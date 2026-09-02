@@ -50,7 +50,7 @@
      behind the serial IIFE wall — getting CSS bytes early shortens the style
      phase before the first paint of #title. -->
 <link rel="preload" href="css/tokens.css?v=8188cb77b276" as="style">
-<link rel="preload" href="css/components.css?v=740c13224a8c" as="style">
+<link rel="preload" href="css/components.css?v=7085b3dc0c3f" as="style">
 <!-- Preload the two faces the TITLE composition uses, and only those. The
      @font-face rules (css/tokens.css) are deliberately `font-display: swap` so
      the system fallback paints instantly and never blocks first render — that
@@ -69,9 +69,9 @@
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
 <link rel="stylesheet" href="css/tokens.css?v=8188cb77b276">
-<link rel="stylesheet" href="css/components.css?v=740c13224a8c">
+<link rel="stylesheet" href="css/components.css?v=7085b3dc0c3f">
 <link rel="stylesheet" href="css/tuner.css?v=fe56135c0173" media="print" onload="this.media='all'">
-<link rel="stylesheet" href="css/menus.css?v=b38306390fe2">
+<link rel="stylesheet" href="css/menus.css?v=e77129701282">
 <link rel="stylesheet" href="css/carsetup.css?v=836e3f3078e6" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/hud.css?v=09eec5dfd7e7" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/overlays.css?v=5c7fe3274e1e" media="print" onload="this.media='all'">
@@ -1882,7 +1882,7 @@
 <script defer crossorigin="anonymous" src="js/game/steer-tuning.js?v=072a417935f9"></script>
 <script defer crossorigin="anonymous" src="js/game/perf.js?v=495da1c1cfe4"></script>
 <script defer crossorigin="anonymous" src="js/game/loop-health.js?v=8cc14cf3aba9"></script>
-<script defer crossorigin="anonymous" src="js/game/gfx-quality.js?v=74964b05b7b3"></script>
+<script defer crossorigin="anonymous" src="js/game/gfx-quality.js?v=15e199eb3344"></script>
 <script defer crossorigin="anonymous" src="js/game/gfx-debug.js?v=e0ccb242c9fc"></script>
 <script defer crossorigin="anonymous" src="js/game/ui-scale.js?v=71d20ad63b86"></script>
 <script defer crossorigin="anonymous" src="js/game/cockpit-opts.js?v=fbd88d65fac7"></script>
@@ -1895,5 +1895,5 @@
 <script defer crossorigin="anonymous" src="js/game/quali.js?v=97772e059767"></script>
 <script defer crossorigin="anonymous" src="js/game/debrisworld.js?v=77718b657fb8"></script>
 <script defer crossorigin="anonymous" src="js/game/incidentsim.js?v=d39ff2c91040"></script>
-<script defer crossorigin="anonymous" src="js/game.js?v=e85329359d18"></script>
+<script defer crossorigin="anonymous" src="js/game.js?v=e4ee8ad8461d"></script>
 </body></html>

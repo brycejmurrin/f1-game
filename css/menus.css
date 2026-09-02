@@ -1417,6 +1417,24 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   flex: 1 1 0;
   min-width: 0;
 }
+/* WEATHER on this shape: five chips in a ~164px column are ~52px each, and
+   "RAIN" / "CLOUDY" / "FOG" with their icons painted past the borders
+   (screenshot at 844x390, 2026-09-02). Wrapping to a second row pushed the
+   DIFFICULTY row under the footer; the icons go (an aria-hidden span in
+   game.js — no class) AND the labels wrap 3 + 2, which is two chip rows:
+   five labels in the 166px column would be ~28px each and "CLOUDY" needs
+   ~45px even without its icon. */
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-weather {
+  flex-wrap: wrap;
+}
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-weather > .sel-chip {
+  gap: 0;
+  padding-inline: calc(var(--gap) * 0.25);
+  flex-basis: 30%;
+}
+:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-weather > .sel-chip > span[aria-hidden] {
+  display: none;
+}
 /* TALL-SHAPED SHEET (portrait): two-column race settings layout.
    TIME spans; DIFF/QUALI then CAUTION/RELIAB share the last two rows.
    Uses data-shape="tall" (zoom-correct) not @media (orientation: portrait). */

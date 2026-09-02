@@ -1139,7 +1139,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   min-width: var(--tap);
   flex: 0 0 var(--tap);
   padding: 0;
-  font-size: var(--fs-5);
+  /* 1.5x the top rung and bold: the single-quote chevrons read as specks
+     in a 52px plate at --fs-5 (screenshot at 844x390, 2026-09-02). */
+  font-size: calc(var(--fs-5) * 1.5);
+  font-weight: 700;
+  line-height: 1;
 }
 #pmsettings-inner .pm-group #pm-renderer {
   flex: 1 1 auto;

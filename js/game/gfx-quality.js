@@ -490,6 +490,9 @@ function initPresentControls() {
     "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.");
   const saveBtn = addBtn("pm-save-shot",
     "Download the visible #game canvas as a PNG. Waits for the 2D blit first (WGX or TLX-WebGPU).");
+  // The label was only ever written by saveScreenshot()'s done() — the button
+  // painted as an EMPTY plate until its first click (screenshot, 2026-09-02).
+  saveBtn.textContent = "SAVE SCREENSHOT";
   const status = document.createElement("p");
   status.id = "pm-gfx-status";
   add(status);

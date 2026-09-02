@@ -8039,7 +8039,7 @@ function buildRaceSettings() {
   for (const [id, label, icon] of [["dry", "DRY", "☀"], ["wet", "WET", "💧"], ["rain", "RAIN", "🌧"], ["overcast", "CLOUDY", "☁"], ["fog", "FOG", "🌫"]]) {
     const b = document.createElement("button");
     b.className = "sel-chip" + (raceWeather === id ? " active" : "");
-    b.textContent = icon + " " + label;
+    const ic = document.createElement("span"); ic.setAttribute("aria-hidden", "true"); ic.textContent = icon; b.append(ic, " " + label);   // icon in its own span: the wide-compact shape hides it so five labels fit one row
     b.onclick = () => { raceWeather = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
     weatherEl.appendChild(b);
   }
