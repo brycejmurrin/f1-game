@@ -696,7 +696,7 @@ const GLX = (function () {
     // landscape 1.7778 through a whole portrait session and a hand-called
     // resize() could not shift it, while dispatching one synthetic "resize"
     // corrected it on the very next call (artifacts/aspect-verdict.log,
-    // artifacts/aspect-why.log; docs/PERF-FINDINGS.md §2s). A stale aspect is
+    // artifacts/aspect-why.log; docs/PERF-FINDINGS.md §2u). A stale aspect is
     // not cosmetic — it feeds the main projection matrix, the FOV cap
     // and the FRUSTUM CULL RADIUS (6310), so geometry pops out of the world.
     // window.innerWidth/innerHeight are VIEWPORT metrics, not element layout:

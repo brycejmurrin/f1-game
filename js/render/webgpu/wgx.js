@@ -593,7 +593,7 @@ const WGX = (function () {
       // Same settle window as GLX cssSize(), for the same measured reason: the
       // dirty flag is edge-triggered and consumed unconditionally, so a single
       // read that lands before the box has reflowed latches the PREVIOUS
-      // viewport's size for good (docs/PERF-FINDINGS.md §2s). innerWidth /
+      // viewport's size for good (docs/PERF-FINDINGS.md §2u). innerWidth /
       // innerHeight are viewport metrics, not element layout, so this costs no
       // reflow; a change opens a window during which the box is re-read every
       // frame. Runs BEFORE resize()'s `_cssApplying = true` bracket, so it

@@ -414,7 +414,7 @@ test.describe("Live resize — the renderer's cached canvas box", () => {
   // before the canvas box reflowed cached the OLD box, cleared the flag, and
   // left GLX.aspect reporting the PREVIOUS viewport's ratio for the rest of the
   // session. Measured in a browser: a landscape 1.7778 survived a whole
-  // portrait session in the garage (docs/PERF-FINDINGS.md §2s). aspect feeds
+  // portrait session in the garage (docs/PERF-FINDINGS.md §2u). aspect feeds
   // the main projection, the FOV cap and the frustum cull radius, so this
   // stretches the world and can pop geometry out of it.
   //

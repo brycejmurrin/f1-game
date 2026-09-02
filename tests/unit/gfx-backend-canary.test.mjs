@@ -154,7 +154,7 @@ test("GLX create* / draw* fail closed when the context is lost", () => {
 });
 
 test("GLX re-reads the canvas box after a viewport change, even when a frame read it too early", () => {
-  // THE DEFECT (docs/PERF-FINDINGS.md §2s). cssDirty is edge-triggered and
+  // THE DEFECT (docs/PERF-FINDINGS.md §2u). cssDirty is edge-triggered and
   // consumed unconditionally, so ONE resize() landing before the canvas box has
   // reflowed caches the OLD box, clears the flag, and nothing ever sets it
   // again: GLX.aspect then reports the PREVIOUS viewport's ratio for the rest
@@ -1609,13 +1609,33 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "a probe that keeps erroring must stand down instead of binding the cube");
   assert.match(fnBody(src, "envProbeReady"), /return\s+envReady\s*\|\|\s*_envGaveUp\b/,
     "standing down must read as ready so the caller stops re-probing forever");
-  // releaseMirrors() nulls attribute.array. three's node builder reads
-  // attribute.array.constructor to type an attribute whenever it compiles a
-  // program for a pass it has not seen before, so a chunk freed before the env
-  // probe's first face makes EVERY face throw. Measured on real hardware
-  // (macos-latest/Metal): 41 failed faces on WebGL2, 81 on WebGPU.
-  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*envReady\s*\|\|\s*_envGaveUp\s*\|\|\s*!envRT\s*\)/,
+  // three's node builder reads attribute.array.constructor to type an attribute
+  // whenever it compiles a program for a pass it has not seen before, so a
+  // chunk freed before the env probe's first face makes EVERY face throw.
+  // Measured on real hardware (macos-latest/Metal): 41 failed faces on WebGL2,
+  // 81 on WebGPU. Two things about that have since changed, and the gate is
+  // re-pinned rather than relaxed:
+  //   1. releaseMirrors() no longer NULLS the array — it assigns a zero-length
+  //      array of the same class, so .constructor still resolves and .count (a
+  //      plain property set once in the BufferAttribute constructor) is
+  //      untouched. The original crash was `reading 'constructor'` of null.
+  //   2. `envReady || _envGaveUp || !envRT` can never open on a phone: game.js
+  //      gates the probe on PerfGov.tier() < 1, so envFaceBegin is never called,
+  //      envReady cannot latch and _envGaveUp cannot flip while envRT is
+  //      allocated anyway. Measured gate "--T", 23 drains, 0 sweeps — the
+  //      release was DEAD on exactly the devices it exists for, and no test
+  //      saw it because a gate that never opens looks like a gate with nothing
+  //      to do. `_envNeverComing()` (no face asked in 5 s of painting) is the
+  //      missing "the probe is not coming" term.
+  // On macos-latest, where the 41/81 regression was measured, tier < 1 holds:
+  // the probe runs, _envEverAsked flips in the first frames, _envNeverComing()
+  // is false and this gate behaves exactly as it did. The new term changes
+  // behaviour only where the probe is tier-disabled. STILL OWED: a real-GPU
+  // confirmation run (gpu-census.yml, macos-latest) — this box cannot prove it.
+  assert.match(src, /!rec\.chunked\._mirrorsFreed\s*&&\s*!vizMat\s*&&\s*\(\s*envReady\s*\|\|\s*_envGaveUp\s*\|\|\s*!envRT\s*\|\|\s*_envNeverComing\(\)\s*\)/,
     "the CPU mirrors must not be freed while the env probe still has passes to compile");
+  assert.match(fnBody(src, "_envNeverComing"), /_envEverAsked/,
+    "and 'not coming' must mean the probe never ASKED, not merely that it is not ready");
   assert.match(src, /if\s*\(\s*_envFailN\s*>=\s*ENV_FAIL_CAP\s*\)\s*_envGaveUp\s*=\s*true\b/,
     "a probe that cannot succeed must stop retrying — it threw every frame forever");
   const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");

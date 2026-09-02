@@ -1825,4 +1825,4 @@ read across two ordinary `waitForTimeout`s instead.
 (`tools/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
 un-blitted canvas and produces a confident, wrong answer — it cost one fully
 written-up "WGX mis-frames the garage" reproduction that had to be retracted
-(docs/PERF-FINDINGS.md §2r).
+(docs/PERF-FINDINGS.md §2t).
