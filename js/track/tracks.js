@@ -1358,8 +1358,20 @@ const Tracks = (function () {
       const u = upOf(track, k);
       const o = side * (hw[k] + dist);
       const cx = px[k] + r[0] * o, cz = pz[k] + r[2] * o;
+      // noteSuppressed, NOT a bare Log.info: this was the only guard in the file
+      // that dropped geometry without recording it, so its drops reached no
+      // test, no tool and no __apex hook. Given a counter it reported 539
+      // suppressed backdrops fleet-wide, 295 at redbull alone (43 % of its
+      // calls) — none of it previously observable.
+      // MARGIN LEFT ALONE ON PURPOSE. sz[0] is the length ALONG the tangent
+      // (addBox below uses basis [t, u, r]; the reach toward the road is
+      // sz[2]/2), so this is the along-track-as-radial shape already fixed for
+      // billboards in scenery-city.js. The correction is NOT a swap: measured,
+      // an oriented footprint test suppresses MORE (618 vs 539) — it recovers
+      // 11 and drops 90 that currently render. Numbers and the decision:
+      // docs/PERF-FINDINGS.md 2u.
       if (onTrack(cx, cz, sz[0] / 2 + 6)) {
-        Log.info("track", `backdrop SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]}`);
+        noteSuppressed("backdrop", `backdrop SUPPRESSED at k=${k} side=${side}: dist=${dist} sz[0]=${sz[0]}`);
         return;
       }
       // distant scenery settles to the lap's low baseline (groundYAt past the last

@@ -2116,15 +2116,21 @@ const GLX = (function () {
     carShadowBegin: (lightVP, boxScale) => SHD.carShadowBegin(lightVP, boxScale),
     carShadowEnd: () => SHD.carShadowEnd(),
     lampShadowBegin: (lightVP, lightIdx) => SHD.lampShadowBegin(lightVP, lightIdx),
+    // "Skipped for cadence, map still valid" — see shadow.js §KEEP.
+    carShadowKeep: () => SHD.carShadowKeep(),
+    lampShadowKeep: (lightIdx) => SHD.lampShadowKeep(lightIdx),
     lampShadowEnd: () => SHD.lampShadowEnd(),
     get width() { return width; },
     get height() { return height; },
     get aspect() { return aspect; },
     hdrMode: () => PST.hdrOk(),
     // Debug introspection for the dynamic car shadow map (used by tests/tools).
-    carShadowState: () => ({ enabled: SHD.carEnabled, arms: SHD.carArms }),
+    // `armed` is the frame-live gate the LIT uniform reads; `arms` is a lifetime
+    // counter that stays true straight through a strobe, which is exactly why the
+    // 30 Hz car strobe and the vanished lamp shadow were invisible to every test.
+    carShadowState: () => ({ enabled: SHD.carEnabled, arms: SHD.carArms, armed: SHD.carArmed }),
     // Same for the nearest-floodlight spot shadow map (idx = frame.lights slot).
-    lampShadowState: () => ({ enabled: SHD.lampEnabled, arms: SHD.lampArms, idx: SHD.lampIdx }),
+    lampShadowState: () => ({ enabled: SHD.lampEnabled, arms: SHD.lampArms, idx: SHD.lampIdx, armed: SHD.lampArmed }),
     msaa: () => PST.msaa(),
     pcss: () => SHD.pcssEnabled,
     setRenderScale, getRenderScale,
