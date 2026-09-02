@@ -18,15 +18,22 @@
 // owns its own car. A rival is posed from replicated state and must NOT also be
 // simulated locally, or the two fight every frame — the same contract the
 // incident sim already has with updateCar().
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): nineteen boots became none. race() walks
+// the shared page back to the title — which stops the previous test's loopback
+// session (quitToMenu calls netPlay.stop; netStop() drops the fake peer too) —
+// pins the default car (McLaren seat 0: the loopback peers below sit in Red
+// Bull and Ferrari seats, and the seat rule would move a colliding local car),
+// and races. UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function race(page, trackId = "monza") {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate((id) => window.__apex.race(id), trackId);
+  await toMenu(page);
+  await page.evaluate(() => window.__apex.netStop());
+  await pinFreePlay(page, { race: [trackId] });
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => {
     const A = window.__apex;

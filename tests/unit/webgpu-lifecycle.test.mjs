@@ -1071,7 +1071,11 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.doesNotMatch(CHUNKS_SOURCE, /1\.0, 0\.0, 1\.0/);
   assert.doesNotMatch(WGX_SOURCE, /__wgxDbg/);
   assert.match(CHUNKS_SOURCE, /trkFromWorld\(wp\.xyz\)/);
-  assert.match(CHUNKS_SOURCE, /trkFromWorld\(in\.wpos\)/);
+  // fs_main reaches the LUT through the uniform gate (road / buryRibbon draws
+  // only — every other lit fragment used to pay the 16-iteration search for a
+  // value select()ed away; 2026-09-01). The gate helper takes no derivative.
+  assert.match(CHUNKS_SOURCE, /let fromWorld = trkFromWorldIf\(in\.wpos, isRoadDraw \|\| D\.mat2\.w > 0\.5\);/);
+  assert.match(CHUNKS_SOURCE, /fn trkFromWorldIf\(wp: vec3<f32>, need: bool\) -> vec4<f32> \{\s*var r = vec4<f32>\(0\.0\);\s*if \(need\) \{ r = trkFromWorld\(wp\); \}/);
   assert.match(CHUNKS_SOURCE, /0\.12 \* F\.params9\.x/, "AMBIENT CONTACT DARK");
   assert.match(CHUNKS_SOURCE, /0\.16, 0\.30, wetSheen\) \* F\.params9\.y/, "LAMP WALL SPILL");
   assert.match(CHUNKS_SOURCE, /0\.6 \* F\.params9\.z/, "WINDOW SUN FLASH");

@@ -134,7 +134,28 @@ function markReloading(rb, next) {
   }
   if (rb) rb.textContent = "RENDERER: " + msg;
 }
+// A reload from the in-race SETTINGS sheet ends the race, its lap times, an
+// unsettled career round and (VS FRIEND) the peer session — with one tap and
+// no warning (2026-09-01 survey). game.js marks body[data-race] while a race
+// is up; the first tap then ARMS the control (same dataset.armed idiom as
+// game.js armConfirm) and only the second tap proceeds. Called BEFORE any
+// preference is written, so an unconfirmed tap changes nothing.
+function raceGuard(btn, armedText) {
+  try {
+    if (typeof document === "undefined" || !document.body || document.body.dataset.race !== "1" || !btn) return true;
+    if (!btn.dataset.armed) {
+      btn.dataset.armed = "1";
+      btn.textContent = armedText;
+      try { btn.classList.add("armed"); } catch (_) { /* option element */ }
+      return false;
+    }
+    delete btn.dataset.armed;
+    try { btn.classList.remove("armed"); } catch (_) { /* option element */ }
+  } catch (_) { /* dataset unavailable: proceed as before */ }
+  return true;
+}
 function applyBackend(next, rb) {
+  if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?")) return false;
   Log.info("game", "GfxQuality.applyBackend " + next);
   try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
   if (next === "webgpu" && !hasWebGPU()) {
@@ -233,6 +254,8 @@ function threePathLabel(v) {
   return "AUTO";
 }
 function applyThreePath(next, opts) {
+  if (readBackend() === "three" && !(opts && opts.noReload) &&
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-three-path") : null, "THREE PATH: END THIS RACE & RELOAD?")) return false;
   try {
     if (next === "webgl2") localStorage.setItem("apex26.tlxForceGL", "1");
     else if (next === "webgpu") localStorage.setItem("apex26.tlxForceGL", "0");
@@ -283,6 +306,8 @@ function shotReloadLive() {
   return be === "three" && readThreePath() === "webgpu";
 }
 function applyShotMode(next, opts) {
+  if (shotReloadLive() && !(opts && opts.noReload) &&
+      !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null, "SCREENSHOTS: END THIS RACE & RELOAD?")) return false;
   writeShotMode(next);
   paintPresent();
   if (shotReloadLive() && !(opts && opts.noReload)) {
@@ -309,7 +334,7 @@ function presentStatus() {
       return "WEBGPU native swapchain. On a software GPU the canvas stays black — screenshots need SCREENSHOTS: 2D BLIT." + live;
     }
     if (shot === "blit") {
-      return "WEBGPU 2D BLIT: each frame is copied onto the canvas so screenshots work. Native swapchain is unused." + live;
+      return "WEBGPU 2D BLIT: each frame is copied onto the canvas so screenshots work (a per-frame CPU copy — on a real GPU it applies to this tab only; a new tab is back to AUTO)." + live;
     }
     return "WEBGPU AUTO: software GPUs 2D-blit onto the canvas (screenshots work). A real GPU uses the native swapchain." + live;
   }
@@ -466,6 +491,7 @@ function initReset() {
   host.insertBefore(btn, slot.nextSibling);
   btn.onclick = () => {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
+    if (!raceGuard(btn, "RESET RENDERER: END THIS RACE & RELOAD?")) return;
     clearRendererStorage();
     btn.textContent = "RESET RENDERER — RELOADING…";
     try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
@@ -548,6 +574,11 @@ function set(id, opts) {
   const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
   if (btn) btn.textContent = needsReload ? label() + " — RELOADING…" : label();
   if (needsReload && !(opts && opts.noReload)) {
+    // In a race the preset is already live; the boot-tier half waits for the
+    // next natural reload instead of ending the race here (2026-09-01 survey).
+    let inRace = false;
+    try { inRace = typeof document !== "undefined" && !!document.body && document.body.dataset.race === "1"; } catch (_) { /* no body */ }
+    if (inRace) { if (btn) btn.textContent = label() + " — FULLY APPLIES AFTER A RELOAD"; return true; }
     try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
     setTimeout(() => { try { location.reload(); } catch (_) {} }, 260);
   }

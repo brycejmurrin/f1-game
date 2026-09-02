@@ -16,7 +16,16 @@
 //
 // The far side is played by __apex.lobbyPeerEvent, exactly as in
 // multiplayer-room.spec.js. A real second browser is tools/net/rtc-e2e.mjs.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): nine boots became none. seatedAs() used to
+// seed localStorage from an init script and rely on the boot to read it; on a
+// shared page there is no next boot, so it writes the store (cache and disk)
+// and the title button that follows — #mb-vs or the garage's own picker —
+// re-reads it (js/game.js restoreFreePlaySelection). enterRoom() first walks
+// back to the title with the last room cancelled and the fake peer re-armed
+// (lobbyReset). UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { lobbyReset, toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 const EV = { HELLO: "hello", READY: "ready" };
@@ -24,21 +33,21 @@ const EV = { HELLO: "hello", READY: "ready" };
 // Teams.LIST index of Red Bull, whose two seats every test here fights over.
 const RBR = 3;
 
-// Seed the saved entry BEFORE the app boots — teamIdx/driverIdx are read out of
-// localStorage at load (js/game.js team/driver defaults), so setting them afterwards would be
-// read by nothing.
-async function seatedAs(page, teamIdx, driverIdx) {
-  await page.addInitScript(([t, d]) => {
-    localStorage.setItem("apex26.team", JSON.stringify(t));
-    localStorage.setItem("apex26.driver", JSON.stringify(d));
-  }, [teamIdx, driverIdx]);
+// The saved seat, written where the game reads it: `team`/`driver` go into the
+// game's teamIdx/driverIdx on #mb-vs (the room route) and on the #mb-race /
+// #sel-back pair pinFreePlay clicks for the solo tests, which enter through
+// #mb-garage — a door that never re-reads the store.
+async function seatedAs(page, teamIdx, driverIdx, { click = false } = {}) {
+  await toMenu(page);
+  await pinFreePlay(page, { team: teamIdx, driver: driverIdx, click });
+  // #sel-back re-shows the ROOM sheet while the game's netRoom flag is still
+  // set from an earlier room test (only a race start clears it); toMenu takes
+  // that down again so the title is what the caller clicks next.
+  if (click) await toMenu(page);
 }
 
 async function enterRoom(page, role = "host") {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => window.__apex.lobbyFake(true));
+  await lobbyReset(page);
   await page.click("#mb-vs");
   await page.click(role === "host" ? "#vs-host" : "#vs-join");
   await page.evaluate(() => window.__apex.lobbyWatch());
@@ -198,9 +207,7 @@ test.describe("seat exclusivity — solo is untouched", () => {
   // session. peerSeats() returns empty off-line and every branch above is
   // gated on it being non-empty.
   test("no session means no held seats and no disabled chips", async ({ page }) => {
-    await seatedAs(page, RBR, 0);
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await seatedAs(page, RBR, 0, { click: true });
     await page.locator("#mb-garage").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();
@@ -213,9 +220,7 @@ test.describe("seat exclusivity — solo is untouched", () => {
   test("solo, switching team still lands on seat 0", async ({ page }) => {
     // The behaviour parts-setup-ids.spec.js pins. The free-seat walk must not
     // change it when nobody holds anything.
-    await seatedAs(page, 1, 1);
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+    await seatedAs(page, 1, 1, { click: true });
     await page.locator("#mb-garage").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();

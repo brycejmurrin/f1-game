@@ -71,6 +71,43 @@ parity once against the browser numbers, then the rest. The `driving-model`
 CI job collapses into `guards`. Risk: the stub surface; the one-off parity
 proof is the mitigation.
 
+**LANDED 2026-09-01 (second half): the thirteen twins**, one
+`tests/unit/<spec>-vm.test.mjs` per spec above, all in `test:game-vm`, each
+one boot per file and the browser spec's own assertions and thresholds
+number for number (no tolerance was widened; the Playwright specs stay in
+place as the truth until CI has run the twins). No harness stub had to be
+extended — every hook the specs read already answers in the VM, including
+`camState()` after `snapCam()` and the scenery diagnostics. What was left
+in the browser, and why:
+
+| spec | ported | left in the browser |
+|---|---|---|
+| headless-api | 24 / 24 | — |
+| obs-act-edge | 16 / 16 | — |
+| longitudinal | 6 / 6 | — |
+| world-physics | 5 / 6 | RESPONSE slider — drives the `#pm-rate` DOM input |
+| drift | 6 / 6 | — |
+| active-aero | 13 / 13 | — |
+| aero-zones | 10 / 10 | — (the aero-part sweep boots three extra VMs where the browser reloads) |
+| offtrack | 8 / 8 | — |
+| elevation-tracks | 47 / 47 | — (40 circuit builds; ~2 min, the whole set's floor) |
+| collisions | 3 / 3 | — |
+| collisions-deep | 15 / 15 | — |
+| collision-ai-fixes | 14 / 14 | — |
+| new-hooks | 55 / 56 | the hidden ~300 s Madrid foundation test (`test.setTimeout(300000)`, spec line 793) |
+
+Three things the port had to get right that a copy would miss: (1) the
+browser gives most of these specs a FRESH page per test, so each twin's
+load helper restores `setPhysics(tuning-at-boot)` and `headless(false)` —
+aero-zones' pace test left `pace: 1.5` behind and the X-mode trade read
+`aeroX 0` until it did; (2) VM objects carry the VM realm's prototypes, so
+`assert.deepEqual` (strict) reports "same structure but not reference-equal"
+— compare JSON copies; (3) "before a track is loaded" tests boot with
+`createGame({ storage: { trackId } })` and run first, since the VM cannot
+reload a page. Measured (this container, 4 cores): a build is ~1 s, a
+physics step ~1.2 ms with the full field; the per-file walls are in the
+`docs/TESTING.md` coverage rows.
+
 ### 1.3 Shape
 
 - **One boot per file** for the parts-* (five specs boot the same garage; the
@@ -105,6 +142,18 @@ is *selection* (the touched spec via `select-specs`), never parallelism.
 The renderer specs (`webgl`, `tlx`; 240–480 s budgets on SwiftShader, never
 in CI today) boot in ~4 s on `macos-latest`'s real Metal adapter — give
 `js/render/**` its own macOS job.
+
+> **Landed 2026-09-01 (unverified until pushed — no Actions run yet):**
+> `ci.yml` `renderer-filter` (ubuntu, path filter: `js/render/**`,
+> `js/game/lighting*.js`, `light-presets.js`, `atmosphere.js`, `tuner.js`,
+> the `test:gfx` specs, both playwright configs; fail-safe RUN on schedule /
+> dispatch / unresolvable diff) → `renderer-macos` (`macos-latest`,
+> `test:gfx` through `playwright.gpu.config.js` — the base config minus
+> `--use-angle=swiftshader` plus `channel: "chromium"`; census-gated on
+> `anyHardware === true`; `APEX_WORKERS=2`, `--timeout=600000`, 30 min cap,
+> a guess). Skipped on the Pages call, so the deploy gate is unchanged.
+> Guards: `tests/unit/ci-coverage.test.mjs`; `docs/TESTING.md` §Renderer
+> specs on a real GPU. The 30-minute figure is not a measurement.
 
 ## 2. Docs
 
@@ -158,7 +207,8 @@ Skills 44 → ~22: delete the four with no repo content (webgpu-inspector,
 webapp-testing, pixel-perfect, apex-env-setup — 1,000+ lines, zero
 references, two name tools that do not exist); fold the pointer skills into
 the skill they point at (motion-capture + perf-profile → playwright-probe;
-cross-backend-parity → `RENDERERS.md`; bake-lighting → lighting-tuner;
+cross-backend-parity → `RENDERERS.md` (LANDED 2026-09-01 as §Cross-backend
+parity; 32 → 31 skills); bake-lighting → lighting-tuner;
 scene-graph-instancing → scenery-dress; debug-state → agent-view;
 test-timeout-triage + bump-cache + deploy-merge → check-changes/references).
 `skill-progressive.test.mjs` pins 33 names in a "previously fat" list and
@@ -204,6 +254,13 @@ and one build in three collided (34 of 105). Fix the cause, not the merge:
    smoke shard of true boot tests + conditional sweeps ≈ 5 min. Full smoke
    (4 shards), `gpu-census` on macOS, `selected` over 24 h → nightly cron;
    its whole recorded failure history is timeouts, never assertions.
+   *Landed 2026-09-01 (unverified until pushed):* `gpu-census.yml` carries
+   `schedule: cron "17 3 * * *"` beside `ci.yml`'s boot group; the schedule
+   run is the FULL check (`census_only` reads false with empty inputs) on the
+   dispatch-default images and track (`inputs.images || '…'`,
+   `inputs.track || 'montreal'` restated inline), gated by the same Verdict
+   step. The renderer job (§1.4) is deliberately NOT in the gate; the gate is
+   as this item describes. `selected` over 24 h is still open.
 6. **Collisions**: after `deploy.mjs --pr` is habitual, a ruleset on the deploy
    branch requiring PR + merge queue with `merge_group:` in `ci.yml`.
 

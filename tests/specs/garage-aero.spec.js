@@ -5,17 +5,28 @@
 // inside the rAF render, and a headless page composites no frames — measured,
 // requestAnimationFrame fires ZERO times per second here — so the ease was
 // unobservable from a test. __apex.garageStep() drives it directly instead.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): six boots became none. openGarage() walks
+// the shared page back to the title and in through #mb-garage, which resets
+// the camera on every visit (js/game.js openGarage: turntable, default
+// distance, panel shut) — that part a fresh boot never had to do for us. The
+// FLAP is different: setupPreviewXOn/AeroX are module-level and nothing on
+// the way in touches them, so a test that left X open would hand the next one
+// an open flap. The opener shuts it the way the game does (garageAero(false)
+// plus the ease, which clamps to exactly 0). UNVERIFIED IN A BROWSER.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { toMenu } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
 async function openGarage(page) {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  await toMenu(page);
   await page.locator("#mb-garage").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
+  await page.evaluate(() => {
+    window.__apex.garageAero(false);
+    window.__apex.garageStep(1 / 60, 120);   // 2 s of closing: X_CLOSE_RATE reaches 0 well inside it
+  });
 }
 
 test.describe("garage active aero", () => {

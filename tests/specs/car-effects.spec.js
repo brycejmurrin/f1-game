@@ -2,13 +2,18 @@
 // Grounded runtime contracts for car effects. The debug surface reports the
 // actual draw decisions; tests drive real physics state rather than toggling
 // renderer-only flags.
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+//
+// ONE BOOT PER WORKER (sharedTest): nine boots became none. Both helpers walk
+// the shared page back to the title and pin the default car (McLaren, nothing
+// fitted) before racing — the ERS and exhaust contracts below are about THAT
+// car, and the shared page carries whatever the previous test fitted.
+// UNVERIFIED IN A BROWSER at conversion time.
+import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 async function startCar(page, speed = 30) {
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+  await toMenu(page);
+  await pinFreePlay(page);
   await page.evaluate((initialSpeed) => {
     window.__apex.race("monza");
     // go() skips the countdown: in "count" state update() runs only the light
@@ -148,10 +153,9 @@ test.describe("Car runtime effects", () => {
   // reason park()/jump() are avoided — every one of those hooks promotes the game
   // straight to "race".
   async function onGrid(page) {
-    await page.goto("/");
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+    await toMenu(page);
     // A dry daytime race, so nothing but the grid state can light the rear.
-    await page.evaluate(() => window.__apex.race("monza", "day", "dry"));
+    await pinFreePlay(page, { race: ["monza", "day", "dry"] });
     // race() DOES NOT land in "count" synchronously any more: startRace() is
     // async since the lazy-scenery split (it awaits ensureScenery), and race()
     // does not await it. Reading carEffects() on return gets null, because

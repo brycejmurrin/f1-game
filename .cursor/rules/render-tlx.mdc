@@ -10,5 +10,5 @@ alwaysApply: false
   `apex26.tlxForceGL=1` — three's WebGPU path dies under SwiftShader
   (`mappedAtCreation`); use `--tlx-webgpu` only on purpose.
 - Canvas alpha must be opaque for correct compositing (transparent-cars class).
-- Load skill `cross-backend-parity` when a look differs vs GLX/WGX.
+- Read `docs/RENDERERS.md` §Cross-backend parity when a look differs vs GLX/WGX.
 - Live probe: `mcp-probe` / `mcp-cli.mjs probe --backend three`.

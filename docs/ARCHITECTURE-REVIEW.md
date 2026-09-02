@@ -316,6 +316,55 @@ on the 08-18 perf-hunt board, not this register.
   telemetry scrubber uses `CssZoom.viewportRect`.
 - **No CSP.** `index.html` ships no Content-Security-Policy of any kind.
 
+### 2026-09-01 general survey — fixed, recorded, and the player-facing list
+
+Fixed in the same session (each a two-line local change; browser groups
+named in the commit): a one-tap reload from the in-race SETTINGS sheet
+(RENDERER / THREE PATH / SCREENSHOTS / RESET RENDERER now arm a two-tap
+confirm while `body[data-race]` is set, and GRAPHICS defers its boot-tier
+reload to after the race); the time-trial ghost store's whole-blob
+parse+stringify moved off the physics step (`requestIdleCallback`);
+`teamMeshes`/`teamBodies` LRU invalidation without their order arrays (a
+later eviction freed a LIVE mesh); `sectorValid` not cleared on a backward
+line crossing (a fraction-of-a-second S3 could become a session best);
+`gamepaddisconnected` killing input for a still-connected second pad; the
+gyro listener never detached when leaving TILT; the shell reload dropping
+`location.search`; `weatherArc` surviving `endRace`/`quitToMenu`; the
+one-shot gesture listener registered `once:false`; `fitHud` re-measuring
+10×/s unbounded while the layout was empty, with four selector queries per
+tick.
+
+Recorded, not fixed (PLAUSIBLE or a design call):
+- **Menu state renders the full scene every frame** behind opaque sheets
+  (GARAGE, DATA HUB, CAREER…) at the last race's render scale, and
+  `PerfGov.tick()` is race-gated so nothing adapts — the mechanism behind
+  PERF-FINDINGS' 39.7 s vs 0.1 s VS FRIEND control. Fix: reduced flyby
+  cadence / capped scale when `UiLayers.top()` is a full-screen sheet.
+- **`sw.js` activate deletes every other cache generation** while the old
+  shell is still running: its lazy fetches (scenery, data, net, deferred
+  backends) miss the cache; offline after the swap a circuit builds bare.
+  Needs a two-generation repro before changing the sweep.
+- **GLX `cullInstances(batch, planes, {upload:false})`**: GLX takes two
+  args, so the shadow-recentre frame packs + uploads every instance set
+  twice (light frustum, then camera). Give the batch two memo slots.
+- **Storage quota is shared** by ghost (uncapped, ~40 KB/track), six career
+  slots and the API cache; only the API cache evicts, and only its own keys.
+- **Ten direct `localStorage.setItem` sites** bypass `store.write`
+  (bodyattitude, cockpit-opts, gfx-quality, metrics, perf, apex) — no
+  `noteBroken`, no cross-tab invalidation.
+- AI brake-look loop redoes three wrap chains per sample (`Tracks.nodeAt`
+  would resolve the index once); `for…of` iterators in the GLX instance
+  cull; netplay allocates one `{id,car}` per remote per publish; career
+  migration branches on `.durable` instead of `.ok`; `endRace` leaves the
+  rain overlay on where `quitToMenu` clears it.
+
+Player-facing improvements the code is one step from: coloured sector
+splits (`sectorBests`/`sectorLast` are already on the façade); `LEADER` /
+`P{n}/{n}` instead of a blank gap chip; a visible `RECOVERING 3…2…1`
+before the auto-rescue teleport, cancellable by real progress; the flagged
+sector stroked yellow on the minimap (it already strokes per-sector
+colours); a centre-out ghost delta bar in place of the six-character text.
+
 ### Found by the 2026-09-01 deep pass (code-read, measured where stated; not browser-verified)
 
 Fixed in the same pass and therefore NOT listed: the contact-shove lap

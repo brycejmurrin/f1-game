@@ -25,11 +25,22 @@ name: GPU census
 #                overlay. Same hooks the overlay prints for a player, so a CI
 #                answer and a pasted player answer compare directly.
 #
-# Dispatch-only. It costs runner minutes on images the normal gate never uses
-# (macOS bills at a multiplier), so it runs when someone asks a question, not on
-# every push.
+# Dispatch, and NIGHTLY (2026-09-01) — never on push. It costs runner minutes on
+# images the normal gate never uses (macOS bills at a multiplier), so it runs
+# when someone asks a question and once a night beside ci.yml's boot group
+# (same cron, PROCESS-SPEEDUP-2026-09 §4.5): the two real-GPU defects the
+# Verdict step has caught were found only when someone happened to dispatch
+# this, and a gate that fires on request catches a regression exactly once.
+#
+# A scheduled run has NO inputs — every `inputs.*` reads as the empty string —
+# so each input used below carries its dispatch default inline (`|| 'x'`), and
+# `census_only` reads as false, which is the FULL check: the schedule gates on
+# exactly what a default dispatch gates on. The schedule runs on the default
+# branch only (GitHub's rule), like ci.yml's nightly.
 
 on:
+  schedule:
+    - cron: "17 3 * * *"
   workflow_dispatch:
     inputs:
       track:
@@ -80,7 +91,8 @@ jobs:
           print("images=" + json.dumps(picked or ["ubuntu-latest"]))
           PY
         env:
-          IMAGES: ${{ inputs.images }}
+          # Dispatch default restated for the schedule (inputs are empty there).
+          IMAGES: ${{ inputs.images || 'ubuntu-latest,macos-latest,windows-latest' }}
 
   census:
     needs: plan
@@ -164,7 +176,7 @@ jobs:
         run: |
           FORCE="${{ inputs.force }}"
           LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gpu-game-check.mjs "${{ inputs.track }}" \
+          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
             --backend three --path webgpu \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
@@ -178,7 +190,7 @@ jobs:
         run: |
           FORCE="${{ inputs.force }}"
           LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gpu-game-check.mjs "${{ inputs.track }}" \
+          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
             --backend three --path webgl2 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
@@ -196,10 +208,30 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gpu-game-check.mjs "${{ inputs.track }}" \
+          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
             --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
+
+      # WGX — the native WebGPU backend (js/render/webgpu/), opt-in for players.
+      # Until 2026-09-02 the "webgpu" leg above was three.js on WebGPU (TLX), so
+      # a WGX shader or present-path change had NO real-GPU evidence at all: the
+      # in-container Dawn validates but never executes (tools/wgx-validate.mjs).
+      # The Verdict holds this leg to: WGX actually bound (GLX.softPresent is
+      # exported by WGX only), the swapchain path on hardware (softPresent
+      # false — the CPU blit is the SwiftShader path and the "WebGPU is laggy"
+      # class), and gpuErrors 0.
+      - name: Game check — WGX / WebGPU (native, opt-in)
+        if: ${{ !inputs.census_only }}
+        continue-on-error: true
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
+          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
+            --backend webgpu $LS \
+            --json "game-wgx-${{ matrix.image }}.json" \
+            --shot "game-wgx-${{ matrix.image }}.png"
 
       # THE GATE. Before this step the job was green whatever the game said:
       # both checks above are continue-on-error and nothing read the JSON they
@@ -251,7 +283,7 @@ jobs:
             // either absent-safe or scoped to tlxLeg — an absence check aimed
             // at all three legs would fail GLX on hardware for reporting
             // exactly what it is built to report.
-            for (const path3 of ["webgpu", "webgl2", "glx"]) {
+            for (const path3 of ["webgpu", "webgl2", "glx", "wgx"]) {
               const file = `game-${path3}-${image}.json`;
               const g = read(file);
               if (!g) { bad.push(`${path3}: ${file} missing — the check produced nothing`); continue; }
@@ -261,7 +293,7 @@ jobs:
               // the leg name rather than on "does this row have a __tlx" is the
               // whole point: a TLX leg that fell back to GLX loses envState too,
               // and that is a regression to fail on, not a reason to go quiet.
-              const tlxLeg = path3 !== "glx";
+              const tlxLeg = path3 === "webgpu" || path3 === "webgl2";
               const frame = g.frame || {};
               rows.push(`${path3.padEnd(7)} phase=${g.phase} ok=${g.ok} ` +
                 `gpuErrors=${gfx.gpuErrors} envFail=${env.fail} envReady=${env.ready} ` +
@@ -321,6 +353,17 @@ jobs:
               // would name one root cause twice.
               if (env.gaveUp) bad.push(`${path3}: the env probe stood down — it could not succeed`);
               if (hardware && be.softAdapter === true) bad.push(`${path3}: softAdapter TRUE on an adapter the census called hardware — the classification regressed and the game is running the degraded content path`);
+              // The WGX leg: gpu-game-check reports wgx (GLX.softPresent exists,
+              // i.e. WGX bound rather than falling back to GLX) and wgxSoftPresent.
+              if (path3 === "wgx") {
+                rows.push(`${" ".repeat(8)}wgx:   bound=${gfx.wgx} softPresent=${gfx.wgxSoftPresent} headlessUa=${gfx.headlessUa}${gfx.wgxSoftPresent === true && gfx.headlessUa === true ? " (expected: WGX blits under a headless UA by design)" : ""}`);
+                if (hardware && gfx.wgx !== true) bad.push(`wgx: WGX did not bind on a hardware adapter (fell back to GLX, or the surface stopped reporting) — this leg proved nothing about js/render/webgpu/`);
+                // Run 19 (2026-09-02) failed here on macos-latest: WGX sniffs a
+                // HeadlessChrome UA as software (wgx.js, measured black swapchain
+                // there) so every headless run blits. Only a HEADED hardware run
+                // proves the swapchain path; a headless one proves bind + render.
+                else if (hardware && gfx.wgxSoftPresent === true && gfx.headlessUa !== true) bad.push(`wgx: WGX is soft-presenting (CPU blit) on a headed hardware adapter — the swapchain path is off, every frame pays a readback + putImageData`);
+              }
             }
             rows.push("```", "");
             if (bad.length) rows.push("**FAILED**", "", ...bad.map((b) => `- ${b}`));

@@ -865,7 +865,7 @@ const CEILINGS = {
   // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
   // pass here and then call GLX with no device (backend-surface-parity).
   // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
-  "js/render/webgpu/wgx.js": 5590,
+  "js/render/webgpu/wgx.js": 5593,   // 2026-09-01: persisted-2D-blit hardening on hardware + row-copy blit + decal pooling
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -996,7 +996,7 @@ const CEILINGS = {
   // term. Mirrors the same edit in js/render/shaders/lit.js and tsl-lit.js — a
   // finish implemented on one backend only is invisible on the other two and
   // nothing in the suite would catch it.
-  "js/render/webgpu/wgsl-chunks.js": 1902,
+  "js/render/webgpu/wgsl-chunks.js": 1907,   // 2026-09-01: trkFromWorldIf uniform gate (largest WGX-only fragment cost)
   // three.js TSL lit-material port; tracks lit.js feature-for-feature.
   // 1725 -> 1768: the same four finishes, the pearlescent term and the carbon
   // weave, in TSL.
