@@ -168,6 +168,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ui-improve-pass.test.mjs",
   "tests/unit/ui-sheets-audit.test.mjs",
   "tests/unit/menu-nav-spatial.test.mjs",
+  "tests/unit/menu-a11y-audit.test.mjs",
   "tests/unit/ui-journey-career.test.mjs",
   "tests/unit/ui-journey-session.test.mjs",
   "tests/unit/ui-journey-race.test.mjs",

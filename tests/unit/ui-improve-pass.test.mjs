@@ -674,8 +674,10 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   vm.runInNewContext(src("js/game/uilayers.js"), sbU, { filename: "js/game/uilayers.js" });
   assert.equal(typeof sbU.UiLayers.navOpen, "function", "title #overlay is pad-navigable through UiLayers.navOpen()");
   assert.equal(sbU.UiLayers.navOpen(), false, "nothing open on a bare DOM");
-  assert.match(code("js/game/menunav.js"), /ty\s*===\s*"range"\s*\|\|\s*ty\s*===\s*"number"/,
-    "range/number own only Left/Right so Up/Down leave the row");
+  // Text fields joined range/number here (menu-a11y-audit.test.mjs pins the
+  // behaviour): every <input> keeps only the caret keys, so Up/Down leave the row.
+  assert.match(code("js/game/menunav.js"), /return !!CARET_KEYS\[key\]/,
+    "inputs own only the caret keys (Left/Right/Home/End) so Up/Down leave the row");
   assert.match(code("js/game/ariastate.js"), /#vsfriend,\s*#season-setup/,
     "AriaState watches the two DOM-built overlays UiLayers already lists");
   assert.match(code("js/game/scrollfade.js"), /"#menu-buttons"/,

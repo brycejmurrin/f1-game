@@ -45,7 +45,13 @@ window.ScrollFade = (function () {
   // hidden attribute like the rest.
   const SCREENS = "#select,#season-setup,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#advanced,#pmsettings," +
     "#lighting,#camtune,#audioset,#results,#quali,#standings,#race-settings,#customize,#pausemenu," +
-    "#datahub,#track-detail,#vsfriend,#spotifypanel";
+    "#datahub,#track-detail,#vsfriend,#spotifypanel," +
+    // The title screen hides for a race and returns with it; its #menu-buttons
+    // column is a region (SEL above), so its own flip must trigger a settle
+    // rather than riding on whichever other screen happened to close in the
+    // same tick. tests/unit/menu-a11y-audit.test.mjs holds this list in step
+    // with UiLayers.LAYER_IDS.
+    "#overlay";
 
   const EDGE = 2;              // px of slack: sub-pixel layout must not flicker
   // Strong Set, pruned in settle(): observers hold strong refs to observed

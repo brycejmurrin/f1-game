@@ -1502,7 +1502,9 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #cz-pvtext { font-weight: 800; font-style: italic; letter-spacing: var(--ls-2); }
 #customize .cz-sep {
   margin: var(--gap) 0 6px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
-  color: rgba(255,255,255,0.4); text-transform: uppercase;
+  /* var(--dim), not white at 0.4 alpha: over the darkest ground the sheet can
+     sit on (#0a0a0f) that was 3.75:1 — below AA for 14px text. --dim is 7:1. */
+  color: var(--dim); text-transform: uppercase;
   border-top: 1px solid var(--card-line); padding-top: var(--gap);
 }
 /* EXTRA PAINT's <summary> keeps the .cz-sep look (the class carries over onto
