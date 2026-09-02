@@ -260,9 +260,17 @@ test("the renderer job proves the adapter before trusting the run, and uploads o
 
 test("the renderer job is path-filtered on a cheap runner and stays out of the deploy gate", () => {
   assert.match(rendererFilter, /^    runs-on: ubuntu-latest$/m, "the filter must not allocate a macOS runner to say no");
-  assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && github\.event_name != 'workflow_call' \}\}/);
+  // 2026-09-02 (Actions minutes): the macOS runner bills at 10x Linux and
+  // gpu-census.yml already gives every renderer commit its real-GPU verdict,
+  // so the gfx specs on Metal are nightly or opt-in (`renderer_macos: true`)
+  // — a push must never allocate that runner. The `!inputs.concurrency_key`
+  // term is what tools/ci-coverage.mjs reads to keep both jobs out of the
+  // deploy gate; it has to stay first.
+  assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\) \}\}/);
   assert.match(rendererJob, /^    needs: renderer-filter$/m);
-  assert.match(rendererJob, /if: needs\.renderer-filter\.outputs\.renderer == 'true'/);
+  assert.match(rendererJob, /if: needs\.renderer-filter\.outputs\.renderer == 'true' && \(github\.event_name == 'schedule' \|\| inputs\.renderer_macos == true\)/);
+  assert.match(ciWorkflow, /workflow_dispatch:\n    inputs:\n(?:.*\n)*?      renderer_macos:\n(?:.*\n)*?        type: boolean\n(?:.*\n)*?        default: false\n/,
+    "the dispatch must declare the renderer_macos opt-in, default off");
   assert.equal(report.rendererGate.deployGate, false,
     "renderer-macos joined the deploy gate — pages.yml aggregates every job in ci.yml, so this must be deliberate");
   assert.deepEqual(report.jobs.filter((j) => !j.deployGate).map((j) => j.name).sort(), ["renderer-filter", "renderer-macos"]);
@@ -339,4 +347,19 @@ test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpu
   const check = fs.readFileSync(new URL("../../tools/gpu-game-check.mjs", import.meta.url), "utf8");
   assert.match(check, /r\.wgx = typeof g\.softPresent === "function";/);
   assert.match(check, /r\.wgxSoftPresent = !!g\.softPresent\(\)/);
+});
+
+test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
+  // A commit that touches only docs / markdown / agent config ships nothing;
+  // the guard suite that covers those trees runs locally on every edit. The
+  // deploy branch is exempt by construction: it reaches this workflow through
+  // pages.yml's `uses:` call, which no path filter touches.
+  const onBlock = ciWorkflow.slice(ciWorkflow.indexOf("\non:\n"), ciWorkflow.indexOf("\npermissions:"));
+  const pushBlock = onBlock.slice(onBlock.indexOf("  push:"), onBlock.indexOf("  pull_request:"));
+  const prBlock = onBlock.slice(onBlock.indexOf("  pull_request:"), onBlock.indexOf("  schedule:"));
+  for (const b of [pushBlock, prBlock]) {
+    assert.match(b, /paths-ignore:\n(?:\s+- "[^"]+"\n)+/, "push and pull_request must carry a paths-ignore list");
+    for (const p of ['"docs/**"', '"**/*.md"', '".claude/**"', '".cursor/**"']) assert.ok(b.includes(`- ${p}`), `${p} missing from paths-ignore`);
+  }
+  assert.match(pushBlock, /branches-ignore: \[claude\/f1-game-project-26h3ng\]/, "the deploy branch stays routed through pages.yml");
 });
