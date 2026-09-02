@@ -4858,11 +4858,30 @@ const WGX = (function () {
         }
       }
       if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
+      // CELL-SET KEY, ported from glx.js (docs/PERF-FINDINGS 2c: 36-60 % fewer
+      // uploads there). The pack is a deterministic function of the surviving
+      // cell set, a strictly stronger key than exact plane equality, which
+      // never held while driving — every camera move repacked and re-uploaded
+      // every visible instance of every batch (20 floats each, tens of
+      // thousands on Vegas). Skips the copy loop and the writeBuffer, not the
+      // AABB sweep. NOT writing _cullPlanes on a hit is load-bearing: it must
+      // keep describing whichever frustum physically wrote the buffer.
+      const cs = batch.cells, cn = cs.length;
+      let ks = batch._cellKeyScratch;
+      if (!ks || ks.length < cn) ks = batch._cellKeyScratch = new Int32Array(cn);
+      let kN = 0;
+      for (let ci = 0; ci < cn; ci++) if (_aabbInFrustum(planes, cs[ci].mn, cs[ci].mx)) ks[kN++] = ci;
+      const res = batch._cellKey;
+      if (res && batch._cellKeyN === kN) {
+        let same = true;
+        for (let i = 0; i < kN; i++) if (res[i] !== ks[i]) { same = false; break; }
+        if (same) { batch.visible = batch._cullN; return batch._cullN; }
+      }
       const src = batch.srcMatrices, dst = batch._instPacked;
       const sc = batch.srcColors;
       let n = 0;
-      for (const c of batch.cells) {
-        if (!_aabbInFrustum(planes, c.mn, c.mx)) continue;
+      for (let ci = 0; ci < kN; ci++) {
+        const c = cs[ks[ci]];
         for (const i of c.idx) {
           // No src.subarray — per-instance views were GC on Vegas-scale batches.
           const so = i * 16, dOff = n * 20;
@@ -4883,7 +4902,32 @@ const WGX = (function () {
         for (let k = 0; k < 4; k++, po++) snap[po] = p[k];
       }
       batch._cullN = n;
+      // Record the cell set that produced the bytes now resident.
+      if (!res || res.length < kN) batch._cellKey = new Int32Array(cn);
+      batch._cellKey.set(ks.subarray(0, kN));
+      batch._cellKeyN = kN;
       return n;
+    }
+    // Caller-packed instance set (DebrisWorld's Rapier pools: transforms new
+    // every frame, the only question is how many are live — PERF-FINDINGS 2h).
+    // Without this WGX fell to debrisworld.js's per-body loop: 17 draws steady,
+    // 98 in a pileup, each a DrawU slot + bind + drawIndexed; instanced it is
+    // four. Stride 16 in, 20 out; colour lanes stay at the 1,1,1 the batch was
+    // packed with. CLEARING BOTH CULL SNAPSHOTS IS LOAD-BEARING (same contract
+    // as glx.js, pinned by gfx-backend-canary): bytes written here came from
+    // no frustum, so a later cullInstances must never hit its cache on them.
+    function updateInstances(batch, matrices, n) {
+      if (_lost || !batch || !batch._instPacked || !batch.instBuf || batch.instBuf === identInstanceBuf) return 0;
+      const v = Math.max(0, Math.min(batch.instances | 0, n | 0)), dst = batch._instPacked;
+      for (let i = 0; i < v; i++) {
+        const so = i * 16, d = i * 20;
+        for (let k = 0; k < 16; k++) dst[d + k] = matrices[so + k];
+      }
+      batch.visible = v;
+      batch._cullPlanes = null;
+      batch._cellKeyN = -1;
+      if (v > 0) device.queue.writeBuffer(batch.instBuf, 0, dst, 0, v * 20);
+      return v;
     }
     function drawInstanced(batch, opts) {
       if (!litPass || !batch || !batch.vbuf || !batch.instances) return;
@@ -4936,6 +4980,7 @@ const WGX = (function () {
         }
         device.queue.writeBuffer(batch.instBuf, 0, dst, 0, n * 20);
         batch._cullPlanes = null;
+        batch._cellKeyN = -1;
         // Buffer holds the full set again — a stale repack count would draw the
         // wrong N until the next cullInstances (same contract as GLX shadow).
         batch.visible = batch.instances;
@@ -5547,7 +5592,7 @@ const WGX = (function () {
       // expanding the caller's stride-16 matrices into WGX's stride-20 instance
       // layout (16 matrix + 3 colour + pad) and deciding what the colour lanes
       // mean for a batch created without srcColors. docs/PERF-FINDINGS.md 2h.
-      updateInstances: undefined,
+      updateInstances,
       drawInstanced,
       freeInstancedBatch,
       castShadowInstanced,

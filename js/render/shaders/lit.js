@@ -1519,9 +1519,13 @@ void main() {
       // arc of the horizon for a more dramatic sunset; an extra tight core (pow 16)
       // adds a hot bloom right at the sun.
       float sunAmt = max(sunAmount, 1e-4);   // floor base: pow(0.0, n) NaNs on mobile GPUs
-      vec3 fogCol = mix(uFogColor, uSunColor, pow(sunAmt, 4.0));
+      // Integer powers as multiplies: pow() is exp2(log2()) — two transcendental
+      // slots, quarter-rate on most mobile ALUs — on every fogged fragment.
+      float sunAmt2 = sunAmt * sunAmt, sunAmt4 = sunAmt2 * sunAmt2;
+      float sunAmt16 = sunAmt4 * sunAmt4; sunAmt16 *= sunAmt16;
+      vec3 fogCol = mix(uFogColor, uSunColor, sunAmt4);
       // FOG SUN CORE knob (def 0.6 = as-shipped): the tight hot bloom right at the sun.
-      fogCol += uSunColor * pow(sunAmt, 16.0) * uFogSunCore;
+      fogCol += uSunColor * sunAmt16 * uFogSunCore;
       // FOG WARM / COOL white-balance (uFogTint 0 = neutral, + warm, − cool).
       fogCol *= vec3(1.0 + max(uFogTint, 0.0) * 0.25 - max(-uFogTint, 0.0) * 0.12,
                      1.0 - abs(uFogTint) * 0.02,
@@ -1540,7 +1544,8 @@ void main() {
       vec2 mp = vWorldPos.xz * 0.020 + vec2(uTime * 0.010, uTime * 0.006);
       float dRamp = clamp((vDist - 8.0) / 45.0, 0.0, 1.0);
       float mist = uGroundMist * band * smoothstep(0.35, 0.72, cloudFBM(mp)) * dRamp;
-      vec3 mistCol = mix(uFogColor, uSunColor, pow(max(sunAmount, 1e-4), 3.0)) + lampFogC * uMistShare;
+      float mistSun = max(sunAmount, 1e-4);
+      vec3 mistCol = mix(uFogColor, uSunColor, mistSun * mistSun * mistSun) + lampFogC * uMistShare;
       color = mix(color, mistCol, clamp(mist, 0.0, 0.45));
     }
   }

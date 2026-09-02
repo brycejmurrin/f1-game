@@ -1927,6 +1927,34 @@ and road markings need far better.
 `gpuErrors` 0 and no page errors throughout; the race renders (car, field, HUD,
 touch controls).
 
+**2026-09-02 — the pack broke TLX's WebGPU path, and no software test saw it.**
+gpu-census runs 21 and 22 on macos-latest reported the three.js/WebGPU leg with
+`envFail=undefined` — not "no failures" but "no `__tlx` surface": the overlay
+read `TLX REFUSED: Failed to execute 'createRenderPipeline' … The provided
+value 'float16x3' is not a valid enum value of type GPUVertexFormat`. WebGPU's
+8- and 16-bit vertex formats come only 2- and 4-wide (`unorm8x2/x4`,
+`snorm16x2/x4`, `float16x2/x4`); three names the format straight from
+`itemSize`, so a packed 3-wide colour reached Dawn as `float16x3` and the whole
+pipeline was refused, after which TLX stood down to GLX. WebGL2 accepts any
+width, which is why the WebGL2 control leg (and every SwiftShader/WebGL2 spec)
+stayed green. The refusal reproduces under Dawn/SwiftShader locally
+(`node tools/gpu-game-check.mjs montreal --backend three --path webgpu`), so
+it was a missing probe, not a missing GPU. A `createRenderPipeline` hook
+(scratch, `scratch/wgpu-fmt-probe.mjs`) then listed every format three named:
+3-wide Int16 normals arrive as `snorm16x4` (three pads the width for 2-byte
+arrays — accepted), 3-wide Uint8 colours as `unorm8x4` (accepted), but a
+1-wide `mat` id goes through three's itemSize-1 table, which maps a Uint16
+array to **`uint32`** regardless of the Float16 class — the pipeline is created
+and then fails validation ("Attribute base type Uint … does not match the
+shader's base type Float"), and the half-float colours arrive as `float16x3`.
+Fix: `packAttr` takes `fmt24` (the renderer's `isWebGPU`, read per build) and
+keeps 1- and 3-wide attributes Float32 under it — at BOTH pack sites, the
+chunked builder and `tlx.js` `buildGeometry` (`_pk`); the first fix covered
+only the chunked one and the props still refused. Padding x3 to x4 is not the fix — three reads a 4-wide
+`color` attribute as RGBA. The WebGPU path therefore forgoes the colour /
+normal / id savings above; a 4-wide pack with an explicit `vec3` read is the
+follow-up, gated on the same probe.
+
 ### Verifying it with decode, not with a screenshot
 
 Two frames differ for a dozen reasons that are not the change under test —

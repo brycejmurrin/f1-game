@@ -119,7 +119,21 @@ on:
     # through pages.yml's `uses:` call instead, so it is gated exactly once
     # rather than running twice in parallel against itself.
     branches-ignore: [claude/f1-game-project-26h3ng]
+    # ACTIONS MINUTES (2026-09-02): a docs / skills / rules-only commit ships
+    # nothing, so it buys no gate. The guard suite that checks those trees
+    # runs locally on every edit (test:tooling-fast); the deploy branch is
+    # gated through pages.yml's call regardless of what the diff touched.
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".claude/**"
+      - ".cursor/**"
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
+      - ".claude/**"
+      - ".cursor/**"
   # NIGHTLY (2026-09-01): the wide browser run — the boot group (73 tests)
   # across 4 shards — moved here from every push. Its whole recorded failure
   # history in this file's header is timeouts on starved runners, never an
@@ -128,6 +142,27 @@ on:
   schedule:
     - cron: "17 3 * * *"
   workflow_dispatch:
+    inputs:
+      # Any browser group from package.json on the 4-shard matrix (default =
+      # the boot group the nightly runs). A desktop-viewport spec that times
+      # out on the SwiftShader dev box measures the box (docs/TESTING.md
+      # §Field notes 2026-09-02); this is the runner-side verification.
+      group:
+        description: "browser group to run on the 4-shard matrix (tiny = boot group; ui, input, driving, ...)"
+        type: string
+        required: false
+        default: "tiny"
+      # The macOS renderer job is the most expensive minute in this file
+      # (a macOS runner bills at 10x Linux). It ran on every push that
+      # touched js/render/ until 2026-09-02; gpu-census.yml already gives
+      # every renderer commit its real-GPU verdict, so the gfx SPECS on
+      # Metal are now nightly or opt-in here — pass true when a gfx spec or
+      # its launch config changed.
+      renderer_macos:
+        description: "also run the gfx specs on the macOS (Metal) runner"
+        type: boolean
+        required: false
+        default: false
   workflow_call:      # pages.yml gates its deploy on this
     inputs:
       # Caller's push `before` SHA. workflow_call replaces github.event with its
@@ -176,7 +211,10 @@ permissions:
 # otherwise GitHub's one-pending-job concurrency rule silently cancels an older
 # queued deployment when the next push arrives.
 concurrency:
-  group: ci-${{ inputs.concurrency_key || github.ref }}
+  # A dispatched run gets its own group: it shares the ref with every push,
+  # and the cancel-in-progress below killed the first dispatched `ui` group
+  # 30 s in when the next docs commit landed (run 2211, 2026-09-02).
+  group: ci-${{ inputs.concurrency_key || (github.event_name == 'workflow_dispatch' && github.run_id) || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -679,12 +717,14 @@ jobs:
         # flag passes through tools/run-playwright.mjs verbatim (it forwards
         # argv to `playwright test`). Unsharded this step took 30-37 min.
         run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/4
-      # The wide run: the whole boot group, 4 shards, nightly / on dispatch only.
-      - name: Boot group (nightly)
+      # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
+      # whichever browser group the `group` input names (default tiny).
+      - name: Boot group (nightly) / dispatched group
         if: steps.shipfilter.outputs.ships != 'false' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         env:
           APEX_WORKERS: 1
-        run: npm run test:tiny -- --timeout=900000 --shard=${{ matrix.shard }}/4
+          GROUP: ${{ github.event_name == 'workflow_dispatch' && inputs.group || 'tiny' }}
+        run: npm run "test:${GROUP:-tiny}" -- --timeout=900000 --shard=${{ matrix.shard }}/4
       - name: Failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
@@ -799,7 +839,10 @@ jobs:
     # plan puts the gate at guards + driving-model + one smoke shard +
     # conditional sweeps (~5 min) with the GPU work on the nightly cron. So:
     # skipped on the Pages call (a skipped job does not fail the aggregate),
-    # run on branch pushes / PRs (path-filtered), nightly and on dispatch.
+    # run nightly and on dispatch. Branch pushes and PRs no longer reach it
+    # (2026-09-02, Actions minutes): the path filter below is kept for the
+    # day it is promoted, but a push skips this job outright, which skips
+    # renderer-macos with it through `needs:`.
     #
     # The Pages call is recognised by `inputs.concurrency_key`, which pages.yml
     # ALWAYS forwards and nothing else sets — not by `github.event_name`, which
@@ -807,7 +850,7 @@ jobs:
     # the sweeps filter accepts `push|workflow_call` either way. Promoting this
     # job into the gate once it has a measured green history is one line:
     # delete this `if:`.
-    if: ${{ !inputs.concurrency_key && github.event_name != 'workflow_call' }}
+    if: ${{ !inputs.concurrency_key && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') }}
     outputs:
       renderer: ${{ steps.filter.outputs.renderer }}
     steps:
@@ -866,7 +909,9 @@ jobs:
     # (renderer-filter is skipped on the Pages call, so this is too). The
     # "skipped reads as passed" hazard the sweeps avoid is about a job whose
     # verdict the deploy consumes; nothing consumes this one but the checks list.
-    if: needs.renderer-filter.outputs.renderer == 'true'
+    # Nightly, or a dispatch that asked for it (`renderer_macos: true`);
+    # never a push — see the filter's header and the dispatch input.
+    if: needs.renderer-filter.outputs.renderer == 'true' && (github.event_name == 'schedule' || inputs.renderer_macos == true)
     runs-on: macos-latest
     # 30 is a GUESS, and the header says what to do about that: the six specs
     # declare 240-480 s budgets measured under SwiftShader, where a boot is

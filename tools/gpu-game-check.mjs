@@ -131,6 +131,9 @@ try {
       localStorage.setItem("apex26.gfxBackend", be);
       if (be === "three") localStorage.setItem("apex26.tlxForceGL", p === "webgl2" ? "1" : "0");
       localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
+      // GLX drains gl.getError() only for the first presents unless this is
+      // set: the census is the consumer of the per-present drain (2e).
+      localStorage.setItem("apex26.glErrDrain", "1");
     } catch (_) { /* blocked storage: the defaults still boot */ }
     for (const kv of ls || []) {
       const i = kv.indexOf("=");

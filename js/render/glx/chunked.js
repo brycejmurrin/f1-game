@@ -233,7 +233,7 @@ function _shadowAllIdx(AL, lx, ly, lz) {
         // track._lights and the next build mints a new array); this loop only
         // binds each visible chunk's pre-baked list.
         const _tbl = LampChunks.resolve(F.allLights, chunks, F.perChunkLights);
-        let lastSlot = null;
+        let lastSlot = null, lastLi = null;
         // RUN-MERGE, the per-chunk twin of the plain branch below. This drew
         // once per visible chunk — 128 of the frame's 129 drawElements — and
         // re-uploaded a light set per chunk even when the neighbour's set was
@@ -251,10 +251,18 @@ function _shadowAllIdx(AL, lx, ly, lz) {
         //   same slot — uLampShadowIdx is a slot in that set.
         //   contiguous + same index type — the merged draw is one range.
         let runOff = -1, runCount = 0, runType = 0, runLi = null, runSlot = -1;
+        // The program keeps its uniforms between runs, so a run whose lamp
+        // list matches the one already uploaded (same members, non-contiguous
+        // chunks — ~40 of ~150 pairs per frame, PERF-FINDINGS 2c) skips the
+        // uniform4fv. _sameList compares by content: chunk lists are distinct
+        // arrays with equal members more often than the same array.
         const flush = () => {
           if (runOff < 0) return;
-          core.uploadLightSet(F.allLights, runLi, runLi.length,
-                              F.lights, F.tailStart, F.tailCount);
+          if (!_sameList(lastLi, runLi)) {
+            core.uploadLightSet(F.allLights, runLi, runLi.length,
+                                F.lights, F.tailStart, F.tailCount);
+            lastLi = runLi;
+          }
           if (runSlot !== lastSlot) { core.setLampShadowSlot(runSlot); lastSlot = runSlot; }
           gl.drawElements(gl.TRIANGLES, runCount, runType, runOff);
           runOff = -1; runCount = 0; runLi = null;

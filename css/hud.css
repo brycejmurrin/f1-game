@@ -132,6 +132,16 @@
   /* no backdrop-filter — over the live canvas (see .hud-box) */
   text-shadow: 0 1px 3px rgba(0,0,0,0.9);   /* legible over a bright sky/sand/snow scene, like #hud-speed */
 }
+/* THE AHEAD SLOT KEEPS ITS LINE. The two readouts are stacked ahead-over-behind
+   and the leader has no car ahead, so the first line emptied and the behind
+   line rode up into its place — one row of jump on every P1/P2 swap. MEASURED
+   headless 2026-09-02: the container was 2px tall with the ahead line empty
+   and 17.6px with it filled. One line of min-height (the 1.3 line-height above)
+   on the first child pins the behind line in place; both empty is now a one-
+   line box, which hud-layout.spec still measures as a container. Child selector,
+   not the class: this file spells the child class nowhere on purpose (the
+   class-count ratchet, see above). */
+.hud-gaps > div:first-child { min-height: 1.3em; }
 /* THE DROPPED STATE. Set by js/game/hud.js when the slot beside the map is
    smaller than any spelling of the readout — see the threshold table there. The
    widget keeps its column (still beside the minimap, still top-left) and moves

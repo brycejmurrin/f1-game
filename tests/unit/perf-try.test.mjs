@@ -378,7 +378,12 @@ test("fog stack skips pow/exp when density and mist are off", () => {
   const lit = shader("js/render/shaders/lit.js");
   assert.match(lit, /if\s*\(\s*uFogDensity\s*>\s*0\.0\s*\|\|\s*uGroundMist\s*>\s*0\.001\s*\)/);
   assert.match(lit, /if\s*\(\s*uFogDensity\s*>\s*0\.0\s*\)\s*\{\s*float\s+heightAtten/);
-  assert.match(lit, /if\s*\(\s*uFogDensity\s*>\s*0\.0\s*\)\s*\{[\s\S]*?pow\(\s*sunAmt\s*,\s*4\.0\s*\)[\s\S]*?pow\(\s*sunAmt\s*,\s*16\.0\s*\)/);
+  // The sun powers live INSIDE the gate. They were pow(sunAmt, 4.0) /
+  // pow(sunAmt, 16.0); since 2026-09-02 they are the exact multiplies
+  // sunAmt4 / sunAmt16 (renderer audit, GLX 10) — still gated, still skipped
+  // when the density is 0.
+  assert.match(lit, /if\s*\(\s*uFogDensity\s*>\s*0\.0\s*\)\s*\{[\s\S]*?sunAmt4\s*=\s*sunAmt2\s*\*\s*sunAmt2[\s\S]*?sunAmt16\s*\*=\s*sunAmt16/);
+  assert.doesNotMatch(lit, /pow\(\s*sunAmt\s*,\s*(4|16)\.0\s*\)/, "the integer sun powers are multiplies now, not pow()");
   const chunks = shader("js/render/webgpu/wgsl-chunks.js");
   assert.match(chunks, /if\s*\(\s*fogDensity\s*>\s*0\.0\s*\|\|\s*mistK\s*>\s*0\.001\s*\)/);
   assert.match(chunks, /if\s*\(\s*fogDensity\s*>\s*0\.0\s*\)\s*\{[\s\S]*?pow\(\s*sunAmt\s*,\s*4\.0\s*\)/);

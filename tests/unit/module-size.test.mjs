@@ -871,7 +871,7 @@ const CEILINGS = {
   // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
   // pass here and then call GLX with no device (backend-surface-parity).
   // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
-  "js/render/webgpu/wgx.js": 5593,   // 2026-09-01: persisted-2D-blit hardening on hardware + row-copy blit + decal pooling
+  "js/render/webgpu/wgx.js": 5640,   // 2026-09-02: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -955,12 +955,13 @@ const CEILINGS = {
   // based prune. Measured against the flat pool it was replacing:
   // createRenderObject allocations -45%, _createBindings -27%, 2-minute race
   // drift -28%. A PARTIAL fix, not a cure — PERF-FINDINGS 2o says so.
-  // 2496 -> 2511: the SSR MRT node hoisted out of present() into a memoised
-  // factory, and the comment carrying why. That one line was the whole of
-  // §2o's leak: a new mrt() per frame meant a new mrt.id, a new render-context
-  // cache key, and a permanent RenderContext every frame. 4-minute race drift
-  // +124 MB -> +4.5 MB (GLX +1.3). PERF-FINDINGS 2p.
-  "js/render/three/tlx.js": 2511,
+  // 2548 -> 2562: their occurrence-keyed mesh pool (the collapse fix) merged
+  // with the SSR MRT node hoisted out of present() into a memoised factory.
+  // That one line was the whole of 2o's leak — a new mrt() per frame meant a
+  // new mrt.id, a new render-context cache key, and a permanent RenderContext
+  // every frame. 4-minute race drift +124 MB -> +4.5 MB (GLX +1.3).
+  // PERF-FINDINGS 2n (their pack sites) and 2p (the MRT node).
+  "js/render/three/tlx.js": 2562,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
@@ -1012,7 +1013,7 @@ const CEILINGS = {
   // Float32Array rounds on store and the compare was float32-vs-float64. The
   // 40 lines buy uniform3fv 31.5 -> 16.3 per frame (vegas night, full field,
   // tools/glx-call-census.mjs) with every other counter unchanged.
-  "js/render/glx.js": 2078,
+  "js/render/glx.js": 2094,   // 2026-09-02: gated per-present getError drain (audit round)
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

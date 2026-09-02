@@ -113,8 +113,21 @@
     if (_zeroBuf.length < len) _zeroBuf = new Float32Array(len);
     return _zeroBuf.subarray(0, len);
   }
-  function packAttr(THREE, src, len, itemSize, kind) {
+  // `fmt24` is the WebGPU rule: 8- and 16-bit VERTEX FORMATS exist only in
+  // 2- and 4-component widths (unorm8x2/x4, snorm16x2/x4, float16x2/x4 —
+  // there is no float16x3 and no unorm8x1), and three names the format
+  // straight from itemSize, so a packed 3-wide colour or 1-wide id reaches
+  // createRenderPipeline as 'float16x3' and the whole pipeline is REFUSED:
+  // "TLX REFUSED ... not a valid enum value of type GPUVertexFormat",
+  // measured on macos-latest/Metal (gpu-census runs 21-22, 2026-09-02) and
+  // reproduced here under Dawn/SwiftShader. WebGL2 takes any width, which is
+  // why the WebGL2 control leg stayed green while the WebGPU leg fell back to
+  // GLX silently. Under fmt24 those widths keep Float32 (the pre-pack
+  // layout); padding x3 to x4 is NOT the fix — three reads a 4-wide colour
+  // attribute as RGBA.
+  function packAttr(THREE, src, len, itemSize, kind, fmt24) {
     const ok = src && src.length === len;
+    if (fmt24 && itemSize !== 2 && itemSize !== 4) kind = null;
     if (!packOn) {
       return new THREE.BufferAttribute(
         ok ? (src instanceof Float32Array ? src : new Float32Array(src)) : new Float32Array(len),
@@ -176,11 +189,27 @@
       packStats.savedMB += (len * 2) / 1048576;
       return new THREE.BufferAttribute(a, itemSize, true);            // normalized
     }
+    if (kind === "id") {
+      // NOT a bare Uint8Array. A non-normalized integer array is bound as an
+      // INTEGER attribute (vertexAttribIPointer / a uint vertex format) while
+      // tsl-lit.js reads attribute("mat", "float"); SwiftShader shrugs, ANGLE
+      // on Metal refuses every draw — GL_INVALID_OPERATION "vertex shader
+      // input type does not match the type of the bound vertex attribute",
+      // measured on macos-latest (dispatched runs 2217/2218, 2026-09-02) with
+      // the road still drawing on the WebGL2/SwiftShader CI. Half-float holds
+      // every id exactly (integers to 2048), is a FLOAT format on both
+      // backends, and still halves the 4-byte source; the same path the
+      // out-of-range branch above already takes.
+      packStats.half++;
+      const h = new Uint16Array(len);
+      for (let i = 0; i < len; i++) h[i] = _toHalf(src[i]);
+      packStats.savedMB += (len * 2) / 1048576;
+      return new THREE.Float16BufferAttribute(h, itemSize);
+    }
     const a = new Uint8Array(len);
-    if (kind === "unorm") { for (let i = 0; i < len; i++) a[i] = Math.round(src[i] * 255); }
-    else { for (let i = 0; i < len; i++) a[i] = src[i]; }
+    for (let i = 0; i < len; i++) a[i] = Math.round(src[i] * 255);
     packStats.savedMB += (len * 3) / 1048576;
-    return new THREE.BufferAttribute(a, itemSize, kind === "unorm");  // ids are NOT normalized
+    return new THREE.BufferAttribute(a, itemSize, true);              // unorm: normalized = a float input
   }
   // Uint16 indices wherever the vertex count allows — three picks the GL type
   // from the array, so this is a straight halving with no shader involvement.
@@ -189,12 +218,15 @@
       (!packOn || vCount > 65535) ? new Uint32Array(idx) : new Uint16Array(idx), 1);
   }
 
-  function chunked(THREE /*, ctx */) {
+  function chunked(THREE, ctx) {
 
     const toF32 = (a) => (a instanceof Float32Array ? a : new Float32Array(a));
+    // Read per build, not once: the renderer's backend is known only after
+    // its async init, and a build can precede it on a slow boot.
+    const fmt24 = () => !!(ctx && ctx.isWebGPU && ctx.isWebGPU());
 
     function attrOrZero(src, len, itemSize, kind) {
-      return packAttr(THREE, src, len, itemSize, kind);
+      return packAttr(THREE, src, len, itemSize, kind, fmt24());
     }
 
     /** Build a chunked mesh: one shared attribute set + one index buffer per
