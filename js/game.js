@@ -6518,17 +6518,23 @@ function render(dt) {
     if (!_shadowsRead) {
       _shadowSnapX = _shadowSnapZ = _shadowBox = null;
       _shadowSunX = _shadowSunY = _shadowSunZ = null;
-    } else if ((lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
-        sd[0] !== _shadowSunX || sd[1] !== _shadowSunY || sd[2] !== _shadowSunZ) &&
-        // DEFER THE WHOLE REBUILD, never part of one. Halving this pass at
-        // tier >= 1 is a real saving and it belongs HERE, at the rebuild
-        // decision, not inside the props cast: the snap keys below are left
-        // untouched, so the previous map — complete, with its instanced props
-        // in it — stays bound and the next frame rebuilds the lot. Skipping
-        // only the instanced half instead published a map with the road and
-        // terrain shadows but no trees, barriers or signs, and held it for a
-        // whole 20 m cell. Same idiom as the lamp pass's one-frame defer.
-        !(PerfGov.tier() >= 1 && (_frameNo & 1) === 1)) {
+    // NO tier >= 1 PARITY GATE ON THIS REBUILD; both forms of it were wrong.
+    // Inside _castPropBatchesShadow it published a map with road and terrain
+    // shadows but no trees or barriers, and the snap cache held that half-built
+    // map for a whole 20 m cell. Moved out here to defer the WHOLE rebuild it
+    // saves nothing: the snap keys are written inside this block, so the
+    // predicate is still true next frame and the deferred rebuild runs in full,
+    // props included. Deferral only pays when the trigger fires on CONSECUTIVE
+    // frames; two 20 m crossings one frame apart needs 1200 m/s. It bought a
+    // frame of extra shadow lag and nothing else.
+    //
+    // Nor is the saving recoverable by coarsening the snap cell: slack is
+    // step/2 against a 0.875·sBox coverage guarantee and a fade that already
+    // reaches 0.84·range, so doubling step spends the whole margin and pushes
+    // shadows through the box edge. That trade moves the fade constant with it
+    // and needs real hardware, not a gate.
+    } else if (lu !== _shadowSnapX || lv !== _shadowSnapZ || sBox !== _shadowBox ||
+        sd[0] !== _shadowSunX || sd[1] !== _shadowSunY || sd[2] !== _shadowSunZ) {
       _shadowSnapX = lu; _shadowSnapZ = lv; _shadowBox = sBox;
       _shadowSunX = sd[0]; _shadowSunY = sd[1]; _shadowSunZ = sd[2];
       // Rebuild the snapped centre in world space. The along-sun component needs
@@ -6965,21 +6971,25 @@ function render(dt) {
         // Snap: 12 m eye cell + same flood index → keep previous lamp map
         // (props are static for that cell; AI cars already one-frame lag).
         const _lsx = Math.round(camEye[0] / 12), _lsz = Math.round(camEye[2] / 12);
+        // NO lampShadowKeep() HERE, unlike the car pass above — it shipped for
+        // three hours and came back out. The missing lamp shadow on these
+        // branches is real, but arming the flag is worse than missing it:
+        //   1. THIS TEST COMPARES SLOTS, NOT LAMPS. _lampShBest is a remembered
+        //      index into frame.lights, which lighting.js re-sorts by distance
+        //      every frame and rebuilds on 0.5 m of eye motion — ~24× inside one
+        //      12 m cell. A handover that lands on the same slot keeps this test
+        //      true while the bound map and its VP belong to the PREVIOUS lamp:
+        //      a floodlight shadow and god-ray shaft from the wrong mast.
+        //      Re-stating the index makes it worse, not safer. Keying the snap
+        //      on lamp identity (world position) is the precondition.
+        //   2. THE LAMP MAP RASTERISES CARS (below), and this gate knows nothing
+        //      about car motion — a kept map paints a car shadow up to a cell
+        //      stale. Unarmed, that map is merely unread.
         if (flBest === _lampShBest && _lsx === _lampShSX && _lsz === _lampShSZ) {
           // Map from last rebuild still bound; skip the 512² props pass.
-          // AND SAY SO. This branch is the common case — it holds for as long as
-          // the player stays in one 12 m cell on the same lamp — and the armed
-          // flag it used to leave false is what the LIT uniform and the god-ray
-          // pass both read. So the floodlight shadow and its shaft were visible
-          // for exactly ONE frame per cell, and for a player parked under a
-          // flood at night they never came back at all. flBest is re-resolved
-          // every frame above, which is what makes it safe to re-state: the slot
-          // is this frame's, not a remembered one.
-          if (gfx.lampShadowKeep) gfx.lampShadowKeep(flBest);
         } else if ((_frameNo & 1) !== 0 && flBest === _lampShBest) {
           // Defer a cell-only rebuild one frame — props are static; the prior
           // map stays valid while the eye crosses a 12 m snap cell.
-          if (gfx.lampShadowKeep) gfx.lampShadowKeep(flBest);
         } else {
         _lampShBest = flBest; _lampShSX = _lsx; _lampShSZ = _lsz;
         // Perspective frustum down the beam: fov spans the OUTER cone (plus

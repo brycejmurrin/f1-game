@@ -50,7 +50,7 @@ const GLXShadow = (function () {
       shadowBegin, castShadow, castShadowInstanced, shadowEnd,
       carShadowBegin, carShadowEnd,
       lampShadowBegin, lampShadowEnd,
-      carShadowKeep, lampShadowKeep,
+      carShadowKeep,
     };
 
     // KEEP: "the pass did not run this frame, and the map is still good."
@@ -84,18 +84,10 @@ const GLXShadow = (function () {
       S.carArmed = true;
       return true;
     }
-    function lampShadowKeep(lightIdx) {
-      if (!S.lampEnabled || S.lampArms <= 0) return false;
-      // The index must be re-stated, not remembered: frame.lights is a
-      // distance-ranked nearest-N that is rebuilt as the eye moves, so the slot
-      // holding this lamp can change between rebuilds. The producer resolves it
-      // every frame; keeping a stale index would run the PCF against a different
-      // light. A caller that cannot resolve it declines the keep.
-      if (!(lightIdx >= 0)) return false;
-      S.lampIdx = lightIdx | 0;
-      S.lampArmed = true;
-      return true;
-    }
+    // There is deliberately no lampShadowKeep: the producer's snap test keys on
+    // a SLOT into a per-frame re-sorted array, not on the lamp, so arming from it
+    // can bind one lamp's map under another lamp's parameters. See the long note
+    // at the lamp pass in game.js.
 
     function setup() {
       depthProg = link(DEPTH_VS, DEPTH_FS);

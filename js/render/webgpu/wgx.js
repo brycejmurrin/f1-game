@@ -4048,21 +4048,23 @@ const WGX = (function () {
     function envProbeReset() {
       _envFacesMask = 0; _envProbeLive = false;
       envCubeView = _envPlaceView || envCubeView;
-      // AND THE STATIC SUN MAP'S LATCH. _shadowRendered is set once, at the first
-      // shadowEnd, and had no reset anywhere: not on a track change, a tier
-      // change, a resize or quitToMenu. It gates the light VP the LIT pass and
-      // the god-ray march both sample (`_shadowRendered ? shadowLVPData : IDENT`),
-      // so a latch that survives a track switch points them at the PREVIOUS
-      // circuit's sun map until the new one's first snap rebuild lands.
+      // _shadowRendered IS NOT RESET HERE, and the argument that it should be
+      // (a latch with no invalidation path) does not survive its two callers:
       //
-      // It is currently masked by the shader also gating on sunUp and shadowStr,
-      // which is luck rather than design, and it is the wrong template for the
-      // car/lamp keeps that now sit beside it — those have an explicit arms
-      // guard precisely because a latch with no invalidation is how this class
-      // of bug starts. envProbeReset is already called on every track change
-      // (js/game.js loadTrack) and on the tier shed, which is exactly the set
-      // this needs, so it rides along rather than growing a second hook.
-      _shadowRendered = false;
+      //   - Track change. loadTrack already nulls _shadowSnapX/_shadowSnapZ/
+      //     _shadowBox/_shadowSun* (js/game.js) BEFORE it calls this, so the
+      //     next frame rebuilds the sun map unconditionally and re-sets the
+      //     latch. There was never a stale-circuit window to close.
+      //   - Tier shed. That caller (js/game.js, PerfGov.tier() >= 1) does NOT
+      //     touch the snap keys, so clearing the latch here feeds IDENT to the
+      //     LIT pass and the god-ray march with nothing scheduled to restore
+      //     it: every static sun shadow switches off until the eye crosses a
+      //     20 m cell, and indefinitely for a parked car or a static camera.
+      //     It also runs AFTER the sun snap block in the same frame, so it
+      //     clobbers a rebuild that just landed.
+      //
+      // A latch whose producer is re-armed by its own invalidation keys does not
+      // need a second reset; one whose caller cannot re-arm it must not get one.
       _rebuildFrameBG();
     }
 
@@ -5859,16 +5861,8 @@ const WGX = (function () {
         _carShadowArmed = true;
         return true;
       },
-      // The index is re-stated rather than remembered: frame.lights is a
-      // distance-ranked nearest-N rebuilt as the eye moves, so this lamp's slot
-      // can change between rebuilds and a stale index runs the PCF on the wrong
-      // light.
-      lampShadowKeep: (lightIdx) => {
-        if (!lampShadowView || WGX_LITE || _lampArms <= 0 || !(lightIdx >= 0)) return false;
-        _lampIdx = lightIdx | 0;
-        _lampShadowArmed = true;
-        return true;
-      },
+      // No lampShadowKeep: see the note at the lamp pass in game.js — the
+      // producer's snap test compares slots into a per-frame re-sorted array.
       // `armed` is the frame-live gate the shader reads; `arms` is a lifetime
       // counter that stays true straight through a strobe, which is why no test
       // could see this.
