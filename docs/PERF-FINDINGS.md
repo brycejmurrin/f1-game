@@ -2209,6 +2209,81 @@ Whether TLX may now default on a phone is a SEPARATE question and is not
 settled here: the baseline is still ~97 MB against GLX's ~47, and no iPhone has
 run this build. `apex26.tlxMobile=1` is how that gets answered.
 
+## 2q. The shadow pass is 40 MB on a phone, and it still is not enough (2026-09-02)
+
+§2n closed with the honest limit: TLX after packing is ~119 MB against GLX's
+~49.6 MB on the same phone profile, "the rest is three's own machinery and the
+TSL node graphs, which no amount of attribute packing reaches". This entry asks
+what the machinery is made of, and answers two thirds of it.
+
+### Where the question came from
+
+three.js **#32409** — override-material `RenderObject`s keep meshes strongly
+referenced — was fixed by **#33682** and that fix is in our r185. The reporter
+retested on r185 and found a residue, which they traced by hand:
+`DirectionalLightShadow` → `shadow.camera` → `RenderList` → render item →
+geometry → typed arrays, and recorded that "with shadows disabled ... cleanup
+appears to behave normally". The env probe is the other override pass this
+backend runs, and it was already worth 54.4 MB of a 197.1 MB desktop-profile
+heap. So: measure both, on the profile that actually matters.
+
+### The measurement
+
+`scratch/cockpit3/heap-mobile2.mjs`. iPhone UA, `isMobile: true`, 844×390,
+montreal, day/dry, in race, 12 s settle, `performance.memory.usedJSHeapSize`.
+Every leg is a fresh browser context and a reload after the keys are set, and
+every leg's backend is **confirmed** from `GLX.__tlx.backendState()` rather than
+assumed — three earlier attempts at this number used `window.__tlx`, which does
+not exist, and silently measured GLX in both arms of a TLX A/B.
+
+| arm | backend confirmed | JS heap | Δ |
+|---|---|---|---|
+| GLX — what phones get today | `tlx:false` | **48.0 MB** | — |
+| TLX mobile | `webgl2`, `liteGpu:true`, `isMobile:true` | **149.0 MB** | +101.0 |
+| TLX mobile, `tlxShadowOff=1` | same | **108.6 MB** | **−40.4** |
+| TLX mobile, `+ envProbeOff=1` | same | **95.8 MB** | −12.8 (−53.2 total) |
+
+Zero page errors in all four. The lite ladder is genuinely engaged — this is not
+a desktop profile wearing a phone's viewport, which is what the earlier 197.1 MB
+figure was.
+
+**40.4 MB from the shadow pass alone** — nearly twice what the whole attribute
+pack won (§2n, 21 MB), from one boolean. That is the residue the upstream
+reporter described, measured on our tree rather than inferred from their thread.
+
+### And it still does not close
+
+95.8 MB is **exactly 2×** GLX's 48.0 MB — with shadows *and* environment
+reflections both switched off. Two visible features surrendered, and TLX is
+still double the backend that already fits. The remaining ~48 MB over GLX is
+not attributable to anything this round found a lever for.
+
+So **the phone gate in `tlx.js` does not move.** A knob that gets a handset from
+149 MB to 96 MB is worth having and is not worth flipping a default over: the
+number that matters is whether the tab survives iOS jetsam, this container
+cannot answer it (§2n said so and it is still true), and 2× the known-good
+backend is not the side of that line to guess from.
+
+### What shipped
+
+`apex26.tlxShadowOff` — a MEMORY lever, sibling of `envProbeOff` /
+`perChunkOff`, off by default, reachable by a player who has already opted in
+with `apex26.tlxMobile=1`. It is also the instrument: the 40.4 MB above cannot
+be re-measured without it.
+
+Visual cost, since a memory knob that quietly removes a feature is a trap:
+`artifacts/shadow-{on,off}` — the car's contact shadow and the sun shadows under
+trackside structures go; the blob shadow and all ambient/AO shading stay.
+
+### The transferable bit
+
+The three arms that mattered were all *subtractive*, and each one is a pass the
+renderer can be told not to run. When a heap is dominated by "the framework's
+own machinery", the cheapest decomposition is not a profiler — it is turning off
+one pass at a time and re-reading `usedJSHeapSize`. Two knobs and forty minutes
+attributed 53 MB of 101; a heap snapshot of three's internals attributed none of
+it in three previous sessions.
+
 ## 3. Left on the table
 
 The pre-08-18 narrative behind this list — the O(n²) AI scans that were
@@ -2281,6 +2356,16 @@ What the bytes actually were, once `__tlx.geoCensus()` existed to ask:
 49.84 MB of deduped live attribute data, half of it Float32 holding values that
 never needed 32 bits. Taken in §2n — 49.84 → 28.68 MB — by packing rather than
 streaming.
+
+**The ~48 MB that is still unattributed** (§2q). On the iPhone profile TLX is
+149.0 MB to GLX's 48.0. The shadow pass is 40.4 of the gap and the env probe
+12.8 — both now switchable, both measured — and with BOTH off TLX is still
+95.8 MB, almost exactly double GLX. Nothing in three rounds of heap snapshots
+has attributed that remainder; the two things that did attribute anything were
+subtractive A/Bs over whole render passes, so the next attempt should be more
+of those (the post chain, the TSL node graphs per material, the mesh pool) and
+not another snapshot. Until it is attributed the phone default stays GLX — 2x
+the known-good backend is not a margin to guess iOS jetsam from.
 
 **Road and terrain had no frustum cull in any pass.** Counted by binning the
 ribbons into the same 72 m cells `createChunkedMesh` uses (a frustum with far

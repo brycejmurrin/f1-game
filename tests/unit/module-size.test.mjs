@@ -961,7 +961,24 @@ const CEILINGS = {
   // new mrt.id, a new render-context cache key, and a permanent RenderContext
   // every frame. 4-minute race drift +124 MB -> +4.5 MB (GLX +1.3).
   // PERF-FINDINGS 2n (their pack sites) and 2p (the MRT node).
-  "js/render/three/tlx.js": 2562,
+  // 2562 -> 2572: apex26.tlxShadowOff, a MEMORY lever and sibling of
+  // envProbeOff/perChunkOff, plus the eight comment lines carrying the
+  // measurement that earns it. iPhone profile, montreal, in race, lite ladder
+  // engaged (liteGpu+isMobile true, WebGL2): TLX 149.0 MB -> 108.6 MB with the
+  // shadow pass off. 40.4 MB from one knob — nearly twice what the whole
+  // attribute pack won (2n, 21 MB) — and the residue three.js#32409's reporter
+  // traced on r185 after #33682 to shadow.camera -> RenderList -> render item
+  // -> geometry. GLX on the same profile is 48.0 MB, so this does NOT by
+  // itself make the phone default flippable. Evidence: PERF-FINDINGS 2q.
+  // 2572 -> 2582: ten lines correcting the releaseMirrors gate's own comment,
+  // which still said the release "nulls attribute.array" and justified the
+  // env-probe hold on that. It assigns a zero-length array of the same class
+  // now, so .constructor resolves and .count (a plain property set once in the
+  // BufferAttribute constructor) is untouched. The gate is kept, but a reader
+  // is told it is belt-and-braces, not the thing standing between them and 81
+  // dead probe faces — a stale justification is how a correct guard gets
+  // deleted by the next person who checks whether it is still needed.
+  "js/render/three/tlx.js": 2582,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
