@@ -572,6 +572,10 @@ const WGX = (function () {
     let _cssApplying = false;
     const _markCssDirty = function () { if (!_cssApplying) _cssDirty = true; };
     let _canWatchCss = false;
+    // The viewport this cache was last taken against, and how long to keep
+    // distrusting it. See _cssSize().
+    let _cssVW = -1, _cssVH = -1, _cssRecheck = 0;
+    const CSS_RECHECK_FRAMES = 30;
     if (typeof window !== "undefined" && window.addEventListener) {
       window.addEventListener("resize", _markCssDirty);
       window.addEventListener("orientationchange", _markCssDirty);
@@ -586,7 +590,26 @@ const WGX = (function () {
     function _cssSize() {
       // Zero means the canvas is not laid out yet; keep probing until real.
       if (!_canWatchCss) _cssDirty = true;
-      if (_cssDirty || _cssW <= 0 || _cssH <= 0) {
+      // Same settle window as GLX cssSize(), for the same measured reason: the
+      // dirty flag is edge-triggered and consumed unconditionally, so a single
+      // read that lands before the box has reflowed latches the PREVIOUS
+      // viewport's size for good (docs/PERF-FINDINGS.md §2s). innerWidth /
+      // innerHeight are viewport metrics, not element layout, so this costs no
+      // reflow; a change opens a window during which the box is re-read every
+      // frame. Runs BEFORE resize()'s `_cssApplying = true` bracket, so it
+      // cannot defeat the ResizeObserver suppression, and a re-read inside the
+      // 1px jitter clamp still resolves to the same w/h.
+      if (typeof window !== "undefined") {
+        const vw = window.innerWidth | 0, vh = window.innerHeight | 0;
+        if (vw !== _cssVW || vh !== _cssVH) {
+          // First observation records without arming — see GLX cssSize().
+          const first = _cssVW < 0;
+          _cssVW = vw; _cssVH = vh;
+          if (!first) _cssRecheck = CSS_RECHECK_FRAMES;
+        }
+      }
+      if (_cssDirty || _cssW <= 0 || _cssH <= 0 || _cssRecheck > 0) {
+          if (_cssRecheck > 0) _cssRecheck--;
         _cssW = _layoutCanvas.clientWidth;
         _cssH = _layoutCanvas.clientHeight;
         _cssDirty = false;

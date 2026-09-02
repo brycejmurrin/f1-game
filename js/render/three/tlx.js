@@ -1452,13 +1452,20 @@ const TLX = (function () {
       }
 
       let cssW = 0, cssH = 0, cssDirty = true;
+      // The viewport this cache was last taken against, and how long to keep
+      // distrusting it. See the settle block in resize().
+      let cssVW = -1, cssVH = -1, cssRecheck = 0;
+      const CSS_RECHECK_FRAMES = 30;
       const markCssDirty = () => { cssDirty = true; };
       if (typeof window !== "undefined" && window.addEventListener) {
         window.addEventListener("resize", markCssDirty);
         window.addEventListener("orientationchange", markCssDirty);
-        if (typeof ResizeObserver === "function" && _layoutCanvas) {
-          try { new ResizeObserver(markCssDirty).observe(_layoutCanvas); } catch (_) {}
-        }
+      }
+      // Registered OUTSIDE the addEventListener check, as GLX and WGX both do:
+      // an engine with ResizeObserver but no addEventListener would otherwise
+      // get no invalidation signal at all.
+      if (typeof ResizeObserver === "function" && _layoutCanvas) {
+        try { new ResizeObserver(markCssDirty).observe(_layoutCanvas); } catch (_) {}
       }
       function resize() {
         // CSS size only — NEVER fall back to canvas.width/.height. setSize() below
@@ -1467,7 +1474,22 @@ const TLX = (function () {
         // doubled its render target every begin() until allocation failed. GLX and
         // WGX both read clientWidth with a floor of 1 for the same reason.
         // Soft-present: the hidden GPU canvas is 1×1 CSS — layout is #game.
-        if (cssDirty || cssW <= 0 || cssH <= 0) {
+        // Same settle window as GLX cssSize(): the dirty flag is edge-triggered
+        // and consumed unconditionally, so one read that lands before the box
+        // has reflowed latches the PREVIOUS viewport's size for the rest of the
+        // session (docs/PERF-FINDINGS.md §2s). innerWidth/innerHeight are
+        // viewport metrics, not element layout, so this costs no reflow.
+        if (typeof window !== "undefined") {
+          const vw = window.innerWidth | 0, vh = window.innerHeight | 0;
+          if (vw !== cssVW || vh !== cssVH) {
+            // First observation records without arming — see GLX cssSize().
+            const first = cssVW < 0;
+            cssVW = vw; cssVH = vh;
+            if (!first) cssRecheck = CSS_RECHECK_FRAMES;
+          }
+        }
+        if (cssDirty || cssW <= 0 || cssH <= 0 || cssRecheck > 0) {
+          if (cssRecheck > 0) cssRecheck--;
           cssW = _layoutCanvas.clientWidth;
           cssH = _layoutCanvas.clientHeight;
           cssDirty = false;

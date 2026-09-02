@@ -403,3 +403,67 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
       expect(state.footReachable, "and the action bar stays on screen").toBe(true);
     });
 });
+
+test.describe("Live resize — the renderer's cached canvas box", () => {
+  // THE ONE THING THIS FILE DELIBERATELY DID NOT COVER. Every test above calls
+  // headless(true) to stop the render loop, for good reasons written at
+  // waitReady() — and the cost, named there, is that "it only leaves rendering
+  // (and the frustum-shift math that reads #cs-inner's live rect while
+  // rendering) untested". A defect lived in exactly that gap: GLX's CSS-size
+  // cache is invalidated by an edge-triggered flag, and one resize() landing
+  // before the canvas box reflowed cached the OLD box, cleared the flag, and
+  // left GLX.aspect reporting the PREVIOUS viewport's ratio for the rest of the
+  // session. Measured in a browser: a landscape 1.7778 survived a whole
+  // portrait session in the garage (docs/PERF-FINDINGS.md §2s). aspect feeds
+  // the main projection, the FOV cap and the frustum cull radius, so this
+  // stretches the world and can pop geometry out of it.
+  //
+  // So this ONE test keeps the loop running. It asserts a relative invariant
+  // against the live DOM — aspect equals the canvas's own box — never an
+  // absolute number, and it tolerates a frame of lag by polling rather than
+  // sampling once.
+  test("GLX.aspect tracks the live canvas box across rotations", async ({ page }) => {
+    // The render loop is the subject here, so headless(true) is off — and that
+    // makes the boot cost this file's own notes measure (54-107 s under
+    // SwiftShader; `AgentView.create` at 72.9 s in the first run of this test)
+    // land INSIDE the test budget instead of beside it. 120 s is not enough for
+    // a boot plus a rotation walk on a software renderer; this is a wall-clock
+    // budget for the machine, not a widened tolerance on the assertion, which
+    // stays exact (docs/TESTING.md: "a timeout on a busy box measures the
+    // machine, not the code").
+    test.setTimeout(300_000);
+    await page.setViewportSize(DESKTOP);
+    await page.goto("/");
+    await page.waitForFunction(() => window.__apex && window.__apex.race,
+      null, { polling: 100, timeout: BOOT_MS });
+    // NO headless(true) here — the render loop is the subject, not the noise.
+    await openGarage(page);
+
+    // Three stops, not five: the measured repro alternated stale/correct on
+    // every single orientation change, so landscape -> portrait -> landscape
+    // already covers it, and each extra stop is another SwiftShader settle.
+    for (const [label, size] of [
+      ["desktop", DESKTOP], ["phone-portrait", PHONE_PORTRAIT],
+      ["phone-landscape", PHONE_LANDSCAPE],
+    ]) {
+      await page.setViewportSize(size);
+      // Poll: a busy SwiftShader box can take several frames to settle, and
+      // this file's own notes measure that as up to seconds. Waiting on the
+      // CONDITION rather than a fixed sleep is what AGENTS.md asks for.
+      await page.waitForFunction(() => {
+        const cv = document.getElementById("game");
+        if (!cv || !cv.clientHeight || typeof GLX === "undefined") return false;
+        return Math.abs(GLX.aspect - cv.clientWidth / cv.clientHeight) < 0.01;
+      }, null, { polling: 100, timeout: 15_000 }).catch(() => {});
+
+      const seen = await page.evaluate(() => {
+        const cv = document.getElementById("game");
+        return { aspect: GLX.aspect, box: cv.clientWidth / cv.clientHeight,
+                 css: `${cv.clientWidth}x${cv.clientHeight}`, buf: `${GLX.width}x${GLX.height}` };
+      });
+      expect(Math.abs(seen.aspect - seen.box),
+        `${label}: GLX.aspect ${seen.aspect.toFixed(4)} must match the live ${seen.css} box `
+        + `(${seen.box.toFixed(4)}); backing store ${seen.buf}`).toBeLessThan(0.01);
+    }
+  });
+});

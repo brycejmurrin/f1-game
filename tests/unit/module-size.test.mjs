@@ -871,7 +871,7 @@ const CEILINGS = {
   // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
   // pass here and then call GLX with no device (backend-surface-parity).
   // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
-  "js/render/webgpu/wgx.js": 5676,   // 2026-09-02 bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  "js/render/webgpu/wgx.js": 5700,   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2s); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo
@@ -996,7 +996,7 @@ const CEILINGS = {
   // MERGE 2026-09-02: both lineages raised this ceiling for different work, so
   // the union is neither side's number — 2603 is MEASURED on the merged file
   // (mine 2588 + their 2577 both stale against it).
-  "js/render/three/tlx.js": 2603,
+  "js/render/three/tlx.js": 2626,   // 2026-09-02 R16: settle window in resize() + the ResizeObserver moved outside the addEventListener check (PERF-FINDINGS 2s)
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
@@ -1048,7 +1048,7 @@ const CEILINGS = {
   // Float32Array rounds on store and the compare was float32-vs-float64. The
   // 40 lines buy uniform3fv 31.5 -> 16.3 per frame (vegas night, full field,
   // tools/glx-call-census.mjs) with every other counter unchanged.
-  "js/render/glx.js": 2105,   // 2026-09-02 bug hunt: drain re-arm on track switch, env-face re-entrancy restore; earlier: gated per-present getError drain (audit round)
+  "js/render/glx.js": 2150,   // 2026-09-02 R16: cssSize() distrusts its cache after a viewport change + the canWatchCss fallback (PERF-FINDINGS 2s); earlier bug hunt: drain re-arm on track switch, env-face re-entrancy restore; earlier: gated per-present getError drain (audit round)
   // WGSL-as-data for the chunked path; grew with R5 per-chunk lamps.
   // 1855 -> 1902: the four new livery finishes (matte 28, brushed 29, pearl 30,
   // carbon 31)

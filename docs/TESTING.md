@@ -1789,3 +1789,28 @@ has 1194: `playwright.config.js` pins the sandbox binary, a bare
 `chromium.launch()` in a scratch script needs `executablePath`.
 
 **The change-aware gate selected the two slowest boot specs for every source edit, and never carried a failure forward (2026-09-02).** Pages runs 1888 (twice) and push run 2229 went red on `boot-guard.spec.js` (PERMANENT 404: 120 s while Playwright set up the browser context) and `logging.spec.js` (the Monaco build) — both pass locally in 86 s, so the reds were runner starvation. They were selected because pick-tests' blanket rules (`/^(js|css)\//` → "any source edit: does the page still boot", `index.html` → "script tags + DOM shell") route every diff to the boot group, and inside a 10-test budget its cheapest-by-count specs are exactly those two, the slowest per test in the tree. That question is already answered by the FIXED smoke gate (four shards) on every push and deploy, so `select-specs` now drops the boot group when only the blanket rules named it (`dropBootFallback`, `bootCoveredBySmoke` in the JSON). Separately, the "Record failing specs" step never recorded anything: Playwright writes `<system-out>` BEFORE `<failure>`/`<error>` inside a testcase, so a "testcase immediately followed by failure" regex matched nothing, and the classname it would have captured (`specs/x.spec.js`) lacks the `tests/` prefix the selector filters on — `tools/junit-failed.mjs` parses the block and normalises the path. Runner boots measured in these runs: a context that takes 120 s to create is the machine; do not widen the 45 s boot wait for it.
+
+### 2026-09-02 — two instruments that lie on this container
+
+**`etime`/`etimes` does not track wall clock here.** A probe polled across ten
+minutes of tool calls reported `etimes 29`, and a second read seven seconds
+later had advanced by over a minute. Every "it has been running too long, it
+must be wedged" judgement made from the process table this session was
+measuring nothing, and one of them killed a healthy run. **Poll the artifact for
+content, not the process for age** — `[ -s artifacts/x.log ] && ! pgrep …` in a
+long-bounded loop, and let the log's own terminal line be the verdict. The
+companion trap is older and already documented: a `pgrep -f`/`pkill -f` pattern
+matches the controlling shell's own command line, so use explicit PIDs.
+
+**An `await requestAnimationFrame` inside `page.evaluate()` has no timeout of
+its own.** A probe that awaited a double-rAF to measure frame liveness hung
+indefinitely with no output and no error — `evaluate` waits for the promise,
+and a throttled or stopped loop never resolves it. Playwright's test timeout is
+the outer backstop; a scratch script has none. Measure liveness with a counter
+read across two ordinary `waitForTimeout`s instead.
+
+**A screenshot of the WebGPU canvas needs `GLX.awaitSoftPresent()` first**
+(`tools/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
+un-blitted canvas and produces a confident, wrong answer — it cost one fully
+written-up "WGX mis-frames the garage" reproduction that had to be retracted
+(docs/PERF-FINDINGS.md §2r).

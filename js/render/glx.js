@@ -666,6 +666,11 @@ const GLX = (function () {
   // only changes on a viewport/orientation change or a rotation of the device, so
   // read it when the browser tells us it moved and cache it in between.
   let cssW = 0, cssH = 0, cssDirty = true;
+  let canWatchCss = false;
+  // The viewport this cache was last taken against, and how long to keep
+  // distrusting it. See cssSize().
+  let cssVW = -1, cssVH = -1, cssRecheck = 0;
+  const CSS_RECHECK_FRAMES = 30;
   const markCssDirty = () => { cssDirty = true; };
   // Wired from init(), NOT at IIFE eval: `canvas` is still null up here, so an
   // observer attached at module scope would silently observe nothing.
@@ -673,6 +678,7 @@ const GLX = (function () {
     if (typeof window === "undefined" || !window.addEventListener) return;
     window.addEventListener("resize", markCssDirty);
     window.addEventListener("orientationchange", markCssDirty);
+    canWatchCss = true;
     // Covers what a window resize never fires for: a layout change that moves
     // the canvas alone (entering photo mode, a rotated phone that keeps the same
     // window size). Feature-detected — without it the two listeners above still
@@ -682,11 +688,50 @@ const GLX = (function () {
     }
   }
   function cssSize() {
+    // THE DIRTY FLAG ALONE IS NOT ENOUGH — measured, not reasoned. It is
+    // edge-triggered and consumed unconditionally, so ONE read that lands before
+    // the canvas box has reflowed caches the old box, clears the flag, and
+    // nothing ever sets it again: GLX.aspect then reports the PREVIOUS
+    // viewport's ratio for the rest of the session. In the garage that held a
+    // landscape 1.7778 through a whole portrait session and a hand-called
+    // resize() could not shift it, while dispatching one synthetic "resize"
+    // corrected it on the very next call (artifacts/aspect-verdict.log,
+    // artifacts/aspect-why.log; docs/PERF-FINDINGS.md §2s). A stale aspect is
+    // not cosmetic — it feeds the main projection matrix, the FOV cap
+    // and the FRUSTUM CULL RADIUS (6310), so geometry pops out of the world.
+    // window.innerWidth/innerHeight are VIEWPORT metrics, not element layout:
+    // reading them here does not force the reflow this cache exists to avoid.
+    // A change in either arms a countdown of FRAMES during which the box is
+    // re-read, so a read that was too early self-corrects on the next one.
+    // A countdown rather than a one-shot re-mark, because a one-shot caches the
+    // old box AND records the new viewport — after which nothing differs and
+    // the staleness latches exactly as before.
+    // FRAMES, not milliseconds: a 500 ms wall-clock window was tried first and
+    // measured LEAVING one rotation stale (artifacts/r16-accept.log), because
+    // on a box where a frame can take seconds the window expired before the
+    // loop ran a single frame. N calls is N frames however slow they are, and
+    // at 60fps it is the same half second the window was.
+    if (typeof window !== "undefined") {
+      const vw = window.innerWidth | 0, vh = window.innerHeight | 0;
+      if (vw !== cssVW || vh !== cssVH) {
+        // First observation has nothing to differ FROM, so it records without
+        // arming: re-reading the frames right after init would spend exactly
+        // the reflow this cache exists to avoid (webgpu-lifecycle.test.mjs
+        // pins that for WGX).
+        const first = cssVW < 0;
+        cssVW = vw; cssVH = vh;
+        if (!first) cssRecheck = CSS_RECHECK_FRAMES;
+      }
+    }
     // A zero is never a real size — it means the canvas has not been laid out
     // yet (init before first layout, a display:none ancestor). Keep re-reading
     // until it is real, so this can't latch a 1x1 backbuffer the way a plain
     // cache would; the old read-every-frame code self-corrected for free.
-    if (cssDirty || cssW <= 0 || cssH <= 0) {
+    // canWatchCss: with no listeners attached at all there is no signal left,
+    // so never trust the cache (WGX has always done this; GLX did not, and
+    // latched the first non-zero size forever).
+    if (cssDirty || cssW <= 0 || cssH <= 0 || cssRecheck > 0 || !canWatchCss) {
+      if (cssRecheck > 0) cssRecheck--;
       cssW = canvas.clientWidth;
       cssH = canvas.clientHeight;
       cssDirty = false;
