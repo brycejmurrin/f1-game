@@ -277,7 +277,23 @@ function start(opts) {
     year: 2026,
     seed: (o.seed | 0) || (hash32(teamId + ":" + flavour + ":" + Date.now()) % 1000000),
     team: teamId,
-    seat: o.seat | 0,
+    // MY TEAM IS ALWAYS SEAT 0. driverOverride() below maps a custom team's
+    // seat 0 to career.driver (you) and seat 1 to the hire, and docs/CAREER.md
+    // says the same. But freshDraft() starts every draft at seat 1 ("the junior
+    // seat — you are the newcomer", true for a DRIVER career) and the MY TEAM
+    // path only overrides flavour, slot and teamId; the seat picker renders for
+    // flavour === "driver" alone, so nothing ever put it back. Every MY TEAM
+    // save was therefore created in seat 1: the player's car carried the HIRED
+    // driver's name, code and number in the HUD, the results sheet and the
+    // standings, while the AI ran the driver they had just named — under a hub
+    // card reading "Car 1 — <your name> (you)". rolloverHire also priced the
+    // renewal off the player's own season, and hireDriver deleted the dev
+    // deltas for the seat they were actually driving.
+    //
+    // Fixed HERE rather than in the draft so it covers every caller, including
+    // __apex.career({flavour:"myteam"}) — which omitted seat and landed on 0,
+    // which is exactly why no career spec ever caught this.
+    seat: flavour === "myteam" ? 0 : (o.seat | 0),
     driver: {
       name: (o.name || "Your Name").slice(0, 22),
       code: (o.code || "YOU").toUpperCase().slice(0, 3),

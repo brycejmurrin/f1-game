@@ -667,8 +667,15 @@ const CEILINGS = {
   // hands cars each other's positions.
   // 2576 -> 2579: setPhysics floors its knobs (a NaN car from expo:-1 had no
   // way back) — the one `fl` helper plus a two-line why.
-  "js/game/apex.js": 2579,
-  "js/game/agentview.js": 2443,
+  // +11: careerSim's inline championship award now also writes the countback
+  // histogram. It reimplemented endRace()'s award and omitted season.finishes,
+  // so a points tie in a simulated season fell through SeasonCal.rank to a
+  // STRING compare on driver id — the exact defect the histogram exists to fix.
+  "js/game/apex.js": 2590,
+  // +9: the parts hook reports the CAREER cap, not the free-play 780. A career
+  // at a team whose factory build costs 1,500 was reported as remaining: -720
+  // for a perfectly legal setup.
+  "js/game/agentview.js": 2452,
   // 2700 -> 2711: the cockpit build needed its own monocoque rear station. The
   // shared span's closed rear cap at z 0.05 sat 0.23 m from the driver's eye and
   // covered 55% of the steering wheel (depth-raster measured); ckpt now ends the
@@ -1121,16 +1128,28 @@ const CEILINGS = {
   // caching the bounds before the free and refusing the sweep on a phone. The
   // union carries all of it and is neither number — re-measured at 2810 on the
   // merged tree with this test's own metric, per the deploy rule.
-  // +14: the keep pass-throughs, armed in the state hooks, and the boot-canary
-  // re-arm on a context loss that sends the tab back to WebGL2 — TLX had no
-  // post-proof re-arm at all, so the jetsam-mid-race its own comment names was
-  // the one case the canary did not cover.
-  // 2833 -> 2839: the instance TINT was marked dirty outside the branch that
+  // 2819 -> 2901 (deploy branch): the see-through car on three.js. forceWebGL was
+  // decided on `navigator.gpu` EXISTING, a presence check — an adapter can
+  // refuse and a webgpu canvas context can fail while it stays true, and on both
+  // paths three binds WebGL WITHOUT throwing, so the opaque-context path keyed
+  // on that flag was skipped and the canvas came up alpha-composited.
+  //
+  // +14 (same base): the keep pass-throughs armed in the state hooks, and the
+  // boot-canary re-arm on a context loss that sends the tab back to WebGL2 —
+  // TLX had no post-proof re-arm at all, so the jetsam-mid-race its own comment
+  // names was the one case the canary did not cover.
+  //
+  // +6 (this branch): the instance TINT was marked dirty outside the branch that
   // writes it. `col` always exists but `colors` is null on every
   // updateInstances call (DebrisWorld) and every batch built without node
   // colours, so an unchanged all-ones buffer was re-uploaded every frame. The
   // fix itself is net -1 line; the rest is the reason.
-  "js/render/three/tlx.js": 2839,
+  //
+  // MERGED at 2921: THREE lineages landed in this file, so the ceiling is the
+  // merged tree's own count, re-measured with this suite's metric. Note 2915 was
+  // itself a merge resolution that could not see this branch's +6 — which is why
+  // the rule is re-measure, never add either side's number on paper.
+  "js/render/three/tlx.js": 2921,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
