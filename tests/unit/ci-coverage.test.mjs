@@ -289,6 +289,17 @@ test("the deploy-gate count excludes what the renderer job runs", () => {
   assert.equal(gfx.deployGate, false);
 });
 
+test("the push-gate smoke spec is sharded four ways on separate runners (unsharded it hits the 30-minute cap)", () => {
+  // Pages runs 1873/1876 measured smoke.spec.js at 30-37 min on one shared
+  // runner — the job's own cap. The matrix must be a constant four (never a
+  // one-shard fallback on push) and the Smoke step must pass --shard.
+  const smokeJob = ciWorkflow.slice(ciWorkflow.indexOf("\n  smoke:\n"), ciWorkflow.indexOf("\n  driving-model:\n"));
+  assert.match(smokeJob, /^\s+shard: \[1, 2, 3, 4\]\s*$/m, "the smoke matrix must be a constant four shards");
+  assert.doesNotMatch(smokeJob, /fromJSON\([^)]*'\[1\]'/, "no one-shard fallback on push");
+  assert.match(smokeJob, /run: npm run test:smoke -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
+  assert.match(smokeJob, /run: npm run test:tiny -- --timeout=\d+ --shard=\$\{\{ matrix\.shard \}\}\/4/);
+});
+
 test("gpu-census runs nightly beside the boot group, with the full check and its dispatch defaults", () => {
   assert.match(gpuWorkflow, /^on:\s*\n  schedule:\s*\n    - cron: "17 3 \* \* \*"\s*\n  workflow_dispatch:/m,
     "gpu-census.yml must carry the same nightly cron as ci.yml");

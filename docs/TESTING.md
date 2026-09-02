@@ -594,7 +594,7 @@ carries `if: !inputs.concurrency_key && github.event_name != 'workflow_call'`
 (pages.yml always forwards `concurrency_key`; a reusable workflow reports the
 CALLER's `event_name`, so the key is the reliable signal) and both jobs are
 skipped on a Pages call, which does not fail the aggregate. The gate stays
-guards + conditional sweeps + one smoke shard + driving-model
+guards + conditional sweeps + smoke.spec.js in four shards + driving-model
 (`PROCESS-SPEEDUP-2026-09.md` §4.5); promoting the renderer job into it once it
 has a measured green history is deleting that one `if:`. `gpu-census.yml` now
 also runs on the same nightly cron (`17 3 * * *`), full check, dispatch
