@@ -174,18 +174,52 @@ function measureIn(win, ms) {
 
 // One thing off per phase. `set` runs in the game window; `restore` puts it back
 // so the next phase starts from BASELINE again rather than compounding.
+// One thing off per phase. Each phase declares the lightTune KEYS it touches;
+// the runner snapshots their LIVE values before setting and puts exactly those
+// back afterwards, so the next phase starts from BASELINE again.
+//
+// It used to hardcode the restore (`bloomMul: 1`, `lampVolBase: 1`, …) from the
+// slider `def` in js/game/lighting.js, and that is not the shipped value. The
+// tuner store is keyed `track|timeOfDay|weather` and the AUTHORED preset for
+// each condition supplies the real number: measured on bahrain|night|dry,
+// bloomMul is 0.8 live against a def of 1.0. Restoring to the def left bloom
+// 25 % strong for every row below it — and because lightTune() PERSISTS, it
+// also wrote a permanent override into the player's own tuner store for that
+// track and condition. A diagnostic must not change what it measures, and must
+// not leave anything behind.
 const PHASES = [
-  { key: "baseline", label: "BASELINE (as shipped)", set: () => {}, restore: () => {} },
-  { key: "noLampShadow", label: "lamp shadow map off",
-    set: (a) => a.lightTune({ lampShadow: 0 }), restore: (a) => a.lightTune({ lampShadow: 1 }) },
-  { key: "noBloom", label: "bloom off",
-    set: (a) => a.lightTune({ bloomMul: 0 }), restore: (a) => a.lightTune({ bloomMul: 1 }) },
-  { key: "noContact", label: "contact shadows off",
-    set: (a) => a.lightTune({ contactStr: 0 }), restore: (a) => a.lightTune({ contactStr: 1 }) },
-  { key: "noMist", label: "ground mist off",
-    set: (a) => a.lightTune({ mistDensity: 0 }), restore: (a) => a.lightTune({ mistDensity: 1 }) },
-  { key: "half", label: "render scale 0.5 (fill-rate probe)",
-    set: (a) => a.renderScale(0.5), restore: (a) => a.renderScale(1) },
+  { key: "baseline", label: "BASELINE (as shipped)", keys: [], set: () => ({}) },
+  { key: "noLampShadow", label: "lamp shadow map off", keys: ["lampShadow"],
+    set: () => ({ lampShadow: 0 }) },
+  { key: "noBloom", label: "bloom off", keys: ["bloomMul"],
+    set: () => ({ bloomMul: 0 }) },
+  { key: "noContact", label: "contact shadows off", keys: ["contactStr"],
+    set: () => ({ contactStr: 0 }) },
+  { key: "noMist", label: "ground mist off", keys: ["mistDensity"],
+    set: () => ({ mistDensity: 0 }) },
+  // SSAO and the god-ray march were missing, and they are two of the three
+  // heaviest passes in the tier-4 rung — SSAO is a pass plus TWO blurs, godray
+  // is a march. Without them the bench could not price the one question a
+  // player actually asks: "what would GRAPHICS: LOW save me if it shed this?"
+  { key: "noSSAO", label: "SSAO off (pass + 2 blurs)", keys: ["aoStr"],
+    set: () => ({ aoStr: 0 }) },
+  { key: "noGodray", label: "god-ray march off", keys: ["godrayBase", "godrayLowBoost"],
+    set: () => ({ godrayBase: 0, godrayLowBoost: 0 }) },
+  { key: "noLampVol", label: "lamp volumetrics off", keys: ["lampVolBase", "lampVolHaze"],
+    set: () => ({ lampVolBase: 0, lampVolHaze: 0 }) },
+  // THE ANSWER ROW. Everything the tier-4 rung sheds, off together — which is
+  // exactly what GRAPHICS: LOW does NOT do, because those five gates read
+  // PerfGov.autoTier() and autoTier excludes the user's preset (js/game.js:
+  // "autoTier 4 drops SSAO (+2 blurs) and god-ray — not GRAPHICS: LOW alone").
+  // The gap between this row and BASELINE is what a player on LOW is paying for
+  // a setting they already chose. On a phone lampVol is already off, so there
+  // the rung is bloom + SSAO + god-ray + contact.
+  { key: "tier4Rung", label: "the WHOLE tier-4 rung off (what LOW does not shed)",
+    keys: ["bloomMul", "contactStr", "aoStr", "godrayBase", "godrayLowBoost", "lampVolBase", "lampVolHaze"],
+    set: () => ({ bloomMul: 0, contactStr: 0, aoStr: 0, godrayBase: 0,
+                  godrayLowBoost: 0, lampVolBase: 0, lampVolHaze: 0 }) },
+  { key: "half", label: "render scale 0.5 (fill-rate probe)", keys: [],
+    set: () => ({}), scale: 0.5 },
 ];
 
 async function run() {
@@ -251,12 +285,24 @@ async function run() {
   const rows = [];
   for (const ph of PHASES) {
     say("measuring: " + ph.label + " …");
-    try { ph.set(apex); } catch (e) { rows.push({ key: ph.key, label: ph.label, error: String(e.message).slice(0, 90) }); continue; }
+    // Snapshot the LIVE values of exactly the keys this phase touches, so the
+    // restore is what was there rather than what a slider def says.
+    let snap = null;
+    try {
+      const live = apex.lightTune();
+      snap = {}; for (const k of ph.keys) snap[k] = live[k];
+      const patch = ph.set(apex);
+      if (patch && Object.keys(patch).length) apex.lightTune(patch);
+      if (ph.scale != null) apex.renderScale(ph.scale);
+    } catch (e) { rows.push({ key: ph.key, label: ph.label, error: String(e.message).slice(0, 90) }); continue; }
     await new Promise((r) => setTimeout(r, 900));   // let the knob take effect
     const m = await measureIn(win, ms);
     let perf = null;
     try { const p = apex.perf(); perf = { tier: p.tier, scale: +p.scale.toFixed(2) }; } catch (e) {}
-    try { ph.restore(apex); } catch (e) {}
+    try {
+      if (snap && Object.keys(snap).length) apex.lightTune(snap);
+      if (ph.scale != null) apex.renderScale(1);
+    } catch (e) {}
     rows.push(Object.assign({ key: ph.key, label: ph.label }, m, perf));
     await new Promise((r) => setTimeout(r, 600));
   }
