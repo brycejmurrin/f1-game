@@ -177,3 +177,20 @@ test("the TIME box's shell placeholder is fmtTime's own zero, so the first tick 
   assert.ok(m, "index.html holds #hud-time");
   assert.equal(m[1], "-", "fmtTime(0) is \"-\" (game.js); a 0:00.0 placeholder was a width fmtTime never produces");
 });
+
+test("the race gap readout is smoothed: braking halves the divisor, the tenths do not double in one tick", () => {
+  const { player, G, els, tick } = boot();
+  const rival = { code: "NOR", prog: player.prog + 100, speed: 80, rank: 1 };
+  G.ranked = [rival, player]; player.rank = 2; player.speed = 80; G.timeTrial = false;
+  tick();
+  const read = () => parseFloat((els.gapA.textContent || "").replace(/[^0-9.]/g, ""));
+  assert.equal(read(), 1.3, "100 m at 80 m/s reads 1.3 s on the first tick (no history)");
+  player.speed = 30; tick();
+  assert.ok(read() < 2.2, `one braking tick must not jump to 3.3 s — read ${read()}`);
+  for (let i = 0; i < 40; i++) tick();
+  assert.equal(read(), 3.3, "…but converges to the true 3.3 s within a few seconds");
+  const other = { code: "LEC", prog: player.prog + 100, speed: 30, rank: 1 };
+  G.ranked = [other, player]; tick();
+  assert.equal(read(), 3.3, "a new rival starts from its own raw gap, not the old rival's history");
+});
+
