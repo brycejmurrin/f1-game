@@ -5,7 +5,13 @@ test("shared scenery kits are bound and Silverstone diagnostics stay finite", as
     const defs = [];
     defs.push = function (...entries) {
       for (const def of entries) {
-        if (def.id !== "silverstone" || typeof def.scenery !== "function") continue;
+        if (def.id !== "silverstone") continue;
+        // The closure no longer rides the def: since the boot-wall split
+        // (456af0f3) it lives in window.TrackScenery[id] and tracks.js reads
+        // the registry when def.scenery is absent. def.scenery still WINS
+        // there, so assigning it is the override seam either way — but the
+        // old `typeof def.scenery !== "function"` guard skipped every split
+        // circuit, which is all of them, and left the contract null.
         // Replace only the track-owned callback so this test isolates the binding
         // contract; Task 6 separately exercises real kit placement by each track.
         def.scenery = (api) => {
@@ -27,16 +33,21 @@ test("shared scenery kits are bound and Silverstone diagnostics stay finite", as
   await page.goto("/");
   await page.waitForFunction(() => window.__apex?.race);
 
-  const state = await page.evaluate(() => {
+  await page.evaluate(() => {
     window.__sceneryKitContract = null;
     window.__apex.headless(true);
     window.__apex.race("silverstone", "day", "dry");
-    return {
-      contract: window.__sceneryKitContract,
-      geometry: window.__apex.geometryDiagnostics(),
-      models: window.__apex.modelDiagnostics(),
-    };
   });
+  // race() returns SYNCHRONOUSLY but startRace() awaits the circuit's scenery
+  // file (lazy since the boot-wall split), so the closure — and this contract —
+  // land a tick or two later. Reading in the same evaluate got null every time.
+  await page.waitForFunction(() => window.__sceneryKitContract !== null,
+    null, { timeout: 60000, polling: 100 });
+  const state = await page.evaluate(() => ({
+    contract: window.__sceneryKitContract,
+    geometry: window.__apex.geometryDiagnostics(),
+    models: window.__apex.modelDiagnostics(),
+  }));
 
   expect(state.contract.theme.name).toBe("permanent");
   expect(state.contract.theme.palette.shell.every(Number.isFinite)).toBe(true);
@@ -78,12 +89,16 @@ for (const [trackId, themeName] of [
       const defs = [];
       defs.push = function (...entries) {
         for (const def of entries) {
-          if (def.id !== id || typeof def.scenery !== "function") continue;
-          const scenery = def.scenery;
+          if (def.id !== id) continue;
+          // Wrap whichever side actually holds the closure: an inline one on
+          // the def, else the registry entry the boot-wall split moved it to
+          // (resolved LAZILY — js/circuits/scenery/<id>.js loads after this).
+          const inline = typeof def.scenery === "function" ? def.scenery : null;
           def.scenery = (api) => {
             window.__resolvedSceneryTheme =
               api.sceneryTheme ? api.sceneryTheme.name : null;
-            return scenery(api);
+            const real = inline || (window.TrackScenery && window.TrackScenery[id]);
+            return typeof real === "function" ? real(api) : undefined;
           };
         }
         return Array.prototype.push.apply(this, entries);
@@ -92,16 +107,20 @@ for (const [trackId, themeName] of [
     }, trackId);
     await page.goto("/");
     await page.waitForFunction(() => window.__apex?.race);
-    const state = await page.evaluate(([id]) => {
+    await page.evaluate(([id]) => {
       window.__resolvedSceneryTheme = null;
       window.__apex.headless(true);
       window.__apex.race(id, "day", "dry");
-      return {
-        theme: window.__resolvedSceneryTheme,
-        geometry: window.__apex.geometryDiagnostics(),
-        models: window.__apex.modelDiagnostics(),
-      };
-    }, [trackId, themeName]);
+    }, [trackId]);
+    // See the binding test: the scenery closure is fetched asynchronously, so
+    // the theme is captured after race() has already returned.
+    await page.waitForFunction(() => window.__resolvedSceneryTheme !== null,
+      null, { timeout: 60000, polling: 100 });
+    const state = await page.evaluate(() => ({
+      theme: window.__resolvedSceneryTheme,
+      geometry: window.__apex.geometryDiagnostics(),
+      models: window.__apex.modelDiagnostics(),
+    }));
 
     // SceneryThemes.resolve falls back to "neutral" for an unknown name and
     // tracks.js falls back per track kind — either silent substitution must
