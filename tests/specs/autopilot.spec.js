@@ -18,14 +18,20 @@
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 
 async function load(page, id) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 8 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate((t) => window.__apex.race(t, "day", "dry"), id);
-  await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+  // NOT a 45 s wall. suzuka is the heaviest scenery build in the suite, and on a
+  // loaded 2-worker SwiftShader box it blew through BOOT_MS while the Log ring was
+  // still emitting `[car] build ...` at 65.7 s — a slow box, not a wedge (pages runs
+  // 1898/1899/1901, and reproduced here 2026-09-02). awaitTrackBuild is exactly what
+  // fixtures.js says to move to when a hand-rolled track wait first goes red on a
+  // slow box: it waits on PROGRESS and still fails fast on a genuinely stuck build.
+  await awaitTrackBuild(page);
   await page.evaluate(() => window.__apex.go());
   // PACE pinned here, at the one place every test stages its lap. The autopilot's
   // controller is written in absolute units (VMAX 94 m/s, aLat 13 m/s², A_BRAKE 24
@@ -186,6 +192,14 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // separate effort. Full-lap completion is therefore not asserted here.)
   for (const id of ["monza", "suzuka"]) {
     test(`autopilot drives safely and makes progress at ${id}`, async ({ page }) => {
+      // ITS OWN NUMBER, MEASURED — not the global 120 s. This test is one boot plus
+      // a 150-sim-second lap, and the boot is the variable half: a loaded 2-worker
+      // SwiftShader box here took 66 s just to finish building suzuka's field
+      // (2026-09-02), leaving under a minute of the global budget for the lap. The
+      // driving loop is a single in-page evaluate, so this cap is not covering a
+      // slow assertion — it is covering a slow MACHINE, which is what the config's
+      // own note says such a test should declare for itself.
+      test.setTimeout(180_000);
       const errors = [];
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
       await load(page, id);
@@ -203,6 +217,12 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // setup must still drive safely (no barrier clip / NaN) and make progress. Each
   // lap reloads a fresh page so runs don't inherit one another's end state.
   test("can drive safely via emulated tilt input", async ({ page }) => {
+    // TWO boots and TWO laps — structurally about double the tests above, and the
+    // most expensive test in this file. Measured at 112.4 s here on a moderately
+    // loaded box (2026-09-02): it PASSED, 7.6 s under the global 120 s cap, which
+    // means the cap was going to fail it on any slower runner for reasons that have
+    // nothing to do with the driving model. 240 s is ~2x the measurement.
+    test.setTimeout(240_000);
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
     await load(page, "monza");
