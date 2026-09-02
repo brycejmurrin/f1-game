@@ -186,6 +186,16 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // separate effort. Full-lap completion is therefore not asserted here.)
   for (const id of ["monza", "suzuka"]) {
     test(`autopilot drives safely and makes progress at ${id}`, async ({ page }) => {
+      // MEASURED, IDLE BOX, 2026-09-02: monza takes 152.8 s and PASSES every
+      // assertion (finite, maxWall < 1, distPct > 40) when given room. Against
+      // the config's 120 s default it timed out at the 120 s mark having driven
+      // perfectly well — speed 32.5 m/s, RaceControl VSC->GREEN at 127 s — and
+      // never reached a single assertion. That is a budget sized below the work,
+      // not a slow runner and not a defect: the same test on the same box is
+      // green at 360 s. This drives a REAL LAP of a real circuit; a lap costs
+      // what it costs. 300 s leaves ~2x headroom for a shared CI runner.
+      // Runs 1898 and 1901 both died here, and both were read as mysteries.
+      test.setTimeout(300_000);
       const errors = [];
       page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
       await load(page, id);
@@ -203,6 +213,13 @@ test.describe("Apex 26 — autopilot (programmatic driving)", () => {
   // setup must still drive safely (no barrier clip / NaN) and make progress. Each
   // lap reloads a fresh page so runs don't inherit one another's end state.
   test("can drive safely via emulated tilt input", async ({ page }) => {
+    // 31.4 s alone on an idle box — this one is not slow. It times out on CI
+    // because Playwright counts FIXTURE SETUP against the test budget and this
+    // test follows the per-circuit laps above, whose now-heavy page is still
+    // tearing down when this context is created. Same mechanism the
+    // scenery-kits budget note records. Given the same headroom as its
+    // neighbours rather than a number tuned to its solo time.
+    test.setTimeout(300_000);
     const errors = [];
     page.on("pageerror", (e) => errors.push("PAGEERROR: " + e.message));
     await load(page, "monza");
