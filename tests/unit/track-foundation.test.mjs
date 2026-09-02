@@ -433,3 +433,28 @@ test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
   assert.match(src, /po\.ssao = PerfGov\.autoTier\(\) >= 4/,
     "the look post stack must stay on autoTier(), which can still reach 4");
 });
+
+test("the display-reset latch clears from EITHER chunk slider, as the tuner promises", () => {
+  // js/game/tuner.js gateNote() shows "held after a display reset — set to 0
+  // and back on to retry" for BOTH chunk knobs (its isChunk covers
+  // roadChunkLamps). The clear in js/game.js was keyed on perChunkLights only,
+  // so a player who read that note on PER-CHUNK ROAD and did exactly what it
+  // said cleared nothing: the instruction silently only worked on the other
+  // control. Whatever the note offers, the edit path has to honour.
+  const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  // Not [^)]* — the condition contains !(+LT[id] > 0), so a no-paren class
+  // stops at the first inner ")". Bounded any-char instead.
+  const clear = game.match(/if \([\s\S]{0,220}?perChunkLights[\s\S]{0,220}?_perChunkOff\) \{/);
+  assert.ok(clear, "the _perChunkOff rising-edge clear still exists");
+  assert.match(clear[0], /roadChunkLamps/,
+    "the latch clear must accept a rising edge on roadChunkLamps too — the " +
+    "tuner tells the player that slider can retry it");
+
+  const tuner = fs.readFileSync(path.join(ROOT, "js/game/tuner.js"), "utf8");
+  const isChunk = tuner.match(/const isChunk = [^;]+;/);
+  assert.ok(isChunk, "tuner.js still classifies the chunk knobs");
+  // If the note ever stops covering roadChunkLamps this test is the reminder to
+  // narrow the clear again rather than leave the two out of step.
+  assert.match(isChunk[0], /roadChunkLamps/,
+    "if the note no longer offers the retry on PER-CHUNK ROAD, narrow the clear to match");
+});

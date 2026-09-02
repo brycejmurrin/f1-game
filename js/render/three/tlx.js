@@ -1895,6 +1895,7 @@ const TLX = (function () {
         gpuMs() { return _gpuMs; },
         // "Skipped for cadence, map still valid" — see tlx-shadow.js §KEEP.
         carShadowKeep() { return !!(shadowSys && shadowSys.carShadowKeep()); },
+        lampShadowKeep(idx) { return !!(shadowSys && shadowSys.lampShadowKeep(idx)); },
         // `armed` is the frame-live gate the lit uniforms read; `arms` is a
         // lifetime counter that stays true straight through a strobe.
         carShadowState() {

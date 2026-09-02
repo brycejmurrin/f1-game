@@ -5867,8 +5867,15 @@ const WGX = (function () {
         _carShadowArmed = true;
         return true;
       },
-      // No lampShadowKeep: see the note at the lamp pass in game.js — the
-      // producer's snap test compares slots into a per-frame re-sorted array.
+      // Keyed on the map's CONTENT by the caller (lamp world position + a
+      // quantised key over the cars in it), so a keep here is "same lamp, same
+      // cars"; the index names this frame's slot for that same lamp.
+      lampShadowKeep: (lightIdx) => {
+        if (!lampShadowView || WGX_LITE || _lampArms <= 0 || !(lightIdx >= 0)) return false;
+        _lampIdx = lightIdx | 0;
+        _lampShadowArmed = true;
+        return true;
+      },
       // `armed` is the frame-live gate the shader reads; `arms` is a lifetime
       // counter that stays true straight through a strobe, which is why no test
       // could see this.

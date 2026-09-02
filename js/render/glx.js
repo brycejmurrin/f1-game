@@ -2118,6 +2118,7 @@ const GLX = (function () {
     lampShadowBegin: (lightVP, lightIdx) => SHD.lampShadowBegin(lightVP, lightIdx),
     // "Skipped for cadence, map still valid" — see shadow.js §KEEP.
     carShadowKeep: () => SHD.carShadowKeep(),
+    lampShadowKeep: (lightIdx) => SHD.lampShadowKeep(lightIdx),
     lampShadowEnd: () => SHD.lampShadowEnd(),
     get width() { return width; },
     get height() { return height; },
