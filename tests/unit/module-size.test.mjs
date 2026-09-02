@@ -1027,7 +1027,7 @@ const CEILINGS = {
   // re-freeing them next round.
   // + R16: the CSS-size cache re-check in resize() and the ResizeObserver
   // moved outside the addEventListener check (PERF-FINDINGS 2u).
-  "js/render/three/tlx.js": 2745,
+  "js/render/three/tlx.js": 2757,   // 2026-09-02 R17: the a63cab7 revert (mirror release took the world with it on a real phone) restored lines without restoring this cap, leaving the deploy branch red on its own tip. Measured on the merged union.
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
