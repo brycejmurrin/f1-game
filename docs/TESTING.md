@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 182 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 184 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -989,6 +989,7 @@ what it covers.
 | `parts-visual-distinctness.test.mjs` | every catalog option is VISIBLY different from the one it replaces, measured rather than hashed: builds all 297 options offline and gates on surface distance, moved area, palette transport and a 14-view visibility mask. INVISIBLE / BROKEN / SLIDE / INTERNAL must be empty, COLOUR-ONLY is an exact allow-list, WEAK is a downward-only ratchet; plus the census (12/297/121) and the SIGNATURE invariant that a reskin keeps its equivalent's cost and all four stat multipliers. Measures through `tools/parts-sweep.mjs`. ~4 min, so it runs in `test:sweeps`, never in the edit loop |
 | `parts-ladder.test.mjs` | every catalog option is one a rational player could ever want to BUY — the other half of the promise `parts-visual-distinctness` makes. An option is LIVE when it maximises `sum w_i*log(stat_i) - lambda*cost` for some positive taste and some price (the upper convex hull of the (cost, log-stat) set, solved exactly per weight vector, no lambda grid). Gates: no PAID option strictly dominated by a cheaper one; the never-optimal list is exact in BOTH directions against a named exemption list (the two wet compounds, which the four DRY stats cannot score); no category flat on a stat; SIGNATURE cost/stat parity; and the career budget cap clears the dearest works car while staying under the whole top shelf. Measured 2026-08-29: 67 of 169 rows never optimal before the re-space, 2 after. Measures through `tools/parts-ladder.mjs`. ~0.3 s, node-only — cheap enough for the edit loop |
 | `garage-mesh.test.mjs` | the bay's meshes carry a per-vertex MATERIAL column of exactly one float per vertex, and the big surfaces are not all left on `MAT.FLAT`. A silent-failure guard: GLX wires the attribute only when `data.mat.length === vCount` (`glx.js:741`) and drops a wrong-length column with no warning, which is how the whole garage shipped untextured while the car standing in it sampled the baked PBR arrays. Runs the real module in a `node:vm` against a recording Gfx — no browser, ~0.15 s |
+| `setup-preview-hull.test.mjs` | the garage turntable's framing hull is cached across colour-only rebuilds, which is only correct while `SP_HULL_GEOM_FIELDS` (js/game.js) names every livery field whose PRESENCE moves a vertex. Does not PIN the list — it re-derives it from the real `Car3D.build` and compares, so a future edit that gates geometry on a new colour goes red here instead of silently re-centring the car against a stale silhouette. Also asserts the premise the cache rests on: a hue change never moves a vertex. `loadParts()` in a `node:vm`, no browser, ~0.8 s |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
@@ -1120,6 +1121,7 @@ what it covers.
 | `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
 | `module-size.test.mjs` | RATCHET on the big modules' line counts — lower a ceiling when you extract; raising one is a deliberate edit with a reason in the commit |
 | `car-mesh-anchors.test.mjs` | The NODE gate for the car-graphic anchor assertions that `parts-physics.spec.js` also makes in a browser. It exists because the browser parts group is NOT in the deploy gate — `pages.yml` calls `ci.yml`, which runs `guards`, the conditional `sweeps`, the 9-spec `smoke` shards and the `driving-model` job (`physics-characterization.spec.js`) — so a red parts assertion ships silently, and one did: the front-wing flap check sat red on the deploy tip through five consecutive green Pages runs. Ported rather than adding ~20 min of SwiftShader to every deploy, because these read MESH ARRAYS and `loadParts()` runs `car3d.js` in a node vm; the node context reproduces the browser numbers exactly (144 accent flank vertices both ways). Covers sidepod/nose decal gaps, the accent flank band, the nose running lights, the front-wing flap tips against `FW_SPAN`, and `functionalEmissive` staying reserved for the rain light. Every selector asserts a COUNT first — a sibling DRL assertion once passed for months on `Math.max([]) === -Infinity` |
+| `track-night-override.test.mjs` | no module in `js/track/` reads `def.night`, except the two sites in `tracks.js` that RESOLVE it. `def.night` is the circuit's AUTHORED default; `track._night` / the destructured `NIGHT` is what THIS build was asked for, and game.js's TIME OF DAY overrides the default — so an emitter reading the def ignores the player's choice and dresses a prop for the wrong sky. Fixed twice now (a bankZones note in `tracks.js`, then `ferrisWheel`), which is what makes it a class rather than an incident. Strips comments before matching, because both fixes explain the trap in prose. Static source scan, no build, instant |
 | `physics-baseline-present.test.mjs` | pins `tests/data/physics-baseline.json` in the always-on suite: `physics-characterization.spec.js` SKIPS (green) without it, so the deploy gate's `driving-model` job could pass on nothing — the "absence reads as clean" class |
 | `track-build-wait.test.mjs` | the loadTrack fixture waits for a track build on PROGRESS, not a 45 s deadline: it keeps waiting while the Log ring grows, fails with a STALL message when it stops, and a hard cap ends the wait even if the stall check is broken — the fake page is bounded so a never-ending wait reads as a red test rather than a hung worker |
 | `deploy-stamp.test.mjs` | the deploy-stamped shell generation: pages.yml stamps `2000 + commit count` on a full-depth checkout, `verify-live` polls the CDN for it, ci.yml no longer demands a committed generation newer than live, and `bump-cache --apply --at N --root` stamps a staged copy without touching the repo |
@@ -1829,3 +1831,38 @@ read across two ordinary `waitForTimeout`s instead.
 un-blitted canvas and produces a confident, wrong answer — it cost one fully
 written-up "WGX mis-frames the garage" reproduction that had to be retracted
 (docs/PERF-FINDINGS.md §2t).
+
+### 2026-09-02 — probing the DEPLOYED build, and what that probe could not show
+
+Chromium in this container cannot reach `https://brycejmurrin.github.io/f1-game/`
+— the agent proxy returns `net::ERR_TUNNEL_CONNECTION_FAILED`. The TinyFish
+fetch tool reaches it because it fetches remotely; that is not egress this
+browser has. The way to drive the SHIPPED code locally is a detached worktree at
+the deployed sha served over `npx serve`:
+
+```sh
+git worktree add --detach <scratch>/livewt <deployed-sha>
+(cd <scratch>/livewt && ln -s /home/user/f1-game/node_modules node_modules && npx serve -l 3499 .)
+LIVE_URL=http://127.0.0.1:3499/ BACKEND=webgl2 node scratch/live-probe.mjs
+```
+
+All three backends boot, race and finish clean on the deployed tree — GLX, TLX
+and WGX each `gpuErrors 0`, zero page errors, zero console errors across boot,
+track build and 25 s of held throttle.
+
+Two things that probe did NOT establish, recorded so a later session does not
+read it as coverage it isn't:
+
+- **The car barely moves, and that is the BOX.** 25 s of wall clock with
+  `setInput({throttle:true})` held reached 1.9 m/s on GLX and 2.4 on TLX, with
+  `s` unmoved to the metre. At this box's SwiftShader frame rate 25 s is a few
+  dozen physics frames. It proves input reaches physics on the shipped build; it
+  is not a driving test, and the speeds are not a measurement of anything. (WGX
+  reached 14.5 m/s over the same wall clock, which is a statement about the
+  soft-present path's cost here, not about the game.)
+- **The garage leg was vacuous.** `garageCam().on` came back `false` on all three
+  — there is no `__apex.openSetup()` and the DOM fallback selector matched
+  nothing, so the probe sampled the default `dist: 8.5` from the menu. The garage
+  screen on the deployed build is UNTESTED by this run. A probe that reports a
+  plausible number from a screen it never opened is the §R14 vacuous-measurement
+  class; it is recorded here rather than quietly dropped.

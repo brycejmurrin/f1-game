@@ -521,7 +521,14 @@ const CEILINGS = {
   // rather than added on paper.
   // 9054 -> 9056: round 2 — the speed cap became a rate (2 lines), a net-owned
   // finished rival takes no local coast, every comment paid down to hold it.
-  "js/game.js": 9056,
+  // 9056 -> 9087: R19, four defects found by a code read and paid for in place.
+  // (a) car tail-lights excluded from the lamp-shadow contest by RANGE, not by a
+  // radius literal a shipped slider crosses; (b) the garage framing hull cached
+  // across colour-only rebuilds — it was 16 ms per frame of a livery colour drag
+  // for the same silhouette; (c) the menu flyby's sky follows the session TIME OF
+  // DAY instead of the circuit's authored default. Each carries the measurement
+  // and the failing input in a comment, which is most of the 30.
+  "js/game.js": 9087,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

@@ -2467,11 +2467,19 @@ function loadTrack(idx) {
     // MENU FLYBY had none — po.exposure went NaN, blacking it out (meanLum 1.06/255).
     fogHeight:  pal.fogHeight != null ? pal.fogHeight : 0.018, exposure: 1,
   };
+  const skyNight = raceTimeOfDay === "night" ||
+    (raceTimeOfDay === "default" && def.night);
   frameSky = {
     invViewProj: M4.ident(), zenith: pal.zenith, horizon: pal.horizon,
-    sunDir: frame.sunDir, sunColor: pal.sun, stars: def.night ? 1 : 0,
+    // The SESSION's night, not the circuit's authored default. applyRaceSettings
+    // computes the same isNightSession and overwrites both — but it runs at
+    // startRace(), and the MENU FLYBY never calls it (same gap as the exposure
+    // note above), so previewing a night-def circuit with TIME OF DAY set to day
+    // gave the flyby a full night sky: uStars is also the sky shader's NIGHT
+    // GATE (nightSky in shaders/sky.js), which zeroes the day/twilight enrichments wholesale.
+    sunDir: frame.sunDir, sunColor: pal.sun, stars: skyNight ? 1 : 0,
     // procedural cloud coverage 0..1 (night skies stay clearer to show stars)
-    cloud: pal.cloud !== undefined ? pal.cloud : (def.night ? 0.22 : 0.4),
+    cloud: pal.cloud !== undefined ? pal.cloud : (skyNight ? 0.22 : 0.4),
   };
 }
 
@@ -5699,7 +5707,12 @@ function resetSetupCam() {
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. gfx.freeMesh
 // releases the previous mesh's GL buffers so repeated chip clicks don't leak.
-let _spMesh = null, _spMeshKey = "", _spHull = null;
+let _spMesh = null, _spMeshKey = "", _spHull = null, _spHullKey = "";
+// Which livery fields can MOVE a vertex, as opposed to only recolouring one.
+// Measured (tests/unit/setup-preview-hull.test.mjs builds the car both ways and
+// compares positions byte for byte): a hue change never moves anything, and only
+// the PRESENCE of these four does — they gate optional strip geometry.
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod"];
 function getSetupPreviewMesh() {
   const team = Teams.LIST[teamIdx];
   const key = team.id + ":" + partsVisualKey(team.id);
@@ -5712,7 +5725,16 @@ function getSetupPreviewMesh() {
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team),
     });
-    _spHull = GarageScene.framingHull(spData);   // silhouette proxy for the turntable re-centre
+    // A convex hull over every vertex (~19k positions — 16 ms measured) that
+    // depends on POSITIONS ONLY. livePreviewDraft busts _spMeshKey on every
+    // distinct colour value and an <input type=color> emits those continuously
+    // while dragged, so the turntable paid the hull once per frame of a colour
+    // drag to arrive at the same silhouette. Rebuild only on a geometry change.
+    const hullKey = key + "|" + SP_HULL_GEOM_FIELDS.map((f) => (liv[f] ? 1 : 0)).join("");
+    if (hullKey !== _spHullKey || !_spHull) {
+      _spHull = GarageScene.framingHull(spData);   // silhouette proxy for the turntable re-centre
+      _spHullKey = hullKey;
+    }
     _spMesh = gfx.createMesh(spData);
     _spMeshKey = key;
   }
@@ -6835,10 +6857,19 @@ function render(dt) {
     const _flk = frame.sunColor ? Math.max(frame.sunColor[0], frame.sunColor[1], frame.sunColor[2]) : 1;
     if (_flk <= 0.30) {
       const L = frame.lights, nRec = (L.length / 15) | 0;
+      // Tail-lights are the LAST frame.tailCount records and are excluded by
+      // RANGE, not by the radius literal below — which is not a filter: a tail
+      // light's radius is 8 * (1 + bAmt * 0.45), bAmt = brakeHeat * BRAKE FLARE,
+      // so it clears 12 once that shipped slider passes 1.111 (max 2.5). A
+      // hard-braking rival 15 m ahead then outscores a 40 m flood and takes the
+      // 512 map with a frustum slung off a moving car. glx/chunked.js's drawChunked guards its
+      // own slot this way; the lit path and godray never did.
+      const tailFrom = frame.tailCount > 0 ? frame.tailStart : nRec;
       let flBest = -1, flScore = Infinity;
       for (let i = 0; i < nRec; i++) {
         const o = i * 15;
-        if (L[o + 6] < 12) continue;   // skip small movers (car tail-lights, washers)
+        if (i >= tailFrom) continue;   // never shadow-map a car tail-light
+        if (L[o + 6] < 12) continue;   // skip small movers (washers)
         const dx = L[o] - camEye[0], dy = L[o + 1] - camEye[1], dz = L[o + 2] - camEye[2];
         // Nearest-strongest: distance² over luminance, so a bright flood bank
         // beats a dim work lamp at similar range.

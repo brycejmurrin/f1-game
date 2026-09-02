@@ -237,6 +237,13 @@ const GLXShadow = (function () {
       gl.uniformMatrix4fv(S.depthU.uLightVP, false, lightVP);
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
+      // Symmetry with lampShadowBegin below. Only gfx.castShadow is issued in
+      // this pass today, and that path ignores castCullVP — but castShadowChunked
+      // and gfx.shadowCullVP both resolve `castCullVP || lightVP`, so the moment
+      // a chunked or instanced caster joins the car pass it would cull against
+      // the SUN's +-80 m ortho while rendering into the +-42 m car map. Set it
+      // here rather than leave that landmine armed.
+      S.castCullVP = S.carLightVP;
       S.depthPassOn = true;
       S.carArmed = true;
       S.carArms++;
@@ -245,6 +252,7 @@ const GLXShadow = (function () {
     function carShadowEnd() {
       S.depthPassOn = false;
       if (!S.carEnabled) return;
+      S.castCullVP = null;
       gl.enable(gl.CULL_FACE);
       core.post.bindSceneTarget();
     }
