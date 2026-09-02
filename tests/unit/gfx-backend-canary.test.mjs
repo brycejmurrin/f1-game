@@ -103,8 +103,14 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   assert.match(src, /\bisWebKit\b/);
   assert.match(src, /apex26\.tlxAutoGL/);
   assert.match(src, /\b_autoStayGL\b/);
-  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_hasGpu\s*\|\|\s*_autoStayGL\s*\)\s*\)/,
-    "AUTO stays on WebGL2 without a GPU or after a WebGPU init failure; a pin of 1/0 overrides");
+  // Was pinned on `!_hasGpu`. That is a PRESENCE check — navigator.gpu can
+  // exist while three still falls back to its WebGL backend, and on that path
+  // three does not throw, so forceWebGL stayed false and bootRenderer skipped
+  // the caller-supplied opaque context it is keyed on. The canvas came up
+  // alpha-composited and the cars rendered see-through. The gate is now the
+  // obtainable WebGPU CONTEXT; renderer-soft-lifecycle.test.mjs holds the rest.
+  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\)\s*\)/,
+    "AUTO stays on WebGL2 when no WebGPU context is obtainable, or after an init failure; a pin of 1/0 overrides");
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
   assert.match(src, /AUTO stayed on three WebGL2/);

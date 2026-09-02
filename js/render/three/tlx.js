@@ -87,9 +87,18 @@ const TLX = (function () {
       // player's path — macos-latest, Apple/Metal, measured anyHardware:true —
       // take the software half of every content skip instead.
       const _headless = /HeadlessChrome/i.test(ua);
+      // Did an adapter actually RESOLVE? `navigator.gpu` existing is a
+      // PRESENCE check and `_hasGpu` below is only that — but a browser can
+      // expose navigator.gpu and still hand back no adapter, and then three's
+      // WebGPURenderer does not throw: it quietly binds its WebGL backend
+      // ("THREE.WebGPURenderer: WebGPU is not available, running under WebGL2
+      // backend", logged verbatim by this repo's own probe of the deployed
+      // build). That silent fallback is why this matters — see forceWebGL.
+      let _gpuAdapterOk = false;
       try {
         if (navigator.gpu && navigator.gpu.requestAdapter) {
           const ad = await navigator.gpu.requestAdapter();
+          _gpuAdapterOk = !!ad;
           if (ad) {
             const info = ad.info || null;
             const dev = info && info.device;
@@ -115,7 +124,69 @@ const TLX = (function () {
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
-      let forceWebGL = _glPin === "1" || (_glPin !== "0" && (!_hasGpu || _autoStayGL));
+      // `!_gpuAdapterOk`, not just `!_hasGpu`. The two differ exactly when
+      // navigator.gpu exists but requestAdapter() resolves null, and on that
+      // path three binds WebGL WITHOUT THROWING — so the catch below never
+      // runs, forceWebGL stays false, and bootRenderer skips the
+      // caller-supplied opaque context because it is keyed on this flag.
+      //
+      // That leaves an ALPHA-COMPOSITED canvas, and the consequence is visible:
+      // WebGLBackend.init() hardcodes `alpha: !0` and IGNORES the `alpha:false`
+      // parameter (see bootRenderer), so anything writing alpha < 1 shows the
+      // page through the car — reported as a see-through car on this backend.
+      // The context's attributes are fixed for the life of the canvas and a
+      // second getContext silently returns the first one, so this CANNOT be
+      // repaired after the fact: the decision has to be right before three
+      // touches the canvas at all, which is here.
+      //
+      // Deciding on the BIND rather than the PICK is the same lesson the boot
+      // canary learned this week ("gfx === GLX on both paths, so only the bind
+      // site can tell them apart"). We cannot read three's bind before it
+      // happens — so we ask the adapter ourselves and stop guessing.
+      //
+      // An explicit WebGPU pin (`_glPin === "0"`) is deliberately still
+      // honoured: the existing clause already excludes it, a pin is a user
+      // override, and the SSR-tag hardening below is what covers it.
+      // An adapter is necessary and NOT sufficient. Measured in this repo's own
+      // container: `requestAdapter()` resolves fine and the very next step still
+      // fails — "Failed to create WebGPU Context Provider" — after which three
+      // binds WebGL anyway. So test the step that actually fails, on a
+      // THROWAWAY canvas: #game's context type and attributes are both fixed by
+      // whoever asks first and a second getContext silently returns the first,
+      // so this probe must never touch the real one.
+      let _gpuCanvasOk = false;
+      if (_gpuAdapterOk && typeof document !== "undefined") {
+        try {
+          const _pc = document.createElement("canvas");
+          _pc.width = _pc.height = 1;
+          _gpuCanvasOk = !!_pc.getContext("webgpu");
+        } catch (_) { _gpuCanvasOk = false; }
+      }
+      // The whole point: decide on what three will ACTUALLY bind, not on what we
+      // are asking for. navigator.gpu existing (`_hasGpu`) is a presence check,
+      // and on both failing paths above three does NOT throw — it quietly binds
+      // its WebGL backend ("THREE.WebGPURenderer: WebGPU is not available,
+      // running under WebGL2 backend"). The catch around bootRenderer therefore
+      // never runs, forceWebGL stays false, and bootRenderer skips the
+      // caller-supplied opaque context because it is keyed on this very flag.
+      //
+      // What that costs is visible: WebGLBackend.init() hardcodes `alpha: !0`
+      // and IGNORES the `alpha:false` parameter, so the canvas is
+      // alpha-composited and anything writing alpha < 1 shows the page through
+      // the car. It cannot be repaired afterwards — context attributes are fixed
+      // for the life of the canvas — so the decision has to be right here,
+      // before three touches #game at all.
+      //
+      // Deciding on the BIND rather than the PICK is the lesson the boot canary
+      // learned this week ("gfx === GLX on both paths, so only the bind site can
+      // tell them apart"). three will not tell us before it binds, so we ask the
+      // two questions it would ask, in its order, and stop guessing.
+      //
+      // An explicit WebGPU pin (`_glPin === "0"`) is still honoured — the clause
+      // already excludes it, and a pin is a user override. backendState()
+      // reports canvasAlpha so that case is diagnosable rather than silent.
+      let forceWebGL = _glPin === "1"
+        || (_glPin !== "0" && (!_gpuCanvasOk || _autoStayGL));
       const _liteGpu = !!(isMobile || isWebKit || _softAdapter);
 
       // SCREENSHOTS (`apex26.wgxCapture`, same key as WGX): session then local.
@@ -2757,6 +2828,17 @@ const TLX = (function () {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
               forceWebGL, pin: _glPin, autoStayGL: _autoStayGL, hasGpu: _hasGpu,
+              gpuAdapterOk: _gpuAdapterOk, gpuCanvasOk: _gpuCanvasOk,
+              // Read back off the LIVE context, not inferred from what we
+              // passed: `true` IS the see-through-car defect, and the paths
+              // that produce it are indistinguishable from the parameters.
+              canvasAlpha: (function () {
+                try {
+                  const g = renderer.backend && renderer.backend.gl;
+                  if (g && g.getContextAttributes) return !!g.getContextAttributes().alpha;
+                } catch (_) { /* WebGPU backend has no gl; null is the honest answer */ }
+                return null;
+              })(),
               isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
               softwareGL, softAdapter: _softAdapter, headless: _headless,
               forceHw: _forceHw.on, forceBatches: _forceBatches,
