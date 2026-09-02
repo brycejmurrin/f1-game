@@ -816,7 +816,10 @@ const CEILINGS = {
   // the merged tree with the ceiling test's own metric, per the deploy rule.
   // 2382 -> 2387: bakedModel joins the (k, side) scenery transform (why, 4
   // lines) and modelDiagnostics.suppressedCounts for tests/unit/scenery-guards.
-  "js/track/tracks.js": 2387,
+  // 2387 -> 2399: the backdrop guard now records its drops through
+  // noteSuppressed, and carries the measured reason its margin is left
+  // alone (an oriented test suppresses MORE — PERF-FINDINGS 2u).
+  "js/track/tracks.js": 2399,
   // ── Round-6 additions: the unguarded giants, set AT measured (test metric,
   // split-newline count) so any growth is a deliberate raise here. Each line
   // says why the file is its size today; none is an extraction target yet.
