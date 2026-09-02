@@ -112,26 +112,56 @@ test("Pages workflow calls use a unique CI concurrency key", () => {
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
 });
 
-test("an obsolete Pages run cannot deploy after a newer commit", () => {
+test("a Pages run publishes the branch tip, and a rewritten history cannot deploy", () => {
+  // The gate used to demand TIP == GITHUB_SHA and drop every superseded run,
+  // which starved the site: ci is ~13 min, pushes land every ~6, so runs 1892,
+  // 1893, 1894 and 1896 all went green and all skipped deploy while the live
+  // build sat an hour behind. Superseded is EARLY, not stale — the tip contains
+  // what the run gated plus more — so the run now publishes the TIP. The hazard
+  // the old check really guarded (moving the site BACKWARDS) is still refused,
+  // but on the honest condition: not an ancestor at all.
   const preflight = pagesWorkflow.split("\n  current-tip:")[1].split("\n  deploy:")[0];
   const deploy = pagesWorkflow.split("\n  deploy:")[1];
   assert.doesNotMatch(preflight, /^\s+environment:/m,
     "the cheap tip check must not create a github-pages deployment record");
   assert.match(preflight, /deploy: \$\{\{ steps\.tip\.outputs\.deploy \}\}/);
+  assert.match(preflight, /fetch-depth: 0/,
+    "merge-base needs history — a shallow checkout makes every ancestor test a false negative");
+  assert.match(preflight, /git merge-base --is-ancestor "\$GITHUB_SHA" "\$TIP"/,
+    "a superseded-but-ancestor run must still be allowed to publish");
+  assert.match(preflight, /echo "deploy=false"[\s\S]*?history was rewritten/,
+    "and only a non-ancestor may be dropped");
+
   assert.match(deploy, /needs: current-tip/);
   assert.match(deploy, /if: needs\.current-tip\.outputs\.deploy == 'true'/,
-    "an already-obsolete run must skip the environment job entirely");
+    "a run that cannot publish must skip the environment job entirely");
   assert.match(deploy, /environment:\s*\n\s+name: github-pages/);
   assert.match(deploy, /git fetch --no-tags origin/);
   assert.match(deploy, /TIP=\$\(git rev-parse/);
-  assert.match(deploy, /\[ "\$TIP" != "\$GITHUB_SHA" \]/);
+  assert.match(deploy, /if ! git merge-base --is-ancestor "\$GITHUB_SHA" "\$TIP"/,
+    "the in-lock recheck must test ancestry, not equality");
   assert.match(deploy, /REFUSING DEPLOY:[\s\S]*?exit 1/,
-    "a run obsoleted while queued must fail, never become a successful no-op deployment");
-  const recheck = deploy.indexOf("Recheck branch tip inside the Pages lock");
-  const publish = deploy.indexOf("actions/deploy-pages@v4");
-  assert.ok(recheck >= 0 && publish > recheck, "the final tip check must precede publication");
+    "a run that cannot publish while queued must fail, never become a successful no-op deployment");
+  assert.match(deploy, /git checkout --detach "\$TIP"/,
+    "the bytes published must be the TIP's, or the site can still go backwards");
+
+  // Order matters three ways: resolve the tip, then stage from it, then publish.
+  // Anchor on the STEP DECLARATIONS, not the bare phrases: the comment above
+  // the tip checkout names "Stage site" in prose, so a loose indexOf finds the
+  // comment and reports the steps in the wrong order (it did).
+  const recheck = deploy.indexOf("- name: Resolve and check out the branch tip inside the Pages lock");
+  const stage = deploy.indexOf("- name: Stage site");
+  const publish = deploy.indexOf("uses: actions/deploy-pages@v4");
+  assert.ok(recheck >= 0 && stage > recheck, "the tip must be checked out BEFORE the site is staged");
+  assert.ok(publish > stage, "the final tip check must precede publication");
+
+  // apex-sha is the provenance record. Stamping GITHUB_SHA while publishing the
+  // tip would make the deployed shell name a commit that is not what shipped.
+  assert.match(deploy, /PUBLISH_SHA="\$\{\{ steps\.tipsha\.outputs\.sha \}\}"/);
+  assert.match(deploy, /name=\\"apex-sha\\" content=\\"\$PUBLISH_SHA\\"/,
+    "apex-sha must name the commit actually published");
   assert.doesNotMatch(deploy, /echo "deploy=false"/,
-    "once the environment job starts, obsolete must fail rather than report success");
+    "once the environment job starts, unpublishable must fail rather than report success");
 });
 
 test("cached browser jobs never enter apt through --with-deps", () => {
