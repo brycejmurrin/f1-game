@@ -3175,6 +3175,112 @@ with it in. That is §2m's frame-counter failure a second time, in the same
 lever, caught only because the counters report what was FREED rather than that
 the code ran. Do not ship a memory lever whose instrument cannot tell "did
 nothing" from "never ran".
+## 2w. Four defects a code read found that no measurement would have (2026-09-02)
+
+R19 was three deep-READ passes (GLX passes; the track/scenery engine; car +
+livery) plus a live probe of the DEPLOYED tree. The reads paid: none of the four
+shipped defects below produce a number a profiler or a soak would flag. Three of
+them are conditional on a setting a player can change and this box never does.
+
+**1. A hard-braking rival could steal the floodlight shadow map.**
+`js/game.js`'s lamp-shadow selector filtered car tail-lights out of the contest
+with `if (L[o + 6] < 12) continue`. That literal is not a filter. A tail light's
+radius is `8 * (1 + bAmt * 0.45)` with `bAmt = brakeHeat * LT.brakeGlowMul`, so
+at the shipped BRAKE FLARE default (1.0) the maximum is 11.6 — under the bar by
+3.5% — and the slider's range goes to 2.5. Past 1.111 a fully brake-heated tail
+light clears 12 and enters the contest, where it WINS: the score is `d²/max(rgb)`,
+so a rival 15 m ahead with `r ≈ 12` scores ~18 against a 40 m flood's ~53. The
+512² map then gets a 149°-capped frustum slung 0.55 m off a moving car, `flBest`
+churns every frame so the snap cache never hits and the expensive props pass runs
+at 60 Hz, and the real floodlight loses its pool shadow. `glx/chunked.js` already
+guarded its own per-chunk slot against exactly this (`SH.lampIdx >= F.tailStart`);
+the lit path and the godray never did. Now excluded by RANGE, which is what
+`frame.tailStart` / `tailCount` exist for. The literal stays for washers.
+
+**2. The ferris wheel ignored the session's time of day.**
+`js/track/scenery-structures.js` read `def.night` for the rim colour and the
+cabin palette. `def.night` is the circuit's AUTHORED default; `NIGHT` — already
+destructured at the top of the same file and used correctly at four other sites —
+is what THIS build was asked for, and game.js overrides it from TIME OF DAY. So
+a night-def circuit raced by day got a dark rim and neon cabins in full sun
+(abudhabi, baku, singapore, vegas) and a day-def circuit raced at night got a
+bright daytime wheel (suzuka, montreal, zandvoort). This is the SAME defect
+already written up and fixed once in `tracks.js`, which makes it a class:
+`tests/unit/track-night-override.test.mjs` now bans `def.night` anywhere in
+`js/track/` except the two sites that resolve it. Note the guard strips comments
+first — both fixes explain the trap in prose, and a guard that matches its own
+warning is a failure mode this repo has hit four times.
+
+**3. The menu flyby's sky ignored it too.**
+Same class, other end of the codebase. `loadTrack` built `frameSky` with
+`stars: def.night ? 1 : 0`. `Atmosphere.applyRaceSettings` computes the identical
+`isNightSession` and overwrites it — but it runs at `startRace()`, and the MENU
+FLYBY never calls it. (The `exposure: 1` note two lines above is the same gap,
+found earlier.) So previewing a night-def circuit with TIME OF DAY set to day
+gave the flyby a full night sky — and `uStars` is not just the star field, it is
+the sky shader's NIGHT GATE (`nightSky = step(0.5, uStars)`), which zeroes the
+day and twilight enrichments wholesale.
+
+**4. `carShadowBegin` never set `castCullVP`.** Latent, no live caller, fixed for
+symmetry. `lampShadowBegin` sets it and `lampShadowEnd` clears it;
+`castShadowChunked` and `gfx.shadowCullVP` both resolve `castCullVP || lightVP`.
+So the first chunked or instanced caster issued into the car pass would have
+culled against the sun's ±80 m ortho while rendering into the ±42 m car map.
+Today the invariant holds purely by caller discipline and nothing said so.
+
+### The perf item: 16 ms per frame of a livery colour drag, for the same silhouette
+
+`getSetupPreviewMesh` rebuilt `GarageScene.framingHull` every time the mesh
+rebuilt. `livePreviewDraft` busts `_spMeshKey` on every distinct colour value and
+an `<input type=color>` emits those continuously while dragged, so the turntable
+paid a monotone-chain convex hull over ~19k positions — 16.2 ms measured — once
+per frame of a drag, to arrive at the same hull.
+
+The obvious fix (coalesce the input events to one rebuild per rAF) is a **no-op**
+and was rejected: the rebuild is already consumed once per RENDERED frame, not
+once per event. The mesh itself genuinely must rebuild, because `Car3D.build`
+bakes colours into vertex colours. The hull does not — it reads `data.pos` only.
+
+The assumption that makes the cache correct was MEASURED, not assumed, and the
+measurement is the guard (`tests/unit/setup-preview-hull.test.mjs`):
+
+| livery field | presence moves geometry | hue moves geometry |
+|---|---|---|
+| stripe, noseStripe, nose, pod | **yes** | no |
+| accent, wing, halo, fin, finArt, logo, logo2, logo3 | no | no |
+| c1, c2 (always present) | — | no |
+
+A hue change never moves a vertex; only presence does, and only for four fields.
+The guard does not PIN that list — it re-derives it from the real `Car3D.build`
+and compares, so an edit that gates geometry on a new colour goes red rather than
+silently re-centring the car against a stale silhouette. Sabotage-proven both
+directions (drop a field → red; add a spurious one → red).
+
+### Reported, not fixed
+
+- **`seal()`'s `data.slice(0, n)` → `subarray`** (`js/track/models.js`). The
+  accumulators hold 129.7 MB of ArrayBuffer for 73.8 MB of data at the Vegas
+  props peak — Vegas glass overshoots a doubling boundary by 1.3% and pays 42.5 MB
+  for it. `subarray` would drop the seal's second copy, but it returns a VIEW,
+  which keeps the 86 MB backing store alive for the life of the mesh: better
+  peak, worse retention. The real fix is an initial size estimate at the three
+  `TrackModels.scratch()` calls, which needs per-track numbers. Not this round.
+- **`track.graph.nodes` retains 24.8 MB of Vegas's 40.4 MB for the session** and
+  is consumed exactly once, by `graph.batches()`. Only `__apex.trackGraph()` and
+  `tools/graph-parity.cjs` read it afterwards.
+- **`lampArmed` is cleared every `present()`** while `js/game.js` deliberately
+  caches the map across frames, so the pool shadow may appear ~1 frame in 12 (and
+  while parked, exactly once — the rank cache freezes `flBest` and the 12 m cell
+  test then skips forever). The suggested "re-arm without clearing" hook rests on
+  `flBest === _lampShBest` implying the same LAMP, and it does not: `frame.lights`
+  is index-addressed and a tail light entering or leaving shifts every index after
+  it. A correct fix keys the snap on the lamp's POSITION. Needs a rendered night
+  lap to settle; `GLX.lampShadowState().arms` is the cheap JSON confirmation.
+- **The 1024² livery atlas is keyed per DRIVER** though only a 284² region (7.7%
+  of the pixels) differs between team-mates: ~123 MB of GPU texture, ~61 MB of it
+  duplicate. On TLX only, `new THREE.Texture(canvas)` also pins the 4.19 MB canvas
+  backing store for the life of the cache entry (~92 MB at the live set) — GLX and
+  WGX both drop it at upload.
 
 ## 2s. Why releasing three's CPU mirrors blanks a chunked world (2026-09-02)
 

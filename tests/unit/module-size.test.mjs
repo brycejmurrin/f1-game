@@ -521,7 +521,16 @@ const CEILINGS = {
   // rather than added on paper.
   // 9054 -> 9056: round 2 — the speed cap became a rate (2 lines), a net-owned
   // finished rival takes no local coast, every comment paid down to hold it.
-  // 9056 -> 9093: three fixes and the reasons they each needed written down.
+  // 9056 -> 9087: R19, four defects found by a code read and paid for in place.
+  // (a) car tail-lights excluded from the lamp-shadow contest by RANGE, not by a
+  // radius literal a shipped slider crosses; (b) the garage framing hull cached
+  // across colour-only rebuilds — it was 16 ms per frame of a livery colour drag
+  // for the same silhouette; (c) the menu flyby's sky follows the session TIME OF
+  // DAY instead of the circuit's authored default. Each carries the measurement
+  // and the failing input in a comment, which is most of the 30.
+  //
+  // 9056 -> 9093 (the other branch, same base): three fixes and the reasons they
+  // each needed written down.
   // (1) the touch-steering rescue — the GAS button is hidden when auto-throttle
   // is on, so gating on the driver's pedal made the only wedge rescue
   // unreachable on a phone; the two narrowings that keep the pack case out are
@@ -530,7 +539,21 @@ const CEILINGS = {
   // pass corrupts maps instead of saving work. (3) _backendBound, because the
   // boot canary armed from the saved pick and two boots deliberately keep a
   // pick while running GLX. Net behaviour is four lines; the rest is the record.
-  "js/game.js": 9093,
+  //
+  // MERGED: both rounds branched from 9056 and both landed, so the ceiling is
+  // the merged file, not either number above. RE-MEASURED with the suite's own
+  // metric, not added on paper.
+  //
+  // 9093 -> 9102 (the other branch, same base): the props-cast parity gate MOVED
+  // rather than died. Removing
+  // it outright was wrong and the note says why: the gate does fire on frames
+  // the function runs (every snap-cell rebuild), so dropping it added an
+  // instanced prop cast to half of them. It now defers the whole rebuild
+  // instead, which keeps the saving and never publishes a half-built map.
+  //
+  // MERGED to 9133: three rounds branched from 9056 and all three landed, so the
+  // ceiling is the merged file, not any number above. RE-MEASURED, not added up.
+  "js/game.js": 9133,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

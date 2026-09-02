@@ -41,15 +41,16 @@ const GLXShadow = (function () {
       castCullVP: null,        // was _castCullVP
       carEnabled: false, carTex: null, carLightVP: new Float32Array(16),
       carBoxScale: 1,          // cBox / default-42m — see carShadowBegin
-      carArmed: false,         // set by carShadowBegin, cleared each present()
+      carArmed: false,         // set by carShadowBegin OR shadowKeep, cleared each present()
       carArms: 0,              // lifetime carShadowBegin count (debug introspection)
       lampEnabled: false, lampTex: null, lampLightVP: new Float32Array(16),
-      lampArmed: false,        // set by lampShadowBegin, cleared each present()
+      lampArmed: false,        // set by lampShadowBegin OR shadowKeep, cleared each present()
       lampIdx: -1,             // frame.lights record index of the mapped lamp
       lampArms: 0,             // lifetime lampShadowBegin count (debug introspection)
       shadowBegin, castShadow, castShadowInstanced, shadowEnd,
       carShadowBegin, carShadowEnd,
       lampShadowBegin, lampShadowEnd,
+      shadowKeep,
     };
 
     function setup() {
@@ -237,6 +238,13 @@ const GLXShadow = (function () {
       gl.uniformMatrix4fv(S.depthU.uLightVP, false, lightVP);
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
       gl.disable(gl.CULL_FACE);   // back faces too, like the static pass
+      // Symmetry with lampShadowBegin below. Only gfx.castShadow is issued in
+      // this pass today, and that path ignores castCullVP — but castShadowChunked
+      // and gfx.shadowCullVP both resolve `castCullVP || lightVP`, so the moment
+      // a chunked or instanced caster joins the car pass it would cull against
+      // the SUN's +-80 m ortho while rendering into the +-42 m car map. Set it
+      // here rather than leave that landmine armed.
+      S.castCullVP = S.carLightVP;
       S.depthPassOn = true;
       S.carArmed = true;
       S.carArms++;
@@ -245,6 +253,7 @@ const GLXShadow = (function () {
     function carShadowEnd() {
       S.depthPassOn = false;
       if (!S.carEnabled) return;
+      S.castCullVP = null;
       gl.enable(gl.CULL_FACE);
       core.post.bindSceneTarget();
     }
@@ -279,6 +288,30 @@ const GLXShadow = (function () {
       S.castCullVP = null;
       gl.enable(gl.CULL_FACE);
       core.post.bindSceneTarget();
+    }
+
+    // "The map from the last rebuild is still the right map" — the call game.js
+    // makes on the frames it skips a pass for CADENCE rather than because the
+    // pass stopped. present() clears both armed flags every frame, and the
+    // contract it protects is right: when game.js stops running a pass (day,
+    // knob off, menu) a stale map must not keep shadowing. But game.js also
+    // skips for cadence, where the map, its VP and its index are all still
+    // valid — begin() re-binds and re-uploads every one of them on every frame
+    // regardless of the flag — and from in here the two cases are identical.
+    // Only the caller knows which it is, so only the caller can say.
+    //
+    // Sets the flag and NOTHING else. It deliberately does not re-issue
+    // *ShadowBegin: that does gl.clear(DEPTH_BUFFER_BIT), which would wipe the
+    // cached map and leave a fully UNSHADOWED pool — strictly worse than the
+    // missing shadow this exists to fix. It also does not touch lampIdx: the
+    // caller's snap test is what proves the retained index still names the same
+    // lamp, and re-deriving it here would just be guessing.
+    //
+    // arms is NOT incremented. It counts real rasterisations, and a keep is the
+    // absence of one — which is exactly how the guard tells a keep from a redraw.
+    function shadowKeep(kind) {
+      if (kind === "lamp") { if (S.lampEnabled) S.lampArmed = true; return; }
+      if (kind === "car") { if (S.carEnabled) S.carArmed = true; }
     }
 
     S.enabled = setup();
