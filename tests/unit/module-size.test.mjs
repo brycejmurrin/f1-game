@@ -865,7 +865,7 @@ const CEILINGS = {
   // GLX's own closure on a WGX-bound gfx, so DebrisWorld's feature test would
   // pass here and then call GLX with no device (backend-surface-parity).
   // Nine lines to keep a wrong-backend call impossible. PERF-FINDINGS 2h.
-  "js/render/webgpu/wgx.js": 5593,   // 2026-09-01: persisted-2D-blit hardening on hardware + row-copy blit + decal pooling
+  "js/render/webgpu/wgx.js": 5640,   // 2026-09-02: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // TLX backend shell; grows only with GLX-parity features.
   // 2095 -> 2099 on the union: deploy's hasPerChunkLights:false backend flag
   // (descriptor-copy would inherit GLX's true) + the TLX-fix side's dropTo

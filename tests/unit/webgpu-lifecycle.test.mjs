@@ -1947,3 +1947,33 @@ test("per-chunk lamps: a device loss while visible writes the crash latch", () =
   assert.match(lost[0], /apex26\.perChunkOff/, "device.lost writes the perChunkOff latch");
   assert.match(lost[0], /document\.hidden/, "the latch keeps the visibility guard");
 });
+
+test("WGX cullInstances keys on the surviving cell set, and updateInstances clears both snapshots", async () => {
+  // The GLX contract (gfx-backend-canary "updateInstances clears the cull
+  // snapshots it did not produce"), now on WGX: a second cull whose frustum
+  // differs but whose surviving CELLS match is a hit — no repack, no
+  // writeBuffer — and a caller-packed set invalidates both memos so the next
+  // cull cannot claim bytes no frustum produced. Ported 2026-09-02 (audit).
+  const h = makeGpuHarness();
+  const gfx = await h.create();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = gfx.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  assert.ok(batch && batch.cells && batch.cells.length === 2, "two cells 100 m apart");
+  const planes = (d) => Array.from({ length: 6 }, () => [0, 0, 0, d]);
+  const uploads = () => h.writes.filter((w) => w.buffer === batch.instBuf).length;
+  const before = uploads();
+  assert.equal(gfx.cullInstances(batch, planes(1e6)), 2);
+  assert.equal(uploads() - before, 1, "a fresh frustum packs and uploads");
+  assert.equal(gfx.cullInstances(batch, planes(2e6)), 2);
+  assert.equal(uploads() - before, 1, "a DIFFERENT frustum with the same surviving cells is a hit: no re-upload");
+  assert.equal(batch._cellKeyN, 2);
+  assert.equal(gfx.updateInstances(batch, new Float32Array(32), 1), 1);
+  assert.equal(batch.visible, 1);
+  assert.equal(batch._cullPlanes, null, "updateInstances must invalidate the frustum snapshot");
+  assert.equal(batch._cellKeyN, -1, "updateInstances must invalidate the cell-set snapshot");
+  assert.equal(uploads() - before, 2, "one caller-packed instance uploaded");
+  assert.equal(gfx.cullInstances(batch, planes(1e6)), 2);
+  assert.equal(uploads() - before, 3, "…so the next cull with the old frustum re-uploads instead of claiming the debris bytes");
+});
+
