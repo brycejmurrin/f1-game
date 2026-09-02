@@ -1458,6 +1458,17 @@ const TLX = (function () {
         // desktop win (PERF-FINDINGS 2r) is untouched; re-open this only with
         // evidence from a real handset.
         if (isMobile) return;
+        // AND KNOW WHAT IT COSTS ON DESKTOP. Freeing an array disarms the
+        // two intermediate rungs of the paint-failure ladder below (dropTo ->
+        // unlitMat -> rawUnlitMat): dropTo reassigns pm.material, a new
+        // (geometry, material) pair is a new RenderObject, and building its
+        // pipeline runs _getVertexFormat, which is `e.array.constructor` with
+        // NO null guard in the shipped vendor build (three.webgpu.min.js,
+        // r185). Both rungs therefore throw and the ladder lands on
+        // refuseTab() — which reloads onto GLX, so the player still gets a
+        // game, just never the unlit TLX degradation those rungs exist for.
+        // Verified by reading the vendored bytes, not reproduced at runtime.
+        // Do not add rungs above refuseTab() expecting them to run here.
         if (now - _mirrorSweepAt < 2000) return;
         _mirrorSweepAt = now;
         _mirrorStat.sweeps++;
@@ -2594,23 +2605,21 @@ const TLX = (function () {
           if (!_envFirstPaintAt) _envFirstPaintAt = _now;
           // "or the probe is not coming": no face asked for in 5 s of painting
           // means game.js's tier gate has it off for this device, and waiting
-          // on a latch that cannot flip is waiting forever. Safe to relax now
-          // in a way it was not when the release nulled arrays: it assigns a
-          // ZERO-LENGTH array of the same class, so a probe that starts later
-          // (PerfGov can raise the tier mid-race) still finds array.constructor
-          // and types the attribute correctly.
-          // REVERTED 2026-09-02, live on a player's phone: with the sweep and the
-          // _envNeverComing() term in, TLX on the handset drew sky, cars and
-          // trackside markers but NO ROAD AND NO TERRAIN — precisely the chunked
-          // meshes. The term was what first let the chunked release run on a
-          // phone at all (game.js gates the env probe on PerfGov.tier() < 1, so
-          // the shipped gate can never open there), and freeing those mirrors
-          // takes the world with it on that device. Neither the in-container
-          // WebGL2 runs (pixel-identical frame) nor gpu-census on macos-latest
-          // Metal (gpuErrors 0 after the index fix) reproduced it: BOTH have
-          // tier < 1, so both took the ordinary gate and neither exercised the
-          // phone path this term opened. Off by default until a device that
-          // reproduces it can prove a fix. apex26.tlxMirrorSweep=1 to A/B.
+          // THE STATIC SWEEP IS OFF FOR EVERY PLAYER, and it takes THREE
+          // independent gates to say so — two sessions added one each on
+          // 2026-09-02 without seeing the other's, so read all three before
+          // concluding anything about what this does in production:
+          //   1. this call site is opt-in (apex26.tlxMirrorSweep=1) — added by
+          //      the revert after a player's handset lost its road;
+          //   2. sweepGeoMirrors() declines outright on mobile (94b9a2da);
+          //   3. the env gate above, which on a phone can never open anyway
+          //      (game.js tier-gates the probe at PerfGov.tier() < 1).
+          // Measured 2026-09-02 with gfx-probe at tier 4, mobile AND desktop:
+          // sweeps 0, geos 0, freedMB 0, gate "--T-" in both arms. So the
+          // 31.6 MB desktop win in PERF-FINDINGS 2r is NOT being taken — any
+          // comment or commit message claiming it is live is describing gate 2
+          // alone. Turning it back on means deleting gate 1 deliberately, with
+          // the bounds fix in place, and re-measuring; it is not a cleanup.
           const _sweepOptIn = (function () {
             try { return localStorage.getItem("apex26.tlxMirrorSweep") === "1"; } catch (_) { return false; }
           })();

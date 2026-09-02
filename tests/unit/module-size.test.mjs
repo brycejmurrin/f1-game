@@ -1053,7 +1053,7 @@ const CEILINGS = {
   // caching the bounds before the free and refusing the sweep on a phone. The
   // union carries all of it and is neither number — re-measured at 2810 on the
   // merged tree with this test's own metric, per the deploy rule.
-  "js/render/three/tlx.js": 2810,
+  "js/render/three/tlx.js": 2819,
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform
