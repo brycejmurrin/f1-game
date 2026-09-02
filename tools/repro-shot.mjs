@@ -79,6 +79,27 @@ try {
     process.exitCode = 1;
   }
   await page.waitForTimeout(2500);
+  // SELF-CHECK. This tool has shipped a wrong cockpit frame before, silently:
+  // the camera is meant to sit ON the car for every onboard mode, so measure it
+  // instead of trusting it. A shot that fails this is not evidence about
+  // anything and says so on the way out.
+  const chk = await page.evaluate(() => {
+    const A = window.__apex, c = A.camState(), p = A.physState() || {};
+    const eye = c.eye || [0, 0, 0];
+    const d = (p.px == null || p.pz == null) ? null
+      : Math.hypot(eye[0] - p.px, eye[2] - p.pz);
+    return { mode: A.camera().mode, eye: eye.map((n) => +n.toFixed(2)), fov: +(c.fov || 0).toFixed(1),
+             car: p.px == null ? null : [+p.px.toFixed(2), +p.pz.toFixed(2)], eyeToCar: d == null ? null : +d.toFixed(2),
+             state: A.info().state };
+  });
+  console.log("camera:", JSON.stringify(chk));
+  const ONBOARD = new Set(["cockpit", "hood", "tcam"]);
+  if (ONBOARD.has(chk.mode) && (chk.eyeToCar == null || chk.eyeToCar > 1.5)) {
+    console.error(`REFUSING: camera mode "${chk.mode}" is an ONBOARD cam, so the eye must ride the car, ` +
+      `but it is ${chk.eyeToCar == null ? "unplaceable (no car pose)" : chk.eyeToCar + " m away"}. ` +
+      "The frame below is not the view the blob describes.");
+    process.exitCode = 1;
+  }
   const box = await page.evaluate(() => {
     const r = document.getElementById("game").getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };

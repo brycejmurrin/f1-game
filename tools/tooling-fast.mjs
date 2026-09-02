@@ -131,6 +131,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // pick-tests names it (js/car/ or tools/slider-effect.mjs).
   "tests/unit/physics-baseline-present.test.mjs",
   "tests/unit/deploy-stamp.test.mjs",
+  "tests/unit/track-build-wait.test.mjs",
   "tests/unit/deploy-tool.test.mjs",
   // The Node VM game harness (tools/game-vm.cjs): boots js/game.js headless in
   // ~300 ms and reproduces tests/data/physics-baseline.json EXACTLY, so the

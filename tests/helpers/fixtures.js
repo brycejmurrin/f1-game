@@ -21,7 +21,14 @@
  * screen-swap waits got.
  */
 export const BOOT_MS = 45000;
+// Still the budget for specs that wait for a track build THEMSELVES
+// (webgl-probes, lighting-ab, lighting-tuner-grade, image-grade-visual). The
+// loadTrack fixture no longer uses it — see awaitTrackBuild below, which those
+// specs should move to whenever one of them next goes red on a slow box.
 export const TRACK_MS = 45000;
+
+import { TRACK_STALL_MS, awaitTrackBuild } from "./await-track-build.js";
+export { TRACK_STALL_MS, awaitTrackBuild };
 
 /**
  * Shared Playwright fixtures for Apex 26.
@@ -170,7 +177,7 @@ export const test = base.extend({
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
       await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
+      await awaitTrackBuild(page);
       await page.evaluate(() => window.__apex.go());
       return page;
     });
@@ -314,7 +321,7 @@ export const sharedTest = test.extend({
     await use(async (id = "monza", tod = "day", wx = "dry") => {
       await ensureLive(page);
       await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
-      await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: TRACK_MS });
+      await awaitTrackBuild(page);
       await page.evaluate(() => window.__apex.go());
     });
   },
