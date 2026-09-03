@@ -1,0 +1,20 @@
+---
+description: WGX / WebGPU backend — soft-adapter gate, validation vs visual oracle
+globs: js/render/webgpu/**/*
+alwaysApply: false
+---
+
+# WGX (WebGPU)
+
+- Opt-in via `apex26.gfxBackend=webgpu`; GLX is the default fallback.
+- Soft-adapter gate refuses Dawn/SwiftShader / empty adapter info unless
+  `apex26.gfxWgxAllowSoftware=1` — players get GLX, not a white canvas.
+- SwiftShader WebGPU EXECUTES: `node spike/backends/tools/wgx-capture.mjs <track>` returns
+  real pixels via `GLX.capturePixels()` (software adapters soft-present into a
+  COPY_SRC texture and never call `getCurrentTexture()`, whose first call
+  breaks `mapAsync` device-wide in headless). Not a performance oracle; MSAA
+  paths never run on software (forced MSAA 1) — those rely on the lifecycle
+  unit guards.
+- Load skill `webgpu-debug` for WGSL / device-loss / `wgx-validate.mjs`.
+- Live probe: `mcp-probe` + `node tools/mcp/mcp-cli.mjs probe --backend webgpu`.
+  Never use github.io from Chrome in this container — tinyfish for deploy.

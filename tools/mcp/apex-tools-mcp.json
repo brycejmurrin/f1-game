@@ -24,13 +24,11 @@
   },
   "tools": [
     "apex_verify_change_fast",
-    "apex_wgx_validate_static",
     "apex_pick_tests",
     "apex_bump_cache_check",
     "apex_status",
     "apex_eval",
     "apex_shot",
-    "apex_gfx_probe",
     "apex_agent",
     "apex_select_specs",
     "apex_rotate_markings_check",

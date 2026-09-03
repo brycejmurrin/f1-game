@@ -391,8 +391,8 @@ most-load-bearing first.
   fix-now batches are worth naming because they are small and near-miss:
   `js/net/handshake.js` `payload.k` null-deref and its missing deflate-bomb cap,
   `js/net/sdp.js` ascii CR/LF handling, `js/data/telemetry.js`'s sprint badge,
-  `js/render/glx/post.js` `hdrOk`, `js/render/three/tlx.js` `boxScale` (and a
-  stale comment in `js/render/three/tlx-post.js`), and a lobby branch in
+  `js/render/glx/post.js` `hdrOk`, `spike/backends/three/tlx.js` `boxScale` (and a
+  stale comment in `spike/backends/three/tlx-post.js`), and a lobby branch in
   `js/net/lobby.js`.
 - **Smaller, catalogued but not itemised here**: the EXPORT data tab still
   hardcodes its year list; several dev tools have exit-0 error paths and

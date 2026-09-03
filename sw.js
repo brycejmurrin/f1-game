@@ -52,9 +52,7 @@ function currentCacheName() {
 async function precacheAssetLists() {
   const essential = new Set(["./", "index.html", "version.json"]);
   // Vendored three.js (TLX backend) is fetched by DYNAMIC import() through the
-  // inline importmap, so the tag parser below never sees it. Seed it as
-  // OPTIONAL: TLX is opt-in — install success for GLX users must not depend on
-  // ~1 MB of vendor they never run (promote to essential at the Phase D flip).
+  // inline importmap, so the tag parser below never sees it.
   const optional = new Set(["manifest.json",
     // All declared install icons must work offline even though only the 180px
     // browser favicon is linked from index.html and visible to the tag parser.
@@ -62,13 +60,6 @@ async function precacheAssetLists() {
     "icons/icon-192.png",
     "icons/icon-512.png",
     "icons/icon-maskable-512.png",
-    "vendor/three-0.185.1/three.webgpu.min.js",
-    "vendor/three-0.185.1/three.core.min.js",
-    "vendor/three-0.185.1/three.tsl.min.js",
-    // addons/tsl/display/BloomNode.js is deliberately NOT precached: nothing
-    // imports it today (TLX bloom lives in tsl-post.js) — it stays on disk and
-    // in the importmap's three/addons/ prefix for a future consumer, but 16 KB
-    // in every PWA install with zero readers earns no cache slot.
     // The QR reader (js/net/scan.js) injects this ON DEMAND the first time
     // someone scans an answer code, so the tag parser below never sees it.
     // OPTIONAL for the same reason as three.js: most sessions never scan, and
@@ -101,19 +92,6 @@ async function precacheAssetLists() {
     "assets/fonts/rajdhani-latin-700-normal.woff2",
     // @gen-shell:sw-optional
     // DEFERRED renderer backends (no <script> tag; injected on opt-in)
-    "js/render/webgpu/wgsl-chunks.js",
-    "js/render/webgpu/wgsl-post.js",
-    "js/render/webgpu/wgsl-fx.js",
-    "js/render/webgpu/wgx.js",
-    "js/render/three/tsl-chunks.js",
-    "js/render/three/tsl-lit.js",
-    "js/render/three/tsl-sky.js",
-    "js/render/three/tsl-fx.js",
-    "js/render/three/tsl-post.js",
-    "js/render/three/tlx-shadow.js",
-    "js/render/three/tlx-chunked.js",
-    "js/render/three/tlx-post.js",
-    "js/render/three/tlx.js",
     // LAZY_RACE + LAZY_SCENERY — the race payload; a miss builds a bare circuit offline
     "js/lighting/presets.js",
     "js/circuits/scenery/bahrain.js",
@@ -210,8 +188,7 @@ async function precacheAssetLists() {
 
 // Precache reads THROUGH the HTTP cache, deliberately. Both lists hold only
 // immutable URLs — executable essentials carry a content-derived `?v=` token,
-// and the optionals are version-pinned by PATH (vendor/three-0.185.1/…, the
-// content-named woff2s) — which is the exact condition the fetch handler below
+// and the optionals are version-pinned by PATH (the content-named woff2s) — which is the exact condition the fetch handler below
 // already relies on when it says a cache hit is always correct without
 // revalidation. `cache: "no-store"` here contradicted that and made a cold
 // first visit download the whole app TWICE: ~5.8 MB for the page's own 145
@@ -284,7 +261,7 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(three|webgpu)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
+      /^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
         ? u + "?v=" + build : u);
     await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
     await self.skipWaiting();

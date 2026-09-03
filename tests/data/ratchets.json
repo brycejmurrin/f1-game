@@ -2,8 +2,8 @@
   "_doc": "Ratchets on the files that only ever grow. `node tools/check/ratchets.mjs` checks, `--update` snaps every ceiling to the current value (lower after an extraction; a raise is a deliberate edit with its reason in the commit). Metrics: lines (split-newline), codeLines (non-comment non-blank), gMembers (G facade members, check-gctx), topLets (column-0 `let`). Tree-wide metrics (scope `tree`, measured by tools/check/tree-counts.mjs): cssClasses (distinct class tokens in css/), shellNodes (index.html tag occurrences less script/link), bareCatches (empty, uncommented catch blocks in js/), waitNoPolling (waitForFunction with a declared timeout and no polling). An entry may declare its own `slack` when its guard is TIGHTER than the default max(60, 4%) — all four of these are, and a slack looser than the default is refused, so consolidating mechanisms cannot quietly widen one. History: docs/notes/CEILING-HISTORY.md.",
   "files": {
     "js/game.js": {
-      "lines": 9290,
-      "codeLines": 5083,
+      "lines": 9280,
+      "codeLines": 5073,
       "gMembers": 222,
       "topLets": 147
     },
@@ -23,20 +23,8 @@
     "js/lighting/presets.js": {
       "lines": 15508
     },
-    "js/render/webgpu/wgx.js": {
-      "lines": 6108
-    },
-    "js/render/three/tlx.js": {
-      "lines": 3150
-    },
     "js/render/glx/glx.js": {
       "lines": 2297
-    },
-    "js/render/webgpu/wgsl-chunks.js": {
-      "lines": 1951
-    },
-    "js/render/three/tsl-lit.js": {
-      "lines": 1794
     },
     "js/net/lobby.js": {
       "lines": 1684
@@ -51,15 +39,15 @@
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1064,
+      "ceiling": 1059,
       "slack": 25
     },
     "bareCatches": {
-      "ceiling": 173,
+      "ceiling": 145,
       "slack": 15
     },
     "waitNoPolling": {
-      "ceiling": 57,
+      "ceiling": 56,
       "slack": 39
     }
   }

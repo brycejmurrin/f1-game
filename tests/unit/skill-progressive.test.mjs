@@ -101,7 +101,6 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["lighting-tuner", "references/bake.md"],
     ["scenery-dress", "references/instancing.md"],
     ["agent-view", "references/state.md"],
-    ["webgpu-debug", "references/defects.md"],
     ["scenery-dress", "references/rules.md"],
     ["css-play", "references/loop.md"],
     ["slim-bloat", "references/do-not.md"],
@@ -147,7 +146,9 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
     assert.equal(fs.existsSync(path.join(SKILLS, gone)), false, `${gone} was folded/deleted 2026-09`);
   }
   const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
-  assert.equal(dirs.length, 26, `expected 26 skills, got ${dirs.length}`);
+  // 26 -> 25 on 2026-09-03: webgpu-debug left with the WGX/TLX spike-out and
+  // lives at spike/backends/skills/webgpu-debug/. It comes back with the backends.
+  assert.equal(dirs.length, 25, `expected 25 skills, got ${dirs.length}`);
   // cross-backend-parity was a 15-line pointer at the renderers doc; that doc
   // was absorbed into docs/ARCHITECTURE.md in Phase 5 and the section moved
   // with it (docs/RENDERERS.md is a redirect stub now).
@@ -257,9 +258,9 @@ test("skills only name real test-bg groups", () => {
 });
 
 test("wgx-validate Usage lists --static as the no-browser gate", () => {
-  const text = fs.readFileSync(path.join(ROOT, "tools/gfx/wgx-validate.mjs"), "utf8");
+  const text = fs.readFileSync(path.join(ROOT, "spike/backends/tools/wgx-validate.mjs"), "utf8");
   const usage = text.match(/Usage:[\s\S]*?\n\/\/\n\/\/ PASS/);
-  assert.ok(usage, "could not find the Usage block in tools/gfx/wgx-validate.mjs");
+  assert.ok(usage, "could not find the Usage block in spike/backends/tools/wgx-validate.mjs");
   assert.match(usage[0], /wgx-validate\.mjs --static/);
   assert.match(usage[0], /parent session only/);
 });
@@ -449,7 +450,6 @@ test("no skill declares the Cursor-only `paths` field — every skill matches fr
   assert.deepEqual(scoped, [], "leave `paths` unset — the description is the trigger");
   // The four former file-family skills still name their files in the body.
   for (const [name, re] of Object.entries({
-    "webgpu-debug": /js\/render\/webgpu/,
     "webgl-debug": /js\/render\/glx/,
     "new-track": /js\/circuits/,
     "scenery-dress": /js\/circuits|scenery\(api\)/,
@@ -495,11 +495,8 @@ test("survey-ui-matrix names the layout-audit CLI recipes", () => {
   assert.match(text, /npm run ui:survey/);
 });
 
-test("webgpu-debug names wgx-shot --gallery for multi-track frames", () => {
-  const text = fs.readFileSync(path.join(SKILLS, "webgpu-debug/SKILL.md"), "utf8");
-  assert.match(text, /wgx-shot\.mjs --gallery/);
-  assert.match(text, /wgx:gallery/);
-});
+// The webgpu-debug SKILL.md test that stood here moved with its skill in the
+// 2026-09-03 spike-out (spike/backends/skills/webgpu-debug/).
 
 test("skills README says the committed shell reads ?v=dev and the deploy stamps hashes", () => {
   const text = fs.readFileSync(path.join(SKILLS, "README.md"), "utf8");
@@ -509,13 +506,8 @@ test("skills README says the committed shell reads ?v=dev and the deploy stamps 
   assert.doesNotMatch(text, /\?v=<sha256>/);
 });
 
-test("wgx-capture pairs with webgpu-debug in tools/README.md", () => {
-  const text = fs.readFileSync(path.join(ROOT, "tools/README.md"), "utf8");
-  const row = text.split("\n").find((l) => l.includes("wgx-capture.mjs"));
-  assert.ok(row, "tools/README.md lost the wgx-capture.mjs row");
-  assert.match(row, /webgpu-debug/);
-  assert.doesNotMatch(row, /webgl-debug/);
-});
+// Likewise the wgx-capture / webgpu-debug pairing row: both the tool and the
+// skill are in spike/backends/ now, so tools/README.md has no such row.
 
 test("slim-bloat is the Claude-simplify analog and stays a thin index", () => {
   const skill = fs.readFileSync(path.join(SKILLS, "slim-bloat/SKILL.md"), "utf8");

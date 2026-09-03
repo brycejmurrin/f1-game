@@ -215,15 +215,6 @@ function wantAgentSurface() {
   const h = typeof location !== "undefined" ? location.hostname : "";
   return h === "127.0.0.1" || h === "localhost" || h === "[::1]";
 }
-function preloadThreeVendor() {
-  for (const href of ["vendor/three-0.185.1/three.webgpu.min.js", "vendor/three-0.185.1/three.tsl.min.js"]) {
-    const el = document.createElement("link");
-    el.rel = "modulepreload";
-    el.href = href;
-    el.crossOrigin = "anonymous";
-    document.head.appendChild(el);
-  }
-}
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
   let pref = null;
@@ -274,7 +265,6 @@ try {
     // is simply absent, and Gfx.create already treats that as "unavailable"
     // (`typeof TLX === "undefined"`) and returns null, which falls through to
     // GLX below exactly as an unsupported browser always has.
-    if (pref === "three") preloadThreeVendor();
     await loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu);
     const backend = await Gfx.create(canvas, {});
     if (backend) {

@@ -107,8 +107,9 @@ test("help lists serve / list-tools / call / status", () => {
   assert.match(r.stdout, /apex_/);
   assert.match(r.stdout, /apex_select_specs/);
   assert.match(r.stdout, /apex_graph_parity/);
-  assert.match(r.stdout, /apex_gfx_probe/);
-  assert.doesNotMatch(r.stdout, /apex_carshot|apex_select_recall|apex_ui_survey/, "trimmed wraps must not be advertised");
+  assert.match(r.stdout, /apex_shot/);
+  assert.doesNotMatch(r.stdout, /apex_carshot|apex_select_recall|apex_ui_survey|apex_gfx_probe|apex_wgx_validate_static/,
+    "trimmed wraps must not be advertised — the last two wrapped CLIs that left with the 2026-09-03 WGX/TLX spike-out");
   assert.match(r.stdout, /serve-http/);
 });
 
@@ -156,7 +157,6 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_agent",
     "apex_bump_cache_check",
     "apex_eval",
-    "apex_gfx_probe",
     "apex_graph_parity",
     "apex_pick_tests",
     "apex_rotate_markings_check",
@@ -164,7 +164,6 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_shot",
     "apex_status",
     "apex_verify_change_fast",
-    "apex_wgx_validate_static",
   ]);
   for (const n of names) {
     assert.match(n, /^apex_/);

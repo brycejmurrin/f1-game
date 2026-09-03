@@ -4,12 +4,12 @@ Project skills for recurring agent workflows. Each is a `SKILL.md` (auto-matched
 from its `description`, or via `/<name>`), grounded in `__apex`,
 `tools/track/verify-track.cjs`, and `npm run test:*` groups.
 
-**A skill is when/how, not the command.** The CLI lives under `tools/`. Twelve
+**A skill is when/how, not the command.** The CLI lives under `tools/`. Ten
 CLIs are pinned as `apex_*` MCP tools; most are not. Full map (three MCP
 servers, wrap table, never-wrap): [`docs/AGENT-SURFACE.md`](../../docs/AGENT-SURFACE.md).
 
 Descriptions say **when** to load the skill; bodies carry the workflow and
-`references/` carry the detail. 26 skills (44 until 2026-09). The folded ones
+`references/` carry the detail. 25 skills (44 until 2026-09). The folded ones
 are named in the rows that absorbed them: `bump-cache`, `deploy-merge`,
 `test-timeout-triage` → check-changes; `motion-capture`, `perf-profile`,
 `car-viewer`, `debug-cameras` → playwright-probe; `bake-lighting` →
@@ -53,7 +53,6 @@ stayed separate in the 2026-09-03 pass.
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`; game feel / juice — shake, hit-stop, kerb and collision feedback that must not touch determinism (`references/game-feel.md`). |
 | **ui-menu-a11y** | Menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, touch layout. |
 | **webgl-debug** | Blank/dark GLX canvas, shadow acne, bloom, HDR, shader/uniform bugs, GLX renderer artifacts. |
-| **webgpu-debug** | WGX black screen, NaN-white road, WGSL failures, device lost, MSAA/HDR, `wgx-validate` with real Dawn. |
 
 Cache busting is the deploy's job: the committed shell reads `?v=dev` on
 every tag and `pages.yml` stamps content hashes while staging. Nothing to

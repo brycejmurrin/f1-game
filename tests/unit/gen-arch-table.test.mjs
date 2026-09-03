@@ -44,7 +44,11 @@ test("every non-data manifest file gets exactly one row", () => {
   // 138 non-collapsed rows today: every FULL/DEFERRED/LAZY_* file minus the 40
   // circuit defs and 40 scenery closures, which collapse to one row per
   // directory. A generator that silently dropped a roster would undershoot.
-  assert.ok(rows.length > 130, `expected > 130 rows, found ${rows.length}`);
+  // 120, not 130: the 13 WGX/TLX modules left the shipped tree in the
+  // 2026-09-03 spike-out. This is an anti-vacuity floor — it catches a
+  // generator that emitted nothing — so it tracks the roster, and the
+  // exact per-file coverage is the one-row-per-file test above.
+  assert.ok(rows.length > 120, `expected > 120 rows, found ${rows.length}`);
   const dataFiles = new Set([...MANIFEST.CIRCUITS.map(MANIFEST.circuitPath), ...MANIFEST.LAZY_SCENERY]);
   const rostered = [
     ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,

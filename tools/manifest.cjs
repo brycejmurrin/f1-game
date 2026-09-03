@@ -203,15 +203,7 @@ const SHELL_NOTES = {
   before: {
     "js/circuits/bahrain.js": "<!-- circuit definitions (data) — must load before the tracks engine -->",
   },
-  after: {
-    "js/render/glx/glx.js":
-      "<!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the\n" +
-      "     two OPT-IN renderer backends and are injected by js/game.js only when\n" +
-      "     apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that\n" +
-      "     every visitor used to parse for a backend almost nobody runs. sw.js seeds\n" +
-      "     them into its OPTIONAL precache set, since it discovers everything else by\n" +
-      "     parsing the tags below. -->\n",
-  },
+  after: {},
 };
 
 // tools/carview.html <script> subset, in order (paths repo-relative; the file
@@ -406,25 +398,11 @@ const HARD_EDGES = [
 // it MUST also be seeded into sw.js's OPTIONAL precache set (the service worker
 // discovers everything else by parsing the shell's own tags, so a deferred file
 // is invisible to it). tests/unit/load-order.test.mjs asserts all three.
-const DEFERRED = {
-  webgpu: [
-    "js/render/webgpu/wgsl-chunks.js",
-    "js/render/webgpu/wgsl-post.js",
-    "js/render/webgpu/wgsl-fx.js",
-    "js/render/webgpu/wgx.js",
-  ],
-  three: [
-    "js/render/three/tsl-chunks.js",
-    "js/render/three/tsl-lit.js",
-    "js/render/three/tsl-sky.js",
-    "js/render/three/tsl-fx.js",
-    "js/render/three/tsl-post.js",
-    "js/render/three/tlx-shadow.js",
-    "js/render/three/tlx-chunked.js",
-    "js/render/three/tlx-post.js",
-    "js/render/three/tlx.js",
-  ],
-};
+// EMPTY since the 2026-09-03 spike-out: WGX and TLX moved to spike/backends/,
+// out of the shipped tree (docs/notes/SPIKE-BACKENDS-CHECKLIST.md,
+// spike/backends/README.md says how to re-attach). The machinery stays because
+// it is what a future deferred file would use; nothing is deferred today.
+const DEFERRED = {};
 
 // Eval-time dependencies WITHIN a deferred group — same meaning as HARD_EDGES,
 // asserted against that group's own array order. The old edges from wgx.js and
@@ -516,20 +494,7 @@ const LAZY_NET_EDGES = [
   ["js/net/scan.js", "js/net/lobby.js"],
 ];
 
-const DEFERRED_EDGES = [
-  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"], // string concat at eval
-  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
-  ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
-  ["js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js"],
-  ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
-  ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
-  ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],      // TLX.create invokes TLXShaders.sky
-  ["js/render/three/tsl-fx.js", "js/render/three/tlx.js"],       // TLX.create invokes TLXShaders.fx
-  ["js/render/three/tlx-shadow.js", "js/render/three/tlx.js"],   // TLX.create invokes TLXShaders.shadowSys
-  ["js/render/three/tlx-chunked.js", "js/render/three/tlx.js"],  // TLX.create invokes TLXShaders.chunked
-  ["js/render/three/tsl-post.js", "js/render/three/tlx-post.js"], // postChain invokes TLXShaders.post
-  ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],     // TLX.create invokes TLXShaders.postChain
-];
+const DEFERRED_EDGES = [];
 
 // Named paths for direct single-file consumers (tests/tools that load one
 // source file by path). When a file moves, update it here and every consumer
@@ -543,9 +508,6 @@ const PATHS = {
   LAMP_CHUNKS: "js/render/shared/lamp-chunks.js",
   GLX_SHADERS_LIT: "js/render/glx/shaders/glsl-lit.js",
   GLX_SHADERS_POST: "js/render/glx/shaders/glsl-post.js", // grade/composite GLSL (image-grade-shaders.test.mjs)
-  WGSL_CHUNKS: "js/render/webgpu/wgsl-chunks.js",
-  WGSL_POST: "js/render/webgpu/wgsl-post.js",
-  WGX: "js/render/webgpu/wgx.js",
   GLTF: "js/render/shared/gltf.js",
   ASSETS: "js/render/shared/assets.js",
   TRACK_SPACE: "js/track/core/space.js",
@@ -563,6 +525,52 @@ const sceneryPath = (id) => `${SCENERY_DIR}/${id}.js`;
 // tools/ci/deploy.mjs can name the new path when another session's edit to the
 // old one conflicts. Prune entries once every in-flight branch has rebased.
 const MOVED = {
+  "js/render/webgpu/wgsl-chunks.js": "spike/backends/webgpu/wgsl-chunks.js",
+  "js/render/webgpu/wgsl-post.js": "spike/backends/webgpu/wgsl-post.js",
+  "js/render/webgpu/wgsl-fx.js": "spike/backends/webgpu/wgsl-fx.js",
+  "js/render/webgpu/wgx.js": "spike/backends/webgpu/wgx.js",
+  "js/render/three/tsl-chunks.js": "spike/backends/three/tsl-chunks.js",
+  "js/render/three/tsl-lit.js": "spike/backends/three/tsl-lit.js",
+  "js/render/three/tsl-sky.js": "spike/backends/three/tsl-sky.js",
+  "js/render/three/tsl-fx.js": "spike/backends/three/tsl-fx.js",
+  "js/render/three/tsl-post.js": "spike/backends/three/tsl-post.js",
+  "js/render/three/tlx-shadow.js": "spike/backends/three/tlx-shadow.js",
+  "js/render/three/tlx-chunked.js": "spike/backends/three/tlx-chunked.js",
+  "js/render/three/tlx-post.js": "spike/backends/three/tlx-post.js",
+  "js/render/three/tlx.js": "spike/backends/three/tlx.js",
+  "vendor/three-0.185.1/LICENSE.txt": "spike/backends/vendor/three-0.185.1/LICENSE.txt",
+  "vendor/three-0.185.1/PATCHES.md": "spike/backends/vendor/three-0.185.1/PATCHES.md",
+  "vendor/three-0.185.1/three.core.min.js": "spike/backends/vendor/three-0.185.1/three.core.min.js",
+  "vendor/three-0.185.1/three.tsl.min.js": "spike/backends/vendor/three-0.185.1/three.tsl.min.js",
+  "vendor/three-0.185.1/three.webgpu.min.js": "spike/backends/vendor/three-0.185.1/three.webgpu.min.js",
+  "vendor/three-0.185.1/addons/tsl/display/BloomNode.js": "spike/backends/vendor/three-0.185.1/addons/tsl/display/BloomNode.js",
+  "tools/gfx/wgx-capture.mjs": "spike/backends/tools/wgx-capture.mjs",
+  "tools/gfx/wgx-lavapipe-probe.mjs": "spike/backends/tools/wgx-lavapipe-probe.mjs",
+  "tools/gfx/wgx-shot.mjs": "spike/backends/tools/wgx-shot.mjs",
+  "tools/gfx/wgx-validate.mjs": "spike/backends/tools/wgx-validate.mjs",
+  "tools/gfx/wgx-vid-repro.mjs": "spike/backends/tools/wgx-vid-repro.mjs",
+  "tools/gfx/tlx-pack-check.cjs": "spike/backends/tools/tlx-pack-check.cjs",
+  "tools/gfx/wgpu-flag-test.mjs": "spike/backends/tools/wgpu-flag-test.mjs",
+  "tools/gfx/gfx-probe.mjs": "spike/backends/tools/gfx-probe.mjs",
+  "tools/gfx/road-lut-census.mjs": "spike/backends/tools/road-lut-census.mjs",
+  "tests/unit/webgpu-lifecycle.test.mjs": "spike/backends/tests/unit/webgpu-lifecycle.test.mjs",
+  "tests/unit/renderer-soft-lifecycle.test.mjs": "spike/backends/tests/unit/renderer-soft-lifecycle.test.mjs",
+  "tests/unit/road-lut-frame.test.mjs": "spike/backends/tests/unit/road-lut-frame.test.mjs",
+  "tests/specs/tlx-probes.spec.js": "spike/backends/tests/specs/tlx-probes.spec.js",
+  "docs/research/WEBGPU-PARITY.md": "spike/backends/docs/WEBGPU-PARITY.md",
+  "docs/research/wgx-gallery-manifest.json": "spike/backends/docs/wgx-gallery-manifest.json",
+  "docs/research/wgx-gallery/README.md": "spike/backends/docs/wgx-gallery/README.md",
+  "docs/research/wgx-gallery/bahrain.png": "spike/backends/docs/wgx-gallery/bahrain.png",
+  "docs/research/wgx-gallery/monaco-eye.png": "spike/backends/docs/wgx-gallery/monaco-eye.png",
+  "docs/research/wgx-gallery/montreal-eye.png": "spike/backends/docs/wgx-gallery/montreal-eye.png",
+  "docs/research/wgx-gallery/montreal.png": "spike/backends/docs/wgx-gallery/montreal.png",
+  "docs/research/wgx-gallery/singapore.png": "spike/backends/docs/wgx-gallery/singapore.png",
+  "docs/research/wgx-gallery/spa.png": "spike/backends/docs/wgx-gallery/spa.png",
+  "docs/research/wgx-gallery/vegas.png": "spike/backends/docs/wgx-gallery/vegas.png",
+  ".claude/skills/webgpu-debug/SKILL.md": "spike/backends/skills/webgpu-debug/SKILL.md",
+  ".claude/skills/webgpu-debug/references/defects.md": "spike/backends/skills/webgpu-debug/references/defects.md",
+  ".cursor/rules/render-wgx.mdc": "spike/backends/skills/cursor-rules/render-wgx.mdc",
+  ".cursor/rules/render-tlx.mdc": "spike/backends/skills/cursor-rules/render-tlx.mdc",
   "tools/capture/apex-capture.mjs": "tools/shot/apex-capture.mjs",
   "tools/capture/backend-compare.mjs": "tools/shot/backend-compare.mjs",
   "tools/capture/baked-scenery.mjs": "tools/shot/baked-scenery.mjs",

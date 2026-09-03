@@ -263,12 +263,10 @@ test("the MCP-facing entry points answer without touching a browser or a network
     // Prefer an explicit path so the assertion is independent of a clean vs
     // dirty checkout. `--help` also answers without git (see pick-tests.mjs);
     // either shape is fine — the path form also exercises RULES → test:gfx.
-    { cmd: process.execPath, args: [tool("pick-tests.mjs"), "js/render/three/tlx.js"],
+    { cmd: process.execPath, args: [tool("pick-tests.mjs"), "js/render/glx/glx.js"],
       want: /test:gfx/ },
     { cmd: process.execPath, args: [tool("pick-tests.mjs"), "--help"],
       want: /group|test:/ },
-    { cmd: process.execPath, args: [tool("wgx-validate.mjs"), "--static"],
-      want: /"static": true/ },
   ];
   const failed = [];
   for (const c of cases) {
@@ -480,20 +478,10 @@ test("capture/shot.mjs clips the canvas instead of locator.screenshot", () => {
   assert.match(src, /from ["']\.{1,2}\/(?:lib\/)?harness\.mjs["']/);
 });
 
-test("wgx-shot.mjs owns the gallery path (its forwarder is gone)", () => {
-  // `wgx-gallery.mjs` was a two-line forwarder; `npm run wgx:gallery` calls
-  // wgx-shot directly, so the forwarder had no caller left. The assertions that
-  // mattered were always about wgx-shot's own surface — they stay here.
-  assert.equal(FILES.some((f) => f.rel.endsWith("wgx-gallery.mjs")), false,
-    "wgx-gallery.mjs must stay gone — the gallery lives on wgx-shot --gallery");
-  const shot = fs.readFileSync(FILES.find((f) => f.rel.endsWith("wgx-shot.mjs")).abs, "utf8");
-  assert.match(shot, /--gallery/);
-  assert.match(shot, /export async function runWgxShot/);
-  assert.match(shot, /export async function runWgxGallery/);
-  assert.match(shot, /export const WGX_GALLERY_SHOTS/);
-  assert.doesNotMatch(shot, /locator\(["']#game["']\)\.screenshot/);
-  assert.match(shot, /page\.screenshot\(\s*\{\s*path[^}]*clip/);
-});
+// The wgx-shot gallery test that stood here (and the wgx-validate --static
+// smoke case above) covered tools that left for spike/backends/tools/ in the
+// 2026-09-03 spike-out. They are not shipped tools any more, so this shipped
+// guard has nothing to say about them; they travel with the backend.
 
 test("the survey forwarders are gone — layout-audit --survey is the entry point", () => {
   // Two stacked forwarders (ui-mcp-survey.mjs -> ui-survey.mjs -> layout-audit

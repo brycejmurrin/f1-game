@@ -169,17 +169,13 @@ test("DEFERRED_EDGES are ordered within their group", () => {
   }
 });
 
-test("DEFERRED_EDGES leave more than one TLX file ready at wave 0", () => {
-  const files = MANIFEST.DEFERRED.three;
-  const preds = new Map(files.map((f) => [f, []]));
-  for (const [a, b] of MANIFEST.DEFERRED_EDGES) {
-    if (preds.has(a) && preds.has(b)) preds.get(b).push(a);
-  }
-  const wave0 = files.filter((f) => preds.get(f).length === 0);
-  assert.ok(wave0.length >= 6, `TLX wave 0 should start the independent IIFEs together, got ${wave0.length}: ${wave0.join(",")}`);
-  assert.ok(!wave0.includes("js/render/three/tlx.js"), "tlx.js must wait for its factories");
-  assert.ok(!wave0.includes("js/render/three/tsl-lit.js"), "tsl-lit.js must wait for tsl-chunks.js");
-});
+// The TLX wave-0 test that stood here asserted DEFERRED_EDGES scheduled the
+// independent TLX IIFEs together. DEFERRED is `{}` since the 2026-09-03
+// spike-out (WGX and TLX left the shipped tree for spike/backends/), so it had
+// nothing to assert on. The machinery it covered is still here and still
+// exercised by the tests below, which are written against whatever DEFERRED
+// holds — they pass vacuously today and start guarding again the moment
+// anything is deferred. spike/backends/README.md says how to re-attach.
 
 test("sw.js seeds every DEFERRED file into its optional precache set", () => {
   const sw = readFileSync(join(ROOT, "sw.js"), "utf8");

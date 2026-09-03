@@ -5,13 +5,26 @@ Both backends behind the Gfx seam were opt-in only (`apex26.gfxBackend=
 2026-09 restructure (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2).
 GLX (WebGL2) is and remains the only shipped renderer.
 
-**Status: this README is a draft written during the Phase 2b INVENTORY
-(docs/notes/SPIKE-BACKENDS-CHECKLIST.md), before the move itself ran.** The
-file lists (`webgpu/`, `three/`, `vendor/three-0.185.1/`, `tools/`, `tests/`,
-`docs/`, `skills/`) below describe what the move window will place here, per
-`tools/moves/spike-backends.json`; they are not yet populated on this branch.
+**Status: LANDED 2026-09-03.** 46 files moved by
+`node tools/gen/move-tree.mjs tools/moves/spike-backends.json`; the non-move
+edits are in `docs/notes/SPIKE-BACKENDS-CHECKLIST.md`.
 
-## What's here (once the move lands)
+Two files the inventory listed for the move STAYED in the shipped tree,
+because the move proved they were not WGX/TLX-only:
+
+- `tools/lib/webgpu-chrome-args.cjs` — `tools/lib/harness.mjs` requires it and
+  re-exports its three flag sets, so it feeds the Chromium launch of EVERY
+  browser test, GLX included. Moving it broke the whole shipped harness.
+- `tools/gfx/gpu-census.mjs` — `ci.yml`'s renderer-macos job runs it to prove a
+  hardware adapter before trusting the GLX `test:gfx` run, and `gpu-census.yml`
+  runs it for the whole census. It imports nothing WGX-specific; it answers
+  "is there a real GPU here", which the shipped tree still needs to ask.
+
+That is the same class of correction the checklist itself had already made for
+`ssr-probe.mjs` (GLX-only) and `gpu-game-check.mjs` (has a live GLX leg): a
+tool that MENTIONS WebGPU is not automatically a WebGPU-only tool.
+
+## What's here
 
 - `webgpu/` — WGX: `wgx.js` (the backend) + `wgsl-chunks.js` / `wgsl-fx.js` /
   `wgsl-post.js` (WGSL-as-data shader sources).
@@ -22,10 +35,10 @@ file lists (`webgpu/`, `three/`, `vendor/three-0.185.1/`, `tools/`, `tests/`,
   runtime (`three.webgpu.min.js` / `three.core.min.js` / `three.tsl.min.js` +
   the BloomNode addon). Carries two load-bearing patches — see
   `vendor/three-0.185.1/PATCHES.md` — re-apply both on any future re-attach.
-- `tools/` — the WGX/TLX-only CLIs: `gfx-probe.mjs`, `gpu-census.mjs`,
-  `road-lut-census.mjs`, `wgx-{capture,gallery,lavapipe-probe,shot,
-  soft-present-diag,validate,vid-repro}.mjs`, `tlx-pack-check.cjs`,
-  `webgpu-chrome-args.cjs`, `wgpu-flag-test.mjs`.
+- `tools/` — the WGX/TLX-only CLIs: `gfx-probe.mjs`, `road-lut-census.mjs`,
+  `wgx-{capture,lavapipe-probe,shot,validate,vid-repro}.mjs`,
+  `tlx-pack-check.cjs`, `wgpu-flag-test.mjs`. (`gpu-census.mjs` and
+  `webgpu-chrome-args.cjs` stayed shipped — see above.)
 - `tests/` — `unit/webgpu-lifecycle.test.mjs`, `unit/renderer-soft-lifecycle.test.mjs`,
   `unit/road-lut-frame.test.mjs`, `specs/tlx-probes.spec.js`.
 - `docs/` — `WEBGPU-PARITY.md` (gap inventory + WebGPU API recipes), the WGX/TLX
@@ -34,30 +47,51 @@ file lists (`webgpu/`, `three/`, `vendor/three-0.185.1/`, `tools/`, `tests/`,
 - `skills/webgpu-debug/` — the WGX debugging skill.
 - `skills/cursor-rules/render-{wgx,tlx}.mdc` — the two Cursor glob rules.
 
+## Two shipped guards still read this directory — on purpose
+
+`tests/unit/backend-surface-parity.test.mjs` and
+`tests/unit/gfx-backend-canary.test.mjs` are on the shipped fast gate and still
+read `spike/backends/webgpu/*` and `spike/backends/three/*`. That was a choice,
+not an oversight. The plan wanted parity narrowed to a GLX-vs-`gfx.js`-header
+check, but narrowing it deletes the guarantee: parity has caught the same
+defect shape twice (a backend missing a member silently inherits GLX's own
+function, which then dies on null `gl`). The tests are node-only and cost
+about two seconds, so keeping them costs nothing and keeps the spike honest.
+
+The consequence to know about: **editing code in here can turn the SHIPPED fast
+gate red.** That is the intended trade — it means the spike cannot rot
+unnoticed while it sits out of the tree. If that coupling ever becomes the
+thing standing in the way, narrow the two guards and record the loss here,
+the way the narrowed guards in step 7 below are recorded.
+
 ## How to re-attach
 
 1. `git mv` every file back to its pre-spike path (the inverse of
    `tools/moves/spike-backends.json` — swap `moves` keys/values and re-run
-   `node tools/move-tree.mjs <inverted-map>`).
+   `node tools/gen/move-tree.mjs <inverted-map>`).
 2. Restore the two `tools/manifest.cjs` `DEFERRED` groups (`webgpu`/`three`
-   arrays) and `DEFERRED_EDGES`, then `node tools/gen-shell.mjs` to
+   arrays) and `DEFERRED_EDGES`, then `node tools/gen/gen-shell.mjs` to
    regenerate `index.html`'s tag blocks, `js/roster.js` and `sw.js`'s
    optional precache set.
 3. Restore `index.html`'s `three*` importmap keys (Trystero's three keys
    never left — do not duplicate them).
 4. Restore `sw.js`'s hand-authored `vendor/three-0.185.1/*` OPTIONAL
    precache lines.
-5. Restore `js/game.js`'s boot-canary block and `preloadThreeVendor()` if
-   they were deleted rather than left as dead code (check the move-window
-   commit — the checklist offered both options).
-6. Restore `js/game/renderer-picker.js`'s `BACKENDS` array and the THREE
-   PATH/SCREENSHOTS control block if deleted.
-7. Re-widen `backend-surface-parity.test.mjs` and `godray-keep-nearest.test.mjs`
-   back to their three-backend form; restore the deleted assertion blocks in
-   `perf-try.test.mjs` / `perf-governor.test.mjs` / `light-grid.test.mjs` /
-   `ci-coverage.test.mjs` / `mcp-cli.test.mjs` — these were narrowed, not
-   just deleted, so re-attaching without them is real functional coverage
-   loss until they are restored.
+5. Restore `js/game.js`'s `preloadThreeVendor()` (deleted — it pointed at
+   vendor paths that left the shipped tree). The boot canary and the
+   `optIn`/`PROBE_KEY` machinery were LEFT IN PLACE: with `DEFERRED` empty
+   they load nothing and `Gfx.create()` returns null, which is the same
+   "backend refused" path an unsupported browser always took.
+6. `js/perf/renderer-picker.js` still offers all three stops — it was NOT
+   narrowed in the move window, so a returning player can still pick a backend
+   that now falls back to GLX. Narrowing it is the one deliberate follow-up.
+7. Restore the NARROWED guards. `image-grade-shaders.test.mjs` lost its
+   GLSL-vs-WGSL grade parity test (it was catching real drift and now the
+   GLSL contract stands alone); `global-registry.test.mjs` lost the
+   `TLXShaders: 8` writer count and gained `js/render/gfx.js: ["TLX", "WGX"]`
+   in `KNOWN_EXTERNAL_READS`; `load-order.test.mjs` lost its TLX wave-0 test.
+   These were narrowed, not tidied — re-attaching without restoring them is
+   real coverage loss.
 8. Re-run the WGX/TLX unit suite and the static WGX validator, then a live
    backend probe for each, before trusting either backend again — a
    spiked-out tree accrues drift the moment it stops running in CI.

@@ -1741,18 +1741,15 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<!-- three.js import map (TLX backend, apex26.gfxBackend="three"): resolves the
-     bare specifiers used by the DYNAMIC import() inside TLX.create() and by the
-     vendored files' own imports. Inline (no src) so the load-order test and the
-     service worker's tag parser both ignore it; the vendor URLs carry no ?v= —
-     immutability comes from the versioned directory name (upgrade = new dir). -->
+<!-- Import map for the vendored ES-module islands (multiplayer's Trystero).
+     The three.js specifiers left with the WGX/TLX spike-out on 2026-09-03
+     (spike/backends/README.md says how to re-attach them). Inline (no src) so
+     the load-order test and the service worker's tag parser both ignore it;
+     the vendor URLs carry no ?v= — immutability comes from the versioned
+     directory name (upgrade = new dir). -->
 <script type="importmap">
 {
   "imports": {
-    "three": "./vendor/three-0.185.1/three.webgpu.min.js",
-    "three/webgpu": "./vendor/three-0.185.1/three.webgpu.min.js",
-    "three/tsl": "./vendor/three-0.185.1/three.tsl.min.js",
-    "three/addons/": "./vendor/three-0.185.1/addons/",
     "@trystero-p2p/core": "./vendor/trystero-0.25.3/core/index.js",
     "@trystero-p2p/nostr": "./vendor/trystero-0.25.3/nostr/index.js",
     "@noble/secp256k1": "./vendor/trystero-0.25.3/noble-secp256k1.js"
@@ -1774,13 +1771,6 @@
 <script defer crossorigin="anonymous" src="js/render/shared/lamp-chunks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/chunked.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/glx.js?v=dev"></script>
-<!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
-     two OPT-IN renderer backends and are injected by js/game.js only when
-     apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
-     every visitor used to parse for a backend almost nobody runs. sw.js seeds
-     them into its OPTIONAL precache set, since it discovers everything else by
-     parsing the tags below. -->
-
 <script defer crossorigin="anonymous" src="js/render/gfx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>

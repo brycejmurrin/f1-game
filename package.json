@@ -9,7 +9,7 @@
     "test:render": "node tools/ci/run-playwright.mjs --project=render --workers=4",
     "test:headless": "node tools/ci/run-playwright.mjs --project=headless",
     "test:smoke": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js",
-    "test:gfx": "node tools/ci/run-playwright.mjs tests/specs/instanced-draw.spec.js tests/specs/webgl-probes.spec.js tests/specs/lighting-ab.spec.js tests/specs/image-grade-visual.spec.js tests/specs/lighting-tuner-grade.spec.js tests/specs/tlx-probes.spec.js",
+    "test:gfx": "node tools/ci/run-playwright.mjs tests/specs/instanced-draw.spec.js tests/specs/webgl-probes.spec.js tests/specs/lighting-ab.spec.js tests/specs/image-grade-visual.spec.js tests/specs/lighting-tuner-grade.spec.js",
     "test:hooks": "node tools/ci/run-playwright.mjs tests/specs/dev-tools.spec.js tests/specs/headless-api.spec.js tests/specs/obs-act-edge.spec.js tests/specs/data-lifecycle.spec.js tests/specs/telemetry-compare.spec.js tests/specs/assets-api.spec.js tests/specs/logging.spec.js tests/specs/persistence.spec.js tests/specs/wake-lock.spec.js tests/specs/output-paths.spec.js tests/specs/map-hooks.spec.js tests/specs/new-hooks.spec.js tests/specs/agent-view.spec.js tests/specs/agent-drive-bench.spec.js tests/specs/agent-determinism.spec.js",
     "test:circuits": "node tools/ci/run-playwright.mjs tests/specs/tracks-walls.spec.js tests/specs/autopilot.spec.js tests/specs/elevation-tracks.spec.js tests/specs/audit.spec.js tests/specs/*-foundation.spec.js tests/specs/props-over-road.spec.js tests/specs/terrain-over-road.spec.js tests/specs/f1-track-accuracy.spec.js tests/specs/scenery-kits.spec.js",
     "test:driving": "node tools/ci/run-playwright.mjs tests/specs/physics-*.spec.js tests/specs/longitudinal.spec.js tests/specs/projection.spec.js tests/specs/understeer-cue.spec.js tests/specs/collision*.spec.js tests/specs/drift.spec.js tests/specs/offtrack.spec.js tests/specs/world-physics.spec.js tests/specs/active-aero.spec.js tests/specs/aero-zones.spec.js tests/specs/debris.spec.js tests/specs/race-control.spec.js",
@@ -32,7 +32,7 @@
     "test:lifecycle-unit": "node --test tests/unit/async-lifecycle.test.mjs",
     "test:state-unit": "node --test tests/unit/season-cal.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/quali-persist.test.mjs",
     "test:service-worker": "node --test tests/unit/service-worker.test.mjs",
-    "test:webgpu-lifecycle": "node --test tests/unit/webgpu-lifecycle.test.mjs tests/unit/renderer-soft-lifecycle.test.mjs",
+    "test:webgpu-lifecycle": "node --test",
     "test:tooling": "npm run test:tooling-fast && npm run test:sweeps",
     "test:tooling-fast": "node tools/ci/tooling-fast.mjs",
     "test:generated-docs": "node --test tests/unit/generated-docs.test.mjs",
@@ -54,11 +54,11 @@
     "ui:survey": "node tools/ui/layout-audit.mjs --survey",
     "ui:gallery": "node tools/ui/layout-audit.mjs --gallery",
     "ui:audit": "node tools/ui/layout-audit.mjs",
-    "wgx:gallery": "node tools/gfx/wgx-shot.mjs --gallery --lite",
+    "wgx:gallery": "node spike/backends/tools/wgx-shot.mjs --gallery --lite",
     "ab:light": "node tools/lighting/ab-lighting.mjs",
     "setup:browsers": "bash tools/env/install-browsers.sh",
     "physics:sweep": "node tools/check/physics-tune-sweep.mjs",
-    "wgx:capture": "node tools/gfx/wgx-capture.mjs"
+    "wgx:capture": "node spike/backends/tools/wgx-capture.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
