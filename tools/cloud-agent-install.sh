@@ -76,10 +76,34 @@ ensure_mcp_clones() {
   fi
 }
 
+# The Playwright TEST suite (playwright.config.js) resolves Chromium from the
+# DEFAULT cache (~/.cache/ms-playwright) whenever the pinned /opt sandbox path
+# is absent (a version drift leaves it so on a fresh box), so `npm test` needs
+# the headless shell THERE — AGENTS.md §1. install-browsers.sh populates
+# /opt/pw-browsers for the wgx / MCP tools; this covers the test runner.
+# Best-effort and idempotent: Playwright skips a browser already on disk.
+ensure_test_headless_shell() {
+  local cli="$ROOT/node_modules/playwright/cli.js"
+  if [[ ! -f "$cli" ]]; then
+    cli="$ROOT/node_modules/@playwright/test/cli.js"
+  fi
+  if [[ ! -f "$cli" ]]; then
+    echo "WARN: playwright CLI missing; cannot install test headless shell" >&2
+    return 1
+  fi
+  echo "Ensuring Playwright chromium-headless-shell in the default cache (npm test)…"
+  if env -u PLAYWRIGHT_BROWSERS_PATH node "$cli" install chromium-headless-shell; then
+    return 0
+  fi
+  echo "WARN: chromium-headless-shell install failed (npm test may not find a browser)" >&2
+  return 1
+}
+
 if ! bash "$ROOT/tools/install-browsers.sh"; then
   if [[ -x /opt/google/chrome/chrome ]]; then
     echo "WARN: Playwright browsers missing; system Chrome is present at /opt/google/chrome/chrome"
     if [[ -f node_modules/playwright/package.json && -f node_modules/sharp/package.json ]]; then
+      ensure_test_headless_shell || true
       ensure_mcp_clones
       echo "OK: cloud-agent install complete (npm ready, browsers deferred)"
       exit 0
@@ -88,6 +112,8 @@ if ! bash "$ROOT/tools/install-browsers.sh"; then
   echo "ERROR: cloud-agent install failed" >&2
   exit 1
 fi
+
+ensure_test_headless_shell || true
 
 ensure_mcp_clones
 
