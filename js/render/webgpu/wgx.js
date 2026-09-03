@@ -221,19 +221,18 @@ const WGX = (function () {
   const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
   // WebGPU allows sampleCount 1 or 4 — ONLY. (w3.org/TR/webgpu: "sampleCount
   // must be either 1 or 4"; Dawn agrees, 4 being the one portable MSAA level.)
-  // Desktop GRAPHICS: ULTRA (apex26.gfxHigh=1) keeps 4×; HIGH (gfxHigh=0) uses 1×
-  // — WebGPU cannot do 2×, so the savings mirror GLX capping HIGH at 2× MSAA.
-  // Missing key defaults to 4× (fresh install / harness) until gfx-quality runs.
+  // Desktop GRAPHICS: ULTRA keeps 4×; every other preset (and unset = the
+  // desktop default HIGH) uses 1× — no 2× on WebGPU, mirroring GLX's HIGH cap.
+  // `apex26.gfxPreset` is JSON-ENCODED by GameStore ("\"ultra\"" with quotes):
+  // decode before comparing, or ULTRA never matches (0a31155 shipped that).
+  // The legacy phone key apex26.gfxHigh counts only when no preset is stored.
   // `let` (not const): soft-adapter escape hatch may drop desktop 4 → 1.
-  // Same mobile-only-signal defect as GLX (js/render/glx/post.js): gfxHigh is
-  // never written on a desktop, so this read never saw "0" and every desktop
-  // preset shipped 4x. Read the preset GfxQuality actually stores.
-  let _wgxMsaa4 = true;
+  let _wgxMsaa4 = false;
   try {
-    const _p = localStorage.getItem("apex26.gfxPreset");
-    if (_p != null) _wgxMsaa4 = _p === "ultra";
-    else if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false;
-  } catch (_) { /* blocked storage: default 4× MSAA */ }
+    let _p = localStorage.getItem("apex26.gfxPreset");
+    try { _p = JSON.parse(_p); } catch (_) { /* raw string */ }
+    _wgxMsaa4 = _p === "ultra" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+  } catch (_) { /* blocked storage: the cheaper of the two */ }
   let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
   // Every path that makes create() return null records WHY, both on the console
@@ -3541,7 +3540,10 @@ const WGX = (function () {
         // encoded yet and no view has been acquired (present() acquires it).
         if (_wantCopyable && !_swapCopyable && !_softGpu) {
           _wantCopyable = false; _swapCopyable = true;
-          _configureCanvas();
+          // Commit only on success: left "copyable" after a failed configure, the
+          // next _capEncode would copy a non-COPY_SRC texture (a phantom GPU error).
+          const _cfgErr = _configureCanvas();
+          if (_cfgErr) { _swapCopyable = false; if (_capReq) { const r = _capReq; _capReq = null; r.reject(new Error("swapchain reconfigure failed: " + _cfgErr)); } }
         }
         lastFrame = frame || null;
         if (width < 1) resize();
@@ -4248,17 +4250,13 @@ const WGX = (function () {
         // A LITE swapchain is configured without COPY_SRC (see
         // _configureCanvas). SAVE SCREENSHOT on such a device reconfigures
         // once, copyable, and reads the NEXT frame; this one is skipped.
-        //
-        // THE RECONFIGURE CANNOT HAPPEN HERE. This runs AFTER the whole frame
-        // is encoded — the lit pass, post and tonemap have already recorded
-        // against a view of the CURRENT swapchain texture — and one statement
-        // before device.queue.submit(). ctx.configure() replaces the drawing
-        // buffer and EXPIRES that texture, so the submit that follows
-        // references a destroyed texture: a validation error, a dropped
-        // frame, and (since the uncapturederror listener landed) a phantom
-        // `err 1` in the GOV row and COPY DIAG — poisoning the one instrument
-        // a phone has, from inside the screenshot path. Ask begin() instead;
-        // it reconfigures before the next frame acquires its view.
+        // THE RECONFIGURE CANNOT HAPPEN HERE: this runs AFTER the frame is
+        // encoded against a view of the CURRENT swapchain texture and one
+        // statement before submit — ctx.configure() EXPIRES that texture, so
+        // the submit referenced a destroyed texture: a dropped frame and a
+        // phantom `err 1` in the GOV row / COPY DIAG, from inside the one
+        // instrument a phone has. Ask begin() instead; it reconfigures before
+        // the next frame acquires its view.
         if (!_softGpu && !_swapCopyable) { _wantCopyable = true; return null; }
         const capTex = _softGpu ? softPresentTex : ctx.getCurrentTexture();
         if (!capTex) throw new Error("no frame texture");

@@ -15,7 +15,7 @@
  * bitmask tests on recorded arguments must compare against the mock's own
  * `gl.CONST` values (see `enums`).
  *
- *   const h = bootGlx();
+ *   const h = bootGlx();            // opts: { aniso, userAgent, ls: { key: value } }
  *   h.GLX.begin(h.frame());  h.reset();  h.GLX.begin(h.frame());
  *   h.count("uniform1f")                 // → 1 (only uTime moves)
  *
@@ -114,6 +114,9 @@ export function bootGlx(opts = {}) {
     requestAnimationFrame: () => 0, Image: class {},
     addEventListener: noop, removeEventListener: noop,
   };
+  // opts.ls seeds localStorage BEFORE GLX.init reads it — the way the game
+  // stores it (GameStore JSON-encodes: `{ "apex26.gfxPreset": '"ultra"' }`).
+  for (const [k, v] of Object.entries(opts.ls || {})) sandbox.localStorage.setItem(k, v);
   sandbox.window = sandbox; sandbox.self = sandbox; sandbox.globalThis = sandbox;
   const ctx = vm.createContext(sandbox);
   for (const [f, src] of SOURCES) vm.runInContext(src, ctx, { filename: f });

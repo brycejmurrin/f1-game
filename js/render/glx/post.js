@@ -160,9 +160,15 @@ const GLXPost = (function () {
   // which is exactly what this block exists to stop. The preset itself is
   // `apex26.gfxPreset` (GfxQuality's store key) on every device; ULTRA keeps
   // 4x, everything below caps. Unset = the desktop default HIGH, which caps.
+          // GameStore JSON-encodes every value it stores, so the key holds
+          // "\"ultra\"" with the quotes — a bare === "ultra" never matched and
+          // (for one deploy, 0a31155) every desktop that had ever touched the
+          // preset button got the cap, ULTRA included. Decode first; a raw
+          // string (a probe's --ls, or an older writer) still compares.
           let _ultra = false;
           try {
-            const _p = localStorage.getItem("apex26.gfxPreset");
+            let _p = localStorage.getItem("apex26.gfxPreset");
+            try { _p = JSON.parse(_p); } catch (_) { /* not JSON: compare the raw string */ }
             _ultra = _p === "ultra" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
           } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
           if (!_ultra && msaaSamples > 2) msaaSamples = 2;
