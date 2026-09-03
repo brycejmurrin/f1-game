@@ -109,7 +109,17 @@ const measure = (page, ctrl, hud, W, H, ins) => page.evaluate(([c, h, w, ht, i])
   // HUD readouts keep the CONSERVATIVE rect test against buttons: a number
   // drawn across a circle's bounding corner is still a number you cannot read.
   for (const a of hb) for (const d of vis) if (hit(a, d)) hudClash.push(`${a.id}+${d.id}`);
-  const unsafe = vis.filter((e) => e.x < i.sal - 0.5 || e.r > w - i.sar + 0.5
+  // …AND AGAINST EACH OTHER. This pair was missing, and that is exactly how the
+  // gap strip shipped painting over the POS/LAP/TIME/BEST plates on a notched
+  // landscape phone: .hud-gaps and .hud-top share a `top`, neither sets a
+  // z-index, and nothing here ever compared two HUD boxes. A defect ledger
+  // entry claimed this coverage was closed when only HUD-vs-buttons was.
+  for (let x = 0; x < hb.length; x++)
+    for (let y = x + 1; y < hb.length; y++)
+      if (hit(hb[x], hb[y])) hudClash.push(`${hb[x].id}+${hb[y].id}`);
+  // The safe area binds the HUD clusters too — they are inset by --sal/--sar in
+  // their own CSS, so a miss there is a real clip on the notch side.
+  const unsafe = [...vis, ...hb].filter((e) => e.x < i.sal - 0.5 || e.r > w - i.sar + 0.5
                                 || e.y < i.sat - 0.5 || e.b > ht - i.sab + 0.5)
                     .map((e) => e.id);
   return { overlaps, hudClash, unsafe, count: vis.length };

@@ -1652,3 +1652,18 @@ adoption was 54.
   flag is out. The counter moved into `tests/data/ratchets.json` on the deploy
   branch while this was in flight, so the raise is recorded here rather than in
   the retired `css-class-ratchet.test.mjs`.
+- `js/game.js` 9499 -> **9546** lines / 5219 -> **5227** code (2026-09-03,
+  post-audit): five defect fixes the adversarial sweep found in the same day's
+  batches. The red-flag re-grid now BANKS the prog the teleport credits
+  (`_progGift`) so `checkRetirements`, which reads prog as a fraction of race
+  distance, cannot park a cluster of cars on the restart; the field's S1
+  reference resets with `lapTime` at the line (it was measured across the
+  reset, so `fieldSectorBests[0]` was frozen and S1 could never show purple);
+  `startRace` restores the weather chip's pick before re-arming, so a
+  pause-menu RESTART mid-arc no longer keeps the arc's weather; the player
+  slipstream skips retired cars; and the tow cue is cleared on both exits that
+  skip the block that used to clear it. (9546 -> **9552** / 5227 -> **5228** on
+  the follow-up: the weather restore in `startRace` is spelled out inline
+  rather than calling `endChangeable()`, because that also drops `wxArcPlan` —
+  and a HOST's plan for the race about to start is set before `startRace` runs,
+  so calling it there threw the plan away. Caught by the game-VM suite.)

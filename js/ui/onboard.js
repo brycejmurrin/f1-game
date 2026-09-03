@@ -60,7 +60,10 @@ const Onboard = (function () {
     // here can reach the car (docs/PHYSICS.md: broadcast-only).
     function tick(dt) {
       if (G.state !== lastState) {
-        if (G.state === "race" && lastState === "count") races++;
+        // A red-flag standing restart also runs count -> race, and it must not
+        // burn one of the two races these marks get. A genuine start has the
+        // race clock at zero; a restart resumes the clock the flag stopped.
+        if (G.state === "race" && lastState === "count" && !(G.raceT > 1)) races++;
         lastState = G.state;
       }
       if (G.state !== "race" || done()) return false;
@@ -77,7 +80,10 @@ const Onboard = (function () {
       if (!(shown & BIT.ot) && p.otArmed && !(p.otT > 0)) return fire("ot");
       if (!(shown & BIT.aero)) {
         const d = G.aeroZoneAhead ? G.aeroZoneAhead(p.s) : -1;
-        if (d > 0 && d < 250 && !p.xOn) return fire("aero");
+        // aeroX (the flap's travel), never xOn — "the switch is not the wing"
+        // is a flat rule in docs/PHYSICS.md, and a prompt that fires while the
+        // flaps are still opening is the case it exists for.
+        if (d > 0 && d < 250 && !(p.aeroX > 0.02)) return fire("aero");
       }
       return false;
     }
