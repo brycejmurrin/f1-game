@@ -51,6 +51,28 @@ const LiveryTex = (function () {
     astonmartin: ["ARAMONT", "GAYDONA", "AVIONNE", "REGALIS", "WINGCRAFT", "SAVILE"],
     cadillac:    ["DETROX", "CRESTLIN", "LIBERTA", "AMERIGO", "MOTORCTY", "GRANDEUR"],
   };
+  // SPONSOR PACKS — a livery's `sponsors` key swaps the per-team table for one
+  // of these universal sets (texture only; the physical board is mesh).
+  // `clean` paints no wordmark at all: the test-livery look.
+  const SPONSOR_PACKS = {
+    retro:  ["MARLBOROUGH", "CASTROLIA", "AGIPO", "GOODYEARS", "ELFIN", "SHELLEY"],
+    tech:   ["QUBITWARE", "NEURALIX", "CLOUDFORGE", "SYNAPSE", "VECTORA", "LATTICE"],
+    energy: ["VOLTSHOT", "FUSIONFUEL", "RAPTORADE", "KINETIQ", "SURGE", "IONBLAST"],
+    clean:  [],
+  };
+  const SPONSOR_PACK_IDS = ["default", "retro", "tech", "energy", "clean"];
+  // NUMBER FONTS. Real numbers are the driver's own design — most are a bold
+  // italic — so the default stays today's italic Arial Narrow. Each recipe
+  // gives the CSS font for a size and how the glyph is layered.
+  const NUM_FONTS = {
+    default: { font: (px) => "italic 900 " + px + "px 'Arial Narrow', Arial, sans-serif", style: "layered" },
+    block:   { font: (px) => "900 " + px + "px 'Arial Black', Impact, Arial, sans-serif", style: "layered" },
+    stencil: { font: (px) => "900 " + px + "px 'Arial Black', Impact, Arial, sans-serif", style: "stencil" },
+    narrow:  { font: (px) => "800 " + px + "px 'Arial Narrow', 'Liberation Sans Narrow', Arial, sans-serif", style: "layered" },
+    rounded: { font: (px) => "900 " + px + "px Verdana, 'DejaVu Sans', Arial, sans-serif", style: "rounded" },
+    outline: { font: (px) => "italic 900 " + px + "px 'Arial Narrow', Arial, sans-serif", style: "outline" },
+  };
+  const NUM_FONT_IDS = Object.keys(NUM_FONTS);
 
   // ── colour helpers ─────────────────────────────────────────────────────────
   function to255(c) { return [
@@ -159,7 +181,8 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  function drawNumber(ctx, n, R, ink, accent, bg) {
+  function drawNumber(ctx, n, R, ink, accent, bg, fontId) {
+    const recipe = NUM_FONTS[fontId] || NUM_FONTS.default;
     if (bg) {
       // Rounded number-board patch: base-paint fill + thin accent keyline.
       const m = 8, rad = 34;
@@ -181,7 +204,7 @@ const LiveryTex = (function () {
     const maxH = R.h - pad * 2;
     const maxW = R.w - pad * 2;
     const text = String(n);
-    const font = (px) => "italic 900 " + px + "px 'Arial Narrow', Arial, sans-serif";
+    const font = recipe.font;
     // Same closed-form + walk as drawWordmark: advance is linear in px.
     ctx.font = font(100);
     const refW = ctx.measureText(text).width / 100;
@@ -199,18 +222,45 @@ const LiveryTex = (function () {
     // soft drop shadow (offset dark) for a painted-on depth cue
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.fillText(text, cx + size * 0.03, cy + size * 0.035);
-    // bold accent outline behind the fill
-    ctx.lineWidth = Math.max(6, size * 0.075);
-    ctx.strokeStyle = css(accent);
     ctx.lineJoin = "round";
-    ctx.strokeText(text, cx, cy);
-    // thin ink keyline hugging the accent for crisp separation
-    ctx.lineWidth = Math.max(2, size * 0.02);
-    ctx.strokeStyle = cssA(ink, 0.55);
-    ctx.strokeText(text, cx, cy);
+    if (recipe.style === "outline") {
+      // Hollow: a wide accent stroke with an ink core line and NO fill — the
+      // base paint shows through the counters.
+      ctx.lineWidth = Math.max(8, size * 0.11);
+      ctx.strokeStyle = css(accent);
+      ctx.strokeText(text, cx, cy);
+      ctx.lineWidth = Math.max(3, size * 0.035);
+      ctx.strokeStyle = css(ink);
+      ctx.strokeText(text, cx, cy);
+      ctx.restore();
+      return;
+    }
+    if (recipe.style === "rounded") {
+      // A soft ink halo under the fill, no hard keyline.
+      ctx.lineWidth = Math.max(8, size * 0.12);
+      ctx.strokeStyle = cssA(accent, 0.85);
+      ctx.strokeText(text, cx, cy);
+    } else {
+      // bold accent outline behind the fill
+      ctx.lineWidth = Math.max(6, size * 0.075);
+      ctx.strokeStyle = css(accent);
+      ctx.strokeText(text, cx, cy);
+      // thin ink keyline hugging the accent for crisp separation
+      ctx.lineWidth = Math.max(2, size * 0.02);
+      ctx.strokeStyle = cssA(ink, 0.55);
+      ctx.strokeText(text, cx, cy);
+    }
     // main fill
     ctx.fillStyle = css(ink);
     ctx.fillText(text, cx, cy);
+    if (recipe.style === "stencil") {
+      // Stencil bridges: two horizontal cuts through the glyphs, back to the
+      // base paint. Cut widths scale with the size so they survive the mips.
+      const cut = Math.max(3, size * 0.045);
+      ctx.fillStyle = css(bg || accent);
+      ctx.fillRect(R.x, cy - size * 0.18 - cut / 2, R.w, cut);
+      ctx.fillRect(R.x, cy + size * 0.2 - cut / 2, R.w, cut);
+    }
     ctx.restore();
   }
 
@@ -1186,21 +1236,24 @@ const LiveryTex = (function () {
     } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true });
 
     // Sponsor wordmarks.
-    const names = SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
-    drawWordmark(ctx, names[0], REGIONS.titleA, inkPod,
-      { align: "center", halo: haloIf(inkPod) });
-    drawWordmark(ctx, names[1], REGIONS.titleB, inkPod,
-      { align: "center", halo: haloIf(inkPod) });
-    const inkWing = inkOn([colors.wing || c2]);
-    drawWordmark(ctx, names[2], REGIONS.wing, inkWing,
-      { align: "center", spacing: 0.1, halo: haloIf(inkWing) });
-    // Long thin strip: chain a couple of names.
-    drawWordmark(ctx, names[3] + "   " + names[4] + "   " + names[5],
-      REGIONS.strip, inkStrip, { align: "center", spacing: 0.04, halo: haloIf(inkStrip) });
+    const pack = colors.sponsors && SPONSOR_PACKS[colors.sponsors];
+    const names = pack || SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
+    if (names.length) {   // `clean` leaves every wordmark region as paint
+      drawWordmark(ctx, names[0], REGIONS.titleA, inkPod,
+        { align: "center", halo: haloIf(inkPod) });
+      drawWordmark(ctx, names[1], REGIONS.titleB, inkPod,
+        { align: "center", halo: haloIf(inkPod) });
+      const inkWing = inkOn([colors.wing || c2]);
+      drawWordmark(ctx, names[2], REGIONS.wing, inkWing,
+        { align: "center", spacing: 0.1, halo: haloIf(inkWing) });
+      // Long thin strip: chain a couple of names.
+      drawWordmark(ctx, names[3] + "   " + names[4] + "   " + names[5],
+        REGIONS.strip, inkStrip, { align: "center", spacing: 0.04, halo: haloIf(inkStrip) });
+    }
 
     const num = numberOverride != null ? numberOverride
               : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
-    drawNumber(ctx, num, REGIONS.num, ink, accent, c1);
+    drawNumber(ctx, num, REGIONS.num, ink, accent, c1, colors.numFont);
 
     // Mobile tier: upload at 512² instead of 1024². All layout stays authored at
     // SIZE (UVs are FRACTIONS of the atlas — resolution-independent), only the
@@ -1229,6 +1282,7 @@ const LiveryTex = (function () {
            MARK_FLOOR, INK_FLOOR,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE,
-           CRESTS, CREST_DISC, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN };
+           CRESTS, CREST_DISC, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
+           NUM_FONT_IDS, SPONSOR_PACK_IDS };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

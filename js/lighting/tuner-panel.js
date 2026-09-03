@@ -266,8 +266,11 @@ function buildLightTunePanel() {
       inp.oninput = () => {
         setLightTune(d.id, parseFloat(inp.value));
         b.textContent = fmtTune(d, LT[d.id]);
-        persistLightTune();
       };
+      // Persist on release (range "change" fires once), not on every drag tick —
+      // persistLightTune() does a synchronous JSON.stringify + localStorage.setItem
+      // of the whole profile store, which is too heavy to run on every oninput.
+      inp.onchange = () => persistLightTune();
       lab.appendChild(span); lab.appendChild(inp);
       item.appendChild(lab);
       if (d.help) { const p = document.createElement("p"); p.className = "adv-help"; p.textContent = d.help; item.appendChild(p); }

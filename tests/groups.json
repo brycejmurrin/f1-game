@@ -10,6 +10,12 @@
   ],
   "toolingFast": [
     "tests/unit/ghost.test.mjs",
+    "// The three suites the feature batches added. Each is pure rules over a",
+    "// store or a source string — no DOM, no rasteriser — so all three together",
+    "// cost under a second and belong where the rule they guard is edited.",
+    "tests/unit/daily-challenge.test.mjs",
+    "tests/unit/setup-tune.test.mjs",
+    "tests/unit/onboard.test.mjs",
     "tests/unit/test-coverage-audit.test.mjs",
     "tests/unit/test-groups-generated.test.mjs",
     "tests/unit/fixture-consumer-audit.test.mjs",
@@ -294,7 +300,8 @@
     "test:parts-unit": {
       "kind": "node",
       "files": [
-        "tests/unit/parts-ladder.test.mjs"
+        "tests/unit/parts-ladder.test.mjs",
+        "tests/unit/setup-tune.test.mjs"
       ]
     },
     "test:garage-unit": {
@@ -306,7 +313,8 @@
     "test:steering-unit": {
       "kind": "node",
       "files": [
-        "tests/unit/brake-cue.test.mjs"
+        "tests/unit/brake-cue.test.mjs",
+        "tests/unit/onboard.test.mjs"
       ]
     },
     "test:ui": {
@@ -401,6 +409,7 @@
       "kind": "node",
       "files": [
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/daily-challenge.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",

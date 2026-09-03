@@ -2,14 +2,14 @@
   "_doc": "Ratchets on the files that only ever grow. `node tools/check/ratchets.mjs` checks, `--update` snaps every ceiling to the current value (lower after an extraction; a raise is a deliberate edit with its reason in the commit). Metrics: lines (split-newline), codeLines (non-comment non-blank), gMembers (G facade members, check-gctx), topLets (column-0 `let`). Tree-wide metrics (scope `tree`, measured by tools/check/tree-counts.mjs): cssClasses (distinct class tokens in css/), shellNodes (index.html tag occurrences less script/link), bareCatches (empty, uncommented catch blocks in js/), waitNoPolling (waitForFunction with a declared timeout and no polling). An entry may declare its own `slack` when its guard is TIGHTER than the default max(60, 4%) — all four of these are, and a slack looser than the default is refused, so consolidating mechanisms cannot quietly widen one. History: docs/notes/CEILING-HISTORY.md.",
   "files": {
     "js/game.js": {
-      "lines": 9345,
-      "codeLines": 5113,
-      "gMembers": 223,
-      "topLets": 147
+      "lines": 9559,
+      "codeLines": 5230,
+      "gMembers": 231,
+      "topLets": 151
     },
     "js/agent/apex.js": {
-      "lines": 2601,
-      "codeLines": 1976
+      "lines": 2610,
+      "codeLines": 1981
     },
     "js/agent/agentview.js": {
       "lines": 2452
@@ -27,7 +27,7 @@
       "lines": 2297
     },
     "js/net/lobby.js": {
-      "lines": 1684
+      "lines": 1712
     },
     "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
@@ -35,7 +35,7 @@
   },
   "tree": {
     "cssClasses": {
-      "ceiling": 534,
+      "ceiling": 535,
       "slack": 5
     },
     "shellNodes": {

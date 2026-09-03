@@ -304,7 +304,7 @@ const api = {
     state: G.state, track: (G.state === "race" || G.state === "count") ? (G.track && G.track.def.id) : null,
     n: G.track && G.track.n, total: G.track && G.track.total, timeTrial: G.timeTrial, seasonMode: G.seasonMode,
     flow: G.flow, session: G.session, career: !!G.career,
-    raceQuali: !!G.raceQuali,
+    raceQuali: !!G.raceQuali, raceGrid: G.raceGrid,
     lapsTarget: G.lapsTarget,
     sectors: G.track && G.track.def && G.track.def.sectors ? G.track.def.sectors.slice() : null,
     turns: G.track && G.track.def && G.track.def.turns ? G.track.def.turns.length : null,
@@ -466,6 +466,7 @@ const api = {
       axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac: +axFrac.toFixed(3),
       slipFactor: +Math.sqrt(Math.max(0, 1 - axFrac * axFrac)).toFixed(3),
+      brakeBias: G.player.brakeBias != null ? +G.player.brakeBias.toFixed(3) : null,   // the SETUP sheet's split (null = BB_REF)
       aeroX: +(G.player.aeroX || 0).toFixed(3),
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
       vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
@@ -1144,6 +1145,14 @@ const api = {
 
   // New dev / test helpers
 
+  // RED FLAG. Runs the standing-restart procedure NOW (js/race/race-control.js
+  // level 4 → game.js redFlagRestart): the surface is cleared, the field
+  // re-grids in race order on the boxes with laps and the race clock kept, and
+  // the lights re-arm. Returns {state:"count"}, or false outside a running race.
+  redFlag() {
+    const ok = !!(G.redFlagRestart && G.redFlagRestart());
+    return ok ? { state: G.state } : false;
+  },
   // Trigger the race-results screen cleanly, as if all cars crossed the line.
   finishRace() {
     if (!G.track || G.state === "results" || G.state === "menu") return false;

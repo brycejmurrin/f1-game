@@ -770,8 +770,10 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.equal(decl(garage, "#cs-stack", "left"), "auto");
   assert.equal(decl(garage, "#cs-stack", "width"), "max-content");
   assert.ok(!declares(garage, "#cs-stack", "left", /calc\(var\(--safe-l\)/));
-  assert.match(game, /qEl\.hidden\s*=\s*qForced\s*!=\s*null/);
-  assert.match(game, /QUALIFYING LAP"\s*\+\s*\(\s*qForced\s*==\s*null\s*\?\s*""\s*:\s*" · "\s*\+/);
+  // A qualifying championship hides the GRID chips and carries ON in the
+  // label; every other flow gets the rule chips (pace order first, quali second).
+  assert.match(game, /qEl\.hidden\s*=\s*!!qForced/);
+  assert.match(game, /qForced\s*\?\s*"QUALIFYING LAP · ON"\s*:\s*"GRID"/);
   const menus = css("css/menus.css");
   const quali = ruleFor(menus, /#rs-quali-section:has\(#rs-quali\[hidden\]\)$/);
   assert.ok(quali && quali.decls.get("grid-column") === "1 / -1" && quali.decls.get("grid-row") === "1");

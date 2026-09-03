@@ -32,14 +32,31 @@ function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m
 
 let _lastRank = 0, _posFlashT = 0;   // POS box flash state (see the tick)
 // Team colours are static — compute once per team, the minimap's idiom.
-const teamCss = (c) => (c.team ? (c.team._cssColor || (c.team._cssColor = G.cssCol(c.team.color))) : "");
+// Keyed on the store revision, exactly as _livResolveCache is (js/game.js):
+// a CUSTOM team's colours are editable in the garage, and an unkeyed memo on
+// the shared Teams.LIST entry kept painting the old rail for the page's life.
+const teamCss = (c) => {
+  const t = c.team;
+  if (!t) return "";
+  const rev = G.store ? G.store.rev : 0;
+  if (t._cssColor == null || t._cssRev !== rev) { t._cssColor = G.cssCol(t.color); t._cssRev = rev; }
+  return t._cssColor;
+};
 let _secRows = null;
 function buildSecRows() {
   // S2 is NOT the brand #e10600: at 14px bold on the 72% plate that red measures
   // ~4.2:1 on pure black and less over a bright scene (css/tokens.css records
   // ~2.6:1 on the page) — under the 4.5:1 AA floor for text this size. The
   // lighter red keeps the hue and clears ~5.9:1; the minimap stroke matches.
-  const SC = ["#c084fc", "#ff3b30", "#a3e635"], labels = ["S1", "S2", "S3"];
+  // The sector-identity array that used to sit here was DEAD: nothing applied
+  // it to a label, and .sec-lbl sets no colour, so the labels have always
+  // inherited the row's ink. Removed rather than left to imply otherwise —
+  // and it matters now, because two of its three colours are byte-identical to
+  // the value palette beside them (--sec-best #c084fc, --faster #a3e635).
+  // Should the labels ever be coloured, they must NOT use those two, or purple
+  // would mean both "sector 1" and "session best". The minimap keeps its own
+  // copy (drawMinimap), where identity is the only thing distinguishing arcs.
+  const labels = ["S1", "S2", "S3"];
   els.hudSectors.textContent = "";
   _secRows = [];
   for (let i = 0; i < 3; i++) {
@@ -91,6 +108,13 @@ function buildSecRows() {
 // can simply run every tick and follow a window resize for free.
 const GAP_SHORT_AT = { narrow: 640, wide: 800 };
 const GAP_DROP_AT  = { narrow: 550, wide: 800 };
+// Set by fitHud() from the real measured fit; null until it has run against a
+// laid-out page (the VM harness never lays out, so the ratio table below stays
+// the fallback there and off-screen). A ratio of viewport to zoom cannot see
+// the notch, the live gap string or the chip's own padding — all three of
+// which decide whether the strip actually fits — so the measurement wins
+// wherever there is one.
+let _gapTight = null;
 // The gap is distance ÷ the PLAYER'S OWN speed, so under braking the divisor
 // halves within a second and the tenths jumped 2x between ticks (10 Hz) with
 // the rival not having moved relative to the car. Smooth the displayed
@@ -108,7 +132,7 @@ function gapForm() {
             +root.style.getPropertyValue("--hud-scale") || 1;
   const ratio = window.innerWidth / s;
   const k = window.innerWidth >= 1200 ? "wide" : "narrow";
-  const drop = ratio <= GAP_DROP_AT[k];
+  const drop = _gapTight != null ? _gapTight : ratio <= GAP_DROP_AT[k];
   // Compared against the DOM rather than a remembered value: a module-level cache
   // desyncs the moment anything else touches the attribute (a dev tool, a probe,
   // a future panel) and then never repairs itself. Reading an attribute is as
@@ -197,9 +221,34 @@ function fitHud() {
   if (!top) { if (++_fitRetry <= 30) _fitKey = ""; return; }
   const half = window.innerWidth / 2;
   const map = wide(els.minimap), gaps = wide(els.gapA && els.gapA.parentNode);
-  const left = (map ? 10 + map + 8 + gaps : 0) + FIT_AIR;
+  // THE SAFE-AREA INSET IS PART OF THE BUDGET. `.hud-gaps` and `#minimap` are
+  // pushed right by `--sal` (and `#hud-sectors` left by `--sar`) in UNSCALED
+  // screen px — `calc(10px + var(--sal) / var(--hud-z))` — while `.hud-top` is
+  // centred on the raw viewport and compensates for neither. Budgeting the
+  // left cluster from a literal 10 therefore under-counted its real span by
+  // the whole inset: 59 px on a notched landscape iPhone, against FIT_AIR's
+  // 10 px of designed daylight. The cap came out ≈ 1.0, never fired, and the
+  // chips painted over the POS tile — reported from a phone, and invisible to
+  // hud-layout.spec.js, which only ever compared HUD boxes against CONTROLS.
+  // Measured off the elements themselves rather than read from env(), which is
+  // not resolvable from script: the map's own left edge is `sal + z·10`.
+  const mz = (els.minimap && els.minimap.currentCSSZoom) || 1;
+  const sz = (els.hudSectors && els.hudSectors.currentCSSZoom) || 1;
+  const sal = els.minimap ? Math.max(0, els.minimap.getBoundingClientRect().left - 10 * mz) : 0;
+  const sar = els.hudSectors ? Math.max(0, window.innerWidth - els.hudSectors.getBoundingClientRect().right - 10 * sz) : 0;
+  // WITH the gap strip and WITHOUT it. When the band fits at the player's own
+  // HUD SIZE once the strip steps out of the row, that is the cheaper trade:
+  // move one chip rather than shrink the map and all four timing tiles on
+  // every notched phone. Only when it does not fit even without the strip
+  // does the cap actually bite.
+  const leftG = (map ? 10 + map + 8 + gaps : 0) + FIT_AIR;
+  const leftN = (map ? 10 + map : 0) + FIT_AIR;
   const right = wide(els.hudSectors) + 10 + FIT_AIR;
-  const capTop = half / Math.max(left + top / 2, right + top / 2, 1);
+  const capFor = (l) => Math.min((half - sal) / Math.max(l + top / 2, 1),
+                                 (half - sar) / Math.max(right + top / 2, 1));
+  const capWith = capFor(leftG), capNo = capFor(leftN);
+  _gapTight = capWith < scale;               // consumed by gapForm(), below
+  const capTop = Math.max(capWith, Math.min(scale, capNo));
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
@@ -385,9 +434,9 @@ function updateHud(force) {
     const show = !!(cn && cn.level > 0);
     if (show) {
       const txt = cn.level === 1 ? "YELLOW" + (cn.sector >= 0 ? " S" + (cn.sector + 1) : "")
-                : cn.level === 2 ? "VSC" : "SAFETY CAR";
+                : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR";
       hText(els.flag, txt);
-      hClass(els.flag, cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
+      hClass(els.flag, cn.level === 4 ? "flag-red" : cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
     }
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
   }

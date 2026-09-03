@@ -353,3 +353,54 @@ test("it is inert when the side-world is down or the race is not running", () =>
   assert.equal(rc.info().level, 0, "debris side-world inactive");
 });
 
+
+// ── the RED FLAG ──────────────────────────────────────────────────────────────
+
+test("sixteen settled hazards raise RED, which outranks the safety car and holds OVERTAKE off", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(16, 2) }).create(makeCtx({ ranked: [{ lap: 3 }] }));
+  run(rc, 1);
+  assert.equal(rc.info().level, 4);
+  assert.equal(rc.info().label, "RED FLAG");
+  assert.equal(rc.info().cause, "RED FLAG");
+  assert.equal(rc.info().phase, "stopping");
+  assert.equal(rc.otEnabled(), false);
+  assert.equal(rc.takeRestart(), false, "no restart while the flag is out");
+});
+
+test("the red procedure: stopping, held, then exactly ONE restart request and a re-arm hold", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(16, 2) }).create(makeCtx());
+  run(rc, 1);
+  run(rc, 8);
+  assert.equal(rc.info().level, 4, "the SC cap does not end a red");
+  assert.equal(rc.info().phase, "held");
+  run(rc, 6);
+  assert.equal(rc.info().level, 0, "the procedure ends the flag");
+  assert.equal(rc.info().phase, "");
+  assert.equal(rc.takeRestart(), true, "one restart request…");
+  assert.equal(rc.takeRestart(), false, "…consumed once");
+  run(rc, 5);
+  assert.equal(rc.info().level, 0, "the same (uncleared) picture cannot raise a second flag during the hold");
+  run(rc, 45);
+  assert.equal(rc.info().level, 4, "…and a picture still there after the hold flies again");
+});
+
+test("a networked race never goes red — it holds a SAFETY CAR instead — and reset() drops a pending restart", () => {
+  const net = { active: () => true, ownsRaceControl: () => true, reportCaution() {} };
+  const rc = load({ active: () => true, hazards: () => hazards(20, 3) }).create(makeCtx({ netPlay: net }));
+  run(rc, 1);
+  assert.equal(rc.info().level, 3);
+  assert.equal(rc.info().cause, "SAFETY CAR");
+  const solo = load({ active: () => true, hazards: () => hazards(20, 3) }).create(makeCtx());
+  run(solo, 15);
+  solo.reset();
+  assert.equal(solo.takeRestart(), false, "a race that ended mid-procedure carries no restart into the next");
+});
+
+test("a guest mirrors the red phase from the host's payload", () => {
+  const rc = load({ active: () => true, hazards: () => hazards(0, 0) }).create(makeCtx());
+  rc.apply({ level: 4, cause: "RED FLAG", phase: "held", total: 16, sectors: [16, 0, 0] });
+  assert.equal(rc.info().label, "RED FLAG");
+  assert.equal(rc.info().phase, "held");
+  rc.apply({ level: 0 });
+  assert.equal(rc.info().phase, "");
+});

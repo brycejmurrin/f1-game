@@ -153,9 +153,9 @@ test("a driven simulate persists; an active netPlay session does not", () => {
 });
 
 test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race uses fresh", () => {
-  assert.match(GAME, /function openQuali\(fresh\)/);
+  assert.match(GAME, /function openQuali\(fresh, netDone\)/);
   assert.match(GAME, /if \(fresh\) quali\.simulate\(0\); else quali\.begin\(\)/);
-  assert.match(GAME, /openQuali\(true\)/);
+  assert.match(GAME, /openQuali\(true, done \|\| null\)/);   // fresh sim, and the gate handed in
   assert.match(GAME, /quali\.clear\(\);   \/\/ memory only/);
   // NOT a blanket whole-file ban. The bug this suite exists for is a
   // clear(true) inside the SHEET'S OWN lifecycle (openQuali / quitToMenu),
@@ -165,19 +165,32 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   // blanket ban failed that fix. It is half of what took pages.yml runs
   // 1888/1889 red on 2026-09-02 and stopped the live site updating. Ban it
   // where the bug lived; require the guard where it is legitimate.
-  assert.doesNotMatch(fnSource(GAME, "async function openQuali(fresh)"), /quali\.clear\(true\)/,
+  assert.doesNotMatch(fnSource(GAME, "async function openQuali(fresh, netDone)"), /quali\.clear\(true\)/,
     "openQuali must not wipe the persist — that is the bug this suite exists for");
   assert.doesNotMatch(fnSource(GAME, "function quitToMenu()"), /quali\.clear\(true\)/,
     "quit-to-menu keeps the persist so CONTINUE still has the driven grid");
   for (const line of GAME.matchAll(/^.*quali\.clear\(true\).*$/gm))
     assert.match(line[0], /!isChampionship\(\)/,
       "a clear(true) anywhere else is legitimate only for a one-off GP, and must say so");
+  // THE FRIEND-RACE GATE IS ARMED INSIDE openQuali, FROM ITS ARGUMENT. It used
+  // to be armed by openQualiForNet AFTER calling it — but openQuali is async and
+  // suspends on its first await, so its own reset ran a microtask later and wiped
+  // the callback. netPlay.start() is reachable only through that callback, so a
+  // friend race with grid-by-qualifying silently ran two disconnected solo races.
+  assert.match(fnSource(GAME, "async function openQuali(fresh, netDone)"),
+    /qualiNetDone = netDone \|\| null/,
+    "openQuali must arm the gate from its own argument, after its own reset");
+  assert.doesNotMatch(fnSource(GAME, "function openQualiForNet(done)"), /qualiNetDone\s*=/,
+    "openQualiForNet must NOT assign qualiNetDone — the async reset would wipe it");
   assert.match(GAME, /RIVAL LEFT — TO THE GRID/);
   assert.match(GAME, /qualiHadRivals/);
   assert.match(GAME, /if \(!p\) \{ closeLightTuner\(false\); closeCamTuner\(false\); exitPhotoMode\(\); \}/);
   assert.match(GAME, /closeCamTuner\(false\); exitPhotoMode\(\);/);
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
-  assert.match(GAME, /vTop\(\) \* \(lvl === 3 \? 0\.45 : 0\.6\)/);
+  // The caution pace cap, now four levels deep: RED (4) stops the field at a
+  // walking-pace floor rather than 0, so every "approaches vmax" fade stays
+  // finite; SC (3) and VSC (2) are the delta paces they always were.
+  assert.match(GAME, /vTop\(\) \* \(lvl >= 4 \? 0\.02 : lvl === 3 \? 0\.45 : 0\.6\)/);
   assert.match(GAME, /if \(netPlay\.active\(\)\) netPlay\.stop\("local"\)/);
   assert.match(GAME, /if \(netPlay\.active\(\) \|\| qualiNetDone\) return/);
   assert.match(SRC, /if \(!classification\.some\(\(r\) => r\.human\)\) return/);

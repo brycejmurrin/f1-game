@@ -263,6 +263,13 @@ self.addEventListener("install", (event) => {
     const stamped = urls.optional.map((u) =>
       /^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
         ? u + "?v=" + build : u);
+    // SKIPWAITING STAYS LAST, deliberately. Hoisting it above this pool lets a
+    // returning player's new worker activate — and `activate` both claims
+    // clients and DELETES every other generation's cache — while the deferred
+    // backends, the forty scenery closures and the data/net bundles are still
+    // in flight. Going offline inside that window would lose assets the
+    // previous cache still held a moment earlier. The first-visit boot win
+    // comes from deferring REGISTRATION (index.html), which costs nothing here.
     await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
     await self.skipWaiting();
   })());

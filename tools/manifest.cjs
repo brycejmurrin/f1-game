@@ -137,6 +137,7 @@ const FULL = [
   "js/race/reliability.js",
   "js/physics/ai-drive.js",
   "js/camera/offsets.js",
+  "js/garage/setup-tune.js",
   "js/garage/setup-sheet.js",
   "js/career/career-ui.js",
   "js/career/season-ui.js",
@@ -170,7 +171,9 @@ const FULL = [
   "js/ui/hud.js",
   "js/ui/results-sheet.js",
   "js/race/quali-model.js",
+  "js/race/daily-challenge.js",
   "js/ui/quali-sheet.js",
+  "js/ui/onboard.js",
   "js/physics/debris-world.js",
   "js/physics/incident-sim.js",
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
@@ -347,6 +350,8 @@ const HARD_EDGES = [
   ["js/core/store.js", "js/camera/offsets.js"],  // cam-tune destructures GameStore at eval
   ["js/core/store.js", "js/career/career.js"],    // career destructures GameStore at eval
   ["js/core/store.js", "js/career/season-cal.js"], // season-cal destructures GameStore at eval
+  ["js/core/store.js", "js/garage/setup-tune.js"],  // the setup sheet destructures GameStore at eval
+  ["js/physics/consts.js", "js/garage/setup-tune.js"],  // …and reads PhysicsConsts.BB_REF at eval
   ["js/career/season-cal.js", "js/career/season-ui.js"], // the screen reads the season rules
   ["js/career/season-ui.js", "js/game.js"],      // game.js calls SeasonUI.create(G) at eval
   ["js/car/parts.js", "js/career/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)
@@ -355,6 +360,7 @@ const HARD_EDGES = [
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create(G) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
+  ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
   ["js/lighting/knobs.js", "js/lighting/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/lighting.js"],      // the LightTune façade re-exports TUNE_DEFS/LT at eval
@@ -364,6 +370,7 @@ const HARD_EDGES = [
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/audio/panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
+  ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time
   ["js/career/career.js", "js/race/reliability.js"],  // reliability draws through Career.hash (call time, keep ordered)
   ["js/car/parts.js", "js/race/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
   ["js/race/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval

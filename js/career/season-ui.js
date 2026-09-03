@@ -128,8 +128,14 @@ function create(G) {
       SeasonCal.LAP_OPTS.map((n) => [n, n + (n === 1 ? " LAP" : " LAPS")]),
       draft.laps, (v) => { draft.laps = v; });
     chipRow(pane, "POINTS", "ss-points",
-      [["modern", "25-18-15…"], ["classic", "10-6-4…"]],
+      [["modern", "25-18-15… (2010–)"], ["classic", "10-6-4… (1991–2002)"]],
       draft.points, (v) => { draft.points = v; });
+    chipRow(pane, "FASTEST LAP POINT", "ss-fl",
+      [[false, "OFF"], [true, "+1 (2019–2024 RULE)"]],
+      draft.flPoint, (v) => { draft.flPoint = v; });
+    chipRow(pane, "DROPPED SCORES", "ss-drop",
+      SeasonCal.DROP_OPTS.map((n) => [n, n ? "DROP WORST " + n : "ALL COUNT"]),
+      draft.drop, (v) => { draft.drop = v; });
 
     // What the two format switches actually cost, in the numbers SeasonCal will
     // pay out — so the screen answers "how long is a sprint" and "what does a
@@ -138,10 +144,13 @@ function create(G) {
     // minting a class, which the cssClasses ratchet (tests/data/ratchets.json) asks for by name.
     const note = el("div", "sur-country");
     note.id = "ss-note";
-    note.textContent = draft.sprint
+    note.textContent = (draft.sprint
       ? "A sprint runs a third of the distance before the Grand Prix and pays "
         + SeasonCal.SPRINT_POINTS.join(" · ") + " pts. Both legs score."
-      : "One race per round.";
+      : "One race per round.")
+      + (draft.flPoint ? " The fastest Grand Prix lap pays one point to a top-ten finisher." : "")
+      + (draft.drop ? " Only a driver's best " + Math.max(1, draft.trackIds.length - draft.drop)
+        + " of " + draft.trackIds.length + " rounds count, as until 1990." : "");
     pane.appendChild(note);
 
     // The shelf. Every circuit NOT already on the calendar, classics included —

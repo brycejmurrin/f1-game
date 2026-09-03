@@ -870,7 +870,7 @@ const isChampionship = () => flow === "season" || flow === "career";
 // GO button ask this, and they must agree — a race that qualified and then
 // gridded up P12 would throw the session away, and one that gridded from a
 // classification it never ran would read a stale one.
-const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (raceQuali && !isTimeTrial());
+const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (qualiGrid() && !isTimeTrial());
 // The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
 // so js/career/career.js has to be told whether its rules apply to the session that
 // is running — otherwise a Grand Prix would quietly inherit the career's team
@@ -894,7 +894,15 @@ let raceLaps = GAME_LAPS;      // user-selected lap count
 // so this is the switch for everything that is not one. A standing preference
 // like DIFFICULTY and RELIABILITY, not a per-race reset: someone who wants to
 // qualify wants to qualify next time too.
-let raceQuali = store.get("raceQuali", false);
+// GRID RULE. "tier" is the pace-order grid gridUp() has always built (player
+// P12); "quali" grids off the qualifying session; "rev10" reverses the
+// qualifying top ten — Formula 2's sprint-race rule, never an F1 one; "revchamp"
+// inverts the championship standings; "random" sorts on gridUp's own single
+// jitter draw. The pre-rule boolean key is honoured once as the default.
+const GRID_RULES = ["tier", "quali", "rev10", "revchamp", "random"];
+let raceGrid = store.get("raceGrid", store.get("raceQuali", false) ? "quali" : "tier");
+if (GRID_RULES.indexOf(raceGrid) < 0) raceGrid = "tier";
+const qualiGrid = () => raceGrid === "quali" || raceGrid === "rev10";
 // A friend race has TWO humans on the grid, and both of their qualifying laps
 // are real. The rival's arrives over the wire (NetPlay EV.QUALI) as
 // driverId -> seconds; quali.simulate() takes the map and stops caring which of
@@ -1002,9 +1010,9 @@ function refreshQualiGate() {
 // build the race and hand its connection to NetPlay, and it cannot do that
 // until the players leave the sheet.
 function openQualiForNet(done) {
-  openQuali(true);                // fresh sim — do not restore a career grid
-  qualiNetDone = done || null;
-  refreshQualiGate();
+  // Armed INSIDE openQuali: it is async, so a qualiNetDone set out here was
+  // wiped by its continuation and netPlay.start() was unreachable.
+  openQuali(true, done || null);  // fresh sim — do not restore a career grid
 }
 
 // A rival's lap IN PROGRESS, so the wait has a clock on it. Deliberately
@@ -1067,6 +1075,7 @@ let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
+let restartPending = false;   // a red-flag standing restart: lights-out resumes the race clock
 // The five red lamps, one per second. A CONSTANT rather than a literal because
 // the networked start has to name an instant a whole countdown away — a lead
 // shorter than the sequence means every peer joins it part-way through by
@@ -1341,6 +1350,10 @@ const _upVS = new Float32Array(3);   // the ROAD PLANE's normal in view space (w
 const _smpRoad = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // its own scratch: smp/smp2 are live elsewhere in the frame
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 const _upX = [1, 0, 0], _upY = [0, 1, 0];   // shadow-basis up choices (read-only)
+// lookAtTo() eye/target scratches — it reads all three vectors synchronously
+// and retains none. CULL_NO_UPLOAD: constant opts TLX/WGX read, GLX ignores.
+const _shEye = [0, 0, 0], _flEye = [0, 0, 0], _flTgt = [0, 0, 0];
+const CULL_NO_UPLOAD = { upload: false };
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
 // Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
@@ -1414,7 +1427,7 @@ function resolveLivery(team) {
     return { id: l.id || null, c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
-             logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null };
+             logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1424,7 +1437,7 @@ function resolveLivery(team) {
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
-                      logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null }
+                      logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -1524,11 +1537,16 @@ let playerVisualKey = "111111111111";
 // driver would accelerate, brake and (via muBase) CORNER on the local player's
 // upgrades. Human cars carry the result as c.mods; AI cars have none and keep
 // running on c.tierV * c.skill.
-function modsFor(team, setup) {
+function modsFor(team, setup, tune) {
   // teamStats() folds in career development; outside career it hands back the
   // team's own literal untouched, so this is the same object it always was.
   const stats = Career.teamStats(team) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const mods = Parts.getMods(setup, team);
+  // `tune` is the SETUP SHEET's contribution and defaults to NONE. It is the
+  // local player's sheet and nobody else's: js/net/lobby.js calls modsFor()
+  // with a RIVAL's declared parts to show their stats, and folding in
+  // SetupTune.mods(team.id) there scored a peer's car with this player's
+  // anti-roll bars whenever the two happened to share a team.
+  const mods = Parts.getMods(setup, team, tune || null);
   return {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,
@@ -1610,12 +1628,12 @@ function swapGridSlots(a, b) {
 function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   const setup = getTeamParts(team.id);
-  playerMods = modsFor(team, setup);
-  if (player) { player.mods = playerMods; player.tread = Parts.tread(setup, team); }
+  playerMods = modsFor(team, setup, SetupTune.mods(team.id));   // the local sheet, here and in makeCars only
+  if (player) { player.mods = playerMods; player.tread = Parts.tread(setup, team); player.brakeBias = SetupTune.brakeBias(team.id); }
   // How much wing this car is carrying (0..1), which sets how much active aero
   // trades — see X_VMAX_GAIN_LO/HI. Cached here rather than resolved per physics
   // step: it only changes when the parts do.
-  playerAeroLoad = Parts.aeroLoad(setup, team);
+  playerAeroLoad = Parts.aeroLoad(setup, team, SetupTune.aero(team.id));   // wing + the sheet's rake
   if (player) player.aeroLoad = playerAeroLoad;
   // The ERS part's two axes — deployment and recovery — which run the battery
   // and the overtake window (see drainFor/regenFor/otTimeFor).
@@ -1720,10 +1738,10 @@ function makeCars() {
         human: isP, local: isP, isPlayer: isP,
         // Per-car performance multipliers (human cars only — see modsFor).
         // startRace()'s recomputePlayerMods() refreshes the local player's.
-        mods: isP ? modsFor(team, getTeamParts(team.id)) : null,
+        mods: isP ? modsFor(team, getTeamParts(team.id), SetupTune.mods(team.id)) : null,
         // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
         // MY TEAM + hire share the saved build; everyone else uses factory.
-        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team) : Parts.aeroLoad(factoryParts.setup, team),
+        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, SetupTune.aero(team.id)) : Parts.aeroLoad(factoryParts.setup, team),
         ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
         ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
         color: team.color, tier: team.tier, seat: di, houseStats: Career.teamStats(team),
@@ -1763,6 +1781,84 @@ function makeCars() {
 // `preOrder` is an explicit grid, fastest first — a qualifying classification.
 // Without one: sort by tier, player dropped into P12 for a climb. GP keeps that
 // on purpose; only a session that held a qualifying hour sets its own grid.
+// The GRID RULE applied to the order the session produced (null = gridUp's own
+// pace-order build). rev10 reverses the qualifying top ten and leaves 11+ as
+// they qualified (Formula 2's sprint rule); revchamp inverts SeasonCal.rank —
+// last in the standings starts first; random sorts on ONE simRnd() per car,
+// the same single draw gridUp() would have spent, so the stream position after
+// the grid is identical whichever rule ran (makeCars' stream contract). A
+// championship weekend that qualifies keeps its qualifying grid, and a sprint
+// result still grids the Grand Prix; a friend race's rule is the host's (lobby
+// SETTINGS `grid`).
+function gridOrderFor(base) {
+  // RANDOM CANNOT BE DECIDED LOCALLY IN A ROOM. netplay's grid is
+  // negotiation-free precisely because gridUp() runs identically on every peer
+  // (js/net/netplay.js separateGrid) — but no seed crosses the wire, so each
+  // peer would roll its own order and lay the humans into different boxes.
+  // Fall back to the pace order every peer already agrees on.
+  const rule0 = isTimeTrial() ? "tier" : (isChampionship() && SeasonCal.quali()) ? "quali" : raceGrid;
+  const rule = (rule0 === "random" && netPlay.active()) ? "tier" : rule0;
+  if (rule === "rev10" && base && base.length === cars.length) {
+    return base.slice(0, 10).reverse().concat(base.slice(10));
+  }
+  if (rule === "revchamp" && isChampionship() && season && !base) {
+    // SPEND THE JITTER ANYWAY. gridUp() draws one simRnd() per car when it
+    // builds its own order, so a rule that returns a full order without
+    // drawing leaves every later consumer (the AI overtake fire, the start
+    // hold) reading a different point in the stream than the same seed would
+    // have reached under PACE ORDER. Draw and discard: same count, same
+    // position, order decided by the standings.
+    for (let i = 0; i < cars.length; i++) simRnd();
+    return cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId)).reverse();
+  }
+  if (rule === "random" && !base) {
+    const jit = new Map(cars.map((c) => [c, simRnd()]));
+    return cars.slice().sort((a, b) => jit.get(a) - jit.get(b));
+  }
+  return base;
+}
+// RED FLAG → STANDING RESTART (js/race/race-control.js level 4). The surface
+// is cleared and the field re-gridded in RACE ORDER on the boxes — the 2026
+// procedure once the track is clear — keeping laps, the race clock, best laps,
+// grid positions and penalties. Lapped cars keep their lap count and grid
+// behind (prog is cumulative). A race already at its flag stands as it is.
+// Not modelled: the wet-race rolling restart, the pit-lane wait; a networked
+// race never goes red (RaceControl holds a safety car instead).
+// STREAM: the restart re-runs the countdown, so it draws one extra simRnd()
+// for the new startHold. Deliberate — the lights are a real second start.
+function redFlagRestart() {
+  if (state !== "race" || !track || cars.some((c) => c.finished)) return false;
+  IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
+  const L = track.total;
+  const order = cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+  order.forEach((c, i) => {
+    const slot = TrackMesh.gridSlot(track, i);
+    c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
+    const w = worldFromTrack(c.s, c.x, smp);
+    c.px = w.x; c.pz = w.z; c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c._prevS = c.s;
+    // The box sits BEHIND the line on the lap the car is on — the same prog
+    // the opening grid uses (lap 0 → negative) — so the next crossing counts.
+    // Bank what the teleport gave (or took): prog must follow the car to the
+    // grid box, but no car DROVE that distance, and checkRetirements measures
+    // the reliability draw against prog / (laps × length).
+    const progWas = c.prog;
+    c.prog = c.lap * L - (L - c.s);
+    c._progGift = (c._progGift || 0) + (c.prog - progWas);
+    c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
+    c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0;
+    c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wheelLock = 0;
+    c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
+  });
+  restartPending = true;
+  state = "count"; countT = 0; lightsLit = 0; startHold = 0;
+  els.lights.hidden = false;
+  for (const l of els.lights.children) l.classList.remove("on");
+  sectorIdx = player ? sectorAt(player.s) : 0; sectorStartT = player ? player.lapTime : 0; sectorValid = false;
+  snapGameCam();
+  announce("RED FLAG — STANDING RESTART", 3);
+  Log.info("game", "red flag: standing restart, " + order.length + " cars re-gridded at raceT " + raceT.toFixed(1));
+  return true;
+}
 function gridUp(preOrder) {
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
     // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
@@ -1790,7 +1886,7 @@ function gridUp(preOrder) {
       c.rPrevS = c.s; c.rPrevX = c.x;
     }
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
-    c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
+    c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
@@ -2683,6 +2779,14 @@ async function startRace() {
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
   raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
+  // Restore the CHIP's pick before re-arming — pm-restart re-enters startRace
+  // from inside a running race, so a half-walked arc would otherwise become
+  // the new race's starting weather AND get written back as the player's
+  // standing choice. NOT endChangeable(): that also drops wxArcPlan, and a
+  // host's plan for THIS race is set before startRace runs.
+  if (_wxBase != null && raceWeather !== _wxBase) raceWeather = _wxBase;
+  _wxBase = null;
+  weatherArc = null;   // a leaked arc must not become this race's weather (startChangeable re-arms below)
   // …and the debris side-world. prime() below only REBUILDS when the track or
   // car count changed, so a restart on the same circuit kept last race's
   // shards, marbles and knocked-over cones — visible on the grid, and
@@ -2716,7 +2820,8 @@ async function startRace() {
     Particles.rainShow(false); // sliders + rainSeed(drizzle)) unreachable.
   }
   if (!isQuali() && gridFromQuali() && !quali.order(cars)) { openQuali(); return false; }
-  gridUp(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season));
+  gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
+  startChangeable();
   recomputePlayerMods();
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
@@ -2762,7 +2867,7 @@ async function startRace() {
   PerfGov.sentinelArm(true);
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
-  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
+  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   clearMenuScreens();
@@ -2916,7 +3021,7 @@ function endRace(forcedOrder) {
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
-  raceCtl.reset(); weatherArc = null;   // an arc that outlives the race would override the next race's weather
+  raceCtl.reset(); weatherArc = null; endChangeable();   // an arc that outlives the race would override the next race's weather
   // The flag can fall while the player is PAUSED — a networked guest is ended
   // by the host's RESULT, not by their own input. Leaving `paused` set stranded
   // the pause dialog on top of the results with a RESUME that resolves to
@@ -2962,7 +3067,11 @@ function endRace(forcedOrder) {
     // a season may sprint before the Grand Prix, and only the second of those two
     // scoring sessions closes the round. A career never sprints, so award() there
     // is the old block verbatim.
-    const settles = SeasonCal.award(season, order) === "race";
+    // The fastest lap among the CLASSIFIED finishers — award() pays the
+    // 2019–2024 point only when the season format asks for it.
+    let fastest = null, fastestT = Infinity;
+    for (const c of order) if (!c.retired && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
+    const settles = SeasonCal.award(season, order, fastest) === "race";
     // In career `season` IS career.season (same object, same shape — which is what
     // lets buildResults/buildStandings/the HUD work in career untouched), so it
     // persists through the career save or this would overwrite the standalone
@@ -3247,7 +3356,21 @@ const G = {
   // exactly as it was.
   peerSeats: () => (netLobby && netLobby.peerSeats ? netLobby.peerSeats() : []),
   onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,
-  get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
+  // raceQuali is a VIEW of the grid rule (quali | rev10). The setter keeps an
+  // older peer's boolean meaningful: it only moves the rule across the
+  // qualifying line, never off a finer rule that already agrees with it.
+  get raceQuali() { return qualiGrid(); }, set raceQuali(v) { if (!!v !== qualiGrid()) raceGrid = v ? "quali" : "tier"; },
+  get raceGrid() { return raceGrid; }, set raceGrid(v) { if (GRID_RULES.indexOf(v) >= 0) raceGrid = v; },
+  referencePole: () => quali.referencePole(),
+  redFlagRestart,
+  get daily() { return daily; },
+  get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (ttLaps is the session's lap list)
+  // CHANGEABLE conditions: the weather walks from the chip's start to a
+  // target the host decides (wxArcPlan) — see startRace / wxArcPlanFor.
+  get raceChangeable() { return raceChangeable; }, set raceChangeable(v) { raceChangeable = !!v; },
+  get announceBusy() { return announceT > 0; },   // a coach mark must never stomp a race message
+  get wxArcPlan() { return wxArcPlan || (raceChangeable ? wxArcPlanFor() : null); },
+  set wxArcPlan(v) { wxArcPlan = v && typeof v === "object" ? { to: v.to, dur: v.dur } : null; },
   openGarageFrom: (from) => openGarage(from),
   startRace, startWeatherArc, update, wrapS, quitToMenu,
 };
@@ -3258,6 +3381,8 @@ const G = {
 ltStore = LightStore.create(G);
 // Race control: the caution flag state machine (js/race/race-control.js).
 raceCtl = RaceControl.create(G);
+const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
+const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -3418,7 +3543,7 @@ function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
-  state = "menu"; paused = false; raceCtl.reset(); weatherArc = null;   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  state = "menu"; paused = false; raceCtl.reset(); weatherArc = null; endChangeable(); daily.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -3515,6 +3640,38 @@ function weather(w) {
 // follow, and frame.wetness ramps via the existing per-frame ramp. Ticked from
 // update() on the fixed physics clock, so it also runs under __apex.headless.
 let weatherArc = null;   // { from, to, t, dur, seq }
+// CHANGEABLE conditions (the MIXED chip). The target and the transition
+// length come from the sim seed and the race counter — the reliability idiom
+// — so a solo race is reproducible and the makeCars stream is untouched. In a
+// friend race the HOST's plan rides in SETTINGS (lobby wxArc): seeds are not
+// shared between peers, so a guest must never derive its own.
+let raceChangeable = false;
+let wxArcPlan = null;     // { to, dur } from the host, else derived at start
+let _wxBase = null;       // the chip's weather, restored when the arc's race ends
+const _WX_TARGETS = ["dry", "overcast", "wet", "rain", "fog"];
+function wxArcPlanFor() {
+  const r = (k) => Career.hash(simSeed(), raceIndex, "wx", k);
+  const opts = _WX_TARGETS.filter((w) => w !== raceWeather);
+  const to = opts[Math.floor(r("to") * opts.length)] || "wet";
+  const dur = 120 + Math.floor(r("dur") * 300);   // 2–7 minutes of transition
+  return { to, dur };
+}
+function startChangeable() {
+  if (!raceChangeable || isTimeTrial() || isQuali()) return null;
+  const plan = wxArcPlan || wxArcPlanFor();
+  _wxBase = raceWeather;
+  const arc = startWeatherArc(raceWeather, plan.to, plan.dur);
+  if (arc) Log.info("game", "changeable " + raceWeather + " -> " + plan.to + " over " + plan.dur + " s");
+  return arc;
+}
+function endChangeable() {
+  if (_wxBase != null && raceWeather !== _wxBase) raceWeather = _wxBase;   // the chip's pick, not where the arc ended
+  _wxBase = null;
+  // The plan is the HOST's for the duration of one networked race. Keeping it
+  // afterwards made a guest's later SOLO changeable races replay that host's
+  // {to, dur} instead of deriving their own from the seed.
+  if (!netPlay.active()) wxArcPlan = null;
+}
 const _WX_LADDER = ["dry", "wet", "rain"];
 const _WX_VALID = ["dry", "wet", "rain", "overcast", "fog"];
 function weatherArcSeq(from, to) {
@@ -3538,7 +3695,7 @@ function tickWeatherArc(dt) {
   const f = Math.min(1, weatherArc.t / weatherArc.dur);
   const seq = weatherArc.seq;
   const want = seq[Math.min(seq.length - 1, Math.floor(f * seq.length))];
-  if (raceWeather !== want) setWeatherLive(want);
+  if (raceWeather !== want) { setWeatherLive(want); announce("WEATHER: " + want.toUpperCase(), 2); }
   if (f >= 1) {
     if (raceWeather !== weatherArc.to) setWeatherLive(weatherArc.to);
     weatherArc = null;   // arc complete — weather stays at `to`
@@ -3590,7 +3747,7 @@ function update(dt) {
       // busy building its circuit rejoins the sequence part-way through — and
       // lighting only children[lit-1] left the earlier lamps dark forever. The
       // guest saw an unlit gantry and then, abruptly, a green track.
-      for (let i = lightsLit; i < lit; i++) els.lights.children[i].classList.add("on");
+      for (let i = lightsLit; i < lit; i++) if (els.lights.children[i]) els.lights.children[i].classList.add("on");   // a harness gantry may be short
       lightsLit = lit;
       if (soundOn) GameAudio.lightOn(lit - 1);
       if (lit === 1) Input.calibrate();
@@ -3599,7 +3756,8 @@ function update(dt) {
       if (lit === COUNTDOWN_S && !netStart) startHold = 0.2 + simRnd() * 1.8;
     }
     if (lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold) {
-      state = "race"; raceT = 0;
+      state = "race";
+      if (!restartPending) raceT = 0;   // a red-flag restart resumes the clock the flag stopped
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
       netStart = null;              // consumed; never carry it into the next race
@@ -3611,12 +3769,14 @@ function update(dt) {
       // That is fixed on the other side now — quali.js charges every modelled
       // lap the same standing start — so both begin from rest and stay on one
       // scale, and the session reads like the thing it is named after.
-      if (isQuali()) launchFlyingLap();
+      if (isQuali() && !restartPending) launchFlyingLap();
+      restartPending = false;
     }
     return;
   }
   if (state !== "race") return;
   raceT += dt;
+  if (raceCtl.takeRestart() && redFlagRestart()) return;   // the red procedure ended: re-grid, lights re-armed
   tickWeatherArc(dt);   // dynamic weather progression (no-op unless an arc is armed)
   checkRetirements();
   // ranks by progress (reuse module-scope buffer, no per-step allocation).
@@ -4090,7 +4250,9 @@ function updateCar(c, dt, ranked) {
   // OVERALL SPEED like the rest.
   if (raceCtl) {
     const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
-    if (lvl >= 2) vmax = Math.min(vmax, vTop() * (lvl === 3 ? 0.45 : 0.6));
+    // RED: the field stops. A walking-pace floor rather than 0 keeps every
+    // "approaches vmax" fade finite.
+    if (lvl >= 2) vmax = Math.min(vmax, vTop() * (lvl >= 4 ? 0.02 : lvl === 3 ? 0.45 : 0.6));
   }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
@@ -4252,13 +4414,21 @@ function updateCar(c, dt, ranked) {
     // (AiDrive.towGain), same lateral fade. The AI gate it on their curvature
     // lookahead (kMax); the player's gate is DRIVER state — not braking, wheel
     // near straight — because nothing derived from the arc may reach the
-    // driver (docs/PHYSICS.md). SURFACE column: it reads car positions only.
+    // driver (docs/PHYSICS.md). It reads car positions and nothing else, so it
+    // has no curvature site to classify and belongs OUTSIDE that table — not in
+    // its "surface" column, which means road geometry. One asymmetry worth
+    // knowing: with DRIVING HELP non-zero the assist supplies lock the driver
+    // does not, so an assisted car can hold the wheel near centre through a
+    // corner and stay inside this gate where an unassisted one could not.
     c.towing = 0;
     if (!braking && Math.abs(c.steerVis || 0) < 0.12 && track) {
       let tc = null, tg = Infinity; const L = track.total;
       for (let i = 0; i < ranked.length; i++) {
         const o = ranked[i];
-        if (o === c || o.finished) continue;
+        // …and never a RETIRED car: retireCar parks it about 5 m off line,
+        // inside this |dx| < 4 window on a narrow circuit, and a stationary
+        // wreck does not punch a hole in the air.
+        if (o === c || o.finished || o.retired) continue;
         let dprog = o.prog - c.prog;
         if (!Number.isFinite(dprog)) continue;
         const ad = dprog < 0 ? -dprog : dprog;
@@ -4774,6 +4944,7 @@ function updateCar(c, dt, ranked) {
     // circle symmetric (power-limited exits) is a feel/design change, not a fix.
     const axFrac = Math.min(1, Math.abs(c.axEstSm ?? 0) / (LONG_GRIP * gripMult(c)));
     const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
+    c.slipFactor = slipFactor;   // setEngine() reads it for slip01; unassigned it read a constant 1
     // LOCK-UP (render + feel only): braking at the top of the friction budget
     // stops the fronts turning; a lock leaves a flat spot that wobbles the
     // wheel once per revolution and heals over ~90 s of rolling. The grip
@@ -4799,9 +4970,30 @@ function updateCar(c, dt, ranked) {
     // the car; it is a pure function of deterministic marble positions and returns
     // 1.0 (a true no-op) off-path. Subtle by construction (≤7% via MARBLE_GRIP_MIN).
     const marbleMu = DebrisWorld.active() ? DebrisWorld.marbleGrip(c) : 1;
-    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * slipFactor * marbleMu;
-    const muF = Math.max(0.5, muBase * loadF * FRONT_GRIP);
-    const muR = Math.max(0.5, muBase * loadR * (1 - DRIFT * 0.55));
+    // BRAKE BIAS spends the friction ellipse per AXLE: under braking the front
+    // spends bb/BB_REF of the longitudinal budget and the rear (1−bb)/(1−BB_REF)
+    // — forward bias uses up the front's circle (entry understeer), rearward
+    // lightens the rear (rotation). At BB_REF both scales are exactly 1 and
+    // this is the single slipFactor it always was; AI and remote cars carry no
+    // brakeBias and read BB_REF. Throttle and coast are unsplit.
+    // Bit-identical when the split is off: muBase keeps slipFactor and the
+    // per-axle factors are exactly 1 (the characterization spec pins this).
+    // Gated on the SMOOTHED longitudinal accel alone, never on `braking`.
+    // `braking` flips in one frame while axEstSm is damped at rate 10 (see the
+    // weight-transfer note above), so releasing the pedal used to swap the
+    // per-axle split for the shared one in a single tick — a step of several
+    // points of front grip at a forward bias, exactly the discontinuity the
+    // damping exists to avoid. Off-throttle coasting has axEstSm < 0 too and
+    // is served by the same split, which is what a real bias does.
+    const bbOn = (c.axEstSm ?? 0) < 0 && c.brakeBias != null && c.brakeBias !== SetupTune.BB_REF;
+    const bb = bbOn ? SetupTune.bbScales(c.brakeBias) : null;
+    // (bbSlip*, not slipF/slipR — those names are the axles' SLIP ANGLES below.)
+    const afF = bb ? Math.min(1, axFrac * bb.f) : 0, afR = bb ? Math.min(1, axFrac * bb.r) : 0;
+    const bbSlipF = bb ? Math.sqrt(Math.max(0, 1 - afF * afF)) : 1;
+    const bbSlipR = bb ? Math.sqrt(Math.max(0, 1 - afR * afR)) : 1;
+    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu;
+    const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP);
+    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
@@ -5119,6 +5311,7 @@ function updateCar(c, dt, ranked) {
     c.exhaustPop = lifted ? 1 : Math.max(0, (c.exhaustPop || 0) - dt * 5);
     c.wasOnThrottle = !!thr;
   }
+  if (c.retired || c.finished) c.towing = 0;   // the cue is about driving; both exits skip the block that clears it
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
@@ -5245,6 +5438,7 @@ function updateCar(c, dt, ranked) {
     }
     c.incidentInvalidLap = false;   // the new lap starts clean
     c.lapTime = 0;
+    c._secT0 = 0;   // …and the FIELD's S1 reference, or it measures across the reset
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
     if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6);
@@ -5456,7 +5650,7 @@ function checkRetirements() {
     // dnfAt (netPlay.start() re-roles it afterwards) — never park a car
     // another person is driving.
     if (netPlay.owns(c)) continue;
-    if (c.prog / dist >= c.dnfAt) retireCar(c, c.dnfWhy);
+    if ((c.prog - (c._progGift || 0)) / dist >= c.dnfAt) retireCar(c, c.dnfWhy);
   }
 }
 
@@ -5468,8 +5662,16 @@ function onTTLap(lapTime) {
   ttBoardAdd(track.def.id, {
     t: lapTime, teamId: player.team.id, code: player.code, name: player.name, ts: Date.now(),
   });
-  Ghost.finishLap(lapTime);
+  // MEDAL against the model's pole for this circuit at this pace and difficulty
+  // (Quali.referencePole): the meta rides with the ghost lap, so a medal is
+  // only ever the ghost lap's medal and says what pace it was earned at.
+  const pole = quali.referencePole();
+  const medal = Quali.medalFor(lapTime, pole);
+  const held = Ghost.medal();
+  const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), pace: PACE, difficulty, weather: raceWeather });
   Ghost.startLap();
+  if (up && medal && medal !== held) announce(medal.toUpperCase() + " MEDAL", 2);
+  if (daily.isActive()) daily.record(lapTime);
   if (lapTime < ttRecord) {
     ttRecord = lapTime;
     ttNewRecord = true;
@@ -5593,13 +5795,14 @@ let setupPreviewOn = false, setupPreviewAz = 0.6;
 // back around. az/el/dist are now a real orbit the player drives (drag on the
 // canvas, wheel/pinch to zoom, preset chips in #cs-view), and SPIN is a toggle
 // over the top of it rather than the whole interaction.
-// Defaults reproduce the previous framing exactly: eye y 2.0 at dist 8.5 over a
-// target at y 0.35 is an elevation of atan2(1.65, 8.5).
-const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.5;
+// Defaults reproduce the previous framing: eye y 2.0 at dist 8.35 over a
+// target at y 0.35 is an elevation of atan2(1.65, 8.5) — el unchanged, a hair
+// closer after the WGX garage fix shipped.
+const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.35;
 // Half the car's BROADSIDE footprint (~5.95 m drawn) plus ~5% margin.
-// Was 3.35 (~12%): honest WGX off-axis projection left the auto turntable
-// ~7% farther than the 8.5 m default at desktop viewports (1440x900 ~8.5 m).
-const SP_FIT_HALF_W = 3.15;
+// Was 3.35 (~12%), then 3.15 after honest WGX off-axis projection. 3.10 is a
+// hair closer on desktop after the view-matrix fix landed (1440x900 ~8.40 m).
+const SP_FIT_HALF_W = 3.10;
 // How far the AUTOMATIC turntable may back off. Deliberately under the MANUAL
 // zoom ceiling SP_DIST_MAX: a player who zooms out that far asked for the wide
 // shot, whereas the auto fit reaching it means the fit diverged. garage-scene.js
@@ -5627,7 +5830,7 @@ const SP_EL_MIN = 0, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
 // does not. SIDE and TOP get the extra pull-back their aspect actually needs
 // rather than one nominal distance that crops the nose off two of the five.
 const SP_VIEWS = {
-  hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.5 },   // rear three-quarter
+  hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.35 },   // rear three-quarter
   front: { az: 0,              el: 0.20, dist: 8.2 },
   side:  { az: Math.PI * 0.5,  el: 0.10, dist: 11.2 },
   rear:  { az: Math.PI,        el: 0.22, dist: 8.4 },
@@ -6061,7 +6264,7 @@ function _castPropBatchesShadow() {
   for (let i = 0; i < _pb.length; i++) {
     if (planes && gfx.cullInstances) {
       // TLX: CPU-pack only (own shadow mesh). GLX/WGX ignore the 3rd arg.
-      gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes, { upload: false }));
+      gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes, CULL_NO_UPLOAD));
     } else gfx.castShadowInstanced(_pb[i]);
   }
 }
@@ -6710,9 +6913,8 @@ function render(dt) {
       // keep casting so they throw faint moon shadows too instead of popping
       // to blob-only.
       if (_ck > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
-        M4.lookAtTo(_mCView,
-          [_shadowCtr[0] + sd[0] * 150, _shadowCtr[1] + sd[1] * 150, _shadowCtr[2] + sd[2] * 150],
-          _shadowCtr, up);
+        _shEye[0] = _shadowCtr[0] + sd[0] * 150; _shEye[1] = _shadowCtr[1] + sd[1] * 150; _shEye[2] = _shadowCtr[2] + sd[2] * 150;
+        M4.lookAtTo(_mCView, _shEye, _shadowCtr, up);
         const cBox = 42 * Math.max(1, sBox / 80);
         M4.orthoTo(_mCProj, -cBox, cBox, -cBox, cBox, 1.0, 320);
         M4.mulTo(_mCVP, _mCProj, _mCView);
@@ -7110,9 +7312,10 @@ function render(dt) {
         } else {
         _lampShX = _lx; _lampShY = _ly; _lampShZ = _lz; _lampShCarKey = _carKey;
         const fov = Math.min(2.6, 2 * Math.acos(clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
-        const up = Math.abs(L[o + 8]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
-        M4.lookAtTo(_mFlView, [L[o], L[o + 1], L[o + 2]],
-          [L[o] + L[o + 7], L[o + 1] + L[o + 8], L[o + 2] + L[o + 9]], up);
+        const up = Math.abs(L[o + 8]) > 0.95 ? _upX : _upY;
+        _flEye[0] = L[o]; _flEye[1] = L[o + 1]; _flEye[2] = L[o + 2];
+        _flTgt[0] = L[o] + L[o + 7]; _flTgt[1] = L[o + 1] + L[o + 8]; _flTgt[2] = L[o + 2] + L[o + 9];
+        M4.lookAtTo(_mFlView, _flEye, _flTgt, up);
         // Near plane 2.5 m: the light sits INSIDE its own fixture geometry (the
         // lamp position IS the visible lens box, with the head/arm right beside
         // it, all part of the props caster mesh) — a closer near plane renders
@@ -7957,12 +8160,13 @@ function tick(now) {
   }
 }
 function tickBody(now) {
-  let dt = Math.min((now - lastFrame) / 1000, 1 / 4);   // clamp big gaps (tab resume)
+  let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp
   const _dtMs = now - lastFrame;
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race.
   if (!paused && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick();   // pad + brake-cue; before pause so Start can un-pause
+  onboard.tick(dt);                // first-run coach marks — reads reports only, never the car
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.
@@ -8328,6 +8532,17 @@ function buildRaceSettings() {
     b.onclick = () => { raceWeather = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
     weatherEl.appendChild(b);
   }
+  // MIXED: changeable conditions — the race STARTS in the weather picked above
+  // and walks to a target the host decides. A toggle, not a sixth weather.
+  if (!isTimeTrial()) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (raceChangeable ? " active" : "");
+    b.setAttribute("aria-pressed", raceChangeable ? "true" : "false");
+    b.title = "Changeable conditions — the weather moves during the race";
+    const ic = document.createElement("span"); ic.setAttribute("aria-hidden", "true"); ic.textContent = "⇄"; b.append(ic, " MIXED");
+    b.onclick = () => { raceChangeable = !raceChangeable; wxArcPlan = null; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
+    weatherEl.appendChild(b);
+  }
   const timeEl = $("rs-time");
   timeEl.innerHTML = "";
   for (const [id, label] of [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]]) {
@@ -8369,15 +8584,24 @@ function buildRaceSettings() {
   const qEl = $("rs-quali");
   qEl.innerHTML = "";
   const qForced = champ ? SeasonCal.quali() : null;
-  $("rs-quali-label").textContent = "QUALIFYING LAP" + (qForced == null ? "" : " · " + (qForced ? "ON" : "OFF"));
-  qEl.hidden = qForced != null;
-  if (qForced == null) for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
+  // A championship that qualifies grids off the session, full stop (the label
+  // carries ON); one that does not still picks among the non-qualifying rules.
+  // Chip 0 is always the pace-order grid and chip 1 the qualifying lap — the
+  // indices quali.spec.js clicks. Labels say what the rule IS, and where it
+  // comes from: REVERSE TOP 10 is Formula 2's sprint rule, not an F1 one.
+  $("rs-quali-label").textContent = qForced ? "QUALIFYING LAP · ON" : "GRID";
+  qEl.hidden = !!qForced;
+  const rules = champ
+    ? [["tier", "PACE ORDER"], ["revchamp", "REVERSE STANDINGS"], ["random", "RANDOM"]]
+    : [["tier", "PACE ORDER"], ["quali", "QUALIFYING LAP"], ["rev10", "REVERSE TOP 10 · F2"], ["random", "RANDOM"]];
+  const cur = rules.some(([r]) => r === raceGrid) ? raceGrid : "tier";   // a rule this flow has no chip for gridOrderFor() ignores
+  if (!qForced) for (const [rule, label] of rules) {
     const b = document.createElement("button");
-    b.className = "sel-chip" + (raceQuali === on ? " active" : "");
-    b.setAttribute("aria-pressed", raceQuali === on ? "true" : "false");
+    b.className = "sel-chip" + (cur === rule ? " active" : "");
+    b.setAttribute("aria-pressed", cur === rule ? "true" : "false");
     b.textContent = label;
     b.onclick = () => {
-      raceQuali = on; store.set("raceQuali", on);
+      raceGrid = rule; store.set("raceGrid", rule);
       buildRaceSettings(); if (soundOn) GameAudio.uiTick();
     };
     qEl.appendChild(b);
@@ -8488,7 +8712,7 @@ $("rs-go").onclick = () => {
 // The sheet opens BEFORE the session with the field already simulated, so the
 // player can see what they have to beat and choose whether to drive it or take
 // the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
-async function openQuali(fresh) {
+async function openQuali(fresh, netDone) {
   await ensureScenery(trackIdx);
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results
@@ -8497,12 +8721,13 @@ async function openQuali(fresh) {
   state = "menu";
   quali.clear();
   qualiPeers.clear();
-  qualiNetDone = null; qualiLive.clear(); qualiHadRivals = false;   // abandoned friend-race gate — openQualiForNet re-arms it AFTER this
+  qualiNetDone = netDone || null; qualiLive.clear(); qualiHadRivals = false;   // armed from the ARG: a caller's write lands before this line
   loadTrack(trackIdx);
   makeCars();
   if (fresh) quali.simulate(0); else quali.begin();
   $("quali").classList.remove("q-done");
   qualiSheet.open(quali.rows());
+  refreshQualiGate();   // the gate's state is only knowable once netDone is armed
 }
 function closeQualiToGrid() {
   qualiSheet.close();

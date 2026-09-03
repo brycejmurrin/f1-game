@@ -376,6 +376,10 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body:not(.desktop) #grp-pedals,
   body:not(.desktop) #grp-shifts,
   body:not(.desktop) #grp-steer { padding-bottom: calc(var(--gap) * 7 / 6); }
+  /* BUTTONS mode: BOOST / OT / AERO are thumb targets every bit as much as GAS,
+     BRAKE and the steer arrows — same diameter and the same lift from the edge. */
+  body.steer-buttons:not(.desktop) #grp-taps .touchbtn { width: var(--hold); height: var(--hold); }
+  body.steer-buttons:not(.desktop) #grp-taps { padding-bottom: calc(var(--gap) * 7 / 6); }
   /* Small landscape (an iPhone SE is 667 wide) — one notch down. */
   @media (max-width: 700px) {
     /* Same HUD-axis floor as the base dock values above. */

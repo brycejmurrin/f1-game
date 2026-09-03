@@ -11,6 +11,7 @@ window.PhysicsConsts = {
                        //   (PACE and the vTop()/vStd() normalisers live in game.js)
   ACCEL: 7,            // m/s^2 at low speed
   BRAKE: 22,
+  BB_REF: 0.56,        // brake bias (% front / 100) at which the friction-ellipse split is 1/1 — see SetupTune
   REVERSE_MAX: -5,     // m/s — top reverse crawl speed (brake held at a stop)
   REVERSE_ACCEL: 5,    // m/s^2 — how quickly the reverse crawl builds
   COAST_DRAG: 6,       // m/s^2 deceleration when off the throttle

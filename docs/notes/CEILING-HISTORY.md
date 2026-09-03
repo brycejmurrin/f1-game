@@ -1428,6 +1428,42 @@ live in `ratchets.json`.
   `physState().towing` — the player's slipstream 0..1, so a harness can tell
   a tow apart from an X-mode gain in `vmaxNow` (aero-zones-vm parks the field
   half a lap away and asserts it is 0 before reading the ratio).
+- `js/game.js` 9345 -> **9401** lines / 5120 -> **5149** code / 223 -> **225** G
+  members, `js/net/lobby.js` 1684 -> **1692** (2026-09-03): the GRID RULE.
+  `raceQuali` (a boolean) becomes a view of `raceGrid` — tier | quali | rev10
+  (Formula 2's reversed top ten) | revchamp | random — applied by
+  `gridOrderFor()` to the order the session produced; the chips say where
+  each rule comes from. The lobby ships and validates `grid` beside `quali`
+  so an older peer's boolean still means what it meant. Plus the classified
+  fastest lap handed to `SeasonCal.award()` for the 2019–2024 point, and
+  `referencePole` on the façade for the time-trial medal sheet.
+- `js/game.js` 9400 -> **9449** lines / 5149 -> **5189** code / 225 -> **228** G
+  members / 147 -> **150** top-level lets, `js/net/lobby.js` 1692 -> **1712**
+  (2026-09-03): CHANGEABLE conditions (the MIXED chip — `raceChangeable`,
+  `wxArcPlan`, `_wxBase`; the arc target and length come from the sim seed
+  and race counter, or from the HOST over SETTINGS `wxArc`, validated) and
+  the DAILY CHALLENGE handle (`js/race/daily-challenge.js`, `G.daily`,
+  `G.ttDistance`) — the day's time trial staged from the select screen's
+  TODAY chip, recorded per UTC day with a streak.
+- `js/game.js` 9449 -> **9492** lines / 5189 -> **5221** code / 229 -> **230** G
+  members / 150 -> **151** top-level lets, `js/agent/apex.js` 2601 -> **2609**
+  (2026-09-03): the RED FLAG. `redFlagRestart()` clears the surface and
+  re-grids the field in race order on the boxes with laps, the race clock,
+  best laps and penalties kept (`restartPending` makes lights-out resume the
+  clock instead of zeroing it); RaceControl level 4 runs the procedure and
+  hands over one restart request. `__apex.redFlag()` drives it for the VM.
+- `js/game.js` 9492 -> **9506** lines / 5221 -> **5226** code, `js/agent/apex.js`
+  2609 -> **2610** (2026-09-03): the SETUP SHEET (`js/garage/setup-tune.js`).
+  Anti-roll bars fold into the four-channel contract through
+  `Parts.getMods(setup, team, tune)` and rake into `Parts.aeroLoad(…, tune)`;
+  BRAKE BIAS splits the friction ellipse per axle under braking (`bbSlipF` /
+  `bbSlipR` against `BB_REF`, exactly the single `slipFactor` at the works
+  bias, and AI/remote cars carry no `brakeBias` at all). `physState().brakeBias`
+  reports the split. Every funnel edit is in place; the works sheet is identity.
+- `js/game.js` 9506 -> **9509** lines / 5226 -> **5229** code / 230 -> **231** G
+  members (2026-09-03): the first-run COACH MARKS (`js/ui/onboard.js`) — a
+  `create` line, the per-frame `onboard.tick(dt)` beside `BrakeCue.tick()`, and
+  `G.announceBusy` so a mark can never stomp LIGHTS OUT! or a sector split.
 
 ## Tree-wide ratchets (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-03)
 
@@ -1611,3 +1647,23 @@ Far enough below and the ratchet has stopped ratcheting — the same trap
 tools/ci/fixture-consumer-audit.mjs records, where a floor sat at 31 while real
 adoption was 54.
 ```
+- `tree.cssClasses` 534 -> **535** (2026-09-03, on the deploy union): one class,
+  `#hud-flag.flag-red` — the HUD state RaceControl level 4 paints while a red
+  flag is out. The counter moved into `tests/data/ratchets.json` on the deploy
+  branch while this was in flight, so the raise is recorded here rather than in
+  the retired `css-class-ratchet.test.mjs`.
+- `js/game.js` 9499 -> **9546** lines / 5219 -> **5227** code (2026-09-03,
+  post-audit): five defect fixes the adversarial sweep found in the same day's
+  batches. The red-flag re-grid now BANKS the prog the teleport credits
+  (`_progGift`) so `checkRetirements`, which reads prog as a fraction of race
+  distance, cannot park a cluster of cars on the restart; the field's S1
+  reference resets with `lapTime` at the line (it was measured across the
+  reset, so `fieldSectorBests[0]` was frozen and S1 could never show purple);
+  `startRace` restores the weather chip's pick before re-arming, so a
+  pause-menu RESTART mid-arc no longer keeps the arc's weather; the player
+  slipstream skips retired cars; and the tow cue is cleared on both exits that
+  skip the block that used to clear it. (9546 -> **9552** / 5227 -> **5228** on
+  the follow-up: the weather restore in `startRace` is spelled out inline
+  rather than calling `endChangeable()`, because that also drops `wxArcPlan` —
+  and a HOST's plan for the race about to start is set before `startRace` runs,
+  so calling it there threw the plan away. Caught by the game-VM suite.)

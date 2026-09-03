@@ -269,9 +269,9 @@ function loadSeasonUi(trackIds = ["a", "b"]) {
   };
   const sb = sandbox(dom, {
     SeasonCal: {
-      config: () => ({ trackIds: trackIds.slice(), quali: true, sprint: true, laps: 57, points: "modern" }),
+      config: () => ({ trackIds: trackIds.slice(), quali: true, sprint: true, laps: 57, points: "modern", flPoint: false, drop: 0 }),
       PRESETS: [{ id: "full", label: "FULL" }], presetIds: () => ["a"], shuffled: (x) => x,
-      LAP_OPTS: [3, 5, 10, 25, 57], SPRINT_POINTS: [8, 7, 6, 5, 4, 3, 2, 1],
+      LAP_OPTS: [3, 5, 10, 25, 57], SPRINT_POINTS: [8, 7, 6, 5, 4, 3, 2, 1], DROP_OPTS: [0, 2, 3],
       hasProgress: () => false, rounds: () => 2, restart: () => ({}), setConfig() {}, trackIndex: () => 0,
     },
     Tracks: { LIST: [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
@@ -335,6 +335,8 @@ function loadSetupUi() {
              getMods: () => ({ speed: 1, accel: 1, cornering: 1, braking: 1 }), CATALOG: [], BUDGET: 780,
              getCost: () => 0, isOptionAvailable: () => true, DEFAULTS: {}, getFactorySetup: () => ({}) },
     Teams: { LIST: TEAMS }, Car3D: { FINISH_SURFACE: { satin: {}, chrome: {} } },
+    SetupTune: { FIELDS: [], RANGE: {}, get: () => ({ rideR: 60, rideF: 25, brakeBias: 56 }), set() {}, reset() {}, isDefault: () => true, mods: () => null, rake: () => 0 },
+    LiveryTex: { NUM_FONT_IDS: ["default", "block"], SPONSOR_PACK_IDS: ["default", "clean"] },
     M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
     PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
   });

@@ -257,9 +257,16 @@ function start(opts) {
   // WHICH SLOT is `o.slot`, or the first free one, or — when the set is full —
   // whichever is live there, which is the only remaining meaning of "start one".
   const free = firstFree(flavour);   // once — each call walks the slot store
+  // A FULL SET WITH NO SLOT NAMED IS NOT A SLOT CHOICE, so it must not become
+  // one. The old fallback here was a hard-coded 0, which silently destroyed
+  // that slot's career whenever the live pointer was in the OTHER flavour —
+  // reachable from the setup form's CAREER TYPE toggle, and the only
+  // destructive path in this module with no arm-then-confirm. Refusing hands
+  // the choice back to the caller, which opens the slot picker.
   const target = o.slot != null ? slotIn(o.slot)
     : free >= 0 ? free
-    : (flavour === slotFlavour ? slotIdx : 0);
+    : (flavour === slotFlavour ? slotIdx : -1);
+  if (target < 0) return null;
   // Save the career being left before the new one takes its place — starting a
   // career must not cost an unsaved change in the one you were playing.
   if (career && (flavour !== slotFlavour || target !== slotIdx)) save();

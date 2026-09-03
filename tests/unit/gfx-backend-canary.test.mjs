@@ -1050,8 +1050,14 @@ test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", (
     "shadow path must be able to skip the lit imesh setMatrixAt walk");
   console.log("[gfx-canary] checking TLX shadow cull upload:false call site: game.js");
   const game = read("js/game.js");
-  assert.match(game, /cullInstances\([^)]*planes,\s*\{\s*upload:\s*false\s*\}\)/,
-    "sun/lamp prop-shadow must pass upload:false");
+  // The call site passes a hoisted constant (the literal was rebuilt per prop
+  // batch per shadow rebuild), so pin BOTH halves — the call passes the const,
+  // and the const is still {upload:false}. Matching only the name would let the
+  // value drift to true and this guard would never notice.
+  assert.match(game, /cullInstances\([^)]*planes,\s*CULL_NO_UPLOAD\)/,
+    "sun/lamp prop-shadow must pass the no-upload cull opts");
+  assert.match(game, /const CULL_NO_UPLOAD = \{ upload: false \};/,
+    "…and those opts must still be upload:false");
   console.log("[gfx-canary] TLX shadow cull upload:false: OK");
 });
 

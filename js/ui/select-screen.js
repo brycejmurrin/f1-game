@@ -257,6 +257,21 @@ function trackFilterBar() {
     };
     bar.appendChild(b);
   });
+  // TODAY'S CHALLENGE — time trial only. The plan is the day's (UTC), the same
+  // for every player; one tap stages it and starts. Dynamic: no shell nodes.
+  if (G.timeTrial && G.daily) {
+    const p = G.daily.plan();
+    const done = G.daily.today();
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "sel-chip";
+    b.id = "sel-daily";
+    b.textContent = "TODAY · " + p.trackName.toUpperCase() + " · " + p.weather.toUpperCase() + " · " + p.tod.toUpperCase()
+      + (done && done.best != null ? " · ★ " + fmtTime(done.best) : "");
+    b.title = "Today's challenge (" + p.day + " UTC): the same circuit and conditions for everyone";
+    b.onclick = (e) => { e.stopPropagation(); tickUi(); G.daily.open(); };
+    bar.appendChild(b);
+  }
   const search = document.createElement("input");
   search.id = "sel-track-search";
   search.type = "search";
