@@ -193,6 +193,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **coplanar-baseline.json** | `coplanar-audit.cjs`, `tests/unit/coplanar-faces.test.mjs` |
 | **float-baseline.json** | `tests/unit/scenery-grounding.test.mjs` |
 | **moves/phase2.json** | — |
+| **moves/spike-backends.json** | — |
 
 ## Subdirectories (R3 families)
 
