@@ -145,7 +145,10 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 ## Parity snapshot
 
 - **GLX:** full reference — MSAA on desktop 4× at GRAPHICS: ULTRA, capped to 2× on
-  HIGH and below, 0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
+  HIGH and below (TRUE since 2026-09-03 only: the cap read `apex26.gfxHigh`,
+  which is written on phones ONLY, so every desktop preset had been shipping
+  4×; it reads `apex26.gfxPreset` now, and WGX had the same dead branch),
+  0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost (env probe off on LITE since 2026-09-03 — a cube cycle is six world passes + 36 mip passes on the jetsam rung); honest

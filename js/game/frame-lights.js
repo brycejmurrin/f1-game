@@ -64,7 +64,14 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   // because the set is ordered by the yaw-biased metric.
   // Mobile still evicts, deliberately: there the cap IS 24 lights total, which is
   // the per-fragment budget the tier exists to protect.
-  const SLOTS = mobileTier ? 24 : 48;   // js/render/glx.js MAX_LIGHTS
+  // …and the shed follows the LIVE tier, not just the device. On mobile the two
+  // agreed (24 either way) so this held; on a DESKTOP the governor could cut the
+  // lamp cap to 24 while SLOTS stayed at the shader's 48, so `room` reported 24
+  // free slots the shed had deliberately emptied and up to five tail-lights were
+  // appended on top — 29 lights through the per-fragment loop on a machine
+  // PerfGov had just judged too slow for 24. Same shape as the bug above, one
+  // level up: a budget read from the device where its sibling reads the tier.
+  const SLOTS = tierShed(mobileTier ? 24 : 48);   // js/render/glx.js MAX_LIGHTS
   const room = SLOTS - ((L.length / 15) | 0);
   if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range
@@ -186,11 +193,19 @@ function lampCap(carCount, mobileTier) {
     mobileTier ? 24 : 48);
   // Shed the nearest-lamp budget under PerfGov load before the fragment loop
   // pays for distant slots (tier 1 drops env probe; tier 2 drops lamp shadow).
-  if (typeof PerfGov !== "undefined") {
-    const tier = PerfGov.tier();
-    if (tier >= 2) cap = Math.min(cap, 24);
-    else if (tier >= 1) cap = Math.min(cap, 32);
-  }
+  return tierShed(cap);
+}
+// The PerfGov half of the budget, alone. lampCap's OTHER term (lampCull with
+// traffic) is a TAIL-LIGHT RESERVE and must never reach the slot budget below —
+// measuring against it evicted lamps into slots that were sitting empty, which
+// is the bug the appendCarTailLights comment describes. The tier shed is not a
+// reserve: it is a total per-fragment fill budget, so both the lamps AND the
+// tail-lights appended on top have to fit inside it.
+function tierShed(cap) {
+  if (typeof PerfGov === "undefined") return cap;
+  const tier = PerfGov.tier();
+  if (tier >= 2) return Math.min(cap, 24);
+  if (tier >= 1) return Math.min(cap, 32);
   return cap;
 }
 // Scale the WHOLE baked set for the per-chunk path with the same transform the

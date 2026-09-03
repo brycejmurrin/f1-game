@@ -225,8 +225,15 @@ const WGX = (function () {
   // — WebGPU cannot do 2×, so the savings mirror GLX capping HIGH at 2× MSAA.
   // Missing key defaults to 4× (fresh install / harness) until gfx-quality runs.
   // `let` (not const): soft-adapter escape hatch may drop desktop 4 → 1.
+  // Same mobile-only-signal defect as GLX (js/render/glx/post.js): gfxHigh is
+  // never written on a desktop, so this read never saw "0" and every desktop
+  // preset shipped 4x. Read the preset GfxQuality actually stores.
   let _wgxMsaa4 = true;
-  try { if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false; } catch (_) { /* blocked storage: default 4× MSAA */ }
+  try {
+    const _p = localStorage.getItem("apex26.gfxPreset");
+    if (_p != null) _wgxMsaa4 = _p === "ultra";
+    else if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false;
+  } catch (_) { /* blocked storage: default 4× MSAA */ }
   let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
   // Every path that makes create() return null records WHY, both on the console

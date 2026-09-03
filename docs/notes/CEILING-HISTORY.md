@@ -1363,3 +1363,8 @@ live in `ratchets.json`.
   counts DISTINCT PRESENTS carrying an error, not raw errors — one rejected
   pipeline is dozens of errors in one frame, one transient is one error, and
   `> 0` reloaded the healthy tab. Mirrors WGX's `GPU_ERR_ESCALATE_FRAMES`.
+- `js/render/webgpu/wgx.js` 6086 -> **6093** (2026-09-03): the desktop MSAA cap
+  read `apex26.gfxHigh`, which `GfxQuality.syncBootTier()` only ever writes on a
+  PHONE — so on desktop the read never saw "0" and every preset shipped 4x,
+  the opposite of the block's purpose. Now reads `apex26.gfxPreset`. Same
+  defect and same fix in `js/render/glx/post.js`.
