@@ -274,6 +274,18 @@ function init(gfx) {
 // and left the floor where boot had put it. See cleanRace() for what that cost.
 function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 
+// RE-ARM WITHOUT THE RESET. The visibilitychange handler used sentinelArm(true)
+// for a tab RETURN, which is not a race start: it dragged the boot-window reset
+// along, snapping _frameEMA and _floorMs back to 16.7 on a device whose budget
+// the governor had already derived. On a 30 Hz capped display (Low Power Mode)
+// that re-armed the exact "degrade a capped clock" bug _floorMs exists to
+// prevent — one scale step down, a revert 45 frames later, two visible target
+// re-allocs per app switch — and it made __apex.perf().open describe the last
+// un-hide instead of the race start. This only re-arms the sentinel.
+function sentinelResume() {
+  if (!_gfx || !_gfx.isMobile) return;
+  GameStore.store.rawSet(SENT_ACTIVE, "1");
+}
 function sentinelArm(on) {
   // Race start / return to a live session: re-open the boot window described
   // at `_live` — both averages restart from their shared 16.7 so the EMA can
@@ -521,7 +533,7 @@ function clearStrikes() {
 }
 
 return {
-  init, tick, sentinelArm, cleanRace, clearStrikes,
+  init, tick, sentinelArm, sentinelResume, cleanRace, clearStrikes,
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
   // Crash + measured only — no GRAPHICS user floor. Look-defining post
   // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so

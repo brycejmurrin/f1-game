@@ -20,7 +20,7 @@ node tools/pick-tests.mjs           # which test GROUPS does this change need?
 node tools/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
 node tools/test-bg.mjs <groups>     # run browser groups in the background
 node tools/assets.mjs verify        # asset-pack licence + md5 + budget check
-tools/README.md                     # test-asserted index of all 110+ tools
+tools/README.md                     # test-asserted index of all 160+ tools
 docs/AGENT-SURFACE.md               # skills / MCP / tools / wrap map
 ```
 
@@ -262,7 +262,7 @@ TLX, and WGX implement it. `tools/assets.mjs verify` gates licences.
 
 ## `window.__apex` dev API
 
-~180 hooks; `docs/DEBUG-HOOKS.md` is the reference and `__apex.agentHelp()`
+~185 hooks; `docs/DEBUG-HOOKS.md` is the reference and `__apex.agentHelp()`
 the machine-readable manifest — call it once per session instead of loading
 the list here. Sharp edges: `obs()`/`physState()` need `player.px` initialised
 (`jump()` or `step()` after `race()`+`go()`); agentview failures are

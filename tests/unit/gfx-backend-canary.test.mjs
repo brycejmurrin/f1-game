@@ -1378,6 +1378,29 @@ test("GLX's env probe cannot latch _envActive against a disabled/null framebuffe
     "envFaceEnd must lower _envActive BEFORE any early return — a texture that vanished mid-cycle is the same brick one frame later");
 });
 
+test("latches come down BEFORE early returns — the shape that bricked the GLX env probe", () => {
+  // 2026-09-03: envFaceEnd returned early with _envActive still set and the
+  // canvas went black for the life of the tab. Two more latches share the
+  // shape and are pinned here so the next early return cannot re-create it.
+  const shadow = read("js/render/glx/shadow.js");
+  for (const fn of ["carShadowEnd", "lampShadowEnd"]) {
+    const body = fnBody(shadow, fn);
+    const clearAt = body.indexOf("S.castCullVP = null");
+    const bailAt = body.indexOf("return;");
+    assert.ok(clearAt >= 0 && bailAt >= 0 && clearAt < bailAt,
+      `${fn}: castCullVP must be cleared before the enabled-check return — chunked.js reads castCullVP || lightVP for every caster`);
+  }
+  // A tab RETURN is not a race start: it must re-arm the sentinel without
+  // resetting the derived frame budget (sentinelArm(true) does both).
+  const game = read("js/game.js");
+  assert.match(game, /else if \(state === "race" \|\| state === "count"\) PerfGov\.sentinelResume\(\);/,
+    "the visibilitychange handler re-arms with sentinelResume(), not sentinelArm(true)");
+  assert.match(read("js/game/perf.js"), /function sentinelResume\(\)/);
+  // The env-probe latch has the same player-reachable reset as the chunk latch.
+  assert.match(game, /id === "carEnvCube" && \+v > 0 && !\(\+LT\[id\] > 0\) && _envProbeOff/,
+    "ENV REFLECTION 0 -> >0 clears apex26.envProbeOff, like the chunk knobs clear perChunkOff");
+});
+
 test("the vendored three carries the swizzle patch — Chromium 141 rejects r185's string swizzle", () => {
   // r185's pooled GPUTextureViewDescriptor stamps swizzle:"rgba" (constructor +
   // reset()) into EVERY createView; Chromium 141 validates the member as a

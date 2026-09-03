@@ -106,10 +106,21 @@ const TrackSceneryData = (function () {
   // load before this one, so they cannot reference the arrays); buildProps
   // resolves the names here, then falls back to THEME_DEF[theme]. Unknown
   // names are dropped so a typo narrows the palette instead of throwing.
-  function resolveCityStyle(raw) {
+  // MERGE, DO NOT REPLACE. buildProps reads seven fields off the result
+  // (neonKinds.length, kinds.length, fh[0], bh[0], bias, neon[i], dayPal[i]);
+  // `resolveCityStyle(x) || THEME_DEF[theme]` was all-or-nothing, so a row that
+  // omitted any one of them threw inside Tracks.build (or, for an empty neon
+  // list, took `i % 0` = NaN into the colour lookup) for that circuit alone.
+  // The theme row is the base; the circuit's row overrides field by field, and
+  // an empty resolved palette keeps the theme's.
+  function resolveCityStyle(raw, theme) {
     if (!raw) return null;
-    const pick = (names, table) => (names || []).map((n) => table[n]).filter(Boolean);
-    return Object.assign({}, raw, { neon: pick(raw.neon, NC), dayPal: pick(raw.dayPal, DC) });
+    const base = THEME_DEF[theme] || THEME_DEF.modern;
+    const pick = (names, table, dflt) => {
+      const out = (names || []).map((n) => table[n]).filter(Boolean);
+      return out.length ? out : dflt;
+    };
+    return Object.assign({}, base, raw, { neon: pick(raw.neon, NC, base.neon), dayPal: pick(raw.dayPal, DC, base.dayPal) });
   }
 
   const THEME_DEF = {

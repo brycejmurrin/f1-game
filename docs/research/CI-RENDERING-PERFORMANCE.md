@@ -502,9 +502,10 @@ canvas colours per backend: §Measured above.
 
 ## Cursor Cloud bootstrap (AGENTS.md §Cursor Cloud)
 
-The personal/dashboard environment for this repo is not
-`.cursor/environment.json`; system packages persist only via snapshot + Save on
-the environment dashboard — an `apt-get` in a live agent does **not** survive
+The bootstrap IS `.cursor/environment.json` (committed 2026-09-03: its `install`
+calls `bash tools/cloud-agent-install.sh` and its `mcpServerAllowlist` names the
+repo's stdio servers; `tests/unit/environment-json.test.mjs` pins it). System
+packages still persist only via snapshot + Save on the environment dashboard — an `apt-get` in a live agent does **not** survive
 the next cold boot otherwise (§Cursor Cloud agent environment above has the
 package list and the ICD proof).
 
@@ -528,7 +529,7 @@ handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even when
 /usr/share/vulkan/icd.d/lvp_icd.json` fails) means reinstall
 `mesa-vulkan-drivers` or re-Save the env snapshot.
 
-MCP on this host: the seven-server map is `docs/AGENT-SURFACE.md`. Keep
+MCP on this host: the three-server map is `docs/AGENT-SURFACE.md` (trimmed from seven on 2026-09; the CLI-only leftovers are tabled there). Keep
 `apex-tools` in repo-root `.mcp.json` (and `.cursor/mcp.json`); the cloud host
 catalog is often empty, in which case the shell wrappers
 (`./tools/apex-tools-mcp.sh call`, `./tools/playwright-mcp.sh`,

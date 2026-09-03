@@ -42,7 +42,7 @@ drawn inside the mark and so answers to the mark alone.
 
 - Pure driving feel → **tune-physics**. Career economy with no parts edit →
   **career-mode**. Isolated car shots → **car-viewer**. Cache bump →
-  `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
+  `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
 
 ## Quick Reference
 

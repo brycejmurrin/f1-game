@@ -104,7 +104,7 @@ its whole group when the change touches that spec's subject and nothing else.
 Tests serve `js/` and `css/` from the working tree, so a browser run in
 flight forbids source edits — which means the efficient session shape is not
 "edit, run browsers, edit, run browsers" but: make ALL the source edits,
-verify once, bump the cache, commit. Re-running browser specs after every
+verify once, commit — there is no cache bump (`?v=dev`; the deploy stamps the hashes). Re-running browser specs after every
 edit buys no additional safety over running them once at the end; it just
 serializes the agent behind SwiftShader several times over.
 
@@ -564,7 +564,7 @@ If a guard needs history, the job needs `fetch-depth: 0` — today the sweeps,
 smoke and selected jobs have it; guards does not, which is also why
 `pick-tests`' merge-base default cannot work in the guards job.
 
-### Renderer specs on a real GPU (`macos-latest`) — 2026-09-01, UNVERIFIED until the first run
+### Renderer specs on a real GPU (`macos-latest`) — first run 2026-09-03 (see §Field notes 2026-09-03, `image-grade-visual`)
 
 Every browser job in `ci.yml` ran on `ubuntu-latest`, whose only adapter is
 SwiftShader, and the `gfx` group had never been in CI at all. `macos-latest`

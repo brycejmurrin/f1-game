@@ -1368,3 +1368,14 @@ live in `ratchets.json`.
   PHONE — so on desktop the read never saw "0" and every preset shipped 4x,
   the opposite of the block's purpose. Now reads `apex26.gfxPreset`. Same
   defect and same fix in `js/render/glx/post.js`.
+- `js/game.js` 9235 -> **9245** lines / 5053 -> **5057** code (2026-09-03): the
+  env-probe latch (`apex26.envProbeOff`) gets the same 0-and-back-on reset the
+  chunk latch has had — before this the only clear was RESET RENDERER, which
+  also discards the renderer pick; and the visibilitychange handler re-arms the
+  crash sentinel with `sentinelResume()` instead of `sentinelArm(true)`, which
+  was resetting the derived frame budget on every tab return.
+- `js/render/webgpu/wgx.js` 6093 -> **6110** (2026-09-03): `envInit()` releases
+  what it made on a partial failure and latches `_envInitFailed`; before, a
+  throw after `envCubeTex` was assigned satisfied the re-entry guard with an
+  empty `envFaceViews` and every probe cycle passed an undefined view to
+  beginRenderPass — one GPU error per cycle for the life of the tab.
