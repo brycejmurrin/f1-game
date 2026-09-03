@@ -247,24 +247,34 @@ test("LAZY_EDGES are ordered within LAZY_AGENT", () => {
 // rather than as a missing include. Five loaders existed; four had to be found
 // by chasing red tests. This is so the sixth cannot be.
 test("every circuit loader also loads the split scenery roster", () => {
-  const roots = ["tools", "tests/unit"];
-  const offenders = [];
-  for (const root of roots) {
-    for (const name of readdirSync(join(ROOT, root))) {
-      if (!/\.(mjs|cjs|js)$/.test(name)) continue;
-      const rel = `${root}/${name}`;
-      // CODE, not prose: read with comments stripped. The first cut of this
-      // guard was satisfied by the word LAZY_SCENERY appearing in the very
-      // comment explaining why the roster is needed, so deleting the actual
-      // load left it green — a guard that passes on a mention of itself.
-      const src = stripComments(readFileSync(join(ROOT, rel), "utf8"));
-      // A loader is a file that RUNS circuit files, not one that merely names
-      // the directory (manifest.cjs itself, or a path-building helper).
-      if (!/CIRCUITS_DIR/.test(src)) continue;
-      if (!/runFile\(|runInContext\(|runInNewContext\(/.test(src)) continue;
-      if (/LAZY_SCENERY|sceneryPath/.test(src)) continue;
-      offenders.push(rel);
+  // RECURSIVE over both trees, not a flat readdir of two fixed directories: the
+  // test tree is about to be re-homed by topic (tests/guards, tests/node, …)
+  // and a loader that moves one level down must stay in the sweep.
+  const files = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(join(ROOT, dir)).sort()) {
+      if (name === "node_modules" || name.startsWith(".") || name.startsWith("_")) continue;
+      const rel = `${dir}/${name}`;
+      if (statSync(join(ROOT, rel)).isDirectory()) walk(rel);
+      else if (/\.(mjs|cjs|js)$/.test(name)) files.push(rel);
     }
+  };
+  walk("tools");
+  walk("tests");
+  assert.ok(files.length > 150, `the loader sweep saw only ${files.length} files — the walk broke`);
+  const offenders = [];
+  for (const rel of files) {
+    // CODE, not prose: read with comments stripped. The first cut of this
+    // guard was satisfied by the word LAZY_SCENERY appearing in the very
+    // comment explaining why the roster is needed, so deleting the actual
+    // load left it green — a guard that passes on a mention of itself.
+    const src = stripComments(readFileSync(join(ROOT, rel), "utf8"));
+    // A loader is a file that RUNS circuit files, not one that merely names
+    // the directory (manifest.cjs itself, or a path-building helper).
+    if (!/CIRCUITS_DIR/.test(src)) continue;
+    if (!/runFile\(|runInContext\(|runInNewContext\(/.test(src)) continue;
+    if (/LAZY_SCENERY|sceneryPath/.test(src)) continue;
+    offenders.push(rel);
   }
   assert.deepEqual(offenders, [],
     `these run circuit files but never load js/circuits/scenery/ — they will build every ` +

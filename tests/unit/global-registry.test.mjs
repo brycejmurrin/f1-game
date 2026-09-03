@@ -34,7 +34,14 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { scanRepo, buildGraph, checkGraph } from "../../tools/scan-globals.mjs";
+
+const require = createRequire(import.meta.url);
+const MANIFEST = require("../../tools/manifest.cjs");
+// "everything directly under <dir>/" as a path regex, from the manifest's own
+// directory constant — the one place the circuits' home is spelled.
+const homeOf = (dir) => new RegExp("^" + dir.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") + "/[^/]+\\.js$");
 
 // One scan serves every test below (~2 s for the ~170 files).
 const scan = scanRepo();
@@ -67,13 +74,13 @@ const SHARED_GLOBALS = {
 // exactly TrackDefs), so the only thing to pin is that nothing OUTSIDE
 // js/circuits/ ever writes it.
 const GROWABLE_GLOBALS = {
-  TrackDefs: /^js\/circuits\//,
+  TrackDefs: homeOf(MANIFEST.CIRCUITS_DIR),
   // Same idiom, same reason, one directory deeper: each circuit's bespoke
   // scenery closure was split out of its def file so the 1,083 KB of closures
   // stops riding the boot script wall for a session that builds ONE circuit.
   // Forty writers by design; what is pinned is that nothing outside the split
   // directory writes it.
-  TrackScenery: /^js\/circuits\/scenery\//,
+  TrackScenery: homeOf(MANIFEST.SCENERY_DIR),
 };
 
 // Known reads of names NO manifest file assigns — each with its story. A new
