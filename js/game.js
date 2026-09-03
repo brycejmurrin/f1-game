@@ -5540,10 +5540,10 @@ let setupPreviewOn = false, setupPreviewAz = 0.6;
 // Defaults reproduce the previous framing exactly: eye y 2.0 at dist 8.5 over a
 // target at y 0.35 is an elevation of atan2(1.65, 8.5).
 const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.5;
-// Half the car's BROADSIDE footprint (~5.95 m drawn, measured on screen at
-// 1440x900) plus ~12% margin. renderSetupPreview holds the auto-turntable at
-// whatever distance keeps this inside the visible half-width.
-const SP_FIT_HALF_W = 3.35;
+// Half the car's BROADSIDE footprint (~5.95 m drawn) plus ~5% margin.
+// Was 3.35 (~12%): honest WGX off-axis projection left the auto turntable
+// ~7% farther than the 8.5 m default at desktop viewports (1440x900 ~8.5 m).
+const SP_FIT_HALF_W = 3.15;
 // How far the AUTOMATIC turntable may back off. Deliberately under the MANUAL
 // zoom ceiling SP_DIST_MAX: a player who zooms out that far asked for the wide
 // shot, whereas the auto fit reaching it means the fit diverged. garage-scene.js

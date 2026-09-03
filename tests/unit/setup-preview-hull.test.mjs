@@ -83,10 +83,10 @@ test("SP_HULL_GEOM_FIELDS names exactly the fields whose PRESENCE moves a vertex
 // MEASURED in a real browser at the panel widths the sheet actually takes
 // (artifacts/garage-900x820-broken.png vs -fixed.png):
 //
-//   viewport    aspect  panelFrac   before   after
-//   1440x900     1.60     0.29       9.08     9.08   unchanged
-//   1280x800     1.60     0.33       9.62     9.62   unchanged
-//    844x390     2.16     0.498      9.49     9.49   unchanged
+//   viewport    aspect  panelFrac   before   after (3.15 half-W)
+//   1440x900     1.60     0.29       9.08     8.54
+//   1280x800     1.60     0.33       9.62     9.05
+//    844x390     2.16     0.498      9.49     8.95
 //    900x820     1.10     0.467     15.00    11.00   was pinned on the clamp
 //    390x844     0.46     0          15.00    11.00   was pinned on the clamp
 //
