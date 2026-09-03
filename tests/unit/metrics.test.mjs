@@ -145,13 +145,11 @@ test("snapshot uses probe(), never obs()", () => {
 });
 
 test("overlay sits below the zoomed sector stack, not on the minimap", () => {
-  const { M } = load({});
-  assert.match(M.PANEL_STYLE, /right:calc\(8px \+ var\(--sar, 0px\)\)/);   // safe-area aware, one style everywhere
-  assert.match(M.PANEL_STYLE, /--tap/);
-  assert.match(M.PANEL_STYLE, /--hud-scale/);
-  assert.match(M.PANEL_STYLE, /z-index:11/);
-  assert.doesNotMatch(M.PANEL_STYLE, /left:\s*8px/);
-  assert.doesNotMatch(M.PANEL_STYLE, /top:\s*140px/);
+  const hud = readFileSync(join(ROOT, "css/hud.css"), "utf8");
+  assert.match(hud, /#game-metrics[\s\S]*--hud-z-top/);
+  assert.match(hud, /#game-metrics[\s\S]*--tap/);
+  assert.match(hud, /#game-metrics[\s\S]*z-index:\s*11/);
+  assert.doesNotMatch(hud, /#game-metrics[\s\S]*left:\s*8px/);
 });
 
 test("without a HUD digit, snapshot speed is ground km/h from probe()", () => {

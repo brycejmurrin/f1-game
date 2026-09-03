@@ -14,6 +14,7 @@ const els = {
   ot: $("hud-ot"), aero: $("hud-aero"),
   gapA: $("hud-gap-ahead"), gapB: $("hud-gap-behind"),
   hudSectors: $("hud-sectors"),
+  hudLimits: $("hud-limits"),
   flag: $("hud-flag"), minimap: $("minimap"),
   lights: $("lights"), announce: $("announce"),
   overlay: $("overlay"), subtitle: $("subtitle"), audiostate: $("audiostate"),
@@ -441,6 +442,10 @@ let manualMode = store.get("manual", false);   // manual gearbox preference (pla
 let unlimitedBudget = store.get("unlimitedBudget", false); // removes credit cap in car setup
 // how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
 let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
+const HUD_PROFILES = ["minimal", "standard", "broadcast"];
+let hudProfile = store.get("hudProfile", "standard");
+if (HUD_PROFILES.indexOf(hudProfile) < 0) hudProfile = "standard";
+function hudProfileLabel() { return "HUD: " + hudProfile.toUpperCase(); }
 // Manual gears: tilt (thumbs free) or desktop keyboard. BUTTONS already owns
 // both thumbs (arrows + pedals); TOUCH auto-throttles — neither has a free
 // hand for a shifter.
@@ -1130,6 +1135,18 @@ let playerErs = { deploy: 0.5, regen: 0.5 };   // 0..1 ERS axes (see drainFor/ot
 const NEUTRAL_MODS = Object.freeze({ speed: 1, accel: 1, cornering: 1, braking: 1 });
 let lastFrame = 0;
 let announceT = 0;
+const ANN_PRI = { coach: 1, info: 2, "penalty-warn": 2, race: 4, "penalty-hit": 5 };
+let _annPri = 0, _annQueue = null;
+function showAnnounce(msg, dur, kind) {
+  kind = kind || "race";
+  _annPri = ANN_PRI[kind] || 2;
+  els.announce.textContent = msg;
+  els.announce.className = "";
+  if (kind && kind !== "race") els.announce.dataset.kind = kind;
+  else delete els.announce.dataset.kind;
+  els.announce.hidden = false;
+  announceT = dur || 1.6;
+}
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
 // per-mark fallback draw) live in js/fx/skidmarks.js — SkidMarks.create(G),
@@ -1198,10 +1215,14 @@ function fmtTime(t) {
   const m = Math.floor(t / 60), s = t - m * 60;
   return m + ":" + (s < 10 ? "0" : "") + s.toFixed(2);
 }
-function announce(msg, dur) {
-  els.announce.textContent = msg;
-  els.announce.hidden = false;
-  announceT = dur || 1.6;
+function announce(msg, dur, kind) {
+  kind = kind || "race";
+  const pri = ANN_PRI[kind] || 2;
+  if (announceT > 0 && pri <= _annPri) {
+    if (!_annQueue || pri > (_annQueue.pri || 0)) _annQueue = { msg, dur, kind, pri };
+    return;
+  }
+  showAnnounce(msg, dur, kind);
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
 // Curated def.sectors splits when present; equal thirds only as fallback.
@@ -1844,7 +1865,7 @@ function redFlagRestart() {
   for (const l of els.lights.children) l.classList.remove("on");
   sectorIdx = player ? sectorAt(player.s) : 0; sectorStartT = player ? player.lapTime : 0; sectorValid = false;
   snapGameCam();
-  announce("RED FLAG — STANDING RESTART", 3);
+  announce("RED FLAG — STANDING RESTART", 3, "race");
   Log.info("game", "red flag: standing restart, " + order.length + " cars re-gridded at raceT " + raceT.toFixed(1));
   return true;
 }
@@ -2721,7 +2742,7 @@ function launchFlyingLap() {
   player.rPrevPx = player.px; player.rPrevPz = player.pz;
   player.rPrevS = player.s; player.rPrevX = player.x;
   player.rPrevHead = player.head; player.rPrevYawVis = 0;
-  announce("QUALIFYING LAP", 1.6);
+  announce("QUALIFYING LAP", 1.6, "info");
 }
 
 // SCREEN WAKE LOCK for a race; browsers release it whenever the page hides.
@@ -2762,7 +2783,7 @@ async function startRace() {
   // Completed seasons are readable, never raceable (also guarded by award()).
   if ((flow === "season" && !SeasonCal.canRace(season)) || (isCareer() && Career.conflicted())) {
     state = "menu"; $("race-settings").hidden = true;
-    isCareer() && Career.conflicted() ? announce("SAVE CONFLICT — reload career", 3) : (buildSelect(), els.select.hidden = false);
+    isCareer() && Career.conflicted() ? announce("SAVE CONFLICT — reload career", 3, "info") : (buildSelect(), els.select.hidden = false);
     return false;
   }
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
@@ -3684,7 +3705,7 @@ function tickWeatherArc(dt) {
   const f = Math.min(1, weatherArc.t / weatherArc.dur);
   const seq = weatherArc.seq;
   const want = seq[Math.min(seq.length - 1, Math.floor(f * seq.length))];
-  if (raceWeather !== want) { setWeatherLive(want); announce("WEATHER: " + want.toUpperCase(), 2); }
+  if (raceWeather !== want) { setWeatherLive(want); announce("WEATHER: " + want.toUpperCase(), 2, "info"); }
   if (f >= 1) {
     if (raceWeather !== weatherArc.to) setWeatherLive(weatherArc.to);
     weatherArc = null;   // arc complete — weather stays at `to`
@@ -3724,7 +3745,7 @@ function update(dt) {
       // The wait is real on the host — it lasts as long as the slowest guest's
       // circuit build — so say so rather than showing a dead gantry. It decays
       // and hides itself once netStart lands.
-      if (announceT <= 0) announce("WAITING FOR PLAYERS…", 1);
+      if (announceT <= 0) announce("WAITING FOR PLAYERS…", 1, "info");
     } else {
       countT += dt;
     }
@@ -3750,7 +3771,7 @@ function update(dt) {
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
       netStart = null;              // consumed; never carry it into the next race
-      announce("LIGHTS OUT!", 1.4);
+      announce("LIGHTS OUT!", 1.4, "race");
       if (soundOn) GameAudio.lightsOut();
       // ONE STANDING LAP, from the line. It used to launch at racing speed
       // because the simulated field is modelled on a flying lap, and timing a
@@ -4648,9 +4669,13 @@ function updateCar(c, dt, ranked) {
       if (c.cutWarn >= 4) {
         c.cutWarn = 0;
         c.penalty += 5;
-        if (c.isPlayer) { announce("+5s TRACK LIMITS PENALTY", 2); if (soundOn) GameAudio.penalty(); }
+        if (c.isPlayer) {
+          const pk = hudProfile === "broadcast" ? "race" : "penalty-hit";
+          announce("+5s TRACK LIMITS PENALTY", 2, pk);
+          if (soundOn) GameAudio.penalty();
+        }
       } else if (c.isPlayer) {
-        announce("TRACK LIMITS " + c.cutWarn + "/4", 1.2);
+        if (hudProfile === "broadcast") announce("TRACK LIMITS " + c.cutWarn + "/4", 1.2, "penalty-warn");
         if (soundOn) GameAudio.offtrack();
       }
     }
@@ -5379,10 +5404,7 @@ function updateCar(c, dt, ranked) {
           // so a new personal best shows the actual improvement (not 0.000).
           const delta = elapsed - (prevBest < Infinity ? prevBest : elapsed);
           if (elapsed < prevBest) sectorBests[prevSector] = elapsed;
-          if (elapsed >= 2) {
-            const sign = delta <= 0 ? "▼ S" : "▲ S";
-            announce(sign + (prevSector + 1) + " " + elapsed.toFixed(3), 1.5);
-          }
+          if (elapsed >= 2 && c.isPlayer) hud.flashSector(prevSector);
         }
       }
       sectorValid = fwd;   // the NEXT split is trustworthy only after a forward entry
@@ -5430,11 +5452,11 @@ function updateCar(c, dt, ranked) {
     c._secT0 = 0;   // …and the FIELD's S1 reference, or it measures across the reset
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
-    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6);
+    if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6, "race");
     if (c.lap > lapsTarget) {
       c.finished = true;
       c.finishT = raceT;
-      if (c.isPlayer) announce("FINISH!", 2);
+      if (c.isPlayer) announce("FINISH!", 2, "race");
     }
   } else if (dLine < 0 && oldS < track.total * 0.5 && c.s > track.total * 0.5) {
     // Backward over the line: give the lap back and put the clock where it was,
@@ -5466,7 +5488,7 @@ function updateCar(c, dt, ranked) {
     else c.wrongT = Math.max(0, (c.wrongT || 0) - dt * 2);
     c.wrongWay = c.wrongWay ? c.wrongT > 0.15 : c.wrongT > 0.4;
     if (c.wrongWay && (c.wrongCueT = (c.wrongCueT || 0) - dt) <= 0) {
-      if (c.local) announce("WRONG WAY", 1.0);
+      if (c.local) announce("WRONG WAY", 1.0, "info");
       c.wrongCueT = 1.0;
     }
     // Auto-rescue: stuck off-track, wrong-way, pinned to a wall, or simply
@@ -5583,7 +5605,7 @@ function rescuePlayer(c) {
   // Cues are for the driver at THIS screen — a rival being recovered elsewhere
   // on track must not announce itself here.
   if (c.local) {
-    announce("RECOVERED", 1.2);
+    announce("RECOVERED", 1.2, "info");
     if (soundOn) GameAudio.offtrack();
   }
 }
@@ -5624,7 +5646,7 @@ function retireCar(c, reason) {
   // The broadcast call. Every retirement is announced, not only the player's:
   // losing a rival is race information, and it is the only way a DNF that
   // happened half a lap away is visible at all.
-  announce("RETIREMENT — " + c.code, 2);
+  announce("RETIREMENT — " + c.code, 2, "info");
   if (c.local && soundOn) GameAudio.offtrack();
 }
 
@@ -5659,12 +5681,12 @@ function onTTLap(lapTime) {
   const held = Ghost.medal();
   const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), pace: PACE, difficulty, weather: raceWeather });
   Ghost.startLap();
-  if (up && medal && medal !== held) announce(medal.toUpperCase() + " MEDAL", 2);
+  if (up && medal && medal !== held) announce(medal.toUpperCase() + " MEDAL", 2, "info");
   if (daily.isActive()) daily.record(lapTime);
   if (lapTime < ttRecord) {
     ttRecord = lapTime;
     ttNewRecord = true;
-    announce("NEW RECORD " + fmtTime(lapTime), 2);
+    announce("NEW RECORD " + fmtTime(lapTime), 2, "info");
   }
 }
 
@@ -8183,7 +8205,16 @@ function tickBody(now) {
     }
     return;
   }
-  if (announceT > 0) { announceT -= dt; if (announceT <= 0) els.announce.hidden = true; }
+  if (announceT > 0) {
+    announceT -= dt;
+    if (announceT <= 0) {
+      els.announce.hidden = true;
+      els.announce.className = "";
+      delete els.announce.dataset.kind;
+      _annPri = 0;
+      if (_annQueue) { const q = _annQueue; _annQueue = null; showAnnounce(q.msg, q.dur, q.kind); }
+    }
+  }
   // hit-stop: slow the simulation to a crawl for a few frames after a hard
   // crash so the impact reads, but keep the camera (render) at full dt so the
   // shake still plays out.
@@ -9247,6 +9278,15 @@ $("pm-gears").onclick = () => {
   if (player && !gearsManual()) player.gear = naturalGear(player.speed);
   showTouchControls(true);
 };
+const pmHudProfile = $("pm-hudprofile");
+if (pmHudProfile) {
+  pmHudProfile.textContent = hudProfileLabel();
+  pmHudProfile.onclick = () => {
+    hudProfile = HUD_PROFILES[(HUD_PROFILES.indexOf(hudProfile) + 1) % HUD_PROFILES.length];
+    store.set("hudProfile", hudProfile);
+    pmHudProfile.textContent = hudProfileLabel();
+  };
+}
 
 // ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
 // both answer "how much of the car do you operate yourself?". Takes effect
@@ -9475,6 +9515,7 @@ Input.setSteerMode(steerMode);
 // which the DATA button awaits — js/data is LAZY_DATA now and there is no
 // DataHub at boot to initialise.
 $("pm-steer").textContent = steerLabel();
+if (pmHudProfile) pmHudProfile.textContent = hudProfileLabel();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
 audioPanel.init();
