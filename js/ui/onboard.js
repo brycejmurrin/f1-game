@@ -56,11 +56,14 @@ const Onboard = (function () {
 
     // One call per frame from the game loop, before the pause gate. Everything
     // it reads is a REPORT — the brake cue's own urgency, the overtake arm flag
-    // the HUD already draws, the distance to the next aero zone — so nothing
+    // the HUD already draws, the car's own active-aero arm state — so nothing
     // here can reach the car (docs/PHYSICS.md: broadcast-only).
     function tick(dt) {
       if (G.state !== lastState) {
-        if (G.state === "race" && lastState === "count") races++;
+        // A red-flag standing restart also runs count -> race, and it must not
+        // burn one of the two races these marks get. A genuine start has the
+        // race clock at zero; a restart resumes the clock the flag stopped.
+        if (G.state === "race" && lastState === "count" && !(G.raceT > 1)) races++;
         lastState = G.state;
       }
       if (G.state !== "race" || done()) return false;
@@ -75,8 +78,16 @@ const Onboard = (function () {
         if (bc && bc.on && bc.urgency > 0.35) return fire("brake");
       }
       if (!(shown & BIT.ot) && p.otArmed && !(p.otT > 0)) return fire("ot");
+      // Two defects, one site. The DISTANCE trigger fired up to 250 m before
+      // the zone, where xArmed is still false and game.js's `if (!c.xArmed)
+      // c.xOn = false` discards the toggle in the same frame — the one-shot
+      // mark taught a press that does nothing. Wait for the ARM instead. And
+      // read aeroX, the flap's travel, never the xOn switch (the flat rule in
+      // docs/PHYSICS.md), so a prompt cannot land while the flaps are opening.
+      // In auto mode the game opens the wing itself and the button is hidden,
+      // so naming a control there is worse than silence.
       if (!(shown & BIT.aero) && G.raceAeroMode !== "auto") {
-        if (p.xArmed && !p.xOn) return fire("aero");
+        if (p.xArmed && !(p.aeroX > 0.02)) return fire("aero");
       }
       return false;
     }

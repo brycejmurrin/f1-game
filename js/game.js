@@ -1526,11 +1526,16 @@ let playerVisualKey = "111111111111";
 // driver would accelerate, brake and (via muBase) CORNER on the local player's
 // upgrades. Human cars carry the result as c.mods; AI cars have none and keep
 // running on c.tierV * c.skill.
-function modsFor(team, setup) {
+function modsFor(team, setup, tune) {
   // teamStats() folds in career development; outside career it hands back the
   // team's own literal untouched, so this is the same object it always was.
   const stats = Career.teamStats(team) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const mods = Parts.getMods(setup, team, SetupTune.mods(team.id));   // parts × the SETUP sheet's bars
+  // `tune` is the SETUP SHEET's contribution and defaults to NONE. It is the
+  // local player's sheet and nobody else's: js/net/lobby.js calls modsFor()
+  // with a RIVAL's declared parts to show their stats, and folding in
+  // SetupTune.mods(team.id) there scored a peer's car with this player's
+  // anti-roll bars whenever the two happened to share a team.
+  const mods = Parts.getMods(setup, team, tune || null);
   return {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,
@@ -1612,7 +1617,7 @@ function swapGridSlots(a, b) {
 function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   const setup = getTeamParts(team.id);
-  playerMods = modsFor(team, setup);
+  playerMods = modsFor(team, setup, SetupTune.mods(team.id));   // the local sheet, here and in makeCars only
   if (player) { player.mods = playerMods; player.tread = Parts.tread(setup, team); player.brakeBias = SetupTune.brakeBias(team.id); }
   // How much wing this car is carrying (0..1), which sets how much active aero
   // trades — see X_VMAX_GAIN_LO/HI. Cached here rather than resolved per physics
@@ -1722,7 +1727,7 @@ function makeCars() {
         human: isP, local: isP, isPlayer: isP,
         // Per-car performance multipliers (human cars only — see modsFor).
         // startRace()'s recomputePlayerMods() refreshes the local player's.
-        mods: isP ? modsFor(team, getTeamParts(team.id)) : null,
+        mods: isP ? modsFor(team, getTeamParts(team.id), SetupTune.mods(team.id)) : null,
         // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
         // MY TEAM + hire share the saved build; everyone else uses factory.
         aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, SetupTune.aero(team.id)) : Parts.aeroLoad(factoryParts.setup, team),
@@ -1775,11 +1780,24 @@ function makeCars() {
 // result still grids the Grand Prix; a friend race's rule is the host's (lobby
 // SETTINGS `grid`).
 function gridOrderFor(base) {
-  const rule = isTimeTrial() ? "tier" : (isChampionship() && SeasonCal.quali()) ? "quali" : raceGrid;
+  // RANDOM CANNOT BE DECIDED LOCALLY IN A ROOM. netplay's grid is
+  // negotiation-free precisely because gridUp() runs identically on every peer
+  // (js/net/netplay.js separateGrid) — but no seed crosses the wire, so each
+  // peer would roll its own order and lay the humans into different boxes.
+  // Fall back to the pace order every peer already agrees on.
+  const rule0 = isTimeTrial() ? "tier" : (isChampionship() && SeasonCal.quali()) ? "quali" : raceGrid;
+  const rule = (rule0 === "random" && netPlay.active()) ? "tier" : rule0;
   if (rule === "rev10" && base && base.length === cars.length) {
     return base.slice(0, 10).reverse().concat(base.slice(10));
   }
   if (rule === "revchamp" && isChampionship() && season && !base) {
+    // SPEND THE JITTER ANYWAY. gridUp() draws one simRnd() per car when it
+    // builds its own order, so a rule that returns a full order without
+    // drawing leaves every later consumer (the AI overtake fire, the start
+    // hold) reading a different point in the stream than the same seed would
+    // have reached under PACE ORDER. Draw and discard: same count, same
+    // position, order decided by the standings.
+    for (let i = 0; i < cars.length; i++) simRnd();
     return cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId)).reverse();
   }
   if (rule === "random" && !base) {
@@ -1795,6 +1813,8 @@ function gridOrderFor(base) {
 // behind (prog is cumulative). A race already at its flag stands as it is.
 // Not modelled: the wet-race rolling restart, the pit-lane wait; a networked
 // race never goes red (RaceControl holds a safety car instead).
+// STREAM: the restart re-runs the countdown, so it draws one extra simRnd()
+// for the new startHold. Deliberate — the lights are a real second start.
 function redFlagRestart() {
   if (state !== "race" || !track || cars.some((c) => c.finished)) return false;
   IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
@@ -1807,7 +1827,12 @@ function redFlagRestart() {
     c.px = w.x; c.pz = w.z; c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c._prevS = c.s;
     // The box sits BEHIND the line on the lap the car is on — the same prog
     // the opening grid uses (lap 0 → negative) — so the next crossing counts.
+    // Bank what the teleport gave (or took): prog must follow the car to the
+    // grid box, but no car DROVE that distance, and checkRetirements measures
+    // the reliability draw against prog / (laps × length).
+    const progWas = c.prog;
     c.prog = c.lap * L - (L - c.s);
+    c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
     c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wheelLock = 0;
@@ -1850,7 +1875,7 @@ function gridUp(preOrder) {
       c.rPrevS = c.s; c.rPrevX = c.x;
     }
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
-    c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1;
+    c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
@@ -2743,7 +2768,14 @@ async function startRace() {
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
   raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
-  weatherArc = null; _wxBase = null;   // a leaked arc must not become this race's weather (startChangeable re-arms below)
+  // Restore the CHIP's pick before re-arming — pm-restart re-enters startRace
+  // from inside a running race, so a half-walked arc would otherwise become
+  // the new race's starting weather AND get written back as the player's
+  // standing choice. NOT endChangeable(): that also drops wxArcPlan, and a
+  // host's plan for THIS race is set before startRace runs.
+  if (_wxBase != null && raceWeather !== _wxBase) raceWeather = _wxBase;
+  _wxBase = null;
+  weatherArc = null;   // a leaked arc must not become this race's weather (startChangeable re-arms below)
   // …and the debris side-world. prime() below only REBUILDS when the track or
   // car count changed, so a restart on the same circuit kept last race's
   // shards, marbles and knocked-over cones — visible on the grid, and
@@ -3624,6 +3656,10 @@ function startChangeable() {
 function endChangeable() {
   if (_wxBase != null && raceWeather !== _wxBase) raceWeather = _wxBase;   // the chip's pick, not where the arc ended
   _wxBase = null;
+  // The plan is the HOST's for the duration of one networked race. Keeping it
+  // afterwards made a guest's later SOLO changeable races replay that host's
+  // {to, dur} instead of deriving their own from the seed.
+  if (!netPlay.active()) wxArcPlan = null;
 }
 const _WX_LADDER = ["dry", "wet", "rain"];
 const _WX_VALID = ["dry", "wet", "rain", "overcast", "fog"];
@@ -4367,13 +4403,21 @@ function updateCar(c, dt, ranked) {
     // (AiDrive.towGain), same lateral fade. The AI gate it on their curvature
     // lookahead (kMax); the player's gate is DRIVER state — not braking, wheel
     // near straight — because nothing derived from the arc may reach the
-    // driver (docs/PHYSICS.md). SURFACE column: it reads car positions only.
+    // driver (docs/PHYSICS.md). It reads car positions and nothing else, so it
+    // has no curvature site to classify and belongs OUTSIDE that table — not in
+    // its "surface" column, which means road geometry. One asymmetry worth
+    // knowing: with DRIVING HELP non-zero the assist supplies lock the driver
+    // does not, so an assisted car can hold the wheel near centre through a
+    // corner and stay inside this gate where an unassisted one could not.
     c.towing = 0;
     if (!braking && Math.abs(c.steerVis || 0) < 0.12 && track) {
       let tc = null, tg = Infinity; const L = track.total;
       for (let i = 0; i < ranked.length; i++) {
         const o = ranked[i];
-        if (o === c || o.finished) continue;
+        // …and never a RETIRED car: retireCar parks it about 5 m off line,
+        // inside this |dx| < 4 window on a narrow circuit, and a stationary
+        // wreck does not punch a hole in the air.
+        if (o === c || o.finished || o.retired) continue;
         let dprog = o.prog - c.prog;
         if (!Number.isFinite(dprog)) continue;
         const ad = dprog < 0 ? -dprog : dprog;
@@ -4923,7 +4967,14 @@ function updateCar(c, dt, ranked) {
     // brakeBias and read BB_REF. Throttle and coast are unsplit.
     // Bit-identical when the split is off: muBase keeps slipFactor and the
     // per-axle factors are exactly 1 (the characterization spec pins this).
-    const bbOn = braking && (c.axEstSm ?? 0) < 0 && c.brakeBias != null && c.brakeBias !== SetupTune.BB_REF;
+    // Gated on the SMOOTHED longitudinal accel alone, never on `braking`.
+    // `braking` flips in one frame while axEstSm is damped at rate 10 (see the
+    // weight-transfer note above), so releasing the pedal used to swap the
+    // per-axle split for the shared one in a single tick — a step of several
+    // points of front grip at a forward bias, exactly the discontinuity the
+    // damping exists to avoid. Off-throttle coasting has axEstSm < 0 too and
+    // is served by the same split, which is what a real bias does.
+    const bbOn = (c.axEstSm ?? 0) < 0 && c.brakeBias != null && c.brakeBias !== SetupTune.BB_REF;
     const bb = bbOn ? SetupTune.bbScales(c.brakeBias) : null;
     // (bbSlip*, not slipF/slipR — those names are the axles' SLIP ANGLES below.)
     const afF = bb ? Math.min(1, axFrac * bb.f) : 0, afR = bb ? Math.min(1, axFrac * bb.r) : 0;
@@ -5249,6 +5300,7 @@ function updateCar(c, dt, ranked) {
     c.exhaustPop = lifted ? 1 : Math.max(0, (c.exhaustPop || 0) - dt * 5);
     c.wasOnThrottle = !!thr;
   }
+  if (c.retired || c.finished) c.towing = 0;   // the cue is about driving; both exits skip the block that clears it
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
 
@@ -5375,6 +5427,7 @@ function updateCar(c, dt, ranked) {
     }
     c.incidentInvalidLap = false;   // the new lap starts clean
     c.lapTime = 0;
+    c._secT0 = 0;   // …and the FIELD's S1 reference, or it measures across the reset
     if (c.isPlayer) { sectorIdx = 0; sectorStartT = 0; }
     // Never on a 1-lap session: that crossing is the START crossing, and a qualifying flying lap is not a final lap.
     if (c.isPlayer && c.lap === lapsTarget && lapsTarget > 1) announce("FINAL LAP", 1.6);
@@ -5586,7 +5639,7 @@ function checkRetirements() {
     // dnfAt (netPlay.start() re-roles it afterwards) — never park a car
     // another person is driving.
     if (netPlay.owns(c)) continue;
-    if (c.prog / dist >= c.dnfAt) retireCar(c, c.dnfWhy);
+    if ((c.prog - (c._progGift || 0)) / dist >= c.dnfAt) retireCar(c, c.dnfWhy);
   }
 }
 
@@ -5731,13 +5784,14 @@ let setupPreviewOn = false, setupPreviewAz = 0.6;
 // back around. az/el/dist are now a real orbit the player drives (drag on the
 // canvas, wheel/pinch to zoom, preset chips in #cs-view), and SPIN is a toggle
 // over the top of it rather than the whole interaction.
-// Defaults reproduce the previous framing exactly: eye y 2.0 at dist 8.5 over a
-// target at y 0.35 is an elevation of atan2(1.65, 8.5).
-const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.5;
+// Defaults reproduce the previous framing: eye y 2.0 at dist 8.35 over a
+// target at y 0.35 is an elevation of atan2(1.65, 8.5) — el unchanged, a hair
+// closer after the WGX garage fix shipped.
+const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.35;
 // Half the car's BROADSIDE footprint (~5.95 m drawn) plus ~5% margin.
-// Was 3.35 (~12%): honest WGX off-axis projection left the auto turntable
-// ~7% farther than the 8.5 m default at desktop viewports (1440x900 ~8.5 m).
-const SP_FIT_HALF_W = 3.15;
+// Was 3.35 (~12%), then 3.15 after honest WGX off-axis projection. 3.10 is a
+// hair closer on desktop after the view-matrix fix landed (1440x900 ~8.40 m).
+const SP_FIT_HALF_W = 3.10;
 // How far the AUTOMATIC turntable may back off. Deliberately under the MANUAL
 // zoom ceiling SP_DIST_MAX: a player who zooms out that far asked for the wide
 // shot, whereas the auto fit reaching it means the fit diverged. garage-scene.js
@@ -5765,7 +5819,7 @@ const SP_EL_MIN = 0, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
 // does not. SIDE and TOP get the extra pull-back their aspect actually needs
 // rather than one nominal distance that crops the nose off two of the five.
 const SP_VIEWS = {
-  hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.5 },   // rear three-quarter
+  hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.35 },   // rear three-quarter
   front: { az: 0,              el: 0.20, dist: 8.2 },
   side:  { az: Math.PI * 0.5,  el: 0.10, dist: 11.2 },
   rear:  { az: Math.PI,        el: 0.22, dist: 8.4 },

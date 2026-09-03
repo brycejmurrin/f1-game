@@ -97,6 +97,13 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   }
 });
 
+test("buttons-mode modifier taps ride the hold rung like pedals and steer", () => {
+  const ov = css("css/overlays.css");
+  assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps .touchbtn", "width"), "var(--hold)");
+  assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps .touchbtn", "height"), "var(--hold)");
+  assert.equal(decl(ov, "body.steer-buttons:not(.desktop) #grp-taps", "padding-bottom"), "calc(var(--gap) * 7 / 6)");
+});
+
 /* ── the dock at 390px tall ──────────────────────────────────────────────── */
 
 test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, and fitHud's cap is wired as the net", () => {
@@ -113,17 +120,24 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   const held = ruleFor(ov, /^body:not\(\.desktop\) #grp-pedals,/, "padding-bottom");
   assert.equal(held.decls.get("padding-bottom"), "calc(var(--gap) * 7 / 6)");
   const dockGap = gap * 2 / 3, heldPad = gap * 7 / 6;
-  const taps = 3 * tap + 2 * dockGap;                 // BOOST / OT / AERO, a 3-high column, no pad
-  const pedals = 2 * hold + dockGap + heldPad;        // BRAKE over GAS, padded up from the edge
-  const tallest = Math.max(taps, pedals);
+  const tapsTilt = 3 * tap + 2 * dockGap;                 // BOOST / OT / AERO, tilt/manual: small tap rung
+  const pedals = 2 * hold + dockGap + heldPad;            // BRAKE over GAS, padded up from the edge
+  const tallestTilt = Math.max(tapsTilt, pedals);
+  const tapsButtons = 3 * hold + 2 * dockGap + heldPad;   // buttons mode: modifiers match hold size
+  const tallestButtons = Math.max(tapsButtons, pedals);
   // The bar sits 10px + the home-indicator inset (21px on a notched iPhone) up.
   const hudDock = ruleFor(ov, "#hud-dock", "bottom");
   assert.match(hudDock.decls.get("bottom"), /^calc\(10px \+ var\(--sab\)\)$/);
   const H = 390, SAB = 21;
   for (const scale of [1, 1.5, 2]) {
-    const painted = tallest * scale;
+    const painted = tallestTilt * scale;
     assert.ok(painted + 10 + SAB <= H,
-      `HUD SIZE ${scale * 100}%: tallest column ${painted.toFixed(0)}px + ${10 + SAB}px stays inside ${H}px`);
+      `tilt/manual HUD SIZE ${scale * 100}%: tallest column ${painted.toFixed(0)}px + ${10 + SAB}px stays inside ${H}px`);
+  }
+  for (const scale of [1, 1.5]) {
+    const painted = tallestButtons * scale;
+    assert.ok(painted + 10 + SAB <= H,
+      `buttons HUD SIZE ${scale * 100}%: tallest column ${painted.toFixed(0)}px + ${10 + SAB}px stays inside ${H}px`);
   }
   // fitHud's cap: (innerHeight - 3 * FIT_AIR) / intrinsic height, written as --hud-z-dock.
   const hud = read("js/ui/hud.js");
@@ -131,8 +145,11 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   assert.ok(air > 0, "hud.js declares FIT_AIR");
   assert.match(hud, /set\("--hud-z-dock", capDock\)/, "fitHud writes --hud-z-dock");
   assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, var(--hud-scale))", "the dock zooms by the capped value, slider as fallback");
-  const cap = (H - 3 * air) / tallest;
-  assert.ok(cap >= 2, `the cap (${cap.toFixed(2)}) only bites past 200 % on 390px — the raw slider fits every setting`);
+  const capTilt = (H - 3 * air) / tallestTilt;
+  assert.ok(capTilt >= 2, `tilt/manual cap (${capTilt.toFixed(2)}) only bites past 200 % on 390px — the raw slider fits every setting`);
+  const capButtons = (H - 3 * air) / tallestButtons;
+  assert.ok(capButtons < 2 && capButtons >= 1.5,
+    `buttons cap (${capButtons.toFixed(2)}) bites before 200 % — fitHud must shrink the dock at max HUD SIZE`);
   // NOT asserted, recorded: the corner clusters are outside that budget. At
   // 200 % the pedal column's top edge is at y = 390 - 31 - pedals*2 ≈ 23px,
   // level with #pausebtn (8..60) and #minimap (8..~124) — see the header.

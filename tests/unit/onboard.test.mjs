@@ -32,8 +32,9 @@ function load(opts = {}) {
   const O = vm.runInContext("Onboard", ctx);
   const G = {
     state: "race",
-    player: { s: 0, otArmed: false, otT: 0, xOn: false, xArmed: !!opts.aeroArmed },
+    player: { s: 0, otArmed: false, otT: 0, xOn: false, aeroX: 0, xArmed: !!opts.aeroArmed },
     announceBusy: false,
+    raceT: 0,
     raceAeroMode: opts.aeroMode || "manual",
     aeroZoneAhead: () => (opts.aeroAhead != null ? opts.aeroAhead : -1),
     announce: (m, d) => said.push([m, d]),
@@ -125,11 +126,27 @@ test("the aero mark waits for the ARM, and never fires in auto mode", () => {
   step(auto.on, 60);
   assert.deepEqual(auto.said, [], "auto mode: the player has no control to be taught");
 
-  // Already open is not a teaching moment either.
+  // Already open is not a teaching moment either — and it is the FLAP's travel
+  // that says so, not the xOn switch (docs/PHYSICS.md's flat rule).
   const open = load({ aeroArmed: true });
-  open.G.player.xOn = true;
+  open.G.player.aeroX = 0.5;
   step(open.on, 60);
   assert.deepEqual(open.said, [], "the wing is already open");
+});
+
+test("a red-flag standing restart does not burn one of the two races", () => {
+  // A restart runs count -> race just like a real start. Telling them apart is
+  // the race clock: a genuine start is at zero, a restart resumes the clock the
+  // flag stopped. Without this a red-flagged race spent both allowances before
+  // the player had seen a single mark.
+  const { on, G } = load({ urgency: 0.9 });
+  step(on, 1);
+  assert.equal(on.state().races, 0, "the first start is counted on its NEXT lights-out");
+  G.state = "count"; on.tick(1 / 60); G.state = "race"; on.tick(1 / 60);
+  assert.equal(on.state().races, 1, "a genuine start at raceT 0 counts");
+  G.raceT = 42;                       // the flag stopped a race already running
+  G.state = "count"; on.tick(1 / 60); G.state = "race"; on.tick(1 / 60);
+  assert.equal(on.state().races, 1, "the standing restart must NOT count");
 });
 
 test("it stops after two races even with a mark unseen, and reset() puts it back", () => {

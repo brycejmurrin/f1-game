@@ -133,6 +133,15 @@ on the 08-18 perf-hunt board, not this register.
   hud-layout coverage is closed (`HUD_LANDSCAPE_ONLY` checks `.hud-top`,
   `.hud-gaps`, `#minimap`, `#hud-sectors`); portrait overlap stays excluded
   behind `#rotate-device`.
+  **2026-09-03 — that "closed" was wrong, and it cost a shipped defect.**
+  Naming those four selectors only ever bought HUD-vs-BUTTON pairs: the
+  collision loop compared `hb × vis` and never `hb × hb`, and `unsafe` filtered
+  `vis` alone, so two HUD clusters overlapping each other — or overrunning the
+  notch — could not fail the spec. `.hud-gaps` painting over `.hud-top` on a
+  notched landscape phone is exactly that case, reported from a real device.
+  `fitHud`'s cap had never carried a `--sal`/`--sar` term either, so the
+  measurement it was checked against was short by the whole inset. Both are
+  fixed; the spec now runs `hb × hb` and includes the HUD boxes in `unsafe`.
 - **A13 zoom/rect sites — closed.** `js/ui/css-zoom.js` (`CssZoom`) is the
   shared helper: `viewportRect` / `localBox` / `toLocalDelta` (+ a one-shot
   `rectsAreVisual` probe). Call sites: garage lens shift (`game.js`
