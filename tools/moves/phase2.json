@@ -1,5 +1,5 @@
 {
-  "_doc": "Phase 2b move map (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2). Applied by `node tools/move-tree.mjs tools/moves/phase2.json` in the move window, one target directory per commit (split this file per commit or pass a filtered copy). DRAFT: entries for files that exist at 2a49eba; the Phase 2a split outputs (lighting-knobs/track-lights/frame-lights, renderer-picker, quali-sheet, scenery data survivors), the generated js/roster.js (gen-shell writes it \u2014 change the generator, not this map), the WGX/TLX spike-out (whole directories, scripted in the window) and js/track/scenery-data.js (may not survive the fold-in) are added after the 2a branches merge.",
+  "_doc": "Phase 2b move map (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2). Applied by `node tools/move-tree.mjs tools/moves/phase2.json` in the move window, one target directory per commit (pass a filtered copy per commit). Covers every file on the tree after the Phase 2a splits merged (2026-09-03). Not in the map, handled in the window by hand: the generated js/roster.js (change gen-shell's output path, not this map) and the WGX/TLX spike-out (whole directories: js/render/webgpu, js/render/three, vendor/three-*).",
   "moves": {
     "js/log.js": "js/core/log.js",
     "js/mat4.js": "js/core/mat4.js",
@@ -83,6 +83,14 @@
     "js/track/models.js": "js/track/scenery/models.js",
     "js/track/themes.js": "js/track/scenery/themes.js",
     "js/track/circuit-kit.js": "js/track/scenery/circuit-kit.js",
-    "js/track/landmark-kit.js": "js/track/scenery/landmark-kit.js"
+    "js/track/landmark-kit.js": "js/track/scenery/landmark-kit.js",
+    "js/game/lighting-knobs.js": "js/lighting/knobs.js",
+    "js/game/track-lights.js": "js/lighting/track-lights.js",
+    "js/game/frame-lights.js": "js/lighting/frame-lights.js",
+    "js/game/lighting.js": "js/lighting/lighting.js",
+    "js/game/renderer-picker.js": "js/perf/renderer-picker.js",
+    "js/game/quali.js": "js/race/quali-model.js",
+    "js/game/quali-sheet.js": "js/ui/quali-sheet.js",
+    "js/track/scenery-data.js": "js/track/scenery/data.js"
   }
 }

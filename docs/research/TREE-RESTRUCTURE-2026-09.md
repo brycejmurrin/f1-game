@@ -144,17 +144,20 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
      `gMembers` + `topLets` (game.js); one slack rule max(60, 4 %); history →
      `docs/notes/CEILING-HISTORY.md`; 20-file reference sweep incl. AGENTS.md,
      deploy.mjs + check-changes `deploy.md` merge rule, the guard pins.
-- [ ] **Phase 2a — splits PR** (own commit; deployed ⚑ and merged BEFORE any
-      move, so rename detection survives): tables.js → consumers; lighting.js
-      → knobs / track-lights / frame-lights; gfx-quality.js → preset vs
-      renderer picker; quali.js → model vs sheet; photomode lt-* → tuner-panel;
-      cockpit-opts IIFE 2 + metrics-panel-style → metrics; six files' direct
-      `localStorage` writes → store; `segs` deleted from 24 defs; geo-paths /
-      markings / four id-keyed scenery-data tables folded into each
-      `js/circuits/<id>.js` (gated by `track-verts --diff` exact +
-      `graph-parity --all`); maps.js → UI. Verification: tooling-fast,
-      `verify-track --all` (bg), `test:game-vm`, then `test-bg tiny` once and
-      `ci.yml group: circuits` (two browser groups).
+- [~] **Phase 2a — splits** merged on the session branch 2026-09-03 from four
+      parallel worktree branches: lighting `e345cdd` (lighting.js → knobs /
+      track-lights / frame-lights behind a 16-line façade; the lt-* handlers
+      → tuner), quali-store `8349abf` (quali model + quali-sheet; six modules'
+      localStorage → GameStore's raw lane; store.js precedes js/game in FULL),
+      options `9beb902` (renderer-picker out of gfx-quality; cockpit-opts'
+      second IIFE + metrics-panel-style → metrics; tables.js → its owners,
+      deleted), circuits `26877e9` (geo-paths, markings and FIVE id-keyed
+      scenery tables folded into each def; `segs` deleted from 24 defs;
+      `realPoints` throws on a path-less def; verts byte-identical,
+      graph-parity 40/40 exact). Union: tooling-fast 137/137; game-vm /
+      verify-track --all / state-unit, then one `test-bg tiny` and `ci.yml
+      group: circuits`, then the deploy ⚑ — recorded here when done.
+      `tools/moves/phase2.json` maps 91 files for 2b.
 - [ ] **Phase 2b — the move window** ⚑ (≤ 1 h, one commit per target dir,
       each with a scripted path sweep over docs/skills/tests/tools; squashed
       names renamed in the same commit; `manifest.cjs` `MOVED` map for one
