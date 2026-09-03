@@ -663,6 +663,20 @@ Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
    layout). Fast-math NaN folding, float-backed `depth24plus` bias scale
    and the mip/view validation of `DataArrayTexture` are the plausible tail.
 
+5. **WebKit caps the PRIVATE address space at 8,192 bytes per module.**
+   Found 2026-09-03 the hour the listener above went live: every lit
+   pipeline on the owner's iPhone failed with "The combined byte size of all
+   variables in the private address space exceeds 8192 bytes" — three r185
+   declares every node variable as a module-scope `var<private>` and the
+   lit fragment had 1,597 of them (~12.4 KB natural size; 1,256 were the
+   vec2 temporaries of the inlined noise helpers). Dawn does not check the
+   sum. Two fixes, both required: `tsl-chunks.js` gives `hash21`/`vnoise`/
+   `ignoise` a `setLayout` so they compile once as real functions, and
+   vendor PATCHES.md §4 makes three emit render-stage node variables inside
+   `main()` (function scope, uncounted). WGX is not exposed: hand-written
+   WGSL keeps its temporaries in function scope already — keep it so, and
+   never introduce `var<private>` arrays.
+
 Breaking either does not throw at the call site: WGX's boot self-test fails,
 the backend refuses, and the game falls back to GLX with one console warning —
 which is why `node tools/wgx-validate.mjs` (real Dawn WGSL + pipeline

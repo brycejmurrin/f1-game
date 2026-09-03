@@ -1965,3 +1965,40 @@ back to GLX without a word. `--lax-uniformity` restores Dawn's default to
 bisect a red run. The tree passed on the first run (montreal, 90 frames,
 `gpuErrors 0`, `wgslParseErrors 0`).
 
+### 2026-09-03 — `image-grade-visual` is threshold-marginal on a real GPU
+
+`ci.yml` run 33762205584 (dispatch, `renderer_macos: true`, tip 905ad6c): the
+Metal renderer job failed ONE spec — `image-grade-visual.spec.js › highlights
+predominantly change bright pixels`, bright/dark delta ratio 1.86 against the
+required 2.0 — and `blacks visibly change the deepest image detail` passed
+only on retry (first attempt moved the deepest pixels the wrong way). The
+single allowed re-run was green on the same commit, and the local GLX frame
+on the same tree rendered normally, so this is a flake, not a regression.
+Mechanism: the spec compares two full-page screenshots of a `park()`-frozen
+race, but the render clock keeps advancing between captures (cloud drift,
+sky), and on a 60 fps GPU the two captures are more frames apart than on
+SwiftShader. `__apex.renderClock(t)` exists to pin that and the spec does not
+call it — pin it before each capture pair when this spec is next touched.
+
+### 2026-09-03 — the iPhone's three-WebGPU failure, measured on Dawn before and after
+
+The phone's metrics `log` tab named it: every lit pipeline refused with
+WebKit's "The combined byte size of all variables in the private address
+space exceeds 8192 bytes". The fix was verified here without a phone by
+dumping every WGSL module three generates (scratch `dump-wgsl.mjs`, Dawn on
+Lavapipe, iPhone UA, `artifacts/wgsl-dump-iphone` → `artifacts/wgsl-dump-2`):
+
+| | before | after |
+|---|---|---|
+| lit fragment size | 359 434 B | 99 204 B |
+| module-scope `var<private>` in the lit fragment | 1,597 (~12.4 KB) | 1 (`output`, 16 B) |
+| `vnoise` bodies in the lit fragment | inlined per call | 1 function, 106 calls |
+| Dawn `gpuErrors` / pipelines | 0 / 24 | 0 / 24 |
+
+Dawn compiles both, which is the point: this class of defect is invisible to
+every Chromium run and only a WebKit device or a private-variable count on
+the dump can see it. When a TSL change lands, re-dump and keep the module-scope
+private sum well under 8,192 bytes; the `gfx-backend-canary` pins the patch
+and the noise layouts. The phone is the confirmation step (THREE PATH:
+WEBGPU, one lap, GOV `gfx` row `err 0`).
+

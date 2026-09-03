@@ -2,10 +2,10 @@
 
 The island is otherwise byte-identical to the pristine npm `three@0.185.1`
 tarball (`build/three.{webgpu,core,tsl}.min.js` + `examples/jsm/tsl/display/
-BloomNode.js` → `addons/tsl/display/BloomNode.js`). All three patches below live in
+BloomNode.js` → `addons/tsl/display/BloomNode.js`). All four patches below live in
 `three.webgpu.min.js` only, and each is asserted by
 `tests/unit/gfx-backend-canary.test.mjs` — a vendor re-drop that silently
-reverts any one fails the guard suite, not production. Re-apply ALL THREE on any
+reverts any one fails the guard suite, not production. Re-apply ALL FOUR on any
 vendor bump, then re-run `npm run test:tlx` and the TLX WebGPU boot diag.
 
 ## 1. swizzle — Chromium 141 rejects the r185 texture-view descriptor
@@ -82,3 +82,47 @@ assign:  t.stencilWriteMask=s.stencilWriteMask,t.side=s.side
 ```
 
 Drop this patch on the first release that contains PR #34406 (r186+).
+
+## 4. WebKit's 8 KB private address space — node variables move into main()
+
+iOS/Safari 26 (WebKit WGSL compiler) refuses any module whose module-scope
+`var<private>` declarations sum past 8,192 bytes:
+
+```
+Render pipeline creation failed (renderPipeline_MeshBasicNodeMaterial_41):
+The combined byte size of all variables in the private address space exceeds 8192 bytes
+```
+
+r185's `WGSLNodeBuilder` emits EVERY node variable (`.toVar()`, property nodes,
+inlined `Fn` temporaries) as a module-scope `var<private>`, in the `// vars`
+block above `fn main`. Apex's lit fragment declared 1,597 of them (~12.4 KB
+natural size); the small sky shader stayed under the cap, so the owner's iPhone
+drew the sky and nothing else (2026-09-03), with zero GPU errors reported
+until the `uncapturederror` listener form landed. Dawn (Chromium) does not
+check the sum, so no software or Metal Chromium run ever saw it.
+
+The builder already has the function-scope form: `getVars(stage, false)`
+emits `var name : type;` with a tab indent, and the COMPUTE template places
+it inside `main()` when `allowGlobalVariables` is false. The render templates
+never did. Backport = make the render stages use the function-scope form and
+move the block into `main()` (3 minified sites):
+
+```
+call site:  s.vars=this.getVars(t,r),s.codes=            → s.vars=this.getVars(t,"compute"===t&&r),s.codes=
+vertex:     …varyings : VaryingsStruct;\n\n// vars\n${e.vars}\n\n// codes\n${e.codes}\n\n@vertex\nfn main( … ) -> VaryingsStruct {\n\n\t// flow
+            → …varyings : VaryingsStruct;\n\n// codes\n${e.codes}\n\n@vertex\nfn main( … ) -> VaryingsStruct {\n\n\t// vars\n\t${e.vars}\n\n\t// flow
+fragment:   // uniforms\n${e.uniforms}\n\n// vars\n${e.vars}\n\n// codes\n${e.codes}\n\n@fragment\nfn main( … ) -> ${e.returnType} {\n\n\t// flow
+            → // uniforms\n${e.uniforms}\n\n// codes\n${e.codes}\n\n@fragment\nfn main( … ) -> ${e.returnType} {\n\n\t// vars\n\t${e.vars}\n\n\t// flow
+```
+
+Safe for every shader this game generates: across the 37 dumped modules no
+helper `fn` (three's `tsl_*` layouted functions) reads a node variable — only
+`main` does (`artifacts/wgsl-dump-iphone`, checked 2026-09-03). A TSL graph
+that reads a `.toVar()` from inside a `setLayout` function would break under
+this patch; none of ours does, and `js/render/three/tsl-chunks.js` keeps the
+layouted noise helpers pure. `varyings`, `output` and `instanceIndex` stay
+`var<private>` (a few dozen bytes). Pair with the `setLayout` on the shared
+noise helpers (same commit) — that is what took the lit shader from 1,597
+node variables to a compilable size; this patch is what makes the remainder
+not count. Drop when upstream emits render-stage vars at function scope (no
+such change on `dev` as of 2026-09-03; worth filing).

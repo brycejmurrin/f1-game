@@ -101,8 +101,19 @@ word (full list and commits: `docs/research/WEBGPU-PARITY.md` §5a rule 4):
 | 4 | one validation failure kills the encoder for the rest of the pass | everything after the first bad draw missing, sky first so it survives | `tlxNoMrt` |
 | 5 | mat3 packing miscompile (three `normalMatrix` in the object struct) fixed upstream mid-2026 | materials using normals only | a `colorNode`-only material draws, a lit one does not |
 
-The ranking is the bisect order for the still-reachable WebGPU path; AUTO on
-WebKit stays on three's WebGL2 backend (works: `err 0`, 47 fps at tier 2).
+**Resolved the same day.** With the listener live the phone reported
+`err 1 · setPipeline: invalid RenderPipeline`, and the metrics `log` tab
+carried three's own line for every lit variant: `Render pipeline creation
+failed (renderPipeline_MeshBasicNodeMaterial_41): The combined byte size of
+all variables in the private address space exceeds 8192 bytes`. WebKit caps
+module-scope `var<private>` storage at 8 KB; three r185 emits every node
+variable that way and the lit fragment had 1,597 (the sky's 174 fit). Fix:
+layouted noise helpers in `tsl-chunks.js` (compile once, not inlined ~50×)
+plus vendor PATCHES.md §4 (node variables declared inside `main()`). None
+of the ranked mechanisms above was it; they stay as the bisect list for the
+NEXT silent drop. AUTO on WebKit stays on three's WebGL2 backend until the
+WebGPU path has a lap of phone evidence (`docs/research/WEBGPU-PARITY.md`
+§5a rule 5).
 
 ## Screenshots — why WebGPU can look black
 
