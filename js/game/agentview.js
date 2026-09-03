@@ -2035,7 +2035,7 @@ const AgentView = (function () {
             "IS ANYTHING BROKEN — floating/buried props, props over the line, "
             + "terrain through the road, holes and cliffs",
           "perf()":
-            "GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/userTier/strikes "
+            "GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes "
             + "(alias of renderScale report)",
         },
         act: {

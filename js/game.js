@@ -1406,7 +1406,14 @@ let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
 // Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
 // Props dominate the cost; freezing the map for a 12 m eye cell is the night twin
 // of the sun snap cache (cars already one-frame lag on AI mats).
-let _lampShBest = -1, _lampShSX = null, _lampShSZ = null;
+// LAMP SHADOW SNAP KEY — the map's CONTENT, not a proxy for it. The old key was
+// (slot into frame.lights, 12 m eye cell) and both halves were wrong: the slot
+// cannot see a lamp handover (lighting.js re-sorts that array every frame), and
+// the eye cell is not what the map depends on at all — the props cast is culled
+// to the LAMP's frustum, so the static half of this map is a pure function of
+// which lamp it is. What actually varies is the lamp and the CARS cast into it.
+let _lampShX = null, _lampShY = null, _lampShZ = null;   // the lamp, by world position (static fixture => exact match)
+let _lampShCarKey = 0;   // quantised positions of the cars in the map
 const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
 // ---------- parts / player mods ----------
@@ -2429,7 +2436,7 @@ function loadTrack(idx) {
   // silhouette until the camera moved a cell (~16 m).
   _shadowSnapX = _shadowSnapZ = _shadowBox = null;
   _shadowSunX = _shadowSunY = _shadowSunZ = null;
-  _lampShBest = -1; _lampShSX = _lampShSZ = null;
+  _lampShX = _lampShY = _lampShZ = null; _lampShCarKey = 0;
   // Buildings light up for the chosen SESSION time, not the track's default:
   // night/dusk/dawn (or a night-default track in "default") → lit windows. Props
   // are rebuilt when this flips so a day-default circuit raced at night gets a
@@ -5487,7 +5494,12 @@ function setLightTune(id, v) {
   // per-chunk path at night) a RISING EDGE from 0 to a positive value is the
   // player choosing to switch it back on — informed, one gesture at a time — so
   // it is the honest reset. The tier gate still protects a governed device.
-  if (id === "perChunkLights" && +v > 0 && !(+LT[id] > 0) && _perChunkOff) {
+  // EITHER chunk knob, because js/game/tuner.js gateNote() shows the "set to 0
+  // and back on to retry" note on BOTH (its isChunk covers roadChunkLamps too).
+  // Keyed on perChunkLights alone, a player who read that note on PER-CHUNK
+  // ROAD and did exactly what it said cleared nothing, and the slider stayed
+  // silently dead — the instruction only worked on the OTHER control.
+  if ((id === "perChunkLights" || id === "roadChunkLamps") && +v > 0 && !(+LT[id] > 0) && _perChunkOff) {
     _perChunkOff = false;
     try { localStorage.removeItem("apex26.perChunkOff"); } catch (_) { /* no storage: the in-memory clear stands for this session */ }
   }
@@ -6036,15 +6048,14 @@ function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
     // index drop); the cull-only path keeps chunking through tier 2 so
     // SSR/shadow sheds do not re-fuse the road.
     //
-    // THE LAMP CLAUSE USES autoTier(), AND IT MUST. With tier() it was DEAD
+    // THE LAMP CLAUSE USES autoShed(), AND IT MUST. With tier() it was DEAD
     // CODE — `(A && tier()<1) || (tier()<3)` is identically `tier()<3` — so
-    // PER-CHUNK ROAD did nothing on GRAPHICS: LOW however the slider was set,
-    // while tuner.js's held-off note (autoTier) and the slider help ("available
-    // at every GRAPHICS preset") both said otherwise. The scenery half below
-    // was moved to autoTier() for exactly this reason and left this line
-    // behind. Truth table and the three-way disagreement: the guard in
-    // tests/unit/track-foundation.test.mjs.
-    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.autoTier() < 1)
+    // PER-CHUNK ROAD did nothing on LOW however the slider was set. autoTier()
+    // fixed that and carried the same bug: it reads _perfTier, which ABSORBS
+    // the preset floor on the first step and is never restored below it, so one
+    // shed on MEDIUM held these lamps off for the session. autoShed() is the
+    // measured shed alone (perf.js `_autoShed`).
+    const _wantRoadChunk = gfx.chunkedTrackCoords !== false && ((LT.roadChunkLamps && LT.perChunkLights && gfx.hasPerChunkLights && !_perChunkOff && PerfGov.autoShed() < 1)
       || (PerfGov.tier() < 3));
     if (_wantRoadChunk) {
       if (track.meshes.roadChunked === undefined) {
@@ -6852,12 +6863,13 @@ function render(dt) {
     // Resolved BEFORE setFrameLights: it builds the scaled full set for the
     // per-chunk path and needs these already on the frame (they are cleared
     // above, so reading them earlier always saw 0).
-    // ADAPTIVE: autoTier() is the crash floor + the governor's MEASURED shed
-    // WITHOUT the GRAPHICS user floor (perf.js), so LOW no longer disables this
-    // while a device missing frames still sheds it. The old tier()>=1 rested on
-    // one un-reproduced scare at knob 1 — the shipped 0.3 measured 18.6%/23.5%
-    // FASTER (docs/PERF-FINDINGS.md §R5) and locked out MEDIUM, every phone.
-    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.autoTier() >= 1) ? 0 : (+LT.perChunkLights || 0);
+    // ADAPTIVE: autoShed() is the crash floor + the governor's MEASURED shed
+    // WITHOUT the GRAPHICS user floor (perf.js `_autoShed`), so LOW no longer
+    // disables this while a device missing frames still sheds it. The old
+    // tier()>=1 rested on one un-reproduced scare at knob 1 — the shipped 0.3
+    // measured 18.6%/23.5% FASTER (docs/PERF-FINDINGS.md §R5) and locked out
+    // MEDIUM. autoTier() was the first fix and leaked the preset back in.
+    frame.perChunkLights = (!gfx.hasPerChunkLights || _perChunkOff || PerfGov.autoShed() >= 1) ? 0 : (+LT.perChunkLights || 0);
     frame.roadChunkLamps = (frame.perChunkLights > 0 && LT.roadChunkLamps) ? 1 : 0;
     setFrameLights(camEye, _floodRGB, _lightFwd);
     // PER-CHUNK LAMPS (experimental): hand the renderer the FULL baked lamp list
@@ -6968,34 +6980,67 @@ function render(dt) {
       if (flBest >= 0) {
         const o = flBest * 15;
         const rad = L[o + 6];
-        // Snap: 12 m eye cell + same flood index → keep previous lamp map
-        // (props are static for that cell; AI cars already one-frame lag).
-        const _lsx = Math.round(camEye[0] / 12), _lsz = Math.round(camEye[2] / 12);
-        // NO lampShadowKeep() HERE, unlike the car pass above — it shipped for
-        // three hours and came back out. The missing lamp shadow on these
-        // branches is real, but arming the flag is worse than missing it:
-        //   1. THIS TEST COMPARES SLOTS, NOT LAMPS. _lampShBest is a remembered
-        //      index into frame.lights, which lighting.js re-sorts by distance
-        //      every frame and rebuilds on 0.5 m of eye motion — ~24× inside one
-        //      12 m cell. A handover that lands on the same slot keeps this test
-        //      true while the bound map and its VP belong to the PREVIOUS lamp:
-        //      a floodlight shadow and god-ray shaft from the wrong mast.
-        //      Re-stating the index makes it worse, not safer. Keying the snap
-        //      on lamp identity (world position) is the precondition.
-        //   2. THE LAMP MAP RASTERISES CARS (below), and this gate knows nothing
-        //      about car motion — a kept map paints a car shadow up to a cell
-        //      stale. Unarmed, that map is merely unread.
-        if (flBest === _lampShBest && _lsx === _lampShSX && _lsz === _lampShSZ) {
-          // Map from last rebuild still bound; skip the 512² props pass.
-        } else if ((_frameNo & 1) !== 0 && flBest === _lampShBest) {
-          // Defer a cell-only rebuild one frame — props are static; the prior
-          // map stays valid while the eye crosses a 12 m snap cell.
+        // WHAT THIS MAP CONTAINS: the props (chunked + instanced), culled to the
+        // LAMP's frustum, plus every car within rad + 8 of the lamp. So it is a
+        // function of exactly two things — WHICH LAMP, and WHERE THOSE CARS ARE.
+        // Key on both and the map is always either provably current (keep it,
+        // and SAY so, or the lit pass reads a false 0) or provably stale
+        // (rebuild). The key it replaces was (slot, 12 m eye cell) and neither
+        // term was the content: the slot indexes an array lighting.js re-sorts
+        // every frame, so a lamp handover onto the same slot read as "no
+        // change" and bound one lamp's depth under another's VP; and the eye
+        // cell is not an input to this map at all — the props cull uses the
+        // lamp frustum, not the camera's. The old pair let the flag sit false on
+        // every frame but the rebuild, which is the floodlight strobe (~1 armed
+        // frame in 14 once the car is moving) and the shadow that never came
+        // back at all for a player parked under a flood.
+        const _lx = L[o], _ly = L[o + 1], _lz = L[o + 2];
+        // Lamp fixtures are STATIC and their coordinates are copied, not
+        // recomputed, so exact equality is the identity test — no epsilon, and
+        // no way for two distinct lamps to collide on it.
+        const _sameLamp = _lx === _lampShX && _ly === _lampShY && _lz === _lampShZ;
+        // Same bound the cast loop below uses, hoisted so the key is computed
+        // from exactly the set that gets rasterised — a key over a different set
+        // than the content is how this class of cache goes wrong.
+        const _lsR = rad + 8, _lsR2 = _lsR * _lsR;
+        // Quantised at 0.25 m: finer than a shadow edge is worth rebuilding for,
+        // coarser than the physics jitter of a stationary car. A parked field
+        // therefore holds one key indefinitely and costs no rebuilds at all,
+        // which is strictly cheaper than the 12 m cell it replaces.
+        let _carKey = 0;
+        if (_hasLivePlayerShadow && player && player.px) {
+          _carKey = ((Math.round(player.px[0] * 4) * 31 + Math.round(player.px[2] * 4)) * 31 + 1) | 0;
+        }
+        for (let i = 0; i < _shadowCount; i++) {
+          const _cm = _shadowMats[i];
+          if (_shadowCars[i] === player) continue;
+          const _cdx = _cm[12] - _lx, _cdy = _cm[13] - _ly, _cdz = _cm[14] - _lz;
+          if (_cdx * _cdx + _cdy * _cdy + _cdz * _cdz > _lsR2) continue;
+          _carKey = ((_carKey * 31 + Math.round(_cm[12] * 4)) * 31 + Math.round(_cm[14] * 4)) | 0;
+        }
+        // The player is cast into this map unconditionally, so while driving the
+        // car half of the key changes every frame and a pure content key would
+        // rebuild at 60 Hz where the old cell key rebuilt at ~5. Bound it: a
+        // CAR-ONLY change may be deferred one frame at tier >= 1, which is the
+        // one-frame lag this file already takes for AI casters in the sun pass
+        // and is invisible at any speed a shadow is legible at. A LAMP change
+        // never defers — that is the wrong-lamp bug, not a lag.
+        //
+        // THIS DEFER ACTUALLY SAVES, unlike the sun pass's (removed) one. There
+        // the keys were written inside the rebuild, so a deferred trigger was
+        // still true next frame and the same rebuild just happened one frame
+        // later — N triggers, N rebuilds. Here the deferred frame ARMS via the
+        // keep and skips the pass outright, so 60 content changes cost 30
+        // rebuilds. The difference is whether the skipped frame does the work.
+        const _carOnly = _sameLamp && _carKey !== _lampShCarKey;
+        if ((_sameLamp && _carKey === _lampShCarKey) ||
+            (_carOnly && PerfGov.tier() >= 1 && (_frameNo & 1) === 1)) {
+          // Provably current, or one frame behind on car positions only. Skip
+          // the pass and ARM: a cadence skip is not a stop, and only this side
+          // knows which it is — the renderer clears the flag every present().
+          if (gfx.lampShadowKeep) gfx.lampShadowKeep(flBest);
         } else {
-        _lampShBest = flBest; _lampShSX = _lsx; _lampShSZ = _lsz;
-        // Perspective frustum down the beam: fov spans the OUTER cone (plus
-        // margin for the soft skirt), capped where 512² texel density and
-        // perspective-depth precision still hold up; far = the lamp radius
-        // (nothing beyond it receives this light anyway).
+        _lampShX = _lx; _lampShY = _ly; _lampShZ = _lz; _lampShCarKey = _carKey;
         const fov = Math.min(2.6, 2 * Math.acos(clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
         const up = Math.abs(L[o + 8]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
         M4.lookAtTo(_mFlView, [L[o], L[o + 1], L[o + 2]],
@@ -7024,7 +7069,8 @@ function render(dt) {
         // caster beyond rad occludes only fragments that already receive zero
         // light from this lamp. +8 covers the car's own half-extent, so a car
         // whose CENTRE clears the bound has no vertex inside rad.
-        const _lsR = rad + 8, _lsR2 = _lsR * _lsR;
+        // _lsR2 is the one hoisted for the content key above — the key MUST be
+        // computed over exactly the set this loop rasterises, so they share it.
         for (let i = 0; i < _shadowCount; i++) {
           const _lm = _shadowMats[i];
           const _ldx = _lm[12] - L[o], _ldy = _lm[13] - L[o + 1], _ldz = _lm[14] - L[o + 2];

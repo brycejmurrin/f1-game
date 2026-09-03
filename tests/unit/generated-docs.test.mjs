@@ -107,3 +107,34 @@ test("docs/DEBUG-HOOKS.md: the hook index names every __apex hook plus the agent
   assert.match(doc, /^## Catalog & meta/m);
   assert.match(doc, /^## Agent world view/m);
 });
+
+test("a slider's help text states ITS OWN ceiling, not a bound it no longer has", () => {
+  // The repo's convention: "Ceiling is N" / "Tops out at N" in a slider's help
+  // means that slider's `max`. It held for 8 of the 10 sliders that use the
+  // phrase; the two exceptions were stale, and git says exactly how.
+  //
+  // 2fa6c88e "re-derive 40 slider bounds from measured consumer saturation"
+  // lowered daySkyBlue 3 -> 2 and vignetteSoft 0.94 -> 0.69 and corrected
+  // carGloss's help in the same commit, but left those two help strings quoting
+  // the OLD ceiling. Player-facing text then promised range the control does
+  // not have. This makes the whole class self-checking so the next bounds
+  // re-derivation cannot leave a help string behind.
+  //
+  // Only the "Ceiling is" / "Tops out at" phrasing is checked. A help may name
+  // other numbers about a CONSUMER (mistDensity's "caps the bank at 0.45",
+  // vignetteSoft's own smoothstep constants) and those are not the slider's max.
+  const src = fs.readFileSync(path.join(ROOT, "js/game/lighting.js"), "utf8");
+  const bad = [];
+  const defRe = /\{\s*id:\s*"(\w+)"[^}]*?max:\s*([\d.]+)[^}]*?help:\s*"((?:[^"\\]|\\.)*)"/g;
+  let m, checked = 0;
+  while ((m = defRe.exec(src))) {
+    const [, id, max, help] = m;
+    const c = /(?:Ceiling is|Tops out at)\s+([\d.]+)/.exec(help);
+    if (!c) continue;
+    checked++;
+    if (Number(c[1]) !== Number(max)) bad.push(`${id}: help says ${c[1]}, max is ${max}`);
+  }
+  assert.ok(checked >= 8, `expected the convention on several sliders, saw ${checked}`);
+  assert.deepEqual(bad, [],
+    "a slider's stated ceiling must equal its max — re-derive the help when you re-derive the bound");
+});

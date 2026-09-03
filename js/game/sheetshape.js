@@ -268,10 +268,19 @@ window.SheetShape = (function () {
 
   let ro = null;
   const seen = new Set();
+  /* "Has this element ever been in the document?" — the term that makes the
+     prune below safe. An element that has NEVER been connected is not garbage:
+     observe() is a public export, and a caller that builds a sheet and inserts
+     it afterwards would otherwise have it dropped on the first reclassify and
+     never classified again. Only a node that was in the tree and has left is
+     one this registry should forget. WeakSet, so membership costs nothing and
+     cannot itself retain anything. */
+  const wasLive = new WeakSet();
 
   function observe(el) {
     if (!el || seen.has(el)) return;
     seen.add(el);
+    if (el.isConnected) wasLive.add(el);
     const r = el.getBoundingClientRect();
     classify(el, r.width, r.height);
     if (ro) ro.observe(el);
@@ -378,8 +387,39 @@ window.SheetShape = (function () {
     if (nowShape !== wasShape) b.dataset.shape = nowShape;
   }
 
-  function reclassify() {
+  /* THE REGISTRY MUST FORGET. `seen` is a STRONG Set and `ro.observe` is a
+     strong observation, so between them every element ever classified was
+     retained for the life of the page — including detached ones. Static markup
+     never noticed, but .fit-managed is not all static: js/data/telemetry.js
+     builds a FRESH .dh-tpopup-card per lap-compare popup, and closing it only
+     removes it from the DOM. The card owns the trace canvases (chart, delta,
+     circuit map), sized layout x min(3, zoom * dpr) — ~2-3.6 MB at dpr 2 and up
+     to ~6 MB at ratio 3 — so a Data Hub session leaked a few MB per open,
+     monotonically, and telemetry could not have prevented it: it disconnects
+     its own observer and nulls its view correctly (stopTelAnim). The retention
+     was entirely on this side, in a registry with no removal path.
+     js/game/scrollfade.js's pruneWatched is the same fix for its own set. */
+  function drop(el) {
+    seen.delete(el);
+    if (ro) { try { ro.unobserve(el); } catch (_) { /* already gone */ } }
+  }
+
+  /* Garbage is "was in the tree, is not now". A node still waiting to be
+     inserted stays, and starts counting once it has been seen live. */
+  function pruneSeen() {
     seen.forEach((el) => {
+      if (el.isConnected) { wasLive.add(el); return; }
+      if (wasLive.has(el)) drop(el);
+    });
+  }
+
+  function reclassify() {
+    /* Free: this walk is already happening, so the prune costs one isConnected
+       read per entry and keeps the set to what is actually on screen. */
+    seen.forEach((el) => {
+      if (!el.isConnected) {
+        if (wasLive.has(el)) { drop(el); return; }
+      } else wasLive.add(el);
       const r = el.getBoundingClientRect();
       classify(el, r.width, r.height);
     });
@@ -514,11 +554,26 @@ window.SheetShape = (function () {
     // A screen that builds its sheet later (the data hub) still gets measured.
     if (typeof MutationObserver === "function") {
       new MutationObserver((muts) => {
-        for (const m of muts) for (const n of m.addedNodes) {
-          if (n.nodeType !== 1) continue;
-          if (n.classList && (n.classList.contains("sheet") || n.classList.contains("fit-managed"))) observe(n);
-          if (n.querySelectorAll) scan(n);
+        let removedManaged = false;
+        for (const m of muts) {
+          for (const n of m.addedNodes) {
+            if (n.nodeType !== 1) continue;
+            if (n.classList && (n.classList.contains("sheet") || n.classList.contains("fit-managed"))) observe(n);
+            if (n.querySelectorAll) scan(n);
+          }
+          /* And drop what leaves. Gated on the removed node actually being (or
+             containing) something this registry holds, because this observer
+             sees every DOM removal on the page and pruneSeen walks the whole
+             set — a telemetry popup closing must free its canvases, a HUD
+             element churning must not cost a sweep. */
+          if (removedManaged) continue;
+          for (const n of m.removedNodes) {
+            if (n.nodeType !== 1) continue;
+            if ((n.matches && n.matches(MANAGED)) ||
+                (n.querySelector && n.querySelector(MANAGED))) { removedManaged = true; break; }
+          }
         }
+        if (removedManaged) pruneSeen();
       }).observe(document.documentElement, { childList: true, subtree: true });
     }
   }

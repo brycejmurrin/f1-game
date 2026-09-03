@@ -1824,20 +1824,34 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
     assert.match(body, /Arms\s*<=\s*0/,
       `${file}: ${fn} must decline until that pass has run at least once`);
   }
-  // THERE IS NO LAMP KEEP, and that is the assertion. It shipped for three hours
-  // and came back out: the producer's snap test (js/game.js) compares a SLOT into
-  // frame.lights, which lighting.js re-sorts by distance every frame, so it
-  // cannot tell a lamp handover from a hold — arming binds one lamp's depth map
-  // under another lamp's VP and frustum. The lamp map also rasterises cars, and
-  // that gate knows nothing about car motion. Wiring a keep needs the snap keyed
-  // on lamp IDENTITY plus a car-motion invalidation; until both land, the flag
-  // stays false and the map stays merely unread rather than wrong.
+  // THE LAMP KEEP IS BACK, KEYED ON CONTENT. Its first version keyed on
+  // (slot into frame.lights, 12 m eye cell) and was reverted the same day: the
+  // slot cannot see a lamp handover, because lighting.js re-sorts that array
+  // every frame, so it bound one lamp's depth under another lamp's VP. The eye
+  // cell was not an input either — the props cast is culled to the LAMP's
+  // frustum, so the static half of that map is a function of the lamp alone.
+  // The key is now the two things the content actually depends on: WHICH LAMP
+  // (world position, exact — static fixtures, copied coordinates) and WHERE THE
+  // CARS ARE (quantised). Pin all three so neither half can quietly come back.
+  const gsrc = code("js/game.js");
+  assert.doesNotMatch(gsrc, /flBest === _lampShBest/,
+    "the lamp snap must not compare SLOTS into frame.lights — that array is re-sorted every frame");
+  assert.match(gsrc, /_lx === _lampShX && _ly === _lampShY && _lz === _lampShZ/,
+    "the lamp snap must key on the lamp's own position, which is its identity");
+  assert.match(gsrc, /_sameLamp && _carKey === _lampShCarKey/,
+    "and on the cars in the map: the lamp map rasterises cars, so a lamp-only key goes stale");
+  // The key must be computed over the SAME set the cast loop rasterises. A key
+  // over a different set than the content is how this class of cache goes wrong,
+  // so they share one bound rather than each computing their own.
+  assert.equal((gsrc.match(/const _lsR = rad \+ 8/g) || []).length, 1,
+    "the content key and the cast loop must share one radius bound, not compute two");
   for (const file of ["js/render/glx/shadow.js", "js/render/webgpu/wgx.js",
-                      "js/render/three/tlx-shadow.js", "js/render/glx.js",
-                      "js/render/three/tlx.js", "js/game.js"]) {
-    assert.doesNotMatch(code(file), /lampShadowKeep/,
-      `${file}: a lamp keep needs identity keying + car-motion invalidation first`);
+                      "js/render/three/tlx-shadow.js"]) {
+    assert.ok(code(file).includes("lampShadowKeep"), `${file} must expose lampShadowKeep`);
   }
+  assert.match(gsrc, /gfx\.lampShadowKeep\(flBest\)/,
+    "and the producer must arm on the frames it skips, or the lit pass reads a false 0");
+
   // And the producer must actually call the car keep, on exactly the branch that
   // skips for cadence rather than for a stop.
   const g = code("js/game.js");

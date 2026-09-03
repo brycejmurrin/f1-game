@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 186 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 187 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -963,6 +963,7 @@ what it covers.
 | `lamp-fixture-anchor.test.mjs` | all-circuit, STRICT ZERO on both axes of the night-lighting anchor: (a) no light record with `glareW > 0` may sit off a registered fixture — `drawGlow` paints a halo billboard for those, and the three start-gantry downlights shipped at `glareW 0.3` unparented (three orbs over every start line; Jeddah's whole tunnel was 311 of them, its poles having registered no lights at all); (b) no registered fixture's radius may stop short of the road — the `(1-(d/r)^4)^2` window is exactly 0 past `r`, and Bahrain's 39 m masts inherited a radius sized for a 13 m verge lamp, so the circuit rendered unlit (2 of 135 centreline samples). No baseline and no ALLOW hatch: both read 0 fleet-wide |
 | `component-inventory.test.mjs` | docs/COMPONENTS.md must name every class family in `css/`, name none that has left, and keep the dead-class list accurate — a map that silently rots is worse than none, because it is trusted |
 | `sheet-per-screen.test.mjs` | one `.sheet` per parent element in the shell — `sheetshape.js` writes `--sheet-eff-scale` on the PARENT, so two co-hosted sheets would clobber each other's fit cap; the failure message names the fix (scope the property to the sheet) |
+| `sheetshape-registry.test.mjs` | SheetShape's `seen` Set and its ResizeObserver must FORGET a detached element — both hold strong refs and had no removal path, so every closed telemetry popup (a fresh `.fit-managed` card owning the trace canvases, ~2–3.6 MB at dpr 2) was retained for the life of the page. Behavioural, in a VM on `mini-dom`: a regex would pass on a prune that never runs |
 | `road-under-floor.test.mjs` | no visible road surface may sit below the flat floor plane |
 | `coplanar-faces.test.mjs` | ratchet: SAME-FACING coplanar faces — the pairs that z-fight at every distance, which `clip-audit` structurally cannot see |
 | `debris-step-skip.test.mjs` | source contract for DebrisWorld's two-tier idle: skip `world.step(_events)` when live bodies are asleep and no car is in `FURN_WAKE_M`, but keep `_ageAndCullPool` + panel `force = 0` so `marbleGrip()` and `PANEL_IDLE_DESPAWN_S` stay honest |

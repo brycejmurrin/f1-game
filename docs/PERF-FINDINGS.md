@@ -3620,3 +3620,39 @@ circuits, needs a rendered look and re-measured `test:sweeps` baselines, and the
 What shipped is the wiring: the drops are now counted, and
 `scenery-guards.test.mjs` ratchets redbull at 295 so the next change to that
 margin has to be deliberate and carry its own measurement.
+
+## 2x. R23: what the WebGPU "lags at first, then runs fine" is NOT (2026-09-02)
+
+Reported: WGX is slow for the opening seconds of a race and then fine, with a
+suggestion to pre-build or bake. Four hypotheses were measured on this box
+(SwiftShader, `scratch/gpu-timeline.mjs`, `scratch/frame-cpu.mjs`,
+`scratch/mat-upload.mjs`, `scratch/wb-census.mjs`) and **all four were
+excluded**. Recording them so the next round does not re-derive them:
+
+| hypothesis | measurement | verdict |
+|---|---|---|
+| lit pipelines compile lazily as new material variants appear | `WGX.__wgxDebug.litPipelineStats()` at menu / trackBuilt / +3 s / +10 s / +20 s of driving: `firstFrameCount 8`, `count 9` after the track build, **no growth at all** across 10 s+ of driving | NOT the cause |
+| post pipelines (SSAO / SSR / god-ray / skid / glow / decal / particle) build on first use of each effect | `_buildPost()` is called eagerly at `wgx.js:1820`, not on demand; the frame census counts exactly **1** `createRenderPipeline` in 800 frames of racing | NOT the cause |
+| the baked material array is uploaded through a per-layer 2D-canvas readback (WGX does `drawImage` + `getImageData` per layer where GLX hands the `ImageBitmap` straight to `texSubImage3D`) | the asymmetry is real, but the shipped pack is 512 px: **28 `getImageData`, 7.0 MiB, 7 ms** plus 5 ms of `drawImage`, for the whole albedo+normal set | real, and far too small to matter |
+| GPU resources keep being created during the first lap | every kind settles by frame ~30: after that, **1 texture and 1 buffer in 770 frames** | NOT the cause |
+
+What IS large, on this box, is the track build: one
+`queue.writeBuffer` of **9 657 396 B** (the chunked scenery index buffer, from
+`_mkBuffer`) measured at 4618 ms — 99.8 % of all upload time in the build,
+while a 4.29 MB write in the same run cost 1 ms. **That is not a size cliff.**
+An isolated bench of the identical write on the same device
+(`scratch/wb-slice-bench.mjs`) costs **30 ms**, and slicing it into 1/2/4 MB
+pieces changes nothing outside the noise (22 / 3 / 86 ms). So the 4.6 s is the
+call blocking on a queue that already has the build's other 35 MB and the live
+frame loop in it — back-pressure, not throughput — and slicing `_mkBuffer`
+would only spread the same wait. Nothing was shipped for it.
+
+**Two process notes, both earned the hard way in this round.** First, the
+numbers above were nearly reported from a box running two Chromium probes at
+once (load 8.3 on 4 cores): the same predicate that measured a 6566 ms build
+under load measured 91 ms alone. Check `/proc/loadavg` and `pgrep chrome`
+before believing any timing here, and never start a second probe while one is
+running. Second, this container cannot answer the question that was actually
+asked — a software rasterizer's queue drain is not a player's GPU. The real
+instrument for it is `bench.html` on the reporting device and the
+`gpu-census.yml` dispatch on `macos-latest`.

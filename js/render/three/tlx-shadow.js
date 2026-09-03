@@ -350,12 +350,22 @@
       S.carArmed = true;
       return true;
     }
-    // No lampShadowKeep: see the note at the lamp pass in game.js — the
-    // producer's snap test compares slots into a per-frame re-sorted array.
+    // The caller's snap key is the map's CONTENT — the lamp's world position
+    // plus a quantised key over the cars cast into it (js/game.js) — so a keep
+    // here means "same lamp, same cars, and the props are a function of the
+    // lamp alone". The index is re-stated rather than remembered because
+    // frame.lights is re-sorted every frame; it names THIS frame's slot for the
+    // lamp the caller has already proved is the same one.
+    function lampShadowKeep(lightIdx) {
+      if (!S.lampEnabled || S.lampArms <= 0 || !(lightIdx >= 0)) return false;
+      S.lampIdx = lightIdx | 0;
+      S.lampArmed = true;
+      return true;
+    }
 
     return {
       S,
-      carShadowKeep,
+      carShadowKeep, lampShadowKeep,
       sunSize: SUN_SIZE,
       sunTex: sunRT ? sunRT.depthTexture : null,
       carTex: carRT ? carRT.depthTexture : null,

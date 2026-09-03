@@ -593,10 +593,25 @@ const CEILINGS = {
   // which made it DEAD CODE ((A && t<1) || (t<3) === t<3) and silently disabled
   // PER-CHUNK ROAD on GRAPHICS: LOW.
   //
-  // MERGED: THREE branches off the same base all landed, so the ceiling is the
+  //
+  // -> (a fourth branch): the display-reset latch clear was keyed on
+  // perChunkLights alone while tuner.js offers the retry note on BOTH chunk
+  // sliders, so following it on PER-CHUNK ROAD cleared nothing.
+  // MERGED: FOUR branches off the same base all landed, so the ceiling is the
   // merged tree's own count, re-measured with this suite's metric — never any
   // one side's number, and never the deltas added on paper.
-  "js/game.js": 9228,
+  // 9228 -> 9269 (this branch): the lamp shadow keep, done on the key it should
+  // always have had. The reverted version keyed on (slot into frame.lights,
+  // 12 m eye cell) and BOTH terms were wrong — the slot cannot see a lamp
+  // handover, and the eye cell is not an input at all, because the props cast is
+  // culled to the LAMP's frustum. The key is now the two things the content
+  // depends on: the lamp's world position and a quantised key over the cars in
+  // the map. Most of the growth is the note explaining why the car-only defer
+  // here DOES save where the sun pass's identical-looking one did not (the
+  // skipped frame arms and does no work, instead of re-triggering next frame).
+  // -> 9233 (deploy branch): the display-reset retry.
+  // MERGED and RE-MEASURED on the union.
+  "js/game.js": 9274,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -990,7 +1005,7 @@ const CEILINGS = {
   // the rest is the measurement, because the numbers are what ruled out the
   // folding theory (monza, no folds at all, was worst at 33.9%).
   // MERGED: both lineages landed; re-measured with this suite's own metric.
-  "js/render/webgpu/wgx.js": 5919,   // +15: _shadowRendered joins envProbeReset. It gated the light VP the LIT pass and the god-ray march both sample, and had no reset on track change, tier change, resize or quit — a latch with no invalidation is how the shadow-flag class of bug starts.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
+  "js/render/webgpu/wgx.js": 5944,   // MERGED and RE-MEASURED on the union (5943 lines), not added on paper. This branch: +18 litPipelineStats — the hook that EXCLUDED lazy pipeline compilation as the "WebGPU lags at first, then runs fine" cause (8 of 9 variants exist before the first frame, none minted while driving; docs/PERF-FINDINGS.md §2x). Kept so the hypothesis cannot come back without re-running the measurement. Deploy side: +7 (this branch): lampShadowKeep returns, keyed by the caller on the map's CONTENT (lamp world position + a quantised key over the cars in it) rather than on a slot into a per-frame re-sorted array; _shadowRendered stays OUT of envProbeReset (that reset shipped and came back out — loadTrack already nulls the sun snap keys before the call, and the tier-shed caller cannot re-arm the latch it clears)// +15: _shadowRendered joins envProbeReset. It gated the light VP the LIT pass and the god-ray march both sample, and had no reset on track change, tier change, resize or quit — a latch with no invalidation is how the shadow-flag class of bug starts.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
   // 5821 -> 5835 (deploy branch): _setIB joins _setPipe/_setBG0/_setVB0/_setVB1. setIndexBuffer was the one state call outside the redundancy filter the doctrine comment above those helpers says EVERY state call must route through, and createChunkedMesh gives every chunk of a mesh the same index buffer — so the per-chunk-lamp path and castShadow's chunk loop re-set an identical buffer once per visible chunk. drawDecal's raw call routes through it too, since a bare one beside the cache desyncs it.
   // -7 (this branch): _shadowRendered LEAVES envProbeReset. That reset shipped this morning and came back out — loadTrack already nulls the sun snap keys BEFORE this call, so the track-change motivation was void, while the tier-shed caller clears the latch with no way to re-arm it (sun shadows off until the eye crosses a 20 m cell, indefinitely for a parked car). lampShadowKeep goes with the producer that called it.
   // MERGED and RE-MEASURED on the union, not added on paper.
@@ -1194,7 +1209,7 @@ const CEILINGS = {
   // tree's own count, re-measured with this suite's metric. Note 2915 was itself
   // a merge resolution that could not see the deploy branch's +6 — which is why
   // the rule is re-measure, never add either side's number on paper.
-  "js/render/three/tlx.js": 2923,
+  "js/render/three/tlx.js": 2924,   // +1: lampShadowKeep returns on the corrected key
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

@@ -1020,6 +1020,9 @@ const WGX = (function () {
     let frameBindGroup, drawBindGroup, skyBindGroup;
     let skyPipeline, blitPipeline, linearSampler, envCubeSamp;
     const _litPipelines = new Map();
+    // Size of the variant cache at the first present() — the boundary between
+    // "built during boot" and "built while driving".
+    let _pipeAtFirstPresent = -1;
 
     // Shadow-pass objects.
     let shadowTex = null, shadowView = null, shadowSampler = null;
@@ -4166,6 +4169,9 @@ const WGX = (function () {
 
     //    (SSAO -> godray -> bloom -> composite -> FXAA), fall back to the blit. ──
     function present(opts) {
+      // Snapshot the variant cache at the FIRST present: everything after this
+      // was compiled while the player was watching. See litPipelineStats.
+      if (_pipeAtFirstPresent < 0) _pipeAtFirstPresent = _litPipelines.size;
       // Car / lamp shadow maps must be re-armed by a fresh *Begin every frame
       // (GLX parity: SH.lampArmed is snapshotted then cleared in glx/post.js
       // present). LIT already consumed the flags in this frame's _writeFrame;
@@ -5861,8 +5867,15 @@ const WGX = (function () {
         _carShadowArmed = true;
         return true;
       },
-      // No lampShadowKeep: see the note at the lamp pass in game.js — the
-      // producer's snap test compares slots into a per-frame re-sorted array.
+      // Keyed on the map's CONTENT by the caller (lamp world position + a
+      // quantised key over the cars in it), so a keep here is "same lamp, same
+      // cars"; the index names this frame's slot for that same lamp.
+      lampShadowKeep: (lightIdx) => {
+        if (!lampShadowView || WGX_LITE || _lampArms <= 0 || !(lightIdx >= 0)) return false;
+        _lampIdx = lightIdx | 0;
+        _lampShadowArmed = true;
+        return true;
+      },
       // `armed` is the frame-live gate the shader reads; `arms` is a lifetime
       // counter that stays true straight through a strobe, which is why no test
       // could see this.
@@ -5878,6 +5891,24 @@ const WGX = (function () {
       holdSoftPresent,
       softPresentState,
       roadLutReady: () => _roadLutReady,
+      // How many LIT pipeline VARIANTS exist, and when they were minted.
+      // _litPipeline builds each combination (blend/doubleSided/noAlphaWrite/
+      // MSAA/depthBias/decal) on FIRST USE, and createRenderPipeline makes Dawn
+      // compile a shader variant — so a count still climbing while the player
+      // drives would be the "WebGPU lags at first, then runs fine" report, and
+      // `keys` would be exactly the warm list a pre-build needs.
+      //
+      // IT IS NOT. Measured 2026-09-02 (montreal, WGX): firstFrameCount 8,
+      // count 9 after the track build, and NO growth across 10 s+ of driving.
+      // Lazy pipeline compilation is excluded as the cause — this hook is what
+      // excluded it, and it stays so the hypothesis cannot be re-proposed
+      // without re-running it. The three other candidates and their numbers:
+      // docs/PERF-FINDINGS.md §2x.
+      litPipelineStats: () => ({
+        count: _litPipelines.size,
+        keys: [..._litPipelines.keys()],
+        firstFrameCount: _pipeAtFirstPresent,
+      }),
       softPresent: () => !!_softGpu,
 
       // extension: lets a future __apex.gfxBackend() report the active path.
