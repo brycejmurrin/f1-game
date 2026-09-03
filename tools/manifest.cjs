@@ -535,6 +535,9 @@ const DEFERRED_EDGES = [
 // source file by path). When a file moves, update it here and every consumer
 // follows automatically.
 const PATHS = {
+  GAME: "js/game.js",                   // the entry: last FULL tag, owner of `const G`
+  GLX: "js/render/glx.js",              // the shipped renderer (game-vm.cjs stubs it)
+  APEX_API: "js/game/apex.js",          // the __apex dev API (LAZY_AGENT; game-vm.cjs hooks ApexApi.create)
   TRACKS_ENGINE: "js/track/tracks.js",
   GLX_CHUNKS: "js/render/shaders/chunks.js",
   LAMP_CHUNKS: "js/render/lamp-chunks.js",

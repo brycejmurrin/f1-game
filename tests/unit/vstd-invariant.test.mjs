@@ -275,7 +275,7 @@ test("stripNonCode preserves every byte offset", () => {
 });
 
 // ── the real thing ────────────────────────────────────────────────────────────
-test("js/game.js and js/game/*.js contain only APPROVED absolute speed thresholds", () => {
+test("js/game.js and every manifest module that reads a speed contain only APPROVED absolute speed thresholds", () => {
   const found = speedLiteralViolations(readFiles());
   const approved = new Set(APPROVED.map(violationKey));
   const unapproved = found.filter((v) => !approved.has(violationKey(v)));

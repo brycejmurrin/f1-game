@@ -52,7 +52,7 @@ const MANIFEST = require("./manifest.cjs");
 // The one FULL entry NOT loaded: the WebGL2 renderer. Everything it would have
 // exported is served by the GLX stub below. The shader/glx-pass files before it
 // are plain data (GLSL strings, tables) and load unchanged.
-const SKIP = new Set(["js/render/glx.js"]);
+const SKIP = new Set([MANIFEST.PATHS.GLX]);
 
 const noop = () => {};
 
@@ -507,7 +507,7 @@ async function createGame(opts) {
     onScript: (rel, ctx) => {
       // apex.js is injected by game.js's own loader; capture the façade the
       // moment ApexApi.create(G) is called so the harness can hand G back.
-      if (rel === "js/game/apex.js" && ctx.ApexApi && typeof ctx.ApexApi.create === "function") {
+      if (rel === MANIFEST.PATHS.APEX_API && ctx.ApexApi && typeof ctx.ApexApi.create === "function") {
         const orig = ctx.ApexApi.create;
         ctx.ApexApi.create = function (g) { G = g; return orig.apply(this, arguments); };
       }
@@ -531,7 +531,7 @@ async function createGame(opts) {
   for (const f of MANIFEST.FULL) {
     if (SKIP.has(f)) continue;
     const r = runFile(ctx, f, record);
-    if (f === "js/game.js") bootPromise = r;
+    if (f === MANIFEST.PATHS.GAME) bootPromise = r;
   }
   // The game IIFE is async: it resolves after bootAgentSurface() (LAZY_AGENT
   // + js/net through the script stub above) and raceAssets().

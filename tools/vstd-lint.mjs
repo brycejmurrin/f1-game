@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 //
-// @doc The PACE invariant as a check: flags `.speed` compared to a literal without `vStd()` in `js/game.js` + `js/game/*.js`.
+// @doc The PACE invariant as a check: flags `.speed` compared to a literal without `vStd()` in a manifest-derived file set.
 // @skill tune-physics
 // vstd-lint — the asserted form of the PACE invariant in AGENTS.md:
 //
@@ -43,16 +43,34 @@
 //
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
+const MANIFEST = require("./manifest.cjs");
 
 const ROOT = path.resolve(fileURLToPath(import.meta.url), "../..");
 
-// The driving model and everything built on the G ctx façade. js/game.js is
-// where PACE lives; js/game/*.js reads the same car objects.
+// js/game.js (where PACE lives) plus every MANIFEST module whose CODE reads a
+// `.speed` — the very thing this lint inspects — wherever in the tree it sits.
+// Derived from the rosters, not from a directory: a file that moves is still
+// linted, and a file that stops reading car speed drops out on its own. The
+// circuit defs and their scenery closures are data and are skipped by roster
+// membership. Comments and strings are blanked before the probe, so a file
+// that only MENTIONS speed is not linted for it.
+// (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2 — tools rewritten before the move.)
+const SPEED_READ = /\.speed\b/;
 export function defaultFiles(root = ROOT) {
-  const files = [path.join("js", "game.js")];
-  for (const name of fs.readdirSync(path.join(root, "js", "game")).sort()) {
-    if (name.endsWith(".js")) files.push(path.join("js", "game", name));
+  const data = new Set([...MANIFEST.CIRCUITS.map(MANIFEST.circuitPath), ...MANIFEST.LAZY_SCENERY]);
+  const rostered = [
+    ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
+    ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
+  ];
+  const files = [];
+  for (const rel of rostered) {
+    if (data.has(rel)) continue;
+    if (rel === MANIFEST.PATHS.GAME
+        || SPEED_READ.test(stripNonCode(fs.readFileSync(path.join(root, rel), "utf8")))) files.push(rel);
   }
   return files;
 }

@@ -17,7 +17,7 @@
       writability. Add a G member without adding it here (or vice versa) and the
       unit suite goes red in the same session that introduced the drift.
    2. USAGE. The tool extracts every `G.<member>` reference and every
-      `const {…} = G` destructure from js/game/*.js and js/net/*.js, emits them
+      `const {…} = G` destructure from every manifest module whose create() takes the ctx, emits them
       as a typed shadow file against this interface, and runs `tsc --noEmit`
       over it. A read of a member that does not exist, or a write to a readonly
       one, is a compile error carrying the real source file:line.

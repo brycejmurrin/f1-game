@@ -24,7 +24,7 @@
  *     readonly  <=>  a getter with no setter, or a plain data property
  *     writable  <=>  an accessor PAIR (get + set)
  * It also asserts the `declare const X: GameModuleFactory` roster equals the set
- * of js/game|net files that actually export a create() taking a ctx.
+ * of manifest modules that actually export a create() taking a ctx.
  *
  * LEG 2, USAGE (needs tsc; skipped with a notice when absent). eslint-scope
  * resolves every reference to each module's own `create(ctx)` parameter — a
@@ -50,15 +50,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import * as espree from "espree";
 import * as escope from "eslint-scope";
 
+const require = createRequire(import.meta.url);
+const MANIFEST = require("./manifest.cjs");
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DTS = "types/game-ctx.d.ts";
-const GAME = "js/game.js";
+const GAME = MANIFEST.PATHS.GAME;
 const OUT_DIR = "artifacts/gctx";
-const MODULE_DIRS = ["js/game", "js/net"];
 
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 const parse = (src) => espree.parse(src, { ecmaVersion: 2022, loc: true, range: true });
@@ -73,8 +76,28 @@ const parseFile = (rel) => {
   if (!astCache.has(rel)) astCache.set(rel, parse(read(rel)));
   return astCache.get(rel);
 };
-const moduleFiles = () => MODULE_DIRS.flatMap((dir) =>
-  fs.readdirSync(path.join(ROOT, dir)).filter((x) => x.endsWith(".js")).sort().map((f) => `${dir}/${f}`));
+// The candidate modules come from the MANIFEST, not from a directory listing:
+// every rostered file (FULL, the DEFERRED backends, every LAZY_* roster) whose
+// source DEFINES a `function create(<param>)` — the one shape scanRealFactories()
+// and collectUsage() resolve — wherever it sits. A moved file is still scanned;
+// a file that never spells create() that way cannot have taken the ctx. The
+// circuit defs and their scenery closures are data and are dropped by ROSTER
+// membership (CIRCUITS / LAZY_SCENERY), not by path. The text prefilter is what
+// keeps this inside its budget: parsing is the whole cost, and without it every
+// circuit and shader file would go through espree for nothing.
+// (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2 — tools rewritten before the move.)
+const CREATE_DEF = /\bfunction\s+create\s*\(\s*[A-Za-z_$]/;
+let moduleCache = null;
+const moduleFiles = () => {
+  if (moduleCache) return moduleCache;
+  const data = new Set([...MANIFEST.CIRCUITS.map(MANIFEST.circuitPath), ...MANIFEST.LAZY_SCENERY]);
+  const rostered = [
+    ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
+    ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
+  ];
+  moduleCache = rostered.filter((rel) => rel !== GAME && !data.has(rel) && CREATE_DEF.test(read(rel)));
+  return moduleCache;
+};
 
 function walk(node, visit, parent = null) {
   if (!node || typeof node !== "object") return;
@@ -165,14 +188,24 @@ export function scanDeclaredFactories() {
 /**
  * Modules that are really handed the ctx: every `X.create(<ctx>)` call site where
  * <ctx> resolves — through eslint-scope, so a comment or a same-named local can
- * neither add nor remove a row — to game.js's own `const G`, or to some module's
- * `create()` parameter (apex.js builds AgentView/AgentRaster off the ctx it was
- * handed). NetSession.create({transport}) is not a ctx factory and does not appear.
+ * neither add nor remove a row — to game.js's own `const G`, or to the `create()`
+ * parameter of a module that is ITSELF such a factory (apex.js builds AgentView
+ * off the ctx it was handed). Transitive from `const G`, as a worklist: a file's
+ * create() parameter is followed only once its global is known to receive the
+ * ctx, so gfx.js's `create(canvas)` handing the canvas to `TLX.create()` is not a
+ * ctx factory, and neither is NetSession.create({transport}). The old form
+ * followed EVERY create() parameter under js/game|net and was right only because
+ * no module there happened to spell a non-ctx handoff that way.
  */
 export function scanRealFactories() {
   if (factoryCache) return factoryCache;
   const out = new Map();
-  for (const rel of [GAME, ...moduleFiles()]) {
+  const fileOf = new Map();
+  for (const rel of moduleFiles()) { const g = moduleGlobal(rel); if (g && !fileOf.has(g)) fileOf.set(g, rel); }
+  const queue = [GAME];
+  const seen = new Set(queue);
+  while (queue.length) {
+    const rel = queue.shift();
     const ast = parseFile(rel);
     const parents = new Map();
     walk(ast, (n, p) => { if (p) parents.set(n, p); });
@@ -198,7 +231,10 @@ export function scanRealFactories() {
         if (callee.type !== "MemberExpression" || callee.computed
             || callee.property.type !== "Identifier" || callee.property.name !== "create"
             || callee.object.type !== "Identifier") continue;
-        if (!out.has(callee.object.name)) out.set(callee.object.name, `${rel}:${call.loc.start.line}`);
+        const g = callee.object.name;
+        if (!out.has(g)) out.set(g, `${rel}:${call.loc.start.line}`);
+        const next = fileOf.get(g);
+        if (next && !seen.has(next)) { seen.add(next); queue.push(next); }
       }
     }
   }
@@ -332,7 +368,7 @@ export function emitShadow() {
  * and only one of the two directions is visible to a type checker.
  *
  * Scope-accurate first, then a REGEX SUPPRESSOR: any name spelled `<ident>.name`
- * in js/game|net is struck off, so a consumer this tool cannot resolve (the ctx
+ * in any candidate module is struck off, so a consumer this tool cannot resolve (the ctx
  * that agentview-raster.js receives inside a bespoke bag) can never be reported
  * as dead. The regex only ever REMOVES rows — it can shrink this list, never
  * grow it — which keeps a false "delete this, nothing reads it" impossible.

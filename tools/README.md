@@ -65,6 +65,7 @@ the tool's own header.
 | **fit-audit.mjs** | The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll. | ui-menu-a11y |
 | **float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom` emitters and reports props above/under the ground; `--all`. | survey-track |
 | **game-vm.cjs** | Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser. | debug-state |
+| **gen-arch-table.mjs** | Generates the module index block of `docs/ARCHITECTURE.md` from `tools/manifest.cjs` + each file's header; `--check`… | check-changes |
 | **gen-hooks-table.mjs** | Regenerates the `__apex` hook index block in `docs/DEBUG-HOOKS.md` from `apex.js` + `agentHelp()`; `--check`. | agent-view |
 | **gen-lib.mjs** | Shared writer for the `gen-*.mjs` generators: `--check` vs write, marker-block replacement. | check-changes |
 | **gen-shell.mjs** | Generates the shell tag blocks, sw.js precache seed and js/roster.js from the manifest; `--check` fails on drift. | check-changes |
@@ -142,7 +143,7 @@ the tool's own header.
 | **ui-scale-axis.mjs** | The `--scale=` axis (80–150 % interface size) shared by layout-audit, menu-fit and fit-audit. | survey-ui-matrix |
 | **ui-survey.mjs** | Thin forwarder → `layout-audit.mjs --survey` (the `npm run ui:survey` entry). | survey-ui-matrix |
 | **verify-track.cjs** | Headless build guard: runs `buildRoad/Terrain/Props/Gate` for one circuit (or `--all`) in a VM; any THROW fails. | debug-tracks |
-| **vstd-lint.mjs** | The PACE invariant as a check: flags `.speed` compared to a literal without `vStd()` in `js/game.js` + `js/game/*.js`. | tune-physics |
+| **vstd-lint.mjs** | The PACE invariant as a check: flags `.speed` compared to a literal without `vStd()` in a manifest-derived file set. | tune-physics |
 | **webgpu-chrome-args.cjs** | Single source for WebGPU Chromium flags, shared by `harness.mjs`, `chrome-devtools-mcp.sh` and tests. | webgpu-debug / mcp-probe |
 | **wgpu-flag-test.mjs** | Flag-matrix probe for WebGPU canvas pixels (SwiftShader / Lavapipe / headed) → `artifacts/tmp/wgpu-flag-test.json`. | webgpu-debug |
 | **wgx-capture.mjs** | REAL WGX pixels in-container (~10 s): soft-present readback via `GLX.capturePixels()` → `frame.png`. | webgpu-debug |
