@@ -47,15 +47,15 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { buildContext } = require("../../tools/verify-track.cjs");
 
-// Same sandbox trick as tests/unit/lamp-density.test.mjs: lighting.js is a plain
-// IIFE assigning one global, so it loads without a browser.
+// Same sandbox trick as tests/unit/lamp-density.test.mjs: the lighting files are
+// plain IIFEs assigning one global each, so they load without a browser.
 function loadLightTune() {
   const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };
   sb.window = sb;
   vm.createContext(sb);
   seedLog(sb);
-  vm.runInContext(readFileSync(path.join(ROOT, "js/game/lighting.js"), "utf8")
-    .replace(/^const\b/gm, "var"), sb);
+  for (const f of ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js", "js/game/lighting.js"])
+    vm.runInContext(readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), sb);
   return sb.LightTune;
 }
 
@@ -189,7 +189,7 @@ test("no circuit races through an unlit stretch of road", () => {
   assert.deepEqual(offenders, [],
     "a night circuit has road no lamp reaches. Check that each fixture's `k` " +
     "names the node it actually stands beside (resolvePostNodes in " +
-    "js/game/lighting.js) before adding more lamps:\n  " + offenders.join("\n  "));
+    "js/game/track-lights.js) before adding more lamps:\n  " + offenders.join("\n  "));
 });
 
 test("the start-gantry downlights stay fixture-less AND invisible", () => {

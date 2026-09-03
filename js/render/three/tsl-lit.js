@@ -137,7 +137,7 @@
     /* ── frame + tune uniforms ────────────────────────────────────────────────
      * One shared set across every material variant (uniform nodes are shared
      * descriptors; tlx.js calls updateFrame(frame) once per begin()).
-     * Defaults MUST mirror LightTune.TUNE_DEFS (js/game/lighting.js) exactly
+     * Defaults MUST mirror LightTune.TUNE_DEFS (js/game/lighting-knobs.js) exactly
      * like js/render/glx.js — a missing tune object renders the shipped look. */
     const U = {
       sunDir:      uniform(new THREE.Vector3(0.4, 0.8, 0.4)),

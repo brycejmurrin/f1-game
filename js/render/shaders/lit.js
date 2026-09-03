@@ -129,7 +129,7 @@ uniform float uLampFog;     // lamp-glow-in-fog strength (0 = off / day)
 uniform sampler2D uBlockerMap;  // PCSS-lite min-depth blocker map (512sq)
 uniform float uPcss;            // 1 = blocker map valid, 0 = fixed penumbra
 // Live-tunable constants (LIGHTING TUNER panel / __apex.lightTune) — defaults
-// mirror LightTune.TUNE_DEFS (js/game/lighting.js); uploaded per frame from frame.tune in begin().
+// mirror LightTune.TUNE_DEFS (js/game/lighting-knobs.js); uploaded per frame from frame.tune in begin().
 uniform float uBounceK;     // per-lamp bounce-fill strength (was literal 0.04)
 uniform float uMistShare;   // ground-mist share of the lamp fog glow (was 1.5)
 uniform float uLampFogClip; // lamp-fog Reinhard shoulder strength (was 0.7)

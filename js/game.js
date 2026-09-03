@@ -3118,7 +3118,7 @@ const G = {
   get _photoPrevScale() { return _photoPrevScale; }, set _photoPrevScale(v) { _photoPrevScale = v; },
   get photoAlt() { return photoAlt; }, set photoAlt(v) { photoAlt = v; },
   get photoVertT() { return photoVertT; }, set photoVertT(v) { photoVertT = v; },
-  // The live profile object owned by js/game/light-store.js — photomode.js
+  // The live profile object owned by js/game/light-store.js — tuner.js
   // deletes a key out of it for the tuner's RESET and merges it for COPY VALUES.
   get _ltStore() { return ltStore.profiles; }, set _ltStore(v) { ltStore.profiles = v; },
   photoCam, photoKeys, photoMouse, photoMove, photoLook,
@@ -5405,8 +5405,8 @@ function coast(c, dt) {
   }
 }
 
-// Lighting tuner registry (TUNE_DEFS), the live LT values, floodColor and
-// the track light builder live in js/game/lighting.js. LT is a plain object
+// Lighting tuner registry + live LT values (js/game/lighting-knobs.js) and the
+// track light builder (js/game/track-lights.js), via LightTune. LT is a plain object
 // mutated in place, so the profile-resolution code below and the sliders/
 // __apex.lightTune keep every LT.x call site unchanged.
 const { TUNE_DEFS, LT, buildTrackLights } = LightTune;
@@ -5442,10 +5442,10 @@ function persistLightTune() { ltStore.persist(); }
 // one-step revert for it. The tuner panel and __apex.lightCopy are the callers.
 function copyLightTune(mode) { return ltStore.copyToTracks(mode); }
 function restoreLightTune(undo) { return ltStore.restore(undo); }
-// LAMP_KINDS + buildTrackLights(track) live in js/game/lighting.js (LightTune).
+// LAMP_KINDS + buildTrackLights(track) live in js/game/track-lights.js (via LightTune).
 
 // Per-frame light assembly (nearest-N flood cull + car tail lights) lives in
-// js/game/lighting.js (LightTune.setFrameLights / appendCarTailLights).
+// js/game/frame-lights.js (LightTune.setFrameLights / appendCarTailLights).
 const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
 const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
 const _flameOpts = { emissive: 1.0, roughness: 1, specular: 0, alpha: 1, noAlphaWrite: true };

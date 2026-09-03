@@ -95,7 +95,8 @@ test("PerfTry module and the PERF tab are gone", () => {
   assert.doesNotMatch(html, /pm-tab-performance|pm-panel-performance|perf-try\.js/);
   assert.doesNotMatch(read("tools/manifest.cjs"), /js\/game\/perf-try\.js/);
   assert.doesNotMatch(read("js/game/settings-nav.js"), /"performance"/);
-  assert.doesNotMatch(read("js/game/lighting.js"), /skyLate|flareGate|envCull|lampFogGate/);
+  for (const f of ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js", "js/game/lighting.js"])
+    assert.doesNotMatch(read(f), /skyLate|flareGate|envCull|lampFogGate/);
   assert.doesNotMatch(read("js/game.js"), /_skyLate|PerfTry/);
 });
 

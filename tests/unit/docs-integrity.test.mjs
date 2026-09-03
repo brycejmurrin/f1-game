@@ -385,7 +385,7 @@ test("CLAUDE.md is a stub that imports AGENTS.md, not a second copy", () => {
 test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   // "Ships OFF … def: 0" survived the knob being flipped to 1.0, which inverted
   // the meaning of the whole asset-pack section.
-  const lighting = read("js/game/lighting.js");
+  const lighting = read("js/game/lighting-knobs.js");
   const def = lighting.match(/\{\s*id:\s*"matTexMix"[^}]*?\bdef:\s*([\d.]+)/);
   assert.ok(def, "matTexMix is no longer a TUNE_DEFS entry with a def");
   const on = Number(def[1]) > 0;

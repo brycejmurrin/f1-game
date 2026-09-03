@@ -190,7 +190,7 @@ interface PhotoMouse { dx: number; dy: number; drag: boolean; px: number; py: nu
 interface PhotoAxis { x: number; y: number; }
 
 /** The lighting profile store, keyed "track|timeOfDay|weather" (plus "*").
-    Owner: js/game/light-store.js; photomode.js mutates it for RESET/COPY VALUES. */
+    Owner: js/game/light-store.js; tuner.js mutates it for RESET/COPY VALUES. */
 type LightProfiles = Record<string, Record<string, unknown>>;
 
 /** The caution/flag picture race control publishes — js/game/racecontrol.js. */
