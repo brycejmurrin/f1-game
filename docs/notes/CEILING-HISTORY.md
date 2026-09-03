@@ -1391,6 +1391,25 @@ live in `ratchets.json`.
   contrast, twilight wash, moon silver. The largest remaining WGX visual gap
   (overcast read flatter and brighter than GLX/TLX); a parity port is paid for
   in lines, not extracted.
+- `js/game.js` 9246 -> **9286** lines / 5058 -> **5083** code (2026-09-03): the
+  boot audit's three cheapest wins — `ensureScenery` memoised on its in-flight
+  promise (four callers used to inject the same 28–58 KB closure while the
+  first fetch was in flight), `decalKeyPrefix` memoised on `store.rev` (a
+  store read per drawn car per frame), and `warmCarAssets()` at the end of
+  `startRace()` so the 11 meshes + 22 atlases build in the load stall instead
+  of on the first countdown frame.
+- `js/car/car3d.js` 3582 -> **3588** (2026-09-03): one-entry last-args cache in
+  front of `aeroFlapsGeom`'s Map — the key concat was the last per-car-per-frame
+  allocation on the flap path.
+- `js/render/glx/glx.js` 2271 -> **2297** (2026-09-03): KHR_parallel_shader_compile.
+  `link()` read LINK_STATUS right after linkProgram, so every compile had to
+  finish before the next was issued — the eight core programs in strict
+  series. `beginLinks()`/`resolveLinks()` issue the batch first and read the
+  statuses after; the extension is requested in init(); without it nothing
+  changes. Pinned on the mock's call order (`bootGlx({ parallel: true })`).
+- `js/game.js` 9286 -> **9290** (2026-09-03): the TIME chip calls
+  `scheduleFlybyTrack()` so a pick that flips sessionDark rebuilds the flyby
+  track in menu idle instead of making GO pay a second full `Tracks.build`.
 
 ## Tree-wide ratchets (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-03)
 

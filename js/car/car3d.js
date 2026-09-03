@@ -1146,8 +1146,13 @@ const Car3D = (function () {
     }
     return sig;
   }
+  // One-entry last-args cache in front of the Map: drawAeroFlaps asks twice
+  // per car per frame with the same (level, style), and the key concat was
+  // the only allocation left on that path.
+  let _flapLastLvl = null, _flapLastSt = null, _flapLastHit = null;
   function aeroFlapsGeom(aLvl, style) {
     const st0 = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
+    if (aLvl === _flapLastLvl && st0 === _flapLastSt) return _flapLastHit;
     const key = aLvl + "|" + flapSig(st0);
     let hit = _flapSpecs.get(key);
     if (!hit) {
@@ -1155,6 +1160,7 @@ const Car3D = (function () {
       for (let i = 0; i < hit.length; i++) hit[i].cacheKey = key + "|" + i;
       _flapSpecs.set(key, hit);
     }
+    _flapLastLvl = aLvl; _flapLastSt = st0; _flapLastHit = hit;
     return hit;
   }
   function solveFlapsGeom(aLvl, style) {

@@ -2333,6 +2333,58 @@ test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading",
   }
 });
 
+test("boot audit: scenery loads are memoised, car assets warm in startRace, decal key prefix is cached", () => {
+  const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  // ensureScenery: four callers race the same circuit at boot; the promise memo
+  // is what stops each of them injecting its own copy of the closure.
+  const es = game.slice(game.indexOf("function ensureScenery("), game.indexOf("function ensureScenery(") + 600);
+  assert.match(es, /_sceneryLoads\.get\(def\.id\)/, "ensureScenery must consult the in-flight memo");
+  assert.match(es, /_sceneryLoads\.delete\(def\.id\)/, "and clear it on settle so a dropped fetch retries");
+  // warmCarAssets: the caches were lazy, so the first countdown frame built
+  // every mesh and atlas; startRace now does it before the first render.
+  const sr = game.slice(game.indexOf("async function startRace("), game.indexOf("function showTouchControls("));
+  assert.match(sr, /warmCarAssets\(\);\s*[^\n]*\n\s*DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
+  const wa = game.slice(game.indexOf("function warmCarAssets("), game.indexOf("function drawCarDecals("));
+  assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team\); else teamBodyMesh\(c\.team\);/, "same mesh cache keys the draw uses");
+  assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
+  // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
+  assert.match(game, /const key = decalKeyPrefix\(team\) \+/, "getCarDecalTexture builds its key from the memoised prefix");
+  assert.match(game, /if \(c && c\.rev === store\.rev\) return c\.val;[\s\S]{0,200}team\.id \+ ":" \+ getLiveryId\(team\.id\) \+ ":"/, "decalKeyPrefix invalidates on store.rev");
+});
+
+test("GLX links its core programs as one parallel batch when KHR_parallel_shader_compile exists", () => {
+  // Reading LINK_STATUS right after linkProgram forces the compile to finish
+  // before the next program is even issued — 18 programs in strict series.
+  // With the extension, the eight core links are issued first and their
+  // statuses read afterwards; without it, link() behaves exactly as before.
+  const order = (h) => {
+    const links = [], statuses = [];
+    h.calls.forEach((c, i) => {
+      if (c[0] === "linkProgram") links.push(i);
+      if (c[0] === "getProgramParameter" && c[1][1] === h.enums.LINK_STATUS) statuses.push(i);
+    });
+    return { links, statuses };
+  };
+  const par = order(bootGlx({ parallel: true }));
+  assert.ok(par.links.length >= 8, "the core batch links at least eight programs");
+  assert.ok(par.statuses.length >= 8, "every program's LINK_STATUS is still read (failures still surface)");
+  assert.ok(par.statuses[0] > par.links[7],
+    `parallel: the first LINK_STATUS read (call #${par.statuses[0]}) must come after the eighth linkProgram (call #${par.links[7]})`);
+  const seq = order(bootGlx());
+  assert.ok(seq.statuses[0] < seq.links[1],
+    "without the extension each link is checked before the next is issued (unchanged contract)");
+  const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(glx, /getExtension\("KHR_parallel_shader_compile"\)/, "init() requests the extension");
+});
+
+test("the TIME chip rebuilds the flyby track so GO does not pay a second Tracks.build", () => {
+  const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(game, /raceTimeOfDay = id; buildRaceSettings\(\); scheduleFlybyTrack\(\);/,
+    "a time-of-day pick must schedule the (memoised) flyby build while the menu is idle");
+  assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
+    "loadTrack's memo is what makes the extra call free when the session darkness did not change");
+});
+
 test("pcssPen help names desktop three.js WebGL2 as live", () => {
   const lighting = read("js/lighting/knobs.js");
   assert.match(lighting, /three\.js desktop WebGL2/,
