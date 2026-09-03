@@ -180,7 +180,7 @@ const CEILING = {
   // 2026-09-03: 323 -> 322. Compact-wide title dropped a redundant
   // `#menu-hero .bigbtn { padding-block }` that the following
   // `#menu-buttons .bigbtn { padding }` shorthand already overrode.
-  rawSpacing: 322,
+  rawSpacing: 315,
   // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
   // declaration value; tokens.css custom-property DEFINITIONS excluded — the
   // definition site is the system, not drift; url() interiors excluded).
@@ -210,7 +210,7 @@ const CEILING = {
   // light up under a thumb in the one steering mode that used them. The
   // ladder's own alphas moved with it (pedals to 0.85, presses to 0.95) but
   // traded one spelling for another, so distinct stays flat.
-  rawColor: 360,
+  rawColor: 348,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide

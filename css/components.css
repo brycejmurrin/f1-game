@@ -935,7 +935,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    it gets a rule above it and a muted red label — visibly apart from the two
    harmless ones, without shouting louder than RESUME. */
 #pm-resume {
-  background: var(--grad-primary); color: #fff !important; border-color: transparent;
+  background: var(--grad-primary); color: var(--text) !important; border-color: transparent;
   font-weight: 700; font-size: var(--fs-5);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
@@ -1133,7 +1133,12 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   letter-spacing: var(--ls-2);
   color: var(--text);
 }
-#pmsettings-inner .pm-doors button { width: auto; }
+#pmsettings-inner .pm-doors button {
+  width: auto;
+  /* Same rank as the category tabs: a door, not a key/value row. */
+  justify-content: center;
+  text-align: center;
+}
 .sheet[data-density="compact"] .pm-group-h {
   letter-spacing: var(--ls-4);
   font-size: var(--fs-2);
