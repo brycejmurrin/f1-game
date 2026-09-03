@@ -504,18 +504,17 @@ const TLX = (function () {
       // them all at once costs more llvmpipe seconds than a present budget
       // has, and a timeout would not say which path did it:
       //   sky | env | chunked | batches | shadow   (or "1" / "all")
-      // A/B switches for the WebKit-WebGPU investigation (THREE PATH: WEBGPU
-      // pinned on the phone). Each reverts ONE suspect without a deploy:
+      // A/B switch left from the WebKit-WebGPU investigation. It reverts ONE
+      // suspect without a deploy, and is reported by backendState() + the GOV
+      // `tlx` row:
       //   apex26.tlxArrayNearest=1  placeholders keep the pre-0a3f480
       //                             Nearest/Clamp state (textureLoad program)
-      //   apex26.tlxNoMrt=1         the scene pass never arms the SSR MRT
-      //                             second attachment (single-target)
-      // Both are reported by backendState() and the GOV `tlx` row.
+      // Its sibling `apex26.tlxNoMrt` is GONE (2026-09-03): it tested whether
+      // the SSR MRT attachment caused the sky-only iPhone, and the cause was
+      // WebKit's 8 KB var<private> cap (PATCHES.md §4) — a disproved switch
+      // costs three per-frame terms and an axis in every phone diag.
       const _arrayNearest = (function () {
         try { return localStorage.getItem("apex26.tlxArrayNearest") === "1"; } catch (_) { return false; }
-      })();
-      const _noMrt = (function () {
-        try { return localStorage.getItem("apex26.tlxNoMrt") === "1"; } catch (_) { return false; }
       })();
       const _forceHw = (function () {
         let raw = "";
@@ -2827,9 +2826,9 @@ const TLX = (function () {
               painted = true;   // nothing drawn this frame by design; the last blit stays up
             } else if (post && _postF.proj) {
               pinSkyMaterial();
-              if (!_noMrt && lit && lit.setSsrMrt) lit.setSsrMrt(true);
-              if (!_noMrt && fx && fx.setSsrMrt) fx.setSsrMrt(true);
-              const _hadMrt = !_noMrt && !!(TSL.mrt && renderer.setMRT);
+              if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
+              if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
+              const _hadMrt = !!(TSL.mrt && renderer.setMRT);
               const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               try {
@@ -3091,7 +3090,7 @@ const TLX = (function () {
               // NodeManager), so the draw count is the CPU lever on a phone;
               // reported here so the GOV `tlx` row can show it (`dc N`).
               calls: (renderer && renderer.info && renderer.info.render) ? (renderer.info.render.drawCalls | 0) : null,
-              arrayNearest: _arrayNearest, noMrt: _noMrt,
+              arrayNearest: _arrayNearest,
               hasMaterialMaps: !!(lit && lit.hasMaterialMaps),
               packLive: !!matOwnedAlbedo,
               drawMatMode: _drawMatMode,
