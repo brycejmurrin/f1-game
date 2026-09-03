@@ -45,6 +45,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.error
@@ -87,6 +88,41 @@ MOCK_TINYFISH = [
     "list_browser_sessions", "close_browser_session", "list_fetch_usage",
     "get_wallet",
 ]
+
+# Upstream chrome-devtools-mcp (1.7+) scopes most tools to a pageId. Only these
+# create or enumerate pages without one. Everything else gets the [selected]
+# page injected when callers omit pageId (the old one-arg navigate URL shape).
+PAGE_ID_OPTIONAL = frozenset({"list_pages", "new_page"})
+
+
+def _page_lines(text: str) -> list[tuple[int, bool]]:
+    """Parse `## Pages` lines: (id, selected)."""
+    out: list[tuple[int, bool]] = []
+    for line in text.splitlines():
+        m = re.match(r"^(\d+):", line.strip())
+        if m:
+            out.append((int(m.group(1)), "[selected]" in line))
+    return out
+
+
+def _selected_page_id_from_result(result: dict[str, Any]) -> int | None:
+    for block in result.get("content") or []:
+        if block.get("type") != "text":
+            continue
+        lines = _page_lines(str(block.get("text") or ""))
+        for page_id, selected in lines:
+            if selected:
+                return page_id
+        if lines:
+            return lines[-1][0]
+    return None
+
+
+def _normalize_chrome_args(tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    args = dict(arguments)
+    if tool == "navigate_page" and "url" in args and "type" not in args:
+        args["type"] = "url"
+    return args
 
 
 def _mock() -> bool:
@@ -194,6 +230,7 @@ class ChromeBackend:
         self._use_daemon = use_daemon
         self._daemon: int | None = None
         self._probed = False
+        self._selected_page_id: int | None = None
 
     def _find_daemon(self) -> int | None:
         # Lazy: a tinyfish-only invocation must not pay the health probe.
@@ -228,14 +265,36 @@ class ChromeBackend:
         self.ensure()
         return self._tools
 
-    def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        self.ensure()
-        if _mock():
-            return _mock_tool_result(name, arguments)
+    def _invoke(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if self._daemon is not None:
             return _daemon_post(self._daemon, "/call", {"name": name, "arguments": arguments})
         assert self._client is not None
         return self._client.call(name, arguments)
+
+    def call(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        self.ensure()
+        if _mock():
+            return _mock_tool_result(name, arguments)
+        args = _normalize_chrome_args(name, arguments)
+        if name not in PAGE_ID_OPTIONAL and "pageId" not in args:
+            page_id = self._selected_page_id
+            if page_id is None:
+                listed = self._invoke("list_pages", {})
+                page_id = _selected_page_id_from_result(listed)
+                if page_id is not None:
+                    self._selected_page_id = page_id
+            if page_id is not None:
+                args["pageId"] = page_id
+        result = self._invoke(name, args)
+        if name in ("list_pages", "new_page"):
+            page_id = _selected_page_id_from_result(result)
+            if page_id is not None:
+                self._selected_page_id = page_id
+        elif name == "select_page" and "pageId" in args:
+            self._selected_page_id = int(args["pageId"])
+        elif name == "close_page" and "pageId" in args and self._selected_page_id == args["pageId"]:
+            self._selected_page_id = None
+        return result
 
     def close(self) -> None:
         if self._client is not None:
