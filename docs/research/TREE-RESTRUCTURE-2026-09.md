@@ -171,48 +171,37 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       `node tools/deploy.mjs`: 12 gate suites + verify-track on all 40
       circuits, pushed in 1 attempt, 496 s. `pages.yml` run 1941 stamping.
       `tools/moves/phase2.json` maps 91 files for 2b.
-- [ ] **Phase 2b — the move window** ⚑ — PREP LANDED 2026-09-03 (`310967d`,
-      `3d5b0f8`, merged `06c7d11`/`73ba0cb`), tooling-fast 138/138 + game-vm
-      248/248 + verify-track monza OK on the union. Ready to execute:
-      - `tools/moves/phase2.json` — 91-file move map (validated, dry-run
-        clean: would rewrite 335 files).
-      - `tools/moves/spike-backends.json` + `docs/notes/SPIKE-BACKENDS-CHECKLIST.md`
-        — 50-file / 7.69 MB WGX/TLX spike-out map (validated, dry-run clean:
-        74 files) with a full non-move edit checklist (manifest/roster,
-        index.html/sw.js, Gfx.create() + boot canary, renderer-picker,
-        backend-surface-parity, godray-keep-nearest, LampChunks,
-        gpu-census.yml/ci.yml, AGENTS.md, ~40 other mentions classified
-        delete/shrink/pointer/keep) and the tests that go red + their fixes.
-        Three corrections to the original plan paragraph found in the audit:
-        `ssr-probe.mjs` is GLX-only (not moved), `gpu-game-check.mjs` stays
-        (shared GLX control leg pinned by ci-coverage), `road-lut-census.mjs`
-        was missing from the plan and is added to the move.
-      - check-gctx / vstd-lint / game-vm / load-order / global-registry /
-        pick-tests already derive from `tools/manifest.cjs` instead of
-        hard-coded directories (`tools/gen-arch-table.mjs` new, generates
-        ARCHITECTURE.md's module index; `.cursor/rules` globs and
-        `js/track/CLAUDE.md` re-homing are the only directory literals left,
-        deliberately, for this window).
-      Remaining for the window itself (≤ 1 h, one commit per target dir,
-      each with a scripted path sweep over docs/skills/tests/tools; squashed
-      names renamed in the same commit; `manifest.cjs` `MOVED` map for one
-      release; deploy.mjs prints the new path on a modify/delete conflict):
-      js/core, physics, race, career, lighting, camera, audio, perf, input, ui,
-      garage, car, data, net, agent, fx, render/{shared,glx}, track/{core,
-      scenery}, circuits unchanged, game.js at root. **WGX/TLX spike-out** to
-      `spike/backends/` in the same window (owner's decision): webgpu/, three/,
-      vendor/three, the nine GPU tools, their tests/docs/skills; DEFERRED
-      rosters, importmap, sw optional entries removed; `Gfx.create()` null →
-      GLX fallback; picker shrinks to WEBGL2; `backend-surface-parity` →
-      GLX-vs-header; gpu-census / ci renderer jobs moved or deleted; AGENTS.md
-      rows collapse to a pointer. Tools/guards rewritten in the window:
-      check-gctx walk, vstd-lint keys, game-vm SKIP path, pick-tests RULES →
-      directory rules, test-groups probe list, load-order recursive scan,
-      global-registry keys, `.cursor/rules` globs, `js/track/CLAUDE.md`
-      re-homed, ARCHITECTURE module table regenerated. Verification: per
-      commit tooling-fast; end: `verify-track --all`, `test:game-vm`,
-      `graph-parity --all`, GLX boot positive signal after `test-bg tiny`,
-      `ci.yml group: circuits`, one `gpu-census.yml census_only` dispatch.
+- [x] **Phase 2b — the move window** DONE 2026-09-03, four batch commits
+      (`c78847b` core/physics/race/career 17, `ac2df8c` lighting/camera/audio/
+      perf/input 26, `5bd4fa6` ui/garage/agent/fx/data/car 24 — **js/game/ is
+      gone**, `f1ee501` render/{shared,glx} + track/{core,scenery} 24). 91
+      files into 16 domain directories; `tools/moves/phase2.json` + the four
+      batch maps are the record. Verified per batch and at the end:
+      tooling-fast 138/138, game-vm 248/248, verify-track --all 40 OK,
+      gen-shell --check, check-gctx and ratchets clean; `test-bg tiny` and
+      `ci.yml group: circuits` for the browser half.
+      FOUR sweep blind spots surfaced and were fixed IN THE TOOL, each with a
+      regression test, so the next move does not re-find them:
+      (1) tokenRe's leading boundary excluded `/`, missing every path written
+      as the suffix of a longer relative path (`"../../js/log.js"`);
+      (2) the sweep walked `tools/moves/` and `manifest.cjs`'s MOVED block,
+      corrupting the move plans and the historical keys deploy.mjs reads —
+      both now excluded, MOVED protected by byte range;
+      (3) a path written as an escaped REGEX (sw.js's optional-precache stamp
+      filter) has no token to match — one instance, fixed by hand;
+      (4) a path built from separate quoted segments
+      (`path.join(ROOT, "js", "track", "geom.js")`) likewise — now REPORTED
+      by `splitSegmentMentions()` at plan time, which named all six of batch
+      4's before that batch ran.
+      Also: move-tree's own test fixture used real repo paths, so a batch
+      rewrote it — it now uses names no move map can contain (`js/zzfix/…`).
+      pick-tests RULES are DIRECTORY rules now (the plan's item, possible
+      once js/game/ emptied); blanket-only routing 33 -> 1, and the guard
+      behind it became a COUNT ratchet in ratchets.json instead of a frozen
+      16-path array that would have needed a hand edit per move.
+      STILL TO DO in this phase: the WGX/TLX spike-out (map + checklist are
+      committed and validated, `tools/moves/spike-backends.json` +
+      `docs/notes/SPIKE-BACKENDS-CHECKLIST.md`), then the deploy ⚑.
 - [ ] **Phase 1 — test taxonomy + one ratchet mechanism** (no js change):
       `tests/{guards,tools,node,node/twins,sweeps,browser/<group>,manual}/`,
       `tests/groups.json` generating npm scripts / tooling-fast list /
