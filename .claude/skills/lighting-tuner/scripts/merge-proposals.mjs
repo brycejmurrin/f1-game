@@ -20,7 +20,7 @@ import vm from "node:vm";
 
 const ROOT = resolve(new URL("../../../../", import.meta.url).pathname);
 const LP = join(ROOT, "js/game/light-presets.js");
-const LIGHTING = join(ROOT, "js/game/lighting.js");
+const LIGHTING = join(ROOT, "js/game/lighting-knobs.js");
 // A directory of proposal JSON, or ONE file — which is what a pasted export is.
 const TARGET = resolve(process.argv[2] || join(ROOT, "artifacts/lighting/proposals"));
 

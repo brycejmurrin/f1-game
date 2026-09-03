@@ -42,7 +42,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
  *  (carEnvCube again, which is tier-gated on GLX.isMobile) yields def
  *  undefined; its range is still checked, its default is skipped. */
 function defs() {
-  const src = read("js/game/lighting.js");
+  const src = read("js/game/lighting-knobs.js");
   const starts = [...src.matchAll(/\{\s*id:\s*"(\w+)"/g)];
   const out = [];
   for (let i = 0; i < starts.length; i++) {
@@ -192,7 +192,7 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
   // (on-sun, horizon, clear) saturates at 1/0.22.
   assert.ok(get("mieScatter").max <= 1 / 0.22 + 0.01,
     `mieScatter max ${get("mieScatter").max} is past the mix=1 sun-glow clamp`);
-  // lighting.js setFrameLights: reach 4 already saturates typical sightlines
+  // frame-lights.js setFrameLights: reach 4 already saturates typical sightlines
   // (Singapore 0.55 measured 415 m, no further lamps). 12 was leftover ×3.
   assert.ok(get("lampReach").max <= 4 + 1e-9,
     `lampReach max ${get("lampReach").max} is past the measured saturate at 4`);

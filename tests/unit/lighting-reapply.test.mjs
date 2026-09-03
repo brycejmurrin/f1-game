@@ -46,7 +46,8 @@ function tuneDefs() {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
-  vm.runInContext(read("js/game/lighting.js").replace(/^const\b/gm, "var"), sandbox);
+  for (const f of ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js", "js/game/lighting.js"])
+    vm.runInContext(read(f).replace(/^const\b/gm, "var"), sandbox);
   return sandbox.LightTune.TUNE_DEFS;
 }
 
@@ -58,8 +59,8 @@ function applyRaceIds() {
 }
 
 // Strip the TUNE_DEFS array so a knob's own declaration is not counted as a read.
-function lightingBody() {
-  const s = read("js/game/lighting.js");
+function knobsBody() {
+  const s = read("js/game/lighting-knobs.js");
   const a = s.indexOf("const TUNE_DEFS = [");
   let i = s.indexOf("[", a), depth = 0, end = -1;
   for (; i < s.length; i++) {
@@ -87,7 +88,9 @@ test("every apply-only knob is registered in APPLY_RACE_IDS", () => {
   const defs = tuneDefs();
   const registered = applyRaceIds();
   const sources = new Map([
-    ["js/game/lighting.js", lightingBody()],
+    ["js/game/lighting-knobs.js", knobsBody()],
+    ["js/game/track-lights.js", read("js/game/track-lights.js")],
+    ["js/game/frame-lights.js", read("js/game/frame-lights.js")],
     ["js/game.js", read("js/game.js")],
     ["js/game/atmosphere.js", read("js/game/atmosphere.js")],
     ["js/game/particles.js", read("js/game/particles.js")],

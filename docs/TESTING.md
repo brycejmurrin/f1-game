@@ -574,7 +574,7 @@ group has its own job pair:
 
 | job | runner | does |
 |---|---|---|
-| `renderer-filter` | ubuntu | fetch-depth 0; diffs the push/PR against its base; `renderer=true` when the diff touches `js/render/**`, `js/game/lighting*.js`, `light-presets.js`, `atmosphere.js`, `tuner.js`, either playwright config, `tests/helpers/`, `ci.yml`, or a `test:gfx` spec (list DERIVED from `package.json`). Fail-safe: any unresolvable diff, and every schedule / dispatch run, answers `true` |
+| `renderer-filter` | ubuntu | fetch-depth 0; diffs the push/PR against its base; `renderer=true` when the diff touches `js/render/**`, `js/game/lighting*.js`, `track-lights.js`, `frame-lights.js`, `light-presets.js`, `atmosphere.js`, `tuner.js`, either playwright config, `tests/helpers/`, `ci.yml`, or a `test:gfx` spec (list DERIVED from `package.json`). Fail-safe: any unresolvable diff, and every schedule / dispatch run, answers `true` |
 | `renderer-macos` | `macos-latest` | `needs: renderer-filter`; installs the FULL Chromium (`npx playwright install chromium`, cached at `~/Library/Caches/ms-playwright`); runs `tools/gpu-census.mjs` and FAILS unless `anyHardware === true`; then `npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000` at `APEX_WORKERS=2`; failure artifacts; `timeout-minutes: 30` (a guess — re-time on the first green run) |
 
 Two rules the job encodes, both measured by the census:

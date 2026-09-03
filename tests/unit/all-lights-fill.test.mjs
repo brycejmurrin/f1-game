@@ -22,23 +22,25 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-// lighting.js is an IIFE exporting a fixed surface, and _fillAllLights is
+// frame-lights.js is an IIFE exporting a fixed surface, and _fillAllLights is
 // internal to it. Widen the export list for the test rather than reaching past
 // the IIFE — the same shape the lamp-chunks drag guard uses. Asserting the
 // anchor first means this fails loudly if the export list is reformatted,
 // instead of silently testing nothing.
 function loadFill() {
-  const src = readFileSync(path.join(ROOT, "js/game/lighting.js"), "utf8");
-  const anchor = "           setFrameLights, appendCarTailLights };";
-  assert.ok(src.includes(anchor), "lighting.js export list moved — update this loader");
+  const src = readFileSync(path.join(ROOT, "js/game/frame-lights.js"), "utf8");
+  const anchor = "  return { setFrameLights, appendCarTailLights };";
+  assert.ok(src.includes(anchor), "frame-lights.js export list moved — update this loader");
   const patched = src.replace(anchor,
-    "           setFrameLights, appendCarTailLights, _fillAllLights };");
+    "  return { setFrameLights, appendCarTailLights, _fillAllLights };");
   const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };
   sb.window = sb;
   sb.Log = { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false };
   vm.createContext(sb);
+  // FrameLights destructures LightKnobs.LT at eval — the registry loads first.
+  vm.runInContext(readFileSync(path.join(ROOT, "js/game/lighting-knobs.js"), "utf8"), sb);
   vm.runInContext(patched, sb);
-  const LT = vm.runInContext("LightTune", sb);
+  const LT = vm.runInContext("FrameLights", sb);
   assert.equal(typeof LT._fillAllLights, "function", "_fillAllLights not exported by the patch");
   return LT._fillAllLights;
 }

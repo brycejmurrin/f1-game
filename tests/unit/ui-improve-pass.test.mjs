@@ -851,24 +851,28 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
   assert.equal(decl(css("css/career.css"), ".cr-cheats .sel-chip", "min-width"), "0");
 });
 
-/* ── Photomode COPY VALUES in a VM ──────────────────────────────────────── */
+/* ── TunerPanel COPY VALUES in a VM ─────────────────────────────────────── */
+// The lt-* buttons (help toggle, RESET, COPY VALUES) are wired by js/game/tuner.js;
+// they used to ride in photomode.js, which is photo mode only now.
 function bootCopyValues(opts = {}) {
   const dom = makeDom();
   const order = [];
   const sb = uiSandbox(dom, {
     GameAudio: { uiSelect() {}, uiTick() {} }, PerfGov: { tier: () => 0 },
+    LightTune: { TUNE_DEFS: [], LT: {} },   // tuner.js destructures the registry at create()
     navigator: { clipboard: { writeText: () => { order.push("clipboard"); return opts.clipboardRejects ? Promise.reject(new Error("no")) : Promise.resolve(); } } },
   });
   sb.document.execCommand = (c) => { order.push("execCommand:" + c); return !!opts.execOk; };
   const ctx = vm.createContext(sb);
-  vm.runInContext(src("js/game/photomode.js"), ctx, { filename: "js/game/photomode.js" });
+  vm.runInContext(src("js/game/tuner.js"), ctx, { filename: "js/game/tuner.js" });
   const G = {
-    $: (id) => dom.byId(id), gfx: {}, photoCam: { pos: [0, 0, 0], pitch: 0, yaw: 0, fov: 60 }, photoKeys: {}, photoMouse: {}, photoMove: {}, photoLook: {},
-    applyResMode() {}, ltKey: () => opts.here || "monza|dusk|dry", persistLightTune() {}, applyLightTune() {}, refreshLightTunePanel() {},
+    $: (id) => dom.byId(id), gfx: {}, els: { pmsettings: {} },
+    ltKey: () => opts.here || "monza|dusk|dry", setLightTune() {}, persistLightTune() {}, applyLightTune() {},
+    setTimeOfDay: () => "dusk", weather: () => "dry", exitPhotoMode() {},
     _ltStore: opts.store || { "monza|dusk|dry": { exposure: 1.2 }, "spa|night|wet": { fogDensityMul: 0.5, bloom: 0.3 }, "*": {} },
-    track: { def: { name: "Monza" } }, camEye: [0, 0, 0], camTgt: [0, 0, -1], camFov: 60,
+    track: { def: { name: "Monza" } },
   };
-  vm.runInContext("Photomode", ctx).create(G);
+  vm.runInContext("TunerPanel", ctx).create(G);
   dom.byId("lt-copy").onclick();
   return { dom, order, json: dom.byId("lt-json").value, btn: dom.byId("lt-copy"), sb };
 }

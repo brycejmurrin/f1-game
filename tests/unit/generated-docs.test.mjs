@@ -123,7 +123,7 @@ test("a slider's help text states ITS OWN ceiling, not a bound it no longer has"
   // Only the "Ceiling is" / "Tops out at" phrasing is checked. A help may name
   // other numbers about a CONSUMER (mistDensity's "caps the bank at 0.45",
   // vignetteSoft's own smoothstep constants) and those are not the slider's max.
-  const src = fs.readFileSync(path.join(ROOT, "js/game/lighting.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/game/lighting-knobs.js"), "utf8");
   const bad = [];
   const defRe = /\{\s*id:\s*"(\w+)"[^}]*?max:\s*([\d.]+)[^}]*?help:\s*"((?:[^"\\]|\\.)*)"/g;
   let m, checked = 0;

@@ -34,10 +34,10 @@ import vm from "node:vm";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
-/** Every `id:` in TUNE_DEFS. Read from source rather than evaluated: lighting.js
+/** Every `id:` in TUNE_DEFS. Read from source rather than evaluated: lighting-knobs.js
  *  reaches for browser globals at load, and the id list is a flat literal. */
 function tuneIds() {
-  return new Set([...read("js/game/lighting.js").matchAll(/id:\s*"(\w+)"/g)].map((m) => m[1]));
+  return new Set([...read("js/game/lighting-knobs.js").matchAll(/id:\s*"(\w+)"/g)].map((m) => m[1]));
 }
 
 /** The presets file assigns `window.LightPresets`; run it against a stub window. */

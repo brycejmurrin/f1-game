@@ -69,7 +69,7 @@ function create(G) {
     // quali sheet on a DIFFERENT circuit. Qualify at Monza, quit, then race Spa
     // and Silverstone and Monaco: Monza is still strongly reachable from module
     // scope the whole time. quitToMenu() clears five other caches and never
-    // knew about this one. A def id is all the invalidation needs; lighting.js's
+    // knew about this one. A def id is all the invalidation needs; track-lights.js's
     // _postNodeMemo (a WeakMap keyed on track) is the same lesson.
     const _kId = (track && track.def && track.def.id) || null;
     if (_kCacheTrack !== _kId || _kCache.length !== m) {

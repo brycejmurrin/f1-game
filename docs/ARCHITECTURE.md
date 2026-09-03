@@ -652,16 +652,29 @@ Static gameplay/render data destructured by game.js at the original sites:
 `GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` (gearbox), `DIFF` (difficulty), `CAM_MODES`
 (player camera list) and the `PAINT_*` car-paint material constants.
 
-## js/game/lighting.js — `LightTune`
+## js/game/lighting.js — `LightTune` (a façade over three files)
 
-The lighting-tuner core: `TUNE_DEFS` (slider registry — the `def` values ARE
-the shipped tuning), the live `LT` value object (a plain object mutated in
-place by game.js's profile resolution and `__apex.lightTune`),
-`buildTrackLights(track)` (bakes the per-track light records — colour and
-fixture character come from the internal `floodColor` + `LAMP_KINDS` tables),
-plus the per-frame light upload — `setFrameLights` (distance-sorted cull to
-the frame CAP) and `appendCarTailLights`. Profile persistence and the (track, time-of-day,
-weather) resolution stay in game.js — they read live session state.
+The lighting-tuner core, split by lifecycle (Phase 2a of
+`docs/research/TREE-RESTRUCTURE-2026-09.md`):
+
+- `js/game/lighting-knobs.js` — `LightKnobs`: `TUNE_DEFS` (the slider
+  registry — the `def` values ARE the shipped tuning; min/max/step are the
+  clamps) and the live `LT` value object (a plain object mutated in place by
+  `light-store.js`'s profile resolution and `__apex.lightTune`).
+- `js/game/track-lights.js` — `TrackLights`: `buildTrackLights(track)` bakes
+  the per-track light records ONCE per track (colour and fixture character from
+  the internal `floodColor` + `LAMP_KINDS` tables, the LAMP DENSITY and
+  DARK-GAP FILL walks), plus `lampStrideNodes`.
+- `js/game/frame-lights.js` — `FrameLights`: the per-frame light upload —
+  `setFrameLights` (distance-sorted cull to the frame CAP, twilight scale,
+  flicker / warm-up, the per-chunk full-set twin) and `appendCarTailLights`.
+- `js/game/lighting.js` — `LightTune`: re-exports the three as the ONE surface
+  every consumer reads (`LightTune.TUNE_DEFS` / `LT` / `buildTrackLights` /
+  `setFrameLights` / …). The eval-time edges are `HARD_EDGES` pairs in
+  `tools/manifest.cjs`; both siblings destructure `LightKnobs.LT` at eval.
+
+Profile persistence and the (track, time-of-day, weather) resolution live in
+`js/game/light-store.js` — they read live session state.
 
 ## js/game/carmesh.js — `CarMesh`
 
@@ -708,8 +721,8 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `menus.js` | `Menus` | menu/select/pause DOM flows |
 | `scrollfade.js` | `ScrollFade` | edge fade + scroll-position indicator on every menu pane (self-initialising, owns no game state) |
 | `menunav.js` | `MenuNav` | desktop menu input (self-initialising): wheel/trackpad gestures that land outside a pane are redirected into the open menu's nearest one, and arrow keys / Home / End / PageUp / PageDown move focus through it |
-| `photomode.js` | `Photomode` | photo mode |
-| `tuner.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel (COPY VALUES export) |
+| `photomode.js` | `Photomode` | photo mode ONLY — the free-fly camera, its touch sticks / hold buttons and the enter/exit plumbing; the lighting tuner's `lt-*` buttons live in `tuner.js` |
+| `tuner.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel: slider rows from `TUNE_DEFS`, preview chips, COPY TO ALL TRACKS, the help toggle, RESET and the COPY VALUES export (`window.LightEdits`) |
 | `steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
 | `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
 | `skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |

@@ -107,8 +107,12 @@ Visual A/B (Playwright via tools/harness.mjs — NOT Chrome MCP):
 `;
 
 const APPLY_ONLY_FILES = ["js/game/atmosphere.js"];
+// The LightTune façade composes three siblings — same order as tools/manifest.cjs.
+export const LIGHTING_FILES = ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js", "js/game/lighting.js"];
 const SCAN_FILES = [
-  "js/game/lighting.js",
+  "js/game/lighting-knobs.js",
+  "js/game/track-lights.js",
+  "js/game/frame-lights.js",
   "js/game.js",
   "js/game/atmosphere.js",
   "js/game/particles.js",
@@ -177,7 +181,7 @@ export function loadTuneDefs(root) {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(root, sandbox);
-  vm.runInContext(read(root, "js/game/lighting.js").replace(/^const\b/gm, "var"), sandbox);
+  for (const f of LIGHTING_FILES) vm.runInContext(read(root, f).replace(/^const\b/gm, "var"), sandbox);
   return sandbox.LightTune.TUNE_DEFS;
 }
 
@@ -330,15 +334,18 @@ function tagsFromKnob(d, gates) {
 export function classifyKnobs(root = ROOT) {
   const defs = loadTuneDefs(root);
   const registered = applyRaceIds(root);
-  const lighting = read(root, "js/game/lighting.js");
-  const lightingBody = stripTuneDefs(lighting);
+  // The build path (track-lights.js) and the per-frame path (frame-lights.js) are
+  // separate files; the registry is scanned with TUNE_DEFS stripped so a knob's own
+  // declaration is not counted as a read.
+  const trackLights = read(root, "js/game/track-lights.js");
+  const frameLights = read(root, "js/game/frame-lights.js");
   const sources = new Map(SCAN_FILES.map((f) => [
-    f, f === "js/game/lighting.js" ? lightingBody : read(root, f),
+    f, f === "js/game/lighting-knobs.js" ? stripTuneDefs(read(root, f)) : read(root, f),
   ]));
   const gsrc = sources.get("js/game.js");
   const nightBand = extractFn(gsrc, "_nightAmbientBand") || "";
-  const buildSrc = BUILD_FNS.map((n) => extractFn(lighting, n) || "").join("\n");
-  const frameSrc = FRAME_FNS.map((n) => extractFn(lighting, n) || "").join("\n");
+  const buildSrc = BUILD_FNS.map((n) => extractFn(trackLights, n) || "").join("\n");
+  const frameSrc = FRAME_FNS.map((n) => extractFn(frameLights, n) || "").join("\n");
 
   const knobs = [];
   for (const d of defs) {

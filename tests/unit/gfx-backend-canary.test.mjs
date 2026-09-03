@@ -1831,7 +1831,7 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
   }
   // THE LAMP KEEP IS BACK, KEYED ON CONTENT. Its first version keyed on
   // (slot into frame.lights, 12 m eye cell) and was reverted the same day: the
-  // slot cannot see a lamp handover, because lighting.js re-sorts that array
+  // slot cannot see a lamp handover, because frame-lights.js re-sorts that array
   // every frame, so it bound one lamp's depth under another lamp's VP. The eye
   // cell was not an input either — the props cast is culled to the LAMP's
   // frustum, so the static half of that map is a function of the lamp alone.
@@ -2126,7 +2126,7 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
 });
 
 test("pcssPen help names desktop three.js WebGL2 as live", () => {
-  const lighting = read("js/game/lighting.js");
+  const lighting = read("js/game/lighting-knobs.js");
   assert.match(lighting, /three\.js desktop WebGL2/,
     "SHADOW SOFTEN help must not still say three.js WebGL2 is a no-op");
   assert.doesNotMatch(lighting, /this slider does nothing on that path only/,

@@ -120,6 +120,9 @@ const FULL = [
   "js/car/ghost.js",
   "js/game/physics-consts.js",
   "js/game/tables.js",
+  "js/game/lighting-knobs.js",
+  "js/game/track-lights.js",
+  "js/game/frame-lights.js",
   "js/game/lighting.js",
   "js/game/light-store.js",
   "js/game/carmesh.js",
@@ -360,6 +363,11 @@ const HARD_EDGES = [
   ["js/game/aerozones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/game/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create(G) at eval time
   ["js/game/racecontrol.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
+  ["js/game/lighting-knobs.js", "js/game/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
+  ["js/game/lighting-knobs.js", "js/game/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
+  ["js/game/lighting-knobs.js", "js/game/lighting.js"],      // the LightTune façade re-exports TUNE_DEFS/LT at eval
+  ["js/game/track-lights.js", "js/game/lighting.js"],        // …and buildTrackLights/lampStrideNodes
+  ["js/game/frame-lights.js", "js/game/lighting.js"],        // …and setFrameLights/appendCarTailLights
   ["js/game/lighting.js", "js/game/light-store.js"],  // light-store destructures LightTune's TUNE_DEFS/LT inside create()
   ["js/game/light-store.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/game/audio-panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time

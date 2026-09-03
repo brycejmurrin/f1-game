@@ -337,7 +337,7 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   assert.deepEqual(report.jobs.filter((j) => !j.deployGate).map((j) => j.name).sort(), ["renderer-filter", "renderer-macos"]);
   // The path filter: every renderer backend plus the lighting modules the
   // gfx specs pin, the spec list DERIVED from package.json, fail-safe to run.
-  for (const p of ["js/render/", "js/game/lighting[^/]*\\.js$", "js/game/light-presets\\.js$", "js/game/atmosphere\\.js$", "js/game/tuner\\.js$"]) {
+  for (const p of ["js/render/", "js/game/lighting[^/]*\\.js$", "js/game/track-lights\\.js$", "js/game/frame-lights\\.js$", "js/game/light-presets\\.js$", "js/game/atmosphere\\.js$", "js/game/tuner\\.js$"]) {
     assert.ok(rendererFilter.includes(p), `renderer filter does not route ${p}`);
   }
   assert.match(rendererFilter, /scripts\["test:gfx"\]/);
