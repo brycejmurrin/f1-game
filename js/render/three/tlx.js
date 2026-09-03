@@ -1427,15 +1427,13 @@ const TLX = (function () {
       // cannot flip (that latch only trips inside the probe path), and envRT is
       // allocated at init regardless. The mirror-release gate below reads
       // `envReady || _envGaveUp || !envRT`, which is therefore permanently
-      // false on phones — measured gate "--T", drains 23, sweeps 0. That
-      // silently disabled the CHUNKED release too, on exactly the devices it
-      // exists for. A gate needs a term for "the probe is not coming".
-      let _envEverAsked = false, _envFirstPaintAt = 0;
-      function _envNeverComing() {
-        if (_envEverAsked || !_envFirstPaintAt) return false;
-        const t = typeof performance !== "undefined" ? performance.now() : Date.now();
-        return (t - _envFirstPaintAt) > 5000;
-      }
+      // false on phones — measured gate "--T", drains 23, sweeps 0.
+      // A "the probe is not coming" term WAS added here (`_envNeverComing()`:
+      // no face asked in 5 s of painting) and REVERTED 2026-09-02 — it let the
+      // chunked release run on a configuration that lost a player's road. The
+      // reverted design and the reason are preserved in
+      // tests/unit/gfx-backend-canary.test.mjs; do not re-add it without that
+      // history. The gate below is what shipped.
       let _envFaceErr = false;   // an uncaptured error DURING one of this cycle's six face renders
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
@@ -2245,7 +2243,6 @@ const TLX = (function () {
           // calling this every 4th frame and every face threw/warned for the
           // life of the session (the Metal case, 2026-08-29).
           if (_envGaveUp) return null;
-          _envEverAsked = true;
           ensureEnvCam();
           if (!envCubeCam) return null;
           _envActive = true;
@@ -2901,9 +2898,6 @@ const TLX = (function () {
           // sweeps:0 on the first run meant the gate never opened. Record WHICH
           // term holds it shut instead of guessing between the three.
           const _now = typeof performance !== "undefined" ? performance.now() : Date.now();
-          if (!_envFirstPaintAt) _envFirstPaintAt = _now;
-          // "or the probe is not coming": no face asked for in 5 s of painting
-          // means game.js's tier gate has it off for this device, and waiting
           // THE STATIC SWEEP IS OFF FOR EVERY PLAYER, and it takes THREE
           // independent gates to say so — two sessions added one each on
           // 2026-09-02 without seeing the other's, so read all three before
