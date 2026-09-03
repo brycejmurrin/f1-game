@@ -234,17 +234,17 @@ test("the dropped gap chip docks under the minimap, not in the POS/flag band", (
   assert.equal(decl(hud, ":root[data-gap-drop] .hud-gaps", "left"),
     "calc(10px + var(--sal) / var(--hud-z))",
     "same left as #minimap, not the beside-slot 130px");
-  assert.equal(decl(hud, ":root[data-gap-drop] .hud-gaps", "top"),
-    "calc(128px + var(--sat) / var(--hud-z))",
-    "8px map-top + 112px map + 8px air");
-  assert.equal(decl(hud, ":root[data-gap-drop] .hud-gaps", "max-width"), "112px",
+  assert.match(decl(hud, ":root[data-gap-drop] .hud-gaps", "top") || "",
+    /var\(--hud-map/,
+    "8px + map + 8px via --hud-map (compact/wide only change the token)");
+  assert.match(decl(hud, ":root[data-gap-drop] .hud-gaps", "max-width") || "",
+    /var\(--hud-map/,
     "cannot grow past the map into POS or the flag");
-  assert.equal(decl(hud, ":root[data-gap-drop] body[data-density=\"compact\"] .hud-gaps", "max-width"),
-    "96px", "compact map is 96px");
-  assert.equal(decl(wide, ":root[data-gap-drop] .hud-gaps", "max-width"), "140px",
-    "wide map is 140px");
-  assert.equal(decl(wide, ":root[data-gap-drop] .hud-gaps", "top"),
-    "calc(156px + var(--sat) / var(--hud-z))",
-    "8 + 140 + 8");
+  assert.match(decl(hud, "body[data-density=\"compact\"] #minimap", "--hud-map") ||
+    decl(hud, "body[data-density=\"compact\"] #minimap", "width") || "",
+    /96px|var\(--hud-map\)/,
+    "compact map is 96px via --hud-map");
+  assert.match(decl(wide, "#minimap", "--hud-map") || "", /140px/,
+    "wide map is 140px via --hud-map");
 });
 

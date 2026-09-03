@@ -144,17 +144,17 @@
 .hud-gaps > div:first-child { min-height: 1.3em; }
 /* THE DROPPED STATE. Set by js/game/hud.js when the slot beside the map is
    smaller than any spelling of the readout — see the threshold table there.
-   Dock UNDER the minimap (same left as `#minimap`, 8px of air below its 112px
-   box: 8+112+8) instead of sliding down the BETWEEN-slot. The old 62px top kept
-   the widget in the POS/flag horizontal band: on 844×390 at HUD ≥150% it ran
-   into `#hud-flag` (top 100px, centred) and still kissed `.hud-top` as the
-   centred row grew left. Under the map the chip stays in the map's column
-   (max-width 112) and cannot reach either. Compact / ≥1200px re-derive the
-   top and max-width wherever the map resizes. */
+   Dock UNDER the minimap (same left as `#minimap`, 8px of air below the map
+   box: 8 + --hud-map + 8) instead of sliding down the BETWEEN-slot. The old
+   62px top kept the widget in the POS/flag horizontal band: on 844×390 at
+   HUD ≥150% it ran into `#hud-flag` (top 100px, centred) and still kissed
+   `.hud-top` as the centred row grew left. Under the map the chip stays in
+   the map's column (max-width: --hud-map) and cannot reach either. Compact /
+   ≥1200px only change --hud-map; this rule follows. */
 :root[data-gap-drop] .hud-gaps {
-  top: calc(128px + var(--sat) / var(--hud-z));
+  top: calc(8px + var(--hud-map, 112px) + 8px + var(--sat) / var(--hud-z));
   left: calc(10px + var(--sal) / var(--hud-z));
-  max-width: 112px;
+  max-width: var(--hud-map, 112px);
   box-sizing: border-box;
 }
 .hud-bottom {
@@ -244,7 +244,11 @@
   position: absolute;
   left: calc(10px + var(--sal) / var(--hud-z));
   top: calc(8px + var(--sat) / var(--hud-z));
-  width: 112px; height: 112px;
+  /* --hud-map is the map's CSS size and the dropped gap chip's column width.
+     Compact / ≥1200px override the token so the drop rule does not need a
+     `:root … body …` selector (source-integrity forbids body as a descendant). */
+  --hud-map: 112px;
+  width: var(--hud-map); height: var(--hud-map);
   opacity: 0.90;
   background: rgba(8,8,14,0.55); box-shadow: 0 2px 8px rgba(0,0,0,0.6);
 }
@@ -302,15 +306,8 @@
    600). Insets still divide by --hud-z. Do not redeclare #hud-sectors top. */
 body[data-density="compact"] .hud-top { gap: calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-box { padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.875); }
-body[data-density="compact"] #minimap { width: 96px; height: 96px; }
+body[data-density="compact"] #minimap { --hud-map: 96px; width: var(--hud-map); height: var(--hud-map); }
 body[data-density="compact"] .hud-gaps { left: calc(114px + var(--sal) / var(--hud-z)); }
-/* Compact map is 96px: dropped chip follows it (8+96+8). More specific than
-   the base drop so the 114px beside-slot left does not win. */
-:root[data-gap-drop] body[data-density="compact"] .hud-gaps {
-  top: calc(112px + var(--sat) / var(--hud-z));
-  left: calc(10px + var(--sal) / var(--hud-z));
-  max-width: 96px;
-}
 body[data-density="compact"] #hud-sectors { font-size: var(--fs-micro); padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75); }
 body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
 

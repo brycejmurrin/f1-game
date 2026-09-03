@@ -157,13 +157,9 @@ body.desktop #pm-calib { display: none !important; }
   /* minimap is 140px here — gaps dock beside it (10+140+8), top-aligned with it
      by the base rule. */
   .hud-gaps { left: calc(158px + var(--sal) / var(--hud-z)); }
-  /* Wide map is 140px: dropped chip docks under it (8+140+8), same left as the
-     map, instead of the old 72px-below-hud-top slide that entered the flag band. */
-  :root[data-gap-drop] .hud-gaps {
-    top: calc(156px + var(--sat) / var(--hud-z));
-    left: calc(10px + var(--sal) / var(--hud-z));
-    max-width: 140px;
-  }
+  /* Wide map is 140px — --hud-map drives both the canvas size and the dropped
+     chip's under-map dock (no separate drop top/left here). */
+  #minimap { --hud-map: 140px; width: var(--hud-map); height: var(--hud-map); }
   #hud-speed { font-size: 42px; }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }
@@ -176,7 +172,6 @@ body.desktop #pm-calib { display: none !important; }
      height to spare. A monitor does, and at this size the cluster hugging the
      edge reads as something that fell off the screen. */
   #hud-dock { bottom: calc(22px + var(--sab)); }
-  #minimap { width: 140px; height: 140px; }
 }
 
 /* Short-landscape HUD shrink used to live here behind
