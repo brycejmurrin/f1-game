@@ -304,6 +304,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
 
    Type / padding / title-size polish stays out of this change — that lane is
    separate. This block is reachability only. */
+:where(body[data-density="compact"]) #overlay { gap: var(--gap); }
 :where(body[data-density="compact"]) #menu-buttons {
   max-height: calc(100 * var(--svhz) - 2 * var(--gut));
   overflow-x: hidden;
@@ -348,12 +349,18 @@ body { --compact-at: 600px; --wide-at: 620px; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   justify-content: safe center;
   align-content: safe center; justify-items: stretch;
-  column-gap: 32px;
+  /* Token gap, not 32px: on 852×393 that literal was a dead third column
+     between brand and doors. The 1fr tracks already split the safe box. */
+  column-gap: var(--gap);
+  gap: var(--gap);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-brand,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
-  width: min(calc(42 * var(--vwz)), 100%);
+  /* Fill the 1fr track. `42vwz` left ~100px of unused overlay on the
+     play-shape (measured 852) after safe-area — the rooms overflowed
+     a column that was narrower than the space already reserved. */
+  width: 100%;
   min-width: 0;
   max-width: 100%;
 }

@@ -180,7 +180,7 @@ const CEILING = {
   // 2026-09-03: 323 -> 322. Compact-wide title dropped a redundant
   // `#menu-hero .bigbtn { padding-block }` that the following
   // `#menu-buttons .bigbtn { padding }` shorthand already overrode.
-  rawSpacing: 315,
+  rawSpacing: 314,
   // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
   // declaration value; tokens.css custom-property DEFINITIONS excluded — the
   // definition site is the system, not drift; url() interiors excluded).

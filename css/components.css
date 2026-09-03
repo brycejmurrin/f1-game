@@ -814,14 +814,18 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   margin-bottom: calc(var(--gap) / 3 / var(--hud-scale));
 }
 #results     { --sheet-w: 600px; --fit-at: 300px; }
-#standings   { --sheet-w: 560px; --fit-at: 300px; }
+#standings   { --sheet-w: 760px; --fit-at: 300px; }
 /* Help uses a term rail beside a readable description column. At the old 700px
    cap long explanations wrapped heavily; 1000px uses available desktop width
    while viewport fitting still protects constrained/high-scale sheets. */
 #howtoplay   { --sheet-w: 1000px; }
 #advanced    { --sheet-w: 820px; --fit-at: 300px; }
 #audioset    { --sheet-w: 460px; --fit-at: 300px; }
-#race-settings { --sheet-w: 560px; --fit-at: 300px; }
+/* 760, not 560: on an 852 landscape phone the old cap left ~200px of
+   safe width unused while CLOUDY / 57 (FULL) wrapped inside a 180px
+   column. min(100%, …) still shrinks to the safe box; this only spends
+   room that exists (same number as settings / customize / vsfriend). */
+#race-settings { --sheet-w: 760px; --fit-at: 300px; }
 /* 760, not the 380 default. Seven chip rows at normal density overflow a
    720-local portrait sheet and a 473-local 860×560 @115% window — REAL
    sat under BACK/RACE (measured). Compact chrome + the 3-col pin need
