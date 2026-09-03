@@ -41,7 +41,7 @@ function sampleBuf(seconds, sr) {
   return { sampleRate: sr, length: len, duration: seconds, numberOfChannels: 1, getChannelData: () => d };
 }
 
-function boot() {
+function boot(extra = {}) {
   const counts = {};
   const held = [];   // fetch resolvers, released by the test
   const ctx = {
@@ -61,6 +61,7 @@ function boot() {
     AudioContext: function () { return ctx; },
     fetch: () => new Promise((res) => held.push(() => res({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
   };
+  Object.assign(sb, extra);
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/mat4.js" });
@@ -89,4 +90,25 @@ test("an engine started on the synth voice upgrades to the samples once they dec
   GameAudio.setEngine(0.7, 0, false, 0.7, 5, {});
   GameAudio.setEngine(0.8, 0, false, 0.8, 6, {});
   assert.equal(counts.src, srcAfter, "one restart, not one per frame");
+});
+
+test("music PCM cache: a phone keeps only the playing track, desktop the two most recent", async () => {
+  // Decoded PCM is ~90 MB per song. The cache bound is the difference between
+  // a phone holding one song and holding two; fetch count is the observable
+  // (a cache hit never fetches).
+  const play = async (isMobile) => {
+    let fetches = 0;
+    const held = [];
+    const fetch = () => { fetches++; return new Promise((res) => held.push(() => res({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))); };
+    const { GameAudio } = boot({ fetch, ...(isMobile ? { GLX: { isMobile: true } } : {}) });
+    const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
+    GameAudio.init(); await release();           // engine samples (2 fetches)
+    const base = fetches;
+    GameAudio.playTrackId("builtin:menu");  await release();
+    GameAudio.playTrackId("builtin:song2"); await release();
+    GameAudio.playTrackId("builtin:menu");  await release();   // repeat: hit or miss?
+    return fetches - base;
+  };
+  assert.equal(await play(false), 2, "desktop: the two most recent stay decoded, so the repeat is a cache hit");
+  assert.equal(await play(true), 3, "phone: only the playing track is kept, so the repeat re-fetches (and re-decodes)");
 });

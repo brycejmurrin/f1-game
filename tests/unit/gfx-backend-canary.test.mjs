@@ -2296,6 +2296,22 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
     "WGX: ULTRA → 4×, unset → legacy key, anything else 1× (agreeing with GLX's cap)");
 });
 
+test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is one shared array", () => {
+  // A hidden Mesh still references its geometry: after a track switch every
+  // shadow-pool slot the new track did not refill kept an old chunk alive.
+  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sh, /const parkedGeo = new THREE\.BufferGeometry\(\)/, "one shared empty geometry for parked wrappers");
+  assert.match(sh, /for \(let i = used; i < pool\.length; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
+    "endPass must release the discrete casters' geometry, not only hide them");
+  assert.match(sh, /iPool\[i\]\.visible = false; iPool\[i\]\.geometry = parkedGeo;/,
+    "and the instanced casters' geometry");
+  // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
+  // one array per skid mark per frame.
+  const glx = read("js/render/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(glx, /setPolyOffset\(\[-4/, "no per-draw bias literal");
+  assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 3, "the three road decal draws share ROAD_BIAS");
+});
+
 test("pcssPen help names desktop three.js WebGL2 as live", () => {
   const lighting = read("js/game/lighting-knobs.js");
   assert.match(lighting, /three\.js desktop WebGL2/,

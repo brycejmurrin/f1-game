@@ -203,7 +203,18 @@ function create(ctx) {
   // Group B disable flags — default ON, read once at boot (any value but "0" is on).
   try { _breakBarriers = (localStorage.getItem("apex26.breakBarriers") || "1") !== "0"; } catch (e) {}
   try { _marbleGripOn = (localStorage.getItem("apex26.marbleGrip") || "1") !== "0"; } catch (e) {}
-  if (opt === "1") setEnabled(true);   // async load, never blocks boot (set "0" to disable)
+  // The 2.2 MB Rapier import + WASM compile used to start HERE, inside the
+  // boot burst (shader compiles, the asset pack, the first track build), for a
+  // side-world nothing needs before a race is primed. It now waits for the
+  // first idle slice (Safari has no requestIdleCallback: a plain timer there);
+  // prime() starts it at once if a race arrives first, and step() builds the
+  // world lazily when the load lands after prime. Set "0" to disable.
+  if (opt === "1") {
+    _enabled = true;
+    const kick = () => { if (_enabled) _load(); };
+    if (typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 5000 });
+    else setTimeout(kick, 2500);
+  }
   // No API return: the sole caller (game.js) discards it and everything goes
   // through the module global — a hand-maintained duplicate list here had
   // already diverged from the real export (it was missing prime).
@@ -290,6 +301,7 @@ function active() { return _active; }
 // with the old path intact as its fallback.
 function prime() {
   const track = G.track, cars = G.cars;
+  if (_enabled && _loadState === 0) _load();   // a race beat the deferred boot kick
   if (!_active || !track || !cars || !cars.length) return false;
   if (world && (_worldTrack !== track || _mirrors.length !== cars.length)) destroyWorld();
   if (!world) buildWorld(track, cars);

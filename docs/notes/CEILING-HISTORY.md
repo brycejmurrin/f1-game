@@ -1379,3 +1379,9 @@ live in `ratchets.json`.
   throw after `envCubeTex` was assigned satisfied the re-entry guard with an
   empty `envFaceViews` and every probe cycle passed an undefined view to
   beginRenderPass — one GPU error per cycle for the life of the tab.
+- `js/game.js` 9245 -> **9246** lines / 5057 -> **5058** code / 221 -> **222** G
+  members (2026-09-03): `_skyHold` — `__apex.renderClock(t, true)` freezes the
+  render clock. `tests/specs/image-grade-visual.spec.js` diffs two screenshots
+  of one scene, and cloud drift between them was the Metal-CI flake; a clock
+  that can only be SET, not held, could not pin it (a software runner renders
+  <1 FPS, so one frame is a second of drift).

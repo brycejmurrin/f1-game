@@ -1234,18 +1234,18 @@ const api = {
     };
   },
 
-  // List all available circuit IDs and names (for iterating in test harnesses).
-  // The built track's scenery SCENE GRAPH (js/track/graph.js): the model library
-  // + one node per placement, plus batches() — the backend-neutral instanced-draw
-  // handoff. Returns null before a track is built. Live object, not a copy: read
-  // it, do not mutate it.
   // Get or PIN the render clock (sky/cloud drift, FLAG cloth wave). It normally
   // accumulates real frame dt, so two runs of the same frozen scene render
   // different pixels — the reason tests/manual/tracks-visual.spec.js could never hold a
   // baseline. Setting it makes a capture reproducible; it keeps advancing from
-  // the value you set unless the scene is also headless().
-  renderClock(t) { if (t !== undefined) G.skyT = t; return G.skyT; },
+  // the value you set unless `hold` is true (or the scene is headless()).
+  renderClock(t, hold) { if (t !== undefined) { G.skyT = t; G.skyHold = !!hold; } return G.skyT; },
+  // The built track's scenery SCENE GRAPH (js/track/graph.js): the model library
+  // + one node per placement, plus batches() — the backend-neutral instanced-draw
+  // handoff. Returns null before a track is built. Live object, not a copy: read
+  // it, do not mutate it.
   trackGraph: () => (G.track && G.track.graph) || null,
+  // List all available circuit IDs and names (for iterating in test harnesses).
   tracks: () => Tracks.LIST.map((t, i) => ({ id: t.id, name: t.name, i })),
 
   // List all teams with engine supplier (for factory-parts and setup tests).

@@ -163,6 +163,12 @@
     const pool = [];
     let used = 0;
     let target = null;    // the pass's render target while open
+    // Parked wrappers (index >= used after a pass) point at this instead of
+    // their last caster: a hidden Mesh still REFERENCES its geometry, so after
+    // a track switch the old track's chunk geometries stayed alive in every
+    // slot the new track did not refill. An attribute-less geometry is never
+    // rendered (the wrapper is invisible) and costs nothing.
+    const parkedGeo = new THREE.BufferGeometry();
 
     function cast(mesh /* {__tlx, geo} */, model /* column-major mat4 */) {
       if (!S.depthPassOn || !mesh || !mesh.geo) return;
@@ -254,8 +260,8 @@
       S.depthPassOn = false;
       if (!target) return;
       const wasSun = target === sunRT;
-      for (let i = used; i < pool.length; i++) pool[i].visible = false;
-      for (let i = iUsed; i < iPool.length; i++) if (iPool[i]) iPool[i].visible = false;
+      for (let i = used; i < pool.length; i++) { pool[i].visible = false; pool[i].geometry = parkedGeo; }
+      for (let i = iUsed; i < iPool.length; i++) if (iPool[i]) { iPool[i].visible = false; iPool[i].geometry = parkedGeo; }
       const prev = renderer.getRenderTarget();
       try {
         renderer.setRenderTarget(target);

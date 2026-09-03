@@ -97,6 +97,12 @@ async function boot(page, {
       window.__apex.camState().debug === true;
   }, { tod, weather }, { polling: 100, timeout: 45_000 });
   if (neutralGrade) await setTune(page, GRADE_NEUTRAL);
+  // Every test here screenshots the SAME scene twice and diffs the pair. The
+  // render clock (cloud drift, star twinkle) kept advancing between the two —
+  // on a software-GL runner at <1 FPS that is a second of cloud motion per
+  // frame, which entered the assertion as "changed pixels" (Metal CI flake,
+  // 2026-09-03). Hold it: the only thing allowed to move is the grade.
+  await page.evaluate(() => window.__apex.renderClock(100, true));
 }
 
 async function pixels(page) {
