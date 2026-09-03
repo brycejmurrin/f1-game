@@ -144,7 +144,7 @@ test("snapshot uses probe(), never obs()", () => {
 
 test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   const { M } = load({});
-  assert.match(M.PANEL_STYLE, /right:\s*8px/);
+  assert.match(M.PANEL_STYLE, /right:calc\(8px \+ var\(--sar, 0px\)\)/);   // safe-area aware, one style everywhere
   assert.match(M.PANEL_STYLE, /--tap/);
   assert.match(M.PANEL_STYLE, /--hud-scale/);
   assert.match(M.PANEL_STYLE, /z-index:11/);

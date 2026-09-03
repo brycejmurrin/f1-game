@@ -240,7 +240,7 @@ function create(G) {
     ]));
     out.push(guideSection("RACE SETTINGS", [
       "Reachable on the way to every weekend. Race length, weather, time of day, "
-      + "AI difficulty (" + Object.keys(GameTables.DIFF).join(" / ") + ") and "
+      + "AI difficulty (" + Object.keys(PhysicsConsts.DIFF).join(" / ") + ") and "
       + "reliability.",
       "They change the weekend, never the economy: prize money is paid on where "
       + "you finished, whatever length or weather you chose to finish in.",

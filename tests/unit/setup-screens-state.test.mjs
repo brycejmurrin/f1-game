@@ -127,7 +127,7 @@ function loadCareerUi(careerOpts = {}) {
     GameStore: { seasonDriverId: (t, i) => t + ":" + i },
     SeasonCal: { hasProgress: () => false, rounds: () => 24 },
     Reliability: { REASONS: ["engine"], TIER_RISK: [0.02, 0.06] },
-    GameTables: { DIFF: { EASY: 1 } },
+    PhysicsConsts: { DIFF: { EASY: 1 } },
   });
   vm.runInNewContext(src("js/game/career-ui.js"), sb, { filename: "js/game/career-ui.js" });
   const ui = sb.CareerUI.create(G);

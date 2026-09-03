@@ -125,5 +125,19 @@ const Teams = (function () {
   /* Top 10 race points, 2026: no fastest-lap point. */
   const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 
-  return { LIST: LIST, POINTS: POINTS };
+  /* The pace ladder the `tier` field above indexes: ground-speed scale per
+     tier, 0 fastest .. 4 slowest (~1.5% a step). game.js folds it with the
+     career development multiplier into each AI car's tierV. */
+  const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
+
+  /* The MY TEAM custom entry — same record shape as LIST, the seed a fresh
+     apex26.customTeam save starts from (game.js loadCustomTeam). */
+  const DEFAULT_CUSTOM = {
+    id: "custom", name: "My Team", short: "YOU", engine: "Custom", tier: 2, custom: true,
+    color: [0.13, 0.79, 0.85], color2: [0.96, 0.86, 0.0],
+    stats: { speed: 84, accel: 82, cornering: 83, braking: 81 },
+    drivers: [{ name: "Your Name", code: "YOU", num: 99 }],
+  };
+
+  return { LIST: LIST, POINTS: POINTS, TIER_V: TIER_V, DEFAULT_CUSTOM: DEFAULT_CUSTOM };
 })();

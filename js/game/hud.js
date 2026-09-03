@@ -2,7 +2,7 @@
 const GameHud = (function () {
   "use strict";
 
-const { IDLE_RPM, MAX_RPM } = GameTables;
+const { IDLE_RPM, MAX_RPM } = PhysicsConsts;   // eval-time read: HARD_EDGES pins physics-consts.js first
 const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
 
 function create(G) {

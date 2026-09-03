@@ -125,7 +125,7 @@ export const RULES = [
   [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js/, ["input"], ""],
   [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["input"], ""],
   [/^js\/game\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
-  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|metrics|cockpit-opts|sheetshape)\.js/, ["ui"], "DOM screens"],
+  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|renderer-picker|metrics|cockpit-opts|sheetshape)\.js/, ["ui"], "DOM screens"],
   [/^js\/game\/(lighting|light-presets|atmosphere|tuner)\.js/, ["gfx"], ""],
   [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["modes", "state-unit"], ""],
   // The season calendar/format. `modes` is season+career+TT+quali (career is a

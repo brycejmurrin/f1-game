@@ -12,7 +12,7 @@ that overrides them for framing.
 ## The 13 camera modes
 
 `__apex.camera()` → `{ mode, index, modes:[...] }`. Cycle order
-(`CAM_MODES` in `js/game/tables.js`):
+(`CamModes.CAM_MODES` in `js/game/cam-modes.js`):
 
 ```
 chase  far  drift  cockpit  hood  overhead  heli  reverse  side  cinematic  low  tcam  rear

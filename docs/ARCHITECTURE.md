@@ -40,7 +40,7 @@ js/render/glx.js + glx/* -> GLX        (default WebGL2 renderer + its passes)
 js/render/gfx.js         -> Gfx        (renderer selection seam; the WGX and
                                         TLX backends are DEFERRED — no script
                                         tag, injected at boot when opted into)
-js/car/teams.js          -> Teams      (2026 grid data)
+js/car/teams.js          -> Teams      (2026 grid data + TIER_V pace ladder + the MY TEAM seed)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
 js/circuits/*.js         -> TrackDefs  (one def per circuit; its scenery(api) closure is
                                         split to js/circuits/scenery/<id>.js, fetched per build)
@@ -270,7 +270,7 @@ button cannot — an iOS jetsam kill, which takes the tab with no JS error and n
 `webglcontextlost`, and which the `GLX.init`-failure recovery in the same file
 never sees. Everything else is recoverable by hand: the menus are DOM layered
 over the canvas, so they stay legible through a garbage frame and the button
-(owned by `js/game/gfx-quality.js`, visible in the HTML, wired at
+(owned by `js/game/renderer-picker.js`, visible in the HTML, wired at
 DOMContentLoaded) is one tap away. Pressing the button also disarms the probe,
 so switching from the menu before any world frame does not revert the choice
 just made.
@@ -390,6 +390,8 @@ Teams.LIST -> [ { id:"mercedes", name:"Mercedes-AMG Petronas", short:"MER",
 // 11 teams in 2026 spec: Mercedes(t0), Ferrari(t1), McLaren(t1, Norris num:1),
 // Red Bull(t2, Verstappen num:33), Alpine(t3), Racing Bulls(t3), Haas(t3),
 // Williams(t3), Audi(t4), Aston Martin(t4), Cadillac(t4, Perez 11 / Bottas 77)
+Teams.TIER_V -> [1.0, 0.988, 0.973, 0.958, 0.942]   // ground-speed scale per tier
+Teams.DEFAULT_CUSTOM -> the MY TEAM seed record (id "custom", tier 2)
 Teams.POINTS  -> [25,18,15,12,10,8,6,4,2,1]   // top 10, no fastest-lap point
 ```
 
@@ -645,12 +647,16 @@ DataHub.init(rootEl)   DataHub.open()   DataHub.close()   DataHub.isOpen() -> bo
 ```
 Styles in `css/data.css` only (prefix all classes `dh-`).
 
-## js/game/tables.js — `GameTables`
+## Where the old `tables.js` rows live
 
-Static gameplay/render data destructured by game.js at the original sites:
-`DEFAULT_CUSTOM` (the custom team), `TIER_V` (AI tier speeds), `GEARS`/
-`GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` (gearbox), `DIFF` (difficulty), `CAM_MODES`
-(player camera list) and the `PAINT_*` car-paint material constants.
+The grab-bag data file went with Phase 2a of
+`docs/research/TREE-RESTRUCTURE-2026-09.md`; each row sits with its owner:
+`DEFAULT_CUSTOM` and `TIER_V` in `js/car/teams.js` (the record shape and the
+`tier` field they index), `GEARS`/`GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` and `DIFF`
+in `js/game/physics-consts.js` (immutable model numbers, already eval-pinned
+before every reader), `CAM_MODES` in `js/game/cam-modes.js`
+(`CamModes.CAM_MODES`), and the four `PAINT_*` car-paint constants in
+`js/game.js` beside `carPaintMat()`, their only reader.
 
 ## js/game/lighting.js — `LightTune`
 
@@ -691,7 +697,7 @@ state plus stable helpers, passed to `Module.create(G)`:
 
 | File | Global | Owns |
 |---|---|---|
-| `physics-consts.js` | `PhysicsConsts` | the driving model's immutable numbers (`VMAX`, `LAT_MAX`, `BRAKE`, …), destructured once by game.js at eval time (a `HARD_EDGES` entry in `tools/manifest.cjs`). Values only — anything a slider or `setPhysics` can change stays a `let` in game.js. A plain data global, not a `create(G)` module |
+| `physics-consts.js` | `PhysicsConsts` | the driving model's immutable numbers (`VMAX`, `LAT_MAX`, `BRAKE`, …, the `GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` gearbox and the `DIFF` difficulty presets), destructured once by game.js at eval time (a `HARD_EDGES` entry in `tools/manifest.cjs`; `hud.js` reads the RPM pair the same way). Values only — anything a slider or `setPhysics` can change stays a `let` in game.js. A plain data global, not a `create(G)` module |
 | `store.js` | `GameStore` | localStorage persistence (settings, season, parts, records) + the career save and its migration ladder |
 | `career.js` | `Career` | CAREER rules: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots in separate sets, one live at a time; both earlier layouts migrate in), the credits economy, contracts, driver/team development, R&D ownership, round settlement. Pure data — no DOM, and a plain global (no ctx), because game.js calls it from `makeCars()`/`recomputePlayerMods()`/`endRace()`. Every GAMEPLAY accessor is gated on `inCareer()`, NOT on "a save exists": the save loads at boot so the title button can offer CONTINUE, but its rules must never reach a Grand Prix |
 | `career-ui.js` | `CareerUI` | the CAREER screen (`#career`) — three states in one sheet: CAREER MODES (both modes, their six slots and their guides — the title button's one door), new-career setup, and the season hub. States rather than screens, so all three inherit the sheet's MenuNav / ScrollFade / AriaState registration instead of needing their own. Replaces `#select` in career, since the calendar owns where you race |
@@ -699,7 +705,7 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `reliability.js` | `Reliability` | RELIABILITY / DNFs — whether a car reaches the flag. Risk is DERIVED (team tier, relieved by career team development and by the player's fitted engine + gearbox), never authored per team. The whole field's retirements are drawn ONCE at the green light from a stateless hash of `(seed, round, driver)`, so arming a race consumes nothing from the sim RNG stream. Ships OFF — opt-in per race via the RELIABILITY setting |
 | `perf.js` | `PerfGov` | adaptive performance governor (render scale / FX tiers) |
 | `cameras.js` | `GameCams` | the 13 player camera modes + the `__apex.view` debug free-cam framing |
-| `cam-modes.js` | `CamModes` | the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to `cameras.js` |
+| `cam-modes.js` | `CamModes` | `CAM_MODES` (the 13-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to `cameras.js` |
 | `hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
 | `results.js` | `GameResults` | results + season-end screens, penalties, points |
 | `apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md). `LAZY_AGENT` — no tagged script; `game.js` injects it when `wantAgentSurface()` |
@@ -718,8 +724,8 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `ariastate.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
 The table lists the modules whose contracts need prose; the rest of `js/game/`
-(59 files today — input, audio, lighting, particles, ai-drive, season-cal,
-ui-scale, gfx-quality, metrics and the rest) is enumerated by
+(58 files today — input, audio, lighting, particles, ai-drive, season-cal,
+ui-scale, gfx-quality, renderer-picker, metrics and the rest) is enumerated by
 `tools/manifest.cjs`, which is the roster truth AGENTS.md's layout defers to
 (the docs-integrity guard asserts the deferral, not a per-file list).
 
@@ -772,7 +778,7 @@ in load order, standings table between races, saved in
 `apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,
 sound), season.
 
-Camera: 13 player modes (`CAM_MODES` in `js/game/tables.js`, driven by
+Camera: 13 player modes (`CAM_MODES` in `js/game/cam-modes.js`, driven by
 `GameCams`) cycled with the CAM button / C key (persisted) — CHASE (close,
 behind+above), FAR (pulled back/up), DRIFT (swings outside on a slide),
 COCKPIT (onboard eye, player car hidden), HOOD (nose cam), OVERHEAD (top-down

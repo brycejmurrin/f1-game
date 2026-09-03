@@ -1023,7 +1023,7 @@
                 select(matteSurface, float(0.0),
                   select(iriSurface, max(matU.metalness, 0.25),
               // PAINT gets metalness instead of falling through to 0.0 — mirrors
-              // js/render/shaders/lit.js. tables.js sets 0.12 on every PAINT_*
+              // js/render/shaders/lit.js. game.js sets 0.12 on every PAINT_*
               // and describes the flake it is meant to produce; the 0.0 discarded
               // it and made CAR METALLIC dead on every car pixel.
               select(carbonSurface, float(0.08),

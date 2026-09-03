@@ -61,7 +61,7 @@ const PAGE_GLOBALS = new Set([
   "F1API", "DataHub", "UiLayers", "TopModal", "MusicLib", "SpotifyMusic",
   "CircuitMarkings", "TrackSpline", "TrackMesh", "TrackGeom", "TrackGraph",
   "TrackSpace", "TrackSurface", "TrackModels", "TrackMaps", "SceneryThemes",
-  "CircuitPaths", "TrackSceneryData", "GameTables", "LightTune", "LightStore",
+  "CircuitPaths", "TrackSceneryData", "CamModes", "LightTune", "LightStore",
   "GLTF", "THREE", "TLX", "WGX", "Input", "GameAudio", "GameStore", "PerfGov",
 ]);
 

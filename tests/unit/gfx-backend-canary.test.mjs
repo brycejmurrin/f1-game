@@ -9,7 +9,7 @@
  * them. Now the GLX renderer is BOOTED on tests/helpers/glx-mock.mjs (a
  * recording WebGL2 mock) and asserted by its gl call stream — uniform caches,
  * fail-closed guards, cull bookkeeping, the light-lane packing, the opaque
- * canvas; the RENDERER picker is driven through gfx-quality.js in a VM; the
+ * canvas; the RENDERER picker is driven through renderer-picker.js in a VM; the
  * GPU-census Verdict script is EXECUTED against fixtures. WGX behaviour that
  * tests/unit/webgpu-lifecycle.test.mjs already drives on its mock device is
  * not repeated here as text. What stays a source pin — TLX (three.js cannot
@@ -90,12 +90,14 @@ test("first world present re-arms the canary so a jetsam mid-frame still reverts
   assert.match(window, /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/);
 });
 
-test("RENDERER picker lives in gfx-quality.js, not game.js", () => {
+test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js", () => {
   // The picker's own behaviour — a <select> with ‹ › steps, "WEBGPU
   // (UNAVAILABLE)" without navigator.gpu — is driven through bootPicker()
   // below; this is the ownership rule only.
   assert.doesNotMatch(code("js/game.js"), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
-  assert.match(code("js/game/gfx-quality.js"), /getElementById\(\s*"pm-renderer"\s*\)/);
+  assert.match(code("js/game/renderer-picker.js"), /getElementById\(\s*"pm-renderer"\s*\)/);
+  // The preset file keeps the GRAPHICS button only — the split is the ownership rule.
+  assert.doesNotMatch(code("js/game/gfx-quality.js"), /pm-renderer|apex26\.gfxBackend/);
 });
 
 test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", () => {
@@ -358,11 +360,11 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
 });
 
 test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgpu", () => {
-  const src = read("js/game/gfx-quality.js");
+  const src = read("js/game/renderer-picker.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
   seedLog(ctx);
-  vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
-  const G = vm.runInContext("GfxQuality", ctx);
+  vm.runInContext(src, ctx, { filename: "js/game/renderer-picker.js" });
+  const G = vm.runInContext("RendererPicker", ctx);
   assert.equal(G.nextBackend("webgl2"), "three");
   assert.equal(G.nextBackend("three"), "webgpu");
   assert.equal(G.nextBackend("webgpu"), "webgl2");
@@ -392,7 +394,7 @@ test("RESET RENDERER is injected next to #pm-renderer, not written into the shel
 });
 
 test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality", () => {
-  const src = read("js/game/gfx-quality.js");
+  const src = read("js/game/renderer-picker.js");
   const ls = makeStorage({
     "apex26.gfxBackend": "three",
     "apex26.gfxBackendProbe": "three",
@@ -418,8 +420,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   });
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
   seedLog(ctx);
-  vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
-  const G = vm.runInContext("GfxQuality", ctx);
+  vm.runInContext(src, ctx, { filename: "js/game/renderer-picker.js" });
+  const G = vm.runInContext("RendererPicker", ctx);
   // Frozen deepEqual, not spot includes(): a round-6 audit found 7 of 12 keys
   // unasserted — a new crash latch omitted from the list would fail nothing
   // and then survive RESET RENDERER. Adding a key now REQUIRES updating this
@@ -468,7 +470,7 @@ test("blocked sessionStorage skips the opt-in so this tab never claims the canva
 });
 
 test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", () => {
-  const src = read("js/game/gfx-quality.js");
+  const src = read("js/game/renderer-picker.js");
   const ls = makeStorage({ "apex26.gfxBackend": "webgpu", "apex26.gfxHigh": "0" });
   const ss = makeStorage({ "apex26.gfxClaimFail": "1" });
   const kids = [];
@@ -507,8 +509,8 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
     GLX: { isMobile: true },
   });
   seedLog(ctx);
-  vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
-  const G = vm.runInContext("GfxQuality", ctx);
+  vm.runInContext(src, ctx, { filename: "js/game/renderer-picker.js" });
+  const G = vm.runInContext("RendererPicker", ctx);
   G.init();
   const btn = byId["pm-renderer-reset"];
   assert.ok(btn, "reset button was injected");
@@ -1076,7 +1078,7 @@ function makePickerDom(byId, hostKids) {
 }
 
 function bootPicker(opts) {
-  const src = read("js/game/gfx-quality.js");
+  const src = read("js/game/renderer-picker.js");
   const ls = makeStorage(opts.ls || {});
   const ss = makeStorage(opts.ss || {});
   const hostKids = [];
@@ -1106,8 +1108,8 @@ function bootPicker(opts) {
     GLX: { isMobile: true },
   });
   seedLog(ctx);
-  vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
-  const G = vm.runInContext("GfxQuality", ctx);
+  vm.runInContext(src, ctx, { filename: "js/game/renderer-picker.js" });
+  const G = vm.runInContext("RendererPicker", ctx);
   // readyState is "complete", so the IIFE already called init().
   return { G, ls, ss, byId, hostKids, reloaded: () => reloaded, timers, winListeners };
 }
@@ -1219,14 +1221,14 @@ test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () =>
 });
 
 test("presentStatus names the three screenshot paths in plain language", () => {
-  const src = read("js/game/gfx-quality.js");
+  const src = read("js/game/renderer-picker.js");
   const ctx = vm.createContext({
     window: {}, document: undefined,
     localStorage: makeStorage({ "apex26.gfxBackend": "webgpu", "apex26.wgxCapture": "0" }),
     sessionStorage: makeStorage(),
   });
-  vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
-  const G = vm.runInContext("GfxQuality", ctx);
+  vm.runInContext(src, ctx, { filename: "js/game/renderer-picker.js" });
+  const G = vm.runInContext("RendererPicker", ctx);
   assert.match(G.presentStatus(), /native swapchain/);
   G.applyShotMode("blit", { noReload: true });
   assert.match(G.presentStatus(), /copied onto the canvas/);
