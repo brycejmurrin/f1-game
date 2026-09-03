@@ -49,7 +49,7 @@ would keep GLX’s dead closure).
 |---|---|---|---|
 | **GLX** | Default always-tagged WebGL2 | `js/render/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
 | **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
-| **TLX** | Opt-in Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; mobile/WebKit take the WebGPU path with lite caps) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
+| **TLX** | Opt-in Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/gltf.js`,
 `js/render/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
@@ -96,6 +96,7 @@ RENDERER so the body-node ratchet stays put.
 | **THREE PATH** | three.js GPU: `AUTO` / `WEBGL2` / `WEBGPU` (`apex26.tlxForceGL`). Reloads only if RENDERER is THREE.JS. |
 | **SCREENSHOTS** | WebGPU present: `AUTO` / `2D BLIT` / `NATIVE` (`apex26.wgxCapture`). Reloads only if RENDERER is WEBGPU. |
 | **SAVE SCREENSHOT** | Waits for `awaitSoftPresent`, then downloads `#game` as a PNG. |
+| **COPY DIAG** | `__apex.diag({download:false})` as JSON on the clipboard (clipboard API, hidden-textarea fallback) — `env.backendState` carries api, `gpuErrors`, the first GPU/WGSL error, the soft-present counters, pack state and the debug switches. Paste it into a bug report instead of a clipped panel screenshot. |
 | Status line | Plain-language: which path is live, and whether screenshots will work. |
 
 **The rule in one sentence.** On a software GPU (SwiftShader / Lavapipe) the
@@ -107,7 +108,7 @@ whole device.
 |---|---|---|
 | **WEBGL2** | Native canvas. Screenshots just work. | `canvas.toDataURL` |
 | **WEBGPU** | Soft-present: final pass → `COPY_SRC` texture → ephemeral readback → `putImageData` on `#game`. Forced by SCREENSHOTS: 2D BLIT or a software adapter. SCREENSHOTS: NATIVE leaves the swapchain black. | `GLX.awaitSoftPresent()` then `#game`; optional `GLX.capturePixels()` |
-| **THREE.JS** | AUTO can be **WebGPU or three WebGL2**. SETTINGS shows `AUTO (WEBGPU)` / `AUTO (WEBGL2)` from the live backend. It tries WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE; since 2026-09-02 a phone that picks THREE.JS BINDS it despite the §2m memory risk — `apex26.tlxMobile=0` declines back to GLX, and the boot canary reverts a load that never presented). It lands on three WebGL2 when GPU is missing, `apex26.tlxAutoGL=1` after this tab lost WebGPU, or `init()` threw before `#game` was claimed — still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
+| **THREE.JS** | AUTO can be **WebGPU or three WebGL2**. SETTINGS shows `AUTO (WEBGPU)` / `AUTO (WEBGL2)` from the live backend. It tries WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE; since 2026-09-02 a phone that picks THREE.JS BINDS it despite the §2m memory risk — `apex26.tlxMobile=0` declines back to GLX, and the boot canary reverts a load that never presented). It lands on three WebGL2 when GPU is missing, `apex26.tlxAutoGL=1` after this tab lost WebGPU, `init()` threw before `#game` was claimed, **or the browser is WebKit (Safari, every iOS browser) — since 2026-09-03: two deploys drew three-WebGPU wrongly on an iPhone with zero reported errors (bodywork missing, then sky-only at `c6d8fd3`); THREE PATH: WEBGPU still pins it for the investigation, with `apex26.tlxArrayNearest=1` / `apex26.tlxNoMrt=1` as the on-device A/B switches and SETTINGS ▸ COPY DIAG as the report** — still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
 
 Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 

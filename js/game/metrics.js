@@ -165,7 +165,7 @@ function snapshot() {
     // one. A phone screenshot of this panel is the evidence a "see-through
     // car on THREE.JS" report never carried (the pick label alone cannot tell
     // WebGPU from WebGL2, or a rejected pipeline from a healthy one).
-    gfxApi: "", gpuErr: null, gpuFirst: "",
+    gfxApi: "", gpuErr: null, gpuFirst: "", tlx: "",
     state: "", track: "", session: "", flow: "",
     lapsTarget: null, quali: null, career: null, turns: null,
     lap: null, pos: null, total: null,
@@ -225,6 +225,16 @@ function snapshot() {
             if (bs.api) out.gfxApi = String(bs.api);
             if (bs.gpuFirstError) out.gpuFirst = String(bs.gpuFirstError).slice(0, 72);
             if (bs.gpuErrors != null) out.gpuErr = bs.gpuErrors | 0;
+            // TLX only: the presentation path, the readback counters, the pack
+            // and the debug switches — the fields a phone A/B needs to see.
+            if (bs.softRead) {
+              out.tlx = "blit " + (bs.softBlit ? "on" : "—") +
+                "  read g" + (bs.softRead.gen | 0) + "/f" + (bs.softRead.fails | 0) +
+                "  pack " + (bs.packLive ? "ok" : "—") +
+                "  heal " + (bs.healed ? "yes" : "—") +
+                (bs.arrayNearest ? "  ARRAYNEAREST" : "") + (bs.noMrt ? "  NOMRT" : "") +
+                (bs.drawMatMode ? "  matMode " + bs.drawMatMode : "");
+            }
           }
         }
       }
@@ -470,7 +480,7 @@ function paintOverlay() {
         pair("tier", fmt(s.tier), "auto", fmt(s.auto)),
         pair("gfx", fmt(s.backend || null) + (s.gfxApi ? "/" + s.gfxApi : ""), "err", fmt(s.gpuErr)),
         (s.track || "menu") + "  " + (s.caution || "GREEN"),
-      ].concat(s.gpuFirst ? [s.gpuFirst.slice(0, 40)] : []);
+      ].concat(s.gpuFirst ? [s.gpuFirst.slice(0, 40)] : []).concat(s.tlx ? [s.tlx.slice(0, 44)] : []);
     } else {
       lines = [
         hdr,
@@ -480,10 +490,13 @@ function paintOverlay() {
         row("budget", fmt(s.budget) + " ms   tier " + fmt(s.tier) +
                       (s.tierFloor != null ? " (fl " + s.tierFloor + ")" : "") +
                       "   auto " + fmt(s.auto)),
+        // err FIRST: on a phone the row's tail is what clips, and the error
+        // count is the one number a "nothing renders" screenshot must carry.
         row("gfx",    fmt(s.backend || null) + (s.gfxApi ? "/" + s.gfxApi : "") +
-                      "   scale " + fmt(s.scale) + "   strikes " + fmt(s.strikes) +
-                      "   err " + fmt(s.gpuErr)),
-      ].concat(s.gpuFirst ? [row("gpu", s.gpuFirst)] : []).concat([
+                      "   err " + fmt(s.gpuErr) + "   strikes " + fmt(s.strikes) +
+                      (s.scale != null ? "   scale " + fmt(s.scale) : "")),
+      ].concat(s.gpuFirst ? [row("gpu", s.gpuFirst)] : [])
+       .concat(s.tlx ? [row("tlx", s.tlx)] : []).concat([
         sep(),
         row("session", (s.track || "menu") + "  " + (s.flow || s.session || s.state || "") +
                        "  " + (s.caution || "GREEN") + "  cam " + fmt(s.cam || null) +

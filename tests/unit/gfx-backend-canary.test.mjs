@@ -109,8 +109,13 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   // the caller-supplied opaque context it is keyed on. The canvas came up
   // alpha-composited and the cars rendered see-through. The gate is now the
   // obtainable WebGPU CONTEXT; renderer-soft-lifecycle.test.mjs holds the rest.
-  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\)\s*\)/,
-    "AUTO stays on WebGL2 when no WebGPU context is obtainable, or after an init failure; a pin of 1/0 overrides");
+  // 2026-09-03: `|| isWebKit` joined the clause. Two consecutive deploys
+  // rendered three-WebGPU wrongly on the owner's iPhone (bodywork missing,
+  // then sky-only at c6d8fd3) with ZERO reported GPU/WGSL errors, while
+  // three's WebGL2 backend on the same phone is known-good (ed8f41f). AUTO on
+  // WebKit takes WebGL2; THREE PATH: WEBGPU (pin "0") still forces WebGPU.
+  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\|\|\s*isWebKit\s*\)\s*\)/,
+    "AUTO stays on WebGL2 when no WebGPU context is obtainable, after an init failure, or on WebKit; a pin of 1/0 overrides");
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
   assert.match(src, /AUTO stayed on three WebGL2/);

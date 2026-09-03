@@ -1214,7 +1214,7 @@ const CEILINGS = {
   // tree's own count, re-measured with this suite's metric. Note 2915 was itself
   // a merge resolution that could not see the deploy branch's +6 — which is why
   // the rule is re-measure, never add either side's number on paper.
-  "js/render/three/tlx.js": 3107,   // 2924 -> 3077 (split-newline count) 2026-09-03: placeholder material arrays carry the pack's sampling state (three compiles textureLoad+clamp from a Nearest placeholder — the phone unlit-track defect); WGSL compile capture; AUTO self-heal to three-WebGL2 on early GPU errors; phones never 'software'; soft-present stale-read guard; backendState on the façade; hidden device loss defers its reload   // +1: lampShadowKeep returns on the corrected key
+  "js/render/three/tlx.js": 3132,   // 2924 -> 3077 (split-newline count) 2026-09-03: placeholder material arrays carry the pack's sampling state (three compiles textureLoad+clamp from a Nearest placeholder — the phone unlit-track defect); WGSL compile capture; AUTO self-heal to three-WebGL2 on early GPU errors; phones never 'software'; soft-present stale-read guard; backendState on the façade; hidden device loss defers its reload   // +1: lampShadowKeep returns on the corrected key
   // GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
   // 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
   // brightness multiplier — it was compensating for the missing lamp transform

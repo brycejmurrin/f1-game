@@ -390,7 +390,7 @@ function presentStatus() {
     if (api === "webgl2") {
       return "THREE.JS AUTO is three WebGL2 — still TLX, not game WEBGL2. THREE PATH: WEBGPU pins three WebGPU.";
     }
-    return "THREE.JS AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, and stays on three WebGL2 if GPU is missing or this tab already lost WebGPU.";
+    return "THREE.JS AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, and stays on three WebGL2 if GPU is missing, this tab already lost WebGPU, or the browser is Safari/iOS (WebKit WebGPU drew nothing on a phone — THREE PATH: WEBGPU opts back in).";
   }
   return "WEBGL2 paints the canvas directly. Screenshots just work.";
 }
@@ -485,7 +485,7 @@ function initPresentControls() {
   }
 
   const pathBtn = addBtn("pm-three-path",
-    "three.js GPU path. AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists. WEBGL2 / WEBGPU pin one path.");
+    "three.js GPU path. AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, except on Safari/iOS (three WebGL2). WEBGL2 / WEBGPU pin one path.");
   const shotBtn = addBtn("pm-screenshots",
     "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.");
   const saveBtn = addBtn("pm-save-shot",
@@ -493,6 +493,13 @@ function initPresentControls() {
   // The label was only ever written by saveScreenshot()'s done() — the button
   // painted as an EMPTY plate until its first click (screenshot, 2026-09-02).
   saveBtn.textContent = "SAVE SCREENSHOT";
+  // COPY DIAG: __apex.diag() as JSON on the clipboard. A phone report used to
+  // be a screenshot of the GOV panel, whose right edge clips the one number
+  // that matters; env.backendState carries api, gpuErrors, the first GPU/WGSL
+  // error, the soft-present counters, the pack state and the debug switches.
+  const diagBtn = addBtn("pm-copy-diag",
+    "Copy __apex.diag() (renderer/backend state, GPU errors, device, build) to the clipboard as JSON, to paste into a bug report.");
+  diagBtn.textContent = "COPY DIAG";
   const status = document.createElement("p");
   status.id = "pm-gfx-status";
   add(status);
@@ -511,6 +518,46 @@ function initPresentControls() {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
     saveScreenshot();
   };
+  diagBtn.onclick = function () {
+    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
+    copyDiag(diagBtn);
+  };
+}
+
+// __apex.diag({download:false}) → clipboard. clipboard.writeText needs a
+// secure context and can reject (iOS wants a user gesture, which this is);
+// the hidden-textarea execCommand fallback is what makes it work over plain
+// http and on older WebKit — the same two-step js/game/gfx-debug.js uses.
+function copyDiag(btn) {
+  const label = (t) => { if (btn) btn.textContent = t; };
+  const reset = () => setTimeout(() => label("COPY DIAG"), 1600);
+  let text = "";
+  try {
+    const d = (typeof __apex !== "undefined" && __apex.diag) ? __apex.diag({ download: false }) : null;
+    text = d ? JSON.stringify(d, null, 1) : "";
+  } catch (e) { text = ""; }
+  if (!text) { label("COPY DIAG — NO DIAG"); reset(); return; }
+  const done = () => { label("COPY DIAG — COPIED"); reset(); };
+  const fallback = () => {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.cssText = "position:fixed;left:-9999px;top:0";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      if (ok) done(); else { label("COPY DIAG — FAILED"); reset(); }
+    } catch (_) { label("COPY DIAG — FAILED"); reset(); }
+  };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+      return;
+    }
+  } catch (_) { /* fall through */ }
+  fallback();
 }
 
 function initReset() {

@@ -193,8 +193,17 @@ const TLX = (function () {
       // An explicit WebGPU pin (`_glPin === "0"`) is still honoured — the clause
       // already excludes it, and a pin is a user override. backendState()
       // reports canvasAlpha so that case is diagnosable rather than silent.
+      // WEBKIT (Safari, every iOS browser) TAKES three's WebGL2 BACKEND ON AUTO
+      // (2026-09-03). Two consecutive deploys rendered three-WebGPU wrongly on
+      // the owner's iPhone — first painted bodywork missing with decals live,
+      // then (c6d8fd3) nothing but the sky — with `gfx: three/webgpu` and ZERO
+      // reported GPU or WGSL errors on the GOV panel, so the failure is silent
+      // to every instrument this backend has. three's WebGL2 backend on the
+      // same phone is known-good (ed8f41f's 16-lamp cap was made for it). A
+      // pin of "0" (THREE PATH: WEBGPU) still forces WebGPU for the
+      // investigation; backendState().pin/forceWebGL say which one bound.
       let forceWebGL = _glPin === "1"
-        || (_glPin !== "0" && (!_gpuCanvasOk || _autoStayGL));
+        || (_glPin !== "0" && (!_gpuCanvasOk || _autoStayGL || isWebKit));
       const _liteGpu = !!(isMobile || isWebKit || _softAdapter);
 
       // SCREENSHOTS (`apex26.wgxCapture`, same key as WGX): session then local.
@@ -485,6 +494,19 @@ const TLX = (function () {
       // them all at once costs more llvmpipe seconds than a present budget
       // has, and a timeout would not say which path did it:
       //   sky | env | chunked | batches | shadow   (or "1" / "all")
+      // A/B switches for the WebKit-WebGPU investigation (THREE PATH: WEBGPU
+      // pinned on the phone). Each reverts ONE suspect without a deploy:
+      //   apex26.tlxArrayNearest=1  placeholders keep the pre-0a3f480
+      //                             Nearest/Clamp state (textureLoad program)
+      //   apex26.tlxNoMrt=1         the scene pass never arms the SSR MRT
+      //                             second attachment (single-target)
+      // Both are reported by backendState() and the GOV `tlx` row.
+      const _arrayNearest = (function () {
+        try { return localStorage.getItem("apex26.tlxArrayNearest") === "1"; } catch (_) { return false; }
+      })();
+      const _noMrt = (function () {
+        try { return localStorage.getItem("apex26.tlxNoMrt") === "1"; } catch (_) { return false; }
+      })();
       const _forceHw = (function () {
         let raw = "";
         try { raw = localStorage.getItem("apex26.tlxForceHw") || ""; } catch (_) { raw = ""; }
@@ -868,11 +890,13 @@ const TLX = (function () {
           // three-WebGL2 never showed it. These MUST equal createTextureArray()
           // below so the compiled program is a repeat-wrapped, mipmapped
           // `textureSample` (tests/unit/gfx-backend-canary.test.mjs pins it).
-          t.wrapS = t.wrapT = THREE.RepeatWrapping;
-          t.minFilter = THREE.LinearMipmapLinearFilter;
-          t.magFilter = THREE.LinearFilter;
-          t.generateMipmaps = true;
-          t.anisotropy = 4;
+          if (!_arrayNearest) {
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            t.minFilter = THREE.LinearMipmapLinearFilter;
+            t.magFilter = THREE.LinearFilter;
+            t.generateMipmaps = true;
+            t.anisotropy = 4;
+          }
           t.needsUpdate = true;
           return t;
         };
@@ -2787,9 +2811,9 @@ const TLX = (function () {
               painted = true;   // nothing drawn this frame by design; the last blit stays up
             } else if (post && _postF.proj) {
               pinSkyMaterial();
-              if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
-              if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
-              const _hadMrt = !!(TSL.mrt && renderer.setMRT);
+              if (!_noMrt && lit && lit.setSsrMrt) lit.setSsrMrt(true);
+              if (!_noMrt && fx && fx.setSsrMrt) fx.setSsrMrt(true);
+              const _hadMrt = !_noMrt && !!(TSL.mrt && renderer.setMRT);
               const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               try {
@@ -3047,6 +3071,7 @@ const TLX = (function () {
               // evidence a "see-through car" report has never had.
               gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstError,
               presents: _presentN, healed: _healTried,
+              arrayNearest: _arrayNearest, noMrt: _noMrt,
               hasMaterialMaps: !!(lit && lit.hasMaterialMaps),
               packLive: !!matOwnedAlbedo,
               drawMatMode: _drawMatMode,
