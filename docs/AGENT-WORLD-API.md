@@ -87,8 +87,8 @@ already; it just isn't wired to the shipped build path.
 
 ### 2.2 No corner semantics
 
-`corners()` returns bare curvature-peak fractions. `CircuitMarkings`
-(`js/track/markings.js`) has curated per-circuit `turns:[frac…]` in driving
+`corners()` returns bare curvature-peak fractions. Each def
+(`js/circuits/<id>.js`) has curated `turns:[frac…]` in driving
 order, but `info().turns` surfaces only the *count*. No direction, no radius,
 no name, no entry/apex/exit, no braking reference.
 
@@ -233,7 +233,7 @@ fixed `[10,30,60]`.
 
 Corners with names/radius/direction/entry/apex/exit, sector boundaries, DRS
 zones, elevation profile. Constant for a session, so it must never ride in the
-per-tick payload. Sources already exist: `CircuitMarkings`, `def.turns`,
+per-tick payload. Sources already exist: `def.turns`,
 `def.sectors`, `TrackMaps` cache (which already computes `drsZones`).
 
 ### Layer 3 — scene graph
@@ -312,7 +312,7 @@ a fixed policy on *honest geometry only* (`headingErrDeg` + `lateralM` +
 ## 5. Phasing
 
 **Phase 1 — presentation only, no new data.** Envelope + versioning, `detail`
-levels, `nextCorner` from `CircuitMarkings`, time-scaled look-ahead, radius
+levels, `nextCorner` from `def.turns`, time-scaled look-ahead, radius
 instead of curvature, per-rival rows, typed errors with a `fix` field, split
 `done` into `{done, reason}`, the `brief` string. All of this is derivable from
 state that already exists. Highest value per line of code.
@@ -341,7 +341,7 @@ from heading swept across the whole corner, and apex snapping, before the table
 was usable. Monaco's hairpin at 10.2 m (real ~10 m) is the check that it works;
 integrated lap heading closing to exactly ±360° is the invariant that guards it.
 
-**Curated apexes don't sit on the geometry.** `CircuitMarkings` documents itself
+**Curated apexes don't sit on the geometry.** A def's `turns` documents itself
 as best-effort against this centreline, and it means it — apexes land tens of
 metres off the real bend, and some circuits number a double-apex as two turns so
 after snapping both land in the same corner. Hence snap-then-merge, with merged

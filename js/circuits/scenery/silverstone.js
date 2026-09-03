@@ -146,7 +146,7 @@
         id: `silverstone-runoff-${id}`, samples: 6,
       });
 
-      const STAND_LIVS = ["navy", "steel", "alu"];      // STAND_SETS.silverstone rotation
+      const STAND_LIVS = ["navy", "steel", "alu"];      // the def's standSet rotation
       const SIL_ROOF   = [0.16, 0.30, 0.58];             // shared Silverstone-blue roof
       const SIL_FASCIA = [0.09, 0.19, 0.42];             // shared deeper-blue fascia band
       let standI = 0;

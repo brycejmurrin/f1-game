@@ -40,7 +40,7 @@ framing; you get a free-orbit shot.
   `snapCam()` after `orbit()` (it clears `dbgCam` and snaps back to the game rig).
 - **Recovery after `snapCam()`:** `snapCam()` clears any active `dbgCam`
   override. Re-call `orbit()` / `eyeAt()` / `view()` with the same args. If
-  you lost them, re-derive `frac` from `js/track/markings.js` or `__apex.corners()`.
+  you lost them, re-derive `frac` from the def's `turns` (`js/circuits/<id>.js`) or `__apex.corners()`.
 
 Inspectors: `camState()` → `{eye, tgt, fov, debug}`; `viewState()` is the
 full scene/camera snapshot. Capture → **playwright-probe**.

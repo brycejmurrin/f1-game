@@ -76,14 +76,14 @@ test("every game circuit matches its pinned real-circuit reference", async ({ pa
   // rebuilds every circuit and compares each against its pinned reference.
   test.setTimeout(300_000);
   await page.goto("/");
-  await page.waitForFunction(() => typeof CircuitPaths !== "undefined");
-  const gameCircuits = await page.evaluate(() => {
-    const definitions = new Map(TrackDefs.map((definition) => [definition.id, definition]));
-    return Object.fromEntries(Object.entries(CircuitPaths).map(([id, circuit]) => [
-      id,
-      { pts: circuit.pts, len: circuit.len, reverse: !!definitions.get(id)?.reverse },
-    ]));
-  });
+  // Each circuit's OSM trace is the `path` key of its def (js/circuits/<id>.js),
+  // copied onto the built def; Tracks loads after every circuit file.
+  await page.waitForFunction(() => typeof Tracks !== "undefined" && Tracks.LIST.length === 40, null, { polling: 100 });
+  const gameCircuits = await page.evaluate(() =>
+    Object.fromEntries(Tracks.LIST.map((definition) => [
+      definition.id,
+      { pts: definition.path.pts, len: definition.path.len, reverse: !!definition.reverse },
+    ])));
   const references = new Map(REFERENCE.features.map((feature) => [feature.properties.id, feature]));
 
   expect(validateMappings(CIRCUIT_MAP, gameCircuits, references)).toEqual([]);

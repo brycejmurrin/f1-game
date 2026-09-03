@@ -1,6 +1,6 @@
 /* Apex 26 — AUTÓDROMO INTERNACIONAL DO ALGARVE (PORTIMÃO) definition (data only).
    Retired circuit (`classic: true`): hosted the Portuguese GP in 2020 and 2021.
-   Geometry from the OSM trace in js/track/geo-paths.js. */
+   Geometry from the OSM trace in `path` below. */
 (function () {
   "use strict";
   (window.TrackDefs = window.TrackDefs || []).push(
@@ -60,6 +60,21 @@
       { frac: 0.640, angleDeg: 4.5, widthM: 130 },
       { frac: 0.900, angleDeg: 3.5, widthM: 110 },
     ],
+
+    // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
+    // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
+    // fractions (post startFrac/reverse), never fmap'd — tools/rotate-markings.cjs
+    // re-seats turns when the start line moves.
+    // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
+    // researched real turn count. No researched sectors — consumers fall back to thirds.
+    turns: [0.0757, 0.1112, 0.1457, 0.1777, 0.3012, 0.4037, 0.4372, 0.5657, 0.5822, 0.6742, 0.6802, 0.7217, 0.7337, 0.7482, 0.8497],
+    furniture: { tree: "stonePine",   fol: [0.14, 0.31, 0.16], lamp: "none",  sparse: true },  // thin Algarve pine; the elevation is the view
+    kit: { marshal: "cabin",     rail: "wArmco",      fence: "leaning",   tyre: "stack",   board: "trivision", gantry: "box",        camera: "scaffold",  hoarding: "panel" },
+    standSet: ["terracotta", "concrete", "alu"],  // Algarve pantile over hillside terracing
+    // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
+    // recentred, one lap, open loop. tools/import-circuit-path.mjs regenerates it.
+    // Autódromo Internacional do Algarve — Portimão. Upstream pt-2008, stated 4653 m, projected 4657 m, trace winding CCW.
+    path: { len: 4657, pts: [[230.2,93],[319.3,398.6],[339.3,471.4],[340,480.6],[335.3,489],[326,498.4],[314.2,505.8],[257.9,547.8],[218.5,575.4],[205.1,579.3],[194.6,578.6],[67.7,547.7],[60.8,541.3],[58,534.3],[57.2,527.8],[59.3,519.8],[66.8,512.1],[139.2,469.4],[150.1,460.3],[159.3,447.1],[162.2,439],[165.7,425.7],[164.3,404.3],[25.7,-80.4],[18.5,-102.1],[9.5,-109.8],[-0.4,-110],[-9.9,-104.6],[-15.6,-95.4],[-17.1,-76.7],[-32.2,65.6],[-34.2,94],[-30.5,126.8],[-23.8,149.6],[-14.6,170.2],[55.7,303.8],[59.3,318.6],[57.6,334.7],[52.6,348.9],[40.3,365.8],[-13.6,429.9],[-21.6,433.1],[-30.7,434.6],[-44.3,431.9],[-55.3,424.3],[-60.7,415],[-103.3,121.9],[-105.9,108.8],[-112.7,92.4],[-119.3,79.5],[-134.4,63],[-155.8,48.1],[-299.1,-25.6],[-311.2,-37.1],[-325.1,-57],[-338,-90.6],[-340,-104.4],[-337.7,-115.5],[-332.9,-123.1],[-324,-131.2],[-170.5,-178.1],[-160.6,-183.5],[-146.4,-195.1],[-131.3,-211.8],[-120.2,-232.4],[-114.9,-256.1],[-96.4,-378.9],[-97.9,-390.4],[-104.1,-399],[-114.1,-408.8],[-128.9,-410.7],[-140.9,-408.2],[-146.3,-404],[-241.7,-288.5],[-255.4,-281.5],[-270.1,-278.4],[-288.7,-282.9],[-303.9,-296.4],[-314.9,-311.7],[-319.3,-322.6],[-323.9,-345],[-323.4,-357.8],[-320.6,-372.6],[-313.7,-387.4],[-294.5,-413.9],[-198.2,-529.9],[-177.4,-547.5],[-158.8,-559.8],[-144,-567],[-121,-575.1],[-99.3,-579.2],[-71.9,-579.3],[-50.4,-576],[-28.8,-570.2],[-7.4,-560.2],[13.9,-547.8],[31.5,-530.9],[46.1,-514],[61.7,-491],[227.3,83]] },
   }
   );
 })();

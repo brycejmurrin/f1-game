@@ -93,7 +93,7 @@ export const RULES = [
    ["circuits", "driving", "sweeps"],
    "road geometry reaches walls, elevation, physics, every circuit's foundation — and buildProps lives here"],
   [/^js\/track\/space\.js/, ["driving"], "world<->track projection"],
-  [/^js\/track\/(markings|maps|geo-paths)\.js/, ["hooks", "circuits"], "layout metadata"],
+  [/^js\/track\/maps\.js/, ["hooks", "circuits"], "layout metadata"],
   [/^js\/circuits\/.*\.js$/, ["circuits"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
 
   // ── spec-backed js/game files that used to reach only tiny + tooling-fast ──

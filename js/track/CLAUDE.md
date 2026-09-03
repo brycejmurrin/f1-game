@@ -3,6 +3,14 @@
 Rules that bind in this directory (circuit DATA lives in `js/circuits/` —
 layout/palette/scenery edits go THERE, never here).
 
+- **The def is the single home of a circuit's data.** `path` (real
+  centreline), `sectors`/`turns` (curated markings), `barrier`, `furniture`,
+  `kit`, `standSet`, `cityStyle` are all keys of `js/circuits/<id>.js`; this
+  directory holds only the GENERIC fallbacks (`FURN_DEF`, `KIT_DEF`,
+  `THEME_DEF`, `STAND_SET_DEF` in scenery-data.js). Never add an id-keyed
+  table here — read the key off the BUILT def (copied in tracks.js `LIST`;
+  `tests/unit/circuit-def-fields.test.mjs` pins the copy).
+
 - **Coordinates**: +Y up, metres, radians, arc `s` in metres, lateral `x`
   +right. **+k = LEFT-hand turn** (measured; the opposite label shipped for
   months). Never flip a curvature sign without a rendered lap.

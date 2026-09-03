@@ -6,10 +6,14 @@ description: Use when the user asks to add a track/circuit, edit Monza/Spa/etc. 
 # Author or edit a track
 
 Each circuit is a self-contained IIFE in `js/circuits/<id>.js` that pushes a plain
-data object onto the global `window.TrackDefs` list. The engine (`js/track/tracks.js`)
-reads `TrackDefs`, builds a Catmull-Rom spline from the segments (or an OSM trace
-in `js/track/geo-paths.js` if one exists for that id), and extrudes the road, terrain,
-and prop meshes. **Track files load before `js/track/tracks.js`** in `index.html`.
+data object onto the global `window.TrackDefs` list — **the def is the single home
+of everything about that circuit**: its real centreline (`path`), curated markings
+(`sectors`/`turns`), dressing rows (`barrier`, `furniture`, `kit`, `standSet`,
+`cityStyle`) and its scenery callback. The engine (`js/track/tracks.js`) reads
+`TrackDefs`, builds a Catmull-Rom spline from `path` (a def without one is a build
+error naming the circuit — there is no hand-authored fallback), and extrudes the
+road, terrain, and prop meshes. **Track files load before `js/track/tracks.js`** in
+`index.html`.
 
 ## Track-definition schema
 
@@ -34,22 +38,22 @@ and prop meshes. **Track files load before `js/track/tracks.js`** in `index.html
     banked: false,            // auto-banking profile on tight corners (Zandvoort)
     pal: { /* zenith, horizon, sun, sunDir, grass, asphalt, line, kerbA, kerbB, fog, ambientSky, ambientGround ... */ },
 
-    // GEOMETRY — used only when no OSM trace exists for this id (trace wins).
-    // t = turn degrees (+right, -left); l = length metres; h = elevation delta;
-    // b = bank radians; w = half-width override.
-    // Minimal closed loop (200×100 m rectangle — cumulative turn ≈ 360°):
-    segs: [
-      { t: 0,   l: 200 },
-      { t: 90,  l: 100 },
-      { t: 0,   l: 200 },
-      { t: 90,  l: 100 },
-    ],
-    // Real circuits are longer — copy spa.js / monza.js and adapt:
-    // segs: [
-    //   { t: 0,   l: 200 },
-    //   { t: 90,  l: 150, h: -3 },
-    //   // ... must close the loop (engine distributes residual + Laplacian-smooths)
-    // ],
+    // GEOMETRY — REQUIRED. The real centreline: [x,z] metres, recentred, one lap,
+    // open loop. `node tools/import-circuit-path.mjs <id>:<featureId>` emits this
+    // line from the bacinger/f1-circuits OSM trace; paste it here.
+    path: { len: 5431, pts: [[-150.5,-809.2],[36.7,-842.1], /* … */] },
+
+    // MARKINGS — RACING-LAP fractions (post startFrac/reverse), never fmap'd.
+    sectors: [0.32, 0.66],         // S1/S2 ends; omit → thirds
+    turns: [0.0455, 0.0755 /* … */], // curated apexes in lap order; index 0 = Turn 1
+
+    // DRESSING — the per-circuit rows the engine used to keep in id-keyed tables.
+    // Every field is optional; absent → FURN_DEF / KIT_DEF / THEME_DEF / STAND_SET_DEF[theme].
+    furniture: { tree: "broad", fol: [0.26, 0.42, 0.20], lamp: "none" },
+    kit: { marshal: "cabin", rail: "armco", fence: "mesh", tyre: "stack", board: "panel", gantry: "box", camera: "lattice", hoarding: "panel" },
+    standSet: ["steel", "darkSteel", "concrete"],
+    // barrier: { a, b, c, night, tyre }   — armco livery (street/night circuits)
+    // cityStyle: { neon: [NC names], dayPal: [DC names], bias, fh, bh, kinds, neonKinds, tone }
 
     bridges:   [{ s: 0.5, halfM: 12, rise: 6 }],   // figure-8 overpass (terrain stays flat under it)
     elevations:[{ s: 0.3, halfM: 40, rise: 8 }],   // real terrain bump (terrain follows)
@@ -59,9 +63,9 @@ and prop meshes. **Track files load before `js/track/tracks.js`** in `index.html
 })();
 ```
 
-Segment sign convention: **+t turns right, −t turns left**; lengths are in metres
-before the internal ~1.45× arcade scale. Coordinates are +Y up, arc position `s`
-in metres (0 → `track.total`), lateral `x` in metres (+ = right of centreline).
+Coordinates are +Y up, arc position `s` in metres (0 → `track.total`), lateral
+`x` in metres (+ = right of centreline). Orient a trace with `reverse` /
+`startFrac`, never by editing `path.pts`; narrow a section with `hwZones`.
 
 
 ---

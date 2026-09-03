@@ -84,7 +84,7 @@ modelled and correctly sited.
   tower's foot (proscenium shell, three-arc fan canopy, LED video wall, PA
   line-array towers, speckled lawn crowd). ✅ nothing to do.
 - **Turn 1's 133 ft hill — NOT changed, and deliberately so.** The def puts
-  Big Red at racing s≈0.108 with `rise: 18` (plus `segs[0].h: 30`), against a
+  Big Red at racing s≈0.108 with `rise: 18`, against a
   quoted 133 ft ≈ 40.5 m. That may well be understated, but `elevations` is
   **physics, not scenery**: it moves the racing line, lap times and the
   reference times the AI is calibrated against. It should be changed as a

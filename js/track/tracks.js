@@ -7,7 +7,7 @@ const Tracks = (function () {
 
   const { MAT, cross, norm, vadd, emit, addBox, addPrism, addPyramid,
           addCone, addCyl, addFrustum, addMountain } = TrackGeom;
-  const { centerline, cr, sample, curvatureRaw, curvature, project, wallAt } = TrackSpline;
+  const { cr, sample, curvatureRaw, curvature, project, wallAt } = TrackSpline;
   const { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
           nodeGrid, buildRoad, buildTerrain, buildFloor } = TrackMesh;
   const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/models.js (this file is AT its module-size ceiling — one line only)
@@ -325,8 +325,8 @@ const Tracks = (function () {
   function buildProps(track) {
     Log.info("track", "buildProps start " + (track.def && track.def.id));
     const { NC, DC, BLD, CROWD_DAY, WINTINTS, HOUSE_WALLS, HOUSE_ROOFS,
-            MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, BARRIER, FURN, FURN_DEF,
-            STYLES, THEME_DEF, ATM, COL } = TrackSceneryData;
+            MOTORHOME_BODY, SIGN_SEG, SIGN_DIGIT, FURN_DEF,
+            THEME_DEF, ATM, COL, resolveCityStyle } = TrackSceneryData;
     const { n, px, py, pz, hw } = track;
     // Mobile geometry LOD: the street-circuit city facade is the single biggest GPU
     // allocation (the props VBO is ~88 MB on Vegas, ~73 on Baku), and the detailed
@@ -1440,9 +1440,8 @@ const Tracks = (function () {
       // after their own guards so only props that actually ship are recorded
       note, noteSpan, noteSuppressed,
       kitOf: (family, fallback) => {
-        const K = TrackSceneryData.KIT || {};
         const D = TrackSceneryData.KIT_DEF || {};
-        const row = K[def.id] || D[theme] || D.green || {};
+        const row = def.kit || D[theme] || D.green || {};
         return row[family] || fallback;
       },
     };
@@ -1466,7 +1465,7 @@ const Tracks = (function () {
             bankedKerbStrip, bowlSeatWall, pastelStreetRow,
             broadcastCompound } = ctx;
 
-    const bt = BARRIER[def.id] || { a: [0.92, 0.92, 0.94], b: [0.85, 0.18, 0.16], c: [0.55, 0.57, 0.62], night: [0.18, 0.18, 0.22], tyre: [0.24, 0.22, 0.20] };
+    const bt = def.barrier || { a: [0.92, 0.92, 0.94], b: [0.85, 0.18, 0.16], c: [0.55, 0.57, 0.62], night: [0.18, 0.18, 0.22], tyre: [0.24, 0.22, 0.20] };
     const btSeq = [bt.a, bt.b, bt.c];
 
     if (def.street) {
@@ -1554,7 +1553,7 @@ const Tracks = (function () {
           const slen = ds * step * 1.1;
           addBox(out, [px[k] + r[0] * o, wy + 0.45, pz[k] + r[2] * o],
                  [1.0, 0.9, slen], [0.24, 0.22, 0.20], [r, u, t]);
-          if (BARRIER[def.id]) addBox(out, [px[k] + r[0] * o, wy + 0.94, pz[k] + r[2] * o],
+          if (def.barrier) addBox(out, [px[k] + r[0] * o, wy + 0.94, pz[k] + r[2] * o],
                  [1.06, 0.18, slen], bt.tyre, [r, u, t]);
           // record the tyre barrier along its span so the car stops just short of it
           for (let d = 0; d < step; d++) markBarrier((k + d) % n, outside, 2.2);
@@ -1563,9 +1562,7 @@ const Tracks = (function () {
       }
     }
 
-    // Prefer curated FIA turn apexes (def.turns from CircuitMarkings; all
-    // shipped circuits have a table). Fall back to curvature-peak detection
-    // only if a def somehow lacks turns.
+    // Prefer the def's curated `turns`; curvature peaks only if a def lacks them.
     {
       let laneCorners;
       if (def.turns && def.turns.length) {
@@ -1593,7 +1590,7 @@ const Tracks = (function () {
       signBoard(spk, -1, 4, "speed", def.street ? 60 : 80);
     }
 
-    const fz = FURN[def.id] || FURN_DEF[theme] || FURN_DEF.green;
+    const fz = def.furniture || FURN_DEF[theme] || FURN_DEF.green;
     // Per-tree foliage variation: a real forest is never one flat green. Each
     // tree gets a jittered brightness + a warm/cool hue drift, and a small
     // fraction of broadleaf trees turn autumnal gold/rust — so a stand of trees
@@ -1673,7 +1670,7 @@ const Tracks = (function () {
     } else if (theme === "desert") {
       every(34, (k) => { for (const side of [-1, 1]) if (hash(HK(k) + side) > 0.6) place(k, side, 8 + hash(HK(k)) * 10, [2 + hash(HK(k)) * 3, 1.5, 2], [0.62, 0.5, 0.34]); });
     } else if (theme === "street_day" || theme === "street_night" || theme === "modern") {
-      const style = STYLES[def.id] || THEME_DEF[theme] || THEME_DEF.modern;
+      const style = resolveCityStyle(def.cityStyle) || THEME_DEF[theme] || THEME_DEF.modern;
       const cn = (k, s) => style.neon[Math.floor(hash(k * 3 + s) * style.neon.length) % style.neon.length];
       const dpal = style.dayPal;
       const toneFor = (k, s) => {
@@ -2124,9 +2121,10 @@ const Tracks = (function () {
     return (typeof CircuitElevations !== "undefined") && !!(CircuitElevations[id] && CircuitElevations[id].length);
   }
 
-  function realPoints(id, baseHW) {
-    const path = (typeof CircuitPaths !== "undefined") && CircuitPaths[id];
-    if (!path) return null;
+  // def.path (the OSM trace) is the ONLY centreline: no path is a build error.
+  function realPoints(id, path, baseHW) {
+    if (!path || !path.pts || !path.pts.length) throw new Error("Tracks: circuit \"" + id +
+      "\" has no `path` — js/circuits/" + id + ".js must carry `path: { len, pts }` (tools/import-circuit-path.mjs emits it)");
     const N = path.pts.length;
     const real = hasRealElevation(id);
     let pts = path.pts.map((p, i) => [p[0], real ? elevationAt(id, i / N) : 0, p[1], baseHW, 0]);
@@ -2222,7 +2220,7 @@ const Tracks = (function () {
       // bespoke per-circuit scenery (js/circuits/<id>.js); run by buildProps
       scenery: d.scenery || null,
       elevations: hasRealElevation(d.id) ? null : (d.elevations || null),
-      // Half-width overlays for CircuitPaths traces (segs `w:` is ignored there).
+      // Half-width overlays on the real centreline (the only way to narrow a section).
       hwZones: d.hwZones || null,
       reverse: !!d.reverse,
       startFrac: d.startFrac || 0,
@@ -2234,12 +2232,14 @@ const Tracks = (function () {
       // member of the family the comment above describes, and it would fail the
       // same silent way, since "no shift" is a legitimate value.
       sceneryStartFrac: d.sceneryStartFrac != null ? d.sceneryStartFrac : null,
-      // Curated FIA-aligned sector splits + turn apexes (js/track/markings.js).
-      // Authored in RACING-LAP space (post startFrac/reverse) — do not fmap.
-      sectors: (typeof CircuitMarkings !== "undefined" && CircuitMarkings[d.id] && CircuitMarkings[d.id].sectors) || null,
-      turns:   (typeof CircuitMarkings !== "undefined" && CircuitMarkings[d.id] && CircuitMarkings[d.id].turns)   || null,
+      // The def's curated FIA markings (RACING-LAP fractions, never fmap'd; no
+      // sectors → thirds), real centreline and dressing rows (ex scenery-data.js
+      // id tables) — all READ OFF THE BUILT DEF: the same trap as the seven above.
+      sectors: d.sectors || null, turns: d.turns || null, path: d.path || null,
+      barrier: d.barrier || null, furniture: d.furniture || null, kit: d.kit || null,
+      standSet: d.standSet || null, cityStyle: d.cityStyle || null,
     };
-    // PERF-FINDINGS: boot ran realPoints/centerline for all 40 circuits (24.0 ms)
+    // PERF-FINDINGS: boot ran realPoints for all 40 circuits (24.0 ms)
     // even though a session builds exactly one. Keep LIST.length===40 and every
     // metadata field copied as today; defer points (+ startFrac remaps /
     // elevation fmap / applyHwZones) until first access. The getter replaces
@@ -2255,7 +2255,7 @@ const Tracks = (function () {
   });
 
   function materializeListPoints(def, d) {
-    let pts = realPoints(d.id, d.baseHW) || centerline(d.segs, d.baseHW);
+    let pts = realPoints(d.id, def.path, d.baseHW);
     const phi = TrackSpace.wrap01(def.startFrac || 0);
     const phiAuthor = def.sceneryStartFrac != null
       ? TrackSpace.wrap01(def.sceneryStartFrac) : phi;

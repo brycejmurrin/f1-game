@@ -72,7 +72,7 @@ function racingNodeToSource(startFrac, reverse, node, count) {
 }
 
 // tracks.js already rotated def.points by the authored startFrac. Undo it to
-// get the trace back in CircuitPaths order, so a candidate can be applied to
+// get the trace back in def.path order, so a candidate can be applied to
 // the same starting material.
 function sourcePoints(def) {
   const P = def.points, N = P.length;

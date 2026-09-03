@@ -148,7 +148,7 @@ test("startFrac and reverse transform source control points and authored fractio
     const phiAuthor = raw.sceneryStartFrac != null ? wrap(raw.sceneryStartFrac) : phi;
     if (!raw.reverse && !phi && !phiAuthor) continue;
     transformed++;
-    const source = smoothXZ(ctx.CircuitPaths[raw.id]);
+    const source = smoothXZ(raw.path);
     const count = source.length;
     const offset = Math.round(phi * count) % count;
     for (const i of [0, 1, Math.floor(count / 3), count - 1]) {

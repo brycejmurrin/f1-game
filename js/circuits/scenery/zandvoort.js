@@ -188,7 +188,7 @@
       // Positions chosen to not cluster (different s fractions, no duplicates).
       // Upgraded from the legacy grandstand() (one grey template, varying only
       // len + shell/shellLt — two near-identical greys) to grandstandEx(), which
-      // rotates through STAND_SETS.zandvoort ("orange"/"alu"/"steel") so the
+      // rotates through the def's standSet ("orange"/"alu"/"scaffold") so the
       // permanent main stands, bare-aluminium temporary bleachers and Oranje-
       // liveried decks read as different structures. `crowd` is passed
       // explicitly as `orange` throughout — every seat in the ground is packed

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Apex 26 — snap each circuit's start/finish line onto its centreline trace and
- * @doc Derives `startFrac` from a real start/finish coordinate: projects into `CircuitPaths`, snaps to the nearest segment.
+ * @doc Derives `startFrac` from a real start/finish coordinate: projects into the def's `path`, snaps to the nearest segment.
  * @skill new-track
  * report the `startFrac` that puts racing s=0 there.
  *
@@ -17,8 +17,8 @@
  *   racingNodeToSource(def, 0, N) === round(wrap01(startFrac) * N) % N
  * so racing node 0 IS source node `round(startFrac * N)`, under both the
  * forward and the `reverse: true` branch. `realPoints()` in tracks.js keeps
- * `CircuitPaths[id].pts` index-for-index (it maps, smooths in place, and never
- * resamples), so the source node index here is the CircuitPaths index, and
+ * `def.path.pts` index-for-index (it maps, smooths in place, and never
+ * resamples), so the source node index here is the path index, and
  *
  *   startFrac = ptsIndex / pts.length
  *
@@ -131,7 +131,7 @@ function projector(coords) {
 
   let pts = coords.map(raw);
   const last = pts[pts.length - 1];
-  // Upstream rings close; CircuitPaths is an open loop.
+  // Upstream rings close; def.path is an open loop.
   if (Math.hypot(last[0] - pts[0][0], last[1] - pts[0][1]) < 1) pts = pts.slice(0, -1);
   const xs = pts.map((p) => p[0]), zs = pts.map((p) => p[1]);
   const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
@@ -145,11 +145,16 @@ function projector(coords) {
 
 /* ---------- committed traces ---------- */
 
+// Each circuit's trace is the `path: { len, pts }` key of js/circuits/<id>.js,
+// parsed straight out of the source so the comparison is against what ships.
 function loadCommitted() {
-  const src = fs.readFileSync(path.join(ROOT, "js/track/geo-paths.js"), "utf8");
-  const re = /(\w+):\s*\{\s*len:\s*(\d+),\s*pts:\s*(\[\[[\s\S]*?\]\])\s*\}/g;
+  const dir = path.join(ROOT, "js/circuits");
+  const re = /^\s*path:\s*\{\s*len:\s*(\d+),\s*pts:\s*(\[\[[\s\S]*?\]\])\s*\}/m;
   const out = {};
-  for (let m; (m = re.exec(src)); ) out[m[1]] = JSON.parse(m[3]);
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".js"))) {
+    const m = re.exec(fs.readFileSync(path.join(dir, f), "utf8"));
+    if (m) out[f.replace(/\.js$/, "")] = JSON.parse(m[2]);
+  }
   return out;
 }
 
@@ -245,7 +250,7 @@ function snap(ids) {
       if (d < altD) { altD = d; altJ = j; }
     }
 
-    // ...then through the measured storage order into a CircuitPaths index,
+    // ...then through the measured storage order into a def.path.pts index,
     // which is what startFrac counts in. Rounding is unavoidable: startFrac can
     // only name a node (`round(startFrac * N)`), so one node is the resolution.
     const jFrac = bestJ + bestT;

@@ -1194,7 +1194,7 @@ function announce(msg, dur) {
   announceT = dur || 1.6;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
-// Curated CircuitMarkings splits when present; equal thirds only as fallback.
+// Curated def.sectors splits when present; equal thirds only as fallback.
 function sectorAt(s) {
   const frac = wrapS(s) / track.total;
   const sec = track.def && track.def.sectors;
