@@ -863,6 +863,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale)', "grid-area"), "hud");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "grid-area"), "sample");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "justify-self"), "start",
+    "HUD sample sits against the sliders, not floating in the leftover column");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
     "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open])', "grid-template-areas"),

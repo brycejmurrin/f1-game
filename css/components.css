@@ -1317,7 +1317,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample {
   grid-area: sample;
   align-self: center;
-  justify-self: center;
+  justify-self: start;
   margin-top: 0;
 }
 #pmsettings-inner[data-density="compact"] #pm-panel-display .tune-row {
