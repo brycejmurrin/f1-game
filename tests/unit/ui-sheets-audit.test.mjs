@@ -401,5 +401,7 @@ test("pause, settings, results and standings all scroll inside the sheet on a sh
   assert.ok(/<div class="sheet-body pane stack">/.test(html.slice(html.indexOf('id="pausemenu"'), html.indexOf('id="pmsettings"'))), "the pause stack is a pane");
   assert.equal(decl(comp, "#pm-category-tabs", "position"), "sticky", "the category tabs stay reachable while the body scrolls");
   // The METRICS submenu inside DISPLAY caps itself in zoom-compensated units.
-  assert.match(read("js/perf/metrics-overlay.js"), /max-height: min\(280px, calc\(100 \* var\(--svhz, 1svh\) - 9rem\)\)/);
+  assert.equal(decl(comp, '#pm-metrics-details [role="group"]', "max-height"),
+    "min(280px, calc(100 * var(--svhz, 1svh) - 9rem))",
+    "METRICS body height is --svhz-capped in the stylesheet, not inject CSS");
 });

@@ -1316,6 +1316,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
   max-height: min(280px, calc(100 * var(--svhz, 1svh) - 9rem));
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
 }
 #pm-metrics-details [role="group"] > button {
   width: 100%;
