@@ -177,7 +177,10 @@ test("openQuali restores via begin(); quit-to-menu keeps persist; friend-race us
   assert.match(GAME, /if \(!p\) \{ closeLightTuner\(false\); closeCamTuner\(false\); exitPhotoMode\(\); \}/);
   assert.match(GAME, /closeCamTuner\(false\); exitPhotoMode\(\);/);
   assert.match(GAME, /isCareer\(\) && Career\.conflicted\(\)/);
-  assert.match(GAME, /vTop\(\) \* \(lvl === 3 \? 0\.45 : 0\.6\)/);
+  // The caution pace cap, now four levels deep: RED (4) stops the field at a
+  // walking-pace floor rather than 0, so every "approaches vmax" fade stays
+  // finite; SC (3) and VSC (2) are the delta paces they always were.
+  assert.match(GAME, /vTop\(\) \* \(lvl >= 4 \? 0\.02 : lvl === 3 \? 0\.45 : 0\.6\)/);
   assert.match(GAME, /if \(netPlay\.active\(\)\) netPlay\.stop\("local"\)/);
   assert.match(GAME, /if \(netPlay\.active\(\) \|\| qualiNetDone\) return/);
   assert.match(SRC, /if \(!classification\.some\(\(r\) => r\.human\)\) return/);
