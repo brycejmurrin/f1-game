@@ -737,7 +737,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    sheet plus the top lip, which is what makes a control look pressable on a
    dark background (an unfilled border alone reads as a disabled field). */
 .bigbtn.alt {
-  background: var(--plate); color: var(--steel);
+  background: var(--plate); color: var(--text);
   border: 1px solid var(--plate-line);
   font-weight: 600;
   letter-spacing: var(--ls-1);
@@ -1051,7 +1051,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   border: 1px solid var(--plate-line);
   border-radius: var(--r-sm);
   background: var(--plate);
-  color: var(--steel);
+  /* Same ink as the doors under the tab. Selected is the red plate, not a
+     second type colour — steel is section chrome, not a control label. */
+  color: var(--text);
   font-family: var(--font-hud);
   font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
   font-weight: 700;
@@ -1129,6 +1131,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
   font-weight: 600;
   letter-spacing: var(--ls-2);
+  color: var(--text);
 }
 #pmsettings-inner .pm-doors button { width: auto; }
 .sheet[data-density="compact"] .pm-group-h {
