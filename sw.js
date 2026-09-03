@@ -286,8 +286,17 @@ self.addEventListener("install", (event) => {
     const stamped = urls.optional.map((u) =>
       /^js\/render\/(three|webgpu)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
         ? u + "?v=" + build : u);
-    await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
+    // SKIP AHEAD OF THE OPTIONAL SEED. skipWaiting() used to sit behind ~6.5 MB
+    // of best-effort precache (the deferred backends, forty scenery closures,
+    // the data and net bundles), so a returning player's browser held the NEW
+    // worker in `waiting` — serving the previous generation's cache — until all
+    // of it had been fetched. The essentials and the completion sentinel are
+    // already written above, which is everything activation actually depends
+    // on; the optional pool still runs inside this same waitUntil, so the
+    // install is not considered finished until it settles and every
+    // tolerates-failure / never-settles guarantee below is unchanged.
     await self.skipWaiting();
+    await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
   })());
 });
 

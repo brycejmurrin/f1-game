@@ -1452,3 +1452,15 @@ live in `ratchets.json`.
   best laps and penalties kept (`restartPending` makes lights-out resume the
   clock instead of zeroing it); RaceControl level 4 runs the procedure and
   hands over one restart request. `__apex.redFlag()` drives it for the VM.
+- `js/game.js` 9492 -> **9506** lines / 5221 -> **5226** code, `js/agent/apex.js`
+  2609 -> **2610** (2026-09-03): the SETUP SHEET (`js/garage/setup-tune.js`).
+  Anti-roll bars fold into the four-channel contract through
+  `Parts.getMods(setup, team, tune)` and rake into `Parts.aeroLoad(…, tune)`;
+  BRAKE BIAS splits the friction ellipse per axle under braking (`bbSlipF` /
+  `bbSlipR` against `BB_REF`, exactly the single `slipFactor` at the works
+  bias, and AI/remote cars carry no `brakeBias` at all). `physState().brakeBias`
+  reports the split. Every funnel edit is in place; the works sheet is identity.
+- `js/game.js` 9506 -> **9509** lines / 5226 -> **5229** code / 230 -> **231** G
+  members (2026-09-03): the first-run COACH MARKS (`js/ui/onboard.js`) — a
+  `create` line, the per-frame `onboard.tick(dt)` beside `BrakeCue.tick()`, and
+  `G.announceBusy` so a mark can never stomp LIGHTS OUT! or a sector split.

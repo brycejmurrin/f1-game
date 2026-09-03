@@ -273,6 +273,7 @@
 #hud-flag.flag-vsc { background: #ffb300; color: #201400;
   animation: flag-vsc-pulse 1s ease-in-out infinite; }
 #hud-flag.flag-sc { background: #f4f6ff; color: #101018; }
+#hud-flag.flag-red { background: var(--slower); color: var(--text); }   /* the red flag: the session is stopped */
 @keyframes flag-vsc-pulse { 0%,100% { opacity: 0.72; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   #hud-flag.flag-vsc { animation: none; }

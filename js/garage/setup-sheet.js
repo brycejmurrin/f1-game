@@ -16,7 +16,8 @@ const CS_STATS = Parts.STAT_KEYS;
 const displayStat = Parts.displayStat;
 function renderStatBars(container, team) {
   const stats = team.stats || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const mods = Parts.getMods(getTeamParts(team.id), team);
+  const tune = typeof SetupTune !== "undefined" ? SetupTune.mods(team.id) : null;
+  const mods = Parts.getMods(getTeamParts(team.id), team, tune);   // the bars move with the SETUP sheet too
   container.textContent = "";
   for (const { key, label } of CS_STATS) {
     const base = stats[key] || 75;
@@ -69,7 +70,7 @@ let csLivCreating = false; // livery creator panel open?
 let csLivDraft = null;     // { name, c1, c2, stripe } while editing a new paint job
 let csLivEditId = null;    // id of the custom livery being edited in-place (null = creating new)
 
-const PSEUDO_CATS = ["team", "livery"];
+const PSEUDO_CATS = ["team", "tune", "livery"];
 
 function csTabId(id) { return "cs-tab-" + String(id).replace(/[^a-z0-9_-]/gi, "-"); }
 
@@ -265,6 +266,8 @@ function buildSetup() {
     tabs.appendChild(pseudoTab(cat.id, cat.label, cur ? cur.label : "",
                                cur && cur.id !== Parts.DEFAULTS[cat.id]));
   }
+  tabs.appendChild(pseudoTab("tune", "SETUP", SetupTune.isDefault(team.id) ? "WORKS" : "TUNED",
+                             !SetupTune.isDefault(team.id)));
   {
     tabs.appendChild(pseudoTab("livery", "LIVERY", "",
                                getLiveryId(team.id) !== "default"));
@@ -282,6 +285,7 @@ function buildSetup() {
   optsEl.classList.remove("cs-liv-grid");
   if (csActiveCat === "team")   { buildTeamOptions(optsEl, team);   renderStatBars($("cs-stats-inner"), team); return; }
   if (csActiveCat === "livery") { buildLiveryOptions(optsEl, team); renderStatBars($("cs-stats-inner"), team); return; }
+  if (csActiveCat === "tune")   { buildTuneOptions(optsEl, team);   renderStatBars($("cs-stats-inner"), team); return; }
   const curOpt = resolveOpt(activeCat);
   const curCost = curOpt ? (curOpt.cost || 0) : 0;
   const factorySetup = Parts.getFactorySetup(team);
@@ -429,6 +433,57 @@ function livSwatch(liv) {
   return sw;
 }
 
+// SETUP — the mechanical sheet (js/garage/setup-tune.js): five sliders on the
+// tuner's .tune-row markup (DOM only, no new classes), a RAKE readout, and a
+// RESET TO WORKS. Every slider writes the store on input; the stat bars and
+// the player's mods follow through recomputePlayerMods on the next race.
+function buildTuneOptions(container, team) {
+  const wrap = document.createElement("div");
+  wrap.className = "cs-liv-editor";
+  wrap.appendChild(csLabel("SETUP SHEET — " + team.short));
+  const cur = SetupTune.get(team.id);
+  const rows = {};
+  const rakeOut = document.createElement("p"); rakeOut.className = "adv-help";
+  const refresh = () => {
+    const t = SetupTune.get(team.id);
+    for (const k of SetupTune.FIELDS) { rows[k].b.textContent = t[k] + SetupTune.RANGE[k].unit; rows[k].inp.value = t[k]; }
+    rakeOut.textContent = "RAKE " + (t.rideR - t.rideF) + " mm (rear − front) · aero load "
+      + (SetupTune.rake(team.id) >= 0 ? "+" : "") + Math.round(SetupTune.rake(team.id) * Parts.RH_GAIN * 100) + " %"
+      + " · brake bias " + t.brakeBias.toFixed(1) + " % front";
+    renderStatBars($("cs-stats-inner"), team);
+    const tab = $(csTabId("tune"));
+    if (tab) { tab.classList.toggle("upgraded", !SetupTune.isDefault(team.id)); const c = tab.querySelector(".cs-tab-cur"); if (c) c.textContent = SetupTune.isDefault(team.id) ? "WORKS" : "TUNED"; }
+  };
+  for (const k of SetupTune.FIELDS) {
+    const r = SetupTune.RANGE[k];
+    const lab = document.createElement("label"); lab.className = "tune-row";
+    const span = document.createElement("span"); span.className = "tune-label";
+    span.textContent = r.label + " ";
+    const b = document.createElement("b"); span.appendChild(b);
+    const inp = document.createElement("input");
+    inp.type = "range"; inp.min = r.min; inp.max = r.max; inp.step = r.step; inp.value = cur[k];
+    inp.dataset.csTune = k;
+    inp.setAttribute("aria-label", r.label);
+    inp.oninput = () => { SetupTune.set(team.id, { [k]: parseFloat(inp.value) }); refresh(); };
+    lab.appendChild(span); lab.appendChild(inp);
+    wrap.appendChild(lab);
+    rows[k] = { b, inp };
+  }
+  wrap.appendChild(rakeOut);
+  const note = document.createElement("p"); note.className = "adv-help";
+  note.textContent = "Bars: stiffer overall sharpens turn-in and costs traction; a stiffer front than rear steadies braking. "
+    + "Rake adds aero load on top of the wing (a max-wing car is already at full load). "
+    + "Brake bias splits the friction budget between the axles under braking — forward understeers on entry, rearward rotates. "
+    + "The works sheet is exactly the car it always was.";
+  wrap.appendChild(note);
+  const reset = document.createElement("button"); reset.type = "button"; reset.className = "cs-liv-ed-cancel";
+  reset.textContent = "RESET TO WORKS";
+  reset.onclick = () => { SetupTune.reset(team.id); if (G.soundOn) GameAudio.uiTick(); refresh(); };
+  wrap.appendChild(reset);
+  container.appendChild(wrap);
+  refresh();
+}
+
 function buildLiveryOptions(container, team) {
   if (csLivCreating) {
     container.classList.remove("cs-liv-grid");
@@ -453,7 +508,7 @@ function buildLiveryOptions(container, team) {
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
                      noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "", logo2: "",
-                     logo3: "", halo: "", finish: "gloss" };
+                     logo3: "", halo: "", finish: "gloss", numFont: "default", sponsors: "default" };
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -507,7 +562,7 @@ function buildLiveryOptions(container, team) {
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
           logo3: liv.logo3 ? arrToHex(liv.logo3) : "",
-          finish: liv.finish || "gloss",
+          finish: liv.finish || "gloss", numFont: liv.numFont || "default", sponsors: liv.sponsors || "default",
         };
         csLivEditId = liv.id;
         csLivCreating = true;
@@ -552,7 +607,7 @@ function buildLiveryOptions(container, team) {
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
           logo3: liv.logo3 ? arrToHex(liv.logo3) : "",
-          finish: liv.finish || "gloss",
+          finish: liv.finish || "gloss", numFont: liv.numFont || "default", sponsors: liv.sponsors || "default",
         };
         csLivEditId = null;   // create-new: never overwrites the stock scheme
         csLivCreating = true;
@@ -671,24 +726,25 @@ function buildLiveryCreator(container, team) {
        { key: "logo3", label: "OUTLINE" }];
   for (const slot of mSlots) wrap.appendChild(colorRow(slot.label, slot.key, true));
   wrap.appendChild(colorRow("HALO", "halo", true));
-  {
+  // One pill row per single-choice field: FINISH (Car3D's surface set — this
+  // array and FINISH_SURFACE were two copies and the specs held a third),
+  // NUMBER FONT and SPONSORS (LiveryTex's id lists). Same nodes and classes.
+  const pillRow = (label, key, values, dflt) => {
     const r = document.createElement("div"); r.className = "cs-liv-ed-row";
-    const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = "FINISH"; r.appendChild(lb);
+    const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = label; r.appendChild(lb);
     const group = document.createElement("span"); group.className = "cs-liv-ed-finish";
     const btns = [];
-    // From Car3D, not a local list: this array and FINISH_SURFACE were two
-    // copies of the same set and the specs held a third.
-    for (const f of ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)]) {
+    for (const f of values) {
       const b = document.createElement("button");
       b.type = "button";
-      b.className = "cs-liv-ed-none" + ((d.finish || "gloss") === f ? " active" : "");
-      b.dataset.csFinish = f;
+      b.className = "cs-liv-ed-none" + ((d[key] || dflt) === f ? " active" : "");
+      if (key === "finish") b.dataset.csFinish = f; else b.dataset.csPill = key + ":" + f;
       b.textContent = f.toUpperCase();
-      b.setAttribute("aria-pressed", String((d.finish || "gloss") === f));
+      b.setAttribute("aria-pressed", String((d[key] || dflt) === f));
       b.onclick = () => {
-        d.finish = f;
+        d[key] = f;
         for (const other of btns) {
-          const on = other.dataset.csFinish === f;
+          const on = other === b;
           other.classList.toggle("active", on);
           other.setAttribute("aria-pressed", String(on));
         }
@@ -699,7 +755,11 @@ function buildLiveryCreator(container, team) {
     }
     r.appendChild(group);
     wrap.appendChild(r);
-  }
+  };
+  pillRow("FINISH", "finish", ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "gloss");
+  const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
+  pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
+  pillRow("SPONSORS", "sponsors", LT && LT.SPONSOR_PACK_IDS || ["default"], "default");
 
   const nameRow = document.createElement("label"); nameRow.className = "cs-liv-ed-row";
   const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
@@ -734,6 +794,8 @@ function buildLiveryCreator(container, team) {
     if (d.logo3) liv.logo3 = hexToArr(d.logo3);
     if (d.halo) liv.halo = hexToArr(d.halo);
     if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
+    if (d.numFont && d.numFont !== "default") liv.numFont = d.numFont;
+    if (d.sponsors && d.sponsors !== "default") liv.sponsors = d.sponsors;
     const existing = getCustomLiveries(team.id);
     // Edit-in-place replaces the entry that carried the OLD id; create appends.
     setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
@@ -765,7 +827,9 @@ function livePreviewDraft(team, d) {
     logo2: d.logo2 ? hexToArr(d.logo2) : null,
     logo3: d.logo3 ? hexToArr(d.logo3) : null,
     noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null,
-    finish: d.finish && d.finish !== "gloss" ? d.finish : null } };
+    finish: d.finish && d.finish !== "gloss" ? d.finish : null,
+    numFont: d.numFont && d.numFont !== "default" ? d.numFont : null,
+    sponsors: d.sponsors && d.sponsors !== "default" ? d.sponsors : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 

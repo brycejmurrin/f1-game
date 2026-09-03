@@ -106,7 +106,22 @@
     // byte-diff. sw.js itself derives its cache generation from version.json,
     // so this is just about prompting a timely update check, not correctness.
     if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js" + (loaded ? "?v=" + loaded : "")).catch(function () {});
+      // AFTER the page has what IT needs. Registering here in the head starts
+      // the worker's ~10 MB precache while the shell is still fetching its own
+      // 3.5 MB of scripts — the two compete for the same connection on the
+      // first visit, which is the visit that decides whether the game feels
+      // fast. The install is unchanged; only its START moves behind window
+      // load plus an idle slice (a timer where requestIdleCallback is absent,
+      // which is Safari). Offline capability is identical one beat later.
+      var reg = function () {
+        navigator.serviceWorker.register("sw.js" + (loaded ? "?v=" + loaded : "")).catch(function () {});
+      };
+      var idle = function () {
+        if (typeof requestIdleCallback === "function") requestIdleCallback(reg, { timeout: 4000 });
+        else setTimeout(reg, 1200);
+      };
+      if (document.readyState === "complete") idle();
+      else window.addEventListener("load", idle, { once: true });
     }
     if (!loaded) return;
     fetch("version.json?_=" + Date.now(), { cache: "no-store" })
@@ -1873,6 +1888,7 @@
 <script defer crossorigin="anonymous" src="js/race/reliability.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/setup-tune.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-ui.js?v=dev"></script>
@@ -1908,6 +1924,7 @@
 <script defer crossorigin="anonymous" src="js/race/quali-model.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/daily-challenge.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/quali-sheet.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/onboard.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/debris-world.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/incident-sim.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game.js?v=dev"></script>

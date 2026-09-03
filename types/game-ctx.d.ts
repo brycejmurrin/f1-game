@@ -584,6 +584,8 @@ interface GameCtx {
   readonly daily: any;
   /** TT_LAPS — the time-trial distance a daily session stages (ttLaps is the lap LIST). */
   readonly ttDistance: number;
+  /** True while an #announce message is still on screen — a coach mark waits for it. */
+  readonly announceBusy: boolean;
   /** CHANGEABLE conditions: the weather walks from the chip's pick to wxArcPlan.to. */
   raceChangeable: boolean;
   /** The host's arc plan ({ to, dur }) or, solo, the seed-derived one; null when not changeable. */
@@ -645,6 +647,7 @@ declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;
 declare const DailyChallenge: GameModuleFactory;
+declare const Onboard: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const SkidMarks: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;

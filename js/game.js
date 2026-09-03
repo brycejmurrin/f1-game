@@ -1422,7 +1422,7 @@ function resolveLivery(team) {
     return { id: l.id || null, c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
-             logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null };
+             logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1432,7 +1432,7 @@ function resolveLivery(team) {
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
-                      logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null }
+                      logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -1536,7 +1536,7 @@ function modsFor(team, setup) {
   // teamStats() folds in career development; outside career it hands back the
   // team's own literal untouched, so this is the same object it always was.
   const stats = Career.teamStats(team) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
-  const mods = Parts.getMods(setup, team);
+  const mods = Parts.getMods(setup, team, SetupTune.mods(team.id));   // parts × the SETUP sheet's bars
   return {
     speed:     Parts.statMult(stats.speed)     * mods.speed,
     accel:     Parts.statMult(stats.accel)     * mods.accel,
@@ -1619,11 +1619,11 @@ function recomputePlayerMods() {
   const team = player ? player.team : Teams.LIST[teamIdx];
   const setup = getTeamParts(team.id);
   playerMods = modsFor(team, setup);
-  if (player) { player.mods = playerMods; player.tread = Parts.tread(setup, team); }
+  if (player) { player.mods = playerMods; player.tread = Parts.tread(setup, team); player.brakeBias = SetupTune.brakeBias(team.id); }
   // How much wing this car is carrying (0..1), which sets how much active aero
   // trades — see X_VMAX_GAIN_LO/HI. Cached here rather than resolved per physics
   // step: it only changes when the parts do.
-  playerAeroLoad = Parts.aeroLoad(setup, team);
+  playerAeroLoad = Parts.aeroLoad(setup, team, SetupTune.aero(team.id));   // wing + the sheet's rake
   if (player) player.aeroLoad = playerAeroLoad;
   // The ERS part's two axes — deployment and recovery — which run the battery
   // and the overtake window (see drainFor/regenFor/otTimeFor).
@@ -1731,7 +1731,7 @@ function makeCars() {
         mods: isP ? modsFor(team, getTeamParts(team.id)) : null,
         // AI runs the works wing/ERS (SIGNATURE equivalents already differ).
         // MY TEAM + hire share the saved build; everyone else uses factory.
-        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team) : Parts.aeroLoad(factoryParts.setup, team),
+        aeroLoad: (isP || mate) ? Parts.aeroLoad(getTeamParts(team.id), team, SetupTune.aero(team.id)) : Parts.aeroLoad(factoryParts.setup, team),
         ersDeploy: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).deploy : Parts.ersProfile(factoryParts.setup, team).deploy,
         ersRegen: (isP || mate) ? Parts.ersProfile(getTeamParts(team.id), team).regen : Parts.ersProfile(factoryParts.setup, team).regen,
         color: team.color, tier: team.tier, seat: di, houseStats: Career.teamStats(team),
@@ -3331,6 +3331,7 @@ const G = {
   // CHANGEABLE conditions: the weather walks from the chip's start to a
   // target the host decides (wxArcPlan) — see startRace / wxArcPlanFor.
   get raceChangeable() { return raceChangeable; }, set raceChangeable(v) { raceChangeable = !!v; },
+  get announceBusy() { return announceT > 0; },   // a coach mark must never stomp a race message
   get wxArcPlan() { return wxArcPlan || (raceChangeable ? wxArcPlanFor() : null); },
   set wxArcPlan(v) { wxArcPlan = v && typeof v === "object" ? { to: v.to, dur: v.dur } : null; },
   openGarageFrom: (from) => openGarage(from),
@@ -3344,6 +3345,7 @@ ltStore = LightStore.create(G);
 // Race control: the caution flag state machine (js/race/race-control.js).
 raceCtl = RaceControl.create(G);
 const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
+const onboard = Onboard.create(G);        // first-run coach marks (js/ui/onboard.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -4918,9 +4920,23 @@ function updateCar(c, dt, ranked) {
     // the car; it is a pure function of deterministic marble positions and returns
     // 1.0 (a true no-op) off-path. Subtle by construction (≤7% via MARBLE_GRIP_MIN).
     const marbleMu = DebrisWorld.active() ? DebrisWorld.marbleGrip(c) : 1;
-    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * slipFactor * marbleMu;
-    const muF = Math.max(0.5, muBase * loadF * FRONT_GRIP);
-    const muR = Math.max(0.5, muBase * loadR * (1 - DRIFT * 0.55));
+    // BRAKE BIAS spends the friction ellipse per AXLE: under braking the front
+    // spends bb/BB_REF of the longitudinal budget and the rear (1−bb)/(1−BB_REF)
+    // — forward bias uses up the front's circle (entry understeer), rearward
+    // lightens the rear (rotation). At BB_REF both scales are exactly 1 and
+    // this is the single slipFactor it always was; AI and remote cars carry no
+    // brakeBias and read BB_REF. Throttle and coast are unsplit.
+    // Bit-identical when the split is off: muBase keeps slipFactor and the
+    // per-axle factors are exactly 1 (the characterization spec pins this).
+    const bbOn = braking && (c.axEstSm ?? 0) < 0 && c.brakeBias != null && c.brakeBias !== SetupTune.BB_REF;
+    const bb = bbOn ? SetupTune.bbScales(c.brakeBias) : null;
+    // (bbSlip*, not slipF/slipR — those names are the axles' SLIP ANGLES below.)
+    const afF = bb ? Math.min(1, axFrac * bb.f) : 0, afR = bb ? Math.min(1, axFrac * bb.r) : 0;
+    const bbSlipF = bb ? Math.sqrt(Math.max(0, 1 - afF * afF)) : 1;
+    const bbSlipR = bb ? Math.sqrt(Math.max(0, 1 - afR * afR)) : 1;
+    const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * gripMult(c) * mods.cornering * bankMu * (1 + vertLoad) * (bb ? 1 : slipFactor) * marbleMu;
+    const muF = Math.max(0.5, muBase * bbSlipF * loadF * FRONT_GRIP);
+    const muR = Math.max(0.5, muBase * bbSlipR * loadR * (1 - DRIFT * 0.55));
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays
@@ -8090,6 +8106,7 @@ function tickBody(now) {
   // Adaptive resolution: only govern while actively rendering a race.
   if (!paused && (state === "race" || state === "count")) PerfGov.tick(_dtMs);
   Input.poll(); BrakeCue.tick();   // pad + brake-cue; before pause so Start can un-pause
+  onboard.tick(dt);                // first-run coach marks — reads reports only, never the car
   // Multiplayer runs BEFORE the paused gate, and the gate below lets it through,
   // because a shared world cannot be stopped by one player opening a menu: the
   // rival keeps driving whatever this screen is doing. Inert solo.

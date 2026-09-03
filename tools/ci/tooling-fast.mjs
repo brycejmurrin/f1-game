@@ -33,6 +33,8 @@ const LOGFILE = path.join(LOGDIR, "tooling-fast-suite.log");
 export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ghost.test.mjs",
   "tests/unit/daily-challenge.test.mjs",
+  "tests/unit/setup-tune.test.mjs",
+  "tests/unit/onboard.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/quick-validate.test.mjs",

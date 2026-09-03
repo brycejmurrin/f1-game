@@ -716,7 +716,10 @@ const Parts = (function () {
     return opt || cat.options.find((o) => o.id === DEFAULTS[cat.id]) || cat.options[0];
   }
 
-  function resolveSetup(setup, team) {
+  // `tune` (optional) is the SETUP SHEET's four-channel contribution
+  // (SetupTune.mods) — multiplied in after the parts. factoryResolved never
+  // passes one, which is what keeps the AI field the works car.
+  function resolveSetup(setup, team, tune) {
     const requested = Object.assign({}, DEFAULTS, setup || {});
     const resolvedSetup = {};
     const mods = { speed: 1, accel: 1, cornering: 1, braking: 1 };
@@ -737,6 +740,7 @@ const Parts = (function () {
       if (opt.cornering !== undefined) mods.cornering *= opt.cornering;
       if (opt.braking   !== undefined) mods.braking   *= opt.braking;
     }
+    if (tune) for (const k of ["speed", "accel", "cornering", "braking"]) if (Number.isFinite(tune[k])) mods[k] *= tune[k];
     return { setup: resolvedSetup, mods, cost, ids: resolvedSetup, tiers, visual, options };
   }
 
@@ -768,8 +772,8 @@ const Parts = (function () {
     return CATALOG.map((cat) => resolved.ids[cat.id]).join("|");
   }
 
-  function getMods(setup, team) {
-    return resolveSetup(setup, team).mods;
+  function getMods(setup, team, tune) {
+    return resolveSetup(setup, team, tune).mods;
   }
 
   function getCost(setup, team) {
@@ -829,11 +833,17 @@ const Parts = (function () {
     return { deploy: at("accel", ERS_SPAN.deploy), regen: at("speed", ERS_SPAN.regen) };
   }
 
-  function aeroLoad(setup, team) {
+  // `tune.rake` (optional, −1..1 from SetupTune.aero) adds RH_GAIN of load on
+  // top of the wing's normalised load, clamped — so an untouched car reads
+  // exactly what it always did, and the measured aero table stays true.
+  const RH_GAIN = 0.06;
+  function aeroLoad(setup, team, tune) {
     const opt = resolveSetup(setup, team).options.aero;
     const w = opt && opt.cornering !== undefined ? opt.cornering : 1;
     const { lo, hi } = AERO_SPAN;
-    return hi > lo ? Math.max(0, Math.min(1, (w - lo) / (hi - lo))) : 0.5;
+    const base = hi > lo ? Math.max(0, Math.min(1, (w - lo) / (hi - lo))) : 0.5;
+    const rake = tune && Number.isFinite(tune.rake) ? Math.max(-1, Math.min(1, tune.rake)) : 0;
+    return rake ? Math.max(0, Math.min(1, base + RH_GAIN * rake)) : base;
   }
 
   // getVisualTiers(setup, teamEngine) -> { engine:0|1|2, aero:0|1|2, ... } —
@@ -857,6 +867,6 @@ const Parts = (function () {
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable,
     getFactorySetup, factoryKey,
-    getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread,
+    getMods, getCost, getVisualTiers, statMult, displayStat, STAT_KEYS, aeroLoad, ersProfile, tread, RH_GAIN,
   };
 })();

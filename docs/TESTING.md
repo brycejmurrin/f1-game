@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 189 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 192 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1078,6 +1078,8 @@ what it covers.
 | `season-format.spec.js` | season mode CUSTOMISED — a shortened/reordered calendar (classics included) crowning its champion at ITS last round, qualifying switched off, the classic points table, the lap chips being PRESELECTED rather than overridden, and sprint weekends: a sprint pays 8-7-6… without closing the round, the Grand Prix follows on the same circuit without a second qualifying session, and the stage survives a quit because it is written with the points |
 | `time-trial.spec.js` | ghost recording, ghost delta HUD, sector-split announces |
 | `ghost.test.mjs` | ghost lap recording, forward-progress filtering, pose lookup at(t) and inverse lookup timeAt(s) with boundary clamps, and the meta (medal, pole, pace) that rides with the ghost lap |
+| `onboard.test.mjs` | the first-run COACH MARKS in a VM — each mark fires once on its own signal and is remembered across a reload, the 8 s gap keeps two apart, a mark never stomps a race message or speaks outside a race, the wording names the control the player actually has (touch / keys), the two-race cap, and a source assertion that the module reads reports only (no `Tracks`, no curvature, no writes to the car) |
+| `setup-tune.test.mjs` | the SETUP sheet's contract in a VM — the works sheet is identity for every team (mods 1.0, rake 0, brake-bias split 1/1, factory path untouched), bars move the four channels inside the ±5 % clamp, rake adds aero load on top of the wing and clamps, brake bias snaps to the wheel's 0.5 steps and range, a damaged sheet falls back per field |
 | `daily-challenge.test.mjs` | the DAILY CHALLENGE in a VM — the plan is a pure function of the UTC day (same day same plan, a week is not one plan), open() stages the time trial by circuit id with the day's seed, record() keeps the day's best and a streak of consecutive UTC days, the share line's one shape, a damaged save normalises |
 | `career.spec.js` | the save and its six slots, the mode axes, the hub, a settled round, ratings, the R&D garage, MY TEAM, objectives/contracts/rollover, reliability, EXTRA FUNDS never raising the fitted cap, the facility, the hire's contract, sponsors — and that career development never reaches a Grand Prix |
 | `quali.spec.js` | one-lap qualifying: the simulated field and its spread, the sheet's two states, the grid being the qualifying order car-for-car, every round qualifying, and no classification leaking into the race |

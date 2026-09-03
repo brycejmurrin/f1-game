@@ -2,14 +2,14 @@
   "_doc": "Ratchets on the files that only ever grow. `node tools/check/ratchets.mjs` checks, `--update` snaps every ceiling to the current value (lower after an extraction; a raise is a deliberate edit with its reason in the commit). Metrics: lines (split-newline), codeLines (non-comment non-blank), gMembers (G facade members, check-gctx), topLets (column-0 `let`). History: docs/notes/CEILING-HISTORY.md.",
   "files": {
     "js/game.js": {
-      "lines": 9492,
-      "codeLines": 5221,
-      "gMembers": 230,
+      "lines": 9509,
+      "codeLines": 5229,
+      "gMembers": 231,
       "topLets": 151
     },
     "js/agent/apex.js": {
-      "lines": 2609,
-      "codeLines": 1980
+      "lines": 2610,
+      "codeLines": 1981
     },
     "js/agent/agentview.js": {
       "lines": 2452

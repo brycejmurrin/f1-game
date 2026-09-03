@@ -56,7 +56,14 @@ collapse onto one new notch. See `docs/research/PHASE-C-SLIDER-DESIGN.md`.
 axis of the traction circle. Braking or accelerating consumes longitudinal grip;
 `slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip. Trail-braking
 rotates the car; hard braking mid-corner understeers. Exposed via `physState()`
-fields `axEstSm`, `axFrac`, `slipFactor`.
+fields `axEstSm`, `axFrac`, `slipFactor`. **Brake bias** (the SETUP sheet,
+`js/garage/setup-tune.js`) splits that budget per axle UNDER BRAKING only:
+the front spends `bb / BB_REF` of it and the rear `(1 − bb) / (1 − BB_REF)`
+(`BB_REF = 0.56`, `js/physics/consts.js`), so `muF`/`muR` carry their own
+`slipF`/`slipR`. At `BB_REF` both scales are exactly 1 and the ellipse is the
+single `slipFactor` it always was — AI and remote cars carry no `brakeBias` and
+read `BB_REF`, so nothing outside the player's sheet moves. Forward bias spends
+the front's circle (entry understeer); rearward lightens the rear (rotation).
 
 **ACTIVE AERO (X-mode / Z-mode)** is the THIRD straight-line lever, next to
 BOOST (spends the battery) and OVERTAKE (a free, proximity-gated push). It adds
@@ -89,6 +96,14 @@ so garage brakes spend the friction ellipse. Measured end to end:
 | `minimal` | 0.00 | +5.5 % | 42 % | −16.0 % |
 | `medium` | 0.41 | +9.6 % | 57 % | −21.4 % |
 | `ground_effect` | 1.00 | +15.5 % | 78 % | −27.3 % |
+
+The SETUP sheet's rake (rear minus front ride height, from the team's default)
+adds `RH_GAIN = 0.06` of load per unit of rake ON TOP of the wing's normalised
+load, clamped to [0, 1] — the untouched car and every AI car read exactly the
+table above; the cost is that a max-wing car gains nothing from more rake. The
+anti-roll bars fold into the four-channel contract through `Parts.getMods(…,
+tune)` (stiffer overall: cornering up, accel down; stiffer front: braking up,
+accel down; ±5 % clamp), and are exactly 1.0 at the works sheet.
 
 The big-wing car has the LOWEST base top speed and the biggest gain from opening,
 so X-mode partly buys back the straight-line speed the wing costs — which is the
@@ -322,3 +337,11 @@ it lands.
 | `js/ui/track-maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
 | `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
 | `js/track/tracks.js` | build LUT bake, signboard side pick | **surface** | the producer itself, plus static scenery placement |
+
+A module that consumes only REPORTS other code already produced is not in this
+table, because it has no curvature site to classify — the first-run coach marks
+(`js/ui/onboard.js`) are the worked example: they read `BrakeCue.debug().urgency`,
+the overtake arm flag the HUD already draws and `G.aeroZoneAhead`, and write only
+to `#announce`. `tests/unit/onboard.test.mjs` asserts the source contains no
+`Tracks` read, no `curvature`, and no assignment to a car — which is what keeps
+it out of this table honestly rather than by omission.
