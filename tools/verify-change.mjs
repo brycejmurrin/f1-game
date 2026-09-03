@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // verify-change.mjs — ONE command that runs what a change needs, serialized
-// @doc ONE command: fast gate (verify-track, graph-parity, tooling-fast, bump-cache --check) + `test-bg` batches → one verdict.
+// @doc ONE command: fast gate (verify-track, graph-parity, tooling-fast, shell check) + `test-bg` batches → one verdict.
 // @section runner
 // correctly, and hands back one verdict.
 //
@@ -167,8 +167,8 @@ if (plan.fast.toolingFast) {
   fastOk = run("tooling-fast", "npm", ["run", "--silent", "test:tooling-fast"]) && fastOk;
 }
 {
-  // Advisory unless it can prove staleness: a mid-session tree legitimately
-  // has edits ahead of the bump (the bump is the LAST edit before commit).
+  // Advisory: confirms every shell tag reads ?v=dev and meta == version.json
+  // (hashes are stamped at deploy; there is no bump to be ahead of).
   say(`phase1 START cache-check (advisory)`);
   const r = spawnSync("node", ["tools/bump-cache.mjs", "--check", "--json"], { cwd: ROOT, encoding: "utf8" });
   const cache = (() => { try { return JSON.parse(r.stdout); } catch (_) { return { consistent: false }; } })();

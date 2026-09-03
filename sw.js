@@ -17,6 +17,10 @@
 // a fresh cache generation and the old one is swept on activate — no manual
 // cache-invalidation step to remember.
 const CACHE_PREFIX = "apex26-";
+// A dev host serves the committed shell, whose asset tags all read `?v=dev`
+// (see the fetch handler). Playwright pages run on 127.0.0.1, so the suite
+// exercises this branch; the deployed site never does.
+const DEV_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test((self.location && self.location.hostname) || "");
 const INSTALL_COMPLETE_URL = "__apex_install_complete__";
 
 let _cacheNamePromise = null;
@@ -58,25 +62,6 @@ async function precacheAssetLists() {
     "icons/icon-192.png",
     "icons/icon-512.png",
     "icons/icon-maskable-512.png",
-    // The two OPT-IN renderer backends. They have no <script> tag any more —
-    // js/game.js injects them at boot only when apex26.gfxBackend selects one
-    // (tools/manifest.cjs DEFERRED) — so the tag parser below cannot see them.
-    // OPTIONAL for the same reason as the vendored three.js underneath: a GLX
-    // user never runs a byte of this, and an install must not fail over it.
-    // tests/unit/load-order.test.mjs asserts this list stays equal to DEFERRED.
-    "js/render/webgpu/wgsl-chunks.js",
-    "js/render/webgpu/wgsl-post.js",
-    "js/render/webgpu/wgsl-fx.js",
-    "js/render/webgpu/wgx.js",
-    "js/render/three/tsl-chunks.js",
-    "js/render/three/tsl-lit.js",
-    "js/render/three/tsl-sky.js",
-    "js/render/three/tsl-fx.js",
-    "js/render/three/tsl-post.js",
-    "js/render/three/tlx-shadow.js",
-    "js/render/three/tlx-chunked.js",
-    "js/render/three/tlx-post.js",
-    "js/render/three/tlx.js",
     "vendor/three-0.185.1/three.webgpu.min.js",
     "vendor/three-0.185.1/three.core.min.js",
     "vendor/three-0.185.1/three.tsl.min.js",
@@ -103,19 +88,33 @@ async function precacheAssetLists() {
     "vendor/trystero-0.25.3/nostr/index.js",
     "vendor/trystero-0.25.3/core/index.js",
     "vendor/trystero-0.25.3/noble-secp256k1.js",
-    // THE RACE PAYLOAD (tools/manifest.cjs LAZY_RACE / LAZY_SCENERY). These
-    // had <script> tags until the boot-wall round took 1,421 KB off the
-    // critical path; the tag parser below therefore cannot see them any more.
-    // WITHOUT THIS AN INSTALLED PWA GOES OFFLINE AND BUILDS BARE CIRCUITS —
-    // js/game.js:loadBackendScripts injects them, its `el.onload = el.onerror =
-    // resolve` swallows the miss, TrackScenery[id] stays undefined and the
-    // track builds road-and-terrain with no dressing. Exactly the failure the
-    // DEFERRED note above describes, and silent in the same way.
-    // Precaching them costs the install nothing it did not already pay when
-    // they were tags; the boot-wall win is the PARSE, not the bytes on disk.
-    // OPTIONAL, not essential: an install must not fail over a circuit the
-    // player may never race. Pinned to the manifest by
-    // tests/unit/load-order.test.mjs.
+    // Self-hosted fonts (referenced from css/tokens.css @font-face, so the tag
+    // parser below never sees them). Immutable vendored assets — no ?v=. Seeded
+    // as OPTIONAL: font-display:swap means a missed precache just falls back to
+    // the system stack, so an install must not fail if one is unreachable.
+    "assets/fonts/titillium-web-latin-400-normal.woff2",
+    "assets/fonts/titillium-web-latin-600-normal.woff2",
+    "assets/fonts/titillium-web-latin-700-normal.woff2",
+    "assets/fonts/titillium-web-latin-700-italic.woff2",
+    "assets/fonts/rajdhani-latin-500-normal.woff2",
+    "assets/fonts/rajdhani-latin-600-normal.woff2",
+    "assets/fonts/rajdhani-latin-700-normal.woff2",
+    // @gen-shell:sw-optional
+    // DEFERRED renderer backends (no <script> tag; injected on opt-in)
+    "js/render/webgpu/wgsl-chunks.js",
+    "js/render/webgpu/wgsl-post.js",
+    "js/render/webgpu/wgsl-fx.js",
+    "js/render/webgpu/wgx.js",
+    "js/render/three/tsl-chunks.js",
+    "js/render/three/tsl-lit.js",
+    "js/render/three/tsl-sky.js",
+    "js/render/three/tsl-fx.js",
+    "js/render/three/tsl-post.js",
+    "js/render/three/tlx-shadow.js",
+    "js/render/three/tlx-chunked.js",
+    "js/render/three/tlx-post.js",
+    "js/render/three/tlx.js",
+    // LAZY_RACE + LAZY_SCENERY — the race payload; a miss builds a bare circuit offline
     "js/game/light-presets.js",
     "js/circuits/scenery/bahrain.js",
     "js/circuits/scenery/monaco.js",
@@ -157,11 +156,7 @@ async function precacheAssetLists() {
     "js/circuits/scenery/indianapolis.js",
     "js/circuits/scenery/buenos_aires.js",
     "js/circuits/scenery/jacarepagua.js",
-    // THE DATA HUB (tools/manifest.cjs LAZY_DATA). Tagless since the 154 KB
-    // came off the boot wall — injected from the DATA button. Unlike the race
-    // payload a miss here is LOUD (the hub simply does not open), but an
-    // installed PWA should still be able to read a cached schedule offline,
-    // and the same ?v=<build> stamping rule applies.
+    // LAZY_DATA — the data hub bundle behind the DATA button
     "js/data/api.js",
     "js/data/telemetry.js",
     "js/data/export.js",
@@ -170,11 +165,7 @@ async function precacheAssetLists() {
     "js/data/lastrace.js",
     "js/data/live.js",
     "js/data/hub.js",
-    // MULTIPLAYER (tools/manifest.cjs LAZY_NET). Tagless since the 241 KB came
-    // off the boot wall — injected when VS FRIEND opens. The room codes need a
-    // network anyway, so this is not about offline play; it is so a player who
-    // installed the PWA and then opened VS FRIEND on a flaky connection gets
-    // the lobby rather than a button that does nothing.
+    // LAZY_NET — the multiplayer stack behind VS FRIEND
     "js/net/nostr.js",
     "js/net/rendezvous.js",
     "js/net/sdp.js",
@@ -186,17 +177,8 @@ async function precacheAssetLists() {
     "js/net/session.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
-    // Self-hosted fonts (referenced from css/tokens.css @font-face, so the tag
-    // parser below never sees them). Immutable vendored assets — no ?v=. Seeded
-    // as OPTIONAL: font-display:swap means a missed precache just falls back to
-    // the system stack, so an install must not fail if one is unreachable.
-    "assets/fonts/titillium-web-latin-400-normal.woff2",
-    "assets/fonts/titillium-web-latin-600-normal.woff2",
-    "assets/fonts/titillium-web-latin-700-normal.woff2",
-    "assets/fonts/titillium-web-latin-700-italic.woff2",
-    "assets/fonts/rajdhani-latin-500-normal.woff2",
-    "assets/fonts/rajdhani-latin-600-normal.woff2",
-    "assets/fonts/rajdhani-latin-700-normal.woff2"]);
+    // /@gen-shell:sw-optional
+  ]);
   const shell = await fetch("index.html", { cache: "no-store" });
   if (!shell || !shell.ok) throw new Error("Unable to fetch the application shell");
   const html = await shell.text();
@@ -217,12 +199,11 @@ async function precacheAssetLists() {
   // script (v8.dev). These three are LAZY_AGENT (no <script> tag) — belt and
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
+  // @gen-shell:sw-lazy-agent
+  const LAZY_AGENT = ["js/game/agentview-raster.js","js/game/agentview.js","js/game/apex.js"];
+  // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
-    if (u.includes("js/game/apex.js") ||
-        u.includes("js/game/agentview.js") ||
-        u.includes("js/game/agentview-raster.js")) {
-      essential.delete(u);
-    }
+    if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
   }
   return { essential: Array.from(essential), optional: Array.from(optional) };
 }
@@ -400,10 +381,29 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for everything else. Every content-hashed ?v= URL is immutable by
-  // this project's own cache-busting convention, and audio/sfx never change
+  // Cache-first for everything else. Every DEPLOYED ?v= URL carries a content
+  // hash (pages.yml stamps it while staging), and audio/sfx never change
   // post-release, so a cache hit is always correct — no revalidation needed.
+  //
+  // EXCEPT on a dev host. The committed shell reads `?v=dev` for every asset
+  // (tools/gen-shell.mjs; hashes exist only in the deploy's staged copy), so a
+  // cache-first worker on localhost would pin the first js/css it saw for the
+  // life of the cache generation. Network-first there, cache as the offline
+  // fallback — tools/offline-precache-check.cjs still passes because the
+  // fallback is the precache.
   event.respondWith((async () => {
+    if (DEV_HOST && url.origin === self.location.origin) {
+      try {
+        const res = await fetch(req);
+        if (res && res.ok) {
+          try {
+            const cache = await caches.open(await currentCacheName());
+            await cache.put(req, res.clone());
+          } catch (_) { /* a failed cache write must not fail a good response */ }
+          return res;
+        }
+      } catch (_) { /* offline: fall through to the cache */ }
+    }
     const cached = await caches.match(req);
     if (cached) return cached;
     // On a miss there is nothing to fall back to, so a timeout race could only

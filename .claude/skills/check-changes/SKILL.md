@@ -47,7 +47,7 @@ node tools/verify-track.cjs monza          # one circuit (plain CLI; no wrap)
 - Gate contracts, ratchets, reading a failure → [`references/guards.md`](references/guards.md)
 - A test timed out / hangs / passes solo but not loaded (or vice versa) —
   the decision tree and `test-solo.mjs` → [`references/triage.md`](references/triage.md)
-- Cache bump after any `js/` or `css/` edit (`bump-cache.mjs --apply`, last
+- No cache bump after a `js/`/`css/` edit (`?v=dev`; the deploy stamps hashes); `gen-shell` after a manifest change (last
   edit before commit; `--merge <ref>` across lineages) → [`references/bump.md`](references/bump.md)
 - Merging with / pushing to the deploy branch, union sweeps, baseline
   grow/shrink rules, Pages concurrency → [`references/deploy.md`](references/deploy.md)

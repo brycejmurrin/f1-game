@@ -292,7 +292,7 @@ override it.
 1. One subagent per track proposes presets for all meaningful `tod × wx` combos (this doc = its brief; it also reads `js/circuits/<id>.js` for palette/locale).
 2. Each subagent writes `artifacts/lighting/proposals/<id>.json` only.
 3. Parent merges with `merge-proposals.mjs`, flips the row to ✅, then
-   `node tools/bump-cache.mjs --apply` after the last js edit.
+   `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) after the last js edit.
 
 ### Tuning one condition for the whole grid
 

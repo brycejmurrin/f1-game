@@ -1,30 +1,26 @@
 #!/usr/bin/env node
-// bump-cache.mjs — deterministic per-file cache busting plus shell generation.
-// @doc Content-hash cache busting: `--check` verifies every `?v=` and the shell generation; `--apply` refreshes them.
-// @skill bump-cache
+// bump-cache.mjs — the DEPLOY-side content hasher; a consistency check in the repo.
+// @doc Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); in the repo, `--check` confirms every tag reads `?v=dev`.
+// @skill check-changes
 //
-// Every local JS/CSS URL in index.html carries a short SHA-256 of that file's
-// contents. Unchanged assets therefore keep stable URLs (and browser/V8 caches)
-// across releases. version.json and <meta name="apex-build"> are the
-// shell/service-worker generation.
+// THERE IS NO CACHE BUMP IN DEVELOPMENT (2026-09-03). Every tagged JS/CSS URL
+// in the committed index.html reads `?v=dev`; tools/gen-shell.mjs writes the
+// tag blocks from tools/manifest.cjs and never hashes. pages.yml stages the
+// site and runs `--apply --at <2000 + commit count> --root _site`, which
+// rewrites every tag to that file's 12-hex SHA-256 and stamps the generation,
+// so the deployed shell is content-addressed and the committed one is
+// stable. Before this, 151 hashes were committed and index.html sat in 77 of
+// 199 commits for hash churn alone.
 //
-// THE GENERATION IS STAMPED BY THE DEPLOY, NOT COMMITTED (2026-09-01).
-// pages.yml runs `--apply --at <2000 + commit count> --root _site` while
-// staging, so the number is monotonic under fast-forward pushes and unique per
-// tip by construction. The committed version.json/meta are a dev placeholder
-// that only has to stay CONSISTENT (the load-order guard); `--apply` therefore
-// KEEPS the committed build and only rehashes tags. Before this, 34 of 105
-// builds were introduced by two or three commits and every deploy merge
-// conflicted on exactly these two files.
+//   node tools/bump-cache.mjs                        # repo check: every tag is ?v=dev, meta == version.json
+//   node tools/bump-cache.mjs --check --root <dir>   # staged check: every tag carries its content hash
+//   node tools/bump-cache.mjs --apply --at N --root <dir>   # what pages.yml runs while staging
+//   node tools/bump-cache.mjs --apply --root <dir>   # hash a staged copy, keep its generation
+//   ... --json
 //
-//   node tools/bump-cache.mjs                  # check (the default mode)
-//   node tools/bump-cache.mjs --since <ref>    # check incl. "assets changed since ref"
-//   node tools/bump-cache.mjs --apply          # rehash tags; build unchanged
-//   node tools/bump-cache.mjs --apply --at N   # rehash + set the generation to N (the deploy)
-//   node tools/bump-cache.mjs --apply --advance [--merge <ref>]   # the old max+1 behaviour
-//   ... --json  [--root <dir>]
-// (--check is accepted for readability but not parsed — checking IS the
-// no-flag default; only --apply changes anything.)
+// `--apply` without `--root` REFUSES (exit 2): a habitual repo-side run would
+// put 151 hashes back into the shell. `--advance` / `--merge <ref>` move the
+// generation inside a staged copy only.
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -37,20 +33,14 @@ const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1
 // --root is RESOLVED: pages.yml passes the relative `_site`, and the asset-path
 // guard below compares against an absolute prefix — a relative ROOT rejected
 // every tag ("Invalid versioned asset path: css/tokens.css") and failed the
-// first stamped deploy (run 1873, 2026-09-01). The unit test used an absolute
-// temp dir and never saw it; it now stamps through a relative --root too.
-const ROOT = opt("--root") ? path.resolve(opt("--root")) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+// first stamped deploy (run 1873, 2026-09-01).
+const STAGED = !!opt("--root");
+const ROOT = STAGED ? path.resolve(opt("--root")) : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const INDEX = path.join(ROOT, "index.html");
 const VERSION = path.join(ROOT, "version.json");
+export const DEV_TOKEN = "dev";
 const TAG_RE = /\b(src|href)="([^"?#]+)\?v=([A-Za-z0-9._-]+)"/g;
 const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/;
-// These paths are served cache-first at stable paths, or contain code loaded
-// with ?v=<shell build> rather than a per-file digest. Any byte change here
-// therefore requires a strictly newer service-worker/shell generation.
-const GENERATION_PATHS = Object.freeze([
-  "js/", "css/", "index.html", "sw.js", "manifest.json",
-  "icons/", "assets/", "vendor/",
-]);
 
 function digest(rel) {
   const target = path.resolve(ROOT, rel);
@@ -75,6 +65,11 @@ function verdict() {
   const { tags, build, shellBuild } = readState();
   const mismatches = [];
   for (const tag of tags) {
+    if (!STAGED) {
+      // The repo shell is content-addressed at DEPLOY, never in the tree.
+      if (tag.actual !== DEV_TOKEN) mismatches.push({ ...tag, expected: DEV_TOKEN });
+      continue;
+    }
     let expected = null;
     try { expected = digest(tag.rel); }
     catch (error) { mismatches.push({ ...tag, error: error.message }); continue; }
@@ -82,36 +77,23 @@ function verdict() {
   }
   const consistent = tags.length > 0 && mismatches.length === 0 &&
     Number.isInteger(build) && build > 0 && shellBuild === build;
-  const out = {
+  return {
     consistent,
+    mode: STAGED ? "staged" : "repo",
     tagCount: tags.length,
     assetMismatches: mismatches,
     shellBuild,
     versionJson: build,
   };
-  const since = opt("--since");
-  if (since) {
-    const diff = execFileSync("git", ["diff", "--name-only", since, "--", ...GENERATION_PATHS],
-      { cwd: ROOT, encoding: "utf8" }).trim();
-    const versionMoved = execFileSync("git", ["diff", "--name-only", since, "--", "version.json"],
-      { cwd: ROOT, encoding: "utf8" }).trim() !== "";
-    const baseBuild = JSON.parse(execFileSync("git", ["show", `${since}:version.json`],
-      { cwd: ROOT, encoding: "utf8" })).build;
-    if (!Number.isInteger(baseBuild) || baseBuild <= 0) {
-      throw new Error(`${since}:version.json has an invalid build`);
-    }
-    out.assetsChangedSince = diff ? diff.split("\n") : [];
-    out.versionMoved = versionMoved;
-    out.baseBuild = baseBuild;
-    out.generationAdvanced = Number.isInteger(build) && build > baseBuild;
-    out.bumpNeeded = out.assetsChangedSince.length > 0 && !out.generationAdvanced;
-    out.generationRegressed = Number.isInteger(build) && build < baseBuild;
-    if (out.bumpNeeded || out.generationRegressed) out.consistent = false;
-  }
-  return out;
 }
 
 function apply() {
+  if (!STAGED) {
+    throw Object.assign(new Error(
+      "refusing --apply on the repo shell: tags read ?v=dev and hashes are stamped by the deploy " +
+      "(pages.yml: --apply --at N --root _site). After a manifest change run `node tools/gen-shell.mjs`."),
+      { exitCode: 2 });
+  }
   const { html, build, shellBuild } = readState();
   const candidates = [Number(build) || 0, Number(shellBuild) || 0];
   const mergeRef = opt("--merge");
@@ -142,13 +124,13 @@ try { result = flag("--apply") ? apply() : verdict(); }
 catch (error) {
   if (flag("--json")) console.log(JSON.stringify({ consistent: false, error: error.message }, null, 2));
   else console.error(error.message);
-  process.exit(1);
+  process.exit(error.exitCode || 1);
 }
 if (flag("--json")) console.log(JSON.stringify(result, null, 2));
 else if (flag("--apply")) console.log(`hashed ${result.tagCount} tag(s); shell build ${result.applied}`);
 else console.log(result.consistent
-  ? `consistent at shell build ${result.versionJson} (${result.tagCount} content-hashed tags)`
-  : `INCONSISTENT: ${result.assetMismatches.length} asset hash mismatch(es), shell ${result.shellBuild}, version.json ${result.versionJson}` +
-    (result.bumpNeeded ? ` — cache-sensitive assets changed since ${opt("--since")} without a newer shell generation` : "") +
-    (result.generationRegressed ? ` — shell generation regressed below ${result.baseBuild}` : ""));
+  ? (STAGED
+    ? `consistent at shell build ${result.versionJson} (${result.tagCount} content-hashed tags)`
+    : `consistent at shell build ${result.versionJson} (${result.tagCount} tags read ?v=dev; hashes are stamped at deploy)`)
+  : `INCONSISTENT: ${result.assetMismatches.length} tag mismatch(es), shell ${result.shellBuild}, version.json ${result.versionJson}`);
 process.exit(flag("--apply") || result.consistent ? 0 : 1);

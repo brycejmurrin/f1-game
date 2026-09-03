@@ -611,12 +611,17 @@ const CEILINGS = {
   // skipped frame arms and does no work, instead of re-triggering next frame).
   // -> 9233 (deploy branch): the display-reset retry.
   // MERGED and RE-MEASURED on the union.
-  // 9274 -> 9307: the garage auto-fit cap (SP_FIT_DIST_MAX) and the effective
-  // framing published for __apex.garageCam(). The fit diverged on a narrow
-  // viewport and pinned on the MANUAL zoom ceiling, orbiting the camera outside
-  // the bay; the note also records the vertical term that was tried and
-  // measured WRONG, so the next round does not re-add it.
-  "js/game.js": 9307,
+  // 9274 -> 9307 (deploy side): the garage auto-fit cap (SP_FIT_DIST_MAX) and
+  // the effective framing published for __apex.garageCam(). The fit diverged
+  // on a narrow viewport and pinned on the MANUAL zoom ceiling, orbiting the
+  // camera outside the bay; the note also records the vertical term that was
+  // tried and measured WRONG, so the next round does not re-add it.
+  // 9307 -> 9235: LOWERED, re-measured on the merged tree (split-newline
+  // count). The five hand-mirrored lazy rosters (BACKEND_FILES /
+  // BACKEND_EDGES / AGENT_* / RACE_FILES / DATA_* / NET_*) are now one
+  // generated global, ApexRoster (js/roster.js, from tools/manifest.cjs via
+  // tools/gen-shell.mjs). The loader logic stays; only the copies left.
+  "js/game.js": 9235,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

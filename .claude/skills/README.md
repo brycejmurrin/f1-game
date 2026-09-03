@@ -52,8 +52,9 @@ scenery-dress; `debug-state` → agent-view; `cross-backend-parity` →
 | **webgl-debug** | Blank/dark GLX canvas, shadow acne, bloom, HDR, shader/uniform bugs, GLX renderer artifacts. |
 | **webgpu-debug** | WGX black screen, NaN-white road, WGSL failures, device lost, MSAA/HDR, `wgx-validate` with real Dawn. |
 
-Cache busting: every `js/`/`css/` edit re-hashes its `?v=<sha256>` URL and
-advances `version.json` — `node tools/bump-cache.mjs --apply`, last edit before
-commit (check-changes `references/bump.md`).
+Cache busting is the deploy's job: the committed shell reads `?v=dev` on
+every tag and `pages.yml` stamps content hashes while staging. Nothing to
+bump after a `js/`/`css/` edit; after a `tools/manifest.cjs` change run
+`node tools/gen-shell.mjs` (check-changes `references/bump.md`).
 
 See individual `SKILL.md` files under this directory for full workflows.

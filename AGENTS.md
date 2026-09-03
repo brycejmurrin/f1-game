@@ -53,9 +53,9 @@ Session shape — this is what controls both wall time and waiting:
    before believing any red run (`docs/research/CI-RENDERING-PERFORMANCE.md` §Part 3).
 2. Make ALL source edits first, then verify ONCE. Tests serve `js/` and `css/`
    from the working tree, so a run in flight forbids source edits — run the
-   browser tests a single time, at the end, just before the cache bump. Do not
-   re-run browser specs after every edit; `test:tooling-fast` is the edit-loop
-   check, and `test:tiny` runs once before the bump. Track or scenery edits
+   browser tests a single time, at the end. Do not re-run browser specs after
+   every edit; `test:tooling-fast` is the edit-loop check, and `test:tiny`
+   runs once at the end. Track or scenery edits
    run `verify-track.cjs <id>` first (2 s), not a browser group.
 3. NEVER BLOCK THE FOREGROUND ON A TEST RUN — this is a flat prohibition and
    it covers node suites, sweeps, and audits, not just browser groups. Every
@@ -84,8 +84,8 @@ Session shape — this is what controls both wall time and waiting:
 7. Never hand a subagent a browser run — give a flat prohibition ("report it
    unverified"). Subagent worktrees default to a STALE base: first step in any
    worktree is `git checkout -B <branch> <the session branch or its SHA>`.
-8. Never bump content hashes / `version.json` mid-run — the bump is the LAST
-   edit before commit.
+8. Never hand-edit a `@gen-shell` block, `version.json` or the `apex-build`
+   meta — the shell is generated and the deploy stamps it.
 
 ## Seeing the game (cheapest first)
 
@@ -189,21 +189,22 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 
 ## Critical conventions
 
-- **Cache busting**: after ANY js/css change, run
-  `node tools/bump-cache.mjs --apply` (`.claude/skills/bump-cache`). Each
-  asset URL carries a 12-char content hash. `version.json` and
-  `<meta name="apex-build">` are a CONSISTENT PLACEHOLDER, not a counter:
-  `pages.yml` stamps the real generation (2000 + the deploy branch's commit
-  count) while staging, so `--apply` keeps the committed number and two
-  sessions can never collide on it (`tests/unit/deploy-stamp.test.mjs`).
-  Last edit before commit, never mid-run. Docs/tools-only deltas need no bump.
+- **Cache busting is the deploy's job**: every asset tag in the committed
+  shell reads `?v=dev`; `pages.yml` rewrites them to 12-char content hashes
+  and stamps the generation (2000 + the deploy branch's commit count) while
+  staging (`bump-cache.mjs --apply --at N --root _site`;
+  `tests/unit/deploy-stamp.test.mjs`). There is NO bump after a js/css edit
+  and `bump-cache --apply` refuses on the repo. `version.json` and
+  `<meta name="apex-build">` are a consistent placeholder. After a
+  `tools/manifest.cjs` change run `node tools/gen-shell.mjs`.
 - **No ES modules** — every file is a `"use strict"` IIFE assigning one global
   (sole exception: the vendored three.js island).
   `tests/unit/global-registry.test.mjs` enforces the registry.
-- **New-file lockstep**: IIFE file + `<script>` tag position +
-  `tools/manifest.cjs` entry (+ HARD_EDGES pair if eval-time destructured) +
-  cache bump. DEFERRED backends have no tag; `DEFERRED`/`BACKEND_FILES`/sw.js
-  precache must agree (guard-asserted).
+- **New file**: IIFE file + `tools/manifest.cjs` entry (+ HARD_EDGES pair if
+  eval-time destructured) + `node tools/gen-shell.mjs` (writes the
+  `index.html` tag block, `tools/carview.html`, sw.js's precache seed and
+  `js/roster.js` — the lazy rosters game.js injects). No cache bump. Never
+  hand-edit a `@gen-shell` block; `load-order.test.mjs` fails on drift.
 - **Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.**
 - `module-size.test.mjs` ratchets game.js and apex.js AT their current
   ceilings — pay for every added line. New `js/game/` files are hyphenated;
@@ -301,8 +302,8 @@ force-push. **`node tools/deploy.mjs`** is the whole protocol (fetch → merge �
 `test:tooling-fast` → `verify-track` for touched circuits → push, or `--pr`
 to open a reviewable PR into the deploy branch instead; `--plan` prints the
 union first). `index.html`/`version.json` are the only files that used to
-conflict and they now resolve to either side plus a hash-only
-`bump-cache --apply`, because the generation is stamped by the deploy.
+conflict; they now resolve to either side plus `node tools/gen-shell.mjs`,
+because the tags read `?v=dev` and the generation is stamped by the deploy.
 `test:sweeps` is CI's on the same diff (do not duplicate it locally). The
 live check is `pages.yml`'s `verify-live` job — this container cannot reach
 `github.io`; read the run in the Actions tab, or fetch `version.json` through

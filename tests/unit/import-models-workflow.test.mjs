@@ -59,13 +59,15 @@ test("the commit step validates and quotes a non-deploy branch", () => {
   assert.doesNotMatch(workflow, /git checkout -B "\${{\s*inputs\.commit_branch\s*}}"/);
 });
 
-test("model imports advance and commit the cache generation", () => {
+test("model imports check the generated shell and commit without a bump", () => {
   const shell = executableShell();
   const changed = shell.indexOf("git diff --cached --quiet");
-  const bump = shell.indexOf("node tools/bump-cache.mjs --apply");
+  const check = shell.indexOf("node tools/gen-shell.mjs --check");
   const commit = shell.indexOf("git commit -m");
-  assert.ok(changed >= 0 && bump > changed && commit > bump,
-    "only a real model change should bump, and the bump must precede the commit");
-  assert.match(shell, /git add index\.html version\.json/,
-    "the bot commit must carry the generation alongside the mutable asset bytes");
+  assert.ok(changed >= 0 && check > changed && commit > check,
+    "the generated shell is checked after a real model change and before the commit (no bump: the deploy stamps the generation)");
+  assert.doesNotMatch(shell, /bump-cache\.mjs --apply/,
+    "the bot never rewrites the committed shell; pages.yml stamps the generation at deploy");
+  assert.doesNotMatch(shell, /git add index\.html version\.json/,
+    "nothing in the shell changes on a model import, so nothing there is staged");
 });

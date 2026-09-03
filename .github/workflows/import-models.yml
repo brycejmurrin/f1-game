@@ -129,12 +129,12 @@ jobs:
           if git diff --cached --quiet; then
             echo "no model changes to commit"; exit 0
           fi
-          # Model paths are mutable and served cache-first. Advance the shell/SW
-          # generation in the same commit so existing installs cannot retain the
-          # previous manifest or model bytes under identical URLs.
-          node tools/bump-cache.mjs --apply
-          git add index.html version.json
-          git commit -m "chore(assets): import CC0 models and bump cache from $MODEL_URL
+          # Model paths are mutable and served cache-first, but every deploy
+          # stamps a new shell/SW generation (pages.yml: 2000 + commit count),
+          # so existing installs drop the old cache on the next deploy without a
+          # committed bump. The shell is generated; just confirm it is in step.
+          node tools/gen-shell.mjs --check
+          git commit -m "chore(assets): import CC0 models from $MODEL_URL
 
           Baked on the runner by tools/import-models.mjs — mat=$MODEL_MAT,
           height=${MODEL_HEIGHT}m. Merge this branch into the deploy branch

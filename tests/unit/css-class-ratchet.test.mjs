@@ -66,10 +66,13 @@ export function classTokens() {
   return seen;
 }
 
-/** SKILL.md rule 13: grep -oE '<[a-zA-Z][a-zA-Z0-9-]*' index.html | wc -l */
+/** SKILL.md rule 13: grep -oE '<[a-zA-Z][a-zA-Z0-9-]*' index.html | wc -l —
+ *  minus the <script>/<link> tags, which are a projection of tools/manifest.cjs
+ *  (written by gen-shell) and not DOM the page renders; counting them made
+ *  every new js file a ratchet edit. */
 export function shellNodes() {
   return [...fs.readFileSync(path.join(ROOT, "index.html"), "utf8")
-    .matchAll(/<[a-zA-Z][a-zA-Z0-9-]*/g)].length;
+    .matchAll(/<([a-zA-Z][a-zA-Z0-9-]*)/g)].filter((m) => m[1] !== "script" && m[1] !== "link").length;
 }
 
 // LOWER THESE WHEN YOU CONSOLIDATE. Raising one is allowed — this is a ratchet,
@@ -171,7 +174,11 @@ const CLASS_CEILING = 534;
 // 1238 -> 1239: the RACE IN PORTRAIT button in #rotate-device (PERF-FINDINGS
 // 5a) — one node, and the opt-in it carries is what makes the portrait touch
 // dock reachable at all.
-const NODE_CEILING = 1239;   // 1234 -> 1238 was the MY TEAM LOGO DETAIL row
+// 1239 -> 1064 (2026-09-03): shellNodes() stopped counting <script>/<link> tags
+// — they are a projection of tools/manifest.cjs written by gen-shell, not DOM
+// the page renders, and counting them made every new js file a ratchet edit.
+// 1059 real body nodes at the switch; 5 of headroom.
+const NODE_CEILING = 1064;   // 1234 -> 1238 was the MY TEAM LOGO DETAIL row
 // (label + colour input + NONE button + their row div). Raised deliberately:
 // the livery editor grew a second logo colour and a paint slot the two editors
 // disagree about is worse than four nodes — see js/car/liverytex.js secondSlot.

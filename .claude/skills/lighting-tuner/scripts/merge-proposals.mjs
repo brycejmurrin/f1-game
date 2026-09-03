@@ -239,4 +239,4 @@ if (!src.match(re)) {
 writeFileSync(LP, src.replace(re, "window.LightPresets = " + JSON.stringify(ordered, null, 2) + ";"));
 console.log(`Merged ${pairs.length} incoming profile(s): ${wrote} written, ${knobs} knob(s).`);
 console.log(`Shipped profiles now: ${Object.keys(ordered).length} (incl "*").`);
-console.log("Did not bump cache — run bump-cache --apply after the last js edit.");
+console.log("No cache bump needed — hashes are stamped at deploy (tags read ?v=dev).");

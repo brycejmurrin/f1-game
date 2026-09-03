@@ -24,7 +24,7 @@ before/after counts (`bloat-scan.mjs --json`).
 5. `grep` every removed symbol. Then `npm run test:tooling-fast`. Near
    `game.js`: `physics-characterization` is the master gate — parent names
    leftover browser groups as not-run.
-6. Last edit: `node tools/bump-cache.mjs --apply` (check-changes/references/bump.md).
+6. Last edit: nothing to bump — `bump-cache` is deploy-only; run `node tools/gen-shell.mjs` if the manifest changed (check-changes/references/bump.md).
 
 `extract-module.mjs` does **not** write the module, manifest, or tags.
 

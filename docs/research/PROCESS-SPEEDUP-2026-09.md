@@ -228,7 +228,7 @@ and one build in three collided (34 of 105). Fix the cause, not the merge:
 
 1. **Derive the shell generation in CI.** Keep per-file `?v=<sha256>` (stable
    URLs, V8 cache survives). Stop committing the monotonic build: `pages.yml`
-   "Stage site" runs `bump-cache --apply --at $(git rev-list --count HEAD)`
+   "Stage site" runs `node tools/bump-cache.mjs --apply` --at $(git rev-list --count HEAD)`
    inside `_site/` and stamps `<meta name="apex-sha">`. Commit count on a
    fast-forward-only branch is integer, monotonic and unique per tip, which
    satisfies the guards in `index.html:86-122` (`v.build <= loaded`) and

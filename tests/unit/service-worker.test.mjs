@@ -21,7 +21,7 @@ function requestKey(value) {
   return value.url;
 }
 
-function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator } = {}) {
+function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediateTimeoutMs = null, navigator, hostname = "apex.test" } = {}) {
   const listeners = new Map();
   const stores = new Map();
   const deleted = [];
@@ -63,7 +63,7 @@ function createHarness({ fetchImpl, putImpl, immediateTimeout = false, immediate
   };
 
   const self = {
-    location: { origin: ORIGIN },
+    location: { origin: ORIGIN, hostname },
     clients: {
       async claim() {
         claimed += 1;
@@ -527,4 +527,41 @@ test("a quota-refused cache write must not discard a good response", async () =>
   });
   const asset = await harness.fetchEvent(new Request(`${ORIGIN}/assets/sfx.ogg`)).responsePromise;
   assert.equal(await asset.text(), "fresh");
+});
+
+// The committed shell reads `?v=dev` for every asset (tools/gen-shell.mjs);
+// hashes exist only in the deploy's staged copy. A cache-first worker on a
+// dev host would therefore pin the first js/css it saw for the life of the
+// cache generation, so sw.js goes network-first there and keeps the cache as
+// the offline fallback. Playwright pages run on 127.0.0.1 and exercise it.
+test("a dev host fetches assets network-first and falls back to the cache offline", async () => {
+  // install: the stock fixture precaches js/game.js?v=321 as "asset";
+  // live: the network serves a newer copy; offline: the network throws.
+  let phase = "install";
+  const fetchImpl = async (request) => {
+    const url = new URL(typeof request === "string" ? request : request.url, `${ORIGIN}/`);
+    if (phase !== "install" && url.pathname.endsWith("/js/game.js")) {
+      if (phase === "offline") throw new TypeError("offline");
+      return new Response("fresh-from-network", { status: 200 });
+    }
+    return installFetch()(request);
+  };
+  const dev = createHarness({ fetchImpl, hostname: "127.0.0.1" });
+  await dev.lifecycleEvent("install").done();
+  phase = "live";
+  const hit = dev.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=321`));
+  assert.equal(await (await hit.responsePromise).text(), "fresh-from-network",
+    "on a dev host the network wins over the precached copy");
+  phase = "offline";
+  const miss = dev.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=321`));
+  assert.equal(await (await miss.responsePromise).text(), "fresh-from-network",
+    "offline, the network-first branch falls back to what it last cached");
+
+  phase = "install";
+  const prod = createHarness({ fetchImpl, hostname: "brycejmurrin.github.io" });
+  await prod.lifecycleEvent("install").done();
+  phase = "live";
+  const cached = prod.fetchEvent(new Request(`${ORIGIN}/js/game.js?v=321`));
+  assert.equal(await (await cached.responsePromise).text(), "asset",
+    "on the deployed host the content-hashed precache is served cache-first");
 });

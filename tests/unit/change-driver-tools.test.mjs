@@ -23,31 +23,6 @@ const run = (args, opts = {}) => {
   }
 };
 
-function generationFixture() {
-  const tmpRoot = path.join(ROOT, "artifacts", "tmp");
-  fs.mkdirSync(tmpRoot, { recursive: true });
-  const dir = fs.mkdtempSync(path.join(tmpRoot, "generation-"));
-  for (const rel of ["js/render/three", "assets/pack/models", "docs"]) {
-    fs.mkdirSync(path.join(dir, rel), { recursive: true });
-  }
-  fs.writeFileSync(path.join(dir, "main.js"), "boot\n");
-  const hash = createHash("sha256").update("boot\n").digest("hex").slice(0, 12);
-  fs.writeFileSync(path.join(dir, "index.html"),
-    `<meta name="apex-build" content="7">\n<script src="main.js?v=${hash}"></script>\n`);
-  fs.writeFileSync(path.join(dir, "version.json"), `{ "build": 7 }\n`);
-  fs.writeFileSync(path.join(dir, "js/render/three/tlx.js"), "old backend\n");
-  fs.writeFileSync(path.join(dir, "assets/pack/manifest.json"), "{}\n");
-  fs.writeFileSync(path.join(dir, "assets", "pack", "models", "a.js"), "old model\n");
-  fs.writeFileSync(path.join(dir, "docs", "note.md"), "old docs\n");
-  const git = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8" }).trim();
-  git("init", "-q");
-  git("config", "user.name", "fixture");
-  git("config", "user.email", "fixture@example.invalid");
-  git("add", "-A");
-  git("commit", "-qm", "baseline");
-  return { dir, base: git("rev-parse", "HEAD") };
-}
-
 // ── verify-change --plan ─────────────────────────────────────────────────────
 
 test("verify-change routes a circuit edit to verify-track and graph.js to graph-parity", () => {
@@ -205,69 +180,23 @@ test("bump-cache: --check catches drift, --apply hashes assets and keeps the gen
   }
 });
 
+test("bump-cache refuses --apply on the repo shell (hashes are stamped at deploy)", () => {
+  // The committed shell reads ?v=dev on every tag; a habitual repo-side
+  // --apply would put 151 hashes back and reopen the churn gen-shell closed.
+  const r = run(["tools/bump-cache.mjs", "--apply", "--json"]);
+  assert.equal(r.status, 2, "plain --apply must refuse with exit 2");
+  assert.match(JSON.parse(r.out).error, /refusing --apply on the repo shell/);
+  assert.match(JSON.parse(r.out).error, /gen-shell/, "the refusal must point at the generator");
+});
+
 test("bump-cache --check on the REAL shell agrees with the load-order guard", () => {
   // Ordinarily green; goes red exactly when someone edits assets and forgets
   // the bump, which is the tool's whole reason to exist.
   const real = run(["tools/bump-cache.mjs", "--check", "--json"]);
   const v = JSON.parse(real.out);
   assert.equal(real.status, 0, `shell inconsistent: ${JSON.stringify(v.assetMismatches)}; shell ${v.shellBuild} vs version.json ${v.versionJson}`);
-  assert.ok(v.tagCount > 100, "the shell has ~160 versioned tags; a collapse means the regex or index.html broke");
-});
-
-test("bump-cache --since rejects deferred backend changes without a newer generation", () => {
-  const { dir, base } = generationFixture();
-  try {
-    fs.writeFileSync(path.join(dir, "js/render/three/tlx.js"), "new backend\n");
-    const r = run(["tools/bump-cache.mjs", "--check", "--json", "--root", dir, "--since", base]);
-    const v = JSON.parse(r.out);
-    assert.equal(r.status, 1);
-    assert.equal(v.bumpNeeded, true);
-    assert.deepEqual(v.assetsChangedSince, ["js/render/three/tlx.js"]);
-    assert.equal(v.baseBuild, 7);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("bump-cache --since rejects mutable model-pack changes without a newer generation", () => {
-  const { dir, base } = generationFixture();
-  try {
-    fs.writeFileSync(path.join(dir, "assets/pack/manifest.json"), '{"a":1}\n');
-    const r = run(["tools/bump-cache.mjs", "--check", "--json", "--root", dir, "--since", base]);
-    const v = JSON.parse(r.out);
-    assert.equal(r.status, 1);
-    assert.equal(v.bumpNeeded, true);
-    assert.deepEqual(v.assetsChangedSince, ["assets/pack/manifest.json"]);
-  } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("bump-cache --since allows docs-only changes and runtime changes with a strictly newer generation", () => {
-  const docs = generationFixture();
-  try {
-    fs.writeFileSync(path.join(docs.dir, "docs", "note.md"), "new docs\n");
-    const r = run(["tools/bump-cache.mjs", "--check", "--json", "--root", docs.dir, "--since", docs.base]);
-    assert.equal(r.status, 0, r.out);
-    assert.deepEqual(JSON.parse(r.out).assetsChangedSince, []);
-  } finally {
-    fs.rmSync(docs.dir, { recursive: true, force: true });
-  }
-
-  const runtime = generationFixture();
-  try {
-    fs.writeFileSync(path.join(runtime.dir, "js/render/three/tlx.js"), "new backend\n");
-    fs.writeFileSync(path.join(runtime.dir, "index.html"),
-      fs.readFileSync(path.join(runtime.dir, "index.html"), "utf8").replace('content="7"', 'content="8"'));
-    fs.writeFileSync(path.join(runtime.dir, "version.json"), `{ "build": 8 }\n`);
-    const r = run(["tools/bump-cache.mjs", "--check", "--json", "--root", runtime.dir, "--since", runtime.base]);
-    const v = JSON.parse(r.out);
-    assert.equal(r.status, 0, r.out);
-    assert.equal(v.generationAdvanced, true);
-    assert.deepEqual(v.assetsChangedSince, ["index.html", "js/render/three/tlx.js"]);
-  } finally {
-    fs.rmSync(runtime.dir, { recursive: true, force: true });
-  }
+  assert.equal(v.mode, "repo");
+  assert.ok(v.tagCount > 100, "the shell has ~150 versioned tags; a collapse means the regex or index.html broke");
 });
 
 // ── test-honesty: the suite stays honest ────────────────────────────────────

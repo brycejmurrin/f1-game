@@ -17,7 +17,7 @@ What changed underneath it, and why the old steps are gone:
 1. **No union re-bump.** `pages.yml` stamps the shell generation while staging
    (`2000 + git rev-list --count HEAD`, `bump-cache --apply --at N --root _site`),
    so the committed `version.json` / `<meta name="apex-build">` are a consistent
-   placeholder and `bump-cache --apply` keeps the number. Two sessions cannot
+   placeholder and the repo's tags read `?v=dev` (nothing to bump). Two sessions cannot
    land the same build; `index.html`/`version.json` were the only files that
    ever conflicted and `deploy.mjs` resolves them to either side + a hash-only
    `--apply`. Pinned by `tests/unit/deploy-stamp.test.mjs`.

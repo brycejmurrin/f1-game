@@ -20,7 +20,7 @@ except Exception:
 [ -z "$FILE" ] && exit 0
 
 case "$(basename "$FILE")" in
-  index.html|manifest.cjs|version.json|sw.js|package.json|package-lock.json|playwright.config.js) ;;
+  index.html|manifest.cjs|version.json|sw.js|roster.js|gen-shell.mjs|package.json|package-lock.json|playwright.config.js) ;;
   *) exit 0 ;;
 esac
 

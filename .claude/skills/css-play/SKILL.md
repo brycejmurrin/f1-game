@@ -36,7 +36,7 @@ Unknown screen: `--click "#mb-foo" --root "#id"`. Catalog ids are a subset of
 
 ## Hard don'ts
 
-1. **Do not `bump-cache --apply` mid-loop.** Hot-swap is the reload. Bump
+1. **There is no cache bump.** `bump-cache` only stamps the deploy's staged copy; hot-swap is the reload. Regenerate
    once, last edit before commit, when the look ships.
 2. **Hide `#game`.** A live canvas starves the compositor (survey-ui-matrix).
 3. **Open through the app's buttons**, never `hidden = false` on a dialog.

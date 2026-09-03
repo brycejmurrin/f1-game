@@ -74,7 +74,7 @@ Load from the SKILL.md index when the task needs this detail.
      race-control logic changes.
    - Run `node tools/test-bg.mjs driving` for debris and caution browser coverage.
    - Use `test:tooling-fast` for docs/hooks/unit inventory checks.
-   - If JS changed, run `node tools/bump-cache.mjs --apply`.
+   - If JS changed, run `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
 
 ## Common Mistakes
 

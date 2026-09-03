@@ -42,7 +42,7 @@ drawn inside the mark and so answers to the mark alone.
 
 - Pure driving feel → **tune-physics**. Career economy with no parts edit →
   **career-mode**. Isolated car shots → **car-viewer**. Cache bump →
-  `node tools/bump-cache.mjs --apply`.
+  `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
 
 ## Quick Reference
 
@@ -65,7 +65,7 @@ node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
 ```
 
 Deep reference: **`docs/PARTS.md`**. Related: **car-viewer**, **career-mode**,
-**tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `bump-cache.mjs --apply`.
+**tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen-shell.mjs --check`.
 
 ## Load on demand
 

@@ -467,10 +467,12 @@ test("webgpu-debug names wgx-shot --gallery for multi-track frames", () => {
   assert.match(text, /wgx:gallery/);
 });
 
-test("skills README uses content-hash cache busting, not ?v=N", () => {
+test("skills README says the committed shell reads ?v=dev and the deploy stamps hashes", () => {
   const text = fs.readFileSync(path.join(SKILLS, "README.md"), "utf8");
-  assert.match(text, /\?v=<sha256>/);
+  assert.match(text, /\?v=dev/);
+  assert.match(text, /gen-shell\.mjs/);
   assert.doesNotMatch(text, /\?v=N\b/);
+  assert.doesNotMatch(text, /\?v=<sha256>/);
 });
 
 test("wgx-capture pairs with webgpu-debug in tools/README.md", () => {
