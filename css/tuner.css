@@ -475,6 +475,20 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .tune-row.tune-off .tune-label { color: var(--dim); }
 .tune-row.tune-off .tune-label b { color: var(--dim); }
 .preset-row { display: flex; gap: calc(var(--gap) * 2 / 3); margin: calc(var(--gap) / 3) 0 calc(var(--gap) * 0.5); }
+/* STEERING & ASSISTS clusters join .balanced-row so a 4-way row wraps from
+   local width instead of shrinking SIM past the pane. The shared shrink
+   contract below still wins on every other .preset-row / .opt-row; these
+   ID-scoped children restore the wrap basis. Headings stay
+   `grid-column: 1 / -1` on the wide body grid. */
+#advanced-inner .preset-row.balanced-row,
+#advanced-inner .opt-row.balanced-row {
+  --balance-basis: 6.5rem; --balance-min: 4.5rem;
+}
+#advanced-inner .preset-row.balanced-row > :not([hidden]),
+#advanced-inner .opt-row.balanced-row > :not([hidden]) {
+  flex: 1 1 var(--balance-basis);
+  min-width: min(100%, var(--balance-min));
+}
 /* THE SHRINK CONTRACT, shared by the tuner's two flexible button rows.
    min-width: 0 defeats flex's min-content floor — without it the PRO preset's
    one-line small ran 59px past the pane at UI SIZE 200% (measured), and the
@@ -521,10 +535,13 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
    178 sliders. Sticky is the invariant rather than another threshold: whatever
    the head does at whatever zoom, the bar stays on screen.
    `--compact-at` beside it hands this panel's own short-height threshold to
-   js/game/sheetshape.js — 620 to match the media query below, because the
+   js/ui/sheet-shape.js — 620 to match the media query below, because the
    viewport height that query reads is blind to `zoom` and the sheet's own height
-   at UI SIZE 115% on that phone was 557 while the query still read 659. */
-#lighting-inner, #camtune-inner { --compact-at: 620px; --rail-at: 500px; }
+   at UI SIZE 115% on that phone was 557 while the query still read 659.
+   `--rail-at` is 640, above the 560px the rail-on dock grows to, so a compact
+   wide dock keeps the horizontal chip strip and the sliders keep the full
+   dock width. Rail-on only when the sheet is already wider than that dock. */
+#lighting-inner, #camtune-inner { --compact-at: 620px; --rail-at: 640px; }
 #lighting-inner > .sheet-foot, #camtune-inner > .sheet-foot {
   position: sticky; bottom: 0; z-index: 2;
 }

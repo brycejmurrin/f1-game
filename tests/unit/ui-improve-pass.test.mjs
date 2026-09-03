@@ -443,7 +443,10 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   const career = css("css/career.css");
   const data = css("css/data.css");
   assert.equal(decl(css("css/menus.css"), "body", "--wide-at"), "620px", "the body-level threshold SheetShape reads");
-  assert.ok(tuner.some((r) => r.decls.get("--rail-at") === "500px"));
+  assert.ok(tuner.some((r) => r.decls.get("--rail-at") === "640px"),
+    "compact-wide stays rail-off: 640 sits above the 560px rail dock so sliders keep full width");
+  assert.ok(rulesFor(tuner, /#ct-modes \.lt-tab/).some((r) => r.decls.get("white-space") === "nowrap"),
+    "compact camera-mode chips stay a nowrap strip");
   assert.ok(rulesFor(tuner, /\[data-density="compact"\]\[data-rail="on"\]/).length, "compact + rail-on has its own rules");
   assert.ok(!tuner.some((r) => r.context.some((c) => /@media \(min-width:\s*720px\)/.test(c))));
   assert.ok(!tuner.some((r) => r.context.some((c) => /@media \(max-height: 430px\)/.test(c))));
@@ -597,6 +600,13 @@ test("variable control clusters use one content-driven balanced-row primitive", 
     assert.match(html, new RegExp(`id="${id}"[^>]*class="[^"]*balanced-row`), `${id} must balance from local space`);
   }
   assert.equal(bootCamModes().open().className, "balanced-row", "the camera picker is a balanced-row too");
+  assert.match(html, /class="preset-row balanced-row"/, "STEERING & ASSISTS presets wrap from local space");
+  assert.match(html, /class="opt-row balanced-row" role="group" aria-label="Steering feel"/);
+  assert.match(html, /class="opt-row balanced-row" role="group" aria-label="Driving help"/);
+  assert.match(html, /class="opt-row balanced-row" role="group" aria-label="Racing line assist"/);
+  assert.ok(rulesFor(components, /#advanced-inner\[data-shape="wide"\] \.adv-sec/).some((r) =>
+    r.decls.get("grid-column") === "1 / -1"),
+    "advanced section headings still span the wide body grid");
   const all = [html, read("css/components.css"), read("css/menus.css"), read("css/tuner.css"), read("js/camera/mode-switch.js")].join("\n");
   assert.doesNotMatch(all, /no-orphan-[235]/, "column-count-specific orphan patches must not return");
   assert.ok(!rulesFor(css("css/menus.css"), /#rs-(?:laps|weather|diff|time)\b/).some((r) => /^repeat\([235]/.test(r.decls.get("grid-template-columns") || "")));
