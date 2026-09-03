@@ -3211,7 +3211,11 @@ const WGX = (function () {
       // Setup preview / garage pass an off-axis proj (proj[8]/[9] lens shift).
       // Z01·(P·V) != (Z01·P)·V when P carries that shear — remap on P first.
       if (pj && pj.length >= 16 && ipj && ipj.length >= 16 && (pj[8] !== 0 || pj[9] !== 0)) {
-        _mul4(_viewScratch, ipj, vp);   // V = inv(P)·(P·V)
+        // Prefer the explicit view game.js already computed — inv(P)·(P·V) drifts
+        // on off-axis shear and framed the garage as a flat team-coloured wall.
+        const v = (f.view && f.view.length >= 16) ? f.view : null;
+        if (v) _viewScratch.set(v);
+        else _mul4(_viewScratch, ipj, vp);   // V = inv(P)·(P·V)
         _mul4(_projZ01, Z01, pj);       // P′ = Z01·P
         _mul4(_vpGpu, _projZ01, _viewScratch);
       } else {

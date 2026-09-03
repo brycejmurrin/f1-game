@@ -150,6 +150,7 @@ export const GROUPS = [
   ["check", "Static guards over the source — a red exit here is a defect, not a report."],
   ["gen", "Author-time generation: the generated doc blocks, the shell, and the asset bakes."],
   ["shot", "Headless observation of the running game: framed screenshots, one-expression evals, the agent surface, a CPU profile."],
+  ["capture", "Shared Playwright probe helpers and garage/menu capture gates reused by shot tools."],
   ["gfx", "Renderer and GPU probes — GLX, WGX, TLX, and the adapter census."],
   ["track", "Circuit geometry and scenery: the build guard, the baseline-gated audits, the survey and the start-line maths."],
   ["car", "The car and the garage: option sweeps, livery and crest rendering, career economics."],

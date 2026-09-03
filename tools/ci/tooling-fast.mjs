@@ -131,6 +131,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // vertex; that js/track/ reads the build's NIGHT, not the def's), so they are
   // only useful if they run right after the edit that would break them.
   "tests/unit/setup-preview-hull.test.mjs",
+  "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
   // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
