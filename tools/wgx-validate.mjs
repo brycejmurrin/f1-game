@@ -24,7 +24,7 @@
 //
 // Usage:
 //   node tools/wgx-validate.mjs --static
-//   node tools/wgx-validate.mjs [trackId] [--lite] [--frames N] [--no-rg11b10]
+//   node tools/wgx-validate.mjs [trackId] [--lite] [--frames N] [--no-rg11b10] [--lax-uniformity]
 //
 // --static is the default no-browser gate. Bare / --lite / --no-rg11b10
 // launch Chromium (parent session only).
@@ -53,6 +53,9 @@ const track = args.find((a) => !a.startsWith("--")) || "montreal";
 const lite = args.includes("--lite");
 const noRg11b10 = args.includes("--no-rg11b10");
 const staticOnly = args.includes("--static");
+// Default ON: the live gate compiles as WebKit does (see the init script).
+// --lax-uniformity restores Dawn's warning-only default to bisect a red run.
+const uniformityError = !args.includes("--lax-uniformity");
 const framesArg = args.indexOf("--frames");
 const frames = framesArg >= 0 ? Math.max(1, parseInt(args[framesArg + 1], 10) || 60) : 60;
 
@@ -144,8 +147,28 @@ try {
   });
   page.on("pageerror", (e) => fail("pageerror: " + String(e).slice(0, 300)));
 
-  await page.addInitScript(([wantLite, dropRg]) => {
+  await page.addInitScript(([wantLite, dropRg, uniErr]) => {
     localStorage.setItem("apex26.gfxBackend", "webgpu");
+    // WebKit runs WGSL uniformity analysis at ERROR severity by default
+    // (UniformityAnalysis.cpp: a textureSample / dpdx under non-uniform
+    // control flow fails createShaderModule, and the pipeline built from it
+    // never draws); Dawn defaults the same diagnostic to a WARNING that only
+    // reaches the console. A module that validates here but not on an iPhone
+    // is exactly the silent-fallback WGX cannot report about itself, so the
+    // live gate compiles every module as WebKit would: prepend the directive
+    // (global directives may appear in any order before the first
+    // declaration, so it sits safely ahead of `enable f16;`). Modules that
+    // already carry a diagnostic() directive keep their own severity.
+    if (uniErr && typeof GPUDevice !== "undefined" && GPUDevice.prototype.createShaderModule) {
+      const origCSM = GPUDevice.prototype.createShaderModule;
+      GPUDevice.prototype.createShaderModule = function (desc) {
+        if (desc && typeof desc.code === "string" && !/^\s*diagnostic\s*\(/m.test(desc.code)) {
+          desc = Object.assign({}, desc, {
+            code: "diagnostic(error, derivative_uniformity);\n" + desc.code });
+        }
+        return origCSM.call(this, desc);
+      };
+    }
     // Soft-adapter gate refuses Dawn SwiftShader by default (native swapchain
     // never composites). This tool intentionally validates/captures on software.
     localStorage.setItem("apex26.gfxWgxAllowSoftware", "1");
@@ -169,7 +192,7 @@ try {
         });
       };
     }
-  }, [lite, noRg11b10]);
+  }, [lite, noRg11b10, uniformityError]);
 
   await page.goto(srv.url + "index.html");
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: 60000 });
@@ -208,6 +231,7 @@ try {
     ok: failures === 0,
     track, lite, frames,
     rg11b10Spoofed: noRg11b10,
+    uniformityError,
     backend,
     msaa: state.env && state.env.msaa,
     hdr: state.env && state.env.hdr,

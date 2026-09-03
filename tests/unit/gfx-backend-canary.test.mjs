@@ -1339,6 +1339,20 @@ test("the vendored three carries the #33952 bind-group leak backport (PR #33954)
   assert.match(THREE_BUNDLE, /bindGroups\.delete\(\w+\)\}\)\(this\.textures\.get\(\w+\.texture\)\)/,
     "the #33952 backport is missing from the vendor bundle — evicted-material dispose() now leaks (see vendor/three-0.185.1/PATCHES.md §2)");
 });
+test("the vendored three carries the #34405 polygonOffset pipeline-key backport (PR #34406)", () => {
+  // r185's WebGPU backend keys a pipeline on blend/depth/stencil/side/formats
+  // but not on polygonOffset*, so TLX's bias-only material variants (tsl-fx
+  // road decals −4/−8, tsl-lit o.depthBias) shared one GPURenderPipeline and
+  // one of each pair drew with the other's bias. All THREE sites must carry
+  // the fields: the cache-key array, the needsRenderUpdate compare chain and
+  // its assignment block. Drop with the patch on the first release with #34406.
+  assert.match(THREE_BUNDLE, /r\.stencilWriteMask,r\.polygonOffset,r\.polygonOffsetFactor,r\.polygonOffsetUnits,r\.side,/,
+    "cache key lacks polygonOffset* (vendor/three-0.185.1/PATCHES.md §3)");
+  assert.match(THREE_BUNDLE, /t\.polygonOffset===s\.polygonOffset&&t\.polygonOffsetFactor===s\.polygonOffsetFactor&&t\.polygonOffsetUnits===s\.polygonOffsetUnits&&t\.side===s\.side/,
+    "needsRenderUpdate does not compare polygonOffset* (PATCHES.md §3)");
+  assert.match(THREE_BUNDLE, /t\.polygonOffset=s\.polygonOffset,t\.polygonOffsetFactor=s\.polygonOffsetFactor,t\.polygonOffsetUnits=s\.polygonOffsetUnits,t\.side=s\.side/,
+    "needsRenderUpdate does not record polygonOffset* (PATCHES.md §3)");
+});
 
 /** The object literal passed to `new THREE.WebGPURenderer({...})`, brace-matched
  *  (it spans ~40 lines of comment, so a regex over one line cannot see it). */

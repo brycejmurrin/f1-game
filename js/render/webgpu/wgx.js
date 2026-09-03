@@ -886,6 +886,16 @@ const WGX = (function () {
         try { localStorage.setItem("apex26.gfxBackendProbe", "webgpu"); } catch (_) { /* next boot has no canary; RESET is the way back */ }
       }
     }
+    function _lostDetail(info) {
+      let d = "";
+      try {
+        const msg = info && info.message ? String(info.message).replace(/\s+/g, " ").slice(0, 160) : "";
+        if (msg) d += ": " + msg;
+        const ven = adapter && adapter.info && adapter.info.vendor;
+        if (ven) d += "; vendor=" + ven;
+      } catch (_) { /* info withheld */ }
+      return d;
+    }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
       // Crash latches, mirroring GLX webglcontextlost / TLX onDeviceLost: a
@@ -897,7 +907,10 @@ const WGX = (function () {
       try { hidden = !!(typeof document !== "undefined" && document.hidden); } catch (_) { /* no document (harness) */ }
       if (!hidden) {
         try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* no storage: the tier gate is the only defence left; nothing here may throw */ }
-        _wgxEscalate("device lost (" + ((info && info.reason) || "unknown") + ")");
+        // Persist WHY, not just that: WebKit's info.message names the loss
+        // ("GPU hang", the imgui-class setPipeline loss) where Dawn says
+        // "unknown", and COPY DIAG is the only channel a phone has.
+        _wgxEscalate("device lost (" + ((info && info.reason) || "unknown") + _lostDetail(info) + ")");
         return;
       }
       // HIDDEN-TAB LOSS IS NOT A CRASH. iOS purges the GPU resources of a
@@ -946,7 +959,12 @@ const WGX = (function () {
     const GPU_ERR_ESCALATE_FRAMES = 3;
     let _gpuErrFrames = 0, _gpuErrLastPresent = -1, _presentCount = 0;
     try {
-      device.onuncapturederror = function (ev) {
+      // addEventListener FIRST: iOS/Safari 26.0–26.5 never fire the property
+      // form (WebKit 689ebe5, Apr 2026), and WebKit's silent draw drops — a
+      // lit PSO that failed its lazy Metal compile ("too complex"), a killed
+      // encoder — report on this channel and nowhere else. Property fallback
+      // for a device without EventTarget (the node harness's mock).
+      const onGpuErr = function (ev) {
         const msg = (ev && ev.error && ev.error.message) || "gpu error";
         if (!_bootError) _bootError = msg;
         if (!_gpuFirstMsg) _gpuFirstMsg = msg;
@@ -966,6 +984,8 @@ const WGX = (function () {
           _wgxEscalate("runtime GPU errors (" + _gpuErrors + " over " + _gpuErrFrames + " frames)");
         }
       };
+      if (typeof device.addEventListener === "function") device.addEventListener("uncapturederror", onGpuErr);
+      else device.onuncapturederror = onGpuErr;
     } catch (_) { /* onuncapturederror is optional; _bootError/_gpuErrors stay 0 if we cannot hook it */ }
 
     let width = 0, height = 0, aspect = 1, renderScale = 1;
@@ -4075,7 +4095,10 @@ const WGX = (function () {
       litPass = _envEncoder.beginRenderPass({
         colorAttachments: [{ view: envFaceViews[face], clearValue: { r: fc[0], g: fc[1], b: fc[2], a: 1 },
           loadOp: "clear", storeOp: "store" }],
-        depthStencilAttachment: { view: envDepthView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "store" },
+        // Nothing samples the env cube's depth after the face is drawn (it
+        // exists only to sort the face), so let the tiler drop it at pass end
+        // instead of writing 6 depth faces per probe back to memory.
+        depthStencilAttachment: { view: envDepthView, depthClearValue: 1.0, depthLoadOp: "clear", depthStoreOp: "discard" },
       });
       encoder = _envEncoder;
       _drawSlot = 0; _fxQuadSlot = 0; _fxDecalSlot = 0; _fxQuadOverflow = 0;

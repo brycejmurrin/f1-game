@@ -359,9 +359,15 @@ const TLX = (function () {
           // would evict Log's ring buffer and destroy the rest of the
           // evidence), and expose the total. Diagnosis only — deliberately NOT
           // WGX's escalate-and-fall-back ladder, which would hide the signal.
+          // LISTENER FORM FIRST. iOS/Safari 26.0–26.5 never fire the
+          // `onuncapturederror = fn` property (WebKit 689ebe5, Apr 2026); only
+          // addEventListener("uncapturederror") works there, and three r185
+          // itself uses the property — so every "gpuErrors 0" a phone reported
+          // on this path was "no reader". The property stays as the fallback
+          // for a device object without EventTarget.
           if (!_dev.__apexErrHook) {
             try {
-              _dev.onuncapturederror = function (ev) {
+              const onErr = function (ev) {
                 const msg = (ev && ev.error && ev.error.message) || "gpu error";
                 if (!_gpuFirstError) _gpuFirstError = msg;
                 _gpuErrors++;
@@ -372,6 +378,8 @@ const TLX = (function () {
                   }
                 }
               };
+              if (typeof _dev.addEventListener === "function") _dev.addEventListener("uncapturederror", onErr);
+              else _dev.onuncapturederror = onErr;
               _dev.__apexErrHook = true;
             } catch (_) { /* optional hook; _gpuErrors stays 0 if the build refuses it */ }
           }
@@ -3071,6 +3079,10 @@ const TLX = (function () {
               // evidence a "see-through car" report has never had.
               gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstError,
               presents: _presentN, healed: _healTried,
+              // three refreshes every OBJECT-group uniform per draw (r185
+              // NodeManager), so the draw count is the CPU lever on a phone;
+              // reported here so the GOV `tlx` row can show it (`dc N`).
+              calls: (renderer && renderer.info && renderer.info.render) ? (renderer.info.render.drawCalls | 0) : null,
               arrayNearest: _arrayNearest, noMrt: _noMrt,
               hasMaterialMaps: !!(lit && lit.hasMaterialMaps),
               packLive: !!matOwnedAlbedo,

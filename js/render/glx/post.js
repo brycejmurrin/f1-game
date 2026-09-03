@@ -443,6 +443,23 @@ const GLXPost = (function () {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
+    // Tile GPUs (every phone; Apple desktop through ANGLE-Metal) open a render
+    // pass by LOADING the attachment's previous contents into tile memory
+    // unless told otherwise, and Apple's own guidance is that a load is
+    // "significantly slower than dontCare or clear". ANGLE maps an
+    // invalidateFramebuffer issued right after the bind — before any draw —
+    // to loadAction DontCare for that pass. Every fullscreen post pass below
+    // overwrites its whole target, so the load is pure tile traffic; bind
+    // through this and the pass starts empty. The additive bloom upsample
+    // levels MUST load (they accumulate) and keep the plain bind. The default
+    // framebuffer takes gl.COLOR, an FBO gl.COLOR_ATTACHMENT0 (WebGL2 §5.14).
+    const _INV_COLOR = [gl.COLOR_ATTACHMENT0], _INV_DEFAULT = [gl.COLOR], _INV_DEPTH = [gl.DEPTH_ATTACHMENT];
+    const _canInvalidate = typeof gl.invalidateFramebuffer === "function";
+    function bindOverwrite(fbo) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      if (_canInvalidate) gl.invalidateFramebuffer(gl.FRAMEBUFFER, fbo ? _INV_COLOR : _INV_DEFAULT);
+    }
+
     // Bind the frame's scene render target (the MSAA or HDR offscreen target when
     // post is enabled, else the default framebuffer) and restore the full-size
     // viewport. Used by GLX.begin() and by the shadow passes' End rebind.
@@ -503,6 +520,14 @@ const GLXPost = (function () {
         // bandwidth/tile-store win, esp. for the multisampled DEPTH).
         if (gl.invalidateFramebuffer) gl.invalidateFramebuffer(gl.READ_FRAMEBUFFER, [gl.COLOR_ATTACHMENT0, gl.DEPTH_ATTACHMENT]);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      } else if (!needDepth && _canInvalidate && sceneFBO) {
+        // Direct path (no MSAA — every phone): nothing below samples sceneDepth
+        // this frame (auto-tier 4 night sheds AO, contact, godray, SSR and
+        // flare together), and the scene pass is still open on sceneFBO, so
+        // tell the tiler to drop the depth tile instead of writing a full-res
+        // depth surface back to memory that no pass will read.
+        gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFBO);
+        gl.invalidateFramebuffer(gl.FRAMEBUFFER, _INV_DEPTH);
       }
 
       // Fullscreen passes must overwrite (no blend) and write depth normally; draws
@@ -520,7 +545,7 @@ const GLXPost = (function () {
       // the sun-blocked contact pixels.
       if (haveAO) {
         gl.viewport(0, 0, ssaoW, ssaoH);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
+        bindOverwrite(ssaoFBO);
         useProg(ssaoProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
@@ -539,11 +564,11 @@ const GLXPost = (function () {
         // Blur H (ssaoTex -> ssaoBlurFBO) then V (ssaoBlurTex -> ssaoFBO). Half res.
         useProg(blurProg);
         gl.uniform1i(blurU.uTex, 0);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoBlurFBO);
+        bindOverwrite(ssaoBlurFBO);
         gl.bindTexture(gl.TEXTURE_2D, ssaoTex);
         gl.uniform2f(blurU.uDir, 1 / ssaoW, 0);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, ssaoFBO);
+        bindOverwrite(ssaoFBO);
         gl.bindTexture(gl.TEXTURE_2D, ssaoBlurTex);
         gl.uniform2f(blurU.uDir, 0, 1 / ssaoH);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -557,7 +582,7 @@ const GLXPost = (function () {
       const haveGR = haveGRPre;
       if (haveGR) {
         gl.viewport(0, 0, godrayW, godrayH);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
+        bindOverwrite(godrayFBO);
         useProg(godrayProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, sceneDepth);
@@ -639,11 +664,11 @@ const GLXPost = (function () {
         // leave thin stripe artifacts that read as "random tiny rays" — two passes
         // turn the shafts into wide, soft volumes.
         for (let bp = 0; bp < 2; bp++) {
-          gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
+          bindOverwrite(godrayBlurFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayTex);
           gl.uniform2f(blurU.uDir, (1 + bp) / godrayW, 0);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, godrayFBO);
+          bindOverwrite(godrayFBO);
           gl.bindTexture(gl.TEXTURE_2D, godrayBlurTex);
           gl.uniform2f(blurU.uDir, 0, (1 + bp) / godrayH);
           gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -663,7 +688,7 @@ const GLXPost = (function () {
       if (doBloom) {
         // 1) bright-pass scene -> bloom level 0 (half res)
         gl.viewport(0, 0, bloomLv[0].w, bloomLv[0].h);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[0].fbo);
+        bindOverwrite(bloomLv[0].fbo);
         useProg(brightProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, sceneTex);
@@ -677,7 +702,7 @@ const GLXPost = (function () {
         useProg(downProg);
         gl.uniform1i(downU.uTex, 0);
         for (let i = 1; i < nLv; i++) {
-          gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i].fbo);
+          bindOverwrite(bloomLv[i].fbo);
           gl.viewport(0, 0, bloomLv[i].w, bloomLv[i].h);
           gl.bindTexture(gl.TEXTURE_2D, bloomLv[i - 1].tex);
           gl.uniform2f(downU.uTexel, 1 / bloomLv[i - 1].w, 1 / bloomLv[i - 1].h);
@@ -699,7 +724,8 @@ const GLXPost = (function () {
           const last = i === 1;
           setBlend(!last);
           if (!last) gl.blendFunc(gl.ONE, gl.ONE);
-          gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i - 1].fbo);
+          // Accumulating levels load; the final overwrite into level 0 need not.
+          if (last) bindOverwrite(bloomLv[i - 1].fbo); else gl.bindFramebuffer(gl.FRAMEBUFFER, bloomLv[i - 1].fbo);
           gl.viewport(0, 0, bloomLv[i - 1].w, bloomLv[i - 1].h);
           gl.bindTexture(gl.TEXTURE_2D, bloomLv[i].tex);
           gl.uniform2f(upU.uTexel, 1 / bloomLv[i].w, 1 / bloomLv[i].h);
@@ -712,7 +738,7 @@ const GLXPost = (function () {
       // 3) composite — to the LDR target when FXAA is on (it resolves to screen),
       //    else straight to the screen.
       const useFxaa = fxaaProg && ldrFBO && ldrTex;
-      gl.bindFramebuffer(gl.FRAMEBUFFER, useFxaa ? ldrFBO : null);
+      bindOverwrite(useFxaa ? ldrFBO : null);
       gl.viewport(0, 0, width, height);
       useProg(compProg);
       gl.activeTexture(gl.TEXTURE0);
@@ -918,7 +944,7 @@ const GLXPost = (function () {
 
       // 4) FXAA resolve: edge-AA the tonemapped LDR image straight to the screen.
       if (useFxaa) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        bindOverwrite(null);
         gl.viewport(0, 0, width, height);
         useProg(fxaaProg);
         gl.activeTexture(gl.TEXTURE0);

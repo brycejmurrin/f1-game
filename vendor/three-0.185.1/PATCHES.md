@@ -2,10 +2,10 @@
 
 The island is otherwise byte-identical to the pristine npm `three@0.185.1`
 tarball (`build/three.{webgpu,core,tsl}.min.js` + `examples/jsm/tsl/display/
-BloomNode.js` → `addons/tsl/display/BloomNode.js`). Both patches below live in
-`three.webgpu.min.js` only, and both are asserted by
+BloomNode.js` → `addons/tsl/display/BloomNode.js`). All three patches below live in
+`three.webgpu.min.js` only, and each is asserted by
 `tests/unit/gfx-backend-canary.test.mjs` — a vendor re-drop that silently
-reverts either one fails the guard suite, not production. Re-apply BOTH on any
+reverts any one fails the guard suite, not production. Re-apply ALL THREE on any
 vendor bump, then re-run `npm run test:tlx` and the TLX WebGPU boot diag.
 
 ## 1. swizzle — Chromium 141 rejects the r185 texture-view descriptor
@@ -54,3 +54,31 @@ shape on a new bundle.) This unblocked the deferred material `dispose()` pass in
 `present()` after paint) and `js/render/three/tsl-fx.js` (`flushEvicted`).
 Drop this patch on the first release that contains PR #33954 (r186+), and keep
 the deferred-dispose game code as-is — it is correct against fixed upstream too.
+
+## 3. #34405 polygonOffset missing from the WebGPU pipeline key — backport of PR #34406 (milestoned r186, unreleased)
+
+`WebGPUBackend.getRenderCacheKey()` / `needsRenderUpdate()` on r185 key a
+pipeline on blend, depth, stencil, side, sample count and formats — but NOT on
+`polygonOffset` / `polygonOffsetFactor` / `polygonOffsetUnits`. Two materials
+that differ only in depth bias therefore share ONE `GPURenderPipeline`, and
+whichever was built first decides the bias for both. TLX creates exactly such
+bias-only variants: the road decals in `js/render/three/tsl-fx.js` (−4/−8) and
+the `o.depthBias` material variants in `js/render/three/tsl-lit.js` — on the
+WebGPU backend one of each pair drew with the other's bias (z-fighting or a
+decal buried under the road, depending on build order). The WebGL2 backend is
+unaffected (polygonOffset is GL state there, not pipeline state).
+
+Backport = the three merged sites, in minified form (locals `r`/`s`/`t`
+survive unchanged on this bundle; re-verify against the surrounding
+`getRenderCacheKey(e){const{object:t,material:r}=e` and
+`needsRenderUpdate(e){const t=this.get(e),{object:r,material:s}=e` shapes):
+
+```
+key:     r.stencilWriteMask,r.side,        → r.stencilWriteMask,r.polygonOffset,r.polygonOffsetFactor,r.polygonOffsetUnits,r.side,
+compare: t.stencilWriteMask===s.stencilWriteMask&&t.side===s.side
+         → …&&t.polygonOffset===s.polygonOffset&&t.polygonOffsetFactor===s.polygonOffsetFactor&&t.polygonOffsetUnits===s.polygonOffsetUnits&&t.side===s.side
+assign:  t.stencilWriteMask=s.stencilWriteMask,t.side=s.side
+         → …,t.polygonOffset=s.polygonOffset,t.polygonOffsetFactor=s.polygonOffsetFactor,t.polygonOffsetUnits=s.polygonOffsetUnits,t.side=s.side
+```
+
+Drop this patch on the first release that contains PR #34406 (r186+).

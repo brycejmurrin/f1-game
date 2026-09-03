@@ -232,6 +232,7 @@ function snapshot() {
                 "  read g" + (bs.softRead.gen | 0) + "/f" + (bs.softRead.fails | 0) +
                 "  pack " + (bs.packLive ? "ok" : "—") +
                 "  heal " + (bs.healed ? "yes" : "—") +
+                (bs.calls != null ? "  dc " + (bs.calls | 0) : "") +
                 (bs.arrayNearest ? "  ARRAYNEAREST" : "") + (bs.noMrt ? "  NOMRT" : "") +
                 (bs.drawMatMode ? "  matMode " + bs.drawMatMode : "");
             }

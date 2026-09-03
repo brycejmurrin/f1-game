@@ -1925,3 +1925,31 @@ The steady-state lit frame on three-WebGPU is correct here (small viewport,
 black-car report on an iPhone is WebKit-specific; the GOV panel and
 `__apex.diag().env.backendState` now carry `api`, `gpuErrors` and the first
 GPU/shader error so the next phone screenshot names it.
+
+### 2026-09-03 — the census gate failed on its own script, and what the real GPU said
+
+`gpu-census.yml` run `33757119814` came back FAILURE with every game check
+green: the Verdict step is a `node -e '…'` inside a bash single-quoted string,
+and a comment in it said "three's" — the apostrophe ended the string and node
+was handed half a program (`SyntaxError: Unexpected end of input`). The gate
+failed closed this time; the same slip inside a condition could drop a clause
+and pass. `tests/unit/ci-coverage.test.mjs` now extracts every inline
+`node -e` block from the three workflows exactly as bash would and compiles it
+(`vm.Script`), and refuses any apostrophe in the body.
+
+The run itself is the real-GPU baseline after the WebKit AUTO → three-WebGL2
+change: all four legs `ok`, `gpuErrors 0` (table in
+`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a real GPU). One number
+to carry: three-WebGL2 on ANGLE-Metal spent **16.2 s in a single first frame**
+(program link + synchronous Metal compile of the TSL lit program). The frames
+themselves are on Azure blob storage the container proxy denies — read them in
+the Actions UI.
+
+`tools/wgx-validate.mjs` (live run) now prepends
+`diagnostic(error, derivative_uniformity);` to every module it compiles,
+because that is WebKit's default severity and Dawn's is a console warning:
+a WGSL module that only warns here refuses to build on an iPhone and WGX falls
+back to GLX without a word. `--lax-uniformity` restores Dawn's default to
+bisect a red run. The tree passed on the first run (montreal, 90 frames,
+`gpuErrors 0`, `wgslParseErrors 0`).
+
