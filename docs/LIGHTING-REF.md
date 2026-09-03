@@ -1,10 +1,10 @@
 # Lighting & sky reference
 
-`js/render/glx.js` owns the shaders and light upload; `js/game/atmosphere.js`
-(`applyRaceSettings`), `js/game/track-lights.js` (`buildTrackLights`) and
-`js/game/frame-lights.js` (`setFrameLights`, `appendCarTailLights`) drive the
-per-frame state; `js/game/lighting-knobs.js` is the `TUNE_DEFS` / `LT` registry
-and `js/game/lighting.js` (`LightTune`) the façade over the three.
+`js/render/glx/glx.js` owns the shaders and light upload; `js/lighting/atmosphere.js`
+(`applyRaceSettings`), `js/lighting/track-lights.js` (`buildTrackLights`) and
+`js/lighting/frame-lights.js` (`setFrameLights`, `appendCarTailLights`) drive the
+per-frame state; `js/lighting/knobs.js` is the `TUNE_DEFS` / `LT` registry
+and `js/lighting/lighting.js` (`LightTune`) the façade over the three.
 
 ---
 
@@ -105,7 +105,7 @@ There is no UBO. `frame.lights` is a flat JS array of **15-float records**:
 GLX uploads packed `vec4` arrays per frame — `uLightA[i]` (xyz + radius),
 `uLightB[i]` (rgb + bleed), `uLightC[i]` (aim + coneIn), `uLightD[i]` (coneOut),
 plus `uNumLights`. God-rays still use their own 12-slot unpacked set. Every
-`lights.push(...)` in `buildTrackLights` (`js/game/track-lights.js`) must be
+`lights.push(...)` in `buildTrackLights` (`js/lighting/track-lights.js`) must be
 exactly 15 values.
 
 `setFrameLights()` re-uploads every frame: it sorts active lamps by
@@ -215,7 +215,7 @@ circuit stays a day session even if its colours are dark.
 ## Track lamps
 
 Street posts and flood banks are **one system**. There is no second floodlight
-pipeline: `buildTrackLights()` in `js/game/track-lights.js` places one point light
+pipeline: `buildTrackLights()` in `js/lighting/track-lights.js` places one point light
 per entry in `track.lampPosts` (generic mast pass ~22 m both edges, plus
 `floodMast` / `lampPost` registrations). Activated whenever the scene is dark:
 
@@ -225,7 +225,7 @@ per entry in `track.lampPosts` (generic mast pass ~22 m both edges, plus
 The LIGHTING TUNER keeps one **LAMPS** tab (POOLS + BEHAVIOUR sections) for
 every knob that drives this pipeline — street posts and flood banks share the
 same controls. Colour is chosen by `floodColor(theme)` and the per-post
-`LAMP_KINDS` table (both internal to `js/game/track-lights.js`):
+`LAMP_KINDS` table (both internal to `js/lighting/track-lights.js`):
 
 | Theme | Colour |
 |---|---|

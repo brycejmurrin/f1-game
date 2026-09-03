@@ -1,9 +1,9 @@
 // agentview-api-contract.test.mjs — freezes the shape of the agent-view
 // surface: the object AgentView.create(G) returns, and the raster band that
-// js/game/agentview-raster.js must keep providing to it.
+// js/agent/agentview-raster.js must keep providing to it.
 //
 // Why this exists: agentview.js grew past 3400 lines and the rasters were split
-// into js/game/agentview-raster.js. A split like that fails SILENTLY — a
+// into js/agent/agentview-raster.js. A split like that fails SILENTLY — a
 // dropped export doesn't throw at load, it throws the first time an agent calls
 // the one method nobody tested, and `__apex` wires these names through by hand.
 // The scenery split is guarded the same way (tests/unit/scenery-api-contract.test.mjs);
@@ -48,16 +48,16 @@ function evalGlobals(files, extras) {
     { Math, JSON, Object, Array, String, Number, isNaN, isFinite, console },
     extras || {}));
   seedLog(ctx);
-  // js/mat4.js first, always: it is the second <script> tag in the shell and the
+  // js/core/mat4.js first, always: it is the second <script> tag in the shell and the
   // home of the shared scalar helpers (M4.clamp), which agentview.js binds at eval.
-  for (const f of ["js/mat4.js", ...files]) {
+  for (const f of ["js/core/mat4.js", ...files]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return (name) => vm.runInContext(name, ctx);
 }
 
 test("agentview-raster.js exposes create() and the three rasters", () => {
-  const get = evalGlobals(["js/game/agentview-raster.js"]);
+  const get = evalGlobals(["js/agent/agentview-raster.js"]);
   const AgentRaster = get("AgentRaster");
   assert.equal(typeof AgentRaster, "object", "AgentRaster global missing");
   assert.equal(typeof AgentRaster.create, "function",
@@ -74,8 +74,8 @@ test("agentview-raster.js exposes create() and the three rasters", () => {
 
 test("AgentView.create() still returns the whole documented surface", () => {
   const get = evalGlobals([
-    "js/game/agentview-raster.js",
-    "js/game/agentview.js",
+    "js/agent/agentview-raster.js",
+    "js/agent/agentview.js",
   ]);
   const AgentView = get("AgentView");
   assert.equal(typeof AgentView, "object", "AgentView global missing");
@@ -103,7 +103,7 @@ test("AgentView.create() still returns the whole documented surface", () => {
 
 // describe("span:N") and render({what:"circuit"}) read the SAME span records
 // (lap fractions, per noteSpan), and both must agree with the geometry walker
-// along() (js/track/scenery-structures.js): spans WRAP the start line
+// along() (js/track/scenery/structures.js): spans WRAP the start line
 // (~20 circuits fence 0.95->0.06), and s0===s1 (mod 1) walks a FULL lap
 // (along()'s `|| n`; monaco/montreal/redbull wall/fence(0.0, 1.0)) — so
 // lengthM is the wrapped difference, and a full-lap span is total, not 0.
@@ -132,7 +132,7 @@ test("span lengthM: wrap, plain and full-lap spans match along()'s walk", () => 
     banking: () => null, terrainY: () => 0,
   };
   const get = evalGlobals(
-    ["js/game/agentview-raster.js", "js/game/agentview.js"],
+    ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
     { Tracks: TracksStub });
   const view = get("AgentView").create({
     wrapS: (s) => ((s % TOTAL) + TOTAL) % TOTAL,
@@ -157,12 +157,12 @@ test("span lengthM: wrap, plain and full-lap spans match along()'s walk", () => 
 test("the raster band reaches agentview through ctx, not a global grab", () => {
   // agentview.js must not reference the raster functions except through the
   // create() handshake — otherwise the split silently re-couples.
-  const src = readFileSync(join(ROOT, "js/game/agentview.js"), "utf8");
+  const src = readFileSync(join(ROOT, "js/agent/agentview.js"), "utf8");
   assert.match(src, /AgentRaster\.create\(/,
                "agentview.js no longer creates the raster band");
   assert.doesNotMatch(src, /function\s+(frame|plan|carRender)\s*\(/,
                       "a raster function was re-defined in agentview.js — it "
-                      + "belongs in js/game/agentview-raster.js");
+                      + "belongs in js/agent/agentview-raster.js");
 });
 
 test("neither raster loop paints an object the camera is INSIDE", () => {
@@ -180,7 +180,7 @@ test("neither raster loop paints an object the camera is INSIDE", () => {
   // grid. containsEye() is the guard, and BOTH loops that paint boxes need it:
   // the scenery loop (a 22 m pine 20 m to the side reported the frame 100% tree)
   // and the car loop (the cockpit reported the frame mostly "player").
-  const src = readFileSync(join(ROOT, "js/game/agentview-raster.js"), "utf8");
+  const src = readFileSync(join(ROOT, "js/agent/agentview-raster.js"), "utf8");
   const guards = src.match(/if \(containsEye\(eye,[^)]*\)\) continue;/g) || [];
   assert.equal(guards.length, 2,
     "expected containsEye() to guard BOTH the scenery loop and the car loop in "

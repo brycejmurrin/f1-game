@@ -62,7 +62,7 @@ test("cdmcp-lamps-tune.py asserts dens + warmth + energy with terminal marker", 
 });
 
 test("apex lightState documents meanLampRGB / bakedLights / lampPosts probes", () => {
-  const apex = fs.readFileSync(path.join(ROOT, "js/game/apex.js"), "utf8");
+  const apex = fs.readFileSync(path.join(ROOT, "js/agent/apex.js"), "utf8");
   assert.match(apex, /meanLampRGB/);
   assert.match(apex, /bakedLights/);
   assert.match(apex, /_alwaysLights/);

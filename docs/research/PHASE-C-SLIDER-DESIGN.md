@@ -10,7 +10,7 @@ The player's complaint was *"the overall speed is weighted too high and for most
 sliders I feel like I end up on the lower end. Some sliders I don't even
 understand."* Three of those are not a matter of taste — they are arithmetic
 defects that can be stated in a table, which is what this document does. Every
-number below is computed from the shipped mappings in `js/game/steer-tuning.js`
+number below is computed from the shipped mappings in `js/input/steer-tuning.js`
 and the taper in `js/game.js`; regenerate with
 `node artifacts/tmp/phase-c-tables.mjs` (the generator is kept with this doc's
 history, not in the tree — it is 90 lines of arithmetic, not a tool).
@@ -197,7 +197,7 @@ adding one now would be inventing physics on the spot rather than shipping a
 designed change. Left as an open follow-up, not a defect in what shipped.
 
 **SHIPPED.** `lockTaper = 1 / (1 + vStd(v) / STEER_SPEED_REF)` in `js/game.js`,
-and `speedRefFromSlider` in `js/game/steer-tuning.js` is `15 + (75 - 15) *
+and `speedRefFromSlider` in `js/input/steer-tuning.js` is `15 + (75 - 15) *
 (v - 1) / 9`. The `Math.max(0.4, …)` floor is gone entirely — the hyperbolic
 law is never negative, so there is nothing left for a floor to catch.
 
@@ -219,7 +219,7 @@ Taper by notch, new law:
 
 Matches the design table above exactly (regenerated from the real, shipped
 `speedRefFromSlider` — see `artifacts/tmp/phase-c-2-3-tables.cjs`, a `vm`
-harness that loads the real `js/game/steer-tuning.js`, not a re-derivation).
+harness that loads the real `js/input/steer-tuning.js`, not a re-derivation).
 
 **`tune-sweep.mjs` ran, on a quiet box, twice** (`--sliders pm-speedsteer,pm-rate
 --tracks monza --notches 1,3,5,7,10`, first at the default `--aggr 0.88`, then
@@ -294,7 +294,7 @@ turn-in out of the box. Given the complaint, that is the right direction; given
 that it moves the shipped feel, it is the one Phase C number that should not go
 in on arithmetic alone.
 
-**SHIPPED.** `wheelbaseFromSlider` in `js/game/steer-tuning.js` is `4.4 +
+**SHIPPED.** `wheelbaseFromSlider` in `js/input/steer-tuning.js` is `4.4 +
 (2.6 - 4.4) * (v - 1) / 9`. v5 = 3.600 m exactly, matching the table above.
 
 | notch | today (m) | shipped (m) |
@@ -401,7 +401,7 @@ per-version ladder before it changes the constant.
 
 **CLEARED.** `STEER_MIGRATIONS` is now a list of `{to, apply}` steps and
 `migrateSteerStore()` runs only those above the stored schema — the shape
-`CAREER_MIGRATIONS` in `js/game/store.js` already used. Every key a step rewrites
+`CAREER_MIGRATIONS` in `js/core/store.js` already used. Every key a step rewrites
 goes through `migSet()`, which logs the old and new value to `Log.info("game")`
 when it actually moves, so a migration that changes a player's settings leaves a
 record in the ring buffer. The lossy old-9/old-10 collision gets its own

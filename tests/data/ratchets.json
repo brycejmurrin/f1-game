@@ -7,11 +7,11 @@
       "gMembers": 222,
       "topLets": 147
     },
-    "js/game/apex.js": {
+    "js/agent/apex.js": {
       "lines": 2600,
       "codeLines": 1975
     },
-    "js/game/agentview.js": {
+    "js/agent/agentview.js": {
       "lines": 2452
     },
     "js/car/car3d.js": {
@@ -20,7 +20,7 @@
     "js/track/tracks.js": {
       "lines": 2399
     },
-    "js/game/light-presets.js": {
+    "js/lighting/presets.js": {
       "lines": 15508
     },
     "js/render/webgpu/wgx.js": {
@@ -29,7 +29,7 @@
     "js/render/three/tlx.js": {
       "lines": 3150
     },
-    "js/render/glx.js": {
+    "js/render/glx/glx.js": {
       "lines": 2271
     },
     "js/render/webgpu/wgsl-chunks.js": {
@@ -40,6 +40,9 @@
     },
     "js/net/lobby.js": {
       "lines": 1684
+    },
+    "tools/pick-tests.mjs": {
+      "blanketOnlyRoutes": 1
     }
   }
 }

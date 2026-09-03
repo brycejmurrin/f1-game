@@ -5,7 +5,7 @@ description: Use when editing the GARAGE parts catalog, livery/finish/shark fin,
 
 # Garage — parts, livery, and car mesh
 
-The GARAGE (`#carsetup`, `js/game/setup-ui.js`) is who you are, what you drive
+The GARAGE (`#carsetup`, `js/garage/setup-sheet.js`) is who you are, what you drive
 (12 categories + 600 cr), and how it looks. Catalog: `js/car/parts.js`. Paint:
 `js/car/liveries.js` + `js/car/liverytex.js`. Geometry: `js/car/car3d.js`.
 

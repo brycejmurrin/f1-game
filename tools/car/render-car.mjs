@@ -34,7 +34,7 @@
 //   columns = tod) — for comparing how a part/livery reads across lighting.
 //
 // Options:
-//   --team=mclaren        team id (js/car/teams.js). Default: mclaren
+//   --team=mclaren        team id (js/data/teams.js). Default: mclaren
 //   --livery=mcl_gulf     livery id (js/car/liveries.js). Default: team default
 //   --num=4               driver number override
 //   --engine= --aero= --brakes= --gearbox= --ers= --tyres= --suspension= --fuel=

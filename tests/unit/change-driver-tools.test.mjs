@@ -27,7 +27,7 @@ const run = (args, opts = {}) => {
 
 test("verify-change routes a circuit edit to verify-track and graph.js to graph-parity", () => {
   const plan = JSON.parse(run(["tools/verify-change.mjs", "--plan",
-    "js/circuits/monza.js", "js/track/graph.js"]).out);
+    "js/circuits/monza.js", "js/track/scenery/graph.js"]).out);
   assert.deepEqual(plan.fast.verifyTrack, ["monza"]);
   assert.equal(plan.fast.graphParity, true);
   assert.equal(plan.fast.cacheCheck, true);
@@ -99,7 +99,7 @@ test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", ()
   // The counter-test, and it is the one that matters: a fix that makes every
   // no-op run loud is worse than the bug. A change a rule DOES claim must still
   // select normally and must never report unmatched.
-  const ok = JSON.parse(run(["tools/verify-change.mjs", "--plan", "js/render/glx.js"]).out);
+  const ok = JSON.parse(run(["tools/verify-change.mjs", "--plan", "js/render/glx/glx.js"]).out);
   assert.ok(ok.batches.length > 0, "a js/ change must still select batches");
   assert.equal(ok.fast.toolingFast, true);
 });

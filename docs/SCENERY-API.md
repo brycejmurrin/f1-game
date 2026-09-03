@@ -2,7 +2,7 @@
 
 Each circuit's bespoke surroundings live in `js/circuits/<id>.js` as a
 `scenery(api)` function (see [ARCHITECTURE.md](ARCHITECTURE.md)). The engine
-(`buildProps`, split across the `js/track/scenery-nature.js` / `scenery-city.js`
+(`buildProps`, split across the `js/track/scenery/nature.js` / `scenery-city.js`
 / `scenery-structures.js` / `scenery-identity.js` modules and orchestrated by
 `js/track/tracks.js`) calls it once with an `api` of placement helpers, geometry
 primitives, and composite models. The **111-member `api` surface is a frozen
@@ -24,9 +24,9 @@ see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 > city generator's palette — `neon` / `dayPal` are NAMES into
 > `TrackSceneryData.NC` / `.DC`). The generic fallbacks (`FURN_DEF`, `KIT_DEF`,
 > `THEME_DEF`, `STAND_SET_DEF`, the colour packs) stay in
-> `js/track/scenery-data.js`; the generators (`neonTower`, `streetLamp`, …) are
-> in `js/track/scenery-city.js`, `conifer` and the rest of the flora in
-> `js/track/scenery-nature.js`, and the theme tables in `js/track/themes.js`.
+> `js/track/scenery/data.js`; the generators (`neonTower`, `streetLamp`, …) are
+> in `js/track/scenery/city.js`, `conifer` and the rest of the flora in
+> `js/track/scenery/nature.js`, and the theme tables in `js/track/scenery/themes.js`.
 > This doc covers only the per-circuit `scenery(api)` toolkit.
 
 ## Road half-width overlays (`hwZones`)
@@ -140,7 +140,7 @@ fixtures.
 ### Scene graph (`ctx.instance`) — engine-internal, not part of the `api` contract
 
 Engine emitters are being migrated off "push primitives into the soup" and onto
-`ctx.instance(key, place, build, meta)` (`js/track/graph.js`): `build(rec)`
+`ctx.instance(key, place, build, meta)` (`js/track/scenery/graph.js`): `build(rec)`
 records the model's primitives ONCE in canonical space (origin, identity basis),
 and each placement becomes a node carrying `{o, r, u, t, s?}`. Replay runs
 through the same guarded emitters, so geometry and on-track suppression are
@@ -426,7 +426,7 @@ Cantilever/flat roofs are a single slab. The only added bands are a rear
 gap-closing fascia at the roof's outer edge (over the shell, behind the crowd —
 not trackside) and a night under-roof light strip.
 
-Liveries live in `js/track/scenery-data.js`: `STAND_LIVERIES` holds the named
+Liveries live in `js/track/scenery/data.js`: `STAND_LIVERIES` holds the named
 families (`steel`, `darkSteel`, `concrete`, `alu`, `scaffold`, `sandstone`,
 `terracotta`, `pastel`, `crimson`, `navy`, `teal`, `orange`); each circuit's
 def names the three it rotates through in `standSet` (`js/circuits/<id>.js`),
@@ -554,13 +554,13 @@ if (!bakedModel("grandstand_tifosi", K(0.12), -1, 14, { scale: 1.2 }))
 
 `bakedModels()` lists the ids the installed pack actually has.
 
-Never async: `js/render/assets.js` prefetches every model at boot precisely so
+Never async: `js/render/shared/assets.js` prefetches every model at boot precisely so
 prop placement cannot vary with network timing — the same circuit must build
 identically every time.
 
 ### Atmosphere / colour packs (`api.ATM` / `api.COL`)
 
-Exported from `js/track/scenery-data.js` and exposed on the scenery `api`.
+Exported from `js/track/scenery/data.js` and exposed on the scenery `api`.
 Merge into a track `pal` or use as literal colours:
 
 | Pack | Intent |

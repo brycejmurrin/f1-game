@@ -534,7 +534,7 @@
           const b = [a.r, a.u, a.t];
           const ROCK = [0.48, 0.46, 0.40], ROCK2 = [0.54, 0.52, 0.44];
           // Rock cliff climbing from the waterline (organic frustum tiers).
-          // addFrustum/addBox anchor at the BASE (js/track/geom.js); these
+          // addFrustum/addBox anchor at the BASE (js/track/core/geom.js); these
           // offsets were authored as centres, floating the whole stack 21 m.
           addFrustum(out, vadd(a.c, a.u, 0), 46, 32, 42, ROCK, 8, b);
           addFrustum(out, vadd(a.c, a.u, 21), 32, 22, 16, ROCK2, 8, b);
@@ -847,7 +847,7 @@
       });
       // Grandstand K, split into twelve 15 m stands instead of one 180 m run.
       // grandstandEx's "truss" roof lays braces by walking ±len/2 off ONE
-      // anchor's straight tangent (js/track/scenery-nature.js) — over 180 m
+      // anchor's straight tangent (js/track/scenery/nature.js) — over 180 m
       // of this curving harbourfront the far bays drift off the actual
       // ground and float (float-audit: 6 clusters, up to 30 m gap; three
       // 60 m stands still left 4 floating at ~19 m, six 30 m stands left 1

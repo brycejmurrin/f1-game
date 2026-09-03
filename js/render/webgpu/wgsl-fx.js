@@ -1,6 +1,6 @@
 /*
  * Apex 26 — WGSL foreground-FX shaders (WGSLFx). Blob shadow, skid marks,
- * glow billboards, textured decals — WGSL ports of js/render/shaders/fx.js.
+ * glow billboards, textured decals — WGSL ports of js/render/glx/shaders/glsl-fx.js.
  * Loaded after wgsl-chunks.js. Uniform layouts exported as WGSLFx.*_UNIFORM_BYTES.
  *
  * NO build step: plain JS template strings, one global WGSLFx.

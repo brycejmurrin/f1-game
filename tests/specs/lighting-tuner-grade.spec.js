@@ -142,7 +142,7 @@ test("COPY ALL arms, spreads the condition to every other track, and undoes", as
 
   // THE ARM/FIRE PAIR RUNS IN ONE evaluate, AND THE REASON IS A RACE THIS TEST
   // CANNOT WIN FROM OUTSIDE THE PAGE. The armed state is held by a wall-clock
-  // `setTimeout(ltDisarm, 20000)` in js/game/tuner.js, so every millisecond
+  // `setTimeout(ltDisarm, 20000)` in js/lighting/tuner-panel.js, so every millisecond
   // between the click and the read is spent against that window. MEASURED here
   // (scratch/tuner/arm-probe.mjs, ONE browser, nothing else running): the
   // arming click landed 78 s after it was issued (the tuner renders, so the
@@ -266,7 +266,7 @@ test("new grading controls clamp, persist, reset, and export", async ({ page }) 
   // silent about a range the tuner is free to change. Same rule the mcp-probe
   // skill's THIRD trap states for knob work: verify TUNE_DEFS by reading it.
   const bounds = await page.evaluate(() => {
-    // BARE `LightTune`, not `window.LightTune`. js/game/lighting.js declares it
+    // BARE `LightTune`, not `window.LightTune`. js/lighting/lighting.js declares it
     // as `const LightTune = (function () {`, and a top-level `const` in a
     // CLASSIC script creates a script-scoped binding — it is NOT a property of
     // window, unlike `var` or the explicit `window.X =` form that ariastate.js,

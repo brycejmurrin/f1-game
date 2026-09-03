@@ -2,7 +2,7 @@
 /**
  * localStorage failing must not be SILENT.
  *
- * js/game/store.js caches every value it writes, so when the underlying
+ * js/core/store.js caches every value it writes, so when the underlying
  * setItem throws, the rest of the session reads back exactly what it expected.
  * The game plays perfectly and the save is gone on reload. Safari on iOS is the
  * real case: Private Browsing sets the localStorage quota to ZERO, so the very

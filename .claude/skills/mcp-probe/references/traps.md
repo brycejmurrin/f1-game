@@ -105,7 +105,7 @@ real `TUNE_DEFS` defaults are 1.0 and 0.5) — the "no visible effect" result th
 produced was really "no visible effect near an arbitrary point that happened not
 to be the default," not evidence about the knob. Five more knobs in the same
 session had the same class of error. Always
-`grep -n 'id: "<knobId>"' js/game/lighting-knobs.js` immediately before testing a knob
+`grep -n 'id: "<knobId>"' js/lighting/knobs.js` immediately before testing a knob
 and read `min`/`max`/`def` off that line — never carry values between sessions
 or reconstruct them from a description.
 
@@ -133,7 +133,7 @@ same scene. A knob whose signal doesn't clear a same-value noise-floor check by
 several times over is not proven, whichever direction it points.
 
 For sky/cloud knobs specifically, don't reach for `sky()` — its ~58° pitch
-looks close to straight up, and the cloud plane in `js/render/shaders/sky.js`
+looks close to straight up, and the cloud plane in `js/render/glx/shaders/glsl-sky.js`
 is sampled as `dir.xz / up * 0.42`: dividing by a near-1 `up` collapses the
 sampled coordinate toward one point, so every pixel reads nearly the same
 noise value and the sky renders as a smooth gradient with no puffy structure
@@ -214,7 +214,7 @@ screenshot, not just before it.
 `c.rPrevPx`/`c.rPrevPz` (WORLD-space render-interpolation anchors) blended
 toward `c.px`/`c.pz` by `renderAlpha` — NOT from `c.rPrevS`/`c.rPrevX` (the
 arc-based anchors, which only feed the AI-car branch). `jump()`
-(`js/game/apex.js`) reset `rPrevS`/`rPrevX` on teleport but never touched
+(`js/agent/apex.js`) reset `rPrevS`/`rPrevX` on teleport but never touched
 `rPrevPx`/`rPrevPz`, so the player mesh kept rendering a straight-line lerp
 between wherever it was BEFORE the teleport and the new spot. Under `park()`'s
 `G.frozen` (physics never steps again, so `renderAlpha` never advances) that

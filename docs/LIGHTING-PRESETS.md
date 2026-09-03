@@ -1,7 +1,7 @@
 # Lighting presets — per-track / time / weather
 
 Goal: ship a hand-considered lighting-tuner preset for **every track × time-of-day ×
-weather**, baked into `js/game/light-presets.js`. This doc is the shared brief: the
+weather**, baked into `js/lighting/presets.js`. This doc is the shared brief: the
 per-track subagents read it, and it tracks which tracks are done.
 
 ---
@@ -12,8 +12,8 @@ per-track subagents read it, and it tracks which tracks are done.
 TUNE_DEFS default  →  file "*"  →  file "track|tod|wx"  →  player localStorage
 ```
 
-- `js/game/lighting-knobs.js` `TUNE_DEFS` holds each knob's factory **default**.
-- `js/game/light-presets.js` `window.LightPresets` holds the shipped overrides:
+- `js/lighting/knobs.js` `TUNE_DEFS` holds each knob's factory **default**.
+- `js/lighting/presets.js` `window.LightPresets` holds the shipped overrides:
   - `"*"` — a **global baseline** applied to every condition (currently `carGloss: 0.35` near-matte paint, plus the shipped broadcast HDR grade: blacks/shadows/midtones/highlights/whites/toe/shoulder and small gainR/gainB trims).
   - `"track|tod|wx"` — a per-condition override that wins over `"*"`.
 - A player's live tuner edits always win over the file; RESET falls back to the file.
@@ -66,7 +66,7 @@ Don't re-specify a `"*"` value in a per-condition preset unless you're deliberat
 
 ## Knob reference (id · range · default · effect)
 
-_(from `TUNE_DEFS` in `js/game/lighting-knobs.js`. Focus on the per-condition-relevant ones; leave the rest at default.)_
+_(from `TUNE_DEFS` in `js/lighting/knobs.js`. Focus on the per-condition-relevant ones; leave the rest at default.)_
 
 _This list is auto-generated from `TUNE_DEFS` (ranges + defaults are exact). Some
 knobs (e.g. `ssaoRadius`, `mistShare`, `carClearcoat`, `wetness`, `blackLift`,
@@ -259,7 +259,7 @@ Cross-cutting from the frames:
 
 ## Per-track proposal file
 
-Subagents never write `js/game/light-presets.js` (a partial bake wipes every
+Subagents never write `js/lighting/presets.js` (a partial bake wipes every
 other key). Each track writes one JSON file, then the parent merges:
 
 ```
@@ -281,7 +281,7 @@ node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs
 ```
 
 `combos` keys are `tod|wx`. Values are sparse knob maps. Merge snaps against
-live `TUNE_DEFS` in `js/game/lighting-knobs.js` (ranges/steps there win over the
+live `TUNE_DEFS` in `js/lighting/knobs.js` (ranges/steps there win over the
 table in this doc) and refuses unknown ids, out-of-range, or off-grid values.
 Do not re-state a knob at its `TUNE_DEFS.def`, and do not re-state a `"*"`
 baseline (`carGloss` 0.35, the shipped HDR grade) unless this condition must

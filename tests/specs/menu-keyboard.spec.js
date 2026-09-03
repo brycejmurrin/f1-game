@@ -1,5 +1,5 @@
 // @ts-check
-// Desktop menu input — js/game/menunav.js.
+// Desktop menu input — js/ui/menu-nav.js.
 //
 // Two behaviours, both invisible on a phone and both load-bearing on a laptop:
 //
@@ -292,7 +292,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
 
   /* A MODAL OUTRANKS EVERY z-index, and getting that wrong made the arrow keys
      dead inside most of the game's sheets. Every `.screen.dim` is a real
-     <dialog> opened with showModal() (js/game/topmodal.js), and a top-layer
+     <dialog> opened with showModal() (js/ui/modal.js), and a top-layer
      dialog computes `z-index: auto` — so the old ranking, `parseInt(zIndex)`
      with a NaN fallback of 0, scored the open modal at 0 and handed the layer
      to whatever visible screen sat behind it with a real z-index. Measured on
@@ -337,7 +337,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
      enforced, since there was no showModal() and so no top layer and no
      inert background. Tab walked straight out of it into #select sitting
      behind it (docs/research/PLATFORM-INPUT-NOTES.md §9a). It is now a real
-     <dialog> (js/game/topmodal.js), so the platform makes the background
+     <dialog> (js/ui/modal.js), so the platform makes the background
      genuinely inert.
 
      WHAT NOT TO ASSERT: #track-detail has exactly one focusable descendant
@@ -355,7 +355,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
   test("Tab cannot escape the track-detail dialog into the select screen behind it", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
-    // Opens via openTrackDetail() in js/game/menus.js — the circuit preview
+    // Opens via openTrackDetail() in js/ui/select-screen.js — the circuit preview
     // map on the select screen, same trigger tests/specs/ui-audit.spec.js uses.
     await page.locator("#sel-preview-map").click();
     await page.locator("#track-detail").waitFor({ state: "visible" });
@@ -363,7 +363,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
        This was `waitForTimeout(300)` and it produced a red `:modal` assertion
        under load — the ui group at two workers — which read as a product bug
        for hours. It is a race. openTrackDetail() reveals the dialog through
-       vt() (js/game/menus.js), a startViewTransition wrapper with a 60 ms
+       vt() (js/ui/select-screen.js), a startViewTransition wrapper with a 60 ms
        setTimeout safety net, so `hidden` clears asynchronously; TopModal's
        MutationObserver then calls showModal(). Visible therefore arrives
        BEFORE modal, and 300 ms is a guess about how much before.
@@ -426,9 +426,9 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
   });
 });
 
-/* ESCAPE IS "BACK" — the contract in js/game/topmodal.js + js/game/uilayers.js.
+/* ESCAPE IS "BACK" — the contract in js/ui/modal.js + js/ui/layers.js.
  *
- * Escape used to be a bare alias for the pause key (js/game/input.js) with no
+ * Escape used to be a bare alias for the pause key (js/input/input.js) with no
  * state check at all, so on a desktop keyboard it meant "pause" on screens
  * where the only sensible answer was "close this", and on the three screens
  * that are still plain <div>s it meant nothing whatsoever. Nothing in the suite

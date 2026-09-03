@@ -5,17 +5,26 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { DEPLOY_BRANCH, RULES } from "../../tools/pick-tests.mjs";
+import { DEPLOY_BRANCH, RULES, blanketOnly } from "../../tools/pick-tests.mjs";
 
+const require = createRequire(import.meta.url);
+const MANIFEST = require("../../tools/manifest.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+// Every file the manifest loads, across all rosters — the selector's input space.
+const manifestFiles = () => [
+  ...MANIFEST.FULL, ...Object.values(MANIFEST.DEFERRED).flat(), ...MANIFEST.LAZY_AGENT,
+  ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
+];
 const run = (...args) =>
   execFileSync("node", ["tools/pick-tests.mjs", "--json", ...args],
                { cwd: ROOT, encoding: "utf8" });
 const json = (...args) => JSON.parse(run(...args));
 
 test("--json reports a reason CI can branch on, not prose", () => {
-  const r = json("js/game/hud.js");
+  const r = json("js/ui/hud.js");
   assert.equal(r.reason, "matched");
   assert.ok(Array.isArray(r.files) && Array.isArray(r.groups));
   for (const g of r.groups) {
@@ -64,9 +73,9 @@ test("a path in FIRST argv position survives the --since filter", () => {
   // question, answered confidently. Every other case in this file hides it,
   // because run() puts --json at index 0; here the path IS argv[0].
   const r = JSON.parse(execFileSync(
-    "node", ["tools/pick-tests.mjs", "js/car/parts.js", "js/game/hud.js", "--json"],
+    "node", ["tools/pick-tests.mjs", "js/car/parts.js", "js/ui/hud.js", "--json"],
     { cwd: ROOT, encoding: "utf8" }));
-  assert.deepEqual(r.files, ["js/car/parts.js", "js/game/hud.js"]);
+  assert.deepEqual(r.files, ["js/car/parts.js", "js/ui/hud.js"]);
 });
 
 test("the default diff base is the DEPLOY branch, which pages.yml names", () => {
@@ -93,4 +102,39 @@ test("parked tracks-visual lives under tests/manual and is never a gate", () => 
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   assert.ok(!pkg.scripts["test:visual"],
     "package.json must not expose test:visual while baselines are absent");
+});
+
+test("every manifest file matches at least one pick-tests rule", () => {
+  // The rules are path REGEXES and the tree is about to move
+  // (docs/research/TREE-RESTRUCTURE-2026-09.md §Phase 2). A file that moves out
+  // from under every rule is a change nobody is told to test — the failure mode
+  // this pins. Checked against the MANIFEST rather than a directory walk, so the
+  // input space is the load order itself and not whatever happens to be on disk.
+  const files = manifestFiles();
+  assert.ok(files.length > 150, `manifest lists only ${files.length} files — the roster read broke`);
+  const orphans = files.filter((f) => !RULES.some(([re]) => re.test(f)));
+  assert.deepEqual(orphans, [],
+    "a manifest file matches no pick-tests rule — add or widen a RULE so a change there is routed somewhere");
+});
+
+// Files that ONLY the two blanket rules (tiny / tooling-fast) reach: no rule
+// names them or their directory, so an edit there is told "boot the page" and
+// nothing topical. The COUNT is ratcheted in tests/data/ratchets.json
+// (`blanketOnlyRoutes` on tools/pick-tests.mjs) rather than frozen here as a
+// path list: the Phase 2b window moves 91 files, and a list keyed on paths
+// needs a hand edit per move while saying nothing the number does not. The
+// list itself is still printed on a failure, so the offender names itself —
+// and `node tools/ratchets.mjs --update` is the one-command flow after a
+// legitimate move, the same as every other ratchet in the tree.
+test("no more manifest files are routed by the blanket rules alone than the ratchet allows", () => {
+  const ceiling = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/ratchets.json"), "utf8"))
+    .files["tools/pick-tests.mjs"].blanketOnlyRoutes;
+  const live = blanketOnly();
+  assert.ok(live.length <= ceiling,
+    `${live.length} manifest files are routed ONLY by the blanket tiny/tooling-fast rules, ceiling ${ceiling} — ` +
+    "give the new one a specific RULE (a moved file that fell off its old rule shows up here first):\n  " +
+    live.join("\n  "));
+  assert.equal(live.length, ceiling,
+    `only ${live.length} files are blanket-only now (ceiling ${ceiling}) — a file gained a rule, so LOWER the ` +
+    "ratchet in the same commit: node tools/ratchets.mjs --update");
 });

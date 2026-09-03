@@ -7,7 +7,7 @@
 // paint is also the only paint being judged. That misses a whole class of bug,
 // because three of this app's layout answers are computed by JavaScript from a
 // measurement rather than declared in CSS — `data-shape`, `data-pair` and
-// `data-density`, all written by js/game/sheetshape.js off a ResizeObserver.
+// `data-density`, all written by js/ui/sheet-shape.js off a ResizeObserver.
 // Anything that leaves one of those stale is invisible to a static test and
 // obvious to a player who rotates their phone.
 //
@@ -30,7 +30,7 @@
 // bake in today's breakpoints and will not need editing when they move.
 //
 // WHAT THAT ORACLE CANNOT CATCH, established by mutation rather than assumed.
-// Stubbing out the classifyDensity call in js/game/sheetshape.js fails case 3
+// Stubbing out the classifyDensity call in js/ui/sheet-shape.js fails case 3
 // and leaves cases 1 and 2 GREEN — because a classifier that is broken
 // everywhere is broken identically on both sides of a "same as fresh" compare.
 // Those two cases are guards against STALENESS and RATCHETING specifically, and
@@ -54,7 +54,7 @@ const PHONE_PORTRAIT = { width: 393, height: 852 };
 // the garage's density classifier RELEASES from compact back to normal only
 // above 520 of its own units. At UI SIZE 50% a 490-tall viewport is ~980 own
 // units (solidly normal); at 100% it is 490 (compact under 480). SCALE_MIN
-// was briefly 90, then 80, then 50, and now sits at 40 (js/game/ui-scale.js);
+// was briefly 90, then 80, then 50, and now sits at 40 (js/ui/scale.js);
 // the round-trip (normal ↔ compact ↔ normal) has ample headroom either way.
 const SHORT_WIDE = { width: 1000, height: 490 };
 
@@ -220,7 +220,7 @@ test.describe("Live resize — the garage re-answers its own layout questions", 
     // The case this test exists for is unchanged and still exercised: two scales
     // that classify differently, with no resize between them, proving the
     // classifier answers to `zoom` alone. 50 was SCALE_MIN when this was
-    // written; the floor is now 40 (js/game/ui-scale.js), and 50 keeps the
+    // written; the floor is now 40 (js/ui/scale.js), and 50 keeps the
     // same normal-vs-compact contrast, so the value stays.
     await page.evaluate(() => window.__apex.uiScale(50));
     await page.waitForTimeout(400);

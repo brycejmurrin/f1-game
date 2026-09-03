@@ -1,10 +1,10 @@
-// assets-api.spec.js — the baked asset pack's RUNTIME path: js/render/assets.js,
+// assets-api.spec.js — the baked asset pack's RUNTIME path: js/render/shared/assets.js,
 // the GLX texture-array upload, and the __apex hooks that drive them.
 //
 // The contract under test WAS "a pack must never change the render until asked"
 // — correct while the pack was procedural noise, but it meant shipping ~5 MB
 // that nothing sampled. With the 5 MB baked pack shipping, the default is ON,
-// and the safety property moved to js/render/assets.js: no pack, a malformed
+// and the safety property moved to js/render/shared/assets.js: no pack, a malformed
 // pack, or a backend without createTextureArray all fall back to the procedural
 // look. Most of what follows is that failure-mode coverage, because all three
 // are states real users boot into.

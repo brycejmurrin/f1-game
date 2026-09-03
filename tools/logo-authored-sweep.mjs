@@ -3,7 +3,7 @@
 /* logo-authored-sweep.mjs — does the colour a player picks in the editor's
  * TEAM LOGO row actually get painted, or does markPalette substitute one?
  *
- * `liv.logo` is written by js/game/setup-ui.js and markPalette is the ONLY
+ * `liv.logo` is written by js/garage/setup-sheet.js and markPalette is the ONLY
  * thing between that value and the pixels, so scoring markPalette scores the
  * whole chain. Offline via crest-sweep's node:vm loader — no browser.
  *

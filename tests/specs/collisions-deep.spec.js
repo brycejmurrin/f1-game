@@ -70,7 +70,7 @@ test.describe("Apex 26 — collisions (deep)", () => {
       // ownership, and game.js skips the wall clamp for owned cars — the
       // player tumbles past the barrier and maxAbsX measures the takeover, not
       // the clamp. Bypass: the sanctioned __apex.incident({flags}) hook
-      // (js/game/apex.js -> IncidentSim.setFlags, which also hands back any
+      // (js/agent/apex.js -> IncidentSim.setFlags, which also hands back any
       // live takeover safely). Assertions unchanged.
       window.__apex.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
       window.__apex.setPhysics({ drift: 0 });

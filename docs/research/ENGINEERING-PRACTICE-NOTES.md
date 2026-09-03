@@ -230,7 +230,7 @@ because it is a user-facing failure with no diagnostics, not a style question.
 
 ## What this repo does with that
 
-`js/game/store.js`:
+`js/core/store.js`:
 
 ```js
 set(k, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
@@ -265,7 +265,7 @@ that a failed write is indistinguishable from a successful one.
 
 1. **Log it.** One `Log.warn("game", …)` in the `catch` turns an invisible
    failure into something `__apex.logs({ns:"game"})` can show. This is the same
-   fix applied to `js/game/audio.js` and `js/net/transport.js` in this pass, and
+   fix applied to `js/audio/engine.js` and `js/net/transport.js` in this pass, and
    the same reasoning: a documented debug namespace that cannot emit a line is
    not a debug namespace.
 2. **Make `set` report success**, so callers that care (career save, custom logo
@@ -275,19 +275,19 @@ that a failed write is indistinguishable from a successful one.
    so plainly. "Progress will not be saved in Private Browsing" is a sentence a
    player can act on; silence is not.
 4. Consider whether the customLogo data URL belongs in IndexedDB instead. The
-   repo already uses it for the music library (`js/game/music-lib.js`), so the
+   repo already uses it for the music library (`js/audio/music-lib.js`), so the
    dependency exists, and IndexedDB's quota is far larger.
 
 None of this was implemented in this pass — it is a behaviour change to the
 persistence layer and deserves its own commit and its own test.
 
-> **Postscript (2026-08): the fix shipped.** `js/game/store.js` no longer
+> **Postscript (2026-08): the fix shipped.** `js/core/store.js` no longer
 > swallows anything: every failed read or write goes through `noteBroken()`,
 > which records the DOMException name on `store.broken`, emits one loud
 > `Log.warn("game", …)` on the FIRST failure ("settings and saves will NOT
 > survive a reload", with the iOS-Private-Browsing hint on
 > `QuotaExceededError`) and buffer-only `Log.info` on every later one, and
-> `__apex.persistState()` (js/game/apex.js) exposes the state so the failure
+> `__apex.persistState()` (js/agent/apex.js) exposes the state so the failure
 > is testable. Of the four recommendations above: **#1 is done**; **#3 is
 > half-done** (the first failure is announced plainly, but via `Log` on first
 > use rather than a boot-time probe, and there is still no player-facing
@@ -312,13 +312,13 @@ file, it becomes a work list. Counting `catch (` against `Log.<level>(` across
 | file | catch | Log | fully empty `catch {}` |
 |---|---:|---:|---:|
 | `js/net/nostr.js` | 37 | **0** | 16 |
-| `js/game/spotify.js` | 35 | **0** | 17 |
+| `js/audio/spotify.js` | 35 | **0** | 17 |
 | `js/game.js` | 26 | **0** | 16 |
 | `js/net/lobby.js` | 25 | **0** | 14 |
 | `js/render/webgpu/wgx.js` | 26 | 2 | 12 |
 | `js/render/three/tlx.js` | 29 | 9 | 11 |
-| `js/game/debrisworld.js` | 17 | 1 | 12 |
-| `js/game/incidentsim.js` | 12 | **0** | 7 |
+| `js/physics/debris-world.js` | 17 | 1 | 12 |
+| `js/physics/incident-sim.js` | 12 | **0** | 7 |
 
 **Totals: 379 `catch`, 165 of them completely empty.**
 
@@ -336,7 +336,7 @@ Two things worth saying before anyone treats this as 379 bugs:
   soundtrack that silently never plays), and `store.js` (§4 above — the whole
   persistence layer).
 
-`js/game/audio.js` and `js/net/transport.js` moved off this list during this
+`js/audio/engine.js` and `js/net/transport.js` moved off this list during this
 pass (0 → 4 and 0 → 3) by logging exactly the failures that present as a symptom
 with no cause. The same three-or-four-site treatment would clear the top of the
 table without touching the other 350.

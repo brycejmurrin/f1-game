@@ -1285,7 +1285,7 @@ test.describe("Career — history", () => {
 });
 
 // ── reliability & retirements ────────────────────────────────────────────────
-// js/game/reliability.js. The rules that matter here are all invariants rather
+// js/race/reliability.js. The rules that matter here are all invariants rather
 // than magnitudes: OFF must change nothing, ON must be reproducible, a DNF must
 // classify last and score nothing, and NONE of it may move the sim RNG stream.
 

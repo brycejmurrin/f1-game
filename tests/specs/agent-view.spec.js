@@ -1,5 +1,5 @@
 // @ts-check
-// Contract tests for the agent-facing world view (js/game/agentview.js):
+// Contract tests for the agent-facing world view (js/agent/agentview.js):
 //   __apex.world(), __apex.trackInfo(), __apex.terminal()
 //
 // These assert the CONTRACT an LLM agent depends on — payload shape, typed
@@ -1353,7 +1353,7 @@ test.describe("worldModel()", () => {
     }
   });
 
-  // Kept in sync with js/track/scenery-structures.js by tests/unit/span-kinds.test.mjs.
+  // Kept in sync with js/track/scenery/structures.js by tests/unit/span-kinds.test.mjs.
   const SPAN_KINDS = ["guardrail", "fence", "tyreWall", "wall",
                       "bleacher", "scaffoldStand", "terrace", "tieredBowl"];
 
@@ -1364,7 +1364,7 @@ test.describe("worldModel()", () => {
     expect(w.spans.length, "a built Monza reported no linear furniture at all").toBeGreaterThan(0);
     for (const s of w.spans) {
       // SOURCE OF TRUTH: every `ctx.noteSpan(...)` call site in
-      // js/track/scenery-structures.js. This list was four kinds long while the
+      // js/track/scenery/structures.js. This list was four kinds long while the
       // emitters had grown to eight — the grandstand family (bleacher,
       // scaffoldStand, terrace, tieredBowl) became spans later and nothing here
       // followed. tests/unit/span-kinds.test.mjs now fails if the two diverge again.

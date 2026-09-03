@@ -193,7 +193,7 @@ const ALLOWED = [
     why: "'not parked' floor for the lift-off after-fire — below the grip-limited corner floor",
   },
   {
-    file: "js/game/apex.js", expr: "G.player.speed > 8",
+    file: "js/agent/apex.js", expr: "G.player.speed > 8",
     code: "if (G.player && G._testInput && G._testInput.throttle && next && !next.throttle && G.player.speed > 8)",
     // setInput() reproduces js/game.js's `lifted` condition so a scripted
     // throttle lift pops the exhaust the same way a real one does. It must use
@@ -275,7 +275,7 @@ test("stripNonCode preserves every byte offset", () => {
 });
 
 // ── the real thing ────────────────────────────────────────────────────────────
-test("js/game.js and js/game/*.js contain only APPROVED absolute speed thresholds", () => {
+test("js/game.js and every manifest module that reads a speed contain only APPROVED absolute speed thresholds", () => {
   const found = speedLiteralViolations(readFiles());
   const approved = new Set(APPROVED.map(violationKey));
   const unapproved = found.filter((v) => !approved.has(violationKey(v)));

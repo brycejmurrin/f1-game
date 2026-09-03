@@ -9,14 +9,14 @@
     // redraw cost (terrain + road + the whole city into the map, roughly every
     // 10 m of travel — that redraw frame IS the periodic HIGH-tier stall), and
     // the car/lamp maps are per-FRAME depth passes, a fill cost that is "the
-    // HIGH-tier lag, not a memory cap". js/game/perf.js draws the same line
+    // HIGH-tier lag, not a memory cap". js/perf/governor.js draws the same line
     // (its crash sentinel gates on isMobile, "NOT just the memory-safe
     // STANDARD tier"). These three keyed on mobileTier instead, so a phone that
     // opted into GRAPHICS: HIGH took a 2048² sun map plus two per-frame depth
     // passes that GLX refuses on EVERY phone — i.e. the config most likely to
     // be jetsam-killed got the allocations GLX withholds from it.
     // mobileTier is kept as the fallback for a caller that predates
-    // ctx.isMobile: MOBILE_TIER implies IS_MOBILE (js/render/glx.js), so the
+    // ctx.isMobile: MOBILE_TIER implies IS_MOBILE (js/render/glx/glx.js), so the
     // OR can only ever be conservative, never wrong.
     const isMobile = !!ctx.isMobile || !!ctx.mobileTier;
     // Software GL (SwiftShader / llvmpipe / WARP) is fill-bound: a 2048² sun

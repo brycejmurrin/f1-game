@@ -9,7 +9,7 @@ const Car3D = (function () {
   });
   // A livery FINISH is a surface-id remap on painted vertices, not a material
   // uniform: the shaders classify car surfaces 20-30 and branch per id, so a new
-  // finish costs an id in that chain (js/render/shaders/lit.js and its WGSL/TSL
+  // finish costs an id in that chain (js/render/glx/shaders/glsl-lit.js and its WGSL/TSL
   // mirrors) and one row here. `carbon` gets id 31 rather than reusing
   // SURFACES.carbon (21): 21 keeps the vertex colour, so pointing the finish at
   // it just rendered flatter TEAM-COLOURED paint. 31 darkens the albedo to bare
@@ -2885,7 +2885,7 @@ const Car3D = (function () {
       // Root the base into the cover, and only ever DOWNWARD. Raising it would
       // walk the fin out from under its livery decal: sharkFinPanel() and
       // sharkFinBadge() below place that decal off the frozen FIN with no
-      // arguments, and js/game/carmesh.js calls Car3D.sharkFinPanel() and
+      // arguments, and js/car/car-mesh.js calls Car3D.sharkFinPanel() and
       // Car3D.sharkFinBadge() exactly that way. Lowering only grows the blade under the decal, which keeps
       // every graphic exactly where it was.
       const root = (z, y0) => {

@@ -75,18 +75,18 @@
     ]
   ],
     LAZY_AGENT: [
-    "js/game/agentview-raster.js",
-    "js/game/agentview.js",
-    "js/game/apex.js"
+    "js/agent/agentview-raster.js",
+    "js/agent/agentview.js",
+    "js/agent/apex.js"
   ],
     LAZY_EDGES: [
     [
-      "js/game/agentview-raster.js",
-      "js/game/agentview.js"
+      "js/agent/agentview-raster.js",
+      "js/agent/agentview.js"
     ]
   ],
     LAZY_RACE: [
-    "js/game/light-presets.js"
+    "js/lighting/presets.js"
   ],
     SCENERY_DIR: "js/circuits/scenery",
     LAZY_DATA: [

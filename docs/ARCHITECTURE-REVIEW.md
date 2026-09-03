@@ -89,7 +89,7 @@ this one class were found across three passes before the rule got its guard:
 raw `.speed`-vs-literal comparison unless the absoluteness is justified in
 place. The lint sees speeds only; the acceleration case is recorded in its
 header rather than asserted. Physics constants now live in
-`js/game/physics-consts.js`, extracted from game.js under the size
+`js/physics/consts.js`, extracted from game.js under the size
 ratchet.
 
 ---
@@ -100,9 +100,9 @@ Easy to mistake for one system:
 
 - **The driving model** — the per-axle bicycle model: deterministic,
   authoritative, the only thing that decides where the player's car is.
-- **`js/game/debrisworld.js`** — a Rapier side-world for debris and kinematic
+- **`js/physics/debris-world.js`** — a Rapier side-world for debris and kinematic
   car mirrors. It **never moves a game car**; that is its whole contract.
-- **`js/game/incidentsim.js`** — the bounded exception: a windowed takeover
+- **`js/physics/incident-sim.js`** — the bounded exception: a windowed takeover
   that *may* move a car, safety contract in its header. `startRace()` calls
   `IncidentSim.reset()` before `makeCars()` because ownership is by `cars[]`
   index and a stale index would own a different car.
@@ -255,7 +255,7 @@ on the 08-18 perf-hunt board, not this register.
 
   **ROOT CAUSE, COTA — confirmed and measured.** An earlier note here said the
   footprint preflight "does not apply" to `modelGroup`/RAW emissions. That was
-  WRONG: `js/track/models.js` does preflight every group. It just checks the
+  WRONG: `js/track/scenery/models.js` does preflight every group. It just checks the
   wrong thing — it tests the bounds the author DECLARED and never looks at what
   was actually emitted, so a group can pass the guard and then put its geometry
   somewhere else. `cota-amphitheater` declares
@@ -307,7 +307,7 @@ on the 08-18 perf-hunt board, not this register.
   hud-layout coverage is closed (`HUD_LANDSCAPE_ONLY` checks `.hud-top`,
   `.hud-gaps`, `#minimap`, `#hud-sectors`); portrait overlap stays excluded
   behind `#rotate-device`.
-- **A13 zoom/rect sites — closed.** `js/game/css-zoom.js` (`CssZoom`) is the
+- **A13 zoom/rect sites — closed.** `js/ui/css-zoom.js` (`CssZoom`) is the
   shared helper: `viewportRect` / `localBox` / `toLocalDelta` (+ a one-shot
   `rectsAreVisual` probe). Call sites: garage lens shift (`game.js`
   `renderSetupPreview`), `menunav` `nearestPane` + wheel→`scrollTop`,
@@ -409,7 +409,7 @@ prop-vert tripwire (now a fleet cap in `verify-track.cjs`), NIP-01 `OK=false`
 visibility, and the CI sweeps filter that skipped
 four suites' own sources. What remains:
 
-- **Bank-zone re-seat has no distance cap** (`js/track/mesh.js` ~:228-246). A
+- **Bank-zone re-seat has no distance cap** (`js/track/core/mesh.js` ~:228-246). A
   frac zone that lands on a straight is moved to the nearest unclaimed apex
   however far that is. Measured pre-reseat distances: watkins_glen 0.24 →
   951 m, estoril 0.075 → 693 m, mugello 0.88 → 690 m, jacarepagua 0.47 →
@@ -476,8 +476,8 @@ here and their narratives are in the archived journal — so what is left is wha
 survived a fix wave, plus what that session's own gates surfaced. Listed
 most-load-bearing first.
 
-- **Curvature-sign convention — SETTLED (`+k = LEFT`).** `js/track/spline.js`
-  `curvatureRaw`, `findCorners` / `buildKerbs` in `js/track/mesh.js`,
+- **Curvature-sign convention — SETTLED (`+k = LEFT`).** `js/track/core/spline.js`
+  `curvatureRaw`, `findCorners` / `buildKerbs` in `js/track/core/mesh.js`,
   `js/game.js`, and the agent `CONVENTIONS` string all agree. Historical
   "+ = right" wording was comment drift; the physics-facing signs were already
   the measured convention. **Still do not flip any sign without a rendered
@@ -493,7 +493,7 @@ most-load-bearing first.
   was general.** tightFrac 0.225 was not missing dressing: sceneryRange()
   collapsed every authored full-lap span to zero width (wrap01(1) === 0)
   before the full-lap guard could see it, so lap-round barriers tightened
-  ONE node per side on shifted circuits. Fixed in js/track/space.js by
+  ONE node per side on shifted circuits. Fixed in js/track/core/space.js by
   short-circuiting width >= 1 to {0, 1} — a whole lap is frame-invariant.
   Verified: fleet A/B shows redbull only (0.225 -> 1.000), characterization
   + redbull-foundation + tiny + guards all green.
@@ -504,7 +504,7 @@ most-load-bearing first.
   corner at ~108° now flags correctly.
 - **Title-screen CLS — FIXED, and the method is the point.** The title screen
   used to paint in the wrong shape and relay out: `body[data-density]` picks
-  `#overlay`'s one- vs two-column grid, and `js/game/sheetshape.js` wrote it on
+  `#overlay`'s one- vs two-column grid, and `js/ui/sheet-shape.js` wrote it on
   `DOMContentLoaded`, behind all ~146 synchronous scripts. Measured on a quiet
   box at 852×393 over a gzip server: **CLS 0.5241** at `d7a1158`, now **0.0602
   and 0.0824** on two cold loads ("good" is under 0.1), via a tiny inline script
@@ -582,9 +582,9 @@ Deferred with reasoning, none lost:
 - **game.js extraction candidates**, ranked by boundary crossings (§4): garage
   live preview ~415 ln (blocked on a car-drawing seam), camera disclosure
   ~324, pre-race screens ~261, liveries ~161, sky state ~107. (Cam modes was
-  taken: `js/game/cam-modes.js`.) The 2026-08-13 structure panel re-affirmed
+  taken: `js/camera/mode-switch.js`.) The 2026-08-13 structure panel re-affirmed
   this list as the live decomposition plan and made it **forced rather than
-  optional**: both ratchets are saturated (`js/game.js` and `js/game/apex.js`
+  optional**: both ratchets are saturated (`js/game.js` and `js/agent/apex.js`
   each sit one line under their ceiling), so the next net-positive edit to
   either file fails the suite. Candidates may be **added** only after
   re-measurement by function body (brace count) — the gap-to-next-function
@@ -592,13 +592,13 @@ Deferred with reasoning, none lost:
   un-extractable `G` façade block to it, and figures derived that way are
   discredited. The `updateCar()` and `render()` megablocks stay fenced.
 - **`wrapDelta` / shared `clamp`/`lerp` — RESOLVED.** All three now live on
-  `M4` (`js/mat4.js`, the 2nd script tag, so every consumer including the
+  `M4` (`js/core/mat4.js`, the 2nd script tag, so every consumer including the
   deferred backends can bind them at eval; they hang off the existing global
   rather than becoming a third one). Consumers ALIAS
   (`const clamp = M4.clamp;`), so hot paths keep their old call shape. 16 clamp
   copies, 6 lerps and 5 of the 7 arc-wrap sites migrated;
   `tests/unit/shared-math.test.mjs` pins the semantics and RATCHETS against a
-  new private copy. The divergent `js/track/scenery-structures.js` clamp
+  new private copy. The divergent `js/track/scenery/structures.js` clamp
   (`Math.max(lo, Math.min(hi, v))`) was **not a bug** — the two forms differ
   only above an inverted range, on `-0`, and on a non-number argument, and all
   eight of its call sites pass finite numbers with `lo < hi`; migrated anyway,
@@ -606,12 +606,12 @@ Deferred with reasoning, none lost:
   LEFT inline: `updateCar()`'s signed wrap (physics inner loop, and its
   characterization golden is a browser spec), and `headInterp`/`yawVisInterp`,
   which fold an unbounded heading and need a loop rather than one fold.
-- **Elevation-profile drawing duplicated in `js/game/menus.js` — RESOLVED.**
+- **Elevation-profile drawing duplicated in `js/ui/select-screen.js` — RESOLVED.**
   One local `drawElevProfile(cv, t, showEl)`; the only real difference between
   the two blocks was which element carries the `hidden` state.
 - **`simTilt`/`tiltSteering`** now share `tiltTarget()`/`tiltSlew()`;
   `tests/specs/tilt-pipeline.spec.js` pins every stage so the next re-inlining fails.
-- **Mobile-tier detection ×4 — RESOLVED.** `js/render/glx.js` is the one copy
+- **Mobile-tier detection ×4 — RESOLVED.** `js/render/glx/glx.js` is the one copy
   and exports `isMobile` / `mobileTier`; `liverytex.js`, `wgx.js` and
   `js/game.js` read it. glx.js is the 11th tag and the deferred backends load
   last, so the value is always there. This fixes the defect the entry names:
@@ -653,7 +653,7 @@ Deferred with reasoning, none lost:
   plus export-object entries in `reliability.js`, `store.js`, `lighting.js` and
   `light-store.js` whose functions stay because they are internally live.
   Remaining owner decisions, evidence gathered but not acted on:
-  `js/track/themes.js`'s `variants` tables (zero readers anywhere) and
+  `js/track/scenery/themes.js`'s `variants` tables (zero readers anywhere) and
   `CarMesh.getBoostFlame`.
 - **The CSS class-count ratchet is installed; the collapses are not finished.**
   The 2026-08-13 panel recorded its non-installation as execution debt; a

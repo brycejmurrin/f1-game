@@ -4,7 +4,7 @@
 /* loop-fault-repro.mjs — does the frame loop actually survive a transient fault
  * and actually stop on a deterministic one?
  *
- * The loop policy (js/game/loop-health.js) is the kind of thing a source
+ * The loop policy (js/perf/loop-health.js) is the kind of thing a source
  * assertion cannot check: tests/unit/source-integrity.test.mjs pins the SHAPE
  * of tick(), but only a running page can answer whether a fault costs one frame
  * or the session. Round 13 shipped a transient fault (a null player in the

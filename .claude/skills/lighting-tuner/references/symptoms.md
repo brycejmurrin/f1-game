@@ -36,7 +36,7 @@ Monza has `night:false` — prefer vegas/singapore for night probes.
 
 ```sh
 node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
-# edit applyRaceSettings (js/game/atmosphere.js) or a TUNE_DEFS default
+# edit applyRaceSettings (js/lighting/atmosphere.js) or a TUNE_DEFS default
 # bump-cache last, then:
 node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
 diff artifacts/tmp/before.json artifacts/tmp/after.json
@@ -71,7 +71,7 @@ rebuild, `orbit(0.15, 45, 20, 60)`, then screenshot `canvas#game`.
 | Overall image cast | final grade, not scene lights | `lightTune({tint: ±N})` — do not use this to fix a lamp or sun |
 
 A shipped stacking example: `LightPresets["jeddah|dawn|dry"]` in
-`js/game/light-presets.js` sets `sunTemp`, `tint`, `sunElev`, `ambTemp`, and
+`js/lighting/presets.js` sets `sunTemp`, `tint`, `sunElev`, `ambTemp`, and
 the lamp/mist/star knobs together.
 
 ## Contract tests

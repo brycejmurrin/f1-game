@@ -50,7 +50,7 @@ FRACTIONS per track (`turns: [0.0432, 0.1524, ...]`) — no name, direction, or
 radius field lives there at all; it is the curated seed list, nothing else.
 Everything in `trackInfo({what:"corners"})` — the `dir` (`"L"`/`"R"`/`"straight"`),
 `radiusM`, `apexSpeedKph`, etc. — is computed geometrically by `buildCorners()`
-in `js/game/agentview.js` off those fractions, and the only identifier it
+in `js/agent/agentview.js` off those fractions, and the only identifier it
 attaches is `turn: "T" + (i+1)` (`"T1"`, `"T2"`, …, in driving order). If a
 real-world corner name is needed for a caption or a scenery placement, it has to
 come from outside this API (e.g. circuit research/docs) — the game itself does

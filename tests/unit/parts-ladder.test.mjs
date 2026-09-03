@@ -45,7 +45,7 @@ test("never-optimal rows are a downward-only ratchet, and the exemptions are nam
   // should shrink the list.
   //
   // These two are now exempt on a MECHANISM rather than a promise: their
-  // advantage is `wetTread` and the WET_GRIP table in js/game/physics-consts.js
+  // advantage is `wetTread` and the WET_GRIP table in js/physics/consts.js
   // (docs/PHYSICS.md "Weather and tyres"), which the four dry stats do not and
   // should not model. When this list was written that advantage did not exist —
   // gripMult() read the weather and never the tyre, so they really were dead
@@ -91,7 +91,7 @@ test("the career budget cap clears the dearest works car and stays under the top
   // was 2035 and one rung of BUDGET_MULT put its budget at 2340 — the dearest
   // build the catalog can express, to the credit. The economy stopped
   // constraining anything, and RAISE THE CAP bought nothing.
-  const src = fs.readFileSync(path.join(ROOT, "js/game/career.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/career/career.js"), "utf8");
   assert.match(src, /_budgetCap = all - top;/, "budgetCap must be derived from the catalog");
   let all = 0, top = 0;
   for (const cat of M.Parts.CATALOG) {

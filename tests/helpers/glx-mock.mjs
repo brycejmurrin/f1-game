@@ -1,4 +1,4 @@
-/* glx-mock.mjs — boot the REAL js/render/glx.js (plus its shader data and
+/* glx-mock.mjs — boot the REAL js/render/glx/glx.js (plus its shader data and
  * glx/ pass modules, in manifest order) against a recording WebGL2 mock.
  *
  * Why: the renderer's uniform caches, fail-closed guards and cull bookkeeping
@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MANIFEST = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
-const GLX_FILE = "js/render/glx.js";
+const GLX_FILE = "js/render/glx/glx.js";
 // Everything the manifest loads before glx.js is what glx.js needs: Log, M4,
 // the GLSL-as-data shader files, the split pass modules, LampChunks.
 const FILES = MANIFEST.FULL.slice(0, MANIFEST.FULL.indexOf(GLX_FILE) + 1);

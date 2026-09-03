@@ -832,7 +832,7 @@ test.describe("Madrid track foundation migration", () => {
       // night identical) Madrid still measures ~435,000. That floor is the
       // required bespoke content alone (ifemaHall/monumentalStand/urbanBlock/
       // motorway overpass — the landmarks `assertSession` itself requires
-      // below), all raw addBox() and so invisible to js/track/graph.js's
+      // below), all raw addBox() and so invisible to js/track/scenery/graph.js's
       // instancing stats the same way js/track/tracks.js's generic city was
       // invisible on Singapore (CI-3). No bound above ~435,000 was ever
       // achievable here. Real cut applied on top of that floor: two more

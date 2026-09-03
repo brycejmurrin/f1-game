@@ -72,7 +72,7 @@ test("every module that receives the ctx is a declared GameModuleFactory", () =>
   assert.ok(files.length > 15, `only ${files.length} ctx modules found — the create(ctx) scan broke`);
   // agentview-raster.js and net/session.js also spell their entry point create()
   // over a different argument; typing those bags as GameCtx would invent drift.
-  assert.ok(!files.includes("js/game/agentview-raster.js"), "AgentRaster takes a bespoke bag, not the ctx");
+  assert.ok(!files.includes("js/agent/agentview-raster.js"), "AgentRaster takes a bespoke bag, not the ctx");
   assert.ok(!files.includes("js/net/session.js"), "NetSession.create takes {transport}, not the ctx");
 });
 

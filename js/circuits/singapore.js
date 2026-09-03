@@ -49,7 +49,7 @@
       // generic pass there, so for most of side -1 BOTH systems were placing a
       // full building row over the identical street frontage: the generic
       // engine-level city generator (js/track/tracks.js, every 18/26 m, raw
-      // addBox geometry via neonTower — invisible to js/track/graph.js's
+      // addBox geometry via neonTower — invisible to js/track/scenery/graph.js's
       // instancing stats, which is why this was hard to find) stacked
       // underneath cityFront()'s own facades rather than only showing through
       // the gaps between them. These three rules (plus the pit-straight one

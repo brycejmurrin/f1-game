@@ -40,8 +40,8 @@ function load(debris) {
     DebrisWorld: debris,
   });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/game/racecontrol.js"), "utf8"), ctx,
-    { filename: "js/game/racecontrol.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/race-control.js"), "utf8"), ctx,
+    { filename: "js/race/race-control.js" });
   return vm.runInContext("RaceControl", ctx);
 }
 

@@ -16,7 +16,7 @@ lines to ~4,700, and that it is back over 8,000: "extraction moved code out
 once and nothing stopped it accumulating again, because no guard bounds the
 file."
 This session watched that happen in miniature. Two extractions
-(js/game/aerozones.js, js/game/skidmarks.js) took 91 lines out of game.js,
+(js/physics/aero-zones.js, js/fx/skidmarks.js) took 91 lines out of game.js,
 and a concurrent branch put 130 back in over the same period. Nobody did
 anything wrong — there was simply nothing that would notice, and the net
 direction of an unbounded file is always up.
@@ -40,7 +40,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - Lowered from 7975 after the R1 audio-panel extraction (AUDIT-SYNTHESIS)
 - took the MUSIC & SOUND panel out — the ratchet follows the file down.
 - 7795 -> 7804 for aTop(): the ground-truth acceleration next to vTop(), plus
-- the comment recording the mismatch it fixes (js/game/quali.js modelled the
+- the comment recording the mismatch it fixes (js/race/quali-model.js modelled the
 - field at pace-5 acceleration into a pace-scaled ceiling). It belongs beside
 - vTop()/vStd()/aStd() and nowhere else, so this is a bug-explaining growth of
 - exactly the kind the note above tolerates — not a feature.
@@ -75,7 +75,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - the file carries both sets of lines, so neither side's number fits it.
 - Set from the merged file: 7944.
 - 7944 -> 7949 for the lighting tuner's COPY ALL: two more thin passes through
-- to js/game/light-store.js (copyToTracks/restore) beside the four that were
+- to js/lighting/profiles.js (copyToTracks/restore) beside the four that were
 - already here, plus the comment saying what the two modes mean. The operation
 - itself is 40 lines and landed in the store, which is the shape this ratchet
 - is asking for — what stayed is the façade line the other five files reach.
@@ -124,7 +124,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - already gone to 0.
 - 8036 -> 8018: LOWERED, not raised. The mobile-only GRAPHICS toggle (22
 - lines of button wiring + the apex26.gfxHigh boot bit) moved out to
-- js/game/gfx-quality.js, which owns #pm-gfx for every device now. This is
+- js/perf/quality-preset.js, which owns #pm-gfx for every device now. This is
 - the direction the ratchet exists to push: a feature landed and game.js got
 - SMALLER, because the preset's tier floor goes into PerfGov.tier()'s max()
 - instead of rewriting the eight PerfGov.tier() gates in the render path.
@@ -292,7 +292,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - -> 8333 perf-hunt: S3 propBatches draw/free/shadow + envCull road chunk.
 - -> 8321 bug-hunt: qualiRivalDriverIds() before NetPlay hand-off (+10).
 - -> 8361 smarter AI drivers: wire AiDrive (OT/ERS/brake/lane + rating axes)
-- into updateCar. Decision math lives in js/game/ai-drive.js (188 lines);
+- into updateCar. Decision math lives in js/physics/ai-drive.js (188 lines);
 - this raise is call-site glue + nearbyN / soft brakeLvl path.
 - -> 8377 deploy∪perf-hunt∪WGX-present: AiDrive + energy short-circuit +
 - propBatches/envCull + WGX software-present merge (split-newline count).
@@ -330,7 +330,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - injector). window.__apex = null is the eval-time latch the global
 - registry pins on this file; ApexApi.create stays call-time after the
 - inject. Bug-explaining growth at the boot site, not a feature.
-- 8635 -> 8512: UI SIZE / HUD SIZE + RESOLUTION moved to js/game/ui-scale.js
+- 8635 -> 8512: UI SIZE / HUD SIZE + RESOLUTION moved to js/ui/scale.js
 - (UiScale.create(G)). 0 new physics; one deferred G.updateTrackPreview
 - beside buildSelect. Comments moved with the block.
 - 8512 -> 8533: pool the 8 AiDrive ctx literals in updateCar onto reused
@@ -369,7 +369,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - quali .q-done Escape flash (the handler is here). All three fix
 - recorded UX defects at their existing sites. 8621 -> 8627: the vt()
 - View-Transition wrap of the title/select/garage spine — the swap
-- handlers live here, the helper in js/game/menus.js.
+- handlers live here, the helper in js/ui/select-screen.js.
 - 8627 -> 8635: syncRotateBlocker learns the pause-card/blocker exclusion
 - (one line + the bug comment): #pausemenu is a modal <dialog> now, so an
 - open card out-layers the z-9000 blocker and refuses focus to its
@@ -405,7 +405,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - DIFFERENT points, so the turntable swung the car across the frame instead
 - of rotating it, and both sat behind the measured car centre), plus the
 - studio backdrop colour, the floor draw and its material opts. The floor
-- MESH itself went to js/game/carmesh.js, which is where the geometry
+- MESH itself went to js/car/car-mesh.js, which is where the geometry
 - belongs and which this ratchet does not bound. Measured 8709.
 - 8715 -> 8721: frame.roadChunkLamps, the RESOLVED per-chunk-road state.
 - PER-CHUNK ROAD could not change any outcome before it: the road is drawn
@@ -507,7 +507,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - transient fault killing the session, and fixes the one instance; round 14
 - fixes the policy. tick() now tolerates a bounded run of consecutive faults
 - that any clean frame pays back, and stops at the cap exactly as before. The
-- policy, the caps and the heartbeat live in the new js/game/loop-health.js
+- policy, the caps and the heartbeat live in the new js/perf/loop-health.js
 - precisely so game.js pays seven lines and not eighty — six of the seven are
 - the comment saying which half is here. PERF-FINDINGS 2k.
 - MERGED, three lineages deep. Each block above is a delta measured against
@@ -619,11 +619,11 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - generated global, ApexRoster (js/roster.js, from tools/manifest.cjs via
 - tools/gen-shell.mjs). The loader logic stays; only the copies left.
 
-## `js/game/apex.js` — last ceiling 2600
+## `js/agent/apex.js` — last ceiling 2600
 
 - Cohesive-today files (a dev API, an agent view, a procedural mesh), so
 - these are drift alarms rather than extraction targets. Note game.js is NOT
-- the largest file in the repo — js/game/light-presets.js is (see below).
+- the largest file in the repo — js/lighting/presets.js is (see below).
 - 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
 - — a dev-API hook growing the dev API is the file doing its job.
 - 3055 -> 3060 for lightState.bakedLights/lampPosts — MCP dens=1 vs dens=2 was
@@ -714,7 +714,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - STRING compare on driver id — the exact defect the histogram exists to fix.
 - 2590 -> 2595 (split-newline count) diag().env.gpuErrors/backendState — the bound backend's own account (api, first GPU/WGSL error) for phone reports · deploy side: +5: garageCam reports effDist/fitD/panelFrac — the auto path is the one that can misframe, and the hook reported a distance the camera does not use
 
-## `js/game/agentview.js` — last ceiling 2452
+## `js/agent/agentview.js` — last ceiling 2452
 
 - +9: the parts hook reports the CAREER cap, not the free-play 780. A career
 - at a team whose factory build costs 1,500 was reported as remaining: -720
@@ -912,7 +912,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - failing silently, which is the one real risk of the split.
 - 2359 -> 2360 on the other lineage for the one call that appends the painted
 - grid boxes to the start-line decal. The 77 lines of box geometry went to
-- js/track/mesh.js, which this ratchet does not bound and which already owns
+- js/track/core/mesh.js, which this ratchet does not bound and which already owns
 - buildRoad and upOf; tracks.js pays only for the call, and riding the
 - existing startline mesh is what keeps that to a single line instead of a
 - mesh registration, a draw call, a free path and a hideMeshes key.
@@ -924,7 +924,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - noteSuppressed, and carries the measured reason its margin is left
 - alone (an oriented test suppresses MORE — PERF-FINDINGS 2u).
 
-## `js/game/light-presets.js` — last ceiling 15508
+## `js/lighting/presets.js` — last ceiling 15508
 
 - ── Round-6 additions: the unguarded giants, set AT measured (test metric,
 - split-newline count) so any growth is a deliberate raise here. Each line
@@ -1234,7 +1234,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - the rule is re-measure, never add either side's number on paper.
 - 2924 -> 3077 (split-newline count) 2026-09-03: placeholder material arrays carry the pack's sampling state (three compiles textureLoad+clamp from a Nearest placeholder — the phone unlit-track defect); WGSL compile capture; AUTO self-heal to three-WebGL2 on early GPU errors; phones never 'software'; soft-present stale-read guard; backendState on the façade; hidden device loss defers its reload   // +1: lampShadowKeep returns on the corrected key
 
-## `js/render/glx.js` — last ceiling 2259
+## `js/render/glx/glx.js` — last ceiling 2259
 
 - GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
 - 1929 -> 1936: the comment recording why the per-chunk knob is no longer a
@@ -1342,7 +1342,7 @@ live in `ratchets.json`.
   `_envNeverComing()` term's dead body and its two write-only latches removed
   (added and reverted 2026-09-02; zero callers). The reverted design is
   preserved in `gfx-backend-canary.test.mjs`.
-- `js/render/glx.js` 2259 -> **2271**: `envFaceBegin` re-tests the disable
+- `js/render/glx/glx.js` 2259 -> **2271**: `envFaceBegin` re-tests the disable
   latch AFTER the lazy `envInit()`, and `envFaceEnd` lowers `_envActive`
   before its early return. Without both, a driver whose probe FBO is
   incomplete left `_envActive` armed against a null framebuffer and the

@@ -198,7 +198,7 @@ jobs:
 
       # GLX — the DEFAULT backend, and until now the only one this workflow
       # never looked at. Both checks above force three.js (TLX); a change to
-      # js/render/glx.js could regress every player's renderer and this job
+      # js/render/glx/glx.js could regress every player's renderer and this job
       # would still go green. That is how a flagged GLX path came to be
       # described as "gated on a real GPU" when nothing here could test it.
       - name: Game check — GLX / WebGL2 (the default backend)

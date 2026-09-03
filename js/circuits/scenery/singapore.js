@@ -301,7 +301,7 @@
           for (let j = 0; j < 5; j++) {
             const c = vadd(a.c, a.t, (j - 2) * 10);  // 10 m spacing — ribs are 2 m wide
             addPrism(out, vadd(c, a.u, 7),  [2.2, 4.5, 9], [0.88, 0.88, 0.92], [a.r, a.u, a.t]);
-            // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/geom.js) — this is the
+            // addCyl is BASE-anchored (the addPrism base-anchoring note in js/track/core/geom.js) — this is the
             // pier holding the rib up: base at the deck (c), rising the full
             // height 7 so its top meets the rib's base flush. The old
             // `vadd(c, a.u, 3.5)` (h/2) floated the pier's own base 3.5 m off

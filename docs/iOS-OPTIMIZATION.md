@@ -33,7 +33,7 @@ no permission gate. iOS 14.5+ pairs PS5/Xbox controllers over Bluetooth and
 reports the W3C "standard" mapping, so the same code path serves desktop and
 iOS.
 
-Key implementation points (`js/game/input.js`):
+Key implementation points (`js/input/input.js`):
 
 - **Poll once per frame.** The Gamepad API has no change events — you read a
   fresh snapshot each frame. `Input.poll()` runs at the top of the game loop,

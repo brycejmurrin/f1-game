@@ -3,7 +3,7 @@
  * @doc Author-time asset bake CLI: `bake-synthetic[-models]`, `bake-atlas`, `bake-model`, `verify` (licence + md5 + budget).
  * @skill asset-pack
  * Apex 26 — asset bake CLI.  AUTHOR-TIME ONLY: never loaded by the game, never
- * run by a normal test pass.  Produces `assets/pack/`, which js/render/assets.js
+ * run by a normal test pass.  Produces `assets/pack/`, which js/render/shared/assets.js
  * loads at runtime.  See docs/research/ASSET-API-RESEARCH.md.
  *
  * The rule this tool exists to enforce: THE GAME NEVER TALKS TO AN ASSET CDN.
@@ -63,7 +63,7 @@ const BUDGET_BYTES = 8 * 1024 * 1024;
 // is itself redistributed.  Anything else is a deliberate, reviewed exception.
 const ALLOWED_LICENCES = new Set(["CC0", "CC0-1.0", "Apex26-Procedural"]);
 
-// MAT ids — MUST match TrackGeom.MAT (js/track/geom.js).  Asserted by
+// MAT ids — MUST match TrackGeom.MAT (js/track/core/geom.js).  Asserted by
 // tests/unit/assets-pack.test.mjs so the two cannot drift.
 const MAT = {
   FLAT: 0, CONCRETE: 1, BRICK: 2, GLASS: 3, METAL: 4, WOOD: 5, FOLIAGE: 6,
@@ -296,7 +296,7 @@ function downsample(rgba, w, h, f) {
 }
 
 // ───────────────────────── tiling value noise ────────────────────────────────
-// Ports the shader's vnoise/hash21 (js/render/shaders/chunks.js) but TILING:
+// Ports the shader's vnoise/hash21 (js/render/glx/shaders/glsl-chunks.js) but TILING:
 // a baked tile has to wrap seamlessly at the texture edge, which the shader's
 // unbounded world-space noise never had to.  Lattice coordinates are taken
 // modulo the period, so the left edge and the right edge sample the same row.
@@ -334,7 +334,7 @@ function fbm(x, y, baseFreq, octaves, gain = 0.5) {
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 // Height field per material, in tile-normalised (0..1) coordinates.  Mirrors
-// matBumpHeight()'s pattern vocabulary (js/render/shaders/lit.js) so a
+// matBumpHeight()'s pattern vocabulary (js/render/glx/shaders/glsl-lit.js) so a
 // baked layer reads as the same material, just finer.  Returns 0..1.
 function matHeight(mid, u, v) {
   switch (mid) {
@@ -388,7 +388,7 @@ function matHeight(mid, u, v) {
     }
     case MAT.ASPHALT:
       // Deliberately the flattest in the table — see the MAT.ASPHALT note in
-      // js/track/geom.js.  Fine aggregate only: no macro term can crawl.
+      // js/track/core/geom.js.  Fine aggregate only: no macro term can crawl.
       return clamp01(0.42 + fbm(u, v, 22, 4) * 0.42 + fbm(u, v, 60, 2) * 0.16);
     default: return 0.5;
   }
@@ -567,7 +567,7 @@ function writeAX26(mesh, matName) {
 // model survives GLTF.toMesh here it will survive it at runtime, and the two
 // can never disagree about what is supported.
 async function loadGLTFModule() {
-  const src = fs.readFileSync(path.join(ROOT, "js", "render", "gltf.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js", "render", "shared", "gltf.js"), "utf8");
   const vm = await import("node:vm");
   const ctx = {
     Math, Array, Object, JSON, Uint8Array, Uint16Array, Uint32Array, Int16Array,
@@ -590,7 +590,7 @@ async function bakeModel(args) {
   const [id, file] = args.filter((a) => !a.startsWith("--"));
   if (!id || !file) fail("usage: bake-model <id> <file.glb> [--mat MATNAME] [--scale N]");
   const GLTF = await loadGLTFModule();
-  if (!GLTF || typeof GLTF.toMesh !== "function") fail("could not load js/render/gltf.js");
+  if (!GLTF || typeof GLTF.toMesh !== "function") fail("could not load js/render/shared/gltf.js");
 
   const buf = fs.readFileSync(path.resolve(file));
   const scale = floatArg(args, "--scale", 1);
@@ -662,7 +662,7 @@ function importPack(args) {
   const inMan = JSON.parse(fs.readFileSync(path.join(src, "manifest.json"), "utf8"));
   const srcSize = inMan.materials.size | 0;
   const target = intArg(args, "--size", 256);
-  // A second, smaller variant for the mobile tier. js/render/assets.js looks for
+  // A second, smaller variant for the mobile tier. js/render/shared/assets.js looks for
   // materials.low on a phone and SILENTLY falls back to the full-size strips
   // when it is absent — so without this, mobile pays the desktop download and
   // roughly 12 MB of VRAM across both arrays, which is the opposite of what the

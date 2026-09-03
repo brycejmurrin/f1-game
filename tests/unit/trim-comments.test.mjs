@@ -24,7 +24,7 @@ test("trim-comments removes dividers and loc pointers on a fixture", () => {
     "   Line three is more prose.",
     "*/",
     "// ---------- section ----------",
-    "// The foo lives in js/log.js",
+    "// The foo lives in js/core/log.js",
     "const x = 1;",
     "// keyboard",
     "let keyLeft = false;",

@@ -3,7 +3,7 @@
 // WHY THIS EXISTS. The grid's geometry — pole 14 m before the line, 8 m between
 // slots, a lateral stagger of 40% of the local half-width capped at 3 m — lived
 // only inside gridUp() in js/game.js, pinned by no test at all. The boxes are
-// built in js/track/mesh.js, a different file in a different layer, and the two
+// built in js/track/core/mesh.js, a different file in a different layer, and the two
 // would have drifted apart in complete silence: the paint would still LOOK like
 // a grid, just not the one the cars stand on. TrackMesh.gridSlot() is now the
 // single definition and this suite is what holds the paint to it.

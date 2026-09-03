@@ -21,8 +21,8 @@ async function dataReady(page) {
   // it before everything); without it this standalone harness threw
   // "Log is not defined" the moment a test called DataHub.open — red since
   // the logging landed, whenever the suite actually ran.
-  await page.addScriptTag({ url: "/js/log.js" });
-  await page.addScriptTag({ url: "/js/mat4.js" });
+  await page.addScriptTag({ url: "/js/core/log.js" });
+  await page.addScriptTag({ url: "/js/core/mat4.js" });
   for (const u of ["api", "telemetry", "export", "schedule", "standings", "lastrace", "live", "hub"])
     await page.addScriptTag({ url: "/js/data/" + u + ".js" });
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");

@@ -8,7 +8,7 @@ geometry bug.
 1. **Identify the layer first.** If keys, wheel, or Escape go to the wrong
    place, inspect `UiLayers.top()` / `UiLayers.anyOpen()` before touching
    individual modules. New full-screen overlays must be added to the internal
-   `DEFS` array in `js/game/uilayers.js` (only `LAYER_IDS` is exported — do
+   `DEFS` array in `js/ui/layers.js` (only `LAYER_IDS` is exported — do
    not assign `UiLayers.DEFS`).
 
 2. **Use the declared close door.** For real dialogs, let `TopModal` mirror

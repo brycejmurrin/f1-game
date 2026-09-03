@@ -289,7 +289,7 @@ editing.
 
 ## The sun-shaft march, found twice independently — LANDED
 
-`js/render/shaders/post.js:1129` and `js/render/webgpu/wgsl-post.js:802` carry
+`js/render/glx/shaders/glsl-post.js:1129` and `js/render/webgpu/wgsl-post.js:802` carry
 the same composite block, and the GLX and WGX agents found the same defect in it
 without seeing each other's work:
 
@@ -473,7 +473,7 @@ The value of a second read is mostly in what it takes AWAY.
 11. **CPU: `makeFrustumPlanes` runs twice per frame** from the identical VP into
     the same pool (`game.js:6074` and `:7133`).
 12. **CPU: `putBoundedMesh` allocates its `create` closure on every call**,
-    including the ~66 cache hits a night frame takes. `js/track/mesh.js:398`
+    including the ~66 cache hits a night frame takes. `js/track/core/mesh.js:398`
     hoisted the identical arrow for exactly this reason.
 
 Deliberately NOT done, with the reason: **`applyMaterialNormal`'s `mid > 16`

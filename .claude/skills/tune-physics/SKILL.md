@@ -25,7 +25,7 @@ absolute magnitudes.
 | `yawInertia` (`YAW_INERTIA` 0.7) | rotational inertia | lazier (`<1` snappier) |
 | `pace` (`PACE` 0.840) | ground-speed scale | faster everywhere |
 
-Boot-effective defaults come from `js/game/steer-tuning.js`
+Boot-effective defaults come from `js/input/steer-tuning.js`
 `applySteerTuning()` — game.js literals (`3.2 m` / `PACE 1.0`) are dead.
 `PACE` is a scale, not a cap; compare speeds via `vTop()`/`vStd()`/`aStd()`.
 

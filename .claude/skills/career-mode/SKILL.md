@@ -40,7 +40,7 @@ Do **not** use this for:
 | Season shape | `career.season` matches standalone `apex26.season` so standings/HUD/results share code |
 | Economy | Credits buy research; fitting owned parts is free but capped by budget level |
 | Research facility | `Career.facilityDiscount()` — discount on **research cost only**; does NOT raise the fitted part budget cap |
-| Fitted budget cap | `Career.budget()` / `budgetLvl` — separate from facility; `Career.upgradeBudget()` lives on `Career` in `js/game/career.js` (the UI in `career-ui.js` only calls it) |
+| Fitted budget cap | `Career.budget()` / `budgetLvl` — separate from facility; `Career.upgradeBudget()` lives on `Career` in `js/career/career.js` (the UI in `career-ui.js` only calls it) |
 | Sponsors | **MY TEAM only** — `sponsorAt()`/`sponsor()` return `null` whenever `career.flavour !== "myteam"`; a DRIVER career never has one, by design (a driver is paid a salary, an owner is paid by sponsors) |
 | Randomness | Use `Career.rnd(...parts)`; do not consume `simRnd` or `Math.random` |
 | Ratings | `DriverRatings` apply in all modes; career adds deltas on top |
@@ -65,7 +65,7 @@ Hooks:
 **Proving a sponsor was just paid is NOT a `careerState()` read.**
 `Career.settleRound()`'s return value (including `sponsorPay`, the amount paid
 this round) is stashed in `js/game.js`'s `careerSettlement` and reached only via
-the `G` façade (`G.careerSettlement`, consumed by `js/game/results.js` for the
+the `G` façade (`G.careerSettlement`, consumed by `js/ui/results-sheet.js` for the
 results screen) — **there is no `__apex` hook that surfaces `sponsorPay`
 directly.** And `careerState().sponsor` reads `sponsor()`, which resolves off
 `career.season.round` — the round counter **already incremented** by the time

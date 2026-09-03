@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// AGENTS.md: logging goes through Log (js/log.js), never bare console.* —
+// AGENTS.md: logging goes through Log (js/core/log.js), never bare console.* —
 // namespace first arg, console threshold warn, ring buffer info. Stated for
 // years, enforced never; a round-6 census found one live violation (fixed)
 // and one legitimate exception. This scan keeps it that way. The exception:
@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const ALLOW = {
-  "js/log.js": "the Log implementation itself",
+  "js/core/log.js": "the Log implementation itself",
   "js/net/nostr.js": "console.warn interception seam for a Trystero vendor warning (save/replace/restore, not logging)",
 };
 
@@ -29,7 +29,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-test("no bare console.* outside js/log.js (allowlisted seams excepted)", () => {
+test("no bare console.* outside js/core/log.js (allowlisted seams excepted)", () => {
   const bad = [];
   for (const p of walk(path.join(ROOT, "js"))) {
     const rel = path.relative(ROOT, p).split(path.sep).join("/");

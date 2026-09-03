@@ -41,7 +41,7 @@ const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 // netplay.js closes over NetSnapshot and NetSession as globals, so they have to
 // exist by the time create() runs. Loading the real ones (rather than stubbing)
 // keeps the interp buffer honest and costs nothing.
-globalThis.M4 = eval(src("js/mat4.js") + ";M4");   // shared math island — snapshot.js binds M4 at eval
+globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");   // shared math island — snapshot.js binds M4 at eval
 const NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;
@@ -336,7 +336,7 @@ const NetHandshake = eval(src("js/net/handshake.js") + ";NetHandshake");
 globalThis.NetHandshake = NetHandshake;
 globalThis.document = { getElementById: () => null, addEventListener: () => {} };
 // Three teams so the guest's seat, the host's seat and a bystander's are all
-// distinct. driverId is seasonDriverId's format (js/game/store.js): "team:seat".
+// distinct. driverId is seasonDriverId's format (js/core/store.js): "team:seat".
 globalThis.Teams = {
   LIST: [
     { id: "alpha", name: "Alpha", drivers: [{ code: "AL1", name: "A One", num: 1 }, { code: "AL2", name: "A Two", num: 2 }] },

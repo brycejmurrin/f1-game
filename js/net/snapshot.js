@@ -13,7 +13,7 @@ const NetSnapshot = (function () {
   // Flags packed above the gear nibble.
   const F_DEPLOY = 0x10, F_OFFROAD = 0x20, F_KERB = 0x40, F_BRAKE = 0x80;
 
-  const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
+  const clamp = M4.clamp;                     // shared scalar helper (js/core/mat4.js)
   const i32 = (v) => (v | 0);
 
   const encS = (s) => clamp(Math.round(s * 100), 0, 4294967295) >>> 0;
@@ -101,7 +101,7 @@ const NetSnapshot = (function () {
   // rotating through the heading wrap spins the wrong way — once per lap,
   // every lap, which reads as a physics bug rather than a netcode one.
   function lerpWrapped(a, b, u, period) {
-    const d = M4.wrapDelta(b - a, period);   // shortest way round (js/mat4.js)
+    const d = M4.wrapDelta(b - a, period);   // shortest way round (js/core/mat4.js)
     const v = a + d * u;
     return ((v % period) + period) % period;
   }
@@ -154,7 +154,7 @@ const NetSnapshot = (function () {
       o.head = lerpWrapped(a.head, b.head, u, TAU);
       o.speed = a.speed + (b.speed - a.speed) * u;
       o.extrapolated = false;
-      const d = M4.wrapDelta(b.s - a.s, total);   // shortest way round (js/mat4.js)
+      const d = M4.wrapDelta(b.s - a.s, total);   // shortest way round (js/core/mat4.js)
       const w = splitS(a.s + d * u);
       o.s = w.s;
       if (Number.isFinite(a.lap)) o.lap = a.lap + w.laps;

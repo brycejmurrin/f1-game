@@ -43,9 +43,9 @@ function load(options = {}) {
     Parts: { getFactorySetup: () => ({}) },
     DriverRatings: { get: () => ({ pace: 50, craft: 50, awareness: 50, consistency: 50, experience: 50 }) },
   });
-  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/game/store.js"), "utf8"), ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/game/career.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/core/store.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx);
   return {
     Career: vm.runInContext("Career", ctx), disk,
     foreign: (key) => listeners.get("storage")({ key, newValue: disk.get(key) }),
@@ -141,7 +141,7 @@ test("settleRound refuses a conflicted save before mutating results", () => {
 });
 
 test("career hub BACK hides the title STANDINGS chip from the standalone season", () => {
-  const src = readFileSync(join(ROOT, "js/game/career-ui.js"), "utf8");
+  const src = readFileSync(join(ROOT, "js/career/career-ui.js"), "utf8");
   assert.match(src, /mb-standings.*SeasonCal\.hasProgress\(G\.season\)/);
   assert.match(src, /\$\("cr-go"\)\.disabled = !!st\.hire \|\| Career\.conflicted\(\)/);
 });

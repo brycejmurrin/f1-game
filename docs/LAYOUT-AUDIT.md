@@ -195,7 +195,7 @@ thresholds.
 | **viewport size** | how big is the window | `@media (min-width: …)` |
 | **viewport shape** | is the WINDOW tall or wide | `@media (orientation: …)` — and almost nothing should need this |
 | **container size** | how much room did this PANEL get | `@container sheet (min-width: …)` |
-| **container shape** | is the PANEL tall or wide | `data-shape="tall\|wide"`, written by `js/game/sheetshape.js` — CSS cannot ask (see below) |
+| **container shape** | is the PANEL tall or wide | `data-shape="tall\|wide"`, written by `js/ui/sheet-shape.js` — CSS cannot ask (see below) |
 | **input modality** | finger, mouse, or both | `pointer` / `any-pointer` / `any-hover`; `body.desktop` |
 | **density** | how big should a target be | the `--tap` / `--pad` / `--gap` token ladder in `css/tokens.css` |
 | **safe area** | what hardware is in the way | `env(safe-area-inset-*)` via the `--safe-t/r/b/l` tokens |
@@ -248,7 +248,7 @@ Two traps worth writing on the wall:
   circuit list turned a 76px action bar into 358px. Use `min-content` for a track
   a scroller spans into.
 - **A modal in the TOP LAYER ignores z-index entirely.** Every `.screen.dim` is a
-  `<dialog>` opened with `showModal()` (`js/game/topmodal.js`), so nothing in the
+  `<dialog>` opened with `showModal()` (`js/ui/modal.js`), so nothing in the
   document can paint over it and no `overflow: hidden` or transformed ancestor
   can clip it. Do not add a `z-index` to one — it does nothing, and an inert
   number that looks like a working ladder is worse than a ladder. Ordering
@@ -325,7 +325,7 @@ only one of them is fixed in `css/`.
 
   Three real ones, all found by eye, none by this tool:
 
-  - `#sel-tracks` got TWO PIXELS on a rotated monitor. `js/game/sheetshape.js`
+  - `#sel-tracks` got TWO PIXELS on a rotated monitor. `js/ui/sheet-shape.js`
     exists because of it; the header of that file is the write-up.
   - `#sel-tracks` again, on a landscape phone at UI SIZE 150% — the same two
     pixels down a different path (flex shrink), while portrait scored green at

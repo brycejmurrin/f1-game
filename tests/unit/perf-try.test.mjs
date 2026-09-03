@@ -14,8 +14,8 @@
    file broke on a one-token refactor that changed no behaviour, so every
    assertion is now one of:
      - BEHAVIOUR through a harness — js/game.js frames pumped in
-       tools/game-vm.cjs with a recording GLX stub, js/render/glx.js booted on
-       the tests/helpers/glx-mock.mjs WebGL2 mock, js/track/models.js in a VM;
+       tools/game-vm.cjs with a recording GLX stub, js/render/glx/glx.js booted on
+       the tests/helpers/glx-mock.mjs WebGL2 mock, js/track/scenery/models.js in a VM;
      - a SHADER-TEXT pin, kept because a Node test has no GPU and the composed
        GLSL/WGSL/TSL is the only observable — matched on the comment-stripped
        source, loosely, on the identifier and the shape of the gate;
@@ -94,8 +94,8 @@ test("PerfTry module and the PERF tab are gone", () => {
   const html = read("index.html");
   assert.doesNotMatch(html, /pm-tab-performance|pm-panel-performance|perf-try\.js/);
   assert.doesNotMatch(read("tools/manifest.cjs"), /js\/game\/perf-try\.js/);
-  assert.doesNotMatch(read("js/game/settings-nav.js"), /"performance"/);
-  for (const f of ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js", "js/game/lighting.js"])
+  assert.doesNotMatch(read("js/ui/settings-tabs.js"), /"performance"/);
+  for (const f of ["js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"])
     assert.doesNotMatch(read(f), /skyLate|flareGate|envCull|lampFogGate/);
   assert.doesNotMatch(read("js/game.js"), /_skyLate|PerfTry/);
 });
@@ -180,7 +180,7 @@ test("props fuse uses sealed typed accumulators", () => {
   // The model helper in a VM: scratch() hands out growable typed accumulators
   // and sealGeometry() trims them to exact-length TypedArrays.
   const ctx = vm.createContext({ Math, Number, Array, Float64Array, Float32Array, Uint32Array, Object, JSON });
-  vm.runInContext(read("js/track/models.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/track/models.js" });
+  vm.runInContext(read("js/track/scenery/models.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/track/scenery/models.js" });
   const TM = vm.runInContext("TrackModels", ctx);
   const geo = TM.scratch(4);
   assert.equal(geo.pos.length, 0);
@@ -206,7 +206,7 @@ test("already-landed leftovers stay in the product path", () => {
   const tracks = read("js/track/tracks.js");
   assert.match(tracks, /\bMASS_CELL\s*=\s*\d+/, "the mass grid keeps a cell size");
   assert.match(tracks, /\bmassGridInsert\b/, "masses are inserted into the grid, not scanned linearly");
-  const geom = shader("js/track/geom.js");
+  const geom = shader("js/track/core/geom.js");
   assert.match(geom, /\(i\s*\+\s*1\)\s*\/\s*seg\s*\*\s*6\.2832/, "ring tables close with (i+1)/seg, never with an integer %seg wrap");
   // Angle wrap via %seg moves the last edge (6.2832 ≠ 2π). Integer %seg on
   // a ring-vertex table (addMountain) is the correct close and is allowed.
@@ -227,7 +227,7 @@ test("env-probe radial cull is 300 m without a toggle", () => {
   assert.equal(tight.cullDist, 120, "a tighter main-camera cull (tier-3 fog) is kept, never widened to 300");
   h.GLX.envFaceEnd(1);
   assert.equal(tight.cullDist, 120);
-  const glx = shader("js/render/glx.js");
+  const glx = shader("js/render/glx/glx.js");
   assert.doesNotMatch(glx, /typeof PerfTry|PerfTry\.(on|defines|withWgslConsts)/);
 
   // game.js: the chunk-ribbon and probe gates are tier reads, not a toggle.
@@ -249,8 +249,8 @@ test("env-probe radial cull is 300 m without a toggle", () => {
 });
 
 test("GLSL / WGSL / TSL keep only the gated ON path", () => {
-  const post = shader("js/render/shaders/post.js");
-  const lit = shader("js/render/shaders/lit.js");
+  const post = shader("js/render/glx/shaders/glsl-post.js");
+  const lit = shader("js/render/glx/shaders/glsl-lit.js");
   assert.doesNotMatch(post, /#ifdef OPT_FLAREGATE|#else/);
   assert.match(post, /sunVis\s*=\s*\(\s*uFlareStr\s*>\s*0\.0\s*&&\s*uSunUV\.x\s*>=\s*0\.0/);
   assert.doesNotMatch(lit, /#ifdef OPT_LAMPFOGGATE/);
@@ -285,7 +285,7 @@ test("SETTINGS still has GRAPHICS: HIGH and three category tabs", () => {
 test("sun GGX and clearcoat skip backfaces on all three backends", () => {
   // specCol is * litNoL (= NoL * …); ccCol is * NoLg. A backface paid two
   // GGX evals for 0. Same shape as the lamp NoLl gate already in the tree.
-  const lit = shader("js/render/shaders/lit.js");
+  const lit = shader("js/render/glx/shaders/glsl-lit.js");
   assert.match(lit, /if\s*\(\s*NoL\s*>\s*0\.0\s*\)\s*\{\s*float\s+D\s*=\s*D_GGX/);
   assert.match(lit, /NoLg\s*=\s*max\(\s*dot\(\s*Ngeo\s*,\s*L\s*\)\s*,\s*0\.0\s*\);[\s\S]{0,300}?if\s*\(\s*NoLg\s*>\s*0\.0\s*\)/);
   const chunks = shader("js/render/webgpu/wgsl-chunks.js");
@@ -297,7 +297,7 @@ test("sun GGX and clearcoat skip backfaces on all three backends", () => {
 });
 
 test("composite skips dummy SSAO / bloom / godray fetches", () => {
-  const post = shader("js/render/shaders/post.js");
+  const post = shader("js/render/glx/shaders/glsl-post.js");
   assert.match(post, /uniform\s+float\s+uHaveGodray\b/);
   assert.match(post, /aoV\s*=\s*1\.0;\s*if\s*\(\s*uAOTexel\.x\s*>\s*0\.0\s*\)/);
   assert.doesNotMatch(post, /else\s+aoV\s*=\s*texture\(\s*uSSAO/);
@@ -348,7 +348,7 @@ test("composite skips dummy SSAO / bloom / godray fetches", () => {
 });
 
 test("SSAO reconstructs the centre from one depth sample", () => {
-  const post = shader("js/render/shaders/post.js");
+  const post = shader("js/render/glx/shaders/glsl-post.js");
   assert.match(post, /vec3\s+viewPosD\s*\(\s*vec2\s+uv\s*,\s*float\s+d\s*\)/);
   assert.match(post, /vec3\s+P\s*=\s*viewPosD\(\s*vUV\s*,\s*d\s*\);/);
   // The 1-arg wrapper stays for contact-shadow sample sites (no overload in ES 3.00).
@@ -376,7 +376,7 @@ test("fog stack skips pow/exp when density and mist are off", () => {
   // fd==0 → f==0 → mix is identity. Setup preview / carview / tuner-zero
   // used to still pay two sunAmt pows + tint + exp. Mist keeps its own
   // gate so a density-0 + mist-on tuner frame still tints.
-  const lit = shader("js/render/shaders/lit.js");
+  const lit = shader("js/render/glx/shaders/glsl-lit.js");
   assert.match(lit, /if\s*\(\s*uFogDensity\s*>\s*0\.0\s*\|\|\s*uGroundMist\s*>\s*0\.001\s*\)/);
   assert.match(lit, /if\s*\(\s*uFogDensity\s*>\s*0\.0\s*\)\s*\{\s*float\s+heightAtten/);
   // The sun powers live INSIDE the gate. They were pow(sunAmt, 4.0) /
@@ -396,7 +396,7 @@ test("fog stack skips pow/exp when density and mist are off", () => {
 test("window sun flash skips pow(_,22) when wet or the knobs are off", () => {
   // Term is * (1-wetSheen)*uWindowSunFlash*uKeyMul. Wet road forces
   // envBlend high then multiplies the flash by 0.
-  const lit = shader("js/render/shaders/lit.js");
+  const lit = shader("js/render/glx/shaders/glsl-lit.js");
   assert.match(lit, /if\s*\(\s*\(\s*1\.0\s*-\s*wetSheen\s*\)\s*\*\s*uWindowSunFlash\s*\*\s*uKeyMul\s*>\s*0\.001\s*\)\s*\{[\s\S]{0,300}?pow\(\s*max\(\s*envSunAlign\s*,\s*1e-4\s*\)\s*,\s*22\.0\s*\)/);
   const chunks = shader("js/render/webgpu/wgsl-chunks.js");
   assert.match(chunks, /if\s*\(\s*\(\s*1\.0\s*-\s*wetSheen\s*\)\s*\*\s*F\.params9\.z\s*\*\s*keyMul\s*>\s*0\.001\s*\)\s*\{[\s\S]{0,300}?pow\(\s*max\(\s*envSunAlign\s*,\s*1e-4\s*\)\s*,\s*22\.0\s*\)/);
@@ -407,7 +407,7 @@ test("window sun flash skips pow(_,22) when wet or the knobs are off", () => {
 test("sky golden-hour and low-sun band skip when sunE >= 0.72", () => {
   // First factor is (1-smoothstep(0, 0.72, sunE)). Identically 0 on
   // default day (~0.95) and night moon-key (~1). Dawn/dusk still enter.
-  assert.match(shader("js/render/shaders/sky.js"), /if\s*\(\s*sunE\s*<\s*0\.72\s*\)\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
+  assert.match(shader("js/render/glx/shaders/glsl-sky.js"), /if\s*\(\s*sunE\s*<\s*0\.72\s*\)\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
   assert.match(shader("js/render/webgpu/wgsl-chunks.js"), /if\s*\(\s*sunE\s*<\s*0\.72\s*\)\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
   assert.match(shader("js/render/three/tsl-sky.js"), /If\(\s*sunE\.lessThan\(\s*0\.72\s*\)\s*,\s*\(\)\s*=>\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
 });
@@ -430,14 +430,14 @@ test("sky twilight cloud wash skips pow(sd,2.5) when twilight is 0", () => {
   // twilight = smoothstep(0.02,0.22,sunE)*(1-dayGate)*(1-nightSky).
   // Identically 0 on default day (~0.95) and night. Default cloud is 0.4
   // so the cloud block is live — the pow was * 0. WGSL has no twilight wash.
-  assert.match(shader("js/render/shaders/sky.js"), /if\s*\(\s*twilight\s*>\s*0\.001\s*\)\s*\{\s*lit\s*\+=\s*uSunColor\s*\*\s*pow\(\s*sd\s*,\s*2\.5\s*\)\s*\*\s*twilight/);
+  assert.match(shader("js/render/glx/shaders/glsl-sky.js"), /if\s*\(\s*twilight\s*>\s*0\.001\s*\)\s*\{\s*lit\s*\+=\s*uSunColor\s*\*\s*pow\(\s*sd\s*,\s*2\.5\s*\)\s*\*\s*twilight/);
   assert.match(shader("js/render/three/tsl-sky.js"), /If\(\s*twilight\.greaterThan\(\s*0\.001\s*\)\s*,\s*\(\)\s*=>\s*\{[\s\S]{0,300}?pow\(\s*sd\s*,\s*2\.5\s*\)/);
 });
 
 test("godray sun HG and TSL sun-half skip when shaft strength is 0", () => {
   // Night haveGR is lampVol with uStr=0. GLSL/WGSL already gated the
   // 16-step sun march; TSL did not. HG sqrt's only consumer is * uStr.
-  const post = shader("js/render/shaders/post.js");
+  const post = shader("js/render/glx/shaders/glsl-post.js");
   assert.match(post, /if\s*\(\s*uStr\s*>\s*0\.0\s*\)\s*\{\s*float\s+hSun/);
   assert.match(post, /vec3\s+sunTerm\s*=\s*vec3\(\s*0\.0\s*\);\s*if\s*\(\s*uStr\s*>\s*0\.0\s*\)\s*\{/);
   assert.match(post, /outColor\s*=\s*vec4\(\s*sunTerm\s*\+\s*lampAccum\s*,\s*1\.0\s*\)/);

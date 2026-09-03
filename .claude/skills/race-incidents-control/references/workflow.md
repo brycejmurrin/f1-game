@@ -48,7 +48,7 @@ Load from the SKILL.md index when the task needs this detail.
    - `carAt(i).otEnabled` to confirm overtake gating under cautions.
 
    **`incident({reset:true})` is a NO-OP once the takeover already ended.**
-   `IncidentSim.reset()` (`js/game/incidentsim.js`) only iterates and hands back
+   `IncidentSim.reset()` (`js/physics/incident-sim.js`) only iterates and hands back
    entries in `_incidents` — if the takeover already settled or hit its hard
    time cap, `_incidents` is already empty and `reset()` does nothing (the
    `for` loop runs zero times) even though it still returns `status()` looking

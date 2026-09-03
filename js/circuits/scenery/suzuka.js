@@ -592,7 +592,7 @@
               addCyl(stage, vadd(vadd(hc, a.t, t), a.u, -1.7), 0.22, 3.4, TIMB, 5, b);
             }
             stage._mat = 0;
-            // addPrism is BASE-anchored (js/track/geom.js addPrism note);
+            // addPrism is BASE-anchored (js/track/core/geom.js addPrism note);
             // the wall box (hc, height 3.4) tops out at hc+1.7, so the old
             // hc+2.7 base left the roof 1.0 m clear of the wall it should
             // cap (measured via float-audit). Based at hc+1.5 — a 0.2 m

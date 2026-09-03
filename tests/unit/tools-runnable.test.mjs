@@ -117,7 +117,7 @@ test("the comment stripper actually strips (or every ban below is vacuous)", () 
 // lines below the comment explaining the first one, on the same object.
 // docs/PERF-FINDINGS.md 2e, 2j.
 //
-// Deliberately NOT applied to js/: `(ctx.speed || 0) > 0` in js/game/ai-drive.js
+// Deliberately NOT applied to js/: `(ctx.speed || 0) > 0` in js/physics/ai-drive.js
 // is a gameplay predicate on a state object that genuinely defaults to zero, not
 // a reading from an instrument. Banning it there would be noise, and a noisy ban
 // gets widened or ignored — which is how this class survived in the first place.

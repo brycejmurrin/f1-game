@@ -12,11 +12,11 @@ Generic trauma-shake math: [feedback-recipes.md](feedback-recipes.md).
 | Collision / wall sfx | `GameAudio.collision()` | Gate with `collideT` / `wallT`. |
 | Wall/car-car sparks | `Particles.sparks` | Wall scrape from `Tracks.wallAt` proximity; collision via `c.fxSparkI`. |
 | Off-track kickup | `Particles.kickup` | Only when `c.offroad` (`Math.abs(c.x) > hw && !c.onKerb`). Kerbs never get kickup. |
-| Tyre marks | `js/game/skidmarks.js` | Stamp from measured slip; keep the ring bounded. |
-| Chassis attitude | `js/game/bodyattitude.js` | Visual only; never write back into physics. |
+| Tyre marks | `js/fx/skidmarks.js` | Stamp from measured slip; keep the ring bounded. |
+| Chassis attitude | `js/physics/body-attitude.js` | Visual only; never write back into physics. |
 | Gear-shift punch | `GameAudio.shift()` | Layer sfx/camera tick; do not retune physics. |
-| HUD/menu pop | `js/game/hud.js`, `js/game/menus.js` | Prefer CSS/DOM transitions. |
-| Perf fallback | `js/game/perf.js` | Lower counts before dropping simulation quality. |
+| HUD/menu pop | `js/ui/hud.js`, `js/ui/select-screen.js` | Prefer CSS/DOM transitions. |
+| Perf fallback | `js/perf/governor.js` | Lower counts before dropping simulation quality. |
 
 ## Workflow
 
@@ -28,7 +28,7 @@ Generic trauma-shake math: [feedback-recipes.md](feedback-recipes.md).
 
 ## Common mistakes
 
-- Hunting `js/game/cameras.js` for shake — it only defines modes; `shake`
+- Hunting `js/camera/vantage.js` for shake — it only defines modes; `shake`
   lives in `js/game.js`.
 - Using `Particles.sparks`/`kickup` to fix kerb feel — kerb is `onKerb`.
 - Editing physics constants because an impact feels soft. Layer audio/shake

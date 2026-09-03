@@ -10,7 +10,7 @@
 // Sign conventions (see Tracks.curvature + the heading model):
 //   x      metres, + = right of the centreline
 //   k      rad/m,  + = LEFT-hand corner (measured — see the corner-table note
-//          in js/game/agentview.js; the old "+ = right" label was backwards)
+//          in js/agent/agentview.js; the old "+ = right" label was backwards)
 //   outside of a corner is the +sign(k) side; inside is -sign(k) — which is
 //   what the assertions below always used.
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches

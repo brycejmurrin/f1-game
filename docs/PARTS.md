@@ -36,7 +36,7 @@ category is `{ id, label, options:[…] }`; each option has
 Budget = 780 cr (`Parts.BUDGET`) for a non-career garage build; in career the
 cap is `Career.budget()` instead (works-car cost × the RAISE THE CAP multiplier,
 clamped by the catalog-derived `budgetCap()` — see docs/CAREER.md) and the
-unlimited toggle is ignored (`js/game/setup-ui.js`). `Parts.getMods(setup, team)`
+unlimited toggle is ignored (`js/garage/setup-sheet.js`). `Parts.getMods(setup, team)`
 takes a `{id, engine}` team object and returns `{speed, accel, cornering,
 braking}` multipliers. Supplier-exclusive options (e.g. `manu_mercedes`) are
 only shown when `team.engine` matches. `unlimitedBudget` (localStorage
@@ -68,7 +68,7 @@ fields one in every category via `FACTORY_PRESETS`, except the four on a
 manufacturer-exclusive FACTORY power unit (that unit is already team-unique).
 `FACTORY_PRESETS` drives AI meshes and the works aero/ERS the AI now runs, and
 seeds a new career save's `owned` + `fitted` build via `Parts.getFactorySetup`
-(`js/game/career.js`); a non-career garage build still goes through the
+(`js/career/career.js`); a non-career garage build still goes through the
 garage, not this table.
 
 ---

@@ -1,11 +1,11 @@
 /*
- * Apex 26 — GLX post-processing subsystem (split out of js/render/glx.js).
+ * Apex 26 — GLX post-processing subsystem (split out of js/render/glx/glx.js).
  * Owns the whole post chain: the HDR scene + MSAA targets, bright pass,
  * mip-chain bloom, SSAO, volumetric god rays, the composite (tone-map +
  * grade + SSR + flare + vignette), FXAA resolve, and the procedural lens-dirt
  * texture. Wired through the GLXCore ctx: glx.js calls GLXPost.init(core)
  * inside GLX.init() and delegates present() here.
- * Must load before js/render/glx.js (glx.js calls GLXPost.init at init time).
+ * Must load before js/render/glx/glx.js (glx.js calls GLXPost.init at init time).
  */
 "use strict";
 
@@ -821,7 +821,7 @@ const GLXPost = (function () {
       gl.uniform1f(compU.uExposure, exposure);
       // SCREEN SUN-SHAFT knob scales the radial crepuscular pass (def 1 = as-shipped).
       // GATED ON doBloom, because the shaft pass READS THE BLOOM CHAIN. Its loop's
-      // only input is texture(uBloom, suv) (js/render/shaders/post.js), and when
+      // only input is texture(uBloom, suv) (js/render/glx/shaders/glsl-post.js), and when
       // bloom is off we bind the 1x1 blackTex to uBloom 50 lines above — so the
       // 8 dependent full-res fetches, the ignoise and the 8 length()/clamp pairs
       // accumulated exactly vec3(0) and were then scaled by uSunShaft. The shader

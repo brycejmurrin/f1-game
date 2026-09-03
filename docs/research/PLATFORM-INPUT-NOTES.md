@@ -44,7 +44,7 @@ and Chromium deliberately does **not** count Escape as a user activation. So an
 Escape that closes one screen and opens another — exactly what a BACK ladder
 does — is opening a dialog *during* a close request with no activation to spend.
 Without the `preventDefault()` above, one press can collapse two screens.
-`js/game/topmodal.js` does this; `tests/specs/ui-button-touch.spec.js` walks the whole
+`js/ui/modal.js` does this; `tests/specs/ui-button-touch.spec.js` walks the whole
 ladder to keep it honest.
 
 Sources: WICG/close-watcher explainer (merged into the HTML Standard),
@@ -87,7 +87,7 @@ el.addEventListener("pointerleave", release);        // the mouse, which has no 
 ```
 
 This class of bug has now been fixed three separate times in this codebase
-(`js/game/input.js` pedals, `js/game/photomode.js` sticks and hold buttons,
+(`js/input/input.js` pedals, `js/camera/photo-cam.js` sticks and hold buttons,
 `js/game.js` `#btn-cam`). If you add a fifth drag control, start from the list.
 
 **And filter by `pointerId`.** A window-level `pointermove` that accepts any
@@ -145,12 +145,12 @@ across engines — three.js, Babylon, Unity and Cesium all carry the same issue.
 iOS Safari is the most memory-restrictive WebGL host in common use, and the
 limit has been *lowered* by point releases.
 
-Already handled here — `js/render/glx.js:225-234` listens for
+Already handled here — `js/render/glx/glx.js:225-234` listens for
 `webglcontextlost`/`webglcontextrestored` and reloads on restore, and
 `js/game.js` persists a flag so a device that has lost a context once starts
 more conservatively. Noted so the next person does not re-diagnose it.
 
-Note the distinction the crash-sentinel section of `js/game/perf.js` (`:91`)
+Note the distinction the crash-sentinel section of `js/perf/governor.js` (`:91`)
 already draws: a **jetsam/OOM kill**
 leaves no signal at all — no `pagehide`, no `contextlost`, no error. Context
 loss is the recoverable case; the silent one is not.
@@ -205,7 +205,7 @@ Consequences worth keeping in mind here:
 - **A menu that works from the keyboard is most of the way to working from a
   pad.** The guidance says so outright: "A good way to ensure that your app will
   work well with gamepad/remote is to make sure that it works well with keyboard
-  on PC." `js/game/menunav.js` already does the hard half (spatial XY movement,
+  on PC." `js/ui/menu-nav.js` already does the hard half (spatial XY movement,
   band-scoped, with wrap); a pad needs a seam into it, not a second
   implementation.
 - **B is Escape.** Which means a pad's back button should press the same
@@ -233,14 +233,14 @@ visible control precisely so there is never a second code path.
 
 ### The fix, shipped
 
-`js/game/input.js`'s `pollGamepad()` now dispatches this exact mapping as REAL
+`js/input/input.js`'s `pollGamepad()` now dispatches this exact mapping as REAL
 synthetic `KeyboardEvent`s once `UiLayers.anyOpen()` is true — D-pad and the
 left stick become arrow keys (with a hand-rolled hold-repeat: ~450 ms initial
 delay, ~130 ms steady cadence, since a polled pad has no OS key-repeat of its
 own), the triggers become PageUp/PageDown, the bumpers page horizontally
 (there being no distinct horizontal-pane concept in this codebase, they
 dispatch ArrowLeft/ArrowRight — the closest existing primitive). This is a SEAM
-into `js/game/menunav.js`, not a second focus-mover: the dispatched events flow
+into `js/ui/menu-nav.js`, not a second focus-mover: the dispatched events flow
 through exactly the same `window`/`document` listeners a real keyboard drives,
 so a menu that already worked from the keyboard picked up pad navigation for
 free, as the guidance above predicted. `padActivate()`/`padEscape()` seed focus
@@ -259,7 +259,7 @@ against a bare `<dialog>` with no listeners: an untrusted Escape keydown left
 it open, where a real keypress (`page.keyboard.press`) closed it. This is the
 same class of gotcha as `.click()` being required for A (see the guidance's own
 "Enter/Space activates the focused button" caveat) — a default action needs
-trust, a JS-registered listener does not. The fix meets `js/game/topmodal.js`'s
+trust, a JS-registered listener does not. The fix meets `js/ui/modal.js`'s
 existing seam at a different point: for a `<dialog>` layer, B dispatches the
 `cancel` `Event` that `TopModal.wire()` already listens for on every
 `dialog.screen` (an ordinary `addEventListener` callback, which does not care
@@ -336,7 +336,7 @@ Verified in code, not inferred. `index.html` used to declare:
 
 but it was a plain `<div>`: no `showModal()`, so no top layer and **no inert
 background**, and `grep` found **no focus trap anywhere in this codebase** —
-`js/game/topmodal.js` gets containment from the platform, and nothing else
+`js/ui/modal.js` gets containment from the platform, and nothing else
 implements it by hand.
 
 `aria-modal="true"` is not decoration. It instructs assistive technology to
@@ -351,7 +351,7 @@ was missing was containment.
 
 **Fix, shipped: made the claim true rather than withdrawing it.** `#track-detail`
 is now a real `<dialog class="screen dim">` in `index.html`, migrated by the
-exact same seam every other screen used — `js/game/topmodal.js`'s `MutationObserver`
+exact same seam every other screen used — `js/ui/modal.js`'s `MutationObserver`
 on `hidden` already mirrors it onto `showModal()`/`close()`, and its `scan()`
 selector (`dialog.screen`) picked the element up with zero code changes once the
 class was added, so nothing in that file changed except a stale header comment
@@ -359,7 +359,7 @@ that still counted it among the non-dialog screens. `role="dialog"` and
 `aria-modal="true"` were removed — the native element and `showModal()` now
 supply that semantics for real, so the hand-written attributes would only have
 been redundant duplicates of what the platform now asserts on its own.
-`js/game/uilayers.js`'s `isModal()` (`el.matches(":modal")`) picked it up
+`js/ui/layers.js`'s `isModal()` (`el.matches(":modal")`) picked it up
 unchanged too, since `#track-detail` was already in its `DEFS` list with no
 special flags.
 
@@ -443,7 +443,7 @@ attested — WebKit bug 173434 discusses it as intended behaviour, and it applie
 to CSS animations too. Low Power Mode is not rare: it turns itself on at 20 %
 battery and plenty of people simply leave it on.
 
-Now read `js/game/perf.js` against that. The governor:
+Now read `js/perf/governor.js` against that. The governor:
 
 - downscales the render resolution when the frame EMA is **> 19 ms**;
 - having downscaled, HOLDS (`_downHold`) and only creeps back up under sustained
@@ -494,7 +494,7 @@ only. So any fix has to be inferential.
 ### Two fixes, shipped, and they are complementary
 
 **A — derive the budget instead of hardcoding it.** `PerfGov._floorMs` in
-`js/game/perf.js` tracks the *floor* of observed frame intervals (a low
+`js/perf/governor.js` tracks the *floor* of observed frame intervals (a low
 percentile, not the mean — that is the fastest this display will go), pulled
 down fast toward a newly observed faster frame and crept up slowly toward a
 slower one, and the degrade/restore thresholds are relative to it instead of
@@ -561,7 +561,7 @@ thing to check.
 
 - **Canvas resizing leaks.** A confirmed WebKit bug grows memory on every canvas
   resize until the tab dies around 1.25 GB. Never recreate a WebGL context;
-  resize the existing one, and resize as rarely as you can. `js/game/perf.js`
+  resize the existing one, and resize as rarely as you can. `js/perf/governor.js`
   already avoids scale churn for a frame-cost reason — the same restraint
   happens to be a memory fix.
 - **All canvases on a page share a 256 MB budget.** At `devicePixelRatio` 3 a

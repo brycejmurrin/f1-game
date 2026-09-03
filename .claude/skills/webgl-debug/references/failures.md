@@ -7,7 +7,7 @@ Load from the SKILL.md index when the task needs this detail.
 ### Shadow acne / detached shadows
 
 The lit shader combines a slope-scale bias with the SHADOW BIAS tuner knob
-(`sampleShadow` in `js/render/shaders/lit.js`):
+(`sampleShadow` in `js/render/glx/shaders/glsl-lit.js`):
 
 ```glsl
 float slopeBias = t * 1.5 * (sqrt(1.0 - cosTheta * cosTheta) / cosTheta);

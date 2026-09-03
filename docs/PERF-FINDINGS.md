@@ -54,8 +54,8 @@ thing**, which is how this project has lost the most time.
 Chrome's `ForcedReflow` insight fires on a cold boot, and it is **not worth
 acting on**: total reflow time **9 ms**, and Chrome's own estimated savings is
 **none**. Top attributed frames were `tick` (`js/game.js`), `cssSize`
-(`js/render/glx.js`), `updateTrackPreview` (`js/game/menus.js`), `measure`
-(`js/game/scrollfade.js`) and `observe` (`js/game/sheetshape.js`); the single
+(`js/render/glx/glx.js`), `updateTrackPreview` (`js/ui/select-screen.js`), `measure`
+(`js/ui/scroll-fade.js`) and `observe` (`js/ui/sheet-shape.js`); the single
 largest bucket (42 ms) is `[unattributed]`. It is a one-time boot cost, not a
 per-frame one. Do not re-chase it.
 
@@ -84,7 +84,7 @@ expensive one (see the `perf.js` crash-sentinel header on shipping `vendor/`).
 `pairContact` + `resolveCollisions` is a further ~9.5 %.
 
 *Traced, not a defect:* `buildWorld` also appears at 0.6 %, but
-`js/game/debrisworld.js` has `if (!world) buildWorld(track, cars);` — the
+`js/physics/debris-world.js` has `if (!world) buildWorld(track, cars);` — the
 one-time lazy build landing inside the sample window. Recorded so it is not
 re-derived.
 
@@ -128,7 +128,7 @@ TTFB 7 ms + render delay 2299 ms**, CLS 0.03.
 > not the bulk. "Render delay" is the browser's bucket for everything between
 > TTFB and the paint. Two eager costs that are NOT bytes: `js/track/tracks.js`
 > built Catmull-Rom control points for **all 40** circuits at boot (**24.0 ms**)
-> — **TAKEN**, see below — and `js/game/apex.js` + `agentview*` is **346 KB of
+> — **TAKEN**, see below — and `js/agent/apex.js` + `agentview*` is **346 KB of
 > dev/test surface** no player reaches. Also note DCL 4712 ms predates the flyby
 > deferral (`de5d202`) and has not been re-measured. See §3.
 
@@ -194,7 +194,7 @@ Two rules fall out of that:
 - **`test:api` is not in CI at all**, so it rots. Found 11 specs failing on a
   bug that predated the session by weeks: `js/data/telemetry.js` aliases
   `M4.clamp` at EVAL time, and the two standalone js/data harnesses did not load
-  `js/mat4.js`, so telemetry.js threw, `DataTelemetry` was stranded in its
+  `js/core/mat4.js`, so telemetry.js threw, `DataTelemetry` was stranded in its
   temporal dead zone, and hub.js's top-level `DataTelemetry.create()` threw in
   turn — surfacing three links away as `ReferenceError: DataHub is not defined`.
   Diagnosed by evaluating the eight modules in a **Node VM with DOM stubs**
@@ -236,7 +236,7 @@ The bug itself: the night lamp cull ranks lamps by a camera-forward-BIASED
 distance, then faded their brightness against that same biased set's edge — so a
 stationary lamp changed brightness when the player only turned. Measured with the
 eye pinned and the aim swept ±60°: lamps swinging 5.01×, 2.99×, 2.86×, 2.77×,
-2.55×. Fixed in `js/game/lighting.js` (fade on the lamp's own geometric distance
+2.55×. Fixed in `js/lighting/lighting.js` (fade on the lamp's own geometric distance
 against a direction-free radius; the biased edge survives only as a narrow
 continuity guard) — the same five lamps then measured 2.07×, 1.07×, 1.01×, 1.00×,
 1.00×. **A "control" run is only a control if it varied the thing you think it
@@ -260,7 +260,7 @@ front around a 40 m circle. Measured (bahrain, day, eye pinned, aim ±40°,
 | 80 m | 0.004 – 0.308 | faint either way |
 
 **Repair.** Fade from eye XZ + look-target Y (`vec3(uEye.x, uShadowCtr.y, uEye.z)`
-in `js/render/shaders/lit.js`; same in `tsl-lit.js` / `wgsl-chunks.js`). Height
+in `js/render/glx/shaders/glsl-lit.js`; same in `tsl-lit.js` / `wgsl-chunks.js`). Height
 stays on the look target so aerial cameras do not erase ground shadows. At the
 default 80 m box / 20 m bias, `0.84·range` from the eye equals the 90° box edge
 (`sqrt(70²−20²)≈67`), so the 0.62/0.84 ratios stay. Box snap and car-map lookAt
@@ -274,7 +274,7 @@ true of **whole-build A/B timing** and false of **attribution**, and the
 difference has already cost two candidate findings.
 
 Both build inside `vm.createContext`, so every bare global read goes through the
-contextified global's interceptor — the ~150-250 ns effect `js/track/models.js`
+contextified global's interceptor — the ~150-250 ns effect `js/track/scenery/models.js`
 documents for `firstNonFinite`. The same vegas build profiled in the VM and in a
 plain realm (identical `TRACK_VM` manifest, loaded by indirect eval):
 
@@ -320,13 +320,13 @@ that are the whole point of the next section:
 
 Two distinct defects were hiding in there, and both are worth knowing:
 
-- **`window.LightTune` is undefined, and always was.** `js/game/lighting.js`
+- **`window.LightTune` is undefined, and always was.** `js/lighting/lighting.js`
   declares `const LightTune = (function () {`, and a top-level `const` in a
   CLASSIC script creates a **script-scoped binding, not a property of `window`**
   — unlike `var` or the explicit `window.X =` form that `ariastate.js`,
   `css-zoom.js` and `sheetshape.js` use. The spec's `page.evaluate` reached for
   `window.LightTune.TUNE_DEFS` and threw. It was the ONLY `window.LightTune` in
-  the tree; every other reader uses the bare identifier, as `js/game/apex.js`
+  the tree; every other reader uses the bare identifier, as `js/agent/apex.js`
   does itself. **When a page global is missing under `page.evaluate`, check how
   it is DECLARED before assuming a load-order break** — `const` and `window.X =`
   are both "one global per file" and only one of them is on `window`.
@@ -368,7 +368,7 @@ runner, with failures the local box never produced:
 Verified after all four fixes: **5/5 pass** solo on a quiet box at
 177.8 / 175.4 / 155.0 / 140.7 / 52.3 s.
 
-**Why it rotted:** `tools/pick-tests.mjs` maps `js/game/lighting.js` to the
+**Why it rotted:** `tools/pick-tests.mjs` maps `js/lighting/lighting.js` to the
 `webgl` group correctly, so a local `pick-tests` run would have named it.
 (SUPERSEDED since: ci.yml's `selected` job is now the change-aware gate and is
 BLOCKING on branch pushes and pull requests, so this class of red no longer
@@ -414,7 +414,7 @@ zero, an async write killed by `process.exit`, a global read going through a
 contextified-global interceptor. Findings **estimated from operation counts**
 came in at a fraction of their billing or vanished. Two of my own predictions
 were in the second category as well — see `nodeGrid`'s note in
-`js/track/mesh.js` and the terrain-normal scope note in the same file.
+`js/track/core/mesh.js` and the terrain-normal scope note in the same file.
 
 Apply that discount to everything in §3.
 
@@ -422,10 +422,10 @@ Apply that discount to everything in §3.
 
 - **God-ray sun march** ran every night frame with `uStr == 0`. The lamp half
   was gated; the sun half was not. `accum` has exactly one consumer, so the
-  guard is provably equivalent. `js/render/shaders/post.js`.
+  guard is provably equivalent. `js/render/glx/shaders/glsl-post.js`.
 - **`sampleShadow`** ran its full PCF — up to 16 dependent texture fetches per
   opaque fragment — when `uShadowStr == 0`, whose only non-trivial exit is
-  `max(0.0, mix(1.0, sh, uShadowStr * edgeFade))`. `js/render/shaders/lit.js`.
+  `max(0.0, mix(1.0, sh, uShadowStr * edgeFade))`. `js/render/glx/shaders/glsl-lit.js`.
 - **ACTIVE AERO flaps** had no distance gate while the brake rings twelve lines
   above did. Gated at 150 m for rivals. `js/game.js`.
 - **`UiLayers.anyOpen()`** ran a 24-selector `querySelectorAll` every frame with
@@ -433,7 +433,7 @@ Apply that discount to everything in §3.
   query — it breaks z-index ties by document order.
 - **Audio**: one shared white-noise buffer for the one-shots instead of a fresh
   main-thread `Math.random()` fill per hit; five provably-constant
-  `setTargetAtTime` calls per frame removed. `js/game/audio.js`.
+  `setTargetAtTime` calls per frame removed. `js/audio/engine.js`.
 - **Four `backdrop-filter` chips** over the garage's live turntable canvas — the
   rule `hud.css` and `overlays.css` already state, applied to the one screen
   that missed it.
@@ -518,7 +518,7 @@ Six taken. Five are the section heading above wearing new hats; the sixth is a
 different animal and is the one worth reading.
 
 **The hitch: the Rapier side-world was built on the LIGHTS-OUT frame.**
-`js/game/debrisworld.js` `step()` builds lazily on first call, and `update()`
+`js/physics/debris-world.js` `step()` builds lazily on first call, and `update()`
 returns at `if (state !== "race") return;` (`js/game.js`) for the whole
 countdown — so "first call" was always the first RACE step. Line-attributed
 from a `profile-gameloop.mjs vegas physics` profile (`positionTicks`):
@@ -611,7 +611,7 @@ masks are products of `smoothstep()`s, hence in [0,1].
 
 Two more taken away from the renderer, both "a writer nobody re-checked":
 
-- **`js/game/audio.js` had a SIXTH constant `setTargetAtTime`**, missed by the
+- **`js/audio/engine.js` had a SIXTH constant `setTargetAtTime`**, missed by the
   pass that removed five from the same function. `lfoG.gain` has exactly two
   writers — `.value = 0` at node creation and this line — so while the car is
   on-track (the overwhelming majority of frames) it scheduled target 0 onto a
@@ -625,10 +625,10 @@ Two more taken away from the renderer, both "a writer nobody re-checked":
   **The general lesson: when you sweep a function for a repeated defect, the
   sweep needs a grep, not a read — the sixth instance was 50 lines below the
   fifth.**
-- **`js/game/sheetshape.js` watched one attribute that four things write.** Its
+- **`js/ui/sheet-shape.js` watched one attribute that four things write.** Its
   `MutationObserver` keys on `documentElement`'s `style` attribute to catch
   `--ui-scale`, but `--hud-scale` and the HUD's own `--hud-z-top`/`--hud-z-bot`
-  zoom caps land on that same inline attribute (`js/game/hud.js`'s `fitHud`),
+  zoom caps land on that same inline attribute (`js/ui/hud.js`'s `fitHud`),
   and an observer cannot tell one custom property from another. So every HUD
   zoom-cap tweak ran a full `reclassify()` — a `getBoundingClientRect` on all 21
   `.sheet` elements, each followed by `CssZoom.localBox` and two
@@ -656,7 +656,7 @@ The biggest finding of the whole exercise, and the one most worth the method
 note: it was found by reading a control loop as arithmetic, and settled in
 thirty seconds by a float trace.
 
-**`js/game/perf.js` — with `_autoRes` on (the shipped default) the governor
+**`js/perf/governor.js` — with `_autoRes` on (the shipped default) the governor
 could scale down and then did nothing, forever. No tier was ever shed by
 evidence.** The structure was:
 
@@ -668,7 +668,7 @@ else if (…) { /* shed a feature */ }
 Step 1.0 down by 0.1 in IEEE doubles and you get
 `1 → 0.9 → 0.8 → 0.7000000000000001 → 0.6000000000000001 → 0.5000000000000001`.
 That last value is **one ULP ABOVE 0.5**, so `cur > 0.5` is true forever. The
-request then clamps to 0.5 and `setRenderScale` (`js/render/glx.js`) rejects it against its own
+request then clamps to 0.5 and `setRenderScale` (`js/render/glx/glx.js`) rejects it against its own
 `Math.abs(s - renderScale) < 0.02` dead zone — and because the outer `if` was
 ENTERED, the `else if` that sheds a feature was **never evaluated**. Only the
 GRAPHICS preset's `_userTier` still bit, because that is a separate term in
@@ -698,18 +698,18 @@ return false` — **not the shipped contract**, which rejects any change under
 the real dead zone and outside `s === scale`. A second fake pinned the floor at
 exactly `0.5`, a value the real down-chain never produces, so the test written to
 cover "scale floor hit" tested a state that cannot occur. Both fakes now mirror
-`setRenderScale`'s dead-zone clamp in `js/render/glx.js` verbatim, and the
+`setRenderScale`'s dead-zone clamp in `js/render/glx/glx.js` verbatim, and the
 recovery test fails on the old code.
 **A fake that is easier than the contract will hide exactly the bugs the
 contract's hard edges cause.**
 
 **Related, and fixed in the same pass: `envReady` is a one-way latch.**
-`js/game.js` stops calling `envFaceBegin` at `tier() >= 1`, but `js/render/glx.js`
+`js/game.js` stops calling `envFaceBegin` at `tier() >= 1`, but `js/render/glx/glx.js`
 sets `envReady = true` on a completed cube and only ever clears it in
 `envProbeReset()` — whose sole caller was the track switch. So `uEnvStr` stayed
 at `carEnvCube` (0.3 on desktop) and every car-paint fragment kept paying a
 4x-anisotropic dependent `textureLod` on a **frozen** cube. Worse than the wasted
-fetch: `js/game/perf.js` documents tier 1 as *"env probe off (car paint falls
+fetch: `js/perf/governor.js` documents tier 1 as *"env probe off (car paint falls
 back to the analytic sky mirror)"* and **that fallback never happened** — the
 paint mirrored wherever the car was when the last 6-face cycle completed. One
 line at the gate now resets it, and the dev-API `envProbe` status field reports
@@ -721,7 +721,7 @@ honestly as a side effect.
 `track.meshes.roadChunked` as "a fix that exists in the tree and is unreachable".
 That is wrong and the correction matters, because the suggested action was to
 reach it. `createChunkedMesh` (`js/render/glx/chunked.js`) **never carried
-`data.trk`** — the fifth attribute `createMesh` builds (`js/render/glx.js`)
+`data.trk`** — the fifth attribute `createMesh` builds (`js/render/glx/glx.js`)
 for road-marking coordinates. Without it the shader reads the generic default,
 `float hw = vTrk.z` is 0, and `lit.js`'s `if (hw <= 0.5) return;` guard fires — its
 own comment even says *"(or no trk attribute)"*. **Every edge line, centre dash
@@ -733,7 +733,7 @@ and marking would silently disappear.** (SUPERSEDED: this fix SHIPPED —
 ### Stale entry corrected: the env-probe cull already shipped
 
 §3's "Env probe inherits the main camera's `cullDist`" entry is out of date. It
-is now the baked product path: `ENV_CULL_M = 300` in `js/render/glx.js`
+is now the baked product path: `ENV_CULL_M = 300` in `js/render/glx/glx.js`
 `envFaceBegin`, applied as a `min` and never an override, with the same cap
 on WGX and TLX. The pause-menu `PerfTry.envCull` toggle is gone — these were
 renderer A/B flags, not lighting knobs, so they were not moved into the
@@ -1520,7 +1520,7 @@ would cost a new API member on all three backends (the parity guard requires it)
 three module-size raises and its own canary assertions. Dropped — the same call
 §2e made on material sorting, for the same reason.
 
-Two stale claims fall out of that number: `js/render/glx.js`'s comment that
+Two stale claims fall out of that number: `js/render/glx/glx.js`'s comment that
 `drawDecal` runs "~22x/frame" predates the frustum gate, and this file's own
 framing of the per-car block as the bulk of `drawElements` is wrong — chunked
 scenery is ~94 of it.
@@ -1637,12 +1637,12 @@ state and must stay green.
 *policy* — one throw ends the session — left every other transient fault just as
 fatal, and `startRace` is async now, so that window is real.
 
-`tick()` now delegates to `js/game/loop-health.js`: a run of consecutive faults
+`tick()` now delegates to `js/perf/loop-health.js`: a run of consecutive faults
 is tolerated and **any clean frame pays the run back to zero**; at the cap it
 reports through `window.__apexReportError` and rethrows exactly as before, so a
 deterministic fault still stops loudly instead of repainting the error overlay
-60x/s. This follows the retry shape the codebase already uses — `js/game/perf.js`
-caps crash-sentinel strikes and lets clean races pay them back, `js/render/glx.js`
+60x/s. This follows the retry shape the codebase already uses — `js/perf/governor.js`
+caps crash-sentinel strikes and lets clean races pay them back, `js/render/glx/glx.js`
 bounds context-loss reloads at two per tab session.
 
 A run counter that any clean frame resets can never stop a fault that
@@ -2146,7 +2146,7 @@ render-object churn and left the rest. This is the rest, and it is one line.
 
 §2o guessed per-chunk lamp bindings. Checked before writing any code, as that
 entry insists: `tlx.js` declares `hasPerChunkLights: false` (GLX and WGX are
-`true`), and `js/game/lighting.js` says so in prose too — "WebGL2 and WebGPU —
+`true`), and `js/lighting/lighting.js` says so in prose too — "WebGL2 and WebGPU —
 three.js keeps the single global set". **The hypothesis was dead on arrival.**
 It cost one grep instead of a round.
 
@@ -2406,7 +2406,7 @@ citable:
    copy per presented frame. That is CPU-bound, and `PerfGov`'s `_scaleFutile`
    exists precisely so a CPU-bound frame skips the useless resolution lever and
    drops straight onto the tier ladder.
-4. `js/game/perf.js` rung **1 is "env probe off"**. `game.js:6961` gates the
+4. `js/perf/governor.js` rung **1 is "env probe off"**. `game.js:6961` gates the
    producer on `PerfGov.tier() < 1`, and `game.js:6976` is the consumer half:
    `else if (PerfGov.tier() >= 1 && gfx.envProbeReady()) gfx.envProbeReset();`
    — which clears `envReady`.
@@ -2693,7 +2693,7 @@ iterations on vegas, 419 on monza).
 > `massGridInsert` on `massAdd`). SAT stays exact; only candidate gathering
 > is culled.
 
-**Emitter ring recomputation** (`js/track/geom.js`: `addCyl` / `addCone` /
+**Emitter ring recomputation** (`js/track/core/geom.js`: `addCyl` / `addCone` /
 `addFrustum` called `lo()` three times per segment where two suffice).
 > **SUPERSEDED 2026-08-18.** Ring ends cached once per segment. Keep the
 > angle as `(i+1)/seg*6.2832`, **not** `(i+1)%seg` — 6.2832 ≠ 2π.
@@ -2929,9 +2929,9 @@ exists, check that the state it defends is still reachable.
 
 Do not re-investigate these; they were checked and are fine.
 
-`js/game/particles.js` (struct-of-arrays pool, zero steady-state allocation),
-`js/game/skidmarks.js`, `js/game/perf.js`, `js/game/bodyattitude.js`,
-`js/game/hud.js` (fully write-cached via WeakMaps, no layout reads anywhere —
+`js/fx/particles.js` (struct-of-arrays pool, zero steady-state allocation),
+`js/fx/skidmarks.js`, `js/perf/governor.js`, `js/physics/body-attitude.js`,
+`js/ui/hud.js` (fully write-cached via WeakMaps, no layout reads anywhere —
 the best-behaved file audited), the `LIT_FS` point-light loop, `GLXChunked`
 frustum culling, the bloom skip, `cssSize()` caching, and the spatial grid
 itself — measured candidate counts are 0.5–19 per query, so nothing degenerates
@@ -3021,7 +3021,7 @@ the 3×2 `.hud-bottom` grid).
 
 ### Steering felt twice as sharp, off one `innerWidth`
 
-`touchRangePx()` in `js/game/input.js` scaled the anchored-drag range by
+`touchRangePx()` in `js/input/input.js` scaled the anchored-drag range by
 `innerWidth`. That is the LONG edge in landscape and the SHORT edge in
 portrait, so the identical thumb gesture meant twice as much lock the moment
 the phone turned: `393 x 0.12` = 47.2px to full lock against `852 x 0.12` =
@@ -3045,9 +3045,9 @@ without a retune — which is exactly why it was written that way.
 
 Worth recording because it is the natural suspicion and it is wrong. The
 fixed-step loop has no orientation term; `#rotate-device` is `{gate:false}` in
-`js/game/uilayers.js`, so keyboard and canvas-drag steering already drove
+`js/ui/layers.js`, so keyboard and canvas-drag steering already drove
 straight through the blocker; and the tilt axis mapping already handles all
-four screen angles with portrait as its `default` case (`js/game/input.js`).
+four screen angles with portrait as its `default` case (`js/input/input.js`).
 Portrait racing was blocked by exactly one CSS rule and one opaque div.
 
 ### The blocker stays; portrait becomes an opt-in
@@ -3198,7 +3198,7 @@ the lit path and the godray never did. Now excluded by RANGE, which is what
 `frame.tailStart` / `tailCount` exist for. The literal stays for washers.
 
 **2. The ferris wheel ignored the session's time of day.**
-`js/track/scenery-structures.js` read `def.night` for the rim colour and the
+`js/track/scenery/structures.js` read `def.night` for the rim colour and the
 cabin palette. `def.night` is the circuit's AUTHORED default; `NIGHT` — already
 destructured at the top of the same file and used correctly at four other sites —
 is what THIS build was asked for, and game.js overrides it from TIME OF DAY. So
@@ -3258,7 +3258,7 @@ directions (drop a field → red; add a spurious one → red).
 
 ### Reported, not fixed
 
-- **`seal()`'s `data.slice(0, n)` → `subarray`** (`js/track/models.js`). The
+- **`seal()`'s `data.slice(0, n)` → `subarray`** (`js/track/scenery/models.js`). The
   accumulators hold 129.7 MB of ArrayBuffer for 73.8 MB of data at the Vegas
   props peak — Vegas glass overshoots a doubling boundary by 1.3% and pays 42.5 MB
   for it. `subarray` would drop the seal's second copy, but it returns a VIEW,
@@ -3359,7 +3359,7 @@ problem — iOS tab memory — answered:
 I read that as a third and decisive failure mode and removed the whole lever on
 the strength of it. **That was wrong, and the code says so.** Apex 26 does not
 use three's in-place restore path at all: `js/render/three/tlx.js:474-533`
-(mirroring `js/render/glx.js:407-460`) handles `webglcontextlost` by latching
+(mirroring `js/render/glx/glx.js:407-460`) handles `webglcontextlost` by latching
 the downgrade and handles `webglcontextrestored` with `location.reload()`. A
 reload re-runs `Tracks.build` and rebuilds every geometry from source, so what
 `attribute.array` held before the loss is irrelevant to recovery. The advice is
@@ -3439,13 +3439,13 @@ are set by different knobs. Getting one and not the other is how four rounds of
 this lever measured the wrong thing.
 
 **Axis 1 — the RENDERER's mobile downgrades.** `apex26.forceMobileTier=1`
-(`js/render/glx.js:36`) forces `GLX.isMobile`, which drives the lamp budget,
+(`js/render/glx/glx.js:36`) forces `GLX.isMobile`, which drives the lamp budget,
 beams-off, atlas and shadow sizes. It is the one copy of the sniff; nothing
 re-sniffs `navigator`.
 
 **Axis 2 — the GOVERNOR's cost tier.** `PerfGov.tier()` is
 `max(_perfTierFloor, _userTier, _perfTier)`, and `_userTier` comes from the
-GRAPHICS preset (`js/game/gfx-quality.js`): LOW 4, MEDIUM 2, HIGH 0, ULTRA 0.
+GRAPHICS preset (`js/perf/quality-preset.js`): LOW 4, MEDIUM 2, HIGH 0, ULTRA 0.
 The preset persists through `GameStore` as `apex26.gfxPreset`, a JSON string —
 so a probe sets it as `--ls 'apex26.gfxPreset="low"'`, quotes included.
 
@@ -3512,7 +3512,7 @@ rAF frames in a 17.5 s window : 2          -> 0.11 fps
 __apex.perf() in that same page: { fps: 59.9, floorMs: 16.7, tier: 0, scale: 1 }
 ```
 
-Nothing had stepped, because nothing had been seen. `js/game/perf.js` `tick()`
+Nothing had stepped, because nothing had been seen. `js/perf/governor.js` `tick()`
 gated the whole measurement on
 
 ```js

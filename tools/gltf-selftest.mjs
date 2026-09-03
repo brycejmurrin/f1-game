@@ -1,11 +1,11 @@
 /*
- * @doc Self-test for the `js/render/gltf.js` GLB loader (Node ESM, no deps).
+ * @doc Self-test for the `js/render/shared/gltf.js` GLB loader (Node ESM, no deps).
  * @skill webgl-debug
- * Self-test for js/render/gltf.js (the GLB loader) — Node ESM, no dependencies.
+ * Self-test for js/render/shared/gltf.js (the GLB loader) — Node ESM, no dependencies.
  *
  * Run:  node tools/gltf-selftest.mjs
  *
- * Strategy: js/render/gltf.js is a browser IIFE that assigns a global `GLTF`. We read
+ * Strategy: js/render/shared/gltf.js is a browser IIFE that assigns a global `GLTF`. We read
  * the file text and eval it in this Node context (providing a `globalThis`,
  * TextDecoder, and Buffer-based base64) so `GLTF` becomes available. Then we
  * build minimal valid .glb files in memory and assert toMesh()'s output.
@@ -22,16 +22,16 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
 
-// --- load js/render/gltf.js into this context ---
+// --- load js/render/shared/gltf.js into this context ---
 // TextDecoder is global in modern Node; atob exists too, but the module also
 // supports Buffer, which we rely on for base64.
 const src = readFileSync(
   join(repoRoot, (await import("node:module")).createRequire(import.meta.url)("./manifest.cjs").PATHS.GLTF),
   "utf8");
-const logSrc = readFileSync(join(repoRoot, "js/log.js"), "utf8");
+const logSrc = readFileSync(join(repoRoot, "js/core/log.js"), "utf8");
 // The module does `const GLTF = (function(){...})();` at top level. Eval'd in a
 // function scope that const stays local, so append an assignment to export it.
-// js/log.js first: toMesh() calls Log.enabled without a try/catch.
+// js/core/log.js first: toMesh() calls Log.enabled without a try/catch.
 const factory = new Function("globalThis", "TextDecoder", "Buffer", "atob",
   logSrc + "\n" + src + "\nreturn GLTF;");
 const GLTF = factory(globalThis, TextDecoder, Buffer, globalThis.atob);

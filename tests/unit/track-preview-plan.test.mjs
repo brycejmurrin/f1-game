@@ -33,9 +33,9 @@ function loadPlanPreview() {
   const sandbox = { Math, Object, JSON, Array, isNaN, isFinite, parseInt, parseFloat };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
-  const src = fs.readFileSync(path.join(ROOT, "js/track/maps.js"), "utf8")
+  const src = fs.readFileSync(path.join(ROOT, "js/ui/track-maps.js"), "utf8")
     .replace(/^const\b/gm, "var");
-  vm.runInContext(src, ctx, { filename: "js/track/maps.js" });
+  vm.runInContext(src, ctx, { filename: "js/ui/track-maps.js" });
   vm.runInContext("this.TrackMaps = TrackMaps;", ctx);
   return ctx.TrackMaps.planPreview;
 }

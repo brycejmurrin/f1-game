@@ -50,7 +50,7 @@ Load from the SKILL.md index when the task needs this detail.
      (test-only accessors) or step through `netStartArm`/`netHostStart`, not the
      ICE/candidate layer.
    - **`__apex.net().startPending` is a boolean only** — it reflects
-     `!!G.netStart` (see `netHostStart()` in `js/game/apex.js`), i.e. whether a
+     `!!G.netStart` (see `netHostStart()` in `js/agent/apex.js`), i.e. whether a
      start has been armed at all. It carries none of `netStart`'s actual fields
      (`at`, `hold`, `now`) and cannot tell you *why* a guest is stuck mid-
      countdown — for that, inspect `countT`/`lightsLit` progression directly as

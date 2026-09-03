@@ -1,0 +1,22 @@
+{
+  "_doc": "Phase 2b batch b1-foundation",
+  "moves": {
+    "js/log.js": "js/core/log.js",
+    "js/mat4.js": "js/core/mat4.js",
+    "js/game/store.js": "js/core/store.js",
+    "js/game/physics-consts.js": "js/physics/consts.js",
+    "js/game/ai-drive.js": "js/physics/ai-drive.js",
+    "js/game/aerozones.js": "js/physics/aero-zones.js",
+    "js/game/bodyattitude.js": "js/physics/body-attitude.js",
+    "js/game/brake-cue.js": "js/physics/brake-cue.js",
+    "js/game/debrisworld.js": "js/physics/debris-world.js",
+    "js/game/incidentsim.js": "js/physics/incident-sim.js",
+    "js/game/racecontrol.js": "js/race/race-control.js",
+    "js/game/reliability.js": "js/race/reliability.js",
+    "js/game/career.js": "js/career/career.js",
+    "js/game/career-ui.js": "js/career/career-ui.js",
+    "js/game/season-cal.js": "js/career/season-cal.js",
+    "js/game/season-ui.js": "js/career/season-ui.js",
+    "js/game/quali.js": "js/race/quali-model.js"
+  }
+}

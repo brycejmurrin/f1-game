@@ -187,7 +187,7 @@ test("startFrac and reverse transform source control points and authored fractio
 
 // UPDATED (was stale, root-caused below — no longer a TODO). This test assumed
 // anchor().c[1] equals Tracks.terrainY() exactly wherever the raycast hits; two
-// documented changes to anchor() (js/track/scenery-nature.js) since this test
+// documented changes to anchor() (js/track/scenery/nature.js) since this test
 // was written both broke that assumption, on purpose:
 //   - anchor() unconditionally returns `base - 0.3`: "a flat-based model placed
 //     exactly at [a single-point terrain reading] floats on the downhill side

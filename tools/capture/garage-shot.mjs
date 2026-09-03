@@ -6,7 +6,7 @@
 // Why this exists: nothing could photograph the garage. layout-audit --screen=
 // captures menus with the CANVAS HIDDEN (that is the point of it), and
 // capture/shot.mjs frames a car on a TRACK via __apex camera hooks, which the
-// garage has none of. So a change to js/game/garage-scene.js or to the crest
+// garage has none of. So a change to js/garage/scene.js or to the crest
 // lightbox could only be reasoned about, never looked at — and reasoning about
 // what a scene looks like is how a rendering defect survives review.
 //

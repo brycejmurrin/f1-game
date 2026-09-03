@@ -18,6 +18,7 @@ Three kinds of docs live here.
 | Doc | Covers |
 |---|---|
 | [notes/CEILING-HISTORY.md](notes/CEILING-HISTORY.md) | Why every size-ratchet number moved, 2026-08 → 2026-09-03 (the comments that lived beside `module-size.test.mjs`'s ceilings); the live numbers are `tests/data/ratchets.json`. |
+| [notes/SPIKE-BACKENDS-CHECKLIST.md](notes/SPIKE-BACKENDS-CHECKLIST.md) | The WGX/TLX spike-out inventory: the move map, every non-move edit with file:line evidence, the tests that go red and their fixes, the `spike/backends/README.md` re-attach draft. |
 | [AGENT-SURFACE.md](AGENT-SURFACE.md) | Skills vs MCP vs `tools/` CLIs vs wrap — which `apex_*` exists, which stay CLI-only. |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Module layout, the game loop, how the pieces fit. |
 | [RENDERERS.md](RENDERERS.md) | Three backends behind one seam: GLX / WGX / TLX boot flow, frame pipeline, safety prefs, parity snapshot, the cross-backend parity workflow (mirror a knob on all three). |
@@ -31,7 +32,7 @@ Three kinds of docs live here.
 | [LIGHTING-REF.md](LIGHTING-REF.md) | Light-record layout, shader uniforms, time-of-day branches, track lamps. |
 | [LIGHTING-KNOBS.md](LIGHTING-KNOBS.md) | Every hand-tuned lighting constant, what it does, and how to A/B it (mirrors `tools/lighting/ab-lighting.mjs`). |
 | [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 183 tuner sliders: range, default, the GLSL uniform each drives, and where it is consumed on the shipping path. Generated from TUNE_DEFS. Every slider IS wired — the table exists to say which of the three real failure modes you are actually looking at. |
-| [LIGHTING-PRESETS.md](LIGHTING-PRESETS.md) | Per-track × time-of-day × weather lighting presets baked into `js/game/light-presets.js`. |
+| [LIGHTING-PRESETS.md](LIGHTING-PRESETS.md) | Per-track × time-of-day × weather lighting presets baked into `js/lighting/presets.js`. |
 | [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit). |
 | [AGENT-WORLD-API.md](AGENT-WORLD-API.md) | The agent-facing JSON world view (`world`/`field`/`scene`/`rollout`/…). |
 | [SCENERY-GROUNDING.md](SCENERY-GROUNDING.md) | How props seat on the terrain ribbon, and the float/clip audits. |
@@ -90,7 +91,7 @@ sit in this table was indexed by nothing and moved to
 | [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md) | Why detail is unaffordable without instancing; the staged scenery scene-graph plan and its measured per-emitter reuse. |
 | [research/PLATFORM-INPUT-NOTES.md](research/PLATFORM-INPUT-NOTES.md) | The platform behaviours that only bite on one device: pointer capture and the four-way release net, the top layer vs z-index, `zoom` and `--ui-scale`, `(pointer: coarse)`, Escape vs `<dialog>` close watchers, iOS WebGL context loss. Read before debugging anything that reproduces on one device and not another. |
 | [research/DRIVING-CONTROLS-RESEARCH.md](research/DRIVING-CONTROLS-RESEARCH.md) | What shipped racing games (F1 24/25, EA's accessibility docs) do for assists and speed-sensitive steering — including the deliberately NEGATIVE conclusions that keep un-built features from being re-litigated. |
-| [research/PHASE-C-SLIDER-DESIGN.md](research/PHASE-C-SLIDER-DESIGN.md) | The slider recalibration with the numbers: the arithmetic defects behind "I always end up at the bottom", computed from the shipped mappings in `js/game/steer-tuning.js`. |
+| [research/PHASE-C-SLIDER-DESIGN.md](research/PHASE-C-SLIDER-DESIGN.md) | The slider recalibration with the numbers: the arithmetic defects behind "I always end up at the bottom", computed from the shipped mappings in `js/input/steer-tuning.js`. |
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the phone at arm's length, collapse a primitive only when it passes the three-places-plus-generic test. (Also indexed under Engineering reference above.) |
 | [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted as the direction, ESM kept as the documented escalation path. |
 | [research/TREE-RESTRUCTURE-2026-09.md](research/TREE-RESTRUCTURE-2026-09.md) | The verified diagnosis (nine whole-tree reads, every claim re-checked) and the approved six-phase restructuring plan: generate the shell from the manifest first (Phase 0, landed), then js/ domain directories, the test-tree taxonomy, game.js carves, tools/ and docs/ consolidation. Supersedes STRUCTURE-REDECISION's deferrals. |

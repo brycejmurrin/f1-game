@@ -71,9 +71,23 @@ const PLACEHOLDERS = new Set([
 // match mid-extension.
 const PATH_RE = /(?<![A-Za-z0-9_./-])((?:js|tools|tests|css|assets|spike|vendor|docs)\/[A-Za-z0-9_.<>/-]+\.(?:json|mjs|cjs|css|js|md|sh))(?![A-Za-z0-9])/g;
 
+// tools/manifest.cjs's MOVED map (tools/move-tree.mjs) keys itself on the
+// OLD path of every file the Phase 2b window relocates — that key is
+// SUPPOSED to be gone from disk; it is the whole reason deploy.mjs can name
+// the new path when a conflicted file was moved. Scan everything BUT that
+// object literal.
+function stripMovedBlock(text) {
+  const at = text.indexOf("const MOVED = {");
+  if (at < 0) return text;
+  const end = text.indexOf("};", at);
+  return end < 0 ? text : text.slice(0, at) + text.slice(end + 2);
+}
+
 function brokenPathsIn(file) {
   const bad = [];
-  for (const m of new Set(read(file).match(PATH_RE) || [])) {
+  let text = read(file);
+  if (file === "tools/manifest.cjs") text = stripMovedBlock(text);
+  for (const m of new Set(text.match(PATH_RE) || [])) {
     if (PLACEHOLDERS.has(m) || m.includes("<") || m.includes("*")) continue;
     if (!fs.existsSync(path.join(ROOT, m))) bad.push(m);
   }
@@ -98,15 +112,15 @@ const SOURCE_EXEMPT = new Map([
   // Synthetic fixture HTML fed to the service worker under test — a string it
   // must rewrite, not a file it must find.
   ["css/style.css", /service-worker\.test\.mjs|docs-integrity\.test\.mjs/],
-  // The scratch tree tools/move-tree.mjs is tested on: a file that moves, its
-  // untouched sibling, and a test that cites it — none of them real.
-  ["js/game/perfect.js", /move-tree\.test\.mjs|docs-integrity/],
-  ["js/perf/governor.js", /move-tree\.test\.mjs|docs-integrity/],
-  ["tests/unit/perf.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  // The scratch tree tools/move-tree.mjs is tested on. The names are
+  // deliberately fictional (js/zzfix/…) so a real move's sweep can never
+  // rewrite the fixture — see the header of move-tree.test.mjs.
+  ["js/zzfix/", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/unit/zzfix.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/helpers/seed-zzfix.mjs", /move-tree\.test\.mjs|docs-integrity/],
   ["docs/archive/OLD.md", /move-tree\.test\.mjs|docs-integrity/],
-  ["js/game/nope.js", /move-tree\.test\.mjs|docs-integrity/],
-  ["js/perf/x.js", /move-tree\.test\.mjs|docs-integrity/],
   ["tools/nested/README.md", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/unit/joins.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
   // Fake package.json scripts inside the coverage-audit's own fixtures.
   ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
   ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],
@@ -385,7 +399,7 @@ test("CLAUDE.md is a stub that imports AGENTS.md, not a second copy", () => {
 test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   // "Ships OFF … def: 0" survived the knob being flipped to 1.0, which inverted
   // the meaning of the whole asset-pack section.
-  const lighting = read("js/game/lighting-knobs.js");
+  const lighting = read("js/lighting/knobs.js");
   const def = lighting.match(/\{\s*id:\s*"matTexMix"[^}]*?\bdef:\s*([\d.]+)/);
   assert.ok(def, "matTexMix is no longer a TUNE_DEFS entry with a def");
   const on = Number(def[1]) > 0;
@@ -413,7 +427,7 @@ test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
 });
 
 test("AGENTS.md's layout names the module-roster truth it defers to", () => {
-  // History: js/game/sheetshape.js and js/game/topmodal.js shipped while absent
+  // History: js/ui/sheet-shape.js and js/ui/modal.js shipped while absent
   // from the then-exhaustive layout, so an agent reading it concluded they did
   // not exist — and this guard required every js/game basename in the file.
   // The 2026-08-13 slimming inverted the contract: the layout is a directory

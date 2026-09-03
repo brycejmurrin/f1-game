@@ -5,7 +5,7 @@
  * Apex 26 — batch glTF -> AX26 model importer.
  *
  * WHY THIS IS SEPARATE FROM assets.mjs bake-model. bake-model takes one local
- * .glb and leans on the game's OWN js/render/gltf.js (GLB-only, no external
+ * .glb and leans on the game's OWN js/render/shared/gltf.js (GLB-only, no external
  * .bin). Real CC0 model PACKS are directories of .gltf + sidecar .bin + a
  * texture, dozens of files, and they arrive on a GitHub Actions runner rather
  * than a dev machine — because the runner has open network and CORS does not
@@ -23,7 +23,7 @@
  *
  *   node tools/import-models.mjs <dir> [--mat CONCRETE] [--height 12] [--prefix q_]
  *
- * Writes assets/pack/models/<name>.bin (the format js/render/assets.js parses)
+ * Writes assets/pack/models/<name>.bin (the format js/render/shared/assets.js parses)
  * and updates the manifest. --height normalises each model to that many metres
  * tall, because pack authors use wildly different unit scales.
  */

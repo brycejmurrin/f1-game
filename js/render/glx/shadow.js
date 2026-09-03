@@ -1,4 +1,4 @@
-/* Apex 26 — GLX shadow subsystem (split out of js/render/glx.js). Owns the static sun shadow map, the per-frame dynamic CAR map, the nearest-floodlight spot map, … */
+/* Apex 26 — GLX shadow subsystem (split out of js/render/glx/glx.js). Owns the static sun shadow map, the per-frame dynamic CAR map, the nearest-floodlight spot map, … */
 "use strict";
 
 const GLXShadow = (function () {

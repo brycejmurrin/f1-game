@@ -381,7 +381,7 @@ contract — the shape of an answer that was never physical to begin with.
   authoring zones as `(fromTurn, toTurn)` pairs failed — 35 of 68 spans came
   out short or curved — because `def.turns` numbered corners as "the N
   strongest curvature peaks in lap order" against a line in the wrong place.
-  With that repaired, `js/game/aerozones.js`'s `AERO_ZONE_TURNS` now names the
+  With that repaired, `js/physics/aero-zones.js`'s `AERO_ZONE_TURNS` now names the
   bounding turns for 21 of the 22 circuits with a published zone count (all
   but `monaco`, which is 0 zones and needs none). Deliberately NOT a fresh
   corner-by-corner re-research: each pair is derived from — and verified

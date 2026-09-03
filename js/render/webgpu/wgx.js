@@ -30,7 +30,7 @@ const WGX = (function () {
   //   rung 2  minimal — lite + NO post chain (tonemap blit), no env probe,
   //                     DPR capped at 1 (scene+depth+swapchain only)
   // A loss ON rung 2 is the exit: session-skip this tab to GLX, keep the pick.
-  // An explicit RENDERER re-pick clears the ladder (js/game/gfx-quality.js).
+  // An explicit RENDERER re-pick clears the ladder (js/perf/quality-preset.js).
   let _wgxLevel = 0;
   try {
     _wgxLevel = parseInt(localStorage.getItem("apex26.gfxWgxLevel") || "0", 10) || 0;
@@ -147,7 +147,7 @@ const WGX = (function () {
   const DRAW_STRIDE = 256;
   const MAX_DRAWS = 4096;                               // per-frame draw slots
   // Per-chunk lamps (bindings 15/16). TRACK_LIGHT_CAP sits above the ~800-lamp
-  // bake ceiling in js/game/track-lights.js; CHUNK_IDX_CAP bounds the concatenated
+  // bake ceiling in js/lighting/track-lights.js; CHUNK_IDX_CAP bounds the concatenated
   // per-chunk index table across every chunked mesh in a bake generation
   // (measured visible-chunk counts are ~150 worst; whole-table sizes are far
   // smaller than 16384 at CAP 24 — overflow warns and falls back to global).
@@ -912,7 +912,7 @@ const WGX = (function () {
       let hidden = false;
       try { hidden = !!(typeof document !== "undefined" && document.hidden); } catch (_) { /* no document (harness) */ }
       if (!hidden) {
-        // BOTH opt-ins, not one. GLX's webglcontextlost (js/render/glx.js) and
+        // BOTH opt-ins, not one. GLX's webglcontextlost (js/render/glx/glx.js) and
         // TLX's onDeviceLost each disarm envProbeOff AND perChunkOff; WGX wrote
         // only the second, so a visible WGX loss that escalated to a GLX
         // session-skip handed GLX a tab with the env probe still armed — the
@@ -1372,7 +1372,7 @@ const WGX = (function () {
       // compare less-equal: SKY_VS puts the fullscreen tri at depth 1.0 (z=w), so
       // early sky paints the clear background, and late sky (opaque → sky →
       // glow) still only fills pixels the world left at the far plane — GLX
-      // parity (js/render/shaders/sky.js + glx.js drawSky depthMask false /
+      // parity (js/render/glx/shaders/glsl-sky.js + glx.js drawSky depthMask false /
       // LEQUAL). Was "always": correct only for sky-FIRST. After late sky
       // shipped, ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors
       // / melted world; cars still visible because they draw after the sky).
@@ -1483,7 +1483,7 @@ const WGX = (function () {
       matPlaceNormalView = matPlaceAlbedoView; // shared 1×1×N dummy is enough
       matAlbedoView = matPlaceAlbedoView;
       matNormalView = matPlaceNormalView;
-      // maxAnisotropy 4 matches GLX (js/render/glx.js applies the same cap to the
+      // maxAnisotropy 4 matches GLX (js/render/glx/glx.js applies the same cap to the
       // MAT array) and TLX (anisotropy = 4). The road is the grazing-angle
       // surface these exist for — trilinear alone smears tarmac aggregate into
       // mip mush ~20 m ahead of the car. WebGPU only allows it when all three
@@ -3038,7 +3038,7 @@ const WGX = (function () {
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
       return { _wgx: "chunked", vbuf, ibuf, sbuf, attrBG, chunks, count: total, indexFormat };
     }
-    // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx.js): a
+    // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx/glx.js): a
     // 256×256 2D-canvas of value-noise + smudge blobs + dust specks + wipe
     // streaks, uploaded as an rgba8unorm texture the composite samples (.r). Same
     // seeded PRNG + draw ops as GLX, so the WebGPU grime matches the WebGL2 look.
@@ -3269,7 +3269,7 @@ const WGX = (function () {
       // map can't leak shadows into a night scene.
       const sunUp = !sd || sd[1] > -0.05;
       d[72] = (_shadowRendered && sunUp) ? 1 : 0;
-      // SHADOW STRENGTH knob × KEY-luminance fade (GLX parity, js/render/glx.js lit
+      // SHADOW STRENGTH knob × KEY-luminance fade (GLX parity, js/render/glx/glx.js lit
       // begin): the night moon-key is deliberately held HIGH (sunDir.y ≈ 0.97
       // drives the sky glow), so the binary sunUp gate above never fires at
       // night — without this fade WebGPU kept full-strength terrain/road sun
@@ -3441,7 +3441,7 @@ const WGX = (function () {
         const AL = frameAllLights;
         const tn = Math.min(TRACK_LIGHT_CAP, (AL.length / 15) | 0), td = _tlScratch;
         // THIRTEEN of the sixteen lanes are baked-static — the same split
-        // js/game/frame-lights.js makes upstream, where only rgb can move. _tlScratch
+        // js/lighting/frame-lights.js makes upstream, where only rgb can move. _tlScratch
         // is module-scope and written nowhere else, so its static lanes survive
         // between frames and only need writing when the SET changes. Gen moves
         // every frame under flicker or the warm-up ramp, and that used to rewrite
@@ -4061,7 +4061,7 @@ const WGX = (function () {
       }
     }
 
-    // GLX parity (js/render/glx.js envFaceBegin/End): capture ONE cube face of the world
+    // GLX parity (js/render/glx/glx.js envFaceBegin/End): capture ONE cube face of the world
     // around the player car per frame into a real RGBA16F cube; after a full 6-face
     // cycle the LIT car-paint block samples it (Block 7, envProbeStr). game.js re-issues
     // the world draws (track meshes then drawSky, NO cars) between begin/end — they record

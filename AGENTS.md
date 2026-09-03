@@ -168,17 +168,19 @@ circuit; script-tag order == `Tracks.LIST` == picker order). The module roster
 and load order live in `tools/manifest.cjs` — read that, not this file, to
 enumerate what exists; `index.html` script order is guard-asserted against it.
 
-- `js/log.js`, `js/mat4.js` — Log loads FIRST; M4/V3 math + shared
+- `js/core/log.js`, `js/core/mat4.js` — Log loads FIRST; M4/V3 math + shared
   clamp/lerp/wrapDelta
 - `js/game.js` — entry: game loop, physics, AI, race flow; hands the `G` ctx
   façade to `js/game/*` modules (one `Module.create(G)` per file; modules
-  never reach into game.js; `js/game/apex.js` is the `__apex` dev API)
-- `js/render/` — Gfx façade → GLX (WebGL2 default: core + `glx/` passes +
-  `shaders/` GLSL-as-data), `gltf.js`, `assets.js` (baked pack loader).
+  never reach into game.js; `js/agent/apex.js` is the `__apex` dev API)
+- `js/render/` — `gfx.js` façade → GLX (WebGL2 default) in `glx/`: the core,
+  its passes and `glx/shaders/` GLSL-as-data. `shared/` is what every backend
+  uses — `assets.js` (baked pack loader), `gltf.js`, `lamp-chunks.js`.
   DEFERRED backends, no script tag, injected at boot: `webgpu/` WGX and
   `three/` TLX (opt-in `apex26.gfxBackend="three"`)
-- `js/track/` — spline mesh geom graph space surface models themes kits maps
-  + the scenery split; only GENERIC tables live here — a circuit's path,
+- `js/track/` — the ENGINE: `core/` (spline mesh geom space surface),
+  `scenery/` (the split + graph models themes kits) and `tracks.js`; only
+  GENERIC tables live here — a circuit's path,
   markings and dressing rows are keys of its def (`js/circuits/<id>.js` is
   the single home); the 111-member scenery(api) contract is frozen by
   `tests/unit/scenery-api-contract.test.mjs`
@@ -229,7 +231,7 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - Frac-keyed def tables must respect `def._sceneryShift`: consume via the
   compensated idiom (`bankingProfile`, `buildCenterline`) — a raw `frac` read
   places things 2/3 of a lap away.
-- Logging goes through `Log` (`js/log.js`), never bare `console.*`: namespace
+- Logging goes through `Log` (`js/core/log.js`), never bare `console.*`: namespace
   first arg, console threshold `warn`, ring buffer `info` (`__apex.logs()`).
   Guard hot-path debug lines with `Log.enabled(ns, level)`; set via
   `__apex.logLevel("ns:debug")`, `?log=`, or `APEX_LOG=` for test runs.
@@ -248,7 +250,7 @@ Full reference `docs/PHYSICS.md`. Two rules bind everywhere:
   assist-gated, broadcast-only, surface — table in docs/PHYSICS.md).
 
 Read `c.aeroX` (or `aeroDfMult(c)`), never `c.xOn`. Immutable model numbers
-live in `js/game/physics-consts.js`; tunables stay `let`s in game.js.
+live in `js/physics/consts.js`; tunables stay `let`s in game.js.
 `tests/specs/physics-characterization.spec.js` is the master gate for anything
 near game.js.
 

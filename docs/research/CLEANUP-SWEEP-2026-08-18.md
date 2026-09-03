@@ -18,8 +18,8 @@ are clean. Cleanup here is subtractive hygiene plus a next-extraction map.
 |---|---|---|
 | **REMOVE** | `tests/helpers/seed-log.cjs` | Duplicate of `seed-log.mjs`. Zero imports. |
 | **REMOVE** | `artifacts/cleanup-survey/*` | Incomplete survey (2 of 11 files) tracked despite `artifacts/` being gitignored. |
-| **CONSOLIDATE** | `js/track/mesh.js` `bankingProfile` | Local `wrap01` now aliases `TrackSpace.wrap01` (space.js already precedes mesh.js). |
-| **STALE** | `js/game/agentview.js` | `curvatureRaw` no longer claims `+ = right`. |
+| **CONSOLIDATE** | `js/track/core/mesh.js` `bankingProfile` | Local `wrap01` now aliases `TrackSpace.wrap01` (space.js already precedes mesh.js). |
+| **STALE** | `js/agent/agentview.js` | `curvatureRaw` no longer claims `+ = right`. |
 | **STALE** | `.claude/skills/pwa-cache-service-worker/SKILL.md` | `test-bg.mjs` has no `service-worker` group; the gate is `npm run test:service-worker`. |
 | **STALE** | `README.md` `test:fast` | Not a ~3 min subset on SwiftShader. |
 | **STALE** | `docs/COMPONENTS.md` | Class count 508 → 505 (inventory method). |

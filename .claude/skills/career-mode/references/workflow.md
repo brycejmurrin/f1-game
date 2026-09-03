@@ -55,14 +55,14 @@ Load from the SKILL.md index when the task needs this detail.
    - Run `test:modes` in the background via `tools/test-bg.mjs` (covers career + quali).
 
 8. **Cache-bust JS/CSS edits.**
-   - Career often touches `js/game/career*.js`, `js/game/quali.js`,
-     `js/game/reliability.js`, or `css/career.css`; run `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
+   - Career often touches `js/career/career*.js`, `js/race/quali-model.js`,
+     `js/race/reliability.js`, or `css/career.css`; run `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
 
 ## Common Mistakes
 
 - Confusing **research facility** with **fitted budget cap**: facility =
   `facilityDiscount()` on research cost; cap = `Career.budget()` /
-  `budgetLvl` (separate ladder; `Career.upgradeBudget()` in `js/game/career.js`). When the user says
+  `budgetLvl` (separate ladder; `Career.upgradeBudget()` in `js/career/career.js`). When the user says
   "budget cap wrong after facility upgrade", check this split first — upgrading
   the facility does not raise the cap.
 - Treating "save exists" as "career rules are active", leaking development or

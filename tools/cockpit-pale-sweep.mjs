@@ -27,7 +27,7 @@ export const isPale = (c) =>
   (Math.max(c[0], c[1], c[2]) - Math.min(c[0], c[1], c[2])) < 0.35;
 
 // The cockpit eye, car-local. Mirrors COCKPIT_EYE_UP / COCKPIT_EYE_FWD in
-// js/game/cameras.js — if those move, move this with them.
+// js/camera/vantage.js — if those move, move this with them.
 export const EYE = [0, 0.82, -0.20];
 
 export function loadCar3D() {
@@ -37,7 +37,7 @@ export function loadCar3D() {
   // races in. The first version of this loader stopped at teams.js, which is
   // why the guard built on it swept every team with `opts.livery` absent — and
   // therefore could not see nose/pod/halo/stripe/noseStripe at all.
-  for (const f of ["js/log.js", "js/mat4.js", "js/car/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/car3d.js"])
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/car3d.js"])
     vm.runInContext(readFileSync(f, "utf8"), ctx, { filename: f });
   return {
     Car3D: vm.runInContext("Car3D", ctx),
@@ -87,7 +87,7 @@ function nearestHit(m, d) {
   return best;
 }
 
-// Cockpit FOV is 64..78 deg vertical (js/game/cameras.js); 2.2 aspect is a
+// Cockpit FOV is 64..78 deg vertical (js/camera/vantage.js); 2.2 aspect is a
 // phone in landscape, the widest shipped shape and so the worst case.
 export function sweep(mesh, { vfov = 78, aspect = 2.2, step = 1.5 } = {}) {
   const buckets = new Map(); let rays = 0, pale = 0;

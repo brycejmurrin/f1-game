@@ -34,7 +34,14 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createRequire } from "node:module";
 import { scanRepo, buildGraph, checkGraph } from "../../tools/scan-globals.mjs";
+
+const require = createRequire(import.meta.url);
+const MANIFEST = require("../../tools/manifest.cjs");
+// "everything directly under <dir>/" as a path regex, from the manifest's own
+// directory constant — the one place the circuits' home is spelled.
+const homeOf = (dir) => new RegExp("^" + dir.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&") + "/[^/]+\\.js$");
 
 // One scan serves every test below (~2 s for the ~170 files).
 const scan = scanRepo();
@@ -47,7 +54,7 @@ const report = checkGraph(scan);
 
 // Files allowed to eval-assign MORE than one global, with the exact set.
 const MULTI_GLOBAL = {
-  "js/mat4.js": ["M4", "V3"], // grandfathered pair — the matrix+vector math island
+  "js/core/mat4.js": ["M4", "V3"], // grandfathered pair — the matrix+vector math island
 };
 
 // Globals deliberately written by MANY files (accumulator idiom:
@@ -67,26 +74,26 @@ const SHARED_GLOBALS = {
 // exactly TrackDefs), so the only thing to pin is that nothing OUTSIDE
 // js/circuits/ ever writes it.
 const GROWABLE_GLOBALS = {
-  TrackDefs: /^js\/circuits\//,
+  TrackDefs: homeOf(MANIFEST.CIRCUITS_DIR),
   // Same idiom, same reason, one directory deeper: each circuit's bespoke
   // scenery closure was split out of its def file so the 1,083 KB of closures
   // stops riding the boot script wall for a session that builds ONE circuit.
   // Forty writers by design; what is pinned is that nothing outside the split
   // directory writes it.
-  TrackScenery: /^js\/circuits\/scenery\//,
+  TrackScenery: homeOf(MANIFEST.SCENERY_DIR),
 };
 
 // Known reads of names NO manifest file assigns — each with its story. A new
 // external name is a red flag (an undeclared dependency or a typo'd global).
 const KNOWN_EXTERNAL_READS = {
   "js/track/tracks.js": ["CircuitElevations"],  // future tools/bake-elevation.mjs output; typeof-guarded feature probe
-  "js/game/spotify.js": [
+  "js/audio/spotify.js": [
     "Spotify",                      // the Spotify Web Playback SDK, injected at connect time
     "onSpotifyWebPlaybackSDKReady", // the SDK's own window callback contract
   ],
-  "js/game/menus.js": ["__APEX_BUILD"],          // exportRecovery stamps the shell build id
-  "js/game/perf.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
-  "js/game/apex.js": ["__APEX_BUILD", "__apexErrors"],      // the shell is outside the manifest,
+  "js/ui/select-screen.js": ["__APEX_BUILD"],          // exportRecovery stamps the shell build id
+  "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
+  "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors"],      // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "__TEST_MODE"], // so the scan cannot see the writer; Playwright init-script flag
   "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
 };

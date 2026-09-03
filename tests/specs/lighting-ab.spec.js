@@ -24,7 +24,7 @@ import { join } from "node:path";
 
 // JOINED, NOT CONCATENATED. dc06779 stripped ROOT's trailing slash (a real fix
 // for a Windows path bug elsewhere), but every consumer here appends a
-// RELATIVE path — "js/game/lighting.js" — so `ROOT + k.file` became
+// RELATIVE path — "js/lighting/lighting.js" — so `ROOT + k.file` became
 // `/home/user/f1-gamejs/game/lighting.js` and this guard died with ENOENT on
 // the deploy branch. path.join is correct whichever way ROOT is normalised
 // next, which string concatenation never was.
@@ -92,7 +92,7 @@ test("A/B knob catalog matches the source exactly (1 hit per knob)", () => {
   // variant server — a stale string just stops freezing (noisy night A/Bs)
   // without any error, so it must be pinned here like the knobs.
   // Read the file the harness actually patches, not a hardcoded one: the flicker
-  // moved to js/game/lighting.js with the LightTune extraction, and pinning
+  // moved to js/lighting/lighting.js with the LightTune extraction, and pinning
   // js/game.js here meant this guard reported the failure it could not fix.
   const ff = srcCache[FREEZE_FLICKER_FILE] || readFileSync(at(FREEZE_FLICKER_FILE), "utf8");
   const nFF = ff.split(FREEZE_FLICKER[0]).length - 1;

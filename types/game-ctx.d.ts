@@ -17,7 +17,7 @@
       writability. Add a G member without adding it here (or vice versa) and the
       unit suite goes red in the same session that introduced the drift.
    2. USAGE. The tool extracts every `G.<member>` reference and every
-      `const {…} = G` destructure from js/game/*.js and js/net/*.js, emits them
+      `const {…} = G` destructure from every manifest module whose create() takes the ctx, emits them
       as a typed shadow file against this interface, and runs `tsc --noEmit`
       over it. A read of a member that does not exist, or a write to a readonly
       one, is a compile error carrying the real source file:line.
@@ -70,7 +70,7 @@ interface TrackModel {
   [key: string]: unknown;
 }
 
-/** A team row from Teams.LIST — js/car/teams.js. */
+/** A team row from Teams.LIST — js/data/teams.js. */
 interface TeamDef {
   id: string;
   name: string;
@@ -113,10 +113,10 @@ interface CarState {
   [key: string]: unknown;
 }
 
-/** The season standings/calendar save — js/game/store.js migrateSeasonPoints. */
+/** The season standings/calendar save — js/core/store.js migrateSeasonPoints. */
 type SeasonState = Opaque;
 
-/** The career save. Owner: js/game/career.js (Career.data()). */
+/** The career save. Owner: js/career/career.js (Career.data()). */
 type CareerSave = Opaque;
 
 /** What Career.settleRound() resolved for the round just finished, or null. */
@@ -129,7 +129,7 @@ type FrameState = Opaque;
     Phase 3 replaces this with the authored `RendererBackend` interface. */
 type GfxBackend = Opaque;
 
-/** The cached localStorage wrapper — js/game/store.js. All keys "apex26."-prefixed. */
+/** The cached localStorage wrapper — js/core/store.js. All keys "apex26."-prefixed. */
 interface StoreApi {
   /** Parsed value for `k`, or `d` when absent/unreadable. */
   get<T>(k: string, d: T): T;
@@ -175,7 +175,7 @@ interface TestInput { steer: number; throttle: boolean; brake: boolean; }
 /** A scheduled weather transition — startWeatherArc(). */
 interface WeatherArc { from: string; to: string; t: number; dur: number; seq: unknown; }
 
-/** An ACTIVE AERO activation zone, in arc metres. Owner: js/game/aerozones.js. */
+/** An ACTIVE AERO activation zone, in arc metres. Owner: js/physics/aero-zones.js. */
 interface AeroZone { start: number; end: number; len: number; }
 
 /** A pooled centreline sample (position, tangent, right, half-width). */
@@ -194,10 +194,10 @@ interface PhotoMouse { dx: number; dy: number; drag: boolean; px: number; py: nu
 interface PhotoAxis { x: number; y: number; }
 
 /** The lighting profile store, keyed "track|timeOfDay|weather" (plus "*").
-    Owner: js/game/light-store.js; tuner.js mutates it for RESET/COPY VALUES. */
+    Owner: js/lighting/profiles.js; tuner.js mutates it for RESET/COPY VALUES. */
 type LightProfiles = Record<string, Record<string, unknown>>;
 
-/** The caution/flag picture race control publishes — js/game/racecontrol.js. */
+/** The caution/flag picture race control publishes — js/race/race-control.js. */
 interface CautionInfo {
   level: number; sector: number; frac: number; total: number;
   sectors: [number, number, number]; sinceT: number; cause: string;
@@ -304,7 +304,7 @@ interface GameCtx {
   /** flow/session are the authority; seasonMode/timeTrial are derived views. */
   flow: FlowMode;
   session: SessionMode;
-  /** Read-through to js/game/career.js — one copy, never a stale mirror. */
+  /** Read-through to js/career/career.js — one copy, never a stale mirror. */
   readonly career: CareerSave;
   readonly careerSettlement: CareerSettlement | null;
   readonly openCareer: () => void;
@@ -380,13 +380,13 @@ interface GameCtx {
   ttLaps: number[];
   weatherArc: WeatherArc | null;
 
-  // ── Atmosphere state (js/game/atmosphere.js) ──────────────────────────────
+  // ── Atmosphere state (js/lighting/atmosphere.js) ──────────────────────────────
   _cloudBase: number;
   _ltBase: unknown;
   _ltFlash: number;
   _ltNextT: number;
 
-  // ── Garage / setup preview (js/game/setup-ui.js) ──────────────────────────
+  // ── Garage / setup preview (js/garage/setup-sheet.js) ──────────────────────────
   livDraftOverride: unknown;
   _spMeshKey: string;
   setupPreviewOn: boolean;
@@ -422,7 +422,7 @@ interface GameCtx {
   unlimitedBudget: boolean;
   teamIdx: number;
 
-  // ── Livery/parts persistence helpers (js/game/setup-ui.js) ────────────────
+  // ── Livery/parts persistence helpers (js/garage/setup-sheet.js) ────────────────
   readonly arrToHex: (a: Vec3) => string;
   readonly hexToArr: (h: string) => Vec3;
   /** Arm-then-confirm for destructive buttons (the career DELETE? idiom, shared): first call arms in place and returns false, second runs `action`; disarm = the caller rebuilding the node. */
@@ -494,7 +494,7 @@ interface GameCtx {
   readonly trackFrom: (px: number, pz: number, sPredicted: number) => { s: number; x: number };
   readonly worldFromTrack: (s: number, x: number) => { x: number; z: number };
 
-  // ── Model constants published for js/game/quali.js and the net layer ──────
+  // ── Model constants published for js/race/quali-model.js and the net layer ──────
   readonly GAME_LAPS: number;
   readonly TT_LAPS: number;
   readonly LONG_GRIP: number;
@@ -598,11 +598,11 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
 }
 
 /* The modules constructed with the ctx itself — `X.create(G)` in game.js, plus
-   AgentView, which js/game/apex.js builds off the ctx it was handed.
+   AgentView, which js/agent/apex.js builds off the ctx it was handed.
    tools/check-gctx.mjs resolves every `X.create(<ctx>)` call site through
    eslint-scope and asserts the two lists agree, so a new ctx module that is not
    declared here fails the surface test. NOT here, deliberately: AgentRaster
-   (the AgentRaster.create call in js/game/agentview.js hands it a bespoke bag, not the ctx) and
+   (the AgentRaster.create call in js/agent/agentview.js hands it a bespoke bag, not the ctx) and
    NetSession (js/net/session.js takes {transport}) — same `create()` spelling,
    different contract. */
 declare const AeroZones: GameModuleFactory;

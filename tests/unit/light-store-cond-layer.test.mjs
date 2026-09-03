@@ -52,7 +52,7 @@ function loadStore({ presets = {}, tod = "night", track = "vegas",
   const ctx = vm.createContext({
     window: { LightPresets: presets },
     LightTune: { TUNE_DEFS: DEFS, LT: {} },
-    // MIRROR THE REAL EXPORT: js/game/gfx-quality.js ends with
+    // MIRROR THE REAL EXPORT: js/perf/quality-preset.js ends with
     // `current: () => current().id`, so current() IS the id STRING, not a
     // preset object. This stub used to return { id } — the same mistake
     // light-store.js made at its call site, so the two cancelled out and this
@@ -63,8 +63,8 @@ function loadStore({ presets = {}, tod = "night", track = "vegas",
     Math, JSON, Object, Array, Number, isFinite, console,
   });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/game/light-store.js"), "utf8"), ctx,
-    { filename: "js/game/light-store.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/lighting/profiles.js"), "utf8"), ctx,
+    { filename: "js/lighting/profiles.js" });
   const store = vm.runInContext("LightStore", ctx).create(G);
   const LT = vm.runInContext("LightTune.LT", ctx);
   store.apply();

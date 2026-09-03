@@ -36,7 +36,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const CASES = [
   {
     name: "side-flip moved kerbs/barriers on all 40 circuits (89ce4f2f)",
-    changed: ["js/track/tracks.js", "js/track/geom.js"],
+    changed: ["js/track/tracks.js", "js/track/core/geom.js"],
     catches: "tests/specs/terrain-over-road.spec.js",
   },
   {
@@ -46,12 +46,12 @@ export const CASES = [
   },
   {
     name: "MUSIC & SOUND panel extracted out of game.js (bb4268b0)",
-    changed: ["js/game/audio-panel.js", "js/game.js"],
+    changed: ["js/audio/panel.js", "js/game.js"],
     catches: "tests/specs/audio-smoke.spec.js",
   },
   {
     name: "hold-button input net #4 (716bd1a2)",
-    changed: ["js/game/input.js"],
+    changed: ["js/input/input.js"],
     catches: "tests/specs/touch-steer.spec.js",
   },
   {

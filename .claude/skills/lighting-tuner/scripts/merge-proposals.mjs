@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Merge lighting deltas into js/game/light-presets.js.
+// Merge lighting deltas into js/lighting/presets.js.
 //
 //   node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs                       # the proposals dir
 //   node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs artifacts/lighting/proposals
@@ -19,8 +19,8 @@ import { join, resolve } from "node:path";
 import vm from "node:vm";
 
 const ROOT = resolve(new URL("../../../../", import.meta.url).pathname);
-const LP = join(ROOT, "js/game/light-presets.js");
-const LIGHTING = join(ROOT, "js/game/lighting-knobs.js");
+const LP = join(ROOT, "js/lighting/presets.js");
+const LIGHTING = join(ROOT, "js/lighting/knobs.js");
 // A directory of proposal JSON, or ONE file — which is what a pasted export is.
 const TARGET = resolve(process.argv[2] || join(ROOT, "artifacts/lighting/proposals"));
 

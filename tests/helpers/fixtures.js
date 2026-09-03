@@ -46,7 +46,7 @@ export { TRACK_STALL_MS, awaitTrackBuild };
  *      report on failure — so a red test shows what the PAGE said, not only
  *      what the assertion said.
  *
- *   4. The `Log` ring buffer (js/log.js) attached on failure too. Console
+ *   4. The `Log` ring buffer (js/core/log.js) attached on failure too. Console
  *      capture only sees what was PRINTED; the ring holds everything retained
  *      (default down to `info`), which is the half that used to be lost.
  *
@@ -71,7 +71,7 @@ const JOLPICA_STUB = JSON.stringify({
 });
 const OPENF1_STUB = JSON.stringify([]);
 
-// APEX_LOG is a js/log.js level spec ("debug", "scenery:debug", "buffer:trace").
+// APEX_LOG is a js/core/log.js level spec ("debug", "scenery:debug", "buffer:trace").
 // It is written to localStorage rather than passed as a query param because the
 // specs navigate to "/" themselves and would drop a query string.
 const LOG_SPEC = process.env.APEX_LOG || "";
@@ -187,7 +187,7 @@ export const test = base.extend({
 // On any failure, attach everything that explains it and nothing that does not:
 //   apex-state    — physState + timing + lightState, so a bare "expected X < Y"
 //                   becomes an actionable dump (live-reporter.js echoes it inline)
-//   apex-logs     — the js/log.js ring buffer: retained diagnostics down to
+//   apex-logs     — the js/core/log.js ring buffer: retained diagnostics down to
 //                   `info`, INCLUDING the ones that were never printed
 //   page-console  — what the page actually said, in order
 // All three are free on a passing test — they are only collected when red.

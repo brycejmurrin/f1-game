@@ -56,9 +56,9 @@ function load() {
     Tracks: { LIST: [] },
   });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/game/career.js"), "utf8"), ctx,
-    { filename: "js/game/career.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
+    { filename: "js/career/career.js" });
   return vm.runInContext("Career", ctx);
 }
 

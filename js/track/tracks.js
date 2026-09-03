@@ -10,7 +10,7 @@ const Tracks = (function () {
   const { cr, sample, curvatureRaw, curvature, project, wallAt } = TrackSpline;
   const { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
           nodeGrid, buildRoad, buildTerrain, buildFloor } = TrackMesh;
-  const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/models.js (this file is AT its module-size ceiling — one line only)
+  const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/core/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/scenery/models.js (this file is AT its module-size ceiling — one line only)
 
   function buildCenterline(def) {
     ensurePoints(def);
@@ -419,7 +419,7 @@ const Tracks = (function () {
     // note() records the semantic placements only — a tree, a building, a
     // grandstand — NOT every primitive. Vegas emits ~94k primitives; a tree alone
     // is a trunk plus several canopy tiers, so recording primitives would cost far
-    // more and say far less. Consumed by __apex.scene() (js/game/agentview.js).
+    // more and say far less. Consumed by __apex.scene() (js/agent/agentview.js).
     //
     // Recording happens at the point of emission, AFTER each emitter's on-track
     // and mass-collision guards, so a suppressed prop never enters the registry —
@@ -1758,7 +1758,7 @@ const Tracks = (function () {
     //       grandstand(K(0.12), -1, 14, 40);
     //
     // Never async: Assets prefetches every model at boot precisely so that prop
-    // placement cannot vary with network timing (js/render/assets.js modelSync).
+    // placement cannot vary with network timing (js/render/shared/assets.js modelSync).
     function bakedModel(id, k, side, dist, opts) {
       if (typeof Assets === "undefined" || !Assets.modelSync) return false;
       const mesh = Assets.modelSync(id);
@@ -2210,7 +2210,7 @@ const Tracks = (function () {
       //                           exact thing the field was added to stop
       //   undulate              buildCenterline — the opt-out could not be taken
       // This trap has bitten before and was fixed for ONE field only (see the
-      // `pal` note in js/game/atmosphere.js); nobody swept the rest. The guard
+      // `pal` note in js/lighting/atmosphere.js); nobody swept the rest. The guard
       // in tests/unit/circuit-def-fields.test.mjs is what stops the sixth.
       sunAzimBias: d.sunAzimBias,
       sceneryTheme: d.sceneryTheme,

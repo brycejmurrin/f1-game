@@ -414,7 +414,7 @@ const PROBE = (rootSel) => {
   // it overflows nothing, it sits inside its parent, and the cell scores GREEN.
   //
   // Three real ones, all found by eye, none by this tool:
-  //   - js/game/sheetshape.js exists because #sel-tracks got TWO PIXELS on a
+  //   - js/ui/sheet-shape.js exists because #sel-tracks got TWO PIXELS on a
   //     rotated monitor. The header of that file is the write-up.
   //   - #sel-tracks again, 2026-08-12, on a landscape phone at UI SIZE 150% —
   //     the same two pixels down a different path (flex shrink), and portrait
@@ -768,7 +768,7 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
       }
       await screen.open(page, screen.circuit);
       // WAIT FOR THE OPEN TRANSITION, DO NOT GUESS AT IT. Every `.screen` is a
-      // <dialog> that fades in (js/game/topmodal.js), and a flat 400ms measured
+      // <dialog> that fades in (js/ui/modal.js), and a flat 400ms measured
       // it MID-FADE on a loaded box: the probe's own `visible()` test reads
       // `opacity: 0` and reports the root absent. That is what produced
       // `rootPresent: false` on 19 of 38 screens per viewport in the 2026-08-08

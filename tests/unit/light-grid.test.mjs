@@ -6,7 +6,7 @@
  * not on that grid cannot be represented: the readout prints the true value
  * while the thumb snaps to the nearest notch, and the two disagree on screen.
  *
- * The damage is not cosmetic. js/game/light-store.js `set()` stores a player
+ * The damage is not cosmetic. js/lighting/profiles.js `set()` stores a player
  * override whenever the incoming value differs from `fallback(id)` — and
  * `fallback` includes the SHIPPED preset for the current condition. With
  * keyMul shipped at 0.85 against a 0.02 grid, the slider can only emit 0.84 or
@@ -42,7 +42,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
  *  (carEnvCube again, which is tier-gated on GLX.isMobile) yields def
  *  undefined; its range is still checked, its default is skipped. */
 function defs() {
-  const src = read("js/game/lighting-knobs.js");
+  const src = read("js/lighting/knobs.js");
   const starts = [...src.matchAll(/\{\s*id:\s*"(\w+)"/g)];
   const out = [];
   for (let i = 0; i < starts.length; i++) {
@@ -64,7 +64,7 @@ function defs() {
 /** The presets file assigns `window.LightPresets`; run it against a stub window. */
 function presets() {
   const ctx = vm.createContext({ window: {}, Math, JSON, Object, Array });
-  vm.runInContext(read("js/game/light-presets.js"), ctx, { filename: "js/game/light-presets.js" });
+  vm.runInContext(read("js/lighting/presets.js"), ctx, { filename: "js/lighting/presets.js" });
   return vm.runInContext("window.LightPresets", ctx);
 }
 
@@ -205,7 +205,7 @@ test("GRAPHICS: LOW must not zero look-defining post (bloom/SSAO/god-rays)", () 
   // healthy desktop. Look post reads autoTier() (crash + measured only);
   // cost rungs (env/SSR/shadows) still read tier() so LOW stays cheaper.
   const game = read("js/game.js");
-  const gfx = read("js/game/gfx-quality.js");
+  const gfx = read("js/perf/quality-preset.js");
   assert.match(gfx, /id:\s*"low"[\s\S]*?tier:\s*4/,
     "LOW must stay a cost-floor of 4 (env/SSR/shadows still shed)");
   for (const id of ["bloom", "ssao", "godray", "contact", "lampVol"]) {
@@ -278,8 +278,8 @@ test("every TUNE_DEFS uniform lives on GLX, WGX, and TLX", () => {
   // A new `u:` knob that ships on GLX only is the project's most persistent
   // look-drift: the slider moves, two backends ignore it. Name-presence is
   // the cheap half (upload + consume formulas stay in gfx-backend-canary).
-  const glx = ["js/render/glx.js", "js/render/glx/post.js", "js/render/glx/shadow.js",
-    "js/render/shaders/lit.js", "js/render/shaders/post.js", "js/render/shaders/sky.js"]
+  const glx = ["js/render/glx/glx.js", "js/render/glx/post.js", "js/render/glx/shadow.js",
+    "js/render/glx/shaders/glsl-lit.js", "js/render/glx/shaders/glsl-post.js", "js/render/glx/shaders/glsl-sky.js"]
     .map(read).join("\n");
   const wgx = ["js/render/webgpu/wgx.js", "js/render/webgpu/wgsl-chunks.js",
     "js/render/webgpu/wgsl-post.js"].map(read).join("\n");
@@ -473,7 +473,7 @@ function htmlRanges() {
 }
 
 function camDefs() {
-  const src = read("js/game/cam-tune.js");
+  const src = read("js/camera/offsets.js");
   const starts = [...src.matchAll(/\{\s*id:\s*"(\w+)"/g)];
   const out = [];
   for (let i = 0; i < starts.length; i++) {
@@ -506,7 +506,7 @@ test("CAMERA / SETTINGS / ADVANCED slider markup matches the JS clamps", () => {
   assert.match(fov.help || "", /20/, "CAM FOV help must name the 20° solved floor");
   assert.match(fov.help || "", /110/, "CAM FOV help must name the 110° solved ceiling");
 
-  const steer = read("js/game/steer-tuning.js");
+  const steer = read("js/input/steer-tuning.js");
   const num = (src, k) => Number((src.match(new RegExp(`${k}\\s*=\\s*(-?[\\d.]+)`)) || [])[1]);
   const SMIN = num(steer, "SLIDER_MIN"), SMAX = num(steer, "SLIDER_MAX");
   const LMIN = num(steer, "LINE_MIN"), LMAX = num(steer, "LINE_MAX");
@@ -515,7 +515,7 @@ test("CAMERA / SETTINGS / ADVANCED slider markup matches the JS clamps", () => {
   assert.equal(LMIN, -5); assert.equal(LMAX, 5);
   assert.equal(PMIN, 1); assert.equal(PMAX, 19);
 
-  const uiScale = read("js/game/ui-scale.js");
+  const uiScale = read("js/ui/scale.js");
   const SCALE_MIN = num(uiScale, "SCALE_MIN"), SCALE_MAX = num(uiScale, "SCALE_MAX");
   assert.equal(SCALE_MIN, 40); assert.equal(SCALE_MAX, 200);
 
@@ -548,7 +548,7 @@ test("god-ray lamp arrays are sized to the ONE bound the beam march walks", () =
   // extra slots are packed and uploaded every frame with no reader. So the
   // GLSL array size, the loop bound, the JS cap and the scratch lengths all
   // have to be the same number.
-  const shd = read("js/render/shaders/post.js");
+  const shd = read("js/render/glx/shaders/glsl-post.js");
   const post = read("js/render/glx/post.js");
 
   const N = Number((shd.match(/#define GR_MAX_LIGHTS (\d+)/) || [])[1]);

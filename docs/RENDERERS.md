@@ -47,12 +47,12 @@ would keep GLX’s dead closure).
 
 | Backend | Role | Entry | Shaders |
 |---|---|---|---|
-| **GLX** | Default always-tagged WebGL2 | `js/render/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
+| **GLX** | Default always-tagged WebGL2 | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
 | **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
 | **TLX** | Opt-in Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
 
-**Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/gltf.js`,
-`js/render/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
+**Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/shared/gltf.js`,
+`js/render/shared/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
 `tools/manifest.cjs` `DEFERRED`, mirrored into `js/roster.js` by `tools/gen-shell.mjs`; no `<script>` tags for
 WGX/TLX.
 
@@ -71,7 +71,7 @@ TSL post chain; stamps `renderOrder` for FX/glass.
 
 | Key | Role |
 |---|---|
-| `apex26.gfxBackend` | Pick: `webgl2` / `three` / `webgpu` (picked in `js/game/renderer-picker.js`) |
+| `apex26.gfxBackend` | Pick: `webgl2` / `three` / `webgpu` (picked in `js/perf/renderer-picker.js`) |
 | `apex26.gfxBackendProbe` | Canary armed around claim / first world `present()` |
 | `apex26.gfxClaimFail` (session) | Skip opt-in after canvas claim-and-die |
 | `apex26.gfxBound` (session) | Live fallback label while the pick stays |
@@ -95,7 +95,7 @@ with no player-reachable reset is a product bug (2026-09-03 phone-gate audit):
 | `apex26.gfxBackendProbe` | local | armed around the first world present | consumed at boot — a SURVIVING canary rewrites the pick to WEBGL2 (re-pick restores) |
 | `apex26.gfxClaimFail`, `tlxAutoGL`, `ctxLostReloads`, `wgxHoldPresent` | session | claim-and-die, third loss / 2 error frames, reload budget, soft-present hold | the tab closing; RESET RENDERER |
 
-`RENDERER_LS_KEYS` / `RENDERER_SS_KEYS` in `js/game/renderer-picker.js` are what
+`RENDERER_LS_KEYS` / `RENDERER_SS_KEYS` in `js/perf/renderer-picker.js` are what
 RESET RENDERER clears, and `tests/unit/gfx-backend-canary.test.mjs` walks
 `js/render/` for every `apex26.*` a backend writes and fails unless it is in one
 of those lists or declared a read-only debug pin — the hole `wgxHoldPresent`
@@ -193,7 +193,7 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   on all three backends. Every baked MAT layer is hoisted with
   `textureSample` (aniso 4) so brick/concrete match GLX `texture()`.
   Per-chunk lamps ship natively: the shared `LampChunks` bake
-  (`js/render/lamp-chunks.js`) uploads the full baked track set +
+  (`js/render/shared/lamp-chunks.js`) uploads the full baked track set +
   concatenated index table to storage bindings 15/16, one DrawU slot per
   visible chunk, absolute shadow index in `params10.x` (no slot remap);
   `gfx.hasPerChunkLights` is the capability read (GLX + WGX; absent TLX).
@@ -327,7 +327,7 @@ here is evidence about an iPhone too; `--lax-uniformity` opts out to bisect.
 ## Related
 
 - Module contract + GLX API sketch: [ARCHITECTURE.md](ARCHITECTURE.md)
-  (section *js/render/glx.js … — renderers*)
+  (section *js/render/glx/glx.js … — renderers*)
 - WGX recipes and inventory: [research/WEBGPU-PARITY.md](research/WEBGPU-PARITY.md)
 - Clipping / depth: [RENDER-CLIPPING.md](RENDER-CLIPPING.md)
 - Lighting uniforms: [LIGHTING-REF.md](LIGHTING-REF.md)

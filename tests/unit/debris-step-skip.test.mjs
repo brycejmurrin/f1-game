@@ -13,11 +13,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = fs.readFileSync(path.join(ROOT, "js/game/debrisworld.js"), "utf8");
+const SRC = fs.readFileSync(path.join(ROOT, "js/physics/debris-world.js"), "utf8");
 
 function extractFn(src, name) {
   const i = src.indexOf(`function ${name}(`);
-  assert.ok(i >= 0, `${name}() not found in js/game/debrisworld.js — was it renamed?`);
+  assert.ok(i >= 0, `${name}() not found in js/physics/debris-world.js — was it renamed?`);
   let depth = 0;
   for (let k = src.indexOf("{", i); k < src.length; k++) {
     if (src[k] === "{") depth++;

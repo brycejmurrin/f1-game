@@ -3,6 +3,12 @@
 Rules that bind in this directory (circuit DATA lives in `js/circuits/` —
 layout/palette/scenery edits go THERE, never here).
 
+Since the 2026-09-03 move window the engine is split: `core/` is the road
+itself (spline, mesh, geom, space, surface), `scenery/` is everything placed
+beside it (the emitter split, graph, models, themes, kits, the generic
+tables), and `tracks.js` at the root is the registry — `LIST`, `resolve`,
+`build`, palettes.
+
 - **The def is the single home of a circuit's data.** `path` (real
   centreline), `sectors`/`turns` (curated markings), `barrier`, `furniture`,
   `kit`, `standSet`, `cityStyle` are all keys of `js/circuits/<id>.js`; this

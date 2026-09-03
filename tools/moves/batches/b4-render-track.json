@@ -1,0 +1,29 @@
+{
+  "_doc": "Phase 2b batch b4-render-track",
+  "moves": {
+    "js/render/lamp-chunks.js": "js/render/shared/lamp-chunks.js",
+    "js/render/assets.js": "js/render/shared/assets.js",
+    "js/render/gltf.js": "js/render/shared/gltf.js",
+    "js/render/glx.js": "js/render/glx/glx.js",
+    "js/render/shaders/chunks.js": "js/render/glx/shaders/glsl-chunks.js",
+    "js/render/shaders/fx.js": "js/render/glx/shaders/glsl-fx.js",
+    "js/render/shaders/lit.js": "js/render/glx/shaders/glsl-lit.js",
+    "js/render/shaders/post.js": "js/render/glx/shaders/glsl-post.js",
+    "js/render/shaders/sky.js": "js/render/glx/shaders/glsl-sky.js",
+    "js/track/spline.js": "js/track/core/spline.js",
+    "js/track/mesh.js": "js/track/core/mesh.js",
+    "js/track/surface.js": "js/track/core/surface.js",
+    "js/track/space.js": "js/track/core/space.js",
+    "js/track/geom.js": "js/track/core/geom.js",
+    "js/track/scenery-city.js": "js/track/scenery/city.js",
+    "js/track/scenery-nature.js": "js/track/scenery/nature.js",
+    "js/track/scenery-structures.js": "js/track/scenery/structures.js",
+    "js/track/scenery-identity.js": "js/track/scenery/identity.js",
+    "js/track/graph.js": "js/track/scenery/graph.js",
+    "js/track/models.js": "js/track/scenery/models.js",
+    "js/track/themes.js": "js/track/scenery/themes.js",
+    "js/track/circuit-kit.js": "js/track/scenery/circuit-kit.js",
+    "js/track/landmark-kit.js": "js/track/scenery/landmark-kit.js",
+    "js/track/scenery-data.js": "js/track/scenery/data.js"
+  }
+}

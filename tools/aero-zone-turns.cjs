@@ -4,7 +4,7 @@
 /* Apex 26 — pair each geometry-detected straight run with the turns[] indices
  * that bound it, so a real (fromTurn, toTurn) zone description can be checked
  * against what the engine will actually select — the missing step the first
- * turn-keyed attempt skipped (see js/game/aerozones.js's ZONE_COUNT comment:
+ * turn-keyed attempt skipped (see js/physics/aero-zones.js's ZONE_COUNT comment:
  * that attempt hard-coded s0/s1 directly and never verified against the
  * geometry, so 35 of 68 spans came out short or curved).
  *

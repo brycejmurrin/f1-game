@@ -25,7 +25,7 @@ import { seedStoreGlobal } from "../helpers/seed-store.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
 seedStoreGlobal();   // perf.js persists the sentinel through GameStore.store's raw lane
-const SRC = fs.readFileSync(path.join(ROOT, "js/game/perf.js"), "utf8");
+const SRC = fs.readFileSync(path.join(ROOT, "js/perf/governor.js"), "utf8");
 
 // A localStorage that is just a Map, and a fresh PerfGov evaluated against it.
 // The raw lane reads the `localStorage` global live on every call, so
