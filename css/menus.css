@@ -687,13 +687,21 @@ body { --compact-at: 600px; --wide-at: 620px; }
    circuit aspect when the cap binds. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
   width: var(--sel-map-w, 100%);
-  max-height: 70%;
+  max-height: 78%;
   object-fit: contain;
   flex: 1 1 auto;
   min-height: 0;
 }
+#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview[data-map-shape="beside"] #sel-preview-map {
+  /* Facts sit beside a tall circuit — the 78% stacked reserve is wasted
+     band above and below the row. */
+  max-height: 100%;
+}
 #sel-inner[data-pair="on"]:not([data-shape="tall"])[data-density="compact"] #sel-track-preview #sel-preview-map {
   max-height: 92%;
+}
+#sel-inner[data-pair="on"]:not([data-shape="tall"])[data-density="compact"] #sel-track-preview[data-map-shape="beside"] #sel-preview-map {
+  max-height: 100%;
 }
 /* FIT THE PREVIEW, DO NOT SCROLL IT. Pair-on already gives this column a
    definite height (sheet grid row 2 is minmax(0, 1fr); body is display:contents).

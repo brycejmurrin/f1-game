@@ -785,16 +785,8 @@ function injectCss() {
     "#pm-metrics-details .pm-metrics-hint {",
     "  margin: 4px 0 0; opacity: .7; font-size: 11px; line-height: 1.3;",
     "}",
-    "@media (max-height: 420px) {",
-    "  #pm-metrics-details .pm-metrics-sub-body {",
-    "    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px;",
-    "    max-height: min(160px, calc(100 * var(--svhz, 1svh) - 7rem));",
-    "  }",
-    "  #pm-metrics-details .pm-metrics-sub-body > button { width: auto; }",
-    "  #pm-metrics-details .pm-metrics-hint {",
-    "    grid-column: 1 / -1; font-size: 10px; margin: 2px 0 0;",
-    "  }",
-    "}",
+    /* 2-up packing lives in css/components.css, keyed on SheetShape
+       data-shape / data-density — not a viewport max-height media. */
   ].join("\n");
   (document.head || document.documentElement).appendChild(s);
 }

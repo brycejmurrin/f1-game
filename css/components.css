@@ -1306,6 +1306,33 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-density="compact"] #pm-hud-sample {
   margin-top: calc(var(--gap) * 0.25);
 }
+/* DISPLAY: HIDE HUD | METRICS share the wide pair. Inner metrics buttons
+   go 2-up whenever the sheet is wide or compact — SheetShape density, not
+   a viewport max-height media (the injected submenu used to key on 420px). */
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud {
+  grid-column: 1;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
+  grid-column: 2;
+  margin: 0;
+  align-self: start;
+  min-width: 0;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details .pm-metrics-sub-body,
+#pmsettings-inner[data-density="compact"] #pm-metrics-details .pm-metrics-sub-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 6px;
+  max-height: min(160px, calc(100 * var(--svhz, 1svh) - 7rem));
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details .pm-metrics-sub-body > button,
+#pmsettings-inner[data-density="compact"] #pm-metrics-details .pm-metrics-sub-body > button {
+  width: auto;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details .pm-metrics-hint,
+#pmsettings-inner[data-density="compact"] #pm-metrics-details .pm-metrics-hint {
+  grid-column: 1 / -1;
+}
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px; }
 #pmsettings-inner.sheet[data-density="compact"] .pm-doors button {

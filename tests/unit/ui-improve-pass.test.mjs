@@ -853,9 +853,17 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "pair-on stacked maps use the whole preview column");
   assert.equal(decl(css("css/menus.css"), '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section > #sel-track-preview', "flex"), "1 1 auto",
     "pair-on preview card fills the side column instead of centering a stamp");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview[data-map-shape="beside"] #sel-preview-map', "max-height"), "100%",
+    "tall-circuit pair-on maps spend the pane height; facts already sit beside");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner[data-shape=\"wide\"] #pm-panel-display .tune-row:has(#pm-hudscale)", "grid-column"), "1",
     "DISPLAY HUD SIZE shares its row with the live sample");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner[data-shape=\"wide\"] #pm-panel-display #pm-hud-sample", "grid-column"), "2");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-column"), "2",
+    "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-metrics-details \.pm-metrics-sub-body/, "display"), "grid",
+    "compact METRICS packs 2-up via SheetShape density, not a height media");
+  assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
+    "METRICS submenu no longer keys packing on viewport height");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",
     "compact wide season setup keeps the calendar + pool pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--compact-at"), "480px",
