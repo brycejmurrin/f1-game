@@ -566,6 +566,9 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
     PerfGov: { setUserTier() {}, sentinelArm(on) { sentinel = !!on; } },
     GameStore: { store: { get() { return null; }, set() {} } },
     GLX: { isMobile: true },
+    // This inline context has no opts; the backends-present world is what this
+    // test is about (RESET RENDERER semantics), so state it directly.
+    ApexRoster: { DEFERRED: { webgpu: ["w"], three: ["t"] } },
   });
   seedLog(ctx);
   seedStore(ctx);
@@ -1166,6 +1169,13 @@ function bootPicker(opts) {
     PerfGov: { setUserTier() {}, sentinelArm() {} },
     GameStore: { store: { get() { return null; }, set() {} } },
     GLX: { isMobile: true },
+    // The picker asks the roster whether a backend's files are in the tree, so
+    // a stop whose files are gone can say UNAVAILABLE rather than write a pref
+    // boot would ignore. These tests are about picker SEMANTICS, so the default
+    // is the backends-present world they were written for; pass `deferred: {}`
+    // to exercise the spiked-out one.
+    ApexRoster: { DEFERRED: opts.deferred !== undefined ? opts.deferred
+      : { webgpu: ["spike/backends/webgpu/wgx.js"], three: ["spike/backends/three/tlx.js"] } },
   });
   seedLog(ctx);
   seedStore(ctx);
@@ -1174,6 +1184,22 @@ function bootPicker(opts) {
   // readyState is "complete", so the IIFE already called init().
   return { G, ls, ss, byId, hostKids, reloaded: () => reloaded, timers, winListeners };
 }
+
+test("a stop whose files left the tree says UNAVAILABLE instead of writing the pref", () => {
+  // The spiked-out world: DEFERRED is {} (tools/manifest.cjs), so neither
+  // alternate can bind. The header's rule is that a stop stays VISIBLE and
+  // names itself unavailable — the same affordance a phone without
+  // navigator.gpu already got — rather than persisting a pick that boot
+  // silently ignores. Derived from the roster, so the stops come back on their
+  // own if the backends are ever re-attached.
+  const a = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" }, gpu: {}, deferred: {} });
+  const sel = a.byId["pm-renderer"];
+  assert.equal(sel.options.length, 3, "the stop is still SHOWN — hiding it is what the header argues against");
+  sel.value = "three";
+  sel.dispatchEvent("change");
+  assert.equal(a.ls.getItem("apex26.gfxBackend"), "webgl2", "the dead pick is not persisted");
+  assert.match(sel.options[1].textContent, /UNAVAILABLE/, "and the stop says why");
+});
 
 test("RENDERER control becomes a select with prev/next, not a one-way cycle", () => {
   const { byId, hostKids } = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" } });

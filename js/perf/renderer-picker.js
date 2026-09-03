@@ -10,6 +10,16 @@ const RendererPicker = (function () {
 // The control is a <select> plus ‹ › so a tap can jump WEBGL2 ↔ WEBGPU
 // without opening THREE (the one-way cycle forced that path).
 const BACKENDS = ["webgl2", "three", "webgpu"];
+// A stop is UNAVAILABLE when the device cannot run it OR its files are not in
+// the tree — both reach the same affordance the header describes, so the label
+// stays visible and says so instead of writing a pref boot silently ignores.
+// Derived, not hardcoded: DEFERRED is {} since the 2026-09-03 WGX/TLX
+// spike-out, so both alternates are file-absent today and the stops come back
+// on their own if the backends are ever re-attached.
+const hasBackendFiles = (b) => b === "webgl2" ||
+  !!(typeof ApexRoster !== "undefined" && ApexRoster.DEFERRED &&
+     (ApexRoster.DEFERRED[b] || []).length);
+const available = (b) => hasBackendFiles(b) && (b !== "webgpu" || hasWebGPU());
 function readBackend() {
   const v = GameStore.store.raw("apex26.gfxBackend");
   return v === "webgpu" || v === "three" ? v : "webgl2";
@@ -118,15 +128,15 @@ function applyBackend(next, rb) {
   if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?", () => paintRenderer(rb))) return false;
   Log.info("game", "RendererPicker.applyBackend " + next);
   try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
-  if (next === "webgpu" && !hasWebGPU()) {
+  if (!available(next)) {
     if (isSelect(rb) && rb.options) {
       const opts = rb.options;
       for (let i = 0; i < opts.length; i++) {
-        if (opts[i].value === "webgpu") opts[i].textContent = "WEBGPU (UNAVAILABLE)";
+        if (opts[i].value === next) opts[i].textContent = backendLabel(next) + " (UNAVAILABLE)";
       }
       rb.value = readBackend();
     } else if (rb) {
-      rb.textContent = "RENDERER: WEBGPU (UNAVAILABLE)";
+      rb.textContent = "RENDERER: " + backendLabel(next) + " (UNAVAILABLE)";
     }
     setTimeout(() => { paintRenderer(rb); }, 900);
     return false;
