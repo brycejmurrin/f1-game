@@ -1324,6 +1324,24 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*ldrRT\b/);
 });
 
+test("TLX WebGPU begin() remaps GL projections with Z01 like WGX", () => {
+  const tlx = code("spike/backends/three/tlx.js");
+  assert.match(tlx, /const Z01 = new Float32Array\(\[1,0,0,0,\s*0,1,0,0,\s*0,0,0\.5,0,\s*0,0,0\.5,1\]\)/);
+  assert.match(tlx, /const Z01INV = new Float32Array/);
+  assert.match(tlx, /_mul4Col\(_projGpu, Z01, frame\.proj\)/);
+  assert.match(tlx, /_mul4Col\(_invProjGpu, frame\.invProj, Z01INV\)/);
+  assert.match(fnBody(tlx, "begin"), /renderer\.backend\.isWebGPUBackend/);
+});
+
+test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => {
+  const wgx = code("spike/backends/webgpu/wgx.js");
+  const body = fnBody(wgx, "_writeFrame");
+  assert.match(body, /pj\[8\]\s*!==\s*0\s*\|\|\s*pj\[9\]\s*!==\s*0/);
+  assert.match(body, /_mul4\(_viewScratch,\s*ipj,\s*vp\)/);
+  assert.match(body, /_mul4\(_projZ01,\s*Z01,\s*pj\)/);
+  assert.match(body, /_mul4\(_vpGpu,\s*_projZ01,\s*_viewScratch\)/);
+});
+
 test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () => {
   const tlx = read("spike/backends/three/tlx.js");
   // MDN: one context type per canvas for life. three r185.1 configure() is

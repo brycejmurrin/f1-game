@@ -30,7 +30,7 @@ async function openSetup(page) {
   await pinFreePlay(page, { team: 2, click: false });   // #mb-race re-reads the store
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 

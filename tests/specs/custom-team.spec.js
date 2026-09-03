@@ -23,7 +23,7 @@ import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 // click waits out the full timeout against a button that is right there in the
 // DOM. RACE SETTINGS' own BACK is what returns to the circuit picker.
 async function saveMyTeam(page, edit) {
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.locator('#cs-tabs [data-cs-cat="team"]').click();
   await page.locator("#cs-customize").click();
@@ -105,7 +105,7 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   // Save the default custom team once so it is selected for the setup preview.
   await saveMyTeam(page);
 
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.waitForFunction(() => window.__customAtlases().length > 0);
   const firstTextureId = await page.evaluate(() => window.__customAtlases()[0]);
@@ -114,7 +114,7 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
   await page.locator("#rs-cancel").click();    // ...and its BACK is the way to #select
   await saveMyTeam(page, () => page.locator("#cz-color").fill("#123456"));
 
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.waitForFunction(() => window.__customAtlases().length > 1, null, { polling: 100, timeout: 45_000 });
 
@@ -178,7 +178,6 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
 
   // Chase and cockpit cameras build the two player-only body cache variants.
   await page.locator("#sel-go").click();
-  await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
   await page.locator("#rs-go").click();
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.park(0.1));
@@ -225,7 +224,7 @@ test("custom livery actions are independent keyboard buttons", async ({ page }) 
   });
   await pinFreePlay(page, { team: "mclaren", click: false });   // #mb-race re-reads
   await page.locator("#mb-race").click();
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   // LIVERY is a TAB since the garage grew its category tablist (adaptive-UI
   // round) — the old button query matched nothing and hung the click forever.

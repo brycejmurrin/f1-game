@@ -509,7 +509,7 @@ test.describe("Career — the garage", () => {
     const tap = (id) => page.evaluate((i) => document.getElementById(i).click(), id);
     await boot(page);
     await tap("mb-race");
-    await tap("sel-go");
+    await tap("sel-car");
     await expect(page.locator("#carsetup")).toBeVisible();
     await expect(page.locator("#cs-unlimited")).toBeVisible();
     await tap("cs-done");
@@ -1834,7 +1834,6 @@ test.describe("Career — the settlement", () => {
     await page.locator("#res-menu").click();
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
-    await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await page.evaluate(() => { window.__apex.park(0.9); window.__apex.finishRace(); });

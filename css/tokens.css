@@ -183,14 +183,26 @@
 
 :root {
   --red: #e10600;
-  --bg: #0a0a0f;
+  /* Official F1 Carbon Black (~#15151E) cooled into a deeper stage black so
+     sheets still float over the live circuit; --carbon is the steely tint for
+     borders / disabled / secondary plates (brand guidelines: carbon hierarchy,
+     not pure #000). */
+  --carbon: #15151E;
+  --bg: #0c0c14;
+  /* Spark accent — warnings / NEW / session badges only. Never body copy.
+     Kept out of Warm Red so red stays scarce (P1 / primary / true alerts). */
+  --spark: #ff8c42;
+  /* Cool steel chrome — section labels, secondary plate ink. F1 Carbon's
+     blue-steel role at readable contrast; never a red substitute. */
+  --steel: #8a8a96;
   /* Translucent on purpose: sheets sit over the live #game circuit, and that
      3D view is the imagery. 0.76 leaves floodlights and tarmac readable
      through the card without dropping type contrast. Reduced-transparency
      swaps this for --surf-1 (css/components.css). */
-  --panel: color-mix(in oklab, #fff 5%, rgba(11, 11, 18, 0.76));
-  --text: #f2f2f5;
-  --dim: #9a9aa5;
+  --panel: color-mix(in oklab, #fff 5%, color-mix(in oklab, var(--carbon) 88%, transparent));
+  /* Hi-Vis White analogue — brand forbids Warm Red as body/headline ink. */
+  --text: #f6f6f9;
+  --dim: #9a9aa8;
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
   --sat: env(safe-area-inset-top, 0px);
@@ -411,7 +423,10 @@
   /* Shared idle / selected plate — the settings tab-header recipe.
      Neutral buttons, chips, and category tabs all read this so they stay
      one family instead of each inventing a slightly brighter glass. */
-  --plate: rgba(255, 255, 255, 0.045);
+  /* Carbon tile, not milky glass — idle controls must read as objects on
+     the grain / live circuit, not as a 4.5% white wash. Hover/press step
+     toward steel so the press is a lightness change, not a new hue. */
+  --plate: color-mix(in oklab, var(--carbon) 62%, transparent);
   --plate-line: rgba(255, 255, 255, 0.16);
   /* The card/panel hairline — the second de-facto edge in the codebase after
      --plate-line's 0.16 control edge. A hairline audit found 0.12 repeated
@@ -419,8 +434,8 @@
      band above was named; naming it lets the sweep converge on two edges
      (control 0.16, card 0.12) instead of forty ad-hoc alphas. */
   --card-line: rgba(255, 255, 255, 0.12);
-  --plate-hover: rgba(255, 255, 255, 0.08);
-  --plate-press: rgba(255, 255, 255, 0.11);
+  --plate-hover: color-mix(in oklab, var(--carbon) 78%, #fff 8%);
+  --plate-press: color-mix(in oklab, var(--carbon) 84%, #fff 12%);
   --plate-on: color-mix(in oklab, var(--red) 18%, transparent);
   /* NO trailing comment-closer here. A stray star-slash after the semicolon
      of the declaration above sat exactly where the parser expects the next
@@ -451,7 +466,7 @@
      trio, cam picker, tuner rails). Translucent-but-opaque on purpose: no
      backdrop-filter over a rendering turntable. Was rgba(12,12,16,0.74)
      pasted three times in carsetup.css with the same six-line comment. */
-  --plate-opaque: rgba(12, 12, 16, 0.74);
+  --plate-opaque: color-mix(in oklab, var(--carbon) 74%, transparent);
   /* Screen scrims — the dim wash behind raised UI. One colour, six ad-hoc
      alphas across five sheets; the two named rungs cover the exact repeats
      (0.42 light dim, 0.92 near-solid backdrop). */
@@ -522,12 +537,12 @@
      a light-from-above sheen. It is what makes a dialog look like part of this
      game rather than a generic card. */
   --grad-head:
-    linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 26%, transparent), transparent 56%),
+    linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 34%, transparent), transparent 56%),
     linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.07), transparent 72%);
   /* A rule that FADES instead of stopping dead — used as a background-image on
      the bottom 1px, so it needs no extra element. Starts on brand so every
      sheet hairline belongs to the same family. */
-  --grad-rule: linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 42%, rgba(255, 255, 255, 0.22)), rgba(255, 255, 255, 0.04) 78%, transparent);
+  --grad-rule: linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 58%, rgba(255, 255, 255, 0.22)), rgba(255, 255, 255, 0.04) 78%, transparent);
   /* Team identity, wherever a surface should carry it. Resolves through
      --accent, so it re-skins itself the moment the player changes team. */
   --grad-accent: linear-gradient(150deg in oklab,

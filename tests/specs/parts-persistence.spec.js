@@ -46,7 +46,7 @@ async function openSetup(page, team = "mclaren") {
   await pinFreePlay(page, { team, click: false });   // #mb-race re-reads the store
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await freeBuildOff(page);
 }
@@ -59,7 +59,7 @@ async function pickOpt(page, catId, optId) {
 async function reopenSetup(page) {
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
 }
 

@@ -46,7 +46,7 @@ export const SCREENS = {
   settings: { name: "Settings", root: "#pmsettings", clicks: ["#mb-settings"] },
   career: { name: "Career hub", root: "#career", clicks: ["#mb-career"] },
   datahub: { name: "F1 data hub", root: "#datahub", clicks: ["#mb-data"] },
-  howtoplay: { name: "How to play", root: "#howtoplay", clicks: ["#mb-settings", "#pm-tab-more", "#pm-howto"] },
+  howtoplay: { name: "How to play", root: "#howtoplay", clicks: ["#mb-help"] },
   vsfriend: { name: "VS friend lobby", root: "#vsfriend", clicks: ["#mb-vs"] },
   pause: { name: "Pause menu", root: "#pausemenu", clicks: ["#pausebtn"], race: "monza" },
 };

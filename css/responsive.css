@@ -113,7 +113,7 @@ body.desktop #pm-calib { display: none !important; }
   :where(body:not([data-density="compact"])) #menu-primary,
   :where(body:not([data-density="compact"])) #menu-secondary { width: 100%; gap: clamp(8px, calc(1 * var(--vwz)), 12px); }
   :where(body:not([data-density="compact"])) #menu-buttons .bigbtn { width: 100%; }
-  :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: var(--fs-micro); padding: 9px 8px; }
+  :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: var(--fs-micro); padding: 9px 6px 9px 10px; }
   /* Small print scales too. At a flat 11/12px it read as a stray line of text
      dropped near the title rather than a caption belonging to it. */
   :where(body:not([data-density="compact"])) #subtitle { font-size: clamp(14px, calc(1.05 * var(--vwz)), 18px); }

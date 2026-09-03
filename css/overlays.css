@@ -735,7 +735,7 @@ body[data-density="compact"] #campicker {
   flex: 0 0 auto; min-height: var(--chip-h);
   padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.65);
   border: 1px solid var(--plate-line); border-radius: var(--r-pill);
-  background: var(--plate); color: var(--dim);
+  background: var(--plate); color: var(--text);
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
   text-decoration: none;
 }
@@ -813,9 +813,9 @@ body[data-density="compact"] #campicker {
   align-items: start;
 }
 #howtoplay dt {
-  color: var(--red); font-weight: 700; font-size: var(--fs-micro);
+  color: var(--steel); font-weight: 700; font-style: italic; font-size: var(--fs-micro);
   letter-spacing: var(--ls-4); padding: calc(var(--gap) * 0.5) 0 calc(var(--gap) / 6);
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--card-line);
   white-space: normal; overflow-wrap: anywhere;
 }
 #howtoplay dt:first-child { border-top: none; }
@@ -823,7 +823,7 @@ body[data-density="compact"] #campicker {
 #howtoplay dd {
   color: var(--text); font-size: var(--fs-micro); margin-left: 0; line-height: 1.45;
   padding: calc(var(--gap) * 0.5) 0 calc(var(--gap) / 6);
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--card-line);
 }
 #howtoplay dd:first-of-type { border-top: none; }
 /* One term/description pair per row at every width. The former wide layout put
@@ -1137,19 +1137,17 @@ body[data-density="compact"] #campicker {
 }
 #vsfriend .vs-raw[open] > summary { margin-bottom: calc(var(--gap) * 0.5); }
 
-@container sheet (min-width: 620px) {
-  #vsfriend .vs-two {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 20px;
-    align-items: start;
-  }
-  /* A hairline between the two steps, so they read as two things rather than
-     one wrapped list. */
-  #vsfriend .vs-two > .vs-col + .vs-col {
-    padding-left: 20px;
-    border-left: 1px solid var(--card-line);
-  }
+#vsfriend-inner[data-shape="wide"] .vs-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 20px;
+  align-items: start;
+}
+/* A hairline between the two steps, so they read as two things rather than
+   one wrapped list. */
+#vsfriend-inner[data-shape="wide"] .vs-two > .vs-col + .vs-col {
+  padding-left: 20px;
+  border-left: 1px solid var(--card-line);
 }
 #vsfriend .vs-status {
   margin: var(--gap) 0 0;

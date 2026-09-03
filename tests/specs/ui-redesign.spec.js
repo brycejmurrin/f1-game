@@ -194,7 +194,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
-    document.getElementById("sel-go").click();
+    document.getElementById("sel-car").click();
   });
   await page.waitForFunction(() => {
     const setup = document.getElementById("carsetup");

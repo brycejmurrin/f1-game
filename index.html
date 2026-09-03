@@ -36,7 +36,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Apex 26">
-<meta name="theme-color" content="#0a0a0f">
+<meta name="theme-color" content="#0c0c14">
 <meta name="description" content="Apex 26 — unofficial F1 fan game. Drive 24 real circuits in the browser with career, garage, and live data.">
 <!-- Monotonic shell/service-worker generation. Asset URLs below are independently
      content-hashed so an unrelated release does not invalidate every script. -->
@@ -386,6 +386,7 @@
       <button id="pm-resume" autofocus>RESUME</button>
       <button id="pm-restart">RESTART RACE</button>
       <button id="pm-settings">SETTINGS&hellip;</button>
+      <button id="pm-howto">HOW TO PLAY&hellip;</button>
       <button id="pm-standings" hidden>STANDINGS</button>
       <button id="pm-quit">QUIT TO MENU</button>
       <!-- Which build am I actually running? index.html carries no ?v= of its
@@ -468,7 +469,6 @@
           <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
           <button id="pm-camtune">CAMERA TUNER&hellip;</button>
           <button id="pm-audio">MUSIC &amp; SOUND&hellip;</button>
-          <button id="pm-howto">HOW TO PLAY&hellip;</button>
         </nav>
       </div>
     </div>
@@ -556,7 +556,7 @@
     </div>
     <div class="sheet-foot" id="cr-foot">
       <button id="cr-back" class="bigbtn alt minibtn">MAIN MENU</button>
-      <button id="cr-garage" class="bigbtn alt minibtn">&#128295; GARAGE</button>
+      <button id="cr-garage" class="bigbtn alt minibtn"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>GARAGE</button>
       <button id="cr-go" class="bigbtn">GO RACING</button>
     </div>
   </div>
@@ -634,15 +634,16 @@
       <!-- The list is a SIBLING of the label+preview section, not a child of it,
            so the two-column layout can make it a grid item of the sheet itself
            and span it down through the action-bar row (css/menus.css). A nested
-           grid cannot span a row of its parent, and the action bar only ever
-           holds BACK and START — both under the preview column. Stacked: label,
+           grid cannot span a row of its parent, and the action bar holds BACK,
+           YOUR CAR and NEXT — under the preview column. Stacked: label,
            compact preview band, then the list — one column, list scrolls. -->
       <div id="sel-tracks" class="pane pair-main" role="group" aria-labelledby="sel-circuit-label"></div>
     </div>
 
     <div class="sheet-foot">
       <button id="sel-back" class="bigbtn alt">BACK</button>
-      <button id="sel-go" class="bigbtn">START</button>
+      <button id="sel-car" class="bigbtn alt">YOUR CAR</button>
+      <button id="sel-go" class="bigbtn">NEXT</button>
     </div>
   </div>
 </div>
@@ -969,7 +970,7 @@
   <div class="sheet">
     <div class="sheet-head"><h2 id="standings-title">CHAMPIONSHIP STANDINGS</h2></div>
     <div class="sheet-body pane" id="standings-body"></div>
-    <div class="sheet-foot"><button id="standings-close" autofocus class="bigbtn">CLOSE</button></div>
+    <div class="sheet-foot"><button id="standings-close" autofocus class="bigbtn alt">CLOSE</button></div>
   </div>
 </dialog>
 
@@ -987,7 +988,7 @@
            taken, going back would silently throw the result away — and the
            classification IS the grid, so there is nothing left to reconsider.
            css/career.css hides it on .q-done alongside DRIVE/SIMULATE. -->
-      <button id="q-back" autofocus class="bigbtn alt minibtn">BACK</button>
+      <button id="q-back" autofocus class="bigbtn alt">BACK</button>
       <button id="q-drive" class="bigbtn">DRIVE MY LAP</button>
       <button id="q-sim" class="bigbtn alt minibtn">SIMULATE</button>
       <button id="q-go" class="bigbtn">TO THE GRID</button>
@@ -1060,7 +1061,7 @@
     <div id="cz-preview"><span id="cz-swatch1"></span><span id="cz-swatch2"></span><span id="cz-pvtext"></span></div>
     </div>
     <div class="sheet-foot">
-      <button id="cz-cancel" autofocus class="bigbtn alt">CANCEL</button>
+      <button id="cz-cancel" autofocus class="bigbtn alt">BACK</button>
       <button id="cz-save" class="bigbtn">SAVE</button>
     </div>
   </div>
@@ -1291,7 +1292,7 @@
         anything you can send a message on will do. In the same room, scan the QR
         code instead. Both of you need the same version of the game</dd>
     </dl>
-    <div class="sheet-foot"><button id="htp-close" autofocus class="bigbtn">DONE</button></div>
+    <div class="sheet-foot"><button id="htp-close" autofocus class="bigbtn alt">BACK</button></div>
   </div>
 </dialog>
 
@@ -1415,7 +1416,7 @@
     </div><!-- /#adv-extra -->
     </details>
     </div><!-- /.sheet-body -->
-    <div class="sheet-foot"><button id="adv-close" autofocus class="bigbtn">DONE</button></div>
+    <div class="sheet-foot"><button id="adv-close" autofocus class="bigbtn alt">BACK</button></div>
   </div>
 </dialog>
 
@@ -1571,7 +1572,7 @@
       </details>
 
     </div>
-    <div class="sheet-foot"><button id="as-close" autofocus class="bigbtn">DONE</button></div>
+    <div class="sheet-foot"><button id="as-close" autofocus class="bigbtn alt">BACK</button></div>
   </div>
 </dialog>
 
@@ -1617,7 +1618,7 @@
       <button id="sp-refresh2" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
       <p id="sp-status2" class="as-note"></p>
     </div>
-    <div class="sheet-foot"><button id="sp-close" autofocus class="bigbtn">DONE</button></div>
+    <div class="sheet-foot"><button id="sp-close" autofocus class="bigbtn alt">BACK</button></div>
   </div>
 </dialog>
 

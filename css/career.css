@@ -36,7 +36,7 @@
 #cr-inner:not([data-shape="tall"]) { --fit-at: 220px; }
 
 /* ---------- head ---------- */
-#cr-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--gap); }
+#cr-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
 #cr-titlebar { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 #cr-sub {
   font-size: var(--label); letter-spacing: var(--ls-5); font-weight: 700;
@@ -48,7 +48,7 @@
 #cr-meters { display: flex; flex-wrap: wrap; gap: var(--gap); margin-left: auto; }
 .cr-meter { display: flex; flex-direction: column; gap: 1px; text-align: right; }
 .cr-meter-lbl { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); }
-.cr-meter-val { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cr-meter-val { font-family: var(--font-hud); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* ---------- body ---------- */
 /* THE STACKED LAYOUT, and it must be gated on `:not([data-pair="on"])` — see the
@@ -101,17 +101,18 @@
 /* The action bar sits under the left column; border-right continues the column
    divider to the sheet floor so the two columns read as one clean split. */
 #cr-inner[data-pair="on"] > .sheet-foot {
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  border-right: 1px solid var(--card-line);
 }
 
 /* SHORT SHEET: `--pair-compact: off` stacks this sheet so #cr-body is the
    scroller. Measured 852×393 @115%: pair-on left SLOT 3 and the guide CTAs
    ~83px past #cr-inner. */
-/* Modes picker: DRIVER | MY TEAM side by side on any stacked sheet so
-   MY TEAM is not below the fold. Hub (no .cr-slot in both panes) stays one
-   column and keeps #cr-body as the scroller. Compact was the first cut;
-   portrait phones stay density=normal and still stacked. */
-#cr-inner:not([data-pair="on"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body {
+/* Modes picker: DRIVER | MY TEAM side by side on any WIDE stacked sheet.
+   Compact-wide used to stack (we hid the unused column) and wasted the
+   axis there is plenty of; two-up + a two-line note clamp fits SLOT 1–3
+   in both columns. Tall stays one column — width is the scarce axis.
+   Hub (no .cr-slot in both panes) stays one column either way. */
+#cr-inner:not([data-pair="on"]):not([data-shape="tall"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--gap);
@@ -120,17 +121,21 @@
 #cr-inner[data-density="compact"] .cr-slot { margin-bottom: 4px; }
 #cr-inner[data-density="compact"] .cr-slot-main {
   padding: calc(var(--pad) * 0.35); gap: 2px;
+  min-height: max(36px, var(--tap-min));
 }
-#cr-inner[data-density="compact"] .cr-note {
+#cr-inner[data-density="compact"] .cr-note,
+#cr-inner[data-shape="tall"] .cr-note {
   margin-bottom: 4px; font-size: var(--fs-2); line-height: 1.35;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 #cr-inner[data-density="compact"] .cr-record {
   padding: calc(var(--pad) * 0.45); gap: 2px;
 }
-#cr-inner[data-density="compact"] .cr-record-line { font-size: var(--fs-2); }
+#cr-inner[data-density="compact"] .cr-record-line { display: none; }
 #cr-inner[data-density="compact"] #cr-header { gap: var(--gap); }
 #cr-inner[data-density="compact"] #cr-titlebar {
-  flex: 1 1 100%; flex-direction: row; align-items: baseline; gap: var(--gap);
+  flex: 1 1 100%; flex-direction: row; align-items: center; gap: var(--gap);
 }
 #cr-inner[data-density="compact"] #cr-sub {
   flex: 1 1 180px; min-width: 0;
@@ -193,7 +198,7 @@
 
 /* ---------- new-career setup ---------- */
 .cr-flavours { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
-@container sheet (min-width: 460px) { .cr-flavours { grid-template-columns: 1fr 1fr; } }
+.sheet[data-shape="wide"] .cr-flavours { grid-template-columns: 1fr 1fr; }
 .cr-flavour {
   display: flex; flex-direction: column; gap: 4px;
   padding: calc(var(--pad) * 0.7);
@@ -208,12 +213,12 @@
 }
 .cr-flavour.active .cr-flavour-blurb,
 .cr-teamtile.active .cr-teamtile-meta,
-.cr-seat.active .cr-seat-who { color: rgba(255, 255, 255, 0.82); }
+.cr-seat.active .cr-seat-who { color: color-mix(in oklab, var(--text) 82%, transparent); }
 .cr-flavour-name { font-size: 14px; font-weight: 800; font-style: italic; letter-spacing: var(--ls-3); }
 .cr-flavour-blurb { font-size: var(--fs-micro); line-height: 1.4; color: var(--dim); }
 
 .cr-teamgrid { display: grid; gap: 6px; grid-template-columns: 1fr; }
-@container sheet (min-width: 460px) { .cr-teamgrid { grid-template-columns: 1fr 1fr; } }
+.sheet[data-shape="wide"] .cr-teamgrid { grid-template-columns: 1fr 1fr; }
 .cr-teamtile {
   display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto;
   column-gap: 8px; align-items: center;
@@ -251,12 +256,30 @@
    foot sits inside and clipped it. Sizing comes from the shared
    `.sheet-foot .bigbtn` rule; only the wrap and the divider inset are new. */
 #cr-foot { flex-wrap: wrap; padding-right: calc(var(--pad) * 0.9); }
+/* Exits stay half-weight on EVERY density — .sheet-foot .bigbtn was promoting
+   MAIN MENU / GARAGE to the same type rung as GO RACING on roomy sheets. */
+#cr-inner #cr-foot .bigbtn.alt {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-1);
+  min-height: max(36px, var(--tap-min));
+  padding: calc(var(--gap) * 0.8) calc(var(--gap) * 0.95) calc(var(--gap) * 0.8) calc(var(--gap) * 1.1);
+  flex: 1 1 auto;
+}
+#cr-inner #cr-foot #cr-go {
+  flex: 1 1 auto;
+  letter-spacing: 0.06em;
+}
 #cr-inner[data-density="compact"] #cr-foot {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 #cr-inner[data-density="compact"] #cr-foot .bigbtn {
   width: 100%; min-width: 0; min-height: var(--tap-min);
   padding-block: 0; font-size: var(--fs-micro);
+}
+#cr-inner[data-density="compact"] #cr-meters {
+  margin-left: 0;
+  width: 100%;
+  justify-content: space-around;
 }
 
 /* ---------- end of season (#career-offers) ---------- */
@@ -266,7 +289,7 @@
    like #results/#standings, the other "the session is over" sheets).
    The summary card is a plain .cr-card and the headings are .sel-label: nothing
    here needs a vocabulary of its own, only the offer rows are new. */
-#career-offers { --sheet-w: 620px; --fit-at: 300px; }
+#career-offers { --sheet-w: 760px; --fit-at: 300px; }
 
 /* An offer is a TILE, not a list row: it is a commitment of one to three seasons
    and the tap target has to say so. Same grid as .cr-teamtile — colour bar, name,
@@ -303,7 +326,7 @@
    the same z-index because only one of the two is ever open. Narrower than the
    offers sheet — a totals card and a column of season rows are both short lines,
    and a wide sheet would strand the points column half a screen from the year. */
-#career-history { --sheet-w: 520px; --fit-at: 300px; }
+#career-history { --sheet-w: 760px; --fit-at: 300px; }
 
 /* The way in, at the foot of the hub's left column. A .cr-card that happens to
    be a button: the surface rides the card class, the button-undo quintet rides
@@ -328,9 +351,9 @@
    .res-row vocabulary from css/components.css; the only new part is the time
    column, which needs tabular figures so the gaps line up as a column of
    numbers rather than drifting with the glyph widths. */
-#quali { --sheet-w: 560px; --fit-at: 300px; }
+#quali { --sheet-w: 760px; --fit-at: 300px; }
 #q-body { min-height: 0; }
-.q-time { font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1); }
+.q-time { font-family: var(--font-hud); font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1); }
 /* Pole gets the absolute lap time and everyone else a gap, so the two read
    differently on purpose — the gaps are dimmed to keep the eye on the leader. */
 .res-row:not(.p1) .q-time { color: var(--dim); }
@@ -348,7 +371,6 @@
 }
 
 #q-foot { display: flex; flex-wrap: wrap; gap: var(--gap); align-items: center; }
-#q-foot #q-go { margin-left: auto; }
 /* The pre-session state offers DRIVE or SIMULATE; the post-session state has a
    classification and only TO THE GRID. JS flips this class rather than rebuilding
    the foot, so focus is never yanked out from under a keyboard user. */
@@ -387,8 +409,14 @@
 /* An EMPTY slot is an invitation, not a result: dashed edge and dimmed text, so
    a column of three reads at a glance as "one career and two openings" without
    having to compare their contents. */
-.cr-slot.empty .cr-slot-main { border-style: dashed; }
+.cr-slot.empty .cr-slot-main {
+  border-style: dashed;
+  border-color: color-mix(in oklab, var(--spark) 32%, var(--card-line));
+}
 .cr-slot.empty .cr-slot-who { color: var(--dim); }
+.cr-slot.empty .cr-slot-meta {
+  color: color-mix(in oklab, var(--spark) 55%, var(--dim));
+}
 /* The career you are IN keeps the red edge permanently — after a switch, "which
    one am I in" has to be answerable without pressing anything. */
 .cr-slot.active .cr-slot-main {
@@ -431,7 +459,7 @@
    measure rather than the full 1020px the career page runs at. A top-layer
    <dialog> over #career, like the history sheet — both are read-only modals
    opened FROM the hub, and neither can be open at once. */
-#career-guide { --sheet-w: 560px; --fit-at: 300px; }
+#career-guide { --sheet-w: 760px; --fit-at: 300px; }
 /* Lower fit-at on wide-shaped sheets (zoom-corrected, not viewport orientation). */
 #career-offers .sheet:not([data-shape="tall"]),
 #career-history .sheet:not([data-shape="tall"]),
