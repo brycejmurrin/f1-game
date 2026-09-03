@@ -847,6 +847,15 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/career.css"), "#career-history", "--sheet-w"), "760px");
   assert.equal(decl(css("css/career.css"), "#quali", "--sheet-w"), "760px");
   assert.equal(decl(css("css/career.css"), "#career-guide", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/menus.css"), "#sel-inner", "--pair-split"), "minmax(0, 56%)",
+    "SELECT spends the side column on the circuit outline, not a 42% leftover");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview', "--sel-map-w"), "100%",
+    "pair-on stacked maps use the whole preview column");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section > #sel-track-preview', "flex"), "1 1 auto",
+    "pair-on preview card fills the side column instead of centering a stamp");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner[data-shape=\"wide\"] #pm-panel-display .tune-row:has(#pm-hudscale)", "grid-column"), "1",
+    "DISPLAY HUD SIZE shares its row with the live sample");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner[data-shape=\"wide\"] #pm-panel-display #pm-hud-sample", "grid-column"), "2");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",
     "compact wide season setup keeps the calendar + pool pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--compact-at"), "480px",

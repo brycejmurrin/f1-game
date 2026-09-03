@@ -1289,6 +1289,23 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status) { grid-column: 1 / -1; }
+/* DISPLAY: HUD SIZE keeps a column; the live sample sits beside it instead
+   of opening a third full-width row under two sliders. */
+#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale) {
+  grid-column: 1;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample {
+  grid-column: 2;
+  align-self: center;
+  margin-top: 0;
+}
+#pmsettings-inner[data-density="compact"] #pm-panel-display .tune-row {
+  min-height: 0;
+  gap: 0;
+}
+#pmsettings-inner[data-density="compact"] #pm-hud-sample {
+  margin-top: calc(var(--gap) * 0.25);
+}
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px; }
 #pmsettings-inner.sheet[data-density="compact"] .pm-doors button {

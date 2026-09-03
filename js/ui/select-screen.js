@@ -687,10 +687,11 @@ function updateTrackPreview() {
       // content, so bounding the map by the CARD's own height is circular.
       sectionH: section ? section.clientHeight : 0,
       labelH: label ? label.offsetHeight : 0,
-      // In the non-tall pair the caption sits BESIDE the map in a flex row —
-      // charging its height to the vertical budget is regression 2 of the
-      // planner's test file. Only a tall sheet stacks it underneath.
-      infoH: (tallSheet && info) ? info.offsetHeight : 0,
+      // Tall sheets and pair-on stacked plans put the caption UNDER the map.
+      // Beside (Jeddah) still ignores infoH inside planPreview. Charging it
+      // on every pair-on plan lets a stacked Bahrain use the column instead
+      // of a 260px clamp.
+      infoH: (info && (tallSheet || (classified && sheet.dataset.pair === "on"))) ? info.offsetHeight : 0,
       padY: cardCS ? px(cardCS.paddingTop) + px(cardCS.paddingBottom) : 0,
       gap: cardCS ? (px(cardCS.rowGap) || px(cardCS.gap)) : 0,
       // Pair-on clips its section ("FIT THE PREVIEW, DO NOT SCROLL IT" in

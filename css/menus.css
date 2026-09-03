@@ -612,18 +612,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
 /* The columns, the spans and the foot placement come from `.pane-pair`
    (css/components.css) — the shared list-detail primitive #carsetup and #career
    also use. Only the threshold and the split are set here.
-   THE SPLIT IS 50%, NOT THE PRIMITIVE'S 42%. The side column here holds the
+   THE SPLIT IS 56%, NOT THE PRIMITIVE'S 42%. The side column here holds the
    circuit MAP, which is the thing being chosen between; the main column holds
    a name, a country and a distance per row and was measurably slack — at a
-   1020px sheet the list ran 573px wide with most of that a gap between the
-   name on the left and "Bahrain · 5.4 km" on the right, while the preview
-   column had to fit a map AND its caption into 428px. An even split spends
-   ~80px of that slack on the map: a tall circuit's outline goes from 206px
-   wide to ~255px with its caption still on one line. The list keeps ~510px,
-   which is well clear of where its rows start wrapping. */
+   1020px sheet the 50% split still left a 260px clamp unused. 56% spends
+   that slack on the outline; the list keeps a wrapping-clear row. */
 #sel-inner {
   --pair-at: 620px;
-  --pair-split: minmax(0, 50%);
+  --pair-split: minmax(0, 56%);
   --fit-at: 200px;
   /* Preview facts start wrapping out of their capped band before the generic
      380px sheet threshold (measured: phone portrait @125%, 432 own px). */
@@ -671,26 +667,33 @@ body { --compact-at: 600px; --wide-at: 620px; }
    do not. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview,
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-preview-map { min-width: 0; }
-/* THE MAP YIELDS, THE FACTS DO NOT. The map's height comes from its 520:300
-   ratio against a full-width column, which ignores how much height the column
-   has: on a 343px-tall landscape phone that is 176px of map, the name/GP/chip
-   rows want 90 more, and the card has ~215 — so the chip row, which wraps to a
-   second line as soon as a circuit has a fourth fact, hung below the card and
-   was clipped mid-chip. T1 SLOWEST, the one red chip, was the casualty.
-   Capping the map at half the card leaves the facts their room; object-fit
-   keeps the outline undistorted when the cap is what binds. */
+/* Pair-on spends the SIDE column on the outline. Default is stacked (map
+   over caption at full column width). data-map-shape="beside" (JS, tall
+   circuits) keeps the row so Jeddah does not become a sliver. The old
+   clamp(140px, 50%, 260px) + safe-centered shrink-wrap left ~half the
+   column empty on 852×393. */
+#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview {
+  flex-direction: column;
+  align-items: stretch;
+  --sel-map-w: 100%;
+}
+#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview[data-map-shape="beside"] {
+  flex-direction: row;
+  align-items: stretch;
+  --sel-map-w: min(72%, 100%);
+}
+/* THE MAP YIELDS, THE FACTS DO NOT. Roomy pair still keeps chips; compact
+   hides them so the outline can take almost the card. object-fit holds the
+   circuit aspect when the cap binds. */
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
-  max-height: 50%;
+  width: var(--sel-map-w, 100%);
+  max-height: 70%;
   object-fit: contain;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 #sel-inner[data-pair="on"]:not([data-shape="tall"])[data-density="compact"] #sel-track-preview #sel-preview-map {
-  /* 80%, not the old 100%: compact pair now KEEPS the name beside the map, so
-     the full-card reserve is gone — and this cap is what bounds the one
-     TRANSITIONAL frame where the plan has not measured yet and the stylesheet
-     clamp+aspect sizes the map alone (measured 852x344 @100%: a 380px-tall
-     unpinned map pushed the caption 10px past the card). The measured pin is
-     far below this cap, so the settled layout is unchanged. */
-  max-height: 80%;
+  max-height: 92%;
 }
 /* FIT THE PREVIEW, DO NOT SCROLL IT. Pair-on already gives this column a
    definite height (sheet grid row 2 is minmax(0, 1fr); body is display:contents).
@@ -704,13 +707,12 @@ body { --compact-at: 600px; --wide-at: 620px; }
   overflow: hidden;
   display: flex; flex-direction: column;
   min-height: 0;
-  justify-content: center;
-  justify-content: safe center;
+  justify-content: stretch;
   padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
 }
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section > #sel-track-preview {
   margin-block: 0;
-  flex: 0 1 auto; min-height: 0; max-height: 100%;
+  flex: 1 1 auto; min-height: 0; max-height: 100%;
   overflow: hidden;
 }
 #sel-inner[data-pair="on"]:not([data-shape="tall"]) > #sel-body > #sel-tracks {
@@ -1183,7 +1185,7 @@ h3.sel-label {
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta { margin-top: calc(var(--gap) / 6); }
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-facts,
 #sel-inner[data-pair="on"][data-density="compact"] #sel-preview-elev { display: none; }
-#sel-inner[data-pair="on"][data-density="compact"] #sel-track-preview { align-items: center; }
+#sel-inner[data-pair="on"][data-density="compact"] #sel-track-preview { align-items: stretch; }
 
 /* Season upcoming rounds list */
 .season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5); color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
