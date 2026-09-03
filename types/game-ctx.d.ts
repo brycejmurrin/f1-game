@@ -389,6 +389,14 @@ interface GameCtx {
   readonly setupPreviewAz: number;
   readonly setupPreviewEl: number;
   readonly setupPreviewDist: number;
+  /** Last frame's RESOLVED turntable distance — what the camera used, which is
+   *  setupPreviewDist only when the auto-fit is off. */
+  readonly spEffDist: number;
+  /** The auto fit BEFORE its cap/clamp, so a test can see the fit diverge on a
+   *  narrow viewport rather than only the clamped symptom. */
+  readonly spEffFit: number;
+  /** Fraction of the canvas width the docked settings sheet covered. */
+  readonly spEffPanel: number;
   readonly setupPreviewPan: Vec3;
   readonly setupPreviewAeroX: number;
 

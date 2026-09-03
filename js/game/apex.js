@@ -315,6 +315,11 @@ const api = {
   garageCam: () => ({
     on: G.setupPreviewOn, spin: G.setupPreviewSpin,
     az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
+    // dist is the ZOOM's stored distance; effDist is what the camera actually
+    // used last frame. They differ on the auto-turntable path, which is the one
+    // that can misframe — fitD is the auto fit before the clamp, so a test can
+    // see the fit diverge (fitD >> effDist) instead of only its symptom.
+    effDist: G.spEffDist, fitD: G.spEffFit, panelFrac: G.spEffPanel,
     pan: G.setupPreviewPan.slice(),
     // ACTIVE AERO in the garage: the switch and the FLAP TRAVEL it eases toward.
     // Separate fields on purpose — the button label follows the switch, so a
