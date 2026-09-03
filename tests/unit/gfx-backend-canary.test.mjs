@@ -266,6 +266,18 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   assert.ok(refused > 0);
   assert.match(game.slice(refused, refused + 3000), /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/, "a refused create disarms the probe");
   assert.doesNotMatch(game, /create\(\)\s*refused[\s\S]{0,250}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+  // A STORED PICK MUST NOT OUTLIVE ITS FILES. With DEFERRED = {} after the
+  // 2026-09-03 spike-out, BACKEND_FILES.three is undefined; the boot armed the
+  // probe and then threw inside loadBackendScripts on `files.map`. It was caught
+  // and GLX rendered, and the next boot's revert cleared the pick — so it
+  // self-healed and no test saw it. The gate below is what stops the throw and
+  // the "never presented a frame" warning about a backend that was never
+  // fetched. Nothing here executes the boot block, so this is a source pin.
+  assert.match(game, /const group = pref === "three" \? BACKEND_FILES\.three/,
+    "the opt-in must resolve its DEFERRED group before arming anything");
+  assert.match(game, /const optIn = [^;]*group && group\.length/,
+    "optIn must require the group to exist and be non-empty — a pick for files that are gone is not an opt-in");
+
   const wgx = code("spike/backends/webgpu/wgx.js");
   assert.match(wgx, /device\.lost[\s\S]{0,600}_wgxEscalate\(/, "device.lost climbs the ladder through _wgxEscalate");
   assert.match(fnBody(wgx, "_wgxEscalate"), /apex26\.gfxClaimFail/, "the last rung surrenders the tab to GLX via the claim-fail latch");

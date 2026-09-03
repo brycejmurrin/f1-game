@@ -246,7 +246,18 @@ try {
     try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem(PROBE_KEY); } catch (_) { /* the in-memory revert above still holds for this load */ } }
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
-  const optIn = !skipClaim && (pref === "three" || (pref === "webgpu" && navigator.gpu));
+  // A pick can only be honoured while its DEFERRED group still exists. Since the
+  // 2026-09-03 WGX/TLX spike-out DEFERRED is {}, so BACKEND_FILES.three was
+  // `undefined` and loadBackendScripts(undefined) threw on `files.map` — caught
+  // below, GLX rendered, but the probe had already been armed one line earlier,
+  // so the NEXT boot logged "backend three never presented a frame" about a
+  // backend that was never fetched, then reverted the pick. Harmless and
+  // self-healing, but it is a thrown exception and a warning that lies. No
+  // group, no opt-in: the pick then reads as the documented GLX fallback.
+  const group = pref === "three" ? BACKEND_FILES.three
+              : pref === "webgpu" ? BACKEND_FILES.webgpu : null;
+  const optIn = !skipClaim && !!(group && group.length) &&
+    (pref === "three" || (pref === "webgpu" && navigator.gpu));
   if (optIn && typeof Gfx !== "undefined") {
     // Armed HERE, not at `optIn`: no Gfx = the canvas is never handed over.
     try { localStorage.setItem(PROBE_KEY, pref); } catch (_) { /* no probe means no auto-revert; the button is still the way back */ }
