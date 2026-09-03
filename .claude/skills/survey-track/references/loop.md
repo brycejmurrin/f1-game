@@ -13,7 +13,7 @@ table and palette.
 ### 2 · Survey — one command
 
 ```sh
-node tools/survey-track.mjs <id> before
+node tools/track/survey-track.mjs <id> before
 ```
 
 Self-boots (no server). Writes `scratch/captures/survey-track/<id>/`:
@@ -34,8 +34,8 @@ Add fractions or a label: `survey-track.mjs <id> after 0.1,0.55,0.78`.
 `--oblique` adds a bounds-fitted topdown plus N/E/S/W high obliques
 (flag may sit anywhere; `monaco --oblique 0.1,0.5` is valid).
 Numbers-only: `node .claude/skills/survey-track/ground-profile.mjs <id>`.
-One bespoke frame: **playwright-probe** `tools/capture/shot.mjs`. Deeper hooks:
-**debug-tracks**. `tests/specs/terrain-over-road.spec.js` catches the
+One bespoke frame: **playwright-probe** `tools/shot/shot.mjs`. Deeper hooks:
+**agent-view** (`references/track-geometry.md`). `tests/specs/terrain-over-road.spec.js` catches the
 terrain-over-road class.
 
 ### 3 · Edit
@@ -53,7 +53,7 @@ terrain-over-road class.
 ### 4 · Verify the build
 
 ```sh
-node tools/verify-track.cjs <id>
+node tools/track/verify-track.cjs <id>
 ```
 
 A `THROW` here strands the game on the menu. Fleet: `verify-track.cjs --all`.
@@ -61,18 +61,18 @@ A `THROW` here strands the game on the menu. Fleet: `verify-track.cjs --all`.
 ### 5 · Re-survey
 
 ```sh
-node tools/survey-track.mjs <id> after
+node tools/track/survey-track.mjs <id> after
 ```
 
 Compare `before-*.png` vs `after-*.png`; confirm the probe is flag-free.
 
 ### 6 · Test & ship
 
-- Geometry: `node tools/test-bg.mjs circuits`
+- Geometry: `node tools/ci/test-bg.mjs circuits`
 - Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
   baselines). Do not treat it as a gate. Intentional goldens:
   `npm test -- tests/manual/tracks-visual.spec.js --update-snapshots`.
-- `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) after any `js/*`/`css/*` edit.
+- `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) after any `js/*`/`css/*` edit.
 - Pick remaining groups with **check-changes**.
 
 ## Worked example — Montreal floating trees

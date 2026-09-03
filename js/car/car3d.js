@@ -433,7 +433,7 @@ const Car3D = (function () {
     // `rimColor` is the brakes recipe's `rim` key. It reached this line and then
     // DIED here: RC was computed and never read once, so the nine catalog
     // options that set a rim colour painted nothing. The clamp scan
-    // (tools/parts-sweep.mjs --clamp-scan) measured brakes/rim at 0.0000 m2 of
+    // (tools/car/parts-sweep.mjs --clamp-scan) measured brakes/rim at 0.0000 m2 of
     // colour over its entire range, which is what a key with no consumer looks
     // like. The rim faces below take RC now. RIM_DEF reproduces the hardcoded
     // value those faces used before, so a car with no `rim` set is byte-identical.
@@ -458,7 +458,7 @@ const Car3D = (function () {
     // The `shoulder` knob's two tiers MOVED UP with it. They were 0.945 / 0.90
     // against a flat 1.0 baseline; leaving them there while the baseline gained
     // a shoulder collapses the first rung to 3.1 mm of surface displacement,
-    // under the 5 mm optical floor (tools/parts-sweep.mjs THRESHOLDS), and
+    // under the 5 mm optical floor (tools/car/parts-sweep.mjs THRESHOLDS), and
     // tyres/soft — whose only geometry key is `shoulder: 1` — measures as a
     // recolour. Re-spaced to 0.920 / 0.874 with matching wider rolls, each rung
     // is ~15 mm of radius and ~8 mm of surface, the same step the knob had

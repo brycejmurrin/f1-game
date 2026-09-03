@@ -35,6 +35,6 @@ tables), and `tracks.js` at the root is the registry — `LIST`, `resolve`,
 - **scenery(api) is a frozen 111-member contract**
   (`tests/unit/scenery-api-contract.test.mjs`). Adding a member is a
   deliberate contract change: update the test in the same commit.
-- After ANY change here: `node tools/verify-track.cjs <id>` (2 s headless
+- After ANY change here: `node tools/track/verify-track.cjs <id>` (2 s headless
   build) BEFORE running spec groups; `pick-tests` names the groups.
 - Deep references: `docs/SCENERY-API.md`, `docs/TESTING.md`.

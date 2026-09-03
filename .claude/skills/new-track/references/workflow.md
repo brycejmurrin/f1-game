@@ -9,14 +9,14 @@ Load from the SKILL.md index when the task needs this detail.
    `js/circuits/monaco.js` for a street circuit, `js/circuits/monza.js` for a parkland
    layout) and adapt it — don't start from a blank file.
 
-   **Real-world centreline (OSM) — `path` is REQUIRED.** `tools/import-circuit-path.mjs`
+   **Real-world centreline (OSM) — `path` is REQUIRED.** `tools/track/import-circuit-path.mjs`
    pulls the centreline from `bacinger/f1-circuits` (ODbL-1.0) in the same
    projection every committed `path` already uses (verify with `--self-check`
    before trusting a new entry):
    ```sh
-   node tools/import-circuit-path.mjs --self-check            # sanity-check the projection against every committed path
-   node tools/import-circuit-path.mjs <gameId>:<featureId>     # emit one new `path:` line
-   node tools/import-circuit-path.mjs --classics               # emit all 16 retired-circuit traces at once
+   node tools/track/import-circuit-path.mjs --self-check            # sanity-check the projection against every committed path
+   node tools/track/import-circuit-path.mjs <gameId>:<featureId>     # emit one new `path:` line
+   node tools/track/import-circuit-path.mjs --classics               # emit all 16 retired-circuit traces at once
    ```
    Paste the emitted `path: { len, pts }` line into the new def. Then author
    `turns` (and `sectors` if researched), `furniture`, `kit`, `standSet` and —
@@ -51,14 +51,14 @@ Load from the SKILL.md index when the task needs this detail.
    Verify with `__apex.tracks()` that the id appears.
 3. **Headless build guard** — the fast pre-push check that needs no browser:
    ```sh
-   node tools/verify-track.cjs <id>
+   node tools/track/verify-track.cjs <id>
    ```
    Success prints `OK <id>: props X verts (road Y, terrain Z)`. A non-zero exit
    means the spline/road/terrain build or the `scenery(api)` callback **threw** —
    which in the running game would strand the player on the menu. Fix before
    pushing. Common causes: a missing destructure (`out` not pulled from `api`), a
    node index out of range, or bad track data.
-4. **Bump the cache version** (`node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`)) — you edited
+4. **Bump the cache version** (`node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`)) — you edited
    `index.html` and/or a JS file.
 5. **Visual check** — load and screenshot it (use the `playwright-probe` skill's `shot.mjs`):
    ```js
@@ -68,8 +68,8 @@ Load from the SKILL.md index when the task needs this detail.
    ```
 6. **Tests**:
    ```sh
-   node tools/verify-track.cjs <id>
-   node tools/test-bg.mjs circuits   # walls + autopilot + elevation (includes tracks-walls.spec.js)
+   node tools/track/verify-track.cjs <id>
+   node tools/ci/test-bg.mjs circuits   # walls + autopilot + elevation (includes tracks-walls.spec.js)
    ```
    The `terrain-over-road.spec.js` audit (part of the full suite) catches terrain
    triangles rendering above the racing line — re-run it if you changed elevation
@@ -86,7 +86,7 @@ Load from the SKILL.md index when the task needs this detail.
   `kit`, `standSet` and the rest come with it, because the def is the single
   home. Nothing in `js/track/` is keyed by circuit id.
 - **`turns` are RACING-LAP fractions**, never fmap'd: when `startFrac` moves the
-  line, re-seat them with `tools/rotate-markings.cjs --check` / `--write` (once
+  line, re-seat them with `tools/track/rotate-markings.cjs --check` / `--write` (once
   per circuit). A def without `turns` falls back to **curvature-peak**
   `__apex.corners()` for corner boards — not the curated FIA apexes. The 16
   classics carry `turns` (the N strongest curvature peaks, N = the real turn

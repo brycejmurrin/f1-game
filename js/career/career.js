@@ -1025,7 +1025,7 @@ function rollover() {
   // exists rather than by a second rule, so a missed goal cannot disagree with
   // the "WHO WOULD SIGN YOU" ladder the hub shows all season.
   //
-  // Deliberately NO money in either direction. tools/career-economy.mjs measures
+  // Deliberately NO money in either direction. tools/car/career-economy.mjs measures
   // this economy against the catalog, and a once-a-season bonus it does not model
   // would silently invalidate every figure in docs/CAREER.md "The economy,
   // measured". Reputation is the channel that already carries season-long form.

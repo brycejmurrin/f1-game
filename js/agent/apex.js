@@ -185,7 +185,7 @@ const api = {
   //
   // TEAM AND HALO ARE REPORTED, NOT RESTORED. Both are read from storage at
   // boot (`teamIdx` in game.js, CockpitOpts.halo), so honouring them needs a reload the
-  // caller has to drive; tools/repro-shot.mjs does exactly that before
+  // caller has to drive; tools/shot/repro-shot.mjs does exactly that before
   // replaying. Returning them and refusing to half-apply them beats silently
   // rendering the wrong car, which is the failure this whole hook is for.
   repro(o) {
@@ -1051,7 +1051,7 @@ const api = {
     return out;
   },
   loadCarModel: (url) => loadCarModel(url),
-  // Baked asset pack (js/render/shared/assets.js, built by tools/assets.mjs)
+  // Baked asset pack (js/render/shared/assets.js, built by tools/gen/assets.mjs)
   // assets() — {supported, pack, uploaded, tier, layers, normal, bytes, models,
   //   error}. `supported:false` means the active renderer has no texture-array
   //   path (WGX/WebGPU); `pack:false` means no pack is installed. Both are

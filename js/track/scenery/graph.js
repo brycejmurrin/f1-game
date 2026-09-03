@@ -105,7 +105,7 @@ const TrackGraph = (function () {
     // ops are replayed straight into the world — so the work only happens when
     // something actually asks: stats(), or an instanced renderer uploading one
     // mesh per model. It also keeps a plain build emitting EXACTLY the primitives
-    // it ships, which matters because tools/float-audit.cjs wraps TrackGeom's
+    // it ships, which matters because tools/track/float-audit.cjs wraps TrackGeom's
     // emitters and indexes them in emission order; a reference mesh baked through
     // those same wrappers is geometry that exists nowhere in the world.
     // Closure-scoped rather than `this`-relative so a destructured or spread model

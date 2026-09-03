@@ -6,8 +6,8 @@ import { join } from "node:path";
 import {
   TRACKS, TODS, WEATHERS, CAMERA_FRACTIONS, SHARDS, SLIDER_GROUPS, REGIONS,
   conditionKey, enumerateConditions, validateConfig,
-} from "../../tools/lighting-campaign/config.mjs";
-import { measurePixels, evaluateGates } from "../../tools/lighting-campaign/metrics.mjs";
+} from "../../tools/lighting/campaign/config.mjs";
+import { measurePixels, evaluateGates } from "../../tools/lighting/campaign/metrics.mjs";
 import {
   validateProfile,
   validateRecord,
@@ -15,13 +15,13 @@ import {
   mergeFragments,
   readJsonLines,
   appendJsonLine,
-} from "../../tools/lighting-campaign/io.mjs";
+} from "../../tools/lighting/campaign/io.mjs";
 import {
   candidateValues,
   classifySensitivity,
   minimalProfile,
   buildConditionRecord,
-} from "../../tools/lighting-campaign/tune.mjs";
+} from "../../tools/lighting/campaign/tune.mjs";
 
 const TEST_TUNE_DEFS = [
   { id: "ambientMul", min: 0, max: 4 },
@@ -44,12 +44,12 @@ function makeRecord(overrides = {}) {
 }
 
 async function importModifiedConfig(search, replacement) {
-  const source = await readFile(new URL("../../tools/lighting-campaign/config.mjs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../tools/lighting/campaign/config.mjs", import.meta.url), "utf8");
   assert.ok(source.includes(search), `config fixture contains ${search}`);
   return import(`data:text/javascript,${encodeURIComponent(source.replace(search, replacement))}`);
 }
 
-const CAPTURE_MODULE_URL = new URL("../../tools/lighting-campaign/capture.mjs", import.meta.url);
+const CAPTURE_MODULE_URL = new URL("../../tools/lighting/campaign/capture.mjs", import.meta.url);
 const CAPTURE_MODULE_PATH = CAPTURE_MODULE_URL.pathname;
 
 async function importCaptureModule() {

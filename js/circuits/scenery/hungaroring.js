@@ -469,7 +469,7 @@
         // Stadium bowl (T1-4, s0-0.10) + the lake/amphitheatre back sweeps.
         // frac~0.42-0.44 used to be excluded here for a reported terrain
         // intrusion at road level. DIAGNOSED: rebuilt this circuit headlessly
-        // (tools/verify-track.cjs harness) with the skip removed and instrumented
+        // (tools/track/verify-track.cjs harness) with the skip removed and instrumented
         // every [scenery] SUPPRESSED warning — none fire anywhere near frac 0.43
         // for any gap this file actually uses (8m lamps, 40-58m crowd blanket).
         // A raycast against the built terrain mesh (mirroring the anchor()

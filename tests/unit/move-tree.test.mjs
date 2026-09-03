@@ -1,4 +1,4 @@
-// move-tree.test.mjs — tools/move-tree.mjs on a scratch tree: the file moves,
+// move-tree.test.mjs — tools/gen/move-tree.mjs on a scratch tree: the file moves,
 // every EXACT path citation follows it, bare basenames are reported not
 // rewritten, the manifest gains a MOVED entry, and a dry run changes nothing.
 import { test } from "node:test";
@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { apply, loadMoves, validate, sweep, splitSegmentMentions } from "../../tools/move-tree.mjs";
+import { apply, loadMoves, validate, sweep, splitSegmentMentions } from "../../tools/gen/move-tree.mjs";
 
 // Fixture comment markers are built at runtime so the docs-integrity comment
 // scan does not read the scratch tree's example paths as citations.
@@ -31,6 +31,8 @@ function scratch() {
   w(".claude/worktrees/agent-x/.git", "gitdir: elsewhere\n");
   w("tools/nested/.git", "gitdir: elsewhere\n");
   w("tools/nested/README.md", "js/zzfix/alpha.js inside a nested checkout\n");
+  w("assets/pack/CREDITS.md", "baked by js/zzfix/alpha.js\n");
+  w("assets/pack/blob.bin", "js/zzfix/alpha.js\n");
   w("moves.json", JSON.stringify({ moves: { "js/zzfix/alpha.js": "js/zzfix/beta.js" } }));
   return root;
 }
@@ -58,6 +60,10 @@ test("a move rewrites exact path citations, leaves bare names and the archive, r
     assert.equal(fs.readFileSync(path.join(root, ".claude/worktrees/agent-x/docs/NOTE.md"), "utf8"), "js/zzfix/alpha.js in a sibling worktree\n", "subagent worktrees are never swept");
     assert.equal(fs.readFileSync(path.join(root, "tools/nested/README.md"), "utf8"), "js/zzfix/alpha.js inside a nested checkout\n", "a directory with its own .git is another checkout");
     assert.match(fs.readFileSync(path.join(root, "js/zzfix/beta.js"), "utf8"), /see js\/zzfix\/beta\.js and js\/zzfix\/alphabet\.js/);
+    assert.equal(fs.readFileSync(path.join(root, "assets/pack/CREDITS.md"), "utf8"), "baked by js/zzfix/beta.js\n",
+      "assets/ IS swept — it holds a handful of text files that cite tools and js by path; it was skipped wholesale for its binaries until a Phase 4 tools move left all four pointing at dead paths (2026-09-03)");
+    assert.equal(fs.readFileSync(path.join(root, "assets/pack/blob.bin"), "utf8"), "js/zzfix/alpha.js\n",
+      "and a non-text extension in there is still untouched — SWEEP_EXT, not the directory skip, is what keeps binaries out");
     assert.ok(res.leftovers.some((l) => l.file === "tests/unit/zzfix.test.mjs" && l.name === "alpha.js"), "the bare-name mention is reported for a human");
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

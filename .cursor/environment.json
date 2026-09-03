@@ -1,6 +1,6 @@
 {
   "name": "Apex 26",
-  "install": "bash tools/cloud-agent-install.sh",
+  "install": "bash tools/env/cloud-agent-install.sh",
   "chromeExecutablePath": "/opt/pw-browsers/chromium",
   "mcpServerAllowlist": [
     {

@@ -125,7 +125,7 @@ const GLX = (function () {
   // are blurred by paint roughness anyway, so tiny faces read perfectly.
   const ENV_SIZE = 64;
   // Probe draw-distance cull, metres. Counted reach in docs/PERF-FINDINGS.md /
-  // tools/chunk-reach.cjs. A face is 90 deg across ENV_SIZE pixels = 1.41 deg/px,
+  // tools/gfx/chunk-reach.cjs. A face is 90 deg across ENV_SIZE pixels = 1.41 deg/px,
   // so a 20 m building subtends ~2.7 px here and 0.9 px at the 900 m far plane.
   const ENV_CULL_M = 300;
   let envTex = null, envFBO = null, envDepthRB = null, envDummyTex = null;
@@ -1227,7 +1227,7 @@ const GLX = (function () {
     // probe inherits the MAIN camera's cullDist, which game.js sets to 0 —
     // no radial cull at all — below PerfGov tier 3. A 64x64 reflection
     // target would otherwise re-draw the city through the 900 m frustum.
-    // Counted with tools/chunk-reach.cjs: 238.3 chunks / 1,256,344 indices
+    // Counted with tools/gfx/chunk-reach.cjs: 238.3 chunks / 1,256,344 indices
     // per cube on vegas at 900 m, 45.3 / 376,791 at 300 m.
     //
     // MIN, never an override: where the main camera is already culling tighter

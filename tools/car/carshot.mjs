@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // carshot — one tiny car-inspection render. Boots headless, parks the player,
 // @doc Cropped studio-orbit car JPEG, self-booting: `carshot.mjs [az] [tod] [teamIdx] [out]` → `artifacts/tmp/carshot.jpg`.
-// @skill playwright-probe / car-viewer
+// @skill playwright-probe
 // raises the __apex.studio() rig, orbits the car, and writes a small cropped
 // JPEG (~5 KB). The cheap way to eyeball the car
 // model without a full-frame screenshot pipeline.
@@ -15,7 +15,7 @@
 
 import { mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { launchChromium, shutdown, sleep, startStaticServer } from "../harness.mjs";
+import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");

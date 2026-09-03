@@ -76,7 +76,7 @@ const ZONE_COUNT = {
 // makes turn-pair authoring safe again — with one deliberate omission: BAHRAIN
 // and JEDDAH stay on the length-only fallback below, because their start lines
 // were never re-derived (no reliable coordinate was found for either) and
-// jeddah's still measures IN A CORNER (`tools/startline-probe.cjs`). Turn
+// jeddah's still measures IN A CORNER (`tools/track/startline-probe.cjs`). Turn
 // numbers built on an unverified line are exactly the trap this table exists to
 // avoid, so those two circuits are excluded rather than guessed.
 //
@@ -91,7 +91,7 @@ const ZONE_COUNT = {
 // above is the sourced fact (a published zone COUNT); this table names exactly
 // the turns bounding the straights the existing N-longest-by-length selection
 // already picks for that count, verified byte-identical in
-// `tools/aero-zone-turns.cjs`'s derivation and by `tests/unit/aero-zones-turns.test.mjs`.
+// `tools/track/aero-zone-turns.cjs`'s derivation and by `tests/unit/aero-zones-turns.test.mjs`.
 // So it does not change which straight is selected anywhere it applies — it
 // only makes the selection ROBUST to a future geometry change (a new curvature
 // scan parameter, an extra dense sample) that would otherwise silently move a

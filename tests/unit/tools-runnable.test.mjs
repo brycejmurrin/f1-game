@@ -43,6 +43,17 @@ function toolFiles() {
 
 const FILES = toolFiles();
 
+/** Absolute path of a tool by BASENAME. tools/ is grouped into subdirectories
+ *  (lib, ci, check, gen, shot, gfx, track, car, ui, lighting, mcp, net, env)
+ *  and a tool moving between them is not a fact this file should have an
+ *  opinion about — every assertion below is about what the tool DOES. A name
+ *  that is ambiguous or absent fails loudly rather than silently skipping. */
+function tool(name) {
+  const hits = FILES.filter((f) => f.rel === name || f.rel.endsWith(`/${name}`));
+  assert.equal(hits.length, 1, `tool(${name}): expected one match, found ${hits.map((h) => h.rel).join(", ") || "none"}`);
+  return hits[0].abs;
+}
+
 test("the sweep sees the whole tools tree (a silent empty list proves nothing)", () => {
   assert.ok(FILES.length >= 70, `expected the full tool set, walked ${FILES.length}`);
   for (const name of ["mcp-cli.mjs", "tinyfish-mcp.sh", "manifest.cjs"]) {
@@ -63,7 +74,7 @@ test("every JS tool parses (node --check)", () => {
 test("no tool derives a path from import.meta.url.pathname (Windows-broken)", () => {
   // `new URL("..", import.meta.url).pathname` is `/D:/a/repo/` on Windows, and
   // path.resolve() then prefixes the cwd's drive to give a path that cannot
-  // exist. tools/gpu-game-check.mjs is the one tool the GPU-census workflow runs
+  // exist. tools/gfx/gpu-game-check.mjs is the one tool the GPU-census workflow runs
   // on windows-latest, and this cost it every request 404ing, the game never
   // booting, and a 5-minute timeout that reported nothing — twice, because the
   // first diagnosis blamed the machine and raised the timeout.
@@ -140,7 +151,7 @@ test("no tool decides a verdict by comparing a coerced measurement to zero", () 
     if (![".mjs", ".cjs", ".js"].includes(f.ext)) continue;
     const lines = stripComments(fs.readFileSync(f.abs, "utf8")).split("\n");
     const hits = lines.map((l, i) => (COERCED_VERDICT.test(l) ? `${f.rel}:${i + 1}: ${l.trim()}` : null)).filter(Boolean);
-    const allowed = COERCED_TOLERATED[f.rel] || 0;
+    const allowed = COERCED_TOLERATED[path.basename(f.rel)] || 0;
     if (hits.length > allowed) bad.push(...hits.slice(allowed));
   }
   assert.deepEqual(bad, [],
@@ -176,10 +187,10 @@ test("the coerced-verdict ceiling has not been left far above the real count", (
   // ratcheting. Every tolerated entry must still be earning its slot.
   const slack = [];
   for (const [rel, allowed] of Object.entries(COERCED_TOLERATED)) {
-    // Keys are tools-relative, the same shape the walk above produces — resolve
-    // through FILES so a renamed or deleted tool fails here instead of leaving
-    // a permanent free pass behind.
-    const f = FILES.find((x) => x.rel === rel);
+    // Keys are BASENAMES (the subdirectory a tool sits in is not part of the
+    // tolerance) — resolved through FILES so a renamed or deleted tool fails
+    // here instead of leaving a permanent free pass behind.
+    const f = FILES.find((x) => path.basename(x.rel) === rel);
     assert.ok(f, `${rel} is tolerated but the walk no longer sees it — drop the entry`);
     const lines = stripComments(fs.readFileSync(f.abs, "utf8")).split("\n");
     const n = lines.filter((l) => COERCED_VERDICT.test(l)).length;
@@ -199,8 +210,8 @@ test("every shell tool parses (bash -n)", () => {
 });
 
 test("cloud-agent install is offline-tolerant (npm ECONNRESET must not fail a usable snapshot)", () => {
-  const browsers = fs.readFileSync(path.join(TOOLS, "install-browsers.sh"), "utf8");
-  const cloud = fs.readFileSync(path.join(TOOLS, "cloud-agent-install.sh"), "utf8");
+  const browsers = fs.readFileSync(tool("install-browsers.sh"), "utf8");
+  const cloud = fs.readFileSync(tool("cloud-agent-install.sh"), "utf8");
   assert.match(browsers, /--no-audit/);
   assert.match(browsers, /--prefer-offline/);
   assert.match(browsers, /node_modules\/playwright\/package\.json/);
@@ -239,24 +250,24 @@ test("the MCP-facing entry points answer without touching a browser or a network
   // These are what an agent reaches for first; a help path that throws reads as
   // "the tool is gone". Each is side-effect-free by construction.
   const cases = [
-    { cmd: process.execPath, args: [path.join(TOOLS, "mcp-cli.mjs"), "--help"], want: /probe/ },
-    { cmd: process.execPath, args: [path.join(TOOLS, "mcp-cli.mjs"), "probe", "--dry-run"], want: /new_page/ },
-    { cmd: "bash", args: [path.join(TOOLS, "tinyfish-mcp.sh"), "help"], want: /deploy-check/ },
-    { cmd: "python3", args: [path.join(TOOLS, "probe-mcp.py"), "help"], want: /chrome_/ },
-    { cmd: "bash", args: [path.join(TOOLS, "apex-tools-mcp.sh"), "help"], want: /apex_/ },
-    { cmd: "bash", args: [path.join(TOOLS, "apex-tools-mcp.sh"), "help"], want: /smoke/ },
-    { cmd: process.execPath, args: [path.join(TOOLS, "mcp-smoke.mjs"), "--help"], want: /Never wraps test-bg/ },
-    { cmd: "bash", args: [path.join(TOOLS, "playwright-mcp.sh"), "help"], want: /browser_resize/ },
-    { cmd: "bash", args: [path.join(TOOLS, "playwright-mcp.sh"), "help"], want: /css-play\.mjs/ },
-    { cmd: process.execPath, args: [path.join(TOOLS, "css-play.mjs"), "--help"], want: /hot-swap|hot swap/i },
+    { cmd: process.execPath, args: [tool("mcp-cli.mjs"), "--help"], want: /probe/ },
+    { cmd: process.execPath, args: [tool("mcp-cli.mjs"), "probe", "--dry-run"], want: /new_page/ },
+    { cmd: "bash", args: [tool("tinyfish-mcp.sh"), "help"], want: /deploy-check/ },
+    { cmd: "python3", args: [tool("probe-mcp.py"), "help"], want: /chrome_/ },
+    { cmd: "bash", args: [tool("apex-tools-mcp.sh"), "help"], want: /apex_/ },
+    { cmd: "bash", args: [tool("apex-tools-mcp.sh"), "help"], want: /smoke/ },
+    { cmd: process.execPath, args: [tool("mcp-smoke.mjs"), "--help"], want: /Never wraps test-bg/ },
+    { cmd: "bash", args: [tool("playwright-mcp.sh"), "help"], want: /browser_resize/ },
+    { cmd: "bash", args: [tool("playwright-mcp.sh"), "help"], want: /css-play\.mjs/ },
+    { cmd: process.execPath, args: [tool("css-play.mjs"), "--help"], want: /hot-swap|hot swap/i },
     // Prefer an explicit path so the assertion is independent of a clean vs
     // dirty checkout. `--help` also answers without git (see pick-tests.mjs);
     // either shape is fine — the path form also exercises RULES → test:gfx.
-    { cmd: process.execPath, args: [path.join(TOOLS, "pick-tests.mjs"), "js/render/three/tlx.js"],
+    { cmd: process.execPath, args: [tool("pick-tests.mjs"), "js/render/three/tlx.js"],
       want: /test:gfx/ },
-    { cmd: process.execPath, args: [path.join(TOOLS, "pick-tests.mjs"), "--help"],
+    { cmd: process.execPath, args: [tool("pick-tests.mjs"), "--help"],
       want: /group|test:/ },
-    { cmd: process.execPath, args: [path.join(TOOLS, "wgx-validate.mjs"), "--static"],
+    { cmd: process.execPath, args: [tool("wgx-validate.mjs"), "--static"],
       want: /"static": true/ },
   ];
   const failed = [];
@@ -272,7 +283,7 @@ test("the MCP-facing entry points answer without touching a browser or a network
 test("chrome-devtools-mcp.sh reports its state without launching Chrome", () => {
   // `status` is the one command that must work on a box where the local clone
   // was never built — it is how you find out that is the case.
-  const r = spawnSync("bash", [path.join(TOOLS, "chrome-devtools-mcp.sh"), "status"],
+  const r = spawnSync("bash", [tool("chrome-devtools-mcp.sh"), "status"],
     { encoding: "utf8", cwd: ROOT, timeout: 30000 });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Chrome:/);
@@ -280,14 +291,14 @@ test("chrome-devtools-mcp.sh reports its state without launching Chrome", () => 
 });
 
 test("playwright-mcp.sh help and status exit 0 without launching Chromium", () => {
-  const help = spawnSync("bash", [path.join(TOOLS, "playwright-mcp.sh"), "help"],
+  const help = spawnSync("bash", [tool("playwright-mcp.sh"), "help"],
     { encoding: "utf8", cwd: ROOT, timeout: 15000 });
   assert.equal(help.status, 0, help.stderr);
   assert.match(help.stdout, /@playwright\/mcp@0\.0\.79/);
   assert.match(help.stdout, /browser_evaluate/);
   assert.match(help.stdout, /css-play\.mjs/);
   assert.match(help.stdout, /\bdom\b/);
-  const st = spawnSync("bash", [path.join(TOOLS, "playwright-mcp.sh"), "status"],
+  const st = spawnSync("bash", [tool("playwright-mcp.sh"), "status"],
     { encoding: "utf8", cwd: ROOT, timeout: 15000 });
   assert.equal(st.status, 0, st.stderr);
   assert.match(st.stdout, /Package:/);
@@ -297,7 +308,7 @@ test("playwright-mcp.sh help and status exit 0 without launching Chromium", () =
 test("chrome-devtools-mcp.sh help exits 0 without requiring Chromium", () => {
   // help used to run after detect_chrome() at script load, so a Mac without
   // /opt/pw-browsers died before printing usage. Detect belongs in run/verify.
-  const r = spawnSync("bash", [path.join(TOOLS, "chrome-devtools-mcp.sh"), "help"],
+  const r = spawnSync("bash", [tool("chrome-devtools-mcp.sh"), "help"],
     { encoding: "utf8", cwd: ROOT, timeout: 30000 });
   const text = `${r.stdout}\n${r.stderr}`;
   assert.equal(r.status, 0, text);
@@ -310,26 +321,15 @@ test("self-booting capture/physics tools use harness.mjs, not a subprocess serve
   // sleep, or a pinned /opt/pw-browsers path. harness.mjs is the
   // teardown-safe server+Chromium pair every other tool uses.
   const files = [
-    "survey-track.mjs",
-    "capture/shot.mjs",
-    "measure-props-over-road.mjs",
-    "car/carshot.mjs",
-    "career-economy.mjs",
-    "check-physics.mjs",
-    "net/rtc-e2e.mjs",
-    "net/rtc-e2e-3p.mjs",
-    "net/rtc-e2e-room.mjs",
-    "profile-gameloop.mjs",
-    "capture/apex-capture.mjs",
-    "capture/motion-capture.mjs",
-    "lighting/ab-lighting.mjs",
-    "quick-validate.mjs",
-    "css-play.mjs",
+    "survey-track.mjs", "shot.mjs", "measure-props-over-road.mjs", "carshot.mjs",
+    "career-economy.mjs", "check-physics.mjs", "rtc-e2e.mjs", "rtc-e2e-3p.mjs",
+    "rtc-e2e-room.mjs", "profile-gameloop.mjs", "apex-capture.mjs", "motion-capture.mjs",
+    "ab-lighting.mjs", "quick-validate.mjs", "css-play.mjs",
   ];
   const bad = [];
   for (const rel of files) {
-    const src = fs.readFileSync(path.join(TOOLS, rel), "utf8");
-    if (!/from ["']\.\.\/harness\.mjs["']|from ["']\.\/harness\.mjs["']/.test(src))
+    const src = fs.readFileSync(tool(rel), "utf8");
+    if (!/from ["']\.{1,2}\/(?:lib\/)?harness\.mjs["']/.test(src))
       bad.push(`${rel}: missing harness.mjs import`);
     if (/spawn\(\s*["']python3["']/.test(src) || /spawn\(\s*["']npx["']/.test(src))
       bad.push(`${rel}: still spawns a subprocess server`);
@@ -345,7 +345,7 @@ test("no tool pins a Linux-only Chromium path as executablePath", () => {
   const pinned = [];
   for (const f of FILES) {
     if (![".mjs", ".cjs", ".js"].includes(f.ext)) continue;
-    if (f.rel === "harness.mjs") continue;
+    if (f.rel.endsWith("harness.mjs")) continue;
     const src = fs.readFileSync(f.abs, "utf8");
     if (/executablePath:\s*["']\/opt\/pw-browsers\/chromium/.test(src))
       pinned.push(f.rel);
@@ -367,7 +367,7 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
   fs.writeFileSync(path.join(dir, "index.html"), "<html><body>hi</body></html>\n");
 
   const proc = spawn(process.execPath,
-    [path.join(TOOLS, "report-server.mjs"), "--port", "0", "--host", "127.0.0.1", "--root", dir],
+    [tool("report-server.mjs"), "--port", "0", "--host", "127.0.0.1", "--root", dir],
     { cwd: ROOT, stdio: ["ignore", "pipe", "pipe"] });
   try {
     // Take the port from what it PRINTS: the URLs are the tool's actual output
@@ -435,7 +435,7 @@ test("report-server: collects a POSTed bundle, and a hostile name cannot escape"
 });
 
 test("apex-report never serializes credentials or URL capabilities", () => {
-  const src = fs.readFileSync(path.join(TOOLS, "apex-report.js"), "utf8");
+  const src = fs.readFileSync(tool("apex-report.js"), "utf8");
   assert.doesNotMatch(src, /Object\.keys\(localStorage\)/,
     "new apex26.* keys must be excluded unless explicitly approved for diagnostics");
   const allowlist = /const STORAGE_KEYS = \[([\s\S]*?)\];/.exec(src);
@@ -448,13 +448,13 @@ test("apex-report never serializes credentials or URL capabilities", () => {
 });
 
 test("aerial-survey.mjs is folded into survey-track --oblique", async () => {
-  assert.equal(fs.existsSync(path.join(TOOLS, "aerial-survey.mjs")), false,
+  assert.equal(FILES.some((f) => f.rel.endsWith("aerial-survey.mjs")), false,
     "aerial-survey.mjs must be gone — its N/E/S/W obliques live on survey-track --oblique");
-  const src = fs.readFileSync(path.join(TOOLS, "survey-track.mjs"), "utf8");
+  const src = fs.readFileSync(tool("survey-track.mjs"), "utf8");
   assert.match(src, /--oblique/);
   assert.match(src, /oblique\$\{name\}/);
   assert.match(src, /dirs = \{ N: 0, E:/);
-  const { parseSurveyTrackArgs } = await import("../../tools/survey-track.mjs");
+  const { parseSurveyTrackArgs } = await import("../../tools/track/survey-track.mjs");
   const mid = parseSurveyTrackArgs(["monaco", "--oblique", "0.1,0.5"]);
   assert.equal(mid.id, "monaco");
   assert.equal(mid.label, "survey");
@@ -471,42 +471,39 @@ test("capture/shot.mjs clips the canvas instead of locator.screenshot", () => {
   // locator.screenshot waits for element stability; a continuously-animating
   // WebGL canvas never settles, so orbit/eye shots timed out (~30 s). survey-track
   // already uses page.screenshot({ clip: canvas box }) for the same reason.
-  const src = fs.readFileSync(path.join(TOOLS, "capture", "shot.mjs"), "utf8");
+  const src = fs.readFileSync(tool("shot.mjs"), "utf8");
   assert.match(src, /boundingBox\(\)/);
   assert.match(src, /timeout:\s*60000/);
   const callers = [...src.matchAll(/(\w+)\.screenshot\(/g)].map((m) => m[1]);
   assert.ok(callers.length && callers.every((n) => n === "page"),
     `screenshot callers must be page, got: ${callers.join(",")}`);
-  assert.match(src, /from ["']\.\.\/harness\.mjs["']/);
+  assert.match(src, /from ["']\.{1,2}\/(?:lib\/)?harness\.mjs["']/);
 });
 
-test("ui-survey.mjs is a layout-audit recipe, not a second Playwright probe", async () => {
-  const src = fs.readFileSync(path.join(TOOLS, "ui-survey.mjs"), "utf8");
-  assert.match(src, /layout-audit\.mjs/);
-  assert.match(src, /ios-iphone-landscape/);
-  assert.doesNotMatch(src, /from ["']\.\/harness\.mjs["']/,
-    "the alias must not boot its own Chromium — layout-audit already does");
-  const { buildLayoutAuditArgs } = await import("../../tools/ui-survey.mjs");
-  const def = buildLayoutAuditArgs([]);
-  assert.ok(def.some((a) => a.startsWith("--screens=title,select,garage")));
-  assert.ok(def.includes("--viewports=ios-iphone-landscape"));
-  assert.ok(def.includes("--jobs=1"));
-  const over = buildLayoutAuditArgs(["--screens=title", "--viewports=desktop-1280x800", "--jobs=4"]);
-  assert.equal(over.filter((a) => a.startsWith("--screens=")).length, 1);
-  assert.ok(over.includes("--screens=title"));
-  assert.ok(over.includes("--viewports=desktop-1280x800"));
-  assert.ok(over.includes("--jobs=4"));
-  assert.ok(!over.includes("--jobs=1"));
-});
-
-test("wgx-gallery.mjs forwards to wgx-shot --gallery", () => {
-  const src = fs.readFileSync(path.join(TOOLS, "wgx-gallery.mjs"), "utf8");
-  assert.match(src, /wgx-shot\.mjs/);
-  assert.match(src, /--gallery/);
-  const shot = fs.readFileSync(path.join(TOOLS, "wgx-shot.mjs"), "utf8");
+test("wgx-shot.mjs owns the gallery path (its forwarder is gone)", () => {
+  // `wgx-gallery.mjs` was a two-line forwarder; `npm run wgx:gallery` calls
+  // wgx-shot directly, so the forwarder had no caller left. The assertions that
+  // mattered were always about wgx-shot's own surface — they stay here.
+  assert.equal(FILES.some((f) => f.rel.endsWith("wgx-gallery.mjs")), false,
+    "wgx-gallery.mjs must stay gone — the gallery lives on wgx-shot --gallery");
+  const shot = fs.readFileSync(FILES.find((f) => f.rel.endsWith("wgx-shot.mjs")).abs, "utf8");
+  assert.match(shot, /--gallery/);
   assert.match(shot, /export async function runWgxShot/);
   assert.match(shot, /export async function runWgxGallery/);
   assert.match(shot, /export const WGX_GALLERY_SHOTS/);
   assert.doesNotMatch(shot, /locator\(["']#game["']\)\.screenshot/);
   assert.match(shot, /page\.screenshot\(\s*\{\s*path[^}]*clip/);
+});
+
+test("the survey forwarders are gone — layout-audit --survey is the entry point", () => {
+  // Two stacked forwarders (ui-mcp-survey.mjs -> ui-survey.mjs -> layout-audit
+  // --survey) with nothing calling either: package.json's `ui:survey` already
+  // names layout-audit.mjs. The recipe they encoded lives in layout-audit.
+  for (const gone of ["ui-survey.mjs", "ui-mcp-survey.mjs"])
+    assert.equal(FILES.some((f) => f.rel.endsWith(gone)), false, `${gone} must stay gone`);
+  const audit = FILES.find((f) => f.rel.endsWith("layout-audit.mjs"));
+  assert.ok(audit, "layout-audit.mjs missing from the walk");
+  const src = fs.readFileSync(audit.abs, "utf8");
+  assert.match(src, /--survey/);
+  assert.match(src, /ios-iphone-landscape/);
 });

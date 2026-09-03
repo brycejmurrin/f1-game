@@ -665,7 +665,7 @@
 
     // Tile coordinate + this layer's world scale. Scale 0 = "no baked layer for
     // this material", which the callers test before sampling (GLASS and FLAG
-    // are deliberately never baked — see tools/assets.mjs SCALES).
+    // are deliberately never baked — see tools/gen/assets.mjs SCALES).
     //
     // Pack layers are MAT 1..16. Car surfaces are 20-27 (car3d.js SURFACES).
     // GLX matTexUV and WGX matTexUV both refuse mid>16 BEFORE indexing the

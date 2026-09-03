@@ -10,7 +10,7 @@ a real device shows a black screen.
    parity). With `"always"` + `skyLate` default-ON, the sky (depth 1.0, drawn
    AFTER the world) overwrote everything except cars/FX. Only the MSAA
    depth-resolve pipeline legitimately uses `"always"` (it fills depth).
-   `tools/wgx-validate.mjs --static` asserts this without a browser.
+   `tools/gfx/wgx-validate.mjs --static` asserts this without a browser.
 
 2. **WGSL derivative uniformity — the NaN-white road.** Unlike GLSL, WGSL
    makes a `dpdx`/`dpdy`/`fwidth` call reached through a non-uniform branch
@@ -38,7 +38,7 @@ a real device shows a black screen.
    feature becomes a color-format mismatch and bloom drops. `DEPTH_RESOLVE`
    must min samples 0–3 (the 4× leftover mined only 0 and 1).
 
-`tools/wgx-validate.mjs --static` covers sky compare, no MSAA 2, bloom
+`tools/gfx/wgx-validate.mjs --static` covers sky compare, no MSAA 2, bloom
 `POST_HDR_FORMAT`, depth-resolve sample 3, and no leftover `fw1`.
 
 ## Device-loss escalation (black screen on real hardware)

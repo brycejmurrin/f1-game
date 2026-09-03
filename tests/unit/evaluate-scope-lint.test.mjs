@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { lintSource, lintAll } from "../../tools/evaluate-scope-lint.mjs";
+import { lintSource, lintAll } from "../../tools/check/evaluate-scope-lint.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 

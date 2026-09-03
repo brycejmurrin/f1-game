@@ -20,14 +20,14 @@ __apex.lightState()
 // }
 ```
 
-`tools/apex-eval.mjs` and `tools/capture/apex-capture.mjs` launch Chromium via
+`tools/shot/apex-eval.mjs` and `tools/shot/apex-capture.mjs` launch Chromium via
 Playwright — they need a browser install. Do not run them while a Playwright
 group is already in flight.
 
 ```sh
-node tools/apex-eval.mjs vegas "a.lightState()"
-node tools/apex-eval.mjs monaco "a.lightState()"
-node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw
+node tools/shot/apex-eval.mjs vegas "a.lightState()"
+node tools/shot/apex-eval.mjs monaco "a.lightState()"
+node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw
 ```
 
 Monza has `night:false` — prefer vegas/singapore for night probes.
@@ -35,18 +35,18 @@ Monza has `night:false` — prefer vegas/singapore for night probes.
 ## Before/after a code change
 
 ```sh
-node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
+node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
 # edit applyRaceSettings (js/lighting/atmosphere.js) or a TUNE_DEFS default
 # bump-cache last, then:
-node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
+node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
 diff artifacts/tmp/before.json artifacts/tmp/after.json
 ```
 
 Visual same-corner A/B:
 
 ```sh
-node tools/capture/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-before
-node tools/capture/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-after
+node tools/shot/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-before
+node tools/shot/apex-capture.mjs cameras monza scratch/captures/apex-capture/lighting-after
 ```
 
 Or in a Playwright page: `setTimeOfDay("night")`, wait ~1400 ms for the dark
@@ -79,7 +79,7 @@ the lamp/mist/star knobs together.
 Day/night **light counts and exposure**:
 
 ```sh
-node tools/test-bg.mjs gfx      # lighting-ab + tuner-grade + webgl-probes + tlx
+node tools/ci/test-bg.mjs gfx      # lighting-ab + tuner-grade + webgl-probes + tlx
 npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
 ```
 

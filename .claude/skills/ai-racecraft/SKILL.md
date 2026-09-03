@@ -31,5 +31,5 @@ for the economy; this skill for how those axes drive the field).
 
 ```sh
 node --test tests/unit/ai-drive.test.mjs
-node tools/test-bg.mjs driving
+node tools/ci/test-bg.mjs driving
 ```

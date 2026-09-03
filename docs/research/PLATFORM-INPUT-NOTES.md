@@ -166,9 +166,9 @@ is latched at module init, so a change needs a reload.
 
 For the memory numbers behind all of this — the ~80 MB one circuit uploads
 against a page a current iPhone SE kills at ~100 MB — see
-`docs/research/CI-RENDERING-PERFORMANCE.md` Part 2. And for the OTHER silent iOS
+`../notes/CI-RENDERING-PERFORMANCE.md` Part 2. And for the OTHER silent iOS
 failure in the same family, localStorage returning a zero quota in Private
-Browsing, see `docs/research/ENGINEERING-PRACTICE-NOTES.md` §4.
+Browsing, see `../notes/ENGINEERING-PRACTICE-NOTES.md` §4.
 
 ---
 

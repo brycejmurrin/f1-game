@@ -1,6 +1,6 @@
 ---
 name: lighting-tuner
-description: Use when the user says night looks washed out/like day, dawn sun is too high, floodlights/lamps aren't firing, day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, or wants to validate Apex 26 lighting knobs via lightState, or pastes a window.LightPresets / LightEdits blob to bake into light-presets.js. Bloom as a GPU/shader defect → webgl-debug. Mirror a new knob across backends → docs/RENDERERS.md §Cross-backend parity after the tune.
+description: Use when the user says night looks washed out/like day, dawn sun is too high, floodlights/lamps aren't firing, day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, or wants to validate Apex 26 lighting knobs via lightState, or pastes a window.LightPresets / LightEdits blob to bake into light-presets.js. Bloom as a GPU/shader defect → webgl-debug. Mirror a new knob across backends → ../../../docs/ARCHITECTURE.md §Cross-backend parity after the tune.
 ---
 
 # Tune and validate scene lighting via __apex probes
@@ -34,15 +34,15 @@ before/after; don't guess from AGENTS.md.
 
 ## When NOT to Use
 
-- Isolated car paint in the studio → **car-viewer** (`--refl` is not a scene
+- Isolated car paint in the studio → **playwright-probe** `references/car-studio.md` (`--refl` is not a scene
   knob). Renderer compile / GL errors → **webgl-debug** / **webgpu-debug**.
 
 ```sh
-node tools/test-bg.mjs gfx      # lighting-ab + tuner-grade + probes + tlx
+node tools/ci/test-bg.mjs gfx      # lighting-ab + tuner-grade + probes + tlx
 npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
 ```
 
-Related: **webgl-debug**, **debug-cameras**.
+Related: **webgl-debug**, **playwright-probe** (`references/cameras.md`).
 
 ## Visual A/B with slider-effect
 
@@ -52,22 +52,22 @@ see *what region* of the frame it changes.
 
 ```sh
 # Classify — no browser, instant
-node tools/slider-effect.mjs --group LAMPS
-node tools/slider-effect.mjs --risk inert --json
+node tools/lighting/slider-effect.mjs --group LAMPS
+node tools/lighting/slider-effect.mjs --risk inert --json
 
 # A/B a single knob — Playwright, ~20 s
-node tools/slider-effect.mjs --live saturation
-node tools/slider-effect.mjs --live lampLevel --from 0 --to 0.55
+node tools/lighting/slider-effect.mjs --live saturation
+node tools/lighting/slider-effect.mjs --live lampLevel --from 0 --to 0.55
 
 # Full range ramp (5 shots)
-node tools/slider-effect.mjs --live contrast --shots 5
+node tools/lighting/slider-effect.mjs --live contrast --shots 5
 
 # Batch (one park per shared condition bucket)
-node tools/slider-effect.mjs --live --ids bloomMul,glareStr,neonBoost
-node tools/slider-effect.mjs --live --group "NIGHT GLOW & BLOOM"
+node tools/lighting/slider-effect.mjs --live --ids bloomMul,glareStr,neonBoost
+node tools/lighting/slider-effect.mjs --live --group "NIGHT GLOW & BLOOM"
 
 # Dry-run: print recipes without launching browser
-node tools/slider-effect.mjs --live glareStr --dry-run
+node tools/lighting/slider-effect.mjs --live glareStr --dry-run
 ```
 
 Outputs per knob: `a.png`, `b.png`, `filter.png` (changed pixels only),

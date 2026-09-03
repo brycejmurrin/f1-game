@@ -9,7 +9,7 @@ Playwright hang after a mid-run version bump.
    - New tagged `<script>`/`<link>` in `index.html` → picked up automatically
      on next install; still bump `?v=N` + `version.json`.
    - New file with **no tag** (DEFERRED backend, font, on-demand vendor) →
-     update `tools/manifest.cjs` `DEFERRED`, then `node tools/gen-shell.mjs`
+     update `tools/manifest.cjs` `DEFERRED`, then `node tools/gen/gen-shell.mjs`
      (it writes `js/roster.js` and the `sw.js` optional seed).
      `tests/unit/load-order.test.mjs` asserts the generated blocks match.
 
@@ -24,7 +24,7 @@ Playwright hang after a mid-run version bump.
    npm run test:tooling-fast
    ```
 
-4. **Bump version last** (`node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`)). Verify one uniform N:
+4. **Bump version last** (`node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`)). Verify one uniform N:
    ```sh
    grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
    ```

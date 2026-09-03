@@ -88,7 +88,7 @@ nearest-bin and chopped the dashes). `fs_main` uses `in.matTrk.xyz` on
 road draws. LUT `trkFromWorld` stays `buryRibbon` + material fallback.
 Vertex colour stays the real albedo (packing into RGB greys the grass
 shoulders).
-See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
+See [../notes/CI-RENDERING-PERFORMANCE.md](../notes/CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
 Companion provenance (do not treat as current structure): the original
@@ -123,7 +123,7 @@ Reproduce the live boot with:
 
 ```sh
 npx serve -l 3456 .        # the wrapper's Chrome needs a SECURE CONTEXT: 127.0.0.1
-node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
+node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
 ```
 
 A clean boot prints no `WGX` console line, `WGX.gpuErrors()` is 0, and
@@ -134,7 +134,7 @@ pair them with one positive check — drive a race and assert
 never hand back a WebGL2 context:
 
 ```sh
-node tools/mcp-cli.mjs probe --backend webgpu --wait 8000 \
+node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 8000 \
   --eval 'await __apex.race("monza"); await __apex.go();
           await new Promise(r=>setTimeout(r,7000));
           return String(document.querySelector("canvas").getContext("webgl2") === null);'
@@ -162,8 +162,8 @@ is 2D-blitted onto visible `#game` via ephemeral staging buffers
 (`_softDisplayEncode` / `_softDisplayFinish`). Readbacks wait for
 `onSubmittedWorkDone` before `mapAsync`; `awaitSoftPresent()` resolves only
 after a successful visible blit (non-blank pixels). `GLX.capturePixels()`
-reads the same texture as optional RGBA oracle — `tools/wgx-capture.mjs` →
-`frame.png`; primary visible gate is `tools/gfx-probe.mjs` → `canvas.png`.
+reads the same texture as optional RGBA oracle — `tools/gfx/wgx-capture.mjs` →
+`frame.png`; primary visible gate is `tools/gfx/gfx-probe.mjs` → `canvas.png`.
 The first capture pass found four latent WGX bugs in one afternoon (§1a below).
 SwiftShader remains non-representative for PERFORMANCE and for anything MSAA
 (software adapters force MSAA 1), but it is now a genuine visible-canvas +
@@ -239,7 +239,7 @@ function, which closes over a null `gl` and throws mid-frame. The 2026-08
 parity names (`gpuTimer`, texture arrays, lamp shadows, instancing,
 `drawParticles`, …) are real functions and remain listed for that reason.
 Gated by `tests/unit/backend-surface-parity.test.mjs`. Overview:
-[RENDERERS.md](../RENDERERS.md).
+[../ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ---
 
@@ -646,7 +646,7 @@ Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
    TLX and WGX register the listener form first and keep the property as
    the fallback. This matters because WebKit's silent failures ARRIVE on
    that channel and nowhere else — the research ranking (2026-09-03,
-   `docs/RENDERERS.md` §WebKit silent draw drops): (1) the Metal PSO is
+   `../ARCHITECTURE.md` §WebKit silent draw drops): (1) the Metal PSO is
    compiled lazily at FIRST DRAW with `error:nil`; on failure WebKit skips
    `setRenderPipelineState` and still issues the draw, reporting an
    out-of-memory error "Render pipeline failed compilation likely due to
@@ -679,7 +679,7 @@ Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
 
 Breaking either does not throw at the call site: WGX's boot self-test fails,
 the backend refuses, and the game falls back to GLX with one console warning —
-which is why `node tools/wgx-validate.mjs` (real Dawn WGSL + pipeline
+which is why `node tools/gfx/wgx-validate.mjs` (real Dawn WGSL + pipeline
 validation, ~5 s) runs on every `js/render/webgpu/` change.
 
 ---
@@ -712,7 +712,7 @@ with `--use-angle=swiftshader --enable-unsafe-webgpu`):
 | Boot blockers fixed this pass | illegal `sampleCount:2` → 1\|4; `rg11b10ufloat` post → `rgba16float`; geometry via `queue.writeBuffer` (not `mappedAtCreation`); MCP `--enable-unsafe-webgpu` |
 | LIT `dpdx` CF | hoisted; lifecycle unit test guards |
 | `create()` on software | **boots** WGX (MSAA 1 + 2D soft-present). No longer falls back to GLX. `apex26.gfxWgxAllowSoftware` is a legacy no-op. |
-| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0` — shader work EXECUTES (§0 correction / §1a). **Software compositor (2026-08-17, cache 1342+):** final pass → `COPY_SRC` soft-present texture (never `getCurrentTexture()`) → ephemeral readback → 2D blit on `#game`. Visible gate: `gfx-probe.mjs` / `awaitSoftPresent()`; readback: `wgx-capture.mjs` → `frame.png`. Gallery: `node tools/wgx-gallery.mjs --lite`. |
+| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0` — shader work EXECUTES (§0 correction / §1a). **Software compositor (2026-08-17, cache 1342+):** final pass → `COPY_SRC` soft-present texture (never `getCurrentTexture()`) → ephemeral readback → 2D blit on `#game`. Visible gate: `gfx-probe.mjs` / `awaitSoftPresent()`; readback: `wgx-capture.mjs` → `frame.png`. Gallery: `node tools/gfx/wgx-shot.mjs --gallery --lite`. |
 
 Do **not** add extra Dawn/Vulkan pins to `playwright.config.js` (they break
 headless boot). Do **not** probe WebGPU on a `data:` page. The chrome-devtools
@@ -740,7 +740,7 @@ slice that adds a method must declare it (real or `undefined`) before
 - **Using WebGPU to make CI faster.** The suite already gets a SwiftShader
   WebGPU adapter under the existing Playwright flags (see §6 table). That
   does not make frames cheaper: even a green LIT compile is still a CPU
-  rasteriser. See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md).
+  rasteriser. See [../notes/CI-RENDERING-PERFORMANCE.md](../notes/CI-RENDERING-PERFORMANCE.md).
 
 ---
 
@@ -869,7 +869,7 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    frame's draws to ~7%). Merged run length: median 1425 -> **22968** verts,
    max 24801 — that max is marginally above the largest N the repro tested
    (24576), a small extrapolation inside the same regime.
-   Evidence, in descending strength: (a) `tools/wgx-vid-repro.mjs` 30/30 OK
+   Evidence, in descending strength: (a) `tools/gfx/wgx-vid-repro.mjs` 30/30 OK
    on SwiftShader-Dawn incl. `firstVertex` and whole `draw(N)` to 24576 —
    a third run agreeing with round 4's two; (b) real-Dawn `wgx-validate`
    before vs after: `ok`, 0 GPU errors, 0 WGSL parse errors, and the
@@ -914,7 +914,7 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    (2026-08-27), implementation scheduled for its own round.** The block
    rested on a 2026-08-17 "vertex_index stays 0 on large non-indexed
    draws (and drawIndexed)" finding whose origin commit is beyond the
-   shallow-clone graft. `tools/wgx-vid-repro.mjs` (committed as the
+   shallow-clone graft. `tools/gfx/wgx-vid-repro.mjs` (committed as the
    re-runnable primary evidence) now measures the actual matrix: draw
    shapes {draw(N) whole, 4095-piece control, draw(n,1,firstVertex) over
    one shared vbuf, drawIndexed(N) identity} × N ∈ {4092, 4095, 4098,

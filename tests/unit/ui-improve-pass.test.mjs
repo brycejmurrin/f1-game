@@ -67,7 +67,7 @@ function uiSandbox(dom, extra = {}) {
 }
 
 test("UI audit scale axis includes the product's 40% minimum", async () => {
-  const { parseScales } = await import("../../tools/ui-scale-axis.mjs");
+  const { parseScales } = await import("../../tools/ui/ui-scale-axis.mjs");
   assert.deepEqual(parseScales(["--scale=40,200"]), [40, 200]);
   assert.throws(() => parseScales(["--scale=39.75"]), /between 40 and 200/);
 });
@@ -169,7 +169,7 @@ test("circuit select stacked uses one list scroller", () => {
   assert.equal(off.el.dataset.pair, "off", "`off` stacks a compact sheet regardless of width");
   assert.doesNotMatch(code("js/ui/scroll-fade.js"), /"\.pane",\s*"#sel-body"/);
   assert.doesNotMatch(code("js/ui/menu-nav.js"), /\.pane,#sel-body/);
-  assert.doesNotMatch(read("tools/layout-audit.mjs"), /\.pane,#sel-body/);
+  assert.doesNotMatch(read("tools/ui/layout-audit.mjs"), /\.pane,#sel-body/);
   assert.match(code("js/ui/scroll-fade.js"), /\boverflowY\b/,
     "fade thumbs require overflow-y auto/scroll, not hidden content height");
 });

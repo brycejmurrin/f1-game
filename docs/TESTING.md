@@ -38,12 +38,12 @@ suites in the background, inspect logs asynchronously, and continue productive
 tasks without waiting.
 
 ```sh
-node tools/test-bg.mjs smoke api collision   # SEQUENTIAL: one group, then the next
-node tools/test-bg.mjs --parallel smoke api  # old concurrent start (core-capped)
+node tools/ci/test-bg.mjs smoke api collision   # SEQUENTIAL: one group, then the next
+node tools/ci/test-bg.mjs --parallel smoke api  # old concurrent start (core-capped)
 tail -f artifacts/logs/smoke.log             # watch one
-node tools/test-bg.mjs --status              # what is running / how it ended
-node tools/test-bg.mjs --wait                # block until all groups finish
-node tools/test-bg.mjs --stop                # kill everything still running
+node tools/ci/test-bg.mjs --status              # what is running / how it ended
+node tools/ci/test-bg.mjs --wait                # block until all groups finish
+node tools/ci/test-bg.mjs --stop                # kill everything still running
 ```
 
 Each group gets its own free port, its own `artifacts/report-<port>/` and its
@@ -63,7 +63,7 @@ sweet spot — and each one reads like a product bug until you check the clock.
 `test-bg.mjs`'s cap ALLOWS two groups; that is a ceiling, not a recommendation.
 Scale the group count to the cores you actually have.
 
-`tools/test-shards.sh` does the same fan-out but WAITS for the result — use it
+`tools/ci/test-shards.sh` does the same fan-out but WAITS for the result — use it
 in CI or when you genuinely want to block.
 
 ### Run the groups your change needs, not all of them
@@ -72,13 +72,13 @@ The whole suite is roughly 40 minutes of software rendering. Which groups a
 change needs is mechanical, so ask:
 
 ```sh
-node tools/pick-tests.mjs                 # vs the branch point + working tree
-node tools/pick-tests.mjs --staged
-node tools/pick-tests.mjs js/car/parts.js # explicit paths
-node tools/pick-tests.mjs --bg            # ready-to-paste background command
+node tools/ci/pick-tests.mjs                 # vs the branch point + working tree
+node tools/ci/pick-tests.mjs --staged
+node tools/ci/pick-tests.mjs js/car/parts.js # explicit paths
+node tools/ci/pick-tests.mjs --bg            # ready-to-paste background command
 ```
 
-The routing rules live in `RULES` at the top of `tools/pick-tests.mjs` and are
+The routing rules live in `RULES` at the top of `tools/ci/pick-tests.mjs` and are
 deliberately coarse and biased toward running too much — a rule that is too
 narrow is a missed regression, one that is too wide costs 10-40 minutes of
 serialized SwiftShader per extra browser group. The cap lives at the RUN, not
@@ -87,12 +87,12 @@ the rest named as not-run in the PR.
 `tests/unit/test-groups.test.mjs` asserts every group they name exists.
 
 When the named group is much bigger than the change, select SPECS instead of
-groups — `tools/select-specs.mjs` decomposes the picked groups into spec files
+groups — `tools/ci/select-specs.mjs` decomposes the picked groups into spec files
 under a time budget and names everything it skipped:
 
 ```sh
-node tools/select-specs.mjs --since <ref>              # spec list, one per line
-node tools/select-specs.mjs --since <ref> --budget-min 15
+node tools/ci/select-specs.mjs --since <ref>              # spec list, one per line
+node tools/ci/select-specs.mjs --since <ref> --budget-min 15
 ```
 
 It powers the blocking change-aware CI gate and is just as useful interactively; a
@@ -111,8 +111,8 @@ serializes the agent behind SwiftShader several times over.
 | When | Run |
 |---|---|
 | in the edit loop | `npm run test:tooling-fast` (~30 s, structural, no browser) |
-| track/scenery edit | `node tools/verify-track.cjs <id>` (2 s, headless) FIRST |
-| once, when the edits are done | `node tools/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
+| track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
+| once, when the edits are done | `node tools/ci/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
 | before pushing | + `npm run test:sweeps` if you touched geometry |
 | single spec | `npm test -- tests/specs/<file>.spec.js` |
 | single unit suite | `node --test tests/unit/<file>.test.mjs` |
@@ -176,12 +176,12 @@ whether the TLX backend happens to be installed.
 **Every `waitForFunction` under `tests/` now carries `{ polling: 100 }`**
 (2026-08-27 sweep — the rAF-starved timeouts were the recurring red class in
 every loaded run). 57 sites under `tools/` still carry a timeout without
-polling (run `node tools/wait-polling-lint.mjs` for the live census; the 24
-that used to live in `layout-audit.mjs` are now in `tools/menu-screens.mjs`) —
+polling (run `node tools/check/wait-polling-lint.mjs` for the live census; the 24
+that used to live in `layout-audit.mjs` are now in `tools/ui/menu-screens.mjs`) —
 fix those as they are touched.
 The count is a RATCHET, not a target — `tests/unit/wait-polling.test.mjs` fails
 if the population grows, and lowering the ceiling as sites are fixed is the
-intended direction. (Count by AST via `tools/wait-polling-lint.mjs`. A grep
+intended direction. (Count by AST via `tools/check/wait-polling-lint.mjs`. A grep
 undercounts the multi-line calls.) The jump from the 319 this file used to
 quote is SCOPE, not new debt: the lint walked `tools/` but admitted only
 `*.js`, and every tool is `.mjs`/`.cjs`, so its own scan list contributed
@@ -228,7 +228,7 @@ game script evaluates, so a spec needs no change to become verbose:
 
 ```sh
 APEX_LOG=scenery:debug npm test -- tests/specs/props-over-road.spec.js
-APEX_LOG=debug node tools/test-bg.mjs circuits
+APEX_LOG=debug node tools/ci/test-bg.mjs circuits
 ```
 
 Every failure automatically attaches three things (see `tests/helpers/fixtures.js`), and
@@ -252,7 +252,7 @@ specs; `npm run test:audit` fails if any test file belongs to none of them, and
 run a spec twice; the 115-spec union was compared file for file before and after).
 
 A browser group is 10-40 minutes of SwiftShader; run ONE at a time through
-`tools/test-bg.mjs`, and `tools/select-specs.mjs` for a finer per-spec cut when
+`tools/ci/test-bg.mjs`, and `tools/ci/select-specs.mjs` for a finer per-spec cut when
 the group is much bigger than the change.
 
 ### Boot (run first, and first to fix)
@@ -261,9 +261,9 @@ the group is much bigger than the change.
 |---|---|
 | `tiny` | boot-guard, smoke, dev-tools, logging — page loads, `__apex` present, dev hooks respond. The CI push gate runs `smoke` alone; `tiny` is the nightly 4-shard boot group |
 | `smoke` | page load + `__apex` available — the one spec the CI push gate runs |
-| `audit` | coverage guard — every test file must belong to ≥1 topical group (`tools/test-coverage-audit.mjs`) |
-| `pick` | print the groups a change needs (`tools/pick-tests.mjs`) — not a test run |
-| `bg` | start groups in the background (`tools/test-bg.mjs`) — not a test run |
+| `audit` | coverage guard — every test file must belong to ≥1 topical group (`tools/ci/test-coverage-audit.mjs`) |
+| `pick` | print the groups a change needs (`tools/ci/pick-tests.mjs`) — not a test run |
+| `bg` | start groups in the background (`tools/ci/test-bg.mjs`) — not a test run |
 
 ### Topical browser groups (disjoint)
 
@@ -286,12 +286,12 @@ the group is much bigger than the change.
 
 | Group | What it runs |
 |---|---|
-| `tooling-fast` | the structural half in ~30 s — **one file at a time** via `tools/tooling-fast.mjs` (`--test-concurrency=1`) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
+| `tooling-fast` | the structural half in ~30 s — **one file at a time** via `tools/ci/tooling-fast.mjs` (`--test-concurrency=1`) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
 | `game-vm` | the Node VM game harness (`game-vm.test.mjs`), physics parity (`physics-characterization-vm`) and the thirteen `*-vm.test.mjs` TWINS of the JSON-only browser specs — `headless-api`, `obs-act-edge`, `longitudinal`, `world-physics`, `drift`, `active-aero`, `aero-zones`, `offtrack`, `elevation-tracks`, `collisions`, `collisions-deep`, `collision-ai-fixes`, `new-hooks` — same assertions and thresholds, one boot per file, ~1 s a circuit build. ~3 min for the set (elevation-tracks builds 40 circuits and is ~2 min of it alone; the rest are 2–30 s each); in CI guards. The browser specs stay in place and stay the truth until CI has run the twins |
 | `mcp` | the CLI-only MCP wrappers (`tinyfish-mcp`, `probe-mcp`) plus `.cursor/environment.json` bootstrap pins: spawn-heavy, off the edit loop; their fast-gate half is `mcp-cli.test.mjs` — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json` |
 | `node-slow` | the three raster/spawn-heavy car files (`cockpit-pale-surfaces`, `crest-marks`, `slider-effect`; 152 s of the old 315 s loop) — CI guards always, locally when pick-tests names it |
-| `sweeps` | the full-fleet geometry audits — prop-clipping, lamp-fixture-anchor, scenery-grounding, road-under-floor, coplanar-faces, debris-hazard-hint, spline-project-height, the shared-foundation characterization, car-front-wing-width and grid-boxes (10 files — `package.json` `test:sweeps` is the list). Each rebuilds circuits through `tools/track-build-vm.cjs`; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
+| `sweeps` | the full-fleet geometry audits — prop-clipping, lamp-fixture-anchor, scenery-grounding, road-under-floor, coplanar-faces, debris-hazard-hint, spline-project-height, the shared-foundation characterization, car-front-wing-width and grid-boxes (10 files — `package.json` `test:sweeps` is the list). Each rebuilds circuits through `tools/lib/track-build-vm.cjs`; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
 | `sweeps-parts` | the 559 s parts option-resolution census (`parts-visual-distinctness`) alone — split out of `sweeps` so the geometry sweeps finish in ~7 min; its own CI job |
 | `generated-docs` | freshness of the generated tools index, slider table and hook index (`npm run gen:docs` regenerates) |
 | `parts-unit` | the catalog LADDER in Node — no paid option dominated by a cheaper one, no row that is never optimal at any price (bar the two wet compounds), no flat category stat, and a career budget cap that clears the dearest works car without reaching the top shelf |
@@ -304,9 +304,9 @@ the group is much bigger than the change.
 | `state-unit` | season, storage and career state machines, including cross-tab conflicts |
 | `service-worker` | the SW's install/fetch/version behaviour |
 | `webgpu-lifecycle` | WGX/TLX resource and software-present lifecycle, as a pure unit suite |
-| `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/graph-parity.cjs`) |
-| `float` | floating-prop audit (`tools/float-audit.cjs`) |
-| `clip` | prop-clipping gate (`tools/clip-audit.cjs`) |
+| `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/track/graph-parity.cjs`) |
+| `float` | floating-prop audit (`tools/track/float-audit.cjs`) |
+| `clip` | prop-clipping gate (`tools/track/clip-audit.cjs`) |
 
 ### Partitions (not topical — they do not count for coverage)
 
@@ -343,7 +343,7 @@ wide pool. `tests/unit/test-groups.test.mjs` catches that.
 
 ### Server lifecycle
 
-The npm wrapper (`tools/run-playwright.mjs`) starts an in-process static server
+The npm wrapper (`tools/ci/run-playwright.mjs`) starts an in-process static server
 on a free ephemeral port, passes that port to Playwright, and closes it when the
 child exits. Independent npm test commands therefore share neither a server nor
 an output directory.
@@ -369,7 +369,7 @@ failure at all. `--test-concurrency=1` on `test:sweeps` is deliberate — and
 npm run test:sweeps`: the sweep suites already saturate the machine one at a
 time, so overlapping them buys nothing and costs the whole run.
 
-Run several GROUPS concurrently instead (`tools/test-bg.mjs`) — those are
+Run several GROUPS concurrently instead (`tools/ci/test-bg.mjs`) — those are
 separate processes with separate ports, and the sizing guidance above applies.
 
 ### Output
@@ -400,9 +400,9 @@ Import `test` and `expect` from `./fixtures.js` instead of `@playwright/test`:
 | `pageErrors` | `string[]` of uncaught JS exceptions — assert `toHaveLength(0)` after exercising game logic |
 | `consoleLines` | `string[]` of every console line and page error, type-prefixed, favicon noise stripped. Prefer this to a hand-rolled `page.on("console", …)` — the hand-rolled ones drifted into a dozen slightly different filters |
 | `racePage` | navigates to `/` and waits for `window.__apex` (`BOOT_MS`, 45 s — see §A boot is 45 s now) |
-| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is broad**: 110 of 115 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
+| `loadTrack` | `loadTrack(id, tod, wx)` — the goto → wait → `race()` → wait built → `go()` block, with unified timeouts. **Adoption is broad**: 110 of 115 specs import `tests/helpers/fixtures.js`; the rest still hand-roll a near-identical helper (`load`, `waitReady`, `startRace`, `boot`) and therefore get NO failure attachments. `tools/ci/fixture-consumer-audit.mjs` ratchets the count so it cannot go backwards — migrate a spec, then raise its `FLOOR` |
 
-`tools/fixture-consumer-audit.mjs` enforces the import for the specs that depend
+`tools/ci/fixture-consumer-audit.mjs` enforces the import for the specs that depend
 on those guarantees (`audio-smoke`, `smoke`, `f1-track-accuracy`, `ui-audit`).
 Other specs may use the base Playwright fixture.
 
@@ -415,7 +415,7 @@ REAL module and let a test assert what it does (2026-09 conversion of
 
 | Harness | What it runs | Use it for |
 |---|---|---|
-| `tools/game-vm.cjs` `createGame()` | js/game.js + `__apex` on an inert DOM with a recording GLX stub; `pumpFrame()` renders one frame | draw ORDER, cull maths, anything read off `G.frame` / `__apex` |
+| `tools/lib/game-vm.cjs` `createGame()` | js/game.js + `__apex` on an inert DOM with a recording GLX stub; `pumpFrame()` renders one frame | draw ORDER, cull maths, anything read off `G.frame` / `__apex` |
 | `tests/helpers/glx-mock.mjs` `bootGlx()` | js/render/glx/glx.js (+ shaders, glx/ passes) on a Proxy WebGL2 whose every call is recorded (`h.calls`, `h.count(name, pred)`); `h.loseContext()`, `h.answers.getError = …`, `bootGlx({ aniso: true })` | uniform caches, fail-closed guards, cull bookkeeping, light-lane packing, context attributes |
 | `tests/helpers/mini-dom.mjs` `makeDom()` | the smallest DOM a js/game UI module needs: attributes, dataset, classList, `focus()` → `activeElement`, a selector matcher for `#id .class tag [attr] :not() :scope >` | MenuNav, SheetShape, CamModes, SettingsNav, Photomode, UiLayers, CssZoom in a VM |
 | `tests/helpers/css-rules.mjs` `cssRules()` / `decl()` | a stylesheet as flat rules `{ selector, decls, context }` (at-rules flattened into `context`) | "selector S declares P as V" — order-, whitespace- and comment-proof |
@@ -569,13 +569,13 @@ smoke and selected jobs have it; guards does not, which is also why
 Every browser job in `ci.yml` ran on `ubuntu-latest`, whose only adapter is
 SwiftShader, and the `gfx` group had never been in CI at all. `macos-latest`
 reports a hardware Metal adapter on stock flags
-(`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a real GPU), so the
+(`notes/CI-RENDERING-PERFORMANCE.md` §There IS a real GPU), so the
 group has its own job pair:
 
 | job | runner | does |
 |---|---|---|
 | `renderer-filter` | ubuntu | fetch-depth 0; diffs the push/PR against its base; `renderer=true` when the diff touches `js/render/**`, `js/game/lighting*.js`, `track-lights.js`, `frame-lights.js`, `light-presets.js`, `atmosphere.js`, `tuner.js`, either playwright config, `tests/helpers/`, `ci.yml`, or a `test:gfx` spec (list DERIVED from `package.json`). Fail-safe: any unresolvable diff, and every schedule / dispatch run, answers `true` |
-| `renderer-macos` | `macos-latest` | `needs: renderer-filter`; installs the FULL Chromium (`npx playwright install chromium`, cached at `~/Library/Caches/ms-playwright`); runs `tools/gpu-census.mjs` and FAILS unless `anyHardware === true`; then `npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000` at `APEX_WORKERS=2`; failure artifacts; `timeout-minutes: 30` (a guess — re-time on the first green run) |
+| `renderer-macos` | `macos-latest` | `needs: renderer-filter`; installs the FULL Chromium (`npx playwright install chromium`, cached at `~/Library/Caches/ms-playwright`); runs `tools/gfx/gpu-census.mjs` and FAILS unless `anyHardware === true`; then `npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000` at `APEX_WORKERS=2`; failure artifacts; `timeout-minutes: 30` (a guess — re-time on the first green run) |
 
 Two rules the job encodes, both measured by the census:
 
@@ -596,7 +596,7 @@ carries `if: !inputs.concurrency_key && github.event_name != 'workflow_call'`
 CALLER's `event_name`, so the key is the reliable signal) and both jobs are
 skipped on a Pages call, which does not fail the aggregate. The gate stays
 guards + conditional sweeps + smoke.spec.js in four shards + driving-model
-(`PROCESS-SPEEDUP-2026-09.md` §4.5); promoting the renderer job into it once it
+(`notes/PROCESS-SPEEDUP-2026-09.md` §4.5); promoting the renderer job into it once it
 has a measured green history is deleting that one `if:`. `gpu-census.yml` now
 also runs on the same nightly cron (`17 3 * * *`), full check, dispatch
 defaults restated inline because a scheduled run has empty `inputs`.
@@ -960,7 +960,7 @@ what it covers.
 | `terrain-over-road.spec.js` | all-circuit audit: no terrain or verge triangle renders above the racing line. Point-in-triangle vs the asphalt; large road-over-road is ignored as an intentional crossover (Suzuka's figure-8) |
 | `props-over-road.spec.js` | all-circuit audit: no PROP triangle sits on/above the racing line, in 3D, 0.2–5 m above the road. Per-track `BASELINE` caps document justified overheads (Miami's beach canopy, Mexico's Foro Sol, gantries) |
 | `prop-clipping.test.mjs` | ratchet: prop-vs-prop interpenetration must not grow |
-| `scenery-grounding.test.mjs` | ratchet: FLOATING scenery must not grow — the vertical axis, gating `tools/float-audit.cjs` against `tools/float-baseline.json`. Same semantics as prop-clipping: absent circuit must read 0, listed circuit fails on growth, a cap above the measured count fails as slack. `npm run test:float` existed for a while but was in no CI job and behind no test, and could not have been wired up as-is — it exits 1 on any floater and 37 of 40 circuits have some |
+| `scenery-grounding.test.mjs` | ratchet: FLOATING scenery must not grow — the vertical axis, gating `tools/track/float-audit.cjs` against `tools/track/float-baseline.json`. Same semantics as prop-clipping: absent circuit must read 0, listed circuit fails on growth, a cap above the measured count fails as slack. `npm run test:float` existed for a while but was in no CI job and behind no test, and could not have been wired up as-is — it exits 1 on any floater and 37 of 40 circuits have some |
 | `lamp-fixture-anchor.test.mjs` | all-circuit, STRICT ZERO on both axes of the night-lighting anchor: (a) no light record with `glareW > 0` may sit off a registered fixture — `drawGlow` paints a halo billboard for those, and the three start-gantry downlights shipped at `glareW 0.3` unparented (three orbs over every start line; Jeddah's whole tunnel was 311 of them, its poles having registered no lights at all); (b) no registered fixture's radius may stop short of the road — the `(1-(d/r)^4)^2` window is exactly 0 past `r`, and Bahrain's 39 m masts inherited a radius sized for a 13 m verge lamp, so the circuit rendered unlit (2 of 135 centreline samples). No baseline and no ALLOW hatch: both read 0 fleet-wide |
 | `component-inventory.test.mjs` | docs/COMPONENTS.md must name every class family in `css/`, name none that has left, and keep the dead-class list accurate — a map that silently rots is worse than none, because it is trusted |
 | `sheet-per-screen.test.mjs` | one `.sheet` per parent element in the shell — `sheetshape.js` writes `--sheet-eff-scale` on the PARENT, so two co-hosted sheets would clobber each other's fit cap; the failure message names the fix (scope the property to the sheet) |
@@ -974,7 +974,7 @@ what it covers.
 | `track-foundation.test.mjs` | Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, mesh validation |
 | `track-maps-corners.test.mjs` | turn class = radius + heading-sweep (not raw \|k\|); Monza includes Curva Grande; Spa La Source HAIRPIN / Eau Rouge FAST |
 | `track-preview-plan.test.mjs` | `TrackMaps.planPreview` — stacked vs beside, and the slot it sizes, over measured card geometry x circuit aspect. Holds shut the tall-circuit sliver, the caption charged to the wrong shape's budget, `beside` on a wide circuit, the 175% collapse, and two-column on a phone |
-| `circuit-axis.test.mjs` | `tools/circuit-axis.mjs` — the spread still spans tall to wide (and names circuits that exist), the axis stays off unless flagged, and a tagged cell id parses back to screen + circuit |
+| `circuit-axis.test.mjs` | `tools/ui/circuit-axis.mjs` — the spread still spans tall to wide (and names circuits that exist), the axis stays off unless flagged, and a tagged cell id parses back to screen + circuit |
 | `track-graph.test.mjs` | the scenery model library + node graph, and `batches()` |
 | `godray-keep-nearest.test.mjs` | the god-ray nearest-k selection, cloned in all three backends: eviction must SWAP so the pooled objects stay a permutation (an overwrite aliased one object at two slots — a lamp beamed twice, another dropped); also pins the three clones in lockstep |
 | `light-store-cond-layer.test.mjs` | the conditional shipped lighting layer ("*|tod" in LightPresets): resolves only on ULTRA + a per-chunk-capable backend off mobile; player edits (incl. explicit 0) always win; dedup against base() includes the layer |
@@ -985,11 +985,11 @@ what it covers.
 | `all-lights-fill.test.mjs` | `_fillAllLights` writes the same bytes a full rewrite would: only rgb can move per frame, so the twelve static lanes are copied once per source array — asserted across a flicker sequence AND a source swap, plus the `_allLightsGen` contract LampChunks and WGX both cache on (including a new set whose colours match but whose positions moved, the case that hides) |
 | `cockpit-pale-surfaces.test.mjs` | nothing in the COCKPIT build reads as a blank pale slab: ray-casts every team's cockpit mesh from the driver's eye and fails on a pale ACCENT (the car's own body colour is exempt — racingbulls really is a white car). Proven to fail on ferrari + williams with the `_ckAcc` dimming disabled |
 | `cockpit-crest-stripe.test.mjs` | the livery CREST STRIPE does not run through the driver's steering wheel: locates the stripe by a DIFFERENTIAL build (with and without `liv.stripe` — colour matching is useless, `hazard` ships the stripe as car3d's `CARBON` byte-for-byte) and fails on any stripe geometry inside the wheel's angular window within 1.5 m of the cockpit eye. A second test asserts the CHASE build still carries it, so the gate cannot be satisfied by deleting the stripe. Proven to fail on all 178 striped liveries with the `!ckpt` gate removed |
-| `crest-marks.test.mjs` | every team mark is READABLE, measured rather than eyeballed: extent inside the fit box and filling it, no limb under `STROKE_MIN` (1.9 px at the 34 px the mobile-AI fin badge gets), lettering floored and absent when `bare`, a colour census that fails on any paint outside `markPalette`, no alpha or `destination-out`, ink coverage in band and stable between 430 px and 40 px, and the 4.2:1 contrast floor over every team x livery x the four surfaces a mark lands on. Also holds the editor's mark rows: every row `markSlots` offers reaches PIXELS on both surfaces, no two rows share a key or a label, the OUTLINE row is opt-in on every mark, and Red Bull's SUN DISC is round (every sampled point one radius from the bbox centre) and backmost — the trace's union silhouette failed that by 6:1 and was what made SUN DISC move an outline. Measures through `tools/crest-sweep.mjs`. Would have failed on the traced logo PNGs this replaced |
-| `car-front-wing-width.test.mjs` | the front wing is NARROWER than the car it is bolted to — a regulation invariant, not a style call. F1 caps the wing ~100 mm inboard of the front tyre's outer face on each side (1700/1900 for 2026), and that gap is what the endplate uses to push the wake around the tyre. Ours stood 95 mm PROUD: the widest vertex in the whole car was the endplate footplate at ±1.045 against a 0.950 tyre face, so the car measured 2.09 m at the wing and 1.90 m at the wheels. Sweeps EVERY aero option, because calibrating on the default alone is what left `outwash_max` and `reg26_concept` 5 mm proud; a lower bound guards the other direction. Builds offline through `tools/parts-sweep.mjs` |
-| `grid-boxes.test.mjs` | the painted starting-grid boxes, measured on a real track build. The grid's geometry — pole 14 m before the line, 8 m between slots, the lateral stagger — lived only inside `gridUp()` in js/game.js, pinned by nothing at all; the boxes are built in js/track/core/mesh.js, a different layer, so the two would have drifted in silence and the paint would still LOOK like a grid, just not the one the cars stand on. `TrackMesh.gridSlot()` is now the single definition and this is what holds the paint to it — falsified by moving the front line 4 m, which reddens the drift guard and nothing else. Also pins the real regulation: a 2.7 m box (the FIA widened it 20 cm in 2023), open at the rear because legality is judged on the front tyres, and the yellow guide line placed CLEAR of the front line rather than z-fighting it. Builds offline through `tools/track-build-vm.cjs`; monaco is in the set because it is the narrowest tarmac a box has to fit on |
-| `parts-visual-distinctness.test.mjs` | every catalog option is VISIBLY different from the one it replaces, measured rather than hashed: builds all 297 options offline and gates on surface distance, moved area, palette transport and a 14-view visibility mask. INVISIBLE / BROKEN / SLIDE / INTERNAL must be empty, COLOUR-ONLY is an exact allow-list, WEAK is a downward-only ratchet; plus the census (12/297/121) and the SIGNATURE invariant that a reskin keeps its equivalent's cost and all four stat multipliers. Measures through `tools/parts-sweep.mjs`. ~4 min, so it runs in `test:sweeps`, never in the edit loop |
-| `parts-ladder.test.mjs` | every catalog option is one a rational player could ever want to BUY — the other half of the promise `parts-visual-distinctness` makes. An option is LIVE when it maximises `sum w_i*log(stat_i) - lambda*cost` for some positive taste and some price (the upper convex hull of the (cost, log-stat) set, solved exactly per weight vector, no lambda grid). Gates: no PAID option strictly dominated by a cheaper one; the never-optimal list is exact in BOTH directions against a named exemption list (the two wet compounds, which the four DRY stats cannot score); no category flat on a stat; SIGNATURE cost/stat parity; and the career budget cap clears the dearest works car while staying under the whole top shelf. Measured 2026-08-29: 67 of 169 rows never optimal before the re-space, 2 after. Measures through `tools/parts-ladder.mjs`. ~0.3 s, node-only — cheap enough for the edit loop |
+| `crest-marks.test.mjs` | every team mark is READABLE, measured rather than eyeballed: extent inside the fit box and filling it, no limb under `STROKE_MIN` (1.9 px at the 34 px the mobile-AI fin badge gets), lettering floored and absent when `bare`, a colour census that fails on any paint outside `markPalette`, no alpha or `destination-out`, ink coverage in band and stable between 430 px and 40 px, and the 4.2:1 contrast floor over every team x livery x the four surfaces a mark lands on. Also holds the editor's mark rows: every row `markSlots` offers reaches PIXELS on both surfaces, no two rows share a key or a label, the OUTLINE row is opt-in on every mark, and Red Bull's SUN DISC is round (every sampled point one radius from the bbox centre) and backmost — the trace's union silhouette failed that by 6:1 and was what made SUN DISC move an outline. Measures through `tools/car/crest-sweep.mjs`. Would have failed on the traced logo PNGs this replaced |
+| `car-front-wing-width.test.mjs` | the front wing is NARROWER than the car it is bolted to — a regulation invariant, not a style call. F1 caps the wing ~100 mm inboard of the front tyre's outer face on each side (1700/1900 for 2026), and that gap is what the endplate uses to push the wake around the tyre. Ours stood 95 mm PROUD: the widest vertex in the whole car was the endplate footplate at ±1.045 against a 0.950 tyre face, so the car measured 2.09 m at the wing and 1.90 m at the wheels. Sweeps EVERY aero option, because calibrating on the default alone is what left `outwash_max` and `reg26_concept` 5 mm proud; a lower bound guards the other direction. Builds offline through `tools/car/parts-sweep.mjs` |
+| `grid-boxes.test.mjs` | the painted starting-grid boxes, measured on a real track build. The grid's geometry — pole 14 m before the line, 8 m between slots, the lateral stagger — lived only inside `gridUp()` in js/game.js, pinned by nothing at all; the boxes are built in js/track/core/mesh.js, a different layer, so the two would have drifted in silence and the paint would still LOOK like a grid, just not the one the cars stand on. `TrackMesh.gridSlot()` is now the single definition and this is what holds the paint to it — falsified by moving the front line 4 m, which reddens the drift guard and nothing else. Also pins the real regulation: a 2.7 m box (the FIA widened it 20 cm in 2023), open at the rear because legality is judged on the front tyres, and the yellow guide line placed CLEAR of the front line rather than z-fighting it. Builds offline through `tools/lib/track-build-vm.cjs`; monaco is in the set because it is the narrowest tarmac a box has to fit on |
+| `parts-visual-distinctness.test.mjs` | every catalog option is VISIBLY different from the one it replaces, measured rather than hashed: builds all 297 options offline and gates on surface distance, moved area, palette transport and a 14-view visibility mask. INVISIBLE / BROKEN / SLIDE / INTERNAL must be empty, COLOUR-ONLY is an exact allow-list, WEAK is a downward-only ratchet; plus the census (12/297/121) and the SIGNATURE invariant that a reskin keeps its equivalent's cost and all four stat multipliers. Measures through `tools/car/parts-sweep.mjs`. ~4 min, so it runs in `test:sweeps`, never in the edit loop |
+| `parts-ladder.test.mjs` | every catalog option is one a rational player could ever want to BUY — the other half of the promise `parts-visual-distinctness` makes. An option is LIVE when it maximises `sum w_i*log(stat_i) - lambda*cost` for some positive taste and some price (the upper convex hull of the (cost, log-stat) set, solved exactly per weight vector, no lambda grid). Gates: no PAID option strictly dominated by a cheaper one; the never-optimal list is exact in BOTH directions against a named exemption list (the two wet compounds, which the four DRY stats cannot score); no category flat on a stat; SIGNATURE cost/stat parity; and the career budget cap clears the dearest works car while staying under the whole top shelf. Measured 2026-08-29: 67 of 169 rows never optimal before the re-space, 2 after. Measures through `tools/car/parts-ladder.mjs`. ~0.3 s, node-only — cheap enough for the edit loop |
 | `garage-mesh.test.mjs` | the bay's meshes carry a per-vertex MATERIAL column of exactly one float per vertex, and the big surfaces are not all left on `MAT.FLAT`. A silent-failure guard: GLX wires the attribute only when `data.mat.length === vCount` (`glx.js:741`) and drops a wrong-length column with no warning, which is how the whole garage shipped untextured while the car standing in it sampled the baked PBR arrays. Runs the real module in a `node:vm` against a recording Gfx — no browser, ~0.15 s |
 | `setup-preview-hull.test.mjs` | the garage turntable's framing hull is cached across colour-only rebuilds, which is only correct while `SP_HULL_GEOM_FIELDS` (js/game.js) names every livery field whose PRESENCE moves a vertex. Does not PIN the list — it re-derives it from the real `Car3D.build` and compares, so a future edit that gates geometry on a new colour goes red here instead of silently re-centring the car against a stale silhouette. Also asserts the premise the cache rests on: a hue change never moves a vertex. `loadParts()` in a `node:vm`, no browser, ~0.8 s |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
@@ -1062,7 +1062,7 @@ what it covers.
 | `title-menu-even.test.mjs` | title 2-up doors share equal flex cells and overlay columns use `--vwz`, not a pixel cap |
 | `menu-survey.spec.js` | click every button, capture every state |
 | `menu-keyboard.spec.js` | desktop menu input — wheel redirection and arrow/Home/End/PageUp/PageDown focus; an open modal outranks the screen behind it; ESCAPE IS BACK (every layer's `data-esc-close` resolves, picker/garage/title, and a sheet closes without resuming the race) |
-| `menu-baseline.spec.js` | SIX blessed pixel baselines (title/select/garage x landscape-phone/desktop) — the IDENTITY half `tools/layout-audit.mjs` structurally cannot see: colour, type, weight, spacing. Deliberately six, not 380: a suite that asks a human to bless 380 images gets rubber-stamped |
+| `menu-baseline.spec.js` | SIX blessed pixel baselines (title/select/garage x landscape-phone/desktop) — the IDENTITY half `tools/ui/layout-audit.mjs` structurally cannot see: colour, type, weight, spacing. Deliberately six, not 380: a suite that asks a human to bless 380 images gets rubber-stamped |
 | `camera.spec.js` | all 13 player camera modes, via the hook and the CAM button |
 | `camera-hooks.spec.js` | `dolly()`, `roadside()`, `tourShots()` |
 | `camera-driving-hooks.spec.js` | orbit fov, cinematic, `carOrbit()` |
@@ -1118,20 +1118,20 @@ what it covers.
 |---|---|
 | `net-stub-surface.test.mjs` | js/net is LAZY_NET, so `js/game.js` holds an INERT netPlay/netLobby from boot. Derives the required stub surface from the real CALL SITES (every `netPlay.<m>` / `netLobby.<m>` outside `js/net/` and the already-lazy `apex.js`) rather than a hand-written roster, so a new call site the stub cannot answer turns red instead of becoming a TypeError in the frame loop. Also pins the two VALUES that no crash would announce: `ownsRaceControl` / `ownsClassification` must be TRUE while inert (a solo game owns everything), checked against the shape in `js/net/netplay.js` so the guard cannot pin a fossil |
 | `load-order.test.mjs` | `index.html` and `tools/carview.html` `<script>` order matches `tools/manifest.cjs` exactly, including `HARD_EDGES` eval-time dependencies |
-| `global-registry.test.mjs` | a LINKER for the globals architecture (Bedrock Phase 0): scans every manifest file with `tools/scan-globals.mjs` (espree/eslint-scope, live — no artifacts/ state) and asserts one-global-per-file, single-writer-per-global (accumulators frozen), eval-time reads resolve in load order, call-time reads resolve somewhere, and the dynamic `window[expr]` class stays extinct — known violations frozen as ratchet baselines. **This, not `node --check`, is what says a `js/` edit is valid.** An IIFE that reads a `const` whose declaration was deleted parses perfectly and throws `ReferenceError` on the first frame; `node --check` is green on it. Measured 2026-09-02: a half-finished removal in `tlx.js` left four such reads, `node --check` passed, and this suite named `_mirrorRelease` in one line |
-| `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in every manifest module whose `create()` takes the ctx (found transitively from `const G`, not by directory) is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
-| `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/vstd-lint.mjs`): no speed in `js/game.js` — or in any manifest module whose code reads a `.speed`, wherever it sits — is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
-| `move-tree.test.mjs` | `tools/move-tree.mjs` (the Phase 2b mover) on a scratch tree: the file moves, every EXACT path citation follows (manifest entry, tests, docs), bare basenames and the docs archive are left alone and reported, the manifest gains a `MOVED` entry, `--plan` changes nothing, a missing source or occupied target refuses before touching anything |
-| `ratchets.test.mjs` | the size RATCHETS in `tests/data/ratchets.json` (`tools/ratchets.mjs`): game.js on lines / non-comment lines / `G` members / column-0 lets, the other big modules on lines; lower with `--update` after an extraction or on a merged tree, raise deliberately with a reason in the commit; one slack rule (max(60, 4 %)). History in `docs/notes/CEILING-HISTORY.md` |
+| `global-registry.test.mjs` | a LINKER for the globals architecture (Bedrock Phase 0): scans every manifest file with `tools/check/scan-globals.mjs` (espree/eslint-scope, live — no artifacts/ state) and asserts one-global-per-file, single-writer-per-global (accumulators frozen), eval-time reads resolve in load order, call-time reads resolve somewhere, and the dynamic `window[expr]` class stays extinct — known violations frozen as ratchet baselines. **This, not `node --check`, is what says a `js/` edit is valid.** An IIFE that reads a `const` whose declaration was deleted parses perfectly and throws `ReferenceError` on the first frame; `node --check` is green on it. Measured 2026-09-02: a half-finished removal in `tlx.js` left four such reads, `node --check` passed, and this suite named `_mirrorRelease` in one line |
+| `game-ctx-surface.test.mjs` | a TYPE CHECK for the `G` ctx façade (Bedrock Phase 1) via `tools/check/check-gctx.mjs`: `types/game-ctx.d.ts` must declare exactly the members of `const G = {…}` in `js/game.js`, with matching writability (`readonly` ⇔ getter-with-no-setter), and the `GameModuleFactory` roster must match the real `X.create(ctx)` call sites. Second leg, skipped when no `tsc` is resolvable: every `G.member` read/write and `const {…} = ctx` destructure in every manifest module whose `create()` takes the ctx (found transitively from `const G`, not by directory) is emitted as a typed shadow and compiled — reading a member that does not exist, or writing one with no setter, is an error reported at the real `js/` file:line. Third leg: a member **no module reads** (the `countT` defect reversed) is baselined, so a new one fails |
+| `vstd-invariant.test.mjs` | the PACE invariant as a lint (`tools/check/vstd-lint.mjs`): no speed in `js/game.js` — or in any manifest module whose code reads a `.speed`, wherever it sits — is divided by `VMAX` or compared against a bare literal outside the reviewed allow-list, so the OVERALL SPEED slider cannot silently shrink the player's envelope again |
+| `move-tree.test.mjs` | `tools/gen/move-tree.mjs` (the Phase 2b mover) on a scratch tree: the file moves, every EXACT path citation follows (manifest entry, tests, docs), bare basenames and the docs archive are left alone and reported, the manifest gains a `MOVED` entry, `--plan` changes nothing, a missing source or occupied target refuses before touching anything |
+| `ratchets.test.mjs` | the size RATCHETS in `tests/data/ratchets.json` (`tools/check/ratchets.mjs`): game.js on lines / non-comment lines / `G` members / column-0 lets, the other big modules on lines; lower with `--update` after an extraction or on a merged tree, raise deliberately with a reason in the commit; one slack rule (max(60, 4 %)). History in `docs/notes/CEILING-HISTORY.md` |
 | `car-mesh-anchors.test.mjs` | The NODE gate for the car-graphic anchor assertions that `parts-physics.spec.js` also makes in a browser. It exists because the browser parts group is NOT in the deploy gate — `pages.yml` calls `ci.yml`, which runs `guards`, the conditional `sweeps`, the 9-spec `smoke` shards and the `driving-model` job (`physics-characterization.spec.js`) — so a red parts assertion ships silently, and one did: the front-wing flap check sat red on the deploy tip through five consecutive green Pages runs. Ported rather than adding ~20 min of SwiftShader to every deploy, because these read MESH ARRAYS and `loadParts()` runs `car3d.js` in a node vm; the node context reproduces the browser numbers exactly (144 accent flank vertices both ways). Covers sidepod/nose decal gaps, the accent flank band, the nose running lights, the front-wing flap tips against `FW_SPAN`, and `functionalEmissive` staying reserved for the rain light. Every selector asserts a COUNT first — a sibling DRL assertion once passed for months on `Math.max([]) === -Infinity` |
 | `track-night-override.test.mjs` | no module in `js/track/` reads `def.night`, except the two sites in `tracks.js` that RESOLVE it. `def.night` is the circuit's AUTHORED default; `track._night` / the destructured `NIGHT` is what THIS build was asked for, and game.js's TIME OF DAY overrides the default — so an emitter reading the def ignores the player's choice and dresses a prop for the wrong sky. Fixed twice now (a bankZones note in `tracks.js`, then `ferrisWheel`), which is what makes it a class rather than an incident. Strips comments before matching, because both fixes explain the trap in prose. Static source scan, no build, instant |
-| `road-lut-frame.test.mjs` | WGX's road-marking LUT must never hand the shader a track frame rotated toward 90°. GLX reads the per-vertex `trk` and interpolates it; WGX cannot (a location-3 interpolator shards dashes on Dawn, and `drawIndexed` leaves `vertex_index` at 0 on that adapter), so it reconstructs (s, lateral x, half-width) per fragment from world XZ against a baked LUT — and `trkFromWorld` builds the frame from the two NEAREST samples. Two bake defects made that pair the wrong two: the table kept a BAND rather than a centreline (one cross-section contributing points metres apart across the ribbon), and a full cell dropped every later pass over the same ground. Either way the tangent ran ACROSS the road, lateral x started measuring distance along the lap, and a LUT miss on a road draw zeroes trk so the centre line was painted down the LENGTH of the road — reported from a phone, correct on WebGL2. Replays the search over the REAL baked table (`WGX.__roadLutTable`, never a copy). Bar is the 90° class: hairpins genuinely disagree with a 4 m chord by up to ~60°, and the two populations are well separated. Three circuits in the fast suite (~3 s); `node tools/road-lut-census.mjs --all` sweeps all 40 in ~34 s |
+| `road-lut-frame.test.mjs` | WGX's road-marking LUT must never hand the shader a track frame rotated toward 90°. GLX reads the per-vertex `trk` and interpolates it; WGX cannot (a location-3 interpolator shards dashes on Dawn, and `drawIndexed` leaves `vertex_index` at 0 on that adapter), so it reconstructs (s, lateral x, half-width) per fragment from world XZ against a baked LUT — and `trkFromWorld` builds the frame from the two NEAREST samples. Two bake defects made that pair the wrong two: the table kept a BAND rather than a centreline (one cross-section contributing points metres apart across the ribbon), and a full cell dropped every later pass over the same ground. Either way the tangent ran ACROSS the road, lateral x started measuring distance along the lap, and a LUT miss on a road draw zeroes trk so the centre line was painted down the LENGTH of the road — reported from a phone, correct on WebGL2. Replays the search over the REAL baked table (`WGX.__roadLutTable`, never a copy). Bar is the 90° class: hairpins genuinely disagree with a 4 m chord by up to ~60°, and the two populations are well separated. Three circuits in the fast suite (~3 s); `node tools/gfx/road-lut-census.mjs --all` sweeps all 40 in ~34 s |
 | `track-build-wait.test.mjs` | the loadTrack fixture waits for a track build on PROGRESS, not a 45 s deadline: it keeps waiting while the Log ring grows, fails with a STALL message when it stops, and a hard cap ends the wait even if the stall check is broken — the fake page is bounded so a never-ending wait reads as a red test rather than a hung worker |
-| `deploy-stamp.test.mjs` | the deploy-stamped shell generation: pages.yml stamps `2000 + commit count` on a full-depth checkout, `verify-live` polls the CDN for it, ci.yml no longer demands a committed generation newer than live, and `node tools/bump-cache.mjs --apply` --at N --root` stamps a staged copy without touching the repo |
-| `deploy-tool.test.mjs` | `tools/deploy.mjs` offline: same deploy branch as pick-tests, `--help`, the circuit-touch detector, preflight refusals |
-| `game-vm.test.mjs` | `tools/game-vm.cjs` boots js/game.js in a Node VM (~300 ms, DOM/GLX/audio stubbed, feature-detected GLX optionals ABSENT so every subsystem takes its degrade path): race, go, step, a finite physState under throttle, a lap-line crossing |
+| `deploy-stamp.test.mjs` | the deploy-stamped shell generation: pages.yml stamps `2000 + commit count` on a full-depth checkout, `verify-live` polls the CDN for it, ci.yml no longer demands a committed generation newer than live, and `node tools/ci/bump-cache.mjs --apply` --at N --root` stamps a staged copy without touching the repo |
+| `deploy-tool.test.mjs` | `tools/ci/deploy.mjs` offline: same deploy branch as pick-tests, `--help`, the circuit-touch detector, preflight refusals |
+| `game-vm.test.mjs` | `tools/lib/game-vm.cjs` boots js/game.js in a Node VM (~300 ms, DOM/GLX/audio stubbed, feature-detected GLX optionals ABSENT so every subsystem takes its degrade path): race, go, step, a finite physState under throttle, a lap-line crossing |
 | `physics-characterization-vm.test.mjs` | the driving-model gate in Node: the four baseline scenarios of `physics-characterization.spec.js` against `tests/data/physics-baseline.json`, EXACT equality at the spec's 1e-4 rounding (measured 2026-09-01) — the browser spec stays as the cross-check |
-| `headless-api-vm.test.mjs` | Node twin of `headless-api.spec.js` on `tools/game-vm.cjs` (one boot, ~2 s): all 24 tests — the `headless()`/`obs()`/`act()`/`reset()` contract, same assertions; the two "before track load" tests run first against the virgin boot. Nothing left in the browser |
+| `headless-api-vm.test.mjs` | Node twin of `headless-api.spec.js` on `tools/lib/game-vm.cjs` (one boot, ~2 s): all 24 tests — the `headless()`/`obs()`/`act()`/`reset()` contract, same assertions; the two "before track load" tests run first against the virgin boot. Nothing left in the browser |
 | `obs-act-edge-vm.test.mjs` | Node twin of `obs-act-edge.spec.js` (~4 s): all 16 tests — `act(n=0)`, the `reset(0.999)` lap seam, scan wrap-around on monza/monaco/suzuka/spa, `done` semantics, NaN sweeps. Nothing left in the browser |
 | `longitudinal-vm.test.mjs` | Node twin of `longitudinal.spec.js` (~6 s): all 6 tests — throttle/coast/brake, grass drag, speed-sensitive steering, spa slope gravity, the start/finish wrap, PACE pinned as the spec pins it. Nothing left in the browser |
 | `world-physics-vm.test.mjs` | Node twin of `world-physics.spec.js` (~4 s): 5 of 6 — progress with speed, steer sign, running wide with the assist off, the AI getting away, the no-errors run (VM console/rejection record in place of `pageerror`). Left in the browser: the RESPONSE slider test, which drives the `#pm-rate` DOM input |
@@ -1148,7 +1148,7 @@ what it covers.
 | `new-hooks-vm.test.mjs` | Node twin of `new-hooks.spec.js` (~12 s): 55 of 56 — `timing`/`sectorState`/`lapHistory` (TT via `tt()`)/`fieldState`/`aiPlace`/`setEnergy`/`setLap`/`trackProfile`/`obs().gear`, the eight virgin-boot nulls first, and the shared-foundation diagnostics (silverstone, cota, miami, jeddah, singapore day+night, shanghai day+night). Left in the browser: the hidden ~300 s Madrid foundation test (`test.setTimeout(300000)`) |
 | `race-settings-vm.test.mjs` | RACE SETTINGS lap ladder as behaviour on the game-vm harness: FULL is `def.gpLaps` and differs per circuit; a VS FRIEND host's distance that is OFF the next circuit's ladder (above OR below FULL — 52 (FULL) at Silverstone is not on Monaco's 3/5/10/25/78) snaps to that circuit's FULL instead of leaving no chip lit; TT ladder untouched; the solo flow still resets to the default |
 | `generated-docs.test.mjs` | the three doc generators (`gen-tools-readme`, `gen-slider-doc`, `gen-hooks-table`) run with `--check` against the committed output — drift is a red test, not a stale table — plus row-count / no-`undefined` sanity |
-| `gen-arch-table.test.mjs` | the module index of `docs/ARCHITECTURE.md` (`tools/gen-arch-table.mjs`, the `@gen-arch:modules` block) matches a fresh `--check`; every non-circuit manifest file has a row and the roster labels are the manifest's; the header-sentence extractor handles the three comment shapes js/ uses; the hand-written contract sections around the block survive. Manifest-derived so the Phase 2 tree move regenerates it rather than hand-editing a table |
+| `gen-arch-table.test.mjs` | the module index of `docs/ARCHITECTURE.md` (`tools/gen/gen-arch-table.mjs`, the `@gen-arch:modules` block) matches a fresh `--check`; every non-circuit manifest file has a row and the roster labels are the manifest's; the header-sentence extractor handles the three comment shapes js/ uses; the hand-written contract sections around the block survive. Manifest-derived so the Phase 2 tree move regenerates it rather than hand-editing a table |
 | `car-wing-foil.test.mjs` | Shared `Car3D` wing section: knife-TE `FOIL_T` sample, five-span planform, beveled endplates, 100-triangle flap (not a 48-triangle plank), default body/cockpit under the 2505/1500 ceilings, single-option recipes within 1.6× the default budget |
 | `car-presentation-canary.test.mjs` | Field cars share the player's presentation path: `renderPosOf` / `playerAnchor` interpolate world `px`/`pz` for every car (not only `c.human`), `xVis` is dump-only (no 16/s or 30/s damp, shadows use the same `cX`), AI mirrors `px`/`pz` *after* the `(s, x)` advance, visible procedural cars draw `teamBodyMesh`/`playerBodyMesh` + planted factory-signature wheels on `_groundMat` (not a generic `field:1:1:1` pair, not baked wheels on the chassis matrix), and `carOrbit` / agent-view `carWorld` read the mirrored pose. Locks the two leftover bugs that made the pack feel delayed and "a different car" |
 | `gfx-backend-canary.test.mjs` | RENDERER pick survives the title menu: `#pm-renderer` is not `hidden`, the boot canary disarms after bind (not only after `present()`), first world present re-arms for jetsam, the picker is a `<select>` + ‹ › that names WEBGPU both ways, labels a GLX fallback `(WEBGPU (WEBGL2))`, resets the WGX loss ladder on a hand re-pick, and RESET RENDERER drops backend crash flags plus context-loss latches without touching GRAPHICS quality — all driven through `js/perf/renderer-picker.js` in a VM. **GLX is booted on `tests/helpers/glx-mock.mjs`** (a recording WebGL2 mock) and pinned by its gl call stream: create*/draw* fail closed after `webglcontextlost`, the uInstanced / uModel / uNumLights / vec3 (float64, copying) redundancy caches skip equal re-uploads, `updateInstances` clears the cull snapshots, the interleaved `uLight[]` lanes land where `shaders/lit.js` reads them, the env cube gets 4× anisotropy, `gpuErrors()` counts drained GL errors, and the context is asked for `alpha:false`. The gpu-census Verdict script is EXECUTED against fixtures (hardware-only vs unconditional checks, null census). Also **TLX's canvas must be OPAQUE**: the lit fragment writes the SSR car-paint tag (0.35) into ALPHA, and `present()`'s post-only-death path keeps those materials while painting straight to the canvas — on an alpha-composited canvas the browser reads that tag as opacity and every car's painted bodywork goes 35% see-through for the rest of the session (reported from an iPhone). three needs telling twice: its WebGPU backend honours `alpha:false`, its WebGL backend hardcodes `alpha:true` and only honours a caller-supplied `context`. **Both vendor behaviours are asserted against the bundled three**. TLX (three.js cannot load in Node), WGSL/GLSL/TSL and the vendored bundle stay source pins, matched on comment-stripped code by identifier and shape; WGX behaviour lives in `webgpu-lifecycle.test.mjs` and is not repeated as text. Source can prove TLX ASKS for an opaque canvas but never that it GOT one, so the live half is in `tlx-probes.spec.js` |
@@ -1187,7 +1187,7 @@ what it covers.
 | `comment-citations.test.mjs` | a `other-file.js:412` comment citation must point at a line that EXISTS, plus a RATCHET on how many there are — a line number in another file cannot be kept true, so cite the symbol |
 | `docs-integrity.test.mjs` | live docs, skills AND source comments reference only files that exist; AGENTS.md's suite counts, the scenery-api member count, the renderer-backend list, and the skills/tools/docs indexes all match the repo |
 | `skill-progressive.test.mjs` | mcp-probe SKILL.md stays a thin index (≤120 lines) with traps/recipes in `references/`; previously-fat skills stay split (index ≤180 + the named reference file) |
-| `css-play.test.mjs` | `tools/css-play.mjs` parse/list/hot-swap contract and the Playwright wrapper's `play`/`dom` commands — screen ids are a subset of layout-audit, `--css` stays inside `css/`, `--help`/`--list` do not launch Chromium, the tool never calls bump-cache mid-loop |
+| `css-play.test.mjs` | `tools/ui/css-play.mjs` parse/list/hot-swap contract and the Playwright wrapper's `play`/`dom` commands — screen ids are a subset of layout-audit, `--css` stays inside `css/`, `--help`/`--list` do not launch Chromium, the tool never calls bump-cache mid-loop |
 | `menu-capture.test.mjs` | `layout-audit.mjs` / `menu-capture.mjs` CLI contracts — `--gallery`, `--list`, `--help`, `--survey` argv parsing, cell resume paths, and screen catalog coverage (no browser) |
 | `lighting-tuner-sweep.test.mjs` | `lighting-tuner-sweep.mjs` gate/push/verdict helpers — night-only knobs gated on day-dry, sunElev push direction, PCSS software skip, report verdict buckets (no browser) |
 | `slider-effect.test.mjs` | LIGHTING TUNER classifier + visual A/B: `--help`, knob catalog, gates/risk/tags, `--live --dry-run` recipe, `slider-effect-view.py` changed-pixel filter |
@@ -1199,10 +1199,10 @@ what it covers.
 | `test-observed.test.mjs` | the never-run detector's title extraction matches the reporter's EXACTLY. A title derived differently reads as "never observed" forever, and a tool that cries wolf on every spec gets ignored — the same outcome as not having it. Its first version missed Playwright's implicit suite title (a top-level test prints as `file › basename › title`, one inside a describe does not) and reported every describe-less spec as 100% never-run, including one verified green minutes earlier |
 | `evaluate-scope-lint.test.mjs` | no `page.evaluate()` callback closes over a Node-side binding — the callback runs in the BROWSER, so a module `const` read inside it is a `ReferenceError` there, not a closure. Anti-vacuity: one case asserts the lint still finds both real sites in `58614db2`, the commit whose two launch constants killed every elevation track, so the analysis cannot silently stop resolving bindings while the synthetic cases keep passing |
 | `change-driver-tools.test.mjs` | the verification DRIVERS' contracts (`verify-change.mjs`, `bump-cache.mjs`, `test-honesty.mjs`): a driver that drifts from the rules it encodes gets trusted INSTEAD of the prose, so the rules are asserted against the real CLIs — batches carry at most ONE browser group, `tooling-fast` is never batched twice, circuit edits route to `verify-track`, `--apply` lands max+1 on a fixture shell (never the real one), and the silent-skip scan stays at zero unexplained sites |
-| `wait-polling.test.mjs` | the ratchet on waits whose declared timeout cannot fire. `waitForFunction` polls on `requestAnimationFrame` by default and the game's render loop starves it — measured at 109,665 ms against a declared 3,000 ms — so call sites carrying a bound that is decoration are ratcheted (`CEILING` 57 today, all under `tools/`, 24 of them in `tools/menu-screens.mjs`; the 2026-08-07 freeze was 353, the population fell as specs were fixed, then the lint's file filter was corrected and the pre-existing `tools/` sites became visible). Frozen rather than swept: rewriting 300 sites in one commit would be a behavioural change with no run behind it. `tests/manual/timeout-probe.spec.js` is exempt and must stay so, because it exists to measure the default |
-| `select-budget.test.mjs` | guards `tools/select-budget.mjs`, the arithmetic behind the change-aware CI decision. Pins the MODEL and not the constants: the measured 79.7 s/test is expected to move when CI is re-measured, but the shape must not — a failure costs `timeout x (1 + retries)`, capacity falls as survivable failures rise, and a budget smaller than one failure must report **0** rather than a positive number for a job that dies on the first red test. One case pins the design conclusion itself (cutting the failure cost buys more than doubling the budget) so it cannot quietly stop being true |
-| `select-specs.test.mjs` | guards `tools/select-specs.mjs` AND `tools/select-recall.mjs`. Glob expansion, dedupe, the budget cut, the own-`setTimeout` exclusion, the TRACKED infra list (both directions), the import-graph helper→spec walk, fail-fast ordering, and the FAULTY-CHANGE RECALL ratchet — no spec that caught a real regression may be dropped in silence. **Why not coverage-derived TIA:** Fowler's survey is explicit that building a per-test coverage map requires running tests ONE AT A TIME, which against a ~40-minute SwiftShader suite is a non-starter, and the map then needs constant refresh. The path RULES plus the import graph buy most of the signal for none of that cost. The same suite guards the per-spec selector behind ci.yml's blocking `selected` job: every unaffordable spec lands in a named skip/exclusion list, and the selected-gate settings (retries 0, 120 s/test) provably fit more tests than smoke's retrying settings. |
-| `ci-coverage.test.mjs` | guards `tools/ci-coverage.mjs`, which answers what the deploy gate actually executes — the fixed gates run a handful of the 115 Playwright specs and the rest are gated by nothing or by the change-aware `selected` job. Pins the MECHANISM and never the number: the count is meant to move as the gate grows, and a test that froze it would just be a chore. Anti-vacuity is the load-bearing case — a broken `ci.yml` parse would report "CI executes 0 specs", which reads as an alarming finding rather than as a broken tool. One case deliberately names a spec that MUST NOT exist, so the resolver is shown to reject it. The tool parses `ci.yml` PER JOB and knows which jobs are skipped on the Pages call (`!inputs.concurrency_key`), so the `renderer-macos` job's six `test:gfx` specs are reported under their own heading and never counted as deploy-gate coverage; the same file pins that job — `macos-latest`, `test:gfx` through `playwright.gpu.config.js`, never `--use-angle=vulkan`, census-gated, out of the gate — and `gpu-census.yml`'s nightly cron with its dispatch defaults restated for a schedule run |
+| `wait-polling.test.mjs` | the ratchet on waits whose declared timeout cannot fire. `waitForFunction` polls on `requestAnimationFrame` by default and the game's render loop starves it — measured at 109,665 ms against a declared 3,000 ms — so call sites carrying a bound that is decoration are ratcheted (`CEILING` 57 today, all under `tools/`, 24 of them in `tools/ui/menu-screens.mjs`; the 2026-08-07 freeze was 353, the population fell as specs were fixed, then the lint's file filter was corrected and the pre-existing `tools/` sites became visible). Frozen rather than swept: rewriting 300 sites in one commit would be a behavioural change with no run behind it. `tests/manual/timeout-probe.spec.js` is exempt and must stay so, because it exists to measure the default |
+| `select-budget.test.mjs` | guards `tools/ci/select-budget.mjs`, the arithmetic behind the change-aware CI decision. Pins the MODEL and not the constants: the measured 79.7 s/test is expected to move when CI is re-measured, but the shape must not — a failure costs `timeout x (1 + retries)`, capacity falls as survivable failures rise, and a budget smaller than one failure must report **0** rather than a positive number for a job that dies on the first red test. One case pins the design conclusion itself (cutting the failure cost buys more than doubling the budget) so it cannot quietly stop being true |
+| `select-specs.test.mjs` | guards `tools/ci/select-specs.mjs` AND `tools/ci/select-recall.mjs`. Glob expansion, dedupe, the budget cut, the own-`setTimeout` exclusion, the TRACKED infra list (both directions), the import-graph helper→spec walk, fail-fast ordering, and the FAULTY-CHANGE RECALL ratchet — no spec that caught a real regression may be dropped in silence. **Why not coverage-derived TIA:** Fowler's survey is explicit that building a per-test coverage map requires running tests ONE AT A TIME, which against a ~40-minute SwiftShader suite is a non-starter, and the map then needs constant refresh. The path RULES plus the import graph buy most of the signal for none of that cost. The same suite guards the per-spec selector behind ci.yml's blocking `selected` job: every unaffordable spec lands in a named skip/exclusion list, and the selected-gate settings (retries 0, 120 s/test) provably fit more tests than smoke's retrying settings. |
+| `ci-coverage.test.mjs` | guards `tools/ci/ci-coverage.mjs`, which answers what the deploy gate actually executes — the fixed gates run a handful of the 115 Playwright specs and the rest are gated by nothing or by the change-aware `selected` job. Pins the MECHANISM and never the number: the count is meant to move as the gate grows, and a test that froze it would just be a chore. Anti-vacuity is the load-bearing case — a broken `ci.yml` parse would report "CI executes 0 specs", which reads as an alarming finding rather than as a broken tool. One case deliberately names a spec that MUST NOT exist, so the resolver is shown to reject it. The tool parses `ci.yml` PER JOB and knows which jobs are skipped on the Pages call (`!inputs.concurrency_key`), so the `renderer-macos` job's six `test:gfx` specs are reported under their own heading and never counted as deploy-gate coverage; the same file pins that job — `macos-latest`, `test:gfx` through `playwright.gpu.config.js`, never `--use-angle=vulkan`, census-gated, out of the gate — and `gpu-census.yml`'s nightly cron with its dispatch defaults restated for a schedule run |
 | `cross-file-paths.test.mjs` | every relative reference in `tests/` and `tools/` — static import, dynamic `import()`, `require()`, `new URL(rel, import.meta.url)` — resolves to a file that exists. Landed BEFORE the `tests/` split, because a guard that arrives after the commit it was meant to protect has protected nothing. The silent class it exists for: `fit-audit.mjs`/`menu-fit.mjs` wrap their `../tests/helpers/f1-api-mock.js` import in a `catch` that is correct at runtime and fatal to a move — afterwards both tools quietly audit an empty data hub with nothing red anywhere. Anti-vacuity: one case builds a moved-file-with-stale-`../` in a temp dir and requires a complaint |
 | `assert-audit.test.mjs` | no test in the default suite is VACUOUS — a body with no assertion passes as long as the page does not throw, so it is a green tick that means nothing. The ratchet exempts an allow-list of capture harnesses (`ui-audit`, whose product is a PNG gallery) and asserts they still are ones. Two cases pin the tool's own failure mode: an assertion reached only through a same-file helper still counts, because a body-only scan calls hud-audit's eight steer-mode tests vacuous and a report that is 20% false gets ignored |
 | `fixture-consumer-audit.test.mjs` | the specs that must import `tests/helpers/fixtures.js` do |
@@ -1218,19 +1218,19 @@ what it covers.
 | `perf-sentinel.test.mjs` | the crash sentinel's memory must not outlive the crash |
 | `perf-governor.test.mjs` | the adaptive-resolution governor: the budget derives from the observed floor of frame intervals rather than a hardcoded 60 fps, so a device capped externally (iOS Low Power Mode's 30 fps throttle) settles at full quality instead of the resolution floor with every feature shed; a genuinely GPU-bound device still downscales and holds; a reverted step does not repeat forever |
 | `metrics.test.mjs` | GameMetrics SETTINGS toggle: default off, persists `apex26.metrics`, `?metrics=1` is session-only (set() does not write storage), snapshot() never throws without `__apex`, ON raises the log buffer to debug while leaving the console at warn, pages persist (`gov`/`car`/`phys`/`log`), GOV skips `probe`/`physState`, HUD digit and probe ground speed are both kept on CAR, and PHYS reads `physState()` without calling `obs()` |
-| `perf-try.test.mjs` | Baked renderer gates, pinned as behaviour where a harness reaches them: no `perf-try.js` / no PERF tab; late sky is the draw ORDER of a frame pumped in `tools/game-vm.cjs` (world meshes → sky → glow → present, and the same on an env-probe face); the main-camera `cullDist` is a far-plane-corner sphere; AI cars outside the 8 m frustum sphere are not drawn while their shadows are still enqueued; GLX (on `glx-mock.mjs`) skips equal tuner-uniform re-uploads, caps the env probe at 300 m / keeps a tighter cull, and resolves MSAA depth only when something reads it (an omitted `carReflect` is the 0.05 default); the props fuse seals typed accumulators. GLSL/WGSL/TSL keep only the gated ON path — shader text, matched loosely on comment-stripped source (a Node test has no GPU) |
+| `perf-try.test.mjs` | Baked renderer gates, pinned as behaviour where a harness reaches them: no `perf-try.js` / no PERF tab; late sky is the draw ORDER of a frame pumped in `tools/lib/game-vm.cjs` (world meshes → sky → glow → present, and the same on an env-probe face); the main-camera `cullDist` is a far-plane-corner sphere; AI cars outside the 8 m frustum sphere are not drawn while their shadows are still enqueued; GLX (on `glx-mock.mjs`) skips equal tuner-uniform re-uploads, caps the env probe at 300 m / keeps a tighter cull, and resolves MSAA depth only when something reads it (an omitted `carReflect` is the 0.05 default); the props fuse seals typed accumulators. GLSL/WGSL/TSL keep only the gated ON path — shader text, matched loosely on comment-stripped source (a Node test has no GPU) |
 | `output-paths.spec.js` | gallery paths are port-scoped and create their parents |
 | `cdmcp-measure.test.mjs` | the Chromium MCP background measure harness — CLI surface, log terminal-marker contract, bg launcher existence, without launching Chromium |
 | `mcp-cli.test.mjs` | the MCP surface on the fast gate: `mcp-cli.mjs` probe-mode call plans (`--backend` order, TLX pins, `--console`/`--eval`, unknown-flag refusal, isError exit), `chrome-devtools-mcp.sh` clone/help/flags/release pin, `gfx-probe` backend flags, the Playwright MCP pin |
 | `tinyfish-mcp.test.mjs` | TinyFish + Chrome + Playwright MCP wrappers — `.mcp.json` has apex-tools + playwright + tinyfish + chrome-devtools + probe, help surfaces (`setup`/`deploy-js`), fixture unwrap/deploy-summary/live-build (search rows render title+url+snippet), every `mcp_post` body must parse as JSON once shell splices are stubbed (the guard that catches the stray-quote class), tracked source has no reusable key and `ensure` names its setup prerequisite, a transient upstream timeout is exit 3 (retried) while a genuine parse failure stays exit 2, `mcp-cli.mjs` uses `chrome-devtools-mcp.sh` with an exact fallback version (no live API), `playwright-mcp.sh` pins `@playwright/mcp@0.0.79` |
 | `tools-runnable.test.mjs` | every tool in `tools/` PARSES (`node --check` / `bash -n` / python compile / JSON) and the MCP-facing entry points answer their help path. The README index guards names in both directions but never says the file runs — a tool with a syntax error is indexed, documented and completely inaccessible, and you find out mid-task. Parse-only for the sweep: these tools launch browsers and hit networks |
-| `trim-comments.test.mjs` | smoke test for `tools/trim-comments.mjs`: `--help` exits 0 and prints `--dry-run`, and the tool removes dividers and location-pointer comments from a fixture file without touching code lines |
+| `trim-comments.test.mjs` | smoke test for `tools/check/trim-comments.mjs`: `--help` exits 0 and prints `--dry-run`, and the tool removes dividers and location-pointer comments from a fixture file without touching code lines |
 | `report-server.test.mjs` | the LAN report collector requires its per-run capability for every read and write, rejects unsafe paths and payloads, and enforces per-request/session storage bounds |
 | `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry, mock chrome daemon (healthz//tools//call + CLI auto-routing to a live daemon) (no Chromium / no TinyFish network). Also `mcp-cli.mjs probe --dry-run`: the pick is written BEFORE the reload in one batch, `--backend three` carries the WebGL2 pin (and only three does), unknown flags exit non-zero rather than probing the default, and the wrapper keeps `--enable-unsafe-webgpu` |
 | `environment-json.test.mjs` | `.cursor/environment.json` Cloud Agent bootstrap — install script, Chromium path, MCP allowlist names, and every stdio command in `.mcp.json` covered |
-| `apex-tools-mcp.test.mjs` | `apex-tools` MCP — `serverInfo.name === apex-tools-mcp`, tools are all `apex_*` (zero chrome/tinyfish; no test-bg wrap), `apex_graph_parity` requires `base`, catalog `tools/apex-tools-mcp.json` locksteps `.mcp.json` stdio + `serve-http` on `127.0.0.1:3713`, week-1–4 pins, lock/occupancy including host `@playwright/mcp` vs `--mcp-config` JSON, `path_escaped` / `port_not_supported`, refuses deploy/github.io, `isError` preserved, stdout JSON-RPC only (mock/`dryRun`, no Chromium) |
+| `apex-tools-mcp.test.mjs` | `apex-tools` MCP — `serverInfo.name === apex-tools-mcp`, tools are all `apex_*` (zero chrome/tinyfish; no test-bg wrap), `apex_graph_parity` requires `base`, catalog `tools/mcp/apex-tools-mcp.json` locksteps `.mcp.json` stdio + `serve-http` on `127.0.0.1:3713`, week-1–4 pins, lock/occupancy including host `@playwright/mcp` vs `--mcp-config` JSON, `path_escaped` / `port_not_supported`, refuses deploy/github.io, `isError` preserved, stdout JSON-RPC only (mock/`dryRun`, no Chromium) |
 | `mcp-smoke.test.mjs` | five-wrapper shell probe — `--dry-run` lists apex-tools / probe / chrome-devtools / playwright / tinyfish, never `verify` / `deploy-check` / `test-bg` / `playwright-mcp.sh run`, `apex-tools-mcp.sh smoke` delegates, no Chromium |
-| `agent-surface.test.mjs` | wrap map lockstep — `docs/AGENT-SURFACE.md` names every `apex_*` in `tools/apex-tools-mcp.json`, each CLI/skill exists, never-wrap lists `test-bg` / `--apply` / github.io, indexes point at the map, catalog descriptions start Tree / Browser (lock first), `.mcp.json` has the seven repo servers including playwright + pinned official npx |
+| `agent-surface.test.mjs` | wrap map lockstep — `docs/AGENT-SURFACE.md` names every `apex_*` in `tools/mcp/apex-tools-mcp.json`, each CLI/skill exists, never-wrap lists `test-bg` / `--apply` / github.io, indexes point at the map, catalog descriptions start Tree / Browser (lock first), `.mcp.json` has the seven repo servers including playwright + pinned official npx |
 
 ---
 
@@ -1241,788 +1241,13 @@ what it covers.
 - `js/core/log.js` — the logging facility the fixtures capture
 - `playwright.config.js`, `tests/helpers/fixtures.js`, `tests/helpers/global-setup.js`,
   `tests/helpers/live-reporter.js` — the infrastructure sources
-- `tools/pick-tests.mjs`, `tools/test-bg.mjs`, `tools/test-shards.sh` — the runners
+- `tools/ci/pick-tests.mjs`, `tools/ci/test-bg.mjs`, `tools/ci/test-shards.sh` — the runners
 
 ---
 
-## Operational field notes (moved from CLAUDE.md, 2026-08-13)
-
-The measured history behind the testing gates. AGENTS.md carries the rules;
-this section carries the evidence so the rules survive re-litigation.
-
-**Audit-then-fix of the pause / settings / results sheets — what a mini-dom
-test could and could not settle (2026-09-02).** Six defects were CONFIRMED in
-Node and fixed with `tests/unit/ui-sheets-audit.test.mjs` red-before /
-green-after: RESULTS top-10 and the WORLD CHAMPION panel ranked by points alone
-while STANDINGS used `SeasonCal.rank` countback (a points tie crowned the
-field-order driver); STANDINGS titled a sprint weekend by the previous round and
-called the race being driven "NEXT" from the pause menu; the in-race two-tap
-reload confirm in `js/perf/quality-preset.js` (now `js/perf/renderer-picker.js`) never disarmed (stale "END THIS RACE
-& RELOAD?" label, and the flag outlived the race so the next race's first tap
-reloaded unasked) and wrote its question as `textContent` on the `<select>`,
-which drops the options; MUSIC & SOUND said "Music off" beside a MUSIC switch
-reading ON when the master SOUND gate was shut, captioned DEFAULT as
-"Built-in", and described the disabled MY TRACKS button instead of the selected
-source. Left as PLAUSIBLE — each needs a screenshot, in `ui` / `tiny` (neither
-run here): the RESULTS sheet carries no gap or finish-time column at all (only
-position / name / pts) — check whether a 3-lap race result reads as a
-classification without one; DSQ has no model path, so nothing renders it;
-constructors ties fall to first-to-score order (no team countback in
-`SeasonCal`, so RESULTS, STANDINGS and career agree with each other); the
-DISPLAY tab's injected order puts GRAPHICS below the renderer status paragraph —
-at `data-shape="wide"` (two-column grid) check GRAPHICS is not orphaned beside
-the paragraph; THREE PATH / SCREENSHOTS stay live under RENDERER: WEBGL2 where
-they change nothing until the renderer does; the armed question on the RENDERER
-`<select>` is an option label, so on a 393-wide portrait phone at 130% check it
-is not clipped by the select's width; "GRAPHICS: ULTRA — FULLY APPLIES AFTER A
-RELOAD" and "IN PROGRESS: ROUND 3 — …" are the longest new strings — check they
-wrap rather than ellipsise in the wide grid's ~350px column; HIDE HUD from
-SETTINGS resumes the race outright and RESTART RACE has no confirm (both
-`js/game.js`, outside this pass); with the camera picker open, Escape should
-close the picker without also pausing (the picker's handler stops propagation
-after `TopModal`'s capture pass declines it).
-
-**A probe that returns "no change" is guilty until proven innocent (2026-08-29).**
-The report was that the editor's TEAM LOGO colour did nothing on the Audi tail.
-Three offline probes ran before one of them was trustworthy. The first hashed
-every 97th byte of the atlas region — fine for a full-region tint, useless for
-Audi's mark, which is four thin ring STROKES, so it reported "no change" for a
-region that changed. The second hashed every byte but tested against a livery
-whose paint no candidate colour could clear, so all three test colours collapsed
-to the SAME `inkOn(under)` fallback and it again reported "no change" — a true
-statement about a rigged input. Only the third, on a field both marks could
-clear, separated the real answer: the fin BADGE responds to `liv.logo`, the fin
-GRAPHIC never does (that is the TAIL GRAPHIC row, `liv.finArt`), and the actual
-defect was upstream of both — `markPalette` substituted a different colour for
-the authored one whenever it fell under `MARK_FLOOR`, which for Audi's
-`[0.96,0.02,0.22]` fin is nearly every mid-tone in the picker. Measured with
-`tools/logo-authored-sweep.mjs`: 9015 of 12112 authored colours were overruled;
-after the authored-halo path, the shark-fin badge keeps 91.2% (was 33.9%). The
-engine cover stays lower (37.4%, was 17.2%) and that is geometry, not a bug —
-`drawTailGraphic` washes it with an alpha gradient of `stripe||c2`, so the mark
-is scored against c1 AND c2 at once, and for a near-black-plus-bright-red pair
-NO colour clears 4.2 against both. Lesson: a negative result from a probe you
-wrote is a claim about the probe until an independent positive control passes.
-
-**`child exited on SIGTERM` is a WORKER line, not the run (2026-08-17).** A
-`test:tiny` log showed `[playwright] child exited on SIGTERM` at 28/73 while
-`test-bg.mjs --status` still said `running`. The log line won the argument and a
-replacement run was started in tmux — so TWO `playwright test` processes then
-shared four cores, load average reached 15.7 against the < 3 guidance, and both
-were writing progress the whole time. `ps -o pid,ppid,lstart -p …` attributed
-them in one command; killing the older tree left the queue clean. Two lessons,
-both already rules that a plausible-looking log line talked me out of: only the
-terminal `= run …` line ends a run, and `pgrep -fa 'playwright test'` BEFORE
-starting anything is the check that makes duplication impossible. (Also: a
-`test-bg` run launched from an ephemeral shell can lose its parent — start long
-queues inside tmux, where the queue survives the shell that spawned it.)
-
-**A total-red run is almost never the code (2026-08-17).** `test:tiny` reported
-`73/73 failed` and the first line of the log said
-`browserType.launch: Executable doesn't exist … chromium_headless_shell-1228`.
-`npm install` had run with `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` — which is the
-right flag for the install step and leaves the browser absent. The specs launch
-Playwright's headless SHELL, not any system Chrome a box may ship,
-so nothing browser-driven can pass until
-`npx playwright install chromium-headless-shell` runs (2.3 MB, seconds). Read the
-FIRST failure's message before forming any hypothesis about a red run: when EVERY
-test in a group fails, the cause is upstream of the code under test — a missing
-browser, a missing `node_modules`, a dead dev server, a syntax error in a file
-every page loads. Bisecting the diff for a fault the harness is reporting
-verbatim is pure waste.
-
-**Watcher anchoring.** Anchor on the reporter's terminal line
-`= run (passed|failed|timedout|interrupted)` and NOTHING looser: the 30 s
-heartbeat lines contain `N/M done, K failed`, so a pattern like
-`[0-9]+ (passed|failed)` fires on the FIRST heartbeat — AGENTS.md recommended
-exactly that for weeks and every watcher built from it misfired. Match every
-terminal status, not just `passed`: a success-only watcher is silent through a
-crash, and silence looks like "still running". Watch the LOG, never the
-process table — a watcher whose command line contains its own grep pattern
-matches itself (`pgrep -cf "python3 -m http.server"` returned 1 on a box with
-no server; that 1 was the grep). Never `| tail` a live background run — tail
-buffers to EOF and the file stays empty. Adding `|Error:` to the UNTIL pattern
-gives early warning on the first stack trace, but re-arm for the terminal line.
-
-**Long queues (2026-08-07 measurements, seven groups, container-killed at
-80 min).** (1) `Monitor` caps at 30 minutes and `persistent: true` DOES NOT
-lift it — tried twice, both lapsed silently; pair every Monitor with a
-`Bash run_in_background` waiter on the queue's own completion marker. (2) Seed
-the seen-file when arming a de-duplicating watcher, or the first event is the
-entire backlog. (3) Make the driver resumable via terminal-marker files the
-driver writes AFTER a run returns — a fixed-list driver re-ran 86 minutes of
-banked groups after a restart. A group that started and died has no marker and
-correctly re-runs whole: a killed Playwright run banks nothing.
-(2026-08-13 addendum: name the driver's group list anything but `GROUPS` —
-that is a readonly bash builtin array and the assignment fails silently.)
-
-**One process, one browser group.** Local runs set `reuseExistingServer`, so
-a second Playwright process attaches to the first's HTTP server; killing
-either strands the survivor's specs with `net::ERR_CONNECTION_REFUSED`
-(measured: 33 false failures in a row reading like product bugs). Pairing two
-BROWSER groups in one batch runs 2 processes x 2 workers on 4 cores —
-measured on 2026-08-13 as the source of every over-budget timeout in a
-five-batch run (projection at 144-176 s vs a 120 s budget, props-over-road at
-1518 s vs its own comment predicting exactly this). Browser+node pairs are
-fine. To cover more at once, hand every spec to ONE process and raise
-`APEX_WORKERS`.
-
-**Orphans vs a second run.** Orphans from a killed run keep eating the box
-invisibly (`node tools/test-bg.mjs --stop`, then `pkill -9 -f
-'tools/run-playwright'; pkill -9 -f pw-browsers`). But before concluding
-"orphans", check `ps -eo pid,etimes,args` for a LIVE `playwright test` — a
-second run you forgot is indistinguishable from orphans by process count.
-One specific orphan bites the NEXT run: a superseded/killed batch can strand
-its `python3 -m http.server 3456`, and the following direct `npx playwright
-test` then dies instantly with "Process from config.webServer was not able to
-start. Exit code: 1" (measured 2026-08-17). `pgrep -af http.server`, kill it,
-re-run — that error is the port, not the code.
-
-**A waiter is not a work slot.** Starting a browser run and then sitting in a
-blocking wait wastes the whole run's wall time (measured 2026-08-17: 17 idle
-minutes on one `--wait`). Start the run in the BACKGROUND and spend the run
-doing what it permits: docs edits, test/tools edits, log analysis, commit
-prep, subagent audits — everything except `js/`/`css/` edits and the
-`?v=N`/`version.json` bump, which stay queued until the terminal line. Check
-the log for `= run (passed|failed|timedout|interrupted)` when you come back;
-never re-enter a foreground wait just to "keep an eye on it".
-
-**`waitForFunction` on a rendering page.** Playwright polls the predicate on
-`requestAnimationFrame`; a SwiftShader page running the game loop starves the
-poll so the declared timeout never fires. MEASURED: `{ timeout: 3000 }`
-against a never-true predicate ran 109,665 ms on a parked Monza — 36x its
-bound — and overran on a menu page too. Only a THROWING predicate terminates
-promptly (11 ms). Pass `{ polling: 100, timeout: N }` on any rendering page.
-And once polling is fixed, a wait that still overruns means the CONDITION is
-unreachable, not that the page is slow — `tlx-probes`' M6 skid took four
-wrong mechanisms before anyone checked whether `skidVerts` could move
-(`skids.stamp()` runs in `render()`; the stint drove through `act()`, which
-never presents a frame). The habit that settled it: reach for an instrument
-(a wrapper logging call counts) instead of a fifth theory.
-
-**Subagent worktrees.** Worktree isolation bases new worktrees on the
-default-branch ref, and this repo's `origin/main` is a stale unrelated
-lineage (measured 2026-08-13: eight fix agents landed on a pre-restructure
-tree with an 8,409-line game.js). Every worktree brief starts with
-`git checkout -B <branch> <session SHA>` plus a fingerprint check of a
-session-known file.
-
-**WebGPU IS validatable in-container — stop shipping "read-verified" WGSL
-(2026-08-17).** For months every `js/render/webgpu/` change carried a "WGSL is
-not compilable in this container" disclaimer and shipped on read-review alone.
-That belief was FALSE, and it shipped a phone-visible defect: a
-`derivative_uniformity` violation (derivatives called behind `roadMarkings`'s
-`hw > 0.5` early return — the road surface itself) that enforcing Dawn builds
-reject (WGX silently fell back to GLX) and warning-mode phone builds executed
-as undefined values — the entire road + shoulders rendered NaN-white while
-grass, walls and cars looked fine. Two more spec violations sat alongside it:
-MSAA count 2 (WebGPU permits only 1 and 4 — invalid on EVERY device) and
-rg11b10ufloat render targets without the `rg11b10ufloat-renderable` feature.
-All three were one-line Dawn errors the moment the code ran on a real device.
-`node tools/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
-Chromium (the headless shell has no `navigator.gpu`) with `--headless=new
---enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader
---use-webgpu-adapter=swiftshader` exposes a real Dawn adapter that parses
-every WGSL module and validates every pipeline. The ceiling, corrected
-2026-08-17: Dawn here EXECUTES shader work — `node tools/wgx-capture.mjs`
-returns real rendered pixels (offscreen mode; see
-`docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
-found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
-the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
-play with this in SETTINGS ▸ SCREENSHOTS (AUTO / 2D BLIT / NATIVE) and the
-three.js counterpart SETTINGS ▸ THREE PATH (AUTO / WEBGL2 / WEBGPU).
-`node tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
-gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
-(`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
-SwiftShader when concurrent with display readback. Still environmental: the
-first `getCurrentTexture()` call breaks `mapAsync` device-wide (why WGX never
-touches the swapchain on software adapters), software adapters force MSAA 1,
-and the full desktop stack can LOSE the device seconds in. Validation evidence
-here is exact; visible-canvas evidence exists in-container via soft-present;
-PERFORMANCE truth still needs a real GPU.
-
-**TLX M4/M5/M9 on SwiftShader is fill-bound after the compile-storm fix
-(2026-08-17).** The 595-program TSL storm is gone (17 links / 6.1 s Monza
-load). The remaining group timeouts were GPU fill: M4 left the loop
-presenting, Playwright tore the page down, and M5's first frame sat behind a
-387% GPU process. `setTimeOfDay("night")` / a second `race()` on a live TLX
-page does not return (530 s+ hung `evaluate`, measured four times). Product
-cuts: software-GL shadow maps 512/256/256, clear-only 64px env faces, one
-cube face per frozen frame. Test cuts: M5 is day-sky only (night `uStars`
-lives on M6), M4/M5/M9 `waitForFunction` with `{ polling: 100 }`, and
-`stopRendering` at the end of M4 so the next spec is not starved. Solo
-verdict after those cuts, M4 still presenting: M4 10.0 s, M5 313.1 s,
-M9 278.9 s. After M4 calls `stopRendering`: M4 10.1 s, M5 **63.5 s**,
-M9 261.4 s, `= run passed (3/3)` in 336.4 s. M9 stays near the
-`test.slow()` 360 s budget because the env-probe wait is fill-bound on
-SwiftShader even with a quiet GPU; do not widen assertion tolerances.
-
-**Software pixels + Lavapipe on Cursor Cloud (2026-08-17).** Native WebGPU
-swapchain present stays black on SwiftShader/Lavapipe; WGX soft-presents to
-visible `#game` via a 2D blit (auto on software adapters +
-`sessionStorage apex26.wgxCapture=1`). Primary probe:
-`node tools/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
-`awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs`. Lavapipe
-needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
-`/usr/share/vulkan/icd.d/` until that package was installed and the env
-snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
-THREE PATH: WEBGPU 2D-blits the LDR target (`readRenderTargetPixelsAsync`).
-`mappedAtCreation` uploads are shimmed to `queue.writeBuffer` so SwiftShader
-does not exhaust Dawn's mappable pool. SETTINGS ▸ WEBGPU / THREE.JS stay on
-those backends (phones and Safari included — lite stack, 8-bit swapchain);
-they must not silently bind GLX. THREE PATH AUTO may land on three
-WebGL2 (`--tlx-auto-gl` / `apex26.tlxAutoGL`) after WebGPU dies in this
-tab — still TLX, not game WEBGL2. THREE PATH: WEBGL2 remains the CI pin.
-`--backend three --tlx-webgpu --lavapipe` waits on `GLX.awaitSoftPresent`.
-
-**TLX WebGPU `configure` null was a self-poison (2026-08-18).**
-`detectSoftwareGL()` called `#game.getContext("webgl2")` after
-`renderer.init()`. three r185.1 does not claim the canvas in `init()` —
-`getContext("webgpu")+configure()` is lazy on first present(). MDN: one
-context type per canvas for life. Fix: sniff GL only when `forceWebGL`;
-the WebGPU path uses `_softAdapter`. Instanced prop colour is a geometry
-`InstancedBufferAttribute` named `color` (not `imesh.instanceColor`).
-The 2D overlay must be opaque and force blit alpha to 255 — the SSR
-car-paint tag (0.35) in HDR alpha is not compositor opacity.
-Index: `AGENTS.md` §Seeing the game / §Cursor Cloud;
-`docs/research/CI-RENDERING-PERFORMANCE.md` §Measured.
-
-**TLX software-GL washout was fog-as-clear + a broken TSL sky (2026-08-18).**
-Dusk `fogColor` is beige `~[0.68,0.64,0.54]`. `begin()` used that as
-`scene.background`; when the TSL `backgroundNode` missed the whole frame
-was that beige. When the node *did* compile against the HDR target on
-SwiftShader, `screenUV`/`invViewProj` reconstruction collapsed the dome
-to horizon beige (`~[0.76,0.68,0.52]`) — kill-fog did not help because
-density was never the path. World frames now clear to `skyZenith`, and
-software GL arms `tsl-sky.js`'s zenith-only `fallbackNode` (M5
-`skyState().on` stays true). Real GPUs keep the full SKY_FS node. Same
-box, GLX was never this washed: it draws the sky as a real fullscreen
-mesh. Real-GPU TLX (user device) already looked correct; this is not a
-color-management change.
-
-**Cloud-agent `npm install` "Exit handler never called!" (2026-08-17).**
-`bld-20260817-e70b375f` failed `INSTALL` after `npm install --ignore-scripts`
-spent ~70 s hitting `https://registry.npmjs.org` with `ECONNRESET` (audit
-endpoint included), then npm 10.9.7 crashed instead of exiting on the fetch
-errors. The leftover debug log still had "http cache … cache hit" followed by
-"tarball no local data … Extracting by manifest" — metadata in `~/.npm` but
-no tarball bytes, so every package re-fetched in parallel. The same VM's
-`npm ping` still ECONNRESETs; `archive.ubuntu.com` Release files 404 through
-Envoy, so `apt-get update` cannot repair a snapshot that is missing
-`mesa-vulkan-drivers`. Cure: dashboard install → `tools/cloud-agent-install.sh`
-(skip npm only when `node_modules/<pkg>/package.json` exists — hollow
-directories from a crashed reify are not usable — `--no-audit
---prefer-offline`, retries; do not fail the build on apt 404 when
-packages are already present).
-Allowlist `registry.npmjs.org`, `archive.ubuntu.com`, `security.ubuntu.com`,
-and `cdn.playwright.dev` if a cold snapshot must actually download.
-
-**Deploy-union review, zero regressions in ~340 union-run tests
-(2026-08-27).** Deploy-union review at bd9c875 / shell 1582. Five rounds from
-two lineages (perf/WGX branch; adaptive-ui-devices incl. the dialog
-migration) cross-merged through builds 1557–1582; this entry is the union's
-first browser-level verification (CI's change-aware selection never runs on
-deploy pushes — deploy tips are gated by smoke + characterization + guards
-+ conditional sweeps only). Static review, three subagents: merge topology
-CLEAN (only index.html/version.json ever hand-resolved; 166/166 `?v=` hashes
-recompute at tip; line-survival regrep of every cross-lineage commit lost 0
-lines; use `git diff-tree --cc`, never `--stat`, for merge resolutions —
-first-parent diffstat reads as phantom resolutions); semantic audit CLEAN
-(hub.js dialog × data-fix union, sw.js dual rewrite, game.js A+B edits, all
-four WGX rounds present exactly once with no raw litPass state calls; unit
-suite 1366/0). Stale LOCAL deploy-branch ref (223f4cb, 44 builds behind)
-fast-forwarded to origin — anything reading the local name had been seeing
-an ancient tree. Live probe on the union: GLX default boot + race clean
-(console: only the three known-benign warns), WGX boot + race clean with
-every round's counters holding (setPipeline 41/frame, submit 1.3/frame,
-createBindGroup 0). Browser batches on the union, serial, one Playwright:
-
-- ui: `= run failed` (115/115, 3 failed) → all three triaged: ui-redesign +
-  ui-resize green solo (machine); rotation-recovery failed the 2-worker
-  solo file run too but passes at `--workers=1` on BOTH the union and the
-  pre-union baseline 4fc1167 (worktree A/B), and the live probe repro
-  (touch-emulated portrait) shows the blocker up with `#rotate-controls`
-  focused and no open top-layer dialogs — 2-worker contention flake of
-  the documented rAF-starvation family, NOT a union regression.
-- api: `= run failed` (140/140, 8 failed) → obs-act-edge pair green solo
-  (machine). headless-api's 5–6 reds REPRODUCE solo — but the pre-union
-  baseline worktree fails the same file the same way (5/24, same ~15 s
-  wait-timeout signature, wandering test subset): PRE-EXISTING
-  budget-vs-box (10 s waits vs ~21 s SwiftShader boot), not a union
-  regression. Candidate for a waits fix in the ce68d3f pattern, its own
-  change.
-- physics: `= run failed` (20/20, 2 failed) → projection spec 3/3 green
-  solo (machine). Characterization green — the re-blessed baseline holds
-  on the union.
-- collision: 45/46 → the one red (offtrack "stopped on-track throttle")
-  failed solo with the exact headless-api signature (8 s boot-wait
-  timeout at grid state, zero assertion failures) but PASSES at
-  `--workers=1`: contention family, not a union regression.
-- season + season-format: 18/18 green.
-- webgl: `= run failed` (32/32, 4 failed) at loadavg 6.5–8 during the run —
-  all four long-duration timeout-family (lighting-ab night fog 191.8 s;
-  lighting-tuner-grade COPY ALL 337.3 s; webgl-probes monaco tunnel bake
-  57.0 s; webgl-probes night ≤48 lights 74.9 s). Solo verdicts:
-  webgl-probes whole-file at `--workers=1` passed 6/6 (incl. both former
-  reds at 62/66 s vs their 57/75 s red durations); lighting-ab night-fog
-  1/1 solo (98.3 s vs 191.8 s red); lighting-tuner-grade solo 2/2 (COPY
-  ALL 148.6 s vs 337.3 s red). All four cleared — machine contention.
-- tlx: the deploy branch moved DURING the review (bd9c875..d5180be, shell
-  1582→1594: TLX hardening + car-parts/audio + the standing-reds fix
-  train incl. the rAF-starved-waits fix this review kept rediscovering as
-  contention). HEAD was an ancestor ⇒ pure fast-forward, and tlx — never
-  union-run and now carrying fresh vendored-three patches — ran on the NEW
-  tip d5180be instead of the stale one, after tooling-fast on the same tip
-  (112/112 green, 139.5 s): `= run failed` (16/16, 5 failed) at 2 workers —
-  all five in tlx-probes.spec.js, 84–124 s durations, first error a bare
-  60 s `page.waitForFunction` timeout. Whole-file solo at `--workers=1`:
-  `= run passed` (16/16, 0 failed) — the entire red set was 2-worker
-  contention on the heavier hardened TLX boots, not a regression.
-
-Operational: the container restarted THREE times mid-review, each time
-killing the background test chain (`test-bg --wait` chains die with the
-box; `artifacts/` logs and the scratchpad survive). Lesson: on this host
-run each browser group as its OWN background task so a restart costs at
-most one group, and re-read surviving logs for `= run` lines before
-re-running anything. Two watchers ALSO re-proved the self-match trap above
-in new clothes: a `while pgrep -f 'playwright test'` wait-loop matches its
-own command line and never exits, and a compound kill-then-relaunch whose
-pkill pattern appears later in the same command line kills its own shell
-(exit 144) — check (`pgrep -af 'playwright[ ]test'`) and launch in SEPARATE
-shell invocations, and anchor waits on the LOG's terminal line, never the
-process table. NOT RUN this review (named per AGENTS): foundation, sweeps
-(no track delta since last green), behaviour, debris, steering, camera,
-audio, parts, net (untouched in range), scenery, gallery, baseline,
-shimmer, map, paths, hooks, agent, circuit, fast, headless, ab, render.
-shared-road-vbuf (unblocked by the wgx-vid-repro measurement) deliberately
-deferred to its own round — a review reviews a fixed tree.
-
-**A CSS specificity defeat is invisible to every string match (2026-08-29).** A
-player reported that BRAKE lit up under the thumb and GAS did not. Both
-`:active` rules existed and had for as long as the file has, so every grep and
-every unit assertion for "the pressed rule is present" was green — and the
-pressed colour was still unreachable. `body.steer-buttons #btn-throttle` is
-(1,1,1) and `#btn-throttle:active` is (1,1,0), so two byte-identical
-restatements of the idle fill in the buttons-mode blocks beat the pressed rule
-in EVERY state. It shipped because BRAKE carried no such restatement: exactly
-one of a symmetric pair was broken, in one steering mode.
-
-The only instrument that sees this is a REAL POINTER on a REAL BROWSER —
-`page.mouse.down()` over the box, then `getComputedStyle`. `:active` cannot be
-forced from page script and cannot be matched from a file. A fixture built from
-the shell's own `<link>` order (`tools/manifest.cjs` CSS) plus the shell's own
-dock markup is enough; it needs no game boot, so it costs ~10 s rather than a
-browser group. Run it against `git show HEAD:css/overlays.css` first — an
-assertion never seen to fail is not an assertion, and this one reproduced the
-reported symptom exactly, GAS red and BRAKE green.
-
-One trap inside the instrument, which cost it a false red of its own:
-`button { transition: background 0.14s }` (css/tokens.css) means the computed
-background the instant the pointer lands is the START of the animation, so a
-working pressed colour reads identical to a missing one. Settle ~300 ms before
-reading. `opacity` carries no transition and jumped immediately, which is what
-gave the contradiction away — the same rule had applied one of its two
-declarations and apparently not the other.
-
-The durable guard is in `tests/unit/ui-journey-race.test.mjs`: no `body.<class>
-#btn-throttle` / `#btn-brake` rule may declare a `background` at all. That is a
-narrower claim than "the pressed state works", and it is the one a file can
-actually hold.
-
-**Measure the fallback before you call it broken (2026-08-29).** COPY VALUES in
-the LIGHTING TUNER reached `execCommand("copy")` only from inside the clipboard
-promise's REJECTION handler. That reads like a guaranteed failure — the copy
-command needs user activation and a rejection handler runs a microtask after the
-click — and it was written up as one. A clipboard READ-BACK said otherwise:
-with `navigator.clipboard.writeText` stubbed to reject, the shipped handler
-still put all 182,631 characters on the clipboard in Chromium, which keeps
-transient activation for about five seconds. WebKit is documented to require the
-copy during gesture processing rather than merely soon after, so the iPhone
-story may well hold — but it is UNVERIFIED here and was labelled as such in the
-code: this container's proxy blocks `cdn.playwright.dev`, so
-`npx playwright install webkit` 403s and nobody can run it. The fix (attempt the
-synchronous copy first) is right either way; the CLAIM had to be corrected.
-
-The measurable half was the payload: 182,631 characters, against 146 for the
-same tune once the export carried only the player's overrides.
-
-**A saturated main thread looks exactly like a missing element.** Driving the
-tuner in that probe, `page.locator("#lt-copy").click()` timed out with
-`waiting for locator('#lt-copy')` while `page.evaluate` in the same page
-answered instantly and reported the element present, visible and 145x46. Nothing
-was wrong with the DOM: the game's rAF loop on llvmpipe was starving
-Playwright's actionability poll. `__apex.headless(true)` before touching the
-panel fixed it outright. Reach for that before believing a locator that cannot
-find what `getElementById` can.
-
-Measured a third time 2026-09-01, on a lazily-injected bundle rather than a
-click: VS FRIEND pulling js/net took **39.7 s** with the menu flyby rendering
-and **0.1 s** with `#game` hidden — same page, same 11 files, **150 ms of
-actual fetch** in both. A wall-clock number taken from a rendering page is
-measuring llvmpipe, so decompose it (resource timings) or take a
-not-rendering control before believing it says anything about the code.
-
-Seen again 2026-08-30 with a live race running: `page.click("#rotate-race")`
-timed out after resolving the locator and logging "element is visible, enabled
-and stable", while `elementFromPoint` at the same coordinates returned that
-button. `el.click()` inside `page.evaluate` drives the real handler and is the
-right probe when the page must keep rendering.
-
-**`context.setOffline(true)` is NOT offline against `127.0.0.1`.** Chromium's
-network emulation exempts loopback, so a page under `setOffline` still reaches
-the local test server. Measured 2026-09-01 while proving the service-worker
-precache fix (`scratch/offline-check.cjs`): with `setOffline(true)` in force, a
-`fetch()` **from inside the page** for a URL no cache can hold returned
-`reachable (404)`. Asking `context.request` — a separate APIRequestContext that
-need not honour page-level emulation at all — gives the same wrong answer for a
-second reason, so a probe placed there is not even measuring the right process.
-
-The cost of not noticing is a green run that proves nothing: the first cut of
-the offline test passed **with the precache deliberately deleted**, because the
-"offline" browser simply re-fetched the missing scenery from the still-live
-server. The cure is to make the origin actually stop existing —
-`srv.closeAllConnections()` then `srv.close()` — with `setOffline(true)` kept on
-as well, because the service worker's navigate handler branches on
-`navigator.onLine` and a returning player really is flagged offline. Under that
-shape the same probe reads `blocked: Failed to fetch`, and only then does the
-number after it mean anything.
-
-Two more traps in the same test, both of which produced a false PASS first:
-
-- **Race a circuit the session has never touched.** The SW's fetch-miss handler
-  caches whatever the online phase requested, so reusing one circuit for the
-  online reference and the offline subject tests the runtime cache, not the
-  precache. The test now warms on `spa` and goes cold on `cota`.
-- **`sw.js` does not `clients.claim()`**, so the page that registers the worker
-  is not controlled by it. One reload — what a returning player does anyway —
-  is required before any cache assertion means anything.
-
-**The phone audit that a css-rules read CAN settle, and the cells it cannot
-(2026-09-02).** Audit-then-fix of the phone driving surface at 390x844 /
-844x390 and HUD SIZE 100/150/200 %, done entirely as rules over the sheets
-(`tests/helpers/css-rules.mjs`) and `Input` in a VM — no browser, so the
-verdicts split into what the numbers prove and what needs a device.
-CONFIRMED and fixed (`tests/unit/phone-touch-surface.test.mjs` pins each):
-the portrait blocker's three pills were `min-height: var(--tap-min)` — the
-24px WCAG floor, with `padding: 0 1rem` and inherited type, on a layer gated to
-`(pointer: coarse)` phones — so RACE IN PORTRAIT / OPEN CONTROLS / EXIT RACE
-painted 24px tall (now `--tap`, 52px on touch); the portrait buttons-mode
-`.hud-bottom` anchor added `var(--sab)` raw inside its `zoom: var(--hud-z)`
-subtree, the one anchor in the zoom list without the division; and
-`Input.requestGyro()` latched `gyroDenied` on ANY rejection — including the
-transient "no user gesture" kind — and never cleared it on a later grant, so
-STEER read "(NO GYRO)" while tilt was driving. CONFIRMED-OK and now guarded:
-every `:hover` in `css/` sits under `(hover: hover)`, every scroll container
-declares `overscroll-behavior`, both dock tiers clear 44px (54/72 and 48/64,
-24px painted floor below 100 %), and the tallest dock column — BOOST/OT/AERO at
-3 x 54 + 2 x 5.3 = 172.7 authored — is 345px at 200 %, inside 390 - 31, so
-`fitHud`'s `--hud-z-dock` cap ((390 - 30) / 172.7 = 2.08) never has to act on
-a 390px phone: the "BRAKE at y=-216" measurement in `js/ui/hud.js` predates
-the grouped dock and is covered. The double-tap trio (viewport
-`maximum-scale=1` + `viewport-fit=cover`, `touch-action: manipulation` on `*`,
-`#game` none, root `overscroll-behavior: none`, the inline touchend killer) is
-present and pinned. PLAUSIBLE — arithmetic says so, a device has to show it;
-the visual checks, each one screenshot:
-
-1. iPhone 844x390 landscape (notch LEFT), STEER: TILT, GEARS: AUTO, HUD SIZE
-   200 %: does the BRAKE pedal's top edge sit under `#minimap`? The dock cap
-   budgets viewport height (3 x `FIT_AIR`), not the corner clusters — at 200 %
-   the pedal column tops out at y ≈ 23px, the map spans y 8..~124. Expect
-   overlap from ~160 %; 150 % is marginal (≈3px, notched only). Owner:
-   `fitHud` in `js/ui/hud.js`.
-2. Same phone, STEER: BUTTONS (pedals RIGHT), HUD SIZE 200 %: GAS/BRAKE column
-   against `#pausebtn` (y 8..60, right edge). Expect contact from ~185 %.
-3. 390x844 portrait, tap RACE IN PORTRAIT, HUD SIZE 100 %: are POS/LAP/TIME/
-   BEST and the map painted at roughly HALF size? `fitHud`'s top-band cap uses
-   the landscape geometry (map beside the POS row: 224 + 183 > 195 half-width),
-   so `--hud-z-top` computes to ~0.5 on a 390px-wide screen at every setting.
-4. iPhone + Bluetooth pad, STEER: TILT, start the race with the pad's A button:
-   does the motion prompt appear, or does STEER silently flip to BUTTONS? The A
-   press is a synthesised `.click()` with no user activation, so
-   `requestPermission()` should reject. Then tap STEER back to TILT with a
-   finger: the prompt must appear and the label must read "STEER: TILT" with
-   no "(NO GYRO)" (the fix above).
-5. Any iPhone, SETTINGS, tap the RENDERER `›` stepper twice within ~300 ms on
-   the same spot: does it advance once or twice? The `index.html` double-tap
-   killer calls `preventDefault()` on the second touchend, which also cancels
-   its click. Out of this change's territory; a fix would exempt buttons.
-6. Any phone, HUD SIZE 60 %, landscape: BOOST/OT/AERO paint 32px — the
-   documented 24px floor, under Apple's 44. A design decision (2026-08 axis
-   audit), recorded here so it is not re-found as a bug.
-### Menu keyboard / gamepad / a11y audit (2026-09-02) — the PLAUSIBLE half
-
-The audit behind `tests/unit/menu-a11y-audit.test.mjs` enumerated every screen
-from `index.html` + `UiLayers.LAYER_IDS` and split its findings in two. The
-CONFIRMED ones (demonstrable on `tests/helpers/mini-dom.mjs`) are fixed and
-pinned in that file. The rest need a screenshot or a screen reader, and this is
-the list, each with the exact check — the browser group for all of it is `ui`:
-
-| # | screen / cell | what to look for |
-|---|---|---|
-| P1 | GARAGE, 844x390 @100% (compact stacked) | `#cs-tabs .cs-tab` is `min-height: 0; padding: 2px` there (`css/carsetup.css`). Measure `getBoundingClientRect().height` of a tab on a touch profile: the touch ladder promises ≥ 44px and this cell may pay ~26px |
-| P2 | LIGHTING / CAMERA TUNER, touch viewport | `.lt-tab` is `min-height: var(--tap-min)` (24px) + 5px padding (`css/tuner.css`) — expect ~28px tabs; decide whether a tuner is a player surface |
-| P3 | DATA HUB, `body[data-density="compact"]` and narrow | `.dh-tab` / `.dh-close` drop to `--tap-min` (24px) (`css/data.css`); measure the tab strip on 390x844 |
-| P4 | SETTINGS (`#pmsettings`), both rail shapes | ArrowDown on the horizontal tab strip now leaves it for the first panel control (focus ring should land inside `#pm-panel-*`); on the single-column rail (`aria-orientation="vertical"`) Up/Down still cycle tabs and ArrowRight is the exit — with nothing to the right it falls to DOM order (the next tab, then the panel), so check the pad can still walk into the panel. Up/Down on the strip no longer page-scroll the sheet |
-| P5 | GARAGE paired (1280x800) and stacked (844x390) | from the category rail, ArrowRight (paired) / ArrowDown (stacked) must reach the parts list and the rail's own handler must NOT snap focus back; Left/Right (stacked) still cycle categories with selection following focus |
-| P6 | SELECT / GARAGE / CAREER opened by MOUSE or TOUCH | focus now lands on the selected control at open. Chrome's `:focus-visible` heuristic should paint NO ring after a pointer open; a ring after a click is the regression to look for. The landing must not scroll `#sel-tracks` (the ALL chip is at the top) |
-| P7 | SELECT → BACK by Escape vs by pointer | Escape: the title door that opened the screen (`#mb-race`) shows a ring; pointer BACK: focus returns silently (no ring). Garage BACK returns SELECT with focus on `#sel-go` |
-| P8 | CUSTOMIZE MY TEAM | `.cz-sep` separator labels are now `var(--dim)` (was white @0.4); confirm they still read as section labels, not body text |
-| P9 | SELECT, pad only | Right from the CLASSICS chip lands on the search field; D-pad Down must now leave it for the first circuit row; Left/Right/Home/End stay in the field |
-| P10 | any settings slider | Home/End now jump the slider to min/max (ARIA slider ends) instead of the pane's first/last control |
-| P11 | title after a race, 844x390 @150% | `#menu-buttons` overflows; the `.sf-b` fade + thumb must appear (the title's own `hidden` flip now triggers ScrollFade's settle) |
-| P12 | SELECT, first arrow press | lands on the ALL filter chip (`aria-pressed`) rather than the selected circuit row — a design choice worth a look with a pad in hand |
-| P13 | SELECT / CAREER / GARAGE with a screen reader | entering announces "SELECT, region" (or GARAGE / CAREER); RESUME / RESTART / QUIT on the pause menu are NOT announced as toggles; LIGHTS OUT / FINAL LAP / FINISH are read from `#announce` (`role="status"`) without repeating |
-
-### 2026-09-02 — a 54–107 s boot on this box is the box, not the tree
-  A/B closed the question the same day: the 2026-09-01 20:23 tree (3fe7dc74,
-  before the deploy merge and the process commit) loads in 48.6 s at 852x393 on
-  this box against 59.1 s for a4a08011 and 54.2 s for HEAD — the same order for
-  every tree, so no commit of the last day moved boot time; the box (and, that
-  night, the ubuntu/windows runners: census run 21's 120 s waits, run 1881's
-  boot-guard) simply boots the game in ~50 s on software GL at that size.
-
-Symptom: desktop-viewport specs (audio-smoke, menu-keyboard's desktop describe,
-ui-scale) hit the 120 s test timeout with the game booted but the main thread
-"gone" for 30–75 s at a time; `__apex.logs()` showed build done at 4.8 s, then
-lobby create 17.7 s, AgentView.create 49.8 s, SeasonCal.engage 124.9 s. The
-same tests passed on the GitHub smoke shards (7–9 min per shard, normal).
-
-Measured with a CDP sampling profile over the first 70 s of boot on the
-working tree (`scratch/bootprofile.mjs`, 2 ms interval): 77.2 of 79.6 s is
-`(program)` — native time outside JavaScript; the largest JS self time is
-`drainGlErrors` at 333 ms. No slow or pending requests; DOMContentLoaded at
-1.1 s and `load` at 107 s (1280×800) / 54 s (852×393). A/B against a worktree
-at a4a08011 (before the UI round) at 852×393: 59 s. So the cost scales with
-the viewport, is identical before and after the round, and lives in the
-software GL path (the title flyby renders full-scale while the boot scripts
-run — the race-gated PerfGov item in ARCHITECTURE-REVIEW §7). Read a desktop
-timeout here as the box; verify desktop-viewport specs on a runner. Playwright
-was bumped to Chromium 1228 by the deploy tip (be24dc66) while this container
-has 1194: `playwright.config.js` pins the sandbox binary, a bare
-`chromium.launch()` in a scratch script needs `executablePath`.
-
-**The change-aware gate selected the two slowest boot specs for every source edit, and never carried a failure forward (2026-09-02).** Pages runs 1888 (twice) and push run 2229 went red on `boot-guard.spec.js` (PERMANENT 404: 120 s while Playwright set up the browser context) and `logging.spec.js` (the Monaco build) — both pass locally in 86 s, so the reds were runner starvation. They were selected because pick-tests' blanket rules (`/^(js|css)\//` → "any source edit: does the page still boot", `index.html` → "script tags + DOM shell") route every diff to the boot group, and inside a 10-test budget its cheapest-by-count specs are exactly those two, the slowest per test in the tree. That question is already answered by the FIXED smoke gate (four shards) on every push and deploy, so `select-specs` now drops the boot group when only the blanket rules named it (`dropBootFallback`, `bootCoveredBySmoke` in the JSON). Separately, the "Record failing specs" step never recorded anything: Playwright writes `<system-out>` BEFORE `<failure>`/`<error>` inside a testcase, so a "testcase immediately followed by failure" regex matched nothing, and the classname it would have captured (`specs/x.spec.js`) lacks the `tests/` prefix the selector filters on — `tools/junit-failed.mjs` parses the block and normalises the path. Runner boots measured in these runs: a context that takes 120 s to create is the machine; do not widen the 45 s boot wait for it.
-
-**tooling-fast is not the deploy gate's node half (2026-09-02).** Pages run
-1889 went red on two `quali-persist` source pins that were green nowhere
-locally, because `quali-persist` lives in `test:state-unit`, which the gate's
-"Pure-node unit suites" step runs and `tooling-fast` does not (the same step
-also runs `node-slow`, the VM twins, the net/audio/agent-contract groups).
-`node tools/deploy.mjs` now runs exactly that step's `npm run test:*` lines,
-parsed from `ci.yml` so the two lists cannot drift; the edit loop stays
-`tooling-fast`, and a pre-deploy run pays the extra ~4 minutes once.
-
-**Re-measured 2026-09-03 for the `?v=dev` shell (Phase 0 Commit B).** `tiny`
-went 72/73 with `smoke` › "page loads without WebGL error" at 150 s, and the
-spec ALONE on a quiet box repeated it (150 s): that test's `page.goto("/")`
-waits for `load` with no navigation timeout, so a >120 s load event reads as
-the bare "Test timeout" with the page alive in `apex-logs`. Boot probe
-(`load` event, 1280×720, one browser at a time, two rounds each) against a
-worktree at the pre-Phase-0 tip vs the working tree: 71 s / 62 s before,
-70 s / 21 s after — DOMContentLoaded ~3 s on both, the SW controlling on
-both. Neither the generated shell, the dev tokens, nor sw.js's dev-host
-network-first rule moved boot time; the deploy-side proof of the tokens is
-`pages.yml`'s `--check --root _site`, and the boot group's verdict comes from
-the runner shards (`ci.yml` `group: tiny`), not this box.
-
-### 2026-09-02 — two instruments that lie on this container
-
-**`etime`/`etimes` does not track wall clock here.** A probe polled across ten
-minutes of tool calls reported `etimes 29`, and a second read seven seconds
-later had advanced by over a minute. Every "it has been running too long, it
-must be wedged" judgement made from the process table this session was
-measuring nothing, and one of them killed a healthy run. **Poll the artifact for
-content, not the process for age** — `[ -s artifacts/x.log ] && ! pgrep …` in a
-long-bounded loop, and let the log's own terminal line be the verdict. The
-companion trap is older and already documented: a `pgrep -f`/`pkill -f` pattern
-matches the controlling shell's own command line, so use explicit PIDs.
-
-**An `await requestAnimationFrame` inside `page.evaluate()` has no timeout of
-its own.** A probe that awaited a double-rAF to measure frame liveness hung
-indefinitely with no output and no error — `evaluate` waits for the promise,
-and a throttled or stopped loop never resolves it. Playwright's test timeout is
-the outer backstop; a scratch script has none. Measure liveness with a counter
-read across two ordinary `waitForTimeout`s instead.
-
-**A screenshot of the WebGPU canvas needs `GLX.awaitSoftPresent()` first**
-(`tools/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
-un-blitted canvas and produces a confident, wrong answer — it cost one fully
-written-up "WGX mis-frames the garage" reproduction that had to be retracted
-(docs/PERF-FINDINGS.md §2t).
-
-### 2026-09-02 — probing the DEPLOYED build, and what that probe could not show
-
-Chromium in this container cannot reach `https://brycejmurrin.github.io/f1-game/`
-— the agent proxy returns `net::ERR_TUNNEL_CONNECTION_FAILED`. The TinyFish
-fetch tool reaches it because it fetches remotely; that is not egress this
-browser has. The way to drive the SHIPPED code locally is a detached worktree at
-the deployed sha served over `npx serve`:
-
-```sh
-git worktree add --detach <scratch>/livewt <deployed-sha>
-(cd <scratch>/livewt && ln -s /home/user/f1-game/node_modules node_modules && npx serve -l 3499 .)
-LIVE_URL=http://127.0.0.1:3499/ BACKEND=webgl2 node scratch/live-probe.mjs
-```
-
-All three backends boot, race and finish clean on the deployed tree — GLX, TLX
-and WGX each `gpuErrors 0`, zero page errors, zero console errors across boot,
-track build and 25 s of held throttle.
-
-Two things that probe did NOT establish, recorded so a later session does not
-read it as coverage it isn't:
-
-- **The car barely moves, and that is the BOX.** 25 s of wall clock with
-  `setInput({throttle:true})` held reached 1.9 m/s on GLX and 2.4 on TLX, with
-  `s` unmoved to the metre. At this box's SwiftShader frame rate 25 s is a few
-  dozen physics frames. It proves input reaches physics on the shipped build; it
-  is not a driving test, and the speeds are not a measurement of anything. (WGX
-  reached 14.5 m/s over the same wall clock, which is a statement about the
-  soft-present path's cost here, not about the game.)
-- **The garage leg was vacuous.** `garageCam().on` came back `false` on all three
-  — there is no `__apex.openSetup()` and the DOM fallback selector matched
-  nothing, so the probe sampled the default `dist: 8.5` from the menu. The garage
-  screen on the deployed build is UNTESTED by this run. A probe that reports a
-  plausible number from a screen it never opened is the §R14 vacuous-measurement
-  class; it is recorded here rather than quietly dropped.
-**A renderer probe measures nothing unless it is in the TIER that runs the code**
-(2026-09-02). `apex26.forceMobileTier=1` and the GRAPHICS preset are two
-different axes, and every round of the TLX mirror-sweep work set the first and
-not the second. `forceMobileTier` forces `GLX.isMobile` — the renderer's own
-downgrades — and `GfxQuality.init()` then defaults a mobile device to MEDIUM,
-so it lands on `PerfGov.tier() === 2`. LOW is tier 4, and tier 4 is where
-`js/game.js:2444` stops chunking road ribbons and the road becomes a plain
-mesh. A defect that only touches plain geometry is invisible at tier 0 and
-tier 2, and the software probe reports a confident 4.8 % road coverage with
-zero GPU errors in every arm. Set BOTH:
-
-```sh
-node tools/gfx-probe.mjs --backend three --lite \
-  --ls apex26.forceMobileTier=1 --ls 'apex26.gfxPreset="low"' montreal
-```
-
-The preset goes through `GameStore`, so it is a JSON string and the quotes are
-part of the value. The full tier -> feature table is in
-`docs/PERF-FINDINGS.md` §2s "Putting a probe in the configuration that exposes
-the code".
-
-### 2026-09-03 — a soft-present capture is not a frame until a second one differs
-
-Every three-WebGPU probe in this container (Dawn on Lavapipe, `gfx-probe
---backend three --tlx-webgpu --lavapipe`) reported PASS with a dark "dusk, no
-cars, unlit road" frame that survived every route-patched source variant
-byte for byte — because it was the FIRST frame the soft-present overlay ever
-read back. `readRenderTargetPixelsAsync` on a lit frame at phone resolution
-never settled on llvmpipe, `_softReadPending` stayed true, and the 2D overlay
-kept that first (pre-lighting, pre-cars) frame while the game moved on
-underneath. Measured: `awaitSoftPresent` never resolving again after a
-camera move (120 s, three runs), timings `[19109 ms, 120007, 120013, 120004]`
-at a 480×222 viewport, identical PNGs across `nomaps` / `nopos` patches.
-
-What changed: TLX submits NO new frame while a soft-present read is in
-flight (back-pressure: 18,172 presents were queued against one completed
-read in 300 s — a copy queued behind that backlog can never land), abandons
-a readback older than 20 s or three times the last completed read (`SOFT_READ_STALE_MS`, epoch-guarded — a 2 s floor was
-tried first and abandoned EVERY llvmpipe read, which take tens of seconds),
-counts rejected reads in `backendState().softRead`, and `gfx-probe` captures
-twice around an `__apex.orbit` and FAILS when the two captures are identical
-(`frame.stale`; `--no-stale-check` opts out and says so). Two capture rules
-for anyone probing this path:
-
-- **Two captures or it is not a frame.** A single soft-present capture on a
-  slow adapter is evidence of the first readback, not the scene.
-- **Route patches need `serviceWorkers: "block"`.** sw.js precaches the
-  deferred backends, and a Playwright `page.route` never sees a fetch the
-  service worker serves — the patched file simply does not load. Put a
-  `console.log("[patch-live]")` in the patched source and assert it.
-
-The steady-state lit frame on three-WebGPU is correct here (small viewport,
-`artifacts/diag-small/canvas-0.png`: lit car, textured road), so the owner's
-black-car report on an iPhone is WebKit-specific; the GOV panel and
-`__apex.diag().env.backendState` now carry `api`, `gpuErrors` and the first
-GPU/shader error so the next phone screenshot names it.
-
-### 2026-09-03 — the census gate failed on its own script, and what the real GPU said
-
-`gpu-census.yml` run `33757119814` came back FAILURE with every game check
-green: the Verdict step is a `node -e '…'` inside a bash single-quoted string,
-and a comment in it said "three's" — the apostrophe ended the string and node
-was handed half a program (`SyntaxError: Unexpected end of input`). The gate
-failed closed this time; the same slip inside a condition could drop a clause
-and pass. `tests/unit/ci-coverage.test.mjs` now extracts every inline
-`node -e` block from the three workflows exactly as bash would and compiles it
-(`vm.Script`), and refuses any apostrophe in the body.
-
-The run itself is the real-GPU baseline after the WebKit AUTO → three-WebGL2
-change: all four legs `ok`, `gpuErrors 0` (table in
-`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a real GPU). One number
-to carry: three-WebGL2 on ANGLE-Metal spent **16.2 s in a single first frame**
-(program link + synchronous Metal compile of the TSL lit program). The frames
-themselves are on Azure blob storage the container proxy denies — read them in
-the Actions UI.
-
-`tools/wgx-validate.mjs` (live run) now prepends
-`diagnostic(error, derivative_uniformity);` to every module it compiles,
-because that is WebKit's default severity and Dawn's is a console warning:
-a WGSL module that only warns here refuses to build on an iPhone and WGX falls
-back to GLX without a word. `--lax-uniformity` restores Dawn's default to
-bisect a red run. The tree passed on the first run (montreal, 90 frames,
-`gpuErrors 0`, `wgslParseErrors 0`).
-
-### 2026-09-03 — `image-grade-visual` is threshold-marginal on a real GPU
-
-`ci.yml` run 33762205584 (dispatch, `renderer_macos: true`, tip 905ad6c): the
-Metal renderer job failed ONE spec — `image-grade-visual.spec.js › highlights
-predominantly change bright pixels`, bright/dark delta ratio 1.86 against the
-required 2.0 — and `blacks visibly change the deepest image detail` passed
-only on retry (first attempt moved the deepest pixels the wrong way). The
-single allowed re-run was green on the same commit, and the local GLX frame
-on the same tree rendered normally, so this is a flake, not a regression.
-Mechanism: the spec compares two full-page screenshots of a `park()`-frozen
-race, but the render clock keeps advancing between captures (cloud drift,
-sky), and on a 60 fps GPU the two captures are more frames apart than on
-SwiftShader. `__apex.renderClock(t)` exists to pin that and the spec does not
-call it — pin it before each capture pair when this spec is next touched.
-
-### 2026-09-03 — the iPhone's three-WebGPU failure, measured on Dawn before and after
-
-The phone's metrics `log` tab named it: every lit pipeline refused with
-WebKit's "The combined byte size of all variables in the private address
-space exceeds 8192 bytes". The fix was verified here without a phone by
-dumping every WGSL module three generates (scratch `dump-wgsl.mjs`, Dawn on
-Lavapipe, iPhone UA, `artifacts/wgsl-dump-iphone` → `artifacts/wgsl-dump-2`):
-
-| | before | after |
-|---|---|---|
-| lit fragment size | 359 434 B | 99 204 B |
-| module-scope `var<private>` in the lit fragment | 1,597 (~12.4 KB) | 1 (`output`, 16 B) |
-| `vnoise` bodies in the lit fragment | inlined per call | 1 function, 106 calls |
-| Dawn `gpuErrors` / pipelines | 0 / 24 | 0 / 24 |
-
-Dawn compiles both, which is the point: this class of defect is invisible to
-every Chromium run and only a WebKit device or a private-variable count on
-the dump can see it. When a TSL change lands, re-dump and keep the module-scope
-private sum well under 8,192 bytes; the `gfx-backend-canary` pins the patch
-and the noise layouts. The phone is the confirmation step (THREE PATH:
-WEBGPU, one lap, GOV `gfx` row `err 0`).
-
-### 2026-09-03 — the TSL layout pass, measured on the same dumps
-
-Second round of the WebKit work: `matBumpHeight` (lit) and the sky's
-`hash3`/`hash2`/`vnoise`/`fbm` took `setLayout`, so each compiles once as a
-real function instead of being inlined at every call. Dawn dump, iPhone UA,
-`artifacts/wgsl-dump-2` → `artifacts/wgsl-dump-3`:
-
-| module | before | after |
-|---|---|---|
-| lit fragment (instanced) | 99 204 B | 69 707 B |
-| lit fragment (plain) | 99 064 B | 69 567 B |
-| lit fragment (chunked) | 97 267 B | 67 770 B |
-| sky fragment | 40 601 B | 16 780 B |
-| all 33 modules | 473 731 B | 361 406 B |
-
-`main`'s node-variable count fell with it (lit 452 → 354, sky 173 → 62).
-Cumulative with `a6a1566`, the lit fragment is 359 434 B → 69 707 B. The
-figure this aims at is the census's 16.2 s three-WebGL2 first frame on
-ANGLE-Metal, which only `gpu-census.yml` can re-measure. `gpuErrors` 0 and
-24 pipelines in both dumps.
-
+## Operational field notes
+
+Dated measurements of this box and of CI — boot walls, the two-worker factor,
+the instruments that lie here, the real-GPU runs — live in
+[`notes/TESTING-FIELD-NOTES.md`](notes/TESTING-FIELD-NOTES.md). They churn with every
+measurement; §1-§5 above do not.

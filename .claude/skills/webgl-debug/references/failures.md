@@ -68,12 +68,12 @@ expect(err).toBe(0);   // GL_NO_ERROR
 
 ```sh
 # Check HDR mode
-node tools/apex-eval.mjs monza "GLX.hdrMode()" --raw
+node tools/shot/apex-eval.mjs monza "GLX.hdrMode()" --raw
 
 # Light state on a night track (Monza has night:false — use vegas/singapore)
-node tools/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw
+node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw
 ```
 
 For wet-road screen-space reflections specifically,
-`node tools/ssr-probe.mjs --track=<id> --debug=<gates|hitmiss|hitcol|mix>`
+`node tools/gfx/ssr-probe.mjs --track=<id> --debug=<gates|hitmiss|hitcol|mix>`
 (`tools/README.md`).

@@ -887,7 +887,7 @@ const TrackMesh = (function () {
   // same depthBias, same free path, same hideMeshes toggle, no new draw call.
   //
   // Open-coded quads ON PURPOSE — TrackGeom's emitters are traced by
-  // tools/coplanar-audit.cjs, and 22 boxes of addBox would land in every
+  // tools/track/coplanar-audit.cjs, and 22 boxes of addBox would land in every
   // circuit's coplanar baseline. buildStartLine open-codes for the same reason.
   //
   // Real geometry: a 2.7 m box (widened 20 cm in 2023), front and side lines

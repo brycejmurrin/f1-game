@@ -45,7 +45,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { buildContext } = require("../../tools/verify-track.cjs");
+const { buildContext } = require("../../tools/track/verify-track.cjs");
 
 // Same sandbox trick as tests/unit/lamp-density.test.mjs: the lighting files are
 // plain IIFEs assigning one global each, so they load without a browser.

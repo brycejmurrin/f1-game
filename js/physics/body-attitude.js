@@ -76,7 +76,7 @@ function update(c, groundY, dt, ygV, dfFrac) {
   // Downforce stiffens the (virtual) suspension: the caller passes the same
   // dimensionless load term the grip model uses, aeroDfMult(c)·(|v|/vTop())²,
   // so PACE and the flap state stay owned by game.js and no speed literal
-  // reaches this module (tools/vstd-lint.mjs). Null/absent ⇒ unscaled, which
+  // reaches this module (tools/check/vstd-lint.mjs). Null/absent ⇒ unscaled, which
   // is the pre-existing behaviour for any caller that has not been updated.
   const df = dfFrac > 0 ? (dfFrac < 1 ? dfFrac : 1) : 0;
   s.z.v -= (ygV - s.ygV0) * HEAVE_GAIN * (1 - (1 - HEAVE_AERO_FLOOR) * df);

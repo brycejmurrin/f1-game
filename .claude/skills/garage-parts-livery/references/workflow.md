@@ -18,7 +18,7 @@ player at `cost`/`desc` ("cheapest recovery-biased option") instead of a name.
 (`drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in `js/game.js`) consume them.
 Verify in-race via **agent-view** `references/state.md` / `__apex.physState()` (`ersDeploy`,
 `ersRegen`, `drain`, `regen`, `otTime`, `otCool`). Measured deltas:
-`docs/PARTS.md` (`harvest` vs `standard` vs `overcharge`).
+`../../../../docs/CAREER.md` (`harvest` vs `standard` vs `overcharge`).
 
 ## Career ownership is a write/UI gate
 
@@ -29,7 +29,7 @@ resolution.
 
 ## Workflow
 
-1. **Read the contract.** `docs/PARTS.md` and the category block in
+1. **Read the contract.** `../../../../docs/CAREER.md` and the category block in
    `js/car/parts.js`. New options need `visual` + registry if they change
    geometry; SIGNATURE entries must point at a valid `equivalent`.
 2. **Edit catalog → derive, don't duplicate.** Stat multipliers flow through
@@ -43,16 +43,16 @@ resolution.
    `getTeamParts` / `saveTeamParts`; research through `Career.research(opt)`.
 5. **Livery/finish.** Schemes in `js/car/liveries.js`; `fin`/`finArt` for the
    shark fin. Test chrome with `finish: "chrome"`, not `--refl=1` in the viewer
-   (studio-only — see **car-viewer**).
+   (studio-only — see **playwright-probe** `references/car-studio.md`).
 6. **Visual verify** (server on 3456):
    ```sh
    node tools/car/render-car.mjs --team=ferrari --preset=livery --views=tail
-   node tools/audit-parts.mjs --cats=aero
+   node tools/car/audit-parts.mjs --cats=aero
    ```
    Or `tools/carview.html?team=mclaren&aero=extreme`.
-7. **Test and ship.** `node tools/test-bg.mjs car` for catalog/physics/visual
-   recipes; `node tools/test-bg.mjs modes` when you changed research locks or
-   garage ownership UI (there is no `test:career`). Bump via `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`)
+7. **Test and ship.** `node tools/ci/test-bg.mjs car` for catalog/physics/visual
+   recipes; `node tools/ci/test-bg.mjs modes` when you changed research locks or
+   garage ownership UI (there is no `test:career`). Bump via `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`)
    before commit.
 
 ## Common mistakes

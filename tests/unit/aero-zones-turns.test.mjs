@@ -8,7 +8,7 @@
 //
 // Second guard: bahrain and jeddah must NEVER get a turn-pair entry. Their
 // start lines were not re-derived this pass (jeddah's still measures IN A
-// CORNER — tools/startline-probe.cjs), so def.turns[0] is not trustworthy as
+// CORNER — tools/track/startline-probe.cjs), so def.turns[0] is not trustworthy as
 // Turn 1 there, and turn-pair authoring on top of that would silently name
 // the wrong straight instead of failing loud.
 import assert from "node:assert/strict";
@@ -21,7 +21,7 @@ import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require2 = createRequire(import.meta.url);
-const { buildContext } = require2("../../tools/verify-track.cjs");
+const { buildContext } = require2("../../tools/track/verify-track.cjs");
 
 const X_ZONE_K = 0.0014;
 const X_ZONE_STEP = 8;

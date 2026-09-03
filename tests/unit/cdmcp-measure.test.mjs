@@ -9,11 +9,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const MEASURE = path.join(ROOT, "tools/cdmcp-measure.py");
-const LAMPS = path.join(ROOT, "tools/cdmcp-lamps.py");
-const LAMPS_TUNE = path.join(ROOT, "tools/cdmcp-lamps-tune.py");
-const CLI = path.join(ROOT, "tools/cdmcp-cli.py");
-const BG = path.join(ROOT, "tools/cdmcp-bg.mjs");
+const MEASURE = path.join(ROOT, "tools/mcp/cdmcp-measure.py");
+const LAMPS = path.join(ROOT, "tools/mcp/cdmcp-lamps.py");
+const LAMPS_TUNE = path.join(ROOT, "tools/mcp/cdmcp-lamps-tune.py");
+const CLI = path.join(ROOT, "tools/mcp/cdmcp-cli.py");
+const BG = path.join(ROOT, "tools/mcp/cdmcp-bg.mjs");
 
 test("cdmcp-measure.py and cdmcp-bg.mjs exist and are executable-ish", () => {
   assert.ok(fs.existsSync(MEASURE));
@@ -145,7 +145,7 @@ test("look-survey settles 1.6s only on day/dark rebuild, not every weather flip"
 });
 
 test("look-survey-sheet.py writes tracked docs/look-survey grids", () => {
-  const sheet = path.join(ROOT, "tools/look-survey-sheet.py");
+  const sheet = path.join(ROOT, "tools/lighting/look-survey-sheet.py");
   assert.ok(fs.existsSync(sheet));
   const py = fs.readFileSync(sheet, "utf8");
   assert.match(py, /docs\/look-survey/);
@@ -160,7 +160,7 @@ test("sort_combos_min_rebuild groups sessionDark so loadTrack flips once", () =>
   const r = spawnSync("python3", ["-c", `
 import importlib.util
 from pathlib import Path
-p = Path("tools/cdmcp-cli.py")
+p = Path("tools/mcp/cdmcp-cli.py")
 spec = importlib.util.spec_from_file_location("cdmcp_cli", p)
 m = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(m)

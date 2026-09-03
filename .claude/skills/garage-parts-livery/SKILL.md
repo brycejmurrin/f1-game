@@ -1,6 +1,6 @@
 ---
 name: garage-parts-livery
-description: Use when editing the GARAGE parts catalog, livery/finish/shark fin, SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, or Car3D visual recipes. Isolated studio renders → car-viewer; on-track handling → tune-physics.
+description: Use when editing the GARAGE parts catalog, livery/finish/shark fin, SIGNATURE or FACTORY_PRESETS meshes, ersProfile/aeroLoad, career owned-part UI, or Car3D visual recipes. Isolated studio renders → playwright-probe; on-track handling → tune-physics.
 ---
 
 # Garage — parts, livery, and car mesh
@@ -41,8 +41,8 @@ drawn inside the mark and so answers to the mark alone.
 ## When NOT to Use
 
 - Pure driving feel → **tune-physics**. Career economy with no parts edit →
-  **career-mode**. Isolated car shots → **car-viewer**. Cache bump →
-  `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
+  **career-mode**. Isolated car shots → **playwright-probe** (`references/car-studio.md`). Cache bump →
+  `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
 
 ## Quick Reference
 
@@ -58,14 +58,14 @@ drawn inside the mark and so answers to the mark alone.
 | `--refl` | Studio dial — **not** in-game chrome finish |
 
 ```sh
-node tools/test-bg.mjs car
-node tools/test-bg.mjs modes              # research locks / ownership UI — no test:career
-node tools/audit-parts.mjs [--cats=engine,aero]
+node tools/ci/test-bg.mjs car
+node tools/ci/test-bg.mjs modes              # research locks / ownership UI — no test:career
+node tools/car/audit-parts.mjs [--cats=engine,aero]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
 ```
 
-Deep reference: **`docs/PARTS.md`**. Related: **car-viewer**, **career-mode**,
-**tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen-shell.mjs --check`.
+Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **career-mode**,
+**tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.
 
 ## Load on demand
 

@@ -4,20 +4,39 @@ Inventory for `docs/research/TREE-RESTRUCTURE-2026-09.md` §Phase 2 "WGX/TLX
 spike-out (owner's decision)". This is the exact list the Phase 2b move
 window executes. The whole-file move (50 files, 7.69 MB) is
 `tools/moves/spike-backends.json`, validated with
-`node tools/move-tree.mjs tools/moves/spike-backends.json --plan` (0 errors,
+`node tools/gen/move-tree.mjs tools/moves/spike-backends.json --plan` (0 errors,
 73 files rewritten, no leftover bare-name mentions). Everything below is the
 **non-move** edits `move-tree.mjs` cannot make on its own — a manifest map, a
 generated block, a partial-file split, a rewritten assertion — each with
 file:line evidence read from the tree at 66b6618 (2026-09-03), plus the tests
 that go RED the moment the move lands and what fixes each.
 
+## Before you run it: revalidate the map
+
+`tools/moves/` is excluded from the mover's own path sweep, and that exclusion
+is right for an APPLIED plan — its `from` keys are historical literals, and a
+sweep that rewrote them turned a just-landed batch into old===new identity
+entries (2026-09-03). It is wrong for a PENDING one: this map's `from` keys are
+live paths, so any move that lands first leaves them dangling. Phase 4's tools
+move did exactly that to 11 of the 48 entries here.
+
+So `validate()` is the first thing to run, not the move:
+
+```sh
+node -e 'import("./tools/gen/move-tree.mjs").then(m=>console.log(m.validate(process.cwd(), m.loadMoves("tools/moves/spike-backends.json"))))'
+```
+
+An empty array means the map still describes the tree. A `missing:` line means
+a prior phase moved that file — retarget the key through that phase's own map
+before going further.
+
 ## What the plan paragraph got wrong
 
-- **`tools/ssr-probe.mjs`** is not one of "the nine WGX/GPU tools." It has no
+- **`tools/gfx/ssr-probe.mjs`** is not one of "the nine WGX/GPU tools." It has no
   `--backend` flag, no `WGX`/`TLX`/`webgpu` reference at all — it is the
   wet-road SSR probe for GLX only (skill `webgl-debug`, not `webgpu-debug`;
-  `tools/ssr-probe.mjs:3` `@skill webgl-debug`). It stays.
-- **`tools/gpu-game-check.mjs`** cannot move as a whole file: `gpu-census.yml`
+  `tools/gfx/ssr-probe.mjs:3` `@skill webgl-debug`). It stays.
+- **`tools/gfx/gpu-game-check.mjs`** cannot move as a whole file: `gpu-census.yml`
   calls it with `--backend webgl2` for the "Game check — GLX / WebGL2 (the
   default backend)" leg (`.github/workflows/gpu-census.yml:204-213`), and
   `tests/unit/ci-coverage.test.mjs:392-410` pins that exact GLX leg and its
@@ -26,8 +45,8 @@ that go RED the moment the move lands and what fixes each.
   inside it (the `three`/`webgpu`-backend calls at `gpu-census.yml:171-197`
   and `:224-234`) are cut or moved as part of the workflow edit below, not
   the tool.
-- **`tools/road-lut-census.mjs`** is missing from the plan's explicit tool
-  list but is WGX-only (`tools/road-lut-census.mjs:69,75-80` load and read
+- **`tools/gfx/road-lut-census.mjs`** is missing from the plan's explicit tool
+  list but is WGX-only (`tools/gfx/road-lut-census.mjs:69,75-80` load and read
   `WGX.__roadLutTable`, nothing else) and used only by
   `tests/unit/road-lut-frame.test.mjs` and the `webgpu-debug` skill. It is
   added to the move map.
@@ -69,7 +88,7 @@ tools import (`harness.mjs`'s importer list includes `ssr-probe.mjs`,
 both **shrink** (below): they currently re-export/reference
 `webgpu-chrome-args.cjs`, which moves.
 
-## Manifest / roster (tools/manifest.cjs, tools/gen-shell.mjs)
+## Manifest / roster (tools/manifest.cjs, tools/gen/gen-shell.mjs)
 
 - `tools/manifest.cjs:409-415` — the `webgpu:` array in `DEFERRED` (4 files).
   Delete the whole key.
@@ -89,15 +108,15 @@ both **shrink** (below): they currently re-export/reference
   hand-authored HTML comment gen-shell inserts after the GLX tag explaining
   the two DEFERRED backends. Rewrite or delete once there is nothing
   deferred to explain.
-- `tools/gen-shell.mjs:96-107` (`swOptionalFiles`/`swOptionalBlock`) —
+- `tools/gen/gen-shell.mjs:96-107` (`swOptionalFiles`/`swOptionalBlock`) —
   `Object.values(MANIFEST.DEFERRED).flat()` becomes `[]` automatically once
   `DEFERRED` is empty; the generated sw.js block just prints an empty
   "DEFERRED renderer backends" group. Cosmetic — either accept the empty
   group or teach `swOptionalBlock` to skip a title whose file list is empty
   (a small tool edit, not required for correctness).
-- `tools/gen-shell.mjs:125-149` (`rosterSource`) — `DEFERRED`/`DEFERRED_EDGES`
+- `tools/gen/gen-shell.mjs:125-149` (`rosterSource`) — `DEFERRED`/`DEFERRED_EDGES`
   still get written into the generated `js/roster.js` as empty
-  values (`{}`/`[]`). No edit needed; `node tools/gen-shell.mjs` regenerates
+  values (`{}`/`[]`). No edit needed; `node tools/gen/gen-shell.mjs` regenerates
   `js/roster.js`, `index.html`'s tag blocks, `tools/carview.html` and
   `sw.js`'s optional block from the edited manifest automatically. Run it
   once after the manifest edit, not by hand.
@@ -291,9 +310,9 @@ not assert on WGX by name).
   `webgpu/` WGX and `three/` TLX" in the Layout section's `js/render/` bullet.
   Delete this clause; `js/render/` no longer has a DEFERRED subtree.
 - `AGENTS.md:252` — "TLX, and WGX implement it" in the Baked asset pack
-  section (`tools/assets.mjs verify` gates licences). Rewrite to "GLX
+  section (`tools/gen/assets.mjs verify` gates licences). Rewrite to "GLX
   implements it" once the other two backends are gone.
-- `AGENTS.md:288,290,295` — `docs/RENDERERS.md` description ("GLX/WGX/TLX,
+- `AGENTS.md:288,290,295` — `../ARCHITECTURE.md` description ("GLX/WGX/TLX,
   cross-backend parity"), the WGX/WGSL pointer to
   `docs/research/WEBGPU-PARITY.md` (moving), and the two-rule WGSL callout
   ("sampleCount is 1 or 4 ONLY… breaking either makes WGX refuse silently").
@@ -320,9 +339,10 @@ whatever Round-2 subsections are WGX/TLX-only into a new file — `RENDERER-PERF
 placed under `spike/backends/docs/` alongside `WEBGPU-PARITY.md` — leaving the GLX section
 (`:110-191`) and any backend-neutral Round-2 material in place under the
 original path — re-verify the split against `docs-integrity.test.mjs`'s
-broken-link and doc-index checks afterward (this doc is a `docs/research/`
-file, exempt from the broken-path checker but NOT from the docs/README index
-checks if it stays listed).
+broken-link and doc-index checks afterward. NOTE, changed 2026-09-03: this
+doc moved to `docs/notes/`, which is NOT exempt from the broken-path checker —
+`docs/notes/` is walked as a live doc for both path existence and relative-link
+resolution, and is exempt only from the archive-referrer rule.
 
 ## `mcp-probe` skill — partial-file split
 
@@ -369,18 +389,18 @@ grep (excludes the docs archive directory, excludes files already covered above)
 | `js/car/car-mesh.js:275-276` | shrink | Comment: "no backend has ever had a deleteMesh (GLX, TLX and WGX all expose freeMesh…)". Rewrite to name GLX only. |
 | `types/game-ctx.d.ts:128,130,491` | shrink | `GfxBackend` type comment says "GLX by default; TLX/WGX when opted in" — rewrite once opting in is impossible. |
 | `bench.html:408,431-432` | shrink | Reads `GLX.__tlx` to report which "three" backend is bound; with TLX gone `GLX.__tlx` is always undefined and the field always reads GLX's own webgl2 state — degrades safely, not wrong. Shrink at leisure. |
-| `docs/CONSOLE-RECIPES.md:177-197` | delete | The whole "Three.js DevTools extension" subsection instructs the reader to opt into `apex26.gfxBackend='three'` and use `__tlx.*` probes — none of this works once TLX is gone. Delete the subsection. |
+| `../DEBUG-HOOKS.md:177-197` | delete | The whole "Three.js DevTools extension" subsection instructs the reader to opt into `apex26.gfxBackend='three'` and use `__tlx.*` probes — none of this works once TLX is gone. Delete the subsection. |
 | `docs/DEBUG-HOOKS.md:692,739,759` | shrink | `__apex` hook docs mentioning WGX's texture-array path and the `stored` overrides table listing `gfxBackend`. Trim the WGX-specific clause at `:692`; the `stored` table entry at `:759` can stay (the key still round-trips harmlessly) or be pruned for accuracy. |
-| `docs/AGENT-SURFACE.md:29,36,110,122,128,153` | shrink/pointer | The `chrome-devtools` MCP row's "WebGPU flags" clause (`:29`), the `apex_wgx_validate_static`/`apex_gfx_probe` rows (`:122,128` — these tools move, so their MCP wrap rows are removed too, along with the `apex-tools-mcp.mjs` wrap registrations at `tools/apex-tools-mcp.mjs:326-328,414-420,537-538,574-576` and the `apex_wgx_validate`/`apex_wgx_validate_static` entries `tests/unit/apex-tools-mcp.test.mjs:167,184` pins), the tools/README pointer row at `:153`. |
+| `docs/AGENT-SURFACE.md:29,36,110,122,128,153` | shrink/pointer | The `chrome-devtools` MCP row's "WebGPU flags" clause (`:29`), the `apex_wgx_validate_static`/`apex_gfx_probe` rows (`:122,128` — these tools move, so their MCP wrap rows are removed too, along with the `apex-tools-mcp.mjs` wrap registrations at `tools/mcp/apex-tools-mcp.mjs:326-328,414-420,537-538,574-576` and the `apex_wgx_validate`/`apex_wgx_validate_static` entries `tests/unit/apex-tools-mcp.test.mjs:167,184` pins), the tools/README pointer row at `:153`. |
 | `docs/ARCHITECTURE.md:8,40-41,150,162-337` (35 hits) | delete/shrink | The `js/render/` module table entries for WGX/TLX, the whole "GLX/WGX/TLX" renderer-selection section (`:229-337`, the biggest single block: boot-canary explanation, the DEFERRED/opt-in table, WGX gap list, TLX façade wiring). This is the live architecture doc's renderer chapter — it needs a substantial rewrite to describe GLX-only rendering, not a one-line pointer. Budget real editing time here in the move window. |
-| `docs/ARCHITECTURE-REVIEW.md:136-157,469,526-532,568-569,615,668-679` | shrink | Standing-assessment prose about the three-backend cost/parity tradeoff and specific WGX/TLX defect notes (the `tlx-probes` M6 skid red-test discussion at `:668-679` describes a test that is about to move — either delete that discussion or move it into the spike's own provenance notes). |
+| `ARCHITECTURE-REVIEW.md:136-157,469,526-532,568-569,615,668-679` | shrink | Standing-assessment prose about the three-backend cost/parity tradeoff and specific WGX/TLX defect notes (the `tlx-probes` M6 skid red-test discussion at `:668-679` describes a test that is about to move — either delete that discussion or move it into the spike's own provenance notes). |
 | `docs/LIGHTING-TUNER-SLIDERS.md:227,444,448` | shrink | "three backends" framing in the slider-parity table intro; rewrite to describe GLX only once WGX/TLX are gone (or note the sliders' spike-only knobs are moot). |
-| `docs/README.md` renderer section | shrink + pointer (see index row below) | Rewrite the "Renderers (GLX / WGX / TLX)" subsection to describe GLX only, point at `spike/backends/README.md` for the other two, and update the RENDERERS.md row's one-line description. |
-| `docs/RENDERERS.md` (whole doc) | major shrink | This is THE renderer architecture doc — "three-renderer architecture" title, `## Who does what`, `## Frame pipeline (all three)`, `## Boot/safety`, `## Screenshots — why WebGPU can look black`, `## Parity snapshot`, `## Cross-backend parity`, `## Boot evidence`. Nearly every section assumes three backends. This is a full rewrite to a GLX-only renderer doc plus a pointer to the spike, not a trim — budget the most editing time here of any single doc. |
+| `docs/README.md` renderer section | shrink + pointer (see index row below) | Rewrite the "Renderers (GLX / WGX / TLX)" subsection to describe GLX only, point at `spike/backends/README.md` for the other two, and update the ../ARCHITECTURE.md row's one-line description. |
+| `../ARCHITECTURE.md` (whole doc) | major shrink | This is THE renderer architecture doc — "three-renderer architecture" title, `## Who does what`, `## Frame pipeline (all three)`, `## Boot/safety`, `## Screenshots — why WebGPU can look black`, `## Parity snapshot`, `## Cross-backend parity`, `## Boot evidence`. Nearly every section assumes three backends. This is a full rewrite to a GLX-only renderer doc plus a pointer to the spike, not a trim — budget the most editing time here of any single doc. |
 | `docs/TESTING.md` (10+ hits: WGX/TLX group descriptions, the `tlx-probes` M6/M9 timeout case studies, spec coverage table rows for `tlx-probes.spec.js`/`webgpu-lifecycle.test.mjs`/`renderer-soft-lifecycle.test.mjs`/`road-lut-frame.test.mjs`/`gfx-backend-canary.test.mjs`) | shrink | Remove the coverage-table rows for the four moved test files; `gfx-backend-canary.test.mjs` stays (rewritten, not moved — see RED tests below) so its row stays too, edited to describe the GLX-only scope. |
-| `docs/PERF-FINDINGS.md` (10 hits) | shrink | Perf case studies citing `gfx-probe.mjs`/`gpu-game-check.mjs`/`wgx-capture.mjs`/`tlx-pack-check.cjs` by path. Dated findings — leave as historical record with a note, or move the WGX/TLX-specific findings into the spike's own notes if they are still load-bearing evidence for anything (they are not cited by any live guard per the grep above). |
+| `PERF-FINDINGS.md` (10 hits) | shrink | Perf case studies citing `gfx-probe.mjs`/`gpu-game-check.mjs`/`wgx-capture.mjs`/`tlx-pack-check.cjs` by path. Dated findings — leave as historical record with a note, or move the WGX/TLX-specific findings into the spike's own notes if they are still load-bearing evidence for anything (they are not cited by any live guard per the grep above). |
 | `docs/notes/CEILING-HISTORY.md` (5 hits) | keep | Ratchet history for `js/render/webgpu/wgx.js` and `js/render/three/tlx.js` lines — this is provenance (why the ceiling moved) for files about to leave the ratchets.json table (below). Leave as-is; it is dated history, not a live claim. |
-| `docs/research/CI-RENDERING-PERFORMANCE.md`, `BUG-HUNT-2026-09-02.md`, `PERF-HUNT-2026-08-18.md`, `SURVEY-BUGS-PERF-2026-08-17.md`, `ENGINEERING-PRACTICE-NOTES.md` | keep | All under `docs/research/`, exempt from the docs-integrity broken-path checker (research is dated record, per `docs/README.md`'s own framing). No edit required; they remain accurate as history of what was investigated when WGX/TLX were live. |
+| `CI-RENDERING-PERFORMANCE.md`, `BUG-HUNT-2026-09-02.md`, `PERF-HUNT-2026-08-18.md`, `ENGINEERING-PRACTICE-NOTES.md` | keep | Moved to `docs/notes/` by the Phase 5 docs pass (2026-09-03); `SURVEY-BUGS-PERF-2026-08-17.md` went to the attic in the same pass. Dated records either way. No edit required; they remain accurate as history of what was investigated when WGX/TLX were live. |
 | `.claude/skills/asset-pack/SKILL.md:16-17`, `references/workflow.md:12-21,67,78` | shrink | "GLX, TLX, and WGX all implement the arrays" claims — rewrite to GLX-only once the other backends cannot bind. Functionally harmless if left (a `supported: false` on an absent global still reads as "not supported," same outcome) but stale documentation. |
 | `.claude/skills/webgl-debug/SKILL.md` | keep | Only 1 hit found in the earlier grep pass and it is incidental (backend-neutral framing) — no edit needed. |
 | `.claude/skills/pwa-cache-service-worker/SKILL.md:16`, `references/workflow.md:54` | shrink | Cites the DEFERRED backends and the sw.js optional-entry trap — rewrite once DEFERRED is empty; the trap itself (forgetting an sw.js optional entry) still applies generically, so keep the lesson, drop the WGX/TLX example. |
@@ -395,11 +415,11 @@ grep (excludes the docs archive directory, excludes files already covered above)
 
 | Guard | Why it goes red | Fix |
 |---|---|---|
-| `tests/data/ratchets.json` — `js/render/webgpu/wgx.js` (6037 lines), `js/render/three/tlx.js` (3132), `js/render/webgpu/wgsl-chunks.js` (1934), `js/render/three/tsl-lit.js` (1777) entries | `tools/ratchets.mjs` (`node --test tests/unit/ratchets.test.mjs`) reads each `files` key as a path and fails with `missing: true` (`tools/ratchets.mjs:55`) when the file no longer exists — `tests/unit/ratchets.test.mjs:14` asserts `rows.filter(r => r.missing)` is empty. | Delete the four `js/render/webgpu/wgx.js` / `js/render/three/tlx.js` / `js/render/webgpu/wgsl-chunks.js` / `js/render/three/tsl-lit.js` entries from `tests/data/ratchets.json`'s `files` object. (`js/render/glx/glx.js` at 2259 lines stays.) |
+| `tests/data/ratchets.json` — `js/render/webgpu/wgx.js` (6037 lines), `js/render/three/tlx.js` (3132), `js/render/webgpu/wgsl-chunks.js` (1934), `js/render/three/tsl-lit.js` (1777) entries | `tools/check/ratchets.mjs` (`node --test tests/unit/ratchets.test.mjs`) reads each `files` key as a path and fails with `missing: true` (`tools/check/ratchets.mjs:55`) when the file no longer exists — `tests/unit/ratchets.test.mjs:14` asserts `rows.filter(r => r.missing)` is empty. | Delete the four `js/render/webgpu/wgx.js` / `js/render/three/tlx.js` / `js/render/webgpu/wgsl-chunks.js` / `js/render/three/tsl-lit.js` entries from `tests/data/ratchets.json`'s `files` object. (`js/render/glx/glx.js` at 2259 lines stays.) |
 | `tests/unit/load-order.test.mjs:172-181` ("DEFERRED_EDGES leave more than one TLX file ready at wave 0") | Asserts on `ApexRoster.DEFERRED_EDGES`/wave-0 shape that no longer exists once `DEFERRED` is `{}`. | Delete this test (and any sibling DEFERRED-wave assertions in the same file that assume a non-empty `DEFERRED`). |
 | `tests/unit/global-registry.test.mjs:60,148` (`TLXShaders: 8` writer count, DEFERRED-only-global crash guard) | The `GlobalRegistry` entry for `TLXShaders` (multi-writer accumulator, 8 files write it) has no files left once `js/render/three/*` moves — the registry scan finds 0 writers, not 8, and the test's declared count goes stale/fails. | Delete the `TLXShaders` (and any `WGXShaders`-equivalent, if one exists — grep did not surface a separate entry) row from the registry table. |
 | `tests/unit/ci-coverage.test.mjs:392-410` | Pins `gpu-census.yml`'s exact WGX-leg source text (`--backend webgpu`, the `tlxLeg`/`path3` regex, `r.wgx = typeof g.softPresent`). Goes red the moment those workflow lines move/delete. | Delete or rewrite the test to match whatever `gpu-census.yml` looks like after the workflow edit (delete outright if the WGX/TLX legs are cut rather than kept in reduced form). |
-| `tests/unit/mcp-cli.test.mjs:72-177` (`--backend webgpu`/`--tlx-webgpu`/`--tlx-auto` flag tests, the `webgpu-chrome-args.cjs` sync check) | `tools/mcp-cli.mjs` still has this flag surface in the shipped tree (mcp-cli.mjs itself is not in the move map — it is a general MCP driver, not WGX/TLX-only, used for GLX probing too). Its WGX/TLX-specific flags (`--backend webgpu`, `--tlx-webgpu`, etc.) become dead once no backend can bind, but the flags and their tests do not automatically break — they still set localStorage keys and reload; the reload just lands on GLX regardless of the pick. **Judgment call**: either strip the WGX/TLX flag surface from `mcp-cli.mjs` (making these tests obsolete — delete them) or leave `mcp-cli.mjs` as a generic prober that happens to have dead flags (tests stay green, doing nothing useful). Recommend stripping, since a probe flag that silently does nothing is worse than one that errors. |
+| `tests/unit/mcp-cli.test.mjs:72-177` (`--backend webgpu`/`--tlx-webgpu`/`--tlx-auto` flag tests, the `webgpu-chrome-args.cjs` sync check) | `tools/mcp/mcp-cli.mjs` still has this flag surface in the shipped tree (mcp-cli.mjs itself is not in the move map — it is a general MCP driver, not WGX/TLX-only, used for GLX probing too). Its WGX/TLX-specific flags (`--backend webgpu`, `--tlx-webgpu`, etc.) become dead once no backend can bind, but the flags and their tests do not automatically break — they still set localStorage keys and reload; the reload just lands on GLX regardless of the pick. **Judgment call**: either strip the WGX/TLX flag surface from `mcp-cli.mjs` (making these tests obsolete — delete them) or leave `mcp-cli.mjs` as a generic prober that happens to have dead flags (tests stay green, doing nothing useful). Recommend stripping, since a probe flag that silently does nothing is worse than one that errors. |
 | `tests/unit/skill-progressive.test.mjs:106,127,141,225-236,405-467,478-482` | Multiple tests assert on `webgpu-debug/SKILL.md`'s and `webgpu-debug/references/defects.md`'s content, plus the `webgpu-debug` skill's presence in `.claude/skills/README.md` and the `wgx-capture.mjs` row in `tools/README.md` pairing with `webgpu-debug`. All of these move or are deleted. | Delete the `webgpu-debug`-specific test cases; remove the skill's row from `.claude/skills/README.md` (the docs-integrity "skills index lists every skill" guard requires this — a row naming a skill directory that no longer exists under `.claude/skills/` fails the OTHER direction of that same guard once the skill moves). |
 | `tests/unit/tools-runnable.test.mjs:255,259,502-509` | Runs `pick-tests.mjs js/render/three/tlx.js` and `wgx-validate.mjs --static` as smoke tests, and asserts `wgx-gallery.mjs`/`wgx-shot.mjs` forwarding. All three tools/paths move. | Delete these three test cases (or point them at `spike/backends/tools/...` if the move window decides the spike keeps its OWN smoke-tested tools — out of scope for this inventory, a move-window decision). |
 | `tests/unit/backend-surface-parity.test.mjs` | See dedicated section above — rewritten, not deleted. | GLX-vs-`gfx.js`-header comparison, per the plan. |
@@ -408,7 +428,7 @@ grep (excludes the docs archive directory, excludes files already covered above)
 | `tests/unit/perf-try.test.mjs` (28 hits, `tests/unit/perf-governor.test.mjs` 6 hits) | Both files assert PerfGov/PerfTry gating logic is IDENTICAL across `js/render/webgpu/wgsl-*.js`, `js/render/webgpu/wgx.js`, and `js/render/three/tsl-*.js`/`tlx*.js` by reading and regex-matching those sources directly. | Delete every assertion block that reads a moved file; keep the GLX-only assertions (both files also test `js/render/glx/glx.js`/`js/render/shaders/*.js` extensively — those stay). This is the largest single per-test edit burden in the whole move: budget real time here, not a one-line fix. |
 | `tests/unit/perf-governor.test.mjs:449-533` | Same class — TLX/WGX carReflect, sunShaft, wet-mirror parity assertions. | Same fix — delete the moved-file assertions, keep GLX's. |
 | `tests/unit/ui-sheets-audit.test.mjs:255-310` (RENDERER select option-text and pick-persistence tests) | Asserts `optText()` returns `["WEBGL2", "THREE.JS", "WEBGPU"]` and that selecting `"three"`/`"webgpu"` persists to `apex26.gfxBackend`. Goes red once `BACKENDS` shrinks to `["webgl2"]` (renderer-picker.js edit above). | Rewrite to assert the single-stop (or removed) control's actual new behaviour. |
-| `tests/unit/apex-tools-mcp.test.mjs:167,184` (`apex_wgx_validate_static`, `apex_wgx_validate` catalog entries) | Asserts these MCP tool names exist in the `apex-tools` catalog. The wraps are removed from `tools/apex-tools-mcp.mjs` (AGENT-SURFACE.md section above). | Delete these two assertions (and any `apex_gfx_probe` one, if that wrap is also cut — the tool moves, so its MCP wrap should go with it). |
+| `tests/unit/apex-tools-mcp.test.mjs:167,184` (`apex_wgx_validate_static`, `apex_wgx_validate` catalog entries) | Asserts these MCP tool names exist in the `apex-tools` catalog. The wraps are removed from `tools/mcp/apex-tools-mcp.mjs` (AGENT-SURFACE.md section above). | Delete these two assertions (and any `apex_gfx_probe` one, if that wrap is also cut — the tool moves, so its MCP wrap should go with it). |
 | `tests/unit/comment-citations.test.mjs` (1 hit, `js/render/webgpu/wgsl-chunks.js` cited-count example in its own header comment) | Just an illustrative example in a comment, not an assertion against a live count — check before assuming red; likely fine as historical color. | Verify at move time; probably no fix needed. |
 | `tests/unit/track-foundation.test.mjs` (1 hit) | Grep hit only — verify at move time whether it is a live path assertion or an incidental comment; not confirmed red from this pass. | Re-check when the file list is final. |
 | `package.json` `"test:gfx"` (line 12), `"wgx:gallery"`/`"wgx:capture"` scripts (lines naming `wgx-shot.mjs`/`wgx-capture.mjs`) | The two `wgx:*` npm scripts point at tools that move; `test:gfx` names `tlx-probes.spec.js`. | Delete `"wgx:gallery"` and `"wgx:capture"` from `scripts`, or repoint them at `spike/backends/tools/...` if the spike keeps its own npm entry points (move-window decision). Drop `tlx-probes.spec.js` from `test:gfx`'s spec list. |
@@ -431,7 +451,7 @@ engineering doc" test only requires the filename appear somewhere in
 matching the existing `notes/CEILING-HISTORY.md` row's pattern):
 
 ```
-| [notes/SPIKE-BACKENDS-CHECKLIST.md](notes/SPIKE-BACKENDS-CHECKLIST.md) | The WGX/TLX spike-out inventory: the move map, every non-move edit with file:line evidence, the tests that go red and their fixes, the `spike/backends/README.md` re-attach draft. |
+| [SPIKE-BACKENDS-CHECKLIST.md](SPIKE-BACKENDS-CHECKLIST.md) (this file) | The WGX/TLX spike-out inventory: the move map, every non-move edit with file:line evidence, the tests that go red and their fixes, the `spike/backends/README.md` re-attach draft. |
 ```
 
 This note itself must pass `docs-integrity.test.mjs`'s "live docs reference

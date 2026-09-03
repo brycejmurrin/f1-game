@@ -1,6 +1,6 @@
 /* gen-arch-table.test.mjs — the module index of docs/ARCHITECTURE.md cannot drift.
  *
- * Same idiom as generated-docs.test.mjs: tools/gen-arch-table.mjs derives the
+ * Same idiom as generated-docs.test.mjs: tools/gen/gen-arch-table.mjs derives the
  * `<!-- @gen-arch:modules -->` block from tools/manifest.cjs + each file's
  * header comment, and `--check` exits 1 when the committed doc is not
  * byte-identical to a fresh regeneration. This test runs that mode and adds
@@ -23,7 +23,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { collect, headerSentence, fileGlobal, rosterOf, OPEN, CLOSE } from "../../tools/gen-arch-table.mjs";
+import { collect, headerSentence, fileGlobal, rosterOf, OPEN, CLOSE } from "../../tools/gen/gen-arch-table.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
@@ -31,11 +31,11 @@ const MANIFEST = require("../../tools/manifest.cjs");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
 test("docs/ARCHITECTURE.md matches a fresh `gen-arch-table.mjs --check`", () => {
-  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/gen-arch-table.mjs"), "--check"],
+  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/gen/gen-arch-table.mjs"), "--check"],
     { encoding: "utf8", cwd: ROOT });
   assert.equal(r.status, 0,
     `docs/ARCHITECTURE.md's module index is stale or the generator failed (exit ${r.status}).\n${r.stdout}${r.stderr}\n` +
-    "Regenerate with: node tools/gen-arch-table.mjs");
+    "Regenerate with: node tools/gen/gen-arch-table.mjs");
 });
 
 test("every non-data manifest file gets exactly one row", () => {

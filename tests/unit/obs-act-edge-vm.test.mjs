@@ -1,5 +1,5 @@
 /* obs-act-edge-vm.test.mjs — tests/specs/obs-act-edge.spec.js replayed in the
- * Node VM (tools/game-vm.cjs): act()/reset()/obs() boundary conditions, the
+ * Node VM (tools/lib/game-vm.cjs): act()/reset()/obs() boundary conditions, the
  * lap seam, scan wrap-around and numeric stability, with the SAME assertions.
  *
  * Ported: all 16 tests (the three multi-track seam tests race monaco, suzuka
@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const closeTo = (r, e, d, m) => assert.ok(Math.abs(e - r) < Math.pow(10, -d) / 2, m || `${r} not within 10^-${d}/2 of ${e}`);
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);

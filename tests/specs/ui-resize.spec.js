@@ -75,7 +75,7 @@ async function waitReady(page) {
   // main-thread time, which is the exact class of flakiness AGENTS.md documents
   // for a page that renders under SwiftShader ("a page running the game loop
   // starves that poll badly enough that the declared timeout never gets to
-  // fire"). Every other layout tool in this repo (tools/layout-audit.mjs, the
+  // fire"). Every other layout tool in this repo (tools/ui/layout-audit.mjs, the
   // menu-survey specs) calls headless(true) before doing timing-sensitive DOM
   // waits for the same reason; this file was the one that did not.
   // MEASURED without it, on a genuinely idle box with nothing else running:

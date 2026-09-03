@@ -22,22 +22,22 @@ The harness hardcodes 12 of the game's **13** `CAM_MODES` (`js/camera/mode-switc
 `park(0.1)` (10% lap) for every shot; a different fraction needs a custom sweep
 with `previewCam(mode, frac)` (mode FIRST — it is validated first and the call
 silently returns `false` if the arguments are swapped) or a fork of
-`tools/capture/apex-capture.mjs`.
+`tools/shot/apex-capture.mjs`.
 
 To include **drift**, append it to the `CAMS` array in `apex-capture.mjs` (or
 run a one-off):
 
 ```sh
-node tools/apex-eval.mjs monza "(a.park(0.18), a.camera('drift'), a.snapCam())"
+node tools/shot/apex-eval.mjs monza "(a.park(0.18), a.camera('drift'), a.snapCam())"
 # then screenshot the canvas, or duplicate the cameras fanout with CAMS.push('drift')
 ```
 
 For arbitrary lap fractions without forking, use `shot.mjs` with your `frac` arg
-or a `previewCam` loop (see **debug-cameras**).
+or a `previewCam` loop (see `cameras.md`).
 
 ## Why one server + Chromium workers
 
-`tools/capture/apex-capture.mjs` uses **one async Node static server** and fans jobs
+`tools/shot/apex-capture.mjs` uses **one async Node static server** and fans jobs
 across separate Chromium worker processes. For sweeps (12 camera modes, 40
 tracks, day/night/wet variants), the shared server handles concurrent asset
 GETs while workers pull the next job as they finish. Extra Python servers only
@@ -79,7 +79,7 @@ helped asset fetch; they are not the current harness.
    ```
    **`shot.mjs` calls `snapCam()` automatically for `park` mode**; for `orbit` /
    `eye` / `cinematic` / `trackside` it sets `dbgCam` directly (no snapCam — and
-   never call snapCam after orbit; see **debug-cameras**). Waiting longer is not a
+   never call snapCam after orbit; see `cameras.md`). Waiting longer is not a
    fix (the ease is slow and `freeze()` can hold it). Symptom: eye-to-car distance
    in the hundreds of metres when chase should read ~5.8 m.
 
@@ -117,8 +117,8 @@ const results = await Promise.all(TRACKS.map(async (id) => {
 ```
 
 Use this to validate work from the camera / track / state debug skills
-(`debug-cameras`, `debug-tracks`, `agent-view` state hooks) at scale. For single
-deterministic screenshots, `tools/capture/shot.mjs` is simpler. It clips
+(`cameras.md`, and **agent-view**'s track-geometry and state hooks) at scale. For single
+deterministic screenshots, `tools/shot/shot.mjs` is simpler. It clips
 `canvas#game` with `page.screenshot({ clip })` — do not use
 `locator("canvas#game").screenshot()`, which waits for element stability a live
 WebGL canvas never reaches.

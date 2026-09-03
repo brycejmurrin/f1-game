@@ -386,10 +386,10 @@ self.addEventListener("fetch", (event) => {
   // post-release, so a cache hit is always correct — no revalidation needed.
   //
   // EXCEPT on a dev host. The committed shell reads `?v=dev` for every asset
-  // (tools/gen-shell.mjs; hashes exist only in the deploy's staged copy), so a
+  // (tools/gen/gen-shell.mjs; hashes exist only in the deploy's staged copy), so a
   // cache-first worker on localhost would pin the first js/css it saw for the
   // life of the cache generation. Network-first there, cache as the offline
-  // fallback — tools/offline-precache-check.cjs still passes because the
+  // fallback — tools/check/offline-precache-check.cjs still passes because the
   // fallback is the precache.
   event.respondWith((async () => {
     if (DEV_HOST && url.origin === self.location.origin) {

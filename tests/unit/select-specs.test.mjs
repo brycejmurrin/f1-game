@@ -9,16 +9,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
-  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS } from "../../tools/select-specs.mjs";
-import { pick } from "../../tools/pick-tests.mjs";
-import { failedSpecsFrom } from "../../tools/junit-failed.mjs";
-import { recall } from "../../tools/select-recall.mjs";
-import { MEASURED, capacity } from "../../tools/select-budget.mjs";
+  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS } from "../../tools/ci/select-specs.mjs";
+import { pick } from "../../tools/ci/pick-tests.mjs";
+import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
+import { recall } from "../../tools/ci/select-recall.mjs";
+import { MEASURED, capacity } from "../../tools/ci/select-budget.mjs";
 
 const SCRIPTS = {
-  "test:one": "node tools/run-playwright.mjs tests/specs/smoke.spec.js",
-  "test:two": "node tools/run-playwright.mjs tests/specs/smoke.spec.js tests/specs/logging.spec.js",
-  "test:glob": "node tools/run-playwright.mjs tests/specs/physics-*.spec.js",
+  "test:one": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js",
+  "test:two": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js tests/specs/logging.spec.js",
+  "test:glob": "node tools/ci/run-playwright.mjs tests/specs/physics-*.spec.js",
   "test:node": "node --test tests/unit/select-specs.test.mjs",
 };
 

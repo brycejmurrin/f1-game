@@ -78,7 +78,7 @@ jobs:
   #
   # The cost, stated plainly: the published tip can include a commit whose own ci
   # run has not finished. That is acceptable HERE and only here — every push to
-  # this branch goes through `tools/deploy.mjs`, which runs the Pages gate's node
+  # this branch goes through `tools/ci/deploy.mjs`, which runs the Pages gate's node
   # suites before it pushes — and it is strictly better than the status quo,
   # which published nothing at all.
   current-tip:
@@ -199,10 +199,10 @@ jobs:
           # published. Still monotonic: the tip's count only ever grows.
           PUBLISH_SHA="${{ steps.tipsha.outputs.sha }}"
           BUILD=$(( 2000 + $(git rev-list --count HEAD) ))
-          node tools/bump-cache.mjs --apply --at "$BUILD" --root _site
+          node tools/ci/bump-cache.mjs --apply --at "$BUILD" --root _site
           sed -i "s|<meta name=\"apex-build\" content=\"$BUILD\">|<meta name=\"apex-build\" content=\"$BUILD\">\n<meta name=\"apex-sha\" content=\"$PUBLISH_SHA\">|" _site/index.html
           grep -q 'name="apex-sha"' _site/index.html
-          node tools/bump-cache.mjs --check --json --root _site
+          node tools/ci/bump-cache.mjs --check --json --root _site
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "stamped build $BUILD for $PUBLISH_SHA"
       # Artifact name is scoped to the RUN ATTEMPT: artifacts survive across

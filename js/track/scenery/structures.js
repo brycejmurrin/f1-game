@@ -499,7 +499,7 @@ const SceneryStructures = (function () {
     // `<`/`>` do not). All eight call sites below pass literal lo < hi and a
     // finite number — every `rows`/`tiers`/`density` in js/circuits/ is a
     // numeric literal — so the swap is output-identical, verified by
-    // tools/verify-track.cjs. Migrated rather than left so the divergence
+    // tools/track/verify-track.cjs. Migrated rather than left so the divergence
     // cannot be mistaken for intent later.
     const clamp = M4.clamp;
 

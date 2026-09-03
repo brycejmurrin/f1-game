@@ -10,7 +10,7 @@
 // Only same-facing pairs count. Back-face culling is on and addBox winds the
 // outward face, so an anti-parallel coplanar pair — a window pane's inner face
 // against its wall, a stacked mass section, a kerb on terrain — has exactly one
-// face rasterised and cannot fight. tools/coplanar-audit.cjs gates on
+// face rasterised and cannot fight. tools/track/coplanar-audit.cjs gates on
 // dot(nA,nB) >= 0.999 so that entire legitimate population is excluded by
 // construction rather than by heuristic.
 //
@@ -109,14 +109,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // fallback, not the first move, and "restored props cost overlap spots" is a
 // trade worth one more attempt at the geometry before it is written down.
 const BASELINE = JSON.parse(
-  readFileSync(path.join(ROOT, "tools", "coplanar-baseline.json"), "utf8"),
+  readFileSync(path.join(ROOT, "tools", "track", "coplanar-baseline.json"), "utf8"),
 );
 
 // The sweep rebuilds every circuit, so run it ONCE and share it.
 let cached = null;
 const sweep = () => (cached ||= JSON.parse(execFileSync(
   process.execPath,
-  [path.join(ROOT, "tools", "coplanar-audit.cjs"), "--all", "--json"],
+  [path.join(ROOT, "tools", "track", "coplanar-audit.cjs"), "--all", "--json"],
   { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
 )));
 

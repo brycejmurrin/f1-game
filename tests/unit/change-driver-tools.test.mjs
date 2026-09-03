@@ -1,6 +1,6 @@
 "use strict";
 // change-driver-tools — contracts for the verification drivers
-// (tools/verify-change.mjs, tools/bump-cache.mjs, tools/test-honesty.mjs).
+// (tools/ci/verify-change.mjs, tools/ci/bump-cache.mjs, tools/ci/test-honesty.mjs).
 //
 // These three exist to make AGENTS.md rules executable (one browser group per
 // batch, bump-is-last-edit, no silent skips). A driver that drifts from the
@@ -26,7 +26,7 @@ const run = (args, opts = {}) => {
 // ── verify-change --plan ─────────────────────────────────────────────────────
 
 test("verify-change routes a circuit edit to verify-track and graph.js to graph-parity", () => {
-  const plan = JSON.parse(run(["tools/verify-change.mjs", "--plan",
+  const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan",
     "js/circuits/monza.js", "js/track/scenery/graph.js"]).out);
   assert.deepEqual(plan.fast.verifyTrack, ["monza"]);
   assert.equal(plan.fast.graphParity, true);
@@ -37,7 +37,7 @@ test("verify-change routes a circuit edit to verify-track and graph.js to graph-
 test("verify-change batches carry AT MOST ONE browser group each (the 120s-timeout rule)", () => {
   // game.js fans out to the widest selection this repo has; if the rule holds
   // there it holds everywhere.
-  const plan = JSON.parse(run(["tools/verify-change.mjs", "--plan", "js/game.js", "index.html", "css/hud.css"]).out);
+  const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "js/game.js", "index.html", "css/hud.css"]).out);
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   const isBrowser = (g) => /run-playwright/.test(pkg.scripts[`test:${g}`]);
   assert.ok(plan.batches.length >= 1, "a game.js change must select browser groups");
@@ -49,7 +49,7 @@ test("verify-change batches carry AT MOST ONE browser group each (the 120s-timeo
 });
 
 test("verify-change batches are size 1 (sequential groups, browser or node)", () => {
-  const plan = JSON.parse(run(["tools/verify-change.mjs", "--plan", "js/game.js", "tools/test-bg.mjs"]).out);
+  const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "js/game.js", "tools/ci/test-bg.mjs"]).out);
   assert.ok(plan.batches.length >= 1);
   for (const batch of plan.batches) {
     assert.equal(batch.length, 1,
@@ -59,20 +59,20 @@ test("verify-change batches are size 1 (sequential groups, browser or node)", ()
 
 test("tooling-fast npm script uses the sequential runner", () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
-  assert.match(pkg.scripts["test:tooling-fast"], /tools\/tooling-fast\.mjs/,
-    "test:tooling-fast must invoke tools/tooling-fast.mjs (concurrency=1 + per-file logging)");
-  assert.ok(fs.existsSync(path.join(ROOT, "tools/tooling-fast.mjs")));
+  assert.match(pkg.scripts["test:tooling-fast"], /tools\/ci\/tooling-fast\.mjs/,
+    "test:tooling-fast must invoke tools/ci/tooling-fast.mjs (concurrency=1 + per-file logging)");
+  assert.ok(fs.existsSync(path.join(ROOT, "tools/ci/tooling-fast.mjs")));
 });
 
 test("test-bg defaults to sequential (one concurrent group) unless --parallel", () => {
-  const src = fs.readFileSync(path.join(ROOT, "tools/test-bg.mjs"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "tools/ci/test-bg.mjs"), "utf8");
   assert.match(src, /--parallel/, "test-bg must expose --parallel for the old concurrent start");
   assert.match(src, /sequential|maxConcurrent|parallel \? PARALLEL_MAX : 1/,
     "test-bg must default concurrent cap to 1");
 });
 
 test("verify-change --plan on a docs-only change selects no browser batches", () => {
-  const plan = JSON.parse(run(["tools/verify-change.mjs", "--plan", "docs/TESTING.md"]).out);
+  const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "docs/TESTING.md"]).out);
   assert.equal(plan.fast.toolingFast, true, "docs integrity is a real test");
   assert.deepEqual(plan.batches, [], "no browser minutes for a prose change");
 });
@@ -88,7 +88,7 @@ test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", ()
   // apex_verify_change_fast — so an agent asking "did I break anything?" after
   // a .github/, package.json, playwright.config.js, icons/ or vendor/ edit was
   // told no, on the strength of one advisory cache-check. PERF-FINDINGS 2j.
-  const r = run(["tools/verify-change.mjs", "--fast", "--json", ".github/workflows/ci.yml"]);
+  const r = run(["tools/ci/verify-change.mjs", "--fast", "--json", ".github/workflows/ci.yml"]);
   const out = JSON.parse(r.out);
   assert.equal(out.verdict, "unmatched",
     "a diff no rule claimed must not report pass — the selection is not trustworthy");
@@ -99,7 +99,7 @@ test("verify-change reports UNMATCHED, not pass, for a diff no rule claimed", ()
   // The counter-test, and it is the one that matters: a fix that makes every
   // no-op run loud is worse than the bug. A change a rule DOES claim must still
   // select normally and must never report unmatched.
-  const ok = JSON.parse(run(["tools/verify-change.mjs", "--plan", "js/render/glx/glx.js"]).out);
+  const ok = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "js/render/glx/glx.js"]).out);
   assert.ok(ok.batches.length > 0, "a js/ change must still select batches");
   assert.equal(ok.fast.toolingFast, true);
 });
@@ -109,8 +109,8 @@ test("verify-change derives its reason the same way pick-tests publishes it", ()
   // asserts verify-change computes the identical expression over the identical
   // inputs (its `groups` is pick-tests' `named`, same filter, same sort), so a
   // change to the contract cannot silently apply to only one of them.
-  const vc = fs.readFileSync(path.join(ROOT, "tools/verify-change.mjs"), "utf8");
-  const pt = fs.readFileSync(path.join(ROOT, "tools/pick-tests.mjs"), "utf8");
+  const vc = fs.readFileSync(path.join(ROOT, "tools/ci/verify-change.mjs"), "utf8");
+  const pt = fs.readFileSync(path.join(ROOT, "tools/ci/pick-tests.mjs"), "utf8");
   const shape = /!files\.length \? "none" : \((?:groups|named)\.length \? "matched" : "unmatched"\)/;
   assert.match(vc, shape, "verify-change must compute the three-way reason");
   assert.match(pt, shape, "pick-tests must still be the definition this mirrors");
@@ -141,15 +141,15 @@ test("bump-cache: --check catches drift, --apply hashes assets and keeps the gen
       `<meta name="apex-build" content="7">\n<script src="a.js?v=bad"></script>\n<link href="b.css?v=bad">\n<script src="c.js?v=bad"></script>\n`);
     fs.writeFileSync(path.join(dir, "version.json"), `{ "build": 7 }\n`);
 
-    const drift = run(["tools/bump-cache.mjs", "--check", "--json", "--root", dir]);
+    const drift = run(["tools/ci/bump-cache.mjs", "--check", "--json", "--root", dir]);
     assert.equal(drift.status, 1, "stale content hashes must exit 1");
     assert.equal(JSON.parse(drift.out).consistent, false);
 
     // Plain --apply rehashes and KEEPS the committed generation: the deploy
     // stamps the real one from the commit count (pages.yml, 2026-09-01).
-    const kept = JSON.parse(run(["tools/bump-cache.mjs", "--apply", "--json", "--root", dir]).out);
+    const kept = JSON.parse(run(["tools/ci/bump-cache.mjs", "--apply", "--json", "--root", dir]).out);
     assert.equal(kept.applied, 7, "--apply must not advance the placeholder generation");
-    const applied = JSON.parse(run(["tools/bump-cache.mjs", "--apply", "--advance", "--json", "--root", dir]).out);
+    const applied = JSON.parse(run(["tools/ci/bump-cache.mjs", "--apply", "--advance", "--json", "--root", dir]).out);
     assert.equal(applied.applied, 8, "--advance is the old max+1 behaviour");
     const html = fs.readFileSync(path.join(dir, "index.html"), "utf8");
     for (const rel of ["a.js", "b.css", "c.js"]) {
@@ -159,13 +159,13 @@ test("bump-cache: --check catches drift, --apply hashes assets and keeps the gen
     assert.match(html, /name="apex-build" content="8"/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "version.json"), "utf8")).build, 8);
 
-    const ok = run(["tools/bump-cache.mjs", "--check", "--root", dir]);
+    const ok = run(["tools/ci/bump-cache.mjs", "--check", "--root", dir]);
     assert.equal(ok.status, 0, "post-apply the shell must be consistent");
 
     const before = Object.fromEntries([...html.matchAll(/(?:src|href)="([^"?]+)\?v=([a-f0-9]{12})"/g)]
       .map((m) => [m[1], m[2]]));
     fs.writeFileSync(path.join(dir, "a.js"), "alpha changed\n");
-    JSON.parse(run(["tools/bump-cache.mjs", "--apply", "--json", "--root", dir]).out);
+    JSON.parse(run(["tools/ci/bump-cache.mjs", "--apply", "--json", "--root", dir]).out);
     const changedHtml = fs.readFileSync(path.join(dir, "index.html"), "utf8");
     const after = Object.fromEntries([...changedHtml.matchAll(/(?:src|href)="([^"?]+)\?v=([a-f0-9]{12})"/g)]
       .map((m) => [m[1], m[2]]));
@@ -173,7 +173,7 @@ test("bump-cache: --check catches drift, --apply hashes assets and keeps the gen
     assert.equal(after["b.css"], before["b.css"], "unchanged CSS keeps its warm-cache URL");
     assert.equal(after["c.js"], before["c.js"], "unchanged JS keeps its warm-code-cache URL");
 
-    JSON.parse(run(["tools/bump-cache.mjs", "--apply", "--at", "42", "--json", "--root", dir]).out);
+    JSON.parse(run(["tools/ci/bump-cache.mjs", "--apply", "--at", "42", "--json", "--root", dir]).out);
     assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "version.json"), "utf8")).build, 42);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -183,7 +183,7 @@ test("bump-cache: --check catches drift, --apply hashes assets and keeps the gen
 test("bump-cache refuses --apply on the repo shell (hashes are stamped at deploy)", () => {
   // The committed shell reads ?v=dev on every tag; a habitual repo-side
   // --apply would put 151 hashes back and reopen the churn gen-shell closed.
-  const r = run(["tools/bump-cache.mjs", "--apply", "--json"]);
+  const r = run(["tools/ci/bump-cache.mjs", "--apply", "--json"]);
   assert.equal(r.status, 2, "plain --apply must refuse with exit 2");
   assert.match(JSON.parse(r.out).error, /refusing --apply on the repo shell/);
   assert.match(JSON.parse(r.out).error, /gen-shell/, "the refusal must point at the generator");
@@ -192,7 +192,7 @@ test("bump-cache refuses --apply on the repo shell (hashes are stamped at deploy
 test("bump-cache --check on the REAL shell agrees with the load-order guard", () => {
   // Ordinarily green; goes red exactly when someone edits assets and forgets
   // the bump, which is the tool's whole reason to exist.
-  const real = run(["tools/bump-cache.mjs", "--check", "--json"]);
+  const real = run(["tools/ci/bump-cache.mjs", "--check", "--json"]);
   const v = JSON.parse(real.out);
   assert.equal(real.status, 0, `shell inconsistent: ${JSON.stringify(v.assetMismatches)}; shell ${v.shellBuild} vs version.json ${v.versionJson}`);
   assert.equal(v.mode, "repo");
@@ -202,7 +202,7 @@ test("bump-cache --check on the REAL shell agrees with the load-order guard", ()
 // ── test-honesty: the suite stays honest ────────────────────────────────────
 
 test("test-honesty finds no unexplained skips (the silent-skip ratchet)", () => {
-  const r = run(["tools/test-honesty.mjs", "--json"]);
+  const r = run(["tools/ci/test-honesty.mjs", "--json"]);
   const v = JSON.parse(r.out);
   assert.ok(v.scanned > 150, "scanner must actually walk tests/");
   // New skips need a `// SKIP-OK: <reason>` comment or a reason argument —

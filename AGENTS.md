@@ -1,85 +1,76 @@
 # Apex 26 — engineering reference
 
 Unofficial WebGL2 F1 fan game. No build step, no frameworks: pure IIFE modules
-loaded via `<script>` tags, static files on GitHub Pages. This file is the
-rules; the evidence and deep references live in `docs/` — start at
-`docs/README.md` and load a reference only when the task touches its area.
+loaded via `<script>` tags, static files on GitHub Pages.
 
-This is the ONE canonical agent reference. CLAUDE.md is a stub that imports
-it (guard-asserted). Edit rules here; put measurements and war stories in the
-area doc — testing evidence goes in `docs/TESTING.md` §Field notes.
+**This file is the RULES.** The evidence behind them — measurements, war
+stories, defect registers — lives in `docs/`; start at `docs/README.md`, which
+is a reading order, and load one area doc when the task touches its area. This
+is the ONE canonical agent reference; CLAUDE.md is a stub that imports it
+(guard-asserted). Edit rules here, evidence there.
 
 ## Key commands
 
 ```sh
 npx serve -l 3456 .                 # run locally (or: python3 -m http.server 3456)
-npm run test:tooling-fast           # the no-browser guard suite (~30 s)
-node tools/verify-change.mjs        # ONE command: fast gate + batched groups (start in background; --wait/--plan/--fast)
-node tools/verify-track.cjs <id>    # 2 s headless build check for track edits
-node tools/pick-tests.mjs           # which test GROUPS does this change need?
-node tools/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
-node tools/test-bg.mjs <groups>     # run browser groups in the background
-node tools/assets.mjs verify        # asset-pack licence + md5 + budget check
+npm run test:tooling-fast           # the no-browser guard suite (~3 min)
+node tools/ci/verify-change.mjs        # ONE command: fast gate + batched groups (background; --wait/--plan/--fast)
+node tools/track/verify-track.cjs <id>    # 2 s headless build check for track edits
+node tools/ci/pick-tests.mjs           # which test GROUPS does this change need?
+node tools/ci/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
+node tools/ci/test-bg.mjs <groups>     # run browser groups in the background
+node tools/gen/assets.mjs verify        # asset-pack licence + md5 + budget check
 tools/README.md                     # test-asserted index of all 160+ tools
 docs/AGENT-SURFACE.md               # skills / MCP / tools / wrap map
 ```
 
 ## Verification — scale it to the change
 
-The browser half of the suite runs on SwiftShader: one browser GROUP costs
-10–40 minutes of serialized wall time on a 4-core box, and the full suite is
-~40 minutes even batched. Match verification to the blast radius — running
-more than the change needs is not extra safety, it is slower feedback and an
-idle agent. Reference (groups, fixtures, field notes): `docs/TESTING.md`.
+One browser GROUP costs 10–40 minutes of serialized SwiftShader wall time here
+and the whole suite ~40 even batched, so running more than the change needs is
+not extra safety — it is slower feedback and an idle agent. Groups, fixtures
+and philosophy: `docs/TESTING.md`; the timing measurements behind every number
+in this section: `docs/notes/TESTING-FIELD-NOTES.md`.
 
 | change touches | run |
 |---|---|
 | docs, tools, tests only | `npm run test:tooling-fast` |
-| one circuit (`js/circuits/<id>.js`) | `node tools/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
+| one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
-| WGX / `js/render/webgpu/` | `node tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU (`docs/TESTING.md` §Field notes) |
-| TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the SAME command with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest` (Apple/Metal, ~3 min) and read its Verdict step, which FAILS on GPU errors, failed env-probe faces, or `softAdapter` true on hardware. A software probe run is not evidence about a player's machine — two shipped defects were invisible to every software test and found the hour a real GPU was first used (`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a real GPU). `ci.yml`'s renderer-macos job (the `gfx` SPECS on Metal) no longer runs on push: nightly, or dispatch `ci.yml` with `renderer_macos: true` when a gfx spec or its launch config changed |
+| WGX / `js/render/webgpu/` | `node tools/gfx/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU |
+| TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the same with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest`, read its Verdict step. A software probe is NOT evidence about a player's machine (two shipped defects were invisible to every software test). `ci.yml`'s renderer-macos job is nightly; dispatch it with `renderer_macos: true` when a gfx spec or its launch config changed |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, CAPPED at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch | the above + `npm run test:sweeps` |
-| a desktop-viewport browser group this box cannot time (boots run 54–107 s here, `docs/TESTING.md` §Field notes 2026-09-02) | dispatch `ci.yml` with `group: <name>` — the group runs on the 4-shard runner matrix; read the four Smoke jobs. ONE group per change, the most specific one: a dispatch is four runners plus the macOS job's minutes, so never fan several groups out for one change. Pushes touching only `docs/**`, `*.md`, `.claude/**`, `.cursor/**` start no CI at all |
+| a desktop-viewport browser group this box cannot time | dispatch `ci.yml` with `group: <name>` — read the four Smoke jobs. ONE group per change, the most specific one: a dispatch is four runners plus the macOS minutes. Pushes touching only `docs/**`, `*.md`, `.claude/**`, `.cursor/**` start no CI at all |
 
 Session shape — this is what controls both wall time and waiting:
 
 1. `npm install` FIRST on a fresh container (`PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
    keeps it to seconds), **then `npx playwright install chromium-headless-shell`**
-   — the skip flag leaves the BROWSER absent. Either missing reads as a total-red
-   run that looks like a boot regression ("Cannot find module" / `Executable
-   doesn't exist …chromium_headless_shell`): read the FIRST failure's message
-   before believing any red run (`docs/research/CI-RENDERING-PERFORMANCE.md` §Part 3).
-2. Make ALL source edits first, then verify ONCE. Tests serve `js/` and `css/`
-   from the working tree, so a run in flight forbids source edits — run the
-   browser tests a single time, at the end. Do not re-run browser specs after
-   every edit; `test:tooling-fast` is the edit-loop check, and `test:tiny`
-   runs once at the end. Track or scenery edits
-   run `verify-track.cjs <id>` first (2 s), not a browser group.
-3. NEVER BLOCK THE FOREGROUND ON A TEST RUN — this is a flat prohibition and
-   it covers node suites, sweeps, and audits, not just browser groups. Every
-   command expected to take more than ~30 s starts in the background with its
-   output to an `artifacts/` log, and the session does other work (docs,
-   analysis, the next investigation) or ends the turn while it runs. Poll a
-   log with a bounded read when a decision needs it; a session sitting in a
-   foreground `npm test` is the failure mode this rule exists to kill.
-4. ONE Playwright process, ONE browser group per batch, started in the
-   background with `test-bg.mjs`. Anchor on the log's terminal line — the
-   reporter emits `= run <status>  (N/M done, K failed)`, so match it with
-   `grep -E '= run (passed|failed|timedout|interrupted)'` (ERE alternation;
-   a fixed-string or BRE grep never matches) — never a looser pattern,
-   never the process table, never `| tail` on a live log. While it runs, do
-   non-`js/`/`css/` work or end the turn; do not idle-watch the log.
-5. A timeout on a busy box measures the machine, not the code — budgets mean
-   roughly half what they say at two workers. Check `/proc/loadavg` (< 3) and
-   for a live `playwright test` process before starting anything. On a
-   timeout, look for a load inversion in the log first; re-run the spec ALONE
-   only when the verdict matters.
-6. STOPPING IS ALLOWED: a pushed change that names its unverified groups in
-   the PR beats an hour of serialized SwiftShader. Never widen a tolerance to
-   make a spec pass; write tests against `__apex` hooks, relative assertions
-   over absolute thresholds; any `waitForFunction` on a rendering page needs
+   — the skip flag leaves the BROWSER absent, and either missing reads as a
+   total-red run that looks like a boot regression. Read the FIRST failure's
+   message before believing any red run.
+2. Make ALL source edits first, then verify ONCE — tests serve `js/` and `css/`
+   from the working tree, so a run in flight FORBIDS source edits.
+   `test:tooling-fast` is the edit-loop check; track or scenery edits run
+   `verify-track.cjs <id>` (2 s), not a browser group.
+3. **NEVER BLOCK THE FOREGROUND ON A TEST RUN** — flat, and it covers node
+   suites, sweeps and audits, not just browser groups. Anything over ~30 s goes
+   to the background with its output in an `artifacts/` log while the session
+   does other work or ends the turn; poll with a bounded read, never idle-watch.
+4. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`.
+   Anchor on the reporter's terminal line with
+   `grep -E '= run (passed|failed|timedout|interrupted)'` (ERE alternation; a
+   fixed-string or BRE grep never matches) — never a looser pattern, never the
+   process table, never `| tail` on a live log.
+5. A timeout on a busy box measures the machine, not the code: check
+   `/proc/loadavg` (< 3) and for a live `playwright test` process before
+   starting anything, look for a load inversion in the log first, and re-run
+   the spec ALONE only when the verdict matters.
+6. **STOPPING IS ALLOWED** — a pushed change that names its unverified groups
+   beats an hour of serialized SwiftShader. **Never widen a tolerance to make a
+   spec pass**; write against `__apex` hooks, relative assertions over absolute
+   thresholds; any `waitForFunction` on a rendering page needs
    `{ polling: 100 }` or its declared timeout never fires.
 7. Never hand a subagent a browser run — give a flat prohibition ("report it
    unverified"). Subagent worktrees default to a STALE base: first step in any
@@ -96,70 +87,25 @@ Session shape — this is what controls both wall time and waiting:
    `park()`/`jump()`.
 3. DOM/a11y snapshot (Playwright MCP `browser_snapshot` / `browser_resize` /
    `browser_evaluate`, or chrome-devtools) — menu/HUD work only; hide `#game`.
-4. Pixel screenshot — visual sign-off only, never an assertion source. For
-   live poking use the `mcp-probe` skill; the Playwright suite itself always
-   runs script-driven, never through an MCP.
+4. Pixel screenshot — visual sign-off only, never an assertion source. Live
+   poking is the `mcp-probe` skill; the suite itself always runs script-driven.
 
-### A real GPU IS reachable — `macos-latest`
+This container has **no real GPU** (llvmpipe) and the native WebGPU swapchain
+never composites on software, so WGX blits the visible `#game` and a probe
+waits on `awaitSoftPresent()`. Which command probes which backend, the measured
+colours, and the Cursor Cloud bootstrap (`tools/env/cloud-agent-install.sh`, what
+survives a cold boot): `docs/notes/CI-RENDERING-PERFORMANCE.md`. Keep
+`apex-tools` in root `.mcp.json`; never run Chrome MCP while Playwright runs;
+never attach `mcp-probe` for a `version.json` check.
 
-GitHub's Apple-silicon image reports a HARDWARE adapter (Metal) on stock flags;
-ubuntu-latest is SwiftShader, windows-latest WARP, this container llvmpipe.
-Dispatch `.github/workflows/gpu-census.yml` — `census_only: true` for the adapter
-answer in seconds, without it to run `tools/gpu-game-check.mjs` and read the
-Verdict step, which GATES (GPU errors, failed env-probe faces, `softAdapter` on
-hardware). **Never pass `--use-angle=vulkan` on macOS** — it drops WebGPU to
-SwiftShader and silently turns a real-GPU run software. Census tables and what
-the real GPU has found: `docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a
-real GPU.
-
-### Software pixels in this container (no real GPU)
-
-On SwiftShader/Lavapipe the **native WebGPU swapchain never composites** to the
-screen — that path stays black, and one `getCurrentTexture()` breaks `mapAsync`
-device-wide. WGX routes the visible `#game` through a **2D soft-present blit**;
-`awaitSoftPresent()` resolves only after a non-blank visible blit.
-
-| Backend | Command / path | Checks |
-|---------|----------------|--------|
-| **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
-| **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
-| **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
-| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
-| **TLX WebGPU** | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
-
-Measured canvas colours, the staging-buffer history and the env packages:
-`docs/research/CI-RENDERING-PERFORMANCE.md` §Measured and §Part 3.
-
-**A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS.** WGX's mock
-device was green while four separate defects made the real backend refuse to
-boot, each hiding the next. Boot it on a live device (`npx serve -l 3456 .` —
-a SECURE CONTEXT — then `node tools/mcp-cli.mjs probe --backend webgpu --wait
-12000 --console 'WGX|error'`) and confirm with one POSITIVE signal: a clean WGX
-boot writes nothing, so assert `canvas.getContext("webgl2") === null`. The four
-defects, the probe flags and the full trap list: `docs/RENDERERS.md` §Boot
-evidence and `.claude/skills/mcp-probe/references/recipes.md` §Probing a
-specific renderer.
-
-## Cursor Cloud specific instructions
-
-Fresh-agent bootstrap is `bash tools/cloud-agent-install.sh` (committed as
-`.cursor/environment.json` `install`; the dashboard `install` should call the
-same script: the Verification §1 sequence plus full Chromium, which
-`wgx-validate` / `wgx-capture` need — the headless shell has no `navigator.gpu`).
-System packages (`mesa-vulkan-drivers`, `vulkan-tools`, `xvfb`) survive a cold
-boot only via snapshot + Save on the environment dashboard; `test -f
-/usr/share/vulkan/icd.d/lvp_icd.json` proves Lavapipe. MCP: repo `.mcp.json`
-lists three stdio servers (`apex-tools`, `playwright-official`, `chrome-devtools`);
-`.cursor/environment.json` `mcpServerAllowlist` permits them and `install`
-builds the chrome-devtools clone. Cloud Agents still need **chrome-devtools
-enabled in the MCP dropdown** at https://cursor.com/agents (or team Integrations
-& MCP) — the host catalog often loads only two servers until all three are
-registered there. CLI fallback when `chrome_*` is missing:
-`python3 tools/probe-mcp.py chrome-start` (see `.claude/skills/mcp-probe`).
-Shell map: `docs/AGENT-SURFACE.md`. Keep `apex-tools` in root `.mcp.json`; never
-run Chrome MCP while Playwright is running; do not attach `mcp-probe` for a
-`version.json` check. Measurements and the npm ECONNRESET note:
-`docs/research/CI-RENDERING-PERFORMANCE.md` §Part 3.
+**A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS** — a mock
+device stayed green while four defects made the real backend refuse to boot.
+Boot it live (`npx serve -l 3456 .`, a SECURE CONTEXT, then `node
+tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'`)
+and confirm with one POSITIVE signal: a clean WGX boot writes nothing, so
+assert `canvas.getContext("webgl2") === null`. Defects and traps:
+`docs/ARCHITECTURE.md` §Boot evidence,
+`.claude/skills/mcp-probe/references/recipes.md`.
 
 ## Layout
 
@@ -167,63 +113,48 @@ run Chrome MCP while Playwright is running; do not attach `mcp-probe` for a
 circuit; script-tag order == `Tracks.LIST` == picker order). The module roster
 and load order live in `tools/manifest.cjs` — read that, not this file, to
 enumerate what exists; `index.html` script order is guard-asserted against it.
+Per-directory module tables: `docs/ARCHITECTURE.md`.
 
-- `js/core/log.js`, `js/core/mat4.js` — Log loads FIRST; M4/V3 math + shared
-  clamp/lerp/wrapDelta
-- `js/game.js` — entry: game loop, physics, AI, race flow; hands the `G` ctx
-  façade to `js/game/*` modules (one `Module.create(G)` per file; modules
-  never reach into game.js; `js/agent/apex.js` is the `__apex` dev API)
-- `js/render/` — `gfx.js` façade → GLX (WebGL2 default) in `glx/`: the core,
-  its passes and `glx/shaders/` GLSL-as-data. `shared/` is what every backend
-  uses — `assets.js` (baked pack loader), `gltf.js`, `lamp-chunks.js`.
-  DEFERRED backends, no script tag, injected at boot: `webgpu/` WGX and
-  `three/` TLX (opt-in `apex26.gfxBackend="three"`)
-- `js/track/` — the ENGINE: `core/` (spline mesh geom space surface),
-  `scenery/` (the split + graph models themes kits) and `tracks.js`; only
-  GENERIC tables live here — a circuit's path,
-  markings and dressing rows are keys of its def (`js/circuits/<id>.js` is
-  the single home); the 111-member scenery(api) contract is frozen by
-  `tests/unit/scenery-api-contract.test.mjs`
-- `js/car/` — car3d, liveries, liverytex, crest-paths, the parts catalog (780 cr budget),
-  ghost, teams, driver-ratings
-- `js/data/` — F1API + DataHub tabs; `js/net/` — 2-4 player WebRTC, no backend
-- `css/` — tokens + component files; `docs/COMPONENTS.md` is test-asserted;
-  class-count + body-node ratchets apply
-- `index.html` — shell: script tags, all static DOM, per-file `?v=dev` (the
-  deploy stamps the content hashes — §Critical conventions) plus
-  `<meta name="apex-build">`; `sw.js` precache derives from the shell's tags
-- `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check-gctx.mjs`
-- `.claude/skills/` — the workflow references (`.claude/skills/README.md`);
-  `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor,
-  bloat-auditor, deploy-research, physics-contract-auditor) that encode the
-  flat prohibitions above (verify-agent `--base <ref>` is the "was it already
-  red on the tip?" check; doc drift is a lens of the total-audit workflow) so a
-  subagent cannot un-know them
+- `js/core/log.js` loads FIRST; `js/core/mat4.js` is M4/V3 + shared clamps.
+- `js/game.js` is the entry (loop, physics, AI, race flow); it hands the `G`
+  façade to the extracted modules — one `Module.create(G)` per file, and a
+  module NEVER reaches into game.js. `js/agent/apex.js` is the `__apex` dev API.
+- `js/render/` — `gfx.js` façade → GLX (WebGL2 default) in `glx/` with its
+  passes and GLSL-as-data; `shared/` is what every backend uses. DEFERRED
+  backends, no script tag, injected at boot: `webgpu/` WGX, `three/` TLX
+  (`apex26.gfxBackend`).
+- `js/track/` — `core/`, `scenery/`, `tracks.js`. Only GENERIC tables live
+  here; the 111-member `scenery(api)` contract is frozen by
+  `tests/unit/scenery-api-contract.test.mjs`.
+- `js/car/`, `js/data/`, `js/net/` (2-4 player WebRTC, no backend), `js/ui/`.
+- `css/` tokens + component files; `docs/COMPONENTS.md` is test-asserted, and
+  class-count + body-node ratchets apply.
+- `index.html` is the shell — script tags and ALL static DOM; `sw.js`'s
+  precache derives from it. `types/game-ctx.d.ts` is the `G` contract, held by
+  `tools/check/check-gctx.mjs`.
+- `.claude/skills/` workflow references, `.claude/agents/` scoped subagents
+  (each with a README index) — they encode the flat prohibitions above so a
+  subagent cannot un-know them.
 
 ## Critical conventions
 
-- **Cache busting is the deploy's job**: every asset tag in the committed
-  shell reads `?v=dev`; `pages.yml` rewrites them to 12-char content hashes
-  and stamps the generation (2000 + the deploy branch's commit count) while
-  staging (`bump-cache.mjs --apply --at N --root _site`;
-  `tests/unit/deploy-stamp.test.mjs`). There is NO bump after a js/css edit
-  and `bump-cache --apply` refuses on the repo. `version.json` and
-  `<meta name="apex-build">` are a consistent placeholder. After a
-  `tools/manifest.cjs` change run `node tools/gen-shell.mjs`.
+- **Cache busting is the deploy's job**: every asset tag in the committed shell
+  reads `?v=dev`; `pages.yml` rewrites them to content hashes and stamps the
+  generation while staging. There is NO bump after a js/css edit, and
+  `bump-cache --apply` refuses on the repo. After a `tools/manifest.cjs` change
+  run `node tools/gen/gen-shell.mjs`.
 - **No ES modules** — every file is a `"use strict"` IIFE assigning one global
   (sole exception: the vendored three.js island).
   `tests/unit/global-registry.test.mjs` enforces the registry.
 - **New file**: IIFE file + `tools/manifest.cjs` entry (+ HARD_EDGES pair if
-  eval-time destructured) + `node tools/gen-shell.mjs` (writes the
+  eval-time destructured) + `node tools/gen/gen-shell.mjs`, which writes the
   `index.html` tag block, `tools/carview.html`, sw.js's precache seed and
-  `js/roster.js` — the lazy rosters game.js injects). No cache bump. Never
-  hand-edit a `@gen-shell` block; `load-order.test.mjs` fails on drift.
+  `js/roster.js`. No cache bump. Never hand-edit a `@gen-shell` block;
+  `load-order.test.mjs` fails on drift.
 - **Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.**
-- `tests/data/ratchets.json` ratchets game.js (lines, non-comment lines,
-  `G` members, column-0 lets) and the other big modules AT their current
-  values — pay for every added line; `node tools/ratchets.mjs --update`
-  lowers them after an extraction or on a merged tree. New `js/game/` files are hyphenated;
-  the older squashed names are grandfathered (settled, final).
+- `tests/data/ratchets.json` ratchets game.js and the other big modules AT
+  their current values — pay for every added line; `node tools/check/ratchets.mjs
+  --update` lowers them after an extraction or on a merged tree.
 - **localStorage keys** are prefixed `apex26.`.
 - **Coordinates**: +Y up, metres, radians, arc `s` in metres, lateral `x`
   +right. **+k = LEFT-hand turn** (measured). Never flip a curvature sign
@@ -231,19 +162,20 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - Frac-keyed def tables must respect `def._sceneryShift`: consume via the
   compensated idiom (`bankingProfile`, `buildCenterline`) — a raw `frac` read
   places things 2/3 of a lap away.
-- Logging goes through `Log` (`js/core/log.js`), never bare `console.*`: namespace
-  first arg, console threshold `warn`, ring buffer `info` (`__apex.logs()`).
-  Guard hot-path debug lines with `Log.enabled(ns, level)`; set via
-  `__apex.logLevel("ns:debug")`, `?log=`, or `APEX_LOG=` for test runs.
+- Logging goes through `Log` (`js/core/log.js`), never bare `console.*`:
+  namespace first arg, console threshold `warn`, ring buffer `info`
+  (`__apex.logs()`). Guard hot-path debug lines with `Log.enabled(ns, level)`;
+  set via `__apex.logLevel("ns:debug")`, `?log=`, or `APEX_LOG=` for tests.
 - Regenerable output goes in the gitignored roots only: `artifacts/` and
   `scratch/`. Never `/tmp`, never the repo root.
 
 ## Physics
 
 Full reference `docs/PHYSICS.md`. Two rules bind everywhere:
+
 - **`PACE` is a ground-speed scale, not a cap.** Anything comparing a speed to
   a literal or VMAX must use `vTop()`/`vStd()`/`aStd()` — enforced by
-  `tools/vstd-lint.mjs`; a bare literal needs a written reason.
+  `tools/check/vstd-lint.mjs`; a bare literal needs a written reason.
 - **The arc must not reach the driver.** Nothing derived from track curvature
   or the racing line may affect the player with assists off; a new
   `Tracks.curvature()` read goes in a legitimate column (AI-only,
@@ -260,7 +192,7 @@ near game.js.
 IS the `MAT` id; blended (`albedo * tex.rgb * 2.0`) so tint and wear survive.
 **Ships ON.** (`matTexMix` def 1.0; `__apex.matTex(0)` is the A/B off-switch.)
 Every failure degrades to the procedural look; boot never awaits assets. GLX,
-TLX, and WGX implement it. `tools/assets.mjs verify` gates licences.
+TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
 
 ## `window.__apex` dev API
 
@@ -270,36 +202,25 @@ the list here. Sharp edges: `obs()`/`physState()` need `player.px` initialised
 (`jump()` or `step()` after `race()`+`go()`); agentview failures are
 `{ok:false, error, message, fix}`, never null; `render({what:"view"})` reuses
 the LAST frame and is stale under `headless(true)`; `snapCam()` after
-`park()`/`jump()` before any shot. `node tools/agent.mjs <track> <cmd>` is the
+`park()`/`jump()` before any shot. `node tools/shot/agent.mjs <track> <cmd>` is the
 same surface from a shell.
 
 ## Agent extensions (skills / subagents)
 
-- **Skills** (on-demand workflows): `.claude/skills/` — index in
-  `.claude/skills/README.md`. Which CLIs are wrapped as `apex_*`:
-  `docs/AGENT-SURFACE.md`. Live canvas: `mcp-probe`. Deploy branch /
-  merge: `check-changes` (`references/deploy.md`, or just `node tools/deploy.mjs`); live `version.json` goes to the `deploy-research`
-  SUBAGENT (do not attach `mcp-probe` for a version.json check). Pre-push:
-  `check-changes` (spawns the `verify-agent` subagent). Fat skill / extract /
-  dead code / agent bloat: `slim-bloat` skill / `bloat-auditor` subagent.
-- **Subagents** (isolated context): `.claude/agents/` — index in
-  `.claude/agents/README.md`. `deploy-research` is the tinyfish-only
-  post-deploy / public-web worker (no Chrome, no Playwright).
-- **Cursor** loads the same Claude paths; thin always-on pointer:
-  `.cursor/rules/apex-shared.mdc`. Do not duplicate skills under
-  `.cursor/skills/` or agents under `.cursor/agents/`. Keep `apex-tools` in
-  root `.mcp.json` so a host that loads the repo catalog can call it; if the
-  session catalog is empty, use the shell wrappers (see §MCP).
+Skills are on-demand workflows in `.claude/skills/` (index
+`.claude/skills/README.md`); subagents are isolated contexts in
+`.claude/agents/`. Which CLIs are wrapped as `apex_*`, and which stay
+CLI-only: `docs/AGENT-SURFACE.md`. Live canvas → `mcp-probe`. Deploy /
+merge → `check-changes` (or just `node tools/ci/deploy.mjs`). Pre-push →
+`check-changes`, which spawns the `verify-agent` subagent (`--base <ref>` is
+the "was it already red on the tip?" check). Live `version.json` goes to the
+`deploy-research` SUBAGENT — never attach `mcp-probe` for that. Fat skill /
+extract / dead code → `slim-bloat` in `check-changes`, or the `bloat-auditor`
+subagent.
 
-## Area references (load on demand)
-
-Skills / MCP / wrap: `docs/AGENT-SURFACE.md`. Lighting/sky:
-`docs/LIGHTING-REF.md`, `-KNOBS.md`, `-PRESETS.md`
-(`.claude/skills/lighting-tuner/references/bake.md` + `scripts/bake.mjs` land a COPY VALUES export). Renderers
-(GLX/WGX/TLX, cross-backend parity): `docs/RENDERERS.md`. Career: `docs/CAREER.md`. Multiplayer:
-`docs/MULTIPLAYER.md`. Scenery: `docs/SCENERY-API.md`. Testing:
-`docs/TESTING.md`. WGX/WGSL (`js/render/webgpu/`):
-`docs/research/WEBGPU-PARITY.md`.
+**Cursor** loads the same Claude paths; the thin always-on pointer is
+`.cursor/rules/apex-shared.mdc`. Do not duplicate skills under
+`.cursor/skills/` or agents under `.cursor/agents/`.
 
 WGSL has FIVE rules a mock device cannot enforce, and three of them shipped a
 defect on the owner's iPhone this week: `sampleCount` is 1 or 4 ONLY;
@@ -317,16 +238,14 @@ any of them makes the backend refuse SILENTLY and fall back:
 Work happens on a `claude/<topic>` branch — `git branch --show-current` is the
 truth. **The deploy branch is `claude/f1-game-project-26h3ng`**: never push
 there without review; `pages.yml` fires only there and ships to
-https://brycejmurrin.github.io/f1-game/. Other sessions develop directly on
-the deploy branch, so a deploy is a merge of THEIR new work — both-side
-changes are real conflicts: re-measure baselines on the merged tree, never
-force-push. **`node tools/deploy.mjs`** is the whole protocol (fetch → merge →
-`test:tooling-fast` → `verify-track` for touched circuits → push, or `--pr`
-to open a reviewable PR into the deploy branch instead; `--plan` prints the
-union first). `index.html`/`version.json` are the only files that used to
-conflict; they now resolve to either side plus `node tools/gen-shell.mjs`,
-because the tags read `?v=dev` and the generation is stamped by the deploy.
-`test:sweeps` is CI's on the same diff (do not duplicate it locally). The
-live check is `pages.yml`'s `verify-live` job — this container cannot reach
-`github.io`; read the run in the Actions tab, or fetch `version.json` through
-the host's fetch tool, never curl.
+https://brycejmurrin.github.io/f1-game/. Other sessions develop directly on the
+deploy branch, so a deploy is a merge of THEIR new work — both-side changes are
+real conflicts: re-measure baselines on the merged tree, never force-push.
+
+**`node tools/ci/deploy.mjs`** is the whole protocol (fetch → merge →
+`test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens
+a reviewable PR instead, `--plan` prints the union first). `test:sweeps` is
+CI's on the same diff — do not duplicate it locally. The live check is
+`pages.yml`'s `verify-live` job; this container cannot reach `github.io`, so
+read the run in the Actions tab or fetch `version.json` through the host's
+fetch tool, never curl.

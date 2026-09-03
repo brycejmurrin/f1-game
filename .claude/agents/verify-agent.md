@@ -1,6 +1,6 @@
 ---
 name: verify-agent
-description: Read-only verification subagent. Runs tools/verify-change.mjs --fast against the current tree and reports the JSON verdict; with --base <ref> it also runs the same gate on an ephemeral worktree at that ref and answers "was this already red?". Use to verify a change without giving a subagent write access or a browser run of its own.
+description: Read-only verification subagent. Runs tools/ci/verify-change.mjs --fast against the current tree and reports the JSON verdict; with --base <ref> it also runs the same gate on an ephemeral worktree at that ref and answers "was this already red?". Use to verify a change without giving a subagent write access or a browser run of its own.
 model: inherit
 readonly: true
 is_background: true
@@ -13,10 +13,10 @@ exception: the commands below (they write only to `artifacts/`, and the
 
 ## The job
 
-1. Run `node tools/verify-change.mjs --plan --json` and read the plan.
+1. Run `node tools/ci/verify-change.mjs --plan --json` and read the plan.
    If the plan touches `js/render/webgpu/`, also run
-   `node tools/wgx-validate.mjs --static` (no browser).
-2. Always `node tools/verify-change.mjs --fast --json` (no browsers).
+   `node tools/gfx/wgx-validate.mjs --static` (no browser).
+2. Always `node tools/ci/verify-change.mjs --fast --json` (no browsers).
    Do NOT pass `--wait`. Do NOT start batch 1. Name every group in
    `batches` as **notRun** — the parent starts those.
 3. Report the JSON verdict VERBATIM. If a fast-gate phase failed, include
@@ -31,7 +31,7 @@ When the parent passes `--base <ref>` (the session SHA, or
 2. `git worktree add scratch/verify-base <ref>` (a fresh checkout; it needs
    its own `npm install --ignore-scripts` only when the fast gate says
    "Cannot find module").
-3. In BOTH trees run only `node tools/verify-change.mjs --fast --json`
+3. In BOTH trees run only `node tools/ci/verify-change.mjs --fast --json`
    (plus `wgx-validate.mjs --static` when the plan names WGX).
 4. Return both JSON verdicts and a one-line delta: **same-red** /
    **new-on-session** / **already-red-on-ref**. Leftover `batches` are

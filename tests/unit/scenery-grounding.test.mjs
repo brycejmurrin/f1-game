@@ -8,7 +8,7 @@
 // their buildings, crowds left behind when their riser was rejected, lamp heads
 // cantilevered off poles with no arm.
 //
-// tools/float-audit.cjs answers the vertical question mechanically. It has
+// tools/track/float-audit.cjs answers the vertical question mechanically. It has
 // existed and been correct for a while; what was missing is anybody running it.
 // `npm run test:float` was in package.json but in no CI job and behind no test,
 // and it could not have been wired up as-is: it exits 1 on any floater, and 37
@@ -73,7 +73,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // scale stretches a 12 m reference mesh. Silverstone stayed 0 (the Y-only
 // scale attempt that floated it was not this remesh).
 const BASELINE = JSON.parse(
-  readFileSync(path.join(ROOT, "tools", "float-baseline.json"), "utf8"),
+  readFileSync(path.join(ROOT, "tools", "track", "float-baseline.json"), "utf8"),
 );
 
 // The sweep rebuilds every circuit, so run it ONCE and share it across tests.
@@ -86,7 +86,7 @@ const BASELINE = JSON.parse(
 // silent pass, which is the failure mode this whole file exists to prevent.
 let cached = null;
 function runSweep() {
-  const args = [path.join(ROOT, "tools", "float-audit.cjs"), "--all", "--json"];
+  const args = [path.join(ROOT, "tools", "track", "float-audit.cjs"), "--all", "--json"];
   const opts = { cwd: ROOT, encoding: "utf8", maxBuffer: 128 * 1024 * 1024 };
   let stdout;
   try {
@@ -116,7 +116,7 @@ test("floating scenery stays within the per-circuit baseline", () => {
     if (n > cap) grown.push(`${r.id}: ${n} floating clusters > baseline ${cap}`);
   }
   assert.deepEqual(grown, [], "floating scenery grew:\n  " + grown.join("\n  ") +
-    "\n\nRun `node tools/float-audit.cjs <id> --why` — it names each floater's SOURCE LINE.");
+    "\n\nRun `node tools/track/float-audit.cjs <id> --why` — it names each floater's SOURCE LINE.");
 });
 
 test("baseline has no stale entries — a cap below the measured count is a lie", () => {

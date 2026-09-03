@@ -9,7 +9,7 @@
         "mat": 1,
         "id": "concrete",
         "scale": 5.5,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -17,7 +17,7 @@
         "mat": 2,
         "id": "brick",
         "scale": 2.8,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -25,7 +25,7 @@
         "mat": 4,
         "id": "metal",
         "scale": 2.8,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -33,7 +33,7 @@
         "mat": 5,
         "id": "wood",
         "scale": 2.8,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -41,7 +41,7 @@
         "mat": 6,
         "id": "foliage",
         "scale": 4,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -49,7 +49,7 @@
         "mat": 7,
         "id": "fabric",
         "scale": 1.8,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -57,7 +57,7 @@
         "mat": 8,
         "id": "sand",
         "scale": 11,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -65,7 +65,7 @@
         "mat": 9,
         "id": "grass",
         "scale": 4.5,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -73,7 +73,7 @@
         "mat": 10,
         "id": "rock",
         "scale": 8,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -81,7 +81,7 @@
         "mat": 11,
         "id": "snow",
         "scale": 7,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -89,7 +89,7 @@
         "mat": 12,
         "id": "roof",
         "scale": 2.6,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -97,7 +97,7 @@
         "mat": 13,
         "id": "stone",
         "scale": 3.5,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -105,7 +105,7 @@
         "mat": 14,
         "id": "rust",
         "scale": 2.5,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       },
@@ -113,7 +113,7 @@
         "mat": 16,
         "id": "asphalt",
         "scale": 3.5,
-        "source": "procedural:tools/assets.mjs",
+        "source": "procedural:tools/gen/assets.mjs",
         "licence": "Apex26-Procedural",
         "author": "Apex 26"
       }
@@ -127,7 +127,7 @@
           "mat": 1,
           "id": "concrete",
           "scale": 5.5,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -135,7 +135,7 @@
           "mat": 2,
           "id": "brick",
           "scale": 2.8,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -143,7 +143,7 @@
           "mat": 4,
           "id": "metal",
           "scale": 2.8,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -151,7 +151,7 @@
           "mat": 5,
           "id": "wood",
           "scale": 2.8,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -159,7 +159,7 @@
           "mat": 6,
           "id": "foliage",
           "scale": 4,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -167,7 +167,7 @@
           "mat": 7,
           "id": "fabric",
           "scale": 1.8,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -175,7 +175,7 @@
           "mat": 8,
           "id": "sand",
           "scale": 11,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -183,7 +183,7 @@
           "mat": 9,
           "id": "grass",
           "scale": 4.5,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -191,7 +191,7 @@
           "mat": 10,
           "id": "rock",
           "scale": 8,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -199,7 +199,7 @@
           "mat": 11,
           "id": "snow",
           "scale": 7,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -207,7 +207,7 @@
           "mat": 12,
           "id": "roof",
           "scale": 2.6,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -215,7 +215,7 @@
           "mat": 13,
           "id": "stone",
           "scale": 3.5,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -223,7 +223,7 @@
           "mat": 14,
           "id": "rust",
           "scale": 2.5,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         },
@@ -231,7 +231,7 @@
           "mat": 16,
           "id": "asphalt",
           "scale": 3.5,
-          "source": "procedural:tools/assets.mjs",
+          "source": "procedural:tools/gen/assets.mjs",
           "licence": "Apex26-Procedural",
           "author": "Apex 26"
         }
@@ -249,7 +249,7 @@
         1.18,
         1.96
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "d4991a51bfbf9209aff80f81a221f563"
@@ -264,7 +264,7 @@
         0.93,
         0.85
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "b99452181fc04516c0791cc7012f6fe2"
@@ -279,7 +279,7 @@
         1.01,
         0.72
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "0f248cc6d7b8aaa0cbdd33ad3c91bbce"
@@ -294,7 +294,7 @@
         18.41,
         13.34
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "dbbbb3898ba2ffe25f93ea9e57379102"
@@ -309,7 +309,7 @@
         18.11,
         15.12
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "daaeb17314883e986bd01a491b7a8f31"
@@ -324,7 +324,7 @@
         16.5,
         25.98
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "cf6cda4997e92c574f370118400572dc"
@@ -339,7 +339,7 @@
         15.73,
         15.42
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "8f8043ea01001837d8033165a02aa762"
@@ -354,7 +354,7 @@
         16.5,
         19.98
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "126a373db8fd2ec07a66b67e6b0a6cf5"
@@ -369,7 +369,7 @@
         14.7,
         3.23
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "699c22351cde59042d0e585029995a40"
@@ -384,7 +384,7 @@
         9.95,
         20
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "3a66bbaaaf419fa1af9526ddc150f19a"
@@ -399,7 +399,7 @@
         18.51,
         12.96
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "98cc55902db04bbbb0a2e2ac88462e7b"
@@ -414,7 +414,7 @@
         18.51,
         19.2
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "b4a46bbc4cbd5f9d64c03d3b2f76fb52"
@@ -429,7 +429,7 @@
         20.02,
         4.2
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "3c5dd06491cf5586c15dcb6b2a3b7b12"
@@ -444,7 +444,7 @@
         18.43,
         8.44
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "a2bbb9004c23e26697a9c1524b0216b5"
@@ -459,7 +459,7 @@
         12.3,
         13.97
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "278f681b814c94e9158446031ca92599"
@@ -474,7 +474,7 @@
         22.11,
         9.18
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "afcd6c54774826ebfea981d873151c64"
@@ -489,7 +489,7 @@
         22.11,
         7.56
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "5ed2c93758824efc8fb9f7ef57ec7a51"
@@ -504,7 +504,7 @@
         13.52,
         13.72
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "063fc3f79fadf35b88b870ae856127e3"
@@ -519,7 +519,7 @@
         11.73,
         10.88
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "a76493035ca81ff6bc052fcdceabd52f"
@@ -534,7 +534,7 @@
         12.51,
         13.48
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "00aee3d2bcbfcd62696f6cbe9b162d62"
@@ -549,7 +549,7 @@
         13.52,
         10.01
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "d18948b6fbff6b71ccc3bf7440fa316f"
@@ -564,7 +564,7 @@
         11.73,
         9.84
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "28a73cbf03c1791eb40e99f64dac9e3a"
@@ -579,7 +579,7 @@
         16.5,
         13.86
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "aab1cc25ce44814725ef8448cbdb2c05"
@@ -594,7 +594,7 @@
         15.73,
         24.95
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "e33cae2cfb628b992cc79edc9498598a"
@@ -609,7 +609,7 @@
         17.03,
         12.3
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "22c95514be0092ad968da8421687bb40"
@@ -624,7 +624,7 @@
         18.41,
         15.94
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "820c43c81fa7332fd64f33382db13b9b"
@@ -639,7 +639,7 @@
         16.5,
         29.46
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "8b1406125b10fae3ad2a985d520f2648"
@@ -654,7 +654,7 @@
         15.1,
         7.8
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "60cd7d23a519f08aea90eb912b67c6b4"
@@ -669,7 +669,7 @@
         20.51,
         14.52
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "2fa05e575547905dc054540fa8380955"
@@ -684,7 +684,7 @@
         23.29,
         11.34
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "d6cc580ff131dffc37fdd84b831b4886"
@@ -699,7 +699,7 @@
         25.2,
         5.62
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "5e95c0440d20418e3448f69230681f92"
@@ -714,7 +714,7 @@
         19.65,
         4.2
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "3f9845b0fd836bce194b7d0851e8d073"
@@ -729,7 +729,7 @@
         20.43,
         8.13
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "20b57765f09f4fdd53b6510cad0741af"
@@ -744,7 +744,7 @@
         1.3,
         0.18
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "c9b873da3d34e4e2f7cf7050fb56e052"
@@ -759,7 +759,7 @@
         1.6,
         0.2
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "a0591f1a8886a719518d16e03977cbe1"
@@ -774,7 +774,7 @@
         1.5,
         2.4
       ],
-      "source": "procedural:tools/synth-models.mjs",
+      "source": "procedural:tools/gen/synth-models.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26",
       "md5": "901c40865ab327f6309d530646f66e64"
@@ -792,7 +792,7 @@
         0.0919,
         0.1251
       ],
-      "source": "procedural:tools/assets.mjs",
+      "source": "procedural:tools/gen/assets.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26"
     },
@@ -807,7 +807,7 @@
         0.0919,
         0.1251
       ],
-      "source": "procedural:tools/assets.mjs",
+      "source": "procedural:tools/gen/assets.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26"
     },
@@ -822,7 +822,7 @@
         0.1634,
         0.2016
       ],
-      "source": "procedural:tools/assets.mjs",
+      "source": "procedural:tools/gen/assets.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26"
     },
@@ -837,7 +837,7 @@
         0.0632,
         0.0675
       ],
-      "source": "procedural:tools/assets.mjs",
+      "source": "procedural:tools/gen/assets.mjs",
       "licence": "Apex26-Procedural",
       "author": "Apex 26"
     }
@@ -848,378 +848,378 @@
       "id": "concrete",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "brick",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "metal",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "wood",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "foliage",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "fabric",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "sand",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "grass",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "rock",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "snow",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "roof",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "stone",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "rust",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "material",
       "id": "asphalt",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_construction-barrier",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_construction-cone",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_construction-light",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-a",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-d",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-h",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-l",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-o",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_chimney-medium",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_detail-tank",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_building-a",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_building-e",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_low-detail-building-a",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_low-detail-building-wide-a",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_twr_building-sample-house-b",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_twr_building-sample-tower-a",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_twr_building-sample-tower-c",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_building-type-a",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_building-type-c",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_building-type-h",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_building-type-k",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_building-type-r",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-b",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-c",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-e",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-g",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_building-q",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_ind_chimney-large",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_building-b",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_building-f",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_building-skyscraper-b",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_low-detail-building-c",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_com_low-detail-building-wide-b",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_fence-low",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_fence",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "model",
       "id": "kenney_sub_planter",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/synth-models.mjs"
+      "source": "procedural:tools/gen/synth-models.mjs"
     },
     {
       "kind": "env",
       "id": "*|default",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "env",
       "id": "*|day",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "env",
       "id": "*|dusk",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     },
     {
       "kind": "env",
       "id": "*|dawn",
       "author": "Apex 26",
       "licence": "Apex26-Procedural",
-      "source": "procedural:tools/assets.mjs"
+      "source": "procedural:tools/gen/assets.mjs"
     }
   ]
 }

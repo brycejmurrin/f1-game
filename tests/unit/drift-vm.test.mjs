@@ -1,5 +1,5 @@
 /* drift-vm.test.mjs — tests/specs/drift.spec.js replayed in the Node VM
- * (tools/game-vm.cjs): the dynamic bicycle model's qualitative contract —
+ * (tools/lib/game-vm.cjs): the dynamic bicycle model's qualitative contract —
  * stable at the limit, SLIDE loosens the rear, self-aligning, grip-limited
  * yaw, no NaN under abuse, SPEED STEER — with the SAME assertions and PACE pin.
  *
@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
 const lt = (a, b, m) => assert.ok(a < b, m || `${a} < ${b}`);

@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved. Device/gamepad/touch/tilt bugs → input-controls.
+description: Use when the user says the car understeers/oversteers, turn-in should be snappier/lazier, grip/trail braking/road-follow/pace feels wrong, compare/A-B physics settings, run a physics sweep, test ROAD_FOLLOW, or asks whether driving feel improved. Also GAME FEEL / juice — screen shake, hit-stop, weak kerb/wall/gear-shift/collision feedback, punchier camera/particles/audio polish that must NOT change driving physics. Device/gamepad/touch/tilt bugs → input-controls; AI racecraft → ai-racecraft.
 ---
 
 # Tune the physics
@@ -37,15 +37,26 @@ Fixed in `js/game.js` (not `setPhysics`): `LONG_GRIP`, `CS_FRONT/CS_REAR`,
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
-node tools/test-bg.mjs driving      # physics + collision + behaviour + debris (one group, ~30 min)
-node tools/test-bg.mjs input        # steering + camera
-node tools/check-physics.mjs <grip|bank|roadfollow|steer>
+node tools/ci/test-bg.mjs driving      # physics + collision + behaviour + debris (one group, ~30 min)
+node tools/ci/test-bg.mjs input        # steering + camera
+node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>
 ```
 
-If you edited `js/game.js`, `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) before commit. Theory:
+If you edited `js/game.js`, `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) before commit. Theory:
 `docs/PHYSICS.md`, `docs/research/steering-research.md`.
 
 ## Load on demand
 
 - Closed-loop trial, parallel sweep (`polling: 100`), trail-brake, house-style
   assertions → [references/harness.md](references/harness.md).
+- **Game feel / juice** — which Apex system owns which channel, and the hard
+  line that juice is a render/audio layer that must never write `car.px/pz`,
+  `s`, `x`, `psi` or change `obs()`/`act()` determinism →
+  [references/game-feel.md](references/game-feel.md); channel table and the
+  kerb-vs-kickup mistakes in
+  [references/game-feel-workflow.md](references/game-feel-workflow.md);
+  trauma-shake math (inspiration only) in
+  [references/game-feel-feedback-recipes.md](references/game-feel-feedback-recipes.md).
+
+Folded in 2026-09-03: `game-feel`. Its trigger words now live in this
+description; the physics/juice boundary is the first line of the reference.

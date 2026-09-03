@@ -11,7 +11,7 @@
    `setLightTune` key), a write to a getter-only member that silently no-ops.
 
    HOW THIS FILE IS CHECKED — it is not documentation, it is a gate:
-     node tools/check-gctx.mjs        (also: tests/unit/game-ctx-surface.test.mjs)
+     node tools/check/check-gctx.mjs        (also: tests/unit/game-ctx-surface.test.mjs)
    1. PARITY. The tool parses `const G = {…}` out of js/game.js with espree and
       asserts the member set here is exactly the member set there, with matching
       writability. Add a G member without adding it here (or vice versa) and the
@@ -599,7 +599,7 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
 
 /* The modules constructed with the ctx itself — `X.create(G)` in game.js, plus
    AgentView, which js/agent/apex.js builds off the ctx it was handed.
-   tools/check-gctx.mjs resolves every `X.create(<ctx>)` call site through
+   tools/check/check-gctx.mjs resolves every `X.create(<ctx>)` call site through
    eslint-scope and asserts the two lists agree, so a new ctx module that is not
    declared here fails the surface test. NOT here, deliberately: AgentRaster
    (the AgentRaster.create call in js/agent/agentview.js hands it a bespoke bag, not the ctx) and

@@ -20,7 +20,7 @@
 // population and fix existing waits where their timing can be verified.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { lintSource, lintAll, count } from "../../tools/wait-polling-lint.mjs";
+import { lintSource, lintAll, count } from "../../tools/check/wait-polling-lint.mjs";
 
 // Measured 2026-08-18 after moving every unambiguous option object into argument
 // three: 370 correctly-positioned timeouts still use rAF polling. LOWER this as
@@ -33,7 +33,7 @@ import { lintSource, lintAll, count } from "../../tools/wait-polling-lint.mjs";
 // never gate a suite; fix them as they are touched.
 const CEILING = 57;
 // Far enough below and the ratchet has stopped ratcheting — the same trap
-// tools/fixture-consumer-audit.mjs records, where a floor sat at 31 while real
+// tools/ci/fixture-consumer-audit.mjs records, where a floor sat at 31 while real
 // adoption was 54.
 const SLACK = 40;
 
@@ -114,7 +114,7 @@ test("the tool finds real sites — anti-vacuity", () => {
 test("check-physics.mjs does not declare a timeout without polling", () => {
   // Six waitForFunction calls on a rendering page. Two already declared a
   // timeout (the SwiftShader trap); the rest must not grow a fake bound.
-  const row = lintAll().find((r) => r.file.replace(/\\/g, "/").endsWith("tools/check-physics.mjs"));
+  const row = lintAll().find((r) => r.file.replace(/\\/g, "/").endsWith("tools/check/check-physics.mjs"));
   assert.deepEqual(row?.sites ?? [], [],
     `check-physics.mjs still has waitForFunction timeout without polling: ${JSON.stringify(row?.sites)}`);
 });

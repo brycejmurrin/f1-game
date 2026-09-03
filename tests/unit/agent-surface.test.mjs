@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DOC = path.join(ROOT, "docs/AGENT-SURFACE.md");
-const CATALOG = path.join(ROOT, "tools/apex-tools-mcp.json");
+const CATALOG = path.join(ROOT, "tools/mcp/apex-tools-mcp.json");
 const SKILLS = path.join(ROOT, ".claude/skills");
 
 function read(rel) {
@@ -36,7 +36,7 @@ function stripTick(s) {
   return String(s || "").replace(/^`|`$/g, "");
 }
 
-test("wrap map names match tools/apex-tools-mcp.json", () => {
+test("wrap map names match tools/mcp/apex-tools-mcp.json", () => {
   const doc = fs.readFileSync(DOC, "utf8");
   const wrap = parseTable(doc, "<!-- WRAP-MAP -->");
   const catalog = JSON.parse(fs.readFileSync(CATALOG, "utf8"));
@@ -138,7 +138,7 @@ test("indexes point at AGENT-SURFACE.md", () => {
 });
 
 test("MCP descriptions state tree vs browser", () => {
-  const src = read("tools/apex-tools-mcp.mjs");
+  const src = read("tools/mcp/apex-tools-mcp.mjs");
   assert.match(src, /docs\/AGENT-SURFACE\.md/);
   const doc = fs.readFileSync(DOC, "utf8");
   const wrap = parseTable(doc, "<!-- WRAP-MAP -->");

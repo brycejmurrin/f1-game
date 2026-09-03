@@ -61,7 +61,7 @@ node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs artifacts/tmp/edi
 ```
 
 - **Agent proposal** — `artifacts/lighting/proposals/<id>.json`, shape
-  `{track, combos:{"dusk|dry":{…}}}` (schema in `docs/LIGHTING-PRESETS.md`).
+  `{track, combos:{"dusk|dry":{…}}}` (schema in `../../../../docs/LIGHTING.md`).
   Parent merges; this is the only safe multi-agent path. Within a condition a
   proposal **REPLACES**: it is a considered whole profile, so dropping a knob is
   how it decides against one, and an empty map resets the condition.
@@ -82,7 +82,7 @@ have a fresh COPY VALUES export, do **not** feed `bake.mjs` a one-key object:
    `window.LightPresets` object (plain JSON after the assignment).
 2. `Object.assign` just that key's new value — leave every other key.
 3. Write the whole object back as `window.LightPresets = {…};` and
-   `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
+   `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
 
 A silent `--merge` default would make a future partial paste look safe.
 If a merge mode is ever added it must be an explicit opt-in flag.
@@ -120,7 +120,7 @@ through the merge path above.
    Every key should look like `track|tod|weather`. A typo'd knob id is
    silently ignored at runtime — stop and ask.
 
-4. **Smoke (optional):** `node tools/test-bg.mjs smoke`
+4. **Smoke (optional):** `node tools/ci/test-bg.mjs smoke`
 
 5. **Commit + push** to the active feature branch (never `main`):
    ```sh

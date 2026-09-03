@@ -3,7 +3,7 @@ import { defineConfig, devices } from "@playwright/test";
 import fs from "fs";
 import os from "os";
 
-// npm scripts use tools/run-playwright.mjs to allocate a unique port per run.
+// npm scripts use tools/ci/run-playwright.mjs to allocate a unique port per run.
 // APEX_PORT remains available for test-shards.sh and direct CLI invocations.
 // Port-suffixed output prevents concurrent runs from clobbering each other.
 const PORT = Number(process.env.APEX_PORT || 3456);
