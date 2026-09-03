@@ -49,6 +49,10 @@
     "waitNoPolling": {
       "ceiling": 56,
       "slack": 39
+    },
+    "dynamicIdReads": {
+      "ceiling": 41,
+      "slack": 5
     }
   }
 }
