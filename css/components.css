@@ -1324,6 +1324,18 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   width: 100%;
   margin: 0;
 }
+#pmsettings-inner #pm-metrics-details > summary {
+  height: var(--tap);
+  min-height: var(--tap);
+  box-sizing: border-box;
+  justify-content: flex-start;
+  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-weight: 600;
+  letter-spacing: var(--ls-2);
+  opacity: 1;
+  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+}
+#pm-metrics-details[open] > summary::after { content: "\25B4"; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud {
   grid-column: 1;
 }
@@ -1332,6 +1344,14 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0;
   align-self: start;
   min-width: 0;
+}
+/* Open METRICS is a block of four buttons — spanning keeps HIDE HUD from
+   sitting over a dead column while the submenu grows beside it. */
+#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]) #pm-hidehud {
+  grid-column: 1 / -1;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details[open] {
+  grid-column: 1 / -1;
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details [role="group"],
 #pmsettings-inner[data-density="compact"] #pm-metrics-details [role="group"] {

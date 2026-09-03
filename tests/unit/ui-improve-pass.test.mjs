@@ -862,6 +862,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner[data-shape=\"wide\"] #pm-panel-display #pm-hud-sample", "grid-column"), "2");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-column"), "2",
     "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details[open]', "grid-column"), "1 / -1",
+    "an open METRICS submenu takes the full DISPLAY row so HIDE HUD is not stranded");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details > summary", "height"), "var(--tap)",
+    "METRICS summary matches the HIDE HUD tap row");
   assert.equal(decl(css("css/components.css"), '#pm-metrics-details [role="group"]', "display"), "flex",
     "METRICS body defaults to a column; wide/compact override to a 2-up grid");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-metrics-details \[role="group"\]/, "display"), "grid",
