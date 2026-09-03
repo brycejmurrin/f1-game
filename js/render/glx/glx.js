@@ -354,6 +354,30 @@ const GLX = (function () {
     return sh;
   }
 
+  // KHR_parallel_shader_compile: with the extension present, a link() issued
+  // between beginLinks() and resolveLinks() returns BEFORE its status is read,
+  // so the driver compiles the whole batch on its worker threads at once;
+  // resolveLinks() then reads every LINK_STATUS (each read blocks only on
+  // that program). Reading the status right after linkProgram — the old
+  // link() — forced every compile to finish before the next was even issued:
+  // 18 programs in strict series, the 1.9 s GLX first-frame cliff the Metal
+  // census measured. Absent the extension (WebKit < 17, software GL) nothing
+  // is deferred and link() behaves exactly as before.
+  let _parallelExt = null, _pendingLinks = null;
+  function beginLinks() { if (_parallelExt) _pendingLinks = []; }
+  function checkLink(prog) {
+    if (gl.getProgramParameter(prog, gl.LINK_STATUS)) return prog;
+    Log.error("gfx", "GLX program link failed: " + gl.getProgramInfoLog(prog));
+    gl.deleteProgram(prog);
+    return null;
+  }
+  // Returns the Set of programs that FAILED; callers null their references.
+  function resolveLinks() {
+    const list = _pendingLinks || []; _pendingLinks = null;
+    const bad = new Set();
+    for (let i = 0; i < list.length; i++) if (!checkLink(list[i])) bad.add(list[i]);
+    return bad;
+  }
   function link(vsSrc, fsSrc) {
     const vs = compile(gl.VERTEX_SHADER, vsSrc);
     const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
@@ -369,12 +393,8 @@ const GLX = (function () {
     // Mark for deletion now (legal while attached) — freed with the program
     // instead of leaking one VS+FS pair per linked program for the ctx's life.
     gl.deleteShader(vs); gl.deleteShader(fs);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      Log.error("gfx", "GLX program link failed: " + gl.getProgramInfoLog(prog));
-      gl.deleteProgram(prog);
-      return null;
-    }
-    return prog;
+    if (_pendingLinks) { _pendingLinks.push(prog); return prog; }
+    return checkLink(prog);
   }
 
   function locs(prog, names) {
@@ -398,6 +418,8 @@ const GLX = (function () {
     });
     if (!gl) return false;
 
+    // Parallel shader compile (Chrome, Firefox, Safari 17+): see link().
+    try { _parallelExt = gl.getExtension("KHR_parallel_shader_compile"); } catch (_) { _parallelExt = null; }
     // GPU timer extension (Chrome/Android; absent on iOS Safari). Acquired once;
     // actual querying is gated behind gpuTimer(true).
     try { _gpuTimerExt = gl.getExtension("EXT_disjoint_timer_query_webgl2"); } catch (_) { _gpuTimerExt = null; }
@@ -504,6 +526,7 @@ const GLX = (function () {
         Log.warn("gfx", "GLX: MAX_FRAGMENT_UNIFORM_VECTORS " + rows + " < the lit shader's ~" + LIT_FS_ROWS + " rows — expect the lit program to fail to link on this GPU");
       }
     } catch (_) { /* a caps read must never cost the boot */ }
+    beginLinks();   // the eight core programs compile as one parallel batch
     litProg = link(LIT_VS, LIT_FS);
     skyProg = link(SKY_VS, SKY_FS);
     shadowProg = link(SHADOW_VS, SHADOW_FS);
@@ -512,6 +535,9 @@ const GLX = (function () {
     glowProg = link(GLOW_VS, GLOW_FS);
     particleProg = link(PARTICLE_VS, PARTICLE_FS);
     decalProg = link(DECAL_VS, DECAL_FS);
+    const _bad = resolveLinks(), _ok = (p) => (p && !_bad.has(p) ? p : null);
+    litProg = _ok(litProg); skyProg = _ok(skyProg); shadowProg = _ok(shadowProg); markProg = _ok(markProg);
+    markBatchProg = _ok(markBatchProg); glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex"]);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
     _clearUf(_litUf); _clearUf(_skyUf);

@@ -128,10 +128,21 @@ const SCENERY_DIR = ApexRoster.SCENERY_DIR;
 function sceneryResident(id) {
   return !!(window.TrackScenery && window.TrackScenery[id]);
 }
+// Memoised on the in-flight PROMISE (the ensureDataHub idiom below): boot's
+// raceAssets(), the 120 ms flyby timer, startRace() and openQuali() all ask
+// for the same circuit, and until the first inject lands sceneryResident() is
+// still false — each caller used to inject its own copy (28–58 KB fetched and
+// evaluated up to four times). Cleared on settle so a dropped fetch retries.
+const _sceneryLoads = new Map();
 function ensureScenery(idx) {
   const def = Tracks.LIST[idx];
   if (!def || sceneryResident(def.id)) return Promise.resolve();
-  return loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []);
+  let p = _sceneryLoads.get(def.id);
+  if (!p) {
+    p = loadBackendScripts([SCENERY_DIR + "/" + def.id + ".js"], []).then(() => { _sceneryLoads.delete(def.id); });
+    _sceneryLoads.set(def.id, p);
+  }
+  return p;
 }
 // LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
 // menu button, which a session that never opens DATA runs no byte of. Only two
@@ -1880,12 +1891,24 @@ function invalidateDecalTextures(teamId) {
     const oi = _decalTexOrder.indexOf(key); if (oi >= 0) _decalTexOrder.splice(oi, 1);
   });
 }
+// The livery half of the atlas key, memoised on store.rev like teamMeshKey:
+// getLiveryId() is a store read (two string concats + a JSON decode) and this
+// ran once per drawn car per FRAME — ~22 times — for a value that only moves
+// when something is written to the store.
+const _decalPrefixCache = new Map();
+function decalKeyPrefix(team) {
+  const c = _decalPrefixCache.get(team.id);
+  if (c && c.rev === store.rev) return c.val;
+  const val = team.id + ":" + getLiveryId(team.id) + ":";
+  _decalPrefixCache.set(team.id, { val, rev: store.rev });
+  return val;
+}
 function getCarDecalTexture(team, num, isPlayer) {
   if (typeof LiveryTex === "undefined" || !gfx.createTexture) return null;
   // isPlayer is part of the key: on the mobile tier the player's atlas uploads
   // at 512² and AI atlases at 256², so a team the player later switches to
   // must not reuse a cached AI-resolution atlas (and vice versa).
-  const key = team.id + ":" + getLiveryId(team.id) + ":" + (num == null ? "_" : num) + (isPlayer ? ":P" : "");
+  const key = decalKeyPrefix(team) + (num == null ? "_" : num) + (isPlayer ? ":P" : "");
   if (!(key in _decalTexCache)) {
     let t = null;
     try { t = gfx.createTexture(LiveryTex.buildAtlas(team.id, resolveLivery(team), num, !!isPlayer)); }
@@ -1933,6 +1956,22 @@ function teamDecalState(team, usePlayerSetup) {
                   parts, rev };
   _aeroLevelCache.set(key, state);
   return state;
+}
+// Build every car's body mesh and livery atlas BEFORE the first frame draws
+// the grid. Both caches were lazy, so the first countdown frame built up to
+// 11 Car3D meshes and 22 atlases (each a 1024² canvas painted, downscaled on
+// phones, uploaded) — hundreds of ms landing on the lights animation. The same
+// keys the per-car draw uses (queueCarDecals / teamBodyMesh / playerBodyMesh),
+// so the caches simply hit; the cost joins the load stall instead.
+function warmCarAssets() {
+  if (carModelBuf) return;   // a GLB body is one piece with no procedural build to warm
+  for (let i = 0; i < cars.length; i++) {
+    const c = cars[i];
+    try {
+      if (c.isPlayer) playerBodyMesh(c.team); else teamBodyMesh(c.team);
+      getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
+    } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
+  }
 }
 function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
   const state = teamDecalState(team, usePlayerSetup);
@@ -2741,6 +2780,7 @@ async function startRace() {
   Input.clearEdges();
   if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
   if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
+  warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
 }
 

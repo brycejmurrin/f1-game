@@ -2,8 +2,8 @@
   "_doc": "Ratchets on the files that only ever grow. `node tools/ratchets.mjs` checks, `--update` snaps every ceiling to the current value (lower after an extraction; a raise is a deliberate edit with its reason in the commit). Metrics: lines (split-newline), codeLines (non-comment non-blank), gMembers (G facade members, check-gctx), topLets (column-0 `let`). History: docs/notes/CEILING-HISTORY.md.",
   "files": {
     "js/game.js": {
-      "lines": 9246,
-      "codeLines": 5058,
+      "lines": 9286,
+      "codeLines": 5083,
       "gMembers": 222,
       "topLets": 147
     },
@@ -15,7 +15,7 @@
       "lines": 2452
     },
     "js/car/car3d.js": {
-      "lines": 3582
+      "lines": 3588
     },
     "js/track/tracks.js": {
       "lines": 2399
@@ -30,7 +30,7 @@
       "lines": 3150
     },
     "js/render/glx/glx.js": {
-      "lines": 2271
+      "lines": 2297
     },
     "js/render/webgpu/wgsl-chunks.js": {
       "lines": 1951

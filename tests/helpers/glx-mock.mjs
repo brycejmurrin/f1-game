@@ -15,7 +15,7 @@
  * bitmask tests on recorded arguments must compare against the mock's own
  * `gl.CONST` values (see `enums`).
  *
- *   const h = bootGlx();            // opts: { aniso, userAgent, ls: { key: value } }
+ *   const h = bootGlx();            // opts: { aniso, parallel, userAgent, ls: { key: value } }
  *   h.GLX.begin(h.frame());  h.reset();  h.GLX.begin(h.frame());
  *   h.count("uniform1f")                 // → 1 (only uTime moves)
  *
@@ -49,10 +49,13 @@ export function bootGlx(opts = {}) {
   // the enum values are the real ones so a recorded texParameterf can be
   // matched on TEXTURE_MAX_ANISOTROPY_EXT.
   const ANISO = { MAX_TEXTURE_MAX_ANISOTROPY_EXT: 34047, TEXTURE_MAX_ANISOTROPY_EXT: 34046 };
+  // KHR_parallel_shader_compile, when a test asks for it (opts.parallel).
+  const PARALLEL = { COMPLETION_STATUS_KHR: 0x91B1 };
   const contextAttrs = [];
   const answers = {
     isContextLost: () => contextLost,
-    getExtension: (name) => (opts.aniso && /anisotropic/.test(String(name)) ? ANISO : null),
+    getExtension: (name) => (opts.aniso && /anisotropic/.test(String(name)) ? ANISO
+      : (opts.parallel && /parallel_shader_compile/.test(String(name)) ? PARALLEL : null)),
     getParameter: () => 16,
     // Desktop-class MSAA support, so glx/post.js takes its multisampled path.
     getInternalformatParameter: () => new Int32Array([4]),
