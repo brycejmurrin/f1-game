@@ -78,7 +78,7 @@ still catches them — but before is free).
 Notes that matter:
 
 - `GLX.draw` / `GLX.createMesh` / `GLX.begin` are plain properties on the object
-  returned from `js/render/glx.js`, and `js/game.js` holds that same object as
+  returned from `js/render/glx/glx.js`, and `js/game.js` holds that same object as
   `gfx` — patching them works. `frame.viewProj` is not on the exported surface,
   which is why it is captured through `begin(frame)`.
 - **Identify meshes by vertex count, not by draw order.** Draw order is not

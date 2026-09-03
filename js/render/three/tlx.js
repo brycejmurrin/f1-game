@@ -276,7 +276,7 @@ const TLX = (function () {
           alpha: false,
           premultipliedAlpha: false,
           ...(glCtx ? { context: glCtx } : {}),
-          // js/render/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
+          // js/render/glx/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
           // the context-level AA path". This is NOT the scene target's MSAA
           // (msaa() below is honestly 1: the post chain deliberately has no
           // multisampled scene target — see the DEVIATION note in tlx-post.js).
@@ -617,7 +617,7 @@ const TLX = (function () {
           "(forceWebGL", forceWebGL, "pin", _glPin, "isMobile", isMobile + ")");
       } catch (_) { /* logging must never cost the backend its boot */ }
 
-      // ── CONTEXT / DEVICE LOSS RECOVERY (js/render/glx.js webglcontextlost) ──
+      // ── CONTEXT / DEVICE LOSS RECOVERY (js/render/glx/glx.js webglcontextlost) ──
       // three DETECTS a loss on both backends — the WebGL backend
       // preventDefault()s the canvas event, the WebGPU backend resolves
       // device.lost — and funnels both into renderer.onDeviceLost, whose
@@ -861,7 +861,7 @@ const TLX = (function () {
         envRT = null; envDummy = null;
       }
 
-      // ── Baked PBR material arrays (js/render/assets.js) ──────────────────
+      // ── Baked PBR material arrays (js/render/shared/assets.js) ──────────────────
       // Created as 1×1×17 mid-grey PLACEHOLDERS before the lit factory runs,
       // because tsl-lit.js binds its texture nodes once at factory time and the
       // asset pack loads asynchronously long after. setMaterialMaps() below
@@ -2120,7 +2120,7 @@ const TLX = (function () {
         // DataArrayTexture, so each ImageBitmap is read back once through a
         // scratch WebGL2 context; GLX can hand the bitmap straight to
         // texSubImage3D, which is why this readback lives here and not in
-        // js/render/assets.js. Returns null on any failure — the caller then
+        // js/render/shared/assets.js. Returns null on any failure — the caller then
         // keeps the procedural look.
         //
         // WHY WEBGL AND NOT A 2D CANVAS: drawImage()+getImageData() is

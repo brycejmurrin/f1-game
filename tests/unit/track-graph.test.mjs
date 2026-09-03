@@ -25,7 +25,7 @@ function load() {
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
-  for (const rel of ["js/track/geom.js", "js/track/graph.js"]) {
+  for (const rel of ["js/track/core/geom.js", "js/track/scenery/graph.js"]) {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var");
     vm.runInContext(src, ctx, { filename: rel });
   }

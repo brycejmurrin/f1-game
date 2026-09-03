@@ -1,6 +1,6 @@
 # Scene graph + detailed models — staged plan
 
-> **Status: S0–S2 infrastructure has LANDED** (`js/track/graph.js`,
+> **Status: S0–S2 infrastructure has LANDED** (`js/track/scenery/graph.js`,
 > `tools/graph-parity.cjs`, `tests/unit/track-graph.test.mjs`), with sixteen emitters
 > migrated: `windowPane`, `crowd`, `fence`, `guardrail`, `tyreWall`, `wall`,
 > `facadeRail`, `streetLamp`, `facadeMullion`, `streetBarrier`, `facadeNeon`,

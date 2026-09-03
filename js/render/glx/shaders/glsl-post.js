@@ -1,13 +1,13 @@
 /*
- * Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx.js):
+ * Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx/glx.js):
  * the post chain — POST_VS fullscreen triangle, bloom
  * (BRIGHT/BLUR/DOWN/UP), SSAO, volumetric sun shafts (GODRAY), the COMPOSITE
  * (tone-map + grade + SSR + flare + vignette), FXAA, and the shadow-map
  * depth passes (DEPTH_*, BLOCKER_FS).
  * Split from the old monolithic glx-shaders.js. Template strings may
- * interpolate GLXChunks (js/render/shaders/chunks.js — loads first); each file
+ * interpolate GLXChunks (js/render/glx/shaders/glsl-chunks.js — loads first); each file
  * registers its programs on the shared GLXShaders global. All shader files
- * must load BEFORE js/render/glx.js (it destructures GLXShaders at eval).
+ * must load BEFORE js/render/glx/glx.js (it destructures GLXShaders at eval).
  */
 "use strict";
 

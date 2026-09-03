@@ -1,4 +1,4 @@
-/* Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx.js): the small effect programs — blob shadow (SHADOW_*), skid-mark stamps (MARK_*), racing-line de… */
+/* Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx/glx.js): the small effect programs — blob shadow (SHADOW_*), skid-mark stamps (MARK_*), racing-line de… */
 "use strict";
 
 (function () {

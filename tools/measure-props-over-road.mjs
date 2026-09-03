@@ -50,7 +50,7 @@ try {
     const pit = (X, Z, ax, az, bx, bz, cx, cz) => { const v0x = cx - ax, v0z = cz - az, v1x = bx - ax, v1z = bz - az, v2x = X - ax, v2z = Z - az; const d00 = v0x * v0x + v0z * v0z, d01 = v0x * v1x + v0z * v1z, d11 = v1x * v1x + v1z * v1z, d20 = v2x * v0x + v2z * v0z, d21 = v2x * v1x + v2z * v1z; const dn = d00 * d11 - d01 * d01; if (Math.abs(dn) < 0.01) return null; /* same 5×5 cm projected-area guard as props-over-road.spec.js — 1e-9 lets near-vertical faces of long stands report a box-top height at any distance */ const u = (d11 * d20 - d01 * d21) / dn, vv = (d00 * d21 - d01 * d20) / dn; return (u >= -0.02 && vv >= -0.02 && u + vv <= 1.02) ? { u, vv } : null; };
     const terr = sized.filter((c) => c.i !== road.i && c.maxLat > 14).sort((a, b) => a.len - b.len)[0];
     const skip = new Set([road.i]); if (terr) skip.add(terr.i);
-    // WHICH EMITTER PUT IT THERE. js/track/models.js records one __blocks entry
+    // WHICH EMITTER PUT IT THERE. js/track/scenery/models.js records one __blocks entry
     // per staged copy (modelGroup / overheadSpan / water) carrying the emitter's
     // own id, so a vertex index maps straight back to the thing that emitted it.
     // Without this the report could say "4.79 m over the racing line" and not

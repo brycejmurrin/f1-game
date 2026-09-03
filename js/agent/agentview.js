@@ -1264,7 +1264,7 @@ const AgentView = (function () {
         const k = ((p.k % G.track.n) + G.track.n) % G.track.n;
         return { s: k / G.track.n * G.track.total, lat: null, sideSel: p.side != null ? p.side : null };
       }
-      const pr = Tracks.project(G.track, p.x, p.z, null, p.y);   // p.y: see js/track/spline.js on self-crossing circuits
+      const pr = Tracks.project(G.track, p.x, p.z, null, p.y);   // p.y: see js/track/core/spline.js on self-crossing circuits
       return pr ? { s: pr.s, lat: pr.lat } : { s: 0, lat: null };
     }
     function propS(p) { return propPos(p).s; }

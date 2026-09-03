@@ -1,12 +1,12 @@
 /*
- * Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx.js):
+ * Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx/glx.js):
  * the LIT program (LIT_VS/LIT_FS) — the scene pass: PBR sun +
  * hemisphere ambient + 48 point lights, procedural materials, sun shadow,
  * wet-road response, fog.
  * Split from the old monolithic glx-shaders.js. Template strings may
- * interpolate GLXChunks (js/render/shaders/chunks.js — loads first); each file
+ * interpolate GLXChunks (js/render/glx/shaders/glsl-chunks.js — loads first); each file
  * registers its programs on the shared GLXShaders global. All shader files
- * must load BEFORE js/render/glx.js (it destructures GLXShaders at eval).
+ * must load BEFORE js/render/glx/glx.js (it destructures GLXShaders at eval).
  */
 "use strict";
 
@@ -102,8 +102,8 @@ uniform float uClearcoat;  // 0..1 automotive lacquer layer: 2nd low-rough specu
 uniform float uCarPaint;    // 0..1 car-paint model: duotone pigment + bounded silhouette rim
 uniform float uSparkle;     // 0..1 metallic-flake glitter strength (1 in-race; low in the setup turntable to kill the "twinkle")
 uniform float uWetness;     // 0..1 rain wetness (wet-road material + reflections)
-// ── Baked PBR material maps (js/render/assets.js) ────────────────────────────
-// TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID (js/track/geom.js MAT). No
+// ── Baked PBR material maps (js/render/shared/assets.js) ────────────────────────────
+// TEXTURE_2D_ARRAY whose LAYER INDEX IS THE MAT ID (js/track/core/geom.js MAT). No
 // UV channel exists anywhere on the lit path and none is needed: the sample
 // reuses the procedural materials' own triplanar convention below, so a scanned
 // map lands on exactly the coordinate the noise it augments already uses.
@@ -322,7 +322,7 @@ void applyMaterialTexNormal(int mid, inout vec3 N, float vd) {
   vec3 T = normalize(cross(vec3(0.0, 1.0, 0.0), N) + vec3(1e-5));
   vec3 B = cross(N, T);
   // ASPHALT stays deliberately the weakest in the table — see the MAT.ASPHALT
-  // note in js/track/geom.js: the road is viewed edge-on for the whole race and
+  // note in js/track/core/geom.js: the road is viewed edge-on for the whole race and
   // anything with real relief crawls.
   float amt = (mid == 16 ? 0.10 : 0.55) * uMatTexMix * fade * aa;
   N = normalize(N + (T * dxy.x + B * dxy.y) * amt);

@@ -10,7 +10,7 @@ const Tracks = (function () {
   const { cr, sample, curvatureRaw, curvature, project, wallAt } = TrackSpline;
   const { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
           nodeGrid, buildRoad, buildTerrain, buildFloor } = TrackMesh;
-  const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/core/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/models.js (this file is AT its module-size ceiling — one line only)
+  const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/core/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/scenery/models.js (this file is AT its module-size ceiling — one line only)
 
   function buildCenterline(def) {
     ensurePoints(def);
@@ -1758,7 +1758,7 @@ const Tracks = (function () {
     //       grandstand(K(0.12), -1, 14, 40);
     //
     // Never async: Assets prefetches every model at boot precisely so that prop
-    // placement cannot vary with network timing (js/render/assets.js modelSync).
+    // placement cannot vary with network timing (js/render/shared/assets.js modelSync).
     function bakedModel(id, k, side, dist, opts) {
       if (typeof Assets === "undefined" || !Assets.modelSync) return false;
       const mesh = Assets.modelSync(id);

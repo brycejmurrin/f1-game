@@ -85,7 +85,7 @@ both **shrink** (below): they currently re-export/reference
   which move with their sources. Delete the three PATHS entries once those
   tests are gone (nothing else reads them — `grep` above showed only the
   moving tests as readers).
-- `tools/manifest.cjs:207-213` — `SHELL_NOTES.after["js/render/glx.js"]`, the
+- `tools/manifest.cjs:207-213` — `SHELL_NOTES.after["js/render/glx/glx.js"]`, the
   hand-authored HTML comment gen-shell inserts after the GLX tag explaining
   the two DEFERRED backends. Rewrite or delete once there is nothing
   deferred to explain.
@@ -199,7 +199,7 @@ the sole caller).
 ## `backend-surface-parity.test.mjs`
 
 `tests/unit/backend-surface-parity.test.mjs:76-93` today: `GLX_FILE =
-"js/render/glx.js"`, `BACKENDS = [["WGX (WebGPU)", "js/render/webgpu/wgx.js"],
+"js/render/glx/glx.js"`, `BACKENDS = [["WGX (WebGPU)", "js/render/webgpu/wgx.js"],
 ["TLX (three.js/TSL)", "js/render/three/tlx.js"]]`, and the test "every GLX
 member is declared by every other backend" scans `GLX_FILE` for member names
 and asserts each is present (by regex) in `wgx.js` and `tlx.js`'s source.
@@ -222,12 +222,12 @@ copy — the `glx` entry alone — and the "stay in lockstep" test either delete
 outright (nothing to compare) or narrows to asserting the GLX copy still
 matches the frozen algorithm text inline (the plan's "shrinks to one copy").
 
-## `LampChunks` (`js/render/lamp-chunks.js`)
+## `LampChunks` (`js/render/shared/lamp-chunks.js`)
 
-`js/render/lamp-chunks.js:1-7` header: "GLXChunked binds each chunk's index
+`js/render/shared/lamp-chunks.js:1-7` header: "GLXChunked binds each chunk's index
 list per draw, and WGX uploads the concatenated table to a storage buffer
 once per bake." Rewrite to drop the WGX clause — GLXChunked stays the only
-consumer of the shared bake. `js/render/lamp-chunks.js:38` also names "the
+consumer of the shared bake. `js/render/shared/lamp-chunks.js:38` also names "the
 WGX storage layout" in a comment on the `concat` field; same edit.
 `tests/unit/lamp-chunks.test.mjs:10` cites WGX in its own header comment
 too — update for consistency, not required for the guard to pass (it does
@@ -303,7 +303,7 @@ not assert on WGX by name).
   (`tests/unit/docs-integrity.test.mjs:481-492`) walks `js/render/`'s actual
   subdirectories and fails if one is undescribed. Once `js/render/webgpu/`
   and `js/render/three/` no longer exist on disk, this guard is satisfied
-  automatically by AGENTS.md naming only `js/render/glx.js` — no edit
+  automatically by AGENTS.md naming only `js/render/glx/glx.js` — no edit
   required to this specific test, but the AGENTS.md Layout bullet at `:170`
   (above) still needs its clause removed for accuracy.
 
@@ -348,12 +348,12 @@ grep (excludes the docs archive directory, excludes files already covered above)
 
 | File | Class | Why |
 |---|---|---|
-| `js/render/glx.js:766-767,778,2161,2175,2193-2194` | shrink | Comments citing WGX/TLX for context ("mirrors WGX", "WGX and TLX both export this"); harmless once those files are gone but stale — trim in the same pass as any GLX edit that touches these lines, not urgent. |
+| `js/render/glx/glx.js:766-767,778,2161,2175,2193-2194` | shrink | Comments citing WGX/TLX for context ("mirrors WGX", "WGX and TLX both export this"); harmless once those files are gone but stale — trim in the same pass as any GLX edit that touches these lines, not urgent. |
 | `js/render/glx/shadow.js:38,68,81,128,225,230,272,309` | shrink | Same — comments contrasting GLX behaviour with WGX/TLX shadow handling. Non-blocking. |
 | `js/render/glx/post.js:88` | shrink | "Partial select nearest-K (match WGX)" comment — see godray-keep-nearest above; the algorithm itself does not change. |
-| `js/render/shaders/lit.js:151,550,570,878,882,991` | shrink | GLSL comments citing WGX/WebGPU parity decisions (RAW footprint, SAA snapshot). The GLSL logic is unaffected; comments go stale, not wrong — low priority. |
-| `js/render/shaders/post.js:1128,1141` | shrink | Same class, GLSL comments citing WGX. |
-| `js/render/shaders/chunks.js:1,5,60` | shrink | Header cites `wgsl-chunks.js` (WGSLChunks) as the "maintainability-tax" sibling. Rewrite the header once the WGSL sibling is gone from the shipped tree (still true as history — a spike pointer is fine). |
+| `js/render/glx/shaders/glsl-lit.js:151,550,570,878,882,991` | shrink | GLSL comments citing WGX/WebGPU parity decisions (RAW footprint, SAA snapshot). The GLSL logic is unaffected; comments go stale, not wrong — low priority. |
+| `js/render/glx/shaders/glsl-post.js:1128,1141` | shrink | Same class, GLSL comments citing WGX. |
+| `js/render/glx/shaders/glsl-chunks.js:1,5,60` | shrink | Header cites `wgsl-chunks.js` (WGSLChunks) as the "maintainability-tax" sibling. Rewrite the header once the WGSL sibling is gone from the shipped tree (still true as history — a spike pointer is fine). |
 | `js/perf/gfx-debug-overlay.js:5,32-58,77,105,130-131` | shrink | The debug overlay reads `apex26.gfxBackend`, `apex26.tlxForceGL`, `apex26.gfxTlxFail`, `apex26.gfxWgxFail`, `G.__tlx`, `G.softPresentState` and prints WGX/TLX-specific diagnostic lines. With those keys permanently absent the reads just return falsy and the lines never print — no crash, dead code. Shrink at leisure. |
 | `js/lighting/knobs.js` (25 hits, e.g. `:448` "WebGL2 and WebGPU") | keep, shrink later | `TUNE_DEFS` `help` strings reference "WebGL2 and WebGPU" per-knob (which backends implement it). Cosmetic once only WebGL2 ships; not load-bearing for any guard found. Low priority. |
 | `js/perf/metrics-overlay.js:160-165,215,225-228,480,496` | shrink | The bug-report `diag()` output includes a `tlx` field and reads `apex26.gfxBackend`. With the backend permanently `"webgl2"` (or empty), the field is always empty-string — dead but harmless. Shrink at leisure. |
@@ -364,7 +364,7 @@ grep (excludes the docs archive directory, excludes files already covered above)
 | `js/physics/debris-world.js:1127,1130` | shrink | Comment: "updateInstances since 2026-09-02 (glx.js, wgx.js, tlx.js)…which is still GLX + WGX only." Stale once WGX is gone; rewrite to "GLX only." |
 | `js/perf/governor.js:63,209` | shrink | Comments about WebGPU/three.js perf tiers in PerfGov's own reasoning; no functional coupling. |
 | `js/car/car3d.js:12,196` | shrink | Comments citing the WGX/TSL shading id-chain and "GLX/WGX paint" — no functional coupling. |
-| `js/render/lamp-chunks.js` | shrink (see above, own section) | |
+| `js/render/shared/lamp-chunks.js` | shrink (see above, own section) | |
 | `js/lighting/profiles.js:78` | keep | "three.js genuinely cannot bind per-chunk sets" — this IS a functional capability gate (`hasPerChunkLights`), but the gate degrades safely once TLX never binds (the condition it guards becomes permanently one-sided, same as tuner.js — could be simplified alongside it). |
 | `js/car/car-mesh.js:275-276` | shrink | Comment: "no backend has ever had a deleteMesh (GLX, TLX and WGX all expose freeMesh…)". Rewrite to name GLX only. |
 | `types/game-ctx.d.ts:128,130,491` | shrink | `GfxBackend` type comment says "GLX by default; TLX/WGX when opted in" — rewrite once opting in is impossible. |
@@ -395,7 +395,7 @@ grep (excludes the docs archive directory, excludes files already covered above)
 
 | Guard | Why it goes red | Fix |
 |---|---|---|
-| `tests/data/ratchets.json` — `js/render/webgpu/wgx.js` (6037 lines), `js/render/three/tlx.js` (3132), `js/render/webgpu/wgsl-chunks.js` (1934), `js/render/three/tsl-lit.js` (1777) entries | `tools/ratchets.mjs` (`node --test tests/unit/ratchets.test.mjs`) reads each `files` key as a path and fails with `missing: true` (`tools/ratchets.mjs:55`) when the file no longer exists — `tests/unit/ratchets.test.mjs:14` asserts `rows.filter(r => r.missing)` is empty. | Delete the four `js/render/webgpu/wgx.js` / `js/render/three/tlx.js` / `js/render/webgpu/wgsl-chunks.js` / `js/render/three/tsl-lit.js` entries from `tests/data/ratchets.json`'s `files` object. (`js/render/glx.js` at 2259 lines stays.) |
+| `tests/data/ratchets.json` — `js/render/webgpu/wgx.js` (6037 lines), `js/render/three/tlx.js` (3132), `js/render/webgpu/wgsl-chunks.js` (1934), `js/render/three/tsl-lit.js` (1777) entries | `tools/ratchets.mjs` (`node --test tests/unit/ratchets.test.mjs`) reads each `files` key as a path and fails with `missing: true` (`tools/ratchets.mjs:55`) when the file no longer exists — `tests/unit/ratchets.test.mjs:14` asserts `rows.filter(r => r.missing)` is empty. | Delete the four `js/render/webgpu/wgx.js` / `js/render/three/tlx.js` / `js/render/webgpu/wgsl-chunks.js` / `js/render/three/tsl-lit.js` entries from `tests/data/ratchets.json`'s `files` object. (`js/render/glx/glx.js` at 2259 lines stays.) |
 | `tests/unit/load-order.test.mjs:172-181` ("DEFERRED_EDGES leave more than one TLX file ready at wave 0") | Asserts on `ApexRoster.DEFERRED_EDGES`/wave-0 shape that no longer exists once `DEFERRED` is `{}`. | Delete this test (and any sibling DEFERRED-wave assertions in the same file that assume a non-empty `DEFERRED`). |
 | `tests/unit/global-registry.test.mjs:60,148` (`TLXShaders: 8` writer count, DEFERRED-only-global crash guard) | The `GlobalRegistry` entry for `TLXShaders` (multi-writer accumulator, 8 files write it) has no files left once `js/render/three/*` moves — the registry scan finds 0 writers, not 8, and the test's declared count goes stale/fails. | Delete the `TLXShaders` (and any `WGXShaders`-equivalent, if one exists — grep did not surface a separate entry) row from the registry table. |
 | `tests/unit/ci-coverage.test.mjs:392-410` | Pins `gpu-census.yml`'s exact WGX-leg source text (`--backend webgpu`, the `tlxLeg`/`path3` regex, `r.wgx = typeof g.softPresent`). Goes red the moment those workflow lines move/delete. | Delete or rewrite the test to match whatever `gpu-census.yml` looks like after the workflow edit (delete outright if the WGX/TLX legs are cut rather than kept in reduced form). |
@@ -405,7 +405,7 @@ grep (excludes the docs archive directory, excludes files already covered above)
 | `tests/unit/backend-surface-parity.test.mjs` | See dedicated section above — rewritten, not deleted. | GLX-vs-`gfx.js`-header comparison, per the plan. |
 | `tests/unit/godray-keep-nearest.test.mjs` | See dedicated section above — rewritten, not deleted. | Shrinks to the GLX-only copy. |
 | `tests/unit/light-grid.test.mjs:242-314` (16 hits: WGX god-ray knob reads, TLX `k()`/`gk()` key checks, "every TUNE_DEFS uniform lives on GLX, WGX, and TLX") | Directly reads `js/render/webgpu/wgx.js` and the `js/render/three/*` shader files by path; the "every uniform lives on GLX/WGX/TLX" test literally cannot pass once two of the three are gone. | Delete the WGX-specific and TLX-specific test cases; rewrite "every TUNE_DEFS uniform lives on GLX, WGX, and TLX" to assert GLX only (a real narrowing of guarantee — flag this loss explicitly in the move-window PR description, since it was catching a real parity-drift class). |
-| `tests/unit/perf-try.test.mjs` (28 hits, `tests/unit/perf-governor.test.mjs` 6 hits) | Both files assert PerfGov/PerfTry gating logic is IDENTICAL across `js/render/webgpu/wgsl-*.js`, `js/render/webgpu/wgx.js`, and `js/render/three/tsl-*.js`/`tlx*.js` by reading and regex-matching those sources directly. | Delete every assertion block that reads a moved file; keep the GLX-only assertions (both files also test `js/render/glx.js`/`js/render/shaders/*.js` extensively — those stay). This is the largest single per-test edit burden in the whole move: budget real time here, not a one-line fix. |
+| `tests/unit/perf-try.test.mjs` (28 hits, `tests/unit/perf-governor.test.mjs` 6 hits) | Both files assert PerfGov/PerfTry gating logic is IDENTICAL across `js/render/webgpu/wgsl-*.js`, `js/render/webgpu/wgx.js`, and `js/render/three/tsl-*.js`/`tlx*.js` by reading and regex-matching those sources directly. | Delete every assertion block that reads a moved file; keep the GLX-only assertions (both files also test `js/render/glx/glx.js`/`js/render/shaders/*.js` extensively — those stay). This is the largest single per-test edit burden in the whole move: budget real time here, not a one-line fix. |
 | `tests/unit/perf-governor.test.mjs:449-533` | Same class — TLX/WGX carReflect, sunShaft, wet-mirror parity assertions. | Same fix — delete the moved-file assertions, keep GLX's. |
 | `tests/unit/ui-sheets-audit.test.mjs:255-310` (RENDERER select option-text and pick-persistence tests) | Asserts `optText()` returns `["WEBGL2", "THREE.JS", "WEBGPU"]` and that selecting `"three"`/`"webgpu"` persists to `apex26.gfxBackend`. Goes red once `BACKENDS` shrinks to `["webgl2"]` (renderer-picker.js edit above). | Rewrite to assert the single-stop (or removed) control's actual new behaviour. |
 | `tests/unit/apex-tools-mcp.test.mjs:167,184` (`apex_wgx_validate_static`, `apex_wgx_validate` catalog entries) | Asserts these MCP tool names exist in the `apex-tools` catalog. The wraps are removed from `tools/apex-tools-mcp.mjs` (AGENT-SURFACE.md section above). | Delete these two assertions (and any `apex_gfx_probe` one, if that wrap is also cut — the tool moves, so its MCP wrap should go with it). |

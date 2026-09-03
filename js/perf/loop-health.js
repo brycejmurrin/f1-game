@@ -10,7 +10,7 @@
  *
  * So: bounded tolerance, the shape this codebase already uses for retries —
  * js/perf/governor.js caps crash-sentinel strikes and lets clean races pay them
- * back; js/render/glx.js bounds context-loss reloads at two per tab session.
+ * back; js/render/glx/glx.js bounds context-loss reloads at two per tab session.
  * A run of consecutive faults is tolerated and any CLEAN frame pays the run
  * back to zero; at the cap the loop reports and rethrows exactly as before, so
  * a deterministic fault still stops loudly.

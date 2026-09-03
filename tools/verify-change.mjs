@@ -21,7 +21,7 @@
 //
 // Phases:
 //   1 fast (inline, ~30 s): tooling-fast when the change warrants it;
-//     verify-track.cjs per changed circuit; graph-parity when js/track/graph.js
+//     verify-track.cjs per changed circuit; graph-parity when js/track/scenery/graph.js
 //     moved; bump-cache --check. Any red here stops before browsers spin up.
 //   2 groups (background via test-bg.mjs): pick-tests selection, ONE group per
 //     batch (browser OR node) — sequential by default; AGENTS.md one-browser-
@@ -107,7 +107,7 @@ const circuits = files
   .filter(Boolean);
 const wantsToolingFast = groups.includes("tooling-fast") ||
   files.some((f) => /^(js|css|tools|tests|docs)\//.test(f) || /^index\.html|^AGENTS\.md/.test(f));
-const wantsGraphParity = files.some((f) => f === "js/track/graph.js");
+const wantsGraphParity = files.some((f) => f === "js/track/scenery/graph.js");
 const wantsSweepsHint = files.some((f) => /^js\/(track|circuits)\//.test(f) || /^tools\//.test(f));
 
 const plan = {

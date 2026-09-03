@@ -429,7 +429,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     //
     // Sampling both neighbours and lerping makes the floor continuous, so a
     // lowered camera SLIDES along the terrain instead of stepping down it.
-    // js/track/mesh.js banking() lerps for exactly this reason ("so cars and
+    // js/track/core/mesh.js banking() lerps for exactly this reason ("so cars and
     // cameras do not jump between the road mesh's ~4 m longitudinal nodes") —
     // this clamp simply never got the same treatment.
     const pos = (((s % track.total) + track.total) % track.total) / track.total * n;

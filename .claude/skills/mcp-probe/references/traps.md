@@ -133,7 +133,7 @@ same scene. A knob whose signal doesn't clear a same-value noise-floor check by
 several times over is not proven, whichever direction it points.
 
 For sky/cloud knobs specifically, don't reach for `sky()` — its ~58° pitch
-looks close to straight up, and the cloud plane in `js/render/shaders/sky.js`
+looks close to straight up, and the cloud plane in `js/render/glx/shaders/glsl-sky.js`
 is sampled as `dir.xz / up * 0.42`: dividing by a near-1 `up` collapses the
 sampled coordinate toward one point, so every pixel reads nearly the same
 noise value and the sky renders as a smooth gradient with no puffy structure

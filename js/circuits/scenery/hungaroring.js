@@ -483,7 +483,7 @@
         // sections overlapping when a node's own outerW reaches far enough to
         // touch a taller nearby section — confirmed: the s≈0.56 crest, py≈13.7m,
         // sits only ~75-90m from this stretch in world space) lives in
-        // js/track/mesh.js buildTerrain + js/track/tracks.js terrainYAt, both
+        // js/track/core/mesh.js buildTerrain + js/track/tracks.js terrainYAt, both
         // engine files this task may not edit. No further js/track/ mitigation
         // needed here since the symptom no longer reproduces at this circuit's
         // gaps; if it resurfaces at a different gap, tightening `terrainOuter`

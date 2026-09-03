@@ -36,7 +36,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const CASES = [
   {
     name: "side-flip moved kerbs/barriers on all 40 circuits (89ce4f2f)",
-    changed: ["js/track/tracks.js", "js/track/geom.js"],
+    changed: ["js/track/tracks.js", "js/track/core/geom.js"],
     catches: "tests/specs/terrain-over-road.spec.js",
   },
   {

@@ -103,7 +103,7 @@ test("AgentView.create() still returns the whole documented surface", () => {
 
 // describe("span:N") and render({what:"circuit"}) read the SAME span records
 // (lap fractions, per noteSpan), and both must agree with the geometry walker
-// along() (js/track/scenery-structures.js): spans WRAP the start line
+// along() (js/track/scenery/structures.js): spans WRAP the start line
 // (~20 circuits fence 0.95->0.06), and s0===s1 (mod 1) walks a FULL lap
 // (along()'s `|| n`; monaco/montreal/redbull wall/fence(0.0, 1.0)) — so
 // lengthM is the wrapped difference, and a full-lap span is total, not 0.

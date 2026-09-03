@@ -278,8 +278,8 @@ test("every TUNE_DEFS uniform lives on GLX, WGX, and TLX", () => {
   // A new `u:` knob that ships on GLX only is the project's most persistent
   // look-drift: the slider moves, two backends ignore it. Name-presence is
   // the cheap half (upload + consume formulas stay in gfx-backend-canary).
-  const glx = ["js/render/glx.js", "js/render/glx/post.js", "js/render/glx/shadow.js",
-    "js/render/shaders/lit.js", "js/render/shaders/post.js", "js/render/shaders/sky.js"]
+  const glx = ["js/render/glx/glx.js", "js/render/glx/post.js", "js/render/glx/shadow.js",
+    "js/render/glx/shaders/glsl-lit.js", "js/render/glx/shaders/glsl-post.js", "js/render/glx/shaders/glsl-sky.js"]
     .map(read).join("\n");
   const wgx = ["js/render/webgpu/wgx.js", "js/render/webgpu/wgsl-chunks.js",
     "js/render/webgpu/wgsl-post.js"].map(read).join("\n");
@@ -548,7 +548,7 @@ test("god-ray lamp arrays are sized to the ONE bound the beam march walks", () =
   // extra slots are packed and uploaded every frame with no reader. So the
   // GLSL array size, the loop bound, the JS cap and the scratch lengths all
   // have to be the same number.
-  const shd = read("js/render/shaders/post.js");
+  const shd = read("js/render/glx/shaders/glsl-post.js");
   const post = read("js/render/glx/post.js");
 
   const N = Number((shd.match(/#define GR_MAX_LIGHTS (\d+)/) || [])[1]);

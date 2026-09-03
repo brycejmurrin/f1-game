@@ -446,7 +446,7 @@ const SceneryNature = (function () {
       // exactly there — and every one of the 28 ridge() calls across 24 circuits
       // passes `pyMin`, the lap's LOWEST NODE. The ground these backdrop ridges
       // actually stand on out there is the floor slab, and that sits at
-      // `floorY = pyMin - 1` (js/track/surface.js) — so the ridge line perched
+      // `floorY = pyMin - 1` (js/track/core/surface.js) — so the ridge line perched
       // above its own ground by construction, fleet-wide. 206 of monza's 214
       // flagged clusters were this one helper.
       //

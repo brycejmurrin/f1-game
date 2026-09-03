@@ -1,13 +1,13 @@
 ---
 name: asset-pack
-description: Use when baking or verifying assets/pack, editing js/render/assets.js or tools/assets.mjs, debugging matTexMix/baked PBR blend, __apex.assets()/matTex(), MAT layer mismatches, or procedural-vs-textured tarmac look on GLX/TLX/WGX.
+description: Use when baking or verifying assets/pack, editing js/render/shared/assets.js or tools/assets.mjs, debugging matTexMix/baked PBR blend, __apex.assets()/matTex(), MAT layer mismatches, or procedural-vs-textured tarmac look on GLX/TLX/WGX.
 ---
 
 # Baked asset pack
 
 Optional PBR material arrays in `assets/pack/` (albedo+roughness, normal+AO)
 indexed by per-vertex **MAT id**, blended over the procedural look via
-`matTexMix`. Tool: `tools/assets.mjs`. Loader: `js/render/assets.js`.
+`matTexMix`. Tool: `tools/assets.mjs`. Loader: `js/render/shared/assets.js`.
 
 Every failure degrades to **pure procedural** — no pack, bad manifest, decode
 error, or a backend without `createTextureArray` never breaks boot. Deep

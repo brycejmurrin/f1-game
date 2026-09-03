@@ -34,7 +34,7 @@ const manifest = hasPack ? JSON.parse(fs.readFileSync(MANIFEST, "utf8")) : null;
 // renderer-free), so this is the actual shipping table, not a transcription.
 function realMAT() {
   const vm = require("node:vm");
-  const src = fs.readFileSync(path.join(ROOT, "js", "track", "geom.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js", "track", "core", "geom.js"), "utf8");
   const sandbox = { Math, Array, Float32Array, Object, JSON, console };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
@@ -58,7 +58,7 @@ test("bake tool's MAT table matches TrackGeom.MAT exactly", () => {
   assert.ok(block, "could not find the MAT table in tools/assets.mjs");
   const tool = {};
   for (const m of block[1].matchAll(/(\w+):\s*(\d+)/g)) tool[m[1]] = Number(m[2]);
-  assert.deepEqual(tool, real, "tools/assets.mjs MAT has drifted from js/track/geom.js");
+  assert.deepEqual(tool, real, "tools/assets.mjs MAT has drifted from js/track/core/geom.js");
 });
 
 test("GLASS and FLAG are never given a baked layer", () => {
@@ -77,12 +77,12 @@ test("GLASS and FLAG are never given a baked layer", () => {
 });
 
 test("the shader's layer count matches the MAT table size", () => {
-  const lit = fs.readFileSync(path.join(ROOT, "js", "render", "shaders", "lit.js"), "utf8");
+  const lit = fs.readFileSync(path.join(ROOT, "js", "render", "glx", "shaders", "glsl-lit.js"), "utf8");
   assert.match(lit, /uniform float uMatTexScale\[17\];/,
     "lit.js uMatTexScale must be sized for all 17 MAT ids (FLAT..ASPHALT)");
-  const glx = fs.readFileSync(path.join(ROOT, "js", "render", "glx.js"), "utf8");
+  const glx = fs.readFileSync(path.join(ROOT, "js", "render", "glx", "glx.js"), "utf8");
   assert.match(glx, /MAT_TEX_LAYERS = 17/, "glx.js MAT_TEX_LAYERS must be 17");
-  const assets = fs.readFileSync(path.join(ROOT, "js", "render", "assets.js"), "utf8");
+  const assets = fs.readFileSync(path.join(ROOT, "js", "render", "shared", "assets.js"), "utf8");
   assert.match(assets, /MAT_LAYERS = 17/, "assets.js MAT_LAYERS must be 17");
 });
 
@@ -94,9 +94,9 @@ test("shader sources parse as JS (no stray backticks in GLSL comments)", () => {
   // `waitForFunction(() => !!window.__apex)` with a bare 30 s timeout that says
   // nothing about shaders. One cheap parse catches it in milliseconds.
   const cp = require("node:child_process");
-  for (const f of ["js/render/shaders/lit.js", "js/render/shaders/chunks.js",
-                   "js/render/shaders/sky.js", "js/render/shaders/fx.js",
-                   "js/render/shaders/post.js"]) {
+  for (const f of ["js/render/glx/shaders/glsl-lit.js", "js/render/glx/shaders/glsl-chunks.js",
+                   "js/render/glx/shaders/glsl-sky.js", "js/render/glx/shaders/glsl-fx.js",
+                   "js/render/glx/shaders/glsl-post.js"]) {
     const r = cp.spawnSync(process.execPath, ["--check", path.join(ROOT, f)], { encoding: "utf8" });
     assert.equal(r.status, 0, `${f} does not parse as JS:\n${r.stderr}`);
   }
@@ -105,7 +105,7 @@ test("shader sources parse as JS (no stray backticks in GLSL comments)", () => {
 test("the baked-material knob is wired, and ON so the pack can contribute", () => {
   // Default is non-zero so a loaded pack actually reaches the shader. Safety
   // (no pack / bad pack / no createTextureArray → procedural look) lives in
-  // js/render/assets.js, not in the knob staying at 0.
+  // js/render/shared/assets.js, not in the knob staying at 0.
   const lighting = fs.readFileSync(path.join(ROOT, "js", "lighting", "knobs.js"), "utf8");
   const def = lighting.match(/\{ id: "matTexMix",[^}]*\}/);
   assert.ok(def, "matTexMix must exist in TUNE_DEFS");
@@ -176,7 +176,7 @@ test("pack manifest is well-formed", { skip: !hasPack && "no pack installed" }, 
 });
 
 test("the pack carries a mobile LOW variant", { skip: !hasPack && "no pack installed" }, () => {
-  // js/render/assets.js picks materials.low on a phone and SILENTLY falls back
+  // js/render/shared/assets.js picks materials.low on a phone and SILENTLY falls back
   // to the full-size strips when it is absent — no error, no warning, mobile
   // just quietly pays the desktop cost. That failure is invisible from the
   // desktop the pack was baked on, so it needs a test rather than a comment.
@@ -274,7 +274,7 @@ test("bake-synthetic-models replaces Kenney bins with Apex26-Procedural AX26", (
 });
 
 test("bake-model round-trips glTF into the game's own vertex format", () => {
-  // Exercises the whole model path — the real js/render/gltf.js reader in a VM,
+  // Exercises the whole model path — the real js/render/shared/gltf.js reader in a VM,
   // the MAT stamping, the AX26 writer — against a hand-built single-triangle
   // .glb. Without this the bake-model command is untested code that would only
   // fail the first time somebody reached for it.
@@ -321,7 +321,7 @@ test("bake-model round-trips glTF into the game's own vertex format", () => {
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
     assert.equal(r.status, 0, `bake-model failed: ${r.stderr || r.stdout}`);
 
-    // Parse it exactly the way js/render/assets.js _parseModel does.
+    // Parse it exactly the way js/render/shared/assets.js _parseModel does.
     const b = fs.readFileSync(path.join(dir, "models", "tri.bin"));
     const buf = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
     const dv = new DataView(buf);
@@ -437,7 +437,7 @@ test("TrackGeom.addMesh transforms a baked model correctly", () => {
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js", "track", "geom.js"), "utf8")
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js", "track", "core", "geom.js"), "utf8")
     .replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
   const G = sandbox.TrackGeom;
   assert.equal(typeof G.addMesh, "function");
@@ -481,7 +481,7 @@ test("TrackGeom.addMesh transforms a baked model correctly", () => {
 });
 
 test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () => {
-  // The browser baker's one genuinely novel piece. js/render/gltf.js is GLB-only
+  // The browser baker's one genuinely novel piece. js/render/shared/gltf.js is GLB-only
   // and refuses external .bin URIs, while Poly Haven ships .gltf with a sidecar
   // .bin — so toGLB() bridges them. A bug here surfaces at runtime as an opaque
   // "malformed GLB", far from its cause, so it is pinned by round-tripping a
@@ -498,7 +498,7 @@ test("webbake toGLB re-packs .gltf + .bin into something gltf.js accepts", () =>
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
-  load("js/render/gltf.js", sandbox);
+  load("js/render/shared/gltf.js", sandbox);
   load("assets/pack/webbake.js", sandbox);
   assert.equal(typeof sandbox.WebBake.toGLB, "function");
 

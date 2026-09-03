@@ -80,7 +80,7 @@ function buildContext(opts) {
   for (const f of PRELUDE) runFile(f);
 
   // Instrument the geometry emitters. Emitters called from INSIDE
-  // js/track/geom.js (addCyl -> emit) use module-scope references and are
+  // js/track/core/geom.js (addCyl -> emit) use module-scope references and are
   // untouched, so nothing is double-counted.
   const prims = [];
   let q = 0;                      // monotonic emission sequence

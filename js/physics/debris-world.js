@@ -877,7 +877,7 @@ function updatePanels(dt, px, pz) {
 // WHY A HINT. Tracks.project with no hint evaluates EVERY centreline segment,
 // and n = round(total/4) (js/track/tracks.js): 824 segments on monaco, 1444 on
 // monza, 1543 on vegas, 1737 on spa. With a hint it evaluates ±16 nodes = 33
-// (js/track/spline.js). This ran unhinted for every live shard (cap 48), every
+// (js/track/core/spline.js). This ran unhinted for every live shard (cap 48), every
 // disturbed cone and every broken panel at the caution machine's 4 Hz
 // (QUERY_EVERY in js/race/race-control.js) — while every one of those records
 // already carries the arc it was placed at.

@@ -156,8 +156,8 @@ export function leftovers(root, moves) {
 }
 
 /** Path references the exact-token sweep CANNOT see: a path built from
- *  SEPARATE quoted segments, `path.join(ROOT, "js", "track", "geom.js")`.
- *  There is no `js/track/geom.js` token in that source, so nothing is
+ *  SEPARATE quoted segments, `path.join(ROOT, "js", "track", "core", "geom.js")`.
+ *  There is no `js/track/core/geom.js` token in that source, so nothing is
  *  rewritten and the break only surfaces as an ENOENT when the suite runs
  *  (2026-09-03, batch 2: assets-pack.test.mjs read the lighting knobs
  *  that way). Reported, never rewritten — the call shape varies too much to

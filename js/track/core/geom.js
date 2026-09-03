@@ -14,7 +14,7 @@ const TrackGeom = (function () {
                 // in the table — tarmac is nearly flat, and the road is the one
                 // surface viewed at a grazing angle at 80 m/s, so anything with
                 // real relief crawls. See applyMaterial()/matBumpHeight() in
-                // js/render/shaders/lit.js.
+                // js/render/glx/shaders/glsl-lit.js.
                 ASPHALT: 16 };
 
   function cross(a, b) {
@@ -239,7 +239,7 @@ const TrackGeom = (function () {
 
   // Stamp a BAKED MODEL's geometry into the accumulator: uniform scale, a yaw
   // about world +Y, then a translation. `mesh` is the {pos,nrm,col,mat,idx}
-  // shape js/render/assets.js parses out of the pack — but this function never
+  // shape js/render/shared/assets.js parses out of the pack — but this function never
   // touches Assets or any renderer, so geom.js keeps loading under the bare VM
   // sandbox (tools/verify-track.cjs) with no stubbing.
   //

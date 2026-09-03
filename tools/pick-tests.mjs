@@ -74,11 +74,10 @@ export const RULES = [
   // tests/unit/pick-tests.test.mjs holds this to the baselines actually being
   // absent, so generating them re-opens the question instead of leaving a
   // stale exclusion behind.
-  [/^js\/render\/(glx|gfx)/, ["gfx"], "the shipped WebGL2 path"],
-  [/^js\/render\/shaders\//, ["gfx"], "GLSL leaves feed every lit surface"],
+  [/^js\/render\/(glx\/|gfx)/, ["gfx"], "the shipped WebGL2 path and its GLSL leaves"],
   [/^js\/render\/webgpu\//, ["gfx"], "WGX is feature-detected; GLX must still boot"],
   [/^js\/render\/three\//, ["gfx"], "the three.js backend has its own probe spec"],
-  [/^js\/render\/assets\.js/, ["hooks"], "assets-api.spec.js rides in test:hooks"],
+  [/^js\/render\/shared\//, ["hooks", "gfx"], "the baked-pack loader, glTF and the lamp chunks every backend shares"],
 
   // ── track engine + circuit data ─────────────────────────────────────────
   [/^js\/track\/scenery/, ["circuits", "sweeps"], "prop placement and the full-fleet clip audits"],
@@ -90,10 +89,10 @@ export const RULES = [
   // props-over-road/terrain-over-road, which lived only in `test:scenery` (now `test:circuits`).
   // Routing it to circuit+physics+sweeps+foundation ran everything except the
   // two specs that actually report the class of bug the file produces.
-  [/^js\/track\/(tracks|mesh|spline|surface|geom|graph)\.js/,
+  [/^js\/track\/core\/space\.js/, ["driving"], "world<->track projection"],
+  [/^js\/track\/(core\/|tracks\.js)/,
    ["circuits", "driving", "sweeps"],
    "road geometry reaches walls, elevation, physics, every circuit's foundation — and buildProps lives here"],
-  [/^js\/track\/space\.js/, ["driving"], "world<->track projection"],
   [/^js\/track\/maps\.js/, ["hooks", "circuits"], "layout metadata"],
   [/^js\/circuits\/.*\.js$/, ["circuits"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
 

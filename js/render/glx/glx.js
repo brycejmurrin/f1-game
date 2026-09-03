@@ -98,7 +98,7 @@ const GLX = (function () {
   // Identity model matrix for instanced draws: the transform lives in the
   // per-instance columns, so uModel is unused on that path.
   const IDENT4 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
-  // Baked PBR material arrays (js/render/assets.js). Layer index == MAT id, so
+  // Baked PBR material arrays (js/render/shared/assets.js). Layer index == MAT id, so
   // the shader indexes them with the per-vertex material id it already carries.
   // Null until a pack is loaded — a pack ships in assets/pack and loads at boot
   // (matTexMix def 1.0), but load is async and can fail, so every path below
@@ -943,7 +943,7 @@ const GLX = (function () {
   //
   // `images` is a sparse array indexed by MAT id (holes = that material has no
   // baked map and keeps its procedural look). Every image must already be
-  // size×size; the caller (js/render/assets.js) guarantees that from the pack
+  // size×size; the caller (js/render/shared/assets.js) guarantees that from the pack
   // manifest. Returns null rather than throwing on any failure — a missing or
   // malformed pack must degrade to the shipping look, never break the render.
   function createTextureArray(size, images, layers) {
@@ -1644,7 +1644,7 @@ const GLX = (function () {
 
   // ---------- instanced draw (the TrackGraph.batches() consumer) ----------
   // One canonical mesh + a per-instance transform, instead of the same geometry
-  // fused into the world N times. See js/track/graph.js and
+  // fused into the world N times. See js/track/scenery/graph.js and
   // docs/research/SCENE-GRAPH-PLAN.md; the producer is graph.batches().
   //
   // Layout: the mesh's own vertex VBO keeps attributes 0-4 with divisor 0, and a
@@ -2139,7 +2139,7 @@ const GLX = (function () {
     init,
     resize,
     createMesh,
-    // TrackGraph.batches() consumer — see js/track/graph.js.
+    // TrackGraph.batches() consumer — see js/track/scenery/graph.js.
     createInstancedBatch,
     cullInstances,
     updateInstances,

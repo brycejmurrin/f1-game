@@ -556,7 +556,7 @@ const TrackMesh = (function () {
         col.push(c[0], c[1], c[2]);
         mat.push(m);
         // Track-space coords for the fragment-side marking SDF (roadMarkings()
-        // in js/render/shaders/lit.js). hw > 0 is what marks a vertex as road
+        // in js/render/glx/shaders/glsl-lit.js). hw > 0 is what marks a vertex as road
         // SURFACE — the kerb ribbon and the edge skirt push hw 0 so they are
         // skipped. Must stay in lockstep with pos: three writers append here.
         trk.push(k * ds, o, w);
@@ -629,7 +629,7 @@ const TrackMesh = (function () {
     // That carve lives in surface.js `ground[]` — and it MUST, because the bridge
     // fracs are pre-rotation and need `def._sceneryShift` compensation. Do not
     // re-derive it here from a raw `b.s * total`: that lands the window two thirds
-    // of a lap away — `TrackSurface.profile` in js/track/surface.js carries the fix.
+    // of a lap away — `TrackSurface.profile` in js/track/core/surface.js carries the fix.
     // Adaptive lateral verts per side: a gravel/runoff verge at the road edge graded
     // out to grass. The old bright concrete apron has been removed — it read as a
     // glaring light slab flanking the track — so the verge is gravel, not tarmac.

@@ -8,9 +8,9 @@
  * both files at once. A citation rots the first time the cited file grows.
  *
  * Measured during the 2026-08 cleanup: js/render/webgpu/wgsl-chunks.js cited
- * `js/render/glx.js:39-896` for LIT_FS about thirty times. glx.js contains no
+ * `js/render/glx/glx.js:39-896` for LIT_FS about thirty times. glx.js contains no
  * shader source at all — it destructures GLXShaders, and the GLSL lives in
- * js/render/shaders/lit.js. Every one of those pointed a reader at uniform
+ * js/render/glx/shaders/glsl-lit.js. Every one of those pointed a reader at uniform
  * upload code. Three more files had the same rot, and four separate numeric
  * claims elsewhere were simply wrong.
  *
@@ -22,7 +22,7 @@
  *      but it catches the whole class that outlived a file shrinking.
  *
  *   2. A RATCHET on how many there are. Converting one to a SYMBOL name
- *      ("LIT_FS in js/render/shaders/lit.js") makes it permanently true, and
+ *      ("LIT_FS in js/render/glx/shaders/glsl-lit.js") makes it permanently true, and
  *      that is the direction this should move. Lowering the ceiling is the
  *      reward; raising it is a deliberate edit with a reason in the commit.
  *      Same idiom as tests/data/ratchets.json and tools/clip-baseline.json.
@@ -73,7 +73,7 @@ const FILES = [...walk(path.join(ROOT, "js")), ...walk(path.join(ROOT, "css")),
                ...walk(path.join(ROOT, "types"))];
 
 // Index every js/ file by full repo-relative path AND by basename, so both
-// `js/render/shaders/lit.js:344` and a bare `lit.js:344` resolve. A basename
+// `js/render/glx/shaders/glsl-lit.js:344` and a bare `lit.js:344` resolve. A basename
 // shared by two files is ambiguous and deliberately skipped rather than guessed.
 const byPath = new Map(), byBase = new Map(), ambiguous = new Set();
 for (const abs of FILES) {
@@ -131,7 +131,7 @@ test("cross-file line citations are not multiplying", () => {
   assert.ok(ALL.length <= CITATION_CEILING,
     `${ALL.length} cross-file line citations in js/, ceiling ${CITATION_CEILING}. ` +
     "A line number in another file cannot be kept true — nothing edits both. Cite the SYMBOL " +
-    "(\"LIT_FS in js/render/shaders/lit.js\") instead, or raise the ceiling here and say why.");
+    "(\"LIT_FS in js/render/glx/shaders/glsl-lit.js\") instead, or raise the ceiling here and say why.");
 });
 
 test("the citation ceiling has not been left far above the real count", (t) => {

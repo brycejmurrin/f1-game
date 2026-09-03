@@ -5,7 +5,7 @@
 // invisible to every guard that existed:
 //
 //   1. FLOATING LIGHTS. GLX.drawGlow paints an additive lens-halo billboard for
-//      any light record with glareW > 0 (js/render/glx.js, "0 = fixture-less
+//      any light record with glareW > 0 (js/render/glx/glx.js, "0 = fixture-less
 //      light ... must never paint a floating halo"). buildTrackLights honours
 //      that for its synth fill lights, but the three START-GANTRY DOWNLIGHTS
 //      shipped at glareW 0.3 while being explicitly NOT parented to the scenery
@@ -59,7 +59,7 @@ function loadLightTune() {
   return sb.LightTune;
 }
 
-const STRIDE = 15;          // flat light record: see js/render/glx.js frame.lights
+const STRIDE = 15;          // flat light record: see js/render/glx/glx.js frame.lights
 const I_RAD = 6, I_GLARE = 14;
 // A fixture "carries" a light when the record sits on the registered lens. The
 // two are written from the same position, so this is an identity check with
@@ -142,7 +142,7 @@ test("every registered fixture's pool reaches the road", () => {
   assert.deepEqual(offenders, [],
     "the pool window (1-(d/r)^4)^2 is exactly 0 past r, so a fixture whose lens " +
     "is further from the road than its radius lights nothing at all. Tall masts " +
-    "carry their real throw as minRadius (js/track/scenery-identity.js):\n  " +
+    "carry their real throw as minRadius (js/track/scenery/identity.js):\n  " +
     offenders.join("\n  "));
 });
 

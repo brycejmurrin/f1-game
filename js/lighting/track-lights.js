@@ -402,7 +402,7 @@ function buildTrackLights(track, onlyAlways) {
     // here too — the gantry bar previously ignored them ("every floodlight" per
     // help text; the energy factor was a 0.55 literal = poolEnergy's default).
     // volW 0 / glareW 0: this bar is NOT parented to the scenery gantry (see the
-    // note in js/track/scenery-structures.js), so there is no fixture at its
+    // note in js/track/scenery/structures.js), so there is no fixture at its
     // position — and drawGlow paints a lens halo for any record with glareW > 0.
     // Shipped at glareW 0.3 it put three glowing orbs 8 m over the start line
     // with nothing holding them up, each with a volumetric shaft under it; on

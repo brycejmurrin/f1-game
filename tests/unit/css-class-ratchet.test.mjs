@@ -151,7 +151,7 @@ const CLASS_CEILING = 534;
 // +4 2026-08-26: #pm-hud-sample and its hud-box — the HUD SIZE slider's live
 // sample; every real cluster is hidden while the settings sheet is open, so
 // the slider had zero visible effect.
-// +1 2026-08-27: the js/render/lamp-chunks.js script tag (new-file lockstep —
+// +1 2026-08-27: the js/render/shared/lamp-chunks.js script tag (new-file lockstep —
 // the shared per-chunk lamp bake consumed by GLX and WGX).
 // +8 2026-08-27: mode sublines on the title 2x2 (RACE / TIME TRIAL / RACE A
 // FRIEND / SEASON each gain a stack span + sub span answering "what is

@@ -414,7 +414,7 @@ sub-pixel-band blind spot as `starBright` above, just narrower.
 
 **`cloudDef` (the 18th) needed a THIRD trap fixed: `sky()`'s hardcoded ~58°
 pitch is the wrong angle to test it.** The cloud noise plane is sampled as
-`dir.xz / up * 0.42` (`js/render/shaders/sky.js`) — dividing by `up` means a
+`dir.xz / up * 0.42` (`js/render/glx/shaders/glsl-sky.js`) — dividing by `up` means a
 steep look-up angle compresses the sampled coordinate toward a single point,
 so every pixel in frame reads nearly the same noise value and the sky renders
 as a smooth gradient with no puffy structure regardless of `cloudDef`. All
@@ -569,7 +569,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampGapFill` | DARK-GAP FILL | 0 … 150 | 60 | — |   | track-lights.js×2 |
 | `lampBehindBias` | BEHIND-CAM BIAS | 0.2 … 8 | 5.25 | — |   | frame-lights.js×3 |
 | `roadChunkLamps` | PER-CHUNK ROAD | 0 … 1 | 0 | — | ✓ | apex.js, game.js×5, chunked.js |
-| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | apex.js×3, game.js×7, frame-lights.js×2, tuner-panel.js, glx.js, chunked.js×2 |
+| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | apex.js×3, game.js×7, frame-lights.js×2, tuner-panel.js, chunked.js×2, glx.js |
 | `lampReach` | LAMP REACH AHEAD | 1 … 4 | 1 | — |   | frame-lights.js×2 |
 | `lampNearClamp` | LAMP NEAR CLAMP | 1 … 8.5 | 4 | `uLampNearClamp` | ✓ | glx.js×2 |
 
@@ -706,7 +706,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `gainG` | GAIN · GREEN | 0.4 … 2.5 | 1 | — | ✓ | post.js×4 |
 | `gainB` | GAIN · BLUE | 0.4 … 2.5 | 1 | — | ✓ | post.js×4 |
 | `vibrance` | VIBRANCE | 0 … 1.5 | 0.2 | `uVibrance` | ✓ | post.js×2 |
-| `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, gltf.js, post.js×2, geom.js, tracks.js |
+| `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, post.js×2, gltf.js, geom.js, tracks.js |
 | `gradeStr` | GRADE STRENGTH | 0 … 2.5 | 1 | — | ✓ | game.js |
 | `shadowHue` | SHADOW TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |
 | `hiHue` | HIGHLIGHT TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |

@@ -14,7 +14,7 @@ expectation vs real regression.
    `tools/verify-change.mjs` already runs this inline when the plan names a
    circuit.
 
-2. **`js/track/graph.js` edited? Also run scene-graph parity.**
+2. **`js/track/scenery/graph.js` edited? Also run scene-graph parity.**
    `pick-tests.mjs` does **not** route to it — this is the one source
    directory whose correctness check lives entirely outside the
    `test:<group>` map:

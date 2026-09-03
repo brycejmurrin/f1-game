@@ -72,7 +72,7 @@ the tool's own header.
 | **gen-slider-doc.mjs** | Regenerates the slider tables in `docs/LIGHTING-TUNER-SLIDERS.md` from `TUNE_DEFS`; `--check` fails on drift. | lighting-tuner |
 | **gen-tools-readme.mjs** | Generates `tools/README.md` from each tool's `@doc` / `@skill` / `@section` header tags; `--check` fails on drift. | check-changes |
 | **gfx-probe.mjs** | WEBGPU + THREE screenshot probe with the right Chromium flags: `--backend`, `--tlx-webgpu`, `--lavapipe`, `--lite`. | webgpu-debug / mcp-probe |
-| **gltf-selftest.mjs** | Self-test for the `js/render/gltf.js` GLB loader (Node ESM, no deps). | webgl-debug |
+| **gltf-selftest.mjs** | Self-test for the `js/render/shared/gltf.js` GLB loader (Node ESM, no deps). | webgl-debug |
 | **glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | webgl-debug |
 | **gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | gpu-census.yml |
 | **gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | gpu-census.yml |

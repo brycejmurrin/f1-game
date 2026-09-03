@@ -328,10 +328,10 @@ test("Circuit filters are not nested in a listbox and circuits expose button sta
 test("scenery SUPPRESSED is coalesced, not a per-prop Log.warn", () => {
   const files = [
     "js/track/tracks.js",
-    "js/track/scenery-structures.js",
-    "js/track/scenery-nature.js",
-    "js/track/scenery-city.js",
-    "js/track/scenery-identity.js",
+    "js/track/scenery/structures.js",
+    "js/track/scenery/nature.js",
+    "js/track/scenery/city.js",
+    "js/track/scenery/identity.js",
   ];
   for (const rel of files) {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8");

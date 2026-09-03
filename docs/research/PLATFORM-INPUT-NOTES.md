@@ -145,7 +145,7 @@ across engines — three.js, Babylon, Unity and Cesium all carry the same issue.
 iOS Safari is the most memory-restrictive WebGL host in common use, and the
 limit has been *lowered* by point releases.
 
-Already handled here — `js/render/glx.js:225-234` listens for
+Already handled here — `js/render/glx/glx.js:225-234` listens for
 `webglcontextlost`/`webglcontextrestored` and reloads on restore, and
 `js/game.js` persists a flag so a device that has lost a context once starts
 more conservatively. Noted so the next person does not re-diagnose it.

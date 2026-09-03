@@ -54,7 +54,7 @@ thing**, which is how this project has lost the most time.
 Chrome's `ForcedReflow` insight fires on a cold boot, and it is **not worth
 acting on**: total reflow time **9 ms**, and Chrome's own estimated savings is
 **none**. Top attributed frames were `tick` (`js/game.js`), `cssSize`
-(`js/render/glx.js`), `updateTrackPreview` (`js/ui/select-screen.js`), `measure`
+(`js/render/glx/glx.js`), `updateTrackPreview` (`js/ui/select-screen.js`), `measure`
 (`js/ui/scroll-fade.js`) and `observe` (`js/ui/sheet-shape.js`); the single
 largest bucket (42 ms) is `[unattributed]`. It is a one-time boot cost, not a
 per-frame one. Do not re-chase it.
@@ -260,7 +260,7 @@ front around a 40 m circle. Measured (bahrain, day, eye pinned, aim ±40°,
 | 80 m | 0.004 – 0.308 | faint either way |
 
 **Repair.** Fade from eye XZ + look-target Y (`vec3(uEye.x, uShadowCtr.y, uEye.z)`
-in `js/render/shaders/lit.js`; same in `tsl-lit.js` / `wgsl-chunks.js`). Height
+in `js/render/glx/shaders/glsl-lit.js`; same in `tsl-lit.js` / `wgsl-chunks.js`). Height
 stays on the look target so aerial cameras do not erase ground shadows. At the
 default 80 m box / 20 m bias, `0.84·range` from the eye equals the 90° box edge
 (`sqrt(70²−20²)≈67`), so the 0.62/0.84 ratios stay. Box snap and car-map lookAt
@@ -274,7 +274,7 @@ true of **whole-build A/B timing** and false of **attribution**, and the
 difference has already cost two candidate findings.
 
 Both build inside `vm.createContext`, so every bare global read goes through the
-contextified global's interceptor — the ~150-250 ns effect `js/track/models.js`
+contextified global's interceptor — the ~150-250 ns effect `js/track/scenery/models.js`
 documents for `firstNonFinite`. The same vegas build profiled in the VM and in a
 plain realm (identical `TRACK_VM` manifest, loaded by indirect eval):
 
@@ -414,7 +414,7 @@ zero, an async write killed by `process.exit`, a global read going through a
 contextified-global interceptor. Findings **estimated from operation counts**
 came in at a fraction of their billing or vanished. Two of my own predictions
 were in the second category as well — see `nodeGrid`'s note in
-`js/track/mesh.js` and the terrain-normal scope note in the same file.
+`js/track/core/mesh.js` and the terrain-normal scope note in the same file.
 
 Apply that discount to everything in §3.
 
@@ -422,10 +422,10 @@ Apply that discount to everything in §3.
 
 - **God-ray sun march** ran every night frame with `uStr == 0`. The lamp half
   was gated; the sun half was not. `accum` has exactly one consumer, so the
-  guard is provably equivalent. `js/render/shaders/post.js`.
+  guard is provably equivalent. `js/render/glx/shaders/glsl-post.js`.
 - **`sampleShadow`** ran its full PCF — up to 16 dependent texture fetches per
   opaque fragment — when `uShadowStr == 0`, whose only non-trivial exit is
-  `max(0.0, mix(1.0, sh, uShadowStr * edgeFade))`. `js/render/shaders/lit.js`.
+  `max(0.0, mix(1.0, sh, uShadowStr * edgeFade))`. `js/render/glx/shaders/glsl-lit.js`.
 - **ACTIVE AERO flaps** had no distance gate while the brake rings twelve lines
   above did. Gated at 150 m for rivals. `js/game.js`.
 - **`UiLayers.anyOpen()`** ran a 24-selector `querySelectorAll` every frame with
@@ -668,7 +668,7 @@ else if (…) { /* shed a feature */ }
 Step 1.0 down by 0.1 in IEEE doubles and you get
 `1 → 0.9 → 0.8 → 0.7000000000000001 → 0.6000000000000001 → 0.5000000000000001`.
 That last value is **one ULP ABOVE 0.5**, so `cur > 0.5` is true forever. The
-request then clamps to 0.5 and `setRenderScale` (`js/render/glx.js`) rejects it against its own
+request then clamps to 0.5 and `setRenderScale` (`js/render/glx/glx.js`) rejects it against its own
 `Math.abs(s - renderScale) < 0.02` dead zone — and because the outer `if` was
 ENTERED, the `else if` that sheds a feature was **never evaluated**. Only the
 GRAPHICS preset's `_userTier` still bit, because that is a separate term in
@@ -698,13 +698,13 @@ return false` — **not the shipped contract**, which rejects any change under
 the real dead zone and outside `s === scale`. A second fake pinned the floor at
 exactly `0.5`, a value the real down-chain never produces, so the test written to
 cover "scale floor hit" tested a state that cannot occur. Both fakes now mirror
-`setRenderScale`'s dead-zone clamp in `js/render/glx.js` verbatim, and the
+`setRenderScale`'s dead-zone clamp in `js/render/glx/glx.js` verbatim, and the
 recovery test fails on the old code.
 **A fake that is easier than the contract will hide exactly the bugs the
 contract's hard edges cause.**
 
 **Related, and fixed in the same pass: `envReady` is a one-way latch.**
-`js/game.js` stops calling `envFaceBegin` at `tier() >= 1`, but `js/render/glx.js`
+`js/game.js` stops calling `envFaceBegin` at `tier() >= 1`, but `js/render/glx/glx.js`
 sets `envReady = true` on a completed cube and only ever clears it in
 `envProbeReset()` — whose sole caller was the track switch. So `uEnvStr` stayed
 at `carEnvCube` (0.3 on desktop) and every car-paint fragment kept paying a
@@ -721,7 +721,7 @@ honestly as a side effect.
 `track.meshes.roadChunked` as "a fix that exists in the tree and is unreachable".
 That is wrong and the correction matters, because the suggested action was to
 reach it. `createChunkedMesh` (`js/render/glx/chunked.js`) **never carried
-`data.trk`** — the fifth attribute `createMesh` builds (`js/render/glx.js`)
+`data.trk`** — the fifth attribute `createMesh` builds (`js/render/glx/glx.js`)
 for road-marking coordinates. Without it the shader reads the generic default,
 `float hw = vTrk.z` is 0, and `lit.js`'s `if (hw <= 0.5) return;` guard fires — its
 own comment even says *"(or no trk attribute)"*. **Every edge line, centre dash
@@ -733,7 +733,7 @@ and marking would silently disappear.** (SUPERSEDED: this fix SHIPPED —
 ### Stale entry corrected: the env-probe cull already shipped
 
 §3's "Env probe inherits the main camera's `cullDist`" entry is out of date. It
-is now the baked product path: `ENV_CULL_M = 300` in `js/render/glx.js`
+is now the baked product path: `ENV_CULL_M = 300` in `js/render/glx/glx.js`
 `envFaceBegin`, applied as a `min` and never an override, with the same cap
 on WGX and TLX. The pause-menu `PerfTry.envCull` toggle is gone — these were
 renderer A/B flags, not lighting knobs, so they were not moved into the
@@ -1520,7 +1520,7 @@ would cost a new API member on all three backends (the parity guard requires it)
 three module-size raises and its own canary assertions. Dropped — the same call
 §2e made on material sorting, for the same reason.
 
-Two stale claims fall out of that number: `js/render/glx.js`'s comment that
+Two stale claims fall out of that number: `js/render/glx/glx.js`'s comment that
 `drawDecal` runs "~22x/frame" predates the frustum gate, and this file's own
 framing of the per-car block as the bulk of `drawElements` is wrong — chunked
 scenery is ~94 of it.
@@ -1642,7 +1642,7 @@ is tolerated and **any clean frame pays the run back to zero**; at the cap it
 reports through `window.__apexReportError` and rethrows exactly as before, so a
 deterministic fault still stops loudly instead of repainting the error overlay
 60x/s. This follows the retry shape the codebase already uses — `js/perf/governor.js`
-caps crash-sentinel strikes and lets clean races pay them back, `js/render/glx.js`
+caps crash-sentinel strikes and lets clean races pay them back, `js/render/glx/glx.js`
 bounds context-loss reloads at two per tab session.
 
 A run counter that any clean frame resets can never stop a fault that
@@ -2693,7 +2693,7 @@ iterations on vegas, 419 on monza).
 > `massGridInsert` on `massAdd`). SAT stays exact; only candidate gathering
 > is culled.
 
-**Emitter ring recomputation** (`js/track/geom.js`: `addCyl` / `addCone` /
+**Emitter ring recomputation** (`js/track/core/geom.js`: `addCyl` / `addCone` /
 `addFrustum` called `lo()` three times per segment where two suffice).
 > **SUPERSEDED 2026-08-18.** Ring ends cached once per segment. Keep the
 > angle as `(i+1)/seg*6.2832`, **not** `(i+1)%seg` — 6.2832 ≠ 2π.
@@ -3198,7 +3198,7 @@ the lit path and the godray never did. Now excluded by RANGE, which is what
 `frame.tailStart` / `tailCount` exist for. The literal stays for washers.
 
 **2. The ferris wheel ignored the session's time of day.**
-`js/track/scenery-structures.js` read `def.night` for the rim colour and the
+`js/track/scenery/structures.js` read `def.night` for the rim colour and the
 cabin palette. `def.night` is the circuit's AUTHORED default; `NIGHT` — already
 destructured at the top of the same file and used correctly at four other sites —
 is what THIS build was asked for, and game.js overrides it from TIME OF DAY. So
@@ -3258,7 +3258,7 @@ directions (drop a field → red; add a spurious one → red).
 
 ### Reported, not fixed
 
-- **`seal()`'s `data.slice(0, n)` → `subarray`** (`js/track/models.js`). The
+- **`seal()`'s `data.slice(0, n)` → `subarray`** (`js/track/scenery/models.js`). The
   accumulators hold 129.7 MB of ArrayBuffer for 73.8 MB of data at the Vegas
   props peak — Vegas glass overshoots a doubling boundary by 1.3% and pays 42.5 MB
   for it. `subarray` would drop the seal's second copy, but it returns a VIEW,
@@ -3359,7 +3359,7 @@ problem — iOS tab memory — answered:
 I read that as a third and decisive failure mode and removed the whole lever on
 the strength of it. **That was wrong, and the code says so.** Apex 26 does not
 use three's in-place restore path at all: `js/render/three/tlx.js:474-533`
-(mirroring `js/render/glx.js:407-460`) handles `webglcontextlost` by latching
+(mirroring `js/render/glx/glx.js:407-460`) handles `webglcontextlost` by latching
 the downgrade and handles `webglcontextrestored` with `location.reload()`. A
 reload re-runs `Tracks.build` and rebuilds every geometry from source, so what
 `attribute.array` held before the loss is irrelevant to recovery. The advice is
@@ -3439,7 +3439,7 @@ are set by different knobs. Getting one and not the other is how four rounds of
 this lever measured the wrong thing.
 
 **Axis 1 — the RENDERER's mobile downgrades.** `apex26.forceMobileTier=1`
-(`js/render/glx.js:36`) forces `GLX.isMobile`, which drives the lamp budget,
+(`js/render/glx/glx.js:36`) forces `GLX.isMobile`, which drives the lamp budget,
 beams-off, atlas and shadow sizes. It is the one copy of the sniff; nothing
 re-sniffs `navigator`.
 

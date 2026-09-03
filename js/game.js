@@ -321,7 +321,7 @@ if (!gfx) {
   // never reaches here — the probe stays armed and the next boot reverts.
   try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* blocked storage */ }
 }
-// Baked asset pack (js/render/assets.js). Bind the resolved backend, then kick
+// Baked asset pack (js/render/shared/assets.js). Bind the resolved backend, then kick
 // the material-array load WITHOUT awaiting it: a pack is optional, the load is
 // feature-detected per backend, and every failure path inside leaves the game
 // on its procedural materials. Boot must never wait on, or fail for, assets.
@@ -5418,7 +5418,7 @@ function ltKey() { return ltStore.key(); }
 function applyLightTune(fromApplyRace) { ltStore.apply(fromApplyRace); }
 function setLightTune(id, v) {
   // A deliberate re-enable of PER-CHUNK LAMPS clears the crash latch. It is set
-  // on a real context loss (js/render/glx.js) and persisted so a reboot into the
+  // on a real context loss (js/render/glx/glx.js) and persisted so a reboot into the
   // same config cannot crash-loop — but nothing else cleared it, so one transient
   // display reset disabled the feature forever and the slider silently did
   // nothing. Here at the EDIT (not in the render loop, which only runs the

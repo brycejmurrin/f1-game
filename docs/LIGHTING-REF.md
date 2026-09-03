@@ -1,6 +1,6 @@
 # Lighting & sky reference
 
-`js/render/glx.js` owns the shaders and light upload; `js/lighting/atmosphere.js`
+`js/render/glx/glx.js` owns the shaders and light upload; `js/lighting/atmosphere.js`
 (`applyRaceSettings`), `js/lighting/track-lights.js` (`buildTrackLights`) and
 `js/lighting/frame-lights.js` (`setFrameLights`, `appendCarTailLights`) drive the
 per-frame state; `js/lighting/knobs.js` is the `TUNE_DEFS` / `LT` registry

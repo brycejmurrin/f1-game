@@ -106,6 +106,6 @@ test("the hand-written contract prose around the block survives regeneration", (
   assert.ok(a >= 0 && b > a, "docs/ARCHITECTURE.md is missing the @gen-arch:modules markers");
   assert.match(doc.slice(0, a), /## Module index \(generated\)/, "the marker's own intro heading must survive");
   assert.match(doc, /## js\/game\.js — main/, "the hand-written js/game.js contract section must survive");
-  assert.match(doc, /## js\/render\/glx\.js .* renderers/, "the hand-written renderer contract section must survive");
+  assert.match(doc, /## js\/render\/glx\/glx\.js .* renderers/, "the hand-written renderer contract section must survive");
   assert.doesNotMatch(doc.slice(a, b), /\bundefined\b/);
 });

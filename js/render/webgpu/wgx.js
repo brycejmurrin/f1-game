@@ -1358,7 +1358,7 @@ const WGX = (function () {
       // compare less-equal: SKY_VS puts the fullscreen tri at depth 1.0 (z=w), so
       // early sky paints the clear background, and late sky (opaque → sky →
       // glow) still only fills pixels the world left at the far plane — GLX
-      // parity (js/render/shaders/sky.js + glx.js drawSky depthMask false /
+      // parity (js/render/glx/shaders/glsl-sky.js + glx.js drawSky depthMask false /
       // LEQUAL). Was "always": correct only for sky-FIRST. After late sky
       // shipped, ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors
       // / melted world; cars still visible because they draw after the sky).
@@ -1469,7 +1469,7 @@ const WGX = (function () {
       matPlaceNormalView = matPlaceAlbedoView; // shared 1×1×N dummy is enough
       matAlbedoView = matPlaceAlbedoView;
       matNormalView = matPlaceNormalView;
-      // maxAnisotropy 4 matches GLX (js/render/glx.js applies the same cap to the
+      // maxAnisotropy 4 matches GLX (js/render/glx/glx.js applies the same cap to the
       // MAT array) and TLX (anisotropy = 4). The road is the grazing-angle
       // surface these exist for — trilinear alone smears tarmac aggregate into
       // mip mush ~20 m ahead of the car. WebGPU only allows it when all three
@@ -3020,7 +3020,7 @@ const WGX = (function () {
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
       return { _wgx: "chunked", vbuf, ibuf, sbuf, attrBG, chunks, count: total, indexFormat };
     }
-    // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx.js): a
+    // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx/glx.js): a
     // 256×256 2D-canvas of value-noise + smudge blobs + dust specks + wipe
     // streaks, uploaded as an rgba8unorm texture the composite samples (.r). Same
     // seeded PRNG + draw ops as GLX, so the WebGPU grime matches the WebGL2 look.
@@ -3251,7 +3251,7 @@ const WGX = (function () {
       // map can't leak shadows into a night scene.
       const sunUp = !sd || sd[1] > -0.05;
       d[72] = (_shadowRendered && sunUp) ? 1 : 0;
-      // SHADOW STRENGTH knob × KEY-luminance fade (GLX parity, js/render/glx.js lit
+      // SHADOW STRENGTH knob × KEY-luminance fade (GLX parity, js/render/glx/glx.js lit
       // begin): the night moon-key is deliberately held HIGH (sunDir.y ≈ 0.97
       // drives the sky glow), so the binary sunUp gate above never fires at
       // night — without this fade WebGPU kept full-strength terrain/road sun
@@ -4033,7 +4033,7 @@ const WGX = (function () {
       }
     }
 
-    // GLX parity (js/render/glx.js envFaceBegin/End): capture ONE cube face of the world
+    // GLX parity (js/render/glx/glx.js envFaceBegin/End): capture ONE cube face of the world
     // around the player car per frame into a real RGBA16F cube; after a full 6-face
     // cycle the LIT car-paint block samples it (Block 7, envProbeStr). game.js re-issues
     // the world draws (track meshes then drawSky, NO cars) between begin/end — they record

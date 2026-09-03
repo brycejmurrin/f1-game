@@ -1,6 +1,6 @@
 /* Apex 26 — TLXShaders.lit: the TSL lit-shader core for the TLX backend (M3).
  *
- * A 1:1 port of js/render/shaders/lit.js (the GLSL source of truth) into
+ * A 1:1 port of js/render/glx/shaders/glsl-lit.js (the GLSL source of truth) into
  * three.js TSL nodes: all 15 procedural track materials + the car surface ids
  * (20-27, including MIRROR chrome), the FLAG cloth-wave vertex displacement, hemisphere ambient +
  * lambert sun + GGX specular (soft-clipped), the 32-lamp spot loop with GGX +
@@ -112,7 +112,7 @@
     //    texture trick without needing dummy bindings. ─────────────────────
     const SHD = (ctx.shadow && ctx.shadow.S) ? ctx.shadow : null;
     // M8: the offscreen HDR target exists — write the SSR car-paint tag into
-    // alpha (js/render/shaders/lit.js). False (no post chain) keeps the M3 behaviour:
+    // alpha (js/render/glx/shaders/glsl-lit.js). False (no post chain) keeps the M3 behaviour:
     // the canvas is the target and a 0.35 alpha would ghost the cars.
     const SSR_TAG = !!ctx.ssrTag;
     // M9: the live env-probe cube (tlx.js CubeRenderTarget.texture), bound at
@@ -123,7 +123,7 @@
     // nodes): tlx.js swaps its .value to a black dummy cube while rendering
     // INTO the probe (the env pass draws glass, an envSurface — sampling the
     // live cube there would be a texture feedback loop; GLX's dummy-cube guard,
-    // js/render/glx.js). cubeTexture(base, dir, lod) clones per use with
+    // js/render/glx/glx.js). cubeTexture(base, dir, lod) clones per use with
     // referenceNode = base (three.js CubeTextureNode), so the swap covers
     // every variant. CubeTextureNode has no .uv() — that is a 2D TextureNode
     // setter and threw on every chrome/env surface.
@@ -138,7 +138,7 @@
      * One shared set across every material variant (uniform nodes are shared
      * descriptors; tlx.js calls updateFrame(frame) once per begin()).
      * Defaults MUST mirror LightTune.TUNE_DEFS (js/lighting/knobs.js) exactly
-     * like js/render/glx.js — a missing tune object renders the shipped look. */
+     * like js/render/glx/glx.js — a missing tune object renders the shipped look. */
     const U = {
       sunDir:      uniform(new THREE.Vector3(0.4, 0.8, 0.4)),
       sunColor:    uniform(new THREE.Vector3(1.0, 0.98, 0.9)),
@@ -203,7 +203,7 @@
       lampShadowIdx:  uniform(-1.0),  // float compare vs the loop index (small ints are exact)
     };
     // Lamp arrays: the flat stride-15 frame.lights record split by consumer,
-    // exactly like js/render/glx.js / the spike. geo = (rad, cosInner, cosOuter,
+    // exactly like js/render/glx/glx.js / the spike. geo = (rad, cosInner, cosOuter,
     // bleed). volW/glareW are godray/glow-pass fields — not consumed here.
     const lampPos = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3());
     const lampCol = Array.from({ length: MAX_LIGHTS }, () => new THREE.Vector3());
@@ -327,7 +327,7 @@
       }
     }
 
-    /* ── BRDF leaves (js/render/shaders/lit.js) — plain node composition, inlined ────── */
+    /* ── BRDF leaves (js/render/glx/shaders/glsl-lit.js) — plain node composition, inlined ────── */
     const D_GGX = (NoH, a) => {
       const a2 = a.mul(a);
       const d = NoH.mul(NoH).mul(a2.sub(1.0)).add(1.0);
@@ -347,7 +347,7 @@
       return f0.add(vec3(f90).sub(f0).mul(v2.mul(v2).mul(v)));
     };
 
-    /* ── cloud shadows (js/render/shaders/lit.js) ─────────────────────────────────────── */
+    /* ── cloud shadows (js/render/glx/shaders/glsl-lit.js) ─────────────────────────────────────── */
     // 2-octave FBM (per-pass tuning — matches LIT's cloudFBM, unrolled).
     const cloudFBM = (pIn) => {
       const s1 = vnoise(pIn).mul(0.5);
@@ -358,7 +358,7 @@
       const wp = vec3(wpIn).toVar();
       const res = float(0.0).toVar();
       If(U.cloudCover.greaterThan(0.001).and(U.sunDir.y.greaterThan(0.06)), () => {
-        // divisor floored at 0.15 (grazing-sun stripe fix — see js/render/shaders/lit.js)
+        // divisor floored at 0.15 (grazing-sun stripe fix — see js/render/glx/shaders/glsl-lit.js)
         const t = float(360.0).sub(wp.y).div(max(U.sunDir.y, 0.15));
         const cT = U.time.mul(U.cloudSpeed);
         const cp = wp.xz.add(U.sunDir.xz.mul(t)).mul(0.0052)
@@ -369,7 +369,7 @@
       return res;
     });
 
-    /* ── M4 sun-shadow sampling (sampleShadow in js/render/shaders/lit.js) ───
+    /* ── M4 sun-shadow sampling (sampleShadow in js/render/glx/shaders/glsl-lit.js) ───
      * Distance fade from eye XZ + look-target Y (yaw-invariant; the box still
      * recentres in 16 m jumps), slope-scale bias, boxK kernel compensation,
      * near/far LOD split (8-tap Poisson + 4-tap far — the GLX Poisson set
@@ -386,7 +386,7 @@
       const wp = vec3(wpIn).toVar();
       const nrm = vec3(nrmIn).toVar();
       const res = float(1.0).toVar();
-      // GLX parity (js/render/shaders/lit.js sampleShadow): uShadowStr <= 0
+      // GLX parity (js/render/glx/shaders/glsl-lit.js sampleShadow): uShadowStr <= 0
       // collapses the whole function to 1.0 — mix(1, sh, 0) is identity — so
       // skip every PCF / car-map tap on overcast-night frames where the CPU
       // already drove strength to 0 via the key-luminance fade.
@@ -394,18 +394,18 @@
         const lc = U.lightVP.mul(vec4(wp, 1.0)).toVar();
         const sc = lc.xyz.div(lc.w).mul(0.5).add(0.5).toVar();
         If(sc.z.lessThan(1.0), () => {
-          // Yaw-invariant fade: eye XZ + look-target Y (js/render/shaders/lit.js).
+          // Yaw-invariant fade: eye XZ + look-target Y (js/render/glx/shaders/glsl-lit.js).
           const fadeCtr = vec3(cameraPosition.x, U.shadowCtr.y, cameraPosition.z);
           const aDist = length(wp.sub(fadeCtr)).toVar();
           const edgeFade = smoothstep(U.shadowRange.mul(0.62), U.shadowRange.mul(0.84), aDist)
             .oneMinus().toVar();
-          // Thin UV border safety feather (js/render/shaders/lit.js).
+          // Thin UV border safety feather (js/render/glx/shaders/glsl-lit.js).
           const ef = smoothstep(vec2(0.0), vec2(0.03), sc.xy)
             .mul(smoothstep(vec2(0.97), vec2(1.0), sc.xy).oneMinus());
           edgeFade.mulAssign(ef.x.mul(ef.y));
           If(edgeFade.greaterThan(0.0), () => {
             const t = float(U.shadowTexel).toVar();
-            // Slope-scale bias: tan(acos(c)) as sqrt(1-c²)/c (js/render/shaders/lit.js).
+            // Slope-scale bias: tan(acos(c)) as sqrt(1-c²)/c (js/render/glx/shaders/glsl-lit.js).
             const cosTheta = clamp(dot(normalize(nrm), U.sunDir), 0.05, 1.0);
             const slopeBias = t.mul(1.5).mul(sqrt(cosTheta.mul(cosTheta).oneMinus()).div(cosTheta));
             const biasTerm = clamp(slopeBias, 0.0005, 0.004).add(U.shadowBias.mul(0.5)).toVar();
@@ -416,11 +416,11 @@
             // STATIC map only: the car branch below multiplies the SAME biasTerm
             // by carBiasScale, so scaling the shared term would square it there.
             const z = sc.z.sub(biasTerm.mul(U.shadowRange.div(80.0))).toVar();
-            // SHADOW DISTANCE kernel compensation (js/render/shaders/lit.js).
+            // SHADOW DISTANCE kernel compensation (js/render/glx/shaders/glsl-lit.js).
             const boxK = min(1.0, float(80.0).div(U.shadowRange)).toVar();
-            // Distance LOD on the same gliding anchor (js/render/shaders/lit.js).
+            // Distance LOD on the same gliding anchor (js/render/glx/shaders/glsl-lit.js).
             const nearLod = aDist.lessThan(U.shadowRange.mul(0.80)).toVar();
-            // PCSS-lite blocker search (js/render/shaders/lit.js): near the
+            // PCSS-lite blocker search (js/render/glx/shaders/glsl-lit.js): near the
             // camera the receiver-blocker gap scales the Poisson radius —
             // crisp at the contact point, soft where the caster is far.
             // Compiled only when the shadow system built its blocker map
@@ -448,7 +448,7 @@
               // Identity at TUNE_DEFS def 80. Same tap count — not PCSS.
               R.assign(float(3.0).mul(U.pcssPen.div(80.0)));
             }
-            // Texel-grid-anchored IGN dither (js/render/shaders/lit.js): glued to the
+            // Texel-grid-anchored IGN dither (js/render/glx/shaders/glsl-lit.js): glued to the
             // ground, not screen-keyed — no penumbra boil while driving.
             const ign = ignoise(floor(sc.xy.div(t)));
             const ang = ign.mul(6.2831853);
@@ -460,7 +460,7 @@
               sr.negate().mul(px).add(cr.mul(py))).mul(rk);
             const tap = (px, py) =>
               texture(SHD.sunTex, flipUV(sc.xy.add(rot(px, py)))).compare(z);
-            // 4 Poisson taps always; 4 more near the camera (js/render/shaders/lit.js).
+            // 4 Poisson taps always; 4 more near the camera (js/render/glx/shaders/glsl-lit.js).
             const s = tap(-0.94201624, -0.39906216)
               .add(tap(0.94558609, -0.76890725))
               .add(tap(-0.09418410, -0.92938870))
@@ -475,7 +475,7 @@
             }).Else(() => {
               sh.assign(s.mul(0.25));
             });
-            // Dynamic CAR map min-combine (js/render/shaders/lit.js): ortho, so no
+            // Dynamic CAR map min-combine (js/render/glx/shaders/glsl-lit.js): ortho, so no
             // perspective divide; same bias; fixed tight 4-tap PCF.
             if (carShadowOn) {
               If(U.carShadowOn.greaterThan(0.5), () => {
@@ -494,7 +494,7 @@
                 });
               });
             }
-            // Clamped: SHADOW DARKNESS extrapolates above t=1 (js/render/shaders/lit.js).
+            // Clamped: SHADOW DARKNESS extrapolates above t=1 (js/render/glx/shaders/glsl-lit.js).
             res.assign(max(0.0, mix(float(1.0), sh, U.shadowStr.mul(edgeFade))));
           });
         });
@@ -502,7 +502,7 @@
       return res;
     });
 
-    /* ── matBumpHeight (js/render/shaders/lit.js): scalar relief height for material mid
+    /* ── matBumpHeight (js/render/glx/shaders/glsl-lit.js): scalar relief height for material mid
      *    at local coords uv — (hc,y) for wall materials, world (x,z) for
      *    organic/horizontal. Sampled 3x per fragment for a gradient. ───────── */
     const matBumpHeight = Fn(([mid, uv]) => {
@@ -550,7 +550,7 @@
         h.assign(smoothstep(0.0, 0.16, d).mul(0.55).add(vnoise(uv.mul(5.0)).mul(0.15)));
       }).ElseIf(mid.equal(14.0), () => {  // RUST/CORRUGATED: sinusoidal ridges
         h.assign(sin(hc.mul(7.5)).mul(0.55).add(vnoise(uv.mul(6.0)).mul(0.10)));
-      }).ElseIf(mid.equal(16.0), () => {  // ASPHALT: fine aggregate only (js/render/shaders/lit.js)
+      }).ElseIf(mid.equal(16.0), () => {  // ASPHALT: fine aggregate only (js/render/glx/shaders/glsl-lit.js)
         // Two tight octaves and nothing below ~0.1 m. A low-frequency term here
         // would read as a rippled road under the car and crawl at speed.
         h.assign(vnoise(uv.mul(9.0)).mul(0.34).add(vnoise(uv.mul(26.0)).mul(0.16)));
@@ -565,7 +565,7 @@
       .or(mid.equal(5.0)).or(mid.equal(7.0)).or(mid.equal(12.0))
       .or(mid.equal(13.0)).or(mid.equal(14.0));
 
-    /* ── applyMaterialNormal (js/render/shaders/lit.js): REAL bump — perturbs the shading
+    /* ── applyMaterialNormal (js/render/glx/shaders/glsl-lit.js): REAL bump — perturbs the shading
      *    normal before the lighting terms consume it. Wall-like materials key
      *    off (hc,y); organic ones off world (x,z). GLASS(3)/FLAG(15) flat.
      *    Returns the perturbed normal (TSL has no inout). ─────────────────── */
@@ -630,9 +630,9 @@
       return N;
     });
 
-    /* ── Baked PBR material arrays (js/render/assets.js) ─────────────────────
+    /* ── Baked PBR material arrays (js/render/shared/assets.js) ─────────────────────
      * GLX counterpart: applyMaterialTexNormal() + the texture block at the end
-     * of applyMaterial() in js/render/shaders/lit.js. The array's LAYER INDEX
+     * of applyMaterial() in js/render/glx/shaders/glsl-lit.js. The array's LAYER INDEX
      * IS THE MAT ID, sampled on the SAME triplanar convention the procedural
      * noise above uses — so a baked scan lands exactly where the noise it
      * augments lands, with no UV channel anywhere in the pipeline.
@@ -724,12 +724,12 @@
       return vec4(albedo, rough);
     }) : null;
 
-    /* ── roadMarkings (js/render/shaders/lit.js) — the painted lines ────────────────────
+    /* ── roadMarkings (js/render/glx/shaders/glsl-lit.js) — the painted lines ────────────────────
      * The white edge lines and the dashed centre line are NOT geometry and NOT
-     * vertex colour: js/track/mesh.js stopped emitting them as colour and
+     * vertex colour: js/track/core/mesh.js stopped emitting them as colour and
      * the fragment shader now draws them analytically from the road's
      * track-space coords (arc-length s, signed lateral x, half-width), carried
-     * by the `trk` attribute (js/render/glx.js, tlx.js buildGeometry). This port
+     * by the `trk` attribute (js/render/glx/glx.js, tlx.js buildGeometry). This port
      * did not exist, so every road on this backend rendered as bare tarmac.
      *
      * DERIVATIVES ARE UNCONDITIONAL. GLX opens with `if (hw <= 0.5) return;`
@@ -779,7 +779,7 @@
       return vec4(albedo, rough);
     });
 
-    /* ── applyMaterial (js/render/shaders/lit.js): albedo + roughness modulation for the
+    /* ── applyMaterial (js/render/glx/shaders/glsl-lit.js): albedo + roughness modulation for the
      *    15 track materials. nrmIn = the RAW varying normal (vNrm), matching
      *    the GLSL call site. Returns vec4(albedo, rough). ─────────────────── */
     const applyMaterial = Fn(([mid, albedoIn, roughIn, wpIn, nrmIn, vd]) => {
@@ -811,7 +811,7 @@
         If(mid.equal(1.0), () => {          // CONCRETE — panels + speckle + seams
           albedo.mulAssign(vnoise(wp.xz.mul(0.09).add(y.mul(0.05))).sub(0.5).mul(0.16).mul(far).add(1.0));
           albedo.mulAssign(vnoise(vec2(hc, y).mul(6.0)).sub(0.5).mul(0.10).mul(near).add(1.0));
-          // fwidth-AA the seam on the PRE-fract coordinate (js/render/shaders/lit.js)
+          // fwidth-AA the seam on the PRE-fract coordinate (js/render/glx/shaders/glsl-lit.js)
           const seam = smoothstep(max(float(0.05), fwY125), 0.0,
             abs(fract(y.div(1.25)).sub(0.5)).sub(0.46)).mul(0.14).mul(near);
           albedo.mulAssign(select(wall, seam.oneMinus(), float(1.0)));
@@ -821,7 +821,7 @@
           const row = floor(y.div(ch));
           const off = mod(row, 2.0).mul(0.5 * bl);
           const bx = fract(hc.add(off).div(bl)), by = fract(y.div(ch));
-          // mort is WORLD-space — AA width = raw hc/y footprint (js/render/shaders/lit.js)
+          // mort is WORLD-space — AA width = raw hc/y footprint (js/render/glx/shaders/glsl-lit.js)
           const mortAA = max(float(mort), max(fwHc, fwY));
           const joint = max(smoothstep(mortAA, 0.0, min(bx, bx.oneMinus()).mul(bl)),
                             smoothstep(mortAA, 0.0, min(by, by.oneMinus()).mul(ch)));
@@ -833,7 +833,7 @@
         }).ElseIf(mid.equal(3.0), () => {   // GLASS — mullion grid + pane variation
           const pw = 1.6, ph = 1.4, mull = 0.11;
           const gx = fract(hc.div(pw)), gy = fract(y.div(ph));
-          // NORMALIZED-space AA: fwidth of the pre-fract pane fraction (js/render/shaders/lit.js)
+          // NORMALIZED-space AA: fwidth of the pre-fract pane fraction (js/render/glx/shaders/glsl-lit.js)
           const mullAA = max(float(mull), max(fwHcPw, fwYPh));
           const bar = max(smoothstep(mullAA, 0.0, min(gx, gx.oneMinus())),
                           smoothstep(mullAA, 0.0, min(gy, gy.oneMinus())));
@@ -846,7 +846,7 @@
           rough.assign(clamp(rough.sub(far.mul(0.15)), 0.05, 1.0));
         }).ElseIf(mid.equal(5.0), () => {   // WOOD — grain + plank seams
           albedo.mulAssign(vnoise(vec2(hc.mul(3.0), y.mul(22.0))).sub(0.5).mul(0.18).mul(near).add(1.0));
-          // normalized-space AA (as glass) — js/render/shaders/lit.js
+          // normalized-space AA (as glass) — js/render/glx/shaders/glsl-lit.js
           albedo.mulAssign(smoothstep(max(float(0.05), fwHc035), 0.0,
             abs(fract(hc.div(0.35)).sub(0.5)).sub(0.46)).mul(0.16).mul(near).oneMinus());
         }).ElseIf(mid.equal(6.0), () => {   // FOLIAGE — dapple + green variation
@@ -880,7 +880,7 @@
           rough.assign(clamp(rough.sub(far.mul(0.10)), 0.05, 1.0));
         }).ElseIf(mid.equal(12.0), () => {  // ROOF — ridged courses, warm bands
           const ty = fract(y.div(0.34));
-          const shadeAA = clamp(fwTy.mul(6.0).oneMinus(), 0.0, 1.0);   // ridge-sine AA (js/render/shaders/lit.js)
+          const shadeAA = clamp(fwTy.mul(6.0).oneMinus(), 0.0, 1.0);   // ridge-sine AA (js/render/glx/shaders/glsl-lit.js)
           const shade = sin(ty.mul(3.14159)).mul(shadeAA);
           albedo.mulAssign(shade.mul(0.16).add(0.88));
           albedo.mulAssign(vnoise(vec2(hc.mul(2.0), floor(y.div(0.34))).mul(3.0)).sub(0.5).mul(0.14).mul(near).add(1.0));
@@ -889,7 +889,7 @@
           const cell = floor(vec2(hc, y).mul(1.3));
           const f = fract(vec2(hc, y).mul(1.3)).sub(hash21(cell).mul(0.12));
           const d = min(min(f.x, f.x.oneMinus()), min(f.y, f.y.oneMinus()));
-          // normalized-space AA in the *1.3 fract domain (js/render/shaders/lit.js)
+          // normalized-space AA in the *1.3 fract domain (js/render/glx/shaders/glsl-lit.js)
           const jointAA = max(float(0.16), max(fwHc13, fwY13));
           const joint = smoothstep(0.0, jointAA, d);
           const block = albedo.mul(hash21(cell).mul(0.4).add(0.80));
@@ -898,13 +898,13 @@
           rough.assign(min(1.0, rough.add(far.mul(0.18))));
         }).ElseIf(mid.equal(14.0), () => {  // RUST/CORRUGATED — ridges + rust streaks
           const ridgePhase = hc.mul(7.5);
-          const ridgeAA = clamp(fwRidge.mul(3.0).oneMinus(), 0.0, 1.0);  // corrugation AA (js/render/shaders/lit.js)
+          const ridgeAA = clamp(fwRidge.mul(3.0).oneMinus(), 0.0, 1.0);  // corrugation AA (js/render/glx/shaders/glsl-lit.js)
           const ridge = sin(ridgePhase).mul(ridgeAA);
           albedo.mulAssign(ridge.mul(0.18).add(0.85));
           const rust = smoothstep(0.55, 0.9, vnoise(vec2(hc.mul(0.8), y.mul(0.35)).add(5.0)));
           albedo.assign(mix(albedo, albedo.mul(vec3(0.62, 0.42, 0.28)), rust.mul(0.5).mul(far)));
           rough.assign(min(1.0, rough.add(far.mul(0.14))));
-        }).ElseIf(mid.equal(16.0), () => {  // ASPHALT — aggregate speckle + wear patches (js/render/shaders/lit.js)
+        }).ElseIf(mid.equal(16.0), () => {  // ASPHALT — aggregate speckle + wear patches (js/render/glx/shaders/glsl-lit.js)
           // Deliberately understated: this is the surface under the car for the
           // whole race, so it gets tone variation rather than pattern. No
           // fract()/sin() term at all — nothing here can strobe, only soften.
@@ -916,7 +916,7 @@
       return vec4(albedo, rough);
     });
 
-    /* ── the fragment (main() in js/render/shaders/lit.js) per material variant ──
+    /* ── the fragment (main() in js/render/glx/shaders/glsl-lit.js) per material variant ──
      * matU = the per-draw material scalars as uniform nodes (one set per
      * cached variant — every variant compiles to the SAME program text, so
      * three's program cache dedupes the actual GL compiles). */
@@ -927,7 +927,7 @@
     // a multi-million-vertex street circuit is ~27 MB of zeros, on the one
     // buffer the whole chunked subsystem exists to keep small (see its header
     // — the staged-release mobile-OOM guard). GLX pays nothing there either:
-    // its aTrk is per-mesh optional (js/render/glx.js trk attrib) and a disabled attrib
+    // its aTrk is per-mesh optional (js/render/glx/glx.js trk attrib) and a disabled attrib
     // array reads a constant (0,0,0), which a node material cannot express.
     // Cost: one extra program. INVARIANT: a chunked mesh must only ever be
     // drawn through drawChunked/castShadowChunked (it is — js/game.js,4810).
@@ -955,11 +955,11 @@
         const V = normalize(cameraPosition.sub(wp)).toVar();
 
         // Two-sided lighting: flip N toward the viewer on back fragments
-        // (js/render/shaders/lit.js). Raw normalWorld carries no faceDirection flip.
+        // (js/render/glx/shaders/glsl-lit.js). Raw normalWorld carries no faceDirection flip.
         const N = select(frontFacing, Nvary, Nvary.negate()).toVar();
         N.assign(normalize(N));
 
-        // ── ground micro-normal relief (uDetail — js/render/shaders/lit.js) ───────────
+        // ── ground micro-normal relief (uDetail — js/render/glx/shaders/glsl-lit.js) ───────────
         // Hoist xz footprint before the detail If (uniform gate, but keep the
         // roadMarkings discipline so a future non-uniform gate cannot poison WGSL).
         const mnFp = max(fwidth(wp.x), fwidth(wp.z)).toVar();
@@ -982,10 +982,10 @@
         });
 
         // Geometric normal for the clearcoat lobes + env mirror — captured
-        // AFTER the ground relief, BEFORE paint/material bumps (js/render/shaders/lit.js).
+        // AFTER the ground relief, BEFORE paint/material bumps (js/render/glx/shaders/glsl-lit.js).
         const Ngeo = vec3(N).toVar();
 
-        // ── car surface ids 20-27 (car3d.js SURFACES; js/render/shaders/lit.js) ───────
+        // ── car surface ids 20-27 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js) ───────
         const surfaceId = floor(matA.add(0.5)).toVar();
         const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(31.0)).toVar();
         const paintSurface = surfaceId.equal(20.0).toVar();
@@ -998,7 +998,7 @@
         // MIRROR: chrome livery finish (FINISH_SURFACE.chrome). Paint-like
         // (keeps clearcoat + env lobe) but metallic and nearly smooth.
         const mirrorSurface = surfaceId.equal(27.0).toVar();
-        // Three more livery finishes, mirroring js/render/shaders/lit.js. A
+        // Three more livery finishes, mirroring js/render/glx/shaders/glsl-lit.js. A
         // finish costs a SURFACE ID, not a uniform: car3d.js FINISH_SURFACE
         // remaps a painted vertex. Carbon needs no id — 21 already exists.
         const matteSurface = surfaceId.equal(28.0).toVar();
@@ -1023,7 +1023,7 @@
                 select(matteSurface, float(0.0),
                   select(iriSurface, max(matU.metalness, 0.25),
               // PAINT gets metalness instead of falling through to 0.0 — mirrors
-              // js/render/shaders/lit.js. game.js sets 0.12 on every PAINT_*
+              // js/render/glx/shaders/glsl-lit.js. game.js sets 0.12 on every PAINT_*
               // and describes the flake it is meant to produce; the 0.0 discarded
               // it and made CAR METALLIC dead on every car pixel.
               select(carbonSurface, float(0.08),
@@ -1044,7 +1044,7 @@
         const envSurface = carPaint.greaterThan(0.001).or(glassSurface)
           .and(clearcoat.greaterThan(0.001)).toVar();
 
-        // ── car-paint orange-peel micro normal (js/render/shaders/lit.js) ─────────────
+        // ── car-paint orange-peel micro normal (js/render/glx/shaders/glsl-lit.js) ─────────────
         If(carPaint.greaterThan(0.001), () => {
           const pFade = clamp(vd.sub(18.0).div(50.0).oneMinus(), 0.0, 1.0).toVar();
           If(pFade.greaterThan(0.01), () => {
@@ -1066,7 +1066,7 @@
         // SAA source: geo + peel, before wall/MAT bump (WGX saaVar mix).
         const Nsaa = vec3(N).toVar();
 
-        // ── per-material procedural bump (before V/L/H/NoL — js/render/shaders/lit.js) ────
+        // ── per-material procedural bump (before V/L/H/NoL — js/render/glx/shaders/glsl-lit.js) ────
         N.assign(applyMaterialNormal(surfaceId, N, wp, vd));
         // Baked normal map composes on top (no-op at matTexMix 0 / no pack).
         if (applyMaterialTexNormal) N.assign(applyMaterialTexNormal(surfaceId, N, wp, vd));
@@ -1080,7 +1080,7 @@
 
         const albedo = vec3(albedoIn).toVar();
 
-        // ── procedural ground texture + patches + cracks (js/render/shaders/lit.js) ───
+        // ── procedural ground texture + patches + cracks (js/render/glx/shaders/glsl-lit.js) ───
         const patchM = float(0.5).toVar();
         // fwidth(cr) BEFORE the detail If — same hoist as roadMarkings / WGX
         // fs_main. matU.detail is a uniform today; a per-fragment gate here
@@ -1104,7 +1104,7 @@
           albedo.assign(max(albedo, vec3(0.0)));
         });
 
-        // ── roughness resolution + car-surface clamps (js/render/shaders/lit.js) ──────
+        // ── roughness resolution + car-surface clamps (js/render/glx/shaders/glsl-lit.js) ──────
         const rough = clamp(matU.roughness, 0.04, 1.0).toVar();
         If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56)); });
         If(rubberSurface, () => { rough.assign(max(rough, 0.90)); });
@@ -1116,11 +1116,11 @@
         If(matteSurface, () => { rough.assign(max(rough, 0.88)); });
         If(satinMetalSurface, () => { rough.assign(clamp(rough, 0.24, 0.40)); });
         If(iriSurface, () => { rough.assign(min(rough, 0.22)); });
-        // PEARLESCENT / FLIP PAINT (mirrors js/render/shaders/lit.js): rotate
+        // PEARLESCENT / FLIP PAINT (mirrors js/render/glx/shaders/glsl-lit.js): rotate
         // albedo through a cosine palette driven by the Fresnel term, so the
         // panel flips colour with view angle and returns to the livery's own
         // colour face-on. No derivative, so it is safe in any control flow.
-        // CARBON FINISH (mirrors js/render/shaders/lit.js).
+        // CARBON FINISH (mirrors js/render/glx/shaders/glsl-lit.js).
         If(carbonFinish, () => {
           const wv = objP.xz.mul(190.0).add(objP.y.mul(190.0)).toVar();
           const weave = wv.x.sin().mul(wv.y.sin()).mul(0.5).add(0.5).toVar();
@@ -1139,7 +1139,7 @@
           rough.assign(clamp(rough.add(patchM.sub(0.5).mul(0.16).mul(min(matU.detail.mul(4.0), 1.0))), 0.04, 1.0));
         });
 
-        // ── procedural per-material albedo/roughness (js/render/shaders/lit.js) ───────────
+        // ── procedural per-material albedo/roughness (js/render/glx/shaders/glsl-lit.js) ───────────
         const packedMat = applyMaterial(surfaceId, albedo, rough, wp, Nvary, vd);
         albedo.assign(packedMat.xyz);
         rough.assign(packedMat.w);
@@ -1149,7 +1149,7 @@
           rough.assign(packedTex.w);
         }
 
-        // ── painted road markings (js/render/shaders/lit.js) ─────────────────────────────
+        // ── painted road markings (js/render/glx/shaders/glsl-lit.js) ─────────────────────────────
         // AFTER the material grain and the baked texture, exactly as GLX
         // orders it, so the paint sits ON the tarmac rather than under it.
         // Called unconditionally: it carries its own hw mask and its
@@ -1169,7 +1169,7 @@
         const a = rough.mul(rough).toVar();
         const f0 = mix(vec3(specular.mul(0.08)), albedo, metalness).toVar();
 
-        // ── wet surface (rain — js/render/shaders/lit.js) ─────────────────────────────
+        // ── wet surface (rain — js/render/glx/shaders/glsl-lit.js) ─────────────────────────────
         // wet = "rained on"; wetSheen = the specular WATER FILM. Porous ground
         // (grass/foliage/rock/sand/snow) drinks the water: it darkens but never
         // polishes. Reflection-side terms must key off wetSheen, not wet —
@@ -1188,7 +1188,7 @@
           wet.assign(U.wetness.mul(upFace));
           const pn = vnoise(wp.xz.mul(0.13).add(4.7));
           puddle.assign(smoothstep(0.48, 0.88, pn).mul(wet).mul(porous.oneMinus()));
-          // Porous as a FRACTION of the road result — mirrors js/render/shaders/lit.js.
+          // Porous as a FRACTION of the road result — mirrors js/render/glx/shaders/glsl-lit.js.
           // The two coefficients were transposed here as they were in GLX: mix(a,b,t)
           // returns a for porous=0 (tarmac) and b for porous=1, so tarmac absorbed
           // 58% while soaked grass absorbed only 42%, leaving verges BRIGHTER than
@@ -1208,9 +1208,9 @@
         const amb = mix(vec3(U.ambGround), vec3(U.ambSky), N.y.mul(0.5).add(0.5)).toVar();
 
         // ── shadow: hard sun/car map (M4) × soft drifting cloud shadows
-        //    (js/render/shaders/lit.js). Nvary = the RAW varying normal, matching the GLSL
+        //    (js/render/glx/shaders/glsl-lit.js). Nvary = the RAW varying normal, matching the GLSL
         //    sampleShadow's normalize(vNrm). ───────────────────────────────────
-        // NoL GATE — js/render/shaders/lit.js: sampleShadow + cloudShadow are
+        // NoL GATE — js/render/glx/shaders/glsl-lit.js: sampleShadow + cloudShadow are
         // thrown away on back-faces (litNoL *= NoL) except clearcoat, which
         // shades on Ngeo. Skip the taps when the result cannot contribute.
         const shadow = float(1.0).toVar();
@@ -1220,15 +1220,15 @@
         });
         const litNoL = NoL.mul(shadow).mul(U.keyMul).toVar();
 
-        // Base diffuse + hemisphere ambient (js/render/shaders/lit.js).
+        // Base diffuse + hemisphere ambient (js/render/glx/shaders/glsl-lit.js).
         const color = albedo.mul(amb.add(vec3(U.sunColor).mul(litNoL).mul(metalness.oneMinus()))).toVar();
-        // SHADOW COOLNESS (js/render/shaders/lit.js).
+        // SHADOW COOLNESS (js/render/glx/shaders/glsl-lit.js).
         If(U.shadowTintAmt.greaterThan(0.001), () => {
           color.mulAssign(mix(vec3(1.0), vec3(0.90, 0.96, 1.12),
             U.shadowTintAmt.mul(clamp(litNoL.oneMinus(), 0.0, 1.0))));
         });
 
-        // ── the 32-lamp spot loop (js/render/shaders/lit.js) ───────────────────────────
+        // ── the 32-lamp spot loop (js/render/glx/shaders/glsl-lit.js) ───────────────────────────
         // Windowed inverse-square + aimed cone + bleed + bounce fill + GGX and
         // clearcoat lamp lobes with their soft-clips. The single mapped lamp
         // (i == uLampShadowIdx) gets a real 4-tap PCF from the 512² spot map
@@ -1258,13 +1258,13 @@
                 lampFogAcc.addAssign(U.lampCol.element(i).mul(att.mul(mix(float(0.35), float(1.0), beam))));
               });
               const NoLl = max(dot(N, Ld), 0.0).toVar();
-              // Per-lamp shadow for the one mapped floodlight (js/render/shaders/lit.js):
+              // Per-lamp shadow for the one mapped floodlight (js/render/glx/shaders/glsl-lit.js):
               // perspective divide, slope-boosted constant bias (perspective
               // depth precision lives at the lens, the road receiver near the
               // far plane), 4-tap PCF at 1.5/512.
               const lampSh = float(1.0).toVar();
               if (lampShadowOn) {
-                // NoLl GATE — js/render/shaders/lit.js: lampSh's only readers
+                // NoLl GATE — js/render/glx/shaders/glsl-lit.js: lampSh's only readers
                 // are the NoLl-scaled diffuse and the specular block already
                 // inside NoLl>0. A back-facing fragment paid 4 compare taps
                 // for a result multiplied by zero.
@@ -1289,13 +1289,13 @@
               color.addAssign(albedo.mul(U.lampCol.element(i))
                 .mul(att.mul(spotD).mul(lampSh)).mul(NoLl)
                 .mul(metalness.oneMinus()).mul(wetSheen.mul(0.85).oneMinus()));
-              // bounce fill (uBounceK, def 0.04 — js/render/shaders/lit.js)
+              // bounce fill (uBounceK, def 0.04 — js/render/glx/shaders/glsl-lit.js)
               If(U.bounceK.greaterThan(0.0), () => {
                 color.addAssign(albedo.mul(U.lampCol.element(i))
                   .mul(att.mul(U.bounceK).mul(NoLl.mul(0.45).add(0.55)))
                   .mul(metalness.oneMinus()));
               });
-              // GGX + clearcoat lamp speculars, NoLl-gated (js/render/shaders/lit.js)
+              // GGX + clearcoat lamp speculars, NoLl-gated (js/render/glx/shaders/glsl-lit.js)
               If(NoLl.greaterThan(0.0), () => {
                 const Hl = normalize(Ld.add(V));
                 const NoHl = max(dot(N, Hl), 0.0).toVar();
@@ -1318,7 +1318,7 @@
           });
         });
 
-        // ── sun Cook-Torrance specular, soft-clipped (js/render/shaders/lit.js) ────────
+        // ── sun Cook-Torrance specular, soft-clipped (js/render/glx/shaders/glsl-lit.js) ────────
         If(NoL.greaterThan(0.0), () => {
           const D = D_GGX(NoH, a);
           const Vis = V_SmithGGX(NoV, NoL, a);
@@ -1328,7 +1328,7 @@
           color.addAssign(specCol);
         });
 
-        // ── clearcoat specular AA variance of Ngeo (js/render/shaders/lit.js) — gated
+        // ── clearcoat specular AA variance of Ngeo (js/render/glx/shaders/glsl-lit.js) — gated
         //    on the UNIFORM so the derivative sits in uniform control flow ────
         const ccSaaVar = float(0.0).toVar();
         If(matU.clearcoat.greaterThan(0.001), () => {
@@ -1336,7 +1336,7 @@
           ccSaaVar.assign(dot(ccDx, ccDx).add(dot(ccDy, ccDy)));
         });
 
-        // ── clearcoat sun lobe (js/render/shaders/lit.js) ──────────────────────────────
+        // ── clearcoat sun lobe (js/render/glx/shaders/glsl-lit.js) ──────────────────────────────
         If(clearcoat.greaterThan(0.001), () => {
           const Hg = normalize(L.add(V));
           const NoHg = max(dot(Ngeo, Hg), 0.0);
@@ -1375,7 +1375,7 @@
           // .toVar()-anchored, so this unconditional reassign never strands
           // (STANDING RULE). .sample() shares the swappable base node.
           if (envCubeNode) {
-            // textureLod(uEnvCube, Rg, rough*2.5) — js/render/shaders/lit.js.
+            // textureLod(uEnvCube, Rg, rough*2.5) — js/render/glx/shaders/glsl-lit.js.
             // Official TSL: cubeTexture(CubeTextureNode, uvNode, levelNode)
             // clones with referenceNode = this base (mrdoob/three.js
             // CubeTextureNode.js). Do not call .uv() on a cube node.
@@ -1393,7 +1393,7 @@
           color.addAssign(addCC.div(addCC.mul(0.35).add(1.0)));  // gentle soft-clip
         });
 
-        // ── metallic-flake sparkle (js/render/shaders/lit.js) ─────────────────────────
+        // ── metallic-flake sparkle (js/render/glx/shaders/glsl-lit.js) ─────────────────────────
         If(carPaint.greaterThan(0.001).and(litNoL.greaterThan(0.0)).and(matU.sparkle.greaterThan(0.001)), () => {
           const spFade = clamp(vd.sub(14.0).div(30.0).oneMinus(), 0.0, 1.0).mul(matU.sparkle).toVar();
           spFade.mulAssign(smoothstep(0.06, 0.22, max(albedo.r, max(albedo.g, albedo.b))));
@@ -1412,7 +1412,7 @@
           });
         });
 
-        // ── environment sky reflection for glossy/wet surfaces (js/render/shaders/lit.js)
+        // ── environment sky reflection for glossy/wet surfaces (js/render/glx/shaders/glsl-lit.js)
         const envBlend = clamp(float(0.40).sub(rough).div(0.30), 0.0, 1.0).mul(specular).toVar();
         envBlend.assign(max(envBlend, wetSheen.mul(0.55)));
         If(envBlend.greaterThan(0.001), () => {
@@ -1437,7 +1437,7 @@
           color.addAssign(envAdd.div(envM.add(1.0)));           // Reinhard shoulder
         });
 
-        // ── sky rim fresnel (js/render/shaders/lit.js) ───────────────────────────────
+        // ── sky rim fresnel (js/render/glx/shaders/glsl-lit.js) ───────────────────────────────
         {
           const rf = NoV.oneMinus();
           const rimFresnel = rf.mul(rf).mul(rf);
@@ -1445,13 +1445,13 @@
           color.addAssign(vec3(U.skyHorizon).mul(rimAmt));
         }
 
-        // ── ambient contact darkening (js/render/shaders/lit.js) ─────────────────────
+        // ── ambient contact darkening (js/render/glx/shaders/glsl-lit.js) ─────────────────────
         {
           const ao = pow(max(N.y.mul(0.5).add(0.5), 1e-4), 0.35);
           color.mulAssign(mix(float(0.12).mul(U.ambContactDark).oneMinus(), float(1.0), ao));
         }
 
-        // ── emissive + over-white hdrTag glow (js/render/shaders/lit.js). The hdrTag
+        // ── emissive + over-white hdrTag glow (js/render/glx/shaders/glsl-lit.js). The hdrTag
         //    push is computed NOW so >1 albedos (neon/lenses) carry HDR energy;
         //    bloom consumes it in M8. ───────────────────────────────────────────
         If(emissive.greaterThan(0.0), () => {
@@ -1462,7 +1462,7 @@
           color.addAssign(albedo.mul(glow).mul(U.glowAmp).mul(hdrTag.mul(U.bloomBoost).add(1.0)));
         });
 
-        // ── fog stack (js/render/shaders/lit.js) ─────────────────────────────────────
+        // ── fog stack (js/render/glx/shaders/glsl-lit.js) ─────────────────────────────────────
         // Skip pow/exp when density and mist are both off (setup / carview / tuner 0).
         If(U.fogDensity.greaterThan(0.0).or(U.groundMist.greaterThan(0.001)), () => {
           const rd = V.negate();
@@ -1505,7 +1505,7 @@
         });
 
         // ── output alpha ──────────────────────────────────────────────────────
-        // M8: car-paint pixels are TAGGED in alpha (0.35 — js/render/shaders/lit.js)
+        // M8: car-paint pixels are TAGGED in alpha (0.35 — js/render/glx/shaders/glsl-lit.js)
         // when the offscreen HDR target carries the frame; the composite's SSR
         // reads the road/car masks off it. Opaque draws write it directly;
         // translucent/noAlphaWrite draws preserve dst alpha through the blend
@@ -1517,7 +1517,7 @@
       })();
     }
 
-    /* ── FLAG cloth-wave vertex displacement (LIT_VS — js/render/shaders/lit.js) ─────────
+    /* ── FLAG cloth-wave vertex displacement (LIT_VS — js/render/glx/shaders/glsl-lit.js) ─────────
      * mat in [15,16): fract(aMat)*2.5 = per-vertex wave weight; a travelling
      * two-sine ripple displaces along the face normal. U.time (frame.time) is
      * the clock — deterministic with the game. */
@@ -1538,7 +1538,7 @@
      * (drawChunked keeps depthWrite TRUE even when alpha<1 — GLX asymmetry).
      *
      * SSR TAG ≠ OPACITY ≠ OUTPUT ALPHA. The fragment still computes the
-     * 0.35 car-paint tag (js/render/shaders/lit.js) as packed.a, but that
+     * 0.35 car-paint tag (js/render/glx/shaders/glsl-lit.js) as packed.a, but that
      * channel must not reach three's output. NodeMaterial.setupDiffuseColor
      * multiplies diffuseColor.a by opacityNode, and r185 NodeBuilder.isOpaque()
      * is `transparent===false && blending===NormalBlending` — our NoBlending
@@ -1638,7 +1638,7 @@
         m.polygonOffsetUnits = o.depthBias[1];
       }
       // M8 alpha discipline (GLX draw(): noAW = noAlphaWrite || alpha < 1 ->
-      // colorMask(r,g,b,FALSE), js/render/glx.js — the SSR tag underneath must
+      // colorMask(r,g,b,FALSE), js/render/glx/glx.js — the SSR tag underneath must
       // survive). three has only a boolean colorWrite, so the mask maps to
       // the blend stage: blendSrcAlpha=Zero / blendDstAlpha=One preserves dst
       // alpha exactly (the tsl-fx.js particles/decals discipline). Colour
@@ -1664,7 +1664,7 @@
         // Reported from an iPhone on the three backend, and worst on a DRY
         // race, where SSR never runs — so the tag was ghosting the cars while
         // nothing consumed it.
-        // GLX's equivalent draw has blending OFF entirely (js/render/glx.js),
+        // GLX's equivalent draw has blending OFF entirely (js/render/glx/glx.js),
         // which writes colour AND the alpha tag verbatim. Match that.
         m.blending = THREE.NoBlending;
       }
@@ -1739,7 +1739,7 @@
       }
     }
 
-    // Adopt a loaded asset pack (js/render/assets.js). The texture nodes were
+    // Adopt a loaded asset pack (js/render/shared/assets.js). The texture nodes were
     // bound to the placeholders at factory time, so — exactly like setEnvCube
     // above — the swap is a `.value` assignment on the shared node, NOT a
     // rebuild. The scales are what the shader actually tests to decide whether

@@ -29,7 +29,7 @@
     "js/render/three/tlx.js": {
       "lines": 3144
     },
-    "js/render/glx.js": {
+    "js/render/glx/glx.js": {
       "lines": 2259
     },
     "js/render/webgpu/wgsl-chunks.js": {
@@ -42,7 +42,7 @@
       "lines": 1684
     },
     "tools/pick-tests.mjs": {
-      "blanketOnlyRoutes": 7
+      "blanketOnlyRoutes": 1
     }
   }
 }

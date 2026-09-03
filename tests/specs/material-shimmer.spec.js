@@ -1,7 +1,7 @@
 // material-shimmer.spec.js — does the baked tarmac CRAWL when the car moves?
 //
 // This is the one risk the whole baked-material feature carries, and the one a
-// screenshot cannot answer. js/track/geom.js's MAT.ASPHALT note says it plainly:
+// screenshot cannot answer. js/track/core/geom.js's MAT.ASPHALT note says it plainly:
 // the road is the surface viewed at a grazing angle for the entire race, and
 // "anything with real relief crawls". A high-relief bake carries far more
 // high-frequency detail than the two-octave procedural noise it replaced, so it

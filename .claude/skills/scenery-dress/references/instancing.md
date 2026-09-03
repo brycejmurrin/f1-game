@@ -1,6 +1,6 @@
 # Scene-graph instancing (folded from the scene-graph-instancing skill)
 
-`js/track/graph.js` (`TrackGraph`) is the scenery **model library + node
+`js/track/scenery/graph.js` (`TrackGraph`) is the scenery **model library + node
 graph**. Migrated emitters call `graph.instance(key, place, build, meta)`
 instead of emitting inline triangles. Replay goes through **GUARDED** emitters
 from `buildProps`. **UNGUARDED** `raw` emitters are only for canonical mesh

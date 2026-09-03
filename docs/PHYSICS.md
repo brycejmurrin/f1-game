@@ -298,7 +298,7 @@ move — it only hands the wet compounds back the braking their tread earns.
 ## Curvature channels — the "arc must not reach the driver" table
 
 Every consumer of `Tracks.curvature()` (direct calls plus the two
-destructured aliases in `js/track/mesh.js` and `js/track/tracks.js`)
+destructured aliases in `js/track/core/mesh.js` and `js/track/tracks.js`)
 classified into its legitimate channel. Audited 2026-08-27 by the
 physics-contract-auditor: ZERO violations — every player-path read is
 behind an assist knob that defaults to 0, or reaches only render / audio /
@@ -320,5 +320,5 @@ it lands.
 | `js/agent/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
 | `js/ui/track-maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
-| `js/track/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
+| `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
 | `js/track/tracks.js` | build LUT bake, signboard side pick | **surface** | the producer itself, plus static scenery placement |

@@ -37,7 +37,7 @@ Open `scratch/profiles/<track>-<mode>.cpuprofile` in Chrome DevTools →
 
 ### Interpreting GC spikes on night tracks
 
-The light-upload path was a known GC source but is **fixed**: `js/render/glx.js`
+The light-upload path was a known GC source but is **fixed**: `js/render/glx/glx.js`
 allocates its per-lamp uniform arrays (pooled as `_luA`/`_luB`/`_luC`/`_luD`)
 **once at module scope** and writes into them each frame, and
 `js/lighting/frame-lights.js`'s per-frame selection buffers (`_tlSel`, `_lightCullBuf`,
@@ -51,7 +51,7 @@ Current cost centers, in rough order of likely impact:
 | Cost center | Where | What to look for |
 |---|---|---|
 | Shadow pass | `js/render/glx/shadow.js` (`GLXShadow`) | Static sun map + dynamic car/lamp maps — flag if the shadow FBO is a large slice |
-| Uniform upload | `js/render/glx.js` `gl.uniform*` | Flag if `> 2 ms`; check `numLights` isn't maxed |
+| Uniform upload | `js/render/glx/glx.js` `gl.uniform*` | Flag if `> 2 ms`; check `numLights` isn't maxed |
 | Particles | `js/fx/particles.js` | Pooled typed arrays sized to `MAX` — profile the update/pack loop, not allocation |
 | `appendCarTailLights` sort | `js/lighting/frame-lights.js` (`_tlSel.sort(_byDistAsc)`) | CPU time scaling with nearby-car count in `tailRange`, not GC |
 | `(garbage collector)` | anywhere | Bottom-up view for the *actual* allocation site — don't reattach it to light upload |

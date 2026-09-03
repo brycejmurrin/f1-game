@@ -7,7 +7,7 @@ local Playwright runs died to their own timeouts rather than to failures.
 it is somebody else's, and the section headings exist to say which claims are
 worth spending an afternoon measuring here. **Part 2 is grounded**: its vertex
 counts come from `tools/verify-track.cjs --all` and its byte arithmetic from the
-real interleaved layout in `js/render/glx.js`. Keep the two apart when quoting
+real interleaved layout in `js/render/glx/glx.js`. Keep the two apart when quoting
 this file.
 
 This repo's culture is measure-then-decide (`playwright.config.js:29-42` is the
@@ -369,7 +369,7 @@ core WebGPU; the freeze was a cost call, not an API wall.
 
 Added the same day. This part **is** grounded in this repo: the vertex counts are
 `tools/verify-track.cjs --all` output and the byte arithmetic is the real
-interleaved layout in `js/render/glx.js:479` (`fpv = 9 + mat + trk`).
+interleaved layout in `js/render/glx/glx.js:479` (`fpv = 9 + mat + trk`).
 
 ## The external numbers
 
@@ -425,7 +425,7 @@ visible edit to the baseline.
 2. Measure real device memory before optimising — `__apex.diag()` already
    reports GL capabilities; a page that dies without an exception needs the
    sentinel, not a try/catch.
-3. Only then consider reducing Vegas. `js/track/graph.js`'s `batches()` already
+3. Only then consider reducing Vegas. `js/track/scenery/graph.js`'s `batches()` already
    returns instanced draws (canonical mesh + per-instance mat4), and
    `docs/research/SCENE-GRAPH-PLAN.md` measured 383,402 of 383,403 nodes as
    instanceable — so the mechanism to stop uploading a million duplicated

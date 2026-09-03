@@ -42,7 +42,7 @@ were caught immediately once the vertical question was asked mechanically.
 
 `addPrism(out, vadd(top, u, roofH / 2), …)` reads naturally and is wrong — it
 floats by `roofH/2`. This single confusion produced seven defects. It is now
-documented at the definition in `js/track/geom.js`, but documentation is a weak
+documented at the definition in `js/track/core/geom.js`, but documentation is a weak
 control; §3 proposes a real one.
 
 **Trap B — one ground sample reused across a wide model.**
@@ -398,7 +398,7 @@ not. Tightening it needs the same call-site tagging as `--clip`.
 
 ### The canopy contract, and where it still does not reach
 
-`canopyR(kind, h)` in `js/track/scenery-nature.js` is now the single source of truth for how
+`canopyR(kind, h)` in `js/track/scenery/nature.js` is now the single source of truth for how
 far a species' foliage reaches sideways. Both `forestEdge()` and the FURN
 roadside scatter derive placement from it, so `dist` means *the clearance the
 canopy's inner edge gets* — not the trunk offset. Two bugs were fixed by

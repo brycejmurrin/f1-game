@@ -64,7 +64,7 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   // because the set is ordered by the yaw-biased metric.
   // Mobile still evicts, deliberately: there the cap IS 24 lights total, which is
   // the per-fragment budget the tier exists to protect.
-  const SLOTS = mobileTier ? 24 : 48;   // js/render/glx.js MAX_LIGHTS
+  const SLOTS = mobileTier ? 24 : 48;   // js/render/glx/glx.js MAX_LIGHTS
   const room = SLOTS - ((L.length / 15) | 0);
   if (room < nT && L.length >= nT * 15) L.length -= (nT - room) * 15;
   // TAIL-LIGHT FADE: ease the glow out over the last `tailFade` m before the range

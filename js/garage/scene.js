@@ -70,7 +70,7 @@ function panelGrid(out, origin, uVec, vVec, nu, nv, nrm, colAt, mid) {
 // the prop silently vanishes instead of smearing across the frame.
 const BOX_F = [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]];
 // A WALL-KEYED material must never land on a horizontal face. matWallLike()
-// (matWallLike() in js/render/shaders/lit.js) makes CONCRETE/BRICK/METAL/WOOD/FABRIC/ROOF/
+// (matWallLike() in js/render/glx/shaders/glsl-lit.js) makes CONCRETE/BRICK/METAL/WOOD/FABRIC/ROOF/
 // STONE/RUST key their triplanar UV off `(an.x > an.z ? worldZ : worldX,
 // worldY)`; on a face whose normal is +-Y, worldY is constant, so the UV
 // collapses to one axis and the material renders as streaks smeared down it.
@@ -722,7 +722,7 @@ function buildBayFloor(out, liv) {
   const band = scale(rgb(liv && liv.c1, [0.3, 0.32, 0.36]), 0.7);
   const L = -HALF_W, R = HALF_W, B = Z_BACK, F = Z_DOOR, W = 0.11;
   // ASPHALT, not CONCRETE, on a HORIZONTAL surface — and this is not a naming
-  // preference. matWallLike() in js/render/shaders/lit.js returns true for
+  // preference. matWallLike() in js/render/glx/shaders/glsl-lit.js returns true for
   // CONCRETE, so its triplanar UV is (an.x > an.z ? z : x, worldY). On a floor
   // the normal is (0,1,0), `an.x > an.z` is false, and worldY is 0 everywhere:
   // the UV collapses to a 1-D function of x and the "concrete" renders as
@@ -1242,9 +1242,9 @@ let dressTex = null, dressFail = 0;
 const propMesh = {};
 // `mat` is a PER-VERTEX MATERIAL ID, and its absence is why this whole room was
 // untextured. GLX wires the attribute only when `data.mat.length === vCount`
-// (createMesh() in js/render/glx.js); without it every vertex reads the generic default
+// (createMesh() in js/render/glx/glx.js); without it every vertex reads the generic default
 // aMat = 0 = MAT.FLAT and applyMaterial early-outs on `mid <= 0`
-// (applyMaterial() in js/render/shaders/lit.js). So the bay was flat vertex colour while the
+// (applyMaterial() in js/render/glx/shaders/glsl-lit.js). So the bay was flat vertex colour while the
 // car standing in it sampled the baked PBR arrays. One float per vertex buys
 // concrete, asphalt and metal at ZERO extra triangles and ZERO extra draw
 // calls. Every primitive below takes an optional trailing `mid` defaulting to

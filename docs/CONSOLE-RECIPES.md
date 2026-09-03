@@ -108,7 +108,7 @@ __apex.race("monza"); setTimeout(function(){ __apex.eyeAt(0.25,0,2.5) }, 2000)
 **The check that matters is temporal, not static:** set `matTex(1)`, drive at
 speed, and watch the road far down a straight for crawling or shimmering. A
 screenshot cannot show it, and a photoscan is more prone to it than the
-procedural noise it replaced — see the `MAT.ASPHALT` note in `js/track/geom.js`.
+procedural noise it replaced — see the `MAT.ASPHALT` note in `js/track/core/geom.js`.
 
 Re-bake materials from real CC0 scans (needs `assets/pack/webbake.js`, see
 [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md)):

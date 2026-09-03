@@ -912,7 +912,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - failing silently, which is the one real risk of the split.
 - 2359 -> 2360 on the other lineage for the one call that appends the painted
 - grid boxes to the start-line decal. The 77 lines of box geometry went to
-- js/track/mesh.js, which this ratchet does not bound and which already owns
+- js/track/core/mesh.js, which this ratchet does not bound and which already owns
 - buildRoad and upOf; tracks.js pays only for the call, and riding the
 - existing startline mesh is what keeps that to a single line instead of a
 - mesh registration, a draw call, a free path and a hideMeshes key.
@@ -1234,7 +1234,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - the rule is re-measure, never add either side's number on paper.
 - 2924 -> 3077 (split-newline count) 2026-09-03: placeholder material arrays carry the pack's sampling state (three compiles textureLoad+clamp from a Nearest placeholder — the phone unlit-track defect); WGSL compile capture; AUTO self-heal to three-WebGL2 on early GPU errors; phones never 'software'; soft-present stale-read guard; backendState on the façade; hidden device loss defers its reload   // +1: lampShadowKeep returns on the corrected key
 
-## `js/render/glx.js` — last ceiling 2259
+## `js/render/glx/glx.js` — last ceiling 2259
 
 - GLX core (passes live in glx/, shaders in shaders/) — the core stays thin.
 - 1929 -> 1936: the comment recording why the per-chunk knob is no longer a

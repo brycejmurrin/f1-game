@@ -1051,7 +1051,7 @@ const api = {
     return out;
   },
   loadCarModel: (url) => loadCarModel(url),
-  // Baked asset pack (js/render/assets.js, built by tools/assets.mjs)
+  // Baked asset pack (js/render/shared/assets.js, built by tools/assets.mjs)
   // assets() — {supported, pack, uploaded, tier, layers, normal, bytes, models,
   //   error}. `supported:false` means the active renderer has no texture-array
   //   path (WGX/WebGPU); `pack:false` means no pack is installed. Both are
@@ -1235,7 +1235,7 @@ const api = {
   },
 
   // List all available circuit IDs and names (for iterating in test harnesses).
-  // The built track's scenery SCENE GRAPH (js/track/graph.js): the model library
+  // The built track's scenery SCENE GRAPH (js/track/scenery/graph.js): the model library
   // + one node per placement, plus batches() — the backend-neutral instanced-draw
   // handoff. Returns null before a track is built. Live object, not a copy: read
   // it, do not mutate it.

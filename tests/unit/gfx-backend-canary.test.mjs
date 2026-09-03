@@ -539,7 +539,7 @@ test("GLX pins the per-chunk uploadLightSet revert (arity 3)", () => {
   // build-1496 squash merge. Re-land the forwarding WITH a repro, and flip
   // this regex in the same commit. (The lost-context no-ops of draw() and
   // present() are behaviour in "GLX create* / draw* fail closed" above.)
-  const glx = code("js/render/glx.js");
+  const glx = code("js/render/glx/glx.js");
   assert.match(glx, /uploadLightSet:\s*\(\s*L\s*,\s*idx\s*,\s*n\s*\)\s*=>\s*uploadLightSet\(\s*L\s*,\s*idx\s*,\s*n\s*\)/);
 });
 
@@ -832,7 +832,7 @@ test("the instancing gate is declared through the cache, never bracketed per dra
   // Source lints that the behaviour above cannot see: a raw write beside the
   // cache would desync it, and a lit draw bound outside litMaterial would skip
   // the declaration.
-  const glx = code("js/render/glx.js");
+  const glx = code("js/render/glx/glx.js");
   assert.doesNotMatch(glx, /gl\.uniform1f\(\s*litU\.uInstanced/, "uInstanced must go through uf1, not a raw uniform1f");
   const binds = glx.match(/useProg\(\s*litProg\s*\)/g) || [];
   assert.equal(binds.length, 2, "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
@@ -862,7 +862,7 @@ test("uModel goes through the redundancy cache, not a raw upload", () => {
   h.reset();
   h.GLX.draw(mesh, new Float32Array(model), {});
   assert.equal(uploads(), 0, "an equal COPY is a hit — the cache compares values, not references");
-  assert.doesNotMatch(code("js/render/glx.js"), /gl\.uniformMatrix4fv\(\s*litU\.uModel/,
+  assert.doesNotMatch(code("js/render/glx/glx.js"), /gl\.uniformMatrix4fv\(\s*litU\.uModel/,
     "uModel must go through ufM4, not a raw uniformMatrix4fv");
 });
 
@@ -920,8 +920,8 @@ test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", (
   // CALL COUNTS byte-identical and the render statistically indistinguishable
   // on a coarse metric — it moves or recolours lamp pools, which no counter
   // and no unit test would catch. This is the guard for that.
-  const glx = code("js/render/glx.js");
-  const lit = code("js/render/shaders/lit.js");
+  const glx = code("js/render/glx/glx.js");
+  const lit = code("js/render/glx/shaders/glsl-lit.js");
 
   // The four arrays must be GONE from both halves, or a stale reader survives.
   for (const n of ["uLightA", "uLightB", "uLightC", "uLightD"]) {
@@ -1309,7 +1309,7 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
  *      see-through. Only the bodywork: tyres, carbon, glass and wings keep
  *      alpha = the material's own, which is 1.
  *
- * GLX cannot hit this because it asks for `alpha: false` (js/render/glx.js), so
+ * GLX cannot hit this because it asks for `alpha: false` (js/render/glx/glx.js), so
  * the compositor ignores whatever it writes to alpha. TLX has to say the same
  * thing, and — the part worth a test — it has to say it TWICE, because three's
  * two backends read different inputs and neither reads the other's. Those two
@@ -1319,7 +1319,7 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
  *
  */
 const TLX = read("js/render/three/tlx.js");
-const GLX = read("js/render/glx.js");
+const GLX = read("js/render/glx/glx.js");
 const TSL_LIT = read("js/render/three/tsl-lit.js");
 const THREE_BUNDLE = read("vendor/three-0.185.1/three.webgpu.min.js");
 
@@ -1425,7 +1425,7 @@ test("TLX pack sampling skips car surface ids, matching GLX matTexUV", () => {
   // GLX/WGX refuse mid>16 before the fetch. TLX used to sample layer=mid
   // on every car fragment; SwiftShader returns black and the car vanishes
   // while the road (MAT 16) still draws.
-  const glxLit = read("js/render/shaders/lit.js");
+  const glxLit = read("js/render/glx/shaders/glsl-lit.js");
   assert.match(glxLit, /mid <= 0 \|\| mid > 16/,
     "GLX matTexUV lost its 1..16 pack gate — re-derive the TLX clamp");
   const src = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
@@ -1780,7 +1780,7 @@ test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint
 });
 
 test("instanced cull cache only hits the transform pack resident in the GPU buffer", () => {
-  for (const file of ["js/render/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
     const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
     // fnBody, never a fixed window: the three backends' cullInstances are 1559
     // / 2446 / 2497 chars, so one 2800 window over-read all three by a
@@ -1917,7 +1917,7 @@ test("shadow state reports the frame-live armed flag, not just a lifetime count"
   // armed field, and deleting `armed: SHD.carArmed` stayed green on two of the
   // three backends. This is the same defect the arms pin above documents,
   // repeated in the same diff that documented it.
-  for (const file of ["js/render/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
     const src = code(file);
     for (const [which, sib] of [["carShadowState", "lampShadowState"],
                                 ["lampShadowState", "carShadowState"]]) {
@@ -2080,7 +2080,7 @@ test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
   // World-space cells swam as the car translated (floor(wpos*45) + hash3).
   // GLX / TLX weld glitter to vObjPos / positionGeometry at 220 Hz + hash21.
   const chunks = read("js/render/webgpu/wgsl-chunks.js");
-  const lit = read("js/render/shaders/lit.js");
+  const lit = read("js/render/glx/shaders/glsl-lit.js");
   const tsl = read("js/render/three/tsl-lit.js");
   // location 3 is the road trk vec3; objPos shifted 7 → 5 with that pack.
   assert.match(chunks, /@location\(5\)\s+objPos\s*:\s*vec3<f32>/,
@@ -2153,7 +2153,7 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
   // to dFdx the bumped N, which widened roughness on every brick/concrete
   // seam and made WebGL2 walls duller than WebGPU. Snapshot after peel,
   // before the material bump; lighting still uses the bumped N.
-  const lit = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const lit = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const post = read("js/render/glx/post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(lit, /vec3 Nsaa = N;/,
@@ -2247,7 +2247,7 @@ test("TLX software/phone WebGL2 scales Poisson R from pcssPen", () => {
 });
 
 test("lamp bounce ALU is gated when bounceK is 0 on all three backends", () => {
-  const glx = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const wgsl = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(glx, /if \(uBounceK > 0\.0\)/,
@@ -2273,7 +2273,7 @@ test("HDR grade is gated on all three backends when knobs are neutral", () => {
   // applyHdrGrade at shipped defaults is an identity that still costs ~20 ALU
   // + transcendentals per full-res pixel. GLX/TLX skip it; WGX used to always
   // run it (and the max(c,0) clamp is the only non-identity).
-  const glx = read("js/render/shaders/post.js");
+  const glx = read("js/render/glx/shaders/glsl-post.js");
   assert.match(glx, /if \(uHdrGradeOn > 0\.5\) c = applyHdrGrade\(c\)/,
     "GLX composite must keep the uHdrGradeOn gate");
   const wgsl = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -2313,7 +2313,7 @@ test("TLX desktop WebGL2 builds a color-depth PCSS blocker", () => {
 test("WGX SSR car streak uses carGloss like GLX/TLX", () => {
   // A single tap left CAR GLOSS dead on WebGPU and night lamps as hard dots.
   const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const glx = read("js/render/shaders/post.js");
+  const glx = read("js/render/glx/shaders/glsl-post.js");
   const tsl = read("js/render/three/tsl-post.js");
   assert.match(post, /gloss\s*:\s*vec4<f32>/,
     "SsrU must carry carGloss");
@@ -2401,7 +2401,7 @@ test("TLX SSAO does not flip N.z; SSR self-hit still does", () => {
 });
 
 test("road-marking mip uses unclamped fwX on all three backends", () => {
-  const glx = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(glx, /float fwX = max\(fwidth\(x\), 1e-4\)/,
@@ -2419,7 +2419,7 @@ test("road-marking mip uses unclamped fwX on all three backends", () => {
 test("SSAO tap setup is skipped when strength is 0 on all three backends", () => {
   // Contact shadows keep the pass live at aoStr=0; the 8 dependent depth
   // fetches must not still run. strength/uStrength is a uniform.
-  const glx = read("js/render/shaders/post.js");
+  const glx = read("js/render/glx/shaders/glsl-post.js");
   assert.match(glx, /if \(uStrength > 0\.0\)/,
     "GLX SSAO must keep the uStrength tap gate");
   const wgsl = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -2512,7 +2512,7 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
 });
 
 test("GLX and TLX road-marking mip use the raw footprint, like WGX", () => {
-  const glx = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(glx, /float fwX = max\(fwidth\(x\), 1e-4\);/,
     "GLX must keep the unclamped lateral footprint for mip");
@@ -2655,7 +2655,7 @@ test("GLX caches uNumLights, and nothing else writes it on the lit program", () 
   // program. post.js's godray pass has its own uNumLights on its own program
   // and cannot collide; a SECOND writer on the lit program would make the
   // cache lie, and this is the assertion that would catch it.
-  const bare = code("js/render/glx.js");
+  const bare = code("js/render/glx/glx.js");
   const writers = bare.match(/uniform1i\(\s*litU\.uNumLights/g) || [];
   assert.equal(writers.length, 1,
     `litU.uNumLights has ${writers.length} writers — the cache is only valid with one; ` +
@@ -2708,7 +2708,7 @@ test("GLX's uf3 cache keeps float64 precision, and owns every lit/sky vec3", () 
   assert.equal(h.count("uniform3fv", (a) => a[0].name === "uAmbSky"), 1, "the cache compares values, not the caller's reference");
   // Single writer, the same property the uNumLights and uModel caches need: a
   // raw gl.uniform3fv on either program would desync the cache behind its back.
-  const bare = code("js/render/glx.js");
+  const bare = code("js/render/glx/glx.js");
   const raw = bare.match(/gl\.uniform3fv\(\s*(litU|skyU)\./g) || [];
   assert.equal(raw.length, 0,
     `${raw.length} raw gl.uniform3fv call(s) remain on the lit/sky programs (${raw.join(", ")}) — ` +

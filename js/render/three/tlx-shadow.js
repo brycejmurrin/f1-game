@@ -16,7 +16,7 @@
     // passes that GLX refuses on EVERY phone — i.e. the config most likely to
     // be jetsam-killed got the allocations GLX withholds from it.
     // mobileTier is kept as the fallback for a caller that predates
-    // ctx.isMobile: MOBILE_TIER implies IS_MOBILE (js/render/glx.js), so the
+    // ctx.isMobile: MOBILE_TIER implies IS_MOBILE (js/render/glx/glx.js), so the
     // OR can only ever be conservative, never wrong.
     const isMobile = !!ctx.isMobile || !!ctx.mobileTier;
     // Software GL (SwiftShader / llvmpipe / WARP) is fill-bound: a 2048² sun

@@ -11,7 +11,7 @@
  * hungaroring 0.185); the other 18 were hand-set round numbers. No tool in the
  * repo reproduced the derivation. This is that tool.
  *
- * THE MECHANISM (read js/track/space.js alongside this)
+ * THE MECHANISM (read js/track/core/space.js alongside this)
  * ----------------------------------------------------
  * `startFrac` is an INDEX fraction, not an arc-length fraction:
  *   racingNodeToSource(def, 0, N) === round(wrap01(startFrac) * N) % N

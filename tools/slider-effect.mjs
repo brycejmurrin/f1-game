@@ -116,7 +116,7 @@ const SCAN_FILES = [
   "js/game.js",
   "js/lighting/atmosphere.js",
   "js/fx/particles.js",
-  "js/render/glx.js",
+  "js/render/glx/glx.js",
   "js/render/glx/post.js",
   "js/render/glx/shadow.js",
 ];

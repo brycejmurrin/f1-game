@@ -131,7 +131,7 @@ function stageRoot() {
   for (const p of ["index.html", "version.json", "js", "css", "assets", "vendor"]) {
     try { cpSync(join(ROOT, p), join(dir, p), { recursive: true }); } catch {}
   }
-  const file = join(dir, "js/render/shaders/post.js");
+  const file = join(dir, "js/render/glx/shaders/glsl-post.js");
   const src = readFileSync(file, "utf8");
   const anchor = [ANCHOR_COVER, ...ANCHOR_COVER_ALT].find((a) => src.includes(a)) || null;
   if (DEBUG === "gates" && !src.includes(ANCHOR_MASK)) throw new Error("gates anchor not found in post.js");

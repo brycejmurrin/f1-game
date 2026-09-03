@@ -1,4 +1,4 @@
-/* Apex 26 — TLXShaders.fx: the FX materials for the TLX backend (M6). TSL ports of the five tiny GLSL programs in js/render/shaders/fx.js (the GLSL source of trut… */
+/* Apex 26 — TLXShaders.fx: the FX materials for the TLX backend (M6). TSL ports of the five tiny GLSL programs in js/render/glx/shaders/glsl-fx.js (the GLSL source of trut… */
 "use strict";
 
 (function () {
@@ -142,7 +142,7 @@
     /* ── car decals (DECAL_VS/FS) ───────────────────────────────────────────
      * Sun + hemisphere lit so marks sit INTO the paint's shading; uGlow lifts
      * them at night. Frame uniforms are fx-local (the decal pass reads the
-     * keyMul-scaled sun + ambientMul-scaled ambient — js/render/glx.js — and
+     * keyMul-scaled sun + ambientMul-scaled ambient — js/render/glx/glx.js — and
      * must keep working when the lit factory is absent). One material per
      * (texture, glow) pair, cached: ~2 textures/car x 2 glow states. */
     const U = {
@@ -213,7 +213,7 @@
       return m;
     }
 
-    /** begin(frame) -> decal-pass uniforms (js/render/glx.js semantics: the
+    /** begin(frame) -> decal-pass uniforms (js/render/glx/glx.js semantics: the
      * AMBIENT and KEY LIGHT sliders re-light the sponsor marks too). */
     function updateFrame(frame) {
       _decalFrame++;   // new frame: last frame's decal mats are evictable again
