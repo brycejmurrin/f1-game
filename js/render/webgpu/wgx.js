@@ -147,7 +147,7 @@ const WGX = (function () {
   const DRAW_STRIDE = 256;
   const MAX_DRAWS = 4096;                               // per-frame draw slots
   // Per-chunk lamps (bindings 15/16). TRACK_LIGHT_CAP sits above the ~800-lamp
-  // bake ceiling in js/game/lighting.js; CHUNK_IDX_CAP bounds the concatenated
+  // bake ceiling in js/game/track-lights.js; CHUNK_IDX_CAP bounds the concatenated
   // per-chunk index table across every chunked mesh in a bake generation
   // (measured visible-chunk counts are ~150 worst; whole-table sizes are far
   // smaller than 16384 at CAP 24 — overflow warns and falls back to global).
@@ -3431,7 +3431,7 @@ const WGX = (function () {
         const AL = frameAllLights;
         const tn = Math.min(TRACK_LIGHT_CAP, (AL.length / 15) | 0), td = _tlScratch;
         // THIRTEEN of the sixteen lanes are baked-static — the same split
-        // js/game/lighting.js makes upstream, where only rgb can move. _tlScratch
+        // js/game/frame-lights.js makes upstream, where only rgb can move. _tlScratch
         // is module-scope and written nowhere else, so its static lanes survive
         // between frames and only need writing when the SET changes. Gen moves
         // every frame under flicker or the warm-up ramp, and that used to rewrite

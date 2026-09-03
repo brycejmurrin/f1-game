@@ -13,7 +13,7 @@ const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
 // Deferred: openCareer is declared below the G literal in game.js, so it arrives
 // as an arrow and must be read through G rather than destructured here.
 const openCareer = (...a) => G.openCareer(...a);
-const { CAM_MODES } = GameTables;
+const { CAM_MODES } = CamModes;
 const { TUNE_DEFS, LT } = LightTune;
 
 // The agent-facing view (js/game/agentview.js). Composed here rather than
@@ -2268,7 +2268,7 @@ const api = {
     // divergence over a 4 s rollout at identical seed and inputs — small, but it
     // is exactly the uncontrolled variable seeding is meant to remove.
     for (const c of G.cars) {
-      c.gear = 1; c.rpm = GameTables.IDLE_RPM; c.shiftT = 0;
+      c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
       c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
       c.stuckT = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
       c.xOn = false; c.aeroX = 0; c.xArmed = false;

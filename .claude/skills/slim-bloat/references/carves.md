@@ -20,7 +20,7 @@ before/after counts (`bloat-scan.mjs --json`).
    roster site.
 4. Lockstep the same commit: file + `index.html` `<script>` position +
    `tools/manifest.cjs` (+ `HARD_EDGES` if eval-time destructure) + lower
-   the ceiling in `tests/unit/module-size.test.mjs`.
+   the ceilings: `node tools/ratchets.mjs --update` (tests/data/ratchets.json).
 5. `grep` every removed symbol. Then `npm run test:tooling-fast`. Near
    `game.js`: `physics-characterization` is the master gate — parent names
    leftover browser groups as not-run.
@@ -45,7 +45,7 @@ before/after counts (`bloat-scan.mjs --json`).
 - New `js/game/` file: hyphenated name; grandfathered squashed names stay.
 - `tools/` subdir: `tools/README.md` must name the file (or `family/`).
 - `tests/` split is done — do not invent a third layout. Guards in
-  `tests-split.test.mjs` / `load-order.test.mjs` / `docs-integrity.test.mjs`.
+  `load-order.test.mjs` / `docs-integrity.test.mjs`.
 
 ## 4. Dead code, duplicates, stale comments
 

@@ -98,6 +98,15 @@ const SOURCE_EXEMPT = new Map([
   // Synthetic fixture HTML fed to the service worker under test — a string it
   // must rewrite, not a file it must find.
   ["css/style.css", /service-worker\.test\.mjs|docs-integrity\.test\.mjs/],
+  // The scratch tree tools/move-tree.mjs is tested on: a file that moves, its
+  // untouched sibling, and a test that cites it — none of them real.
+  ["js/game/perfect.js", /move-tree\.test\.mjs|docs-integrity/],
+  ["js/perf/governor.js", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/unit/perf.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  ["docs/archive/OLD.md", /move-tree\.test\.mjs|docs-integrity/],
+  ["js/game/nope.js", /move-tree\.test\.mjs|docs-integrity/],
+  ["js/perf/x.js", /move-tree\.test\.mjs|docs-integrity/],
+  ["tools/nested/README.md", /move-tree\.test\.mjs|docs-integrity/],
   // Fake package.json scripts inside the coverage-audit's own fixtures.
   ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
   ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],
@@ -111,13 +120,7 @@ const SOURCE_EXEMPT = new Map([
   // was deleted after the ON paths baked in. Naming the old path is the
   // assertion; if someone recreates the file, this exemption should go too.
   ["js/game/perf-try.js", /perf-try\.test\.mjs|docs-integrity/],
-  // tools/tests-split.mjs documents the PRE-SPLIT tree it migrated (its header
-  // and mapping rules name flat tests/ from-paths by design), and its guard
-  // builds scratch trees out of synthetic tests/ names. Rewriting either would
-  // falsify the record of what moved where — so the pair gets a directory-wide
-  // exemption rather than a listing that breaks on the next scratch fixture.
-  ["tests/", /tests-split/],
-  ["docs/LIVE.md", /tests-split\.test\.mjs|docs-integrity/],
+  ["docs/LIVE.md", /docs-integrity/],
 ]);
 
 test("a `file.js:NNN` citation in a comment points inside that file", () => {
@@ -382,7 +385,7 @@ test("CLAUDE.md is a stub that imports AGENTS.md, not a second copy", () => {
 test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   // "Ships OFF … def: 0" survived the knob being flipped to 1.0, which inverted
   // the meaning of the whole asset-pack section.
-  const lighting = read("js/game/lighting.js");
+  const lighting = read("js/game/lighting-knobs.js");
   const def = lighting.match(/\{\s*id:\s*"matTexMix"[^}]*?\bdef:\s*([\d.]+)/);
   assert.ok(def, "matTexMix is no longer a TUNE_DEFS entry with a def");
   const on = Number(def[1]) > 0;

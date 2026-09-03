@@ -267,6 +267,9 @@ jobs:
           npm run test:webgpu-lifecycle
           npm run test:agent-contract
           npm run test:audio-unit
+          # The CLI-only MCP wrappers (tinyfish proxy, probe bridge): spawn-heavy,
+          # off the edit loop since 2026-09-03; their fast-gate half is mcp-cli.
+          npm run test:mcp
           # The three raster/spawn-heavy car files, out of the edit loop
           # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.
           npm run test:node-slow
@@ -892,7 +895,7 @@ jobs:
           # The two playwright configs carry the launch flags this job depends
           # on, tests/helpers/ is what every spec boots through, and the
           # workflow file is here so an edit to THIS job runs it.
-          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/game/lighting[^/]*\.js$|js/game/light-presets\.js$|js/game/atmosphere\.js$|js/game/tuner\.js$|playwright(\.gpu)?\.config\.js$|\.github/workflows/ci\.yml$|tests/helpers/)' \
+          if printf '%s\n' "$CHANGED" | grep -qE '^(js/render/|js/game/lighting[^/]*\.js$|js/game/track-lights\.js$|js/game/frame-lights\.js$|js/game/light-presets\.js$|js/game/atmosphere\.js$|js/game/tuner\.js$|playwright(\.gpu)?\.config\.js$|\.github/workflows/ci\.yml$|tests/helpers/)' \
             || printf '%s\n' "$CHANGED" | grep -qxF -f "$SPECS_FILE"; then
             echo "renderer=true" >> "$GITHUB_OUTPUT"
             echo "RUNNING RENDERER SPECS: the diff touches the renderer, its lighting modules, a gfx spec or the launch config"

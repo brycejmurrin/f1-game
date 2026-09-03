@@ -16,7 +16,7 @@ tools start their own server + Chromium; no setup beyond `npm install`.
 
 ## `apex-capture cameras` — 12 modes, no drift
 
-The harness hardcodes 12 of the game's **13** `CAM_MODES` (`js/game/tables.js`):
+The harness hardcodes 12 of the game's **13** `CAM_MODES` (`js/game/cam-modes.js`):
 `chase`, `far`, `cockpit`, `hood`, `overhead`, `heli`, `reverse`, `side`,
 `cinematic`, `low`, `tcam`, `rear` — **`drift` is omitted**. It also hardcodes
 `park(0.1)` (10% lap) for every shot; a different fraction needs a custom sweep

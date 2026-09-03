@@ -26,7 +26,7 @@
 // timer polling to every correctly-positioned timeout is a separate behavioural
 // change across hundreds of sites, so that population remains frozen and each
 // site gets converted where its timing can be verified. Same pattern as
-// tests/silent-catch and the module-size ceiling.
+// tests/silent-catch and the size ratchet (tests/data/ratchets.json).
 //
 // The visible symptom this prevents: a test reporting `Test timeout of Nms
 // exceeded` while pointing at a line that claims to wait 30 s. `tlx-probes`'

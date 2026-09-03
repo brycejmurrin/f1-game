@@ -44,7 +44,7 @@ scenery-dress; `debug-state` → agent-view; `cross-backend-parity` →
 | **restructure-screens-css** | Restructuring screens, menus, dialogs, DOM, or the CSS class/token system — collapsing duplicate component families. |
 | **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains); `TrackGraph.instance` migration, graph parity, `batches()`/`bakeOnly` (`references/instancing.md`). |
 | **season-mode** | Standalone Season calendar, weekend format, sprint, quali-on/off, points table, `season-cal.js`, `season-ui.js`. |
-| **slim-bloat** | Fat SKILL.md, saturated module-size ceiling, dead or duplicate code, stale comments, extract/split candidates. |
+| **slim-bloat** | Fat SKILL.md, saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates. |
 | **survey-track** | End-to-end circuit accuracy: survey → diagnose geometry → edit → verify → ship (orchestrates scenery/debug/probe + ground-profile). |
 | **survey-ui-matrix** | Reviewing the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type — `playwright-official` `browser_*` resize/DOM/CSS or `layout-audit.mjs`; enumerate screens from source, measure each cell, capture. |
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`. |

@@ -44,7 +44,7 @@ Mostly flat (sea-level boulevards). One distinct climb: the Old City "Castle Sec
 ## 6. Modelling Notes
 - Contrast is the identity: cluster warm sandstone crenellated boxes (notch the top edge) in the Old City vs. cool tall glass boxes with emissive window grids on the seafront.
 - Flame Towers: three tapered shafts with **full-height LED fire** (stacked emissive orange/red/amber bands via `ledFacadeBands` when available, else inline frustum rings) plus a flame crown — readable on the skyline early in the lap, not trackside.
-- Castle Section squeeze (s≈0.42–0.50): road `w: 3.8` (~7.6 m full width on segs fallback) + sandstone walls/gates at **~1–2 m clearance** both sides.
+- Castle Section squeeze (s≈0.42–0.50): road `hwZones` squeeze to `hw: 3.8` (~7.6 m full width) + sandstone walls/gates at **~1–2 m clearance** both sides.
 - Neftchilar L: sell the Caspian **void** — reflective sea + far silhouettes only; cull mid-ground palms, cafes, near piers, and dense boulevard buildings.
 - Line the whole lap with low repeating barrier/wall boxes; punctuate with floodlight poles (thin box + bright top) for the night mood.
 - Concentrate lit boxes on the right of the long straight; keep the left visually empty.

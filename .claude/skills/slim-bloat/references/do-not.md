@@ -11,10 +11,10 @@ reaches for these first. They are not bloat.
 | Split `updateCar()` or `render()` | Continuous integration / one draw; inventing a struct risks characterization. | `docs/ARCHITECTURE.md` §Reorg |
 | Extract garage preview "because it's big" | ~15 new `G` accessors — moves coupling, does not remove it. Sort by **boundary crossings**, not lines. | same §, 2026-08 table |
 | IIFE → `import`/`export` | No ES modules (vendored three.js only). | `tests/unit/global-registry.test.mjs` |
-| Delete a bug-explaining comment | The one growth `module-size` tolerates. The comment **is** the test the suite cannot write. | `tests/unit/module-size.test.mjs` header |
+| Delete a bug-explaining comment | The one growth the size ratchet tolerates (`codeLines` ignores it). The comment **is** the test the suite cannot write. | `docs/notes/CEILING-HISTORY.md` header |
 | Delete a `catch` without the why-comment | Silent-catch ratchet: empty catch needs the sentence. | `tests/unit/silent-catch.test.mjs` |
 | Restore `other-file.js:412` citations | Ceiling is 0. Cite the **symbol**. | `tests/unit/comment-citations.test.mjs` |
-| Raise a ceiling so the extract "fits" | Ratchet exists because extraction happened once and the file grew back. | `ARCHITECTURE.md`; module-size slack test |
+| Raise a ceiling so the extract "fits" | Ratchet exists because extraction happened once and the file grew back. | `ARCHITECTURE.md`; ratchets slack rule |
 | Copy constants out instead of moving them | aerozones leftover; settings then `ReferenceError`. `grep` the old names. | `ARCHITECTURE.md` § leftovers |
 | Flatten `HARD_EDGES` / script order | Eval-time destructure order is load-bearing. | `tools/manifest.cjs`, `load-order.test.mjs` |
 | "Fix" seeded float associativity / lockstep net | Same-machine reproducibility only; peers have authority. | ENGINEERING-PRACTICE-NOTES §2 |

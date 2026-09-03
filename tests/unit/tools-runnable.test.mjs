@@ -123,7 +123,7 @@ test("the comment stripper actually strips (or every ban below is vacuous)", () 
 // gets widened or ignored — which is how this class survived in the first place.
 const COERCED_VERDICT = /\(\s*[A-Za-z_$][A-Za-z0-9_$.]*(\([^()]*\))?\s*(\|\||\?\?)\s*0\s*\)\s*(>=|>|<=|<|!==|!=|===|==)\s*0/;
 
-// Frozen count, the module-size ratchet idiom: existing entries are tolerated
+// Frozen count, the size-ratchet idiom: existing entries are tolerated
 // and named, new ones are the defect. Shrinking this is progress.
 const COERCED_TOLERATED = {
   // `(d.cost || 0) > 0` over the parts CATALOG — product data this repo owns,

@@ -6,7 +6,7 @@ description: Use when the user says night looks washed out/like day, dawn sun is
 # Tune and validate scene lighting via __apex probes
 
 **Reach for the tuner knobs FIRST.** Nearly every hand-tuned value is a live
-`TUNE_DEFS` knob (`js/game/lighting.js`) read via `LT.<id>` each frame.
+`TUNE_DEFS` knob (`js/game/lighting-knobs.js`) read via `LT.<id>` each frame.
 
 ```js
 __apex.lightTune()

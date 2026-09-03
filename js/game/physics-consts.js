@@ -104,4 +104,24 @@ window.PhysicsConsts = {
   OT_TIME_LO: 3.2, OT_TIME_HI: 5.2,  // overtake push, seconds
   OT_COOL_LO: 9, OT_COOL_HI: 14,     // ...and its lockout, best -> worst deploy
   OT_GAP: 1.0,
+
+  // GEARBOX. 8-speed with realistic PROGRESSIVE ratios (real F1 gearboxes space
+  // the ratios so the steps shrink in the higher gears): GEAR_TOP is each
+  // gear's top speed as a fraction of the speed ENVELOPE (game.js gearHi()
+  // scales it by vTop(), so all eight stay reachable at any OVERALL SPEED).
+  // F1 V6 turbo: idle ~5k, rev limit 15k. Read by game.js (rpmFor, the
+  // limiter), js/game/hud.js (the tach) and js/game/apex.js (reset).
+  GEARS: 8,
+  GEAR_TOP: [0.095, 0.16, 0.25, 0.36, 0.50, 0.66, 0.83, 1.0],
+  IDLE_RPM: 5000, MAX_RPM: 15000,
+
+  // DIFFICULTY presets — the AI field's pace scale (`ai`, a ground-speed
+  // multiplier on TIER_V) and the rubber-band tolerance (`band`). Keyed by the
+  // settings value; read by game.js (makeCars), js/game/quali.js (the modelled
+  // field's lap) and js/game/career-ui.js (the guide lists the keys).
+  DIFF: {
+    easy:   { ai: 0.86, band: 0.18 },
+    normal: { ai: 0.92, band: 0.08 },
+    hard:   { ai: 0.99, band: 0.02 },  // was 0.03 — smarter OT/ERS/brake cuts rubber-band need
+  },
 };

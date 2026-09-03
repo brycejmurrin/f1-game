@@ -59,9 +59,9 @@ const PAGE_GLOBALS = new Set([
   "__apex", "Tracks", "Log", "M4", "V3", "Gfx", "GLX", "Assets", "Career",
   "Teams", "Parts", "Liveries", "LiveryTex", "Ghost", "DriverRatings",
   "F1API", "DataHub", "UiLayers", "TopModal", "MusicLib", "SpotifyMusic",
-  "CircuitMarkings", "TrackSpline", "TrackMesh", "TrackGeom", "TrackGraph",
+  "TrackDefs", "TrackSpline", "TrackMesh", "TrackGeom", "TrackGraph",
   "TrackSpace", "TrackSurface", "TrackModels", "TrackMaps", "SceneryThemes",
-  "CircuitPaths", "TrackSceneryData", "GameTables", "LightTune", "LightStore",
+  "TrackSceneryData", "CamModes", "LightTune", "LightStore",
   "GLTF", "THREE", "TLX", "WGX", "Input", "GameAudio", "GameStore", "PerfGov",
 ]);
 

@@ -1623,7 +1623,7 @@
 
 <!-- lighting tuner: live sliders for every lighting/rendering tunable on the
      loaded track. Docked right so the scene keeps rendering as a live preview;
-     rows are generated from TUNE_DEFS in js/game/lighting.js (wired in game.js). -->
+     rows are generated from TUNE_DEFS in js/game/lighting-knobs.js (wired in js/game/tuner.js). -->
 <div id="lighting" role="region" aria-label="Lighting tuner" data-esc-close="lt-close" hidden>
   <div id="lighting-inner" class="sheet">
     <!-- #lt-rail groups the panel's fixed furniture so a wide-but-short screen
@@ -1786,10 +1786,9 @@
 <script defer crossorigin="anonymous" src="js/render/assets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/teams.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/driver-ratings.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/geo-paths.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/game/store.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/geom.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery-data.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/track/markings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/space.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/surface.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/models.js?v=dev"></script>
@@ -1858,7 +1857,9 @@
 <script defer crossorigin="anonymous" src="js/car/liverytex.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/ghost.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/physics-consts.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/game/tables.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/game/lighting-knobs.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/game/track-lights.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/game/frame-lights.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/lighting.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/light-store.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/carmesh.js?v=dev"></script>
@@ -1866,7 +1867,6 @@
 <script defer crossorigin="anonymous" src="js/game/bodyattitude.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/particles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/atmosphere.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/game/store.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/career.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/season-cal.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/reliability.js?v=dev"></script>
@@ -1895,16 +1895,17 @@
 <script defer crossorigin="anonymous" src="js/game/perf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/loop-health.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/gfx-quality.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/game/renderer-picker.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/gfx-debug.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/ui-scale.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/cockpit-opts.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/game/metrics-panel-style.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/metrics.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/cameras.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/cam-modes.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/hud.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/results.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/quali.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/game/quali-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/debrisworld.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game/incidentsim.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/game.js?v=dev"></script>

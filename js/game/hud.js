@@ -2,7 +2,7 @@
 const GameHud = (function () {
   "use strict";
 
-const { IDLE_RPM, MAX_RPM } = GameTables;
+const { IDLE_RPM, MAX_RPM } = PhysicsConsts;   // eval-time read: HARD_EDGES pins physics-consts.js first
 const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
 
 function create(G) {
@@ -416,7 +416,7 @@ function drawMinimap() {
     const map = track.map, n = map.length;
     mc.lineWidth = 2; mc.lineJoin = "round"; mc.lineCap = "round";
     const SC = ["rgba(192,132,252,0.8)", "rgba(255,59,48,0.8)", "rgba(163,230,53,0.8)"];   // = the sector labels
-    // Same CircuitMarkings splits as TrackMaps.draw / sectorAt (thirds if missing).
+    // Same def.sectors splits as TrackMaps.draw / sectorAt (thirds if missing).
     const sec = track.def && track.def.sectors;
     const splits = (sec && sec.length === 2) ? [0, sec[0], sec[1], 1] : [0, 1 / 3, 2 / 3, 1];
     for (let s = 0; s < 3; s++) {

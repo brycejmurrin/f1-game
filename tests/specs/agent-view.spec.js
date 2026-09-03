@@ -553,7 +553,7 @@ test.describe("trackInfo() corner table", () => {
     await load(page, "monza");
     const info = await page.evaluate(() => window.__apex.trackInfo({ what: "corners" }));
     expect(info.corners.length).toBeGreaterThan(3);
-    expect(info.source).toContain("CircuitMarkings");
+    expect(info.source).toContain("curated FIA apexes");
     for (const c of info.corners) {
       expect(c.turn).toMatch(/^T\d+(-T\d+)?$/);
       expect(["L", "R", "straight"]).toContain(c.dir);

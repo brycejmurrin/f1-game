@@ -33,6 +33,7 @@ import { fileURLToPath } from "node:url";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -181,7 +182,7 @@ test("STANDINGS title says which half of a sprint weekend it stands on, and the 
   assert.doesNotMatch(last(), /^(NEXT|IN PROGRESS)/, "no next round after the last one");
 });
 
-/* ── GfxQuality's in-race reload confirm ──────────────────────────────── */
+/* ── RendererPicker's in-race reload confirm ──────────────────────────── */
 function makeStorage() {
   const m = new Map();
   return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), _map: m };
@@ -228,9 +229,13 @@ function bootGfx() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
+  seedStore(ctx);
+  // Both halves of the old gfx-quality.js, in shell order: the GRAPHICS preset
+  // button (GfxQuality) and the RENDERER picker that owns the reload confirm.
   vm.runInContext(src("js/game/gfx-quality.js"), ctx, { filename: "js/game/gfx-quality.js" });
+  vm.runInContext(src("js/game/renderer-picker.js"), ctx, { filename: "js/game/renderer-picker.js" });
   dom.document.dispatchEvent({ type: "DOMContentLoaded" });
-  const Gfx = vm.runInContext("GfxQuality", ctx);
+  const Gfx = vm.runInContext("RendererPicker", ctx);
   const sel = dom.byId("pm-renderer");
   assert.equal(sel.tagName, "SELECT", "precondition: the picker mounted as a <select>");
   assert.equal(sel.options.length, 3);
@@ -396,5 +401,5 @@ test("pause, settings, results and standings all scroll inside the sheet on a sh
   assert.ok(/<div class="sheet-body pane stack">/.test(html.slice(html.indexOf('id="pausemenu"'), html.indexOf('id="pmsettings"'))), "the pause stack is a pane");
   assert.equal(decl(comp, "#pm-category-tabs", "position"), "sticky", "the category tabs stay reachable while the body scrolls");
   // The METRICS submenu inside DISPLAY caps itself in zoom-compensated units.
-  assert.match(read("js/game/cockpit-opts.js"), /max-height: min\(280px, calc\(100 \* var\(--svhz, 1svh\) - 9rem\)\)/);
+  assert.match(read("js/game/metrics.js"), /max-height: min\(280px, calc\(100 \* var\(--svhz, 1svh\) - 9rem\)\)/);
 });

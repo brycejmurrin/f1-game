@@ -13,6 +13,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedStore } from "../helpers/seed-store.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/game/metrics.js"), "utf8");
@@ -40,6 +41,7 @@ function load(opts) {
   };
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
+  seedStore(ctx);   // metrics.js persists through GameStore.store's raw lane, over the fake localStorage above
   vm.runInContext(SRC, ctx, { filename: "js/game/metrics.js" });
   return { M: vm.runInContext("GameMetrics", ctx), disk, Log: vm.runInContext("Log", ctx) };
 }
@@ -144,7 +146,7 @@ test("snapshot uses probe(), never obs()", () => {
 
 test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   const { M } = load({});
-  assert.match(M.PANEL_STYLE, /right:\s*8px/);
+  assert.match(M.PANEL_STYLE, /right:calc\(8px \+ var\(--sar, 0px\)\)/);   // safe-area aware, one style everywhere
   assert.match(M.PANEL_STYLE, /--tap/);
   assert.match(M.PANEL_STYLE, /--hud-scale/);
   assert.match(M.PANEL_STYLE, /z-index:11/);

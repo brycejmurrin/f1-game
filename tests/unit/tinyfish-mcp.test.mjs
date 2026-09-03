@@ -1,4 +1,9 @@
 // tinyfish-mcp.test.mjs — guards the TinyFish proxy helper + RPC unwrap.
+// Runs in `npm run test:mcp` (the Pages gate's node suites), not tooling-fast:
+// the tool is CLI-only and egress-blocked in-container, and the spawns cost
+// 11 s of the edit loop. The assertions about the tools that stay on the fast
+// gate (chrome-devtools-mcp.sh, mcp-cli.mjs, the MCP release pins) live in
+// tests/unit/mcp-cli.test.mjs.
 // Does NOT hit the live TinyFish API (needs a key + network). Fixtures cover
 // the nested JSON-RPC shape we measured from fetch_content / deploy-check.
 import { test } from "node:test";
@@ -204,24 +209,6 @@ test("tinyfish-rpc live-build extracts N from nested version.json RPC", () => {
   });
   assert.equal(r.status, 0, r.stderr);
   assert.equal(r.stdout.trim(), "1262");
-});
-
-test("chrome-devtools-mcp.sh clone/build never prompts npx", () => {
-  const src = fs.readFileSync(CD_SH, "utf8");
-  assert.match(src, /npx --yes tsx/);
-  assert.match(src, /npx --yes tsc/);
-  assert.doesNotMatch(src, /^\s*npx tsx /m);
-});
-
-test("chrome-devtools-mcp.sh help lists clone / verify / run", () => {
-  const r = spawnSync("bash", [CD_SH, "help"], { encoding: "utf8" });
-  // help is the default unknown-path; script exits 1 with usage on bad cmd —
-  // `status` exits 0. Usage text lives on stderr+stdout for the catch-all.
-  const text = `${r.stdout}\n${r.stderr}`;
-  assert.match(text, /clone/);
-  assert.match(text, /verify/);
-  assert.match(text, /run/);
-  assert.match(text, /chrome-devtools-mcp/);
 });
 
 test("tinyfish-rpc unwrap prints version.json body text from nested RPC", () => {
@@ -434,34 +421,10 @@ test("tinyfish-rpc unwrap renders search rows (title + url + snippet, not bare U
   assert.match(r.stdout, /5\.793 km/);
 });
 
-test("mcp-cli.mjs drives chrome via chrome-devtools-mcp.sh, not a hard-coded pw path", () => {
-  const src = fs.readFileSync(MCP_CLI, "utf8");
-  assert.match(src, /chrome-devtools-mcp\.sh/);
-  assert.doesNotMatch(src, /\/opt\/pw-browsers\/chromium/);
-  assert.ok(fs.existsSync(CD_SH));
-});
-
-test("Chrome MCP network fallback is pinned to the audited release", () => {
-  const src = fs.readFileSync(CD_SH, "utf8");
-  assert.match(src, /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.7\.0"/);
-  assert.doesNotMatch(src, /chrome-devtools-mcp@latest/);
-});
-
 test("deploy-check --tip does not trip set -u on an empty rest array", () => {
   const src = fs.readFileSync(SH, "utf8");
   assert.match(src, /# bash \+ set -u: empty rest\[@\] is unbound/);
   assert.match(src, /if \(\(\$\{#rest\[@\]\}\)\)/);
   const r = spawnSync("bash", [SH, "help"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
-});
-
-test("Playwright MCP network fallback is pinned to the audited release", () => {
-  const src = fs.readFileSync(path.join(ROOT, "tools/playwright-mcp.sh"), "utf8");
-  assert.match(src, /MCP_NPM_PACKAGE="@playwright\/mcp@0\.0\.79"/);
-  assert.match(src, /NOT MCP-ATTACHED/, "the wrapper is a CLI now; playwright-official is the server");
-  const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
-  assert.deepEqual(cfg.mcpServers["playwright-official"].args, ["-y", "@playwright/mcp@0.0.79"]);
-  assert.doesNotMatch(src, /@playwright\/mcp@latest/);
-  assert.match(src, /never --port \/ 0\.0\.0\.0/);
-  assert.doesNotMatch(src, /npx[\s\S]*--port/);
 });

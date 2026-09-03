@@ -93,7 +93,7 @@ export const RULES = [
    ["circuits", "driving", "sweeps"],
    "road geometry reaches walls, elevation, physics, every circuit's foundation — and buildProps lives here"],
   [/^js\/track\/space\.js/, ["driving"], "world<->track projection"],
-  [/^js\/track\/(markings|maps|geo-paths)\.js/, ["hooks", "circuits"], "layout metadata"],
+  [/^js\/track\/maps\.js/, ["hooks", "circuits"], "layout metadata"],
   [/^js\/circuits\/.*\.js$/, ["circuits"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
 
   // ── spec-backed js/game files that used to reach only tiny + tooling-fast ──
@@ -125,8 +125,8 @@ export const RULES = [
   [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js/, ["input"], ""],
   [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["input"], ""],
   [/^js\/game\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
-  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|metrics|cockpit-opts|sheetshape)\.js/, ["ui"], "DOM screens"],
-  [/^js\/game\/(lighting|light-presets|atmosphere|tuner)\.js/, ["gfx"], ""],
+  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|renderer-picker|metrics|cockpit-opts|sheetshape|quali-sheet)\.js/, ["ui"], "DOM screens"],
+  [/^js\/game\/(lighting|lighting-knobs|track-lights|frame-lights|light-presets|atmosphere|tuner)\.js/, ["gfx"], ""],
   [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["modes", "state-unit"], ""],
   // The season calendar/format. `modes` is season+career+TT+quali (career is a
   // championship too, and the endRace award path is shared); `ui` because the

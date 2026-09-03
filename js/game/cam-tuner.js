@@ -7,7 +7,7 @@ let _refresh = null;
 function create(G) {
 Log.info("game", "CamTunerPanel.create");
 const { $, els } = G;
-const { CAM_MODES } = GameTables;
+const { CAM_MODES } = CamModes;
 const DEFS = CamTune.defs();
 
 // The mode under the crosshair == the mode being edited (see header).

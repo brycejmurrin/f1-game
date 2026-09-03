@@ -16,7 +16,7 @@
  * when you write its section; the second test fails if a name is listed but has
  * since been documented, so the list cannot rot in the other direction either.
  *
- * Same idiom as tests/unit/module-size.test.mjs and tests/unit/comment-citations.test.mjs:
+ * Same idiom as tests/data/ratchets.json and tests/unit/comment-citations.test.mjs:
  * a number (or a list) you must look at gets thought about, where a rule nobody
  * can satisfy gets deleted the first time it is inconvenient.
  *

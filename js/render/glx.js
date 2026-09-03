@@ -1355,7 +1355,7 @@ const GLX = (function () {
     uf3(litU.uSunDir, _litUf, "sunDir", frame.sunDir);
     uf3(litU.uSunColor, _litUf, "sunColor", frame.sunColor);
     // Live tunables (LIGHTING TUNER / __apex.lightTune) ride in on frame.tune;
-    // defaults here MUST mirror LightTune.TUNE_DEFS (js/game/lighting.js) so a missing tune object
+    // defaults here MUST mirror LightTune.TUNE_DEFS (js/game/lighting-knobs.js) so a missing tune object
     // (unit harnesses driving GLX directly) renders the shipped look.
     const T = frame.tune || null;
     const _ambM = T && T.ambientMul != null ? T.ambientMul : 1;

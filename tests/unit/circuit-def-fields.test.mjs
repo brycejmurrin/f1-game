@@ -28,7 +28,9 @@
 // copied through or explicitly declared engine-only below.
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
@@ -41,8 +43,7 @@ const { buildContext } = require(path.join(ROOT, "tools/verify-track.cjs"));
 // allow-list" is the easy way to reintroduce exactly the bug above — the
 // question to answer is "is this read off `d`, or off `def`?".
 const ENGINE_ONLY = {
-  segs: "the authored centreline; consumed by centerline() into def.points",
-  baseHW: "half-width input to centerline()/applyHwZones, not read after build",
+  baseHW: "half-width input to realPoints()/applyHwZones, not read after build",
   pal: "raw palette input; built into def.palette by dayPal/nightPal",
 };
 
@@ -142,4 +143,46 @@ test("gpLaps is the circuit's real race distance, not a flat number", () => {
   // top rung is below its own floor.
   for (const t of Tracks.LIST)
     assert.ok(t.gpLaps > 3, `${t.id} gpLaps ${t.gpLaps} must exceed the 3-lap floor`);
+});
+
+// The per-circuit data that used to live in js/track/ (geo-paths.js,
+// markings.js, the id-keyed scenery-data tables) is now authored in the def,
+// and the engine reads it OFF THE BUILT DEF — which is the trap above again,
+// so pin the fold positively: every circuit carries its real centreline, its
+// curated turns and its dressing rows, and the old id-keyed tables are gone.
+test("the folded per-circuit data reaches the built def", () => {
+  const Tracks = buildContext();
+  const ctx = Tracks._vmContext;
+  assert.equal(typeof ctx.CircuitPaths, "undefined", "CircuitPaths must not exist any more");
+  assert.equal(typeof ctx.CircuitMarkings, "undefined", "CircuitMarkings must not exist any more");
+  for (const k of ["BARRIER", "FURN", "KIT", "STYLES", "STAND_SETS"])
+    assert.equal(ctx.TrackSceneryData[k], undefined, `TrackSceneryData.${k} must not exist any more`);
+  assert.equal(Tracks.LIST.length, 40);
+  for (const t of Tracks.LIST) {
+    assert.ok(t.path && Array.isArray(t.path.pts) && t.path.pts.length > 50, `${t.id} must carry path.pts`);
+    assert.ok(Number.isFinite(t.path.len) && t.path.len > 3000, `${t.id} must carry path.len`);
+    assert.ok(Array.isArray(t.turns) && t.turns.length >= 8, `${t.id} must carry curated turns`);
+    assert.ok(t.furniture && t.furniture.tree, `${t.id} must carry furniture`);
+    assert.ok(t.kit && t.kit.rail, `${t.id} must carry kit`);
+    assert.ok(Array.isArray(t.standSet) && t.standSet.length === 3, `${t.id} must carry a 3-family standSet`);
+    assert.ok(!("segs" in t), `${t.id}: segs is gone — the def's path IS the centreline`);
+  }
+  // A def without a path is a build error that names the circuit, never a
+  // silently different layout: re-evaluate tracks.js over a TrackDefs whose
+  // monaco lost its path and touch the lazy `points` getter.
+  const monaco = Tracks.LIST.find((t) => t.id === "monaco");
+  assert.ok(monaco.barrier && monaco.cityStyle, "monaco authors barrier + cityStyle");
+  const saved = ctx.TrackDefs;
+  ctx.TrackDefs = saved.map((d) => (d.id === "monaco" ? Object.assign({}, d, { path: null }) : d));
+  try {
+    // Function-scoped so the file's top-level declarations do not collide
+    // with the context's own; the re-built Tracks is handed out explicitly.
+    const src = fs.readFileSync(path.join(ROOT, "js/track/tracks.js"), "utf8");
+    const rebuilt = vm.runInContext("(function () {\n" + src + "\n; return Tracks; })()", ctx,
+      { filename: "js/track/tracks.js" });
+    const broken = rebuilt.LIST.find((t) => t.id === "monaco");
+    assert.throws(() => broken.points, /circuit "monaco" has no `path`/);
+  } finally {
+    ctx.TrackDefs = saved;
+  }
 });

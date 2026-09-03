@@ -43,7 +43,6 @@ const EXEC_SPREAD = 0.012;
 
 function create(G) {
   Log.info("game", "Quali.create");
-  const { $ } = G;
 
   let classification = null;
   let _kCache = new Float64Array(0), _kCacheTrack = null;   // |curvature| per sample; _kCacheTrack is a def ID, never the track (see below)
@@ -69,7 +68,7 @@ function create(G) {
     // quali sheet on a DIFFERENT circuit. Qualify at Monza, quit, then race Spa
     // and Silverstone and Monaco: Monza is still strongly reachable from module
     // scope the whole time. quitToMenu() clears five other caches and never
-    // knew about this one. A def id is all the invalidation needs; lighting.js's
+    // knew about this one. A def id is all the invalidation needs; track-lights.js's
     // _postNodeMemo (a WeakMap keyed on track) is the same lesson.
     const _kId = (track && track.def && track.def.id) || null;
     if (_kCacheTrack !== _kId || _kCache.length !== m) {
@@ -108,7 +107,7 @@ function create(G) {
   }
 
   function capFor(c) {
-    const dd = GameTables.DIFF[G.difficulty] || GameTables.DIFF.normal;
+    const dd = PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal;
     return G.vTop() * c.tierV * c.skill * dd.ai * QUALI_TRIM;
   }
 
@@ -302,50 +301,15 @@ function create(G) {
     return simulate(0);
   }
 
-  function build() {
-    const body = $("q-table");
-    if (!body) return;
-    body.textContent = "";
-    if (!classification) return;
-    for (const r of classification) {
-      const team = Teams.LIST.find((t) => t.id === r.team);
-      const row = document.createElement("div");
-      const podium = r.pos === 1 ? " p1" : r.pos === 2 ? " p2" : r.pos === 3 ? " p3" : "";
-      // A DRIVEN lap is marked. compute() has always worked out r.human — a
-      // real time substituted for a simulated one — and then thrown it away
-      // here, so three rivals' actual laps were drawn identically to the
-      // eighteen the model guessed. On a sheet whose whole job is "who was
-      // quick", not saying which times are real is the one thing it must not
-      // leave out. `you` still marks the local player, exactly as before.
-      const driven = r.human && !r.isPlayer ? " q-real" : "";
-      row.className = "res-row" + podium + (r.isPlayer ? " you" : "") + driven;
-      const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = r.pos;
-      const sw = document.createElement("span"); sw.className = "res-swatch";
-      sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
-      const nm = document.createElement("span"); nm.className = "res-name";
-      nm.textContent = r.code + "  " + r.name;
-      if (driven) {
-        const tag = document.createElement("span");
-        tag.className = "q-real-tag";
-        tag.textContent = " DRIVEN";
-        nm.appendChild(tag);
-      }
-      const tm = document.createElement("span"); tm.className = "res-pts q-time";
-      tm.textContent = r.pos === 1 ? G.fmtTime(r.t) : "+" + r.gap.toFixed(3);
-      row.append(pos, sw, nm, tm);
-      body.appendChild(row);
-    }
-    const title = $("q-title");
-    if (title) {
-      const you = classification.find((r) => r.isPlayer);
-      title.textContent = you ? "QUALIFYING — P" + you.pos : "QUALIFYING";
-    }
+  // The classification as the SHEET draws it (js/game/quali-sheet.js): the
+  // current rows, live car refs dropped, no restore — build() always read the
+  // in-memory classification as-is, and this keeps that contract. null when
+  // nothing has been simulated or restored.
+  function rows() {
+    return classification ? classification.map(({ car, ...row }) => row) : null;
   }
 
-  function open() { Log.info("game", "Quali.open"); build(); $("quali").hidden = false; ScrollFade.refresh(); }
-  function close() { Log.info("game", "Quali.close"); $("quali").hidden = true; }
-
-  return { simulate, preview, order, results, clear, begin, forgetOrder, build, open, close, lapTime, capFor };
+  return { simulate, preview, order, results, rows, clear, begin, forgetOrder, lapTime, capFor };
 }
 
 return { create, STEP, QUALI_TRIM, EXEC_SPREAD };

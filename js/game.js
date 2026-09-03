@@ -355,7 +355,7 @@ function initRainDrops() {
 // wrapper, the TT leaderboard, season identity/migration, hex<->rgb.
 const { store, ttBoard, ttBoardAdd, hexToRgb, rgbToHex, seasonDriverId } = GameStore;
 
-const { DEFAULT_CUSTOM } = GameTables;
+const { DEFAULT_CUSTOM, TIER_V } = Teams;   // the custom-team seed + the tier pace ladder (js/car/teams.js)
 function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
 function invalidateCustomMeshCache(cache, order) {
   Object.keys(cache).forEach((key) => {
@@ -463,7 +463,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         LONG_GRIP, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
         DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, DRAIN_LO, DRAIN_HI,
         REGEN_LO, REGEN_HI, OT_TIME_LO, OT_TIME_HI, OT_COOL_LO, OT_COOL_HI,
-        OT_GAP, WET_GRIP } = PhysicsConsts;
+        OT_GAP, WET_GRIP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF } = PhysicsConsts;
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
 // (player + AI) so the whole field speeds up/slows down together and the racing
 // stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
@@ -733,14 +733,12 @@ function simRnd() {
   _simRngState = (Math.imul(_simRngState, 1103515245) + 12345) >>> 0;
   return _simRngState / 0x100000000;
 }
-const { TIER_V } = GameTables;
 // 8-speed gearbox with realistic PROGRESSIVE ratios (research: real/F1 gearboxes
 // space the ratios so the steps shrink in the higher gears). So an upshift drops
 // the revs a lot in the low gears and less up top, and every shift lands back in
 // the ~8.7-11.3k power band (F1's optimal ~8-12k) before climbing to the limit —
 // rather than dropping to idle or barely dropping at all. Top speed fraction of VMAX.
-// F1-authentic 8 gears.
-const { GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM } = GameTables;
+// F1-authentic 8 gears (GEARS / GEAR_TOP / IDLE_RPM / MAX_RPM: js/game/physics-consts.js).
 // GEAR_TOP is a fraction of the speed ENVELOPE, so these track vTop() rather than
 // the bare VMAX: all eight gears stay reachable at any OVERALL SPEED setting, the
 // tach sweeps its whole band, and the manual top-gear limiter (which caps speedCap
@@ -763,7 +761,6 @@ function rpmFor(gear, speed) {
   const rpm = MAX_RPM * (speed / Math.max(hi, 1));
   return clamp(rpm, IDLE_RPM, MAX_RPM * 1.04);
 }
-const { DIFF } = GameTables;
 const GAME_LAPS = 3;
 const TT_LAPS = 4;          // time trial: one standing out-lap + flying laps
 // Weather predicates. "wet" = damp/wet track (wet road, no falling rain);
@@ -841,7 +838,7 @@ function buildStudioRig() {
   return _studioBuf;
 }
 let headlessMode = false;  // skip render() when true (headless control loop)
-const { CAM_MODES } = GameTables;  // player camera modes (see js/game/tables.js)
+const { CAM_MODES } = CamModes;  // player camera modes (js/game/cam-modes.js; eval-time — a HARD_EDGES pair)
 let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.length - 1);
 // The game mode, on TWO axes. `flow` is what the run is FOR and survives a whole
 // championship; `session` is what this one visit to the track IS. They are genuinely
@@ -1016,7 +1013,7 @@ function onPeerQuali(d) {
   if (!isQuali()) return;
   const mine = player && player.lastLap > 0 ? player.lastLap : (player && player.best < Infinity ? player.best : 0);
   quali.simulate(qualiDriven(mine));
-  if (!$("quali").hidden) quali.build();
+  if (!$("quali").hidden) qualiSheet.build(quali.rows());
   refreshQualiGate();
 }
 function qualiDriven(myTime) {
@@ -1128,7 +1125,10 @@ let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // per-mark fallback draw) live in js/game/skidmarks.js — SkidMarks.create(G),
 // wired after the G façade as `skids`. Nothing outside that module reads its
 // state, which is what made it liftable.
-const { PAINT_WET_NIGHT, PAINT_WET_DAY, PAINT_DRY_NIGHT, PAINT_DRY_DAY } = GameTables;  // car paint materials (see js/game/tables.js)
+const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };  // car paint by condition: night adds emissive, wet lowers roughness
+const PAINT_WET_DAY   = { roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 };
+const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
+const PAINT_DRY_DAY   = { roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 0.9, carPaint: 1.0 };
 // Apply the CAR tuner group (LT.car*) to a base paint constant, into a reused
 // scratch object (gfx.draw consumes the material synchronously, so one scratch
 // is safe across every car in the frame). GLOSS divides roughness (higher =
@@ -1194,7 +1194,7 @@ function announce(msg, dur) {
   announceT = dur || 1.6;
 }
 function wrapS(s) { const L = track.total; s %= L; return s < 0 ? s + L : s; }
-// Curated CircuitMarkings splits when present; equal thirds only as fallback.
+// Curated def.sectors splits when present; equal thirds only as fallback.
 function sectorAt(s) {
   const frac = wrapS(s) / track.total;
   const sec = track.def && track.def.sectors;
@@ -2894,7 +2894,7 @@ function endRace(forcedOrder) {
     if (myLap > 0) netReportQuali(player.driverId, myLap);
     quali.simulate(qualiDriven(myLap));
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
-    quali.open();
+    qualiSheet.open(quali.rows());
     refreshQualiGate();
     return;
   }
@@ -3118,7 +3118,7 @@ const G = {
   get _photoPrevScale() { return _photoPrevScale; }, set _photoPrevScale(v) { _photoPrevScale = v; },
   get photoAlt() { return photoAlt; }, set photoAlt(v) { photoAlt = v; },
   get photoVertT() { return photoVertT; }, set photoVertT(v) { photoVertT = v; },
-  // The live profile object owned by js/game/light-store.js — photomode.js
+  // The live profile object owned by js/game/light-store.js — tuner.js
   // deletes a key out of it for the tuner's RESET and merges it for COPY VALUES.
   get _ltStore() { return ltStore.profiles; }, set _ltStore(v) { ltStore.profiles = v; },
   photoCam, photoKeys, photoMouse, photoMove, photoLook,
@@ -3229,9 +3229,9 @@ const careerUi = CareerUI.create(G);
 // SEASON SETUP screen (js/game/season-ui.js) — the calendar and weekend format.
 // Same split: the rules and the save live in js/game/season-cal.js.
 const seasonUi = SeasonUI.create(G);
-// QUALIFYING (js/game/quali.js) — the flying lap plus the simulated field it is
-// measured against. Holds the classification between the session and the grid.
-const quali = Quali.create(G);
+// QUALIFYING — the model (js/game/quali.js: the flying lap plus the simulated field,
+// holding the classification between session and grid) and its sheet (quali-sheet.js).
+const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
 // ACTIVE AERO activation zones (js/game/aerozones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/game/skidmarks.js) — self-contained ring buffer + batched draw.
@@ -5405,8 +5405,8 @@ function coast(c, dt) {
   }
 }
 
-// Lighting tuner registry (TUNE_DEFS), the live LT values, floodColor and
-// the track light builder live in js/game/lighting.js. LT is a plain object
+// Lighting tuner registry + live LT values (js/game/lighting-knobs.js) and the
+// track light builder (js/game/track-lights.js), via LightTune. LT is a plain object
 // mutated in place, so the profile-resolution code below and the sliders/
 // __apex.lightTune keep every LT.x call site unchanged.
 const { TUNE_DEFS, LT, buildTrackLights } = LightTune;
@@ -5442,10 +5442,10 @@ function persistLightTune() { ltStore.persist(); }
 // one-step revert for it. The tuner panel and __apex.lightCopy are the callers.
 function copyLightTune(mode) { return ltStore.copyToTracks(mode); }
 function restoreLightTune(undo) { return ltStore.restore(undo); }
-// LAMP_KINDS + buildTrackLights(track) live in js/game/lighting.js (LightTune).
+// LAMP_KINDS + buildTrackLights(track) live in js/game/track-lights.js (via LightTune).
 
 // Per-frame light assembly (nearest-N flood cull + car tail lights) lives in
-// js/game/lighting.js (LightTune.setFrameLights / appendCarTailLights).
+// js/game/frame-lights.js (LightTune.setFrameLights / appendCarTailLights).
 const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
 const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
 const _flameOpts = { emissive: 1.0, roughness: 1, specular: 0, alpha: 1, noAlphaWrite: true };
@@ -8148,7 +8148,7 @@ $("track-detail-close").onclick = closeTrackDetail;
 // thumb mid-tap.
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
 function syncSettingsAvailability() {
-  const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* GfxQuality's reload buttons arm a two-tap confirm while this is set */ }
+  const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* RendererPicker's reload buttons arm a two-tap confirm while this is set */ }
   $("pm-hidehud").disabled = !inRace;
   $("pm-lighting").disabled = !inRace;
   $("pm-camtune").disabled = !inRace;
@@ -8392,16 +8392,16 @@ async function openQuali(fresh) {
   makeCars();
   if (fresh) quali.simulate(0); else quali.begin();
   $("quali").classList.remove("q-done");
-  quali.open();
+  qualiSheet.open(quali.rows());
 }
 function closeQualiToGrid() {
-  quali.close();
+  qualiSheet.close();
   session = "race";
   startRace();                    // gridUp() reads quali.order()
 }
 $("q-drive").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
-  quali.close();
+  qualiSheet.close();
   session = "quali";
   startRace();                    // one out-lap + one flying lap, alone
 };
@@ -8411,7 +8411,7 @@ $("q-sim").onclick = () => {
   // does not lose it because we could not be bothered to drive ours.
   quali.simulate(qualiDriven(0));
   $("quali").classList.add("q-done");
-  quali.build();
+  qualiSheet.build(quali.rows());
   refreshQualiGate();
 };
 $("q-go").onclick = () => {
@@ -8424,7 +8424,7 @@ $("q-go").onclick = () => {
   if (qualiNetDone) {
     const go = qualiNetDone;
     qualiNetDone = null;
-    quali.close();
+    qualiSheet.close();
     go();
     return;
   }
@@ -8453,7 +8453,7 @@ $("q-back").onclick = () => {
     return;
   }
   if (soundOn) GameAudio.uiSelect();
-  quali.close();
+  qualiSheet.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
   session = "race";
   qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiPeers.clear(), qualiLive.clear(), netLobby.abortQuali()) : ($("race-settings").hidden = false);

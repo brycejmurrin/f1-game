@@ -48,7 +48,7 @@ than behaviour:
 | `tests/unit/deploy-staging.test.mjs` | every path shipped code can fetch is inside the Pages upload allow-list |
 | `tools/graph-parity.cjs` | scene-graph migrations are vertex-for-vertex identical to a baseline ref |
 | `tests/unit/backend-surface-parity.test.mjs` | a renderer backend declares every GLX member, absent ones as explicit `undefined` (§5) |
-| `tests/unit/module-size.test.mjs` | the game.js line ceiling — a ratchet, so extraction lowers it and regrowth fails |
+| `tests/unit/ratchets.test.mjs` + `tests/data/ratchets.json` | the game.js size ceilings (lines, code lines, `G` members, column-0 lets) — a ratchet, so extraction lowers them and regrowth fails |
 | `tests/unit/vstd-invariant.test.mjs` + `tools/vstd-lint.mjs` | no `.speed` compared against a numeric literal without a written reason (§3) |
 | `tests/unit/comment-citations.test.mjs` | a comment citing another file names a symbol that exists; ratchet on the cross-file-citation population |
 | `tests/unit/silent-catch.test.mjs` | ratchet on bare `catch {}` — the escape hatch is a comment saying why, not a log line |
@@ -89,7 +89,7 @@ this one class were found across three passes before the rule got its guard:
 raw `.speed`-vs-literal comparison unless the absoluteness is justified in
 place. The lint sees speeds only; the acceleration case is recorded in its
 header rather than asserted. Physics constants now live in
-`js/game/physics-consts.js`, extracted from game.js under the module-size
+`js/game/physics-consts.js`, extracted from game.js under the size
 ratchet.
 
 ---
@@ -112,7 +112,7 @@ Easy to mistake for one system:
 ## 4. The `G` façade
 
 `js/game.js` is the largest file in the repo (the figure lives in
-`tests/unit/module-size.test.mjs`, the only place it cannot go stale). Extracted
+`tests/data/ratchets.json`, the only place it cannot go stale). Extracted
 modules never reach into it: game.js builds one `G` object of live
 getters/setters plus stable helpers and instantiates each module as
 `Module.create(G)`.
@@ -657,7 +657,7 @@ Deferred with reasoning, none lost:
   `CarMesh.getBoostFlame`.
 - **The CSS class-count ratchet is installed; the collapses are not finished.**
   The 2026-08-13 panel recorded its non-installation as execution debt; a
-  ceiling now exists in the `module-size.test.mjs` idiom, alongside a shell
+  ceiling now exists in the ratchet idiom (`tests/data/ratchets.json`), alongside a shell
   node-count ceiling guarding the premise the keep-the-monolith ruling rests
   on. The first three one-surface collapses took the count 543 → 537; the
   remaining clusters are ordered **behind** the zoom/data-density migration

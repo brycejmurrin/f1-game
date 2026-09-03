@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-/* Apex 26 — rotate CircuitMarkings onto a corrected start line.
- * @doc Rotates `CircuitMarkings` turn apexes onto a corrected start line by the scenery's arc shift, then re-sorts them.
+/* Apex 26 — rotate a circuit's curated turn apexes onto a corrected start line.
+ * @doc Rotates each circuit's `turns` (js/circuits/<id>.js) onto a corrected start line by the scenery's arc shift, then re-sorts them.
  * @skill new-track
  *
- * `CircuitMarkings` sector splits and turn apexes are authored in RACING-LAP
- * space and deliberately never fmap'd (see the header of js/track/markings.js).
+ * A def's `sectors` / `turns` (js/circuits/<id>.js) are authored in RACING-LAP
+ * space and deliberately never fmap'd (see the copy site in js/track/tracks.js).
  * So when `startFrac` moves the line, the same PHYSICAL apex acquires a new
  * racing fraction and the stored numbers go stale — silently, because they stay
  * perfectly well-formed.
@@ -27,7 +27,7 @@
  *   node tools/rotate-markings.cjs --write
  *
  * NOT IDEMPOTENT — do not re-run --write against an already-rotated
- * markings.js. `_sceneryShift` is a fixed function of startFrac vs
+ * circuit file. `_sceneryShift` is a fixed function of startFrac vs
  * sceneryStartFrac, so it stays nonzero forever once a circuit opts in; this
  * tool has no way to tell "already rotated" from "never rotated" and will add
  * the shift AGAIN on a second run, silently corrupting every turn on that
@@ -44,14 +44,13 @@ const path = require("path");
 const { buildContext } = require("./verify-track.cjs");
 
 const ROOT = path.resolve(__dirname, "..");
-const FILE = path.join(ROOT, "js/track/markings.js");
+const circuitFile = (id) => path.join(ROOT, "js/circuits", `${id}.js`);
 const wrap01 = (v) => ((v % 1) + 1) % 1;
 const r4 = (v) => Number(wrap01(v).toFixed(4));
 
 function main(write) {
   const Tracks = buildContext();
-  const src = fs.readFileSync(FILE, "utf8");
-  let out = src, changed = 0, skipped = [];
+  let changed = 0, skipped = [];
 
   for (const def of Tracks.LIST) {
     // `_sceneryShift` is stamped by buildCenterline, not by resolve(), so it is
@@ -61,22 +60,19 @@ function main(write) {
     Tracks.buildCenterline(def);
     const shift = def._sceneryShift;
     if (!shift) continue;                       // start line did not move
-    const M = Tracks._vmContext.CircuitMarkings[def.id];
-    if (!M) continue;
+    const M = def;                              // turns/sectors live on the def
+    if (!Array.isArray(M.turns) || !M.turns.length) continue;
 
-    // Match this circuit's block in the source so the rewrite is surgical —
-    // the file is hand-maintained and full of comments worth keeping.
-    const block = new RegExp(`(^  ${def.id}: \\{)([\\s\\S]*?)(^  \\},)`, "m");
-    const m = block.exec(out);
-    if (!m) { skipped.push(`${def.id}: no block matched`); continue; }
-    let body = m[2];
-
-    if (Array.isArray(M.turns) && M.turns.length) {
-      // Rotate, then sort: index 0 becomes the first apex after the new line.
-      const turns = M.turns.map((f) => r4(f + shift)).sort((a, b) => a - b);
-      body = body.replace(/turns:\s*\[[^\]]*\]/,
-        `turns: [${turns.map((v) => v.toFixed(4)).join(", ")}]`);
-    }
+    // Rewrite the ONE `turns:` line of the circuit file so the edit is
+    // surgical — the file is hand-maintained and full of comments worth keeping.
+    const file = circuitFile(def.id);
+    const src = fs.readFileSync(file, "utf8");
+    const line = /^(\s*)turns:\s*\[[^\]]*\],/m;
+    if (!line.test(src)) { skipped.push(`${def.id}: no turns: line matched in ${path.relative(ROOT, file)}`); continue; }
+    // Rotate, then sort: index 0 becomes the first apex after the new line.
+    const turns = M.turns.map((f) => r4(f + shift)).sort((a, b) => a - b);
+    const body = src.replace(line,
+      (_, ind) => `${ind}turns: [${turns.map((v) => v.toFixed(4)).join(", ")}],`);
     // SECTORS ARE DELIBERATELY NOT ROTATED. They are not timing-loop positions:
     // the whole grid carries the same handful of idealised thirds ([0.30, 0.62],
     // [0.32, 0.68], [0.28, 0.62]), i.e. "about a third of a lap from the line"
@@ -87,14 +83,14 @@ function main(write) {
     // never physical to begin with. Turns are the opposite case: they were
     // regenerated from the N strongest curvature PEAKS, so they name places on
     // the tarmac and have to move with the origin.
-    if (body !== m[2]) { out = out.replace(m[0], m[1] + body + m[3]); changed++; }
+    if (body !== src) { changed++; if (write) fs.writeFileSync(file, body); }
     console.log(`${def.id.padEnd(13)} shift ${(shift * 100).toFixed(2)}% of lap` +
       (M.turns ? `  ${M.turns.length} turns` : "") + (M.sectors ? "  (sectors left alone)" : ""));
   }
 
   for (const s of skipped) console.log(`  SKIP ${s}`);
-  if (write) { fs.writeFileSync(FILE, out); console.log(`\n${changed} circuit block(s) rewritten`); }
-  else console.log(`\n${changed} circuit block(s) would change (--write to apply)`);
+  if (write) console.log(`\n${changed} circuit file(s) rewritten`);
+  else console.log(`\n${changed} circuit file(s) would change (--write to apply)`);
 }
 
 main(process.argv.includes("--write"));

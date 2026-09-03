@@ -61,7 +61,7 @@ function boot(opts = {}) {
     document: dom.document,
     innerWidth: opts.innerWidth || 1280, innerHeight: 800, devicePixelRatio: 1,
     M4: { clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) },
-    GameTables: { IDLE_RPM, MAX_RPM },
+    PhysicsConsts: { IDLE_RPM, MAX_RPM },
     Ghost: { hasGhost: () => false, timeAt: () => null, at: () => null },
     TrackMaps: { drsZones: () => [] },
   };

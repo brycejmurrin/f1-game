@@ -137,7 +137,7 @@
     /* ── frame + tune uniforms ────────────────────────────────────────────────
      * One shared set across every material variant (uniform nodes are shared
      * descriptors; tlx.js calls updateFrame(frame) once per begin()).
-     * Defaults MUST mirror LightTune.TUNE_DEFS (js/game/lighting.js) exactly
+     * Defaults MUST mirror LightTune.TUNE_DEFS (js/game/lighting-knobs.js) exactly
      * like js/render/glx.js — a missing tune object renders the shipped look. */
     const U = {
       sunDir:      uniform(new THREE.Vector3(0.4, 0.8, 0.4)),
@@ -1033,7 +1033,7 @@
                 select(matteSurface, float(0.0),
                   select(iriSurface, max(matU.metalness, 0.25),
               // PAINT gets metalness instead of falling through to 0.0 — mirrors
-              // js/render/shaders/lit.js. tables.js sets 0.12 on every PAINT_*
+              // js/render/shaders/lit.js. game.js sets 0.12 on every PAINT_*
               // and describes the flake it is meant to produce; the 0.0 discarded
               // it and made CAR METALLIC dead on every car pixel.
               // carbonFinish (surfaceId 31, bare weave OVER the livery) takes the

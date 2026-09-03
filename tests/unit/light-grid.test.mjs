@@ -42,7 +42,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
  *  (carEnvCube again, which is tier-gated on GLX.isMobile) yields def
  *  undefined; its range is still checked, its default is skipped. */
 function defs() {
-  const src = read("js/game/lighting.js");
+  const src = read("js/game/lighting-knobs.js");
   const starts = [...src.matchAll(/\{\s*id:\s*"(\w+)"/g)];
   const out = [];
   for (let i = 0; i < starts.length; i++) {
@@ -192,7 +192,7 @@ test("slider maxima stop where the consumer saturates, not past it", () => {
   // (on-sun, horizon, clear) saturates at 1/0.22.
   assert.ok(get("mieScatter").max <= 1 / 0.22 + 0.01,
     `mieScatter max ${get("mieScatter").max} is past the mix=1 sun-glow clamp`);
-  // lighting.js setFrameLights: reach 4 already saturates typical sightlines
+  // frame-lights.js setFrameLights: reach 4 already saturates typical sightlines
   // (Singapore 0.55 measured 415 m, no further lamps). 12 was leftover ×3.
   assert.ok(get("lampReach").max <= 4 + 1e-9,
     `lampReach max ${get("lampReach").max} is past the measured saturate at 4`);
@@ -400,12 +400,12 @@ test("asymmetric white-balance sliders are not ±N when the mix is not", () => {
   assert.equal(get("glowAmp").min, 0, "EMISSIVE GLOW must be able to go fully off");
   assert.equal(get("poolEnergy").min, 0, "POOL ENERGY must be able to go fully off");
   assert.equal(get("twilightFloor").min, 0, "TWILIGHT FLOOR must be able to go fully off");
-  // tables.js night paint clearcoat is 1.0; shader comment is 0..1. Past 1
+  // game.js PAINT_*_NIGHT clearcoat is 1.0; shader comment is 0..1. Past 1
   // the night body overshoots the designed lacquer (wet-day 0.8 can no
   // longer quite reach 1 — same trade as wetDark porous-vs-not).
   assert.ok(get("carClearcoat").max <= 1 + 1e-9,
     `carClearcoat max ${get("carClearcoat").max} is past the 0..1 lacquer`);
-  // tables.js paint metalness is 0.12; clamp(0.12*k, 0, 1) saturates at 1/0.12.
+  // game.js PAINT_* metalness is 0.12; clamp(0.12*k, 0, 1) saturates at 1/0.12.
   assert.ok(get("carMetal").max <= 1 / 0.12 + 0.05, "carMetal past metalness=1 on shipped paint");
   // game.js terrain detail = 0.42 * slider; lit.js grain 1+(n-0.5)*uDetail
   // floors at uDetail=2. 2/0.42 ≈ 4.76 — the 4.75 max is that last live notch.

@@ -129,7 +129,7 @@ uniform float uLampFog;     // lamp-glow-in-fog strength (0 = off / day)
 uniform sampler2D uBlockerMap;  // PCSS-lite min-depth blocker map (512sq)
 uniform float uPcss;            // 1 = blocker map valid, 0 = fixed penumbra
 // Live-tunable constants (LIGHTING TUNER panel / __apex.lightTune) — defaults
-// mirror LightTune.TUNE_DEFS (js/game/lighting.js); uploaded per frame from frame.tune in begin().
+// mirror LightTune.TUNE_DEFS (js/game/lighting-knobs.js); uploaded per frame from frame.tune in begin().
 uniform float uBounceK;     // per-lamp bounce-fill strength (was literal 0.04)
 uniform float uMistShare;   // ground-mist share of the lamp fog glow (was 1.5)
 uniform float uLampFogClip; // lamp-fog Reinhard shoulder strength (was 0.7)
@@ -829,7 +829,7 @@ void main() {
   // surfaceOf() falls back to paint), metal/mirror are pinned by the max() floors
   // below, carbon is a constant — so uMetalness reached NOTHING. The knob would
   // have needed 6.5 against a max of 2.5 to move even the metal parts.
-  // This is restoring intent, not inventing a look: js/game/tables.js sets
+  // This is restoring intent, not inventing a look: js/game.js's PAINT_* set
   // metalness 0.12 on all four PAINT_* constants and its comment says the mild
   // metalness "tints specular + reflections toward the team colour like real
   // metallic flake, and scales the sky env down so the paint stays saturated" —

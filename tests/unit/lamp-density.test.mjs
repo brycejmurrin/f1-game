@@ -12,13 +12,15 @@ import { seedLog } from "../helpers/seed-log.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
+// The LightTune façade composes three siblings — same order as tools/manifest.cjs.
+const LIGHTING_FILES = ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js", "js/game/lighting.js"];
 
 function loadLightTune() {
   const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };
   sb.window = sb;
   vm.createContext(sb);
   seedLog(sb);
-  vm.runInContext(read("js/game/lighting.js").replace(/^const\b/gm, "var"), sb);
+  for (const f of LIGHTING_FILES) vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb);
   return sb.LightTune;
 }
 
@@ -114,7 +116,7 @@ test("dressingExcluded lamps aliases match floodlights/lighting rules", () => {
 });
 
 test("street posts and flood banks share one lampPosts bake, one LAMPS tab", () => {
-  const lighting = read("js/game/lighting.js");
+  const lighting = read("js/game/track-lights.js") + read("js/game/lighting-knobs.js");
   assert.match(lighting, /function buildTrackLights/);
   assert.doesNotMatch(lighting, /function buildFloodLights/);
   assert.doesNotMatch(lighting, /group:\s*"FLOODLIGHTS"/);

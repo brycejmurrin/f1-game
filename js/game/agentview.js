@@ -95,10 +95,10 @@ const AgentView = (function () {
       }
       if (o.camera) {
         const m = String(o.camera).toLowerCase();
-        if (!GameTables.CAM_MODES.some((c) => (c.id || c) === m)) {
+        if (!CamModes.CAM_MODES.some((c) => (c.id || c) === m)) {
           return fail("BadArgumentError",
                       'unknown camera "' + o.camera + '"',
-                      "one of: " + GameTables.CAM_MODES.map((c) => c.id || c).join(", "));
+                      "one of: " + CamModes.CAM_MODES.map((c) => c.id || c).join(", "));
         }
         const v = camVantage(m, p.s, p.x, p.speed || 0, 0, {
           carPos: (p.px != null && p.pz != null) ? [p.px, p.pz] : null,
@@ -115,8 +115,8 @@ const AgentView = (function () {
                     + "and let a frame draw");
       }
       return { vp, eye: fr.eye || G.camEye, tgt: G.camTgt,
-               mode: (GameTables.CAM_MODES[G.camMode] || {}).id
-                     || String(GameTables.CAM_MODES[G.camMode] || G.camMode),
+               mode: (CamModes.CAM_MODES[G.camMode] || {}).id
+                     || String(CamModes.CAM_MODES[G.camMode] || G.camMode),
                fovDeg: G.camFov, synthetic: false };
     }
 
@@ -194,7 +194,7 @@ const AgentView = (function () {
     }
 
     // corner table (static per track, built once)
-    // def.turns is the curated FIA apex list from CircuitMarkings — real turn
+    // def.turns is the curated FIA apex list authored in the def — real turn
     // numbering, in driving order. info().turns exposes only its LENGTH today,
     // which is the least useful projection of it available. Circuits without
     // curated turns fall back to curvature peaks.
@@ -205,7 +205,7 @@ const AgentView = (function () {
       const out = [];
       for (let i = 0; i < fracs.length; i++) {
         const frac = ((fracs[i] % 1) + 1) % 1;
-        // CircuitMarkings apexes are documented best-effort against this game's
+        // The curated apexes are documented best-effort against this game's
         // centreline, so they can sit tens of metres off the actual bend. Snap
         // to the nearest smoothed-curvature peak, bounded by half the distance
         // to the neighbouring turns so a snap can't hop onto the wrong corner.
@@ -2293,8 +2293,8 @@ const AgentView = (function () {
         apiVersion: API_VERSION, seq: ++seq, conventions: CONVENTIONS,
         camera: {
           eye: eye.map(r1), target: G.camTgt.map(r1), fovDeg: r1(G.camFov),
-          mode: (GameTables.CAM_MODES[G.camMode] || {}).id
-                || String(GameTables.CAM_MODES[G.camMode] || G.camMode),
+          mode: (CamModes.CAM_MODES[G.camMode] || {}).id
+                || String(CamModes.CAM_MODES[G.camMode] || G.camMode),
           debugCam: !!G.dbgCam,
         },
         framePending: !!G.headlessMode,
@@ -2417,7 +2417,7 @@ const AgentView = (function () {
       if (what === "corners" || what === "all") {
         base.corners = corners();
         base.cornerCount = base.corners.length;
-        base.source = def.turns && def.turns.length ? "CircuitMarkings (curated FIA apexes)"
+        base.source = def.turns && def.turns.length ? "def.turns (curated FIA apexes)"
                                                     : "curvature peaks (no curated turn list)";
       }
       if (what === "sectors" || what === "all") {

@@ -87,10 +87,13 @@ const FULL = [
   "js/render/assets.js",
   "js/car/teams.js",
   "js/car/driver-ratings.js",
-  "js/track/geo-paths.js",
+  // Persistence sits ahead of every js/game module: the settings panels, the
+  // perf sentinel and the Spotify client go through GameStore.store's raw lane,
+  // and spotify.js's init() runs at EVAL when the document is already complete
+  // (the game-vm harness; a late-injected script), so the store must precede it.
+  "js/game/store.js",
   "js/track/geom.js",
   "js/track/scenery-data.js",
-  "js/track/markings.js",
   "js/track/space.js",
   "js/track/surface.js",
   "js/track/models.js",
@@ -119,7 +122,9 @@ const FULL = [
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/game/physics-consts.js",
-  "js/game/tables.js",
+  "js/game/lighting-knobs.js",
+  "js/game/track-lights.js",
+  "js/game/frame-lights.js",
   "js/game/lighting.js",
   "js/game/light-store.js",
   "js/game/carmesh.js",
@@ -127,7 +132,6 @@ const FULL = [
   "js/game/bodyattitude.js",
   "js/game/particles.js",
   "js/game/atmosphere.js",
-  "js/game/store.js",
   "js/game/career.js",
   "js/game/season-cal.js",
   "js/game/reliability.js",
@@ -156,16 +160,17 @@ const FULL = [
   "js/game/perf.js",
   "js/game/loop-health.js",
   "js/game/gfx-quality.js",
+  "js/game/renderer-picker.js",
   "js/game/gfx-debug.js",
   "js/game/ui-scale.js",
   "js/game/cockpit-opts.js",
-  "js/game/metrics-panel-style.js",
   "js/game/metrics.js",
   "js/game/cameras.js",
   "js/game/cam-modes.js",
   "js/game/hud.js",
   "js/game/results.js",
   "js/game/quali.js",
+  "js/game/quali-sheet.js",
   "js/game/debrisworld.js",
   "js/game/incidentsim.js",
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
@@ -242,10 +247,8 @@ const TRACK_VM = [
   // scalar helpers (M4.clamp/lerp/wrapDelta), which js/track/ binds at eval.
   // Leaving it out is how the track engine ended up with four private lerps.
   "js/mat4.js",
-  "js/track/geo-paths.js",
   "js/track/geom.js",
   "js/track/scenery-data.js",
-  "js/track/markings.js",
   "js/track/space.js",
   "js/track/surface.js",
   "js/track/models.js",
@@ -329,14 +332,14 @@ const HARD_EDGES = [
   ["js/track/scenery-structures.js", "js/track/tracks.js"],
   ["js/track/scenery-city.js", "js/track/tracks.js"],
   ["js/track/scenery-identity.js", "js/track/tracks.js"],
-  ["js/track/geo-paths.js", "js/track/tracks.js"],          // CircuitPaths read by LIST build
   ["js/track/space.js", "js/track/surface.js"],
   ["js/track/models.js", "js/track/circuit-kit.js"],
   ["js/track/tracks.js", "js/track/maps.js"],               // maps calls Tracks.buildCenterline
   // js/data's own eval-time edges moved to LAZY_DATA_EDGES when the hub left
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
-  ["js/game/tables.js", "js/game/hud.js"],      // hud destructures GameTables at eval
-  ["js/game/tables.js", "js/game/cam-modes.js"], // cam-modes destructures GameTables at eval
+  ["js/game/physics-consts.js", "js/game/hud.js"], // hud destructures IDLE_RPM/MAX_RPM at eval
+  ["js/game/cam-modes.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
+  ["js/car/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/game/physics-consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/game/physics-consts.js", "js/game/bodyattitude.js"], // LAT_MAX read at eval
   ["js/car/teams.js", "js/game/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
@@ -360,6 +363,11 @@ const HARD_EDGES = [
   ["js/game/aerozones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/game/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create(G) at eval time
   ["js/game/racecontrol.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
+  ["js/game/lighting-knobs.js", "js/game/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
+  ["js/game/lighting-knobs.js", "js/game/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
+  ["js/game/lighting-knobs.js", "js/game/lighting.js"],      // the LightTune façade re-exports TUNE_DEFS/LT at eval
+  ["js/game/track-lights.js", "js/game/lighting.js"],        // …and buildTrackLights/lampStrideNodes
+  ["js/game/frame-lights.js", "js/game/lighting.js"],        // …and setFrameLights/appendCarTailLights
   ["js/game/lighting.js", "js/game/light-store.js"],  // light-store destructures LightTune's TUNE_DEFS/LT inside create()
   ["js/game/light-store.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/game/audio-panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time

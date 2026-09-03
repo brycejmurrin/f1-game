@@ -135,6 +135,10 @@ interface StoreApi {
   get<T>(k: string, d: T): T;
   get(k: string, d?: unknown): unknown;
   set(k: string, v: unknown): void;
+  /** The raw string lane: bare "1"/"0" flags and ids, read live (no cache), key with or without the prefix. */
+  raw(k: string): string | null;
+  rawSet(k: string, v: string): boolean;
+  rawDel(k: string): boolean;
   /** Bumped on every set() so memo caches can self-invalidate. */
   rev: number;
   /** The DOMException name once a read or write has failed, else null. */
@@ -190,7 +194,7 @@ interface PhotoMouse { dx: number; dy: number; drag: boolean; px: number; py: nu
 interface PhotoAxis { x: number; y: number; }
 
 /** The lighting profile store, keyed "track|timeOfDay|weather" (plus "*").
-    Owner: js/game/light-store.js; photomode.js mutates it for RESET/COPY VALUES. */
+    Owner: js/game/light-store.js; tuner.js mutates it for RESET/COPY VALUES. */
 type LightProfiles = Record<string, Record<string, unknown>>;
 
 /** The caution/flag picture race control publishes — js/game/racecontrol.js. */
@@ -621,6 +625,7 @@ declare const NetLobby: GameModuleFactory;
 declare const NetPlay: GameModuleFactory;
 declare const Photomode: GameModuleFactory;
 declare const Quali: GameModuleFactory;
+declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const SkidMarks: GameModuleFactory;

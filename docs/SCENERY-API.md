@@ -14,20 +14,25 @@ The per-circuit visual targets are the briefs in [docs/tracks/](tracks/); this
 is the toolkit for building them. Verify with the `__apex.view` survey camera —
 see [DEBUG-HOOKS.md](DEBUG-HOOKS.md).
 
-> **Separate from this:** `buildProps` *also* lays down shared, theme/`def.id`-keyed
+> **Separate from this:** `buildProps` *also* lays down shared, theme-keyed
 > **city dressing** on top of each `scenery(api)` — procedural buildings, armco
-> barrier liveries, roadside trees/lamps, and per-track tarmac/verge tints. That
-> system lives in the code, not in a prose section: the `STYLES` / `BARRIER` /
-> `FURN` tables are in `js/track/scenery-data.js`, the generators (`neonTower`,
-> `streetLamp`, …) in `js/track/scenery-city.js`, `conifer` and the rest of the
-> flora in `js/track/scenery-nature.js`, and the theme tables in
-> `js/track/themes.js`. This doc covers only the per-circuit `scenery(api)`
-> toolkit.
+> barrier liveries, roadside trees/lamps, and per-track tarmac/verge tints. The
+> per-circuit half of that system is authored IN THE DEF (`js/circuits/<id>.js`
+> is the single home of a circuit's data): `barrier` (armco livery), `furniture`
+> (tree species + lamp), `kit` (barrier/signage/marshal families, read through
+> `api.kitOf`), `standSet` (grandstand livery rotation) and `cityStyle` (the
+> city generator's palette — `neon` / `dayPal` are NAMES into
+> `TrackSceneryData.NC` / `.DC`). The generic fallbacks (`FURN_DEF`, `KIT_DEF`,
+> `THEME_DEF`, `STAND_SET_DEF`, the colour packs) stay in
+> `js/track/scenery-data.js`; the generators (`neonTower`, `streetLamp`, …) are
+> in `js/track/scenery-city.js`, `conifer` and the rest of the flora in
+> `js/track/scenery-nature.js`, and the theme tables in `js/track/themes.js`.
+> This doc covers only the per-circuit `scenery(api)` toolkit.
 
 ## Road half-width overlays (`hwZones`)
 
-CircuitPaths traces ignore segs `w:`. To squeeze a section (e.g. Baku castle),
-set on the track def:
+The centreline is the def's `path` (an OSM trace, constant `baseHW`), so the
+only way to narrow a section (e.g. Baku castle) is an overlay on the track def:
 
 ```js
 hwZones: [{ s0: 0.42, s1: 0.50, hw: 3.8, ease: 0.02 }]
@@ -112,7 +117,7 @@ rule as every other lamp — no light without something visible emitting it.
 
 - `pos` is a RAW WORLD position, like the `px`/`py`/`pz` arrays, and is *not*
   remapped by the reversed-lap wrapper.
-- `kind` names an entry in lighting.js's internal `LAMP_KINDS` table (`led`,
+- `kind` names an entry in track-lights.js's internal `LAMP_KINDS` table (`led`,
   `fluor`, `halide`, `sodium`, …) and
   sets colour, cone and volumetric weight, exactly as for a mast.
 - `aim` overrides the default beam direction. The default aims at the centre of
@@ -355,17 +360,17 @@ passing an autumn colour to `tree()` still gives you a `tree()` shape.
 | `acacia(k, side, dist, h, col, opts)` | flat-topped veld thorn: low fork + near-horizontal umbrella | `{spread, layers, barkCol}` |
 | `plane(k, side, dist, h, col, opts)` | pollarded avenue tree — pale mottled trunk + broad flattened crown discs | `{stages, spread, trunkCol}` |
 
-**`FURN[id].tree` reaches these too.** The generic roadside scatter runs on
+**`def.furniture.tree` reaches these too.** The generic roadside scatter runs on
 every circuit and used to resolve to exactly three silhouettes — `"palm"`,
 `"fir"`, or `"broad"` for everything else — so eighteen circuits shared one tree
 shape on the one foliage pass that is guaranteed to run. The five species above
-are now valid `FURN.tree` values as well (`"cypress"`, `"stonePine"`,
+are now valid `furniture.tree` values as well (`"cypress"`, `"stonePine"`,
 `"broadleafFall"`, `"acacia"`, `"plane"`), each with its own `canopyR()` entry
 so the scatter's fence guard clears a barrier by exactly what the species
 actually spans. Unknown names still fall back to `"broad"`, so the field stays
 backward-compatible.
 
-Note that `FURN.tree` does nothing on a circuit whose `dressingExclusions`
+Note that `furniture.tree` does nothing on a circuit whose `dressingExclusions`
 suppress `"foliage"` lap-wide (imola plants its own bespoke parkland instead) —
 setting it there is a declaration of the local species, not a visible change.
 
@@ -423,9 +428,9 @@ not trackside) and a night under-roof light strip.
 
 Liveries live in `js/track/scenery-data.js`: `STAND_LIVERIES` holds the named
 families (`steel`, `darkSteel`, `concrete`, `alu`, `scaffold`, `sandstone`,
-`terracotta`, `pastel`, `crimson`, `navy`, `teal`, `orange`) and `STAND_SETS`
-maps each circuit to the families it should rotate through, so a venue's stands
-differ from each other while staying recognisably one place.
+`terracotta`, `pastel`, `crimson`, `navy`, `teal`, `orange`); each circuit's
+def names the three it rotates through in `standSet` (`js/circuits/<id>.js`),
+so a venue's stands differ from each other while staying recognisably one place.
 
 ```js
 // A big two-tier main stand with hospitality suites and a truss roof
@@ -492,7 +497,7 @@ run longer than ~200 m raise `step`, or drop `rows`/`density`.
 `building()` used to have exactly one massing: a plinth, a hash-picked
 `flat`/`setback`/`taper`/`spire` archetype and a sculpted crown. Meanwhile
 `neonTower()` carried a ~20-form massing library — but the only way in was the
-city generator's `STYLES` table, so every hand-placed pit block, paddock and
+city generator's per-circuit `cityStyle`, so every hand-placed pit block, paddock and
 hospitality unit in the fleet came out as the same box.
 
 `opts.kind` opens that library to `building()`. **Omit it and nothing changes**;

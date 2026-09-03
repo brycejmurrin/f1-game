@@ -43,7 +43,7 @@ JSON_PATH = LOG_DIR / "cdmcp-lamps-tune.json"
 
 DEFAULT_PORT = int(os.environ.get("APEX_PORT") or os.environ.get("PORT") or "3456")
 
-# TUNE_DEFS extremes — read from js/game/lighting.js, do not invent:
+# TUNE_DEFS extremes — read from js/game/lighting-knobs.js, do not invent:
 #   lampDensity  min 0.5 max 2.5 def 1.0
 #   lampTemp     min -2  max 2   def 0
 #   poolEnergy   min 0.04 max 2  def 0.55

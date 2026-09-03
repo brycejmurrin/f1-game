@@ -6,9 +6,27 @@
 // own wiring. Created once with the G façade at boot; game.js keeps `camMode`
 // and `camCutT` as its own closure state and this module mutates them through
 // G (the render loop reads them directly).
+//
+// CAM_MODES is the player camera list — index IS `camMode` (persisted as
+// apex26.camMode, so the order is a save-format contract; append, never
+// reorder). js/game/cameras.js resolves each id to a rig; cam-tuner.js,
+// apex.js, agentview.js and game.js read it through CamModes.CAM_MODES.
 window.CamModes = (function () {
-  // Eval-time dependency on GameTables (HARD_EDGES pins tables.js before this).
-  const { CAM_MODES } = GameTables;
+  const CAM_MODES = [
+    { id: "chase",     label: "CHASE" },
+    { id: "far",       label: "FAR" },
+    { id: "drift",     label: "DRIFT" },
+    { id: "cockpit",   label: "COCKPIT" },
+    { id: "hood",      label: "HOOD" },
+    { id: "overhead",  label: "OVERHEAD" },
+    { id: "heli",      label: "HELI" },
+    { id: "reverse",   label: "REVERSE" },
+    { id: "side",      label: "TV SIDE" },
+    { id: "cinematic", label: "CINEMATIC" },
+    { id: "low",       label: "LOW" },
+    { id: "tcam",      label: "T-CAM" },
+    { id: "rear",      label: "REAR CAM" },
+  ];
 
   function create(G) {
     Log.info("game", "CamModes.create");
@@ -139,5 +157,5 @@ window.CamModes = (function () {
     return { refreshCamBtn, setCamMode, cycleCam, hideCamPicker: camPicker.hide };
   }
 
-  return { create };
+  return { CAM_MODES, create };
 })();

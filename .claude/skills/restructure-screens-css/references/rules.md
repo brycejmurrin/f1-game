@@ -83,7 +83,7 @@ reach — and none of its folder structure.** `@layer reset, base, components,
 hud, overlays` already does the ordering natively. *Prevents:* a Sass-shaped
 directory tree in a project with no build step.
 
-**11. Ratchet the distinct-class count the way `module-size.test.mjs` ratchets
+**11. Ratchet the distinct-class count the way `tests/data/ratchets.json` ratchets
 game.js, and lower the ceiling when you consolidate.** *Prevents:* a cleanup
 undone by the next three features with nothing to notice.
 

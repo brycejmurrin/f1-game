@@ -1,4 +1,4 @@
-/* Apex 26 — LIGHTING PROFILE STORE (LightStore.create(G)) The resolution and persistence half of the lighting tuner. js/game/lighting.js owns the REGISTRY (TUNE_D… */
+/* Apex 26 — LIGHTING PROFILE STORE (LightStore.create(G)) The resolution and persistence half of the lighting tuner. js/game/lighting-knobs.js owns the REGISTRY (TUNE_D… */
 "use strict";
 const LightStore = (() => {
   function create(G) {

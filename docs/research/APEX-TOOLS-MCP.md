@@ -230,7 +230,7 @@ other occupants. One-sided is acceptable if `apex_status` reports them
 | `report-server.mjs` | Binds `0.0.0.0`, LAN URLs |
 | `cdmcp-*`, `mcp-cli.mjs`, `chrome-devtools-mcp.sh` | Probe / chrome-devtools |
 | `playwright-mcp.sh` / `@playwright/mcp` | Interactive UI survey; not an apex_* wrap |
-| `assets.mjs bake*`, `tests-split --apply`, `rotate-markings --write` | Writers |
+| `assets.mjs bake*`, `rotate-markings --write` | Writers |
 | `graph-parity` without `BASE=` | Vacuous-refuse on a clean tree (exit 2). Wrapped only as `apex_graph_parity` with required `base`. |
 
 ---

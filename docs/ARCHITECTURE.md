@@ -40,7 +40,7 @@ js/render/glx.js + glx/* -> GLX        (default WebGL2 renderer + its passes)
 js/render/gfx.js         -> Gfx        (renderer selection seam; the WGX and
                                         TLX backends are DEFERRED — no script
                                         tag, injected at boot when opted into)
-js/car/teams.js          -> Teams      (2026 grid data)
+js/car/teams.js          -> Teams      (2026 grid data + TIER_V pace ladder + the MY TEAM seed)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
 js/circuits/*.js         -> TrackDefs  (one def per circuit; its scenery(api) closure is
                                         split to js/circuits/scenery/<id>.js, fetched per build)
@@ -68,7 +68,7 @@ The July 2026 architecture reorg moved every module into a domain directory
 
 **That 4,700 is a historical measurement, not a current one.** `game.js` grew
 back to its ceiling (8,885 as of 2026-09) — extraction moved code out once and nothing stopped it
-accumulating again until `tests/unit/module-size.test.mjs` put a ratcheted ceiling on
+accumulating again until the size ratchet (`tests/data/ratchets.json`, checked by `tools/ratchets.mjs`) put a ceiling on
 the file (lowered with each extraction). Treat the number as a record of what
 the reorg achieved, and `wc -l js/game.js` against the current ceiling as the
 truth about today.
@@ -99,8 +99,8 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   `js/game/light-store.js`, `js/game/racecontrol.js`, and from the 2026-08
   cleanup `js/game/physics-consts.js` and `js/game/cam-modes.js` — more have
   landed since (e.g. `js/game/ai-drive.js`); `tools/manifest.cjs` is the roster
-  truth and `module-size.test.mjs` the tally. The current
-  count and its ratcheted ceiling live in `tests/unit/module-size.test.mjs`, and the
+  truth and `tests/data/ratchets.json` the tally. The current
+  count and its ratcheted ceiling live there (`node tools/ratchets.mjs`), and the
   remaining extraction candidates are ranked in ARCHITECTURE-REVIEW.md §8.
 
   **The payoff is testability, not tidiness.** Race control is the clearest
@@ -140,7 +140,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   `tests/specs/physics-characterization.spec.js` now pins, for no functional gain.
   Take the cohesive blocks around them instead.
 
-  `tests/unit/module-size.test.mjs` is the guard that makes this stick: a per-file
+  `tests/data/ratchets.json` (`tools/ratchets.mjs`, `tests/unit/ratchets.test.mjs`) is the guard that makes this stick: a per-file
   line ceiling you LOWER when you extract. It exists because this file's own
   note above — that extraction happened once and nothing stopped the file
   growing back — was demonstrated again in miniature during the 2026-08 cleanup,
@@ -270,7 +270,7 @@ button cannot — an iOS jetsam kill, which takes the tab with no JS error and n
 `webglcontextlost`, and which the `GLX.init`-failure recovery in the same file
 never sees. Everything else is recoverable by hand: the menus are DOM layered
 over the canvas, so they stay legible through a garbage frame and the button
-(owned by `js/game/gfx-quality.js`, visible in the HTML, wired at
+(owned by `js/game/renderer-picker.js`, visible in the HTML, wired at
 DOMContentLoaded) is one tap away. Pressing the button also disarms the probe,
 so switching from the menu before any world frame does not revert the choice
 just made.
@@ -390,6 +390,8 @@ Teams.LIST -> [ { id:"mercedes", name:"Mercedes-AMG Petronas", short:"MER",
 // 11 teams in 2026 spec: Mercedes(t0), Ferrari(t1), McLaren(t1, Norris num:1),
 // Red Bull(t2, Verstappen num:33), Alpine(t3), Racing Bulls(t3), Haas(t3),
 // Williams(t3), Audi(t4), Aston Martin(t4), Cadillac(t4, Perez 11 / Bottas 77)
+Teams.TIER_V -> [1.0, 0.988, 0.973, 0.958, 0.942]   // ground-speed scale per tier
+Teams.DEFAULT_CUSTOM -> the MY TEAM seed record (id "custom", tier 2)
 Teams.POINTS  -> [25,18,15,12,10,8,6,4,2,1]   // top 10, no fastest-lap point
 ```
 
@@ -405,11 +407,14 @@ the on-track rejection guard (`RAW`).
 
 ## js/track/scenery-data.js — `TrackSceneryData`
 
-The static dressing tables hoisted out of buildProps: `BARRIER` (armco
-liveries), `FURN`/`FURN_DEF` (per-track trees + lamps), `CROWD_DAY`,
-`WINTINTS`, `HOUSE_*`, `MOTORHOME_BODY`, `SIGN_SEG`/`SIGN_DIGIT`, and the city
-generator's `NC`/`DC`/`BLD`/`STYLES`/`THEME_DEF`. Pure constants — anything
-that closes over placement state stays in the scenery modules.
+The GENERIC dressing tables hoisted out of buildProps: the theme fallbacks
+`FURN_DEF` (trees + lamps), `KIT_DEF` (barrier/signage/marshal families),
+`THEME_DEF` (city style) and `STAND_SET_DEF`, plus `STAND_LIVERIES`,
+`CROWD_DAY`, `WINTINTS`, `HOUSE_*`, `MOTORHOME_BODY`, `SIGN_SEG`/`SIGN_DIGIT`,
+the colour packs `NC`/`DC`/`ATM`/`COL`, `BLD`, and `resolveCityStyle()` (turns
+a def's `cityStyle` colour NAMES into `NC`/`DC` arrays). Pure constants —
+anything that closes over placement state stays in the scenery modules, and
+anything PER-CIRCUIT is a key of the def (below), never an id-keyed table here.
 
 ## js/track/ — the rest of the engine
 
@@ -422,16 +427,14 @@ One concern per file, all loaded before `tracks.js`:
 | `mesh.js` | `TrackMesh` | road/terrain mesh extrusion (`buildRoad`/`buildTerrain`) |
 | `space.js` | `TrackSpace` | world↔track (Frenet) projection used by physics |
 | `surface.js` | `TrackSurface` | road-surface build details, per-track tarmac/verge tints |
-| `markings.js` | `CircuitMarkings` | curated FIA-aligned sector splits + turn apexes (racing-lap fractions; feeds `Tracks.LIST`, sectorAt, minimaps, corner boards) |
 | `models.js` | `TrackModels` | composite prop models shared across circuits |
 | `themes.js` | `SceneryThemes` | theme tables for the city generator |
 | `landmark-kit.js` / `circuit-kit.js` | `LandmarkKit` / `CircuitKit` | landmark & circuit composite kits for `scenery(api)` |
-| `geo-paths.js` | `CircuitPaths` | real OSM circuit centrelines (bacinger/f1-circuits, ODbL) — was `circuits.js` |
 | `maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine — was `trackmaps.js` |
 | `scenery-nature.js` / `scenery-city.js` / `scenery-structures.js` / `scenery-identity.js` | `Scenery*` | the buildProps split (below) |
 
 **The buildProps split.** Prop placement is four `Scenery*.create(ctx)`
-modules — nature (trees/terrain furniture), city (the `STYLES` building
+modules — nature (trees/terrain furniture), city (the `cityStyle` building
 generator, neon, glass), structures (grandstands, gantries, barriers,
 floodmasts), identity (per-circuit landmark passes) — each instantiated with a
 ctx of the placement helpers and accumulators. Together they serve the
@@ -445,6 +448,12 @@ change the test catches. See [SCENERY-API.md](SCENERY-API.md).
 One def file per circuit, plus one scenery file under `js/circuits/scenery/`.
 The def is a self-contained IIFE that pushes a plain data object onto the
 global `TrackDefs` list — no engine logic, no palette helpers, just raw fields.
+**The def is the single home of a circuit's data**: its real centreline
+(`path`), curated sector splits + turn apexes (`sectors`, `turns`) and its
+dressing rows (`barrier`, `furniture`, `kit`, `standSet`, `cityStyle`) all live
+here — there are no id-keyed tables in `js/track/` any more, and the engine
+reads every one of them off the BUILT def (`tests/unit/circuit-def-fields.test.mjs`
+pins that they survive the copy).
 The bespoke `scenery(api)` closure lives in `js/circuits/scenery/<id>.js`
 (registered on `window.TrackScenery[id]`, no `<script>` tag: `game.js` fetches
 the one it is about to build, ~27 KB each, so a session does not parse all 40). Loaded *before* `js/track/tracks.js`, in the order their
@@ -455,16 +464,23 @@ calendar order). **Tag order == `Tracks.LIST` order == picker/season order.**
 def = { id, name, gp, country, night, theme, lengthKm, baseHW,
         street?:true,                              // continuous-barrier street circuit
         pal: { ...palette overrides... },          // engine wraps with day/nightPal
-        segs: [ {t,l,h?,b?,w?}, ... ],             // authored fallback if no OSM trace
+        path: { len, pts: [[x,z], ...] },          // REQUIRED: the real centreline (OSM trace, open loop)
+        sectors?: [s1End, s2End], turns: [frac…],  // curated FIA markings, RACING-LAP fractions, never fmap'd
+        barrier?: {a,b,c,night,tyre},              // armco livery (street / night circuits)
+        furniture: {tree, fol, lamp, lc?, sparse?, treeCrown?},   // roadside planting + lamps
+        kit: {marshal, rail, fence, tyre, board, gantry, camera, hoarding},   // api.kitOf families
+        standSet: [livery, livery, livery],        // grandstand livery rotation (STAND_LIVERIES names)
+        cityStyle?: {neon: [NC names], dayPal: [DC names], bias, fh, bh, kinds, neonKinds, tone},
         bridges?:   [ {s,halfM,rise}, ... ],       // figure-8 overpass deck (terrain stays flat)
         elevations?:[ {s,halfM,rise}, ... ],       // real elevation bumps (terrain follows road)
-        hwZones?:   [ {s0,s1,hw,ease?}, ... ] }    // half-width overlays (CircuitPaths ignores segs w:)
+        hwZones?:   [ {s0,s1,hw,ease?}, ... ] }    // half-width overlays on the path
 ```
 
 ## js/track/tracks.js — `Tracks` (engine shell)
 
 Resolves each `TrackDefs` entry (palette from the `night` flag, geometry from
-the OSM trace in `js/track/geo-paths.js` or the authored `segs`), samples the
+the def's `path` — a def without one is a build error naming the circuit, there
+is no authored-segment fallback), samples the
 closed Catmull-Rom spline (via `TrackSpline`), and orchestrates the build —
 road/terrain meshes through `TrackMesh`/`TrackSurface`, props through the four
 scenery modules.
@@ -645,23 +661,40 @@ DataHub.init(rootEl)   DataHub.open()   DataHub.close()   DataHub.isOpen() -> bo
 ```
 Styles in `css/data.css` only (prefix all classes `dh-`).
 
-## js/game/tables.js — `GameTables`
+## Where the old `tables.js` rows live
 
-Static gameplay/render data destructured by game.js at the original sites:
-`DEFAULT_CUSTOM` (the custom team), `TIER_V` (AI tier speeds), `GEARS`/
-`GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` (gearbox), `DIFF` (difficulty), `CAM_MODES`
-(player camera list) and the `PAINT_*` car-paint material constants.
+The grab-bag data file went with Phase 2a of
+`docs/research/TREE-RESTRUCTURE-2026-09.md`; each row sits with its owner:
+`DEFAULT_CUSTOM` and `TIER_V` in `js/car/teams.js` (the record shape and the
+`tier` field they index), `GEARS`/`GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` and `DIFF`
+in `js/game/physics-consts.js` (immutable model numbers, already eval-pinned
+before every reader), `CAM_MODES` in `js/game/cam-modes.js`
+(`CamModes.CAM_MODES`), and the four `PAINT_*` car-paint constants in
+`js/game.js` beside `carPaintMat()`, their only reader.
 
-## js/game/lighting.js — `LightTune`
+## js/game/lighting.js — `LightTune` (a façade over three files)
 
-The lighting-tuner core: `TUNE_DEFS` (slider registry — the `def` values ARE
-the shipped tuning), the live `LT` value object (a plain object mutated in
-place by game.js's profile resolution and `__apex.lightTune`),
-`buildTrackLights(track)` (bakes the per-track light records — colour and
-fixture character come from the internal `floodColor` + `LAMP_KINDS` tables),
-plus the per-frame light upload — `setFrameLights` (distance-sorted cull to
-the frame CAP) and `appendCarTailLights`. Profile persistence and the (track, time-of-day,
-weather) resolution stay in game.js — they read live session state.
+The lighting-tuner core, split by lifecycle (Phase 2a of
+`docs/research/TREE-RESTRUCTURE-2026-09.md`):
+
+- `js/game/lighting-knobs.js` — `LightKnobs`: `TUNE_DEFS` (the slider
+  registry — the `def` values ARE the shipped tuning; min/max/step are the
+  clamps) and the live `LT` value object (a plain object mutated in place by
+  `light-store.js`'s profile resolution and `__apex.lightTune`).
+- `js/game/track-lights.js` — `TrackLights`: `buildTrackLights(track)` bakes
+  the per-track light records ONCE per track (colour and fixture character from
+  the internal `floodColor` + `LAMP_KINDS` tables, the LAMP DENSITY and
+  DARK-GAP FILL walks), plus `lampStrideNodes`.
+- `js/game/frame-lights.js` — `FrameLights`: the per-frame light upload —
+  `setFrameLights` (distance-sorted cull to the frame CAP, twilight scale,
+  flicker / warm-up, the per-chunk full-set twin) and `appendCarTailLights`.
+- `js/game/lighting.js` — `LightTune`: re-exports the three as the ONE surface
+  every consumer reads (`LightTune.TUNE_DEFS` / `LT` / `buildTrackLights` /
+  `setFrameLights` / …). The eval-time edges are `HARD_EDGES` pairs in
+  `tools/manifest.cjs`; both siblings destructure `LightKnobs.LT` at eval.
+
+Profile persistence and the (track, time-of-day, weather) resolution live in
+`js/game/light-store.js` — they read live session state.
 
 ## js/game/carmesh.js — `CarMesh`
 
@@ -691,15 +724,16 @@ state plus stable helpers, passed to `Module.create(G)`:
 
 | File | Global | Owns |
 |---|---|---|
-| `physics-consts.js` | `PhysicsConsts` | the driving model's immutable numbers (`VMAX`, `LAT_MAX`, `BRAKE`, …), destructured once by game.js at eval time (a `HARD_EDGES` entry in `tools/manifest.cjs`). Values only — anything a slider or `setPhysics` can change stays a `let` in game.js. A plain data global, not a `create(G)` module |
+| `physics-consts.js` | `PhysicsConsts` | the driving model's immutable numbers (`VMAX`, `LAT_MAX`, `BRAKE`, …, the `GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` gearbox and the `DIFF` difficulty presets), destructured once by game.js at eval time (a `HARD_EDGES` entry in `tools/manifest.cjs`; `hud.js` reads the RPM pair the same way). Values only — anything a slider or `setPhysics` can change stays a `let` in game.js. A plain data global, not a `create(G)` module |
 | `store.js` | `GameStore` | localStorage persistence (settings, season, parts, records) + the career save and its migration ladder |
 | `career.js` | `Career` | CAREER rules: the `apex26.career.<flavour>.0..2` saves (three DRIVER slots and three MY TEAM slots in separate sets, one live at a time; both earlier layouts migrate in), the credits economy, contracts, driver/team development, R&D ownership, round settlement. Pure data — no DOM, and a plain global (no ctx), because game.js calls it from `makeCars()`/`recomputePlayerMods()`/`endRace()`. Every GAMEPLAY accessor is gated on `inCareer()`, NOT on "a save exists": the save loads at boot so the title button can offer CONTINUE, but its rules must never reach a Grand Prix |
 | `career-ui.js` | `CareerUI` | the CAREER screen (`#career`) — three states in one sheet: CAREER MODES (both modes, their six slots and their guides — the title button's one door), new-career setup, and the season hub. States rather than screens, so all three inherit the sheet's MenuNav / ScrollFade / AriaState registration instead of needing their own. Replaces `#select` in career, since the calendar owns where you race |
-| `quali.js` | `Quali` | ONE-LAP QUALIFYING (`#quali`). A `session`, not a game state: the player's flying lap reuses the time-trial path, and the rest of the field is MODELLED — a quasi-steady forward/backward lap simulation off the same `LAT_MAX`/`ACCEL`/`BRAKE` the driving model uses, so a simulated time and a driven one land on one scale. Feeds `gridUp()` |
+| `quali.js` | `Quali` | ONE-LAP QUALIFYING, the MODEL. A `session`, not a game state: the player's flying lap reuses the time-trial path, and the rest of the field is MODELLED — a quasi-steady forward/backward lap simulation off the same `LAT_MAX`/`ACCEL`/`BRAKE` the driving model uses, so a simulated time and a driven one land on one scale. Owns the classification between session and grid and its persist (`season.qualiOrder`); feeds `gridUp()`. No DOM — `rows()` is what the sheet paints |
+| `quali-sheet.js` | `QualiSheet` | the QUALIFYING sheet (`#quali`): `build(rows)` / `open(rows)` / `close()` over `quali.rows()` — pure DOM assembly of the model's classification (podium classes, the DRIVEN tag on a rival's real lap, the P-title). No timing, no ordering, no persist |
 | `reliability.js` | `Reliability` | RELIABILITY / DNFs — whether a car reaches the flag. Risk is DERIVED (team tier, relieved by career team development and by the player's fitted engine + gearbox), never authored per team. The whole field's retirements are drawn ONCE at the green light from a stateless hash of `(seed, round, driver)`, so arming a race consumes nothing from the sim RNG stream. Ships OFF — opt-in per race via the RELIABILITY setting |
 | `perf.js` | `PerfGov` | adaptive performance governor (render scale / FX tiers) |
 | `cameras.js` | `GameCams` | the 13 player camera modes + the `__apex.view` debug free-cam framing |
-| `cam-modes.js` | `CamModes` | the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to `cameras.js` |
+| `cam-modes.js` | `CamModes` | `CAM_MODES` (the 13-entry player camera list — index IS the persisted `camMode`) plus the CAM button / picker-grid / C-key mode-switch UI (broadcast-only; mutates `camMode` through `G`) — the DOM front-end to `cameras.js` |
 | `hud.js` | `GameHud` | in-race DOM HUD (pos/lap/times, speed, energy, gaps, minimap) |
 | `results.js` | `GameResults` | results + season-end screens, penalties, points |
 | `apex.js` | `ApexApi` | the **whole `window.__apex` dev API** (see DEBUG-HOOKS.md). `LAZY_AGENT` — no tagged script; `game.js` injects it when `wantAgentSurface()` |
@@ -708,8 +742,8 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `menus.js` | `Menus` | menu/select/pause DOM flows |
 | `scrollfade.js` | `ScrollFade` | edge fade + scroll-position indicator on every menu pane (self-initialising, owns no game state) |
 | `menunav.js` | `MenuNav` | desktop menu input (self-initialising): wheel/trackpad gestures that land outside a pane are redirected into the open menu's nearest one, and arrow keys / Home / End / PageUp / PageDown move focus through it |
-| `photomode.js` | `Photomode` | photo mode |
-| `tuner.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel (COPY VALUES export) |
+| `photomode.js` | `Photomode` | photo mode ONLY — the free-fly camera, its touch sticks / hold buttons and the enter/exit plumbing; the lighting tuner's `lt-*` buttons live in `tuner.js` |
+| `tuner.js` | `TunerPanel` | LIGHTING TUNER pause-menu panel: slider rows from `TUNE_DEFS`, preview chips, COPY TO ALL TRACKS, the help toggle, RESET and the COPY VALUES export (`window.LightEdits`) |
 | `steer-tuning.js` | `SteerTuning` | ADVANCED STEERING panel (presets + sliders) |
 | `aerozones.js` | `AeroZones` | ACTIVE AERO activation zones — pure circuit GEOMETRY (curvature in, arc-metre spans out). Knows nothing about a car; `xStraightAhead()`/`aeroDfMult()` stay in game.js because they read car state |
 | `skidmarks.js` | `SkidMarks` | the 120-entry tyre-mark ring buffer plus its batched vertex build — one draw call instead of up to 120 per frame — and the per-mark fallback for GPUs where the batch program fails to link. Fully self-contained: game.js calls only `reset()` / `stamp()` / `draw()` |
@@ -718,15 +752,15 @@ state plus stable helpers, passed to `Module.create(G)`:
 | `ariastate.js` | `AriaState` | mirrors each option group's visual selection onto `aria-pressed` for screen readers |
 
 The table lists the modules whose contracts need prose; the rest of `js/game/`
-(59 files today — input, audio, lighting, particles, ai-drive, season-cal,
-ui-scale, gfx-quality, metrics and the rest) is enumerated by
+(58 files today — input, audio, lighting, particles, ai-drive, season-cal,
+ui-scale, gfx-quality, renderer-picker, metrics and the rest) is enumerated by
 `tools/manifest.cjs`, which is the roster truth AGENTS.md's layout defers to
 (the docs-integrity guard asserts the deferral, not a per-file list).
 
 ## js/game.js — main
 
 The entry point (the largest file in the repo — its line ceiling is ratcheted by
-`tests/unit/module-size.test.mjs`; loop, physics, AI, race logic — the subsystems
+`tests/data/ratchets.json`; loop, physics, AI, race logic — the subsystems
 above are extracted). Player + 21 AI.
 
 **States** are `menu | count | race | results` — those are the only four values
@@ -772,7 +806,7 @@ in load order, standings table between races, saved in
 `apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,
 sound), season.
 
-Camera: 13 player modes (`CAM_MODES` in `js/game/tables.js`, driven by
+Camera: 13 player modes (`CAM_MODES` in `js/game/cam-modes.js`, driven by
 `GameCams`) cycled with the CAM button / C key (persisted) — CHASE (close,
 behind+above), FAR (pulled back/up), DRIFT (swings outside on a slide),
 COCKPIT (onboard eye, player car hidden), HOOD (nose cam), OVERHEAD (top-down

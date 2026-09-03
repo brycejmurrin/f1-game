@@ -377,7 +377,7 @@ test("game keeps the sole prebuilt ribbon usable across envCull and tier changes
 test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
   // A feature the player can switch on must not be held off by three different
   // answers. Before this was pinned:
-  //   js/game/lighting.js  help text : "Available at every GRAPHICS preset"
+  //   js/game/lighting-knobs.js  help text : "Available at every GRAPHICS preset"
   //   js/game/tuner.js     why-off   : PerfGov.autoTier()  (governor only)
   //   js/game.js           the gate  : PerfGov.tier()      (preset TOO)
   // and the third one wins, so PER-CHUNK ROAD did nothing on GRAPHICS: LOW
