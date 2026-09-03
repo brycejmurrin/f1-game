@@ -87,7 +87,7 @@
   letter-spacing: 0.2em;
   color: var(--dim);
 }
-.hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
 .hud-gaps {
   position: absolute;
   /* BESIDE the minimap, top-left cluster, the two readouts STACKED — ahead over
