@@ -2312,6 +2312,27 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 3, "the three road decal draws share ROAD_BIAS");
 });
 
+test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {
+  // The deck used to ignore overcast entirely (no clamped sun, no grey mix),
+  // so heavy cloud read flatter and brighter on WGX than on GLX/TLX. Pin the
+  // terms that were missing, in the same shape GLX SKY_FS writes them.
+  const glx = read("js/render/shaders/sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgsl = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  for (const [name, g, w] of [
+    ["overcast sun clamp", /mix\(sunBright, min\(sunBright, 0\.55\), overcast\)/, /mix\(sunBright, min\(sunBright, 0\.55\), overcast\)/],
+    ["grey tops", /vec3\(0\.62, 0\.63, 0\.65\), overcast \* 0\.65\)/, /vec3<f32>\(0\.62, 0\.63, 0\.65\), overcast \* 0\.65\)/],
+    ["grey bases", /vec3\(0\.19, 0\.19, 0\.22\), overcast \* 0\.60\)/, /vec3<f32>\(0\.19, 0\.19, 0\.22\), overcast \* 0\.60\)/],
+    ["golden tops", /mix\(1\.45, 2\.6, golden\)/, /mix\(1\.45, 2\.6, goldenCl\)/],
+    ["pink undersides", /vec3\(0\.9, 0\.42, 0\.5\) \* \(0\.22 \* golden/, /vec3<f32>\(0\.9, 0\.42, 0\.5\)\s*\* \(0\.22 \* goldenCl/],
+    ["day cap/base contrast", /cloudBot \* 0\.80, cloudTop \* 1\.14, capf\), daytime \* 0\.45\)/, /cloudBot \* 0\.80, cloudTop \* 1\.14, capf\), daytime \* 0\.45\)/],
+    ["twilight wash", /pow\(sd, 2\.5\) \* twilight \* 0\.30 \* \(1\.0 - overcast \* 0\.6\)/, /pow\(sd, 2\.5\) \* twilight \* 0\.30 \* \(1\.0 - overcast \* 0\.6\)/],
+    ["moon silver", /vec3\(0\.08, 0\.10, 0\.16\)/, /vec3<f32>\(0\.08, 0\.10, 0\.16\)/],
+  ]) {
+    assert.match(glx, g, `GLX still carries the ${name} term`);
+    assert.match(wgsl, w, `WGX must carry the ${name} term`);
+  }
+});
+
 test("pcssPen help names desktop three.js WebGL2 as live", () => {
   const lighting = read("js/game/lighting-knobs.js");
   assert.match(lighting, /three\.js desktop WebGL2/,

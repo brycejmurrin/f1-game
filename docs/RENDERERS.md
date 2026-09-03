@@ -176,7 +176,11 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   match WGX (a post-bump `dFdx(N)` dulled every seam).
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost (env probe off on LITE since 2026-09-03 — a cube cycle is six world passes + 36 mip passes on the jetsam rung); honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
-  history resolve is sub-pixel shimmer). The road is NOT lifted — WGX uses
+  history resolve is sub-pixel shimmer). The sky's cloud deck shades like GLX
+  SKY_FS since 2026-09-03 (overcast clamp/greys, golden tops, pink bases, day
+  contrast, twilight wash, moon silver — before that WGX ignored overcast and
+  the deck read flatter and brighter; `gfx-probe --weather overcast` is the
+  A/B). The road is NOT lifted — WGX uses
   `depthBias`/`depthBiasSlopeScale` only, the same as GLX's polygonOffset;
   an 8 cm Y bump was tried and buried cars and fence feet. Env cube uses a dedicated 4×-aniso
   sampler (binding 14). Car-paint flake / orange-peel interpolate `objPos`.
