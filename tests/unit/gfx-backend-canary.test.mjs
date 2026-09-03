@@ -1185,6 +1185,25 @@ function bootPicker(opts) {
   return { G, ls, ss, byId, hostKids, reloaded: () => reloaded, timers, winListeners };
 }
 
+test("WGX/TLX-only DISPLAY controls are not injected when their files are gone", () => {
+  // THREE PATH and SCREENSHOTS steer the three.js GPU path and the soft-present
+  // blit — nothing GLX can use. Shipping them inert is worse than not shipping
+  // them: they read as controls that do nothing. SAVE SCREENSHOT and COPY DIAG
+  // must survive, though: the first feature-tests the soft-present API and
+  // falls through to a plain canvas capture, and the second is the phone
+  // bug-report path.
+  const gone = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" }, deferred: {} });
+  assert.equal(gone.byId["pm-three-path"], undefined, "THREE PATH is WGX/TLX-only");
+  assert.equal(gone.byId["pm-screenshots"], undefined, "SCREENSHOTS is WGX/TLX-only");
+  assert.ok(gone.byId["pm-save-shot"], "SAVE SCREENSHOT works on GLX and must stay");
+  assert.ok(gone.byId["pm-copy-diag"], "COPY DIAG is backend-agnostic and must stay");
+
+  // ...and they come back with the backends, with no code change.
+  const back = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" } });
+  assert.ok(back.byId["pm-three-path"], "re-attaching the backends restores the control");
+  assert.ok(back.byId["pm-screenshots"]);
+});
+
 test("a stop whose files left the tree says UNAVAILABLE instead of writing the pref", () => {
   // The spiked-out world: DEFERRED is {} (tools/manifest.cjs), so neither
   // alternate can bind. The header's rule is that a stop stays VISIBLE and

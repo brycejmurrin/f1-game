@@ -52,8 +52,8 @@ const DYNAMIC_RE = /(?:document\.getElementById|(?<![.\w$])\$)\(\s*(?!["'])([^)]
  *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
-  "pm-three-path":     "renderer-picker addBtn(): SETTINGS > DISPLAY, injected at runtime",
-  "pm-screenshots":    "renderer-picker addBtn()",
+  "pm-three-path":     "renderer-picker addBtn(), and only when the backend files exist — the read at paintPresent() is null-guarded",
+  "pm-screenshots":    "renderer-picker addBtn(), same condition and same null-guarded read",
   "pm-save-shot":      "renderer-picker addBtn()",
   "pm-metrics":        "metrics-overlay makeMetricsBtn(), guarded by its own getElementById check",
   "pm-metrics-page":   "metrics-overlay makeMetricsBtn()",
