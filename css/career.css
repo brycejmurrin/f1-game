@@ -539,6 +539,18 @@
 /* ---------- extra funds ---------- */
 .cr-cheats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .cr-cheats .sel-chip { flex: 1 1 4.5rem; min-width: 0; }
+/* Practice cheats are a native disclosure on the hub. No new class: the
+   card is `.cr-card`, the label is `.sel-label`, the marker is ID-scoped. */
+#cr-funds > summary.sel-label {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--gap);
+  margin: 0;
+}
+#cr-funds > summary::-webkit-details-marker { display: none; }
+#cr-funds > summary::after {
+  content: "\25BE"; color: var(--red); font-size: var(--fs-micro); letter-spacing: var(--ls-5);
+}
+#cr-funds[open] > summary::after { content: "\25B4"; }
 
 /* Overlay leftover sheets: inherit --fit-at from the dialog. Compact packs
    rows and wraps names; #co-body / #ch-body / #cg-body / #q-body stay the

@@ -361,7 +361,7 @@ lighting tuner's failure was in a state the grid had no entry for.
 
 | cell | why it is its own cell |
 |---|---|
-| `careerhub` | `#career` is the new-career SETUP on a fresh profile and the SEASON HUB once one exists — two layouts, one root |
+| `careerhub` | `#career` is the new-career SETUP on a fresh profile and the SEASON HUB once one exists — two layouts, one root. Hub left: next race + contract/car + `#cr-funds` disclosure; right: upcoming + championship + market ladder |
 | `garagelivery` | colour pickers and swatch grids, not option rows |
 | `garageteam` | team card + driver chips + EDIT MY TEAM |
 | `datatelemetry` | the trace viewer/map/playback — the densest thing in the app |
