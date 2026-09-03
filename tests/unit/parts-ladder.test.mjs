@@ -9,7 +9,7 @@
 // `aero/diffuser` at 100 cr on all four. A player could only lose by buying it.
 //
 // The model, the derivation and the "convex price curve" failure mode are
-// documented in tools/parts-ladder.mjs. This file is the gate.
+// documented in tools/car/parts-ladder.mjs. This file is the gate.
 //
 // COST: node-only, no browser, ~0.3 s for the whole catalog — cheap enough for
 // the edit-loop suite, unlike its distinctness sibling.
@@ -18,8 +18,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadParts } from "../../tools/parts-sweep.mjs";
-import { liveSet, dominated, visibleRows, sweepLadder, LADDER } from "../../tools/parts-ladder.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { liveSet, dominated, visibleRows, sweepLadder, LADDER } from "../../tools/car/parts-ladder.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const M = loadParts();
@@ -54,7 +54,7 @@ test("never-optimal rows are a downward-only ratchet, and the exemptions are nam
   const dead = rows.flatMap((r) => r.dead.map((d) => `${r.cat}/${d.id}`)).sort();
   assert.deepEqual(dead, [...WEATHER_ONLY].sort(),
     "a row is never optimal under any taste at any price — reprice it (cost is " +
-    "economy-only) or give it a real trade; see tools/parts-ladder.mjs");
+    "economy-only) or give it a real trade; see tools/car/parts-ladder.mjs");
 });
 
 test("no category is flat on a stat the player is asked to choose over", () => {

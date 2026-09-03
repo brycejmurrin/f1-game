@@ -11,7 +11,7 @@ A fresh container needs the browser before any shot/eval — AGENTS.md
 §Verification 1:
 
 ```bash
-bash tools/cloud-agent-install.sh
+bash tools/env/cloud-agent-install.sh
 # or: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install && npx playwright install chromium-headless-shell
 ```
 
@@ -21,7 +21,7 @@ bash tools/cloud-agent-install.sh
 Interactive resize / DOM / CSS survey is the **playwright-official** MCP
 (`browser_*`, skill `survey-ui-matrix`), not this batch harness.
 One-screen CSS edit + hot-swap + structured DOM dump is **css-play**
-(`tools/css-play.mjs` / `playwright-mcp.sh play|dom`).
+(`tools/ui/css-play.mjs` / `playwright-mcp.sh play|dom`).
 
 The renderer runs deterministically headless under SwiftShader, so you can drive
 the real game and the `__apex` API from Node to validate cameras, modes, tracks,
@@ -32,32 +32,32 @@ cover most needs; drop to a custom harness for bespoke sweeps.
 
 ```sh
 # Same CLIs via MCP (takes scratch/apex-browser.lock; apex_status first):
-#   ./tools/apex-tools-mcp.sh call apex_eval '{"track":"monza","expr":"a.info()"}'
-#   ./tools/apex-tools-mcp.sh call apex_shot '{"track":"monza","frac":0.1}'
-# Plain CLIs (no wrap since 2026-09): tools/car/carshot.mjs, tools/quick-validate.mjs
+#   ./tools/mcp/apex-tools-mcp.sh call apex_eval '{"track":"monza","expr":"a.info()"}'
+#   ./tools/mcp/apex-tools-mcp.sh call apex_shot '{"track":"monza","frac":0.1}'
+# Plain CLIs (no wrap since 2026-09): tools/car/carshot.mjs, tools/check/quick-validate.mjs
 # One-off: boot the game, evaluate an __apex expression, print JSON.
-node tools/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
-node tools/apex-eval.mjs monaco "a.camera()"
-node tools/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
+node tools/shot/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
+node tools/shot/apex-eval.mjs monaco "a.camera()"
+node tools/shot/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
 
 # Parallel screenshot validation (writes PNGs + a blank/fail manifest):
-node tools/capture/apex-capture.mjs cameras [track] [outdir]
-node tools/capture/apex-capture.mjs modes   [outdir]
-node tools/capture/apex-capture.mjs tracks  [outdir] [id ...]
+node tools/shot/apex-capture.mjs cameras [track] [outdir]
+node tools/shot/apex-capture.mjs modes   [outdir]
+node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
 ```
 
 ## Single framed screenshot (`shot.mjs`)
 
 ```sh
-node tools/capture/shot.mjs <trackId> <frac> [cam] [out.png] \
+node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png] \
   [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud]
 ```
 
 ## Motion and profiling (still this harness)
 
 ```sh
-node tools/capture/motion-capture.mjs monaco 4 50      # driven clip → per-frame flicker score (trust p90)
-node tools/profile-gameloop.mjs singapore render        # .cpuprofile → Chrome DevTools → Performance
+node tools/shot/motion-capture.mjs monaco 4 50      # driven clip → per-frame flicker score (trust p90)
+node tools/shot/profile-gameloop.mjs singapore render        # .cpuprofile → Chrome DevTools → Performance
 ```
 
 A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —

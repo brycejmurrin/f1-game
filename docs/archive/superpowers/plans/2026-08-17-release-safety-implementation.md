@@ -177,10 +177,10 @@ git commit -m "fix: document vendored runtime licences"
 ### Task 4: Make Chromium/TinyFish wrappers reliable diagnostics
 
 **Files:**
-- Modify: `tools/mcp-cli.mjs:55-62`
-- Modify: `tools/chrome-devtools-mcp.sh:10,59-66`
-- Modify: `tools/tinyfish-mcp.sh:88-150`
-- Modify: `tools/cdmcp-measure.py`
+- Modify: `tools/mcp/mcp-cli.mjs:55-62`
+- Modify: `tools/mcp/chrome-devtools-mcp.sh:10,59-66`
+- Modify: `tools/mcp/tinyfish-mcp.sh:88-150`
+- Modify: `tools/mcp/cdmcp-measure.py`
 - Modify: `tests/unit/cdmcp-measure.test.mjs`
 
 **Interfaces:**
@@ -192,10 +192,10 @@ git commit -m "fix: document vendored runtime licences"
 - [ ] **Step 1: Write failing wrapper-source assertions**
 
 ```js
-assert.doesNotMatch(read("tools/mcp-cli.mjs"), /\/opt\/pw-browsers\/chromium/);
-assert.match(read("tools/mcp-cli.mjs"), /chrome-devtools-mcp\.sh/);
-assert.match(read("tools/tinyfish-mcp.sh"), /json\.dumps/);
-assert.doesNotMatch(read("tools/cdmcp-measure.py"), /\/tmp\/chrome-devtools-mcp-/);
+assert.doesNotMatch(read("tools/mcp/mcp-cli.mjs"), /\/opt\/pw-browsers\/chromium/);
+assert.match(read("tools/mcp/mcp-cli.mjs"), /chrome-devtools-mcp\.sh/);
+assert.match(read("tools/mcp/tinyfish-mcp.sh"), /json\.dumps/);
+assert.doesNotMatch(read("tools/mcp/cdmcp-measure.py"), /\/tmp\/chrome-devtools-mcp-/);
 ```
 
 - [ ] **Step 2: Run the focused suite**
@@ -206,7 +206,7 @@ Expected: FAIL on the current hardcoded Chromium and report-path behavior.
 
 - [ ] **Step 3: Implement the shared wrapper behavior**
 
-Make `mcp-cli.mjs` spawn `tools/chrome-devtools-mcp.sh run` rather than `npx`
+Make `mcp-cli.mjs` spawn `tools/mcp/chrome-devtools-mcp.sh run` rather than `npx`
 with a hardcoded executable. Pin the fallback package version in
 `chrome-devtools-mcp.sh` using one `MCP_VERSION` constant. Build TinyFish URL
 and query JSON with Python `json.dumps`, not `printf` interpolation. Configure
@@ -219,7 +219,7 @@ Run:
 
 ```bash
 node --test tests/unit/cdmcp-measure.test.mjs
-python3 tools/cdmcp-cli.py list-tools
+python3 tools/mcp/cdmcp-cli.py list-tools
 ```
 
 Expected: PASS; live discovery prints a nonzero tool count.
@@ -227,8 +227,8 @@ Expected: PASS; live discovery prints a nonzero tool count.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add tools/mcp-cli.mjs tools/chrome-devtools-mcp.sh tools/tinyfish-mcp.sh \
-  tools/cdmcp-measure.py tests/unit/cdmcp-measure.test.mjs
+git add tools/mcp/mcp-cli.mjs tools/mcp/chrome-devtools-mcp.sh tools/mcp/tinyfish-mcp.sh \
+  tools/mcp/cdmcp-measure.py tests/unit/cdmcp-measure.test.mjs
 git commit -m "fix: harden diagnostic MCP wrappers"
 ```
 
@@ -283,7 +283,7 @@ git commit -m "docs: synchronize agent operating guidance"
 ## Verification
 
 - [ ] Run `npm run test:tooling-fast`.
-- [ ] Run `node tools/pick-tests.mjs --staged` and execute only selected
+- [ ] Run `node tools/ci/pick-tests.mjs --staged` and execute only selected
   Node-safe checks before browser work.
 - [ ] Bump the shell cache build as the final runtime change, then re-run
   `tests/unit/load-order.test.mjs`.

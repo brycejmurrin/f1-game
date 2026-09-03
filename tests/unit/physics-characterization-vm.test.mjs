@@ -3,7 +3,7 @@
  *
  * tests/specs/physics-characterization.spec.js pins the driving model's numbers
  * across commits; tests/data/physics-baseline.json is the ground truth it wrote
- * from a real Chromium run. This file drives tools/game-vm.cjs through the
+ * from a real Chromium run. This file drives tools/lib/game-vm.cjs through the
  * identical scenarios (seed, reset, scripted inputs, 1/60 steps, a physState
  * row every 15 steps, rounded to 1e-4) and asserts equality with that file —
  * so it proves two things at once: the harness IS the browser's physics, and
@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const BASELINE = path.join(HERE, "..", "data", "physics-baseline.json");

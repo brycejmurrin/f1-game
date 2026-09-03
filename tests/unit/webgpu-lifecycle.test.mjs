@@ -1012,7 +1012,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   // non-indexed draw. That is safe because the road binds the magic-12345 LUT,
   // so its WGSL reads trkFromWorld(wpos) and never matTrkArr[vid] — and the
   // merge refuses when no LUT is bound. Evidence for the draw shapes on this
-  // container's stacks: tools/wgx-vid-repro.mjs (30/30 OK incl. firstVertex
+  // container's stacks: tools/gfx/wgx-vid-repro.mjs (30/30 OK incl. firstVertex
   // and whole draw(N) to 24576, three runs).
   assert.match(WGX_SOURCE, /const PIECE = 4095/);
   assert.match(WGX_SOURCE, /const vidDead = indexed \|\| !!_roadLutBG;/,
@@ -1646,7 +1646,7 @@ test("derivatives stay OUT of the material helper bodies (the WGSL NaN-white roa
   // phones while grass, walls and cars — hw 0, early return before any
   // derivative — looked fine). Widths are computed at fs_main top and threaded
   // in; every pattern width is linear in them, so the chain-rule scaling is
-  // exact. Verified against a real Dawn device by tools/wgx-validate.mjs.
+  // exact. Verified against a real Dawn device by tools/gfx/wgx-validate.mjs.
   const helpers = ["matBumpHeight", "matTexUV", "applyMaterialTexNormal",
                    "applyMaterialNormal", "applyMaterial", "roadMarkings"];
   for (const name of helpers) {
@@ -1720,7 +1720,7 @@ test("pipelines that share a shader module never use layout:'auto'", async () =>
   // compatible" and dropped the whole frame's command buffer. Invisible in
   // this container (software adapters force MSAA 1; the mock validates
   // nothing) — found 2026-08-17 by the first real pixel capture
-  // (tools/wgx-capture.mjs / gfx-probe.mjs on software adapters).
+  // (tools/gfx/wgx-capture.mjs / gfx-probe.mjs on software adapters).
   // This test pins the structural rule the fixes follow, using only the
   // descriptors the harness already records.
   const h = makeGpuHarness();

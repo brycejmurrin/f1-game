@@ -12,7 +12,7 @@
 // hand back a stale silhouette and the car would re-centre wrong — this goes red
 // first.
 //
-// Pure Node: tools/parts-sweep.mjs's loadParts runs car3d.js in a VM with no
+// Pure Node: tools/car/parts-sweep.mjs's loadParts runs car3d.js in a VM with no
 // browser, so this belongs in `npm run test:tooling`, not the Playwright projects.
 
 import { test } from "node:test";
@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { loadParts } from "../../tools/parts-sweep.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 

@@ -24,10 +24,8 @@
     "vendor/three-0.185.1/addons/tsl/display/BloomNode.js": "spike/backends/vendor/three-0.185.1/addons/tsl/display/BloomNode.js",
 
     "tools/wgx-capture.mjs": "spike/backends/tools/wgx-capture.mjs",
-    "tools/wgx-gallery.mjs": "spike/backends/tools/wgx-gallery.mjs",
     "tools/wgx-lavapipe-probe.mjs": "spike/backends/tools/wgx-lavapipe-probe.mjs",
     "tools/wgx-shot.mjs": "spike/backends/tools/wgx-shot.mjs",
-    "tools/wgx-soft-present-diag.mjs": "spike/backends/tools/wgx-soft-present-diag.mjs",
     "tools/wgx-validate.mjs": "spike/backends/tools/wgx-validate.mjs",
     "tools/wgx-vid-repro.mjs": "spike/backends/tools/wgx-vid-repro.mjs",
     "tools/tlx-pack-check.cjs": "spike/backends/tools/tlx-pack-check.cjs",

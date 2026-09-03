@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
-const { buildContext } = require(path.join(ROOT, "tools", "track-build-vm.cjs"));
+const { buildContext } = require(path.join(ROOT, "tools", "lib", "track-build-vm.cjs"));
 
 const SRC_PATH = path.join(ROOT, "js/physics/debris-world.js");
 const SRC = fs.readFileSync(SRC_PATH, "utf8");

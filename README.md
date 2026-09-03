@@ -150,15 +150,15 @@ minutes of software rendering, so the workflow is: ask which groups a change
 needs, run those in the background, tail the log.
 
 ```sh
-node tools/pick-tests.mjs                    # which test:<group>s does this change need?
-node tools/test-bg.mjs driving hooks         # start them in the background, one at a time
+node tools/ci/pick-tests.mjs                    # which test:<group>s does this change need?
+node tools/ci/test-bg.mjs driving hooks         # start them in the background, one at a time
 tail -f artifacts/logs/smoke.log             # watch one live
-node tools/test-bg.mjs --status              # running / how each ended
+node tools/ci/test-bg.mjs --status              # running / how each ended
 
 npm run test:tiny                            # start here: page loads, __apex responds
 npm run test:driving                         # the driving model, collisions, debris (browser; ~30 min on SwiftShader)
 npm test -- tests/specs/autopilot.spec.js          # single file
-node tools/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
+node tools/track/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
 ```
 
 `docs/TESTING.md` is the full reference: every group, every spec, the fixtures

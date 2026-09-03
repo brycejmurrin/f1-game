@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const REQUIRE = (await import("node:module")).createRequire(import.meta.url);
 const MANIFEST = REQUIRE("../../tools/manifest.cjs");
-const { buildContext } = REQUIRE("../../tools/track-build-vm.cjs");
+const { buildContext } = REQUIRE("../../tools/lib/track-build-vm.cjs");
 const P = MANIFEST.PATHS;
 
 // Read one js/ file into a fresh sandbox, converting top-level `const` to `var`

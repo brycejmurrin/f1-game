@@ -272,7 +272,7 @@ const WGX = (function () {
   // GLX does (a location-3 interpolator shards dashes on Dawn; drawIndexed
   // leaves vertex_index at 0 on that adapter). Every road marking the player
   // sees on WebGPU is computed from what this returns, which makes it worth
-  // being able to audit WITHOUT a GPU — tools/road-lut-census.mjs calls it
+  // being able to audit WITHOUT a GPU — tools/gfx/road-lut-census.mjs calls it
   // directly through the static surface. Returns the packed Float32Array, or
   // null when the geometry carries no usable road surface.
   function _roadLutTable(pos, trk, matArr) {
@@ -307,7 +307,7 @@ const WGX = (function () {
     // measuring distance along the lap, and the markings were painted down the
     // LENGTH of the road.
     //
-    // Measured before this existed (tools/road-lut-census.mjs): monza had a
+    // Measured before this existed (tools/gfx/road-lut-census.mjs): monza had a
     // lateral pair at 31.4% of stations and a rotated frame at 33.9% of ribbon
     // points — on a circuit with no folded geometry whatsoever, which is what
     // ruled out every "the track runs back near itself" explanation. Collapsing
@@ -341,7 +341,7 @@ const WGX = (function () {
     // only a section tens of metres away, and then trkFromWorld's search misses:
     // on a road draw a miss ZEROES trk, so lateral x reads 0 across the whole
     // surface and the marking shader paints its centre line down the length of
-    // the road. Measured before this (tools/road-lut-census.mjs): on baku the
+    // the road. Measured before this (tools/gfx/road-lut-census.mjs): on baku the
     // chosen nearest sample sat a median 47.6 m from the query point — on a
     // polyline whose samples are 4 m apart.
     const cellCx = (gx) => minX + (gx + 0.5) * extX / GW;
@@ -3807,7 +3807,7 @@ const WGX = (function () {
       // chunks measured worst-case).
       // That sentence was load-bearing and unmeasured; it is measured now, and
       // it holds: 3 shared non-empty adjacent pairs of 909, 0 of 195
-      // (tools/chunk-share-census.mjs). Empty chunks DO share constantly and
+      // (tools/gfx/chunk-share-census.mjs). Empty chunks DO share constantly and
       // still do not merge — they are outfield the frustum never draws, ~2
       // visible a frame. Two audits have proposed this merge; both numbers and
       // the trap are in docs/PERF-FINDINGS.md §2b. Do not re-open it.
@@ -3926,7 +3926,7 @@ const WGX = (function () {
         //    trkFromWorld(wpos), never matTrkArr[vid]. If no LUT is bound the
         //    authored storage read is live and merging could shift it, so the
         //    merge refuses rather than relying on the argument holding.
-        //    Evidence for the shapes themselves: tools/wgx-vid-repro.mjs.
+        //    Evidence for the shapes themselves: tools/gfx/wgx-vid-repro.mjs.
         //  - no lamp mask, ROAD ONLY: a run ORs its chunks' masks, so merging
         //    the ribbon at night would hand a long run the UNION and turn
         //    cheap mask-skips back into full lamp evaluations over the road's
@@ -6049,7 +6049,7 @@ const WGX = (function () {
       lampShadowState: () => ({ enabled: !!lampShadowView && !WGX_LITE, arms: _lampArms, idx: _lampIdx, armed: _lampShadowArmed }),
 
       // extension: reads the next presented frame back as RGBA pixels — the
-      // container's pixel oracle (tools/wgx-capture.mjs); WGX-only, so the
+      // container's pixel oracle (tools/gfx/wgx-capture.mjs); WGX-only, so the
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
       awaitSoftPresent,
@@ -6093,7 +6093,7 @@ const WGX = (function () {
   // __roadLutTable(pos, trk, mat): the pure road-LUT bake, exposed so it can be
   // audited with no GPU and no device. Every WebGPU road marking is computed
   // from this table, so "are the markings in the right place" is answerable
-  // headlessly — tools/road-lut-census.mjs replays the shader's search over the
+  // headlessly — tools/gfx/road-lut-census.mjs replays the shader's search over the
   // REAL baked table rather than reimplementing the bake, because a census that
   // re-derives what it audits agrees with itself while the shipped code is wrong.
   return {

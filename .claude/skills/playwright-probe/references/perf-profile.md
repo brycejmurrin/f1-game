@@ -4,9 +4,9 @@ Captures a V8 `.cpuprofile` of the running game loop. Writes
 `scratch/profiles/<track>-<mode>.cpuprofile`.
 
 ```sh
-node tools/profile-gameloop.mjs [track] [physics|render]
-node tools/profile-gameloop.mjs singapore render   # rAF + WebGL draw (~10 s)
-node tools/profile-gameloop.mjs vegas physics      # __apex.step() loop (default)
+node tools/shot/profile-gameloop.mjs [track] [physics|render]
+node tools/shot/profile-gameloop.mjs singapore render   # rAF + WebGL draw (~10 s)
+node tools/shot/profile-gameloop.mjs vegas physics      # __apex.step() loop (default)
 ```
 
 - **`physics`** (default): `__apex.step(1/60, 600)` — uncapped physics, no compositor.
@@ -61,7 +61,7 @@ copies.
 
 ### Legacy inline harness
 
-Prefer `tools/profile-gameloop.mjs`. Hand-roll only for custom staging
+Prefer `tools/shot/profile-gameloop.mjs`. Hand-roll only for custom staging
 (`setTimeOfDay("night")` before `Profiler.start`, a specific car count). Pattern:
 free port → static server → Chromium + SwiftShader → CDP
 `Profiler.enable/start/stop` → write JSON to `scratch/profiles/`.

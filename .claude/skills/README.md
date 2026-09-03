@@ -2,7 +2,7 @@
 
 Project skills for recurring agent workflows. Each is a `SKILL.md` (auto-matched
 from its `description`, or via `/<name>`), grounded in `__apex`,
-`tools/verify-track.cjs`, and `npm run test:*` groups.
+`tools/track/verify-track.cjs`, and `npm run test:*` groups.
 
 **A skill is when/how, not the command.** The CLI lives under `tools/`. Twelve
 CLIs are pinned as `apex_*` MCP tools; most are not. Full map (three MCP
@@ -18,7 +18,7 @@ lighting-tuner; `scene-graph-instancing` → scenery-dress; `debug-state`,
 `restructure-screens-css` → css-play; `cross-backend-parity` →
 `../../docs/ARCHITECTURE.md` §Cross-backend parity. `apex-env-setup`,
 `pixel-perfect`, `webapp-testing`, `webgpu-inspector` were deleted: env setup
-is AGENTS.md §Verification 1 + `tools/cloud-agent-install.sh`.
+is AGENTS.md §Verification 1 + `tools/env/cloud-agent-install.sh`.
 
 **A merge is only correct when the hub's `description` absorbs the trigger
 words.** That is what a host auto-selects on, so a fold that leaves the
@@ -34,7 +34,7 @@ stayed separate in the 2026-09-03 pass.
 | **audio-debug** | Engine sounds flat at high speed, sfx not triggering, gear-shift audio wrong, music cuts out, WebAudio debugging. |
 | **career-mode** | DRIVER CAREER, MY TEAM, career saves, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs. |
 | **check-changes** | Pre-push validation — `verify-change.mjs --fast` / `--plan` + batched `test-bg`; the cache bump (`references/bump.md`), a Playwright timeout triage (`references/triage.md`), merging with / pushing to the deploy branch (`references/deploy.md`). |
-| **css-play** | Iterating on one menu/HUD stylesheet — host localhost, open a screen, dump DOM, hot-swap `css/`, screenshot (`tools/css-play.mjs` / `playwright-mcp.sh play|dom`); restructuring screens/DOM/the class-token system, and whether a CSS methodology is worth adopting (`references/restructure.md`). |
+| **css-play** | Iterating on one menu/HUD stylesheet — host localhost, open a screen, dump DOM, hot-swap `css/`, screenshot (`tools/ui/css-play.mjs` / `playwright-mcp.sh play|dom`); restructuring screens/DOM/the class-token system, and whether a CSS methodology is worth adopting (`references/restructure.md`). |
 | **data-hub** | Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1, `js/data/*`. |
 | **garage-parts-livery** | GARAGE parts catalog, livery/finish/shark fin, `ersProfile`/`aeroLoad`, career owned-part UI, Car3D visual recipes. |
 | **input-controls** | Steering, gamepad, touch steer, tilt/gyro, keyboard, on-screen steer buttons, driving-help/racing-line assists. |
@@ -58,6 +58,6 @@ stayed separate in the 2026-09-03 pass.
 Cache busting is the deploy's job: the committed shell reads `?v=dev` on
 every tag and `pages.yml` stamps content hashes while staging. Nothing to
 bump after a `js/`/`css/` edit; after a `tools/manifest.cjs` change run
-`node tools/gen-shell.mjs` (check-changes `references/bump.md`).
+`node tools/gen/gen-shell.mjs` (check-changes `references/bump.md`).
 
 See individual `SKILL.md` files under this directory for full workflows.

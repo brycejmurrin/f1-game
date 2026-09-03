@@ -1,5 +1,5 @@
 /* longitudinal-vm.test.mjs — tests/specs/longitudinal.spec.js replayed in the
- * Node VM (tools/game-vm.cjs): throttle/coast/brake, grass drag, speed-
+ * Node VM (tools/lib/game-vm.cjs): throttle/coast/brake, grass drag, speed-
  * sensitive steering, slope gravity (spa) and the start/finish wrap, with the
  * SAME assertions, thresholds and PACE pin (setPhysics({ pace: 1 })).
  *
@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
 const lt = (a, b, m) => assert.ok(a < b, m || `${a} < ${b}`);

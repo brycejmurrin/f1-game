@@ -38,7 +38,7 @@ before/after; don't guess from AGENTS.md.
   knob). Renderer compile / GL errors → **webgl-debug** / **webgpu-debug**.
 
 ```sh
-node tools/test-bg.mjs gfx      # lighting-ab + tuner-grade + probes + tlx
+node tools/ci/test-bg.mjs gfx      # lighting-ab + tuner-grade + probes + tlx
 npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
 ```
 
@@ -52,22 +52,22 @@ see *what region* of the frame it changes.
 
 ```sh
 # Classify — no browser, instant
-node tools/slider-effect.mjs --group LAMPS
-node tools/slider-effect.mjs --risk inert --json
+node tools/lighting/slider-effect.mjs --group LAMPS
+node tools/lighting/slider-effect.mjs --risk inert --json
 
 # A/B a single knob — Playwright, ~20 s
-node tools/slider-effect.mjs --live saturation
-node tools/slider-effect.mjs --live lampLevel --from 0 --to 0.55
+node tools/lighting/slider-effect.mjs --live saturation
+node tools/lighting/slider-effect.mjs --live lampLevel --from 0 --to 0.55
 
 # Full range ramp (5 shots)
-node tools/slider-effect.mjs --live contrast --shots 5
+node tools/lighting/slider-effect.mjs --live contrast --shots 5
 
 # Batch (one park per shared condition bucket)
-node tools/slider-effect.mjs --live --ids bloomMul,glareStr,neonBoost
-node tools/slider-effect.mjs --live --group "NIGHT GLOW & BLOOM"
+node tools/lighting/slider-effect.mjs --live --ids bloomMul,glareStr,neonBoost
+node tools/lighting/slider-effect.mjs --live --group "NIGHT GLOW & BLOOM"
 
 # Dry-run: print recipes without launching browser
-node tools/slider-effect.mjs --live glareStr --dry-run
+node tools/lighting/slider-effect.mjs --live glareStr --dry-run
 ```
 
 Outputs per knob: `a.png`, `b.png`, `filter.png` (changed pixels only),

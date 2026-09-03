@@ -257,7 +257,7 @@ on either is genuinely giving up the other.
 > together, and did.
 >
 > **Re-measure after touching `BUDGET_MULT` or `BUDGET_UPGRADE`.** Raising
-> `budget()` lowers `tools/career-economy.mjs`'s re-spec figure with no change in
+> `budget()` lowers `tools/car/career-economy.mjs`'s re-spec figure with no change in
 > income, because more of what a season earns goes onto the car instead of into
 > the owned set.
 
@@ -551,7 +551,7 @@ also `GOAL_MV` (12) off the market value the winter's offers are drawn against.
 That is the demotion: `offerBar()` spaces the tiers 18 apart, so a missed goal
 costs most of a tier's worth of interest without needing a second rule to say so.
 
-**No money either way, deliberately.** `tools/career-economy.mjs` measures this
+**No money either way, deliberately.** `tools/car/career-economy.mjs` measures this
 economy against the catalog, and a once-a-season bonus it does not model would
 invalidate every figure in "The economy, measured" above. Reputation is the
 channel that already carries season-long form.
@@ -581,7 +581,7 @@ market swap applies in MY TEAM as well, while the player's own seat still outran
 
 ## The economy, measured
 
-`tools/career-economy.mjs` sims a season per starting team through the **real**
+`tools/car/career-economy.mjs` sims a season per starting team through the **real**
 `Career.settleRound()` and prices the income against the catalog. It exists because
 `QUALI_TRIM` shipped as a reasoned guess and was **27% wrong**, and `RESEARCH_MULT`
 / `PRIZE` / `BUDGET_MULT` had never had the same treatment.
@@ -753,7 +753,7 @@ lights up gold with no new CSS.
 
 ## Tests
 
-`tests/specs/career.spec.js` and `tests/specs/quali.spec.js`, both in `node tools/test-bg.mjs modes`
+`tests/specs/career.spec.js` and `tests/specs/quali.spec.js`, both in `node tools/ci/test-bg.mjs modes`
 (there is no `test:career` group — `test-bg` exits 2 on an unknown name). They cover the mode axes, the save and its migration, the
 isolation guarantees, the hub flow, a settled round, the R&D garage, MY TEAM's two
 cars and its wage bill, the objectives, the rollover and the contracts, the ratings,
@@ -763,7 +763,7 @@ every finisher and scores no points, and that the draw leaves the sim RNG stream
 exactly where it found it. `tests/specs/ui-audit.spec.js` screenshots the career hub, its
 new-career state, qualifying and the offers sheet in both orientations.
 
-Run `node tools/test-bg.mjs modes` in the background after any change here, and `node tools/test-bg.mjs car` after
+Run `node tools/ci/test-bg.mjs modes` in the background after any change here, and `node tools/ci/test-bg.mjs car` after
 anything that touches the garage.
 
 ## Upgrade parts — the catalog

@@ -15,7 +15,7 @@
 // (Sporting Regulations art. 48.1) — plus the yellow guide line the FIA paints
 // across the front of the box to help a driver who cannot see their own wheels.
 //
-// Pure Node: tools/track-build-vm.cjs runs the real track build with no browser.
+// Pure Node: tools/lib/track-build-vm.cjs runs the real track build with no browser.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -25,7 +25,7 @@ import path from "node:path";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { buildContext } = require(path.join(ROOT, "tools", "track-build-vm.cjs"));
+const { buildContext } = require(path.join(ROOT, "tools", "lib", "track-build-vm.cjs"));
 
 // monza is wide and flat, monaco is the narrowest circuit in the game — the one
 // where a 2.7 m box plus a guide line has the least tarmac to fit inside.

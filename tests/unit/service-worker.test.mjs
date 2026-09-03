@@ -529,7 +529,7 @@ test("a quota-refused cache write must not discard a good response", async () =>
   assert.equal(await asset.text(), "fresh");
 });
 
-// The committed shell reads `?v=dev` for every asset (tools/gen-shell.mjs);
+// The committed shell reads `?v=dev` for every asset (tools/gen/gen-shell.mjs);
 // hashes exist only in the deploy's staged copy. A cache-first worker on a
 // dev host would therefore pin the first js/css it saw for the life of the
 // cache generation, so sw.js goes network-first there and keeps the cache as

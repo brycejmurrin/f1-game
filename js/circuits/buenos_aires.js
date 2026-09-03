@@ -50,7 +50,7 @@
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/rotate-markings.cjs
+    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
@@ -59,7 +59,7 @@
     kit: { marshal: "cabin",     rail: "cable",       fence: "palisade",  tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["concrete", "scaffold", "pastel"],  // 1950s mass concrete + temporary tube
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
-    // recentred, one lap, open loop. tools/import-circuit-path.mjs regenerates it.
+    // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
     // Autódromo Oscar y Juan Gálvez — Buenos Aires. Upstream ar-1952, stated 4322 m, projected 4299 m, trace winding CCW.
     path: { len: 4299, pts: [[56,80.5],[-97.4,309.2],[-140.4,364.9],[-155.8,373.4],[-176.6,370.4],[-195.3,355.6],[-208.6,334.3],[-212.2,316.4],[-212.4,219.3],[-207.3,199.3],[-191.1,175.3],[-59.3,36.1],[-54.1,20.6],[-52.5,9.5],[-56,-2.7],[-63,-13.7],[-79.1,-23.4],[-91.8,-26],[-106.2,-23.9],[-278.3,65.7],[-290,81.3],[-295.4,93.5],[-299.6,115.8],[-296.6,141],[-282.1,171.7],[-277.4,190.9],[-275.3,207.2],[-283.7,289.5],[-292.4,312.6],[-313.2,334.8],[-339.6,344.8],[-367.3,344.4],[-391.7,334],[-411.5,315.9],[-423,286.4],[-422.1,269.5],[-374.6,-163.9],[-363.7,-192.8],[-346.3,-222.1],[-327.6,-243.1],[-301.4,-263.7],[-263.5,-282.1],[-70,-310],[-49.7,-306],[-39.4,-298.3],[-32.2,-282.6],[-35.7,-263.7],[-45.3,-251],[-60.7,-245],[-130.3,-236.3],[-142.9,-229.1],[-159.1,-212.3],[-172.4,-203.5],[-190.4,-200.8],[-238.6,-196.9],[-256,-187.9],[-267.8,-172.5],[-274.6,-155.4],[-279.5,-74.6],[-275,-57.7],[-265.7,-45.3],[-253.8,-37.2],[-238.6,-34.2],[-222.6,-34.2],[59.9,-184.1],[68.3,-196.1],[70.2,-209.1],[64.1,-219.6],[52.4,-231.1],[34.6,-242.8],[28.9,-254.5],[36.1,-271.8],[71,-311.8],[86.6,-326.3],[110.4,-334.8],[394.4,-373.4],[409.2,-371.6],[419.7,-358.3],[423,-339.1],[416.9,-322.4],[405.4,-311.4],[380.2,-296.4],[367.1,-295.9],[353.3,-306.1],[342.4,-307.8],[327.3,-303.6],[312.9,-293.7],[295.3,-275],[249.3,-212.1]] },
   }

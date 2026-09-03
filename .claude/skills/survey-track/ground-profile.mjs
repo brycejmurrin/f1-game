@@ -11,7 +11,7 @@
 //     FLOAT (or sink) and a visible step ("channel between rings") appears.
 //   • gap (terrainY - roadY) should be small & smooth. A big jump between adjacent
 //     lats = a cliff/step; sudden null after solid = the ribbon's outer edge.
-// Pair this with eye/orbit screenshots (tools/capture/shot.mjs) — numbers find the
+// Pair this with eye/orbit screenshots (tools/shot/shot.mjs) — numbers find the
 // gap, pictures confirm the read. See the survey-track SKILL.
 
 import {
@@ -19,7 +19,7 @@ import {
   shutdown,
   sleep,
   startStaticServer,
-} from "../../../tools/harness.mjs";
+} from "../../../tools/lib/harness.mjs";
 
 const ROOT = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
 

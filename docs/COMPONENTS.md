@@ -221,15 +221,15 @@ every other screenshot taken that day.
 The cure is not more screenshots. It is enumerating the matrix and measuring it.
 
 ```sh
-node tools/layout-audit.mjs --help
-node tools/layout-audit.mjs --list
-node tools/layout-audit.mjs                          # geometry matrix
-node tools/layout-audit.mjs --shots --dom            # + PNG / DOM per cell
-node tools/layout-audit.mjs --screens=select,garage --viewports=ios-*
-node tools/layout-audit.mjs --scale=100,130,150       # each viewport at each UI size
-node tools/layout-audit.mjs --gallery                 # fast PNG+DOM (no geometry probe)
-node tools/layout-audit.mjs --screen=settings         # one cell
-node tools/layout-audit.mjs --survey                  # title-path recipe (+ shots)
+node tools/ui/layout-audit.mjs --help
+node tools/ui/layout-audit.mjs --list
+node tools/ui/layout-audit.mjs                          # geometry matrix
+node tools/ui/layout-audit.mjs --shots --dom            # + PNG / DOM per cell
+node tools/ui/layout-audit.mjs --screens=select,garage --viewports=ios-*
+node tools/ui/layout-audit.mjs --scale=100,130,150       # each viewport at each UI size
+node tools/ui/layout-audit.mjs --gallery                 # fast PNG+DOM (no geometry probe)
+node tools/ui/layout-audit.mjs --screen=settings         # one cell
+node tools/ui/layout-audit.mjs --survey                  # title-path recipe (+ shots)
 ```
 
 Geometry output: `artifacts/layout-audit/{audit.json,index.html}`.
@@ -312,14 +312,14 @@ not tell you the sheet's shape, and the sheet is what the layout keys on.
 
 ### The screens, and how to reach each one
 
-The other half of the matrix. `SCREENS` in `tools/layout-audit.mjs` is the
+The other half of the matrix. `SCREENS` in `tools/ui/layout-audit.mjs` is the
 executable version of this table — **it is the inventory**, so a screen missing
 from it is a screen nobody measures.
 
 The first draft of this grid held twelve entries and reported "130 cells, 0 red",
 which read as full coverage. It was not: the app has far more screen roots than
 that (**22** top-level ones are tabled below; counting the sub-views, `SCREENS`
-in `tools/layout-audit.mjs` now spans 34 cells over 24 distinct roots — that
+in `tools/ui/layout-audit.mjs` now spans 34 cells over 24 distinct roots — that
 inventory, not this prose, is the count that matters), and
 several change shape entirely between states behind one root. Qualifying, the
 livery editor, the standings table, both tuner panels and every career

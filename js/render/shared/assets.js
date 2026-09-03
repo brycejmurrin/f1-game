@@ -247,7 +247,7 @@ const Assets = (function () {
   function modelSync(id) { return _models[id] || null; }
 
   // Prefetch every model in the pack. Resolves to the number now resident.
-  // Cheap by construction: `tools/assets.mjs verify` caps the whole pack at
+  // Cheap by construction: `tools/gen/assets.mjs verify` caps the whole pack at
   // 8 MB, so this is never a large download.
   async function loadModels() {
     const m = await manifest();

@@ -9,7 +9,7 @@
 // refactor" loop says never to skip.
 //
 // Why it did not exist. This repo already has an excellent example of the
-// pattern in tools/graph-parity.cjs, which builds every track from a baseline
+// pattern in tools/track/graph-parity.cjs, which builds every track from a baseline
 // ref AND the working tree and diffs prop geometry vertex for vertex. Nothing
 // equivalent covered the physics side, so an extraction out of updateCar() or
 // render() had no way to prove it changed nothing — and "the existing specs

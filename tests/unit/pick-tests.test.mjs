@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { DEPLOY_BRANCH, RULES, blanketOnly } from "../../tools/pick-tests.mjs";
+import { DEPLOY_BRANCH, RULES, blanketOnly } from "../../tools/ci/pick-tests.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -19,7 +19,7 @@ const manifestFiles = () => [
   ...MANIFEST.LAZY_RACE, ...MANIFEST.LAZY_SCENERY, ...MANIFEST.LAZY_DATA, ...MANIFEST.LAZY_NET,
 ];
 const run = (...args) =>
-  execFileSync("node", ["tools/pick-tests.mjs", "--json", ...args],
+  execFileSync("node", ["tools/ci/pick-tests.mjs", "--json", ...args],
                { cwd: ROOT, encoding: "utf8" });
 const json = (...args) => JSON.parse(run(...args));
 
@@ -73,7 +73,7 @@ test("a path in FIRST argv position survives the --since filter", () => {
   // question, answered confidently. Every other case in this file hides it,
   // because run() puts --json at index 0; here the path IS argv[0].
   const r = JSON.parse(execFileSync(
-    "node", ["tools/pick-tests.mjs", "js/car/parts.js", "js/ui/hud.js", "--json"],
+    "node", ["tools/ci/pick-tests.mjs", "js/car/parts.js", "js/ui/hud.js", "--json"],
     { cwd: ROOT, encoding: "utf8" }));
   assert.deepEqual(r.files, ["js/car/parts.js", "js/ui/hud.js"]);
 });
@@ -87,7 +87,7 @@ test("the default diff base is the DEPLOY branch, which pages.yml names", () => 
   const m = yml.match(/branches:\s*\[\s*([^\]\s]+)\s*\]/);
   assert.ok(m, "pages.yml no longer declares a deploy branch in the expected form");
   assert.equal(DEPLOY_BRANCH, m[1],
-    "tools/pick-tests.mjs DEPLOY_BRANCH disagrees with .github/workflows/pages.yml");
+    "tools/ci/pick-tests.mjs DEPLOY_BRANCH disagrees with .github/workflows/pages.yml");
 });
 
 test("parked tracks-visual lives under tests/manual and is never a gate", () => {
@@ -98,7 +98,7 @@ test("parked tracks-visual lives under tests/manual and is never a gate", () => 
   assert.ok(fs.existsSync(manualVisual),
     "tracks-visual.spec.js must live under tests/manual/");
   assert.equal(RULES.some(([, groups]) => groups.includes("visual")), false,
-    "tools/pick-tests.mjs must not recommend a visual group");
+    "tools/ci/pick-tests.mjs must not recommend a visual group");
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
   assert.ok(!pkg.scripts["test:visual"],
     "package.json must not expose test:visual while baselines are absent");
@@ -120,15 +120,15 @@ test("every manifest file matches at least one pick-tests rule", () => {
 // Files that ONLY the two blanket rules (tiny / tooling-fast) reach: no rule
 // names them or their directory, so an edit there is told "boot the page" and
 // nothing topical. The COUNT is ratcheted in tests/data/ratchets.json
-// (`blanketOnlyRoutes` on tools/pick-tests.mjs) rather than frozen here as a
+// (`blanketOnlyRoutes` on tools/ci/pick-tests.mjs) rather than frozen here as a
 // path list: the Phase 2b window moves 91 files, and a list keyed on paths
 // needs a hand edit per move while saying nothing the number does not. The
 // list itself is still printed on a failure, so the offender names itself —
-// and `node tools/ratchets.mjs --update` is the one-command flow after a
+// and `node tools/check/ratchets.mjs --update` is the one-command flow after a
 // legitimate move, the same as every other ratchet in the tree.
 test("no more manifest files are routed by the blanket rules alone than the ratchet allows", () => {
   const ceiling = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/ratchets.json"), "utf8"))
-    .files["tools/pick-tests.mjs"].blanketOnlyRoutes;
+    .files["tools/ci/pick-tests.mjs"].blanketOnlyRoutes;
   const live = blanketOnly();
   assert.ok(live.length <= ceiling,
     `${live.length} manifest files are routed ONLY by the blanket tiny/tooling-fast rules, ceiling ${ceiling} — ` +
@@ -136,5 +136,5 @@ test("no more manifest files are routed by the blanket rules alone than the ratc
     live.join("\n  "));
   assert.equal(live.length, ceiling,
     `only ${live.length} files are blanket-only now (ceiling ${ceiling}) — a file gained a rule, so LOWER the ` +
-    "ratchet in the same commit: node tools/ratchets.mjs --update");
+    "ratchet in the same commit: node tools/check/ratchets.mjs --update");
 });

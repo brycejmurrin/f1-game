@@ -213,10 +213,10 @@ __apex.race("monza"); __apex.go(); __apex.jump(0.1, 55);  // load, start, place
 //   "not built yet", not "nothing there" — let frames draw, or just re-call it
 ```
 
-`node tools/agent.mjs monza world --detail drive` does all of this for you.
+`node tools/shot/agent.mjs monza world --detail drive` does all of this for you.
 **`apex-eval` does not** — it boots and calls `race()` only, so a player-placed
 tool returns a not-placed error until you stage inside the expression:
-`node tools/apex-eval.mjs monza "(a.go(), a.jump(0.1,55), a.world())"`.
+`node tools/shot/apex-eval.mjs monza "(a.go(), a.jump(0.1,55), a.world())"`.
 
 You rarely need to memorise this, because **the errors tell you the fix.** Every
 agent-view failure is `{ok:false, error, message, fix, state}` — `fix` names the

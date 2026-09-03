@@ -44,8 +44,8 @@ geometry bug.
    pointer only; use `any-pointer` when the question is "does any attached
    input exist?"
 
-8. **Verify.** `npm run test:tooling-fast`, then `node tools/test-bg.mjs ui`.
-   If JS/CSS changed, `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) before commit.
+8. **Verify.** `npm run test:tooling-fast`, then `node tools/ci/test-bg.mjs ui`.
+   If JS/CSS changed, `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) before commit.
 
 ### Pause settings overlay
 

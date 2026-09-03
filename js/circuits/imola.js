@@ -41,7 +41,7 @@
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/rotate-markings.cjs
+    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     sectors: [0.32, 0.66],
     turns: [0.1529, 0.1639, 0.1844, 0.1919, 0.2804, 0.2969, 0.3549, 0.3624, 0.4834, 0.5139, 0.5204, 0.5674, 0.5904, 0.5999, 0.6984, 0.8169, 0.8529, 0.8799, 0.9459],
@@ -49,7 +49,7 @@
     kit: { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "arched",    gantry: "box",        camera: "lattice",   hoarding: "panel" },
     standSet: ["crimson", "sandstone", "concrete"],  // Ferrari red over Imola's stone-and-terracotta town
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
-    // recentred, one lap, open loop. tools/import-circuit-path.mjs regenerates it.
+    // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
     path: { len: 4904, pts: [[-326.4,356.3],[-293.7,356.8],[-90.1,400.5],[-17.4,408.2],[25,408.7],[237.5,389.6],[341.8,364.9],[354.8,356.3],[361,348.7],[362.9,341.5],[370.5,308.3],[376.1,297.7],[389.1,288.7],[485.1,239.8],[499.5,223.8],[654.4,-160.3],[656.2,-170.5],[656,-183],[639.6,-242.7],[639.6,-252.1],[644.9,-263.7],[650.9,-271.6],[834.3,-428.6],[839.6,-437.6],[841.5,-448.3],[839.2,-459.7],[832.4,-473.4],[823.7,-480.9],[813.7,-483.9],[798.4,-483.7],[502.7,-445.3],[469,-442.9],[419.2,-445.7],[383.2,-451],[334,-460.3],[283.6,-469.5],[257.5,-474.7],[241,-471.3],[228.5,-465.1],[212.4,-449.4],[196.1,-420],[171.2,-357.8],[165.4,-330.5],[163.6,-299.6],[168.4,-268.1],[204.5,-97.3],[204,-86.6],[198.9,-74.4],[177.9,-41.3],[150.4,1.5],[142.4,5.6],[131.7,6.7],[124.3,3.5],[83.6,-12.9],[71.1,-14.6],[-355.4,-11.8],[-360.9,-14.1],[-366.2,-26.8],[-370.2,-38],[-374.8,-40.7],[-383.8,-41],[-554.1,29.2],[-575.6,41.2],[-646.5,90.2],[-687.1,127.1],[-726.4,166.7],[-822.5,260.8],[-841.9,274.6],[-863,285],[-988.6,340.8],[-998.1,350],[-999.4,364.6],[-996.9,376.2],[-959,456.3],[-950.2,463.9],[-940.5,466.9],[-926.8,467.4],[-915.9,464.7],[-747.1,400.5],[-687.1,377.4],[-654.5,365.6],[-626.1,359.1],[-606.9,355.7]] },
   }
   );

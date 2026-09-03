@@ -72,7 +72,7 @@ const results = await Promise.all(CONFIGS.map(async cfg => {
 }));
 ```
 
-See `tools/harness.mjs` (`pickChromium`, `startStaticServer`) and
+See `tools/lib/harness.mjs` (`pickChromium`, `startStaticServer`) and
 **playwright-probe**. Metrics: `finalSpeed`, `avgSlip` (< 1 = traction
 consumed), `offT` (stability), `done` (crashed). Harder: run
 `tests/specs/autopilot.spec.js` under each config and compare lap times.

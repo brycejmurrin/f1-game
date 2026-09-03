@@ -42,7 +42,7 @@ drives it.
 | [DEBUG-HOOKS.md](DEBUG-HOOKS.md) | Full `window.__apex` dev-API reference (generated), the agent-facing JSON world view (`world`/`field`/`scene`/`rollout`), and the DevTools console recipes. `AGENTS.md` has the short list. |
 | [LIGHTING-TUNER-SLIDERS.md](LIGHTING-TUNER-SLIDERS.md) | All 183 tuner sliders: range, default, the GLSL uniform each drives, where it is consumed. Generated from `TUNE_DEFS`. |
 | [tracks/](tracks/) | Per-circuit reference material. |
-| [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit); written by `tools/look-survey-sheet.py`. |
+| [look-survey/README.md](look-survey/README.md) | 4×5 contact sheets from the mcp-probe look-survey (one PNG per finished circuit); written by `tools/lighting/look-survey-sheet.py`. |
 
 ## `notes/` — the dated ledgers
 
@@ -83,16 +83,16 @@ rather than rewriting the record.
 | [research/DRIVING-CONTROLS-RESEARCH.md](research/DRIVING-CONTROLS-RESEARCH.md) | What shipped racing games do for assists and speed-sensitive steering — including the deliberately NEGATIVE conclusions that keep un-built features from being re-litigated. | `js/audio/engine.js`, `js/physics/brake-cue.js` |
 | [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md) | Why detail is unaffordable without instancing; the staged scenery scene-graph plan and its measured per-emitter reuse. | `js/render/glx/glx.js` |
 | [research/UI-DESIGN-PRINCIPLES.md](research/UI-DESIGN-PRINCIPLES.md) | Why the UI is sized the way it is: size for the PHONE at arm's length, and collapse a primitive only when it passes the three-places-plus-generic test. | `css/tokens.css`, `tests/unit/game-ctx-surface.test.mjs` |
-| [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted, ESM kept as the documented escalation path. | `tools/check-gctx.mjs`, `tools/scan-globals.mjs` |
-| [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md) | External model/texture/normal-map ingestion: CC0 asset APIs, a `MAT`-indexed texture array, offline bake tool. | `tools/check-gctx.mjs`, `tools/assets.mjs` |
-| [research/APEX-TOOLS-MCP.md](research/APEX-TOOLS-MCP.md) | Design / refuses for the `apex-tools` wrap. Agent map: [AGENT-SURFACE.md](AGENT-SURFACE.md). | `tools/apex-tools-mcp.mjs`, `tools/wgx-shot.mjs` |
-| [research/CHROME-DEVTOOLS-MCP.md](research/CHROME-DEVTOOLS-MCP.md) | Playbook for the chrome-devtools MCP tools against Apex: roots/`/tmp` file writes, snapshot uids, cold-boot LCP, clean heap cycles, lighthouse snapshot scores. Companion to `.claude/skills/mcp-probe`. | `tools/cdmcp-cli.py`, `tools/ratchets.mjs` |
+| [research/ARCHITECTURE-REDESIGN-2026-08.md](research/ARCHITECTURE-REDESIGN-2026-08.md) | Three competing redesigns (zero-build ESM, TypeScript+esbuild, harden-IIFE-in-place) scored by two judges; Bedrock-with-grafts adopted, ESM kept as the documented escalation path. | `tools/check/check-gctx.mjs`, `tools/check/scan-globals.mjs` |
+| [research/ASSET-API-RESEARCH.md](research/ASSET-API-RESEARCH.md) | External model/texture/normal-map ingestion: CC0 asset APIs, a `MAT`-indexed texture array, offline bake tool. | `tools/check/check-gctx.mjs`, `tools/gen/assets.mjs` |
+| [research/APEX-TOOLS-MCP.md](research/APEX-TOOLS-MCP.md) | Design / refuses for the `apex-tools` wrap. Agent map: [AGENT-SURFACE.md](AGENT-SURFACE.md). | `tools/mcp/apex-tools-mcp.mjs`, `tools/gfx/wgx-shot.mjs` |
+| [research/CHROME-DEVTOOLS-MCP.md](research/CHROME-DEVTOOLS-MCP.md) | Playbook for the chrome-devtools MCP tools against Apex: roots/`/tmp` file writes, snapshot uids, cold-boot LCP, clean heap cycles, lighthouse snapshot scores. Companion to `.claude/skills/mcp-probe`. | `tools/mcp/cdmcp-cli.py`, `tools/check/ratchets.mjs` |
 | [research/STRUCTURE-REDECISION-2026-08.md](research/STRUCTURE-REDECISION-2026-08.md) | Six structural questions re-opened on user request and re-decided from fresh measurement. | `tests/unit/perf-governor.test.mjs` |
 | [research/UI-REDESIGN-2026-08-18.md](research/UI-REDESIGN-2026-08-18.md) | UI redesign implementation plan + acceptance contract: catalogue screens restructured around one dominant scroller; the visual identity kept. | `tests/unit/css-token-adoption.test.mjs` |
 | [research/TREE-RESTRUCTURE-2026-09.md](research/TREE-RESTRUCTURE-2026-09.md) | The verified diagnosis and the approved six-phase restructuring plan: generate the shell from the manifest (Phase 0), js/ domain directories (Phase 2), the test-tree taxonomy, game.js carves, tools/ and docs/ consolidation. | `js/perf/renderer-picker.js`, 2 tests, 3 tools |
 | [research/RENDERER-PERF-AUDIT-2026-09-02.md](research/RENDERER-PERF-AUDIT-2026-09-02.md) | Three read-only renderer perf audits (GLX / WGX / TLX), ranked findings with proposed patches; landed items marked. Held at this path by the pending WGX/TLX spike-out. | `spike/backends/README.md`, `tools/moves/spike-backends.json` |
 | [research/steering-research.md](research/steering-research.md) | Steering-model source notes + citations. | `.claude/skills/tune-physics` |
-| [research/wgx-gallery/](research/wgx-gallery/) | WGX reference frames + `wgx-gallery-manifest.json`, read by `tools/wgx-shot.mjs`. Moves with the spike-out. | `tools/wgx-shot.mjs` |
+| [research/wgx-gallery/](research/wgx-gallery/) | WGX reference frames + `wgx-gallery-manifest.json`, read by `tools/gfx/wgx-shot.mjs`. Moves with the spike-out. | `tools/gfx/wgx-shot.mjs` |
 
 ## `archive/` — provenance only
 

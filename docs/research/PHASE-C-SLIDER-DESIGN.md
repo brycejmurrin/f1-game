@@ -2,7 +2,7 @@
 > slider recalibration; all four sections shipped (see Status below).
 >
 > Errata: `tools/tune-sweep.mjs` has since been renamed
-> `tools/physics-tune-sweep.mjs`.
+> `tools/check/physics-tune-sweep.mjs`.
 
 # Phase C — the slider recalibration, with the numbers
 

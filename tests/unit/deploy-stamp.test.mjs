@@ -50,11 +50,11 @@ test("a RELATIVE --root (pages.yml passes `_site`) stamps too", () => {
     fs.writeFileSync(path.join(dir, "index.html"),
       `<meta name="apex-build" content="1689">\n<link rel="stylesheet" href="css/tokens.css?v=bad">\n`);
     fs.writeFileSync(path.join(dir, "version.json"), `{ "build": 1689 }\n`);
-    const r = spawnSync("node", ["tools/bump-cache.mjs", "--apply", "--at", "2315", "--json", "--root", rel], { cwd: ROOT, encoding: "utf8" });
+    const r = spawnSync("node", ["tools/ci/bump-cache.mjs", "--apply", "--at", "2315", "--json", "--root", rel], { cwd: ROOT, encoding: "utf8" });
     assert.equal(r.status, 0, `relative --root must stamp: ${r.stderr}`);
     assert.equal(JSON.parse(r.stdout).applied, 2315);
     assert.doesNotMatch(fs.readFileSync(path.join(dir, "index.html"), "utf8"), /\?v=bad/);
-    const check = spawnSync("node", ["tools/bump-cache.mjs", "--check", "--root", rel], { cwd: ROOT, encoding: "utf8" });
+    const check = spawnSync("node", ["tools/ci/bump-cache.mjs", "--check", "--root", rel], { cwd: ROOT, encoding: "utf8" });
     assert.equal(check.status, 0, check.stderr);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -67,13 +67,13 @@ test("bump-cache --apply --at N --root <dir> stamps a staged copy and leaves the
       `<meta name="apex-build" content="1689">\n<script src="a.js?v=bad"></script>\n`);
     fs.writeFileSync(path.join(dir, "version.json"), `{ "build": 1689 }\n`);
     const before = fs.readFileSync(path.join(ROOT, "version.json"), "utf8");
-    const r = spawnSync("node", ["tools/bump-cache.mjs", "--apply", "--at", "4242", "--json", "--root", dir], { cwd: ROOT, encoding: "utf8" });
+    const r = spawnSync("node", ["tools/ci/bump-cache.mjs", "--apply", "--at", "4242", "--json", "--root", dir], { cwd: ROOT, encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
     assert.equal(JSON.parse(r.stdout).applied, 4242);
     assert.match(fs.readFileSync(path.join(dir, "index.html"), "utf8"), /content="4242"/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "version.json"), "utf8")).build, 4242);
     assert.equal(fs.readFileSync(path.join(ROOT, "version.json"), "utf8"), before, "the repo's own placeholder is untouched");
-    const check = spawnSync("node", ["tools/bump-cache.mjs", "--check", "--root", dir], { cwd: ROOT, encoding: "utf8" });
+    const check = spawnSync("node", ["tools/ci/bump-cache.mjs", "--check", "--root", dir], { cwd: ROOT, encoding: "utf8" });
     assert.equal(check.status, 0, "the staged copy is consistent after the stamp");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

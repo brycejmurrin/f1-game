@@ -620,7 +620,7 @@ All 40 circuits now have a full `tod × weather` grid (800 condition keys plus `
 
 Full-grid **mcp-probe `look-survey`** (chase + `park` + `snapCam`). Contact
 sheets land in [`docs/look-survey/`](look-survey/README.md) as each circuit
-hits all 20 looks (`python3 tools/look-survey-sheet.py --ready`). First visual
+hits all 20 looks (`python3 tools/lighting/look-survey-sheet.py --ready`). First visual
 pass was 4 looks × 40 circuits; the remaining 16 per track are still shooting.
 Cross-cutting from the frames:
 - Desert/street **nights** often flood/neon-hot with dusk-orange horizons —
@@ -715,7 +715,7 @@ override it.
 1. One subagent per track proposes presets for all meaningful `tod × wx` combos (this doc = its brief; it also reads `js/circuits/<id>.js` for palette/locale).
 2. Each subagent writes `artifacts/lighting/proposals/<id>.json` only.
 3. Parent merges with `merge-proposals.mjs`, flips the row to ✅, then
-   `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) after the last js edit.
+   `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) after the last js edit.
 
 #### Tuning one condition for the whole grid
 

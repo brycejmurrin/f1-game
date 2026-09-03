@@ -10,7 +10,7 @@
 // Run with: npm run test:gallery   (or: npm test -- tests/specs/ui-audit.spec.js)
 // Output: artifacts/galleries-<port>/ui-audit/
 //
-// tools/assert-audit.mjs allow-lists this file by name. If it ever grows real
+// tools/ci/assert-audit.mjs allow-lists this file by name. If it ever grows real
 // assertions, tests/unit/assert-audit.test.mjs fails and says so — the exemption is
 // not allowed to quietly cover a file that stopped being a harness.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";

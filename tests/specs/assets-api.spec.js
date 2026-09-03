@@ -39,7 +39,7 @@ test("the committed pack loads and uploads its material layers", async ({ page }
   expect(s.pack).toBe(true);
   expect(s.uploaded).toBe(true);
   expect(s.error).toBeNull();
-  // Every material in tools/assets.mjs SCALES, and not one more: GLASS, FLAG
+  // Every material in tools/gen/assets.mjs SCALES, and not one more: GLASS, FLAG
   // and FLAT must stay procedural.
   expect(s.layers).toBeGreaterThanOrEqual(10);
   expect(s.layers).toBeLessThanOrEqual(16);
@@ -142,7 +142,7 @@ test("credits cover every baked asset", async ({ page }) => {
   for (const e of c) {
     expect(e.licence).toBeTruthy();
     // Every asset must be traceable to where it came from — that is what the
-    // licence audit in `node tools/assets.mjs verify` depends on.
+    // licence audit in `node tools/gen/assets.mjs verify` depends on.
     expect(e.source).toBeTruthy();
   }
 });

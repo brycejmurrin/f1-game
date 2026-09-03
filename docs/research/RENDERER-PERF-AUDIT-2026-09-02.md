@@ -120,7 +120,7 @@ full pack), 914 prop chunks; monza 38 / 11,385; spa 33 / 6,017; singapore
    start the next frame until the GPU process has decoded this one. 0.3–1 ms
    on a laptop, more on Android. It exists for the real-GPU gate (PERF-FINDINGS
    §2e). Patch: `if (_glDrain) drainGlErrors("present")`, `_glDrain` true only
-   under `apex26.glErrDrain=1` (set by `tools/gpu-game-check.mjs`) or for the
+   under `apex26.glErrDrain=1` (set by `tools/gfx/gpu-game-check.mjs`) or for the
    first ~120 presents; `gpuErrors()` forces one drain on read. CONFIRMED call,
    PLAUSIBLE magnitude.
 2. **Dry-road SSR march for a 0.35×-damped sheen** — lighting.js:155-156
@@ -377,7 +377,7 @@ The value of a second read is mostly in what it takes AWAY.
 
 - **GLX-8 (state brackets) is over-estimated.** Its "~200 redundant GL calls per
   frame" is contradicted by this repo's own census. A fresh
-  `tools/glx-call-census.mjs` run (vegas night, 40 frames) measured
+  `tools/gfx/glx-call-census.mjs` run (vegas night, 40 frames) measured
   **32.8 CULL_FACE toggles**, 8.3 `polygonOffset`, 7.5 `depthMask`, 11.3
   `colorMask` — the restores are ≤ ~45 calls, not 200, against 114.2 draws and
   ~540 total GL calls per frame. Rank it accordingly.
@@ -390,7 +390,7 @@ The value of a second read is mostly in what it takes AWAY.
   121.8/frame — the largest call categories by count — but `../notes/PERF-FINDINGS.md`
   §3 already warns not to invent a millisecond claim from uniform elision, and
   that warning stands.
-- **WGX-5 (night road merge) is nearly dead work.** `tools/chunk-share-census.mjs`
+- **WGX-5 (night road merge) is nearly dead work.** `tools/gfx/chunk-share-census.mjs`
   already recorded the answer: 3 shared non-empty adjacent pairs out of 909.
   The merge would save about three draws. Rank it last.
 - **TLX-2's magnitude was wrong, its mechanism right.** `prunePool` does leak —
@@ -426,7 +426,7 @@ The value of a second read is mostly in what it takes AWAY.
    `glx/chunked.js:211`'s `!F.roadChunkLamps` is always true and PER-CHUNK ROAD
    is a dead knob on the default backend — while 24 shipped presets set it to 1
    and `game.js:6038` still builds the second GPU copy of the road for it. WGX
-   does the plumbing. `tools/slider-effect-live.mjs:124` already records the
+   does the plumbing. `tools/lighting/slider-effect-live.mjs:124` already records the
    verdict "inert"; this names why.
 4. **TLX: `tlx-shadow.castInstanced` has no update range at all** — pool slots
    are sized to the largest batch ever seen, so the upload is `cap × 64 B`, per
@@ -484,7 +484,7 @@ Same reason backlog item 10 left `lit.js:1456` alone.
 
 ## A tool that reported ok on a file that would not parse
 
-`tools/wgx-validate.mjs --static` — the gate AGENTS.md names for WGSL edits, and
+`tools/gfx/wgx-validate.mjs --static` — the gate AGENTS.md names for WGSL edits, and
 the one a verify-agent runs — returned `{"ok": true}` on a `wgsl-post.js` whose
 JavaScript was **syntactically broken**. It only ever `readFileSync`'d `wgx.js`
 and `wgsl-chunks.js` as TEXT for a handful of regex invariants; it never read
@@ -503,7 +503,7 @@ backend file from node). Proved to bite by reintroducing the backtick.
 
 ## Instrumentation
 
-`tools/gpu-game-check.mjs` now records `__apex.renderScale()` and the census
+`tools/gfx/gpu-game-check.mjs` now records `__apex.renderScale()` and the census
 prints a `gov:` row with `tier / autoTier / userTier / scale / fps / floorMs /
 envFace`. §2t of `../notes/PERF-FINDINGS.md` named this as the missing half: a
 `meanLuma` comparison between two legs is only a comparison if both ran the same

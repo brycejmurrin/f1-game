@@ -14,12 +14,12 @@ is the ONE canonical agent reference; CLAUDE.md is a stub that imports it
 ```sh
 npx serve -l 3456 .                 # run locally (or: python3 -m http.server 3456)
 npm run test:tooling-fast           # the no-browser guard suite (~3 min)
-node tools/verify-change.mjs        # ONE command: fast gate + batched groups (background; --wait/--plan/--fast)
-node tools/verify-track.cjs <id>    # 2 s headless build check for track edits
-node tools/pick-tests.mjs           # which test GROUPS does this change need?
-node tools/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
-node tools/test-bg.mjs <groups>     # run browser groups in the background
-node tools/assets.mjs verify        # asset-pack licence + md5 + budget check
+node tools/ci/verify-change.mjs        # ONE command: fast gate + batched groups (background; --wait/--plan/--fast)
+node tools/track/verify-track.cjs <id>    # 2 s headless build check for track edits
+node tools/ci/pick-tests.mjs           # which test GROUPS does this change need?
+node tools/ci/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
+node tools/ci/test-bg.mjs <groups>     # run browser groups in the background
+node tools/gen/assets.mjs verify        # asset-pack licence + md5 + budget check
 tools/README.md                     # test-asserted index of all 160+ tools
 docs/AGENT-SURFACE.md               # skills / MCP / tools / wrap map
 ```
@@ -35,9 +35,9 @@ in this section: `docs/notes/TESTING-FIELD-NOTES.md`.
 | change touches | run |
 |---|---|
 | docs, tools, tests only | `npm run test:tooling-fast` |
-| one circuit (`js/circuits/<id>.js`) | `node tools/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
+| one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
-| WGX / `js/render/webgpu/` | `node tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU |
+| WGX / `js/render/webgpu/` | `node tools/gfx/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU |
 | TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the same with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest`, read its Verdict step. A software probe is NOT evidence about a player's machine (two shipped defects were invisible to every software test). `ci.yml`'s renderer-macos job is nightly; dispatch it with `renderer_macos: true` when a gfx spec or its launch config changed |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, CAPPED at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch | the above + `npm run test:sweeps` |
@@ -93,7 +93,7 @@ Session shape — this is what controls both wall time and waiting:
 This container has **no real GPU** (llvmpipe) and the native WebGPU swapchain
 never composites on software, so WGX blits the visible `#game` and a probe
 waits on `awaitSoftPresent()`. Which command probes which backend, the measured
-colours, and the Cursor Cloud bootstrap (`tools/cloud-agent-install.sh`, what
+colours, and the Cursor Cloud bootstrap (`tools/env/cloud-agent-install.sh`, what
 survives a cold boot): `docs/notes/CI-RENDERING-PERFORMANCE.md`. Keep
 `apex-tools` in root `.mcp.json`; never run Chrome MCP while Playwright runs;
 never attach `mcp-probe` for a `version.json` check.
@@ -101,7 +101,7 @@ never attach `mcp-probe` for a `version.json` check.
 **A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS** — a mock
 device stayed green while four defects made the real backend refuse to boot.
 Boot it live (`npx serve -l 3456 .`, a SECURE CONTEXT, then `node
-tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'`)
+tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'`)
 and confirm with one POSITIVE signal: a clean WGX boot writes nothing, so
 assert `canvas.getContext("webgl2") === null`. Defects and traps:
 `docs/ARCHITECTURE.md` §Boot evidence,
@@ -131,7 +131,7 @@ Per-directory module tables: `docs/ARCHITECTURE.md`.
   class-count + body-node ratchets apply.
 - `index.html` is the shell — script tags and ALL static DOM; `sw.js`'s
   precache derives from it. `types/game-ctx.d.ts` is the `G` contract, held by
-  `tools/check-gctx.mjs`.
+  `tools/check/check-gctx.mjs`.
 - `.claude/skills/` workflow references, `.claude/agents/` scoped subagents
   (each with a README index) — they encode the flat prohibitions above so a
   subagent cannot un-know them.
@@ -142,18 +142,18 @@ Per-directory module tables: `docs/ARCHITECTURE.md`.
   reads `?v=dev`; `pages.yml` rewrites them to content hashes and stamps the
   generation while staging. There is NO bump after a js/css edit, and
   `bump-cache --apply` refuses on the repo. After a `tools/manifest.cjs` change
-  run `node tools/gen-shell.mjs`.
+  run `node tools/gen/gen-shell.mjs`.
 - **No ES modules** — every file is a `"use strict"` IIFE assigning one global
   (sole exception: the vendored three.js island).
   `tests/unit/global-registry.test.mjs` enforces the registry.
 - **New file**: IIFE file + `tools/manifest.cjs` entry (+ HARD_EDGES pair if
-  eval-time destructured) + `node tools/gen-shell.mjs`, which writes the
+  eval-time destructured) + `node tools/gen/gen-shell.mjs`, which writes the
   `index.html` tag block, `tools/carview.html`, sw.js's precache seed and
   `js/roster.js`. No cache bump. Never hand-edit a `@gen-shell` block;
   `load-order.test.mjs` fails on drift.
 - **Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.**
 - `tests/data/ratchets.json` ratchets game.js and the other big modules AT
-  their current values — pay for every added line; `node tools/ratchets.mjs
+  their current values — pay for every added line; `node tools/check/ratchets.mjs
   --update` lowers them after an extraction or on a merged tree.
 - **localStorage keys** are prefixed `apex26.`.
 - **Coordinates**: +Y up, metres, radians, arc `s` in metres, lateral `x`
@@ -175,7 +175,7 @@ Full reference `docs/PHYSICS.md`. Two rules bind everywhere:
 
 - **`PACE` is a ground-speed scale, not a cap.** Anything comparing a speed to
   a literal or VMAX must use `vTop()`/`vStd()`/`aStd()` — enforced by
-  `tools/vstd-lint.mjs`; a bare literal needs a written reason.
+  `tools/check/vstd-lint.mjs`; a bare literal needs a written reason.
 - **The arc must not reach the driver.** Nothing derived from track curvature
   or the racing line may affect the player with assists off; a new
   `Tracks.curvature()` read goes in a legitimate column (AI-only,
@@ -192,7 +192,7 @@ near game.js.
 IS the `MAT` id; blended (`albedo * tex.rgb * 2.0`) so tint and wear survive.
 **Ships ON.** (`matTexMix` def 1.0; `__apex.matTex(0)` is the A/B off-switch.)
 Every failure degrades to the procedural look; boot never awaits assets. GLX,
-TLX, and WGX implement it. `tools/assets.mjs verify` gates licences.
+TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
 
 ## `window.__apex` dev API
 
@@ -202,7 +202,7 @@ the list here. Sharp edges: `obs()`/`physState()` need `player.px` initialised
 (`jump()` or `step()` after `race()`+`go()`); agentview failures are
 `{ok:false, error, message, fix}`, never null; `render({what:"view"})` reuses
 the LAST frame and is stale under `headless(true)`; `snapCam()` after
-`park()`/`jump()` before any shot. `node tools/agent.mjs <track> <cmd>` is the
+`park()`/`jump()` before any shot. `node tools/shot/agent.mjs <track> <cmd>` is the
 same surface from a shell.
 
 ## Agent extensions (skills / subagents)
@@ -211,7 +211,7 @@ Skills are on-demand workflows in `.claude/skills/` (index
 `.claude/skills/README.md`); subagents are isolated contexts in
 `.claude/agents/`. Which CLIs are wrapped as `apex_*`, and which stay
 CLI-only: `docs/AGENT-SURFACE.md`. Live canvas → `mcp-probe`. Deploy /
-merge → `check-changes` (or just `node tools/deploy.mjs`). Pre-push →
+merge → `check-changes` (or just `node tools/ci/deploy.mjs`). Pre-push →
 `check-changes`, which spawns the `verify-agent` subagent (`--base <ref>` is
 the "was it already red on the tip?" check). Live `version.json` goes to the
 `deploy-research` SUBAGENT — never attach `mcp-probe` for that. Fat skill /
@@ -242,7 +242,7 @@ https://brycejmurrin.github.io/f1-game/. Other sessions develop directly on the
 deploy branch, so a deploy is a merge of THEIR new work — both-side changes are
 real conflicts: re-measure baselines on the merged tree, never force-push.
 
-**`node tools/deploy.mjs`** is the whole protocol (fetch → merge →
+**`node tools/ci/deploy.mjs`** is the whole protocol (fetch → merge →
 `test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens
 a reviewable PR instead, `--plan` prints the union first). `test:sweeps` is
 CI's on the same diff — do not duplicate it locally. The live check is

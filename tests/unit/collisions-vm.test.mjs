@@ -1,5 +1,5 @@
 /* collisions-vm.test.mjs — tests/specs/collisions.spec.js replayed in the Node
- * VM (tools/game-vm.cjs): the Frenet car-to-car model — pair() separation,
+ * VM (tools/lib/game-vm.cjs): the Frenet car-to-car model — pair() separation,
  * jam() dig-out, a full pack for 10 s — with the SAME assertions.
  *
  * Ported: all 3 tests. The pageerror guards read the VM's console/rejection
@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
 const lt = (a, b, m) => assert.ok(a < b, m || `${a} < ${b}`);

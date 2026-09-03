@@ -19,8 +19,8 @@ node tools/car/render-car.mjs --team=ferrari --views=all
 node tools/car/render-car.mjs --team=redbull --views=tail,side --tod=night
 ```
 
-Read the PNGs it prints. Batch audits: `tools/audit-parts.mjs` →
-`scratch/renders/parts/<category>/`; `tools/audit-aero.mjs` →
+Read the PNGs it prints. Batch audits: `tools/car/audit-parts.mjs` →
+`scratch/renders/parts/<category>/`; `tools/car/audit-aero.mjs` →
 `scratch/renders/aero/`.
 
 `--refl` is a **studio dial** on all shine — not in-game chrome

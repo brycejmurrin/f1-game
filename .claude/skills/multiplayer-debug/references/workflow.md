@@ -71,13 +71,13 @@ Load from the SKILL.md index when the task needs this detail.
 7. **Respect build handshakes.**
    - Handshake refuses mismatched `version.json` builds because physics/track
      constants can differ.
-   - If JS/CSS changed, run `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`); stale builds can make peers unable to
+   - If JS/CSS changed, run `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`); stale builds can make peers unable to
      connect by design.
 
 8. **Verify in order.**
    - Run `npm run test:net-unit` before any browser group; it covers transport,
      SDP, rendezvous, QR, snapshot, and session contracts.
-   - Run `test:net` in the background through `tools/test-bg.mjs`.
+   - Run `test:net` in the background through `tools/ci/test-bg.mjs`.
    - Use real RTC scripts only for browser/ICE behavior that loopback cannot
      exercise.
 

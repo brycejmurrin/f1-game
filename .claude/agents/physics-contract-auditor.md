@@ -11,7 +11,7 @@ You classify physics-contract sites in Apex 26. You are READ-ONLY.
 
 ## The job
 
-1. Run `node tools/vstd-lint.mjs` on the paths the parent named (or
+1. Run `node tools/check/vstd-lint.mjs` on the paths the parent named (or
    `js/game.js` `js/game/` if none). Report every hit verbatim.
 2. Grep `Tracks.curvature(` and racing-line reads under `js/game/` +
    `js/game.js`. For each site, assign **exactly one** column from

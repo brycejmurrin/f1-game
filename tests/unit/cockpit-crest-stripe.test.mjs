@@ -18,7 +18,7 @@
 //   2. the CHASE build still does.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadCar3D, EYE } from "../../tools/cockpit-pale-sweep.mjs";
+import { loadCar3D, EYE } from "../../tools/car/cockpit-pale-sweep.mjs";
 
 const { Car3D, Teams, Liveries, Parts } = loadCar3D();
 

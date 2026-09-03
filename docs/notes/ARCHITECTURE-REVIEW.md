@@ -46,10 +46,10 @@ than behaviour:
 | `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, the topical browser groups DISJOINT (2026-09 regroup), `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
 | `tests/unit/docs-integrity.test.mjs` | live docs reference only files that exist; counts match the repo; no live doc reaches into the archive |
 | `tests/unit/deploy-staging.test.mjs` | every path shipped code can fetch is inside the Pages upload allow-list |
-| `tools/graph-parity.cjs` | scene-graph migrations are vertex-for-vertex identical to a baseline ref |
+| `tools/track/graph-parity.cjs` | scene-graph migrations are vertex-for-vertex identical to a baseline ref |
 | `tests/unit/backend-surface-parity.test.mjs` | a renderer backend declares every GLX member, absent ones as explicit `undefined` (§5) |
 | `tests/unit/ratchets.test.mjs` + `tests/data/ratchets.json` | the game.js size ceilings (lines, code lines, `G` members, column-0 lets) — a ratchet, so extraction lowers them and regrowth fails |
-| `tests/unit/vstd-invariant.test.mjs` + `tools/vstd-lint.mjs` | no `.speed` compared against a numeric literal without a written reason (§3) |
+| `tests/unit/vstd-invariant.test.mjs` + `tools/check/vstd-lint.mjs` | no `.speed` compared against a numeric literal without a written reason (§3) |
 | `tests/unit/comment-citations.test.mjs` | a comment citing another file names a symbol that exists; ratchet on the cross-file-citation population |
 | `tests/unit/silent-catch.test.mjs` | ratchet on bare `catch {}` — the escape hatch is a comment saying why, not a log line |
 
@@ -85,7 +85,7 @@ in. It has held so far. It is exactly the shape of thing that stops holding.
 that divides a speed by `VMAX` or compares one against a literal must go
 through `vTop()`/`vStd()` (and accelerations through `aStd()`). Four defects of
 this one class were found across three passes before the rule got its guard:
-`tools/vstd-lint.mjs` + `tests/unit/vstd-invariant.test.mjs` now fail the suite on a
+`tools/check/vstd-lint.mjs` + `tests/unit/vstd-invariant.test.mjs` now fail the suite on a
 raw `.speed`-vs-literal comparison unless the absoluteness is justified in
 place. The lint sees speeds only; the acceleration case is recorded in its
 header rather than asserted. Physics constants now live in
@@ -175,7 +175,7 @@ Four decisions that solve their problem unusually well:
   the right coordinate, not clamped after the fact.
 - **`TrackGraph` records ops, not triangles** — scenery replay runs through the
   same guarded emitters, so geometry and on-track suppression are unchanged by
-  construction, and `tools/graph-parity.cjs` proves it vertex-for-vertex
+  construction, and `tools/track/graph-parity.cjs` proves it vertex-for-vertex
   against a baseline ref. That gate is the pattern to apply more widely.
 
 ---

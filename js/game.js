@@ -72,7 +72,7 @@ let _probeArmed = false;      // mirrors the stored probe, so the loop never rea
 // them apart; only the bind site knows.
 let _backendBound = false;
 // The rosters below are ApexRoster (js/roster.js), GENERATED from
-// tools/manifest.cjs by tools/gen-shell.mjs — one truth, no hand mirror.
+// tools/manifest.cjs by tools/gen/gen-shell.mjs — one truth, no hand mirror.
 // The two DEFERRED renderer groups. Array order is the documented toposort;
 // loadBackendScripts starts every file whose BACKEND_EDGES predecessors have
 // evaluated (six TLX IIFEs in the first wave). A load error RESOLVES: a

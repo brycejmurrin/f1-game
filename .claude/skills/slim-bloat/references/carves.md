@@ -10,7 +10,7 @@ before/after counts (`bloat-scan.mjs --json`).
 2. Analyse only (no write):
 
    ```sh
-   node tools/extract-module.mjs js/game.js <start> <end>
+   node tools/check/extract-module.mjs js/game.js <start> <end>
    ```
 
    Classify FREE names: `let` → `--mutable` rewrite; `const`/`function`
@@ -20,11 +20,11 @@ before/after counts (`bloat-scan.mjs --json`).
    roster site.
 4. Lockstep the same commit: file + `index.html` `<script>` position +
    `tools/manifest.cjs` (+ `HARD_EDGES` if eval-time destructure) + lower
-   the ceilings: `node tools/ratchets.mjs --update` (tests/data/ratchets.json).
+   the ceilings: `node tools/check/ratchets.mjs --update` (tests/data/ratchets.json).
 5. `grep` every removed symbol. Then `npm run test:tooling-fast`. Near
    `game.js`: `physics-characterization` is the master gate — parent names
    leftover browser groups as not-run.
-6. Last edit: nothing to bump — `bump-cache` is deploy-only; run `node tools/gen-shell.mjs` if the manifest changed (check-changes/references/bump.md).
+6. Last edit: nothing to bump — `bump-cache` is deploy-only; run `node tools/gen/gen-shell.mjs` if the manifest changed (check-changes/references/bump.md).
 
 `extract-module.mjs` does **not** write the module, manifest, or tags.
 
@@ -67,9 +67,9 @@ mirrors that cite a **symbol**.
 ## 5. After the carve
 
 ```sh
-node tools/bloat-scan.mjs --json
+node tools/check/bloat-scan.mjs --json
 npm run test:tooling-fast
-node tools/verify-change.mjs --plan --json
+node tools/ci/verify-change.mjs --plan --json
 ```
 
 Do not start a browser group from this skill. `verify-agent` for `--fast`.

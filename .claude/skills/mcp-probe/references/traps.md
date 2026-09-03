@@ -11,7 +11,7 @@ Playwright render and produce **false failures**, not just timeouts. Measured
 passing specs red — a 120 s timeout AND an assertion miss (`dynamic player shadow`
 read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
 
-- **Check `node tools/test-bg.mjs --status` before you render here.** If a group
+- **Check `node tools/ci/test-bg.mjs --status` before you render here.** If a group
   is running, wait — or accept you will re-run its false-fails solo.
 - **Park to `about:blank` (`navigate_page`) the moment you're done**, so the warm
   page doesn't tax the next `test-solo`.
@@ -367,7 +367,7 @@ the pit wall and grandstand). The listing is what kept the search pointed at
 camera framing instead of at emission.
 
 The vertex count is the honest instrument, and it is a shell call, not a browser
-one: `node tools/verify-track.cjs <id>`, then comment the call out and run it
+one: `node tools/track/verify-track.cjs <id>`, then comment the call out and run it
 again. Identical `props N` = nothing was emitted. **Run a control first** — add
 a throwaway `for (let i=0;i<50;i++) addBox(out, [0,500+i,0], [10,10,10], [1,0,0]);`
 and confirm the number moves (+1200) — because two equal readings look identical

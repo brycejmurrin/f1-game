@@ -1,11 +1,11 @@
 // ratchets.test.mjs — the size ratchets in tests/data/ratchets.json, checked
-// in-process by tools/ratchets.mjs. LOWER a ceiling when you extract
-// (`node tools/ratchets.mjs --update`); raising one is a deliberate edit of
+// in-process by tools/check/ratchets.mjs. LOWER a ceiling when you extract
+// (`node tools/check/ratchets.mjs --update`); raising one is a deliberate edit of
 // the JSON with a reason in the commit. History: docs/notes/CEILING-HISTORY.md.
 // Run: node --test tests/unit/ratchets.test.mjs   (npm run test:tooling-fast)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { load, measure, verdict, METRICS, SLACK_MIN, SLACK_PCT } from "../../tools/ratchets.mjs";
+import { load, measure, verdict, METRICS, SLACK_MIN, SLACK_PCT } from "../../tools/check/ratchets.mjs";
 
 test("every ratcheted metric is at or under its ceiling", async () => {
   const v = verdict(await measure());
@@ -17,7 +17,7 @@ test("every ratcheted metric is at or under its ceiling", async () => {
 test("no ceiling is left far above the value it guards (one slack rule)", async () => {
   const v = verdict(await measure());
   assert.deepEqual(v.loose.map((r) => `${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > max(${SLACK_MIN}, ${SLACK_PCT * 100}%))`), [],
-    "a ceiling drifted above its file and stopped ratcheting — node tools/ratchets.mjs --update");
+    "a ceiling drifted above its file and stopped ratcheting — node tools/check/ratchets.mjs --update");
 });
 
 test("the data names only known metrics, and game.js carries the carve metrics", () => {

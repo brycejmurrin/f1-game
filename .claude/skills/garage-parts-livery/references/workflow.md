@@ -47,12 +47,12 @@ resolution.
 6. **Visual verify** (server on 3456):
    ```sh
    node tools/car/render-car.mjs --team=ferrari --preset=livery --views=tail
-   node tools/audit-parts.mjs --cats=aero
+   node tools/car/audit-parts.mjs --cats=aero
    ```
    Or `tools/carview.html?team=mclaren&aero=extreme`.
-7. **Test and ship.** `node tools/test-bg.mjs car` for catalog/physics/visual
-   recipes; `node tools/test-bg.mjs modes` when you changed research locks or
-   garage ownership UI (there is no `test:career`). Bump via `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`)
+7. **Test and ship.** `node tools/ci/test-bg.mjs car` for catalog/physics/visual
+   recipes; `node tools/ci/test-bg.mjs modes` when you changed research locks or
+   garage ownership UI (there is no `test:career`). Bump via `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`)
    before commit.
 
 ## Common mistakes

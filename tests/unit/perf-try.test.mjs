@@ -14,7 +14,7 @@
    file broke on a one-token refactor that changed no behaviour, so every
    assertion is now one of:
      - BEHAVIOUR through a harness — js/game.js frames pumped in
-       tools/game-vm.cjs with a recording GLX stub, js/render/glx/glx.js booted on
+       tools/lib/game-vm.cjs with a recording GLX stub, js/render/glx/glx.js booted on
        the tests/helpers/glx-mock.mjs WebGL2 mock, js/track/scenery/models.js in a VM;
      - a SHADER-TEXT pin, kept because a Node test has no GPU and the composed
        GLSL/WGSL/TSL is the only observable — matched on the comment-stripped
@@ -39,7 +39,7 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 // Shader files are GLSL/WGSL/TSL-as-data; strip JS and shader comments so a
 // pin can only match CODE, and a comment edit can neither fail nor satisfy it.
 const shader = (p) => read(p).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
-const { createGame } = createRequire(import.meta.url)("../../tools/game-vm.cjs");
+const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
 
 /* ── the shared headless game (draw order, cull maths, props fuse) ──────── */
 let g = null;

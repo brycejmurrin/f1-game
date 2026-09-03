@@ -7,12 +7,12 @@ orbit PNGs. The SKILL.md index is the hook tables and corner-name rules.
 
 ```sh
 # official turn count vs curvature peaks:
-node tools/apex-eval.mjs spa "({official:a.info().turns, peaks:a.corners().length})"
-node tools/apex-eval.mjs spa "a.trackInfo({what:'corners'})" --raw   # curated FIA list
+node tools/shot/apex-eval.mjs spa "({official:a.info().turns, peaks:a.corners().length})"
+node tools/shot/apex-eval.mjs spa "a.trackInfo({what:'corners'})" --raw   # curated FIA list
 
-node tools/apex-eval.mjs monza "a.wallStats()"
-node tools/apex-eval.mjs monaco "a.groundY(0.18, 10)"          # gap finder at a corner
-node tools/apex-eval.mjs suzuka "a.trackProfile(40)" --raw     # full elevation profile
+node tools/shot/apex-eval.mjs monza "a.wallStats()"
+node tools/shot/apex-eval.mjs monaco "a.groundY(0.18, 10)"          # gap finder at a corner
+node tools/shot/apex-eval.mjs suzuka "a.trackProfile(40)" --raw     # full elevation profile
 ```
 
 ## Street circuits (`street: true`)
@@ -27,7 +27,7 @@ changes). `wallStats().street` mirrors the flag; `trackProfile().hw` is still th
 
 ```sh
 for id in monaco singapore vegas baku jeddah; do
-  node tools/apex-eval.mjs "$id" "(({id:'$id', hw:a.trackProfile(80).map(p=>p.hw), w:a.wallStats()}))" --raw
+  node tools/shot/apex-eval.mjs "$id" "(({id:'$id', hw:a.trackProfile(80).map(p=>p.hw), w:a.wallStats()}))" --raw
 done
 ```
 
@@ -52,10 +52,10 @@ floodlights built; 0 = bright day).
 ## Validate visually
 
 ```sh
-node tools/capture/apex-capture.mjs tracks scratch/captures/apex-capture/tracks            # one orbit PNG per circuit
-node tools/capture/apex-capture.mjs tracks scratch/captures/apex-capture/tracks spa monza  # just these two
+node tools/shot/apex-capture.mjs tracks scratch/captures/apex-capture/tracks            # one orbit PNG per circuit
+node tools/shot/apex-capture.mjs tracks scratch/captures/apex-capture/tracks spa monza  # just these two
 ```
 The manifest flags any `blank:true` render. For geometry regressions the full
 suite's `terrain-over-road.spec.js` and `tracks-walls.spec.js` are the assertions;
 these hooks are how you investigate a failure. After any `js/circuits/*` edit, run
-`node tools/verify-track.cjs <id>` first (see the **new-track** skill).
+`node tools/track/verify-track.cjs <id>` first (see the **new-track** skill).

@@ -2,7 +2,7 @@
 //
 // The engine guards scenery horizontally against the ROAD (onTrack/rejBox) and
 // vertically against the GROUND (float-audit). This is the third axis — models
-// passing through each other. tools/clip-audit.cjs finds them; this locks the
+// passing through each other. tools/track/clip-audit.cjs finds them; this locks the
 // count in.
 //
 // Semantics are copied from tests/specs/props-over-road.spec.js deliberately:
@@ -33,7 +33,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // Street circuits dominate what remains — their city generators place building
 // rows by centreline arc length, which compresses on the inside of a corner
 // until adjacent footprints share volume.
-// Kept in tools/clip-baseline.json so the tool's own --gate and this test can
+// Kept in tools/track/clip-baseline.json so the tool's own --gate and this test can
 // never disagree about what the caps are.
 //
 // KNOWN LIMITATION behind silverstone's cap. The emission-adjacency filter
@@ -110,14 +110,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // session a full before/after audit to establish the reds were not its own
 // renderer change. A geometry edit owns its caps.
 const BASELINE = JSON.parse(
-  readFileSync(path.join(ROOT, "tools", "clip-baseline.json"), "utf8"),
+  readFileSync(path.join(ROOT, "tools", "track", "clip-baseline.json"), "utf8"),
 );
 
 // The sweep rebuilds every circuit (~90 s), so run it ONCE and share it.
 let cached = null;
 const sweep = () => (cached ||= JSON.parse(execFileSync(
   process.execPath,
-  [path.join(ROOT, "tools", "clip-audit.cjs"), "--all", "--json"],
+  [path.join(ROOT, "tools", "track", "clip-audit.cjs"), "--all", "--json"],
   { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
 )));
 

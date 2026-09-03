@@ -35,7 +35,7 @@ Load from the SKILL.md index when the task needs this detail.
    - Credits are in the same unit as `Parts.CATALOG` costs.
    - Research unlocks ownership permanently; fitting is constrained by budget
      cap and owned parts.
-   - Use `tools/career-economy.mjs` to measure what one or more seasons can buy
+   - Use `tools/car/career-economy.mjs` to measure what one or more seasons can buy
      instead of reasoning from raw credit totals.
 
 6. **Preserve determinism.**
@@ -52,11 +52,11 @@ Load from the SKILL.md index when the task needs this detail.
    - Garage locked rows: `#cs-options .cs-opt.locked`, or assert owned parts vs
      `Parts.CATALOG` via `__apex.career().owned` / `Career.isOwned()`.
    - Then assert UI flow through `tests/specs/career.spec.js` / `tests/specs/quali.spec.js`.
-   - Run `test:modes` in the background via `tools/test-bg.mjs` (covers career + quali).
+   - Run `test:modes` in the background via `tools/ci/test-bg.mjs` (covers career + quali).
 
 8. **Cache-bust JS/CSS edits.**
    - Career often touches `js/career/career*.js`, `js/race/quali-model.js`,
-     `js/race/reliability.js`, or `css/career.css`; run `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
+     `js/race/reliability.js`, or `css/career.css`; run `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
 
 ## Common Mistakes
 

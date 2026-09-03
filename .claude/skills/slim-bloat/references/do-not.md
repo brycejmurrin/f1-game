@@ -5,7 +5,7 @@ reaches for these first. They are not bloat.
 
 | Temptation | Why it stays | Evidence |
 |---|---|---|
-| Bare speed vs `VMAX` / a literal | `PACE` is a scale, not a cap. Use `vTop()`/`vStd()`/`aStd()`. | `tools/vstd-lint.mjs`, `docs/PHYSICS.md` |
+| Bare speed vs `VMAX` / a literal | `PACE` is a scale, not a cap. Use `vTop()`/`vStd()`/`aStd()`. | `tools/check/vstd-lint.mjs`, `docs/PHYSICS.md` |
 | `Tracks.curvature()` on the player with assists off | The arc must not reach the driver. | physics-contract-auditor; `docs/PHYSICS.md` columns |
 | `dt` clamp, `steps < 5`, `renderAlpha` | Tab-resume tunneling, spiral of death, stutter. | `../../../../docs/notes/ENGINEERING-PRACTICE-NOTES.md` §1 |
 | Split `updateCar()` or `render()` | Continuous integration / one draw; inventing a struct risks characterization. | `docs/ARCHITECTURE.md` §Reorg |

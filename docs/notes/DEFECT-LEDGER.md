@@ -39,7 +39,7 @@ on the 08-18 perf-hunt board, not this register.
 - **`menu-keyboard` › "left/right move along a chip row without leaving it" is
   red** (`tests/specs/menu-keyboard.spec.js`, the desktop keyboard/trackpad
   block). Confirmed PRE-EXISTING at `d7a1158` by a quiet-box A/B, both sides via
-  `tools/test-solo.mjs` and both started at load 1.24: `HEAD` fails in 20.6 s,
+  `tools/ci/test-solo.mjs` and both started at load 1.24: `HEAD` fails in 20.6 s,
   base fails in 18.4 s. No timeout on either side, so it is an assertion, not
   contention. This is the SECOND red test in this file — the `#track-detail`
   dialog regression above owns "Tab cannot escape the track-detail dialog" — so
@@ -49,12 +49,12 @@ on the 08-18 perf-hunt board, not this register.
   browser re-measure not run in this session.** COTA's amphitheater now emits
   from its declared origin (the 8 m declared-vs-built offset). Indianapolis
   shortens the oval stand and colour-band chords that covered the infield at
-  racing 0.33. Re-measure with `tools/measure-props-over-road.mjs` before
+  racing 0.33. Re-measure with `tools/track/measure-props-over-road.mjs` before
   treating the spec as green.
 
   **Both offenders are located and are the same class: a big bespoke
   `structure`, not foliage, barriers or lighting.** Measured with
-  `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs`, then matched to
+  `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs`, then matched to
   a prop by footprint via `a.scene({radius})` (`props[].at` / `sizeM`):
   - **COTA** max **4.79** at frac 0.877, world (709.1, 41.6). The intruding
     triangles stack vertically at one XZ point (`triY` 1.36 / 2.76 / 4.16), so
@@ -104,7 +104,7 @@ on the 08-18 perf-hunt board, not this register.
   must be lateral-only, or it will fail 40 circuits on harmless apron slack.
   Confirmed PRE-EXISTING at
   `d7a1158`, not introduced by the instancing-key hoist: `BASE=HEAD~1 node
-  tools/graph-parity.cjs cota indianapolis` returns exact parity
+  tools/track/graph-parity.cjs cota indianapolis` returns exact parity
   (max |Δpos| 0.0e+0 m), and a geometry test over identical geometry returns an
   identical verdict. Unseen because `test:scenery` is not in the CI smoke job —
   the same gap that let `agent-drive-bench` sit red, and the standing argument
@@ -268,7 +268,7 @@ four suites' own sources. What remains:
   the `test:net` browser group was NOT run for it.
 - **`CircuitElevations` is a dead branch** (`js/track/tracks.js` `hasRealElevation`
   / `elevationAt` / the `real` arm of `realPoints`): the global is defined only
-  by `tools/bake-elevation.mjs`, is in no manifest entry, so every circuit's
+  by `tools/gen/bake-elevation.mjs`, is in no manifest entry, so every circuit's
   elevation today is the synthetic `def.elevations` cosine bumps. Either wire
   the bake into `TRACK_VM` + the shell or delete the ~20 lines.
 - **Jeddah `startFrac` is in a corner** (`startline-probe`: mean |k| 0.0173
@@ -428,7 +428,7 @@ Deferred with reasoning, none lost:
   (`Math.max(lo, Math.min(hi, v))`) was **not a bug** — the two forms differ
   only above an inverted range, on `-0`, and on a non-number argument, and all
   eight of its call sites pass finite numbers with `lo < hi`; migrated anyway,
-  proven vertex-for-vertex by `tools/graph-parity.cjs --all`. Deliberately
+  proven vertex-for-vertex by `tools/track/graph-parity.cjs --all`. Deliberately
   LEFT inline: `updateCar()`'s signed wrap (physics inner loop, and its
   characterization golden is a browser spec), and `headInterp`/`yawVisInterp`,
   which fold an unbounded heading and need a loop rather than one fold.
@@ -458,7 +458,7 @@ Deferred with reasoning, none lost:
   presenting as tests. The second is now absorbed into the first as two more
   viewport rows, and the survivor is declared a capture harness: its own
   `test:gallery` group, run on demand, out of `test:ui`'s pass count.
-  `tools/assert-audit.mjs` now grades every test in the tree
+  `tools/ci/assert-audit.mjs` now grades every test in the tree
   asserting/implicit/vacuous and `tests/unit/assert-audit.test.mjs` fails on a
   vacuous body anywhere outside that one allow-listed file.
 - **`tests/manual/tracks-visual.spec.js` baselines were never generated** — the spec

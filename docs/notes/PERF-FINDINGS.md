@@ -20,9 +20,9 @@ thing**, which is how this project has lost the most time.
 
 | Question | Instrument | Valid on this box? |
 |---|---|---|
-| Where does physics/AI/CPU time go? | `tools/profile-gameloop.mjs <track> physics` | **Yes** — synchronous `__apex.step()`, no compositor. The honest one. |
-| Where does render-path JS time go? | `tools/profile-gameloop.mjs <track> render` | **No** — see below. |
-| How long does a track build take? | Node VM harness (`tools/verify-track.cjs`, `track-build-vm.cjs`) | **Yes** — pure CPU, no GPU. Same harness that produced the 14.0 → 4.5 s win. |
+| Where does physics/AI/CPU time go? | `tools/shot/profile-gameloop.mjs <track> physics` | **Yes** — synchronous `__apex.step()`, no compositor. The honest one. |
+| Where does render-path JS time go? | `tools/shot/profile-gameloop.mjs <track> render` | **No** — see below. |
+| How long does a track build take? | Node VM harness (`tools/track/verify-track.cjs`, `track-build-vm.cjs`) | **Yes** — pure CPU, no GPU. Same harness that produced the 14.0 → 4.5 s win. |
 | How big is the boot script wall? | Static: sum `stat -c%s` over index.html's `src=`s | **Yes** — no browser needed, fully deterministic. |
 | What is boot LCP / DCL made of? | chrome-devtools MCP `performance_start_trace` → `analyze_insight` | **Yes**, with caveats below. |
 | Is a frame GPU-bound? | `__apex.gpuTimer()` | **No** — returns `-1` under SwiftShader. Needs Chrome/Android on real hardware. |
@@ -65,7 +65,7 @@ Kept so the next audit starts from numbers instead of re-deriving them. Taken on
 the 4-core container under concurrent load, so treat the **ratios** as the
 signal and the absolute ms as an upper bound.
 
-**Physics CPU** — `tools/profile-gameloop.mjs vegas physics`, 2748 samples:
+**Physics CPU** — `tools/shot/profile-gameloop.mjs vegas physics`, 2748 samples:
 
 | self | function | file |
 |---|---|---|
@@ -268,8 +268,8 @@ are unchanged. Source-contracted in `tests/unit/perf-governor.test.mjs`.
 
 ### The VM build harness is a valid TIMER and an invalid PROFILER (2026-08-14)
 
-§0's table lists the Node VM harness (`tools/verify-track.cjs`,
-`tools/track-build-vm.cjs`) as a valid instrument for track-build cost. That is
+§0's table lists the Node VM harness (`tools/track/verify-track.cjs`,
+`tools/lib/track-build-vm.cjs`) as a valid instrument for track-build cost. That is
 true of **whole-build A/B timing** and false of **attribution**, and the
 difference has already cost two candidate findings.
 
@@ -311,7 +311,7 @@ operation count did not.
 read that as the change's fault. It was not, and the two steps that established
 that are the whole point of the next section:
 
-1. **`tools/test-solo.mjs`** re-ran it alone on a gated-quiet box (load 1.55) and
+1. **`tools/ci/test-solo.mjs`** re-ran it alone on a gated-quiet box (load 1.55) and
    returned *"FAIL on a quiet box is REAL. It is not the machine. Bisect it."*
    So it was not contention — three of the four were genuine.
 2. **The same spec was then run at the PREVIOUS DEPLOY SHA**, which had already
@@ -368,7 +368,7 @@ runner, with failures the local box never produced:
 Verified after all four fixes: **5/5 pass** solo on a quiet box at
 177.8 / 175.4 / 155.0 / 140.7 / 52.3 s.
 
-**Why it rotted:** `tools/pick-tests.mjs` maps `js/lighting/lighting.js` to the
+**Why it rotted:** `tools/ci/pick-tests.mjs` maps `js/lighting/lighting.js` to the
 `webgl` group correctly, so a local `pick-tests` run would have named it.
 (SUPERSEDED since: ci.yml's `selected` job is now the change-aware gate and is
 BLOCKING on branch pushes and pull requests, so this class of red no longer
@@ -385,7 +385,7 @@ running the same thing at an older commit, or by `md5`-ing the files the failing
 test actually loads. It costs minutes; believing a red run costs hours and can
 end in "fixing" working code.
 
-`tools/test-solo.mjs` exists for the first case and REFUSES to run on a hot box.
+`tools/ci/test-solo.mjs` exists for the first case and REFUSES to run on a hot box.
 Trust it. Two specs that blew a 120 s budget under load 8-9 came back at 68.9 s
 and 73.2 s solo.
 
@@ -533,7 +533,7 @@ re-checks and rebuilds if either moved — so priming changes WHEN the same worl
 is built, never WHICH.
 
 **VERIFIED AFTER THE FIX, with the instrument that found it.** Re-ran
-`tools/profile-gameloop.mjs vegas physics` on a quiet box and searched the raw
+`tools/shot/profile-gameloop.mjs vegas physics` on a quiet box and searched the raw
 profile by function name: `buildWorld`, `createCollider` and `trimesh` are
 **completely ABSENT** from the sampled window, against 467 inclusive samples
 before. Total samples for the identical 600-step workload fell **2575 -> 2093**,
@@ -766,7 +766,7 @@ merge that is worth 76-87 % fewer scenery draws in the normal path, on the
 strength of one sentence in `js/render/webgpu/wgx.js`: *"adjacent chunks almost
 never share an index list"*. That sentence was load-bearing and unmeasured.
 
-It is now measured, `tools/chunk-share-census.mjs` (vegas night, LOW, knob 0.3):
+It is now measured, `tools/gfx/chunk-share-census.mjs` (vegas night, LOW, knob 0.3):
 
 | mesh | chunks | empty | adjacent-equal pairs | of which BOTH empty | genuinely shared | longest run |
 |---|---|---|---|---|---|---|
@@ -800,7 +800,7 @@ That is a shader change mirrored across three backends and wants its own round.
 
 ## 2c. GLX per-frame call baseline, and the instance cell-set cache (2026-08-29)
 
-First full GL-call census of a RUNNING race (`tools/glx-call-census.mjs`,
+First full GL-call census of a RUNNING race (`tools/gfx/glx-call-census.mjs`,
 vegas night, full field, driving — not parked):
 
 | call | per frame |
@@ -843,7 +843,7 @@ OFF pending a hardware run, and the workflow that was supposed to gate it could
 not: both `gpu-census.yml` game-check steps passed `--backend three`, and their
 only `--ls` was hardcoded to `apex26.tlxForceHw`, so **GLX — the default
 backend, and the one this change lives in — was never exercised on real
-hardware at all**. The tool was always capable (`tools/gpu-game-check.mjs`
+hardware at all**. The tool was always capable (`tools/gfx/gpu-game-check.mjs`
 takes `--backend webgl2` and repeatable `--ls apex26.k=v`); only the workflow
 was hardcoded. So the gate was built first: a GLX leg plus a generic `ls`
 dispatch input threaded to all three legs, and the Verdict loop widened to
@@ -1025,7 +1025,7 @@ The job log had the shape:
 JSON, so the renderer never crashed; `pageClosed`/`browserGone` are teardown
 artifacts. The run reached `navigated` and never `booted`.
 
-**Cause** — `tools/gpu-game-check.mjs`:
+**Cause** — `tools/gfx/gpu-game-check.mjs`:
 
 ```js
 const ROOT = resolve(new URL("..", import.meta.url).pathname);
@@ -1087,7 +1087,7 @@ tests. Only `gpu-game-check` runs on Windows, so the rest were latent, but the
 form also mishandles percent-encoding: a checkout path containing a space breaks
 it on Linux too. All converted to `fileURLToPath`, and
 `tools-runnable.test.mjs` now bans the idiom, naming the offending file and the
-replacement. Proven by reintroducing it in `tools/agent.mjs` and watching the
+replacement. Proven by reintroducing it in `tools/shot/agent.mjs` and watching the
 guard name it.
 
 ### Part 2 — a failed diagnostic read was reporting `ok: true`
@@ -1543,7 +1543,7 @@ more live instances, all confirmed at source, all in `tools/` — which
 
 ### `verify-change.mjs` returned `pass` for a diff no rule claimed
 
-`tools/pick-tests.mjs` computes a three-way `reason` whose own comment says
+`tools/ci/pick-tests.mjs` computes a three-way `reason` whose own comment says
 *"unmatched — files changed but no rule claimed them, so the selection is NOT
 trustworthy and the caller must fall back to a full run."* `verify-change.mjs`
 called the raw `pick()` Map API and never saw it, so `!batches.length` collapsed
@@ -1559,7 +1559,7 @@ tolerates exit 2, so this needed no new mechanism and no caller change.
 
 ### The real-GPU gate could silently disable its own strongest checks
 
-`tools/gpu-census.mjs` set `anyHardware` from `runs.some(...)` and exited 0
+`tools/gfx/gpu-census.mjs` set `anyHardware` from `runs.some(...)` and exited 0
 **unconditionally**, so four failed launches were indistinguishable from "this
 machine is software". `gpu-census.yml` read that as `hardware = false`, which
 turns the `hardware &&` clauses — a missing `gpuErrors` count, `softAdapter` on
@@ -1677,7 +1677,7 @@ overlay reports the delta between its own paints for the same reason.
 
 ### Verified on a live page, not in the source
 
-`tools/loop-fault-repro.mjs` injects throws into `Input.poll` (a global
+`tools/gfx/loop-fault-repro.mjs` injects throws into `Input.poll` (a global
 `tickBody` calls unconditionally every frame) and reads what the game does.
 Seven checks, all green:
 
@@ -1704,7 +1704,7 @@ backends boot with zero GPU errors and produced **no pixel evidence at all**.
 
 ### The appearance column was never wired
 
-`tools/gpu-game-check.mjs` did not contain the string `frame` anywhere. It never
+`tools/gfx/gpu-game-check.mjs` did not contain the string `frame` anywhere. It never
 wrote `out.frame`. `gpu-census.yml` reads `const frame = g.frame || {}` and
 prints `meanLuma=${frame.meanLuma != null ? … : "n/a"}`, so that column was
 structurally empty from the day it was added. `meanLuma` exists in
@@ -1729,7 +1729,7 @@ The verification run left a stack trace, and it was pre-existing:
 
 ```
 ReferenceError: console_ is not defined
-    at tools/gpu-game-check.mjs:273   (in the finally)
+    at tools/gfx/gpu-game-check.mjs:273   (in the finally)
 ```
 
 `const console_ = []` was declared INSIDE the `try` while the `finally` read it.
@@ -1867,7 +1867,7 @@ over a number from a different instrument. `tlx-chunked.build()` gives every
 chunk of a mesh the **same** `position` / `normal` / `color` / `mat`
 `BufferAttribute` objects and only the index differs — so chunk residency can
 free index arrays and nothing else. Building montreal in a VM and totalling the
-buffers by kind (`tools/tlx-pack-check.cjs` shares the harness):
+buffers by kind (`tools/gfx/tlx-pack-check.cjs` shares the harness):
 
 | | vertex | index | chunks |
 |---|---|---|---|
@@ -1938,7 +1938,7 @@ value 'float16x3' is not a valid enum value of type GPUVertexFormat`. WebGPU's
 pipeline was refused, after which TLX stood down to GLX. WebGL2 accepts any
 width, which is why the WebGL2 control leg (and every SwiftShader/WebGL2 spec)
 stayed green. The refusal reproduces under Dawn/SwiftShader locally
-(`node tools/gpu-game-check.mjs montreal --backend three --path webgpu`), so
+(`node tools/gfx/gpu-game-check.mjs montreal --backend three --path webgpu`), so
 it was a missing probe, not a missing GPU. A `createRenderPipeline` hook
 (scratch, `scratch/wgpu-fmt-probe.mjs`) then listed every format three named:
 3-wide Int16 normals arrive as `snorm16x4` (three pads the width for 2-byte
@@ -1962,7 +1962,7 @@ the A/B tried first drifted the camera and the countdown between arms, and the
 OFF frame showed trees the ON frame did not for reasons that had nothing to do
 with packing. Screenshots could not settle this.
 
-`tools/tlx-pack-check.cjs` settles it: it **lifts the real packer out of the
+`tools/gfx/tlx-pack-check.cjs` settles it: it **lifts the real packer out of the
 shipping file** (a reimplementation drifts, then verifies its own copy), feeds
 it the real attribute arrays from a real build, decodes what the GPU would read
 back, and gates on the three things `tsl-lit` actually DOES with `mat` —
@@ -2350,7 +2350,7 @@ it in three previous sessions.
 
 `gpu-census.yml` run 25, `macos-latest` (Apple silicon / Metal), commit
 `64a98dd`, job green. This is the first census whose appearance column carries
-numbers: until the fix in §2l, `tools/gpu-game-check.mjs` never wrote
+numbers: until the fix in §2l, `tools/gfx/gpu-game-check.mjs` never wrote
 `out.frame`, so `meanLuma` printed `n/a` on every leg of every run.
 
 ```
@@ -2371,7 +2371,7 @@ because there was no pixel to disagree with.
 **WGX binds and renders on hardware.** `bound=true`, no `softAdapter`, luma
 76.4. Every in-container claim that WGX showed a frozen canvas or the wrong
 framing was a SwiftShader artifact from a screenshot taken without
-`GLX.awaitSoftPresent()` (the trap `tools/gfx-probe.mjs:301` already guards
+`GLX.awaitSoftPresent()` (the trap `tools/gfx/gfx-probe.mjs:301` already guards
 against and an ad-hoc CDP `Page.captureScreenshot` does not). Those claims are
 retracted.
 
@@ -2396,7 +2396,7 @@ original note here blamed the soak lengths (33 s vs 45 s). The real cause is
 that THE HARNESS RUNS THE TWO LEGS ON DIFFERENT PRESENT PATHS, and every link is
 citable:
 
-1. `tools/gpu-game-check.mjs:132` sets `apex26.tlxForceGL = "0"` for the WebGPU
+1. `tools/gfx/gpu-game-check.mjs:132` sets `apex26.tlxForceGL = "0"` for the WebGPU
    leg and `"1"` for the WebGL2 leg.
 2. `tlx.js:137` — `_softBlit = !forceWebGL && _capPref !== "0" && (_softAdapter
    || _headless || …)`. Playwright is headless, so `_headless` is true (the
@@ -2655,7 +2655,7 @@ Also hardened: `freeTexture` nulls `t.view` and `t._wgxDecalBG`, so a caller tha
 frees a livery texture and redraws hits the existing `!tex.view` guard instead of
 binding a destroyed texture through `drawDecal`'s cached bind group.
 
-Verified: `tools/wgx-validate.mjs` (real Dawn, montreal, 60 frames) exit 0.
+Verified: `tools/gfx/wgx-validate.mjs` (real Dawn, montreal, 60 frames) exit 0.
 
 ## 3. Left on the table
 
@@ -2803,7 +2803,7 @@ not yet built (menu flyby, `startRace`, `openQuali`).
 **The trap, measured.** FIVE separate harnesses load circuits with
 `readdirSync(CIRCUITS_DIR).filter(f => f.endsWith(".js"))`, which does not
 descend into the new subdirectory. A harness that misses it builds every
-circuit BARE and still reports confident numbers: `tools/float-audit.cjs` put
+circuit BARE and still reports confident numbers: `tools/track/float-audit.cjs` put
 cota at **3,988 prop cells instead of 32,897**, which surfaced as
 `scenery-grounding` "floating scenery grew" — i.e. it reads as a scenery
 REGRESSION, not as a missing include. Four of the five had to be found by
@@ -2829,7 +2829,7 @@ matches without `ignoreSearch` — a bare key is one nothing ever asks for.
 `load-order.test.mjs` now asserts both: that every `LAZY_RACE` / `LAZY_SCENERY`
 file is seeded, and that the SW's own stamping predicate — extracted from
 source and RUN, not pattern-matched — covers every path it seeds.
-`tools/offline-precache-check.cjs` is the behavioural half; see its README row
+`tools/check/offline-precache-check.cjs` is the behavioural half; see its README row
 and `docs/TESTING.md` for why `setOffline(true)` alone measures nothing here.
 
 **Round 16 (2026-09-01): 3,715,772 -> 3,319,340 B, another 396,432 B / 10.7%,
@@ -2967,7 +2967,7 @@ cost on GLX (GL blocks in draw calls) but only CPU-side cadence on WGX
   PASS (#game road coverage 43.6%, roadLutReady).
 - Commands: mcp-cli raw batches (detached page-side measurement + pollers,
   MCP_CLI_TIMEOUT_MS=170000) in artifacts/r5-{glx,wgx}-ab*.log;
-  node tools/gfx-probe.mjs --backend webgpu --lite vegas.
+  node tools/gfx/gfx-probe.mjs --backend webgpu --lite vegas.
 - DECISION: ULTRA-night conditional layer ships `perChunkLights: 0.3`
   (light-presets.js "*|night"), predicate in light-store condLayer.
 
@@ -3267,7 +3267,7 @@ directions (drop a field → red; add a spurious one → red).
   `TrackModels.scratch()` calls, which needs per-track numbers. Not this round.
 - **`track.graph.nodes` retains 24.8 MB of Vegas's 40.4 MB for the session** and
   is consumed exactly once, by `graph.batches()`. Only `__apex.trackGraph()` and
-  `tools/graph-parity.cjs` read it afterwards.
+  `tools/track/graph-parity.cjs` read it afterwards.
 - **`lampArmed` is cleared every `present()`** while `js/game.js` deliberately
   caches the map across frames, so the pool shadow may appear ~1 frame in 12 (and
   while parked, exactly once — the rank cache freezes `flBest` and the 12 m cell

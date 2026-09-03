@@ -5,7 +5,7 @@
  * that the file really assigns exactly the global it is supposed to, or that
  * every global it references is assigned by SOME file that loads first. The
  * post-extraction ritual was "grep the removed symbols" — this test replaces
- * it with the real reference graph from tools/scan-globals.mjs (espree +
+ * it with the real reference graph from tools/check/scan-globals.mjs (espree +
  * eslint-scope over every manifest FULL + DEFERRED + LAZY_AGENT file, scanned LIVE — no
  * artifacts/ state, works from a fresh clone).
  *
@@ -35,7 +35,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { scanRepo, buildGraph, checkGraph } from "../../tools/scan-globals.mjs";
+import { scanRepo, buildGraph, checkGraph } from "../../tools/check/scan-globals.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -86,7 +86,7 @@ const GROWABLE_GLOBALS = {
 // Known reads of names NO manifest file assigns — each with its story. A new
 // external name is a red flag (an undeclared dependency or a typo'd global).
 const KNOWN_EXTERNAL_READS = {
-  "js/track/tracks.js": ["CircuitElevations"],  // future tools/bake-elevation.mjs output; typeof-guarded feature probe
+  "js/track/tracks.js": ["CircuitElevations"],  // future tools/gen/bake-elevation.mjs output; typeof-guarded feature probe
   "js/audio/spotify.js": [
     "Spotify",                      // the Spotify Web Playback SDK, injected at connect time
     "onSpotifyWebPlaybackSDKReady", // the SDK's own window callback contract

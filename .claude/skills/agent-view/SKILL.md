@@ -5,10 +5,10 @@ description: Use when the user wants to see or drive Apex 26 without screenshots
 
 # Agent view — perceive and drive the game as text
 
-Prefer `node tools/agent.mjs <track> help` / `__apex.agentHelp()` over this skill when you only need one tool. MCP wrap (week-2 lock): `./tools/apex-tools-mcp.sh call apex_agent '{"track":"monza","command":"world"}'`. Per-tool catalog, policy, staging: [references/surface.md](references/surface.md). Full surface: `../../../docs/DEBUG-HOOKS.md` + `docs/DEBUG-HOOKS.md`.
+Prefer `node tools/shot/agent.mjs <track> help` / `__apex.agentHelp()` over this skill when you only need one tool. MCP wrap (week-2 lock): `./tools/mcp/apex-tools-mcp.sh call apex_agent '{"track":"monza","command":"world"}'`. Per-tool catalog, policy, staging: [references/surface.md](references/surface.md). Full surface: `../../../docs/DEBUG-HOOKS.md` + `docs/DEBUG-HOOKS.md`.
 
 **TL;DR** — Perceive and drive Apex 26 as text, no screenshots. From a shell:
-`node tools/agent.mjs <track> <tool> [flags]` (it stages `race`/`go`/`jump` +
+`node tools/shot/agent.mjs <track> <tool> [flags]` (it stages `race`/`go`/`jump` +
 frames for you). In-page: `window.__apex.<tool>(...)`. Read `agentHelp()` +
 `objective()` once, then loop `world({detail:"drive"})` → decide →
 `act(...)`/`rollout({policy})` → `terminal()`. Pin `seed(n)` before `race()`/`tt()`,
@@ -27,7 +27,7 @@ error, message, fix}`, never `null` — with the two quiet exceptions above),
 text (BALROG, VideoGameBench) — so use these, not screenshots.
 
 Three ways in — same surface, different cost:
-- `node tools/agent.mjs <track> <tool> [flags]` from a shell — it does the
+- `node tools/shot/agent.mjs <track> <tool> [flags]` from a shell — it does the
   `race`/`go`/`jump` + render-frames staging correctly so you don't hand-roll it.
   **Each call boots its own browser (~30–40 s)**, so it is one read per boot:
   great for a single question, wasteful for many. Don't chain several in one
@@ -40,7 +40,7 @@ Three ways in — same surface, different cost:
   `render({what:"view"})`/`render({what:"map"})`/`scene({visible:true})`;
   `terminal`/`seed` are in-page only.
   Run `agent.mjs` with no args (or `-h`) for the exact list.
-- `node tools/apex-eval.mjs <track> "<expr>"` — boots once and evaluates one
+- `node tools/shot/apex-eval.mjs <track> "<expr>"` — boots once and evaluates one
   expression where `a` = `window.__apex`. The door for **anything past a single
   read**: a multi-call sequence, a custom driving policy, a seeded A/B. Batch
   reads into one expression (`JSON.stringify({x:a.world(), y:a.field()})`) and pay
@@ -77,7 +77,7 @@ Read both once; do not re-fetch per tick.
 - `../../../docs/DEBUG-HOOKS.md` — the design and the research behind each choice.
 - `__apex.agentHelp()` — the live manifest, including the `fields` glossary and
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
-- Tests: `node tools/test-bg.mjs hooks` (`tests/specs/agent-view.spec.js`,
+- Tests: `node tools/ci/test-bg.mjs hooks` (`tests/specs/agent-view.spec.js`,
   `tests/specs/agent-drive-bench.spec.js`, `tests/specs/agent-determinism.spec.js`).
 
 ## Load on demand

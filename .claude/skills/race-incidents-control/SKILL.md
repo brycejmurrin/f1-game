@@ -66,7 +66,7 @@ Commands:
 ```sh
 npm run test:tooling-fast
 node --test tests/unit/race-control.test.mjs
-node tools/test-bg.mjs driving   # in background (non-blocking)
+node tools/ci/test-bg.mjs driving   # in background (non-blocking)
 ```
 
 Deep references:

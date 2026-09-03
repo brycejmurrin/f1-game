@@ -15,7 +15,7 @@ const {
   parseMenuGalleryArgv,
   pickScreens,
   SCREENS,
-} = await import("../../tools/menu-capture.mjs");
+} = await import("../../tools/ui/menu-capture.mjs");
 
 test("cellFileBase and cellPaths agree", () => {
   const base = cellFileBase("settings", "ios-iphone-landscape");
@@ -49,7 +49,7 @@ test("listScreenIds matches SCREENS length", () => {
 });
 
 test("layout-audit --list exits 0 without Chromium", () => {
-  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/layout-audit.mjs"), "--list"], {
+  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ui/layout-audit.mjs"), "--list"], {
     encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stderr || r.stdout);
@@ -58,7 +58,7 @@ test("layout-audit --list exits 0 without Chromium", () => {
 });
 
 test("layout-audit --help names gallery and survey", () => {
-  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/layout-audit.mjs"), "--help"], {
+  const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ui/layout-audit.mjs"), "--help"], {
     encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stderr || r.stdout);

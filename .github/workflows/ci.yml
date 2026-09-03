@@ -92,7 +92,7 @@ name: CI
 # If you change what a step RUNS, re-time it and change the number here too.
 #
 # Deliberately NOT here: the full Playwright suite is ~40 minutes of SwiftShader.
-# Run it locally with tools/test-bg.mjs against the groups tools/pick-tests.mjs
+# Run it locally with tools/ci/test-bg.mjs against the groups tools/ci/pick-tests.mjs
 # names. This gate is for what breaks silently, not for everything. (The
 # renderer group is the exception, and it is in this FILE without being in the
 # GATE — see renderer-macos.)
@@ -245,11 +245,11 @@ jobs:
       # of those was invisible because nothing said out loud how much of the
       # suite the gate covers. Today: 2 of 110 Playwright specs. That is a
       # deliberate choice — the full suite is ~40 minutes of SwiftShader and the
-      # header above explains why it lives in tools/test-bg.mjs instead — but it
+      # header above explains why it lives in tools/ci/test-bg.mjs instead — but it
       # should be a choice someone can SEE, not one only visible by reading four
       # job definitions and resolving every npm script by hand.
       #
-      # NOT a gate, on purpose. The obvious version — run tools/test-observed.mjs
+      # NOT a gate, on purpose. The obvious version — run tools/ci/test-observed.mjs
       # here and fail on the never-observed count — is broken by construction:
       # artifacts/ is gitignored, so in CI every title is legitimately unobserved
       # and the check would be red on an environment fact. That is precisely the
@@ -257,7 +257,7 @@ jobs:
       # §"a guard that only runs on ONE MACHINE"). tests/unit/ci-coverage.test.mjs
       # guards the TOOL, which is where a guard belongs.
       - name: What does this gate cover?
-        run: node tools/ci-coverage.mjs
+        run: node tools/ci/ci-coverage.mjs
       - name: Pure-node unit suites
         run: |
           npm run test:net-unit
@@ -356,7 +356,7 @@ jobs:
       # only the expensive steps inside it are skipped. The `needs:` semantics
       # that just started working are not touched at all.
       #
-      # The paths come from tools/pick-tests.mjs's RULES, which is the repo's
+      # The paths come from tools/ci/pick-tests.mjs's RULES, which is the repo's
       # existing answer to "what does this diff need": `sweeps` is routed only
       # from js/track/scenery* and js/track/{tracks,mesh,spline,surface,geom,
       # graph}.js. js/circuits/ and the suites' own files are included here as
@@ -418,7 +418,7 @@ jobs:
         run: npm run test:sweeps
       - name: Every circuit still builds headlessly
         if: steps.filter.outputs.geometry == 'true'
-        run: node tools/verify-track.cjs --all
+        run: node tools/track/verify-track.cjs --all
 
   smoke:
     name: Smoke (page boots, __apex responds)
@@ -654,7 +654,7 @@ jobs:
       # A gate that is always killed provides no coverage, so this is not a
       # reduction in what CI checks — it is the difference between nine specs
       # that report and seventy-one that never finish. dev-tools and logging
-      # belong in a local `tools/test-bg.mjs` run, which is where the workflow
+      # belong in a local `tools/ci/test-bg.mjs` run, which is where the workflow
       # header already says the full suite lives.
       # ONE WORKER, AND A PER-TEST TIMEOUT THAT FITS THE RUNNER. With the spec
       # count fixed, run 31019857052 still failed — but as `failure` rather than
@@ -717,7 +717,7 @@ jobs:
         env:
           APEX_WORKERS: 1
         # --shard splits smoke.spec.js's tests across the four matrix VMs; the
-        # flag passes through tools/run-playwright.mjs verbatim (it forwards
+        # flag passes through tools/ci/run-playwright.mjs verbatim (it forwards
         # argv to `playwright test`). Unsharded this step took 30-37 min.
         run: npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/4
       # The wide run: the whole boot group, 4 shards, nightly — or, on dispatch,
@@ -949,12 +949,12 @@ jobs:
       # change, a Chromium that stops seeing Metal) the specs would silently
       # run on SwiftShader and this job would become a slower ubuntu job that
       # still says "macOS". AGENTS.md: a software run is not evidence about a
-      # player's machine. The tri-state census (tools/gpu-census.mjs) is the
+      # player's machine. The tri-state census (tools/gfx/gpu-census.mjs) is the
       # same one gpu-census.yml gates on; `=== true` on purpose, so a census
       # that measured nothing (null) fails rather than passing vacuously.
       - name: Adapter census — is the Metal adapter still there?
         run: |
-          node tools/gpu-census.mjs --json census-macos.json
+          node tools/gfx/gpu-census.mjs --json census-macos.json
           node -e '
             const r = require("./census-macos.json");
             if (r.anyHardware !== true) {
@@ -966,7 +966,7 @@ jobs:
       # the launch drops the `--use-angle=swiftshader` pin every other run
       # carries and selects the full Chromium (`channel: "chromium"`). The
       # shared config is untouched — it is a protected contract file — and the
-      # --config flag passes through tools/run-playwright.mjs verbatim. NEVER
+      # --config flag passes through tools/ci/run-playwright.mjs verbatim. NEVER
       # add --use-angle=vulkan anywhere on this job: on macOS that one flag
       # forces ANGLE onto SwiftShader and requestAdapter() returns null
       # (CI-RENDERING-PERFORMANCE.md §There IS a real GPU, trap 1). Two
@@ -1000,7 +1000,7 @@ jobs:
     # event payload does not carry a PR base.
     if: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
     #
-    # The budget maths is tools/select-budget.mjs (measured: 79.7 s/test at one
+    # The budget maths is tools/ci/select-budget.mjs (measured: 79.7 s/test at one
     # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).
     # Hence retries 0 and --timeout=120000 here — the selector's settings, not
     # smoke's gate settings (420 s, one retry): a retry only doubles the cost
@@ -1008,7 +1008,7 @@ jobs:
     # specs are excluded here because their independent blocking jobs own their
     # measured timeout policies; duplicating smoke here caused run 32103664606
     # to turn four green 420 s shards into a false red at exactly 120 s.
-    # tools/select-specs.mjs decomposes
+    # tools/ci/select-specs.mjs decomposes
     # pick-tests' groups into specs, fits them to the budget surviving one
     # timeout, and NAMES every spec it skips — silent truncation would read as
     # "covered".
@@ -1058,12 +1058,12 @@ jobs:
           fail() { echo "::error::SELECTED GATE FAILED CLOSED: $1"; exit 1; }
           # Resolve comparison base with HEAD~1 fallback for force-push/first-branch.
           BEFORE="$(EVENT="$EVENT" PUSH_BEFORE="$PUSH_BEFORE" PR_BASE="${PR_BASE:-}" \
-            bash tools/ci-resolve-before.sh)" || fail "could not resolve comparison base"
+            bash tools/ci/ci-resolve-before.sh)" || fail "could not resolve comparison base"
           case "${BEFORE:-}" in
             ""|0000000000000000000000000000000000000000) fail "no valid comparison base for $EVENT" ;;
           esac
           git cat-file -e "${BEFORE}^{commit}" 2>/dev/null || fail "comparison base $BEFORE is unreachable"
-          node tools/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt --json > sel.json \
+          node tools/ci/select-specs.mjs --since "$BEFORE" --failed-from .selected-failed.txt --json > sel.json \
             || fail "selector failed"
           node -e '
             const r = require("./sel.json");
@@ -1094,12 +1094,12 @@ jobs:
       # writes; parsing it here keeps the tool free of CI-specific formats.
       - name: Record failing specs for the next run
         if: always() && steps.sel.outputs.specs != ''
-        # tools/junit-failed.mjs, not an inline regex: Playwright writes
+        # tools/ci/junit-failed.mjs, not an inline regex: Playwright writes
         # <system-out> BEFORE <failure>/<error> inside a testcase, so the
         # "testcase immediately followed by failure" regex this replaced never
         # matched (two red runs on 2026-09-02 both said "no failures to carry"),
         # and its classname lacks the tests/ prefix the selector filters on.
-        run: node tools/junit-failed.mjs artifacts > .selected-failed.txt || true
+        run: node tools/ci/junit-failed.mjs artifacts > .selected-failed.txt || true
       - name: Save failing specs
         if: always() && steps.sel.outputs.specs != ''
         uses: actions/cache/save@v4

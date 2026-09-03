@@ -1,6 +1,6 @@
 # Track debug hooks
 
-Verified live (`tools/apex-eval.mjs`). All return plain JSON — ideal for tests and
+Verified live (`tools/shot/apex-eval.mjs`). All return plain JSON — ideal for tests and
 audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)`.
 
 ## Layout & geometry

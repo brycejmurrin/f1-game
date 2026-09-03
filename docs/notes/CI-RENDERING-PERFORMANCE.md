@@ -6,7 +6,7 @@ local Playwright runs died to their own timeouts rather than to failures.
 **Part 1 is external findings, not measurements on this repo** — every number in
 it is somebody else's, and the section headings exist to say which claims are
 worth spending an afternoon measuring here. **Part 2 is grounded**: its vertex
-counts come from `tools/verify-track.cjs --all` and its byte arithmetic from the
+counts come from `tools/track/verify-track.cjs --all` and its byte arithmetic from the
 real interleaved layout in `js/render/glx/glx.js`. Keep the two apart when quoting
 this file.
 
@@ -62,17 +62,17 @@ Three software paths matter for Apex probing; they are **not interchangeable**:
 Commands that produced the table:
 
 ```sh
-node tools/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
-node tools/gfx-probe.mjs --backend webgpu --lite montreal
-node tools/wgx-lavapipe-probe.mjs montreal --lite
+node tools/gfx/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
+node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal
+node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite
 APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
-  node tools/mcp-cli.mjs probe --backend webgpu --lite --wait 12000 --eval '…'
+  node tools/mcp/mcp-cli.mjs probe --backend webgpu --lite --wait 12000 --eval '…'
 ```
 
 **Takeaways for probe tooling:**
 
 1. **Keep SwiftShader as the default WebGPU preset** — simplest, documented in
-   `tools/webgpu-chrome-args.cjs`, matches Playwright harness.
+   `tools/lib/webgpu-chrome-args.cjs`, matches Playwright harness.
 2. **Lavapipe headless is a viable A/B** for WGX lifecycle (adapter/device/shaders)
    when you want a second software Vulkan stack; swap flags only, not game code.
 3. **MCP / Playwright WGX screenshots:** use visible `#game` after
@@ -126,7 +126,7 @@ soft, which is the only part software genuinely cannot do. Force them
 individually — forcing all of them at once costs more llvmpipe seconds than the
 `awaitSoftPresent` budget has, and the timeout does not say which path did it
 (measured: `tlxForceHw=1` timed out at 60 s twice; each single gate presents in
-10–25 s). `tools/gfx-probe.mjs --ls key=value` sets any `apex26.*` knob before
+10–25 s). `tools/gfx/gfx-probe.mjs --ls key=value` sets any `apex26.*` knob before
 boot.
 
 Bisect on montreal, TLX + Dawn + Lavapipe, `GLX.gpuErrors()` after `park()`:
@@ -170,7 +170,7 @@ The agent container has none (previous section) — but GitHub's Apple-silicon
 image does, and the published answers about it contradict each other (the M1
 runner announcement says GPU acceleration is on by default;
 `actions/runner-images#7085` asks for Metal passthrough as a missing feature).
-`tools/gpu-census.mjs` + `.github/workflows/gpu-census.yml` asked the images
+`tools/gfx/gpu-census.mjs` + `.github/workflows/gpu-census.yml` asked the images
 instead of believing either:
 
 | image | stock | `--enable-unsafe-webgpu` | `+Vulkan` | `+disable_adapter_blocklist` | anyHardware |
@@ -209,7 +209,7 @@ backend pick has to survive the gap between them.
 
 Practical consequence: `macos-latest` is the project's real-GPU surface. Dispatch
 `gpu-census.yml` with `census_only: true` for the adapter answer in seconds, or
-without it to run `tools/gpu-game-check.mjs` — the portable sibling of
+without it to run `tools/gfx/gpu-game-check.mjs` — the portable sibling of
 `gfx-probe` that reports `GLX.gpuErrors()`, the env-probe state and the
 `?gfxdebug=1` overlay text from the game itself.
 
@@ -266,11 +266,11 @@ agent loses Lavapipe again.
 
 | Want | Do this |
 |------|---------|
-| WGX visible `#game` | `node tools/gfx-probe.mjs --backend webgpu --lite montreal` |
-| WGX readback oracle | `node tools/wgx-capture.mjs montreal --lite` → `frame.png` (optional; can flake on SwiftShader) |
-| WGX on Lavapipe | `node tools/wgx-lavapipe-probe.mjs montreal --lite` |
-| TLX pixels (ForceGL / SwiftShader WebGL2) | `node tools/gfx-probe.mjs --backend three --lite montreal` |
-| TLX WebGPU pixels (Lavapipe soft-present) | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal` |
+| WGX visible `#game` | `node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal` |
+| WGX readback oracle | `node tools/gfx/wgx-capture.mjs montreal --lite` → `frame.png` (optional; can flake on SwiftShader) |
+| WGX on Lavapipe | `node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite` |
+| TLX pixels (ForceGL / SwiftShader WebGL2) | `node tools/gfx/gfx-probe.mjs --backend three --lite montreal` |
+| TLX WebGPU pixels (Lavapipe soft-present) | `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal` |
 | Prove ICD | `test -f /usr/share/vulkan/icd.d/lvp_icd.json && vulkaninfo --summary \| head` |
 
 Agent index: `AGENTS.md` §Seeing the game / §Cursor Cloud. Tool rows:
@@ -368,7 +368,7 @@ core WebGPU; the freeze was a cost call, not an API wall.
 # Part 2 — iOS Safari memory, and what Vegas actually costs
 
 Added the same day. This part **is** grounded in this repo: the vertex counts are
-`tools/verify-track.cjs --all` output and the byte arithmetic is the real
+`tools/track/verify-track.cjs --all` output and the byte arithmetic is the real
 interleaved layout in `js/render/glx/glx.js:479` (`fpv = 9 + mat + trk`).
 
 ## The external numbers
@@ -415,7 +415,7 @@ structural work, noting that `verify-track vegas` prints 1,825,925 prop verts an
 trigger". This part supplies the number that item was missing. The gate is cheap
 — `verify-track.cjs` already computes the count, so it is a threshold and a
 non-zero exit — and the ratchet pattern already used by
-`tools/clip-baseline.json` and `tools/coplanar-baseline.json` fits exactly: pin
+`tools/track/clip-baseline.json` and `tools/track/coplanar-baseline.json` fits exactly: pin
 today's per-circuit counts, fail on regression, let a deliberate increase be a
 visible edit to the baseline.
 
@@ -503,7 +503,7 @@ canvas colours per backend: §Measured above.
 ## Cursor Cloud bootstrap (AGENTS.md §Cursor Cloud)
 
 The bootstrap IS `.cursor/environment.json` (committed 2026-09-03: its `install`
-calls `bash tools/cloud-agent-install.sh` and its `mcpServerAllowlist` names the
+calls `bash tools/env/cloud-agent-install.sh` and its `mcpServerAllowlist` names the
 repo's stdio servers; `tests/unit/environment-json.test.mjs` pins it). System
 packages still persist only via snapshot + Save on the environment dashboard — an `apt-get` in a live agent does **not** survive
 the next cold boot otherwise (§Cursor Cloud agent environment above has the
@@ -514,12 +514,12 @@ Registering the servers is NOT enough on its own: a Cloud Agent still needs
 (or team Integrations & MCP) — the host catalog often loads only two of the
 three until all three are registered there (2026-09-03). When `chrome_*` is
 missing from the session catalog, the CLI fallback is
-`python3 tools/probe-mcp.py chrome-start` (see `.claude/skills/mcp-probe`).
+`python3 tools/mcp/probe-mcp.py chrome-start` (see `.claude/skills/mcp-probe`).
 
 Fresh-agent bootstrap, matching AGENTS.md Verification §1:
 
 ```sh
-bash tools/cloud-agent-install.sh
+bash tools/env/cloud-agent-install.sh
 # equivalent manual steps when the script is not the dashboard install:
 export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 npm install --ignore-scripts --no-audit --prefer-offline
@@ -527,7 +527,7 @@ npx playwright install chromium-headless-shell
 npx playwright install chromium
 ```
 
-The dashboard `install` should call `bash tools/cloud-agent-install.sh`. A bare
+The dashboard `install` should call `bash tools/env/cloud-agent-install.sh`. A bare
 `npm install` can die on `registry.npmjs.org` ECONNRESET with npm's "Exit
 handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even when
 `node_modules` is already usable — `--prefer-offline` is what the script adds.
@@ -539,8 +539,8 @@ handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even when
 MCP on this host: the three-server map is `docs/AGENT-SURFACE.md` (trimmed from seven on 2026-09; the CLI-only leftovers are tabled there). Keep
 `apex-tools` in repo-root `.mcp.json` (and `.cursor/mcp.json`); the cloud host
 catalog is often empty, in which case the shell wrappers
-(`./tools/apex-tools-mcp.sh call`, `./tools/playwright-mcp.sh`,
-`./tools/tinyfish-mcp.sh`, `python3 tools/probe-mcp.py`) are the same surface.
+(`./tools/mcp/apex-tools-mcp.sh call`, `./tools/mcp/playwright-mcp.sh`,
+`./tools/mcp/tinyfish-mcp.sh`, `python3 tools/mcp/probe-mcp.py`) are the same surface.
 Never run Chrome MCP while Playwright is running, and do not attach
 `mcp-probe` for a `version.json` check (`deploy-research` owns that).
 
@@ -555,11 +555,11 @@ non-blank visible blit.
 
 | Backend | Command / path | Checks |
 |---------|----------------|--------|
-| **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
-| **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
-| **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
-| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
-| **TLX WebGPU** | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
+| **WGX visible canvas** | `node tools/gfx/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
+| **WGX readback** | `node tools/gfx/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
+| **WGX A/B** | `node tools/gfx/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
+| **TLX / three** | `node tools/gfx/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
+| **TLX WebGPU** | `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
 
 ### The real GPU, in one paragraph
 
@@ -567,7 +567,7 @@ GitHub's Apple-silicon image (`macos-latest`) reports a HARDWARE adapter
 (Metal) on stock flags; ubuntu-latest is SwiftShader, windows-latest WARP, this
 container llvmpipe. Dispatch `.github/workflows/gpu-census.yml` —
 `census_only: true` for the adapter answer in seconds, without it to run
-`tools/gpu-game-check.mjs` and read the Verdict step, which GATES on GPU
+`tools/gfx/gpu-game-check.mjs` and read the Verdict step, which GATES on GPU
 errors, failed env-probe faces, or `softAdapter` true on hardware. **Never pass
 `--use-angle=vulkan` on macOS** — it drops WebGPU to SwiftShader and silently
 turns a real-GPU run software. Census tables and what the real GPU has found:
@@ -575,7 +575,7 @@ turns a real-GPU run software. Census tables and what the real GPU has found:
 
 ### Cursor Cloud, measured
 
-Fresh-agent bootstrap is `bash tools/cloud-agent-install.sh` (the dashboard
+Fresh-agent bootstrap is `bash tools/env/cloud-agent-install.sh` (the dashboard
 `install` should call it: the AGENTS.md §Verification session-shape sequence
 plus full Chromium, which `wgx-validate` / `wgx-capture` need — the headless
 shell has no `navigator.gpu`). System packages (`mesa-vulkan-drivers`,

@@ -1,7 +1,7 @@
 # Chrome DevTools MCP — Apex playbook (2026-08-12)
 
 Measured recipes for the **40** tools exposed by
-`tools/chrome-devtools-mcp.sh` (local `scratch/chrome-devtools-mcp` clone).
+`tools/mcp/chrome-devtools-mcp.sh` (local `scratch/chrome-devtools-mcp` clone).
 Interactive twin of Playwright — not a CI gate. Skills:
 `.claude/skills/mcp-probe`, `.claude/skills/survey-ui-matrix`.
 
@@ -19,7 +19,7 @@ Interactive twin of Playwright — not a CI gate. Skills:
    `take_snapshot` → `click({uid})` over `getElementById` when checking a11y.
 4. **`resize_page` is unreliable** on this shell — use `emulate` with the full
    viewport descriptor (`852x393x3,mobile,touch,landscape`), or Playwright MCP
-   `browser_resize` (`tools/playwright-mcp.sh`; never both browsers at once).
+   `browser_resize` (`tools/mcp/playwright-mcp.sh`; never both browsers at once).
 5. **Park `about:blank`** before starting Playwright groups.
 6. **DO NOT JUDGE LAYOUT FROM AN MCP SCREENSHOT ON THIS SHELL.** `take_screenshot`
    here produces images that disagree with the DOM, in both directions, and it
@@ -36,7 +36,7 @@ Interactive twin of Playwright — not a CI gate. Skills:
    the brand measured x=86 w=348 h=325 at `opacity: 1` while the PNG showed
    empty space, and `take_snapshot` listed 20 painted elements with no
    duplicates. A Playwright capture of the identical page
-   (`node tools/layout-audit.mjs --screens=title --viewports=… --shots`)
+   (`node tools/ui/layout-audit.mjs --screens=title --viewports=… --shots`)
    rendered correctly both times.
    **So: measure with `evaluate_script`, and if you need a picture, take it with
    Playwright.** An MCP screenshot is fine for "is the app up, roughly", never
@@ -72,7 +72,7 @@ Interactive twin of Playwright — not a CI gate. Skills:
 | Phone realism | `emulate.cpuThrottlingRate` (e.g. 4) + optional `networkConditions` |
 | Leaks | `take_heapsnapshot` → `compare_heapsnapshots` → `get_heapsnapshot_*` |
 
-Full schemas: run `tools/cdmcp-cli.py list-tools` or initialise the MCP and call
+Full schemas: run `tools/mcp/cdmcp-cli.py list-tools` or initialise the MCP and call
 `tools/list`.
 
 ---
@@ -165,12 +165,12 @@ Do not chase SEO on the fan game shell unless product asks.
 ### Background measure (logged)
 
 ```
-node tools/cdmcp-bg.mjs boot --port 3462   # returns immediately
+node tools/mcp/cdmcp-bg.mjs boot --port 3462   # returns immediately
 tail -f artifacts/logs/cdmcp-measure.log
-node tools/cdmcp-bg.mjs --status | --wait | --stop
+node tools/mcp/cdmcp-bg.mjs --status | --wait | --stop
 ```
 
-Or: `python3 tools/cdmcp-measure.py full --bg --port 3462`.
+Or: `python3 tools/mcp/cdmcp-measure.py full --bg --port 3462`.
 
 Writes `artifacts/logs/cdmcp-measure.log` + `.json`. Watcher MUST anchor on the
 reporter terminal line — same rule as Playwright groups:
@@ -196,18 +196,18 @@ Cursor-hosted MCP catalogs may only expose `cursor-cloud`. Prefer the unified
 bridge:
 
 ```
-python3 tools/probe-mcp.py list-tools
-python3 tools/probe-mcp.py call chrome_<tool> '<json>'
-python3 tools/probe-mcp.py serve   # .mcp.json "probe" entry — every chrome_* + tinyfish_* tool
+python3 tools/mcp/probe-mcp.py list-tools
+python3 tools/mcp/probe-mcp.py call chrome_<tool> '<json>'
+python3 tools/mcp/probe-mcp.py serve   # .mcp.json "probe" entry — every chrome_* + tinyfish_* tool
 ```
 
 A bare `call` spawns a fresh Chromium per invocation and loses all page state
 (measured 2026-08-17). For multi-call flows run
-`python3 tools/probe-mcp.py chrome-start` first — one persistent browser
+`python3 tools/mcp/probe-mcp.py chrome-start` first — one persistent browser
 behind `127.0.0.1:3712` that `call` auto-routes to — and `chrome-stop` before
 any Playwright run. Details in `.claude/skills/mcp-probe`.
 
-Local agents can also drive chrome-devtools via `tools/chrome-devtools-mcp.sh run`
-over stdio (`tools/cdmcp-cli.py`, `tools/ui-readable-survey-mcp.py`,
-`tools/mcp-cli.mjs`). When writing a custom client, handle **server→client**
+Local agents can also drive chrome-devtools via `tools/mcp/chrome-devtools-mcp.sh run`
+over stdio (`tools/mcp/cdmcp-cli.py`, `tools/mcp/ui-readable-survey-mcp.py`,
+`tools/mcp/mcp-cli.mjs`). When writing a custom client, handle **server→client**
 `roots/list` or restrict artifact paths to `/tmp`.

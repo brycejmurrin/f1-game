@@ -8,7 +8,7 @@ description: Use when the user asks did I break anything, run the right tests, v
 ## Prerequisites
 
 `--fast` needs only Node modules; browser batches need the headless shell
-(AGENTS.md §Verification 1): `bash tools/cloud-agent-install.sh`, or
+(AGENTS.md §Verification 1): `bash tools/env/cloud-agent-install.sh`, or
 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install` then
 `npx playwright install chromium-headless-shell`.
 
@@ -18,10 +18,10 @@ The suite is slow software rendering. **One command composes the rest**
 group per batch**):
 
 ```sh
-node tools/verify-change.mjs --plan       # what this change needs (JSON)
-node tools/verify-change.mjs --fast       # no browsers — default for verify-agent
-node tools/verify-change.mjs              # fast gate + start batch 1 (background)
-node tools/verify-change.mjs --wait       # every batch — ONLY when the parent asked
+node tools/ci/verify-change.mjs --plan       # what this change needs (JSON)
+node tools/ci/verify-change.mjs --fast       # no browsers — default for verify-agent
+node tools/ci/verify-change.mjs              # fast gate + start batch 1 (background)
+node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked
 ```
 
 `--wait` blocks for the full queue. Subagents and the default loop use
@@ -35,11 +35,11 @@ Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 
 ```sh
-./tools/apex-tools-mcp.sh call apex_verify_change_fast '{"dryRun":true}'
-./tools/apex-tools-mcp.sh call apex_pick_tests '{}'
-./tools/apex-tools-mcp.sh call apex_bump_cache_check '{}'
-node tools/verify-track.cjs monza          # one circuit (plain CLI; no wrap)
-./tools/apex-tools-mcp.sh smoke
+./tools/mcp/apex-tools-mcp.sh call apex_verify_change_fast '{"dryRun":true}'
+./tools/mcp/apex-tools-mcp.sh call apex_pick_tests '{}'
+./tools/mcp/apex-tools-mcp.sh call apex_bump_cache_check '{}'
+node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wrap)
+./tools/mcp/apex-tools-mcp.sh smoke
 ```
 
 ## Load on demand

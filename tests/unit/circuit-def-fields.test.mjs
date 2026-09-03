@@ -36,7 +36,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { buildContext } = require(path.join(ROOT, "tools/verify-track.cjs"));
+const { buildContext } = require(path.join(ROOT, "tools/track/verify-track.cjs"));
 
 // Fields the ENGINE consumes off the AUTHORED def and deliberately does not
 // carry onto the built one. Each needs a reason, because "add it to the

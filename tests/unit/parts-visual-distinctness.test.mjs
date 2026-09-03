@@ -8,7 +8,7 @@
 // option they name as `equivalent` — so for 43% of the catalog "looks
 // different" IS the feature, and nothing measured it.
 //
-// The measurement lives in tools/parts-sweep.mjs (thresholds, optical anchor
+// The measurement lives in tools/car/parts-sweep.mjs (thresholds, optical anchor
 // and calibration deciles documented in its header). This file is the gate.
 //
 // COST: the full catalog is ~4 min of node, so this belongs in
@@ -17,7 +17,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   sweep, classify, attribute, loadParts, catalogRows, assertFlapSig, THRESHOLDS,
-} from "../../tools/parts-sweep.mjs";
+} from "../../tools/car/parts-sweep.mjs";
 
 const M = loadParts();
 

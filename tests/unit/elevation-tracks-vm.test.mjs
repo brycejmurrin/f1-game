@@ -1,5 +1,5 @@
 /* elevation-tracks-vm.test.mjs — tests/specs/elevation-tracks.spec.js replayed
- * in the Node VM (tools/game-vm.cjs): banking geometry (Tracks.banking on a
+ * in the Node VM (tools/lib/game-vm.cjs): banking geometry (Tracks.banking on a
  * bare centreline), the chase camera riding the bank, and — for every one of
  * the 40 circuits — slope gravity, the climb, road-following on the grade and
  * the two banked bowls, with the SAME assertions, launches and thresholds.
@@ -21,7 +21,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const closeTo = (r, e, d, m) => assert.ok(Math.abs(e - r) < Math.pow(10, -d) / 2, m || `${r} not within 10^-${d}/2 of ${e}`);
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 let g = null, PHYS0 = null;
 before(async () => { g = await createGame({ track: "monza" }); PHYS0 = { ...g.apex.tuning() }; });

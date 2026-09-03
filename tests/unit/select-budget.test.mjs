@@ -6,7 +6,7 @@
 // must not inherit a gate's retry settings) rests on it.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { capacity, declaredTests, MEASURED, VARIANTS, SPEC_COUNTS } from "../../tools/select-budget.mjs";
+import { capacity, declaredTests, MEASURED, VARIANTS, SPEC_COUNTS } from "../../tools/ci/select-budget.mjs";
 
 test("a failure costs timeout x (1 + retries) — the term the design omitted", () => {
   assert.equal(capacity(15, 1, { ...MEASURED, retries: 1, perTestTimeoutSec: 240 }).perFailureSec, 480);

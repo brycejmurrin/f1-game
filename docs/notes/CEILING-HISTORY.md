@@ -2,7 +2,7 @@
 
 The line-count ratchet on the big modules lived in the `module-size` unit test
 from 2026-08 until 2026-09-03, when it became `tests/data/ratchets.json` +
-`tools/ratchets.mjs` (Phase 1-lite of `docs/research/TREE-RESTRUCTURE-2026-09.md`).
+`tools/check/ratchets.mjs` (Phase 1-lite of `docs/research/TREE-RESTRUCTURE-2026-09.md`).
 Every raise and lower was recorded as a comment beside its number; those comments
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
@@ -25,8 +25,8 @@ Raising one is allowed — this is a ratchet, not a cap on doing work — but it
 has to be a deliberate edit here with a reason in the commit message, which
 is the whole point. A number nobody can raise gets deleted the first time it
 is inconvenient; a number you must look at gets thought about.
-Same idiom as tools/clip-baseline.json and tools/coplanar-baseline.json, and
-as the FLOOR in tools/fixture-consumer-audit.mjs.
+Same idiom as tools/track/clip-baseline.json and tools/track/coplanar-baseline.json, and
+as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 ```
 
 ## `js/game.js` — last ceiling 9235
@@ -617,7 +617,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - count). The five hand-mirrored lazy rosters (BACKEND_FILES /
 - BACKEND_EDGES / AGENT_* / RACE_FILES / DATA_* / NET_*) are now one
 - generated global, ApexRoster (js/roster.js, from tools/manifest.cjs via
-- tools/gen-shell.mjs). The loader logic stays; only the copies left.
+- tools/gen/gen-shell.mjs). The loader logic stays; only the copies left.
 
 ## `js/agent/apex.js` — last ceiling 2600
 
@@ -779,7 +779,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - in the shaders' 20-30 classification chain rather than a material uniform.
 - 3004 -> 3032. +20 for the exhaust heat-stain sleeve and its heatOf() blend:
 - the fuel `flame` key reached only three ~2 cm glaze pips (0.0028 m2), which
-- tools/parts-sweep.mjs --clamp-scan reads as a dead key. +8 for threading the
+- tools/car/parts-sweep.mjs --clamp-scan reads as a dead key. +8 for threading the
 - brakes `rim` colour into the rim faces, which was computed and never read.
 - 3032 -> 3068. +36 for the DIFFUSER, which was one closed loft and read as
 - a featureless grey slab from directly behind — the view a chase camera
@@ -802,7 +802,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - the deck it is meant to lie on. Both fixes are comment-heavy because the
 - fin one is only safe in the lowering direction.
 - 3121 -> 3164. Two NEW part knobs, both measured live against the range the
-- catalog ships (tools/parts-sweep.mjs --clamp-scan): cockpit.mirror moves the
+- catalog ships (tools/car/parts-sweep.mjs --clamp-scan): cockpit.mirror moves the
 - widest element of the upper body 170 mm, and aero.fin 291 mm on the largest
 - flat plate at the highest point of the car. Neither section read a recipe at
 - all before. The fin comment carries its weight: its scale has to reach the
@@ -1249,7 +1249,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - 1928 -> 1963: the opt-in instance CELL-SET cull cache. cullInstances
 - memoises on frustum-plane equality and three callers use three frusta a
 - frame, so while driving it never hits and props are repacked and
-- re-uploaded 2-3x — measured 426.7 KiB/frame (tools/glx-call-census.mjs).
+- re-uploaded 2-3x — measured 426.7 KiB/frame (tools/gfx/glx-call-census.mjs).
 - Keying on the surviving cell set takes -23.4% of that (-48% in a pack). The
 - existing plane path is left intact beside it (the canary pins it), which is
 - why this ADDS rather than replaces. Detail: PERF-FINDINGS 2c.
@@ -1286,7 +1286,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - with Float32Array(3) it skipped 0 of 17.5 calls a frame, because a
 - Float32Array rounds on store and the compare was float32-vs-float64. The
 - 40 lines buy uniform3fv 31.5 -> 16.3 per frame (vegas night, full field,
-- tools/glx-call-census.mjs) with every other counter unchanged.
+- tools/gfx/glx-call-census.mjs) with every other counter unchanged.
 - 2150 -> 2156: carShadowKeep/lampShadowKeep pass-throughs, and `armed` added
 - to the two shadow state hooks. The state hooks returned only the LIFETIME
 - arms counter, which stays true straight through a strobe — that is why a
@@ -1300,7 +1300,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - best a tangent, so it must be best's neighbour along the LAP — spatial
 - distance cannot tell that apart from a sample on another part of the
 - circuit. Belt-and-braces rather than load-bearing once the bake is fixed
-- (measured: 3 points on baku, NO_SWIN=1 in tools/road-lut-census.mjs A/Bs
+- (measured: 3 points on baku, NO_SWIN=1 in tools/gfx/road-lut-census.mjs A/Bs
 - it), which is exactly why the number is written down instead of assumed.
 - 2026-09-01: trkFromWorldIf uniform gate (largest WGX-only fragment cost)
 

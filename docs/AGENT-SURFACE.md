@@ -24,18 +24,18 @@ auto-load them — then use the Fallback column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
-| **apex-tools** | `apex_*` | Pin safe flags on twelve committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/apex-tools-mcp.sh call <name> '{…}'` |
+| **apex-tools** | `apex_*` | Pin safe flags on twelve committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
 | **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **playwright-probe**, **survey-ui-matrix**, **css-play**. | `npx -y @playwright/mcp@0.0.79` |
-| **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/chrome-devtools-mcp.sh run` / `python3 tools/probe-mcp.py chrome-start` |
+| **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 
 **Removed 2026-09 (CLI only now, not MCP-attached):**
 
 | Was | Why it left the catalog | The CLI that remains |
 |---|---|---|
-| **playwright** (wrapper `run`, `--browser chromium`) | Failed to connect as a server; `playwright-official` is the same upstream without wrapper flags. | `tools/playwright-mcp.sh status\|play\|dom` (css-play) |
+| **playwright** (wrapper `run`, `--browser chromium`) | Failed to connect as a server; `playwright-official` is the same upstream without wrapper flags. | `tools/mcp/playwright-mcp.sh status\|play\|dom` (css-play) |
 | **chrome-devtools-official** | Duplicate of **chrome-devtools** minus the WebGPU flags; two Chrome MCPs fought over one box. | `npx -y chrome-devtools-mcp@1.7.0` by hand |
-| **tinyfish** (`127.0.0.1:3711`) and the `tinyfish_*` half of **probe** | Container egress blocks `agent.tinyfish.ai`, so the in-repo proxy can never answer here. The hosted TinyFish connector in the main session and the host fetch tool can. | `tools/tinyfish-mcp.sh` on a box with egress; key from shell / gitignored `.env` only (no tracked fallback) |
-| **probe** (`chrome_*` + `tinyfish_*` bridge) | Its `chrome_*` half duplicates **chrome-devtools**; its `tinyfish_*` half is dead in-container. | `python3 tools/probe-mcp.py chrome-start` / `call` — the persistent-daemon flow has no MCP equivalent and stays |
+| **tinyfish** (`127.0.0.1:3711`) and the `tinyfish_*` half of **probe** | Container egress blocks `agent.tinyfish.ai`, so the in-repo proxy can never answer here. The hosted TinyFish connector in the main session and the host fetch tool can. | `tools/mcp/tinyfish-mcp.sh` on a box with egress; key from shell / gitignored `.env` only (no tracked fallback) |
+| **probe** (`chrome_*` + `tinyfish_*` bridge) | Its `chrome_*` half duplicates **chrome-devtools**; its `tinyfish_*` half is dead in-container. | `python3 tools/mcp/probe-mcp.py chrome-start` / `call` — the persistent-daemon flow has no MCP equivalent and stays |
 
 **Cloud / desktop global catalog.** Cloud Agents do **not** read
 `~/.cursor/mcp.json`. Add servers at https://cursor.com/agents (MCP dropdown)
@@ -66,13 +66,13 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | Need | Use | Not |
 |---|---|---|
 | Pre-push / did I break anything | skill **check-changes** → `apex_verify_change_fast` / `verify-agent` | `mcp-probe` |
-| One circuit build | `node tools/verify-track.cjs <id>` / skill **agent-view** | a browser group |
+| One circuit build | `node tools/track/verify-track.cjs <id>` / skill **agent-view** | a browser group |
 | Live working-tree canvas | skill **mcp-probe** (`chrome_*`) | apex-tools (no `--url`) |
 | Live `version.json` / Pages | **deploy-research** (host fetch / WebFetch / hosted TinyFish) | `mcp-probe`, curl github.io, `tinyfish-mcp.sh` in-container |
 | Batch screenshots | skill **playwright-probe** (`apex_shot` / `shot.mjs`) | Chrome MCP while Playwright runs |
 | Interactive host browser | **playwright-official** (`browser_*`) | `test-bg.mjs`; chrome-devtools at the same time |
 | One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` matrix / `--gallery` |
-| Start Playwright **groups** | `tools/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
+| Start Playwright **groups** | `tools/ci/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |
 | Agent bloat / extract / dead code | skill **slim-bloat** → `bloat-auditor` + `bloat-scan.mjs` | a browser group; raising a ratchet to hide growth |
 
 Call `apex_status` before any `apex_*` browser tool. Occupancy treats host
@@ -85,8 +85,8 @@ One command that pokes the repo shell wrappers (no Chromium; missing
 TinyFish key / chrome clone = warn; playwright `status` only):
 
 ```sh
-./tools/apex-tools-mcp.sh smoke
-node tools/mcp-smoke.mjs --dry-run
+./tools/mcp/apex-tools-mcp.sh smoke
+node tools/mcp/mcp-smoke.mjs --dry-run
 ```
 
 ## Layers
@@ -95,7 +95,7 @@ node tools/mcp-smoke.mjs --dry-run
 |---|---|---|
 | **Skills** | `.claude/skills/*/SKILL.md` — index [`.claude/skills/README.md`](../.claude/skills/README.md) | When to load a workflow; hard don'ts; which composer to run. |
 | **Subagents** | `.claude/agents/*.md` — index [`.claude/agents/README.md`](../.claude/agents/README.md) | Isolated verify / survey / deploy-research / audits. No browser groups. |
-| **MCP wrap** | `tools/apex-tools-mcp.mjs` + catalog `tools/apex-tools-mcp.json` | Pinned argv. Tree = no lock. Browser = lock + occupancy. |
+| **MCP wrap** | `tools/mcp/apex-tools-mcp.mjs` + catalog `tools/mcp/apex-tools-mcp.json` | Pinned argv. Tree = no lock. Browser = lock + occupancy. |
 | **CLIs** | `tools/*.mjs` / `*.cjs` — index [`tools/README.md`](../tools/README.md) | The real commands. Most exist whether or not they are wrapped. |
 
 A skill is **not** an MCP tool. An MCP tool is **not** a new implementation —
@@ -107,7 +107,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
 names the CLI. Twelve wraps (30 → 12 on 2026-09: the audits, startline,
-survey-track, carshot, wgx-shot/capture/validate-live, ui-survey,
+survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`).
 
@@ -115,17 +115,17 @@ and verify-track are plain CLIs now — `tools/README.md`).
 | MCP tool | CLI | Kind | Skill |
 |---|---|---|---|
 | `apex_status` | built-in | tree | check-changes |
-| `apex_pick_tests` | `pick-tests.mjs` | tree | check-changes |
-| `apex_select_specs` | `select-specs.mjs` | tree | check-changes |
-| `apex_verify_change_fast` | `verify-change.mjs` | tree | check-changes |
-| `apex_bump_cache_check` | `bump-cache.mjs` | tree | check-changes |
-| `apex_wgx_validate_static` | `wgx-validate.mjs` | tree | webgpu-debug |
-| `apex_rotate_markings_check` | `rotate-markings.cjs` | tree | new-track |
-| `apex_graph_parity` | `graph-parity.cjs` | tree | scenery-dress |
-| `apex_eval` | `apex-eval.mjs` | browser | playwright-probe |
-| `apex_agent` | `agent.mjs` | browser | agent-view |
-| `apex_shot` | `capture/shot.mjs` | browser | playwright-probe |
-| `apex_gfx_probe` | `gfx-probe.mjs` | browser | webgpu-debug |
+| `apex_pick_tests` | `ci/pick-tests.mjs` | tree | check-changes |
+| `apex_select_specs` | `ci/select-specs.mjs` | tree | check-changes |
+| `apex_verify_change_fast` | `ci/verify-change.mjs` | tree | check-changes |
+| `apex_bump_cache_check` | `ci/bump-cache.mjs` | tree | check-changes |
+| `apex_wgx_validate_static` | `gfx/wgx-validate.mjs` | tree | webgpu-debug |
+| `apex_rotate_markings_check` | `track/rotate-markings.cjs` | tree | new-track |
+| `apex_graph_parity` | `track/graph-parity.cjs` | tree | scenery-dress |
+| `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
+| `apex_agent` | `shot/agent.mjs` | browser | agent-view |
+| `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
+| `apex_gfx_probe` | `gfx/gfx-probe.mjs` | browser | webgpu-debug |
 
 Pins the wrap always applies (you cannot override them):
 
@@ -146,7 +146,7 @@ These stay CLI-only on purpose. The MCP must refuse if asked to grow them.
 |---|---|---|
 | `test-bg.mjs` start / `--wait` / `--stop` | Minutes of Playwright; foreground-illegal | CLI `test-bg.mjs`; skill **check-changes** |
 | `verify-change.mjs` without `--fast` | Starts browser groups | `apex_verify_change_fast` |
-| `node tools/bump-cache.mjs --apply` --at N --root _site` | Deploy-only: hashes a STAGED shell (pages.yml); the repo carries `?v=dev` and `--apply` refuses without `--root` | `check-changes/references/bump.md` |
+| `node tools/ci/bump-cache.mjs --apply` --at N --root _site` | Deploy-only: hashes a STAGED shell (pages.yml); the repo carries `?v=dev` and `--apply` refuses without `--root` | `check-changes/references/bump.md` |
 | `assets.mjs bake*` | Author-time writer | skill **asset-pack** |
 | `rotate-markings.cjs --write` | Mutates circuit markings | CLI after `--check` review |
 | `graph-parity.cjs` without `BASE=` | Vacuous pass on a clean tree | `apex_graph_parity` with `base` |
@@ -170,10 +170,10 @@ apex_pick_tests  { "since": "HEAD~1" }
 Host catalog empty (this Cloud dashboard often is):
 
 ```sh
-./tools/apex-tools-mcp.sh call apex_status '{}'
-./tools/apex-tools-mcp.sh call apex_pick_tests '{"since":"HEAD~1"}'
+./tools/mcp/apex-tools-mcp.sh call apex_status '{}'
+./tools/mcp/apex-tools-mcp.sh call apex_pick_tests '{"since":"HEAD~1"}'
 ```
 
 `dryRun: true` prints argv and spawns nothing. Browser wraps take the lock —
-`apex_status` first. `./tools/apex-tools-mcp.sh smoke` checks the repo shell
+`apex_status` first. `./tools/mcp/apex-tools-mcp.sh smoke` checks the repo shell
 wrappers without taking the lock.

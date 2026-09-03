@@ -4,7 +4,7 @@
 
 **Goal:** Ship a fourth `.mcp.json` server `apex-tools` that wraps week-1 local CLIs under `apex_*` (no browser, no github.io).
 
-**Architecture:** Hand-rolled stdio JSON-RPC in Node (`tools/apex-tools-mcp.mjs` + shell entry), same shape as `probe-mcp.py`, separate catalog so TinyFish failures cannot empty it. Week-1 tools spawn pinned argv; refuses are tool results with `isError: true`.
+**Architecture:** Hand-rolled stdio JSON-RPC in Node (`tools/mcp/apex-tools-mcp.mjs` + shell entry), same shape as `probe-mcp.py`, separate catalog so TinyFish failures cannot empty it. Week-1 tools spawn pinned argv; refuses are tool results with `isError: true`.
 
 **Tech Stack:** Node `node:test`, Bash wrapper, existing CLIs under `tools/`. No npm MCP SDK.
 
@@ -24,7 +24,7 @@
 
 **Files:**
 - Create: `tests/unit/apex-tools-mcp.test.mjs`
-- Modify: `tools/tooling-fast.mjs` (add to `TOOLING_FAST_FILES` next to `probe-mcp.test.mjs`)
+- Modify: `tools/ci/tooling-fast.mjs` (add to `TOOLING_FAST_FILES` next to `probe-mcp.test.mjs`)
 
 - [x] **Step 1: Write assertions from `docs/research/APEX-TOOLS-MCP.md` §Tests**
 - [x] **Step 2: Run `node --test tests/unit/apex-tools-mcp.test.mjs` — expect FAIL (missing server)**
@@ -33,7 +33,7 @@
 ### Task 2: Implement week-1 server + shell + `.mcp.json`
 
 **Files:**
-- Create: `tools/apex-tools-mcp.mjs`, `tools/apex-tools-mcp.sh`
+- Create: `tools/mcp/apex-tools-mcp.mjs`, `tools/mcp/apex-tools-mcp.sh`
 - Modify: `.mcp.json`
 - Modify: `tests/unit/probe-mcp.test.mjs`, `tests/unit/tinyfish-mcp.test.mjs` (4-key sort)
 - Modify: `tests/unit/tools-runnable.test.mjs` (help path)

@@ -1,6 +1,6 @@
 // @ts-check
 // Port-scoped gallery paths for Playwright specs.
-// Tool/CLI path containment helpers live in tools/output-paths.mjs.
+// Tool/CLI path containment helpers live in tools/lib/output-paths.mjs.
 import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join, posix, resolve } from "node:path";
 

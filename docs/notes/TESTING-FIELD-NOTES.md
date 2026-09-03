@@ -55,7 +55,7 @@ GRAPHIC never does (that is the TAIL GRAPHIC row, `liv.finArt`), and the actual
 defect was upstream of both — `markPalette` substituted a different colour for
 the authored one whenever it fell under `MARK_FLOOR`, which for Audi's
 `[0.96,0.02,0.22]` fin is nearly every mid-tone in the picker. Measured with
-`tools/logo-authored-sweep.mjs`: 9015 of 12112 authored colours were overruled;
+`tools/car/logo-authored-sweep.mjs`: 9015 of 12112 authored colours were overruled;
 after the authored-halo path, the shark-fin badge keeps 91.2% (was 33.9%). The
 engine cover stays lower (37.4%, was 17.2%) and that is geometry, not a bug —
 `drawTailGraphic` washes it with an alpha gradient of `stripe||c2`, so the mark
@@ -127,7 +127,7 @@ fine. To cover more at once, hand every spec to ONE process and raise
 `APEX_WORKERS`.
 
 **Orphans vs a second run.** Orphans from a killed run keep eating the box
-invisibly (`node tools/test-bg.mjs --stop`, then `pkill -9 -f
+invisibly (`node tools/ci/test-bg.mjs --stop`, then `pkill -9 -f
 'tools/run-playwright'; pkill -9 -f pw-browsers`). But before concluding
 "orphans", check `ps -eo pid,etimes,args` for a LIVE `playwright test` — a
 second run you forgot is indistinguishable from orphans by process count.
@@ -178,19 +178,19 @@ grass, walls and cars looked fine. Two more spec violations sat alongside it:
 MSAA count 2 (WebGPU permits only 1 and 4 — invalid on EVERY device) and
 rg11b10ufloat render targets without the `rg11b10ufloat-renderable` feature.
 All three were one-line Dawn errors the moment the code ran on a real device.
-`node tools/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
+`node tools/gfx/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
 Chromium (the headless shell has no `navigator.gpu`) with `--headless=new
 --enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader
 --use-webgpu-adapter=swiftshader` exposes a real Dawn adapter that parses
 every WGSL module and validates every pipeline. The ceiling, corrected
-2026-08-17: Dawn here EXECUTES shader work — `node tools/wgx-capture.mjs`
+2026-08-17: Dawn here EXECUTES shader work — `node tools/gfx/wgx-capture.mjs`
 returns real rendered pixels (offscreen mode; see
 `docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
 found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
 the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
 play with this in SETTINGS ▸ SCREENSHOTS (AUTO / 2D BLIT / NATIVE) and the
 three.js counterpart SETTINGS ▸ THREE PATH (AUTO / WEBGL2 / WEBGPU).
-`node tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
+`node tools/gfx/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
 gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
 (`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
 SwiftShader when concurrent with display readback. Still environmental: the
@@ -220,8 +220,8 @@ SwiftShader even with a quiet GPU; do not widen assertion tolerances.
 swapchain present stays black on SwiftShader/Lavapipe; WGX soft-presents to
 visible `#game` via a 2D blit (auto on software adapters +
 `sessionStorage apex26.wgxCapture=1`). Primary probe:
-`node tools/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
-`awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs`. Lavapipe
+`node tools/gfx/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
+`awaitSoftPresent`). Readback oracle: `node tools/gfx/wgx-capture.mjs`. Lavapipe
 needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
 snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
@@ -268,7 +268,7 @@ errors. The leftover debug log still had "http cache … cache hit" followed by
 no tarball bytes, so every package re-fetched in parallel. The same VM's
 `npm ping` still ECONNRESETs; `archive.ubuntu.com` Release files 404 through
 Envoy, so `apt-get update` cannot repair a snapshot that is missing
-`mesa-vulkan-drivers`. Cure: dashboard install → `tools/cloud-agent-install.sh`
+`mesa-vulkan-drivers`. Cure: dashboard install → `tools/env/cloud-agent-install.sh`
 (skip npm only when `node_modules/<pkg>/package.json` exists — hollow
 directories from a crashed reify are not usable — `--no-audit
 --prefer-offline`, retries; do not fail the build on apt 404 when
@@ -560,14 +560,14 @@ was bumped to Chromium 1228 by the deploy tip (be24dc66) while this container
 has 1194: `playwright.config.js` pins the sandbox binary, a bare
 `chromium.launch()` in a scratch script needs `executablePath`.
 
-**The change-aware gate selected the two slowest boot specs for every source edit, and never carried a failure forward (2026-09-02).** Pages runs 1888 (twice) and push run 2229 went red on `boot-guard.spec.js` (PERMANENT 404: 120 s while Playwright set up the browser context) and `logging.spec.js` (the Monaco build) — both pass locally in 86 s, so the reds were runner starvation. They were selected because pick-tests' blanket rules (`/^(js|css)\//` → "any source edit: does the page still boot", `index.html` → "script tags + DOM shell") route every diff to the boot group, and inside a 10-test budget its cheapest-by-count specs are exactly those two, the slowest per test in the tree. That question is already answered by the FIXED smoke gate (four shards) on every push and deploy, so `select-specs` now drops the boot group when only the blanket rules named it (`dropBootFallback`, `bootCoveredBySmoke` in the JSON). Separately, the "Record failing specs" step never recorded anything: Playwright writes `<system-out>` BEFORE `<failure>`/`<error>` inside a testcase, so a "testcase immediately followed by failure" regex matched nothing, and the classname it would have captured (`specs/x.spec.js`) lacks the `tests/` prefix the selector filters on — `tools/junit-failed.mjs` parses the block and normalises the path. Runner boots measured in these runs: a context that takes 120 s to create is the machine; do not widen the 45 s boot wait for it.
+**The change-aware gate selected the two slowest boot specs for every source edit, and never carried a failure forward (2026-09-02).** Pages runs 1888 (twice) and push run 2229 went red on `boot-guard.spec.js` (PERMANENT 404: 120 s while Playwright set up the browser context) and `logging.spec.js` (the Monaco build) — both pass locally in 86 s, so the reds were runner starvation. They were selected because pick-tests' blanket rules (`/^(js|css)\//` → "any source edit: does the page still boot", `index.html` → "script tags + DOM shell") route every diff to the boot group, and inside a 10-test budget its cheapest-by-count specs are exactly those two, the slowest per test in the tree. That question is already answered by the FIXED smoke gate (four shards) on every push and deploy, so `select-specs` now drops the boot group when only the blanket rules named it (`dropBootFallback`, `bootCoveredBySmoke` in the JSON). Separately, the "Record failing specs" step never recorded anything: Playwright writes `<system-out>` BEFORE `<failure>`/`<error>` inside a testcase, so a "testcase immediately followed by failure" regex matched nothing, and the classname it would have captured (`specs/x.spec.js`) lacks the `tests/` prefix the selector filters on — `tools/ci/junit-failed.mjs` parses the block and normalises the path. Runner boots measured in these runs: a context that takes 120 s to create is the machine; do not widen the 45 s boot wait for it.
 
 **tooling-fast is not the deploy gate's node half (2026-09-02).** Pages run
 1889 went red on two `quali-persist` source pins that were green nowhere
 locally, because `quali-persist` lives in `test:state-unit`, which the gate's
 "Pure-node unit suites" step runs and `tooling-fast` does not (the same step
 also runs `node-slow`, the VM twins, the net/audio/agent-contract groups).
-`node tools/deploy.mjs` now runs exactly that step's `npm run test:*` lines,
+`node tools/ci/deploy.mjs` now runs exactly that step's `npm run test:*` lines,
 parsed from `ci.yml` so the two lists cannot drift; the edit loop stays
 `tooling-fast`, and a pre-deploy run pays the extra ~4 minutes once.
 
@@ -604,7 +604,7 @@ the outer backstop; a scratch script has none. Measure liveness with a counter
 read across two ordinary `waitForTimeout`s instead.
 
 **A screenshot of the WebGPU canvas needs `GLX.awaitSoftPresent()` first**
-(`tools/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
+(`tools/gfx/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
 un-blitted canvas and produces a confident, wrong answer — it cost one fully
 written-up "WGX mis-frames the garage" reproduction that had to be retracted
 (PERF-FINDINGS.md §2t).
@@ -655,7 +655,7 @@ tier 2, and the software probe reports a confident 4.8 % road coverage with
 zero GPU errors in every arm. Set BOTH:
 
 ```sh
-node tools/gfx-probe.mjs --backend three --lite \
+node tools/gfx/gfx-probe.mjs --backend three --lite \
   --ls apex26.forceMobileTier=1 --ls 'apex26.gfxPreset="low"' montreal
 ```
 
@@ -719,7 +719,7 @@ to carry: three-WebGL2 on ANGLE-Metal spent **16.2 s in a single first frame**
 themselves are on Azure blob storage the container proxy denies — read them in
 the Actions UI.
 
-`tools/wgx-validate.mjs` (live run) now prepends
+`tools/gfx/wgx-validate.mjs` (live run) now prepends
 `diagnostic(error, derivative_uniformity);` to every module it compiles,
 because that is WebKit's default severity and Dawn's is a console warning:
 a WGSL module that only warns here refuses to build on an iPhone and WGX falls

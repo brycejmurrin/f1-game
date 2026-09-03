@@ -19,7 +19,7 @@ browser run to land.
 | `test:sweeps` | 999 s, of which ONE subtest is 559 s | `union-sweeps.log`: parts-visual-distinctness "every option resolves to itself" |
 | a deploy (merge, bump, tooling-fast, sweeps, push, live check) | ~35–45 min session time, ~10 min Pages | this session, twice |
 | build-number collisions | 34 of 105 builds introduced by 2–3 commits | `git log` on the deploy branch, last 200 commits: 144 touched `version.json` |
-| CI deploy gate | 2 of 115 specs; 26 specs excluded from `selected` by their own timeouts, incl. all 16 `*-foundation` and every `webgl` spec | `tools/ci-coverage.mjs`, `select-specs.mjs:46-52` |
+| CI deploy gate | 2 of 115 specs; 26 specs excluded from `selected` by their own timeouts, incl. all 16 `*-foundation` and every `webgl` spec | `tools/ci/ci-coverage.mjs`, `select-specs.mjs:46-52` |
 
 Two facts frame everything: **the browser is the cost** (SwiftShader, 4 cores,
 one worker is the honest maximum) and **most browser tests do not need a
@@ -37,7 +37,7 @@ browser** (they read `__apex` JSON after `step()`).
 2. **Move the three slow unit files out of the edit loop.**
    cockpit-pale-surfaces, crest-marks, slider-effect (152 s of 315) → a
    `test:node-slow` group run by CI `guards` and by `verify-change` only when
-   `js/car/` or `tools/slider-effect.mjs` changed. Keep car-mesh-anchors in
+   `js/car/` or `tools/lighting/slider-effect.mjs` changed. Keep car-mesh-anchors in
    fast (it is the deploy gate for the wing check). Edit loop → ~160 s.
 3. **Split the 559 s sweeps subtest** into its own CI job; sweeps → ~7.5 min.
 4. **`test-bg` refuses to start at loadavg > 3** and defaults render-project
@@ -51,9 +51,9 @@ browser** (they read `__apex` JSON after `step()`).
 
 ### 1.2 The structural win: a node harness for the physics (~180 tests)
 
-`tools/track-build-vm.cjs` already runs the real track build in a Node VM and
+`tools/lib/track-build-vm.cjs` already runs the real track build in a Node VM and
 `tests/unit/ai-drive.test.mjs` shows the pattern for `js/game/*`, but nothing
-loads `js/game.js` in Node. A `tools/game-vm.cjs` (game.js + physics-consts +
+loads `js/game.js` in Node. A `tools/lib/game-vm.cjs` (game.js + physics-consts +
 GLX/DOM/audio stubs on top of track-build-vm) turns these specs into
 sub-second unit tests, because none of them reads a pixel or the DOM:
 
@@ -180,7 +180,7 @@ in CI today) boot in ~4 s on `macos-latest`'s real Metal adapter — give
 
 ## 3. Agent surface (MCP, skills, agents)
 
-**Security first: `tools/tinyfish-mcp.sh:41` ships a tracked TinyFish API key
+**Security first: `tools/mcp/tinyfish-mcp.sh:41` ships a tracked TinyFish API key
 (`TINYFISH_KEY_FALLBACK`) and `tinyfish-mcp.test.mjs:89` asserts it is
 there.** The repo is public. Rotate the key, remove the fallback, and change
 the test to assert the fallback is ABSENT. This is a decision for the owner,
@@ -228,7 +228,7 @@ and one build in three collided (34 of 105). Fix the cause, not the merge:
 
 1. **Derive the shell generation in CI.** Keep per-file `?v=<sha256>` (stable
    URLs, V8 cache survives). Stop committing the monotonic build: `pages.yml`
-   "Stage site" runs `node tools/bump-cache.mjs --apply` --at $(git rev-list --count HEAD)`
+   "Stage site" runs `node tools/ci/bump-cache.mjs --apply` --at $(git rev-list --count HEAD)`
    inside `_site/` and stamps `<meta name="apex-sha">`. Commit count on a
    fast-forward-only branch is integer, monotonic and unique per tip, which
    satisfies the guards in `index.html:86-122` (`v.build <= loaded`) and
@@ -236,7 +236,7 @@ and one build in three collided (34 of 105). Fix the cause, not the merge:
    disappears (14 of the last 40 deploy-branch commits). Risk: deployed
    `index.html` ≠ committed bytes; `deploy-staging.test.mjs` grows a case
    that runs the stamp against a temp `_site`.
-2. **`tools/deploy.mjs`**: fetch → merge (stop on any non-index conflict) →
+2. **`tools/ci/deploy.mjs`**: fetch → merge (stop on any non-index conflict) →
    tooling-fast → `verify-track` for touched circuits → push, retry ×3 on
    non-fast-forward, refuse at loadavg > 3 or with a live Playwright.
    `--pr` opens/updates a PR into the deploy branch and enables auto-merge,

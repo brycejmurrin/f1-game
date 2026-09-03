@@ -21,7 +21,7 @@
 // only the part that must never regress unnoticed.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loadParts } from "../../tools/parts-sweep.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const M = loadParts();
 const ACCENT = [0.123, 0.456, 0.789];   // sentinel livery accent, as in the spec
