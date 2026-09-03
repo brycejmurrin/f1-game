@@ -28,4 +28,7 @@ tools/.*
 # git worktrees for isolated agent work
 .worktrees/
 assets/pack/src/
-tools/__pycache__/
+# Any __pycache__, not just tools/'s: the Phase 4 move put the python tools in
+# tools/mcp/, the old path-specific rule stopped matching, and the .pyc there
+# became TRACKED — which then blocked two deploys as a dirty tree.
+**/__pycache__/
