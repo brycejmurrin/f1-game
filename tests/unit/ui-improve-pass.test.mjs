@@ -857,13 +857,19 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "tall-circuit pair-on maps spend the pane height; facts already sit beside");
   assert.match(code("js/ui/select-screen.js"), /besidePair/,
     "pair-on beside maps do not self-heal the pin down to a stale stamp");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner[data-shape=\"wide\"] #pm-panel-display .tune-row:has(#pm-hudscale)", "grid-column"), "1",
-    "DISPLAY HUD SIZE shares its row with the live sample");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner[data-shape=\"wide\"] #pm-panel-display #pm-hud-sample", "grid-column"), "2");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-column"), "2",
+  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
+    /"ui sample"\s*"hud sample"/,
+    "DISPLAY stacks UI SIZE + HUD SIZE beside the live sample");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale)', "grid-area"), "hud");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "grid-area"), "sample");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
     "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details[open]', "grid-column"), "1 / -1",
+  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open])', "grid-template-areas"),
+    /"metrics metrics"/,
     "an open METRICS submenu takes the full DISPLAY row so HIDE HUD is not stranded");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-density="compact"] #pm-hud-sample::before', "display"), "none",
+    "compact DISPLAY drops the HUD SIZE PREVIEW caption — the slider already names it");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details > summary", "height"), "var(--tap)",
     "METRICS summary matches the HIDE HUD tap row");
   assert.equal(decl(css("css/components.css"), '#pm-metrics-details [role="group"]', "display"), "flex",

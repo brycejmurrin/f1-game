@@ -1289,14 +1289,35 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status) { grid-column: 1 / -1; }
-/* DISPLAY: HUD SIZE keeps a column; the live sample sits beside it instead
-   of opening a third full-width row under two sliders. */
-#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale) {
-  grid-column: 1;
+/* DISPLAY: UI SIZE and HUD SIZE stack in the left column; the live sample
+   sits beside both instead of a leftover full-width slider row plus a
+   third sample row. Named areas so METRICS opening cannot steal the hole. */
+#pmsettings-inner[data-shape="wide"] #pm-panel-display {
+  grid-template-areas:
+    "hide metrics"
+    "ui sample"
+    "hud sample";
 }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]) {
+  grid-template-areas:
+    "hide hide"
+    "metrics metrics"
+    "ui sample"
+    "hud sample";
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud { grid-area: hide; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
+  grid-area: metrics;
+  margin: 0;
+  align-self: start;
+  min-width: 0;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: ui; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale) { grid-area: hud; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample {
-  grid-column: 2;
+  grid-area: sample;
   align-self: center;
+  justify-self: center;
   margin-top: 0;
 }
 #pmsettings-inner[data-density="compact"] #pm-panel-display .tune-row {
@@ -1304,7 +1325,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   gap: 0;
 }
 #pmsettings-inner[data-density="compact"] #pm-hud-sample {
-  margin-top: calc(var(--gap) * 0.25);
+  margin-top: 0;
+}
+#pmsettings-inner[data-density="compact"] #pm-hud-sample::before {
+  display: none;
 }
 /* DISPLAY: HIDE HUD | METRICS share the wide pair. Inner metrics buttons
    go 2-up whenever the sheet is wide or compact — SheetShape density, not
@@ -1337,23 +1361,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
 }
 #pm-metrics-details[open] > summary::after { content: "\25B4"; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud {
-  grid-column: 1;
-}
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
-  grid-column: 2;
-  margin: 0;
-  align-self: start;
-  min-width: 0;
-}
-/* Open METRICS is a block of four buttons — spanning keeps HIDE HUD from
-   sitting over a dead column while the submenu grows beside it. */
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]) #pm-hidehud {
-  grid-column: 1 / -1;
-}
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details[open] {
-  grid-column: 1 / -1;
-}
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details [role="group"],
 #pmsettings-inner[data-density="compact"] #pm-metrics-details [role="group"] {
   display: grid;
