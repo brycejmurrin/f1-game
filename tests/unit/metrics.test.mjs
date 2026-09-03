@@ -13,6 +13,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedStore } from "../helpers/seed-store.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/game/metrics.js"), "utf8");
@@ -40,6 +41,7 @@ function load(opts) {
   };
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
+  seedStore(ctx);   // metrics.js persists through GameStore.store's raw lane, over the fake localStorage above
   vm.runInContext(SRC, ctx, { filename: "js/game/metrics.js" });
   return { M: vm.runInContext("GameMetrics", ctx), disk, Log: vm.runInContext("Log", ctx) };
 }

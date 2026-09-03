@@ -28,6 +28,7 @@ import { spawnSync } from "node:child_process";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 import { bootGlx } from "../helpers/glx-mock.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -361,6 +362,7 @@ test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgp
   const src = read("js/game/gfx-quality.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
   seedLog(ctx);
+  seedStore(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   assert.equal(G.nextBackend("webgl2"), "three");
@@ -418,6 +420,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   });
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
   seedLog(ctx);
+  seedStore(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   // Frozen deepEqual, not spot includes(): a round-6 audit found 7 of 12 keys
@@ -507,6 +510,7 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
     GLX: { isMobile: true },
   });
   seedLog(ctx);
+  seedStore(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   G.init();
@@ -1106,6 +1110,7 @@ function bootPicker(opts) {
     GLX: { isMobile: true },
   });
   seedLog(ctx);
+  seedStore(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   // readyState is "complete", so the IIFE already called init().
@@ -1225,6 +1230,7 @@ test("presentStatus names the three screenshot paths in plain language", () => {
     localStorage: makeStorage({ "apex26.gfxBackend": "webgpu", "apex26.wgxCapture": "0" }),
     sessionStorage: makeStorage(),
   });
+  seedStore(ctx);
   vm.runInContext(src, ctx, { filename: "js/game/gfx-quality.js" });
   const G = vm.runInContext("GfxQuality", ctx);
   assert.match(G.presentStatus(), /native swapchain/);

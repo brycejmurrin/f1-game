@@ -247,23 +247,22 @@ function init(gfx) {
   // jetsam-killed, so it needs the crash sentinel + conservative restart too.
   // Desktop stays isMobile=false, so the test suite never enters safe mode.
   if (gfx && gfx.isMobile) {
-    try {
-      const build = String((typeof window !== "undefined" && window.__APEX_BUILD) || 0);
-      if (localStorage.getItem(SENT_BUILD) !== build) {
-        // New code, clean slate. Also clears any in-flight race flag: a race
-        // that was running when the update landed did not crash, it was
-        // replaced.
-        localStorage.setItem(SENT_BUILD, build);
-        localStorage.setItem(SENT_STRIKES, "0");
-        localStorage.removeItem(SENT_ACTIVE);
-      }
-      _crashStrikes = Math.min(4, parseInt(localStorage.getItem(SENT_STRIKES), 10) || 0);
-      if (localStorage.getItem(SENT_ACTIVE) === "1") {
-        _crashStrikes = Math.min(4, _crashStrikes + 1);
-        localStorage.setItem(SENT_STRIKES, String(_crashStrikes));
-        localStorage.removeItem(SENT_ACTIVE);
-      }
-    } catch (_) {}
+    const st = GameStore.store;   // raw lane: bare strings, read live, never throws
+    const build = String((typeof window !== "undefined" && window.__APEX_BUILD) || 0);
+    if (st.raw(SENT_BUILD) !== build) {
+      // New code, clean slate. Also clears any in-flight race flag: a race
+      // that was running when the update landed did not crash, it was
+      // replaced.
+      st.rawSet(SENT_BUILD, build);
+      st.rawSet(SENT_STRIKES, "0");
+      st.rawDel(SENT_ACTIVE);
+    }
+    _crashStrikes = Math.min(4, parseInt(st.raw(SENT_STRIKES), 10) || 0);
+    if (st.raw(SENT_ACTIVE) === "1") {
+      _crashStrikes = Math.min(4, _crashStrikes + 1);
+      st.rawSet(SENT_STRIKES, String(_crashStrikes));
+      st.rawDel(SENT_ACTIVE);
+    }
   }
   _perfTierFloor = _floorFromStrikes(_crashStrikes);
   _perfTier = _perfTierFloor;
@@ -282,13 +281,13 @@ function sentinelArm(on) {
   // the governor runs everywhere, only the sentinel is mobile.
   if (on) { _frameEMA = _floorMs = 16.7; _slowRun = 0; _openN = 0; _openMax = 0; _openSlow = 0; } else _live = false;
   if (!_gfx || !_gfx.isMobile) return;
-  try { if (on) localStorage.setItem(SENT_ACTIVE, "1"); else localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
+  if (on) GameStore.store.rawSet(SENT_ACTIVE, "1"); else GameStore.store.rawDel(SENT_ACTIVE);
 }
 function cleanRace() {
   sentinelArm(false);
   if (_crashStrikes > 0) {
     _crashStrikes--;
-    try { localStorage.setItem(SENT_STRIKES, String(_crashStrikes)); } catch (_) {}
+    GameStore.store.rawSet(SENT_STRIKES, String(_crashStrikes));
     // RECOMPUTE THE FLOOR. Paying a strike down used to move the counter and
     // nothing else, so _perfTierFloor stayed at whatever init() derived for the
     // WHOLE session. One strike floors the tier at 2, and tier() >= 2 is exactly
@@ -505,7 +504,7 @@ function clearStrikes() {
   // __apex.safeMode(false) until a reload. Drop to the new floor so the device
   // can prove itself again (governor may re-shed if frames still miss).
   if (_perfTier > _floorTier()) { _perfTier = _floorTier(); _autoShed = 0; }
-  try { localStorage.setItem(SENT_STRIKES, "0"); localStorage.removeItem(SENT_ACTIVE); } catch (_) {}
+  GameStore.store.rawSet(SENT_STRIKES, "0"); GameStore.store.rawDel(SENT_ACTIVE);
 }
 
 return {

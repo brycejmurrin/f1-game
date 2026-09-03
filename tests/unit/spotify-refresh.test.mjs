@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { seedStore } from "../helpers/seed-store.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = readFileSync(join(ROOT, "js/game/spotify.js"), "utf8");
@@ -50,6 +51,7 @@ function load(fetchImpl) {
   };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
+  seedStore(ctx);   // spotify.js keeps its keys through GameStore.store's raw lane, over the fake localStorage above
   vm.runInContext(SRC, ctx, { filename: "js/game/spotify.js" });
   return { SpotifyMusic: sandbox.SpotifyMusic, disk };
 }

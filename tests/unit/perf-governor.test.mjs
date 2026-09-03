@@ -31,9 +31,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
+import { seedStoreGlobal } from "../helpers/seed-store.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
+seedStoreGlobal();   // perf.js persists the sentinel through GameStore.store's raw lane
 const SRC = fs.readFileSync(path.join(ROOT, "js/game/perf.js"), "utf8");
 
 // A fake renderer mirroring GLX.setRenderScale (js/render/glx.js) EXACTLY,

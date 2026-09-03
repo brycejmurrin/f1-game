@@ -1,4 +1,4 @@
-/* Apex 26 — persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26."), the per-track time-trial leaderboard, season-point… */
+/* Apex 26 — persistence for js/game.js: the cached localStorage wrapper (`store`, all keys prefixed "apex26.", plus the uncached raw-string lane the settings panels persist through), the per-track time-trial leaderboard, season-point… */
 const GameStore = (function () {
   "use strict";
 
@@ -60,8 +60,33 @@ const store = {
     return result;
   },
   keyRevision(k) {
-    const key = k.indexOf("apex26.") === 0 ? k : "apex26." + k;
-    return this._clearRev + ":" + (this._keyRev.get(key) || 0);
+    return this._clearRev + ":" + (this._keyRev.get(fullKey(k)) || 0);
+  },
+  // THE RAW STRING LANE. The settings panels (GfxQuality, CockpitOpts,
+  // GameMetrics), the perf sentinel, BodyAttitude and the Spotify client keep
+  // bare "1"/"0" flags and ids under the same "apex26." prefix, and each used
+  // to reach localStorage on its own inside a `catch (_) {}`. Same storage,
+  // same prefix (accepted spelled either way, like keyRevision), but NOT the
+  // JSON cache above: a raw read hits the disk every call, so a devtools edit
+  // or another tab's write is seen at once, and the on-disk form stays the
+  // bare string the old call sites wrote — no key changes, no quoting. What
+  // they gain is `broken`: a failed raw write is recorded and reported once,
+  // the same as a failed JSON write, instead of vanishing.
+  raw(k) {
+    try { return localStorage.getItem(fullKey(k)); }
+    catch (e) { noteBroken(e, "read " + k); return null; }
+  },
+  rawSet(k, v) {
+    const key = fullKey(k);
+    this._cache.delete(key);   // a key lives in one lane; if one ever strays, the disk wins
+    try { localStorage.setItem(key, v); return true; }
+    catch (e) { noteBroken(e, "write " + k); return false; }
+  },
+  rawDel(k) {
+    const key = fullKey(k);
+    this._cache.delete(key);
+    try { localStorage.removeItem(key); return true; }
+    catch (e) { noteBroken(e, "remove " + k); return false; }
   },
   subscribe(fn) {
     if (typeof fn !== "function") return () => {};
@@ -112,6 +137,8 @@ const store = {
 if (typeof window !== "undefined" && window.addEventListener) {
   window.addEventListener("storage", (e) => { store.onForeignWrite(e); });
 }
+
+function fullKey(k) { return k.indexOf("apex26.") === 0 ? k : "apex26." + k; }
 
 function noteBroken(e, what) {
   const name = (e && e.name) || "Error";

@@ -84,7 +84,7 @@ function qFlag(re) {
 function read() {
   const q = qFlag(/[?&]metrics=(1|0|on|off|true|false)/i);
   if (q) return /^(1|on|true)$/i.test(q[1]);
-  try { return localStorage.getItem(KEY) === "1"; } catch (_) { return false; }
+  return GameStore.store.raw(KEY) === "1";
 }
 
 function pinned(re) { return !!qFlag(re); }
@@ -92,10 +92,8 @@ function pinned(re) { return !!qFlag(re); }
 function readPage() {
   const q = qFlag(/[?&]metricsPage=(gov|car|phys|log)/i);
   if (q) return q[1].toLowerCase();
-  try {
-    const v = localStorage.getItem(PAGE_KEY);
-    if (PAGES.indexOf(v) >= 0) return v;
-  } catch (_) { /* private mode */ }
+  const v = GameStore.store.raw(PAGE_KEY);
+  if (PAGES.indexOf(v) >= 0) return v;
   return "gov";
 }
 
@@ -105,20 +103,16 @@ function readLogNs() {
     const v = q[1].toLowerCase();
     if (LOG_NS.indexOf(v) >= 0) return v;
   }
-  try {
-    const v = localStorage.getItem(LOG_NS_KEY);
-    if (LOG_NS.indexOf(v) >= 0) return v;
-  } catch (_) { /* private mode */ }
+  const v = GameStore.store.raw(LOG_NS_KEY);
+  if (LOG_NS.indexOf(v) >= 0) return v;
   return "*";
 }
 
 function readLogLvl() {
   const q = qFlag(/[?&]metricsLvl=(warn|info|debug)/i);
   if (q) return q[1].toLowerCase();
-  try {
-    const v = localStorage.getItem(LOG_LVL_KEY);
-    if (LOG_LVLS.indexOf(v) >= 0) return v;
-  } catch (_) { /* private mode */ }
+  const v = GameStore.store.raw(LOG_LVL_KEY);
+  if (LOG_LVLS.indexOf(v) >= 0) return v;
   return "warn";
 }
 
@@ -144,7 +138,7 @@ function logLvl() {
 
 function store(key, val, pinRe) {
   if (pinned(pinRe)) return;
-  try { localStorage.setItem(key, val); } catch (_) { /* session-only */ }
+  GameStore.store.rawSet(key, val);   // a blocked write is session-only, and store.broken says so
 }
 
 function snapshot() {
@@ -215,7 +209,7 @@ function snapshot() {
       out.backend = GfxQuality.readBackend() || "";
   } catch (_) { /* quality module absent in a VM */ }
   try {
-    if (!out.backend) out.backend = localStorage.getItem("apex26.gfxBackend") || "";
+    if (!out.backend) out.backend = GameStore.store.raw("apex26.gfxBackend") || "";
     try {
       if (typeof GLX !== "undefined") {
         if (typeof GLX.gpuErrors === "function") out.gpuErr = GLX.gpuErrors() | 0;

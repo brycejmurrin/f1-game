@@ -75,14 +75,16 @@ window.SpotifyMusic = (function () {
   let refreshInFlight = null;
   let refreshTokenInFlight = null;
 
-  /* ---------------- storage (raw, not GameStore) ----------------
-     Deliberately not GameStore.store: this must be queryable before game.js has
-     built anything, and its cache would hold a stale ID after a manual
-     localStorage edit. Keys keep the apex26. prefix. Every access is
-     try/catch'd — Safari private mode throws on read AND write. */
-  function ls(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
-  function lsDel(k) { try { localStorage.removeItem(k); } catch (e) {} }
+  /* ---------------- storage (GameStore's raw lane) ----------------
+     Deliberately the RAW lane, not store.get/set: the JSON cache would hold a
+     stale ID after a manual localStorage edit, and raw() reads the disk on
+     every call. Keys keep the apex26. prefix and stay bare strings on disk.
+     Safari private mode throws on read AND write; the lane swallows both and
+     records the write failure in store.broken. Only ever called from
+     DOMContentLoaded and handlers, so GameStore is loaded by then. */
+  function ls(k) { return GameStore.store.raw(k); }
+  function lsSet(k, v) { GameStore.store.rawSet(k, v); }
+  function lsDel(k) { GameStore.store.rawDel(k); }
   function ss(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } }
   function ssSet(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
   function ssDel(k) { try { sessionStorage.removeItem(k); } catch (e) {} }

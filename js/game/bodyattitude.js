@@ -105,7 +105,7 @@ function offsets(c) {
 
 function setEnabled(v) {
   enabled = !!v;
-  try { localStorage.setItem(LS_KEY, enabled ? "1" : "0"); } catch (e) {}
+  GameStore.store.rawSet(LS_KEY, enabled ? "1" : "0");
   if (!enabled) reset();               // settle everything to rigid immediately
   return status();
 }
@@ -116,7 +116,7 @@ function status() { return { enabled, offsets: offsets() }; }
 function create(ctx) {
   Log.info("game", "BodyAttitude.create");
   G = ctx;
-  try { enabled = localStorage.getItem(LS_KEY) !== "0"; } catch (e) { enabled = true; }
+  enabled = GameStore.store.raw(LS_KEY) !== "0";   // raw() is null when storage is blocked: enabled
   return { update, reset, offsets, setEnabled, active, status };
 }
 
