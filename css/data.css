@@ -493,7 +493,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   color: var(--text);
 }
 .dh-ratebtn.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
-.dh-thint { font-size: var(--fs-2); color: #7a7a85; font-style: italic; margin-left: auto; }
+.dh-thint { font-size: var(--fs-2); color: var(--steel); font-style: italic; margin-left: auto; }
 /* On very narrow portrait, hide the scrub hint to keep transport on one row */
 body[data-width="narrow"] .dh-thint { display: none; }
 .dh-onboard.dh-tplaying { background: #2a6df0; border-color: #2a6df0; color: #fff; }
@@ -567,7 +567,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 }
 .dh-laneboard-dl.dh-pos { color: #ff6b6b; }   /* behind the reference */
 .dh-laneboard-dl.dh-neg { color: #3fd06b; }   /* ahead of the reference */
-.dh-live-updated { font-size: var(--fs-2); color: #7a7a85; margin-left: auto; }
+.dh-live-updated { font-size: var(--fs-2); color: var(--steel); margin-left: auto; }
 .dh-class-head { gap: 10px; }
 .dh-class-head .dh-section { margin: calc(var(--gap) * 0.5) 0 calc(var(--gap) * 2 / 3); flex: 1; }
 .dh-sorts { display: flex; gap: calc(var(--gap) / 3); flex: 0 0 auto; }
@@ -576,7 +576,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   padding: calc(var(--gap) / 3) calc(var(--gap) * 0.75); border-radius: var(--r-pill);
   background: var(--plate);
   border: 1px solid var(--plate-line);
-  color: var(--dim);
+  color: var(--text);
 }
 .dh-sortbtn.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
 

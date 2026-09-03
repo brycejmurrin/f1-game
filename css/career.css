@@ -198,7 +198,7 @@
 
 /* ---------- new-career setup ---------- */
 .cr-flavours { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
-@container sheet (min-width: 460px) { .cr-flavours { grid-template-columns: 1fr 1fr; } }
+.sheet[data-shape="wide"] .cr-flavours { grid-template-columns: 1fr 1fr; }
 .cr-flavour {
   display: flex; flex-direction: column; gap: 4px;
   padding: calc(var(--pad) * 0.7);
@@ -218,7 +218,7 @@
 .cr-flavour-blurb { font-size: var(--fs-micro); line-height: 1.4; color: var(--dim); }
 
 .cr-teamgrid { display: grid; gap: 6px; grid-template-columns: 1fr; }
-@container sheet (min-width: 460px) { .cr-teamgrid { grid-template-columns: 1fr 1fr; } }
+.sheet[data-shape="wide"] .cr-teamgrid { grid-template-columns: 1fr 1fr; }
 .cr-teamtile {
   display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto auto;
   column-gap: 8px; align-items: center;

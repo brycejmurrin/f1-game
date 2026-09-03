@@ -383,7 +383,7 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   // control between the two primaries.
   const pause = html.slice(html.indexOf('id="pausemenu"'), html.indexOf("</dialog>", html.indexOf('id="pausemenu"')));
   const ids = [...pause.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-standings", "pm-quit"]);
+  assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-howto", "pm-standings", "pm-quit"]);
   assert.match(pause, /id="pm-resume" autofocus/);
 });
 

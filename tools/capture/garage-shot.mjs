@@ -42,7 +42,7 @@ await p.waitForFunction(() => window.__apex && window.__apex.race, null,
   { polling: 200, timeout: 120000 });
 await p.locator("#mb-race").click();
 await p.locator("#select").waitFor({ state: "visible" });
-await p.locator("#sel-go").click();
+await p.locator("#sel-car").click();
 await p.locator("#carsetup").waitFor({ state: "visible" });
 await p.waitForTimeout(6000);        // turntable build + light settle
 await p.evaluate(() => { const c = document.getElementById("carsetup"); if (c) c.style.opacity = "0"; });

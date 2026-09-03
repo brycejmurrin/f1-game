@@ -300,33 +300,33 @@ test("TopModal: BACK returns focus to the button that opened the screen", () => 
   assert.equal(g.focused(), "mb-tt");
 });
 
-test("TopModal: a screen reopens on the control it was left from (garage BACK → NEXT: YOUR CAR)", () => {
+test("TopModal: a screen reopens on the control it was left from (garage BACK → YOUR CAR)", () => {
   const h = bootTopModal(["overlay", "select", "carsetup"]);
   const overlay = h.layer("overlay"), select = h.layer("select"), garage = h.layer("carsetup");
   select.hidden = true; garage.hidden = true;
   const mbRace = h.add(overlay, "mb-race", { y: 10 });
   h.add(select, "chip-all", { y: 10, attrs: { "aria-pressed": "true" } });
-  const selGo = h.add(select, "sel-go", { y: 500 });
+  const selCar = h.add(select, "sel-car", { y: 500 });
   const tab = h.add(garage, "cs-tab-aero", { y: 10, attrs: { role: "tab", "aria-selected": "true" } });
   const csBack = h.add(garage, "cs-back", { y: 500 });
   h.TopModal.scanLayers();
   mbRace.focus();
   h.flipAll([[overlay, true], [select, false]]);
-  selGo.focus();
+  selCar.focus();
   h.flipAll([[select, true], [garage, false]]);
   assert.equal(h.focused(), "cs-tab-aero", "the garage lands on its selected category");
   assert.equal(tab, h.dom.document.activeElement);
   csBack.focus();
   h.flipAll([[garage, true], [select, false]]);
-  assert.equal(h.focused(), "sel-go", "SELECT comes back on NEXT: YOUR CAR, where it was left");
-  selGo.focus();
+  assert.equal(h.focused(), "sel-car", "SELECT comes back on YOUR CAR, where it was left");
+  selCar.focus();
   // The view-transition path shows the next screen a frame later: hide first, show later.
   h.flip(select, true); h.flip(garage, false);
   csBack.focus();
   h.flip(garage, true);
-  assert.equal(h.focused(), "cs-back", "with its screen still hidden, no focus is thrown at sel-go yet");
+  assert.equal(h.focused(), "cs-back", "with its screen still hidden, no focus is thrown at sel-car yet");
   h.flip(select, false);
-  assert.equal(h.focused(), "sel-go", "…it lands when the screen actually shows");
+  assert.equal(h.focused(), "sel-car", "…it lands when the screen actually shows");
 });
 
 test("TopModal: no focus is restored to a control whose screen is not up (a race started), and dialogs are left to the platform", () => {

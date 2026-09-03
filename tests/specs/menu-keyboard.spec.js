@@ -212,7 +212,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     await openSelect(page);
     // The DRIVER chips moved from the select screen into the GARAGE's TEAM tab
     // when the screens were split by question (who you are / where you race).
-    await page.locator("#sel-go").click();
+    await page.locator("#sel-car").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();
     const chips = await page.evaluate(() => document.querySelectorAll("#cs-driver .sel-chip").length);
@@ -482,7 +482,7 @@ test.describe("Escape is BACK", () => {
     await openSelect(page);
     // START on the picker opens the GARAGE with garageReturn = "select" — the
     // exact path where DONE goes forward to race settings.
-    await page.locator("#sel-go").click();
+    await page.locator("#sel-car").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);

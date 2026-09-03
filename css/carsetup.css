@@ -444,7 +444,10 @@
   font-size: 18px; font-weight: 700; color: rgba(255,255,255,0.6);
   background: var(--plate); border-style: dashed;
 }
-.cs-liv-create { border-style: dashed; border-color: var(--plate-line); }
+.cs-liv-create {
+  border-style: dashed;
+  border-color: color-mix(in oklab, var(--spark) 32%, var(--card-line));
+}
 .cs-liv-row { display: flex; align-items: stretch; gap: calc(var(--gap) * 0.5); width: 100%; }
 .cs-liv-row > .cs-liv { flex: 1 1 auto; min-width: 0; width: auto; }
 
@@ -904,7 +907,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   display: flex; align-items: center; gap: 6px;
   padding: 5px 10px; border-radius: var(--r-sm);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
-  background: var(--plate-opaque); color: rgba(255,255,255,0.62);
+  background: var(--plate-opaque); color: color-mix(in oklab, var(--text) 62%, transparent);
   border: 1px solid var(--card-line);
   /* no backdrop-filter: these chips sit over the garage's LIVE turntable
      canvas (renderSetupPreview spins the car every frame), so a blur here
@@ -999,7 +1002,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 }
 .cs-aero-val {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: var(--ls-3);
-  color: var(--dim);
+  color: var(--text);
 }
 /* Lit state uses the same CYAN the in-race HUD chip uses for X-mode, so the
    garage and the track speak the same colour about the same system. */
@@ -1029,7 +1032,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   flex: 0 0 auto; width: auto; margin: 0;
   font-size: var(--vb-fs, var(--fs-micro)); font-weight: 800; letter-spacing: var(--ls-4);
   padding: var(--vb-pad, 5px 9px); border-radius: var(--r-sm);
-  background: var(--plate-opaque); color: var(--dim);
+  background: var(--plate-opaque); color: var(--text);
   border: 1px solid var(--card-line);
   /* no backdrop-filter: these chips sit over the garage's LIVE turntable
      canvas (renderSetupPreview spins the car every frame), so a blur here

@@ -19,7 +19,7 @@ async function openSetup(page) {
   await pinFreePlay(page, { click: false });
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await freeBuildOff(page);
 }
@@ -82,12 +82,12 @@ test.describe("Car setup — nothing shows through from the screen below", () =>
   // race now, not a side door off it.
   for (const [route, enter, backTo] of [
     ["GARAGE from the title", "#mb-garage", "overlay"],
-    ["START from the track picker", "#sel-go", "race-settings"],
+    ["YOUR CAR from the track picker", "#sel-car", "race-settings"],
   ]) {
     test(`${route}: no screen is left visible behind the panel`, async ({ page }) => {
       // The title screen and nothing else, as the boot used to leave it.
       await toMenu(page);
-      if (enter === "#sel-go") {
+      if (enter === "#sel-car") {
         await page.locator("#mb-race").click();
         await page.locator("#select").waitFor({ state: "visible" });
       }
@@ -206,8 +206,8 @@ test.describe("Garage — TEAM tab owns team, driver and MY TEAM", () => {
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
     // The team summary lives in the GARAGE now — the select screen asks where
-    // you race and nothing else, and START is the way in.
-    await page.locator("#sel-go").click();
+    // you race and nothing else, and YOUR CAR is the way in.
+    await page.locator("#sel-car").click();
     await expect(page.locator("#carsetup")).toBeVisible();
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();
     await expect(page.locator("#cs-driver .sel-chip.active")).toContainText(surname);

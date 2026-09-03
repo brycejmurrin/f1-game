@@ -403,23 +403,21 @@ test.describe("Pause settings — stable layout", () => {
   });
 });
 
-test.describe("Pause settings — HOW TO PLAY", () => {
+test.describe("Pause — HOW TO PLAY", () => {
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
-  test("opens the help sheet over the settings menu and BACK returns to it", async ({ page }) => {
+  test("opens the help sheet over the pause menu and BACK returns to it", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseSettings(page);
-    await page.locator("#pm-tab-more").click();
+    await openPauseMenu(page);
 
     await page.locator("#pm-howto").click();
     await expect(page.locator("#howtoplay")).toBeVisible();
-    // It lays OVER the settings menu (z-index 40 vs 35) rather than replacing it.
-    expect(await page.evaluate(() => document.getElementById("pmsettings").hidden)).toBe(false);
+    expect(await page.evaluate(() => document.getElementById("pausemenu").hidden)).toBe(false);
 
     await page.locator("#htp-close").click();
     await expect(page.locator("#howtoplay")).toBeHidden();
-    await expect(page.locator("#pmsettings")).toBeVisible();
+    await expect(page.locator("#pausemenu")).toBeVisible();
 
     // A pause press closes the innermost sheet first — the help sheet, not the
     // menu under it (which would strand the help sheet over the race). Gamepad
@@ -438,7 +436,7 @@ test.describe("Pause settings — HOW TO PLAY", () => {
       Input.poll();
     });
     await expect(page.locator("#howtoplay")).toBeHidden();
-    await expect(page.locator("#pmsettings")).toBeVisible();
+    await expect(page.locator("#pausemenu")).toBeVisible();
 
     // Resuming never leaves it up.
     await page.locator("#pm-howto").click();
@@ -484,15 +482,9 @@ test.describe("Race settings — portrait layout", () => {
     await page.evaluate(() => window.__apex.headless(true));
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
-    // START on the select screen goes to the GARAGE now, and the garage's DONE
-    // carries on to race settings. This spec waited on #race-settings straight
-    // after #sel-go and had been timing out ever since the garage was inserted
-    // into the flow — two minutes per run, twice, for a route that no longer
-    // exists. Reaching a screen the way a player reaches it is the point; when
-    // the route moves, the spec's path has to move with it.
+    // NEXT on the select screen opens race settings. YOUR CAR is the garage
+    // door beside it — this spec is about the settings sheet, not the garage.
     await page.locator("#sel-go").click();
-    await page.locator("#carsetup").waitFor({ state: "visible" });
-    await page.locator("#cs-done").click();
     await page.locator("#race-settings").waitFor({ state: "visible" });
     await page.waitForTimeout(300);
     // RACE! button must be visible without scrolling
@@ -551,15 +543,9 @@ test.describe("Race settings — landscape layout", () => {
     await page.evaluate(() => window.__apex.headless(true));   // see the portrait twin
     await page.locator("#mb-race").click();
     await page.locator("#select").waitFor({ state: "visible" });
-    // START on the select screen goes to the GARAGE now, and the garage's DONE
-    // carries on to race settings. This spec waited on #race-settings straight
-    // after #sel-go and had been timing out ever since the garage was inserted
-    // into the flow — two minutes per run, twice, for a route that no longer
-    // exists. Reaching a screen the way a player reaches it is the point; when
-    // the route moves, the spec's path has to move with it.
+    // NEXT on the select screen opens race settings. YOUR CAR is the garage
+    // door beside it — this spec is about the settings sheet, not the garage.
     await page.locator("#sel-go").click();
-    await page.locator("#carsetup").waitFor({ state: "visible" });
-    await page.locator("#cs-done").click();
     await page.locator("#race-settings").waitFor({ state: "visible" });
     await page.waitForTimeout(300);
     // Panel must not overflow

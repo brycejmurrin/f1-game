@@ -84,7 +84,7 @@ const SCREENS = [
   // The garage is a STEP, not a side door: #select's START opens #carsetup and
   // the garage's DONE goes on to #race-settings. `sel-setup` no longer exists,
   // and both routes below had been silently reporting "root missing/hidden".
-  ["race-settings", `document.getElementById('mb-race').click(); await until('#carsetup:not([hidden])',4000); document.getElementById('cs-done').click()`, "#race-settings"],
+  ["race-settings", `document.getElementById('mb-race').click(); document.getElementById('sel-go').click()`, "#race-settings"],
   ["customize", `
      document.getElementById('mb-garage').click();
      await until('#carsetup:not([hidden])', 4000);
@@ -94,8 +94,8 @@ const SCREENS = [
      document.getElementById('cs-customize').click();
      await until('#customize:not([hidden])', 4000);
    `, "#customize"],
-  ["carsetup", `document.getElementById('mb-race').click(); document.getElementById('sel-go').click()`, "#carsetup"],
-  ["howtoplay", `document.getElementById('mb-settings').click(); await until('#pmsettings:not([hidden])', 4000); document.getElementById('pm-tab-more').click(); document.getElementById('pm-howto').click()`, "#howtoplay"],
+  ["carsetup", `document.getElementById('mb-race').click(); document.getElementById('sel-car').click()`, "#carsetup"],
+  ["howtoplay", `document.getElementById('mb-help').click()`, "#howtoplay"],
   ["pause", `window.__apex.race('bahrain'); `, "#pausemenu"],
 
   // ── F1 DATA HUB (#datahub — markup is built entirely by js/data/hub.js) ──

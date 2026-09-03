@@ -126,11 +126,11 @@ found a real WCAG failure in the lighting tuner within a minute.
 | `garage` | `#carsetup` | `#mb-garage` → ENGINE tab |
 | `career` | `#career` | `#mb-career` (new-career SETUP state) |
 | `datahub` | `#datahub` | `#mb-data` |
-| `howtoplay` | `#howtoplay` | `#mb-settings` → `#pm-tab-more` → `#pm-howto` |
+| `howtoplay` | `#howtoplay` | `#mb-help` |
 | `settings` | `#pmsettings` | `#mb-settings` |
 | `vsfriend` | `#vsfriend` | `#mb-vs` |
 | `teampicker` | `#teampicker` | garage → TEAM tab → `#cs-team-card` |
-| `racesettings` | `#race-settings` | select → START → garage → `#cs-done` |
+| `racesettings` | `#race-settings` | select → `#sel-go` (NEXT) |
 | `quali` | `#quali` | race settings → QUALIFYING LAP **on** → `#rs-go` |
 | `standings` | `#standings` | in-race → pause → `#pm-standings` |
 | `customize` | `#customize` | garage → **TEAM** tab → `#cs-customize` |

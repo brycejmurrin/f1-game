@@ -1636,22 +1636,23 @@ h3.sel-label {
    the room the sheet was given — on a landscape phone the sheet is now wide
    enough for three, which is what finally gets the whole form above the fold
    (it was 442px of rows in a 271px window). */
-@container sheet (min-width: 460px) {
-  #cz-body, #cz-paint-rows {
-    display: grid;
-    /* min(...) floor — see #sel-teams above for why a bare px floor overflows */
-    grid-template-columns: repeat(auto-fill, minmax(min(205px, 100%), 1fr));
-    column-gap: var(--pad); align-content: start;
-  }
-  /* #cz-paint (the <details> now wrapping the paint rows) has to be the grid
-     item that spans full width, not the .cz-sep summary or #cz-paint-rows
-     inside it — display:contents on the <details> looks like the fix but
-     Chromium does not promote a <details>'s children out of the box tree for
-     grid placement even with it (see the identical dead end in
-     css/components.css for #advanced), so the wrapper stays a real box and
-     grids its OWN children instead, same as #cz-body does for its own. */
-  #cz-body .cz-sep, #cz-body #cz-preview, #cz-body #cz-paint { grid-column: 1 / -1; }
+#customize .sheet[data-shape="wide"] #cz-body,
+#customize .sheet[data-shape="wide"] #cz-paint-rows {
+  display: grid;
+  /* min(...) floor — see #sel-teams above for why a bare px floor overflows */
+  grid-template-columns: repeat(auto-fill, minmax(min(205px, 100%), 1fr));
+  column-gap: var(--pad); align-content: start;
 }
+/* #cz-paint (the <details> now wrapping the paint rows) has to be the grid
+   item that spans full width, not the .cz-sep summary or #cz-paint-rows
+   inside it — display:contents on the <details> looks like the fix but
+   Chromium does not promote a <details>'s children out of the box tree for
+   grid placement even with it (see the identical dead end in
+   css/components.css for #advanced), so the wrapper stays a real box and
+   grids its OWN children instead, same as #cz-body does for its own. */
+#customize .sheet[data-shape="wide"] #cz-body .cz-sep,
+#customize .sheet[data-shape="wide"] #cz-body #cz-preview,
+#customize .sheet[data-shape="wide"] #cz-body #cz-paint { grid-column: 1 / -1; }
 
 /* ---------- THE TOUCH TYPE FLOOR ----------------------------------------
    css/tokens.css says --label is "the smallest type this UI has" and sets it

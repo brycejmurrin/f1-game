@@ -8092,10 +8092,9 @@ $("mb-data").onclick = () => {
   ensureDataHub().then((ok) => { if (ok) DataHub.open(); });
 };
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
-// Same sheet from the pause menu's SETTINGS page — the controls reference is
-// most wanted mid-session, not on the title screen. #howtoplay outranks
-// #pmsettings in z-index, so it lays over the settings menu and DONE returns
-// there with nothing else to restore.
+// Same sheet from the pause stack — the controls reference is most wanted
+// mid-session. #howtoplay outranks #pausemenu in z-index, so BACK returns
+// to the pause menu with nothing else to restore.
 $("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("htp-close").onclick = () => {
   els.howtoplay.hidden = true; const fromRotate = document.body.classList.contains("rotate-help-open");
@@ -8164,7 +8163,7 @@ $("pm-settings-close").onclick = closeSettings;
 // tuners are reachable without starting a race first. closeSettings() already
 // only returns to the pause menu when actually paused, so from here it just
 // closes back to the title.
-$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); settingsNav.show("more", false); openSettings(); };
+$("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
 // Advanced steering: opened from the settings menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
 $("adv-close").onclick = () => { $("advanced").hidden = true; };
@@ -8347,10 +8346,10 @@ els.selGo.onclick = () => {
   if (els.selGo.dataset.seasonComplete === "1") {
     buildStandings(); $("standings").hidden = false; return;
   }
-  // Solo flows go through the garage; VS FRIEND owns a separate garage step.
-  if (netRoom) { openRaceSettings("select"); return; }
-  openGarage("select");
+  // Circuit first, then race settings. YOUR CAR (#sel-car) is the garage door.
+  openRaceSettings("select");
 };
+$("sel-car").onclick = () => openGarage("select");
 $("rs-cancel").onclick = () => {
   $("race-settings").hidden = true;
   $(rsReturn).hidden = false;

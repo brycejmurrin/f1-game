@@ -1137,19 +1137,17 @@ body[data-density="compact"] #campicker {
 }
 #vsfriend .vs-raw[open] > summary { margin-bottom: calc(var(--gap) * 0.5); }
 
-@container sheet (min-width: 620px) {
-  #vsfriend .vs-two {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    column-gap: 20px;
-    align-items: start;
-  }
-  /* A hairline between the two steps, so they read as two things rather than
-     one wrapped list. */
-  #vsfriend .vs-two > .vs-col + .vs-col {
-    padding-left: 20px;
-    border-left: 1px solid var(--card-line);
-  }
+#vsfriend-inner[data-shape="wide"] .vs-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 20px;
+  align-items: start;
+}
+/* A hairline between the two steps, so they read as two things rather than
+   one wrapped list. */
+#vsfriend-inner[data-shape="wide"] .vs-two > .vs-col + .vs-col {
+  padding-left: 20px;
+  border-left: 1px solid var(--card-line);
 }
 #vsfriend .vs-status {
   margin: var(--gap) 0 0;

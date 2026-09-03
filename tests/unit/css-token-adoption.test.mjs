@@ -212,7 +212,9 @@ const CEILING = {
   // traded one spelling for another, so distinct stays flat.
   // 2026-09-03 matching pass: 348 -> 334. Idle-tab / selected-chip / headline
   // ink left #fff and leftover red section chrome for --text / --steel.
-  rawColor: 334,
+  // 2026-09-03 leftover pass: 334 -> 330. Sort/label/live-updated chrome
+  // left #7a7a85 and leftover dim for --steel / --text.
+  rawColor: 330,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide
@@ -224,7 +226,8 @@ const CEILING = {
   // left rgba(255,255,255,0.78) for color-mix(var(--text)).
   // 2026-09-03 deep pass: 374 -> 367 / 189 -> 188. Customize rows, title
   // subs, How-to-Play rules, and data-hub numerals moved onto tokens.
-  rawColorDistinct: 185,
+  // 2026-09-03 leftover pass: 185 -> 184 with rawColor 334 -> 330.
+  rawColorDistinct: 184,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

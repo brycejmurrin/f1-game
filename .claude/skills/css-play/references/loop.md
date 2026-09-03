@@ -30,7 +30,7 @@ Catalog (`node tools/css-play.mjs --list`):
 | settings | `#pmsettings` | `#mb-settings` |
 | career | `#career` | `#mb-career` |
 | datahub | `#datahub` | `#mb-data` |
-| howtoplay | `#howtoplay` | `#mb-settings` → `#pm-tab-more` → `#pm-howto` |
+| howtoplay | `#howtoplay` | `#mb-help` |
 | vsfriend | `#vsfriend` | `#mb-vs` |
 | pause | `#pausemenu` | `__apex.race` → `#pausebtn` |
 

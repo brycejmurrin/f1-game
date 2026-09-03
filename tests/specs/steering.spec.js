@@ -22,7 +22,6 @@ async function startLiveRace(page) {
   await page.goto("/");
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
-  await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
   await page.locator("#rs-go").click();
   // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(

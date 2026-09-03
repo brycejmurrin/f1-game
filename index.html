@@ -386,6 +386,7 @@
       <button id="pm-resume" autofocus>RESUME</button>
       <button id="pm-restart">RESTART RACE</button>
       <button id="pm-settings">SETTINGS&hellip;</button>
+      <button id="pm-howto">HOW TO PLAY&hellip;</button>
       <button id="pm-standings" hidden>STANDINGS</button>
       <button id="pm-quit">QUIT TO MENU</button>
       <!-- Which build am I actually running? index.html carries no ?v= of its
@@ -468,7 +469,6 @@
           <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
           <button id="pm-camtune">CAMERA TUNER&hellip;</button>
           <button id="pm-audio">MUSIC &amp; SOUND&hellip;</button>
-          <button id="pm-howto">HOW TO PLAY&hellip;</button>
         </nav>
       </div>
     </div>
@@ -634,15 +634,16 @@
       <!-- The list is a SIBLING of the label+preview section, not a child of it,
            so the two-column layout can make it a grid item of the sheet itself
            and span it down through the action-bar row (css/menus.css). A nested
-           grid cannot span a row of its parent, and the action bar only ever
-           holds BACK and START — both under the preview column. Stacked: label,
+           grid cannot span a row of its parent, and the action bar holds BACK,
+           YOUR CAR and NEXT — under the preview column. Stacked: label,
            compact preview band, then the list — one column, list scrolls. -->
       <div id="sel-tracks" class="pane pair-main" role="group" aria-labelledby="sel-circuit-label"></div>
     </div>
 
     <div class="sheet-foot">
       <button id="sel-back" class="bigbtn alt">BACK</button>
-      <button id="sel-go" class="bigbtn">START</button>
+      <button id="sel-car" class="bigbtn alt">YOUR CAR</button>
+      <button id="sel-go" class="bigbtn">NEXT</button>
     </div>
   </div>
 </div>
@@ -987,7 +988,7 @@
            taken, going back would silently throw the result away — and the
            classification IS the grid, so there is nothing left to reconsider.
            css/career.css hides it on .q-done alongside DRIVE/SIMULATE. -->
-      <button id="q-back" autofocus class="bigbtn alt minibtn">BACK</button>
+      <button id="q-back" autofocus class="bigbtn alt">BACK</button>
       <button id="q-drive" class="bigbtn">DRIVE MY LAP</button>
       <button id="q-sim" class="bigbtn alt minibtn">SIMULATE</button>
       <button id="q-go" class="bigbtn">TO THE GRID</button>

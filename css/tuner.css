@@ -287,7 +287,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .lt-section {
   margin: 16px 0 7px;
   padding: 0 0 calc(var(--gap) / 3);
-  color: rgba(255,255,255,.72);
+  color: var(--steel);
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
   font-size: var(--fs-micro);
   font-weight: 800;

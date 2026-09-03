@@ -747,9 +747,8 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
   assert.ok(fitAt(components, /^#vsfriend-inner/).includes("280px"));
   assert.ok(fitAt(css("css/career.css"), /^#cr-inner/).includes("300px") && fitAt(css("css/career.css"), /^#cr-inner/).includes("220px"));
   assert.ok(fitAt(menus, /^#ss-inner/).includes("300px") && fitAt(menus, /^#ss-inner/).includes("220px"), "#ss-inner wide-shape fit-at 220px");
-  const vsTwo = rulesFor(css("css/overlays.css"), "#vsfriend .vs-two");
-  assert.ok(vsTwo.some((r) => r.context.includes("@container sheet (min-width: 620px)")), "VS Friend columns are a container query");
-  assert.ok(!vsTwo.some((r) => r.context.some((c) => /@media \(min-width: 620px\)/.test(c))));
+  const vsTwo = rulesFor(css("css/overlays.css"), /^#vsfriend-inner\[data-shape="wide"\] \.vs-two$/);
+  assert.ok(vsTwo.length, "VS Friend columns key on the sheet's wide shape, not a 620px container guess");
   assert.ok(!declares(menus, '#sel-inner[data-fit="on"] #sel-preview-map', "display", "none"),
     "zoomed / data-fit SELECT keeps the map; caps bind instead of hiding it");
 });
@@ -810,8 +809,14 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(h.tab("more").tabIndex, 0);
   assert.equal(h.tab("controls").tabIndex, -1, "roving tab stop");
   const game = code("js/game.js");
-  assert.match(game, /settingsNav\.show\(\s*"more"\s*,\s*false\s*\)\s*;\s*openSettings\(\s*\)/,
-    "title Settings opens the MORE category (How to Play lives there)");
+  assert.match(game, /\$\(\s*"mb-settings"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*soundOn\s*\)\s*GameAudio\.init\(\s*\)\s*;\s*openSettings\(\s*\)/,
+    "title Settings reopens the last category via openSettings → showCurrent");
+  assert.doesNotMatch(game, /mb-settings"\)\.onclick[\s\S]{0,120}settingsNav\.show\(\s*"more"/,
+    "title Settings must not force MORE");
+  assert.match(game, /els\.selGo\.onclick[\s\S]{0,400}openRaceSettings\(\s*"select"\s*\)/,
+    "SELECT NEXT opens race settings, not the garage");
+  assert.match(game, /\$\(\s*"sel-car"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*openGarage\(\s*"select"\s*\)/,
+    "SELECT YOUR CAR is the garage door");
   assert.match(game, /pmStandings\.hidden\s*=\s*!\(\s*isChampionship\(\s*\)\s*&&\s*SeasonCal\.hasProgress\(\s*season\s*\)\s*&&\s*season\.round\s*<\s*SeasonCal\.rounds\(\s*\)\s*\)/,
     "pause STANDINGS matches the title: hide once the season is finished");
   assert.match(game, /\$\(\s*"pm-restart"\s*\)\.disabled\s*=\s*!!\s*\(\s*netPlay\.active\(\s*\)\s*\|\|\s*qualiNetDone\s*\)/,
@@ -833,6 +838,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",
     "compact wide season setup keeps the calendar + pool pair");
   const shell = read("index.html");
+  assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
+  assert.match(shell, /id="sel-car"[^>]*>YOUR CAR</);
+  assert.match(shell, /id="sel-go"[^>]*>NEXT</);
   assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is BACK on the alt plate");
   assert.match(shell, /id="htp-close"[^>]*>BACK</, "How to Play returns to its parent, it does not commit");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
@@ -858,7 +866,7 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.match(decl(tokens, /:root/, "--plate-on") || "", /^color-mix\(in oklab, var\(--red\) 18%/);
   assert.equal(decl(components, "#pm-category-tabs > button", "background"), "var(--plate)");
   assert.ok(rulesFor(components, /^#pm-category-tabs > button\.active,/).some((r) => r.decls.get("background") === "var(--plate-on)"));
-  assert.equal(decl(components, ".bigbtn.alt", "background"), "var(--plate)");
+  assert.equal(decl(components, ".bigbtn.alt", "background"), "var(--plate-opaque)");
   assert.equal(decl(menus, ".sel-chip", "background"), "var(--plate)");
   assert.equal(decl(menus, ".sel-chip.active", "background"), "var(--plate-on)");
   assert.equal(decl(menus, "#race-settings .sel-chip.active", "background"), "var(--plate-on)");
@@ -867,6 +875,8 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(data, ".dh-pill.dh-active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-livebtn.dh-active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-tab", "color"), "var(--text)", "idle hub tabs are ink, not dim-as-disabled");
+  assert.equal(decl(data, ".dh-sortbtn", "color"), "var(--text)");
+  assert.equal(decl(components, ".sel-label", "color"), "var(--steel)", "section chrome, not leftover dim");
   assert.equal(decl(carsetup, ".cs-tab-lbl", "color"), "var(--text)");
   assert.equal(decl(css("css/overlays.css"), "#htp-contents a", "color"), "var(--text)");
   assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab", "color"), "var(--text)");
