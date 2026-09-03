@@ -41,6 +41,16 @@ const QUALI_TRIM = 0.75;
 
 const EXEC_SPREAD = 0.012;
 
+// Time-trial MEDALS as multiples of the reference pole (referencePole below):
+// gold beats the modelled pole, silver is within 3 %, bronze within 7 %.
+const MEDALS = [["gold", 1.0], ["silver", 1.03], ["bronze", 1.07]];
+const MEDAL_RANK = { bronze: 1, silver: 2, gold: 3 };
+function medalFor(t, pole) {
+  if (!(t > 0) || !(pole > 0)) return null;
+  for (const [m, k] of MEDALS) if (t <= pole * k) return m;
+  return null;
+}
+
 function create(G) {
   Log.info("game", "Quali.create");
 
@@ -109,6 +119,17 @@ function create(G) {
   function capFor(c) {
     const dd = PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal;
     return G.vTop() * c.tierV * c.skill * dd.ai * QUALI_TRIM;
+  }
+
+  // The reference POLE a time-trial medal is measured against: a top-rated
+  // driver (skill 1) in the tier-0 car on a flying lap — the same model
+  // capFor()/lapTime() grid a field with, minus the standing start — at the
+  // current pace, difficulty and weather grip. 0 with no track loaded.
+  function referencePole() {
+    const track = G.track;
+    if (!track || !track.n) return 0;
+    const dd = PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal;
+    return lapTime(track, G.vTop() * Teams.TIER_V[0] * dd.ai * QUALI_TRIM, G.gripMult());
   }
 
   // What a STANDING start costs, in seconds, for a car whose flying pace is
@@ -309,8 +330,8 @@ function create(G) {
     return classification ? classification.map(({ car, ...row }) => row) : null;
   }
 
-  return { simulate, preview, order, results, rows, clear, begin, forgetOrder, lapTime, capFor };
+  return { simulate, preview, order, results, rows, clear, begin, forgetOrder, lapTime, capFor, referencePole };
 }
 
-return { create, STEP, QUALI_TRIM, EXEC_SPREAD };
+return { create, STEP, QUALI_TRIM, EXEC_SPREAD, MEDALS, MEDAL_RANK, medalFor };
 })();

@@ -141,3 +141,24 @@ test("Ghost clear and track switching", () => {
   Ghost.clear("monaco");
   assert.equal(Ghost.hasGhost(), false);
 });
+
+test("finishLap meta rides with the ghost lap, survives a reload, and a slower lap keeps it", () => {
+  const { Ghost } = createHarness();
+  Ghost.setTrack("monza");
+  const lap = (t) => { Ghost.startLap(); for (let i = 0; i < 12; i++) Ghost.record(i * t / 12, i * 100, 0); };
+  lap(90);
+  assert.equal(Ghost.finishLap(90, { medal: "silver", pole: 88 }), true);
+  assert.equal(Ghost.medal(), "silver");
+  assert.equal(Ghost.meta().pole, 88);
+  lap(95);
+  assert.equal(Ghost.finishLap(95, { medal: "bronze" }), false);
+  assert.equal(Ghost.medal(), "silver", "a slower lap does not overwrite the medal");
+  Ghost.setTrack("spa");
+  assert.equal(Ghost.medal(), null);
+  assert.equal(Ghost.meta(), null);
+  Ghost.setTrack("monza");
+  assert.equal(Ghost.medal(), "silver", "persisted beside the lap");
+  lap(85);
+  assert.equal(Ghost.finishLap(85), true);
+  assert.equal(Ghost.medal(), null, "a lap saved without meta carries none");
+});

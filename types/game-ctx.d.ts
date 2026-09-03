@@ -572,7 +572,12 @@ interface GameCtx {
   readonly onPeerQualiLive: (d: unknown) => void;
   readonly openQualiForNet: (done: () => void) => void;
   readonly refreshQualiGate: () => void;
+  /** A view of raceGrid: true for "quali" | "rev10". */
   raceQuali: boolean;
+  /** "tier" pace order | "quali" | "rev10" (F2 sprint rule) | "revchamp" | "random". */
+  raceGrid: "tier" | "quali" | "rev10" | "revchamp" | "random";
+  /** Time-trial medal reference: the modelled pole for this circuit (Quali.referencePole). */
+  readonly referencePole: () => number;
   readonly openGarageFrom: (from?: string) => void;
   readonly startRace: () => void;
   readonly startWeatherArc: (from: Weather, to: Weather, dur?: number) => void;

@@ -7,7 +7,10 @@ const { store } = GameStore;
 const CFG_KEY = "seasonCfg";           // store.get/set add the `apex26.` prefix
 
 const SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
-const CLASSIC_POINTS = [10, 6, 4, 3, 2, 1];
+const CLASSIC_POINTS = [10, 6, 4, 3, 2, 1];   // 1991–2002 table
+// Dropped scores: until 1990 only a driver's best N results counted (best 11
+// of 16 in 1990). `drop` is how many of the season's rounds do NOT count.
+const DROP_OPTS = [0, 2, 3];
 
 const SPRINT_FRAC = 1 / 3;
 const SPRINT_MIN = 2;
@@ -30,6 +33,8 @@ function fresh() {
     sprint: false,
     laps: DEFAULT_LAPS,
     points: "modern",
+    flPoint: false,   // the 2019–2024 fastest-lap point (top-ten finisher, Grand Prix only)
+    drop: 0,
   };
 }
 
@@ -54,6 +59,8 @@ function normalize(raw) {
     sprint: c.sprint === true,
     laps: LAP_OPTS.indexOf(c.laps) >= 0 ? c.laps : def.laps,
     points: c.points === "classic" ? "classic" : "modern",
+    flPoint: c.flPoint === true,
+    drop: DROP_OPTS.indexOf(c.drop) >= 0 ? c.drop : 0,
   };
 }
 
@@ -110,7 +117,7 @@ function trackIndex(round) {
 let lastScored = "race";
 let sprintOrder = null;   // driverIds, for a no-qualifying sprint weekend's grid
 
-function blank() { return { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {} }; }
+function blank() { return { round: 0, pts: {}, teamPts: {}, driverCodes: {}, finishes: {}, roundPts: {} }; }
 function resetWeekend() { lastScored = "race"; sprintOrder = null; }
 function restart() { resetWeekend(); return blank(); }
 
@@ -124,6 +131,17 @@ function scoreMap(raw) {
   return out;
 }
 // finishes: driverId -> sparse array of per-position counts (see award()).
+// roundPts: driverId -> sparse array of points per ROUND (both legs of a sprint
+// weekend land in the same index). netPts() reads it when scores are dropped.
+function roundMap(o) {
+  const out = {};
+  if (!o || typeof o !== "object") return out;
+  for (const k of Object.keys(o)) {
+    if (!Array.isArray(o[k])) continue;
+    out[k] = o[k].map((v) => (Number.isFinite(v) && v > 0 ? v : 0));
+  }
+  return out;
+}
 function finishMap(o) {
   const out = {};
   if (!o || typeof o !== "object") return out;
@@ -156,6 +174,8 @@ function resume(saved) {
   s.teamPts = scoreMap(s.teamPts);
   s.driverCodes = codeMap(s.driverCodes);
   s.finishes = finishMap(s.finishes);
+  s.roundPts = roundMap(s.roundPts);
+  if (typeof s.lastFl !== "string") delete s.lastFl;
   if (s.stage === "race" && Array.isArray(s.sprintOrder) && s.sprintOrder.length) {
     sprintOrder = s.sprintOrder.slice();
   } else {
@@ -197,12 +217,22 @@ function pointsTable() {
   return fmtActive() && config().points === "classic" ? CLASSIC_POINTS : Teams.POINTS;
 }
 
-function award(season, order) {
+function award(season, order, fastestId) {
   if (!canRace(season)) return null;
   const scoring = stage(season);
   const table = scoring === "sprint" ? SPRINT_POINTS : pointsTable();
+  // The 2019–2024 fastest-lap point: one point, Grand Prix leg only, and only
+  // to a driver classified inside the top ten. Season format only (fmtActive):
+  // a career keeps the table it always paid. `lastFl` names this round's
+  // recipient for the results sheet and is cleared on the next scoring.
+  const fl = scoring !== "sprint" && fmtActive() && config().flPoint && fastestId != null;
+  delete season.lastFl;
+  const rp = season.roundPts || (season.roundPts = {});
   order.forEach((c, i) => {
-    const pts = c.retired ? 0 : (table[i] || 0);
+    let pts = c.retired ? 0 : (table[i] || 0);
+    if (fl && c.driverId === fastestId && i < 10 && !c.retired) { pts += 1; season.lastFl = fastestId; }
+    const row = rp[c.driverId] || (rp[c.driverId] = []);
+    row[season.round] = (row[season.round] || 0) + pts;
     season.pts[c.driverId] = (season.pts[c.driverId] || 0) + pts;
     season.driverCodes[c.driverId] = c.code;
     season.teamPts[c.team.id] = (season.teamPts[c.team.id] || 0) + pts;
@@ -234,9 +264,28 @@ function scored() { return lastScored; }
 // Standings order for two driver ids: points, then countback (more wins, then
 // more seconds, …), then the id so the order is total and stable. Equal points
 // used to fall to Object.entries insertion order — whoever scored first.
+// A driver's COUNTING points. With dropped scores only the best
+// (rounds − drop) results count, and only once a driver has more scoring
+// rounds than that — early in the season the gross total stands, as it did
+// in the dropped-score years. Gross for a save with no per-round record.
+function netPts(season, id) {
+  const gross = (season && season.pts && season.pts[id]) || 0;
+  const drop = fmtActive() ? config().drop : 0;
+  if (!drop) return gross;
+  const row = (season.roundPts && season.roundPts[id]) || [];
+  const played = (season.round || 0) + (midWeekend(season) ? 1 : 0);
+  const keep = Math.max(1, rounds() - drop);
+  if (played <= keep || !row.length) return gross;
+  const vals = [];
+  for (let r = 0; r < played; r++) vals.push(row[r] || 0);
+  vals.sort((x, y) => y - x);
+  let sum = 0;
+  for (let i = 0; i < keep; i++) sum += vals[i];
+  return sum;
+}
+
 function rank(season, a, b) {
-  const pts = (season && season.pts) || {};
-  const d = (pts[b] || 0) - (pts[a] || 0);
+  const d = netPts(season, b) - netPts(season, a);
   if (d) return d;
   const fin = (season && season.finishes) || {};
   const fa = fin[a] || [], fb = fin[b] || [];
@@ -297,12 +346,12 @@ function shuffled(ids, seed) {
 }
 
 return {
-  SPRINT_POINTS, CLASSIC_POINTS, LAP_OPTS, PRESETS, DEFAULT_LAPS,
+  SPRINT_POINTS, CLASSIC_POINTS, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS,
   config, setConfig, resetConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   resume, blank, restart, resetWeekend, canRace, hasProgress,
   quali, qualiNext, stage, midWeekend, sprintOn, lapsFor, formatLaps, pointsTable,
-  award, scored, rank, grid, drawRound,
+  award, scored, rank, netPts, grid, drawRound,
   presetIds, shuffled,
 };
 })();

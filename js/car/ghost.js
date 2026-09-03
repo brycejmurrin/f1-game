@@ -58,6 +58,8 @@ const Ghost = (function () {
 
   function hasGhost() { return !!best; }
   function bestTime() { return best ? best.time : Infinity; }
+  function meta() { return best && best.meta && typeof best.meta === "object" ? best.meta : null; }
+  function medal() { const m = meta(); return m && typeof m.medal === "string" ? m.medal : null; }
 
   // Begin recording a fresh lap (call at each lap start / lights-out).
   function startLap() {
@@ -75,13 +77,17 @@ const Ghost = (function () {
     rec.x.push(round(x, 2));
   }
 
-  function finishLap(lapTime) {
+  // `meta` (optional, a plain object — medal, pole, pace, weather) is stored
+  // beside the lap it belongs to and only when that lap becomes the ghost, so
+  // Ghost.meta() always describes the lap the player is racing against.
+  function finishLap(lapTime, meta) {
     if (!Number.isFinite(lapTime) || lapTime <= 0) { rec = null; return false; }
     if (!rec || rec.t.length < MIN_SAMPLES) { rec = null; return false; }
     const done = rec;
     rec = null;
     if (lapTime < bestTime()) {
       best = { time: round(lapTime, 3), t: done.t, s: done.s, x: done.x };
+      if (meta && typeof meta === "object") best.meta = meta;
       if (trackId != null) {
         // Deferred: loadStore/saveStore parse and stringify EVERY circuit's ghost
         // (~40 KB each) and this runs inside updateCar on the lap-line frame of
@@ -148,7 +154,7 @@ const Ghost = (function () {
 
   return {
     setTrack, startLap, record, finishLap, at, timeAt,
-    hasGhost, bestTime, clear,
+    hasGhost, bestTime, meta, medal, clear,
   };
 })();
 

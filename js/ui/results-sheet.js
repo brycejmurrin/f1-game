@@ -59,7 +59,10 @@ function buildResults(order) {
     const pt = document.createElement("span"); pt.className = "res-pts";
     const table = sprint ? SeasonCal.SPRINT_POINTS
       : G.seasonMode ? SeasonCal.pointsTable() : Teams.POINTS;
-    pt.textContent = dnf ? "DNF" : (table[i] || 0) + " pts";
+    // "+FL": this round's fastest-lap point (SeasonCal.award sets lastFl only
+    // when the format pays it, and only to a top-ten finisher).
+    const fl = !sprint && G.seasonMode && season && season.lastFl === c.driverId && !dnf ? 1 : 0;
+    pt.textContent = dnf ? "DNF" : ((table[i] || 0) + fl) + " pts" + (fl ? " +FL" : "");
     row.append(pos, sw, nm, pt);
     els.resultsTable.appendChild(row);
   });
@@ -208,6 +211,25 @@ function buildTTResults() {
     }
   }
 
+  // MEDAL. Thresholds from the model's pole for this circuit at this pace and
+  // difficulty (Quali.referencePole): gold beats it, silver within 3 %, bronze
+  // within 7 %. The medal held is the GHOST lap's (Ghost.medal), so it is
+  // always the lap the player can race against.
+  const pole = G.referencePole ? G.referencePole() : 0;
+  if (pole > 0) {
+    const held = Ghost.medal();
+    const mr = document.createElement("div");
+    mr.className = "res-row";
+    const ml = document.createElement("span"); ml.className = "res-name";
+    ml.textContent = "MEDAL — " + (held ? held.toUpperCase() : "NONE YET");
+    if (held) ml.style.color = "var(--" + held + ")";
+    const mv = document.createElement("span"); mv.className = "res-pts"; mv.style.width = "auto";
+    const next = Quali.MEDALS.slice().reverse().find(([m]) => !held || Quali.MEDAL_RANK[m] > Quali.MEDAL_RANK[held]);
+    mv.textContent = next ? "NEXT " + next[0].toUpperCase() + " ≤ " + G.fmtTime(pole * next[1]) : "POLE " + G.fmtTime(pole);
+    mr.append(ml, mv);
+    els.resultsTable.appendChild(mr);
+  }
+
   // leaderboard header
   const lbHead = document.createElement("div");
   lbHead.style.cssText = "margin-top:12px;color:#e10600;font-weight:800;font-style:italic";
@@ -283,7 +305,10 @@ function buildStandings() {
     sw.style.background = c ? G.cssCol(c.team.color) : "#555";
     const nm = document.createElement("span"); nm.className = "res-name";
     nm.textContent = code + (c ? "  " + c.name : "");
-    const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = pts + " pts";
+    const pt = document.createElement("span"); pt.className = "res-pts";
+    // Dropped scores: the COUNTING total, with the gross beside it.
+    const net = SeasonCal.netPts(season, driverId);
+    pt.textContent = net === pts ? pts + " pts" : net + " (" + pts + ") pts";
     row.append(pos, sw, nm, pt);
     body.appendChild(row);
   });

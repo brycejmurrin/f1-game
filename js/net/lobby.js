@@ -479,7 +479,7 @@ const NetLobby = (function () {
       return broadcast(NetPlay.EV.SETTINGS, {
         track: G.trackIdx,
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
-        quali: !!G.raceQuali,
+        quali: !!G.raceQuali, grid: G.raceGrid,
         difficulty: G.difficulty,
       });
     }
@@ -487,6 +487,8 @@ const NetLobby = (function () {
     const WEATHER = new Set(["dry", "wet", "rain", "overcast", "fog"]);
     const TIME_OF_DAY = new Set(["default", "dawn", "day", "dusk", "night"]);
     const DIFFICULTY = new Set(["easy", "normal", "hard"]);
+    const GRID = new Set(["tier", "quali", "rev10", "revchamp", "random"]);   // game.js GRID_RULES
+    const GRID_LABEL = { tier: "Pace order", quali: "Qualifying lap", rev10: "Reverse top 10", revchamp: "Reverse standings", random: "Random" };
     const own = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
     function normaliseSettings(d) {
@@ -506,6 +508,10 @@ const NetLobby = (function () {
       if (own(d, "quali")) {
         if (typeof d.quali !== "boolean") return null;
         out.quali = d.quali;
+      }
+      if (own(d, "grid")) {
+        if (typeof d.grid !== "string" || !GRID.has(d.grid)) return null;
+        out.grid = d.grid;
       }
       if (own(d, "weather")) {
         if (typeof d.weather !== "string" || !WEATHER.has(d.weather)) return null;
@@ -531,6 +537,7 @@ const NetLobby = (function () {
       if (own(next, "track")) G.trackIdx = next.track;
       if (own(next, "laps")) G.raceLaps = next.laps;
       if (own(next, "quali")) G.raceQuali = next.quali;
+      if (own(next, "grid")) G.raceGrid = next.grid;   // after quali: the rule is the finer statement
       if (own(next, "weather")) G.raceWeather = next.weather;
       if (own(next, "tod")) G.raceTimeOfDay = next.tod;
       if (own(next, "difficulty")) G.difficulty = next.difficulty;
@@ -786,6 +793,7 @@ const NetLobby = (function () {
         frag.appendChild(summaryRow("Circuit", track ? (track.name || track.id) : "—"));
         frag.appendChild(summaryRow("Laps", G.raceLaps));
         frag.appendChild(summaryRow("Qualifying lap", G.raceQuali ? "On" : "Off"));
+        frag.appendChild(summaryRow("Grid", GRID_LABEL[G.raceGrid] || (G.raceQuali ? "Qualifying lap" : "Pace order")));
         frag.appendChild(summaryRow("Weather", wx));
         frag.appendChild(summaryRow("Time", tod));
         replace(e.raceSummary, frag);

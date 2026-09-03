@@ -1428,3 +1428,12 @@ live in `ratchets.json`.
   `physState().towing` — the player's slipstream 0..1, so a harness can tell
   a tow apart from an X-mode gain in `vmaxNow` (aero-zones-vm parks the field
   half a lap away and asserts it is 0 before reading the ratio).
+- `js/game.js` 9345 -> **9401** lines / 5120 -> **5149** code / 223 -> **225** G
+  members, `js/net/lobby.js` 1684 -> **1692** (2026-09-03): the GRID RULE.
+  `raceQuali` (a boolean) becomes a view of `raceGrid` — tier | quali | rev10
+  (Formula 2's reversed top ten) | revchamp | random — applied by
+  `gridOrderFor()` to the order the session produced; the chips say where
+  each rule comes from. The lobby ships and validates `grid` beside `quali`
+  so an older peer's boolean still means what it meant. Plus the classified
+  fastest lap handed to `SeasonCal.award()` for the 2019–2024 point, and
+  `referencePole` on the façade for the time-trial medal sheet.

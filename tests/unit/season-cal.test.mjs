@@ -421,3 +421,71 @@ test("a saved season without finishes normalises to an empty map", () => {
   assert.equal(S.rank({ pts: { a: 1, b: 1 } }, "a", "b"), -1, "no finishes at all: the id breaks the tie, stably");
   assert.equal(S.rank({ pts: { a: 1, b: 1 } }, "b", "a"), 1);
 });
+
+// ── scoring variants: the fastest-lap point and dropped scores ────────────────
+
+test("the fastest-lap point pays +1 to a top-ten finisher only, and never on a sprint", () => {
+  const { S } = load({ seasonCfg: { flPoint: true } });
+  S.engage("season");
+  const season = S.blank();
+  S.award(season, field(12), "d11");                 // P12 set the fastest lap: nothing
+  assert.equal(season.pts.d11 || 0, 0);
+  assert.equal(season.lastFl, undefined, "no recipient this round");
+  S.award(season, field(12), "d3");                  // P4 again: 12 + 12 + 1
+  assert.equal(season.pts.d3, 12 + 12 + 1);
+  assert.equal(season.teamPts.t3, 12 + 12 + 1, "the constructor gets it too");
+  assert.equal(season.lastFl, "d3");
+  assert.equal(season.pts.d0, 25 + 25, "the winner's points are untouched");
+
+  const sp = load({ seasonCfg: { flPoint: true, sprint: true } });
+  sp.S.engage("season");
+  const wk = sp.S.blank();
+  sp.S.award(wk, field(4), "d0");                    // the sprint leg pays no FL point
+  assert.equal(wk.pts.d0, 8);
+  assert.equal(wk.lastFl, undefined);
+  sp.S.award(wk, field(4), "d0");                    // the Grand Prix leg does
+  assert.equal(wk.pts.d0, 8 + 25 + 1);
+});
+
+test("a retired fastest-lap setter earns nothing, and a career never pays the point", () => {
+  const { S } = load({ seasonCfg: { flPoint: true } });
+  S.engage("season");
+  const season = S.blank();
+  S.award(season, field(3, [0]), "d0");
+  assert.equal(season.pts.d0 || 0, 0);
+  assert.equal(season.lastFl, undefined);
+  S.engage("career");
+  const c = S.blank();
+  S.award(c, field(3), "d0");
+  assert.equal(c.pts.d0, 25, "career pays the plain table whatever the season format says");
+});
+
+test("DROP WORST 2 ranks on the best rounds — countback and the gross total are both kept", () => {
+  const { S } = load({ seasonCfg: { drop: 2 } });        // 8 rounds → the best 6 count
+  S.engage("season");
+  const season = S.blank();
+  const d0 = { driverId: "d0", code: "D0", team: { id: "t0" } };
+  const d1 = { driverId: "d1", code: "D1", team: { id: "t1" } };
+  for (let r = 0; r < 6; r++) S.award(season, [d0, d1]);           // d0 25×6, d1 18×6
+  assert.equal(S.netPts(season, "d0"), 150, "inside the counting rounds net is gross");
+  assert.equal(S.rank(season, "d0", "d1") < 0, true);
+  for (let r = 0; r < 2; r++) S.award(season, [d1, { ...d0, retired: true }]);   // d1 wins twice, d0 out
+  assert.equal(season.pts.d1, 108 + 50, "gross: d1 leads");
+  assert.equal(season.pts.d0, 150);
+  assert.equal(S.netPts(season, "d1"), 25 + 25 + 18 * 4, "d1's two 18s drop");
+  assert.equal(S.netPts(season, "d0"), 150, "d0's two zeros drop");
+  assert.equal(S.rank(season, "d0", "d1") < 0, true, "d0 leads on counting points");
+  assert.deepEqual(JSON.parse(JSON.stringify(season.roundPts.d0)), [25, 25, 25, 25, 25, 25, 0, 0]);   // VM realm: compare plain data
+});
+
+test("an old save without roundPts normalises to {} and a bad lastFl is dropped", () => {
+  const { S } = load({ seasonCfg: { drop: 3 } });
+  S.engage("season");
+  const s = S.resume({ round: 1, pts: { d0: 25 }, lastFl: 5 });
+  assert.deepEqual(JSON.parse(JSON.stringify(s.roundPts)), {});
+  assert.equal(s.lastFl, undefined);
+  assert.equal(S.netPts(s, "d0"), 25, "no per-round record: the gross total stands");
+  const c = S.normalize({ flPoint: "yes", drop: 7 });
+  assert.equal(c.flPoint, false, "only an explicit true turns the fastest-lap point on");
+  assert.equal(c.drop, 0, "an unknown drop count falls back to all rounds counting");
+});

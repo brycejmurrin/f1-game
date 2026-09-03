@@ -351,7 +351,7 @@ function lobbyG() {
   const G = {
     teamIdx: 0, driverIdx: 0,             // the local player holds alpha:0
     trackIdx: 0, raceLaps: 3, raceWeather: "dry", raceTimeOfDay: "day",
-    raceQuali: true, difficulty: 1,
+    raceQuali: true, raceGrid: "quali", difficulty: 1,
     caughtQuali: [], caughtQLive: [],
     onPeerQuali: (d) => { G.caughtQuali.push(d); },
     onPeerQualiLive: (d) => { G.caughtQLive.push(d); },
@@ -462,7 +462,7 @@ test("LOBBY phase: SETTINGS is validated atomically before guest state changes",
   const { G, lobby, peerSays, settle } = await lobbyUp("guest");
   const snapshot = () => ({
     track: G.trackIdx, laps: G.raceLaps, weather: G.raceWeather,
-    tod: G.raceTimeOfDay, quali: G.raceQuali, difficulty: G.difficulty,
+    tod: G.raceTimeOfDay, quali: G.raceQuali, difficulty: G.difficulty, grid: G.raceGrid,
   });
   try {
     const before = snapshot();
@@ -473,6 +473,8 @@ test("LOBBY phase: SETTINGS is validated atomically before guest state changes",
       { tod: { toString: "night" } },
       { difficulty: "impossible" },
       { quali: 1 },
+      { grid: "chaos" },
+      { grid: 7 },
       // Atomicity: valid fields alongside one invalid field change nothing.
       { track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: "yes" },
     ];
@@ -483,11 +485,11 @@ test("LOBBY phase: SETTINGS is validated atomically before guest state changes",
     }
 
     peerSays("settings", {
-      track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: false,
+      track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: false, grid: "random",
     });
     await settle();
     assert.deepEqual(snapshot(), {
-      track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: false,
+      track: 4, laps: 7, weather: "wet", tod: "night", difficulty: "hard", quali: false, grid: "random",
     });
   } finally { lobby.cancel(); }
 });

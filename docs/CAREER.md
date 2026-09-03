@@ -474,7 +474,15 @@ themselves by progress, then delegates awarding to `SeasonCal.award()`, which
 pays `c.retired ? 0 : (table[i] || 0)` from `pointsTable()` — `Teams.POINTS` in
 career, `CLASSIC_POINTS`/`SPRINT_POINTS` under a season weekend format — explicit
 rather than relying on a DNF landing outside the ten scoring slots, so every car
-above keeps what its position earns.
+above keeps what its position earns. Two season-only format switches ride on
+it: `flPoint` pays the 2019–2024 fastest-lap point (+1, Grand Prix leg only, to
+a classified top-ten finisher — `endRace()` hands `award()` the fastest
+classified `c.best`; `season.lastFl` names the recipient for the sheet), and
+`drop` keeps the pre-1991 dropped-score rule (`roundPts` records each driver's
+points per round; `netPts()` counts only the best `rounds − drop` results once
+a driver has more scoring rounds than that, and `rank()` orders on it while the
+standings show the gross beside the counting total). A career never sees
+either: `fmtActive()` is false there.
 
 ### In career
 
@@ -666,10 +674,16 @@ over places cars nobody is driving and leaves the real field at `prog: 0`, where
 careless check. `Quali.order(live)` returns `null` unless every car maps.
 
 A one-off Grand Prix defaults to its hardcoded P12 start, but the persisted
-`raceQuali` race-settings chip can qualify one (`gridFromQuali` accepts either a
-championship with `SeasonCal.quali()` on, or `raceQuali` outside time trial).
-SEASON quali is format-gated — a weekend format can turn quali off or add a
-sprint.
+`raceGrid` race-settings chips can qualify one (`gridFromQuali` accepts either a
+championship with `SeasonCal.quali()` on, or a qualifying grid rule outside time
+trial; `raceQuali` is the boolean VIEW of that rule the lobby still ships).
+The rule is applied by `gridOrderFor()` to whatever order the session produced:
+`tier` (the P12 pace order), `quali`, `rev10` (the qualifying top ten reversed —
+Formula 2's sprint rule, never an F1 one), `revchamp` (the standings inverted,
+championship only) and `random` (one `simRnd()` per car, the same single draw
+`gridUp()` would have spent). A championship weekend that qualifies ignores the
+rule, and a sprint result still grids the Grand Prix. SEASON quali is
+format-gated — a weekend format can turn quali off or add a sprint.
 
 **Every round qualifies, and the classification never outlives its weekend.** Two
 bugs came out of getting that wrong, and both looked like working grids:

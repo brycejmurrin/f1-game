@@ -869,7 +869,7 @@ const isChampionship = () => flow === "season" || flow === "career";
 // GO button ask this, and they must agree — a race that qualified and then
 // gridded up P12 would throw the session away, and one that gridded from a
 // classification it never ran would read a stale one.
-const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (raceQuali && !isTimeTrial());
+const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (qualiGrid() && !isTimeTrial());
 // The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
 // so js/career/career.js has to be told whether its rules apply to the session that
 // is running — otherwise a Grand Prix would quietly inherit the career's team
@@ -893,7 +893,15 @@ let raceLaps = GAME_LAPS;      // user-selected lap count
 // so this is the switch for everything that is not one. A standing preference
 // like DIFFICULTY and RELIABILITY, not a per-race reset: someone who wants to
 // qualify wants to qualify next time too.
-let raceQuali = store.get("raceQuali", false);
+// GRID RULE. "tier" is the pace-order grid gridUp() has always built (player
+// P12); "quali" grids off the qualifying session; "rev10" reverses the
+// qualifying top ten — Formula 2's sprint-race rule, never an F1 one; "revchamp"
+// inverts the championship standings; "random" sorts on gridUp's own single
+// jitter draw. The pre-rule boolean key is honoured once as the default.
+const GRID_RULES = ["tier", "quali", "rev10", "revchamp", "random"];
+let raceGrid = store.get("raceGrid", store.get("raceQuali", false) ? "quali" : "tier");
+if (GRID_RULES.indexOf(raceGrid) < 0) raceGrid = "tier";
+const qualiGrid = () => raceGrid === "quali" || raceGrid === "rev10";
 // A friend race has TWO humans on the grid, and both of their qualifying laps
 // are real. The rival's arrives over the wire (NetPlay EV.QUALI) as
 // driverId -> seconds; quali.simulate() takes the map and stops caring which of
@@ -1762,6 +1770,29 @@ function makeCars() {
 // `preOrder` is an explicit grid, fastest first — a qualifying classification.
 // Without one: sort by tier, player dropped into P12 for a climb. GP keeps that
 // on purpose; only a session that held a qualifying hour sets its own grid.
+// The GRID RULE applied to the order the session produced (null = gridUp's own
+// pace-order build). rev10 reverses the qualifying top ten and leaves 11+ as
+// they qualified (Formula 2's sprint rule); revchamp inverts SeasonCal.rank —
+// last in the standings starts first; random sorts on ONE simRnd() per car,
+// the same single draw gridUp() would have spent, so the stream position after
+// the grid is identical whichever rule ran (makeCars' stream contract). A
+// championship weekend that qualifies keeps its qualifying grid, and a sprint
+// result still grids the Grand Prix; a friend race's rule is the host's (lobby
+// SETTINGS `grid`).
+function gridOrderFor(base) {
+  const rule = isTimeTrial() ? "tier" : (isChampionship() && SeasonCal.quali()) ? "quali" : raceGrid;
+  if (rule === "rev10" && base && base.length === cars.length) {
+    return base.slice(0, 10).reverse().concat(base.slice(10));
+  }
+  if (rule === "revchamp" && isChampionship() && season && !base) {
+    return cars.slice().sort((a, b) => SeasonCal.rank(season, a.driverId, b.driverId)).reverse();
+  }
+  if (rule === "random" && !base) {
+    const jit = new Map(cars.map((c) => [c, simRnd()]));
+    return cars.slice().sort((a, b) => jit.get(a) - jit.get(b));
+  }
+  return base;
+}
 function gridUp(preOrder) {
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
     // grid jitter: ONE simRnd() draw per car, BEFORE the sort — a random
@@ -2715,7 +2746,7 @@ async function startRace() {
     Particles.rainShow(false); // sliders + rainSeed(drizzle)) unreachable.
   }
   if (!isQuali() && gridFromQuali() && !quali.order(cars)) { openQuali(); return false; }
-  gridUp(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season));
+  gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
   recomputePlayerMods();
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
@@ -2961,7 +2992,11 @@ function endRace(forcedOrder) {
     // a season may sprint before the Grand Prix, and only the second of those two
     // scoring sessions closes the round. A career never sprints, so award() there
     // is the old block verbatim.
-    const settles = SeasonCal.award(season, order) === "race";
+    // The fastest lap among the CLASSIFIED finishers — award() pays the
+    // 2019–2024 point only when the season format asks for it.
+    let fastest = null, fastestT = Infinity;
+    for (const c of order) if (!c.retired && c.best < fastestT) { fastestT = c.best; fastest = c.driverId; }
+    const settles = SeasonCal.award(season, order, fastest) === "race";
     // In career `season` IS career.season (same object, same shape — which is what
     // lets buildResults/buildStandings/the HUD work in career untouched), so it
     // persists through the career save or this would overwrite the standalone
@@ -3246,7 +3281,12 @@ const G = {
   // exactly as it was.
   peerSeats: () => (netLobby && netLobby.peerSeats ? netLobby.peerSeats() : []),
   onPeerQuali, onPeerQualiLive, openQualiForNet, refreshQualiGate,
-  get raceQuali() { return raceQuali; }, set raceQuali(v) { raceQuali = !!v; },
+  // raceQuali is a VIEW of the grid rule (quali | rev10). The setter keeps an
+  // older peer's boolean meaningful: it only moves the rule across the
+  // qualifying line, never off a finer rule that already agrees with it.
+  get raceQuali() { return qualiGrid(); }, set raceQuali(v) { if (!!v !== qualiGrid()) raceGrid = v ? "quali" : "tier"; },
+  get raceGrid() { return raceGrid; }, set raceGrid(v) { if (GRID_RULES.indexOf(v) >= 0) raceGrid = v; },
+  referencePole: () => quali.referencePole(),
   openGarageFrom: (from) => openGarage(from),
   startRace, startWeatherArc, update, wrapS, quitToMenu,
 };
@@ -5467,8 +5507,15 @@ function onTTLap(lapTime) {
   ttBoardAdd(track.def.id, {
     t: lapTime, teamId: player.team.id, code: player.code, name: player.name, ts: Date.now(),
   });
-  Ghost.finishLap(lapTime);
+  // MEDAL against the model's pole for this circuit at this pace and difficulty
+  // (Quali.referencePole): the meta rides with the ghost lap, so a medal is
+  // only ever the ghost lap's medal and says what pace it was earned at.
+  const pole = quali.referencePole();
+  const medal = Quali.medalFor(lapTime, pole);
+  const held = Ghost.medal();
+  const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), pace: PACE, difficulty, weather: raceWeather });
   Ghost.startLap();
+  if (up && medal && medal !== held) announce(medal.toUpperCase() + " MEDAL", 2);
   if (lapTime < ttRecord) {
     ttRecord = lapTime;
     ttNewRecord = true;
@@ -8369,15 +8416,24 @@ function buildRaceSettings() {
   const qEl = $("rs-quali");
   qEl.innerHTML = "";
   const qForced = champ ? SeasonCal.quali() : null;
-  $("rs-quali-label").textContent = "QUALIFYING LAP" + (qForced == null ? "" : " · " + (qForced ? "ON" : "OFF"));
-  qEl.hidden = qForced != null;
-  if (qForced == null) for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
+  // A championship that qualifies grids off the session, full stop (the label
+  // carries ON); one that does not still picks among the non-qualifying rules.
+  // Chip 0 is always the pace-order grid and chip 1 the qualifying lap — the
+  // indices quali.spec.js clicks. Labels say what the rule IS, and where it
+  // comes from: REVERSE TOP 10 is Formula 2's sprint rule, not an F1 one.
+  $("rs-quali-label").textContent = qForced ? "QUALIFYING LAP · ON" : "GRID";
+  qEl.hidden = !!qForced;
+  const rules = champ
+    ? [["tier", "PACE ORDER"], ["revchamp", "REVERSE STANDINGS"], ["random", "RANDOM"]]
+    : [["tier", "PACE ORDER"], ["quali", "QUALIFYING LAP"], ["rev10", "REVERSE TOP 10 · F2"], ["random", "RANDOM"]];
+  const cur = rules.some(([r]) => r === raceGrid) ? raceGrid : "tier";   // a rule this flow has no chip for gridOrderFor() ignores
+  if (!qForced) for (const [rule, label] of rules) {
     const b = document.createElement("button");
-    b.className = "sel-chip" + (raceQuali === on ? " active" : "");
-    b.setAttribute("aria-pressed", raceQuali === on ? "true" : "false");
+    b.className = "sel-chip" + (cur === rule ? " active" : "");
+    b.setAttribute("aria-pressed", cur === rule ? "true" : "false");
     b.textContent = label;
     b.onclick = () => {
-      raceQuali = on; store.set("raceQuali", on);
+      raceGrid = rule; store.set("raceGrid", rule);
       buildRaceSettings(); if (soundOn) GameAudio.uiTick();
     };
     qEl.appendChild(b);
