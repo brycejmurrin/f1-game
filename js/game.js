@@ -5726,13 +5726,14 @@ let setupPreviewOn = false, setupPreviewAz = 0.6;
 // back around. az/el/dist are now a real orbit the player drives (drag on the
 // canvas, wheel/pinch to zoom, preset chips in #cs-view), and SPIN is a toggle
 // over the top of it rather than the whole interaction.
-// Defaults reproduce the previous framing exactly: eye y 2.0 at dist 8.5 over a
-// target at y 0.35 is an elevation of atan2(1.65, 8.5).
-const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.5;
+// Defaults reproduce the previous framing: eye y 2.0 at dist 8.35 over a
+// target at y 0.35 is an elevation of atan2(1.65, 8.5) — el unchanged, a hair
+// closer after the WGX garage fix shipped.
+const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.35;
 // Half the car's BROADSIDE footprint (~5.95 m drawn) plus ~5% margin.
-// Was 3.35 (~12%): honest WGX off-axis projection left the auto turntable
-// ~7% farther than the 8.5 m default at desktop viewports (1440x900 ~8.5 m).
-const SP_FIT_HALF_W = 3.15;
+// Was 3.35 (~12%), then 3.15 after honest WGX off-axis projection. 3.10 is a
+// hair closer on desktop after the view-matrix fix landed (1440x900 ~8.40 m).
+const SP_FIT_HALF_W = 3.10;
 // How far the AUTOMATIC turntable may back off. Deliberately under the MANUAL
 // zoom ceiling SP_DIST_MAX: a player who zooms out that far asked for the wide
 // shot, whereas the auto fit reaching it means the fit diverged. garage-scene.js
@@ -5760,7 +5761,7 @@ const SP_EL_MIN = 0, SP_EL_MAX = 1.30, SP_DIST_MIN = 4.6, SP_DIST_MAX = 15;
 // does not. SIDE and TOP get the extra pull-back their aspect actually needs
 // rather than one nominal distance that crops the nose off two of the five.
 const SP_VIEWS = {
-  hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.5 },   // rear three-quarter
+  hero:  { az: Math.PI * 0.78, el: 0.30, dist: 8.35 },   // rear three-quarter
   front: { az: 0,              el: 0.20, dist: 8.2 },
   side:  { az: Math.PI * 0.5,  el: 0.10, dist: 11.2 },
   rear:  { az: Math.PI,        el: 0.22, dist: 8.4 },
