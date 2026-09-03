@@ -578,6 +578,16 @@ interface GameCtx {
   raceGrid: "tier" | "quali" | "rev10" | "revchamp" | "random";
   /** Time-trial medal reference: the modelled pole for this circuit (Quali.referencePole). */
   readonly referencePole: () => number;
+  /** RED FLAG → standing restart: clears the surface, re-grids in race order, re-arms the lights. */
+  readonly redFlagRestart: () => boolean;
+  /** The day's time-trial plan (js/race/daily-challenge.js). */
+  readonly daily: any;
+  /** TT_LAPS — the time-trial distance a daily session stages (ttLaps is the lap LIST). */
+  readonly ttDistance: number;
+  /** CHANGEABLE conditions: the weather walks from the chip's pick to wxArcPlan.to. */
+  raceChangeable: boolean;
+  /** The host's arc plan ({ to, dur }) or, solo, the seed-derived one; null when not changeable. */
+  wxArcPlan: { to: Weather; dur: number } | null;
   readonly openGarageFrom: (from?: string) => void;
   readonly startRace: () => void;
   readonly startWeatherArc: (from: Weather, to: Weather, dur?: number) => void;
@@ -634,6 +644,7 @@ declare const Photomode: GameModuleFactory;
 declare const Quali: GameModuleFactory;
 declare const QualiSheet: GameModuleFactory;
 declare const RaceControl: GameModuleFactory;
+declare const DailyChallenge: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const SkidMarks: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;

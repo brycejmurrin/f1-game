@@ -156,3 +156,97 @@ test("the medal ladder is monotone and the reference pole slows with the pace sl
     assert.ok(g.G.referencePole() > pole * 1.3, "half the pace is a much slower pole");
   } finally { g.G.PACE = pace; }
 });
+
+// ── CHANGEABLE (MIXED) conditions ─────────────────────────────────────────────
+
+test("a MIXED race arms a weather arc at the start and walks it; the plan is the seed's", async () => {
+  g.G.timeTrial = false; g.G.seasonMode = false; g.G.raceGrid = "tier";
+  g.G.raceChangeable = true; g.G.wxArcPlan = null; g.G.seed = 5;
+  await g.race("monza", "day", "dry");
+  const arc = g.G.weatherArc;
+  assert.ok(arc, "an arc is armed");
+  assert.equal(arc.from, "dry");
+  assert.notEqual(arc.to, "dry");
+  assert.ok(arc.dur >= 120 && arc.dur <= 420, "2–7 minutes: " + arc.dur);
+  // The derived plan is a function of (seed, race counter): read twice, same answer.
+  g.G.wxArcPlan = null;
+  const p1 = JSON.parse(JSON.stringify(g.G.wxArcPlan)), p2 = JSON.parse(JSON.stringify(g.G.wxArcPlan));
+  assert.deepEqual(p1, p2, "same seed and counter, same plan");
+  assert.ok(p1 && p1.to !== "dry" && p1.dur >= 120, JSON.stringify(p1));
+  // A host-supplied plan wins over the derived one.
+  g.G.wxArcPlan = { to: "fog", dur: 200 };
+  await g.race("monza", "day", "dry");
+  assert.equal(g.G.weatherArc.to, "fog");
+  assert.equal(g.G.weatherArc.dur, 200);
+  // Walk it: the weather has moved off dry well before the arc ends…
+  g.apex.headless(true); g.apex.go();
+  g.apex.step(1 / 30, 30 * 150);
+  assert.notEqual(g.G.raceWeather, "dry", "the arc moved the weather");
+  // …and the chip's pick comes back when the race is left.
+  g.G.quitToMenu();
+  assert.equal(g.G.raceWeather, "dry");
+  assert.equal(g.G.weatherArc, null);
+  g.G.raceChangeable = false; g.G.wxArcPlan = null;
+});
+
+// apex.tt()/daily.open() start a session the way race() does; wait the same way.
+async function started(start) {
+  const before = g.G.cars;
+  const r = start();
+  await g.settle(() => { const i = g.apex.info(); return i && i.track && g.G.cars !== before; }, 4000);
+  return r;
+}
+
+test("a time trial never arms the arc, and MIXED off means no arc", async () => {
+  g.G.raceChangeable = true; g.G.wxArcPlan = null;
+  await started(() => g.apex.tt("monza"));
+  assert.equal(g.G.weatherArc, null);
+  g.G.quitToMenu();
+  g.G.raceChangeable = false;
+  await g.race("monza", "day", "wet");
+  assert.equal(g.G.weatherArc, null);
+  g.G.quitToMenu();
+});
+
+// ── the DAILY in the live game ────────────────────────────────────────────────
+
+test("TODAY's challenge stages the day's circuit as a time trial with the day's seed", async () => {
+  const p = await started(() => g.G.daily.open("2026-09-03"));
+  assert.equal(g.apex.info().timeTrial, true);
+  assert.equal(g.apex.info().track, p.trackId);
+  assert.equal(g.G.seed, p.seed);
+  assert.equal(g.G.raceWeather, p.weather);
+  assert.equal(g.G.daily.isActive(), true);
+  g.G.quitToMenu();
+  assert.equal(g.G.daily.isActive(), false, "leaving the session ends the daily");
+});
+
+// ── the RED FLAG in the live game ─────────────────────────────────────────────
+
+test("a red flag re-grids the field in race order with laps and the clock kept, and lights-out resumes the race", async () => {
+  g.G.timeTrial = false; g.G.seasonMode = false; g.G.raceGrid = "tier"; g.G.raceChangeable = false;
+  await g.race("monza", "day", "dry");
+  const A = g.apex;
+  A.headless(true); A.go();
+  A.step(1 / 30, 30 * 20);   // 20 s of racing: the field has spread out
+  const before = A.fieldState();
+  const raceT = g.G.raceT;
+  assert.ok(raceT > 15, "the clock ran: " + raceT);
+  const r = A.redFlag();
+  assert.equal(r && r.state, "count");
+  assert.equal(A.redFlag(), false, "a second call while counting is refused");
+  const after = A.fieldState();
+  assert.deepEqual(after.map((c) => c.code), before.map((c) => c.code), "race order is the grid order");
+  assert.deepEqual(after.map((c) => c.lap), before.map((c) => c.lap), "laps are kept");
+  assert.ok(after.every((c) => c.speed === 0), "the field is standing");
+  assert.ok(after.every((c, i) => i === 0 || after[i - 1].gap <= c.gap), "boxes in order");
+  assert.equal(g.G.raceT, raceT, "the clock is stopped, not reset");
+  assert.equal(g.G.lightsLit, 0);
+  // Through the lights: state race, clock continuous, the cars move again.
+  A.step(1 / 30, 30 * 9);
+  assert.equal(g.apex.info().state, "race");
+  assert.ok(g.G.raceT >= raceT, "lights-out resumed the clock: " + g.G.raceT + " >= " + raceT);
+  A.step(1 / 30, 30 * 3);
+  assert.ok(A.fieldState().some((c) => c.speed > 5), "racing again");
+  g.G.quitToMenu();
+});

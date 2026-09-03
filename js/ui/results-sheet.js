@@ -252,6 +252,24 @@ function buildTTResults() {
     els.resultsTable.appendChild(row);
   });
 
+  // DAILY: the shareable line, copied on tap (clipboard needs a secure
+  // context; the fallback shows the text where the button was).
+  if (G.daily && G.daily.isActive()) {
+    const row = document.createElement("div");
+    row.style.cssText = "margin-top:10px;text-align:center";
+    const btn = document.createElement("button");
+    btn.style.cssText = "font-size:11px;padding:4px 10px";
+    btn.textContent = "COPY DAILY RESULT";
+    btn.onclick = () => {
+      const text = G.daily.shareText(Ghost.medal());
+      const ok = typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText;
+      if (ok) navigator.clipboard.writeText(text).then(() => { btn.textContent = "COPIED"; }, () => { btn.textContent = text; });
+      else btn.textContent = text;
+    };
+    row.appendChild(btn);
+    els.resultsTable.appendChild(row);
+  }
+
   // Ghost clear link
   if (Ghost.hasGhost()) {
     const clrRow = document.createElement("div");

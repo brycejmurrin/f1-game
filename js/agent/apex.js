@@ -1144,6 +1144,14 @@ const api = {
 
   // New dev / test helpers
 
+  // RED FLAG. Runs the standing-restart procedure NOW (js/race/race-control.js
+  // level 4 → game.js redFlagRestart): the surface is cleared, the field
+  // re-grids in race order on the boxes with laps and the race clock kept, and
+  // the lights re-arm. Returns {state:"count"}, or false outside a running race.
+  redFlag() {
+    const ok = !!(G.redFlagRestart && G.redFlagRestart());
+    return ok ? { state: G.state } : false;
+  },
   // Trigger the race-results screen cleanly, as if all cars crossed the line.
   finishRace() {
     if (!G.track || G.state === "results" || G.state === "menu") return false;

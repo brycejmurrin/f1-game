@@ -385,9 +385,9 @@ function updateHud(force) {
     const show = !!(cn && cn.level > 0);
     if (show) {
       const txt = cn.level === 1 ? "YELLOW" + (cn.sector >= 0 ? " S" + (cn.sector + 1) : "")
-                : cn.level === 2 ? "VSC" : "SAFETY CAR";
+                : cn.level === 2 ? "VSC" : cn.level === 4 ? "RED FLAG" : "SAFETY CAR";
       hText(els.flag, txt);
-      hClass(els.flag, cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
+      hClass(els.flag, cn.level === 4 ? "flag-red" : cn.level === 3 ? "flag-sc" : cn.level === 2 ? "flag-vsc" : "flag-yellow");
     }
     if (_flagShown !== show) { _flagShown = show; els.flag.hidden = !show; }
   }

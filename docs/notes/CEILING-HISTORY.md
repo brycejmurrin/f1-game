@@ -1437,3 +1437,18 @@ live in `ratchets.json`.
   so an older peer's boolean still means what it meant. Plus the classified
   fastest lap handed to `SeasonCal.award()` for the 2019–2024 point, and
   `referencePole` on the façade for the time-trial medal sheet.
+- `js/game.js` 9400 -> **9449** lines / 5149 -> **5189** code / 225 -> **228** G
+  members / 147 -> **150** top-level lets, `js/net/lobby.js` 1692 -> **1712**
+  (2026-09-03): CHANGEABLE conditions (the MIXED chip — `raceChangeable`,
+  `wxArcPlan`, `_wxBase`; the arc target and length come from the sim seed
+  and race counter, or from the HOST over SETTINGS `wxArc`, validated) and
+  the DAILY CHALLENGE handle (`js/race/daily-challenge.js`, `G.daily`,
+  `G.ttDistance`) — the day's time trial staged from the select screen's
+  TODAY chip, recorded per UTC day with a streak.
+- `js/game.js` 9449 -> **9492** lines / 5189 -> **5221** code / 229 -> **230** G
+  members / 150 -> **151** top-level lets, `js/agent/apex.js` 2601 -> **2609**
+  (2026-09-03): the RED FLAG. `redFlagRestart()` clears the surface and
+  re-grids the field in race order on the boxes with laps, the race clock,
+  best laps and penalties kept (`restartPending` makes lights-out resume the
+  clock instead of zeroing it); RaceControl level 4 runs the procedure and
+  hands over one restart request. `__apex.redFlag()` drives it for the VM.

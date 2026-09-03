@@ -1074,6 +1074,7 @@ let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60
 let camCutT = 0;        // s; >0 just after a camera-mode cut → eased glide to the new vantage
 let hitStop = 0;        // seconds of remaining sim slow-mo after a hard hit
 let startHold = 0;      // randomised lights-out delay after the 5th light (F1-style)
+let restartPending = false;   // a red-flag standing restart: lights-out resumes the race clock
 // The five red lamps, one per second. A CONSTANT rather than a literal because
 // the networked start has to name an instant a whole countdown away — a lead
 // shorter than the sequence means every peer joins it part-way through by
@@ -1792,6 +1793,41 @@ function gridOrderFor(base) {
     return cars.slice().sort((a, b) => jit.get(a) - jit.get(b));
   }
   return base;
+}
+// RED FLAG → STANDING RESTART (js/race/race-control.js level 4). The surface
+// is cleared and the field re-gridded in RACE ORDER on the boxes — the 2026
+// procedure once the track is clear — keeping laps, the race clock, best laps,
+// grid positions and penalties. Lapped cars keep their lap count and grid
+// behind (prog is cumulative). A race already at its flag stands as it is.
+// Not modelled: the wet-race rolling restart, the pit-lane wait; a networked
+// race never goes red (RaceControl holds a safety car instead).
+function redFlagRestart() {
+  if (state !== "race" || !track || cars.some((c) => c.finished)) return false;
+  IncidentSim.reset(); DebrisWorld.reset(); DebrisWorld.prime();
+  const L = track.total;
+  const order = cars.filter((c) => !c.retired).sort((a, b) => b.prog - a.prog);
+  order.forEach((c, i) => {
+    const slot = TrackMesh.gridSlot(track, i);
+    c.s = wrapS(slot.s); c.x = slot.x; c.xVis = c.x;
+    const w = worldFromTrack(c.s, c.x, smp);
+    c.px = w.x; c.pz = w.z; c.rPrevPx = c.px; c.rPrevPz = c.pz; c.rPrevS = c.s; c.rPrevX = c.x; c._prevS = c.s;
+    // The box sits BEHIND the line on the lap the car is on — the same prog
+    // the opening grid uses (lap 0 → negative) — so the next crossing counts.
+    c.prog = c.lap * L - (L - c.s);
+    c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
+    c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0;
+    c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wheelLock = 0;
+    c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
+  });
+  restartPending = true;
+  state = "count"; countT = 0; lightsLit = 0; startHold = 0;
+  els.lights.hidden = false;
+  for (const l of els.lights.children) l.classList.remove("on");
+  sectorIdx = player ? sectorAt(player.s) : 0; sectorStartT = player ? player.lapTime : 0; sectorValid = false;
+  snapGameCam();
+  announce("RED FLAG — STANDING RESTART", 3);
+  Log.info("game", "red flag: standing restart, " + order.length + " cars re-gridded at raceT " + raceT.toFixed(1));
+  return true;
 }
 function gridUp(preOrder) {
   const order = preOrder && preOrder.length === cars.length ? preOrder.slice() : (() => {
@@ -2713,6 +2749,7 @@ async function startRace() {
   // Drop ownership of the previous race's car indexes before makeCars replaces them.
   IncidentSim.reset();
   raceCtl.reset();   // and the caution machine — no stale flag/capHoldT into this race
+  weatherArc = null; _wxBase = null;   // a leaked arc must not become this race's weather (startChangeable re-arms below)
   // …and the debris side-world. prime() below only REBUILDS when the track or
   // car count changed, so a restart on the same circuit kept last race's
   // shards, marbles and knocked-over cones — visible on the grid, and
@@ -2747,6 +2784,7 @@ async function startRace() {
   }
   if (!isQuali() && gridFromQuali() && !quali.order(cars)) { openQuali(); return false; }
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : SeasonCal.grid(cars, season)));
+  startChangeable();
   recomputePlayerMods();
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
@@ -2792,7 +2830,7 @@ async function startRace() {
   PerfGov.sentinelArm(true);
   if (PerfGov.strikes() > 0 && PerfGov.autoRes() && gfx.setRenderScale && gfx.getRenderScale)
     gfx.setRenderScale(Math.min(gfx.getRenderScale(), PerfGov.strikes() >= 2 ? 0.7 : 0.85));
-  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; paused = false; frozen = false; skyViewOverride = null;
+  state = "count"; countT = 0; lightsLit = 0; raceT = 0; startHold = 0; restartPending = false; paused = false; frozen = false; skyViewOverride = null;
   skids.reset();
   Particles.clear();   // no stale smoke/spray teleporting into the new session
   clearMenuScreens();
@@ -2946,7 +2984,7 @@ function endRace(forcedOrder) {
   // raceCtl.update's own not-in-race reset is unreachable (update() only calls
   // it in state "race"), so without this a flying flag survives into results
   // for anything reading raceCtl.info()/level between races.
-  raceCtl.reset(); weatherArc = null;   // an arc that outlives the race would override the next race's weather
+  raceCtl.reset(); weatherArc = null; endChangeable();   // an arc that outlives the race would override the next race's weather
   // The flag can fall while the player is PAUSED — a networked guest is ended
   // by the host's RESULT, not by their own input. Leaving `paused` set stranded
   // the pause dialog on top of the results with a RESUME that resolves to
@@ -3287,6 +3325,14 @@ const G = {
   get raceQuali() { return qualiGrid(); }, set raceQuali(v) { if (!!v !== qualiGrid()) raceGrid = v ? "quali" : "tier"; },
   get raceGrid() { return raceGrid; }, set raceGrid(v) { if (GRID_RULES.indexOf(v) >= 0) raceGrid = v; },
   referencePole: () => quali.referencePole(),
+  redFlagRestart,
+  get daily() { return daily; },
+  get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (ttLaps is the session's lap list)
+  // CHANGEABLE conditions: the weather walks from the chip's start to a
+  // target the host decides (wxArcPlan) — see startRace / wxArcPlanFor.
+  get raceChangeable() { return raceChangeable; }, set raceChangeable(v) { raceChangeable = !!v; },
+  get wxArcPlan() { return wxArcPlan || (raceChangeable ? wxArcPlanFor() : null); },
+  set wxArcPlan(v) { wxArcPlan = v && typeof v === "object" ? { to: v.to, dur: v.dur } : null; },
   openGarageFrom: (from) => openGarage(from),
   startRace, startWeatherArc, update, wrapS, quitToMenu,
 };
@@ -3297,6 +3343,7 @@ const G = {
 ltStore = LightStore.create(G);
 // Race control: the caution flag state machine (js/race/race-control.js).
 raceCtl = RaceControl.create(G);
+const daily = DailyChallenge.create(G);   // the day's time-trial plan (js/race/daily-challenge.js)
 // Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
 // In-race HUD + minimap (js/ui/hud.js).
@@ -3457,7 +3504,7 @@ function quitToMenu() {
   PerfGov.sentinelArm(false); if (netPlay.active()) netPlay.stop("local"); hideCamPicker();
   closeLightTuner(false);
   closeCamTuner(false); exitPhotoMode();
-  state = "menu"; paused = false; raceCtl.reset(); weatherArc = null;   // no SC/VSC (or a half-run weather arc) left flying for the next race
+  state = "menu"; paused = false; raceCtl.reset(); weatherArc = null; endChangeable(); daily.stop();   // no SC/VSC (or a half-run weather arc) left flying for the next race
   // A netplay lights-out instant is consumed by the countdown (the
   // `netStart = null` at its end). Quitting BEFORE that consumption stranded
   // it, and the next SOLO race read an `at` already in the past: countT
@@ -3554,6 +3601,34 @@ function weather(w) {
 // follow, and frame.wetness ramps via the existing per-frame ramp. Ticked from
 // update() on the fixed physics clock, so it also runs under __apex.headless.
 let weatherArc = null;   // { from, to, t, dur, seq }
+// CHANGEABLE conditions (the MIXED chip). The target and the transition
+// length come from the sim seed and the race counter — the reliability idiom
+// — so a solo race is reproducible and the makeCars stream is untouched. In a
+// friend race the HOST's plan rides in SETTINGS (lobby wxArc): seeds are not
+// shared between peers, so a guest must never derive its own.
+let raceChangeable = false;
+let wxArcPlan = null;     // { to, dur } from the host, else derived at start
+let _wxBase = null;       // the chip's weather, restored when the arc's race ends
+const _WX_TARGETS = ["dry", "overcast", "wet", "rain", "fog"];
+function wxArcPlanFor() {
+  const r = (k) => Career.hash(simSeed(), raceIndex, "wx", k);
+  const opts = _WX_TARGETS.filter((w) => w !== raceWeather);
+  const to = opts[Math.floor(r("to") * opts.length)] || "wet";
+  const dur = 120 + Math.floor(r("dur") * 300);   // 2–7 minutes of transition
+  return { to, dur };
+}
+function startChangeable() {
+  if (!raceChangeable || isTimeTrial() || isQuali()) return null;
+  const plan = wxArcPlan || wxArcPlanFor();
+  _wxBase = raceWeather;
+  const arc = startWeatherArc(raceWeather, plan.to, plan.dur);
+  if (arc) Log.info("game", "changeable " + raceWeather + " -> " + plan.to + " over " + plan.dur + " s");
+  return arc;
+}
+function endChangeable() {
+  if (_wxBase != null && raceWeather !== _wxBase) raceWeather = _wxBase;   // the chip's pick, not where the arc ended
+  _wxBase = null;
+}
 const _WX_LADDER = ["dry", "wet", "rain"];
 const _WX_VALID = ["dry", "wet", "rain", "overcast", "fog"];
 function weatherArcSeq(from, to) {
@@ -3577,7 +3652,7 @@ function tickWeatherArc(dt) {
   const f = Math.min(1, weatherArc.t / weatherArc.dur);
   const seq = weatherArc.seq;
   const want = seq[Math.min(seq.length - 1, Math.floor(f * seq.length))];
-  if (raceWeather !== want) setWeatherLive(want);
+  if (raceWeather !== want) { setWeatherLive(want); announce("WEATHER: " + want.toUpperCase(), 2); }
   if (f >= 1) {
     if (raceWeather !== weatherArc.to) setWeatherLive(weatherArc.to);
     weatherArc = null;   // arc complete — weather stays at `to`
@@ -3629,7 +3704,7 @@ function update(dt) {
       // busy building its circuit rejoins the sequence part-way through — and
       // lighting only children[lit-1] left the earlier lamps dark forever. The
       // guest saw an unlit gantry and then, abruptly, a green track.
-      for (let i = lightsLit; i < lit; i++) els.lights.children[i].classList.add("on");
+      for (let i = lightsLit; i < lit; i++) if (els.lights.children[i]) els.lights.children[i].classList.add("on");   // a harness gantry may be short
       lightsLit = lit;
       if (soundOn) GameAudio.lightOn(lit - 1);
       if (lit === 1) Input.calibrate();
@@ -3638,7 +3713,8 @@ function update(dt) {
       if (lit === COUNTDOWN_S && !netStart) startHold = 0.2 + simRnd() * 1.8;
     }
     if (lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold) {
-      state = "race"; raceT = 0;
+      state = "race";
+      if (!restartPending) raceT = 0;   // a red-flag restart resumes the clock the flag stopped
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
       netStart = null;              // consumed; never carry it into the next race
@@ -3650,12 +3726,14 @@ function update(dt) {
       // That is fixed on the other side now — quali.js charges every modelled
       // lap the same standing start — so both begin from rest and stay on one
       // scale, and the session reads like the thing it is named after.
-      if (isQuali()) launchFlyingLap();
+      if (isQuali() && !restartPending) launchFlyingLap();
+      restartPending = false;
     }
     return;
   }
   if (state !== "race") return;
   raceT += dt;
+  if (raceCtl.takeRestart() && redFlagRestart()) return;   // the red procedure ended: re-grid, lights re-armed
   tickWeatherArc(dt);   // dynamic weather progression (no-op unless an arc is armed)
   checkRetirements();
   // ranks by progress (reuse module-scope buffer, no per-step allocation).
@@ -4129,7 +4207,9 @@ function updateCar(c, dt, ranked) {
   // OVERALL SPEED like the rest.
   if (raceCtl) {
     const lvl = raceCtl.level;   // cheap getter, no per-frame allocation
-    if (lvl >= 2) vmax = Math.min(vmax, vTop() * (lvl === 3 ? 0.45 : 0.6));
+    // RED: the field stops. A walking-pace floor rather than 0 keeps every
+    // "approaches vmax" fade finite.
+    if (lvl >= 2) vmax = Math.min(vmax, vTop() * (lvl >= 4 ? 0.02 : lvl === 3 ? 0.45 : 0.6));
   }
 
   // --- AI traffic awareness: clearance on each side, the nearest blocker ahead
@@ -5516,6 +5596,7 @@ function onTTLap(lapTime) {
   const up = Ghost.finishLap(lapTime, { medal, pole: +pole.toFixed(3), pace: PACE, difficulty, weather: raceWeather });
   Ghost.startLap();
   if (up && medal && medal !== held) announce(medal.toUpperCase() + " MEDAL", 2);
+  if (daily.isActive()) daily.record(lapTime);
   if (lapTime < ttRecord) {
     ttRecord = lapTime;
     ttNewRecord = true;
@@ -8372,6 +8453,17 @@ function buildRaceSettings() {
     b.className = "sel-chip" + (raceWeather === id ? " active" : "");
     const ic = document.createElement("span"); ic.setAttribute("aria-hidden", "true"); ic.textContent = icon; b.append(ic, " " + label);   // icon in its own span: the wide-compact shape hides it so five labels fit one row
     b.onclick = () => { raceWeather = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
+    weatherEl.appendChild(b);
+  }
+  // MIXED: changeable conditions — the race STARTS in the weather picked above
+  // and walks to a target the host decides. A toggle, not a sixth weather.
+  if (!isTimeTrial()) {
+    const b = document.createElement("button");
+    b.className = "sel-chip" + (raceChangeable ? " active" : "");
+    b.setAttribute("aria-pressed", raceChangeable ? "true" : "false");
+    b.title = "Changeable conditions — the weather moves during the race";
+    const ic = document.createElement("span"); ic.setAttribute("aria-hidden", "true"); ic.textContent = "⇄"; b.append(ic, " MIXED");
+    b.onclick = () => { raceChangeable = !raceChangeable; wxArcPlan = null; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
     weatherEl.appendChild(b);
   }
   const timeEl = $("rs-time");

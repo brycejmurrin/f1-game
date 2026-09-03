@@ -117,7 +117,7 @@ export function shellNodes() {
 // it deliberately reuse .cs-liv-ed-none rather than adding a second class.
 // 533 -> 534: body.rotate-ok, the RACE IN PORTRAIT opt-in. Reuses the
 // existing rotate- family (rotate-inner/-icon/-help-open) so no new family.
-const CLASS_CEILING = 534;
+const CLASS_CEILING = 535;   // 534 -> 535: #hud-flag.flag-red (the RED FLAG state)
 
 // 1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
 // SKILL.md rule 13's ruling (do not split the shell) rests on staying under

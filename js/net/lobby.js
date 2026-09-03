@@ -481,6 +481,9 @@ const NetLobby = (function () {
         laps: G.raceLaps, weather: G.raceWeather, tod: G.raceTimeOfDay,
         quali: !!G.raceQuali, grid: G.raceGrid,
         difficulty: G.difficulty,
+        // CHANGEABLE conditions are the host's plan, never a guest's own
+        // derivation (peers do not share a sim seed).
+        changeable: !!G.raceChangeable, wxArc: G.raceChangeable ? G.wxArcPlan : null,
       });
     }
 
@@ -513,6 +516,19 @@ const NetLobby = (function () {
         if (typeof d.grid !== "string" || !GRID.has(d.grid)) return null;
         out.grid = d.grid;
       }
+      if (own(d, "changeable")) {
+        if (typeof d.changeable !== "boolean") return null;
+        out.changeable = d.changeable;
+      }
+      if (own(d, "wxArc")) {
+        const a = d.wxArc;
+        if (a !== null) {
+          if (!a || typeof a !== "object" || Array.isArray(a)) return null;
+          if (typeof a.to !== "string" || !WEATHER.has(a.to)) return null;
+          if (!Number.isInteger(a.dur) || a.dur < 30 || a.dur > 3600) return null;
+        }
+        out.wxArc = a === null ? null : { to: a.to, dur: a.dur };
+      }
       if (own(d, "weather")) {
         if (typeof d.weather !== "string" || !WEATHER.has(d.weather)) return null;
         out.weather = d.weather;
@@ -538,6 +554,8 @@ const NetLobby = (function () {
       if (own(next, "laps")) G.raceLaps = next.laps;
       if (own(next, "quali")) G.raceQuali = next.quali;
       if (own(next, "grid")) G.raceGrid = next.grid;   // after quali: the rule is the finer statement
+      if (own(next, "changeable")) G.raceChangeable = next.changeable;
+      if (own(next, "wxArc")) G.wxArcPlan = next.wxArc;
       if (own(next, "weather")) G.raceWeather = next.weather;
       if (own(next, "tod")) G.raceTimeOfDay = next.tod;
       if (own(next, "difficulty")) G.difficulty = next.difficulty;
@@ -785,7 +803,9 @@ const NetLobby = (function () {
       if (!e.roomStep || e.roomStep.hidden) return;
       const host = role === "host";
       const track = (Tracks.LIST && Tracks.LIST[G.trackIdx]) || null;
-      const wx = G.raceWeather === "wet" ? "Wet" : G.raceWeather === "dry" ? "Dry" : "Mixed";
+      const WX_LABEL = { dry: "Dry", wet: "Wet", rain: "Rain", overcast: "Overcast", fog: "Fog" };
+      const arc = G.raceChangeable && G.wxArcPlan;
+      const wx = (WX_LABEL[G.raceWeather] || "Mixed") + (arc && WX_LABEL[arc.to] ? " → " + WX_LABEL[arc.to] : "");
       const tod = G.raceTimeOfDay && G.raceTimeOfDay !== "default"
         ? G.raceTimeOfDay.charAt(0).toUpperCase() + G.raceTimeOfDay.slice(1) : "Default";
       if (e.raceSummary) {
