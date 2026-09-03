@@ -4,7 +4,7 @@
  * a reload; a mark never stomps a race message (#announce is one channel and
  * LIGHTS OUT! owns it); the wording names the control this player actually has;
  * and the module reads REPORTS only — the brake cue's urgency, the overtake arm
- * flag, the distance to the next aero zone — so it can never reach the car.
+ * flag, the car's own active-aero ARM state — so it can never reach the car.
  *
  * Run: node --test tests/unit/onboard.test.mjs   (npm run test:tooling-fast)
  */
@@ -32,8 +32,9 @@ function load(opts = {}) {
   const O = vm.runInContext("Onboard", ctx);
   const G = {
     state: "race",
-    player: { s: 0, otArmed: false, otT: 0, xOn: false },
+    player: { s: 0, otArmed: false, otT: 0, xOn: false, xArmed: !!opts.aeroArmed },
     announceBusy: false,
+    raceAeroMode: opts.aeroMode || "manual",
     aeroZoneAhead: () => (opts.aeroAhead != null ? opts.aeroAhead : -1),
     announce: (m, d) => said.push([m, d]),
     store: { get: (k, d) => (stored.has(k) ? stored.get(k) : d), set: (k, v) => stored.set(k, v) },
@@ -59,7 +60,7 @@ test("the brake mark fires once when the cue is genuinely urgent, and is remembe
 });
 
 test("overtake and aero fire on their own signals, and two marks never land together", () => {
-  const { on, G, said } = load({ urgency: 0.9, aeroAhead: 120 });
+  const { on, G, said } = load({ urgency: 0.9, aeroArmed: true });
   G.player.otArmed = true;
   on.tick(1 / 60);
   assert.equal(said.length, 1, "one per frame");
@@ -100,9 +101,35 @@ test("the wording names the control the player actually has", () => {
   const keys = load({ urgency: 0.9 });
   step(keys.on, 1);
   assert.match(keys.said[0][0], /S OR DOWN/);
-  const t2 = load({ touch: true, aeroAhead: 100 });
+  const t2 = load({ touch: true, aeroArmed: true });
   step(t2.on, 1);
   assert.match(t2.said[0][0], /^TAP AERO/);
+});
+
+test("the aero mark waits for the ARM, and never fires in auto mode", () => {
+  // It used to fire on `aeroZoneAhead() < 250` — up to 250 m BEFORE the zone,
+  // where xArmed is still false and js/game.js's `if (!c.xArmed) c.xOn = false`
+  // discards the toggle in the same frame. The one-shot mark was spent teaching
+  // a press that does nothing. It now waits until the car can actually take it.
+  const early = load({ aeroAhead: 120, aeroArmed: false });
+  step(early.on, 60);
+  assert.deepEqual(early.said, [], "approaching the zone is not yet a usable control");
+  early.G.player.xArmed = true;
+  step(early.on, 1);
+  assert.equal(early.said.length, 1, "armed: now the press does something");
+  assert.match(early.said[0][0], /^ACTIVE AERO/);
+
+  // In auto mode the game opens the wing itself, the toggle is never read and
+  // the button is hidden — naming a key there is worse than silence.
+  const auto = load({ aeroArmed: true, aeroMode: "auto" });
+  step(auto.on, 60);
+  assert.deepEqual(auto.said, [], "auto mode: the player has no control to be taught");
+
+  // Already open is not a teaching moment either.
+  const open = load({ aeroArmed: true });
+  open.G.player.xOn = true;
+  step(open.on, 60);
+  assert.deepEqual(open.said, [], "the wing is already open");
 });
 
 test("it stops after two races even with a mark unseen, and reset() puts it back", () => {
