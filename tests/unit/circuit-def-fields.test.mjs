@@ -12,7 +12,7 @@
 // written.
 //
 // It has bitten twice. Once for `pal` (fixed, and documented in
-// js/game/atmosphere.js). Then for FIVE more at once — sunAzimBias,
+// js/lighting/atmosphere.js). Then for FIVE more at once — sunAzimBias,
 // sceneryTheme, sceneryThemeOverrides, ownPitStraight, undulate — which sat
 // inert long enough that:
 //   - six circuits' hand-tuned sun geography did nothing,

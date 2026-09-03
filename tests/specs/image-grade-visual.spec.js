@@ -42,7 +42,7 @@ async function waitForTune(page, values) {
     const tune = window.__apex?.lightTune?.();
     if (!tune) return false;
     // Wait for what the STORE will actually resolve to, not the raw ask.
-    // js/game/light-store.js clamps every write to the knob's declared
+    // js/lighting/profiles.js clamps every write to the knob's declared
     // [min, max], so a test driving past a bound waits forever on a value that
     // can never appear — the helper just sits here for the whole 15 s and the
     // rest of the serial block skips. That is exactly what happened when BLACKS

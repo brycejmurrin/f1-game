@@ -3,7 +3,7 @@
    renderer samples every lit frame) and appendCarTailLights (the nearest cars'
    tail-lights as real point lights). Reads the live knob values through
    LightKnobs.LT (eval-time destructure — tools/manifest.cjs HARD_EDGES); the
-   baked records it culls come from js/game/track-lights.js. */
+   baked records it culls come from js/lighting/track-lights.js. */
 const FrameLights = (function () {
   "use strict";
   const { LT } = LightKnobs;

@@ -58,7 +58,7 @@ they just don't fail the exit code. The `-AB.jpg` side-by-side is the judge.
 longer matches its file exactly once, so retuning a constant forces the
 catalog to follow.
 
-## Lamp geometry & energy (js/game/track-lights.js `buildTrackLights`)
+## Lamp geometry & energy (js/lighting/track-lights.js `buildTrackLights`)
 
 | Knob | What it changes | Watch |
 |---|---|---|

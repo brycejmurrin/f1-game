@@ -46,12 +46,12 @@ export const CASES = [
   },
   {
     name: "MUSIC & SOUND panel extracted out of game.js (bb4268b0)",
-    changed: ["js/game/audio-panel.js", "js/game.js"],
+    changed: ["js/audio/panel.js", "js/game.js"],
     catches: "tests/specs/audio-smoke.spec.js",
   },
   {
     name: "hold-button input net #4 (716bd1a2)",
-    changed: ["js/game/input.js"],
+    changed: ["js/input/input.js"],
     catches: "tests/specs/touch-steer.spec.js",
   },
   {

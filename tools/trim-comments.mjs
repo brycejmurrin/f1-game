@@ -46,7 +46,7 @@ const EDGE_LABEL = /^\s*\/\/\s*edge-triggered:/i;
 const LINE_COMMENT = /^\s*\/\//;
 const LOC_POINTER = /^\s*\/\/.*\blives in js\//i;
 const ORPHAN_FRAGMENT = /^\s*\/\/\s*[\w./-]+\)\s*[─═-]+\s*$/;
-const PHYSICS_CONSTS_POINTER = /^\s*\/\/ The immutable numbers live in js\/game\/physics-consts\.js/;
+const PHYSICS_CONSTS_POINTER = /^\s*\/\/ The immutable numbers live in js\/physics\/consts\.js/;
 
 const KEEP = /\b(must not|must|bug|measured|_sceneryShift|sceneryShift|assist|AI-only|ignored|blocked|Safari|iOS|WGX|WebGPU|port mirror|LIT_|load-order|DEFERRED|registry|silent|ratchet|WARNING|never|do not|curvature|unaided|same omission|false no-op|det −1|PACE|vTop\(|vStd\(|aStd\(|START-LINES|docs\/|NOTE:|Was \d|leftover|player with assists|Newton|understeer|oversteer|quali\.js|emulation|harness|No 4th vertex|hasTrk roads|SSR march off|debug — the __tlx|Raw RGB\. Packing|Bug-explaining|hooks-documented|lazyTrackEnsure|registry pins)\b/i;
 
@@ -120,7 +120,7 @@ function shortenFileHeader(src) {
 function narrativeOkForFile(rel) {
   if (!stripNarrative) return false;
   if (rel.includes("js/render/webgpu/")) return false;
-  if (rel === "js/game/perf.js" || rel === "js/game/cameras.js" || rel === "js/physics/debris-world.js") return false;
+  if (rel === "js/perf/governor.js" || rel === "js/camera/vantage.js" || rel === "js/physics/debris-world.js") return false;
   return true;
 }
 

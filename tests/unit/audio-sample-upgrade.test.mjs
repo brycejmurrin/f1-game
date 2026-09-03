@@ -6,7 +6,7 @@
  * ran its whole distance on the oscillator fallback. setEngine() now restarts
  * the engine once, the first time it sees samples it is not using.
  *
- * js/game/audio.js has no other node harness: this is a fake AudioContext just
+ * js/audio/engine.js has no other node harness: this is a fake AudioContext just
  * wide enough for createCtx/startEngine/setEngine/stopEngine (every node is a
  * generic connect/start/stop object with AudioParam-shaped fields). The fetch
  * of the two sample files is held back until the test releases it.
@@ -22,7 +22,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC_PATH = process.env.APEX_AUDIO_SRC || path.join(ROOT, "js/game/audio.js");
+const SRC_PATH = process.env.APEX_AUDIO_SRC || path.join(ROOT, "js/audio/engine.js");
 const SRC = fs.readFileSync(SRC_PATH, "utf8").replace(/^const\b/gm, "var");
 
 function param(v) {
@@ -64,7 +64,7 @@ function boot() {
   sb.window = sb;
   const vctx = vm.createContext(sb);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
-  vm.runInContext(SRC, vctx, { filename: "js/game/audio.js" });
+  vm.runInContext(SRC, vctx, { filename: "js/audio/engine.js" });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
   return { GameAudio, counts, release };

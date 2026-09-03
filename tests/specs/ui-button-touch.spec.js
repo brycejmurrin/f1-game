@@ -131,7 +131,7 @@ test.describe("Lighting tuner — pause lifecycle", () => {
      #pausemenu is a <dialog>, so opening it from a keydown handler hands Chrome
      a close-watcher mid-keypress and the watcher consumes the KEYUP of the very
      Escape that opened it. Measured before the fix: shown on keydown, hidden
-     again on keyup, i.e. one press did nothing at all. js/game/input.js
+     again on keyup, i.e. one press did nothing at all. js/input/input.js
      preventDefaults the Escape it spends on PAUSE, which suppresses the close
      request. Without that line this test fails and the ladder above still
      passes, so it earns its place. */

@@ -100,7 +100,7 @@ const LampChunks = (function () {
   // stale table falls out for free.
   //
   // The knob is NOT part of that key, and used to be. The PER-CHUNK LAMPS
-  // slider is `step: 0.001` over 0..1 (js/game/lighting-knobs.js), so it has 1000
+  // slider is `step: 0.001` over 0..1 (js/lighting/knobs.js), so it has 1000
   // distinct values — but capFor() maps all of them onto at most 17 distinct
   // caps, and the bake depends on the knob ONLY through that cap. Keying on the
   // raw float meant dragging 0.300 -> 0.301 re-ran the whole

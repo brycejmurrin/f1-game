@@ -1,5 +1,5 @@
 // @ts-check
-// Gamepad input tests for js/game/input.js (W3C Gamepad API, "standard" mapping).
+// Gamepad input tests for js/input/input.js (W3C Gamepad API, "standard" mapping).
 //
 // These mock navigator.getGamepads() with a synthetic pad snapshot, call the
 // once-per-frame Input.poll(), then read the public Input surface the game loop
@@ -229,7 +229,7 @@ test("document becoming hidden releases held keyboard, pointer, and touch input"
 
 /* ---------------------------------------------------------------------------
  * GAMEPAD MENU NAVIGATION — the UWP gamepad/keyboard-parity mapping settled in
- * docs/research/PLATFORM-INPUT-NOTES.md §8, shipped in js/game/input.js
+ * docs/research/PLATFORM-INPUT-NOTES.md §8, shipped in js/input/input.js
  * (padNavPoll / padActivate / padEscape / padSeedFocus). pollGamepad() dispatches REAL
  * synthetic KeyboardEvents at `document` when UiLayers.anyOpen() is true, so
  * these tests exercise the same seam a keyboard uses — js/game/menunav.js and

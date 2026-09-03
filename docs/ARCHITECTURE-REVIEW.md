@@ -582,7 +582,7 @@ Deferred with reasoning, none lost:
 - **game.js extraction candidates**, ranked by boundary crossings (§4): garage
   live preview ~415 ln (blocked on a car-drawing seam), camera disclosure
   ~324, pre-race screens ~261, liveries ~161, sky state ~107. (Cam modes was
-  taken: `js/game/cam-modes.js`.) The 2026-08-13 structure panel re-affirmed
+  taken: `js/camera/mode-switch.js`.) The 2026-08-13 structure panel re-affirmed
   this list as the live decomposition plan and made it **forced rather than
   optional**: both ratchets are saturated (`js/game.js` and `js/game/apex.js`
   each sit one line under their ceiling), so the next net-positive edit to

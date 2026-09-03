@@ -381,7 +381,7 @@ interleaved layout in `js/render/glx.js:479` (`fpv = 9 + mat + trk`).
   page memory.
 - **There is no JavaScript exception to catch.** `try/catch` does not help; the
   tab dies. So a memory kill cannot be logged from inside the page, which is
-  exactly why `js/game/perf.js`'s crash sentinel writes to localStorage BEFORE it
+  exactly why `js/perf/governor.js`'s crash sentinel writes to localStorage BEFORE it
   can be told anything went wrong. That design is vindicated by this.
 
 ## What this repo uploads

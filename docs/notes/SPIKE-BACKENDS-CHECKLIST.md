@@ -168,13 +168,13 @@ the sole caller).
   `_backendBound`, which can only become true inside the dead-code path
   above. Deletable in the same pass.
 
-## RENDERER picker (`js/game/renderer-picker.js`)
+## RENDERER picker (`js/perf/renderer-picker.js`)
 
-- `js/game/renderer-picker.js:12` — `const BACKENDS = ["webgl2", "three", "webgpu"]`.
+- `js/perf/renderer-picker.js:12` — `const BACKENDS = ["webgl2", "three", "webgpu"]`.
   Shrinks to `["webgl2"]`, which collapses the picker from a 3-stop
   `<select>` + `‹›` control to a no-op (or the control itself is removed —
   the plan says "shrinks to WEBGL2").
-- `js/game/renderer-picker.js:149-157` — `RENDERER_LS_KEYS` (11 keys:
+- `js/perf/renderer-picker.js:149-157` — `RENDERER_LS_KEYS` (11 keys:
   `apex26.gfxBackend`, `apex26.gfxBackendProbe`, `apex26.gfxWgxLevel`,
   `apex26.gfxWgxLite`, `apex26.gfxWgxOk`, `apex26.gfxWgxFail`,
   `apex26.gfxTlxFail`, `apex26.envProbeOff`, `apex26.perChunkOff`,
@@ -184,7 +184,7 @@ the sole caller).
   `clearRendererStorage()` (`:159-165`) reset list. Drop every WGX/TLX-only
   key; `apex26.gfxBackend` and `apex26.gfxBackendProbe` may still be worth
   clearing for returning players with a stale pick.
-- `js/game/renderer-picker.js:12-583` more broadly — roughly 200 of the
+- `js/perf/renderer-picker.js:12-583` more broadly — roughly 200 of the
   file's 584 lines are THREE PATH / SCREENSHOTS / diag-copy machinery
   (`THREE_PATHS`, `readThreePath`, `applyThreePath`, `threePathLabel`,
   `liveThreeApi`, `readShotMode`, `writeShotMode`, `shotModeLabel`,
@@ -354,18 +354,18 @@ grep (excludes the docs archive directory, excludes files already covered above)
 | `js/render/shaders/lit.js:151,550,570,878,882,991` | shrink | GLSL comments citing WGX/WebGPU parity decisions (RAW footprint, SAA snapshot). The GLSL logic is unaffected; comments go stale, not wrong — low priority. |
 | `js/render/shaders/post.js:1128,1141` | shrink | Same class, GLSL comments citing WGX. |
 | `js/render/shaders/chunks.js:1,5,60` | shrink | Header cites `wgsl-chunks.js` (WGSLChunks) as the "maintainability-tax" sibling. Rewrite the header once the WGSL sibling is gone from the shipped tree (still true as history — a spike pointer is fine). |
-| `js/game/gfx-debug.js:5,32-58,77,105,130-131` | shrink | The debug overlay reads `apex26.gfxBackend`, `apex26.tlxForceGL`, `apex26.gfxTlxFail`, `apex26.gfxWgxFail`, `G.__tlx`, `G.softPresentState` and prints WGX/TLX-specific diagnostic lines. With those keys permanently absent the reads just return falsy and the lines never print — no crash, dead code. Shrink at leisure. |
-| `js/game/lighting-knobs.js` (25 hits, e.g. `:448` "WebGL2 and WebGPU") | keep, shrink later | `TUNE_DEFS` `help` strings reference "WebGL2 and WebGPU" per-knob (which backends implement it). Cosmetic once only WebGL2 ships; not load-bearing for any guard found. Low priority. |
-| `js/game/metrics.js:160-165,215,225-228,480,496` | shrink | The bug-report `diag()` output includes a `tlx` field and reads `apex26.gfxBackend`. With the backend permanently `"webgl2"` (or empty), the field is always empty-string — dead but harmless. Shrink at leisure. |
+| `js/perf/gfx-debug-overlay.js:5,32-58,77,105,130-131` | shrink | The debug overlay reads `apex26.gfxBackend`, `apex26.tlxForceGL`, `apex26.gfxTlxFail`, `apex26.gfxWgxFail`, `G.__tlx`, `G.softPresentState` and prints WGX/TLX-specific diagnostic lines. With those keys permanently absent the reads just return falsy and the lines never print — no crash, dead code. Shrink at leisure. |
+| `js/lighting/knobs.js` (25 hits, e.g. `:448` "WebGL2 and WebGPU") | keep, shrink later | `TUNE_DEFS` `help` strings reference "WebGL2 and WebGPU" per-knob (which backends implement it). Cosmetic once only WebGL2 ships; not load-bearing for any guard found. Low priority. |
+| `js/perf/metrics-overlay.js:160-165,215,225-228,480,496` | shrink | The bug-report `diag()` output includes a `tlx` field and reads `apex26.gfxBackend`. With the backend permanently `"webgl2"` (or empty), the field is always empty-string — dead but harmless. Shrink at leisure. |
 | `js/game/apex.js:1057,2417,2494,2501,2542` | shrink | `__apex.info()`/`diag()` surface reports `gfxBackend` from storage and comments cite "identically on GLX, TLX and WGX". Same class as metrics.js — dead reads, not wrong ones. |
-| `js/game/tuner.js:24-27` | delete (dead branch) | `if (g && g.hasPerChunkLights === false) return " · not supported by the three.js renderer…"` — this branch can only fire when `g` (the bound backend) is TLX, which can never bind again. Delete the branch; `hasPerChunkLights` on GLX is always defined so the guard is unreachable already once TLX is gone, not just cosmetically stale. |
-| `js/game/gfx-quality.js:1` | shrink | Header comment; no functional WGX/TLX coupling found beyond the pref key already covered under renderer-picker. |
+| `js/lighting/tuner-panel.js:24-27` | delete (dead branch) | `if (g && g.hasPerChunkLights === false) return " · not supported by the three.js renderer…"` — this branch can only fire when `g` (the bound backend) is TLX, which can never bind again. Delete the branch; `hasPerChunkLights` on GLX is always defined so the guard is unreachable already once TLX is gone, not just cosmetically stale. |
+| `js/perf/quality-preset.js:1` | shrink | Header comment; no functional WGX/TLX coupling found beyond the pref key already covered under renderer-picker. |
 | `js/track/tracks.js:146,694,732` | shrink | Comments naming "the WebGL2/TLX/WGX backend" and "GLX/WGX/TLX" batch drawing, and a WGX-specific scenery skip note. No functional code depends on a WGX/TLX identity check here (confirmed no `pref ===`/backend-name branch in these lines) — comment-only. |
 | `js/physics/debris-world.js:1127,1130` | shrink | Comment: "updateInstances since 2026-09-02 (glx.js, wgx.js, tlx.js)…which is still GLX + WGX only." Stale once WGX is gone; rewrite to "GLX only." |
-| `js/game/perf.js:63,209` | shrink | Comments about WebGPU/three.js perf tiers in PerfGov's own reasoning; no functional coupling. |
+| `js/perf/governor.js:63,209` | shrink | Comments about WebGPU/three.js perf tiers in PerfGov's own reasoning; no functional coupling. |
 | `js/car/car3d.js:12,196` | shrink | Comments citing the WGX/TSL shading id-chain and "GLX/WGX paint" — no functional coupling. |
 | `js/render/lamp-chunks.js` | shrink (see above, own section) | |
-| `js/game/light-store.js:78` | keep | "three.js genuinely cannot bind per-chunk sets" — this IS a functional capability gate (`hasPerChunkLights`), but the gate degrades safely once TLX never binds (the condition it guards becomes permanently one-sided, same as tuner.js — could be simplified alongside it). |
+| `js/lighting/profiles.js:78` | keep | "three.js genuinely cannot bind per-chunk sets" — this IS a functional capability gate (`hasPerChunkLights`), but the gate degrades safely once TLX never binds (the condition it guards becomes permanently one-sided, same as tuner.js — could be simplified alongside it). |
 | `js/game/carmesh.js:275-276` | shrink | Comment: "no backend has ever had a deleteMesh (GLX, TLX and WGX all expose freeMesh…)". Rewrite to name GLX only. |
 | `types/game-ctx.d.ts:128,130,491` | shrink | `GfxBackend` type comment says "GLX by default; TLX/WGX when opted in" — rewrite once opting in is impossible. |
 | `bench.html:408,431-432` | shrink | Reads `GLX.__tlx` to report which "three" backend is bound; with TLX gone `GLX.__tlx` is always undefined and the field always reads GLX's own webgl2 state — degrades safely, not wrong. Shrink at leisure. |

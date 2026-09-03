@@ -115,7 +115,7 @@ test("real GameAudio unlock and engine synthesis run after a user gesture", asyn
 });
 
 // GameAudio.setMusicVolume/setSfxVolume clamp to 0..1 and RETURN the clamped
-// value; js/game/audio-panel.js used to call them at boot and discard that
+// value; js/audio/panel.js used to call them at boot and discard that
 // return, keeping its OWN musicVol/sfxVol (the pair the MUSIC & SOUND panel's
 // slider label reads) at whatever raw number came out of localStorage. The
 // gain itself was always safe — only the number shown on the slider could

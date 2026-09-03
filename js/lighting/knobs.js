@@ -1,10 +1,10 @@
 /* Apex 26 — the LIGHTING TUNER knob registry: TUNE_DEFS (the slider registry —
    the `def` values ARE the shipped tuning; min/max/step are the clamps
-   js/game/light-store.js and the panel honour) and the live LT value object
+   js/lighting/profiles.js and the panel honour) and the live LT value object
    every consumer reads per frame (mutated in place by light-store.js's profile
    resolution and __apex.lightTune). Pure data, no game state: per-track lamp
-   baking is js/game/track-lights.js, the per-frame cull/upload is
-   js/game/frame-lights.js, and js/game/lighting.js (LightTune) is the façade
+   baking is js/lighting/track-lights.js, the per-frame cull/upload is
+   js/lighting/frame-lights.js, and js/lighting/lighting.js (LightTune) is the façade
    that composes the three. Must load BEFORE both siblings — they destructure
    LT at eval time (tools/manifest.cjs HARD_EDGES). */
 const LightKnobs = (function () {
@@ -28,7 +28,7 @@ const TUNE_DEFS = [
   // ── SUN & MOON ──
   { id: "keyMul",       label: "KEY LIGHT (SUN)", group: "SUN & MOON", min: 0, max: 2.5, step: 0.005,  def: 1.0,  u: "uKeyMul", help: "Direct sun/moon intensity — diffuse + speculars + shadows, plus the paint sun-glint and window sun-flash terms (those two used to ignore this slider, so 0 left hotspots). Ambient, fog and sky reflection are untouched, so the scene stays coherent when dimmed. Floor stays 0 (already fully off); headroom is on the bright end." },
   { id: "sunTemp",      label: "SUN / MOON WARMTH", group: "SUN & MOON", min: -3.3, max: 8.3, step: 0.001, def: 0.0, fmt: "signed", help: "White-balance of the direct key light (sun by day, moonlight at night). − warm sunrise/sodium, + cool overcast/moonlight. Asymmetric on purpose: warm cuts blue at 0.30/unit (zero at −3.33) while cool cuts red at 0.12/unit (zero at +8.33), so the range stops at −3.3 / +8.3 — the last live notch on each side." },
-  { id: "sunElev",      label: "SUN ELEVATION",   group: "SUN & MOON", min: -50, max: 50, step: 0.1, def: 0, fmt: "signed", help: "Sun/moon height offset from the time-of-day default (deg). − lowers it for longer raking shadows + more god-rays. 0 = as-shipped. The SUM with the time-of-day base is clamped to ±88.2° (js/game/atmosphere.js), so on a midday session anything past about +45 is a no-op; far enough negative the sun goes under the horizon and you get no key light and no god-rays at all — on a dawn session that is only about -7." },
+  { id: "sunElev",      label: "SUN ELEVATION",   group: "SUN & MOON", min: -50, max: 50, step: 0.1, def: 0, fmt: "signed", help: "Sun/moon height offset from the time-of-day default (deg). − lowers it for longer raking shadows + more god-rays. 0 = as-shipped. The SUM with the time-of-day base is clamped to ±88.2° (js/lighting/atmosphere.js), so on a midday session anything past about +45 is a no-op; far enough negative the sun goes under the horizon and you get no key light and no god-rays at all — on a dawn session that is only about -7." },
   { id: "sunAzim",      label: "SUN AZIMUTH",     group: "SUN & MOON", min: -180, max: 180, step: 0.5, def: 0, fmt: "signed", help: "Rotates the key-light compass direction from the default — swings shadow direction across the track. 0 = as-shipped. Already a full compass turn, so only the step is worth refining; at 0.5 deg it is 720 notches." },
   { id: "moonBright",   label: "MOON BRIGHTNESS", group: "SUN & MOON", min: 0, max: 2.5, step: 0.001, def: 1.0, help: "Moon disc/halo + its soft blue fill on the night sky." },
   { id: "grMul",        label: "SUN GOD-RAYS",    group: "SUN & MOON", min: 0, max: 2.5, step: 0.001, def: 1.0,  help: "Volumetric sun-shaft strength (dawn/dusk drama). Stays live on GRAPHICS: LOW; the governor or a crash floor can still shed the pass." },
@@ -235,7 +235,7 @@ const TUNE_DEFS = [
   { id: "particleMul",  label: "PARTICLE FX",     group: "FX", min: 0, max: 2, step: 0.005, def: 1.0, help: "Transient particle amount — tyre smoke, collision sparks, gravel kickup and rain spray. 0 = off, 1 = as-shipped, 2 = double the emission rate." },
 ];
 // LT holds the LIVE values the driver reads every frame. They are resolved by
-// js/game/light-store.js from a per-CONDITION profile store: each (track,
+// js/lighting/profiles.js from a per-CONDITION profile store: each (track,
 // time-of-day, weather) combination keeps its own set of overrides, so
 // night+wet Monaco and day+dry Monza are tuned independently. Resolution per
 // id, lowest precedence first: TUNE_DEFS default → LightPresets["*"] →

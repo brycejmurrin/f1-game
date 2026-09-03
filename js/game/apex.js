@@ -272,7 +272,7 @@ const api = {
     return { eye: v.eye, target: v.tgt, fov: +v.fov.toFixed(1), mode: m };
   },
   // camTune(mode?, obj?) — the CAMERA TUNER's per-camera-mode framing offsets
-  // (js/game/cam-tune.js), the camera counterpart of lightTune(). With no args
+  // (js/camera/offsets.js), the camera counterpart of lightTune(). With no args
   // it reports every tuned mode plus the knob registry; with a mode id it
   // returns that mode's six resolved values; with a mode id + an object of
   // {height,dist,side,pitch,yaw,fov} it applies and persists them and re-snaps
@@ -1445,7 +1445,7 @@ const api = {
   // the auto-governor. true: re-enable the governor. Lower scale = big fill-rate
   // win (softer 3D view; HUD stays crisp). `floorMs` is the governor's derived
   // per-device budget (the observed floor of frame intervals — see
-  // js/game/perf.js) rather than a hardcoded 16.7 ms; it rises to match an
+  // js/perf/governor.js) rather than a hardcoded 16.7 ms; it rises to match an
   // external cap like iOS Low Power Mode's 30 fps throttle instead of forever
   // judging that device against a 60 fps target it cannot reach.
   renderScale(v) {

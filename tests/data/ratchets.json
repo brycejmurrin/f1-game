@@ -20,7 +20,7 @@
     "js/track/tracks.js": {
       "lines": 2399
     },
-    "js/game/light-presets.js": {
+    "js/lighting/presets.js": {
       "lines": 15508
     },
     "js/render/webgpu/wgx.js": {
@@ -40,6 +40,9 @@
     },
     "js/net/lobby.js": {
       "lines": 1684
+    },
+    "tools/pick-tests.mjs": {
+      "blanketOnlyRoutes": 15
     }
   }
 }

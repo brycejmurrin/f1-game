@@ -72,7 +72,7 @@ const AudioPanel = (() => {
     }
 
     /* MUSIC SOURCE — ALL / DEFAULT / MY TRACKS pick which part of the local
-       library plays; SPOTIFY hands the music role to js/game/spotify.js. It is
+       library plays; SPOTIFY hands the music role to js/audio/spotify.js. It is
        a four-way choice rather than a Spotify on/off switch because "my
        uploads only" and "the shipped songs only" are both things people
        actually want. */

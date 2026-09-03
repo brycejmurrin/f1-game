@@ -1366,7 +1366,7 @@ const Input = (function () {
     get gyroSeen() { return tiltSeen; },
     get gyroDenied() { return gyroDenied; },
     get gyroHardDenied() { return gyroHardDenied; },
-    // Exported for js/game/photomode.js, whose hold buttons capture the pointer
+    // Exported for js/camera/photo-cam.js, whose hold buttons capture the pointer
     // the same way and need the same "was the button taken away?" test.
     holdTargetGone,
     // Read-only tilt-tuning state (for tests / diagnostics).

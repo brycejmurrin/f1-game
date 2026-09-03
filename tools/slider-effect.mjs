@@ -106,15 +106,15 @@ Visual A/B (Playwright via tools/harness.mjs — NOT Chrome MCP):
   uses per-id RECIPE_BY_ID entries. Full reference: docs/LIGHTING-TUNER-SLIDERS.md
 `;
 
-const APPLY_ONLY_FILES = ["js/game/atmosphere.js"];
+const APPLY_ONLY_FILES = ["js/lighting/atmosphere.js"];
 // The LightTune façade composes three siblings — same order as tools/manifest.cjs.
-export const LIGHTING_FILES = ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js", "js/game/lighting.js"];
+export const LIGHTING_FILES = ["js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"];
 const SCAN_FILES = [
-  "js/game/lighting-knobs.js",
-  "js/game/track-lights.js",
-  "js/game/frame-lights.js",
+  "js/lighting/knobs.js",
+  "js/lighting/track-lights.js",
+  "js/lighting/frame-lights.js",
   "js/game.js",
-  "js/game/atmosphere.js",
+  "js/lighting/atmosphere.js",
   "js/game/particles.js",
   "js/render/glx.js",
   "js/render/glx/post.js",
@@ -186,9 +186,9 @@ export function loadTuneDefs(root) {
 }
 
 function applyRaceIds(root) {
-  const src = read(root, "js/game/light-store.js");
+  const src = read(root, "js/lighting/profiles.js");
   const m = src.match(/APPLY_RACE_IDS\s*=\s*new Set\(\[([\s\S]*?)\]\)/);
-  if (!m) throw new Error("could not find APPLY_RACE_IDS in js/game/light-store.js");
+  if (!m) throw new Error("could not find APPLY_RACE_IDS in js/lighting/profiles.js");
   return new Set([...m[1].matchAll(/"([A-Za-z0-9_]+)"/g)].map((x) => x[1]));
 }
 
@@ -337,10 +337,10 @@ export function classifyKnobs(root = ROOT) {
   // The build path (track-lights.js) and the per-frame path (frame-lights.js) are
   // separate files; the registry is scanned with TUNE_DEFS stripped so a knob's own
   // declaration is not counted as a read.
-  const trackLights = read(root, "js/game/track-lights.js");
-  const frameLights = read(root, "js/game/frame-lights.js");
+  const trackLights = read(root, "js/lighting/track-lights.js");
+  const frameLights = read(root, "js/lighting/frame-lights.js");
   const sources = new Map(SCAN_FILES.map((f) => [
-    f, f === "js/game/lighting-knobs.js" ? stripTuneDefs(read(root, f)) : read(root, f),
+    f, f === "js/lighting/knobs.js" ? stripTuneDefs(read(root, f)) : read(root, f),
   ]));
   const gsrc = sources.get("js/game.js");
   const nightBand = extractFn(gsrc, "_nightAmbientBand") || "";

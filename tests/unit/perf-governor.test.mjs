@@ -36,7 +36,7 @@ import { seedStoreGlobal } from "../helpers/seed-store.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
 seedStoreGlobal();   // perf.js persists the sentinel through GameStore.store's raw lane
-const SRC = fs.readFileSync(path.join(ROOT, "js/game/perf.js"), "utf8");
+const SRC = fs.readFileSync(path.join(ROOT, "js/perf/governor.js"), "utf8");
 
 // A fake renderer mirroring GLX.setRenderScale (js/render/glx.js) EXACTLY,
 // dead zone and all.
@@ -295,7 +295,7 @@ test("the crash-sentinel floor still cannot be defeated by pinning the resolutio
   assert.equal(PerfGov.tier(), 4, "the sentinel floor must hold even with the resolution pinned");
 });
 
-// ── The GRAPHICS preset's user tier (js/game/gfx-quality.js) ────────────────
+// ── The GRAPHICS preset's user tier (js/perf/quality-preset.js) ────────────────
 // tier() folds three terms with max(): the crash-sentinel floor, the user's
 // preset floor, and the governor's own live tier. That single expression IS the
 // interaction rule — a manual choice sets the FLOOR of degradation, never the

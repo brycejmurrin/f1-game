@@ -1,6 +1,6 @@
 // @ts-check
-// CAMERA TUNER contract: per-camera-mode framing offsets (js/game/cam-tune.js),
-// the __apex.camTune() hook, and the pause-menu panel (js/game/cam-tuner.js).
+// CAMERA TUNER contract: per-camera-mode framing offsets (js/camera/offsets.js),
+// the __apex.camTune() hook, and the pause-menu panel (js/camera/tuner-panel.js).
 // The invariant that matters: a knob moved on one camera changes ONLY that
 // camera, and an untuned mode frames exactly as it did before the feature.
 import { test, expect } from "@playwright/test";

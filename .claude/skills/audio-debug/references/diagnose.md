@@ -37,7 +37,7 @@ engine idle still hums on the **sfx** bus. That is correct.
 
 ## Pitch curve
 
-Search `js/game/audio.js` for `setEngine(rev01, boost01, offroad, speed01,
+Search `js/audio/engine.js` for `setEngine(rev01, boost01, offroad, speed01,
 gear)`. The sample core sets `playbackRate`; the synth fallback sets
 oscillator frequencies. After an edit, bump-cache and reload — WebAudio does
 not hot-reload. Confirm with `GameAudio.rate()` at the same speed.

@@ -1,9 +1,9 @@
 // A tuner knob consumed ONLY inside buildTrackLights() must carry `rebuild:true`,
 // or its slider does nothing until the track is reloaded.
 //
-// THE INVARIANT. js/game/track-lights.js builds the static lamp/floodlight geometry
+// THE INVARIANT. js/lighting/track-lights.js builds the static lamp/floodlight geometry
 // in buildTrackLights() and caches it on track._lights. That cache is only
-// rebuilt when something nulls it: js/game/light-store.js set() does so via
+// rebuilt when something nulls it: js/lighting/profiles.js set() does so via
 // liveEffects(rebuilt=…), and `rebuilt` is true exactly when a moved knob has
 // d.rebuild. So a knob whose value is baked into the lamp geometry — read only
 // inside buildTrackLights — needs rebuild:true, or set() leaves the stale
@@ -36,7 +36,7 @@ function tuneDefs() {
   const sb = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };
   sb.window = sb; vm.createContext(sb);
   seedLog(sb);
-  for (const f of ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js", "js/game/lighting.js"])
+  for (const f of ["js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), sb);
   return sb.LightTune.TUNE_DEFS;
 }
@@ -53,10 +53,10 @@ function extractFn(src, name) {
   return null;
 }
 
-// The build path is js/game/track-lights.js and the per-frame path
-// js/game/frame-lights.js (the registry is lighting-knobs.js); extractFn walks
+// The build path is js/lighting/track-lights.js and the per-frame path
+// js/lighting/frame-lights.js (the registry is lighting-knobs.js); extractFn walks
 // the three as one source so the split cannot hide a function from it.
-const LIGHTING = ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js"].map(read).join("\n");
+const LIGHTING = ["js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js"].map(read).join("\n");
 // The build path: buildTrackLights and its helper floodColor (called only from
 // the build). The per-frame path: functions render() calls each frame.
 const BUILD_FNS = ["buildTrackLights", "floodColor", "applyLampDensity", "lampDensityFactor", "lampStrideNodes", "lampStrideM"];
@@ -64,7 +64,7 @@ const FRAME_FNS = ["setFrameLights", "appendCarTailLights", "lampCap", "capRadiu
 
 test("the light functions this test models still exist", () => {
   for (const n of [...BUILD_FNS, ...FRAME_FNS])
-    assert.ok(extractFn(LIGHTING, n), `function ${n} not found in js/game/track-lights.js / frame-lights.js — the build/frame split this test relies on has changed`);
+    assert.ok(extractFn(LIGHTING, n), `function ${n} not found in js/lighting/track-lights.js / frame-lights.js — the build/frame split this test relies on has changed`);
 });
 
 test("floodColor is not called from a per-frame path", () => {
@@ -97,7 +97,7 @@ test("every build-only knob carries rebuild:true", () => {
   assert.deepEqual(offenders, [],
     "these knobs are baked into the lamp geometry by buildTrackLights but never invalidate it, so\n" +
     "dragging their slider does NOTHING until the track reloads. Add `rebuild: true` to their\n" +
-    "TUNE_DEFS entry in js/game/lighting-knobs.js:\n  " + offenders.join("\n  "));
+    "TUNE_DEFS entry in js/lighting/knobs.js:\n  " + offenders.join("\n  "));
 });
 
 test("LAMPS tuner group merges the old FLOODLIGHTS + LAMP BEHAVIOUR tabs", () => {

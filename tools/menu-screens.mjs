@@ -326,7 +326,7 @@ export const SCREENS = [
   //
   // THE LIGHTING TUNER ONLY, and that is a fact about the app rather than a gap
   // here. `#pc-toggle` is the sole way into photo mode and it lives in this
-  // panel; `closeLightTuner` (js/game/tuner.js) calls `exitPhotoMode()` on the
+  // panel; `closeLightTuner` (js/lighting/tuner-panel.js) calls `exitPhotoMode()` on the
   // way out; and the camera tuner is opened from pause SETTINGS, which the
   // lighting tuner hides while it is open. So `#camtune-inner` under
   // `body.photo-mode` is unreachable, and a cell for it measures nothing — which

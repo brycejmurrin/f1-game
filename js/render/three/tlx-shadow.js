@@ -9,7 +9,7 @@
     // redraw cost (terrain + road + the whole city into the map, roughly every
     // 10 m of travel — that redraw frame IS the periodic HIGH-tier stall), and
     // the car/lamp maps are per-FRAME depth passes, a fill cost that is "the
-    // HIGH-tier lag, not a memory cap". js/game/perf.js draws the same line
+    // HIGH-tier lag, not a memory cap". js/perf/governor.js draws the same line
     // (its crash sentinel gates on isMobile, "NOT just the memory-safe
     // STANDARD tier"). These three keyed on mobileTier instead, so a phone that
     // opted into GRAPHICS: HIGH took a 2048² sun map plus two per-frame depth

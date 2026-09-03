@@ -1,4 +1,4 @@
-/* Apex 26 — GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist (apex26.gfxHigh), the apex26.gfxPreset store key and the #pm-gfx button. The RENDERER picker (WEBGL2 / THREE.JS / WEBGPU, RESET RENDERER, THREE PATH, SCREENSHOTS) is js/game/renderer-picker.js. */
+/* Apex 26 — GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist (apex26.gfxHigh), the apex26.gfxPreset store key and the #pm-gfx button. The RENDERER picker (WEBGL2 / THREE.JS / WEBGPU, RESET RENDERER, THREE PATH, SCREENSHOTS) is js/perf/renderer-picker.js. */
 const GfxQuality = (function () {
   "use strict";
 
@@ -12,7 +12,7 @@ function gstore() {
   return (typeof GameStore !== "undefined" && GameStore.store) || null;
 }
 
-// userTier is a FLOOR on the COST shedding ladder in js/game/perf.js:
+// userTier is a FLOOR on the COST shedding ladder in js/perf/governor.js:
 //   0 nothing pinned off · 1 env probe · 2 +lamp shadow/SSR · 3 +car shadow
 // Look-defining post (bloom / SSAO / god rays / contact / lamp volumetrics)
 // reads PerfGov.autoTier() instead — GRAPHICS: LOW must not mute the lighting

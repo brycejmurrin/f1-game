@@ -1,7 +1,7 @@
 // A tuner knob consumed ONLY inside applyRaceSettings() must be in
 // APPLY_RACE_IDS, or its slider does nothing.
 //
-// THE BUG THIS EXISTS FOR. js/game/light-store.js keeps APPLY_RACE_IDS: the
+// THE BUG THIS EXISTS FOR. js/lighting/profiles.js keeps APPLY_RACE_IDS: the
 // knobs whose effect is baked into frame.*/frameSky.* by applyRaceSettings()
 // rather than read per-frame in render(). set() re-runs applyRaceSettings when
 // one of those moves, which is the only reason such a knob is live at all.
@@ -35,32 +35,32 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => readFileSync(path.join(ROOT, p), "utf8");
 
-// js/game/atmosphere.js exists to hold applyRaceSettings and its helpers — its
+// js/lighting/atmosphere.js exists to hold applyRaceSettings and its helpers — its
 // module header says so — so a read there runs only when that function runs.
 // _nightAmbientBand lives in game.js but has no other caller (asserted below),
 // which is what made nightAmbLift the least obvious of the five.
-const APPLY_ONLY_FILES = ["js/game/atmosphere.js"];
+const APPLY_ONLY_FILES = ["js/lighting/atmosphere.js"];
 
 function tuneDefs() {
   const sandbox = { console: { log() {}, warn() {}, error() {} }, Math, JSON, Object, Array };
   sandbox.window = sandbox;
   vm.createContext(sandbox);
   seedLog(sandbox);
-  for (const f of ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js", "js/game/lighting.js"])
+  for (const f of ["js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), sandbox);
   return sandbox.LightTune.TUNE_DEFS;
 }
 
 function applyRaceIds() {
-  const src = read("js/game/light-store.js");
+  const src = read("js/lighting/profiles.js");
   const m = src.match(/APPLY_RACE_IDS\s*=\s*new Set\(\[([\s\S]*?)\]\)/);
-  assert.ok(m, "could not find APPLY_RACE_IDS in js/game/light-store.js");
+  assert.ok(m, "could not find APPLY_RACE_IDS in js/lighting/profiles.js");
   return new Set([...m[1].matchAll(/"([A-Za-z0-9_]+)"/g)].map((x) => x[1]));
 }
 
 // Strip the TUNE_DEFS array so a knob's own declaration is not counted as a read.
 function knobsBody() {
-  const s = read("js/game/lighting-knobs.js");
+  const s = read("js/lighting/knobs.js");
   const a = s.indexOf("const TUNE_DEFS = [");
   let i = s.indexOf("[", a), depth = 0, end = -1;
   for (; i < s.length; i++) {
@@ -75,12 +75,12 @@ test("_nightAmbientBand is only reached from applyRaceSettings", () => {
   // per-frame caller ever appears, knobs read there stop needing registration
   // and this test's model is wrong — so assert the premise rather than assume it.
   const callers = [];
-  for (const f of ["js/game.js", "js/game/atmosphere.js"]) {
+  for (const f of ["js/game.js", "js/lighting/atmosphere.js"]) {
     for (const line of read(f).split("\n")) {
       if (/_nightAmbientBand\s*\(/.test(line) && !/function _nightAmbientBand/.test(line)) callers.push(f);
     }
   }
-  assert.deepEqual([...new Set(callers)].sort(), ["js/game.js", "js/game/atmosphere.js"],
+  assert.deepEqual([...new Set(callers)].sort(), ["js/game.js", "js/lighting/atmosphere.js"],
     "_nightAmbientBand gained a caller outside atmosphere.js/game.js — re-check APPLY_RACE_IDS");
 });
 
@@ -88,11 +88,11 @@ test("every apply-only knob is registered in APPLY_RACE_IDS", () => {
   const defs = tuneDefs();
   const registered = applyRaceIds();
   const sources = new Map([
-    ["js/game/lighting-knobs.js", knobsBody()],
-    ["js/game/track-lights.js", read("js/game/track-lights.js")],
-    ["js/game/frame-lights.js", read("js/game/frame-lights.js")],
+    ["js/lighting/knobs.js", knobsBody()],
+    ["js/lighting/track-lights.js", read("js/lighting/track-lights.js")],
+    ["js/lighting/frame-lights.js", read("js/lighting/frame-lights.js")],
     ["js/game.js", read("js/game.js")],
-    ["js/game/atmosphere.js", read("js/game/atmosphere.js")],
+    ["js/lighting/atmosphere.js", read("js/lighting/atmosphere.js")],
     ["js/game/particles.js", read("js/game/particles.js")],
     ["js/render/glx.js", read("js/render/glx.js")],
     ["js/render/glx/post.js", read("js/render/glx/post.js")],
@@ -133,6 +133,6 @@ test("every apply-only knob is registered in APPLY_RACE_IDS", () => {
 
   assert.deepEqual(missing, [],
     "these knobs are consumed only where applyRaceSettings runs, so dragging their slider does\n" +
-    "NOTHING until something else re-runs it. Add them to APPLY_RACE_IDS in js/game/light-store.js:\n  " +
+    "NOTHING until something else re-runs it. Add them to APPLY_RACE_IDS in js/lighting/profiles.js:\n  " +
     missing.join("\n  "));
 });

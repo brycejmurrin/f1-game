@@ -803,7 +803,7 @@ const photoKeys = { w: false, s: false, a: false, d: false, up: false, dn: false
 const photoMove = { x: 0, y: 0 };   // touch move stick: x=strafe, y=forward (−1..1)
 const photoLook = { x: 0, y: 0 };   // touch look stick: x=yaw, y=pitch (−1..1)
 // pid: the ONE pointer that owns a look-drag; every other one is ignored (see
-// js/game/photomode.js). null when nothing is dragging.
+// js/camera/photo-cam.js). null when nothing is dragging.
 const photoMouse = { dx: 0, dy: 0, drag: false, px: 0, py: 0, pid: null };
 let photoAlt = 0;                    // touch up/down buttons: +1 up, −1 down
 let photoVertT = 0;                  // how long vertical input has been held (s) — ramps the climb rate
@@ -838,7 +838,7 @@ function buildStudioRig() {
   return _studioBuf;
 }
 let headlessMode = false;  // skip render() when true (headless control loop)
-const { CAM_MODES } = CamModes;  // player camera modes (js/game/cam-modes.js; eval-time — a HARD_EDGES pair)
+const { CAM_MODES } = CamModes;  // player camera modes (js/camera/mode-switch.js; eval-time — a HARD_EDGES pair)
 let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.length - 1);
 // The game mode, on TWO axes. `flow` is what the run is FOR and survives a whole
 // championship; `session` is what this one visit to the track IS. They are genuinely
@@ -2505,7 +2505,7 @@ function isFloodActiveSession() {
 
 // ---------- race flow ----------
 // applyRaceSettings() (session lighting/weather/time-of-day) and the
-// per-track atmosphere bias live in js/game/atmosphere.js
+// per-track atmosphere bias live in js/lighting/atmosphere.js
 // (Atmosphere.create(G) — wired after the G façade below).
 
 // Snap the live camera straight to the current mode's vantage (no damping), so
@@ -3042,7 +3042,7 @@ const G = {
   get trackIdx() { return trackIdx; }, set trackIdx(v) { trackIdx = v; },
   get ttLaps() { return ttLaps; }, set ttLaps(v) { ttLaps = v; },
   get weatherArc() { return weatherArc; }, set weatherArc(v) { weatherArc = v; },
-  // Mutable state consumed by js/game/atmosphere.js.
+  // Mutable state consumed by js/lighting/atmosphere.js.
   get _cloudBase() { return _cloudBase; }, set _cloudBase(v) { _cloudBase = v; },
   get _ltBase() { return _ltBase; }, set _ltBase(v) { _ltBase = v; },
   get _ltFlash() { return _ltFlash; }, set _ltFlash(v) { _ltFlash = v; },
@@ -3113,12 +3113,12 @@ const G = {
   // team" by itself, so outside a career this is a no-op the garage can ignore.
   // Read per rebuild rather than held, so a part researched mid-session shows up.
   careerOwned: () => Career.owned(Teams.LIST[teamIdx] && Teams.LIST[teamIdx].id),
-  // Mutable state + helpers consumed by js/game/photomode.js.
+  // Mutable state + helpers consumed by js/camera/photo-cam.js.
   get photoMode() { return photoMode; }, set photoMode(v) { photoMode = v; },
   get _photoPrevScale() { return _photoPrevScale; }, set _photoPrevScale(v) { _photoPrevScale = v; },
   get photoAlt() { return photoAlt; }, set photoAlt(v) { photoAlt = v; },
   get photoVertT() { return photoVertT; }, set photoVertT(v) { photoVertT = v; },
-  // The live profile object owned by js/game/light-store.js — tuner.js
+  // The live profile object owned by js/lighting/profiles.js — tuner.js
   // deletes a key out of it for the tuner's RESET and merges it for COPY VALUES.
   get _ltStore() { return ltStore.profiles; }, set _ltStore(v) { ltStore.profiles = v; },
   photoCam, photoKeys, photoMouse, photoMove, photoLook,
@@ -3127,7 +3127,7 @@ const G = {
   // (setLightTune is a hoisted function, exposed as a plain shorthand below —
   // the deferred-arrow copy that used to sit here was a dead duplicate key.)
   exitPhotoMode: (...a) => exitPhotoMode(...a),   // const initialised below — defer
-  // Stable helpers consumed by js/game/atmosphere.js.
+  // Stable helpers consumed by js/lighting/atmosphere.js.
   clamp: (v, a, b) => clamp(v, a, b),
   satAdjust: (rgb, amt) => satAdjust(rgb, amt),
   isRaining: () => isRaining(),
@@ -3203,7 +3203,7 @@ const G = {
   startRace, startWeatherArc, update, wrapS, quitToMenu,
 };
 
-// Lighting profile resolution + persistence (js/game/light-store.js). FIRST of
+// Lighting profile resolution + persistence (js/lighting/profiles.js). FIRST of
 // the module wires: it reads the saved profiles at construction, and
 // Atmosphere's applyRaceSettings — created a few lines down — calls into it.
 ltStore = LightStore.create(G);
@@ -3214,7 +3214,7 @@ const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResu
 // In-race HUD + minimap (js/game/hud.js).
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
-// Session atmosphere: applyRaceSettings + per-track bias (js/game/atmosphere.js).
+// Session atmosphere: applyRaceSettings + per-track bias (js/lighting/atmosphere.js).
 const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
 // CAR SETUP panel UI (js/game/setup-ui.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
@@ -3236,13 +3236,13 @@ const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/game/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
-// Photo mode (js/game/photomode.js).
+// Photo mode (js/camera/photo-cam.js).
 const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
-// LIGHTING TUNER panel UI (js/game/tuner.js).
+// LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
 const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
-// CAMERA TUNER panel UI (js/game/cam-tuner.js) — per-camera-mode framing offsets.
+// CAMERA TUNER panel UI (js/camera/tuner-panel.js) — per-camera-mode framing offsets.
 const { closeCamTuner } = CamTunerPanel.create(G);
-// Steering-tuning sliders + presets (js/game/steer-tuning.js).
+// Steering-tuning sliders + presets (js/input/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
 // Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,
 // inert (a single boolean check) unless enabled via apex26.debris/__apex.debris.
@@ -3292,7 +3292,7 @@ let netLobby = {
 // C2 visual suspension (js/physics/body-attitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
-// MUSIC & SOUND panel (js/game/audio-panel.js) — the mixer screen, the ♪
+// MUSIC & SOUND panel (js/audio/panel.js) — the mixer screen, the ♪
 // master button and the audio-settings persistence. create() wires the DOM;
 // init() runs at the boot-restore position near the end of this file.
 const audioPanel = AudioPanel.create(G);
@@ -4567,7 +4567,7 @@ function updateCar(c, dt, ranked) {
     // act through the front tyre below, so neither can exceed available grip.
     // vStd: the SPEED STEER slider's reference is a point on the dial, so the lock
     // taper reaches the same place at every pace. The slider's own mapping
-    // (speedRefFromSlider in js/game/steer-tuning.js) moved with this formula —
+    // (speedRefFromSlider in js/input/steer-tuning.js) moved with this formula —
     // see its comment.
     // HYPERBOLIC, not clamped-linear: `1 - v/ref` goes negative at any real
     // racing speed, so the old Math.max(0.4, …) floor was not a safety net, it
@@ -5405,13 +5405,13 @@ function coast(c, dt) {
   }
 }
 
-// Lighting tuner registry + live LT values (js/game/lighting-knobs.js) and the
-// track light builder (js/game/track-lights.js), via LightTune. LT is a plain object
+// Lighting tuner registry + live LT values (js/lighting/knobs.js) and the
+// track light builder (js/lighting/track-lights.js), via LightTune. LT is a plain object
 // mutated in place, so the profile-resolution code below and the sliders/
 // __apex.lightTune keep every LT.x call site unchanged.
 const { TUNE_DEFS, LT, buildTrackLights } = LightTune;
 // The PROFILE STORE — which layer of (default / shipped preset / player edit)
-// wins for the conditions on screen — lives in js/game/light-store.js
+// wins for the conditions on screen — lives in js/lighting/profiles.js
 // (LightStore.create(G), assigned with the other modules below). These six are
 // thin passes through to it, kept so every call site here reads unchanged.
 function ltKey() { return ltStore.key(); }
@@ -5425,7 +5425,7 @@ function setLightTune(id, v) {
   // per-chunk path at night) a RISING EDGE from 0 to a positive value is the
   // player choosing to switch it back on — informed, one gesture at a time — so
   // it is the honest reset. The tier gate still protects a governed device.
-  // EITHER chunk knob, because js/game/tuner.js gateNote() shows the "set to 0
+  // EITHER chunk knob, because js/lighting/tuner-panel.js gateNote() shows the "set to 0
   // and back on to retry" note on BOTH (its isChunk covers roadChunkLamps too).
   // Keyed on perChunkLights alone, a player who read that note on PER-CHUNK
   // ROAD and did exactly what it said cleared nothing, and the slider stayed
@@ -5442,10 +5442,10 @@ function persistLightTune() { ltStore.persist(); }
 // one-step revert for it. The tuner panel and __apex.lightCopy are the callers.
 function copyLightTune(mode) { return ltStore.copyToTracks(mode); }
 function restoreLightTune(undo) { return ltStore.restore(undo); }
-// LAMP_KINDS + buildTrackLights(track) live in js/game/track-lights.js (via LightTune).
+// LAMP_KINDS + buildTrackLights(track) live in js/lighting/track-lights.js (via LightTune).
 
 // Per-frame light assembly (nearest-N flood cull + car tail lights) lives in
-// js/game/frame-lights.js (LightTune.setFrameLights / appendCarTailLights).
+// js/lighting/frame-lights.js (LightTune.setFrameLights / appendCarTailLights).
 const _wheelOpts = { roughness: 0.55, metalness: 0.30, specular: 0.45, emissive: 0, doubleSided: true };
 const _ersLightOpts = { emissive: 1.0, roughness: 1, specular: 0, noAlphaWrite: true, alpha: 1 };
 const _flameOpts = { emissive: 1.0, roughness: 1, specular: 0, alpha: 1, noAlphaWrite: true };
@@ -5460,7 +5460,7 @@ function appendCarTailLights() {
 // ---------- cameras ----------
 // (render() itself is further down, after the garage preview — see the
 // `render` banner below it.)
-// Reusable camera-vantage solver — lives in js/game/cameras.js (GameCams).
+// Reusable camera-vantage solver — lives in js/camera/vantage.js (GameCams).
 // For a player camera `mode` at arc position `s`, lateral `x`, speed `spd`
 // (m/s) and wall-clock `now` (ms), returns { eye, tgt, fov }. Centralised so
 // the live camera in render(), snapCam() and the previewCam() debug hook frame
@@ -5886,7 +5886,7 @@ let _envProbeOff = false;
 try { _envProbeOff = localStorage.getItem("apex26.envProbeOff") === "1"; } catch (_) {}
 // Same latch for PER-CHUNK LAMPS, set by the same webglcontextlost handler. It
 // is the loop-breaker the crash sentinel cannot be: that ledger is mobile-only
-// (js/game/perf.js gates it on gfx.isMobile so the desktop suite never enters
+// (js/perf/governor.js gates it on gfx.isMobile so the desktop suite never enters
 // safe mode), so on desktop a GPU reset leaves nothing behind and the knob —
 // which IS persisted, in the tuner store — comes straight back on at the next
 // boot into the same configuration that just killed the context.
@@ -6869,7 +6869,7 @@ function render(dt) {
     // earlier: that was ONE large draw, single-digit ms. This is sustained
     // per-fragment cost across the whole frame.)
     //
-    // Composes with the crash sentinel in js/game/perf.js: a player who has
+    // Composes with the crash sentinel in js/perf/governor.js: a player who has
     // already hit a hard failure comes back at a floored tier, which now has
     // the feature off, so the sentinel can actually rescue this case instead of
     // watching it repeat.
@@ -7826,14 +7826,14 @@ function render(dt) {
 let physAcc = 0;                 // leftover sim time carried between frames
 let renderAlpha = 1;             // leftover-step fraction (0..1) for render interpolation
 // Adaptive-resolution governor + feature-shedding tiers + mobile crash
-// sentinel live in js/game/perf.js (PerfGov, initialised at boot with gfx).
+// sentinel live in js/perf/governor.js (PerfGov, initialised at boot with gfx).
 // render() gates features on PerfGov.tier(); tickBody feeds PerfGov.tick(ms).
 PerfGov.init(gfx);
 const PHYS_DT = 1 / 60;          // fixed physics step
 function tick(now) {
   try { tickBody(now); LoopHealth.clean(); requestAnimationFrame(tick); }
   catch (e) {
-    // BOUNDED tolerance, policy in js/game/loop-health.js: a transient fault
+    // BOUNDED tolerance, policy in js/perf/loop-health.js: a transient fault
     // costs one frame and any clean frame pays the run back, because round 13
     // made startRace async and update() can now tick on a null player in the
     // window before makeCars runs — a condition that heals on the next frame
@@ -7974,10 +7974,10 @@ document.addEventListener("pointerdown", () => {
 // UI SIZE / HUD SIZE + RESOLUTION live in js/game/ui-scale.js (UiScale.create(G)
 // — wired after Menus). Bug-explaining comments moved with the block.
 
-// RENDERER cycle lives in js/game/gfx-quality.js with GRAPHICS — wired at
+// RENDERER cycle lives in js/perf/quality-preset.js with GRAPHICS — wired at
 // DOMContentLoaded so SETTINGS shows it during (and after) a deferred backend load.
 
-// GRAPHICS presets + RENDERER cycle live in js/game/gfx-quality.js — it owns
+// GRAPHICS presets + RENDERER cycle live in js/perf/quality-preset.js — it owns
 // #pm-gfx and #pm-renderer for EVERY device, and wires the preset's tier floor
 // into PerfGov.
 // It self-inits at DOMContentLoaded, so there is nothing to call from here.
@@ -8172,7 +8172,7 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 // it's open so the live preview is unobstructed (tick() keeps render() running
 // with physics paused), and DONE returns to it. Rows are generated
 // once from TUNE_DEFS; values persist via localStorage (apex26.lightTune).
-// The LIGHTING TUNER panel UI lives in js/game/tuner.js
+// The LIGHTING TUNER panel UI lives in js/lighting/tuner-panel.js
 // (TunerPanel.create(G) — wired after the G façade).
 
 // ---------- pre-race screens ----------
@@ -8180,7 +8180,7 @@ $("adv-close").onclick = () => { $("advanced").hidden = true; };
 // here to the button wiring below is screen flow, not simulation.
 //
 // This banner used to read "Photo mode (free-fly camera)" and had done since
-// photo mode was extracted to js/game/photomode.js — ~780 lines of unrelated
+// photo mode was extracted to js/camera/photo-cam.js — ~780 lines of unrelated
 // screen code sitting under a heading naming a file that no longer holds any of
 // it. A section banner is the only navigation this file has; one that lies is
 // worse than none.
@@ -8857,7 +8857,7 @@ $("pm-hidehud").onclick = () => {
 $("hud-restore").onclick = () => setHudUserHidden(false);
 
 // ---- player camera modes (CAM button / C key) ----
-// The CAM button + picker grid + mode-cycle wiring live in js/game/cam-modes.js
+// The CAM button + picker grid + mode-cycle wiring live in js/camera/mode-switch.js
 // (broadcast-only — no physics). game.js keeps `camMode`/`camCutT` as closure
 // state (the render loop reads them); the module mutates them through G. The
 // façade exposes setCamMode as a deferred arrow (const initialised here), and
@@ -8908,7 +8908,7 @@ $("pm-steer").onclick = () => {
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 
 // Steering-tuning sliders, presets + macro levels live in
-// js/game/steer-tuning.js (SteerTuning.create(G) — wired after the G façade).
+// js/input/steer-tuning.js (SteerTuning.create(G) — wired after the G façade).
 
 // GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
 // Disabled — not hidden — on BUTTONS/TOUCH (see the pm-calib note in setSteerMode).
@@ -9114,7 +9114,7 @@ Input.init(canvas, { onPause: () => {
   // press there has to close the help sheet, not the menu underneath it (which
   // would leave the help sheet floating over the race with no way back). Reached
   // via the pause BUTTON / gamepad Start — a keyboard Esc never gets here while a
-  // menu sheet is up (onKey returns early on menuOverlayOpen(), js/game/input.js).
+  // menu sheet is up (onKey returns early on menuOverlayOpen(), js/input/input.js).
   if (paused && els.howtoplay && !els.howtoplay.hidden) { els.howtoplay.hidden = true; return; }
   if (paused && els.pmsettings && !els.pmsettings.hidden) { closeSettings(); return; }
   setPaused(!paused);

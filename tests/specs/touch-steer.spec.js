@@ -1,5 +1,5 @@
 // @ts-check
-// Canvas touch steering and on-screen pedal travel — js/game/input.js.
+// Canvas touch steering and on-screen pedal travel — js/input/input.js.
 //
 // NOTHING COVERED ANY OF THIS BEFORE. The whole touch path — the one steering
 // mode aimed squarely at an iPad — had no spec at all: the only canvas

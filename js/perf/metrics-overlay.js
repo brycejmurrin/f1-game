@@ -760,7 +760,7 @@ if (on()) raiseBuffer();
 /* ── SETTINGS > DISPLAY — the METRICS submenu ──────────────────────────
  Folds #pm-metrics / PAGE / LOG NS / LOG SHOW into one <details> under HIDE
  HUD, compact on short/high-scale viewports. Used to be a second IIFE in
- js/game/cockpit-opts.js; it is this overlay's own settings row. */
+ js/camera/cockpit-opts.js; it is this overlay's own settings row. */
 function injectCss() {
   if (document.getElementById("pm-metrics-sub-css")) return;
   var s = document.createElement("style");

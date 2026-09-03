@@ -428,7 +428,7 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
 
 /* ESCAPE IS "BACK" — the contract in js/game/topmodal.js + js/game/uilayers.js.
  *
- * Escape used to be a bare alias for the pause key (js/game/input.js) with no
+ * Escape used to be a bare alias for the pause key (js/input/input.js) with no
  * state check at all, so on a desktop keyboard it meant "pause" on screens
  * where the only sensible answer was "close this", and on the three screens
  * that are still plain <div>s it meant nothing whatsoever. Nothing in the suite

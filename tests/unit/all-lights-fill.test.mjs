@@ -28,7 +28,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // anchor first means this fails loudly if the export list is reformatted,
 // instead of silently testing nothing.
 function loadFill() {
-  const src = readFileSync(path.join(ROOT, "js/game/frame-lights.js"), "utf8");
+  const src = readFileSync(path.join(ROOT, "js/lighting/frame-lights.js"), "utf8");
   const anchor = "  return { setFrameLights, appendCarTailLights };";
   assert.ok(src.includes(anchor), "frame-lights.js export list moved — update this loader");
   const patched = src.replace(anchor,
@@ -38,7 +38,7 @@ function loadFill() {
   sb.Log = { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false };
   vm.createContext(sb);
   // FrameLights destructures LightKnobs.LT at eval — the registry loads first.
-  vm.runInContext(readFileSync(path.join(ROOT, "js/game/lighting-knobs.js"), "utf8"), sb);
+  vm.runInContext(readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8"), sb);
   vm.runInContext(patched, sb);
   const LT = vm.runInContext("FrameLights", sb);
   assert.equal(typeof LT._fillAllLights, "function", "_fillAllLights not exported by the patch");

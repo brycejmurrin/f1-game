@@ -95,7 +95,7 @@ window.TopModal = (function () {
      on `window` would beat it and there would be no way back.
 
      Stopping propagation is the point, not a side effect: it is what keeps the
-     key from also reaching the pause switch in js/game/input.js, which is on
+     key from also reaching the pause switch in js/input/input.js, which is on
      `window` in the BUBBLE phase and therefore downstream of this. When no
      screen claims the key we return WITHOUT stopping anything, so the data
      hub's and the telemetry popup's own document-bubble handlers still work. */

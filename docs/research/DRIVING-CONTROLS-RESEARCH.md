@@ -305,7 +305,7 @@ notch 1 is very numb.
 ## Our racing-line assist already matches the industry vocabulary
 
 F1 uses **Off / Corners Only / Full**. `LINE_LEVELS = { off: 0, corner: 3,
-full: 5 }` in `js/game/steer-tuning.js`, with OFF / CORNERS / FULL buttons, is
+full: 5 }` in `js/input/steer-tuning.js`, with OFF / CORNERS / FULL buttons, is
 character-for-character the same taxonomy. Traction control uses **Off / Medium /
 Full**, which is the same three-step shape.
 

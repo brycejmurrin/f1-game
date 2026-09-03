@@ -111,32 +111,32 @@ const FULL = [
   "js/track/tracks.js",
   "js/track/maps.js",
   "js/car/car3d.js",
-  "js/game/input.js",
-  "js/game/audio.js",
-  "js/game/music-lib.js",
-  "js/game/spotify.js",
-  "js/game/audio-panel.js",
+  "js/input/input.js",
+  "js/audio/engine.js",
+  "js/audio/music-lib.js",
+  "js/audio/spotify.js",
+  "js/audio/panel.js",
   "js/car/parts.js",
   "js/car/liveries.js",
   "js/car/crest-paths.js",
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/physics/consts.js",
-  "js/game/lighting-knobs.js",
-  "js/game/track-lights.js",
-  "js/game/frame-lights.js",
-  "js/game/lighting.js",
-  "js/game/light-store.js",
+  "js/lighting/knobs.js",
+  "js/lighting/track-lights.js",
+  "js/lighting/frame-lights.js",
+  "js/lighting/lighting.js",
+  "js/lighting/profiles.js",
   "js/game/carmesh.js",
   "js/game/garage-scene.js",
   "js/physics/body-attitude.js",
   "js/game/particles.js",
-  "js/game/atmosphere.js",
+  "js/lighting/atmosphere.js",
   "js/career/career.js",
   "js/career/season-cal.js",
   "js/race/reliability.js",
   "js/physics/ai-drive.js",
-  "js/game/cam-tune.js",
+  "js/camera/offsets.js",
   "js/game/setup-ui.js",
   "js/career/career-ui.js",
   "js/career/season-ui.js",
@@ -152,21 +152,21 @@ const FULL = [
   "js/physics/aero-zones.js",
   "js/game/skidmarks.js",
   "js/race/race-control.js",
-  "js/game/photomode.js",
-  "js/game/tuner.js",
-  "js/game/cam-tuner.js",
+  "js/camera/photo-cam.js",
+  "js/lighting/tuner-panel.js",
+  "js/camera/tuner-panel.js",
   "js/physics/brake-cue.js",
-  "js/game/steer-tuning.js",
-  "js/game/perf.js",
-  "js/game/loop-health.js",
-  "js/game/gfx-quality.js",
-  "js/game/renderer-picker.js",
-  "js/game/gfx-debug.js",
+  "js/input/steer-tuning.js",
+  "js/perf/governor.js",
+  "js/perf/loop-health.js",
+  "js/perf/quality-preset.js",
+  "js/perf/renderer-picker.js",
+  "js/perf/gfx-debug-overlay.js",
   "js/game/ui-scale.js",
-  "js/game/cockpit-opts.js",
-  "js/game/metrics.js",
-  "js/game/cameras.js",
-  "js/game/cam-modes.js",
+  "js/camera/cockpit-opts.js",
+  "js/perf/metrics-overlay.js",
+  "js/camera/vantage.js",
+  "js/camera/mode-switch.js",
   "js/game/hud.js",
   "js/game/results.js",
   "js/race/quali-model.js",
@@ -338,7 +338,7 @@ const HARD_EDGES = [
   // js/data's own eval-time edges moved to LAZY_DATA_EDGES when the hub left
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
   ["js/physics/consts.js", "js/game/hud.js"], // hud destructures IDLE_RPM/MAX_RPM at eval
-  ["js/game/cam-modes.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
+  ["js/camera/mode-switch.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
   ["js/car/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
@@ -352,7 +352,7 @@ const HARD_EDGES = [
   // monogram because a tag moved is exactly the kind of quiet regression the
   // load-order guard exists to prevent.
   ["js/car/crest-paths.js", "js/car/liverytex.js"],
-  ["js/core/store.js", "js/game/cam-tune.js"],  // cam-tune destructures GameStore at eval
+  ["js/core/store.js", "js/camera/offsets.js"],  // cam-tune destructures GameStore at eval
   ["js/core/store.js", "js/career/career.js"],    // career destructures GameStore at eval
   ["js/core/store.js", "js/career/season-cal.js"], // season-cal destructures GameStore at eval
   ["js/career/season-cal.js", "js/career/season-ui.js"], // the screen reads the season rules
@@ -363,14 +363,14 @@ const HARD_EDGES = [
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
   ["js/game/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create(G) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
-  ["js/game/lighting-knobs.js", "js/game/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
-  ["js/game/lighting-knobs.js", "js/game/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
-  ["js/game/lighting-knobs.js", "js/game/lighting.js"],      // the LightTune façade re-exports TUNE_DEFS/LT at eval
-  ["js/game/track-lights.js", "js/game/lighting.js"],        // …and buildTrackLights/lampStrideNodes
-  ["js/game/frame-lights.js", "js/game/lighting.js"],        // …and setFrameLights/appendCarTailLights
-  ["js/game/lighting.js", "js/game/light-store.js"],  // light-store destructures LightTune's TUNE_DEFS/LT inside create()
-  ["js/game/light-store.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
-  ["js/game/audio-panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time
+  ["js/lighting/knobs.js", "js/lighting/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
+  ["js/lighting/knobs.js", "js/lighting/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
+  ["js/lighting/knobs.js", "js/lighting/lighting.js"],      // the LightTune façade re-exports TUNE_DEFS/LT at eval
+  ["js/lighting/track-lights.js", "js/lighting/lighting.js"],        // …and buildTrackLights/lampStrideNodes
+  ["js/lighting/frame-lights.js", "js/lighting/lighting.js"],        // …and setFrameLights/appendCarTailLights
+  ["js/lighting/lighting.js", "js/lighting/profiles.js"],  // light-store destructures LightTune's TUNE_DEFS/LT inside create()
+  ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
+  ["js/audio/panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time
   ["js/game/ui-scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/career/career.js", "js/race/reliability.js"],  // reliability draws through Career.hash (call time, keep ordered)
   ["js/car/parts.js", "js/race/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
@@ -448,11 +448,11 @@ const LAZY_EDGES = [
 // a menu — so it must not sit in the boot script wall, which is the one perf
 // number this box can measure honestly (docs/PERF-FINDINGS.md §0).
 // light-presets.js is 338 KB of baked per-condition lighting whose ONLY reader
-// is js/game/light-store.js, and that reads window.LightPresets at CALL time
+// is js/lighting/profiles.js, and that reads window.LightPresets at CALL time
 // (base()/layers()), not at eval — so an absent file resolves to TUNE_DEFS
 // defaults rather than throwing, and game.js re-applies once it lands.
 const LAZY_RACE = [
-  "js/game/light-presets.js",
+  "js/lighting/presets.js",
 ];
 
 // THE DATA HUB (js/data/*), 154 KB behind ONE menu button. Jolpica/OpenF1
@@ -563,6 +563,32 @@ const sceneryPath = (id) => `${SCENERY_DIR}/${id}.js`;
 // tools/deploy.mjs can name the new path when another session's edit to the
 // old one conflicts. Prune entries once every in-flight branch has rebased.
 const MOVED = {
+  "js/game/light-store.js": "js/lighting/profiles.js",
+  "js/game/light-presets.js": "js/lighting/presets.js",
+  "js/game/atmosphere.js": "js/lighting/atmosphere.js",
+  "js/game/tuner.js": "js/lighting/tuner-panel.js",
+  "js/game/cameras.js": "js/camera/vantage.js",
+  "js/game/cam-tune.js": "js/camera/offsets.js",
+  "js/game/cam-modes.js": "js/camera/mode-switch.js",
+  "js/game/cam-tuner.js": "js/camera/tuner-panel.js",
+  "js/game/photomode.js": "js/camera/photo-cam.js",
+  "js/game/cockpit-opts.js": "js/camera/cockpit-opts.js",
+  "js/game/audio.js": "js/audio/engine.js",
+  "js/game/audio-panel.js": "js/audio/panel.js",
+  "js/game/music-lib.js": "js/audio/music-lib.js",
+  "js/game/spotify.js": "js/audio/spotify.js",
+  "js/game/perf.js": "js/perf/governor.js",
+  "js/game/loop-health.js": "js/perf/loop-health.js",
+  "js/game/gfx-quality.js": "js/perf/quality-preset.js",
+  "js/game/metrics.js": "js/perf/metrics-overlay.js",
+  "js/game/gfx-debug.js": "js/perf/gfx-debug-overlay.js",
+  "js/game/input.js": "js/input/input.js",
+  "js/game/steer-tuning.js": "js/input/steer-tuning.js",
+  "js/game/lighting-knobs.js": "js/lighting/knobs.js",
+  "js/game/track-lights.js": "js/lighting/track-lights.js",
+  "js/game/frame-lights.js": "js/lighting/frame-lights.js",
+  "js/game/lighting.js": "js/lighting/lighting.js",
+  "js/game/renderer-picker.js": "js/perf/renderer-picker.js",
   "js/log.js": "js/core/log.js",
   "js/mat4.js": "js/core/mat4.js",
   "js/game/store.js": "js/core/store.js",

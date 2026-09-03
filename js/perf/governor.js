@@ -218,7 +218,7 @@ let _autoShed = 0;
 // they survive into `__apex.perf()` for as long as the race does.
 const OPEN_FRAMES = 600;   // ~10 s at 60 fps, ~20 s at 30
 let _openN = 0, _openMax = 0, _openSlow = 0;
-// The USER's floor, from the GRAPHICS preset (js/game/gfx-quality.js). It is a
+// The USER's floor, from the GRAPHICS preset (js/perf/quality-preset.js). It is a
 // third term in tier()'s max(), and that is the whole interaction rule:
 //
 //   a manual choice sets the FLOOR of degradation, never the ceiling.
@@ -296,7 +296,7 @@ function cleanRace() {
     // crash — or one sentinel trip that was never a crash — silently pinned
     // those features off until the page happened to reload, no matter what the
     // player set GRAPHICS to. On mobile the one preset switch that DOES force a
-    // reload is ULTRA (it flips the mobileHigh bit, see js/game/gfx-quality.js
+    // reload is ULTRA (it flips the mobileHigh bit, see js/perf/quality-preset.js
     // syncBootTier), which is why the symptom reads as "wet sheen and per-chunk
     // only work on ULTRA" rather than as a stuck floor.
     // clearStrikes() recomputes the floor the same way; both paths then release

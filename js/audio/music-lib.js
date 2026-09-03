@@ -12,7 +12,7 @@
  * encode). One four-minute MP3 blows the whole quota. IndexedDB stores Blobs
  * natively, asynchronously, with a quota measured in a share of free disk, and
  * hands the bytes back as a Blob we can turn into an object URL that the
- * existing fetch()+decodeAudioData path in js/game/audio.js already knows how
+ * existing fetch()+decodeAudioData path in js/audio/engine.js already knows how
  * to play. The rest of the game's persistence (js/core/store.js) stays on
  * localStorage — this is the one thing that cannot live there.
  *
@@ -120,7 +120,7 @@ window.MusicLib = (function () {
     }));
   }
 
-  // The playlist id namespace is a contract with js/game/audio.js: user uploads
+  // The playlist id namespace is a contract with js/audio/engine.js: user uploads
   // are "user:<db id>", shipped tracks are "builtin:<name>". Never mint or
   // remove an id outside our own prefix.
   const pid = (id) => "user:" + id;

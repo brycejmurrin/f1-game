@@ -260,7 +260,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
       eye = [extra.carPos[0] + hx * eyeFwd, p[1] + eyeUp, extra.carPos[1] + hz * eyeFwd];
       const aimUp = mode === "cockpit" ? eyeUp - 0.15 : eyeUp + 1.2;
-      // TURN CHASING (SETTINGS > COCKPIT, default OFF — js/game/cockpit-opts.js).
+      // TURN CHASING (SETTINGS > COCKPIT, default OFF — js/camera/cockpit-opts.js).
       // At 0 the aim is the car's heading and NOTHING else, which is the state
       // AGENTS.md's "the arc must not reach the driver" rule asks for: no read of
       // curvature or the racing line reaches the player unless they switch it on.
@@ -391,7 +391,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     }
     fov = lerp(57, 63, spN) + (far ? 4 : 0) + dep * 3;
   }
-  // Per-mode HEIGHT/DISTANCE/SIDE/PITCH/YAW/FOV nudges from js/game/cam-tune.js,
+  // Per-mode HEIGHT/DISTANCE/SIDE/PITCH/YAW/FOV nudges from js/camera/offsets.js,
   // applied to the solved rig rather than baked into each branch — one place to
   // reason about, and every mode gets the same six knobs for free. A no-op (and
   // an early return inside apply()) until the player actually tunes something,

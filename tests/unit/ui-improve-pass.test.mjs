@@ -344,7 +344,7 @@ test("title keyboard navigation has an explicit default before stateful controls
 });
 
 test("tuner tabs scroll the selected chip into view", () => {
-  for (const file of ["js/game/tuner.js", "js/game/cam-tuner.js"]) {
+  for (const file of ["js/lighting/tuner-panel.js", "js/camera/tuner-panel.js"]) {
     const s = code(file);
     assert.match(s, /scrollIntoView\(\s*\{[^}]*\bblock:\s*"nearest"[^}]*\binline:\s*"center"[^}]*\}\s*\)|scrollIntoView\(\s*\{[^}]*\binline:\s*"center"[^}]*\bblock:\s*"nearest"[^}]*\}\s*\)/, `${file} centres the selected chip`);
   }
@@ -357,7 +357,7 @@ test("camera reset actions state their scope", () => {
 });
 
 test("lighting tuner preview uses G facade, not __apex (Pages has no agent surface)", () => {
-  const lighting = code("js/game/tuner.js");
+  const lighting = code("js/lighting/tuner-panel.js");
   assert.doesNotMatch(lighting, /__apex/);
   assert.match(lighting, /\bsetTimeOfDay\b/);
   assert.match(lighting, /\bweather\b/);
@@ -365,8 +365,8 @@ test("lighting tuner preview uses G facade, not __apex (Pages has no agent surfa
 
 test("generated lighting and camera tabs carry the complete tab contract", () => {
   const html = read("index.html");
-  const lighting = code("js/game/tuner.js");
-  const camera = code("js/game/cam-tuner.js");
+  const lighting = code("js/lighting/tuner-panel.js");
+  const camera = code("js/camera/tuner-panel.js");
 
   assert.match(html, /id="lt-tabs"[^>]*role="tablist"[^>]*aria-label="Lighting categories"/);
   assert.match(html, /id="ct-modes"[^>]*role="tablist"[^>]*aria-label="Camera modes"/);
@@ -482,7 +482,7 @@ test("an active career locks team and seat selection in the garage", () => {
 function bootCamModes(camMode = 2) {
   const dom = makeDom();
   const sb = uiSandbox(dom, { CamTunerPanel: { refresh() {} } });
-  vm.runInNewContext(src("js/game/cam-modes.js"), sb, { filename: "js/game/cam-modes.js" });
+  vm.runInNewContext(src("js/camera/mode-switch.js"), sb, { filename: "js/camera/mode-switch.js" });
   const store = {};
   const G = { $: (id) => dom.byId(id), camMode, camCutT: 0, store: { set: (k, v) => { store[k] = v; }, get: () => null } };
   const api = sb.CamModes.create(G);
@@ -597,7 +597,7 @@ test("variable control clusters use one content-driven balanced-row primitive", 
     assert.match(html, new RegExp(`id="${id}"[^>]*class="[^"]*balanced-row`), `${id} must balance from local space`);
   }
   assert.equal(bootCamModes().open().className, "balanced-row", "the camera picker is a balanced-row too");
-  const all = [html, read("css/components.css"), read("css/menus.css"), read("css/tuner.css"), read("js/game/cam-modes.js")].join("\n");
+  const all = [html, read("css/components.css"), read("css/menus.css"), read("css/tuner.css"), read("js/camera/mode-switch.js")].join("\n");
   assert.doesNotMatch(all, /no-orphan-[235]/, "column-count-specific orphan patches must not return");
   assert.ok(!rulesFor(css("css/menus.css"), /#rs-(?:laps|weather|diff|time)\b/).some((r) => /^repeat\([235]/.test(r.decls.get("grid-template-columns") || "")));
 });
@@ -632,7 +632,7 @@ function bootInput() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/game/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
   const Input = vm.runInContext("Input", ctx);
   const pad = (ax, buttons = [], ax2 = 0) => ({
     connected: true, axes: [ax, 0, ax2, 0],
@@ -757,7 +757,7 @@ test("dense sheets preserve a functional content height at extreme UI size", () 
 test("garage preview chips hug the sheet and season quali is a label", () => {
   const garage = css("css/carsetup.css");
   const game = code("js/game.js");
-  const spotify = code("js/game/spotify.js");
+  const spotify = code("js/audio/spotify.js");
   assert.equal(decl(garage, "#cs-stack", "left"), "auto");
   assert.equal(decl(garage, "#cs-stack", "width"), "max-content");
   assert.ok(!declares(garage, "#cs-stack", "left", /calc\(var\(--safe-l\)/));
@@ -852,7 +852,7 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
 });
 
 /* ── TunerPanel COPY VALUES in a VM ─────────────────────────────────────── */
-// The lt-* buttons (help toggle, RESET, COPY VALUES) are wired by js/game/tuner.js;
+// The lt-* buttons (help toggle, RESET, COPY VALUES) are wired by js/lighting/tuner-panel.js;
 // they used to ride in photomode.js, which is photo mode only now.
 function bootCopyValues(opts = {}) {
   const dom = makeDom();
@@ -864,7 +864,7 @@ function bootCopyValues(opts = {}) {
   });
   sb.document.execCommand = (c) => { order.push("execCommand:" + c); return !!opts.execOk; };
   const ctx = vm.createContext(sb);
-  vm.runInContext(src("js/game/tuner.js"), ctx, { filename: "js/game/tuner.js" });
+  vm.runInContext(src("js/lighting/tuner-panel.js"), ctx, { filename: "js/lighting/tuner-panel.js" });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, els: { pmsettings: {} },
     ltKey: () => opts.here || "monza|dusk|dry", setLightTune() {}, persistLightTune() {}, applyLightTune() {},

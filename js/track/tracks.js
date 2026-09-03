@@ -2210,7 +2210,7 @@ const Tracks = (function () {
       //                           exact thing the field was added to stop
       //   undulate              buildCenterline — the opt-out could not be taken
       // This trap has bitten before and was fixed for ONE field only (see the
-      // `pal` note in js/game/atmosphere.js); nobody swept the rest. The guard
+      // `pal` note in js/lighting/atmosphere.js); nobody swept the rest. The guard
       // in tests/unit/circuit-def-fields.test.mjs is what stops the sixth.
       sunAzimBias: d.sunAzimBias,
       sceneryTheme: d.sceneryTheme,

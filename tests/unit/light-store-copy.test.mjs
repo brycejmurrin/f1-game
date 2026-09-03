@@ -1,7 +1,7 @@
 /* light-store-copy.test.mjs — COPY ALL must land the right values on the right
  * profiles, and land NOTHING anywhere else.
  *
- * `LightStore.copyToTracks` (js/game/light-store.js) is the only operation in the
+ * `LightStore.copyToTracks` (js/lighting/profiles.js) is the only operation in the
  * game that writes lighting profiles the player is not looking at: it takes the
  * condition on screen and spreads it to every other circuit at the same
  * time-of-day and weather. That makes two ordinary mistakes expensive rather than
@@ -77,8 +77,8 @@ function loadStore({ presets = {}, saved = null, track = "bahrain", tod = "dusk"
     Math, JSON, Object, Array, Number, isFinite, console,
   });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/game/light-store.js"), "utf8"), ctx,
-    { filename: "js/game/light-store.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/lighting/profiles.js"), "utf8"), ctx,
+    { filename: "js/lighting/profiles.js" });
   const store = vm.runInContext("LightStore", ctx).create(G);
   const LT = vm.runInContext("LightTune.LT", ctx);
   // Switch the live conditions the way applyRaceSettings does: set, then re-apply.

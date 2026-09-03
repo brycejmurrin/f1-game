@@ -1,6 +1,6 @@
 > **Dated record (2026-08).** Source synthesis behind the steering redesign,
 > kept for the citations; the shipped implementation lives in
-> `js/game/input.js` and `js/game/steer-tuning.js`.
+> `js/input/input.js` and `js/input/steer-tuning.js`.
 
 # Steering Redesign — Research Synthesis
 

@@ -506,7 +506,7 @@ the pack lands asynchronously. That is the same trick `setEnvCube` already used.
 
 Both consumers now exist:
 
-- **`Assets.env()` is wired into `applyRaceSettings`** (`js/game/atmosphere.js`),
+- **`Assets.env()` is wired into `applyRaceSettings`** (`js/lighting/atmosphere.js`),
   applied straight after the palette base and before the weather branches — so a
   measured sky replaces the hand-picked hemisphere colours while overcast/rain/fog
   still scale it. No shader change, as predicted in §3.4.

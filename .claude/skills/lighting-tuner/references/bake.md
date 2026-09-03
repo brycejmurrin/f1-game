@@ -13,7 +13,7 @@ textarea or paste into a message. It now exports only the local overrides, as
 `window.LightEdits`, current condition first. That is a DELTA: feeding it to
 `bake.mjs` would write those few keys and delete ~800 others, so `bake.mjs`
 refuses it by name and points here. Either way this skill writes shipped
-`js/game/light-presets.js`, bumps cache, and commits. localStorage still
+`js/lighting/presets.js`, bumps cache, and commits. localStorage still
 outranks the file until RESET.
 
 Live knob work without a paste → the lighting-tuner index (`SKILL.md`).
@@ -44,7 +44,7 @@ node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs artifacts/tmp/edi
 ## Capture, review, ship
 
 Load this when you have a blob and are ready to write
-`js/game/light-presets.js`. Check the first line first: `window.LightEdits` is a
+`js/lighting/presets.js`. Check the first line first: `window.LightEdits` is a
 delta and goes through the merge path below; only `window.LightPresets` reaches
 `bake.mjs`. The index's CRITICAL full-replace rule still applies — a partial
 object handed to `bake.mjs` wipes every other key.
@@ -78,7 +78,7 @@ comments the export writes between blocks are fine.
 If you only need to update ONE `track|tod|weather` (or `"*"`) key and do not
 have a fresh COPY VALUES export, do **not** feed `bake.mjs` a one-key object:
 
-1. Read `js/game/light-presets.js` and parse the existing
+1. Read `js/lighting/presets.js` and parse the existing
    `window.LightPresets` object (plain JSON after the assignment).
 2. `Object.assign` just that key's new value — leave every other key.
 3. Write the whole object back as `window.LightPresets = {…};` and
@@ -114,8 +114,8 @@ through the merge path above.
 
 3. **Review + syntax-check:**
    ```sh
-   git --no-pager diff js/game/light-presets.js index.html version.json
-   node --check js/game/light-presets.js
+   git --no-pager diff js/lighting/presets.js index.html version.json
+   node --check js/lighting/presets.js
    ```
    Every key should look like `track|tod|weather`. A typo'd knob id is
    silently ignored at runtime — stop and ask.
@@ -124,7 +124,7 @@ through the merge path above.
 
 5. **Commit + push** to the active feature branch (never `main`):
    ```sh
-   git add js/game/light-presets.js index.html version.json
+   git add js/lighting/presets.js index.html version.json
    git commit -m "Bake lighting presets: <which tracks/conditions>"
    git push -u origin <dev-branch>
    ```
@@ -132,7 +132,7 @@ through the merge path above.
 ### Notes
 
 - Helper takes a file arg OR stdin (`bake.mjs - < blob`).
-- Only `js/game/light-presets.js` changes the shipped look; a player's
+- Only `js/lighting/presets.js` changes the shipped look; a player's
   localStorage still overrides until RESET.
 - Parse failure writes nothing — usually a stray trailing comma.
 - Regex failure (`Could not find the window.LightPresets assignment`): the

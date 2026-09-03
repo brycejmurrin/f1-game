@@ -9,7 +9,7 @@
 //
 // CAM_MODES is the player camera list — index IS `camMode` (persisted as
 // apex26.camMode, so the order is a save-format contract; append, never
-// reorder). js/game/cameras.js resolves each id to a rig; cam-tuner.js,
+// reorder). js/camera/vantage.js resolves each id to a rig; cam-tuner.js,
 // apex.js, agentview.js and game.js read it through CamModes.CAM_MODES.
 window.CamModes = (function () {
   const CAM_MODES = [

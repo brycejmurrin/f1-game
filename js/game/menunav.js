@@ -25,7 +25,7 @@
 window.MenuNav = (function () {
 
   // The menu LAYERS and "which one is on top" both live in js/game/uilayers.js
-  // now — js/game/input.js and js/game/topmodal.js ask the same module the same
+  // now — js/input/input.js and js/game/topmodal.js ask the same module the same
   // question, which is the whole point of it. This file used to carry its own
   // copy of the list, and the copies drifted by five screens.
   const UL = window.UiLayers;
@@ -46,7 +46,7 @@ window.MenuNav = (function () {
 
   /* THE FREE CAMERA IS NOT A MENU, and this is the one layer MenuNav has to
      refuse. In the tuner's fly-cam the arrow keys PITCH AND YAW the camera
-     (js/game/photomode.js) — but that handler is added when free-cam opens,
+     (js/camera/photo-cam.js) — but that handler is added when free-cam opens,
      which puts it AFTER this one among window-capture listeners, so whatever
      MenuNav does with an arrow happens first. Left to itself it would walk
      focus around the fly-cam's own EXIT/FOV buttons and preventDefault the key
@@ -508,7 +508,7 @@ window.MenuNav = (function () {
     // page keeps its own (no-op) scroll and the gesture double-counts on the
     // platforms that do rubber-band.
     window.addEventListener("wheel", onWheel, { passive: false, capture: true });
-    // Capture, so this runs before the driving handler in js/game/input.js.
+    // Capture, so this runs before the driving handler in js/input/input.js.
     window.addEventListener("keydown", onKeyDown, true);
   }
 
@@ -517,7 +517,7 @@ window.MenuNav = (function () {
   else init();
 
   // FOCUSABLE is exported so a second caller (the gamepad A-button seam in
-  // js/game/input.js) can ask "is this a real actionable control" without a
+  // js/input/input.js) can ask "is this a real actionable control" without a
   // second copy of the selector to drift out of step with this one.
   // items / currentItem: js/game/topmodal.js lands focus on a freshly shown
   // non-dialog screen with the same rule the first arrow press uses.

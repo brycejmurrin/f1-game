@@ -1,4 +1,4 @@
-/* Apex 26 — the LIGHTING TUNER panel UI for js/game.js: slider rows generated from TUNE_DEFS, group tabs, preview time-of-day/weather chips, COPY TO ALL TRACKS, the help toggle and the RESET / COPY VALUES export (window.LightEdits), open/close. The knob registry is js/game/lighting-knobs.js; profile resolution is js/game/light-store.js. */
+/* Apex 26 — the LIGHTING TUNER panel UI for js/game.js: slider rows generated from TUNE_DEFS, group tabs, preview time-of-day/weather chips, COPY TO ALL TRACKS, the help toggle and the RESET / COPY VALUES export (window.LightEdits), open/close. The knob registry is js/lighting/knobs.js; profile resolution is js/lighting/profiles.js. */
 const TunerPanel = (function () {
   "use strict";
 
@@ -88,7 +88,7 @@ function buildLtPreview() {
 // COPY TO ALL TRACKS. Every other control in this panel edits the ONE
 // (track, time-of-day, weather) profile named above it; these two write the same
 // values into every OTHER track at that same time and weather
-// (LightStore.copyToTracks — js/game/light-store.js owns the semantics):
+// (LightStore.copyToTracks — js/lighting/profiles.js owns the semantics):
 //   MY EDITS  — only this profile's own overrides, merged over each target's, so
 //               a circuit keeps its shipped character for untouched knobs.
 //   FULL LOOK — every live value, so they all render identically. This overrides

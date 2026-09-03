@@ -175,7 +175,7 @@ const AgentRaster = (function () {
         // puts the eye INSIDE the player's own box, whose corners then project
         // to both sides of the near plane and paint most of the grid "player".
         // The centre-in-front-of-eye gate in boxRect does not catch it, because
-        // COCKPIT_EYE_FWD is -0.20 (js/game/cameras.js) — the eye sits BEHIND
+        // COCKPIT_EYE_FWD is -0.20 (js/camera/vantage.js) — the eye sits BEHIND
         // the car's centre, so the centre is legitimately in shot while the car
         // around it is not something the driver can see.
         if (containsEye(eye, wx, 0.55, wz, 1.1, 0.55, 2.6)) continue;

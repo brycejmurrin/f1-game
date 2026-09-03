@@ -71,7 +71,7 @@ TSL post chain; stamps `renderOrder` for FX/glass.
 
 | Key | Role |
 |---|---|
-| `apex26.gfxBackend` | Pick: `webgl2` / `three` / `webgpu` (picked in `js/game/renderer-picker.js`) |
+| `apex26.gfxBackend` | Pick: `webgl2` / `three` / `webgpu` (picked in `js/perf/renderer-picker.js`) |
 | `apex26.gfxBackendProbe` | Canary armed around claim / first world `present()` |
 | `apex26.gfxClaimFail` (session) | Skip opt-in after canvas claim-and-die |
 | `apex26.gfxBound` (session) | Live fallback label while the pick stays |

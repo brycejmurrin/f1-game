@@ -236,7 +236,7 @@ The bug itself: the night lamp cull ranks lamps by a camera-forward-BIASED
 distance, then faded their brightness against that same biased set's edge — so a
 stationary lamp changed brightness when the player only turned. Measured with the
 eye pinned and the aim swept ±60°: lamps swinging 5.01×, 2.99×, 2.86×, 2.77×,
-2.55×. Fixed in `js/game/lighting.js` (fade on the lamp's own geometric distance
+2.55×. Fixed in `js/lighting/lighting.js` (fade on the lamp's own geometric distance
 against a direction-free radius; the biased edge survives only as a narrow
 continuity guard) — the same five lamps then measured 2.07×, 1.07×, 1.01×, 1.00×,
 1.00×. **A "control" run is only a control if it varied the thing you think it
@@ -320,7 +320,7 @@ that are the whole point of the next section:
 
 Two distinct defects were hiding in there, and both are worth knowing:
 
-- **`window.LightTune` is undefined, and always was.** `js/game/lighting.js`
+- **`window.LightTune` is undefined, and always was.** `js/lighting/lighting.js`
   declares `const LightTune = (function () {`, and a top-level `const` in a
   CLASSIC script creates a **script-scoped binding, not a property of `window`**
   — unlike `var` or the explicit `window.X =` form that `ariastate.js`,
@@ -368,7 +368,7 @@ runner, with failures the local box never produced:
 Verified after all four fixes: **5/5 pass** solo on a quiet box at
 177.8 / 175.4 / 155.0 / 140.7 / 52.3 s.
 
-**Why it rotted:** `tools/pick-tests.mjs` maps `js/game/lighting.js` to the
+**Why it rotted:** `tools/pick-tests.mjs` maps `js/lighting/lighting.js` to the
 `webgl` group correctly, so a local `pick-tests` run would have named it.
 (SUPERSEDED since: ci.yml's `selected` job is now the change-aware gate and is
 BLOCKING on branch pushes and pull requests, so this class of red no longer
@@ -433,7 +433,7 @@ Apply that discount to everything in §3.
   query — it breaks z-index ties by document order.
 - **Audio**: one shared white-noise buffer for the one-shots instead of a fresh
   main-thread `Math.random()` fill per hit; five provably-constant
-  `setTargetAtTime` calls per frame removed. `js/game/audio.js`.
+  `setTargetAtTime` calls per frame removed. `js/audio/engine.js`.
 - **Four `backdrop-filter` chips** over the garage's live turntable canvas — the
   rule `hud.css` and `overlays.css` already state, applied to the one screen
   that missed it.
@@ -611,7 +611,7 @@ masks are products of `smoothstep()`s, hence in [0,1].
 
 Two more taken away from the renderer, both "a writer nobody re-checked":
 
-- **`js/game/audio.js` had a SIXTH constant `setTargetAtTime`**, missed by the
+- **`js/audio/engine.js` had a SIXTH constant `setTargetAtTime`**, missed by the
   pass that removed five from the same function. `lfoG.gain` has exactly two
   writers — `.value = 0` at node creation and this line — so while the car is
   on-track (the overwhelming majority of frames) it scheduled target 0 onto a
@@ -656,7 +656,7 @@ The biggest finding of the whole exercise, and the one most worth the method
 note: it was found by reading a control loop as arithmetic, and settled in
 thirty seconds by a float trace.
 
-**`js/game/perf.js` — with `_autoRes` on (the shipped default) the governor
+**`js/perf/governor.js` — with `_autoRes` on (the shipped default) the governor
 could scale down and then did nothing, forever. No tier was ever shed by
 evidence.** The structure was:
 
@@ -709,7 +709,7 @@ sets `envReady = true` on a completed cube and only ever clears it in
 `envProbeReset()` — whose sole caller was the track switch. So `uEnvStr` stayed
 at `carEnvCube` (0.3 on desktop) and every car-paint fragment kept paying a
 4x-anisotropic dependent `textureLod` on a **frozen** cube. Worse than the wasted
-fetch: `js/game/perf.js` documents tier 1 as *"env probe off (car paint falls
+fetch: `js/perf/governor.js` documents tier 1 as *"env probe off (car paint falls
 back to the analytic sky mirror)"* and **that fallback never happened** — the
 paint mirrored wherever the car was when the last 6-face cycle completed. One
 line at the gate now resets it, and the dev-API `envProbe` status field reports
@@ -1637,11 +1637,11 @@ state and must stay green.
 *policy* — one throw ends the session — left every other transient fault just as
 fatal, and `startRace` is async now, so that window is real.
 
-`tick()` now delegates to `js/game/loop-health.js`: a run of consecutive faults
+`tick()` now delegates to `js/perf/loop-health.js`: a run of consecutive faults
 is tolerated and **any clean frame pays the run back to zero**; at the cap it
 reports through `window.__apexReportError` and rethrows exactly as before, so a
 deterministic fault still stops loudly instead of repainting the error overlay
-60x/s. This follows the retry shape the codebase already uses — `js/game/perf.js`
+60x/s. This follows the retry shape the codebase already uses — `js/perf/governor.js`
 caps crash-sentinel strikes and lets clean races pay them back, `js/render/glx.js`
 bounds context-loss reloads at two per tab session.
 
@@ -2146,7 +2146,7 @@ render-object churn and left the rest. This is the rest, and it is one line.
 
 §2o guessed per-chunk lamp bindings. Checked before writing any code, as that
 entry insists: `tlx.js` declares `hasPerChunkLights: false` (GLX and WGX are
-`true`), and `js/game/lighting.js` says so in prose too — "WebGL2 and WebGPU —
+`true`), and `js/lighting/lighting.js` says so in prose too — "WebGL2 and WebGPU —
 three.js keeps the single global set". **The hypothesis was dead on arrival.**
 It cost one grep instead of a round.
 
@@ -2406,7 +2406,7 @@ citable:
    copy per presented frame. That is CPU-bound, and `PerfGov`'s `_scaleFutile`
    exists precisely so a CPU-bound frame skips the useless resolution lever and
    drops straight onto the tier ladder.
-4. `js/game/perf.js` rung **1 is "env probe off"**. `game.js:6961` gates the
+4. `js/perf/governor.js` rung **1 is "env probe off"**. `game.js:6961` gates the
    producer on `PerfGov.tier() < 1`, and `game.js:6976` is the consumer half:
    `else if (PerfGov.tier() >= 1 && gfx.envProbeReady()) gfx.envProbeReset();`
    — which clears `envReady`.
@@ -2930,7 +2930,7 @@ exists, check that the state it defends is still reachable.
 Do not re-investigate these; they were checked and are fine.
 
 `js/game/particles.js` (struct-of-arrays pool, zero steady-state allocation),
-`js/game/skidmarks.js`, `js/game/perf.js`, `js/physics/body-attitude.js`,
+`js/game/skidmarks.js`, `js/perf/governor.js`, `js/physics/body-attitude.js`,
 `js/game/hud.js` (fully write-cached via WeakMaps, no layout reads anywhere —
 the best-behaved file audited), the `LIT_FS` point-light loop, `GLXChunked`
 frustum culling, the bloom skip, `cssSize()` caching, and the spatial grid
@@ -3021,7 +3021,7 @@ the 3×2 `.hud-bottom` grid).
 
 ### Steering felt twice as sharp, off one `innerWidth`
 
-`touchRangePx()` in `js/game/input.js` scaled the anchored-drag range by
+`touchRangePx()` in `js/input/input.js` scaled the anchored-drag range by
 `innerWidth`. That is the LONG edge in landscape and the SHORT edge in
 portrait, so the identical thumb gesture meant twice as much lock the moment
 the phone turned: `393 x 0.12` = 47.2px to full lock against `852 x 0.12` =
@@ -3047,7 +3047,7 @@ Worth recording because it is the natural suspicion and it is wrong. The
 fixed-step loop has no orientation term; `#rotate-device` is `{gate:false}` in
 `js/game/uilayers.js`, so keyboard and canvas-drag steering already drove
 straight through the blocker; and the tilt axis mapping already handles all
-four screen angles with portrait as its `default` case (`js/game/input.js`).
+four screen angles with portrait as its `default` case (`js/input/input.js`).
 Portrait racing was blocked by exactly one CSS rule and one opaque div.
 
 ### The blocker stays; portrait becomes an opt-in
@@ -3445,7 +3445,7 @@ re-sniffs `navigator`.
 
 **Axis 2 — the GOVERNOR's cost tier.** `PerfGov.tier()` is
 `max(_perfTierFloor, _userTier, _perfTier)`, and `_userTier` comes from the
-GRAPHICS preset (`js/game/gfx-quality.js`): LOW 4, MEDIUM 2, HIGH 0, ULTRA 0.
+GRAPHICS preset (`js/perf/quality-preset.js`): LOW 4, MEDIUM 2, HIGH 0, ULTRA 0.
 The preset persists through `GameStore` as `apex26.gfxPreset`, a JSON string —
 so a probe sets it as `--ls 'apex26.gfxPreset="low"'`, quotes included.
 
@@ -3512,7 +3512,7 @@ rAF frames in a 17.5 s window : 2          -> 0.11 fps
 __apex.perf() in that same page: { fps: 59.9, floorMs: 16.7, tier: 0, scale: 1 }
 ```
 
-Nothing had stepped, because nothing had been seen. `js/game/perf.js` `tick()`
+Nothing had stepped, because nothing had been seen. `js/perf/governor.js` `tick()`
 gated the whole measurement on
 
 ```js

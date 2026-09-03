@@ -1,5 +1,5 @@
 // @ts-check
-// The STEER_SCHEMA store migration in js/game/steer-tuning.js.
+// The STEER_SCHEMA store migration in js/input/steer-tuning.js.
 //
 // migrateSteerStore() is the only code in the game that OVERWRITES a setting the
 // player chose. It exists because `store.get(k, d)` returns the stored value
@@ -54,9 +54,9 @@ function readStore(page, keys) {
 // __apex hook for it — this is a tests-only change, and the served source is
 // ground truth anyway.
 async function currentSchema(page) {
-  const src = await (await page.request.get("/js/game/steer-tuning.js")).text();
+  const src = await (await page.request.get("/js/input/steer-tuning.js")).text();
   const m = src.match(/const\s+STEER_SCHEMA\s*=\s*(\d+)/);
-  expect(m, "STEER_SCHEMA not found in js/game/steer-tuning.js").not.toBeNull();
+  expect(m, "STEER_SCHEMA not found in js/input/steer-tuning.js").not.toBeNull();
   return Number(m[1]);
 }
 
@@ -129,7 +129,7 @@ test.describe("steering-store schema migration", () => {
     await boot(page);
 
     // THE INVARIANT: a migration must run ONCE PER VERSION, not once ever.
-    // The guard in js/game/steer-tuning.js used to be a single `>= STEER_SCHEMA`
+    // The guard in js/input/steer-tuning.js used to be a single `>= STEER_SCHEMA`
     // gate, so the moment STEER_SCHEMA became 3 a store sitting at 2 fell
     // straight through it and got V2'S RESET APPLIED A SECOND TIME — silently
     // discarding a driving-help or racing-line value the player chose on purpose

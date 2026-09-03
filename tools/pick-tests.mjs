@@ -41,6 +41,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -122,21 +123,21 @@ export const RULES = [
   // circuit/foundation/scenery sets, so the SPEC union is unchanged.
   [/^js\/game\.js/, ["driving", "hooks", "circuits"], "the loop: physics, AI, race logic"],
   [/^(js\/game\/physics-consts|js\/physics\/consts)\.js/, ["driving", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
-  [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js/, ["input"], ""],
-  [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["input"], ""],
+  [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js|^js\/camera\/(vantage|offsets|mode-switch|tuner-panel)\.js/, ["input"], ""],
+  [/^js\/game\/(input|steer-tuning|uilayers)\.js|^js\/input\/(input|steer-tuning)\.js/, ["input"], ""],
   [/^(js\/game|js\/physics)\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
-  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|renderer-picker|metrics|cockpit-opts|sheetshape|quali-sheet)\.js/, ["ui"], "DOM screens"],
-  [/^js\/game\/(lighting|lighting-knobs|track-lights|frame-lights|light-presets|atmosphere|tuner)\.js/, ["gfx"], ""],
+  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|renderer-picker|metrics|cockpit-opts|sheetshape|quali-sheet)\.js|^js\/perf\/(quality-preset|renderer-picker|metrics-overlay)\.js|^js\/camera\/cockpit-opts\.js/, ["ui"], "DOM screens"],
+  [/^js\/game\/(lighting|lighting-knobs|track-lights|frame-lights|light-presets|atmosphere|tuner)\.js|^js\/lighting\//, ["gfx"], ""],
   [/^js\/game\/(career|career-ui|reliability|quali)\.js|^js\/career\/(career|career-ui)\.js|^js\/race\/(reliability|quali-model)\.js/, ["modes", "state-unit"], ""],
   // The season calendar/format. `modes` is season+career+TT+quali (career is a
   // championship too, and the endRace award path is shared); `ui` because the
   // SETUP screen is DOM the menu specs click through.
   [/^js\/game\/season-(cal|ui)\.js|^js\/career\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
-  [/^js\/game\/(audio|music-lib)\.js/, ["ui", "lifecycle-unit"], ""],
-  [/^js\/game\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
+  [/^js\/game\/(audio|music-lib)\.js|^js\/audio\/(engine|music-lib)\.js/, ["ui", "lifecycle-unit"], ""],
+  [/^js\/(game|audio)\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
   // The MUSIC & SOUND panel is DOM the menu specs click through, not just audio
   // plumbing — menu-survey/ui-scale/ui-button-touch/menu-keyboard all open it.
-  [/^js\/game\/audio-panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
+  [/^js\/game\/audio-panel\.js|^js\/audio\/panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
   [/^js\/game\/(agentview|agentview-raster)\.js/, ["hooks", "agent-contract"], ""],
   [/^js\/game\/apex\.js/, ["hooks", "agent-contract"], "the __apex contract"],
   // `sweeps` because debrisworld's hazard query projects bodies back onto the
@@ -144,8 +145,8 @@ export const RULES = [
   // that checks that projection — it lives with the other track-build-vm suites,
   // so a debrisworld edit would otherwise never run its own Node gate.
   [/^js\/game\/(debrisworld|incidentsim)\.js|^js\/physics\/(debris-world|incident-sim)\.js/, ["driving", "sweeps"], ""],
-  [/^js\/game\/(particles|carmesh|bodyattitude|photomode)\.js|^js\/physics\/body-attitude\.js/, ["ui"], "visual-only layers"],
-  [/^js\/game\/(store|perf|tables)\.js|^js\/core\/store\.js/, ["hooks", "modes", "state-unit"], ""],
+  [/^js\/game\/(particles|carmesh|bodyattitude|photomode)\.js|^js\/physics\/body-attitude\.js|^js\/camera\/photo-cam\.js/, ["ui"], "visual-only layers"],
+  [/^js\/game\/(store|perf|tables)\.js|^js\/core\/store\.js|^js\/perf\/governor\.js/, ["hooks", "modes", "state-unit"], ""],
   [/^js\/log\.js|^js\/core\/log\.js/, ["hooks", "tooling-fast"], "every module logs through it"],
 
   // ── the rest ────────────────────────────────────────────────────────────
@@ -163,6 +164,25 @@ export const RULES = [
   [/^types\//, ["tooling-fast"], "the authored .d.ts contracts are checked by game-ctx-surface"],
   [/^(CLAUDE|README)\.md|^docs\//, ["tooling-fast"], "docs integrity is a real test"],
 ];
+
+/** Manifest files that ONLY the two blanket rules (tiny / tooling-fast) reach:
+ *  no rule names them or their directory, so an edit there is told "boot the
+ *  page" and nothing topical. Ratcheted by COUNT in tests/data/ratchets.json
+ *  (`blanketOnlyRoutes` on this file) rather than as a frozen path list — the
+ *  Phase 2b window moves 91 files, and a list keyed on paths would need a hand
+ *  edit per move while saying nothing a count does not. The count may shrink
+ *  (a file gains a rule) and must not grow (a new or MOVED file that fell off
+ *  every specific rule is exactly the regression a tree move causes); the
+ *  guard prints the live list so the offender names itself.
+ *  The two "always" rules are excluded on purpose. */
+export function blanketOnly(manifest = createRequire(import.meta.url)("./manifest.cjs")) {
+  const specific = RULES.slice(2);
+  const files = [
+    ...manifest.FULL, ...Object.values(manifest.DEFERRED).flat(), ...manifest.LAZY_AGENT,
+    ...manifest.LAZY_RACE, ...manifest.LAZY_SCENERY, ...manifest.LAZY_DATA, ...manifest.LAZY_NET,
+  ];
+  return files.filter((f) => !specific.some(([re]) => re.test(f)));
+}
 
 export function pick(files) {
   const groups = new Map();   // group -> reasons

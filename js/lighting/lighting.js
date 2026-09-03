@@ -1,9 +1,9 @@
 /* Apex 26 — LightTune, the lighting façade every consumer addresses. Composes
-   js/game/lighting-knobs.js (TUNE_DEFS + the live LT object),
-   js/game/track-lights.js (buildTrackLights / lampStrideNodes — baked once per
-   track) and js/game/frame-lights.js (setFrameLights / appendCarTailLights —
+   js/lighting/knobs.js (TUNE_DEFS + the live LT object),
+   js/lighting/track-lights.js (buildTrackLights / lampStrideNodes — baked once per
+   track) and js/lighting/frame-lights.js (setFrameLights / appendCarTailLights —
    the state the renderer samples each frame) into the one surface game.js, the
-   renderers, js/game/light-store.js and the tests read. No logic of its own;
+   renderers, js/lighting/profiles.js and the tests read. No logic of its own;
    the three siblings load first (tools/manifest.cjs HARD_EDGES). */
 const LightTune = (function () {
   "use strict";

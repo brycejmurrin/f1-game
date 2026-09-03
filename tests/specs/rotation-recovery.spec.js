@@ -33,7 +33,7 @@ test("portrait blocker explains rotation lock and opens controls safely", async 
 });
 
 test("a gamepad routes to the blocker's buttons, not the car", async ({ page }) => {
-  // navOpen() is what js/game/input.js branches on: false meant d-pad/A were
+  // navOpen() is what js/input/input.js branches on: false meant d-pad/A were
   // spent on boost/shift BEHIND the opaque blocker and a pad-only player had
   // no reachable way to press OPEN CONTROLS or EXIT RACE.
   await startPortraitRace(page);

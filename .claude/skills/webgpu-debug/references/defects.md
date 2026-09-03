@@ -56,7 +56,7 @@ up + one reload:
 - loss on rung 2 → session-skip to GLX; the user's RENDERER pick is preserved
 
 The ladder HEALS (5 clean sessions step a rung down; `apex26.gfxWgxOk`). An
-explicit RENDERER re-pick clears it (`js/game/renderer-picker.js` RESET RENDERER). JS
+explicit RENDERER re-pick clears it (`js/perf/renderer-picker.js` RESET RENDERER). JS
 exceptions do NOT latch a dead canvas: 3 strikes (`JS_STRIKE_CAP`) surrender
 to GLX with the reason in `apex26.gfxWgxFail`. A persistent black screen on
 hardware means the ladder itself is broken — check those keys before

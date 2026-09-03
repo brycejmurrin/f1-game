@@ -105,7 +105,7 @@ real `TUNE_DEFS` defaults are 1.0 and 0.5) — the "no visible effect" result th
 produced was really "no visible effect near an arbitrary point that happened not
 to be the default," not evidence about the knob. Five more knobs in the same
 session had the same class of error. Always
-`grep -n 'id: "<knobId>"' js/game/lighting-knobs.js` immediately before testing a knob
+`grep -n 'id: "<knobId>"' js/lighting/knobs.js` immediately before testing a knob
 and read `min`/`max`/`def` off that line — never carry values between sessions
 or reconstruct them from a description.
 

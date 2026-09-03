@@ -2,9 +2,9 @@
    per-fixture light character), the LAMP DENSITY / DARK-GAP FILL walks and
    buildTrackLights(track) — bakes the flat 15-float light records the renderer
    uploads. Built ONCE per track; re-run only when a `rebuild: true` knob nulls
-   track._lights (js/game/light-store.js). Reads the live knob values through
+   track._lights (js/lighting/profiles.js). Reads the live knob values through
    LightKnobs.LT (eval-time destructure — tools/manifest.cjs HARD_EDGES); the
-   per-frame cull of these records is js/game/frame-lights.js. */
+   per-frame cull of these records is js/lighting/frame-lights.js. */
 const TrackLights = (function () {
   "use strict";
   const { LT } = LightKnobs;

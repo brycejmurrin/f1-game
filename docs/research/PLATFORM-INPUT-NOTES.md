@@ -87,7 +87,7 @@ el.addEventListener("pointerleave", release);        // the mouse, which has no 
 ```
 
 This class of bug has now been fixed three separate times in this codebase
-(`js/game/input.js` pedals, `js/game/photomode.js` sticks and hold buttons,
+(`js/input/input.js` pedals, `js/camera/photo-cam.js` sticks and hold buttons,
 `js/game.js` `#btn-cam`). If you add a fifth drag control, start from the list.
 
 **And filter by `pointerId`.** A window-level `pointermove` that accepts any
@@ -150,7 +150,7 @@ Already handled here — `js/render/glx.js:225-234` listens for
 `js/game.js` persists a flag so a device that has lost a context once starts
 more conservatively. Noted so the next person does not re-diagnose it.
 
-Note the distinction the crash-sentinel section of `js/game/perf.js` (`:91`)
+Note the distinction the crash-sentinel section of `js/perf/governor.js` (`:91`)
 already draws: a **jetsam/OOM kill**
 leaves no signal at all — no `pagehide`, no `contextlost`, no error. Context
 loss is the recoverable case; the silent one is not.
@@ -233,7 +233,7 @@ visible control precisely so there is never a second code path.
 
 ### The fix, shipped
 
-`js/game/input.js`'s `pollGamepad()` now dispatches this exact mapping as REAL
+`js/input/input.js`'s `pollGamepad()` now dispatches this exact mapping as REAL
 synthetic `KeyboardEvent`s once `UiLayers.anyOpen()` is true — D-pad and the
 left stick become arrow keys (with a hand-rolled hold-repeat: ~450 ms initial
 delay, ~130 ms steady cadence, since a polled pad has no OS key-repeat of its
@@ -443,7 +443,7 @@ attested — WebKit bug 173434 discusses it as intended behaviour, and it applie
 to CSS animations too. Low Power Mode is not rare: it turns itself on at 20 %
 battery and plenty of people simply leave it on.
 
-Now read `js/game/perf.js` against that. The governor:
+Now read `js/perf/governor.js` against that. The governor:
 
 - downscales the render resolution when the frame EMA is **> 19 ms**;
 - having downscaled, HOLDS (`_downHold`) and only creeps back up under sustained
@@ -494,7 +494,7 @@ only. So any fix has to be inferential.
 ### Two fixes, shipped, and they are complementary
 
 **A — derive the budget instead of hardcoding it.** `PerfGov._floorMs` in
-`js/game/perf.js` tracks the *floor* of observed frame intervals (a low
+`js/perf/governor.js` tracks the *floor* of observed frame intervals (a low
 percentile, not the mean — that is the fastest this display will go), pulled
 down fast toward a newly observed faster frame and crept up slowly toward a
 slower one, and the degrade/restore thresholds are relative to it instead of
@@ -561,7 +561,7 @@ thing to check.
 
 - **Canvas resizing leaks.** A confirmed WebKit bug grows memory on every canvas
   resize until the tab dies around 1.25 GB. Never recreate a WebGL context;
-  resize the existing one, and resize as rarely as you can. `js/game/perf.js`
+  resize the existing one, and resize as rarely as you can. `js/perf/governor.js`
   already avoids scale churn for a frame-cost reason — the same restraint
   happens to be a memory fix.
 - **All canvases on a page share a 256 MB budget.** At `devicePixelRatio` 3 a

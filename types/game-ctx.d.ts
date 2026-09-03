@@ -194,7 +194,7 @@ interface PhotoMouse { dx: number; dy: number; drag: boolean; px: number; py: nu
 interface PhotoAxis { x: number; y: number; }
 
 /** The lighting profile store, keyed "track|timeOfDay|weather" (plus "*").
-    Owner: js/game/light-store.js; tuner.js mutates it for RESET/COPY VALUES. */
+    Owner: js/lighting/profiles.js; tuner.js mutates it for RESET/COPY VALUES. */
 type LightProfiles = Record<string, Record<string, unknown>>;
 
 /** The caution/flag picture race control publishes — js/race/race-control.js. */
@@ -379,7 +379,7 @@ interface GameCtx {
   ttLaps: number[];
   weatherArc: WeatherArc | null;
 
-  // ── Atmosphere state (js/game/atmosphere.js) ──────────────────────────────
+  // ── Atmosphere state (js/lighting/atmosphere.js) ──────────────────────────────
   _cloudBase: number;
   _ltBase: unknown;
   _ltFlash: number;

@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { DEPLOY_BRANCH, RULES } from "../../tools/pick-tests.mjs";
+import { DEPLOY_BRANCH, RULES, blanketOnly } from "../../tools/pick-tests.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -119,38 +119,22 @@ test("every manifest file matches at least one pick-tests rule", () => {
 
 // Files that ONLY the two blanket rules (tiny / tooling-fast) reach: no rule
 // names them or their directory, so an edit there is told "boot the page" and
-// nothing topical. Frozen as a baseline in the ratchet idiom — the list may
-// shrink (a file gains a rule: delete its row here in the same commit) and
-// must not grow (a new or MOVED file that falls off every specific rule is
-// exactly the regression the tree move can cause). The Phase 2 window
-// rewrites RULES to directory rules, which should empty this list.
-const BLANKET_ONLY = [
-  "js/core/mat4.js",
-  "js/roster.js",
-  "js/render/lamp-chunks.js",
-  "js/render/gltf.js",
-  "js/car/driver-ratings.js",
-  "js/track/models.js",
-  "js/track/themes.js",
-  "js/track/landmark-kit.js",
-  "js/track/circuit-kit.js",
-  "js/game/light-store.js",
-  "js/physics/ai-drive.js",
-  "js/game/css-zoom.js",
-  "js/game/settings-nav.js",
-  "js/game/skidmarks.js",
-  "js/game/loop-health.js",
-  "js/game/gfx-debug.js",
-];
-
-test("files reached only by the blanket rules are the frozen baseline — no new ones", () => {
-  const specific = RULES.slice(2);          // the two "always" rules are excluded on purpose
-  const blanketOnly = manifestFiles().filter((f) => !specific.some(([re]) => re.test(f)));
-  const grew = blanketOnly.filter((f) => !BLANKET_ONLY.includes(f));
-  assert.deepEqual(grew, [],
-    "a manifest file is routed ONLY by the blanket tiny/tooling-fast rules — give it a specific RULE " +
-    "(a moved file that fell off its old rule shows up here first)");
-  const gone = BLANKET_ONLY.filter((f) => !blanketOnly.includes(f));
-  assert.deepEqual(gone, [],
-    "a baselined file now has a specific rule (or left the manifest) — delete its row from BLANKET_ONLY");
+// nothing topical. The COUNT is ratcheted in tests/data/ratchets.json
+// (`blanketOnlyRoutes` on tools/pick-tests.mjs) rather than frozen here as a
+// path list: the Phase 2b window moves 91 files, and a list keyed on paths
+// needs a hand edit per move while saying nothing the number does not. The
+// list itself is still printed on a failure, so the offender names itself —
+// and `node tools/ratchets.mjs --update` is the one-command flow after a
+// legitimate move, the same as every other ratchet in the tree.
+test("no more manifest files are routed by the blanket rules alone than the ratchet allows", () => {
+  const ceiling = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/ratchets.json"), "utf8"))
+    .files["tools/pick-tests.mjs"].blanketOnlyRoutes;
+  const live = blanketOnly();
+  assert.ok(live.length <= ceiling,
+    `${live.length} manifest files are routed ONLY by the blanket tiny/tooling-fast rules, ceiling ${ceiling} — ` +
+    "give the new one a specific RULE (a moved file that fell off its old rule shows up here first):\n  " +
+    live.join("\n  "));
+  assert.equal(live.length, ceiling,
+    `only ${live.length} files are blanket-only now (ceiling ${ceiling}) — a file gained a rule, so LOWER the ` +
+    "ratchet in the same commit: node tools/ratchets.mjs --update");
 });

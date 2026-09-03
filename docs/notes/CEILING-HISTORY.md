@@ -75,7 +75,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - the file carries both sets of lines, so neither side's number fits it.
 - Set from the merged file: 7944.
 - 7944 -> 7949 for the lighting tuner's COPY ALL: two more thin passes through
-- to js/game/light-store.js (copyToTracks/restore) beside the four that were
+- to js/lighting/profiles.js (copyToTracks/restore) beside the four that were
 - already here, plus the comment saying what the two modes mean. The operation
 - itself is 40 lines and landed in the store, which is the shape this ratchet
 - is asking for — what stayed is the façade line the other five files reach.
@@ -124,7 +124,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - already gone to 0.
 - 8036 -> 8018: LOWERED, not raised. The mobile-only GRAPHICS toggle (22
 - lines of button wiring + the apex26.gfxHigh boot bit) moved out to
-- js/game/gfx-quality.js, which owns #pm-gfx for every device now. This is
+- js/perf/quality-preset.js, which owns #pm-gfx for every device now. This is
 - the direction the ratchet exists to push: a feature landed and game.js got
 - SMALLER, because the preset's tier floor goes into PerfGov.tier()'s max()
 - instead of rewriting the eight PerfGov.tier() gates in the render path.
@@ -507,7 +507,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - transient fault killing the session, and fixes the one instance; round 14
 - fixes the policy. tick() now tolerates a bounded run of consecutive faults
 - that any clean frame pays back, and stops at the cap exactly as before. The
-- policy, the caps and the heartbeat live in the new js/game/loop-health.js
+- policy, the caps and the heartbeat live in the new js/perf/loop-health.js
 - precisely so game.js pays seven lines and not eighty — six of the seven are
 - the comment saying which half is here. PERF-FINDINGS 2k.
 - MERGED, three lineages deep. Each block above is a delta measured against
@@ -623,7 +623,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 
 - Cohesive-today files (a dev API, an agent view, a procedural mesh), so
 - these are drift alarms rather than extraction targets. Note game.js is NOT
-- the largest file in the repo — js/game/light-presets.js is (see below).
+- the largest file in the repo — js/lighting/presets.js is (see below).
 - 3050 -> 3055 for __apex.lightCopy, the headless door onto that same COPY ALL
 - — a dev-API hook growing the dev API is the file doing its job.
 - 3055 -> 3060 for lightState.bakedLights/lampPosts — MCP dens=1 vs dens=2 was
@@ -924,7 +924,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - noteSuppressed, and carries the measured reason its margin is left
 - alone (an oriented test suppresses MORE — PERF-FINDINGS 2u).
 
-## `js/game/light-presets.js` — last ceiling 15508
+## `js/lighting/presets.js` — last ceiling 15508
 
 - ── Round-6 additions: the unguarded giants, set AT measured (test metric,
 - split-newline count) so any growth is a deliberate raise here. Each line

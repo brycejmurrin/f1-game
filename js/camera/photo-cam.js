@@ -1,4 +1,4 @@
-/* Apex 26 — photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its DOM buttons. Photo mode ONLY — the lighting tuner's lt-* buttons (help toggle, RESET, COPY VALUES) live in js/game/tuner.js. */
+/* Apex 26 — photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its DOM buttons. Photo mode ONLY — the lighting tuner's lt-* buttons (help toggle, RESET, COPY VALUES) live in js/lighting/tuner-panel.js. */
 const Photomode = (function () {
   "use strict";
 
@@ -155,7 +155,7 @@ function wirePhotoStick(id, vec) {
        trigger, and it is not platform-specific. An unguarded throw aborts the
        handler before set() AND before preventDefault(), so the stick reads zero
        and the page keeps the gesture. Every other capture in this repo is
-       wrapped (js/game/input.js, js/game.js); this was the one that was not. */
+       wrapped (js/input/input.js, js/game.js); this was the one that was not. */
     try { el.setPointerCapture(pid); } catch (_) {}
     _r = el.getBoundingClientRect();
     _zoom = el.currentCSSZoom || 1;
@@ -171,7 +171,7 @@ function wirePhotoStick(id, vec) {
      can fire with a thumb down. A touch pointer holds IMPLICIT capture, so
      removing the element loses the capture instead of delivering an up, the
      vector stays at its last value, and updatePhotoCam flies the camera away
-     for good. js/game/input.js added this same listener to the pedals for
+     for good. js/input/input.js added this same listener to the pedals for
      the same reason. */
   el.addEventListener("lostpointercapture", endIf);
 }
@@ -192,7 +192,7 @@ function wirePhotoHold(id, on, off) {
      documents), so the button let go on the same press that took it. And a
      lostpointercapture is a teardown only when the button was taken away —
      WebKit keeps one capture slot, so a second finger on the other hold
-     button steals it with this thumb still down (js/game/input.js
+     button steals it with this thumb still down (js/input/input.js
      holdTargetGone / lostCaptureShouldRelease). */
   el.addEventListener("lostpointercapture", (e) => { if (Input.holdTargetGone(el)) release(e); });   // see wirePhotoStick
 }

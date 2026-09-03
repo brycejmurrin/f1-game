@@ -37,6 +37,17 @@ export const METRICS = {
   lines: (rel, text) => text.split("\n").length,
   codeLines: (rel, text) => text.split("\n").filter((l) => l.trim() && !COMMENT.test(l)).length,
   topLets: (rel, text) => text.split("\n").filter((l) => /^let /.test(l)).length,
+  // How many manifest files pick-tests routes with NOTHING but the two blanket
+  // rules. A count, not a path list: the Phase 2b window moves 91 files, and a
+  // frozen list keyed on paths needs a hand edit per move while saying nothing
+  // the number does not. It may shrink (a file gains a rule) and must not grow
+  // (a moved file that fell off its old rule is the regression a tree move
+  // causes); tests/unit/pick-tests.test.mjs prints the live list on a failure.
+  blanketOnlyRoutes: async (rel) => {
+    if (rel !== "tools/pick-tests.mjs") throw new Error(`blanketOnlyRoutes is a tools/pick-tests.mjs metric (asked for ${rel})`);
+    const { blanketOnly } = await import("./pick-tests.mjs");
+    return blanketOnly().length;
+  },
   gMembers: async (rel) => {
     if (rel !== "js/game.js") throw new Error(`gMembers is a js/game.js metric (asked for ${rel})`);
     const { scanGameCtx } = await import("./check-gctx.mjs");

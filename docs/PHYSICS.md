@@ -201,7 +201,7 @@ forever. Lowering a default and migrating a stored value are DIFFERENT ACTS and
 both are usually needed: the first reaches nobody who has opened the settings,
 the second reaches nobody who has not.
 
-`STEER_SCHEMA` in `js/game/steer-tuning.js` is the migration, and it is a
+`STEER_SCHEMA` in `js/input/steer-tuning.js` is the migration, and it is a
 per-version LADDER (`STEER_MIGRATIONS`, currently at 4), not a single gate. That
 distinction is load-bearing. It was once `if (stored >= STEER_SCHEMA) return`
 followed by the v2 body, which works for exactly one version: bump the constant
@@ -314,7 +314,7 @@ it lands.
 | `js/game.js` | `coast` | **broadcast-only** | runs only on `c.finished` cars — driving control is already disconnected. Any future reuse of `coast()` on a live car is a BLOCKER |
 | `js/physics/aero-zones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |
 | `js/physics/debris-world.js` | `registerFurniture` | **broadcast-only** | apex-kerb cones in the one-way cosmetic Rapier side-world |
-| `js/game/cameras.js` | `vantage` | **broadcast-only** | only heli/side/cinematic broadcast cams; 0 in every driven mode |
+| `js/camera/vantage.js` | `vantage` | **broadcast-only** | only heli/side/cinematic broadcast cams; 0 in every driven mode |
 | `js/race/quali-model.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
 | `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue |
 | `js/game/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |

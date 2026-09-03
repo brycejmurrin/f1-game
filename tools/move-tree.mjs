@@ -155,6 +155,29 @@ export function leftovers(root, moves) {
   return out;
 }
 
+/** Path references the exact-token sweep CANNOT see: a path built from
+ *  SEPARATE quoted segments, `path.join(ROOT, "js", "track", "geom.js")`.
+ *  There is no `js/track/geom.js` token in that source, so nothing is
+ *  rewritten and the break only surfaces as an ENOENT when the suite runs
+ *  (2026-09-03, batch 2: assets-pack.test.mjs read the lighting knobs
+ *  that way). Reported, never rewritten — the call shape varies too much to
+ *  edit blind, and a human fixing four of these beats a tool guessing. */
+export function splitSegmentMentions(root, moves) {
+  const out = [];
+  const files = SWEEP_ROOTS.flatMap((r) => walk(root, r, []));
+  for (const { from, to } of moves) {
+    const segs = from.split("/");
+    if (segs.length < 2) continue;
+    const re = new RegExp(segs.map((x) => `"${esc(x)}"`).join("\\s*,\\s*"), "g");
+    for (const rel of files) {
+      const text = fs.readFileSync(path.join(root, rel), "utf8");
+      const n = (text.match(re) || []).length;
+      if (n) out.push({ file: rel, from, to, hits: n });
+    }
+  }
+  return out;
+}
+
 export function recordMoved(root, moves) {
   const rel = "tools/manifest.cjs";
   const abs = path.join(root, rel);
@@ -192,7 +215,7 @@ export function apply(root, moves, { plan = false, git = fs.existsSync(path.join
       if (r.status !== 0) throw new Error(`gen-shell after the move: ${r.stderr || r.stdout}`);
     }
   }
-  return { moved: moves.length, rewritten, leftovers: leftovers(root, moves) };
+  return { moved: moves.length, rewritten, leftovers: leftovers(root, moves), splitSegments: splitSegmentMentions(root, moves) };
 }
 
 function main() {
@@ -206,6 +229,10 @@ function main() {
   const res = apply(root, moves, { plan });
   console.log(`${plan ? "would move" : "moved"} ${res.moved} file(s); ${plan ? "would rewrite" : "rewrote"} paths in ${res.rewritten.length} file(s)`);
   for (const r of res.rewritten) console.log(`  ${r.file} (${r.hits})`);
+  if (res.splitSegments.length) {
+    console.log(`path.join()-style SEGMENT references the sweep cannot rewrite — fix these by hand (${res.splitSegments.length}):`);
+    for (const m of res.splitSegments) console.log(`  ${m.file}: ${m.from} built from segments x${m.hits} -> now ${m.to}`);
+  }
   if (res.leftovers.length) {
     console.log(`bare-name mentions left for a human (${res.leftovers.length}):`);
     for (const l of res.leftovers) console.log(`  ${l.file}: "${l.name}" x${l.hits} -> now ${l.now}`);

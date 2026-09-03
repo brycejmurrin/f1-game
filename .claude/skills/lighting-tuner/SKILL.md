@@ -6,7 +6,7 @@ description: Use when the user says night looks washed out/like day, dawn sun is
 # Tune and validate scene lighting via __apex probes
 
 **Reach for the tuner knobs FIRST.** Nearly every hand-tuned value is a live
-`TUNE_DEFS` knob (`js/game/lighting-knobs.js`) read via `LT.<id>` each frame.
+`TUNE_DEFS` knob (`js/lighting/knobs.js`) read via `LT.<id>` each frame.
 
 ```js
 __apex.lightTune()
@@ -14,11 +14,11 @@ __apex.lightTune({ lampLevel: 0.4 })
 ```
 
 Precedence, lowest→highest: `TUNE_DEFS.def` → shipped
-`js/game/light-presets.js` `"*"` → shipped `"track|tod|weather"` →
+`js/lighting/presets.js` `"*"` → shipped `"track|tod|weather"` →
 localStorage `"*"` → localStorage **`track|tod|weather`**. Live slider edits
 write the **current condition** key (`LightStore.set` → `profiles[key()]`),
 not global `"*"`. Ship a look by baking COPY VALUES into
-`js/game/light-presets.js` ([references/bake.md](references/bake.md)). Edit `applyRaceSettings` only
+`js/lighting/presets.js` ([references/bake.md](references/bake.md)). Edit `applyRaceSettings` only
 for STRUCTURAL changes.
 
 localStorage (`apex26.lightTune`) outranks shipped presets — RESET in the

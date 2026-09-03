@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_138 rows over 17 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_138 rows over 22 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -155,57 +155,21 @@ _138 rows over 17 directories, in load order. `tag` = a `<script>` in index.html
 |---|---|---|---|
 | `<id>.js × 40` | `TrackDefs` | tag | 40 circuit definitions (data only), one file per id in `Tracks.LIST` order — see the "js/circuits/<id>.js" section |
 
-**`js/game/`**
+**`js/input/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `input.js` | `Input` | tag | Input: keyboard / gamepad / tilt / touch for Apex 26. |
-| `audio.js` | `GameAudio` | tag | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
+| `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for js/game.js (the ADVANCED pause-menu page). |
+
+**`js/audio/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `engine.js` | `GameAudio` | tag | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
 | `music-lib.js` | `MusicLib` | tag | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | tag | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
-| `audio-panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer screen plus the master-sound plumbing. |
-| `lighting-knobs.js` | `LightKnobs` | tag | the LIGHTING TUNER knob registry: TUNE_DEFS (the slider registry — the `def` values ARE the shipped tuning; min/max/step are the clamps js/game/light-store.js… |
-| `track-lights.js` | `TrackLights` | tag | per-track lamp baking: floodColor / LAMP_KINDS (per-theme and per-fixture light character), the LAMP DENSITY / DARK-GAP FILL walks and buildTrackLights(track)… |
-| `frame-lights.js` | `FrameLights` | tag | per-frame light state: setFrameLights (the nearest-CAP cull with the twilight scale, flicker / warm-up and the per-chunk full-set twin the renderer samples… |
-| `lighting.js` | `LightTune` | tag | LightTune, the lighting façade every consumer addresses. |
-| `light-store.js` | `LightStore` | tag | LIGHTING PROFILE STORE (LightStore.create(G)) The resolution and persistence half of the lighting tuner. js/game/lighting-knobs.js owns the REGISTRY (TUNE_D… |
-| `carmesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
-| `garage-scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
-| `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. |
-| `atmosphere.js` | `Atmosphere` | tag | session atmosphere for js/game.js: applyRaceSettings(), the lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches for night/dawn/d… |
-| `cam-tune.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.c… |
-| `setup-ui.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
-| `menus.js` | `Menus` | tag | the select-screen UI for js/game.js: the track picker with its live preview map + elevation canvases, and the fullscreen circuit-detail modal. |
-| `scrollfade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
-| `css-zoom.js` | `CssZoom` | tag | CssZoom — one place for zoom ↔ viewport ↔ local conversions. |
-| `sheetshape.js` | `SheetShape` | tag | SHEET SHAPE — one place decides whether a panel is TALL or WIDE. |
-| `uilayers.js` | `UiLayers` | tag | UI LAYERS — which screen is on top, and are we racing? |
-| `topmodal.js` | `TopModal` | tag | TOP MODAL — mirrors each dialog.screen's `hidden` onto showModal()/close(). |
-| `menunav.js` | `MenuNav` | tag | MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls the panel you are looking at, and arrow keys that move through it. |
-| `ariastate.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
-| `settings-nav.js` | `SettingsNav` | tag | SettingsNav — category tabs for the pause/title Settings sheet. |
-| `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
-| `photomode.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
-| `tuner.js` | `TunerPanel` | tag | the LIGHTING TUNER panel UI for js/game.js: slider rows generated from TUNE_DEFS, group tabs, preview time-of-day/weather chips, COPY TO ALL TRACKS, the help… |
-| `cam-tuner.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), so each of the 13 cameras carries its own… |
-| `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for js/game.js (the ADVANCED pause-menu page). |
-| `perf.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
-| `loop-health.js` | `LoopHealth` | tag | FRAME-LOOP FAULT POLICY + the one heartbeat that outlives the loop. |
-| `gfx-quality.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
-| `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
-| `gfx-debug.js` | `GfxDebug` | tag | ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1") The renderer's own verdict, rendered as DOM, for the case this project kept losing to: a player… |
-| `ui-scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE sliders + RESOLUTION pin. |
-| `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
-| `metrics.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
-| `cameras.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/ reverse) as… |
-| `cam-modes.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
-| `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
-| `results.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
-| `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
-| `agentview-raster.js` | `AgentRaster` | LAZY_AGENT | AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… |
-| `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
-| `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~180 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
-| `light-presets.js` | `LightPresets` | LAZY_RACE | — (no header comment) |
+| `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer screen plus the master-sound plumbing. |
 
 **`js/physics/`**
 
@@ -218,6 +182,45 @@ _138 rows over 17 directories, in load order. `tag` = a `<script>` in index.html
 | `brake-cue.js` | `BrakeCue` | tag | braking CUE: pulse RATE that says when to brake, never brakes for you. |
 | `debris-world.js` | `DebrisWorld` | tag | Rapier side-world for render-only debris (adoption phases R0+R1, see spike/ADOPTION-PLAN.md Part 2). |
 | `incident-sim.js` | `IncidentSim` | tag | Rapier bounded-takeover incident sim (adoption layer R2 + R3 + C1 + C3, see spike/ADOPTION-PLAN.md Part 2 R2/R3 and Part 3 C1/C3). |
+
+**`js/lighting/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `knobs.js` | `LightKnobs` | tag | the LIGHTING TUNER knob registry: TUNE_DEFS (the slider registry — the `def` values ARE the shipped tuning; min/max/step are the clamps… |
+| `track-lights.js` | `TrackLights` | tag | per-track lamp baking: floodColor / LAMP_KINDS (per-theme and per-fixture light character), the LAMP DENSITY / DARK-GAP FILL walks and buildTrackLights(track)… |
+| `frame-lights.js` | `FrameLights` | tag | per-frame light state: setFrameLights (the nearest-CAP cull with the twilight scale, flicker / warm-up and the per-chunk full-set twin the renderer samples… |
+| `lighting.js` | `LightTune` | tag | LightTune, the lighting façade every consumer addresses. |
+| `profiles.js` | `LightStore` | tag | LIGHTING PROFILE STORE (LightStore.create(G)) The resolution and persistence half of the lighting tuner. js/lighting/knobs.js owns the REGISTRY (TUNE_D… |
+| `atmosphere.js` | `Atmosphere` | tag | session atmosphere for js/game.js: applyRaceSettings(), the lighting/weather/time-of-day monolith (sun + sky + ambient + fog branches for night/dawn/d… |
+| `tuner-panel.js` | `TunerPanel` | tag | the LIGHTING TUNER panel UI for js/game.js: slider rows generated from TUNE_DEFS, group tabs, preview time-of-day/weather chips, COPY TO ALL TRACKS, the help… |
+| `presets.js` | `LightPresets` | LAZY_RACE | — (no header comment) |
+
+**`js/game/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `carmesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
+| `garage-scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
+| `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. |
+| `setup-ui.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
+| `menus.js` | `Menus` | tag | the select-screen UI for js/game.js: the track picker with its live preview map + elevation canvases, and the fullscreen circuit-detail modal. |
+| `scrollfade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
+| `css-zoom.js` | `CssZoom` | tag | CssZoom — one place for zoom ↔ viewport ↔ local conversions. |
+| `sheetshape.js` | `SheetShape` | tag | SHEET SHAPE — one place decides whether a panel is TALL or WIDE. |
+| `uilayers.js` | `UiLayers` | tag | UI LAYERS — which screen is on top, and are we racing? |
+| `topmodal.js` | `TopModal` | tag | TOP MODAL — mirrors each dialog.screen's `hidden` onto showModal()/close(). |
+| `menunav.js` | `MenuNav` | tag | MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls the panel you are looking at, and arrow keys that move through it. |
+| `ariastate.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
+| `settings-nav.js` | `SettingsNav` | tag | SettingsNav — category tabs for the pause/title Settings sheet. |
+| `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
+| `ui-scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE sliders + RESOLUTION pin. |
+| `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
+| `results.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
+| `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
+| `agentview-raster.js` | `AgentRaster` | LAZY_AGENT | AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… |
+| `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
+| `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~180 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
 
 **`js/career/`**
 
@@ -235,6 +238,28 @@ _138 rows over 17 directories, in load order. `tag` = a `<script>` in index.html
 | `reliability.js` | `Reliability` | tag | RELIABILITY: whether a car reaches the flag at all. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
+
+**`js/camera/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `offsets.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.c… |
+| `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
+| `tuner-panel.js` | `CamTunerPanel` | tag | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), so each of the 13 cameras carries its own… |
+| `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
+| `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/ reverse) as… |
+| `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
+
+**`js/perf/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `governor.js` | `PerfGov` | tag | adaptive-performance governor + mobile crash sentinel for js/game.js. |
+| `loop-health.js` | `LoopHealth` | tag | FRAME-LOOP FAULT POLICY + the one heartbeat that outlives the loop. |
+| `quality-preset.js` | `GfxQuality` | tag | GfxQuality: the GRAPHICS quality PRESETS (LOW / MEDIUM / HIGH / ULTRA) — their tier floor on the PerfGov shedding ladder, the mobile boot tier they persist… |
+| `renderer-picker.js` | `RendererPicker` | tag | RendererPicker: the RENDERER control in SETTINGS > DISPLAY. |
+| `gfx-debug-overlay.js` | `GfxDebug` | tag | ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1") The renderer's own verdict, rendered as DOM, for the case this project kept losing to: a player… |
+| `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
 
 **`js/render/webgpu/`**
 
@@ -334,8 +359,8 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
 
 - **game.js pass 2** — promote the remaining closure `let`s to a shared state
   object. The early extractions were `js/physics/aero-zones.js`, `js/game/skidmarks.js`,
-  `js/game/light-store.js`, `js/race/race-control.js`, and from the 2026-08
-  cleanup `js/physics/consts.js` and `js/game/cam-modes.js` — more have
+  `js/lighting/profiles.js`, `js/race/race-control.js`, and from the 2026-08
+  cleanup `js/physics/consts.js` and `js/camera/mode-switch.js` — more have
   landed since (e.g. `js/physics/ai-drive.js`); `tools/manifest.cjs` is the roster
   truth and `tests/data/ratchets.json` the tally. The current
   count and its ratcheted ceiling live there (`node tools/ratchets.mjs`), and the
@@ -508,7 +533,7 @@ button cannot — an iOS jetsam kill, which takes the tab with no JS error and n
 `webglcontextlost`, and which the `GLX.init`-failure recovery in the same file
 never sees. Everything else is recoverable by hand: the menus are DOM layered
 over the canvas, so they stay legible through a garbage frame and the button
-(owned by `js/game/renderer-picker.js`, visible in the HTML, wired at
+(owned by `js/perf/renderer-picker.js`, visible in the HTML, wired at
 DOMContentLoaded) is one tap away. Pressing the button also disarms the probe,
 so switching from the menu before any world frame does not revert the choice
 just made.
@@ -803,7 +828,7 @@ shading (duplicated verts, face normals).
 | `parts.js` | `Parts` | upgrade catalog — 12 ordered categories, `getMods`, `getCost`, `statMult`, 780 cr budget (see docs/PARTS.md) |
 | `ghost.js` | `Ghost` | time-trial ghost: records the player's lap as parallel `(t, s, x)` arrays, replays the best one; pure data layer — game.js feeds samples and draws |
 
-## js/game/input.js — `Input`
+## js/input/input.js — `Input`
 
 Steering priority: keyboard > tilt > touch.
 
@@ -826,7 +851,7 @@ left/right steer halves on the lower screen when tilt off; `#btn-boost`,
 `#btn-ot`, `#btn-brake` buttons always in race. Listeners use
 `{passive:false}` + preventDefault on the canvas only.
 
-## js/game/audio.js — `GameAudio`
+## js/audio/engine.js — `GameAudio`
 
 Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
 with a saw+square synth pair ~90–700 Hz as the fallback when decode fails.
@@ -906,33 +931,33 @@ The grab-bag data file went with Phase 2a of
 `DEFAULT_CUSTOM` and `TIER_V` in `js/car/teams.js` (the record shape and the
 `tier` field they index), `GEARS`/`GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` and `DIFF`
 in `js/physics/consts.js` (immutable model numbers, already eval-pinned
-before every reader), `CAM_MODES` in `js/game/cam-modes.js`
+before every reader), `CAM_MODES` in `js/camera/mode-switch.js`
 (`CamModes.CAM_MODES`), and the four `PAINT_*` car-paint constants in
 `js/game.js` beside `carPaintMat()`, their only reader.
 
-## js/game/lighting.js — `LightTune` (a façade over three files)
+## js/lighting/lighting.js — `LightTune` (a façade over three files)
 
 The lighting-tuner core, split by lifecycle (Phase 2a of
 `docs/research/TREE-RESTRUCTURE-2026-09.md`):
 
-- `js/game/lighting-knobs.js` — `LightKnobs`: `TUNE_DEFS` (the slider
+- `js/lighting/knobs.js` — `LightKnobs`: `TUNE_DEFS` (the slider
   registry — the `def` values ARE the shipped tuning; min/max/step are the
   clamps) and the live `LT` value object (a plain object mutated in place by
   `light-store.js`'s profile resolution and `__apex.lightTune`).
-- `js/game/track-lights.js` — `TrackLights`: `buildTrackLights(track)` bakes
+- `js/lighting/track-lights.js` — `TrackLights`: `buildTrackLights(track)` bakes
   the per-track light records ONCE per track (colour and fixture character from
   the internal `floodColor` + `LAMP_KINDS` tables, the LAMP DENSITY and
   DARK-GAP FILL walks), plus `lampStrideNodes`.
-- `js/game/frame-lights.js` — `FrameLights`: the per-frame light upload —
+- `js/lighting/frame-lights.js` — `FrameLights`: the per-frame light upload —
   `setFrameLights` (distance-sorted cull to the frame CAP, twilight scale,
   flicker / warm-up, the per-chunk full-set twin) and `appendCarTailLights`.
-- `js/game/lighting.js` — `LightTune`: re-exports the three as the ONE surface
+- `js/lighting/lighting.js` — `LightTune`: re-exports the three as the ONE surface
   every consumer reads (`LightTune.TUNE_DEFS` / `LT` / `buildTrackLights` /
   `setFrameLights` / …). The eval-time edges are `HARD_EDGES` pairs in
   `tools/manifest.cjs`; both siblings destructure `LightKnobs.LT` at eval.
 
 Profile persistence and the (track, time-of-day, weather) resolution live in
-`js/game/light-store.js` — they read live session state.
+`js/lighting/profiles.js` — they read live session state.
 
 ## js/game/carmesh.js — `CarMesh`
 
@@ -1044,7 +1069,7 @@ in load order, standings table between races, saved in
 `apex26.season`. localStorage: hiscore N/A, settings (team, difficulty, tilt,
 sound), season.
 
-Camera: 13 player modes (`CAM_MODES` in `js/game/cam-modes.js`, driven by
+Camera: 13 player modes (`CAM_MODES` in `js/camera/mode-switch.js`, driven by
 `GameCams`) cycled with the CAM button / C key (persisted) — CHASE (close,
 behind+above), FAR (pulled back/up), DRIFT (swings outside on a slide),
 COCKPIT (onboard eye, player car hidden), HOOD (nose cam), OVERHEAD (top-down

@@ -1,6 +1,6 @@
 /* Apex 26 — RendererPicker: the RENDERER control in SETTINGS > DISPLAY. Owns #pm-renderer (a <select> with ‹ › steps over WEBGL2 / THREE.JS / WEBGPU), RESET RENDERER, THREE PATH, SCREENSHOTS, SAVE SCREENSHOT, COPY DIAG and the #pm-gfx-status line; the apex26.gfxBackend / gfxWgx* / tlxForceGL / wgxCapture keys those write; and the in-race two-tap reload confirm (raceGuard / ARM_MS) every reloading control shares.
 
-   Split out of js/game/gfx-quality.js (Phase 2a of docs/research/TREE-RESTRUCTURE-2026-09.md): that file is the GRAPHICS quality PRESET model and button; this one is which backend boots. Same load-order stance — every global read (GLX, PerfGov, GameAudio, __apex) is resolved at CALL time, never at eval, so the file has no HARD_EDGES pair and can sit anywhere in the shell. */
+   Split out of js/perf/quality-preset.js (Phase 2a of docs/research/TREE-RESTRUCTURE-2026-09.md): that file is the GRAPHICS quality PRESET model and button; this one is which backend boots. Same load-order stance — every global read (GLX, PerfGov, GameAudio, __apex) is resolved at CALL time, never at eval, so the file has no HARD_EDGES pair and can sit anywhere in the shell. */
 const RendererPicker = (function () {
   "use strict";
 
@@ -444,7 +444,7 @@ function initPresentControls() {
 // __apex.diag({download:false}) → clipboard. clipboard.writeText needs a
 // secure context and can reject (iOS wants a user gesture, which this is);
 // the hidden-textarea execCommand fallback is what makes it work over plain
-// http and on older WebKit — the same two-step js/game/gfx-debug.js uses.
+// http and on older WebKit — the same two-step js/perf/gfx-debug-overlay.js uses.
 function copyDiag(btn) {
   const label = (t) => { if (btn) btn.textContent = t; };
   const reset = () => setTimeout(() => label("COPY DIAG"), 1600);

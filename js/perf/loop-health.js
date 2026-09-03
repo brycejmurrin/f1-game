@@ -9,7 +9,7 @@
  * game down for a condition that heals on the very next frame.
  *
  * So: bounded tolerance, the shape this codebase already uses for retries —
- * js/game/perf.js caps crash-sentinel strikes and lets clean races pay them
+ * js/perf/governor.js caps crash-sentinel strikes and lets clean races pay them
  * back; js/render/glx.js bounds context-loss reloads at two per tab session.
  * A run of consecutive faults is tolerated and any CLEAN frame pays the run
  * back to zero; at the cap the loop reports and rethrows exactly as before, so
@@ -83,7 +83,7 @@ const LoopHealth = (() => {
       return survive;
     },
 
-    // Read by js/game/gfx-debug.js, which runs on setInterval and is therefore
+    // Read by js/perf/gfx-debug-overlay.js, which runs on setInterval and is therefore
     // the one surface that still paints after the loop is gone.
     state() {
       return {

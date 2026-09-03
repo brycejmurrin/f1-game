@@ -160,7 +160,7 @@ const CLASS_CEILING = 534;
 // landscape clearance is untouched.
 // 1227 on the deploy union (both lineages' adds; re-measured per the
 // deploy-merge rule).
-// 1228 -> 1229: one <script> tag for js/game/gfx-debug.js, the ?gfxdebug=1
+// 1228 -> 1229: one <script> tag for js/perf/gfx-debug-overlay.js, the ?gfxdebug=1
 // overlay. A node is the honest price of the only channel a player with no
 // console has for telling us what their GPU did.
 // 1234 -> 1238: +4 for the MY TEAM customizer's LOGO OUTLINE row (label +
@@ -186,12 +186,12 @@ const NODE_CEILING = 1064;   // 1234 -> 1238 was the MY TEAM LOGO DETAIL row
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module
 // (measurable only on real hardware — later baked ON and deleted).
-// +1 2026-08-13: the <script> tag for js/game/gfx-quality.js (GRAPHICS presets).
+// +1 2026-08-13: the <script> tag for js/perf/quality-preset.js (GRAPHICS presets).
 // A script tag, not UI markup — it adds nothing to the rendered tree Lighthouse's
 // ~1,400 error band is about, and the feature itself reuses the EXISTING hidden
 // #pm-gfx button rather than minting new controls, so the visible UI grew by zero
 // nodes and css/ by zero classes.
-// +1 2026-08-14: the <script> tag for js/game/cockpit-opts.js (the opt-in
+// +1 2026-08-14: the <script> tag for js/camera/cockpit-opts.js (the opt-in
 // cockpit HALO). Its SETTINGS button is injected at runtime and costs no shell
 // node, exactly like PerfTry's — the tag itself is the whole +1.
 // +12 2026-08-14: the SEASON calendar/format feature — two <script> tags
@@ -204,7 +204,7 @@ const NODE_CEILING = 1064;   // 1234 -> 1238 was the MY TEAM LOGO DETAIL row
 // id scoping a class that already existed.
 // 1140 (deploy) + 12 = 1152, still far under the ~1,400 error band the
 // keep-the-monolith ruling rests on.
-// +1 2026-08-18: <script> for js/game/metrics.js (SETTINGS METRICS overlay).
+// +1 2026-08-18: <script> for js/perf/metrics-overlay.js (SETTINGS METRICS overlay).
 // The button and <pre> are injected at runtime — the tag is the whole +1.
 // +1 2026-08-28: <script> for js/game/garage-scene.js (the setup preview's pit
 // bay — shell, props, team dress, light rig). All of it is geometry built in

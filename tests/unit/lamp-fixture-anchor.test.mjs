@@ -54,7 +54,7 @@ function loadLightTune() {
   sb.window = sb;
   vm.createContext(sb);
   seedLog(sb);
-  for (const f of ["js/game/lighting-knobs.js", "js/game/track-lights.js", "js/game/frame-lights.js", "js/game/lighting.js"])
+  for (const f of ["js/lighting/knobs.js", "js/lighting/track-lights.js", "js/lighting/frame-lights.js", "js/lighting/lighting.js"])
     vm.runInContext(readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), sb);
   return sb.LightTune;
 }
@@ -189,7 +189,7 @@ test("no circuit races through an unlit stretch of road", () => {
   assert.deepEqual(offenders, [],
     "a night circuit has road no lamp reaches. Check that each fixture's `k` " +
     "names the node it actually stands beside (resolvePostNodes in " +
-    "js/game/track-lights.js) before adding more lamps:\n  " + offenders.join("\n  "));
+    "js/lighting/track-lights.js) before adding more lamps:\n  " + offenders.join("\n  "));
 });
 
 test("the start-gantry downlights stay fixture-less AND invisible", () => {

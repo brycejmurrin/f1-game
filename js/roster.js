@@ -86,7 +86,7 @@
     ]
   ],
     LAZY_RACE: [
-    "js/game/light-presets.js"
+    "js/lighting/presets.js"
   ],
     SCENERY_DIR: "js/circuits/scenery",
     LAZY_DATA: [

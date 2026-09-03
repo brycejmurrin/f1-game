@@ -30,7 +30,7 @@ const WGX = (function () {
   //   rung 2  minimal — lite + NO post chain (tonemap blit), no env probe,
   //                     DPR capped at 1 (scene+depth+swapchain only)
   // A loss ON rung 2 is the exit: session-skip this tab to GLX, keep the pick.
-  // An explicit RENDERER re-pick clears the ladder (js/game/gfx-quality.js).
+  // An explicit RENDERER re-pick clears the ladder (js/perf/quality-preset.js).
   let _wgxLevel = 0;
   try {
     _wgxLevel = parseInt(localStorage.getItem("apex26.gfxWgxLevel") || "0", 10) || 0;
@@ -147,7 +147,7 @@ const WGX = (function () {
   const DRAW_STRIDE = 256;
   const MAX_DRAWS = 4096;                               // per-frame draw slots
   // Per-chunk lamps (bindings 15/16). TRACK_LIGHT_CAP sits above the ~800-lamp
-  // bake ceiling in js/game/track-lights.js; CHUNK_IDX_CAP bounds the concatenated
+  // bake ceiling in js/lighting/track-lights.js; CHUNK_IDX_CAP bounds the concatenated
   // per-chunk index table across every chunked mesh in a bake generation
   // (measured visible-chunk counts are ~150 worst; whole-table sizes are far
   // smaller than 16384 at CAP 24 — overflow warns and falls back to global).
@@ -3423,7 +3423,7 @@ const WGX = (function () {
         const AL = frameAllLights;
         const tn = Math.min(TRACK_LIGHT_CAP, (AL.length / 15) | 0), td = _tlScratch;
         // THIRTEEN of the sixteen lanes are baked-static — the same split
-        // js/game/frame-lights.js makes upstream, where only rgb can move. _tlScratch
+        // js/lighting/frame-lights.js makes upstream, where only rgb can move. _tlScratch
         // is module-scope and written nowhere else, so its static lanes survive
         // between frames and only need writing when the SET changes. Gen moves
         // every frame under flicker or the warm-up ramp, and that used to rewrite

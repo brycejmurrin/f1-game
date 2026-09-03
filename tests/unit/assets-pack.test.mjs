@@ -106,7 +106,7 @@ test("the baked-material knob is wired, and ON so the pack can contribute", () =
   // Default is non-zero so a loaded pack actually reaches the shader. Safety
   // (no pack / bad pack / no createTextureArray → procedural look) lives in
   // js/render/assets.js, not in the knob staying at 0.
-  const lighting = fs.readFileSync(path.join(ROOT, "js", "game", "lighting-knobs.js"), "utf8");
+  const lighting = fs.readFileSync(path.join(ROOT, "js", "lighting", "knobs.js"), "utf8");
   const def = lighting.match(/\{ id: "matTexMix",[^}]*\}/);
   assert.ok(def, "matTexMix must exist in TUNE_DEFS");
   assert.match(def[0], /u: "uMatTexMix"/, "matTexMix must be wired to the uMatTexMix uniform");
@@ -603,7 +603,7 @@ test("credits cover every asset in the pack", { skip: !hasPack && "no pack insta
 
 // WHAT THE GAME TELLS THE PLAYER ABOUT PROVENANCE MUST MATCH THE MANIFEST.
 //
-// The BAKED MATERIALS slider help in js/game/lighting-knobs.js described the shipped
+// The BAKED MATERIALS slider help in js/lighting/knobs.js described the shipped
 // pack as "real CC0 photoscans" while all 14 committed layers record
 // `procedural:tools/assets.mjs` / `Apex26-Procedural`. Nothing connected the
 // two, so the string outlived the pack it described: assets/pack/webbake.js CAN
@@ -617,7 +617,7 @@ test("credits cover every asset in the pack", { skip: !hasPack && "no pack insta
 // project's own procedural output. Re-bake with real scans and the manifest
 // licences change to CC0 first — then the string is free to say so.
 test("the UI never claims a provenance the pack contradicts", { skip: !hasPack && "no pack installed" }, () => {
-  const help = fs.readFileSync(path.join(ROOT, "js", "game", "lighting-knobs.js"), "utf8");
+  const help = fs.readFileSync(path.join(ROOT, "js", "lighting", "knobs.js"), "utf8");
   const matTex = help.split("\n").find((l) => l.includes('id: "matTexMix"')) || "";
   assert.ok(matTex, "the BAKED MATERIALS slider disappeared — update this guard");
 

@@ -8,7 +8,7 @@ const DEG = Math.PI / 180;
 const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 
 // The six knobs, in panel order. `def` is 0 for all of them by construction:
-// zero MUST mean "the framing js/game/cameras.js shipped", so RESET is exact
+// zero MUST mean "the framing js/camera/vantage.js shipped", so RESET is exact
 // and a value only ever needs storing when the player actually moved it.
 const CAM_TUNE_DEFS = [
   { id: "height", label: "HEIGHT",   min: -6,  max: 10, step: 0.025, def: 0, unit: "m",
@@ -24,7 +24,7 @@ const CAM_TUNE_DEFS = [
   { id: "fov",    label: "FOV",      min: -35, max: 35, step: 0.25, def: 0, unit: "°",
     help: "Widen (+) or tighten (−) the field of view on top of the mode's own speed-scaled FOV. Solved FOV is clamped 20–110°: a tight onboard (~36°) clips the last −16° of this slider, and a wide chase (~81°) clips the last few + degrees." },
   // CORNER LEAD is not a geometric offset like the six above — CamTune.apply()
-  // never touches it. js/game/cameras.js reads it directly in the chase/far
+  // never touches it. js/camera/vantage.js reads it directly in the chase/far
   // branch and blends the rig toward the classic road-frame chase (eye back
   // along the road, aim at the curved centreline ahead), so the camera leads
   // and swings INTO turns. 0 = locked to the car (the shipped free-world rig);

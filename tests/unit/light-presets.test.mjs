@@ -1,12 +1,12 @@
 /* light-presets.test.mjs — the shipped lighting values must name real knobs.
  *
- * js/game/light-presets.js is 255 profiles carrying 1,921 individual knob
+ * js/lighting/presets.js is 255 profiles carrying 1,921 individual knob
  * settings, keyed "trackId|timeOfDay|weather", and it IS the look everyone sees
  * on the deployed build. Each key inside a profile is a `TUNE_DEFS` id.
  *
  * NOTHING CONNECTS THE TWO FILES. The presets are a baked export from the
  * in-game LIGHTING TUNER's COPY VALUES button — a data blob pasted in — and the
- * resolution in js/game/light-store.js reads `typeof L[d.id] === "number"`,
+ * resolution in js/lighting/profiles.js reads `typeof L[d.id] === "number"`,
  * iterating TUNE_DEFS and looking each id up in the profile. A knob renamed in
  * lighting.js therefore does not throw and does not warn: the lookup simply
  * misses, the value falls back to the default, and every shipped profile that
@@ -37,13 +37,13 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 /** Every `id:` in TUNE_DEFS. Read from source rather than evaluated: lighting-knobs.js
  *  reaches for browser globals at load, and the id list is a flat literal. */
 function tuneIds() {
-  return new Set([...read("js/game/lighting-knobs.js").matchAll(/id:\s*"(\w+)"/g)].map((m) => m[1]));
+  return new Set([...read("js/lighting/knobs.js").matchAll(/id:\s*"(\w+)"/g)].map((m) => m[1]));
 }
 
 /** The presets file assigns `window.LightPresets`; run it against a stub window. */
 function presets() {
   const ctx = vm.createContext({ window: {}, Math, JSON, Object, Array });
-  vm.runInContext(read("js/game/light-presets.js"), ctx, { filename: "js/game/light-presets.js" });
+  vm.runInContext(read("js/lighting/presets.js"), ctx, { filename: "js/lighting/presets.js" });
   const P = vm.runInContext("window.LightPresets", ctx);
   assert.ok(P && typeof P === "object", "light-presets.js did not assign window.LightPresets");
   return P;
@@ -71,7 +71,7 @@ test("every shipped preset knob is a real TUNE_DEFS id", () => {
     .sort();
   assert.deepEqual(bad, [],
     "a shipped lighting preset names a knob that no longer exists in TUNE_DEFS. It will not throw — " +
-    "the resolution in js/game/light-store.js just misses the lookup and falls back to the default, " +
+    "the resolution in js/lighting/profiles.js just misses the lookup and falls back to the default, " +
     "so the shipped look for those conditions quietly stops applying. Rename it here too, or drop it.");
 });
 
@@ -79,7 +79,7 @@ test("the global baseline profile, if present, is a plain knob map", () => {
   // "*" is the optional global baseline and resolves BELOW every per-condition
   // profile. A nested object here (a track key pasted one level too deep, which
   // is the natural COPY VALUES slip) would be read as a knob whose value is not
-  // a number, and js/game/light-store.js's `typeof === "number"` test would skip
+  // a number, and js/lighting/profiles.js's `typeof === "number"` test would skip
   // it — silently, and for every condition at once.
   const P = presets();
   if (!P["*"]) return;

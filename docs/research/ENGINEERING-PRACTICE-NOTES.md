@@ -265,7 +265,7 @@ that a failed write is indistinguishable from a successful one.
 
 1. **Log it.** One `Log.warn("game", …)` in the `catch` turns an invisible
    failure into something `__apex.logs({ns:"game"})` can show. This is the same
-   fix applied to `js/game/audio.js` and `js/net/transport.js` in this pass, and
+   fix applied to `js/audio/engine.js` and `js/net/transport.js` in this pass, and
    the same reasoning: a documented debug namespace that cannot emit a line is
    not a debug namespace.
 2. **Make `set` report success**, so callers that care (career save, custom logo
@@ -275,7 +275,7 @@ that a failed write is indistinguishable from a successful one.
    so plainly. "Progress will not be saved in Private Browsing" is a sentence a
    player can act on; silence is not.
 4. Consider whether the customLogo data URL belongs in IndexedDB instead. The
-   repo already uses it for the music library (`js/game/music-lib.js`), so the
+   repo already uses it for the music library (`js/audio/music-lib.js`), so the
    dependency exists, and IndexedDB's quota is far larger.
 
 None of this was implemented in this pass — it is a behaviour change to the
@@ -312,7 +312,7 @@ file, it becomes a work list. Counting `catch (` against `Log.<level>(` across
 | file | catch | Log | fully empty `catch {}` |
 |---|---:|---:|---:|
 | `js/net/nostr.js` | 37 | **0** | 16 |
-| `js/game/spotify.js` | 35 | **0** | 17 |
+| `js/audio/spotify.js` | 35 | **0** | 17 |
 | `js/game.js` | 26 | **0** | 16 |
 | `js/net/lobby.js` | 25 | **0** | 14 |
 | `js/render/webgpu/wgx.js` | 26 | 2 | 12 |
@@ -336,7 +336,7 @@ Two things worth saying before anyone treats this as 379 bugs:
   soundtrack that silently never plays), and `store.js` (§4 above — the whole
   persistence layer).
 
-`js/game/audio.js` and `js/net/transport.js` moved off this list during this
+`js/audio/engine.js` and `js/net/transport.js` moved off this list during this
 pass (0 → 4 and 0 → 3) by logging exactly the failures that present as a symptom
 with no cause. The same three-or-four-site treatment would clear the top of the
 table without touching the other 350.
