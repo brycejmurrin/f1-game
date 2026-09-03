@@ -63,7 +63,10 @@ function appendCarTailLights(frame, track, cars, player, mobileTier) {
   // third rival came inside tailRange, and which three depended on camera yaw
   // because the set is ordered by the yaw-biased metric.
   // Mobile still evicts, deliberately: there the cap IS 24 lights total, which is
-  // the per-fragment budget the tier exists to protect.
+  // the per-fragment budget the tier exists to protect. So does a desktop under
+  // a GOVERNOR shed (tierShed below): at tier >= 1 the lamp cap and the slot
+  // budget coincide by design, and the farthest lamps give way to tail-lights
+  // — that is the total fill budget being honoured, not the empty-slot bug.
   // …and the shed follows the LIVE tier, not just the device. On mobile the two
   // agreed (24 either way) so this held; on a DESKTOP the governor could cut the
   // lamp cap to 24 while SLOTS stayed at the shader's 48, so `room` reported 24

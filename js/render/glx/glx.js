@@ -325,6 +325,7 @@ const GLX = (function () {
   function setAlphaWrite(on) {
     gl.colorMask(true, true, true, on);
   }
+  const ROAD_BIAS = [-4.0, -8.0];   // decals sit on the road: shared, not a literal per draw
   function setPolyOffset(bias) {
     if (bias) {
       gl.enable(gl.POLYGON_OFFSET_FILL);
@@ -1976,9 +1977,8 @@ const GLX = (function () {
     gl.uniform2f(shadowU.uSize, w, l);
     setBlend(true);
     setDepthMask(false);
-    // Pull the flat quad toward the camera in depth so it can't z-fight the
-    // coplanar road underneath (the "shadow flickering under the car").
-    setPolyOffset([-4.0, -8.0]);
+    // Pull the quad toward the camera so it can't z-fight the coplanar road.
+    setPolyOffset(ROAD_BIAS);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     setPolyOffset(null);
@@ -1995,7 +1995,7 @@ const GLX = (function () {
     gl.uniform2f(markU.uSize, w, l);
     setBlend(true);
     setDepthMask(false);
-    setPolyOffset([-4.0, -8.0]);
+    setPolyOffset(ROAD_BIAS);
     bindVAO(shadowVAO);
     gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
     setPolyOffset(null);
@@ -2013,7 +2013,7 @@ const GLX = (function () {
     gl.uniformMatrix4fv(markBatchU.uViewProj, false, frameViewProj);
     setBlend(true);
     setDepthMask(false);
-    setPolyOffset([-4.0, -8.0]);   // sit on the road, no z-fight
+    setPolyOffset(ROAD_BIAS);   // sit on the road, no z-fight
     bindVAO(markBatchVAO);
     if (dirty) {
       gl.bindBuffer(gl.ARRAY_BUFFER, markBatchVBO);

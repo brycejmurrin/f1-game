@@ -62,7 +62,14 @@ const GameAudio = (function () {
   let currentUrl = null;
   let musicToken = 0;
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
-  const _userBufKeys = [];                 // insertion order of non-builtin keys (cap 2)
+  const _bufKeys = [];                     // insertion order of cached urls (bound: MUSIC_CACHE)
+  // Decoded PCM is ~90 MB per four-minute track at a 48 kHz context. Desktop
+  // keeps the 2 most recent so a two-track playlist alternates without a
+  // re-decode; a PHONE keeps only the playing track — the second buffer was
+  // the largest single item in a phone's heap, and on a rotating playlist it
+  // is hit once per full rotation. GLX loads before this file (manifest order);
+  // the typeof guard is the standalone harness.
+  const MUSIC_CACHE = (typeof GLX !== "undefined" && GLX && GLX.isMobile) ? 1 : 2;
   const MENU_TRACK = "assets/music/menu.mp3";
   const PLAYLIST = [
     { id: "builtin:menu", name: "menu", url: MENU_TRACK, builtin: true },
@@ -249,7 +256,7 @@ const GameAudio = (function () {
     rainPending = null;
     rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
     for (const k in musicBuffers) delete musicBuffers[k];  // buffers are ctx-bound
-    _userBufKeys.length = 0;
+    _bufKeys.length = 0;
     engBuf = accBuf = null; samplesReady = false;           // ctx-bound; reload for new ctx
     noisePoolBuf = null;                                    // ctx-bound too — a buffer from the
                                                             // old ctx throws on the new one
@@ -1076,16 +1083,13 @@ const GameAudio = (function () {
       .then(r => r.arrayBuffer())
       .then(ab => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
       .then(buf => {
-        // Cache user tracks too — a single uploaded MP3 used to re-fetch and
-        // re-decode on EVERY repeat (loop only engages under 2 playlist
-        // entries, and only builtins were cached). Decoded PCM is big, so
-        // user-track buffers are bounded to the 2 most recent.
+        // Every track, builtin or uploaded, is cached under the same bound
+        // (MUSIC_CACHE): builtins used to be held for the life of the context
+        // — five decoded songs — and a single uploaded MP3 used to re-fetch
+        // and re-decode on EVERY repeat.
         musicBuffers[url] = buf;
-        // Builtins were cached for the life of the context: the playlist
-        // rotates, so a long session held all five decoded (~80-90 MB of PCM
-        // each). Same 2-entry bound for every track, builtin or not.
-        _userBufKeys.push(url);
-        while (_userBufKeys.length > 2) delete musicBuffers[_userBufKeys.shift()];
+        _bufKeys.push(url);
+        while (_bufKeys.length > MUSIC_CACHE) delete musicBuffers[_bufKeys.shift()];
         playMusicBuffer(buf, token);
       })
       .catch((err) => {

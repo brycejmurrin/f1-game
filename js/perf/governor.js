@@ -66,6 +66,13 @@ let _upBackoff = UP_BACKOFF_MIN;   // wait before the next restore attempt after
 // "Reverted for buying nothing" is the honest signal that the lever is wrong,
 // and it is already computed; this just stops throwing it away.
 let _scaleFutile = false;
+// Same idea for the FEATURE ladder. A tier step that did not move the EMA is
+// reverted and, without this, retried on the very next evaluation forever —
+// on LOW that step is the whole post stack (bloom, SSAO, god-rays, contact,
+// lamp volumetrics), so a CPU-bound device saw them strobe on and off every
+// ~8 s. Latched on a reverted DOWN step; released when headroom returns or the
+// player changes preset (either changes what a step means).
+let _tierFutile = false;
 
 // THE BUDGET IS DERIVED, NOT HARDCODED. "> 19 ms" only ever meant "slower than
 // a 60 Hz display can go" — it silently assumed the frame INTERVAL is a proxy
@@ -401,7 +408,7 @@ function tick(dtMs) {
         // this device has just answered for. (An UP step failing says the
         // opposite — there was no headroom — and implies nothing about fill.)
         if (!v.up) _scaleFutile = true;
-      } else { _perfTier = v.prev; _autoShed = v.shed; }
+      } else { _perfTier = v.prev; _autoShed = v.shed; if (!v.up) _tierFutile = true; }
       _govCool = VERIFY_COOL;
       // A failed UP step is the device saying "no headroom". Without a hold
       // the restore gate (EMA under the floor, _downHold 0) was true again
@@ -442,7 +449,7 @@ function tick(dtMs) {
     if (stepped) {
       _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
       _govCool = 30; _downHold = 600;
-    } else if (_perfTier < 4) {   // scale lever exhausted — shed a feature
+    } else if (_perfTier < 4 && _perfTierFloor < 4 && !_tierFutile) {   // scale lever exhausted — shed a feature (a crash floor of 4 has already shed everything this ladder can)
       // Step from the EFFECTIVE tier, not from _perfTier alone. A rung at or
       // below the floor (crash sentinel, or the player's GRAPHICS preset) is
       // already shed, so incrementing onto it changes nothing the EMA can see:
@@ -474,6 +481,7 @@ function tick(dtMs) {
     }
   } else if (_frameEMA < restoreAt && _downHold === 0) {   // clear, SETTLED headroom (~10 s since the last cut): restore slowly
     _scaleFutile = false;   // headroom is back — nothing about the old verdict still applies
+    _tierFutile = false;
     // The up-step is VERIFIED like the down-step. Restoring is a guess that the
     // headroom is real, and the same _pendingVerify machinery that reverts a
     // useless cut reverts a premature restore one evaluation later — without
@@ -569,6 +577,7 @@ return {
     if (t === _userTier) return;
     const prev = _userTier;
     _userTier = t;
+    _tierFutile = false;   // a new preset changes what a step means
     // RAISING QUALITY MUST RELEASE WHAT THE OLD PRESET CAUSED. The degrade
     // branch steps from _floorTier(), which folds in _userTier, so a shed taken
     // while the player sat on MEDIUM wrote _perfTier = 3 — the governor adopted

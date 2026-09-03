@@ -1036,7 +1036,7 @@ let frameSky = {}, frame = {};
 // ---------- sky / weather animation state ----------
 // Continuously increasing render clock (seconds) fed to the sky shader each
 // frame so clouds drift and stars twinkle even when the physics are frozen.
-let _skyT = 0;
+let _skyT = 0, _skyHold = false;   // hold: __apex.renderClock(t, true) freezes the sky for a reproducible capture
 // Lightning state: base ambient colours saved from applyRaceSettings(), current
 // flash intensity, remaining flash bright time, and next-flash countdown.
 let _ltBase = null;           // { ambientSky, ambientGround, exposure } saved at race start
@@ -3033,6 +3033,7 @@ const G = {
   // makes any pixel comparison across runs non-deterministic. Exposed so a
   // visual-regression capture can pin it; see __apex.renderClock().
   get skyT() { return _skyT; }, set skyT(v) { _skyT = v; },
+  get skyHold() { return _skyHold; }, set skyHold(v) { _skyHold = !!v; },
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
@@ -6656,8 +6657,8 @@ function render(dt) {
 
   // ── Sky animation & weather FX ──────────────────────────────────────────
   // Advance the render clock regardless of physics freeze so the sky always
-  // animates (cloud drift, star twinkle).
-  _skyT += dt;
+  // animates (cloud drift, star twinkle) — unless a capture holds it.
+  if (!_skyHold) _skyT += dt;
   frameSky.time = _skyT;
   // STAR BRIGHTNESS / CLOUD SPEED tuner knobs ride on the sky object.
   frameSky.starBright = LT.starBright;

@@ -369,6 +369,7 @@ interface GameCtx {
   raceT: number;
   /** The RENDER clock (sky drift, flag cloth) — pin it for a pixel comparison. */
   skyT: number;
+  skyHold: boolean;
   raceTimeOfDay: TimeOfDay;
   raceWeather: Weather;
   sectorBests: [number, number, number];

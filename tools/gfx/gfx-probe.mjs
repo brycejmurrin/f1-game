@@ -45,6 +45,8 @@ function parseArgs(argv) {
     lite: false,
     iphone: false,
     tod: null,
+    weather: null,   // dry | wet | rain | overcast | fog (needs --tod too; default dry)
+    tune: [],        // --tune cloudCover=0.9 (repeatable): __apex.lightTune after the race starts
     tlxWebgpu: false,
     lavapipe: false,
     outDir: null,
@@ -63,6 +65,8 @@ function parseArgs(argv) {
     else if (a === "--retries") o.retries = Math.max(1, parseInt(next(), 10) || 1);
     else if (a === "--retry-delay") o.retryDelayMs = Math.max(0, parseInt(next(), 10) || 0);
     else if (a === "--tod") { o.tod = next(); skip.add(o.tod); }
+    else if (a === "--weather") { o.weather = next(); skip.add(o.weather); }
+    else if (a === "--tune") { const kv = next(); skip.add(kv); if (kv) o.tune.push(kv); }
     else if (a === "--lite") o.lite = true;
     else if (a === "--iphone") o.iphone = true;
     else if (a === "--tlx-webgpu") o.tlxWebgpu = true;
@@ -74,7 +78,9 @@ function parseArgs(argv) {
       console.log(`gfx-probe — WEBGPU/THREE screenshot probe with logging + retry
 
   node tools/gfx/gfx-probe.mjs [--backend webgpu|three] [--lite] [--iphone]
-                           [--tod day|dusk|dawn|night] [--tlx-webgpu] [--lavapipe]
+                           [--tod day|dusk|dawn|night] [--weather dry|wet|rain|overcast|fog]
+                           [--tune knob=value]…  (lighting knob after the race starts)
+                           [--tlx-webgpu] [--lavapipe]
                            [--retries N] [--retry-delay MS]
                            [track] [--cam orbit|eye|park] [--out DIR]
 
@@ -268,12 +274,18 @@ async function runProbeAttempt(attemptNum) {
     });
     log("assets", "loadModels done");
 
-    await page.evaluate(({ id, tod }) => {
-      if (tod) __apex.race(id, tod, "dry");
+    await page.evaluate(({ id, tod, weather }) => {
+      if (tod || weather) __apex.race(id, tod || "day", weather || "dry");
       else __apex.race(id);
       __apex.go();
-    }, { id: opts.track, tod: opts.tod });
-    log("race", `started track=${opts.track}` + (opts.tod ? ` tod=${opts.tod}` : ""));
+    }, { id: opts.track, tod: opts.tod, weather: opts.weather });
+    log("race", `started track=${opts.track}` + (opts.tod ? ` tod=${opts.tod}` : "") + (opts.weather ? ` weather=${opts.weather}` : ""));
+    if (opts.tune.length) {
+      const tune = {};
+      for (const kv of opts.tune) { const i = kv.indexOf("="); if (i > 0) tune[kv.slice(0, i)] = parseFloat(kv.slice(i + 1)); }
+      await page.evaluate((t) => { __apex.lightTune(t); }, tune);
+      log("tune", JSON.stringify(tune));
+    }
 
     await retryStep("track-ready", () => page.waitForFunction(
       () => { try { return !!__apex.info().track; } catch { return false; } },

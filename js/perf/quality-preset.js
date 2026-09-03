@@ -77,6 +77,7 @@ function label() { return "GRAPHICS: " + current().label; }
 function set(id, opts) {
   const p = byId(id);
   if (!p) return false;
+  const prev = byId(_cur);
   _cur = p.id;
   Log.info("game", "GfxQuality.set " + _cur);
   const st = gstore(); if (st) st.set("gfxPreset", _cur);
@@ -85,7 +86,11 @@ function set(id, opts) {
   // rung) resolves through the CURRENT preset, so a flip must re-run the
   // lighting apply to engage live. Lazy, like the PerfGov poke above.
   try { if (typeof LightStore !== "undefined" && LightStore.reapply) LightStore.reapply(); } catch (_) { /* pre-boot: the first apply() resolves it */ }
-  const needsReload = syncBootTier();
+  // MSAA is decided once when the render targets are made (GLX setup, WGX
+  // script eval) from this preset: ULTRA 4×, anything else 2×/1×. Crossing
+  // that boundary on a DESKTOP therefore needs the same reload the mobile
+  // boot tier takes, or the new sample count applies only on the next visit.
+  const needsReload = syncBootTier() || (!_isMobile && !!prev && prev.mobileHigh !== p.mobileHigh);
   const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
   if (btn) btn.textContent = needsReload ? label() + " — RELOADING…" : label();
   if (needsReload && !(opts && opts.noReload)) {

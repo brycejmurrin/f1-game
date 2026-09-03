@@ -80,6 +80,10 @@ const TLX = (function () {
       // GPU error tally — see the onuncapturederror hook below.
       let _gpuErrors = 0, _gpuFirstError = null;
       const GPU_ERR_LOG_CAP = 8;
+      // Heal-gate counters live HERE, not by the gate: the error hooks install
+      // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
+      // error arriving before the later declarations ran was a TDZ throw.
+      let _presentN = 0, _healTried = false, _gpuErrFrames = 0, _gpuErrLastPresent = -1;
       // Headless is a fact about PRESENTATION, not about silicon: headless
       // Chromium on a real GPU IS hardware. It belongs to _softBlit (which
       // exists because a headless swapchain does not composite) and never
@@ -758,17 +762,12 @@ const TLX = (function () {
       // 0 = lit/post, 1 = TSL unlit, 2 = classic (no TSL). Latched on the
       // first present() throw so later frames do not recompile the dead graph.
       let _drawMatMode = 0;
-      // present() count since boot, and whether the AUTO self-heal below has
-      // already fired this session (it reloads, so once is all it can do).
-      let _presentN = 0, _healTried = false;
-      // DISTINCT PRESENTS an error landed in, not the raw count. One rejected
-      // pipeline raises an uncaptured error per DRAW and a compilation-info
-      // error per message, so a single broken program can be dozens of
-      // "errors" in one frame — while a healthy tab can raise exactly one
-      // transient (a resize race, a texture freed on a track switch, the
-      // capture path). Healing on `> 0` reloaded the second case; WGX already
-      // counts frames for the same reason (GPU_ERR_ESCALATE_FRAMES).
-      let _gpuErrFrames = 0, _gpuErrLastPresent = -1;
+      // The heal counts DISTINCT PRESENTS an error landed in (_gpuErrFrames,
+      // declared beside _gpuErrors above), not raw errors: one rejected
+      // pipeline raises an error per DRAW, so a broken program is dozens of
+      // "errors" in one frame, while a healthy tab can raise exactly one
+      // transient (resize race, texture freed on a track switch, the capture
+      // path). Healing on `> 0` reloaded the second case; WGX counts frames too.
       const HEAL_WINDOW = 120;
       const HEAL_MIN_FRAMES = 2;   // distinct presents carrying an error (see _gpuErrFrames)
 

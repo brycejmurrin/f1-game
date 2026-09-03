@@ -455,10 +455,15 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxWgxAllowSoftware", "apex26.glErrDrain", "apex26.instCellCache",
     "apex26.forceMobileTier", "apex26.tlxForceHw", "apex26.tlxForceBatches",
     "apex26.tlxArrayNearest", "apex26.tlxMirrorSweep", "apex26.tlxChunkRelease",
-    "apex26.tlxMobile", "apex26.gfxWgxLite", "apex26.gfxHigh", "apex26.matTexMix",
+    "apex26.tlxMobile", "apex26.gfxHigh", "apex26.matTexMix",
   ]);
-  const resettable = new Set([...G.RENDERER_LS_KEYS, ...G.RENDERER_SS_KEYS]);
-  const written = new Set();
+  // LANE-AWARE: clearRendererStorage removes each list from ITS OWN store, so a
+  // key written to localStorage but listed only in RENDERER_SS_KEYS would pass
+  // a merged check and never be cleared. Computed keys (`setItem(_rk, …)`) are
+  // invisible to the literal regex and are named here so a new one is noticed.
+  const lsResettable = new Set(G.RENDERER_LS_KEYS), ssResettable = new Set(G.RENDERER_SS_KEYS);
+  const COMPUTED_OK = new Set(["_rk", "rk"]);   // apex26.ctxLostReloads via a local (glx.js, tlx.js) — in RENDERER_SS_KEYS
+  const written = new Set();   // "ls:key" / "ss:key"
   const renderDir = path.join(ROOT, "js/render");
   const stack = [renderDir];
   while (stack.length) {
@@ -466,12 +471,20 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
       const abs = path.join(e.parentPath || e.path, e.name);
       if (e.isDirectory()) { stack.push(abs); continue; }
       if (!e.name.endsWith(".js")) continue;
-      for (const m of fs.readFileSync(abs, "utf8").matchAll(/(?:local|session)Storage\.setItem\(\s*"(apex26\.[A-Za-z0-9_]+)"/g)) {
-        written.add(m[1]);
+      const src = fs.readFileSync(abs, "utf8");
+      for (const m of src.matchAll(/(local|session)Storage\.setItem\(\s*"(apex26\.[A-Za-z0-9_]+)"/g)) {
+        written.add((m[1] === "local" ? "ls:" : "ss:") + m[2]);
+      }
+      for (const m of src.matchAll(/(?:local|session)Storage\.setItem\(\s*([A-Za-z_$][\w$]*)\s*,/g)) {
+        assert.ok(COMPUTED_OK.has(m[1]), `${path.relative(ROOT, abs)}: setItem with a computed key "${m[1]}" — name it in COMPUTED_OK and make sure the key it holds is resettable`);
       }
     }
   }
-  const unresettable = [...written].filter((k) => !resettable.has(k) && !READ_ONLY_PINS.has(k)).sort();
+  const unresettable = [...written].filter((k) => {
+    const [lane, key] = [k.slice(0, 2), k.slice(3)];
+    if (READ_ONLY_PINS.has(key)) return false;
+    return lane === "ls" ? !lsResettable.has(key) : !ssResettable.has(key);
+  }).sort();
   assert.deepEqual(unresettable, [],
     "these backend-written latches survive RESET RENDERER — add them to RENDERER_LS_KEYS/SS_KEYS (renderer-picker.js) or, if they are read-only debug pins, to READ_ONLY_PINS here");
   const removed = G.clearRendererStorage();
@@ -2254,7 +2267,70 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
   assert.match(tsl, /dFdx\(Nsaa\)/,
     "TLX SAA must differentiate the pre-material snapshot");
   assert.match(post, /Math\.min\(4, cMax, dMax\)/,
-    "desktop GLX MSAA must pick 4× like WGX, not the old 2× cap");
+    "desktop GLX MSAA starts from min(4, cMax, dMax); the preset cap (ULTRA 4×, else 2×) is applied AFTER, see the gfxPreset test");
+});
+
+test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
+  // GameStore JSON-encodes every value: the key holds "\"ultra\"" WITH the
+  // quotes. 0a31155 compared the raw string to "ultra", so every desktop that
+  // had ever pressed the preset button — ULTRA included — shipped at 2×. The
+  // mock answers 4 samples for both formats, so the cap is the only thing
+  // that can move the number; behaviour, not source text, is what's pinned.
+  const msaaFor = (ls) => bootGlx({ ls }).GLX.msaa();
+  assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("ultra") }), 4,
+    "ULTRA stored the way GameStore stores it must keep 4×");
+  assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("high") }), 2,
+    "HIGH caps at 2×");
+  assert.equal(msaaFor({ "apex26.gfxPreset": "ultra" }), 4,
+    "a raw (unencoded) 'ultra' — a probe's --ls or an older writer — still reads as ULTRA");
+  assert.equal(msaaFor({}), 2,
+    "unset = the desktop default HIGH = capped");
+  assert.equal(msaaFor({ "apex26.gfxHigh": "1" }), 4,
+    "the legacy phone key is honoured only when the preset was never stored");
+  assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("high"), "apex26.gfxHigh": "1" }), 2,
+    "a stored preset outranks the legacy key");
+  // WGX makes the same decision at module scope; pin that it decodes too.
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /_p = JSON\.parse\(_p\)/, "WGX must JSON-decode apex26.gfxPreset before comparing");
+  assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
+    "WGX: ULTRA → 4×, unset → legacy key, anything else 1× (agreeing with GLX's cap)");
+});
+
+test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is one shared array", () => {
+  // A hidden Mesh still references its geometry: after a track switch every
+  // shadow-pool slot the new track did not refill kept an old chunk alive.
+  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sh, /const parkedGeo = new THREE\.BufferGeometry\(\)/, "one shared empty geometry for parked wrappers");
+  assert.match(sh, /for \(let i = used; i < pool\.length; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
+    "endPass must release the discrete casters' geometry, not only hide them");
+  assert.match(sh, /iPool\[i\]\.visible = false; iPool\[i\]\.geometry = parkedGeo;/,
+    "and the instanced casters' geometry");
+  // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
+  // one array per skid mark per frame.
+  const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(glx, /setPolyOffset\(\[-4/, "no per-draw bias literal");
+  assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 3, "the three road decal draws share ROAD_BIAS");
+});
+
+test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {
+  // The deck used to ignore overcast entirely (no clamped sun, no grey mix),
+  // so heavy cloud read flatter and brighter on WGX than on GLX/TLX. Pin the
+  // terms that were missing, in the same shape GLX SKY_FS writes them.
+  const glx = read("js/render/glx/shaders/glsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgsl = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  for (const [name, g, w] of [
+    ["overcast sun clamp", /mix\(sunBright, min\(sunBright, 0\.55\), overcast\)/, /mix\(sunBright, min\(sunBright, 0\.55\), overcast\)/],
+    ["grey tops", /vec3\(0\.62, 0\.63, 0\.65\), overcast \* 0\.65\)/, /vec3<f32>\(0\.62, 0\.63, 0\.65\), overcast \* 0\.65\)/],
+    ["grey bases", /vec3\(0\.19, 0\.19, 0\.22\), overcast \* 0\.60\)/, /vec3<f32>\(0\.19, 0\.19, 0\.22\), overcast \* 0\.60\)/],
+    ["golden tops", /mix\(1\.45, 2\.6, golden\)/, /mix\(1\.45, 2\.6, goldenCl\)/],
+    ["pink undersides", /vec3\(0\.9, 0\.42, 0\.5\) \* \(0\.22 \* golden/, /vec3<f32>\(0\.9, 0\.42, 0\.5\)\s*\* \(0\.22 \* goldenCl/],
+    ["day cap/base contrast", /cloudBot \* 0\.80, cloudTop \* 1\.14, capf\), daytime \* 0\.45\)/, /cloudBot \* 0\.80, cloudTop \* 1\.14, capf\), daytime \* 0\.45\)/],
+    ["twilight wash", /pow\(sd, 2\.5\) \* twilight \* 0\.30 \* \(1\.0 - overcast \* 0\.6\)/, /pow\(sd, 2\.5\) \* twilight \* 0\.30 \* \(1\.0 - overcast \* 0\.6\)/],
+    ["moon silver", /vec3\(0\.08, 0\.10, 0\.16\)/, /vec3<f32>\(0\.08, 0\.10, 0\.16\)/],
+  ]) {
+    assert.match(glx, g, `GLX still carries the ${name} term`);
+    assert.match(wgsl, w, `WGX must carry the ${name} term`);
+  }
 });
 
 test("pcssPen help names desktop three.js WebGL2 as live", () => {

@@ -1795,12 +1795,29 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     let thick = clamp(fbm(cp2 * 0.55 + vec2<f32>(3.1, 1.7)) * 2.0 - 0.55, 0.0, 1.0);
     let sl = pow(sd, 2.0);
     let sunBright = max(sunColor.r, max(sunColor.g, sunColor.b));
-    let cloudTop = mix(vec3<f32>(0.58, 0.62, 0.70), vec3<f32>(1.0, 0.97, 0.91), sl)
-                 * (0.38 + 0.62 * sunBright);
-    let cloudBot = vec3<f32>(0.26, 0.27, 0.34) * (0.24 + 0.44 * sunBright);
-    var lit = mix(cloudBot, cloudTop, clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0));
-    let silver = pow(sd, 6.0) * (1.0 - thick);
-    lit = lit + sunColor * silver * 1.3 * cloudSilver;   // CLOUD SILVER LINING knob
+    // Deck shading = GLX SKY_FS, term for term. Before this port the deck
+    // ignored overcast entirely (no clamped sun, no grey mix on tops or
+    // bases), so a heavy-cloud sky read flatter and brighter here than on
+    // GLX/TLX; golden-hour tops, pink undersides, the daytime cap/base
+    // contrast, the twilight wash and the moon silver were all missing too.
+    let effSunBright = mix(sunBright, min(sunBright, 0.55), overcast);
+    let goldenCl = 1.0 - smoothstep(0.0, 0.45, sunE);   // 1 near the horizon, 0 high
+    var cloudTop = mix(vec3<f32>(0.58, 0.62, 0.70), vec3<f32>(1.0, 0.97, 0.91), sl)
+                 * (0.38 + 0.62 * effSunBright);
+    cloudTop = mix(cloudTop, cloudTop * sunColor * mix(1.45, 2.6, goldenCl),
+                   sl * (1.0 - sunE) * (0.55 + goldenCl * 0.40) * (1.0 - overcast));
+    cloudTop = mix(cloudTop, vec3<f32>(0.62, 0.63, 0.65), overcast * 0.65);
+    var cloudBot = vec3<f32>(0.26, 0.27, 0.34) * (0.24 + 0.44 * effSunBright);
+    cloudBot = cloudBot + sunColor * vec3<f32>(0.9, 0.42, 0.5)
+             * (0.22 * goldenCl * (1.0 - overcast) * (1.0 + twilight * 1.3));
+    cloudBot = mix(cloudBot, vec3<f32>(0.19, 0.19, 0.22), overcast * 0.60);
+    let capf = clamp(0.18 + (1.0 - thick) * 0.75, 0.0, 1.0);
+    var lit = mix(cloudBot, cloudTop, capf);
+    lit = mix(lit, mix(cloudBot * 0.80, cloudTop * 1.14, capf), daytime * 0.45);
+    let silver = pow(sd, 6.0) * (1.0 - thick) * (0.55 + goldenCl) * (1.0 - overcast * 0.7);
+    lit = lit + sunColor * silver * (1.3 + twilight * 1.6) * cloudSilver;   // CLOUD SILVER LINING knob
+    if (twilight > 0.001) { lit = lit + sunColor * pow(sd, 2.5) * twilight * 0.30 * (1.0 - overcast * 0.6); }
+    if (moon > 0.0) { lit = mix(lit, lit + vec3<f32>(0.08, 0.10, 0.16), moon * cov * (1.0 - thick * 0.6) * 0.18); }
     // LIGHTNING: cool blue-white flash through the deck (GLX SKY_FS).
     if (lightning > 0.001) {
       let ltFlash = vec3<f32>(0.82, 0.94, 1.30) * (1.0 + thick * 1.2);
