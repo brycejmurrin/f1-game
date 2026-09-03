@@ -72,9 +72,12 @@ function buildSecRows() {
 // right, and fatter `.hud-box` padding starts `.hud-top` further left. MEASURED
 // slack, full spelling: 1000@150% (ratio 667) +27, 1000@175% (571) -38 but short
 // fits at +13, 1000@200% (500) short still -50; 1280@150% (853) +25, 1280@175%
-// (731) -64 and short would be -16 too, 1280@200% (640) -105. So narrow gets a
-// shorten band between 550 and 640 and drops below it; wide has no useful
-// shorten band at all and drops straight away at 800.
+// (731) -64 and short would be -16 too, 1280@200% (640) -105.
+// Phone landscape 852×393 @150% (ratio 568): slot 69px vs short chip 62px —
+// they OVERLAP POS (clashTop measured Chromium 2026-09-03) while the old
+// drop floor of 550 left the chip beside the map. Narrow drop is therefore
+// 600 (catches that cell); fitHud also force-drops on a measured slot clash
+// so a weird viewport cannot sit in the overlap. Wide still drops at 800.
 //
 // Every read here is cheap and needs no cache. Both custom properties are
 // INLINE declarations this file's own passes write (applyScale writes
@@ -85,7 +88,11 @@ function buildSecRows() {
 // before the first fit. Nothing here asks the layout engine anything, so it
 // can simply run every tick and follow a window resize for free.
 const GAP_SHORT_AT = { narrow: 640, wide: 800 };
-const GAP_DROP_AT  = { narrow: 550, wide: 800 };
+const GAP_DROP_AT  = { narrow: 600, wide: 800 };
+// Undrop hysteresis: only leave the under-map dock when the between-slot can
+// hold a FULL long spelling (~120 CSS px) plus FIT_AIR. Clears a sticky drop
+// after a resize without flickering at the threshold.
+const GAP_UNDROP_CSS = 120;
 // The gap is distance ÷ the PLAYER'S OWN speed, so under braking the divisor
 // halves within a second and the tenths jumped 2x between ticks (10 Hz) with
 // the rival not having moved relative to the car. Smooth the displayed
@@ -108,11 +115,14 @@ function gapForm() {
   // desyncs the moment anything else touches the attribute (a dev tool, a probe,
   // a future panel) and then never repairs itself. Reading an attribute is as
   // cheap as reading a field and cannot go stale.
-  if (drop !== ("gapDrop" in root.dataset)) {
-    if (drop) root.dataset.gapDrop = "1";
-    else delete root.dataset.gapDrop;
-  }
-  return ratio <= GAP_SHORT_AT[k] ? _gapFormShort : _gapFormLong;
+  // SET from ratio; CLEAR from ratio only when clearly above the floor — a
+  // mid-band leave alone lets fitHud's geometry force-drop survive the next
+  // tick (phone @ ~140% can clash while ratio is still above DROP_AT).
+  if (drop) root.dataset.gapDrop = "1";
+  else if (ratio > GAP_DROP_AT[k] + 80) delete root.dataset.gapDrop;
+  // Short whenever dropped (under-map max-width is the map) or the ratio says so.
+  return (("gapDrop" in root.dataset) || ratio <= GAP_SHORT_AT[k])
+    ? _gapFormShort : _gapFormLong;
 }
 // Hoisted: gapForm runs every HUD tick — returning fresh arrows was 2 closures
 // per call for two constant formats.
@@ -192,6 +202,26 @@ function fitHud() {
   if (!top) { if (++_fitRetry <= 30) _fitKey = ""; return; }
   const half = window.innerWidth / 2;
   const map = wide(els.minimap), gaps = wide(els.gapA && els.gapA.parentNode);
+  // GEOMETRY DROP. The ratio floor is the cheap early signal; this is the
+  // truth. When the between-slot (POS left − map right) is smaller than the
+  // chip plus air, dock under the map — measured 852×393 @150%: slot 69 vs
+  // short chip 62 with clashTop true while ratio 568 was only just under the
+  // new 600 floor. Also CLEAR when the slot can hold a long spelling again
+  // (GAP_UNDROP_CSS), so a sticky force-drop does not survive a widen.
+  {
+    const gapsEl = els.gapA && els.gapA.parentNode;
+    if (els.minimap && _hudTop && gapsEl) {
+      const mapR = els.minimap.getBoundingClientRect();
+      const topR = _hudTop.getBoundingClientRect();
+      const gapsR = gapsEl.getBoundingClientRect();
+      if (mapR.width && topR.width && gapsR.width) {
+        const slot = topR.left - mapR.right;
+        const z = gapsEl.currentCSSZoom || 1;
+        if (slot < gapsR.width + FIT_AIR) root.dataset.gapDrop = "1";
+        else if (slot >= GAP_UNDROP_CSS * z + FIT_AIR) delete root.dataset.gapDrop;
+      }
+    }
+  }
   // A dropped chip lives UNDER the map, so it is not competing with `.hud-top`
   // for the half-width budget. Counting it here over-capped the top band and
   // shrank POS/LAP while the overlap it was trying to prevent had already

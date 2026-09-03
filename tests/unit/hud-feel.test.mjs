@@ -197,7 +197,7 @@ test("the race gap readout is smoothed: braking halves the divisor, the tenths d
 test("the gap widget's DROP rule follows the viewport in a time trial as well as a race", () => {
   // Bug-hunt 2026-09-02 (UI, not landed in round 1): gapForm() ran only on the
   // race branch, so data-gap-drop on <html> was whatever the LAST race left.
-  const narrow = boot({ innerWidth: 500 });          // ratio 500 <= GAP_DROP_AT.narrow (550)
+  const narrow = boot({ innerWidth: 500 });          // ratio 500 <= GAP_DROP_AT.narrow (600)
   narrow.G.timeTrial = true; narrow.tick();
   assert.equal(narrow.dom.documentElement.dataset.gapDrop, "1",
     "a time trial on a narrow phone drops the widget below .hud-top like a race does");
@@ -206,6 +206,17 @@ test("the gap widget's DROP rule follows the viewport in a time trial as well as
   wide.G.timeTrial = true; wide.tick();
   assert.equal("gapDrop" in wide.dom.documentElement.dataset, false,
     "and a wide time trial clears a drop the previous session left behind");
+});
+
+test("phone HUD 150% is under the narrow DROP floor so the chip leaves the POS slot", () => {
+  // Measured Chromium 2026-09-03: 852×393 @150% → ratio 568, slot 69 vs chip 62,
+  // clashTop true while DROP_AT was 550. Floor is 600 so that cell drops.
+  const src = read("js/game/hud.js");
+  const m = src.match(/GAP_DROP_AT\s*=\s*\{\s*narrow:\s*(\d+)/);
+  assert.ok(m, "GAP_DROP_AT.narrow is declared");
+  assert.ok(Number(m[1]) >= 600, `narrow drop floor ${m[1]} must be ≥ 600 (852@150% ratio 568)`);
+  assert.match(src, /slot < gapsR\.width \+ FIT_AIR/,
+    "fitHud also force-drops when the measured between-slot is smaller than the chip");
 });
 
 test("the ahead gap slot keeps one line so the behind line never jumps when the leader has nobody ahead", () => {
