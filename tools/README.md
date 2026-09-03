@@ -34,8 +34,9 @@ the tool's own header.
 | **capture/apex-capture.mjs** | Parallel headless screenshot sweep across cameras/tracks/modes → `scratch/captures/apex-capture/<purpose>/`. | playwright-probe |
 | **capture/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **capture/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
-| **capture/garage-shot.mjs** | One screenshot of the GARAGE 3D scene (turntable car, crest lightbox, boards) — the only way to look at garage-scene.js. | garage-parts-livery / car-viewer |
+| **capture/garage-shot.mjs** | Garage 3D screenshot: `--backend`, `--compare`, in-page nav; skips view-transition overlay trap. | — |
 | **capture/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | motion-capture |
+| **capture/probe-page.mjs** | Probe helpers: reduced-motion init (no view-transition overlay), backend pick, garage open/settle, #game canvas shot. | — |
 | **capture/shot.mjs** | One deterministic framed screenshot via `__apex` camera hooks: `shot.mjs <trackId> <frac> [cam] [out.png]`. | playwright-probe |
 | **capture/synthetic-gallery.mjs** | Wide gallery of the synthetic scenery models — many circuits / angles / times of day into one contact sheet. | asset-pack |
 | **car-build-parity.mjs** | Did a `car3d.js` edit move a build it was not meant to touch? Hashes pos/nrm/col/idx per variant across two versions. | garage-parts-livery / car-viewer |
@@ -121,6 +122,7 @@ the tool's own header.
 | **road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | webgpu-debug |
 | **rotate-markings.cjs** | Rotates each circuit's `turns` (js/circuits/<id>.js) onto a corrected start line by the scenery's arc shift, then… | new-track |
 | **scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
+| **scratch/garage-recheck.mjs** | Wrapper: runs capture/garage-shot.mjs --compare (844×390) and copies PNGs to artifacts/. | — |
 | **slider-effect-live.mjs** | The `--live` harness imported by `slider-effect.mjs`: chase+park recipes, restores the pre-push live value on exit. | lighting-tuner |
 | **slider-effect-view.py** | Visual filter for a slider A/B: `filter.png`, `heat.png`, `sheet.png`, MAD/p99/max stats. | lighting-tuner |
 | **slider-effect.mjs** | LIGHTING TUNER effectiveness: no-browser catalog (group/class/gate/risk/tag) plus `--live <id>` A/B ramp. | lighting-tuner |

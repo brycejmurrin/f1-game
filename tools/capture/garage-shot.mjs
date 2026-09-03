@@ -1,6 +1,6 @@
+#!/usr/bin/env node
 // One screenshot of the GARAGE 3D scene — the setup-preview turntable, its
-// @doc One screenshot of the GARAGE 3D scene (turntable car, crest lightbox, boards) — the only way to look at garage-scene.js.
-// @skill garage-parts-livery / car-viewer
+// @doc Garage 3D screenshot: `--backend`, `--compare`, in-page nav; skips view-transition overlay trap.
 // lightbox crest, boards and props — not the DOM panel in front of it.
 //
 // Why this exists: nothing could photograph the garage. layout-audit --screen=
@@ -10,44 +10,164 @@
 // lightbox could only be reasoned about, never looked at — and reasoning about
 // what a scene looks like is how a rendering defect survives review.
 //
-//   node tools/capture/garage-shot.mjs [out.png] [teamIndex]
+// Usage:
+//   node tools/capture/garage-shot.mjs [out.png] [--backend webgl2|webgpu|three]
+//     [--team N] [--viewport WxH] [--compare] [--json manifest.json] [--wait SEC]
 //
-// Needs a static server on $PORT (default 3456). Screenshots the canvas BOX
-// rather than the locator: a continuously animating WebGL canvas never passes
-// Playwright's stability check (capture/shot.mjs has the same idiom, and
-// survey-track.mjs before it). The DOM panel is faded to opacity 0 instead of
-// hidden — `hidden` on #carsetup would end the preview and stop the render.
-import { chromium } from "playwright";
-import fs from "node:fs";
+// --compare runs webgl2 + webgpu into the output directory with a manifest.
+// Starts its own static server (harness); PORT env overrides only when using
+// an external server via --port (legacy: set PORT=3456 and pass --port 3456).
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  launchChromium,
+  shutdown,
+  sleep,
+  startStaticServer,
+} from "../harness.mjs";
+import { assertSafePathToken, resolveRepoDefault } from "../output-paths.mjs";
+import {
+  chromiumArgsForBackend,
+  garageDiagnostics,
+  gotoGame,
+  installProbeInit,
+  openGarage,
+  screenshotGameCanvas,
+  settleGarage,
+} from "./probe-page.mjs";
 
-const PORT = process.env.PORT || 3456;
-const out = process.argv[2] || "scratch/captures/garage/garage.png";
-const team = process.argv[3] || null;
-// The bundled full Chromium, not the headless shell: the shell has no
-// navigator.gpu and this box does not always carry a matching shell build.
-const EXE = ["/opt/pw-browsers/chromium-1194/chrome-linux/chrome"]
-  .find((p) => fs.existsSync(p));
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
-const b = await chromium.launch(EXE ? { executablePath: EXE } : {});
-const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
-p.on("pageerror", (e) => console.error("[pageerror]", String(e).slice(0, 300)));
-// Boot + the first Tracks.build are CPU-bound under SwiftShader and routinely
-// outrun Playwright's 30 s default on a loaded box.
-p.setDefaultTimeout(120000);
-if (team != null) {
-  await p.addInitScript((t) => localStorage.setItem("apex26.team", JSON.stringify(+t)), team);
+function flag(argv, name, fallback) {
+  const i = argv.indexOf(name);
+  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : fallback;
 }
-await p.goto(`http://127.0.0.1:${PORT}/`);
-await p.waitForFunction(() => window.__apex && window.__apex.race, null,
-  { polling: 200, timeout: 120000 });
-await p.locator("#mb-race").click();
-await p.locator("#select").waitFor({ state: "visible" });
-await p.locator("#sel-go").click();
-await p.locator("#carsetup").waitFor({ state: "visible" });
-await p.waitForTimeout(6000);        // turntable build + light settle
-await p.evaluate(() => { const c = document.getElementById("carsetup"); if (c) c.style.opacity = "0"; });
-await p.waitForTimeout(1200);
-fs.mkdirSync(out.replace(/\/[^/]+$/, ""), { recursive: true });
-await p.screenshot({ path: out, clip: await p.locator("#game").boundingBox() });
-console.log("wrote " + out);
-await b.close();
+function has(argv, name) { return argv.includes(name); }
+
+const argv = process.argv.slice(2);
+const positionals = [];
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i].startsWith("--")) {
+    if (i + 1 < argv.length && !argv[i + 1].startsWith("--")) i++;
+    continue;
+  }
+  positionals.push(argv[i]);
+}
+
+const outArg = positionals[0] || null;
+const teamArg = flag(argv, "--team", null);
+const backend = flag(argv, "--backend", "webgl2");
+const compare = has(argv, "--compare");
+const jsonOut = flag(argv, "--json", null);
+const waitSec = Math.max(30, parseFloat(flag(argv, "--wait", "120")) || 120);
+const waitMs = waitSec * 1000;
+const extPort = flag(argv, "--port", process.env.PORT || null);
+
+const vpStr = flag(argv, "--viewport", "1280x720");
+const vpMatch = /^(\d+)x(\d+)$/.exec(vpStr);
+if (!vpMatch) {
+  console.error("garage-shot: --viewport must be WxH, got " + vpStr);
+  process.exit(1);
+}
+const viewport = { width: +vpMatch[1], height: +vpMatch[2] };
+
+const backends = compare ? ["webgl2", "webgpu"] : [backend];
+for (const be of backends) {
+  if (!["webgl2", "webgpu", "three"].includes(be)) {
+    console.error("garage-shot: unknown backend " + be);
+    process.exit(1);
+  }
+}
+
+const team = teamArg != null ? parseInt(teamArg, 10) : 2;
+const defaultOut = resolveRepoDefault(ROOT, "scratch", "captures", "garage", "garage.png");
+const baseOut = outArg ? resolve(outArg) : defaultOut;
+
+let srv = null;
+let ownServer = false;
+if (extPort) {
+  srv = { url: `http://127.0.0.1:${extPort}/`, close: async () => {} };
+} else {
+  srv = await startStaticServer(ROOT);
+  ownServer = true;
+}
+
+async function captureOne(be, outPath) {
+  const browser = await launchChromium({ args: chromiumArgsForBackend(be) });
+  const consoleLines = [];
+  try {
+    const page = await browser.newPage({ viewport });
+    page.on("console", (m) => {
+      const t = m.type();
+      if (t === "error" || t === "warning") consoleLines.push(`[${t}] ${m.text()}`);
+    });
+    await installProbeInit(page, { backend: be, team });
+    await gotoGame(page, srv.url, waitMs);
+    await openGarage(page, { team, waitMs });
+    await settleGarage(page, { frames: 90, sleepFn: sleep });
+    const diag = await garageDiagnostics(page);
+    mkdirSync(dirname(outPath), { recursive: true });
+    const shot = await screenshotGameCanvas(page, outPath);
+    if (diag.overlay) {
+      console.warn(`  ${be}: error overlay present — ${diag.overlay.split("\n")[0]}`);
+    }
+    if (shot.bytes < 8000) {
+      console.warn(`  ${be}: screenshot only ${shot.bytes} bytes — likely blank`);
+    }
+    console.log(`  ${be}: ${outPath} (${(shot.bytes / 1024).toFixed(1)} KB) bound=${diag.backend} centerPx=${diag.centerPx}`);
+    return { backend: be, path: outPath, ...shot, diag, consoleLines };
+  } finally {
+    await browser.close();
+  }
+}
+
+const results = [];
+try {
+  console.log(`garage-shot: viewport=${vpStr} team=${team} → ${compare ? dirname(baseOut) : baseOut}`);
+  for (const be of backends) {
+    const path = compare
+      ? resolve(dirname(baseOut), `garage-${be}.png`)
+      : baseOut;
+    results.push(await captureOne(be, path));
+  }
+
+  const manifest = {
+    viewport,
+    team,
+    shots: results.map((r) => ({
+      backend: r.backend,
+      path: r.path,
+      bytes: r.bytes,
+      diag: r.diag,
+      consoleErrors: r.consoleLines.filter((l) => l.startsWith("[error]")),
+    })),
+  };
+  if (compare && results.length === 2) {
+    const a = results[0].diag.centerPx;
+    const b = results[1].diag.centerPx;
+    if (a && b) {
+      manifest.centerRgbDelta = a.slice(0, 3).map((v, i) => Math.abs(v - b[i]));
+    }
+  }
+
+  const manifestPath = jsonOut
+    ? resolve(jsonOut)
+    : compare
+      ? resolve(dirname(baseOut), "garage-manifest.json")
+      : null;
+  if (manifestPath) {
+    mkdirSync(dirname(manifestPath), { recursive: true });
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+    console.log("wrote " + manifestPath);
+  }
+
+  const failed = results.some((r) => r.diag.overlay || r.bytes < 8000);
+  if (failed) process.exitCode = 1;
+} catch (err) {
+  console.error("garage-shot failed:", err && err.stack || err);
+  process.exitCode = 1;
+} finally {
+  if (ownServer) await srv.close();
+  await shutdown();
+}
