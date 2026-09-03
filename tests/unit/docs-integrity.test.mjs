@@ -106,6 +106,7 @@ const SOURCE_EXEMPT = new Map([
   ["docs/archive/OLD.md", /move-tree\.test\.mjs|docs-integrity/],
   ["js/game/nope.js", /move-tree\.test\.mjs|docs-integrity/],
   ["js/perf/x.js", /move-tree\.test\.mjs|docs-integrity/],
+  ["tools/nested/README.md", /move-tree\.test\.mjs|docs-integrity/],
   // Fake package.json scripts inside the coverage-audit's own fixtures.
   ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
   ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],
