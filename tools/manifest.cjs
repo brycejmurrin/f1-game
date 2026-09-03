@@ -124,7 +124,6 @@ const FULL = [
   "js/car/liverytex.js",
   "js/car/ghost.js",
   "js/game/physics-consts.js",
-  "js/game/tables.js",
   "js/game/lighting-knobs.js",
   "js/game/track-lights.js",
   "js/game/frame-lights.js",
@@ -163,10 +162,10 @@ const FULL = [
   "js/game/perf.js",
   "js/game/loop-health.js",
   "js/game/gfx-quality.js",
+  "js/game/renderer-picker.js",
   "js/game/gfx-debug.js",
   "js/game/ui-scale.js",
   "js/game/cockpit-opts.js",
-  "js/game/metrics-panel-style.js",
   "js/game/metrics.js",
   "js/game/cameras.js",
   "js/game/cam-modes.js",
@@ -343,8 +342,9 @@ const HARD_EDGES = [
   ["js/track/tracks.js", "js/track/maps.js"],               // maps calls Tracks.buildCenterline
   // js/data's own eval-time edges moved to LAZY_DATA_EDGES when the hub left
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
-  ["js/game/tables.js", "js/game/hud.js"],      // hud destructures GameTables at eval
-  ["js/game/tables.js", "js/game/cam-modes.js"], // cam-modes destructures GameTables at eval
+  ["js/game/physics-consts.js", "js/game/hud.js"], // hud destructures IDLE_RPM/MAX_RPM at eval
+  ["js/game/cam-modes.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
+  ["js/car/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/game/physics-consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/game/physics-consts.js", "js/game/bodyattitude.js"], // LAT_MAX read at eval
   ["js/car/teams.js", "js/game/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)

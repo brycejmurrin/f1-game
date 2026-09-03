@@ -107,7 +107,7 @@ function create(G) {
   }
 
   function capFor(c) {
-    const dd = GameTables.DIFF[G.difficulty] || GameTables.DIFF.normal;
+    const dd = PhysicsConsts.DIFF[G.difficulty] || PhysicsConsts.DIFF.normal;
     return G.vTop() * c.tierV * c.skill * dd.ai * QUALI_TRIM;
   }
 

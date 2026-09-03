@@ -95,10 +95,10 @@ const AgentView = (function () {
       }
       if (o.camera) {
         const m = String(o.camera).toLowerCase();
-        if (!GameTables.CAM_MODES.some((c) => (c.id || c) === m)) {
+        if (!CamModes.CAM_MODES.some((c) => (c.id || c) === m)) {
           return fail("BadArgumentError",
                       'unknown camera "' + o.camera + '"',
-                      "one of: " + GameTables.CAM_MODES.map((c) => c.id || c).join(", "));
+                      "one of: " + CamModes.CAM_MODES.map((c) => c.id || c).join(", "));
         }
         const v = camVantage(m, p.s, p.x, p.speed || 0, 0, {
           carPos: (p.px != null && p.pz != null) ? [p.px, p.pz] : null,
@@ -115,8 +115,8 @@ const AgentView = (function () {
                     + "and let a frame draw");
       }
       return { vp, eye: fr.eye || G.camEye, tgt: G.camTgt,
-               mode: (GameTables.CAM_MODES[G.camMode] || {}).id
-                     || String(GameTables.CAM_MODES[G.camMode] || G.camMode),
+               mode: (CamModes.CAM_MODES[G.camMode] || {}).id
+                     || String(CamModes.CAM_MODES[G.camMode] || G.camMode),
                fovDeg: G.camFov, synthetic: false };
     }
 
@@ -2293,8 +2293,8 @@ const AgentView = (function () {
         apiVersion: API_VERSION, seq: ++seq, conventions: CONVENTIONS,
         camera: {
           eye: eye.map(r1), target: G.camTgt.map(r1), fovDeg: r1(G.camFov),
-          mode: (GameTables.CAM_MODES[G.camMode] || {}).id
-                || String(GameTables.CAM_MODES[G.camMode] || G.camMode),
+          mode: (CamModes.CAM_MODES[G.camMode] || {}).id
+                || String(CamModes.CAM_MODES[G.camMode] || G.camMode),
           debugCam: !!G.dbgCam,
         },
         framePending: !!G.headlessMode,

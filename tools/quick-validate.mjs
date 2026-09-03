@@ -34,7 +34,7 @@ export function evaluateLiveProbe(
 ) {
   const out = { globals: {}, race: null, obs: null, light: null, cams: null };
   for (const name of ["GLX", "Tracks", "Parts", "Teams", "CircuitPaths", "GLXShaders",
-                      "TrackGeom", "TrackSceneryData", "GameTables"]) {
+                      "TrackGeom", "TrackSceneryData", "PhysicsConsts"]) {
     out.globals[name] = hasGlobal(name);
   }
   out.race = apex.race("monza");

@@ -829,7 +829,7 @@ void main() {
   // surfaceOf() falls back to paint), metal/mirror are pinned by the max() floors
   // below, carbon is a constant — so uMetalness reached NOTHING. The knob would
   // have needed 6.5 against a max of 2.5 to move even the metal parts.
-  // This is restoring intent, not inventing a look: js/game/tables.js sets
+  // This is restoring intent, not inventing a look: js/game.js's PAINT_* set
   // metalness 0.12 on all four PAINT_* constants and its comment says the mild
   // metalness "tints specular + reflections toward the team colour like real
   // metallic flake, and scales the sky env down so the paint stays saturated" —

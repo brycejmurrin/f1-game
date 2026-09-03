@@ -1,7 +1,8 @@
 /* Apex 26 — GameMetrics: toggleable in-game FPS / car / log overlay.
 
    SETTINGS > DISPLAY — METRICS (on/off), METRICS PAGE (gov/car/phys/log),
-   LOG NS, and LOG SHOW. Or ` (backtick) / F9 on the canvas. Persists as
+   LOG NS, and LOG SHOW, folded into one METRICS <details> submenu this file
+   builds (see the bottom). Or ` (backtick) / F9 on the canvas. Persists as
    apex26.metrics. URL `?metrics=1` overrides for the session without writing
    storage, same shape as CockpitOpts.
 
@@ -51,22 +52,24 @@ let _raisedBuffer = null;
 // Position: right-anchored, below the sector strip (top = tap + sat + hud
 // offset), above the bottom HUD dock. The 80px * hud-scale term is clamped
 // to 120px so at 150% HUD the panel doesn't descend into the mid-screen.
+// Safe-area aware: fixed (not under zoom) — raw env insets, same as #pausebtn.
+// House height unit is svh, not dvh (toolbar jitter). Bottom = dock + --sab.
+// (Was a one-string sibling file, metrics-panel-style.js, loaded before this
+// one; the overlay's layout is its own concern.)
 const HUD_TOP_OFFSET = "min(120px, calc(80px * var(--hud-scale, 1)))";
-const PANEL_STYLE_FALLBACK = "position:fixed;right:8px;" +
+const PANEL_STYLE =
+  "position:fixed;" +
+  "right:calc(8px + var(--sar, 0px));" +
   "top:calc(12px + var(--tap, 44px) + var(--sat, 0px) + " + HUD_TOP_OFFSET + ");" +
   "z-index:11;margin:0;padding:10px 12px;" +
   "font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;" +
   "color:#d8ffe0;background:rgba(4,8,6,.82);border:1px solid rgba(90,200,120,.4);" +
   "border-radius:8px;pointer-events:none;white-space:pre;text-align:left;" +
-  "max-width:min(52ch,calc(100vw - 16px));" +
-  "max-height:calc(100dvh - 12px - var(--tap, 44px) - var(--sat, 0px) - " +
-    HUD_TOP_OFFSET + " - 70px);" +
+  "max-width:min(52ch,calc(100vw - 16px - var(--sal, 0px) - var(--sar, 0px)));" +
+  "max-height:calc(100svh - 12px - var(--tap, 44px) - var(--sat, 0px) - " +
+    HUD_TOP_OFFSET + " - max(80px, calc(72px + var(--sab, 0px))));" +
   "overflow-y:auto;pointer-events:auto;text-shadow:0 1px 2px rgba(0,0,0,.9);" +
   "letter-spacing:.01em";
-// The safe-area-aware layout ships in metrics-panel-style.js (loaded before
-// this file); the fallback keeps headless/VM consumers position-correct.
-const PANEL_STYLE =
-  (typeof window !== "undefined" && window.__METRICS_PANEL_STYLE) || PANEL_STYLE_FALLBACK;
 
 // Adaptive density: same proxy as HUD gap — innerWidth / hudScale.
 // At < 480 use the compact (narrow) layout with 2 values per line.
@@ -205,8 +208,8 @@ function snapshot() {
     }
   } catch (_) { /* SwiftShader / no EXT */ }
   try {
-    if (typeof GfxQuality !== "undefined" && GfxQuality.readBackend)
-      out.backend = GfxQuality.readBackend() || "";
+    if (typeof RendererPicker !== "undefined" && RendererPicker.readBackend)
+      out.backend = RendererPicker.readBackend() || "";
   } catch (_) { /* quality module absent in a VM */ }
   try {
     if (!out.backend) out.backend = GameStore.store.raw("apex26.gfxBackend") || "";
@@ -752,6 +755,117 @@ if (typeof document !== "undefined") {
 }
 
 if (on()) raiseBuffer();
+
+/* ── SETTINGS > DISPLAY — the METRICS submenu ──────────────────────────
+ Folds #pm-metrics / PAGE / LOG NS / LOG SHOW into one <details> under HIDE
+ HUD, compact on short/high-scale viewports. Used to be a second IIFE in
+ js/game/cockpit-opts.js; it is this overlay's own settings row. */
+function injectCss() {
+  if (document.getElementById("pm-metrics-sub-css")) return;
+  var s = document.createElement("style");
+  s.id = "pm-metrics-sub-css";
+  s.textContent = [
+    "#pm-metrics-details.pm-metrics-sub { margin: 6px 0 0; }",
+    "#pm-metrics-details.pm-metrics-sub > summary.adv-more-btn { cursor: pointer; }",
+    "#pm-metrics-details .pm-metrics-sub-body {",
+    "  display: flex; flex-direction: column; gap: 4px;",
+    "  padding: 6px 0 2px;",
+    /* --svhz, not raw svh: this list lives inside the #pausemenu sheet's
+       zoom, where 100svh of LOCAL px paints zoom× that on screen — at 130%
+       the submenu took 324 of a 393px-tall phone. The zoom-compensated
+       token collapses the per-scale html[style*=…] hack this block used to
+       carry for exactly three slider values. */
+    "  max-height: min(280px, calc(100 * var(--svhz, 1svh) - 9rem));",
+    "  overflow-y: auto;",
+    "}",
+    "#pm-metrics-details .pm-metrics-sub-body > button {",
+    "  width: 100%; margin: 0;",
+    "}",
+    "#pm-metrics-details .pm-metrics-hint {",
+    "  margin: 4px 0 0; opacity: .7; font-size: 11px; line-height: 1.3;",
+    "}",
+    "@media (max-height: 420px) {",
+    "  #pm-metrics-details .pm-metrics-sub-body {",
+    "    display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px;",
+    "    max-height: min(160px, calc(100 * var(--svhz, 1svh) - 7rem));",
+    "  }",
+    "  #pm-metrics-details .pm-metrics-sub-body > button { width: auto; }",
+    "  #pm-metrics-details .pm-metrics-hint {",
+    "    grid-column: 1 / -1; font-size: 10px; margin: 2px 0 0;",
+    "  }",
+    "}",
+  ].join("\n");
+  (document.head || document.documentElement).appendChild(s);
+}
+
+function buildSubmenu() {
+  if (typeof document === "undefined") return;
+  injectCss();
+  var onBtn = document.getElementById("pm-metrics");   // the button — a local named like the module's on() shadowed it
+  var page = document.getElementById("pm-metrics-page");
+  var ns = document.getElementById("pm-metrics-logns");
+  var lvl = document.getElementById("pm-metrics-loglvl");
+  if (!onBtn || document.getElementById("pm-metrics-details")) return;
+  var host = onBtn.parentNode;
+  if (!host) return;
+
+  var det = document.createElement("details");
+  det.id = "pm-metrics-details";
+  det.className = "pm-metrics-sub";
+
+  var sum = document.createElement("summary");
+  sum.className = "adv-more-btn";
+  sum.textContent = "METRICS";
+  sum.title = "Live FPS / car / phys / log overlay controls";
+  det.appendChild(sum);
+
+  var body = document.createElement("div");
+  body.className = "pm-metrics-sub-body";
+  body.setAttribute("role", "group");
+  body.setAttribute("aria-label", "Metrics controls");
+
+  [onBtn, page, ns, lvl].forEach(function (btn) {
+    if (!btn) return;
+    btn.addEventListener("click", function (e) { e.stopPropagation(); });
+    body.appendChild(btn);
+  });
+
+  var hint = document.createElement("p");
+  hint.className = "pm-metrics-hint as-note";
+  hint.textContent = "Live ~4×/sec while ON. ` / F9 toggle · [ ] page · 1–4 jump";
+  body.appendChild(hint);
+  det.appendChild(body);
+
+  var hide = document.getElementById("pm-hidehud");
+  if (hide && hide.parentNode === host) {
+    if (hide.nextSibling) host.insertBefore(det, hide.nextSibling);
+    else host.appendChild(det);
+  } else {
+    host.appendChild(det);
+  }
+
+  try {
+    if (on()) det.open = true;
+  } catch (_) { /* not ready */ }
+
+  onBtn.addEventListener("click", function () {
+    try {
+      if (on()) det.open = true;
+    } catch (_) { /* ignore */ }
+  });
+}
+
+function scheduleSubmenu() {
+  // A VM harness may hand this file a document with no timers (the metrics
+  // unit test does): the submenu is DOM sugar, so it simply does not build there.
+  if (typeof document === "undefined" || typeof setTimeout !== "function") return;
+  var run = function () { setTimeout(buildSubmenu, 0); };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", run, { once: true });
+  else run();
+  setTimeout(buildSubmenu, 250);
+  setTimeout(buildSubmenu, 1000);
+}
+scheduleSubmenu();
 
 return {
   KEY, PAGE_KEY, LOG_NS_KEY, LOG_LVL_KEY, PAGES, LOG_NS, LOG_LVLS,

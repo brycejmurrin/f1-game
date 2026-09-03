@@ -975,7 +975,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (mirrorSurface) { metalness = max(D.mat0.w, 0.55); }
     if (carbonSurface || carbonFinish) { metalness = 0.08; }
     // PAINT gets metalness rather than the 0.0 base — mirrors
-    // js/render/shaders/lit.js. tables.js sets 0.12 on every PAINT_* for the
+    // js/render/shaders/lit.js. game.js sets 0.12 on every PAINT_* for the
     // metallic-flake tint; the 0.0 discarded it and left CAR METALLIC dead.
     if (paintSurface) { metalness = D.mat0.w; }
     if (satinMetalSurface) { metalness = max(D.mat0.w, 0.60); }

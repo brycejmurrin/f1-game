@@ -482,7 +482,7 @@ test("an active career locks team and seat selection in the garage", () => {
 function bootCamModes(camMode = 2) {
   const dom = makeDom();
   const sb = uiSandbox(dom, { CamTunerPanel: { refresh() {} } });
-  vm.runInNewContext(src("js/game/tables.js") + "\n" + src("js/game/cam-modes.js"), sb, { filename: "js/game/cam-modes.js" });
+  vm.runInNewContext(src("js/game/cam-modes.js"), sb, { filename: "js/game/cam-modes.js" });
   const store = {};
   const G = { $: (id) => dom.byId(id), camMode, camCutT: 0, store: { set: (k, v) => { store[k] = v; }, get: () => null } };
   const api = sb.CamModes.create(G);

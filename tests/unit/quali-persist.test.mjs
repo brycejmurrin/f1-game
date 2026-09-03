@@ -64,7 +64,7 @@ function loadQuali(opts = {}) {
     Float64Array,
     Quali: undefined,
     Teams: { LIST: [{ id: "rb", color: [1, 0, 0] }, { id: "me", color: [0, 0, 1] }] },
-    GameTables: { DIFF: { normal: { ai: 1 } } },
+    PhysicsConsts: { DIFF: { normal: { ai: 1 } } },
     DriverRatings: { get: () => ({ consistency: 90 }) },
     Career: {
       inCareer: () => !!opts.inCareer,
