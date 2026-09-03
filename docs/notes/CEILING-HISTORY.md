@@ -1331,3 +1331,51 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - no slot or wireId for it, so the rival sat frozen with no error. Six lines,
 - one of them the message that says why the car changed.
 - 2026-09-02 bug hunt: finishStart awaits the async startRace (+7, the comment says why)
+
+## 2026-09-03 (renderer session, merged into Phase 1-lite)
+
+Recorded here because these four moved on `claude/rendering-bugs-optimizations-3pstxj`
+while this file was being created on the deploy branch; the numbers themselves
+live in `ratchets.json`.
+
+- `js/render/three/tlx.js` 3144 -> **3138** (LOWER): the reverted
+  `_envNeverComing()` term's dead body and its two write-only latches removed
+  (added and reverted 2026-09-02; zero callers). The reverted design is
+  preserved in `gfx-backend-canary.test.mjs`.
+- `js/render/glx/glx.js` 2259 -> **2271**: `envFaceBegin` re-tests the disable
+  latch AFTER the lazy `envInit()`, and `envFaceEnd` lowers `_envActive`
+  before its early return. Without both, a driver whose probe FBO is
+  incomplete left `_envActive` armed against a null framebuffer and the
+  player got a permanently black canvas with a 64-pixel corner. Bug-fixing
+  growth, pinned in the canary.
+- `js/render/three/tsl-lit.js` 1777 -> **1794**: `apexMatBumpHeight`
+  `setLayout` (three inlined the 15-branch chain at all six call sites — 31 KB
+  of the 99 KB lit fragment) plus the `carbonFinish` metalness parity fix.
+- `js/render/webgpu/wgx.js` 6060 -> **6068**: `device.lost` disarms
+  `envProbeOff` as well as `perChunkOff`, matching GLX and TLX — both are
+  shared cross-backend keys and WGX wrote only one.
+- `js/render/webgpu/wgx.js` 6068 -> **6086** (2026-09-03): the SAVE SCREENSHOT
+  reconfigure moves out of `_capEncode` (which runs after the frame is encoded
+  and one statement before submit, so `ctx.configure()` expired a texture the
+  submit still referenced) into the top of `begin()`. Bug-fixing growth; the
+  comment is the reason.
+- `js/render/three/tlx.js` 3138 -> **3152** (2026-09-03): the AUTO self-heal
+  counts DISTINCT PRESENTS carrying an error, not raw errors — one rejected
+  pipeline is dozens of errors in one frame, one transient is one error, and
+  `> 0` reloaded the healthy tab. Mirrors WGX's `GPU_ERR_ESCALATE_FRAMES`.
+- `js/render/webgpu/wgx.js` 6086 -> **6093** (2026-09-03): the desktop MSAA cap
+  read `apex26.gfxHigh`, which `GfxQuality.syncBootTier()` only ever writes on a
+  PHONE — so on desktop the read never saw "0" and every preset shipped 4x,
+  the opposite of the block's purpose. Now reads `apex26.gfxPreset`. Same
+  defect and same fix in `js/render/glx/post.js`.
+- `js/game.js` 9235 -> **9245** lines / 5053 -> **5057** code (2026-09-03): the
+  env-probe latch (`apex26.envProbeOff`) gets the same 0-and-back-on reset the
+  chunk latch has had — before this the only clear was RESET RENDERER, which
+  also discards the renderer pick; and the visibilitychange handler re-arms the
+  crash sentinel with `sentinelResume()` instead of `sentinelArm(true)`, which
+  was resetting the derived frame budget on every tab return.
+- `js/render/webgpu/wgx.js` 6093 -> **6110** (2026-09-03): `envInit()` releases
+  what it made on a partial failure and latches `_envInitFailed`; before, a
+  throw after `envCubeTex` was assigned satisfied the re-entry guard with an
+  empty `envFaceViews` and every probe cycle passed an undefined view to
+  beginRenderPass — one GPU error per cycle for the life of the tab.

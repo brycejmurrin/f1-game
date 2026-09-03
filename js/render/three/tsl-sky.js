@@ -63,12 +63,18 @@
     const hash3 = Fn(([pIn]) => {
       const p = fract(vec3(pIn).mul(0.3183099).add(vec3(0.1, 0.2, 0.3))).mul(17.0).toVar();
       return fract(p.x.mul(p.y).mul(p.z).mul(p.x.add(p.y).add(p.z)));
-    });
+    }).setLayout({ name: "apexSkyHash3", type: "float", inputs: [{ name: "pIn", type: "vec3" }] });
     const hash2 = Fn(([pIn]) => {
       const p = fract(vec2(pIn).mul(vec2(127.1, 311.7))).toVar();
       p.addAssign(dot(p, p.add(34.5)));
       return fract(p.x.mul(p.y));
-    });
+      // LAYOUTS, not style. Unlayouted, three inlines every Fn at every call:
+      // fbm(4 vnoise) × 4 calls + 1 direct = 17 vnoise = 68 hash2 copies, and
+      // the sky fragment carried 171 node variables for them. The names stay
+      // apexSky* because this is a DIFFERENT noise family from tsl-chunks'
+      // (127.1/311.7 here, 123.34/456.21 there) and the two must not read as
+      // one at the WGSL level. All four are pure functions of their arguments.
+    }).setLayout({ name: "apexSkyHash2", type: "float", inputs: [{ name: "pIn", type: "vec2" }] });
     const vnoise = Fn(([pIn]) => {
       const i = floor(pIn);
       const f = fract(pIn).toVar();
@@ -76,7 +82,7 @@
       const a = hash2(i), b = hash2(i.add(vec2(1, 0)));
       const c = hash2(i.add(vec2(0, 1))), d = hash2(i.add(vec2(1, 1)));
       return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-    });
+    }).setLayout({ name: "apexSkyVnoise", type: "float", inputs: [{ name: "pIn", type: "vec2" }] });
     // 4-octave fbm (chunks.js: s += a*vnoise(p); p *= 2.02; a *= 0.5) unrolled.
     const fbm = Fn(([pIn]) => {
       const p = vec2(pIn).toVar();
@@ -85,7 +91,7 @@
       p.mulAssign(2.02); s.addAssign(vnoise(p).mul(0.125));
       p.mulAssign(2.02); s.addAssign(vnoise(p).mul(0.0625));
       return s;
-    });
+    }).setLayout({ name: "apexSkyFbm", type: "float", inputs: [{ name: "pIn", type: "vec2" }] });
     // ignoise: the shared leaf from tsl-chunks (local fallback keeps the
     // factory self-sufficient if ctx.chunks is absent).
     const ignoise = (ctx && ctx.chunks && ctx.chunks.ignoise) || Fn(([p]) => {

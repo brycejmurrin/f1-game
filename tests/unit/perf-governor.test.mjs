@@ -406,6 +406,30 @@ test("a recovered device gets its per-chunk lamps back on GRAPHICS: MEDIUM", () 
     "autoTier() still reports where the ladder stands — that is what it is for");
 });
 
+test("GRAPHICS: LOW can still shed by evidence — the ladder is not short-circuited by its own floor", () => {
+  // The degrade branch used to gate on `Math.max(_perfTier, _floorTier()) < 4`.
+  // On LOW the preset sets _userTier = 4, so _floorTier() is 4 and that guard
+  // was FALSE on the first evaluation: _perfTier and _autoShed could never
+  // leave 0 for the whole session. autoTier() and autoShed() exclude the user
+  // floor on purpose, so they returned 0 too — and bloom, SSAO, god-rays,
+  // contact shadows and per-chunk lamps (their only consumers) became
+  // unsheddable on the cheapest preset, however badly the device was missing
+  // frames. The MEDIUM test above could not see it: at _userTier 2 the guard
+  // is true and the ladder runs.
+  const PerfGov = makeGovAtFloor();          // scale lever exhausted: the ladder is the only lever
+  PerfGov.setUserTier(4);                    // GRAPHICS: LOW
+  assert.equal(PerfGov.autoShed(), 0, "a preset alone is not a measured shed");
+  assert.equal(PerfGov.autoTier(), 0, "…and LOW alone is not measured evidence either");
+
+  // Genuinely too slow, and genuinely cheaper for each rung shed.
+  feed(PerfGov, () => 34 - PerfGov.autoShed() * 6, 3000);
+  assert.ok(PerfGov.autoShed() >= 1,
+    `LOW must shed on evidence like every other preset (autoShed ${PerfGov.autoShed()})`);
+  assert.equal(PerfGov.autoTier(), 4,
+    `the step starts from the floor, so LOW reaches the tier-4 consumers in one felt move (got ${PerfGov.autoTier()})`);
+  assert.ok(PerfGov.tier() <= 4, "the ladder never invents a rung above 4");
+});
+
 test("the opening window keeps the frames every EMA in this file forgets", () => {
   // "It lags for the first few seconds and then runs fine" is a report about
   // frames that are gone before anyone can read perf(): _frameEMA at alpha 0.1

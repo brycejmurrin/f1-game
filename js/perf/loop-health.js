@@ -59,6 +59,13 @@ const LoopHealth = (() => {
   const LOG_FIRST = 5, LOG_EVERY = 60;
 
   let _run = 0, _total = 0, _frames = 0, _lastClean = 0, _lastMsg = "", _stopped = false;
+  // The cap above is documented as "four seconds of a half-broken loop" and
+  // was implemented as a per-TAB lifetime count: _total was never paid back,
+  // so a long PWA session whose transients each healed in a frame could reach
+  // 240 hours later and have the loop killed on a fault that had been harmless
+  // all day. A quiet stretch of this length forgets the tally.
+  const QUIET_RESET_MS = 4000;
+  let _lastFaultAt = 0;
 
   function now() {
     try { return performance.now(); } catch (_) { return Date.now(); }
@@ -66,12 +73,15 @@ const LoopHealth = (() => {
 
   return {
     // A frame finished. Pay the run back and stamp the heartbeat.
-    clean() { _run = 0; _frames++; _lastClean = now(); },
+    clean() {
+      _run = 0; _frames++; _lastClean = now();
+      if (_total && !_stopped && _lastClean - _lastFaultAt > QUIET_RESET_MS) _total = 0;
+    },
 
     // A frame threw. Returns TRUE if the caller should schedule another frame,
     // FALSE if this fault is at the cap and the loop must report and rethrow.
     fault(e) {
-      _total++; _run++;
+      _total++; _run++; _lastFaultAt = now();
       _lastMsg = String((e && (e.message || e)) || "?").slice(0, 200);
       const survive = _run < RUN_CAP && _total < TOTAL_CAP;
       if (_total <= LOG_FIRST || _total % LOG_EVERY === 0 || !survive) {

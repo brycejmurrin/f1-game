@@ -1076,15 +1076,21 @@ const Input = (function () {
   }
   function setSpeedProvider(fn) { speedProvider = typeof fn === "function" ? fn : null; }
 
+  // DEADZONE < MAX_TILT is an invariant of the steer formula d/(MAX_TILT-DEADZONE),
+  // and setTiltDeadzone enforced it only at ITS call: setTiltSensitivity could
+  // then lower MAX_TILT beneath a deadzone already set (deadzone 12, then
+  // maxTilt 8 -> divisor -4) and every tilt past the deadzone steered the WRONG
+  // WAY at full lock. Both setters go through one clamp.
+  function clampDeadzone() { DEADZONE = Math.max(0, Math.min(Math.min(15, MAX_TILT - 1), DEADZONE)); }
   function setTiltSensitivity(deg) {
-    if (typeof deg === "number" && isFinite(deg)) MAX_TILT = Math.max(8, Math.min(60, deg));
+    if (typeof deg === "number" && isFinite(deg)) { MAX_TILT = Math.max(8, Math.min(60, deg)); clampDeadzone(); }
   }
   function setTiltSmoothing(cutoff) {
     if (typeof cutoff === "number" && isFinite(cutoff)) OE_MIN_CUTOFF = Math.max(0.3, Math.min(4, cutoff));
   }
   function setTiltDeadzone(deg) {
     // Clamp DEADZONE strictly below MAX_TILT so the steering formula d/(MAX_TILT-DEADZONE) never divides by zero or inverts.
-    if (typeof deg === "number" && isFinite(deg)) DEADZONE = Math.max(0, Math.min(Math.min(15, MAX_TILT - 1), deg));
+    if (typeof deg === "number" && isFinite(deg)) { DEADZONE = deg; clampDeadzone(); }
   }
 
   let _coarseMql = null;

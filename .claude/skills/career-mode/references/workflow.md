@@ -55,8 +55,8 @@ Load from the SKILL.md index when the task needs this detail.
    - Run `test:modes` in the background via `tools/test-bg.mjs` (covers career + quali).
 
 8. **Cache-bust JS/CSS edits.**
-   - Career often touches `js/game/career*.js`, `js/race/quali-model.js`,
-     `js/race/reliability.js`, or `css/career.css`; run `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
+   - Career often touches `js/career/career*.js`, `js/race/quali-model.js`,
+     `js/race/reliability.js`, or `css/career.css`; run `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
 
 ## Common Mistakes
 

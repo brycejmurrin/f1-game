@@ -230,7 +230,7 @@ function snapshot() {
                 "  pack " + (bs.packLive ? "ok" : "—") +
                 "  heal " + (bs.healed ? "yes" : "—") +
                 (bs.calls != null ? "  dc " + (bs.calls | 0) : "") +
-                (bs.arrayNearest ? "  ARRAYNEAREST" : "") + (bs.noMrt ? "  NOMRT" : "") +
+                (bs.arrayNearest ? "  ARRAYNEAREST" : "") +
                 (bs.drawMatMode ? "  matMode " + bs.drawMatMode : "");
             }
           }

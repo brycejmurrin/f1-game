@@ -20,6 +20,13 @@ function gateNote(d, v) {
   // only one of them left the other silently doing nothing — which is exactly
   // how a held-off feature reads as a broken slider.
   const isChunk = d.id === "perChunkLights" || d.id === "roadChunkLamps";
+  // ENV REFLECTION carries the same latch shape (apex26.envProbeOff, written on
+  // a visible context loss) and the same 0-and-back-on reset in setLightTune.
+  if (d.id === "carEnvCube" && v > 0) {
+    let held = false;
+    try { held = localStorage.getItem("apex26.envProbeOff") === "1"; } catch (_) { /* no storage */ }
+    return held ? " · held after a display reset — set to 0 and back on to retry" : "";
+  }
   if (!isChunk || !(v > 0)) return "";
   // The BACKEND gate first: three.js has no per-chunk lamp binding at all, so
   // on TLX the knob can never do anything however the tier and latch sit.

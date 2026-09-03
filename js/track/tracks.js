@@ -1670,7 +1670,7 @@ const Tracks = (function () {
     } else if (theme === "desert") {
       every(34, (k) => { for (const side of [-1, 1]) if (hash(HK(k) + side) > 0.6) place(k, side, 8 + hash(HK(k)) * 10, [2 + hash(HK(k)) * 3, 1.5, 2], [0.62, 0.5, 0.34]); });
     } else if (theme === "street_day" || theme === "street_night" || theme === "modern") {
-      const style = resolveCityStyle(def.cityStyle) || THEME_DEF[theme] || THEME_DEF.modern;
+      const style = resolveCityStyle(def.cityStyle, theme) || THEME_DEF[theme] || THEME_DEF.modern;
       const cn = (k, s) => style.neon[Math.floor(hash(k * 3 + s) * style.neon.length) % style.neon.length];
       const dpal = style.dayPal;
       const toneFor = (k, s) => {

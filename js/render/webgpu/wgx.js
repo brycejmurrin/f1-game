@@ -225,8 +225,15 @@ const WGX = (function () {
   // — WebGPU cannot do 2×, so the savings mirror GLX capping HIGH at 2× MSAA.
   // Missing key defaults to 4× (fresh install / harness) until gfx-quality runs.
   // `let` (not const): soft-adapter escape hatch may drop desktop 4 → 1.
+  // Same mobile-only-signal defect as GLX (js/render/glx/post.js): gfxHigh is
+  // never written on a desktop, so this read never saw "0" and every desktop
+  // preset shipped 4x. Read the preset GfxQuality actually stores.
   let _wgxMsaa4 = true;
-  try { if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false; } catch (_) { /* blocked storage: default 4× MSAA */ }
+  try {
+    const _p = localStorage.getItem("apex26.gfxPreset");
+    if (_p != null) _wgxMsaa4 = _p === "ultra";
+    else if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false;
+  } catch (_) { /* blocked storage: default 4× MSAA */ }
   let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
   // Every path that makes create() return null records WHY, both on the console
@@ -906,6 +913,14 @@ const WGX = (function () {
       let hidden = false;
       try { hidden = !!(typeof document !== "undefined" && document.hidden); } catch (_) { /* no document (harness) */ }
       if (!hidden) {
+        // BOTH opt-ins, not one. GLX's webglcontextlost (js/render/glx/glx.js) and
+        // TLX's onDeviceLost each disarm envProbeOff AND perChunkOff; WGX wrote
+        // only the second, so a visible WGX loss that escalated to a GLX
+        // session-skip handed GLX a tab with the env probe still armed — the
+        // expensive per-frame cube on a device that just lost its GPU. Both
+        // keys are shared cross-backend state (RENDERER_LS_KEYS), which is
+        // exactly why the latch has to be written by whichever backend died.
+        try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* no storage (private mode): the probe stays on next boot, the pre-existing behaviour; a failed latch must not break the loss handler */ }
         try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* no storage: the tier gate is the only defence left; nothing here may throw */ }
         // Persist WHY, not just that: WebKit's info.message names the loss
         // ("GPU hang", the imgui-class setPipeline loss) where Dawn says
@@ -1935,6 +1950,10 @@ const WGX = (function () {
     }
 
     let _swapCopyable = _capPref != null || (!_outProbeOff && !WGX_LITE);
+    // Set by _capEncode when a capture needs COPY_SRC and the swapchain has
+    // not got it; consumed at the TOP of begin(), the only point in the frame
+    // where reconfiguring cannot expire a texture already recorded against.
+    let _wantCopyable = false;
     function _configureCanvas() {
       if (!ctx || !device) return null;
       try {
@@ -3517,6 +3536,13 @@ const WGX = (function () {
       _presentCount++;   // frame counter for the GPU-error cap (errors are attributed to the frame they arrive in)
       if (_lost) return false;
       try {
+        // Before ANY of this frame's work: a pending capture that needs a
+        // copyable swapchain gets its reconfigure here, where nothing has been
+        // encoded yet and no view has been acquired (present() acquires it).
+        if (_wantCopyable && !_swapCopyable && !_softGpu) {
+          _wantCopyable = false; _swapCopyable = true;
+          _configureCanvas();
+        }
         lastFrame = frame || null;
         if (width < 1) resize();
         ensureTargets();
@@ -4038,22 +4064,39 @@ const WGX = (function () {
     // cycle the LIT car-paint block samples it (Block 7, envProbeStr). game.js re-issues
     // the world draws (track meshes then drawSky, NO cars) between begin/end — they record
     // into the face's own pass via litPass, so every lighting uniform matches the frame.
+    let _envInitFailed = false;   // a partial envInit is never retried: see the catch
     function envInit() {
-      if (envCubeTex) return;
+      if (envCubeTex || _envInitFailed) return;
       const envMips = Math.floor(Math.log2(ENV_SIZE)) + 1;
-      envCubeTex = device.createTexture({
-        size: [ENV_SIZE, ENV_SIZE, 6], dimension: "2d", format: SCENE_FORMAT,
-        mipLevelCount: envMips,
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      });
-      envSampleView = envCubeTex.createView({ dimension: "cube" });
-      envFaceViews = [];
-      for (let f = 0; f < 6; f++)
-        envFaceViews.push(envCubeTex.createView({ dimension: "2d", baseArrayLayer: f, arrayLayerCount: 1, baseMipLevel: 0, mipLevelCount: 1 }));
-      envDepthTex = device.createTexture({
-        size: [ENV_SIZE, ENV_SIZE], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT,
-      });
-      envDepthView = envDepthTex.createView();
+      try {
+        envCubeTex = device.createTexture({
+          size: [ENV_SIZE, ENV_SIZE, 6], dimension: "2d", format: SCENE_FORMAT,
+          mipLevelCount: envMips,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        envSampleView = envCubeTex.createView({ dimension: "cube" });
+        envFaceViews = [];
+        for (let f = 0; f < 6; f++)
+          envFaceViews.push(envCubeTex.createView({ dimension: "2d", baseArrayLayer: f, arrayLayerCount: 1, baseMipLevel: 0, mipLevelCount: 1 }));
+        envDepthTex = device.createTexture({
+          size: [ENV_SIZE, ENV_SIZE], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        envDepthView = envDepthTex.createView();
+      } catch (e) {
+        // RELEASE WHAT WAS MADE, AND LATCH. envCubeTex was assigned first, so a
+        // throw from any later view/texture (OOM on the device class this
+        // probe is gated for) used to leave the re-entry guard satisfied with
+        // envFaceViews empty — and every following envFaceBegin passed an
+        // undefined view to beginRenderPass: one validation error per probe
+        // cycle for the life of the tab, enough to climb the GPU-error ladder
+        // off a working device. createMesh / _makeAttrBG / _capEncode already
+        // release on failure; this one was missed.
+        try { if (envCubeTex) envCubeTex.destroy(); } catch (_) { /* already invalid */ }
+        try { if (envDepthTex) envDepthTex.destroy(); } catch (_) { /* already invalid */ }
+        envCubeTex = null; envSampleView = null; envFaceViews = null; envDepthTex = null; envDepthView = null;
+        _envInitFailed = true;
+        try { Log.warn("gfx", "WGX env probe allocation failed — analytic reflections only:", e && e.message); } catch (_) { /* harness */ }
+      }
     }
 
     // Open the pass for one cube face: set the face camera, upload it as the frame
@@ -4070,7 +4113,7 @@ const WGX = (function () {
       // re-uploading the frame UBO and the light SBO, on the rung whose whole
       // point is the jetsam budget — the same gate the car map, lamp map and
       // SSR already honour on LITE. Desktop keeps the live mirror.
-      if (_lost || WGX_MINIMAL || WGX_LITE || !skyPipeline) return null;
+      if (_lost || WGX_MINIMAL || WGX_LITE || _envInitFailed || !skyPipeline) return null;
       if (!envCubeTex) envInit();
       _passSamples = 1;
       const F = ENV_FACES[face];
@@ -4205,11 +4248,18 @@ const WGX = (function () {
         // A LITE swapchain is configured without COPY_SRC (see
         // _configureCanvas). SAVE SCREENSHOT on such a device reconfigures
         // once, copyable, and reads the NEXT frame; this one is skipped.
-        if (!_softGpu && !_swapCopyable) {
-          _swapCopyable = true;
-          _configureCanvas();
-          return null;
-        }
+        //
+        // THE RECONFIGURE CANNOT HAPPEN HERE. This runs AFTER the whole frame
+        // is encoded — the lit pass, post and tonemap have already recorded
+        // against a view of the CURRENT swapchain texture — and one statement
+        // before device.queue.submit(). ctx.configure() replaces the drawing
+        // buffer and EXPIRES that texture, so the submit that follows
+        // references a destroyed texture: a validation error, a dropped
+        // frame, and (since the uncapturederror listener landed) a phantom
+        // `err 1` in the GOV row and COPY DIAG — poisoning the one instrument
+        // a phone has, from inside the screenshot path. Ask begin() instead;
+        // it reconfigures before the next frame acquires its view.
+        if (!_softGpu && !_swapCopyable) { _wantCopyable = true; return null; }
         const capTex = _softGpu ? softPresentTex : ctx.getCurrentTexture();
         if (!capTex) throw new Error("no frame texture");
         const w = capTex.width, h = capTex.height;

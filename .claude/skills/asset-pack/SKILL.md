@@ -26,7 +26,7 @@ device/feature miss, not "WGX has no pack."
 
 ## When NOT to Use
 
-- Cache-busting shell assets — the pack has **no `?v=`**; `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) is
+- Cache-busting shell assets — the pack has **no `?v=`**; `node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) is
   for `js/`/`css/`/`index.html` tags only.
 - Mid-test-run pack edits — SW is cache-first (same class as not bumping
   `version.json` mid-run).

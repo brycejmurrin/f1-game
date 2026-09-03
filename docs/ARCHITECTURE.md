@@ -381,9 +381,12 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   headless guards follow the layout automatically.
 - **`tools/extract-module.mjs`** assists further extractions from game.js
   (moves a block, wires the `create(G)` boilerplate, updates manifest + tags).
-- **Cache busting is content-addressed** — every JS/CSS edit still needs the `bump-cache` refresh
-  across `index.html` plus the matching `version.json` bump. The tag blocks
-  themselves are written by `tools/gen-shell.mjs`, never by hand.
+- **Cache busting is the DEPLOY's job** — the committed shell reads `?v=dev` on
+  every tag; `pages.yml` rewrites them to 12-char content hashes and stamps the
+  generation while staging (`bump-cache.mjs --apply --at N --root _site`). There
+  is NO bump after a `js/`/`css/` edit, and `bump-cache --apply` REFUSES on the
+  repo (exit 2). The tag blocks themselves are written by
+  `tools/gen-shell.mjs`, never by hand.
 
 ### Deferred follow-ups (known debt, in rough priority order)
 

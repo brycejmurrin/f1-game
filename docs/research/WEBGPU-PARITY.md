@@ -600,7 +600,7 @@ regresses.
 | Y flip | `copyExternalImageToTexture({flipY})` is per-call, not a pack state | Assuming GL `UNPACK_FLIP_Y` semantics globally |
 | Depth compare | WebGPU NDC z already [0,1] after `Z01`; shadow `refD` is not remapped again | A leftover `* 0.5 + 0.5` on shadow z |
 
-### 5a. Two WGSL rules the language enforces and a mock device cannot
+### 5a. Five WGSL rules the language enforces and a mock device cannot
 
 Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
 

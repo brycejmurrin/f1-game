@@ -80,6 +80,27 @@ TSL post chain; stamps `renderOrder` for FX/glass.
 | `apex26.wgxCapture` | SCREENSHOTS: `1`=2D blit, `0`=native swapchain, unset=AUTO (session overrides local) |
 | `apex26.tlxForceBatches`, `apex26.tlxForceHw` | DEBUG: run the code a real GPU runs, on a software adapter. `tlxForceHw` is a comma list — `sky\|env\|chunked\|batches\|shadow`, or `1`/`all`. Every software skip in TLX is a BUDGET guard, so an unforced CI run never executes the player's path; `env` is how the black-frame Dawn defect was found. Presentation stays soft. Set them with `gfx-probe --ls key=value` |
 
+### Persisted degradations — and how each one comes back
+
+Every latch a backend writes to survive a reload, with its reset path. A latch
+with no player-reachable reset is a product bug (2026-09-03 phone-gate audit):
+`apex26.envProbeOff` was one until ENV REFLECTION 0→>0 learned to clear it.
+
+| key | store | written on | cleared by |
+|---|---|---|---|
+| `apex26.envProbeOff` | local | a VISIBLE context/device loss (GLX, WGX, TLX) | ENV REFLECTION knob 0→>0 (tuner note says so); RESET RENDERER |
+| `apex26.perChunkOff` | local | the same losses | either LAMPS chunk knob 0→>0 (tuner note); RESET RENDERER |
+| `apex26.gfxWgxLevel` / `gfxWgxLite` | local | `_wgxEscalate` (device lost, black output) | self-heals after 5 clean sessions; re-picking WEBGPU; RESET RENDERER |
+| `apex26.crashStrikes` (mobile) | local | a race that never finished | one strike per cleanly finished race; any build change wipes it; `__apex.safeMode(false)` |
+| `apex26.gfxBackendProbe` | local | armed around the first world present | consumed at boot — a SURVIVING canary rewrites the pick to WEBGL2 (re-pick restores) |
+| `apex26.gfxClaimFail`, `tlxAutoGL`, `ctxLostReloads`, `wgxHoldPresent` | session | claim-and-die, third loss / 2 error frames, reload budget, soft-present hold | the tab closing; RESET RENDERER |
+
+`RENDERER_LS_KEYS` / `RENDERER_SS_KEYS` in `js/perf/renderer-picker.js` are what
+RESET RENDERER clears, and `tests/unit/gfx-backend-canary.test.mjs` walks
+`js/render/` for every `apex26.*` a backend writes and fails unless it is in one
+of those lists or declared a read-only debug pin — the hole `wgxHoldPresent`
+shipped through.
+
 Canary + session claim-fail recover from claim-and-die / jetsam by falling
 back to WebGL2 without always wiping the user’s pick. WGX climbs
 `gfxWgxLevel` (full → lite → minimal → session skip). Phones are not
@@ -98,7 +119,7 @@ word (full list and commits: `docs/research/WEBGPU-PARITY.md` §5a rule 4):
 |---|---|---|---|
 | 1 | Metal PSO compiled lazily at first draw with `error:nil`; on failure the draw is issued with no pipeline. OOM error "…too complex, please reduce its size" (only since Oct 2025) | sky (small program) survives, every lit draw vanishes; `gpuFirst` now shows the message | THREE PATH: WEBGPU + COPY DIAG after one lap; if it names "too complex", the lit program is the size problem |
 | 3 | indexed draw skipped when any declared vertex buffer is one element short; OOB index poisons the index buffer for good | per-mesh, not per-material | `tlxForceBatches` / chunk on-off |
-| 4 | one validation failure kills the encoder for the rest of the pass | everything after the first bad draw missing, sky first so it survives | `tlxNoMrt` |
+| 4 | one validation failure kills the encoder for the rest of the pass | everything after the first bad draw missing, sky first so it survives | (was `tlxNoMrt`, retired 2026-09-03 — mechanism 1 was the real one) |
 | 5 | mat3 packing miscompile (three `normalMatrix` in the object struct) fixed upstream mid-2026 | materials using normals only | a `colorNode`-only material draws, a lit one does not |
 
 **Resolved the same day.** With the listener live the phone reported
@@ -138,14 +159,17 @@ whole device.
 |---|---|---|
 | **WEBGL2** | Native canvas. Screenshots just work. | `canvas.toDataURL` |
 | **WEBGPU** | Soft-present: final pass → `COPY_SRC` texture → ephemeral readback → `putImageData` on `#game`. Forced by SCREENSHOTS: 2D BLIT or a software adapter. SCREENSHOTS: NATIVE leaves the swapchain black. | `GLX.awaitSoftPresent()` then `#game`; optional `GLX.capturePixels()` |
-| **THREE.JS** | AUTO can be **WebGPU or three WebGL2**. SETTINGS shows `AUTO (WEBGPU)` / `AUTO (WEBGL2)` from the live backend. It tries WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE; since 2026-09-02 a phone that picks THREE.JS BINDS it despite the §2m memory risk — `apex26.tlxMobile=0` declines back to GLX, and the boot canary reverts a load that never presented). It lands on three WebGL2 when GPU is missing, `apex26.tlxAutoGL=1` after this tab lost WebGPU, `init()` threw before `#game` was claimed, **or the browser is WebKit (Safari, every iOS browser) — since 2026-09-03: two deploys drew three-WebGPU wrongly on an iPhone with zero reported errors (bodywork missing, then sky-only at `c6d8fd3`); THREE PATH: WEBGPU still pins it for the investigation, with `apex26.tlxArrayNearest=1` / `apex26.tlxNoMrt=1` as the on-device A/B switches and SETTINGS ▸ COPY DIAG as the report** — still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
+| **THREE.JS** | AUTO can be **WebGPU or three WebGL2**. SETTINGS shows `AUTO (WEBGPU)` / `AUTO (WEBGL2)` from the live backend. It tries WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE; since 2026-09-02 a phone that picks THREE.JS BINDS it despite the §2m memory risk — `apex26.tlxMobile=0` declines back to GLX, and the boot canary reverts a load that never presented). It lands on three WebGL2 when GPU is missing, `apex26.tlxAutoGL=1` after this tab lost WebGPU, `init()` threw before `#game` was claimed, **or the browser is WebKit (Safari, every iOS browser) — since 2026-09-03, when three deploys drew three-WebGPU wrongly on an iPhone (bodywork missing, then sky-only) with zero reported errors. ROOT-CAUSED the same day, once the `uncapturederror` LISTENER form made the phone audible: WebKit refuses any module whose module-scope `var<private>` sum passes 8,192 bytes and three r185 declared 1,597 of them in the lit fragment (`vendor/three-0.185.1/PATCHES.md` §4 + the `setLayout`ed noise helpers, shipped `a6a1566`). The WebKit pin STAYS until a phone confirms the fix on THREE PATH: WEBGPU; `apex26.tlxArrayNearest=1` (reverts `0a3f480`'s placeholder sampling state) and SETTINGS ▸ COPY DIAG are the on-device tools** — still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
 
 Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
 
 ## Parity snapshot
 
 - **GLX:** full reference — MSAA on desktop 4× at GRAPHICS: ULTRA, capped to 2× on
-  HIGH and below, 0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
+  HIGH and below (TRUE since 2026-09-03 only: the cap read `apex26.gfxHigh`,
+  which is written on phones ONLY, so every desktop preset had been shipping
+  4×; it reads `apex26.gfxPreset` now, and WGX had the same dead branch),
+  0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost (env probe off on LITE since 2026-09-03 — a cube cycle is six world passes + 36 mip passes on the jetsam rung); honest
@@ -169,7 +193,7 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   `gfx.hasPerChunkLights` is the capability read (GLX + WGX; absent TLX).
   `gfx.updateInstances(batch, matrices, n)` is the second capability of
   that shape, and unlike per-chunk lights it is now on ALL THREE
-  (`glx.js:1742`, `wgx.js:5069`, `tlx.js:924` — WGX and TLX ported
+  (`updateInstances` in `glx.js`, `wgx.js` and `tlx.js` — WGX and TLX ported
   2026-09-02): it hands an existing instanced batch a
   caller-packed transform set, for a batch whose poses are new every
   frame rather than static geometry narrowed by a frustum. Its one
@@ -206,16 +230,20 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   placeholders carry the pack's Repeat / LinearMipmapLinear / aniso 4 state
   (guard-asserted), or every baked fragment reads an edge texel on WebGPU
   (the phone "unlit / see-through track"). The WebGL backend emits
-  `texture()` regardless. A WebGPU device that rejects work in the first 120
-  presents on AUTO self-heals to three WebGL2 next boot (`tlxAutoGL`), and
+  `texture()` regardless. A WebGPU device that rejects work in TWO distinct presents inside the first
+  120 on AUTO self-heals to three WebGL2 next boot (`tlxAutoGL`; one transient
+  no longer trips it — `HEAL_MIN_FRAMES`, and `backendState().gpuErrFrames`
+  says why it did or did not fire), and
   `backendState()` (now on all three backends, via the GOV panel `gfx` row
   and `__apex.diag().env`) reports `api`, `gpuErrors` and the first GPU or
   WGSL-compile error. Phones are never classified as software adapters.
   Software adapters stay on WebGPU (soft-present + writeBuffer shim); they
   must not silently bind GLX. AUTO may then take three WebGL2 (`tlxAutoGL`)
-  without writing `gfxClaimFail`. Phones and Safari AUTO try the same
-  WebGPU path with a lite swapchain (`UnsignedByteType`, no MSAA 4,
-  low-power).
+  without writing `gfxClaimFail`. Since 2026-09-03 AUTO on WebKit (Safari,
+  every iOS browser) binds three's WebGL2 backend — the lite WebGPU swapchain
+  (`UnsignedByteType`, no MSAA 4, low-power) is what THREE PATH: WEBGPU and
+  Android AUTO take; see the THREE.JS row above for the root cause and why the
+  pin stays until more phones confirm the fix.
 
 ## Cross-backend parity — mirroring a knob across GLX / WGX / TLX
 

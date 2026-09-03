@@ -24,7 +24,7 @@ Playwright hang after a mid-run version bump.
    npm run test:tooling-fast
    ```
 
-4. **Bump version last** (`node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`)). Verify one uniform N:
+4. **Bump version last** (`node tools/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`)). Verify one uniform N:
    ```sh
    grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
    ```

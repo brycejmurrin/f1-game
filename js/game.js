@@ -5434,6 +5434,16 @@ function setLightTune(id, v) {
     _perChunkOff = false;
     try { localStorage.removeItem("apex26.perChunkOff"); } catch (_) { /* no storage: the in-memory clear stands for this session */ }
   }
+  // Same reset, same gesture, for the env-probe latch. All three backends write
+  // apex26.envProbeOff on a VISIBLE context/device loss, and until this line the
+  // only thing that cleared it was RESET RENDERER — which also throws away the
+  // player's renderer pick. One transient glitch therefore removed live car
+  // reflections on every future boot, on every backend, with no indication and
+  // no proportionate way back. ENV REFLECTION 0 -> >0 is that way back.
+  if (id === "carEnvCube" && +v > 0 && !(+LT[id] > 0) && _envProbeOff) {
+    _envProbeOff = false;
+    try { localStorage.removeItem("apex26.envProbeOff"); } catch (_) { /* same: the in-memory clear stands */ }
+  }
   return ltStore.set(id, v);
 }
 function persistLightTune() { ltStore.persist(); }
@@ -8971,7 +8981,7 @@ document.addEventListener("visibilitychange", () => {
   // normal iOS housekeeping, not our crash. Disarm while hidden, re-arm on
   // return to a live session.
   if (document.hidden) PerfGov.sentinelArm(false);
-  else if (state === "race" || state === "count") PerfGov.sentinelArm(true);
+  else if (state === "race" || state === "count") PerfGov.sentinelResume();
   // The platform releases a wake lock on every hide and does not give it
   // back — re-request it here rather than a fourth listener elsewhere.
   if (!document.hidden && raceWakeWanted) holdRaceWake();

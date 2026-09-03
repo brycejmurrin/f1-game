@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 187 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 188 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -104,7 +104,7 @@ its whole group when the change touches that spec's subject and nothing else.
 Tests serve `js/` and `css/` from the working tree, so a browser run in
 flight forbids source edits — which means the efficient session shape is not
 "edit, run browsers, edit, run browsers" but: make ALL the source edits,
-verify once, bump the cache, commit. Re-running browser specs after every
+verify once, commit — there is no cache bump (`?v=dev`; the deploy stamps the hashes). Re-running browser specs after every
 edit buys no additional safety over running them once at the end; it just
 serializes the agent behind SwiftShader several times over.
 
@@ -289,7 +289,7 @@ the group is much bigger than the change.
 | `tooling-fast` | the structural half in ~30 s — **one file at a time** via `tools/tooling-fast.mjs` (`--test-concurrency=1`) with START/PASS/FAIL + `not ok` names on stdout and `artifacts/logs/tooling-fast-suite.log`. Load order, docs integrity, test groups, api contracts, css layer discipline, graph, validators. The full-fleet sweeps dominate `tooling`; this is everything else, for the edit loop |
 | `tooling` | every Node contract suite — chains `test:tooling-fast` then `test:sweeps` (the sweeps run `--test-concurrency=1`, see below) |
 | `game-vm` | the Node VM game harness (`game-vm.test.mjs`), physics parity (`physics-characterization-vm`) and the thirteen `*-vm.test.mjs` TWINS of the JSON-only browser specs — `headless-api`, `obs-act-edge`, `longitudinal`, `world-physics`, `drift`, `active-aero`, `aero-zones`, `offtrack`, `elevation-tracks`, `collisions`, `collisions-deep`, `collision-ai-fixes`, `new-hooks` — same assertions and thresholds, one boot per file, ~1 s a circuit build. ~3 min for the set (elevation-tracks builds 40 circuits and is ~2 min of it alone; the rest are 2–30 s each); in CI guards. The browser specs stay in place and stay the truth until CI has run the twins |
-| `mcp` | the CLI-only MCP wrappers (`tinyfish-mcp`, `probe-mcp`): spawn-heavy, off the edit loop; their fast-gate half is `mcp-cli.test.mjs` — CI's node suites always, locally when touching `tools/*-mcp.*` |
+| `mcp` | the CLI-only MCP wrappers (`tinyfish-mcp`, `probe-mcp`) plus `.cursor/environment.json` bootstrap pins: spawn-heavy, off the edit loop; their fast-gate half is `mcp-cli.test.mjs` — CI's node suites always, locally when touching `tools/*-mcp.*` or `.cursor/environment.json` |
 | `node-slow` | the three raster/spawn-heavy car files (`cockpit-pale-surfaces`, `crest-marks`, `slider-effect`; 152 s of the old 315 s loop) — CI guards always, locally when pick-tests names it |
 | `sweeps` | the full-fleet geometry audits — prop-clipping, lamp-fixture-anchor, scenery-grounding, road-under-floor, coplanar-faces, debris-hazard-hint, spline-project-height, the shared-foundation characterization, car-front-wing-width and grid-boxes (10 files — `package.json` `test:sweeps` is the list). Each rebuilds circuits through `tools/track-build-vm.cjs`; `coplanar-faces` is the z-fighting ratchet that `clip-audit` structurally cannot see. Runs `--test-concurrency=1` **on purpose** — see below |
 | `sweeps-parts` | the 559 s parts option-resolution census (`parts-visual-distinctness`) alone — split out of `sweeps` so the geometry sweeps finish in ~7 min; its own CI job |
@@ -564,7 +564,7 @@ If a guard needs history, the job needs `fetch-depth: 0` — today the sweeps,
 smoke and selected jobs have it; guards does not, which is also why
 `pick-tests`' merge-base default cannot work in the guards job.
 
-### Renderer specs on a real GPU (`macos-latest`) — 2026-09-01, UNVERIFIED until the first run
+### Renderer specs on a real GPU (`macos-latest`) — first run 2026-09-03 (see §Field notes 2026-09-03, `image-grade-visual`)
 
 Every browser job in `ci.yml` ran on `ubuntu-latest`, whose only adapter is
 SwiftShader, and the `gfx` group had never been in CI at all. `macos-latest`
@@ -1227,6 +1227,7 @@ what it covers.
 | `trim-comments.test.mjs` | smoke test for `tools/trim-comments.mjs`: `--help` exits 0 and prints `--dry-run`, and the tool removes dividers and location-pointer comments from a fixture file without touching code lines |
 | `report-server.test.mjs` | the LAN report collector requires its per-run capability for every read and write, rejects unsafe paths and payloads, and enforces per-request/session storage bounds |
 | `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry, mock chrome daemon (healthz//tools//call + CLI auto-routing to a live daemon) (no Chromium / no TinyFish network). Also `mcp-cli.mjs probe --dry-run`: the pick is written BEFORE the reload in one batch, `--backend three` carries the WebGL2 pin (and only three does), unknown flags exit non-zero rather than probing the default, and the wrapper keeps `--enable-unsafe-webgpu` |
+| `environment-json.test.mjs` | `.cursor/environment.json` Cloud Agent bootstrap — install script, Chromium path, MCP allowlist names, and every stdio command in `.mcp.json` covered |
 | `apex-tools-mcp.test.mjs` | `apex-tools` MCP — `serverInfo.name === apex-tools-mcp`, tools are all `apex_*` (zero chrome/tinyfish; no test-bg wrap), `apex_graph_parity` requires `base`, catalog `tools/apex-tools-mcp.json` locksteps `.mcp.json` stdio + `serve-http` on `127.0.0.1:3713`, week-1–4 pins, lock/occupancy including host `@playwright/mcp` vs `--mcp-config` JSON, `path_escaped` / `port_not_supported`, refuses deploy/github.io, `isError` preserved, stdout JSON-RPC only (mock/`dryRun`, no Chromium) |
 | `mcp-smoke.test.mjs` | five-wrapper shell probe — `--dry-run` lists apex-tools / probe / chrome-devtools / playwright / tinyfish, never `verify` / `deploy-check` / `test-bg` / `playwright-mcp.sh run`, `apex-tools-mcp.sh smoke` delegates, no Chromium |
 | `agent-surface.test.mjs` | wrap map lockstep — `docs/AGENT-SURFACE.md` names every `apex_*` in `tools/apex-tools-mcp.json`, each CLI/skill exists, never-wrap lists `test-bg` / `--apply` / github.io, indexes point at the map, catalog descriptions start Tree / Browser (lock first), `.mcp.json` has the seven repo servers including playwright + pinned official npx |
@@ -2003,4 +2004,25 @@ the dump can see it. When a TSL change lands, re-dump and keep the module-scope
 private sum well under 8,192 bytes; the `gfx-backend-canary` pins the patch
 and the noise layouts. The phone is the confirmation step (THREE PATH:
 WEBGPU, one lap, GOV `gfx` row `err 0`).
+
+### 2026-09-03 — the TSL layout pass, measured on the same dumps
+
+Second round of the WebKit work: `matBumpHeight` (lit) and the sky's
+`hash3`/`hash2`/`vnoise`/`fbm` took `setLayout`, so each compiles once as a
+real function instead of being inlined at every call. Dawn dump, iPhone UA,
+`artifacts/wgsl-dump-2` → `artifacts/wgsl-dump-3`:
+
+| module | before | after |
+|---|---|---|
+| lit fragment (instanced) | 99 204 B | 69 707 B |
+| lit fragment (plain) | 99 064 B | 69 567 B |
+| lit fragment (chunked) | 97 267 B | 67 770 B |
+| sky fragment | 40 601 B | 16 780 B |
+| all 33 modules | 473 731 B | 361 406 B |
+
+`main`'s node-variable count fell with it (lit 452 → 354, sky 173 → 62).
+Cumulative with `a6a1566`, the lit fragment is 359 434 B → 69 707 B. The
+figure this aims at is the census's 16.2 s three-WebGL2 first frame on
+ANGLE-Metal, which only `gpu-census.yml` can re-measure. `gpuErrors` 0 and
+24 pipelines in both dumps.
 

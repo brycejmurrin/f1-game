@@ -440,9 +440,40 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
-    "apex26.wgxCapture", "apex26.tlxAutoGL",
+    "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
   ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
+
+  // MECHANISM, not just the frozen copy: every apex26.* latch a BACKEND writes
+  // must be resettable. The deepEqual above catches someone editing the list;
+  // it cannot catch someone adding a setItem in js/render/ and never touching
+  // renderer-picker.js — which is how apex26.wgxHoldPresent shipped able to
+  // survive RESET RENDERER and keep a tab skipping the soft-present copy+map
+  // for good. Read-only pins (debug switches the game never writes) are not
+  // latches and stay out.
+  const READ_ONLY_PINS = new Set([
+    "apex26.gfxWgxAllowSoftware", "apex26.glErrDrain", "apex26.instCellCache",
+    "apex26.forceMobileTier", "apex26.tlxForceHw", "apex26.tlxForceBatches",
+    "apex26.tlxArrayNearest", "apex26.tlxMirrorSweep", "apex26.tlxChunkRelease",
+    "apex26.tlxMobile", "apex26.gfxWgxLite", "apex26.gfxHigh", "apex26.matTexMix",
+  ]);
+  const resettable = new Set([...G.RENDERER_LS_KEYS, ...G.RENDERER_SS_KEYS]);
+  const written = new Set();
+  const renderDir = path.join(ROOT, "js/render");
+  const stack = [renderDir];
+  while (stack.length) {
+    for (const e of fs.readdirSync(stack.pop(), { withFileTypes: true })) {
+      const abs = path.join(e.parentPath || e.path, e.name);
+      if (e.isDirectory()) { stack.push(abs); continue; }
+      if (!e.name.endsWith(".js")) continue;
+      for (const m of fs.readFileSync(abs, "utf8").matchAll(/(?:local|session)Storage\.setItem\(\s*"(apex26\.[A-Za-z0-9_]+)"/g)) {
+        written.add(m[1]);
+      }
+    }
+  }
+  const unresettable = [...written].filter((k) => !resettable.has(k) && !READ_ONLY_PINS.has(k)).sort();
+  assert.deepEqual(unresettable, [],
+    "these backend-written latches survive RESET RENDERER — add them to RENDERER_LS_KEYS/SS_KEYS (renderer-picker.js) or, if they are read-only debug pins, to READ_ONLY_PINS here");
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
   assert.equal(ls.getItem("apex26.gfxBackend"), null);
@@ -1326,6 +1357,50 @@ const THREE_BUNDLE = read("vendor/three-0.185.1/three.webgpu.min.js");
 // ── The two LOCAL PATCHES carried on the vendored bundle (vendor/three-0.185.1/
 // PATCHES.md). A vendor re-drop that silently reverts either one must fail HERE,
 // not in production. Upstream has fixed neither as of 186dev (2026-08-27).
+test("GLX's env probe cannot latch _envActive against a disabled/null framebuffer", () => {
+  // The completeness check (2026-09-03) can disable the probe DURING the first
+  // envFaceBegin, because the lazy envInit() runs after the _envDisabled gate.
+  // If envFaceBegin then armed _envActive anyway, begin() would bind the
+  // DEFAULT framebuffer at a 64px viewport and clear it every frame for the
+  // life of the tab: a black canvas with a 64-pixel corner, no exception, no
+  // console error. Two invariants keep that shut.
+  const glx = read("js/render/glx/glx.js");
+  const beginFn = fnBody(glx, "envFaceBegin");
+  assert.match(beginFn, /if \(!envTex\) \{ envInit\(\); if \(_envDisabled \|\| !envTex \|\| !envFBO\) return null; \}/,
+    "envFaceBegin must re-test the disable latch AFTER the lazy envInit, and bail before arming _envActive");
+  const armAt = beginFn.indexOf("_envActive = true");
+  const testAt = beginFn.indexOf("if (!envTex) { envInit()");
+  assert.ok(testAt >= 0 && armAt > testAt, "the re-test must precede the arm");
+  const endFn = fnBody(glx, "envFaceEnd");
+  const clearAt = endFn.indexOf("_envActive = false");
+  const bailAt = endFn.indexOf("if (!gl || !envTex) return;");
+  assert.ok(clearAt >= 0 && bailAt >= 0 && clearAt < bailAt,
+    "envFaceEnd must lower _envActive BEFORE any early return — a texture that vanished mid-cycle is the same brick one frame later");
+});
+
+test("latches come down BEFORE early returns — the shape that bricked the GLX env probe", () => {
+  // 2026-09-03: envFaceEnd returned early with _envActive still set and the
+  // canvas went black for the life of the tab. Two more latches share the
+  // shape and are pinned here so the next early return cannot re-create it.
+  const shadow = read("js/render/glx/shadow.js");
+  for (const fn of ["carShadowEnd", "lampShadowEnd"]) {
+    const body = fnBody(shadow, fn);
+    const clearAt = body.indexOf("S.castCullVP = null");
+    const bailAt = body.indexOf("return;");
+    assert.ok(clearAt >= 0 && bailAt >= 0 && clearAt < bailAt,
+      `${fn}: castCullVP must be cleared before the enabled-check return — chunked.js reads castCullVP || lightVP for every caster`);
+  }
+  // A tab RETURN is not a race start: it must re-arm the sentinel without
+  // resetting the derived frame budget (sentinelArm(true) does both).
+  const game = read("js/game.js");
+  assert.match(game, /else if \(state === "race" \|\| state === "count"\) PerfGov\.sentinelResume\(\);/,
+    "the visibilitychange handler re-arms with sentinelResume(), not sentinelArm(true)");
+  assert.match(read("js/perf/governor.js"), /function sentinelResume\(\)/);
+  // The env-probe latch has the same player-reachable reset as the chunk latch.
+  assert.match(game, /id === "carEnvCube" && \+v > 0 && !\(\+LT\[id\] > 0\) && _envProbeOff/,
+    "ENV REFLECTION 0 -> >0 clears apex26.envProbeOff, like the chunk knobs clear perChunkOff");
+});
+
 test("the vendored three carries the swizzle patch — Chromium 141 rejects r185's string swizzle", () => {
   // r185's pooled GPUTextureViewDescriptor stamps swizzle:"rgba" (constructor +
   // reset()) into EVERY createView; Chromium 141 validates the member as a
@@ -1359,6 +1434,18 @@ test("the vendored three emits render-stage node variables at FUNCTION scope (We
   for (const name of ["apexHash21", "apexVnoise", "apexIgnoise"]) {
     assert.match(chunks, new RegExp(`setLayout\\(\\{ name: "${name}", type: "float", inputs: \\[\\{ name: "\\w+", type: "vec2" \\}\\] \\}\\)`),
       `${name} must carry a setLayout so it compiles once instead of per call`);
+  }
+  // The two biggest remaining inliners, measured on the Dawn dumps: three
+  // inlined matBumpHeight's 15-branch chain at all SIX applyMaterialNormal call
+  // sites (5.2 KB + ~25 node vars each — 31 KB of the 99 KB lit fragment), and
+  // the sky's hash2 68x (fbm->4 vnoise->4 hash2, fbm called 4x, plus one
+  // direct). A dropped layout re-inflates the shader silently: nothing fails.
+  assert.match(read("js/render/three/tsl-lit.js"), /setLayout\(\{ name: "apexMatBumpHeight", type: "float",/,
+    "matBumpHeight must stay layouted — 6 inlines is 26% of the lit fragment");
+  const skyF = read("js/render/three/tsl-sky.js");
+  for (const name of ["apexSkyHash2", "apexSkyVnoise", "apexSkyFbm", "apexSkyHash3"]) {
+    assert.match(skyF, new RegExp(`setLayout\\(\\{ name: "${name}", type: "float"`),
+      `${name} must carry a setLayout (the sky noise family is SEPARATE from tsl-chunks')`);
   }
 });
 test("the vendored three carries the #33952 bind-group leak backport (PR #33954)", () => {

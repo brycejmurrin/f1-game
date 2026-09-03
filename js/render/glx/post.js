@@ -153,9 +153,19 @@ const GLXPost = (function () {
         // memory tier; IS_MOBILE keeps that from coming back.
         msaaSamples = IS_MOBILE ? 0 : Math.min(4, cMax, dMax);
         if (!IS_MOBILE) {
-          let _gfxHighOff = false;
-          try { _gfxHighOff = localStorage.getItem("apex26.gfxHigh") === "0"; } catch (_) { /* blocked storage: keep ULTRA MSAA cap */ }
-          if (_gfxHighOff && msaaSamples > 2) msaaSamples = 2;
+  // THE SIGNAL WAS MOBILE-ONLY. `apex26.gfxHigh` is written by
+  // GfxQuality.syncBootTier(), whose first line is `if (!_isMobile) return
+  // false` — so on a DESKTOP the key is never written, this read never saw
+  // "0", and the cap below never applied: every desktop preset shipped 4x,
+  // which is exactly what this block exists to stop. The preset itself is
+  // `apex26.gfxPreset` (GfxQuality's store key) on every device; ULTRA keeps
+  // 4x, everything below caps. Unset = the desktop default HIGH, which caps.
+          let _ultra = false;
+          try {
+            const _p = localStorage.getItem("apex26.gfxPreset");
+            _ultra = _p === "ultra" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+          } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
+          if (!_ultra && msaaSamples > 2) msaaSamples = 2;
         }
         if (msaaSamples < 2) msaaSamples = 0;
       } catch (e) { msaaSamples = 0; }

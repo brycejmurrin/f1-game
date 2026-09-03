@@ -274,6 +274,18 @@ function init(gfx) {
 // and left the floor where boot had put it. See cleanRace() for what that cost.
 function _floorFromStrikes(n) { return n >= 2 ? 4 : (n >= 1 ? 2 : 0); }
 
+// RE-ARM WITHOUT THE RESET. The visibilitychange handler used sentinelArm(true)
+// for a tab RETURN, which is not a race start: it dragged the boot-window reset
+// along, snapping _frameEMA and _floorMs back to 16.7 on a device whose budget
+// the governor had already derived. On a 30 Hz capped display (Low Power Mode)
+// that re-armed the exact "degrade a capped clock" bug _floorMs exists to
+// prevent — one scale step down, a revert 45 frames later, two visible target
+// re-allocs per app switch — and it made __apex.perf().open describe the last
+// un-hide instead of the race start. This only re-arms the sentinel.
+function sentinelResume() {
+  if (!_gfx || !_gfx.isMobile) return;
+  GameStore.store.rawSet(SENT_ACTIVE, "1");
+}
 function sentinelArm(on) {
   // Race start / return to a live session: re-open the boot window described
   // at `_live` — both averages restart from their shared 16.7 so the EMA can
@@ -430,7 +442,7 @@ function tick(dtMs) {
     if (stepped) {
       _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
       _govCool = 30; _downHold = 600;
-    } else if (Math.max(_perfTier, _floorTier()) < 4) {   // scale lever exhausted — shed a feature
+    } else if (_perfTier < 4) {   // scale lever exhausted — shed a feature
       // Step from the EFFECTIVE tier, not from _perfTier alone. A rung at or
       // below the floor (crash sentinel, or the player's GRAPHICS preset) is
       // already shed, so incrementing onto it changes nothing the EMA can see:
@@ -440,8 +452,21 @@ function tick(dtMs) {
       // distinguish, because the step genuinely did not help and the reason
       // (redundant, not mis-targeted) is invisible to a frame-time delta.
       // Skipping to floor+1 guarantees every step is one that can be felt.
+      //
+      // THE GUARD READS _perfTier, NOT THE EFFECTIVE TIER, and that is the
+      // whole point. Gating on `Math.max(_perfTier, _floorTier()) < 4` made
+      // GRAPHICS: LOW (_userTier 4, so _floorTier() 4) false on its very first
+      // evaluation: _perfTier and _autoShed could never leave 0, so autoTier()
+      // and autoShed() — which exclude the user floor ON PURPOSE — returned 0
+      // for the whole session and bloom, SSAO, god-rays, contact shadows and
+      // per-chunk lamps were UNSHEDDABLE on the preset that exists to make the
+      // game cheap. That is verbatim the failure the autoTier() comment below
+      // says it fixed ("_perfTier is the effective tier and can always climb to
+      // 4"); the accessor was corrected and the producer that feeds it was not.
+      // Stepping still starts from the floor, so LOW takes one felt 0 -> 4 step
+      // and every other preset behaves exactly as before.
       _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA };
-      _perfTier = Math.max(_perfTier, _floorTier()) + 1; _autoShed++; _govCool = 90; _downHold = 600;
+      _perfTier = Math.min(4, Math.max(_perfTier, _floorTier()) + 1); _autoShed++; _govCool = 90; _downHold = 600;
       // A shed rung changes what the frame is bound BY, so let the scale lever
       // prove itself again from the new baseline rather than staying latched
       // off for the session on one old measurement.
@@ -508,7 +533,7 @@ function clearStrikes() {
 }
 
 return {
-  init, tick, sentinelArm, cleanRace, clearStrikes,
+  init, tick, sentinelArm, sentinelResume, cleanRace, clearStrikes,
   tier: () => Math.max(_perfTierFloor, _userTier, _perfTier),
   // Crash + measured only — no GRAPHICS user floor. Look-defining post
   // (bloom / SSAO / god-rays / contact / lamp volumetrics) reads this so

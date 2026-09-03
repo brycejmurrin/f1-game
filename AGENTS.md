@@ -20,7 +20,7 @@ node tools/pick-tests.mjs           # which test GROUPS does this change need?
 node tools/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
 node tools/test-bg.mjs <groups>     # run browser groups in the background
 node tools/assets.mjs verify        # asset-pack licence + md5 + budget check
-tools/README.md                     # test-asserted index of all 110+ tools
+tools/README.md                     # test-asserted index of all 160+ tools
 docs/AGENT-SURFACE.md               # skills / MCP / tools / wrap map
 ```
 
@@ -142,16 +142,24 @@ specific renderer.
 
 ## Cursor Cloud specific instructions
 
-Fresh-agent bootstrap is `bash tools/cloud-agent-install.sh` (the dashboard
-`install` should call it: the Verification §1 sequence plus full Chromium, which
+Fresh-agent bootstrap is `bash tools/cloud-agent-install.sh` (committed as
+`.cursor/environment.json` `install`; the dashboard `install` should call the
+same script: the Verification §1 sequence plus full Chromium, which
 `wgx-validate` / `wgx-capture` need — the headless shell has no `navigator.gpu`).
 System packages (`mesa-vulkan-drivers`, `vulkan-tools`, `xvfb`) survive a cold
 boot only via snapshot + Save on the environment dashboard; `test -f
-/usr/share/vulkan/icd.d/lvp_icd.json` proves Lavapipe. MCP server map and the
-shell fallbacks for an empty host catalog: `docs/AGENT-SURFACE.md`. Keep
-`apex-tools` in root `.mcp.json`; never run Chrome MCP while Playwright is
-running; do not attach `mcp-probe` for a `version.json` check. Measurements
-and the npm ECONNRESET note: `docs/research/CI-RENDERING-PERFORMANCE.md` §Part 3.
+/usr/share/vulkan/icd.d/lvp_icd.json` proves Lavapipe. MCP: repo `.mcp.json`
+lists three stdio servers (`apex-tools`, `playwright-official`, `chrome-devtools`);
+`.cursor/environment.json` `mcpServerAllowlist` permits them and `install`
+builds the chrome-devtools clone. Cloud Agents still need **chrome-devtools
+enabled in the MCP dropdown** at https://cursor.com/agents (or team Integrations
+& MCP) — the host catalog often loads only two servers until all three are
+registered there. CLI fallback when `chrome_*` is missing:
+`python3 tools/probe-mcp.py chrome-start` (see `.claude/skills/mcp-probe`).
+Shell map: `docs/AGENT-SURFACE.md`. Keep `apex-tools` in root `.mcp.json`; never
+run Chrome MCP while Playwright is running; do not attach `mcp-probe` for a
+`version.json` check. Measurements and the npm ECONNRESET note:
+`docs/research/CI-RENDERING-PERFORMANCE.md` §Part 3.
 
 ## Layout
 
@@ -181,8 +189,9 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - `js/data/` — F1API + DataHub tabs; `js/net/` — 2-4 player WebRTC, no backend
 - `css/` — tokens + component files; `docs/COMPONENTS.md` is test-asserted;
   class-count + body-node ratchets apply
-- `index.html` — shell: script tags, all static DOM, per-file `?v=<sha256>`
-  plus `<meta name="apex-build">`; `sw.js` precache derives from the shell's tags
+- `index.html` — shell: script tags, all static DOM, per-file `?v=dev` (the
+  deploy stamps the content hashes — §Critical conventions) plus
+  `<meta name="apex-build">`; `sw.js` precache derives from the shell's tags
 - `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check-gctx.mjs`
 - `.claude/skills/` — the workflow references (`.claude/skills/README.md`);
   `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor,
@@ -255,7 +264,7 @@ TLX, and WGX implement it. `tools/assets.mjs verify` gates licences.
 
 ## `window.__apex` dev API
 
-~180 hooks; `docs/DEBUG-HOOKS.md` is the reference and `__apex.agentHelp()`
+~185 hooks; `docs/DEBUG-HOOKS.md` is the reference and `__apex.agentHelp()`
 the machine-readable manifest — call it once per session instead of loading
 the list here. Sharp edges: `obs()`/`physState()` need `player.px` initialised
 (`jump()` or `step()` after `race()`+`go()`); agentview failures are
@@ -292,9 +301,16 @@ Skills / MCP / wrap: `docs/AGENT-SURFACE.md`. Lighting/sky:
 `docs/TESTING.md`. WGX/WGSL (`js/render/webgpu/`):
 `docs/research/WEBGPU-PARITY.md`.
 
-WGSL has two rules a mock device cannot enforce — `sampleCount` is 1 or 4
-ONLY, and `dpdx`/`dpdy`/`fwidth` only under uniform control flow — and breaking
-either makes WGX refuse silently and fall back to GLX: `docs/research/WEBGPU-PARITY.md` §5.
+WGSL has FIVE rules a mock device cannot enforce, and three of them shipped a
+defect on the owner's iPhone this week: `sampleCount` is 1 or 4 ONLY;
+`dpdx`/`dpdy`/`fwidth` only under uniform control flow (WebKit ERRORS where
+Dawn only warns); a TSL placeholder texture must carry the sampling state of
+the texture that will replace it; `device.onuncapturederror = fn` is DEAF on
+iOS/Safari 26.0–26.5 (register `addEventListener("uncapturederror")` first);
+and WebKit caps module-scope `var<private>` at 8,192 bytes per module (three
+r185 declares every node variable that way — see the vendor patch). Breaking
+any of them makes the backend refuse SILENTLY and fall back:
+`docs/research/WEBGPU-PARITY.md` §5a.
 
 ## Git branch & deploy
 

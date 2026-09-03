@@ -1161,7 +1161,16 @@ const GLX = (function () {
   // matches the main frame exactly. Returns the face's invViewProj for drawSky.
   function envFaceBegin(face, eye, frame) {
     if (!gl || ctxGone() || _envDisabled) return null;
-    if (!envTex) envInit();
+    // RE-TEST AFTER envInit. The gate above runs BEFORE the lazy init, and
+    // envInit's completeness check (added with it) can set _envDisabled and
+    // null envFBO/envTex on the very first face. Falling through then armed
+    // _envActive for the life of the tab against a null FBO: begin() binds the
+    // DEFAULT framebuffer at a 64px viewport and clears it every frame,
+    // PST.bindSceneTarget() is never reached, and the player gets a permanently
+    // black canvas with a 64-pixel corner — strictly worse than the dark
+    // reflection this check was written to fix. Returning null here makes
+    // game.js skip the probe, which is what "disabled" has to mean.
+    if (!envTex) { envInit(); if (_envDisabled || !envTex || !envFBO) return null; }
     _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube
     const F = ENV_FACES[face];
     _envTgt[0] = eye[0] + F[0][0]; _envTgt[1] = eye[1] + F[0][1]; _envTgt[2] = eye[2] + F[0][2];
@@ -1208,8 +1217,11 @@ const GLX = (function () {
       _envFrame.cullDist = _envSvCull;
       _envFrame = null;
     }
-    if (!gl || !envTex) return;
+    // _envActive comes down FIRST, before any early return. It is the flag that
+    // redirects begin() to the probe FBO; leaving it set because the texture
+    // went away mid-cycle is the same brick as above, one frame later.
     _envActive = false;
+    if (!gl || !envTex) return;
     envFacesMask |= 1 << face;
     // Unbind the probe FBO FIRST. generateMipmap below must NOT run while envTex
     // is still the COLOR_ATTACHMENT0 of the bound framebuffer — that read/write

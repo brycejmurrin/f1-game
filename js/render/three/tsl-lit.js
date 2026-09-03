@@ -556,7 +556,17 @@
         h.assign(vnoise(uv.mul(9.0)).mul(0.34).add(vnoise(uv.mul(26.0)).mul(0.16)));
       });
       return h;
-    });
+      // LAYOUT: applyMaterialNormal calls this 6× (one per coordinate family),
+      // and without a layout three INLINES the whole 15-branch chain at every
+      // call — 5.2 KB and ~25 node variables each, 31 KB of the 99 KB lit
+      // fragment. Pure: no uniform, texture, varying or derivative read (the
+      // fwidth widths are the caller's, passed in), which is what makes the
+      // layout legal at all — see vendor/three-0.185.1/PATCHES.md §4 and
+      // tsl-chunks.js. WGX declares the same helper as a real WGSL function
+      // (wgsl-chunks.js `fn matBumpHeight`), so this is parity, not novelty.
+      // `mid` stays float: TSL compares it with .equal(1.0), never as an int.
+    }).setLayout({ name: "apexMatBumpHeight", type: "float",
+      inputs: [{ name: "mid", type: "float" }, { name: "uv", type: "vec2" }] });
 
     // Per-MATERIAL coordinate classification, shared by the procedural bump and
     // the baked texture sample below (GLX: matWallLike in lit.js). Declared here
@@ -1026,7 +1036,14 @@
               // js/render/glx/shaders/glsl-lit.js. game.js sets 0.12 on every PAINT_*
               // and describes the flake it is meant to produce; the 0.0 discarded
               // it and made CAR METALLIC dead on every car pixel.
-              select(carbonSurface, float(0.08),
+              // carbonFinish (surfaceId 31, bare weave OVER the livery) takes the
+              // same 0.08 as carbonSurface — GLX `(carbonSurface || carbonFinish)
+              // ? 0.08` (js/render/glx/shaders/glsl-lit.js) and WGX `if (carbonSurface ||
+              // carbonFinish) { metalness = 0.08; }`. TLX had carbonSurface only,
+              // so a CARBON finish rendered as a pure dielectric here and as a
+              // faint metallic flake on the other two. Specular (below) and
+              // roughness already paired them; metalness was the one missed.
+              select(carbonSurface.or(carbonFinish), float(0.08),
                 select(paintSurface, matU.metalness, float(0.0)))))))),
           matU.metalness).toVar();
         const specular = select(classifiedCar,
