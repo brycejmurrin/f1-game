@@ -423,7 +423,10 @@
   /* Shared idle / selected plate — the settings tab-header recipe.
      Neutral buttons, chips, and category tabs all read this so they stay
      one family instead of each inventing a slightly brighter glass. */
-  --plate: rgba(255, 255, 255, 0.045);
+  /* Carbon tile, not milky glass — idle controls must read as objects on
+     the grain / live circuit, not as a 4.5% white wash. Hover/press step
+     toward steel so the press is a lightness change, not a new hue. */
+  --plate: color-mix(in oklab, var(--carbon) 62%, transparent);
   --plate-line: rgba(255, 255, 255, 0.16);
   /* The card/panel hairline — the second de-facto edge in the codebase after
      --plate-line's 0.16 control edge. A hairline audit found 0.12 repeated
@@ -431,8 +434,8 @@
      band above was named; naming it lets the sweep converge on two edges
      (control 0.16, card 0.12) instead of forty ad-hoc alphas. */
   --card-line: rgba(255, 255, 255, 0.12);
-  --plate-hover: rgba(255, 255, 255, 0.08);
-  --plate-press: rgba(255, 255, 255, 0.11);
+  --plate-hover: color-mix(in oklab, var(--carbon) 78%, #fff 8%);
+  --plate-press: color-mix(in oklab, var(--carbon) 84%, #fff 12%);
   --plate-on: color-mix(in oklab, var(--red) 18%, transparent);
   /* NO trailing comment-closer here. A stray star-slash after the semicolon
      of the declaration above sat exactly where the parser expects the next

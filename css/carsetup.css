@@ -125,11 +125,11 @@
   display: flex; flex-flow: column nowrap; align-items: stretch; justify-content: flex-start;
   gap: calc(var(--gap) * 0.6);
 }
-#cs-titlebar { display: flex; align-items: baseline; gap: calc(var(--gap) * 0.8); flex-wrap: wrap; min-width: 0; }
-#cs-titlebar h2 { margin: 0; letter-spacing: var(--ls-5); }
+#cs-titlebar { display: flex; align-items: center; gap: calc(var(--gap) * 0.8); flex-wrap: wrap; min-width: 0; }
+#cs-titlebar h2 { margin: 0; letter-spacing: var(--ls-5); color: var(--text); }
 #cs-team {
   font-size: var(--label); font-weight: 800; font-style: italic; letter-spacing: var(--ls-4);
-  color: color-mix(in srgb, var(--text) 70%, transparent);
+  color: var(--steel);
 }
 
 /* ---------- budget ---------- */
@@ -156,7 +156,7 @@
 #cs-budget {
   font-size: var(--label); letter-spacing: var(--ls-3); color: var(--dim); min-width: 0;
 }
-#cs-budget.tight { color: #f90; }
+#cs-budget.tight { color: var(--spark); }
 #cs-budget.over  { color: var(--red); }
 #cs-budget.unlimited { color: #0c8; }
 .cs-unlimited-btn {
@@ -198,14 +198,14 @@
 .cs-stat-boost {
   position: absolute; top: 0; height: 100%; background: var(--red); opacity: 0.92;
 }
-.cs-stat-boost.penalty { background: #f90; }
+.cs-stat-boost.penalty { background: var(--spark); }
 .cs-stat-val {
   width: 30px; flex-shrink: 0; text-align: right;
   font-size: var(--fs-2); font-weight: 700; color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 .cs-stat-val.up { color: #4df; }
-.cs-stat-val.down { color: #f90; }
+.cs-stat-val.down { color: var(--spark); }
 
 /* ---------- body: category pane + option pane ---------- */
 /* STACKED: one horizontal category strip + one options scroller.
@@ -359,7 +359,7 @@
   padding: 1px 5px; border-radius: var(--r-xs);
 }
 .cs-delta.up { background: rgba(80,210,255,0.16); color: #4df; }
-.cs-delta.down { background: rgba(255,150,0,0.16); color: #f90; }
+.cs-delta.down { background: color-mix(in oklab, var(--spark) 16%, transparent); color: var(--spark); }
 .cs-opt-desc { font-size: var(--fs-2); color: var(--dim); line-height: 1.35; margin-top: 6px; }
 .cs-opt-cost {
   flex: 0 0 auto; align-self: center;

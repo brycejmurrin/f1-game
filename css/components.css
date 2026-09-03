@@ -1002,6 +1002,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pm-quit,
 #pm-standings,
 #pm-build { grid-column: 1 / -1; }
+#pausemenu .bigbtn.alt {
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
 
 /* ---------- settings sub-menu ----------
    One category at a time. Tabs stay a single equal-width row (flex, not a
@@ -1124,6 +1129,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
   font-weight: 600;
   letter-spacing: var(--ls-2);
+}
+#pmsettings-inner .pm-doors button { width: auto; }
+.sheet[data-density="compact"] .pm-group-h {
+  letter-spacing: var(--ls-4);
+  font-size: var(--fs-2);
 }
 .pm-group .tune-row {
   margin: 0;

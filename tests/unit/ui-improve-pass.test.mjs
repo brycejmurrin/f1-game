@@ -826,7 +826,7 @@ test("neutral buttons share the settings tab-header plate", () => {
   const menus = css("css/menus.css");
   const carsetup = css("css/carsetup.css");
   const data = css("css/data.css");
-  assert.equal(decl(tokens, /:root/, "--plate"), "rgba(255, 255, 255, 0.045)");
+  assert.equal(decl(tokens, /:root/, "--plate"), "color-mix(in oklab, var(--carbon) 62%, transparent)");
   assert.equal(decl(tokens, /:root/, "--plate-line"), "rgba(255, 255, 255, 0.16)");
   assert.match(decl(tokens, /:root/, "--plate-on") || "", /^color-mix\(in oklab, var\(--red\) 18%/);
   assert.equal(decl(components, "#pm-category-tabs > button", "background"), "var(--plate)");

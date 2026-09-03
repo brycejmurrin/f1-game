@@ -36,7 +36,7 @@
 #cr-inner:not([data-shape="tall"]) { --fit-at: 220px; }
 
 /* ---------- head ---------- */
-#cr-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--gap); }
+#cr-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
 #cr-titlebar { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 #cr-sub {
   font-size: var(--label); letter-spacing: var(--ls-5); font-weight: 700;
@@ -101,7 +101,7 @@
 /* The action bar sits under the left column; border-right continues the column
    divider to the sheet floor so the two columns read as one clean split. */
 #cr-inner[data-pair="on"] > .sheet-foot {
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  border-right: 1px solid var(--card-line);
 }
 
 /* SHORT SHEET: `--pair-compact: off` stacks this sheet so #cr-body is the
@@ -131,7 +131,7 @@
 #cr-inner[data-density="compact"] .cr-record-line { font-size: var(--fs-2); }
 #cr-inner[data-density="compact"] #cr-header { gap: var(--gap); }
 #cr-inner[data-density="compact"] #cr-titlebar {
-  flex: 1 1 100%; flex-direction: row; align-items: baseline; gap: var(--gap);
+  flex: 1 1 100%; flex-direction: row; align-items: center; gap: var(--gap);
 }
 #cr-inner[data-density="compact"] #cr-sub {
   flex: 1 1 180px; min-width: 0;
@@ -209,7 +209,7 @@
 }
 .cr-flavour.active .cr-flavour-blurb,
 .cr-teamtile.active .cr-teamtile-meta,
-.cr-seat.active .cr-seat-who { color: rgba(255, 255, 255, 0.82); }
+.cr-seat.active .cr-seat-who { color: color-mix(in oklab, var(--text) 82%, transparent); }
 .cr-flavour-name { font-size: 14px; font-weight: 800; font-style: italic; letter-spacing: var(--ls-3); }
 .cr-flavour-blurb { font-size: var(--fs-micro); line-height: 1.4; color: var(--dim); }
 

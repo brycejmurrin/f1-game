@@ -193,7 +193,7 @@
    than --dim gives it; resting below --text keeps hover's step-up visible. */
 /* Quiet secondary rooms: token-mix only so the colour ratchet can fall, and
    still above --dim for contrast over a bright sky. */
-#menu-secondary .minibtn { color: color-mix(in oklab, var(--text) 78%, transparent); }
+#menu-secondary .minibtn { color: var(--text); }
 /* Align icon+label like a single control (primary modes use an inner column;
    rooms are one-line). Half-height floors so they read as secondary without
    still painting at full --tap (52 on touch). */
@@ -208,6 +208,13 @@
   letter-spacing: var(--ls-1);
 }
 #menu-secondary .bigbtn .btn-ico { margin-right: 0; }
+/* Title rooms sit on grain + a live circuit, not on a sheet. The shared
+   --plate wash disappeared there; a carbon tile keeps the door a door. */
+#overlay .bigbtn.alt {
+  background: var(--plate-opaque);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+  color: var(--text);
+}
 .minibtn .btn-ico { margin-right: 0.35em; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
@@ -230,7 +237,12 @@
    button left 25). `width: auto` is what actually stops it spanning the column;
    `min-height` puts it on the touch ladder, which .minibtn does not do on its
    own — it is padding-sized, and this measured 40 CSS px without it. */
-#soundbtn { width: auto; margin: 2px 0 0; min-height: var(--tap); }
+#soundbtn {
+  width: auto; margin: 2px 0 0; min-height: var(--tap);
+  font-weight: 700; letter-spacing: var(--ls-2);
+  background: var(--plate-opaque);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
 /* Brighter than bare --dim: the judges flagged the unofficial-fan-game line
    as below comfortable reading contrast over the bright sky. Token-mix only
    (no raw literal); still clearly quieter than body text. */
@@ -368,11 +380,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
   gap: calc(var(--gap) * 0.45);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn {
-  width: 100%; padding: 6px 10px; font-size: 16px;
+  width: 100%; padding: 6px 8px 6px 12px; font-size: 16px;
   min-height: max(32px, var(--tap-min));
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .minibtn {
-  padding: 3px 8px; font-size: var(--fs-micro);
+  padding: 3px 6px 3px 10px; font-size: var(--fs-micro);
   min-height: max(26px, var(--tap-min));
 }
 /* The static mode subs are the first thing to go when height is short — the
