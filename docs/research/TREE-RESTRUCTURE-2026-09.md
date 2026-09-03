@@ -171,7 +171,29 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       `node tools/deploy.mjs`: 12 gate suites + verify-track on all 40
       circuits, pushed in 1 attempt, 496 s. `pages.yml` run 1941 stamping.
       `tools/moves/phase2.json` maps 91 files for 2b.
-- [ ] **Phase 2b — the move window** ⚑ (≤ 1 h, one commit per target dir,
+- [ ] **Phase 2b — the move window** ⚑ — PREP LANDED 2026-09-03 (`310967d`,
+      `3d5b0f8`, merged `06c7d11`/`73ba0cb`), tooling-fast 138/138 + game-vm
+      248/248 + verify-track monza OK on the union. Ready to execute:
+      - `tools/moves/phase2.json` — 91-file move map (validated, dry-run
+        clean: would rewrite 335 files).
+      - `tools/moves/spike-backends.json` + `docs/notes/SPIKE-BACKENDS-CHECKLIST.md`
+        — 50-file / 7.69 MB WGX/TLX spike-out map (validated, dry-run clean:
+        74 files) with a full non-move edit checklist (manifest/roster,
+        index.html/sw.js, Gfx.create() + boot canary, renderer-picker,
+        backend-surface-parity, godray-keep-nearest, LampChunks,
+        gpu-census.yml/ci.yml, AGENTS.md, ~40 other mentions classified
+        delete/shrink/pointer/keep) and the tests that go red + their fixes.
+        Three corrections to the original plan paragraph found in the audit:
+        `ssr-probe.mjs` is GLX-only (not moved), `gpu-game-check.mjs` stays
+        (shared GLX control leg pinned by ci-coverage), `road-lut-census.mjs`
+        was missing from the plan and is added to the move.
+      - check-gctx / vstd-lint / game-vm / load-order / global-registry /
+        pick-tests already derive from `tools/manifest.cjs` instead of
+        hard-coded directories (`tools/gen-arch-table.mjs` new, generates
+        ARCHITECTURE.md's module index; `.cursor/rules` globs and
+        `js/track/CLAUDE.md` re-homing are the only directory literals left,
+        deliberately, for this window).
+      Remaining for the window itself (≤ 1 h, one commit per target dir,
       each with a scripted path sweep over docs/skills/tests/tools; squashed
       names renamed in the same commit; `manifest.cjs` `MOVED` map for one
       release; deploy.mjs prints the new path on a modify/delete conflict):
