@@ -32,7 +32,7 @@ Everything else is built on these. They live in `css/components.css`.
 | `.screen` | a full-viewport overlay, inset by the OS safe area, that centres its child |
 | `.sheet` | a card with a fixed head, ONE scrolling body and a pinned foot; also the `sheet` **query container** every layout decision inside it keys on. Dense sheets may declare `--fit-at` (minimum functional local height); `SheetShape` then caps only that panel's effective zoom when the safe viewport cannot supply it |
 | `.pane` | a scroll region that says so — an edge fade on whichever side has more |
-| `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#select`, `#carsetup` and `#career`. Slots are named by POSITION, not role — see the note in `css/components.css` |
+| `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#select`, `#season-setup`, `#carsetup` and `#career`. Default foot sits under the side column; `.pair-foot-full` spans BACK / YOUR CAR / NEXT (and season APPLY) across both. Slots are named by POSITION, not role — see the note in `css/components.css` |
 | `.balanced-row` | a content-driven control cluster: items wrap from their preferred local width, every line shares its space evenly, and a lone final item fills the line without child-count-specific CSS |
 
 ## Families, and the file that owns each
@@ -166,8 +166,8 @@ most-shared class in the project and had no entry at all:
 - `.preset-btn` — `components` + `tuner`
 - `.preset-row` — `components` + `tuner`
 - `.res-name` — `career` + `components`
-- `.res-pts` — `career` + `components`. Compact Career history / qualifying wrap
-  the shared points cell instead of ellipsizing it.
+- `.res-pts` — `career` + `components`. Compact Career history / qualifying /
+  standings / results wrap the shared points cell instead of ellipsizing it.
 - `.season-upcoming-row` — `components` + `menus`
 - `.sf-scroll` — `components` + `tuner`
 - `.sheet-foot` — `career` + `carsetup` + `components` + `menus` + `overlays` + `tuner`
@@ -318,7 +318,7 @@ from it is a screen nobody measures.
 
 The first draft of this grid held twelve entries and reported "130 cells, 0 red",
 which read as full coverage. It was not: the app has far more screen roots than
-that (**22** top-level ones are tabled below; counting the sub-views, `SCREENS`
+that (**24** top-level ones are tabled below; counting the sub-views, `SCREENS`
 in `tools/ui/layout-audit.mjs` now spans 34 cells over 24 distinct roots — that
 inventory, not this prose, is the count that matters), and
 several change shape entirely between states behind one root. Qualifying, the
@@ -340,6 +340,8 @@ found a real WCAG failure in the lighting tuner within a minute.
 | `vsfriend` | `#vsfriend` | `#mb-vs` |
 | `teampicker` | `#teampicker` | garage → TEAM tab → `#cs-team-card` |
 | `racesettings` | `#race-settings` | select → `#sel-go` (NEXT) |
+| `seasonsetup` | `#season-setup` | `#mb-season` → SETUP |
+| `trackdetail` | `#track-detail` | select → `#sel-map-btn` / `#sel-detail-chip` |
 | `quali` | `#quali` | race settings → QUALIFYING LAP **on** → `#rs-go` |
 | `standings` | `#standings` | in-race → pause → `#pm-standings` |
 | `customize` | `#customize` | garage → **TEAM** tab → `#cs-customize` |

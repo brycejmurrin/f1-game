@@ -542,7 +542,7 @@
 <!-- CAREER. A full-screen page like #select (not a .dim modal), because in career
      it REPLACES #select: the calendar decides where you race, so the only thing
      left to choose is whether you are ready. Two states share the sheet — the
-     new-career setup and the season hub — both built by js/game/career-ui.js into
+     new-career setup and the season hub — both built by js/career/career-ui.js into
      the two empty panes. -->
 <div id="career" class="screen" role="region" aria-labelledby="cr-title" data-esc-close="cr-back" hidden>
   <div id="cr-inner" class="sheet pane-pair">
@@ -576,7 +576,7 @@
 <!-- career history: the record of everything this career has achieved -->
 <!-- HOW CAREER WORKS. One sheet, TWO documents: the driver career and MY TEAM
      are different games sharing a core, and a guide that hedged between them
-     would describe neither. js/game/career-ui.js builds whichever applies, and
+     would describe neither. js/career/career-ui.js builds whichever applies, and
      the setup screen opens it for the flavour being CONSIDERED — reading what a
      mode is should not cost a career to find out. -->
 <dialog id="career-guide" class="screen dim" data-esc-close="cg-back" aria-labelledby="cg-title" hidden>
@@ -600,7 +600,7 @@
 </dialog>
 
 <div id="select" class="screen" role="region" aria-labelledby="select-title" data-esc-close="sel-back" hidden>
-  <div id="sel-inner" class="sheet pane-pair">
+  <div id="sel-inner" class="sheet pane-pair pair-foot-full">
 
     <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
 
@@ -633,10 +633,10 @@
       </section>
       <!-- The list is a SIBLING of the label+preview section, not a child of it,
            so the two-column layout can make it a grid item of the sheet itself
-           and span it down through the action-bar row (css/menus.css). A nested
-           grid cannot span a row of its parent, and the action bar holds BACK,
-           YOUR CAR and NEXT — under the preview column. Stacked: label,
-           compact preview band, then the list — one column, list scrolls. -->
+           (css/menus.css). A nested grid cannot span a row of its parent. The
+           action bar is `.pair-foot-full` so BACK / YOUR CAR / NEXT span both
+           columns — three 110px buttons no longer wrap inside the preview
+           column. Stacked: label, compact preview band, then the list. -->
       <div id="sel-tracks" class="pane pair-main" role="group" aria-labelledby="sel-circuit-label"></div>
     </div>
 
@@ -652,11 +652,11 @@
      classics included) and the weekend format (qualifying, sprint, distance,
      points). A .dim modal rather than a page like #select, because it lays OVER
      the season select screen and BACK returns there.
-     Both panes are EMPTY: js/game/season-ui.js builds them, the same way
-     js/game/career-ui.js fills #cr-left / #cr-right. Nothing here is markup a
+     Both panes are EMPTY: js/career/season-ui.js builds them, the same way
+     js/career/career-ui.js fills #cr-left / #cr-right. Nothing here is markup a
      screen-shaped feature needs in the shell. -->
 <dialog id="season-setup" class="screen dim" data-esc-close="ss-back" aria-labelledby="ss-title" hidden>
-  <div id="ss-inner" class="sheet pane-pair">
+  <div id="ss-inner" class="sheet pane-pair pair-foot-full">
     <div class="sheet-head"><h2 id="ss-title">SEASON SETUP</h2></div>
     <div class="sheet-body" id="ss-body">
       <div id="ss-cal" class="pane pair-side"></div>
