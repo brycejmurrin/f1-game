@@ -1688,16 +1688,26 @@ test("runtime uncaptured GPU errors escalate to GLX at the log cap", async () =>
   const session = new Map();
   let reloads = 0;
   const h = makeGpuHarness({ storage, session, onReload: () => { reloads += 1; } });
-  await h.create();
-  for (let i = 0; i < 7; i++) {
+  const gfx = await h.create();
+  gfx.resize();
+  // The cap spans FRAMES. An invalid bind errors once per draw, so eight
+  // arrive inside ONE frame from one freed decal texture — and the ladder
+  // used to reload the phone a rung down for a defect gone by the next
+  // frame. Eight errors in one frame: counted, logged, no surrender.
+  for (let i = 0; i < 8; i++) {
     h.device.onuncapturederror({ error: { message: "synthetic validation error " + i } });
   }
-  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "seven GPU errors must not surrender");
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "eight GPU errors in ONE frame must not surrender");
   assert.equal(reloads, 0);
-  h.device.onuncapturederror({ error: { message: "synthetic validation error cap" } });
-  assert.equal(session.get("apex26.gfxClaimFail"), "1", "eight GPU errors surrender the tab to GLX");
+  // A flood that persists across three presented frames is a dead backend.
+  assert.equal(gfx.begin({}), true); gfx.present({});
+  h.device.onuncapturederror({ error: { message: "synthetic validation error frame 2" } });
+  assert.equal(session.get("apex26.gfxClaimFail"), undefined, "two frames of errors must not surrender");
+  assert.equal(gfx.begin({}), true); gfx.present({});
+  h.device.onuncapturederror({ error: { message: "synthetic validation error frame 3" } });
+  assert.equal(session.get("apex26.gfxClaimFail"), "1", "eight-plus GPU errors over three frames surrender the tab to GLX");
   assert.equal(session.get("apex26.gfxBound"), "webgl2");
-  assert.match(storage.get("apex26.gfxWgxFail") || "", /runtime GPU errors/);
+  assert.match(storage.get("apex26.gfxWgxFail") || "", /runtime GPU errors \(\d+ over 3 frames\)/);
   assert.equal(reloads, 1);
 });
 

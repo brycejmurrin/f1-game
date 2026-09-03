@@ -315,6 +315,11 @@ const api = {
   garageCam: () => ({
     on: G.setupPreviewOn, spin: G.setupPreviewSpin,
     az: G.setupPreviewAz, el: G.setupPreviewEl, dist: G.setupPreviewDist,
+    // dist is the ZOOM's stored distance; effDist is what the camera actually
+    // used last frame. They differ on the auto-turntable path, which is the one
+    // that can misframe — fitD is the auto fit before the clamp, so a test can
+    // see the fit diverge (fitD >> effDist) instead of only its symptom.
+    effDist: G.spEffDist, fitD: G.spEffFit, panelFrac: G.spEffPanel,
     pan: G.setupPreviewPan.slice(),
     // ACTIVE AERO in the garage: the switch and the FLAP TRAVEL it eases toward.
     // Separate fields on purpose — the button label follows the switch, so a
@@ -2492,6 +2497,11 @@ const api = {
         hdr: safe(() => !!(gfx && gfx.hdrMode && gfx.hdrMode()), null),
         msaa: safe(() => gfx && gfx.msaa && gfx.msaa(), null),
         renderScale: safe(() => gfx && gfx.getRenderScale && gfx.getRenderScale(), null),
+        // The bound backend's own account of the device — api (three's
+        // WebGPU vs WebGL2), GPU/shader error count and the first message,
+        // soft-blit, baked-pack state. This is what a phone report needs.
+        gpuErrors: safe(() => (gfx && typeof gfx.gpuErrors === "function") ? gfx.gpuErrors() : null, null),
+        backendState: safe(() => (gfx && typeof gfx.backendState === "function") ? gfx.backendState() : null, null),
       },
       canvas: safe(() => {
         const c = document.getElementById("game");

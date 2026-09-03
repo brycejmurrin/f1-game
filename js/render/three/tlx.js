@@ -120,7 +120,15 @@ const TLX = (function () {
             const smallLimits = !!(lim && (lim.maxTextureDimension2D <= 8192
               || lim.maxBufferSize <= 1073741824));
             const named = /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob);
-            _softAdapter = !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
+            // A PHONE HAS NO SOFTWARE ADAPTER. WebKit trims adapter.info and
+            // reports conservative limits, which is exactly the (!infoBlob &&
+            // smallLimits) tie-break — and a "software" verdict on a handset
+            // routes presentation through the 2D soft-blit overlay, a readback
+            // path that on a slow frame keeps showing the FIRST frame it ever
+            // read (measured in-container: byte-identical captures across a
+            // camera move, awaitSoftPresent never resolving again). Content
+            // gates key off this flag too. Never on a mobile UA.
+            _softAdapter = !isMobile && !!(ad.isFallbackAdapter || named || (!infoBlob && smallLimits));
           }
         }
       } catch (_) { _softAdapter = false; /* sniff is best-effort; AUTO still tries WebGPU when gpu exists */ }
@@ -185,8 +193,17 @@ const TLX = (function () {
       // An explicit WebGPU pin (`_glPin === "0"`) is still honoured — the clause
       // already excludes it, and a pin is a user override. backendState()
       // reports canvasAlpha so that case is diagnosable rather than silent.
+      // WEBKIT (Safari, every iOS browser) TAKES three's WebGL2 BACKEND ON AUTO
+      // (2026-09-03). Two consecutive deploys rendered three-WebGPU wrongly on
+      // the owner's iPhone — first painted bodywork missing with decals live,
+      // then (c6d8fd3) nothing but the sky — with `gfx: three/webgpu` and ZERO
+      // reported GPU or WGSL errors on the GOV panel, so the failure is silent
+      // to every instrument this backend has. three's WebGL2 backend on the
+      // same phone is known-good (ed8f41f's 16-lamp cap was made for it). A
+      // pin of "0" (THREE PATH: WEBGPU) still forces WebGPU for the
+      // investigation; backendState().pin/forceWebGL say which one bound.
       let forceWebGL = _glPin === "1"
-        || (_glPin !== "0" && (!_gpuCanvasOk || _autoStayGL));
+        || (_glPin !== "0" && (!_gpuCanvasOk || _autoStayGL || isWebKit));
       const _liteGpu = !!(isMobile || isWebKit || _softAdapter);
 
       // SCREENSHOTS (`apex26.wgxCapture`, same key as WGX): session then local.
@@ -358,6 +375,43 @@ const TLX = (function () {
               _dev.__apexErrHook = true;
             } catch (_) { /* optional hook; _gpuErrors stays 0 if the build refuses it */ }
           }
+          // SHADER COMPILE CAPTURE. A WGSL module that fails to compile does
+          // NOT raise an uncaptured error at createShaderModule — three reads
+          // getCompilationInfo() itself and prints it with console.error,
+          // which never reaches Log's ring buffer, __apex.diag() or the GOV
+          // panel. The pipeline built on it is what errors, per draw, and on
+          // a WebKit device the visible result is "every lit surface missing
+          // while decals and the sky draw". Count it here the same way the
+          // uncaptured errors are counted, so the FIRST message is the one a
+          // phone screenshot of the GOV panel carries.
+          if (!_dev.__apexShaderHook && typeof _dev.createShaderModule === "function") {
+            try {
+              const _origCSM = _dev.createShaderModule.bind(_dev);
+              _dev.createShaderModule = function (desc) {
+                const mod = _origCSM(desc);
+                try {
+                  if (mod && typeof mod.getCompilationInfo === "function") {
+                    mod.getCompilationInfo().then(function (info) {
+                      const msgs = (info && info.messages) || [];
+                      for (let i = 0; i < msgs.length; i++) {
+                        const m = msgs[i];
+                        if (!m || m.type !== "error") continue;
+                        const label = (desc && desc.label) || "shader";
+                        const text = "WGSL " + label + " " + (m.lineNum | 0) + ":" + (m.linePos | 0) + " " + m.message;
+                        if (!_gpuFirstError) _gpuFirstError = text;
+                        _gpuErrors++;
+                        if (_gpuErrors <= GPU_ERR_LOG_CAP) {
+                          try { Log.warn("gfx", "TLX shader error #" + _gpuErrors + ":", text); } catch (_) { /* no Log in the node VM harness */ }
+                        }
+                      }
+                    }, function () { /* compilation info unavailable: the pipeline error still counts below */ });
+                  }
+                } catch (_) { /* diagnosis only — never let it cost the module */ }
+                return mod;
+              };
+              _dev.__apexShaderHook = true;
+            } catch (_) { /* optional hook */ }
+          }
           if (_liteGpu) {
             try { renderer.samples = 1; } catch (_) { /* samples is a three setter; ignore a frozen build */ }
           }
@@ -440,6 +494,19 @@ const TLX = (function () {
       // them all at once costs more llvmpipe seconds than a present budget
       // has, and a timeout would not say which path did it:
       //   sky | env | chunked | batches | shadow   (or "1" / "all")
+      // A/B switches for the WebKit-WebGPU investigation (THREE PATH: WEBGPU
+      // pinned on the phone). Each reverts ONE suspect without a deploy:
+      //   apex26.tlxArrayNearest=1  placeholders keep the pre-0a3f480
+      //                             Nearest/Clamp state (textureLoad program)
+      //   apex26.tlxNoMrt=1         the scene pass never arms the SSR MRT
+      //                             second attachment (single-target)
+      // Both are reported by backendState() and the GOV `tlx` row.
+      const _arrayNearest = (function () {
+        try { return localStorage.getItem("apex26.tlxArrayNearest") === "1"; } catch (_) { return false; }
+      })();
+      const _noMrt = (function () {
+        try { return localStorage.getItem("apex26.tlxNoMrt") === "1"; } catch (_) { return false; }
+      })();
       const _forceHw = (function () {
         let raw = "";
         try { raw = localStorage.getItem("apex26.tlxForceHw") || ""; } catch (_) { raw = ""; }
@@ -574,6 +641,20 @@ const TLX = (function () {
           if (!document.hidden) {
             try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* no storage: the knob stays as-is and the tier gate is the only defence left */ }
             try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* ditto — nothing in this handler may throw */ }
+          } else {
+            // HIDDEN loss: iOS drops the device of a backgrounded tab as a
+            // matter of course. Reloading now (and counting it against the
+            // two-per-tab budget) returned the player to the title screen and
+            // spent a retry on a loss that was never a crash. Reload when the
+            // tab is visible again, uncounted, ladder untouched — same rule
+            // as GLX webglcontextlost and WGX device.lost.
+            const onVisible = function () {
+              if (document.hidden) return;
+              document.removeEventListener("visibilitychange", onVisible);
+              try { location.reload(); } catch (_) { /* harness */ }
+            };
+            document.addEventListener("visibilitychange", onVisible);
+            return;
           }
           const rk = "apex26.ctxLostReloads";
           const n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
@@ -668,6 +749,10 @@ const TLX = (function () {
       // 0 = lit/post, 1 = TSL unlit, 2 = classic (no TSL). Latched on the
       // first present() throw so later frames do not recompile the dead graph.
       let _drawMatMode = 0;
+      // present() count since boot, and whether the AUTO self-heal below has
+      // already fired this session (it reloads, so once is all it can do).
+      let _presentN = 0, _healTried = false;
+      const HEAL_WINDOW = 120;
 
       const vizMode = (function () {
         try {
@@ -789,6 +874,29 @@ const TLX = (function () {
           const t = new THREE.DataArrayTexture(d, 1, 1, 17);
           t.format = THREE.RGBAFormat; t.type = THREE.UnsignedByteType;
           t.colorSpace = THREE.NoColorSpace;   // no-sRGB calibration invariant
+          // SAMPLING STATE IS COMPILED IN. three r185's WGSLNodeBuilder
+          // decides the ACCESS MODE of a texture node from the texture bound at
+          // program-build time: isUnfilterable() is true for a Nearest/Nearest
+          // texture (the DataTexture default), and an unfilterable texture is
+          // emitted as `textureLoad(tex, clamp(floor(uv * dims)), layer, 0)` —
+          // integer texel, mip 0, and the placeholder's ClampToEdge wrap baked
+          // into `tsl_coord_clampS_clampT_2d`. setMaterialMaps() only swaps
+          // `.value`; the program text never changes. With the defaults here
+          // every baked-material fragment more than one tile from the origin
+          // read the layer's EDGE texel on the WebGPU path: flat-toned asphalt,
+          // grass and walls — the "see-through / unlit track" reports from
+          // phones on THREE.JS (dumped WGSL: artifacts/wgsl-dump-iphone). The
+          // WebGL backend emits `texture()` regardless of filter, which is why
+          // three-WebGL2 never showed it. These MUST equal createTextureArray()
+          // below so the compiled program is a repeat-wrapped, mipmapped
+          // `textureSample` (tests/unit/gfx-backend-canary.test.mjs pins it).
+          if (!_arrayNearest) {
+            t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            t.minFilter = THREE.LinearMipmapLinearFilter;
+            t.magFilter = THREE.LinearFilter;
+            t.generateMipmaps = true;
+            t.anisotropy = 4;
+          }
           t.needsUpdate = true;
           return t;
         };
@@ -1804,6 +1912,7 @@ const TLX = (function () {
       }
       function _startSoftBlitRead(req) {
         _softReadPending = true;
+        _softReadSince = (typeof performance !== "undefined" ? performance.now() : Date.now());
         let read;
         try { read = _readLdr(req.rt, req.w, req.h); }
         catch (_) { _finishSoftBlitRead(); return; }
@@ -1832,9 +1941,38 @@ const TLX = (function () {
               _displayCtx.putImageData(img, 0, 0);
               _softBlitNotify();
             }
+            _softReadLastMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - _softReadSince;
           } catch (_) { /* 2D blit failed */ }
-        }, function () { /* RT not GPU-ready this frame */ }).then(_finishSoftBlitRead);
+        }, function (err) {
+          // RT not GPU-ready this frame — COUNTED, because a read that rejects
+          // every frame looks exactly like one that never settles from outside
+          // (no blit either way) and the two need different fixes.
+          _softReadFails++;
+          _softReadLastErr = String((err && err.message) || err || "readback rejected").slice(0, 120);
+        }).then(function () {
+          // A read the stale guard already abandoned must not clear the gate
+          // a NEWER read now holds.
+          if (req.epoch === _softReadEpoch) _finishSoftBlitRead();
+        });
       }
+      // A readback that never settles must not wedge presentation. One
+      // in-flight read gates every later one, and on a slow frame (llvmpipe,
+      // a phone under load) readRenderTargetPixelsAsync can stay pending for
+      // the rest of the session — the overlay then keeps the FIRST frame it
+      // ever read while the game moves on underneath, and every probe reads
+      // that stale image as a live frame (measured 2026-09-03: byte-identical
+      // captures across a camera move, awaitSoftPresent never resolving again,
+      // gfx-probe reporting PASS). Abandon a read older than SOFT_READ_STALE_MS:
+      // bump the epoch so its late completion is ignored, clear the gate, and
+      // let the current frame read back.
+      // The floor is generous because a SLOW read is not a wedged one: on
+      // llvmpipe a phone-resolution lit frame reads back in tens of seconds,
+      // and abandoning it at 2 s made every read abandon (measured: the
+      // probe never presented at all). Adaptive: three times the last
+      // completed read, never under the floor.
+      const SOFT_READ_STALE_MS = 20000;
+      let _softReadSince = 0, _softReadLastMs = 0, _softReadFails = 0, _softReadLastErr = null, _softReadAbandoned = 0;
+      function _softReadStaleMs() { return Math.max(SOFT_READ_STALE_MS, 3 * _softReadLastMs); }
       function _queueSoftBlit(rt) {
         if (!_softBlit || !_displayCtx || !rt || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
         const req = {
@@ -1844,8 +1982,17 @@ const TLX = (function () {
           epoch: _softReadEpoch,
         };
         if (_softReadPending) {
-          _softReadQueued = req;       // newest frame wins; bounded to one waiter
-          return;
+          const now = (typeof performance !== "undefined" ? performance.now() : Date.now());
+          if (now - _softReadSince > _softReadStaleMs()) {
+            _softReadEpoch++;            // the wedged read's completion is void
+            _softReadPending = false;
+            _softReadQueued = null;
+            _softReadAbandoned++;
+            req.epoch = _softReadEpoch;
+          } else {
+            _softReadQueued = req;       // newest frame wins; bounded to one waiter
+            return;
+          }
         }
         _startSoftBlitRead(req);
       }
@@ -2272,6 +2419,14 @@ const TLX = (function () {
         // which is TRUE for a live-but-broken function, passes, and throws one
         // line later. WGX declares the same two for the same reason; TLX had
         // neither, so __apex.scene({visible}) threw on the three.js backend.
+        // GLX/WGX parity: the device's own account (api, GPU/shader error
+        // count and first message, soft-blit, pack state). The full TLX
+        // decision tree lives on __tlx.backendState(); this is the façade
+        // name game.js descriptor-copies onto GLX.
+        backendState() {
+          const t = this && this.__tlx;
+          return (t && typeof t.backendState === "function") ? t.backendState() : null;
+        },
         makeFrustumPlanes(viewProj, out) {
           return TLXShaders.makeFrustumPlanes(viewProj, out);
         },
@@ -2640,11 +2795,25 @@ const TLX = (function () {
             // the car, and ?viz=scene confirmed the RT itself is empty.
             // View-space post already self-disables; paint the default
             // framebuffer like GLX.
-            if (post && _postF.proj) {
+            //
+            // SOFT-PRESENT BACK-PRESSURE. On a software adapter the visible
+            // frame is a readback, and a readback completes only after every
+            // submission queued before it. Rendering a new frame every rAF
+            // while one is pending built an unbounded backlog: 18,172
+            // presents against ONE completed read in 300 s (counters in
+            // backendState().softRead), so the overlay kept the first frame
+            // for ever. While a read is in flight and not overdue, submit
+            // nothing — the next frame renders the moment the read lands,
+            // which is the only pace the pixels can be seen at anyway.
+            // Hardware presentation (_softBlit false) never takes this branch.
+            if (_softBlit && _softReadPending
+                && ((typeof performance !== "undefined" ? performance.now() : Date.now()) - _softReadSince) <= _softReadStaleMs()) {
+              painted = true;   // nothing drawn this frame by design; the last blit stays up
+            } else if (post && _postF.proj) {
               pinSkyMaterial();
-              if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
-              if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
-              const _hadMrt = !!(TSL.mrt && renderer.setMRT);
+              if (!_noMrt && lit && lit.setSsrMrt) lit.setSsrMrt(true);
+              if (!_noMrt && fx && fx.setSsrMrt) fx.setSsrMrt(true);
+              const _hadMrt = !_noMrt && !!(TSL.mrt && renderer.setMRT);
               const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               try {
@@ -2680,6 +2849,34 @@ const TLX = (function () {
             dropTo(2, rawUnlitMat);
             try { paintCanvas(); painted = true; }
             catch (e) { persistFail(e); refuseTab(); }
+          }
+          _presentN++;
+          // ── AUTO SELF-HEAL: a WebGPU device that rejects work early is a
+          // device that is drawing part of the scene, and nothing above can
+          // see that — a rejected lit pipeline throws nothing on the JS side,
+          // present() "succeeds", and the player sees decals floating over a
+          // missing car (the iPhone report). The uncaptured-error and shader
+          // hooks count it; act on it once, the same way the third device loss
+          // does: stay on three, take its WebGL2 backend next boot (which the
+          // same phone renders correctly), and reload — bounded by the shared
+          // ctxLostReloads cap so a tab that dies every boot cannot loop.
+          // AUTO only: a pin is a user override. Never on a diagnostic run
+          // (forceHw / soft-blit), where the error count IS the evidence.
+          if (painted && !_healTried && _gpuErrors > 0 && _presentN <= HEAL_WINDOW
+              && renderer.backend && renderer.backend.isWebGPUBackend
+              && _glPin !== "0" && _glPin !== "1" && !_forceHw.on && !_softBlit) {
+            _healTried = true;
+            try {
+              const rk = "apex26.ctxLostReloads";
+              const n = (parseInt(sessionStorage.getItem(rk), 10) || 0) + 1;
+              if (n <= 2) {
+                sessionStorage.setItem(rk, String(n));
+                sessionStorage.setItem("apex26.tlxAutoGL", "1");
+                try { localStorage.setItem("apex26.gfxTlxFail", "WebGPU rejected work in the first " + _presentN + " frames (" + String(_gpuFirstError || "gpu error").slice(0, 160) + ") — AUTO takes three WebGL2"); } catch (_) { /* backendState still carries the reason */ }
+                try { Log.warn("gfx", "TLX: " + _gpuErrors + " GPU error(s) in the first " + _presentN + " frames — reloading on three WebGL2:", _gpuFirstError); } catch (_) { /* no Log in the node VM harness */ }
+                setTimeout(function () { try { location.reload(); } catch (_) { /* harness: the session key still steers the next real boot */ } }, 300);
+              }
+            } catch (_) { /* no sessionStorage: cannot bound a reload, so do not start one */ }
           }
           _chunkLast.total = _chunkFrame.total; _chunkLast.visible = _chunkFrame.visible;
           // Count the CHUNKED releases too. tlxMirror reported only the static
@@ -2867,6 +3064,17 @@ const TLX = (function () {
               forceHw: _forceHw.on, forceBatches: _forceBatches,
               envFail: _envFailN, envFailMsg: _envFailMsg,
               softBlit: _softBlit, capPref: _capPref,
+              softRead: { gen: _softBlitGen, lastMs: Math.round(_softReadLastMs), fails: _softReadFails,
+                          lastErr: _softReadLastErr, abandoned: _softReadAbandoned, pending: _softReadPending },
+              // The runtime half: what the device has said since boot. A
+              // phone screenshot of the GOV panel carries these, which is the
+              // evidence a "see-through car" report has never had.
+              gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstError,
+              presents: _presentN, healed: _healTried,
+              arrayNearest: _arrayNearest, noMrt: _noMrt,
+              hasMaterialMaps: !!(lit && lit.hasMaterialMaps),
+              packLive: !!matOwnedAlbedo,
+              drawMatMode: _drawMatMode,
             };
           },
           materialCacheSize() { return matCache.size; },

@@ -3056,6 +3056,9 @@ const G = {
   get setupPreviewAz() { return setupPreviewAz; },
   get setupPreviewEl() { return setupPreviewEl; },
   get setupPreviewDist() { return setupPreviewDist; },
+  get spEffDist() { return _spEffDist; },
+  get spEffFit() { return _spEffFit; },
+  get spEffPanel() { return _spEffPanel; },
   get setupPreviewPan() { return setupPreviewPan; },
   get setupPreviewAeroX() { return setupPreviewAeroX; },
   get raceAeroMode() { return raceAeroMode; },
@@ -5490,6 +5493,13 @@ const SP_EL_DEF = Math.atan2(1.65, 8.5), SP_DIST_DEF = 8.5;
 // 1440x900) plus ~12% margin. renderSetupPreview holds the auto-turntable at
 // whatever distance keeps this inside the visible half-width.
 const SP_FIT_HALF_W = 3.35;
+// How far the AUTOMATIC turntable may back off. Deliberately under the MANUAL
+// zoom ceiling SP_DIST_MAX: a player who zooms out that far asked for the wide
+// shot, whereas the auto fit reaching it means the fit diverged. garage-scene.js
+// notes a camera at 15 m "is outside the bay on at least one axis nearly
+// always"; 11 keeps the swing inside the door/back walls (Z +/-6.4) at the
+// default elevation with real headroom over the 8.5 m default framing.
+const SP_FIT_DIST_MAX = 11;
 // The garage environment — bay shell, truss, LED fixtures, pit equipment, team
 // dress, floor and light rig — lives in js/game/garage-scene.js. It owns the
 // frame clear colour too: every surface in there fades to exactly BACKDROP at
@@ -5544,6 +5554,8 @@ const SP_CAR_CTR = [0, 0.45, 0.245];
 const SP_ORBIT_DEF = SP_CAR_CTR.slice(), SP_TGT_DEF = SP_CAR_CTR.slice();
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();
 let setupPreviewMinDist = 0;   // 0 = use the global SP_DIST_MIN
+// Last frame's RESOLVED framing, for __apex.garageCam(). Read-only telemetry.
+let _spEffDist = 0, _spEffFit = 0, _spEffPanel = 0;
 // PAN — a translation of the whole rig (orbit centre AND look-at) in car-local
 // metres. Orbit and zoom alone can only ever circle the same point, so there is
 // no way to walk along the car and study one end of it up close; you can only
@@ -5764,9 +5776,30 @@ function renderSetupPreview(dt) {
   // come out of the VISIBLE half-width. Hold the turntable at whatever distance
   // keeps that inside it. Only the AUTOMATIC view self-frames — picking a preset
   // or zooming clears setupPreviewSpin, and from there the distance is theirs.
-  const spFitD = SP_FIT_HALF_W / Math.max(Math.tan(18 * Math.PI / 180) * gfx.aspect * (1 - panelFrac), 0.05);
+  // THIS BACKS OFF WITHOUT BOUND. The visible half-angle is
+  // atan(tan18 * aspect * (1 - panelFrac)), so as the region narrows the
+  // distance diverges, and the only thing stopping it was the MANUAL zoom's
+  // SP_DIST_MAX. Measured at 900x820 with the panel over half the width: the
+  // fit asks for 17.6 m and pins on 15 — outside the bay's 5.4 m side wall, the
+  // near wall culled away, the car a small object in a dollhouse of the whole
+  // garage. That is the reported "the camera is further back and rotates around
+  // the outside of the room". Cap the AUTO fit; past it, crop the wings at
+  // broadside rather than leave the room. Only the viewports that were PINNED
+  // move (1440x900, 1280x800 and 844x390 are unchanged to 2 dp).
+  //
+  // panelFracY is NOT a term here and that is not the oversight it looks like:
+  // it constrains the car's on-screen HEIGHT (~1.8 m projected against 6.7 m
+  // wide), so the horizontal axis binds everywhere. Fitting the half-WIDTH
+  // against the vertical half-angle was tried and measured wrong — a constant
+  // 10.31 m floor that pushed 1440x900 from 9.10 to 10.31.
+  const spFitD = Math.min(SP_FIT_DIST_MAX,
+    SP_FIT_HALF_W / Math.max(Math.tan(18 * Math.PI / 180) * gfx.aspect * (1 - panelFrac), 0.05));
   const spDist = setupPreviewSpin
     ? clamp(Math.max(setupPreviewDist, spFitD), SP_DIST_MIN, SP_DIST_MAX) : setupPreviewDist;
+  // Publish what the camera USES: garageCam() reported setupPreviewDist, which
+  // is the effective distance only when the turntable is off — so on the auto
+  // path, the one that can misframe, it read 8.5 while the camera sat at 15.
+  _spEffDist = spDist; _spEffFit = spFitD; _spEffPanel = panelFrac;
   // PAN shifts the orbit centre and the look-at together, so strafing tracks
   // along the car instead of swinging the aim off it — the difference between
   // "walk down the flank" and "turn your head at the far end of the pit box".
@@ -7107,7 +7140,6 @@ function render(dt) {
   //  LT.glareStr, default 0.12.)
   drawWorldMeshes(frame, night, wet, _floodEmit, false);
   gfx.drawSky(frameSky);
-  if (frame.lights && !_studioRig && PerfGov.tier() < 3) gfx.drawGlow(frame.lights, LT.glareStr);
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
@@ -7569,6 +7601,7 @@ function render(dt) {
   }
 
   // Rapier debris shards (render-only side-world; poses stepped in update()).
+  if (frame.lights && !_studioRig && PerfGov.tier() < 3) gfx.drawGlow(frame.lights, LT.glareStr);   // AFTER the cars: depth-tested, no depth write — before them a halo in front of a body was overwritten
   if (DebrisWorld.active()) DebrisWorld.draw();
 
   // Transient FX particles (tyre smoke / sparks / kickup / spray): advanced

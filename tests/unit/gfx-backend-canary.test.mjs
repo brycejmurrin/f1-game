@@ -109,8 +109,13 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   // the caller-supplied opaque context it is keyed on. The canvas came up
   // alpha-composited and the cars rendered see-through. The gate is now the
   // obtainable WebGPU CONTEXT; renderer-soft-lifecycle.test.mjs holds the rest.
-  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\)\s*\)/,
-    "AUTO stays on WebGL2 when no WebGPU context is obtainable, or after an init failure; a pin of 1/0 overrides");
+  // 2026-09-03: `|| isWebKit` joined the clause. Two consecutive deploys
+  // rendered three-WebGPU wrongly on the owner's iPhone (bodywork missing,
+  // then sky-only at c6d8fd3) with ZERO reported GPU/WGSL errors, while
+  // three's WebGL2 backend on the same phone is known-good (ed8f41f). AUTO on
+  // WebKit takes WebGL2; THREE PATH: WEBGPU (pin "0") still forces WebGPU.
+  assert.match(src, /forceWebGL\s*=\s*_glPin\s*===\s*"1"\s*\|\|\s*\(\s*_glPin\s*!==\s*"0"\s*&&\s*\(\s*!_gpuCanvasOk\s*\|\|\s*_autoStayGL\s*\|\|\s*isWebKit\s*\)\s*\)/,
+    "AUTO stays on WebGL2 when no WebGPU context is obtainable, after an init failure, or on WebKit; a pin of 1/0 overrides");
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
   assert.match(src, /AUTO stayed on three WebGL2/);
@@ -2923,4 +2928,35 @@ test("the geometry mirror sweep caches bounds before it frees, and never runs on
   const throttleAt = sweepBody.indexOf("_mirrorSweepAt");
   assert.ok(mobileAt >= 0 && mobileAt < throttleAt,
     "the mobile decline must come before the throttle, so it cannot be reached by a clock edge");
+});
+
+// ── The placeholder material arrays decide the WGSL access mode ─────────────
+// three r185's WGSLNodeBuilder.isUnfilterable() emits `textureLoad` (integer
+// texel, mip 0, the placeholder's wrap baked into a tsl_coord_* helper) for a
+// texture whose min AND mag filters are Nearest — the DataTexture default. The
+// lit graph is compiled against the 1×1 placeholders and setMaterialMaps() only
+// swaps `.value`, so the program keeps that access forever: every baked
+// fragment more than a tile from the origin read the layer's EDGE texel on the
+// WebGPU path (flat asphalt / grass / walls — the phone "see-through track").
+// Pin: the placeholder sets the SAME wrap/filter/mipmap/anisotropy lines as
+// createTextureArray, so the compiled program is a repeat-wrapped
+// `textureSample`. Sabotage-proven: delete any one placeholder line, red.
+test("TLX placeholder material arrays carry the pack's sampling state (WGSL access mode is compiled in)", () => {
+  const src = code("js/render/three/tlx.js");
+  const greyAt = src.indexOf("const grey = (v) =>");
+  assert.ok(greyAt > 0, "tlx.js no longer builds the placeholder arrays with grey() — re-anchor this pin");
+  const placeholder = src.slice(greyAt, src.indexOf("matPlaceAlbedo = grey(", greyAt));
+  const packAt = src.indexOf("createTextureArray(size, images, layers) {");
+  assert.ok(packAt > 0, "createTextureArray moved — re-anchor this pin");
+  const pack = src.slice(packAt, src.indexOf("return t;", packAt));
+  for (const line of [
+    "t.wrapS = t.wrapT = THREE.RepeatWrapping",
+    "t.minFilter = THREE.LinearMipmapLinearFilter",
+    "t.magFilter = THREE.LinearFilter",
+    "t.generateMipmaps = true",
+    "t.anisotropy = 4",
+  ]) {
+    assert.ok(pack.includes(line), "createTextureArray lost `" + line + "` — the pack sampling state changed; mirror it in the placeholder");
+    assert.ok(placeholder.includes(line), "placeholder array lacks `" + line + "` — three compiles the lit program against the placeholder, and a Nearest/Nearest ClampToEdge placeholder bakes textureLoad+clamp into the WGSL for the life of the program");
+  }
 });

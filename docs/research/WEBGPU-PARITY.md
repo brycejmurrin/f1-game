@@ -613,6 +613,20 @@ Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
    early non-uniformly poisons its caller too — the SAA peel hoists its
    object-space derivatives for exactly this reason (a `dpdx` after a
    non-uniform `matId` branch is a compile error).
+3. **On three/TSL the texture ACCESS MODE is compiled in from the texture
+   bound at build time** (found 2026-09-03, `artifacts/wgsl-dump-iphone`).
+   r185 `WGSLNodeBuilder.isUnfilterable()` is true for a Nearest/Nearest
+   texture — the DataTexture default — and an unfilterable texture is emitted
+   as `textureLoad(tex, clamp(floor(uv * dims)), layer, 0)` with the wrap mode
+   baked into a `tsl_coord_<wrapS>_<wrapT>` helper. Swapping `.value` later
+   changes nothing in the program. TLX compiled its lit graph against 1×1
+   placeholder `DataArrayTexture`s and the real pack (Linear/Repeat) arrived
+   later, so every baked fragment more than a tile from the origin read the
+   layer's edge texel on the WebGPU path: flat asphalt, grass and walls. The
+   WebGL backend emits `texture()` regardless of filter, which hid it on
+   three-WebGL2. Rule: a placeholder must carry the sampling state of the
+   texture that will replace it (`tests/unit/gfx-backend-canary.test.mjs`
+   pins TLX's).
 
 Breaking either does not throw at the call site: WGX's boot self-test fails,
 the backend refuses, and the game falls back to GLX with one console warning —

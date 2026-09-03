@@ -105,7 +105,16 @@ test("TLX post construction failure unwinds targets, textures, and tracked mater
 test("TLX soft present serializes reads, coalesces newest, and rejects stale sizes", () => {
   const src = read("js/render/three/tlx.js");
   assert.match(src, /let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0/);
-  assert.match(src, /if \(_softReadPending\) \{\s*_softReadQueued = req;[^]*?return;\s*\}/);
+  // One in-flight read still gates the next, and the newest frame still wins
+  // the single waiter slot — but a read that has not settled in
+  // SOFT_READ_STALE_MS is abandoned (epoch bumped so its late completion is
+  // void, gate cleared) instead of wedging presentation on the first frame it
+  // ever read (2026-09-03: byte-identical captures across a camera move).
+  assert.match(src, /const SOFT_READ_STALE_MS = 20000/, "a 2 s floor abandoned every llvmpipe read (they take tens of seconds) — keep the floor generous, the guard adaptive");
+  assert.match(src, /Math\.max\(SOFT_READ_STALE_MS, 3 \* _softReadLastMs\)/);
+  assert.match(src, /if \(_softReadPending\) \{[^]*?now - _softReadSince > _softReadStaleMs\(\)[^]*?_softReadEpoch\+\+;[^]*?_softReadPending = false;[^]*?\} else \{\s*_softReadQueued = req;[^]*?return;\s*\}\s*\}/);
+  assert.match(src, /if \(req\.epoch === _softReadEpoch\) _finishSoftBlitRead\(\)/,
+    "an abandoned read's completion must not clear the gate a newer read holds");
   assert.match(src, /const next = _softReadQueued;\s*_softReadQueued = null;\s*if \(next\) _startSoftBlitRead\(next\)/);
   assert.match(src, /req\.epoch !== _softReadEpoch[^]*?_displayCanvas\.width !== w[^]*?_displayCanvas\.height !== h/);
   const resize = src.slice(src.indexOf("function resize()"), src.indexOf("const noopMesh"));

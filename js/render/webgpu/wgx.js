@@ -893,12 +893,31 @@ const WGX = (function () {
       // does not repeat the configuration that killed the device. Same
       // visibility guard — a backgrounding-driven loss is benign and must not
       // disable a feature the player deliberately turned on.
+      let hidden = false;
+      try { hidden = !!(typeof document !== "undefined" && document.hidden); } catch (_) { /* no document (harness) */ }
+      if (!hidden) {
+        try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* no storage: the tier gate is the only defence left; nothing here may throw */ }
+        _wgxEscalate("device lost (" + ((info && info.reason) || "unknown") + ")");
+        return;
+      }
+      // HIDDEN-TAB LOSS IS NOT A CRASH. iOS purges the GPU resources of a
+      // backgrounded tab as a matter of course; escalating here climbed the
+      // rung ladder (full → lite → minimal → GLX skip) and reloaded the tab
+      // while the player was away — a race discarded and a permanent
+      // downgrade for putting the phone in a pocket. Stop presenting (the
+      // device is gone), keep the rung, and reload once the tab is visible
+      // again — still a reload, because a lost device cannot be revived in
+      // place, but with the pick and the ladder untouched.
+      _lost = true;
+      try { Log.warn("gfx", "WGX device lost while hidden (" + ((info && info.reason) || "unknown") + ") — reload deferred to visibility, rung kept"); } catch (_) { /* harness */ }
       try {
-        if (typeof document !== "undefined" && !document.hidden) {
-          try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* no storage: the tier gate is the only defence left; nothing here may throw */ }
-        }
-      } catch (_) { /* no document (harness) */ }
-      _wgxEscalate("device lost (" + ((info && info.reason) || "unknown") + ")");
+        const onVisible = function () {
+          if (document.hidden) return;
+          document.removeEventListener("visibilitychange", onVisible);
+          try { location.reload(); } catch (_) { /* harness */ }
+        };
+        document.addEventListener("visibilitychange", onVisible);
+      } catch (_) { /* no document: nothing to wait for */ }
     });
 
     // Uncaptured GPU errors. WebGPU does NOT throw on an invalid pipeline or
@@ -918,12 +937,21 @@ const WGX = (function () {
     let _runtimeReady = false; // set after a successful create() return path
     const GPU_ERR_LOG_CAP = 8;
     const GPU_ERR_ESCALATE_CAP = 8;
+    // The cap must span FRAMES, not one. An invalid bind on a single draw
+    // errors once per draw, so eight arrive inside one frame from one freed
+    // decal texture or one bad instance buffer — and the ladder reloaded the
+    // phone a rung down for a defect that was gone by the next frame. Count
+    // the distinct presents the errors fell in; escalate only when a flood
+    // has persisted across three.
+    const GPU_ERR_ESCALATE_FRAMES = 3;
+    let _gpuErrFrames = 0, _gpuErrLastPresent = -1, _presentCount = 0;
     try {
       device.onuncapturederror = function (ev) {
         const msg = (ev && ev.error && ev.error.message) || "gpu error";
         if (!_bootError) _bootError = msg;
         if (!_gpuFirstMsg) _gpuFirstMsg = msg;
         _gpuErrors++;
+        if (_gpuErrLastPresent !== _presentCount) { _gpuErrLastPresent = _presentCount; _gpuErrFrames++; }
         if (_gpuErrors <= GPU_ERR_LOG_CAP) {
           try { Log.warn("gfx", "WGX GPU error #" + _gpuErrors + ":", msg); } catch (_) { /* Log absent (node VM harness): _gpuErrors still counts, which is the load-bearing part */ }
           if (_gpuErrors === GPU_ERR_LOG_CAP) {
@@ -933,8 +961,9 @@ const WGX = (function () {
         // After boot, a flood of uncaptured errors means the GPU is drawing
         // nothing while the UI still says WEBGPU. Climb the same ladder as
         // device.lost / JS-strike cap — do not keep presenting a dead backend.
-        if (_runtimeReady && !_lost && _gpuErrors >= GPU_ERR_ESCALATE_CAP) {
-          _wgxEscalate("runtime GPU errors (" + _gpuErrors + ")");
+        if (_runtimeReady && !_lost && _gpuErrors >= GPU_ERR_ESCALATE_CAP
+            && _gpuErrFrames >= GPU_ERR_ESCALATE_FRAMES) {
+          _wgxEscalate("runtime GPU errors (" + _gpuErrors + " over " + _gpuErrFrames + " frames)");
         }
       };
     } catch (_) { /* onuncapturederror is optional; _bootError/_gpuErrors stay 0 if we cannot hook it */ }
@@ -1885,12 +1914,19 @@ const WGX = (function () {
       return p;
     }
 
+    let _swapCopyable = _capPref != null || (!_outProbeOff && !WGX_LITE);
     function _configureCanvas() {
       if (!ctx || !device) return null;
       try {
+        // COPY_SRC on the drawable is only ever read by tooling
+        // (capturePixels / the boot swapchain self-test). A copyable
+        // swapchain can cost direct-to-display compositing on some
+        // implementations, so a LITE (phone / WebKit) canvas is
+        // RENDER_ATTACHMENT only; a capture pick, the desktop self-test, or a
+        // later capturePixels() (which reconfigures once) adds it.
         ctx.configure({
           device, format, alphaMode: "opaque",
-          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | (_swapCopyable ? GPUTextureUsage.COPY_SRC : 0),
         });
         return null;
       } catch (e) {
@@ -2652,11 +2688,30 @@ const WGX = (function () {
       const padded = new Float32Array(Math.max(128, Math.ceil(src.length / 64) * 64));
       padded.set(src);
       const sbuf = _mkBuffer(padded, GPUBufferUsage.STORAGE);
-      const attrBG = device.createBindGroup({
-        layout: g2Layout,
-        entries: [{ binding: 0, resource: { buffer: sbuf } }],
-      });
+      let attrBG;
+      try {
+        attrBG = device.createBindGroup({
+          layout: g2Layout,
+          entries: [{ binding: 0, resource: { buffer: sbuf } }],
+        });
+      } catch (e) {
+        // A failed bind group must not strand its storage buffer — this runs
+        // under memory pressure, which is exactly when a leak matters.
+        try { sbuf.destroy(); } catch (_) { /* already invalid */ }
+        throw e;
+      }
       return { sbuf, attrBG };
+    }
+    // The per-mesh (mat, s, x, hw) storage buffer is DEAD once the world road
+    // LUT exists: _bindLitVerts binds `_roadLutBG || attrBG || zeroAttrBG`, so
+    // on every circuit the authored array is uploaded (16 B per vertex, ~44 %
+    // of a non-road mesh's VBO bytes — ~15 MB of the 35 MB chunked scenery
+    // set on a phone) and never read. Share the zero bind group instead; the
+    // road's own pieces keep their authored copy (they are what the LUT is
+    // built from, and _meshFromPull is given it explicitly).
+    function _attrOrZero(attr) {
+      if (_roadLutReady && zeroAttrBG) return { sbuf: null, attrBG: zeroAttrBG };
+      return _makeAttrBG(attr);
     }
     // World-XZ spatial LUT (32×32×16). Group-2 used to be a per-vertex
     // mat+trk array — vertex_index stays 0 on this adapter, and a 4th
@@ -2744,11 +2799,17 @@ const WGX = (function () {
         }
         vbuf = _mkBuffer(b.vert, GPUBufferUsage.VERTEX);
         ibuf = _mkBuffer(b.idx, GPUBufferUsage.INDEX);
-        const a = lut || _makeAttrBG(b.attr);
+        const a = lut || _attrOrZero(b.attr);
         sbuf = a.sbuf; attrBG = a.attrBG;
       } catch (e) {
+        // Release EVERYTHING this call made — the index buffer and any road
+        // pieces already uploaded were dropped undestroyed here, exactly when
+        // memory is tightest. `lut` was created outside the try; it is owned by
+        // the returned mesh on success and must go with the failure.
         try { if (vbuf) vbuf.destroy(); } catch (_) { /* already invalid */ }
-        try { if (sbuf) sbuf.destroy(); } catch (_) { /* already invalid */ }
+        try { if (ibuf) ibuf.destroy(); } catch (_) { /* already invalid */ }
+        try { if (sbuf && sbuf !== (lut && lut.sbuf)) sbuf.destroy(); } catch (_) { /* already invalid */ }
+        try { if (lut && lut.sbuf) { if (lut.attrBG === _roadLutBG) { _roadLutBG = null; _roadLutReady = false; } lut.sbuf.destroy(); } } catch (_) { /* already invalid */ }
         _allocFail("createMesh", e);
         return { _wgx: "mesh", vbuf: null, ibuf: null, sbuf: null, attrBG: null, count: 0, indexFormat: b.indexFormat, chunks: null };
       }
@@ -2917,7 +2978,7 @@ const WGX = (function () {
       });
       try {
         ibuf = _mkBuffer(packed, GPUBufferUsage.INDEX);
-        const a = _makeAttrBG(b.attr);
+        const a = _attrOrZero(b.attr);
         sbuf = a.sbuf; attrBG = a.attrBG;
         for (let i = 0; i < chunks.length; i++) {
           chunks[i].ibuf = ibuf;
@@ -3433,6 +3494,7 @@ const WGX = (function () {
 
     let encoder = null, litPass = null, currentView = null, _drawSlot = 0;
     function begin(frame) {
+      _presentCount++;   // frame counter for the GPU-error cap (errors are attributed to the frame they arrive in)
       if (_lost) return false;
       try {
         lastFrame = frame || null;
@@ -3983,7 +4045,12 @@ const WGX = (function () {
       // Minimal rung sheds the probe entirely: 6 extra world passes + an
       // rgba16f mip cube is exactly the discretionary load a device that has
       // already died twice cannot carry. game.js checks the null return.
-      if (_lost || WGX_MINIMAL || !skyPipeline) return null;
+      // LITE (every phone / WebKit) sheds it too: a cube cycle is six world
+      // passes, 36 mip render passes and seven extra submits, each face
+      // re-uploading the frame UBO and the light SBO, on the rung whose whole
+      // point is the jetsam budget — the same gate the car map, lamp map and
+      // SSR already honour on LITE. Desktop keeps the live mirror.
+      if (_lost || WGX_MINIMAL || WGX_LITE || !skyPipeline) return null;
       if (!envCubeTex) envInit();
       _passSamples = 1;
       const F = ENV_FACES[face];
@@ -4112,14 +4179,27 @@ const WGX = (function () {
     function _capEncode() {
       if (!_capReq) return null;
       try {
+        // A LITE swapchain is configured without COPY_SRC (see
+        // _configureCanvas). SAVE SCREENSHOT on such a device reconfigures
+        // once, copyable, and reads the NEXT frame; this one is skipped.
+        if (!_softGpu && !_swapCopyable) {
+          _swapCopyable = true;
+          _configureCanvas();
+          return null;
+        }
         const capTex = _softGpu ? softPresentTex : ctx.getCurrentTexture();
         if (!capTex) throw new Error("no frame texture");
         const w = capTex.width, h = capTex.height;
         const bpr = (w * 4 + 255) & ~255;
         const buf = device.createBuffer({ size: bpr * h,
           usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
-        encoder.copyTextureToBuffer({ texture: capTex },
-          { buffer: buf, bytesPerRow: bpr }, [w, h]);
+        try {
+          encoder.copyTextureToBuffer({ texture: capTex },
+            { buffer: buf, bytesPerRow: bpr }, [w, h]);
+        } catch (e) {
+          try { buf.destroy(); } catch (_) { /* already invalid */ }   // a failed copy must not strand the readback buffer
+          throw e;
+        }
         // Soft-present renders into LDR_FORMAT (rgba8unorm); the swapchain is
         // `format` (usually bgra8unorm). Record which so the finish swizzles right.
         return { buf, bpr, w, h, bgra: !_softGpu && format === "bgra8unorm" };
@@ -4614,9 +4694,12 @@ const WGX = (function () {
             try {
               const t = new BigUint64Array(_gpuReadBuf.getMappedRange());
               _gpuMs = Number(t[1] - t[0]) / 1e6;
-              _gpuReadBuf.unmap();
             } catch (_) { /* keep last-good gpuMs */ }
-          });
+            // ALWAYS unmap: a throw above used to leave the buffer mapped for
+            // the rest of the session, and the `mapState === "unmapped"` gate
+            // then silently switched the GPU timer off for good.
+            try { _gpuReadBuf.unmap(); } catch (_) { /* already unmapped / destroyed */ }
+          }, function () { /* map rejected (device busy or lost): the timer keeps its last-good value */ });
         } catch (_) { /* mapAsync unsupported or already mapped */ }
       }
       encoder = null; currentView = null;
@@ -5705,7 +5788,10 @@ const WGX = (function () {
     const PRESENT_TEST_MS = 4000;
     let _ptTimer = null;
     let _presentReason = null;
-    if (!_outProbeOff && !_softGpu) {
+    // LITE skips the swapchain smoke: it reads the drawable back (COPY_SRC, a
+    // mapAsync round trip) and paints one ACES-white frame on a phone whose
+    // swapchain the runtime output probe already declines to read (_sceneProbeOn).
+    if (!_outProbeOff && !_softGpu && !WGX_LITE) {
       _presentReason = await Promise.race([
         _selfTestPresent().catch(function (e) {
           return "swapchain self-test threw: " + (((e && e.message) || String(e)).slice(0, 200));
@@ -5802,6 +5888,13 @@ const WGX = (function () {
       // game.js descriptor-copies onto GLX. PERF-FINDINGS 2e.
       gpuErrors: () => _gpuErrors,
       gpuFirstError: () => _gpuFirstMsg,
+      // GLX/TLX parity: the backend's own account of the device for the GOV
+      // panel and __apex.diag().env.
+      backendState: () => ({
+        api: "webgpu", lite: WGX_LITE, minimal: WGX_MINIMAL, softGpu: _softGpu,
+        isMobile: IS_MOBILE, gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstMsg,
+        lost: _lost, format,
+      }),
 
       // Cull-test helpers (GLX parity). Optional `out` reuses a caller pool for
       // the race prop-batch path; omit it for agentview (fresh planes).

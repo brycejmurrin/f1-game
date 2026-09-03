@@ -66,7 +66,11 @@ const GLX = (function () {
   // boot (shader/pipeline errors surface there) and whenever the diagnostic
   // flag is set (tools/gpu-game-check seeds it) — never on a steady-state
   // frame. gpuErrors() stays a pure read: the counter is drained at present().
-  let _drainLeft = 120, _glDrainAlways = false;
+  // 30 presents, not 120: shader/pipeline errors surface in the first handful,
+  // and on Safari's out-of-process GPU each drain is a blocking IPC — 120 of
+  // them after every track switch was three seconds of serialised frames.
+  const DRAIN_PRESENTS = 30;
+  let _drainLeft = DRAIN_PRESENTS, _glDrainAlways = false;
   try { _glDrainAlways = localStorage.getItem("apex26.glErrDrain") === "1"; } catch (_) {}
   function drainGlErrors(where) {
     if (!gl || _ctxLost) return;
@@ -125,6 +129,7 @@ const GLX = (function () {
   // so a 20 m building subtends ~2.7 px here and 0.9 px at the 900 m far plane.
   const ENV_CULL_M = 300;
   let envTex = null, envFBO = null, envDepthRB = null, envDummyTex = null;
+  let _envDisabled = false;   // envInit() found the probe FBO incomplete: analytic reflections only
   let envFacesMask = 0, envReady = false, _envActive = false;
   // Saved game-frame fields while a probe face is open — restored in envFaceEnd
   // so drawWorldMeshes (propBatches cull via frame.viewProj) still sees the
@@ -218,6 +223,14 @@ const GLX = (function () {
   function uf1(loc, cache, key, v) {
     if (!loc) return;
     if (cache[key] !== v) { gl.uniform1f(loc, v); cache[key] = v; }
+  }
+  // int twin, for the sampler UNIT bindings and uLampShadowIdx: seven
+  // uniform1i calls ran on every begin() — twice a game frame with the probe
+  // live — to re-state unit numbers that change only on relink. The cache is
+  // _litUf, cleared with it, so a relink re-uploads.
+  function ufI(loc, cache, key, v) {
+    if (!loc) return;
+    if (cache[key] !== v) { gl.uniform1i(loc, v); cache[key] = v; }
   }
   // mat4 twin of uf1, for uModel: 103.2 uploads a frame against 50.3 distinct
   // values (docs/PERF-FINDINGS.md 2h),
@@ -450,6 +463,23 @@ const GLX = (function () {
       // make each retry lighter than the last, which is what gives the retry a
       // reason to succeed. sessionStorage (not local) so a genuinely new visit
       // always gets its two attempts back.
+      //
+      // A HIDDEN loss takes none of the above. iOS drops the context of a
+      // backgrounded tab routinely; reloading on the timer put the player on
+      // the title screen mid-race when they came back, and spent one of the
+      // two bounded retries on a loss that was never a crash. Defer the
+      // reload to the moment the tab is visible again, uncounted.
+      if (document.hidden) {
+        try {
+          var _onVis = function () {
+            if (document.hidden) return;
+            document.removeEventListener("visibilitychange", _onVis);
+            try { location.reload(); } catch (_) { /* harness */ }
+          };
+          document.addEventListener("visibilitychange", _onVis);
+        } catch (_) { /* no document events: the restore handler below is the remaining path */ }
+        return;
+      }
       try {
         var _rk = "apex26.ctxLostReloads";
         var _n = (parseInt(sessionStorage.getItem(_rk), 10) || 0) + 1;
@@ -459,6 +489,20 @@ const GLX = (function () {
     }, false);
     canvas.addEventListener("webglcontextrestored", function () { try { location.reload(); } catch (_) {} }, false);
 
+    // FRAGMENT UNIFORM BUDGET. LIT_FS's default block is ~279 vec4 rows
+    // (uLight 192 + uMatTexScale 17 + three mat4 + nine vec3 + ~47 scalars),
+    // above the GLES 3.0 floor of 224 that shaders/lit.js still cites. Apple
+    // and desktop drivers report 1024+, so iPhone links; an Adreno at the
+    // floor does not, and until now the only symptom was init() returning
+    // false with a 100 KB shader dumped to the console. Say the two numbers
+    // side by side so a "no WebGL" report on a phone names its cause.
+    const LIT_FS_ROWS = 279;
+    try {
+      const rows = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS) | 0;
+      if (rows && rows < LIT_FS_ROWS) {
+        Log.warn("gfx", "GLX: MAX_FRAGMENT_UNIFORM_VECTORS " + rows + " < the lit shader's ~" + LIT_FS_ROWS + " rows — expect the lit program to fail to link on this GPU");
+      }
+    } catch (_) { /* a caps read must never cost the boot */ }
     litProg = link(LIT_VS, LIT_FS);
     skyProg = link(SKY_VS, SKY_FS);
     shadowProg = link(SHADOW_VS, SHADOW_FS);
@@ -670,7 +714,10 @@ const GLX = (function () {
   // The viewport this cache was last taken against, and how long to keep
   // distrusting it. See cssSize().
   let cssVW = -1, cssVH = -1, cssRecheck = 0;
-  const CSS_RECHECK_FRAMES = 30;
+  // 8, not 30: iOS Safari's toolbar collapse changes innerHeight on every
+  // scroll-bar gesture, and each change bought 30 forced layouts. The latch
+  // bug this countdown exists for (§2u) resolves in a handful of frames.
+  const CSS_RECHECK_FRAMES = 8;
   const markCssDirty = () => { cssDirty = true; };
   // Wired from init(), NOT at IIFE eval: `canvas` is still null up here, so an
   // observer attached at module scope would silently observe nothing.
@@ -956,6 +1003,27 @@ const GLX = (function () {
   // sampler pointing at an incomplete texture unit is undefined behaviour and
   // renders black on strict drivers (SwiftShader) even when the shader branch
   // that would sample it is never taken.
+  // A COMPLETE compare-mode depth texture for unit 0 whenever the shadow system
+  // is off. uShadowMap / uCarShadowMap / uLampShadowMap are sampler2DShadow
+  // uniforms that default to unit 0, and present() leaves unit 0 holding the
+  // LDR / scene COLOUR texture from the post chain — sampling a colour texture
+  // through a compare sampler is undefined in GLES and a validation error on
+  // Metal. The uShadowStr <= 0 early-out makes it rare; a driver does not care
+  // how rare. 1×1 DEPTH_COMPONENT16, depth 1.0, so a stray tap reads "lit".
+  let shadowDummyTex = null;
+  function ensureShadowDummy() {
+    if (shadowDummyTex) return;
+    shadowDummyTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, shadowDummyTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT16, 1, 1, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_SHORT, new Uint16Array([65535]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
   function ensureMatDummy() {
     if (matDummyArrTex) return;
     matDummyArrTex = gl.createTexture();
@@ -974,7 +1042,7 @@ const GLX = (function () {
     ensureMatDummy();
     gl.activeTexture(gl.TEXTURE10);
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, matAlbedoTex || matDummyArrTex);
-    gl.uniform1i(litU.uMatAlbedoTex, 10);
+    ufI(litU.uMatAlbedoTex, _litUf, "u.matAlbedo", 10);
     gl.activeTexture(gl.TEXTURE11);
     // No baked normal array → sample the NEUTRAL 128-grey dummy, not the albedo
     // array. A pack with albedo but no normal is documented-valid ("albedo alone
@@ -982,7 +1050,7 @@ const GLX = (function () {
     // applyMaterialTexNormal as a tangent-space normal, warping shading on every
     // grass/rock/wall layer instead of degrading cleanly.
     gl.bindTexture(gl.TEXTURE_2D_ARRAY, matNormalTex || matDummyArrTex);
-    gl.uniform1i(litU.uMatNormalTex, 11);
+    ufI(litU.uMatNormalTex, _litUf, "u.matNormal", 11);
     gl.activeTexture(gl.TEXTURE0);      // leave unit 0 active + bound to the shadow map
     uf1(litU.uMatTexMix, _litUf, "matTexMix", matAlbedoTex ? mix : 0);
     if (litU["uMatTexScale[0]"]) gl.uniform1fv(litU["uMatTexScale[0]"], matTexScales);
@@ -1070,14 +1138,29 @@ const GLX = (function () {
     envFBO = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, envFBO);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, envDepthRB);
+    // COMPLETENESS, checked once on face 0 — every other FBO in post.js and
+    // shadow.js is checked and this one never was. On a driver where the
+    // RGBA16F cube face + DEPTH_COMPONENT16 combination is incomplete every
+    // probe face is INVALID_FRAMEBUFFER_OPERATION, envFaceEnd still flips
+    // envReady after six of them, and the paint mirrors a cube nothing ever
+    // wrote (a dark car, and 120 boot getError drains of noise).
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X, envTex, 0);
+    const _envStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X, null, 0);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (_envStatus !== gl.FRAMEBUFFER_COMPLETE) {
+      try { Log.warn("gfx", "GLX env probe framebuffer incomplete (0x" + _envStatus.toString(16) + ") — analytic reflections only"); } catch (_) { /* Log optional */ }
+      gl.deleteFramebuffer(envFBO); gl.deleteRenderbuffer(envDepthRB); gl.deleteTexture(envTex);
+      envFBO = null; envDepthRB = null; envTex = null;
+      _envDisabled = true;
+    }
   }
   // Render one probe face: caller re-issues the world draws (sky + track meshes,
   // no cars) between envFaceBegin and envFaceEnd. Reuses begin() with the face's
   // camera so every lighting uniform (sun, shadow map, ambient, fog, tune)
   // matches the main frame exactly. Returns the face's invViewProj for drawSky.
   function envFaceBegin(face, eye, frame) {
-    if (!gl || ctxGone()) return null;
+    if (!gl || ctxGone() || _envDisabled) return null;
     if (!envTex) envInit();
     _envActive = true;   // begin() → env FBO + 64px viewport; env unit → dummy cube
     const F = ENV_FACES[face];
@@ -1323,18 +1406,21 @@ const GLX = (function () {
     // SAME sampler type; the blocker was the one case it did not cover. Hoisted
     // ABOVE the SHD.enabled branch because its else-arm leaves BOTH samplers at
     // their default unit 0, which is the same collision by another route.
-    gl.uniform1i(litU.uBlockerMap, 7);
+    ufI(litU.uBlockerMap, _litUf, "u.blocker", 7);
     if (SHD.enabled) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, SHD.mapTex);
-      gl.uniform1i(litU.uShadowMap, 0);
+      ufI(litU.uShadowMap, _litUf, "u.shadow", 0);
       if (SHD.pcssEnabled) {
         gl.activeTexture(gl.TEXTURE7);
         gl.bindTexture(gl.TEXTURE_2D, SHD.blockerTex);
         gl.activeTexture(gl.TEXTURE0);
       }
       uf1(litU.uPcss, _litUf, "pcss", SHD.pcssEnabled ? 1.0 : 0.0);
-      gl.uniformMatrix4fv(litU.uLightVP, false, SHD.lightVP);
+      // The three light VPs change only on a shadow snap; every begin()
+      // (main + probe faces) re-sent them. ufM4 copies, so the snap's in-place
+      // rewrite of SHD.lightVP is still seen.
+      ufM4(litU.uLightVP, _litUf, "lightVP", SHD.lightVP);
       // SHADOW BIAS / DARKNESS knobs (repair + artistic; defaults mirror TUNE_DEFS).
       uf1(litU.uShadowBias, _litUf, "shadowBias", T && T.shadowBias != null ? T.shadowBias : 0.001);
       // Fade the cast shadow out as the KEY light dims toward moonlight: props stop
@@ -1371,8 +1457,8 @@ const GLX = (function () {
         gl.activeTexture(gl.TEXTURE8);
         gl.bindTexture(gl.TEXTURE_2D, SHD.carTex);
         gl.activeTexture(gl.TEXTURE0);
-        gl.uniform1i(litU.uCarShadowMap, 8);
-        gl.uniformMatrix4fv(litU.uCarLightVP, false, SHD.carLightVP);
+        ufI(litU.uCarShadowMap, _litUf, "u.carShadow", 8);
+        ufM4(litU.uCarLightVP, _litUf, "carLightVP", SHD.carLightVP);
         uf1(litU.uCarShadowOn, _litUf, "carShadowOn", SHD.carArmed ? 1.0 : 0.0);
         uf1(litU.uCarBiasScale, _litUf, "carBiasScale", SHD.carBoxScale || 1.0);
       } else {
@@ -1387,14 +1473,22 @@ const GLX = (function () {
         gl.activeTexture(gl.TEXTURE9);
         gl.bindTexture(gl.TEXTURE_2D, SHD.lampTex);
         gl.activeTexture(gl.TEXTURE0);
-        gl.uniform1i(litU.uLampShadowMap, 9);
-        gl.uniformMatrix4fv(litU.uLampShadowVP, false, SHD.lampLightVP);
+        ufI(litU.uLampShadowMap, _litUf, "u.lampShadow", 9);
+        ufM4(litU.uLampShadowVP, _litUf, "lampLightVP", SHD.lampLightVP);
         uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", SHD.lampArmed ? 1.0 : 0.0);
-        gl.uniform1i(litU.uLampShadowIdx, SHD.lampIdx);
+        ufI(litU.uLampShadowIdx, _litUf, "lampShadowIdx", SHD.lampIdx | 0);
       } else {
         uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", 0.0);
       }
     } else {
+      // Shadows off: unit 0 must still hold a compare-mode DEPTH texture for
+      // the three sampler2DShadow uniforms that default there (see
+      // ensureShadowDummy) — present() leaves the post chain's colour texture
+      // on it otherwise.
+      ensureShadowDummy();
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, shadowDummyTex);
+      ufI(litU.uShadowMap, _litUf, "u.shadow", 0);
       uf1(litU.uShadowStr, _litUf, "shadowStr", 0.0);
       uf1(litU.uCarShadowOn, _litUf, "carShadowOn", 0.0);
       uf1(litU.uLampShadowOn, _litUf, "lampShadowOn", 0.0);
@@ -2096,6 +2190,15 @@ const GLX = (function () {
     },
     gpuErrors: () => _glErrors,
     gpuFirstError: () => _glFirstError || null,
+    // The bound backend's account of itself, one shape on all three (TLX
+    // carries the three.js decision tree, WGX the rung). Read by the GOV
+    // panel and __apex.diag().env so a phone screenshot names the API and
+    // the first GPU error — the evidence a "see-through car" report lacked.
+    backendState: () => ({
+      api: "webgl2", isMobile: IS_MOBILE, mobileTier: MOBILE_TIER,
+      gpuErrors: _glErrors, gpuFirstError: _glFirstError || null,
+      ctxLost: _ctxLost, packLive: !!matAlbedoTex,
+    }),
     envFaceBegin,
     envFaceEnd,
     envProbeReady() { return envReady; },
@@ -2105,7 +2208,7 @@ const GLX = (function () {
     // presents were spent in the SETUP preview, so the first night lamp set /
     // first instanced draw on a new circuit went uncounted (gpuErrors() is a
     // pure read).
-    envProbeReset() { envFacesMask = 0; envReady = false; _drainLeft = 120; },
+    envProbeReset() { envFacesMask = 0; envReady = false; _drainLeft = DRAIN_PRESENTS; },
     shadowBegin: (lightVP) => SHD.shadowBegin(lightVP),
     castShadow: (mesh, model) => SHD.castShadow(mesh, model),
     castShadowInstanced: (batch, count) => SHD.castShadowInstanced(batch, count),
