@@ -3,13 +3,13 @@
  * single-file shell.
  *
  * WHY THIS FILE EXISTS AT ALL. `.claude/skills/restructure-screens-css/references/rules.md`
- * rule 11 says to "ratchet the distinct-class count the way module-size.test.mjs
+ * rule 11 says to "ratchet the distinct-class count the way ratchets.json
  * ratchets game.js". docs/archive/research/UI-REMODEL-DECISION-2026-08.md
  * prescribed it concretely ("start at 538"). It was never installed — and
  * docs/research/STRUCTURE-REDECISION-2026-08.md §Q5 records the consequence as a
  * formal execution debt: with no test carrying a ceiling, the count crept
  * 538 -> 543 in five days while every suite stayed green. That is the exact
- * failure mode module-size.test.mjs was written for, in a different currency:
+ * failure mode the size ratchet (tests/data/ratchets.json) was written for, in a different currency:
  * nobody did anything wrong, there was simply nothing that would notice.
  *
  * The class count is the repo's headline structural cost. Measured against Pico
@@ -20,7 +20,7 @@
  * answer is `--sheet-w`: one primitive class plus N one-line `--property`
  * contexts, which is already the shape used by fourteen dialogs here. Every
  * consolidation onto that shape lowers this number; LOWER THE CEILING WHEN IT
- * DOES, the same way you lower a module-size ceiling after an extraction.
+ * DOES, the same way you lower a size-ratchet ceiling after an extraction.
  *
  * The body-node ceiling is the second half, endorsed by STRUCTURE-REDECISION
  * §Q1's operational addendum. The split-index.html question was decided
@@ -228,7 +228,7 @@ test("the shell's DOM node count stays under the Lighthouse error band", () => {
     "deliberately, or take the nodes out of the shell.");
 });
 
-// The other failure mode, straight out of module-size.test.mjs: consolidate, never
+// The other failure mode, straight out of the size ratchet: consolidate, never
 // lower the ceiling, and the ratchet silently stops ratcheting. A ceiling sitting
 // well above what it guards has lost its grip. The slack allowances are small on
 // purpose — these counts move in ones and twos, not in hundreds like a line count.

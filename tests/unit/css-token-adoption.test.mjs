@@ -25,7 +25,7 @@
  * suite fails if either goes UP, which is the property that matters: a
  * consolidation cannot be undone by the next three features with nothing to
  * notice. Lower the ceiling whenever you migrate a file — that is the whole
- * protocol, and it is the same one tests/unit/module-size.test.mjs uses to
+ * protocol, and it is the same one tests/data/ratchets.json uses to
  * ratchet game.js.
  *
  * WHY NOT ZERO. Some literals are legitimately not sizes on the ladder: hairline

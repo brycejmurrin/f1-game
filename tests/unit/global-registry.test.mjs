@@ -10,7 +10,7 @@
  * artifacts/ state, works from a fresh clone).
  *
  * Rules, with the currently-known violations FROZEN as baselines in the
- * module-size ratchet idiom (existing entries are tolerated and documented;
+ * size-ratchet idiom (existing entries are tolerated and documented;
  * new code cannot add to them — fix the read or extend the manifest instead):
  *
  *   1. one file, one global — every file eval-assigns exactly one global.

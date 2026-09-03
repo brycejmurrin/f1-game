@@ -112,7 +112,7 @@ function mergeDeployTip(tip) {
   const cureable = conflicted.every((f) => f === "index.html" || f === "version.json");
   if (!cureable) {
     git(["merge", "--abort"]);
-    throw new Error(`real conflicts (not just the shell hashes): ${conflicted.join(", ")} — resolve by hand, re-measure on the union`);
+    throw new Error(`real conflicts (not just the shell hashes): ${conflicted.join(", ")} — resolve by hand; for tests/data/ratchets.json run \`node tools/ratchets.mjs --update\` on the union`);
   }
   for (const f of conflicted) must(git(["checkout", "--theirs", "--", f]), `checkout --theirs ${f}`);
   run("node", ["tools/gen-shell.mjs"], "regenerate the union shell from the manifest");

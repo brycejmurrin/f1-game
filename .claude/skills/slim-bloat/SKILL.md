@@ -1,6 +1,6 @@
 ---
 name: slim-bloat
-description: Use when files, skills, docs, or the tree have grown too large for agents — fat SKILL.md, saturated module-size ceiling, dead or duplicate code, stale comments, extract/split candidates, or "simplify this / too much context". Claude-simplify analog for Apex 26. Not for physics tune, circuit accuracy, CSS restructure (restructure-screens-css), or pre-push verify (check-changes).
+description: Use when files, skills, docs, or the tree have grown too large for agents — fat SKILL.md, saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or "simplify this / too much context". Claude-simplify analog for Apex 26. Not for physics tune, circuit accuracy, CSS restructure (restructure-screens-css), or pre-push verify (check-changes).
 ---
 
 # Cut agent bloat (Claude-simplify for Apex 26)
@@ -24,8 +24,8 @@ locksteps, and bumps cache.
 
 1. **One carve per commit.** Extraction leftovers are the measured failure
    (`ARCHITECTURE.md` §Reorg — copied constants, leftover `_cautionOn`).
-2. **Never raise a ratchet to hide growth.** Lower `module-size` in the
-   same commit as the extract. Same for skill line caps.
+2. **Never raise a ratchet to hide growth.** `node tools/ratchets.mjs --update`
+   in the same commit as the extract. Same for skill line caps.
 3. **Never convert IIFE → ESM.** New-file lockstep: file + `<script>` +
    `tools/manifest.cjs` (+ `HARD_EDGES` if eval-time) + cache bump.
 4. **Never hand the auditor a browser run.** Dead `__apex` hooks: parent

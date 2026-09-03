@@ -82,8 +82,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-play.test.mjs",
   "tests/unit/menu-capture.test.mjs",
   "tests/unit/report-server.test.mjs",
-  "tests/unit/tinyfish-mcp.test.mjs",
-  "tests/unit/probe-mcp.test.mjs",
+  "tests/unit/mcp-cli.test.mjs",
   "tests/unit/apex-tools-mcp.test.mjs",
   "tests/unit/mcp-smoke.test.mjs",
   "tests/unit/agent-surface.test.mjs",
@@ -103,7 +102,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/ci-coverage.test.mjs",
   "tests/unit/select-budget.test.mjs",
   "tests/unit/select-specs.test.mjs",
-  "tests/unit/tests-split.test.mjs",
   "tests/unit/wait-polling.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/lighting-campaign.test.mjs",
@@ -113,7 +111,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-layers.test.mjs",
   "tests/unit/css-media-disjoint.test.mjs",
   "tests/unit/uilayers-modal-order.test.mjs",
-  "tests/unit/module-size.test.mjs",
+  "tests/unit/ratchets.test.mjs",
   "tests/unit/gfx-backend-canary.test.mjs",
   "tests/unit/gfx-debug-overlay.test.mjs",
   "tests/unit/car-presentation-canary.test.mjs",
@@ -140,7 +138,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // crest-marks 41 s, slider-effect 42 s — 48 % of this loop, measured
   // 2026-09-01) run in test:node-slow: CI guards always, locally when
   // pick-tests names it (js/car/ or tools/slider-effect.mjs).
-  "tests/unit/physics-baseline-present.test.mjs",
   "tests/unit/deploy-stamp.test.mjs",
   "tests/unit/track-build-wait.test.mjs",
   "tests/unit/deploy-tool.test.mjs",

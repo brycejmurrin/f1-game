@@ -206,8 +206,10 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
   `js/roster.js` — the lazy rosters game.js injects). No cache bump. Never
   hand-edit a `@gen-shell` block; `load-order.test.mjs` fails on drift.
 - **Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.**
-- `module-size.test.mjs` ratchets game.js and apex.js AT their current
-  ceilings — pay for every added line. New `js/game/` files are hyphenated;
+- `tests/data/ratchets.json` ratchets game.js (lines, non-comment lines,
+  `G` members, column-0 lets) and the other big modules AT their current
+  values — pay for every added line; `node tools/ratchets.mjs --update`
+  lowers them after an extraction or on a merged tree. New `js/game/` files are hyphenated;
   the older squashed names are grandfathered (settled, final).
 - **localStorage keys** are prefixed `apex26.`.
 - **Coordinates**: +Y up, metres, radians, arc `s` in metres, lateral `x`

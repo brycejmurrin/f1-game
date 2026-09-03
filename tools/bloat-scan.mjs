@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// @doc Size report for slim-bloat: module-size ceiling slack, SKILL.md / agent line counts. `--json`; never edits.
+// @doc Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits.
 // @skill slim-bloat
 /* bloat-scan.mjs — size report for slim-bloat / bloat-auditor.
  *
- * Prints ratchet slack (from tests/unit/module-size.test.mjs CEILINGS),
+ * Prints ratchet slack (from tests/data/ratchets.json `lines` ceilings),
  * SKILL.md / agent line counts, and oversized unratcheted files. Evidence
  * only — never edits, never launches a browser.
  *
@@ -31,8 +31,8 @@ const linesOf = (rel) => {
 
 const CEILINGS = {};
 {
-  const src = fs.readFileSync(path.join(ROOT, "tests/unit/module-size.test.mjs"), "utf8");
-  for (const m of src.matchAll(/^\s*"([^"]+)":\s*(\d+)/gm)) CEILINGS[m[1]] = Number(m[2]);
+  const data = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/ratchets.json"), "utf8"));
+  for (const [file, metrics] of Object.entries(data.files)) if (metrics.lines) CEILINGS[file] = metrics.lines;
 }
 
 function walkFiles(rel, out = []) {

@@ -3,7 +3,9 @@
 > Errata: none yet. Landed: Phase 0 Commit A `bcf17c8`, Commit B `f2d6f44`
 > (the `?v=dev` policy, `bump-cache --apply` refusal, sw.js dev network-first
 > rule, `cache-bump-only` deleted; unit-suite count 186), deploy merge
-> `3685460`. Live checklist: §Status and remaining steps.
+> `3685460` (deploy branch tip), Phase 1-lite (tests-split + physics-baseline-present
+> deleted, mcp tests split fast/`test:mcp`, module-size → `tests/data/ratchets.json` +
+> `tools/ratchets.mjs`; unit-suite count 185). Live checklist: §Status and remaining steps.
 
 ## Context
 
@@ -124,7 +126,7 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       → ours + gen-shell; game.js ceiling re-measured 9,307 → 9,235 on the
       union). ⚑ `deploy.mjs` push in flight; proof is `pages.yml`'s
       `bump-cache --check --root _site` and `verify-live`.
-- [ ] **Phase 1-lite** (next; no js/css change, tooling-fast only):
+- [x] **Phase 1-lite** (landed 2026-09-03; no js/css change, tooling-fast 136/136 + `test:mcp` 31/31):
   1. delete `tests-split.test.mjs` + `tools/tests-split.mjs` (+ README regen,
      docs-integrity comment, TESTING row, carves.md, APEX-TOOLS-MCP);
   2. delete `physics-baseline-present.test.mjs` after confirming the VM twin

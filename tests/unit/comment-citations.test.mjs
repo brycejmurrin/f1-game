@@ -25,7 +25,7 @@
  *      ("LIT_FS in js/render/shaders/lit.js") makes it permanently true, and
  *      that is the direction this should move. Lowering the ceiling is the
  *      reward; raising it is a deliberate edit with a reason in the commit.
- *      Same idiom as tests/unit/module-size.test.mjs and tools/clip-baseline.json.
+ *      Same idiom as tests/data/ratchets.json and tools/clip-baseline.json.
  *
  * Run: node --test tests/unit/comment-citations.test.mjs   (npm run test:tooling-fast)
  */
@@ -42,7 +42,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // with file-path or symbol references (2026-08-12 full sweep).
 const CITATION_CEILING = 0;
 // A ceiling left far above the real count has stopped ratcheting — the same
-// second assertion tests/unit/module-size.test.mjs carries, for the same reason.
+// slack rule tools/ratchets.mjs carries, for the same reason.
 const CITATION_SLACK = 15;
 
 function walk(dir, out = []) {

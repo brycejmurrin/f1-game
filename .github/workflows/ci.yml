@@ -267,6 +267,9 @@ jobs:
           npm run test:webgpu-lifecycle
           npm run test:agent-contract
           npm run test:audio-unit
+          # The CLI-only MCP wrappers (tinyfish proxy, probe bridge): spawn-heavy,
+          # off the edit loop since 2026-09-03; their fast-gate half is mcp-cli.
+          npm run test:mcp
           # The three raster/spawn-heavy car files, out of the edit loop
           # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.
           npm run test:node-slow

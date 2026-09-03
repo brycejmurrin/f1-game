@@ -68,7 +68,7 @@ The July 2026 architecture reorg moved every module into a domain directory
 
 **That 4,700 is a historical measurement, not a current one.** `game.js` grew
 back to its ceiling (8,885 as of 2026-09) — extraction moved code out once and nothing stopped it
-accumulating again until `tests/unit/module-size.test.mjs` put a ratcheted ceiling on
+accumulating again until the size ratchet (`tests/data/ratchets.json`, checked by `tools/ratchets.mjs`) put a ceiling on
 the file (lowered with each extraction). Treat the number as a record of what
 the reorg achieved, and `wc -l js/game.js` against the current ceiling as the
 truth about today.
@@ -99,8 +99,8 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   `js/game/light-store.js`, `js/game/racecontrol.js`, and from the 2026-08
   cleanup `js/game/physics-consts.js` and `js/game/cam-modes.js` — more have
   landed since (e.g. `js/game/ai-drive.js`); `tools/manifest.cjs` is the roster
-  truth and `module-size.test.mjs` the tally. The current
-  count and its ratcheted ceiling live in `tests/unit/module-size.test.mjs`, and the
+  truth and `tests/data/ratchets.json` the tally. The current
+  count and its ratcheted ceiling live there (`node tools/ratchets.mjs`), and the
   remaining extraction candidates are ranked in ARCHITECTURE-REVIEW.md §8.
 
   **The payoff is testability, not tidiness.** Race control is the clearest
@@ -140,7 +140,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   `tests/specs/physics-characterization.spec.js` now pins, for no functional gain.
   Take the cohesive blocks around them instead.
 
-  `tests/unit/module-size.test.mjs` is the guard that makes this stick: a per-file
+  `tests/data/ratchets.json` (`tools/ratchets.mjs`, `tests/unit/ratchets.test.mjs`) is the guard that makes this stick: a per-file
   line ceiling you LOWER when you extract. It exists because this file's own
   note above — that extraction happened once and nothing stopped the file
   growing back — was demonstrated again in miniature during the 2026-08 cleanup,
@@ -726,7 +726,7 @@ ui-scale, gfx-quality, metrics and the rest) is enumerated by
 ## js/game.js — main
 
 The entry point (the largest file in the repo — its line ceiling is ratcheted by
-`tests/unit/module-size.test.mjs`; loop, physics, AI, race logic — the subsystems
+`tests/data/ratchets.json`; loop, physics, AI, race logic — the subsystems
 above are extracted). Player + 21 AI.
 
 **States** are `menu | count | race | results` — those are the only four values
