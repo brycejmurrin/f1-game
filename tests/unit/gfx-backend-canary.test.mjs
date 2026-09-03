@@ -11,7 +11,7 @@
  * fail-closed guards, cull bookkeeping, the light-lane packing, the opaque
  * canvas; the RENDERER picker is driven through renderer-picker.js in a VM; the
  * GPU-census Verdict script is EXECUTED against fixtures. WGX behaviour that
- * tests/unit/webgpu-lifecycle.test.mjs already drives on its mock device is
+ * spike/backends/tests/unit/webgpu-lifecycle.test.mjs already drives on its mock device is
  * not repeated here as text. What stays a source pin — TLX (three.js cannot
  * load in Node), WGSL/GLSL/TSL, the vendored three bundle, the workflow
  * YAML, the tools — is matched on comment-stripped source by identifier and
@@ -51,7 +51,7 @@ function fnBody(src, name) {
 }
 
 test("gfx-probe cannot report a stale optional frame as fresh", () => {
-  const probe = read("tools/gfx/gfx-probe.mjs");
+  const probe = read("spike/backends/tools/gfx-probe.mjs");
   assert.match(probe, /ATTEMPT_ARTIFACTS\s*=\s*\[[^\]]*"frame\.png"/,
     "frame.png must be one of the owned artifacts cleared before every attempt");
   assert.match(probe, /for \(let attempt[^]*?clearAttemptArtifacts\(\);[^]*?runProbeAttempt\(attempt\)/,
@@ -102,7 +102,7 @@ test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js
 });
 
 test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", () => {
-  const src = code("js/render/three/tlx.js");
+  const src = code("spike/backends/three/tlx.js");
   assert.match(src, /\bisWebKit\b/);
   assert.match(src, /apex26\.tlxAutoGL/);
   assert.match(src, /\b_autoStayGL\b/);
@@ -125,7 +125,7 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
   assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
   assert.match(src, /powerPreference:\s*"low-power"/);
   assert.match(src, /infoBlob\s*=\s*\[[^\]]*\bdev\b[^\]]*\]/, "the adapter sniff joins the info fields into one blob");
-  assert.match(code("js/render/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*Rg\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
+  assert.match(code("spike/backends/three/tsl-lit.js"), /cubeTexture\(\s*envCubeNode\s*,\s*Rg\s*,\s*rough\.mul\(\s*2\.5\s*\)\s*\)/);
 });
 
 test("GLX create* / draw* fail closed when the context is lost", () => {
@@ -216,7 +216,7 @@ test("GLX re-reads the canvas box after a viewport change, even when a frame rea
 });
 
 test("TLX hoists crack fwidth and MAT samples before the detail/live If (WGSL derivative_uniformity)", () => {
-  const lit = read("js/render/three/tsl-lit.js");
+  const lit = read("spike/backends/three/tsl-lit.js");
   const at = lit.indexOf("const cr = abs(vnoise(wp.xz");
   const gate = lit.indexOf("If(matU.detail.greaterThan(0.0)", at);
   assert.ok(at > 0 && gate > at, "fwidth(cr) must be taken before the detail If");
@@ -230,7 +230,7 @@ test("TLX hoists crack fwidth and MAT samples before the detail/live If (WGSL de
 });
 
 test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
-  const fx = read("js/render/three/tsl-fx.js");
+  const fx = read("spike/backends/three/tsl-fx.js");
   const start = fx.indexOf("if (decalCache.size >= DECAL_CACHE_CAP)");
   const evict = fx.slice(start, fx.indexOf("m = fxMaterial({ doubleSided: true, key: \"tlx-fx-decal-\"", start));
   assert.match(evict, /decalCache\.delete\(k\)/);
@@ -239,7 +239,7 @@ test("TLX decal cache evicts without Material.dispose (three #33952)", () => {
 });
 
 test("TLX decal programs share a material map reference, not the first car's texture node", () => {
-  const fx = read("js/render/three/tsl-fx.js");
+  const fx = read("spike/backends/three/tsl-fx.js");
   assert.match(fx, /materialReference\("map", "texture"\)/);
   assert.match(fx, /m\.map = tex/);
   assert.match(fx, /const _decalGraph = \[null, null\]/);
@@ -266,7 +266,7 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   assert.ok(refused > 0);
   assert.match(game.slice(refused, refused + 3000), /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/, "a refused create disarms the probe");
   assert.doesNotMatch(game, /create\(\)\s*refused[\s\S]{0,250}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
-  const wgx = code("js/render/webgpu/wgx.js");
+  const wgx = code("spike/backends/webgpu/wgx.js");
   assert.match(wgx, /device\.lost[\s\S]{0,600}_wgxEscalate\(/, "device.lost climbs the ladder through _wgxEscalate");
   assert.match(fnBody(wgx, "_wgxEscalate"), /apex26\.gfxClaimFail/, "the last rung surrenders the tab to GLX via the claim-fail latch");
   assert.doesNotMatch(wgx, /device\.lost[\s\S]{0,2200}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
@@ -278,7 +278,7 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // apex26.gfxWgxLevel), the JS strike cap in begin()/present(), the
   // HEAL_SESSIONS step-down, the minimal rung's no-post/no-sky path and the
   // apex26.gfxBound label are all driven on the mock device by
-  // tests/unit/webgpu-lifecycle.test.mjs ("device.lost climbs the ladder",
+  // spike/backends/tests/unit/webgpu-lifecycle.test.mjs ("device.lost climbs the ladder",
   // "…climbs to minimal", "minimal rung: no post targets…", "a JS throw in
   // begin() strikes out…", "clean sessions heal the ladder") — not repeated
   // here as source text.
@@ -314,11 +314,11 @@ test("RENDERER label names the live backend when WEBGPU fell back to GLX", () =>
 });
 
 test("TLX HDR accepts iOS half-float and a refused create records why", () => {
-  const post = read("js/render/three/tlx-post.js");
+  const post = read("spike/backends/three/tlx-post.js");
   assert.match(post, /EXT_color_buffer_half_float/);
   assert.match(post, /EXT_color_buffer_float/);
   assert.doesNotMatch(post, /keep hdr=true \(WebGPU is always half-float\)/);
-  const tlx = read("js/render/three/tlx.js");
+  const tlx = read("spike/backends/three/tlx.js");
   assert.match(tlx, /apex26\.gfxTlxFail/);
   assert.doesNotMatch(tlx, /isMobile\s*&&\s*!post\.hdrOk\(\s*\)/,
     "GLX keeps the 8-bit post chain when half-float is missing; TLX must too");
@@ -333,11 +333,11 @@ test("TLX HDR accepts iOS half-float and a refused create records why", () => {
   const body = tlx.slice(present, presentEnd);
   assert.ok(present > 0 && presentEnd > present, "present() body found");
   assert.doesNotMatch(body, /post = null;\s*renderer\.setRenderTarget\(null\);\s*renderer\.render/);
-  assert.match(read("js/render/three/tlx-shadow.js"), /TLX: shadow pass failed/);
+  assert.match(read("spike/backends/three/tlx-shadow.js"), /TLX: shadow pass failed/);
 });
 
 test("TLX AO and god-ray blurs cannot share a node-program cache key", () => {
-  const post = read("js/render/three/tsl-post.js");
+  const post = read("spike/backends/three/tsl-post.js");
   assert.match(post, /const blurAO = makeBlur\("tlx-post-blur-ao"\)/);
   assert.match(post, /const blurGR = makeBlur\("tlx-post-blur-godray"\)/);
   assert.doesNotMatch(post, /const blur(?:AO|GR) = makeBlur\(\)/,
@@ -348,13 +348,13 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
   // Placeholders are always bound so nodes stay complete; materialMapState must
   // key off owned pack textures, and unload must dispose those without killing
   // the placeholders (GLX deleteTexture parity).
-  const tlx = read("js/render/three/tlx.js");
+  const tlx = read("spike/backends/three/tlx.js");
   assert.match(tlx, /matPlaceAlbedo/);
   assert.match(tlx, /matOwnedAlbedo/);
   assert.match(tlx, /albedo: !!matOwnedAlbedo/);
   assert.doesNotMatch(tlx, /albedo: !!\(matMaps && matMaps\.albedo\)/);
   assert.match(tlx, /t\.dispose\(\)/);
-  const wgx = read("js/render/webgpu/wgx.js");
+  const wgx = read("spike/backends/webgpu/wgx.js");
   assert.match(wgx, /_matOwnedAlbedo/);
   assert.match(wgx, /matPlaceAlbedoView/);
   assert.match(wgx, /_releaseOwnedMatMaps/);
@@ -1001,7 +1001,7 @@ test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", (
 });
 
 test("WGX sky ports GLX overcast grey-shift, horizon bank, and azimuthal variation", () => {
-  const sky = read("js/render/webgpu/wgsl-chunks.js");
+  const sky = read("spike/backends/webgpu/wgsl-chunks.js");
   assert.match(sky, /nightLid/);
   assert.match(sky, /greyZ/);
   assert.match(sky, /bankThresh/);
@@ -1014,7 +1014,7 @@ test("WGX sky ports GLX overcast grey-shift, horizon bank, and azimuthal variati
 
 test("TLX sky gates night corona and the day-band atan like GLX", () => {
   console.log("[gfx-canary] checking TLX sky night-corona + day-band gate: tsl-sky.js");
-  const sky = read("js/render/three/tsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const sky = read("spike/backends/three/tsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(sky, /If\(nightSky\.lessThan\(0\.5\)/,
     "night corona/disc must skip (GLX SKY_FS) — do not mul-to-zero");
   assert.match(sky, /If\(daytime\.greaterThan\(0\.0\)/,
@@ -1024,7 +1024,7 @@ test("TLX sky gates night corona and the day-band atan like GLX", () => {
 
 test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", () => {
   console.log("[gfx-canary] checking TLX shadow cull upload:false: tlx.js");
-  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tlx = read("spike/backends/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   // fnBody, never a fixed window. cullInstances is ~1560 chars in tlx.js and
   // the slice(at, at + 3600) this replaces read 2000 chars PAST its closing
   // brace, so an assertion here could pass on code in a different function
@@ -1041,7 +1041,7 @@ test("TLX shadow cull packs CPU-side without uploading the lit InstancedMesh", (
 });
 
 test("WGX phone post targets use the slim GLX-equivalent formats", () => {
-  const wgx = read("js/render/webgpu/wgx.js");
+  const wgx = read("spike/backends/webgpu/wgx.js");
   assert.match(wgx, /SSAO_FORMAT\s*=\s*"r8unorm"/);
   assert.match(wgx, /POST_HDR_FORMAT\s*=\s*"rg11b10ufloat"/);
   // Blur pipelines use an explicit dynamic-offset layout (not fsPipe) so H/V
@@ -1051,7 +1051,7 @@ test("WGX phone post targets use the slim GLX-equivalent formats", () => {
 });
 
 test("TLX present() records gfxBound when a fallback still paints", () => {
-  const tlx = read("js/render/three/tlx.js");
+  const tlx = read("spike/backends/three/tlx.js");
   const persist = tlx.slice(tlx.indexOf("const persistFail"), tlx.indexOf("const paintCanvas"));
   assert.match(persist, /apex26\.gfxBound/);
 });
@@ -1308,8 +1308,8 @@ test("presentStatus names the three screenshot paths in plain language", () => {
 });
 
 test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot API", () => {
-  const tlx = code("js/render/three/tlx.js");
-  const post = code("js/render/three/tlx-post.js");
+  const tlx = code("spike/backends/three/tlx.js");
+  const post = code("spike/backends/three/tlx-post.js");
   assert.match(tlx, /\bcapturePixels\s*\(\s*\)\s*\{/);
   assert.match(tlx, /\breadRenderTargetPixelsAsync\b/, "the blit goes through three's readback (copyTextureToBuffer + mapAsync), not the swapchain");
   assert.match(fnBody(tlx, "softPresent"), /return\s+!!\s*_softBlit\b/);
@@ -1325,7 +1325,7 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
 });
 
 test("TLX WebGPU begin() remaps GL projections with Z01 like WGX", () => {
-  const tlx = code("js/render/three/tlx.js");
+  const tlx = code("spike/backends/three/tlx.js");
   assert.match(tlx, /const Z01 = new Float32Array\(\[1,0,0,0,\s*0,1,0,0,\s*0,0,0\.5,0,\s*0,0,0\.5,1\]\)/);
   assert.match(tlx, /const Z01INV = new Float32Array/);
   assert.match(tlx, /_mul4Col\(_projGpu, Z01, frame\.proj\)/);
@@ -1334,7 +1334,7 @@ test("TLX WebGPU begin() remaps GL projections with Z01 like WGX", () => {
 });
 
 test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => {
-  const wgx = code("js/render/webgpu/wgx.js");
+  const wgx = code("spike/backends/webgpu/wgx.js");
   const body = fnBody(wgx, "_writeFrame");
   assert.match(body, /pj\[8\]\s*!==\s*0\s*\|\|\s*pj\[9\]\s*!==\s*0/);
   assert.match(body, /f\.view\s*&&\s*f\.view\.length\s*>=\s*16/);
@@ -1348,7 +1348,7 @@ test("setup preview passes explicit view for garage off-axis backends", () => {
 });
 
 test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () => {
-  const tlx = read("js/render/three/tlx.js");
+  const tlx = read("spike/backends/three/tlx.js");
   // MDN: one context type per canvas for life. three r185.1 configure() is
   // lazy on first present(); sniffing WebGL2 on #game after init() made
   // getContext("webgpu") return null (mcp-probe 2026-08-18).
@@ -1364,7 +1364,7 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
  * The defect this pins, end to end:
  *
  *   1. The lit fragment writes the SSR car-paint TAG — 0.35 — into ALPHA
- *      (js/render/three/tsl-lit.js, gated on ctx.ssrTag). It is a CHANNEL for
+ *      (spike/backends/three/tsl-lit.js, gated on ctx.ssrTag). It is a CHANNEL for
  *      the post chain, not an opacity, and the post chain's own passes all
  *      output alpha 1.0, so the canvas never normally sees it.
  *   2. present() has a "post-only death" path: when the post chain throws it
@@ -1385,10 +1385,10 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
  * turning back into a bug report from a phone.
  *
  */
-const TLX = read("js/render/three/tlx.js");
+const TLX = read("spike/backends/three/tlx.js");
 const GLX = read("js/render/glx/glx.js");
-const TSL_LIT = read("js/render/three/tsl-lit.js");
-const THREE_BUNDLE = read("vendor/three-0.185.1/three.webgpu.min.js");
+const TSL_LIT = read("spike/backends/three/tsl-lit.js");
+const THREE_BUNDLE = read("spike/backends/vendor/three-0.185.1/three.webgpu.min.js");
 
 // ── The two LOCAL PATCHES carried on the vendored bundle (vendor/three-0.185.1/
 // PATCHES.md). A vendor re-drop that silently reverts either one must fail HERE,
@@ -1445,7 +1445,7 @@ test("the vendored three carries the swizzle patch — Chromium 141 rejects r185
   // first race frame, TLX refuses the tab and reloads. The patch omits the
   // member (identity swizzle carries no information). Re-apply per PATCHES.md.
   assert.doesNotMatch(THREE_BUNDLE, /this\.swizzle="rgba"/,
-    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see vendor/three-0.185.1/PATCHES.md §1)");
+    "pristine swizzle default is back — the vendor bundle was re-dropped without the patch (see spike/backends/vendor/three-0.185.1/PATCHES.md §1)");
   assert.equal(THREE_BUNDLE.split('this.swizzle=void 0').length - 1, 2,
     "the swizzle patch must cover BOTH sites (constructor + reset())");
 });
@@ -1466,7 +1466,7 @@ test("the vendored three emits render-stage node variables at FUNCTION scope (We
     "a module-scope // vars block before @vertex/@fragment is the pristine r185 emission");
   // The graph-side half: the shared noise helpers are layouted (real functions),
   // not inlined ~50× into the lit shader.
-  const chunks = read("js/render/three/tsl-chunks.js");
+  const chunks = read("spike/backends/three/tsl-chunks.js");
   for (const name of ["apexHash21", "apexVnoise", "apexIgnoise"]) {
     assert.match(chunks, new RegExp(`setLayout\\(\\{ name: "${name}", type: "float", inputs: \\[\\{ name: "\\w+", type: "vec2" \\}\\] \\}\\)`),
       `${name} must carry a setLayout so it compiles once instead of per call`);
@@ -1476,9 +1476,9 @@ test("the vendored three emits render-stage node variables at FUNCTION scope (We
   // sites (5.2 KB + ~25 node vars each — 31 KB of the 99 KB lit fragment), and
   // the sky's hash2 68x (fbm->4 vnoise->4 hash2, fbm called 4x, plus one
   // direct). A dropped layout re-inflates the shader silently: nothing fails.
-  assert.match(read("js/render/three/tsl-lit.js"), /setLayout\(\{ name: "apexMatBumpHeight", type: "float",/,
+  assert.match(read("spike/backends/three/tsl-lit.js"), /setLayout\(\{ name: "apexMatBumpHeight", type: "float",/,
     "matBumpHeight must stay layouted — 6 inlines is 26% of the lit fragment");
-  const skyF = read("js/render/three/tsl-sky.js");
+  const skyF = read("spike/backends/three/tsl-sky.js");
   for (const name of ["apexSkyHash2", "apexSkyVnoise", "apexSkyFbm", "apexSkyHash3"]) {
     assert.match(skyF, new RegExp(`setLayout\\(\\{ name: "${name}", type: "float"`),
       `${name} must carry a setLayout (the sky noise family is SEPARATE from tsl-chunks')`);
@@ -1491,7 +1491,7 @@ test("the vendored three carries the #33952 bind-group leak backport (PR #33954)
   // material dispose() in tlx.js/tsl-fx.js is only leak-free WITH this patch.
   // Drop the assertion (and the patch) on the first release containing #33954.
   assert.match(THREE_BUNDLE, /bindGroups\.delete\(\w+\)\}\)\(this\.textures\.get\(\w+\.texture\)\)/,
-    "the #33952 backport is missing from the vendor bundle — evicted-material dispose() now leaks (see vendor/three-0.185.1/PATCHES.md §2)");
+    "the #33952 backport is missing from the vendor bundle — evicted-material dispose() now leaks (see spike/backends/vendor/three-0.185.1/PATCHES.md §2)");
 });
 test("the vendored three carries the #34405 polygonOffset pipeline-key backport (PR #34406)", () => {
   // r185's WebGPU backend keys a pipeline on blend/depth/stencil/side/formats
@@ -1501,7 +1501,7 @@ test("the vendored three carries the #34405 polygonOffset pipeline-key backport 
   // the fields: the cache-key array, the needsRenderUpdate compare chain and
   // its assignment block. Drop with the patch on the first release with #34406.
   assert.match(THREE_BUNDLE, /r\.stencilWriteMask,r\.polygonOffset,r\.polygonOffsetFactor,r\.polygonOffsetUnits,r\.side,/,
-    "cache key lacks polygonOffset* (vendor/three-0.185.1/PATCHES.md §3)");
+    "cache key lacks polygonOffset* (spike/backends/vendor/three-0.185.1/PATCHES.md §3)");
   assert.match(THREE_BUNDLE, /t\.polygonOffset===s\.polygonOffset&&t\.polygonOffsetFactor===s\.polygonOffsetFactor&&t\.polygonOffsetUnits===s\.polygonOffsetUnits&&t\.side===s\.side/,
     "needsRenderUpdate does not compare polygonOffset* (PATCHES.md §3)");
   assert.match(THREE_BUNDLE, /t\.polygonOffset=s\.polygonOffset,t\.polygonOffsetFactor=s\.polygonOffsetFactor,t\.polygonOffsetUnits=s\.polygonOffsetUnits,t\.side=s\.side/,
@@ -1575,7 +1575,7 @@ test("TLX pooled meshes write matrixWorld — scene auto-update is off", () => {
     "acquireMesh must stamp matrixWorld — scene auto-update will not");
   assert.match(body, /matrixWorldAutoUpdate\s*=\s*false/,
     "pool meshes must not let a later graph walk clobber the stamp");
-  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const sh = read("spike/backends/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(sh, /matrixWorld\.copy\(\s*m\.matrix\s*\)/,
     "shadow casters are the working reference for this stamp");
 });
@@ -1630,7 +1630,7 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
   // TSL compile, HDR-target skip). Clearing to fogColor made every dusk
   // probe a washed beige void ([0.68,0.64,0.54]). Zenith is the sky the
   // node would have drawn; fog stays the no-track menu fallback only.
-  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const src = read("spike/backends/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const begin = src.indexOf("begin(frame)");
   assert.notEqual(begin, -1, "begin(frame) moved");
   const body = src.slice(begin, begin + 900);
@@ -1648,12 +1648,12 @@ test("TLX world-frame Color clear prefers skyZenith over fog (missed TSL sky is 
   // escape folded in — the fallback stays the software default for players.
   assert.match(src.slice(drawSky, drawSky + 1100), /softContent\("sky"\) && sky\.fallbackNode/,
     "software GL and software WebGPU must arm the zenith-only fallback, not the full SKY_FS node");
-  assert.match(read("js/render/three/tsl-sky.js"), /fallbackNode/,
+  assert.match(read("spike/backends/three/tsl-sky.js"), /fallbackNode/,
     "tsl-sky must publish a zenith-only fallbackNode for the software-GL path");
 });
 
 test("TLX pins the sky material before the HDR scene render, not only the canvas fallback", () => {
-  const src = read("js/render/three/tlx.js");
+  const src = read("spike/backends/three/tlx.js");
   const present = src.indexOf("present(opts)");
   const hdr = src.indexOf("post.sceneTarget()", present);
   assert.ok(present > 0 && hdr > present, "HDR present path moved");
@@ -1667,7 +1667,7 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // never composites, and the first getCurrentTexture() breaks mapAsync
   // device-wide. TLX sniffs the adapter (info fields are not JSON-
   // enumerable), keeps #game as the GPU canvas, and blits onto #game-soft.
-  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const src = read("spike/backends/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(src, /navigator\.gpu\.requestAdapter\(\)/,
     "soft-adapter sniff must use requestAdapter — getContext('webgl2') is null after WebGPU claims the canvas");
   assert.match(src, /info\.vendor/,
@@ -1840,14 +1840,14 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // explains the rule — the words "new array.constructor(0)" in the comment
   // beside the code — and failed on a correct file. A guard that reads comments
   // is asserting the documentation, not the behaviour.
-  const chunkSrc = read("js/render/three/tlx-chunked.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const chunkSrc = read("spike/backends/three/tlx-chunked.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(fnBody(chunkSrc, "releaseMirrors"), /atts\[k\]\.array\s*=\s*null/,
     "releaseMirrors must NULL the mirror, never assign a zero-length array");
   assert.doesNotMatch(fnBody(chunkSrc, "releaseMirrors"), /\.array\s*=\s*new\s+\S*constructor\(0\)/,
     "a zero-length array is what Metal refused (gpu-census 26 vs 27)");
   assert.match(src, /if\s*\(\s*_envFailN\s*>=\s*ENV_FAIL_CAP\s*\)\s*_envGaveUp\s*=\s*true\b/,
     "a probe that cannot succeed must stop retrying — it threw every frame forever");
-  const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("spike/backends/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(post, /ctx\.softDest/,
     "tlx-post must honour ctx.softDest for the FXAA / viz dest");
   assert.match(post, /if\s*\(\s*!dest\s*\)/,
@@ -1858,7 +1858,7 @@ test("TLX soft-present overlay is opaque — SSR tag 0.35 is not compositor opac
   // Same hole as the iPhone alpha-canvas guard, on the #game-soft path:
   // car-paint alpha is the SSR mask. A default 2D overlay composites that
   // as 35% opacity and the bodywork ghosts (tyres/wings stay solid).
-  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const src = read("spike/backends/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const at = src.indexOf('_displayCanvas.getContext("2d"');
   assert.notEqual(at, -1, "overlay getContext moved");
   assert.match(src.slice(at, at + 120), /alpha:\s*false/,
@@ -1874,7 +1874,7 @@ test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint
   // missing; DrawIndexed with count>1 fails validation (Lavapipe, 2026-08-18).
   // A dedicated instanceTint avoids that path without replacing canonical
   // per-vertex `color` (brown trunks / billboard frames must survive).
-  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const src = read("spike/backends/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   // fnBody, never a fixed window — createInstancedBatch is ~2550 chars, so the
   // slice(at, at + 2200) this replaces was ALREADY truncating 350 of them and
   // any assertion aimed at its tail had gone quietly vacuous.
@@ -1889,12 +1889,12 @@ test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint
     "placement colour must use its own instance-rate attribute");
   assert.doesNotMatch(attrBody, /setAttribute\(\s*"color"/,
     "instancing must not overwrite canonical per-vertex colour");
-  const lit = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const lit = read("spike/backends/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(lit, /vertexColor\.mul\(attribute\(\s*"instanceTint"/,
     "the instanced lit graph must multiply base colour by placement tint");
   assert.match(lit, /tlx-lit-instanced/,
     "the extra attribute requires its own stable program family");
-  const shadow = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const shadow = read("spike/backends/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const cast = shadow.indexOf("function castInstanced");
   assert.notEqual(cast, -1, "castInstanced moved");
   const castBody = shadow.slice(cast, cast + 1800);
@@ -1903,7 +1903,7 @@ test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint
 });
 
 test("instanced cull cache only hits the transform pack resident in the GPU buffer", () => {
-  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+  for (const file of ["js/render/glx/glx.js", "spike/backends/webgpu/wgx.js", "spike/backends/three/tlx.js"]) {
     const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
     // fnBody, never a fixed window: the three backends' cullInstances are 1559
     // / 2446 / 2497 chars, so one 2800 window over-read all three by a
@@ -1931,7 +1931,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     }
   }
   const glShadow = read("js/render/glx/shadow.js");
-  const wgx = read("js/render/webgpu/wgx.js");
+  const wgx = read("spike/backends/webgpu/wgx.js");
   assert.match(glShadow, /bufferSubData\([^]*?batch\._cullPlanes\s*=\s*null/,
     "GLX full-set shadow restore must invalidate the resident cull pack");
   // WGX (bug hunt 2026-09-02): the shadow pass packs into the batch's OWN
@@ -1961,7 +1961,7 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
   // _shadowEncoderBegin must therefore submit ANY pending encoder, not only one
   // whose model ring is nearly full — that ring threshold is a memory concern
   // and says nothing about which light packed the instance buffer.
-  const beginFn = fnBody(code("js/render/webgpu/wgx.js"), "_shadowEncoderBegin");
+  const beginFn = fnBody(code("spike/backends/webgpu/wgx.js"), "_shadowEncoderBegin");
   assert.match(beginFn, /if\s*\(\s*_pendingShadowEnc\s*\)\s*\{[^]*?queue\.submit/,
     "each shadow pass must submit the previous one — an unconditional submit, not a ring-threshold one");
   assert.doesNotMatch(beginFn, /_pendingShadowEnc\s*&&\s*_shadowSlot\s*>/,
@@ -1974,8 +1974,8 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
 test("all three backends take a shadow KEEP, and game.js says which skips are cadence", () => {
   for (const [file, fn] of [
     ["js/render/glx/shadow.js", "carShadowKeep"],
-    ["js/render/webgpu/wgx.js", "carShadowKeep"],
-    ["js/render/three/tlx-shadow.js", "carShadowKeep"],
+    ["spike/backends/webgpu/wgx.js", "carShadowKeep"],
+    ["spike/backends/three/tlx-shadow.js", "carShadowKeep"],
   ]) {
     const src = code(file);
     assert.ok(src.includes(fn), `${file} must expose ${fn}`);
@@ -2018,8 +2018,8 @@ test("all three backends take a shadow KEEP, and game.js says which skips are ca
   // so they share one bound rather than each computing their own.
   assert.equal((gsrc.match(/const _lsR = rad \+ 8/g) || []).length, 1,
     "the content key and the cast loop must share one radius bound, not compute two");
-  for (const file of ["js/render/glx/shadow.js", "js/render/webgpu/wgx.js",
-                      "js/render/three/tlx-shadow.js"]) {
+  for (const file of ["js/render/glx/shadow.js", "spike/backends/webgpu/wgx.js",
+                      "spike/backends/three/tlx-shadow.js"]) {
     assert.ok(code(file).includes("lampShadowKeep"), `${file} must expose lampShadowKeep`);
   }
   assert.match(gsrc, /gfx\.lampShadowKeep\(flBest\)/,
@@ -2040,7 +2040,7 @@ test("shadow state reports the frame-live armed flag, not just a lifetime count"
   // armed field, and deleting `armed: SHD.carArmed` stayed green on two of the
   // three backends. This is the same defect the arms pin above documents,
   // repeated in the same diff that documented it.
-  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+  for (const file of ["js/render/glx/glx.js", "spike/backends/webgpu/wgx.js", "spike/backends/three/tlx.js"]) {
     const src = code(file);
     for (const [which, sib] of [["carShadowState", "lampShadowState"],
                                 ["lampShadowState", "carShadowState"]]) {
@@ -2072,7 +2072,7 @@ test("the boot probe disarms on hide and on a clean exit", () => {
 
 // A latch must be cleared only by a caller that can re-arm it.
 test("WGX's static shadow latch is NOT cleared by envProbeReset", () => {
-  const src = code("js/render/webgpu/wgx.js");
+  const src = code("spike/backends/webgpu/wgx.js");
   const at = src.indexOf("function envProbeReset");
   assert.ok(at > 0, "envProbeReset moved — check this test, not the code");
   // This shipped and came back out. envProbeReset has two callers. On a track
@@ -2113,7 +2113,7 @@ test("the boot canary holds across a run of frames, and no path arms it behind s
   // player's renderer choice to webgl2 because of one context loss. Worse, the
   // hide/pagehide disarm only covers the first PROVE_FRAMES, so the case the
   // canary exists for (bound, drew a while, then died) was the one it broke.
-  const tlx = code("js/render/three/tlx.js");
+  const tlx = code("spike/backends/three/tlx.js");
   const cf = tlx.indexOf("gfxClaimFail");
   assert.ok(cf > 0, "TLX's claim-fail escalation moved — check this test, not the code");
   assert.doesNotMatch(tlx.slice(cf, cf + 900), /setItem\("apex26\.gfxBackendProbe"/,
@@ -2161,12 +2161,12 @@ test("the instanced prop shadow cast carries no frame-parity gate", () => {
 });
 
 test("TLX instanced shadows consume the light-frustum packed slice", () => {
-  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const src = read("spike/backends/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const at = src.indexOf("function castShadowInstanced");
   assert.notEqual(at, -1, "TLX castShadowInstanced moved");
   assert.match(src.slice(at, at + 350), /castInstanced\(batch,\s*count\)/,
     "TLX wrapper must forward game.js's culled count");
-  const shadow = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const shadow = read("spike/backends/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const castAt = shadow.indexOf("function castInstanced");
   const body = shadow.slice(castAt, castAt + 2600);
   assert.match(body, /culled[^]*?batch\.packMatrices/,
@@ -2188,12 +2188,12 @@ test("env cube 4× anisotropy is on all three backends (grazing clearcoat)", () 
   const none = bootGlx();
   none.GLX.envFaceBegin(0, [0, 1, 0], none.frame());
   assert.equal(none.count("texParameterf"), 0, "without the extension nothing is set — no invalid enum");
-  const tlx = code("js/render/three/tlx.js");
+  const tlx = code("spike/backends/three/tlx.js");
   assert.match(tlx, /envRT\.texture\.anisotropy\s*=\s*4\b/, "TLX env cube must match GLX 4× anisotropy");
-  const wgx = code("js/render/webgpu/wgx.js");
+  const wgx = code("spike/backends/webgpu/wgx.js");
   assert.match(wgx, /\benvCubeSamp\b/, "WGX must own a dedicated env-cube sampler");
   assert.match(wgx, /maxAnisotropy:\s*4\b/, "WGX env-cube sampler must request 4× anisotropy");
-  const wgsl = code("js/render/webgpu/wgsl-chunks.js");
+  const wgsl = code("spike/backends/webgpu/wgsl-chunks.js");
   assert.match(wgsl, /binding\(\s*14\s*\)\s*var\s+envCubeSamp\b/, "WGSL must sample the cube through the aniso sampler, not shared envSamp");
   assert.match(wgsl, /textureSampleLevel\(\s*envCube\s*,\s*envCubeSamp\b/, "env cube taps must use envCubeSamp");
   assert.doesNotMatch(wgsl, /textureSampleLevel\(\s*envCube\s*,\s*envSamp\b/, "do not sample the cube with the shared SSR/blocker sampler");
@@ -2202,9 +2202,9 @@ test("env cube 4× anisotropy is on all three backends (grazing clearcoat)", () 
 test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
   // World-space cells swam as the car translated (floor(wpos*45) + hash3).
   // GLX / TLX weld glitter to vObjPos / positionGeometry at 220 Hz + hash21.
-  const chunks = read("js/render/webgpu/wgsl-chunks.js");
+  const chunks = read("spike/backends/webgpu/wgsl-chunks.js");
   const lit = read("js/render/glx/shaders/glsl-lit.js");
-  const tsl = read("js/render/three/tsl-lit.js");
+  const tsl = read("spike/backends/three/tsl-lit.js");
   // location 3 is the road trk vec3; objPos shifted 7 → 5 with that pack.
   assert.match(chunks, /@location\(5\)\s+objPos\s*:\s*vec3<f32>/,
     "LIT VSOut must carry object-space position (GLX vObjPos)");
@@ -2231,7 +2231,7 @@ test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
 });
 
 test("WGX SAA mixes geometric N with a uniform-CF peel hoist", () => {
-  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const chunks = read("spike/backends/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(chunks, /let Npeel = paintPeelN\(topNgeo, in\.objPos, vDist, peelAmt\)/,
     "peel normal for SAA must be computed at fs_main top (uniform CF)");
   // The peel's cost gate is a uniform early return INSIDE paintPeelN (amt from
@@ -2248,7 +2248,7 @@ test("WGX SAA mixes geometric N with a uniform-CF peel hoist", () => {
 });
 
 test("WGX hoists every pack layer with textureSample so walls match GLX aniso", () => {
-  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const chunks = read("spike/backends/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(chunks, /fn matUvLit\(/,
     "constant-layer UV helper for the fs_main hoist");
   // The per-layer hoist collapsed to ONE dynamic-layer tap (WGSL allows
@@ -2277,7 +2277,7 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
   // seam and made WebGL2 walls duller than WebGPU. Snapshot after peel,
   // before the material bump; lighting still uses the bumped N.
   const lit = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("spike/backends/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const post = read("js/render/glx/post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(lit, /vec3 Nsaa = N;/,
     "GLX must snapshot N after peel, before applyMaterialNormal");
@@ -2313,7 +2313,7 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
   assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("high"), "apex26.gfxHigh": "1" }), 2,
     "a stored preset outranks the legacy key");
   // WGX makes the same decision at module scope; pin that it decodes too.
-  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgx = read("spike/backends/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /_p = JSON\.parse\(_p\)/, "WGX must JSON-decode apex26.gfxPreset before comparing");
   assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
     "WGX: ULTRA → 4×, unset → legacy key, anything else 1× (agreeing with GLX's cap)");
@@ -2322,7 +2322,7 @@ test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unse
 test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is one shared array", () => {
   // A hidden Mesh still references its geometry: after a track switch every
   // shadow-pool slot the new track did not refill kept an old chunk alive.
-  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const sh = read("spike/backends/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(sh, /const parkedGeo = new THREE\.BufferGeometry\(\)/, "one shared empty geometry for parked wrappers");
   assert.match(sh, /for \(let i = used; i < pool\.length; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
     "endPass must release the discrete casters' geometry, not only hide them");
@@ -2340,7 +2340,7 @@ test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading",
   // so heavy cloud read flatter and brighter on WGX than on GLX/TLX. Pin the
   // terms that were missing, in the same shape GLX SKY_FS writes them.
   const glx = read("js/render/glx/shaders/glsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const wgsl = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgsl = read("spike/backends/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   for (const [name, g, w] of [
     ["overcast sun clamp", /mix\(sunBright, min\(sunBright, 0\.55\), overcast\)/, /mix\(sunBright, min\(sunBright, 0\.55\), overcast\)/],
     ["grey tops", /vec3\(0\.62, 0\.63, 0\.65\), overcast \* 0\.65\)/, /vec3<f32>\(0\.62, 0\.63, 0\.65\), overcast \* 0\.65\)/],
@@ -2453,7 +2453,7 @@ test("WGX COMPOSITE declares ssrWet and does not remul wetness", () => {
   // Dawn rejected the identifier and shed COMPOSITE. Deploy re-declares the
   // let so a leftover use compiles; wetness still lives in the SSR pass .a,
   // so the consume gate must not remultiply it.
-  const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("spike/backends/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(post, /let ssrWet = U\.lift\.w/,
     "COMPOSITE must declare ssrWet so Dawn does not reject a leftover use");
   assert.doesNotMatch(post, /ssrWet \* ssrRefl/,
@@ -2463,19 +2463,19 @@ test("WGX COMPOSITE declares ssrWet and does not remul wetness", () => {
 });
 
 test("WGX bloom final upsample overwrites mip0 like GLX/TLX", () => {
-  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgx = read("spike/backends/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /loadOp: last \? "clear" : "load"/,
     "mip0 upsample must clear (overwrite the sharp bright-pass), not load+add");
 });
 
 test("WGX screen sun-shaft is zero when bloom is shed", () => {
-  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgx = read("spike/backends/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /shaftMul = \(bloomAmt > 0 && sun && sun\.shaft > 0\)/,
     "shaft pass reads the bloom chain — producer must say 0 when bloomAmt is 0");
 });
 
 test("WGX godray requires invViewProj like GLX/TLX", () => {
-  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgx = read("spike/backends/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /godrayBG && lastFrame && lastFrame\.invViewProj/,
     "haveGR without invVP marches IDENT world rays");
 });
@@ -2483,13 +2483,13 @@ test("WGX godray requires invViewProj like GLX/TLX", () => {
 test("TLX godray uses partial nearest-K, not a full sort", () => {
   // _grKeepNearest itself (present in all three backends, swap-not-overwrite
   // eviction) is driven by tests/unit/godray-keep-nearest.test.mjs.
-  const tlx = code("js/render/three/tlx-post.js");
+  const tlx = code("spike/backends/three/tlx-post.js");
   assert.match(tlx, /grNL\s*=\s*_grKeepNearest\(\s*total\s*,\s*6\s*\)/, "uploader cap must stay 6 (TSL march bound)");
   assert.doesNotMatch(tlx, /_grSel\.sort\(/, "do not full-sort the floodlight list every night frame");
 });
 
 test("TLX software/phone WebGL2 scales Poisson R from pcssPen", () => {
-  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("spike/backends/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tsl, /R\.assign\(float\(3\.0\)\.mul\(U\.pcssPen\.div\(80\.0\)\)\)/,
     "blocker-off path must scale R by pcssPen/80 (identity at the shipped def)");
   assert.match(tsl, /\}\)\.Else\(\(\) => \{/,
@@ -2500,8 +2500,8 @@ test("TLX software/phone WebGL2 scales Poisson R from pcssPen", () => {
 
 test("lamp bounce ALU is gated when bounceK is 0 on all three backends", () => {
   const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const wgsl = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgsl = read("spike/backends/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("spike/backends/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(glx, /if \(uBounceK > 0\.0\)/,
     "GLX lamp bounce must skip when LAMP BOUNCE is 0");
   assert.match(wgsl, /if \(F\.params3\.x > 0\.0\)/,
@@ -2511,7 +2511,7 @@ test("lamp bounce ALU is gated when bounceK is 0 on all three backends", () => {
 });
 
 test("WGX SSAO kernel is the GLX/TLX K[0..7] fan, not an even ring", () => {
-  const post = read("js/render/webgpu/wgsl-post.js");
+  const post = read("spike/backends/webgpu/wgsl-post.js");
   assert.match(post, /const SSAO_K = array<vec2<f32>, 8>/,
     "WGX SSAO must name the shared 8-tap fan");
   assert.match(post, /vec2<f32>\(0\.0, 1\.0\).*vec2<f32>\(-0\.5, -0\.866\)/s,
@@ -2528,24 +2528,24 @@ test("HDR grade is gated on all three backends when knobs are neutral", () => {
   const glx = read("js/render/glx/shaders/glsl-post.js");
   assert.match(glx, /if \(uHdrGradeOn > 0\.5\) c = applyHdrGrade\(c\)/,
     "GLX composite must keep the uHdrGradeOn gate");
-  const wgsl = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgsl = read("spike/backends/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgsl, /if \(U\.tone1\.w > 0\.5\) \{ c = applyHdrGrade\(c\); \}/,
     "WGX must gate applyHdrGrade on tone1.w (hdrGradeOn)");
   assert.doesNotMatch(wgsl, /^\s*c = applyHdrGrade\(c\);/m,
     "do not always run applyHdrGrade — that is the skip-path drift vs GLX/TLX");
-  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgx = read("spike/backends/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /s\[43\] = _hg \? 1 : 0/,
     "WGX must pack hdrGradeOn into the tone1.w pad");
-  const tsl = read("js/render/three/tsl-post.js");
+  const tsl = read("spike/backends/three/tsl-post.js");
   assert.match(tsl, /hdrGradeOn\.greaterThan\(0\.5\)/,
     "TLX composite must keep the hdrGradeOn gate");
-  const tlxPost = read("js/render/three/tlx-post.js");
+  const tlxPost = read("spike/backends/three/tlx-post.js");
   assert.match(tlxPost, /C\.hdrGradeOn\.value = _hg \? 1 : 0/,
     "TLX must still compute the same off-neutral _hg mask as GLX");
 });
 
 test("TLX software sky fallback is a zenith-horizon mix, not a flat lid", () => {
-  const sky = read("js/render/three/tsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const sky = read("spike/backends/three/tsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(sky, /mix\(U\.zenith,\s*U\.horizon,\s*t\)/,
     "fallbackNode must mix the same zenith/horizon uniforms the full sky reads");
   assert.doesNotMatch(sky, /fallbackNode = Fn\(\(\) => vec4\(U\.zenith, 1\.0\)\)/,
@@ -2553,7 +2553,7 @@ test("TLX software sky fallback is a zenith-horizon mix, not a flat lid", () => 
 });
 
 test("TLX desktop WebGL2 builds a color-depth PCSS blocker", () => {
-  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const sh = read("spike/backends/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(sh, /colorPcss/,
     "WebGL2 desktop must take the depth-in-color blocker path");
   assert.match(sh, /TSL\.depth/,
@@ -2564,9 +2564,9 @@ test("TLX desktop WebGL2 builds a color-depth PCSS blocker", () => {
 
 test("WGX SSR car streak uses carGloss like GLX/TLX", () => {
   // A single tap left CAR GLOSS dead on WebGPU and night lamps as hard dots.
-  const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("spike/backends/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const glx = read("js/render/glx/shaders/glsl-post.js");
-  const tsl = read("js/render/three/tsl-post.js");
+  const tsl = read("spike/backends/three/tsl-post.js");
   assert.match(post, /gloss\s*:\s*vec4<f32>/,
     "SsrU must carry carGloss");
   assert.match(post, /clamp\(\(1\.4 - U\.gloss\.x\) \* 0\.5, 0\.0, 1\.0\)/,
@@ -2579,24 +2579,24 @@ test("WGX SSR car streak uses carGloss like GLX/TLX", () => {
     "GLX still owns the carSoft formula — WGX is the port");
   assert.match(tsl, /float\(1\.4\)\.sub\(C\.carGloss\)\.mul\(0\.5\)/,
     "TLX still owns the carSoft formula — WGX is the port");
-  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgx = read("spike/backends/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /s\[48\] = \(T && T\.carGloss != null\) \? T\.carGloss : 1\.0/,
     "WGX must pack carGloss into SsrU gloss.x");
 });
 
 test("WGX SSR is consumed same-frame in COMPOSITE, not next-frame LIT", () => {
-  const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("spike/backends/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(post, /binding\(8\) var ssrPostTex/,
     "COMPOSITE must bind this-frame ssrTex");
   assert.match(post, /ssrPostTex/,
     "COMPOSITE must sample the SSR target");
-  const lit = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const lit = read("spike/backends/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.doesNotMatch(lit, /wetSheen > 0\.001 && ssrStrength > 0\.001/,
     "LIT must not still mix last frame's ssrTex into wet road");
 });
 
 test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)", () => {
-  const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("spike/backends/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.doesNotMatch(post, /ssrWet \* ssrRefl/,
     "COMPOSITE must not remultiply wetness * reflect — that zeros dry sheen");
   assert.match(post, /ssr\.rgb \* aoV \* aoV/,
@@ -2622,7 +2622,7 @@ test("WGX SSR consume/march/sinT match GLX (no wetness remul, dry sheen lives)",
 });
 
 test("WGX SAA widens roughness before wet like GLX", () => {
-  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const chunks = read("spike/backends/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const saa = chunks.indexOf("let saaVar = mix(saaVarGeo, saaVarPeel");
   const wet = chunks.indexOf("if (wetness > 0.001)");
   assert.ok(saa > 0 && wet > saa,
@@ -2632,7 +2632,7 @@ test("WGX SAA widens roughness before wet like GLX", () => {
 });
 
 test("TLX FS mat stays a smooth attribute (flat varying blanks the garage car)", () => {
-  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("spike/backends/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tsl, /const matA = float\(attribute\("mat", "float"\)\)\.toVar\(\)/,
     "FS must read attribute(mat) directly — varying()+FLAT made the garage car vanish");
   assert.doesNotMatch(tsl, /InterpolationSamplingType\.FLAT/,
@@ -2644,7 +2644,7 @@ test("TLX FS mat stays a smooth attribute (flat varying blanks the garage car)",
 });
 
 test("TLX SSAO does not flip N.z; SSR self-hit still does", () => {
-  const tsl = read("js/render/three/tsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("spike/backends/three/tsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const ssao = tsl.slice(0, tsl.indexOf("Contact shadows"));
   assert.doesNotMatch(ssao, /If\(N\.z\.lessThan\(0\.0\)/,
     "GLX SSAO does not flip N.z — the coin toss darkens walls");
@@ -2654,8 +2654,8 @@ test("TLX SSAO does not flip N.z; SSR self-hit still does", () => {
 
 test("road-marking mip uses unclamped fwX on all three backends", () => {
   const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("spike/backends/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const chunks = read("spike/backends/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(glx, /float fwX = max\(fwidth\(x\), 1e-4\)/,
     "GLX mip must read raw fwidth, not the clamped aaX (0.30 ceiling → mip 0)");
   assert.match(glx, /1\.0 - \(fwX - 0\.10\) \/ 0\.55/,
@@ -2674,10 +2674,10 @@ test("SSAO tap setup is skipped when strength is 0 on all three backends", () =>
   const glx = read("js/render/glx/shaders/glsl-post.js");
   assert.match(glx, /if \(uStrength > 0\.0\)/,
     "GLX SSAO must keep the uStrength tap gate");
-  const wgsl = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgsl = read("spike/backends/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgsl, /if \(strength > 0\.0\)/,
     "WGX SSAO must skip the 8-tap loop when AO strength is 0");
-  const tsl = read("js/render/three/tsl-post.js");
+  const tsl = read("spike/backends/three/tsl-post.js");
   assert.match(tsl, /ssaoU\.strength\.greaterThan\(0\.0\)/,
     "TLX SSAO must skip the 8-tap loop when AO strength is 0");
 });
@@ -2691,7 +2691,7 @@ test("Gfx seam lists instancing on all three backends", () => {
 test("TLX garage (no proj) paints the canvas, not the HDR scene target", () => {
   // Setup preview only sends viewProj. The HDR RT stayed black on software
   // GL (viz=scene was empty) so the turntable vanished while GLX was fine.
-  const src = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const src = read("spike/backends/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(src, /if \(post && _postF\.proj\)/,
     "post chain must require begin() proj — garage frames must not render into sceneRT");
 });
@@ -2750,7 +2750,7 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
   assert.match(THREE_BUNDLE, /depth:\w+=!0,stencil:\w+=!1/,
     "three's depth/stencil defaults moved — re-derive the context TLX hands it");
 
-  const tlx = read("js/render/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tlx = read("spike/backends/three/tlx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const ctx = tlx.match(/getContext\("webgl2",\s*\{([^}]*)\}/);
   assert.ok(ctx, "TLX no longer makes its own WebGL2 context");
   assert.match(ctx[1], /depth:\s*true/, "context must request depth (three's default)");
@@ -2765,7 +2765,7 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
 
 test("GLX and TLX road-marking mip use the raw footprint, like WGX", () => {
   const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("spike/backends/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(glx, /float fwX = max\(fwidth\(x\), 1e-4\);/,
     "GLX must keep the unclamped lateral footprint for mip");
   assert.match(glx, /float mip = clamp\(1\.0 - \(fwX - 0\.10\) \/ 0\.55, 0\.0, 1\.0\);/,
@@ -2782,11 +2782,11 @@ test("WGX's canvas is opaque too — it writes the same tag with NO gate", () =>
   // that safe is one word in the context configure, and nothing was checking
   // it. All three backends now hold the same invariant for the same reason:
   // GLX `alpha: false`, WGX `alphaMode: "opaque"`, TLX both spellings.
-  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgx = read("spike/backends/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(wgx, /\.configure\(\{[^}]*alphaMode:\s*"opaque"/,
     "WGX must configure an OPAQUE canvas — it tags alpha on every frame");
 
-  const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const chunks = read("spike/backends/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(chunks, /select\(alpha,\s*0\.35,\s*carPaint\s*>\s*0\.001\)/,
     "the ungated WGX car-paint tag moved — recheck what its canvas opacity is carrying");
 });
@@ -2845,12 +2845,12 @@ test("TLX car SSR tag lives on a second HDR attachment, not scene alpha", () => 
     "env / canvas paths must be able to drop mrtNode");
   assert.match(lit, /mrtNode \? "-mrt"/,
     "program key must fork when MRT is armed — one program cannot target both RTs");
-  const post = read("js/render/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const post = read("spike/backends/three/tlx-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(post, /count:\s*2/,
     "HDR scene target must allocate the ssrTag colour attachment");
   assert.match(post, /textures\[1\]\.name\s*=\s*"ssrTag"/,
     "MRTNode.setup matches attachments by texture.name");
-  const tsl = read("js/render/three/tsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const tsl = read("spike/backends/three/tsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(tsl, /tagT\.sample\(TL\(vUV\)\)\.r/,
     "heat haze must skip car pixels using the tag RT, not scene alpha");
   assert.match(tsl, /tagT\.sample\(TL\(hazeUV\)\)\.r/,
@@ -2981,7 +2981,7 @@ test("GLX's uf3 cache keeps float64 precision, and owns every lit/sky vec3", () 
 // opt-OUT (apex26.tlxMobile="0") and the boot canary is the safety net.
 // Four things have to stay true.
 test("TLX binds on a phone by default, declines only on apex26.tlxMobile=0 with a REASON, before importing three", () => {
-  const tlx = read("js/render/three/tlx.js");
+  const tlx = read("spike/backends/three/tlx.js");
 
   // 1. The decline route still exists and goes through _fail — the seam that
   //    records apex26.gfxTlxFail and flips gfxBound so SETTINGS can show why.
@@ -3019,7 +3019,7 @@ test("TLX binds on a phone by default, declines only on apex26.tlxMobile=0 with 
 // work — asserted against the VENDORED bundle so a version bump re-checks them
 // rather than letting the comment go stale.
 test("three still re-reads attribute.array after upload (why the release fix is impossible)", () => {
-  const three = read("vendor/three-0.185.1/three.webgpu.min.js");
+  const three = read("spike/backends/vendor/three-0.185.1/three.webgpu.min.js");
 
   // draw(): firstVertex *= index.array.BYTES_PER_ELEMENT, every indexed draw.
   assert.match(three, /\*=\s*\w+\.array\.BYTES_PER_ELEMENT/,
@@ -3039,7 +3039,7 @@ test("three still re-reads attribute.array after upload (why the release fix is 
 // bytes from 50.0 to 28.6 MB. The risk is not that it fails loudly — it is
 // that it quietly shifts a value the shader BRANCHES on.
 test("the attribute packer proves its precondition instead of assuming it", () => {
-  const ch = read("js/render/three/tlx-chunked.js");
+  const ch = read("spike/backends/three/tlx-chunked.js");
 
   // A blanket quantise is the bug. Colours carry emissive to 3.4 and MAT ids
   // are not whole (measured 15.4) — both must be range-scanned and kept wider
@@ -3074,7 +3074,7 @@ test("the attribute packer proves its precondition instead of assuming it", () =
     "under fmt24, 1- and 3-wide attributes must stay Float32 — 'float16x3' is not a GPUVertexFormat");
   assert.match(ch, /packAttr\(THREE, src, len, itemSize, kind, fmt24\(\)\)/,
     "attrOrZero no longer passes the per-build fmt24 rule");
-  const tlxSrc = read("js/render/three/tlx.js");
+  const tlxSrc = read("spike/backends/three/tlx.js");
   // buildGeometry (the non-chunked meshes) packs through the same function
   // under the alias _pk — both call sites must carry the rule, or the props
   // refuse while the road draws.
@@ -3095,15 +3095,15 @@ test("the attribute packer proves its precondition instead of assuming it", () =
 });
 
 test("the packing round-trip check is wired to the shader's own decisions", () => {
-  const tool = read("tools/gfx/tlx-pack-check.cjs");
+  const tool = read("spike/backends/tools/tlx-pack-check.cjs");
   // The tool must LIFT the packer out of the shipping file. A reimplementation
   // drifts, and then it verifies its own copy rather than what ships.
-  assert.match(tool, /readFileSync\(path\.join\(ROOT, "js\/render\/three\/tlx-chunked\.js"\)/,
+  assert.match(tool, /readFileSync\(path\.join\(ROOT, "spike\/backends\/three\/tlx-chunked\.js"\)/,
     "the check no longer reads the real packer — it would be testing a copy");
   // And it must gate on DECISIONS, not on raw error: MAT is legitimately
   // fractional, so a zero-error gate is wrong and would fail forever.
   for (const decision of [/floor\(o \+ 0\.5\) !== Math\.floor\(d \+ 0\.5\)/, /o >= 15 && o < 16/, /\(o \| 0\) === o && d !== o/])
-    assert.match(tool, decision, "a shader decision is no longer checked by tools/gfx/tlx-pack-check.cjs");
+    assert.match(tool, decision, "a shader decision is no longer checked by spike/backends/tools/tlx-pack-check.cjs");
   assert.match(tool, /if \(layerChanges \|\| flips \|\| intInexact\) \{/, "the check no longer FAILS on a changed decision");
 });
 
@@ -3114,7 +3114,7 @@ test("the packing round-trip check is wired to the shader's own decisions", () =
 // minted a cache entry per frame that was never released. Measured against the
 // flat pool: createRenderObject -45%, _createBindings -27%, drift -28%.
 test("TLX pools meshes by (geometry, material), and prunes on a clock", () => {
-  const raw = read("js/render/three/tlx.js");
+  const raw = read("spike/backends/three/tlx.js");
   // Negative assertions run against CODE, never against prose. The comment in
   // tlx.js explaining this fix quotes `meshPool[poolUsed]` verbatim, and the
   // first draft of this test failed on its own documentation — the same trap
@@ -3159,7 +3159,7 @@ test("TLX pools meshes by (geometry, material), and prunes on a clock", () => {
 // linear, ~2,150 createRenderObject per 15 s, 4-minute drift +124 MB.
 // Hoisted: 1 → 2 contexts, 2 creates per 15 s, drift +4.5 MB (GLX +1.3).
 test("TLX builds its SSR MRT node once, not once per frame", () => {
-  const raw = read("js/render/three/tlx.js");
+  const raw = read("spike/backends/three/tlx.js");
   const code = raw.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
 
   // The node must come from a memoised factory, never constructed at the call.
@@ -3186,7 +3186,7 @@ test("TLX builds its SSR MRT node once, not once per frame", () => {
 // skipped because chunkedSys owns them — and no software probe reproduces it
 // (lavapipe draws the road at every tier). Two rules keep it shut.
 test("the geometry mirror sweep caches bounds before it frees, and never runs on a phone", () => {
-  const tlx = read("js/render/three/tlx.js");
+  const tlx = read("spike/backends/three/tlx.js");
 
   // 1. Bounds are computed BEFORE any array is emptied. three's render walk
   //    computes a bounding sphere for every drawn object when sortObjects is
@@ -3204,7 +3204,7 @@ test("the geometry mirror sweep caches bounds before it frees, and never runs on
   // accounting, not allocation — so this guard stands on the hardware A/B alone.
   // COMMENTS STRIPPED, for the reason recorded above: the first version of the
   // sibling check matched the prose explaining the rule and failed a good file.
-  const bodyCode = fnBody(code("js/render/three/tlx.js"), "releaseGeoMirrors");
+  const bodyCode = fnBody(code("spike/backends/three/tlx.js"), "releaseGeoMirrors");
   const dropAt = bodyCode.indexOf("a.array = null");
   assert.ok(boundsAt > 0, "releaseGeoMirrors no longer caches the bounding sphere");
   assert.ok(dropAt > 0, "releaseGeoMirrors no longer frees anything — check this test, not the code");
@@ -3239,7 +3239,7 @@ test("the geometry mirror sweep caches bounds before it frees, and never runs on
 // createTextureArray, so the compiled program is a repeat-wrapped
 // `textureSample`. Sabotage-proven: delete any one placeholder line, red.
 test("TLX placeholder material arrays carry the pack's sampling state (WGSL access mode is compiled in)", () => {
-  const src = code("js/render/three/tlx.js");
+  const src = code("spike/backends/three/tlx.js");
   const greyAt = src.indexOf("const grey = (v) =>");
   assert.ok(greyAt > 0, "tlx.js no longer builds the placeholder arrays with grey() — re-anchor this pin");
   const placeholder = src.slice(greyAt, src.indexOf("matPlaceAlbedo = grey(", greyAt));

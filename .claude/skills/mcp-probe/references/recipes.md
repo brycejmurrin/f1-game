@@ -30,7 +30,7 @@ Four traps, each of which has cost a run:
   does that; setting it as a separate command probes the default and looks like
   the backend silently ignoring you.
 - **`--backend three` pins three to WebGL2** (`apex26.tlxForceGL=1`, what
-  `tests/specs/tlx-probes.spec.js` sets). `--tlx-auto` leaves the pin unset
+  `spike/backends/tests/specs/tlx-probes.spec.js` sets). `--tlx-auto` leaves the pin unset
   (THREE PATH: AUTO — WebGPU when `navigator.gpu` works). `--tlx-auto-gl`
   is AUTO after `apex26.tlxAutoGL=1` (three WebGL2, still TLX — not game
   GLX). `--tlx-webgpu` pins three's WebGPU path.
@@ -66,10 +66,10 @@ SwiftShader WebGPU is a **validation and lifecycle** oracle — shaders compile,
 bind groups match, buffers upload. It is not a visual one. For **pixels**:
 
 ```sh
-node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal  # visible #game (primary)
-node tools/gfx/wgx-capture.mjs montreal --lite                 # readback oracle → frame.png
-node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite   # second Vulkan stack (Lavapipe)
-node tools/gfx/gfx-probe.mjs --backend three --lite montreal   # TLX via WebGL2
+node spike/backends/tools/gfx-probe.mjs --backend webgpu --lite montreal  # visible #game (primary)
+node spike/backends/tools/wgx-capture.mjs montreal --lite                 # readback oracle → frame.png
+node spike/backends/tools/wgx-lavapipe-probe.mjs montreal --lite   # second Vulkan stack (Lavapipe)
+node spike/backends/tools/gfx-probe.mjs --backend three --lite montreal   # TLX via WebGL2
 ```
 
 Missing `/usr/share/vulkan/icd.d/lvp_icd.json` → install `mesa-vulkan-drivers`
@@ -165,7 +165,7 @@ for P in 3456 3466; do node tools/mcp/mcp-cli.mjs probe \
   --wait 14000 --eval scratch/my-probe.js; done
 ```
 
-Measured 2026-08-17 for the transparent-cars fix (`js/render/three/tlx.js` —
+Measured 2026-08-17 for the transparent-cars fix (`spike/backends/three/tlx.js` —
 canvas alpha), reading composited alpha by `drawImage`-ing `canvas#game` onto a
 cleared 2d canvas and histogramming the alpha byte:
 

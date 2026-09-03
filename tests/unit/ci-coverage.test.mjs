@@ -283,7 +283,10 @@ test("the renderer specs have their own macOS job that runs test:gfx", () => {
   assert.match(rendererJob, /APEX_WORKERS: 2/);
   assert.match(rendererJob, /^    timeout-minutes: 30$/m);
   assert.deepEqual(report.rendererGate.specs, groupSpecs("test:gfx"));
-  assert.ok(report.rendererGate.specs.length >= 6, `test:gfx resolved to ${report.rendererGate.specs.length} specs`);
+  // >= 5, not 6: tlx-probes.spec.js left test:gfx with the 2026-09-03 WGX/TLX
+  // spike-out. The five that remain are the GLX renderer specs this macOS job
+  // exists for — an anti-vacuity floor, so it tracks the list.
+  assert.ok(report.rendererGate.specs.length >= 5, `test:gfx resolved to ${report.rendererGate.specs.length} specs`);
   assert.equal(report.rendererGate.runsOn, "macos-latest");
   assert.equal(report.rendererGate.config, "playwright.gpu.config.js");
 });

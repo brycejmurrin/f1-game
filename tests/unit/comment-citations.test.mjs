@@ -7,7 +7,7 @@
  * and they are also the least maintainable thing in it, because NOTHING edits
  * both files at once. A citation rots the first time the cited file grows.
  *
- * Measured during the 2026-08 cleanup: js/render/webgpu/wgsl-chunks.js cited
+ * Measured during the 2026-08 cleanup: spike/backends/webgpu/wgsl-chunks.js cited
  * `js/render/glx/glx.js:39-896` for LIT_FS about thirty times. glx.js contains no
  * shader source at all — it destructures GLXShaders, and the GLSL lives in
  * js/render/glx/shaders/glsl-lit.js. Every one of those pointed a reader at uniform

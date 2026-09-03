@@ -1,0 +1,153 @@
+{
+  "generatedAt": "2026-08-17T14:12:35.828Z",
+  "lite": true,
+  "outRoot": "artifacts/tmp/wgx-gallery-commit",
+  "backend": "webgpu",
+  "build": 1319,
+  "galleryDir": "docs/research/wgx-gallery",
+  "shots": [
+    {
+      "label": "montreal",
+      "track": "montreal",
+      "cam": "orbit",
+      "image": "spike/backends/docs/wgx-gallery/montreal.png",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": {
+        "sky": 22.2,
+        "broadleafFall": 3.5,
+        "ground": 7.9,
+        "tree": 61,
+        "pine": 0.6,
+        "prop": 1.1,
+        "road": 2.5,
+        "kerb": 0.6,
+        "player": 0.2,
+        "bush": 0.3
+      },
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "label": "montreal-eye",
+      "track": "montreal",
+      "cam": "eye",
+      "image": "spike/backends/docs/wgx-gallery/montreal-eye.png",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": {
+        "tree": 28.7,
+        "sky": 24.8,
+        "broadleafFall": 0.9,
+        "pine": 1.6,
+        "bush": 1.2,
+        "prop": 0.2,
+        "kerb": 1,
+        "road": 31.9,
+        "ground": 9.8
+      },
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "label": "singapore",
+      "track": "singapore",
+      "cam": "orbit",
+      "image": "spike/backends/docs/wgx-gallery/singapore.png",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": {
+        "structure": 69.5,
+        "palm": 29.6,
+        "ground": 0.9
+      },
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "label": "vegas",
+      "track": "vegas",
+      "cam": "orbit",
+      "image": "spike/backends/docs/wgx-gallery/vegas.png",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": {
+        "structure": 98.4,
+        "ground": 1.6
+      },
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "label": "spa",
+      "track": "spa",
+      "cam": "orbit",
+      "image": "spike/backends/docs/wgx-gallery/spa.png",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": {
+        "sky": 21.9,
+        "pine": 40.9,
+        "ground": 32.6,
+        "prop": 1.2,
+        "road": 1.9,
+        "kerb": 0.5,
+        "marshalPost": 1
+      },
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "label": "monaco-eye",
+      "track": "monaco",
+      "cam": "eye",
+      "image": "spike/backends/docs/wgx-gallery/monaco-eye.png",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": {
+        "structure": 33.7,
+        "sky": 29,
+        "ground": 2.1,
+        "building": 0.1,
+        "palm": 2.1,
+        "kerb": 1,
+        "road": 32,
+        "signBoard": 0
+      },
+      "exitCode": 0,
+      "error": null
+    },
+    {
+      "label": "bahrain",
+      "track": "bahrain",
+      "cam": "orbit",
+      "image": "spike/backends/docs/wgx-gallery/bahrain.png",
+      "ok": true,
+      "backend": "webgpu",
+      "gpuErrors": 0,
+      "coveragePct": {
+        "structure": 33.6,
+        "sky": 7.1,
+        "grandstand": 1,
+        "ground": 37.7,
+        "prop": 4.8,
+        "bush": 0.4,
+        "mountain": 2.4,
+        "acacia": 0.3,
+        "signBoard": 0.1,
+        "kerb": 1.7,
+        "road": 10.7,
+        "player": 0.1
+      },
+      "exitCode": 0,
+      "error": null
+    }
+  ],
+  "note": "Committed PNGs live in docs/research/wgx-gallery/; re-run node spike/backends/tools/wgx-shot.mjs --gallery --lite and copy canvas.png files to refresh."
+}

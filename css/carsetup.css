@@ -726,6 +726,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
      the number for a sheet that is mostly chrome, which is why it is declared
      here beside --pair-at rather than moved into css/tokens.css. */
   --compact-at: 480px;
+  --pair-compact: off;
   /* 28%, not 27%. At 27% a 529px desktop sheet gave the rail 142px, which left
      the category label 67px against the 70px "SUSPENSION" needs at the 10px
      desktop size — truncated by THREE pixels. Here the share binds, not the
@@ -1242,9 +1243,11 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
    name, badge, delta chips and price stack instead of sitting on one line — so
    buying the car its space with row height would just move the readability
    problem. Measured at 1000x462, UI SIZE 150%: 8px row padding and a 4px delta
-   gap put one option on screen; at 4px/2px, two fit with their descriptions. */
+   gap put one option on screen; at 4px/2px, two fit. Compact hides
+   `.cs-opt-desc` so a short landscape sheet spends the leftover on more rows. */
 #cs-inner[data-density="compact"] .cs-opt { padding: 4px 9px; }
 #cs-inner[data-density="compact"] .cs-opt-deltas { margin-top: 2px; gap: 3px; }
+#cs-inner[data-density="compact"] .cs-opt-desc { display: none; }
 #cs-inner[data-density="compact"] #cs-options { gap: calc(var(--gap) * 0.45); }
 #cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }

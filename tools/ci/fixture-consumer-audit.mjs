@@ -29,7 +29,10 @@ const ROOT = path.resolve(fileURLToPath(import.meta.url), "../../..");
 // the shared BOOT_MS / TRACK_MS budgets from tests/helpers/fixtures.js rather
 // than each carrying its own 8000/15000/20000 ms guess. That is the adoption
 // this ratchet is asking for, so the floor follows it up.
-export const FLOOR = 110;   // 2026-09-01: every spec with a boot wait imports BOOT_MS from fixtures (was 67)
+export const FLOOR = 109;   // 2026-09-01: every spec with a boot wait imports BOOT_MS from fixtures (was 67).
+                            // 110 -> 109 on 2026-09-03: tlx-probes.spec.js was a CONSUMER and left with
+                            // the WGX/TLX spike-out, so both sides of the ratio dropped by one. Adoption
+                            // is unchanged at 100% of the specs that remain — nothing migrated off.
 
 // The other failure mode: migrate a batch of specs, never raise the floor, and
 // the ratchet silently stops ratcheting (it sat at 31 while real adoption was

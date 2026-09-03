@@ -2,7 +2,7 @@
 // @doc Do adjacent chunks share a lamp list? Per baked `LampChunks` table: empty chunks, adjacent-equal pairs, longest run.
 // @skill webgl-debug / lighting-tuner
 //
-// js/render/webgpu/wgx.js:3496 asserts "adjacent chunks almost never share an
+// spike/backends/webgpu/wgx.js:3496 asserts "adjacent chunks almost never share an
 // index list", and that sentence is the entire justification for both backends
 // forfeiting their adjacent-run draw merge in per-chunk lamp mode — a merge
 // measured elsewhere at 76-87% fewer scenery draws. Nothing in docs/ or

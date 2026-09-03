@@ -370,7 +370,7 @@ test("game keeps the sole prebuilt ribbon usable across envCull and tier changes
   assert.match(source, /_wantRoadChunk = gfx\.chunkedTrackCoords !== false/);
   assert.match(source, /if \(allow && geo && gfx\.createChunkedMesh\)/);
   assert.match(source, /"roadChunked", track\.meshes\.road, gfx\.chunkedTrackCoords !== false/);
-  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
+  const tlx = fs.readFileSync(path.join(ROOT, "spike/backends/three/tlx.js"), "utf8");
   assert.match(tlx, /chunkedTrackCoords:\s*false/);
 });
 

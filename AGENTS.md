@@ -37,7 +37,7 @@ in this section: `docs/notes/TESTING-FIELD-NOTES.md`.
 | docs, tools, tests only | `npm run test:tooling-fast` |
 | one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
-| WGX / `js/render/webgpu/` | `node tools/gfx/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU |
+| WGX / `js/render/webgpu/` | `node spike/backends/tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU |
 | TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the same with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest`, read its Verdict step. A software probe is NOT evidence about a player's machine (two shipped defects were invisible to every software test). `ci.yml`'s renderer-macos job is nightly; dispatch it with `renderer_macos: true` when a gfx spec or its launch config changed |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, CAPPED at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch | the above + `npm run test:sweeps` |
@@ -231,7 +231,7 @@ iOS/Safari 26.0–26.5 (register `addEventListener("uncapturederror")` first);
 and WebKit caps module-scope `var<private>` at 8,192 bytes per module (three
 r185 declares every node variable that way — see the vendor patch). Breaking
 any of them makes the backend refuse SILENTLY and fall back:
-`docs/research/WEBGPU-PARITY.md` §5a.
+`spike/backends/docs/WEBGPU-PARITY.md` §5a.
 
 ## Git branch & deploy
 

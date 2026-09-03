@@ -668,7 +668,7 @@ body[data-density="compact"] #campicker {
    The shell (header + scrolling body + pinned action bar) is the shared .sheet
    in css/components.css, and so are the .res-* row rules now that four screens
    use them. Only what is specific to THIS container stays here. */
-#results-table { font-size: 14px; font-variant-numeric: tabular-nums; }
+#results-table { font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
 #results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot, #advanced .sheet-foot { justify-content: center; }
 #res-settle-unsaved { margin-top: var(--gap); color: #ffd180; font-weight: 800; }
 

@@ -81,6 +81,7 @@
   --pair-split: minmax(0, 1fr);
   --pair-main: minmax(0, 1.05fr);
   --pair-gap: calc(var(--pad) * 0.9);
+  --pair-compact: off;
 }
 
 /* Keyed on the ATTRIBUTE, not on a second copy of the 620px threshold. Two
@@ -226,6 +227,9 @@
 
 .cr-teamtile-sw { grid-row: 1 / 3; width: 10px; height: 30px; border-radius: 2px; border: 2px solid transparent; }
 .cr-teamtile-name { font-size: var(--fs-2); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#cr-inner[data-density="compact"] .cr-teamtile-name {
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
+}
 .cr-teamtile-meta { font-size: var(--fs-micro); color: var(--dim); letter-spacing: var(--ls-2); }
 
 .cr-form { display: flex; flex-direction: column; gap: 8px; }
@@ -535,6 +539,18 @@
 /* ---------- extra funds ---------- */
 .cr-cheats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .cr-cheats .sel-chip { flex: 1 1 4.5rem; min-width: 0; }
+/* Practice cheats are a native disclosure on the hub. No new class: the
+   card is `.cr-card`, the label is `.sel-label`, the marker is ID-scoped. */
+#cr-funds > summary.sel-label {
+  cursor: pointer; list-style: none;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--gap);
+  margin: 0;
+}
+#cr-funds > summary::-webkit-details-marker { display: none; }
+#cr-funds > summary::after {
+  content: "\25BE"; color: var(--red); font-size: var(--fs-micro); letter-spacing: var(--ls-5);
+}
+#cr-funds[open] > summary::after { content: "\25B4"; }
 
 /* Overlay leftover sheets: inherit --fit-at from the dialog. Compact packs
    rows and wraps names; #co-body / #ch-body / #cg-body / #q-body stay the
@@ -661,7 +677,9 @@
   font-size: var(--fs-micro);
 }
 #career-history .sheet[data-density="compact"] .res-row,
-#quali .sheet[data-density="compact"] .res-row {
+#quali .sheet[data-density="compact"] .res-row,
+#standings .sheet[data-density="compact"] .res-row,
+#results .sheet[data-density="compact"] .res-row {
   padding: calc(var(--gap) * 0.35) calc(var(--gap) * 0.5); gap: calc(var(--gap) * 0.5); flex-wrap: wrap; align-items: flex-start;
 }
 #career-history .sheet[data-density="compact"] .res-name,

@@ -123,7 +123,7 @@ const ENV = new Set([
   "scrollTo", "scrollBy", "scrollX", "scrollY", "pageXOffset", "pageYOffset",
   "customElements", "reportError", "postMessage", "focus", "blur", "print", "stop",
   "CompressionStream", "DecompressionStream", "orientation",
-  // WebGPU host constants (js/render/webgpu/wgx.js)
+  // WebGPU host constants (spike/backends/webgpu/wgx.js)
   "GPUBufferUsage", "GPUColorWrite", "GPUMapMode", "GPUShaderStage", "GPUTextureUsage",
   // Node-side hosts the same files run under (track-build VM, tools)
   "process", "global", "require", "module", "exports", "Buffer",

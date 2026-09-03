@@ -15,7 +15,7 @@ exception: the commands below (they write only to `artifacts/`, and the
 
 1. Run `node tools/ci/verify-change.mjs --plan --json` and read the plan.
    If the plan touches `js/render/webgpu/`, also run
-   `node tools/gfx/wgx-validate.mjs --static` (no browser).
+   `node spike/backends/tools/wgx-validate.mjs --static` (no browser).
 2. Always `node tools/ci/verify-change.mjs --fast --json` (no browsers).
    Do NOT pass `--wait`. Do NOT start batch 1. Name every group in
    `batches` as **notRun** — the parent starts those.

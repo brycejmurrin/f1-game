@@ -1,7 +1,7 @@
 # Agent surface — skills, MCP, tools, wrap
 
 One map. Skills say **when**. MCP servers are **pinned calls**. `tools/` CLIs
-do the work. Only twelve CLIs are wrapped as `apex_*`.
+do the work. Only ten CLIs are wrapped as `apex_*`.
 
 ```
 need → skill (when / don'ts)
@@ -24,7 +24,7 @@ auto-load them — then use the Fallback column.
 
 | Server | Prefix | Job | Fallback |
 |---|---|---|---|
-| **apex-tools** | `apex_*` | Pin safe flags on twelve committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
+| **apex-tools** | `apex_*` | Pin safe flags on ten committed `tools/` CLIs against the **working tree**. Never github.io. | `./tools/mcp/apex-tools-mcp.sh call <name> '{…}'` |
 | **playwright-official** | `browser_*` | Interactive host Chromium (resize / DOM snapshot / evaluate). Skills **playwright-probe**, **survey-ui-matrix**, **css-play**. | `npx -y @playwright/mcp@0.0.79` |
 | **chrome-devtools** | `chrome_*` (upstream names) | Interactive live canvas / DOM / heap / perf on the working tree, with the WebGPU flags from `webgpu-chrome-args.cjs`. Skill **mcp-probe**. | `tools/mcp/chrome-devtools-mcp.sh run` / `python3 tools/mcp/probe-mcp.py chrome-start` |
 
@@ -106,7 +106,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 
 `Kind` is `tree` (TRACK_VM / static, no Chromium lock) or `browser` (harness
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
-names the CLI. Twelve wraps (30 → 12 on 2026-09: the audits, startline,
+names the CLI. Ten wraps (30 → 12 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, layout-audit --survey,
 quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`).
@@ -119,13 +119,11 @@ and verify-track are plain CLIs now — `tools/README.md`).
 | `apex_select_specs` | `ci/select-specs.mjs` | tree | check-changes |
 | `apex_verify_change_fast` | `ci/verify-change.mjs` | tree | check-changes |
 | `apex_bump_cache_check` | `ci/bump-cache.mjs` | tree | check-changes |
-| `apex_wgx_validate_static` | `gfx/wgx-validate.mjs` | tree | webgpu-debug |
 | `apex_rotate_markings_check` | `track/rotate-markings.cjs` | tree | new-track |
 | `apex_graph_parity` | `track/graph-parity.cjs` | tree | scenery-dress |
 | `apex_eval` | `shot/apex-eval.mjs` | browser | playwright-probe |
 | `apex_agent` | `shot/agent.mjs` | browser | agent-view |
 | `apex_shot` | `shot/shot.mjs` | browser | playwright-probe |
-| `apex_gfx_probe` | `gfx/gfx-probe.mjs` | browser | webgpu-debug |
 
 Pins the wrap always applies (you cannot override them):
 
@@ -150,7 +148,6 @@ These stay CLI-only on purpose. The MCP must refuse if asked to grow them.
 | `assets.mjs bake*` | Author-time writer | skill **asset-pack** |
 | `rotate-markings.cjs --write` | Mutates circuit markings | CLI after `--check` review |
 | `graph-parity.cjs` without `BASE=` | Vacuous pass on a clean tree | `apex_graph_parity` with `base` |
-| `wgx-validate.mjs` (live Dawn) / `wgx-capture.mjs` / `wgx-shot.mjs` | Parent-session browser boots; were wraps until 2026-09 | skill **webgpu-debug** (parent session); `npm run wgx:gallery` |
 | `lighting-tuner-sweep.mjs` / `physics-tune-sweep.mjs` | Long, sharded, resumable | skills **lighting-tuner** / **tune-physics** |
 | `rtc-e2e*.mjs` / `nostr-probe.mjs` | Real network / minutes | skill **multiplayer-debug** |
 | `report-server.mjs` | Binds `0.0.0.0` | skill **mcp-probe** |

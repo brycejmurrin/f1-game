@@ -4,7 +4,7 @@ Three read-only subagent audits (no edits, no browser runs) over the three
 backends, ranked by expected frame-time win. Landed items are marked; the rest
 are the backlog, with the proposed patch kept so the next round does not re-read
 the code. Evidence for landed items lives in `../ARCHITECTURE.md`,
-`../notes/PERF-FINDINGS.md` and `docs/research/WEBGPU-PARITY.md`.
+`../notes/PERF-FINDINGS.md` and `spike/backends/docs/WEBGPU-PARITY.md`.
 
 Method notes shared by all three: nothing re-reports the items already landed
 before this date (uInstanced bracket, uNumLights/uModel caches, interleaved lamp
@@ -289,7 +289,7 @@ editing.
 
 ## The sun-shaft march, found twice independently — LANDED
 
-`js/render/glx/shaders/glsl-post.js:1129` and `js/render/webgpu/wgsl-post.js:802` carry
+`js/render/glx/shaders/glsl-post.js:1129` and `spike/backends/webgpu/wgsl-post.js:802` carry
 the same composite block, and the GLX and WGX agents found the same defect in it
 without seeing each other's work:
 
@@ -484,7 +484,7 @@ Same reason backlog item 10 left `lit.js:1456` alone.
 
 ## A tool that reported ok on a file that would not parse
 
-`tools/gfx/wgx-validate.mjs --static` — the gate AGENTS.md names for WGSL edits, and
+`spike/backends/tools/wgx-validate.mjs --static` — the gate AGENTS.md names for WGSL edits, and
 the one a verify-agent runs — returned `{"ok": true}` on a `wgsl-post.js` whose
 JavaScript was **syntactically broken**. It only ever `readFileSync`'d `wgx.js`
 and `wgsl-chunks.js` as TEXT for a handful of regex invariants; it never read

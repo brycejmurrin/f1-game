@@ -264,7 +264,6 @@ jobs:
           npm run test:service-worker
           npm run test:lifecycle-unit
           npm run test:state-unit
-          npm run test:webgpu-lifecycle
           npm run test:agent-contract
           npm run test:audio-unit
           # The CLI-only MCP wrappers (tinyfish proxy, probe bridge): spawn-heavy,

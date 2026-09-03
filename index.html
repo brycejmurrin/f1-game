@@ -557,7 +557,7 @@
 <!-- CAREER. A full-screen page like #select (not a .dim modal), because in career
      it REPLACES #select: the calendar decides where you race, so the only thing
      left to choose is whether you are ready. Two states share the sheet — the
-     new-career setup and the season hub — both built by js/game/career-ui.js into
+     new-career setup and the season hub — both built by js/career/career-ui.js into
      the two empty panes. -->
 <div id="career" class="screen" role="region" aria-labelledby="cr-title" data-esc-close="cr-back" hidden>
   <div id="cr-inner" class="sheet pane-pair">
@@ -591,7 +591,7 @@
 <!-- career history: the record of everything this career has achieved -->
 <!-- HOW CAREER WORKS. One sheet, TWO documents: the driver career and MY TEAM
      are different games sharing a core, and a guide that hedged between them
-     would describe neither. js/game/career-ui.js builds whichever applies, and
+     would describe neither. js/career/career-ui.js builds whichever applies, and
      the setup screen opens it for the flavour being CONSIDERED — reading what a
      mode is should not cost a career to find out. -->
 <dialog id="career-guide" class="screen dim" data-esc-close="cg-back" aria-labelledby="cg-title" hidden>
@@ -615,7 +615,7 @@
 </dialog>
 
 <div id="select" class="screen" role="region" aria-labelledby="select-title" data-esc-close="sel-back" hidden>
-  <div id="sel-inner" class="sheet pane-pair">
+  <div id="sel-inner" class="sheet pane-pair pair-foot-full">
 
     <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
 
@@ -648,10 +648,10 @@
       </section>
       <!-- The list is a SIBLING of the label+preview section, not a child of it,
            so the two-column layout can make it a grid item of the sheet itself
-           and span it down through the action-bar row (css/menus.css). A nested
-           grid cannot span a row of its parent, and the action bar holds BACK,
-           YOUR CAR and NEXT — under the preview column. Stacked: label,
-           compact preview band, then the list — one column, list scrolls. -->
+           (css/menus.css). A nested grid cannot span a row of its parent. The
+           action bar is `.pair-foot-full` so BACK / YOUR CAR / NEXT span both
+           columns — three 110px buttons no longer wrap inside the preview
+           column. Stacked: label, compact preview band, then the list. -->
       <div id="sel-tracks" class="pane pair-main" role="group" aria-labelledby="sel-circuit-label"></div>
     </div>
 
@@ -667,11 +667,11 @@
      classics included) and the weekend format (qualifying, sprint, distance,
      points). A .dim modal rather than a page like #select, because it lays OVER
      the season select screen and BACK returns there.
-     Both panes are EMPTY: js/game/season-ui.js builds them, the same way
-     js/game/career-ui.js fills #cr-left / #cr-right. Nothing here is markup a
+     Both panes are EMPTY: js/career/season-ui.js builds them, the same way
+     js/career/career-ui.js fills #cr-left / #cr-right. Nothing here is markup a
      screen-shaped feature needs in the shell. -->
 <dialog id="season-setup" class="screen dim" data-esc-close="ss-back" aria-labelledby="ss-title" hidden>
-  <div id="ss-inner" class="sheet pane-pair">
+  <div id="ss-inner" class="sheet pane-pair pair-foot-full">
     <div class="sheet-head"><h2 id="ss-title">SEASON SETUP</h2></div>
     <div class="sheet-body" id="ss-body">
       <div id="ss-cal" class="pane pair-side"></div>
@@ -1320,7 +1320,7 @@
     <div class="sheet-body pane">
     <p class="adv-intro">Pick a preset to set everything at once &mdash; most players never need more. Adjust the few controls below to taste, or open <b>Advanced</b> for the full set of knobs. Everything takes effect immediately and is saved.</p>
 
-    <div class="preset-row">
+    <div class="preset-row balanced-row">
       <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
       <button id="pm-preset-standard" class="preset-btn">STANDARD<small>balanced default</small></button>
       <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
@@ -1334,7 +1334,7 @@
     </div>
     <div class="adv-item">
       <span class="tune-label">STEERING</span>
-      <div class="opt-row" role="group" aria-label="Steering feel">
+      <div class="opt-row balanced-row" role="group" aria-label="Steering feel">
         <button id="pm-steer-easy" class="opt-btn">SUPER EASY</button>
         <button id="pm-steer-assist" class="opt-btn">ASSISTED</button>
         <button id="pm-steer-normal" class="opt-btn">NORMAL</button>
@@ -1344,7 +1344,7 @@
     </div>
     <div class="adv-item">
       <span class="tune-label">DRIVING HELP</span>
-      <div class="opt-row" role="group" aria-label="Driving help">
+      <div class="opt-row balanced-row" role="group" aria-label="Driving help">
         <button id="pm-help-low" class="opt-btn">LOW</button>
         <button id="pm-help-med" class="opt-btn">MEDIUM</button>
         <button id="pm-help-high" class="opt-btn">HIGH</button>
@@ -1353,7 +1353,7 @@
     </div>
     <div class="adv-item">
       <span class="tune-label">RACING LINE</span>
-      <div class="opt-row" role="group" aria-label="Racing line assist">
+      <div class="opt-row balanced-row" role="group" aria-label="Racing line assist">
         <button id="pm-line-off" class="opt-btn">OFF</button>
         <button id="pm-line-corner" class="opt-btn">CORNERS</button>
         <button id="pm-line-full" class="opt-btn">FULL</button>
@@ -1757,18 +1757,15 @@
 
 <div id="nogl" hidden><p>Sorry &mdash; this game needs WebGL2.</p></div>
 
-<!-- three.js import map (TLX backend, apex26.gfxBackend="three"): resolves the
-     bare specifiers used by the DYNAMIC import() inside TLX.create() and by the
-     vendored files' own imports. Inline (no src) so the load-order test and the
-     service worker's tag parser both ignore it; the vendor URLs carry no ?v= —
-     immutability comes from the versioned directory name (upgrade = new dir). -->
+<!-- Import map for the vendored ES-module islands (multiplayer's Trystero).
+     The three.js specifiers left with the WGX/TLX spike-out on 2026-09-03
+     (spike/backends/README.md says how to re-attach them). Inline (no src) so
+     the load-order test and the service worker's tag parser both ignore it;
+     the vendor URLs carry no ?v= — immutability comes from the versioned
+     directory name (upgrade = new dir). -->
 <script type="importmap">
 {
   "imports": {
-    "three": "./vendor/three-0.185.1/three.webgpu.min.js",
-    "three/webgpu": "./vendor/three-0.185.1/three.webgpu.min.js",
-    "three/tsl": "./vendor/three-0.185.1/three.tsl.min.js",
-    "three/addons/": "./vendor/three-0.185.1/addons/",
     "@trystero-p2p/core": "./vendor/trystero-0.25.3/core/index.js",
     "@trystero-p2p/nostr": "./vendor/trystero-0.25.3/nostr/index.js",
     "@noble/secp256k1": "./vendor/trystero-0.25.3/noble-secp256k1.js"
@@ -1790,13 +1787,6 @@
 <script defer crossorigin="anonymous" src="js/render/shared/lamp-chunks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/chunked.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/glx/glx.js?v=dev"></script>
-<!-- js/render/webgpu/* (WGX) and js/render/three/* (TLX) have NO tags: they are the
-     two OPT-IN renderer backends and are injected by js/game.js only when
-     apex26.gfxBackend selects one (tools/manifest.cjs DEFERRED). ~532 KB that
-     every visitor used to parse for a backend almost nobody runs. sw.js seeds
-     them into its OPTIONAL precache set, since it discovers everything else by
-     parsing the tags below. -->
-
 <script defer crossorigin="anonymous" src="js/render/gfx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>

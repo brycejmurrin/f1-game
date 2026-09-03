@@ -216,7 +216,7 @@ jobs:
       # WGX — the native WebGPU backend (js/render/webgpu/), opt-in for players.
       # Until 2026-09-02 the "webgpu" leg above was three.js on WebGPU (TLX), so
       # a WGX shader or present-path change had NO real-GPU evidence at all: the
-      # in-container Dawn validates but never executes (tools/gfx/wgx-validate.mjs).
+      # in-container Dawn validates but never executes (spike/backends/tools/wgx-validate.mjs).
       # The Verdict holds this leg to: WGX actually bound (GLX.softPresent is
       # exported by WGX only), the swapchain path on hardware (softPresent
       # false — the CPU blit is the SwiftShader path and the "WebGPU is laggy"
@@ -354,7 +354,7 @@ jobs:
               // fix twelve lines up, on the same object: a build that stops
               // exporting envState().fail reads as clean. Absence fails on
               // hardware instead. envState().fail is `_envFailN`, initialised 0
-              // (js/render/three/tlx.js 1112) and always a number once the
+              // (spike/backends/three/tlx.js 1112) and always a number once the
               // surface exists — so on a hardware TLX leg an ABSENT count means
               // the surface is gone or envState() threw, never "no failures".
               // docs/PERF-FINDINGS.md 2j.

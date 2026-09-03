@@ -403,6 +403,9 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    A slot on the primitive, not a fourth patch in carsetup.css: the same defect
    ("the action bar steals a row from the list") has already been found three
    times in three files, which is why .pane-pair exists at all.
+   #select and #season-setup also opt in: BACK + YOUR CAR + NEXT (and
+   BACK + APPLY) are three/two 110px buttons that wrap inside the ~50% side
+   column. Career keeps the default — a full-width foot clips UPCOMING.
    Specificity is (0,4,0) against the primitive's (0,3,0), so it wins on its own
    — no id, no !important. .pair-main stops spanning into row 3 because in this
    shape the foot is underneath it too. */

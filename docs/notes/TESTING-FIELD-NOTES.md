@@ -178,19 +178,19 @@ grass, walls and cars looked fine. Two more spec violations sat alongside it:
 MSAA count 2 (WebGPU permits only 1 and 4 — invalid on EVERY device) and
 rg11b10ufloat render targets without the `rg11b10ufloat-renderable` feature.
 All three were one-line Dawn errors the moment the code ran on a real device.
-`node tools/gfx/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
+`node spike/backends/tools/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
 Chromium (the headless shell has no `navigator.gpu`) with `--headless=new
 --enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader
 --use-webgpu-adapter=swiftshader` exposes a real Dawn adapter that parses
 every WGSL module and validates every pipeline. The ceiling, corrected
-2026-08-17: Dawn here EXECUTES shader work — `node tools/gfx/wgx-capture.mjs`
+2026-08-17: Dawn here EXECUTES shader work — `node spike/backends/tools/wgx-capture.mjs`
 returns real rendered pixels (offscreen mode; see
-`docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
+`spike/backends/docs/WEBGPU-PARITY.md` §1a for the four bugs the first capture
 found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
 the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
 play with this in SETTINGS ▸ SCREENSHOTS (AUTO / 2D BLIT / NATIVE) and the
 three.js counterpart SETTINGS ▸ THREE PATH (AUTO / WEBGL2 / WEBGPU).
-`node tools/gfx/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
+`node spike/backends/tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
 gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
 (`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
 SwiftShader when concurrent with display readback. Still environmental: the
@@ -220,8 +220,8 @@ SwiftShader even with a quiet GPU; do not widen assertion tolerances.
 swapchain present stays black on SwiftShader/Lavapipe; WGX soft-presents to
 visible `#game` via a 2D blit (auto on software adapters +
 `sessionStorage apex26.wgxCapture=1`). Primary probe:
-`node tools/gfx/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
-`awaitSoftPresent`). Readback oracle: `node tools/gfx/wgx-capture.mjs`. Lavapipe
+`node spike/backends/tools/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
+`awaitSoftPresent`). Readback oracle: `node spike/backends/tools/wgx-capture.mjs`. Lavapipe
 needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
 snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
@@ -604,7 +604,7 @@ the outer backstop; a scratch script has none. Measure liveness with a counter
 read across two ordinary `waitForTimeout`s instead.
 
 **A screenshot of the WebGPU canvas needs `GLX.awaitSoftPresent()` first**
-(`tools/gfx/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
+(`spike/backends/tools/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
 un-blitted canvas and produces a confident, wrong answer — it cost one fully
 written-up "WGX mis-frames the garage" reproduction that had to be retracted
 (PERF-FINDINGS.md §2t).
@@ -655,7 +655,7 @@ tier 2, and the software probe reports a confident 4.8 % road coverage with
 zero GPU errors in every arm. Set BOTH:
 
 ```sh
-node tools/gfx/gfx-probe.mjs --backend three --lite \
+node spike/backends/tools/gfx-probe.mjs --backend three --lite \
   --ls apex26.forceMobileTier=1 --ls 'apex26.gfxPreset="low"' montreal
 ```
 
@@ -719,7 +719,7 @@ to carry: three-WebGL2 on ANGLE-Metal spent **16.2 s in a single first frame**
 themselves are on Azure blob storage the container proxy denies — read them in
 the Actions UI.
 
-`tools/gfx/wgx-validate.mjs` (live run) now prepends
+`spike/backends/tools/wgx-validate.mjs` (live run) now prepends
 `diagnostic(error, derivative_uniformity);` to every module it compiles,
 because that is WebKit's default severity and Dawn's is a console warning:
 a WGSL module that only warns here refuses to build on an iPhone and WGX falls
@@ -784,3 +784,29 @@ Cumulative with `a6a1566`, the lit fragment is 359 434 B → 69 707 B. The
 figure this aims at is the census's 16.2 s three-WebGL2 first frame on
 ANGLE-Metal, which only `gpu-census.yml` can re-measure. `gpuErrors` 0 and
 24 pipelines in both dumps.
+
+### 2026-09-03 — the standing smoke boot red went green when the backends left
+
+`test-bg tiny` on the WGX/TLX spike-out commit (`cc8d138`):
+**`= run passed (73/73 done, 0 failed)`**.
+
+That is the first fully green `tiny` on this box in the restructure. The
+known-benign red every earlier run carried — `smoke.spec.js › Apex 26 — smoke ›
+page loads without WebGL error`, whose `page.goto` waits for `load` with no
+navigation timeout while this container boots in 54–154 s — did not reproduce.
+
+The likely cause is the change itself: the spike-out took `js/render/webgpu/`,
+`js/render/three/` and the 1.1 MB vendored three.js island out of the shipped
+tree, and although those files were DEFERRED (no `<script>` tag, injected only
+on an opt-in), the service worker seeded the three vendor bundles into its
+OPTIONAL precache set and the shell carried their importmap. Fewer bytes to
+fetch and parse before `load` fires is exactly the direction that moves a
+boot sitting on the edge of a timeout.
+
+Treat this as ONE observation, not a new baseline: it is a single run, the
+box's load varies, and the underlying defect (a `load` wait with no navigation
+timeout) is still there and will still bite on a slow run. The rule in
+`AGENTS.md` §Verification stands — read the FIRST failure's message before
+believing any red run. What this DOES retire is the assumption that a red
+smoke boot is unavoidable here; if it comes back, it is worth timing rather
+than waving through.

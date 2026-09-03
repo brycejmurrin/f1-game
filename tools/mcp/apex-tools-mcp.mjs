@@ -323,19 +323,6 @@ const CATALOG = [
     },
   },
   {
-    name: "apex_wgx_validate_static",
-    week: 1,
-    description: "Tree — WGSL source invariants (--static). No Chromium; live Dawn is the wgx-validate.mjs CLI (parent session). Skill: webgpu-debug.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        dryRun: { type: "boolean" },
-        target: { type: "string", enum: ["local", "deploy"] },
-        url: { type: "string" },
-      },
-    },
-  },
-  {
     name: "apex_pick_tests",
     week: 1,
     description: "Tree — which test GROUPS this change needs (--json). Never --bg (that would start test-bg). Skill: check-changes.",
@@ -404,25 +391,6 @@ const CATALOG = [
         side: { type: "number" },
         hud: { type: "boolean" },
         tod: { type: "string" },
-        dryRun: { type: "boolean" },
-        target: { type: "string", enum: ["local", "deploy"] },
-        url: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "apex_gfx_probe",
-    week: 2,
-    description: "Browser (lock first) — visible #game pixels for webgpu or three. No --url. Skill: webgpu-debug.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        backend: { type: "string", enum: ["webgpu", "three"] },
-        track: { type: "string" },
-        lite: { type: "boolean" },
-        iphone: { type: "boolean" },
-        cam: { type: "string" },
-        out: { type: "string" },
         dryRun: { type: "boolean" },
         target: { type: "string", enum: ["local", "deploy"] },
         url: { type: "string" },
@@ -534,8 +502,6 @@ function buildArgv(name, args) {
       if (args.staged) argv.push("--staged");
       return argv;
     }
-    case "apex_wgx_validate_static":
-      return [...nodeTool("gfx/wgx-validate.mjs"), "--static"];
     case "apex_pick_tests": {
       const argv = [...nodeTool("ci/pick-tests.mjs"), "--json"];
       if (args.since) argv.push("--since", String(args.since));
@@ -569,16 +535,6 @@ function buildArgv(name, args) {
       if (args.side != null) argv.push("--side", String(args.side));
       if (args.tod) argv.push("--tod", String(args.tod));
       if (args.hud) argv.push("--hud");
-      return argv;
-    }
-    case "apex_gfx_probe": {
-      const argv = [...nodeTool("gfx/gfx-probe.mjs")];
-      argv.push("--backend", String(args.backend || "webgpu"));
-      if (args.lite) argv.push("--lite");
-      if (args.iphone) argv.push("--iphone");
-      if (args.cam) argv.push("--cam", String(args.cam));
-      if (args.out) argv.push("--out", assertSafeOut(args.out));
-      argv.push(String(args.track || "montreal"));
       return argv;
     }
     case "apex_agent": {
@@ -899,7 +855,7 @@ function writeRpc(msg) {
 function cmdHelp() {
   const tree = CATALOG.filter((t) => toolKind(t) === "tree").map((t) => `  ${t.name}`).join("\n");
   const browser = CATALOG.filter((t) => toolKind(t) === "browser").map((t) => `  ${t.name}`).join("\n");
-  process.stdout.write(`apex-tools-mcp — wrap tools/ CLIs as apex_* MCP tools (12 wraps)
+  process.stdout.write(`apex-tools-mcp — wrap tools/ CLIs as apex_* MCP tools (${CATALOG.length} wraps)
 
 Commands:
   help

@@ -443,7 +443,10 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
   const career = css("css/career.css");
   const data = css("css/data.css");
   assert.equal(decl(css("css/menus.css"), "body", "--wide-at"), "620px", "the body-level threshold SheetShape reads");
-  assert.ok(tuner.some((r) => r.decls.get("--rail-at") === "500px"));
+  assert.ok(tuner.some((r) => r.decls.get("--rail-at") === "640px"),
+    "compact-wide stays rail-off: 640 sits above the 560px rail dock so sliders keep full width");
+  assert.ok(rulesFor(tuner, /#ct-modes \.lt-tab/).some((r) => r.decls.get("white-space") === "nowrap"),
+    "compact camera-mode chips stay a nowrap strip");
   assert.ok(rulesFor(tuner, /\[data-density="compact"\]\[data-rail="on"\]/).length, "compact + rail-on has its own rules");
   assert.ok(!tuner.some((r) => r.context.some((c) => /@media \(min-width:\s*720px\)/.test(c))));
   assert.ok(!tuner.some((r) => r.context.some((c) => /@media \(max-height: 430px\)/.test(c))));
@@ -597,6 +600,13 @@ test("variable control clusters use one content-driven balanced-row primitive", 
     assert.match(html, new RegExp(`id="${id}"[^>]*class="[^"]*balanced-row`), `${id} must balance from local space`);
   }
   assert.equal(bootCamModes().open().className, "balanced-row", "the camera picker is a balanced-row too");
+  assert.match(html, /class="preset-row balanced-row"/, "STEERING & ASSISTS presets wrap from local space");
+  assert.match(html, /class="opt-row balanced-row" role="group" aria-label="Steering feel"/);
+  assert.match(html, /class="opt-row balanced-row" role="group" aria-label="Driving help"/);
+  assert.match(html, /class="opt-row balanced-row" role="group" aria-label="Racing line assist"/);
+  assert.ok(rulesFor(components, /#advanced-inner\[data-shape="wide"\] \.adv-sec/).some((r) =>
+    r.decls.get("grid-column") === "1 / -1"),
+    "advanced section headings still span the wide body grid");
   const all = [html, read("css/components.css"), read("css/menus.css"), read("css/tuner.css"), read("js/camera/mode-switch.js")].join("\n");
   assert.doesNotMatch(all, /no-orphan-[235]/, "column-count-specific orphan patches must not return");
   assert.ok(!rulesFor(css("css/menus.css"), /#rs-(?:laps|weather|diff|time)\b/).some((r) => /^repeat\([235]/.test(r.decls.get("grid-template-columns") || "")));
@@ -839,7 +849,19 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/career.css"), "#career-guide", "--sheet-w"), "760px");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",
     "compact wide season setup keeps the calendar + pool pair");
+  assert.equal(decl(css("css/menus.css"), "#ss-inner", "--compact-at"), "480px",
+    "season setup shares #sel-inner's 480 compact floor, not the 380 default");
+  assert.equal(decl(css("css/career.css"), "#cr-inner", "--pair-compact"), "off",
+    "career compact always stacks — pair-on starves the hub left column");
+  assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
+    "garage compact always stacks — pair-on starves #cs-options");
+  assert.equal(decl(css("css/carsetup.css"), '#cs-inner[data-density="compact"] .cs-opt-desc', "display"), "none",
+    "compact garage hides part blurbs so more option rows fit");
   const shell = read("index.html");
+  assert.match(shell, /id="sel-inner"[^>]*pair-foot-full/,
+    "SELECT foot spans both pair columns so BACK / YOUR CAR / NEXT share the sheet");
+  assert.match(shell, /id="ss-inner"[^>]*pair-foot-full/,
+    "season-setup foot spans both pair columns like SELECT");
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
   assert.match(shell, /id="sel-car"[^>]*>YOUR CAR</);
   assert.match(shell, /id="sel-go"[^>]*>NEXT</);

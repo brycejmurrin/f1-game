@@ -19,7 +19,7 @@
  *   h.GLX.begin(h.frame());  h.reset();  h.GLX.begin(h.frame());
  *   h.count("uniform1f")                 // → 1 (only uTime moves)
  *
- * Same idea as tests/unit/webgpu-lifecycle.test.mjs's mock GPUDevice for WGX.
+ * Same idea as spike/backends/tests/unit/webgpu-lifecycle.test.mjs's mock GPUDevice for WGX.
  */
 import fs from "node:fs";
 import path from "node:path";

@@ -57,7 +57,7 @@ const RENDER_SPECS = [
   "lighting-ab", "lighting-tuner-grade",
   "carview-parts", "parts-budget", "parts-catalog", "parts-persistence",
   "ui-audit", "ui-button-touch", "menu-survey", "menu-keyboard",
-  "webgl-probes", "tlx-probes", "camera", "smoke", "season", "time-trial",
+  "webgl-probes", "camera", "smoke", "season", "time-trial",
   "material-shimmer", "instanced-draw",
   "menu-baseline",
 ].map((n) => `**/${n}.spec.js`);

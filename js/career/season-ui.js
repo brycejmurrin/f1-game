@@ -141,7 +141,7 @@ function create(G) {
     // pay out — so the screen answers "how long is a sprint" and "what does a
     // sprint win earn" without the player having to run one to find out.
     // .sur-country is "small dim text" and nothing else — reused rather than
-    // minting a class, which css-class-ratchet.test.mjs asks for by name.
+    // minting a class, which the cssClasses ratchet (tests/data/ratchets.json) asks for by name.
     const note = el("div", "sur-country");
     note.id = "ss-note";
     note.textContent = (draft.sprint

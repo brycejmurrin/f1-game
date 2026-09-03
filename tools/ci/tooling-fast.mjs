@@ -31,11 +31,16 @@ const LOGFILE = path.join(LOGDIR, "tooling-fast-suite.log");
 
 /** @type {readonly string[]} */
 export const TOOLING_FAST_FILES = Object.freeze([
+  // @gen-test-groups:begin — generated from tests/groups.json; do not hand-edit
   "tests/unit/ghost.test.mjs",
+  // The three suites the feature batches added. Each is pure rules over a
+  // store or a source string — no DOM, no rasteriser — so all three together
+  // cost under a second and belong where the rule they guard is edited.
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/setup-tune.test.mjs",
   "tests/unit/onboard.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
+  "tests/unit/test-groups-generated.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/track-accuracy-validator.test.mjs",
@@ -96,7 +101,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/component-inventory.test.mjs",
   "tests/unit/sheet-per-screen.test.mjs",
   "tests/unit/sheetshape-registry.test.mjs",
-  "tests/unit/css-class-ratchet.test.mjs",
   "tests/unit/test-groups.test.mjs",
   "tests/unit/pick-tests.test.mjs",
   "tests/unit/test-observed.test.mjs",
@@ -137,9 +141,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
-  // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
+  // sweep is `node spike/backends/tools/road-lut-census.mjs --all` (~34 s), run before a deploy
   // that touches the LUT rather than on every edit.
-  "tests/unit/road-lut-frame.test.mjs",
   // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,
   // crest-marks 41 s, slider-effect 42 s — 48 % of this loop, measured
   // 2026-09-01) run in test:node-slow: CI guards always, locally when
@@ -152,8 +155,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // driving-model gate runs here in seconds rather than in a browser job.
   "tests/unit/game-vm.test.mjs",
   "tests/unit/physics-characterization-vm.test.mjs",
-  "tests/unit/webgpu-lifecycle.test.mjs",
-  "tests/unit/renderer-soft-lifecycle.test.mjs",
   "tests/unit/shared-math.test.mjs",
   "tests/unit/store-cross-tab.test.mjs",
   "tests/unit/comment-citations.test.mjs",
@@ -174,7 +175,6 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/css-comments.test.mjs",
   "tests/unit/css-tokens.test.mjs",
   "tests/unit/css-token-adoption.test.mjs",
-  "tests/unit/silent-catch.test.mjs",
   "tests/unit/light-presets.test.mjs",
   "tests/unit/light-store-copy.test.mjs",
   "tests/unit/light-grid.test.mjs",
@@ -202,6 +202,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/trim-comments.test.mjs",
   "tests/unit/metrics.test.mjs",
   "tests/unit/perf-try.test.mjs",
+  // @gen-test-groups:end
 ]);
 
 const loadavgLine = () => {

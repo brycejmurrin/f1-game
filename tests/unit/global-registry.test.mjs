@@ -64,7 +64,10 @@ const MULTI_GLOBAL = {
 // adds the writer (e.g. a new shader file merging into GLXShaders).
 const SHARED_GLOBALS = {
   GLXShaders: 4,  // shaders/lit|sky|fx|post.js each merge their GLSL sources in
-  TLXShaders: 8,  // the three/ TSL family does the same for the deferred backend
+  // TLXShaders (8 writers, the three/ TSL family) left with the 2026-09-03
+  // spike-out — no shipped file writes it now, so a frozen count of 8 would
+  // fail in the direction that means "the files are gone", not "a writer was
+  // added". It comes back with the backend.
 };
 
 // Accumulator globals that are PRODUCT DATA designed to grow — no writer-count
@@ -96,6 +99,13 @@ const KNOWN_EXTERNAL_READS = {
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors"],      // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "__TEST_MODE"], // so the scan cannot see the writer; Playwright init-script flag
   "js/net/scan.js": ["jsQR"],                     // vendored decoder, script-injected on demand
+  // The two opt-in backends left the shipped tree in the 2026-09-03 spike-out
+  // (spike/backends/, README there says how to re-attach). gfx.js keeps the
+  // seam: both reads are `typeof X === "undefined"` probes that return null,
+  // which is the same "backend refused" path an unsupported browser has always
+  // taken. Keeping the branches is deliberate — the fallback is what makes the
+  // spike safe, and re-attaching is then putting the files back, nothing more.
+  "js/render/gfx.js": ["TLX", "WGX"],
 };
 
 // ---------------------------------------------------------------------------

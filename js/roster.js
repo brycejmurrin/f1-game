@@ -5,75 +5,8 @@
 (function () {
   "use strict";
   self.ApexRoster = Object.freeze({
-    DEFERRED: {
-    "webgpu": [
-      "js/render/webgpu/wgsl-chunks.js",
-      "js/render/webgpu/wgsl-post.js",
-      "js/render/webgpu/wgsl-fx.js",
-      "js/render/webgpu/wgx.js"
-    ],
-    "three": [
-      "js/render/three/tsl-chunks.js",
-      "js/render/three/tsl-lit.js",
-      "js/render/three/tsl-sky.js",
-      "js/render/three/tsl-fx.js",
-      "js/render/three/tsl-post.js",
-      "js/render/three/tlx-shadow.js",
-      "js/render/three/tlx-chunked.js",
-      "js/render/three/tlx-post.js",
-      "js/render/three/tlx.js"
-    ]
-  },
-    DEFERRED_EDGES: [
-    [
-      "js/render/webgpu/wgsl-chunks.js",
-      "js/render/webgpu/wgsl-post.js"
-    ],
-    [
-      "js/render/webgpu/wgsl-chunks.js",
-      "js/render/webgpu/wgsl-fx.js"
-    ],
-    [
-      "js/render/webgpu/wgsl-post.js",
-      "js/render/webgpu/wgx.js"
-    ],
-    [
-      "js/render/webgpu/wgsl-fx.js",
-      "js/render/webgpu/wgx.js"
-    ],
-    [
-      "js/render/three/tsl-chunks.js",
-      "js/render/three/tsl-lit.js"
-    ],
-    [
-      "js/render/three/tsl-lit.js",
-      "js/render/three/tlx.js"
-    ],
-    [
-      "js/render/three/tsl-sky.js",
-      "js/render/three/tlx.js"
-    ],
-    [
-      "js/render/three/tsl-fx.js",
-      "js/render/three/tlx.js"
-    ],
-    [
-      "js/render/three/tlx-shadow.js",
-      "js/render/three/tlx.js"
-    ],
-    [
-      "js/render/three/tlx-chunked.js",
-      "js/render/three/tlx.js"
-    ],
-    [
-      "js/render/three/tsl-post.js",
-      "js/render/three/tlx-post.js"
-    ],
-    [
-      "js/render/three/tlx-post.js",
-      "js/render/three/tlx.js"
-    ]
-  ],
+    DEFERRED: {},
+    DEFERRED_EDGES: [],
     LAZY_AGENT: [
     "js/agent/agentview-raster.js",
     "js/agent/agentview.js",

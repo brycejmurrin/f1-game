@@ -51,7 +51,7 @@ than behaviour:
 | `tests/unit/ratchets.test.mjs` + `tests/data/ratchets.json` | the game.js size ceilings (lines, code lines, `G` members, column-0 lets) — a ratchet, so extraction lowers them and regrowth fails |
 | `tests/unit/vstd-invariant.test.mjs` + `tools/check/vstd-lint.mjs` | no `.speed` compared against a numeric literal without a written reason (§3) |
 | `tests/unit/comment-citations.test.mjs` | a comment citing another file names a symbol that exists; ratchet on the cross-file-citation population |
-| `tests/unit/silent-catch.test.mjs` | ratchet on bare `catch {}` — the escape hatch is a comment saying why, not a log line |
+| `bareCatches` (`tests/data/ratchets.json`) | ratchet on bare `catch {}` — the escape hatch is a comment saying why, not a log line |
 
 Where one of these exists, the invariant has held; where the same class of
 invariant had only a comment, it has not. The archived journal is ~950 lines of
@@ -154,7 +154,7 @@ implementations or it is a divergence. WGX now publishes the GLX draw-API
 surface (gpuTimer, texture arrays, lamp shadows, instancing, particles,
 MSAA 2×) and stays opt-in; GLX remains the default. The tax is keeping the
 two shader trees in sync, not an API wall. See
-[research/WEBGPU-PARITY.md](../research/WEBGPU-PARITY.md).
+[../../spike/backends/docs/WEBGPU-PARITY.md](../../spike/backends/docs/WEBGPU-PARITY.md).
 
 ---
 
