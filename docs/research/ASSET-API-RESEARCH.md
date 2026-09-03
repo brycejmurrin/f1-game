@@ -186,17 +186,17 @@ committed.**
 Three independent pieces, each shippable and revertible on its own. Ordered by
 value-per-risk.
 
-### 3.1 The bake tool — `tools/assets.mjs` (author-time only)
+### 3.1 The bake tool — `tools/gen/assets.mjs` (author-time only)
 
 A Node CLI alongside `tools/verify-track.cjs`. Never loaded by the game, never
 runs in CI for a normal test pass. Network access only here.
 
 ```sh
-node tools/assets.mjs search materials asphalt      # query PH + aCG, print candidates
-node tools/assets.mjs bake-material asphalt ambientcg:Asphalt026A --mat ASPHALT
-node tools/assets.mjs bake-model grandstand ./src/stand.glb --mat-map metal=METAL
-node tools/assets.mjs verify                        # md5s, licences, sizes, manifest
-node tools/assets.mjs credits                       # regenerate assets/pack/CREDITS.md
+node tools/gen/assets.mjs search materials asphalt      # query PH + aCG, print candidates
+node tools/gen/assets.mjs bake-material asphalt ambientcg:Asphalt026A --mat ASPHALT
+node tools/gen/assets.mjs bake-model grandstand ./src/stand.glb --mat-map metal=METAL
+node tools/gen/assets.mjs verify                        # md5s, licences, sizes, manifest
+node tools/gen/assets.mjs credits                       # regenerate assets/pack/CREDITS.md
 ```
 
 Outputs, all committed:
@@ -301,7 +301,7 @@ per-material draw state to a path that currently gets ~1 draw per visible chunk,
 and gain little: at the distances props are viewed, `MAT`-array texturing from
 §3.2 already covers them.
 
-So: **the model pipeline is a geometry pipeline.** `tools/assets.mjs bake-model`
+So: **the model pipeline is a geometry pipeline.** `tools/gen/assets.mjs bake-model`
 takes a `.glb`, runs it through glTF-Transform (`weld`, `simplify` for LODs,
 `dedup`, `prune`), bakes each source material down to a vertex colour +
 a `MAT` id via an explicit `--mat-map`, and writes the game's existing
@@ -372,7 +372,7 @@ does exactly that kind of pixel comparison.
 | phase | work | status |
 |---|---|---|
 | 0 | `MAT` ids for road/terrain | **was already done** — `mesh.js:412-424`, `:713` |
-| 1 | `tools/assets.mjs` + manifest + licence `verify` | **shipped**, guarded by `tests/unit/assets-pack.test.mjs` |
+| 1 | `tools/gen/assets.mjs` + manifest + licence `verify` | **shipped**, guarded by `tests/unit/assets-pack.test.mjs` |
 | 2 | `Assets` global + `createTextureArray` + `uMatTexMix` at 0 | **shipped** on GLX, TLX, and WGX |
 | 3 | Tune `matTexMix` per profile, bake into `light-presets.js` | **open** — needs a human eye on a real screen |
 | 4 | KTX2 container + vendored transcoder | **open** — the 561 KB PNG pack is far under budget, so this is not yet needed |
@@ -433,7 +433,7 @@ does exactly that kind of pixel comparison.
 
 ### Landed
 
-**`tools/assets.mjs`** — the author-time bake CLI. `bake-synthetic` needs no
+**`tools/gen/assets.mjs`** — the author-time bake CLI. `bake-synthetic` needs no
 network and no dependencies: it generates all 14 material layers from
 multi-octave tiling noise and encodes them with node's own zlib (a ~90-line PNG
 encoder), which is what makes the whole runtime path testable in CI and in a
@@ -528,7 +528,7 @@ Measured after the 2k→256 full-pack rebake + Chromium A/B (`matTex` 0 vs 1):
 
 1. **Tune world scales** — **done**: sand 6→11, rock 5→8, grass 3→4.5,
    foliage 3→4, snow 6→7, asphalt 4→3.5 (finer grit). Synced in
-   `tools/assets.mjs` SCALES, `webbake.js`, and `manifest.json` layers.
+   `tools/gen/assets.mjs` SCALES, `webbake.js`, and `manifest.json` layers.
 2. **HDRI → `Assets.env()`** — **done** for `*|default|day|dusk|dawn` via
    `bake-env-hdri` (Poly Haven 1k `.hdr` hemisphere sample). Night skipped on
    purpose. `atmosphere.js` now applies env after every non-night TOD base.

@@ -12,7 +12,7 @@ the build-time §3 items. Live leftover list:
 cap/rest/far trim, WGX draw-UBO flush (already on tip) + god-ray top-6 partial
 select (GLX+WGX), TLX matCache eviction skips `dispose()` on r184 (#33952).
 Test runners default to sequential with per-file/group logging
-(`tools/tooling-fast.mjs`, `test-bg` concurrent cap 1).
+(`tools/ci/tooling-fast.mjs`, `test-bg` concurrent cap 1).
 
 Pine/tree instance reuse was attempted (unit-Y + `[1,hQ,1]`) and **reverted**:
 even Y-only scale + 0.5 m height bins grew Monza severe clips 20→55 and
@@ -253,7 +253,7 @@ Reliability DNF scoring itself looked consistent with retirement rules.
   shared textures must not be disposed with every material eviction.
 - **Web search:** same writeBuffer lesson ([webgpufundamentals uniforms](https://webgpufundamentals.org/webgpu/lessons/webgpu-uniforms.html));
   generic “F1 26” web results are the commercial title, not this fan game.
-- **Physics arc:** still holds (assists-off). Re-run `node tools/vstd-lint.mjs`
+- **Physics arc:** still holds (assists-off). Re-run `node tools/check/vstd-lint.mjs`
   in a write-capable session for a verbatim dump (static ALLOWED check was clean).
 
 ---

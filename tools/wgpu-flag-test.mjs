@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "./harness.mjs";
+import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "./lib/harness.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -72,7 +72,7 @@ async function probe(name, preset) {
   const inner = `
 import { createRequire } from "node:module";
 const preset = ${JSON.stringify(preset)};
-const { startStaticServer, launchChromium, shutdown } = await import("./tools/harness.mjs");
+const { startStaticServer, launchChromium, shutdown } = await import("./lib/harness.mjs");
 const { chromium } = createRequire(import.meta.url)("playwright");
 const srv = await startStaticServer(${JSON.stringify(ROOT)});
 const browser = await launchChromium({ executablePath: chromium.executablePath(), headless: false, args: preset.args, env: { ...process.env, ...preset.env } });

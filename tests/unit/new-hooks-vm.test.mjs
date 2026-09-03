@@ -1,5 +1,5 @@
 /* new-hooks-vm.test.mjs — tests/specs/new-hooks.spec.js replayed in the Node
- * VM (tools/game-vm.cjs): the timing(), sectorState(), lapHistory(),
+ * VM (tools/lib/game-vm.cjs): the timing(), sectorState(), lapHistory(),
  * fieldState(), aiPlace(), setEnergy(), setLap(), trackProfile() and
  * obs().gear contracts, plus the shared-track-foundation diagnostics
  * (modelDiagnostics / geometryDiagnostics / wallStats / groundY, day and
@@ -25,7 +25,7 @@ import { isDeepStrictEqual } from "node:util";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const closeTo = (r, e, d, m) => assert.ok(Math.abs(e - r) < Math.pow(10, -d) / 2, m || `${r} not within 10^-${d}/2 of ${e}`);
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);

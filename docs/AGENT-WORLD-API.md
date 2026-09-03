@@ -9,7 +9,7 @@ rasters in `js/agent/agentview-raster.js`) — `world()`, `field()`, `trackInfo(
 `js/track/tracks.js` and the scenery modules, and a CLI at `tools/agent.mjs`.
 **Reference documentation is `docs/DEBUG-HOOKS.md` → "Agent world view"**; the
 API also describes itself via `__apex.agentHelp()`. Tests:
-`tests/specs/agent-view.spec.js` (`node tools/test-bg.mjs hooks`, 117 tests).
+`tests/specs/agent-view.spec.js` (`node tools/ci/test-bg.mjs hooks`, 117 tests).
 This document keeps the research and the reasoning — §2's audit describes the
 state of the codebase **before** the work, and is retained because it explains
 why the design is shaped the way it is.
@@ -80,7 +80,7 @@ An agent cannot answer "is there a grandstand on my left", "what building is
 that", "are there trees here". This is the only thing on the list that is
 missing *data* rather than missing *presentation*.
 
-Note `tools/track-build-vm.cjs` already wraps every `TrackGeom` emitter and
+Note `tools/lib/track-build-vm.cjs` already wraps every `TrackGeom` emitter and
 records per-primitive bounds, material, and an emission-group id that acts as a
 model-identity proxy. The offline instrumentation is most of a scene graph
 already; it just isn't wired to the shipped build path.

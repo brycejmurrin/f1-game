@@ -49,7 +49,7 @@
  */
 "use strict";
 
-const { buildContext } = require("./track-build-vm.cjs");
+const { buildContext } = require("./lib/track-build-vm.cjs");
 
 const CELL = 72;   // must track createChunkedMesh's default cellSize
 

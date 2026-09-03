@@ -30,13 +30,13 @@ GameAudio.centroidHz()              // spectral centroid of live engine
 ```
 
 ```sh
-node tools/test-bg.mjs ui        # audio-smoke + music-library
+node tools/ci/test-bg.mjs ui        # audio-smoke + music-library
 python3 -m http.server 3456         # then DevTools → Web Audio
 ```
 
 `tests/specs/audio-smoke.spec.js` covers init, re-enable during a race, and a
 user-gesture unlock (`setEngine(0.75, 0.4, false, 0.6, 4)` then
-`centroidHz() > 50`). After editing `js/audio/engine.js`, `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
+`centroidHz() > 50`). After editing `js/audio/engine.js`, `node tools/gen/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
 
 ## Load on demand
 

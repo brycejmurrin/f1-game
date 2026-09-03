@@ -4,7 +4,7 @@
  * @skill mcp-probe
  * cdmcp-bg.mjs — start chrome-devtools MCP measurements in the BACKGROUND.
  *
- * Twin of tools/test-bg.mjs for Chromium MCP probes. Detaches
+ * Twin of tools/ci/test-bg.mjs for Chromium MCP probes. Detaches
  * tools/cdmcp-measure.py, leaves a log to tail, and exposes --status/--wait/
  * --stop. Anchor watchers on the terminal line:
  *

@@ -300,7 +300,7 @@ size; depth ranks by what a player sees. Monza's largest-volume pair (609 m³) i
 
 ```sh
 node tools/clip-audit.cjs <track> [--why]     # defect list + call-site pairings
-node tools/clip-audit.cjs --all --gate        # node tools/test-bg.mjs clip
+node tools/clip-audit.cjs --all --gate        # node tools/ci/test-bg.mjs clip
 ```
 
 Gated by `tests/unit/prop-clipping.test.mjs` against `tools/clip-baseline.json`, on

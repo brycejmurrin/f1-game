@@ -23,7 +23,7 @@
 //
 // Exit 0 = every peer reached the waiting room by room code alone.
 import { fileURLToPath } from "node:url";
-import { launchChromium, shutdown, startStaticServer } from "../harness.mjs";
+import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 

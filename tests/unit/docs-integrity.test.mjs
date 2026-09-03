@@ -71,7 +71,7 @@ const PLACEHOLDERS = new Set([
 // match mid-extension.
 const PATH_RE = /(?<![A-Za-z0-9_./-])((?:js|tools|tests|css|assets|spike|vendor|docs)\/[A-Za-z0-9_.<>/-]+\.(?:json|mjs|cjs|css|js|md|sh))(?![A-Za-z0-9])/g;
 
-// tools/manifest.cjs's MOVED map (tools/move-tree.mjs) keys itself on the
+// tools/manifest.cjs's MOVED map (tools/gen/move-tree.mjs) keys itself on the
 // OLD path of every file the Phase 2b window relocates — that key is
 // SUPPOSED to be gone from disk; it is the whole reason deploy.mjs can name
 // the new path when a conflicted file was moved. Scan everything BUT that
@@ -105,14 +105,14 @@ test("live docs reference only files that exist", () => {
 // Source files that are ALLOWED to name a path that does not resolve, with the
 // reason. Keep this list short and justified — everything else is drift.
 const SOURCE_EXEMPT = new Map([
-  // A forward reference: tools/bake-elevation.mjs GENERATES this file, and the
+  // A forward reference: tools/gen/bake-elevation.mjs GENERATES this file, and the
   // manifest records where it would slot in. It is legitimately absent until
   // someone bakes a profile.
   ["js/track/circuit-elevations.js", /bake-elevation|manifest\.cjs|track\/tracks\.js|docs-integrity/],
   // Synthetic fixture HTML fed to the service worker under test — a string it
   // must rewrite, not a file it must find.
   ["css/style.css", /service-worker\.test\.mjs|docs-integrity\.test\.mjs/],
-  // The scratch tree tools/move-tree.mjs is tested on. The names are
+  // The scratch tree tools/gen/move-tree.mjs is tested on. The names are
   // deliberately fictional (js/zzfix/…) so a real move's sweep can never
   // rewrite the fixture — see the header of move-tree.test.mjs.
   ["js/zzfix/", /move-tree\.test\.mjs|docs-integrity/],
@@ -557,8 +557,8 @@ test("tools/README documents live test-infra knobs and stays two-column in the r
   const index = read("tools/README.md");
   assert.match(index, /SPLIT=N/, "test-shards SPLIT fan-out must be indexed");
   assert.match(index, /FLOOR_SLACK/, "fixture-consumer upper-bound slack must be indexed");
-  const specs = index.split("\n").find((l) => l.includes("**select-specs.mjs**")) || "";
-  const recall = index.split("\n").find((l) => l.includes("**select-recall.mjs**")) || "";
+  const specs = index.split("\n").find((l) => l.includes("**ci/select-specs.mjs**")) || "";
+  const recall = index.split("\n").find((l) => l.includes("**ci/select-recall.mjs**")) || "";
   assert.ok(specs, "select-specs row missing");
   assert.ok(recall, "select-recall row missing");
   assert.doesNotMatch(specs, /\|\s*check-changes\s*\|/,

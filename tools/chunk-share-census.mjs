@@ -23,7 +23,7 @@
 // a frame. The merge is dead; re-run this before anyone proposes it a third time.
 //
 // Run: node tools/chunk-share-census.mjs [track]
-import { startStaticServer, launchChromium, shutdown } from "./harness.mjs";
+import { startStaticServer, launchChromium, shutdown } from "./lib/harness.mjs";
 const srv = await startStaticServer(process.cwd());
 const browser = await launchChromium();
 const TRACK = process.argv[2] || "vegas";

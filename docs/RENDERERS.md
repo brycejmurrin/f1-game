@@ -53,7 +53,7 @@ would keep GLX’s dead closure).
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/shared/gltf.js`,
 `js/render/shared/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
-`tools/manifest.cjs` `DEFERRED`, mirrored into `js/roster.js` by `tools/gen-shell.mjs`; no `<script>` tags for
+`tools/manifest.cjs` `DEFERRED`, mirrored into `js/roster.js` by `tools/gen/gen-shell.mjs`; no `<script>` tags for
 WGX/TLX.
 
 ## Frame pipeline (all three)

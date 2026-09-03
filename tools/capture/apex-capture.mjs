@@ -34,7 +34,7 @@ import { createServer as createNetServer } from "node:net";
 import { createServer as createHttpServer } from "node:http";
 import { join, normalize, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { launchChromium } from "../harness.mjs";
+import { launchChromium } from "../lib/harness.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const [cmd = "modes", ...rest] = process.argv.slice(2);

@@ -42,7 +42,7 @@
 // the team in the blob, because rendering the wrong car is precisely the
 // mistake this tool exists to stop.
 import { readFileSync } from "node:fs";
-import { startStaticServer, launchChromium, shutdown } from "./harness.mjs";
+import { startStaticServer, launchChromium, shutdown } from "./lib/harness.mjs";
 
 const args = process.argv.slice(2);
 const flag = (n, d) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : d; };

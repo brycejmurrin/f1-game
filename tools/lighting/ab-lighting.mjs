@@ -24,7 +24,7 @@
 import { createServer } from "node:http";
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { extname } from "node:path";
-import { launchChromium, sleep } from "../harness.mjs";
+import { launchChromium, sleep } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");

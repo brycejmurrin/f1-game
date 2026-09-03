@@ -10,7 +10,7 @@ description: Use when systematically reviewing Apex 26's UI across orientations,
 Playwright MCP + Chromium must be installed before interactive resize/DOM work:
 
 ```bash
-bash tools/cloud-agent-install.sh      # AGENTS.md §Verification 1
+bash tools/env/cloud-agent-install.sh      # AGENTS.md §Verification 1
 bash tools/playwright-mcp.sh status 2>/dev/null || true
 ```
 

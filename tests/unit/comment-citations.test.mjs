@@ -42,7 +42,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // with file-path or symbol references (2026-08-12 full sweep).
 const CITATION_CEILING = 0;
 // A ceiling left far above the real count has stopped ratcheting — the same
-// slack rule tools/ratchets.mjs carries, for the same reason.
+// slack rule tools/check/ratchets.mjs carries, for the same reason.
 const CITATION_SLACK = 15;
 
 function walk(dir, out = []) {

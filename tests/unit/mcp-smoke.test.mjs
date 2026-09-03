@@ -85,7 +85,7 @@ test("help names the never-wrap and the write path", () => {
 });
 
 test("cloud-agent-install notes TinyFish key and chrome-devtools clone", () => {
-  const src = fs.readFileSync(path.join(ROOT, "tools/cloud-agent-install.sh"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "tools/env/cloud-agent-install.sh"), "utf8");
   assert.match(src, /TINYFISH_API_KEY/);
   assert.match(src, /https:\/\/agent\.tinyfish\.ai\/home/);
   assert.match(src, /chrome-devtools-mcp\.sh" clone/);

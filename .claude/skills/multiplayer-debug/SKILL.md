@@ -63,7 +63,7 @@ Commands:
 
 ```sh
 npm run test:net-unit
-node tools/test-bg.mjs net
+node tools/ci/test-bg.mjs net
 node tools/net/rtc-e2e.mjs
 node tools/net/rtc-e2e-3p.mjs
 ```

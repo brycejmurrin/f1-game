@@ -30,7 +30,7 @@
 // the machine's network stack. Exit 0 = three peers racing, each seeing the
 // other two.
 import { fileURLToPath } from "node:url";
-import { launchChromium, shutdown, startStaticServer } from "../harness.mjs";
+import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const PORT = 4468;                       // not 4467 — so it can run beside the 2-peer one

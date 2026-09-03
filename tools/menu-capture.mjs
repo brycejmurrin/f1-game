@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
-import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, startStaticServer } from "./lib/harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
 import {
   SCREENS,

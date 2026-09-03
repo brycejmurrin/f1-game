@@ -35,9 +35,9 @@ decisions → **restructure-screens-css**.
 | Scroll fade | `js/ui/scroll-fade.js` | Measures regions; writes fade/position classes |
 
 ```sh
-node tools/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css
-node tools/test-bg.mjs ui
-node tools/test-bg.mjs gallery          # ui-audit captures — read the PNGs
+node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css
+node tools/ci/test-bg.mjs ui
+node tools/ci/test-bg.mjs gallery          # ui-audit captures — read the PNGs
 npm run test:tooling-fast
 ```
 

@@ -2,7 +2,7 @@
 
 The line-count ratchet on the big modules lived in the `module-size` unit test
 from 2026-08 until 2026-09-03, when it became `tests/data/ratchets.json` +
-`tools/ratchets.mjs` (Phase 1-lite of `docs/research/TREE-RESTRUCTURE-2026-09.md`).
+`tools/check/ratchets.mjs` (Phase 1-lite of `docs/research/TREE-RESTRUCTURE-2026-09.md`).
 Every raise and lower was recorded as a comment beside its number; those comments
 are preserved here verbatim, per file, as the record of WHY each number moved.
 The live numbers are in `ratchets.json`; nothing here is asserted.
@@ -26,7 +26,7 @@ has to be a deliberate edit here with a reason in the commit message, which
 is the whole point. A number nobody can raise gets deleted the first time it
 is inconvenient; a number you must look at gets thought about.
 Same idiom as tools/clip-baseline.json and tools/coplanar-baseline.json, and
-as the FLOOR in tools/fixture-consumer-audit.mjs.
+as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 ```
 
 ## `js/game.js` — last ceiling 9235
@@ -617,7 +617,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - count). The five hand-mirrored lazy rosters (BACKEND_FILES /
 - BACKEND_EDGES / AGENT_* / RACE_FILES / DATA_* / NET_*) are now one
 - generated global, ApexRoster (js/roster.js, from tools/manifest.cjs via
-- tools/gen-shell.mjs). The loader logic stays; only the copies left.
+- tools/gen/gen-shell.mjs). The loader logic stays; only the copies left.
 
 ## `js/agent/apex.js` — last ceiling 2600
 

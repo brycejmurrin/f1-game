@@ -25,7 +25,7 @@ are clean. Cleanup here is subtractive hygiene plus a next-extraction map.
 | **STALE** | `docs/COMPONENTS.md` | Class count 508 → 505 (inventory method). |
 | **STALE** | `tests/specs/props-over-road.spec.js` header | Dropped the frozen "15 circuits fully clean (incl. cota)" claim. |
 | **STALE** | `docs/ARCHITECTURE-REVIEW.md` §7 | Curvature sign settled; throttle never-fail and coplanar roster floor marked fixed; 08-17 survey items that have landed are no longer listed as open. hud-layout "FIXED" no longer followed by a current-tense 6/6-fail narrative. |
-| **STALE** | `docs/TESTING.md` fixture adoption | 60 of 111 → 61 of 113; `tools/fixture-consumer-audit.mjs` `FLOOR` raised to 61. |
+| **STALE** | `docs/TESTING.md` fixture adoption | 60 of 111 → 61 of 113; `tools/ci/fixture-consumer-audit.mjs` `FLOOR` raised to 61. |
 | **STALE** | `tests/unit/css-token-adoption.test.mjs` | `CEILING.rawSpacing` 467 → 473 — already red on deploy tip after the menu-color restore. |
 
 Second-round verify (6 agents): all landing claims **PASS**. `SceneryThemes.variant`

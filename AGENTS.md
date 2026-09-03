@@ -14,12 +14,12 @@ area doc — testing evidence goes in `docs/TESTING.md` §Field notes.
 ```sh
 npx serve -l 3456 .                 # run locally (or: python3 -m http.server 3456)
 npm run test:tooling-fast           # the no-browser guard suite (~30 s)
-node tools/verify-change.mjs        # ONE command: fast gate + batched groups (start in background; --wait/--plan/--fast)
+node tools/ci/verify-change.mjs        # ONE command: fast gate + batched groups (start in background; --wait/--plan/--fast)
 node tools/verify-track.cjs <id>    # 2 s headless build check for track edits
-node tools/pick-tests.mjs           # which test GROUPS does this change need?
-node tools/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
-node tools/test-bg.mjs <groups>     # run browser groups in the background
-node tools/assets.mjs verify        # asset-pack licence + md5 + budget check
+node tools/ci/pick-tests.mjs           # which test GROUPS does this change need?
+node tools/ci/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
+node tools/ci/test-bg.mjs <groups>     # run browser groups in the background
+node tools/gen/assets.mjs verify        # asset-pack licence + md5 + budget check
 tools/README.md                     # test-asserted index of all 110+ tools
 docs/AGENT-SURFACE.md               # skills / MCP / tools / wrap map
 ```
@@ -142,7 +142,7 @@ specific renderer.
 
 ## Cursor Cloud specific instructions
 
-Fresh-agent bootstrap is `bash tools/cloud-agent-install.sh` (the dashboard
+Fresh-agent bootstrap is `bash tools/env/cloud-agent-install.sh` (the dashboard
 `install` should call it: the Verification §1 sequence plus full Chromium, which
 `wgx-validate` / `wgx-capture` need — the headless shell has no `navigator.gpu`).
 System packages (`mesa-vulkan-drivers`, `vulkan-tools`, `xvfb`) survive a cold
@@ -183,7 +183,7 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
   class-count + body-node ratchets apply
 - `index.html` — shell: script tags, all static DOM, per-file `?v=<sha256>`
   plus `<meta name="apex-build">`; `sw.js` precache derives from the shell's tags
-- `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check-gctx.mjs`
+- `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check/check-gctx.mjs`
 - `.claude/skills/` — the workflow references (`.claude/skills/README.md`);
   `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor,
   bloat-auditor, deploy-research, physics-contract-auditor) that encode the
@@ -200,19 +200,19 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
   `tests/unit/deploy-stamp.test.mjs`). There is NO bump after a js/css edit
   and `bump-cache --apply` refuses on the repo. `version.json` and
   `<meta name="apex-build">` are a consistent placeholder. After a
-  `tools/manifest.cjs` change run `node tools/gen-shell.mjs`.
+  `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`.
 - **No ES modules** — every file is a `"use strict"` IIFE assigning one global
   (sole exception: the vendored three.js island).
   `tests/unit/global-registry.test.mjs` enforces the registry.
 - **New file**: IIFE file + `tools/manifest.cjs` entry (+ HARD_EDGES pair if
-  eval-time destructured) + `node tools/gen-shell.mjs` (writes the
+  eval-time destructured) + `node tools/gen/gen-shell.mjs` (writes the
   `index.html` tag block, `tools/carview.html`, sw.js's precache seed and
   `js/roster.js` — the lazy rosters game.js injects). No cache bump. Never
   hand-edit a `@gen-shell` block; `load-order.test.mjs` fails on drift.
 - **Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.**
 - `tests/data/ratchets.json` ratchets game.js (lines, non-comment lines,
   `G` members, column-0 lets) and the other big modules AT their current
-  values — pay for every added line; `node tools/ratchets.mjs --update`
+  values — pay for every added line; `node tools/check/ratchets.mjs --update`
   lowers them after an extraction or on a merged tree. New `js/game/` files are hyphenated;
   the older squashed names are grandfathered (settled, final).
 - **localStorage keys** are prefixed `apex26.`.
@@ -234,7 +234,7 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 Full reference `docs/PHYSICS.md`. Two rules bind everywhere:
 - **`PACE` is a ground-speed scale, not a cap.** Anything comparing a speed to
   a literal or VMAX must use `vTop()`/`vStd()`/`aStd()` — enforced by
-  `tools/vstd-lint.mjs`; a bare literal needs a written reason.
+  `tools/check/vstd-lint.mjs`; a bare literal needs a written reason.
 - **The arc must not reach the driver.** Nothing derived from track curvature
   or the racing line may affect the player with assists off; a new
   `Tracks.curvature()` read goes in a legitimate column (AI-only,
@@ -251,7 +251,7 @@ near game.js.
 IS the `MAT` id; blended (`albedo * tex.rgb * 2.0`) so tint and wear survive.
 **Ships ON.** (`matTexMix` def 1.0; `__apex.matTex(0)` is the A/B off-switch.)
 Every failure degrades to the procedural look; boot never awaits assets. GLX,
-TLX, and WGX implement it. `tools/assets.mjs verify` gates licences.
+TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
 
 ## `window.__apex` dev API
 
@@ -269,7 +269,7 @@ same surface from a shell.
 - **Skills** (on-demand workflows): `.claude/skills/` — index in
   `.claude/skills/README.md`. Which CLIs are wrapped as `apex_*`:
   `docs/AGENT-SURFACE.md`. Live canvas: `mcp-probe`. Deploy branch /
-  merge: `check-changes` (`references/deploy.md`, or just `node tools/deploy.mjs`); live `version.json` goes to the `deploy-research`
+  merge: `check-changes` (`references/deploy.md`, or just `node tools/ci/deploy.mjs`); live `version.json` goes to the `deploy-research`
   SUBAGENT (do not attach `mcp-probe` for a version.json check). Pre-push:
   `check-changes` (spawns the `verify-agent` subagent). Fat skill / extract /
   dead code / agent bloat: `slim-bloat` skill / `bloat-auditor` subagent.
@@ -304,11 +304,11 @@ there without review; `pages.yml` fires only there and ships to
 https://brycejmurrin.github.io/f1-game/. Other sessions develop directly on
 the deploy branch, so a deploy is a merge of THEIR new work — both-side
 changes are real conflicts: re-measure baselines on the merged tree, never
-force-push. **`node tools/deploy.mjs`** is the whole protocol (fetch → merge →
+force-push. **`node tools/ci/deploy.mjs`** is the whole protocol (fetch → merge →
 `test:tooling-fast` → `verify-track` for touched circuits → push, or `--pr`
 to open a reviewable PR into the deploy branch instead; `--plan` prints the
 union first). `index.html`/`version.json` are the only files that used to
-conflict; they now resolve to either side plus `node tools/gen-shell.mjs`,
+conflict; they now resolve to either side plus `node tools/gen/gen-shell.mjs`,
 because the tags read `?v=dev` and the generation is stamped by the deploy.
 `test:sweeps` is CI's on the same diff (do not duplicate it locally). The
 live check is `pages.yml`'s `verify-live` job — this container cannot reach

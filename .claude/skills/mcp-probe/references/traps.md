@@ -11,7 +11,7 @@ Playwright render and produce **false failures**, not just timeouts. Measured
 passing specs red — a 120 s timeout AND an assertion miss (`dynamic player shadow`
 read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
 
-- **Check `node tools/test-bg.mjs --status` before you render here.** If a group
+- **Check `node tools/ci/test-bg.mjs --status` before you render here.** If a group
   is running, wait — or accept you will re-run its false-fails solo.
 - **Park to `about:blank` (`navigate_page`) the moment you're done**, so the warm
   page doesn't tax the next `test-solo`.

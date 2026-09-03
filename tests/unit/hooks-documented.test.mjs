@@ -55,7 +55,7 @@ function documented(doc, name) {
   return new RegExp("__apex\\." + name + "\\b|`" + name + "\\(").test(doc);
 }
 
-// The generated hook index (tools/gen-hooks-table.mjs) lists EVERY hook by
+// The generated hook index (tools/gen/gen-hooks-table.mjs) lists EVERY hook by
 // construction, so it would satisfy `documented()` for all of them and turn
 // this ratchet vacuous. Strip it: the requirement here is a HAND section per
 // hook. tests/unit/generated-docs.test.mjs guards the index separately.

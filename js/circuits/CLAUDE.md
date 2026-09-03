@@ -10,5 +10,5 @@ and the `scenery(api)` callback (reference: `docs/SCENERY-API.md`).
   them via the compensated idiom; write fracs in the def's own frame and
   never pre-compensate by hand.
 - After ANY edit: `node tools/verify-track.cjs <id>` FIRST (2 s), then the
-  groups `node tools/pick-tests.mjs` names. A misplaced prop or terrain
+  groups `node tools/ci/pick-tests.mjs` names. A misplaced prop or terrain
   reading usually means a raw-frac mistake, not a geometry bug.

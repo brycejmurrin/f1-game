@@ -1,5 +1,5 @@
 /* collision-ai-fixes-vm.test.mjs — tests/specs/collision-ai-fixes.spec.js
- * replayed in the Node VM (tools/game-vm.cjs): the June 2026 collision / AI /
+ * replayed in the Node VM (tools/lib/game-vm.cjs): the June 2026 collision / AI /
  * physics bug-fix audit — wrong-way thresholds and hysteresis, the open-circuit
  * wall scrub, the throttle-gated rescue and its cooldown reset, rear-end
  * contactT, the >6-car separation window, AI banking grip (zandvoort) and the
@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const closeTo = (r, e, d, m) => assert.ok(Math.abs(e - r) < Math.pow(10, -d) / 2, m || `${r} not within 10^-${d}/2 of ${e}`);
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);

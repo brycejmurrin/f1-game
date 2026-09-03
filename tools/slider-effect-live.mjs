@@ -32,7 +32,7 @@
 import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, startStaticServer } from "./lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
 const VIEW = path.join(path.dirname(fileURLToPath(import.meta.url)), "slider-effect-view.py");

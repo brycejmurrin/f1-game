@@ -26,11 +26,11 @@ import {
   shutdown,
   sleep,
   startStaticServer,
-} from "./harness.mjs";
+} from "./lib/harness.mjs";
 import {
   assertContainedPath,
   resolveRepoDefault,
-} from "./output-paths.mjs";
+} from "./lib/output-paths.mjs";
 
 const ROOT = pathFromModule(import.meta.url);
 

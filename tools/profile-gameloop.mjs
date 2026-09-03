@@ -5,7 +5,7 @@
 //   mode "physics" (default): __apex.step()-driven synchronous loop
 //   mode "render": recordVideo-ticked rAF loop (compositor drives frames)
 import { writeFileSync, mkdirSync } from "node:fs";
-import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, sleep, startStaticServer } from "./lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");

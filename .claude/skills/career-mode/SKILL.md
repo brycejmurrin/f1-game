@@ -80,7 +80,7 @@ Commands:
 ```sh
 node tools/career-economy.mjs            # launches Playwright/Chromium
 node tools/career-economy.mjs --years 3
-node tools/test-bg.mjs modes              # career + quali + season + TT — there is no test:career
+node tools/ci/test-bg.mjs modes              # career + quali + season + TT — there is no test:career
 npm run test:tooling-fast
 ```
 

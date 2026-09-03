@@ -323,7 +323,7 @@ test.describe("Apex 26 — rendering", () => {
 // the speed test left the car at 80 m/s.
 sharedTest.describe("Apex 26 — HUD", () => {
   sharedTest("speed readout updates after jump() at speed", async ({ page }) => {
-    // BUDGET, not contention. Re-run ALONE on an idle box (tools/test-solo.mjs,
+    // BUDGET, not contention. Re-run ALONE on an idle box (tools/ci/test-solo.mjs,
     // which refuses to start above load 2) this took 98.5 s of the 120 s default
     // — 82 % of budget with nothing else on the machine — and it is reliably the
     // first test to fail the moment anything else touches the CPU. The cost is

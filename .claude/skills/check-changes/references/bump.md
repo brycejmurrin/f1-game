@@ -2,10 +2,10 @@
 
 Apex 26 has **no build step** and, since 2026-09-03, **no cache bump in
 development**. Every tagged JS/CSS URL in the committed `index.html` reads
-`?v=dev`; `tools/gen-shell.mjs` writes the tag blocks (and `tools/carview.html`,
+`?v=dev`; `tools/gen/gen-shell.mjs` writes the tag blocks (and `tools/carview.html`,
 the `sw.js` precache seed and `js/roster.js`) from `tools/manifest.cjs`.
 `pages.yml` stages the site and runs
-`node tools/bump-cache.mjs --apply --at <2000 + commit count> --root _site`,
+`node tools/ci/bump-cache.mjs --apply --at <2000 + commit count> --root _site`,
 which rewrites every tag to that file's 12-char SHA-256 and stamps the shell
 generation — so the deployed shell is content-addressed and the committed one
 never changes for a hash. `version.json` and `<meta name="apex-build">` are a
@@ -16,12 +16,12 @@ consistent placeholder (`tests/unit/deploy-stamp.test.mjs`).
 | you changed | run |
 |---|---|
 | any `js/` or `css/` file | nothing — the tag already reads `?v=dev` |
-| `tools/manifest.cjs` (new / moved / removed file, roster or edge) | `node tools/gen-shell.mjs` |
-| `sw.js` DEV rule / precache seed | `node tools/gen-shell.mjs --check` + `npm run test:service-worker` |
+| `tools/manifest.cjs` (new / moved / removed file, roster or edge) | `node tools/gen/gen-shell.mjs` |
+| `sw.js` DEV rule / precache seed | `node tools/gen/gen-shell.mjs --check` + `npm run test:service-worker` |
 
 ```sh
-node tools/gen-shell.mjs --check     # every generated block byte-identical to the manifest
-node tools/bump-cache.mjs            # repo check: every tag is ?v=dev, meta == version.json
+node tools/gen/gen-shell.mjs --check     # every generated block byte-identical to the manifest
+node tools/ci/bump-cache.mjs            # repo check: every tag is ?v=dev, meta == version.json
 ```
 
 `bump-cache.mjs --apply` without `--root` REFUSES (exit 2): a habitual

@@ -30,9 +30,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
 const GENERATORS = [
-  { tool: "tools/gen-tools-readme.mjs", target: "tools/README.md" },
-  { tool: "tools/gen-slider-doc.mjs", target: "docs/LIGHTING-TUNER-SLIDERS.md" },
-  { tool: "tools/gen-hooks-table.mjs", target: "docs/DEBUG-HOOKS.md" },
+  { tool: "tools/gen/gen-tools-readme.mjs", target: "tools/README.md" },
+  { tool: "tools/gen/gen-slider-doc.mjs", target: "docs/LIGHTING-TUNER-SLIDERS.md" },
+  { tool: "tools/gen/gen-hooks-table.mjs", target: "docs/DEBUG-HOOKS.md" },
 ];
 
 function check(tool) {

@@ -32,7 +32,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, startStaticServer } from "./lib/harness.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const DIR = path.join(ROOT, "artifacts/graphics/tuner-sweep");

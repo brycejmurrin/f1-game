@@ -24,7 +24,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { emptyPlaywright, scanPlaywrightLines } from "./playwright-occupancy.mjs";
+import { emptyPlaywright, scanPlaywrightLines } from "./ci/playwright-occupancy.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -271,7 +271,7 @@ function occupancyRefuse() {
     return refuse(
       "playwright_live",
       `${who || "A Playwright process"} is live.`,
-      "Wait for test-bg (`node tools/test-bg.mjs --status`) or close the host MCP browser (`browser_close`) before apex_* browser tools.",
+      "Wait for test-bg (`node tools/ci/test-bg.mjs --status`) or close the host MCP browser (`browser_close`) before apex_* browser tools.",
     );
   }
   return null;

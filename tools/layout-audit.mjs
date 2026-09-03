@@ -40,7 +40,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { parseCircuits, circuitTag, pickCircuit } from "./circuit-axis.mjs";
-import { launchChromium } from "./harness.mjs";
+import { launchChromium } from "./lib/harness.mjs";
 import { collectDomInfo } from "./css-play.mjs";
 import { SCREENS, VIEWPORTS, OVERLAY_IDS, pickScreens, pickViewports } from "./menu-screens.mjs";
 import {

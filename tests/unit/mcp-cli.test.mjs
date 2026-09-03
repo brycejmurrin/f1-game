@@ -166,13 +166,13 @@ test("probe rejects an unknown flag instead of silently probing the default", ()
 });
 
 test("the Chrome wrapper passes the flags WebGPU and software WebGL need", () => {
-  // Flags live in tools/webgpu-chrome-args.cjs — chrome-devtools-mcp.sh and
+  // Flags live in tools/lib/webgpu-chrome-args.cjs — chrome-devtools-mcp.sh and
   // harness.mjs must stay in sync or MCP reads "no adapter" while wgx-shot passes.
   const src = fs.readFileSync(path.join(ROOT, "tools/chrome-devtools-mcp.sh"), "utf8");
   assert.match(src, /webgpu-chrome-args\.cjs/);
   assert.match(src, /APEX_CHROME_ARGS/);
   assert.match(src, /SECURE CONTEXT/);
-  const argsMod = fs.readFileSync(path.join(ROOT, "tools/webgpu-chrome-args.cjs"), "utf8");
+  const argsMod = fs.readFileSync(path.join(ROOT, "tools/lib/webgpu-chrome-args.cjs"), "utf8");
   assert.match(argsMod, /--enable-unsafe-webgpu/);
   assert.match(argsMod, /--use-webgpu-adapter=swiftshader/);
   assert.match(argsMod, /--enable-unsafe-swiftshader/);

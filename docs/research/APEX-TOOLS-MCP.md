@@ -222,7 +222,7 @@ other occupants. One-sided is acceptable if `apex_status` reports them
 |---|---|
 | `verify-change` without `--fast` (default starts batch 1; `--wait` runs every group) | Playwright groups, minutes, foreground-illegal |
 | `test-shards.sh` | Blocking concurrent groups |
-| `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) / `--at` / `--merge` | Writes `index.html` / `version.json`; last edit before commit |
+| `node tools/gen/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) / `--at` / `--merge` | Writes `index.html` / `version.json`; last edit before commit |
 | `rtc-e2e` / `rtc-e2e-3p` / `rtc-e2e-room` / `nostr-probe` | Real network / minutes / host stack |
 | TinyFish keys / `tinyfish-mcp.sh` / `.env` | Probe owns `tinyfish_*`; key is shell / gitignored `.env` / tracked `TINYFISH_KEY_FALLBACK` (`TINYFISH_NO_FALLBACK=1`; custom key: https://agent.tinyfish.ai/home) |
 | `chrome_*` / `tinyfish_*` names or passthrough | Mixing catalogs is how apex-wrap shipped 0 tools |

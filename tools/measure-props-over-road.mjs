@@ -4,11 +4,11 @@
 // Usage: TRACK=redbull PORT=3471 node tools/measure-props-over-road.mjs [--shots]
 // Starts an in-process static server via harness.mjs and launches Chromium
 // through the same path every other tool uses (CHROME / PW_CHROMIUM / ladder).
-import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, startStaticServer } from "./lib/harness.mjs";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertSafePathToken } from "./output-paths.mjs";
+import { assertSafePathToken } from "./lib/output-paths.mjs";
 
 const TRACK = process.env.TRACK;
 const PORT = process.env.PORT ? +process.env.PORT : 0;

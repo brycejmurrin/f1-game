@@ -31,7 +31,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { decodePNG, encodePNG } from "./assets.mjs";
+import { decodePNG, encodePNG } from "./gen/assets.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // The last commit that carried assets/logos/*.png. Pinned rather than resolved

@@ -58,7 +58,7 @@ Load from the SKILL.md index when the task needs this detail.
    which in the running game would strand the player on the menu. Fix before
    pushing. Common causes: a missing destructure (`out` not pulled from `api`), a
    node index out of range, or bad track data.
-4. **Bump the cache version** (`node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`)) — you edited
+4. **Bump the cache version** (`node tools/gen/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`)) — you edited
    `index.html` and/or a JS file.
 5. **Visual check** — load and screenshot it (use the `playwright-probe` skill's `shot.mjs`):
    ```js
@@ -69,7 +69,7 @@ Load from the SKILL.md index when the task needs this detail.
 6. **Tests**:
    ```sh
    node tools/verify-track.cjs <id>
-   node tools/test-bg.mjs circuits   # walls + autopilot + elevation (includes tracks-walls.spec.js)
+   node tools/ci/test-bg.mjs circuits   # walls + autopilot + elevation (includes tracks-walls.spec.js)
    ```
    The `terrain-over-road.spec.js` audit (part of the full suite) catches terrain
    triangles rendering above the racing line — re-run it if you changed elevation

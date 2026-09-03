@@ -22,10 +22,10 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const PACK = path.join(ROOT, "assets", "pack");
 const MANIFEST = path.join(PACK, "manifest.json");
-const BUDGET_BYTES = 8 * 1024 * 1024;         // must match tools/assets.mjs
+const BUDGET_BYTES = 8 * 1024 * 1024;         // must match tools/gen/assets.mjs
 const ALLOWED = new Set(["CC0", "CC0-1.0", "Apex26-Procedural"]);
 
-const TOOL_SRC = fs.readFileSync(path.join(ROOT, "tools", "assets.mjs"), "utf8");
+const TOOL_SRC = fs.readFileSync(path.join(ROOT, "tools", "gen", "assets.mjs"), "utf8");
 const hasPack = fs.existsSync(MANIFEST);
 const manifest = hasPack ? JSON.parse(fs.readFileSync(MANIFEST, "utf8")) : null;
 
@@ -55,16 +55,16 @@ test("bake tool's MAT table matches TrackGeom.MAT exactly", () => {
   // The tool declares its own copy because it must run without the game's
   // load order; this is the assertion that keeps the copy honest.
   const block = TOOL_SRC.match(/const MAT = \{([\s\S]*?)\};/);
-  assert.ok(block, "could not find the MAT table in tools/assets.mjs");
+  assert.ok(block, "could not find the MAT table in tools/gen/assets.mjs");
   const tool = {};
   for (const m of block[1].matchAll(/(\w+):\s*(\d+)/g)) tool[m[1]] = Number(m[2]);
-  assert.deepEqual(tool, real, "tools/assets.mjs MAT has drifted from js/track/core/geom.js");
+  assert.deepEqual(tool, real, "tools/gen/assets.mjs MAT has drifted from js/track/core/geom.js");
 });
 
 test("GLASS and FLAG are never given a baked layer", () => {
   const real = realMAT();
   const block = TOOL_SRC.match(/const SCALES = \{([\s\S]*?)\};/);
-  assert.ok(block, "could not find the SCALES table in tools/assets.mjs");
+  assert.ok(block, "could not find the SCALES table in tools/gen/assets.mjs");
   const ids = [...block[1].matchAll(/MAT\.(\w+)\]/g)].map((m) => m[1]);
   // GLASS: a baked albedo would blur the mirror reflection read.
   // FLAG: geometry is displaced in the vertex shader off fract(aMat).
@@ -136,7 +136,7 @@ test("bake-synthetic produces a dual-tier Apex26-Procedural pack with no network
       credits: [],
     }));
     const r = cp.spawnSync(process.execPath,
-      [path.join(ROOT, "tools", "assets.mjs"), "bake-synthetic"],
+      [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic"],
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
     assert.equal(r.status, 0, `bake-synthetic failed:\n${r.stdout}\n${r.stderr}`);
     const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
@@ -253,7 +253,7 @@ test("bake-synthetic-models replaces Kenney bins with Apex26-Procedural AX26", (
       env: {}, credits: [],
     }));
     const r = cp.spawnSync(process.execPath,
-      [path.join(ROOT, "tools", "assets.mjs"), "bake-synthetic-models"],
+      [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-synthetic-models"],
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
     assert.equal(r.status, 0, `bake-synthetic-models failed:\n${r.stdout}\n${r.stderr}`);
     const m = JSON.parse(fs.readFileSync(path.join(dir, "manifest.json"), "utf8"));
@@ -317,7 +317,7 @@ test("bake-model round-trips glTF into the game's own vertex format", () => {
     fs.writeFileSync(glb, Buffer.concat([head, jc, bc]));
 
     const r = cp.spawnSync(process.execPath,
-      [path.join(ROOT, "tools", "assets.mjs"), "bake-model", "tri", glb, "--mat", "CONCRETE"],
+      [path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-model", "tri", glb, "--mat", "CONCRETE"],
       { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
     assert.equal(r.status, 0, `bake-model failed: ${r.stderr || r.stdout}`);
 
@@ -405,7 +405,7 @@ test("bake-atlas slices a 4x4 sheet onto the named MAT layer", () => {
     ]));
 
     const r = cp.spawnSync(process.execPath, [
-      path.join(ROOT, "tools", "assets.mjs"), "bake-atlas",
+      path.join(ROOT, "tools", "gen", "assets.mjs"), "bake-atlas",
       "--albedo", atlas, "--grid", "4", "--inset", "0",
       "--size", "8", "--low", "0", "--map", "BRICK=1,0",
     ], { env: { ...process.env, APEX_PACK_DIR: dir }, encoding: "utf8" });
@@ -598,14 +598,14 @@ test("credits cover every asset in the pack", { skip: !hasPack && "no pack insta
     assert.ok(c.source, `credit ${c.id}: no source recorded`);
   }
   assert.ok(fs.existsSync(path.join(PACK, "CREDITS.md")),
-    "assets/pack/CREDITS.md missing — run `node tools/assets.mjs credits`");
+    "assets/pack/CREDITS.md missing — run `node tools/gen/assets.mjs credits`");
 });
 
 // WHAT THE GAME TELLS THE PLAYER ABOUT PROVENANCE MUST MATCH THE MANIFEST.
 //
 // The BAKED MATERIALS slider help in js/lighting/knobs.js described the shipped
 // pack as "real CC0 photoscans" while all 14 committed layers record
-// `procedural:tools/assets.mjs` / `Apex26-Procedural`. Nothing connected the
+// `procedural:tools/gen/assets.mjs` / `Apex26-Procedural`. Nothing connected the
 // two, so the string outlived the pack it described: assets/pack/webbake.js CAN
 // composite Poly Haven CC0 scans, but it is a manual browser tool whose output
 // has to be hand-imported (`assets.mjs import-pack`), and it was never run for

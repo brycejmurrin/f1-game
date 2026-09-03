@@ -31,10 +31,10 @@
 //   - probe triangles: all triangles are degenerate except K probes placed in
 //     distinct grid cells; flat interpolation carries the PROVOKING (first)
 //     vertex's value, so each probe cell reads back its first-vertex vid.
-import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } from "./harness.mjs";
+import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } from "./lib/harness.mjs";
 import { createRequire } from "node:module";
 const { WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } =
-  createRequire(import.meta.url)("./webgpu-chrome-args.cjs");
+  createRequire(import.meta.url)("./lib/webgpu-chrome-args.cjs");
 
 const argv = process.argv.slice(2);
 const stackArg = argv.includes("--stack") ? argv[argv.indexOf("--stack") + 1] : "both";

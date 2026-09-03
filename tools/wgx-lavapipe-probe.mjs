@@ -26,7 +26,7 @@ const lite = args.includes("--lite");
 const inner = `
 import { createRequire } from "node:module";
 const ROOT = ${JSON.stringify(ROOT)};
-const { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } = await import("./tools/harness.mjs");
+const { startStaticServer, launchChromium, shutdown, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } = await import("./lib/harness.mjs");
 const { chromium } = createRequire(import.meta.url)("playwright");
 const srv = await startStaticServer(ROOT);
 const browser = await launchChromium({

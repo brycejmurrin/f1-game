@@ -24,12 +24,12 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, sleep, startStaticServer } from "./lib/harness.mjs";
 import {
   assertSafePathToken,
   resolveContainedChild,
   resolveRepoDefault,
-} from "./output-paths.mjs";
+} from "./lib/output-paths.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");
 export const SURVEY_USAGE = "usage: survey-track.mjs <id> [label] [fracs] [--oblique]";

@@ -298,7 +298,7 @@ const LOCK = path.join(ROOT, "scratch", "apex-browser.lock");
 const TEST_BG = path.join(ROOT, "artifacts", "logs", "test-bg.json");
 
 test("playwright occupancy matches `playwright test` tokens, not MCP JSON", async () => {
-  const { classifyPlaywrightLine, scanPlaywrightLines } = await import("../../tools/playwright-occupancy.mjs");
+  const { classifyPlaywrightLine, scanPlaywrightLines } = await import("../../tools/ci/playwright-occupancy.mjs");
   assert.equal(
     classifyPlaywrightLine("4321 /usr/bin/npx playwright test --reporter=line")?.kind,
     "suite",

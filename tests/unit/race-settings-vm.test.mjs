@@ -1,5 +1,5 @@
 /* race-settings-vm.test.mjs — RACE SETTINGS lap ladder as BEHAVIOUR in the
- * game-vm harness (tools/game-vm.cjs runs the real game.js on an inert DOM).
+ * game-vm harness (tools/lib/game-vm.cjs runs the real game.js on an inert DOM).
  *
  * FULL moves with the circuit (def.gpLaps: Monaco 78, Spa 44, Silverstone 52),
  * so a lap count picked on one circuit can sit OFF the ladder on the next —
@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 let g = null;
 before(async () => { g = await createGame({ storage: { trackId: "monza" } }); });

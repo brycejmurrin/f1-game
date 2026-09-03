@@ -77,5 +77,5 @@ Read both once; do not re-fetch per tick.
 - `docs/AGENT-WORLD-API.md` — the design and the research behind each choice.
 - `__apex.agentHelp()` — the live manifest, including the `fields` glossary and
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
-- Tests: `node tools/test-bg.mjs hooks` (`tests/specs/agent-view.spec.js`,
+- Tests: `node tools/ci/test-bg.mjs hooks` (`tests/specs/agent-view.spec.js`,
   `tests/specs/agent-drive-bench.spec.js`, `tests/specs/agent-determinism.spec.js`).

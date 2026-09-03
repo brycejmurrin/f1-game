@@ -24,7 +24,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, sleep, startStaticServer } from "./lib/harness.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { fileURLToPath } from "node:url";
 // The data hub is the only screen whose content comes off the network. Reuse the

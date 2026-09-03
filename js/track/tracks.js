@@ -1746,7 +1746,7 @@ const Tracks = (function () {
     }
 
     // Place a BAKED MODEL from the asset pack (assets/pack, built by
-    // `node tools/assets.mjs bake-model`) at a trackside anchor. This is the one
+    // `node tools/gen/assets.mjs bake-model`) at a trackside anchor. This is the one
     // scenery helper whose geometry is not generated here — it is a real modelled
     // asset baked down to the game's own vertex format, MAT id included.
     //

@@ -72,9 +72,9 @@ Load from the SKILL.md index when the task needs this detail.
 7. **Verify narrowly, then with browser coverage.**
    - Run the pure unit guard `node --test tests/unit/race-control.test.mjs` after
      race-control logic changes.
-   - Run `node tools/test-bg.mjs driving` for debris and caution browser coverage.
+   - Run `node tools/ci/test-bg.mjs driving` for debris and caution browser coverage.
    - Use `test:tooling-fast` for docs/hooks/unit inventory checks.
-   - If JS changed, run `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
+   - If JS changed, run `node tools/gen/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
 
 ## Common Mistakes
 

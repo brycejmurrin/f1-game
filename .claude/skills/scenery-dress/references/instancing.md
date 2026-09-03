@@ -35,7 +35,7 @@ baking. Plan + reuse numbers: `docs/research/SCENE-GRAPH-PLAN.md`.
 node tools/graph-parity.cjs <id>            # or --all
 BASE=<ref> node tools/graph-parity.cjs --all
 npm run test:tooling-fast
-node tools/test-bg.mjs gfx                # instanced-draw.spec.js
+node tools/ci/test-bg.mjs gfx                # instanced-draw.spec.js
 node tools/verify-track.cjs <id>
 ```
 
@@ -87,10 +87,10 @@ judging a `graph-parity` mismatch.
 5. **Fast contract then GL wiring**:
    ```sh
    npm run test:tooling-fast
-   node tools/test-bg.mjs gfx    # instanced-draw.spec.js — background
+   node tools/ci/test-bg.mjs gfx    # instanced-draw.spec.js — background
    ```
 
-6. **Ship** — `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) if you edited `js/`. Visual spot-check:
+6. **Ship** — `node tools/gen/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) if you edited `js/`. Visual spot-check:
    **playwright-probe** on a dense track (Spa, Vegas).
 
 `batches()` routing: instanced when `node.full` and no radial op under

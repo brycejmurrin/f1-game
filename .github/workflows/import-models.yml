@@ -7,7 +7,7 @@ name: Import CC0 models
 # browser-only policy and does not exist server-side, and this runner is not
 # behind the sandbox proxy that 403s the asset CDNs — so it can fetch itch.io,
 # Kenney, Quaternius or a signed download URL that nothing else in this project
-# can reach. It downloads the pack, runs tools/import-models.mjs, and both
+# can reach. It downloads the pack, runs tools/gen/import-models.mjs, and both
 # commits the baked models to a bot branch AND uploads them as an artifact.
 #
 # Dispatch from the Actions tab (or via the API). The baked models land on the
@@ -89,14 +89,14 @@ jobs:
           MODEL_PREFIX: ${{ inputs.prefix }}
           MODEL_AUTHOR: ${{ inputs.author }}
         run: |
-          node tools/import-models.mjs _extract \
+          node tools/gen/import-models.mjs _extract \
             --mat "$MODEL_MAT" \
             --height "$MODEL_HEIGHT" \
             --prefix "$MODEL_PREFIX" \
             --author "$MODEL_AUTHOR" \
             --source "$MODEL_URL"
-          node tools/assets.mjs credits || true
-          node tools/assets.mjs verify || echo "::warning::verify reported issues (often the budget — review the size report above)"
+          node tools/gen/assets.mjs credits || true
+          node tools/gen/assets.mjs verify || echo "::warning::verify reported issues (often the budget — review the size report above)"
 
       - name: Upload baked models as an artifact
         uses: actions/upload-artifact@v4
@@ -133,10 +133,10 @@ jobs:
           # stamps a new shell/SW generation (pages.yml: 2000 + commit count),
           # so existing installs drop the old cache on the next deploy without a
           # committed bump. The shell is generated; just confirm it is in step.
-          node tools/gen-shell.mjs --check
+          node tools/gen/gen-shell.mjs --check
           git commit -m "chore(assets): import CC0 models from $MODEL_URL
 
-          Baked on the runner by tools/import-models.mjs — mat=$MODEL_MAT,
+          Baked on the runner by tools/gen/import-models.mjs — mat=$MODEL_MAT,
           height=${MODEL_HEIGHT}m. Merge this branch into the deploy branch
           to ship; nothing places these until a circuit calls api.bakedModel()."
           git push -f origin "$COMMIT_BRANCH"

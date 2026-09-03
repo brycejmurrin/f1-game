@@ -71,7 +71,7 @@ Filters (no browser):
                  | sparse-pixels
   --json         JSON on stdout (knobs + counts)
 
-Visual A/B (Playwright via tools/harness.mjs — NOT Chrome MCP):
+Visual A/B (Playwright via tools/lib/harness.mjs — NOT Chrome MCP):
   --live ID      boot Playwright, chase+park at the knob's recipe, write
                  v0.png… / a.png / b.png / filter.png / heat.png / sheet.png
                  (ramp.png when N>2). filter.png shows ONLY the changed pixels

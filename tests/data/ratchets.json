@@ -1,5 +1,5 @@
 {
-  "_doc": "Ratchets on the files that only ever grow. `node tools/ratchets.mjs` checks, `--update` snaps every ceiling to the current value (lower after an extraction; a raise is a deliberate edit with its reason in the commit). Metrics: lines (split-newline), codeLines (non-comment non-blank), gMembers (G facade members, check-gctx), topLets (column-0 `let`). History: docs/notes/CEILING-HISTORY.md.",
+  "_doc": "Ratchets on the files that only ever grow. `node tools/check/ratchets.mjs` checks, `--update` snaps every ceiling to the current value (lower after an extraction; a raise is a deliberate edit with its reason in the commit). Metrics: lines (split-newline), codeLines (non-comment non-blank), gMembers (G facade members, check-gctx), topLets (column-0 `let`). History: docs/notes/CEILING-HISTORY.md.",
   "files": {
     "js/game.js": {
       "lines": 9235,
@@ -41,7 +41,7 @@
     "js/net/lobby.js": {
       "lines": 1684
     },
-    "tools/pick-tests.mjs": {
+    "tools/ci/pick-tests.mjs": {
       "blanketOnlyRoutes": 1
     }
   }

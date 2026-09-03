@@ -7,7 +7,7 @@
 // #game-soft after GLX.awaitSoftPresent() (soft-present 2D blit). THREE
 // pins tlxForceGL=1 unless --tlx-webgpu. capturePixels readback →
 // frame.png is optional and runs AFTER the visible check. Playwright uses
-// tools/webgpu-chrome-args.cjs; MCP chrome-devtools uses the same flags.
+// tools/lib/webgpu-chrome-args.cjs; MCP chrome-devtools uses the same flags.
 //
 // Usage:
 //   node tools/gfx-probe.mjs [--backend webgpu|three] [--lite] [--iphone]
@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 import {
   startStaticServer, launchChromium, shutdown, sleep,
   WEBGPU_CHROMIUM_ARGS, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV,
-} from "./harness.mjs";
+} from "./lib/harness.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 

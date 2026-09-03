@@ -11,7 +11,7 @@ expectation vs real regression.
    node tools/verify-track.cjs <id>
    node tools/verify-track.cjs --all    # js/track/* engine edits
    ```
-   `tools/verify-change.mjs` already runs this inline when the plan names a
+   `tools/ci/verify-change.mjs` already runs this inline when the plan names a
    circuit.
 
 2. **`js/track/scenery/graph.js` edited? Also run scene-graph parity.**
@@ -30,16 +30,16 @@ expectation vs real regression.
    change: every `?v=N` in `index.html` AND `version.json`'s `build` must
    equal the same N (the deploy stamp; the repo carries `?v=dev`):
    ```sh
-   node tools/bump-cache.mjs --check
+   node tools/ci/bump-cache.mjs --check
    grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
    ```
-   Cross-lineage merge: `node tools/gen-shell.mjs` regenerates the union shell
+   Cross-lineage merge: `node tools/gen/gen-shell.mjs` regenerates the union shell
    (max of both + 1). Never `--apply` while a browser run is in flight.
 
 4. **Smoke + load order** if you touched load order, `index.html`, or a core
    module (`index.html` script tags must match `tools/manifest.cjs`):
    ```sh
-   npm run test:tooling-fast && node tools/test-bg.mjs smoke
+   npm run test:tooling-fast && node tools/ci/test-bg.mjs smoke
    ```
    `test:tooling` also runs the slow full-fleet sweeps — reserve that for
    geometry pushes. Docs/skills/tools edits: `test:tooling-fast` covers
@@ -56,7 +56,7 @@ drift; geometry/behaviour hooks are ground truth. Do not "fix" code to
 satisfy a threshold that itself went stale.
 
 A timeout on a busy box measures the machine, not the code — re-run that
-spec **alone** (`node tools/test-solo.mjs <spec>`) before believing it.
+spec **alone** (`node tools/ci/test-solo.mjs <spec>`) before believing it.
 Check `/proc/loadavg` (< 3) and for a live `playwright test` process first.
 
 ## Push

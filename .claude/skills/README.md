@@ -16,7 +16,7 @@ playwright-probe; `bake-lighting` → lighting-tuner; `scene-graph-instancing` �
 scenery-dress; `debug-state` → agent-view; `cross-backend-parity` →
 `docs/RENDERERS.md` §Cross-backend parity. `apex-env-setup`, `pixel-perfect`,
 `webapp-testing`, `webgpu-inspector` were deleted: env setup is AGENTS.md
-§Verification 1 + `tools/cloud-agent-install.sh`.)
+§Verification 1 + `tools/env/cloud-agent-install.sh`.)
 
 | Skill | Use it when |
 |---|---|
@@ -55,6 +55,6 @@ scenery-dress; `debug-state` → agent-view; `cross-backend-parity` →
 Cache busting is the deploy's job: the committed shell reads `?v=dev` on
 every tag and `pages.yml` stamps content hashes while staging. Nothing to
 bump after a `js/`/`css/` edit; after a `tools/manifest.cjs` change run
-`node tools/gen-shell.mjs` (check-changes `references/bump.md`).
+`node tools/gen/gen-shell.mjs` (check-changes `references/bump.md`).
 
 See individual `SKILL.md` files under this directory for full workflows.

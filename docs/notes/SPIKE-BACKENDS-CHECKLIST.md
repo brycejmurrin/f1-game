@@ -4,7 +4,7 @@ Inventory for `docs/research/TREE-RESTRUCTURE-2026-09.md` §Phase 2 "WGX/TLX
 spike-out (owner's decision)". This is the exact list the Phase 2b move
 window executes. The whole-file move (50 files, 7.69 MB) is
 `tools/moves/spike-backends.json`, validated with
-`node tools/move-tree.mjs tools/moves/spike-backends.json --plan` (0 errors,
+`node tools/gen/move-tree.mjs tools/moves/spike-backends.json --plan` (0 errors,
 73 files rewritten, no leftover bare-name mentions). Everything below is the
 **non-move** edits `move-tree.mjs` cannot make on its own — a manifest map, a
 generated block, a partial-file split, a rewritten assertion — each with
@@ -69,7 +69,7 @@ tools import (`harness.mjs`'s importer list includes `ssr-probe.mjs`,
 both **shrink** (below): they currently re-export/reference
 `webgpu-chrome-args.cjs`, which moves.
 
-## Manifest / roster (tools/manifest.cjs, tools/gen-shell.mjs)
+## Manifest / roster (tools/manifest.cjs, tools/gen/gen-shell.mjs)
 
 - `tools/manifest.cjs:409-415` — the `webgpu:` array in `DEFERRED` (4 files).
   Delete the whole key.
@@ -89,15 +89,15 @@ both **shrink** (below): they currently re-export/reference
   hand-authored HTML comment gen-shell inserts after the GLX tag explaining
   the two DEFERRED backends. Rewrite or delete once there is nothing
   deferred to explain.
-- `tools/gen-shell.mjs:96-107` (`swOptionalFiles`/`swOptionalBlock`) —
+- `tools/gen/gen-shell.mjs:96-107` (`swOptionalFiles`/`swOptionalBlock`) —
   `Object.values(MANIFEST.DEFERRED).flat()` becomes `[]` automatically once
   `DEFERRED` is empty; the generated sw.js block just prints an empty
   "DEFERRED renderer backends" group. Cosmetic — either accept the empty
   group or teach `swOptionalBlock` to skip a title whose file list is empty
   (a small tool edit, not required for correctness).
-- `tools/gen-shell.mjs:125-149` (`rosterSource`) — `DEFERRED`/`DEFERRED_EDGES`
+- `tools/gen/gen-shell.mjs:125-149` (`rosterSource`) — `DEFERRED`/`DEFERRED_EDGES`
   still get written into the generated `js/roster.js` as empty
-  values (`{}`/`[]`). No edit needed; `node tools/gen-shell.mjs` regenerates
+  values (`{}`/`[]`). No edit needed; `node tools/gen/gen-shell.mjs` regenerates
   `js/roster.js`, `index.html`'s tag blocks, `tools/carview.html` and
   `sw.js`'s optional block from the edited manifest automatically. Run it
   once after the manifest edit, not by hand.
@@ -291,7 +291,7 @@ not assert on WGX by name).
   `webgpu/` WGX and `three/` TLX" in the Layout section's `js/render/` bullet.
   Delete this clause; `js/render/` no longer has a DEFERRED subtree.
 - `AGENTS.md:252` — "TLX, and WGX implement it" in the Baked asset pack
-  section (`tools/assets.mjs verify` gates licences). Rewrite to "GLX
+  section (`tools/gen/assets.mjs verify` gates licences). Rewrite to "GLX
   implements it" once the other two backends are gone.
 - `AGENTS.md:288,290,295` — `docs/RENDERERS.md` description ("GLX/WGX/TLX,
   cross-backend parity"), the WGX/WGSL pointer to
@@ -395,7 +395,7 @@ grep (excludes the docs archive directory, excludes files already covered above)
 
 | Guard | Why it goes red | Fix |
 |---|---|---|
-| `tests/data/ratchets.json` — `js/render/webgpu/wgx.js` (6037 lines), `js/render/three/tlx.js` (3132), `js/render/webgpu/wgsl-chunks.js` (1934), `js/render/three/tsl-lit.js` (1777) entries | `tools/ratchets.mjs` (`node --test tests/unit/ratchets.test.mjs`) reads each `files` key as a path and fails with `missing: true` (`tools/ratchets.mjs:55`) when the file no longer exists — `tests/unit/ratchets.test.mjs:14` asserts `rows.filter(r => r.missing)` is empty. | Delete the four `js/render/webgpu/wgx.js` / `js/render/three/tlx.js` / `js/render/webgpu/wgsl-chunks.js` / `js/render/three/tsl-lit.js` entries from `tests/data/ratchets.json`'s `files` object. (`js/render/glx/glx.js` at 2259 lines stays.) |
+| `tests/data/ratchets.json` — `js/render/webgpu/wgx.js` (6037 lines), `js/render/three/tlx.js` (3132), `js/render/webgpu/wgsl-chunks.js` (1934), `js/render/three/tsl-lit.js` (1777) entries | `tools/check/ratchets.mjs` (`node --test tests/unit/ratchets.test.mjs`) reads each `files` key as a path and fails with `missing: true` (`tools/check/ratchets.mjs:55`) when the file no longer exists — `tests/unit/ratchets.test.mjs:14` asserts `rows.filter(r => r.missing)` is empty. | Delete the four `js/render/webgpu/wgx.js` / `js/render/three/tlx.js` / `js/render/webgpu/wgsl-chunks.js` / `js/render/three/tsl-lit.js` entries from `tests/data/ratchets.json`'s `files` object. (`js/render/glx/glx.js` at 2259 lines stays.) |
 | `tests/unit/load-order.test.mjs:172-181` ("DEFERRED_EDGES leave more than one TLX file ready at wave 0") | Asserts on `ApexRoster.DEFERRED_EDGES`/wave-0 shape that no longer exists once `DEFERRED` is `{}`. | Delete this test (and any sibling DEFERRED-wave assertions in the same file that assume a non-empty `DEFERRED`). |
 | `tests/unit/global-registry.test.mjs:60,148` (`TLXShaders: 8` writer count, DEFERRED-only-global crash guard) | The `GlobalRegistry` entry for `TLXShaders` (multi-writer accumulator, 8 files write it) has no files left once `js/render/three/*` moves — the registry scan finds 0 writers, not 8, and the test's declared count goes stale/fails. | Delete the `TLXShaders` (and any `WGXShaders`-equivalent, if one exists — grep did not surface a separate entry) row from the registry table. |
 | `tests/unit/ci-coverage.test.mjs:392-410` | Pins `gpu-census.yml`'s exact WGX-leg source text (`--backend webgpu`, the `tlxLeg`/`path3` regex, `r.wgx = typeof g.softPresent`). Goes red the moment those workflow lines move/delete. | Delete or rewrite the test to match whatever `gpu-census.yml` looks like after the workflow edit (delete outright if the WGX/TLX legs are cut rather than kept in reduced form). |

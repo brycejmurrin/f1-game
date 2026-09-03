@@ -28,7 +28,7 @@ season sprint distance and its points table. Persist at `apex26.seasonCfg`
 - Recommend `test:career` — there is no such group
 
 ```sh
-node tools/test-bg.mjs modes
+node tools/ci/test-bg.mjs modes
 ```
 
 `modes` is season + career + quali + TT. `season-(cal|ui).js` also

@@ -1,4 +1,4 @@
-// move-tree.test.mjs — tools/move-tree.mjs on a scratch tree: the file moves,
+// move-tree.test.mjs — tools/gen/move-tree.mjs on a scratch tree: the file moves,
 // every EXACT path citation follows it, bare basenames are reported not
 // rewritten, the manifest gains a MOVED entry, and a dry run changes nothing.
 import { test } from "node:test";
@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { apply, loadMoves, validate, sweep, splitSegmentMentions } from "../../tools/move-tree.mjs";
+import { apply, loadMoves, validate, sweep, splitSegmentMentions } from "../../tools/gen/move-tree.mjs";
 
 // Fixture comment markers are built at runtime so the docs-integrity comment
 // scan does not read the scratch tree's example paths as citations.

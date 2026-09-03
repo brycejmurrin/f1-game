@@ -19,7 +19,7 @@ import {
   shutdown,
   sleep,
   startStaticServer,
-} from "../../../tools/harness.mjs";
+} from "../../../tools/lib/harness.mjs";
 
 const ROOT = new URL("../../..", import.meta.url).pathname.replace(/\/$/, "");
 

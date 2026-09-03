@@ -7,9 +7,9 @@ Never force-push. Never rebase published history. Never push without review.
 **The protocol is one command (2026-09-01):**
 
 ```sh
-node tools/deploy.mjs --plan   # fetch, show their commits / ours / conflicts / touched circuits — runs nothing
-node tools/deploy.mjs          # fetch → merge → test:tooling-fast → verify-track (touched circuits) → push HEAD:<deploy> (retry ×3)
-node tools/deploy.mjs --pr     # same checks, then push the session branch and open/update a PR into the deploy branch (auto-merge)
+node tools/ci/deploy.mjs --plan   # fetch, show their commits / ours / conflicts / touched circuits — runs nothing
+node tools/ci/deploy.mjs          # fetch → merge → test:tooling-fast → verify-track (touched circuits) → push HEAD:<deploy> (retry ×3)
+node tools/ci/deploy.mjs --pr     # same checks, then push the session branch and open/update a PR into the deploy branch (auto-merge)
 ```
 
 What changed underneath it, and why the old steps are gone:

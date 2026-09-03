@@ -753,7 +753,7 @@ lights up gold with no new CSS.
 
 ## Tests
 
-`tests/specs/career.spec.js` and `tests/specs/quali.spec.js`, both in `node tools/test-bg.mjs modes`
+`tests/specs/career.spec.js` and `tests/specs/quali.spec.js`, both in `node tools/ci/test-bg.mjs modes`
 (there is no `test:career` group — `test-bg` exits 2 on an unknown name). They cover the mode axes, the save and its migration, the
 isolation guarantees, the hub flow, a settled round, the R&D garage, MY TEAM's two
 cars and its wage bill, the objectives, the rollover and the contracts, the ratings,
@@ -763,5 +763,5 @@ every finisher and scores no points, and that the draw leaves the sim RNG stream
 exactly where it found it. `tests/specs/ui-audit.spec.js` screenshots the career hub, its
 new-career state, qualifying and the offers sheet in both orientations.
 
-Run `node tools/test-bg.mjs modes` in the background after any change here, and `node tools/test-bg.mjs car` after
+Run `node tools/ci/test-bg.mjs modes` in the background after any change here, and `node tools/ci/test-bg.mjs car` after
 anything that touches the garage.

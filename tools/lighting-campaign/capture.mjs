@@ -5,7 +5,7 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { extname, join, resolve, sep } from "node:path";
 import { CAMERA_FRACTIONS, REGIONS } from "./config.mjs";
 import { evaluateGates, measurePixels } from "./metrics.mjs";
-import { launchChromium } from "../harness.mjs";
+import { launchChromium } from "../lib/harness.mjs";
 
 const MIME = Object.freeze({
   ".css": "text/css; charset=utf-8",

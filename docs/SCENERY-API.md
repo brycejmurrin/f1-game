@@ -533,7 +533,7 @@ building(K(0.55), -1, 40, 46, 26, 46, { kind: "drum" });
 `bakedModel(id, k, side, dist, opts?) → boolean`
 
 Places a modelled asset from `assets/pack/` — either generated offline by
-`node tools/assets.mjs bake-synthetic-models` (no network) or imported via
+`node tools/gen/assets.mjs bake-synthetic-models` (no network) or imported via
 `bake-model` / `import-models.mjs` from a glTF. Geometry is the game's own
 vertex format with a `MAT` id per vertex.
 

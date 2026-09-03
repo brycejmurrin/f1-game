@@ -17,7 +17,7 @@
 // the npm playwright build doesn't match (executablePath fallback), and resolves
 // playwright from the project even when run from elsewhere.
 
-import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, sleep, startStaticServer } from "./lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");

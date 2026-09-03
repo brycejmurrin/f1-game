@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci-coverage.mjs";
+import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
 
 const ciWorkflow = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
 const pagesWorkflow = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
@@ -326,7 +326,7 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   // gpu-census.yml already gives every renderer commit its real-GPU verdict,
   // so the gfx specs on Metal are nightly or opt-in (`renderer_macos: true`)
   // — a push must never allocate that runner. The `!inputs.concurrency_key`
-  // term is what tools/ci-coverage.mjs reads to keep both jobs out of the
+  // term is what tools/ci/ci-coverage.mjs reads to keep both jobs out of the
   // deploy gate; it has to stay first.
   assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\) \}\}/);
   assert.match(rendererJob, /^    needs: renderer-filter$/m);

@@ -1,6 +1,6 @@
 /* physics-rows-vm.test.mjs — five physics rows from the 2026-09-02 bug hunt
  * (round 2 "Not landed" → Physics), each replayed where it lives: four in the
- * Node VM (tools/game-vm.cjs — the real js/game.js, no browser) and one in
+ * Node VM (tools/lib/game-vm.cjs — the real js/game.js, no browser) and one in
  * the incident-gate style harness (js/physics/incident-sim.js whole, DebrisWorld
  * mocked). Every pin was red on the code before its fix (HEAD's file swapped
  * back in) and is green after; none moves physics-characterization-vm.
@@ -17,7 +17,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 let g = null, PHYS0 = null;

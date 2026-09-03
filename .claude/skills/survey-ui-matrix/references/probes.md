@@ -218,7 +218,7 @@ against the left edge in portrait, and only the portrait sweep caught it.
 
 Then run the batch instrument to cover what you did not: `node tools/layout-audit.mjs`
 (add `--shots` for a PNG per cell, `--scale=100,130,150` to add the scale axis).
-Finish with `node tools/pick-tests.mjs --staged` and the groups it names — for
+Finish with `node tools/ci/pick-tests.mjs --staged` and the groups it names — for
 menu/CSS work that is `test:ui`, whose `ui-audit.spec.js` is a capture harness that
 **asserts nothing**: read its PNGs, do not read its pass count. Expect
 `menu-baseline.spec.js` snapshots to change whenever menu geometry does, and

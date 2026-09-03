@@ -38,7 +38,7 @@
 // init is reported as an environment note, not a failure — but any validation
 // error is fatal.
 
-import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } from "./harness.mjs";
+import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } from "./lib/harness.mjs";
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

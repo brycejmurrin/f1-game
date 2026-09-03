@@ -283,7 +283,7 @@ git commit -m "docs: synchronize agent operating guidance"
 ## Verification
 
 - [ ] Run `npm run test:tooling-fast`.
-- [ ] Run `node tools/pick-tests.mjs --staged` and execute only selected
+- [ ] Run `node tools/ci/pick-tests.mjs --staged` and execute only selected
   Node-safe checks before browser work.
 - [ ] Bump the shell cache build as the final runtime change, then re-run
   `tests/unit/load-order.test.mjs`.

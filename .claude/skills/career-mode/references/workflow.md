@@ -52,11 +52,11 @@ Load from the SKILL.md index when the task needs this detail.
    - Garage locked rows: `#cs-options .cs-opt.locked`, or assert owned parts vs
      `Parts.CATALOG` via `__apex.career().owned` / `Career.isOwned()`.
    - Then assert UI flow through `tests/specs/career.spec.js` / `tests/specs/quali.spec.js`.
-   - Run `test:modes` in the background via `tools/test-bg.mjs` (covers career + quali).
+   - Run `test:modes` in the background via `tools/ci/test-bg.mjs` (covers career + quali).
 
 8. **Cache-bust JS/CSS edits.**
    - Career often touches `js/game/career*.js`, `js/race/quali-model.js`,
-     `js/race/reliability.js`, or `css/career.css`; run `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`).
+     `js/race/reliability.js`, or `css/career.css`; run `node tools/gen/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
 
 ## Common Mistakes
 

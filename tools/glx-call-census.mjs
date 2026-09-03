@@ -10,7 +10,7 @@
  *
  * Run: node tools/glx-call-census.mjs [track] [night|day] [frames]
  */
-import { startStaticServer, launchChromium, shutdown } from "./harness.mjs";
+import { startStaticServer, launchChromium, shutdown } from "./lib/harness.mjs";
 const TRACK = process.argv[2] || "vegas";
 const TOD = process.argv[3] || "night";
 const FRAMES = +(process.argv[4] || 40);

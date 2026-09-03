@@ -79,7 +79,7 @@ the lamp/mist/star knobs together.
 Day/night **light counts and exposure**:
 
 ```sh
-node tools/test-bg.mjs gfx      # lighting-ab + tuner-grade + webgl-probes + tlx
+node tools/ci/test-bg.mjs gfx      # lighting-ab + tuner-grade + webgl-probes + tlx
 npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
 ```
 

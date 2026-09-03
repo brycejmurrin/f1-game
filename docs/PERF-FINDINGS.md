@@ -269,7 +269,7 @@ are unchanged. Source-contracted in `tests/unit/perf-governor.test.mjs`.
 ### The VM build harness is a valid TIMER and an invalid PROFILER (2026-08-14)
 
 §0's table lists the Node VM harness (`tools/verify-track.cjs`,
-`tools/track-build-vm.cjs`) as a valid instrument for track-build cost. That is
+`tools/lib/track-build-vm.cjs`) as a valid instrument for track-build cost. That is
 true of **whole-build A/B timing** and false of **attribution**, and the
 difference has already cost two candidate findings.
 
@@ -311,7 +311,7 @@ operation count did not.
 read that as the change's fault. It was not, and the two steps that established
 that are the whole point of the next section:
 
-1. **`tools/test-solo.mjs`** re-ran it alone on a gated-quiet box (load 1.55) and
+1. **`tools/ci/test-solo.mjs`** re-ran it alone on a gated-quiet box (load 1.55) and
    returned *"FAIL on a quiet box is REAL. It is not the machine. Bisect it."*
    So it was not contention — three of the four were genuine.
 2. **The same spec was then run at the PREVIOUS DEPLOY SHA**, which had already
@@ -368,7 +368,7 @@ runner, with failures the local box never produced:
 Verified after all four fixes: **5/5 pass** solo on a quiet box at
 177.8 / 175.4 / 155.0 / 140.7 / 52.3 s.
 
-**Why it rotted:** `tools/pick-tests.mjs` maps `js/lighting/lighting.js` to the
+**Why it rotted:** `tools/ci/pick-tests.mjs` maps `js/lighting/lighting.js` to the
 `webgl` group correctly, so a local `pick-tests` run would have named it.
 (SUPERSEDED since: ci.yml's `selected` job is now the change-aware gate and is
 BLOCKING on branch pushes and pull requests, so this class of red no longer
@@ -385,7 +385,7 @@ running the same thing at an older commit, or by `md5`-ing the files the failing
 test actually loads. It costs minutes; believing a red run costs hours and can
 end in "fixing" working code.
 
-`tools/test-solo.mjs` exists for the first case and REFUSES to run on a hot box.
+`tools/ci/test-solo.mjs` exists for the first case and REFUSES to run on a hot box.
 Trust it. Two specs that blew a 120 s budget under load 8-9 came back at 68.9 s
 and 73.2 s solo.
 
@@ -1543,7 +1543,7 @@ more live instances, all confirmed at source, all in `tools/` — which
 
 ### `verify-change.mjs` returned `pass` for a diff no rule claimed
 
-`tools/pick-tests.mjs` computes a three-way `reason` whose own comment says
+`tools/ci/pick-tests.mjs` computes a three-way `reason` whose own comment says
 *"unmatched — files changed but no rule claimed them, so the selection is NOT
 trustworthy and the caller must fall back to a full run."* `verify-change.mjs`
 called the raw `pick()` Map API and never saw it, so `!batches.length` collapsed
@@ -2829,7 +2829,7 @@ matches without `ignoreSearch` — a bare key is one nothing ever asks for.
 `load-order.test.mjs` now asserts both: that every `LAZY_RACE` / `LAZY_SCENERY`
 file is seeded, and that the SW's own stamping predicate — extracted from
 source and RUN, not pattern-matched — covers every path it seeds.
-`tools/offline-precache-check.cjs` is the behavioural half; see its README row
+`tools/check/offline-precache-check.cjs` is the behavioural half; see its README row
 and `docs/TESTING.md` for why `setOffline(true)` alone measures nothing here.
 
 **Round 16 (2026-09-01): 3,715,772 -> 3,319,340 B, another 396,432 B / 10.7%,

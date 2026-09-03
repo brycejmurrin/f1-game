@@ -27,7 +27,7 @@
 // Sibling tools: apex-eval.mjs for an arbitrary __apex expression (the escape
 // hatch), apex-capture.mjs for screenshots. Prefer this for "what is going on".
 
-import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, sleep, startStaticServer } from "./lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url)).replace(/[\\/]$/, "");

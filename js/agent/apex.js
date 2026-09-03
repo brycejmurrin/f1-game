@@ -1051,7 +1051,7 @@ const api = {
     return out;
   },
   loadCarModel: (url) => loadCarModel(url),
-  // Baked asset pack (js/render/shared/assets.js, built by tools/assets.mjs)
+  // Baked asset pack (js/render/shared/assets.js, built by tools/gen/assets.mjs)
   // assets() — {supported, pack, uploaded, tier, layers, normal, bytes, models,
   //   error}. `supported:false` means the active renderer has no texture-array
   //   path (WGX/WebGPU); `pack:false` means no pack is installed. Both are

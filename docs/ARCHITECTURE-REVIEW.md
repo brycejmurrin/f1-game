@@ -49,7 +49,7 @@ than behaviour:
 | `tools/graph-parity.cjs` | scene-graph migrations are vertex-for-vertex identical to a baseline ref |
 | `tests/unit/backend-surface-parity.test.mjs` | a renderer backend declares every GLX member, absent ones as explicit `undefined` (§5) |
 | `tests/unit/ratchets.test.mjs` + `tests/data/ratchets.json` | the game.js size ceilings (lines, code lines, `G` members, column-0 lets) — a ratchet, so extraction lowers them and regrowth fails |
-| `tests/unit/vstd-invariant.test.mjs` + `tools/vstd-lint.mjs` | no `.speed` compared against a numeric literal without a written reason (§3) |
+| `tests/unit/vstd-invariant.test.mjs` + `tools/check/vstd-lint.mjs` | no `.speed` compared against a numeric literal without a written reason (§3) |
 | `tests/unit/comment-citations.test.mjs` | a comment citing another file names a symbol that exists; ratchet on the cross-file-citation population |
 | `tests/unit/silent-catch.test.mjs` | ratchet on bare `catch {}` — the escape hatch is a comment saying why, not a log line |
 
@@ -85,7 +85,7 @@ in. It has held so far. It is exactly the shape of thing that stops holding.
 that divides a speed by `VMAX` or compares one against a literal must go
 through `vTop()`/`vStd()` (and accelerations through `aStd()`). Four defects of
 this one class were found across three passes before the rule got its guard:
-`tools/vstd-lint.mjs` + `tests/unit/vstd-invariant.test.mjs` now fail the suite on a
+`tools/check/vstd-lint.mjs` + `tests/unit/vstd-invariant.test.mjs` now fail the suite on a
 raw `.speed`-vs-literal comparison unless the absoluteness is justified in
 place. The lint sees speeds only; the acceleration case is recorded in its
 header rather than asserted. Physics constants now live in
@@ -213,7 +213,7 @@ on the 08-18 perf-hunt board, not this register.
 - **`menu-keyboard` › "left/right move along a chip row without leaving it" is
   red** (`tests/specs/menu-keyboard.spec.js`, the desktop keyboard/trackpad
   block). Confirmed PRE-EXISTING at `d7a1158` by a quiet-box A/B, both sides via
-  `tools/test-solo.mjs` and both started at load 1.24: `HEAD` fails in 20.6 s,
+  `tools/ci/test-solo.mjs` and both started at load 1.24: `HEAD` fails in 20.6 s,
   base fails in 18.4 s. No timeout on either side, so it is an assertion, not
   contention. This is the SECOND red test in this file — the `#track-detail`
   dialog regression above owns "Tab cannot escape the track-detail dialog" — so
@@ -442,7 +442,7 @@ four suites' own sources. What remains:
   the `test:net` browser group was NOT run for it.
 - **`CircuitElevations` is a dead branch** (`js/track/tracks.js` `hasRealElevation`
   / `elevationAt` / the `real` arm of `realPoints`): the global is defined only
-  by `tools/bake-elevation.mjs`, is in no manifest entry, so every circuit's
+  by `tools/gen/bake-elevation.mjs`, is in no manifest entry, so every circuit's
   elevation today is the synthetic `def.elevations` cosine bumps. Either wire
   the bake into `TRACK_VM` + the shell or delete the ~20 lines.
 - **Jeddah `startFrac` is in a corner** (`startline-probe`: mean |k| 0.0173
@@ -632,7 +632,7 @@ Deferred with reasoning, none lost:
   presenting as tests. The second is now absorbed into the first as two more
   viewport rows, and the survivor is declared a capture harness: its own
   `test:gallery` group, run on demand, out of `test:ui`'s pass count.
-  `tools/assert-audit.mjs` now grades every test in the tree
+  `tools/ci/assert-audit.mjs` now grades every test in the tree
   asserting/implicit/vacuous and `tests/unit/assert-audit.test.mjs` fails on a
   vacuous body anywhere outside that one allow-listed file.
 - **`tests/manual/tracks-visual.spec.js` baselines were never generated** — the spec

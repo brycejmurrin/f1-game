@@ -23,7 +23,7 @@
 //   node tools/fit-audit.mjs --sizes=852x393,393x852
 //   node tools/fit-audit.mjs --scale=100,130,150   # ...crossed with interface size
 //
-import { launchChromium, shutdown, sleep, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, sleep, startStaticServer } from "./lib/harness.mjs";
 import { applyScale, parseScales, scaleTag } from "./ui-scale-axis.mjs";
 import { fileURLToPath } from "node:url";
 let setupApiMocks = null;

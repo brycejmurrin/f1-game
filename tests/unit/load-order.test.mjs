@@ -2,7 +2,7 @@
 // single source of truth in tools/manifest.cjs.
 //
 // The tag blocks, sw.js's precache seed and js/roster.js are GENERATED from
-// the manifest by tools/gen-shell.mjs; this test makes divergence impossible
+// the manifest by tools/gen/gen-shell.mjs; this test makes divergence impossible
 // to ship:
 //   - every generated block is byte-identical to a fresh `gen-shell` run
 //   - the <script> sequence must equal MANIFEST.FULL exactly (order included)
@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
-import { stale as genShellStale } from "../../tools/gen-shell.mjs";
+import { stale as genShellStale } from "../../tools/gen/gen-shell.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -71,7 +71,7 @@ test("index.html stylesheet sequence equals MANIFEST.CSS", () => {
 test("every gen-shell block is byte-identical to a fresh generation", () => {
   const drift = genShellStale();
   assert.deepEqual(drift.map((d) => `${d.rel}\n${d.diff}`), [],
-    "run `node tools/gen-shell.mjs` — a generated block has been hand-edited or the manifest changed");
+    "run `node tools/gen/gen-shell.mjs` — a generated block has been hand-edited or the manifest changed");
 });
 
 test("every asset tag reads ?v=dev and the shell generation matches version.json", () => {
@@ -79,7 +79,7 @@ test("every asset tag reads ?v=dev and the shell generation matches version.json
   // the committed shell must never carry them, or index.html goes back to
   // being rewritten on every js/css edit.
   const stale = [...scriptSrcs, ...linkHrefs].filter((u) => !u.endsWith("?v=dev"));
-  assert.deepEqual(stale, [], "a tag carries something other than ?v=dev — run `node tools/gen-shell.mjs`");
+  assert.deepEqual(stale, [], "a tag carries something other than ?v=dev — run `node tools/gen/gen-shell.mjs`");
   const versionJson = JSON.parse(readFileSync(join(ROOT, "version.json"), "utf8"));
   const meta = indexHtml.match(/<meta\s+name="apex-build"\s+content="(\d+)"/);
   assert.ok(meta, "index.html must declare the shell generation");

@@ -68,11 +68,11 @@ Compare `before-*.png` vs `after-*.png`; confirm the probe is flag-free.
 
 ### 6 · Test & ship
 
-- Geometry: `node tools/test-bg.mjs circuits`
+- Geometry: `node tools/ci/test-bg.mjs circuits`
 - Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
   baselines). Do not treat it as a gate. Intentional goldens:
   `npm test -- tests/manual/tracks-visual.spec.js --update-snapshots`.
-- `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) after any `js/*`/`css/*` edit.
+- `node tools/gen/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) after any `js/*`/`css/*` edit.
 - Pick remaining groups with **check-changes**.
 
 ## Worked example — Montreal floating trees

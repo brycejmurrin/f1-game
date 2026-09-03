@@ -22,7 +22,7 @@
 //
 //   node tools/career-economy.mjs            # one season per starter team
 //   node tools/career-economy.mjs --years 3  # follow the arc over three seasons
-import { launchChromium, shutdown, startStaticServer } from "./harness.mjs";
+import { launchChromium, shutdown, startStaticServer } from "./lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
 const YEARS = Math.max(1, parseInt((process.argv.find((a) => a.startsWith("--years=")) || "").split("=")[1]

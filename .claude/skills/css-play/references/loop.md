@@ -89,7 +89,7 @@ shot as UI evidence.
 
 ## 5. Ship
 
-When the look is right: `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) (last edit),
+When the look is right: `node tools/gen/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) (last edit),
 then the ui / gallery group if the change is more than a token. One-screen
 play is not a matrix proof.
 

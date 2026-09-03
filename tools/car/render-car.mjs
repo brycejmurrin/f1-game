@@ -70,7 +70,7 @@ import {
   assertSafePathToken,
   resolveContainedChild,
   resolveRepoDefault,
-} from '../output-paths.mjs';
+} from '../lib/output-paths.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..', '..');

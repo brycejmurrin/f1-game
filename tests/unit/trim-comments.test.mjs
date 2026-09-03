@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const TOOL = path.join(ROOT, "tools", "trim-comments.mjs");
+const TOOL = path.join(ROOT, "tools", "check", "trim-comments.mjs");
 
 test("trim-comments.mjs --help exits 0", () => {
   const r = spawnSync(process.execPath, [TOOL, "--help"], { encoding: "utf8" });

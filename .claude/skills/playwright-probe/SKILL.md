@@ -11,7 +11,7 @@ A fresh container needs the browser before any shot/eval — AGENTS.md
 §Verification 1:
 
 ```bash
-bash tools/cloud-agent-install.sh
+bash tools/env/cloud-agent-install.sh
 # or: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install && npx playwright install chromium-headless-shell
 ```
 
@@ -34,7 +34,7 @@ cover most needs; drop to a custom harness for bespoke sweeps.
 # Same CLIs via MCP (takes scratch/apex-browser.lock; apex_status first):
 #   ./tools/apex-tools-mcp.sh call apex_eval '{"track":"monza","expr":"a.info()"}'
 #   ./tools/apex-tools-mcp.sh call apex_shot '{"track":"monza","frac":0.1}'
-# Plain CLIs (no wrap since 2026-09): tools/car/carshot.mjs, tools/quick-validate.mjs
+# Plain CLIs (no wrap since 2026-09): tools/car/carshot.mjs, tools/check/quick-validate.mjs
 # One-off: boot the game, evaluate an __apex expression, print JSON.
 node tools/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
 node tools/apex-eval.mjs monaco "a.camera()"

@@ -28,11 +28,11 @@ import {
   shutdown,
   sleep,
   startStaticServer,
-} from "../harness.mjs";
+} from "../lib/harness.mjs";
 import {
   assertSafePathToken,
   resolveRepoDefault,
-} from "../output-paths.mjs";
+} from "../lib/output-paths.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 

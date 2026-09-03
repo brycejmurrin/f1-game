@@ -219,7 +219,7 @@ Full recipes + measured LCP/heap/a11y numbers:
 
 Regression coverage, anything that must assert-and-gate, the 113-spec batch, or
 anything in CI. It is one stateful browser driven by the model — no assertion
-framework, no parallelism, no reporter. Use Playwright (`tools/test-bg.mjs`).
+framework, no parallelism, no reporter. Use Playwright (`tools/ci/test-bg.mjs`).
 
 ---
 

@@ -39,7 +39,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { buildContext, shipped, primKey, ROOT, RAW_FRAME } = require("./track-build-vm.cjs");
+const { buildContext, shipped, primKey, ROOT, RAW_FRAME } = require("./lib/track-build-vm.cjs");
 
 // Local site formatter — deliberately NOT track-build-vm's siteOf, which strips
 // the parenthesised location. For coplanarity the file:line IS the finding: two

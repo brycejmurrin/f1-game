@@ -36,7 +36,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { networkInterfaces } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { startStaticServer } from "./harness.mjs";
+import { startStaticServer } from "./lib/harness.mjs";
 
 const MAX_BYTES = 32 * 1024 * 1024;   // a bundle with a PNG is ~100 KB; this is only a floodgate
 const MAX_TOTAL_BYTES = 128 * 1024 * 1024;

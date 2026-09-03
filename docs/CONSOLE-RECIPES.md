@@ -16,7 +16,7 @@ can reach four situations the suite **structurally cannot**:
 | a human judging how it looks | no eyes |
 
 So use the console for **exploration, device-specific bugs, and judgement**;
-use background test suites (`node tools/test-bg.mjs <group>`) or unit tests (`npm run test:tooling-fast`) for anything you want to stay fixed. See
+use background test suites (`node tools/ci/test-bg.mjs <group>`) or unit tests (`npm run test:tooling-fast`) for anything you want to stay fixed. See
 [DEBUG-HOOKS.md](DEBUG-HOOKS.md) for the full `__apex` reference.
 
 ---

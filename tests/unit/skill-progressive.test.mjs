@@ -172,7 +172,7 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
   };
   walk(SKILLS);
   walk(AGENTS);
-  assert.deepEqual(env, [], "env setup is AGENTS.md §Verification 1 + tools/cloud-agent-install.sh, not a skill");
+  assert.deepEqual(env, [], "env setup is AGENTS.md §Verification 1 + tools/env/cloud-agent-install.sh, not a skill");
 });
 
 test("skills do not recommend the retired test:career group", () => {
@@ -507,7 +507,7 @@ test("slim-bloat is the Claude-simplify analog and stays a thin index", () => {
 });
 
 test("bloat-scan reports ratchet slack and skill sizes as JSON", () => {
-  const r = spawnSync(process.execPath, ["tools/bloat-scan.mjs", "--json"], {
+  const r = spawnSync(process.execPath, ["tools/check/bloat-scan.mjs", "--json"], {
     cwd: ROOT, encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stderr || r.stdout);

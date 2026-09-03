@@ -72,7 +72,7 @@ APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d
 **Takeaways for probe tooling:**
 
 1. **Keep SwiftShader as the default WebGPU preset** — simplest, documented in
-   `tools/webgpu-chrome-args.cjs`, matches Playwright harness.
+   `tools/lib/webgpu-chrome-args.cjs`, matches Playwright harness.
 2. **Lavapipe headless is a viable A/B** for WGX lifecycle (adapter/device/shaders)
    when you want a second software Vulkan stack; swap flags only, not game code.
 3. **MCP / Playwright WGX screenshots:** use visible `#game` after
@@ -511,7 +511,7 @@ package list and the ICD proof).
 Fresh-agent bootstrap, matching AGENTS.md Verification §1:
 
 ```sh
-bash tools/cloud-agent-install.sh
+bash tools/env/cloud-agent-install.sh
 # equivalent manual steps when the script is not the dashboard install:
 export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 npm install --ignore-scripts --no-audit --prefer-offline
@@ -519,7 +519,7 @@ npx playwright install chromium-headless-shell
 npx playwright install chromium
 ```
 
-The dashboard `install` should call `bash tools/cloud-agent-install.sh`. A bare
+The dashboard `install` should call `bash tools/env/cloud-agent-install.sh`. A bare
 `npm install` can die on `registry.npmjs.org` ECONNRESET with npm's "Exit
 handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even when
 `node_modules` is already usable — `--prefer-offline` is what the script adds.

@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { referencesIn, audit } from "../../tools/cross-file-paths.mjs";
+import { referencesIn, audit } from "../../tools/check/cross-file-paths.mjs";
 
 test("a static import is found", () => {
   const { refs } = referencesIn(`import { x } from "./helpers/fixtures.js";`, "a.js");

@@ -47,7 +47,7 @@ the analysis fans out, the edits and commits come back to one branch in order.
 
 ## What is NOT worth running in parallel
 
-- **More than two test groups.** `tools/test-bg.mjs` already gives each group a
+- **More than two test groups.** `tools/ci/test-bg.mjs` already gives each group a
   free port, its own report dir and its own log, so the port collision the
   worktree literature warns about is solved — but the cores are not.
 - **Any group alongside `test:baseline`, a `--project=render` suite, or a

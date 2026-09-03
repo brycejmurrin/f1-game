@@ -34,7 +34,7 @@
 
 "use strict";
 
-const { buildContext, shipped, siteOf, primKey } = require("./track-build-vm.cjs");
+const { buildContext, shipped, siteOf, primKey } = require("./lib/track-build-vm.cjs");
 
 // ---------------------------------------------------------------------------
 // Tunables. Defaults are the measured values; every one is overridable so a

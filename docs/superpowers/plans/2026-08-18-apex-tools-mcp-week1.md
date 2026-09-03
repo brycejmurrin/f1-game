@@ -24,7 +24,7 @@
 
 **Files:**
 - Create: `tests/unit/apex-tools-mcp.test.mjs`
-- Modify: `tools/tooling-fast.mjs` (add to `TOOLING_FAST_FILES` next to `probe-mcp.test.mjs`)
+- Modify: `tools/ci/tooling-fast.mjs` (add to `TOOLING_FAST_FILES` next to `probe-mcp.test.mjs`)
 
 - [x] **Step 1: Write assertions from `docs/research/APEX-TOOLS-MCP.md` §Tests**
 - [x] **Step 2: Run `node --test tests/unit/apex-tools-mcp.test.mjs` — expect FAIL (missing server)**

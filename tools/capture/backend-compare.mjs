@@ -39,8 +39,8 @@ import {
   sleep,
   startStaticServer,
   WEBGPU_CHROMIUM_ARGS,
-} from "../harness.mjs";
-import { assertSafePathToken, resolveRepoDefault } from "../output-paths.mjs";
+} from "../lib/harness.mjs";
+import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");

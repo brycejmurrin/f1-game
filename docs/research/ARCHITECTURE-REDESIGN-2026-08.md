@@ -322,7 +322,7 @@ static. What changes is that its invariants become machine-derived. (a)
 `tools/gen-manifest.mjs` becomes the writer of manifest.cjs, the index.html
 tag block, and sw.js's DEFERRED precache seed — inputs are per-file
 `/* @global X @after Y(eval) */` headers plus an espree/eslint-scope scan
-(`tools/scan-globals.mjs`) deriving HARD_EDGES from actual eval-time
+(`tools/check/scan-globals.mjs`) deriving HARD_EDGES from actual eval-time
 destructures; call-time-but-pinned edges stay in a small hand-curated
 CALL_EDGES list; the CIRCUITS calendar stays hand-owned product data; a drift
 test asserts regeneration is a byte-identical no-op; gen-manifest never
@@ -388,7 +388,7 @@ baseline (Vegas grandfathered at 1,825,925, ratchet-down), and a
 net-authority spec pinning guest-role gating of EV.CAUTION/START/RESULT/QUALI.
 
 **Migration plan.**
-1. Land `tools/scan-globals.mjs` emitting a dep-graph artifact; add the
+1. Land `tools/check/scan-globals.mjs` emitting a dep-graph artifact; add the
    global-registry test in baseline-ratchet mode. Pure tooling, green by
    construction.
 2. Prove the scanner against reality: derived eval-edges ⊇ every current
@@ -519,7 +519,7 @@ document):
 **Base: Bedrock — the IIFE+globals runtime is unchanged; every remaining prose invariant becomes a generator or a guard.** Three grafts from the runners-up, all named "best idea" by at least one judge:
 
 1. **From Typed Apex (graft into Phase 1, done first and most precisely): authored `.d.ts` contracts.** `types/globals.d.ts` (~30 core globals), `interface GameCtx` transcribed from the G region at `js/game.js:2540–2772`, `interface RendererBackend` (~40 members from gfx.js's header), `interface SceneryApi` (the 107 members `tests/unit/scenery-api-contract.test.mjs` freezes). `tsc --noEmit --checkJs` in ci.yml; files opt in per-file with `// @ts-check`; an adoption ratchet test (same idiom as `tests/unit/module-size.test.mjs`) keeps coverage monotonic. This retires the façade-drift defect class (the dead `countT` accessor, dead duplicate `setLightTune` key) in the session that creates it.
-2. **From Graphline (graft into Phase 0): the dependency-truth check.** `tools/scan-globals.mjs` (espree/eslint-scope — both already devDeps at package.json:60–61) derives the real eval-time global graph and **asserts `tools/manifest.cjs` order is a valid topological sort and derived edges ⊇ the 5 hand-recorded HARD_EDGES entries** before anything moves. Zero product edits; surfaces every undeclared edge; keeps the door open for Graphline's proven in-place `defer`/`type=module` tag-swap strangler later.
+2. **From Graphline (graft into Phase 0): the dependency-truth check.** `tools/check/scan-globals.mjs` (espree/eslint-scope — both already devDeps at package.json:60–61) derives the real eval-time global graph and **asserts `tools/manifest.cjs` order is a valid topological sort and derived edges ⊇ the 5 hand-recorded HARD_EDGES entries** before anything moves. Zero product edits; surfaces every undeclared edge; keeps the door open for Graphline's proven in-place `defer`/`type=module` tag-swap strangler later.
 3. **Bedrock's own sharpest mechanisms, kept exactly as designed:** generated manifest with byte-identical-first-run bootstrap (three outputs: manifest.cjs, index.html tag block, sw.js precache seed); `Object.seal()`ed single-owner state objects (S.cam/S.tuning/S.race/S.world/S.garage/S.debug) with side effects as named verbs, never property setters; the `g-contract` snapshot making façade widening a loud merge conflict between parallel sessions; and mechanized explicit-`undefined` backfill inside a centralized `Gfx.install()`, preserving `gfx === GLX` identity for the ~8 monkey-patching specs.
 
 Explicitly out of scope, eyes open: `render()`/`updateCar()` internals (determinism spec forbids it), the ?v=N bump ritual, and the no-edits-mid-test-run hazard. The last two are the acknowledged Graphline-only wins; see §4.
@@ -529,7 +529,7 @@ Explicitly out of scope, eyes open: `render()`/`updateCar()` internals (determin
 All new guards must fit the ~15 s `test:tooling-fast` budget (all are static scans) and carry the vstd-lint-style in-place escape hatch — a guard agents `--force` around is worse than no guard.
 
 **Phase 0 — Observe (no runtime bytes change, no cache bump).**
-Land `tools/scan-globals.mjs` emitting `artifacts/dep-graph.json`; Graphline's toposort assertion against manifest order; `tests/global-registry.test.mjs` in baseline-ratchet mode (one declared global per file, no undeclared reads — replaces the "grep removed symbols" post-extraction ritual). Split manifest edges into derived EVAL_EDGES + hand-curated CALL_EDGES (net family, career→quali, with rationale comments).
+Land `tools/check/scan-globals.mjs` emitting `artifacts/dep-graph.json`; Graphline's toposort assertion against manifest order; `tests/global-registry.test.mjs` in baseline-ratchet mode (one declared global per file, no undeclared reads — replaces the "grep removed symbols" post-extraction ritual). Split manifest edges into derived EVAL_EDGES + hand-curated CALL_EDGES (net family, career→quali, with rationale comments).
 *Guards added:* global-registry, toposort assertion. *Retired:* nothing. *Gate:* test:tooling-fast.
 
 **Phase 1 — Types (Typed Apex graft; still zero runtime change).**
@@ -568,7 +568,7 @@ Recorded 2026-08. Implementation is to be reconciled with the audit workflow's
 FIX-NOW/RESTRUCTURE synthesis before any phase lands.
 
 **Phase 0 landed 2026-08-13** (`679e85c9` + `a2bb2aac`, merged at `0f0c3b84`):
-`tools/scan-globals.mjs` — a ~2.8 s scan of all 159 eagerly-loaded files — plus
+`tools/check/scan-globals.mjs` — a ~2.8 s scan of all 159 eagerly-loaded files — plus
 `tests/unit/global-registry.test.mjs`, which pins every global's writer and
 declares its consumers three ways. The evidence it produced is what makes the
 later phases derivable rather than speculative: the manifest's FULL order **is**
@@ -583,7 +583,7 @@ while a rogue writer outside `js/circuits/` still fails.
 
 **Phase 1, first half, landed 2026-08-13**: `types/game-ctx.d.ts` (the `GameCtx`
 interface — all **210** members of `const G` at `js/game.js:2562-2812`, plus the
-`GameModuleFactory` roster), `tools/check-gctx.mjs` and
+`GameModuleFactory` roster), `tools/check/check-gctx.mjs` and
 `tests/unit/game-ctx-surface.test.mjs`. ~5 s, zero runtime bytes, no cache bump.
 Two deviations from the plan as written, both forced by the constraints:
 
