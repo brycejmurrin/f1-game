@@ -124,8 +124,11 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       (smoke shards included).
 - [x] **Phase 0 deploy merge** `3685460` — deploy tip 0ea825d merged (index.html
       → ours + gen-shell; game.js ceiling re-measured 9,307 → 9,235 on the
-      union). ⚑ `deploy.mjs` push in flight; proof is `pages.yml`'s
-      `bump-cache --check --root _site` and `verify-live`.
+      union), pushed by `deploy.mjs` (10 gate suites verified). DEPLOY-SIDE
+      PROOF: `pages.yml` run 1938 — every CI job green incl. the four smoke
+      shards, "Stamp the shell generation" (`bump-cache --apply --at N --root
+      _site` + `--check --root _site`) green, "Live version.json equals the
+      stamped build" green. The `?v=dev` policy ships.
 - [x] **Phase 1-lite** (landed 2026-09-03; no js/css change, tooling-fast 136/136 + `test:mcp` 31/31):
   1. delete `tests-split.test.mjs` + `tools/tests-split.mjs` (+ README regen,
      docs-integrity comment, TESTING row, carves.md, APEX-TOOLS-MCP);
