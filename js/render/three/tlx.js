@@ -371,6 +371,7 @@ const TLX = (function () {
                 const msg = (ev && ev.error && ev.error.message) || "gpu error";
                 if (!_gpuFirstError) _gpuFirstError = msg;
                 _gpuErrors++;
+                if (_gpuErrLastPresent !== _presentN) { _gpuErrLastPresent = _presentN; _gpuErrFrames++; }
                 if (_gpuErrors <= GPU_ERR_LOG_CAP) {
                   try { Log.warn("gfx", "TLX GPU error #" + _gpuErrors + ":", msg); } catch (_) { /* no Log in the node VM harness: the count is the load-bearing part */ }
                   if (_gpuErrors === GPU_ERR_LOG_CAP) {
@@ -408,6 +409,7 @@ const TLX = (function () {
                         const text = "WGSL " + label + " " + (m.lineNum | 0) + ":" + (m.linePos | 0) + " " + m.message;
                         if (!_gpuFirstError) _gpuFirstError = text;
                         _gpuErrors++;
+                        if (_gpuErrLastPresent !== _presentN) { _gpuErrLastPresent = _presentN; _gpuErrFrames++; }
                         if (_gpuErrors <= GPU_ERR_LOG_CAP) {
                           try { Log.warn("gfx", "TLX shader error #" + _gpuErrors + ":", text); } catch (_) { /* no Log in the node VM harness */ }
                         }
@@ -760,7 +762,16 @@ const TLX = (function () {
       // present() count since boot, and whether the AUTO self-heal below has
       // already fired this session (it reloads, so once is all it can do).
       let _presentN = 0, _healTried = false;
+      // DISTINCT PRESENTS an error landed in, not the raw count. One rejected
+      // pipeline raises an uncaptured error per DRAW and a compilation-info
+      // error per message, so a single broken program can be dozens of
+      // "errors" in one frame — while a healthy tab can raise exactly one
+      // transient (a resize race, a texture freed on a track switch, the
+      // capture path). Healing on `> 0` reloaded the second case; WGX already
+      // counts frames for the same reason (GPU_ERR_ESCALATE_FRAMES).
+      let _gpuErrFrames = 0, _gpuErrLastPresent = -1;
       const HEAL_WINDOW = 120;
+      const HEAL_MIN_FRAMES = 2;   // distinct presents carrying an error (see _gpuErrFrames)
 
       const vizMode = (function () {
         try {
@@ -2867,7 +2878,10 @@ const TLX = (function () {
           // ctxLostReloads cap so a tab that dies every boot cannot loop.
           // AUTO only: a pin is a user override. Never on a diagnostic run
           // (forceHw / soft-blit), where the error count IS the evidence.
-          if (painted && !_healTried && _gpuErrors > 0 && _presentN <= HEAL_WINDOW
+          // TWO distinct presents, not one error: a broken pipeline fails
+          // every frame it is drawn in, a transient does not. The iPhone case
+          // this exists for (a rejected lit program) trips it on frame two.
+          if (painted && !_healTried && _gpuErrFrames >= HEAL_MIN_FRAMES && _presentN <= HEAL_WINDOW
               && renderer.backend && renderer.backend.isWebGPUBackend
               && _glPin !== "0" && _glPin !== "1" && !_forceHw.on && !_softBlit) {
             _healTried = true;
@@ -3072,7 +3086,7 @@ const TLX = (function () {
               // phone screenshot of the GOV panel carries these, which is the
               // evidence a "see-through car" report has never had.
               gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstError,
-              presents: _presentN, healed: _healTried,
+              presents: _presentN, healed: _healTried, gpuErrFrames: _gpuErrFrames,
               // three refreshes every OBJECT-group uniform per draw (r185
               // NodeManager), so the draw count is the CPU lever on a phone;
               // reported here so the GOV `tlx` row can show it (`dc N`).

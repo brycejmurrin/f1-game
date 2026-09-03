@@ -1354,3 +1354,12 @@ live in `ratchets.json`.
 - `js/render/webgpu/wgx.js` 6060 -> **6068**: `device.lost` disarms
   `envProbeOff` as well as `perChunkOff`, matching GLX and TLX — both are
   shared cross-backend keys and WGX wrote only one.
+- `js/render/webgpu/wgx.js` 6068 -> **6086** (2026-09-03): the SAVE SCREENSHOT
+  reconfigure moves out of `_capEncode` (which runs after the frame is encoded
+  and one statement before submit, so `ctx.configure()` expired a texture the
+  submit still referenced) into the top of `begin()`. Bug-fixing growth; the
+  comment is the reason.
+- `js/render/three/tlx.js` 3138 -> **3152** (2026-09-03): the AUTO self-heal
+  counts DISTINCT PRESENTS carrying an error, not raw errors — one rejected
+  pipeline is dozens of errors in one frame, one transient is one error, and
+  `> 0` reloaded the healthy tab. Mirrors WGX's `GPU_ERR_ESCALATE_FRAMES`.
