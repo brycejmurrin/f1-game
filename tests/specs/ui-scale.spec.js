@@ -36,16 +36,15 @@ const SCALES = [50, 100, 115, 130, 150, 200];
 // The screens reachable from the title without starting a session. Each is
 // [name, root selector, ids to click in order].
 //
-// THE GARAGE IS A STEP, NOT A SIDE DOOR: #select's START opens #carsetup, and
-// the garage's DONE goes on to #race-settings. There is no `sel-setup` any
-// more. tools/ui/menu-fit.mjs and tools/ui/fit-audit.mjs both still carried the old
-// route and had been quietly reporting "root missing/hidden" for those two
-// screens; they are fixed alongside this.
+// YOUR CAR on #select opens #carsetup; NEXT opens #race-settings. There is
+// no `sel-setup` any more. tools/ui/menu-fit.mjs and tools/ui/fit-audit.mjs both
+// still carried the old route and had been quietly reporting "root
+// missing/hidden" for those two screens; they are fixed alongside this.
 const SCREENS = [
   ["title", "#overlay", []],
   ["select", "#select", ["mb-race"]],
-  ["garage", "#carsetup", ["mb-race", "sel-go"]],
-  ["race-settings", "#race-settings", ["mb-race", "sel-go", "cs-done"]],
+  ["garage", "#carsetup", ["mb-race", "sel-car"]],
+  ["race-settings", "#race-settings", ["mb-race", "sel-go"]],
   ["howtoplay", "#howtoplay", ["mb-help"]],
   ["settings", "#pmsettings", ["mb-settings"]],
 ];

@@ -73,15 +73,21 @@
      set on <html> by the HUD). */
   border-left: 3px solid var(--accent);
   padding: calc(var(--gap) / 3) var(--gap);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-xs);
   text-align: center;
   /* no backdrop-filter: this panel sits over the live 3D canvas, and a blur
      here forces the compositor to re-blur the backdrop EVERY frame while
      racing (top mobile compositing cost). The tinted bg carries the look. */
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
-.hud-label { font-size: var(--fs-micro); letter-spacing: 0.16em; color: var(--dim); }
-.hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.hud-label {
+  font-family: var(--font-hud);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--dim);
+}
+.hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
 /* POSITION CHANGE. hud.js stamps data-delta="up"/"down" on #hud-pos for ~6
    HUD ticks when the rank moves; the colour is state (kept under reduced
    motion), the scale pop is motion (not). */

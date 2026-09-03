@@ -26,7 +26,7 @@ async function openSetup(page, team = "mclaren") {
   await pinFreePlay(page, { team, click: false });
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await freeBuildOff(page);              // the in-memory flag, not just the key
 }

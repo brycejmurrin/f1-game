@@ -140,12 +140,12 @@ screens nobody had opened.
 |---|---|
 | `#overlay` | boot |
 | `#select` | `mb-race` |
-| `#carsetup` | `mb-race`, `sel-go` |
-| `#race-settings` | `mb-race`, `sel-go`, `cs-done` |
+| `#carsetup` | `mb-race`, `sel-car` |
+| `#race-settings` | `mb-race`, `sel-go` |
 | `#career` | `mb-career` |
 | `#season-setup` | `mb-season` (SEASON setup screen — `season-ui.js`) |
 | `#pmsettings` | `mb-settings` |
-| `#howtoplay` | `mb-settings` → `pm-tab-more` → `pm-howto` |
+| `#howtoplay` | `mb-help` |
 | `#vsfriend` | `mb-vs` |
 | `#datahub` | `mb-data` (+ its 6 tabs: schedule/standings/lastrace/live/telemetry/export) |
 | `#teampicker` | garage → TEAM tab → `cs-team-card` |

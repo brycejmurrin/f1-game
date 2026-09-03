@@ -24,7 +24,7 @@ SCREENS = [
   ("garage", "carsetup", "mb-garage"),
   ("career", "career", "mb-career"),
   ("select", "select", "mb-race"),
-  ("howto", "howtoplay", "mb-settings,pm-tab-more,pm-howto"),
+  ("howto", "howtoplay", "mb-help"),
   ("datahub", "datahub", "mb-data"),
   ("vsfriend", "vsfriend", "mb-vs"),
 ]

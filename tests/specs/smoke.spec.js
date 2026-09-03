@@ -65,10 +65,8 @@ async function goToRace(page) {
   await quietRenderer(page);
   // Dismiss any overlay — the RACE button lives in the main menu
   await page.locator("#mb-race").click();
-  // Leave the circuit at its default; START opens the GARAGE...
+  // Leave the circuit at its default; NEXT opens race settings.
   await page.locator("#sel-go").click();
-  // ...and DONE carries on to the race settings, which we accept as they are.
-  await page.locator("#cs-done").click();
   await page.locator("#rs-go").click();
   // Renderer back on BEFORE the track wait, so callers get the live scene.
   await page.evaluate(() => window.__apex.headless(false));
@@ -195,7 +193,7 @@ test.describe("Apex 26 — smoke", () => {
     expect(pageErrors).toEqual([]);
   });
 
-  test("the select screen is a circuit picker, and START opens the garage", async ({ page }) => {
+  test("the select screen is a circuit picker, and YOUR CAR opens the garage", async ({ page }) => {
     await page.goto("/");
     // Every assertion below is DOM — visibility, counts, which sheet is open.
     // Nothing here reads the canvas, so the 3D redraw behind these menus is pure
@@ -216,8 +214,8 @@ test.describe("Apex 26 — smoke", () => {
     // a property of the race, not of the driver you pick.
     await expect(page.locator("#sel-diff")).toHaveCount(0);
 
-    // Choosing a car is a STEP now, not a side door: START goes to the garage.
-    await page.locator("#sel-go").click();
+    // Choosing a car is a side door: YOUR CAR opens the garage; NEXT skips it.
+    await page.locator("#sel-car").click();
     await expect(page.locator("#carsetup")).toBeVisible();
     await expect(page.locator("#select")).toBeHidden();
     // ...and the team picker lives there, on the TEAM & DRIVER tab.

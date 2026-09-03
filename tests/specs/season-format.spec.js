@@ -41,7 +41,7 @@ async function boot(page, cfg) {
 /** #mb-season → select → garage → race settings, stopping before GO. */
 async function toRaceSettings(page) {
   await page.locator("#mb-season").click();
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.locator("#cs-done").click();
   await page.locator("#carsetup").waitFor({ state: "hidden" });
@@ -92,7 +92,6 @@ test.describe("Season — a custom calendar", () => {
     await expect(page.locator("#sel-preview-rec")).toContainText("of 3");
     await expect(page.locator("#sel-tracks")).toContainText("MONACO");
     await page.locator("#sel-go").click();
-    await page.locator("#cs-done").click();
     await toTheGrid(page);
     // info().track is the circuit ID, and only while a session is live.
     expect(await page.evaluate(() => window.__apex.info().track)).toBe("monza");

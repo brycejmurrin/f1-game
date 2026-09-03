@@ -177,7 +177,10 @@ const CEILING = {
   // teamtile/seat padding pair into one shared declaration.
   // 2026-08-27: 324 -> 323. Round-13 season-row de-buttoning dropped the
   // rows' raw margin-bottom (the hairline grammar needs no stacking gap).
-  rawSpacing: 323,
+  // 2026-09-03: 323 -> 322. Compact-wide title dropped a redundant
+  // `#menu-hero .bigbtn { padding-block }` that the following
+  // `#menu-buttons .bigbtn { padding }` shorthand already overrode.
+  rawSpacing: 314,
   // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
   // declaration value; tokens.css custom-property DEFINITIONS excluded — the
   // definition site is the system, not drift; url() interiors excluded).
@@ -207,7 +210,13 @@ const CEILING = {
   // light up under a thumb in the one steering mode that used them. The
   // ladder's own alphas moved with it (pedals to 0.85, presses to 0.95) but
   // traded one spelling for another, so distinct stays flat.
-  rawColor: 371,
+  // 2026-09-03 matching pass: 348 -> 334. Idle-tab / selected-chip / headline
+  // ink left #fff and leftover red section chrome for --text / --steel.
+  // 2026-09-03 leftover pass: 334 -> 330. Sort/label/live-updated chrome
+  // left #7a7a85 and leftover dim for --steel / --text.
+  // 2026-09-03 union with the timing-colour pass: --faster/--slower replace the
+  // laneboard literals; the count is the merged tree's.
+  rawColor: 326,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide
@@ -215,7 +224,12 @@ const CEILING = {
   // get planned. Set 2026-08-27 with the guard.
   // 2026-08-27: 194 -> 190 in the same pass — the deleted border tints were
   // the only users of their values.
-  rawColorDistinct: 187,
+  // 2026-09-03: 190 -> 189 with rawColor 375 -> 374. Title secondary rooms
+  // left rgba(255,255,255,0.78) for color-mix(var(--text)).
+  // 2026-09-03 deep pass: 374 -> 367 / 189 -> 188. Customize rows, title
+  // subs, How-to-Play rules, and data-hub numerals moved onto tokens.
+  // 2026-09-03 leftover pass: 185 -> 184 with rawColor 334 -> 330.
+  rawColorDistinct: 181,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

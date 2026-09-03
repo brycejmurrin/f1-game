@@ -23,6 +23,14 @@
    The title screen is not a `.sheet`, so without this it is the one screen the
    setting would never move. */
 #overlay > * { zoom: var(--ui-scale); }
+/* Title arrives once. Reuses sheet-in (css/components.css) so the doors and
+   the wordmark share the same motion as every modal sheet — one-shot, never
+   a loop (the sheen rule below documents why). hidden on #overlay restarts it
+   when the player comes back from a room. */
+@media (prefers-reduced-motion: no-preference) {
+  #menu-brand { animation: sheet-in 0.32s cubic-bezier(0.2, 0.7, 0.3, 1); }
+  #menu-buttons { animation: sheet-in 0.4s 0.05s cubic-bezier(0.2, 0.7, 0.3, 1); }
+}
 #overlay {
   position: fixed; inset: 0;
   z-index: 20;
@@ -60,14 +68,16 @@
   /* in oklab so the red wash stays red through its falloff instead of
      sagging grey, and .grain (css/components.css) dithers what is left */
   background:
-    radial-gradient(120% 90% at 50% 10% in oklab, color-mix(in oklab, var(--red) 22%, transparent), transparent 64%),
+    radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 28%, transparent), transparent 58%),
     rgba(6, 6, 10, 0.36);
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
 }
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
+  font-weight: 700; font-style: italic;
   color: var(--text);
+  letter-spacing: var(--ls-2);
   text-shadow: 0 0 42px color-mix(in oklab, var(--red) 82%, transparent), 0 2px 12px rgba(0, 0, 0, 0.8);
 }
 /* The accent rule UNDERLINES THE WORDMARK. It was `width: 70%; margin: 4px auto
@@ -148,7 +158,7 @@
    where the mb- family's one-off pair did not (rule 12 note above). */
 .mb-sub {
   font-size: var(--fs-micro); font-weight: 600; letter-spacing: var(--ls-4);
-  font-style: normal; color: rgba(255, 255, 255, 0.72);
+  font-style: normal; color: color-mix(in oklab, var(--text) 72%, transparent);
   text-transform: none;
 }
 /* The live save line ships its first-time text in the shell (like #mb-season
@@ -176,12 +186,35 @@
    no red glow, so the eye still lands on the modes first. */
 .minibtn {
   font-size: var(--fs-micro); letter-spacing: var(--ls-1);
-  padding: 9px 10px;
+  padding: calc(var(--gap) * 0.75) calc(var(--gap) * 5 / 6);
   box-shadow: none;
 }
 /* Micro type over a translucent plate over a moving 3D scene needs more ink
    than --dim gives it; resting below --text keeps hover's step-up visible. */
-#menu-secondary .minibtn { color: rgba(255, 255, 255, 0.78); }
+/* Quiet secondary rooms: token-mix only so the colour ratchet can fall, and
+   still above --dim for contrast over a bright sky. */
+#menu-secondary .minibtn { color: var(--text); }
+/* Align icon+label like a single control (primary modes use an inner column;
+   rooms are one-line). Half-height floors so they read as secondary without
+   still painting at full --tap (52 on touch). */
+#menu-secondary .bigbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em;
+  min-height: max(36px, var(--tap-min));
+  padding: calc(var(--gap) * 0.65) calc(var(--gap) * 0.95) calc(var(--gap) * 0.65) calc(var(--gap) * 1.15);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-1);
+}
+#menu-secondary .bigbtn .btn-ico { margin-right: 0; }
+/* Title rooms sit on grain + a live circuit, not on a sheet. The shared
+   --plate wash disappeared there; a carbon tile keeps the door a door. */
+#overlay .bigbtn.alt {
+  background: var(--plate-opaque);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+  color: var(--text);
+}
 .minibtn .btn-ico { margin-right: 0.35em; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
@@ -204,7 +237,12 @@
    button left 25). `width: auto` is what actually stops it spanning the column;
    `min-height` puts it on the touch ladder, which .minibtn does not do on its
    own — it is padding-sized, and this measured 40 CSS px without it. */
-#soundbtn { width: auto; margin: 2px 0 0; min-height: var(--tap); }
+#soundbtn {
+  width: auto; margin: 2px 0 0; min-height: var(--tap);
+  font-weight: 700; letter-spacing: var(--ls-2);
+  background: var(--plate-opaque);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
 /* Brighter than bare --dim: the judges flagged the unofficial-fan-game line
    as below comfortable reading contrast over the bright sky. Token-mix only
    (no raw literal); still clearly quieter than body text. */
@@ -266,6 +304,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
 
    Type / padding / title-size polish stays out of this change — that lane is
    separate. This block is reachability only. */
+:where(body[data-density="compact"]) #overlay { gap: var(--gap); }
 :where(body[data-density="compact"]) #menu-buttons {
   max-height: calc(100 * var(--svhz) - 2 * var(--gut));
   overflow-x: hidden;
@@ -310,12 +349,18 @@ body { --compact-at: 600px; --wide-at: 620px; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   justify-content: safe center;
   align-content: safe center; justify-items: stretch;
-  column-gap: 32px;
+  /* Token gap, not 32px: on 852×393 that literal was a dead third column
+     between brand and doors. The 1fr tracks already split the safe box. */
+  column-gap: var(--gap);
+  gap: var(--gap);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-brand { grid-column: 1; grid-row: 1; align-items: flex-start; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-brand,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons {
-  width: min(calc(42 * var(--vwz)), 100%);
+  /* Fill the 1fr track. `42vwz` left ~100px of unused overlay on the
+     play-shape (measured 852) after safe-area — the rooms overflowed
+     a column that was narrower than the space already reserved. */
+  width: 100%;
   min-width: 0;
   max-width: 100%;
 }
@@ -323,18 +368,32 @@ body { --compact-at: 600px; --wide-at: 620px; }
   grid-column: 2; grid-row: 1;
   align-self: stretch;
   justify-items: stretch;
+  /* Rooms used to sit on --tap (52px on touch) so a 2×2 of DATA / GARAGE /
+     SETTINGS / HELP overflowed the column (measured gallery 2026-09-03:
+     scrollH 388 → 323 vs clientH 306 at 734×343 after the first cut).
+     Second cut clears the remaining ~17px so sf-b fade does not eat the
+     rooms. Same compact floor family the pause stack already uses. */
+  gap: calc(var(--gap) * 0.35);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
-:where(body[data-shape="wide"][data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: var(--fs-micro); }
-:where(body[data-shape="wide"][data-density="compact"]) #menu-meta { margin-top: 12px; gap: 4px; }
+:where(body[data-shape="wide"][data-density="compact"]) #subtitle { margin: var(--gap) 0 0; font-size: var(--fs-micro); }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-meta { margin-top: calc(var(--gap) * 1.5); gap: calc(var(--gap) / 2); }
 :where(body[data-shape="wide"][data-density="compact"]) #audiostate { font-size: var(--fs-micro); }
 :where(body[data-shape="wide"][data-density="compact"]) #disclaimer { font-size: var(--fs-micro); }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary { width: 100%; }
-:where(body[data-shape="wide"][data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
-:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
-:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .minibtn { padding: 7px 10px; font-size: var(--fs-micro); }
+:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-secondary) {
+  gap: calc(var(--gap) * 0.45);
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn {
+  width: 100%; padding: 6px 8px 6px 12px; font-size: var(--fs-3);
+  min-height: max(32px, var(--tap-min));
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .minibtn {
+  padding: 3px 6px 3px 10px; font-size: var(--fs-micro);
+  min-height: max(26px, var(--tap-min));
+}
 /* The static mode subs are the first thing to go when height is short — the
    hero's save line stays, it is state the player came back for. */
 :where(body[data-density="compact"]) #menu-primary .mb-sub { display: none; }
@@ -377,7 +436,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
      use a deliberate 17px control rung; every smaller label uses the shared
      micro rung. Icons are em-sized and follow their label automatically. */
   :where(body[data-density="compact"]) #menu-buttons .bigbtn {
-    font-size: calc(17px * var(--ui-compact-text));
+    font-size: calc(var(--fs-4) * var(--ui-compact-text));
   }
   :where(body[data-density="compact"]) :is(#subtitle, #audiostate, #disclaimer, #soundbtn) {
     font-size: calc(var(--fs-micro) * var(--ui-compact-brand-text));
@@ -757,7 +816,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
 .tm-body { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
 .tm-name {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic; letter-spacing: var(--ls-1);
-  color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .tm-sub {
   font-size: var(--fs-micro); letter-spacing: var(--ls-2); color: var(--dim);
@@ -776,7 +835,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   overflow-wrap: break-word;
 }
 .tm-chev { flex: none; color: var(--red); font-size: var(--fs-micro); }
-.team-tile.active .tm-name { color: #fff; }
+.team-tile.active .tm-name { color: var(--text); }
 /* Tiles fill the picker in as many columns as fit; each stays a big target.
  *
  * `min(240px, 100%)` IS THE FLOOR, NOT A BARE 240px. `repeat(auto-fill,
@@ -812,9 +871,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
 .sel-chip {
   /* on the height ladder (css/tokens.css) rather than sized by padding alone */
   min-height: var(--chip-h);
-  display: inline-flex; align-items: center;
-  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.85);
+  display: inline-flex; align-items: center; justify-content: center;
+  /* Leading-edge bias under the shared -6deg skew so labels sit optically
+     centred in the parallelogram. */
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.7) calc(var(--gap) * 0.5) calc(var(--gap) * 1);
   font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-1);
+  color: var(--text);
   border-radius: var(--r-sm);
   border: 1px solid var(--plate-line);
   /* Same dark plate as the settings tab headers — one family of keys. */
@@ -832,12 +896,13 @@ body { --compact-at: 600px; --wide-at: 620px; }
   border-color: var(--red);
   background: var(--plate-on);
   box-shadow: var(--plate-on-glow);
+  color: var(--text);
 }
 .sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
 .sel-edit {
   min-height: var(--chip-h);
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: var(--fs-micro); padding: 6px 12px;
+  font-size: var(--fs-micro); padding: calc(var(--gap) / 2) var(--gap);
   border: 1px solid var(--red); background: var(--plate-on); border-radius: var(--r-sm);
   transition: background 0.12s, box-shadow 0.12s; cursor: pointer;
 }
@@ -845,7 +910,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
   .sel-edit:hover { background: var(--plate-on-strong); box-shadow: var(--lift-sel); }
 }
 .sel-edit:active { background: color-mix(in oklab, var(--red) 30%, transparent); }
-h3.sel-label { font-size: var(--label); font-weight: 700; }
+h3.sel-label {
+  font-size: var(--label); font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-4); color: var(--steel); text-transform: uppercase;
+}
 
 /* ---------- circuit preview ---------- */
 #sel-track-preview {
@@ -1074,7 +1142,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    #sel-preview-elev { display: none }` (two IDs, inside the layer) lost to
    `#sel-preview-elev { display: block }` (one ID, unlayered), so the elevation
    strip the phone layout explicitly removes was on screen the whole time. */
-#sel-preview-name { font-size: 15px; font-weight: 800; font-style: italic; color: #fff; letter-spacing: var(--ls-1); }
+#sel-preview-name { font-size: var(--fs-2); font-weight: 800; font-style: italic; color: var(--text); letter-spacing: var(--ls-1); }
 #sel-preview-gp { font-size: var(--fs-micro); color: var(--red); font-weight: 700; margin-top: 2px; }
 #sel-preview-meta { font-size: var(--fs-micro); color: var(--dim); margin-top: 6px; line-height: 1.5; }
 #sel-preview-rec { font-size: var(--fs-micro); color: #f6d200; font-weight: 700; margin-top: 5px; font-variant-numeric: tabular-nums; }
@@ -1096,7 +1164,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    later one won, which is why an iPad in portrait (786px sheet) came out right
    and a desktop (1020px) did not. Only the type scales now. */
 @container sheet (min-width: 820px) {
-  #sel-preview-name { font-size: 18px; }
+  #sel-preview-name { font-size: var(--fs-5); }
 }
 /* Compact pair-on: the extras go, the NAME AND ONE FACT LINE stay — beside
    the map, not under it. Hiding the whole caption left the band a row holding
@@ -1126,7 +1194,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    refused to press. .track-row (below) is the named model — full-bleed rows
    split by a hairline — and these rows now follow it, so the calendar reads
    as the circuit list does everywhere else. */
-.season-upcoming-row { display: flex; align-items: baseline; gap: 8px; padding: 6px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); cursor: default; }
+.season-upcoming-row { display: flex; align-items: baseline; gap: calc(var(--gap) * 2 / 3); padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6); border-bottom: 1px solid var(--card-line); cursor: default; }
 .season-upcoming-row:last-child { border-bottom: none; }
 .sur-rnd { font-size: var(--fs-micro); font-weight: 700; color: var(--red); letter-spacing: var(--ls-3); min-width: 24px; }
 .sur-name { font-size: var(--fs-micro); font-weight: 700; color: var(--text); flex: 1; font-style: italic; letter-spacing: var(--ls-1); }
@@ -1153,10 +1221,11 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    same threshold. `data-pair="on"` is what puts both panes in a
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
-#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; }
+#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; --pair-compact: wide; }
 #ss-inner:not([data-shape="tall"]) { --fit-at: 220px; }
-/* SHORT SHEET: `--pair-compact: off` on `.pane-pair` stacks this sheet when
-   compact even if clientWidth stays above 620. Same as select / career / garage. */
+/* Compact WIDE keeps the calendar + pool pair (same as #sel-inner). Compact
+   TALL still stacks — `--pair-compact: wide` only holds the pair on a wide
+   shape. `.pane-pair` still defaults `off` for garage / career. */
 /* Stacked season setup owns ONE vertical scroll region. Without this branch the
    two `.pane` children take their full natural height, #ss-body overflows while
    remaining `overflow: visible`, and #ss-inner clips the result. On a 390x844
@@ -1201,7 +1270,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 /* Armed APPLY on a live season — the career DELETE? treatment: the second
    press is the one that wipes up to 23 raced rounds, so the first must
    read as danger, not as the same primary button. */
-#ss-apply.armed { color: #fff; border-color: var(--red); background: var(--armed-fill); }
+#ss-apply.armed { color: var(--text); border-color: var(--red); background: var(--armed-fill); }
 
 /* ---------- track picker rows ---------- */
 #sel-tracks {
@@ -1216,7 +1285,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.5);
   padding: calc(var(--gap) * 0.66) calc(var(--gap) * 0.83);
   background: color-mix(in oklab, var(--panel) 92%, #000);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--card-line);
 }
 #sel-track-filter .sel-chip {
   flex: 1 1 auto;
@@ -1295,7 +1364,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   width: 100%; padding: 9px 12px;
   text-align: left; cursor: pointer;
   border: none; border-radius: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--card-line);
   background: none;
   transition: background 0.1s;
 }
@@ -1306,14 +1375,14 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 @media (hover: hover) {
   .track-row:hover { background: var(--plate); }
 }
-.track-row:active { background: rgba(255, 255, 255, 0.09); }
+.track-row:active { background: var(--plate-hover); }
 .track-row.active { background: color-mix(in oklab, var(--red) 16%, transparent); border-left: 3px solid var(--red); padding-left: 9px; }
 .track-row-name {
   flex: 1;
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
-  color: #fff; letter-spacing: var(--ls-1);
+  color: var(--text); letter-spacing: var(--ls-1);
 }
-.track-row.active .track-row-name { color: var(--red); }
+.track-row.active .track-row-name { color: var(--text); }
 .track-row-meta { font-size: var(--fs-micro); color: var(--dim); }
 .track-row-rec { font-size: var(--fs-micro); color: #f6d200; font-variant-numeric: tabular-nums; font-weight: 700; }
 .trb { display: inline-block; font-size: var(--fs-micro); letter-spacing: var(--ls-4); padding: 1px 5px; border-radius: var(--r-xs); margin-left: 5px; vertical-align: middle; font-weight: 700; }
@@ -1330,13 +1399,13 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
   font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5);
   color: var(--dim); padding: 7px 12px 5px;
   background: var(--surf-1);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--card-line);
 }
 
 /* ---------- race settings ---------- */
 .rs-row { margin-bottom: var(--gap); }
 #race-settings .sel-chip { font-size: clamp(var(--fs-micro), calc(1.6 * var(--vwz)), var(--fs-3)); padding: 8px 14px; }
-#race-settings .sel-chip.active { background: var(--plate-on); box-shadow: var(--plate-on-glow); color: #fff; font-weight: 700; }
+#race-settings .sel-chip.active { background: var(--plate-on); box-shadow: var(--plate-on-glow); color: var(--text); font-weight: 700; }
 /* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
 @container sheet (min-width: 440px) {
   #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
@@ -1483,7 +1552,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #customize .cz-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--gap); margin: 6px 0;
-  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-4); color: rgba(255,255,255,0.5);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-4); color: var(--dim);
 }
 #customize .cz-row label { flex: 1 1 auto; min-width: 0; }
 #customize input[type="text"], #customize input[type="number"] {
@@ -1522,7 +1591,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #customize .cz-sep {
   margin: var(--gap) 0 6px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   /* var(--dim), not white at 0.4 alpha: over the darkest ground the sheet can
-     sit on (#0a0a0f) that was 3.75:1 — below AA for 14px text. --dim is 7:1. */
+     sit on (#0c0c14) that was 3.75:1 — below AA for 14px text. --dim is 7:1. */
   color: var(--dim); text-transform: uppercase;
   border-top: 1px solid var(--card-line); padding-top: var(--gap);
 }
@@ -1545,7 +1614,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
      sub-100% arm ever wins. */
   flex: none; width: auto; min-width: max(56px, var(--tap-min)); min-height: var(--chip-h);
   font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
-  padding: 6px 9px; border-radius: var(--r-sm); cursor: pointer; color: var(--dim);
+  padding: 6px 9px; border-radius: var(--r-sm); cursor: pointer; color: var(--text);
   background: var(--plate); border: 1px solid var(--plate-line);
 }
 /* Engaged = a lighter SURFACE, not a colour. This was a blue fill, and blue
@@ -1567,22 +1636,23 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
    the room the sheet was given — on a landscape phone the sheet is now wide
    enough for three, which is what finally gets the whole form above the fold
    (it was 442px of rows in a 271px window). */
-@container sheet (min-width: 460px) {
-  #cz-body, #cz-paint-rows {
-    display: grid;
-    /* min(...) floor — see #sel-teams above for why a bare px floor overflows */
-    grid-template-columns: repeat(auto-fill, minmax(min(205px, 100%), 1fr));
-    column-gap: var(--pad); align-content: start;
-  }
-  /* #cz-paint (the <details> now wrapping the paint rows) has to be the grid
-     item that spans full width, not the .cz-sep summary or #cz-paint-rows
-     inside it — display:contents on the <details> looks like the fix but
-     Chromium does not promote a <details>'s children out of the box tree for
-     grid placement even with it (see the identical dead end in
-     css/components.css for #advanced), so the wrapper stays a real box and
-     grids its OWN children instead, same as #cz-body does for its own. */
-  #cz-body .cz-sep, #cz-body #cz-preview, #cz-body #cz-paint { grid-column: 1 / -1; }
+#customize .sheet[data-shape="wide"] #cz-body,
+#customize .sheet[data-shape="wide"] #cz-paint-rows {
+  display: grid;
+  /* min(...) floor — see #sel-teams above for why a bare px floor overflows */
+  grid-template-columns: repeat(auto-fill, minmax(min(205px, 100%), 1fr));
+  column-gap: var(--pad); align-content: start;
 }
+/* #cz-paint (the <details> now wrapping the paint rows) has to be the grid
+   item that spans full width, not the .cz-sep summary or #cz-paint-rows
+   inside it — display:contents on the <details> looks like the fix but
+   Chromium does not promote a <details>'s children out of the box tree for
+   grid placement even with it (see the identical dead end in
+   css/components.css for #advanced), so the wrapper stays a real box and
+   grids its OWN children instead, same as #cz-body does for its own. */
+#customize .sheet[data-shape="wide"] #cz-body .cz-sep,
+#customize .sheet[data-shape="wide"] #cz-body #cz-preview,
+#customize .sheet[data-shape="wide"] #cz-body #cz-paint { grid-column: 1 / -1; }
 
 /* ---------- THE TOUCH TYPE FLOOR ----------------------------------------
    css/tokens.css says --label is "the smallest type this UI has" and sets it

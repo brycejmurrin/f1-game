@@ -266,16 +266,16 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   padding: 5px 9px; font-size: var(--fs-micro); letter-spacing: var(--ls-2);
   /* plate fill + line come from the button base; the pill radius is ours */
   border-radius: var(--r-pill);
-  color: var(--dim);
+  color: var(--text);
   transition: background 0.12s, color 0.12s;
   /* wraps rather than truncates: at rail width a column is ~100px and the
      longest label needs two lines. Grid rows stretch, so both cells match. */
   white-space: normal; text-align: center; line-height: 1.15;
 }
 @media (hover: hover) {
-  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { color: #fff; }
+  #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { color: var(--text); }
 }
-#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { color: #fff; }
+#lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { color: var(--text); }
 #lt-tabs .lt-tab.on, #ct-modes .lt-tab.on {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
   box-shadow: var(--plate-on-glow);
@@ -287,7 +287,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .lt-section {
   margin: 16px 0 7px;
   padding: 0 0 calc(var(--gap) / 3);
-  color: rgba(255,255,255,.72);
+  color: var(--steel);
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
   font-size: var(--fs-micro);
   font-weight: 800;
@@ -333,7 +333,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 /* A mode whose framing has been changed keeps a red outline even when it is not
    the selected chip — the panel shows one camera at a time, so this is the only
    way to see at a glance which of the 13 you have already tuned. */
-#ct-modes .lt-tab.tuned { border-color: var(--red); color: #fff; }
+#ct-modes .lt-tab.tuned { border-color: var(--red); color: var(--text); }
 #ct-modes .lt-tab.tuned.on { border-color: var(--red); }
 #lt-json {
   /* field-sizing lets the export box grow to whatever COPY VALUES produced
@@ -355,12 +355,12 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 .adv-intro { font-size: var(--fs-micro); opacity: 0.7; margin: 0 0 calc(var(--gap) * 0.5); line-height: 1.45; }
 .adv-sec {
-  color: var(--red); font-size: var(--fs-micro); letter-spacing: var(--ls-4);
+  color: var(--steel); font-size: var(--fs-micro); letter-spacing: var(--ls-4);
   margin: calc(var(--gap) * 4 / 3) 0 calc(var(--gap) * 2 / 3); padding-bottom: calc(var(--gap) / 3);
   border-bottom: 1px solid var(--card-line);
 }
 .adv-sec span {
-  color: rgba(255, 255, 255, 0.45); font-size: var(--fs-micro);
+  color: color-mix(in oklab, var(--text) 45%, transparent); font-size: var(--fs-micro);
   letter-spacing: var(--ls-1); margin-left: calc(var(--gap) * 0.5);
 }
 .adv-item { margin: 11px 0; }
