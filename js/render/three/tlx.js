@@ -2543,7 +2543,6 @@ const TLX = (function () {
           camera.matrixWorldAutoUpdate = false;
           const _wgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
           if (frame && frame.proj && frame.invProj && frame.viewProj) {
-            const _offAxis = !!(frame.proj[8] || frame.proj[9]);
             if (_wgpu) {
               _mul4Col(_projGpu, Z01, frame.proj);
               camera.projectionMatrix.fromArray(_projGpu);
