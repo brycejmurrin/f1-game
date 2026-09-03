@@ -823,10 +823,28 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), "#race-settings", "--sheet-w"), "760px",
     "race settings spends the same safe width as settings / customize");
   assert.equal(decl(css("css/components.css"), "#standings", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/components.css"), "#results", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/components.css"), "#audioset", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/components.css"), "#spotifypanel", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/career.css"), "#career-offers", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/career.css"), "#career-history", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/career.css"), "#quali", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/career.css"), "#career-guide", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",
+    "compact wide season setup keeps the calendar + pool pair");
   const shell = read("index.html");
   assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is BACK on the alt plate");
   assert.match(shell, /id="htp-close"[^>]*>BACK</, "How to Play returns to its parent, it does not commit");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
+  for (const id of ["adv-close", "as-close", "sp-close"]) {
+    assert.match(shell, new RegExp(`id="${id}"[^>]*class="bigbtn alt"`), `${id} dismiss is the alt plate`);
+    assert.match(shell, new RegExp(`id="${id}"[^>]*>BACK<`), `${id} returns to its parent`);
+  }
+  assert.match(shell, /id="cz-cancel"[^>]*>BACK</, "customize cancel is BACK beside SAVE");
+  assert.match(shell, /id="lt-close"[^>]*class="bigbtn"/, "lighting tuner DONE stays a live-commit primary");
+  assert.doesNotMatch(shell, /id="lt-close"[^>]*class="bigbtn alt"/);
+  assert.match(shell, /id="ct-close"[^>]*class="bigbtn"/);
+  assert.doesNotMatch(shell, /id="ct-close"[^>]*class="bigbtn alt"/);
 });
 
 test("neutral buttons share the settings tab-header plate", () => {
@@ -848,6 +866,13 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(carsetup, ".cs-tab.active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-pill.dh-active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-livebtn.dh-active", "background"), "var(--plate-on)");
+  assert.equal(decl(data, ".dh-tab", "color"), "var(--text)", "idle hub tabs are ink, not dim-as-disabled");
+  assert.equal(decl(carsetup, ".cs-tab-lbl", "color"), "var(--text)");
+  assert.equal(decl(css("css/overlays.css"), "#htp-contents a", "color"), "var(--text)");
+  assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab", "color"), "var(--text)");
+  assert.equal(decl(css("css/tuner.css"), ".adv-sec", "color"), "var(--steel)", "section chrome, not a leftover red headline");
+  assert.equal(decl(menus, ".track-row.active .track-row-name", "color"), "var(--text)");
+  assert.equal(decl(components, "#pmsettings-inner .pm-doors button", "background"), "var(--plate-opaque)");
 });
 
 test("tool doors and lone foot actions do not stretch into banners", () => {

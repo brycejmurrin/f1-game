@@ -266,7 +266,7 @@
   flex: 1 1 auto;
 }
 #cr-inner #cr-foot #cr-go {
-  flex: 1.35 1 auto;
+  flex: 1 1 auto;
   letter-spacing: 0.06em;
 }
 #cr-inner[data-density="compact"] #cr-foot {
@@ -289,7 +289,7 @@
    like #results/#standings, the other "the session is over" sheets).
    The summary card is a plain .cr-card and the headings are .sel-label: nothing
    here needs a vocabulary of its own, only the offer rows are new. */
-#career-offers { --sheet-w: 620px; --fit-at: 300px; }
+#career-offers { --sheet-w: 760px; --fit-at: 300px; }
 
 /* An offer is a TILE, not a list row: it is a commitment of one to three seasons
    and the tap target has to say so. Same grid as .cr-teamtile — colour bar, name,
@@ -326,7 +326,7 @@
    the same z-index because only one of the two is ever open. Narrower than the
    offers sheet — a totals card and a column of season rows are both short lines,
    and a wide sheet would strand the points column half a screen from the year. */
-#career-history { --sheet-w: 520px; --fit-at: 300px; }
+#career-history { --sheet-w: 760px; --fit-at: 300px; }
 
 /* The way in, at the foot of the hub's left column. A .cr-card that happens to
    be a button: the surface rides the card class, the button-undo quintet rides
@@ -351,7 +351,7 @@
    .res-row vocabulary from css/components.css; the only new part is the time
    column, which needs tabular figures so the gaps line up as a column of
    numbers rather than drifting with the glyph widths. */
-#quali { --sheet-w: 560px; --fit-at: 300px; }
+#quali { --sheet-w: 760px; --fit-at: 300px; }
 #q-body { min-height: 0; }
 .q-time { font-family: var(--font-hud); font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1); }
 /* Pole gets the absolute lap time and everyone else a gap, so the two read
@@ -371,7 +371,6 @@
 }
 
 #q-foot { display: flex; flex-wrap: wrap; gap: var(--gap); align-items: center; }
-#q-foot #q-go { margin-left: auto; }
 /* The pre-session state offers DRIVE or SIMULATE; the post-session state has a
    classification and only TO THE GRID. JS flips this class rather than rebuilding
    the foot, so focus is never yanked out from under a keyboard user. */
@@ -460,7 +459,7 @@
    measure rather than the full 1020px the career page runs at. A top-layer
    <dialog> over #career, like the history sheet — both are read-only modals
    opened FROM the hub, and neither can be open at once. */
-#career-guide { --sheet-w: 560px; --fit-at: 300px; }
+#career-guide { --sheet-w: 760px; --fit-at: 300px; }
 /* Lower fit-at on wide-shaped sheets (zoom-corrected, not viewport orientation). */
 #career-offers .sheet:not([data-shape="tall"]),
 #career-history .sheet:not([data-shape="tall"]),

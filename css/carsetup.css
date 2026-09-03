@@ -328,14 +328,14 @@
    0→81px for "SUSPENSION"). Pair rail floor 120px + zero tracking clears
    the 1px ellipsis left at 0.02em inside tab padding. */
 .cs-tab-lbl {
-  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0; color: var(--dim);
+  font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0; color: var(--text);
 }
-.cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: rgba(255,255,255,0.4); }
+.cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: color-mix(in oklab, var(--text) 40%, transparent); }
 .cs-tab.upgraded .cs-tab-lbl { color: #4df; }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
 .cs-tab.active { background: var(--plate-on); border-color: var(--red); box-shadow: var(--plate-on-glow); }
-.cs-tab.active .cs-tab-lbl { color: #fff; }
-.cs-tab.active .cs-tab-cur { color: rgba(255,255,255,0.72); }
+.cs-tab.active .cs-tab-lbl { color: var(--text); }
+.cs-tab.active .cs-tab-cur { color: color-mix(in oklab, var(--text) 72%, transparent); }
 
 /* ---------- option rows ---------- */
 .cs-opt {

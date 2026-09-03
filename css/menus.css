@@ -1221,10 +1221,11 @@ h3.sel-label {
    same threshold. `data-pair="on"` is what puts both panes in a
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
-#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; }
+#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; --pair-compact: wide; }
 #ss-inner:not([data-shape="tall"]) { --fit-at: 220px; }
-/* SHORT SHEET: `--pair-compact: off` on `.pane-pair` stacks this sheet when
-   compact even if clientWidth stays above 620. Same as select / career / garage. */
+/* Compact WIDE keeps the calendar + pool pair (same as #sel-inner). Compact
+   TALL still stacks — `--pair-compact: wide` only holds the pair on a wide
+   shape. `.pane-pair` still defaults `off` for garage / career. */
 /* Stacked season setup owns ONE vertical scroll region. Without this branch the
    two `.pane` children take their full natural height, #ss-body overflows while
    remaining `overflow: visible`, and #ss-inner clips the result. On a 390x844
@@ -1381,7 +1382,7 @@ h3.sel-label {
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
   color: var(--text); letter-spacing: var(--ls-1);
 }
-.track-row.active .track-row-name { color: var(--red); }
+.track-row.active .track-row-name { color: var(--text); }
 .track-row-meta { font-size: var(--fs-micro); color: var(--dim); }
 .track-row-rec { font-size: var(--fs-micro); color: #f6d200; font-variant-numeric: tabular-nums; font-weight: 700; }
 .trb { display: inline-block; font-size: var(--fs-micro); letter-spacing: var(--ls-4); padding: 1px 5px; border-radius: var(--r-xs); margin-left: 5px; vertical-align: middle; font-weight: 700; }
@@ -1613,7 +1614,7 @@ h3.sel-label {
      sub-100% arm ever wins. */
   flex: none; width: auto; min-width: max(56px, var(--tap-min)); min-height: var(--chip-h);
   font: inherit; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
-  padding: 6px 9px; border-radius: var(--r-sm); cursor: pointer; color: var(--dim);
+  padding: 6px 9px; border-radius: var(--r-sm); cursor: pointer; color: var(--text);
   background: var(--plate); border: 1px solid var(--plate-line);
 }
 /* Engaged = a lighter SURFACE, not a colour. This was a blue fill, and blue
