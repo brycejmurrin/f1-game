@@ -1333,6 +1333,23 @@ const TLX = (function () {
       let _poolBatch = 0;
       let _pruneLast = 0;
       const _tmpMat4 = new THREE.Matrix4(), _tmpMat4b = new THREE.Matrix4();
+      // GL→WebGPU clip depth remap — game.js builds GL projections (NDC z ∈ [-1,1]);
+      // three WebGPU rasterises z ∈ [0,1]. Same Z01 as WGX (js/render/webgpu/wgx.js).
+      const Z01 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,0.5,0, 0,0,0.5,1]);
+      const Z01INV = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,2,0, 0,0,-1,1]);
+      const _projGpu = new Float32Array(16);
+      const _vpGpuTlx = new Float32Array(16);
+      const _invProjGpu = new Float32Array(16);
+      function _mul4Col(out, a, b) {
+        for (let c = 0; c < 4; c++) {
+          const b0 = b[c * 4], b1 = b[c * 4 + 1], b2 = b[c * 4 + 2], b3 = b[c * 4 + 3];
+          out[c * 4]     = a[0] * b0 + a[4] * b1 + a[8] * b2  + a[12] * b3;
+          out[c * 4 + 1] = a[1] * b0 + a[5] * b1 + a[9] * b2  + a[13] * b3;
+          out[c * 4 + 2] = a[2] * b0 + a[6] * b1 + a[10] * b2 + a[14] * b3;
+          out[c * 4 + 3] = a[3] * b0 + a[7] * b1 + a[11] * b2 + a[15] * b3;
+        }
+        return out;
+      }
 
       // ── M6 FX plumbing ───────────────────────────────────────────────────
       // Shared unit quad for blob shadows + per-mark skid stamps: the GLX
@@ -2525,14 +2542,27 @@ const TLX = (function () {
             : ((frame && frame.fogColor) || [0.04, 0.04, 0.06]);
           scene.background.setRGB(f[0], f[1], f[2]);
           camera.matrixWorldAutoUpdate = false;
+          const _wgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
           if (frame && frame.proj && frame.invProj && frame.viewProj) {
-            camera.projectionMatrix.fromArray(frame.proj);
+            if (_wgpu) {
+              _mul4Col(_projGpu, Z01, frame.proj);
+              camera.projectionMatrix.fromArray(_projGpu);
+              if (renderer.coordinateSystem != null) camera.coordinateSystem = renderer.coordinateSystem;
+            } else {
+              camera.projectionMatrix.fromArray(frame.proj);
+            }
             camera.matrixWorldInverse.multiplyMatrices(
               _tmpMat4.fromArray(frame.invProj),
               _tmpMat4b.fromArray(frame.viewProj));
             camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
           } else if (frame && frame.viewProj) {
-            camera.projectionMatrix.fromArray(frame.viewProj);
+            if (_wgpu) {
+              _mul4Col(_vpGpuTlx, Z01, frame.viewProj);
+              camera.projectionMatrix.fromArray(_vpGpuTlx);
+              if (renderer.coordinateSystem != null) camera.coordinateSystem = renderer.coordinateSystem;
+            } else {
+              camera.projectionMatrix.fromArray(frame.viewProj);
+            }
             camera.matrixWorldInverse.identity();
             camera.matrixWorld.identity();
           }
@@ -2552,7 +2582,12 @@ const TLX = (function () {
           if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
           frameCullDist = (frame && frame.cullDist) || 0;
           _postF.proj = (frame && frame.proj) || null;
-          _postF.invProj = (frame && frame.invProj) || null;
+          if (_wgpu && frame && frame.invProj && frame.invProj.length >= 16) {
+            _mul4Col(_invProjGpu, frame.invProj, Z01INV);
+            _postF.invProj = _invProjGpu;
+          } else {
+            _postF.invProj = (frame && frame.invProj) || null;
+          }
           _postF.invVP = (frame && frame.invViewProj) || null;
           _postF.sunVS = (frame && frame.sunViewDir) || null;
           _postF.upVS = (frame && frame.upViewDir) || null;
