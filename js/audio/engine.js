@@ -704,7 +704,13 @@ const GameAudio = (function () {
     // lvl·0.55 and the square wave swings it 0.10–1.00 × lvl.
     const limOn = rev > 0.985 && s > 0.05;
     const limDepth = limOn ? lvl * 0.45 : 0;
-    if (limGain) limGain.gain.setTargetAtTime(limDepth, t, 0.02);
+    // Same idiom as lfoG below: limDepth is 0 on the overwhelming majority of
+    // frames (limiter only above 98.5% rev), so guard on the cached target —
+    // cached ON THE NODE for the same restart-safety reason lfoG's comment gives.
+    if (limGain && limGain._apexLimTgt !== limDepth) {
+      limGain.gain.setTargetAtTime(limDepth, t, 0.02);
+      limGain._apexLimTgt = limDepth;
+    }
     engGain.gain.setTargetAtTime((lvl - limDepth) * (1 - 0.55 * shiftDuck), t, 0.03);
 
     // Turbo whine: in low gears (1-3) mechanical supercharger character — the
@@ -746,7 +752,14 @@ const GameAudio = (function () {
     const ersLvl = deploy > 0
       ? (0.010 + 0.018 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias
       : 0;
-    ersGain.gain.setTargetAtTime(ersLvl, t, deploy > 0 ? 0.05 : 0.10);
+    // Cached on the node, same idiom as lfoG/limGain above: ersLvl is 0 whenever
+    // the car isn't deploying. The time constant varies with deploy>0, but a
+    // 0->0 call is a no-op regardless of time constant, so gating on the
+    // cached TARGET alone (not the tau) is still correct.
+    if (ersGain._apexErsTgt !== ersLvl) {
+      ersGain.gain.setTargetAtTime(ersLvl, t, deploy > 0 ? 0.05 : 0.10);
+      ersGain._apexErsTgt = ersLvl;
+    }
     if (deploy > 0)
       ersOsc.frequency.setTargetAtTime((2400 + rev * 900) * (0.88 + 0.12 * low), t, 0.06);
 

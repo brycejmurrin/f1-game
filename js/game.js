@@ -999,9 +999,9 @@ function refreshQualiGate() {
 // build the race and hand its connection to NetPlay, and it cannot do that
 // until the players leave the sheet.
 function openQualiForNet(done) {
-  openQuali(true);                // fresh sim — do not restore a career grid
-  qualiNetDone = done || null;
-  refreshQualiGate();
+  // Armed INSIDE openQuali: it is async, so a qualiNetDone set out here was
+  // wiped by its continuation and netPlay.start() was unreachable.
+  openQuali(true, done || null);  // fresh sim — do not restore a career grid
 }
 
 // A rival's lap IN PROGRESS, so the wait has a clock on it. Deliberately
@@ -1339,6 +1339,10 @@ const _upVS = new Float32Array(3);   // the ROAD PLANE's normal in view space (w
 const _smpRoad = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // its own scratch: smp/smp2 are live elsewhere in the frame
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 const _upX = [1, 0, 0], _upY = [0, 1, 0];   // shadow-basis up choices (read-only)
+// lookAtTo() eye/target scratches — it reads all three vectors synchronously
+// and retains none. CULL_NO_UPLOAD: constant opts TLX/WGX read, GLX ignores.
+const _shEye = [0, 0, 0], _flEye = [0, 0, 0], _flTgt = [0, 0, 0];
+const CULL_NO_UPLOAD = { upload: false };
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
 // Lamp-spot shadow snap: skip full rebuild when nearest flood + eye cell hold.
@@ -4885,6 +4889,7 @@ function updateCar(c, dt, ranked) {
     // circle symmetric (power-limited exits) is a feel/design change, not a fix.
     const axFrac = Math.min(1, Math.abs(c.axEstSm ?? 0) / (LONG_GRIP * gripMult(c)));
     const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
+    c.slipFactor = slipFactor;   // setEngine() reads it for slip01; unassigned it read a constant 1
     // LOCK-UP (render + feel only): braking at the top of the friction budget
     // stops the fronts turning; a lock leaves a flat spot that wobbles the
     // wheel once per revolution and heals over ~90 s of rolling. The grip
@@ -6194,7 +6199,7 @@ function _castPropBatchesShadow() {
   for (let i = 0; i < _pb.length; i++) {
     if (planes && gfx.cullInstances) {
       // TLX: CPU-pack only (own shadow mesh). GLX/WGX ignore the 3rd arg.
-      gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes, { upload: false }));
+      gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes, CULL_NO_UPLOAD));
     } else gfx.castShadowInstanced(_pb[i]);
   }
 }
@@ -6843,9 +6848,8 @@ function render(dt) {
       // keep casting so they throw faint moon shadows too instead of popping
       // to blob-only.
       if (_ck > 0.28 || (LT.moonShadow > 0 && (frame.moonGate || 0) > 0.01)) {
-        M4.lookAtTo(_mCView,
-          [_shadowCtr[0] + sd[0] * 150, _shadowCtr[1] + sd[1] * 150, _shadowCtr[2] + sd[2] * 150],
-          _shadowCtr, up);
+        _shEye[0] = _shadowCtr[0] + sd[0] * 150; _shEye[1] = _shadowCtr[1] + sd[1] * 150; _shEye[2] = _shadowCtr[2] + sd[2] * 150;
+        M4.lookAtTo(_mCView, _shEye, _shadowCtr, up);
         const cBox = 42 * Math.max(1, sBox / 80);
         M4.orthoTo(_mCProj, -cBox, cBox, -cBox, cBox, 1.0, 320);
         M4.mulTo(_mCVP, _mCProj, _mCView);
@@ -7243,9 +7247,10 @@ function render(dt) {
         } else {
         _lampShX = _lx; _lampShY = _ly; _lampShZ = _lz; _lampShCarKey = _carKey;
         const fov = Math.min(2.6, 2 * Math.acos(clamp(L[o + 11], -0.999, 0.999)) * 1.1 + 0.15);
-        const up = Math.abs(L[o + 8]) > 0.95 ? [1, 0, 0] : [0, 1, 0];
-        M4.lookAtTo(_mFlView, [L[o], L[o + 1], L[o + 2]],
-          [L[o] + L[o + 7], L[o + 1] + L[o + 8], L[o + 2] + L[o + 9]], up);
+        const up = Math.abs(L[o + 8]) > 0.95 ? _upX : _upY;
+        _flEye[0] = L[o]; _flEye[1] = L[o + 1]; _flEye[2] = L[o + 2];
+        _flTgt[0] = L[o] + L[o + 7]; _flTgt[1] = L[o + 1] + L[o + 8]; _flTgt[2] = L[o + 2] + L[o + 9];
+        M4.lookAtTo(_mFlView, _flEye, _flTgt, up);
         // Near plane 2.5 m: the light sits INSIDE its own fixture geometry (the
         // lamp position IS the visible lens box, with the head/arm right beside
         // it, all part of the props caster mesh) — a closer near plane renders
@@ -8090,7 +8095,7 @@ function tick(now) {
   }
 }
 function tickBody(now) {
-  let dt = Math.min((now - lastFrame) / 1000, 1 / 4);   // clamp big gaps (tab resume)
+  let dt = Math.max(0, Math.min((now - lastFrame) / 1000, 1 / 4));   // clamp big gaps (tab resume) and a non-monotonic rAF stamp
   const _dtMs = now - lastFrame;
   lastFrame = now;
   // Adaptive resolution: only govern while actively rendering a race.
@@ -8642,7 +8647,7 @@ $("rs-go").onclick = () => {
 // The sheet opens BEFORE the session with the field already simulated, so the
 // player can see what they have to beat and choose whether to drive it or take
 // the simulated time. `q-done` flips the foot from DRIVE/SIMULATE to TO THE GRID.
-async function openQuali(fresh) {
+async function openQuali(fresh, netDone) {
   await ensureScenery(trackIdx);
   session = "quali";
   // Reached from race settings this is already "menu"; reached from the results
@@ -8651,12 +8656,13 @@ async function openQuali(fresh) {
   state = "menu";
   quali.clear();
   qualiPeers.clear();
-  qualiNetDone = null; qualiLive.clear(); qualiHadRivals = false;   // abandoned friend-race gate — openQualiForNet re-arms it AFTER this
+  qualiNetDone = netDone || null; qualiLive.clear(); qualiHadRivals = false;   // armed from the ARG: a caller's write lands before this line
   loadTrack(trackIdx);
   makeCars();
   if (fresh) quali.simulate(0); else quali.begin();
   $("quali").classList.remove("q-done");
   qualiSheet.open(quali.rows());
+  refreshQualiGate();   // the gate's state is only knowable once netDone is armed
 }
 function closeQualiToGrid() {
   qualiSheet.close();

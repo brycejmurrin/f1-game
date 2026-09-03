@@ -364,9 +364,9 @@ const GLTF = (function () {
           }
         }
 
-        // compute flat face normals if the primitive had none
+        // compute averaged vertex normals if the primitive had none
         if (!normals) {
-          computeFlatNormals(posOut, tri, vertBase, nrmOut);
+          computeVertexNormals(posOut, tri, vertBase, vCount, nrmOut);
         }
 
         // emit indices, offset by this primitive's vertex base
@@ -386,7 +386,11 @@ const GLTF = (function () {
     return { pos, nrm, col, idx };
   }
 
-  function computeFlatNormals(posOut, indices, vertBase, nrmOut) {
+  // Smooth (angle-agnostic) vertex normals: accumulate each triangle's unit
+  // face normal onto its three (shared) vertices, then normalize once per
+  // vertex. `vertBase`/`vertCount` scope the normalize pass to exactly the
+  // vertices this call's primitive wrote into the shared nrmOut buffer.
+  function computeVertexNormals(posOut, indices, vertBase, vertCount, nrmOut) {
     for (let t = 0; t + 2 < indices.length; t += 3) {
       const ia = vertBase + indices[t];
       const ib = vertBase + indices[t + 1];
@@ -401,12 +405,20 @@ const GLTF = (function () {
       let nz = ux * vy - uy * vx;
       const l = Math.hypot(nx, ny, nz) || 1;
       nx /= l; ny /= l; nz /= l;
-      // assign the face normal to each of the triangle's three vertices
+      // accumulate the face normal onto each of the triangle's three vertices
       for (const vi of [ia, ib, ic]) {
-        nrmOut[vi * 3] = nx;
-        nrmOut[vi * 3 + 1] = ny;
-        nrmOut[vi * 3 + 2] = nz;
+        nrmOut[vi * 3] += nx;
+        nrmOut[vi * 3 + 1] += ny;
+        nrmOut[vi * 3 + 2] += nz;
       }
+    }
+    // normalize the accumulated sum per vertex, scoped to this primitive
+    for (let vi = vertBase; vi < vertBase + vertCount; vi++) {
+      const nx = nrmOut[vi * 3], ny = nrmOut[vi * 3 + 1], nz = nrmOut[vi * 3 + 2];
+      const l = Math.hypot(nx, ny, nz) || 1;
+      nrmOut[vi * 3] = nx / l;
+      nrmOut[vi * 3 + 1] = ny / l;
+      nrmOut[vi * 3 + 2] = nz / l;
     }
   }
 

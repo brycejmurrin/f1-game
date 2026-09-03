@@ -22,7 +22,7 @@ const Onboard = (function () {
   const TAIL = {
     brake: "into the corner",
     ot: "you are close enough to use it",
-    aero: "the straight is long enough",
+    aero: "you can open it now",
   };
 
   function create(G) {
@@ -75,9 +75,8 @@ const Onboard = (function () {
         if (bc && bc.on && bc.urgency > 0.35) return fire("brake");
       }
       if (!(shown & BIT.ot) && p.otArmed && !(p.otT > 0)) return fire("ot");
-      if (!(shown & BIT.aero)) {
-        const d = G.aeroZoneAhead ? G.aeroZoneAhead(p.s) : -1;
-        if (d > 0 && d < 250 && !p.xOn) return fire("aero");
+      if (!(shown & BIT.aero) && G.raceAeroMode !== "auto") {
+        if (p.xArmed && !p.xOn) return fire("aero");
       }
       return false;
     }
