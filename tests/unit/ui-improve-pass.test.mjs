@@ -872,6 +872,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact METRICS packs 2-up via SheetShape density, not a height media");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
     "METRICS submenu no longer keys packing on viewport height");
+  assert.ok(!code("js/perf/metrics-overlay.js").includes("margin: 6px"),
+    "unlayered inject must not offset METRICS off the HIDE HUD row");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",
     "compact wide season setup keeps the calendar + pool pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--compact-at"), "480px",

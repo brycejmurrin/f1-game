@@ -1328,6 +1328,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   height: var(--tap);
   min-height: var(--tap);
   box-sizing: border-box;
+  cursor: pointer;
   justify-content: flex-start;
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
   font-weight: 600;

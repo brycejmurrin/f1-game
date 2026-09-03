@@ -766,7 +766,6 @@ function injectCss() {
   var s = document.createElement("style");
   s.id = "pm-metrics-sub-css";
   s.textContent = [
-    "#pm-metrics-details.pm-metrics-sub { margin: 6px 0 0; }",
     "#pm-metrics-details.pm-metrics-sub > summary.adv-more-btn { cursor: pointer; }",
     "#pm-metrics-details .pm-metrics-hint {",
     "  margin: 4px 0 0; opacity: .7; font-size: 11px; line-height: 1.3;",
