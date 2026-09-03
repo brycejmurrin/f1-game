@@ -32,7 +32,6 @@
     "test:lifecycle-unit": "node --test tests/unit/async-lifecycle.test.mjs",
     "test:state-unit": "node --test tests/unit/season-cal.test.mjs tests/unit/career-settle.test.mjs tests/unit/career-seat-rollover.test.mjs tests/unit/setup-screens-state.test.mjs tests/unit/career-cross-tab.test.mjs tests/unit/store-cross-tab.test.mjs tests/unit/quali-persist.test.mjs",
     "test:service-worker": "node --test tests/unit/service-worker.test.mjs",
-    "test:webgpu-lifecycle": "node --test",
     "test:tooling": "npm run test:tooling-fast && npm run test:sweeps",
     "test:tooling-fast": "node tools/ci/tooling-fast.mjs",
     "test:generated-docs": "node --test tests/unit/generated-docs.test.mjs",

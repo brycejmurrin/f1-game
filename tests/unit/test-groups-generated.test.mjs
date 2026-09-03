@@ -35,6 +35,21 @@ test("each group's command is the one its definition renders", () => {
   }
 });
 
+test("no group is left naming nothing", () => {
+  // `node --test` with no file arguments EXITS 1. A group whose whole subject
+  // moved away (test:webgpu-lifecycle, when WGX left for spike/backends/ on
+  // 2026-09-03) becomes exactly that, and the fast gate does not run npm
+  // groups — so it sailed through here and failed in the Pages gate instead,
+  // several minutes into a deploy. Delete the group or give it files.
+  // Only NODE groups: `node --test` with no paths exits 1, while a browser
+  // group with no paths is the deliberate "let Playwright discover every spec"
+  // shape that `test`, `test:update`, `test:render` and `test:headless` use.
+  const empty = Object.entries(doc.groups)
+    .filter(([, def]) => def.kind === "node" && (def.files || []).length === 0)
+    .map(([name]) => name);
+  assert.deepEqual(empty, [], "a node group with no files runs nothing and exits non-zero");
+});
+
 test("every file a group names exists on disk", () => {
   const missing = [];
   for (const [name, def] of Object.entries(doc.groups)) {

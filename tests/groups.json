@@ -414,10 +414,6 @@
         "tests/unit/service-worker.test.mjs"
       ]
     },
-    "test:webgpu-lifecycle": {
-      "kind": "node",
-      "files": []
-    },
     "test:tooling": {
       "kind": "command",
       "cmd": "npm run test:tooling-fast && npm run test:sweeps"

@@ -50,8 +50,13 @@ export function renderPkg(doc, pkgText) {
     if (!(name in pkg.scripts)) throw new Error(`groups.json names ${name}, package.json has no such script — add it or drop the group`);
     pkg.scripts[name] = commandFor(def);
   }
+  // A `test:*` script whose group left groups.json is DELETED here, not
+  // refused: groups.json is the single source, so removing a group has to be
+  // one edit for the same reason adding one is. Nothing goes silently — the
+  // drift guard compares both lists in both directions, and a group deleted by
+  // accident shows up as a removed script in the diff.
   for (const name of Object.keys(pkg.scripts)) {
-    if (name.startsWith("test") && !(name in doc.groups)) throw new Error(`package.json has ${name}, tests/groups.json does not — every test script is a group`);
+    if (name.startsWith("test") && !(name in doc.groups)) delete pkg.scripts[name];
   }
   const trailing = pkgText.endsWith("\n") ? "\n" : "";
   return JSON.stringify(pkg, null, 2) + trailing;

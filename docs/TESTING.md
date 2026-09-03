@@ -316,7 +316,6 @@ eat them.
 | `lifecycle-unit` | deferred scanner, data fetch and IndexedDB ownership races in Node VMs |
 | `state-unit` | season, storage and career state machines, including cross-tab conflicts |
 | `service-worker` | the SW's install/fetch/version behaviour |
-| `webgpu-lifecycle` | WGX/TLX resource and software-present lifecycle, as a pure unit suite |
 | `graph-parity` | builds each track from a baseline ref AND the working tree and diffs prop geometry vertex for vertex (`tools/track/graph-parity.cjs`) |
 | `float` | floating-prop audit (`tools/track/float-audit.cjs`) |
 | `clip` | prop-clipping gate (`tools/track/clip-audit.cjs`) |

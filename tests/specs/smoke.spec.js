@@ -17,6 +17,22 @@ async function waitForTrack(page, timeout = 480_000) {
   );
 }
 
+// The FIXTURE waits scale with the budget CI hands the spec, for exactly the
+// reason the HUD wait below already spells out: "a constant here is a guess
+// about a machine, and the machine keeps getting slower". That lesson was
+// applied to the assertion wait and missed one level up, in the fixture — so
+// Pages runs 1953/1954 died in `waitForTrack` at a hard 180 s while the test
+// itself had been handed 900 s and used 720 s of it for nothing. The build had
+// reached 187 s of page time: seven seconds short.
+//
+// NOT a widened tolerance. Today's constants are the FLOOR, so nothing gets
+// looser locally (a 120 s local budget keeps the same 180 s / 60 s it has now),
+// the ceiling stays under this file's own `waitForTrack` default of 480 s, and
+// the real backstop is untouched — the per-test budget still fails a genuinely
+// hung build or a shell that never defines __apex.
+const trackWait = () => Math.max(180_000, Math.floor(test.info().timeout / 2));
+const bootWait = () => Math.max(60_000, Math.floor(test.info().timeout / 6));
+
 // Helper: stop the render loop, for a phase that does not look at the canvas.
 //
 // THE MENUS ARE THE EXPENSIVE PART OF THIS FILE, not the rendering they sit in
@@ -48,7 +64,7 @@ async function waitForTrack(page, timeout = 480_000) {
 // same starvation this helper exists to remove; polling on a wall clock instead of
 // on frames is the only way to wait for the hook that turns it off.
 async function quietRenderer(page) {
-  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60_000 });
+  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: bootWait() });
   await page.evaluate(() => window.__apex.headless(true));
 }
 
@@ -70,7 +86,8 @@ async function goToRace(page) {
   await page.locator("#rs-go").click();
   // Renderer back on BEFORE the track wait, so callers get the live scene.
   await page.evaluate(() => window.__apex.headless(false));
-  // 180 s, THE SAME BOUND bootRace PASSES for the identical wait. This was a
+  // THE SAME BOUND bootRace PASSES for the identical wait — trackWait() now, so
+  // the two cannot drift apart again. This was a
   // bare waitForTrack(page), i.e. the helper's 10 s default, while bootRace six
   // lines down asks for 180_000 with the reason written next to it: "CI has been
   // measured taking 94 s just to boot a race on a starved runner." One helper,
@@ -82,7 +99,7 @@ async function goToRace(page) {
   // runner stall. bootRace's callers rode it out; goToRace's blew a 10 s bound
   // and failed the deploy. The tests either side of this line are identical in
   // what they ask the browser to do.
-  await waitForTrack(page, 180_000);
+  await waitForTrack(page, trackWait());
 }
 
 // Helper: skip the countdown, clear the AI pack, and park the player
@@ -118,6 +135,7 @@ async function park(page, frac = 0) {
 // bootRace for a page the sharedTest fixture has ALREADY booted: no goto, and
 // no re-race when the circuit is already the one wanted. That is the whole
 // saving — the second test in the shard skips a page boot AND a circuit build.
+
 async function raceOnBootedPage(page, trackId = "bahrain") {
   const on = await page.evaluate(() => {
     const i = window.__apex && window.__apex.info();
@@ -125,16 +143,17 @@ async function raceOnBootedPage(page, trackId = "bahrain") {
   });
   if (on === trackId) return;
   await page.evaluate((t) => window.__apex.race(t), trackId);
-  await waitForTrack(page, 180_000);
+  await waitForTrack(page, trackWait());
 }
 
 async function bootRace(page, trackId = "bahrain") {
   await page.goto("/");
-  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: 60_000 });
+  await page.waitForFunction(() => !!window.__apex, null, { polling: 100, timeout: bootWait() });
   await page.evaluate((t) => window.__apex.race(t), trackId);
   // Generous: the menu walk used to absorb the circuit build, and this does not.
-  // CI has been measured taking 94 s just to boot a race on a starved runner.
-  await waitForTrack(page, 180_000);
+  // CI has been measured taking 94 s just to boot a race on a starved runner —
+  // and 187 s on a contended one, which is what trackWait() exists for.
+  await waitForTrack(page, trackWait());
 }
 
 // Helper: like park(), but for a test that is about to SCREENSHOT the canvas.
