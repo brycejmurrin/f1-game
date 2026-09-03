@@ -14,7 +14,7 @@
 // What changed underneath it (see pages.yml "Stamp the shell generation"): the
 // build number is stamped by the deploy from the commit count, so there is no
 // union re-bump; version.json/index.html conflicts resolve to EITHER side plus a
-// hash-only `bump-cache --apply`. Sweeps are CI's (ci.yml runs them on the
+// a `gen-shell` regeneration (tags read ?v=dev; the deploy stamps hashes). Sweeps are CI's (ci.yml runs them on the
 // same diff, conditionally); running them here only duplicated 10 minutes.
 // The live check is pages.yml's `verify-live` job — this box cannot reach
 // github.io, the runner can.
@@ -83,7 +83,7 @@ export function plan() {
   return { branch, head, tip, fastForward: ancestor, theirCommits: theirs, ourCommits: ours, theirDiffstat: stat, conflicts,
     touchedCircuits: touchedCircuits(tip),
     steps: [
-      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (index.html/version.json conflicts resolve to theirs + bump-cache --apply)",
+      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (index.html/version.json conflicts resolve to theirs + gen-shell)",
       "npm run test:tooling-fast",
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
       "verify-track for touched circuits",
@@ -115,7 +115,7 @@ function mergeDeployTip(tip) {
     throw new Error(`real conflicts (not just the shell hashes): ${conflicted.join(", ")} — resolve by hand, re-measure on the union`);
   }
   for (const f of conflicted) must(git(["checkout", "--theirs", "--", f]), `checkout --theirs ${f}`);
-  run("node", ["tools/bump-cache.mjs", "--apply"], "rehash the union shell");
+  run("node", ["tools/gen-shell.mjs"], "regenerate the union shell from the manifest");
   must(git(["add", "index.html", "version.json"]), "add");
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
   return "merged (shell hashes re-applied)";

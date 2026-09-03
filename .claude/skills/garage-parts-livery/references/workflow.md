@@ -52,7 +52,7 @@ resolution.
    Or `tools/carview.html?team=mclaren&aero=extreme`.
 7. **Test and ship.** `node tools/test-bg.mjs car` for catalog/physics/visual
    recipes; `node tools/test-bg.mjs modes` when you changed research locks or
-   garage ownership UI (there is no `test:career`). Bump via `node tools/bump-cache.mjs --apply`
+   garage ownership UI (there is no `test:career`). Bump via `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`)
    before commit.
 
 ## Common mistakes

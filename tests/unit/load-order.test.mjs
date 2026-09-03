@@ -7,7 +7,7 @@
 //   - every generated block is byte-identical to a fresh `gen-shell` run
 //   - the <script> sequence must equal MANIFEST.FULL exactly (order included)
 //   - the stylesheet <link> sequence must equal MANIFEST.CSS
-//   - every ?v= value must match that asset's content hash
+//   - every ?v= token is the literal `dev` (hashes are stamped at deploy)
 //   - the shell build meta and version.json generation must match
 //   - every file under js/**/*.js must appear in FULL ∪ DEFERRED ∪ LAZY_*
 //     (no forgotten tags, no dead files) — catches "created the file but
@@ -22,7 +22,6 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -56,7 +55,6 @@ const scriptSrcs = parseTags(indexHtml, /<script[^>]*\bsrc="([^"]+)"/g);
 const linkHrefs = parseTags(indexHtml, /<link[^>]*\brel="stylesheet"[^>]*\bhref="([^"]+)"/g);
 
 const stripV = (u) => u.replace(/\?v=[A-Za-z0-9._-]+$/, "");
-const vOf = (u) => { const m = u.match(/\?v=([a-f0-9]{12})$/); return m ? m[1] : null; };
 
 test("index.html script sequence equals MANIFEST.FULL", () => {
   assert.deepEqual(scriptSrcs.map(stripV), MANIFEST.FULL);
@@ -76,12 +74,12 @@ test("every gen-shell block is byte-identical to a fresh generation", () => {
     "run `node tools/gen-shell.mjs` — a generated block has been hand-edited or the manifest changed");
 });
 
-test("every asset carries its content hash and shell generation matches version.json", () => {
-  for (const url of [...scriptSrcs, ...linkHrefs]) {
-    const rel = stripV(url);
-    const expected = createHash("sha256").update(readFileSync(join(ROOT, rel))).digest("hex").slice(0, 12);
-    assert.equal(vOf(url), expected, `${rel} must carry its current content hash`);
-  }
+test("every asset tag reads ?v=dev and the shell generation matches version.json", () => {
+  // Hashes are stamped by the deploy (pages.yml --apply --at N --root _site);
+  // the committed shell must never carry them, or index.html goes back to
+  // being rewritten on every js/css edit.
+  const stale = [...scriptSrcs, ...linkHrefs].filter((u) => !u.endsWith("?v=dev"));
+  assert.deepEqual(stale, [], "a tag carries something other than ?v=dev — run `node tools/gen-shell.mjs`");
   const versionJson = JSON.parse(readFileSync(join(ROOT, "version.json"), "utf8"));
   const meta = indexHtml.match(/<meta\s+name="apex-build"\s+content="(\d+)"/);
   assert.ok(meta, "index.html must declare the shell generation");

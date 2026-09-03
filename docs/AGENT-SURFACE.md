@@ -108,7 +108,7 @@ it spawns the CLI with flags the project already considers safe (`--check`,
 Chromium; takes `scratch/apex-browser.lock`). `Skill` is the workflow that
 names the CLI. Twelve wraps (30 → 12 on 2026-09: the audits, startline,
 survey-track, carshot, wgx-shot/capture/validate-live, ui-survey,
-quick-validate, select-recall, cache-bump-only, track-verts, assets-verify
+quick-validate, select-recall, track-verts, assets-verify
 and verify-track are plain CLIs now — `tools/README.md`).
 
 <!-- WRAP-MAP -->
@@ -146,7 +146,7 @@ These stay CLI-only on purpose. The MCP must refuse if asked to grow them.
 |---|---|---|
 | `test-bg.mjs` start / `--wait` / `--stop` | Minutes of Playwright; foreground-illegal | CLI `test-bg.mjs`; skill **check-changes** |
 | `verify-change.mjs` without `--fast` | Starts browser groups | `apex_verify_change_fast` |
-| `bump-cache.mjs --apply` | Writes `index.html` / `version.json` | `check-changes/references/bump.md` (last edit before commit) |
+| `node tools/bump-cache.mjs --apply` --at N --root _site` | Deploy-only: hashes a STAGED shell (pages.yml); the repo carries `?v=dev` and `--apply` refuses without `--root` | `check-changes/references/bump.md` |
 | `assets.mjs bake*` | Author-time writer | skill **asset-pack** |
 | `rotate-markings.cjs --write` | Mutates circuit markings | CLI after `--check` review |
 | `graph-parity.cjs` without `BASE=` | Vacuous pass on a clean tree | `apex_graph_parity` with `base` |

@@ -157,7 +157,7 @@ const CONVENTIONS = `## Conventions
   Playwright's bundled browser. Servers bind a free port (or \`:3456\`).
 - **Two Playwright packages on purpose:** specs run on \`@playwright/test\`;
   ~10 tools import bare \`playwright\` for direct browser control.
-- Any \`js/*\` / \`css/*\` edit still needs \`node tools/bump-cache.mjs --apply\`.
+- No cache bump after a \`js/*\` / \`css/*\` edit: tags read \`?v=dev\` and the deploy stamps hashes. A \`tools/manifest.cjs\` change needs \`node tools/gen-shell.mjs\`.
 - \`net/rtc-e2e.mjs\` (\`npm run rtc:e2e\`) is outside every test group on
   purpose: minutes long, host-network dependent; the lobby spec fakes the
   transport because a sandboxed CI browser never finishes ICE.

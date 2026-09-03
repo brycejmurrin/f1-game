@@ -13,15 +13,19 @@
  * `--check` form, so a hand edit inside a generated block cannot land.
  *
  * Owned blocks (markers must already exist; the tool never guesses):
- *   index.html         <!-- @gen-shell:css --> … <!-- /@gen-shell:css -->
+ *   index.html         <!-- @gen-shell:preload --> … <!-- /@gen-shell:preload -->
+ *                      <!-- @gen-shell:css --> … <!-- /@gen-shell:css -->
  *                      <!-- @gen-shell:scripts --> … <!-- /@gen-shell:scripts -->
  *   tools/carview.html <!-- @gen-shell:carview --> … <!-- /@gen-shell:carview -->
  *   sw.js              // @gen-shell:sw-optional … // /@gen-shell:sw-optional
  *                      // @gen-shell:sw-lazy-agent … // /@gen-shell:sw-lazy-agent
  *   js/roster.js       the whole file (one global, ApexRoster)
  *
- * The `?v=` token on each tag is the asset's content digest, computed exactly
- * as tools/bump-cache.mjs computes it, so the two writers always agree.
+ * The `?v=` token on every tag in the REPO is the literal `dev`: hashes are
+ * stamped by the deploy (pages.yml runs `bump-cache --apply --at N --root
+ * _site` on the staged copy), so no cache bump ever happens in development
+ * and index.html changes only when markup changes. `digest()` stays exported
+ * for that deploy path and computes the same 12-hex token bump-cache writes.
  *
  *   node tools/gen-shell.mjs            # write every block
  *   node tools/gen-shell.mjs --check    # exit 1 when any committed block ≠ generated
@@ -36,6 +40,9 @@ const require = createRequire(import.meta.url);
 const MANIFEST = require("./manifest.cjs");
 
 export const TARGETS = Object.freeze(["index.html", "tools/carview.html", "sw.js", "js/roster.js"]);
+/** The `?v=` token written into the repo's shell. Real hashes exist only in
+ *  the deploy's staged copy. */
+export const DEV_TOKEN = "dev";
 
 /** 12-hex SHA-256 prefix — the same token tools/bump-cache.mjs writes. The
  *  roster is hashed from its GENERATED text, so index.html's tag for it is
@@ -59,10 +66,15 @@ export function replaceMarked(text, open, close, body) {
 // ---------------------------------------------------------------------------
 // Block bodies.
 
+function preloadBlock() {
+  return (MANIFEST.CSS_PRELOAD || []).map((f) =>
+    `<link rel="preload" href="${f}?v=${DEV_TOKEN}" as="style">`).join("\n") + "\n";
+}
+
 function cssBlock() {
   const deferred = new Set(MANIFEST.CSS_DEFERRED || []);
   return MANIFEST.CSS.map((f) =>
-    `<link rel="stylesheet" href="${f}?v=${digest(f)}"` +
+    `<link rel="stylesheet" href="${f}?v=${DEV_TOKEN}"` +
     (deferred.has(f) ? ` media="print" onload="this.media='all'"` : "") + ">").join("\n") + "\n";
 }
 
@@ -71,7 +83,7 @@ function scriptsBlock() {
   const out = [];
   for (const f of MANIFEST.FULL) {
     if (notes.before[f]) out.push(notes.before[f]);
-    out.push(`<script defer crossorigin="anonymous" src="${f}?v=${digest(f)}"></script>`);
+    out.push(`<script defer crossorigin="anonymous" src="${f}?v=${DEV_TOKEN}"></script>`);
     if (notes.after[f]) out.push(notes.after[f]);
   }
   return out.join("\n") + "\n";
@@ -140,6 +152,7 @@ function rosterSource() {
 export function generate() {
   const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
   let html = read("index.html");
+  html = replaceMarked(html, "<!-- @gen-shell:preload -->", "<!-- /@gen-shell:preload -->", preloadBlock());
   html = replaceMarked(html, "<!-- @gen-shell:css -->", "<!-- /@gen-shell:css -->", cssBlock());
   html = replaceMarked(html, "<!-- @gen-shell:scripts -->", "<!-- /@gen-shell:scripts -->", scriptsBlock());
   let carview = read("tools/carview.html");

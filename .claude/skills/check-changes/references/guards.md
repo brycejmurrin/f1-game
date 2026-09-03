@@ -28,12 +28,12 @@ expectation vs real regression.
 
 3. **Cache version bumped — BOTH files?** Any `js/*.js` or `css/*.css`
    change: every `?v=N` in `index.html` AND `version.json`'s `build` must
-   equal the same N (`bump-cache.mjs --apply`):
+   equal the same N (the deploy stamp; the repo carries `?v=dev`):
    ```sh
    node tools/bump-cache.mjs --check
    grep -o '?v=[0-9]\+' index.html | sort -u && cat version.json
    ```
-   Cross-lineage merge: `node tools/bump-cache.mjs --apply --merge <ref>`
+   Cross-lineage merge: `node tools/gen-shell.mjs` regenerates the union shell
    (max of both + 1). Never `--apply` while a browser run is in flight.
 
 4. **Smoke + load order** if you touched load order, `index.html`, or a core

@@ -83,6 +83,6 @@ test("gfx-debug obeys the file conventions", () => {
   assert.ok(manifest.includes('"js/game/gfx-debug.js"'),
     "new-file lockstep: the module roster must list it");
   const html = read("index.html");
-  assert.match(html, /src="js\/game\/gfx-debug\.js\?v=[0-9a-f]{12}"/,
-    "new-file lockstep: a content-hashed script tag in the shell");
+  assert.match(html, /src="js\/game\/gfx-debug\.js\?v=[A-Za-z0-9._-]+"/,
+    "new-file lockstep: a script tag in the shell (gen-shell writes it from the manifest)");
 });

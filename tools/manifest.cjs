@@ -183,6 +183,9 @@ const CSS = [
   "css/career.css",
   "css/data.css",
 ];
+// The two title-critical sheets are also <link rel="preload">ed above the
+// stylesheet block (gen-shell writes that block too).
+const CSS_PRELOAD = ["css/tokens.css", "css/components.css"];
 // Sheets that are NOT title-critical load print→all (media="print"
 // onload="this.media='all'") so they do not hold LCP; the rest render-block.
 const CSS_DEFERRED = [
@@ -546,7 +549,7 @@ const circuitPath = (id) => `${CIRCUITS_DIR}/${id}.js`;
 const sceneryPath = (id) => `${SCENERY_DIR}/${id}.js`;
 
 module.exports = {
-  CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_DEFERRED, SHELL_NOTES, CARVIEW, TRACK_VM, HARD_EDGES,
+  CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, TRACK_VM, HARD_EDGES,
   DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,

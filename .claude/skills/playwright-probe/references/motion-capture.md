@@ -23,7 +23,7 @@ below.
 - Shader / GL state → **webgl-debug**.
 - Frame-time / GC / build spikes → [perf-profile.md](perf-profile.md).
 
-Editing `js/`/`css/` still needs a cache bump (`node tools/bump-cache.mjs --apply`).
+Editing `js/`/`css/` still needs a cache bump (`node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`)).
 
 ## Why naive motion capture fails
 

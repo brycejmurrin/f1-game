@@ -30,7 +30,7 @@ the tool's own header.
 | **audit-parts.mjs** | Renders every option of chosen part categories through `carview.html`; per-category contact sheets. | car-viewer |
 | **bake-elevation.mjs** | Offline elevation baker — precomputes per-track elevation profiles into a `CircuitElevations` global. | new-track |
 | **bloat-scan.mjs** | Size report for slim-bloat: module-size ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
-| **bump-cache.mjs** | Content-hash cache busting: `--check` verifies every `?v=` and the shell generation; `--apply` refreshes them. | bump-cache |
+| **bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); in the repo, `--check` confirms every… | check-changes |
 | **capture/apex-capture.mjs** | Parallel headless screenshot sweep across cameras/tracks/modes → `scratch/captures/apex-capture/<purpose>/`. | playwright-probe |
 | **capture/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **capture/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
@@ -156,7 +156,6 @@ the tool's own header.
 | Tool | Does |
 |---|---|
 | **assert-audit.mjs** | Does each declared test ASSERT anything? Grades `asserting` / `implicit` / `vacuous`; flags empty `.catch(() => {})`. |
-| **cache-bump-only.mjs** | Is this `index.html` diff JUST the cache bump? The one exemption change-aware CI makes to its infra gate. |
 | **ci-coverage.mjs** | What does the deploy gate execute? Resolves every `npm run test:*` / by-path invocation in `ci.yml` against the specs. |
 | **ci-resolve-before.sh** | Resolves the base SHA for the selected-specs CI gate from `EVENT` / `PUSH_BEFORE` / `PR_BASE` (falls back to `HEAD~1`). |
 | **ci-select-specs-step.sh** | The CI "select specs for this change" step body: base via `ci-resolve-before.sh`, then `select-specs.mjs --since`. |
@@ -178,7 +177,7 @@ the tool's own header.
 | **test-solo.mjs** | Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`, refusing to start until the box is quiet (`--max-load`). |
 | **tests-split.mjs** | The tests/ split as a reproducible plan (done and shipped; kept as the move-map source for `cross-file-paths`). |
 | **tooling-fast.mjs** | Sequential runner behind `npm run test:tooling-fast`: one unit file at a time, per-file timing; exports the list. |
-| **verify-change.mjs** | ONE command: fast gate (verify-track, graph-parity, tooling-fast, bump-cache --check) + `test-bg` batches → one verdict. |
+| **verify-change.mjs** | ONE command: fast gate (verify-track, graph-parity, tooling-fast, shell check) + `test-bg` batches → one verdict. |
 | **wait-polling-lint.mjs** | A declared `waitForFunction` timeout that cannot fire is not a bound — checks every call carries `{ polling }`. |
 
 ### Data files
@@ -216,7 +215,7 @@ deliberately NOT moved — their consumers hardcode the flat paths):
   Playwright's bundled browser. Servers bind a free port (or `:3456`).
 - **Two Playwright packages on purpose:** specs run on `@playwright/test`;
   ~10 tools import bare `playwright` for direct browser control.
-- Any `js/*` / `css/*` edit still needs `node tools/bump-cache.mjs --apply`.
+- No cache bump after a `js/*` / `css/*` edit: tags read `?v=dev` and the deploy stamps hashes. A `tools/manifest.cjs` change needs `node tools/gen-shell.mjs`.
 - `net/rtc-e2e.mjs` (`npm run rtc:e2e`) is outside every test group on
   purpose: minutes long, host-network dependent; the lobby spec fakes the
   transport because a sandboxed CI browser never finishes ICE.

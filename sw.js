@@ -17,6 +17,10 @@
 // a fresh cache generation and the old one is swept on activate — no manual
 // cache-invalidation step to remember.
 const CACHE_PREFIX = "apex26-";
+// A dev host serves the committed shell, whose asset tags all read `?v=dev`
+// (see the fetch handler). Playwright pages run on 127.0.0.1, so the suite
+// exercises this branch; the deployed site never does.
+const DEV_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/.test((self.location && self.location.hostname) || "");
 const INSTALL_COMPLETE_URL = "__apex_install_complete__";
 
 let _cacheNamePromise = null;
@@ -377,10 +381,29 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for everything else. Every content-hashed ?v= URL is immutable by
-  // this project's own cache-busting convention, and audio/sfx never change
+  // Cache-first for everything else. Every DEPLOYED ?v= URL carries a content
+  // hash (pages.yml stamps it while staging), and audio/sfx never change
   // post-release, so a cache hit is always correct — no revalidation needed.
+  //
+  // EXCEPT on a dev host. The committed shell reads `?v=dev` for every asset
+  // (tools/gen-shell.mjs; hashes exist only in the deploy's staged copy), so a
+  // cache-first worker on localhost would pin the first js/css it saw for the
+  // life of the cache generation. Network-first there, cache as the offline
+  // fallback — tools/offline-precache-check.cjs still passes because the
+  // fallback is the precache.
   event.respondWith((async () => {
+    if (DEV_HOST && url.origin === self.location.origin) {
+      try {
+        const res = await fetch(req);
+        if (res && res.ok) {
+          try {
+            const cache = await caches.open(await currentCacheName());
+            await cache.put(req, res.clone());
+          } catch (_) { /* a failed cache write must not fail a good response */ }
+          return res;
+        }
+      } catch (_) { /* offline: fall through to the cache */ }
+    }
     const cached = await caches.match(req);
     if (cached) return cached;
     // On a miss there is nothing to fall back to, so a timeout race could only

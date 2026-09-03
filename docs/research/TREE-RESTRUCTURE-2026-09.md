@@ -1,6 +1,9 @@
 # Tree restructuring — decision and plan of record (2026-09-03)
 
-> Errata: none yet. Phase 0 Commit A (gen-shell) landed with this record.
+> Errata: none yet. Phase 0 Commit A (gen-shell) landed with this record;
+> Commit B (the `?v=dev` policy, `bump-cache --apply` refusal, sw.js dev
+> network-first rule, `cache-bump-only` deleted) landed next. Unit-suite
+> count is 186 after that deletion.
 
 ## Context
 
