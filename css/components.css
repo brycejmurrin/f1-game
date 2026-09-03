@@ -162,7 +162,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);
-  border: 1px solid color-mix(in oklab, var(--red) 20%, var(--card-line));
+  border: 1px solid color-mix(in oklab, var(--red) 28%, var(--card-line));
   border-radius: var(--r-lg);
   /* lightness + a top lip do the lifting here; the cast shadow only matters
      against the 3D scene (see the elevation notes in css/tokens.css) */
@@ -194,6 +194,9 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   background: var(--grad-head);
   border-bottom: 0;
   position: relative;
+  /* Broadcast red-line on the leading edge — F1 digital grammar, one accent
+     only (research). Inset so it does not fight the sheet's own border. */
+  box-shadow: inset 3px 0 0 var(--red);
 }
 .sheet-head::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
@@ -214,7 +217,15 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    heading comes straight out of the list under it, on exactly the short screens
    the rule exists for. The clamp's px bounds ARE in own units and do scale, so
    the heading is never smaller than the floor at any setting. */
-.sheet-head h2 { color: var(--red); margin: 0; font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px); }
+.sheet-head h2 {
+  /* White title + red leading rail (box-shadow on .sheet-head): brand keeps
+     Warm Red scarce — rail/tick/P1 only, not headline ink. */
+  color: var(--text); margin: 0;
+  font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px);
+  font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+}
 .sheet-body {
   /* Grid items default to min-width:auto, so a max-content child can widen the
      BODY track even while the sheet itself stays viewport-sized. At 200% UI
@@ -282,11 +293,17 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      ~54px of the ~230px the content has to live in.
      Floor 14px so 90% UI zoom still clears the 12px visual type floor. */
   font-size: clamp(14px, calc(3.6 * var(--vhz)), 20px);
-  /* --vhz like the font-size above — same zoomed element, one line apart. */
-  padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 16px;
+  /* --vhz like the font-size above — same zoomed element, one line apart.
+     Leading-edge +4px so the skewed label stays optically column-centred. */
+  padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 14px clamp(7px, calc(1.8 * var(--vhz)), 14px) 18px;
 }
 /* A lone BACK / DONE / CLOSE is not a banner. Pairs (BACK + RACE!) still
-   share the foot 1:1 via flex-grow. */
+   share the foot 1:1 via flex-grow.
+   Dismiss rank: same body as the primary (skew, type, height), alt plate.
+   BACK = return to a parent sheet. CLOSE = overlay on something still
+   visible. DONE / APPLY / SAVE / RACE! stay the red primary (a commit).
+   A lone dismiss is never the red fill — How to Play's old DONE and
+   Standings' old CLOSE read as commit when they only leave. */
 .sheet-foot .bigbtn:only-child {
   flex: 0 1 auto;
   width: auto;
@@ -603,7 +620,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 
 /* ---------- section label ---------- */
 .sel-label {
-  color: var(--dim);
+  color: var(--steel);
   font-size: var(--label); font-weight: 700;
   letter-spacing: var(--ls-5);
   margin: 0 0 calc(var(--gap) * 0.5);
@@ -639,9 +656,13 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      floor means a font-size override can never quietly shrink a primary
      button below the rest of its row. */
   min-height: var(--tap);
-  padding: 14px 20px;
+  /* Optical centre under skewX(-6deg): the parallelogram drifts left, so
+     bias padding toward the leading edge so the label reads column-centred. */
+  padding: 14px 18px 14px 22px;
   font-size: var(--fs-6);
-  color: #fff;
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  color: var(--text);
   background: var(--grad-primary);
   border: none;
   border-radius: var(--r-md);
@@ -730,8 +751,10 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    sheet plus the top lip, which is what makes a control look pressable on a
    dark background (an unfilled border alone reads as a disabled field). */
 .bigbtn.alt {
-  background: var(--plate); color: var(--dim);
-  border: 1px solid var(--plate-line);
+  background: var(--plate-opaque); color: var(--text);
+  border: 1px solid color-mix(in oklab, var(--steel) 42%, transparent);
+  font-weight: 600;
+  letter-spacing: var(--ls-1);
   /* Flat plate, same as the settings tab headers — not a lighter raised slab. */
   box-shadow: none;
 }
@@ -799,15 +822,20 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   font-weight: 700; letter-spacing: var(--ls-4); color: var(--dim);
   margin-bottom: calc(var(--gap) / 3 / var(--hud-scale));
 }
-#results     { --sheet-w: 600px; --fit-at: 300px; }
-#standings   { --sheet-w: 560px; --fit-at: 300px; }
+#results     { --sheet-w: 760px; --fit-at: 300px; }
+#standings   { --sheet-w: 760px; --fit-at: 300px; }
 /* Help uses a term rail beside a readable description column. At the old 700px
    cap long explanations wrapped heavily; 1000px uses available desktop width
    while viewport fitting still protects constrained/high-scale sheets. */
 #howtoplay   { --sheet-w: 1000px; }
 #advanced    { --sheet-w: 820px; --fit-at: 300px; }
-#audioset    { --sheet-w: 460px; --fit-at: 300px; }
-#race-settings { --sheet-w: 560px; --fit-at: 300px; }
+#audioset    { --sheet-w: 760px; --fit-at: 300px; }
+#spotifypanel { --sheet-w: 760px; --fit-at: 300px; }
+/* 760, not 560: on an 852 landscape phone the old cap left ~200px of
+   safe width unused while CLOUDY / 57 (FULL) wrapped inside a 180px
+   column. min(100%, …) still shrinks to the safe box; this only spends
+   room that exists (same number as settings / customize / vsfriend). */
+#race-settings { --sheet-w: 760px; --fit-at: 300px; }
 /* 760, not the 380 default. Seven chip rows at normal density overflow a
    720-local portrait sheet and a 473-local 860×560 @115% window — REAL
    sat under BACK/RACE (measured). Compact chrome + the 3-col pin need
@@ -824,6 +852,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #standings .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
 #race-settings .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
 #audioset .sheet:not([data-shape="tall"])    { --fit-at: 220px; }
+#spotifypanel .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
 #advanced .sheet:not([data-shape="tall"])    { --fit-at: 220px; }
 #customize .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
 #pausemenu .sheet:not([data-shape="tall"])   { --fit-at: 180px; }
@@ -926,7 +955,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    it gets a rule above it and a muted red label — visibly apart from the two
    harmless ones, without shouting louder than RESUME. */
 #pm-resume {
-  background: var(--grad-primary); color: #fff !important; border-color: transparent;
+  background: var(--grad-primary); color: var(--text) !important; border-color: transparent;
   font-weight: 700; font-size: var(--fs-5);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
@@ -992,7 +1021,18 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pm-resume,
 #pm-quit,
 #pm-standings,
+#pm-howto,
 #pm-build { grid-column: 1 / -1; }
+#pausemenu .sheet-body.stack > button:not(#pm-resume):not(#pm-quit) {
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
+#pausemenu .bigbtn.alt {
+  background: var(--plate-opaque);
+  color: var(--text);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
 
 /* ---------- settings sub-menu ----------
    One category at a time. Tabs stay a single equal-width row (flex, not a
@@ -1020,7 +1060,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   --balance-min: 7.25rem;
   gap: calc(var(--gap) * 0.5);
   padding-bottom: calc(var(--gap) * 0.6);
-  background: var(--bg);
+  /* Match the sheet surface so sticky tabs do not flash --bg through scroll. */
+  background: var(--surf-1);
 }
 /* Equal segments: override .balanced-row's 7.25rem basis so three tabs stay
    one even row instead of wrapping MORE onto a lonely second line. */
@@ -1032,13 +1073,16 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   min-width: 0;
   min-height: var(--tap);
   margin: 0;
-  padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.67);
+  padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.5) calc(var(--gap) * 0.6) calc(var(--gap) * 0.84);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-sm);
   background: var(--plate);
-  color: var(--dim);
+  /* Same ink as the doors under the tab. Selected is the red plate, not a
+     second type colour — steel is section chrome, not a control label. */
+  color: var(--text);
+  font-family: var(--font-hud);
   font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: var(--ls-3);
   text-align: center;
 }
@@ -1047,7 +1091,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--text);
   border-color: var(--red);
   background: var(--plate-on);
-  box-shadow: var(--plate-on-glow);
+  /* Edge tick + plate glow: selected = two signals (not colour alone). */
+  box-shadow: inset 3px 0 0 var(--red), var(--plate-on-glow);
 }
 /* At very high UI zoom a phone sheet can be under 250 LOCAL px even though it
    fills the physical viewport. Keep the aria-label as the accessible name,
@@ -1076,10 +1121,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 .pm-groups > [role="tabpanel"][hidden] { display: none !important; }
 .pm-group { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
-  color: var(--red);
+  /* Steel section chrome — red is reserved for the rule under the label. */
+  color: var(--steel);
   font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
-  font-weight: 700; letter-spacing: var(--ls-5);
+  font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-5);
   line-height: 1.2;
+  text-transform: uppercase;
   box-sizing: border-box;
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
@@ -1104,10 +1152,26 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   justify-content: flex-start;
   text-align: left;
   width: 100%;
-  padding-inline: calc(var(--pad) * 0.75);
+  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
   /* Grows with the viewport, never under the micro floor inside sheet zoom. */
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-weight: 600;
   letter-spacing: var(--ls-2);
+  color: var(--text);
+}
+#pmsettings-inner .pm-doors button {
+  width: auto;
+  /* Same rank as the category tabs: a door, not a key/value row. */
+  justify-content: center;
+  text-align: center;
+  /* Title-room recipe: carbon tile + steel line. MORE doors sit on the
+     settings grain the same way #overlay alts sit on the title grain. */
+  background: var(--plate-opaque);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
+}
+.sheet[data-density="compact"] .pm-group-h {
+  letter-spacing: var(--ls-4);
+  font-size: var(--fs-2);
 }
 .pm-group .tune-row {
   margin: 0;
@@ -1184,14 +1248,23 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 .pm-doors {
   /* Same primitive as chips / title rooms: wrap into a grid when the
-     sheet is wide enough, stack when it is not. */
+     sheet is wide enough, stack when it is not. Heading stays full-bleed;
+     only the tool doors balance. */
+  display: flex;
+  flex-wrap: wrap;
   --balance-basis: 12rem;
   --balance-min: 9rem;
   gap: calc(var(--gap) * 0.5);
 }
-.pm-doors button {
+.pm-doors > .pm-group-h {
+  flex: 1 1 100%;
+  width: 100%;
+  margin: 0 0 calc(var(--gap) * 0.25);
+}
+.pm-doors > button {
+  flex: 1 1 var(--balance-basis);
+  min-width: min(100%, var(--balance-min));
   margin: 0;
-  min-width: 0;
 }
 /* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't
    have to scroll through a single full-width column of buttons.
@@ -1258,36 +1331,23 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    naming either width here.
    The section headings inside the ADVANCED disclosure span the full width so
    the list still reads as grouped rather than as one undifferentiated field. */
-@container sheet (min-width: 620px) {
-  /* the body itself is the grid, and so is the ADVANCED disclosure that holds
-     the second batch of items */
-  #advanced-inner .sheet-body,
-  #advanced-inner #adv-extra {
-    display: grid;
-    /* min(...) floor: a bare `minmax(215px, …)` cannot shrink below 215 even
-       when the container is narrower, and overflows it. The @container guard
-       above says the sheet is at least 620px WIDE, which is not the same as
-       this grid's own box being 215 — padding, a pair column and UI SIZE all
-       sit between the two. See #sel-teams in css/menus.css for the measurement. */
-    grid-template-columns: repeat(auto-fill, minmax(min(215px, 100%), 1fr));
-    column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
-    align-content: start;
-  }
-  #advanced-inner .adv-item { margin: 0; min-width: 0; }
-  /* full-width rows: the intro, the preset picker, the whole <details>
-     disclosure (summary + content flow normally inside it — display:contents
-     was tried here first to keep the summary and #adv-extra as separate grid
-     items the way the old button+div pair were, but Chromium does not
-     promote a <details>'s children out of the box tree for grid placement
-     even with display:contents, so #adv-extra rendered at one column's width
-     instead of spanning the sheet), and every section heading inside
-     #adv-extra's OWN nested grid */
-  #advanced-inner .adv-intro,
-  #advanced-inner .preset-row,
-  #advanced-inner #adv-details,
-  #advanced-inner .adv-sec { grid-column: 1 / -1; }
-  #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
+#advanced-inner[data-shape="wide"] .sheet-body,
+#advanced-inner[data-shape="wide"] #adv-extra {
+  display: grid;
+  /* min(...) floor: a bare `minmax(215px, …)` cannot shrink below 215 even
+     when the container is narrower, and overflows it. Shape, not a 620px
+     container guess — fit-cap can shrink local width while the sheet stays
+     wide. See #sel-teams in css/menus.css for the measurement. */
+  grid-template-columns: repeat(auto-fill, minmax(min(215px, 100%), 1fr));
+  column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
+  align-content: start;
 }
+#advanced-inner[data-shape="wide"] .adv-item { margin: 0; min-width: 0; }
+#advanced-inner[data-shape="wide"] .adv-intro,
+#advanced-inner[data-shape="wide"] .preset-row,
+#advanced-inner[data-shape="wide"] #adv-details,
+#advanced-inner[data-shape="wide"] .adv-sec { grid-column: 1 / -1; }
+#advanced-inner[data-shape="wide"] .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
 /* MY TEAM logo upload: the file input itself is hidden (its native button is
    unstyleable), so the <label> is the visible control.
    NOTE: this block used to sit AFTER the layer's closing brace, which made it

@@ -65,9 +65,7 @@ export const SCREENS = [
       await p.click("#mb-data"); await p.waitForSelector("#datahub:not([hidden])", { timeout: 15000 });
       await p.waitForTimeout(1200); } },
   { id: "howtoplay", name: "How to play", root: "#howtoplay", open: async (p) => {
-      await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 });
-      await p.click("#pm-tab-more");
-      await p.click("#pm-howto"); await p.waitForSelector("#howtoplay:not([hidden])", { timeout: 15000 }); } },
+      await p.click("#mb-help"); await p.waitForSelector("#howtoplay:not([hidden])", { timeout: 15000 }); } },
   { id: "settings", name: "Settings", root: "#pmsettings", open: async (p) => {
       await p.click("#mb-settings"); await p.waitForSelector("#pmsettings:not([hidden])", { timeout: 15000 }); } },
   // The VS FRIEND lobby is the densest sheet in the game — two multi-hundred-
@@ -89,12 +87,9 @@ export const SCREENS = [
       await p.waitForTimeout(400);
       await p.click("#cs-team-card");
       await p.waitForSelector("#teampicker:not([hidden])", { timeout: 15000 }); } },
-  // START on the select screen goes to the GARAGE, not to race settings — the
-  // garage is a step on the way now, and its DONE carries on to the settings.
   { id: "racesettings", name: "Race settings", root: "#race-settings", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
-      await p.click("#sel-go"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
-      await p.click("#cs-done");
+      await p.click("#sel-go");
       await p.waitForSelector("#race-settings:not([hidden])", { timeout: 15000 }); } },
   { id: "results", name: "Results", root: "#results", open: async (p) => {
       await p.evaluate(async () => { await window.__apex.race("monza"); });
@@ -135,8 +130,7 @@ export const SCREENS = [
       await p.waitForTimeout(500); } },
   { id: "quali", name: "Qualifying", root: "#quali", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
-      await p.click("#sel-go"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
-      await p.click("#cs-done"); await p.waitForSelector("#race-settings:not([hidden])", { timeout: 15000 });
+      await p.click("#sel-go"); await p.waitForSelector("#race-settings:not([hidden])", { timeout: 15000 });
       // QUALIFYING LAP ships OFF, so the chip has to be turned on before GO —
       // the chips are generated, hence the text match rather than an id.
       await p.evaluate(() => { const c = [...document.querySelectorAll("#rs-quali .sel-chip")];

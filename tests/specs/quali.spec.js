@@ -6,7 +6,7 @@
 // DELIBERATELY ON THE VIRGIN-PAGE FIXTURE, same as tests/specs/career.spec.js. This
 // was converted to `sharedTest` and reverted after measurement: 5 of its 20
 // tests failed, all of them on the 120 s timeout. toQuali() below CLICKS its
-// way from the main menu (#mb-season → #sel-go → #cs-done → #rs-go), and a
+// way from the main menu (#mb-season → #sel-go → #rs-go), and a
 // shared page starts each test wherever the previous one left the app — so
 // #mb-season is simply not there to click.
 //
@@ -31,7 +31,6 @@ async function toQuali(page) {
   await boot(page);
   await page.locator("#mb-season").click();
   await page.locator("#sel-go").click();
-  await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
   await page.locator("#rs-go").click();
   await expect(page.locator("#quali")).toBeVisible({ timeout: 20_000 });
 }
@@ -58,7 +57,6 @@ test.describe("Qualifying — the session", () => {
     await boot(page);
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
-    await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     await expect(page.locator("#quali")).toBeHidden();
@@ -191,7 +189,6 @@ test.describe("Qualifying — the grid", () => {
     await expect(page.locator("#overlay")).toBeVisible();
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
-    await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     const info = await page.evaluate(() => ({
@@ -286,7 +283,6 @@ test.describe("Qualifying — the lap itself", () => {
     await boot(page);
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
-    await page.locator("#cs-done").click();   // START opens the GARAGE; DONE carries on
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
     const speed = await page.evaluate(() => {
@@ -351,7 +347,6 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
     await boot(page);
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
-    await page.locator("#cs-done").click();
     await expect(page.locator("#race-settings")).toBeVisible();
   }
   // Chips carry no ids, so they are clicked by index inside the page.
@@ -398,7 +393,6 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
     await boot(page);
     await page.locator("#mb-season").click();
     await page.locator("#sel-go").click();
-    await page.locator("#cs-done").click();
     await expect(page.locator("#rs-quali-section")).toBeVisible();
     const state = await page.evaluate(() => ({
       label: document.getElementById("rs-quali-label").textContent,

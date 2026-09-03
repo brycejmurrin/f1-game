@@ -40,9 +40,6 @@ async function checkGrip(browser) {
   await page.goto(BASE + "/");
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
-  // #sel-go opens the GARAGE (a step since "the garage is a step"); #cs-done
-  // advances to race settings, where #rs-go starts the race.
-  await page.locator("#cs-done").click();
   await page.locator("#rs-go").click();
   await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, POLL);
   await page.evaluate(() => window.__apex.go());
@@ -106,8 +103,6 @@ async function checkSteer(browser) {
     await page.goto(BASE + "/");
     await page.locator("#mb-race").click();
     await page.locator("#sel-go").click();
-    // #sel-go opens the GARAGE (a step); #cs-done advances to race settings.
-    await page.locator("#cs-done").click();
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => window.__apex && window.__apex.info().track != null, POLL);
 

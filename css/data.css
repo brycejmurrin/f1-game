@@ -105,12 +105,12 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   width: var(--tap); height: var(--tap); flex: 0 0 auto;
   display: flex; align-items: center; justify-content: center;
   padding: 0; font-size: var(--fs-5);
-  color: var(--dim);
+  color: var(--text);
 }
 @media (hover: hover) {
-  .dh-close:hover { color: #fff; }
+  .dh-close:hover { color: var(--text); }
 }
-.dh-close:active { color: #fff; }
+.dh-close:active { color: var(--text); }
 
 /* A SIDEWAYS SCROLL REGION IS NOT FINISHED AT `overflow-x: auto`. Two more
    declarations decide whether a thumb-drag actually pans it, and this strip had
@@ -143,7 +143,7 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   /* Plate fill, line and radius come from the button base (css/tokens.css). */
   padding: 7px 14px;
   font-size: var(--fs-2); font-weight: 700; letter-spacing: var(--ls-3);
-  color: var(--dim);
+  color: var(--text);
   white-space: nowrap;
   text-align: center;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
@@ -218,8 +218,8 @@ body[data-width="narrow"] .dh-content { padding: var(--gap) calc(var(--gap) * 7 
 .dh-tabbody { display: flex; flex-direction: column; gap: var(--gap); }
 
 .dh-section {
-  font-size: var(--fs-2); letter-spacing: var(--ls-5); color: var(--red);
-  font-weight: 800; font-style: italic;
+  font-size: var(--fs-2); letter-spacing: var(--ls-5); color: var(--steel);
+  font-weight: 800; font-style: italic; text-transform: uppercase;
   margin: calc(var(--gap) * 0.5) 0 calc(var(--gap) * 2 / 3);
 }
 
@@ -324,8 +324,8 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-swatch { width: 12px; height: 12px; border-radius: var(--r-xs); flex: 0 0 auto; }
 .dh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dh-wins { font-size: var(--fs-2); color: #f6d200; font-weight: 700; flex: 0 0 auto; }
-.dh-pts { font-family: var(--font-hud); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: #fff; font-variant-numeric: tabular-nums; }
-.dh-gap { font-family: var(--font-hud); font-variant-numeric: tabular-nums; font-size: var(--fs-2); color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+.dh-pts { font-family: var(--font-hud); min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: var(--text); font-variant-numeric: tabular-nums; }
+.dh-gap { font-size: var(--fs-2); color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* last race */
 #dh-lr-head { margin-bottom: var(--gap); }
@@ -340,7 +340,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
    scale; these seven ladders (16 sites, `grep -n dh-lr-name\\|dh-dchip\\|
    dh-pill\\|dh-tbtn\\|dh-td-time\\|dh-gval\\|dh-live-title data.css`) are
    left for whenever the scale gains an intermediate step, not before. */
-.dh-lr-name { font-size: 16px; font-weight: 800; font-style: italic; color: #fff; }
+.dh-lr-name { font-size: 16px; font-weight: 800; font-style: italic; color: var(--text); }
 .dh-lr-meta { font-size: var(--fs-2); color: var(--dim); margin-top: calc(var(--gap) / 6); }
 .dh-table {
   width: 100%; max-width: 100%; table-layout: fixed;
@@ -373,7 +373,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 
 /* live */
 .dh-livecard, .dh-card.dh-livecard { display: flex; flex-direction: column; gap: calc(var(--gap) / 3); }
-.dh-live-title { font-size: 17px; font-weight: 800; font-style: italic; color: #fff; }
+.dh-live-title { font-size: 17px; font-weight: 800; font-style: italic; color: var(--text); }
 .dh-live-type { font-size: var(--fs-2); color: var(--red); letter-spacing: var(--ls-4); }
 .dh-live-sub { font-size: var(--fs-2); color: var(--dim); margin-top: calc(var(--gap) / 6); }
 .dh-live-team { color: var(--dim); font-size: var(--fs-2); }
@@ -483,17 +483,17 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   color: var(--text);
 }
 .dh-trestart { padding: 7px var(--gap); }
-.dh-tplay.dh-tplaying { background: var(--plate-on); border-color: var(--red); color: #fff; box-shadow: var(--plate-on-glow); }
+.dh-tplay.dh-tplaying { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
 .dh-trates { display: flex; gap: calc(var(--gap) / 3); }
 .dh-ratebtn {
   font-size: var(--fs-2); font-weight: 800;
   padding: calc(var(--gap) * 0.5) 10px; border-radius: var(--r-pill);
   background: var(--plate);
   border: 1px solid var(--plate-line);
-  color: var(--dim);
+  color: var(--text);
 }
 .dh-ratebtn.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
-.dh-thint { font-size: var(--fs-2); color: #7a7a85; font-style: italic; margin-left: auto; }
+.dh-thint { font-size: var(--fs-2); color: var(--steel); font-style: italic; margin-left: auto; }
 /* On very narrow portrait, hide the scrub hint to keep transport on one row */
 body[data-width="narrow"] .dh-thint { display: none; }
 .dh-onboard.dh-tplaying { background: #2a6df0; border-color: #2a6df0; color: #fff; }
@@ -508,7 +508,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 }
 .dh-gcell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .dh-glabel { font-size: var(--fs-micro); letter-spacing: var(--ls-4); color: var(--dim); white-space: nowrap; }
-.dh-gval { font-family: var(--font-hud); font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
+.dh-gval { font-family: var(--font-hud); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1; }
 .dh-gspeed .dh-gval { color: #39d0ff; }
 .dh-gbar { height: 8px; border-radius: var(--r-sm); background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
 .dh-gfill { height: 100%; width: 0%; border-radius: var(--r-sm); transition: width 0.05s linear; }
@@ -532,7 +532,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-livebtn.dh-active { background: var(--plate-on); border-color: var(--red); color: #fff; box-shadow: var(--plate-on-glow); }
+.dh-livebtn.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
 /* ---------- compare lanes (multi-driver + cross-session telemetry) ---------- */
 /* session badge on a lane row / header / legend chip (R, Q, P2, …) */
 .dh-lane-ses {
@@ -567,7 +567,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 }
 .dh-laneboard-dl.dh-pos { color: var(--slower); }   /* behind the reference */
 .dh-laneboard-dl.dh-neg { color: var(--faster); }   /* ahead of the reference */
-.dh-live-updated { font-size: var(--fs-2); color: #7a7a85; margin-left: auto; }
+.dh-live-updated { font-size: var(--fs-2); color: var(--steel); margin-left: auto; }
 .dh-class-head { gap: 10px; }
 .dh-class-head .dh-section { margin: calc(var(--gap) * 0.5) 0 calc(var(--gap) * 2 / 3); flex: 1; }
 .dh-sorts { display: flex; gap: calc(var(--gap) / 3); flex: 0 0 auto; }
@@ -576,7 +576,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   padding: calc(var(--gap) / 3) calc(var(--gap) * 0.75); border-radius: var(--r-pill);
   background: var(--plate);
   border: 1px solid var(--plate-line);
-  color: var(--dim);
+  color: var(--text);
 }
 .dh-sortbtn.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
 
@@ -601,7 +601,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   color: var(--text);
   flex: 0 0 auto;
 }
-.dh-pill.dh-active { background: var(--plate-on); border-color: var(--red); color: #fff; box-shadow: var(--plate-on-glow); }
+.dh-pill.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
 .dh-pill:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- TAP TARGETS ----------
@@ -836,7 +836,7 @@ body[data-density="compact"][data-width="wide"] {
 }
 .dh-tpopup-title {
   flex: 1; display: flex; flex-direction: column; gap: calc(var(--gap) / 6);
-  font-size: var(--fs-5); font-weight: 800; font-style: italic; color: var(--red);
+  font-size: var(--fs-5); font-weight: 800; font-style: italic; color: var(--text);
 }
 .dh-tpopup-sub {
   font-size: var(--fs-2); font-weight: 600; font-style: normal;

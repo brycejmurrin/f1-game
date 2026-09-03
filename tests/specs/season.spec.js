@@ -22,7 +22,7 @@ async function startSeasonRace(page, laps) {
   // migration test lower down was updated and this was not — so every test using
   // it sat on #rs-go for 209 retries and died at the 120 s timeout, reporting
   // "element is not visible" about a button on a screen that had not opened yet.
-  await page.locator("#sel-go").click();
+  await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await page.locator("#cs-done").click();
   await page.locator("#carsetup").waitFor({ state: "hidden" });
@@ -160,7 +160,7 @@ test.describe("Season — standings panel", () => {
     await page.locator("#select").waitFor({ state: "visible" });
     // MY TEAM lives in the garage's TEAM tab now, so editing the custom team
     // mid-season is a trip through the garage and back.
-    await page.locator("#sel-go").click();
+    await page.locator("#sel-car").click();
     await page.locator("#carsetup").waitFor({ state: "visible" });
     await page.locator('#cs-tabs [data-cs-cat="team"]').click();
     await page.locator("#cs-customize").click();

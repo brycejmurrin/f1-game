@@ -1,9 +1,8 @@
 /* Apex 26 — the select-screen UI for js/game.js: the track picker with its live
    preview map + elevation canvases, and the fullscreen circuit-detail modal.
    The screen answers WHERE you race and nothing else — who you are and what you
-   drive belong to the garage (js/garage/setup-sheet.js), which START opens on the
-   way to the race. It used to carry a YOUR CAR summary card and a GARAGE button
-   as well, and won at neither job.
+   drive belong to the garage (js/garage/setup-sheet.js), opened from YOUR CAR.
+   NEXT goes to race settings. The old in-sheet car summary is gone.
    Also owns the shared team-picker sheet (#teampicker) that the garage opens.
    Pure DOM; live selection state comes through the ctx façade G handed to
    Menus.create(G). Consumes globals Teams, Tracks, TrackMaps, SeasonCal (the
@@ -275,18 +274,17 @@ function trackFilterBar() {
 }
 
 function buildSelect() {
-  // ONE QUESTION: WHERE. The car summary and its GARAGE button that used to
-  // share this screen are gone (index.html) — WHO and WHAT are chosen in the
-  // garage, which START now opens on the way to the race. So the only thing
-  // that differs between modes here is what the screen is called and what the
-  // foot button promises next.
+  // ONE QUESTION: WHERE. The car summary that used to share this screen is
+  // gone (index.html) — WHO and WHAT are chosen in the garage via YOUR CAR.
+  // NEXT opens race settings. The only thing that differs between modes here
+  // is what the screen is called and what the foot button promises next.
   const room = !!G.netRoom;
   const seasonComplete = !room && G.seasonMode && G.season && !SeasonCal.canRace(G.season);
-  // "NEXT: YOUR CAR", not "START": the button opens the GARAGE, and a label
-  // that promises lights-out while delivering a parts catalogue reads as a
-  // wrong turn. Same per-mode relabelling this line has always done.
-  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : room ? "NEXT" : "NEXT: YOUR CAR";
+  // NEXT opens race settings. YOUR CAR is the garage door beside it.
+  els.selGo.textContent = seasonComplete ? "VIEW FINAL STANDINGS" : "NEXT";
   els.selGo.dataset.seasonComplete = seasonComplete ? "1" : "";
+  const selCar = $("sel-car");
+  if (selCar) selCar.hidden = seasonComplete || room;
   els.selTitle.textContent = room ? "THE RACE"
     : seasonComplete ? "SEASON COMPLETE"
     : G.seasonMode ? "SEASON — ROUND " + ((G.season && G.season.round || 0) + 1)
