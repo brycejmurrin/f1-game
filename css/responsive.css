@@ -157,10 +157,13 @@ body.desktop #pm-calib { display: none !important; }
   /* minimap is 140px here — gaps dock beside it (10+140+8), top-aligned with it
      by the base rule. */
   .hud-gaps { left: calc(158px + var(--sal) / var(--hud-z)); }
-  /* `.hud-top` is taller here (.hud-box padding 5px 16px, .hud-value 23px): its
-     bottom sits at 68 in the widget's own zoomed units against 58 on the base
-     ladder, so the dropped state clears by the same 4px. */
-  :root[data-gap-drop] .hud-gaps { top: calc(72px + var(--sat) / var(--hud-z)); }
+  /* Wide map is 140px: dropped chip docks under it (8+140+8), same left as the
+     map, instead of the old 72px-below-hud-top slide that entered the flag band. */
+  :root[data-gap-drop] .hud-gaps {
+    top: calc(156px + var(--sat) / var(--hud-z));
+    left: calc(10px + var(--sal) / var(--hud-z));
+    max-width: 140px;
+  }
   #hud-speed { font-size: 42px; }
   #hud-gear  { font-size: 68px; }
   #hud-tach  { width: 150px; height: 18px; }

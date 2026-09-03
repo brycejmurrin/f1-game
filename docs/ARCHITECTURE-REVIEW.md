@@ -393,7 +393,7 @@ after the browser groups, never during):
 - C. CHECKED, no change: the idle chip reads `AERO 463m` (distance to the next zone) at 844×390 and 1280×800 (artifacts/shots/20-hud-*, headless Bahrain race 2026-09-02).
 - D. S3 label lime vs the PB-value lime — one hue, two meanings. `#hud-sectors` after a PB S3.
 - E. CHECKED, no change: POS/LAP/TIME/BEST labels on the plate over Bahrain day sand read at 844×390 and 1280×800 (same shots).
-- F. `#hud-flag` (top 100 px) vs the dropped `.hud-gaps` (top 62 px) on a short phone at HUD SIZE ≥ 150 %. 844×390, yellow flag, `:root[data-gap-drop]`.
+- F. LANDED: dropped `.hud-gaps` docks under the minimap (same left, max-width the map) instead of sliding to top 62 px in the POS/flag band. `#hud-flag` (top 100 px, centred) no longer shares that strip.
 - G. CHECKED, no change: `ENERGY` at 100 % over the lime fill reads at both viewports (same shots) — the halo carries it.
 - H. Three unsynchronised blinkers (OT armed 0.8 s, redline 0.4 s, VSC 1 s) together. Bottom cluster under VSC with OT armed.
 - No pit-lane indicator exists in the HUD (nothing to disambiguate; noted).

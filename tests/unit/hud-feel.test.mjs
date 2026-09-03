@@ -214,3 +214,26 @@ test("the ahead gap slot keeps one line so the behind line never jumps when the 
     "measured: the container was 2px with the ahead line empty and 17.6px filled (headless, 2026-09-02)");
 });
 
+test("the dropped gap chip docks under the minimap, not in the POS/flag band", () => {
+  // The old drop was top:62px / same 130px left as the beside-slot. That kept
+  // the chip in the centred POS row's horizontal band and under `#hud-flag`
+  // (top 100px) on a short phone at HUD ≥150% (ARCHITECTURE-REVIEW item F).
+  const hud = cssRules(read("css/hud.css"));
+  const wide = cssRules(read("css/responsive.css"));
+  assert.equal(decl(hud, ":root[data-gap-drop] .hud-gaps", "left"),
+    "calc(10px + var(--sal) / var(--hud-z))",
+    "same left as #minimap, not the beside-slot 130px");
+  assert.equal(decl(hud, ":root[data-gap-drop] .hud-gaps", "top"),
+    "calc(128px + var(--sat) / var(--hud-z))",
+    "8px map-top + 112px map + 8px air");
+  assert.equal(decl(hud, ":root[data-gap-drop] .hud-gaps", "max-width"), "112px",
+    "cannot grow past the map into POS or the flag");
+  assert.equal(decl(hud, ":root[data-gap-drop] body[data-density=\"compact\"] .hud-gaps", "max-width"),
+    "96px", "compact map is 96px");
+  assert.equal(decl(wide, ":root[data-gap-drop] .hud-gaps", "max-width"), "140px",
+    "wide map is 140px");
+  assert.equal(decl(wide, ":root[data-gap-drop] .hud-gaps", "top"),
+    "calc(156px + var(--sat) / var(--hud-z))",
+    "8 + 140 + 8");
+});
+

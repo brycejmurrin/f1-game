@@ -62,9 +62,10 @@ function buildSecRows() {
 //   1. SHORTEN. Drop the driver code and the "s" — the ARROW already says which
 //      side and the number is what a driver reads mid-corner. Full spelling is
 //      ~111px, short is ~70px.
-//   2. DROP. Below `.hud-top`'s bottom edge, still beside the map, where the
-//      strip runs clear to the far side of the screen. Costs the widget its
-//      alignment with the top of the minimap and nothing else.
+//   2. DROP. Under the minimap, same left edge, max-width the map. The old
+//      "slide down the between-slot" kept the chip in the POS/flag band
+//      (`#hud-flag` at 100px vs dropped top 62px). Under the map the column
+//      never reaches either. Costs the top-of-map alignment, nothing else.
 //
 // The thresholds are per BREAKPOINT because the >=1200px ladder makes both walls
 // of the slot worse at once: a 140px minimap (vs 96) starts the widget further
@@ -191,7 +192,11 @@ function fitHud() {
   if (!top) { if (++_fitRetry <= 30) _fitKey = ""; return; }
   const half = window.innerWidth / 2;
   const map = wide(els.minimap), gaps = wide(els.gapA && els.gapA.parentNode);
-  const left = (map ? 10 + map + 8 + gaps : 0) + FIT_AIR;
+  // A dropped chip lives UNDER the map, so it is not competing with `.hud-top`
+  // for the half-width budget. Counting it here over-capped the top band and
+  // shrank POS/LAP while the overlap it was trying to prevent had already
+  // been solved by the drop.
+  const left = (map ? 10 + map + ("gapDrop" in root.dataset ? 0 : 8 + gaps) : 0) + FIT_AIR;
   const right = wide(els.hudSectors) + 10 + FIT_AIR;
   const capTop = half / Math.max(left + top / 2, right + top / 2, 1);
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
@@ -248,6 +253,11 @@ function updateHud(force) {
   hudT -= 1;
   if (!force && hudT > 0) return;
   hudT = 6; // ~10Hz at 60fps
+  // DROP before FIT: fitHud's left-cluster width omits the gap chip once it
+  // has left the map/POS slot (under the minimap). Running the other way
+  // around measured the beside-slot width for a chip that had already dropped
+  // and over-capped `--hud-z-top`.
+  const gapFmt = gapForm();
   fitHud();                    // below the throttle: this reads layout, per TICK not per frame
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
@@ -303,12 +313,9 @@ function updateHud(force) {
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
     : "Z-MODE");
   if (timeTrial) {
-    // The DROP rule (gapForm) runs here too. The attribute it maintains lives
-    // on <html> and outlives the session, so a race on a narrow phone left the
-    // widget dropped for the time trial that followed, and a time trial on its
-    // own never dropped it — although GHOST +0.123s is the LONGEST spelling the
-    // slot ever holds. The format it returns is a race concern (no gaps here).
-    gapForm();
+    // gapForm() already ran above (drop + fit order). The attribute lives on
+    // <html> and outlives the session, so a race on a narrow phone used to
+    // leave the widget dropped for the time trial that followed.
     // no rivals — show ghost delta (or last lap) and the record to chase instead of gaps
     if (Ghost.hasGhost()) {
       const ghostT = Ghost.timeAt(player.s);
@@ -334,7 +341,7 @@ function updateHud(force) {
     let i = (player.rank || 0) - 1;
     if (ranked[i] !== player) i = ranked.indexOf(player);
     const a = i > 0 ? ranked[i - 1] : null, b = i >= 0 ? ranked[i + 1] : null;
-    const gap = gapForm();
+    const gap = gapFmt;
     // Divisor floor as a fraction of the speed envelope, not a raw m/s
     // literal: PACE scales real speeds, so an absolute floor swallowed most
     // of the envelope at low OVERALL SPEED and understated slow-corner gaps.
