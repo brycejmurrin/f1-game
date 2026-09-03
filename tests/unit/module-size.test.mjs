@@ -611,7 +611,12 @@ const CEILINGS = {
   // skipped frame arms and does no work, instead of re-triggering next frame).
   // -> 9233 (deploy branch): the display-reset retry.
   // MERGED and RE-MEASURED on the union.
-  "js/game.js": 9274,
+  // 9274 -> 9307: the garage auto-fit cap (SP_FIT_DIST_MAX) and the effective
+  // framing published for __apex.garageCam(). The fit diverged on a narrow
+  // viewport and pinned on the MANUAL zoom ceiling, orbiting the camera outside
+  // the bay; the note also records the vertical term that was tried and
+  // measured WRONG, so the next round does not re-add it.
+  "js/game.js": 9307,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).
@@ -703,7 +708,7 @@ const CEILINGS = {
   // histogram. It reimplemented endRace()'s award and omitted season.finishes,
   // so a points tie in a simulated season fell through SeasonCal.rank to a
   // STRING compare on driver id — the exact defect the histogram exists to fix.
-  "js/game/apex.js": 2595,   // 2590 -> 2595 (split-newline count) diag().env.gpuErrors/backendState — the bound backend's own account (api, first GPU/WGSL error) for phone reports
+  "js/game/apex.js": 2600,   // 2590 -> 2595 (split-newline count) diag().env.gpuErrors/backendState — the bound backend's own account (api, first GPU/WGSL error) for phone reports · deploy side: +5: garageCam reports effDist/fitD/panelFrac — the auto path is the one that can misframe, and the hook reported a distance the camera does not use
   // +9: the parts hook reports the CAREER cap, not the free-play 780. A career
   // at a team whose factory build costs 1,500 was reported as remaining: -720
   // for a perfectly legal setup.
