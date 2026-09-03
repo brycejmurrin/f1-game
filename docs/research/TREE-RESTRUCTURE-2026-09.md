@@ -104,6 +104,33 @@ Baseline (2026-09-03, branch `claude/project-structure-review-p6eu08`):
    forwarders, 8 `@skill` tags naming skills that no longer exist, ~27
    files with no functional caller. 31 skills; 22 route to siblings by name.
 
+## Where this stands (2026-09-03, end of the Phase 2b move)
+
+Sessions so far have landed 38 commits on `claude/project-structure-review-p6eu08`,
+of which Phase 0, Phase 1-lite and Phase 2a are DEPLOYED (deploy branch tip
+`bfde168`) and Phase 2b's move is pushed but not yet deployed.
+
+**What the tree looks like now vs. the diagnosis this plan opened with:**
+
+| the diagnosis said | today |
+|---|---|
+| a new eager file costs 5-7 coordinated edits | file + ONE manifest line (`gen-shell` writes the rest) |
+| index.html in 77 of 199 commits, almost all hash bumps | tags read `?v=dev`; the deploy stamps hashes; the shell changes only when markup does |
+| `js/game/` holds six module lifecycles in one directory | `js/game/` no longer exists — 16 domain directories |
+| per-circuit data lives in seven homes | the def is the single home (`js/circuits/<id>.js`) |
+| eight ratchets with five different slack rules | one mechanism: `tests/data/ratchets.json` + `tools/ratchets.mjs` |
+| pick-tests routes by a filename list, one `|` per file | directory rules; blanket-only routing 33 -> 1 |
+
+**The four sweep blind spots** found while moving are worth recording because
+they are the reason the move was safe rather than lucky. Each was a class of
+path reference the exact-token sweep could not see, each would have silently
+broken files, and each is now fixed IN THE TOOL with a regression test:
+a `/`-prefixed relative suffix (`"../../js/log.js"`); the sweep eating its own
+move plans and the MOVED block's historical keys; a path written as an escaped
+regex; and a path built from separate quoted segments, which is now REPORTED
+at plan time rather than guessed at. The last one paid for itself immediately:
+it named all six of batch 4's hazards before that batch ran.
+
 ## Status and remaining steps (2026-09-03)
 
 Order of landing: **0 → 1-lite → 2 (splits, then the move window) → 1 → 3
