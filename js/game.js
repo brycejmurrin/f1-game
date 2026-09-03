@@ -136,7 +136,7 @@ function ensureScenery(idx) {
 // LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
 // menu button, which a session that never opens DATA runs no byte of. Only two
 // names escape js/data/: DataHub.init/.open here, and a `typeof F1API` read in
-// js/game/apex.js that already guards itself. Unlike the scenery closures —
+// js/agent/apex.js that already guards itself. Unlike the scenery closures —
 // consumed synchronously by Tracks.build() on the next line — nothing outside
 // reads a Data* global, so this needs no gate beyond the button itself.
 const DATA_FILES = ApexRoster.LAZY_DATA;
@@ -167,7 +167,7 @@ function ensureDataHub() {
 
 // LAZY_NET (tools/manifest.cjs) — the 241 KB WebRTC stack. Loaded from the ONE
 // player-facing entry (VS FRIEND) and, at boot, whenever the agent surface is
-// wanted: js/game/apex.js reads NetTransport / NetSession / NetSnapshot and 22
+// wanted: js/agent/apex.js reads NetTransport / NetSession / NetSnapshot and 22
 // netLobby methods directly and drives the multiplayer specs, so tying the two
 // together keeps every test and dev session behaving exactly as before and
 // confines this change to players, who load neither.
@@ -342,7 +342,7 @@ if (typeof Assets !== "undefined") {
 }
 
 // ---------- rain overlay ----------
-// The 2D falling-streak overlay lives in js/game/particles.js (Particles.rain*).
+// The 2D falling-streak overlay lives in js/fx/particles.js (Particles.rain*).
 // game.js decides the weather tier and hands booleans/speed in.
 let _lastFloodEmit = 0;   // prop-emissive ramp actually used this frame (debug: lightState)
 function initRainDrops() {
@@ -355,7 +355,7 @@ function initRainDrops() {
 // wrapper, the TT leaderboard, season identity/migration, hex<->rgb.
 const { store, ttBoard, ttBoardAdd, hexToRgb, rgbToHex, seasonDriverId } = GameStore;
 
-const { DEFAULT_CUSTOM, TIER_V } = Teams;   // the custom-team seed + the tier pace ladder (js/car/teams.js)
+const { DEFAULT_CUSTOM, TIER_V } = Teams;   // the custom-team seed + the tier pace ladder (js/data/teams.js)
 function loadCustomTeam() { return store.get("customTeam", DEFAULT_CUSTOM); }
 function invalidateCustomMeshCache(cache, order) {
   Object.keys(cache).forEach((key) => {
@@ -1122,7 +1122,7 @@ let lastFrame = 0;
 let announceT = 0;
 let skids = null;   // SkidMarks.create(G), assigned once G exists (below)
 // Tyre marks (the 120-entry ring buffer, its batched vertex build and the
-// per-mark fallback draw) live in js/game/skidmarks.js — SkidMarks.create(G),
+// per-mark fallback draw) live in js/fx/skidmarks.js — SkidMarks.create(G),
 // wired after the G façade as `skids`. Nothing outside that module reads its
 // state, which is what made it liftable.
 const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };  // car paint by condition: night adds emissive, wet lowers roughness
@@ -1858,12 +1858,12 @@ function teamBodyMesh(team) {
 }
 
 // Car decal / effect-quad / cockpit-instrument geometry lives in
-// js/game/carmesh.js (CarMesh; renderer handle injected below at boot).
+// js/car/car-mesh.js (CarMesh; renderer handle injected below at boot).
 CarMesh.init(gfx);
-// The garage/setup-preview environment — js/game/garage-scene.js, same pattern.
+// The garage/setup-preview environment — js/garage/scene.js, same pattern.
 GarageScene.init(gfx);
 // Transient FX particle pool (tyre smoke / sparks / kickup / rain spray) —
-// js/game/particles.js; same injected-renderer pattern as CarMesh above.
+// js/fx/particles.js; same injected-renderer pattern as CarMesh above.
 Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
         getBrakeRing, drawRearLights, getExhaustFlame, getErsLight,
@@ -2935,7 +2935,7 @@ function endRace(forcedOrder) {
 let ltStore = null;   // LightStore.create(G), assigned once G exists (below)
 
 // ── The shared ctx façade over game.js closure state ─────────────────────────
-// Extracted modules (js/game/results.js, hud.js, apex.js, …) can't reach the
+// Extracted modules (js/ui/results-sheet.js, hud.js, apex.js, …) can't reach the
 // closure `let`s in this file, so game.js hands them ONE object of live
 // getters/setters + stable helpers. Getters read the current value at call
 // time; setters write back into the closure. Grown as extractions need it —
@@ -3047,7 +3047,7 @@ const G = {
   get _ltBase() { return _ltBase; }, set _ltBase(v) { _ltBase = v; },
   get _ltFlash() { return _ltFlash; }, set _ltFlash(v) { _ltFlash = v; },
   get _ltNextT() { return _ltNextT; }, set _ltNextT(v) { _ltNextT = v; },
-  // Mutable state consumed by js/game/setup-ui.js.
+  // Mutable state consumed by js/garage/setup-sheet.js.
   get livDraftOverride() { return livDraftOverride; }, set livDraftOverride(v) { livDraftOverride = v; },
   get _spMeshKey() { return _spMeshKey; }, set _spMeshKey(v) { _spMeshKey = v; },
   get setupPreviewOn() { return setupPreviewOn; }, set setupPreviewOn(v) { setupPreviewOn = v; },
@@ -3082,11 +3082,11 @@ const G = {
   get musicEnabled() { return musicEnabled; }, set musicEnabled(v) { musicEnabled = v; },
   get unlimitedBudget() { return unlimitedBudget; }, set unlimitedBudget(v) { unlimitedBudget = v; },
   get teamIdx() { return teamIdx; }, set teamIdx(v) { teamIdx = v; },
-  // Stable helpers consumed by js/game/setup-ui.js.
+  // Stable helpers consumed by js/garage/setup-sheet.js.
   arrToHex, hexToArr, getTeamParts, saveTeamParts, getLiveryId, saveLiveryId,
   getCustomLiveries, setCustomLiveries, getLiveries, invalidateDecalTextures,
   armConfirm,
-  // Mutable state + helpers consumed by js/game/menus.js.
+  // Mutable state + helpers consumed by js/ui/select-screen.js.
   get driverIdx() { return driverIdx; }, set driverIdx(v) { driverIdx = v; },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
   store, tickUi, scheduleFlybyTrack,
@@ -3136,7 +3136,7 @@ const G = {
   isFloodActiveSession: () => isFloodActiveSession(),
   _nightAmbientBand: () => _nightAmbientBand(),
   applyLightTune: (fromApplyRace) => applyLightTune(fromApplyRace),
-  // Stable bindings consumed by js/game/apex.js (functions hoist; consts are
+  // Stable bindings consumed by js/agent/apex.js (functions hoist; consts are
   // initialised before ApexApi.create(G) runs at the end of boot).
   smp, smp2, canvas,
   get gfx() { return gfx; },
@@ -3161,7 +3161,7 @@ const G = {
   setCautionEnabled, otEnabled,
   get netPlay() { return netPlay; },
   get netStart() { return netStart; }, set netStart(v) { netStart = v; },
-  // DECLARED, not an expando. js/net/netplay.js and js/game/apex.js write
+  // DECLARED, not an expando. js/net/netplay.js and js/agent/apex.js write
   // G.netNow at four sites and read it at three, and it appeared NOWHERE in
   // this file — it existed only because JS lets you add a property to an
   // object. That is the countT shape all over again, and the whole premise of
@@ -3209,18 +3209,18 @@ const G = {
 ltStore = LightStore.create(G);
 // Race control: the caution flag state machine (js/race/race-control.js).
 raceCtl = RaceControl.create(G);
-// Results / TT-leaderboard / standings DOM builders (js/game/results.js).
+// Results / TT-leaderboard / standings DOM builders (js/ui/results-sheet.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
-// In-race HUD + minimap (js/game/hud.js).
+// In-race HUD + minimap (js/ui/hud.js).
 const hud = GameHud.create(G);
 const updateHud = hud.updateHud;
 // Session atmosphere: applyRaceSettings + per-track bias (js/lighting/atmosphere.js).
 const applyRaceSettings = Atmosphere.create(G).applyRaceSettings;
-// CAR SETUP panel UI (js/game/setup-ui.js).
+// CAR SETUP panel UI (js/garage/setup-sheet.js).
 const { buildSetup, openSetup } = SetupUI.create(G);
-// Select-screen UI (js/game/menus.js).
+// Select-screen UI (js/ui/select-screen.js).
 const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setTeamPicker, teamSwatch, vt } = Menus.create(G);
-// UI SIZE / HUD SIZE + RESOLUTION (js/game/ui-scale.js). After Menus so the
+// UI SIZE / HUD SIZE + RESOLUTION (js/ui/scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
 const { setScale, applyResMode } = UiScale.create(G);
 // CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
@@ -3234,7 +3234,7 @@ const seasonUi = SeasonUI.create(G);
 const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
 // ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
-// Tyre marks (js/game/skidmarks.js) — self-contained ring buffer + batched draw.
+// Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
 // Photo mode (js/camera/photo-cam.js).
 const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
@@ -5501,7 +5501,7 @@ const SP_FIT_HALF_W = 3.35;
 // default elevation with real headroom over the 8.5 m default framing.
 const SP_FIT_DIST_MAX = 11;
 // The garage environment — bay shell, truss, LED fixtures, pit equipment, team
-// dress, floor and light rig — lives in js/game/garage-scene.js. It owns the
+// dress, floor and light rig — lives in js/garage/scene.js. It owns the
 // frame clear colour too: every surface in there fades to exactly BACKDROP at
 // its far edge, so the room has no silhouette against the void.
 let setupPreviewEl = SP_EL_DEF, setupPreviewDist = SP_DIST_DEF;
@@ -7820,7 +7820,7 @@ function render(dt) {
 }
 
 // ---------- HUD ----------
-// HUD + minimap live in js/game/hud.js (GameHud.create(G) below).
+// HUD + minimap live in js/ui/hud.js (GameHud.create(G) below).
 
 // ---------- main loop ----------
 let physAcc = 0;                 // leftover sim time carried between frames
@@ -7924,11 +7924,11 @@ function tickBody(now) {
 
 // ---------- car setup panel ----------
 // The CAR SETUP panel UI (stat bars, tabs, options, livery creator) lives in
-// js/game/setup-ui.js (SetupUI.create(G) — wired after the G façade).
+// js/garage/setup-sheet.js (SetupUI.create(G) — wired after the G façade).
 
 // ---------- UI wiring ----------
 // Select-screen UI (team/track grids, preview, circuit detail modal) lives in
-// js/game/menus.js (Menus.create(G) — wired after the G façade).
+// js/ui/select-screen.js (Menus.create(G) — wired after the G façade).
 
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
@@ -7971,7 +7971,7 @@ document.addEventListener("pointerdown", () => {
 }, { once: true, capture: true });
 
 
-// UI SIZE / HUD SIZE + RESOLUTION live in js/game/ui-scale.js (UiScale.create(G)
+// UI SIZE / HUD SIZE + RESOLUTION live in js/ui/scale.js (UiScale.create(G)
 // — wired after Menus). Bug-explaining comments moved with the block.
 
 // RENDERER cycle lives in js/perf/quality-preset.js with GRAPHICS — wired at
@@ -8117,7 +8117,7 @@ $("rotate-race").onclick = () => {
 try {
   if (localStorage.getItem("apex26.portraitOk") === "1") document.body.classList.add("rotate-ok");
 } catch (_) { /* no storage: it asks again */ }
-// Team picker: opened by the garage's TEAM & DRIVER tab (js/game/setup-ui.js).
+// Team picker: opened by the garage's TEAM & DRIVER tab (js/garage/setup-sheet.js).
 // Closing without choosing leaves the current team as-is. Nothing to rebuild —
 // the garage is still underneath, unchanged.
 $("tp-close").onclick = () => { $("teampicker").hidden = true; };
@@ -8559,7 +8559,7 @@ document.addEventListener("pointerdown", (e) => {
 }, true);
 // AN INNER DISCLOSURE CLAIMS ESCAPE BEFORE ITS SCREEN DOES. This listener is on
 // document/capture and registers at script-eval time, i.e. before the generic
-// layer handler in js/game/topmodal.js (which registers on DOMContentLoaded and
+// layer handler in js/ui/modal.js (which registers on DOMContentLoaded and
 // therefore runs second on the same node) — and that handler bails on an event
 // already marked handled. stopPropagation alone did NOT mark it: it stops the
 // event descending but says nothing to a sibling listener on this same node, so
@@ -8798,7 +8798,7 @@ els.resNext.onclick = () => {
   if (isChampionship()) {
     if (season.round >= SeasonCal.rounds()) {
       // First click: build the champion panel and STAY on the results screen. The
-      // panel's own DOM lives in js/game/results.js with every other results
+      // panel's own DOM lives in js/ui/results-sheet.js with every other results
       // builder; "MAIN MENU" on the button is the sentinel that it is already up.
       if (els.resNext.textContent !== "MAIN MENU") { buildChampion(); return; }
       // Second click: go to menu, reset season
@@ -8981,7 +8981,7 @@ window.addEventListener("pagehide", () => { PerfGov.sentinelArm(false); _disarmP
 // ---------- boot ----------
 // (A `window.__APEX` bridge lived here, gated on a `window.__APEX_DEBUG` flag
 // that nothing in js/, tests/, tools/ or index.html has ever set. The harness
-// it was written for is window.__apex, in js/game/apex.js.)
+// it was written for is window.__apex, in js/agent/apex.js.)
 
 // MY TEAM's own emblem. Stored as a downscaled data URL under apex26.customLogo
 // so it survives a reload without touching the asset pipeline — LiveryTex takes
@@ -9103,7 +9103,7 @@ if (Tracks.LIST[trackIdx]) {
   $("mb-standings").hidden = !hasSeason; }
 Career.load();            // resolve + migrate the career save once at boot
 refreshCareerButton();
-// `state` is closure-local, and js/game/uilayers.js is what decides whether
+// `state` is closure-local, and js/ui/layers.js is what decides whether
 // Escape means PAUSE or BACK — hand it the answer rather than have it guess one
 // from the DOM. Same pair setPaused() gates on.
 UiLayers.setRaceGetter(() => state === "race" || state === "count");
@@ -9162,7 +9162,7 @@ audioPanel.init();
 // draw from Tracks.LIST defs via TrackMaps; startRace()/openQuali() build the
 // real track themselves), so it is only ever the background flyby — which is
 // what scheduleFlybyTrack() exists for. __apex forces the build on first use
-// (lazyTrackEnsure, js/game/apex.js) so the test harness keeps the synchronous
+// (lazyTrackEnsure, js/agent/apex.js) so the test harness keeps the synchronous
 // world every spec written before this assumed.
 scheduleFlybyTrack();
 window.addEventListener("resize", () => gfx.resize());
@@ -9175,7 +9175,7 @@ requestAnimationFrame(tick);
 // too slow to reach distant corners). Examples, from page.evaluate:
 //   __apex.park(0.25)              -> jump to 25% of the lap, field cleared, still
 //   __apex.jump(0.5, 60, 2)        -> 50% of lap, 60 m/s, 2 m right of centre
-// The __apex dev/test API lives in js/game/apex.js (ApexApi.create(G)).
+// The __apex dev/test API lives in js/agent/apex.js (ApexApi.create(G)).
 // Injected only when wantAgentSurface() — Pages players never download it.
 // game.js eval-assigns window.__apex (the one-global the registry pins on this
 // file) and bootAgentSurface fills it after the lazy inject. ApexApi itself is

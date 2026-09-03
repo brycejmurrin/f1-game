@@ -307,7 +307,7 @@ on the 08-18 perf-hunt board, not this register.
   hud-layout coverage is closed (`HUD_LANDSCAPE_ONLY` checks `.hud-top`,
   `.hud-gaps`, `#minimap`, `#hud-sectors`); portrait overlap stays excluded
   behind `#rotate-device`.
-- **A13 zoom/rect sites — closed.** `js/game/css-zoom.js` (`CssZoom`) is the
+- **A13 zoom/rect sites — closed.** `js/ui/css-zoom.js` (`CssZoom`) is the
   shared helper: `viewportRect` / `localBox` / `toLocalDelta` (+ a one-shot
   `rectsAreVisual` probe). Call sites: garage lens shift (`game.js`
   `renderSetupPreview`), `menunav` `nearestPane` + wheel→`scrollTop`,
@@ -504,7 +504,7 @@ most-load-bearing first.
   corner at ~108° now flags correctly.
 - **Title-screen CLS — FIXED, and the method is the point.** The title screen
   used to paint in the wrong shape and relay out: `body[data-density]` picks
-  `#overlay`'s one- vs two-column grid, and `js/game/sheetshape.js` wrote it on
+  `#overlay`'s one- vs two-column grid, and `js/ui/sheet-shape.js` wrote it on
   `DOMContentLoaded`, behind all ~146 synchronous scripts. Measured on a quiet
   box at 852×393 over a gzip server: **CLS 0.5241** at `d7a1158`, now **0.0602
   and 0.0824** on two cold loads ("good" is under 0.1), via a tiny inline script
@@ -584,7 +584,7 @@ Deferred with reasoning, none lost:
   ~324, pre-race screens ~261, liveries ~161, sky state ~107. (Cam modes was
   taken: `js/camera/mode-switch.js`.) The 2026-08-13 structure panel re-affirmed
   this list as the live decomposition plan and made it **forced rather than
-  optional**: both ratchets are saturated (`js/game.js` and `js/game/apex.js`
+  optional**: both ratchets are saturated (`js/game.js` and `js/agent/apex.js`
   each sit one line under their ceiling), so the next net-positive edit to
   either file fails the suite. Candidates may be **added** only after
   re-measurement by function body (brace count) — the gap-to-next-function
@@ -606,7 +606,7 @@ Deferred with reasoning, none lost:
   LEFT inline: `updateCar()`'s signed wrap (physics inner loop, and its
   characterization golden is a browser spec), and `headInterp`/`yawVisInterp`,
   which fold an unbounded heading and need a loop rather than one fold.
-- **Elevation-profile drawing duplicated in `js/game/menus.js` — RESOLVED.**
+- **Elevation-profile drawing duplicated in `js/ui/select-screen.js` — RESOLVED.**
   One local `drawElevProfile(cv, t, showEl)`; the only real difference between
   the two blocks was which element carries the `hidden` state.
 - **`simTilt`/`tiltSteering`** now share `tiltTarget()`/`tiltSlew()`;

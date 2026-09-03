@@ -265,7 +265,7 @@ test.describe("TLX — boot", () => {
     // RENDERER-ONLY commits either way (00bca5b red, 08b96a3 green, both with
     // identical physics), which is what identifies the setup, not the backend,
     // as the variable. park() is the shipped hook that shoves the field 600 m
-    // back (js/game/apex.js) and pins state to "race" — the stint is then solo
+    // back (js/agent/apex.js) and pins state to "race" — the stint is then solo
     // and the outcome no longer depends on frame pacing.
     //
     // THE STINT LENGTH IS LOAD-BEARING TOO. 30 frames only ever laid marks

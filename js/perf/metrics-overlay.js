@@ -45,7 +45,7 @@ let _logLvlBtn = null;
 let _keysBound = false;
 let _raisedBuffer = null;
 
-// Mirrors the HUD gap-form pattern (js/game/hud.js): innerWidth / hudScale
+// Mirrors the HUD gap-form pattern (js/ui/hud.js): innerWidth / hudScale
 // is the slot proxy. Two display densities:
 //   WIDE  (ratio >= 480): label column + value, full rows, up to 12 rows
 //   NARROW (ratio < 480): compact, two values per line, fewer rows

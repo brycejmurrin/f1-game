@@ -35,7 +35,7 @@ function harness() {
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
   vm.runInContext(read("js/track/geom.js"), ctx, { filename: "js/track/geom.js" });
-  vm.runInContext(read("js/game/garage-scene.js"), ctx, { filename: "js/game/garage-scene.js" });
+  vm.runInContext(read("js/garage/scene.js"), ctx, { filename: "js/garage/scene.js" });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
   return { GarageScene, meshes, ctx };

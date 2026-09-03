@@ -14,9 +14,9 @@ attitude.
 
 - **Shake** → `js/game.js` `shake` (not `js/camera/vantage.js` — that file is
   modes only). Never write shake into `car.px/pz`, `s`, `x`, or `psi`.
-- **Particles** → `js/game/particles.js`. Render-path only.
+- **Particles** → `js/fx/particles.js`. Render-path only.
 - **Audio** → `js/audio/engine.js` (shifts, kerb, wall, ERS, sector/lap).
-- **Tyre marks** → `js/game/skidmarks.js` from real slip/contact.
+- **Tyre marks** → `js/fx/skidmarks.js` from real slip/contact.
 - **Chassis motion** → `js/physics/body-attitude.js` — visual only.
 - **Budget** → `js/perf/governor.js` / `PerfGov`. Cap and decay.
 

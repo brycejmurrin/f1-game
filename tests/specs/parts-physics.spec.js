@@ -1263,7 +1263,7 @@ test.describe("Parts module — visual recipes", () => {
     // file measures.
     // 48, FROM A MEASUREMENT. This said 32 and the decal sheet has been 36
     // triangles (18 quads over LiveryTex's 8 regions) at EVERY revision of
-    // js/game/carmesh.js — bisected, not assumed. So the ceiling was never
+    // js/car/car-mesh.js — bisected, not assumed. So the ceiling was never
     // satisfiable and the test never passed; 32 was a number someone liked.
     // 48 is the measured 36 plus a third, which is room for a few more decal
     // regions and still far below anything that would cost a frame. The tier

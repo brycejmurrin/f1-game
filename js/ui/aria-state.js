@@ -88,7 +88,7 @@ window.AriaState = (function () {
   // whole batch is the same single pass.
   //
   // setTimeout, NOT requestAnimationFrame. rAF is dropped when the page is not
-  // compositing — the same hazard js/game/menus.js documents for
+  // compositing — the same hazard js/ui/select-screen.js documents for
   // startViewTransition — and because the flag is only cleared inside the
   // callback, one dropped frame LATCHED this module off permanently: every
   // later mutation saw `pending` still set and returned. That is exactly how it

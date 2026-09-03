@@ -12,7 +12,7 @@
  *   node tools/pick-tests.mjs                 # vs the merge-base with main
  *   node tools/pick-tests.mjs --staged        # only what is staged
  *   node tools/pick-tests.mjs --since HEAD~3
- *   node tools/pick-tests.mjs js/car/parts.js js/game/hud.js   # explicit paths
+ *   node tools/pick-tests.mjs js/car/parts.js js/ui/hud.js   # explicit paths
  *   node tools/pick-tests.mjs --bg            # print the background-run command
  *   node tools/pick-tests.mjs --json         # machine-readable, for CI
  *
@@ -97,57 +97,67 @@ export const RULES = [
   [/^js\/track\/maps\.js/, ["hooks", "circuits"], "layout metadata"],
   [/^js\/circuits\/.*\.js$/, ["circuits"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
 
-  // ── spec-backed js/game files that used to reach only tiny + tooling-fast ──
-  [/^js\/game\/ui-scale\.js/, ["ui"], "ui-scale.spec.js"],
-  [/^(js\/game\/racecontrol|js\/race\/race-control)\.js/, ["driving"], "race-control.spec.js rides in test:driving"],
-  [/^(js\/game\/aerozones|js\/physics\/aero-zones)\.js/, ["driving"], "aero-zones.spec.js rides in test:driving"],
-  [/^js\/game\/garage-scene\.js/, ["car"], "garage-aero.spec.js rides in test:car"],
+  // ── DIRECTORY rules (Phase 2b) ──────────────────────────────────────────
+  // js/game/ dissolved into domain directories in the 2026-09-03 move window,
+  // so a rule names a DIRECTORY rather than an alternation of filenames: a new
+  // file in js/ui/ is routed the day it lands instead of the day someone
+  // remembers to extend a regex. The blanket-route count in
+  // tests/data/ratchets.json is what catches a file no rule names.
+  [/^tools\/game-vm\.cjs/, ["game-vm"], "the Node VM game harness and its parity test"],
+  [/^tools\/slider-effect\.mjs/, ["node-slow"], "slider-effect.test.mjs spawns this tool per test"],
 
   // ── car ─────────────────────────────────────────────────────────────────
-  [/^tools\/game-vm\.cjs/, ["game-vm"], "the Node VM game harness and its parity test"],
   [/^js\/car\/parts\.js/, ["car", "sweeps-parts"], "the catalog, budgets, recipes and their physics; sweeps-parts is the 559 s option-resolution census"],
   [/^js\/car\/(car3d|liveries|liverytex|crest-paths)\.js/, ["car", "node-slow"], "car mesh + livery specs; node-slow rasterises every livery and crest"],
-  [/^tools\/slider-effect\.mjs/, ["node-slow"], "slider-effect.test.mjs spawns this tool per test"],
-  [/^js\/car\/teams\.js/, ["car", "modes"], "the grid feeds season and career"],
+  [/^js\/data\/teams\.js/, ["car", "modes"], "the grid feeds season and career"],
   [/^js\/car\/ghost\.js/, ["modes"], "time-trial ghost"],
+  [/^js\/car\//, ["car"], "the car's mesh, livery and parts"],
+  [/^js\/garage\//, ["car", "ui"], "the garage bay: the studio scene and the setup sheet the menu specs click through"],
 
-  // ── game ────────────────────────────────────────────────────────────────
+  // ── the loop and the driving model ──────────────────────────────────────
   // js/game.js IS the physics — the bicycle model, the friction ellipse, the
-  // aero trade and the longitudinal integrator all live in it — so `physics`
-  // belongs here and was simply missing. js/track/space.js and js/track/tracks.js
-  // routed to it while the file that contains the model did not, which is how a
-  // change to the FX block's pace normalisation came back "no physics group
-  // needed". Since the 2026-09 regroup the blast radius is three browser groups
-  // (driving, hooks, circuits) instead of six: each is the union of the old
-  // physics/collision/behaviour/debris, api/hooks/agent/map, and
-  // circuit/foundation/scenery sets, so the SPEC union is unchanged.
+  // aero trade and the longitudinal integrator all live in it. Since the
+  // 2026-09 regroup the blast radius is three browser groups (driving, hooks,
+  // circuits): each is the union of the old physics/collision/behaviour/debris,
+  // api/hooks/agent/map, and circuit/foundation/scenery sets.
   [/^js\/game\.js/, ["driving", "hooks", "circuits"], "the loop: physics, AI, race logic"],
-  [/^(js\/game\/physics-consts|js\/physics\/consts)\.js/, ["driving", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
-  [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js|^js\/camera\/(vantage|offsets|mode-switch|tuner-panel)\.js/, ["input"], ""],
-  [/^js\/game\/(input|steer-tuning|uilayers)\.js|^js\/input\/(input|steer-tuning)\.js/, ["input"], ""],
-  [/^(js\/game|js\/physics)\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
-  [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|renderer-picker|metrics|cockpit-opts|sheetshape|quali-sheet)\.js|^js\/perf\/(quality-preset|renderer-picker|metrics-overlay)\.js|^js\/camera\/cockpit-opts\.js/, ["ui"], "DOM screens"],
-  [/^js\/game\/(lighting|lighting-knobs|track-lights|frame-lights|light-presets|atmosphere|tuner)\.js|^js\/lighting\//, ["gfx"], ""],
-  [/^js\/game\/(career|career-ui|reliability|quali)\.js|^js\/career\/(career|career-ui)\.js|^js\/race\/(reliability|quali-model)\.js/, ["modes", "state-unit"], ""],
-  // The season calendar/format. `modes` is season+career+TT+quali (career is a
-  // championship too, and the endRace award path is shared); `ui` because the
-  // SETUP screen is DOM the menu specs click through.
-  [/^js\/game\/season-(cal|ui)\.js|^js\/career\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
-  [/^js\/game\/(audio|music-lib)\.js|^js\/audio\/(engine|music-lib)\.js/, ["ui", "lifecycle-unit"], ""],
-  [/^js\/(game|audio)\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
-  // The MUSIC & SOUND panel is DOM the menu specs click through, not just audio
-  // plumbing — menu-survey/ui-scale/ui-button-touch/menu-keyboard all open it.
-  [/^js\/game\/audio-panel\.js|^js\/audio\/panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
-  [/^js\/game\/(agentview|agentview-raster)\.js/, ["hooks", "agent-contract"], ""],
-  [/^js\/game\/apex\.js/, ["hooks", "agent-contract"], "the __apex contract"],
-  // `sweeps` because debrisworld's hazard query projects bodies back onto the
+  [/^js\/physics\/consts\.js/, ["driving", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
+  [/^js\/physics\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
+  [/^js\/physics\/body-attitude\.js/, ["ui"], "a visual-only layer"],
+  // `sweeps` because debris-world's hazard query projects bodies back onto the
   // centreline, and debris-hazard-hint.test.mjs is the circuit-rebuilding sweep
-  // that checks that projection — it lives with the other track-build-vm suites,
-  // so a debrisworld edit would otherwise never run its own Node gate.
-  [/^js\/game\/(debrisworld|incidentsim)\.js|^js\/physics\/(debris-world|incident-sim)\.js/, ["driving", "sweeps"], ""],
-  [/^js\/game\/(particles|carmesh|bodyattitude|photomode)\.js|^js\/physics\/body-attitude\.js|^js\/camera\/photo-cam\.js/, ["ui"], "visual-only layers"],
-  [/^js\/game\/(store|perf|tables)\.js|^js\/core\/store\.js|^js\/perf\/governor\.js/, ["hooks", "modes", "state-unit"], ""],
-  [/^js\/log\.js|^js\/core\/log\.js/, ["hooks", "tooling-fast"], "every module logs through it"],
+  // that checks that projection.
+  [/^js\/physics\/(debris-world|incident-sim)\.js/, ["driving", "sweeps"], ""],
+  [/^js\/physics\//, ["driving"], "the driving model and what feeds it"],
+  [/^js\/race\/race-control\.js/, ["driving"], "race-control.spec.js rides in test:driving"],
+  [/^js\/race\//, ["modes", "state-unit"], "session model: quali, reliability, race control"],
+
+  // ── modes and their screens ─────────────────────────────────────────────
+  // `ui` on the season files because the SETUP screen is DOM the menu specs
+  // click through; `modes` is season+career+TT+quali.
+  [/^js\/career\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
+  [/^js\/career\//, ["modes", "state-unit"], ""],
+
+  // ── presentation ────────────────────────────────────────────────────────
+  [/^js\/lighting\//, ["gfx"], ""],
+  [/^js\/camera\/photo-cam\.js/, ["ui"], "a visual-only layer"],
+  [/^js\/camera\/cockpit-opts\.js/, ["ui"], "DOM screens"],
+  [/^js\/camera\//, ["input"], "camera vantage, offsets and mode switching"],
+  [/^js\/audio\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
+  [/^js\/audio\/panel\.js/, ["ui"], "mixer panel: audio behaviour + menu DOM"],
+  [/^js\/audio\//, ["ui", "lifecycle-unit"], ""],
+  [/^js\/perf\/governor\.js/, ["hooks", "modes", "state-unit"], ""],
+  [/^js\/perf\//, ["ui"], "the quality preset, renderer picker and the overlays — DOM screens"],
+  [/^js\/input\//, ["input"], ""],
+  [/^js\/ui\/scale\.js/, ["ui"], "ui-scale.spec.js"],
+  [/^js\/ui\//, ["ui"], "DOM screens"],
+  [/^js\/fx\//, ["ui"], "visual-only layers"],
+
+  // ── core and the agent surface ──────────────────────────────────────────
+  [/^js\/agent\//, ["hooks", "agent-contract"], "the __apex contract and the agent view"],
+  [/^js\/core\/store\.js/, ["hooks", "modes", "state-unit"], ""],
+  [/^js\/core\/log\.js/, ["hooks", "tooling-fast"], "every module logs through it"],
+  [/^js\/core\//, ["hooks"], "the shared floor every module stands on"],
 
   // ── the rest ────────────────────────────────────────────────────────────
   [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],

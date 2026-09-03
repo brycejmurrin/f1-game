@@ -37,7 +37,7 @@ export function loadCar3D() {
   // races in. The first version of this loader stopped at teams.js, which is
   // why the guard built on it swept every team with `opts.livery` absent — and
   // therefore could not see nose/pod/halo/stripe/noseStripe at all.
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/car/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/car3d.js"])
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/liveries.js", "js/car/car3d.js"])
     vm.runInContext(readFileSync(f, "utf8"), ctx, { filename: f });
   return {
     Car3D: vm.runInContext("Car3D", ctx),

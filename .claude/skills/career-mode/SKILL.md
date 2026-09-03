@@ -65,7 +65,7 @@ Hooks:
 **Proving a sponsor was just paid is NOT a `careerState()` read.**
 `Career.settleRound()`'s return value (including `sponsorPay`, the amount paid
 this round) is stashed in `js/game.js`'s `careerSettlement` and reached only via
-the `G` façade (`G.careerSettlement`, consumed by `js/game/results.js` for the
+the `G` façade (`G.careerSettlement`, consumed by `js/ui/results-sheet.js` for the
 results screen) — **there is no `__apex` hook that surfaces `sponsorPay`
 directly.** And `careerState().sponsor` reads `sponsor()`, which resolves off
 `career.season.round` — the round counter **already incremented** by the time

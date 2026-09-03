@@ -164,7 +164,7 @@ in CI today) boot in ~4 s on `macos-latest`'s real Metal adapter — give
   only by the index): archive them.
 - **Generate what drifts.** Today's audit found ~40 stale rows across nine
   docs; every one was a count, a path, or a signature. Generate:
-  `DEBUG-HOOKS.md`'s hook table from `agentHelp()` (`js/game/agentview.js:1986`
+  `DEBUG-HOOKS.md`'s hook table from `agentHelp()` (`js/agent/agentview.js:1986`
   already holds the manifest; keep hand prose for sharp edges only),
   `tools/README.md` from a `@doc` first-line summary in each tool header
   (70 KB hand-written today; the test only asserts row existence),

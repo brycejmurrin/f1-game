@@ -110,7 +110,7 @@ window.PhysicsConsts = {
   // gear's top speed as a fraction of the speed ENVELOPE (game.js gearHi()
   // scales it by vTop(), so all eight stay reachable at any OVERALL SPEED).
   // F1 V6 turbo: idle ~5k, rev limit 15k. Read by game.js (rpmFor, the
-  // limiter), js/game/hud.js (the tach) and js/game/apex.js (reset).
+  // limiter), js/ui/hud.js (the tach) and js/agent/apex.js (reset).
   GEARS: 8,
   GEAR_TOP: [0.095, 0.16, 0.25, 0.36, 0.50, 0.66, 0.83, 1.0],
   IDLE_RPM: 5000, MAX_RPM: 15000,

@@ -85,8 +85,8 @@ const FULL = [
   "js/render/gfx.js",
   "js/render/gltf.js",
   "js/render/assets.js",
-  "js/car/teams.js",
-  "js/car/driver-ratings.js",
+  "js/data/teams.js",
+  "js/data/driver-ratings.js",
   // Persistence sits ahead of every js/game module: the settings panels, the
   // perf sentinel and the Spotify client go through GameStore.store's raw lane,
   // and spotify.js's init() runs at EVAL when the document is already complete
@@ -109,7 +109,7 @@ const FULL = [
   "js/track/scenery-identity.js",
   ...circuitFiles,
   "js/track/tracks.js",
-  "js/track/maps.js",
+  "js/ui/track-maps.js",
   "js/car/car3d.js",
   "js/input/input.js",
   "js/audio/engine.js",
@@ -127,30 +127,30 @@ const FULL = [
   "js/lighting/frame-lights.js",
   "js/lighting/lighting.js",
   "js/lighting/profiles.js",
-  "js/game/carmesh.js",
-  "js/game/garage-scene.js",
+  "js/car/car-mesh.js",
+  "js/garage/scene.js",
   "js/physics/body-attitude.js",
-  "js/game/particles.js",
+  "js/fx/particles.js",
   "js/lighting/atmosphere.js",
   "js/career/career.js",
   "js/career/season-cal.js",
   "js/race/reliability.js",
   "js/physics/ai-drive.js",
   "js/camera/offsets.js",
-  "js/game/setup-ui.js",
+  "js/garage/setup-sheet.js",
   "js/career/career-ui.js",
   "js/career/season-ui.js",
-  "js/game/menus.js",
-  "js/game/scrollfade.js",
-  "js/game/css-zoom.js",
-  "js/game/sheetshape.js",
-  "js/game/uilayers.js",
-  "js/game/topmodal.js",
-  "js/game/menunav.js",
-  "js/game/ariastate.js",
-  "js/game/settings-nav.js",
+  "js/ui/select-screen.js",
+  "js/ui/scroll-fade.js",
+  "js/ui/css-zoom.js",
+  "js/ui/sheet-shape.js",
+  "js/ui/layers.js",
+  "js/ui/modal.js",
+  "js/ui/menu-nav.js",
+  "js/ui/aria-state.js",
+  "js/ui/settings-tabs.js",
   "js/physics/aero-zones.js",
-  "js/game/skidmarks.js",
+  "js/fx/skidmarks.js",
   "js/race/race-control.js",
   "js/camera/photo-cam.js",
   "js/lighting/tuner-panel.js",
@@ -162,15 +162,15 @@ const FULL = [
   "js/perf/quality-preset.js",
   "js/perf/renderer-picker.js",
   "js/perf/gfx-debug-overlay.js",
-  "js/game/ui-scale.js",
+  "js/ui/scale.js",
   "js/camera/cockpit-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
-  "js/game/hud.js",
-  "js/game/results.js",
+  "js/ui/hud.js",
+  "js/ui/results-sheet.js",
   "js/race/quali-model.js",
-  "js/game/quali-sheet.js",
+  "js/ui/quali-sheet.js",
   "js/physics/debris-world.js",
   "js/physics/incident-sim.js",
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /
@@ -229,13 +229,13 @@ const CARVIEW = [
   "js/render/lamp-chunks.js",
   "js/render/glx/chunked.js",
   "js/render/glx.js",
-  "js/car/teams.js",
+  "js/data/teams.js",
   "js/car/parts.js",
   "js/car/car3d.js",
   "js/car/liveries.js",
   "js/car/crest-paths.js",
   "js/car/liverytex.js",
-  "js/game/carmesh.js",
+  "js/car/car-mesh.js",
 ];
 
 // verify-track.cjs / track-foundation Node-VM subset, in order.
@@ -321,7 +321,7 @@ const HARD_EDGES = [
   ["js/render/lamp-chunks.js", "js/render/glx/chunked.js"], // drawChunked resolves LampChunks tables (call-time; keep explicit)
   ["js/render/glx/chunked.js", "js/render/glx.js"],
   ["js/render/glx.js", "js/render/assets.js"],         // Assets feature-detects the backend's createTextureArray
-  ["js/track/geom.js", "js/game/garage-scene.js"],          // the bay reads TrackGeom.MAT at eval for its per-vertex material ids
+  ["js/track/geom.js", "js/garage/scene.js"],          // the bay reads TrackGeom.MAT at eval for its per-vertex material ids
   ["js/track/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
   ["js/track/geom.js", "js/track/mesh.js"],                 // mesh destructures TrackGeom at eval
@@ -334,19 +334,19 @@ const HARD_EDGES = [
   ["js/track/scenery-identity.js", "js/track/tracks.js"],
   ["js/track/space.js", "js/track/surface.js"],
   ["js/track/models.js", "js/track/circuit-kit.js"],
-  ["js/track/tracks.js", "js/track/maps.js"],               // maps calls Tracks.buildCenterline
+  ["js/track/tracks.js", "js/ui/track-maps.js"],               // maps calls Tracks.buildCenterline
   // js/data's own eval-time edges moved to LAZY_DATA_EDGES when the hub left
   // FULL — HARD_EDGES pairs must both be IN FULL to be orderable.
-  ["js/physics/consts.js", "js/game/hud.js"], // hud destructures IDLE_RPM/MAX_RPM at eval
+  ["js/physics/consts.js", "js/ui/hud.js"], // hud destructures IDLE_RPM/MAX_RPM at eval
   ["js/camera/mode-switch.js", "js/game.js"],       // game.js destructures CamModes.CAM_MODES at eval
-  ["js/car/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
+  ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
   ["js/physics/consts.js", "js/physics/body-attitude.js"], // LAT_MAX read at eval
-  ["js/car/teams.js", "js/core/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
+  ["js/data/teams.js", "js/core/store.js"],      // seasonRoster reads Teams (call time, but keep ordered)
   // liverytex kicks off loadLogos(Teams.LIST ids) at EVAL time — it used to
   // carry its own copy of the roster (a SHORT table that had drifted), and
   // reading the real one makes the order load-bearing rather than tidy.
-  ["js/car/teams.js", "js/car/liverytex.js"],
+  ["js/data/teams.js", "js/car/liverytex.js"],
   // crestTraced reads CrestPaths at DRAW time, not eval time, so this is not
   // strictly a hard edge — but a mark that silently falls back to the generic
   // monogram because a tag moved is exactly the kind of quiet regression the
@@ -358,10 +358,10 @@ const HARD_EDGES = [
   ["js/career/season-cal.js", "js/career/season-ui.js"], // the screen reads the season rules
   ["js/career/season-ui.js", "js/game.js"],      // game.js calls SeasonUI.create(G) at eval
   ["js/car/parts.js", "js/career/career.js"],     // Career.start seeds owned/fitted from Parts (call time, keep ordered)
-  ["js/car/driver-ratings.js", "js/game.js"],   // makeCars reads DriverRatings for every car's skill
+  ["js/data/driver-ratings.js", "js/game.js"],   // makeCars reads DriverRatings for every car's skill
   ["js/career/career.js", "js/race/quali-model.js"],    // quali reads Career.rnd/devFor for its spread
   ["js/physics/aero-zones.js", "js/game.js"],      // game.js calls AeroZones.create(G) at eval time
-  ["js/game/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create(G) at eval time
+  ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create(G) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/lighting/knobs.js", "js/lighting/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
@@ -371,7 +371,7 @@ const HARD_EDGES = [
   ["js/lighting/lighting.js", "js/lighting/profiles.js"],  // light-store destructures LightTune's TUNE_DEFS/LT inside create()
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/audio/panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time
-  ["js/game/ui-scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
+  ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
   ["js/career/career.js", "js/race/reliability.js"],  // reliability draws through Career.hash (call time, keep ordered)
   ["js/car/parts.js", "js/race/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)
   ["js/race/reliability.js", "js/game.js"],     // game.js validates the stored RELIABILITY level at eval
@@ -436,12 +436,12 @@ const DEFERRED = {
 // ?apex=1 / ?debug= / ?report=, or apex26.devApi=1. Players on Pages skip
 // ~350 KB of parse + PWA memory. Fetch-miss still caches on first use.
 const LAZY_AGENT = [
-  "js/game/agentview-raster.js",
-  "js/game/agentview.js",
-  "js/game/apex.js",
+  "js/agent/agentview-raster.js",
+  "js/agent/agentview.js",
+  "js/agent/apex.js",
 ];
 const LAZY_EDGES = [
-  ["js/game/agentview-raster.js", "js/game/agentview.js"],
+  ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
 ];
 
 // RACE PAYLOAD. Data a session needs only once a race resolves, never to paint
@@ -459,7 +459,7 @@ const LAZY_RACE = [
 // schedule, standings, last race, live timing, telemetry and export — none of
 // which a session that never opens DATA will run a byte of. Nothing outside
 // js/data/ names any of its eight globals except DataHub.init/.open in
-// game.js and a `typeof F1API` read in js/game/apex.js, so the whole directory
+// game.js and a `typeof F1API` read in js/agent/apex.js, so the whole directory
 // lifts off the boot wall as one bundle loaded from the #mb-data click.
 const LAZY_DATA = [
   "js/data/api.js",
@@ -537,7 +537,7 @@ const DEFERRED_EDGES = [
 const PATHS = {
   GAME: "js/game.js",                   // the entry: last FULL tag, owner of `const G`
   GLX: "js/render/glx.js",              // the shipped renderer (game-vm.cjs stubs it)
-  APEX_API: "js/game/apex.js",          // the __apex dev API (LAZY_AGENT; game-vm.cjs hooks ApexApi.create)
+  APEX_API: "js/agent/apex.js",          // the __apex dev API (LAZY_AGENT; game-vm.cjs hooks ApexApi.create)
   TRACKS_ENGINE: "js/track/tracks.js",
   GLX_CHUNKS: "js/render/shaders/chunks.js",
   LAMP_CHUNKS: "js/render/lamp-chunks.js",
@@ -563,6 +563,30 @@ const sceneryPath = (id) => `${SCENERY_DIR}/${id}.js`;
 // tools/deploy.mjs can name the new path when another session's edit to the
 // old one conflicts. Prune entries once every in-flight branch has rebased.
 const MOVED = {
+  "js/game/uilayers.js": "js/ui/layers.js",
+  "js/game/topmodal.js": "js/ui/modal.js",
+  "js/game/menunav.js": "js/ui/menu-nav.js",
+  "js/game/scrollfade.js": "js/ui/scroll-fade.js",
+  "js/game/sheetshape.js": "js/ui/sheet-shape.js",
+  "js/game/ariastate.js": "js/ui/aria-state.js",
+  "js/game/css-zoom.js": "js/ui/css-zoom.js",
+  "js/game/hud.js": "js/ui/hud.js",
+  "js/game/menus.js": "js/ui/select-screen.js",
+  "js/game/results.js": "js/ui/results-sheet.js",
+  "js/game/settings-nav.js": "js/ui/settings-tabs.js",
+  "js/game/ui-scale.js": "js/ui/scale.js",
+  "js/track/maps.js": "js/ui/track-maps.js",
+  "js/game/garage-scene.js": "js/garage/scene.js",
+  "js/game/setup-ui.js": "js/garage/setup-sheet.js",
+  "js/game/carmesh.js": "js/car/car-mesh.js",
+  "js/car/teams.js": "js/data/teams.js",
+  "js/car/driver-ratings.js": "js/data/driver-ratings.js",
+  "js/game/apex.js": "js/agent/apex.js",
+  "js/game/agentview.js": "js/agent/agentview.js",
+  "js/game/agentview-raster.js": "js/agent/agentview-raster.js",
+  "js/game/particles.js": "js/fx/particles.js",
+  "js/game/skidmarks.js": "js/fx/skidmarks.js",
+  "js/game/quali-sheet.js": "js/ui/quali-sheet.js",
   "js/game/light-store.js": "js/lighting/profiles.js",
   "js/game/light-presets.js": "js/lighting/presets.js",
   "js/game/atmosphere.js": "js/lighting/atmosphere.js",

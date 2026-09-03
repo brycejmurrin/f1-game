@@ -68,7 +68,7 @@ colour comes from `baseColorFactor` only (`gltf.js:348-351`).
 `GLTF.toMesh`, and on success rebuilds every team mesh from it. It is
 **deliberately never auto-called** — the comment says *"Drop in a model then
 call this once a CC-licensed .glb is available."* It is exposed as
-`__apex.loadCarModel` (`js/game/apex.js:874`).
+`__apex.loadCarModel` (`js/agent/apex.js:874`).
 
 So a previous pass already built the door and left it unlocked. Nobody has
 walked through it because there is no asset acquisition story.

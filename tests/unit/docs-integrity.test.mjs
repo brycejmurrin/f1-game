@@ -427,7 +427,7 @@ test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
 });
 
 test("AGENTS.md's layout names the module-roster truth it defers to", () => {
-  // History: js/game/sheetshape.js and js/game/topmodal.js shipped while absent
+  // History: js/ui/sheet-shape.js and js/ui/modal.js shipped while absent
   // from the then-exhaustive layout, so an agent reading it concluded they did
   // not exist — and this guard required every js/game basename in the file.
   // The 2026-08-13 slimming inverted the contract: the layout is a directory

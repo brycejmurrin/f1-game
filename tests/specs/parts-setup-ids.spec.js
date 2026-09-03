@@ -193,7 +193,7 @@ test.describe("Garage — TEAM tab owns team, driver and MY TEAM", () => {
     if (chips > 1) await page.locator("#cs-driver .sel-chip").nth(1).click();
     // NO .toUpperCase(). This read the chip's own text and then transformed it
     // into something the chip cannot contain: the label is "#81 Oscar Piastri"
-    // (js/game/setup-ui.js builds "#" + num + " " + name, and teams.js stores
+    // (js/garage/setup-sheet.js builds "#" + num + " " + name, and teams.js stores
     // "Oscar Piastri"), so the surname is "Piastri" and toContainText is
     // case-sensitive. There is no CSS text-transform on .sel-chip either, so
     // the uppercase form has never existed anywhere — the round trip could only

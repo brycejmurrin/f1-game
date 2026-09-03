@@ -214,7 +214,7 @@ screenshot, not just before it.
 `c.rPrevPx`/`c.rPrevPz` (WORLD-space render-interpolation anchors) blended
 toward `c.px`/`c.pz` by `renderAlpha` — NOT from `c.rPrevS`/`c.rPrevX` (the
 arc-based anchors, which only feed the AI-car branch). `jump()`
-(`js/game/apex.js`) reset `rPrevS`/`rPrevX` on teleport but never touched
+(`js/agent/apex.js`) reset `rPrevS`/`rPrevX` on teleport but never touched
 `rPrevPx`/`rPrevPz`, so the player mesh kept rendering a straight-line lerp
 between wherever it was BEFORE the teleport and the new spot. Under `park()`'s
 `G.frozen` (physics never steps again, so `renderAlpha` never advances) that

@@ -338,7 +338,7 @@ with its reason):
    `--update` snaps every ceiling to the current value, `--json`),
    `tests/unit/ratchets.test.mjs`. Metrics: `lines` (split-newline, the old
    metric, for every file the old CEILINGS named); `codeLines`
-   (non-comment, non-blank) for `js/game.js` and `js/game/apex.js`;
+   (non-comment, non-blank) for `js/game.js` and `js/agent/apex.js`;
    `gMembers` (`scanGameCtx().members.size` from check-gctx) and `topLets`
    (`^let ` at column 0 — 147 today) for `js/game.js`. ONE slack rule: a
    ceiling more than max(60, 4 %) above its value fails ("lower it"). The

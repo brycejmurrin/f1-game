@@ -776,7 +776,7 @@ function buildBayFloor(out, liv) {
 
 // ── team dress ─────────────────────────────────────────────────────────────
 // One canvas atlas, one texture, one texMesh, one drawDecal: the same shape as
-// the car's own decal path (js/game/carmesh.js carDecalData), which is what
+// the car's own decal path (js/car/car-mesh.js carDecalData), which is what
 // keeps this to a single extra draw call however many branded surfaces there
 // are. The crest is the real team PNG where LiveryTex has one and its
 // hand-drawn vector crest where it does not — which is also the permanent path
@@ -1256,7 +1256,7 @@ const pushMat = (out, n, mid) => {
 };
 function rebuild(team, liv, info) {
   const drv = (team && team.drivers) || [];
-  // Same idiom as getCockpitWheel's _cockpitWheelKey (js/game/carmesh.js): fold
+  // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
   const kc = (c) => (c ? rgb(c, [0, 0, 0]).map((v) => v.toFixed(3)).join(",") : "-");
   const livKey = kc(liv && liv.c1) + "/" + kc(liv && (liv.accent || liv.stripe || liv.c2)) +

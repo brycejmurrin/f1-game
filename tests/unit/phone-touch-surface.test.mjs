@@ -29,7 +29,7 @@
  *     ≥ ~160 %: the pedal column's top edge rises under #minimap. fitHud's
  *     dock cap reserves 3 x FIT_AIR of viewport height, not the corner
  *     clusters. Pedals RIGHT (buttons / tilt+manual) meet #pausebtn from
- *     ~185 %. Owner: js/game/hud.js fitHud — not touched here.
+ *     ~185 %. Owner: js/ui/hud.js fitHud — not touched here.
  *   - 390x844 portrait after RACE IN PORTRAIT: fitHud's top-band cap assumes
  *     the landscape geometry (map beside the POS row), so on a 390px-wide
  *     screen `--hud-z-top` computes to ~0.5 at EVERY HUD SIZE — the POS/LAP/
@@ -126,7 +126,7 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
       `HUD SIZE ${scale * 100}%: tallest column ${painted.toFixed(0)}px + ${10 + SAB}px stays inside ${H}px`);
   }
   // fitHud's cap: (innerHeight - 3 * FIT_AIR) / intrinsic height, written as --hud-z-dock.
-  const hud = read("js/game/hud.js");
+  const hud = read("js/ui/hud.js");
   const air = +(/const FIT_AIR = (\d+)/.exec(hud) || [])[1];
   assert.ok(air > 0, "hud.js declares FIT_AIR");
   assert.match(hud, /set\("--hud-z-dock", capDock\)/, "fitHud writes --hud-z-dock");

@@ -52,7 +52,7 @@ Current cost centers, in rough order of likely impact:
 |---|---|---|
 | Shadow pass | `js/render/glx/shadow.js` (`GLXShadow`) | Static sun map + dynamic car/lamp maps — flag if the shadow FBO is a large slice |
 | Uniform upload | `js/render/glx.js` `gl.uniform*` | Flag if `> 2 ms`; check `numLights` isn't maxed |
-| Particles | `js/game/particles.js` | Pooled typed arrays sized to `MAX` — profile the update/pack loop, not allocation |
+| Particles | `js/fx/particles.js` | Pooled typed arrays sized to `MAX` — profile the update/pack loop, not allocation |
 | `appendCarTailLights` sort | `js/lighting/frame-lights.js` (`_tlSel.sort(_byDistAsc)`) | CPU time scaling with nearby-car count in `tailRange`, not GC |
 | `(garbage collector)` | anywhere | Bottom-up view for the *actual* allocation site — don't reattach it to light upload |
 

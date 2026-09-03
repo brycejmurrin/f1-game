@@ -40,7 +40,7 @@ js/render/glx.js + glx/* -> GLX        (default WebGL2 renderer + its passes)
 js/render/gfx.js         -> Gfx        (renderer selection seam; the WGX and
                                         TLX backends are DEFERRED — no script
                                         tag, injected at boot when opted into)
-js/car/teams.js          -> Teams      (2026 grid data + TIER_V pace ladder + the MY TEAM seed)
+js/data/teams.js          -> Teams      (2026 grid data + TIER_V pace ladder + the MY TEAM seed)
 js/track/*               -> the track engine (spline, mesh, scenery, markings…)
 js/circuits/*.js         -> TrackDefs  (one def per circuit; its scenery(api) closure is
                                         split to js/circuits/scenery/<id>.js, fetched per build)
@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_138 rows over 22 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_138 rows over 25 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -114,18 +114,20 @@ _138 rows over 22 directories, in load order. `tag` = a `<script>` in index.html
 | `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
 
-**`js/car/`**
+**`js/data/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `teams.js` | `Teams` | tag | Teams: hardcoded, verified 2026 grid (11 teams, 22 drivers). |
 | `driver-ratings.js` | `DriverRatings` | tag | DRIVER RATINGS: the five-axis skill table for the 2026 grid. |
-| `car3d.js` | `Car3D` | tag | procedural 2026 F1 car. |
-| `parts.js` | `Parts` | tag | Parts catalog and stat helpers. |
-| `liveries.js` | `Liveries` | tag | custom paint jobs (liveries). |
-| `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
-| `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
-| `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
+| `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica (Ergast) + OpenF1 clients. |
+| `telemetry.js` | `DataTelemetry` | LAZY_DATA | the data hub's TELEMETRY tab (trace viewer, delta, map, playback). |
+| `export.js` | `DataExport` | LAZY_DATA | the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… |
+| `schedule.js` | `DataSchedule` | LAZY_DATA | — (no header comment) |
+| `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
+| `lastrace.js` | `DataLastRace` | LAZY_DATA | — (no header comment) |
+| `live.js` | `DataLive` | LAZY_DATA | — (no header comment) |
+| `hub.js` | `DataHub` | LAZY_DATA | DataHub: F1 data overlay (#datahub). |
 
 **`js/track/`**
 
@@ -147,13 +149,43 @@ _138 rows over 22 directories, in load order. `tag` = a `<script>` in index.html
 | `scenery-city.js` | `SceneryCity` | tag | SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… |
 | `scenery-identity.js` | `SceneryIdentity` | tag | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
 | `tracks.js` | `Tracks` | tag | track engine: circuit defs (js/circuits/) → splines, meshes, scenery(api). |
-| `maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
 
 **`js/circuits/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `<id>.js × 40` | `TrackDefs` | tag | 40 circuit definitions (data only), one file per id in `Tracks.LIST` order — see the "js/circuits/<id>.js" section |
+
+**`js/ui/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
+| `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the track picker with its live preview map + elevation canvases, and the fullscreen circuit-detail modal. |
+| `scroll-fade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
+| `css-zoom.js` | `CssZoom` | tag | CssZoom — one place for zoom ↔ viewport ↔ local conversions. |
+| `sheet-shape.js` | `SheetShape` | tag | SHEET SHAPE — one place decides whether a panel is TALL or WIDE. |
+| `layers.js` | `UiLayers` | tag | UI LAYERS — which screen is on top, and are we racing? |
+| `modal.js` | `TopModal` | tag | TOP MODAL — mirrors each dialog.screen's `hidden` onto showModal()/close(). |
+| `menu-nav.js` | `MenuNav` | tag | MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls the panel you are looking at, and arrow keys that move through it. |
+| `aria-state.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
+| `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — category tabs for the pause/title Settings sheet. |
+| `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE sliders + RESOLUTION pin. |
+| `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
+| `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
+| `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
+
+**`js/car/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `car3d.js` | `Car3D` | tag | procedural 2026 F1 car. |
+| `parts.js` | `Parts` | tag | Parts catalog and stat helpers. |
+| `liveries.js` | `Liveries` | tag | custom paint jobs (liveries). |
+| `crest-paths.js` | `CrestPaths` | tag | team crest path data. |
+| `liverytex.js` | `LiveryTex` | tag | — (no header comment) |
+| `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
+| `car-mesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
 
 **`js/input/`**
 
@@ -196,31 +228,19 @@ _138 rows over 22 directories, in load order. `tag` = a `<script>` in index.html
 | `tuner-panel.js` | `TunerPanel` | tag | the LIGHTING TUNER panel UI for js/game.js: slider rows generated from TUNE_DEFS, group tabs, preview time-of-day/weather chips, COPY TO ALL TRACKS, the help… |
 | `presets.js` | `LightPresets` | LAZY_RACE | — (no header comment) |
 
-**`js/game/`**
+**`js/garage/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
-| `carmesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
-| `garage-scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
+| `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
+| `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
+
+**`js/fx/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
 | `particles.js` | `Particles` | tag | shared transient-particle pool (tyre smoke, collision sparks, gravel/grass kickup, rain spray) for js/game.js. |
-| `setup-ui.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
-| `menus.js` | `Menus` | tag | the select-screen UI for js/game.js: the track picker with its live preview map + elevation canvases, and the fullscreen circuit-detail modal. |
-| `scrollfade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
-| `css-zoom.js` | `CssZoom` | tag | CssZoom — one place for zoom ↔ viewport ↔ local conversions. |
-| `sheetshape.js` | `SheetShape` | tag | SHEET SHAPE — one place decides whether a panel is TALL or WIDE. |
-| `uilayers.js` | `UiLayers` | tag | UI LAYERS — which screen is on top, and are we racing? |
-| `topmodal.js` | `TopModal` | tag | TOP MODAL — mirrors each dialog.screen's `hidden` onto showModal()/close(). |
-| `menunav.js` | `MenuNav` | tag | MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls the panel you are looking at, and arrow keys that move through it. |
-| `ariastate.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
-| `settings-nav.js` | `SettingsNav` | tag | SettingsNav — category tabs for the pause/title Settings sheet. |
 | `skidmarks.js` | `SkidMarks` | tag | SkidMarks: the tyre-mark ring buffer and its batched draw. |
-| `ui-scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE sliders + RESOLUTION pin. |
-| `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
-| `results.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
-| `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |
-| `agentview-raster.js` | `AgentRaster` | LAZY_AGENT | AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… |
-| `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
-| `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~180 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
 
 **`js/career/`**
 
@@ -284,24 +304,19 @@ _138 rows over 22 directories, in load order. `tag` = a `<script>` in index.html
 | `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
 | `tlx.js` | `TLX` | DEFERRED:three | TLX: three.js/TSL renderer backend. |
 
+**`js/agent/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `agentview-raster.js` | `AgentRaster` | LAZY_AGENT | AgentRaster: the text rasterisers behind the agent view's ONE optional composition aid, render({what}). frame() renders the camera view as a depth-sor… |
+| `agentview.js` | `AgentView` | LAZY_AGENT | AgentView: the agent-facing JSON view of the running game. __apex is a dev console: ~180 flat hooks, each answering one narrow question, most of them … |
+| `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~180 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
+
 **`js/circuits/scenery/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `<id>.js × 40` | `TrackScenery` | LAZY_SCENERY | 40 bespoke `scenery(api)` closures, one per circuit, fetched when that circuit is built |
-
-**`js/data/`**
-
-| File | Global | Loaded | Purpose (header, first sentence) |
-|---|---|---|---|
-| `api.js` | `F1API` | LAZY_DATA | F1API: Jolpica (Ergast) + OpenF1 clients. |
-| `telemetry.js` | `DataTelemetry` | LAZY_DATA | the data hub's TELEMETRY tab (trace viewer, delta, map, playback). |
-| `export.js` | `DataExport` | LAZY_DATA | the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… |
-| `schedule.js` | `DataSchedule` | LAZY_DATA | — (no header comment) |
-| `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
-| `lastrace.js` | `DataLastRace` | LAZY_DATA | — (no header comment) |
-| `live.js` | `DataLive` | LAZY_DATA | — (no header comment) |
-| `hub.js` | `DataHub` | LAZY_DATA | DataHub: F1 data overlay (#datahub). |
 
 **`js/net/`**
 
@@ -358,7 +373,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
 ### Deferred follow-ups (known debt, in rough priority order)
 
 - **game.js pass 2** — promote the remaining closure `let`s to a shared state
-  object. The early extractions were `js/physics/aero-zones.js`, `js/game/skidmarks.js`,
+  object. The early extractions were `js/physics/aero-zones.js`, `js/fx/skidmarks.js`,
   `js/lighting/profiles.js`, `js/race/race-control.js`, and from the 2026-08
   cleanup `js/physics/consts.js` and `js/camera/mode-switch.js` — more have
   landed since (e.g. `js/physics/ai-drive.js`); `tools/manifest.cjs` is the roster
@@ -390,7 +405,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   | garage live preview | ~415 (ARCHITECTURE-REVIEW.md's measurement) | ~15 new | **left** — `teamDecalState`, `drawAeroFlaps`, `drawCarDecals`, `carDecalNum`, `carPaintMat`, `partsVisualKey`, `resolveLivery`, `getTeamParts`, `teamIdx`, `MAT_REFLECT_X` … none of which `G` carries |
 
   The garage preview is the bigger block and the more obvious target — its
-  natural partner `js/game/setup-ui.js` already exists — but taking it would
+  natural partner `js/garage/setup-sheet.js` already exists — but taking it would
   widen the façade by half again for one screen. That is precisely the review's
   warning about `G` being a *migration* device used as an *architecture*: an
   extraction that adds fifteen accessors has moved the coupling, not removed it.
@@ -640,7 +655,7 @@ plain mesh data `createMesh` expects (`{pos,nrm,col,idx}`) — materials'
 baseColorFactor and any COLOR_0 baked into vertex colours, all primitives
 merged with node transforms applied. Self-test: `tools/gltf-selftest.mjs`.
 
-## js/car/teams.js — `Teams`
+## js/data/teams.js — `Teams`
 
 2026 grid, hardcoded.
 
@@ -928,7 +943,7 @@ Styles in `css/data.css` only (prefix all classes `dh-`).
 
 The grab-bag data file went with Phase 2a of
 `docs/research/TREE-RESTRUCTURE-2026-09.md`; each row sits with its owner:
-`DEFAULT_CUSTOM` and `TIER_V` in `js/car/teams.js` (the record shape and the
+`DEFAULT_CUSTOM` and `TIER_V` in `js/data/teams.js` (the record shape and the
 `tier` field they index), `GEARS`/`GEAR_TOP`/`IDLE_RPM`/`MAX_RPM` and `DIFF`
 in `js/physics/consts.js` (immutable model numbers, already eval-pinned
 before every reader), `CAM_MODES` in `js/camera/mode-switch.js`
@@ -959,7 +974,7 @@ The lighting-tuner core, split by lifecycle (Phase 2a of
 Profile persistence and the (track, time-of-day, weather) resolution live in
 `js/lighting/profiles.js` — they read live session state.
 
-## js/game/carmesh.js — `CarMesh`
+## js/car/car-mesh.js — `CarMesh`
 
 Car decal-quad geometry (`carDecalData` + the shared decal meshes), the effect
 quads (brake-glow ring, rain light, exhaust/boost flames, ERS strip) and the
@@ -969,7 +984,7 @@ handle, injected once at boot: `CarMesh.init(gfx)`. State-coupled car drawing
 (teamMesh, playerBodyMesh, cockpitBodyMesh, drawCockpitRig, decal textures)
 stays in game.js.
 
-## js/game/particles.js — `Particles`
+## js/fx/particles.js — `Particles`
 
 Shared transient-particle pool (tyre smoke, collision sparks, gravel/grass
 kickup, rain spray): a fixed CPU pool of camera-facing soft billboards drawn
@@ -1080,7 +1095,7 @@ anchor a fixed arc-length behind the car so they never lag at speed; onboard
 modes ride ON the car with very high damping. fov widens with speed; a debug
 free camera (`__apex.view`) can override all of it.
 
-Debug & test API: `window.__apex` (built by `js/game/apex.js`) drives the game
+Debug & test API: `window.__apex` (built by `js/agent/apex.js`) drives the game
 from the console or a headless harness — loading/positioning
 (race/park/jump/aim/sky/go/info), cameras (camera/view/snapCam), telemetry
 (probe/physState/tuning/cars/corners/wallStats), deterministic physics

@@ -70,7 +70,7 @@ interface TrackModel {
   [key: string]: unknown;
 }
 
-/** A team row from Teams.LIST — js/car/teams.js. */
+/** A team row from Teams.LIST — js/data/teams.js. */
 interface TeamDef {
   id: string;
   name: string;
@@ -385,7 +385,7 @@ interface GameCtx {
   _ltFlash: number;
   _ltNextT: number;
 
-  // ── Garage / setup preview (js/game/setup-ui.js) ──────────────────────────
+  // ── Garage / setup preview (js/garage/setup-sheet.js) ──────────────────────────
   livDraftOverride: unknown;
   _spMeshKey: string;
   setupPreviewOn: boolean;
@@ -421,7 +421,7 @@ interface GameCtx {
   unlimitedBudget: boolean;
   teamIdx: number;
 
-  // ── Livery/parts persistence helpers (js/game/setup-ui.js) ────────────────
+  // ── Livery/parts persistence helpers (js/garage/setup-sheet.js) ────────────────
   readonly arrToHex: (a: Vec3) => string;
   readonly hexToArr: (h: string) => Vec3;
   /** Arm-then-confirm for destructive buttons (the career DELETE? idiom, shared): first call arms in place and returns false, second runs `action`; disarm = the caller rebuilding the node. */
@@ -597,11 +597,11 @@ interface GameModuleFactory<TApi = Record<string, unknown>> {
 }
 
 /* The modules constructed with the ctx itself — `X.create(G)` in game.js, plus
-   AgentView, which js/game/apex.js builds off the ctx it was handed.
+   AgentView, which js/agent/apex.js builds off the ctx it was handed.
    tools/check-gctx.mjs resolves every `X.create(<ctx>)` call site through
    eslint-scope and asserts the two lists agree, so a new ctx module that is not
    declared here fails the surface test. NOT here, deliberately: AgentRaster
-   (the AgentRaster.create call in js/game/agentview.js hands it a bespoke bag, not the ctx) and
+   (the AgentRaster.create call in js/agent/agentview.js hands it a bespoke bag, not the ctx) and
    NetSession (js/net/session.js takes {transport}) — same `create()` spelling,
    different contract. */
 declare const AeroZones: GameModuleFactory;

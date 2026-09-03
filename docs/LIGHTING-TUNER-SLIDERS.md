@@ -548,7 +548,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `poolEnergy` | POOL ENERGY | 0 … 1.375 | 0.55 | — | ✓ | track-lights.js×3 |
 | `lampRadiusMul` | POOL RADIUS | 0.4 … 1.9 | 1 | — | ✓ | track-lights.js×3 |
 | `bleedMul` | VALLEY BLEED | 0 … 2.5 | 1 | — | ✓ | track-lights.js×3 |
-| `glareStr` | LENS GLARE | 0 … 0.3 | 0.12 | — | ✓ | game.js×4, garage-scene.js |
+| `glareStr` | LENS GLARE | 0 … 0.3 | 0.12 | — | ✓ | game.js×4, scene.js |
 | `lampTemp` | LAMP TEMPERATURE | -3.3 … 8.3 | 0 | — | ✓ | game.js |
 | `lampFlicker` | LAMP FLICKER | 0 … 0.6 | 0.1 | — | ✓ | frame-lights.js |
 | `beamCone` | BEAM CONE WIDTH | 0.08 … 2.2 | 1 | — | ✓ | track-lights.js×3 |
@@ -568,8 +568,8 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampCullFade` | LAMP CULL FADE | 0.02 … 0.9 | 0.35 | — | ✓ | frame-lights.js×2 |
 | `lampGapFill` | DARK-GAP FILL | 0 … 150 | 60 | — |   | track-lights.js×2 |
 | `lampBehindBias` | BEHIND-CAM BIAS | 0.2 … 8 | 5.25 | — |   | frame-lights.js×3 |
-| `roadChunkLamps` | PER-CHUNK ROAD | 0 … 1 | 0 | — | ✓ | game.js×5, apex.js, chunked.js |
-| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | game.js×7, apex.js×3, frame-lights.js×2, tuner-panel.js, glx.js, chunked.js×2 |
+| `roadChunkLamps` | PER-CHUNK ROAD | 0 … 1 | 0 | — | ✓ | apex.js, game.js×5, chunked.js |
+| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | apex.js×3, game.js×7, frame-lights.js×2, tuner-panel.js, glx.js, chunked.js×2 |
 | `lampReach` | LAMP REACH AHEAD | 1 … 4 | 1 | — |   | frame-lights.js×2 |
 | `lampNearClamp` | LAMP NEAR CLAMP | 1 … 8.5 | 4 | `uLampNearClamp` | ✓ | glx.js×2 |
 
@@ -669,7 +669,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `cityGlowReach` | CITY GLOW REACH | 0.04 … 2.44 | 1 | `uCityGlowReach` | ✓ | game.js×2, glx.js×2 |
 | `cloudDef` | CLOUD DEFINITION | 0 … 1.2 | 1 | `uCloudDef` |   | game.js×2, glx.js×2 |
 | `skyColorSat` | SKY COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
-| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — | ✓ | game.js×11, apex.js, glx.js×2 |
+| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — | ✓ | apex.js, game.js×11, glx.js×2 |
 | `rainCount` | RAIN INTENSITY | 20 … 1000 | 360 | — | ✓ | particles.js |
 | `rainStreak` | RAIN STREAK LEN | 0.04 … 2.44 | 1 | — | ✓ | particles.js |
 | `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
@@ -690,7 +690,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `exposureMul` | EXPOSURE | 0.1 … 2.35 | 1 | — | ✓ | game.js |
-| `contrast` | CONTRAST | 0.5 … 2.05 | 1.12 | `uContrast` | ✓ | garage-scene.js×4, post.js×2 |
+| `contrast` | CONTRAST | 0.5 … 2.05 | 1.12 | `uContrast` | ✓ | scene.js×4, post.js×2 |
 | `shadows` | SHADOWS | -0.55 … 0.55 | 0 | — | ✓ | post.js×3 |
 | `midtones` | MIDTONES | -2 … 1.4 | 0 | — | ✓ | post.js×3 |
 | `highlights` | HIGHLIGHTS | -1 … 1.5 | 0 | — | ✓ | post.js×3 |

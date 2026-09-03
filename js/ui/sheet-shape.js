@@ -306,7 +306,7 @@ window.SheetShape = (function () {
      falls back to the stacked layout. Visually that is a valid layout — it was
      made valid on purpose — but it is not the SAME layout, and the difference is
      observable: stacked vs pair is columns vs a preview band, but `#sel-tracks`
-     is the list scroller in both. js/game/menunav.js redirects a trackpad
+     is the list scroller in both. js/ui/menu-nav.js redirects a trackpad
      gesture to the nearest pane, so for that one frame the wheel scrolled the
      wrong element, and three menu-keyboard specs caught it.
      Screens are toggled by their `hidden` attribute, so watching that and
@@ -398,7 +398,7 @@ window.SheetShape = (function () {
      monotonically, and telemetry could not have prevented it: it disconnects
      its own observer and nulls its view correctly (stopTelAnim). The retention
      was entirely on this side, in a registry with no removal path.
-     js/game/scrollfade.js's pruneWatched is the same fix for its own set. */
+     js/ui/scroll-fade.js's pruneWatched is the same fix for its own set. */
   function drop(el) {
     seen.delete(el);
     if (ro) { try { ro.unobserve(el); } catch (_) { /* already gone */ } }
@@ -429,7 +429,7 @@ window.SheetShape = (function () {
   /* THE OBSERVER WATCHES ONE ATTRIBUTE THAT FOUR THINGS WRITE. Its trigger is
      --ui-scale, but --hud-scale and the HUD's own --hud-z-top/--hud-z-bot zoom
      caps land on the SAME inline style attribute on documentElement
-     (js/game/hud.js's fitHud), and a MutationObserver cannot tell one custom
+     (js/ui/hud.js's fitHud), and a MutationObserver cannot tell one custom
      property from another. So every HUD zoom-cap adjustment ran a full
      reclassify() — a getBoundingClientRect on all 21 .sheet elements, each
      followed by CssZoom.localBox and two getComputedStyle calls, plus

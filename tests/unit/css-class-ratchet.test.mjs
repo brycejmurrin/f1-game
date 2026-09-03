@@ -96,7 +96,7 @@ export function shellNodes() {
 /* 535 (2026-08-26): +1 for .fit-managed — the opt-in marker that lets a
    non-.sheet card (the data hub's .dh-card) join SheetShape's classifyFit
    scan. It cannot be a custom property: the scan is a querySelectorAll and
-   a MutationObserver classList test (js/game/sheetshape.js), both of which
+   a MutationObserver classList test (js/ui/sheet-shape.js), both of which
    need a selector-addressable hook. */
 /* 536 (2026-08-26): +1 for .sel-map-btn — the display:contents button that
    makes CIRCUIT DETAIL keyboard/gamepad-reachable (the door used to be a
@@ -199,14 +199,14 @@ const NODE_CEILING = 1064;   // 1234 -> 1238 was the MY TEAM LOGO DETAIL row
 // #season-setup screen, because both of its panes are EMPTY and season-ui.js
 // fills them (the shape #career established at index.html:438). It is also a
 // <dialog>, so nothing but the head/foot is in the tree until it is opened, and
-// its CUSTOMISE button is created in js/game/menus.js rather than sitting in the
+// its CUSTOMISE button is created in js/ui/select-screen.js rather than sitting in the
 // shell. The CLASS count did not move at all: every selector on the screen is an
 // id scoping a class that already existed.
 // 1140 (deploy) + 12 = 1152, still far under the ~1,400 error band the
 // keep-the-monolith ruling rests on.
 // +1 2026-08-18: <script> for js/perf/metrics-overlay.js (SETTINGS METRICS overlay).
 // The button and <pre> are injected at runtime — the tag is the whole +1.
-// +1 2026-08-28: <script> for js/game/garage-scene.js (the setup preview's pit
+// +1 2026-08-28: <script> for js/garage/scene.js (the setup preview's pit
 // bay — shell, props, team dress, light rig). All of it is geometry built in
 // the module and drawn to the canvas, so again the tag is the whole +1.
 

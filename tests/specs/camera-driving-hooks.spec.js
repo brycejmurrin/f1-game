@@ -89,7 +89,7 @@ test("cinematic camera outside left corner (k>0)", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page, "monaco");
   // Find a LEFT-hand corner: +k bends the road left (measured — see the
-  // corner-table note in js/game/agentview.js; the old "+k = right" labels
+  // corner-table note in js/agent/agentview.js; the old "+k = right" labels
   // were backwards, and this spec pinned the camera to the INSIDE with them).
   const res = await page.evaluate(() => {
     const profile = __apex.trackProfile(200);
@@ -214,7 +214,7 @@ test("spin rotates heading by deg", async ({ page }) => {
   await page.setViewportSize(VIEWPORT);
   await loadTrack(page);
   // ONE evaluate: physics keeps integrating between round-trips even under
-  // headless(true) (that only skips RENDERING — js/game/apex.js headless()), so a
+  // headless(true) (that only skips RENDERING — js/agent/apex.js headless()), so a
   // heading sampled in a separate call has drifted by an unknown amount.
   const r = await page.evaluate(() => {
     __apex.reset(0.1, 0);
@@ -224,7 +224,7 @@ test("spin rotates heading by deg", async ({ page }) => {
     return { angleBefore, headBefore,
              angleAfter: __apex.probe().angle, headAfter: __apex.physState().head };
   });
-  // spin() adds exactly deg*PI/180 (js/game/apex.js spin()), so assert the SIGNED delta.
+  // spin() adds exactly deg*PI/180 (js/agent/apex.js spin()), so assert the SIGNED delta.
   // The old form took Math.abs() before the modulo, which passed just as
   // happily for spin(-90) — i.e. it could not tell the hook's direction from
   // its opposite, and direction is the whole contract.
@@ -239,7 +239,7 @@ test("spin zeroes vLat and yawRate", async ({ page }) => {
   await loadTrack(page);
   // The title names TWO quantities and only vLat used to be asserted, because
   // physState() did not report yawRate at all — the test could cover half its
-  // own name and no more. yawRate is exposed now (js/game/apex.js), so both
+  // own name and no more. yawRate is exposed now (js/agent/apex.js), so both
   // halves are checked, in one evaluate so the physics loop cannot run between
   // the nudge and the read.
   const r = await page.evaluate(() => {

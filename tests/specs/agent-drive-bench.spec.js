@@ -1,5 +1,5 @@
 // @ts-check
-// Task-success benchmark for the agent world view (js/game/agentview.js).
+// Task-success benchmark for the agent world view (js/agent/agentview.js).
 //
 // The research on machine-oriented observation is unanimous on one point: the
 // only eval that matters is whether an agent DRIVES BETTER with the observation

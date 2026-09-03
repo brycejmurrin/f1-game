@@ -1219,10 +1219,10 @@ const LiveryTex = (function () {
     return canvas;
   }
 
-  // drawLogoImage is exported for the GARAGE back-wall crest (js/game/garage-scene.js):
+  // drawLogoImage is exported for the GARAGE back-wall crest (js/garage/scene.js):
   // aspect-fit + tint + halo is exactly the same job there, and reimplementing
   // the fit maths in a second place is how the two drift apart.
-  // contrast/inkOn are exported for the GARAGE crest wall (js/game/garage-scene.js),
+  // contrast/inkOn are exported for the GARAGE crest wall (js/garage/scene.js),
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
   return { SIZE, REGIONS, buildAtlas, drawCrest, markBase, markPalette,

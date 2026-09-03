@@ -19,7 +19,7 @@ All figures re-verified live in this session (commands: `wc -l`, grep counts, ju
 | Script tags | 146 | **146** src-carrying (149 `<script` occurrences) | matches |
 | `index.html` ids | — | 498, 0 duplicates | |
 | `js/game.js` | 8,002 ln | **8,002** vs ceiling **8,003** (`module-size.test.mjs:104`) | ONE line of headroom — ratchet saturated |
-| `js/game/apex.js` | 3,079 ln | **3,079** vs ceiling **3,080** | ONE line of headroom |
+| `js/agent/apex.js` | 3,079 ln | **3,079** vs ceiling **3,080** | ONE line of headroom |
 | `js/game/` files | 46 | **46**: 15 squashed multi-word, 13 hyphenated, 18 single-word | |
 | Self-init no-`create(G)` files in `js/game/` | — | **7** (scrollfade, sheetshape, topmodal, menunav, ariastate, uilayers, css-zoom) — grep confirms zero `create(G)` calls | new fact; see Q6 |
 | `css/` | 11 files, 7,826 ln | **11 files, 7,826 ln** | matches |

@@ -54,8 +54,8 @@ thing**, which is how this project has lost the most time.
 Chrome's `ForcedReflow` insight fires on a cold boot, and it is **not worth
 acting on**: total reflow time **9 ms**, and Chrome's own estimated savings is
 **none**. Top attributed frames were `tick` (`js/game.js`), `cssSize`
-(`js/render/glx.js`), `updateTrackPreview` (`js/game/menus.js`), `measure`
-(`js/game/scrollfade.js`) and `observe` (`js/game/sheetshape.js`); the single
+(`js/render/glx.js`), `updateTrackPreview` (`js/ui/select-screen.js`), `measure`
+(`js/ui/scroll-fade.js`) and `observe` (`js/ui/sheet-shape.js`); the single
 largest bucket (42 ms) is `[unattributed]`. It is a one-time boot cost, not a
 per-frame one. Do not re-chase it.
 
@@ -128,7 +128,7 @@ TTFB 7 ms + render delay 2299 ms**, CLS 0.03.
 > not the bulk. "Render delay" is the browser's bucket for everything between
 > TTFB and the paint. Two eager costs that are NOT bytes: `js/track/tracks.js`
 > built Catmull-Rom control points for **all 40** circuits at boot (**24.0 ms**)
-> — **TAKEN**, see below — and `js/game/apex.js` + `agentview*` is **346 KB of
+> — **TAKEN**, see below — and `js/agent/apex.js` + `agentview*` is **346 KB of
 > dev/test surface** no player reaches. Also note DCL 4712 ms predates the flyby
 > deferral (`de5d202`) and has not been re-measured. See §3.
 
@@ -326,7 +326,7 @@ Two distinct defects were hiding in there, and both are worth knowing:
   — unlike `var` or the explicit `window.X =` form that `ariastate.js`,
   `css-zoom.js` and `sheetshape.js` use. The spec's `page.evaluate` reached for
   `window.LightTune.TUNE_DEFS` and threw. It was the ONLY `window.LightTune` in
-  the tree; every other reader uses the bare identifier, as `js/game/apex.js`
+  the tree; every other reader uses the bare identifier, as `js/agent/apex.js`
   does itself. **When a page global is missing under `page.evaluate`, check how
   it is DECLARED before assuming a load-order break** — `const` and `window.X =`
   are both "one global per file" and only one of them is on `window`.
@@ -625,10 +625,10 @@ Two more taken away from the renderer, both "a writer nobody re-checked":
   **The general lesson: when you sweep a function for a repeated defect, the
   sweep needs a grep, not a read — the sixth instance was 50 lines below the
   fifth.**
-- **`js/game/sheetshape.js` watched one attribute that four things write.** Its
+- **`js/ui/sheet-shape.js` watched one attribute that four things write.** Its
   `MutationObserver` keys on `documentElement`'s `style` attribute to catch
   `--ui-scale`, but `--hud-scale` and the HUD's own `--hud-z-top`/`--hud-z-bot`
-  zoom caps land on that same inline attribute (`js/game/hud.js`'s `fitHud`),
+  zoom caps land on that same inline attribute (`js/ui/hud.js`'s `fitHud`),
   and an observer cannot tell one custom property from another. So every HUD
   zoom-cap tweak ran a full `reclassify()` — a `getBoundingClientRect` on all 21
   `.sheet` elements, each followed by `CssZoom.localBox` and two
@@ -2929,9 +2929,9 @@ exists, check that the state it defends is still reachable.
 
 Do not re-investigate these; they were checked and are fine.
 
-`js/game/particles.js` (struct-of-arrays pool, zero steady-state allocation),
-`js/game/skidmarks.js`, `js/perf/governor.js`, `js/physics/body-attitude.js`,
-`js/game/hud.js` (fully write-cached via WeakMaps, no layout reads anywhere —
+`js/fx/particles.js` (struct-of-arrays pool, zero steady-state allocation),
+`js/fx/skidmarks.js`, `js/perf/governor.js`, `js/physics/body-attitude.js`,
+`js/ui/hud.js` (fully write-cached via WeakMaps, no layout reads anywhere —
 the best-behaved file audited), the `LIT_FS` point-light loop, `GLXChunked`
 frustum culling, the bloom skip, `cssSize()` caching, and the spatial grid
 itself — measured candidate counts are 0.5–19 per query, so nothing degenerates
@@ -3045,7 +3045,7 @@ without a retune — which is exactly why it was written that way.
 
 Worth recording because it is the natural suspicion and it is wrong. The
 fixed-step loop has no orientation term; `#rotate-device` is `{gate:false}` in
-`js/game/uilayers.js`, so keyboard and canvas-drag steering already drove
+`js/ui/layers.js`, so keyboard and canvas-drag steering already drove
 straight through the blocker; and the tilt axis mapping already handles all
 four screen angles with portrait as its `default` case (`js/input/input.js`).
 Portrait racing was blocked by exactly one CSS rule and one opaque div.

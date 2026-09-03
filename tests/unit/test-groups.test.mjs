@@ -70,10 +70,10 @@ test("a js/game file with its own browser spec routes to that spec's group", () 
   // sat in a group nobody was told to run (found 2026-09-01). The always-rules
   // are excluded here on purpose, so this cannot pass vacuously.
   const specBacked = [
-    ["js/game/ui-scale.js", "ui"],
+    ["js/ui/scale.js", "ui"],
     ["js/race/race-control.js", "driving"],
     ["js/physics/aero-zones.js", "driving"],
-    ["js/game/garage-scene.js", "car"],
+    ["js/garage/scene.js", "car"],
   ];
   const specific = RULES.slice(2);
   for (const [file, group] of specBacked) {

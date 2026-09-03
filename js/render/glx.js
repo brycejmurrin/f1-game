@@ -653,7 +653,7 @@ const GLX = (function () {
     if (particleProg) {
       particleU = locs(particleProg, ["uViewProj", "uEye", "uAdditive"]);
       // Dynamic interleaved buffer: [cornerX, cornerY, cx, cy, cz, r, g, b,
-      // size, alpha] ×6 verts/particle (filled by js/game/particles.js).
+      // size, alpha] ×6 verts/particle (filled by js/fx/particles.js).
       particleVAO = gl.createVertexArray();
       gl.bindVertexArray(particleVAO);
       particleVBO = gl.createBuffer();

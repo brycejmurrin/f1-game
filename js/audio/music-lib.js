@@ -22,7 +22,7 @@
  * a boolean and reports in words through #as-lib-msg; a broken store means the
  * MUSIC & SOUND panel says so and the built-in soundtrack keeps working.
  *
- * Self-initialising like js/game/scrollfade.js. Deliberately does NOT call
+ * Self-initialising like js/ui/scroll-fade.js. Deliberately does NOT call
  * GameAudio.init() — the AudioContext may only start from a user gesture and
  * game.js owns that gesture.
  */

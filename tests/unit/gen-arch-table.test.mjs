@@ -91,7 +91,7 @@ test("headerSentence handles the three header shapes js/ uses", () => {
 });
 
 test("fileGlobal finds the real global, and treats js/game.js as the documented exception", () => {
-  assert.equal(fileGlobal("js/car/teams.js", 'const Teams = (function () {\n  "use strict";\n'), "Teams");
+  assert.equal(fileGlobal("js/data/teams.js", 'const Teams = (function () {\n  "use strict";\n'), "Teams");
   assert.equal(fileGlobal("js/car/crest-paths.js", 'const CrestPaths = Object.freeze({\n'), "CrestPaths");
   assert.equal(fileGlobal("js/roster.js", 'self.ApexRoster = Object.freeze({\n'), "ApexRoster");
   // game.js is a bare entry point with no product global — the 374 column-0

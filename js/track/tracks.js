@@ -419,7 +419,7 @@ const Tracks = (function () {
     // note() records the semantic placements only — a tree, a building, a
     // grandstand — NOT every primitive. Vegas emits ~94k primitives; a tree alone
     // is a trunk plus several canopy tiers, so recording primitives would cost far
-    // more and say far less. Consumed by __apex.scene() (js/game/agentview.js).
+    // more and say far less. Consumed by __apex.scene() (js/agent/agentview.js).
     //
     // Recording happens at the point of emission, AFTER each emitter's on-track
     // and mass-collision guards, so a suppressed prop never enters the registry —

@@ -515,7 +515,7 @@ Three edges that bite when converting a spec:
   it wanted >0.7. The reset now calls `freeze(false)` and `camera("chase")`,
   which clears `dbgCam` and restores the default mode in one call.
 - **Physics keeps running between round-trips.** `headless(true)` only skips
-  RENDERING (`js/game/apex.js` `headless()`), so a test that sets a value in one
+  RENDERING (`js/agent/apex.js` `headless()`), so a test that sets a value in one
   `evaluate` and reads it in the next is racing the game loop. `setSpeed(55)`
   then `probe()` measured 54.498 against a `toBeCloseTo(…, 1)` tolerance of
   0.05 — latent until the box was loaded enough to stretch the gap. Sample both
@@ -1048,12 +1048,12 @@ what it covers.
 | `ui-audit.spec.js` | portrait + landscape screenshots of every screen |
 | `rotation-recovery.spec.js` | portrait-phone race blocker guidance, focus, controls escape and exit-race recovery |
 | `ui-button-touch.spec.js` | button/touch steer mode: auto-throttle, disabled calibrate, race-settings layout; the lighting tuner's FREE CAMERA touch sticks (drag registers, no latch when the overlay is pulled away mid-hold, a cancelled scene drag releases) and its layout clearing the docked panel at every UI SIZE |
-| `ui-resize.spec.js` | live resize: `data-shape`/`data-pair`/`data-density` (`js/game/sheetshape.js`) converge correctly after the viewport, UI SIZE, or `zoom` changes mid-session, not just at first paint |
+| `ui-resize.spec.js` | live resize: `data-shape`/`data-pair`/`data-density` (`js/ui/sheet-shape.js`) converge correctly after the viewport, UI SIZE, or `zoom` changes mid-session, not just at first paint |
 | `ui-scale.spec.js` | UI SIZE / HUD SIZE — every main screen still fits at 80/100/130/150 %, the two scales stay independent, and the HUD clusters stay on screen. Containment only, never absolute sizes; the exhaustive matrix is `--scale=` on the three fit tools |
 | `ui-redesign.spec.js` | the redesign foundation in one renderer-light journey: searchable circuits, the Garage's roving tab contract, Settings at 200% on a short landscape phone, Advanced steering `--fit-at`, compact lighting tuner (one scroller, help off), How to Play and Career guide contents rails, standings leftover height, compact HUD density, and fixed-layout Last Race columns at phone portrait width |
 | `hud-layout.spec.js` | touch control + HUD layout across every steering and gearbox mode |
 | `hud-audit.spec.js` | HUD screenshots + mode-dependent elements |
-| `hud-feel.test.mjs` | the in-race HUD's glance-ability, `js/game/hud.js` in a VM on `mini-dom` plus `css/hud.css` as rules: the tach redline latches with hysteresis (on above 92 % of `MAX_RPM`, off below 89 %) instead of flickering on the line; the OVERTAKE chip spells its lockout (`COOLDOWN n`) rather than reusing `OVERTAKE` at half opacity; sector splits carry the announce banner's ▼/▲ against `sectorBests` and lime for a personal best; `#hud-speed-n` holds a 3ch right-aligned slot so 99→100 km/h cannot shift the figure; the energy bar has a plate and a light-ink label; no HUD text uses the brand red (#e10600) below 4.5:1 |
+| `hud-feel.test.mjs` | the in-race HUD's glance-ability, `js/ui/hud.js` in a VM on `mini-dom` plus `css/hud.css` as rules: the tach redline latches with hysteresis (on above 92 % of `MAX_RPM`, off below 89 %) instead of flickering on the line; the OVERTAKE chip spells its lockout (`COOLDOWN n`) rather than reusing `OVERTAKE` at half opacity; sector splits carry the announce banner's ▼/▲ against `sectorBests` and lime for a personal best; `#hud-speed-n` holds a 3ch right-aligned slot so 99→100 km/h cannot shift the figure; the energy bar has a plate and a light-ink label; no HUD text uses the brand red (#e10600) below 4.5:1 |
 | `pause-hud-layout.test.mjs` | the pause dialog hides bottom HUD chrome mid-race, and the compact pause stack tightens without changing type tokens |
 | `phone-touch-surface.test.mjs` | the phone DRIVING surface as rules (`tests/helpers/css-rules.mjs`) plus `Input` in a VM: the portrait blocker's pills sit on `--tap` (52px on touch), never the 24px `--tap-min` floor; the dock's tap/hold rungs clear 44px at both width tiers and keep the 24px painted floor under HUD SIZE < 100 %; the tallest dock column (3 x 54 + gaps) fits a 390px landscape phone at 200 % and `fitHud`'s `--hud-z-dock` cap is wired as the net; every anchor inside a `--hud-z` zoom divides its `--sa*` inset; every `:hover` in `css/` is gated on `(hover: hover)`; every scroll container declares `overscroll-behavior`; double-tap zoom is refused on every layer (viewport meta, `touch-action: manipulation` reset, `#game` none, root `overscroll-behavior: none`); in-race chrome and the blocker are anchored inside the safe area. `Input.requestGyro()` in a VM: a transient rejection (no user gesture) is recorded, a later grant CLEARS `gyroDenied` and attaches once, `setSteerMode("buttons")` detaches the sensor (2026-09-01), and `gamepaddisconnected` re-reads the live pad list. The device-only cells it cannot see are in §Field notes, 2026-09-02 |
 | `audio-sample-upgrade.test.mjs` | fake-AudioContext harness for `GameAudio`: an engine started on the synth voice (samples not yet decoded) upgrades to the samples at the next `setEngine` once they are ready, exactly once |
@@ -1716,7 +1716,7 @@ declares `overscroll-behavior`, both dock tiers clear 44px (54/72 and 48/64,
 24px painted floor below 100 %), and the tallest dock column — BOOST/OT/AERO at
 3 x 54 + 2 x 5.3 = 172.7 authored — is 345px at 200 %, inside 390 - 31, so
 `fitHud`'s `--hud-z-dock` cap ((390 - 30) / 172.7 = 2.08) never has to act on
-a 390px phone: the "BRAKE at y=-216" measurement in `js/game/hud.js` predates
+a 390px phone: the "BRAKE at y=-216" measurement in `js/ui/hud.js` predates
 the grouped dock and is covered. The double-tap trio (viewport
 `maximum-scale=1` + `viewport-fit=cover`, `touch-action: manipulation` on `*`,
 `#game` none, root `overscroll-behavior: none`, the inline touchend killer) is
@@ -1728,7 +1728,7 @@ the visual checks, each one screenshot:
    budgets viewport height (3 x `FIT_AIR`), not the corner clusters — at 200 %
    the pedal column tops out at y ≈ 23px, the map spans y 8..~124. Expect
    overlap from ~160 %; 150 % is marginal (≈3px, notched only). Owner:
-   `fitHud` in `js/game/hud.js`.
+   `fitHud` in `js/ui/hud.js`.
 2. Same phone, STEER: BUTTONS (pedals RIGHT), HUD SIZE 200 %: GAS/BRAKE column
    against `#pausebtn` (y 8..60, right edge). Expect contact from ~185 %.
 3. 390x844 portrait, tap RACE IN PORTRAIT, HUD SIZE 100 %: are POS/LAP/TIME/

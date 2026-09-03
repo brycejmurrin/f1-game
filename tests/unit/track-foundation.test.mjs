@@ -421,7 +421,7 @@ test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
   const tuner = fs.readFileSync(path.join(ROOT, "js/lighting/tuner-panel.js"), "utf8");
   assert.match(tuner, /PerfGov\.autoShed\s*\)\s*\?\s*PerfGov\.autoShed\(\)/,
     "tuner.js's held-off note must read the same accessor as the gate");
-  const apex = fs.readFileSync(path.join(ROOT, "js/game/apex.js"), "utf8");
+  const apex = fs.readFileSync(path.join(ROOT, "js/agent/apex.js"), "utf8");
   assert.match(apex, /PerfGov\.autoShed\(\) >= 1\) return "tier"/,
     "__apex.perChunkHeld() must name the same gate the render path runs");
 

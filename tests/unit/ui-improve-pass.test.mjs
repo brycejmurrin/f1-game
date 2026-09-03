@@ -74,9 +74,9 @@ test("UI audit scale axis includes the product's 40% minimum", async () => {
 
 test("CssZoom helper ships before sheetshape and menunav", () => {
   const man = read("tools/manifest.cjs");
-  const iZoom = man.indexOf('"js/game/css-zoom.js"');
-  const iSheet = man.indexOf('"js/game/sheetshape.js"');
-  const iNav = man.indexOf('"js/game/menunav.js"');
+  const iZoom = man.indexOf('"js/ui/css-zoom.js"');
+  const iSheet = man.indexOf('"js/ui/sheet-shape.js"');
+  const iNav = man.indexOf('"js/ui/menu-nav.js"');
   assert.ok(iZoom > 0, "css-zoom.js must be in the manifest");
   assert.ok(iZoom < iSheet, "css-zoom before sheetshape");
   assert.ok(iSheet < iNav, "sheetshape before menunav");
@@ -84,7 +84,7 @@ test("CssZoom helper ships before sheetshape and menunav", () => {
 
 test("CssZoom exports its API surface", () => {
   const sb = uiSandbox(makeDom());
-  vm.runInNewContext(src("js/game/css-zoom.js"), sb, { filename: "js/game/css-zoom.js" });
+  vm.runInNewContext(src("js/ui/css-zoom.js"), sb, { filename: "js/ui/css-zoom.js" });
   const Z = sb.CssZoom;
   assert.ok(Z, "window.CssZoom is assigned");
   for (const name of ["of", "viewportRect", "localRect", "localBox", "toLocalDelta", "rectsAreVisual"]) {
@@ -101,7 +101,7 @@ test("data hub card carries UI SIZE zoom (fit-capped like a sheet)", () => {
 });
 
 test("garage livery grid class is wired", () => {
-  const js = code("js/game/setup-ui.js");
+  const js = code("js/garage/setup-sheet.js");
   assert.match(js, /\bcs-liv-grid\b/);
   assert.ok(ruleFor(css("css/carsetup.css"), /^#cs-options\.cs-liv-grid\b/), "carsetup.css styles #cs-options.cs-liv-grid");
   const clear = js.search(/classList\.remove\(\s*"cs-liv-grid"\s*\)/);
@@ -111,7 +111,7 @@ test("garage livery grid class is wired", () => {
 });
 
 test("select track filter persists via store", () => {
-  const js = code("js/game/menus.js");
+  const js = code("js/ui/select-screen.js");
   assert.match(js, /\btrackFilter\b/);
   assert.match(js, /store\.set\(\s*"trackFilter"/);
   assert.match(js, /"classic"\s*,\s*"CLASSICS"/);
@@ -128,7 +128,7 @@ function bootSheetShape(opts = {}) {
   vars.set(dom.body, { "--tall-at": "1.05", "--wide-at": "620px", ...(opts.body || {}) });
   vars.set(dom.documentElement, { "--ui-scale": String(opts.uiScale || 1) });
   const sb = uiSandbox(dom, { getComputedStyle: style, innerWidth: opts.innerWidth || 1000, innerHeight: opts.innerHeight || 600 });
-  vm.runInNewContext(src("js/game/sheetshape.js"), sb, { filename: "js/game/sheetshape.js" });
+  vm.runInNewContext(src("js/ui/sheet-shape.js"), sb, { filename: "js/ui/sheet-shape.js" });
   const sheet = (id, o = {}) => {
     const host = dom.makeElement("div"); host._client = o.hostHeight || 0;
     const el = dom.makeElement("div"); el.id = id; host.appendChild(el);
@@ -167,10 +167,10 @@ test("circuit select stacked uses one list scroller", () => {
   const off = h.sheet("cs-inner", { w: 900, h: 300, vars: { "--pair-compact": "off", "--compact-at": "380px", "--pair-at": "400px" } });
   h.SS.observe(off.el);
   assert.equal(off.el.dataset.pair, "off", "`off` stacks a compact sheet regardless of width");
-  assert.doesNotMatch(code("js/game/scrollfade.js"), /"\.pane",\s*"#sel-body"/);
-  assert.doesNotMatch(code("js/game/menunav.js"), /\.pane,#sel-body/);
+  assert.doesNotMatch(code("js/ui/scroll-fade.js"), /"\.pane",\s*"#sel-body"/);
+  assert.doesNotMatch(code("js/ui/menu-nav.js"), /\.pane,#sel-body/);
   assert.doesNotMatch(read("tools/layout-audit.mjs"), /\.pane,#sel-body/);
-  assert.match(code("js/game/scrollfade.js"), /\boverflowY\b/,
+  assert.match(code("js/ui/scroll-fade.js"), /\boverflowY\b/,
     "fade thumbs require overflow-y auto/scroll, not hidden content height");
 });
 
@@ -195,7 +195,7 @@ test("density is judged by the sheet's ROOM, not its content height", () => {
   const nohost = h.sheet("rs-nohost", { w: 558, h: 358, vars: { "--compact-at": "760px" } });
   h.SS.observe(nohost.el);
   assert.equal(nohost.el.dataset.density, "compact", "host 0 (hidden, or this harness) falls back to the sheet's own height");
-  assert.match(code("js/game/sheetshape.js"), /function roomOwn\(el, hOwn\)/, "the room floor lives in sheetshape.js");
+  assert.match(code("js/ui/sheet-shape.js"), /function roomOwn\(el, hOwn\)/, "the room floor lives in sheetshape.js");
   // THE BODY IS EXEMPT: classifyBody() passes innerHeight ÷ --ui-scale, already
   // the room in the body's own units; the documentElement host would hand back
   // the raw viewport and un-compact every phone at UI SIZE 200%.
@@ -224,12 +224,12 @@ test("garage stacked categories are a horizontal strip", () => {
   assert.ok(decl(carsetup, packed, "max-height"), "wrapped play-shape tabs cap at two rows so #cs-options keeps a list");
   assert.ok(!declares(carsetup, /^#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs$/, "flex-wrap", "wrap"),
     "tall stacked garage must keep the horizontal strip — wrapping 14 tabs starved options");
-  assert.match(code("js/game/setup-ui.js"), /scrollIntoView\(\s*\{[^}]*\bblock:\s*"nearest"[^}]*\}\s*\)/, "the active tab is scrolled into view (nearest)");
-  assert.match(code("js/game/setup-ui.js"), /scrollIntoView\(\s*\{[^}]*\binline:\s*"center"[^}]*\}\s*\)/, "…and centred sideways along the strip");
+  assert.match(code("js/garage/setup-sheet.js"), /scrollIntoView\(\s*\{[^}]*\bblock:\s*"nearest"[^}]*\}\s*\)/, "the active tab is scrolled into view (nearest)");
+  assert.match(code("js/garage/setup-sheet.js"), /scrollIntoView\(\s*\{[^}]*\binline:\s*"center"[^}]*\}\s*\)/, "…and centred sideways along the strip");
 });
 
 test("circuit catalogue has a searchable filter toolbar", () => {
-  const js = code("js/game/menus.js");
+  const js = code("js/ui/select-screen.js");
   assert.match(js, /\.type\s*=\s*"search"/);
   assert.match(js, /setAttribute\(\s*"aria-label"\s*,\s*"Search circuits"\s*\)/);
   assert.match(js, /\.dataset\.search\s*=/);
@@ -259,14 +259,14 @@ test("compact landscape catalogue spends its first viewport on a circuit", () =>
   assert.equal(decl(menus, '#sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section', "max-height"), "58%",
     "compact stacked band spends more of the body on the map without eating the list");
   assert.ok(!declares(menus, '#sel-inner[data-fit="on"] #sel-preview-map', "display", "none"));
-  const menusJs = code("js/game/menus.js");
+  const menusJs = code("js/ui/select-screen.js");
   assert.match(menusJs, /cardInnerW\s*\*\s*\(\s*compact\s*\?\s*0\.48\s*:\s*0\.42\s*\)/);
   assert.match(menusJs, /chipH\s*\*\s*\(\s*compact\s*\?\s*5\.2\s*:\s*3\.5\s*\)/);
   assert.match(menusJs, /slotH:\s*chipH\s*\*\s*3\.5/, "CSS and JS stay in lockstep — fitCanvas pins max-height inline");
 });
 
 test("garage categories implement one roving tab system", () => {
-  const js = code("js/game/setup-ui.js");
+  const js = code("js/garage/setup-sheet.js");
   assert.match(js, /setAttribute\(\s*"role"\s*,\s*"tablist"\s*\)/);
   assert.match(js, /setAttribute\(\s*"role"\s*,\s*"tab"\s*\)/);
   assert.match(js, /setAttribute\(\s*"aria-controls"\s*,\s*"cs-options"\s*\)/);
@@ -312,7 +312,7 @@ function bootMenuNav(layerId = "overlay") {
   const layer = dom.byId(layerId);
   layer._rect = { left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600 };
   const sb = uiSandbox(dom, { UiLayers: { shown: () => true, top: () => layer } });
-  vm.runInNewContext(src("js/game/menunav.js"), sb, { filename: "js/game/menunav.js" });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
   const button = (id, y, attrs = {}) => {
     const b = dom.makeElement("button"); b.id = id;
     b._rect = { left: 10, top: y, right: 210, bottom: y + 30, width: 200, height: 30 };
@@ -404,11 +404,11 @@ test("VS Friend text uses the menu type scale instead of sub-floor rem literals"
 });
 
 test("closing track detail disconnects its observer and blocks queued hidden redraws", () => {
-  const menus = code("js/game/menus.js");
+  const menus = code("js/ui/select-screen.js");
   const drawAt = menus.search(/drawDetail\s*=\s*function\s*\(\s*\)\s*\{/);
   assert.ok(drawAt >= 0, "drawDetail is the redraw closure");
   assert.match(menus.slice(drawAt, drawAt + 400), /if\s*\(\s*modal\.hidden\s*\)\s*return\s*;/, "a queued redraw of a hidden modal is dropped");
-  const close = fnBody(menus, "closeTrackDetail", "js/game/menus.js");
+  const close = fnBody(menus, "closeTrackDetail", "js/ui/select-screen.js");
   assert.match(close, /detailRO\.disconnect\(\s*\)/, "closing disconnects the ResizeObserver");
   assert.match(close, /detailRO\s*=\s*null/, "…and forgets it");
   const ret = menus.match(/return\s*\{([^}]*\bopenTrackDetail\b[^}]*)\}/);
@@ -471,7 +471,7 @@ test("extreme-scale journeys use local-width and compact-chrome contracts", () =
 });
 
 test("an active career locks team and seat selection in the garage", () => {
-  const setup = code("js/game/setup-ui.js");
+  const setup = code("js/garage/setup-sheet.js");
   assert.match(setup, /careerLocked\s*=\s*typeof\s+Career\s*!==\s*"undefined"\s*&&\s*Career\.inCareer\s*&&\s*Career\.inCareer\(\s*\)/);
   assert.match(setup, /card\.disabled\s*=\s*!!\s*careerLocked\b/);
   assert.match(setup, /\.disabled\s*=\s*taken\s*\|\|\s*careerLocked\b/);
@@ -703,18 +703,18 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
 
   // The seams the pad path relies on, as behaviour where a module loads alone.
   const sbU = uiSandbox(makeDom());
-  vm.runInNewContext(src("js/game/uilayers.js"), sbU, { filename: "js/game/uilayers.js" });
+  vm.runInNewContext(src("js/ui/layers.js"), sbU, { filename: "js/ui/layers.js" });
   assert.equal(typeof sbU.UiLayers.navOpen, "function", "title #overlay is pad-navigable through UiLayers.navOpen()");
   assert.equal(sbU.UiLayers.navOpen(), false, "nothing open on a bare DOM");
   // Text fields joined range/number here (menu-a11y-audit.test.mjs pins the
   // behaviour): every <input> keeps only the caret keys, so Up/Down leave the row.
-  assert.match(code("js/game/menunav.js"), /return !!CARET_KEYS\[key\]/,
+  assert.match(code("js/ui/menu-nav.js"), /return !!CARET_KEYS\[key\]/,
     "inputs own only the caret keys (Left/Right/Home/End) so Up/Down leave the row");
-  assert.match(code("js/game/ariastate.js"), /#vsfriend,\s*#season-setup/,
+  assert.match(code("js/ui/aria-state.js"), /#vsfriend,\s*#season-setup/,
     "AriaState watches the two DOM-built overlays UiLayers already lists");
-  assert.match(code("js/game/scrollfade.js"), /"#menu-buttons"/,
+  assert.match(code("js/ui/scroll-fade.js"), /"#menu-buttons"/,
     "title chrome fade watches the zoomed #menu-buttons scroller");
-  assert.match(code("js/game/scrollfade.js"), /\boverflowX\b/,
+  assert.match(code("js/ui/scroll-fade.js"), /\boverflowX\b/,
     "sideways strips get .sf-l / .sf-r, not only overflow-y thumbs");
 });
 
@@ -781,7 +781,7 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
 function bootSettingsNav(stored) {
   const dom = makeDom();
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
-  vm.runInNewContext(src("js/game/settings-nav.js"), sb, { filename: "js/game/settings-nav.js" });
+  vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
   const st = { ...stored };
   let selected = 0;
   const nav = sb.SettingsNav.create({ get: (k, d) => (k in st ? st[k] : d), set: (k, v) => { st[k] = v; } }, () => selected++);

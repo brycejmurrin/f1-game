@@ -88,7 +88,7 @@ test.describe("Lighting tuner — pause lifecycle", () => {
   // ESCAPE IS ONE STEP BACK, not the emergency exit it used to be. It called
   // setPaused(false), which threw away the fly-cam, the tuner panel AND the
   // pause in a single press — three screens for one key. #photo-controls is a
-  // layer in its own right now (js/game/uilayers.js) carrying
+  // layer in its own right now (js/ui/layers.js) carrying
   // data-esc-close="pc-exit", so the first press lands you back on the panel
   // you opened the camera from. The pause key and gamepad Start below keep the
   // old all-the-way-out behaviour, which is the point of the distinction.

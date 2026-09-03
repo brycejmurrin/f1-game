@@ -193,7 +193,7 @@ const ALLOWED = [
     why: "'not parked' floor for the lift-off after-fire — below the grip-limited corner floor",
   },
   {
-    file: "js/game/apex.js", expr: "G.player.speed > 8",
+    file: "js/agent/apex.js", expr: "G.player.speed > 8",
     code: "if (G.player && G._testInput && G._testInput.throttle && next && !next.throttle && G.player.speed > 8)",
     // setInput() reproduces js/game.js's `lifted` condition so a scripted
     // throttle lift pops the exhaust the same way a real one does. It must use

@@ -287,7 +287,7 @@ persistence layer and deserves its own commit and its own test.
 > `Log.warn("game", …)` on the FIRST failure ("settings and saves will NOT
 > survive a reload", with the iOS-Private-Browsing hint on
 > `QuotaExceededError`) and buffer-only `Log.info` on every later one, and
-> `__apex.persistState()` (js/game/apex.js) exposes the state so the failure
+> `__apex.persistState()` (js/agent/apex.js) exposes the state so the failure
 > is testable. Of the four recommendations above: **#1 is done**; **#3 is
 > half-done** (the first failure is announced plainly, but via `Log` on first
 > use rather than a boot-time probe, and there is still no player-facing

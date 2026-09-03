@@ -1,5 +1,5 @@
 // @ts-check
-// Contract tests for the agent-facing world view (js/game/agentview.js):
+// Contract tests for the agent-facing world view (js/agent/agentview.js):
 //   __apex.world(), __apex.trackInfo(), __apex.terminal()
 //
 // These assert the CONTRACT an LLM agent depends on — payload shape, typed

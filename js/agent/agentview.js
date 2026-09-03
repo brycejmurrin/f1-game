@@ -2,7 +2,7 @@
 const AgentView = (function () {
   // The parts budget a given team is actually judged against: a career that
   // owns the team gets Career.budget(), everyone else the free-play constant.
-  // Same resolution as js/game/setup-ui.js, which is the enforcing side.
+  // Same resolution as js/garage/setup-sheet.js, which is the enforcing side.
   const _partsCap = (team) =>
     (typeof Career !== "undefined" && Career.owned && team && Career.owned(team.id))
       ? Career.budget() : Parts.BUDGET;

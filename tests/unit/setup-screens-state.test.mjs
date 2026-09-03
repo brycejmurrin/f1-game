@@ -320,7 +320,7 @@ function loadSetupUi() {
     M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
     PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
   });
-  vm.runInNewContext(src("js/game/setup-ui.js"), sb, { filename: "js/game/setup-ui.js" });
+  vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: "js/garage/setup-sheet.js" });
   return { dom, ui: sb.SetupUI.create(G), G, $: G.$, observers };
 }
 

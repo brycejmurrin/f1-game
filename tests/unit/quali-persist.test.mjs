@@ -215,11 +215,11 @@ test("persistOrder skips a conflicted career save", () => {
   assert.equal(saved.career, undefined);
 });
 
-// The SHEET (js/game/quali-sheet.js) is a separate module that only ever sees
+// The SHEET (js/ui/quali-sheet.js) is a separate module that only ever sees
 // `quali.rows()`: the model owns timing, ordering and the persist; the sheet
 // owns #q-table, #q-title and #quali's hidden bit. A stub element is enough —
 // what is pinned is the row shape the sheet consumes and what it draws from it.
-const SHEET_SRC = fs.readFileSync(path.join(ROOT, "js/game/quali-sheet.js"), "utf8");
+const SHEET_SRC = fs.readFileSync(path.join(ROOT, "js/ui/quali-sheet.js"), "utf8");
 
 function loadSheet() {
   class El {
@@ -240,7 +240,7 @@ function loadSheet() {
   };
   vm.createContext(ctx);
   seedLog(ctx);
-  vm.runInContext(SHEET_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/game/quali-sheet.js" });
+  vm.runInContext(SHEET_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/ui/quali-sheet.js" });
   return { sheet: ctx.QualiSheet.create(G), els, refreshed: () => refreshed };
 }
 

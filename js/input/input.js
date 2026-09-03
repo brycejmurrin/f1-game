@@ -332,12 +332,12 @@ const Input = (function () {
     return keySteerVal;
   }
 
-  // A menu overlay being open is what hands the arrow keys to js/game/menunav.js:
+  // A menu overlay being open is what hands the arrow keys to js/ui/menu-nav.js:
   // while the pause menu, the select screen or any sheet is up, Up/Down/Left/Right
   // move through the menu and must not also be steering and braking the car
   // underneath it. Asked per key event, never per tick — keys are rare and the
   // set of open overlays changes without notice.
-  // THE LIST LIVES IN js/game/uilayers.js.
+  // THE LIST LIVES IN js/ui/layers.js.
   function menuOverlayOpen() {
     return !!(window.UiLayers && window.UiLayers.anyOpen());
   }
@@ -374,7 +374,7 @@ const Input = (function () {
        They used to sit inside the switch below, which only worked by accident:
        the gate's screen list happened not to mention the two tuner panels, so
        the pause key reached them. The moment that list was corrected (one list
-       for everyone, js/game/uilayers.js) the key started being swallowed in the
+       for everyone, js/ui/layers.js) the key started being swallowed in the
        LIGHTING TUNER and free camera — the one place its documented
        all-the-way-out behaviour matters most. Reachability should not be a
        side effect of a list being incomplete. */
@@ -388,13 +388,13 @@ const Input = (function () {
          desktop keyboard everywhere the answer to Escape was obviously "close
          this" — and was actively wrong with a tuner open, where it resumed the
          race instead of stepping back to SETTINGS. An open layer belongs to the
-         Escape handler in js/game/topmodal.js, which runs first (capture) and
+         Escape handler in js/ui/modal.js, which runs first (capture) and
          presses that screen's own back control; by the time one is open this
          key normally never even arrives. */
       if (onPauseCb && window.UiLayers && window.UiLayers.inRace() && !window.UiLayers.anyOpen()) {
         onPauseCb();
         /* AND THE KEY IS SPENT — without this, Escape could not pause at all.
-           #pausemenu is a <dialog> (js/game/topmodal.js), so opening it here
+           #pausemenu is a <dialog> (js/ui/modal.js), so opening it here
            hands Chrome a fresh close-watcher MID-KEYPRESS, and the watcher
            takes the KEYUP of the very Escape that opened it: the menu appeared
            and vanished within one press, measured keydown→shown, keyup→hidden.

@@ -4,7 +4,7 @@
  * Every one of these exists because of a real failure in the 2026-08 UI pass,
  * and in each case the 350-odd guards that DO run were green through it:
  *
- *   1. A comment body with no opening `/*` in js/game/sheetshape.js. That is a
+ *   1. A comment body with no opening `/*` in js/ui/sheet-shape.js. That is a
  *      SyntaxError, so the whole IIFE never ran, so no sheet carried
  *      `data-shape` or `data-pair` and every list/detail layout in the app
  *      silently fell back to stacked. Nothing failed. It was caught by looking
@@ -310,7 +310,7 @@ test("no screen fakes modality with a div claiming dialog semantics", () => {
   assert.deepEqual(fakes, [],
     "a <div> claiming role=\"dialog\" or aria-modal is a promise the platform " +
     "never honours: no top layer, no focus containment, no Escape, no :modal. " +
-    "Every modal here is a real <dialog> mirrored by js/game/topmodal.js — the " +
+    "Every modal here is a real <dialog> mirrored by js/ui/modal.js — the " +
     "data hub and the telemetry popup were the last two fakes to convert. Use " +
     "one, or add the id to FAKE_MODAL_OK with the reason it cannot be modal: " +
     fakes.join(", "));
@@ -318,7 +318,7 @@ test("no screen fakes modality with a div claiming dialog semantics", () => {
 
 test("Circuit filters are not nested in a listbox and circuits expose button state", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const menus = fs.readFileSync(path.join(ROOT, "js/game/menus.js"), "utf8");
+  const menus = fs.readFileSync(path.join(ROOT, "js/ui/select-screen.js"), "utf8");
   assert.match(html, /id="sel-tracks"[^>]*role="group"/);
   assert.doesNotMatch(html, /id="sel-tracks"[^>]*role="listbox"/);
   assert.match(menus, /row\.setAttribute\("aria-pressed"/);

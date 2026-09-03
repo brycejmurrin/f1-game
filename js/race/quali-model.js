@@ -301,7 +301,7 @@ function create(G) {
     return simulate(0);
   }
 
-  // The classification as the SHEET draws it (js/game/quali-sheet.js): the
+  // The classification as the SHEET draws it (js/ui/quali-sheet.js): the
   // current rows, live car refs dropped, no restore — build() always read the
   // in-memory classification as-is, and this keeps that contract. null when
   // nothing has been simulated or restored.

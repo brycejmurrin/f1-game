@@ -1,7 +1,7 @@
 # Agent World API — showing the game to an LLM agent as JSON
 
-**Status: implemented.** The surface ships in `js/game/agentview.js` (+ the
-rasters in `js/game/agentview-raster.js`) — `world()`, `field()`, `trackInfo()`,
+**Status: implemented.** The surface ships in `js/agent/agentview.js` (+ the
+rasters in `js/agent/agentview-raster.js`) — `world()`, `field()`, `trackInfo()`,
 `scene()`, `describe()`, `query()`, `atmosphere()`, `objective()`, `carView()`,
 `render()`, `survey()`, `rollout()`, `terminal()`, `agentHelp()` — the former
 `frame()`/`plan()`/`worldModel()`/`visible()` aliases have been REMOVED (use
@@ -49,7 +49,7 @@ can see forty numbers and still can't tell it's about to miss a braking point."
 ## 2. What the codebase can answer today
 
 `window.__apex` exposes ~182 hooks. `obs()`
-(`js/game/apex.js:1064`) is already a better observation than most published
+(`js/agent/apex.js:1064`) is already a better observation than most published
 game-agent wrappers: egocentric signed wall clearances, lateral offset,
 look-ahead scan, combined-slip state, applied-input echo, reward components.
 
@@ -94,7 +94,7 @@ no name, no entry/apex/exit, no braking reference.
 
 ### 2.3 Look-ahead horizon is distance-scaled, not time-scaled
 
-`obs().scan` is hardcoded to `[10, 30, 60]` m (`js/game/apex.js:1081`). At
+`obs().scan` is hardcoded to `[10, 30, 60]` m (`js/agent/apex.js:1081`). At
 50 m/s that is 1.2 s of warning; at 10 m/s it is 6 s. Backwards. GT Sophy
 samples ~6 seconds of travel — the span scales with velocity.
 
@@ -109,7 +109,7 @@ adding opponent *orientation* measurably improved overtaking.
 ### 2.5 No world position for AI cars
 
 `cars()`/`carAt()`/`fieldState()` return Frenet `(s, x, prog)` only.
-`carOrbit()` has to reconstruct world XZ itself (`js/game/apex.js:558`)
+`carOrbit()` has to reconstruct world XZ itself (`js/agent/apex.js:558`)
 because AI cars don't carry `px/pz`. Only the player has world coordinates
 (`wsInfo()`).
 

@@ -94,7 +94,7 @@ test("docs/DEBUG-HOOKS.md: the hook index names every __apex hook plus the agent
   // A CELL that is undefined is the generator bug; the word inside a quoted
   // source expression (`typeof F1API !== "undefined"`) is source, not a bug.
   assert.doesNotMatch(b, /\|\s*undefined\s*\||\(undefined[,)]|undefined\(/);
-  const src = read("js/game/apex.js");
+  const src = read("js/agent/apex.js");
   const body = src.slice(src.indexOf("const api = {"));
   const names = new Set();
   for (const m of body.matchAll(/^ {2}(?:async\s+)?([a-zA-Z_$][\w$]*)\s*[(:]/gm)) names.add(m[1]);

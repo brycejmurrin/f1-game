@@ -55,10 +55,10 @@ shot, columns = tod).
 - `--w= --h=` viewport, `--url=` (default `http://127.0.0.1:3456`).
 
 All-teams side batch (`custom` / MY TEAM is runtime-only — grep
-`js/car/teams.js`):
+`js/data/teams.js`):
 
 ```sh
-grep -oP 'id: "\K[^"]+' js/car/teams.js | while read -r t; do
+grep -oP 'id: "\K[^"]+' js/data/teams.js | while read -r t; do
   node tools/car/render-car.mjs --team="$t" --views=side --out=scratch/renders/cars-grid/
 done
 ```

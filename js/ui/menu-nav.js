@@ -19,13 +19,13 @@
 // pull the focused row into view. Both are desktop affordances only; neither
 // changes a single touch gesture.
 //
-// The module owns no game state and self-initialises, like js/game/scrollfade.js
+// The module owns no game state and self-initialises, like js/ui/scroll-fade.js
 // (which it tells to repaint after a redirected scroll, so the edge fade and the
 // position indicator stay honest).
 window.MenuNav = (function () {
 
-  // The menu LAYERS and "which one is on top" both live in js/game/uilayers.js
-  // now — js/input/input.js and js/game/topmodal.js ask the same module the same
+  // The menu LAYERS and "which one is on top" both live in js/ui/layers.js
+  // now — js/input/input.js and js/ui/modal.js ask the same module the same
   // question, which is the whole point of it. This file used to carry its own
   // copy of the list, and the copies drifted by five screens.
   const UL = window.UiLayers;
@@ -519,7 +519,7 @@ window.MenuNav = (function () {
   // FOCUSABLE is exported so a second caller (the gamepad A-button seam in
   // js/input/input.js) can ask "is this a real actionable control" without a
   // second copy of the selector to drift out of step with this one.
-  // items / currentItem: js/game/topmodal.js lands focus on a freshly shown
+  // items / currentItem: js/ui/modal.js lands focus on a freshly shown
   // non-dialog screen with the same rule the first arrow press uses.
   return { activeLayer, nearestPane, onWheel, onKeyDown, FOCUSABLE, step, pickSideways, items, currentItem, ownsArrows };
 })();

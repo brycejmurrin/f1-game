@@ -7,7 +7,7 @@ Load from the SKILL.md index when the task needs this detail.
 **1. Screen visibility must be a TOTAL function over a declared registry.**
 On every transition, assign state to *every* screen, not just the two involved.
 *Prevents:* two screens open at once, and screens drifting out of the list.
-2,140 vanilla-JS repos converge on this shape; `js/game/uilayers.js` exists
+2,140 vanilla-JS repos converge on this shape; `js/ui/layers.js` exists
 because three modules each kept their own list and **they differed by five
 screens** — career plus three sub-sheets and quali were missing from the input
 gate, so arrow keys inside the career hub latched the car's steering.
@@ -129,7 +129,7 @@ available since Feb 2023, and shipped in typebot.io, medplum, voyager, fluxer.
 The real constraint is only that a size container cannot be sized by its
 contents; a full-viewport shell at `100svh` already has an explicit block size.
 *Prevents:* falling back to viewport media queries for a component-local
-question. **Note the boundary:** `js/game/sheetshape.js` is still right that a
+question. **Note the boundary:** `js/ui/sheet-shape.js` is still right that a
 *content-sized sheet* cannot be a size container — the shell can, the sheet
 cannot.
 

@@ -53,7 +53,7 @@ export const SCREENS = [
       await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
         (t.find((e) => /ENGINE/i.test(e.textContent)) || t[1] || t[0])?.click(); }); } },
   // SEASON SETUP is reached through the season select screen, not the title: the
-  // CUSTOMISE button only exists in #select's season branch (js/game/menus.js),
+  // CUSTOMISE button only exists in #select's season branch (js/ui/select-screen.js),
   // which is what keeps it out of the Grand Prix pixel golden.
   { id: "season-setup", name: "Season setup", root: "#season-setup", open: async (p) => {
       await p.click("#mb-season"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
@@ -131,7 +131,7 @@ export const SCREENS = [
       await p.click("#sel-preview-map");
       await p.waitForSelector("#track-detail:not([hidden])", { timeout: 15000 });
       // The modal fits its map on a ResizeObserver after the open transition
-      // (js/game/menus.js), so the first frame is not the final size.
+      // (js/ui/select-screen.js), so the first frame is not the final size.
       await p.waitForTimeout(500); } },
   { id: "quali", name: "Qualifying", root: "#quali", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
@@ -156,7 +156,7 @@ export const SCREENS = [
 
   { id: "customize", name: "Livery editor", root: "#customize", open: async (p) => {
       await p.click("#mb-garage"); await p.waitForSelector("#carsetup:not([hidden])", { timeout: 15000 });
-      // EDIT MY TEAM is rendered by the TEAM tab (js/game/setup-ui.js), not the
+      // EDIT MY TEAM is rendered by the TEAM tab (js/garage/setup-sheet.js), not the
       // LIVERY one — an easy thing to assume wrong, and it costs a whole cell.
       await p.evaluate(() => { const t = [...document.querySelectorAll("#cs-tabs .cs-tab")];
         t.find((e) => /TEAM/i.test(e.textContent))?.click(); });

@@ -2416,7 +2416,7 @@ const TLX = (function () {
         },
 
         // ── Cull-test helpers (GLX parity) ──────────────────────────────────
-        // js/game/agentview.js calls GLX.makeFrustumPlanes/aabbInFrustum
+        // js/agent/agentview.js calls GLX.makeFrustumPlanes/aabbInFrustum
         // directly, so its "what is on screen" answer runs the SAME test the
         // draw path runs. These MUST be own properties of the backend object:
         // game.js installs a backend by descriptor-copy onto GLX

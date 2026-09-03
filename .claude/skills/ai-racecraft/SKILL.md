@@ -20,7 +20,7 @@ curvature samples and the already-drawn roll so the seeded stream in
 | brake target + craft late-brake | the Frenet lateral step |
 
 Ratings on the car (`craft` / `awareness` / `experience` / `skill`) come
-from `js/car/driver-ratings.js`. Career adds deltas on top (**career-mode**
+from `js/data/driver-ratings.js`. Career adds deltas on top (**career-mode**
 for the economy; this skill for how those axes drive the field).
 
 ## Do not

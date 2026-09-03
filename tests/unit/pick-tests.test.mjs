@@ -24,7 +24,7 @@ const run = (...args) =>
 const json = (...args) => JSON.parse(run(...args));
 
 test("--json reports a reason CI can branch on, not prose", () => {
-  const r = json("js/game/hud.js");
+  const r = json("js/ui/hud.js");
   assert.equal(r.reason, "matched");
   assert.ok(Array.isArray(r.files) && Array.isArray(r.groups));
   for (const g of r.groups) {
@@ -73,9 +73,9 @@ test("a path in FIRST argv position survives the --since filter", () => {
   // question, answered confidently. Every other case in this file hides it,
   // because run() puts --json at index 0; here the path IS argv[0].
   const r = JSON.parse(execFileSync(
-    "node", ["tools/pick-tests.mjs", "js/car/parts.js", "js/game/hud.js", "--json"],
+    "node", ["tools/pick-tests.mjs", "js/car/parts.js", "js/ui/hud.js", "--json"],
     { cwd: ROOT, encoding: "utf8" }));
-  assert.deepEqual(r.files, ["js/car/parts.js", "js/game/hud.js"]);
+  assert.deepEqual(r.files, ["js/car/parts.js", "js/ui/hud.js"]);
 });
 
 test("the default diff base is the DEPLOY branch, which pages.yml names", () => {

@@ -28,7 +28,7 @@ async function dataReady(page) {
   // the moment either ran — red since the logging landed, whenever the suite
   // actually ran.
   await page.addScriptTag({ url: "/js/core/log.js" });
-  await page.addScriptTag({ url: "/js/game/topmodal.js" });
+  await page.addScriptTag({ url: "/js/ui/modal.js" });
   await page.addScriptTag({ url: "/js/core/mat4.js" });
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.addScriptTag({ url: "/js/data/telemetry.js" });

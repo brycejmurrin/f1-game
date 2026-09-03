@@ -172,7 +172,7 @@ test("the boot group is not selected for a blanket source edit — the fixed smo
   // 2026-09-02: every js/css edit routed to `tiny`, whose cheapest-by-count
   // specs (boot-guard, logging) are the slowest per test; they timed out the
   // deploy gate twice on starved runners for diffs that never touched them.
-  const g = pick(["js/game/hud.js", "index.html"]);
+  const g = pick(["js/ui/hud.js", "index.html"]);
   assert.ok(g.has("tiny"), "the blanket rules still route to the boot group for a human reader");
   for (const why of g.get("tiny")) assert.ok(BOOT_FALLBACK_REASONS.has(why), `unexpected boot reason: ${why}`);
   assert.equal(dropBootFallback(g), true);

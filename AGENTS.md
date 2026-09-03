@@ -164,7 +164,7 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
   clamp/lerp/wrapDelta
 - `js/game.js` — entry: game loop, physics, AI, race flow; hands the `G` ctx
   façade to `js/game/*` modules (one `Module.create(G)` per file; modules
-  never reach into game.js; `js/game/apex.js` is the `__apex` dev API)
+  never reach into game.js; `js/agent/apex.js` is the `__apex` dev API)
 - `js/render/` — Gfx façade → GLX (WebGL2 default: core + `glx/` passes +
   `shaders/` GLSL-as-data), `gltf.js`, `assets.js` (baked pack loader).
   DEFERRED backends, no script tag, injected at boot: `webgpu/` WGX and

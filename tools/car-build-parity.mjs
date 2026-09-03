@@ -27,7 +27,7 @@ const VARIANTS = [
 function build(carPath, opts, c1, c2, teamId) {
   const ctx = { console, Math, Object, Array, Float32Array, Uint16Array, Uint32Array, JSON, Number, String, Boolean, isFinite, isNaN };
   ctx.globalThis = ctx; vm.createContext(ctx);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/car/teams.js", "js/car/parts.js", carPath])
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", carPath])
     vm.runInContext(readFileSync(f, "utf8"), ctx, { filename: f });
   const m = vm.runInContext("Car3D", ctx).build(c1, c2, { teamId, ...opts });
   const h = createHash("sha256");

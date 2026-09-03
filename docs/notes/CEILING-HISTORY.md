@@ -16,7 +16,7 @@ lines to ~4,700, and that it is back over 8,000: "extraction moved code out
 once and nothing stopped it accumulating again, because no guard bounds the
 file."
 This session watched that happen in miniature. Two extractions
-(js/physics/aero-zones.js, js/game/skidmarks.js) took 91 lines out of game.js,
+(js/physics/aero-zones.js, js/fx/skidmarks.js) took 91 lines out of game.js,
 and a concurrent branch put 130 back in over the same period. Nobody did
 anything wrong — there was simply nothing that would notice, and the net
 direction of an unbounded file is always up.
@@ -330,7 +330,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - injector). window.__apex = null is the eval-time latch the global
 - registry pins on this file; ApexApi.create stays call-time after the
 - inject. Bug-explaining growth at the boot site, not a feature.
-- 8635 -> 8512: UI SIZE / HUD SIZE + RESOLUTION moved to js/game/ui-scale.js
+- 8635 -> 8512: UI SIZE / HUD SIZE + RESOLUTION moved to js/ui/scale.js
 - (UiScale.create(G)). 0 new physics; one deferred G.updateTrackPreview
 - beside buildSelect. Comments moved with the block.
 - 8512 -> 8533: pool the 8 AiDrive ctx literals in updateCar onto reused
@@ -369,7 +369,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - quali .q-done Escape flash (the handler is here). All three fix
 - recorded UX defects at their existing sites. 8621 -> 8627: the vt()
 - View-Transition wrap of the title/select/garage spine — the swap
-- handlers live here, the helper in js/game/menus.js.
+- handlers live here, the helper in js/ui/select-screen.js.
 - 8627 -> 8635: syncRotateBlocker learns the pause-card/blocker exclusion
 - (one line + the bug comment): #pausemenu is a modal <dialog> now, so an
 - open card out-layers the z-9000 blocker and refuses focus to its
@@ -405,7 +405,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - DIFFERENT points, so the turntable swung the car across the frame instead
 - of rotating it, and both sat behind the measured car centre), plus the
 - studio backdrop colour, the floor draw and its material opts. The floor
-- MESH itself went to js/game/carmesh.js, which is where the geometry
+- MESH itself went to js/car/car-mesh.js, which is where the geometry
 - belongs and which this ratchet does not bound. Measured 8709.
 - 8715 -> 8721: frame.roadChunkLamps, the RESOLVED per-chunk-road state.
 - PER-CHUNK ROAD could not change any outcome before it: the road is drawn
@@ -619,7 +619,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - generated global, ApexRoster (js/roster.js, from tools/manifest.cjs via
 - tools/gen-shell.mjs). The loader logic stays; only the copies left.
 
-## `js/game/apex.js` — last ceiling 2600
+## `js/agent/apex.js` — last ceiling 2600
 
 - Cohesive-today files (a dev API, an agent view, a procedural mesh), so
 - these are drift alarms rather than extraction targets. Note game.js is NOT
@@ -714,7 +714,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - STRING compare on driver id — the exact defect the histogram exists to fix.
 - 2590 -> 2595 (split-newline count) diag().env.gpuErrors/backendState — the bound backend's own account (api, first GPU/WGSL error) for phone reports · deploy side: +5: garageCam reports effDist/fitD/panelFrac — the auto path is the one that can misframe, and the hook reported a distance the camera does not use
 
-## `js/game/agentview.js` — last ceiling 2452
+## `js/agent/agentview.js` — last ceiling 2452
 
 - +9: the parts hook reports the CAREER cap, not the free-play 780. A career
 - at a team whose factory build costs 1,500 was reported as remaining: -720

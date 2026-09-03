@@ -54,7 +54,7 @@ function fakeDom(els, modalOrder) {
   };
   context.globalThis = context;
   vm.createContext(context);
-  vm.runInContext(read("js/game/uilayers.js"), context);
+  vm.runInContext(read("js/ui/layers.js"), context);
   return context.window.UiLayers;
 }
 
@@ -113,14 +113,14 @@ test("every opener in index.html precedes the dialog it opens", () => {
 });
 
 test("topmodal does not preventDefault a non-cancelable focusin (F9)", () => {
-  const src = read("js/game/topmodal.js");
+  const src = read("js/ui/modal.js");
   assert.doesNotMatch(src, /focusin[\s\S]{0,1200}?e\.preventDefault\(\)/,
     "focusin is not cancelable — preventDefault there is a no-op that reads as a guard");
   assert.match(src, /No preventDefault: `focusin` is NOT cancelable/);
 });
 
 test("menunav releases its per-press measurement cache (F11)", () => {
-  const src = read("js/game/menunav.js");
+  const src = read("js/ui/menu-nav.js");
   assert.match(src, /try \{ navKey\(e\); \} finally \{ _boxes = null; \}/,
     "the box cache must be dropped across every early return, not just replaced next press");
   assert.match(src, /_boxes = new Map\(\);/, "still fresh per press");

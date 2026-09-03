@@ -44,7 +44,7 @@ and Chromium deliberately does **not** count Escape as a user activation. So an
 Escape that closes one screen and opens another — exactly what a BACK ladder
 does — is opening a dialog *during* a close request with no activation to spend.
 Without the `preventDefault()` above, one press can collapse two screens.
-`js/game/topmodal.js` does this; `tests/specs/ui-button-touch.spec.js` walks the whole
+`js/ui/modal.js` does this; `tests/specs/ui-button-touch.spec.js` walks the whole
 ladder to keep it honest.
 
 Sources: WICG/close-watcher explainer (merged into the HTML Standard),
@@ -205,7 +205,7 @@ Consequences worth keeping in mind here:
 - **A menu that works from the keyboard is most of the way to working from a
   pad.** The guidance says so outright: "A good way to ensure that your app will
   work well with gamepad/remote is to make sure that it works well with keyboard
-  on PC." `js/game/menunav.js` already does the hard half (spatial XY movement,
+  on PC." `js/ui/menu-nav.js` already does the hard half (spatial XY movement,
   band-scoped, with wrap); a pad needs a seam into it, not a second
   implementation.
 - **B is Escape.** Which means a pad's back button should press the same
@@ -240,7 +240,7 @@ delay, ~130 ms steady cadence, since a polled pad has no OS key-repeat of its
 own), the triggers become PageUp/PageDown, the bumpers page horizontally
 (there being no distinct horizontal-pane concept in this codebase, they
 dispatch ArrowLeft/ArrowRight — the closest existing primitive). This is a SEAM
-into `js/game/menunav.js`, not a second focus-mover: the dispatched events flow
+into `js/ui/menu-nav.js`, not a second focus-mover: the dispatched events flow
 through exactly the same `window`/`document` listeners a real keyboard drives,
 so a menu that already worked from the keyboard picked up pad navigation for
 free, as the guidance above predicted. `padActivate()`/`padEscape()` seed focus
@@ -259,7 +259,7 @@ against a bare `<dialog>` with no listeners: an untrusted Escape keydown left
 it open, where a real keypress (`page.keyboard.press`) closed it. This is the
 same class of gotcha as `.click()` being required for A (see the guidance's own
 "Enter/Space activates the focused button" caveat) — a default action needs
-trust, a JS-registered listener does not. The fix meets `js/game/topmodal.js`'s
+trust, a JS-registered listener does not. The fix meets `js/ui/modal.js`'s
 existing seam at a different point: for a `<dialog>` layer, B dispatches the
 `cancel` `Event` that `TopModal.wire()` already listens for on every
 `dialog.screen` (an ordinary `addEventListener` callback, which does not care
@@ -336,7 +336,7 @@ Verified in code, not inferred. `index.html` used to declare:
 
 but it was a plain `<div>`: no `showModal()`, so no top layer and **no inert
 background**, and `grep` found **no focus trap anywhere in this codebase** —
-`js/game/topmodal.js` gets containment from the platform, and nothing else
+`js/ui/modal.js` gets containment from the platform, and nothing else
 implements it by hand.
 
 `aria-modal="true"` is not decoration. It instructs assistive technology to
@@ -351,7 +351,7 @@ was missing was containment.
 
 **Fix, shipped: made the claim true rather than withdrawing it.** `#track-detail`
 is now a real `<dialog class="screen dim">` in `index.html`, migrated by the
-exact same seam every other screen used — `js/game/topmodal.js`'s `MutationObserver`
+exact same seam every other screen used — `js/ui/modal.js`'s `MutationObserver`
 on `hidden` already mirrors it onto `showModal()`/`close()`, and its `scan()`
 selector (`dialog.screen`) picked the element up with zero code changes once the
 class was added, so nothing in that file changed except a stale header comment
@@ -359,7 +359,7 @@ that still counted it among the non-dialog screens. `role="dialog"` and
 `aria-modal="true"` were removed — the native element and `showModal()` now
 supply that semantics for real, so the hand-written attributes would only have
 been redundant duplicates of what the platform now asserts on its own.
-`js/game/uilayers.js`'s `isModal()` (`el.matches(":modal")`) picked it up
+`js/ui/layers.js`'s `isModal()` (`el.matches(":modal")`) picked it up
 unchanged too, since `#track-detail` was already in its `DEFS` list with no
 special flags.
 

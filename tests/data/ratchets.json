@@ -7,11 +7,11 @@
       "gMembers": 221,
       "topLets": 147
     },
-    "js/game/apex.js": {
+    "js/agent/apex.js": {
       "lines": 2600,
       "codeLines": 1975
     },
-    "js/game/agentview.js": {
+    "js/agent/agentview.js": {
       "lines": 2452
     },
     "js/car/car3d.js": {
@@ -42,7 +42,7 @@
       "lines": 1684
     },
     "tools/pick-tests.mjs": {
-      "blanketOnlyRoutes": 15
+      "blanketOnlyRoutes": 7
     }
   }
 }

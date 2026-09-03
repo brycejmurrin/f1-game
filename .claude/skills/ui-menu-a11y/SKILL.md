@@ -26,16 +26,16 @@ decisions → **restructure-screens-css**.
 
 | Surface | Owner | Contract |
 |---|---|---|
-| Topmost / input gate | `js/game/uilayers.js` | `top()` ranks `:modal` above z-index; `anyOpen()` gates driving keys |
-| Dialog seam | `js/game/topmodal.js` | `hidden` is source of truth; `showModal()` mirrors it |
+| Topmost / input gate | `js/ui/layers.js` | `top()` ranks `:modal` above z-index; `anyOpen()` gates driving keys |
+| Dialog seam | `js/ui/modal.js` | `hidden` is source of truth; `showModal()` mirrors it |
 | Escape/back | `data-esc-close`, `data-esc="none"` | Press the named control |
-| Desktop nav | `js/game/menunav.js` | Redirect wheel only when no scroller owns it |
-| Sheet class | `js/game/sheetshape.js` | Writes `data-shape` / `data-pair`; JS must not read it |
-| Selected a11y | `js/game/ariastate.js` | Mirrors visual selected → `aria-pressed` unless claimed |
-| Scroll fade | `js/game/scrollfade.js` | Measures regions; writes fade/position classes |
+| Desktop nav | `js/ui/menu-nav.js` | Redirect wheel only when no scroller owns it |
+| Sheet class | `js/ui/sheet-shape.js` | Writes `data-shape` / `data-pair`; JS must not read it |
+| Selected a11y | `js/ui/aria-state.js` | Mirrors visual selected → `aria-pressed` unless claimed |
+| Scroll fade | `js/ui/scroll-fade.js` | Measures regions; writes fade/position classes |
 
 ```sh
-node tools/pick-tests.mjs js/game/uilayers.js js/game/topmodal.js css/components.css
+node tools/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css
 node tools/test-bg.mjs ui
 node tools/test-bg.mjs gallery          # ui-audit captures — read the PNGs
 npm run test:tooling-fast

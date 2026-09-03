@@ -23,7 +23,7 @@ const GameAudio = (function () {
   let ersOsc = null, ersHp = null, ersGain = null; // continuous ERS deploy whine
   let windSrc = null, windFilter = null, windGain = null; // airflow over the car
 
-  // Per-manufacturer engine character, keyed by team.engine (js/car/teams.js).
+  // Per-manufacturer engine character, keyed by team.engine (js/data/teams.js).
   // Every field is CONSTANT TIMBRE — a fixed multiplier or filter, never a
   // function of rev — so tools/audio-test.cjs's invariants (pitch monotonic in
   // rev per gear, gear1 < gear4 at redline) hold for every voice by

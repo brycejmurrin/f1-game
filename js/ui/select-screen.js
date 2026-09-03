@@ -1,7 +1,7 @@
 /* Apex 26 — the select-screen UI for js/game.js: the track picker with its live
    preview map + elevation canvases, and the fullscreen circuit-detail modal.
    The screen answers WHERE you race and nothing else — who you are and what you
-   drive belong to the garage (js/game/setup-ui.js), which START opens on the
+   drive belong to the garage (js/garage/setup-sheet.js), which START opens on the
    way to the race. It used to carry a YOUR CAR summary card and a GARAGE button
    as well, and won at neither job.
    Also owns the shared team-picker sheet (#teampicker) that the garage opens.
@@ -191,7 +191,7 @@ function buildTeamPicker() {
 }
 
 // Panes only measure themselves when something tells them to; opening a sheet
-// is exactly such a moment (see js/game/scrollfade.js).
+// is exactly such a moment (see js/ui/scroll-fade.js).
 // The track-detail map's size observer (openTrackDetail). Module-scoped so a
 // re-open disconnects the previous one instead of stacking a fresh observer —
 // and a stale closure over the PREVIOUS circuit — on every visit.
@@ -500,7 +500,7 @@ function drawElevProfile(cv, t, showEl) {
 // large preview of the currently-selected circuit: sector-coloured outline,
 // DRS zones, numbered corners, name / GP / length / turn count, track facts.
 /* THE PREVIEW CARD'S BOX IS NOT KNOWN WHEN THE SCREEN OPENS.
- * Same shape as js/game/sheetshape.js's own note: a hidden element measures
+ * Same shape as js/ui/sheet-shape.js's own note: a hidden element measures
  * 0x0, so the first useful measurement is the ResizeObserver callback when its
  * screen is shown, not the call that showed it. updateTrackPreview() runs on
  * that first (unmeasurable) pass and deliberately does not pin; this refits
@@ -743,7 +743,7 @@ function updateTrackPreview() {
   // though the buffer is larger.
   // currentCSSZoom, NOT the raw --ui-scale slider: the sheet paints at the
   // fit-CAPPED --sheet-scale (≈1.76 on an 852x393 phone asking for 200%), so
-  // the slider over-allocated the exact way the minimap fix in js/game/hud.js
+  // the slider over-allocated the exact way the minimap fix in js/ui/hud.js
   // warns about. Capped at 3 like the minimap — DPR-3 phones at 200% were
   // allocating 6x, and 200% browser zoom on a DPR-2 desktop 8x (~10 MB a
   // redraw for a 260px slot).

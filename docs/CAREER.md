@@ -7,8 +7,8 @@ team) and **MY TEAM** (you own the twelfth team) — share one core.
 - **Rules and save:** `js/career/career.js` (global `Career`) — no DOM.
 - **Reliability / DNFs:** `js/race/reliability.js` (global `Reliability`).
 - **Screens:** `js/career/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
-- **Qualifying:** `js/race/quali-model.js` (global `Quali`) — the model: session timing, ordering, the persisted grid; `js/game/quali-sheet.js` (global `QualiSheet`) — `#quali`, the sheet that paints `quali.rows()`.
-- **Ratings:** `js/car/driver-ratings.js` (global `DriverRatings`).
+- **Qualifying:** `js/race/quali-model.js` (global `Quali`) — the model: session timing, ordering, the persisted grid; `js/ui/quali-sheet.js` (global `QualiSheet`) — `#quali`, the sheet that paints `quali.rows()`.
+- **Ratings:** `js/data/driver-ratings.js` (global `DriverRatings`).
 - **Persistence + migration:** `GameStore.migrateCareer` in `js/core/store.js`.
 - **Styles:** `css/career.css`.
 
@@ -143,7 +143,7 @@ Two consequences to respect:
   `quitToMenu`) to re-read `apex26.season` is what drops the alias on the way out.
 
 `dev`/`tdev`/`seats` store deltas, never absolutes, so updating the hardcoded 2026
-grid in `js/car/teams.js` never invalidates a save.
+grid in `js/data/teams.js` never invalidates a save.
 
 ### Randomness
 
@@ -169,7 +169,7 @@ every key in the file ends with its varying part.
 
 ## Driver ratings
 
-`js/car/driver-ratings.js` holds five axes, 0–100, for all 22 drivers, keyed by
+`js/data/driver-ratings.js` holds five axes, 0–100, for all 22 drivers, keyed by
 driver **code** so a driver keeps their ratings when the market moves them.
 
 | Axis | Feeds |
@@ -180,7 +180,7 @@ driver **code** so a driver keeps their ratings when the market moves them.
 | `consistency` | **variance, not speed** — it narrows the band around a driver's pace |
 | `experience` | races started; damps development **and** steer smoothing / unstuck panic / OT hesitation |
 
-It is deliberately not in `js/car/teams.js`: that file is the verified real-world
+It is deliberately not in `js/data/teams.js`: that file is the verified real-world
 grid and is loaded by `tools/carview.html` through the manifest's `CARVIEW` subset,
 which has no use for balance numbers.
 
@@ -273,7 +273,7 @@ nothing in resolution passes it.
 
 ### The garage is the R&D tree
 
-There is no separate research screen. `#carsetup` (`js/game/setup-ui.js`) is the
+There is no separate research screen. `#carsetup` (`js/garage/setup-sheet.js`) is the
 tree, because "what could this car become" is the question you ask standing in
 front of the list you fit from. `G.careerOwned()` is the one test it branches on —
 non-null already means "career rules apply AND the team on screen is the career
@@ -421,7 +421,7 @@ makes a championship a pure pace ranking — and a career flat, because a points
 finish in a bad car is only earned if the good cars can break.
 
 **The rating is derived, never authored.** There is no per-team reliability table
-to keep in step with `js/car/teams.js`. Risk is the team `tier` — the number that
+to keep in step with `js/data/teams.js`. Risk is the team `tier` — the number that
 already says how good the car is — relieved by two things a career can actually
 buy:
 
@@ -745,7 +745,7 @@ and costs a button's height out of a 390 px-tall screen. A card also states what
 opens, which a row of exits cannot.
 
 Registered in all three screen registries — the `UiLayers` layer list
-(`js/game/uilayers.js`, which MenuNav reads), `ScrollFade.SCREENS`, and
+(`js/ui/layers.js`, which MenuNav reads), `ScrollFade.SCREENS`, and
 `AriaState.ROOTS` — or it silently loses keyboard nav, scroll
 fades and screen-reader state. Styles are in `css/career.css`; the season rows are
 the shared `.res-row` vocabulary, podium classes included, so a title-winning year

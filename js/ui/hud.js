@@ -381,7 +381,7 @@ function drawMinimap() {
   // Logical space = the element's LOCAL CSS box (clientWidth is pre-zoom px,
   // the same convention sheetshape.js relies on). Bitmap = local x effective
   // zoom x DPR so one drawn pixel is one physical pixel — mirroring the menu
-  // track preview (js/game/menus.js), which solved this exact blur first.
+  // track preview (js/ui/select-screen.js), which solved this exact blur first.
   // currentCSSZoom, not the raw --hud-scale: the element rides the CAPPED
   // --hud-z, and the raw slider would over-allocate on a capped band. Ratio
   // capped at 3 to bound fill/memory on a DPR-3 phone at HUD SIZE 200%.

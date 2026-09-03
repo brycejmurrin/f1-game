@@ -93,7 +93,7 @@ test("every apply-only knob is registered in APPLY_RACE_IDS", () => {
     ["js/lighting/frame-lights.js", read("js/lighting/frame-lights.js")],
     ["js/game.js", read("js/game.js")],
     ["js/lighting/atmosphere.js", read("js/lighting/atmosphere.js")],
-    ["js/game/particles.js", read("js/game/particles.js")],
+    ["js/fx/particles.js", read("js/fx/particles.js")],
     ["js/render/glx.js", read("js/render/glx.js")],
     ["js/render/glx/post.js", read("js/render/glx/post.js")],
     ["js/render/glx/shadow.js", read("js/render/glx/shadow.js")],
