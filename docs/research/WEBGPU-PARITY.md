@@ -612,7 +612,16 @@ Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
    `fs_main` and pass them down as parameters, because a callee that returns
    early non-uniformly poisons its caller too — the SAA peel hoists its
    object-space derivatives for exactly this reason (a `dpdx` after a
-   non-uniform `matId` branch is a compile error).
+   non-uniform `matId` branch is a compile error). The SEVERITY is the trap:
+   WebKit's `UniformityAnalysis.cpp` errors by default and its enforced set
+   includes the implicit-derivative samplers (`textureSample`,
+   `textureSampleBias`, `textureSampleCompare`) — Dawn only WARNS, on the
+   console, and builds the pipeline anyway. So a module that is clean on
+   every Chromium run can refuse on an iPhone with nothing but a GLX
+   fallback to show for it. Since 2026-09-03 the live `wgx-validate` run
+   prepends `diagnostic(error, derivative_uniformity);` to every module it
+   compiles (WebKit's default; `--lax-uniformity` restores Dawn's) and the
+   tree passes — keep it that way.
 3. **On three/TSL the texture ACCESS MODE is compiled in from the texture
    bound at build time** (found 2026-09-03, `artifacts/wgsl-dump-iphone`).
    r185 `WGSLNodeBuilder.isUnfilterable()` is true for a Nearest/Nearest
@@ -627,6 +636,46 @@ Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
    three-WebGL2. Rule: a placeholder must carry the sampling state of the
    texture that will replace it (`tests/unit/gfx-backend-canary.test.mjs`
    pins TLX's).
+
+4. **`device.onuncapturederror = fn` is DEAF on iOS/Safari 26.0–26.5.**
+   WebKit only wired the property form in commit 689ebe5 (bug 291775,
+   2026-04-26); before it only `addEventListener("uncapturederror", fn)`
+   fired. three r185 (`WebGPUBackend.js` L277) and both of this repo's
+   backends used the property, so every "gpuErrors 0" a phone ever reported
+   on the WebGPU paths was "no reader", not "no errors". Since 2026-09-03
+   TLX and WGX register the listener form first and keep the property as
+   the fallback. This matters because WebKit's silent failures ARRIVE on
+   that channel and nowhere else — the research ranking (2026-09-03,
+   `docs/RENDERERS.md` §WebKit silent draw drops): (1) the Metal PSO is
+   compiled lazily at FIRST DRAW with `error:nil`; on failure WebKit skips
+   `setRenderPipelineState` and still issues the draw, reporting an
+   out-of-memory error "Render pipeline failed compilation likely due to
+   being too complex" only since Oct 2025 — the 360 KB lit fragment is the
+   candidate, the sky's small program is not; (2) the property-form
+   listener above; (3) an indexed draw is silently SKIPPED when any vertex
+   buffer the pipeline declares holds fewer elements than the draw needs,
+   and an index ≥ that count marks the index buffer never-drawn-again;
+   (4) one draw-time validation failure ends the Metal encoder and every
+   later draw in the pass is a no-op, the whole command buffer dropped at
+   submit; (5) WGSL→MSL miscompiles fixed only in mid-2026 — 3-row matrix
+   packing (three's `normalMatrix` is `mat3x3f` in the object struct; a
+   material that never touches normals, like a sky, keeps a correct
+   layout). Fast-math NaN folding, float-backed `depth24plus` bias scale
+   and the mip/view validation of `DataArrayTexture` are the plausible tail.
+
+5. **WebKit caps the PRIVATE address space at 8,192 bytes per module.**
+   Found 2026-09-03 the hour the listener above went live: every lit
+   pipeline on the owner's iPhone failed with "The combined byte size of all
+   variables in the private address space exceeds 8192 bytes" — three r185
+   declares every node variable as a module-scope `var<private>` and the
+   lit fragment had 1,597 of them (~12.4 KB natural size; 1,256 were the
+   vec2 temporaries of the inlined noise helpers). Dawn does not check the
+   sum. Two fixes, both required: `tsl-chunks.js` gives `hash21`/`vnoise`/
+   `ignoise` a `setLayout` so they compile once as real functions, and
+   vendor PATCHES.md §4 makes three emit render-stage node variables inside
+   `main()` (function scope, uncounted). WGX is not exposed: hand-written
+   WGSL keeps its temporaries in function scope already — keep it so, and
+   never introduce `var<private>` arrays.
 
 Breaking either does not throw at the call site: WGX's boot self-test fails,
 the backend refuses, and the game falls back to GLX with one console warning —

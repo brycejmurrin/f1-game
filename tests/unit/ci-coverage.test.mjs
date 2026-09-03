@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci-coverage.mjs";
 
 const ciWorkflow = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
@@ -423,4 +424,39 @@ test("docs-only pushes do not start CI (Actions minutes, 2026-09-02)", () => {
     for (const p of ['"docs/**"', '"**/*.md"', '".claude/**"', '".cursor/**"']) assert.ok(b.includes(`- ${p}`), `${p} missing from paths-ignore`);
   }
   assert.match(pushBlock, /branches-ignore: \[claude\/f1-game-project-26h3ng\]/, "the deploy branch stays routed through pages.yml");
+});
+
+test("every inline `node -e '…'` script in the workflows is syntactically complete (no apostrophe can close the quote early)", () => {
+  // Run 33757119814 (2026-09-03): all four macOS game checks passed and the
+  // Verdict step FAILED with "SyntaxError: Unexpected end of input" — a
+  // comment inside the single-quoted script said "three's", the apostrophe
+  // ended the bash string, and node received half a program. The gate
+  // failed CLOSED that time; the same slip inside an `if (...)` could just as
+  // easily drop a clause and pass. Extract every `node -e '` block as bash
+  // would see it and compile it: a body that contains an apostrophe is
+  // truncated by construction, and one that does not must still parse.
+  const files = ["ci.yml", "pages.yml", "gpu-census.yml"];
+  let blocks = 0;
+  for (const f of files) {
+    const text = fs.readFileSync(new URL(`../../.github/workflows/${f}`, import.meta.url), "utf8");
+    const lines = text.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (!/^\s*node -e '$/.test(lines[i])) continue;
+      const indent = lines[i].match(/^\s*/)[0];
+      let j = i + 1;
+      // The closing quote may carry a redirect / fallback on the same line
+      // (`' > "$FILE" || run_all …` in ci.yml).
+      while (j < lines.length && !(lines[j].startsWith(indent + "'") && /^'(\s|$)/.test(lines[j].slice(indent.length)))) j++;
+      assert.ok(j < lines.length, `${f}:${i + 1}: node -e block never closes`);
+      const body = lines.slice(i + 1, j).join("\n");
+      const apos = body.split("\n").findIndex((l) => l.includes("'"));
+      assert.equal(apos, -1,
+        `${f}:${i + 1 + apos + 1}: an apostrophe inside a single-quoted node -e script ends the script there`);
+      assert.doesNotThrow(() => new vm.Script(body, { filename: `${f}:${i + 1}` }),
+        `${f}:${i + 1}: the inline node script does not parse`);
+      blocks++;
+      i = j;
+    }
+  }
+  assert.ok(blocks >= 2, `found only ${blocks} node -e blocks — the extraction regex has stopped matching`);
 });

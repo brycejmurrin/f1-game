@@ -1938,3 +1938,68 @@ The steady-state lit frame on three-WebGPU is correct here (small viewport,
 black-car report on an iPhone is WebKit-specific; the GOV panel and
 `__apex.diag().env.backendState` now carry `api`, `gpuErrors` and the first
 GPU/shader error so the next phone screenshot names it.
+
+### 2026-09-03 — the census gate failed on its own script, and what the real GPU said
+
+`gpu-census.yml` run `33757119814` came back FAILURE with every game check
+green: the Verdict step is a `node -e '…'` inside a bash single-quoted string,
+and a comment in it said "three's" — the apostrophe ended the string and node
+was handed half a program (`SyntaxError: Unexpected end of input`). The gate
+failed closed this time; the same slip inside a condition could drop a clause
+and pass. `tests/unit/ci-coverage.test.mjs` now extracts every inline
+`node -e` block from the three workflows exactly as bash would and compiles it
+(`vm.Script`), and refuses any apostrophe in the body.
+
+The run itself is the real-GPU baseline after the WebKit AUTO → three-WebGL2
+change: all four legs `ok`, `gpuErrors 0` (table in
+`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a real GPU). One number
+to carry: three-WebGL2 on ANGLE-Metal spent **16.2 s in a single first frame**
+(program link + synchronous Metal compile of the TSL lit program). The frames
+themselves are on Azure blob storage the container proxy denies — read them in
+the Actions UI.
+
+`tools/wgx-validate.mjs` (live run) now prepends
+`diagnostic(error, derivative_uniformity);` to every module it compiles,
+because that is WebKit's default severity and Dawn's is a console warning:
+a WGSL module that only warns here refuses to build on an iPhone and WGX falls
+back to GLX without a word. `--lax-uniformity` restores Dawn's default to
+bisect a red run. The tree passed on the first run (montreal, 90 frames,
+`gpuErrors 0`, `wgslParseErrors 0`).
+
+### 2026-09-03 — `image-grade-visual` is threshold-marginal on a real GPU
+
+`ci.yml` run 33762205584 (dispatch, `renderer_macos: true`, tip 905ad6c): the
+Metal renderer job failed ONE spec — `image-grade-visual.spec.js › highlights
+predominantly change bright pixels`, bright/dark delta ratio 1.86 against the
+required 2.0 — and `blacks visibly change the deepest image detail` passed
+only on retry (first attempt moved the deepest pixels the wrong way). The
+single allowed re-run was green on the same commit, and the local GLX frame
+on the same tree rendered normally, so this is a flake, not a regression.
+Mechanism: the spec compares two full-page screenshots of a `park()`-frozen
+race, but the render clock keeps advancing between captures (cloud drift,
+sky), and on a 60 fps GPU the two captures are more frames apart than on
+SwiftShader. `__apex.renderClock(t)` exists to pin that and the spec does not
+call it — pin it before each capture pair when this spec is next touched.
+
+### 2026-09-03 — the iPhone's three-WebGPU failure, measured on Dawn before and after
+
+The phone's metrics `log` tab named it: every lit pipeline refused with
+WebKit's "The combined byte size of all variables in the private address
+space exceeds 8192 bytes". The fix was verified here without a phone by
+dumping every WGSL module three generates (scratch `dump-wgsl.mjs`, Dawn on
+Lavapipe, iPhone UA, `artifacts/wgsl-dump-iphone` → `artifacts/wgsl-dump-2`):
+
+| | before | after |
+|---|---|---|
+| lit fragment size | 359 434 B | 99 204 B |
+| module-scope `var<private>` in the lit fragment | 1,597 (~12.4 KB) | 1 (`output`, 16 B) |
+| `vnoise` bodies in the lit fragment | inlined per call | 1 function, 106 calls |
+| Dawn `gpuErrors` / pipelines | 0 / 24 | 0 / 24 |
+
+Dawn compiles both, which is the point: this class of defect is invisible to
+every Chromium run and only a WebKit device or a private-variable count on
+the dump can see it. When a TSL change lands, re-dump and keep the module-scope
+private sum well under 8,192 bytes; the `gfx-backend-canary` pins the patch
+and the noise layouts. The phone is the confirmation step (THREE PATH:
+WEBGPU, one lap, GOV `gfx` row `err 0`).
+

@@ -1338,6 +1338,29 @@ test("the vendored three carries the swizzle patch — Chromium 141 rejects r185
   assert.equal(THREE_BUNDLE.split('this.swizzle=void 0').length - 1, 2,
     "the swizzle patch must cover BOTH sites (constructor + reset())");
 });
+test("the vendored three emits render-stage node variables at FUNCTION scope (WebKit 8 KB private cap, PATCHES.md §4)", () => {
+  // iOS/Safari 26 refuses a module whose module-scope var<private> sum passes
+  // 8,192 bytes ("The combined byte size of all variables in the private
+  // address space exceeds 8192 bytes"); r185 declared every node variable that
+  // way and the lit fragment carried 1,597 of them. The patch routes the
+  // vertex/fragment stages through getVars(stage, false) and moves the block
+  // inside main(). Dawn never checks the sum, so only this pin and a phone can.
+  assert.match(THREE_BUNDLE, /s\.vars=this\.getVars\(t,"compute"===t&&r\)/,
+    "render stages must take the function-scope getVars form (compute keeps allowGlobalVariables)");
+  assert.match(THREE_BUNDLE, /@vertex\\nfn main\( \$\{e\.attributes\} \) -> VaryingsStruct \{\\n\\n\\t\/\/ vars\\n\\t\$\{e\.vars\}/,
+    "vertex template must declare the node variables inside main()");
+  assert.match(THREE_BUNDLE, /@fragment\\nfn main\( \$\{e\.varyings\} \) -> \$\{e\.returnType\} \{\\n\\n\\t\/\/ vars\\n\\t\$\{e\.vars\}/,
+    "fragment template must declare the node variables inside main()");
+  assert.doesNotMatch(THREE_BUNDLE, /\/\/ vars\\n\$\{e\.vars\}\\n\\n\/\/ codes\\n\$\{e\.codes\}\\n\\n@(vertex|fragment)/,
+    "a module-scope // vars block before @vertex/@fragment is the pristine r185 emission");
+  // The graph-side half: the shared noise helpers are layouted (real functions),
+  // not inlined ~50× into the lit shader.
+  const chunks = read("js/render/three/tsl-chunks.js");
+  for (const name of ["apexHash21", "apexVnoise", "apexIgnoise"]) {
+    assert.match(chunks, new RegExp(`setLayout\\(\\{ name: "${name}", type: "float", inputs: \\[\\{ name: "\\w+", type: "vec2" \\}\\] \\}\\)`),
+      `${name} must carry a setLayout so it compiles once instead of per call`);
+  }
+});
 test("the vendored three carries the #33952 bind-group leak backport (PR #33954)", () => {
   // _destroyBindings must delete the destroyed bind group from the shared
   // texture's bindGroups Set, or the Set grows unboundedly holding
@@ -1346,6 +1369,20 @@ test("the vendored three carries the #33952 bind-group leak backport (PR #33954)
   // Drop the assertion (and the patch) on the first release containing #33954.
   assert.match(THREE_BUNDLE, /bindGroups\.delete\(\w+\)\}\)\(this\.textures\.get\(\w+\.texture\)\)/,
     "the #33952 backport is missing from the vendor bundle — evicted-material dispose() now leaks (see vendor/three-0.185.1/PATCHES.md §2)");
+});
+test("the vendored three carries the #34405 polygonOffset pipeline-key backport (PR #34406)", () => {
+  // r185's WebGPU backend keys a pipeline on blend/depth/stencil/side/formats
+  // but not on polygonOffset*, so TLX's bias-only material variants (tsl-fx
+  // road decals −4/−8, tsl-lit o.depthBias) shared one GPURenderPipeline and
+  // one of each pair drew with the other's bias. All THREE sites must carry
+  // the fields: the cache-key array, the needsRenderUpdate compare chain and
+  // its assignment block. Drop with the patch on the first release with #34406.
+  assert.match(THREE_BUNDLE, /r\.stencilWriteMask,r\.polygonOffset,r\.polygonOffsetFactor,r\.polygonOffsetUnits,r\.side,/,
+    "cache key lacks polygonOffset* (vendor/three-0.185.1/PATCHES.md §3)");
+  assert.match(THREE_BUNDLE, /t\.polygonOffset===s\.polygonOffset&&t\.polygonOffsetFactor===s\.polygonOffsetFactor&&t\.polygonOffsetUnits===s\.polygonOffsetUnits&&t\.side===s\.side/,
+    "needsRenderUpdate does not compare polygonOffset* (PATCHES.md §3)");
+  assert.match(THREE_BUNDLE, /t\.polygonOffset=s\.polygonOffset,t\.polygonOffsetFactor=s\.polygonOffsetFactor,t\.polygonOffsetUnits=s\.polygonOffsetUnits,t\.side=s\.side/,
+    "needsRenderUpdate does not record polygonOffset* (PATCHES.md §3)");
 });
 
 /** The object literal passed to `new THREE.WebGPURenderer({...})`, brace-matched

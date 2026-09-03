@@ -228,6 +228,26 @@ What the real GPU has found so far, none of it visible to any software test:
 |---|---|---|
 | `_softAdapter` read headless (and empty `adapter.info`) as software, so real hardware ran the degraded content path | `softAdapter: true` with `softwareGL: false` | `67d5616` |
 | `releaseMirrors()` freed attribute arrays the node builder still needed, so every env-probe face threw | `envFail` 81 (WebGPU) / 41 (WebGL2), `env ready=false` | `69836ca` |
+| the Verdict script itself: an apostrophe in a `node -e '…'` comment ("three's") closed the bash quote, node got half a program, the gate went red on a run where all four legs were clean | step 14 `SyntaxError: Unexpected end of input` after four `ok:true` legs (run `33757119814`) | 2026-09-03 (+ `ci-coverage.test.mjs` compiles every inline script) |
+
+Run `33757119814` (2026-09-03, `0ea825d`, the first census after the WebKit
+AUTO→three-WebGL2 deploy) is the current real-GPU baseline — all four legs
+`ok:true`, `gpuErrors 0`, `softAdapter false`, env probe `fail 0`:
+
+| leg | fps | tier | scale | `open.maxMs` (worst frame in the first 600) | meanLuma | note |
+|---|---|---|---|---|---|---|
+| three / WebGPU | 8 | 0 | 1 | 7615 | 37.8 | headless UA → soft-blit; `softRead.lastMs` 13 422 — the readback, not the render, is what is slow here |
+| three / WebGL2 | 59.9 | 0 | 1 | **16 250** | 62.8 | `loop: +1 frames/16647ms`: ONE 16 s frame — three links its TSL programs on first render and ANGLE-Metal compiles them synchronously |
+| GLX | 60.3 | 1 | 0.9 | 1850 | 67.7 | first-draw stall in the 1–2 s class the ANGLE-Metal research predicted (PSO + uniform resolve) |
+| WGX | 59.4 | 0 | 1 | 1452 | 74.0 | headless → soft-present by design; native swapchain unproven on this image |
+
+Two limits of this evidence: `meanLuma` is not comparable across legs (the
+three-WebGPU leg is a blit of whatever the last readback returned), and the
+`game-*.png` frames are uploaded to Azure blob storage that this container's
+egress proxy denies (`CONNECT … 403`) — read them in the Actions UI, not from
+an agent session. The 16 s three-WebGL2 first frame is the same first-draw
+compile the phone pays (ANGLE-Metal, synchronous `MTLLibrary` build); it lands
+inside the loading screen on a device but is worth a warm-up pass one day.
 
 ### Cursor Cloud agent environment (2026-08-17)
 

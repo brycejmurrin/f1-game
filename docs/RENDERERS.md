@@ -85,6 +85,36 @@ back to WebGL2 without always wiping the user’s pick. WGX climbs
 `gfxWgxLevel` (full → lite → minimal → session skip). Phones are not
 hard-refused; tiers read `GLX.isMobile` / `mobileTier` for caps.
 
+## WebKit silent draw drops (iOS 26, three-WebGPU / WGX) — what "no errors" meant
+
+The phone that rendered only the sky on three-WebGPU reported `gpuErrors 0`
+because iOS 26.0–26.5 never fires `device.onuncapturederror = fn` (WebKit
+689ebe5, 2026-04-26, bug 291775); three r185 and both our backends used the
+property. Both now register `addEventListener("uncapturederror")` first.
+With the ear open, the WebKit-source ranking of what drops draws without a
+word (full list and commits: `docs/research/WEBGPU-PARITY.md` §5a rule 4):
+
+| # | mechanism | discriminator | A/B on the phone |
+|---|---|---|---|
+| 1 | Metal PSO compiled lazily at first draw with `error:nil`; on failure the draw is issued with no pipeline. OOM error "…too complex, please reduce its size" (only since Oct 2025) | sky (small program) survives, every lit draw vanishes; `gpuFirst` now shows the message | THREE PATH: WEBGPU + COPY DIAG after one lap; if it names "too complex", the lit program is the size problem |
+| 3 | indexed draw skipped when any declared vertex buffer is one element short; OOB index poisons the index buffer for good | per-mesh, not per-material | `tlxForceBatches` / chunk on-off |
+| 4 | one validation failure kills the encoder for the rest of the pass | everything after the first bad draw missing, sky first so it survives | `tlxNoMrt` |
+| 5 | mat3 packing miscompile (three `normalMatrix` in the object struct) fixed upstream mid-2026 | materials using normals only | a `colorNode`-only material draws, a lit one does not |
+
+**Resolved the same day.** With the listener live the phone reported
+`err 1 · setPipeline: invalid RenderPipeline`, and the metrics `log` tab
+carried three's own line for every lit variant: `Render pipeline creation
+failed (renderPipeline_MeshBasicNodeMaterial_41): The combined byte size of
+all variables in the private address space exceeds 8192 bytes`. WebKit caps
+module-scope `var<private>` storage at 8 KB; three r185 emits every node
+variable that way and the lit fragment had 1,597 (the sky's 174 fit). Fix:
+layouted noise helpers in `tsl-chunks.js` (compile once, not inlined ~50×)
+plus vendor PATCHES.md §4 (node variables declared inside `main()`). None
+of the ranked mechanisms above was it; they stay as the bisect list for the
+NEXT silent drop. AUTO on WebKit stays on three's WebGL2 backend until the
+WebGPU path has a lap of phone evidence (`docs/research/WEBGPU-PARITY.md`
+§5a rule 5).
+
 ## Screenshots — why WebGPU can look black
 
 Play with this in **SETTINGS ▸ DISPLAY**. The controls are injected next to
@@ -256,7 +286,9 @@ pixels use `tools/gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for the
 readback oracle use `tools/wgx-capture.mjs` → `frame.png`. Full trap list:
 `.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
 WGSL validation without a browser: `node tools/wgx-validate.mjs` (real Dawn,
-~5 s) — never ship "read-verified" WGSL.
+~5 s) — never ship "read-verified" WGSL. The live run compiles every module
+at WebKit's ERROR-severity uniformity default (Dawn only warns), so a pass
+here is evidence about an iPhone too; `--lax-uniformity` opts out to bisect.
 
 ## Related
 
