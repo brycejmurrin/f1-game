@@ -17,8 +17,8 @@ return a short summary with citations (URLs + live vs local build numbers).
   and search tools (`WebFetch` / `WebSearch`, or the hosted TinyFish
   `fetch_content` / `search` when the session has that connector).
 - **Out:** working-tree WebGL, `chrome-start`, Playwright, `test-bg.mjs`,
-  source edits, cache bumps, and `tools/tinyfish-mcp.sh` / the `tinyfish_*`
-  half of `tools/probe-mcp.py` — the container egress blocks
+  source edits, cache bumps, and `tools/mcp/tinyfish-mcp.sh` / the `tinyfish_*`
+  half of `tools/mcp/probe-mcp.py` — the container egress blocks
   `agent.tinyfish.ai`, so the in-repo proxy can never answer here.
 
 ## Recipes

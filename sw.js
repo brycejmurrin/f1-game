@@ -74,7 +74,7 @@ async function precacheAssetLists() {
     // OPTIONAL for the same reason as three.js: most sessions never scan, and
     // an install must not fail over 257 KB they will not run.
     "vendor/jsqr-1.4.0/jsQR.js",
-    // Rapier (js/game/debrisworld.js) is dynamic-import()ed, never tagged, so
+    // Rapier (js/physics/debris-world.js) is dynamic-import()ed, never tagged, so
     // the parser below cannot find it either. Unlike the entries around it this
     // one is ON by default — an installed-but-not-yet-raced PWA that never
     // seeded it loses debris/incident physics offline. Still OPTIONAL, not
@@ -115,7 +115,7 @@ async function precacheAssetLists() {
     "js/render/three/tlx-post.js",
     "js/render/three/tlx.js",
     // LAZY_RACE + LAZY_SCENERY — the race payload; a miss builds a bare circuit offline
-    "js/game/light-presets.js",
+    "js/lighting/presets.js",
     "js/circuits/scenery/bahrain.js",
     "js/circuits/scenery/monaco.js",
     "js/circuits/scenery/silverstone.js",
@@ -200,7 +200,7 @@ async function precacheAssetLists() {
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/game/agentview-raster.js","js/game/agentview.js","js/game/apex.js"];
+  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview.js","js/agent/apex.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
@@ -284,7 +284,7 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(three|webgpu)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/game\/light-presets\.js$/.test(u)
+      /^js\/render\/(three|webgpu)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
         ? u + "?v=" + build : u);
     await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
     await self.skipWaiting();
@@ -309,7 +309,7 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  // blob: URLs (the player's uploaded music, js/game/music-lib.js) report the
+  // blob: URLs (the player's uploaded music, js/audio/music-lib.js) report the
   // PAGE's origin, so the same-origin test below would wave them through — and
   // cache.put() throws on any non-HTTP scheme, which would fail the request
   // instead of just declining to cache it. Spec says a SW never sees these;
@@ -386,10 +386,10 @@ self.addEventListener("fetch", (event) => {
   // post-release, so a cache hit is always correct — no revalidation needed.
   //
   // EXCEPT on a dev host. The committed shell reads `?v=dev` for every asset
-  // (tools/gen-shell.mjs; hashes exist only in the deploy's staged copy), so a
+  // (tools/gen/gen-shell.mjs; hashes exist only in the deploy's staged copy), so a
   // cache-first worker on localhost would pin the first js/css it saw for the
   // life of the cache generation. Network-first there, cache as the offline
-  // fallback — tools/offline-precache-check.cjs still passes because the
+  // fallback — tools/check/offline-precache-check.cjs still passes because the
   // fallback is the precache.
   event.respondWith((async () => {
     if (DEV_HOST && url.origin === self.location.origin) {

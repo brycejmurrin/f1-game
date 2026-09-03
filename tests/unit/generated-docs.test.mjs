@@ -30,9 +30,9 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
 const GENERATORS = [
-  { tool: "tools/gen-tools-readme.mjs", target: "tools/README.md" },
-  { tool: "tools/gen-slider-doc.mjs", target: "docs/LIGHTING-TUNER-SLIDERS.md" },
-  { tool: "tools/gen-hooks-table.mjs", target: "docs/DEBUG-HOOKS.md" },
+  { tool: "tools/gen/gen-tools-readme.mjs", target: "tools/README.md" },
+  { tool: "tools/gen/gen-slider-doc.mjs", target: "docs/LIGHTING-TUNER-SLIDERS.md" },
+  { tool: "tools/gen/gen-hooks-table.mjs", target: "docs/DEBUG-HOOKS.md" },
 ];
 
 function check(tool) {
@@ -58,9 +58,36 @@ for (const g of GENERATORS) {
 test("tools/README.md: one row per tool, every row within the @doc cap, no undefined", () => {
   const index = read("tools/README.md");
   // The data-files table is derived ("read by" lists), not @doc text — cap only the tool rows.
-  const toolTables = index.split("### Data files")[0];
+  const toolTables = index.split("## Data files")[0];
   const rows = toolTables.split("\n").filter((l) => /^\|\s*\*\*[^*]+\*\*\s*\|/.test(l));
-  assert.ok(rows.length > 120, `expected > 120 tool rows, found ${rows.length}`);
+  // A ">120" floor was a flat-tools/ artefact: it could only ever notice a
+  // catastrophic empty table, and it drifts every time a tool is added or
+  // deleted. Count what is ON DISK instead — the index must have exactly one
+  // row per indexable file, so a tool that lands in a subdirectory the
+  // generator does not group is caught here as well as in the generator.
+  const onDisk = [];
+  (function walk(dir, rel) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith("_") || e.name === "__pycache__" || e.name === "README.md") continue;
+      const abs = path.join(dir, e.name), r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(abs, r);
+      else if (/\.(mjs|cjs|js|sh|py|html)$/.test(e.name)) onDisk.push(r);
+    }
+  })(path.join(ROOT, "tools"), "");
+  assert.ok(onDisk.length >= 100, `the walk saw only ${onDisk.length} tools — a silent empty list proves nothing`);
+  const listed = new Set(rows.map((l) => l.match(/^\|\s*\*\*([^*]+)\*\*/)[1]));
+  assert.deepEqual(onDisk.filter((f) => !listed.has(f)), [], "a tool on disk has no index row");
+  assert.equal(rows.length, onDisk.length,
+    `index has ${rows.length} tool rows for ${onDisk.length} files on disk`);
+
+  // Every group heading the generator emits names a real directory, and every
+  // directory with tools in it got a heading — the grouping IS the index now.
+  const headings = [...index.matchAll(/^### `tools\/([a-z/]*)`$/gm)].map((m) => m[1].replace(/\/$/, ""));
+  // Grouping is by TOP-LEVEL directory; lighting/campaign/ sits under the
+  // lighting heading, the way the generator emits it.
+  const dirs = new Set(onDisk.map((f) => (f.includes("/") ? f.slice(0, f.indexOf("/")) : "")));
+  assert.deepEqual([...dirs].filter((d) => !headings.includes(d)).sort(), [],
+    "a tools/ subdirectory has files but no group heading");
   assert.doesNotMatch(index, /\bundefined\b/);
   // Second cell, split on UNESCAPED pipes, escapes folded back before measuring.
   const docCell = (l) => (l.split(/(?<!\\) \| /)[1] || "").replace(/\s*\|\s*$/, "").replace(/\\\|/g, "|");
@@ -94,7 +121,7 @@ test("docs/DEBUG-HOOKS.md: the hook index names every __apex hook plus the agent
   // A CELL that is undefined is the generator bug; the word inside a quoted
   // source expression (`typeof F1API !== "undefined"`) is source, not a bug.
   assert.doesNotMatch(b, /\|\s*undefined\s*\||\(undefined[,)]|undefined\(/);
-  const src = read("js/game/apex.js");
+  const src = read("js/agent/apex.js");
   const body = src.slice(src.indexOf("const api = {"));
   const names = new Set();
   for (const m of body.matchAll(/^ {2}(?:async\s+)?([a-zA-Z_$][\w$]*)\s*[(:]/gm)) names.add(m[1]);
@@ -123,7 +150,7 @@ test("a slider's help text states ITS OWN ceiling, not a bound it no longer has"
   // Only the "Ceiling is" / "Tops out at" phrasing is checked. A help may name
   // other numbers about a CONSUMER (mistDensity's "caps the bank at 0.45",
   // vignetteSoft's own smoothstep constants) and those are not the slider's max.
-  const src = fs.readFileSync(path.join(ROOT, "js/game/lighting-knobs.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/lighting/knobs.js"), "utf8");
   const bad = [];
   const defRe = /\{\s*id:\s*"(\w+)"[^}]*?max:\s*([\d.]+)[^}]*?help:\s*"((?:[^"\\]|\\.)*)"/g;
   let m, checked = 0;

@@ -27,7 +27,7 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = readFileSync(join(ROOT, "js/game/store.js"), "utf8");
+const SRC = readFileSync(join(ROOT, "js/core/store.js"), "utf8");
 
 /** Load store.js over a fake localStorage + window, returning the pieces a test
  *  needs: the module's `store`, the disk behind it, and the `storage` handler it
@@ -53,7 +53,7 @@ function load(writeError = null) {
   sandbox.window = sandbox;
   sandbox.addEventListener = (type, fn) => { listeners.set(type, fn); };
   const ctx = vm.createContext(sandbox);
-  vm.runInContext(SRC, ctx, { filename: "js/game/store.js" });
+  vm.runInContext(SRC, ctx, { filename: "js/core/store.js" });
   const GameStore = vm.runInContext("GameStore", ctx);
   return { store: GameStore.store, disk, onStorage: listeners.get("storage") || null };
 }

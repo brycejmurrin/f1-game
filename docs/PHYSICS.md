@@ -15,7 +15,7 @@ Per-axle bicycle model. Key tuning variables in `game.js`: `WHEELBASE`,
 `PLAYER_GRIP`, `FRONT_GRIP`, `YAW_DAMP`, `YAW_INERTIA`, `PACE`. Modify via
 `__apex.setPhysics(o)` for A/B tests. The model's immutable constants (`VMAX`,
 `ACCEL`, `BRAKE`, `LAT_MAX`, `LONG_GRIP`, the `X_*` aero pairs, the ERS/OT
-windows, …) live in `js/game/physics-consts.js` (global `PhysicsConsts`),
+windows, …) live in `js/physics/consts.js` (global `PhysicsConsts`),
 destructured once by game.js at eval time — anything a slider or `setPhysics`
 can change stays a `let` in game.js.
 
@@ -114,7 +114,7 @@ same draw, so its ACTIVE AERO button shows the real geometry at real angles.
 `c.xOn` is the switch and `c.xArmed` whether the car is allowed the mode here at
 all. Allowed means **inside an ACTIVATION ZONE**: the FIA approves fixed zones
 per circuit and the standard ECU refuses to rotate the wings outside one, so
-`AeroZones.create(G).build()` (`js/game/aerozones.js`, wired into game.js as
+`AeroZones.create(G).build()` (`js/physics/aero-zones.js`, wired into game.js as
 `aeroZ`) scans each built track for contiguous runs under `X_ZONE_K`
 and keeps those longer than `X_STRAIGHT_T × X_ZONE_VREF` (210 m — the rule's
 three seconds at racing speed). Zones are measured against a FIXED reference
@@ -152,7 +152,7 @@ so it inherits DRS's safety restrictions; active aero inherits none of them.
 | under a caution | available | disabled |
 | circuit with no zones | unavailable (Monaco) | available |
 
-`otEnabled()` (a game.js delegate to `RaceControl`, `js/game/racecontrol.js`) is the race-wide gate — it reads `ranked[0].lap` (the
+`otEnabled()` (a game.js delegate to `RaceControl`, `js/race/race-control.js`) is the race-wide gate — it reads `ranked[0].lap` (the
 LEADER's, because a field-wide switch is what race control throws, and it is
 O(1) since `ranked` is already sorted) and `caution.level`. `c.otArmed` folds
 that together with the car's own gap and cooldown. The HUD says `NO OVERTAKE`
@@ -201,7 +201,7 @@ forever. Lowering a default and migrating a stored value are DIFFERENT ACTS and
 both are usually needed: the first reaches nobody who has opened the settings,
 the second reaches nobody who has not.
 
-`STEER_SCHEMA` in `js/game/steer-tuning.js` is the migration, and it is a
+`STEER_SCHEMA` in `js/input/steer-tuning.js` is the migration, and it is a
 per-version LADDER (`STEER_MIGRATIONS`, currently at 4), not a single gate. That
 distinction is load-bearing. It was once `if (stored >= STEER_SCHEMA) return`
 followed by the v2 body, which works for exactly one version: bump the constant
@@ -218,7 +218,7 @@ current schema is left completely alone.
 ## Weather and tyres
 
 Weather and the fitted compound meet in ONE place: `gripMult(c)` in `js/game.js`,
-reading `WET_GRIP` in `js/game/physics-consts.js`. The table is indexed by the
+reading `WET_GRIP` in `js/physics/consts.js`. The table is indexed by the
 compound's tread class — `wetTread` in the Parts catalog, absent = 0 = slick:
 
 | condition | slick | intermediate (`wetTread: 1`) | full wet (`wetTread: 2`) |
@@ -231,7 +231,7 @@ compound's tread class — `wetTread` in the Parts catalog, absent = 0 = slick:
 this landed the function read the weather and never the tyre, so the two wet
 compounds were a pure penalty in the only conditions they exist for: you paid
 about 10% of the car to fit a full wet and the rain treated you exactly like a
-slick. `tools/parts-ladder.mjs` had been reporting it from the other side —
+slick. `tools/car/parts-ladder.mjs` had been reporting it from the other side —
 those two rows are the only never-optimal options in the whole catalog, and
 `tests/unit/parts-ladder.test.mjs` still names them as exemptions because the
 ladder scores the four DRY stats and none of them can say "works when it rains".
@@ -298,7 +298,7 @@ move — it only hands the wet compounds back the braking their tread earns.
 ## Curvature channels — the "arc must not reach the driver" table
 
 Every consumer of `Tracks.curvature()` (direct calls plus the two
-destructured aliases in `js/track/mesh.js` and `js/track/tracks.js`)
+destructured aliases in `js/track/core/mesh.js` and `js/track/tracks.js`)
 classified into its legitimate channel. Audited 2026-08-27 by the
 physics-contract-auditor: ZERO violations — every player-path read is
 behind an assist knob that defaults to 0, or reaches only render / audio /
@@ -312,13 +312,13 @@ it lands.
 | `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target | **AI-only** | each inside the `!c.human` arm |
 | `js/game.js` | `updateCar` RACING LINE assist | **assist-gated** | inside `if (raceLineAssist !== 0)`; slider def 0 |
 | `js/game.js` | `coast` | **broadcast-only** | runs only on `c.finished` cars — driving control is already disconnected. Any future reuse of `coast()` on a live car is a BLOCKER |
-| `js/game/aerozones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |
-| `js/game/debrisworld.js` | `registerFurniture` | **broadcast-only** | apex-kerb cones in the one-way cosmetic Rapier side-world |
-| `js/game/cameras.js` | `vantage` | **broadcast-only** | only heli/side/cinematic broadcast cams; 0 in every driven mode |
-| `js/game/quali.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
-| `js/game/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue |
-| `js/game/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
-| `js/game/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
-| `js/track/maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
-| `js/track/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
+| `js/physics/aero-zones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |
+| `js/physics/debris-world.js` | `registerFurniture` | **broadcast-only** | apex-kerb cones in the one-way cosmetic Rapier side-world |
+| `js/camera/vantage.js` | `vantage` | **broadcast-only** | only heli/side/cinematic broadcast cams; 0 in every driven mode |
+| `js/race/quali-model.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
+| `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue |
+| `js/agent/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
+| `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |
+| `js/ui/track-maps.js` | measureApex/detectDRS/detectCorners | **broadcast-only** | 2D picker/popup/minimap outlines (menus + HUD drawing only) |
+| `js/track/core/mesh.js` | findCorners, bankingProfile, banked-corner pick | **surface** | build-time road-geometry decisions baked into the mesh — road shape itself |
 | `js/track/tracks.js` | build LUT bake, signboard side pick | **surface** | the producer itself, plus static scenery placement |

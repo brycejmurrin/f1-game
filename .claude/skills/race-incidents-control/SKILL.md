@@ -32,10 +32,10 @@ Do **not** use this for:
 
 | Module | Authority contract |
 |---|---|
-| `js/game/debrisworld.js` | Rapier side-world for render/cosmetic-plus debris; never writes car pose, `(s,x)`, speed, or heading |
-| `js/game/incidentsim.js` | High-risk layer; may move cars only inside finite, bounded takeover windows with fallback |
-| `js/game/racecontrol.js` | Read-only flag machine over `DebrisWorld.hazards()`; host-owned in multiplayer |
-| `js/game/reliability.js` | Staged DNF/retirement plan; deterministic and career-aware |
+| `js/physics/debris-world.js` | Rapier side-world for render/cosmetic-plus debris; never writes car pose, `(s,x)`, speed, or heading |
+| `js/physics/incident-sim.js` | High-risk layer; may move cars only inside finite, bounded takeover windows with fallback |
+| `js/race/race-control.js` | Read-only flag machine over `DebrisWorld.hazards()`; host-owned in multiplayer |
+| `js/race/reliability.js` | Staged DNF/retirement plan; deterministic and career-aware |
 
 Flags / storage:
 
@@ -66,13 +66,13 @@ Commands:
 ```sh
 npm run test:tooling-fast
 node --test tests/unit/race-control.test.mjs
-node tools/test-bg.mjs driving   # in background (non-blocking)
+node tools/ci/test-bg.mjs driving   # in background (non-blocking)
 ```
 
 Deep references:
 
-- Headers of `js/game/debrisworld.js`, `js/game/incidentsim.js`,
-  `js/game/racecontrol.js`.
+- Headers of `js/physics/debris-world.js`, `js/physics/incident-sim.js`,
+  `js/race/race-control.js`.
 - `docs/DEBUG-HOOKS.md` sections for `caution()` and `retirements()`.
 
 

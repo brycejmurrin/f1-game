@@ -36,9 +36,9 @@ import { seedStoreGlobal } from "../helpers/seed-store.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 seedLogGlobal();
 seedStoreGlobal();   // perf.js persists the sentinel through GameStore.store's raw lane
-const SRC = fs.readFileSync(path.join(ROOT, "js/game/perf.js"), "utf8");
+const SRC = fs.readFileSync(path.join(ROOT, "js/perf/governor.js"), "utf8");
 
-// A fake renderer mirroring GLX.setRenderScale (js/render/glx.js) EXACTLY,
+// A fake renderer mirroring GLX.setRenderScale (js/render/glx/glx.js) EXACTLY,
 // dead zone and all.
 // It used to test `s === scale`, which is NOT the shipped contract: the real
 // setRenderScale rejects any change smaller than 0.02. That gap hid two live
@@ -295,7 +295,7 @@ test("the crash-sentinel floor still cannot be defeated by pinning the resolutio
   assert.equal(PerfGov.tier(), 4, "the sentinel floor must hold even with the resolution pinned");
 });
 
-// ── The GRAPHICS preset's user tier (js/game/gfx-quality.js) ────────────────
+// ── The GRAPHICS preset's user tier (js/perf/quality-preset.js) ────────────────
 // tier() folds three terms with max(): the crash-sentinel floor, the user's
 // preset floor, and the governor's own live tier. That single expression IS the
 // interaction rule — a manual choice sets the FLOOR of degradation, never the
@@ -482,7 +482,7 @@ test("tier 2 sheds car-paint SSR with the wet-road march, not via po.reflect", (
 
 test("shadow box and shader fade share the same unset shadowRange fallback", () => {
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  const glx = fs.readFileSync(path.join(ROOT, "js/render/glx.js"), "utf8");
+  const glx = fs.readFileSync(path.join(ROOT, "js/render/glx/glx.js"), "utf8");
   assert.match(game, /LT\.shadowRange != null \? LT\.shadowRange : 80/);
   assert.match(glx, /T && T\.shadowRange != null \? T\.shadowRange : 80\.0/);
   assert.doesNotMatch(game, /LT\.shadowRange \|\| 64/,
@@ -493,7 +493,7 @@ test("sun-shadow fade origin is yaw-invariant (eye XZ, look-target Y)", () => {
   // docs/PERF-FINDINGS.md 2026-08-15: fading from the look-biased box anchor
   // swept a 58% strength swing at 70 m on a pinned-eye yaw. The box stays
   // forward-biased (texel allocation); the fade must not.
-  const lit = fs.readFileSync(path.join(ROOT, "js/render/shaders/lit.js"), "utf8");
+  const lit = fs.readFileSync(path.join(ROOT, "js/render/glx/shaders/glsl-lit.js"), "utf8");
   const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
   const wgsl = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
   assert.match(lit, /distance\(wpos,\s*vec3\(uEye\.x,\s*uShadowCtr\.y,\s*uEye\.z\)\)/);
@@ -509,7 +509,7 @@ test("TLX zeros sunShaft when bloom is shed, matching GLX doBloom gate", () => {
 });
 
 test("TLX wet analytic mirror and chrome MIRROR id 27 match GLX", () => {
-  const lit = fs.readFileSync(path.join(ROOT, "js/render/shaders/lit.js"), "utf8");
+  const lit = fs.readFileSync(path.join(ROOT, "js/render/glx/shaders/glsl-lit.js"), "utf8");
   const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
   assert.match(lit, /wetSheen \* 0\.55/);
   assert.match(tsl, /wetSheen\.mul\(0\.55\)/);

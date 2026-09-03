@@ -5,7 +5,7 @@
  * filmstrips js/render/assets.js expects, uploads them live so you can see the
  * result immediately, and downloads the finished PNGs so they can be committed.
  *
- * WHY THIS EXISTS. The offline baker (tools/assets.mjs) needs a shell and
+ * WHY THIS EXISTS. The offline baker (tools/gen/assets.mjs) needs a shell and
  * network. Two things made that a dead end in practice:
  *   - the authoring sandbox's egress proxy 403s every asset CDN, and
  *   - the person doing the tuning may only have a DevTools console.
@@ -37,7 +37,7 @@ const WebBake = (function () {
 
   // MAT id -> a Poly Haven asset that reads as that material. Chosen from the
   // live catalogue; every one is CC0. GLASS(3), FLAG(15) and FLAT(0) are
-  // deliberately absent — see tools/assets.mjs SCALES for why.
+  // deliberately absent — see tools/gen/assets.mjs SCALES for why.
   const DEFAULTS = {
     1:  "concrete_panels",        2:  "red_brick",
     4:  "corrugated_iron",        5:  "wood_planks",
@@ -48,7 +48,7 @@ const WebBake = (function () {
     14: "rusty_metal",            16: "asphalt_track",
   };
 
-  // World metres per tile — MUST match tools/assets.mjs SCALES, or a browser
+  // World metres per tile — MUST match tools/gen/assets.mjs SCALES, or a browser
   // bake and an offline bake of the same material would tile differently.
   const SCALES = {
     1: 5.5, 2: 2.8, 4: 2.8, 5: 2.8, 6: 4.0, 7: 1.8, 8: 11.0,

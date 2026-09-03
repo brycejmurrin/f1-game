@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Bake copied LIGHTING TUNER settings into js/game/light-presets.js and bump the
+// Bake copied LIGHTING TUNER settings into js/lighting/presets.js and bump the
 // cache version — the "apply" step of the in-game tuner's COPY VALUES export.
 //
 // Usage:
@@ -10,7 +10,7 @@
 // bare `{…}` object. The export is strict JSON; hand-edited JS object literals
 // (unquoted keys) are tolerated via a fallback. Validates shape (keys are
 // "track|tod|weather" or "*", values are {knobId:number}) before writing, then
-// replaces the assignment in js/game/light-presets.js and increments ?v= across
+// replaces the assignment in js/lighting/presets.js and increments ?v= across
 // index.html + version.json. Does NOT commit — the skill drives review + push.
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -65,15 +65,15 @@ for (const [k, v] of Object.entries(obj)) {
   }
 }
 
-// Replace the assignment in js/game/light-presets.js, preserving the file header.
-const lpPath = ROOT + "js/game/light-presets.js";
+// Replace the assignment in js/lighting/presets.js, preserving the file header.
+const lpPath = ROOT + "js/lighting/presets.js";
 let src = readFileSync(lpPath, "utf8");
 // Anchor to line-start so the real assignment is matched, NOT the
 // `//   window.LightPresets = {…}` example inside the header comment (which is
 // indented behind `//`). Multiline flag: `^window…` and the closing `^};`.
 const re = /^window\.LightPresets\s*=\s*\{[\s\S]*?^\};/m;
 const oldMatch = src.match(re);
-if (!oldMatch) { console.error("Could not find the window.LightPresets assignment in js/game/light-presets.js"); process.exit(1); }
+if (!oldMatch) { console.error("Could not find the window.LightPresets assignment in js/lighting/presets.js"); process.exit(1); }
 
 // This REPLACES the whole file, not a merge — the in-game COPY VALUES export is
 // always the full file+local merge, so a legitimate paste should not usually
@@ -85,11 +85,11 @@ try {
   const oldKeys = Object.keys(oldObj).length;
   const newKeys = Object.keys(obj).length;
   if (oldKeys > 0 && newKeys < oldKeys / 2) {
-    console.error(`WARNING: this blob has ${newKeys} profile(s) vs ${oldKeys} already in js/game/light-presets.js.`);
+    console.error(`WARNING: this blob has ${newKeys} profile(s) vs ${oldKeys} already in js/lighting/presets.js.`);
     console.error("bake.mjs does a FULL replace, not a merge — if this was meant to be a");
     console.error("one-key update, STOP: re-copy the full COPY VALUES export from the tuner");
     console.error("(it already merges file+local), or hand-merge instead of re-running this:");
-    console.error('  read js/game/light-presets.js, Object.assign the one key into the parsed');
+    console.error('  read js/lighting/presets.js, Object.assign the one key into the parsed');
     console.error("  object, JSON.stringify it back into the window.LightPresets = ...; literal.");
     console.error("Writing anyway (this tool never blocks) — review `git diff` before committing.");
   }
@@ -108,6 +108,6 @@ idx = idx.replace(/\?v=\d+/g, "?v=" + next);
 writeFileSync(idxPath, idx);
 writeFileSync(ROOT + "version.json", `{ "build": ${next} }\n`);
 
-console.log(`Baked ${Object.keys(obj).length} profile(s) / ${nKnobs} value(s) into js/game/light-presets.js`);
+console.log(`Baked ${Object.keys(obj).length} profile(s) / ${nKnobs} value(s) into js/lighting/presets.js`);
 console.log(`Cache bumped to ?v=${next} (index.html + version.json).`);
 console.log("Next: review `git diff`, then commit + push (the bake-lighting skill drives this).");

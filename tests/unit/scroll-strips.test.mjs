@@ -23,7 +23,7 @@
  * back-navigation gesture, so overscrolling a tab strip can leave the page.
  *
  * AND NOTHING COULD SEE IT. This is behaviour, not geometry: every box is the
- * right size in the right place, so tools/layout-audit.mjs scores all four
+ * right size in the right place, so tools/ui/layout-audit.mjs scores all four
  * green, at every viewport and every scale. The only way to find it was to read
  * the four rules side by side.
  *

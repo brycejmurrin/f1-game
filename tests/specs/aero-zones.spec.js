@@ -4,7 +4,7 @@
 // rotate the wings outside one.
 //
 // HOW MANY zones a circuit gets is now AUTHORED from the published lists
-// (ZONE_COUNT in js/game/aerozones.js), because it is not derivable: the scan
+// (ZONE_COUNT in js/physics/aero-zones.js), because it is not derivable: the scan
 // that used to decide it gave baku 8 against a real 2, qatar 4 against 1 and
 // imola 7 against 1. Two consequences for the assertions below.
 //
@@ -28,7 +28,7 @@
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
-const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/game/aerozones.js
+const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/physics/aero-zones.js
 
 async function loadTrack(page, id) {
   await page.goto("/");

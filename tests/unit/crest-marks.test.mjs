@@ -7,14 +7,14 @@
 // each read on exactly one kind of background. Every one of those is a
 // measurable property, and none of them was measured.
 //
-// The measurements come from tools/crest-sweep.mjs, which replays the real
+// The measurements come from tools/car/crest-sweep.mjs, which replays the real
 // crest code against a recording 2D context. See that file for how.
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadCrests, replay, cssOf } from "../../tools/crest-sweep.mjs";
+import { loadCrests, replay, cssOf } from "../../tools/car/crest-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const { LiveryTex: LT, Teams, Liveries, RecCtx } = loadCrests();

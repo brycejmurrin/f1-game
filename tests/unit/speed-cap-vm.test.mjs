@@ -1,6 +1,6 @@
 /* speed-cap-vm.test.mjs — the speed cap is an ACCELERATION ceiling, not a
  * teleport; the dev physics knobs have floors. Bug hunt 2026-09-02, js/game.js
- * (`speedCap`) and js/game/apex.js (`setPhysics`), replayed in the Node VM.
+ * (`speedCap`) and js/agent/apex.js (`setPhysics`), replayed in the Node VM.
  *
  * Run: node --test tests/unit/speed-cap-vm.test.mjs   (npm run test:game-vm)
  */
@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 let g = null, PHYS0 = null;
 before(async () => { g = await createGame({ track: "monza" }); PHYS0 = { ...g.apex.tuning() }; });

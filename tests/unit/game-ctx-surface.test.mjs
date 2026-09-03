@@ -9,7 +9,7 @@
  * accessor to receive it, a duplicate `setLightTune` key that was dead the day
  * it was written. Both are decidable statically; neither was decided.
  *
- * types/game-ctx.d.ts is now the declaration and tools/check-gctx.mjs is the
+ * types/game-ctx.d.ts is now the declaration and tools/check/check-gctx.mjs is the
  * check. This suite runs it (Bedrock Phase 1 — see
  * docs/research/ARCHITECTURE-REDESIGN-2026-08.md).
  *
@@ -32,7 +32,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   checkParity, scanGameCtx, scanDts, emitShadow, ctxModuleFiles, deadMembers, findTsc, runTsc,
-} from "../../tools/check-gctx.mjs";
+} from "../../tools/check/check-gctx.mjs";
 
 /* Members game.js publishes that NOTHING reads — the other direction of drift, and
  * the one a type checker cannot see (an unused declaration is not an error). Frozen
@@ -48,7 +48,7 @@ test("types/game-ctx.d.ts declares exactly the members of `const G` in game.js",
   const { problems, memberCount } = checkParity();
   assert.deepEqual(problems, [],
     "the G façade and its type declaration have drifted — add the member to types/game-ctx.d.ts " +
-    "(or remove the dead one from js/game.js); `node tools/check-gctx.mjs` prints the same list");
+    "(or remove the dead one from js/game.js); `node tools/check/check-gctx.mjs` prints the same list");
   assert.ok(memberCount > 200, `only ${memberCount} G members parsed — the scan broke, not the façade`);
 });
 
@@ -72,7 +72,7 @@ test("every module that receives the ctx is a declared GameModuleFactory", () =>
   assert.ok(files.length > 15, `only ${files.length} ctx modules found — the create(ctx) scan broke`);
   // agentview-raster.js and net/session.js also spell their entry point create()
   // over a different argument; typing those bags as GameCtx would invent drift.
-  assert.ok(!files.includes("js/game/agentview-raster.js"), "AgentRaster takes a bespoke bag, not the ctx");
+  assert.ok(!files.includes("js/agent/agentview-raster.js"), "AgentRaster takes a bespoke bag, not the ctx");
   assert.ok(!files.includes("js/net/session.js"), "NetSession.create takes {transport}, not the ctx");
 });
 

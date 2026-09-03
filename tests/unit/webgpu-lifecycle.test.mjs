@@ -214,7 +214,13 @@ function makeGpuHarness(opts = {}) {
       getItem: (k) => (stored.has(k) ? stored.get(k) : null),
       setItem: (k, v) => { stored.set(k, String(v)); },
       removeItem: (k) => { stored.delete(k); },
-    } : { getItem: () => null, setItem() {} },
+    } : {
+      // The storage-less harness is the DESKTOP ULTRA machine: WGX reads the
+      // JSON-encoded GameStore preset at module scope (ULTRA → 4×, anything
+      // else 1×, unset = HIGH = 1×), and the parity tests below want the full
+      // 4× stack. Pass opts.storage (a Map) to test the other presets.
+      getItem: (k) => (k === "apex26.gfxPreset" ? JSON.stringify("ultra") : null), setItem() {},
+    },
     ...(session ? { sessionStorage: {
       getItem: (k) => (session.has(k) ? session.get(k) : null),
       setItem: (k, v) => {
@@ -1012,7 +1018,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   // non-indexed draw. That is safe because the road binds the magic-12345 LUT,
   // so its WGSL reads trkFromWorld(wpos) and never matTrkArr[vid] — and the
   // merge refuses when no LUT is bound. Evidence for the draw shapes on this
-  // container's stacks: tools/wgx-vid-repro.mjs (30/30 OK incl. firstVertex
+  // container's stacks: tools/gfx/wgx-vid-repro.mjs (30/30 OK incl. firstVertex
   // and whole draw(N) to 24576, three runs).
   assert.match(WGX_SOURCE, /const PIECE = 4095/);
   assert.match(WGX_SOURCE, /const vidDead = indexed \|\| !!_roadLutBG;/,
@@ -1163,6 +1169,23 @@ test("desktop harness still takes the full WGX stack (GLX-parity)", async () => 
   assert.equal(gfx.gpuTimer().supported, true, "timestamp-query stays on the non-lite path");
   assert.equal(gfx.carShadowState().enabled, true);
   assert.equal(gfx.lampShadowState().enabled, true);
+});
+
+test("WGX MSAA follows the JSON-encoded gfxPreset: ULTRA 4×, HIGH 1×, unset 1×", async () => {
+  // GameStore stores the preset JSON-encoded ('"ultra"' with the quotes);
+  // 0a31155 compared the raw string and no desktop ever matched ULTRA.
+  // WebGPU has no 2×, so every non-ULTRA preset — and a never-stored one,
+  // the desktop default HIGH — runs 1×, mirroring GLX's HIGH cap.
+  const msaaFor = async (entries) => {
+    const h = makeGpuHarness({ storage: new Map(entries) });
+    const gfx = await h.create();
+    return gfx.msaa();
+  };
+  assert.equal(await msaaFor([["apex26.gfxPreset", JSON.stringify("ultra")]]), 4, "ULTRA as GameStore stores it");
+  assert.equal(await msaaFor([["apex26.gfxPreset", JSON.stringify("high")]]), 1, "HIGH has no 2× on WebGPU");
+  assert.equal(await msaaFor([["apex26.gfxPreset", "ultra"]]), 4, "a raw 'ultra' (probe --ls) still counts");
+  assert.equal(await msaaFor([]), 1, "unset = desktop default HIGH");
+  assert.equal(await msaaFor([["apex26.gfxHigh", "1"]]), 4, "legacy phone key only when the preset was never stored");
 });
 
 test("software / empty-info adapter boots WGX (soft-present, MSAA 1)", async () => {
@@ -1646,7 +1669,7 @@ test("derivatives stay OUT of the material helper bodies (the WGSL NaN-white roa
   // phones while grass, walls and cars — hw 0, early return before any
   // derivative — looked fine). Widths are computed at fs_main top and threaded
   // in; every pattern width is linear in them, so the chain-rule scaling is
-  // exact. Verified against a real Dawn device by tools/wgx-validate.mjs.
+  // exact. Verified against a real Dawn device by tools/gfx/wgx-validate.mjs.
   const helpers = ["matBumpHeight", "matTexUV", "applyMaterialTexNormal",
                    "applyMaterialNormal", "applyMaterial", "roadMarkings"];
   for (const name of helpers) {
@@ -1720,7 +1743,7 @@ test("pipelines that share a shader module never use layout:'auto'", async () =>
   // compatible" and dropped the whole frame's command buffer. Invisible in
   // this container (software adapters force MSAA 1; the mock validates
   // nothing) — found 2026-08-17 by the first real pixel capture
-  // (tools/wgx-capture.mjs / gfx-probe.mjs on software adapters).
+  // (tools/gfx/wgx-capture.mjs / gfx-probe.mjs on software adapters).
   // This test pins the structural rule the fixes follow, using only the
   // descriptors the harness already records.
   const h = makeGpuHarness();
@@ -2034,8 +2057,8 @@ test("a capture NEVER reconfigures the swapchain inside an encoded frame", async
     "_capEncode must not reconfigure — it runs after the frame is encoded");
   assert.match(capFn, /_wantCopyable = true; return null;/,
     "_capEncode asks begin() for a copyable swapchain and skips this frame");
-  const beginFn = src.slice(src.indexOf("function begin(frame)"), src.indexOf("function begin(frame)") + 1400);
-  assert.match(beginFn, /_wantCopyable && !_swapCopyable && !_softGpu[\s\S]{0,140}_configureCanvas\(\)/,
+  const beginFn = src.slice(src.indexOf("function begin(frame)"), src.indexOf("function begin(frame)") + 2000);
+  assert.match(beginFn, /_wantCopyable && !_swapCopyable && !_softGpu[\s\S]{0,520}_configureCanvas\(\)/,
     "begin() honours the pending capture before anything is encoded");
   const cfgAt = beginFn.indexOf("_configureCanvas()");
   const encAt = beginFn.indexOf("createCommandEncoder");

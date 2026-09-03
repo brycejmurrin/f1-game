@@ -13,11 +13,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = fs.readFileSync(path.join(ROOT, "js/game/debrisworld.js"), "utf8");
+const SRC = fs.readFileSync(path.join(ROOT, "js/physics/debris-world.js"), "utf8");
 
 function extractFn(src, name) {
   const i = src.indexOf(`function ${name}(`);
-  assert.ok(i >= 0, `${name}() not found in js/game/debrisworld.js — was it renamed?`);
+  assert.ok(i >= 0, `${name}() not found in js/physics/debris-world.js — was it renamed?`);
   let depth = 0;
   for (let k = src.indexOf("{", i); k < src.length; k++) {
     if (src[k] === "{") depth++;
@@ -62,4 +62,20 @@ test("step() skips world.step on the asleep path and zeros panel force first", (
 test("status() reports stepSkips; reset() zeroes it", () => {
   assert.match(extractFn(SRC, "status"), /stepSkips:\s*_stepSkips/);
   assert.match(extractFn(SRC, "reset"), /_stepSkips = 0/);
+});
+
+test("Rapier is not imported inside the boot burst; prime() starts it if a race comes first", () => {
+  // create() used to call setEnabled(true) synchronously, which import()ed
+  // 2.2 MB of Rapier + compiled its WASM while the shaders, the asset pack and
+  // the first track were all in flight. The side-world is not needed before a
+  // race is primed, so the load waits for an idle slice; prime() kicks it at
+  // once if the player is faster, and step() builds the world lazily.
+  const create = extractFn(SRC, "create");
+  assert.doesNotMatch(create, /setEnabled\(true\)/, "create() must not start the Rapier load synchronously");
+  assert.match(create, /requestIdleCallback\(kick, \{ timeout: \d+ \}\)/, "the boot kick waits for an idle slice");
+  assert.match(create, /else setTimeout\(kick, \d+\)/, "Safari has no requestIdleCallback — a timer fallback is required");
+  assert.match(extractFn(SRC, "prime"), /if \(_enabled && _loadState === 0\) _load\(\);/,
+    "prime() must start the load when a race arrives before the deferred kick");
+  assert.match(extractFn(SRC, "step"), /if \(!world\) buildWorld\(track, cars\);/,
+    "step() builds lazily, so a load that lands after prime still gets a world");
 });

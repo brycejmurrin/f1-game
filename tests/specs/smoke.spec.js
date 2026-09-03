@@ -100,7 +100,7 @@ async function park(page, frac = 0) {
 // For a spec whose subject is the rendered scene, the menu walk is pure setup
 // cost — and the measurements say it is most of the cost. __apex.race() exists
 // for precisely this ("Skips menus so a harness can render any track", see
-// js/game/apex.js), and the menu path it bypasses is not lost coverage: three
+// js/agent/apex.js), and the menu path it bypasses is not lost coverage: three
 // specs above still reach a race by clicking, and "the select screen is a circuit
 // picker" asserts that flow in detail on purpose.
 //
@@ -155,7 +155,7 @@ async function bootRace(page, trackId = "bahrain") {
 // cost becomes negligible once it is reading a quiet compositor instead of
 // racing an endless one.
 //
-// `headless(true)` (js/game/apex.js) stops render() entirely and the compositor
+// `headless(true)` (js/agent/apex.js) stops render() entirely and the compositor
 // keeps the LAST drawn frame — tests/helpers/track-helpers.js's tracks-visual capture
 // already relies on exactly this to get a stable, quickly-readable frame. Give
 // the scene time to actually present one real frame first (300ms — 100ms is not
@@ -323,7 +323,7 @@ test.describe("Apex 26 — rendering", () => {
 // the speed test left the car at 80 m/s.
 sharedTest.describe("Apex 26 — HUD", () => {
   sharedTest("speed readout updates after jump() at speed", async ({ page }) => {
-    // BUDGET, not contention. Re-run ALONE on an idle box (tools/test-solo.mjs,
+    // BUDGET, not contention. Re-run ALONE on an idle box (tools/ci/test-solo.mjs,
     // which refuses to start above load 2) this took 98.5 s of the 120 s default
     // — 82 % of budget with nothing else on the machine — and it is reliably the
     // first test to fail the moment anything else touches the CPU. The cost is

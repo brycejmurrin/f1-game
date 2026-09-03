@@ -1,11 +1,11 @@
 /*
- * Apex 26 — GLX post-processing subsystem (split out of js/render/glx.js).
+ * Apex 26 — GLX post-processing subsystem (split out of js/render/glx/glx.js).
  * Owns the whole post chain: the HDR scene + MSAA targets, bright pass,
  * mip-chain bloom, SSAO, volumetric god rays, the composite (tone-map +
  * grade + SSR + flare + vignette), FXAA resolve, and the procedural lens-dirt
  * texture. Wired through the GLXCore ctx: glx.js calls GLXPost.init(core)
  * inside GLX.init() and delegates present() here.
- * Must load before js/render/glx.js (glx.js calls GLXPost.init at init time).
+ * Must load before js/render/glx/glx.js (glx.js calls GLXPost.init at init time).
  */
 "use strict";
 
@@ -160,9 +160,15 @@ const GLXPost = (function () {
   // which is exactly what this block exists to stop. The preset itself is
   // `apex26.gfxPreset` (GfxQuality's store key) on every device; ULTRA keeps
   // 4x, everything below caps. Unset = the desktop default HIGH, which caps.
+          // GameStore JSON-encodes every value it stores, so the key holds
+          // "\"ultra\"" with the quotes — a bare === "ultra" never matched and
+          // (for one deploy, 0a31155) every desktop that had ever touched the
+          // preset button got the cap, ULTRA included. Decode first; a raw
+          // string (a probe's --ls, or an older writer) still compares.
           let _ultra = false;
           try {
-            const _p = localStorage.getItem("apex26.gfxPreset");
+            let _p = localStorage.getItem("apex26.gfxPreset");
+            try { _p = JSON.parse(_p); } catch (_) { /* not JSON: compare the raw string */ }
             _ultra = _p === "ultra" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
           } catch (_) { /* blocked storage: cap, the cheaper of the two */ }
           if (!_ultra && msaaSamples > 2) msaaSamples = 2;
@@ -815,7 +821,7 @@ const GLXPost = (function () {
       gl.uniform1f(compU.uExposure, exposure);
       // SCREEN SUN-SHAFT knob scales the radial crepuscular pass (def 1 = as-shipped).
       // GATED ON doBloom, because the shaft pass READS THE BLOOM CHAIN. Its loop's
-      // only input is texture(uBloom, suv) (js/render/shaders/post.js), and when
+      // only input is texture(uBloom, suv) (js/render/glx/shaders/glsl-post.js), and when
       // bloom is off we bind the 1x1 blackTex to uBloom 50 lines above — so the
       // 8 dependent full-res fetches, the ignoise and the 8 length()/clamp pairs
       // accumulated exactly vec3(0) and were then scaled by uSunShaft. The shader

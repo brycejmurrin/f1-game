@@ -34,10 +34,10 @@ Every helper takes `(k, side, dist, …)`:
 - **Utilities:** `every`, `hash`, `anchor`, `groundYAt`, `onTrack`.
 
 ```sh
-node tools/verify-track.cjs <id>     # must print OK; catches scenery() THROW
+node tools/track/verify-track.cjs <id>     # must print OK; catches scenery() THROW
 ```
 
-Then `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`). Visual: **playwright-probe** `shot.mjs`. Picture-driven
+Then `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`). Visual: **playwright-probe** `shot.mjs`. Picture-driven
 accuracy / floating-tree survey → **survey-track** (Montreal already ships
 `flatTerrain`). Instancing migration →
 [references/instancing.md](references/instancing.md).

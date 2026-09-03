@@ -12,27 +12,27 @@ read-only.
 
 ## The loop
 
-1. `node tools/survey-track.mjs <id>` — the one-shot survey (grounding, floats,
+1. `node tools/track/survey-track.mjs <id>` — the one-shot survey (grounding, floats,
    terrain gaps). This tool launches Chromium as a **probe**, not a Playwright
    test group. Read `.claude/skills/survey-track/SKILL.md` for how to read the
    output. Skip that skill's "Test & ship" / `test-bg` steps — those are the
    parent. Engine edits (`js/track/tracks.js` LIST whitelist) are parent-only.
 2. Diagnose with the real `agent.mjs` verbs (unknown names exit 1):
    ```sh
-   node tools/agent.mjs <id> survey
-   node tools/agent.mjs <id> track --what corners
+   node tools/shot/agent.mjs <id> survey
+   node tools/shot/agent.mjs <id> track --what corners
    ```
    `groundY` / `scan` / `wallStats` are `__apex` hooks, not `agent.mjs`
-   commands — use `node tools/apex-eval.mjs <id> "a.groundY(…)"` if the
+   commands — use `node tools/shot/apex-eval.mjs <id> "a.groundY(…)"` if the
    survey table is not enough (also Chromium; still not a test group).
 3. Edit `js/circuits/<id>.js` only. Frac-keyed tables MUST respect
    `def._sceneryShift` — consume via the compensated idiom (`bankingProfile`,
    `buildCenterline`); a raw `frac` read places things 2/3 of a lap away.
 4. After EVERY edit:
    ```sh
-   node tools/verify-track.cjs <id>
-   node tools/coplanar-audit.cjs <id>
-   node tools/float-audit.cjs <id>    # if the survey flagged floats
+   node tools/track/verify-track.cjs <id>
+   node tools/track/coplanar-audit.cjs <id>
+   node tools/track/float-audit.cjs <id>    # if the survey flagged floats
    ```
 5. Report: what moved, the before/after survey numbers, and the exact baseline
    deltas (file + count) if any — the parent decides whether a baseline moves.

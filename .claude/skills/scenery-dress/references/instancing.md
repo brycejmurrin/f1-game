@@ -1,6 +1,6 @@
 # Scene-graph instancing (folded from the scene-graph-instancing skill)
 
-`js/track/graph.js` (`TrackGraph`) is the scenery **model library + node
+`js/track/scenery/graph.js` (`TrackGraph`) is the scenery **model library + node
 graph**. Migrated emitters call `graph.instance(key, place, build, meta)`
 instead of emitting inline triangles. Replay goes through **GUARDED** emitters
 from `buildProps`. **UNGUARDED** `raw` emitters are only for canonical mesh
@@ -16,7 +16,7 @@ baking. Plan + reuse numbers: `docs/research/SCENE-GRAPH-PLAN.md`.
 ## When NOT to Use
 
 - First-time dressing → the scenery-dress index (`SKILL.md`). Track spline/elevation →
-  **debug-tracks**. Shader/GL errors → **webgl-debug**. Treating a pine
+  **agent-view**. Shader/GL errors → **webgl-debug**. Treating a pine
   re-param mismatch vs old HEAD as a regression — that look change is the
   worklist (SCENE-GRAPH-PLAN §6).
 
@@ -31,15 +31,15 @@ baking. Plan + reuse numbers: `docs/research/SCENE-GRAPH-PLAN.md`.
 | `TrackGraph.NODE_COLOR` (`"@node"`) | Per-node tint; canonical mesh bakes white |
 
 ```sh
-./tools/apex-tools-mcp.sh call apex_graph_parity '{"base":"HEAD~1","id":"monza"}'
-node tools/graph-parity.cjs <id>            # or --all
-BASE=<ref> node tools/graph-parity.cjs --all
+./tools/mcp/apex-tools-mcp.sh call apex_graph_parity '{"base":"HEAD~1","id":"monza"}'
+node tools/track/graph-parity.cjs <id>            # or --all
+BASE=<ref> node tools/track/graph-parity.cjs --all
 npm run test:tooling-fast
-node tools/test-bg.mjs gfx                # instanced-draw.spec.js
-node tools/verify-track.cjs <id>
+node tools/ci/test-bg.mjs gfx                # instanced-draw.spec.js
+node tools/track/verify-track.cjs <id>
 ```
 
-Related: **webgl-debug**, **debug-tracks**.
+Related: **webgl-debug**, **agent-view**.
 
 ## Migration workflow and mistakes
 
@@ -63,8 +63,8 @@ judging a `graph-parity` mismatch.
 
 3. **Parity gate** — geometry must match exactly:
    ```sh
-   node tools/graph-parity.cjs <id>
-   BASE=<pre-migration-ref> node tools/graph-parity.cjs --all
+   node tools/track/graph-parity.cjs <id>
+   BASE=<pre-migration-ref> node tools/track/graph-parity.cjs --all
    ```
    Default `BASE=HEAD` on a clean tree only checks working-tree drift.
    Tolerance is 1e-6 m on positions; indices and `mat` must match exactly.
@@ -87,10 +87,10 @@ judging a `graph-parity` mismatch.
 5. **Fast contract then GL wiring**:
    ```sh
    npm run test:tooling-fast
-   node tools/test-bg.mjs gfx    # instanced-draw.spec.js — background
+   node tools/ci/test-bg.mjs gfx    # instanced-draw.spec.js — background
    ```
 
-6. **Ship** — `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) if you edited `js/`. Visual spot-check:
+6. **Ship** — `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) if you edited `js/`. Visual spot-check:
    **playwright-probe** on a dense track (Spa, Vegas).
 
 `batches()` routing: instanced when `node.full` and no radial op under

@@ -9,14 +9,14 @@
     // redraw cost (terrain + road + the whole city into the map, roughly every
     // 10 m of travel — that redraw frame IS the periodic HIGH-tier stall), and
     // the car/lamp maps are per-FRAME depth passes, a fill cost that is "the
-    // HIGH-tier lag, not a memory cap". js/game/perf.js draws the same line
+    // HIGH-tier lag, not a memory cap". js/perf/governor.js draws the same line
     // (its crash sentinel gates on isMobile, "NOT just the memory-safe
     // STANDARD tier"). These three keyed on mobileTier instead, so a phone that
     // opted into GRAPHICS: HIGH took a 2048² sun map plus two per-frame depth
     // passes that GLX refuses on EVERY phone — i.e. the config most likely to
     // be jetsam-killed got the allocations GLX withholds from it.
     // mobileTier is kept as the fallback for a caller that predates
-    // ctx.isMobile: MOBILE_TIER implies IS_MOBILE (js/render/glx.js), so the
+    // ctx.isMobile: MOBILE_TIER implies IS_MOBILE (js/render/glx/glx.js), so the
     // OR can only ever be conservative, never wrong.
     const isMobile = !!ctx.isMobile || !!ctx.mobileTier;
     // Software GL (SwiftShader / llvmpipe / WARP) is fill-bound: a 2048² sun
@@ -163,6 +163,12 @@
     const pool = [];
     let used = 0;
     let target = null;    // the pass's render target while open
+    // Parked wrappers (index >= used after a pass) point at this instead of
+    // their last caster: a hidden Mesh still REFERENCES its geometry, so after
+    // a track switch the old track's chunk geometries stayed alive in every
+    // slot the new track did not refill. An attribute-less geometry is never
+    // rendered (the wrapper is invisible) and costs nothing.
+    const parkedGeo = new THREE.BufferGeometry();
 
     function cast(mesh /* {__tlx, geo} */, model /* column-major mat4 */) {
       if (!S.depthPassOn || !mesh || !mesh.geo) return;
@@ -254,8 +260,8 @@
       S.depthPassOn = false;
       if (!target) return;
       const wasSun = target === sunRT;
-      for (let i = used; i < pool.length; i++) pool[i].visible = false;
-      for (let i = iUsed; i < iPool.length; i++) if (iPool[i]) iPool[i].visible = false;
+      for (let i = used; i < pool.length; i++) { pool[i].visible = false; pool[i].geometry = parkedGeo; }
+      for (let i = iUsed; i < iPool.length; i++) if (iPool[i]) { iPool[i].visible = false; iPool[i].geometry = parkedGeo; }
       const prev = renderer.getRenderTarget();
       try {
         renderer.setRenderTarget(target);

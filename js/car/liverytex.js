@@ -331,7 +331,7 @@ const LiveryTex = (function () {
   //            this is reached only by a livery saved before the outline had a
   //            row of its own, and by the surfaces below
   // Derived from the traced role data where there is any, so re-running
-  // tools/trace-logo.mjs cannot leave this table lying. The three hand-drawn
+  // tools/car/trace-logo.mjs cannot leave this table lying. The three hand-drawn
   // marks have no trace to derive from and are named here instead.
   const SECOND_DRAWN = { haas: "alt", mercedes: "part", audi: "part" };
   function secondSlot(teamId, bare) {
@@ -487,7 +487,7 @@ const LiveryTex = (function () {
     // TEAM LOGO row, and the substitution below used to overrule it in silence:
     // 9015 of 12112 team x livery x pick x surface combinations came back
     // painted in something OTHER than the colour that was picked (measured
-    // 2026-08-29, tools/logo-authored-sweep.mjs). Audi is the reported case —
+    // 2026-08-29, tools/car/logo-authored-sweep.mjs). Audi is the reported case —
     // its fin is [0.96,0.02,0.22], which only near-white and near-black clear
     // 4.2, so every mid-tone in the picker collapsed to the same fallback and
     // TEAM LOGO looked dead on the tail. Outline the colour instead of
@@ -615,7 +615,7 @@ const LiveryTex = (function () {
 
   // ── traced marks ───────────────────────────────────────────────────────────
   // Eight of the eleven marks are path data in js/car/crest-paths.js, traced
-  // from the bitmaps that used to ship in assets/logos (tools/trace-logo.mjs).
+  // from the bitmaps that used to ship in assets/logos (tools/car/trace-logo.mjs).
   // Hand-drawing them from memory as chained canvas calls did not work: Red
   // Bull's two charging bulls came out as a pair of pigs and Aston's spread
   // wings as three chevrons. A silhouette is data, and the bitmaps had it even
@@ -1219,10 +1219,10 @@ const LiveryTex = (function () {
     return canvas;
   }
 
-  // drawLogoImage is exported for the GARAGE back-wall crest (js/game/garage-scene.js):
+  // drawLogoImage is exported for the GARAGE back-wall crest (js/garage/scene.js):
   // aspect-fit + tint + halo is exactly the same job there, and reimplementing
   // the fit maths in a second place is how the two drift apart.
-  // contrast/inkOn are exported for the GARAGE crest wall (js/game/garage-scene.js),
+  // contrast/inkOn are exported for the GARAGE crest wall (js/garage/scene.js),
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
   return { SIZE, REGIONS, buildAtlas, drawCrest, markBase, markPalette,

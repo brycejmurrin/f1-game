@@ -11,7 +11,7 @@ Playwright render and produce **false failures**, not just timeouts. Measured
 passing specs red — a 120 s timeout AND an assertion miss (`dynamic player shadow`
 read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
 
-- **Check `node tools/test-bg.mjs --status` before you render here.** If a group
+- **Check `node tools/ci/test-bg.mjs --status` before you render here.** If a group
   is running, wait — or accept you will re-run its false-fails solo.
 - **Park to `about:blank` (`navigate_page`) the moment you're done**, so the warm
   page doesn't tax the next `test-solo`.
@@ -105,7 +105,7 @@ real `TUNE_DEFS` defaults are 1.0 and 0.5) — the "no visible effect" result th
 produced was really "no visible effect near an arbitrary point that happened not
 to be the default," not evidence about the knob. Five more knobs in the same
 session had the same class of error. Always
-`grep -n 'id: "<knobId>"' js/game/lighting-knobs.js` immediately before testing a knob
+`grep -n 'id: "<knobId>"' js/lighting/knobs.js` immediately before testing a knob
 and read `min`/`max`/`def` off that line — never carry values between sessions
 or reconstruct them from a description.
 
@@ -133,7 +133,7 @@ same scene. A knob whose signal doesn't clear a same-value noise-floor check by
 several times over is not proven, whichever direction it points.
 
 For sky/cloud knobs specifically, don't reach for `sky()` — its ~58° pitch
-looks close to straight up, and the cloud plane in `js/render/shaders/sky.js`
+looks close to straight up, and the cloud plane in `js/render/glx/shaders/glsl-sky.js`
 is sampled as `dir.xz / up * 0.42`: dividing by a near-1 `up` collapses the
 sampled coordinate toward one point, so every pixel reads nearly the same
 noise value and the sky renders as a smooth gradient with no puffy structure
@@ -214,7 +214,7 @@ screenshot, not just before it.
 `c.rPrevPx`/`c.rPrevPz` (WORLD-space render-interpolation anchors) blended
 toward `c.px`/`c.pz` by `renderAlpha` — NOT from `c.rPrevS`/`c.rPrevX` (the
 arc-based anchors, which only feed the AI-car branch). `jump()`
-(`js/game/apex.js`) reset `rPrevS`/`rPrevX` on teleport but never touched
+(`js/agent/apex.js`) reset `rPrevS`/`rPrevX` on teleport but never touched
 `rPrevPx`/`rPrevPz`, so the player mesh kept rendering a straight-line lerp
 between wherever it was BEFORE the teleport and the new spot. Under `park()`'s
 `G.frozen` (physics never steps again, so `renderAlpha` never advances) that
@@ -279,7 +279,7 @@ exported surface) and `GLX.draw` (grab the real model matrices), all from a
 buffer and count pixels where one beats the other, mapping each loss back to a
 `part()` name via the cumulative `out.parts[].vertices` sum. Full code, and the
 NDC-bbox shortcut that produces false positives, in
-[`docs/OCCLUSION-PROBE.md`](docs/OCCLUSION-PROBE.md). It costs one
+[`../../../../docs/notes/OCCLUSION-PROBE.md`](../../../../docs/notes/OCCLUSION-PROBE.md). It costs one
 `evaluate_script` and returns a number you can put in a commit message —
 `2722 px → 0 px` beats "looks better now".
 
@@ -367,7 +367,7 @@ the pit wall and grandstand). The listing is what kept the search pointed at
 camera framing instead of at emission.
 
 The vertex count is the honest instrument, and it is a shell call, not a browser
-one: `node tools/verify-track.cjs <id>`, then comment the call out and run it
+one: `node tools/track/verify-track.cjs <id>`, then comment the call out and run it
 again. Identical `props N` = nothing was emitted. **Run a control first** — add
 a throwaway `for (let i=0;i<50;i++) addBox(out, [0,500+i,0], [10,10,10], [1,0,0]);`
 and confirm the number moves (+1200) — because two equal readings look identical

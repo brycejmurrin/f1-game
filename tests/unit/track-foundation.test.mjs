@@ -8,12 +8,12 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const REQUIRE = (await import("node:module")).createRequire(import.meta.url);
 const MANIFEST = REQUIRE("../../tools/manifest.cjs");
-const { buildContext } = REQUIRE("../../tools/track-build-vm.cjs");
+const { buildContext } = REQUIRE("../../tools/lib/track-build-vm.cjs");
 const P = MANIFEST.PATHS;
 
 // Read one js/ file into a fresh sandbox, converting top-level `const` to `var`
 // so the global lands as a sandbox property (same trick as verify-track.cjs).
-// js/mat4.js goes in FIRST every time: it is the second <script> tag in the real
+// js/core/mat4.js goes in FIRST every time: it is the second <script> tag in the real
 // shell and the home of the shared scalar helpers (M4.clamp/lerp/wrapDelta), so
 // a file loaded without it is not the file the browser evaluates.
 function runInto(ctx, file) {
@@ -24,8 +24,8 @@ function loadGlobal(file, name) {
   const sandbox = { console, Math, Array, Object, Number, Float32Array, Float64Array, Uint32Array, ArrayBuffer, Map, Set };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
-  runInto(ctx, "js/log.js");
-  runInto(ctx, "js/mat4.js");
+  runInto(ctx, "js/core/log.js");
+  runInto(ctx, "js/core/mat4.js");
   runInto(ctx, file);
   return sandbox[name];
 }
@@ -377,8 +377,8 @@ test("game keeps the sole prebuilt ribbon usable across envCull and tier changes
 test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
   // A feature the player can switch on must not be held off by three different
   // answers. Before this was pinned:
-  //   js/game/lighting-knobs.js  help text : "Available at every GRAPHICS preset"
-  //   js/game/tuner.js     why-off   : PerfGov.autoTier()  (governor only)
+  //   js/lighting/knobs.js  help text : "Available at every GRAPHICS preset"
+  //   js/lighting/tuner-panel.js     why-off   : PerfGov.autoTier()  (governor only)
   //   js/game.js           the gate  : PerfGov.tier()      (preset TOO)
   // and the third one wins, so PER-CHUNK ROAD did nothing on GRAPHICS: LOW
   // while the tuner reported no problem.
@@ -397,7 +397,7 @@ test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
   // so these lamps went off and never came back however completely the device
   // recovered — reported as "chunk lights isn't working even with the slider",
   // against a tuner note promising it "returns on its own when frames recover".
-  // autoShed() is the governor's measured shed alone (js/game/perf.js), and
+  // autoShed() is the governor's measured shed alone (js/perf/governor.js), and
   // autoTier() deliberately stays behind for the tier-4 post consumers, which
   // must still be able to reach 4 on a low preset.
   const src = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
@@ -418,10 +418,10 @@ test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
     "two cannot disagree");
 
   // And the knob's own explanation has to describe the gate that actually runs.
-  const tuner = fs.readFileSync(path.join(ROOT, "js/game/tuner.js"), "utf8");
+  const tuner = fs.readFileSync(path.join(ROOT, "js/lighting/tuner-panel.js"), "utf8");
   assert.match(tuner, /PerfGov\.autoShed\s*\)\s*\?\s*PerfGov\.autoShed\(\)/,
     "tuner.js's held-off note must read the same accessor as the gate");
-  const apex = fs.readFileSync(path.join(ROOT, "js/game/apex.js"), "utf8");
+  const apex = fs.readFileSync(path.join(ROOT, "js/agent/apex.js"), "utf8");
   assert.match(apex, /PerfGov\.autoShed\(\) >= 1\) return "tier"/,
     "__apex.perChunkHeld() must name the same gate the render path runs");
 
@@ -435,7 +435,7 @@ test("per-chunk lamps: every half shares ONE gate, and it is autoShed", () => {
 });
 
 test("the display-reset latch clears from EITHER chunk slider, as the tuner promises", () => {
-  // js/game/tuner.js gateNote() shows "held after a display reset — set to 0
+  // js/lighting/tuner-panel.js gateNote() shows "held after a display reset — set to 0
   // and back on to retry" for BOTH chunk knobs (its isChunk covers
   // roadChunkLamps). The clear in js/game.js was keyed on perChunkLights only,
   // so a player who read that note on PER-CHUNK ROAD and did exactly what it
@@ -450,7 +450,7 @@ test("the display-reset latch clears from EITHER chunk slider, as the tuner prom
     "the latch clear must accept a rising edge on roadChunkLamps too — the " +
     "tuner tells the player that slider can retry it");
 
-  const tuner = fs.readFileSync(path.join(ROOT, "js/game/tuner.js"), "utf8");
+  const tuner = fs.readFileSync(path.join(ROOT, "js/lighting/tuner-panel.js"), "utf8");
   const isChunk = tuner.match(/const isChunk = [^;]+;/);
   assert.ok(isChunk, "tuner.js still classifies the chunk knobs");
   // If the note ever stops covering roadChunkLamps this test is the reminder to

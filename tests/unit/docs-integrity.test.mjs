@@ -71,9 +71,23 @@ const PLACEHOLDERS = new Set([
 // match mid-extension.
 const PATH_RE = /(?<![A-Za-z0-9_./-])((?:js|tools|tests|css|assets|spike|vendor|docs)\/[A-Za-z0-9_.<>/-]+\.(?:json|mjs|cjs|css|js|md|sh))(?![A-Za-z0-9])/g;
 
+// tools/manifest.cjs's MOVED map (tools/gen/move-tree.mjs) keys itself on the
+// OLD path of every file the Phase 2b window relocates — that key is
+// SUPPOSED to be gone from disk; it is the whole reason deploy.mjs can name
+// the new path when a conflicted file was moved. Scan everything BUT that
+// object literal.
+function stripMovedBlock(text) {
+  const at = text.indexOf("const MOVED = {");
+  if (at < 0) return text;
+  const end = text.indexOf("};", at);
+  return end < 0 ? text : text.slice(0, at) + text.slice(end + 2);
+}
+
 function brokenPathsIn(file) {
   const bad = [];
-  for (const m of new Set(read(file).match(PATH_RE) || [])) {
+  let text = read(file);
+  if (file === "tools/manifest.cjs") text = stripMovedBlock(text);
+  for (const m of new Set(text.match(PATH_RE) || [])) {
     if (PLACEHOLDERS.has(m) || m.includes("<") || m.includes("*")) continue;
     if (!fs.existsSync(path.join(ROOT, m))) bad.push(m);
   }
@@ -91,22 +105,22 @@ test("live docs reference only files that exist", () => {
 // Source files that are ALLOWED to name a path that does not resolve, with the
 // reason. Keep this list short and justified — everything else is drift.
 const SOURCE_EXEMPT = new Map([
-  // A forward reference: tools/bake-elevation.mjs GENERATES this file, and the
+  // A forward reference: tools/gen/bake-elevation.mjs GENERATES this file, and the
   // manifest records where it would slot in. It is legitimately absent until
   // someone bakes a profile.
   ["js/track/circuit-elevations.js", /bake-elevation|manifest\.cjs|track\/tracks\.js|docs-integrity/],
   // Synthetic fixture HTML fed to the service worker under test — a string it
   // must rewrite, not a file it must find.
   ["css/style.css", /service-worker\.test\.mjs|docs-integrity\.test\.mjs/],
-  // The scratch tree tools/move-tree.mjs is tested on: a file that moves, its
-  // untouched sibling, and a test that cites it — none of them real.
-  ["js/game/perfect.js", /move-tree\.test\.mjs|docs-integrity/],
-  ["js/perf/governor.js", /move-tree\.test\.mjs|docs-integrity/],
-  ["tests/unit/perf.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  // The scratch tree tools/gen/move-tree.mjs is tested on. The names are
+  // deliberately fictional (js/zzfix/…) so a real move's sweep can never
+  // rewrite the fixture — see the header of move-tree.test.mjs.
+  ["js/zzfix/", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/unit/zzfix.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/helpers/seed-zzfix.mjs", /move-tree\.test\.mjs|docs-integrity/],
   ["docs/archive/OLD.md", /move-tree\.test\.mjs|docs-integrity/],
-  ["js/game/nope.js", /move-tree\.test\.mjs|docs-integrity/],
-  ["js/perf/x.js", /move-tree\.test\.mjs|docs-integrity/],
   ["tools/nested/README.md", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/unit/joins.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
   // Fake package.json scripts inside the coverage-audit's own fixtures.
   ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
   ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],
@@ -385,7 +399,7 @@ test("CLAUDE.md is a stub that imports AGENTS.md, not a second copy", () => {
 test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
   // "Ships OFF … def: 0" survived the knob being flipped to 1.0, which inverted
   // the meaning of the whole asset-pack section.
-  const lighting = read("js/game/lighting-knobs.js");
+  const lighting = read("js/lighting/knobs.js");
   const def = lighting.match(/\{\s*id:\s*"matTexMix"[^}]*?\bdef:\s*([\d.]+)/);
   assert.ok(def, "matTexMix is no longer a TUNE_DEFS entry with a def");
   const on = Number(def[1]) > 0;
@@ -413,7 +427,7 @@ test("AGENTS.md's matTexMix default matches TUNE_DEFS", () => {
 });
 
 test("AGENTS.md's layout names the module-roster truth it defers to", () => {
-  // History: js/game/sheetshape.js and js/game/topmodal.js shipped while absent
+  // History: js/ui/sheet-shape.js and js/ui/modal.js shipped while absent
   // from the then-exhaustive layout, so an agent reading it concluded they did
   // not exist — and this guard required every js/game basename in the file.
   // The 2026-08-13 slimming inverted the contract: the layout is a directory
@@ -526,10 +540,16 @@ test("every tool named in tools/README.md exists on disk", () => {
   // run. Deleting a tool without deleting its row leaves exactly this residue,
   // and the disk->README test above is blind to it by construction.
   const index = read("tools/README.md");
-  const onDisk = new Set(fs.readdirSync(path.join(ROOT, "tools")));
-  for (const d of fs.readdirSync(path.join(ROOT, "tools"), { withFileTypes: true }))
-    if (d.isDirectory())
-      for (const f of fs.readdirSync(path.join(ROOT, "tools", d.name))) onDisk.add(f);
+  // FULLY RECURSIVE since Phase 4: tools/ nests two deep (lighting/campaign/,
+  // moves/batches/), and a one-level walk silently stopped seeing those files —
+  // which would have let a row for any of them read as a ghost.
+  const onDisk = new Set();
+  (function walk(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) { if (e.name !== "__pycache__") walk(path.join(dir, e.name)); }
+      else onDisk.add(e.name);
+    }
+  })(path.join(ROOT, "tools"));
   const ghosts = [...index.matchAll(/^\|\s*\*\*([A-Za-z0-9_.-]+\.(?:mjs|cjs|js|sh|html|json))\*\*/gm)]
     .map((m) => m[1])
     .filter((f) => !onDisk.has(f));
@@ -543,8 +563,8 @@ test("tools/README documents live test-infra knobs and stays two-column in the r
   const index = read("tools/README.md");
   assert.match(index, /SPLIT=N/, "test-shards SPLIT fan-out must be indexed");
   assert.match(index, /FLOOR_SLACK/, "fixture-consumer upper-bound slack must be indexed");
-  const specs = index.split("\n").find((l) => l.includes("**select-specs.mjs**")) || "";
-  const recall = index.split("\n").find((l) => l.includes("**select-recall.mjs**")) || "";
+  const specs = index.split("\n").find((l) => l.includes("**ci/select-specs.mjs**")) || "";
+  const recall = index.split("\n").find((l) => l.includes("**ci/select-recall.mjs**")) || "";
   assert.ok(specs, "select-specs row missing");
   assert.ok(recall, "select-recall row missing");
   assert.doesNotMatch(specs, /\|\s*check-changes\s*\|/,
@@ -557,23 +577,23 @@ test("the tools index lists every tool", () => {
   // Underscore-prefixed scripts are transient agent scratch by convention
   // (.gitignore: tools/_*.mjs) and are deliberately not indexed.
   //
-  // WALKS SUBDIRECTORIES since the R3 family move (tools/net|car|capture|
-  // lighting) — a moved tool must not silently exit the index guard. A file
-  // in a subdir passes when the README names the FILE or names its SUBDIR
-  // with a trailing slash (a family header covers its members the way
-  // grouped notation covers renderer files).
+  // WALKS THE WHOLE TREE since Phase 4 grouped tools/ into thirteen
+  // subdirectories, two of them nested (lighting/campaign/, moves/batches/).
+  // A one-level walk stopped at the second level and a moved tool could
+  // silently exit the index guard.
   const index = read("tools/README.md");
   const missing = [];
-  for (const e of fs.readdirSync(path.join(ROOT, "tools"), { withFileTypes: true })) {
-    if (e.name === "README.md" || e.name.startsWith("_")) continue;
-    if (!e.isDirectory()) {
-      if (!index.includes(e.name)) missing.push(e.name);
-      continue;
+  (function walk(dir, rel) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === "README.md" || e.name.startsWith("_") || e.name === "__pycache__") continue;
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { walk(path.join(dir, e.name), r); continue; }
+      // A file passes when the index names its full tools-relative path, its
+      // basename, or its directory with a trailing slash (a family header
+      // covers its members). The path form is what the generator emits now.
+      if (!index.includes(r) && !index.includes(e.name) && !index.includes(`${rel}/`)) missing.push(r);
     }
-    for (const f of fs.readdirSync(path.join(ROOT, "tools", e.name)))
-      if (!f.startsWith("_") && !index.includes(f) && !index.includes(`${e.name}/`))
-        missing.push(`${e.name}/${f}`);
-  }
+  })(path.join(ROOT, "tools"), "");
   assert.deepEqual(missing, [], "a tool exists on disk but is not in tools/README.md");
 });
 
@@ -614,14 +634,27 @@ test("every relative link in EVERY live doc resolves", () => {
   // relative to the DOC'S OWN DIRECTORY, so research/-to-research/ hops and
   // README's rows both check under the same rule. docs/archive/ is excluded:
   // it describes trees that no longer exist, and that is its job.
+  //
+  // EVERY DIRECTORY UNDER docs/, not three named ones (2026-09-03). Phase 5
+  // moved the dated ledgers into docs/notes/, and each arrived carrying links
+  // written relative to docs/ — `research/WEBGPU-PARITY.md`, `../AGENTS.md`,
+  // `ARCHITECTURE.md`. Nine were dead the moment the files landed and nothing
+  // said so, because this list enumerated `research` and `tracks` by name.
+  // Walking whatever is there covers the next directory on the day it appears.
   const dead = [];
   const docs = ["docs/README.md",
     ...ls("docs", /\.md$/).filter((f) => f !== "README.md").map((f) => `docs/${f}`),
-    ...fs.readdirSync(path.join(ROOT, "docs", "research"))
-      .filter((f) => f.endsWith(".md")).map((f) => `docs/research/${f}`),
-    ...fs.readdirSync(path.join(ROOT, "docs", "tracks"))
-      .filter((f) => f.endsWith(".md")).map((f) => `docs/tracks/${f}`),
   ];
+  for (const e of fs.readdirSync(path.join(ROOT, "docs"), { withFileTypes: true })) {
+    if (!e.isDirectory() || e.name === "archive") continue;   // archive: checked below
+    (function walk(rel) {
+      for (const d of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+        const sub = `${rel}/${d.name}`;
+        if (d.isDirectory()) walk(sub);
+        else if (d.name.endsWith(".md")) docs.push(sub);
+      }
+    })(`docs/${e.name}`);
+  }
   for (const doc of docs) {
     const dir = path.dirname(path.join(ROOT, doc));
     for (const m of read(doc).matchAll(/\]\(([^)#:\s]+)(?:#[^)]*)?\)/g)) {
@@ -662,10 +695,19 @@ test("no live doc points a reader at docs/archive/", () => {
   // have been archived, or a reference that should have been rewritten — both
   // are worth catching. docs/README.md is the one legitimate referrer, because
   // indexing the archive is its job.
+  //
+  // docs/notes/ is EXEMPT (2026-09-03). Those are dated ledgers, and a ledger's
+  // provenance chain is the point of it: PERF-FINDINGS §3 cites the archived
+  // perf ledger it was distilled from, the defect register cites the sweeps
+  // that closed its rows. That is a record pointing at its own history, not a
+  // reference doc sending a reader to a layout that has moved — which is what
+  // this test exists to catch. Their links still have to resolve; the walk
+  // above covers notes/, and it did not before.
+  const inNotes = (p) => p.split(path.sep).join("/").startsWith("docs/notes/");
   const offenders = [];
   for (const doc of LIVE_DOCS) {
-    if (doc === "docs/README.md") continue;
-    if (/docs\/archive\//.test(read(doc))) offenders.push(doc);
+    if (doc === "docs/README.md" || inNotes(doc)) continue;
+    if (/docs\/archive\/|\.\.\/archive\//.test(read(doc))) offenders.push(doc);
   }
   assert.deepEqual(offenders, [],
     "a live doc references docs/archive/ — either it should not be archived, or the reference is stale");

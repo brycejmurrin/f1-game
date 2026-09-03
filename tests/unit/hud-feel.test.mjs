@@ -66,7 +66,7 @@ function boot(opts = {}) {
     TrackMaps: { drsZones: () => [] },
   };
   sb.window = sb;
-  vm.runInNewContext(src("js/game/hud.js"), sb, { filename: "js/game/hud.js" });
+  vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: "js/ui/hud.js" });
 
   const $ = (id) => dom.byId(id);
   const minimap = $("minimap");
@@ -166,7 +166,7 @@ test("the speed digits, energy bar and sector red are set up to be read at a gla
 
   // Contrast: the brand red is a fill colour, not an ink for 12–14px text
   // (css/tokens.css measures it at ~2.6:1 on the page). No HUD text may use it.
-  const hud = read("js/game/hud.js").replace(/\/\/.*$/gm, "");
+  const hud = read("js/ui/hud.js").replace(/\/\/.*$/gm, "");
   assert.doesNotMatch(hud, /#e10600/i, "hud.js writes no text in the brand red");
   assert.match(hud, /"#ff3b30"/, "the S2 label / ghost delta use the AA text red");
 });

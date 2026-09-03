@@ -62,7 +62,7 @@ test("the commit step validates and quotes a non-deploy branch", () => {
 test("model imports check the generated shell and commit without a bump", () => {
   const shell = executableShell();
   const changed = shell.indexOf("git diff --cached --quiet");
-  const check = shell.indexOf("node tools/gen-shell.mjs --check");
+  const check = shell.indexOf("node tools/gen/gen-shell.mjs --check");
   const commit = shell.indexOf("git commit -m");
   assert.ok(changed >= 0 && check > changed && commit > check,
     "the generated shell is checked after a real model change and before the commit (no bump: the deploy stamps the generation)");

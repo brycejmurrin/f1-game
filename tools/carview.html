@@ -6,7 +6,7 @@
 <title>Apex 26 — Car Viewer</title>
 <!--
   @doc Standalone isolated car photo studio (no track, no game.js): Car3D + LiveryTex via GLX; headless API `window.CARVIEW`.
-  @skill car-viewer
+  @skill playwright-probe
   Standalone, ISOLATED car viewer (no track / no game.js). Renders the procedural
   Car3D on a plain studio backdrop using the real GLX renderer + LiveryTex decals.
   Meant as a dev/inspection tool: pick team / livery / parts / lighting / angle and
@@ -59,25 +59,25 @@
 <div id="err"></div>
 
 <!-- @gen-shell:carview -->
-<script src="../js/log.js"></script>
-<script src="../js/mat4.js"></script>
-<script src="../js/render/shaders/chunks.js"></script>
-<script src="../js/render/shaders/lit.js"></script>
-<script src="../js/render/shaders/sky.js"></script>
-<script src="../js/render/shaders/fx.js"></script>
-<script src="../js/render/shaders/post.js"></script>
+<script src="../js/core/log.js"></script>
+<script src="../js/core/mat4.js"></script>
+<script src="../js/render/glx/shaders/glsl-chunks.js"></script>
+<script src="../js/render/glx/shaders/glsl-lit.js"></script>
+<script src="../js/render/glx/shaders/glsl-sky.js"></script>
+<script src="../js/render/glx/shaders/glsl-fx.js"></script>
+<script src="../js/render/glx/shaders/glsl-post.js"></script>
 <script src="../js/render/glx/post.js"></script>
 <script src="../js/render/glx/shadow.js"></script>
-<script src="../js/render/lamp-chunks.js"></script>
+<script src="../js/render/shared/lamp-chunks.js"></script>
 <script src="../js/render/glx/chunked.js"></script>
-<script src="../js/render/glx.js"></script>
-<script src="../js/car/teams.js"></script>
+<script src="../js/render/glx/glx.js"></script>
+<script src="../js/data/teams.js"></script>
 <script src="../js/car/parts.js"></script>
 <script src="../js/car/car3d.js"></script>
 <script src="../js/car/liveries.js"></script>
 <script src="../js/car/crest-paths.js"></script>
 <script src="../js/car/liverytex.js"></script>
-<script src="../js/game/carmesh.js"></script>
+<script src="../js/car/car-mesh.js"></script>
 <!-- /@gen-shell:carview -->
 <script>
 "use strict";

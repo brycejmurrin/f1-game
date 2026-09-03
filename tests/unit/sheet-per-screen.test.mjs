@@ -1,6 +1,6 @@
 /* sheet-per-screen.test.mjs — ONE `.sheet` PER PARENT, asserted on the shell.
  *
- * Why this invariant is load-bearing: js/game/sheetshape.js classifyFit()
+ * Why this invariant is load-bearing: js/ui/sheet-shape.js classifyFit()
  * writes and removes `--sheet-eff-scale` on el.parentElement — the property
  * every `.sheet` reads back for its zoom compensation. Two sheets sharing a
  * parent would clobber each other's value on every reclassify: whichever

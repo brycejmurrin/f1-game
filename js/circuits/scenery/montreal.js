@@ -644,7 +644,7 @@
           }, (stage) => {
             // The legs used to be plain boxes standing on anchor().c, which is
             // deliberately sunk 0.3 m BELOW the sampled surface (see the embed
-            // note in js/track/scenery-nature.js) so a flat-based prop cannot
+            // note in js/track/scenery/nature.js) so a flat-based prop cannot
             // float off the downhill edge of a slope. That embed is right for a
             // tree or a sign and wrong for a BRIDGE PIER: the feet ended up
             // buried, 0.3 m clear of the grass they are supposed to bear on.

@@ -68,7 +68,7 @@ function boot() {
   sb.window = sb;
   sb.self = sb;
   vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/game/sheetshape.js"), "utf8"),
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/sheet-shape.js"), "utf8"),
     sb, { filename: "sheetshape.js" });
 
   return { dom, sheet: sb.SheetShape, observed, unobserved, mutationCbs, sb };

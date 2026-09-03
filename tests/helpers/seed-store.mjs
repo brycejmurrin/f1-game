@@ -1,4 +1,4 @@
-/* seed-store.mjs — put the real `GameStore` IIFE (js/game/store.js) into a Node
+/* seed-store.mjs — put the real `GameStore` IIFE (js/core/store.js) into a Node
  * VM or eval host, the way seed-log.mjs does for `Log`.
  *
  * The settings panels, the perf sentinel, BodyAttitude and the Spotify client
@@ -22,14 +22,14 @@ import { fileURLToPath } from "node:url";
 import { seedLog, seedLogGlobal } from "./seed-log.mjs";
 
 const STORE_JS = fs.readFileSync(
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/game/store.js"),
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/core/store.js"),
   "utf8",
 );
 
-/** Evaluate js/game/store.js into an existing VM context (seeds Log if absent). */
+/** Evaluate js/core/store.js into an existing VM context (seeds Log if absent). */
 export function seedStore(ctx) {
   if (vm.runInContext("typeof Log === \"undefined\"", ctx)) seedLog(ctx);
-  vm.runInContext(STORE_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/game/store.js" });
+  vm.runInContext(STORE_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/store.js" });
   return ctx;
 }
 

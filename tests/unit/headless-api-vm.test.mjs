@@ -1,5 +1,5 @@
 /* headless-api-vm.test.mjs — tests/specs/headless-api.spec.js replayed in the
- * Node VM (tools/game-vm.cjs): the headless control loop — headless(), obs(),
+ * Node VM (tools/lib/game-vm.cjs): the headless control loop — headless(), obs(),
  * act(), reset() — with the SAME assertions and thresholds as the browser spec.
  *
  * Ported: all 24 tests. The two "before track load" tests (obs() null,
@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 // Playwright's toBeCloseTo(expected, digits): |e - r| < 10^-digits / 2.
 const closeTo = (r, e, d, m) => assert.ok(Math.abs(e - r) < Math.pow(10, -d) / 2, m || `${r} not within 10^-${d}/2 of ${e}`);

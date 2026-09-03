@@ -24,7 +24,7 @@
 import { createServer } from "node:http";
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from "node:fs";
 import { extname } from "node:path";
-import { launchChromium, sleep } from "../harness.mjs";
+import { launchChromium, sleep } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
@@ -72,28 +72,28 @@ const SCENES = {
 // with an inherently tiny footprint.)
 const KNOBS = [
   // ── Lamp geometry / energy (game.js buildTrackLights) ──
-  { id: "lamp.poolEnergy", file: "js/game/lighting-knobs.js", scene: "qatarNight",
+  { id: "lamp.poolEnergy", file: "js/lighting/knobs.js", scene: "qatarNight",
     find: "def: 0.55, rebuild: true", b: "def: 0.30, rebuild: true",
     expect: { region: "road", metric: "mean", dir: "-", minRel: 0.05 },
     note: "master lamp-pool energy scale — now the TUNE_DEFS poolEnergy default (LIGHTING TUNER slider)" },
-  { id: "lamp.aimPoint", file: "js/game/track-lights.js", scene: "qatarNight",
+  { id: "lamp.aimPoint", file: "js/lighting/track-lights.js", scene: "qatarNight",
     find: "const nlOff = track.hw[k] * 0.5 * side;", b: "const nlOff = track.hw[k] * 0.0 * side;",
     expect: { region: "road", metric: "mean", dir: "~", minRel: 0.30 },
     note: "pool lands on near lane (0.5) vs centreline (0) — position shift, energy roughly stable" },
-  { id: "lamp.radius", file: "js/game/track-lights.js", scene: "bahNight",
+  { id: "lamp.radius", file: "js/lighting/track-lights.js", scene: "bahNight",
     find: "intensity: 18.0, radius: 34", b: "intensity: 18.0, radius: 24",
     expect: { region: "road", metric: "p90", dir: "-", minRel: 0.04 },
     note: "desert pool radius; windowing eats the pool's far corner when small" },
-  { id: "lamp.sodiumCone", file: "js/game/track-lights.js", scene: "qatarNight",
+  { id: "lamp.sodiumCone", file: "js/lighting/track-lights.js", scene: "qatarNight",
     find: "sodium:     { col: [1.42, 0.72, 0.24], eMul: 0.85, cIn: 0.82, cOut: 0.44",
     b:    "sodium:     { col: [1.42, 0.72, 0.24], eMul: 0.85, cIn: 0.66, cOut: 0.40",
     expect: { region: "road", metric: "contrast", dir: "-", minRel: 0.03 },
     note: "wider inner cone flattens the pool (less hot-core/valley contrast)" },
-  { id: "lamp.bleed", file: "js/game/track-lights.js", scene: "bahNight",
+  { id: "lamp.bleed", file: "js/lighting/track-lights.js", scene: "bahNight",
     find: "bleed = KP.blB + lh(i + 31) * KP.blV;", b: "bleed = (KP.blB + lh(i + 31) * KP.blV) * 2.5;",
     expect: { region: "road", metric: "p10", dir: "+", minRel: 0.05 },
     note: "out-of-beam floor — lifts the valleys between pools" },
-  { subtle: true, id: "lamp.glareW", file: "js/render/glx.js", scene: "qatarNight",
+  { subtle: true, id: "lamp.glareW", file: "js/render/glx/glx.js", scene: "qatarNight",
     find: "* fade * glareW;", b: "* fade * glareW * 2.5;",
     expect: { region: "frame", metric: "p90", dir: "+", minRel: 0.005 },
     note: "per-lamp lens-glare halo brightness (drawGlow)" },
@@ -102,19 +102,19 @@ const KNOBS = [
     find: "Math.min(0.9, LT.lampFogBase + LT.lampFogHaze * (frame.groundMist || 0) * LT.mistDensity)", b: "0.0",
     expect: { region: "fogwall", metric: "mean", dir: "-", minRel: 0.04 },
     note: "how strongly lamps tint the fog wall (the glowing-fog amount) — B fully kills it for a stark before/after" },
-  { id: "lampFog.softClip", file: "js/game/lighting-knobs.js", scene: "bahFog",
+  { id: "lampFog.softClip", file: "js/lighting/knobs.js", scene: "bahFog",
     find: "def: 0.7,  u: \"uLampFogClip\"", b: "def: 0.2,  u: \"uLampFogClip\"",
     expect: { region: "fogwall", metric: "bloomPct", dir: "+", minRel: 0.0 },
     note: "anti-white-wash shoulder; weaker clip lets fog cross the bloom threshold" },
-  { id: "lampFog.mistShare", file: "js/game/lighting-knobs.js", scene: "bahFog",
+  { id: "lampFog.mistShare", file: "js/lighting/knobs.js", scene: "bahFog",
     find: "def: 1.5,  u: \"uMistShare\"", b: "def: 0.4,  u: \"uMistShare\"",
     expect: { region: "near", metric: "mean", dir: "-", minRel: 0.02 },
     note: "ground-mist share of the lamp glow (mist hugs the road where lamps aim)" },
-  { id: "vol.lampRange", file: "js/render/shaders/post.js", scene: "bahFog",
+  { id: "vol.lampRange", file: "js/render/glx/shaders/glsl-post.js", scene: "bahFog",
     find: "uLampStr > 0.0 && td < 200.0", b: "uLampStr > 0.0 && td < 15.0",
     expect: { region: "fogwall", metric: "mean", dir: "-", minRel: 0.01 },
     note: "how far along the ray lamps volumetrically in-scatter (B kills all but the nearest to force a visible delta)" },
-  { id: "vol.beamHeight", file: "js/render/shaders/post.js", scene: "bahFog",
+  { id: "vol.beamHeight", file: "js/render/glx/shaders/glsl-post.js", scene: "bahFog",
     // The trailing "// lamp haze hugs the road (taller beams)" comment this
     // used to anchor on was moved ABOVE the line by 78814e3d (2026-08-13,
     // hoisting hLamp into the uLampStr>0 branch), so the patch string matched
@@ -127,12 +127,12 @@ const KNOBS = [
     b:    "exp(-max(p.y - groundY, 0.0) * 0.25);",
     expect: { region: "sky", metric: "mean", dir: "-", minRel: 0.0 },
     note: "beam height falloff — larger constant = shorter cones above the road" },
-  { id: "vol.lampStrength", file: "js/game/lighting-knobs.js", scene: "bahFog",
+  { id: "vol.lampStrength", file: "js/lighting/knobs.js", scene: "bahFog",
     find: "def: 0.70, help: \"Hard cap", b: "def: 0.20, help: \"Hard cap",
     expect: { region: "fogwall", metric: "mean", dir: "-", minRel: 0.01 },
     note: "lamp-volumetric beam ceiling (TUNE_DEFS lampVolCap; the mist-swelled driver hits this cap in bahFog)" },
   // ── Ambient ──
-  { id: "amb.bounceK", file: "js/game/lighting-knobs.js", scene: "bahNight",
+  { id: "amb.bounceK", file: "js/lighting/knobs.js", scene: "bahNight",
     find: "def: 0.04, u: \"uBounceK\"", b: "def: 0.0, u: \"uBounceK\"",
     expect: { region: "wallL", metric: "mean", dir: "-", minRel: 0.02 },
     note: "per-lamp bounce fill on walls/kerbs (0 = the old dead-wall look)" },
@@ -146,15 +146,15 @@ const KNOBS = [
     expect: { region: "near", metric: "mean", dir: "~", minRel: 0.15 },
     note: "ambient hued toward city glow (whole block toggled) — colour cast shift, near energy-neutral" },
   // ── Reflections ──
-  { id: "ssr.dryFloors", file: "js/game/lighting-knobs.js", scene: "vegasNight",
+  { id: "ssr.dryFloors", file: "js/lighting/knobs.js", scene: "vegasNight",
     find: "def: 0.08, help: \"Dry tarmac", b: "def: 0.0, help: \"Dry tarmac",
     expect: { region: "road", metric: "mean", dir: "~", minRel: 0.25 },
     note: "dry-NIGHT scene-mirror floor (TUNE_DEFS ssrDryNight; the day floor is its own ssrDryDay slider); B = fully matte" },
-  { id: "ssr.sheenFade", file: "js/render/shaders/post.js", scene: "monzaDay",
+  { id: "ssr.sheenFade", file: "js/render/glx/shaders/glsl-post.js", scene: "monzaDay",
     find: "strength *= min(gateSrc / 0.20, 1.0);", b: "strength *= 1.0;",
     expect: { region: "road", metric: "mean", dir: "~", minRel: 0.25 },
     note: "low-strength sheen fade; B = full darker-mirror even at faint levels" },
-  { id: "ssr.roadMask", file: "js/render/shaders/post.js", scene: "zandRain",
+  { id: "ssr.roadMask", file: "js/render/glx/shaders/glsl-post.js", scene: "zandRain",
     // Anchored on the ASSIGNMENT: the bare smoothstep(...) literal now also
     // appears in two explanatory comments above, and the catalog contract is
     // exactly one hit per knob.
@@ -163,11 +163,11 @@ const KNOBS = [
     expect: { region: "road", metric: "mean", dir: "~", minRel: 0.25 },
     note: "up-facing gate — B is the old edge that dropped banked-corner reflections" },
   // ── Shadows ──
-  { subtle: true, id: "pcss.penScale", file: "js/game/lighting-knobs.js", scene: "monzaDay",
+  { subtle: true, id: "pcss.penScale", file: "js/lighting/knobs.js", scene: "monzaDay",
     find: "def: 80, u: \"uPcssPen\"", b: "def: 300, u: \"uPcssPen\"",
     expect: { region: "road", metric: "edgeE", dir: "-", minRel: 0.0 },
     note: "penumbra growth with caster distance; larger = softer (lower edge energy)" },
-  { id: "pcss.radiusRange", file: "js/render/shaders/lit.js", scene: "monzaDay",
+  { id: "pcss.radiusRange", file: "js/render/glx/shaders/glsl-lit.js", scene: "monzaDay",
     find: "R = mix(1.5, 6.0, pen);", b: "R = mix(24.0, 24.0, pen);",
     expect: { region: "road", metric: "edgeE", dir: "-", minRel: 0.0 },
     note: "contact-hardening range; B is a dramatic uniform blur (4x the old max) for a visible before/after" },
@@ -175,25 +175,25 @@ const KNOBS = [
     find: "const sBox = LT.shadowRange != null ? LT.shadowRange : 80;", b: "const sBox = (LT.shadowRange != null ? LT.shadowRange : 80) * 2;",
     expect: { region: "road", metric: "edgeE", dir: "-", minRel: 0.0 },
     note: "light-box size; doubling it halves texel density (softer, muddier edges)" },
-  { id: "shadow.biasClamp", file: "js/render/shaders/lit.js", scene: "monzaDay",
+  { id: "shadow.biasClamp", file: "js/render/glx/shaders/glsl-lit.js", scene: "monzaDay",
     find: "clamp(slopeBias, 0.0005, 0.004)", b: "clamp(slopeBias, 0.004, 0.012)",
     expect: { region: "road", metric: "mean", dir: "+", minRel: 0.0 },
     note: "acne-vs-peter-panning bias; larger bias lightens (shadows detach/shrink)" },
   // ── Surface detail ──
-  { id: "detail.reliefStrength", file: "js/render/shaders/lit.js", scene: "silvDay",
+  { id: "detail.reliefStrength", file: "js/render/glx/shaders/glsl-lit.js", scene: "silvDay",
     find: "(uDetail * 0.4 * mnFade) / e", b: "(uDetail * 0.0 * mnFade) / e",
     minVisible: 0.2, expect: { region: "near", metric: "edgeE", dir: "-", minRel: 0.0 },
     note: "micro-normal relief strength (two-octave asphalt/verge bumpiness); B flattens it" },
-  { id: "detail.crackStrength", file: "js/render/shaders/lit.js", scene: "silvDay",
+  { id: "detail.crackStrength", file: "js/render/glx/shaders/glsl-lit.js", scene: "silvDay",
     find: "smoothstep(0.40, 0.70, vnoise(wp * 0.11 + 7.7));", b: "smoothstep(0.05, 0.35, vnoise(wp * 0.11 + 7.7));",
     minVisible: 0.2, expect: { region: "near", metric: "p10", dir: "-", minRel: 0.0 },
     note: "crack COVERAGE zone-gate (was darkness only) — B widens which stretches show cracks, so much more of the road cracks visibly" },
-  { id: "detail.patch", file: "js/render/shaders/lit.js", scene: "silvDay",
+  { id: "detail.patch", file: "js/render/glx/shaders/glsl-lit.js", scene: "silvDay",
     find: "albedo *= 1.0 - pm * 0.05 * min(uDetail * 4.0, 1.0);", b: "albedo *= 1.0 - pm * 0.18 * min(uDetail * 4.0, 1.0);",
     minVisible: 0.2, expect: { region: "near", metric: "mean", dir: "-", minRel: 0.0 },
     note: "repair-patch albedo shift; stronger patches darken the near road" },
   // ── Night energy budget (pre-existing, now measurable) ──
-  { id: "night.glowAmp", file: "js/game/lighting-knobs.js", scene: "vegasNight",
+  { id: "night.glowAmp", file: "js/lighting/knobs.js", scene: "vegasNight",
     find: "def: 2.3,  u: \"uGlowAmp\"", b: "def: 3.4,  u: \"uGlowAmp\"",
     expect: { region: "frame", metric: "bloomPct", dir: "+", minRel: 0.0 },
     note: "emissive HDR push (windows/lenses/neon) — B is the old too-bright budget" },
@@ -201,9 +201,9 @@ const KNOBS = [
     find: "(raceTimeOfDay === \"default\" && track.def.night)) ? 0.78", b: "(raceTimeOfDay === \"default\" && track.def.night)) ? 0.40",
     expect: { region: "frame", metric: "mean", dir: "-", minRel: 0.02 },
     note: "prop emissive ramp at night (lit windows / lens glow level)" },
-  // applyRaceSettings moved to js/game/atmosphere.js; this is its EXPLICIT-night
+  // applyRaceSettings moved to js/lighting/atmosphere.js; this is its EXPLICIT-night
   // branch (raceTimeOfDay === "night"), which is what every *Night scene uses.
-  { id: "night.exposure", file: "js/game/atmosphere.js", scene: "qatarNight",
+  { id: "night.exposure", file: "js/lighting/atmosphere.js", scene: "qatarNight",
     find: "G.frame.exposure = (G.track && G.track.def && G.track.def.theme === \"street_night\") ? 0.86 : 0.90;",
     b:    "G.frame.exposure = (G.track && G.track.def && G.track.def.theme === \"street_night\") ? 1.05 : 1.10;",
     expect: { region: "frame", metric: "mean", dir: "+", minRel: 0.05 },
@@ -214,12 +214,12 @@ const KNOBS = [
     note: "night bright-pass threshold; lower = more of the scene blooms" },
 ];
 
-// Applied to js/game/frame-lights.js in EVERY render (baseline AND variant): freeze the
+// Applied to js/lighting/frame-lights.js in EVERY render (baseline AND variant): freeze the
 // per-lamp flicker so night scenes are deterministic — otherwise the ±2/10%
 // lamp breathing (performance.now-driven) adds ~1 luma of A-vs-B noise that
 // has nothing to do with the knob under test.
-const FREEZE_FLICKER_FILE = "js/game/frame-lights.js";
-// The flicker refactor hoisted the closure (js/game/frame-lights.js _flLive):
+const FREEZE_FLICKER_FILE = "js/lighting/frame-lights.js";
+// The flicker refactor hoisted the closure (js/lighting/frame-lights.js _flLive):
 // the knob is now read once into the local `flick`. Same line, new spelling —
 // the 1-hit source pin in lighting-ab.spec is what catches this drifting.
 const FREEZE_FLICKER = ["const amp = hsh > 0.90 ? flick : flick * 0.2;", "const amp = 0.0;"];

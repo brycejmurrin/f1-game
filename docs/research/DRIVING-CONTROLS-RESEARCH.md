@@ -3,7 +3,7 @@
 > column below is as of writing — the code is the authority on what shipped.
 >
 > Errata: `tools/tune-sweep.mjs` has since been renamed
-> `tools/physics-tune-sweep.mjs`.
+> `tools/check/physics-tune-sweep.mjs`.
 
 # Driving controls & assists — what shipped games do, and what it means here
 
@@ -305,7 +305,7 @@ notch 1 is very numb.
 ## Our racing-line assist already matches the industry vocabulary
 
 F1 uses **Off / Corners Only / Full**. `LINE_LEVELS = { off: 0, corner: 3,
-full: 5 }` in `js/game/steer-tuning.js`, with OFF / CORNERS / FULL buttons, is
+full: 5 }` in `js/input/steer-tuning.js`, with OFF / CORNERS / FULL buttons, is
 character-for-character the same taxonomy. Traction control uses **Off / Medium /
 Full**, which is the same three-step shape.
 
@@ -473,7 +473,7 @@ fact about `Fyf` saturation that they have no other way to learn.
 
 Investigated while building the above, and the finding is blunt: **`js/game.js`
 contained zero `Log` calls.** Not "few" — zero, alongside zero bare `console.*`.
-`js/log.js` defines the `game` namespace as covering *"game loop, race logic,
+`js/core/log.js` defines the `game` namespace as covering *"game loop, race logic,
 physics (js/game.js, js/game/**)"*, and the file it was created for never used
 it. Across `js/game/` only `apex.js` (5 calls) and `debrisworld.js` (1) log at
 all.
@@ -546,7 +546,7 @@ should quietly do another's job.
 ## Live mcp-probe, 2026-08-18 — what the car actually does
 
 Working-tree canvas at `http://127.0.0.1:3456/` (shell `?v=` hash `7eb65822effc`),
-`node tools/mcp-cli.mjs probe --eval artifacts/driving-controls-probe.js` then
+`node tools/mcp/mcp-cli.mjs probe --eval artifacts/driving-controls-probe.js` then
 `…-v2.js`. Track: Monza. `__apex.headless(true)` + `act()` — JSON, no pixels.
 v1 closed-loop trials at full lock ran into the barrier (`x≈7.9`, `wall=0`);
 those yaw numbers are discarded. v2 uses 18-frame / 0.35-stick pulses on the
@@ -659,7 +659,7 @@ helps still off — presets-first still matches the industry table in
 
 ### What is still worth building (unchanged, now with live reasons)
 
-1. **Braking CUE — shipped 2026-08-18** (`js/game/brake-cue.js`). Pulse rate
+1. **Braking CUE — shipped 2026-08-18** (`js/physics/brake-cue.js`). Pulse rate
    + lookahead slider (1 = OFF). LIGHT/FULL takeover is still not built.
 2. **Rate half on the simple sheet — shipped.** Adaptive Buttons defaults to
    notch 6 and sits next to Racing Line, not inside Advanced.

@@ -37,7 +37,7 @@ test.describe.configure({ timeout: 300000 });
 // assignment with a setter so the wrap survives whenever that script lands.
 //
 // AND WAIT FOR THE BUILD. __apex.race() calls startRace() WITHOUT awaiting it
-// (js/game/apex.js:926), and the same split made startRace async precisely so
+// (js/agent/apex.js:926), and the same split made startRace async precisely so
 // it could `await ensureScenery(trackIdx)` (js/game.js:2659). So race() now
 // returns before the circuit is built, and a spec that races and reads in ONE
 // page.evaluate() reads before the scenery callback has run. Every such spec

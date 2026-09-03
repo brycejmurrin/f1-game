@@ -49,7 +49,7 @@
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/rotate-markings.cjs
+    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
@@ -63,7 +63,7 @@
                  kinds: ["setback", "slab", "podium", "hall", "chevron", "tiered"], neonKinds: [], tone: { n: [0.18, 0.19, 0.17], d: [0.78, 0.74, 0.64] },
                  dayPal: ["cream", "white", "paleblue", "peach", "steel", "aqua", "coral"] },
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
-    // recentred, one lap, open loop. tools/import-circuit-path.mjs regenerates it.
+    // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
     // Autódromo Internacional Nelson Piquet — Jacarepaguá. Upstream br-1977, stated 5031 m, projected 4967 m, trace winding CW.
     path: { len: 4967, pts: [[66.2,257.5],[-171.3,255.9],[-203.9,252],[-228.7,240.2],[-250.8,216.2],[-263.9,193.6],[-270.4,167.6],[-270.4,138.4],[-264.8,110.2],[-246.9,87.6],[-229.1,68.9],[-204.7,59.7],[-191.7,58.4],[-60.8,61.9],[-38.2,53.5],[-24.8,40.4],[-14.7,25.7],[-10.4,7],[-10,-150.4],[-16,-169.4],[-25.6,-183.3],[-37.8,-195.4],[-59.1,-206.8],[-78.2,-211.1],[-100.8,-212.5],[-117.4,-211.1],[-144.4,-196.3],[-294.3,-91.6],[-355.4,-29.1],[-368.9,-15.2],[-371.1,-3.8],[-370.6,168.1],[-378.4,186],[-400.6,197.2],[-429.3,200.3],[-463.2,186.3],[-485.4,178.4],[-508.9,176.7],[-527.6,191.5],[-541.1,218.5],[-540.2,245.8],[-525.4,269.3],[-504.5,286.3],[-486.3,293.7],[-314.1,329.8],[158.5,338.5],[456.7,329.8],[485,319.8],[508.5,304.1],[525,282.8],[534.6,258.4],[541.1,233.7],[540.7,212.8],[538.5,188.4],[534.6,166.7],[524.2,146.7],[509.8,126.3],[491.6,108.9],[470.3,94.6],[438.5,84.5],[397.6,75],[365.9,65.8],[355.5,55.2],[343.3,36],[341.3,19.2],[344,-2.1],[371,-148.7],[372.2,-163.8],[371.8,-183],[367.9,-197.3],[360.5,-213.8],[351.4,-227.7],[340,-236.8],[215.5,-332.5],[200.7,-338],[184.6,-338.5],[165.5,-333.7],[149.4,-323.3],[133.7,-303.7],[129,-286.8],[123.8,47.4],[130.2,63.4],[141.6,74.3],[158.9,83.9],[433.5,149.4],[449.2,162.9],[458.7,181.2],[462.7,200.3],[456.1,221.6],[447,238.2],[430.9,251.2],[407,258.5]] },
   }

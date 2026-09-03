@@ -1,5 +1,5 @@
 // @ts-check
-// Rapier debris side-world (js/game/debrisworld.js — adoption phases R0+R1).
+// Rapier debris side-world (js/physics/debris-world.js — adoption phases R0+R1).
 // Render-only, opt-in, deterministic. These are physics/hook assertions
 // (headless project — NOT a render spec): the side-world must be inert when
 // disabled (no rapier fetch, zero steps), spawn debris from a real wall hit,

@@ -9,7 +9,7 @@ const Car3D = (function () {
   });
   // A livery FINISH is a surface-id remap on painted vertices, not a material
   // uniform: the shaders classify car surfaces 20-30 and branch per id, so a new
-  // finish costs an id in that chain (js/render/shaders/lit.js and its WGSL/TSL
+  // finish costs an id in that chain (js/render/glx/shaders/glsl-lit.js and its WGSL/TSL
   // mirrors) and one row here. `carbon` gets id 31 rather than reusing
   // SURFACES.carbon (21): 21 keeps the vertex colour, so pointing the finish at
   // it just rendered flatter TEAM-COLOURED paint. 31 darkens the albedo to bare
@@ -433,7 +433,7 @@ const Car3D = (function () {
     // `rimColor` is the brakes recipe's `rim` key. It reached this line and then
     // DIED here: RC was computed and never read once, so the nine catalog
     // options that set a rim colour painted nothing. The clamp scan
-    // (tools/parts-sweep.mjs --clamp-scan) measured brakes/rim at 0.0000 m2 of
+    // (tools/car/parts-sweep.mjs --clamp-scan) measured brakes/rim at 0.0000 m2 of
     // colour over its entire range, which is what a key with no consumer looks
     // like. The rim faces below take RC now. RIM_DEF reproduces the hardcoded
     // value those faces used before, so a car with no `rim` set is byte-identical.
@@ -458,7 +458,7 @@ const Car3D = (function () {
     // The `shoulder` knob's two tiers MOVED UP with it. They were 0.945 / 0.90
     // against a flat 1.0 baseline; leaving them there while the baseline gained
     // a shoulder collapses the first rung to 3.1 mm of surface displacement,
-    // under the 5 mm optical floor (tools/parts-sweep.mjs THRESHOLDS), and
+    // under the 5 mm optical floor (tools/car/parts-sweep.mjs THRESHOLDS), and
     // tyres/soft — whose only geometry key is `shoulder: 1` — measures as a
     // recolour. Re-spaced to 0.920 / 0.874 with matching wider rolls, each rung
     // is ~15 mm of radius and ~8 mm of surface, the same step the knob had
@@ -1146,8 +1146,13 @@ const Car3D = (function () {
     }
     return sig;
   }
+  // One-entry last-args cache in front of the Map: drawAeroFlaps asks twice
+  // per car per frame with the same (level, style), and the key concat was
+  // the only allocation left on that path.
+  let _flapLastLvl = null, _flapLastSt = null, _flapLastHit = null;
   function aeroFlapsGeom(aLvl, style) {
     const st0 = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
+    if (aLvl === _flapLastLvl && st0 === _flapLastSt) return _flapLastHit;
     const key = aLvl + "|" + flapSig(st0);
     let hit = _flapSpecs.get(key);
     if (!hit) {
@@ -1155,6 +1160,7 @@ const Car3D = (function () {
       for (let i = 0; i < hit.length; i++) hit[i].cacheKey = key + "|" + i;
       _flapSpecs.set(key, hit);
     }
+    _flapLastLvl = aLvl; _flapLastSt = st0; _flapLastHit = hit;
     return hit;
   }
   function solveFlapsGeom(aLvl, style) {
@@ -2885,7 +2891,7 @@ const Car3D = (function () {
       // Root the base into the cover, and only ever DOWNWARD. Raising it would
       // walk the fin out from under its livery decal: sharkFinPanel() and
       // sharkFinBadge() below place that decal off the frozen FIN with no
-      // arguments, and js/game/carmesh.js calls Car3D.sharkFinPanel() and
+      // arguments, and js/car/car-mesh.js calls Car3D.sharkFinPanel() and
       // Car3D.sharkFinBadge() exactly that way. Lowering only grows the blade under the decal, which keeps
       // every graphic exactly where it was.
       const root = (z, y0) => {

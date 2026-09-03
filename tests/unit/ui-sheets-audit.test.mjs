@@ -64,8 +64,8 @@ function bootResults({ state = "menu", season, cars, netPlay }) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
-  vm.runInContext(src("js/game/season-cal.js"), ctx, { filename: "js/game/season-cal.js" });
-  vm.runInContext(src("js/game/results.js"), ctx, { filename: "js/game/results.js" });
+  vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: "js/career/season-cal.js" });
+  vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: "js/ui/results-sheet.js" });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
   const els = { resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next") };
   const G = {
@@ -232,8 +232,8 @@ function bootGfx() {
   seedStore(ctx);
   // Both halves of the old gfx-quality.js, in shell order: the GRAPHICS preset
   // button (GfxQuality) and the RENDERER picker that owns the reload confirm.
-  vm.runInContext(src("js/game/gfx-quality.js"), ctx, { filename: "js/game/gfx-quality.js" });
-  vm.runInContext(src("js/game/renderer-picker.js"), ctx, { filename: "js/game/renderer-picker.js" });
+  vm.runInContext(src("js/perf/quality-preset.js"), ctx, { filename: "js/perf/quality-preset.js" });
+  vm.runInContext(src("js/perf/renderer-picker.js"), ctx, { filename: "js/perf/renderer-picker.js" });
   dom.document.dispatchEvent({ type: "DOMContentLoaded" });
   const Gfx = vm.runInContext("RendererPicker", ctx);
   const sel = dom.byId("pm-renderer");
@@ -331,7 +331,7 @@ function bootAudio({ soundOn, musicEnabled }) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
-  vm.runInContext(src("js/game/audio-panel.js"), ctx, { filename: "js/game/audio-panel.js" });
+  vm.runInContext(src("js/audio/panel.js"), ctx, { filename: "js/audio/panel.js" });
   const store = stubStore();
   store.set("musicSource", "builtin");
   const G = { $: (id) => dom.byId(id), els: { soundbtn: dom.byId("soundbtn") }, store, soundOn, musicEnabled, state: "race", trackIdx: 0 };
@@ -401,5 +401,5 @@ test("pause, settings, results and standings all scroll inside the sheet on a sh
   assert.ok(/<div class="sheet-body pane stack">/.test(html.slice(html.indexOf('id="pausemenu"'), html.indexOf('id="pmsettings"'))), "the pause stack is a pane");
   assert.equal(decl(comp, "#pm-category-tabs", "position"), "sticky", "the category tabs stay reachable while the body scrolls");
   // The METRICS submenu inside DISPLAY caps itself in zoom-compensated units.
-  assert.match(read("js/game/metrics.js"), /max-height: min\(280px, calc\(100 \* var\(--svhz, 1svh\) - 9rem\)\)/);
+  assert.match(read("js/perf/metrics-overlay.js"), /max-height: min\(280px, calc\(100 \* var\(--svhz, 1svh\) - 9rem\)\)/);
 });

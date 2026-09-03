@@ -1379,7 +1379,7 @@ const DataTelemetry = (function () {
     return { loadTelemetry, closeTelemPopup };
   }
 
-  const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
+  const clamp = M4.clamp;                     // shared scalar helper (js/core/mat4.js)
 
   function cumDist(car) {
     const t = [], d = [];

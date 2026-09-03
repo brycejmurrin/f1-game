@@ -79,11 +79,11 @@ interfere with a run in flight. Chrome setup / park-before-Playwright:
 ```sh
 grep -nE '<dialog[^>]*id="[^"]+"' index.html
 grep -nE '<div[^>]*class="[^"]*screen' index.html
-grep -n "DEFS" -A 40 js/game/uilayers.js
-grep -n "data-shape\|data-pair" css/*.css js/game/sheetshape.js
+grep -n "DEFS" -A 40 js/ui/layers.js
+grep -n "data-shape\|data-pair" css/*.css js/ui/sheet-shape.js
 ```
 
-Cross-check against `SCREENS` in `tools/layout-audit.mjs`. A root present in
+Cross-check against `SCREENS` in `tools/ui/layout-audit.mjs`. A root present in
 `index.html` and absent from `SCREENS` is a screen nobody measures.
 
 Remember sub-views: `#career` is new-career SETUP *and* the season hub;

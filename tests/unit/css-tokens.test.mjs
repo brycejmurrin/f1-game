@@ -18,7 +18,7 @@
  * which is a conversation, where a pre-seeded list is a place to hide.
  *
  * A token counts as consumed by `var(--x)` anywhere in css/, js/ or index.html,
- * or by `setProperty("--x", …)` from JS (js/game/scrollfade.js and
+ * or by `setProperty("--x", …)` from JS (js/ui/scroll-fade.js and
  * js/data/standings.js both write tokens that no stylesheet mentions by name).
  *
  * Run: node --test tests/unit/css-tokens.test.mjs   (npm run test:tooling-fast)
@@ -75,7 +75,7 @@ test("every token defined in css/tokens.css is read somewhere", () => {
 
 // A SHEET THAT DECLARES `.pane-pair` MUST DECLARE `--pair-at`.
 //
-// js/game/sheetshape.js:classifyPair reads that property to decide `data-pair`,
+// js/ui/sheet-shape.js:classifyPair reads that property to decide `data-pair`,
 // and its miss branch is silent by design: no value means DELETE the attribute
 // and return. So a pair sheet that forgets it does not fail loudly — it renders
 // as a plain vertical stack, and because `data-pair="on"` is what puts the panes
@@ -98,11 +98,11 @@ test("every .pane-pair sheet declares the --pair-at that switches it on", () => 
 
   const missing = pairs.filter((id) => !new RegExp("#" + id + "\\b[^{}]*\\{[^{}]*--pair-at\\s*:").test(css));
   assert.deepEqual(missing, [],
-    "a .pane-pair sheet has no --pair-at, so js/game/sheetshape.js will delete its data-pair and " +
+    "a .pane-pair sheet has no --pair-at, so js/ui/sheet-shape.js will delete its data-pair and " +
     "the two panes will stack at full height instead of becoming bounded scroll regions. " +
     "Declare it beside the sheet's --sheet-w (620px matches #sel-inner / #cr-inner / #ss-inner).");
 
-  const shape = fs.readFileSync(path.join(ROOT, "js/game/sheetshape.js"), "utf8");
+  const shape = fs.readFileSync(path.join(ROOT, "js/ui/sheet-shape.js"), "utf8");
   assert.match(css, /\.pane-pair\s*\{[^}]*--pair-compact\s*:\s*off/,
     "`.pane-pair` must default `--pair-compact: off` so compact sheets stack " +
     "without four copies of `--pair-at: 2000px`.");

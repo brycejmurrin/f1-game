@@ -469,7 +469,7 @@
         // Stadium bowl (T1-4, s0-0.10) + the lake/amphitheatre back sweeps.
         // frac~0.42-0.44 used to be excluded here for a reported terrain
         // intrusion at road level. DIAGNOSED: rebuilt this circuit headlessly
-        // (tools/verify-track.cjs harness) with the skip removed and instrumented
+        // (tools/track/verify-track.cjs harness) with the skip removed and instrumented
         // every [scenery] SUPPRESSED warning — none fire anywhere near frac 0.43
         // for any gap this file actually uses (8m lamps, 40-58m crowd blanket).
         // A raycast against the built terrain mesh (mirroring the anchor()
@@ -483,7 +483,7 @@
         // sections overlapping when a node's own outerW reaches far enough to
         // touch a taller nearby section — confirmed: the s≈0.56 crest, py≈13.7m,
         // sits only ~75-90m from this stretch in world space) lives in
-        // js/track/mesh.js buildTerrain + js/track/tracks.js terrainYAt, both
+        // js/track/core/mesh.js buildTerrain + js/track/tracks.js terrainYAt, both
         // engine files this task may not edit. No further js/track/ mitigation
         // needed here since the symptom no longer reproduces at this circuit's
         // gaps; if it resurfaces at a different gap, tightening `terrainOuter`

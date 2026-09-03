@@ -1,7 +1,7 @@
 // @ts-check
 // Deterministic comparison against a pinned subset of bacinger/f1-circuits
 // (ODbL-1.0). Refreshing the fixture is an explicit maintenance operation via
-// tools/refresh-f1-circuit-reference.mjs, never part of this test.
+// tools/track/refresh-f1-circuit-reference.mjs, never part of this test.
 import { test, expect } from "../helpers/fixtures.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -11,7 +11,7 @@ import {
   MAX_SHAPE_ERROR,
   signedArea,
   validateMappings,
-} from "../../tools/track-accuracy-validator.mjs";
+} from "../../tools/track/track-accuracy-validator.mjs";
 
 const OUT = galleryDir("f1-track-accuracy");
 const REFERENCE = JSON.parse(fs.readFileSync(

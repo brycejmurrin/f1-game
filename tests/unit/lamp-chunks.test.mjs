@@ -14,7 +14,7 @@ import { createRequire } from "node:module";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
 const MAN = require(join(ROOT, "tools/manifest.cjs"));
-const SRC_PATH = (MAN.PATHS && MAN.PATHS.LAMP_CHUNKS) || "js/render/lamp-chunks.js";
+const SRC_PATH = (MAN.PATHS && MAN.PATHS.LAMP_CHUNKS) || "js/render/shared/lamp-chunks.js";
 
 const LampChunks = new Function(
   readFileSync(join(ROOT, SRC_PATH), "utf8") + "; return LampChunks;"

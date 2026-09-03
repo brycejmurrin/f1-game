@@ -4,12 +4,12 @@ Long-form progression on top of the race loop: a season is a chapter, not the
 whole story. Two front-ends — **DRIVER CAREER** (you are a driver signed to a
 team) and **MY TEAM** (you own the twelfth team) — share one core.
 
-- **Rules and save:** `js/game/career.js` (global `Career`) — no DOM.
-- **Reliability / DNFs:** `js/game/reliability.js` (global `Reliability`).
-- **Screens:** `js/game/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
-- **Qualifying:** `js/game/quali.js` (global `Quali`) — the model: session timing, ordering, the persisted grid; `js/game/quali-sheet.js` (global `QualiSheet`) — `#quali`, the sheet that paints `quali.rows()`.
-- **Ratings:** `js/car/driver-ratings.js` (global `DriverRatings`).
-- **Persistence + migration:** `GameStore.migrateCareer` in `js/game/store.js`.
+- **Rules and save:** `js/career/career.js` (global `Career`) — no DOM.
+- **Reliability / DNFs:** `js/race/reliability.js` (global `Reliability`).
+- **Screens:** `js/career/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
+- **Qualifying:** `js/race/quali-model.js` (global `Quali`) — the model: session timing, ordering, the persisted grid; `js/ui/quali-sheet.js` (global `QualiSheet`) — `#quali`, the sheet that paints `quali.rows()`.
+- **Ratings:** `js/data/driver-ratings.js` (global `DriverRatings`).
+- **Persistence + migration:** `GameStore.migrateCareer` in `js/core/store.js`.
 - **Styles:** `css/career.css`.
 
 ---
@@ -143,7 +143,7 @@ Two consequences to respect:
   `quitToMenu`) to re-read `apex26.season` is what drops the alias on the way out.
 
 `dev`/`tdev`/`seats` store deltas, never absolutes, so updating the hardcoded 2026
-grid in `js/car/teams.js` never invalidates a save.
+grid in `js/data/teams.js` never invalidates a save.
 
 ### Randomness
 
@@ -169,7 +169,7 @@ every key in the file ends with its varying part.
 
 ## Driver ratings
 
-`js/car/driver-ratings.js` holds five axes, 0–100, for all 22 drivers, keyed by
+`js/data/driver-ratings.js` holds five axes, 0–100, for all 22 drivers, keyed by
 driver **code** so a driver keeps their ratings when the market moves them.
 
 | Axis | Feeds |
@@ -180,7 +180,7 @@ driver **code** so a driver keeps their ratings when the market moves them.
 | `consistency` | **variance, not speed** — it narrows the band around a driver's pace |
 | `experience` | races started; damps development **and** steer smoothing / unstuck panic / OT hesitation |
 
-It is deliberately not in `js/car/teams.js`: that file is the verified real-world
+It is deliberately not in `js/data/teams.js`: that file is the verified real-world
 grid and is loaded by `tools/carview.html` through the manifest's `CARVIEW` subset,
 which has no use for balance numbers.
 
@@ -257,7 +257,7 @@ on either is genuinely giving up the other.
 > together, and did.
 >
 > **Re-measure after touching `BUDGET_MULT` or `BUDGET_UPGRADE`.** Raising
-> `budget()` lowers `tools/career-economy.mjs`'s re-spec figure with no change in
+> `budget()` lowers `tools/car/career-economy.mjs`'s re-spec figure with no change in
 > income, because more of what a season earns goes onto the car instead of into
 > the owned set.
 
@@ -273,7 +273,7 @@ nothing in resolution passes it.
 
 ### The garage is the R&D tree
 
-There is no separate research screen. `#carsetup` (`js/game/setup-ui.js`) is the
+There is no separate research screen. `#carsetup` (`js/garage/setup-sheet.js`) is the
 tree, because "what could this car become" is the question you ask standing in
 front of the list you fit from. `G.careerOwned()` is the one test it branches on —
 non-null already means "career rules apply AND the team on screen is the career
@@ -415,13 +415,13 @@ cruising in a good one does not.
 
 ## Reliability and retirements
 
-`js/game/reliability.js` (global `Reliability`) decides whether a car reaches the
+`js/race/reliability.js` (global `Reliability`) decides whether a car reaches the
 flag. Without it every one of the twenty-two finishes every race forever, which
 makes a championship a pure pace ranking — and a career flat, because a points
 finish in a bad car is only earned if the good cars can break.
 
 **The rating is derived, never authored.** There is no per-team reliability table
-to keep in step with `js/car/teams.js`. Risk is the team `tier` — the number that
+to keep in step with `js/data/teams.js`. Risk is the team `tier` — the number that
 already says how good the car is — relieved by two things a career can actually
 buy:
 
@@ -551,7 +551,7 @@ also `GOAL_MV` (12) off the market value the winter's offers are drawn against.
 That is the demotion: `offerBar()` spaces the tiers 18 apart, so a missed goal
 costs most of a tier's worth of interest without needing a second rule to say so.
 
-**No money either way, deliberately.** `tools/career-economy.mjs` measures this
+**No money either way, deliberately.** `tools/car/career-economy.mjs` measures this
 economy against the catalog, and a once-a-season bonus it does not model would
 invalidate every figure in "The economy, measured" above. Reputation is the
 channel that already carries season-long form.
@@ -581,7 +581,7 @@ market swap applies in MY TEAM as well, while the player's own seat still outran
 
 ## The economy, measured
 
-`tools/career-economy.mjs` sims a season per starting team through the **real**
+`tools/car/career-economy.mjs` sims a season per starting team through the **real**
 `Career.settleRound()` and prices the income against the catalog. It exists because
 `QUALI_TRIM` shipped as a reasoned guess and was **27% wrong**, and `RESEARCH_MULT`
 / `PRIZE` / `BUDGET_MULT` had never had the same treatment.
@@ -724,7 +724,7 @@ points, championships, best championship finish, teams driven for — then **SEA
 BY SEASON**, one `.res-row` per archived year, newest first.
 
 **Every total is derived, none is stored.** `careerTotals()` in
-`js/game/career-ui.js` walks `career.history` and adds the season in progress from
+`js/career/career-ui.js` walks `career.history` and adds the season in progress from
 `career.results` and `career.season.pts`. A totals block on the save would be one
 more rung on the migration ladder for numbers that are a sum over data already
 there — and a total written once is a total that goes stale, which no migration
@@ -745,7 +745,7 @@ and costs a button's height out of a 390 px-tall screen. A card also states what
 opens, which a row of exits cannot.
 
 Registered in all three screen registries — the `UiLayers` layer list
-(`js/game/uilayers.js`, which MenuNav reads), `ScrollFade.SCREENS`, and
+(`js/ui/layers.js`, which MenuNav reads), `ScrollFade.SCREENS`, and
 `AriaState.ROOTS` — or it silently loses keyboard nav, scroll
 fades and screen-reader state. Styles are in `css/career.css`; the season rows are
 the shared `.res-row` vocabulary, podium classes included, so a title-winning year
@@ -753,7 +753,7 @@ lights up gold with no new CSS.
 
 ## Tests
 
-`tests/specs/career.spec.js` and `tests/specs/quali.spec.js`, both in `node tools/test-bg.mjs modes`
+`tests/specs/career.spec.js` and `tests/specs/quali.spec.js`, both in `node tools/ci/test-bg.mjs modes`
 (there is no `test:career` group — `test-bg` exits 2 on an unknown name). They cover the mode axes, the save and its migration, the
 isolation guarantees, the hub flow, a settled round, the R&D garage, MY TEAM's two
 cars and its wage bill, the objectives, the rollover and the contracts, the ratings,
@@ -763,5 +763,80 @@ every finisher and scores no points, and that the draw leaves the sim RNG stream
 exactly where it found it. `tests/specs/ui-audit.spec.js` screenshots the career hub, its
 new-career state, qualifying and the offers sheet in both orientations.
 
-Run `node tools/test-bg.mjs modes` in the background after any change here, and `node tools/test-bg.mjs car` after
+Run `node tools/ci/test-bg.mjs modes` in the background after any change here, and `node tools/ci/test-bg.mjs car` after
 anything that touches the garage.
+
+## Upgrade parts — the catalog
+
+Twelve upgrade categories, a 780 cr budget, and the measured effect of each on
+the four stats. Extracted from the agent brief. `AGENTS.md` keeps only the rules another
+subsystem has to respect.
+
+---
+
+**THE ERS PART RUNS THE BATTERY.** Every category moves the four stats
+(`speed`→`vmax`, `accel`→`ACCEL`, `cornering`→`LAT_MAX`, `braking`→`BRAKE`), and
+all twelve have real spread — but ERS's options *describe* battery behaviour
+("harvests extra energy under braking", "maximum recovery window", "immediate
+deployment") and for a long time did none of it. `Parts.ersProfile(setup, team)`
+returns two 0..1 axes read from the bias the catalog already encodes
+(`deploy` ← the option's `accel`, `regen` ← its `speed`), and they drive
+`drainFor`/`regenFor`/`otTimeFor`/`otCoolFor` in game.js. Deriving rather than
+authoring new fields keeps the SIGNATURE clones consistent for free, since they
+copy those stats. Measured:
+
+| ERS part | deploy / regen | boost lasts | recharge | OT push / cooldown |
+|---|---|---|---|---|
+| `harvest` | 0.00 / 0.43 | 3.8 s | 5.4 s | 3.2 s / 14.0 s |
+| `standard` | 0.22 / 0.29 | 4.3 s | 5.9 s | 3.6 s / 12.9 s |
+| `overcharge` | 1.00 / 1.00 | 7.1 s | 4.0 s | 5.2 s / 9.0 s |
+
+AI cars use the team's `FACTORY_PRESETS` aero/ERS (SIGNATURE equivalents
+already differ). A car with no resolved setup still sits at the midpoint.
+`physState()` reports `ersDeploy`, `ersRegen`, `drain`, `regen`, `otTime`,
+`otCool`.
+
+`Parts.CATALOG` — an **array** of 12 category objects (ordered, not keyed by id):
+`engine`, `aero`, `suspension`, `brakes`, `tyres`, `ers`, `gearbox`, `fuel`,
+`exhaust`, `floor`, `cockpit`, `wheels`. Each
+category is `{ id, label, options:[…] }`; each option has
+`{ id, label, cost, desc, speed?, accel?, cornering?, braking?, supplier? }`.
+Budget = 780 cr (`Parts.BUDGET`) for a non-career garage build; in career the
+cap is `Career.budget()` instead (works-car cost × the RAISE THE CAP multiplier,
+clamped by the catalog-derived `budgetCap()` — see docs/CAREER.md) and the
+unlimited toggle is ignored (`js/garage/setup-sheet.js`). `Parts.getMods(setup, team)`
+takes a `{id, engine}` team object and returns `{speed, accel, cornering,
+braking}` multipliers. Supplier-exclusive options (e.g. `manu_mercedes`) are
+only shown when `team.engine` matches. `unlimitedBudget` (localStorage
+`apex26.unlimitedBudget`) removes the 780 cr cap outside career.
+
+Every option also carries a parametric `visual` **recipe** consumed by `Car3D`
+(`getVisualTiers().._visual`); `VISUAL_FIELD_REGISTRY` names the one consumer of
+each recipe field, and `tests/specs/parts-physics.spec.js` fails on an unregistered or
+stale field, a duplicate recipe within a category, or an engine that repeats
+another's six-field bodywork shape. The newer STRUCTURE knobs are
+`aero.plate/casc/swan/tvane` (endplate profile, cascade count, swan-neck mount,
+T-wing), `aero.duct/board/slot` (2026 upper pod ram, in-wash wakeboard, floor
+mouse-hole), `engine.chimney`, `brakes.scoop`, `ers.conduit`, `fuel.filler`,
+`exhaust.pipes/bore/flare/wastegate/wrap` and `floor.fences/fenceH/skid/edgeLip`
+— each defaults to the shipped geometry, so an option written before them is
+unchanged. EXHAUST and FLOOR took over geometry that used to be hardcoded (the
+tailpipe derived from `engine.twin`, and a fixed five-fence floor edge); both
+still derive exactly that when their recipe leaves the field at its default.
+
+Prefer knobs that change WHAT EXISTS over knobs that scale what is already
+there. A category whose recipe is all scalars gives every team the same part at
+a different size — `tyres.shoulder`, `brakes.discFace` and `suspension.rocker`
+exist because those three read as near-identical across the grid without them.
+
+**SIGNATURE options** (`tag: "SIGNATURE"`, `teams: [id]`) are cost- and
+physics-identical clones of the universal option named in `equivalent` — they buy
+a distinct mesh, never an advantage, and the test suite enforces that. Every team
+fields one in every category via `FACTORY_PRESETS`, except the four on a
+manufacturer-exclusive FACTORY power unit (that unit is already team-unique).
+`FACTORY_PRESETS` drives AI meshes and the works aero/ERS the AI now runs, and
+seeds a new career save's `owned` + `fitted` build via `Parts.getFactorySetup`
+(`js/career/career.js`); a non-career garage build still goes through the
+garage, not this table.
+
+---

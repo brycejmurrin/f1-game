@@ -18,7 +18,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadCar3D, buildCockpit, sweep, isPale } from "../../tools/cockpit-pale-sweep.mjs";
+import { loadCar3D, buildCockpit, sweep, isPale } from "../../tools/car/cockpit-pale-sweep.mjs";
 
 // Pale things that are SUPPOSED to be pale, each with the reason it stays.
 const ALLOWED = [

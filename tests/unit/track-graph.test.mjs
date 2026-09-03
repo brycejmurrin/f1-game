@@ -2,7 +2,7 @@
  *
  * Run: node --test tests/unit/track-graph.test.mjs   (also in `npm run test:tooling`)
  *
- * The whole-track parity gate lives in tools/graph-parity.cjs (it needs a
+ * The whole-track parity gate lives in tools/track/graph-parity.cjs (it needs a
  * baseline checkout to diff against). This file pins the contract that gate
  * assumes: that a model is recorded once and replayed faithfully, that replay
  * goes through the caller's GUARDED emitters, and that bake() reconstructs the
@@ -19,13 +19,13 @@ import { seedLog } from "../helpers/seed-log.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // graph.js and geom.js are bare IIFEs assigning one global each — load them the
-// same way tools/verify-track.cjs does, so this test exercises the shipped file.
+// same way tools/track/verify-track.cjs does, so this test exercises the shipped file.
 function load() {
   const sandbox = { Math, Array, Object, JSON, Number, Infinity, isFinite, console };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   seedLog(ctx);
-  for (const rel of ["js/track/geom.js", "js/track/graph.js"]) {
+  for (const rel of ["js/track/core/geom.js", "js/track/scenery/graph.js"]) {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8").replace(/^const\b/gm, "var");
     vm.runInContext(src, ctx, { filename: rel });
   }

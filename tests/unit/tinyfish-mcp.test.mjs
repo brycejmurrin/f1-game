@@ -15,11 +15,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const SH = path.join(ROOT, "tools/tinyfish-mcp.sh");
-const RPC = path.join(ROOT, "tools/tinyfish-rpc.py");
+const SH = path.join(ROOT, "tools/mcp/tinyfish-mcp.sh");
+const RPC = path.join(ROOT, "tools/mcp/tinyfish-rpc.py");
 const MCP_JSON = path.join(ROOT, ".mcp.json");
-const MCP_CLI = path.join(ROOT, "tools/mcp-cli.mjs");
-const CD_SH = path.join(ROOT, "tools/chrome-devtools-mcp.sh");
+const MCP_CLI = path.join(ROOT, "tools/mcp/mcp-cli.mjs");
+const CD_SH = path.join(ROOT, "tools/mcp/chrome-devtools-mcp.sh");
 
 const FIXTURE_FETCH = {
   jsonrpc: "2.0",
@@ -63,9 +63,9 @@ test(".mcp.json is the three-server catalog — tinyfish / probe are CLI-only no
   assert.equal(cfg.mcpServers.probe, undefined, "probe must not be MCP-attached");
   assert.equal(cfg.mcpServers.playwright, undefined, "the wrapper playwright server failed to connect; playwright-official replaces it");
   assert.equal(cfg.mcpServers["chrome-devtools"].command, "bash");
-  assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["tools/chrome-devtools-mcp.sh", "run"]);
+  assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["tools/mcp/chrome-devtools-mcp.sh", "run"]);
   assert.equal(cfg.mcpServers["apex-tools"].command, "bash");
-  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/apex-tools-mcp.sh", "serve"]);
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/mcp/apex-tools-mcp.sh", "serve"]);
   assert.doesNotMatch(JSON.stringify(cfg), /3711/, "no loopback TinyFish URL in the catalog");
   const sh = fs.readFileSync(SH, "utf8");
   assert.match(sh, /NOT MCP-ATTACHED/, "tinyfish-mcp.sh must say it is a CLI, not a server entry");

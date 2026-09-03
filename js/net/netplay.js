@@ -270,7 +270,7 @@ const NetPlay = (function () {
           // as `(COUNTDOWN_S + hold) - …`: a missing or non-numeric hold makes
           // countT NaN, every comparison against it false, and the guest sits
           // on the grid forever with no lamps and no way out. The __apex twin
-          // (js/game/apex.js netStartArm) already defaults it; the wire needs
+          // (js/agent/apex.js netStartArm) already defaults it; the wire needs
           // the same, plus a range — a hostile 1e9 hold is the same hang.
           if (name === EV.START && d && d.at != null && !ownsRaceControl()) {
             const h = Number(d.hold);

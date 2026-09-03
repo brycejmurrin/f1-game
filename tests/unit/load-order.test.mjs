@@ -2,7 +2,7 @@
 // single source of truth in tools/manifest.cjs.
 //
 // The tag blocks, sw.js's precache seed and js/roster.js are GENERATED from
-// the manifest by tools/gen-shell.mjs; this test makes divergence impossible
+// the manifest by tools/gen/gen-shell.mjs; this test makes divergence impossible
 // to ship:
 //   - every generated block is byte-identical to a fresh `gen-shell` run
 //   - the <script> sequence must equal MANIFEST.FULL exactly (order included)
@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
-import { stale as genShellStale } from "../../tools/gen-shell.mjs";
+import { stale as genShellStale } from "../../tools/gen/gen-shell.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -71,7 +71,7 @@ test("index.html stylesheet sequence equals MANIFEST.CSS", () => {
 test("every gen-shell block is byte-identical to a fresh generation", () => {
   const drift = genShellStale();
   assert.deepEqual(drift.map((d) => `${d.rel}\n${d.diff}`), [],
-    "run `node tools/gen-shell.mjs` — a generated block has been hand-edited or the manifest changed");
+    "run `node tools/gen/gen-shell.mjs` — a generated block has been hand-edited or the manifest changed");
 });
 
 test("every asset tag reads ?v=dev and the shell generation matches version.json", () => {
@@ -79,7 +79,7 @@ test("every asset tag reads ?v=dev and the shell generation matches version.json
   // the committed shell must never carry them, or index.html goes back to
   // being rewritten on every js/css edit.
   const stale = [...scriptSrcs, ...linkHrefs].filter((u) => !u.endsWith("?v=dev"));
-  assert.deepEqual(stale, [], "a tag carries something other than ?v=dev — run `node tools/gen-shell.mjs`");
+  assert.deepEqual(stale, [], "a tag carries something other than ?v=dev — run `node tools/gen/gen-shell.mjs`");
   const versionJson = JSON.parse(readFileSync(join(ROOT, "version.json"), "utf8"));
   const meta = indexHtml.match(/<meta\s+name="apex-build"\s+content="(\d+)"/);
   assert.ok(meta, "index.html must declare the shell generation");
@@ -247,24 +247,34 @@ test("LAZY_EDGES are ordered within LAZY_AGENT", () => {
 // rather than as a missing include. Five loaders existed; four had to be found
 // by chasing red tests. This is so the sixth cannot be.
 test("every circuit loader also loads the split scenery roster", () => {
-  const roots = ["tools", "tests/unit"];
-  const offenders = [];
-  for (const root of roots) {
-    for (const name of readdirSync(join(ROOT, root))) {
-      if (!/\.(mjs|cjs|js)$/.test(name)) continue;
-      const rel = `${root}/${name}`;
-      // CODE, not prose: read with comments stripped. The first cut of this
-      // guard was satisfied by the word LAZY_SCENERY appearing in the very
-      // comment explaining why the roster is needed, so deleting the actual
-      // load left it green — a guard that passes on a mention of itself.
-      const src = stripComments(readFileSync(join(ROOT, rel), "utf8"));
-      // A loader is a file that RUNS circuit files, not one that merely names
-      // the directory (manifest.cjs itself, or a path-building helper).
-      if (!/CIRCUITS_DIR/.test(src)) continue;
-      if (!/runFile\(|runInContext\(|runInNewContext\(/.test(src)) continue;
-      if (/LAZY_SCENERY|sceneryPath/.test(src)) continue;
-      offenders.push(rel);
+  // RECURSIVE over both trees, not a flat readdir of two fixed directories: the
+  // test tree is about to be re-homed by topic (tests/guards, tests/node, …)
+  // and a loader that moves one level down must stay in the sweep.
+  const files = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(join(ROOT, dir)).sort()) {
+      if (name === "node_modules" || name.startsWith(".") || name.startsWith("_")) continue;
+      const rel = `${dir}/${name}`;
+      if (statSync(join(ROOT, rel)).isDirectory()) walk(rel);
+      else if (/\.(mjs|cjs|js)$/.test(name)) files.push(rel);
     }
+  };
+  walk("tools");
+  walk("tests");
+  assert.ok(files.length > 150, `the loader sweep saw only ${files.length} files — the walk broke`);
+  const offenders = [];
+  for (const rel of files) {
+    // CODE, not prose: read with comments stripped. The first cut of this
+    // guard was satisfied by the word LAZY_SCENERY appearing in the very
+    // comment explaining why the roster is needed, so deleting the actual
+    // load left it green — a guard that passes on a mention of itself.
+    const src = stripComments(readFileSync(join(ROOT, rel), "utf8"));
+    // A loader is a file that RUNS circuit files, not one that merely names
+    // the directory (manifest.cjs itself, or a path-building helper).
+    if (!/CIRCUITS_DIR/.test(src)) continue;
+    if (!/runFile\(|runInContext\(|runInNewContext\(/.test(src)) continue;
+    if (/LAZY_SCENERY|sceneryPath/.test(src)) continue;
+    offenders.push(rel);
   }
   assert.deepEqual(offenders, [],
     `these run circuit files but never load js/circuits/scenery/ — they will build every ` +

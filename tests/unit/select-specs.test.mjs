@@ -9,16 +9,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
-  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS } from "../../tools/select-specs.mjs";
-import { pick } from "../../tools/pick-tests.mjs";
-import { failedSpecsFrom } from "../../tools/junit-failed.mjs";
-import { recall } from "../../tools/select-recall.mjs";
-import { MEASURED, capacity } from "../../tools/select-budget.mjs";
+  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS } from "../../tools/ci/select-specs.mjs";
+import { pick } from "../../tools/ci/pick-tests.mjs";
+import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
+import { recall } from "../../tools/ci/select-recall.mjs";
+import { MEASURED, capacity } from "../../tools/ci/select-budget.mjs";
 
 const SCRIPTS = {
-  "test:one": "node tools/run-playwright.mjs tests/specs/smoke.spec.js",
-  "test:two": "node tools/run-playwright.mjs tests/specs/smoke.spec.js tests/specs/logging.spec.js",
-  "test:glob": "node tools/run-playwright.mjs tests/specs/physics-*.spec.js",
+  "test:one": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js",
+  "test:two": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js tests/specs/logging.spec.js",
+  "test:glob": "node tools/ci/run-playwright.mjs tests/specs/physics-*.spec.js",
   "test:node": "node --test tests/unit/select-specs.test.mjs",
 };
 
@@ -172,13 +172,13 @@ test("the boot group is not selected for a blanket source edit — the fixed smo
   // 2026-09-02: every js/css edit routed to `tiny`, whose cheapest-by-count
   // specs (boot-guard, logging) are the slowest per test; they timed out the
   // deploy gate twice on starved runners for diffs that never touched them.
-  const g = pick(["js/game/hud.js", "index.html"]);
+  const g = pick(["js/ui/hud.js", "index.html"]);
   assert.ok(g.has("tiny"), "the blanket rules still route to the boot group for a human reader");
   for (const why of g.get("tiny")) assert.ok(BOOT_FALLBACK_REASONS.has(why), `unexpected boot reason: ${why}`);
   assert.equal(dropBootFallback(g), true);
   assert.ok(!g.has("tiny"), "the selected gate drops the boot group when only the blanket rules named it");
   // A group named for a specific reason stays.
-  const specific = new Map([["tiny", new Set(["js/log.js"])]]);
+  const specific = new Map([["tiny", new Set(["js/core/log.js"])]]);
   assert.equal(dropBootFallback(specific), false);
   assert.ok(specific.has("tiny"));
 });

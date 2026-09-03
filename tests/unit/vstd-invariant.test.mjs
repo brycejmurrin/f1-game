@@ -17,7 +17,7 @@
 //
 // So this is the guard, in the shape docs/ARCHITECTURE-REVIEW.md records for
 // A10 ("plus tests/unit/circuit-def-fields.test.mjs — the guard is the real fix").
-// tools/vstd-lint.mjs finds every `.speed` compared against a numeric literal
+// tools/check/vstd-lint.mjs finds every `.speed` compared against a numeric literal
 // without vStd(); ALLOWED below is the set that is legitimately ABSOLUTE, each
 // with a written reason. A new absolute speed threshold cannot be added without
 // somebody writing down why it is allowed to be one.
@@ -37,7 +37,7 @@
 //
 import test from "node:test";
 import assert from "node:assert/strict";
-import { speedLiteralViolations, stripNonCode, readFiles, violationKey } from "../../tools/vstd-lint.mjs";
+import { speedLiteralViolations, stripNonCode, readFiles, violationKey } from "../../tools/check/vstd-lint.mjs";
 
 // ── the approved absolute sites ───────────────────────────────────────────────
 // Every row is a speed that is legitimately NOT pace-normalised, and says why.
@@ -193,7 +193,7 @@ const ALLOWED = [
     why: "'not parked' floor for the lift-off after-fire — below the grip-limited corner floor",
   },
   {
-    file: "js/game/apex.js", expr: "G.player.speed > 8",
+    file: "js/agent/apex.js", expr: "G.player.speed > 8",
     code: "if (G.player && G._testInput && G._testInput.throttle && next && !next.throttle && G.player.speed > 8)",
     // setInput() reproduces js/game.js's `lifted` condition so a scripted
     // throttle lift pops the exhaust the same way a real one does. It must use
@@ -275,7 +275,7 @@ test("stripNonCode preserves every byte offset", () => {
 });
 
 // ── the real thing ────────────────────────────────────────────────────────────
-test("js/game.js and js/game/*.js contain only APPROVED absolute speed thresholds", () => {
+test("js/game.js and every manifest module that reads a speed contain only APPROVED absolute speed thresholds", () => {
   const found = speedLiteralViolations(readFiles());
   const approved = new Set(APPROVED.map(violationKey));
   const unapproved = found.filter((v) => !approved.has(violationKey(v)));

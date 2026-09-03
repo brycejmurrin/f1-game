@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   fixtureImportViolations, adoption, readSpecs, FLOOR, FLOOR_SLACK,
-} from "../../tools/fixture-consumer-audit.mjs";
+} from "../../tools/ci/fixture-consumer-audit.mjs";
 
 test("fixture consumer audit rejects direct Playwright imports", () => {
   const files = new Map([
@@ -36,6 +36,6 @@ test("real fixture adoption sits within the ratchet band", () => {
     `Migrating a spec OFF the shared fixture drops its failure attachments.`);
   assert.ok(uses - FLOOR <= FLOOR_SLACK,
     `adoption is ${uses} but FLOOR is ${FLOOR} — raise FLOOR in ` +
-    `tools/fixture-consumer-audit.mjs so the ratchet keeps its grip ` +
+    `tools/ci/fixture-consumer-audit.mjs so the ratchet keeps its grip ` +
     `(allowed slack: ${FLOOR_SLACK}).`);
 });

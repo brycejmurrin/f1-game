@@ -15,9 +15,9 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/game/ai-drive.js"), "utf8"), ctx,
-    { filename: "js/game/ai-drive.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx,
+    { filename: "js/physics/ai-drive.js" });
   return vm.runInContext("AiDrive", ctx);
 }
 

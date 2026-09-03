@@ -73,7 +73,7 @@ function surfaceOf(relPath) {
   return out;
 }
 
-const GLX_FILE = "js/render/glx.js";
+const GLX_FILE = "js/render/glx/glx.js";
 const BACKENDS = [
   ["WGX (WebGPU)", "js/render/webgpu/wgx.js"],
   ["TLX (three.js/TSL)", "js/render/three/tlx.js"],

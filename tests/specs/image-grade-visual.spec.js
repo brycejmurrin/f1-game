@@ -42,7 +42,7 @@ async function waitForTune(page, values) {
     const tune = window.__apex?.lightTune?.();
     if (!tune) return false;
     // Wait for what the STORE will actually resolve to, not the raw ask.
-    // js/game/light-store.js clamps every write to the knob's declared
+    // js/lighting/profiles.js clamps every write to the knob's declared
     // [min, max], so a test driving past a bound waits forever on a value that
     // can never appear — the helper just sits here for the whole 15 s and the
     // rest of the serial block skips. That is exactly what happened when BLACKS
@@ -97,6 +97,12 @@ async function boot(page, {
       window.__apex.camState().debug === true;
   }, { tod, weather }, { polling: 100, timeout: 45_000 });
   if (neutralGrade) await setTune(page, GRADE_NEUTRAL);
+  // Every test here screenshots the SAME scene twice and diffs the pair. The
+  // render clock (cloud drift, star twinkle) kept advancing between the two —
+  // on a software-GL runner at <1 FPS that is a second of cloud motion per
+  // frame, which entered the assertion as "changed pixels" (Metal CI flake,
+  // 2026-09-03). Hold it: the only thing allowed to move is the grade.
+  await page.evaluate(() => window.__apex.renderClock(100, true));
 }
 
 async function pixels(page) {

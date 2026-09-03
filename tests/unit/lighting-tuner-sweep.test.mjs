@@ -8,7 +8,7 @@ import {
   knobGateReason,
   pushExtreme,
   verdict,
-} from "../../tools/lighting-tuner-sweep.mjs";
+} from "../../tools/lighting/lighting-tuner-sweep.mjs";
 
 test("pushExtreme uses min for sunElev on day conditions", () => {
   const def = { id: "sunElev", min: -50, max: 50, def: 0 };

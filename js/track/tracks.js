@@ -10,7 +10,7 @@ const Tracks = (function () {
   const { cr, sample, curvatureRaw, curvature, project, wallAt } = TrackSpline;
   const { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
           nodeGrid, buildRoad, buildTerrain, buildFloor } = TrackMesh;
-  const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/models.js (this file is AT its module-size ceiling — one line only)
+  const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/core/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/scenery/models.js (this file is AT its module-size ceiling — one line only)
 
   function buildCenterline(def) {
     ensurePoints(def);
@@ -145,7 +145,7 @@ const Tracks = (function () {
     // (game.js passes `gfx`). This ends tracks.js's reliance on reaching the
     // GLX global directly — the injected handle is the WebGL2/TLX/WGX backend
     // actually in use. The `typeof GLX` branch is the fallback for callers that
-    // don't inject one: the Node-VM build guard (tools/verify-track.cjs) and the
+    // don't inject one: the Node-VM build guard (tools/track/verify-track.cjs) and the
     // VM tests, which install a stub GLX global instead of an opts.gfx.
     const G = (opts && opts.gfx) || (typeof GLX !== "undefined" ? GLX : null);
     track._gfx = G;
@@ -419,7 +419,7 @@ const Tracks = (function () {
     // note() records the semantic placements only — a tree, a building, a
     // grandstand — NOT every primitive. Vegas emits ~94k primitives; a tree alone
     // is a trunk plus several canopy tiers, so recording primitives would cost far
-    // more and say far less. Consumed by __apex.scene() (js/game/agentview.js).
+    // more and say far less. Consumed by __apex.scene() (js/agent/agentview.js).
     //
     // Recording happens at the point of emission, AFTER each emitter's on-track
     // and mass-collision guards, so a suppressed prop never enters the registry —
@@ -834,7 +834,7 @@ const Tracks = (function () {
 
     // Every guard in this file is HORIZONTAL (onTrack/rejBox/blockAt keep props
     // off the racing line); nothing asserted that a prop meets the ground, and
-    // every floating-scenery defect found by tools/float-audit.cjs was vertical.
+    // every floating-scenery defect found by tools/track/float-audit.cjs was vertical.
     // These three close that gap by expressing intent instead of arithmetic.
     const UPV = [0, 1, 0];
 
@@ -1670,7 +1670,7 @@ const Tracks = (function () {
     } else if (theme === "desert") {
       every(34, (k) => { for (const side of [-1, 1]) if (hash(HK(k) + side) > 0.6) place(k, side, 8 + hash(HK(k)) * 10, [2 + hash(HK(k)) * 3, 1.5, 2], [0.62, 0.5, 0.34]); });
     } else if (theme === "street_day" || theme === "street_night" || theme === "modern") {
-      const style = resolveCityStyle(def.cityStyle) || THEME_DEF[theme] || THEME_DEF.modern;
+      const style = resolveCityStyle(def.cityStyle, theme) || THEME_DEF[theme] || THEME_DEF.modern;
       const cn = (k, s) => style.neon[Math.floor(hash(k * 3 + s) * style.neon.length) % style.neon.length];
       const dpal = style.dayPal;
       const toneFor = (k, s) => {
@@ -1746,7 +1746,7 @@ const Tracks = (function () {
     }
 
     // Place a BAKED MODEL from the asset pack (assets/pack, built by
-    // `node tools/assets.mjs bake-model`) at a trackside anchor. This is the one
+    // `node tools/gen/assets.mjs bake-model`) at a trackside anchor. This is the one
     // scenery helper whose geometry is not generated here — it is a real modelled
     // asset baked down to the game's own vertex format, MAT id included.
     //
@@ -1758,7 +1758,7 @@ const Tracks = (function () {
     //       grandstand(K(0.12), -1, 14, 40);
     //
     // Never async: Assets prefetches every model at boot precisely so that prop
-    // placement cannot vary with network timing (js/render/assets.js modelSync).
+    // placement cannot vary with network timing (js/render/shared/assets.js modelSync).
     function bakedModel(id, k, side, dist, opts) {
       if (typeof Assets === "undefined" || !Assets.modelSync) return false;
       const mesh = Assets.modelSync(id);
@@ -2124,7 +2124,7 @@ const Tracks = (function () {
   // def.path (the OSM trace) is the ONLY centreline: no path is a build error.
   function realPoints(id, path, baseHW) {
     if (!path || !path.pts || !path.pts.length) throw new Error("Tracks: circuit \"" + id +
-      "\" has no `path` — js/circuits/" + id + ".js must carry `path: { len, pts }` (tools/import-circuit-path.mjs emits it)");
+      "\" has no `path` — js/circuits/" + id + ".js must carry `path: { len, pts }` (tools/track/import-circuit-path.mjs emits it)");
     const N = path.pts.length;
     const real = hasRealElevation(id);
     let pts = path.pts.map((p, i) => [p[0], real ? elevationAt(id, i / N) : 0, p[1], baseHW, 0]);
@@ -2210,7 +2210,7 @@ const Tracks = (function () {
       //                           exact thing the field was added to stop
       //   undulate              buildCenterline — the opt-out could not be taken
       // This trap has bitten before and was fixed for ONE field only (see the
-      // `pal` note in js/game/atmosphere.js); nobody swept the rest. The guard
+      // `pal` note in js/lighting/atmosphere.js); nobody swept the rest. The guard
       // in tests/unit/circuit-def-fields.test.mjs is what stops the sixth.
       sunAzimBias: d.sunAzimBias,
       sceneryTheme: d.sceneryTheme,

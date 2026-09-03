@@ -1,5 +1,5 @@
 // @ts-check
-// SIX BLESSED PIXEL BASELINES — the half tools/layout-audit.mjs cannot see.
+// SIX BLESSED PIXEL BASELINES — the half tools/ui/layout-audit.mjs cannot see.
 //
 // The audit grid measures GEOMETRY: what escapes its clipper, what no scroll can
 // reach, what is under 24px or under the hardware. It needs no baseline, no

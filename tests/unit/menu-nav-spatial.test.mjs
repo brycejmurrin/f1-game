@@ -20,12 +20,12 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const SRC_PATH = path.join(ROOT, "js/game/menunav.js");
+const SRC_PATH = path.join(ROOT, "js/ui/menu-nav.js");
 const SRC = fs.readFileSync(SRC_PATH, "utf8");
 
 function extractFn(src, name) {
   const i = src.indexOf(`function ${name}(`);
-  assert.ok(i >= 0, `${name}() not found in js/game/menunav.js — was it renamed?`);
+  assert.ok(i >= 0, `${name}() not found in js/ui/menu-nav.js — was it renamed?`);
   let depth = 0;
   for (let k = src.indexOf("{", i); k < src.length; k++) {
     if (src[k] === "{") depth++;

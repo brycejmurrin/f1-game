@@ -3,7 +3,7 @@
     "apex-tools": {
       "type": "stdio",
       "command": "bash",
-      "args": ["tools/apex-tools-mcp.sh", "serve"]
+      "args": ["tools/mcp/apex-tools-mcp.sh", "serve"]
     },
     "playwright-official": {
       "type": "stdio",
@@ -13,7 +13,7 @@
     "chrome-devtools": {
       "type": "stdio",
       "command": "bash",
-      "args": ["tools/chrome-devtools-mcp.sh", "run"]
+      "args": ["tools/mcp/chrome-devtools-mcp.sh", "run"]
     }
   }
 }

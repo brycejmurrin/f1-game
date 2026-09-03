@@ -1,5 +1,5 @@
 /* active-aero-vm.test.mjs — tests/specs/active-aero.spec.js replayed in the
- * Node VM (tools/game-vm.cjs): the 2026 X/Z-mode moveable wing — state
+ * Node VM (tools/lib/game-vm.cjs): the 2026 X/Z-mode moveable wing — state
  * surface, arming in a zone, flap travel, braking shut, the top-speed/grip
  * trade, the AI using it — with the SAME assertions and thresholds.
  *
@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
 const lt = (a, b, m) => assert.ok(a < b, m || `${a} < ${b}`);

@@ -1,6 +1,6 @@
 /* Apex 26 — TLXShaders.sky: the procedural sky for the TLX backend (M5).
  *
- * A 1:1 port of js/render/shaders/sky.js (SKY_VS/SKY_FS — the GLSL source of
+ * A 1:1 port of js/render/glx/shaders/glsl-sky.js (SKY_VS/SKY_FS — the GLSL source of
  * truth) into three.js TSL nodes: gradient dome (overcast flattening, day
  * deep-blue band + azimuthal life, golden-hour + low-sun horizon band,
  * below-horizon earth), the full procedural cloud pass (two drift vectors +
@@ -98,7 +98,7 @@
       return fract(float(52.9829189).mul(fract(dot(p, vec2(0.06711056, 0.00583715)))));
     });
 
-    /* ── the 28 uniforms (drawSky upload in js/render/glx.js) ─────────────── */
+    /* ── the 28 uniforms (drawSky upload in js/render/glx/glx.js) ─────────────── */
     const U = {
       invViewProj:   uniform(new THREE.Matrix4()),
       zenith:        uniform(new THREE.Vector3(0.18, 0.40, 0.78)),
@@ -131,7 +131,7 @@
     };
 
     /** drawSky(frameSky) -> uniform values. Field names + defaults mirror the
-     * js/render/glx.js upload exactly (each frameSky field maps to the same-
+     * js/render/glx/glx.js upload exactly (each frameSky field maps to the same-
      * named uniform; stars is the bool->float night flag). Takes whatever
      * invViewProj the frame carries — the env-probe pass (M9) swaps it. */
     function update(sky) {
@@ -168,7 +168,7 @@
       s1(U.lightning, sky.lightning, 0);
     }
 
-    /* ── the fragment (SKY_VS ray math + SKY_FS in js/render/shaders/sky.js) ─ */
+    /* ── the fragment (SKY_VS ray math + SKY_FS in js/render/glx/shaders/glsl-sky.js) ─ */
     const node = Fn(() => {
       // ── ANCHORS: screenUV + the whole ray chain, unconditional ────────────
       const suv = vec2(screenUV).toVar();
@@ -204,7 +204,7 @@
         // overcast ceiling, and overcast was the one cloud term the nightSky gate
         // never covered — a night+rain sky painted a pale grey lid ~20x the
         // authored zenith. One common target at night so it stays a FLATTEN.
-        // Mirrors js/render/shaders/sky.js.
+        // Mirrors js/render/glx/shaders/glsl-sky.js.
         const nightLid = U.zenith.add(U.horizon).mul(1.25);
         const greyZ = mix(vec3(0.55, 0.56, 0.58), nightLid, nightSky);
         const greyH = mix(vec3(0.58, 0.58, 0.60), nightLid, nightSky);
@@ -430,7 +430,7 @@
         const moonCol = vec3(0.82, 0.88, 1.00);
         If(up.greaterThan(0.0).and(md.greaterThan(0.0)), () => {
           // Cloud occlusion: the moon sits BEHIND the deck exactly as the
-          // stars do (SKY_FS in js/render/shaders/sky.js). Without this a
+          // stars do (SKY_FS in js/render/glx/shaders/glsl-sky.js). Without this a
           // stormy/foggy night painted a crisp moon ON TOP of the clouds
           // while the stars behind it were correctly hidden.
           c.addAssign(moonCol.mul(moonDisc.mul(1.10).add(moonHalo)).mul(cityCov.oneMinus()));

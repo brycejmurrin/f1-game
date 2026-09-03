@@ -1,6 +1,6 @@
 /* season-cal.test.mjs — the SEASON calendar/format model, in a VM.
  *
- * js/game/season-cal.js is pure rules with no DOM, so like career-settle.test.mjs
+ * js/career/season-cal.js is pure rules with no DOM, so like career-settle.test.mjs
  * and race-control.test.mjs it loads whole into a VM with stub GameStore / Tracks
  * / Teams and is driven directly. Playwright buys nothing here and costs 20 s a
  * case.
@@ -57,7 +57,7 @@ function load(stored0) {
     Teams: { POINTS },
   });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/game/season-cal.js"), "utf8"), ctx);
+  vm.runInContext(readFileSync(join(ROOT, "js/career/season-cal.js"), "utf8"), ctx);
   return {
     S: vm.runInContext("SeasonCal", ctx), stored, tracks,
     foreign: (key) => subscribers.forEach((fn) => fn({ key, foreign: true, clear: key == null })),

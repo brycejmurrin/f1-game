@@ -4,7 +4,7 @@
  * Every one of these exists because of a real failure in the 2026-08 UI pass,
  * and in each case the 350-odd guards that DO run were green through it:
  *
- *   1. A comment body with no opening `/*` in js/game/sheetshape.js. That is a
+ *   1. A comment body with no opening `/*` in js/ui/sheet-shape.js. That is a
  *      SyntaxError, so the whole IIFE never ran, so no sheet carried
  *      `data-shape` or `data-pair` and every list/detail layout in the app
  *      silently fell back to stacked. Nothing failed. It was caught by looking
@@ -14,7 +14,7 @@
  *      unlayered rule beats every layer — so roughly half a stylesheet quietly
  *      changed precedence. A stylesheet does not report errors; it just stops
  *      containing what you thought.
- *   3. tools/layout-audit.mjs surveyed 38 screens while the shell had 39. The
+ *   3. tools/ui/layout-audit.mjs surveyed 38 screens while the shell had 39. The
  *      missing one was #track-detail, which is exactly why a landscape
  *      dead-band in it survived a 380-cell survey and had to be found by hand.
  *      A survey is only as good as its inventory, and nothing checked the
@@ -218,9 +218,9 @@ test("index.html's tags are balanced and correctly nested", () => {
     "silently re-nests around it, and a whole screen ends up inside the wrong parent");
 });
 
-test("tools/menu-screens.mjs knows about every screen in the shell", () => {
+test("tools/ui/menu-screens.mjs knows about every screen in the shell", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const audit = fs.readFileSync(path.join(ROOT, "tools/menu-screens.mjs"), "utf8");
+  const audit = fs.readFileSync(path.join(ROOT, "tools/ui/menu-screens.mjs"), "utf8");
 
   const shell = new Set([
     ...[...html.matchAll(/<dialog id="([a-z0-9-]+)"/g)].map((m) => m[1]),
@@ -251,7 +251,7 @@ test("tools/menu-screens.mjs knows about every screen in the shell", () => {
     !EXEMPT.has(id) && !known.has(id) && !known.has(id.replace(/-/g, "")));
 
   assert.deepEqual(missing, [],
-    "a screen exists in index.html that tools/layout-audit.mjs never opens, so the " +
+    "a screen exists in index.html that tools/ui/layout-audit.mjs never opens, so the " +
     "layout survey silently does not cover it. Add it to SCREENS in menu-screens.mjs — or, if it " +
     "genuinely cannot be surveyed, add it to EXEMPT above with the reason, " +
     "rather than leaving the gap unstated");
@@ -310,7 +310,7 @@ test("no screen fakes modality with a div claiming dialog semantics", () => {
   assert.deepEqual(fakes, [],
     "a <div> claiming role=\"dialog\" or aria-modal is a promise the platform " +
     "never honours: no top layer, no focus containment, no Escape, no :modal. " +
-    "Every modal here is a real <dialog> mirrored by js/game/topmodal.js — the " +
+    "Every modal here is a real <dialog> mirrored by js/ui/modal.js — the " +
     "data hub and the telemetry popup were the last two fakes to convert. Use " +
     "one, or add the id to FAKE_MODAL_OK with the reason it cannot be modal: " +
     fakes.join(", "));
@@ -318,7 +318,7 @@ test("no screen fakes modality with a div claiming dialog semantics", () => {
 
 test("Circuit filters are not nested in a listbox and circuits expose button state", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const menus = fs.readFileSync(path.join(ROOT, "js/game/menus.js"), "utf8");
+  const menus = fs.readFileSync(path.join(ROOT, "js/ui/select-screen.js"), "utf8");
   assert.match(html, /id="sel-tracks"[^>]*role="group"/);
   assert.doesNotMatch(html, /id="sel-tracks"[^>]*role="listbox"/);
   assert.match(menus, /row\.setAttribute\("aria-pressed"/);
@@ -328,10 +328,10 @@ test("Circuit filters are not nested in a listbox and circuits expose button sta
 test("scenery SUPPRESSED is coalesced, not a per-prop Log.warn", () => {
   const files = [
     "js/track/tracks.js",
-    "js/track/scenery-structures.js",
-    "js/track/scenery-nature.js",
-    "js/track/scenery-city.js",
-    "js/track/scenery-identity.js",
+    "js/track/scenery/structures.js",
+    "js/track/scenery/nature.js",
+    "js/track/scenery/city.js",
+    "js/track/scenery/identity.js",
   ];
   for (const rel of files) {
     const src = fs.readFileSync(path.join(ROOT, rel), "utf8");
@@ -381,7 +381,7 @@ test("the GL-call census refuses to report a frame it did not measure", () => {
   // absence-reads-as-normal shape as the vacuous gpuErrors check and the
   // readdirSync harnesses that built circuits bare, both of which shipped
   // confident numbers about nothing. PERF-FINDINGS 2i.
-  const src = fs.readFileSync(path.join(ROOT, "tools/glx-call-census.mjs"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "tools/gfx/glx-call-census.mjs"), "utf8");
   assert.match(src, /CENSUS MEASURED NOTHING/);
   assert.match(src, /process\.exitCode = 1/,
     "an empty census must exit non-zero, not merely print");

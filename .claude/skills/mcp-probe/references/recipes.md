@@ -4,14 +4,14 @@ Chrome setup, renderer probes, A/B ports, post-deploy checks (deploy-research).
 
 ## Probing a specific renderer
 
-`node tools/mcp-cli.mjs probe` is the shape a renderer question takes. One
+`node tools/mcp/mcp-cli.mjs probe` is the shape a renderer question takes. One
 command, one browser, no heredoc:
 
 ```sh
 npx serve -l 3456 .          # the page must be on 127.0.0.1 (see the trap below)
-node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error' \
+node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error' \
   --eval 'return JSON.stringify({gpuErrors: WGX.gpuErrors ? WGX.gpuErrors() : "n/a"});'
-node tools/mcp-cli.mjs probe --dry-run --backend three   # inspect the batch, no browser
+node tools/mcp/mcp-cli.mjs probe --dry-run --backend three   # inspect the batch, no browser
 ```
 
 Four traps, each of which has cost a run:
@@ -46,7 +46,7 @@ logged is also what a probe that never reached the renderer looks like, and
 race and ask the canvas:
 
 ```sh
-node tools/mcp-cli.mjs probe --backend webgpu --wait 8000 \
+node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 8000 \
   --eval 'await __apex.race("monza"); await __apex.go();
           await new Promise(r=>setTimeout(r,7000));
           return String(document.querySelector("canvas").getContext("webgl2") === null);'
@@ -66,10 +66,10 @@ SwiftShader WebGPU is a **validation and lifecycle** oracle — shaders compile,
 bind groups match, buffers upload. It is not a visual one. For **pixels**:
 
 ```sh
-node tools/gfx-probe.mjs --backend webgpu --lite montreal  # visible #game (primary)
-node tools/wgx-capture.mjs montreal --lite                 # readback oracle → frame.png
-node tools/wgx-lavapipe-probe.mjs montreal --lite   # second Vulkan stack (Lavapipe)
-node tools/gfx-probe.mjs --backend three --lite montreal   # TLX via WebGL2
+node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal  # visible #game (primary)
+node tools/gfx/wgx-capture.mjs montreal --lite                 # readback oracle → frame.png
+node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite   # second Vulkan stack (Lavapipe)
+node tools/gfx/gfx-probe.mjs --backend three --lite montreal   # TLX via WebGL2
 ```
 
 Missing `/usr/share/vulkan/icd.d/lvp_icd.json` → install `mesa-vulkan-drivers`
@@ -114,7 +114,7 @@ mcp__chrome-devtools__take_screenshot   filePath: scratch/<name>.png
 Shell one-liner (auto-starts `:3456` if needed, parks to `about:blank` after):
 
 ```sh
-python3 tools/cdmcp-cli.py apex-shot monza 0.97 --az -105 --el 26 --dist 110 \
+python3 tools/mcp/cdmcp-cli.py apex-shot monza 0.97 --az -105 --el 26 --dist 110 \
   --out /opt/cursor/artifacts/baked-models/cdmcp-monza-paddock.png
 ```
 
@@ -125,7 +125,7 @@ go under `scratch/` or `/opt/cursor/artifacts/`, never the repo root (AGENTS.md)
 ### Background Chromium measure (logged)
 
 ```
-node tools/cdmcp-bg.mjs boot --port 3462
+node tools/mcp/cdmcp-bg.mjs boot --port 3462
 tail -f artifacts/logs/cdmcp-measure.log
 # watcher: until grep -qE "= run (passed|failed|timedout|interrupted)" artifacts/logs/cdmcp-measure.log
 ```
@@ -160,7 +160,7 @@ measured before/after, in one command, with the browser held constant:
 ```sh
 npx serve -l 3456 /the/pre-fix/tree &     # control
 npx serve -l 3466 /the/fixed/tree   &     # patch
-for P in 3456 3466; do node tools/mcp-cli.mjs probe \
+for P in 3456 3466; do node tools/mcp/mcp-cli.mjs probe \
   --url http://127.0.0.1:$P/index.html --backend three \
   --wait 14000 --eval scratch/my-probe.js; done
 ```
@@ -219,7 +219,7 @@ Full recipes + measured LCP/heap/a11y numbers:
 
 Regression coverage, anything that must assert-and-gate, the 113-spec batch, or
 anything in CI. It is one stateful browser driven by the model — no assertion
-framework, no parallelism, no reporter. Use Playwright (`tools/test-bg.mjs`).
+framework, no parallelism, no reporter. Use Playwright (`tools/ci/test-bg.mjs`).
 
 ---
 
@@ -229,7 +229,7 @@ The whole suite tests the working tree; **nothing verifies the shipped artifact*
 After a Pages deploy, confirm the live site actually serves the build you shipped.
 
 Since 2026-09 no TinyFish MCP is attached: the container egress blocks
-`agent.tinyfish.ai`, so `tools/tinyfish-mcp.sh deploy-check --tip` and
+`agent.tinyfish.ai`, so `tools/mcp/tinyfish-mcp.sh deploy-check --tip` and
 `probe-mcp.py call tinyfish_*` can never answer here (they stay as CLIs for a
 box with egress). Route the check to the **deploy-research** subagent, which
 uses the host fetch tool (WebFetch, or the hosted TinyFish connector when the
@@ -274,7 +274,7 @@ inlining every page.
 | Live vs deploy tip | deploy-research: WebFetch `version.json` + `git show origin/<deploy>:version.json` |
 | Confirm a marker shipped | deploy-research: fetch `js/<path>.js?v=<live hash>` then grep the unique string |
 | External grounding | WebSearch / hosted TinyFish `search`, then fetch the best URLs |
-| Box WITH egress only | `./tools/tinyfish-mcp.sh deploy-check --tip` / `deploy-js --marker RE js/<path>.js` (CLI, not attached; key from shell / gitignored `.env`, no tracked fallback) |
+| Box WITH egress only | `./tools/mcp/tinyfish-mcp.sh deploy-check --tip` / `deploy-js --marker RE js/<path>.js` (CLI, not attached; key from shell / gitignored `.env`, no tracked fallback) |
 
 Do **not** use a public-web fetcher for the working tree (localhost). Do **not**
 use Chrome DevTools MCP for `github.io` from this container (egress proxy).
@@ -292,14 +292,14 @@ queue message suggests, not in a loop.
 
 MCP cannot reach the reporter's phone, and the backends that only misbehave
 there (three/TLX on iOS) are exactly the ones a container cannot reproduce. Two
-deliveries, same paste — `tools/apex-report.js` (bundle: `diag()`, GL identity,
+deliveries, same paste — `tools/mcp/apex-report.js` (bundle: `diag()`, GL identity,
 canvas context attributes, log ring, `apex26.*`, frame sample + PNG, `verdict`).
 
 | Page the device is on | What the reporter does | Where the bundle goes |
 | --- | --- | --- |
-| Served from your box (`node tools/report-server.mjs`, phone opens the printed LAN URL **with `?report=1`**) | taps SEND REPORT — no console at all | POSTs itself to `artifacts/reports/`, verdict printed in your terminal |
-| Same, but they have a console | `fetch("/tools/apex-report.js").then(r=>r.text()).then(s=>(0,eval)(s))` | same |
-| The deployed site | same line, but fetch `https://raw.githubusercontent.com/brycejmurrin/f1-game/claude/f1-game-project-26h3ng/tools/apex-report.js` | downloads on the device — the POST cannot cross from https to a plain-http laptop |
+| Served from your box (`node tools/mcp/report-server.mjs`, phone opens the printed LAN URL **with `?report=1`**) | taps SEND REPORT — no console at all | POSTs itself to `artifacts/reports/`, verdict printed in your terminal |
+| Same, but they have a console | `fetch("/tools/mcp/apex-report.js").then(r=>r.text()).then(s=>(0,eval)(s))` | same |
+| The deployed site | same line, but fetch `https://raw.githubusercontent.com/brycejmurrin/f1-game/claude/f1-game-project-26h3ng/tools/mcp/apex-report.js` | downloads on the device — the POST cannot cross from https to a plain-http laptop |
 
 Prefer `?report=1` for anyone on an iPhone: iOS Safari has no console without a
 Mac on the other end of a cable and Web Inspector switched on, and a tap samples

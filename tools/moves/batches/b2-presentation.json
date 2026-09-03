@@ -1,0 +1,31 @@
+{
+  "_doc": "Phase 2b batch b2-presentation",
+  "moves": {
+    "js/game/light-store.js": "js/lighting/profiles.js",
+    "js/game/light-presets.js": "js/lighting/presets.js",
+    "js/game/atmosphere.js": "js/lighting/atmosphere.js",
+    "js/game/tuner.js": "js/lighting/tuner-panel.js",
+    "js/game/cameras.js": "js/camera/vantage.js",
+    "js/game/cam-tune.js": "js/camera/offsets.js",
+    "js/game/cam-modes.js": "js/camera/mode-switch.js",
+    "js/game/cam-tuner.js": "js/camera/tuner-panel.js",
+    "js/game/photomode.js": "js/camera/photo-cam.js",
+    "js/game/cockpit-opts.js": "js/camera/cockpit-opts.js",
+    "js/game/audio.js": "js/audio/engine.js",
+    "js/game/audio-panel.js": "js/audio/panel.js",
+    "js/game/music-lib.js": "js/audio/music-lib.js",
+    "js/game/spotify.js": "js/audio/spotify.js",
+    "js/game/perf.js": "js/perf/governor.js",
+    "js/game/loop-health.js": "js/perf/loop-health.js",
+    "js/game/gfx-quality.js": "js/perf/quality-preset.js",
+    "js/game/metrics.js": "js/perf/metrics-overlay.js",
+    "js/game/gfx-debug.js": "js/perf/gfx-debug-overlay.js",
+    "js/game/input.js": "js/input/input.js",
+    "js/game/steer-tuning.js": "js/input/steer-tuning.js",
+    "js/game/lighting-knobs.js": "js/lighting/knobs.js",
+    "js/game/track-lights.js": "js/lighting/track-lights.js",
+    "js/game/frame-lights.js": "js/lighting/frame-lights.js",
+    "js/game/lighting.js": "js/lighting/lighting.js",
+    "js/game/renderer-picker.js": "js/perf/renderer-picker.js"
+  }
+}

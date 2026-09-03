@@ -5,18 +5,18 @@ import { request } from "node:http";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { startReportServer } from "../../tools/report-server.mjs";
+import { startReportServer } from "../../tools/mcp/report-server.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function fixture() {
   mkdirSync(join(ROOT, "scratch"), { recursive: true });
   const root = mkdtempSync(join(ROOT, "scratch", "report-server-test-"));
-  for (const dir of ["js", "tools", ".git", "artifacts/reports"])
+  for (const dir of ["js", "tools/mcp", ".git", "artifacts/reports"])
     mkdirSync(join(root, dir), { recursive: true });
   writeFileSync(join(root, "index.html"), "<!doctype html><body>game</body>");
   writeFileSync(join(root, "js/game.js"), "window.game = true;");
-  writeFileSync(join(root, "tools/apex-report.js"), "window.apexReport = true;");
+  writeFileSync(join(root, "tools/mcp/apex-report.js"), "window.apexReport = true;");
   writeFileSync(join(root, ".git/config"), "private repository metadata");
   writeFileSync(join(root, "artifacts/reports/old.json"), '{"secret":true}');
   return root;

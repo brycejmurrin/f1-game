@@ -24,7 +24,7 @@
 //
 // Exit 0 = a session came up on BOTH peers.
 import { fileURLToPath } from "node:url";
-import { launchChromium, shutdown, startStaticServer } from "../harness.mjs";
+import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const PORT = 4467;

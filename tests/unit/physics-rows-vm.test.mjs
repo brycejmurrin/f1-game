@@ -1,7 +1,7 @@
 /* physics-rows-vm.test.mjs — five physics rows from the 2026-09-02 bug hunt
  * (round 2 "Not landed" → Physics), each replayed where it lives: four in the
- * Node VM (tools/game-vm.cjs — the real js/game.js, no browser) and one in
- * the incident-gate style harness (js/game/incidentsim.js whole, DebrisWorld
+ * Node VM (tools/lib/game-vm.cjs — the real js/game.js, no browser) and one in
+ * the incident-gate style harness (js/physics/incident-sim.js whole, DebrisWorld
  * mocked). Every pin was red on the code before its fix (HEAD's file swapped
  * back in) and is green after; none moves physics-characterization-vm.
  *
@@ -17,7 +17,7 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 let g = null, PHYS0 = null;
@@ -32,12 +32,12 @@ async function startRace() {
 }
 
 // ---------------------------------------------------------------------------
-// Row 1 — js/game/incidentsim.js `_lapCross`: a lap counted under a takeover
+// Row 1 — js/physics/incident-sim.js `_lapCross`: a lap counted under a takeover
 // mirrors updateCar's crossing for the player's sector clock, and the lap it
 // starts stays incident-invalid (the clock froze while Rapier drove).
 // ---------------------------------------------------------------------------
 test("a lap counted under a takeover resets the player's sector clock and keeps the new lap invalid", () => {
-  const SRC = readFileSync(join(ROOT, "js/game/incidentsim.js"), "utf8");
+  const SRC = readFileSync(join(ROOT, "js/physics/incident-sim.js"), "utf8");
   const pose = { x: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, vx: 30, vz: 0, sleeping: false };
   const DebrisWorld = {
     active: () => true, rapierReady: () => true, worldGen: () => 1,
@@ -48,8 +48,8 @@ test("a lap counted under a takeover resets the player's sector clock and keeps 
     DebrisWorld, Tracks: { sample: () => {}, wallAt: () => 8 },
   });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
-  vm.runInContext(SRC, ctx, { filename: "js/game/incidentsim.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(SRC, ctx, { filename: "js/physics/incident-sim.js" });
   const IncidentSim = vm.runInContext("IncidentSim", ctx);
   const mk = (s) => ({ px: 0, pz: 0, head: 0, speed: 40, s, x: 0, vLat: 0, yawRateCur: 0, prog: s,
                        lap: 3, lapTime: 80, finished: false, retired: false, human: true, isPlayer: true, local: true });

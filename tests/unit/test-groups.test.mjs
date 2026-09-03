@@ -4,7 +4,7 @@
  * specs (115 at the 2026-08 census; the count test below holds the live number,
  * now under tests/specs/) and the groups are what say which ones matter for a
  * given change. That only works while three things agree — package.json, the
- * routing rules in tools/pick-tests.mjs, and docs/TESTING.md. Nothing forces
+ * routing rules in tools/ci/pick-tests.mjs, and docs/TESTING.md. Nothing forces
  * them to, and each has drifted: TESTING.md advertised 69 specs against 98 on
  * disk and listed `tooling` twice while omitting a dozen groups outright.
  *
@@ -18,7 +18,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { RULES } from "../../tools/pick-tests.mjs";
+import { RULES } from "../../tools/ci/pick-tests.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -33,7 +33,7 @@ const GROUPS = Object.keys(pkg.scripts)
 // differently from the rest.
 const META = new Set(["headless", "render", "update", "pick", "bg"]);
 
-test("every group tools/pick-tests.mjs routes to exists in package.json", () => {
+test("every group tools/ci/pick-tests.mjs routes to exists in package.json", () => {
   const missing = [];
   for (const [re, groups] of RULES)
     for (const g of groups)
@@ -43,10 +43,10 @@ test("every group tools/pick-tests.mjs routes to exists in package.json", () => 
 });
 
 test("test:tooling-fast is the sequential runner (not a parallel node --test dump)", () => {
-  assert.match(pkg.scripts["test:tooling-fast"], /^node tools\/tooling-fast\.mjs\b/,
-    "bunched `node --test file1 file2…` parallelises by default — use tools/tooling-fast.mjs");
-  assert.ok(fs.existsSync(path.join(ROOT, "tools/tooling-fast.mjs")),
-    "tools/tooling-fast.mjs must exist (per-file logging + --test-concurrency=1)");
+  assert.match(pkg.scripts["test:tooling-fast"], /^node tools\/ci\/tooling-fast\.mjs\b/,
+    "bunched `node --test file1 file2…` parallelises by default — use tools/ci/tooling-fast.mjs");
+  assert.ok(fs.existsSync(path.join(ROOT, "tools/ci/tooling-fast.mjs")),
+    "tools/ci/tooling-fast.mjs must exist (per-file logging + --test-concurrency=1)");
 });
 
 test("pick-tests routes every source directory somewhere", () => {
@@ -70,10 +70,10 @@ test("a js/game file with its own browser spec routes to that spec's group", () 
   // sat in a group nobody was told to run (found 2026-09-01). The always-rules
   // are excluded here on purpose, so this cannot pass vacuously.
   const specBacked = [
-    ["js/game/ui-scale.js", "ui"],
-    ["js/game/racecontrol.js", "driving"],
-    ["js/game/aerozones.js", "driving"],
-    ["js/game/garage-scene.js", "car"],
+    ["js/ui/scale.js", "ui"],
+    ["js/race/race-control.js", "driving"],
+    ["js/physics/aero-zones.js", "driving"],
+    ["js/garage/scene.js", "car"],
   ];
   const specific = RULES.slice(2);
   for (const [file, group] of specBacked) {

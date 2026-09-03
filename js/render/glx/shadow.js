@@ -1,4 +1,4 @@
-/* Apex 26 — GLX shadow subsystem (split out of js/render/glx.js). Owns the static sun shadow map, the per-frame dynamic CAR map, the nearest-floodlight spot map, … */
+/* Apex 26 — GLX shadow subsystem (split out of js/render/glx/glx.js). Owns the static sun shadow map, the per-frame dynamic CAR map, the nearest-floodlight spot map, … */
 "use strict";
 
 const GLXShadow = (function () {
@@ -296,8 +296,8 @@ const GLXShadow = (function () {
 
     function carShadowEnd() {
       S.depthPassOn = false;
+      S.castCullVP = null;   // before the early return: chunked.js reads castCullVP || lightVP for EVERY caster's frustum
       if (!S.carEnabled) return;
-      S.castCullVP = null;
       gl.enable(gl.CULL_FACE);
       core.post.bindSceneTarget();
     }
@@ -328,8 +328,8 @@ const GLXShadow = (function () {
 
     function lampShadowEnd() {
       S.depthPassOn = false;
+      S.castCullVP = null;   // same — a latched lamp VP would cull the SUN pass against a lamp-sized box
       if (!S.lampEnabled) return;
-      S.castCullVP = null;
       gl.enable(gl.CULL_FACE);
       core.post.bindSceneTarget();
     }

@@ -7,7 +7,7 @@
  * trap js/game.js holdSetupCtl documents). It also released on ANY
  * lostpointercapture — and WebKit keeps one capture slot, so a second finger
  * on the other hold button stole capture from the first with its thumb still
- * down. Both now go through js/game/input.js holdTargetGone, the same test
+ * down. Both now go through js/input/input.js holdTargetGone, the same test
  * the pedals use: a lost capture is a release only when the button was taken
  * away mid-hold.
  *
@@ -40,7 +40,7 @@ function boot() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/log.js", "js/mat4.js", "js/game/input.js", "js/game/photomode.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/input.js", "js/camera/photo-cam.js"]) vm.runInContext(src(f), ctx, { filename: f });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, photoCam: { pos: [0, 0, 0], pitch: 0, yaw: 0, fov: 60 },
     photoKeys: {}, photoMouse: {}, photoMove: {}, photoLook: {},

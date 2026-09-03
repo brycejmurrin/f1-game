@@ -50,7 +50,7 @@ Load from the SKILL.md index when the task needs this detail.
      (test-only accessors) or step through `netStartArm`/`netHostStart`, not the
      ICE/candidate layer.
    - **`__apex.net().startPending` is a boolean only** — it reflects
-     `!!G.netStart` (see `netHostStart()` in `js/game/apex.js`), i.e. whether a
+     `!!G.netStart` (see `netHostStart()` in `js/agent/apex.js`), i.e. whether a
      start has been armed at all. It carries none of `netStart`'s actual fields
      (`at`, `hold`, `now`) and cannot tell you *why* a guest is stuck mid-
      countdown — for that, inspect `countT`/`lightsLit` progression directly as
@@ -71,13 +71,13 @@ Load from the SKILL.md index when the task needs this detail.
 7. **Respect build handshakes.**
    - Handshake refuses mismatched `version.json` builds because physics/track
      constants can differ.
-   - If JS/CSS changed, run `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`); stale builds can make peers unable to
+   - If JS/CSS changed, run `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`); stale builds can make peers unable to
      connect by design.
 
 8. **Verify in order.**
    - Run `npm run test:net-unit` before any browser group; it covers transport,
      SDP, rendezvous, QR, snapshot, and session contracts.
-   - Run `test:net` in the background through `tools/test-bg.mjs`.
+   - Run `test:net` in the background through `tools/ci/test-bg.mjs`.
    - Use real RTC scripts only for browser/ICE behavior that loopback cannot
      exercise.
 

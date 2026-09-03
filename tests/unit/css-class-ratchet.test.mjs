@@ -96,7 +96,7 @@ export function shellNodes() {
 /* 535 (2026-08-26): +1 for .fit-managed — the opt-in marker that lets a
    non-.sheet card (the data hub's .dh-card) join SheetShape's classifyFit
    scan. It cannot be a custom property: the scan is a querySelectorAll and
-   a MutationObserver classList test (js/game/sheetshape.js), both of which
+   a MutationObserver classList test (js/ui/sheet-shape.js), both of which
    need a selector-addressable hook. */
 /* 536 (2026-08-26): +1 for .sel-map-btn — the display:contents button that
    makes CIRCUIT DETAIL keyboard/gamepad-reachable (the door used to be a
@@ -151,7 +151,7 @@ const CLASS_CEILING = 534;
 // +4 2026-08-26: #pm-hud-sample and its hud-box — the HUD SIZE slider's live
 // sample; every real cluster is hidden while the settings sheet is open, so
 // the slider had zero visible effect.
-// +1 2026-08-27: the js/render/lamp-chunks.js script tag (new-file lockstep —
+// +1 2026-08-27: the js/render/shared/lamp-chunks.js script tag (new-file lockstep —
 // the shared per-chunk lamp bake consumed by GLX and WGX).
 // +8 2026-08-27: mode sublines on the title 2x2 (RACE / TIME TRIAL / RACE A
 // FRIEND / SEASON each gain a stack span + sub span answering "what is
@@ -160,7 +160,7 @@ const CLASS_CEILING = 534;
 // landscape clearance is untouched.
 // 1227 on the deploy union (both lineages' adds; re-measured per the
 // deploy-merge rule).
-// 1228 -> 1229: one <script> tag for js/game/gfx-debug.js, the ?gfxdebug=1
+// 1228 -> 1229: one <script> tag for js/perf/gfx-debug-overlay.js, the ?gfxdebug=1
 // overlay. A node is the honest price of the only channel a player with no
 // console has for telling us what their GPU did.
 // 1234 -> 1238: +4 for the MY TEAM customizer's LOGO OUTLINE row (label +
@@ -186,27 +186,27 @@ const NODE_CEILING = 1064;   // 1234 -> 1238 was the MY TEAM LOGO DETAIL row
 // shell in the deploy merge.
 // +1 2026-08-13: the <script> tag for the renderer A/B switch module
 // (measurable only on real hardware — later baked ON and deleted).
-// +1 2026-08-13: the <script> tag for js/game/gfx-quality.js (GRAPHICS presets).
+// +1 2026-08-13: the <script> tag for js/perf/quality-preset.js (GRAPHICS presets).
 // A script tag, not UI markup — it adds nothing to the rendered tree Lighthouse's
 // ~1,400 error band is about, and the feature itself reuses the EXISTING hidden
 // #pm-gfx button rather than minting new controls, so the visible UI grew by zero
 // nodes and css/ by zero classes.
-// +1 2026-08-14: the <script> tag for js/game/cockpit-opts.js (the opt-in
+// +1 2026-08-14: the <script> tag for js/camera/cockpit-opts.js (the opt-in
 // cockpit HALO). Its SETTINGS button is injected at runtime and costs no shell
 // node, exactly like PerfTry's — the tag itself is the whole +1.
 // +12 2026-08-14: the SEASON calendar/format feature — two <script> tags
-// (js/game/season-cal.js, js/game/season-ui.js) and 10 markup nodes for the whole
+// (js/career/season-cal.js, js/career/season-ui.js) and 10 markup nodes for the whole
 // #season-setup screen, because both of its panes are EMPTY and season-ui.js
 // fills them (the shape #career established at index.html:438). It is also a
 // <dialog>, so nothing but the head/foot is in the tree until it is opened, and
-// its CUSTOMISE button is created in js/game/menus.js rather than sitting in the
+// its CUSTOMISE button is created in js/ui/select-screen.js rather than sitting in the
 // shell. The CLASS count did not move at all: every selector on the screen is an
 // id scoping a class that already existed.
 // 1140 (deploy) + 12 = 1152, still far under the ~1,400 error band the
 // keep-the-monolith ruling rests on.
-// +1 2026-08-18: <script> for js/game/metrics.js (SETTINGS METRICS overlay).
+// +1 2026-08-18: <script> for js/perf/metrics-overlay.js (SETTINGS METRICS overlay).
 // The button and <pre> are injected at runtime — the tag is the whole +1.
-// +1 2026-08-28: <script> for js/game/garage-scene.js (the setup preview's pit
+// +1 2026-08-28: <script> for js/garage/scene.js (the setup preview's pit
 // bay — shell, props, team dress, light rig). All of it is geometry built in
 // the module and drawn to the canvas, so again the tag is the whole +1.
 

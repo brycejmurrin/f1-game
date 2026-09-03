@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const TOOL = path.join(ROOT, "tools", "trim-comments.mjs");
+const TOOL = path.join(ROOT, "tools", "check", "trim-comments.mjs");
 
 test("trim-comments.mjs --help exits 0", () => {
   const r = spawnSync(process.execPath, [TOOL, "--help"], { encoding: "utf8" });
@@ -24,7 +24,7 @@ test("trim-comments removes dividers and loc pointers on a fixture", () => {
     "   Line three is more prose.",
     "*/",
     "// ---------- section ----------",
-    "// The foo lives in js/log.js",
+    "// The foo lives in js/core/log.js",
     "const x = 1;",
     "// keyboard",
     "let keyLeft = false;",

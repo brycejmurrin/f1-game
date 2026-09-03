@@ -2,11 +2,11 @@
 /*
  * MUSIC LIBRARY + SPOTIFY BACKEND regression coverage.
  *
- *   js/game/music-lib.js  — uploaded audio files kept in IndexedDB and appended
+ *   js/audio/music-lib.js  — uploaded audio files kept in IndexedDB and appended
  *                           to the GameAudio playlist as "user:<db id>" entries.
- *   js/game/spotify.js    — optional personal-use Spotify backend that must stay
+ *   js/audio/spotify.js    — optional personal-use Spotify backend that must stay
  *                           COMPLETELY DORMANT until a Client ID is stored.
- *   js/game/audio.js      — PLAYLIST entries are {id,name,url,builtin} objects,
+ *   js/audio/engine.js      — PLAYLIST entries are {id,name,url,builtin} objects,
  *                           plus tracks/addTracks/removeTrack/playTrackId/
  *                           currentTrackId/setMusicBackend/musicBackend.
  *

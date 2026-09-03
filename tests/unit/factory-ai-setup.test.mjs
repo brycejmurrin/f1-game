@@ -13,7 +13,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
-  for (const f of ["js/mat4.js", "js/car/teams.js", "js/car/parts.js"]) {
+  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return {

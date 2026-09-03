@@ -1,5 +1,5 @@
 // @ts-check
-// The TILT steering pipeline — js/game/input.js.
+// The TILT steering pipeline — js/input/input.js.
 //
 // Tilt is the DEFAULT steering mode on a phone (`steerMode` starts at "tilt"),
 // and until this file nothing asserted any stage of it. `Input.simTilt` exists
@@ -381,7 +381,7 @@ test.describe("calibration", () => {
 test.describe("smoothing", () => {
   test("a lower min cutoff is visibly laggier — and changes lag, not gain", async ({ page }) => {
     // 0.4 / 1.2 / 2.2 Hz are the SMOOTHING slider's v10 / v6 / v1 (see
-    // cutoffFromSmooth in js/game/steer-tuning.js). Ordering only: the absolute
+    // cutoffFromSmooth in js/input/steer-tuning.js). Ordering only: the absolute
     // response depends on the whole chain and moves the moment anything is
     // retuned.
     const r = await page.evaluate(() => {

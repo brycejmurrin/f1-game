@@ -2,10 +2,10 @@
 // exactly one float per vertex.
 //
 // This is a silent-failure guard, not a style check. GLX wires the material
-// attribute ONLY when `data.mat.length === vCount` (js/render/glx.js:741) — a
+// attribute ONLY when `data.mat.length === vCount` (js/render/glx/glx.js:741) — a
 // short array, a long one, or a missing one is dropped with no warning, every
 // vertex falls back to the generic default `aMat = 0 = MAT.FLAT`, and
-// `applyMaterial` early-outs on `mid <= 0` (js/render/shaders/lit.js:294). The
+// `applyMaterial` early-outs on `mid <= 0` (js/render/glx/shaders/glsl-lit.js:294). The
 // garage shipped that way: the whole room was untextured flat vertex colour
 // while the car standing in it sampled the baked PBR arrays, and nothing said
 // so. One primitive that forgets to push its ids puts it straight back, and the
@@ -34,8 +34,8 @@ function harness() {
     Uint32Array, isFinite, parseFloat, parseInt, Date,
     Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
   });
-  vm.runInContext(read("js/track/geom.js"), ctx, { filename: "js/track/geom.js" });
-  vm.runInContext(read("js/game/garage-scene.js"), ctx, { filename: "js/game/garage-scene.js" });
+  vm.runInContext(read("js/track/core/geom.js"), ctx, { filename: "js/track/core/geom.js" });
+  vm.runInContext(read("js/garage/scene.js"), ctx, { filename: "js/garage/scene.js" });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);
   return { GarageScene, meshes, ctx };
@@ -64,7 +64,7 @@ test("every garage mesh carries exactly one material id per vertex", () => {
 
 test("no horizontal surface carries a wall-keyed material", () => {
   // The trap that cost this file its first bug. matWallLike()
-  // (js/render/shaders/lit.js:287) is true for CONCRETE / BRICK / METAL / WOOD /
+  // (js/render/glx/shaders/glsl-lit.js:287) is true for CONCRETE / BRICK / METAL / WOOD /
   // FABRIC / ROOF / STONE / RUST, and for those the triplanar UV is
   // `(an.x > an.z ? worldZ : worldX, worldY)`. On a floor the normal is (0,1,0)
   // and worldY is constant, so the UV collapses to a 1-D function of x and the
