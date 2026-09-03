@@ -13,7 +13,7 @@ table and palette.
 ### 2 · Survey — one command
 
 ```sh
-node tools/survey-track.mjs <id> before
+node tools/track/survey-track.mjs <id> before
 ```
 
 Self-boots (no server). Writes `scratch/captures/survey-track/<id>/`:
@@ -53,7 +53,7 @@ terrain-over-road class.
 ### 4 · Verify the build
 
 ```sh
-node tools/verify-track.cjs <id>
+node tools/track/verify-track.cjs <id>
 ```
 
 A `THROW` here strands the game on the menu. Fleet: `verify-track.cjs --all`.
@@ -61,7 +61,7 @@ A `THROW` here strands the game on the menu. Fleet: `verify-track.cjs --all`.
 ### 5 · Re-survey
 
 ```sh
-node tools/survey-track.mjs <id> after
+node tools/track/survey-track.mjs <id> after
 ```
 
 Compare `before-*.png` vs `after-*.png`; confirm the probe is flag-free.

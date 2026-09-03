@@ -90,7 +90,7 @@ walked through it because there is no asset acquisition story.
   violates no-external-assets, no-build-step."* The proposal below is the
   argument for relaxing exactly one half of that: **no build step at *runtime*,
   but an offline bake tool in `tools/` is fine** — the same category as
-  `tools/verify-track.cjs`. `assets/` already ships fonts, icons, music and sfx.
+  `tools/track/verify-track.cjs`. `assets/` already ships fonts, icons, music and sfx.
 
 ---
 
@@ -188,7 +188,7 @@ value-per-risk.
 
 ### 3.1 The bake tool — `tools/gen/assets.mjs` (author-time only)
 
-A Node CLI alongside `tools/verify-track.cjs`. Never loaded by the game, never
+A Node CLI alongside `tools/track/verify-track.cjs`. Never loaded by the game, never
 runs in CI for a normal test pass. Network access only here.
 
 ```sh

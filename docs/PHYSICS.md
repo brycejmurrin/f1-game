@@ -231,7 +231,7 @@ compound's tread class — `wetTread` in the Parts catalog, absent = 0 = slick:
 this landed the function read the weather and never the tyre, so the two wet
 compounds were a pure penalty in the only conditions they exist for: you paid
 about 10% of the car to fit a full wet and the rain treated you exactly like a
-slick. `tools/parts-ladder.mjs` had been reporting it from the other side —
+slick. `tools/car/parts-ladder.mjs` had been reporting it from the other side —
 those two rows are the only never-optimal options in the whole catalog, and
 `tests/unit/parts-ladder.test.mjs` still names them as exemptions because the
 ladder scores the four DRY stats and none of them can say "works when it rains".

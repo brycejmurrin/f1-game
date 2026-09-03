@@ -25,7 +25,7 @@
  *      ("LIT_FS in js/render/glx/shaders/glsl-lit.js") makes it permanently true, and
  *      that is the direction this should move. Lowering the ceiling is the
  *      reward; raising it is a deliberate edit with a reason in the commit.
- *      Same idiom as tests/data/ratchets.json and tools/clip-baseline.json.
+ *      Same idiom as tests/data/ratchets.json and tools/track/clip-baseline.json.
  *
  * Run: node --test tests/unit/comment-citations.test.mjs   (npm run test:tooling-fast)
  */

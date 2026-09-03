@@ -35,7 +35,7 @@ Load from the SKILL.md index when the task needs this detail.
    - Credits are in the same unit as `Parts.CATALOG` costs.
    - Research unlocks ownership permanently; fitting is constrained by budget
      cap and owned parts.
-   - Use `tools/career-economy.mjs` to measure what one or more seasons can buy
+   - Use `tools/car/career-economy.mjs` to measure what one or more seasons can buy
      instead of reasoning from raw credit totals.
 
 6. **Preserve determinism.**

@@ -145,7 +145,7 @@ test("look-survey settles 1.6s only on day/dark rebuild, not every weather flip"
 });
 
 test("look-survey-sheet.py writes tracked docs/look-survey grids", () => {
-  const sheet = path.join(ROOT, "tools/look-survey-sheet.py");
+  const sheet = path.join(ROOT, "tools/lighting/look-survey-sheet.py");
   assert.ok(fs.existsSync(sheet));
   const py = fs.readFileSync(sheet, "utf8");
   assert.match(py, /docs\/look-survey/);

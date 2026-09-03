@@ -47,7 +47,7 @@ resolution.
 6. **Visual verify** (server on 3456):
    ```sh
    node tools/car/render-car.mjs --team=ferrari --preset=livery --views=tail
-   node tools/audit-parts.mjs --cats=aero
+   node tools/car/audit-parts.mjs --cats=aero
    ```
    Or `tools/carview.html?team=mclaren&aero=extreme`.
 7. **Test and ship.** `node tools/ci/test-bg.mjs car` for catalog/physics/visual

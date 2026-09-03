@@ -40,7 +40,7 @@ function realMAT() {
   vm.createContext(sandbox);
   seedLog(sandbox);
   // Top-level `const` is block-scoped inside a VM and never lands on the
-  // sandbox — the same rewrite tools/verify-track.cjs uses.
+  // sandbox — the same rewrite tools/track/verify-track.cjs uses.
   vm.runInContext(src.replace(/^const\b/gm, "var"), sandbox, { filename: "geom.js" });
   const G = sandbox.TrackGeom;
   assert.ok(G && G.MAT, "TrackGeom.MAT not reachable from the VM sandbox");

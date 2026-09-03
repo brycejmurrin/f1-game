@@ -119,7 +119,7 @@ const TrackModels = (function () {
   // same work is a predictable read-and-compare the JIT keeps in registers.
   // Behaviour is identical, including which reason wins.
   // Hoisted out of the loop below. `Infinity` is a GLOBAL, and under
-  // vm.createContext — which tools/verify-track.cjs, tools/graph-parity.cjs and
+  // vm.createContext — which tools/track/verify-track.cjs, tools/track/graph-parity.cjs and
   // the VM-based unit suites all use — every bare global read goes through the
   // contextified global's C++ interceptor. At 27 M elements x 2 lookups that is
   // ~54 M interceptor calls: validateGeometry measured 10.4 s of a 13.9 s Vegas

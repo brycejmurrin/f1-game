@@ -9,11 +9,11 @@ Orchestrator for taking one circuit from "roughly dressed" to "reads like the
 real place". Work one circuit at a time.
 
 ```sh
-node tools/survey-track.mjs <id>            # screenshots + flagged ground probe
-node tools/survey-track.mjs <id> --oblique  # plus bounds-fitted topdown + N/E/S/W
+node tools/track/survey-track.mjs <id>            # screenshots + flagged ground probe
+node tools/track/survey-track.mjs <id> --oblique  # plus bounds-fitted topdown + N/E/S/W
 # --oblique may sit anywhere; a comma-list after <id> is fracs (no label required):
 #   survey-track.mjs monaco --oblique 0.1,0.5
-node tools/verify-track.cjs <id>            # after every edit
+node tools/track/verify-track.cjs <id>            # after every edit
 node .claude/skills/survey-track/ground-profile.mjs <id>   # numbers only
 ```
 

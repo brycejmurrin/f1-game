@@ -19,7 +19,7 @@
  *   js/ minus the deferred three/ + webgpu/ backends, minus light-presets.js
  *   which is preset DATA, minus the TUNE_DEFS block itself)
  *
- * TUNE_DEFS is loaded the way tools/slider-effect.mjs loads it — js/core/log.js +
+ * TUNE_DEFS is loaded the way tools/lighting/slider-effect.mjs loads it — js/core/log.js +
  * the lighting files (js/lighting/knobs.js + its siblings) evaluated in a Node VM.
  *
  *   node tools/gen/gen-slider-doc.mjs            # write
@@ -29,7 +29,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { ROOT, emit, isMain, readRepo, replaceBlock } from "./gen-lib.mjs";
-import { loadTuneDefs } from "../slider-effect.mjs";
+import { loadTuneDefs } from "../lighting/slider-effect.mjs";
 
 export const TARGET = "docs/LIGHTING-TUNER-SLIDERS.md";
 

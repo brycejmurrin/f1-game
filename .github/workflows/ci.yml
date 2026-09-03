@@ -418,7 +418,7 @@ jobs:
         run: npm run test:sweeps
       - name: Every circuit still builds headlessly
         if: steps.filter.outputs.geometry == 'true'
-        run: node tools/verify-track.cjs --all
+        run: node tools/track/verify-track.cjs --all
 
   smoke:
     name: Smoke (page boots, __apex responds)

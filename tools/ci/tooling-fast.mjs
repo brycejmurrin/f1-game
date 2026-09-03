@@ -139,7 +139,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,
   // crest-marks 41 s, slider-effect 42 s — 48 % of this loop, measured
   // 2026-09-01) run in test:node-slow: CI guards always, locally when
-  // pick-tests names it (js/car/ or tools/slider-effect.mjs).
+  // pick-tests names it (js/car/ or tools/lighting/slider-effect.mjs).
   "tests/unit/deploy-stamp.test.mjs",
   "tests/unit/track-build-wait.test.mjs",
   "tests/unit/deploy-tool.test.mjs",

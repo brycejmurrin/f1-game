@@ -197,7 +197,7 @@ All 40 circuits now have a full `tod × weather` grid (800 condition keys plus `
 
 Full-grid **mcp-probe `look-survey`** (chase + `park` + `snapCam`). Contact
 sheets land in [`docs/look-survey/`](look-survey/README.md) as each circuit
-hits all 20 looks (`python3 tools/look-survey-sheet.py --ready`). First visual
+hits all 20 looks (`python3 tools/lighting/look-survey-sheet.py --ready`). First visual
 pass was 4 looks × 40 circuits; the remaining 16 per track are still shooting.
 Cross-cutting from the frames:
 - Desert/street **nights** often flood/neon-hot with dusk-orange horizons —

@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { buildContext } = require("../../tools/verify-track.cjs");
+const { buildContext } = require("../../tools/track/verify-track.cjs");
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const counts = (Tracks, id) => {

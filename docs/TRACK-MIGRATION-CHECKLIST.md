@@ -30,7 +30,7 @@ Use one isolated track-scoped change at a time.
 - Confirm visible runoff matches `wallAt`/`wallStats().tightFrac`.
 
 ## Verification
-- `node tools/verify-track.cjs <id>`
+- `node tools/track/verify-track.cjs <id>`
 - Pure foundation Node tests.
 - Focused terrain-over-road, props-over-road, wall, elevation, and track survey tests.
 - Day/night driver-eye and orbit captures.

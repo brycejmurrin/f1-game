@@ -1,7 +1,7 @@
 # Scenery grounding — measuring, positioning, filling, and not clipping
 
 Written after an exhaustive float audit of all 40 circuits (see
-`tools/float-audit.cjs`). It records *why* floating scenery kept recurring and
+`tools/track/float-audit.cjs`). It records *why* floating scenery kept recurring and
 what to build so it stops, rather than listing the individual fixes.
 
 ---
@@ -111,7 +111,7 @@ that carries it. `streetLamp` does; Hungaroring's per-track copy did not, and
 168 heads hovered. Any offset > ~0.5 m from its mast needs a connecting member —
 this is also exactly the signature `float-audit` detects, so it self-polices.
 
-## 4. Measuring it — `tools/float-audit.cjs`
+## 4. Measuring it — `tools/track/float-audit.cjs`
 
 Screenshots sample four points per lap and cannot prove absence. The audit runs
 the real build in a Node VM (the `verify-track` trick) but keeps the vertex
@@ -128,9 +128,9 @@ buffers, then resolves per primitive **what it is resting on**:
 5. what is left is genuinely unsupported.
 
 ```sh
-node tools/float-audit.cjs <track>          # count + worst offenders
-node tools/float-audit.cjs <track> --why    # names each floater's SOURCE LINE
-node tools/float-audit.cjs --all            # exit 1 if anything floats
+node tools/track/float-audit.cjs <track>          # count + worst offenders
+node tools/track/float-audit.cjs <track> --why    # names each floater's SOURCE LINE
+node tools/track/float-audit.cjs --all            # exit 1 if anything floats
 ```
 
 `--why` works by re-running the deterministic build with stack capture enabled
@@ -154,7 +154,7 @@ Not everything elevated is a defect. Expect these and judge them:
 
 ## 5. The gate
 
-`npm run test:float` (`node tools/float-audit.cjs --all`) existed for a long
+`npm run test:float` (`node tools/track/float-audit.cjs --all`) existed for a long
 time and **ran nowhere** — no CI job, no test. It could not have been wired up
 as written either: it exits 1 on any floater and 37 of the 40 circuits have
 some, so a fleet-wide gate would have been red from the day it landed. A
@@ -164,7 +164,7 @@ What ships now is the per-circuit ratchet this section always argued for:
 
 | | |
 |---|---|
-| caps | `tools/float-baseline.json` |
+| caps | `tools/track/float-baseline.json` |
 | test | `tests/unit/scenery-grounding.test.mjs` |
 | runs in | `npm run test:sweeps`, which CI runs |
 
@@ -266,7 +266,7 @@ bury, the terrain over-track clip). Two gaps remain:
   crossover regressed precisely because its deck was authored 720 m away from
   the crossing it was meant to span, and no check related the two.
 
-### 6.1 The detector — `tools/clip-audit.cjs`
+### 6.1 The detector — `tools/track/clip-audit.cjs`
 
 The old exploratory `--clip` mode is gone. It reported ~15 700 pairs on Monza
 and disclaimed its own numbers, and the fix it recommended — *"tag each
@@ -299,11 +299,11 @@ size; depth ranks by what a player sees. Monza's largest-volume pair (609 m³) i
 4 m deep, while Monaco's 8.8 m penetration is 2 219 m³.
 
 ```sh
-node tools/clip-audit.cjs <track> [--why]     # defect list + call-site pairings
-node tools/clip-audit.cjs --all --gate        # node tools/ci/test-bg.mjs clip
+node tools/track/clip-audit.cjs <track> [--why]     # defect list + call-site pairings
+node tools/track/clip-audit.cjs --all --gate        # node tools/ci/test-bg.mjs clip
 ```
 
-Gated by `tests/unit/prop-clipping.test.mjs` against `tools/clip-baseline.json`, on
+Gated by `tests/unit/prop-clipping.test.mjs` against `tools/track/clip-baseline.json`, on
 the same ratchet semantics as `props-over-road.spec.js`: a circuit not in the
 map must read 0, a capped circuit fails when it grows, no `ALLOW` hatch.
 

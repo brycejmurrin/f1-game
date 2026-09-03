@@ -18,15 +18,15 @@ Missing browsers / wrapper: AGENTS.md §Verification 1 (`npm install`, then
 `npx playwright install chromium-headless-shell`).
 
 A layout bug is never "on a screen" — it is a **cell of a matrix**: screen ×
-viewport × scale × pointer. **One CLI:** `tools/layout-audit.mjs`.
+viewport × scale × pointer. **One CLI:** `tools/ui/layout-audit.mjs`.
 
 ```sh
-node tools/layout-audit.mjs --help
-node tools/layout-audit.mjs --list
-node tools/layout-audit.mjs --survey          # title-path + shots (npm run ui:survey)
-node tools/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
-node tools/layout-audit.mjs --screen=settings # one cell
-node tools/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
+node tools/ui/layout-audit.mjs --help
+node tools/ui/layout-audit.mjs --list
+node tools/ui/layout-audit.mjs --survey          # title-path + shots (npm run ui:survey)
+node tools/ui/layout-audit.mjs --gallery         # fast PNG+DOM all menus (npm run ui:gallery)
+node tools/ui/layout-audit.mjs --screen=settings # one cell
+node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run ui:audit)
 ```
 
 This skill is the **interactive** complement: Playwright MCP for resize / DOM /

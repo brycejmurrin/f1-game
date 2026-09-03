@@ -48,7 +48,7 @@
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
 import { fileURLToPath } from "node:url";
 
-const ROOT = fileURLToPath(new URL("../../..", import.meta.url)).replace(/[\\/]$/, "");
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
 // ---- CLI ----
 const argv = process.argv.slice(2);

@@ -6,7 +6,7 @@
 // that guard, landed BEFORE the move rather than after it, because a check that
 // arrives after the commit it was meant to protect has protected nothing.
 //
-// The silent class, concretely: `tools/fit-audit.mjs` and `tools/menu-fit.mjs`
+// The silent class, concretely: `tools/ui/fit-audit.mjs` and `tools/ui/menu-fit.mjs`
 // import `../tests/helpers/f1-api-mock.js` inside `try { … } catch { /* degrades */ }`.
 // That catch is right at runtime and fatal to a move — afterwards the import
 // fails forever, both tools quietly audit an empty data hub, and nothing goes
@@ -26,7 +26,7 @@ test("a static import is found", () => {
 test("a SWALLOWED dynamic import is found — the ⚠ case this exists for", () => {
   const src = `let m = null;
     try { ({ m } = await import("../tests/helpers/f1-api-mock.js")); } catch { /* degrades */ }`;
-  const { refs } = referencesIn(src, "tools/fit-audit.mjs");
+  const { refs } = referencesIn(src, "tools/ui/fit-audit.mjs");
   assert.deepEqual(refs.map((r) => r.spec), ["../tests/helpers/f1-api-mock.js"]);
 });
 

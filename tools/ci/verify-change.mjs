@@ -158,10 +158,10 @@ const run = (name, cmd, args) => {
 say(`── phase 1: fast gate ${loadavgLine()}`);
 let fastOk = true;
 for (const id of plan.fast.verifyTrack) {
-  fastOk = run(`verify-track ${id}`, "node", ["tools/verify-track.cjs", id]) && fastOk;
+  fastOk = run(`verify-track ${id}`, "node", ["tools/track/verify-track.cjs", id]) && fastOk;
 }
 if (plan.fast.graphParity) {
-  fastOk = run("graph-parity", "node", ["tools/graph-parity.cjs", "--all"]) && fastOk;
+  fastOk = run("graph-parity", "node", ["tools/track/graph-parity.cjs", "--all"]) && fastOk;
 }
 if (plan.fast.toolingFast) {
   fastOk = run("tooling-fast", "npm", ["run", "--silent", "test:tooling-fast"]) && fastOk;

@@ -20,9 +20,9 @@ Canvas / 3D → **playwright-probe**.
 ## Command
 
 ```sh
-node tools/css-play.mjs --list
-node tools/css-play.mjs --screen settings
-node tools/css-play.mjs garage --sel "#cs-tabs" --css css/carsetup.css
+node tools/ui/css-play.mjs --list
+node tools/ui/css-play.mjs --screen settings
+node tools/ui/css-play.mjs garage --sel "#cs-tabs" --css css/carsetup.css
 ./tools/playwright-mcp.sh play --screen settings
 ./tools/playwright-mcp.sh dom  --screen settings --sel .sheet
 ```
@@ -32,7 +32,7 @@ node tools/css-play.mjs garage --sel "#cs-tabs" --css css/carsetup.css
 `artifacts/css-play/<screen>-<stamp>/{shot.png,dom.json,meta.json}`.
 
 Unknown screen: `--click "#mb-foo" --root "#id"`. Catalog ids are a subset of
-`SCREENS` in `tools/layout-audit.mjs`.
+`SCREENS` in `tools/ui/layout-audit.mjs`.
 
 ## Hard don'ts
 

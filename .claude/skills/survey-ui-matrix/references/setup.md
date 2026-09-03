@@ -83,7 +83,7 @@ grep -n "DEFS" -A 40 js/ui/layers.js
 grep -n "data-shape\|data-pair" css/*.css js/ui/sheet-shape.js
 ```
 
-Cross-check against `SCREENS` in `tools/layout-audit.mjs`. A root present in
+Cross-check against `SCREENS` in `tools/ui/layout-audit.mjs`. A root present in
 `index.html` and absent from `SCREENS` is a screen nobody measures.
 
 Remember sub-views: `#career` is new-career SETUP *and* the season hub;

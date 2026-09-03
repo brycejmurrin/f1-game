@@ -22,8 +22,8 @@ python3 tools/cdmcp-cli.py look-survey \
   --plan artifacts/lighting/survey-plan.json
 
 # Stitch the sheet after shooting
-python3 tools/look-survey-sheet.py monaco
-python3 tools/look-survey-sheet.py --ready   # all circuits with shots
+python3 tools/lighting/look-survey-sheet.py monaco
+python3 tools/lighting/look-survey-sheet.py --ready   # all circuits with shots
 ```
 
 Shots land in `artifacts/lighting/shots/<id>/` (gitignored).

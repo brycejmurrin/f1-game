@@ -367,7 +367,7 @@ the pit wall and grandstand). The listing is what kept the search pointed at
 camera framing instead of at emission.
 
 The vertex count is the honest instrument, and it is a shell call, not a browser
-one: `node tools/verify-track.cjs <id>`, then comment the call out and run it
+one: `node tools/track/verify-track.cjs <id>`, then comment the call out and run it
 again. Identical `props N` = nothing was emitted. **Run a control first** — add
 a throwaway `for (let i=0;i<50;i++) addBox(out, [0,500+i,0], [10,10,10], [1,0,0]);`
 and confirm the number moves (+1200) — because two equal readings look identical

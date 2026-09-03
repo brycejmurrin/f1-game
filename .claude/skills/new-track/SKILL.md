@@ -39,7 +39,7 @@ road, terrain, and prop meshes. **Track files load before `js/track/tracks.js`**
     pal: { /* zenith, horizon, sun, sunDir, grass, asphalt, line, kerbA, kerbB, fog, ambientSky, ambientGround ... */ },
 
     // GEOMETRY — REQUIRED. The real centreline: [x,z] metres, recentred, one lap,
-    // open loop. `node tools/import-circuit-path.mjs <id>:<featureId>` emits this
+    // open loop. `node tools/track/import-circuit-path.mjs <id>:<featureId>` emits this
     // line from the bacinger/f1-circuits OSM trace; paste it here.
     path: { len: 5431, pts: [[-150.5,-809.2],[36.7,-842.1], /* … */] },
 

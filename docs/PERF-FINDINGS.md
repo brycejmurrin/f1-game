@@ -22,7 +22,7 @@ thing**, which is how this project has lost the most time.
 |---|---|---|
 | Where does physics/AI/CPU time go? | `tools/profile-gameloop.mjs <track> physics` | **Yes** — synchronous `__apex.step()`, no compositor. The honest one. |
 | Where does render-path JS time go? | `tools/profile-gameloop.mjs <track> render` | **No** — see below. |
-| How long does a track build take? | Node VM harness (`tools/verify-track.cjs`, `track-build-vm.cjs`) | **Yes** — pure CPU, no GPU. Same harness that produced the 14.0 → 4.5 s win. |
+| How long does a track build take? | Node VM harness (`tools/track/verify-track.cjs`, `track-build-vm.cjs`) | **Yes** — pure CPU, no GPU. Same harness that produced the 14.0 → 4.5 s win. |
 | How big is the boot script wall? | Static: sum `stat -c%s` over index.html's `src=`s | **Yes** — no browser needed, fully deterministic. |
 | What is boot LCP / DCL made of? | chrome-devtools MCP `performance_start_trace` → `analyze_insight` | **Yes**, with caveats below. |
 | Is a frame GPU-bound? | `__apex.gpuTimer()` | **No** — returns `-1` under SwiftShader. Needs Chrome/Android on real hardware. |
@@ -268,7 +268,7 @@ are unchanged. Source-contracted in `tests/unit/perf-governor.test.mjs`.
 
 ### The VM build harness is a valid TIMER and an invalid PROFILER (2026-08-14)
 
-§0's table lists the Node VM harness (`tools/verify-track.cjs`,
+§0's table lists the Node VM harness (`tools/track/verify-track.cjs`,
 `tools/lib/track-build-vm.cjs`) as a valid instrument for track-build cost. That is
 true of **whole-build A/B timing** and false of **attribution**, and the
 difference has already cost two candidate findings.
@@ -2803,7 +2803,7 @@ not yet built (menu flyby, `startRace`, `openQuali`).
 **The trap, measured.** FIVE separate harnesses load circuits with
 `readdirSync(CIRCUITS_DIR).filter(f => f.endsWith(".js"))`, which does not
 descend into the new subdirectory. A harness that misses it builds every
-circuit BARE and still reports confident numbers: `tools/float-audit.cjs` put
+circuit BARE and still reports confident numbers: `tools/track/float-audit.cjs` put
 cota at **3,988 prop cells instead of 32,897**, which surfaced as
 `scenery-grounding` "floating scenery grew" — i.e. it reads as a scenery
 REGRESSION, not as a missing include. Four of the five had to be found by
@@ -3267,7 +3267,7 @@ directions (drop a field → red; add a spurious one → red).
   `TrackModels.scratch()` calls, which needs per-track numbers. Not this round.
 - **`track.graph.nodes` retains 24.8 MB of Vegas's 40.4 MB for the session** and
   is consumed exactly once, by `graph.batches()`. Only `__apex.trackGraph()` and
-  `tools/graph-parity.cjs` read it afterwards.
+  `tools/track/graph-parity.cjs` read it afterwards.
 - **`lampArmed` is cleared every `present()`** while `js/game.js` deliberately
   caches the map across frames, so the pool shadow may appear ~1 frame in 12 (and
   while parked, exactly once — the rank cache freezes `flBest` and the 12 m cell

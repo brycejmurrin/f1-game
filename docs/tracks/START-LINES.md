@@ -22,10 +22,10 @@ touched here, so that mismatch is pre-existing.
 Reproduce:
 
 ```sh
-node tools/startline-snap.cjs                       # the coordinate -> startFrac derivation
-node tools/startline-probe.cjs --calibrate          # the two checks, sign-calibrated first
-node tools/rotate-markings.cjs --check              # the turn-table rotation
-node tools/track-verts.cjs --diff before.json       # did the dressed world move?
+node tools/track/startline-snap.cjs                       # the coordinate -> startFrac derivation
+node tools/track/startline-probe.cjs --calibrate          # the two checks, sign-calibrated first
+node tools/track/rotate-markings.cjs --check              # the turn-table rotation
+node tools/track/track-verts.cjs --diff before.json       # did the dressed world move?
 ```
 
 ---
@@ -189,7 +189,7 @@ different things are written in racing fractions.
 
 A circuit's `scenery()` anchors, its `dressingExclusions` and its corner boards
 are racing fractions, so moving the line drags the whole dressed world round the
-lap. Measured with `tools/track-verts.cjs`: COTA −6 583 prop vertices, Istanbul
+lap. Measured with `tools/track/track-verts.cjs`: COTA −6 583 prop vertices, Istanbul
 +34 318, and **seven circuits failed `verify-track --all`** outright on required
 landmarks pushed off their footprints and into the road — Marina Bay Sands, the
 Katara Towers, the Pudong skyline, the KLIA skyline, the Hungaroring lake, the
@@ -255,9 +255,9 @@ them, so shifting it at source would apply the shift twice.
 **That latent gap is confirmed live, not just theoretical — three of the four
 reversed circuits (monaco, paul_ricard, singapore) now carry a nonzero shift,
 and the shift-only wrap is measurably wrong for them.** Evidence, from
-Monaco: `tools/float-audit.cjs monaco --why` names `waterField`/`grandstandEx`/
+Monaco: `tools/track/float-audit.cjs monaco --why` names `waterField`/`grandstandEx`/
 `cameraTower`/yacht call sites, and floating clusters went **29 → 48** after
-the shift landed; `tools/coplanar-audit.cjs monaco --why --raw` found pairs
+the shift landed; `tools/track/coplanar-audit.cjs monaco --why --raw` found pairs
 with byte-identical bounding boxes at two different harbour locations — not
 near-misses, the exact same box twice.
 
@@ -277,8 +277,8 @@ Not fixed here: closing it correctly requires reading every `groundPatch`/
 `overheadSpan`/`groundedSegments`/`waterField`/`circuitKit` call in the three
 affected circuit files and determining, per call, which space its fraction was
 actually authored in — guessing wrong moves already-shipped geometry rather
-than fixing it. `tools/coplanar-baseline.json`, `tools/clip-baseline.json` and
-`tools/float-baseline.json` were only LOWERED where this round's measurement
+than fixing it. `tools/track/coplanar-baseline.json`, `tools/track/clip-baseline.json` and
+`tools/track/float-baseline.json` were only LOWERED where this round's measurement
 showed genuine improvement; monaco/paul_ricard/singapore's grown counts were
 left as failing baselines rather than raised, so `npm run test:sweeps` stays
 red on exactly this until the six-emitter gap gets its own pass.
@@ -351,7 +351,7 @@ Fixed by special-casing the full-lap span in `sceneryRange` to pass through
 unrotated — rotating a full circle onto itself is a no-op by definition, so the
 only correct answer was already sitting there before the shift was added.
 
-### 6. Turn tables — `tools/rotate-markings.cjs`
+### 6. Turn tables — `tools/track/rotate-markings.cjs`
 
 A def's `turns` apexes are racing fractions and deliberately never
 fmap'd, so the same physical apex acquires a new fraction when the line moves.
@@ -386,7 +386,7 @@ contract — the shape of an answer that was never physical to begin with.
   but `monaco`, which is 0 zones and needs none). Deliberately NOT a fresh
   corner-by-corner re-research: each pair is derived from — and verified
   byte-identical to — the already-sourced `ZONE_COUNT` selection (the N
-  longest qualifying straights), via `tools/aero-zone-turns.cjs` and
+  longest qualifying straights), via `tools/track/aero-zone-turns.cjs` and
   `tests/unit/aero-zones-turns.test.mjs`. So today it changes nothing about
   WHICH straight is selected; what it buys is a selection that is ROBUST to a
   future geometry change (a new curvature-scan parameter would otherwise
@@ -400,7 +400,7 @@ contract — the shape of an answer that was never physical to begin with.
 
 | tool | what it does |
 |---|---|
-| `tools/startline-snap.cjs` | start-line coordinate → `startFrac`; re-derives trace storage order per circuit, projects onto segments, flags ambiguous branch snaps |
-| `tools/startline-probe.cjs` | the two falsifiable checks, with `--calibrate`, `--snap`, `--frac id=v` |
-| `tools/rotate-markings.cjs` | rotates + re-sorts turn tables onto the corrected line |
-| `tools/track-verts.cjs` | per-circuit vertex + diagnostics dump for exact before/after diffing |
+| `tools/track/startline-snap.cjs` | start-line coordinate → `startFrac`; re-derives trace storage order per circuit, projects onto segments, flags ambiguous branch snaps |
+| `tools/track/startline-probe.cjs` | the two falsifiable checks, with `--calibrate`, `--snap`, `--frac id=v` |
+| `tools/track/rotate-markings.cjs` | rotates + re-sorts turn tables onto the corrected line |
+| `tools/track/track-verts.cjs` | per-circuit vertex + diagnostics dump for exact before/after diffing |

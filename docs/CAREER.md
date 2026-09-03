@@ -257,7 +257,7 @@ on either is genuinely giving up the other.
 > together, and did.
 >
 > **Re-measure after touching `BUDGET_MULT` or `BUDGET_UPGRADE`.** Raising
-> `budget()` lowers `tools/career-economy.mjs`'s re-spec figure with no change in
+> `budget()` lowers `tools/car/career-economy.mjs`'s re-spec figure with no change in
 > income, because more of what a season earns goes onto the car instead of into
 > the owned set.
 
@@ -551,7 +551,7 @@ also `GOAL_MV` (12) off the market value the winter's offers are drawn against.
 That is the demotion: `offerBar()` spaces the tiers 18 apart, so a missed goal
 costs most of a tier's worth of interest without needing a second rule to say so.
 
-**No money either way, deliberately.** `tools/career-economy.mjs` measures this
+**No money either way, deliberately.** `tools/car/career-economy.mjs` measures this
 economy against the catalog, and a once-a-season bonus it does not model would
 invalidate every figure in "The economy, measured" above. Reputation is the
 channel that already carries season-long form.
@@ -581,7 +581,7 @@ market swap applies in MY TEAM as well, while the player's own seat still outran
 
 ## The economy, measured
 
-`tools/career-economy.mjs` sims a season per starting team through the **real**
+`tools/car/career-economy.mjs` sims a season per starting team through the **real**
 `Career.settleRound()` and prices the income against the catalog. It exists because
 `QUALI_TRIM` shipped as a reasoned guess and was **27% wrong**, and `RESEARCH_MULT`
 / `PRIZE` / `BUDGET_MULT` had never had the same treatment.

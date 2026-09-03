@@ -21,7 +21,7 @@
 //
 // Presets (--preset=<name>): purpose-built 3-shot sets for reviewing a specific
 // part or aspect, reusing the exact angles already validated for that purpose
-// (see tools/audit-parts.mjs / tools/audit-aero.mjs) instead of hand-picking
+// (see tools/car/audit-parts.mjs / tools/car/audit-aero.mjs) instead of hand-picking
 // az/el/dist each time. Overrides --views.
 //   wing (alias aero)   behind / front / front-3-quarter — endplate + rear wing
 //   engine, suspension, brakes, tyres, ers, gearbox, fuel
@@ -100,7 +100,7 @@ const GROUPS = {
 
 // Named PRESET shot-sets: 3 purpose-built {label, az, el, dist, look?, tod?,
 // intensity?} angles per review purpose.
-//  - `wing` is the exact 3-view spread from tools/audit-aero.mjs (behind/front/
+//  - `wing` is the exact 3-view spread from tools/car/audit-aero.mjs (behind/front/
 //    front-3-quarter, confirmed to clear the endplate at every downforce level).
 //  - Part-detail presets (engine/suspension/brakes/tyres/ers/gearbox/fuel) use a
 //    CLOSE distance + a `look` target offset toward the actual part instead of

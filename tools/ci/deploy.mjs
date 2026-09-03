@@ -182,7 +182,7 @@ export function main() {
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
   // from ci.yml so the two lists cannot drift apart.
   for (const script of gateNodeSuites()) { run("npm", ["run", script], `Pages gate: ${script}`); verdict.verified.push(script); }
-  for (const id of touchedCircuits(p.tip)) { run("node", ["tools/verify-track.cjs", id], `verify-track ${id}`); verdict.verified.push(`verify-track:${id}`); }
+  for (const id of touchedCircuits(p.tip)) { run("node", ["tools/track/verify-track.cjs", id], `verify-track ${id}`); verdict.verified.push(`verify-track:${id}`); }
   if (flag("--pr")) {
     Object.assign(verdict, openPr(p.branch));
   } else {

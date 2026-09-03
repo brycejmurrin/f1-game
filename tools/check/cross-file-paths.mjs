@@ -10,7 +10,7 @@
 // that don't are the ones this exists for, and R2's lockstep marks five of them
 // ⚠ "no guard turns red":
 //
-//   tools/fit-audit.mjs and tools/menu-fit.mjs wrap their import of
+//   tools/ui/fit-audit.mjs and tools/ui/menu-fit.mjs wrap their import of
 //   ../tests/helpers/f1-api-mock.js in `try { … } catch { /* degrades */ }`. That catch
 //   is correct at runtime and fatal to a move: after the split the import fails
 //   forever, the tools silently audit an empty data hub, and nothing anywhere

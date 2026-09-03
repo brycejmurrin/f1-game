@@ -25,7 +25,7 @@ Raising one is allowed — this is a ratchet, not a cap on doing work — but it
 has to be a deliberate edit here with a reason in the commit message, which
 is the whole point. A number nobody can raise gets deleted the first time it
 is inconvenient; a number you must look at gets thought about.
-Same idiom as tools/clip-baseline.json and tools/coplanar-baseline.json, and
+Same idiom as tools/track/clip-baseline.json and tools/track/coplanar-baseline.json, and
 as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 ```
 
@@ -779,7 +779,7 @@ as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 - in the shaders' 20-30 classification chain rather than a material uniform.
 - 3004 -> 3032. +20 for the exhaust heat-stain sleeve and its heatOf() blend:
 - the fuel `flame` key reached only three ~2 cm glaze pips (0.0028 m2), which
-- tools/parts-sweep.mjs --clamp-scan reads as a dead key. +8 for threading the
+- tools/car/parts-sweep.mjs --clamp-scan reads as a dead key. +8 for threading the
 - brakes `rim` colour into the rim faces, which was computed and never read.
 - 3032 -> 3068. +36 for the DIFFUSER, which was one closed loft and read as
 - a featureless grey slab from directly behind — the view a chase camera
@@ -802,7 +802,7 @@ as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 - the deck it is meant to lie on. Both fixes are comment-heavy because the
 - fin one is only safe in the lowering direction.
 - 3121 -> 3164. Two NEW part knobs, both measured live against the range the
-- catalog ships (tools/parts-sweep.mjs --clamp-scan): cockpit.mirror moves the
+- catalog ships (tools/car/parts-sweep.mjs --clamp-scan): cockpit.mirror moves the
 - widest element of the upper body 170 mm, and aero.fin 291 mm on the largest
 - flat plate at the highest point of the car. Neither section read a recipe at
 - all before. The fin comment carries its weight: its scale has to reach the

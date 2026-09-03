@@ -29,7 +29,7 @@ Commands:
   help
   status
   run                 # stdio MCP (.mcp.json → tools/playwright-mcp.sh run)
-  play [flags]        # host + open a screen + screenshot (tools/css-play.mjs)
+  play [flags]        # host + open a screen + screenshot (tools/ui/css-play.mjs)
   dom  [flags]        # same, --no-shot: structured DOM JSON only
 
 Pinned: isolated Chromium, headless, profile under scratch/playwright-mcp,
@@ -40,9 +40,9 @@ browser_snapshot (DOM/a11y tree), browser_evaluate (CSS / getComputedStyle /
 getBoundingClientRect), browser_take_screenshot.
 
 CLI extras for CSS play (not the MCP stdio server): play / dom wrap
-tools/css-play.mjs — localhost host, catalog --screen, stylesheet hot-swap
+tools/ui/css-play.mjs — localhost host, catalog --screen, stylesheet hot-swap
 (--css css/menus.css), structured DOM dump (boxes + computed + tokens).
-See: node tools/css-play.mjs --help
+See: node tools/ui/css-play.mjs --help
 
 Loopback only for the game (http://127.0.0.1). github.io stays TinyFish.
 Park about:blank before any Playwright test group.
@@ -78,11 +78,11 @@ cmd_run() {
 }
 
 cmd_play() {
-  exec node "$ROOT/tools/css-play.mjs" "$@"
+  exec node "$ROOT/tools/ui/css-play.mjs" "$@"
 }
 
 cmd_dom() {
-  exec node "$ROOT/tools/css-play.mjs" --no-shot "$@"
+  exec node "$ROOT/tools/ui/css-play.mjs" --no-shot "$@"
 }
 
 cmd="${1:-help}"

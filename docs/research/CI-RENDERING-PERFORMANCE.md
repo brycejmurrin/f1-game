@@ -6,7 +6,7 @@ local Playwright runs died to their own timeouts rather than to failures.
 **Part 1 is external findings, not measurements on this repo** — every number in
 it is somebody else's, and the section headings exist to say which claims are
 worth spending an afternoon measuring here. **Part 2 is grounded**: its vertex
-counts come from `tools/verify-track.cjs --all` and its byte arithmetic from the
+counts come from `tools/track/verify-track.cjs --all` and its byte arithmetic from the
 real interleaved layout in `js/render/glx/glx.js`. Keep the two apart when quoting
 this file.
 
@@ -368,7 +368,7 @@ core WebGPU; the freeze was a cost call, not an API wall.
 # Part 2 — iOS Safari memory, and what Vegas actually costs
 
 Added the same day. This part **is** grounded in this repo: the vertex counts are
-`tools/verify-track.cjs --all` output and the byte arithmetic is the real
+`tools/track/verify-track.cjs --all` output and the byte arithmetic is the real
 interleaved layout in `js/render/glx/glx.js:479` (`fpv = 9 + mat + trk`).
 
 ## The external numbers
@@ -415,7 +415,7 @@ structural work, noting that `verify-track vegas` prints 1,825,925 prop verts an
 trigger". This part supplies the number that item was missing. The gate is cheap
 — `verify-track.cjs` already computes the count, so it is a threshold and a
 non-zero exit — and the ratchet pattern already used by
-`tools/clip-baseline.json` and `tools/coplanar-baseline.json` fits exactly: pin
+`tools/track/clip-baseline.json` and `tools/track/coplanar-baseline.json` fits exactly: pin
 today's per-circuit counts, fail on regression, let a deliberate increase be a
 visible edit to the baseline.
 

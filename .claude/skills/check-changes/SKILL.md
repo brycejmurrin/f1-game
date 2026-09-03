@@ -38,7 +38,7 @@ Pinned flags without re-learning CLIs (Cloud has no `.mcp.json` catalog):
 ./tools/apex-tools-mcp.sh call apex_verify_change_fast '{"dryRun":true}'
 ./tools/apex-tools-mcp.sh call apex_pick_tests '{}'
 ./tools/apex-tools-mcp.sh call apex_bump_cache_check '{}'
-node tools/verify-track.cjs monza          # one circuit (plain CLI; no wrap)
+node tools/track/verify-track.cjs monza          # one circuit (plain CLI; no wrap)
 ./tools/apex-tools-mcp.sh smoke
 ```
 

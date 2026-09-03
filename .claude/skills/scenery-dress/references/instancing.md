@@ -32,11 +32,11 @@ baking. Plan + reuse numbers: `docs/research/SCENE-GRAPH-PLAN.md`.
 
 ```sh
 ./tools/apex-tools-mcp.sh call apex_graph_parity '{"base":"HEAD~1","id":"monza"}'
-node tools/graph-parity.cjs <id>            # or --all
-BASE=<ref> node tools/graph-parity.cjs --all
+node tools/track/graph-parity.cjs <id>            # or --all
+BASE=<ref> node tools/track/graph-parity.cjs --all
 npm run test:tooling-fast
 node tools/ci/test-bg.mjs gfx                # instanced-draw.spec.js
-node tools/verify-track.cjs <id>
+node tools/track/verify-track.cjs <id>
 ```
 
 Related: **webgl-debug**, **debug-tracks**.
@@ -63,8 +63,8 @@ judging a `graph-parity` mismatch.
 
 3. **Parity gate** — geometry must match exactly:
    ```sh
-   node tools/graph-parity.cjs <id>
-   BASE=<pre-migration-ref> node tools/graph-parity.cjs --all
+   node tools/track/graph-parity.cjs <id>
+   BASE=<pre-migration-ref> node tools/track/graph-parity.cjs --all
    ```
    Default `BASE=HEAD` on a clean tree only checks working-tree drift.
    Tolerance is 1e-6 m on positions; indices and `mat` must match exactly.

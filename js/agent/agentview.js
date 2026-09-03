@@ -1213,7 +1213,7 @@ const AgentView = (function () {
         // A SCREEN, not a verdict. Registry boxes are world-axis-aligned and
         // carry no orientation, so an elongated object on a curve inflates its
         // apparent lateral extent: on Monza this lists 6 candidates where the
-        // vertex-level ground truth (tools/measure-props-over-road.mjs) is 0.
+        // vertex-level ground truth (tools/track/measure-props-over-road.mjs) is 0.
         propsOverRoadCandidates: propsOverRoad.slice(0, cap),
         terrainHoles: holes.slice(0, cap),
         groundCliffs: cliffs.slice(0, cap),
@@ -1222,7 +1222,7 @@ const AgentView = (function () {
                             invalid: (md.invalid || []).slice(0, cap) },
         profile: o.profile ? profile : undefined,
         authoritative: {
-          propsOverRoad: "tools/measure-props-over-road.mjs (vertex-level)",
+          propsOverRoad: "tools/track/measure-props-over-road.mjs (vertex-level)",
           terrainOverRoad: "tests/specs/terrain-over-road.spec.js",
         },
         note: "pass {profile:true} for the full lateral ground table. A terrain "

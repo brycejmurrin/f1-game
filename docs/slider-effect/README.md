@@ -1,6 +1,6 @@
 # Slider-effect A/B sheets
 
-Per-knob visual A/B sheets produced by `tools/slider-effect.mjs --live`.
+Per-knob visual A/B sheets produced by `tools/lighting/slider-effect.mjs --live`.
 
 Each subfolder `<track>-<condition>-<knob>/` contains `sheet.png`:
 - **A** (left) — default value
@@ -14,10 +14,10 @@ Each subfolder `<track>-<condition>-<knob>/` contains `sheet.png`:
 
 ```sh
 # Single knob A/B
-node tools/slider-effect.mjs --live lampLevel --track monza
+node tools/lighting/slider-effect.mjs --live lampLevel --track monza
 
 # Batch by IDs
-node tools/slider-effect.mjs --live --track monza \
+node tools/lighting/slider-effect.mjs --live --track monza \
   --ids exposureMul,contrast,saturation,bloomMul,glareStr,neonBoost,lampLevel,ambientMul,fogDensityMul,daySkyBlue
 
 # Copy summary and sheets into docs/slider-effect/

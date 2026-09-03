@@ -147,7 +147,7 @@ if (!CHECKS[which]) {
   console.error(`usage: node tools/check/check-physics.mjs <${Object.keys(CHECKS).join("|")}>`);
   process.exit(1);
 }
-const ROOT = fileURLToPath(new URL("../../..", import.meta.url)).replace(/[\\/]$/, "");
+const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const srv = await startStaticServer(ROOT);
 BASE = srv.url.replace(/\/?$/, "");
 try {

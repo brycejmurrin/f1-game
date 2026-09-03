@@ -320,7 +320,7 @@ state that already exists. Highest value per line of code.
 **Phase 2 — `visible()` (shipped; now `scene({visible:true})`).** Export the two frustum functions; add the query.
 
 **Phase 3 — prop registry.** The only phase that touches the build path, so
-the only one that needs `tools/verify-track.cjs` and the scenery contract test
+the only one that needs `tools/track/verify-track.cjs` and the scenery contract test
 (`tests/unit/scenery-api-contract.test.mjs`, which freezes a 111-member API) run
 against it. Vertex-budget sensitive.
 

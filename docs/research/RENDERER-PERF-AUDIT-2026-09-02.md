@@ -426,7 +426,7 @@ The value of a second read is mostly in what it takes AWAY.
    `glx/chunked.js:211`'s `!F.roadChunkLamps` is always true and PER-CHUNK ROAD
    is a dead knob on the default backend — while 24 shipped presets set it to 1
    and `game.js:6038` still builds the second GPU copy of the road for it. WGX
-   does the plumbing. `tools/slider-effect-live.mjs:124` already records the
+   does the plumbing. `tools/lighting/slider-effect-live.mjs:124` already records the
    verdict "inert"; this names why.
 4. **TLX: `tlx-shadow.castInstanced` has no update range at all** — pool slots
    are sized to the largest batch ever seen, so the upload is `cap × 64 B`, per

@@ -82,7 +82,7 @@ restatement of it since) is:
 4. Change, then refactor, re-running those tests after each small step.
 
 The step everyone skips is 3, and it is the step that makes the rest safe.
-**This repo has an unusually good example of it already**: `tools/graph-parity.cjs`
+**This repo has an unusually good example of it already**: `tools/track/graph-parity.cjs`
 builds every track from a baseline ref *and* the working tree and diffs prop
 geometry vertex for vertex. That is a characterization test in the strict sense —
 it asserts nothing about correctness, only that behaviour did not change — and it

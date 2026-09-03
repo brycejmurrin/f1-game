@@ -22,7 +22,7 @@
  * Three layout intuitions, three measurements, three reversals.
  *
  * WHEN TO USE IT, versus the two neighbours it does not replace:
- *   - tools/layout-audit.mjs — the MATRIX. Every screen x viewport x scale,
+ *   - tools/ui/layout-audit.mjs — the MATRIX. Every screen x viewport x scale,
  *     asserted, reported. Use it to know whether anything is broken anywhere.
  *   - the Playwright suite — the REGRESSION net, parallel and CI-gated.
  *   - this — ONE question, interactively, against a running build. Especially an

@@ -60,7 +60,7 @@ drawn inside the mark and so answers to the mark alone.
 ```sh
 node tools/ci/test-bg.mjs car
 node tools/ci/test-bg.mjs modes              # research locks / ownership UI — no test:career
-node tools/audit-parts.mjs [--cats=engine,aero]
+node tools/car/audit-parts.mjs [--cats=engine,aero]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
 ```
 

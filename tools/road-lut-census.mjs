@@ -82,7 +82,7 @@ export function loadBake() {
 
 /** Build a circuit headlessly and hand back its road geometry. */
 export function roadGeometry(circuitId) {
-  const { buildContext } = require(path.join(ROOT, "tools/verify-track.cjs"));
+  const { buildContext } = require(path.join(ROOT, "tools/track/verify-track.cjs"));
   const Tracks = buildContext();
   Tracks.setKeepGeometry(true);
   const def = Tracks.LIST.find((d) => d.id === circuitId);
@@ -231,7 +231,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const bake = loadBake();
   let ids = named.length ? named : DEFAULT;
   if (all) {
-    const { buildContext } = require(path.join(ROOT, "tools/verify-track.cjs"));
+    const { buildContext } = require(path.join(ROOT, "tools/track/verify-track.cjs"));
     ids = buildContext().LIST.map((d) => d.id);
   }
   const rows = [];

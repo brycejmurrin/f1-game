@@ -1,7 +1,7 @@
 # Scene graph + detailed models — staged plan
 
 > **Status: S0–S2 infrastructure has LANDED** (`js/track/scenery/graph.js`,
-> `tools/graph-parity.cjs`, `tests/unit/track-graph.test.mjs`), with sixteen emitters
+> `tools/track/graph-parity.cjs`, `tests/unit/track-graph.test.mjs`), with sixteen emitters
 > migrated: `windowPane`, `crowd`, `fence`, `guardrail`, `tyreWall`, `wall`,
 > `facadeRail`, `streetLamp`, `facadeMullion`, `streetBarrier`, `facadeNeon`,
 > `crowdRiser`, `billboard`, `marshalPost`, `buildingMass`, `pine`. All 24 circuits are at exact geometry parity — nothing renders
@@ -61,7 +61,7 @@ identical pixels.
 > reduction is real but has a prerequisite the estimate missed — re-parameterising
 > the emitter to be scale-linear, which moves vertices and so belongs in S4.
 
-Whole-track totals (`node tools/verify-track.cjs <id>`):
+Whole-track totals (`node tools/track/verify-track.cjs <id>`):
 
 | track | props verts | ≈ props VBO | placements |
 |---|---|---|---|
@@ -150,7 +150,7 @@ body, window pane) into factories that emit **at origin in canonical
 orientation** into a local buffer, keyed `id + variant`. The existing helpers
 keep their signatures and blit the factory output at the placement transform.
 
-*Gate:* `node tools/verify-track.cjs --all` reports **identical vertex counts**
+*Gate:* `node tools/track/verify-track.cjs --all` reports **identical vertex counts**
 for all 24 circuits. Byte-identical geometry or the extraction is wrong.
 
 ### S1 — the node graph
@@ -231,7 +231,7 @@ on-track `rejBox`/`rejRad` decisions, the `absorb*` occupancy writes and the
 emitted geometry are the same as when the helper emitted inline. Recording
 triangles instead would have bypassed all of that.
 
-`tools/graph-parity.cjs` is the gate: it materialises a baseline git ref with
+`tools/track/graph-parity.cjs` is the gate: it materialises a baseline git ref with
 `git archive`, builds every track twice in one process — baseline tree and
 working tree — and diffs `propsGeo`/`glassGeo`/`waterGeo`/`roadGeo`/`terrainGeo`
 vertex for vertex, plus the `note()` registry count.

@@ -8,7 +8,7 @@
  * no bespoke scenery — with no exception and no visible error. A tag assertion
  * cannot see it. So: install the service worker online, go OFFLINE, then race a
  * circuit this session has never raced, and compare the instanced-prop count
- * against tools/verify-track.cjs, which builds the same circuit in Node with
+ * against tools/track/verify-track.cjs, which builds the same circuit in Node with
  * the closure guaranteed present.
  */
 const { chromium } = require("playwright");
@@ -39,7 +39,7 @@ const srv = http.createServer((req, rep) => {
 
 srv.listen(0, "127.0.0.1", async () => {
   const base = `http://127.0.0.1:${srv.address().port}`;
-  const want = Number((execFileSync("node", ["tools/verify-track.cjs", TRACK], { encoding: "utf8" })
+  const want = Number((execFileSync("node", ["tools/track/verify-track.cjs", TRACK], { encoding: "utf8" })
     .match(/— (\d+) instanced/) || [])[1]);
   console.log(`warm=${WARM} (raced online)   cold=${TRACK} (first touched OFFLINE, Node says ${want})`);
   // Chromium comes from harness.mjs's ladder (CHROME / PW_CHROMIUM / the known

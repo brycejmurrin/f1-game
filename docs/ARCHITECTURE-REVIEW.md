@@ -46,7 +46,7 @@ than behaviour:
 | `tests/unit/test-groups.test.mjs` | the test taxonomy: every group real, every source dir routed, the topical browser groups DISJOINT (2026-09 regroup), `docs/TESTING.md` in step, `RENDER_SPECS` bidirectional |
 | `tests/unit/docs-integrity.test.mjs` | live docs reference only files that exist; counts match the repo; no live doc reaches into the archive |
 | `tests/unit/deploy-staging.test.mjs` | every path shipped code can fetch is inside the Pages upload allow-list |
-| `tools/graph-parity.cjs` | scene-graph migrations are vertex-for-vertex identical to a baseline ref |
+| `tools/track/graph-parity.cjs` | scene-graph migrations are vertex-for-vertex identical to a baseline ref |
 | `tests/unit/backend-surface-parity.test.mjs` | a renderer backend declares every GLX member, absent ones as explicit `undefined` (§5) |
 | `tests/unit/ratchets.test.mjs` + `tests/data/ratchets.json` | the game.js size ceilings (lines, code lines, `G` members, column-0 lets) — a ratchet, so extraction lowers them and regrowth fails |
 | `tests/unit/vstd-invariant.test.mjs` + `tools/check/vstd-lint.mjs` | no `.speed` compared against a numeric literal without a written reason (§3) |
@@ -175,7 +175,7 @@ Four decisions that solve their problem unusually well:
   the right coordinate, not clamped after the fact.
 - **`TrackGraph` records ops, not triangles** — scenery replay runs through the
   same guarded emitters, so geometry and on-track suppression are unchanged by
-  construction, and `tools/graph-parity.cjs` proves it vertex-for-vertex
+  construction, and `tools/track/graph-parity.cjs` proves it vertex-for-vertex
   against a baseline ref. That gate is the pattern to apply more widely.
 
 ---
@@ -223,12 +223,12 @@ on the 08-18 perf-hunt board, not this register.
   browser re-measure not run in this session.** COTA's amphitheater now emits
   from its declared origin (the 8 m declared-vs-built offset). Indianapolis
   shortens the oval stand and colour-band chords that covered the infield at
-  racing 0.33. Re-measure with `tools/measure-props-over-road.mjs` before
+  racing 0.33. Re-measure with `tools/track/measure-props-over-road.mjs` before
   treating the spec as green.
 
   **Both offenders are located and are the same class: a big bespoke
   `structure`, not foliage, barriers or lighting.** Measured with
-  `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs`, then matched to
+  `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs`, then matched to
   a prop by footprint via `a.scene({radius})` (`props[].at` / `sizeM`):
   - **COTA** max **4.79** at frac 0.877, world (709.1, 41.6). The intruding
     triangles stack vertically at one XZ point (`triY` 1.36 / 2.76 / 4.16), so
@@ -278,7 +278,7 @@ on the 08-18 perf-hunt board, not this register.
   must be lateral-only, or it will fail 40 circuits on harmless apron slack.
   Confirmed PRE-EXISTING at
   `d7a1158`, not introduced by the instancing-key hoist: `BASE=HEAD~1 node
-  tools/graph-parity.cjs cota indianapolis` returns exact parity
+  tools/track/graph-parity.cjs cota indianapolis` returns exact parity
   (max |Δpos| 0.0e+0 m), and a geometry test over identical geometry returns an
   identical verdict. Unseen because `test:scenery` is not in the CI smoke job —
   the same gap that let `agent-drive-bench` sit red, and the standing argument
@@ -602,7 +602,7 @@ Deferred with reasoning, none lost:
   (`Math.max(lo, Math.min(hi, v))`) was **not a bug** — the two forms differ
   only above an inverted range, on `-0`, and on a non-number argument, and all
   eight of its call sites pass finite numbers with `lo < hi`; migrated anyway,
-  proven vertex-for-vertex by `tools/graph-parity.cjs --all`. Deliberately
+  proven vertex-for-vertex by `tools/track/graph-parity.cjs --all`. Deliberately
   LEFT inline: `updateCar()`'s signed wrap (physics inner loop, and its
   characterization golden is a browser spec), and `headInterp`/`yawVisInterp`,
   which fold an unbounded heading and need a loop rather than one fold.

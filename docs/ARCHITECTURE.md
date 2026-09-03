@@ -377,7 +377,7 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   `tests/unit/load-order.test.mjs`. Its `HARD_EDGES` list records **eval-time load
   dependencies** (B destructures A's global at eval time, so A must precede B —
   e.g. shaders before glx.js). Its `TRACK_VM` list names the files
-  `tools/verify-track.cjs` and the VM-based tests load into a bare Node VM, so
+  `tools/track/verify-track.cjs` and the VM-based tests load into a bare Node VM, so
   headless guards follow the layout automatically.
 - **`tools/check/extract-module.mjs`** assists further extractions from game.js
   (moves a block, wires the `create(G)` boilerplate, updates manifest + tags).
@@ -609,7 +609,7 @@ track engine — `Tracks.build(def, { night, gfx })`. `tracks.js` resolves
 `const G = (opts && opts.gfx) || (typeof GLX !== "undefined" ? GLX : null)` and
 builds every mesh through `G` (`createMesh` / `createChunkedMesh` / `mobileTier`)
 instead of reaching the `GLX` global directly. The `GLX` fallback in that line
-serves only the Node-VM build guard (`tools/verify-track.cjs`) and the VM tests,
+serves only the Node-VM build guard (`tools/track/verify-track.cjs`) and the VM tests,
 which install a stub `GLX` rather than injecting `opts.gfx`. On an opt-in, game.js
 still descriptor-copies the backend's methods onto the `GLX` object — that
 monkey-patch is retained purely as the **object-identity compatibility contract**

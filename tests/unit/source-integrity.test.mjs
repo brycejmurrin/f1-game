@@ -14,7 +14,7 @@
  *      unlayered rule beats every layer — so roughly half a stylesheet quietly
  *      changed precedence. A stylesheet does not report errors; it just stops
  *      containing what you thought.
- *   3. tools/layout-audit.mjs surveyed 38 screens while the shell had 39. The
+ *   3. tools/ui/layout-audit.mjs surveyed 38 screens while the shell had 39. The
  *      missing one was #track-detail, which is exactly why a landscape
  *      dead-band in it survived a 380-cell survey and had to be found by hand.
  *      A survey is only as good as its inventory, and nothing checked the
@@ -218,9 +218,9 @@ test("index.html's tags are balanced and correctly nested", () => {
     "silently re-nests around it, and a whole screen ends up inside the wrong parent");
 });
 
-test("tools/menu-screens.mjs knows about every screen in the shell", () => {
+test("tools/ui/menu-screens.mjs knows about every screen in the shell", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  const audit = fs.readFileSync(path.join(ROOT, "tools/menu-screens.mjs"), "utf8");
+  const audit = fs.readFileSync(path.join(ROOT, "tools/ui/menu-screens.mjs"), "utf8");
 
   const shell = new Set([
     ...[...html.matchAll(/<dialog id="([a-z0-9-]+)"/g)].map((m) => m[1]),
@@ -251,7 +251,7 @@ test("tools/menu-screens.mjs knows about every screen in the shell", () => {
     !EXEMPT.has(id) && !known.has(id) && !known.has(id.replace(/-/g, "")));
 
   assert.deepEqual(missing, [],
-    "a screen exists in index.html that tools/layout-audit.mjs never opens, so the " +
+    "a screen exists in index.html that tools/ui/layout-audit.mjs never opens, so the " +
     "layout survey silently does not cover it. Add it to SCREENS in menu-screens.mjs — or, if it " +
     "genuinely cannot be surveyed, add it to EXEMPT above with the reason, " +
     "rather than leaving the gap unstated");

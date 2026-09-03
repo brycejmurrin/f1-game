@@ -2,7 +2,7 @@
 
 Project skills for recurring agent workflows. Each is a `SKILL.md` (auto-matched
 from its `description`, or via `/<name>`), grounded in `__apex`,
-`tools/verify-track.cjs`, and `npm run test:*` groups.
+`tools/track/verify-track.cjs`, and `npm run test:*` groups.
 
 **A skill is when/how, not the command.** The CLI lives under `tools/`. Twelve
 CLIs are pinned as `apex_*` MCP tools; most are not. Full map (three MCP
@@ -27,7 +27,7 @@ scenery-dress; `debug-state` → agent-view; `cross-backend-parity` →
 | **car-viewer** | Inspecting the car in isolation (no track) — `tools/carview.html`, `tools/car/render-car.mjs`, `tools/car/carshot.mjs`. |
 | **career-mode** | DRIVER CAREER, MY TEAM, career saves, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs. |
 | **check-changes** | Pre-push validation — `verify-change.mjs --fast` / `--plan` + batched `test-bg`; the cache bump (`references/bump.md`), a Playwright timeout triage (`references/triage.md`), merging with / pushing to the deploy branch (`references/deploy.md`). |
-| **css-play** | Iterating on one menu/HUD stylesheet — host localhost, open a screen, dump DOM, hot-swap `css/`, screenshot (`tools/css-play.mjs` / `playwright-mcp.sh play|dom`). |
+| **css-play** | Iterating on one menu/HUD stylesheet — host localhost, open a screen, dump DOM, hot-swap `css/`, screenshot (`tools/ui/css-play.mjs` / `playwright-mcp.sh play|dom`). |
 | **data-hub** | Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1, `js/data/*`. |
 | **debug-cameras** | Switch or check camera modes, cockpit/chase/orbit/cinematic/roadside shots, `camState`/`viewState`, camera lag. |
 | **debug-tracks** | Track geometry, corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, `groundY`. |

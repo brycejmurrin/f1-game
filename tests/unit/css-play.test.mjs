@@ -16,7 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const TOOL = path.join(ROOT, "tools", "css-play.mjs");
+const TOOL = path.join(ROOT, "tools", "ui", "css-play.mjs");
 const PW = path.join(ROOT, "tools", "playwright-mcp.sh");
 
 const {
@@ -26,7 +26,7 @@ const {
   assertCssRel,
   collectDomInfo,
   SCREENS,
-} = await import("../../tools/css-play.mjs");
+} = await import("../../tools/ui/css-play.mjs");
 
 test("parseCssPlayArgs: screen, css hot-swap, sel, no-shot, json", () => {
   const a = parseCssPlayArgs([
@@ -70,7 +70,7 @@ test("assertCssRel stays inside css/ and exists on disk", () => {
 });
 
 test("every css-play screen id is a menu-screens screen", () => {
-  const audit = fs.readFileSync(path.join(ROOT, "tools", "menu-screens.mjs"), "utf8");
+  const audit = fs.readFileSync(path.join(ROOT, "tools", "ui", "menu-screens.mjs"), "utf8");
   const known = new Set([...audit.matchAll(/id:\s*"([a-z0-9-]+)"/g)].map((m) => m[1]));
   const ids = Object.keys(SCREENS);
   assert.ok(ids.length >= 6, `expected the title-path set, got ${ids.join(",")}`);
@@ -126,7 +126,7 @@ test("css-play --list prints screen ids without Chromium", () => {
 
 test("the tool uses harness.mjs and never bumps cache", () => {
   const src = fs.readFileSync(TOOL, "utf8");
-  assert.match(src, /from ["']\.\/harness\.mjs["']/);
+  assert.match(src, /from ["']\.{1,2}\/(?:lib\/)?harness\.mjs["']/);
   assert.doesNotMatch(src, /bump-cache\.mjs/);
   assert.doesNotMatch(src, /spawn\(\s*["']python3["']/);
   assert.match(src, /visibility["']:\s*["']hidden["']|#game[\s\S]{0,80}hidden/);

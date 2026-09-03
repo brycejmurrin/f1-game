@@ -10,7 +10,7 @@
 // anywhere.
 //
 // This is the cheap standing guard. The exhaustive version is the scale axis on
-// the three fit tools (`--scale=`, tools/ui-scale-axis.mjs) — a matrix of
+// the three fit tools (`--scale=`, tools/ui/ui-scale-axis.mjs) — a matrix of
 // screen x viewport x scale that is far too slow to run per commit. What is
 // asserted here is the part that must never regress:
 //
@@ -38,7 +38,7 @@ const SCALES = [50, 100, 115, 130, 150, 200];
 //
 // THE GARAGE IS A STEP, NOT A SIDE DOOR: #select's START opens #carsetup, and
 // the garage's DONE goes on to #race-settings. There is no `sel-setup` any
-// more. tools/menu-fit.mjs and tools/fit-audit.mjs both still carried the old
+// more. tools/ui/menu-fit.mjs and tools/ui/fit-audit.mjs both still carried the old
 // route and had been quietly reporting "root missing/hidden" for those two
 // screens; they are fixed alongside this.
 const SCREENS = [

@@ -454,7 +454,7 @@ test("aerial-survey.mjs is folded into survey-track --oblique", async () => {
   assert.match(src, /--oblique/);
   assert.match(src, /oblique\$\{name\}/);
   assert.match(src, /dirs = \{ N: 0, E:/);
-  const { parseSurveyTrackArgs } = await import("../../tools/survey-track.mjs");
+  const { parseSurveyTrackArgs } = await import("../../tools/track/survey-track.mjs");
   const mid = parseSurveyTrackArgs(["monaco", "--oblique", "0.1,0.5"]);
   assert.equal(mid.id, "monaco");
   assert.equal(mid.label, "survey");

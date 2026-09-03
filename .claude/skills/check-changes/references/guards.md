@@ -8,8 +8,8 @@ expectation vs real regression.
 1. **Build guard for any track touched** — must print `OK <id>: ...`
    (`FAIL <id>: <msg>` means the game would strand on the menu):
    ```sh
-   node tools/verify-track.cjs <id>
-   node tools/verify-track.cjs --all    # js/track/* engine edits
+   node tools/track/verify-track.cjs <id>
+   node tools/track/verify-track.cjs --all    # js/track/* engine edits
    ```
    `tools/ci/verify-change.mjs` already runs this inline when the plan names a
    circuit.
@@ -19,8 +19,8 @@ expectation vs real regression.
    directory whose correctness check lives entirely outside the
    `test:<group>` map:
    ```sh
-   node tools/graph-parity.cjs --all
-   BASE=<pre-change-ref> node tools/graph-parity.cjs --all
+   node tools/track/graph-parity.cjs --all
+   BASE=<pre-change-ref> node tools/track/graph-parity.cjs --all
    ```
    Builds each track twice (baseline ref + working tree) and diffs emitted
    prop geometry vertex for vertex. `verify-change` runs this inline when

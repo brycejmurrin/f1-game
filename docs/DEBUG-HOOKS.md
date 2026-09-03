@@ -1416,7 +1416,7 @@ advancing from the value you set unless the scene is also `headless()`.
 
 ### `trackGraph() → graph | null`
 The built circuit's `TrackGraph` (instanced-scenery op record) — see
-`docs/RENDERERS.md` and `tools/graph-parity.cjs`. `null` before a build.
+`docs/RENDERERS.md` and `tools/track/graph-parity.cjs`. `null` before a build.
 
 ### `weather(w?) → "dry" | "wet" | "rain" | "overcast" | "fog"`
 Get or set race weather. Called with no argument returns the current mode.
@@ -2359,7 +2359,7 @@ spent trusting a list instead of the picture.
 
 `scene()` answers "what did this circuit ASK for". To ask "what is actually in
 the buffers", diff the vertex count with the call removed:
-`node tools/verify-track.cjs <id>` before and after commenting the line out —
+`node tools/track/verify-track.cjs <id>` before and after commenting the line out —
 identical `props N` means nothing was emitted. Run a control first (add a loop
 of throwaway `addBox` calls and confirm the number moves), because two equal
 readings look the same whether the instrument works or is simply not seeing
@@ -2590,7 +2590,7 @@ otherwise swamp the report:**
 `clean` to say so. Registry boxes are world-axis-aligned with no orientation, so
 a 160 m grandstand on a curve inflates its apparent lateral extent: Monza lists
 4 candidates where the vertex-level ground truth is **0**. Confirm with
-`tools/measure-props-over-road.mjs`, which the payload names under
+`tools/track/measure-props-over-road.mjs`, which the payload names under
 `authoritative`.
 
 Monza reports `clean: true` while Spa, Monaco and Vegas do not — that

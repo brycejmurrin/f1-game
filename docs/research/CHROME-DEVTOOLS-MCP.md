@@ -36,7 +36,7 @@ Interactive twin of Playwright — not a CI gate. Skills:
    the brand measured x=86 w=348 h=325 at `opacity: 1` while the PNG showed
    empty space, and `take_snapshot` listed 20 painted elements with no
    duplicates. A Playwright capture of the identical page
-   (`node tools/layout-audit.mjs --screens=title --viewports=… --shots`)
+   (`node tools/ui/layout-audit.mjs --screens=title --viewports=… --shots`)
    rendered correctly both times.
    **So: measure with `evaluate_script`, and if you need a picture, take it with
    Playwright.** An MCP screenshot is fine for "is the app up, roughly", never

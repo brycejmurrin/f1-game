@@ -158,7 +158,7 @@ node tools/ci/test-bg.mjs --status              # running / how each ended
 npm run test:tiny                            # start here: page loads, __apex responds
 npm run test:driving                         # the driving model, collisions, debris (browser; ~30 min on SwiftShader)
 npm test -- tests/specs/autopilot.spec.js          # single file
-node tools/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
+node tools/track/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
 ```
 
 `docs/TESTING.md` is the full reference: every group, every spec, the fixtures

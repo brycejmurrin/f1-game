@@ -1,6 +1,6 @@
 // slider-effect.test.mjs — the no-browser LIGHTING TUNER classifier.
 //
-// Guards tools/slider-effect.mjs: TUNE_DEFS parse, gate/risk filters, and
+// Guards tools/lighting/slider-effect.mjs: TUNE_DEFS parse, gate/risk filters, and
 // the documented failure-mode classes (docs/LIGHTING-TUNER-SLIDERS.md).
 // No Chromium. Pixel MAD is the wrong instrument; this is consumer + gates.
 //
@@ -15,7 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const TOOL = path.join(ROOT, "tools/slider-effect.mjs");
+const TOOL = path.join(ROOT, "tools/lighting/slider-effect.mjs");
 
 function run(args) {
   return spawnSync(process.execPath, [TOOL, ...args], {
@@ -30,7 +30,7 @@ function json(args) {
 }
 
 test("the tool exists", () => {
-  assert.ok(existsSync(TOOL), "tools/slider-effect.mjs missing");
+  assert.ok(existsSync(TOOL), "tools/lighting/slider-effect.mjs missing");
 });
 
 test("--help exits 0 and documents --live visual filter plus the failure-mode table", () => {
@@ -144,7 +144,7 @@ for x in range(8, 16):
 a.save(d / "a.png"); b.save(d / "b.png")
 `], { encoding: "utf8" });
     assert.equal(mk.status, 0, mk.stderr);
-    const view = path.join(ROOT, "tools/slider-effect-view.py");
+    const view = path.join(ROOT, "tools/lighting/slider-effect-view.py");
     const r = spawnSync("python3", [view, path.join(dir, "a.png"), path.join(dir, "b.png"),
       "--out", dir, "--hud-crop", "0"], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
@@ -159,8 +159,8 @@ a.save(d / "a.png"); b.save(d / "b.png")
 });
 
 test("every TUNE_DEFS knob has a valid live recipe (no browser)", async () => {
-  const { classifyKnobs, loadTuneDefs } = await import("../../tools/slider-effect.mjs");
-  const { livePlan, RECIPE_BY_ID } = await import("../../tools/slider-effect-live.mjs");
+  const { classifyKnobs, loadTuneDefs } = await import("../../tools/lighting/slider-effect.mjs");
+  const { livePlan, RECIPE_BY_ID } = await import("../../tools/lighting/slider-effect-live.mjs");
   const knobs = classifyKnobs(ROOT);
   const defs = loadTuneDefs(ROOT);
   const byDef = new Map(defs.map((d) => [d.id, d]));
@@ -187,8 +187,8 @@ test("every TUNE_DEFS knob has a valid live recipe (no browser)", async () => {
 });
 
 test("documented live recipes: weather / far-clip / traffic / stars", async () => {
-  const { classifyKnobs, loadTuneDefs } = await import("../../tools/slider-effect.mjs");
-  const { livePlan } = await import("../../tools/slider-effect-live.mjs");
+  const { classifyKnobs, loadTuneDefs } = await import("../../tools/lighting/slider-effect.mjs");
+  const { livePlan } = await import("../../tools/lighting/slider-effect-live.mjs");
   const knobs = Object.fromEntries(classifyKnobs(ROOT).map((k) => [k.id, k]));
   const defs = Object.fromEntries(loadTuneDefs(ROOT).map((d) => [d.id, d]));
   const plan = (id) => livePlan({ id }, knobs[id], defs[id], ROOT);
@@ -299,16 +299,16 @@ test("--from/--to without --shots stays a 2-shot A/B", () => {
 });
 
 test("sampleLevels rejects shots < 2 and a single --levels value", async () => {
-  const { loadTuneDefs } = await import("../../tools/slider-effect.mjs");
-  const { sampleLevels } = await import("../../tools/slider-effect-live.mjs");
+  const { loadTuneDefs } = await import("../../tools/lighting/slider-effect.mjs");
+  const { sampleLevels } = await import("../../tools/lighting/slider-effect-live.mjs");
   const def = loadTuneDefs(ROOT).find((d) => d.id === "lampLevel");
   assert.throws(() => sampleLevels(def, { shots: 1 }), /shots/);
   assert.throws(() => sampleLevels(def, { levels: "0.26" }), /levels/);
 });
 
 test("glareStr recipe uses night + full 0→max range", async () => {
-  const { classifyKnobs, loadTuneDefs } = await import("../../tools/slider-effect.mjs");
-  const { livePlan } = await import("../../tools/slider-effect-live.mjs");
+  const { classifyKnobs, loadTuneDefs } = await import("../../tools/lighting/slider-effect.mjs");
+  const { livePlan } = await import("../../tools/lighting/slider-effect-live.mjs");
   const knobs = Object.fromEntries(classifyKnobs(ROOT).map((k) => [k.id, k]));
   const defs = Object.fromEntries(loadTuneDefs(ROOT).map((d) => [d.id, d]));
   const plan = livePlan({ id: "glareStr" }, knobs.glareStr, defs.glareStr, ROOT);
@@ -321,7 +321,7 @@ test("glareStr recipe uses night + full 0→max range", async () => {
 });
 
 test("slider-effect-view.py --batch-summary produces summary.png", (t) => {
-  const VIEW = path.join(ROOT, "tools/slider-effect-view.py");
+  const VIEW = path.join(ROOT, "tools/lighting/slider-effect-view.py");
   const batchJson = path.join(ROOT, "artifacts/lighting/slider-effect/batch.json");
   if (!existsSync(batchJson)) {
     // t.skip, not a bare return: a return REPORTS PASS, so in CI (artifacts/
@@ -344,7 +344,7 @@ test("slider-effect-view.py --batch-summary produces summary.png", (t) => {
 });
 
 test("slider-effect-view.py produces diff.png alongside filter/heat/sheet", (t) => {
-  const VIEW = path.join(ROOT, "tools/slider-effect-view.py");
+  const VIEW = path.join(ROOT, "tools/lighting/slider-effect-view.py");
   const sampleDir = path.join(ROOT, "artifacts/lighting/slider-effect/bahrain-night-dry-lampLevel");
   if (!existsSync(path.join(sampleDir, "a.png"))) {
     t.skip("no live slider-effect artifacts (gitignored input) — the view pipeline needs a prior batch run");

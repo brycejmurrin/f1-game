@@ -770,7 +770,7 @@ def cmd_look_survey(argv: list[str]) -> None:
       artifacts/lighting/shots/<track>/<tod>-<wx>.png  — one per combo
       artifacts/lighting/shots/<track>/state.json       — lightState snapshot
       docs/look-survey/<track>_grid.png                 — stitched sheet
-        (run: python3 tools/look-survey-sheet.py <track>)
+        (run: python3 tools/lighting/look-survey-sheet.py <track>)
 
     loadTrack rebuilds only on day ↔ dawn/dusk/night flip; weather-only combos
     skip the rebuild poll. Combos are sorted so each track rebuilds at most once.
@@ -784,7 +784,7 @@ def cmd_look_survey(argv: list[str]) -> None:
       # Batch plan (shoots only missing PNGs)
       python3 tools/cdmcp-cli.py look-survey --plan artifacts/lighting/survey-plan.json
       # Stitch the contact sheet after shooting
-      python3 tools/look-survey-sheet.py monaco
+      python3 tools/lighting/look-survey-sheet.py monaco
     """
     p = argparse.ArgumentParser(prog="look-survey")
     p.add_argument("track", nargs="?", default=None)

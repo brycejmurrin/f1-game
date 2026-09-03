@@ -149,7 +149,7 @@ what stands where.
 
 This is internal to `js/track/`: the 111-member `scenery(api)` surface a circuit
 destructures is untouched, and circuit files need no changes. Gate any migration
-with `node tools/graph-parity.cjs --all`. See
+with `node tools/track/graph-parity.cjs --all`. See
 [research/SCENE-GRAPH-PLAN.md](research/SCENE-GRAPH-PLAN.md).
 
 ### Scenery themes and reusable kits
@@ -585,7 +585,7 @@ floodMastRing(48, { h: 38, dist: 16 });
 concreteCanyon(0.40, 0.55, -1, 0.6, { stripeCol: [0.05, 0.52, 0.28] });
 ```
 
-> Verify a track builds: `node tools/verify-track.cjs <id>` (catches a scenery
+> Verify a track builds: `node tools/track/verify-track.cjs <id>` (catches a scenery
 > that throws — which silently strands the game on the menu).
 
 ## On-track guard — props must never sit on/above the racing line
@@ -599,7 +599,7 @@ same for any new composite (`rejBox(centre,[w,h,d],basis)`), never a single
 `onTrack()` point, which misses a long/deep model swinging over a curving stretch.
 `RAW.*` emissions (crowd spectators) skip the guard for speed — keep them behind a
 shell. `tests/specs/props-over-road.spec.js` audits all 40 circuits and fails on any new
-intrusion; measure one with `TRACK=<id> PORT=<p> node tools/measure-props-over-road.mjs --shots`.
+intrusion; measure one with `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs --shots`.
 
 ## Pattern: an encircling mountain range
 

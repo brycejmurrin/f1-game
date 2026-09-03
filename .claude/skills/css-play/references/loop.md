@@ -5,7 +5,7 @@ Load from the SKILL.md index when opening a non-catalog screen, reading a
 
 ## 1. Host + open
 
-`tools/css-play.mjs` uses `harness.mjs` (`Cache-Control: no-store`, loopback).
+`tools/ui/css-play.mjs` uses `harness.mjs` (`Cache-Control: no-store`, loopback).
 Default viewport is the play-shape **852×393**. `--desktop` is 1280×720.
 
 Boot ritual (already in the CLI; paste into `browser_evaluate` only for a
@@ -20,7 +20,7 @@ const g = document.querySelector("#game");
 if (g) g.style.visibility = "hidden";
 ```
 
-Catalog (`node tools/css-play.mjs --list`):
+Catalog (`node tools/ui/css-play.mjs --list`):
 
 | id | root | clicks |
 |---|---|---|
@@ -39,7 +39,7 @@ garage, `help` → howtoplay, `vs` → vsfriend.
 
 Anything else: `--click "#mb-settings,#pm-advanced" --root "#advanced"`.
 Reach through the player's door. The authoritative inventory is `SCREENS`
-in `tools/layout-audit.mjs`.
+in `tools/ui/layout-audit.mjs`.
 
 Wait for the open transition (`opacity !== 0`, no running animations) before
 measuring. `#pmsettings` can take ~1.2 s.
@@ -67,7 +67,7 @@ you measured mid-transition, not a broken stylesheet.
 After editing `css/menus.css` (or any catalog sheet):
 
 ```sh
-node tools/css-play.mjs --screen settings --css css/menus.css
+node tools/ui/css-play.mjs --screen settings --css css/menus.css
 ```
 
 The tool finds the `<link rel="stylesheet">` whose href contains that path

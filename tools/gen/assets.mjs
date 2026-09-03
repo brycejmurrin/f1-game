@@ -581,7 +581,7 @@ async function loadGLTFModule() {
   };
   vm.createContext(ctx);
   // Top-level `const` is block-scoped inside a VM and never becomes a property
-  // of the sandbox — the same rewrite tools/verify-track.cjs applies.
+  // of the sandbox — the same rewrite tools/track/verify-track.cjs applies.
   vm.runInContext(src.replace(/^const\b/gm, "var"), ctx, { filename: "gltf.js" });
   return ctx.GLTF || (ctx.window && ctx.window.GLTF);
 }
@@ -1681,8 +1681,8 @@ async function main() {
   }
 }
 
-// Only when RUN, not when imported. tools/trace-logo.mjs reuses decodePNG and
-// tools/crest-sweep.mjs reuses encodePNG rather than adding a third copy of
+// Only when RUN, not when imported. tools/car/trace-logo.mjs reuses decodePNG and
+// tools/car/crest-sweep.mjs reuses encodePNG rather than adding a third copy of
 // each to the tree (there is already a second decoder in import-models.mjs).
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
   main().catch((e) => fail(e && e.stack ? e.stack : String(e)));

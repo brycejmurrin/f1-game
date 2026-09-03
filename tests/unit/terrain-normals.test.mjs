@@ -8,7 +8,7 @@
 // up-normal everywhere, all of that shaded as a level plane — an embankment, a
 // banked verge and a flat runoff all took exactly the same amount of sun. That
 // is the kind of defect that never throws and never shows up in a vertex count,
-// which is why it survived: `tools/verify-track.cjs` happily reported OK.
+// which is why it survived: `tools/track/verify-track.cjs` happily reported OK.
 //
 // So this asserts the SHADING INPUT directly, off the built mesh. A regression
 // back to a constant normal collapses the tilt spread to zero and fails here.
@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { buildContext } = require("../../tools/verify-track.cjs");
+const { buildContext } = require("../../tools/track/verify-track.cjs");
 
 // One street circuit and one open circuit: they take different paths through
 // buildTerrain (lats, floor grading, how much road passes close to itself), and

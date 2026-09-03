@@ -37,7 +37,7 @@ browser** (they read `__apex` JSON after `step()`).
 2. **Move the three slow unit files out of the edit loop.**
    cockpit-pale-surfaces, crest-marks, slider-effect (152 s of 315) → a
    `test:node-slow` group run by CI `guards` and by `verify-change` only when
-   `js/car/` or `tools/slider-effect.mjs` changed. Keep car-mesh-anchors in
+   `js/car/` or `tools/lighting/slider-effect.mjs` changed. Keep car-mesh-anchors in
    fast (it is the deploy gate for the wing check). Edit loop → ~160 s.
 3. **Split the 559 s sweeps subtest** into its own CI job; sweeps → ~7.5 min.
 4. **`test-bg` refuses to start at loadavg > 3** and defaults render-project

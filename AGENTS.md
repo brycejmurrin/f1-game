@@ -15,7 +15,7 @@ area doc — testing evidence goes in `docs/TESTING.md` §Field notes.
 npx serve -l 3456 .                 # run locally (or: python3 -m http.server 3456)
 npm run test:tooling-fast           # the no-browser guard suite (~30 s)
 node tools/ci/verify-change.mjs        # ONE command: fast gate + batched groups (start in background; --wait/--plan/--fast)
-node tools/verify-track.cjs <id>    # 2 s headless build check for track edits
+node tools/track/verify-track.cjs <id>    # 2 s headless build check for track edits
 node tools/ci/pick-tests.mjs           # which test GROUPS does this change need?
 node tools/ci/select-specs.mjs --since <ref>   # finer: per-SPEC selection, budgeted
 node tools/ci/test-bg.mjs <groups>     # run browser groups in the background
@@ -35,7 +35,7 @@ idle agent. Reference (groups, fixtures, field notes): `docs/TESTING.md`.
 | change touches | run |
 |---|---|
 | docs, tools, tests only | `npm run test:tooling-fast` |
-| one circuit (`js/circuits/<id>.js`) | `node tools/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
+| one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
 | WGX / `js/render/webgpu/` | `node tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU (`docs/TESTING.md` §Field notes) |
 | TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the SAME command with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest` (Apple/Metal, ~3 min) and read its Verdict step, which FAILS on GPU errors, failed env-probe faces, or `softAdapter` true on hardware. A software probe run is not evidence about a player's machine — two shipped defects were invisible to every software test and found the hour a real GPU was first used (`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a real GPU). `ci.yml`'s renderer-macos job (the `gfx` SPECS on Metal) no longer runs on push: nightly, or dispatch `ci.yml` with `renderer_macos: true` when a gfx spec or its launch config changed |

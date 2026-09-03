@@ -57,7 +57,7 @@ back to 15.
   or `tools/`. Per-circuit clip/float/coplanar baselines are exact in BOTH
   directions; geometry green on each lineage alone can be red on their union
   (measured 2026-08-14: one engine fix moved clip counts on 8 circuits).
-- A grown count needs `node tools/coplanar-audit.cjs <id>` and a dated note in
+- A grown count needs `node tools/track/coplanar-audit.cjs <id>` and a dated note in
   the test file before the baseline moves.
 - A shrunk count means the baseline must come DOWN (the anti-staleness
   assertion fails a cap above the measured count).

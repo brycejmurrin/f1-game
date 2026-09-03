@@ -66,7 +66,7 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | Need | Use | Not |
 |---|---|---|
 | Pre-push / did I break anything | skill **check-changes** → `apex_verify_change_fast` / `verify-agent` | `mcp-probe` |
-| One circuit build | `node tools/verify-track.cjs <id>` / skill **debug-tracks** | a browser group |
+| One circuit build | `node tools/track/verify-track.cjs <id>` / skill **debug-tracks** | a browser group |
 | Live working-tree canvas | skill **mcp-probe** (`chrome_*`) | apex-tools (no `--url`) |
 | Live `version.json` / Pages | **deploy-research** (host fetch / WebFetch / hosted TinyFish) | `mcp-probe`, curl github.io, `tinyfish-mcp.sh` in-container |
 | Batch screenshots | skill **playwright-probe** (`apex_shot` / `shot.mjs`) | Chrome MCP while Playwright runs |

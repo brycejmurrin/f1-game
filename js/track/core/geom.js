@@ -241,7 +241,7 @@ const TrackGeom = (function () {
   // about world +Y, then a translation. `mesh` is the {pos,nrm,col,mat,idx}
   // shape js/render/shared/assets.js parses out of the pack — but this function never
   // touches Assets or any renderer, so geom.js keeps loading under the bare VM
-  // sandbox (tools/verify-track.cjs) with no stubbing.
+  // sandbox (tools/track/verify-track.cjs) with no stubbing.
   //
   // Uniform scale only, deliberately: a non-uniform scale would need the
   // inverse-transpose for normals, and every prop here is a real-world object

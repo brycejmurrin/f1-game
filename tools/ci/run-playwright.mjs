@@ -10,7 +10,7 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { extname, join, resolve as resolvePath, sep } from "node:path";
 
-const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
