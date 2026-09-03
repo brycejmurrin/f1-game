@@ -1041,7 +1041,7 @@ let ttLaps = [];            // completed lap times this time-trial session
 let ttSessionTs = 0;        // session start stamp; entries at/after it are "yours, just now"
 let sectorStartT = 0;        // lapTime when current sector started
 let sectorIdx = 0, sectorValid = true;   // current sector + "entered it FORWARD" flag
-let sectorBests = [Infinity, Infinity, Infinity];  // best S1/S2/S3 times ever
+let sectorBests = [Infinity, Infinity, Infinity], fieldSectorBests = [Infinity, Infinity, Infinity];   // player's / the FIELD's (timing-screen purple)  // best S1/S2/S3 times ever
 let sectorLast = [null, null, null];               // last lap's S1/S2/S3 times
 let frameSky = {}, frame = {};
 // ---------- sky / weather animation state ----------
@@ -2296,7 +2296,12 @@ function getFieldWheelMeshes(team) {
 function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
   const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team);
   c.wheelSpin = ((c.wheelSpin || 0) + (c.speed / WHEEL_R) * dt) % (Math.PI * 2);
-  const sp = Math.sin(c.wheelSpin), cp = Math.cos(c.wheelSpin);
+  // Fronts have their own spin so a lock-up (c.wheelLock) freezes them while
+  // the car still moves; the flat spot it leaves bumps them once per rev.
+  c.wheelSpinF = ((c.wheelSpinF || 0) + (c.speed / WHEEL_R) * dt * (1 - (c.wheelLock || 0))) % (Math.PI * 2);
+  const spR = Math.sin(c.wheelSpin), cpR = Math.cos(c.wheelSpin);
+  const spF = Math.sin(c.wheelSpinF), cpF = Math.cos(c.wheelSpinF);
+  const flat = (c.flatSpot || 0) * 0.004 * (0.5 + 0.5 * cpF);
   const steerA = clamp(c.steerVis || 0, -1, 1) * WHEEL_STEER_VIS;
   const ws = wScale || 1;   // widen the tyre along its axle (cockpit view)
   for (let w = 0; w < WHEELS.length; w++) {
@@ -2304,13 +2309,14 @@ function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
     if (frontsOnly && wd.rear) continue;   // cockpit: rears sit beside the camera and blob the corners
     const yaw = wd.front ? steerA : 0;
     const ss = Math.sin(yaw), cs = Math.cos(yaw);
+    const sp = wd.front ? spF : spR, cp = wd.front ? cpF : cpR;
     const L = _wheelLocal;
     // Local X is the wheel axle (tyre width); scale that column by ws to widen.
     L[0] = cs*ws;    L[1] = 0;      L[2] = -ss*ws;    L[3] = 0;
     L[4] = ss*sp;    L[5] = cp;     L[6] = cs*sp;     L[7] = 0;
     L[8] = ss*cp;    L[9] = -sp;    L[10] = cs*cp;    L[11] = 0;
     // Push the widened wheels outward so they don't intersect the tub.
-    L[12] = wd.x + (wd.x < 0 ? -1 : 1) * (ws - 1) * 0.16; L[13] = wd.y; L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
+    L[12] = wd.x + (wd.x < 0 ? -1 : 1) * (ws - 1) * 0.16; L[13] = wd.y + (wd.front ? flat : 0); L[14] = wd.z + (fwdOffset || 0); L[15] = 1;
     M4.mulTo(_wheelWorld, base, L);
     gfx.draw(wd.rear ? wm.R : wm.F, _wheelWorld, opt);
     const F = _fixedWheelLocal;
@@ -2747,7 +2753,7 @@ async function startRace() {
   // were measured against a race that had already finished. Changing the time
   // of day cleared them, which made two otherwise identical sessions differ on
   // an unrelated setting. Session state belongs to the session.
-  sectorBests = [Infinity, Infinity, Infinity];
+  sectorBests = [Infinity, Infinity, Infinity]; fieldSectorBests = [Infinity, Infinity, Infinity];
   sectorLast = [null, null, null];
   // Arm the crash sentinel (mobile only) and, after a strike, start the
   // session pre-scaled-down — the governor may restore upward, but only under
@@ -3077,6 +3083,7 @@ const G = {
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
+  get fieldSectorBests() { return fieldSectorBests; },
   get sectorIdx() { return sectorIdx; }, set sectorIdx(v) { sectorIdx = v; },
   get sectorStartT() { return sectorStartT; }, set sectorStartT(v) { sectorStartT = v; },
   get skyViewOverride() { return skyViewOverride; }, set skyViewOverride(v) { skyViewOverride = v; },
@@ -3537,7 +3544,7 @@ function tickWeatherArc(dt) {
   }
 }
 
-const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false,
+const _engArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0,
                   deploy: 0, energy: 1, ersDeploy: 0.5 };  // setEngine reads synchronously
 function update(dt) {
   // Camera cycling works during the countdown and the race (set your view before
@@ -3680,7 +3687,7 @@ function update(dt) {
   if (soundOn && player) {
     const revFrac = clamp((player.rpm - IDLE_RPM) / (MAX_RPM - IDLE_RPM), 0, 1);
     _engArg.slip = player.slipFactor ?? 1; _engArg.ax = player.axEstSm ?? 0;
-    _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad();
+    _engArg.onKerb = !!player.onKerb; _engArg.wet = isWetRoad(); _engArg.tow = player.towing || 0;
     // ERS state for the deploy whine: continuous, charge-scaled, part-flavoured.
     _engArg.deploy = player.deploying ? 1 : 0; _engArg.energy = player.energy ?? 1;
     _engArg.ersDeploy = player.ersDeploy ?? 0.5;
@@ -3839,7 +3846,7 @@ function collideFx(a, b, impact) {
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
   impact = clamp(impact, 0.12, 1);
-  if (soundOn) GameAudio.collision();
+  if (soundOn) GameAudio.collision(impact);
   shake = Math.min(1, shake + impact * 0.45);
   hitStop = Math.max(hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
   pc.collideT = 0.35;
@@ -4238,6 +4245,31 @@ function updateCar(c, dt, ranked) {
     // FULL travel unless it says otherwise — which keeps every __apex.setInput
     // caller (and every physics spec built on one) exactly as it was.
     throttleLvl = inp ? (inp.throttleLevel ?? 1) : (autoThrottle() ? 1 : Math.max(0, Input.throttleLevel()));
+    // PLAYER SLIPSTREAM. The AI have towed since day one (the block after
+    // brakeDecision below); the human never did — a whole racing mechanic was
+    // AI-only. Same window (0.5–34 m ahead, |dx| < 4), same gain
+    // (AiDrive.towGain), same lateral fade. The AI gate it on their curvature
+    // lookahead (kMax); the player's gate is DRIVER state — not braking, wheel
+    // near straight — because nothing derived from the arc may reach the
+    // driver (docs/PHYSICS.md). SURFACE column: it reads car positions only.
+    c.towing = 0;
+    if (!braking && Math.abs(c.steerVis || 0) < 0.12 && track) {
+      let tc = null, tg = Infinity; const L = track.total;
+      for (let i = 0; i < ranked.length; i++) {
+        const o = ranked[i];
+        if (o === c || o.finished) continue;
+        let dprog = o.prog - c.prog;
+        if (!Number.isFinite(dprog)) continue;
+        const ad = dprog < 0 ? -dprog : dprog;
+        if (ad > 34.1 && ad < L - 34.1) continue;
+        dprog = ((dprog + L / 2) % L + L) % L - L / 2;
+        if (dprog > 0.5 && dprog < tg && Math.abs(o.x - c.x) < 4) { tc = o; tg = dprog; }
+      }
+      if (tc) {
+        c.towing = clamp((34 - tg) / 28, 0, 1) * clamp(1 - Math.abs(tc.x - c.x) / 4, 0, 1);
+        vmax *= 1 + AiDrive.towGain(!!track.street) * c.towing;
+      }
+    }
   } else {
     // AI: multi-sample brake target (compound corners) + soft pedal + craft
     // late-brake when a pass is on — see js/physics/ai-drive.js.
@@ -4741,6 +4773,12 @@ function updateCar(c, dt, ranked) {
     // circle symmetric (power-limited exits) is a feel/design change, not a fix.
     const axFrac = Math.min(1, Math.abs(c.axEstSm ?? 0) / (LONG_GRIP * gripMult(c)));
     const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
+    // LOCK-UP (render + feel only): braking at the top of the friction budget
+    // stops the fronts turning; a lock leaves a flat spot that wobbles the
+    // wheel once per revolution and heals over ~90 s of rolling. The grip
+    // model above is untouched — this is what the wheels SHOW.
+    c.wheelLock = braking && axFrac > 0.92 ? clamp((axFrac - 0.92) / 0.08, 0, 1) : 0;
+    c.flatSpot = clamp((c.flatSpot || 0) + c.wheelLock * dt * 0.4 - dt / 90, 0, 1);
     // --- friction limit per axle (the grip circle). Everything scales with the
     // same surface/weather grip the rest of the sim uses.
     // Aero load (rises with v²) replaces the old speed taper, and the surface the
@@ -4985,7 +5023,7 @@ function updateCar(c, dt, ranked) {
         c.head -= rel * wallAlign;
         if (track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
-          if (soundOn) GameAudio.collision();
+          if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
           if (navigator.vibrate) { try { navigator.vibrate(Math.round(15 + incidence * 35)); } catch (e) {} }
           if (c.isPlayer) Input.rumble(0.35 + incidence * 0.5, 100);
         }
@@ -5070,12 +5108,15 @@ function updateCar(c, dt, ranked) {
     const heating = braking && vStd(c.speed) > 12;   // vStd: a threshold, not a force — see OT_MIN_SPEED
     c.brakeHeat = clamp((c.brakeHeat || 0) + (heating ? dt * 1.6 : -dt * 0.9), 0, 1);
   }
-  if (c.human) {
+  {
     // Combustion after-fire is a short throttle-lift transient, not a continuous
     // arcade torch. ERS deployment is electric and never feeds this state.
-    const lifted = !!c.wasOnThrottle && !onThrottle && c.speed > 8;
+    // Every car: an AI's onThrottle is always true, so its lift is the moment
+    // it starts braking — the car ahead spits on the way into the zone.
+    const thr = c.human ? onThrottle : !braking;
+    const lifted = !!c.wasOnThrottle && !thr && c.speed > 8;
     c.exhaustPop = lifted ? 1 : Math.max(0, (c.exhaustPop || 0) - dt * 5);
-    c.wasOnThrottle = !!onThrottle;
+    c.wasOnThrottle = !!thr;
   }
   c.collideT = Math.max(0, c.collideT - dt);
   c.contactT = Math.max(0, (c.contactT || 0) - dt);
@@ -5117,6 +5158,20 @@ function updateCar(c, dt, ranked) {
     netReportQualiLive(c.driverId, c.lapTime, track && track.total ? (c.s || 0) / track.total : 0);
   }
 
+  // The FIELD's sector bests — the timing screen's purple is the session best
+  // of ANY car, so every car's forward crossing is timed (a per-car index and
+  // start stamp; the player's curated split logic below stays as it is).
+  if (state === "race" && track) {
+    const ns = sectorAt(c.s);
+    if (ns !== c._secIdx) {
+      const fwd = ds > 0 && c._secIdx != null && (c._secIdx < ns || (c._secIdx === 2 && ns === 0));
+      if (fwd && c.lap >= 1 && !c.incidentInvalidLap && c._secT0 != null) {
+        const e = c.lapTime - c._secT0;
+        if (e >= 2 && e < fieldSectorBests[c._secIdx]) fieldSectorBests[c._secIdx] = e;
+      }
+      c._secIdx = ns; c._secT0 = c.lapTime;
+    }
+  }
   // Sector detection (curated splits via sectorAt). Must run before finish-line
   // timing resets so a forward S3→S1 crossing records the completed S3 split.
   if (c.isPlayer && state === "race" && track) {
@@ -7481,7 +7536,7 @@ function render(dt) {
       gfx.draw(getErsLight(), W, _ersLightOpts);
     }
     // Brief fuel-coloured throttle-lift after-fire, visible at any time of day.
-    if (c.isPlayer && (c.exhaustPop || 0) > 0.05) {
+    if ((c.exhaustPop || 0) > 0.05) {   // every car — the transient lasts ~0.2 s
       const fl = 0.6 + 0.4 * Math.sin(raceT * 41.0 + Math.sin(raceT * 23.0) * 3.0);
       const W = _ringWorld;
       W.set(tmpMat);

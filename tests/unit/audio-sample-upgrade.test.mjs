@@ -49,6 +49,8 @@ function boot(extra = {}) {
     createGain: () => node(counts, "gain"), createBiquadFilter: () => node(counts, "biquad"),
     createOscillator: () => node(counts, "osc"), createBufferSource: () => node(counts, "src"),
     createAnalyser: () => node(counts, "analyser"),
+    createDynamicsCompressor: () => Object.assign(node(counts, "comp"),
+      { threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25) }),
     createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
     decodeAudioData: (ab, res) => res(sampleBuf(4, 8000)),
     resume: () => Promise.resolve(), close() {},
@@ -111,4 +113,36 @@ test("music PCM cache: a phone keeps only the playing track, desktop the two mos
   };
   assert.equal(await play(false), 2, "desktop: the two most recent stay decoded, so the repeat is a cache hit");
   assert.equal(await play(true), 3, "phone: only the playing track is kept, so the repeat re-fetches (and re-decodes)");
+});
+
+test("master limiter: one compressor sits between master and the destination", () => {
+  const { GameAudio, counts } = boot();
+  GameAudio.init();
+  assert.equal(counts.comp, 1, "exactly one DynamicsCompressor is created at context build");
+});
+
+test("collision scales with impact and a shallow wall angle is a scrape, not a thump", () => {
+  const { GameAudio, counts } = boot();
+  GameAudio.init();
+  const snap = () => ({ osc: counts.osc || 0, src: counts.src || 0, biquad: counts.biquad || 0 });
+  const a = snap(); GameAudio.collision(0.2); const b = snap();
+  assert.equal(b.osc - a.osc, 1, "a graze is one tone + noise (no bang)");
+  GameAudio.collision(0.95); const c = snap();
+  assert.equal(c.osc - b.osc, 2, "a heavy hit adds the low bang");
+  GameAudio.collision(0.5, true); const d = snap();
+  assert.equal(d.osc - c.osc, 0, "a scrape is noise only");
+  assert.equal(d.src - c.src, 1, "one band-passed noise burst");
+  assert.equal(d.biquad - c.biquad, 1);
+});
+
+test("the rev-limiter gate is an audio-thread oscillator built with the engine", async () => {
+  const { GameAudio, counts, release } = boot();
+  GameAudio.init(); await release();
+  const before = counts.osc || 0;
+  GameAudio.startEngine();
+  assert.ok((counts.osc || 0) - before >= 1, "startEngine builds the gate oscillator alongside the voice");
+  // A sweep at ax <= 0 (what tools/check/audio-test.cjs runs) must not throw.
+  for (const rv of [0, 0.5, 0.99, 1]) GameAudio.setEngine(rv, 0, false, rv, 6, { ax: 0 });
+  GameAudio.setEngine(0.7, 0, false, 0.7, 4, { ax: 12 });   // full load: the lowpass opens
+  GameAudio.stopEngine();
 });

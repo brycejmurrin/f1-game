@@ -2408,6 +2408,20 @@ test("the TIME chip rebuilds the flyby track so GO does not pay a second Tracks.
     "loadTrack's memo is what makes the extra call free when the session darkness did not change");
 });
 
+test("driving feel: the player tows on car positions only, the fronts lock, every car pops on lift", () => {
+  const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const human = game.slice(game.indexOf("throttleLvl = inp ? (inp.throttleLevel ?? 1)"), game.indexOf("AiDrive.beginLook();"));
+  assert.match(human, /c\.towing = clamp\(\(34 - tg\) \/ 28, 0, 1\)/, "the player's tow uses the AI's window and fade");
+  assert.match(human, /vmax \*= 1 \+ AiDrive\.towGain\(!!track\.street\) \* c\.towing/, "and the AI's gain");
+  assert.doesNotMatch(human, /Tracks\.curvature|kMax/, "the player's gate is driver state, never the arc");
+  assert.match(game, /c\.wheelLock = braking && axFrac > 0\.92/, "a lock-up is the top of the friction budget under braking");
+  assert.match(game, /c\.wheelSpinF = \(\(c\.wheelSpinF \|\| 0\) \+ \(c\.speed \/ WHEEL_R\) \* dt \* \(1 - \(c\.wheelLock \|\| 0\)\)\)/, "locked fronts stop turning");
+  assert.match(game, /const thr = c\.human \? onThrottle : !braking;/, "AI cars lift when they start braking");
+  assert.match(game, /if \(\(c\.exhaustPop \|\| 0\) > 0\.05\) \{/, "the flame draws for every car, not only the player");
+  const eng = read("js/audio/engine.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(eng, /\(1 - 0\.35 \* tow\) \* windOpen/, "the wind drops in a tow");
+});
+
 test("pcssPen help names desktop three.js WebGL2 as live", () => {
   const lighting = read("js/lighting/knobs.js");
   assert.match(lighting, /three\.js desktop WebGL2/,

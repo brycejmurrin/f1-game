@@ -214,7 +214,9 @@ const CEILING = {
   // ink left #fff and leftover red section chrome for --text / --steel.
   // 2026-09-03 leftover pass: 334 -> 330. Sort/label/live-updated chrome
   // left #7a7a85 and leftover dim for --steel / --text.
-  rawColor: 330,
+  // 2026-09-03 union with the timing-colour pass: --faster/--slower replace the
+  // laneboard literals; the count is the merged tree's.
+  rawColor: 326,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide
@@ -227,7 +229,7 @@ const CEILING = {
   // 2026-09-03 deep pass: 374 -> 367 / 189 -> 188. Customize rows, title
   // subs, How-to-Play rules, and data-hub numerals moved onto tokens.
   // 2026-09-03 leftover pass: 185 -> 184 with rawColor 334 -> 330.
-  rawColorDistinct: 184,
+  rawColorDistinct: 181,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

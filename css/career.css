@@ -181,7 +181,7 @@
 }
 .cr-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--gap); font-size: var(--fs-2); }
 .cr-row-k { color: var(--dim); }
-.cr-row-v { min-width: 0; overflow-wrap: anywhere; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.cr-row-v { font-family: var(--font-hud); font-variant-numeric: tabular-nums; min-width: 0; overflow-wrap: anywhere; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
 
 /* The round's brief. It is the one line on the hub that changes between visits,
    so it gets its own weight instead of being a .cr-row value — right-aligned in a
@@ -501,7 +501,7 @@
 }
 /* Money lines are read as a column, so they get tabular figures — otherwise
    "+900" and "+1,240" do not line up and the total looks unrelated to them. */
-.res-settle-v { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
+.res-settle-v { font-family: var(--font-hud); font-variant-numeric: tabular-nums; font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text); }
 .res-settle-row.missed .res-settle-v { color: var(--dim); font-weight: 600; }
 /* The total is the answer; everything above it is working. */
 .res-settle-row.total {

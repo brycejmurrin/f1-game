@@ -189,7 +189,7 @@ const ALLOWED = [
   // ── exhaust after-fire, and the test hook that must mirror it ──
   {
     file: "js/game.js", expr: "c.speed > 8",
-    code: "const lifted = !!c.wasOnThrottle && !onThrottle && c.speed > 8;",
+    code: "const lifted = !!c.wasOnThrottle && !thr && c.speed > 8;",
     why: "'not parked' floor for the lift-off after-fire — below the grip-limited corner floor",
   },
   {
