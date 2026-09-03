@@ -107,11 +107,12 @@
 /* SHORT SHEET: `--pair-compact: off` stacks this sheet so #cr-body is the
    scroller. Measured 852×393 @115%: pair-on left SLOT 3 and the guide CTAs
    ~83px past #cr-inner. */
-/* Modes picker: DRIVER | MY TEAM side by side on any stacked sheet so
-   MY TEAM is not below the fold. Hub (no .cr-slot in both panes) stays one
-   column and keeps #cr-body as the scroller. Compact was the first cut;
-   portrait phones stay density=normal and still stacked. */
-#cr-inner:not([data-pair="on"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body {
+/* Modes picker: DRIVER | MY TEAM side by side only when the stacked sheet
+   is wide AND tall enough. Forced two-up on portrait / compact (852×393)
+   wrapped the blurbs to 5 lines and clipped SLOT 2/3 under the foot.
+   Tall and compact stack: one mode, then the other, #cr-body scrolls.
+   Hub (no .cr-slot in both panes) stays one column either way. */
+#cr-inner:not([data-pair="on"]):not([data-shape="tall"]):not([data-density="compact"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--gap);

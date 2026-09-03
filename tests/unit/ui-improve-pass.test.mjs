@@ -816,8 +816,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "pause STANDINGS matches the title: hide once the season is finished");
   assert.match(game, /\$\(\s*"pm-restart"\s*\)\.disabled\s*=\s*!!\s*\(\s*netPlay\.active\(\s*\)\s*\|\|\s*qualiNetDone\s*\)/,
     "RESTART looks dead in net / quali-net, same gate as its click handler");
-  assert.equal(decl(css("css/career.css"), '#cr-inner:not([data-pair="on"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body', "grid-template-columns"),
-    "minmax(0, 1fr) minmax(0, 1fr)", "any stacked modes picker puts DRIVER and MY TEAM in one row");
+  assert.equal(decl(css("css/career.css"), '#cr-inner:not([data-pair="on"]):not([data-shape="tall"]):not([data-density="compact"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body', "grid-template-columns"),
+    "minmax(0, 1fr) minmax(0, 1fr)", "wide+roomy stacked modes picker is two-up; tall/compact stack");
+  const shell = read("index.html");
+  assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is BACK on the alt plate");
+  assert.match(shell, /id="htp-close"[^>]*>BACK</, "How to Play returns to its parent, it does not commit");
+  assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
 });
 
 test("neutral buttons share the settings tab-header plate", () => {

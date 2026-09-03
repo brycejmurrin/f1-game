@@ -298,7 +298,12 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 14px clamp(7px, calc(1.8 * var(--vhz)), 14px) 18px;
 }
 /* A lone BACK / DONE / CLOSE is not a banner. Pairs (BACK + RACE!) still
-   share the foot 1:1 via flex-grow. */
+   share the foot 1:1 via flex-grow.
+   Dismiss rank: same body as the primary (skew, type, height), alt plate.
+   BACK = return to a parent sheet. CLOSE = overlay on something still
+   visible. DONE / APPLY / SAVE / RACE! stay the red primary (a commit).
+   A lone dismiss is never the red fill — How to Play's old DONE and
+   Standings' old CLOSE read as commit when they only leave. */
 .sheet-foot .bigbtn:only-child {
   flex: 0 1 auto;
   width: auto;

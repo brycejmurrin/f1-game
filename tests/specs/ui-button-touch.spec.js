@@ -406,7 +406,7 @@ test.describe("Pause settings — stable layout", () => {
 test.describe("Pause settings — HOW TO PLAY", () => {
   test.use({ viewport: LANDSCAPE, hasTouch: true });
 
-  test("opens the help sheet over the settings menu and DONE returns to it", async ({ page }) => {
+  test("opens the help sheet over the settings menu and BACK returns to it", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
     await openPauseSettings(page);
