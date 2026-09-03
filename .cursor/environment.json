@@ -1,0 +1,23 @@
+{
+  "name": "Apex 26",
+  "install": "bash tools/cloud-agent-install.sh",
+  "chromeExecutablePath": "/opt/pw-browsers/chromium",
+  "mcpServerAllowlist": [
+    {
+      "name": "apex-tools",
+      "command": "bash"
+    },
+    {
+      "name": "chrome-devtools",
+      "command": "bash"
+    },
+    {
+      "name": "playwright-official",
+      "command": "npx"
+    },
+    {
+      "name": "chrome-devtools-mcp",
+      "command": "npx"
+    }
+  ]
+}

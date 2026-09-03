@@ -142,16 +142,24 @@ specific renderer.
 
 ## Cursor Cloud specific instructions
 
-Fresh-agent bootstrap is `bash tools/cloud-agent-install.sh` (the dashboard
-`install` should call it: the Verification §1 sequence plus full Chromium, which
+Fresh-agent bootstrap is `bash tools/cloud-agent-install.sh` (committed as
+`.cursor/environment.json` `install`; the dashboard `install` should call the
+same script: the Verification §1 sequence plus full Chromium, which
 `wgx-validate` / `wgx-capture` need — the headless shell has no `navigator.gpu`).
 System packages (`mesa-vulkan-drivers`, `vulkan-tools`, `xvfb`) survive a cold
 boot only via snapshot + Save on the environment dashboard; `test -f
-/usr/share/vulkan/icd.d/lvp_icd.json` proves Lavapipe. MCP server map and the
-shell fallbacks for an empty host catalog: `docs/AGENT-SURFACE.md`. Keep
-`apex-tools` in root `.mcp.json`; never run Chrome MCP while Playwright is
-running; do not attach `mcp-probe` for a `version.json` check. Measurements
-and the npm ECONNRESET note: `docs/research/CI-RENDERING-PERFORMANCE.md` §Part 3.
+/usr/share/vulkan/icd.d/lvp_icd.json` proves Lavapipe. MCP: repo `.mcp.json`
+lists three stdio servers (`apex-tools`, `playwright-official`, `chrome-devtools`);
+`.cursor/environment.json` `mcpServerAllowlist` permits them and `install`
+builds the chrome-devtools clone. Cloud Agents still need **chrome-devtools
+enabled in the MCP dropdown** at https://cursor.com/agents (or team Integrations
+& MCP) — the host catalog often loads only two servers until all three are
+registered there. CLI fallback when `chrome_*` is missing:
+`python3 tools/probe-mcp.py chrome-start` (see `.claude/skills/mcp-probe`).
+Shell map: `docs/AGENT-SURFACE.md`. Keep `apex-tools` in root `.mcp.json`; never
+run Chrome MCP while Playwright is running; do not attach `mcp-probe` for a
+`version.json` check. Measurements and the npm ECONNRESET note:
+`docs/research/CI-RENDERING-PERFORMANCE.md` §Part 3.
 
 ## Layout
 
