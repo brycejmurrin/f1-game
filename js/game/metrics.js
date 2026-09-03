@@ -160,6 +160,12 @@ function snapshot() {
     logLvl: logLvl(),
     fps: null, ms: null, budget: null, scale: null, tier: null, backend: "",
     auto: null, strikes: null, tierFloor: null, gpuMs: null,
+    // What the BOUND backend says about the device: which API three/WGX
+    // actually took, how many GPU/shader errors it has raised, and the first
+    // one. A phone screenshot of this panel is the evidence a "see-through
+    // car on THREE.JS" report never carried (the pick label alone cannot tell
+    // WebGPU from WebGL2, or a rejected pipeline from a healthy one).
+    gfxApi: "", gpuErr: null, gpuFirst: "",
     state: "", track: "", session: "", flow: "",
     lapsTarget: null, quali: null, career: null, turns: null,
     lap: null, pos: null, total: null,
@@ -210,6 +216,19 @@ function snapshot() {
   } catch (_) { /* quality module absent in a VM */ }
   try {
     if (!out.backend) out.backend = localStorage.getItem("apex26.gfxBackend") || "";
+    try {
+      if (typeof GLX !== "undefined") {
+        if (typeof GLX.gpuErrors === "function") out.gpuErr = GLX.gpuErrors() | 0;
+        if (typeof GLX.backendState === "function") {
+          const bs = GLX.backendState();
+          if (bs) {
+            if (bs.api) out.gfxApi = String(bs.api);
+            if (bs.gpuFirstError) out.gpuFirst = String(bs.gpuFirstError).slice(0, 72);
+            if (bs.gpuErrors != null) out.gpuErr = bs.gpuErrors | 0;
+          }
+        }
+      }
+    } catch (_) { /* backend not bound yet */ }
   } catch (_) { /* storage blocked */ }
   try {
     if (typeof __apex !== "undefined" && __apex.info) {
@@ -449,9 +468,9 @@ function paintOverlay() {
         hdr,
         pair("fps", fmt(s.fps), "ms", fmt(s.ms)),
         pair("tier", fmt(s.tier), "auto", fmt(s.auto)),
-        pair("gfx", fmt(s.backend || null), "str", fmt(s.strikes)),
+        pair("gfx", fmt(s.backend || null) + (s.gfxApi ? "/" + s.gfxApi : ""), "err", fmt(s.gpuErr)),
         (s.track || "menu") + "  " + (s.caution || "GREEN"),
-      ];
+      ].concat(s.gpuFirst ? [s.gpuFirst.slice(0, 40)] : []);
     } else {
       lines = [
         hdr,
@@ -461,13 +480,16 @@ function paintOverlay() {
         row("budget", fmt(s.budget) + " ms   tier " + fmt(s.tier) +
                       (s.tierFloor != null ? " (fl " + s.tierFloor + ")" : "") +
                       "   auto " + fmt(s.auto)),
-        row("gfx",    fmt(s.backend || null) + "   scale " + fmt(s.scale) + "   strikes " + fmt(s.strikes)),
+        row("gfx",    fmt(s.backend || null) + (s.gfxApi ? "/" + s.gfxApi : "") +
+                      "   scale " + fmt(s.scale) + "   strikes " + fmt(s.strikes) +
+                      "   err " + fmt(s.gpuErr)),
+      ].concat(s.gpuFirst ? [row("gpu", s.gpuFirst)] : []).concat([
         sep(),
         row("session", (s.track || "menu") + "  " + (s.flow || s.session || s.state || "") +
                        "  " + (s.caution || "GREEN") + "  cam " + fmt(s.cam || null) +
                        (s.quali ? "  quali" : "") + (s.career ? "  career" : "")),
         row("build",  s.buildDone ? s.buildDone.replace(/^build done /, "") : "—"),
-      ];
+      ]);
     }
   }
   el.textContent = lines.join("\n");

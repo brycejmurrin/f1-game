@@ -69,6 +69,7 @@ function parseArgs(argv) {
     else if (a === "--lavapipe") o.lavapipe = true;
     else if (a === "--ls") { const kv = next(); skip.add(kv); if (kv) o.ls.push(kv); }
     else if (a === "--present-timeout") { const v = next(); skip.add(v); o.presentMs = Math.max(1000, parseInt(v, 10) || 60000); }
+    else if (a === "--no-stale-check") o.noStaleCheck = true;
     else if (a === "--help" || a === "-h") {
       console.log(`gfx-probe — WEBGPU/THREE screenshot probe with logging + retry
 
@@ -81,6 +82,10 @@ function parseArgs(argv) {
   --lavapipe    Dawn via Mesa Lavapipe ICD (pair with --tlx-webgpu on Cloud)
   --ls k=v      set a localStorage key before boot (repeatable)
   --present-timeout MS   awaitSoftPresent budget (default 60000)
+  --no-stale-check       skip the second capture (a soft-present frame that does not
+                         change across a camera move is STALE and fails the run —
+                         on llvmpipe a phone-resolution three-WebGPU lit frame reads
+                         back in tens of seconds; use a small viewport or this flag)
 
   stderr + <out>/probe.log: phased progress; stdout: final JSON result.`);
       process.exit(0);
@@ -357,6 +362,44 @@ async function runProbeAttempt(attemptNum) {
       });
       writeFileSync(canvasPath, Buffer.from(canvasB64, "base64"));
       log("canvas", "visible #game canvas.png saved");
+
+      // TWO CAPTURES OR IT IS NOT A FRAME. The soft-present overlay keeps the
+      // last frame that read back; when the readback wedges (a slow lit frame
+      // on llvmpipe, a phone under load) the overlay shows the FIRST frame it
+      // ever read while the game moves on, and a single capture reports that
+      // stale image as a live PASS — this tool did exactly that for a whole
+      // session (2026-09-03, docs/TESTING.md §Field notes). Move the camera,
+      // wait for a NEWER blit, capture again: byte-identical means stale.
+      let stale = false;
+      if (opts.noStaleCheck) {
+        log("stale-check", "SKIPPED (--no-stale-check): canvas.png is one soft-present read, not proven live");
+        if (frameStats) frameStats.stale = null;
+      } else try {
+        await page.evaluate(() => { __apex.orbit(0.12, 120, 25, 60); });
+        await page.evaluate((n) => new Promise((res) => {
+          let i = 0;
+          const tick = () => { if (++i > n) res(); else requestAnimationFrame(tick); };
+          requestAnimationFrame(tick);
+        }), 20);
+        await page.evaluate((ms) => GLX.awaitSoftPresent(ms), Math.min(opts.presentMs, 45000));
+        const secondB64 = await page.evaluate(() => {
+          const g = document.getElementById("game-soft") || document.getElementById("game");
+          return g.toDataURL("image/png").split(",")[1];
+        });
+        stale = secondB64 === canvasB64;
+        writeFileSync(join(opts.outDir, "canvas-2.png"), Buffer.from(secondB64, "base64"));
+      } catch (e) {
+        stale = true;
+        log("stale-check", "no newer blit after a camera move", { error: String(e.message || e).slice(0, 120) });
+      }
+      if (!opts.noStaleCheck) {
+        if (frameStats) frameStats.stale = stale;
+        if (stale) {
+          throw new Error("soft-present is STALE: the visible frame did not change across a camera move " +
+            "(the readback wedged; canvas.png is not a live frame — see docs/TESTING.md §Field notes 2026-09-03)");
+        }
+        log("stale-check", "ok — a newer frame blitted after the camera move (canvas-2.png)");
+      }
 
       // TLX's blit already used mapAsync on softOutRT. A second
       // capturePixels races that readback and times out on Lavapipe

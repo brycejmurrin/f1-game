@@ -117,7 +117,7 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   HIGH and below, 0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
-- **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost; honest
+- **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost (env probe off on LITE since 2026-09-03 — a cube cycle is six world passes + 36 mip passes on the jetsam rung); honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
   history resolve is sub-pixel shimmer). The road is NOT lifted — WGX uses
   `depthBias`/`depthBiasSlopeScale` only, the same as GLX's polygonOffset;
@@ -168,6 +168,18 @@ Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
   and a canvas is bound to one context type for life (that sniff was the
   `configure` null throw on SwiftShader). Instanced props use a geometry
   `InstancedBufferAttribute` named `color`, not `imesh.instanceColor`.
+  **The texture ACCESS MODE is compiled in from the texture bound at
+  program-build time** (2026-09-03): three's WGSL builder emits
+  `textureLoad` + a baked wrap for a Nearest/Nearest texture, and the lit
+  graph is built against the 1×1 placeholder material arrays — so the
+  placeholders carry the pack's Repeat / LinearMipmapLinear / aniso 4 state
+  (guard-asserted), or every baked fragment reads an edge texel on WebGPU
+  (the phone "unlit / see-through track"). The WebGL backend emits
+  `texture()` regardless. A WebGPU device that rejects work in the first 120
+  presents on AUTO self-heals to three WebGL2 next boot (`tlxAutoGL`), and
+  `backendState()` (now on all three backends, via the GOV panel `gfx` row
+  and `__apex.diag().env`) reports `api`, `gpuErrors` and the first GPU or
+  WGSL-compile error. Phones are never classified as software adapters.
   Software adapters stay on WebGPU (soft-present + writeBuffer shim); they
   must not silently bind GLX. AUTO may then take three WebGL2 (`tlxAutoGL`)
   without writing `gfxClaimFail`. Phones and Safari AUTO try the same

@@ -1889,3 +1889,39 @@ The preset goes through `GameStore`, so it is a JSON string and the quotes are
 part of the value. The full tier -> feature table is in
 `docs/PERF-FINDINGS.md` §2s "Putting a probe in the configuration that exposes
 the code".
+
+### 2026-09-03 — a soft-present capture is not a frame until a second one differs
+
+Every three-WebGPU probe in this container (Dawn on Lavapipe, `gfx-probe
+--backend three --tlx-webgpu --lavapipe`) reported PASS with a dark "dusk, no
+cars, unlit road" frame that survived every route-patched source variant
+byte for byte — because it was the FIRST frame the soft-present overlay ever
+read back. `readRenderTargetPixelsAsync` on a lit frame at phone resolution
+never settled on llvmpipe, `_softReadPending` stayed true, and the 2D overlay
+kept that first (pre-lighting, pre-cars) frame while the game moved on
+underneath. Measured: `awaitSoftPresent` never resolving again after a
+camera move (120 s, three runs), timings `[19109 ms, 120007, 120013, 120004]`
+at a 480×222 viewport, identical PNGs across `nomaps` / `nopos` patches.
+
+What changed: TLX submits NO new frame while a soft-present read is in
+flight (back-pressure: 18,172 presents were queued against one completed
+read in 300 s — a copy queued behind that backlog can never land), abandons
+a readback older than 20 s or three times the last completed read (`SOFT_READ_STALE_MS`, epoch-guarded — a 2 s floor was
+tried first and abandoned EVERY llvmpipe read, which take tens of seconds),
+counts rejected reads in `backendState().softRead`, and `gfx-probe` captures
+twice around an `__apex.orbit` and FAILS when the two captures are identical
+(`frame.stale`; `--no-stale-check` opts out and says so). Two capture rules
+for anyone probing this path:
+
+- **Two captures or it is not a frame.** A single soft-present capture on a
+  slow adapter is evidence of the first readback, not the scene.
+- **Route patches need `serviceWorkers: "block"`.** sw.js precaches the
+  deferred backends, and a Playwright `page.route` never sees a fetch the
+  service worker serves — the patched file simply does not load. Put a
+  `console.log("[patch-live]")` in the patched source and assert it.
+
+The steady-state lit frame on three-WebGPU is correct here (small viewport,
+`artifacts/diag-small/canvas-0.png`: lit car, textured road), so the owner's
+black-car report on an iPhone is WebKit-specific; the GOV panel and
+`__apex.diag().env.backendState` now carry `api`, `gpuErrors` and the first
+GPU/shader error so the next phone screenshot names it.

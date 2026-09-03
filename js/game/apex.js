@@ -2492,6 +2492,11 @@ const api = {
         hdr: safe(() => !!(gfx && gfx.hdrMode && gfx.hdrMode()), null),
         msaa: safe(() => gfx && gfx.msaa && gfx.msaa(), null),
         renderScale: safe(() => gfx && gfx.getRenderScale && gfx.getRenderScale(), null),
+        // The bound backend's own account of the device — api (three's
+        // WebGPU vs WebGL2), GPU/shader error count and the first message,
+        // soft-blit, baked-pack state. This is what a phone report needs.
+        gpuErrors: safe(() => (gfx && typeof gfx.gpuErrors === "function") ? gfx.gpuErrors() : null, null),
+        backendState: safe(() => (gfx && typeof gfx.backendState === "function") ? gfx.backendState() : null, null),
       },
       canvas: safe(() => {
         const c = document.getElementById("game");

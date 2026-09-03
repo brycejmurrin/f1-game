@@ -7179,7 +7179,6 @@ function render(dt) {
   //  LT.glareStr, default 0.12.)
   drawWorldMeshes(frame, night, wet, _floodEmit, false);
   gfx.drawSky(frameSky);
-  if (frame.lights && !_studioRig && PerfGov.tier() < 3) gfx.drawGlow(frame.lights, LT.glareStr);
 
   // skid marks — one batched draw for the whole live trail (rebuilt only when a
   // mark is added/evicted). Was up to 120 per-mark draws every frame once the
@@ -7641,6 +7640,7 @@ function render(dt) {
   }
 
   // Rapier debris shards (render-only side-world; poses stepped in update()).
+  if (frame.lights && !_studioRig && PerfGov.tier() < 3) gfx.drawGlow(frame.lights, LT.glareStr);   // AFTER the cars: depth-tested, no depth write — before them a halo in front of a body was overwritten
   if (DebrisWorld.active()) DebrisWorld.draw();
 
   // Transient FX particles (tyre smoke / sparks / kickup / spray): advanced
