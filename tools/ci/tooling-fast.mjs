@@ -31,8 +31,10 @@ const LOGFILE = path.join(LOGDIR, "tooling-fast-suite.log");
 
 /** @type {readonly string[]} */
 export const TOOLING_FAST_FILES = Object.freeze([
+  // @gen-test-groups:begin — generated from tests/groups.json; do not hand-edit
   "tests/unit/ghost.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
+  "tests/unit/test-groups-generated.test.mjs",
   "tests/unit/fixture-consumer-audit.test.mjs",
   "tests/unit/quick-validate.test.mjs",
   "tests/unit/track-accuracy-validator.test.mjs",
@@ -198,6 +200,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/trim-comments.test.mjs",
   "tests/unit/metrics.test.mjs",
   "tests/unit/perf-try.test.mjs",
+  // @gen-test-groups:end
 ]);
 
 const loadavgLine = () => {

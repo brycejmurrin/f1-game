@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 188 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 189 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -254,6 +254,19 @@ run a spec twice; the 115-spec union was compared file for file before and after
 A browser group is 10-40 minutes of SwiftShader; run ONE at a time through
 `tools/ci/test-bg.mjs`, and `tools/ci/select-specs.mjs` for a finer per-spec cut when
 the group is much bigger than the change.
+
+**A group is defined once, in `tests/groups.json`.** `package.json`'s `test:*`
+scripts and `tools/ci/tooling-fast.mjs`'s file list are GENERATED from it by
+`node tools/gen/gen-test-groups.mjs`; `--check` runs on the fast gate, so a
+hand-edit to either generated copy fails at once. Adding a group used to mean
+three coordinated edits — a script, the `TOOLING_FAST_FILES` array, a row in
+this document — with nothing failing at the time if one was missed; the
+coverage audit noticed later, or nobody did. It is one edit now.
+
+In that file's `toolingFast` list an entry beginning `//` is a note emitted
+verbatim into the generated block: the reasons a given file earns a place in
+the edit loop live beside the file they explain, and regenerating must never
+eat them.
 
 ### Boot (run first, and first to fix)
 
@@ -1192,6 +1205,7 @@ what it covers.
 | `lighting-tuner-sweep.test.mjs` | `lighting-tuner-sweep.mjs` gate/push/verdict helpers — night-only knobs gated on day-dry, sunElev push direction, PCSS software skip, report verdict buckets (no browser) |
 | `slider-effect.test.mjs` | LIGHTING TUNER classifier + visual A/B: `--help`, knob catalog, gates/risk/tags, `--live --dry-run` recipe, `slider-effect-view.py` changed-pixel filter |
 | `test-groups.test.mjs` | the taxonomy: pick-tests rules name real groups and route every source dir; this document lists every group and every test file; `RENDER_SPECS` partitions cleanly; the manual suites stay out of default discovery |
+| `test-groups-generated.test.mjs` | `tests/groups.json` is the single definition of a group: package.json's `test:*` scripts and tooling-fast's file list regenerate from it, every group names files that exist, and the tooling-fast notes stay comments rather than leaking into the runtime array |
 | `circuit-def-fields.test.mjs` | every field authored in `js/circuits/<id>.js` survives the field-by-field copy into `Tracks.LIST`, or is named engine-only with a reason — an uncopied field reads as `undefined` at every consumer, silently, and the circuit renders as though it was never written |
 | `backend-surface-parity.test.mjs` | every name GLX publishes is an own property of WGX and TLX (`undefined` allowed, absent not) — game.js installs a backend by descriptor-copy, so an absent name keeps GLX's own function running against a null `gl`/`CHK`, and every feature test for it passes before throwing |
 | `test-coverage-audit.test.mjs` | the coverage auditor itself |
