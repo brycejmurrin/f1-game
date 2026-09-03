@@ -154,9 +154,11 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       deleted), circuits `26877e9` (geo-paths, markings and FIVE id-keyed
       scenery tables folded into each def; `segs` deleted from 24 defs;
       `realPoints` throws on a path-less def; verts byte-identical,
-      graph-parity 40/40 exact). Union: tooling-fast 137/137; game-vm /
-      verify-track --all / state-unit, then one `test-bg tiny` and `ci.yml
-      group: circuits`, then the deploy ⚑ — recorded here when done.
+      graph-parity 40/40 exact). Union verified: tooling-fast 137/137, game-vm 248/248, verify-track --all
+      40 OK, state-unit 89/89; `test-bg tiny` 72/73 (the one red is the boot
+      `load`-wait timeout, 147.8 s, the box — §Field notes 2026-09-03); runner
+      push run 2346 on 66b6618 green incl. the four fixed smoke shards;
+      `ci.yml group: circuits` (run 2347) — result recorded at deploy.
       `tools/moves/phase2.json` maps 91 files for 2b.
 - [ ] **Phase 2b — the move window** ⚑ (≤ 1 h, one commit per target dir,
       each with a scripted path sweep over docs/skills/tests/tools; squashed
