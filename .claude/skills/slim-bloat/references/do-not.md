@@ -7,7 +7,7 @@ reaches for these first. They are not bloat.
 |---|---|---|
 | Bare speed vs `VMAX` / a literal | `PACE` is a scale, not a cap. Use `vTop()`/`vStd()`/`aStd()`. | `tools/vstd-lint.mjs`, `docs/PHYSICS.md` |
 | `Tracks.curvature()` on the player with assists off | The arc must not reach the driver. | physics-contract-auditor; `docs/PHYSICS.md` columns |
-| `dt` clamp, `steps < 5`, `renderAlpha` | Tab-resume tunneling, spiral of death, stutter. | `docs/research/ENGINEERING-PRACTICE-NOTES.md` §1 |
+| `dt` clamp, `steps < 5`, `renderAlpha` | Tab-resume tunneling, spiral of death, stutter. | `../../../../docs/notes/ENGINEERING-PRACTICE-NOTES.md` §1 |
 | Split `updateCar()` or `render()` | Continuous integration / one draw; inventing a struct risks characterization. | `docs/ARCHITECTURE.md` §Reorg |
 | Extract garage preview "because it's big" | ~15 new `G` accessors — moves coupling, does not remove it. Sort by **boundary crossings**, not lines. | same §, 2026-08 table |
 | IIFE → `import`/`export` | No ES modules (vendored three.js only). | `tests/unit/global-registry.test.mjs` |

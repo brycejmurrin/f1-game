@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-capture.mjs, apex-eval.mjs), before/after frames, Playwright headless probes, flicker/shimmer/z-fighting while driving (a recorded driven clip via motion-capture.mjs), or a game-loop CPU profile / flame chart / GC spikes (profile-gameloop.mjs). For hook catalogs use agent-view; for camera semantics use debug-cameras; for a live canvas use mcp-probe. WGX on SwiftShader: use gfx-probe.mjs for visible #game (soft-present blit), not raw canvas screenshots. Live version.json is deploy-research.
+description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-capture.mjs, apex-eval.mjs), before/after frames, Playwright headless probes, flicker/shimmer/z-fighting while driving (a recorded driven clip via motion-capture.mjs), or a game-loop CPU profile / flame chart / GC spikes (profile-gameloop.mjs). Also the CAR STUDIO — show/render/check the car, a team livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated front/side/rear shots (carview.html, render-car.mjs) — and CAMERA SEMANTICS: switch or check camera modes, cockpit/chase/orbit/cinematic/roadside, frame a corner, camState/viewState, camera lag. For hook catalogs use agent-view; for a live canvas use mcp-probe. WGX on SwiftShader: use gfx-probe.mjs for visible #game (soft-present blit), not raw canvas screenshots. Live version.json is deploy-research.
 ---
 
 # Headless Playwright probing (parallel)
@@ -72,3 +72,16 @@ both references say what the numbers mean before you A/B on them.
   [references/motion-capture.md](references/motion-capture.md).
 - Frame-budget hog, GC jitter, slow track build, flame-chart symbols →
   [references/perf-profile.md](references/perf-profile.md).
+- **Car studio** — track-free look at just the car (`tools/carview.html`,
+  `tools/car/render-car.mjs`, team/livery/part audits) →
+  [references/car-studio.md](references/car-studio.md), preset views and the
+  `CARVIEW` API in
+  [references/car-viewer-presets.md](references/car-viewer-presets.md).
+- **Camera semantics** — the 13 built-in modes, `orbit()` vs `snapCam()` (the
+  trap that costs a shot), `camState()`/`viewState()` →
+  [references/cameras.md](references/cameras.md), free-cam table and framing
+  recipes in
+  [references/debug-cameras-framing.md](references/debug-cameras-framing.md).
+
+Folded in 2026-09-03: `car-viewer` and `debug-cameras`. Both were one hop
+before every capture this skill already owned.

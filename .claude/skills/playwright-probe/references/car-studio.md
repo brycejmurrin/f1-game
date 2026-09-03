@@ -1,8 +1,3 @@
----
-name: car-viewer
-description: Use when the user asks to show/render/check the car, inspect a team livery, sponsors, number, wing/gearbox/brake/part geometry, reflections/material finish, isolated F1 car, or front/side/rear/car-viewer shots in Apex 26.
----
-
 # Car viewer — isolated car photo studio
 
 Track-free look at just the car. Two front-ends over the same page:
@@ -35,4 +30,8 @@ Read the PNGs it prints. Batch audits: `tools/audit-parts.mjs` →
 ## Load on demand
 
 - Preset views / shot sets, CLI options, `CARVIEW` API, decal handedness →
-  [references/presets.md](references/presets.md).
+  [references/presets.md](car-viewer-presets.md).
+
+---
+
+_Folded into `playwright-probe` on 2026-09-03 (tree restructure Phase 5). Selection trigger it carried, now merged into `playwright-probe`'s description: Use when the user asks to show/render/check the car, inspect a team livery, sponsors, number, wing/gearbox/brake/part geometry, reflections/material finish, isolated F1 car, or front/side/rear/car-viewer shots in Apex 26._

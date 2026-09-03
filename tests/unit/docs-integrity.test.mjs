@@ -628,14 +628,27 @@ test("every relative link in EVERY live doc resolves", () => {
   // relative to the DOC'S OWN DIRECTORY, so research/-to-research/ hops and
   // README's rows both check under the same rule. docs/archive/ is excluded:
   // it describes trees that no longer exist, and that is its job.
+  //
+  // EVERY DIRECTORY UNDER docs/, not three named ones (2026-09-03). Phase 5
+  // moved the dated ledgers into docs/notes/, and each arrived carrying links
+  // written relative to docs/ — `research/WEBGPU-PARITY.md`, `../AGENTS.md`,
+  // `ARCHITECTURE.md`. Nine were dead the moment the files landed and nothing
+  // said so, because this list enumerated `research` and `tracks` by name.
+  // Walking whatever is there covers the next directory on the day it appears.
   const dead = [];
   const docs = ["docs/README.md",
     ...ls("docs", /\.md$/).filter((f) => f !== "README.md").map((f) => `docs/${f}`),
-    ...fs.readdirSync(path.join(ROOT, "docs", "research"))
-      .filter((f) => f.endsWith(".md")).map((f) => `docs/research/${f}`),
-    ...fs.readdirSync(path.join(ROOT, "docs", "tracks"))
-      .filter((f) => f.endsWith(".md")).map((f) => `docs/tracks/${f}`),
   ];
+  for (const e of fs.readdirSync(path.join(ROOT, "docs"), { withFileTypes: true })) {
+    if (!e.isDirectory() || e.name === "archive") continue;   // archive: checked below
+    (function walk(rel) {
+      for (const d of fs.readdirSync(path.join(ROOT, rel), { withFileTypes: true })) {
+        const sub = `${rel}/${d.name}`;
+        if (d.isDirectory()) walk(sub);
+        else if (d.name.endsWith(".md")) docs.push(sub);
+      }
+    })(`docs/${e.name}`);
+  }
   for (const doc of docs) {
     const dir = path.dirname(path.join(ROOT, doc));
     for (const m of read(doc).matchAll(/\]\(([^)#:\s]+)(?:#[^)]*)?\)/g)) {
@@ -676,10 +689,19 @@ test("no live doc points a reader at docs/archive/", () => {
   // have been archived, or a reference that should have been rewritten — both
   // are worth catching. docs/README.md is the one legitimate referrer, because
   // indexing the archive is its job.
+  //
+  // docs/notes/ is EXEMPT (2026-09-03). Those are dated ledgers, and a ledger's
+  // provenance chain is the point of it: PERF-FINDINGS §3 cites the archived
+  // perf ledger it was distilled from, the defect register cites the sweeps
+  // that closed its rows. That is a record pointing at its own history, not a
+  // reference doc sending a reader to a layout that has moved — which is what
+  // this test exists to catch. Their links still have to resolve; the walk
+  // above covers notes/, and it did not before.
+  const inNotes = (p) => p.split(path.sep).join("/").startsWith("docs/notes/");
   const offenders = [];
   for (const doc of LIVE_DOCS) {
-    if (doc === "docs/README.md") continue;
-    if (/docs\/archive\//.test(read(doc))) offenders.push(doc);
+    if (doc === "docs/README.md" || inNotes(doc)) continue;
+    if (/docs\/archive\/|\.\.\/archive\//.test(read(doc))) offenders.push(doc);
   }
   assert.deepEqual(offenders, [],
     "a live doc references docs/archive/ — either it should not be archived, or the reference is stale");

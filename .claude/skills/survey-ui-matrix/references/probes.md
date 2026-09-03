@@ -210,7 +210,7 @@ Sort by **failure mode, not by count**:
   preference between 24 and `--tap`
 - **document h-overflow** — always a defect here
 - **dead space beside cramped space in one composition** — a design finding, not
-  a bug; feed it to `restructure-screens-css`
+  a bug; feed it to `css-play` (`references/restructure.md`)
 
 Re-measure after every fix **in the shape you fixed it in and at least one other**
 — this session, a fix that was correct in landscape put a centred element hard

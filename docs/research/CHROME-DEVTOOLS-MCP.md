@@ -40,7 +40,7 @@ Interactive twin of Playwright — not a CI gate. Skills:
    rendered correctly both times.
    **So: measure with `evaluate_script`, and if you need a picture, take it with
    Playwright.** An MCP screenshot is fine for "is the app up, roughly", never
-   for "does this element overlap that one". This is `docs/LAYOUT-AUDIT.md`'s "a
+   for "does this element overlap that one". This is `../COMPONENTS.md`'s "a
    finding is a claim about the probe" inverted — here the MEASUREMENT is the
    reliable half and the PICTURE is the claim, which is the opposite of the
    usual assumption and the reason it costs so much time.

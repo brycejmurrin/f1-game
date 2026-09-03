@@ -1,6 +1,6 @@
 ---
 name: slim-bloat
-description: Use when files, skills, docs, or the tree have grown too large for agents — fat SKILL.md, saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or "simplify this / too much context". Claude-simplify analog for Apex 26. Not for physics tune, circuit accuracy, CSS restructure (restructure-screens-css), or pre-push verify (check-changes).
+description: Use when files, skills, docs, or the tree have grown too large for agents — fat SKILL.md, saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates, or "simplify this / too much context". Claude-simplify analog for Apex 26. Not for physics tune, circuit accuracy, CSS restructure (css-play), or pre-push verify (check-changes).
 ---
 
 # Cut agent bloat (Claude-simplify for Apex 26)
@@ -34,7 +34,7 @@ locksteps, and bumps cache.
 5. **Never "simplify" physics, the timestep, or `updateCar`/`render()`.**
    See do-not.md.
 
-CSS/DOM count work → **restructure-screens-css**. Pre-push →
+CSS/DOM count work → **css-play** (`references/restructure.md`). Pre-push →
 **check-changes** / `verify-agent`.
 
 ## Load on demand

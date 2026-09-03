@@ -279,7 +279,7 @@ exported surface) and `GLX.draw` (grab the real model matrices), all from a
 buffer and count pixels where one beats the other, mapping each loss back to a
 `part()` name via the cumulative `out.parts[].vertices` sum. Full code, and the
 NDC-bbox shortcut that produces false positives, in
-[`docs/OCCLUSION-PROBE.md`](docs/OCCLUSION-PROBE.md). It costs one
+[`../../../../docs/notes/OCCLUSION-PROBE.md`](../../../../docs/notes/OCCLUSION-PROBE.md). It costs one
 `evaluate_script` and returns a number you can put in a commit message —
 `2722 px → 0 px` beats "looks better now".
 

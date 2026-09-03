@@ -60,7 +60,7 @@ vs playwright-official).
    adapters — it breaks `mapAsync` device-wide). Lavapipe A/B:
    `wgx-lavapipe-probe.mjs` (needs `mesa-vulkan-drivers`). TLX:
    `gfx-probe.mjs --backend three` (WebGL2 pin). Cloud env packages:
-   `AGENTS.md` §Cursor Cloud; `docs/research/CI-RENDERING-PERFORMANCE.md`
+   `AGENTS.md` §Cursor Cloud; `../../../docs/notes/CI-RENDERING-PERFORMANCE.md`
    §Cursor Cloud.
 5. Long fetch/search → `deploy-research` subagent, not the parent context.
 

@@ -1,8 +1,3 @@
----
-name: debug-tracks
-description: Use when the user asks about track geometry, corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, groundY/scan/wallStats, comparing circuits, or whether terrain is poking through the road in Apex 26.
----
-
 # Track debug hooks
 
 Verified live (`tools/apex-eval.mjs`). All return plain JSON — ideal for tests and
@@ -59,4 +54,8 @@ not know one.
 ## Load on demand
 
 - Street half-width loop, multi-track sweep, one-off `apex-eval` recipes,
-  visual validate → [references/sweeps.md](references/sweeps.md).
+  visual validate → [references/sweeps.md](debug-tracks-sweeps.md).
+
+---
+
+_Folded into `agent-view` on 2026-09-03 (tree restructure Phase 5). Selection trigger it carried, now merged into `agent-view`'s description: Use when the user asks about track geometry, corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, groundY/scan/wallStats, comparing circuits, or whether terrain is poking through the road in Apex 26._

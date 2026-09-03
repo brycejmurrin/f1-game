@@ -1,8 +1,16 @@
-# iOS & GitHub Pages compatibility notes
+# Platform notes — iOS, Safari, and the static host
 
 How Apex 26's input and rendering choices map onto iOS Safari and a static
 GitHub Pages host, plus the reasoning behind the controller support added from
 the racing-game input research.
+
+The **per-device behaviours** that only bite on one platform — pointer capture
+and the four-way release net, the top layer vs `z-index`, `zoom` and
+`--ui-scale`, `(pointer: coarse)`, Escape vs `<dialog>` close watchers, iOS
+WebGL context loss — stay in
+[`research/PLATFORM-INPUT-NOTES.md`](research/PLATFORM-INPUT-NOTES.md), which
+`js/input/input.js`, `js/ui/modal.js` and four specs cite by path. Read that
+one before debugging anything that reproduces on one device and not another.
 
 ## Everything here runs on a static host
 

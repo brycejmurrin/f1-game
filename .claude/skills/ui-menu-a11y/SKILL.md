@@ -20,7 +20,7 @@ Do **not** use for in-race driving input (unless a menu leaks keys) —
 **input-controls**. Data-hub tab logic → **data-hub**. Renderer/canvas
 visuals outside menu/HUD layout are out. Whole-matrix review →
 **survey-ui-matrix**. One-screen CSS try-on → **css-play**. Restructure
-decisions → **restructure-screens-css**.
+decisions → **css-play** (`references/restructure.md`).
 
 ## Quick Reference
 
@@ -43,7 +43,7 @@ npm run test:tooling-fast
 
 `tests/specs/ui-audit.spec.js` asserts nothing — it is a capture harness.
 Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
-`docs/ARCHITECTURE-REVIEW.md`.
+`../../../docs/notes/ARCHITECTURE-REVIEW.md`.
 
 ## Load on demand
 

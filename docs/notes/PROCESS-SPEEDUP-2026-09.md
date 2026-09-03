@@ -174,7 +174,7 @@ in CI today) boot in ~4 s on `macos-latest`'s real Metal adapter — give
 - **AGENTS.md**: ~800 of 2,933 words are war stories (npm-install red run,
   the real-GPU census, soft-present mechanics, the four WGX boot defects,
   Cursor Cloud packages, WGSL rules). Keep each rule as one line with a
-  pointer; move the paragraphs to `RENDERERS.md`, `CI-RENDERING-PERFORMANCE.md`,
+  pointer; move the paragraphs to `../ARCHITECTURE.md`, `CI-RENDERING-PERFORMANCE.md`,
   `WEBGPU-PARITY.md`, `apex-env-setup`. `PERF-FINDINGS.md`: keep §0 + the
   cited §2 sections, archive §3–§5 (~900 lines).
 
@@ -207,7 +207,7 @@ Skills 44 → ~22: delete the four with no repo content (webgpu-inspector,
 webapp-testing, pixel-perfect, apex-env-setup — 1,000+ lines, zero
 references, two name tools that do not exist); fold the pointer skills into
 the skill they point at (motion-capture + perf-profile → playwright-probe;
-cross-backend-parity → `RENDERERS.md` (LANDED 2026-09-01 as §Cross-backend
+cross-backend-parity → `../ARCHITECTURE.md` (LANDED 2026-09-01 as §Cross-backend
 parity; 32 → 31 skills); bake-lighting → lighting-tuner;
 scene-graph-instancing → scenery-dress; debug-state → agent-view;
 test-timeout-triage + bump-cache + deploy-merge → check-changes/references).

@@ -1,7 +1,7 @@
 # Game-feel channels, workflow, mistakes
 
 Load this when picking a channel for kerb / wall / shift / collision juice.
-Generic trauma-shake math: [feedback-recipes.md](feedback-recipes.md).
+Generic trauma-shake math: [feedback-recipes.md](game-feel-feedback-recipes.md).
 
 ## Where to add feedback
 

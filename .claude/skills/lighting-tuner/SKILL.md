@@ -1,6 +1,6 @@
 ---
 name: lighting-tuner
-description: Use when the user says night looks washed out/like day, dawn sun is too high, floodlights/lamps aren't firing, day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, or wants to validate Apex 26 lighting knobs via lightState, or pastes a window.LightPresets / LightEdits blob to bake into light-presets.js. Bloom as a GPU/shader defect → webgl-debug. Mirror a new knob across backends → docs/RENDERERS.md §Cross-backend parity after the tune.
+description: Use when the user says night looks washed out/like day, dawn sun is too high, floodlights/lamps aren't firing, day scene is flat, ambient/exposure/fog/lighting slider/lightTune/applyRaceSettings issues, or wants to validate Apex 26 lighting knobs via lightState, or pastes a window.LightPresets / LightEdits blob to bake into light-presets.js. Bloom as a GPU/shader defect → webgl-debug. Mirror a new knob across backends → ../../../docs/ARCHITECTURE.md §Cross-backend parity after the tune.
 ---
 
 # Tune and validate scene lighting via __apex probes
@@ -34,7 +34,7 @@ before/after; don't guess from AGENTS.md.
 
 ## When NOT to Use
 
-- Isolated car paint in the studio → **car-viewer** (`--refl` is not a scene
+- Isolated car paint in the studio → **playwright-probe** `references/car-studio.md` (`--refl` is not a scene
   knob). Renderer compile / GL errors → **webgl-debug** / **webgpu-debug**.
 
 ```sh
@@ -42,7 +42,7 @@ node tools/test-bg.mjs gfx      # lighting-ab + tuner-grade + probes + tlx
 npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
 ```
 
-Related: **webgl-debug**, **debug-cameras**.
+Related: **webgl-debug**, **playwright-probe** (`references/cameras.md`).
 
 ## Visual A/B with slider-effect
 

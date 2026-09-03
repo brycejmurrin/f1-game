@@ -3,8 +3,8 @@
 **Status (2026-08-18, cache 1421):** Leftover-hunt sessions on deploy took
 TLX shadow `count`, content-hash cache busting, typed accumulators, and
 the build-time §3 items. Live leftover list:
-[PERF-HUNT-2026-08-18.md](PERF-HUNT-2026-08-18.md) (union banner) and
-[PERF-FINDINGS.md](../PERF-FINDINGS.md) §3. Pine unit-Y reuse stays
+[PERF-HUNT-2026-08-18.md](../../notes/PERF-HUNT-2026-08-18.md) (union banner) and
+[PERF-FINDINGS.md](../../notes/PERF-FINDINGS.md) §3. Pine unit-Y reuse stays
 **reverted**. Do not treat this 08-17 board as current.
 
 **Status (2026-08-17 deferred pass):** Remaining survey items landed on
