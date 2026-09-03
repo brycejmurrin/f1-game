@@ -177,7 +177,10 @@ const CEILING = {
   // teamtile/seat padding pair into one shared declaration.
   // 2026-08-27: 324 -> 323. Round-13 season-row de-buttoning dropped the
   // rows' raw margin-bottom (the hairline grammar needs no stacking gap).
-  rawSpacing: 323,
+  // 2026-09-03: 323 -> 322. Compact-wide title dropped a redundant
+  // `#menu-hero .bigbtn { padding-block }` that the following
+  // `#menu-buttons .bigbtn { padding }` shorthand already overrode.
+  rawSpacing: 322,
   // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
   // declaration value; tokens.css custom-property DEFINITIONS excluded — the
   // definition site is the system, not drift; url() interiors excluded).

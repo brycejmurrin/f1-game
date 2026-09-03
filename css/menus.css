@@ -23,6 +23,14 @@
    The title screen is not a `.sheet`, so without this it is the one screen the
    setting would never move. */
 #overlay > * { zoom: var(--ui-scale); }
+/* Title arrives once. Reuses sheet-in (css/components.css) so the doors and
+   the wordmark share the same motion as every modal sheet — one-shot, never
+   a loop (the sheen rule below documents why). hidden on #overlay restarts it
+   when the player comes back from a room. */
+@media (prefers-reduced-motion: no-preference) {
+  #menu-brand { animation: sheet-in 0.32s cubic-bezier(0.2, 0.7, 0.3, 1); }
+  #menu-buttons { animation: sheet-in 0.4s 0.05s cubic-bezier(0.2, 0.7, 0.3, 1); }
+}
 #overlay {
   position: fixed; inset: 0;
   z-index: 20;
@@ -60,7 +68,7 @@
   /* in oklab so the red wash stays red through its falloff instead of
      sagging grey, and .grain (css/components.css) dithers what is left */
   background:
-    radial-gradient(120% 90% at 50% 10% in oklab, color-mix(in oklab, var(--red) 22%, transparent), transparent 64%),
+    radial-gradient(115% 80% at 50% 0% in oklab, color-mix(in oklab, var(--red) 28%, transparent), transparent 58%),
     rgba(6, 6, 10, 0.36);
   overflow-y: auto; overflow-x: hidden;
   overscroll-behavior-y: contain; touch-action: pan-y;
@@ -68,6 +76,7 @@
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
   color: var(--text);
+  letter-spacing: 0.06em;
   text-shadow: 0 0 42px color-mix(in oklab, var(--red) 82%, transparent), 0 2px 12px rgba(0, 0, 0, 0.8);
 }
 /* The accent rule UNDERLINES THE WORDMARK. It was `width: 70%; margin: 4px auto
@@ -323,6 +332,11 @@ body { --compact-at: 600px; --wide-at: 620px; }
   grid-column: 2; grid-row: 1;
   align-self: stretch;
   justify-items: stretch;
+  /* Rooms used to sit on --tap (52px on touch) so a 2×2 of DATA / GARAGE /
+     SETTINGS / HELP overflowed the column (measured gallery 2026-09-03:
+     scrollH 388 vs clientH 306 at 734×343). Same compact floor the pause
+     stack already uses on this shape. */
+  gap: calc(var(--gap) * 0.55);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
 :where(body[data-shape="wide"][data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: var(--fs-micro); }
@@ -332,9 +346,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary { width: 100%; }
-:where(body[data-shape="wide"][data-density="compact"]) #menu-hero .bigbtn { padding-block: 12px; }
-:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn { width: 100%; padding: 11px 10px; font-size: 17px; }
-:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .minibtn { padding: 7px 10px; font-size: var(--fs-micro); }
+:where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn {
+  width: 100%; padding: 8px 10px; font-size: 17px;
+  min-height: max(36px, var(--tap-min));
+}
+:where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .minibtn {
+  padding: 5px 8px; font-size: var(--fs-micro);
+  min-height: max(30px, var(--tap-min));
+}
 /* The static mode subs are the first thing to go when height is short — the
    hero's save line stays, it is state the player came back for. */
 :where(body[data-density="compact"]) #menu-primary .mb-sub { display: none; }

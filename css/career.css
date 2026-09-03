@@ -120,6 +120,7 @@
 #cr-inner[data-density="compact"] .cr-slot { margin-bottom: 4px; }
 #cr-inner[data-density="compact"] .cr-slot-main {
   padding: calc(var(--pad) * 0.35); gap: 2px;
+  min-height: max(36px, var(--tap-min));
 }
 #cr-inner[data-density="compact"] .cr-note {
   margin-bottom: 4px; font-size: var(--fs-2); line-height: 1.35;
