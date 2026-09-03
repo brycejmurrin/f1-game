@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TOOL = path.join(ROOT, "tools", "ui", "css-play.mjs");
-const PW = path.join(ROOT, "tools", "playwright-mcp.sh");
+const PW = path.join(ROOT, "tools", "mcp", "playwright-mcp.sh");
 
 const {
   parseCssPlayArgs,

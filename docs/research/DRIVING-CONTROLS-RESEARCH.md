@@ -546,7 +546,7 @@ should quietly do another's job.
 ## Live mcp-probe, 2026-08-18 — what the car actually does
 
 Working-tree canvas at `http://127.0.0.1:3456/` (shell `?v=` hash `7eb65822effc`),
-`node tools/mcp-cli.mjs probe --eval artifacts/driving-controls-probe.js` then
+`node tools/mcp/mcp-cli.mjs probe --eval artifacts/driving-controls-probe.js` then
 `…-v2.js`. Track: Monza. `__apex.headless(true)` + `act()` — JSON, no pixels.
 v1 closed-loop trials at full lock ran into the barrier (`x≈7.9`, `wall=0`);
 those yaw numbers are discarded. v2 uses 18-frame / 0.35-stick pulses on the

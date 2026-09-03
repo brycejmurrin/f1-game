@@ -17,9 +17,9 @@ alwaysApply: true
   `mcp-probe` for a version.json check.
 - **MCP:** three servers in root `.mcp.json` (and `.cursor/mcp.json`):
   `apex-tools`, `playwright-official`, `chrome-devtools`. Cloud host catalog
-  often does **not** auto-load them — then `tools/apex-tools-mcp.sh call`,
-  `tools/chrome-devtools-mcp.sh`, `python3 tools/probe-mcp.py chrome-start`
-  (CLI daemon, not attached). `tools/tinyfish-mcp.sh` is CLI-only and
+  often does **not** auto-load them — then `tools/mcp/apex-tools-mcp.sh call`,
+  `tools/mcp/chrome-devtools-mcp.sh`, `python3 tools/mcp/probe-mcp.py chrome-start`
+  (CLI daemon, not attached). `tools/mcp/tinyfish-mcp.sh` is CLI-only and
   egress-blocked in-container. Map: `docs/AGENT-SURFACE.md`. Never run Chrome
   MCP while Playwright is running; never hand a subagent a browser test group.
 - **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /

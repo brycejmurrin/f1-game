@@ -17,8 +17,10 @@
  * tools and tests that name the file. Underscore-prefixed files are agent
  * scratch (.gitignore) and are not indexed.
  *
- * The hand prose (intro, subdirectories, conventions) lives in this file as a
- * template; tests/unit/docs-integrity.test.mjs asserts the index both ways
+ * Rows are GROUPED by subdirectory, from the GROUPS roster below — a tool in a
+ * directory that roster does not name fails the generator rather than landing
+ * in an unlabelled bucket. The hand prose (intro, conventions) lives in this
+ * file as a template; tests/unit/docs-integrity.test.mjs asserts the index both ways
  * (every tool has a row, every row names a tool) and tests/unit/
  * generated-docs.test.mjs asserts `--check` is clean.
  *
@@ -124,7 +126,10 @@ export function collect() {
         if (!SKILLS.has(name))
           problems.push(`${rel}: \`@skill ${name}\` names no skill under .claude/skills/ — retarget it or drop the tag`);
     }
-    const row = { rel, doc, skill: tags.skill || "—", section: tags.section || "" };
+    const dir = rel.includes("/") ? rel.slice(0, rel.indexOf("/")) : "";
+    if (!GROUPS.some(([g]) => g === dir))
+      problems.push(`${rel}: tools/${dir}/ is not a documented group — add it to GROUPS in gen-tools-readme.mjs or move the file`);
+    const row = { rel, doc, skill: tags.skill || "—", section: tags.section || "", dir };
     if (row.section === "runner") runner.push(row);
     else if (row.section) problems.push(`${rel}: unknown @section "${row.section}" (only "runner" exists)`);
     else main.push(row);
@@ -132,6 +137,29 @@ export function collect() {
   if (problems.length) throw new Error("tools/ header tags:\n  " + problems.join("\n  "));
   return { main, runner, data, warnings };
 }
+
+/** The tools/ subdirectories, in reading order, with the one line that says
+ *  what belongs in each. A tool in a directory NOT listed here fails the
+ *  generator rather than landing in an unlabelled table: the grouping is the
+ *  index's whole value, and a silent "misc" bucket is how 160 flat files
+ *  happened the first time. Root holds only what every consumer hardcodes. */
+export const GROUPS = [
+  ["", "Root — the load-order truth and the car studio page; every consumer hardcodes these paths."],
+  ["lib", "Shared harnesses and helpers other tools load: the browser+server harness, the two Node-VM harnesses, the output-path contract, the WebGPU flag set."],
+  ["ci", "The test runner and the release pipeline: what to run, how to run it in the background, what CI selected, and the deploy."],
+  ["check", "Static guards over the source — a red exit here is a defect, not a report."],
+  ["gen", "Author-time generation: the generated doc blocks, the shell, and the asset bakes."],
+  ["shot", "Headless observation of the running game: framed screenshots, one-expression evals, the agent surface, a CPU profile."],
+  ["gfx", "Renderer and GPU probes — GLX, WGX, TLX, and the adapter census."],
+  ["track", "Circuit geometry and scenery: the build guard, the baseline-gated audits, the survey and the start-line maths."],
+  ["car", "The car and the garage: option sweeps, livery and crest rendering, career economics."],
+  ["ui", "Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) they share."],
+  ["lighting", "The lighting tuner: A/B harnesses, slider effectiveness, and the batch campaign package."],
+  ["mcp", "MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools and TinyFish bridges, the phone report pair."],
+  ["net", "WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers."],
+  ["env", "Container bootstrap: browsers and the Cursor Cloud install."],
+  ["moves", "Move plans read by gen/move-tree.mjs — data, not code."],
+];
 
 const INTRO = `# Apex 26 dev tools
 
@@ -152,27 +180,20 @@ lines). Edit the tool's header, then regenerate; \`--check\` is the drift gate
 the tool's own header.
 `;
 
-const SUBDIRS = `## Subdirectories (R3 families)
-
-Self-contained families live in subdirectories; everything else stays flat
-(manifest.cjs, carview.html, the test infra and every baseline/audit are
-deliberately NOT moved — their consumers hardcode the flat paths):
-
-- \`net/\` — WebRTC/Nostr end-to-end harnesses and the local relay/TURN servers
-- \`car/\` — car renders (carshot, render-car)
-- \`capture/\` — frame capture (apex-capture, backend-compare, baked-scenery, motion-capture, shot)
-- \`lighting/\` — ab-lighting; \`lighting-campaign/\` is the batch lighting-sweep package (\`tests/unit/lighting-campaign.test.mjs\`)
-`;
-
 const CONVENTIONS = `## Conventions
 
-- **Capture tools are a family:** \`apex-capture.mjs\` is the parallel sweep,
-  \`carshot.mjs\` the ~5 KB studio probe, \`render-car.mjs\` the contact sheet,
-  \`capture/shot.mjs\` one framed shot, \`survey-track.mjs <id>\` the one-stop
-  circuit pass (\`--oblique\` adds topdown + N/E/S/W). Redundant one-offs were
-  deleted; recover from git history if a need returns. \`menu-fit.mjs\` survives
-  \`layout-audit.mjs\` only for \`--safe=\` (arbitrary notch insets — headless
-  Chromium reports every \`env(safe-area-inset-*)\` as 0).
+- **Where a tool goes:** by what it DOES, not by what it is named. The
+  directory headings above are the contract — \`gen-tools-readme.mjs\` fails on
+  a tool in a group it does not know, so a new tool picks a group or the group
+  gets documented. Only what every consumer hardcodes stays at \`tools/\` root.
+- **Capture tools are a family:** \`shot/apex-capture.mjs\` is the parallel
+  sweep, \`car/carshot.mjs\` the ~5 KB studio probe, \`car/render-car.mjs\` the
+  contact sheet, \`shot/shot.mjs\` one framed shot, \`track/survey-track.mjs
+  <id>\` the one-stop circuit pass (\`--oblique\` adds topdown + N/E/S/W).
+  Redundant one-offs were deleted; recover from git history if a need returns.
+  \`ui/menu-fit.mjs\` survives \`ui/layout-audit.mjs\` only for \`--safe=\`
+  (arbitrary notch insets — headless Chromium reports every
+  \`env(safe-area-inset-*)\` as 0).
 - **Chromium:** \`CHROME\` / \`PW_CHROMIUM\`, then \`/opt/pw-browsers/...\`, else
   Playwright's bundled browser. Servers bind a free port (or \`:3456\`).
 - **Two Playwright packages on purpose:** specs run on \`@playwright/test\`;
@@ -187,16 +208,22 @@ export function render() {
   const { main, runner, data, warnings } = collect();
   for (const w of warnings) process.stderr.write(`gen-tools-readme: ${w}\n`);
   const out = [INTRO];
-  out.push("| Tool | Does | Paired skill |\n|---|---|---|");
-  for (const r of main) out.push(`| **${r.rel}** | ${cell(r.doc)} | ${cell(r.skill)} |`);
-  out.push("");
-  out.push("### Test runner & coverage\n\n| Tool | Does |\n|---|---|");
+  out.push("## The tools, by what they do\n");
+  for (const [dir, blurb] of GROUPS) {
+    const rows = main.filter((r) => r.dir === dir);
+    if (!rows.length) continue;
+    out.push(`### \`tools/${dir}${dir ? "/" : ""}\`\n`);
+    out.push(`${blurb}\n`);
+    out.push("| Tool | Does | Paired skill |\n|---|---|---|");
+    for (const r of rows) out.push(`| **${r.rel}** | ${cell(r.doc)} | ${cell(r.skill)} |`);
+    out.push("");
+  }
+  out.push("## Test runner & coverage\n\n| Tool | Does |\n|---|---|");
   for (const r of runner) out.push(`| **${r.rel}** | ${cell(r.doc)} |`);
   out.push("");
-  out.push("### Data files\n\nNo header comment in JSON, so the \"read by\" column is derived from which tools and unit tests name the file.\n\n| File | Read by |\n|---|---|");
+  out.push("## Data files\n\nNo header comment in JSON, so the \"read by\" column is derived from which tools and unit tests name the file.\n\n| File | Read by |\n|---|---|");
   for (const d of data) out.push(`| **${d.rel}** | ${d.readers.map((r) => `\`${r}\``).join(", ") || "—"} |`);
   out.push("");
-  out.push(SUBDIRS);
   out.push(CONVENTIONS);
   return out.join("\n");
 }

@@ -133,7 +133,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/setup-preview-hull.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
-  // sweep is `node tools/road-lut-census.mjs --all` (~34 s), run before a deploy
+  // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
   // that touches the LUT rather than on every edit.
   "tests/unit/road-lut-frame.test.mjs",
   // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,

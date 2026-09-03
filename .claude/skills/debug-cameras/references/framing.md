@@ -46,14 +46,14 @@ do **not** `snapCam()` after `orbit()` — `snapCam()` clears `dbgCam`.
 
 ```sh
 # one-off via the reusable evaluator (boots headless, prints JSON):
-node tools/apex-eval.mjs monaco "a.camera()"                 # list modes / current
-node tools/apex-eval.mjs spa    "a.cinematic(0.07)"          # resolve Eau Rouge cinematic
-node tools/apex-eval.mjs monza  "(a.park(0.03), a.orbit(0.03,45,18,45), a.camState())"  # T1 ~0.016–0.042 (monza.js turns)
+node tools/shot/apex-eval.mjs monaco "a.camera()"                 # list modes / current
+node tools/shot/apex-eval.mjs spa    "a.cinematic(0.07)"          # resolve Eau Rouge cinematic
+node tools/shot/apex-eval.mjs monza  "(a.park(0.03), a.orbit(0.03,45,18,45), a.camState())"  # T1 ~0.016–0.042 (monza.js turns)
 
 # lap tour — chase cam at every 5% of a circuit (20 shots in order):
-node tools/capture/apex-capture.mjs lap-tour monza           # → scratch/captures/apex-capture/lap-tour/01-f0.00.png … 20-f0.95.png
-node tools/capture/apex-capture.mjs lap-tour monaco 55       # slower speed for tighter street circuit
-node tools/capture/apex-capture.mjs lap-tour spa 70 scratch/captures/apex-capture/spa # custom outdir
+node tools/shot/apex-capture.mjs lap-tour monza           # → scratch/captures/apex-capture/lap-tour/01-f0.00.png … 20-f0.95.png
+node tools/shot/apex-capture.mjs lap-tour monaco 55       # slower speed for tighter street circuit
+node tools/shot/apex-capture.mjs lap-tour spa 70 scratch/captures/apex-capture/spa # custom outdir
 ```
 ```js
 // in a Playwright page or the dev console — frame + freeze + (screenshot):
@@ -62,7 +62,7 @@ __apex.race("monaco");
 // __apex.trackInfo({what:"corners"}) or __apex.corners() or the def's `turns` in js/circuits/<id>.js
 __apex.park(0.18);   // stationary + frozen
 __apex.orbit(0.18, 60, 20, 40);             // orbit the chicane (dbgCam — no snapCam after)
-// for a PNG, use tools/capture/shot.mjs (cam = orbit|eye|cinematic|trackside)
+// for a PNG, use tools/shot/shot.mjs (cam = orbit|eye|cinematic|trackside)
 
 // manual chase-cam snap (the lap-tour pattern in bare JS):
 __apex.jump(0.035, 60, 0);  // Monza T1 ~0.016–0.042 (monza.js turns), not 0.1

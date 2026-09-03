@@ -29,7 +29,7 @@
 //
 // WGX needs the FULL Chromium binary (not the headless shell — no navigator.gpu)
 // plus Vulkan/SwiftShader pins. The old `--use-angle=swiftshader
-// --enable-unsafe-webgpu` pair alone refuses MSAA>1; see tools/wgx-validate.mjs.
+// --enable-unsafe-webgpu` pair alone refuses MSAA>1; see tools/gfx/wgx-validate.mjs.
 //
 // SwiftShader: Dawn validation oracle — native swapchain compositor blank; WGX
 // soft-presents to visible #game via 2D blit. Lavapipe (+ xvfb-run for headed):
@@ -195,7 +195,7 @@ export async function startStaticServer(root, {
     server.once("error", fail);
     // host defaults to loopback: a test server must not appear on the LAN just
     // because it exists. A tool that WANTS to be reachable from a phone passes
-    // "0.0.0.0" deliberately (tools/report-server.mjs).
+    // "0.0.0.0" deliberately (tools/mcp/report-server.mjs).
     server.listen(port, host, ok);
   });
   // Unref'd: a tool that forgets to close must still be able to exit on its own.

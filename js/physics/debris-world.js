@@ -272,7 +272,7 @@ function active() { return _active; }
 // step() below builds lazily on its first call, and game.js's update() returns
 // at `if (state !== "race") return;` all through the countdown — so that first
 // call has always landed on the very first RACE step, i.e. the lights-out
-// frame. Measured with tools/profile-gameloop.mjs (vegas, physics), reading the
+// frame. Measured with tools/shot/profile-gameloop.mjs (vegas, physics), reading the
 // profile's positionTicks so this is line-attributed rather than estimated:
 // buildWorld is 467 of 2575 samples INCLUSIVE — ~216 ms on this box, of which
 // createCollider is 410 —

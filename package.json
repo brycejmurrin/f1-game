@@ -54,11 +54,11 @@
     "ui:survey": "node tools/ui/layout-audit.mjs --survey",
     "ui:gallery": "node tools/ui/layout-audit.mjs --gallery",
     "ui:audit": "node tools/ui/layout-audit.mjs",
-    "wgx:gallery": "node tools/wgx-shot.mjs --gallery --lite",
+    "wgx:gallery": "node tools/gfx/wgx-shot.mjs --gallery --lite",
     "ab:light": "node tools/lighting/ab-lighting.mjs",
     "setup:browsers": "bash tools/env/install-browsers.sh",
     "physics:sweep": "node tools/check/physics-tune-sweep.mjs",
-    "wgx:capture": "node tools/wgx-capture.mjs"
+    "wgx:capture": "node tools/gfx/wgx-capture.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",

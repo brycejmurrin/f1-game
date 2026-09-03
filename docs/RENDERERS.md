@@ -140,7 +140,7 @@ whole device.
 | **WEBGPU** | Soft-present: final pass → `COPY_SRC` texture → ephemeral readback → `putImageData` on `#game`. Forced by SCREENSHOTS: 2D BLIT or a software adapter. SCREENSHOTS: NATIVE leaves the swapchain black. | `GLX.awaitSoftPresent()` then `#game`; optional `GLX.capturePixels()` |
 | **THREE.JS** | AUTO can be **WebGPU or three WebGL2**. SETTINGS shows `AUTO (WEBGPU)` / `AUTO (WEBGL2)` from the live backend. It tries WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE; since 2026-09-02 a phone that picks THREE.JS BINDS it despite the §2m memory risk — `apex26.tlxMobile=0` declines back to GLX, and the boot canary reverts a load that never presented). It lands on three WebGL2 when GPU is missing, `apex26.tlxAutoGL=1` after this tab lost WebGPU, `init()` threw before `#game` was claimed, **or the browser is WebKit (Safari, every iOS browser) — since 2026-09-03: two deploys drew three-WebGPU wrongly on an iPhone with zero reported errors (bodywork missing, then sky-only at `c6d8fd3`); THREE PATH: WEBGPU still pins it for the investigation, with `apex26.tlxArrayNearest=1` / `apex26.tlxNoMrt=1` as the on-device A/B switches and SETTINGS ▸ COPY DIAG as the report** — still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
 
-Probes: `node tools/gfx-probe.mjs --backend webgpu|three <track>`.
+Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
 
 ## Parity snapshot
 
@@ -236,12 +236,12 @@ recorded as a gap** in §Parity snapshot above and in the defect inventory
    `webgpu/wgsl-*.js`, TSL factories in `three/`, and the CPU plumbing that
    feeds the uniforms — a knob that reaches one shader family and not the
    others is the usual drift.
-3. WGX: `node tools/wgx-validate.mjs --static` (real Dawn WGSL validation,
+3. WGX: `node tools/gfx/wgx-validate.mjs --static` (real Dawn WGSL validation,
    ~5 s). A live-device Dawn run is parent-session only → `webgpu-debug`.
-4. Same-scene shots per backend: `node tools/capture/backend-compare.mjs
+4. Same-scene shots per backend: `node tools/shot/backend-compare.mjs
    <track> …` (one deterministic framing, N backends, numeric pixel diff —
    MAD and %px changed — plus per-backend console errors), or
-   `tools/gfx-probe.mjs --backend webgpu|three <track>` (`playwright-probe`
+   `tools/gfx/gfx-probe.mjs --backend webgpu|three <track>` (`playwright-probe`
    skill). `__apex.diag({download:false}).env.backend` is what actually
    bound — a fallback to GLX is silent, so never trust the pick alone.
 
@@ -267,7 +267,7 @@ like success.
 
 ```sh
 npx serve -l 3456 .
-node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
+node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
 ```
 
 `probe` writes the backend pick and RELOADS in one batch (`--backend
@@ -282,10 +282,10 @@ leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused)
 a success test is not a test. Drive a race and assert
 `canvas.getContext("webgl2") === null`, which only holds once WebGPU has
 claimed the canvas. SwiftShader is a validation oracle; for WGX **visible**
-pixels use `tools/gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for the
-readback oracle use `tools/wgx-capture.mjs` → `frame.png`. Full trap list:
+pixels use `tools/gfx/gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for the
+readback oracle use `tools/gfx/wgx-capture.mjs` → `frame.png`. Full trap list:
 `.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
-WGSL validation without a browser: `node tools/wgx-validate.mjs` (real Dawn,
+WGSL validation without a browser: `node tools/gfx/wgx-validate.mjs` (real Dawn,
 ~5 s) — never ship "read-verified" WGSL. The live run compiles every module
 at WebKit's ERROR-severity uniformity default (Dawn only warns), so a pass
 here is evidence about an iPhone too; `--lax-uniformity` opts out to bisect.

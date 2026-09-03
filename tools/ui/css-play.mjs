@@ -10,8 +10,8 @@
 //   node tools/ui/css-play.mjs settings --inject ".sheet{max-height:80vh}" --json
 //
 // Playwright MCP extras (same CLI):
-//   ./tools/playwright-mcp.sh play --screen settings
-//   ./tools/playwright-mcp.sh dom  --screen settings --sel .sheet
+//   ./tools/mcp/playwright-mcp.sh play --screen settings
+//   ./tools/mcp/playwright-mcp.sh dom  --screen settings --sel .sheet
 //
 // Hot-swap rewrites the matching <link href="css/….css?v=…"> to
 // css/….css?play=<mtime>. The static server already sends Cache-Control:
@@ -165,8 +165,8 @@ Flags:
   --help
 
 Same CLI via the Playwright wrapper:
-  ./tools/playwright-mcp.sh play --screen settings
-  ./tools/playwright-mcp.sh dom  --screen settings --sel .sheet
+  ./tools/mcp/playwright-mcp.sh play --screen settings
+  ./tools/mcp/playwright-mcp.sh dom  --screen settings --sel .sheet
 
 Output: artifacts/css-play/<screen>-<stamp>/{shot.png,dom.json,meta.json}
 Hide #game. Do not bump-cache mid-loop — ship with bump-cache after the look lands.

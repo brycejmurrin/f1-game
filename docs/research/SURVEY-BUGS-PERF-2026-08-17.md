@@ -73,7 +73,7 @@ Evidence: `js/render/webgpu/wgx.js` `_blurSep` (~2628–2644),
 
 **Fix direction:** Dual/ring UBOs (or dynamic offsets) for blur axes; dual
 particle VBO/UBO (CPU already has `_vertA`/`_vertB`); or submit between
-passes. Validate with `node tools/wgx-validate.mjs` + a soft-present capture
+passes. Validate with `node tools/gfx/wgx-validate.mjs` + a soft-present capture
 that SSAO/god-ray blur axes differ and both particle layers survive.
 
 ### 1.2 Env cube mips only on first probe cycle (High)

@@ -100,7 +100,7 @@ sit in this table was indexed by nothing and moved to
 | [research/SURVEY-BUGS-PERF-2026-08-17.md](research/SURVEY-BUGS-PERF-2026-08-17.md) | Parallel fleet survey at tip 46554737. **Leftovers after 1421:** next row. |
 | [research/CLEANUP-SWEEP-2026-08-18.md](research/CLEANUP-SWEEP-2026-08-18.md) | Six-agent dead-code / bug / split sweep: what was removed, what looked dead and is not, next `game.js` extractions. |
 | [research/PERF-HUNT-2026-08-18.md](research/PERF-HUNT-2026-08-18.md) | 08-17 board re-walk; union banner at cache 1421. WGX UBO flushes, `LAZY_AGENT` (`apex.js` / `agentview*`), DebrisWorld asleep-skip taken 2026-08-18. |
-| [research/APEX-TOOLS-MCP.md](research/APEX-TOOLS-MCP.md) | Design / refuses for the `apex-tools` wrap. Agent map: [AGENT-SURFACE.md](AGENT-SURFACE.md). Five-server catalog includes `playwright` → `tools/playwright-mcp.sh`; HTTP `127.0.0.1:3713`. |
+| [research/APEX-TOOLS-MCP.md](research/APEX-TOOLS-MCP.md) | Design / refuses for the `apex-tools` wrap. Agent map: [AGENT-SURFACE.md](AGENT-SURFACE.md). Five-server catalog includes `playwright` → `tools/mcp/playwright-mcp.sh`; HTTP `127.0.0.1:3713`. |
 
 The four workflows' verbatim per-agent output now lives together in
 [`archive/research/raw/`](archive/research/raw/) — `2026-08-audit-workflow.json`,

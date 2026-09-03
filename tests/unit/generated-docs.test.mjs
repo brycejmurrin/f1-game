@@ -58,9 +58,36 @@ for (const g of GENERATORS) {
 test("tools/README.md: one row per tool, every row within the @doc cap, no undefined", () => {
   const index = read("tools/README.md");
   // The data-files table is derived ("read by" lists), not @doc text — cap only the tool rows.
-  const toolTables = index.split("### Data files")[0];
+  const toolTables = index.split("## Data files")[0];
   const rows = toolTables.split("\n").filter((l) => /^\|\s*\*\*[^*]+\*\*\s*\|/.test(l));
-  assert.ok(rows.length > 120, `expected > 120 tool rows, found ${rows.length}`);
+  // A ">120" floor was a flat-tools/ artefact: it could only ever notice a
+  // catastrophic empty table, and it drifts every time a tool is added or
+  // deleted. Count what is ON DISK instead — the index must have exactly one
+  // row per indexable file, so a tool that lands in a subdirectory the
+  // generator does not group is caught here as well as in the generator.
+  const onDisk = [];
+  (function walk(dir, rel) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith("_") || e.name === "__pycache__" || e.name === "README.md") continue;
+      const abs = path.join(dir, e.name), r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(abs, r);
+      else if (/\.(mjs|cjs|js|sh|py|html)$/.test(e.name)) onDisk.push(r);
+    }
+  })(path.join(ROOT, "tools"), "");
+  assert.ok(onDisk.length >= 100, `the walk saw only ${onDisk.length} tools — a silent empty list proves nothing`);
+  const listed = new Set(rows.map((l) => l.match(/^\|\s*\*\*([^*]+)\*\*/)[1]));
+  assert.deepEqual(onDisk.filter((f) => !listed.has(f)), [], "a tool on disk has no index row");
+  assert.equal(rows.length, onDisk.length,
+    `index has ${rows.length} tool rows for ${onDisk.length} files on disk`);
+
+  // Every group heading the generator emits names a real directory, and every
+  // directory with tools in it got a heading — the grouping IS the index now.
+  const headings = [...index.matchAll(/^### `tools\/([a-z/]*)`$/gm)].map((m) => m[1].replace(/\/$/, ""));
+  // Grouping is by TOP-LEVEL directory; lighting/campaign/ sits under the
+  // lighting heading, the way the generator emits it.
+  const dirs = new Set(onDisk.map((f) => (f.includes("/") ? f.slice(0, f.indexOf("/")) : "")));
+  assert.deepEqual([...dirs].filter((d) => !headings.includes(d)).sort(), [],
+    "a tools/ subdirectory has files but no group heading");
   assert.doesNotMatch(index, /\bundefined\b/);
   // Second cell, split on UNESCAPED pipes, escapes folded back before measuring.
   const docCell = (l) => (l.split(/(?<!\\) \| /)[1] || "").replace(/\s*\|\s*$/, "").replace(/\\\|/g, "|");

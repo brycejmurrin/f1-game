@@ -185,7 +185,7 @@ const api = {
   //
   // TEAM AND HALO ARE REPORTED, NOT RESTORED. Both are read from storage at
   // boot (`teamIdx` in game.js, CockpitOpts.halo), so honouring them needs a reload the
-  // caller has to drive; tools/repro-shot.mjs does exactly that before
+  // caller has to drive; tools/shot/repro-shot.mjs does exactly that before
   // replaying. Returning them and refusing to half-apply them beats silently
   // rendering the wrong car, which is the failure this whole hook is for.
   repro(o) {

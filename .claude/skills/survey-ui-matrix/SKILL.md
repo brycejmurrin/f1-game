@@ -11,7 +11,7 @@ Playwright MCP + Chromium must be installed before interactive resize/DOM work:
 
 ```bash
 bash tools/env/cloud-agent-install.sh      # AGENTS.md §Verification 1
-bash tools/playwright-mcp.sh status 2>/dev/null || true
+bash tools/mcp/playwright-mcp.sh status 2>/dev/null || true
 ```
 
 Missing browsers / wrapper: AGENTS.md §Verification 1 (`npm install`, then
@@ -30,7 +30,7 @@ node tools/ui/layout-audit.mjs                   # full geometry matrix (npm run
 ```
 
 This skill is the **interactive** complement: Playwright MCP for resize / DOM /
-CSS survey (`tools/playwright-mcp.sh`) or Chrome DevTools MCP; enumerate screens from source, measure each cell, capture.
+CSS survey (`tools/mcp/playwright-mcp.sh`) or Chrome DevTools MCP; enumerate screens from source, measure each cell, capture.
 
 ## Load on demand
 

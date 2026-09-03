@@ -5,11 +5,11 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { smokePlan } from "../../tools/mcp-smoke.mjs";
+import { smokePlan } from "../../tools/mcp/mcp-smoke.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const SMOKE = path.join(ROOT, "tools/mcp-smoke.mjs");
-const SH = path.join(ROOT, "tools/apex-tools-mcp.sh");
+const SMOKE = path.join(ROOT, "tools/mcp/mcp-smoke.mjs");
+const SH = path.join(ROOT, "tools/mcp/apex-tools-mcp.sh");
 
 function run(args, extraEnv = {}) {
   return spawnSync(process.execPath, [SMOKE, ...args], {

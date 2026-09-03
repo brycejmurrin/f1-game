@@ -37,7 +37,7 @@ idle agent. Reference (groups, fixtures, field notes): `docs/TESTING.md`.
 | docs, tools, tests only | `npm run test:tooling-fast` |
 | one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
-| WGX / `js/render/webgpu/` | `node tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU (`docs/TESTING.md` §Field notes) |
+| WGX / `js/render/webgpu/` | `node tools/gfx/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU (`docs/TESTING.md` §Field notes) |
 | TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the SAME command with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest` (Apple/Metal, ~3 min) and read its Verdict step, which FAILS on GPU errors, failed env-probe faces, or `softAdapter` true on hardware. A software probe run is not evidence about a player's machine — two shipped defects were invisible to every software test and found the hour a real GPU was first used (`docs/research/CI-RENDERING-PERFORMANCE.md` §There IS a real GPU). `ci.yml`'s renderer-macos job (the `gfx` SPECS on Metal) no longer runs on push: nightly, or dispatch `ci.yml` with `renderer_macos: true` when a gfx spec or its launch config changed |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, CAPPED at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch | the above + `npm run test:sweeps` |
@@ -105,7 +105,7 @@ Session shape — this is what controls both wall time and waiting:
 GitHub's Apple-silicon image reports a HARDWARE adapter (Metal) on stock flags;
 ubuntu-latest is SwiftShader, windows-latest WARP, this container llvmpipe.
 Dispatch `.github/workflows/gpu-census.yml` — `census_only: true` for the adapter
-answer in seconds, without it to run `tools/gpu-game-check.mjs` and read the
+answer in seconds, without it to run `tools/gfx/gpu-game-check.mjs` and read the
 Verdict step, which GATES (GPU errors, failed env-probe faces, `softAdapter` on
 hardware). **Never pass `--use-angle=vulkan` on macOS** — it drops WebGPU to
 SwiftShader and silently turns a real-GPU run software. Census tables and what
@@ -121,11 +121,11 @@ device-wide. WGX routes the visible `#game` through a **2D soft-present blit**;
 
 | Backend | Command / path | Checks |
 |---------|----------------|--------|
-| **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
-| **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
-| **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
-| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
-| **TLX WebGPU** | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
+| **WGX visible canvas** | `node tools/gfx/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
+| **WGX readback** | `node tools/gfx/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
+| **WGX A/B** | `node tools/gfx/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
+| **TLX / three** | `node tools/gfx/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
+| **TLX WebGPU** | `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
 
 Measured canvas colours, the staging-buffer history and the env packages:
 `docs/research/CI-RENDERING-PERFORMANCE.md` §Measured and §Part 3.
@@ -133,7 +133,7 @@ Measured canvas colours, the staging-buffer history and the env packages:
 **A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS.** WGX's mock
 device was green while four separate defects made the real backend refuse to
 boot, each hiding the next. Boot it on a live device (`npx serve -l 3456 .` —
-a SECURE CONTEXT — then `node tools/mcp-cli.mjs probe --backend webgpu --wait
+a SECURE CONTEXT — then `node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait
 12000 --console 'WGX|error'`) and confirm with one POSITIVE signal: a clean WGX
 boot writes nothing, so assert `canvas.getContext("webgl2") === null`. The four
 defects, the probe flags and the full trap list: `docs/RENDERERS.md` §Boot
@@ -261,7 +261,7 @@ the list here. Sharp edges: `obs()`/`physState()` need `player.px` initialised
 (`jump()` or `step()` after `race()`+`go()`); agentview failures are
 `{ok:false, error, message, fix}`, never null; `render({what:"view"})` reuses
 the LAST frame and is stale under `headless(true)`; `snapCam()` after
-`park()`/`jump()` before any shot. `node tools/agent.mjs <track> <cmd>` is the
+`park()`/`jump()` before any shot. `node tools/shot/agent.mjs <track> <cmd>` is the
 same surface from a shell.
 
 ## Agent extensions (skills / subagents)

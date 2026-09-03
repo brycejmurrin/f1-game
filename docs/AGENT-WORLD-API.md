@@ -6,7 +6,7 @@ rasters in `js/agent/agentview-raster.js`) — `world()`, `field()`, `trackInfo(
 `render()`, `survey()`, `rollout()`, `terminal()`, `agentHelp()` — the former
 `frame()`/`plan()`/`worldModel()`/`visible()` aliases have been REMOVED (use
 `render({what})`/`scene({visible})`) — plus the prop registry in
-`js/track/tracks.js` and the scenery modules, and a CLI at `tools/agent.mjs`.
+`js/track/tracks.js` and the scenery modules, and a CLI at `tools/shot/agent.mjs`.
 **Reference documentation is `docs/DEBUG-HOOKS.md` → "Agent world view"**; the
 API also describes itself via `__apex.agentHelp()`. Tests:
 `tests/specs/agent-view.spec.js` (`node tools/ci/test-bg.mjs hooks`, 117 tests).

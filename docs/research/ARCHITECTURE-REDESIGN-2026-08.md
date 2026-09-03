@@ -182,7 +182,7 @@ physics.
 by esbuild (~200 ms for 156 files); tsc checks, esbuild strips. Each IIFE's
 single global becomes its named export. One generated `src/globals.ts`
 assigns every window global — a PUBLISHED, test-asserted surface, not a shim
-to delete (specs, the console workflow, and tools/agent.mjs all reach page
+to delete (specs, the console workflow, and tools/shot/agent.mjs all reach page
 globals). Eval-time HARD_EDGES become literal import statements seeded from
 the manifest, cycles failing the codemod; the curated circuit order — product
 data, not a load-order artifact — survives as `src/circuits/index.ts`.

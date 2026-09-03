@@ -1249,7 +1249,7 @@ as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 - 1928 -> 1963: the opt-in instance CELL-SET cull cache. cullInstances
 - memoises on frustum-plane equality and three callers use three frusta a
 - frame, so while driving it never hits and props are repacked and
-- re-uploaded 2-3x — measured 426.7 KiB/frame (tools/glx-call-census.mjs).
+- re-uploaded 2-3x — measured 426.7 KiB/frame (tools/gfx/glx-call-census.mjs).
 - Keying on the surviving cell set takes -23.4% of that (-48% in a pack). The
 - existing plane path is left intact beside it (the canary pins it), which is
 - why this ADDS rather than replaces. Detail: PERF-FINDINGS 2c.
@@ -1286,7 +1286,7 @@ as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 - with Float32Array(3) it skipped 0 of 17.5 calls a frame, because a
 - Float32Array rounds on store and the compare was float32-vs-float64. The
 - 40 lines buy uniform3fv 31.5 -> 16.3 per frame (vegas night, full field,
-- tools/glx-call-census.mjs) with every other counter unchanged.
+- tools/gfx/glx-call-census.mjs) with every other counter unchanged.
 - 2150 -> 2156: carShadowKeep/lampShadowKeep pass-throughs, and `armed` added
 - to the two shadow state hooks. The state hooks returned only the LIFETIME
 - arms counter, which stays true straight through a strobe — that is why a
@@ -1300,7 +1300,7 @@ as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 - best a tangent, so it must be best's neighbour along the LAP — spatial
 - distance cannot tell that apart from a sample on another part of the
 - circuit. Belt-and-braces rather than load-bearing once the bake is fixed
-- (measured: 3 points on baku, NO_SWIN=1 in tools/road-lut-census.mjs A/Bs
+- (measured: 3 points on baku, NO_SWIN=1 in tools/gfx/road-lut-census.mjs A/Bs
 - it), which is exactly why the number is written down instead of assumed.
 - 2026-09-01: trkFromWorldIf uniform gate (largest WGX-only fragment cost)
 

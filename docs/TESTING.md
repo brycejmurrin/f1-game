@@ -575,7 +575,7 @@ group has its own job pair:
 | job | runner | does |
 |---|---|---|
 | `renderer-filter` | ubuntu | fetch-depth 0; diffs the push/PR against its base; `renderer=true` when the diff touches `js/render/**`, `js/game/lighting*.js`, `track-lights.js`, `frame-lights.js`, `light-presets.js`, `atmosphere.js`, `tuner.js`, either playwright config, `tests/helpers/`, `ci.yml`, or a `test:gfx` spec (list DERIVED from `package.json`). Fail-safe: any unresolvable diff, and every schedule / dispatch run, answers `true` |
-| `renderer-macos` | `macos-latest` | `needs: renderer-filter`; installs the FULL Chromium (`npx playwright install chromium`, cached at `~/Library/Caches/ms-playwright`); runs `tools/gpu-census.mjs` and FAILS unless `anyHardware === true`; then `npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000` at `APEX_WORKERS=2`; failure artifacts; `timeout-minutes: 30` (a guess — re-time on the first green run) |
+| `renderer-macos` | `macos-latest` | `needs: renderer-filter`; installs the FULL Chromium (`npx playwright install chromium`, cached at `~/Library/Caches/ms-playwright`); runs `tools/gfx/gpu-census.mjs` and FAILS unless `anyHardware === true`; then `npm run test:gfx -- --config=playwright.gpu.config.js --timeout=600000` at `APEX_WORKERS=2`; failure artifacts; `timeout-minutes: 30` (a guess — re-time on the first green run) |
 
 Two rules the job encodes, both measured by the census:
 
@@ -1125,7 +1125,7 @@ what it covers.
 | `ratchets.test.mjs` | the size RATCHETS in `tests/data/ratchets.json` (`tools/check/ratchets.mjs`): game.js on lines / non-comment lines / `G` members / column-0 lets, the other big modules on lines; lower with `--update` after an extraction or on a merged tree, raise deliberately with a reason in the commit; one slack rule (max(60, 4 %)). History in `docs/notes/CEILING-HISTORY.md` |
 | `car-mesh-anchors.test.mjs` | The NODE gate for the car-graphic anchor assertions that `parts-physics.spec.js` also makes in a browser. It exists because the browser parts group is NOT in the deploy gate — `pages.yml` calls `ci.yml`, which runs `guards`, the conditional `sweeps`, the 9-spec `smoke` shards and the `driving-model` job (`physics-characterization.spec.js`) — so a red parts assertion ships silently, and one did: the front-wing flap check sat red on the deploy tip through five consecutive green Pages runs. Ported rather than adding ~20 min of SwiftShader to every deploy, because these read MESH ARRAYS and `loadParts()` runs `car3d.js` in a node vm; the node context reproduces the browser numbers exactly (144 accent flank vertices both ways). Covers sidepod/nose decal gaps, the accent flank band, the nose running lights, the front-wing flap tips against `FW_SPAN`, and `functionalEmissive` staying reserved for the rain light. Every selector asserts a COUNT first — a sibling DRL assertion once passed for months on `Math.max([]) === -Infinity` |
 | `track-night-override.test.mjs` | no module in `js/track/` reads `def.night`, except the two sites in `tracks.js` that RESOLVE it. `def.night` is the circuit's AUTHORED default; `track._night` / the destructured `NIGHT` is what THIS build was asked for, and game.js's TIME OF DAY overrides the default — so an emitter reading the def ignores the player's choice and dresses a prop for the wrong sky. Fixed twice now (a bankZones note in `tracks.js`, then `ferrisWheel`), which is what makes it a class rather than an incident. Strips comments before matching, because both fixes explain the trap in prose. Static source scan, no build, instant |
-| `road-lut-frame.test.mjs` | WGX's road-marking LUT must never hand the shader a track frame rotated toward 90°. GLX reads the per-vertex `trk` and interpolates it; WGX cannot (a location-3 interpolator shards dashes on Dawn, and `drawIndexed` leaves `vertex_index` at 0 on that adapter), so it reconstructs (s, lateral x, half-width) per fragment from world XZ against a baked LUT — and `trkFromWorld` builds the frame from the two NEAREST samples. Two bake defects made that pair the wrong two: the table kept a BAND rather than a centreline (one cross-section contributing points metres apart across the ribbon), and a full cell dropped every later pass over the same ground. Either way the tangent ran ACROSS the road, lateral x started measuring distance along the lap, and a LUT miss on a road draw zeroes trk so the centre line was painted down the LENGTH of the road — reported from a phone, correct on WebGL2. Replays the search over the REAL baked table (`WGX.__roadLutTable`, never a copy). Bar is the 90° class: hairpins genuinely disagree with a 4 m chord by up to ~60°, and the two populations are well separated. Three circuits in the fast suite (~3 s); `node tools/road-lut-census.mjs --all` sweeps all 40 in ~34 s |
+| `road-lut-frame.test.mjs` | WGX's road-marking LUT must never hand the shader a track frame rotated toward 90°. GLX reads the per-vertex `trk` and interpolates it; WGX cannot (a location-3 interpolator shards dashes on Dawn, and `drawIndexed` leaves `vertex_index` at 0 on that adapter), so it reconstructs (s, lateral x, half-width) per fragment from world XZ against a baked LUT — and `trkFromWorld` builds the frame from the two NEAREST samples. Two bake defects made that pair the wrong two: the table kept a BAND rather than a centreline (one cross-section contributing points metres apart across the ribbon), and a full cell dropped every later pass over the same ground. Either way the tangent ran ACROSS the road, lateral x started measuring distance along the lap, and a LUT miss on a road draw zeroes trk so the centre line was painted down the LENGTH of the road — reported from a phone, correct on WebGL2. Replays the search over the REAL baked table (`WGX.__roadLutTable`, never a copy). Bar is the 90° class: hairpins genuinely disagree with a 4 m chord by up to ~60°, and the two populations are well separated. Three circuits in the fast suite (~3 s); `node tools/gfx/road-lut-census.mjs --all` sweeps all 40 in ~34 s |
 | `track-build-wait.test.mjs` | the loadTrack fixture waits for a track build on PROGRESS, not a 45 s deadline: it keeps waiting while the Log ring grows, fails with a STALL message when it stops, and a hard cap ends the wait even if the stall check is broken — the fake page is bounded so a never-ending wait reads as a red test rather than a hung worker |
 | `deploy-stamp.test.mjs` | the deploy-stamped shell generation: pages.yml stamps `2000 + commit count` on a full-depth checkout, `verify-live` polls the CDN for it, ci.yml no longer demands a committed generation newer than live, and `node tools/ci/bump-cache.mjs --apply` --at N --root` stamps a staged copy without touching the repo |
 | `deploy-tool.test.mjs` | `tools/ci/deploy.mjs` offline: same deploy branch as pick-tests, `--help`, the circuit-touch detector, preflight refusals |
@@ -1227,9 +1227,9 @@ what it covers.
 | `trim-comments.test.mjs` | smoke test for `tools/check/trim-comments.mjs`: `--help` exits 0 and prints `--dry-run`, and the tool removes dividers and location-pointer comments from a fixture file without touching code lines |
 | `report-server.test.mjs` | the LAN report collector requires its per-run capability for every read and write, rejects unsafe paths and payloads, and enforces per-request/session storage bounds |
 | `probe-mcp.test.mjs` | Unified probe MCP bridge — prefixes `chrome_*`/`tinyfish_*`, help/route, mock stdio handshake advertises full catalogs, `.mcp.json` `probe` entry, mock chrome daemon (healthz//tools//call + CLI auto-routing to a live daemon) (no Chromium / no TinyFish network). Also `mcp-cli.mjs probe --dry-run`: the pick is written BEFORE the reload in one batch, `--backend three` carries the WebGL2 pin (and only three does), unknown flags exit non-zero rather than probing the default, and the wrapper keeps `--enable-unsafe-webgpu` |
-| `apex-tools-mcp.test.mjs` | `apex-tools` MCP — `serverInfo.name === apex-tools-mcp`, tools are all `apex_*` (zero chrome/tinyfish; no test-bg wrap), `apex_graph_parity` requires `base`, catalog `tools/apex-tools-mcp.json` locksteps `.mcp.json` stdio + `serve-http` on `127.0.0.1:3713`, week-1–4 pins, lock/occupancy including host `@playwright/mcp` vs `--mcp-config` JSON, `path_escaped` / `port_not_supported`, refuses deploy/github.io, `isError` preserved, stdout JSON-RPC only (mock/`dryRun`, no Chromium) |
+| `apex-tools-mcp.test.mjs` | `apex-tools` MCP — `serverInfo.name === apex-tools-mcp`, tools are all `apex_*` (zero chrome/tinyfish; no test-bg wrap), `apex_graph_parity` requires `base`, catalog `tools/mcp/apex-tools-mcp.json` locksteps `.mcp.json` stdio + `serve-http` on `127.0.0.1:3713`, week-1–4 pins, lock/occupancy including host `@playwright/mcp` vs `--mcp-config` JSON, `path_escaped` / `port_not_supported`, refuses deploy/github.io, `isError` preserved, stdout JSON-RPC only (mock/`dryRun`, no Chromium) |
 | `mcp-smoke.test.mjs` | five-wrapper shell probe — `--dry-run` lists apex-tools / probe / chrome-devtools / playwright / tinyfish, never `verify` / `deploy-check` / `test-bg` / `playwright-mcp.sh run`, `apex-tools-mcp.sh smoke` delegates, no Chromium |
-| `agent-surface.test.mjs` | wrap map lockstep — `docs/AGENT-SURFACE.md` names every `apex_*` in `tools/apex-tools-mcp.json`, each CLI/skill exists, never-wrap lists `test-bg` / `--apply` / github.io, indexes point at the map, catalog descriptions start Tree / Browser (lock first), `.mcp.json` has the seven repo servers including playwright + pinned official npx |
+| `agent-surface.test.mjs` | wrap map lockstep — `docs/AGENT-SURFACE.md` names every `apex_*` in `tools/mcp/apex-tools-mcp.json`, each CLI/skill exists, never-wrap lists `test-bg` / `--apply` / github.io, indexes point at the map, catalog descriptions start Tree / Browser (lock first), `.mcp.json` has the seven repo servers including playwright + pinned official npx |
 
 ---
 
@@ -1418,19 +1418,19 @@ grass, walls and cars looked fine. Two more spec violations sat alongside it:
 MSAA count 2 (WebGPU permits only 1 and 4 — invalid on EVERY device) and
 rg11b10ufloat render targets without the `rg11b10ufloat-renderable` feature.
 All three were one-line Dawn errors the moment the code ran on a real device.
-`node tools/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
+`node tools/gfx/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
 Chromium (the headless shell has no `navigator.gpu`) with `--headless=new
 --enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader
 --use-webgpu-adapter=swiftshader` exposes a real Dawn adapter that parses
 every WGSL module and validates every pipeline. The ceiling, corrected
-2026-08-17: Dawn here EXECUTES shader work — `node tools/wgx-capture.mjs`
+2026-08-17: Dawn here EXECUTES shader work — `node tools/gfx/wgx-capture.mjs`
 returns real rendered pixels (offscreen mode; see
 `docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
 found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
 the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
 play with this in SETTINGS ▸ SCREENSHOTS (AUTO / 2D BLIT / NATIVE) and the
 three.js counterpart SETTINGS ▸ THREE PATH (AUTO / WEBGL2 / WEBGPU).
-`node tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
+`node tools/gfx/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
 gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
 (`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
 SwiftShader when concurrent with display readback. Still environmental: the
@@ -1460,8 +1460,8 @@ SwiftShader even with a quiet GPU; do not widen assertion tolerances.
 swapchain present stays black on SwiftShader/Lavapipe; WGX soft-presents to
 visible `#game` via a 2D blit (auto on software adapters +
 `sessionStorage apex26.wgxCapture=1`). Primary probe:
-`node tools/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
-`awaitSoftPresent`). Readback oracle: `node tools/wgx-capture.mjs`. Lavapipe
+`node tools/gfx/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
+`awaitSoftPresent`). Readback oracle: `node tools/gfx/wgx-capture.mjs`. Lavapipe
 needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
 snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
@@ -1844,7 +1844,7 @@ the outer backstop; a scratch script has none. Measure liveness with a counter
 read across two ordinary `waitForTimeout`s instead.
 
 **A screenshot of the WebGPU canvas needs `GLX.awaitSoftPresent()` first**
-(`tools/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
+(`tools/gfx/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
 un-blitted canvas and produces a confident, wrong answer — it cost one fully
 written-up "WGX mis-frames the garage" reproduction that had to be retracted
 (docs/PERF-FINDINGS.md §2t).
@@ -1895,7 +1895,7 @@ tier 2, and the software probe reports a confident 4.8 % road coverage with
 zero GPU errors in every arm. Set BOTH:
 
 ```sh
-node tools/gfx-probe.mjs --backend three --lite \
+node tools/gfx/gfx-probe.mjs --backend three --lite \
   --ls apex26.forceMobileTier=1 --ls 'apex26.gfxPreset="low"' montreal
 ```
 
@@ -1959,7 +1959,7 @@ to carry: three-WebGL2 on ANGLE-Metal spent **16.2 s in a single first frame**
 themselves are on Azure blob storage the container proxy denies — read them in
 the Actions UI.
 
-`tools/wgx-validate.mjs` (live run) now prepends
+`tools/gfx/wgx-validate.mjs` (live run) now prepends
 `diagnostic(error, derivative_uniformity);` to every module it compiles,
 because that is WebKit's default severity and Dawn's is a console warning:
 a WGSL module that only warns here refuses to build on an iPhone and WGX falls

@@ -381,7 +381,7 @@ test("the GL-call census refuses to report a frame it did not measure", () => {
   // absence-reads-as-normal shape as the vacuous gpuErrors check and the
   // readdirSync harnesses that built circuits bare, both of which shipped
   // confident numbers about nothing. PERF-FINDINGS 2i.
-  const src = fs.readFileSync(path.join(ROOT, "tools/glx-call-census.mjs"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "tools/gfx/glx-call-census.mjs"), "utf8");
   assert.match(src, /CENSUS MEASURED NOTHING/);
   assert.match(src, /process\.exitCode = 1/,
     "an empty census must exit non-zero, not merely print");

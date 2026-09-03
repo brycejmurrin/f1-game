@@ -62,11 +62,11 @@ Three software paths matter for Apex probing; they are **not interchangeable**:
 Commands that produced the table:
 
 ```sh
-node tools/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
-node tools/gfx-probe.mjs --backend webgpu --lite montreal
-node tools/wgx-lavapipe-probe.mjs montreal --lite
+node tools/gfx/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
+node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal
+node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite
 APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
-  node tools/mcp-cli.mjs probe --backend webgpu --lite --wait 12000 --eval '…'
+  node tools/mcp/mcp-cli.mjs probe --backend webgpu --lite --wait 12000 --eval '…'
 ```
 
 **Takeaways for probe tooling:**
@@ -126,7 +126,7 @@ soft, which is the only part software genuinely cannot do. Force them
 individually — forcing all of them at once costs more llvmpipe seconds than the
 `awaitSoftPresent` budget has, and the timeout does not say which path did it
 (measured: `tlxForceHw=1` timed out at 60 s twice; each single gate presents in
-10–25 s). `tools/gfx-probe.mjs --ls key=value` sets any `apex26.*` knob before
+10–25 s). `tools/gfx/gfx-probe.mjs --ls key=value` sets any `apex26.*` knob before
 boot.
 
 Bisect on montreal, TLX + Dawn + Lavapipe, `GLX.gpuErrors()` after `park()`:
@@ -170,7 +170,7 @@ The agent container has none (previous section) — but GitHub's Apple-silicon
 image does, and the published answers about it contradict each other (the M1
 runner announcement says GPU acceleration is on by default;
 `actions/runner-images#7085` asks for Metal passthrough as a missing feature).
-`tools/gpu-census.mjs` + `.github/workflows/gpu-census.yml` asked the images
+`tools/gfx/gpu-census.mjs` + `.github/workflows/gpu-census.yml` asked the images
 instead of believing either:
 
 | image | stock | `--enable-unsafe-webgpu` | `+Vulkan` | `+disable_adapter_blocklist` | anyHardware |
@@ -209,7 +209,7 @@ backend pick has to survive the gap between them.
 
 Practical consequence: `macos-latest` is the project's real-GPU surface. Dispatch
 `gpu-census.yml` with `census_only: true` for the adapter answer in seconds, or
-without it to run `tools/gpu-game-check.mjs` — the portable sibling of
+without it to run `tools/gfx/gpu-game-check.mjs` — the portable sibling of
 `gfx-probe` that reports `GLX.gpuErrors()`, the env-probe state and the
 `?gfxdebug=1` overlay text from the game itself.
 
@@ -266,11 +266,11 @@ agent loses Lavapipe again.
 
 | Want | Do this |
 |------|---------|
-| WGX visible `#game` | `node tools/gfx-probe.mjs --backend webgpu --lite montreal` |
-| WGX readback oracle | `node tools/wgx-capture.mjs montreal --lite` → `frame.png` (optional; can flake on SwiftShader) |
-| WGX on Lavapipe | `node tools/wgx-lavapipe-probe.mjs montreal --lite` |
-| TLX pixels (ForceGL / SwiftShader WebGL2) | `node tools/gfx-probe.mjs --backend three --lite montreal` |
-| TLX WebGPU pixels (Lavapipe soft-present) | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal` |
+| WGX visible `#game` | `node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal` |
+| WGX readback oracle | `node tools/gfx/wgx-capture.mjs montreal --lite` → `frame.png` (optional; can flake on SwiftShader) |
+| WGX on Lavapipe | `node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite` |
+| TLX pixels (ForceGL / SwiftShader WebGL2) | `node tools/gfx/gfx-probe.mjs --backend three --lite montreal` |
+| TLX WebGPU pixels (Lavapipe soft-present) | `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal` |
 | Prove ICD | `test -f /usr/share/vulkan/icd.d/lvp_icd.json && vulkaninfo --summary \| head` |
 
 Agent index: `AGENTS.md` §Seeing the game / §Cursor Cloud. Tool rows:
@@ -531,7 +531,7 @@ handler never called!" (measured 2026-08-17, `bld-20260817-e70b375f`) even when
 MCP on this host: the seven-server map is `docs/AGENT-SURFACE.md`. Keep
 `apex-tools` in repo-root `.mcp.json` (and `.cursor/mcp.json`); the cloud host
 catalog is often empty, in which case the shell wrappers
-(`./tools/apex-tools-mcp.sh call`, `./tools/playwright-mcp.sh`,
-`./tools/tinyfish-mcp.sh`, `python3 tools/probe-mcp.py`) are the same surface.
+(`./tools/mcp/apex-tools-mcp.sh call`, `./tools/mcp/playwright-mcp.sh`,
+`./tools/mcp/tinyfish-mcp.sh`, `python3 tools/mcp/probe-mcp.py`) are the same surface.
 Never run Chrome MCP while Playwright is running, and do not attach
 `mcp-probe` for a `version.json` check (`deploy-research` owns that).

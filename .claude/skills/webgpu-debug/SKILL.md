@@ -14,11 +14,11 @@ failure must degrade to GLX, never a dead canvas.
 ## 1. First probe — static, then Dawn
 
 ```sh
-node tools/wgx-validate.mjs --static             # ALWAYS this first (no browser)
+node tools/gfx/wgx-validate.mjs --static             # ALWAYS this first (no browser)
 # parent session only — these launch Chromium:
-# node tools/wgx-validate.mjs
-# node tools/wgx-validate.mjs --lite
-# node tools/wgx-validate.mjs --no-rg11b10
+# node tools/gfx/wgx-validate.mjs
+# node tools/gfx/wgx-validate.mjs --lite
+# node tools/gfx/wgx-validate.mjs --no-rg11b10
 ```
 
 `--static` is the only command **verify-agent** / any subagent may run. The
@@ -31,9 +31,9 @@ shader work here. Two narrower limits remain: the **native swapchain** never
 composites (hidden WebGPU canvas stays black), and the FIRST
 `getCurrentTexture()` call permanently breaks `mapAsync` on that device — WGX
 never touches the swapchain on software adapters. Visible pixels: soft-present
-2D blit on `#game` — probe with `node tools/gfx-probe.mjs --backend webgpu`
+2D blit on `#game` — probe with `node tools/gfx/gfx-probe.mjs --backend webgpu`
 (`awaitSoftPresent` + `#game` luma). Readback oracle:
-`node tools/wgx-capture.mjs <track>` → `frame.png` via `GLX.capturePixels()`
+`node tools/gfx/wgx-capture.mjs <track>` → `frame.png` via `GLX.capturePixels()`
 (same `COPY_SRC` texture; can flake when concurrent with display readback).
 Prefer hooks/capture over reasoning from absence. Still true: SwiftShader is
 not a PERFORMANCE oracle, software adapters force MSAA 1, and
@@ -62,16 +62,16 @@ __apex.logs()                       // "gfx" ns
 WGX via `localStorage` then reload, or:
 
 ```sh
-node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval 'a.diag({download:false}).env'
+node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval 'a.diag({download:false}).env'
 ```
 
 Live session: **mcp-probe** with
 `localStorage.setItem("apex26.gfxBackend","webgpu")` before reload.
 `render({what:"view"})` is the cheap scene truth; for visible WGX pixels use
-`node tools/gfx-probe.mjs --backend webgpu <track>` (`#game` after
-`awaitSoftPresent`). Multi-track gallery: `node tools/wgx-shot.mjs --gallery`
+`node tools/gfx/gfx-probe.mjs --backend webgpu <track>` (`#game` after
+`awaitSoftPresent`). Multi-track gallery: `node tools/gfx/wgx-shot.mjs --gallery`
 (or `npm run wgx:gallery`).
-Readback oracle: `node tools/wgx-capture.mjs <track>`.
+Readback oracle: `node tools/gfx/wgx-capture.mjs <track>`.
 
 ## Load on demand
 

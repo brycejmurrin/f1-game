@@ -8,8 +8,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const MCP = path.join(ROOT, "tools/apex-tools-mcp.mjs");
-const SH = path.join(ROOT, "tools/apex-tools-mcp.sh");
+const MCP = path.join(ROOT, "tools/mcp/apex-tools-mcp.mjs");
+const SH = path.join(ROOT, "tools/mcp/apex-tools-mcp.sh");
 const MCP_JSON = path.join(ROOT, ".mcp.json");
 
 function rpc(lines, env = {}) {
@@ -56,7 +56,7 @@ test("apex-tools-mcp.mjs and shell entry exist", () => {
 
 test(".mcp.json registers apex-tools in the three-server catalog", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
-  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/apex-tools-mcp.json"), "utf8"));
+  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.json"), "utf8"));
   assert.deepEqual(Object.keys(cfg.mcpServers).sort(), [
     "apex-tools",
     "chrome-devtools",
@@ -64,7 +64,7 @@ test(".mcp.json registers apex-tools in the three-server catalog", () => {
   ]);
   assert.equal(cfg.mcpServers["apex-tools"].type, "stdio");
   assert.equal(cfg.mcpServers["apex-tools"].command, "bash");
-  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/apex-tools-mcp.sh", "serve"]);
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/mcp/apex-tools-mcp.sh", "serve"]);
   assert.deepEqual(cfg.mcpServers["apex-tools"].args, catalog.stdio.args);
   assert.equal(catalog.stdio.command, "bash");
   assert.equal(catalog.http.bind, "127.0.0.1");
@@ -75,7 +75,7 @@ test(".mcp.json registers apex-tools in the three-server catalog", () => {
 test("playwright-official pin matches the wrapper's audited package and never @latest", () => {
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
   const cursorCfg = JSON.parse(fs.readFileSync(path.join(ROOT, ".cursor/mcp.json"), "utf8"));
-  const pw = fs.readFileSync(path.join(ROOT, "tools/playwright-mcp.sh"), "utf8")
+  const pw = fs.readFileSync(path.join(ROOT, "tools/mcp/playwright-mcp.sh"), "utf8")
     .match(/MCP_NPM_PACKAGE="([^"]+)"/)[1];
   assert.equal(cfg.mcpServers["playwright-official"].command, "npx");
   assert.deepEqual(cfg.mcpServers["playwright-official"].args, ["-y", pw]);
@@ -83,7 +83,7 @@ test("playwright-official pin matches the wrapper's audited package and never @l
   // chrome-devtools-official (bare npx, no WebGPU flags) left the catalog 2026-09;
   // the wrapper server keeps the same pinned package as its network fallback.
   assert.equal(cfg.mcpServers["chrome-devtools-official"], undefined);
-  assert.match(fs.readFileSync(path.join(ROOT, "tools/chrome-devtools-mcp.sh"), "utf8"),
+  assert.match(fs.readFileSync(path.join(ROOT, "tools/mcp/chrome-devtools-mcp.sh"), "utf8"),
     /MCP_NPM_PACKAGE="chrome-devtools-mcp@1\.7\.0"/);
   assert.doesNotMatch(JSON.stringify(cfg), /@latest/);
   assert.doesNotMatch(JSON.stringify(cursorCfg), /@latest/);
@@ -393,7 +393,7 @@ test("tree pins: rotate-markings --check only, graph-parity needs base", () => {
 });
 
 test("committed catalog JSON matches tools/list and never binds 0.0.0.0", () => {
-  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/apex-tools-mcp.json"), "utf8"));
+  const catalog = JSON.parse(fs.readFileSync(path.join(ROOT, "tools/mcp/apex-tools-mcp.json"), "utf8"));
   const r = spawnSync(process.execPath, [MCP, "list-tools"], { encoding: "utf8", cwd: ROOT });
   assert.equal(r.status, 0, r.stderr);
   const names = JSON.parse(r.stdout).map((t) => t.name);

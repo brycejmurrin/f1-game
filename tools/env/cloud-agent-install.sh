@@ -52,7 +52,7 @@ ensure_mcp_clones() {
       echo "chrome-devtools MCP clone already built"
     else
       echo "Cloning chrome-devtools MCP (best-effort; npx pin remains if this fails)…"
-      if ! bash "$ROOT/tools/chrome-devtools-mcp.sh" clone; then
+      if ! bash "$ROOT/tools/mcp/chrome-devtools-mcp.sh" clone; then
         echo "WARN: chrome-devtools clone failed; verify uses npx chrome-devtools-mcp@1.7.0" >&2
       fi
     fi
@@ -63,8 +63,8 @@ ensure_mcp_clones() {
       echo "tinyfish MCP clone already built"
     else
       echo "Cloning tinyfish MCP (best-effort; deploy-check needs setup)…"
-      if ! bash "$ROOT/tools/tinyfish-mcp.sh" setup; then
-        echo "WARN: tinyfish setup failed — run tools/tinyfish-mcp.sh setup" >&2
+      if ! bash "$ROOT/tools/mcp/tinyfish-mcp.sh" setup; then
+        echo "WARN: tinyfish setup failed — run tools/mcp/tinyfish-mcp.sh setup" >&2
       fi
     fi
   fi

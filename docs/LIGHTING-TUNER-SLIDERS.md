@@ -811,14 +811,14 @@ node tools/lighting/slider-effect.mjs --filter --a a.png --b b.png --out dir/
 npx serve -l 3456 .
 
 # All 20 conditions for a circuit
-python3 tools/cdmcp-cli.py look-survey monaco --frac 0.45
+python3 tools/mcp/cdmcp-cli.py look-survey monaco --frac 0.45
 
 # Subset
-python3 tools/cdmcp-cli.py look-survey bahrain --frac 0.12 \
+python3 tools/mcp/cdmcp-cli.py look-survey bahrain --frac 0.12 \
   --combos dawn|dry,day|dry,dusk|dry,night|dry,night|wet,night|rain
 
 # Batch plan (shoots only missing PNGs across all circuits)
-python3 tools/cdmcp-cli.py look-survey --plan artifacts/lighting/survey-plan.json
+python3 tools/mcp/cdmcp-cli.py look-survey --plan artifacts/lighting/survey-plan.json
 
 # Stitch the 4×5 contact sheet
 python3 tools/lighting/look-survey-sheet.py monaco

@@ -2105,7 +2105,7 @@ const AgentView = (function () {
         },
         setup: ['__apex.race("monza")', "__apex.go()", "__apex.jump(0.1, 55)"],
         loop: "world() -> decide -> rollout({seconds, policy}) -> read the digest",
-        cli: "node tools/agent.mjs <track> <help|world|field|scene|atmosphere|"
+        cli: "node tools/shot/agent.mjs <track> <help|world|field|scene|atmosphere|"
              + "objective|model|describe|query|render|track|car|survey|rollout> [flags]",
         notes: [
           "no agent hook returns null — failures are {ok:false, error, message, fix}",

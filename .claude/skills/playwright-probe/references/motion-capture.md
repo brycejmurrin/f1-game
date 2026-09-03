@@ -4,8 +4,8 @@ Static screenshots miss flicker — the artifact is frame-to-frame under motion.
 This skill captures a real driven clip headless and scores per-frame flicker.
 
 ```sh
-node tools/capture/motion-capture.mjs <track> [seconds] [speed] [outdir]
-node tools/capture/motion-capture.mjs monaco 4 50
+node tools/shot/motion-capture.mjs <track> [seconds] [speed] [outdir]
+node tools/shot/motion-capture.mjs monaco 4 50
 ```
 
 **No start-frac CLI** — always `jump(0.05, speed)`. Eau Rouge is ~0.078 on Spa;
@@ -58,9 +58,9 @@ Editing `js/`/`css/` still needs a cache bump (`node tools/gen/gen-shell.mjs --c
 ### A/B a rendering change
 
 ```sh
-node tools/capture/motion-capture.mjs monaco 4 50      # on your branch → note p90
+node tools/shot/motion-capture.mjs monaco 4 50      # on your branch → note p90
 # revert the change
-node tools/capture/motion-capture.mjs monaco 4 50      # baseline → note p90
+node tools/shot/motion-capture.mjs monaco 4 50      # baseline → note p90
 ```
 
 Real result from the near-plane depth fix (0.2 → 0.3): **p90 0.21 → 0.00**

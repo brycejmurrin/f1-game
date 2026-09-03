@@ -540,10 +540,16 @@ test("every tool named in tools/README.md exists on disk", () => {
   // run. Deleting a tool without deleting its row leaves exactly this residue,
   // and the disk->README test above is blind to it by construction.
   const index = read("tools/README.md");
-  const onDisk = new Set(fs.readdirSync(path.join(ROOT, "tools")));
-  for (const d of fs.readdirSync(path.join(ROOT, "tools"), { withFileTypes: true }))
-    if (d.isDirectory())
-      for (const f of fs.readdirSync(path.join(ROOT, "tools", d.name))) onDisk.add(f);
+  // FULLY RECURSIVE since Phase 4: tools/ nests two deep (lighting/campaign/,
+  // moves/batches/), and a one-level walk silently stopped seeing those files —
+  // which would have let a row for any of them read as a ghost.
+  const onDisk = new Set();
+  (function walk(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) { if (e.name !== "__pycache__") walk(path.join(dir, e.name)); }
+      else onDisk.add(e.name);
+    }
+  })(path.join(ROOT, "tools"));
   const ghosts = [...index.matchAll(/^\|\s*\*\*([A-Za-z0-9_.-]+\.(?:mjs|cjs|js|sh|html|json))\*\*/gm)]
     .map((m) => m[1])
     .filter((f) => !onDisk.has(f));
@@ -571,23 +577,23 @@ test("the tools index lists every tool", () => {
   // Underscore-prefixed scripts are transient agent scratch by convention
   // (.gitignore: tools/_*.mjs) and are deliberately not indexed.
   //
-  // WALKS SUBDIRECTORIES since the R3 family move (tools/net|car|capture|
-  // lighting) — a moved tool must not silently exit the index guard. A file
-  // in a subdir passes when the README names the FILE or names its SUBDIR
-  // with a trailing slash (a family header covers its members the way
-  // grouped notation covers renderer files).
+  // WALKS THE WHOLE TREE since Phase 4 grouped tools/ into thirteen
+  // subdirectories, two of them nested (lighting/campaign/, moves/batches/).
+  // A one-level walk stopped at the second level and a moved tool could
+  // silently exit the index guard.
   const index = read("tools/README.md");
   const missing = [];
-  for (const e of fs.readdirSync(path.join(ROOT, "tools"), { withFileTypes: true })) {
-    if (e.name === "README.md" || e.name.startsWith("_")) continue;
-    if (!e.isDirectory()) {
-      if (!index.includes(e.name)) missing.push(e.name);
-      continue;
+  (function walk(dir, rel) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === "README.md" || e.name.startsWith("_") || e.name === "__pycache__") continue;
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) { walk(path.join(dir, e.name), r); continue; }
+      // A file passes when the index names its full tools-relative path, its
+      // basename, or its directory with a trailing slash (a family header
+      // covers its members). The path form is what the generator emits now.
+      if (!index.includes(r) && !index.includes(e.name) && !index.includes(`${rel}/`)) missing.push(r);
     }
-    for (const f of fs.readdirSync(path.join(ROOT, "tools", e.name)))
-      if (!f.startsWith("_") && !index.includes(f) && !index.includes(`${e.name}/`))
-        missing.push(`${e.name}/${f}`);
-  }
+  })(path.join(ROOT, "tools"), "");
   assert.deepEqual(missing, [], "a tool exists on disk but is not in tools/README.md");
 });
 

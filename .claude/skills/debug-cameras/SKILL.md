@@ -5,7 +5,7 @@ description: Use when the user asks to switch or check camera modes, cockpit/cha
 
 # Camera debug hooks
 
-Verified live (`tools/apex-eval.mjs`). Two layers: the **13 built-in camera
+Verified live (`tools/shot/apex-eval.mjs`). Two layers: the **13 built-in camera
 modes** (C / CAM button) and the **free debug camera** (`view()` and friends)
 that overrides them for framing.
 

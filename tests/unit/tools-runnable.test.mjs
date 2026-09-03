@@ -74,7 +74,7 @@ test("every JS tool parses (node --check)", () => {
 test("no tool derives a path from import.meta.url.pathname (Windows-broken)", () => {
   // `new URL("..", import.meta.url).pathname` is `/D:/a/repo/` on Windows, and
   // path.resolve() then prefixes the cwd's drive to give a path that cannot
-  // exist. tools/gpu-game-check.mjs is the one tool the GPU-census workflow runs
+  // exist. tools/gfx/gpu-game-check.mjs is the one tool the GPU-census workflow runs
   // on windows-latest, and this cost it every request 404ing, the game never
   // booting, and a 5-minute timeout that reported nothing — twice, because the
   // first diagnosis blamed the machine and raised the timeout.

@@ -11,7 +11,7 @@
 //
 // If you ADD a method intentionally, append it here — additions are safe.
 // Removals/renames are not: they break docs/AGENT-WORLD-API.md, the
-// agentHelp() manifest, tools/agent.mjs, and .claude/skills/agent-view.
+// agentHelp() manifest, tools/shot/agent.mjs, and .claude/skills/agent-view.
 //
 // Run: node --test tests/unit/agentview-api-contract.test.mjs
 

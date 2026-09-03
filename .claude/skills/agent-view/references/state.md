@@ -1,6 +1,6 @@
 # State & telemetry debug hooks (folded from the debug-state skill)
 
-Verified live (`tools/apex-eval.mjs`). Debug-hooks-first: assert relative
+Verified live (`tools/shot/apex-eval.mjs`). Debug-hooks-first: assert relative
 behaviour, not brittle magnitudes.
 
 > **Init order:** `obs()`/`physState()`/`probe()` return null until `player.px`
@@ -21,8 +21,8 @@ o = __apex.act({steer:-0.3, throttle:true, brake:false}, 1/60, 5);
 ```
 
 ```sh
-node tools/apex-eval.mjs monza "(a.go(), a.jump(0.2,55), a.physState())" --raw
-node tools/apex-eval.mjs vegas "a.lightState()"
+node tools/shot/apex-eval.mjs monza "(a.go(), a.jump(0.2,55), a.physState())" --raw
+node tools/shot/apex-eval.mjs vegas "a.lightState()"
 ```
 
 Physics tune → **tune-physics**. Parallel harness → **playwright-probe**.

@@ -668,7 +668,7 @@ default framebuffer would be pure waste. The lit fragment shader fades to `fogCo
 Self-contained binary glTF 2.0 (`.glb`) parser that bakes a model down to the
 plain mesh data `createMesh` expects (`{pos,nrm,col,idx}`) — materials'
 baseColorFactor and any COLOR_0 baked into vertex colours, all primitives
-merged with node transforms applied. Self-test: `tools/gltf-selftest.mjs`.
+merged with node transforms applied. Self-test: `tools/gfx/gltf-selftest.mjs`.
 
 ## js/data/teams.js — `Teams`
 

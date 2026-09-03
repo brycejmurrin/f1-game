@@ -308,7 +308,7 @@ test("the renderer job never passes --use-angle=vulkan (it drops macOS to SwiftS
 });
 
 test("the renderer job proves the adapter before trusting the run, and uploads on failure", () => {
-  assert.match(rendererJob, /node tools\/gpu-census\.mjs --json census-macos\.json/);
+  assert.match(rendererJob, /node tools\/gfx\/gpu-census\.mjs --json census-macos\.json/);
   assert.match(rendererJob, /r\.anyHardware !== true/, "the tri-state census must be compared with === true, never coerced");
   assert.equal(report.rendererGate.censusGated, true);
   assert.match(rendererJob, /if: failure\(\)\s*\n\s*uses: actions\/upload-artifact@v4/);
@@ -406,7 +406,7 @@ test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpu
   assert.match(gpuWorkflow, /if \(hardware && gfx\.wgx !== true\) bad\.push\(`wgx: WGX did not bind/);
   assert.match(gpuWorkflow, /else if \(hardware && gfx\.wgxSoftPresent === true && gfx\.headlessUa !== true\) bad\.push\(`wgx: WGX is soft-presenting/,
     "a headless UA blits by design (run 19); only a headed hardware run proves the swapchain path");
-  const check = fs.readFileSync(new URL("../../tools/gpu-game-check.mjs", import.meta.url), "utf8");
+  const check = fs.readFileSync(new URL("../../tools/gfx/gpu-game-check.mjs", import.meta.url), "utf8");
   assert.match(check, /r\.wgx = typeof g\.softPresent === "function";/);
   assert.match(check, /r\.wgxSoftPresent = !!g\.softPresent\(\)/);
 });

@@ -949,12 +949,12 @@ jobs:
       # change, a Chromium that stops seeing Metal) the specs would silently
       # run on SwiftShader and this job would become a slower ubuntu job that
       # still says "macOS". AGENTS.md: a software run is not evidence about a
-      # player's machine. The tri-state census (tools/gpu-census.mjs) is the
+      # player's machine. The tri-state census (tools/gfx/gpu-census.mjs) is the
       # same one gpu-census.yml gates on; `=== true` on purpose, so a census
       # that measured nothing (null) fails rather than passing vacuously.
       - name: Adapter census — is the Metal adapter still there?
         run: |
-          node tools/gpu-census.mjs --json census-macos.json
+          node tools/gfx/gpu-census.mjs --json census-macos.json
           node -e '
             const r = require("./census-macos.json");
             if (r.anyHardware !== true) {

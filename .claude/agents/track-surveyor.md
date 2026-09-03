@@ -19,11 +19,11 @@ read-only.
    parent. Engine edits (`js/track/tracks.js` LIST whitelist) are parent-only.
 2. Diagnose with the real `agent.mjs` verbs (unknown names exit 1):
    ```sh
-   node tools/agent.mjs <id> survey
-   node tools/agent.mjs <id> track --what corners
+   node tools/shot/agent.mjs <id> survey
+   node tools/shot/agent.mjs <id> track --what corners
    ```
    `groundY` / `scan` / `wallStats` are `__apex` hooks, not `agent.mjs`
-   commands — use `node tools/apex-eval.mjs <id> "a.groundY(…)"` if the
+   commands — use `node tools/shot/apex-eval.mjs <id> "a.groundY(…)"` if the
    survey table is not enough (also Chromium; still not a test group).
 3. Edit `js/circuits/<id>.js` only. Frac-keyed tables MUST respect
    `def._sceneryShift` — consume via the compensated idiom (`bankingProfile`,

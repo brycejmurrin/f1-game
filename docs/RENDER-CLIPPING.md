@@ -75,7 +75,7 @@ temporal or view-dependent.
 
 | Symptom | How to look at it |
 |---|---|
-| Z-fighting / shimmer | Only visible in motion. Use the **playwright-probe** skill (`references/motion-capture.md`, `tools/capture/motion-capture.mjs`) to record a driven lap headless; a still frame will not show it. |
+| Z-fighting / shimmer | Only visible in motion. Use the **playwright-probe** skill (`references/motion-capture.md`, `tools/shot/motion-capture.mjs`) to record a driven lap headless; a still frame will not show it. |
 | Decal dropout at range | Park at increasing distances from the start line (`__apex.eyeAt`) and compare — dropout is a function of distance, so one framing proves nothing. |
 | Camera inside geometry | Observed repeatedly this session: `orbit`/`trackside` framings landed *inside* tree canopies, producing a full-screen green wash. Worth an `__apex` guard that reports when the eye is inside a prop's bounds. |
 | Near-plane slicing | Cockpit and hood only. Check the wheel/fascia edges after ANY near-plane change — and after any change that moves near geometry, which is the direction that fails silently. A clipped mesh looks washed-out, not clipped: read the projected `w`, per [OCCLUSION-PROBE.md](OCCLUSION-PROBE.md). |

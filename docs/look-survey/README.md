@@ -11,14 +11,14 @@ at a representative lap fraction, chase camera, HUD off.
 npx serve -l 3456 .
 
 # Single circuit — all 20 tod×weather combos
-python3 tools/cdmcp-cli.py look-survey monaco --frac 0.45
+python3 tools/mcp/cdmcp-cli.py look-survey monaco --frac 0.45
 
 # Or a subset
-python3 tools/cdmcp-cli.py look-survey bahrain --frac 0.12 \
+python3 tools/mcp/cdmcp-cli.py look-survey bahrain --frac 0.12 \
   --combos dawn|dry,day|dry,dusk|dry,night|dry
 
 # Batch plan (shoots only missing PNGs, safe to re-run)
-python3 tools/cdmcp-cli.py look-survey \
+python3 tools/mcp/cdmcp-cli.py look-survey \
   --plan artifacts/lighting/survey-plan.json
 
 # Stitch the sheet after shooting

@@ -13,8 +13,8 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MCP_JSON = path.join(ROOT, ".mcp.json");
-const MCP_CLI = path.join(ROOT, "tools/mcp-cli.mjs");
-const CD_SH = path.join(ROOT, "tools/chrome-devtools-mcp.sh");
+const MCP_CLI = path.join(ROOT, "tools/mcp/mcp-cli.mjs");
+const CD_SH = path.join(ROOT, "tools/mcp/chrome-devtools-mcp.sh");
 
 test("chrome-devtools-mcp.sh clone/build never prompts npx", () => {
   const src = fs.readFileSync(CD_SH, "utf8");
@@ -50,7 +50,7 @@ test("Chrome MCP network fallback is pinned to the audited release", () => {
 
 
 test("Playwright MCP network fallback is pinned to the audited release", () => {
-  const src = fs.readFileSync(path.join(ROOT, "tools/playwright-mcp.sh"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "tools/mcp/playwright-mcp.sh"), "utf8");
   assert.match(src, /MCP_NPM_PACKAGE="@playwright\/mcp@0\.0\.79"/);
   assert.match(src, /NOT MCP-ATTACHED/, "the wrapper is a CLI now; playwright-official is the server");
   const cfg = JSON.parse(fs.readFileSync(MCP_JSON, "utf8"));
@@ -83,7 +83,7 @@ test("probe --backend sets the pick BEFORE reloading (order is the whole point)"
 });
 
 test("gfx-probe --tlx-webgpu unpins TLX ForceGL and --lavapipe uses the Lavapipe ICD", () => {
-  const src = fs.readFileSync(path.join(ROOT, "tools/gfx-probe.mjs"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "tools/gfx/gfx-probe.mjs"), "utf8");
   assert.match(src, /--tlx-webgpu/);
   assert.match(src, /--lavapipe/);
   assert.match(src, /tlxForceGL", wantTlxGpu \? "0" : "1"/);
@@ -168,7 +168,7 @@ test("probe rejects an unknown flag instead of silently probing the default", ()
 test("the Chrome wrapper passes the flags WebGPU and software WebGL need", () => {
   // Flags live in tools/lib/webgpu-chrome-args.cjs — chrome-devtools-mcp.sh and
   // harness.mjs must stay in sync or MCP reads "no adapter" while wgx-shot passes.
-  const src = fs.readFileSync(path.join(ROOT, "tools/chrome-devtools-mcp.sh"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "tools/mcp/chrome-devtools-mcp.sh"), "utf8");
   assert.match(src, /webgpu-chrome-args\.cjs/);
   assert.match(src, /APEX_CHROME_ARGS/);
   assert.match(src, /SECURE CONTEXT/);

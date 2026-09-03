@@ -29,7 +29,11 @@ import { fileURLToPath } from "node:url";
 const HERE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 export const SWEEP_ROOTS = ["js", "tools", "tests", "docs", "types", ".claude", ".cursor", ".github",
-  "AGENTS.md", "README.md", "sw.js", "package.json", "playwright.config.js"];
+  "AGENTS.md", "README.md", "sw.js", "package.json", "playwright.config.js",
+  // .mcp.json names the stdio wrappers by path and is NOT under any of the
+  // directories above; a Phase 4 mcp/ move left it pointing at two tools that
+  // had moved, and nothing in the suite reads it.
+  ".mcp.json"];
 // Never descend into another checkout: .claude/worktrees/ holds subagent
 // worktrees (each with its own .git), and a nested .git anywhere means the
 // same — rewriting those would edit a sibling branch's files in place.

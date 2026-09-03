@@ -223,9 +223,9 @@ test("skills only name real test-bg groups", () => {
 });
 
 test("wgx-validate Usage lists --static as the no-browser gate", () => {
-  const text = fs.readFileSync(path.join(ROOT, "tools/wgx-validate.mjs"), "utf8");
+  const text = fs.readFileSync(path.join(ROOT, "tools/gfx/wgx-validate.mjs"), "utf8");
   const usage = text.match(/Usage:[\s\S]*?\n\/\/\n\/\/ PASS/);
-  assert.ok(usage, "could not find the Usage block in tools/wgx-validate.mjs");
+  assert.ok(usage, "could not find the Usage block in tools/gfx/wgx-validate.mjs");
   assert.match(usage[0], /wgx-validate\.mjs --static/);
   assert.match(usage[0], /parent session only/);
 });

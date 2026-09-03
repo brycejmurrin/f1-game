@@ -23,8 +23,8 @@ Canvas / 3D → **playwright-probe**.
 node tools/ui/css-play.mjs --list
 node tools/ui/css-play.mjs --screen settings
 node tools/ui/css-play.mjs garage --sel "#cs-tabs" --css css/carsetup.css
-./tools/playwright-mcp.sh play --screen settings
-./tools/playwright-mcp.sh dom  --screen settings --sel .sheet
+./tools/mcp/playwright-mcp.sh play --screen settings
+./tools/mcp/playwright-mcp.sh dom  --screen settings --sel .sheet
 ```
 
 `--css css/menus.css` reloads that `<link>` as `?play=<mtime>` (server is

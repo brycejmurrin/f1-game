@@ -51,7 +51,7 @@ function fnBody(src, name) {
 }
 
 test("gfx-probe cannot report a stale optional frame as fresh", () => {
-  const probe = read("tools/gfx-probe.mjs");
+  const probe = read("tools/gfx/gfx-probe.mjs");
   assert.match(probe, /ATTEMPT_ARTIFACTS\s*=\s*\[[^\]]*"frame\.png"/,
     "frame.png must be one of the owned artifacts cleared before every attempt");
   assert.match(probe, /for \(let attempt[^]*?clearAttemptArtifacts\(\);[^]*?runProbeAttempt\(attempt\)/,
@@ -628,7 +628,7 @@ function verdictScript() {
   return body;
 }
 
-// Fixtures shaped like what tools/gpu-game-check.mjs actually writes: it reads
+// Fixtures shaped like what tools/gfx/gpu-game-check.mjs actually writes: it reads
 // backendState/envState ONLY when g.__tlx exists (gpu-game-check.mjs 205-207),
 // so the GLX leg legitimately carries neither.
 const tlxLegJson = (gfxOver = {}) => ({
@@ -678,7 +678,7 @@ test("gpu-game-check reports appearance, and can say when it could not measure i
   // human" was untrue: there was nothing to report. Both halves are pinned,
   // because writing the field WITHOUT the absence path just recreates a
   // silently-empty column. docs/PERF-FINDINGS.md 2l.
-  const ggc = read("tools/gpu-game-check.mjs");
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
   assert.match(ggc, /out\.frame = n\s*\?/, "the tool must write out.frame");
   assert.match(ggc, /meanLuma: \+\(sum \/ n\)\.toFixed\(1\)/);
   assert.match(ggc, /out\.frameReadFailed = /,
@@ -702,7 +702,7 @@ test("gpu-game-check's finally can actually reach the console buffer", () => {
   // `continue-on-error: true` on all four census steps swallowed the exit code
   // and checkpoint() had already written the JSON, so nothing looked wrong.
   // Measured after the fix: exit 0, root set, 7 console lines. PERF-FINDINGS 2l.
-  const ggc = read("tools/gpu-game-check.mjs");
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
   const decl = ggc.indexOf("const console_ = [];");
   const tryAt = ggc.indexOf("\ntry {");
   const useAt = ggc.indexOf("out.console = console_");
@@ -2843,7 +2843,7 @@ test("the attribute packer proves its precondition instead of assuming it", () =
 });
 
 test("the packing round-trip check is wired to the shader's own decisions", () => {
-  const tool = read("tools/tlx-pack-check.cjs");
+  const tool = read("tools/gfx/tlx-pack-check.cjs");
   // The tool must LIFT the packer out of the shipping file. A reimplementation
   // drifts, and then it verifies its own copy rather than what ships.
   assert.match(tool, /readFileSync\(path\.join\(ROOT, "js\/render\/three\/tlx-chunked\.js"\)/,
@@ -2851,7 +2851,7 @@ test("the packing round-trip check is wired to the shader's own decisions", () =
   // And it must gate on DECISIONS, not on raw error: MAT is legitimately
   // fractional, so a zero-error gate is wrong and would fail forever.
   for (const decision of [/floor\(o \+ 0\.5\) !== Math\.floor\(d \+ 0\.5\)/, /o >= 15 && o < 16/, /\(o \| 0\) === o && d !== o/])
-    assert.match(tool, decision, "a shader decision is no longer checked by tools/tlx-pack-check.cjs");
+    assert.match(tool, decision, "a shader decision is no longer checked by tools/gfx/tlx-pack-check.cjs");
   assert.match(tool, /if \(layerChanges \|\| flips \|\| intInexact\) \{/, "the check no longer FAILS on a changed decision");
 });
 
