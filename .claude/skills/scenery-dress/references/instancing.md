@@ -16,7 +16,7 @@ baking. Plan + reuse numbers: `docs/research/SCENE-GRAPH-PLAN.md`.
 ## When NOT to Use
 
 - First-time dressing → the scenery-dress index (`SKILL.md`). Track spline/elevation →
-  **debug-tracks**. Shader/GL errors → **webgl-debug**. Treating a pine
+  **agent-view**. Shader/GL errors → **webgl-debug**. Treating a pine
   re-param mismatch vs old HEAD as a regression — that look change is the
   worklist (SCENE-GRAPH-PLAN §6).
 
@@ -39,7 +39,7 @@ node tools/test-bg.mjs gfx                # instanced-draw.spec.js
 node tools/verify-track.cjs <id>
 ```
 
-Related: **webgl-debug**, **debug-tracks**.
+Related: **webgl-debug**, **agent-view**.
 
 ## Migration workflow and mistakes
 

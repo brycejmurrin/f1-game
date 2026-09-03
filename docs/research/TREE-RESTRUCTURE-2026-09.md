@@ -233,13 +233,47 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       tinyfish-rpc.py, probe-mcp.py, chrome-devtools-mcp.sh, mcp-cli.mjs,
       mcp-smoke.mjs) consolidates here — that is where the Phase 1-lite
       deferral is decided. Verification: tooling-fast.
-- [ ] **Phase 5 — docs/ + agent surface**: top level 28 → ~12 with generated
-      tables; `docs/notes/` ledgers path-checked only; ATTIC absorbs the
-      zero-citation research + superpowers/ + PNGs + workflow JS;
-      `docs/README.md` → reading order; AGENTS.md → ~120 lines of rules;
-      skills 31 → ~20 (owner's choice); `skill-progressive` loses its ~118
-      prose pins; doc-guard counts become generated numbers. Verification:
-      tooling-fast (`generated-docs`, `agent-surface`, `skill-progressive`).
+- [x] **Phase 5 — docs/ + agent surface** landed 2026-09-03 on
+      `claude/p5-docs`; `test:tooling-fast` 138/138, all four generators
+      byte-clean. **docs/ top level 28 → 23 files, of which 13 are documents
+      and 10 are one-line redirect stubs.** ~12 was not reachable: ten of the
+      absorbed docs are cited BY PATH from `js/`, `css/`, `tests/` or `tools/`
+      comments (PERF-FINDINGS 82 refs, ARCHITECTURE-REVIEW 12, SCENERY-GROUNDING
+      7, COCKPIT-DATUMS 3, RENDERERS 3, AGENT-WORLD-API 3, OCCLUSION-PROBE 3,
+      LAYOUT-AUDIT 3, CONSOLE-RECIPES 1, PARALLEL-WORK 1), and this phase's
+      scope excluded editing those trees. Merges: ARCHITECTURE ← RENDERERS +
+      RENDER-CLIPPING; CAREER ← PARTS; SCENERY-API ← SCENERY-GROUNDING +
+      TRACK-MIGRATION-CHECKLIST; LIGHTING (was LIGHTING-REF) ← KNOBS + PRESETS;
+      COMPONENTS ← LAYOUT-AUDIT; DEBUG-HOOKS ← AGENT-WORLD-API +
+      CONSOLE-RECIPES; PLATFORM (was iOS-OPTIMIZATION). TESTING's field notes
+      and the review's §7-8 became `notes/TESTING-FIELD-NOTES.md` and
+      `notes/DEFECT-LEDGER.md`. **The zero-citation claim was FALSE for four of
+      the five named research files** — re-grepped one by one: BROWSER-GRAPHICS
+      is the only genuine zero, CLEANUP-SWEEP and SURVEY-BUGS-PERF had one live
+      citer each (dropped, then archived), PERF-HUNT is cited by PERF-FINDINGS
+      §3 (→ notes/, not the attic), RENDERER-PERF-AUDIT has five citers
+      including `spike/backends/README.md` and `tools/moves/spike-backends.json`
+      and stays at its research/ path until the spike-out lands. `docs/research/`
+      itself could not be emptied: twelve of its files are cited by path from
+      `js/`/`tests/`/`tools/`. `look-survey/` stays (written by
+      `tools/look-survey-sheet.py`, pinned by `cdmcp-measure.test.mjs`);
+      `research/wgx-gallery/` stays (pinned by `tools/wgx-shot.mjs` and the
+      spike move map); `.claude/workflows/*.js` stays (three LIVE workflows,
+      not spent scripts). AGENTS.md 316 → 245 lines / 2858 → 2092 words — every
+      rule kept, ~770 words of evidence moved to
+      `notes/CI-RENDERING-PERFORMANCE.md` and `notes/TESTING-FIELD-NOTES.md`;
+      120 lines would have cost rules. Skills 31 → 26, not ~20: five folded
+      where the hub's `description` could absorb the trigger vocabulary
+      (car-viewer + debug-cameras → playwright-probe, game-feel → tune-physics,
+      restructure-screens-css → css-play, debug-tracks → agent-view), six kept
+      because the merge would have made them un-findable (see the reasoning
+      block in `.claude/skills/README.md`). Guard changes: `skill-progressive`
+      retargeted its fold pins and gained a STRUCTURAL check that each hub's
+      description carries the absorbed vocabulary; `docs-integrity` now walks
+      EVERY directory under docs/ for link resolution (nine dead links landed
+      with the notes/ move and nothing saw them) and exempts `docs/notes/` from
+      the archive-referrer rule, because a ledger citing its own provenance is
+      the point of a ledger.
 - [ ] **Close-out**: `docs/research/TREE-RESTRUCTURE-2026-09.md` gets its
       errata + landed SHAs per phase; `docs/ARCHITECTURE.md` and
       `docs/TESTING.md` describe the final tree; the `MOVED` map and the

@@ -1,6 +1,6 @@
 ---
 name: survey-track
-description: Use when the user asks to survey a track, make a circuit more accurate/realistic, compare Apex 26 to real-world reference, or do a picture-driven accuracy pass (gaps, terrain channels/steps, sunk water). Orchestrate first; scenery(api) prop edits after the survey flags them → scenery-dress. Geometry hooks only → debug-tracks.
+description: Use when the user asks to survey a track, make a circuit more accurate/realistic, compare Apex 26 to real-world reference, or do a picture-driven accuracy pass (gaps, terrain channels/steps, sunk water). Orchestrate first; scenery(api) prop edits after the survey flags them → scenery-dress. Geometry hooks only → agent-view.
 ---
 
 # Survey & update a track
@@ -18,7 +18,7 @@ node .claude/skills/survey-track/ground-profile.mjs <id>   # numbers only
 ```
 
 Hands off: **scenery-dress** (`js/circuits/<id>.js` `scenery(api)`),
-**debug-tracks** (geometry hooks), **playwright-probe** (`shot.mjs`),
+**agent-view** (geometry hooks), **playwright-probe** (`shot.mjs`),
 **check-changes** (ship). Subagent: **track-surveyor** (writes only that
 circuit file; no browser runs).
 

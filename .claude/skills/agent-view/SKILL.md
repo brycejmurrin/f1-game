@@ -1,11 +1,11 @@
 ---
 name: agent-view
-description: Use when the user wants to see or drive Apex 26 without screenshots, asks what the car sees, wants agent world view/world()/field()/rollout(), wants a headless lap, deterministic run reproduction, or asks what the agent is trying to do, what the car is doing, telemetry, slip/grip, field order/gaps, sector timing, lightState, or a headless control/obs/act/reset loop. One-off geometry JSON (corners/groundY/walls) → debug-tracks.
+description: Use when the user wants to see or drive Apex 26 without screenshots, asks what the car sees, wants agent world view/world()/field()/rollout(), wants a headless lap, deterministic run reproduction, or asks what the agent is trying to do, what the car is doing, telemetry, slip/grip, field order/gaps, sector timing, lightState, or a headless control/obs/act/reset loop. Also the TRACK GEOMETRY hooks — corners, elevation, curvature, map/bounds, wall/barrier audits, terrain-over-road gaps, groundY/scan/wallStats, comparing circuits, "how many corners does this track have". Editing a circuit is new-track; a picture-driven accuracy pass is survey-track.
 ---
 
 # Agent view — perceive and drive the game as text
 
-Prefer `node tools/agent.mjs <track> help` / `__apex.agentHelp()` over this skill when you only need one tool. MCP wrap (week-2 lock): `./tools/apex-tools-mcp.sh call apex_agent '{"track":"monza","command":"world"}'`. Per-tool catalog, policy, staging: [references/surface.md](references/surface.md). Full surface: `docs/AGENT-WORLD-API.md` + `docs/DEBUG-HOOKS.md`.
+Prefer `node tools/agent.mjs <track> help` / `__apex.agentHelp()` over this skill when you only need one tool. MCP wrap (week-2 lock): `./tools/apex-tools-mcp.sh call apex_agent '{"track":"monza","command":"world"}'`. Per-tool catalog, policy, staging: [references/surface.md](references/surface.md). Full surface: `../../../docs/DEBUG-HOOKS.md` + `docs/DEBUG-HOOKS.md`.
 
 **TL;DR** — Perceive and drive Apex 26 as text, no screenshots. From a shell:
 `node tools/agent.mjs <track> <tool> [flags]` (it stages `race`/`go`/`jump` +
@@ -74,8 +74,22 @@ Read both once; do not re-fetch per tick.
 
 - `docs/DEBUG-HOOKS.md` → "Agent world view" — the full per-tool reference (every
   field, every option, the typed errors).
-- `docs/AGENT-WORLD-API.md` — the design and the research behind each choice.
+- `../../../docs/DEBUG-HOOKS.md` — the design and the research behind each choice.
 - `__apex.agentHelp()` — the live manifest, including the `fields` glossary and
   the `read`/`control` sections listing the raw hooks and the drive/stage verbs.
 - Tests: `node tools/test-bg.mjs hooks` (`tests/specs/agent-view.spec.js`,
   `tests/specs/agent-drive-bench.spec.js`, `tests/specs/agent-determinism.spec.js`).
+
+## Load on demand
+
+- **Track geometry hooks** — `trackShape`/`trackProfile`/`trackBounds`/
+  `nodeAt`/`groundY`/`scan`/`wallStats`, and the official-turns-vs-curvature-
+  peaks distinction (answer "how many corners?" with `info().turns`, never
+  `corners().length`; corners have no real names) →
+  [references/track-geometry.md](references/track-geometry.md); street
+  half-width loop, multi-track sweeps and one-off `apex-eval` recipes in
+  [references/debug-tracks-sweeps.md](references/debug-tracks-sweeps.md).
+
+Folded in 2026-09-03: `debug-tracks`. It was a hook catalog, which is what this
+skill is; `new-track` (edit a circuit) and `survey-track` (accuracy pass) stay
+separate because they are different acts, not different hooks.

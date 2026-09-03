@@ -33,7 +33,7 @@ node tools/apex-eval.mjs monza "(a.park(0.18), a.camera('drift'), a.snapCam())"
 ```
 
 For arbitrary lap fractions without forking, use `shot.mjs` with your `frac` arg
-or a `previewCam` loop (see **debug-cameras**).
+or a `previewCam` loop (see `cameras.md`).
 
 ## Why one server + Chromium workers
 
@@ -79,7 +79,7 @@ helped asset fetch; they are not the current harness.
    ```
    **`shot.mjs` calls `snapCam()` automatically for `park` mode**; for `orbit` /
    `eye` / `cinematic` / `trackside` it sets `dbgCam` directly (no snapCam — and
-   never call snapCam after orbit; see **debug-cameras**). Waiting longer is not a
+   never call snapCam after orbit; see `cameras.md`). Waiting longer is not a
    fix (the ease is slow and `freeze()` can hold it). Symptom: eye-to-car distance
    in the hundreds of metres when chase should read ~5.8 m.
 
@@ -117,7 +117,7 @@ const results = await Promise.all(TRACKS.map(async (id) => {
 ```
 
 Use this to validate work from the camera / track / state debug skills
-(`debug-cameras`, `debug-tracks`, `agent-view` state hooks) at scale. For single
+(`cameras.md`, and **agent-view**'s track-geometry and state hooks) at scale. For single
 deterministic screenshots, `tools/capture/shot.mjs` is simpler. It clips
 `canvas#game` with `page.screenshot({ clip })` — do not use
 `locator("canvas#game").screenshot()`, which waits for element stability a live

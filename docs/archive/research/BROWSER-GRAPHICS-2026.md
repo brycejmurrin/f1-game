@@ -33,7 +33,7 @@ That is the opposite of what `js/game.js` asks every backend to do and of what
 GLX and WGX actually do (opaque → sky, depth write off, LEQUAL). It is the
 mechanism behind the TLX sky item, and the reason that item is a **parity
 defect** and not only a cost. The full three-way case, and the patch, are in
-[RENDERER-PERF-AUDIT-2026-09-02.md](RENDERER-PERF-AUDIT-2026-09-02.md)
+[RENDERER-PERF-AUDIT-2026-09-02.md](../../research/RENDERER-PERF-AUDIT-2026-09-02.md)
 §"The sky, settled three ways".
 
 Related and NOT verified: `_renderBundles()` runs before the opaque list, which

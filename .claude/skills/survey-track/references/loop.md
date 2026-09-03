@@ -35,7 +35,7 @@ Add fractions or a label: `survey-track.mjs <id> after 0.1,0.55,0.78`.
 (flag may sit anywhere; `monaco --oblique 0.1,0.5` is valid).
 Numbers-only: `node .claude/skills/survey-track/ground-profile.mjs <id>`.
 One bespoke frame: **playwright-probe** `tools/capture/shot.mjs`. Deeper hooks:
-**debug-tracks**. `tests/specs/terrain-over-road.spec.js` catches the
+**agent-view** (`references/track-geometry.md`). `tests/specs/terrain-over-road.spec.js` catches the
 terrain-over-road class.
 
 ### 3 · Edit

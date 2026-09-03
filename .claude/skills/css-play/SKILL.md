@@ -1,6 +1,6 @@
 ---
 name: css-play
-description: Use when iterating on Apex 26 menu/HUD CSS for a specific screen or sheet, trying a token or class change, or wanting before/after screenshots of a page without a full layout-audit. Not for whole-matrix review (survey-ui-matrix), restructure decisions (restructure-screens-css), or canvas/3D shots (playwright-probe).
+description: Use when iterating on Apex 26 menu/HUD CSS for a specific screen or sheet, trying a token or class change, or wanting before/after screenshots of a page without a full layout-audit — and when RESTRUCTURING screens, menus, dialogs, the DOM or the CSS class/token system: collapsing duplicate component families, adding or removing a screen layer, deciding whether to split index.html, designing height-responsive layout, or judging whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. Not for whole-matrix review (survey-ui-matrix), one-off layout bugs (ui-menu-a11y), or canvas/3D shots (playwright-probe).
 ---
 
 # Playing with menu / HUD CSS
@@ -14,7 +14,7 @@ hot-swap the stylesheet, screenshot. No cache bump in the loop.
 - Before/after pixels of a named menu, plus boxes / computed styles.
 
 **Not this skill:** whole matrix → **survey-ui-matrix**. Restructure / class
-counts → **restructure-screens-css**. One Escape/a11y bug → **ui-menu-a11y**.
+counts → `references/restructure.md`. One Escape/a11y bug → **ui-menu-a11y**.
 Canvas / 3D → **playwright-probe**.
 
 ## Command
@@ -51,3 +51,13 @@ Live MCP session (already on localhost): `browser_resize` →
 
 - Screen catalog, DOM fields, hot-swap traps →
   [references/loop.md](references/loop.md).
+- **Restructuring** — the before-numbers you must record (a restructure with no
+  before/after count is an opinion), and the governing question *does it reduce
+  a COUNT, or does it rename things?* →
+  [references/restructure.md](references/restructure.md); the 15 checkable
+  rules (screens/layers, CSS variation, DOM size, anti-methodology) in
+  [references/restructure-screens-css-rules.md](references/restructure-screens-css-rules.md).
+
+Folded in 2026-09-03: `restructure-screens-css`. Same files, same CLIs; the
+difference was one screen versus the whole class system, which is a scope of
+the same task, not a different one.

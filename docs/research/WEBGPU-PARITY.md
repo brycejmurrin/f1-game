@@ -88,7 +88,7 @@ nearest-bin and chopped the dashes). `fs_main` uses `in.matTrk.xyz` on
 road draws. LUT `trkFromWorld` stays `buryRibbon` + material fallback.
 Vertex colour stays the real albedo (packing into RGB greys the grass
 shoulders).
-See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
+See [../notes/CI-RENDERING-PERFORMANCE.md](../notes/CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
 Companion provenance (do not treat as current structure): the original
@@ -239,7 +239,7 @@ function, which closes over a null `gl` and throws mid-frame. The 2026-08
 parity names (`gpuTimer`, texture arrays, lamp shadows, instancing,
 `drawParticles`, …) are real functions and remain listed for that reason.
 Gated by `tests/unit/backend-surface-parity.test.mjs`. Overview:
-[RENDERERS.md](../RENDERERS.md).
+[../ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ---
 
@@ -646,7 +646,7 @@ Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
    TLX and WGX register the listener form first and keep the property as
    the fallback. This matters because WebKit's silent failures ARRIVE on
    that channel and nowhere else — the research ranking (2026-09-03,
-   `docs/RENDERERS.md` §WebKit silent draw drops): (1) the Metal PSO is
+   `../ARCHITECTURE.md` §WebKit silent draw drops): (1) the Metal PSO is
    compiled lazily at FIRST DRAW with `error:nil`; on failure WebKit skips
    `setRenderPipelineState` and still issues the draw, reporting an
    out-of-memory error "Render pipeline failed compilation likely due to
@@ -740,7 +740,7 @@ slice that adds a method must declare it (real or `undefined`) before
 - **Using WebGPU to make CI faster.** The suite already gets a SwiftShader
   WebGPU adapter under the existing Playwright flags (see §6 table). That
   does not make frames cheaper: even a green LIT compile is still a CPU
-  rasteriser. See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md).
+  rasteriser. See [../notes/CI-RENDERING-PERFORMANCE.md](../notes/CI-RENDERING-PERFORMANCE.md).
 
 ---
 

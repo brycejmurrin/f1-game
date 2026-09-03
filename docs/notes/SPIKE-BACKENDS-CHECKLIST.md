@@ -293,7 +293,7 @@ not assert on WGX by name).
 - `AGENTS.md:252` — "TLX, and WGX implement it" in the Baked asset pack
   section (`tools/assets.mjs verify` gates licences). Rewrite to "GLX
   implements it" once the other two backends are gone.
-- `AGENTS.md:288,290,295` — `docs/RENDERERS.md` description ("GLX/WGX/TLX,
+- `AGENTS.md:288,290,295` — `../ARCHITECTURE.md` description ("GLX/WGX/TLX,
   cross-backend parity"), the WGX/WGSL pointer to
   `docs/research/WEBGPU-PARITY.md` (moving), and the two-rule WGSL callout
   ("sampleCount is 1 or 4 ONLY… breaking either makes WGX refuse silently").
@@ -320,9 +320,10 @@ whatever Round-2 subsections are WGX/TLX-only into a new file — `RENDERER-PERF
 placed under `spike/backends/docs/` alongside `WEBGPU-PARITY.md` — leaving the GLX section
 (`:110-191`) and any backend-neutral Round-2 material in place under the
 original path — re-verify the split against `docs-integrity.test.mjs`'s
-broken-link and doc-index checks afterward (this doc is a `docs/research/`
-file, exempt from the broken-path checker but NOT from the docs/README index
-checks if it stays listed).
+broken-link and doc-index checks afterward. NOTE, changed 2026-09-03: this
+doc moved to `docs/notes/`, which is NOT exempt from the broken-path checker —
+`docs/notes/` is walked as a live doc for both path existence and relative-link
+resolution, and is exempt only from the archive-referrer rule.
 
 ## `mcp-probe` skill — partial-file split
 
@@ -369,18 +370,18 @@ grep (excludes the docs archive directory, excludes files already covered above)
 | `js/car/car-mesh.js:275-276` | shrink | Comment: "no backend has ever had a deleteMesh (GLX, TLX and WGX all expose freeMesh…)". Rewrite to name GLX only. |
 | `types/game-ctx.d.ts:128,130,491` | shrink | `GfxBackend` type comment says "GLX by default; TLX/WGX when opted in" — rewrite once opting in is impossible. |
 | `bench.html:408,431-432` | shrink | Reads `GLX.__tlx` to report which "three" backend is bound; with TLX gone `GLX.__tlx` is always undefined and the field always reads GLX's own webgl2 state — degrades safely, not wrong. Shrink at leisure. |
-| `docs/CONSOLE-RECIPES.md:177-197` | delete | The whole "Three.js DevTools extension" subsection instructs the reader to opt into `apex26.gfxBackend='three'` and use `__tlx.*` probes — none of this works once TLX is gone. Delete the subsection. |
+| `../DEBUG-HOOKS.md:177-197` | delete | The whole "Three.js DevTools extension" subsection instructs the reader to opt into `apex26.gfxBackend='three'` and use `__tlx.*` probes — none of this works once TLX is gone. Delete the subsection. |
 | `docs/DEBUG-HOOKS.md:692,739,759` | shrink | `__apex` hook docs mentioning WGX's texture-array path and the `stored` overrides table listing `gfxBackend`. Trim the WGX-specific clause at `:692`; the `stored` table entry at `:759` can stay (the key still round-trips harmlessly) or be pruned for accuracy. |
 | `docs/AGENT-SURFACE.md:29,36,110,122,128,153` | shrink/pointer | The `chrome-devtools` MCP row's "WebGPU flags" clause (`:29`), the `apex_wgx_validate_static`/`apex_gfx_probe` rows (`:122,128` — these tools move, so their MCP wrap rows are removed too, along with the `apex-tools-mcp.mjs` wrap registrations at `tools/apex-tools-mcp.mjs:326-328,414-420,537-538,574-576` and the `apex_wgx_validate`/`apex_wgx_validate_static` entries `tests/unit/apex-tools-mcp.test.mjs:167,184` pins), the tools/README pointer row at `:153`. |
 | `docs/ARCHITECTURE.md:8,40-41,150,162-337` (35 hits) | delete/shrink | The `js/render/` module table entries for WGX/TLX, the whole "GLX/WGX/TLX" renderer-selection section (`:229-337`, the biggest single block: boot-canary explanation, the DEFERRED/opt-in table, WGX gap list, TLX façade wiring). This is the live architecture doc's renderer chapter — it needs a substantial rewrite to describe GLX-only rendering, not a one-line pointer. Budget real editing time here in the move window. |
-| `docs/ARCHITECTURE-REVIEW.md:136-157,469,526-532,568-569,615,668-679` | shrink | Standing-assessment prose about the three-backend cost/parity tradeoff and specific WGX/TLX defect notes (the `tlx-probes` M6 skid red-test discussion at `:668-679` describes a test that is about to move — either delete that discussion or move it into the spike's own provenance notes). |
+| `ARCHITECTURE-REVIEW.md:136-157,469,526-532,568-569,615,668-679` | shrink | Standing-assessment prose about the three-backend cost/parity tradeoff and specific WGX/TLX defect notes (the `tlx-probes` M6 skid red-test discussion at `:668-679` describes a test that is about to move — either delete that discussion or move it into the spike's own provenance notes). |
 | `docs/LIGHTING-TUNER-SLIDERS.md:227,444,448` | shrink | "three backends" framing in the slider-parity table intro; rewrite to describe GLX only once WGX/TLX are gone (or note the sliders' spike-only knobs are moot). |
-| `docs/README.md` renderer section | shrink + pointer (see index row below) | Rewrite the "Renderers (GLX / WGX / TLX)" subsection to describe GLX only, point at `spike/backends/README.md` for the other two, and update the RENDERERS.md row's one-line description. |
-| `docs/RENDERERS.md` (whole doc) | major shrink | This is THE renderer architecture doc — "three-renderer architecture" title, `## Who does what`, `## Frame pipeline (all three)`, `## Boot/safety`, `## Screenshots — why WebGPU can look black`, `## Parity snapshot`, `## Cross-backend parity`, `## Boot evidence`. Nearly every section assumes three backends. This is a full rewrite to a GLX-only renderer doc plus a pointer to the spike, not a trim — budget the most editing time here of any single doc. |
+| `docs/README.md` renderer section | shrink + pointer (see index row below) | Rewrite the "Renderers (GLX / WGX / TLX)" subsection to describe GLX only, point at `spike/backends/README.md` for the other two, and update the ../ARCHITECTURE.md row's one-line description. |
+| `../ARCHITECTURE.md` (whole doc) | major shrink | This is THE renderer architecture doc — "three-renderer architecture" title, `## Who does what`, `## Frame pipeline (all three)`, `## Boot/safety`, `## Screenshots — why WebGPU can look black`, `## Parity snapshot`, `## Cross-backend parity`, `## Boot evidence`. Nearly every section assumes three backends. This is a full rewrite to a GLX-only renderer doc plus a pointer to the spike, not a trim — budget the most editing time here of any single doc. |
 | `docs/TESTING.md` (10+ hits: WGX/TLX group descriptions, the `tlx-probes` M6/M9 timeout case studies, spec coverage table rows for `tlx-probes.spec.js`/`webgpu-lifecycle.test.mjs`/`renderer-soft-lifecycle.test.mjs`/`road-lut-frame.test.mjs`/`gfx-backend-canary.test.mjs`) | shrink | Remove the coverage-table rows for the four moved test files; `gfx-backend-canary.test.mjs` stays (rewritten, not moved — see RED tests below) so its row stays too, edited to describe the GLX-only scope. |
-| `docs/PERF-FINDINGS.md` (10 hits) | shrink | Perf case studies citing `gfx-probe.mjs`/`gpu-game-check.mjs`/`wgx-capture.mjs`/`tlx-pack-check.cjs` by path. Dated findings — leave as historical record with a note, or move the WGX/TLX-specific findings into the spike's own notes if they are still load-bearing evidence for anything (they are not cited by any live guard per the grep above). |
+| `PERF-FINDINGS.md` (10 hits) | shrink | Perf case studies citing `gfx-probe.mjs`/`gpu-game-check.mjs`/`wgx-capture.mjs`/`tlx-pack-check.cjs` by path. Dated findings — leave as historical record with a note, or move the WGX/TLX-specific findings into the spike's own notes if they are still load-bearing evidence for anything (they are not cited by any live guard per the grep above). |
 | `docs/notes/CEILING-HISTORY.md` (5 hits) | keep | Ratchet history for `js/render/webgpu/wgx.js` and `js/render/three/tlx.js` lines — this is provenance (why the ceiling moved) for files about to leave the ratchets.json table (below). Leave as-is; it is dated history, not a live claim. |
-| `docs/research/CI-RENDERING-PERFORMANCE.md`, `BUG-HUNT-2026-09-02.md`, `PERF-HUNT-2026-08-18.md`, `SURVEY-BUGS-PERF-2026-08-17.md`, `ENGINEERING-PRACTICE-NOTES.md` | keep | All under `docs/research/`, exempt from the docs-integrity broken-path checker (research is dated record, per `docs/README.md`'s own framing). No edit required; they remain accurate as history of what was investigated when WGX/TLX were live. |
+| `CI-RENDERING-PERFORMANCE.md`, `BUG-HUNT-2026-09-02.md`, `PERF-HUNT-2026-08-18.md`, `ENGINEERING-PRACTICE-NOTES.md` | keep | Moved to `docs/notes/` by the Phase 5 docs pass (2026-09-03); `SURVEY-BUGS-PERF-2026-08-17.md` went to the attic in the same pass. Dated records either way. No edit required; they remain accurate as history of what was investigated when WGX/TLX were live. |
 | `.claude/skills/asset-pack/SKILL.md:16-17`, `references/workflow.md:12-21,67,78` | shrink | "GLX, TLX, and WGX all implement the arrays" claims — rewrite to GLX-only once the other backends cannot bind. Functionally harmless if left (a `supported: false` on an absent global still reads as "not supported," same outcome) but stale documentation. |
 | `.claude/skills/webgl-debug/SKILL.md` | keep | Only 1 hit found in the earlier grep pass and it is incidental (backend-neutral framing) — no edit needed. |
 | `.claude/skills/pwa-cache-service-worker/SKILL.md:16`, `references/workflow.md:54` | shrink | Cites the DEFERRED backends and the sw.js optional-entry trap — rewrite once DEFERRED is empty; the trap itself (forgetting an sw.js optional entry) still applies generically, so keep the lesson, drop the WGX/TLX example. |
@@ -431,7 +432,7 @@ engineering doc" test only requires the filename appear somewhere in
 matching the existing `notes/CEILING-HISTORY.md` row's pattern):
 
 ```
-| [notes/SPIKE-BACKENDS-CHECKLIST.md](notes/SPIKE-BACKENDS-CHECKLIST.md) | The WGX/TLX spike-out inventory: the move map, every non-move edit with file:line evidence, the tests that go red and their fixes, the `spike/backends/README.md` re-attach draft. |
+| [SPIKE-BACKENDS-CHECKLIST.md](SPIKE-BACKENDS-CHECKLIST.md) (this file) | The WGX/TLX spike-out inventory: the move map, every non-move edit with file:line evidence, the tests that go red and their fixes, the `spike/backends/README.md` re-attach draft. |
 ```
 
 This note itself must pass `docs-integrity.test.mjs`'s "live docs reference

@@ -1,8 +1,3 @@
----
-name: debug-cameras
-description: Use when the user asks to switch or check camera modes, cockpit/chase/orbit/cinematic/roadside shots, frame a corner/chicane, inspect camState/viewState, debug camera lag/framing, or set up Apex 26 screenshots from specific camera angles.
----
-
 # Camera debug hooks
 
 Verified live (`tools/apex-eval.mjs`). Two layers: the **13 built-in camera
@@ -48,4 +43,8 @@ full scene/camera snapshot. Capture → **playwright-probe**.
 ## Load on demand
 
 - Free-cam table, `previewCam`, `look:"in"` vs `roadside()` look set, recipes →
-  [references/framing.md](references/framing.md).
+  [references/framing.md](debug-cameras-framing.md).
+
+---
+
+_Folded into `playwright-probe` on 2026-09-03 (tree restructure Phase 5). Selection trigger it carried, now merged into `playwright-probe`'s description: Use when the user asks to switch or check camera modes, cockpit/chase/orbit/cinematic/roadside shots, frame a corner/chicane, inspect camState/viewState, debug camera lag/framing, or set up Apex 26 screenshots from specific camera angles._

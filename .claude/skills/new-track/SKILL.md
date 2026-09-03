@@ -1,6 +1,6 @@
 ---
 name: new-track
-description: Use when the user asks to add a track/circuit, edit Monza/Spa/etc. layout, change circuit geometry/metadata/palette/theme/bridges/elevation, or register a new circuit in js/circuits/. Corner/terrain diagnosis → debug-tracks; picture-driven accuracy → survey-track; scenery(api) props → scenery-dress.
+description: Use when the user asks to add a track/circuit, edit Monza/Spa/etc. layout, change circuit geometry/metadata/palette/theme/bridges/elevation, or register a new circuit in js/circuits/. Corner/terrain diagnosis → agent-view; picture-driven accuracy → survey-track; scenery(api) props → scenery-dress.
 ---
 
 # Author or edit a track

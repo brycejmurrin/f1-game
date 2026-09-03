@@ -305,7 +305,7 @@ Consistent advice across sources, and it contradicts the obvious instinct:
   when slightly flaky is a slow suite.
 
 Sharding syntax, when it is finally the right move, is `--shard=x/y` across jobs
-(Playwright's `docs/src/test-sharding-js.md`); a GitLab `parallel:matrix` example
+(Playwright's own `test-sharding-js` page, upstream `docs/src/`); a GitLab `parallel:matrix` example
 and the GitHub equivalent are in Playwright's own CI docs.
 
 **Applies to the gate as built:** `ci.yml` already splits by *cost* (guards /
@@ -325,7 +325,7 @@ out, but they flatten the gating that actually matters):
 
 - **Safari: macOS Tahoe 26, iOS 26, iPadOS 26, visionOS 26 — enabled by
   default.** This is the big one: iOS Safari was the reason to treat WebGPU as
-  unreachable, and it is the platform `docs/iOS-OPTIMIZATION.md` exists for.
+  unreachable, and it is the platform `../PLATFORM.md` exists for.
 - **Chrome desktop** (Mac/Windows/ChromeOS): 113+, default on.
 - **Chrome Android is gated by GPU vendor**, not just version: 121+ on
   ARM/Qualcomm/Intel (Android 12+), 139+ on Imagination (Android 16+), Samsung
@@ -342,15 +342,15 @@ feature-detect and fall back to WebGL2 automatically — **which is exactly what
 commentary about it is stale.
 
 **What this does NOT imply.** It is not an argument to flip the default
-renderer. §6 of `docs/ARCHITECTURE-REVIEW.md` makes the real point: the cost
+renderer. §6 of `ARCHITECTURE-REVIEW.md` makes the real point: the cost
 is *one look in three shading languages*. The 2026-08 WGX parity pass closed
-the documented API/shader gaps (see [WEBGPU-PARITY.md](WEBGPU-PARITY.md));
+the documented API/shader gaps (see [WEBGPU-PARITY.md](../research/WEBGPU-PARITY.md));
 keeping two shader trees in sync is still the tax. Broader platform support
 does not reduce that cost. The honest options are still "invest in one of
 TLX/WGX" or "keep GLX and let the seam be insurance", and this finding only
 changes the input to that decision, not the answer. The API recipes and
 slice order live in
-[WEBGPU-PARITY.md](WEBGPU-PARITY.md) — every listed gap is implementable in
+[WEBGPU-PARITY.md](../research/WEBGPU-PARITY.md) — every listed gap is implementable in
 core WebGPU; the freeze was a cost call, not an API wall.
 
 ---
@@ -409,7 +409,7 @@ materially higher than the 80 MB the VBO settles at.
 
 ## Why this matters for a deferred item
 
-`docs/ARCHITECTURE-REVIEW.md` lists **"no vertex budget gate"** under deferred
+`ARCHITECTURE-REVIEW.md` lists **"no vertex budget gate"** under deferred
 structural work, noting that `verify-track vegas` prints 1,825,925 prop verts and
 **exits 0**, "on a codebase whose own comment names that VBO as the iOS jetsam
 trigger". This part supplies the number that item was missing. The gate is cheap
@@ -535,3 +535,42 @@ catalog is often empty, in which case the shell wrappers
 `./tools/tinyfish-mcp.sh`, `python3 tools/probe-mcp.py`) are the same surface.
 Never run Chrome MCP while Playwright is running, and do not attach
 `mcp-probe` for a `version.json` check (`deploy-research` owns that).
+
+## Which probe command for which backend (moved out of AGENTS.md, 2026-09-03)
+
+Operational table, kept beside the measurements it depends on. On
+SwiftShader/Lavapipe the **native WebGPU swapchain never composites** to the
+screen — that path stays black, and one `getCurrentTexture()` breaks `mapAsync`
+device-wide. WGX therefore routes the visible `#game` through a **2D
+soft-present blit**, and `GLX.awaitSoftPresent()` resolves only after a
+non-blank visible blit.
+
+| Backend | Command / path | Checks |
+|---------|----------------|--------|
+| **WGX visible canvas** | `node tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
+| **WGX readback** | `node tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
+| **WGX A/B** | `node tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
+| **TLX / three** | `node tools/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
+| **TLX WebGPU** | `node tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
+
+### The real GPU, in one paragraph
+
+GitHub's Apple-silicon image (`macos-latest`) reports a HARDWARE adapter
+(Metal) on stock flags; ubuntu-latest is SwiftShader, windows-latest WARP, this
+container llvmpipe. Dispatch `.github/workflows/gpu-census.yml` —
+`census_only: true` for the adapter answer in seconds, without it to run
+`tools/gpu-game-check.mjs` and read the Verdict step, which GATES on GPU
+errors, failed env-probe faces, or `softAdapter` true on hardware. **Never pass
+`--use-angle=vulkan` on macOS** — it drops WebGPU to SwiftShader and silently
+turns a real-GPU run software. Census tables and what the real GPU has found:
+§There IS a real GPU above.
+
+### Cursor Cloud, measured
+
+Fresh-agent bootstrap is `bash tools/cloud-agent-install.sh` (the dashboard
+`install` should call it: the AGENTS.md §Verification session-shape sequence
+plus full Chromium, which `wgx-validate` / `wgx-capture` need — the headless
+shell has no `navigator.gpu`). System packages (`mesa-vulkan-drivers`,
+`vulkan-tools`, `xvfb`) survive a cold boot only via snapshot + Save on the
+environment dashboard; `test -f /usr/share/vulkan/icd.d/lvp_icd.json` proves
+Lavapipe. The npm ECONNRESET note is in §Part 3.

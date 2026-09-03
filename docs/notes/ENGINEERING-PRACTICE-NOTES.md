@@ -107,7 +107,7 @@ The other standard advice, which matches the plan already agreed:
 
 ## 4. The no-build bet, revisited
 
-Since `docs/ARCHITECTURE-REVIEW.md` §2 frames the whole codebase as a
+Since `ARCHITECTURE-REVIEW.md` §2 frames the whole codebase as a
 consequence of "no build step", it is worth recording what the alternative looks
 like in 2026, because it is no longer 2015:
 
@@ -304,7 +304,7 @@ persistence layer and deserves its own commit and its own test.
 
 ## 4b. Where the silence actually is
 
-`docs/ARCHITECTURE-REVIEW.md` records "340 `catch` blocks in `js/`; 59 `Log`
+`ARCHITECTURE-REVIEW.md` records "340 `catch` blocks in `js/`; 59 `Log`
 call sites" as a single number, which is true and not actionable. Measured per
 file, it becomes a work list. Counting `catch (` against `Log.<level>(` across
 `js/` (excluding `vendor/`):

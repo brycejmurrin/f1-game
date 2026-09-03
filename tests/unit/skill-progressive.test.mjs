@@ -78,7 +78,6 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["survey-ui-matrix", "references/setup.md"],
     ["agent-view", "references/surface.md"],
     ["playwright-probe", "references/recipes.md"],
-    ["restructure-screens-css", "references/rules.md"],
     ["multiplayer-debug", "references/workflow.md"],
     ["career-mode", "references/workflow.md"],
     ["race-incidents-control", "references/workflow.md"],
@@ -87,7 +86,6 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["garage-parts-livery", "references/workflow.md"],
     ["lighting-tuner", "references/symptoms.md"],
     ["tune-physics", "references/harness.md"],
-    ["car-viewer", "references/presets.md"],
     ["audio-debug", "references/diagnose.md"],
     ["survey-track", "references/loop.md"],
     ["pwa-cache-service-worker", "references/workflow.md"],
@@ -105,12 +103,22 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["agent-view", "references/state.md"],
     ["webgpu-debug", "references/defects.md"],
     ["scenery-dress", "references/rules.md"],
-    ["game-feel", "references/workflow.md"],
-    ["debug-cameras", "references/framing.md"],
-    ["debug-tracks", "references/sweeps.md"],
     ["css-play", "references/loop.md"],
     ["slim-bloat", "references/do-not.md"],
     ["slim-bloat", "references/carves.md"],
+    // 2026-09-03 folds (Phase 5). The absorbed skill's body AND its own
+    // references/ land in the hub, prefixed with the old skill name so the
+    // provenance survives the move.
+    ["playwright-probe", "references/car-studio.md"],
+    ["playwright-probe", "references/car-viewer-presets.md"],
+    ["playwright-probe", "references/cameras.md"],
+    ["playwright-probe", "references/debug-cameras-framing.md"],
+    ["tune-physics", "references/game-feel.md"],
+    ["tune-physics", "references/game-feel-workflow.md"],
+    ["css-play", "references/restructure.md"],
+    ["css-play", "references/restructure-screens-css-rules.md"],
+    ["agent-view", "references/track-geometry.md"],
+    ["agent-view", "references/debug-tracks-sweeps.md"],
   ];
   for (const [name, ref] of splits) {
     const skill = fs.readFileSync(path.join(SKILLS, name, "SKILL.md"), "utf8");
@@ -121,22 +129,30 @@ test("previously-fat skills stay split (index + references/)", () => {
 });
 
 test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer stays thin", () => {
-  // 44 → 31. A folded skill coming back as its own directory re-splits a
+  // 44 → 31 → 26. A folded skill coming back as its own directory re-splits a
   // workflow the tests above now index under its target.
   for (const gone of [
     "webgpu-inspector", "webapp-testing", "pixel-perfect", "apex-env-setup",
     "motion-capture", "perf-profile", "bake-lighting", "scene-graph-instancing",
     "debug-state", "test-timeout-triage", "bump-cache", "deploy-merge",
     "cross-backend-parity",
+    // 2026-09-03 (Phase 5) — folded because the HUB's description could absorb
+    // their trigger words. The five that were NOT folded (ai-racecraft,
+    // input-controls, season-mode, data-hub, asset-pack, slim-bloat) are held
+    // by the coverage tests below: a merge that leaves the vocabulary behind
+    // makes the workflow unreachable, which is worse than one more directory.
+    "car-viewer", "debug-cameras", "debug-tracks", "game-feel",
+    "restructure-screens-css",
   ]) {
     assert.equal(fs.existsSync(path.join(SKILLS, gone)), false, `${gone} was folded/deleted 2026-09`);
   }
   const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
-  assert.equal(dirs.length, 31, `expected 31 skills, got ${dirs.length}`);
-  // cross-backend-parity was a 15-line pointer at docs/RENDERERS.md; the
-  // workflow it pointed at now lives there as its own section.
-  const renderers = fs.readFileSync(path.join(ROOT, "docs/RENDERERS.md"), "utf8");
-  assert.match(renderers, /^## Cross-backend parity/m, "docs/RENDERERS.md lost the §Cross-backend parity section");
+  assert.equal(dirs.length, 26, `expected 26 skills, got ${dirs.length}`);
+  // cross-backend-parity was a 15-line pointer at the renderers doc; that doc
+  // was absorbed into docs/ARCHITECTURE.md in Phase 5 and the section moved
+  // with it (docs/RENDERERS.md is a redirect stub now).
+  const renderers = fs.readFileSync(path.join(ROOT, "docs/ARCHITECTURE.md"), "utf8");
+  assert.match(renderers, /^### Cross-backend parity/m, "docs/ARCHITECTURE.md lost the Cross-backend parity section");
   assert.match(renderers, /backend-surface-parity\.test\.mjs/);
   assert.match(renderers, /wgx-validate\.mjs --static/);
   assert.match(renderers, /backend-compare\.mjs/);
@@ -173,6 +189,24 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
   walk(SKILLS);
   walk(AGENTS);
   assert.deepEqual(env, [], "env setup is AGENTS.md §Verification 1 + tools/cloud-agent-install.sh, not a skill");
+});
+
+test("a folded skill's trigger words live in the hub description", () => {
+  // The whole correctness condition for a 2026-09-03 fold: a host auto-selects
+  // on `description`, so a merge that drops the absorbed skill's vocabulary
+  // makes that workflow unreachable from chat. Structural, not prose: each row
+  // names the hub and one word only the folded skill used to carry.
+  const need = {
+    "playwright-probe": [/livery/i, /sponsors/i, /camera modes/i, /cockpit/i],
+    "tune-physics": [/game feel/i, /juice/i, /shake/i],
+    "css-play": [/restructur/i, /BEM|CUBE|ITCSS/],
+    "agent-view": [/geometry/i, /curvature/i, /groundY/i],
+  };
+  for (const [hub, res] of Object.entries(need)) {
+    const fm = frontmatter(fs.readFileSync(path.join(SKILLS, hub, "SKILL.md"), "utf8"));
+    for (const re of res)
+      assert.match(fm.description, re, `${hub}: description lost a folded skill's trigger word ${re}`);
+  }
 });
 
 test("skills do not recommend the retired test:career group", () => {

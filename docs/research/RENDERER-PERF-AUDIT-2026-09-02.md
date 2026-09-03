@@ -3,8 +3,8 @@
 Three read-only subagent audits (no edits, no browser runs) over the three
 backends, ranked by expected frame-time win. Landed items are marked; the rest
 are the backlog, with the proposed patch kept so the next round does not re-read
-the code. Evidence for landed items lives in `docs/RENDERERS.md`,
-`docs/research/PERF-FINDINGS.md` and `docs/research/WEBGPU-PARITY.md`.
+the code. Evidence for landed items lives in `../ARCHITECTURE.md`,
+`../notes/PERF-FINDINGS.md` and `docs/research/WEBGPU-PARITY.md`.
 
 Method notes shared by all three: nothing re-reports the items already landed
 before this date (uInstanced bracket, uNumLights/uModel caches, interleaved lamp
@@ -387,7 +387,7 @@ The value of a second read is mostly in what it takes AWAY.
   aniso tap on the road is the **albedo** one, guarded only by `far` (260 m).
 - **GLX-12's line numbers are stale**, and `begin()` runs 1-2× per frame in a
   race, not eight. The census puts `uniform1i` at 72/frame and `uniform1f` at
-  121.8/frame — the largest call categories by count — but `docs/PERF-FINDINGS.md`
+  121.8/frame — the largest call categories by count — but `../notes/PERF-FINDINGS.md`
   §3 already warns not to invent a millisecond claim from uniform elision, and
   that warning stands.
 - **WGX-5 (night road merge) is nearly dead work.** `tools/chunk-share-census.mjs`
@@ -447,7 +447,7 @@ The value of a second read is mostly in what it takes AWAY.
    argument**. Four tests pin the exact `textureSample(` string for aniso
    parity; a macOS census is the sign-off.
 7. **CPU: a THIRD Δprog scan with no pre-reject** (`game.js:4211`), the same
-   shape `docs/PERF-FINDINGS.md` §3 records fixing twice at **5.01% of physics
+   shape `../notes/PERF-FINDINGS.md` §3 records fixing twice at **5.01% of physics
    CPU** — and worse than either, because it runs for every car, not just AI.
    462 pairs × 2 `fmod` per physics step. Every consumer is gated on `gapAhead <
    OT_GAP` in seconds, so the window must be `vTop()`-derived, never a literal.
@@ -505,7 +505,7 @@ backend file from node). Proved to bite by reintroducing the backtick.
 
 `tools/gpu-game-check.mjs` now records `__apex.renderScale()` and the census
 prints a `gov:` row with `tier / autoTier / userTier / scale / fps / floorMs /
-envFace`. §2t of `docs/PERF-FINDINGS.md` named this as the missing half: a
+envFace`. §2t of `../notes/PERF-FINDINGS.md` named this as the missing half: a
 `meanLuma` comparison between two legs is only a comparison if both ran the same
 content, and rung 1 of the governor's ladder is "env probe off". Run 25 read
 46.9 vs 66.2 across three's two backends with none of it recorded, and the gap is

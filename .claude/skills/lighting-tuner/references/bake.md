@@ -61,7 +61,7 @@ node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs artifacts/tmp/edi
 ```
 
 - **Agent proposal** — `artifacts/lighting/proposals/<id>.json`, shape
-  `{track, combos:{"dusk|dry":{…}}}` (schema in `docs/LIGHTING-PRESETS.md`).
+  `{track, combos:{"dusk|dry":{…}}}` (schema in `../../../../docs/LIGHTING.md`).
   Parent merges; this is the only safe multi-agent path. Within a condition a
   proposal **REPLACES**: it is a considered whole profile, so dropping a knob is
   how it decides against one, and an empty map resets the condition.

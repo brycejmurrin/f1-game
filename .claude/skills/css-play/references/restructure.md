@@ -1,8 +1,3 @@
----
-name: restructure-screens-css
-description: Use when restructuring or consolidating screens, menus, dialogs, the DOM, or the CSS class/token system in Apex 26 — collapsing duplicate component families, adding or removing a screen layer, deciding whether to split index.html, designing height-responsive layout, or being asked whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. Not for one-off layout bugs (use ui-menu-a11y), one-screen CSS play (use css-play), or renderer/canvas work.
----
-
 # Restructuring screens, DOM and CSS in a no-build codebase
 
 Fifteen rules, each with the failure it prevents and the measurement that
@@ -39,4 +34,8 @@ grep -ohE '(max|min)-height: *[0-9]+px' css/*.css | sort | uniq -c
 
 ## Load on demand
 
-- The 15 checkable rules (screens/layers, CSS variation, DOM size, anti-methodology) → [references/rules.md](references/rules.md).
+- The 15 checkable rules (screens/layers, CSS variation, DOM size, anti-methodology) → [references/rules.md](restructure-screens-css-rules.md).
+
+---
+
+_Folded into `css-play` on 2026-09-03 (tree restructure Phase 5). Selection trigger it carried, now merged into `css-play`'s description: Use when restructuring or consolidating screens, menus, dialogs, the DOM, or the CSS class/token system in Apex 26 — collapsing duplicate component families, adding or removing a screen layer, deciding whether to split index.html, designing height-responsive layout, or being asked whether a CSS methodology (BEM/CUBE/ITCSS/utilities) is worth adopting. Not for one-off layout bugs (use ui-menu-a11y), one-screen CSS play (use css-play), or renderer/canvas work._
