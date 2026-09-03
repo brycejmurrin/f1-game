@@ -1337,9 +1337,14 @@ test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => 
   const wgx = code("spike/backends/webgpu/wgx.js");
   const body = fnBody(wgx, "_writeFrame");
   assert.match(body, /pj\[8\]\s*!==\s*0\s*\|\|\s*pj\[9\]\s*!==\s*0/);
-  assert.match(body, /_mul4\(_viewScratch,\s*ipj,\s*vp\)/);
+  assert.match(body, /f\.view\s*&&\s*f\.view\.length\s*>=\s*16/);
   assert.match(body, /_mul4\(_projZ01,\s*Z01,\s*pj\)/);
   assert.match(body, /_mul4\(_vpGpu,\s*_projZ01,\s*_viewScratch\)/);
+});
+
+test("setup preview passes explicit view for garage off-axis backends", () => {
+  const game = code("js/game.js");
+  assert.match(game, /viewProj:\s*_spVP,\s*view:\s*_spView/);
 });
 
 test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () => {

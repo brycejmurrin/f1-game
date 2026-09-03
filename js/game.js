@@ -5876,7 +5876,7 @@ function renderSetupPreview(dt) {
     // as long as the sun stayed at full white it owned the picture and the bay's
     // ten fixtures were decoration. proj/invProj are what unlock SSAO in
     // present(), and an interior lives or dies on its corner darkening.
-    viewProj: _spVP, eye, sunDir: [0, 0.86, 0.51], sunColor: GarageScene.SKYLIGHT,
+    viewProj: _spVP, view: _spView, eye, sunDir: [0, 0.86, 0.51], sunColor: GarageScene.SKYLIGHT,
     ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
     fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.lights(_spLiv()),
     proj: _spProj, invProj: _spInvProj,

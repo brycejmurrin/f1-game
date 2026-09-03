@@ -2551,10 +2551,15 @@ const TLX = (function () {
               camera.projectionMatrix.fromArray(frame.proj);
             }
             // Garage lens shift: keep P and V separate on WebGPU (Z01·(P·V) ≠ (Z01·P)·V).
-            _tmpMat4.fromArray(frame.invProj);
-            _tmpMat4b.fromArray(frame.viewProj);
-            camera.matrixWorldInverse.multiplyMatrices(_tmpMat4, _tmpMat4b);
-            camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+            if (frame.view && frame.view.length >= 16) {
+              camera.matrixWorldInverse.fromArray(frame.view);
+              camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+            } else {
+              _tmpMat4.fromArray(frame.invProj);
+              _tmpMat4b.fromArray(frame.viewProj);
+              camera.matrixWorldInverse.multiplyMatrices(_tmpMat4, _tmpMat4b);
+              camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
+            }
           } else if (frame && frame.viewProj) {
             if (_wgpu) {
               // No proj/invProj split — fold VP (OK when P is on-axis, e.g. legacy paths).

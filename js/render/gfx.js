@@ -116,6 +116,8 @@
  *   fogColor:vec3                   REQUIRED  also the frame clear colour
  *   ambientSky:vec3, ambientGround:vec3      hemisphere ambient
  *   invViewProj:Float32Array(16)   sky ray reconstruction
+ *   view:Float32Array(16)         explicit view matrix (garage off-axis: WGX/TLX
+ *                                  must not decompose invProj·viewProj)
  *   invProj / proj / sunViewDir / upViewDir  view-space helpers (post)
  *   skyZenith:vec3, skyHorizon:vec3          sky/atmosphere colours
  *   fogDensity, fogHeight, groundMist, lampFog, wetness, time, cloud,

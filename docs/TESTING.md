@@ -1,6 +1,6 @@
 # Testing reference
 
-114 root Playwright spec files (`tests/specs/*.spec.js`) + 184 `node --test` unit suites
+114 root Playwright spec files (`tests/specs/*.spec.js`) + 185 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1005,6 +1005,7 @@ what it covers.
 | `parts-ladder.test.mjs` | every catalog option is one a rational player could ever want to BUY — the other half of the promise `parts-visual-distinctness` makes. An option is LIVE when it maximises `sum w_i*log(stat_i) - lambda*cost` for some positive taste and some price (the upper convex hull of the (cost, log-stat) set, solved exactly per weight vector, no lambda grid). Gates: no PAID option strictly dominated by a cheaper one; the never-optimal list is exact in BOTH directions against a named exemption list (the two wet compounds, which the four DRY stats cannot score); no category flat on a stat; SIGNATURE cost/stat parity; and the career budget cap clears the dearest works car while staying under the whole top shelf. Measured 2026-08-29: 67 of 169 rows never optimal before the re-space, 2 after. Measures through `tools/car/parts-ladder.mjs`. ~0.3 s, node-only — cheap enough for the edit loop |
 | `garage-mesh.test.mjs` | the bay's meshes carry a per-vertex MATERIAL column of exactly one float per vertex, and the big surfaces are not all left on `MAT.FLAT`. A silent-failure guard: GLX wires the attribute only when `data.mat.length === vCount` (`glx.js:741`) and drops a wrong-length column with no warning, which is how the whole garage shipped untextured while the car standing in it sampled the baked PBR arrays. Runs the real module in a `node:vm` against a recording Gfx — no browser, ~0.15 s |
 | `setup-preview-hull.test.mjs` | the garage turntable's framing hull is cached across colour-only rebuilds, which is only correct while `SP_HULL_GEOM_FIELDS` (js/game.js) names every livery field whose PRESENCE moves a vertex. Does not PIN the list — it re-derives it from the real `Car3D.build` and compares, so a future edit that gates geometry on a new colour goes red here instead of silently re-centring the car against a stale silhouette. Also asserts the premise the cache rests on: a hue change never moves a vertex. `loadParts()` in a `node:vm`, no browser, ~0.8 s |
+| `garage-interior-gate.test.mjs` | the garage capture gate rejects flat team-tint wall frames (uniform teal when WGX off-axis view decomposition drifts) and accepts a varied car+floor+ceiling gap sample — pure node, no browser |
 | `scenery-kits.test.mjs` | Node contracts for deterministic themes, every LandmarkKit form and CircuitKit facility, bounded counts, budgets, fail-closed behaviour |
 | `scenery-kits.spec.js` | the browser binding of those kits into Silverstone's `scenery(api)` |
 | `scenery-api-contract.test.mjs` | freezes the 111-member `scenery(api)` surface across the `js/track/scenery-*.js` split |
