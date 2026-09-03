@@ -768,25 +768,12 @@ function injectCss() {
   s.textContent = [
     "#pm-metrics-details.pm-metrics-sub { margin: 6px 0 0; }",
     "#pm-metrics-details.pm-metrics-sub > summary.adv-more-btn { cursor: pointer; }",
-    "#pm-metrics-details .pm-metrics-sub-body {",
-    "  display: flex; flex-direction: column; gap: 4px;",
-    "  padding: 6px 0 2px;",
-    /* --svhz, not raw svh: this list lives inside the #pausemenu sheet's
-       zoom, where 100svh of LOCAL px paints zoom× that on screen — at 130%
-       the submenu took 324 of a 393px-tall phone. The zoom-compensated
-       token collapses the per-scale html[style*=…] hack this block used to
-       carry for exactly three slider values. */
-    "  max-height: min(280px, calc(100 * var(--svhz, 1svh) - 9rem));",
-    "  overflow-y: auto;",
-    "}",
-    "#pm-metrics-details .pm-metrics-sub-body > button {",
-    "  width: 100%; margin: 0;",
-    "}",
     "#pm-metrics-details .pm-metrics-hint {",
     "  margin: 4px 0 0; opacity: .7; font-size: 11px; line-height: 1.3;",
     "}",
-    /* 2-up packing lives in css/components.css, keyed on SheetShape
-       data-shape / data-density — not a viewport max-height media. */
+    /* Body layout (flex vs 2-up grid, max-height) lives in
+       css/components.css so @layer components can win. An unlayered
+       display:flex here beat the density grid. */
   ].join("\n");
   (document.head || document.documentElement).appendChild(s);
 }

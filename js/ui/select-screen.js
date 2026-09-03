@@ -745,7 +745,12 @@ function updateTrackPreview() {
   if (measurable) {
     void map.offsetWidth;
     const gW = map.clientWidth, gH = map.clientHeight;
-    if (gW && gH && (fit.w - gW > 2 || fit.h - gH > 2)) {
+    // Pair-on beside already spends the pane (max-height: 100%). Shrinking
+    // the pin to the first granted box ratcheted a 513px plan down to the
+    // previous 345px stamp and left the desktop column half empty.
+    const besidePair = !!(card && card.getAttribute("data-map-shape") === "beside"
+      && sheet && sheet.dataset.pair === "on");
+    if (!besidePair && gW && gH && (fit.w - gW > 2 || fit.h - gH > 2)) {
       fit = TrackMaps.fitCanvas(map, Math.min(fit.w, gW), Math.min(fit.h, gH), t, true);
     }
   }

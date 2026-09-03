@@ -1309,6 +1309,18 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 /* DISPLAY: HIDE HUD | METRICS share the wide pair. Inner metrics buttons
    go 2-up whenever the sheet is wide or compact — SheetShape density, not
    a viewport max-height media (the injected submenu used to key on 420px). */
+#pm-metrics-details [role="group"] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
+  max-height: min(280px, calc(100 * var(--svhz, 1svh) - 9rem));
+  overflow-y: auto;
+}
+#pm-metrics-details [role="group"] > button {
+  width: 100%;
+  margin: 0;
+}
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud {
   grid-column: 1;
 }
@@ -1318,19 +1330,19 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   align-self: start;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details .pm-metrics-sub-body,
-#pmsettings-inner[data-density="compact"] #pm-metrics-details .pm-metrics-sub-body {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details [role="group"],
+#pmsettings-inner[data-density="compact"] #pm-metrics-details [role="group"] {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px 6px;
+  gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
   max-height: min(160px, calc(100 * var(--svhz, 1svh) - 7rem));
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details .pm-metrics-sub-body > button,
-#pmsettings-inner[data-density="compact"] #pm-metrics-details .pm-metrics-sub-body > button {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details [role="group"] > button,
+#pmsettings-inner[data-density="compact"] #pm-metrics-details [role="group"] > button {
   width: auto;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details .pm-metrics-hint,
-#pmsettings-inner[data-density="compact"] #pm-metrics-details .pm-metrics-hint {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details .as-note,
+#pmsettings-inner[data-density="compact"] #pm-metrics-details .as-note {
   grid-column: 1 / -1;
 }
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
