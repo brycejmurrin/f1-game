@@ -210,7 +210,7 @@ const CEILING = {
   // light up under a thumb in the one steering mode that used them. The
   // ladder's own alphas moved with it (pedals to 0.85, presses to 0.95) but
   // traded one spelling for another, so distinct stays flat.
-  rawColor: 375,
+  rawColor: 374,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide
@@ -218,7 +218,9 @@ const CEILING = {
   // get planned. Set 2026-08-27 with the guard.
   // 2026-08-27: 194 -> 190 in the same pass — the deleted border tints were
   // the only users of their values.
-  rawColorDistinct: 190,
+  // 2026-09-03: 190 -> 189 with rawColor 375 -> 374. Title secondary rooms
+  // left rgba(255,255,255,0.78) for color-mix(var(--text)).
+  rawColorDistinct: 189,
 };
 
 test("no new font-size below the --fs-micro floor", () => {

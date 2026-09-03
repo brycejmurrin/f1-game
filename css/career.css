@@ -388,7 +388,10 @@
 /* An EMPTY slot is an invitation, not a result: dashed edge and dimmed text, so
    a column of three reads at a glance as "one career and two openings" without
    having to compare their contents. */
-.cr-slot.empty .cr-slot-main { border-style: dashed; }
+.cr-slot.empty .cr-slot-main {
+  border-style: dashed;
+  border-color: color-mix(in oklab, var(--red) 22%, var(--card-line));
+}
 .cr-slot.empty .cr-slot-who { color: var(--dim); }
 /* The career you are IN keeps the red edge permanently — after a switch, "which
    one am I in" has to be answerable without pressing anything. */

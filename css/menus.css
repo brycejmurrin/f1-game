@@ -190,7 +190,9 @@
 }
 /* Micro type over a translucent plate over a moving 3D scene needs more ink
    than --dim gives it; resting below --text keeps hover's step-up visible. */
-#menu-secondary .minibtn { color: rgba(255, 255, 255, 0.78); }
+/* Quiet secondary rooms: token-mix only so the colour ratchet can fall, and
+   still above --dim for contrast over a bright sky. */
+#menu-secondary .minibtn { color: color-mix(in oklab, var(--text) 78%, transparent); }
 .minibtn .btn-ico { margin-right: 0.35em; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */

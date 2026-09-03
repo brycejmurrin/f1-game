@@ -162,7 +162,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   width: min(100%, var(--sheet-w, 520px));
   max-height: 100%;
   background: var(--panel);
-  border: 1px solid color-mix(in oklab, var(--red) 20%, var(--card-line));
+  border: 1px solid color-mix(in oklab, var(--red) 28%, var(--card-line));
   border-radius: var(--r-lg);
   /* lightness + a top lip do the lifting here; the cast shadow only matters
      against the 3D scene (see the elevation notes in css/tokens.css) */
@@ -194,6 +194,9 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   background: var(--grad-head);
   border-bottom: 0;
   position: relative;
+  /* Broadcast red-line on the leading edge — F1 digital grammar, one accent
+     only (research). Inset so it does not fight the sheet's own border. */
+  box-shadow: inset 3px 0 0 var(--red);
 }
 .sheet-head::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
@@ -1038,7 +1041,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--text);
   border-color: var(--red);
   background: var(--plate-on);
-  box-shadow: var(--plate-on-glow);
+  /* Edge tick + plate glow: selected = two signals (not colour alone). */
+  box-shadow: inset 3px 0 0 var(--red), var(--plate-on-glow);
 }
 /* At very high UI zoom a phone sheet can be under 250 LOCAL px even though it
    fills the physical viewport. Keep the aria-label as the accessible name,

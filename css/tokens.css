@@ -522,12 +522,12 @@
      a light-from-above sheen. It is what makes a dialog look like part of this
      game rather than a generic card. */
   --grad-head:
-    linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 26%, transparent), transparent 56%),
+    linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 34%, transparent), transparent 56%),
     linear-gradient(180deg in oklab, rgba(255, 255, 255, 0.07), transparent 72%);
   /* A rule that FADES instead of stopping dead — used as a background-image on
      the bottom 1px, so it needs no extra element. Starts on brand so every
      sheet hairline belongs to the same family. */
-  --grad-rule: linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 42%, rgba(255, 255, 255, 0.22)), rgba(255, 255, 255, 0.04) 78%, transparent);
+  --grad-rule: linear-gradient(90deg in oklab, color-mix(in oklab, var(--red) 58%, rgba(255, 255, 255, 0.22)), rgba(255, 255, 255, 0.04) 78%, transparent);
   /* Team identity, wherever a surface should carry it. Resolves through
      --accent, so it re-skins itself the moment the player changes team. */
   --grad-accent: linear-gradient(150deg in oklab,
