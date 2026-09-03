@@ -104,6 +104,26 @@ Baseline (2026-09-03, branch `claude/project-structure-review-p6eu08`):
    forwarders, 8 `@skill` tags naming skills that no longer exist, ~27
    files with no functional caller. 31 skills; 22 route to siblings by name.
 
+### In flight at the last update (2026-09-03 17:30 UTC)
+
+Read this first if you are picking the work up mid-stream — it is the only
+part of this file that goes stale by the minute.
+
+| what | where | state |
+|---|---|---|
+| `tiny` browser group on the moved tree | `artifacts/logs/tiny.log` | running, ~30/73, 0 failed. Anchor on `grep -E '= run (passed\|failed\|timedout\|interrupted)'`. The ONE known-benign red is smoke.spec's "page loads without WebGL error" — its `page.goto` waits for `load` with no navigation timeout and this box boots in 54–150 s (docs/TESTING.md §Field notes 2026-09-03). Any OTHER failure is a real move regression. |
+| `ci.yml` push run for `f1ee501` | Actions | running; batches 1 and 2 already passed their own runs |
+| `ci.yml` dispatch `group: circuits` | Actions | running. NOTE: two earlier dispatches were CANCELLED externally by Actions concurrency contention across sessions, not by a failure — if it happens again, do not re-dispatch; the push run's smoke gate is the evidence. |
+| Phase 4 agent | worktree `claude/p4-tools` | surveying (a no-caller proof per deletion comes before any edit) |
+| Phase 5 agent | worktree `claude/p5-docs` | mid doc-merge, ~66 files touched |
+
+**The next decision** is the Phase 2b deploy: `node tools/deploy.mjs --plan`,
+report the union, then the real `node tools/deploy.mjs` (fast-forward push, no
+PR). It matters more than the earlier deploys because other sessions develop
+directly on the deploy branch — until the move lands there, every edit they
+make to a moved file is a rename-merge for somebody. `MOVED` in
+`tools/manifest.cjs` exists to make that legible and only helps once pushed.
+
 ## Where this stands (2026-09-03, end of the Phase 2b move)
 
 Sessions so far have landed 38 commits on `claude/project-structure-review-p6eu08`,
@@ -171,7 +191,7 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
      `gMembers` + `topLets` (game.js); one slack rule max(60, 4 %); history →
      `docs/notes/CEILING-HISTORY.md`; 20-file reference sweep incl. AGENTS.md,
      deploy.mjs + check-changes `deploy.md` merge rule, the guard pins.
-- [~] **Phase 2a — splits** merged on the session branch 2026-09-03 from four
+- [x] **Phase 2a — splits** DEPLOYED (`bfde168`); merged on the session branch 2026-09-03 from four
       parallel worktree branches: lighting `e345cdd` (lighting.js → knobs /
       track-lights / frame-lights behind a 16-line façade; the lt-* handlers
       → tuner), quali-store `8349abf` (quali model + quali-sheet; six modules'
@@ -198,7 +218,7 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       `node tools/deploy.mjs`: 12 gate suites + verify-track on all 40
       circuits, pushed in 1 attempt, 496 s. `pages.yml` run 1941 stamping.
       `tools/moves/phase2.json` maps 91 files for 2b.
-- [x] **Phase 2b — the move window** DONE 2026-09-03, four batch commits
+- [~] **Phase 2b — move DONE, phase OPEN** (spike-out + deploy still to come) — four batch commits
       (`c78847b` core/physics/race/career 17, `ac2df8c` lighting/camera/audio/
       perf/input 26, `5bd4fa6` ui/garage/agent/fx/data/car 24 — **js/game/ is
       gone**, `f1ee501` render/{shared,glx} + track/{core,scenery} 24). 91
@@ -250,7 +270,12 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       custom-team-ui → live weather → atmosphere; `hooks-documented` → the
       espree walker. `render()` / `updateCar()` stay whole. End: `driving` +
       `hooks` groups once.
-- [ ] **Phase 4 — tools/ 160 → ~95** in `tools/{lib,ci,check,gen,shot,gfx,
+- [~] **Phase 4 — tools/ 160 → ~95** IN FLIGHT 2026-09-03 as a worktree agent on
+      `claude/p4-tools` off 9486be6 (writes its own `tools/moves/phase4-tools.json`,
+      reads the mover's splitSegmentMentions report per batch, must prove
+      no-caller by grep before each deletion). Scope fenced to tools/ +
+      package.json + workflows + five named guards so it cannot collide with
+      the Phase 5 agent or the tests/ work. Original scope: in `tools/{lib,ci,check,gen,shot,gfx,
       track,car,ui,lighting,mcp,net,env}/`; delete the ~27 no-caller files
       (pins in tools-runnable / package.json first); families → one entry
       point with subcommands; three track-build harnesses → `track-build-vm`;
@@ -260,7 +285,12 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       tinyfish-rpc.py, probe-mcp.py, chrome-devtools-mcp.sh, mcp-cli.mjs,
       mcp-smoke.mjs) consolidates here — that is where the Phase 1-lite
       deferral is decided. Verification: tooling-fast.
-- [ ] **Phase 5 — docs/ + agent surface**: top level 28 → ~12 with generated
+- [~] **Phase 5 — docs/ + agent surface** IN FLIGHT 2026-09-03 as a worktree
+      agent on `claude/p5-docs` off 9486be6; scope fenced to docs/, .claude/skills/,
+      AGENTS.md and four doc guards. Told explicitly to keep the measurements and
+      war stories (they are the only record of why several rules exist), to leave
+      a stub at any path with many citations (PERF-FINDINGS has 52), and to justify
+      each skill merge against host auto-selection. Original scope: top level 28 → ~12 with generated
       tables; `docs/notes/` ledgers path-checked only; ATTIC absorbs the
       zero-citation research + superpowers/ + PNGs + workflow JS;
       `docs/README.md` → reading order; AGENTS.md → ~120 lines of rules;
