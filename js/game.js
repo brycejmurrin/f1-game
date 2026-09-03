@@ -1041,7 +1041,7 @@ let ttLaps = [];            // completed lap times this time-trial session
 let ttSessionTs = 0;        // session start stamp; entries at/after it are "yours, just now"
 let sectorStartT = 0;        // lapTime when current sector started
 let sectorIdx = 0, sectorValid = true;   // current sector + "entered it FORWARD" flag
-let sectorBests = [Infinity, Infinity, Infinity];  // best S1/S2/S3 times ever
+let sectorBests = [Infinity, Infinity, Infinity], fieldSectorBests = [Infinity, Infinity, Infinity];   // player's / the FIELD's (timing-screen purple)  // best S1/S2/S3 times ever
 let sectorLast = [null, null, null];               // last lap's S1/S2/S3 times
 let frameSky = {}, frame = {};
 // ---------- sky / weather animation state ----------
@@ -2747,7 +2747,7 @@ async function startRace() {
   // were measured against a race that had already finished. Changing the time
   // of day cleared them, which made two otherwise identical sessions differ on
   // an unrelated setting. Session state belongs to the session.
-  sectorBests = [Infinity, Infinity, Infinity];
+  sectorBests = [Infinity, Infinity, Infinity]; fieldSectorBests = [Infinity, Infinity, Infinity];
   sectorLast = [null, null, null];
   // Arm the crash sentinel (mobile only) and, after a strike, start the
   // session pre-scaled-down — the governor may restore upward, but only under
@@ -3077,6 +3077,7 @@ const G = {
   get raceTimeOfDay() { return raceTimeOfDay; }, set raceTimeOfDay(v) { raceTimeOfDay = v; },
   get raceWeather() { return raceWeather; }, set raceWeather(v) { raceWeather = v; },
   get sectorBests() { return sectorBests; }, set sectorBests(v) { sectorBests = v; },
+  get fieldSectorBests() { return fieldSectorBests; },
   get sectorIdx() { return sectorIdx; }, set sectorIdx(v) { sectorIdx = v; },
   get sectorStartT() { return sectorStartT; }, set sectorStartT(v) { sectorStartT = v; },
   get skyViewOverride() { return skyViewOverride; }, set skyViewOverride(v) { skyViewOverride = v; },
@@ -5117,6 +5118,20 @@ function updateCar(c, dt, ranked) {
     netReportQualiLive(c.driverId, c.lapTime, track && track.total ? (c.s || 0) / track.total : 0);
   }
 
+  // The FIELD's sector bests — the timing screen's purple is the session best
+  // of ANY car, so every car's forward crossing is timed (a per-car index and
+  // start stamp; the player's curated split logic below stays as it is).
+  if (state === "race" && track) {
+    const ns = sectorAt(c.s);
+    if (ns !== c._secIdx) {
+      const fwd = ds > 0 && c._secIdx != null && (c._secIdx < ns || (c._secIdx === 2 && ns === 0));
+      if (fwd && c.lap >= 1 && !c.incidentInvalidLap && c._secT0 != null) {
+        const e = c.lapTime - c._secT0;
+        if (e >= 2 && e < fieldSectorBests[c._secIdx]) fieldSectorBests[c._secIdx] = e;
+      }
+      c._secIdx = ns; c._secT0 = c.lapTime;
+    }
+  }
   // Sector detection (curated splits via sectorAt). Must run before finish-line
   // timing resets so a forward S3→S1 crossing records the completed S3 split.
   if (c.isPlayer && state === "race" && track) {

@@ -1410,3 +1410,8 @@ live in `ratchets.json`.
 - `js/game.js` 9286 -> **9290** (2026-09-03): the TIME chip calls
   `scheduleFlybyTrack()` so a pick that flips sessionDark rebuilds the flyby
   track in menu idle instead of making GO pay a second full `Tracks.build`.
+- `js/game.js` 9290 -> **9305** lines / 5083 -> **5095** code / 222 -> **223** G
+  members (2026-09-03): `fieldSectorBests` — every car's forward sector
+  crossing is timed so the HUD's PURPLE is the timing screen's session best
+  (the FIELD's), not the player's own; the player's curated split logic is
+  untouched. Green = personal best, yellow = slower, white = no reference.

@@ -30,6 +30,9 @@ function hStyle(el, prop, v) { if (!el) return; let m = _hudSty.get(el); if (!m)
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 
+let _lastRank = 0, _posFlashT = 0;   // POS box flash state (see the tick)
+// Team colours are static — compute once per team, the minimap's idiom.
+const teamCss = (c) => (c.team ? (c.team._cssColor || (c.team._cssColor = G.cssCol(c.team.color))) : "");
 let _secRows = null;
 function buildSecRows() {
   // S2 is NOT the brand #e10600: at 14px bold on the 72% plate that red measures
@@ -41,7 +44,10 @@ function buildSecRows() {
   _secRows = [];
   for (let i = 0; i < 3; i++) {
     const row = document.createElement("div"); row.className = "sec-row";
-    const lbl = document.createElement("span"); lbl.className = "sec-lbl"; lbl.style.color = SC[i]; lbl.textContent = labels[i];
+    // The label keeps the row's dim ink: SC (sector identity) still colours
+    // the minimap, but a purple S1 label beside a purple "session best" value
+    // would read as two of the same thing.
+    const lbl = document.createElement("span"); lbl.className = "sec-lbl"; lbl.textContent = labels[i];
     const val = document.createElement("span"); val.className = "sec-val"; val.textContent = "--";
     row.appendChild(lbl); row.appendChild(val); els.hudSectors.appendChild(row);
     _secRows.push(val);
@@ -253,6 +259,11 @@ function updateHud(force) {
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).
   hText(els.pos, timeTrial ? "TT" : player.retired ? "DNF" : (player.rank || "-") + "/" + cars.length);
+  // Position change: acknowledge an overtake (either way) for ~6 ticks.
+  const rank = timeTrial || player.retired ? 0 : (player.rank || 0);
+  if (rank && _lastRank && rank !== _lastRank) { els.pos.dataset.delta = rank < _lastRank ? "up" : "down"; _posFlashT = 6; }
+  else if (_posFlashT > 0 && --_posFlashT === 0) delete els.pos.dataset.delta;
+  if (rank) _lastRank = rank;
   hText(els.lap, Math.min(player.lap || 1, G.lapsTarget) + "/" + G.lapsTarget);
   hText(els.time, G.fmtTime(player.lapTime));
   hText(els.best, isFinite(player.best) ? G.fmtTime(player.best) : "-");
@@ -316,7 +327,7 @@ function updateHud(force) {
         const delta = player.lapTime - ghostT;
         const sign = delta >= 0 ? "+" : "";
         hText(els.gapA, "GHOST " + sign + delta.toFixed(3) + "s");
-        hStyle(els.gapA, "color", delta <= 0 ? "#a3e635" : "#ff3b30");   // same text red as the S2 label (AA at 12px)
+        hStyle(els.gapA, "color", delta <= 0 ? "var(--faster)" : "var(--slower)");
       } else {
         hText(els.gapA, player.lastLap ? "LAST " + G.fmtTime(player.lastLap) : "");
         hStyle(els.gapA, "color", "");
@@ -342,6 +353,9 @@ function updateHud(force) {
     const vFloor = Math.max(player.speed, G.vTop() * 0.26);
     hText(els.gapA, a ? gap("▲", a.code, gapSec(0, a, (a.prog - player.prog) / vFloor)) : "");
     hText(els.gapB, b ? gap("▼", b.code, gapSec(1, b, (player.prog - b.prog) / vFloor)) : "");
+    // WHO: the neighbour's team colour as the chip's left bar (css/hud.css).
+    hStyle(els.gapA, "--gap-team", a ? teamCss(a) : "");
+    hStyle(els.gapB, "--gap-team", b ? teamCss(b) : "");
   }
   // Sector split display (top-right) — cached span nodes, textContent per tick
   if (els.hudSectors) {
@@ -351,12 +365,15 @@ function updateHud(force) {
     // for the whole lap, and lime is the HUD's existing "faster" colour (the
     // ghost delta). sectorBests is updated in the same crossing, so a fresh
     // PB reads t == best; a first-ever lap is every sector's best, correctly.
-    const bests = G.sectorBests;
+    const bests = G.sectorBests, field = G.fieldSectorBests;
     for (let i = 0; i < 3; i++) {
       const t = G.sectorLast[i];
       const pb = t != null && bests && t <= bests[i];
+      const sb = pb && field && t <= field[i];   // the FIELD's best — the timing screen's purple
       hText(_secRows[i], t == null ? "--" : (pb ? "▼" : "▲") + t.toFixed(3));
-      hStyle(_secRows[i], "color", pb ? "#a3e635" : "");
+      // Timing-screen colours: purple session best, green personal best,
+      // yellow slower than your own best; no split yet keeps the row's ink.
+      hStyle(_secRows[i], "color", t == null ? "" : sb ? "var(--sec-best)" : pb ? "var(--faster)" : "var(--sec-slow)");
     }
   }
   // B1 caution flag (local yellow / VSC / safety car) — driven by the caution

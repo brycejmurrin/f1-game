@@ -312,7 +312,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-h2h-alt { background: rgba(255, 255, 255, 0.3); }
 .dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: var(--fs-micro); color: var(--dim); font-weight: 700; letter-spacing: var(--ls-3); }
 
-.dh-pos { width: 24px; text-align: right; color: var(--dim); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.dh-pos { font-family: var(--font-hud); font-variant-numeric: tabular-nums; width: 24px; text-align: right; color: var(--dim); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .dh-codechip {
   flex: 0 0 auto;
   font-size: var(--fs-2); font-weight: 800;
@@ -324,8 +324,8 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-swatch { width: 12px; height: 12px; border-radius: var(--r-xs); flex: 0 0 auto; }
 .dh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dh-wins { font-size: var(--fs-2); color: #f6d200; font-weight: 700; flex: 0 0 auto; }
-.dh-pts { min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: #fff; font-variant-numeric: tabular-nums; }
-.dh-gap { font-size: var(--fs-2); color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+.dh-pts { font-family: var(--font-hud); font-variant-numeric: tabular-nums; min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: #fff; font-variant-numeric: tabular-nums; }
+.dh-gap { font-family: var(--font-hud); font-variant-numeric: tabular-nums; font-size: var(--fs-2); color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* last race */
 #dh-lr-head { margin-bottom: var(--gap); }
@@ -508,7 +508,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 }
 .dh-gcell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .dh-glabel { font-size: var(--fs-micro); letter-spacing: var(--ls-4); color: var(--dim); white-space: nowrap; }
-.dh-gval { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
+.dh-gval { font-family: var(--font-hud); font-variant-numeric: tabular-nums; font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
 .dh-gspeed .dh-gval { color: #39d0ff; }
 .dh-gbar { height: 8px; border-radius: var(--r-sm); background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
 .dh-gfill { height: 100%; width: 0%; border-radius: var(--r-sm); transition: width 0.05s linear; }
@@ -520,8 +520,8 @@ body[data-width="narrow"] .dh-thint { display: none; }
 .dh-gbar2 { height: 5px; margin-top: calc(var(--gap) * 0.25); }
 .dh-gfill2 { opacity: 0.6; }
 .dh-gdrs-pill.dh-gdrs2 { font-size: var(--fs-2); opacity: 0.85; }
-.dh-gdelta.dh-pos { color: #3fb950; }
-.dh-gdelta.dh-neg { color: #ff6b6b; }
+.dh-gdelta.dh-pos { color: var(--faster); }
+.dh-gdelta.dh-neg { color: var(--slower); }
 
 /* ---------- live controls + sortable classification ---------- */
 .dh-livecontrols { gap: calc(var(--gap) * 2 / 3); margin-bottom: 10px; }
@@ -565,8 +565,8 @@ body[data-width="narrow"] .dh-thint { display: none; }
   min-width: 46px; text-align: right; font-variant-numeric: tabular-nums;
   color: var(--dim);
 }
-.dh-laneboard-dl.dh-pos { color: #ff6b6b; }   /* behind the reference */
-.dh-laneboard-dl.dh-neg { color: #3fd06b; }   /* ahead of the reference */
+.dh-laneboard-dl.dh-pos { color: var(--slower); }   /* behind the reference */
+.dh-laneboard-dl.dh-neg { color: var(--faster); }   /* ahead of the reference */
 .dh-live-updated { font-size: var(--fs-2); color: #7a7a85; margin-left: auto; }
 .dh-class-head { gap: 10px; }
 .dh-class-head .dh-section { margin: calc(var(--gap) * 0.5) 0 calc(var(--gap) * 2 / 3); flex: 1; }
@@ -869,14 +869,14 @@ body[data-density="compact"][data-width="wide"] {
    claims only leftover space instead of joining the initial distribution and
    dragging the name down with it. */
 .dh-tname { flex: 0 1 auto; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dh-tsect {
+.dh-tsect { font-family: var(--font-hud); font-variant-numeric: tabular-nums;
   flex: 1 1 0; min-width: 0; margin-left: auto;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   text-align: right;
   font-size: var(--fs-1); font-weight: 600; font-style: normal;
   color: var(--dim); font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1);
 }
-.dh-tlap {
+.dh-tlap { font-family: var(--font-hud); font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
   font-size: var(--fs-2); font-weight: 700; font-style: normal;
   color: var(--text); font-variant-numeric: tabular-nums;

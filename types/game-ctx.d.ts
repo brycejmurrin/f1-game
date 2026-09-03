@@ -373,6 +373,7 @@ interface GameCtx {
   raceTimeOfDay: TimeOfDay;
   raceWeather: Weather;
   sectorBests: [number, number, number];
+  readonly fieldSectorBests: [number, number, number];
   sectorIdx: number;
   sectorStartT: number;
   skyViewOverride: SkyViewOverride | null;

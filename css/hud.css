@@ -82,6 +82,19 @@
 }
 .hud-label { font-size: var(--fs-micro); letter-spacing: 0.16em; color: var(--dim); }
 .hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+/* POSITION CHANGE. hud.js stamps data-delta="up"/"down" on #hud-pos for ~6
+   HUD ticks when the rank moves; the colour is state (kept under reduced
+   motion), the scale pop is motion (not). */
+#hud-pos[data-delta="up"] { color: var(--faster); }
+#hud-pos[data-delta="down"] { color: var(--slower); }
+@media (prefers-reduced-motion: no-preference) {
+  #hud-pos[data-delta] { animation: pos-flash 0.5s ease-out; }
+}
+@keyframes pos-flash { from { transform: scale(1.18); } }
+/* WHO is ahead/behind: a 3px bar in that car's team colour, written by hud.js
+   as an element-local --gap-team (child selector: this file spells the chip
+   class nowhere, see the ratchet note below). */
+.hud-gaps > div { border-left: 3px solid var(--gap-team, transparent); padding-left: calc(var(--gap) / 3); }
 .hud-gaps {
   position: absolute;
   /* BESIDE the minimap, top-left cluster, the two readouts STACKED — ahead over
