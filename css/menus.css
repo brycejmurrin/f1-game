@@ -334,9 +334,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
   justify-items: stretch;
   /* Rooms used to sit on --tap (52px on touch) so a 2×2 of DATA / GARAGE /
      SETTINGS / HELP overflowed the column (measured gallery 2026-09-03:
-     scrollH 388 vs clientH 306 at 734×343). Same compact floor the pause
-     stack already uses on this shape. */
-  gap: calc(var(--gap) * 0.55);
+     scrollH 388 → 323 vs clientH 306 at 734×343 after the first cut).
+     Second cut clears the remaining ~17px so sf-b fade does not eat the
+     rooms. Same compact floor family the pause stack already uses. */
+  gap: calc(var(--gap) * 0.35);
 }
 :where(body[data-shape="wide"][data-density="compact"]) #title { font-size: clamp(26px, calc(7.5 * var(--vwz)), 48px); }
 :where(body[data-shape="wide"][data-density="compact"]) #subtitle { margin: 8px 0 0; font-size: var(--fs-micro); }
@@ -346,13 +347,16 @@ body { --compact-at: 600px; --wide-at: 620px; }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-hero,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-primary,
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary { width: 100%; }
+:where(body[data-shape="wide"][data-density="compact"]) :is(#menu-primary, #menu-secondary) {
+  gap: calc(var(--gap) * 0.45);
+}
 :where(body[data-shape="wide"][data-density="compact"]) #menu-buttons .bigbtn {
-  width: 100%; padding: 8px 10px; font-size: 17px;
-  min-height: max(36px, var(--tap-min));
+  width: 100%; padding: 6px 10px; font-size: 16px;
+  min-height: max(32px, var(--tap-min));
 }
 :where(body[data-shape="wide"][data-density="compact"]) #menu-secondary .minibtn {
-  padding: 5px 8px; font-size: var(--fs-micro);
-  min-height: max(30px, var(--tap-min));
+  padding: 3px 8px; font-size: var(--fs-micro);
+  min-height: max(26px, var(--tap-min));
 }
 /* The static mode subs are the first thing to go when height is short — the
    hero's save line stays, it is state the player came back for. */

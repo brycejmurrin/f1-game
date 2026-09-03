@@ -28,18 +28,23 @@ test("compact landscape title doors fit without a nested scroller", () => {
   const menus = read("css/menus.css");
   assert.match(
     menus,
-    /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-buttons \{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.55\)/,
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-buttons \{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.35\)/,
     "compact-wide title stack is tighter than the desktop 0.9 gap",
   );
   assert.match(
     menus,
-    /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-buttons \.bigbtn \{[^}]*min-height:\s*max\(36px, var\(--tap-min\)\)/,
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-buttons \.bigbtn \{[^}]*min-height:\s*max\(32px, var\(--tap-min\)\)/,
     "play doors drop from --tap (52 on touch) so CAREER + 2×2 + rooms clear 343px",
   );
   assert.match(
     menus,
-    /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-secondary \.minibtn \{[^}]*min-height:\s*max\(30px, var\(--tap-min\)\)/,
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) #menu-secondary \.minibtn \{[^}]*min-height:\s*max\(26px, var\(--tap-min\)\)/,
     "rooms sit one step below the play doors",
+  );
+  assert.match(
+    menus,
+    /body\[data-shape="wide"\]\[data-density="compact"\]\) :is\(#menu-primary, #menu-secondary\) \{[^}]*gap:\s*calc\(var\(--gap\) \* 0\.45\)/,
+    "2-up rows also tighten on the short landscape column",
   );
 });
 
