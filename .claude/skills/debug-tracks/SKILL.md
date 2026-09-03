@@ -45,7 +45,7 @@ When someone asks "how many corners does Spa have?", answer with `info().turns` 
 `trackInfo`, not `corners().length`.
 
 **Corners have no real names — don't invent "Eau Rouge" or "Casino Square."**
-`js/track/markings.js`'s `CircuitMarkings.turns` is a raw array of apex
+each def's `turns` (`js/circuits/<id>.js`) is a raw array of apex
 FRACTIONS per track (`turns: [0.0432, 0.1524, ...]`) — no name, direction, or
 radius field lives there at all; it is the curated seed list, nothing else.
 Everything in `trackInfo({what:"corners"})` — the `dir` (`"L"`/`"R"`/`"straight"`),

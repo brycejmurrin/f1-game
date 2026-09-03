@@ -302,8 +302,8 @@ when testing TT-specific behaviour (ghost delta, TT results, sector splits).
 Snapshot of state: `state` is the state-machine value
 (`menu｜count｜race｜results`), `track` the loaded circuit id, `n` the
 sample count, `total` the lap length (m). `timeTrial` and `seasonMode` reflect the
-active game mode. `sectors` is `[s1End, s2End]` racing-lap fractions from
-`CircuitMarkings` (or `null`); `turns` is the curated FIA turn count (or `null`).
+active game mode. `sectors` is `[s1End, s2End]` racing-lap fractions from the
+def's curated markings (or `null`); `turns` is the curated FIA turn count (or `null`).
 Returns `track: null` if no circuit is loaded — poll this to know when a track
 has finished building.
 
@@ -1007,7 +1007,7 @@ MOVE/zoom/SPIN controls leave it open.
 ### `corners() → [number, …]`
 Lap-fractions of **curvature-peak** apexes (local maxima of `|curvature|`). Handy
 for parking at sharp bends. This is **not** the curated FIA turn list — that lives
-on `info().turns` / `track.def.turns` from `js/track/markings.js`.
+on `info().turns` / `track.def.turns`, authored in `js/circuits/<id>.js`.
 
 ### `nodeAt(frac) → {k, frac, x, y, z, tx, tz, rx, rz} | null`
 World position and orientation of the track node closest to lap-fraction `frac`
@@ -1771,7 +1771,7 @@ loaded.
 | `sectorElapsed` | Seconds spent in the current sector so far |
 
 ### `sectorState() → {idx, elapsed, bests, last} | null`
-Live S1/S2/S3 timing. Boundaries come from curated `CircuitMarkings` via
+Live S1/S2/S3 timing. Boundaries come from the def's curated `sectors` via
 `sectorAt` (equal thirds only if a track has no `sectors` table). `idx` = current
 sector (0–2). `elapsed` = seconds into it. `bests[i]` = personal-best for sector i
 (`null` until that sector is completed with `lap ≥ 1` — formation-lap S3 is not
@@ -2459,7 +2459,7 @@ __apex.trackInfo({ what: "corners" }).corners
 //    straightAfterM = road to the next corner; exitsOntoStraight past ~120 m
 ```
 
-Corners come from the curated `CircuitMarkings` apex list (real FIA turn
+Corners come from the def's curated `turns` apex list (real FIA turn
 numbering) where a circuit has one, falling back to curvature peaks. Three
 things happen to make the table trustworthy on OSM-derived centrelines:
 
@@ -2471,7 +2471,7 @@ things happen to make the table trustworthy on OSM-derived centrelines:
 - **Radius comes from heading swept across the whole corner**, not from any one
   sample: `radius = arcLength / |Δheading|`.
 - **Curated apexes are snapped** to the nearest smoothed-curvature peak (bounded
-  by half the gap to the neighbouring turns), because `CircuitMarkings` is
+  by half the gap to the neighbouring turns), because a def's `turns` are
   documented as best-effort against this game's centreline. Overlapping results
   are merged and keep both numbers (`"T9-T10"`).
 

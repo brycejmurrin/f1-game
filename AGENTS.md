@@ -169,9 +169,11 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
   `shaders/` GLSL-as-data), `gltf.js`, `assets.js` (baked pack loader).
   DEFERRED backends, no script tag, injected at boot: `webgpu/` WGX and
   `three/` TLX (opt-in `apex26.gfxBackend="three"`)
-- `js/track/` — spline mesh geom graph space surface markings models themes
-  kits geo-paths maps + the scenery split; the 111-member scenery(api)
-  contract is frozen by `tests/unit/scenery-api-contract.test.mjs`
+- `js/track/` — spline mesh geom graph space surface models themes kits maps
+  + the scenery split; only GENERIC tables live here — a circuit's path,
+  markings and dressing rows are keys of its def (`js/circuits/<id>.js` is
+  the single home); the 111-member scenery(api) contract is frozen by
+  `tests/unit/scenery-api-contract.test.mjs`
 - `js/car/` — car3d, liveries, liverytex, crest-paths, the parts catalog (780 cr budget),
   ghost, teams, driver-ratings
 - `js/data/` — F1API + DataHub tabs; `js/net/` — 2-4 player WebRTC, no backend

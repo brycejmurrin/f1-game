@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// @doc Projects a `bacinger/f1-circuits` GeoJSON feature into a `CircuitPaths` entry; `--self-check` diffs committed traces.
+// @doc Projects a `bacinger/f1-circuits` GeoJSON feature into a circuit def's `path` entry; `--self-check` diffs committed traces.
 // @skill new-track
 /* Apex 26 — import real circuit centrelines from bacinger/f1-circuits (ODbL-1.0)
-   into the `CircuitPaths` table in js/track/geo-paths.js.
+   as the `path: { len, pts }` key of a circuit def in js/circuits/<id>.js.
  *
  * The committed traces were produced by hand from the same upstream GeoJSON but
  * no tool was ever checked in, so the projection had to be recovered before the
@@ -18,7 +18,7 @@
  *   len = summed length of the projected open polyline, rounded to metres
  *
  * `--self-check` regenerates the ALREADY-COMMITTED circuits and diffs them
- * against geo-paths.js. That is the guard that this projection is still the one
+ * against the committed circuit files. That is the guard that this projection is still the one
  * the shipped data was built with — run it before trusting any new entry.
  * Observed agreement is 0.4-1.1 m mean error per circuit (digitisation-level).
  *
@@ -30,7 +30,7 @@
  *
  * Flags:
  *   --source <path>   read the GeoJSON from disk instead of fetching
- *   --json            emit JSON instead of the geo-paths.js source line
+ *   --json            emit JSON instead of the circuit-file source line
  *
  * Network: fetches raw.githubusercontent.com, same host and file as
  * tools/refresh-f1-circuit-reference.mjs. Never run by the test suite.
@@ -41,7 +41,7 @@ import { fileURLToPath } from "node:url";
 
 const SOURCE = "https://raw.githubusercontent.com/bacinger/f1-circuits/master/f1-circuits.geojson";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const GEO_PATHS = path.join(ROOT, "js/track/geo-paths.js");
+const CIRCUITS = path.join(ROOT, "js/circuits");
 const R = 6378137;
 
 // Circuits already in the game — game id → upstream feature id. Mirrors
@@ -69,7 +69,7 @@ const CLASSICS = {
 
 /* ---------- projection ---------- */
 
-// GeoJSON [lon,lat] ring → { len, pts:[[x,z],…] } in the CircuitPaths convention.
+// GeoJSON [lon,lat] ring → { len, pts:[[x,z],…] } in the def.path convention.
 export function project(coords) {
   const n = coords.length;
   let lon0 = 0, lat0 = 0;
@@ -79,7 +79,7 @@ export function project(coords) {
   const kz = (Math.PI / 180) * R;
 
   let pts = coords.map(([lon, lat]) => [-(lon - lon0) * kx, (lat - lat0) * kz]);
-  // Upstream rings are closed (last vertex repeats the first). CircuitPaths is
+  // Upstream rings are closed (last vertex repeats the first). def.path is
   // an OPEN loop — the Catmull-Rom pass closes it — so drop the duplicate.
   const last = pts[pts.length - 1];
   if (Math.hypot(last[0] - pts[0][0], last[1] - pts[0][1]) < 1) pts = pts.slice(0, -1);
@@ -122,23 +122,24 @@ async function loadSource(file) {
   return res.json();
 }
 
-// Parse the committed CircuitPaths entries straight out of the source file, so
+// Parse each circuit's committed `path` straight out of js/circuits/<id>.js, so
 // --self-check compares against what actually ships rather than a copy.
 async function loadCommitted() {
-  const src = await fs.readFile(GEO_PATHS, "utf8");
   const out = {};
-  const re = /(\w+):\s*\{\s*len:\s*(\d+),\s*pts:\s*(\[\[[\s\S]*?\]\])\s*\}/g;
-  for (let m; (m = re.exec(src)); ) {
-    out[m[1]] = { len: Number(m[2]), pts: JSON.parse(m[3]) };
+  const re = /^\s*path:\s*\{\s*len:\s*(\d+),\s*pts:\s*(\[\[[\s\S]*?\]\])\s*\}/m;
+  for (const f of (await fs.readdir(CIRCUITS)).filter((n) => n.endsWith(".js"))) {
+    const m = re.exec(await fs.readFile(path.join(CIRCUITS, f), "utf8"));
+    if (m) out[f.replace(/\.js$/, "")] = { len: Number(m[1]), pts: JSON.parse(m[2]) };
   }
   return out;
 }
 
 /* ---------- output ---------- */
 
+// The def key, ready to paste into js/circuits/<gameId>.js.
 function emit(gameId, entry, asJson) {
   if (asJson) return JSON.stringify({ [gameId]: entry });
-  return `    ${gameId}: { len: ${entry.len}, pts: ${JSON.stringify(entry.pts)} },`;
+  return `    path: { len: ${entry.len}, pts: ${JSON.stringify(entry.pts)} },  // ${gameId}`;
 }
 
 // Mean per-vertex distance between two same-length traces, after aligning the
@@ -185,7 +186,7 @@ const geo = await loadSource(sourceFile);
 const features = new Map(geo.features.map((f) => [f.properties.id, f]));
 
 if (selfCheck) {
-  // geo-paths.js commits the 16 classics alongside the 24 season rounds, so
+  // The 16 classics ship alongside the 24 season rounds, so
   // self-check must resolve feature ids through BOTH maps — COMMITTED alone
   // silently skipped every classic with "no upstream feature".
   const KNOWN = { ...COMMITTED, ...CLASSICS };

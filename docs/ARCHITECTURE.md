@@ -407,11 +407,14 @@ the on-track rejection guard (`RAW`).
 
 ## js/track/scenery-data.js — `TrackSceneryData`
 
-The static dressing tables hoisted out of buildProps: `BARRIER` (armco
-liveries), `FURN`/`FURN_DEF` (per-track trees + lamps), `CROWD_DAY`,
-`WINTINTS`, `HOUSE_*`, `MOTORHOME_BODY`, `SIGN_SEG`/`SIGN_DIGIT`, and the city
-generator's `NC`/`DC`/`BLD`/`STYLES`/`THEME_DEF`. Pure constants — anything
-that closes over placement state stays in the scenery modules.
+The GENERIC dressing tables hoisted out of buildProps: the theme fallbacks
+`FURN_DEF` (trees + lamps), `KIT_DEF` (barrier/signage/marshal families),
+`THEME_DEF` (city style) and `STAND_SET_DEF`, plus `STAND_LIVERIES`,
+`CROWD_DAY`, `WINTINTS`, `HOUSE_*`, `MOTORHOME_BODY`, `SIGN_SEG`/`SIGN_DIGIT`,
+the colour packs `NC`/`DC`/`ATM`/`COL`, `BLD`, and `resolveCityStyle()` (turns
+a def's `cityStyle` colour NAMES into `NC`/`DC` arrays). Pure constants —
+anything that closes over placement state stays in the scenery modules, and
+anything PER-CIRCUIT is a key of the def (below), never an id-keyed table here.
 
 ## js/track/ — the rest of the engine
 
@@ -424,16 +427,14 @@ One concern per file, all loaded before `tracks.js`:
 | `mesh.js` | `TrackMesh` | road/terrain mesh extrusion (`buildRoad`/`buildTerrain`) |
 | `space.js` | `TrackSpace` | world↔track (Frenet) projection used by physics |
 | `surface.js` | `TrackSurface` | road-surface build details, per-track tarmac/verge tints |
-| `markings.js` | `CircuitMarkings` | curated FIA-aligned sector splits + turn apexes (racing-lap fractions; feeds `Tracks.LIST`, sectorAt, minimaps, corner boards) |
 | `models.js` | `TrackModels` | composite prop models shared across circuits |
 | `themes.js` | `SceneryThemes` | theme tables for the city generator |
 | `landmark-kit.js` / `circuit-kit.js` | `LandmarkKit` / `CircuitKit` | landmark & circuit composite kits for `scenery(api)` |
-| `geo-paths.js` | `CircuitPaths` | real OSM circuit centrelines (bacinger/f1-circuits, ODbL) — was `circuits.js` |
 | `maps.js` | `TrackMaps` | offline 2D picker outlines from the spline engine — was `trackmaps.js` |
 | `scenery-nature.js` / `scenery-city.js` / `scenery-structures.js` / `scenery-identity.js` | `Scenery*` | the buildProps split (below) |
 
 **The buildProps split.** Prop placement is four `Scenery*.create(ctx)`
-modules — nature (trees/terrain furniture), city (the `STYLES` building
+modules — nature (trees/terrain furniture), city (the `cityStyle` building
 generator, neon, glass), structures (grandstands, gantries, barriers,
 floodmasts), identity (per-circuit landmark passes) — each instantiated with a
 ctx of the placement helpers and accumulators. Together they serve the
@@ -447,6 +448,12 @@ change the test catches. See [SCENERY-API.md](SCENERY-API.md).
 One def file per circuit, plus one scenery file under `js/circuits/scenery/`.
 The def is a self-contained IIFE that pushes a plain data object onto the
 global `TrackDefs` list — no engine logic, no palette helpers, just raw fields.
+**The def is the single home of a circuit's data**: its real centreline
+(`path`), curated sector splits + turn apexes (`sectors`, `turns`) and its
+dressing rows (`barrier`, `furniture`, `kit`, `standSet`, `cityStyle`) all live
+here — there are no id-keyed tables in `js/track/` any more, and the engine
+reads every one of them off the BUILT def (`tests/unit/circuit-def-fields.test.mjs`
+pins that they survive the copy).
 The bespoke `scenery(api)` closure lives in `js/circuits/scenery/<id>.js`
 (registered on `window.TrackScenery[id]`, no `<script>` tag: `game.js` fetches
 the one it is about to build, ~27 KB each, so a session does not parse all 40). Loaded *before* `js/track/tracks.js`, in the order their
@@ -457,16 +464,23 @@ calendar order). **Tag order == `Tracks.LIST` order == picker/season order.**
 def = { id, name, gp, country, night, theme, lengthKm, baseHW,
         street?:true,                              // continuous-barrier street circuit
         pal: { ...palette overrides... },          // engine wraps with day/nightPal
-        segs: [ {t,l,h?,b?,w?}, ... ],             // authored fallback if no OSM trace
+        path: { len, pts: [[x,z], ...] },          // REQUIRED: the real centreline (OSM trace, open loop)
+        sectors?: [s1End, s2End], turns: [frac…],  // curated FIA markings, RACING-LAP fractions, never fmap'd
+        barrier?: {a,b,c,night,tyre},              // armco livery (street / night circuits)
+        furniture: {tree, fol, lamp, lc?, sparse?, treeCrown?},   // roadside planting + lamps
+        kit: {marshal, rail, fence, tyre, board, gantry, camera, hoarding},   // api.kitOf families
+        standSet: [livery, livery, livery],        // grandstand livery rotation (STAND_LIVERIES names)
+        cityStyle?: {neon: [NC names], dayPal: [DC names], bias, fh, bh, kinds, neonKinds, tone},
         bridges?:   [ {s,halfM,rise}, ... ],       // figure-8 overpass deck (terrain stays flat)
         elevations?:[ {s,halfM,rise}, ... ],       // real elevation bumps (terrain follows road)
-        hwZones?:   [ {s0,s1,hw,ease?}, ... ] }    // half-width overlays (CircuitPaths ignores segs w:)
+        hwZones?:   [ {s0,s1,hw,ease?}, ... ] }    // half-width overlays on the path
 ```
 
 ## js/track/tracks.js — `Tracks` (engine shell)
 
 Resolves each `TrackDefs` entry (palette from the `night` flag, geometry from
-the OSM trace in `js/track/geo-paths.js` or the authored `segs`), samples the
+the def's `path` — a def without one is a build error naming the circuit, there
+is no authored-segment fallback), samples the
 closed Catmull-Rom spline (via `TrackSpline`), and orchestrates the build —
 road/terrain meshes through `TrackMesh`/`TrackSurface`, props through the four
 scenery modules.

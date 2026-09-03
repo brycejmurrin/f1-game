@@ -517,8 +517,9 @@ const SceneryNature = (function () {
       const lib = TrackSceneryData.STAND_LIVERIES || {};
       let liveryName = opts.livery;
       if (!liveryName && !shell) {
-        const set = (TrackSceneryData.STAND_SETS || {})[def && def.id]
-          || TrackSceneryData.STAND_SET_DEF;
+        // def.standSet (js/circuits/<id>.js) names the livery families this
+        // venue rotates through; the three permanent-circuit greys otherwise.
+        const set = (def && def.standSet) || TrackSceneryData.STAND_SET_DEF;
         if (set && set.length) {
           const kk = Math.round(s * n) % n;
           liveryName = set[Math.floor(hash(kk * 2.7 + side * 1.9) * set.length) % set.length];

@@ -9,19 +9,19 @@ Load from the SKILL.md index when the task needs this detail.
    `js/circuits/monaco.js` for a street circuit, `js/circuits/monza.js` for a parkland
    layout) and adapt it — don't start from a blank file.
 
-   **Real-world centreline (OSM)**: don't hand-author `segs` for a real circuit
-   if a trace can be imported. `tools/import-circuit-path.mjs` pulls centrelines
-   from `bacinger/f1-circuits` (ODbL-1.0) into `CircuitPaths` in
-   `js/track/geo-paths.js` — the same projection the committed traces already
-   use (verify with `--self-check` before trusting a new entry):
+   **Real-world centreline (OSM) — `path` is REQUIRED.** `tools/import-circuit-path.mjs`
+   pulls the centreline from `bacinger/f1-circuits` (ODbL-1.0) in the same
+   projection every committed `path` already uses (verify with `--self-check`
+   before trusting a new entry):
    ```sh
    node tools/import-circuit-path.mjs --self-check            # sanity-check the projection against every committed path
-   node tools/import-circuit-path.mjs <gameId>:<featureId>     # emit one new geo-paths.js entry
+   node tools/import-circuit-path.mjs <gameId>:<featureId>     # emit one new `path:` line
    node tools/import-circuit-path.mjs --classics               # emit all 16 retired-circuit traces at once
    ```
-   Paste the emitted line into `js/track/geo-paths.js` under the new id — the
-   trace wins over `segs` (see Gotchas below), so `segs` in the def only needs
-   to be a rough closed-loop fallback.
+   Paste the emitted `path: { len, pts }` line into the new def. Then author
+   `turns` (and `sectors` if researched), `furniture`, `kit`, `standSet` and —
+   for street/modern circuits — `barrier` / `cityStyle`; copy a sibling's rows
+   as the starting point.
 
 2. **Register it** (new tracks only): add `<script src="js/circuits/<id>.js?v=N"></script>`
    to `index.html` in the circuit block (before `js/track/tracks.js`) **and add the
@@ -42,11 +42,12 @@ Load from the SKILL.md index when the task needs this detail.
      1. Delete `js/circuits/jacarepagua.js`.
      2. Remove its `<script>` tag from `index.html`.
      3. Remove its entry from the `CIRCUITS` array in `tools/manifest.cjs`.
-     4. Remove its `CircuitPaths` entry in `js/track/geo-paths.js`, if any.
-     Then add the new circuit's four matching pieces. Skipping any one of the
-     four leaves a dangling reference that `tests/unit/load-order.test.mjs` or the
-     40-cap test will catch — but don't rely on the test to tell you which
-     file you forgot; delete all four together.
+     (Its centreline, markings and dressing rows are keys of that one file —
+     nothing else in `js/track/` names the circuit.)
+     Then add the new circuit's three matching pieces. Skipping one leaves a
+     dangling reference that `tests/unit/load-order.test.mjs` or the 40-cap
+     test will catch — but don't rely on the test to tell you which file you
+     forgot; delete all three together.
    Verify with `__apex.tracks()` that the id appears.
 3. **Headless build guard** — the fast pre-push check that needs no browser:
    ```sh
@@ -76,18 +77,20 @@ Load from the SKILL.md index when the task needs this detail.
 
 ## Gotchas
 
-- **The loop must close.** The engine distributes any residual position/elevation
-  around the lap and applies mild Laplacian smoothing, but wildly unclosed
-  `segs` produce kinks. Keep cumulative turn near a multiple of 360°.
-- **OSM trace wins over `segs`.** If `js/track/geo-paths.js` has a path for this id, your
-  `segs` are ignored for the centreline (still useful as a fallback). Use
-  `reverse`/`startFrac` to orient a trace, not `segs` rewrites.
-- **Cloning an OSM-backed track:** you **must** copy the `CircuitPaths` entry in
-  `js/track/geo-paths.js` under the new id. Without it the build silently falls
-  back to coarse `segs` — the game loads, but the layout is wrong and hard to spot.
-- **`CircuitMarkings` covers the 24 season rounds only** (`js/track/markings.js`).
-  Classics and new tracks without an entry fall back to **curvature-peak**
-  `__apex.corners()` for turn lists — not the curated FIA apex fractions.
+- **`path` is the geometry, full stop.** There is no hand-authored segment
+  fallback any more: a def without `path` fails the build with an error naming
+  the circuit (`verify-track` shows it in 2 s). Use `reverse`/`startFrac` to
+  orient a trace and `hwZones` to narrow it — never edit `path.pts` by hand
+  (`realPoints()` keeps the trace index-for-index; `startFrac` counts in it).
+- **Cloning a track:** copy the whole def — `path`, `turns`, `furniture`,
+  `kit`, `standSet` and the rest come with it, because the def is the single
+  home. Nothing in `js/track/` is keyed by circuit id.
+- **`turns` are RACING-LAP fractions**, never fmap'd: when `startFrac` moves the
+  line, re-seat them with `tools/rotate-markings.cjs --check` / `--write` (once
+  per circuit). A def without `turns` falls back to **curvature-peak**
+  `__apex.corners()` for corner boards — not the curated FIA apexes. The 16
+  classics carry `turns` (the N strongest curvature peaks, N = the real turn
+  count) but no researched `sectors`; every consumer falls back to thirds.
 - **`apex26.track` is a positional index** into `Tracks.LIST` (same order as
   `tools/manifest.cjs` `CIRCUITS`). Do not reorder the circuit block casually —
   saved track picks and season routing will point at the wrong def.

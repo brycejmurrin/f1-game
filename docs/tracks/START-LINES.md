@@ -35,7 +35,7 @@ node tools/track-verts.cjs --diff before.json       # did the dressed world move
 `startFrac` is an **index fraction**, not an arc-length fraction: `resolve()`
 uses `round(wrap01(startFrac) * points.length)` as a node index, so racing node 0
 *is* source control point `round(startFrac * N)`, under both the forward and the
-`reverse: true` branch. `realPoints()` keeps `CircuitPaths[id].pts`
+`reverse: true` branch. `realPoints()` keeps the def's `path.pts`
 index-for-index (it maps and smooths in place, never resamples), so
 
 ```
@@ -353,7 +353,7 @@ only correct answer was already sitting there before the shift was added.
 
 ### 6. Turn tables — `tools/rotate-markings.cjs`
 
-`CircuitMarkings` turn apexes are racing fractions and deliberately never
+A def's `turns` apexes are racing fractions and deliberately never
 fmap'd, so the same physical apex acquires a new fraction when the line moves.
 They are rotated by the same arc shift and then **re-sorted**, which is the whole
 point: the array is consumed by index (`signBoard(..., idx + 1)`), so index 0 must
@@ -366,7 +366,7 @@ whole grid carries the same handful of idealised thirds (`[0.30, 0.62]`,
 `[0.32, 0.68]`, `[0.28, 0.62]`), i.e. "about a third of a lap from the line",
 which makes them line-relative by construction and already correct against a
 corrected line. Rotating them produced `[0.7160, 0.0360]` at COTA and
-`[0.9953, 0.3453]` at Qatar, breaking markings.js's own `0 < s1 < s2 < 1`
+`[0.9953, 0.3453]` at Qatar, breaking the sectors' own `0 < s1 < s2 < 1`
 contract — the shape of an answer that was never physical to begin with.
 
 ---

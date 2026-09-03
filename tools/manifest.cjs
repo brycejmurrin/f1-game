@@ -92,10 +92,8 @@ const FULL = [
   // and spotify.js's init() runs at EVAL when the document is already complete
   // (the game-vm harness; a late-injected script), so the store must precede it.
   "js/game/store.js",
-  "js/track/geo-paths.js",
   "js/track/geom.js",
   "js/track/scenery-data.js",
-  "js/track/markings.js",
   "js/track/space.js",
   "js/track/surface.js",
   "js/track/models.js",
@@ -249,10 +247,8 @@ const TRACK_VM = [
   // scalar helpers (M4.clamp/lerp/wrapDelta), which js/track/ binds at eval.
   // Leaving it out is how the track engine ended up with four private lerps.
   "js/mat4.js",
-  "js/track/geo-paths.js",
   "js/track/geom.js",
   "js/track/scenery-data.js",
-  "js/track/markings.js",
   "js/track/space.js",
   "js/track/surface.js",
   "js/track/models.js",
@@ -336,7 +332,6 @@ const HARD_EDGES = [
   ["js/track/scenery-structures.js", "js/track/tracks.js"],
   ["js/track/scenery-city.js", "js/track/tracks.js"],
   ["js/track/scenery-identity.js", "js/track/tracks.js"],
-  ["js/track/geo-paths.js", "js/track/tracks.js"],          // CircuitPaths read by LIST build
   ["js/track/space.js", "js/track/surface.js"],
   ["js/track/models.js", "js/track/circuit-kit.js"],
   ["js/track/tracks.js", "js/track/maps.js"],               // maps calls Tracks.buildCenterline
