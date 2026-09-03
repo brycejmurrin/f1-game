@@ -98,6 +98,7 @@ the tool's own header.
 | **menu-capture.mjs** | Library (not a CLI): `runMenuShot` / `runMenuGallery` behind `layout-audit --gallery` / `--screen=`. | survey-ui-matrix |
 | **menu-fit.mjs** | Audits every menu screen for cramped/clipped layout at a viewport; `--safe=` simulates arbitrary notch insets. | ui-menu-a11y |
 | **menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
+| **move-tree.mjs** | Phase 2b mover: `git mv` from a JSON old→new map, rewrite the paths in manifest / tools / tests / docs / skills,… | — |
 | **net/nostr-local.cjs** | A Nostr relay on localhost so the ROOM CODE path can be tested without a public relay. | multiplayer-debug |
 | **net/nostr-probe.mjs** | Which public relays will actually carry our signalling? Probes each and reports. | multiplayer-debug |
 | **net/rtc-e2e-3p.mjs** | THREE peers over real WebRTC in one room, end to end. | multiplayer-debug |
@@ -190,6 +191,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **clip-baseline.json** | `clip-audit.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs` |
 | **coplanar-baseline.json** | `coplanar-audit.cjs`, `tests/unit/coplanar-faces.test.mjs` |
 | **float-baseline.json** | `tests/unit/scenery-grounding.test.mjs` |
+| **moves/phase2.json** | — |
 
 ## Subdirectories (R3 families)
 

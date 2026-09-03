@@ -26,6 +26,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -105,6 +106,11 @@ function gateNodeSuites() {
   return [...body.matchAll(/^\s+npm run (test:[\w-]+)\s*$/gm)].map((m) => m[1]);
 }
 
+// tools/manifest.cjs MOVED (written by tools/move-tree.mjs): old path -> new.
+function manifestMoved() {
+  try { return createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs")).MOVED || {}; } catch (_) { return {}; }
+}
+
 function mergeDeployTip(tip) {
   const r = git(["merge", "--no-edit", `${REMOTE}/${DEPLOY_BRANCH}`]);
   if (r.code === 0) return "merged";
@@ -112,7 +118,9 @@ function mergeDeployTip(tip) {
   const cureable = conflicted.every((f) => f === "index.html" || f === "version.json");
   if (!cureable) {
     git(["merge", "--abort"]);
-    throw new Error(`real conflicts (not just the shell hashes): ${conflicted.join(", ")} — resolve by hand; for tests/data/ratchets.json run \`node tools/ratchets.mjs --update\` on the union`);
+    const moved = manifestMoved();
+    const named = conflicted.map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
+    throw new Error(`real conflicts (not just the shell hashes): ${named.join(", ")} — resolve by hand; for tests/data/ratchets.json run \`node tools/ratchets.mjs --update\` on the union`);
   }
   for (const f of conflicted) must(git(["checkout", "--theirs", "--", f]), `checkout --theirs ${f}`);
   run("node", ["tools/gen-shell.mjs"], "regenerate the union shell from the manifest");

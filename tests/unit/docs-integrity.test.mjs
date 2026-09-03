@@ -98,6 +98,14 @@ const SOURCE_EXEMPT = new Map([
   // Synthetic fixture HTML fed to the service worker under test — a string it
   // must rewrite, not a file it must find.
   ["css/style.css", /service-worker\.test\.mjs|docs-integrity\.test\.mjs/],
+  // The scratch tree tools/move-tree.mjs is tested on: a file that moves, its
+  // untouched sibling, and a test that cites it — none of them real.
+  ["js/game/perfect.js", /move-tree\.test\.mjs|docs-integrity/],
+  ["js/perf/governor.js", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/unit/perf.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  ["docs/archive/OLD.md", /move-tree\.test\.mjs|docs-integrity/],
+  ["js/game/nope.js", /move-tree\.test\.mjs|docs-integrity/],
+  ["js/perf/x.js", /move-tree\.test\.mjs|docs-integrity/],
   // Fake package.json scripts inside the coverage-audit's own fixtures.
   ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
   ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],
