@@ -3839,7 +3839,7 @@ function collideFx(a, b, impact) {
   const pc = a.isPlayer ? a : b;
   if (pc.collideT > 0) return;
   impact = clamp(impact, 0.12, 1);
-  if (soundOn) GameAudio.collision();
+  if (soundOn) GameAudio.collision(impact);
   shake = Math.min(1, shake + impact * 0.45);
   hitStop = Math.max(hitStop, impact * 0.015);   // barely any freeze, so contact doesn't feel like a stop
   pc.collideT = 0.35;
@@ -4985,7 +4985,7 @@ function updateCar(c, dt, ranked) {
         c.head -= rel * wallAlign;
         if (track.street && c.collideT <= 0 && incidence > 0.12 && !c.wasOnWall) {
           shake = Math.min(1, shake + 0.1 + incidence * 0.3); c.collideT = 0.35;
-          if (soundOn) GameAudio.collision();
+          if (soundOn) GameAudio.collision(incidence, incidence < 0.45);   // shallow angle = scrape, steep = hit
           if (navigator.vibrate) { try { navigator.vibrate(Math.round(15 + incidence * 35)); } catch (e) {} }
           if (c.isPlayer) Input.rumble(0.35 + incidence * 0.5, 100);
         }
