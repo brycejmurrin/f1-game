@@ -24,8 +24,12 @@ const { chromium } = require("playwright");
 const BASE = process.argv[2] || "http://localhost:8099";
 
 (async () => {
-  const b = await chromium.launch({ headless: true,
-    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
+  // Chromium from harness.mjs's ladder (CHROME / PW_CHROMIUM / the known
+  // paths), like offline-precache-check: playwright's own registry pin may
+  // not be installed in a container whose egress blocks cdn.playwright.dev.
+  const exe = (await import("../lib/harness.mjs")).pickChromium();
+  const b = await chromium.launch({ headless: true, ...(exe ? { executablePath: exe } : {}),
+    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"] });
   const page = await b.newPage();
   const errs = []; page.on("pageerror", (e) => errs.push(e.message));
   await page.goto(BASE + "/index.html?v=" + Date.now(), { waitUntil: "networkidle" });
@@ -50,7 +54,14 @@ const BASE = process.argv[2] || "http://localhost:8099";
     }
     GameAudio.setEngine(0.7, 0, false, 0.7, 6); await sleep(160); const bo = GameAudio.rate();
     GameAudio.setEngine(0.7, 1, false, 0.7, 6); await sleep(160); const bn = GameAudio.rate();
-    return { rate, cen, boostOff: bo, boostOn: bn };
+    // LOAD crossfade (js/audio/engine.js): the accel recording opens with
+    // longitudinal acceleration, never with rev. Same rev, same gear, ax 0 vs
+    // a full-throttle launch: pitch must be identical, brightness must rise.
+    GameAudio.setEngine(0.6, 0, false, 0.6, 4, { ax: 0 });  await sleep(260);
+    const coast = { rate: GameAudio.rate(), cen: GameAudio.centroidHz() };
+    GameAudio.setEngine(0.6, 0, false, 0.6, 4, { ax: 12 }); await sleep(260);
+    const pull = { rate: GameAudio.rate(), cen: GameAudio.centroidHz() };
+    return { rate, cen, boostOff: bo, boostOn: bn, coast, pull };
   }, revs);
   await b.close();
   if (errs.length) { console.log("pageerrors:", errs.join(" | ")); process.exit(1); }
@@ -65,17 +76,21 @@ const BASE = process.argv[2] || "http://localhost:8099";
   let ok = true;
   for (let g = 1; g <= 8; g++) { const a = r.rate[g]; for (let i = 1; i < a.length; i++) if (a[i] < a[i - 1] - 1e-3) { ok = false; console.log(`FAIL: g${g} pitch not monotonic in rev`); } }
   if (r.rate[1][4] >= r.rate[4][4]) { ok = false; console.log("FAIL: gear 1 redline not lower than gear 4"); }
+  console.log(`load (g4, rev .6): coast rate ${r.coast.rate} cen ${Math.round(r.coast.cen)} Hz -> pull rate ${r.pull.rate} cen ${Math.round(r.pull.cen)} Hz`);
+  if (Math.abs(r.pull.rate - r.coast.rate) > 1e-3) { ok = false; console.log("FAIL: load must not move pitch"); }
+  if (!(r.pull.cen > r.coast.cen)) { ok = false; console.log("FAIL: pulling must read brighter than coasting"); }
   console.log(ok ? "PASS: pitch climbs with rev in every gear; gears 1-3 lower than 4-8" : "CHECK FAILED");
 
   // Per-manufacturer voices: same invariants must hold under every voice, and
   // the timbres must actually differ (relative rate offsets + centroid spread).
-  const b2 = await chromium.launch({ headless: true,
-    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
+  const b2 = await chromium.launch({ headless: true, ...(exe ? { executablePath: exe } : {}),
+    args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist", "--autoplay-policy=no-user-gesture-required"] });
   const page2 = await b2.newPage();
   const errs2 = []; page2.on("pageerror", (e) => errs2.push(e.message));
   await page2.goto(BASE + "/index.html?v=" + Date.now() + 1, { waitUntil: "networkidle" });
   await page2.waitForTimeout(400);
-  await page2.click("#mb-race"); await page2.waitForTimeout(400);
+  try { await page2.click("#mb-race", { timeout: 8000, noWaitAfter: true }); } catch (_) { /* boot still busy */ }
+  await page2.waitForTimeout(400);
   await page2.evaluate(() => { GameAudio.init(); GameAudio.setEnabled(true); });
   await page2.waitForTimeout(1400);
   const VOICES = ["default", "Mercedes", "Ferrari", "Red Bull Ford", "Honda", "Audi"];

@@ -39,6 +39,7 @@ function buildResults(order) {
     const podium = i === 0 ? " p1" : i === 1 ? " p2" : i === 2 ? " p3" : "";
     const other = c.human && !c.local ? " q-real" : "";
     row.className = "res-row" + podium + (c.isPlayer ? " you" : "") + other;
+    row.style.setProperty("--i", i);   // settle stagger, css/components.css
     const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
     const sw = document.createElement("span"); sw.className = "res-swatch";
     sw.style.background = G.cssCol(c.team.color);
@@ -200,7 +201,7 @@ function buildTTResults() {
       gr.className = "res-row";
       const gl = document.createElement("span"); gl.className = "res-name"; gl.textContent = "vs Ghost";
       const gv = document.createElement("span"); gv.className = "res-pts"; gv.style.width = "auto";
-      gv.style.color = delta <= 0 ? "#a3e635" : "#e10600";
+      gv.style.color = delta <= 0 ? "var(--faster)" : "var(--slower)";
       gv.textContent = (delta >= 0 ? "+" : "") + delta.toFixed(3) + "s";
       gr.append(gl, gv);
       els.resultsTable.appendChild(gr);

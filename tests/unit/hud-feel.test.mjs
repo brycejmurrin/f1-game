@@ -85,7 +85,7 @@ function boot(opts = {}) {
   const G = {
     els, player, cars: [player], ranked: [player], timeTrial: false, state: "race",
     lapsTarget: 5, track: { map: [[0, 0], [0.5, 0.5], [1, 1]], total: 100, def: {} },
-    sectorLast: [null, null, null], sectorBests: [Infinity, Infinity, Infinity],
+    sectorLast: [null, null, null], sectorBests: [Infinity, Infinity, Infinity], fieldSectorBests: [Infinity, Infinity, Infinity],
     aeroZones: [{}], ttRecord: Infinity,
     fmtTime: (t) => (isFinite(t) && t > 0 ? t.toFixed(2) : "-"),
     dashKph: (v) => v * 3.6, vTop: () => 90, otEnabled: () => true,
@@ -130,7 +130,7 @@ test("the OVERTAKE chip spells all four states differently — the lockout count
   assert.equal(els.ot.textContent, "NO OVERTAKE", "the race-wide gate still wins over a cooldown");
 });
 
-test("sector splits carry the banner's ▼/▲ against sectorBests, lime on a personal best", () => {
+test("sector splits carry the banner's ▼/▲ against sectorBests, timing-screen colours", () => {
   const { els, G, tick } = boot();
   tick();
   const vals = els.hudSectors.children.map((row) => row.children[1]);
@@ -139,15 +139,20 @@ test("sector splits carry the banner's ▼/▲ against sectorBests, lime on a pe
 
   // A first-ever lap: every split IS the best, and game.js writes the best in
   // the same crossing that writes the split.
-  G.sectorLast[0] = 28.431; G.sectorBests[0] = 28.431; tick();
+  G.sectorLast[0] = 28.431; G.sectorBests[0] = 28.431; G.fieldSectorBests[0] = 28.0; tick();
   assert.equal(vals[0].textContent, "▼28.431");
-  assert.equal(vals[0].style.color, "#a3e635", "a PB reads in the HUD's existing faster-than colour");
+  assert.equal(vals[0].style.color, "var(--faster)", "a personal best that is not the field's reads GREEN");
   assert.equal(vals[1].textContent, "--");
+  assert.equal(vals[1].style.color, "", "no split yet keeps the row's own ink (white)");
 
-  // Next lap, slower: the arrow flips and the colour drops back to the row's own.
+  // The field's best too: PURPLE, the timing screen's session best.
+  G.fieldSectorBests[0] = 28.431; tick();
+  assert.equal(vals[0].style.color, "var(--sec-best)", "session best reads purple");
+
+  // Next lap, slower: the arrow flips and the colour is the timing screen's yellow.
   G.sectorLast[0] = 28.9; tick();
   assert.equal(vals[0].textContent, "▲28.900");
-  assert.equal(vals[0].style.color, "", "slower: no inline colour, the .sec-val rule shows through");
+  assert.equal(vals[0].style.color, "var(--sec-slow)", "slower than your own best reads yellow");
 
   // A slower lap NEVER lowers sectorBests, so a later equal-to-best split is a PB again.
   G.sectorLast[0] = 28.431; tick();
@@ -168,7 +173,8 @@ test("the speed digits, energy bar and sector red are set up to be read at a gla
   // (css/tokens.css measures it at ~2.6:1 on the page). No HUD text may use it.
   const hud = read("js/ui/hud.js").replace(/\/\/.*$/gm, "");
   assert.doesNotMatch(hud, /#e10600/i, "hud.js writes no text in the brand red");
-  assert.match(hud, /"#ff3b30"/, "the S2 label / ghost delta use the AA text red");
+  assert.match(hud, /var\(--slower\)/, "the ghost delta reads the shared --slower token");
+  assert.match(hud, /var\(--faster\)/, "and --faster");
 });
 
 test("the TIME box's shell placeholder is fmtTime's own zero, so the first tick does not reflow it", () => {
@@ -214,3 +220,40 @@ test("the ahead gap slot keeps one line so the behind line never jumps when the 
     "measured: the container was 2px with the ahead line empty and 17.6px filled (headless, 2026-09-02)");
 });
 
+
+test("the POS box flashes on a position change and the gap chips carry the neighbour's team colour", () => {
+  const { els, G, tick, player } = boot();
+  const rival = { ...player, code: "RIV", prog: (player.prog || 0) + 50, rank: 1, team: { color: [1, 0, 0] }, isPlayer: false };
+  player.rank = 2; G.cars = [rival, player]; G.ranked = [rival, player];
+  tick();
+  assert.equal(els.pos.dataset.delta, undefined, "the first rank is not a change");
+  player.rank = 1; G.ranked = [player, rival]; rival.rank = 2; rival.prog = (player.prog || 0) - 50; tick();
+  assert.equal(els.pos.dataset.delta, "up", "gaining a place stamps data-delta=up");
+  for (let i = 0; i < 6; i++) tick();
+  assert.equal(els.pos.dataset.delta, undefined, "and it expires after ~6 ticks");
+  assert.equal(els.gapB.style.getPropertyValue("--gap-team"), "#f00", "the behind chip carries that car's team colour");
+  assert.equal(els.gapA.style.getPropertyValue("--gap-team"), "", "no car ahead: no bar");
+});
+
+test("timing columns use the bundled condensed numerals with tabular figures", () => {
+  const comp = cssRules(read("css/components.css"));
+  for (const sel of [".res-pos", ".res-pts"]) {
+    assert.equal(decl(comp, sel, "font-family"), "var(--font-hud)", sel + " reads the HUD face");
+    assert.equal(decl(comp, sel, "font-variant-numeric"), "tabular-nums", sel + " keeps digits from reflowing");
+  }
+  const hud = cssRules(read("css/hud.css"));
+  assert.match(decl(hud, '#hud-pos[data-delta="up"]', "color") || "", /--faster/);
+  const results = read("css/components.css");
+  assert.match(results, /prefers-reduced-motion: no-preference\)[^}]*#results-table \.res-row \{ animation: row-in/s,
+    "the results stagger lives inside the no-preference query");
+});
+
+test("the ahead chip marks the slipstream from player.towing", () => {
+  const { els, G, tick, player } = boot();
+  const lead = { ...player, code: "LEA", prog: (player.prog || 0) + 20, rank: 1, team: { color: [0, 0, 1] }, isPlayer: false };
+  player.rank = 2; G.cars = [lead, player]; G.ranked = [lead, player];
+  player.towing = 0.9; tick();
+  assert.equal(els.gapA.dataset.tow, "1", "towing > 0.5 stamps data-tow on the ahead chip");
+  player.towing = 0.1; tick();
+  assert.equal(els.gapA.dataset.tow, undefined, "and it clears when the tow fades");
+});

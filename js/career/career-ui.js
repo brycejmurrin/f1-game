@@ -645,6 +645,23 @@ function create(G) {
       meter("REPUTATION", Math.round(st.rep) + " / 100"),
       meter("ROUND", (Math.min(st.round + 1, st.rounds)) + " / " + st.rounds));
 
+    // NEXT RACE lives on the LEFT. The foot is under this column, so the
+    // UPCOMING list has to stay on the right or GO RACING clips it — but the
+    // one card you act on this visit belongs with the brief, not under the
+    // championship table. Hire / offers / season-done have no next round.
+    const midSeason = !st.hire && !st.offers && !Career.seasonDone();
+    if (midSeason) {
+      left.appendChild(head("NEXT RACE"));
+      const t = Tracks.SEASON[c.season.round];
+      const nr = el("div", "cr-card cr-nextrace");
+      nr.id = "cr-nextrace";
+      nr.append(
+        el("div", "cr-nr-round", "ROUND " + (c.season.round + 1)),
+        el("div", "cr-nr-name", t ? t.name : "—"),
+        el("div", "cr-nr-country", t && t.country ? t.country : ""));
+      left.appendChild(nr);
+    }
+
     if (!Career.seasonDone()) {
       const obj = Career.objective();
       left.appendChild(head("THIS ROUND"));
@@ -775,33 +792,15 @@ function create(G) {
       left.appendChild(cap);
     }
 
-    if (c.flavour !== "myteam") {
-      left.appendChild(head("WHO WOULD SIGN YOU"));
-      const mv = Math.round(Career.marketValue(Career.driverStandings()));
-      const ladder = el("div", "cr-card");
-      ladder.appendChild(row("Your market value", mv + " / 100"));
-      // One row per tier, best first, so the climb reads top-down.
-      const TIERS = [[0, "Front runners"], [1, "Title contenders"],
-                     [2, "Upper midfield"], [3, "Midfield"], [4, "The back"]];
-      for (const [tier, label] of TIERS) {
-        const bar = Career.offerBar(tier);
-        const openSeat = mv >= bar;
-        const r = el("div", "cr-ladder" + (openSeat ? " open" : ""));
-        const names = Teams.LIST.filter((t) => !t.custom && t.tier === tier)
-          .map((t) => t.short || t.name).join(" · ");
-        r.append(
-          el("span", "cr-ladder-k", label),
-          el("span", "cr-ladder-teams", names),
-          el("span", "cr-ladder-v", openSeat ? "OPEN" : "needs " + bar));
-        ladder.appendChild(r);
-      }
-      left.appendChild(ladder);
-    }
-
-    left.appendChild(head("EXTRA FUNDS"));
-    const cheat = el("div", "cr-card");
+    // EXTRA FUNDS is a practice cheat, not a season decision — native
+    // <details> keeps #cr-grant / #cr-freemoney in the tree (career.spec
+    // clicks them) without another always-open card on the left. The
+    // summary reuses .sel-label so it reads as the same heading it replaced.
+    const funds = el("details", "cr-card");
+    funds.id = "cr-funds";
+    funds.appendChild(el("summary", "sel-label", "EXTRA FUNDS"));
     const unlimited = Career.freeMoney();
-    cheat.appendChild(el("div", "cg-p",
+    funds.appendChild(el("div", "cg-p",
       "Off by default. Money stops being the constraint; the cap on what you may "
       + "fit at once does not move, so the car is still a choice."));
     const cheatRow = el("div", "cr-cheats");
@@ -822,8 +821,8 @@ function create(G) {
       build();
     };
     cheatRow.append(grantBtn, freeBtn);
-    cheat.appendChild(cheatRow);
-    left.appendChild(cheat);
+    funds.appendChild(cheatRow);
+    left.appendChild(funds);
 
     const guideBtn = el("button", "cr-card cr-record");
     guideBtn.id = "cr-guide";
@@ -885,15 +884,6 @@ function create(G) {
       right.appendChild(el("div", "cr-note", "All " + st.rounds + " rounds are done. " +
         "Close out the year to see where you finished."));
     } else {
-      const t = Tracks.SEASON[c.season.round];
-      right.appendChild(head("NEXT RACE"));
-      const nr = el("div", "cr-card cr-nextrace");
-      nr.append(
-        el("div", "cr-nr-round", "ROUND " + (c.season.round + 1)),
-        el("div", "cr-nr-name", t ? t.name : "—"),
-        el("div", "cr-nr-country", t && t.country ? t.country : ""));
-      right.appendChild(nr);
-
       const upcoming = [];
       for (let i = c.season.round + 1; i < Math.min(c.season.round + 5, Tracks.SEASON.length); i++)
         upcoming.push({ n: i + 1, t: Tracks.SEASON[i] });
@@ -924,6 +914,32 @@ function create(G) {
           el("span", "res-pts", pts + " pts"));
         right.appendChild(r);
       });
+    }
+
+    // Market ladder sits with the championship, not under the car — it is
+    // "who talks to you this winter", not a left-column economy card.
+    if (c.flavour !== "myteam") {
+      right.appendChild(head("WHO WOULD SIGN YOU"));
+      const mv = Math.round(Career.marketValue(Career.driverStandings()));
+      const ladder = el("div", "cr-card");
+      ladder.id = "cr-ladder";
+      ladder.appendChild(row("Your market value", mv + " / 100"));
+      // One row per tier, best first, so the climb reads top-down.
+      const TIERS = [[0, "Front runners"], [1, "Title contenders"],
+                     [2, "Upper midfield"], [3, "Midfield"], [4, "The back"]];
+      for (const [tier, label] of TIERS) {
+        const bar = Career.offerBar(tier);
+        const openSeat = mv >= bar;
+        const r = el("div", "cr-ladder" + (openSeat ? " open" : ""));
+        const names = Teams.LIST.filter((t) => !t.custom && t.tier === tier)
+          .map((t) => t.short || t.name).join(" · ");
+        r.append(
+          el("span", "cr-ladder-k", label),
+          el("span", "cr-ladder-teams", names),
+          el("span", "cr-ladder-v", openSeat ? "OPEN" : "needs " + bar));
+        ladder.appendChild(r);
+      }
+      right.appendChild(ladder);
     }
 
     $("cr-go").textContent = st.hire ? "SIGN A DRIVER"

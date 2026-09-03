@@ -403,6 +403,9 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    A slot on the primitive, not a fourth patch in carsetup.css: the same defect
    ("the action bar steals a row from the list") has already been found three
    times in three files, which is why .pane-pair exists at all.
+   #select and #season-setup also opt in: BACK + YOUR CAR + NEXT (and
+   BACK + APPLY) are three/two 110px buttons that wrap inside the ~50% side
+   column. Career keeps the default — a full-width foot clips UPCOMING.
    Specificity is (0,4,0) against the primitive's (0,3,0), so it wins on its own
    — no id, no !important. .pair-main stops spanning into row 3 because in this
    shape the foot is underneath it too. */
@@ -599,7 +602,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 .res-row.p2 { color: var(--silver); background: color-mix(in srgb, var(--silver) 7%, transparent); border-left: 3px solid var(--silver); padding-left: 5px; }
 .res-row.p3 { color: var(--bronze); background: color-mix(in srgb, var(--bronze) 7%, transparent); border-left: 3px solid var(--bronze); padding-left: 5px; }
 .res-row.p1 .res-pos, .res-row.p2 .res-pos, .res-row.p3 .res-pos { color: inherit; font-weight: 700; }
-.res-pos { width: 26px; text-align: right; color: var(--dim); }
+.res-pos { width: 26px; text-align: right; color: var(--dim); font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
 .res-swatch { width: 4px; height: 20px; border-radius: var(--r-xs); flex-shrink: 0; }
 /* min-width: 0 + ellipsis: a 22-char single-token MY TEAM name (the maxlength
    the customize form allows) cannot line-break, and a flex item's default
@@ -607,7 +610,16 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    column past the sheet edge, where .sheet's overflow: hidden clipped it
    silently. The compact quali/history rules already wrap; this is the base. */
 .res-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.res-pts { width: 62px; text-align: right; white-space: nowrap; }
+.res-pts { width: 62px; text-align: right; white-space: nowrap; font-family: var(--font-hud); font-variant-numeric: tabular-nums; }
+/* RESULTS SETTLE. The classification lands row by row (18 ms apart, capped at
+   the 12th row) instead of appearing; results-sheet.js writes --i per row.
+   Scoped to the results table only — #ch-body / #q-body / #standings-body
+   reuse .res-row and stay instant. Inside the no-preference query so the
+   `both` fill can never hold a row invisible for a reduced-motion reader. */
+@media (prefers-reduced-motion: no-preference) {
+  #results-table .res-row { animation: row-in 0.22s cubic-bezier(0.2, 0.7, 0.3, 1) calc(min(var(--i, 0), 12) * 18ms) both; }
+}
+@keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
 
 /* ---------- section label ---------- */
 .sel-label {

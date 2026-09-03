@@ -5,6 +5,7 @@ const GameAudio = (function () {
   let ctx = null;
   let master = null;
   let sfxBus = null;
+  let limiter = null;              // DynamicsCompressor between master and the destination
   // 0..1 mixer levels, restored by the caller from storage on boot.
   let sfxVol = 1;
   let sfxEnabled = true;      // the SOUND EFFECTS switch — music is unaffected
@@ -15,6 +16,7 @@ const GameAudio = (function () {
   // Engine voice (persistent while racing)
   let engA = null, engB = null, engC = null;     // saw, saw, square (synth fallback)
   let engFilter = null, engGain = null;
+  let limOsc = null, limGain = null;               // rev-limiter gate (audio-thread)
   let whineOsc = null, whineGain = null;          // turbo whine
   let harvSrc = null, harvFilter = null, harvGain = null; // MGU-K harvest whirr
   let lfo = null, lfoG = null;                    // offroad pitch wobble (8 Hz)
@@ -158,7 +160,15 @@ const GameAudio = (function () {
     ctx = new AC();
     master = ctx.createGain();
     master.gain.value = isEnabled ? 0.8 : 0;
-    master.connect(ctx.destination);
+    // MASTER LIMITER. Engine + wind + skid + rain + thunder + music summed
+    // straight into the destination and clipped a phone speaker whenever
+    // thunder landed over a full-throttle straight. A brick-wall-ish
+    // compressor (fast attack, high ratio) keeps the peaks legal so the
+    // whole mix can sit higher; the WIDE/NIGHT presets below only move it.
+    limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -10; limiter.knee.value = 6; limiter.ratio.value = 12;
+    limiter.attack.value = 0.003; limiter.release.value = 0.15;
+    master.connect(limiter).connect(ctx.destination);
     sfxBus = ctx.createGain();
     sfxBus.gain.value = sfxEnabled ? sfxVol : 0;
     sfxBus.connect(master);
@@ -250,6 +260,7 @@ const GameAudio = (function () {
     ctx = null;
     master = null;
     sfxBus = null;
+    limiter = null;
     musicGain = null;
     currentUrl = null;
     rainStopping = false;
@@ -380,6 +391,11 @@ const GameAudio = (function () {
     // the lowpass and the gain when the voice asks for one.
     engFilter = ctx.createBiquadFilter();
     engGain = ctx.createGain();
+    // Rev-limiter gate (see setEngine): a 13 Hz square into engGain.gain.
+    limOsc = ctx.createOscillator(); limOsc.type = "square"; limOsc.frequency.value = 13;
+    limGain = ctx.createGain(); limGain.gain.value = 0;
+    limOsc.connect(limGain).connect(engGain.gain);
+    limOsc.start();
     engFilter.type = "lowpass";
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
@@ -534,6 +550,7 @@ const GameAudio = (function () {
   function stopEngine() {
     if (!engineOn) return;
     const t0 = now();
+    if (musicGain) musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL, t0, 0.3);   // release the engine duck
     engGain.gain.cancelScheduledValues(t0);
     engGain.gain.setTargetAtTime(0, t0, 0.06);
     whineGain.gain.setTargetAtTime(0, t0, 0.06);
@@ -550,6 +567,8 @@ const GameAudio = (function () {
       engA.stop(t0 + 0.35); engB.stop(t0 + 0.35); engC.stop(t0 + 0.35);
     }
     engSrcIdle = engSrcAcc = engGainIdle = engGainAcc = null;
+    if (limGain) limGain.gain.setTargetAtTime(0, t0, 0.02);
+    if (limOsc) { limOsc.stop(t0 + 0.35); limOsc = null; limGain = null; }
     whineOsc.stop(t0 + 0.35);
     harvSrc.stop(t0 + 0.35);
     ersOsc.stop(t0 + 0.35);
@@ -625,6 +644,11 @@ const GameAudio = (function () {
       // in rev and the gear ordering is unchanged (same trim on both sides).
       const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul * voice.rateTrim;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
+      // NOT a crossfade to the second recording: measured 2026-09-03 with
+      // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load read
+      // DARKER (centroid 1489 -> 1389 Hz at the same rev), the same defect
+      // that got the rev-driven fade removed. Load is expressed on the one
+      // voice instead — see loadLift below, which the check pins.
       // Single coherent voice: run only the steady idle loop, pitched. Crossfading
       // in the second (different) recording made the output incoherent — its
       // brightness FELL as revs rose (measured via the audio test) instead of
@@ -656,16 +680,32 @@ const GameAudio = (function () {
     const slipLoad  = slip01 * 0.12;          // up to +12% filter open under slide
     const brakeLoad = brakeFrac * 0.08;        // up to +8% under hard braking
     const kerbLoad  = onKerb ? 0.04 : 0;      // small gain bump over a kerb
+    // LOAD: longitudinal acceleration (ph.ax; ~12 m/s² is a full-throttle
+    // launch) opens the lowpass and lifts the level, so a car PULLING reads
+    // brighter and fuller than one coasting at the same rev. Zero at ax <= 0,
+    // which is every rev sweep the audio check runs, so the pitch and
+    // centroid-vs-rev pins are untouched; the check's coast-vs-pull pair
+    // asserts the brightening.
+    const loadLift  = clamp01((ph.ax || 0) / 12);
 
     const cut = (usingSamples
       ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500 + slipLoad * 2000 + brakeLoad * 1200)
       : Math.min(7200,  600  + s * 4200 + rev * 700  + b * 1400 + slipLoad * 1000 + brakeLoad * 600))
-      * voice.cutTrim;
+      * voice.cutTrim * (1 + 0.22 * loadLift);
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
-    const lvl = usingSamples
+    const lvl = (usingSamples
       ? (0.3 + s * 0.3 + rev * 0.08 + b * 0.08 + (offroad ? 0.03 : 0) + slipLoad * 0.8 + kerbLoad)
-      : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0) + slipLoad * 0.2 + kerbLoad * 0.3);
-    engGain.gain.setTargetAtTime(lvl * (1 - 0.55 * shiftDuck), t, 0.03);
+      : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0) + slipLoad * 0.2 + kerbLoad * 0.3))
+      * (1 + 0.08 * loadLift);
+    // REV LIMITER. Above 98.5% the ignition cut chops the note at ~13 Hz —
+    // the loudest "shift now" cue in F1 and functional feedback, not
+    // decoration. limOsc feeds engGain.gain through limDepth on the audio
+    // thread, so the gate costs no per-frame scheduling: base drops to
+    // lvl·0.55 and the square wave swings it 0.10–1.00 × lvl.
+    const limOn = rev > 0.985 && s > 0.05;
+    const limDepth = limOn ? lvl * 0.45 : 0;
+    if (limGain) limGain.gain.setTargetAtTime(limDepth, t, 0.02);
+    engGain.gain.setTargetAtTime((lvl - limDepth) * (1 - 0.55 * shiftDuck), t, 0.03);
 
     // Turbo whine: in low gears (1-3) mechanical supercharger character — the
     // frequency climbs faster but levels off earlier than at high speed.
@@ -695,6 +735,10 @@ const GameAudio = (function () {
     // a full pack screams, a sagging one fades — and below 20% the pitch drops
     // ~12% so the driver HEARS the pack die before the HUD bar empties. The
     // fitted ERS part's deploy bias (ersDeploy 0..1) adds ±20% character.
+    // Music sits under the ENGINE, not the reverse: a flat musicVol·MUSIC_FULL
+    // competed with the note at redline. A gentle rev-keyed duck (−25% at
+    // full revs, 250 ms tau) lets the engine win exactly when it should.
+    if (musicGain) musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL * (1 - 0.25 * rev), t, 0.25);
     const deploy = clamp01(ph.deploy || 0);
     const energy = ph.energy != null ? clamp01(ph.energy) : 1;
     const low = energy < 0.2 ? energy / 0.2 : 1;
@@ -717,8 +761,9 @@ const GameAudio = (function () {
     const windOpen = s > 0.04 ? 1 : 0;
     const gust = harvLevel;   // already the smoothed decel signal, computed above
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
+    const tow = clamp01(ph.tow || 0);   // in a slipstream the air is already moving: less wind
     windGain.gain.setTargetAtTime(
-      (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * windOpen,
+      (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen,
       t, 0.10);
     windFilter.frequency.setTargetAtTime(450 + s * 1450 + rough * 260, t, 0.12);
 
@@ -914,9 +959,30 @@ const GameAudio = (function () {
     blip(220, "sawtooth", 0.12, 0.03, 0.4, 880);
   }
 
-  function collision() {
-    blip(150, "sine", 0.34, 0.005, 0.25, 45);
-    noise(0.26, 0.18, 900);
+  // Contact. `impact` 0..1 is what collideFx already computes (and used to
+  // throw away): a graze and a T1 shunt were byte-identical. `scrape` is the
+  // wall-follow case — a sustained band-passed grind instead of a thump.
+  function collision(impact, scrape) {
+    const k = clamp01(impact != null ? impact : 0.6);
+    if (scrape) { scrapeNoise(0.12 + 0.22 * k, 0.22 + 0.18 * k); return; }
+    blip(150, "sine", 0.34 * (0.4 + 0.6 * k), 0.005, 0.25, 45);
+    noise(0.26 * (0.4 + 0.6 * k), 0.18, 900);
+    if (k > 0.6) blip(70, "sine", 0.3 * (k - 0.6) / 0.4, 0.004, 0.3, 40);   // the bang under a real hit
+  }
+  // Band-passed noise burst — metal on barrier. Shares the noise pool.
+  function scrapeNoise(peak, decay) {
+    if (!sfxOk()) return;
+    const t0 = now();
+    const src = ctx.createBufferSource();
+    const off = bindNoise(src, decay + 0.15);
+    const f = ctx.createBiquadFilter();
+    f.type = "bandpass"; f.frequency.value = 2600; f.Q.value = 1.2;
+    const g = ctx.createGain();
+    env(g, t0, peak, 0.02, decay);
+    src.connect(f).connect(g).connect(sfxBus);
+    src.start(t0, off);
+    src.stop(t0 + decay + 0.1);
+    src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
   }
 
   function offtrack() {

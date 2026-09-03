@@ -1221,7 +1221,7 @@ h3.sel-label {
    same threshold. `data-pair="on"` is what puts both panes in a
    `minmax(0, 1fr)` row with `min-height: 0`, which is the bounded height a
    scroll region needs. */
-#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; --pair-compact: wide; }
+#ss-inner { --sheet-w: 1020px; --pair-at: 620px; --fit-at: 300px; --pair-compact: wide; --compact-at: 480px; }
 #ss-inner:not([data-shape="tall"]) { --fit-at: 220px; }
 /* Compact WIDE keeps the calendar + pool pair (same as #sel-inner). Compact
    TALL still stacks — `--pair-compact: wide` only holds the pair on a wide

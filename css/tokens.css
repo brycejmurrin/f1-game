@@ -484,6 +484,15 @@
      matching stop stays literal — a ramp's stops are chosen against each
      other, not from the palette (see css/hud.css). */
   --you: #aeea00;
+  /* TIMING COLOURS — the F1 timing-screen convention, as the 2026 tower
+     draws it: purple = session best (one holder, transfers), green =
+     personal best, yellow = slower than your own best; no reference yet
+     keeps the row's own ink. --faster/--slower are the HUD's existing
+     delta inks (ghost, gaps, data hub), named so every reader agrees. */
+  --faster: #a3e635;
+  --slower: #ff3b30;
+  --sec-best: #c084fc;
+  --sec-slow: #f6d200;
   /* The livery list's two-verb palette: DELETE is the warm danger family,
      EDIT the cool info family. Ink is the light readable tint, fill the
      saturated base the wash/hover/press states mix from — was 12 raw rgba()

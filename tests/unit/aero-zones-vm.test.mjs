@@ -173,10 +173,15 @@ test("X-mode buys X_VMAX_GAIN of vmax and gives up X_DF_LOSS of the aero load", 
   const zone = A.aeroZones().slice().sort((a, b) => b.len - a.len)[0];
   const read = (wantX) => {
     A.reset(zone.midFrac, 70, 0);
+    // The player tows like the AI now (game.js updateCar, human branch): a grid
+    // car launching inside the 34 m window would fold a slipstream gain into
+    // vmaxNow. Park the field half a lap away so the ratio is X-mode alone.
+    A.cars().forEach((c) => { if (!c.p) A.aiPlace(c.id, (zone.midFrac + 0.5) % 1, 0, 0); });
     A.setInput({ throttle: true });
     for (let i = 0; i < 60; i++) { A.aero(wantX); A.step(1 / 60, 1); }
     const ps = A.physState();
     A.clearInput();
+    assert.equal(ps.towing, 0, "no slipstream in the sample");
     return { aeroX: ps.aeroX, vmaxNow: ps.vmaxNow, aeroGrip: ps.aeroGrip,
              aeroDf: ps.aeroDf, xVmaxGain: ps.xVmaxGain, xDfLoss: ps.xDfLoss,
              onTrack: Math.abs(ps.x) < 8 };

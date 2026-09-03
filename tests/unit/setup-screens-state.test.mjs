@@ -189,6 +189,24 @@ test("career: driver-career team tiles carry the per-round salary unit their MY 
   for (const m of metas) assert.match(m, /\d+ cr \/ round$/, m);
 });
 
+test("career hub: next race and funds sit on the left; the market ladder is on the right", () => {
+  const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState() });
+  ui.openHub();
+  const left = $("cr-left"), right = $("cr-right");
+  assert.equal($("cr-nextrace").parentNode, left, "NEXT RACE card is the left-column action");
+  assert.equal($("cr-nextrace").querySelector(".cr-nr-round").textContent, "ROUND 3");
+  assert.ok($("cr-nextrace").querySelector(".cr-nr-name").textContent);
+  assert.equal($("cr-funds").tagName, "DETAILS");
+  assert.equal($("cr-funds").parentNode, left);
+  assert.ok(left.contains($("cr-grant")), "#cr-grant stays in the tree inside the disclosure");
+  assert.ok(left.contains($("cr-freemoney")));
+  assert.equal($("cr-guide").parentNode, left);
+  assert.equal($("cr-ladder").parentNode, right, "WHO WOULD SIGN YOU sits with the championship");
+  assert.ok(!left.contains($("cr-ladder")));
+  assert.ok(right.querySelectorAll(".season-upcoming-row").length, "UPCOMING list stays on the right");
+  assert.equal(left.contains(right.querySelector(".season-upcoming-row") || { parentNode: null }), false);
+});
+
 test("career hub: THE CAR's Fitted row groups thousands like the garage readout", () => {
   const { ui, $ } = loadCareerUi({ career: hubCareer(), state: hubState(), fitted: 1000, budget: 1170 });
   ui.openHub();
