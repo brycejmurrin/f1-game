@@ -440,9 +440,40 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
-    "apex26.wgxCapture", "apex26.tlxAutoGL",
+    "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
   ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
+
+  // MECHANISM, not just the frozen copy: every apex26.* latch a BACKEND writes
+  // must be resettable. The deepEqual above catches someone editing the list;
+  // it cannot catch someone adding a setItem in js/render/ and never touching
+  // renderer-picker.js — which is how apex26.wgxHoldPresent shipped able to
+  // survive RESET RENDERER and keep a tab skipping the soft-present copy+map
+  // for good. Read-only pins (debug switches the game never writes) are not
+  // latches and stay out.
+  const READ_ONLY_PINS = new Set([
+    "apex26.gfxWgxAllowSoftware", "apex26.glErrDrain", "apex26.instCellCache",
+    "apex26.forceMobileTier", "apex26.tlxForceHw", "apex26.tlxForceBatches",
+    "apex26.tlxArrayNearest", "apex26.tlxMirrorSweep", "apex26.tlxChunkRelease",
+    "apex26.tlxMobile", "apex26.gfxWgxLite", "apex26.gfxHigh", "apex26.matTexMix",
+  ]);
+  const resettable = new Set([...G.RENDERER_LS_KEYS, ...G.RENDERER_SS_KEYS]);
+  const written = new Set();
+  const renderDir = path.join(ROOT, "js/render");
+  const stack = [renderDir];
+  while (stack.length) {
+    for (const e of fs.readdirSync(stack.pop(), { withFileTypes: true })) {
+      const abs = path.join(e.parentPath || e.path, e.name);
+      if (e.isDirectory()) { stack.push(abs); continue; }
+      if (!e.name.endsWith(".js")) continue;
+      for (const m of fs.readFileSync(abs, "utf8").matchAll(/(?:local|session)Storage\.setItem\(\s*"(apex26\.[A-Za-z0-9_]+)"/g)) {
+        written.add(m[1]);
+      }
+    }
+  }
+  const unresettable = [...written].filter((k) => !resettable.has(k) && !READ_ONLY_PINS.has(k)).sort();
+  assert.deepEqual(unresettable, [],
+    "these backend-written latches survive RESET RENDERER — add them to RENDERER_LS_KEYS/SS_KEYS (renderer-picker.js) or, if they are read-only debug pins, to READ_ONLY_PINS here");
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
   assert.equal(ls.getItem("apex26.gfxBackend"), null);

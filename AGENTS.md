@@ -187,8 +187,9 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - `js/data/` — F1API + DataHub tabs; `js/net/` — 2-4 player WebRTC, no backend
 - `css/` — tokens + component files; `docs/COMPONENTS.md` is test-asserted;
   class-count + body-node ratchets apply
-- `index.html` — shell: script tags, all static DOM, per-file `?v=<sha256>`
-  plus `<meta name="apex-build">`; `sw.js` precache derives from the shell's tags
+- `index.html` — shell: script tags, all static DOM, per-file `?v=dev` (the
+  deploy stamps the content hashes — §Critical conventions) plus
+  `<meta name="apex-build">`; `sw.js` precache derives from the shell's tags
 - `types/game-ctx.d.ts` — the `G` façade contract, held by `tools/check-gctx.mjs`
 - `.claude/skills/` — the workflow references (`.claude/skills/README.md`);
   `.claude/agents/` — scoped subagent definitions (verify-agent, track-surveyor,
@@ -298,9 +299,16 @@ Skills / MCP / wrap: `docs/AGENT-SURFACE.md`. Lighting/sky:
 `docs/TESTING.md`. WGX/WGSL (`js/render/webgpu/`):
 `docs/research/WEBGPU-PARITY.md`.
 
-WGSL has two rules a mock device cannot enforce — `sampleCount` is 1 or 4
-ONLY, and `dpdx`/`dpdy`/`fwidth` only under uniform control flow — and breaking
-either makes WGX refuse silently and fall back to GLX: `docs/research/WEBGPU-PARITY.md` §5.
+WGSL has FIVE rules a mock device cannot enforce, and three of them shipped a
+defect on the owner's iPhone this week: `sampleCount` is 1 or 4 ONLY;
+`dpdx`/`dpdy`/`fwidth` only under uniform control flow (WebKit ERRORS where
+Dawn only warns); a TSL placeholder texture must carry the sampling state of
+the texture that will replace it; `device.onuncapturederror = fn` is DEAF on
+iOS/Safari 26.0–26.5 (register `addEventListener("uncapturederror")` first);
+and WebKit caps module-scope `var<private>` at 8,192 bytes per module (three
+r185 declares every node variable that way — see the vendor patch). Breaking
+any of them makes the backend refuse SILENTLY and fall back:
+`docs/research/WEBGPU-PARITY.md` §5a.
 
 ## Git branch & deploy
 

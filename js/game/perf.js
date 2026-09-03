@@ -430,7 +430,7 @@ function tick(dtMs) {
     if (stepped) {
       _pendingVerify = { kind: "scale", prev: cur, ema: _frameEMA };
       _govCool = 30; _downHold = 600;
-    } else if (Math.max(_perfTier, _floorTier()) < 4) {   // scale lever exhausted — shed a feature
+    } else if (_perfTier < 4) {   // scale lever exhausted — shed a feature
       // Step from the EFFECTIVE tier, not from _perfTier alone. A rung at or
       // below the floor (crash sentinel, or the player's GRAPHICS preset) is
       // already shed, so incrementing onto it changes nothing the EMA can see:
@@ -440,8 +440,21 @@ function tick(dtMs) {
       // distinguish, because the step genuinely did not help and the reason
       // (redundant, not mis-targeted) is invisible to a frame-time delta.
       // Skipping to floor+1 guarantees every step is one that can be felt.
+      //
+      // THE GUARD READS _perfTier, NOT THE EFFECTIVE TIER, and that is the
+      // whole point. Gating on `Math.max(_perfTier, _floorTier()) < 4` made
+      // GRAPHICS: LOW (_userTier 4, so _floorTier() 4) false on its very first
+      // evaluation: _perfTier and _autoShed could never leave 0, so autoTier()
+      // and autoShed() — which exclude the user floor ON PURPOSE — returned 0
+      // for the whole session and bloom, SSAO, god-rays, contact shadows and
+      // per-chunk lamps were UNSHEDDABLE on the preset that exists to make the
+      // game cheap. That is verbatim the failure the autoTier() comment below
+      // says it fixed ("_perfTier is the effective tier and can always climb to
+      // 4"); the accessor was corrected and the producer that feeds it was not.
+      // Stepping still starts from the floor, so LOW takes one felt 0 -> 4 step
+      // and every other preset behaves exactly as before.
       _pendingVerify = { kind: "tier", prev: _perfTier, shed: _autoShed, ema: _frameEMA };
-      _perfTier = Math.max(_perfTier, _floorTier()) + 1; _autoShed++; _govCool = 90; _downHold = 600;
+      _perfTier = Math.min(4, Math.max(_perfTier, _floorTier()) + 1); _autoShed++; _govCool = 90; _downHold = 600;
       // A shed rung changes what the frame is bound BY, so let the scale lever
       // prove itself again from the new baseline rather than staying latched
       // off for the session on one old measurement.

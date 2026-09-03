@@ -2019,6 +2019,29 @@ test("WGX cullInstances keys on the surviving cell set, and updateInstances clea
 });
 
 
+test("a capture NEVER reconfigures the swapchain inside an encoded frame", async () => {
+  // _capEncode runs after the whole frame is recorded and one statement before
+  // device.queue.submit(). ctx.configure() replaces the drawing buffer and
+  // EXPIRES the current texture, so reconfiguring there submitted a command
+  // buffer referencing a destroyed texture: a dropped frame plus a phantom
+  // GPU error in the GOV row and COPY DIAG — from inside the screenshot path,
+  // poisoning the one instrument a phone has. The reconfigure belongs at the
+  // top of begin(), before any view is acquired.
+  const src = await readFile(new URL("../../js/render/webgpu/wgx.js", import.meta.url), "utf8");
+  const capFn = src.slice(src.indexOf("function _capEncode()"), src.indexOf("function _capFinish"));
+  assert.ok(capFn.length > 200, "could not slice _capEncode");
+  assert.doesNotMatch(capFn, /_configureCanvas\(\)/,
+    "_capEncode must not reconfigure — it runs after the frame is encoded");
+  assert.match(capFn, /_wantCopyable = true; return null;/,
+    "_capEncode asks begin() for a copyable swapchain and skips this frame");
+  const beginFn = src.slice(src.indexOf("function begin(frame)"), src.indexOf("function begin(frame)") + 1400);
+  assert.match(beginFn, /_wantCopyable && !_swapCopyable && !_softGpu[\s\S]{0,140}_configureCanvas\(\)/,
+    "begin() honours the pending capture before anything is encoded");
+  const cfgAt = beginFn.indexOf("_configureCanvas()");
+  const encAt = beginFn.indexOf("createCommandEncoder");
+  assert.ok(cfgAt >= 0 && encAt > cfgAt, "the reconfigure must precede this frame's encoder");
+});
+
 test("WGX shadow cull packs into the batch's OWN buffer and leaves the camera pack alone", async () => {
   // Bug hunt 2026-09-02: the shadow encoder rides the FRAME submit while the
   // camera cull's writeBuffer is queue-ordered before it, so a shared instBuf

@@ -225,8 +225,15 @@ const WGX = (function () {
   // — WebGPU cannot do 2×, so the savings mirror GLX capping HIGH at 2× MSAA.
   // Missing key defaults to 4× (fresh install / harness) until gfx-quality runs.
   // `let` (not const): soft-adapter escape hatch may drop desktop 4 → 1.
+  // Same mobile-only-signal defect as GLX (js/render/glx/post.js): gfxHigh is
+  // never written on a desktop, so this read never saw "0" and every desktop
+  // preset shipped 4x. Read the preset GfxQuality actually stores.
   let _wgxMsaa4 = true;
-  try { if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false; } catch (_) { /* blocked storage: default 4× MSAA */ }
+  try {
+    const _p = localStorage.getItem("apex26.gfxPreset");
+    if (_p != null) _wgxMsaa4 = _p === "ultra";
+    else if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false;
+  } catch (_) { /* blocked storage: default 4× MSAA */ }
   let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
   // Every path that makes create() return null records WHY, both on the console
@@ -1943,6 +1950,10 @@ const WGX = (function () {
     }
 
     let _swapCopyable = _capPref != null || (!_outProbeOff && !WGX_LITE);
+    // Set by _capEncode when a capture needs COPY_SRC and the swapchain has
+    // not got it; consumed at the TOP of begin(), the only point in the frame
+    // where reconfiguring cannot expire a texture already recorded against.
+    let _wantCopyable = false;
     function _configureCanvas() {
       if (!ctx || !device) return null;
       try {
@@ -3525,6 +3536,13 @@ const WGX = (function () {
       _presentCount++;   // frame counter for the GPU-error cap (errors are attributed to the frame they arrive in)
       if (_lost) return false;
       try {
+        // Before ANY of this frame's work: a pending capture that needs a
+        // copyable swapchain gets its reconfigure here, where nothing has been
+        // encoded yet and no view has been acquired (present() acquires it).
+        if (_wantCopyable && !_swapCopyable && !_softGpu) {
+          _wantCopyable = false; _swapCopyable = true;
+          _configureCanvas();
+        }
         lastFrame = frame || null;
         if (width < 1) resize();
         ensureTargets();
@@ -4213,11 +4231,18 @@ const WGX = (function () {
         // A LITE swapchain is configured without COPY_SRC (see
         // _configureCanvas). SAVE SCREENSHOT on such a device reconfigures
         // once, copyable, and reads the NEXT frame; this one is skipped.
-        if (!_softGpu && !_swapCopyable) {
-          _swapCopyable = true;
-          _configureCanvas();
-          return null;
-        }
+        //
+        // THE RECONFIGURE CANNOT HAPPEN HERE. This runs AFTER the whole frame
+        // is encoded — the lit pass, post and tonemap have already recorded
+        // against a view of the CURRENT swapchain texture — and one statement
+        // before device.queue.submit(). ctx.configure() replaces the drawing
+        // buffer and EXPIRES that texture, so the submit that follows
+        // references a destroyed texture: a validation error, a dropped
+        // frame, and (since the uncapturederror listener landed) a phantom
+        // `err 1` in the GOV row and COPY DIAG — poisoning the one instrument
+        // a phone has, from inside the screenshot path. Ask begin() instead;
+        // it reconfigures before the next frame acquires its view.
+        if (!_softGpu && !_swapCopyable) { _wantCopyable = true; return null; }
         const capTex = _softGpu ? softPresentTex : ctx.getCurrentTexture();
         if (!capTex) throw new Error("no frame texture");
         const w = capTex.width, h = capTex.height;

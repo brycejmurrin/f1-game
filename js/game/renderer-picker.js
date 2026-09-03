@@ -154,7 +154,12 @@ const RENDERER_LS_KEYS = [
   "apex26.tlxForceGL", "apex26.tlxViz",
   "apex26.wgxCapture",
 ];
-const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL"];
+// wgxHoldPresent is written by WGX itself (holdSoftPresent), so a tab that
+// took the hold and never released it keeps skipping the soft-present
+// copy+map on the next boot with no way back — RESET RENDERER is that way
+// back, and it has to know the key exists. Every latch a backend WRITES
+// belongs in one of these two lists.
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent"];
 
 function clearRendererStorage() {
   const removed = [];
