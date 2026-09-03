@@ -11,6 +11,25 @@ generated block, a partial-file split, a rewritten assertion — each with
 file:line evidence read from the tree at 66b6618 (2026-09-03), plus the tests
 that go RED the moment the move lands and what fixes each.
 
+## Before you run it: revalidate the map
+
+`tools/moves/` is excluded from the mover's own path sweep, and that exclusion
+is right for an APPLIED plan — its `from` keys are historical literals, and a
+sweep that rewrote them turned a just-landed batch into old===new identity
+entries (2026-09-03). It is wrong for a PENDING one: this map's `from` keys are
+live paths, so any move that lands first leaves them dangling. Phase 4's tools
+move did exactly that to 11 of the 48 entries here.
+
+So `validate()` is the first thing to run, not the move:
+
+```sh
+node -e 'import("./tools/gen/move-tree.mjs").then(m=>console.log(m.validate(process.cwd(), m.loadMoves("tools/moves/spike-backends.json"))))'
+```
+
+An empty array means the map still describes the tree. A `missing:` line means
+a prior phase moved that file — retarget the key through that phase's own map
+before going further.
+
 ## What the plan paragraph got wrong
 
 - **`tools/gfx/ssr-probe.mjs`** is not one of "the nine WGX/GPU tools." It has no
