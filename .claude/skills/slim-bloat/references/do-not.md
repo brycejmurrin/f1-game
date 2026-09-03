@@ -12,7 +12,7 @@ reaches for these first. They are not bloat.
 | Extract garage preview "because it's big" | ~15 new `G` accessors — moves coupling, does not remove it. Sort by **boundary crossings**, not lines. | same §, 2026-08 table |
 | IIFE → `import`/`export` | No ES modules (vendored three.js only). | `tests/unit/global-registry.test.mjs` |
 | Delete a bug-explaining comment | The one growth the size ratchet tolerates (`codeLines` ignores it). The comment **is** the test the suite cannot write. | `docs/notes/CEILING-HISTORY.md` header |
-| Delete a `catch` without the why-comment | Silent-catch ratchet: empty catch needs the sentence. | `tests/unit/silent-catch.test.mjs` |
+| Delete a `catch` without the why-comment | `bareCatches` ratchet: an empty catch needs the sentence. | `tests/data/ratchets.json`, `tools/check/tree-counts.mjs` |
 | Restore `other-file.js:412` citations | Ceiling is 0. Cite the **symbol**. | `tests/unit/comment-citations.test.mjs` |
 | Raise a ceiling so the extract "fits" | Ratchet exists because extraction happened once and the file grew back. | `ARCHITECTURE.md`; ratchets slack rule |
 | Copy constants out instead of moving them | aerozones leftover; settings then `ReferenceError`. `grep` the old names. | `ARCHITECTURE.md` § leftovers |

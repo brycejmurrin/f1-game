@@ -1391,3 +1391,186 @@ live in `ratchets.json`.
   contrast, twilight wash, moon silver. The largest remaining WGX visual gap
   (overcast read flatter and brighter than GLX/TLX); a parity port is paid for
   in lines, not extracted.
+
+## Tree-wide ratchets (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-03)
+
+These four numbers lived as `const CEILING = N` beside their assertions in
+three unit files — `css-class-ratchet.test.mjs` and `silent-catch.test.mjs`
+(both DELETED here, their whole content being those ratchets) and the surviving
+`tests/unit/wait-polling.test.mjs`, which keeps its lint-behaviour tests — each
+with its own slack rule and its own copy of the walk. The measurement moved to
+`tools/check/tree-counts.mjs`, the number to `ratchets.json`, and the reason for
+every raise and lowering is kept below.
+
+**Every one of the four rules was TIGHTER than the shared `max(60, 4%)`
+default.** That is why a ratchet entry may declare its own `slack`, and why a
+slack looser than the default is refused outright: folding five mechanisms into
+one must not quietly widen any of them.
+
+| metric | ceiling | slack it kept | was |
+|---|---|---|---|
+| `cssClasses` | 534 | 5 | `CLASS_CEILING - classes > 5` |
+| `shellNodes` | 1064 | 25 | `NODE_CEILING - nodes > 25` |
+| `bareCatches` | 173 | 15 | `BARE_CEILING - total <= 15` |
+| `waitNoPolling` | 57 | 39 | `n > CEILING - 40` |
+
+### `cssClasses` — distinct class tokens across `css/`
+
+```
+LOWER THESE WHEN YOU CONSOLIDATE. Raising one is allowed — this is a ratchet,
+not a cap on doing work — but it must be a deliberate edit here with the
+reason in the commit message, which is the entire mechanism.
+
+543 was the count at install time (STRUCTURE-REDECISION-2026-08 §Q5), and is
+the figure SKILL.md rule 8 quotes as "the whole finding".
+541 after the mb-prefix family collapsed onto #mb-career / #mb-career-sub.
+538 after the garage preview bar's two chip variants became --vb-fs / --vb-pad
+on the buttons' own ids, and .cs-cam-lbl (a duplicate of an inherited value)
+went entirely.
+537 after .sel-section (one element, one declaration) became #sel-track-section.
+UI redesign: the one-off Last Race heading moved from a class to a stable ID.
+536 → 534: unused .ui-panel / .ui-kicker / .ui-value / .ui-muted
+placeholders (no html/js consumer) removed from css/menus.css.
+534 → 532: .menu-status-item / .menu-status-label left with the
+title-screen dashboard chrome.
+532 → 534: ScrollFade's sideways "more this way" edges (.sf-l / .sf-r),
+the horizontal twin of the existing .sf-t / .sf-b pair. No new host class.
+2026-08-27 round 12: 536 -> 533. The live tab's row-main class folded into
+the standings' identical .dh-cons-main (the wrap floor became a context
+override on the class board), buying real headroom instead of sitting as
+a duplicate recipe.
+2026-08-27 round 12 (second lowering): 533 -> 532. The camera panel's row
+class left the shell — its five rows are the panel's only direct div
+children, so the id scopes them without a class repeated five times.
+2026-08-28: 532 -> 533. +1 for .cs-liv-pal, the strip of already-used colours
+under each livery colour row. It cannot be a custom property on a context
+selector (SKILL.md rule 8's usual answer): this is a NEW flex container with
+its own wrap behaviour, not a variation of an existing box. The chips inside
+it deliberately reuse .cs-liv-ed-none rather than adding a second class.
+533 -> 534: body.rotate-ok, the RACE IN PORTRAIT opt-in. Reuses the
+existing rotate- family (rotate-inner/-icon/-help-open) so no new family.
+```
+
+### `shellNodes` — `index.html` tag occurrences, less `<script>`/`<link>`
+
+```
+1,133 at install time. Lighthouse warns at ~800 nodes and errors at ~1,400;
+SKILL.md rule 13's ruling (do not split the shell) rests on staying under
+that error band, so this ceiling is where the ruling's premise is kept true.
+Growth points named by STRUCTURE-REDECISION §Q1: #advanced (106 nodes),
+#vsfriend (95).
+1152 = the count MEASURED on the merged tree, not either lineage's arithmetic:
+the deploy branch and the season branch each raised this in parallel and both
+numbers are stale the moment they meet.
+1160 = category-based Settings navigation: tab buttons + panels.
+Still well below 1,400. The PERF tab / PerfTry script were removed
+when those switches baked ON; NODE_CEILING stays a max, not a target.
++3 2026-08-18: five How-to-Play landmark links and their labelled navigation
+replace the former undifferentiated long sheet without adding wrapper headings.
++8 2026-08-18: Adaptive Buttons OFF/ON in Advanced → BUTTON INPUT (h3 +
+label + opt-row + two buttons + help). Reuses existing classes.
++30 2026-08-18: How to Play CONTROLS grew a CONTROLLER row and accurate
+keyboard / phone / camera copy (key chips + the missing pad mapping).
+Still well under Lighthouse's ~1,400 error band.
++10 2026-08-18: title-screen #menu-status season chips (3 items).
++8 2026-08-18: Adaptive Buttons moved onto the simple sheet; BRAKE CUE
+slider + How-to-Play key chips + brake-cue.js script tag. Still under ~1400.
+−10 2026-08-18: #menu-status chips removed with the dashboard chrome.
++1 2026-08-19: <script> block for iOS double-tap zoom cancel (gesturestart/
+touchend handlers). Needed for Safari which ignores viewport maximum-scale.
++1 2026-08-19: four separate pm-metrics* buttons injected into DISPLAY panel.
++2 2026-08-26: #sel-map-btn (the display:contents button making CIRCUIT
+DETAIL keyboard-reachable) + #sel-detail-chip (the fallback door on tiny
+sheets where the canvas is display:none — hiding it used to make the whole
+screen unreachable).
++4 2026-08-26: #pm-hud-sample and its hud-box — the HUD SIZE slider's live
+sample; every real cluster is hidden while the settings sheet is open, so
+the slider had zero visible effect.
++1 2026-08-27: the js/render/shared/lamp-chunks.js script tag (new-file lockstep —
+the shared per-chunk lamp bake consumed by GLX and WGX).
++8 2026-08-27: mode sublines on the title 2x2 (RACE / TIME TRIAL / RACE A
+FRIEND / SEASON each gain a stack span + sub span answering "what is
+this?"), the round-10 judged ask. The label itself is an anonymous flex
+item — no third span. Hidden at compact density, so the measured 390px
+landscape clearance is untouched.
+1227 on the deploy union (both lineages' adds; re-measured per the
+deploy-merge rule).
+1228 -> 1229: one <script> tag for js/perf/gfx-debug-overlay.js, the ?gfxdebug=1
+overlay. A node is the honest price of the only channel a player with no
+console has for telling us what their GPU did.
+1234 -> 1238: +4 for the MY TEAM customizer's LOGO OUTLINE row (label +
+colour input + NONE button + their row div). The outline stopped sharing a
+picker with the mark's second SHAPE — on Red Bull that one row was labelled
+SUN DISC and moved a rim, which is the report this raise answers — so it
+needs a row of its own in both editors. The GARAGE editor builds its rows
+from LiveryTex.markSlots at runtime and costs the shell nothing; this dialog
+is static markup, and two editors disagreeing about a paint slot is worse
+than four nodes.
+1238 -> 1239: the RACE IN PORTRAIT button in #rotate-device (PERF-FINDINGS
+5a) — one node, and the opt-in it carries is what makes the portrait touch
+dock reachable at all.
+1239 -> 1064 (2026-09-03): shellNodes() stopped counting <script>/<link> tags
+— they are a projection of tools/manifest.cjs written by gen-shell, not DOM
+the page renders, and counting them made every new js file a ratchet edit.
+1059 real body nodes at the switch; 5 of headroom.
+```
+
+### `bareCatches` — empty, uncommented `catch` blocks in `js/`
+
+```
+Silent failure is this codebase's most-repeated defect shape, and the register
+in docs/ARCHITECTURE-REVIEW.md says so in several places. The 2026-08 cleanup
+hit a live one: js/core/store.js swallowed a localStorage write failure while
+its cache went on answering reads, so on iOS Safari Private Browsing (quota
+ZERO) a whole career saved perfectly, read back correctly all session, and was
+gone on reload with nothing in the console.
+
+MEASURING IT PROPERLY CHANGED THE PICTURE. The register framed this as "469
+catch blocks against 59 Log call sites", which counts as swallowing every
+catch that converts an exception into a typed error return — and js/net/ does
+that deliberately and well (js/net/rendezvous.js turns nearly all of its
+catches into ERR("timeout"|"offline"|…) so the lobby can fall back rather than
+throw). The real numbers, by parsing each catch body:
+
+    344  catch blocks in js/          (2026-08 census — the ratchet below
+                                       holds the live bare-catch number)
+    151  do something with the error
+     26  are empty but carry a COMMENT saying why
+    167  are bare `catch (e) {}`
+
+So the honest target is the 167, not the 469, and the honest fix is not a mass
+rewrite — plenty of those are legitimate best-effort probes (feature
+detection, an optional API, a localStorage read that may be blocked).
+
+THE ESCAPE HATCH IS A COMMENT, on purpose. An empty catch with a comment
+explaining why passes. That is not a loophole: writing "ignored — the probe is
+allowed to fail on Safari" is the entire thing that was missing, and demanding
+a sentence is a far better filter than demanding a Log call nobody wants in a
+hot path. Add `Log` where a user would notice; add a comment where they would
+not; the ratchet stops the population growing either way.
+
+Run: node tools/check/ratchets.mjs   (metric `bareCatches`)
+
+
+The bare-catch population as of the pass that added this guard. LOWER it.
+Measured 2026-08-19: 173 bare blocks (ceiling was 167 but count had grown
+across several merges without being updated). Raised to the measured count;
+the target is still to drive this toward zero, not raise it further.
+```
+
+### `waitNoPolling` — a declared timeout that cannot fire
+
+```
+Measured 2026-08-18 after moving every unambiguous option object into argument
+three: 370 correctly-positioned timeouts still use rAF polling. LOWER this as
+call sites are fixed; raising it needs a reason, and "I added a new wait" is
+not one.
+370 -> 57 (2026-08-27): EVERY waitForFunction under tests/ now carries
+{ polling: 100 } — the rAF-starved timeouts were the recurring red class in
+every loaded run (dev-tools, new-hooks, camera-driving-hooks, the
+foundation specs, tiny). The 57 that remain are all tools/ CLIs, which
+never gate a suite; fix them as they are touched.
+Far enough below and the ratchet has stopped ratcheting — the same trap
+tools/ci/fixture-consumer-audit.mjs records, where a floor sat at 31 while real
+adoption was 54.
+```

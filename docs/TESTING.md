@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 189 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 187 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1174,14 +1174,12 @@ what it covers.
 | `ui-journey-race.test.mjs` | HUD `--hud-z` (never `--ui-scale`), compact HUD on `body[data-density]`, pause-hidden `#campicker`, `#pc-restore` |
 | `css-comments.test.mjs` | a CSS comment that ends early (or never opens) turns prose into a selector and DROPS the rule after it, silently — caught by measuring prelude length (`MAX_PRELUDE` 230; measured max 218 in `css/tuner.css`, the two live failures were 275 and 759) |
 | `css-tokens.test.mjs` | every custom property in `css/tokens.css` must have a consumer — an unread token is an invitation to use a value nobody has been maintaining |
-| `css-class-ratchet.test.mjs` | RATCHET on the distinct CSS class count across `css/` and on `index.html`'s DOM node count, both measured by the restructure-screens-css skill's own grep so the numbers line up with the 543 / 1,133 written into the decision records. Lower a ceiling when you consolidate onto a `--property` context; raising one is a deliberate edit with a reason in the commit |
 | `css-token-adoption.test.mjs` | the converse of `css-tokens`: a rule needing a size must READ a token, not write a literal. Ratchets two counts that may only fall — font-sizes below the `--fs-micro` floor (5) and raw px padding/gap/margin (323), plus raw colours (376 / 190 distinct) — plus the list of sheets that read no spacing token at all and so cannot respond to the density ladder |
 | `light-presets.test.mjs` | the 1,921 shipped lighting values must name real `TUNE_DEFS` ids — a renamed knob does not throw, the lookup just misses and the shipped look silently stops applying |
 | `light-store-copy.test.mjs` | the tuner's COPY ALL fan-out (`LightStore.copyToTracks`): which profiles a copy writes, what each target then resolves to in either mode, that storage stays sparse, and that undo is exact |
 | `light-grid.test.mjs` | every shipped `TUNE_DEFS` preset value lands exactly on its own slider's min+k*step grid — an off-grid value reads as a false player override |
 | `lighting-reapply.test.mjs` | every tuner knob consumed only inside `applyRaceSettings()` is listed in `APPLY_RACE_IDS`, or its slider silently does nothing until an unrelated TIME/WEATHER change |
 | `lighting-rebuild.test.mjs` | every tuner knob consumed only inside `buildTrackLights()` carries `rebuild:true`, or its slider is invisible until the next track load |
-| `silent-catch.test.mjs` | a RATCHET on bare `catch (e) {}` — silent failure is this repo's most-repeated defect shape; the escape hatch is a COMMENT saying why, which is the sentence that was always missing |
 | `hooks-documented.test.mjs` | every `__apex` hook must have a section in `docs/DEBUG-HOOKS.md` — a RATCHET over the 28 that already had none, so nothing NEW joins them |
 | `race-control.test.mjs` | the caution state machine in a VM — thresholds, the raise-fast/lower-slow hysteresis, the hard time caps, drop-on-disable, host vs guest, and the leader's-lap rule behind OVERTAKE |
 | `season-cal.test.mjs` | the SEASON calendar/format model in a VM — config normalisation, the calendar presets, and the TWO-GATE rule the whole design rests on: the calendar follows the player outside a career, but the FORMAT (distance, sprint, points table, qualifying) follows it ONLY in a season, so a one-off Grand Prix cannot inherit a season's sprint distance. Also the weekend stage machine: a sprint scores 8-7-6… without advancing the round, the Grand Prix closes it, and the two legs draw retirements on different keys |

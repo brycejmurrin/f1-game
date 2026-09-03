@@ -1539,7 +1539,7 @@ sabotage.
 
 §2i wrote the rule down and never swept for it. A read-only audit found three
 more live instances, all confirmed at source, all in `tools/` — which
-`tests/unit/silent-catch.test.mjs` has never walked (it is scoped to `js/`).
+the `bareCatches` ratchet has never walked (it is scoped to `js/`).
 
 ### `verify-change.mjs` returned `pass` for a diff no rule claimed
 

@@ -51,7 +51,7 @@ than behaviour:
 | `tests/unit/ratchets.test.mjs` + `tests/data/ratchets.json` | the game.js size ceilings (lines, code lines, `G` members, column-0 lets) — a ratchet, so extraction lowers them and regrowth fails |
 | `tests/unit/vstd-invariant.test.mjs` + `tools/check/vstd-lint.mjs` | no `.speed` compared against a numeric literal without a written reason (§3) |
 | `tests/unit/comment-citations.test.mjs` | a comment citing another file names a symbol that exists; ratchet on the cross-file-citation population |
-| `tests/unit/silent-catch.test.mjs` | ratchet on bare `catch {}` — the escape hatch is a comment saying why, not a log line |
+| `bareCatches` (`tests/data/ratchets.json`) | ratchet on bare `catch {}` — the escape hatch is a comment saying why, not a log line |
 
 Where one of these exists, the invariant has held; where the same class of
 invariant had only a comment, it has not. The archived journal is ~950 lines of

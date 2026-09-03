@@ -22,20 +22,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { lintSource, lintAll, count } from "../../tools/check/wait-polling-lint.mjs";
 
-// Measured 2026-08-18 after moving every unambiguous option object into argument
-// three: 370 correctly-positioned timeouts still use rAF polling. LOWER this as
-// call sites are fixed; raising it needs a reason, and "I added a new wait" is
-// not one.
-// 370 -> 57 (2026-08-27): EVERY waitForFunction under tests/ now carries
-// { polling: 100 } — the rAF-starved timeouts were the recurring red class in
-// every loaded run (dev-tools, new-hooks, camera-driving-hooks, the
-// foundation specs, tiny). The 57 that remain are all tools/ CLIs, which
-// never gate a suite; fix them as they are touched.
-const CEILING = 57;
-// Far enough below and the ratchet has stopped ratcheting — the same trap
-// tools/ci/fixture-consumer-audit.mjs records, where a floor sat at 31 while real
-// adoption was 54.
-const SLACK = 40;
+// The POPULATION ratchet on these sites is now `waitNoPolling` in
+// tests/data/ratchets.json (slack 39, the rule this file used); its history
+// is docs/notes/CEILING-HISTORY.md. What stays here is the LINT's behaviour:
+// what counts as a site, what does not, and that it still finds real ones.
 
 test("a declared timeout with no polling is flagged", () => {
   const { sites } = lintSource(
@@ -89,17 +79,6 @@ test("tests/manual is exempt, and timeout-probe MUST stay exempt", () => {
 test("every scanned file parses", () => {
   const bad = lintAll().filter((r) => r.parseError);
   assert.deepEqual(bad.map((b) => `${b.file}: ${b.parseError}`), []);
-});
-
-test("the population does not grow", () => {
-  const n = count();
-  assert.ok(n <= CEILING,
-    `${n} waitForFunction calls declare a timeout without polling, ceiling is ${CEILING}. ` +
-    "A declared timeout does not bound a wait on a rendering page — pass " +
-    "null, { polling: 100, timeout: N }. See docs/TESTING.md.");
-  assert.ok(n > CEILING - SLACK,
-    `only ${n} sites against a ceiling of ${CEILING} — lower the ceiling, or this ` +
-    "ratchet has stopped ratcheting");
 });
 
 test("the tool finds real sites — anti-vacuity", () => {

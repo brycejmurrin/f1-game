@@ -182,7 +182,7 @@ test("no workflow decides a gate by comparing a coerced measurement to zero", ()
 });
 
 test("the coerced-verdict ceiling has not been left far above the real count", () => {
-  // The other failure mode, copied from tests/unit/silent-catch.test.mjs: fix
+  // The other failure mode, copied from the bareCatches ratchet (tests/data/ratchets.json): fix
   // the last instance, never lower the ceiling, and the ratchet silently stops
   // ratcheting. Every tolerated entry must still be earning its slot.
   const slack = [];

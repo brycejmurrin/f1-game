@@ -91,7 +91,7 @@ buttons that all carry ids anyway, so those became `--vb-fs` / `--vb-pad` set on
 the ids. `.cs-cam-lbl` went with them — its single declaration duplicated the
 value `#cs-cam` already passed down by inheritance, so it could not change a
 pixel. Nothing in this document is asserted about a family's SIZE, which is
-exactly why the count needs `tests/unit/css-class-ratchet.test.mjs` as well:
+exactly why the count needs the `cssClasses` ratchet (`tests/data/ratchets.json`) as well:
 this table proves a family left, the ratchet proves the total came down.
 
 `sel-` shrank the same way and for the same reason: `.sel-section` set one
