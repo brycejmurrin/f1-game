@@ -1047,6 +1047,8 @@ const WGX = (function () {
     const blitData  = new Float32Array(BLIT_BYTES / 4);
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
     const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
+    const _projZ01  = new Float32Array(16);   // Z01·P scratch (off-axis garage/setup)
+    const _viewScratch = new Float32Array(16); // V = invProj·viewProj scratch
     const _grInvTmp = new Float32Array(16);   // godray invVP mul scratch (was per-frame new)
     const _instDrawOpts = { _instanced: true }; // reused; fields overwritten each draw
     const _dynOff = [0];   // single-element dynamic-offset scratch
@@ -3206,7 +3208,16 @@ const WGX = (function () {
     function _writeFrame(f) {
       const d = frameData;
       const vp = (f.viewProj && f.viewProj.length >= 16) ? f.viewProj : IDENT;
-      _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
+      const pj = f.proj, ipj = f.invProj;
+      // Setup preview / garage pass an off-axis proj (proj[8]/[9] lens shift).
+      // Z01·(P·V) != (Z01·P)·V when P carries that shear — remap on P first.
+      if (pj && pj.length >= 16 && ipj && ipj.length >= 16 && (pj[8] !== 0 || pj[9] !== 0)) {
+        _mul4(_viewScratch, ipj, vp);   // V = inv(P)·(P·V)
+        _mul4(_projZ01, Z01, pj);       // P′ = Z01·P
+        _mul4(_vpGpu, _projZ01, _viewScratch);
+      } else {
+        _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
+      }
 
       // TAA Halton jitter scaffolding — GATED OFF until a temporal RESOLVE pass
       // exists. Jittering the projection each frame with nothing accumulating

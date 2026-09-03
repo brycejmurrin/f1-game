@@ -1320,6 +1320,15 @@ test("TLX WebGPU begin() remaps GL projections with Z01 like WGX", () => {
   assert.match(fnBody(tlx, "begin"), /renderer\.backend\.isWebGPUBackend/);
 });
 
+test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => {
+  const wgx = code("js/render/webgpu/wgx.js");
+  const body = fnBody(wgx, "_writeFrame");
+  assert.match(body, /pj\[8\]\s*!==\s*0\s*\|\|\s*pj\[9\]\s*!==\s*0/);
+  assert.match(body, /_mul4\(_viewScratch,\s*ipj,\s*vp\)/);
+  assert.match(body, /_mul4\(_projZ01,\s*Z01,\s*pj\)/);
+  assert.match(body, /_mul4\(_vpGpu,\s*_projZ01,\s*_viewScratch\)/);
+});
+
 test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () => {
   const tlx = read("js/render/three/tlx.js");
   // MDN: one context type per canvas for life. three r185.1 configure() is
