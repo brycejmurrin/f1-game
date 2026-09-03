@@ -1016,7 +1016,7 @@ function onPeerQuali(d) {
   if (!isQuali()) return;
   const mine = player && player.lastLap > 0 ? player.lastLap : (player && player.best < Infinity ? player.best : 0);
   quali.simulate(qualiDriven(mine));
-  if (!$("quali").hidden) quali.build();
+  if (!$("quali").hidden) qualiSheet.build(quali.rows());
   refreshQualiGate();
 }
 function qualiDriven(myTime) {
@@ -2894,7 +2894,7 @@ function endRace(forcedOrder) {
     if (myLap > 0) netReportQuali(player.driverId, myLap);
     quali.simulate(qualiDriven(myLap));
     $("quali").classList.add("q-done");   // the session is run: only TO THE GRID now
-    quali.open();
+    qualiSheet.open(quali.rows());
     refreshQualiGate();
     return;
   }
@@ -3229,9 +3229,9 @@ const careerUi = CareerUI.create(G);
 // SEASON SETUP screen (js/game/season-ui.js) — the calendar and weekend format.
 // Same split: the rules and the save live in js/game/season-cal.js.
 const seasonUi = SeasonUI.create(G);
-// QUALIFYING (js/game/quali.js) — the flying lap plus the simulated field it is
-// measured against. Holds the classification between the session and the grid.
-const quali = Quali.create(G);
+// QUALIFYING — the model (js/game/quali.js: the flying lap plus the simulated field,
+// holding the classification between session and grid) and its sheet (quali-sheet.js).
+const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
 // ACTIVE AERO activation zones (js/game/aerozones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/game/skidmarks.js) — self-contained ring buffer + batched draw.
@@ -8392,16 +8392,16 @@ async function openQuali(fresh) {
   makeCars();
   if (fresh) quali.simulate(0); else quali.begin();
   $("quali").classList.remove("q-done");
-  quali.open();
+  qualiSheet.open(quali.rows());
 }
 function closeQualiToGrid() {
-  quali.close();
+  qualiSheet.close();
   session = "race";
   startRace();                    // gridUp() reads quali.order()
 }
 $("q-drive").onclick = () => {
   if (soundOn) GameAudio.uiSelect();
-  quali.close();
+  qualiSheet.close();
   session = "quali";
   startRace();                    // one out-lap + one flying lap, alone
 };
@@ -8411,7 +8411,7 @@ $("q-sim").onclick = () => {
   // does not lose it because we could not be bothered to drive ours.
   quali.simulate(qualiDriven(0));
   $("quali").classList.add("q-done");
-  quali.build();
+  qualiSheet.build(quali.rows());
   refreshQualiGate();
 };
 $("q-go").onclick = () => {
@@ -8424,7 +8424,7 @@ $("q-go").onclick = () => {
   if (qualiNetDone) {
     const go = qualiNetDone;
     qualiNetDone = null;
-    quali.close();
+    qualiSheet.close();
     go();
     return;
   }
@@ -8453,7 +8453,7 @@ $("q-back").onclick = () => {
     return;
   }
   if (soundOn) GameAudio.uiSelect();
-  quali.close();
+  qualiSheet.close();
   quali.clear();          // nothing was run; the next visit draws its own sheet
   session = "race";
   qualiNetDone ? (qualiNetDone = null, qualiHadRivals = false, qualiPeers.clear(), qualiLive.clear(), netLobby.abortQuali()) : ($("race-settings").hidden = false);

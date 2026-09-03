@@ -87,6 +87,11 @@ const FULL = [
   "js/render/assets.js",
   "js/car/teams.js",
   "js/car/driver-ratings.js",
+  // Persistence sits ahead of every js/game module: the settings panels, the
+  // perf sentinel and the Spotify client go through GameStore.store's raw lane,
+  // and spotify.js's init() runs at EVAL when the document is already complete
+  // (the game-vm harness; a late-injected script), so the store must precede it.
+  "js/game/store.js",
   "js/track/geo-paths.js",
   "js/track/geom.js",
   "js/track/scenery-data.js",
@@ -127,7 +132,6 @@ const FULL = [
   "js/game/bodyattitude.js",
   "js/game/particles.js",
   "js/game/atmosphere.js",
-  "js/game/store.js",
   "js/game/career.js",
   "js/game/season-cal.js",
   "js/game/reliability.js",
@@ -166,6 +170,7 @@ const FULL = [
   "js/game/hud.js",
   "js/game/results.js",
   "js/game/quali.js",
+  "js/game/quali-sheet.js",
   "js/game/debrisworld.js",
   "js/game/incidentsim.js",
   // agentview* + apex.js are LAZY_AGENT — injected when tests / localhost /

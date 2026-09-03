@@ -39,8 +39,7 @@ const PRESETS = [
 // apex26.gfxHigh (the old mobile-only toggle this control replaces).
 function defaultId(isMobile) {
   if (!isMobile) return "high";
-  let legacy = false;
-  try { legacy = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
+  const legacy = GameStore.store.raw("apex26.gfxHigh") === "1";
   return legacy ? "ultra" : "medium";
 }
 
@@ -67,10 +66,9 @@ function applyLive() {
 function syncBootTier() {
   if (!_isMobile) return false;
   const want = current().mobileHigh;
-  let have = false;
-  try { have = localStorage.getItem("apex26.gfxHigh") === "1"; } catch (_) {}
+  const have = GameStore.store.raw("apex26.gfxHigh") === "1";
   if (want === have) return false;
-  try { localStorage.setItem("apex26.gfxHigh", want ? "1" : "0"); } catch (_) {}
+  GameStore.store.rawSet("apex26.gfxHigh", want ? "1" : "0");
   return true;
 }
 
@@ -83,10 +81,8 @@ function label() { return "GRAPHICS: " + current().label; }
 // without opening THREE (the one-way cycle forced that path).
 const BACKENDS = ["webgl2", "three", "webgpu"];
 function readBackend() {
-  try {
-    const v = localStorage.getItem("apex26.gfxBackend");
-    return v === "webgpu" || v === "three" ? v : "webgl2";
-  } catch (_) { return "webgl2"; }
+  const v = GameStore.store.raw("apex26.gfxBackend");
+  return v === "webgpu" || v === "three" ? v : "webgl2";
 }
 function backendLabel(v) { return v === "three" ? "THREE.JS" : String(v).toUpperCase(); }
 function stepBackend(cur, dir) {
@@ -205,14 +201,13 @@ function applyBackend(next, rb) {
     setTimeout(() => { paintRenderer(rb); }, 900);
     return false;
   }
-  try { localStorage.setItem("apex26.gfxBackend", next); localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) {}
+  GameStore.store.rawSet("apex26.gfxBackend", next); GameStore.store.rawDel("apex26.gfxBackendProbe");
   try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* next boot paints the new pick */ }
   // Landing on WEBGPU by hand is the retry signal (browser update, new
   // device state): reset the WGX loss ladder so the boot re-attempts from
   // the sniffed baseline instead of a rung a long-dead session earned.
   if (next === "webgpu") {
-    try { localStorage.removeItem("apex26.gfxWgxLevel"); localStorage.removeItem("apex26.gfxWgxLite");
-      localStorage.removeItem("apex26.gfxWgxOk"); localStorage.removeItem("apex26.gfxWgxFail"); } catch (_) {}
+    for (const k of ["apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail"]) GameStore.store.rawDel(k);
     try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* boot consumes it anyway */ }
   }
   markReloading(rb, next);
@@ -233,12 +228,11 @@ const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxL
 
 function clearRendererStorage() {
   const removed = [];
-  try {
-    for (const k of RENDERER_LS_KEYS) {
-      if (localStorage.getItem(k) != null) { localStorage.removeItem(k); removed.push(k); }
-    }
-  } catch (_) { /* private mode / blocked storage: in-memory boot still uses the empty pref */ }
-  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* same */ }
+  // Blocked storage reads as null and removes nothing: the in-memory boot still uses the empty pref.
+  for (const k of RENDERER_LS_KEYS) {
+    if (GameStore.store.raw(k) != null) { GameStore.store.rawDel(k); removed.push(k); }
+  }
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode / blocked storage */ }
   return removed;
 }
 
@@ -255,11 +249,9 @@ function cycleOf(list, cur) {
   return list[(((i < 0 ? 0 : i) + 1) % list.length)];
 }
 function readThreePath() {
-  try {
-    const v = localStorage.getItem("apex26.tlxForceGL");
-    if (v === "1") return "webgl2";
-    if (v === "0") return "webgpu";
-  } catch (_) { /* blocked storage: AUTO */ }
+  const v = GameStore.store.raw("apex26.tlxForceGL");   // blocked storage: null, AUTO
+  if (v === "1") return "webgl2";
+  if (v === "0") return "webgpu";
   return "auto";
 }
 function liveThreeApi() {
@@ -290,12 +282,11 @@ function threePathLabel(v) {
 function applyThreePath(next, opts) {
   if (readBackend() === "three" && !(opts && opts.noReload) &&
       !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-three-path") : null, "THREE PATH: END THIS RACE & RELOAD?", paintPresent)) return false;
-  try {
-    if (next === "webgl2") localStorage.setItem("apex26.tlxForceGL", "1");
-    else if (next === "webgpu") localStorage.setItem("apex26.tlxForceGL", "0");
-    else localStorage.removeItem("apex26.tlxForceGL");
-    try { sessionStorage.removeItem("apex26.tlxAutoGL"); } catch (_) { /* AUTO stay-GL latch is session-only */ }
-  } catch (_) { /* preference still paints from the in-memory read on next boot if storage is blocked */ }
+  // A blocked write is recorded in store.broken; the preference still paints from the in-memory read.
+  if (next === "webgl2") GameStore.store.rawSet("apex26.tlxForceGL", "1");
+  else if (next === "webgpu") GameStore.store.rawSet("apex26.tlxForceGL", "0");
+  else GameStore.store.rawDel("apex26.tlxForceGL");
+  try { sessionStorage.removeItem("apex26.tlxAutoGL"); } catch (_) { /* AUTO stay-GL latch is session-only */ }
   paintPresent();
   if (readBackend() === "three" && !(opts && opts.noReload)) {
     const btn = typeof document !== "undefined" ? document.getElementById("pm-three-path") : null;
@@ -312,11 +303,9 @@ function readShotMode() {
     if (s === "1") return "blit";
     if (s === "0") return "native";
   } catch (_) { /* fall through to localStorage */ }
-  try {
-    const s = localStorage.getItem("apex26.wgxCapture");
-    if (s === "1") return "blit";
-    if (s === "0") return "native";
-  } catch (_) { /* AUTO */ }
+  const s = GameStore.store.raw("apex26.wgxCapture");   // blocked: null, AUTO
+  if (s === "1") return "blit";
+  if (s === "0") return "native";
   return "auto";
 }
 function shotModeLabel(v) {
@@ -324,10 +313,8 @@ function shotModeLabel(v) {
 }
 function writeShotMode(next) {
   const v = next === "blit" ? "1" : next === "native" ? "0" : null;
-  try {
-    if (v) localStorage.setItem("apex26.wgxCapture", v);
-    else localStorage.removeItem("apex26.wgxCapture");
-  } catch (_) { /* session write below still covers this tab */ }
+  if (v) GameStore.store.rawSet("apex26.wgxCapture", v);   // blocked: the session write below still covers this tab
+  else GameStore.store.rawDel("apex26.wgxCapture");
   try {
     if (v) sessionStorage.setItem("apex26.wgxCapture", v);
     else sessionStorage.removeItem("apex26.wgxCapture");

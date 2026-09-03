@@ -7,7 +7,7 @@ team) and **MY TEAM** (you own the twelfth team) — share one core.
 - **Rules and save:** `js/game/career.js` (global `Career`) — no DOM.
 - **Reliability / DNFs:** `js/game/reliability.js` (global `Reliability`).
 - **Screens:** `js/game/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
-- **Qualifying:** `js/game/quali.js` (global `Quali`) — `#quali`.
+- **Qualifying:** `js/game/quali.js` (global `Quali`) — the model: session timing, ordering, the persisted grid; `js/game/quali-sheet.js` (global `QualiSheet`) — `#quali`, the sheet that paints `quali.rows()`.
 - **Ratings:** `js/car/driver-ratings.js` (global `DriverRatings`).
 - **Persistence + migration:** `GameStore.migrateCareer` in `js/game/store.js`.
 - **Styles:** `css/career.css`.

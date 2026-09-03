@@ -214,3 +214,68 @@ test("persistOrder skips a conflicted career save", () => {
   assert.equal(G.season.qualiOrder, undefined);
   assert.equal(saved.career, undefined);
 });
+
+// The SHEET (js/game/quali-sheet.js) is a separate module that only ever sees
+// `quali.rows()`: the model owns timing, ordering and the persist; the sheet
+// owns #q-table, #q-title and #quali's hidden bit. A stub element is enough —
+// what is pinned is the row shape the sheet consumes and what it draws from it.
+const SHEET_SRC = fs.readFileSync(path.join(ROOT, "js/game/quali-sheet.js"), "utf8");
+
+function loadSheet() {
+  class El {
+    constructor(tag) { this.tag = tag; this.className = ""; this.style = {}; this.children = []; this.hidden = true; this._t = ""; }
+    get textContent() { return this._t; }
+    set textContent(v) { this._t = v; this.children.length = 0; }
+    appendChild(c) { this.children.push(c); return c; }
+    append(...cs) { for (const c of cs) this.children.push(c); }
+  }
+  const els = new Map(["q-table", "q-title", "quali"].map((id) => [id, new El("div")]));
+  let refreshed = 0;
+  const G = { $: (id) => els.get(id) || null, cssCol: (c) => "rgb(" + c.join(",") + ")", fmtTime: (t) => "T" + t };
+  const ctx = {
+    Map, QualiSheet: undefined,
+    Teams: { LIST: [{ id: "rb", color: [1, 0, 0] }, { id: "me", color: [0, 0, 1] }] },
+    ScrollFade: { refresh() { refreshed++; } },
+    document: { createElement: (tag) => new El(tag) },
+  };
+  vm.createContext(ctx);
+  seedLog(ctx);
+  vm.runInContext(SHEET_SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/game/quali-sheet.js" });
+  return { sheet: ctx.QualiSheet.create(G), els, refreshed: () => refreshed };
+}
+
+test("the sheet paints quali.rows(): a rival's DRIVEN lap is tagged, the title carries the player's P", () => {
+  const { q } = loadQuali({ season: { round: 0 } });
+  q.simulate(new Map([["p2", 65.0]]));          // HAM drove it; VER (the player) is modelled
+  const rows = q.rows();
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every((r) => !("car" in r)), "rows() must drop the live car ref the sheet has no use for");
+  const { sheet, els, refreshed } = loadSheet();
+  sheet.open(rows);
+  const table = els.get("q-table");
+  assert.equal(table.children.length, 2);
+  const ham = table.children.find((r) => r.className.includes("q-real"));
+  assert.ok(ham, "a rival's real lap gets the q-real class");
+  assert.equal(ham.children[2].children[0].textContent, " DRIVEN");
+  const you = table.children.find((r) => r.className.includes(" you"));
+  assert.ok(you && !you.className.includes("q-real"), "the local player is `you`, never DRIVEN-tagged");
+  assert.equal(table.children[0].children[3].textContent, "T" + rows[0].t, "P1 shows the lap, the rest show gaps");
+  assert.match(table.children[1].children[3].textContent, /^\+\d+\.\d{3}$/);
+  assert.match(els.get("q-title").textContent, /^QUALIFYING — P[12]$/);
+  assert.equal(els.get("quali").hidden, false);
+  assert.equal(refreshed(), 1, "open() refreshes the scroll fades once");
+  sheet.close();
+  assert.equal(els.get("quali").hidden, true);
+  sheet.build(null);                              // nothing simulated: an empty table, no throw
+  assert.equal(table.children.length, 0);
+});
+
+test("the model no longer owns any DOM — build/open/close live on the sheet", () => {
+  const { q } = loadQuali({});
+  for (const k of ["build", "open", "close"]) assert.equal(q[k], undefined, `Quali.${k} moved to QualiSheet`);
+  assert.equal(typeof q.rows, "function");
+  assert.equal(q.rows(), null, "nothing simulated yet");
+  assert.doesNotMatch(SRC, /document\.createElement|ScrollFade/, "quali.js is the model: no DOM, no sheet chrome");
+  assert.doesNotMatch(SHEET_SRC, /GameStore|G\.store|Career\.|simulate\(|persistOrder|localStorage/,
+    "quali-sheet.js is the sheet: no timing, no persist (code tokens, not prose)");
+});

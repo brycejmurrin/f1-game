@@ -33,6 +33,7 @@ import { fileURLToPath } from "node:url";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
+import { seedStore } from "../helpers/seed-store.mjs";   // gfx-quality.js persists through GameStore.store's raw lane
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
@@ -228,6 +229,7 @@ function bootGfx() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
+  seedStore(ctx);
   vm.runInContext(src("js/game/gfx-quality.js"), ctx, { filename: "js/game/gfx-quality.js" });
   dom.document.dispatchEvent({ type: "DOMContentLoaded" });
   const Gfx = vm.runInContext("GfxQuality", ctx);
