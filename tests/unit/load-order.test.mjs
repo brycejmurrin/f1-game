@@ -1,18 +1,20 @@
 // load-order.test.mjs — asserts index.html / tools/carview.html against the
 // single source of truth in tools/manifest.cjs.
 //
-// index.html cannot be generated (no build step), so it is hand-edited; this
-// test makes divergence impossible to ship:
+// The tag blocks, sw.js's precache seed and js/roster.js are GENERATED from
+// the manifest by tools/gen-shell.mjs; this test makes divergence impossible
+// to ship:
+//   - every generated block is byte-identical to a fresh `gen-shell` run
 //   - the <script> sequence must equal MANIFEST.FULL exactly (order included)
 //   - the stylesheet <link> sequence must equal MANIFEST.CSS
 //   - every ?v= value must match that asset's content hash
 //   - the shell build meta and version.json generation must match
-//   - every file under js/**/*.js must appear in FULL ∪ DEFERRED ∪ LAZY_AGENT
+//   - every file under js/**/*.js must appear in FULL ∪ DEFERRED ∪ LAZY_*
 //     (no forgotten tags, no dead files) — catches "created the file but
-//     forgot the tag / DEFERRED / LAZY_AGENT entry"
+//     forgot the manifest entry"
 //   - every HARD_EDGES pair must be ordered in FULL (eval-time dependencies)
 //   - LAZY_AGENT has no <script> tag and is not SW-optional (V8 full-compiles
-//     install puts); game.js AGENT_FILES / AGENT_EDGES must match the manifest
+//     install puts)
 //   - tools/carview.html's tags must equal MANIFEST.CARVIEW
 //   - TRACK_VM entries must exist and appear in FULL
 //
@@ -25,6 +27,8 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+
+import { stale as genShellStale } from "../../tools/gen-shell.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -60,6 +64,16 @@ test("index.html script sequence equals MANIFEST.FULL", () => {
 
 test("index.html stylesheet sequence equals MANIFEST.CSS", () => {
   assert.deepEqual(linkHrefs.map(stripV), MANIFEST.CSS);
+});
+
+// THE ONE DRIFT CHECK. index.html's tag blocks, carview's tags, sw.js's optional
+// seed and js/roster.js are projections of the manifest; a hand edit inside a
+// generated block, or a manifest edit without a regeneration, shows up here as
+// the first differing line.
+test("every gen-shell block is byte-identical to a fresh generation", () => {
+  const drift = genShellStale();
+  assert.deepEqual(drift.map((d) => `${d.rel}\n${d.diff}`), [],
+    "run `node tools/gen-shell.mjs` — a generated block has been hand-edited or the manifest changed");
 });
 
 test("every asset carries its content hash and shell generation matches version.json", () => {
@@ -123,11 +137,11 @@ test("every js/**/*.js appears in FULL ∪ DEFERRED ∪ LAZY_AGENT (and vice ver
 });
 
 // ---- DEFERRED: js/ files with no tag, injected at runtime by game.js --------
-// Three things have to agree or a deferred backend silently 404s in production
-// while every local run passes (the exact failure mode that shipped vendor/ to
-// Pages in build 895): the manifest, game.js's own loader table, and sw.js's
-// optional precache seed (the SW discovers everything else by parsing tags, so
-// a tagless file is invisible to it).
+// The manifest is the truth; js/roster.js (game.js's loader table) and sw.js's
+// optional precache seed are generated from it (the SW discovers everything
+// else by parsing tags, so a tagless file is invisible to it). A deferred
+// backend that silently 404s in production while every local run passes was
+// the build-895 failure; the seed tests below keep the generated block honest.
 function deferredFiles() {
   return Object.values(MANIFEST.DEFERRED).flat();
 }
@@ -155,26 +169,6 @@ test("DEFERRED_EDGES are ordered within their group", () => {
     assert.ok(group, `DEFERRED_EDGES pair ${before} -> ${after} spans no single group`);
     assert.ok(group.indexOf(before) < group.indexOf(after), `${before} must load before ${after}`);
   }
-});
-
-test("js/game.js BACKEND_FILES equals MANIFEST.DEFERRED, group for group", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const block = src.match(/const BACKEND_FILES = \{([\s\S]*?)\n\};/);
-  assert.ok(block, "js/game.js must declare a BACKEND_FILES table for the deferred backends");
-  for (const [name, files] of Object.entries(MANIFEST.DEFERRED)) {
-    const group = block[1].match(new RegExp(`\\b${name}:\\s*\\[([\\s\\S]*?)\\]`));
-    assert.ok(group, `BACKEND_FILES is missing the "${name}" group`);
-    const listed = [...stripComments(group[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(listed, files, `BACKEND_FILES.${name} must match MANIFEST.DEFERRED.${name} exactly, in order`);
-  }
-});
-
-test("js/game.js BACKEND_EDGES equals MANIFEST.DEFERRED_EDGES", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const block = src.match(/const BACKEND_EDGES = \[([\s\S]*?)\n\];/);
-  assert.ok(block, "js/game.js must declare BACKEND_EDGES for the DAG loader");
-  const listed = [...stripComments(block[1]).matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]);
-  assert.deepEqual(listed, MANIFEST.DEFERRED_EDGES);
 });
 
 test("DEFERRED_EDGES leave more than one TLX file ready at wave 0", () => {
@@ -245,26 +239,6 @@ test("LAZY_EDGES are ordered within LAZY_AGENT", () => {
   }
 });
 
-test("js/game.js AGENT_FILES equals MANIFEST.LAZY_AGENT", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const block = src.match(/const AGENT_FILES = \[([\s\S]*?)\n\];/);
-  assert.ok(block, "js/game.js must declare AGENT_FILES for the lazy agent surface");
-  const listed = [...stripComments(block[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(listed, MANIFEST.LAZY_AGENT);
-});
-
-// Same lockstep as AGENT_FILES above, for the race payload. A file that leaves
-// FULL without joining this roster has no tag AND no injector: it 404s only on
-// the path that needs it, which on light-presets is "the whole game looks
-// wrong once you actually start a race".
-test("js/game.js RACE_FILES equals MANIFEST.LAZY_RACE", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const block = src.match(/const RACE_FILES = \[([\s\S]*?)\n\];/);
-  assert.ok(block, "js/game.js must declare RACE_FILES for the lazy race payload");
-  const listed = [...stripComments(block[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(listed, MANIFEST.LAZY_RACE);
-});
-
 // EVERY CIRCUIT LOADER MUST ALSO LOAD THE SCENERY DIRECTORY. Circuits are read
 // with readdirSync(CIRCUITS_DIR).filter(f => f.endsWith(".js")), which does not
 // descend into js/circuits/scenery/ — so a loader that misses the roster builds
@@ -306,60 +280,15 @@ test("LAZY_RACE files have no <script> tag", () => {
   }
 });
 
-// Same lockstep again, for the data hub. Its failure mode is the mild one of
-// the three — DataHub simply never appears and the DATA button stays shut —
-// but the drift is identical: leave FULL without joining this roster and the
-// file has neither a tag nor an injector.
-test("js/game.js DATA_FILES equals MANIFEST.LAZY_DATA", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const block = src.match(/const DATA_FILES = \[([\s\S]*?)\n\];/);
-  assert.ok(block, "js/game.js must declare DATA_FILES for the lazy data hub");
-  const listed = [...stripComments(block[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(listed, MANIFEST.LAZY_DATA);
-});
-
 // hub.js calls Data*.create() at EVAL time, so these pairs are the difference
-// between a working hub and a TypeError on the tab modules. loadBackendScripts
-// only honours edges whose BOTH ends are in the file list it was handed, so a
-// pair that stopped naming a real file would silently stop constraining
-// anything. Both sides DERIVE the edges from their roster ("everything, then
-// the hub"), so what is asserted is that the two derivations agree AND that
-// the result actually orders every tab module before hub.js — the property the
-// hand-written lists existed to guarantee.
-test("the data-hub DAG orders every tab module before hub.js, on both sides", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(src, /const DATA_EDGES = DATA_FILES\.filter\(\(f\) => f !== DATA_HUB\)\.map\(\(f\) => \[f, DATA_HUB\]\);/,
-    "js/game.js must derive DATA_EDGES from DATA_FILES");
-  assert.match(src, /const DATA_HUB = "js\/data\/hub\.js";/, "DATA_HUB must name the hub");
+// between a working hub and a TypeError on the tab modules. The manifest
+// DERIVES them ("everything, then the hub") and js/roster.js carries the
+// result to game.js; assert the derivation actually orders every tab module.
+test("the data-hub DAG orders every tab module before hub.js", () => {
   const want = MANIFEST.LAZY_DATA.filter((f) => f !== "js/data/hub.js").map((f) => [f, "js/data/hub.js"]);
   assert.deepEqual(MANIFEST.LAZY_DATA_EDGES, want);
   assert.equal(want.length, MANIFEST.LAZY_DATA.length - 1,
     "every LAZY_DATA file except the hub itself must be ordered before it");
-});
-
-// Same lockstep for the multiplayer stack. Its drift is the WORST of the four
-// rosters: a js/net file with neither a tag nor an injector entry leaves the
-// inert stub in place for ever, so VS FRIEND opens a lobby that silently never
-// connects — no crash, no console line, just a room code that does nothing.
-test("js/game.js NET_FILES / NET_EDGES equal MANIFEST.LAZY_NET / LAZY_NET_EDGES", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const files = src.match(/const NET_FILES = \[([\s\S]*?)\n\];/);
-  assert.ok(files, "js/game.js must declare NET_FILES for the lazy multiplayer stack");
-  assert.deepEqual([...stripComments(files[1]).matchAll(/"([^"]+)"/g)].map((m) => m[1]),
-    MANIFEST.LAZY_NET);
-  const edges = src.match(/const NET_EDGES = \[([\s\S]*?)\n\];/);
-  assert.ok(edges, "js/game.js must declare NET_EDGES for the multiplayer DAG");
-  assert.deepEqual(
-    [...stripComments(edges[1]).matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]),
-    MANIFEST.LAZY_NET_EDGES);
-});
-
-test("js/game.js AGENT_EDGES equals MANIFEST.LAZY_EDGES", () => {
-  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  const block = src.match(/const AGENT_EDGES = \[([\s\S]*?)\n\];/);
-  assert.ok(block, "js/game.js must declare AGENT_EDGES for the lazy agent DAG");
-  const listed = [...stripComments(block[1]).matchAll(/\["([^"]+)",\s*"([^"]+)"\]/g)].map((m) => [m[1], m[2]]);
-  assert.deepEqual(listed, MANIFEST.LAZY_EDGES);
 });
 
 test("sw.js optional precache does not include LAZY_AGENT", () => {

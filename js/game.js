@@ -71,44 +71,14 @@ let _probeArmed = false;      // mirrors the stored probe, so the loop never rea
 // player's renderer choice. gfx === GLX on both paths, so identity cannot tell
 // them apart; only the bind site knows.
 let _backendBound = false;
-// The two DEFERRED renderer groups (tools/manifest.cjs DEFERRED). Array order
-// is the documented toposort; loadBackendScripts starts every file whose
-// BACKEND_EDGES predecessors have evaluated (six TLX IIFEs in the first wave).
-const BACKEND_FILES = {
-  webgpu: [
-    "js/render/webgpu/wgsl-chunks.js",
-    "js/render/webgpu/wgsl-post.js",
-    "js/render/webgpu/wgsl-fx.js",
-    "js/render/webgpu/wgx.js",
-  ],
-  three: [
-    "js/render/three/tsl-chunks.js",
-    "js/render/three/tsl-lit.js",
-    "js/render/three/tsl-sky.js",
-    "js/render/three/tsl-fx.js",
-    "js/render/three/tsl-post.js",
-    "js/render/three/tlx-shadow.js",
-    "js/render/three/tlx-chunked.js",
-    "js/render/three/tlx-post.js",
-    "js/render/three/tlx.js",
-  ],
-};
-// Same pairs as tools/manifest.cjs DEFERRED_EDGES — load-order.test.mjs asserts
-// equality. A load error RESOLVES: missing global is already the fallback.
-const BACKEND_EDGES = [
-  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-post.js"],
-  ["js/render/webgpu/wgsl-chunks.js", "js/render/webgpu/wgsl-fx.js"],
-  ["js/render/webgpu/wgsl-post.js", "js/render/webgpu/wgx.js"],
-  ["js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js"],
-  ["js/render/three/tsl-chunks.js", "js/render/three/tsl-lit.js"],
-  ["js/render/three/tsl-lit.js", "js/render/three/tlx.js"],
-  ["js/render/three/tsl-sky.js", "js/render/three/tlx.js"],
-  ["js/render/three/tsl-fx.js", "js/render/three/tlx.js"],
-  ["js/render/three/tlx-shadow.js", "js/render/three/tlx.js"],
-  ["js/render/three/tlx-chunked.js", "js/render/three/tlx.js"],
-  ["js/render/three/tsl-post.js", "js/render/three/tlx-post.js"],
-  ["js/render/three/tlx-post.js", "js/render/three/tlx.js"],
-];
+// The rosters below are ApexRoster (js/roster.js), GENERATED from
+// tools/manifest.cjs by tools/gen-shell.mjs — one truth, no hand mirror.
+// The two DEFERRED renderer groups. Array order is the documented toposort;
+// loadBackendScripts starts every file whose BACKEND_EDGES predecessors have
+// evaluated (six TLX IIFEs in the first wave). A load error RESOLVES: a
+// missing global is already the fallback.
+const BACKEND_FILES = ApexRoster.DEFERRED;
+const BACKEND_EDGES = ApexRoster.DEFERRED_EDGES;
 function loadBackendScripts(files, edges) {
   const pending = new Set(files), done = new Set(), inflight = new Set();
   const preds = new Map(files.map((f) => [f, []]));
@@ -136,22 +106,12 @@ function loadBackendScripts(files, edges) {
     pump();
   });
 }
-// LAZY_AGENT (tools/manifest.cjs). Same files / edges as AGENT_FILES below —
-// load-order.test.mjs asserts equality. Not SW-optional (V8 full-compiles
-// install puts). Players on github.io skip this; tests and localhost inject.
-const AGENT_FILES = [
-  "js/game/agentview-raster.js",
-  "js/game/agentview.js",
-  "js/game/apex.js",
-];
-const AGENT_EDGES = [
-  ["js/game/agentview-raster.js", "js/game/agentview.js"],
-];
-// LAZY_RACE (tools/manifest.cjs). load-order.test.mjs asserts this equals the
-// manifest roster, the same way AGENT_FILES is held to LAZY_AGENT.
-const RACE_FILES = [
-  "js/game/light-presets.js",
-];
+// LAZY_AGENT. Not SW-optional (V8 full-compiles install puts). Players on
+// github.io skip this; tests and localhost inject.
+const AGENT_FILES = ApexRoster.LAZY_AGENT;
+const AGENT_EDGES = ApexRoster.LAZY_EDGES;
+// LAZY_RACE — the race payload, fetched before the first race.
+const RACE_FILES = ApexRoster.LAZY_RACE;
 // LAZY_SCENERY (tools/manifest.cjs): one file per circuit, ~27 KB each, holding
 // that circuit's bespoke scenery() closure. All 40 were 1,083 KB of the boot
 // script wall for a session that builds ONE of them.
@@ -164,7 +124,7 @@ const RACE_FILES = [
 // the menu flyby (which already debounces 120 ms in a setTimeout), startRace(),
 // and openQuali(). Everything else — setTimeOfDay, the quali re-entry, the
 // __apex no-track fallback — only ever re-loads the circuit already on screen.
-const SCENERY_DIR = "js/circuits/scenery";
+const SCENERY_DIR = ApexRoster.SCENERY_DIR;
 function sceneryResident(id) {
   return !!(window.TrackScenery && window.TrackScenery[id]);
 }
@@ -179,22 +139,10 @@ function ensureScenery(idx) {
 // js/game/apex.js that already guards itself. Unlike the scenery closures —
 // consumed synchronously by Tracks.build() on the next line — nothing outside
 // reads a Data* global, so this needs no gate beyond the button itself.
-const DATA_FILES = [
-  "js/data/api.js",
-  "js/data/telemetry.js",
-  "js/data/export.js",
-  "js/data/schedule.js",
-  "js/data/standings.js",
-  "js/data/lastrace.js",
-  "js/data/live.js",
-  "js/data/hub.js",
-];
-// hub.js calls Data*.create() at EVAL time, so every tab module lands first.
-// DERIVED, not listed: a hand-written copy of "everything, then the hub" has
-// no failure mode except drifting from the roster above. The manifest derives
-// it the same way; load-order.test.mjs asserts both.
-const DATA_HUB = "js/data/hub.js";
-const DATA_EDGES = DATA_FILES.filter((f) => f !== DATA_HUB).map((f) => [f, DATA_HUB]);
+const DATA_FILES = ApexRoster.LAZY_DATA;
+// hub.js calls Data*.create() at EVAL time, so every tab module lands first —
+// the manifest derives "everything, then the hub" and the roster carries it.
+const DATA_EDGES = ApexRoster.LAZY_DATA_EDGES;
 // Memoised on the PROMISE, not on a boolean: two fast taps on DATA must not
 // inject the bundle twice, and the second tap has to await the first load
 // rather than call DataHub.open() while hub.js is still in flight.
@@ -223,28 +171,8 @@ function ensureDataHub() {
 // netLobby methods directly and drives the multiplayer specs, so tying the two
 // together keeps every test and dev session behaving exactly as before and
 // confines this change to players, who load neither.
-const NET_FILES = [
-  "js/net/nostr.js",
-  "js/net/rendezvous.js",
-  "js/net/sdp.js",
-  "js/net/qr.js",
-  "js/net/scan.js",
-  "js/net/transport.js",
-  "js/net/handshake.js",
-  "js/net/snapshot.js",
-  "js/net/session.js",
-  "js/net/netplay.js",
-  "js/net/lobby.js",
-];
-// Same pairs as manifest LAZY_NET_EDGES — load-order.test.mjs asserts equality.
-const NET_EDGES = [
-  ["js/net/snapshot.js", "js/net/session.js"],
-  ["js/net/sdp.js", "js/net/handshake.js"],
-  ["js/net/qr.js", "js/net/lobby.js"],
-  ["js/net/rendezvous.js", "js/net/lobby.js"],
-  ["js/net/nostr.js", "js/net/rendezvous.js"],
-  ["js/net/scan.js", "js/net/lobby.js"],
-];
+const NET_FILES = ApexRoster.LAZY_NET;
+const NET_EDGES = ApexRoster.LAZY_NET_EDGES;
 let netLoad = null;
 function ensureNet() {
   if (netLoad) return netLoad;

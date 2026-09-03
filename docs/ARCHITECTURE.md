@@ -21,9 +21,12 @@ Modules are grouped by domain: `js/render/` (renderers), `js/track/` (the track
 the `js/game.js` entry at the root.
 
 **`tools/manifest.cjs` is the single source of truth for load order.** The
-`<script>` tag order in `index.html` must match it — `tests/unit/load-order.test.mjs`
-(run via `npm run test:tooling-fast`) asserts they never diverge. Adding a file means
-a `FULL` script tag, a `DEFERRED` backend entry, a `LAZY_AGENT` entry
+`<script>` tag block in `index.html`, the `tools/carview.html` tags, sw.js's
+optional precache seed and `js/roster.js` (the lazy rosters `js/game.js`
+injects at runtime, one frozen `ApexRoster` global) are all GENERATED from it
+by `tools/gen-shell.mjs`; `tests/unit/load-order.test.mjs` (run via
+`npm run test:tooling-fast`) asserts every generated block is byte-identical
+to a fresh run. Adding a file means a `FULL` entry, a `DEFERRED` backend entry, a `LAZY_AGENT` entry
 (`apex.js` / `agentview*` — injected when tests / localhost / `?apex=1`), a
 `LAZY_RACE` entry (`light-presets.js`, fetched before the first race) or a
 `LAZY_SCENERY` entry (`js/circuits/scenery/<id>.js`, fetched per build). The abbreviated sketch below is a subset;
@@ -86,7 +89,8 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
 - **`tools/extract-module.mjs`** assists further extractions from game.js
   (moves a block, wires the `create(G)` boilerplate, updates manifest + tags).
 - **Cache busting is content-addressed** — every JS/CSS edit still needs the `bump-cache` refresh
-  across `index.html` plus the matching `version.json` bump.
+  across `index.html` plus the matching `version.json` bump. The tag blocks
+  themselves are written by `tools/gen-shell.mjs`, never by hand.
 
 ### Deferred follow-ups (known debt, in rough priority order)
 

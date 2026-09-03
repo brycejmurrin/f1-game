@@ -11,7 +11,7 @@
  *                          GLX stays the default.
  *
  * TLX and WGX are DEFERRED backends: they have NO <script> tags. game.js
- * injects their files at boot (see DEFERRED/BACKEND_FILES in game.js) only when
+ * injects their files at boot (manifest DEFERRED via js/roster.js) only when
  * the matching opt-in is set, then calls `Gfx.create()`, which returns a ready
  * TLX or WGX backend implementing the interface below — or `null` on absence
  * or ANY failure, and THE CALLER falls back to GLX. This module deliberately

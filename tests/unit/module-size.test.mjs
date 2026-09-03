@@ -611,7 +611,11 @@ const CEILINGS = {
   // skipped frame arms and does no work, instead of re-triggering next frame).
   // -> 9233 (deploy branch): the display-reset retry.
   // MERGED and RE-MEASURED on the union.
-  "js/game.js": 9274,
+  // 9274 -> 9202: LOWERED. The five hand-mirrored lazy rosters (BACKEND_FILES /
+  // BACKEND_EDGES / AGENT_* / RACE_FILES / DATA_* / NET_*) are now one generated
+  // global, ApexRoster (js/roster.js, from tools/manifest.cjs via
+  // tools/gen-shell.mjs). The loader logic stays; only the copies left.
+  "js/game.js": 9202,
   // Cohesive-today files (a dev API, an agent view, a procedural mesh), so
   // these are drift alarms rather than extraction targets. Note game.js is NOT
   // the largest file in the repo — js/game/light-presets.js is (see below).

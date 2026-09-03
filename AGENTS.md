@@ -200,10 +200,11 @@ enumerate what exists; `index.html` script order is guard-asserted against it.
 - **No ES modules** — every file is a `"use strict"` IIFE assigning one global
   (sole exception: the vendored three.js island).
   `tests/unit/global-registry.test.mjs` enforces the registry.
-- **New-file lockstep**: IIFE file + `<script>` tag position +
-  `tools/manifest.cjs` entry (+ HARD_EDGES pair if eval-time destructured) +
-  cache bump. DEFERRED backends have no tag; `DEFERRED`/`BACKEND_FILES`/sw.js
-  precache must agree (guard-asserted).
+- **New file**: IIFE file + `tools/manifest.cjs` entry (+ HARD_EDGES pair if
+  eval-time destructured) + `node tools/gen-shell.mjs` (writes the
+  `index.html` tag block, `tools/carview.html`, sw.js's precache seed and
+  `js/roster.js` — the lazy rosters game.js injects) + cache bump. Never
+  hand-edit a `@gen-shell` block; `load-order.test.mjs` fails on drift.
 - **Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.**
 - `module-size.test.mjs` ratchets game.js and apex.js AT their current
   ceilings — pay for every added line. New `js/game/` files are hyphenated;

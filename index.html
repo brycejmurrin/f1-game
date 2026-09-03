@@ -68,6 +68,7 @@
 <!-- MANIFEST.CSS order preserved (cascade). Title-critical sheets stay
      render-blocking; the rest use print→all so Slow-4G RenderBlocking
      (chrome-devtools) does not hold LCP for garage/tuner/hud/data CSS. -->
+<!-- @gen-shell:css -->
 <link rel="stylesheet" href="css/tokens.css?v=0aa289ab8635">
 <link rel="stylesheet" href="css/components.css?v=f8e5f321f635">
 <link rel="stylesheet" href="css/tuner.css?v=fe56135c0173" media="print" onload="this.media='all'">
@@ -79,6 +80,7 @@
 <link rel="stylesheet" href="css/track-detail.css?v=c34d140afbeb" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/career.css?v=dab85626d73c" media="print" onload="this.media='all'">
 <link rel="stylesheet" href="css/data.css?v=2e723024c38d" media="print" onload="this.media='all'">
+<!-- /@gen-shell:css -->
 <!-- No <noscript> CSS fallback: the shell is a JS app (IIFE wall). Duplicate
      stylesheet hrefs inside noscript would also break load-order + sw precache
      parsers that scan every rel=stylesheet. -->
@@ -1756,8 +1758,10 @@
 }
 </script>
 
+<!-- @gen-shell:scripts -->
 <script defer crossorigin="anonymous" src="js/log.js?v=da9d964fe2a5"></script>
 <script defer crossorigin="anonymous" src="js/mat4.js?v=11205916c4e7"></script>
+<script defer crossorigin="anonymous" src="js/roster.js?v=73b91ec93d8e"></script>
 <script defer crossorigin="anonymous" src="js/render/shaders/chunks.js?v=4573d49f92ab"></script>
 <script defer crossorigin="anonymous" src="js/render/shaders/lit.js?v=0c1324bbe949"></script>
 <script defer crossorigin="anonymous" src="js/render/shaders/sky.js?v=63276a11e93d"></script>
@@ -1775,7 +1779,7 @@
      them into its OPTIONAL precache set, since it discovers everything else by
      parsing the tags below. -->
 
-<script defer crossorigin="anonymous" src="js/render/gfx.js?v=6c9115228dad"></script>
+<script defer crossorigin="anonymous" src="js/render/gfx.js?v=eecfd6a9187b"></script>
 <script defer crossorigin="anonymous" src="js/render/gltf.js?v=a68c67631936"></script>
 <script defer crossorigin="anonymous" src="js/render/assets.js?v=ed166b68b74b"></script>
 <script defer crossorigin="anonymous" src="js/car/teams.js?v=453435b9c847"></script>
@@ -1901,5 +1905,6 @@
 <script defer crossorigin="anonymous" src="js/game/quali.js?v=680b7c244e41"></script>
 <script defer crossorigin="anonymous" src="js/game/debrisworld.js?v=85f01bdbe6aa"></script>
 <script defer crossorigin="anonymous" src="js/game/incidentsim.js?v=e9ec4e49689b"></script>
-<script defer crossorigin="anonymous" src="js/game.js?v=a2e2d87534b5"></script>
+<script defer crossorigin="anonymous" src="js/game.js?v=b121ec3a3eac"></script>
+<!-- /@gen-shell:scripts -->
 </body></html>

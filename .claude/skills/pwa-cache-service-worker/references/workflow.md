@@ -9,9 +9,9 @@ Playwright hang after a mid-run version bump.
    - New tagged `<script>`/`<link>` in `index.html` → picked up automatically
      on next install; still bump `?v=N` + `version.json`.
    - New file with **no tag** (DEFERRED backend, font, on-demand vendor) →
-     update `tools/manifest.cjs` `DEFERRED` + `js/game.js` `BACKEND_FILES` +
-     `sw.js` optional seed. `tests/unit/load-order.test.mjs` asserts all three
-     stay equal.
+     update `tools/manifest.cjs` `DEFERRED`, then `node tools/gen-shell.mjs`
+     (it writes `js/roster.js` and the `sw.js` optional seed).
+     `tests/unit/load-order.test.mjs` asserts the generated blocks match.
 
 2. **Edit `sw.js` carefully.**
    - Keep essential vs optional — never promote DEFERRED/vendor to essential
