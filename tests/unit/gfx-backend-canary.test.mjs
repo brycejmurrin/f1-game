@@ -1318,6 +1318,27 @@ const THREE_BUNDLE = read("vendor/three-0.185.1/three.webgpu.min.js");
 // ── The two LOCAL PATCHES carried on the vendored bundle (vendor/three-0.185.1/
 // PATCHES.md). A vendor re-drop that silently reverts either one must fail HERE,
 // not in production. Upstream has fixed neither as of 186dev (2026-08-27).
+test("GLX's env probe cannot latch _envActive against a disabled/null framebuffer", () => {
+  // The completeness check (2026-09-03) can disable the probe DURING the first
+  // envFaceBegin, because the lazy envInit() runs after the _envDisabled gate.
+  // If envFaceBegin then armed _envActive anyway, begin() would bind the
+  // DEFAULT framebuffer at a 64px viewport and clear it every frame for the
+  // life of the tab: a black canvas with a 64-pixel corner, no exception, no
+  // console error. Two invariants keep that shut.
+  const glx = read("js/render/glx.js");
+  const beginFn = fnBody(glx, "envFaceBegin");
+  assert.match(beginFn, /if \(!envTex\) \{ envInit\(\); if \(_envDisabled \|\| !envTex \|\| !envFBO\) return null; \}/,
+    "envFaceBegin must re-test the disable latch AFTER the lazy envInit, and bail before arming _envActive");
+  const armAt = beginFn.indexOf("_envActive = true");
+  const testAt = beginFn.indexOf("if (!envTex) { envInit()");
+  assert.ok(testAt >= 0 && armAt > testAt, "the re-test must precede the arm");
+  const endFn = fnBody(glx, "envFaceEnd");
+  const clearAt = endFn.indexOf("_envActive = false");
+  const bailAt = endFn.indexOf("if (!gl || !envTex) return;");
+  assert.ok(clearAt >= 0 && bailAt >= 0 && clearAt < bailAt,
+    "envFaceEnd must lower _envActive BEFORE any early return — a texture that vanished mid-cycle is the same brick one frame later");
+});
+
 test("the vendored three carries the swizzle patch — Chromium 141 rejects r185's string swizzle", () => {
   // r185's pooled GPUTextureViewDescriptor stamps swizzle:"rgba" (constructor +
   // reset()) into EVERY createView; Chromium 141 validates the member as a
@@ -1351,6 +1372,18 @@ test("the vendored three emits render-stage node variables at FUNCTION scope (We
   for (const name of ["apexHash21", "apexVnoise", "apexIgnoise"]) {
     assert.match(chunks, new RegExp(`setLayout\\(\\{ name: "${name}", type: "float", inputs: \\[\\{ name: "\\w+", type: "vec2" \\}\\] \\}\\)`),
       `${name} must carry a setLayout so it compiles once instead of per call`);
+  }
+  // The two biggest remaining inliners, measured on the Dawn dumps: three
+  // inlined matBumpHeight's 15-branch chain at all SIX applyMaterialNormal call
+  // sites (5.2 KB + ~25 node vars each — 31 KB of the 99 KB lit fragment), and
+  // the sky's hash2 68x (fbm->4 vnoise->4 hash2, fbm called 4x, plus one
+  // direct). A dropped layout re-inflates the shader silently: nothing fails.
+  assert.match(read("js/render/three/tsl-lit.js"), /setLayout\(\{ name: "apexMatBumpHeight", type: "float",/,
+    "matBumpHeight must stay layouted — 6 inlines is 26% of the lit fragment");
+  const skyF = read("js/render/three/tsl-sky.js");
+  for (const name of ["apexSkyHash2", "apexSkyVnoise", "apexSkyFbm", "apexSkyHash3"]) {
+    assert.match(skyF, new RegExp(`setLayout\\(\\{ name: "${name}", type: "float"`),
+      `${name} must carry a setLayout (the sky noise family is SEPARATE from tsl-chunks')`);
   }
 });
 test("the vendored three carries the #33952 bind-group leak backport (PR #33954)", () => {

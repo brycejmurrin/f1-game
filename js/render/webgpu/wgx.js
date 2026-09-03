@@ -906,6 +906,14 @@ const WGX = (function () {
       let hidden = false;
       try { hidden = !!(typeof document !== "undefined" && document.hidden); } catch (_) { /* no document (harness) */ }
       if (!hidden) {
+        // BOTH opt-ins, not one. GLX's webglcontextlost (js/render/glx.js) and
+        // TLX's onDeviceLost each disarm envProbeOff AND perChunkOff; WGX wrote
+        // only the second, so a visible WGX loss that escalated to a GLX
+        // session-skip handed GLX a tab with the env probe still armed — the
+        // expensive per-frame cube on a device that just lost its GPU. Both
+        // keys are shared cross-backend state (RENDERER_LS_KEYS), which is
+        // exactly why the latch has to be written by whichever backend died.
+        try { localStorage.setItem("apex26.envProbeOff", "1"); } catch (_) { /* no storage (private mode): the probe stays on next boot, the pre-existing behaviour; a failed latch must not break the loss handler */ }
         try { localStorage.setItem("apex26.perChunkOff", "1"); } catch (_) { /* no storage: the tier gate is the only defence left; nothing here may throw */ }
         // Persist WHY, not just that: WebKit's info.message names the loss
         // ("GPU hang", the imgui-class setPipeline loss) where Dawn says

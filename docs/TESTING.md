@@ -2002,3 +2002,24 @@ private sum well under 8,192 bytes; the `gfx-backend-canary` pins the patch
 and the noise layouts. The phone is the confirmation step (THREE PATH:
 WEBGPU, one lap, GOV `gfx` row `err 0`).
 
+### 2026-09-03 — the TSL layout pass, measured on the same dumps
+
+Second round of the WebKit work: `matBumpHeight` (lit) and the sky's
+`hash3`/`hash2`/`vnoise`/`fbm` took `setLayout`, so each compiles once as a
+real function instead of being inlined at every call. Dawn dump, iPhone UA,
+`artifacts/wgsl-dump-2` → `artifacts/wgsl-dump-3`:
+
+| module | before | after |
+|---|---|---|
+| lit fragment (instanced) | 99 204 B | 69 707 B |
+| lit fragment (plain) | 99 064 B | 69 567 B |
+| lit fragment (chunked) | 97 267 B | 67 770 B |
+| sky fragment | 40 601 B | 16 780 B |
+| all 33 modules | 473 731 B | 361 406 B |
+
+`main`'s node-variable count fell with it (lit 452 → 354, sky 173 → 62).
+Cumulative with `a6a1566`, the lit fragment is 359 434 B → 69 707 B. The
+figure this aims at is the census's 16.2 s three-WebGL2 first frame on
+ANGLE-Metal, which only `gpu-census.yml` can re-measure. `gpuErrors` 0 and
+24 pipelines in both dumps.
+
