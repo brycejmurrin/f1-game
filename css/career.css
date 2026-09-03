@@ -48,7 +48,7 @@
 #cr-meters { display: flex; flex-wrap: wrap; gap: var(--gap); margin-left: auto; }
 .cr-meter { display: flex; flex-direction: column; gap: 1px; text-align: right; }
 .cr-meter-lbl { font-size: var(--fs-micro); letter-spacing: var(--ls-5); color: var(--dim); }
-.cr-meter-val { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.cr-meter-val { font-family: var(--font-hud); font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* ---------- body ---------- */
 /* THE STACKED LAYOUT, and it must be gated on `:not([data-pair="on"])` — see the
@@ -252,12 +252,30 @@
    foot sits inside and clipped it. Sizing comes from the shared
    `.sheet-foot .bigbtn` rule; only the wrap and the divider inset are new. */
 #cr-foot { flex-wrap: wrap; padding-right: calc(var(--pad) * 0.9); }
+/* Exits stay half-weight on EVERY density — .sheet-foot .bigbtn was promoting
+   MAIN MENU / GARAGE to the same type rung as GO RACING on roomy sheets. */
+#cr-inner #cr-foot .bigbtn.alt {
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-1);
+  min-height: max(36px, var(--tap-min));
+  padding: calc(var(--gap) * 0.8) calc(var(--gap) * 0.95) calc(var(--gap) * 0.8) calc(var(--gap) * 1.1);
+  flex: 1 1 auto;
+}
+#cr-inner #cr-foot #cr-go {
+  flex: 1.35 1 auto;
+  letter-spacing: 0.06em;
+}
 #cr-inner[data-density="compact"] #cr-foot {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 #cr-inner[data-density="compact"] #cr-foot .bigbtn {
   width: 100%; min-width: 0; min-height: var(--tap-min);
   padding-block: 0; font-size: var(--fs-micro);
+}
+#cr-inner[data-density="compact"] #cr-meters {
+  margin-left: 0;
+  width: 100%;
+  justify-content: space-around;
 }
 
 /* ---------- end of season (#career-offers) ---------- */
@@ -331,7 +349,7 @@
    numbers rather than drifting with the glyph widths. */
 #quali { --sheet-w: 560px; --fit-at: 300px; }
 #q-body { min-height: 0; }
-.q-time { font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1); }
+.q-time { font-family: var(--font-hud); font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1); }
 /* Pole gets the absolute lap time and everyone else a gap, so the two read
    differently on purpose — the gaps are dimmed to keep the eye on the leader. */
 .res-row:not(.p1) .q-time { color: var(--dim); }
@@ -390,9 +408,12 @@
    having to compare their contents. */
 .cr-slot.empty .cr-slot-main {
   border-style: dashed;
-  border-color: color-mix(in oklab, var(--red) 22%, var(--card-line));
+  border-color: color-mix(in oklab, var(--spark) 32%, var(--card-line));
 }
 .cr-slot.empty .cr-slot-who { color: var(--dim); }
+.cr-slot.empty .cr-slot-meta {
+  color: color-mix(in oklab, var(--spark) 55%, var(--dim));
+}
 /* The career you are IN keeps the red edge permanently — after a switch, "which
    one am I in" has to be answerable without pressing anything. */
 .cr-slot.active .cr-slot-main {

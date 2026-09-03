@@ -262,12 +262,14 @@
   align-content: start;
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab {
-  /* 14 tabs in 7×2 grid. Stretch to fill the fixed 28px row. */
+  /* 14 tabs in 7×2 grid. Stretch to fill the fixed 28px row; centre the
+     label so short codes (TEAM) and long ones (SUSPENSION) share one axis. */
   min-width: 0;
   min-height: 0;
   padding: 2px calc(var(--gap) * 0.2);
   justify-content: center;
-  align-items: stretch;
+  align-items: center;
+  text-align: center;
 }
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs .cs-tab-lbl {
   /* Tighter font so the longest label fits the 7-column grid without
@@ -281,6 +283,8 @@
      still shrinks if the token ever drops below 11px. */
   font-size: min(8px, calc(var(--fs-micro) - 3px));
   letter-spacing: 0;
+  text-align: center;
+  width: 100%;
 }
 #cs-options {
   flex: 1 1 auto; min-height: 0;

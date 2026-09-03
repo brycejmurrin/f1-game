@@ -75,8 +75,9 @@
 }
 #title {
   font-size: clamp(34px, calc(9 * var(--vwz)), 92px);
+  font-weight: 700; font-style: italic;
   color: var(--text);
-  letter-spacing: 0.06em;
+  letter-spacing: var(--ls-2);
   text-shadow: 0 0 42px color-mix(in oklab, var(--red) 82%, transparent), 0 2px 12px rgba(0, 0, 0, 0.8);
 }
 /* The accent rule UNDERLINES THE WORDMARK. It was `width: 70%; margin: 4px auto
@@ -157,7 +158,7 @@
    where the mb- family's one-off pair did not (rule 12 note above). */
 .mb-sub {
   font-size: var(--fs-micro); font-weight: 600; letter-spacing: var(--ls-4);
-  font-style: normal; color: rgba(255, 255, 255, 0.72);
+  font-style: normal; color: color-mix(in oklab, var(--text) 72%, transparent);
   text-transform: none;
 }
 /* The live save line ships its first-time text in the shell (like #mb-season
@@ -193,6 +194,20 @@
 /* Quiet secondary rooms: token-mix only so the colour ratchet can fall, and
    still above --dim for contrast over a bright sky. */
 #menu-secondary .minibtn { color: color-mix(in oklab, var(--text) 78%, transparent); }
+/* Align icon+label like a single control (primary modes use an inner column;
+   rooms are one-line). Half-height floors so they read as secondary without
+   still painting at full --tap (52 on touch). */
+#menu-secondary .bigbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35em;
+  min-height: max(36px, var(--tap-min));
+  padding: calc(var(--gap) * 0.65) calc(var(--gap) * 0.95) calc(var(--gap) * 0.65) calc(var(--gap) * 1.15);
+  font-size: var(--fs-micro);
+  letter-spacing: var(--ls-1);
+}
+#menu-secondary .bigbtn .btn-ico { margin-right: 0; }
 .minibtn .btn-ico { margin-right: 0.35em; }
 /* Branding and small print as blocks — portrait stacks them centred, exactly as
    the loose elements did. */
@@ -837,9 +852,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
 .sel-chip {
   /* on the height ladder (css/tokens.css) rather than sized by padding alone */
   min-height: var(--chip-h);
-  display: inline-flex; align-items: center;
-  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.85);
+  display: inline-flex; align-items: center; justify-content: center;
+  /* Leading-edge bias under the shared -6deg skew so labels sit optically
+     centred in the parallelogram. */
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.7) calc(var(--gap) * 0.5) calc(var(--gap) * 1);
   font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-1);
+  color: var(--steel);
   border-radius: var(--r-sm);
   border: 1px solid var(--plate-line);
   /* Same dark plate as the settings tab headers — one family of keys. */
@@ -857,6 +877,7 @@ body { --compact-at: 600px; --wide-at: 620px; }
   border-color: var(--red);
   background: var(--plate-on);
   box-shadow: var(--plate-on-glow);
+  color: var(--text);
 }
 .sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
 .sel-edit {
@@ -870,7 +891,10 @@ body { --compact-at: 600px; --wide-at: 620px; }
   .sel-edit:hover { background: var(--plate-on-strong); box-shadow: var(--lift-sel); }
 }
 .sel-edit:active { background: color-mix(in oklab, var(--red) 30%, transparent); }
-h3.sel-label { font-size: var(--label); font-weight: 700; }
+h3.sel-label {
+  font-size: var(--label); font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-4); color: var(--steel); text-transform: uppercase;
+}
 
 /* ---------- circuit preview ---------- */
 #sel-track-preview {
@@ -1508,7 +1532,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #customize .cz-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--gap); margin: 6px 0;
-  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-4); color: rgba(255,255,255,0.5);
+  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-4); color: var(--dim);
 }
 #customize .cz-row label { flex: 1 1 auto; min-width: 0; }
 #customize input[type="text"], #customize input[type="number"] {
@@ -1547,7 +1571,7 @@ h3.sel-label { font-size: var(--label); font-weight: 700; }
 #customize .cz-sep {
   margin: var(--gap) 0 6px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5);
   /* var(--dim), not white at 0.4 alpha: over the darkest ground the sheet can
-     sit on (#0a0a0f) that was 3.75:1 — below AA for 14px text. --dim is 7:1. */
+     sit on (#0c0c14) that was 3.75:1 — below AA for 14px text. --dim is 7:1. */
   color: var(--dim); text-transform: uppercase;
   border-top: 1px solid var(--card-line); padding-top: var(--gap);
 }

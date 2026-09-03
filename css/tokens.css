@@ -183,14 +183,26 @@
 
 :root {
   --red: #e10600;
-  --bg: #0a0a0f;
+  /* Official F1 Carbon Black (~#15151E) cooled into a deeper stage black so
+     sheets still float over the live circuit; --carbon is the steely tint for
+     borders / disabled / secondary plates (brand guidelines: carbon hierarchy,
+     not pure #000). */
+  --carbon: #15151E;
+  --bg: #0c0c14;
+  /* Spark accent — warnings / NEW / session badges only. Never body copy.
+     Kept out of Warm Red so red stays scarce (P1 / primary / true alerts). */
+  --spark: #ff8c42;
+  /* Cool steel chrome — section labels, secondary plate ink. F1 Carbon's
+     blue-steel role at readable contrast; never a red substitute. */
+  --steel: #8a8a96;
   /* Translucent on purpose: sheets sit over the live #game circuit, and that
      3D view is the imagery. 0.76 leaves floodlights and tarmac readable
      through the card without dropping type contrast. Reduced-transparency
      swaps this for --surf-1 (css/components.css). */
-  --panel: color-mix(in oklab, #fff 5%, rgba(11, 11, 18, 0.76));
-  --text: #f2f2f5;
-  --dim: #9a9aa5;
+  --panel: color-mix(in oklab, #fff 5%, color-mix(in oklab, var(--carbon) 88%, transparent));
+  /* Hi-Vis White analogue — brand forbids Warm Red as body/headline ink. */
+  --text: #f6f6f9;
+  --dim: #9a9aa8;
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
   --sat: env(safe-area-inset-top, 0px);
@@ -451,7 +463,7 @@
      trio, cam picker, tuner rails). Translucent-but-opaque on purpose: no
      backdrop-filter over a rendering turntable. Was rgba(12,12,16,0.74)
      pasted three times in carsetup.css with the same six-line comment. */
-  --plate-opaque: rgba(12, 12, 16, 0.74);
+  --plate-opaque: color-mix(in oklab, var(--carbon) 74%, transparent);
   /* Screen scrims — the dim wash behind raised UI. One colour, six ad-hoc
      alphas across five sheets; the two named rungs cover the exact repeats
      (0.42 light dim, 0.92 near-solid backdrop). */

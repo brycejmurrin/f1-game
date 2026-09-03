@@ -813,9 +813,9 @@ body[data-density="compact"] #campicker {
   align-items: start;
 }
 #howtoplay dt {
-  color: var(--red); font-weight: 700; font-size: var(--fs-micro);
+  color: var(--steel); font-weight: 700; font-style: italic; font-size: var(--fs-micro);
   letter-spacing: var(--ls-4); padding: calc(var(--gap) * 0.5) 0 calc(var(--gap) / 6);
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--card-line);
   white-space: normal; overflow-wrap: anywhere;
 }
 #howtoplay dt:first-child { border-top: none; }
@@ -823,7 +823,7 @@ body[data-density="compact"] #campicker {
 #howtoplay dd {
   color: var(--text); font-size: var(--fs-micro); margin-left: 0; line-height: 1.45;
   padding: calc(var(--gap) * 0.5) 0 calc(var(--gap) / 6);
-  border-top: 1px solid rgba(255,255,255,0.06);
+  border-top: 1px solid var(--card-line);
 }
 #howtoplay dd:first-of-type { border-top: none; }
 /* One term/description pair per row at every width. The former wide layout put

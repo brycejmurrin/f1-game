@@ -217,7 +217,15 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    heading comes straight out of the list under it, on exactly the short screens
    the rule exists for. The clamp's px bounds ARE in own units and do scale, so
    the heading is never smaller than the floor at any setting. */
-.sheet-head h2 { color: var(--red); margin: 0; font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px); }
+.sheet-head h2 {
+  /* White title + red leading rail (box-shadow on .sheet-head): brand keeps
+     Warm Red scarce — rail/tick/P1 only, not headline ink. */
+  color: var(--text); margin: 0;
+  font-size: clamp(15px, calc(3.6 * var(--vhz)), 24px);
+  font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+}
 .sheet-body {
   /* Grid items default to min-width:auto, so a max-content child can widen the
      BODY track even while the sheet itself stays viewport-sized. At 200% UI
@@ -285,8 +293,9 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      ~54px of the ~230px the content has to live in.
      Floor 14px so 90% UI zoom still clears the 12px visual type floor. */
   font-size: clamp(14px, calc(3.6 * var(--vhz)), 20px);
-  /* --vhz like the font-size above — same zoomed element, one line apart. */
-  padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 16px;
+  /* --vhz like the font-size above — same zoomed element, one line apart.
+     Leading-edge +4px so the skewed label stays optically column-centred. */
+  padding: clamp(7px, calc(1.8 * var(--vhz)), 14px) 14px clamp(7px, calc(1.8 * var(--vhz)), 14px) 18px;
 }
 /* A lone BACK / DONE / CLOSE is not a banner. Pairs (BACK + RACE!) still
    share the foot 1:1 via flex-grow. */
@@ -633,9 +642,13 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
      floor means a font-size override can never quietly shrink a primary
      button below the rest of its row. */
   min-height: var(--tap);
-  padding: 14px 20px;
+  /* Optical centre under skewX(-6deg): the parallelogram drifts left, so
+     bias padding toward the leading edge so the label reads column-centred. */
+  padding: 14px 18px 14px 22px;
   font-size: var(--fs-6);
-  color: #fff;
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  color: var(--text);
   background: var(--grad-primary);
   border: none;
   border-radius: var(--r-md);
@@ -724,8 +737,10 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    sheet plus the top lip, which is what makes a control look pressable on a
    dark background (an unfilled border alone reads as a disabled field). */
 .bigbtn.alt {
-  background: var(--plate); color: var(--dim);
+  background: var(--plate); color: var(--steel);
   border: 1px solid var(--plate-line);
+  font-weight: 600;
+  letter-spacing: var(--ls-1);
   /* Flat plate, same as the settings tab headers — not a lighter raised slab. */
   box-shadow: none;
 }
@@ -1014,7 +1029,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   --balance-min: 7.25rem;
   gap: calc(var(--gap) * 0.5);
   padding-bottom: calc(var(--gap) * 0.6);
-  background: var(--bg);
+  /* Match the sheet surface so sticky tabs do not flash --bg through scroll. */
+  background: var(--surf-1);
 }
 /* Equal segments: override .balanced-row's 7.25rem basis so three tabs stay
    one even row instead of wrapping MORE onto a lonely second line. */
@@ -1026,13 +1042,14 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   min-width: 0;
   min-height: var(--tap);
   margin: 0;
-  padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.67);
+  padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.5) calc(var(--gap) * 0.6) calc(var(--gap) * 0.84);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-sm);
   background: var(--plate);
-  color: var(--dim);
+  color: var(--steel);
+  font-family: var(--font-hud);
   font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: var(--ls-3);
   text-align: center;
 }
@@ -1071,10 +1088,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 .pm-groups > [role="tabpanel"][hidden] { display: none !important; }
 .pm-group { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
-  color: var(--red);
+  /* Steel section chrome — red is reserved for the rule under the label. */
+  color: var(--steel);
   font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
-  font-weight: 700; letter-spacing: var(--ls-5);
+  font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-5);
   line-height: 1.2;
+  text-transform: uppercase;
   box-sizing: border-box;
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
@@ -1099,9 +1119,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   justify-content: flex-start;
   text-align: left;
   width: 100%;
-  padding-inline: calc(var(--pad) * 0.75);
+  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
   /* Grows with the viewport, never under the micro floor inside sheet zoom. */
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-weight: 600;
   letter-spacing: var(--ls-2);
 }
 .pm-group .tune-row {
@@ -1179,14 +1200,23 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 .pm-doors {
   /* Same primitive as chips / title rooms: wrap into a grid when the
-     sheet is wide enough, stack when it is not. */
+     sheet is wide enough, stack when it is not. Heading stays full-bleed;
+     only the tool doors balance. */
+  display: flex;
+  flex-wrap: wrap;
   --balance-basis: 12rem;
   --balance-min: 9rem;
   gap: calc(var(--gap) * 0.5);
 }
-.pm-doors button {
+.pm-doors > .pm-group-h {
+  flex: 1 1 100%;
+  width: 100%;
+  margin: 0 0 calc(var(--gap) * 0.25);
+}
+.pm-doors > button {
+  flex: 1 1 var(--balance-basis);
+  min-width: min(100%, var(--balance-min));
   margin: 0;
-  min-width: 0;
 }
 /* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't
    have to scroll through a single full-width column of buttons.

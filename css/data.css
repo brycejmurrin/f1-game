@@ -218,8 +218,8 @@ body[data-width="narrow"] .dh-content { padding: var(--gap) calc(var(--gap) * 7 
 .dh-tabbody { display: flex; flex-direction: column; gap: var(--gap); }
 
 .dh-section {
-  font-size: var(--fs-2); letter-spacing: var(--ls-5); color: var(--red);
-  font-weight: 800; font-style: italic;
+  font-size: var(--fs-2); letter-spacing: var(--ls-5); color: var(--steel);
+  font-weight: 800; font-style: italic; text-transform: uppercase;
   margin: calc(var(--gap) * 0.5) 0 calc(var(--gap) * 2 / 3);
 }
 
@@ -324,7 +324,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-swatch { width: 12px; height: 12px; border-radius: var(--r-xs); flex: 0 0 auto; }
 .dh-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dh-wins { font-size: var(--fs-2); color: #f6d200; font-weight: 700; flex: 0 0 auto; }
-.dh-pts { min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: #fff; font-variant-numeric: tabular-nums; }
+.dh-pts { font-family: var(--font-hud); min-width: 44px; text-align: right; font-weight: 800; flex: 0 0 auto; color: var(--text); font-variant-numeric: tabular-nums; }
 .dh-gap { font-size: var(--fs-2); color: #6a6a75; flex: 0 0 auto; min-width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* last race */
@@ -508,7 +508,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
 }
 .dh-gcell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .dh-glabel { font-size: var(--fs-micro); letter-spacing: var(--ls-4); color: var(--dim); white-space: nowrap; }
-.dh-gval { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fff; line-height: 1; }
+.dh-gval { font-family: var(--font-hud); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text); line-height: 1; }
 .dh-gspeed .dh-gval { color: #39d0ff; }
 .dh-gbar { height: 8px; border-radius: var(--r-sm); background: rgba(255, 255, 255, 0.09); overflow: hidden; margin-top: auto; }
 .dh-gfill { height: 100%; width: 0%; border-radius: var(--r-sm); transition: width 0.05s linear; }

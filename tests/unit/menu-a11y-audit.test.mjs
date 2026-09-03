@@ -471,7 +471,7 @@ test("menus.css text colours clear AA over the darkest sheet ground", () => {
   const tokens = cssRules(read("css/tokens.css"));
   const menus = cssRules(read("css/menus.css"));
   const bg = decl(tokens, ":root", "--bg");
-  assert.equal(bg, "#0a0a0f", "the darkest ground a sheet can sit over");
+  assert.equal(bg, "#0c0c14", "the darkest ground a sheet can sit over");
   for (const sel of ["#customize .cz-sep", "#customize .cz-row"]) {
     const c = resolveColor(decl(menus, sel, "color"), tokens, bg);
     assert.ok(c, `${sel} colour resolves`);
