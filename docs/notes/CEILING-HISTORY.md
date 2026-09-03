@@ -1407,3 +1407,6 @@ live in `ratchets.json`.
   series. `beginLinks()`/`resolveLinks()` issue the batch first and read the
   statuses after; the extension is requested in init(); without it nothing
   changes. Pinned on the mock's call order (`bootGlx({ parallel: true })`).
+- `js/game.js` 9286 -> **9290** (2026-09-03): the TIME chip calls
+  `scheduleFlybyTrack()` so a pick that flips sessionDark rebuilds the flyby
+  track in menu idle instead of making GO pay a second full `Tracks.build`.

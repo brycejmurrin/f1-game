@@ -8279,7 +8279,11 @@ function buildRaceSettings() {
     const b = document.createElement("button");
     b.className = "sel-chip" + (raceTimeOfDay === id ? " active" : "");
     b.textContent = label;
-    b.onclick = () => { raceTimeOfDay = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
+    // scheduleFlybyTrack: loadTrack is memoised on (circuit, sessionDark), and
+    // a TIME pick that flips sessionDark used to leave the flyby's build stale
+    // so GO paid a second full Tracks.build (0.9–3.3 s measured) on top of the
+    // first. Rebuilding on the click lands it in menu idle instead.
+    b.onclick = () => { raceTimeOfDay = id; buildRaceSettings(); scheduleFlybyTrack(); if (soundOn) GameAudio.uiTick(); };
     timeEl.appendChild(b);
   }
   // DIFFICULTY — a race setting like the rest, so it is built here rather than

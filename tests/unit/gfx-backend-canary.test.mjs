@@ -2377,6 +2377,14 @@ test("GLX links its core programs as one parallel batch when KHR_parallel_shader
   assert.match(glx, /getExtension\("KHR_parallel_shader_compile"\)/, "init() requests the extension");
 });
 
+test("the TIME chip rebuilds the flyby track so GO does not pay a second Tracks.build", () => {
+  const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(game, /raceTimeOfDay = id; buildRaceSettings\(\); scheduleFlybyTrack\(\);/,
+    "a time-of-day pick must schedule the (memoised) flyby build while the menu is idle");
+  assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
+    "loadTrack's memo is what makes the extra call free when the session darkness did not change");
+});
+
 test("pcssPen help names desktop three.js WebGL2 as live", () => {
   const lighting = read("js/lighting/knobs.js");
   assert.match(lighting, /three\.js desktop WebGL2/,
