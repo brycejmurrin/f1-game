@@ -80,9 +80,9 @@ const GAME = readFileSync(new URL("../../js/game.js", import.meta.url), "utf8");
 function gridRule(rule, o = {}) {
   const src = fnSource(GAME, "function gridOrderFor(base)");
   const rank = (season, a, b) => (season.pts[b] || 0) - (season.pts[a] || 0) || (a < b ? -1 : 1);
-  return new Function("isTimeTrial", "isChampionship", "SeasonCal", "raceGrid", "season", "cars", "simRnd",
+  return new Function("isTimeTrial", "isChampionship", "SeasonCal", "raceGrid", "season", "cars", "simRnd", "netPlay",
     src + ";return gridOrderFor;")(() => !!o.tt, () => !!o.champ, { quali: () => !!o.squali, rank },
-    rule, o.season || { pts: {} }, o.cars, o.rnd || (() => 0.5));
+    rule, o.season || { pts: {} }, o.cars, o.rnd || (() => 0.5), { active: () => !!o.net });
 }
 const carsOf = (n) => Array.from({ length: n }, (_, i) => ({ driverId: "d" + i }));
 
@@ -112,6 +112,34 @@ test("a qualifying championship and a time trial ignore the rule; RANDOM spends 
   const out = gridRule("random", { cars, rnd })(null);
   assert.equal(draws, cars.length, "exactly the jitter gridUp would have drawn");
   assert.deepEqual(out.map((c) => c.driverId), ["d1", "d3", "d0", "d2"]);
+});
+
+test("RANDOM falls back to the pace order in a room — peers share no seed", () => {
+  // netplay's grid is negotiation-free BECAUSE gridUp() runs identically on
+  // every peer (js/net/netplay.js separateGrid lays the humans into consecutive
+  // boxes from the local car's slot). No seed crosses the wire, so a rule that
+  // rolls its own order would have each peer build a DIFFERENT grid and place
+  // rivals inside one another.
+  const cars = carsOf(4);
+  let draws = 0;
+  const rnd = () => { draws++; return [0.7, 0.1, 0.9, 0.4][draws - 1]; };
+  assert.equal(gridRule("random", { cars, rnd, net: true })(null), null, "the room grids on pace order");
+  assert.equal(draws, 0, "…and spends no draw doing it, exactly as PACE ORDER would");
+  const solo = gridRule("random", { cars, rnd })(null);
+  assert.deepEqual(solo.map((c) => c.driverId), ["d1", "d3", "d0", "d2"], "solo still rolls");
+});
+
+test("REVERSE STANDINGS spends the grid jitter it does not use, so the stream does not shift", () => {
+  // gridUp() draws one simRnd() per car when it builds its own order. A rule
+  // that returns a full order without drawing would leave every later consumer
+  // (the AI overtake fire, the start hold) at a different point in the stream
+  // for the same seed — the makeCars stream contract.
+  const cars = carsOf(3);
+  const season = { pts: { d0: 40, d1: 10, d2: 25 } };
+  let draws = 0;
+  const out = gridRule("revchamp", { cars, champ: true, season, rnd: () => { draws++; return 0.5; } })(null);
+  assert.deepEqual(out.map((c) => c.driverId), ["d1", "d2", "d0"], "still the standings, reversed");
+  assert.equal(draws, cars.length, "one draw per car, discarded — same count, same stream position");
 });
 
 test("RANDOM in the live game: the same seed grids the same field, and it is not the pace order", async () => {

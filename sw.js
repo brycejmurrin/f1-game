@@ -263,17 +263,15 @@ self.addEventListener("install", (event) => {
     const stamped = urls.optional.map((u) =>
       /^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
         ? u + "?v=" + build : u);
-    // SKIP AHEAD OF THE OPTIONAL SEED. skipWaiting() used to sit behind ~6.5 MB
-    // of best-effort precache (the deferred backends, forty scenery closures,
-    // the data and net bundles), so a returning player's browser held the NEW
-    // worker in `waiting` — serving the previous generation's cache — until all
-    // of it had been fetched. The essentials and the completion sentinel are
-    // already written above, which is everything activation actually depends
-    // on; the optional pool still runs inside this same waitUntil, so the
-    // install is not considered finished until it settles and every
-    // tolerates-failure / never-settles guarantee below is unchanged.
-    await self.skipWaiting();
+    // SKIPWAITING STAYS LAST, deliberately. Hoisting it above this pool lets a
+    // returning player's new worker activate — and `activate` both claims
+    // clients and DELETES every other generation's cache — while the deferred
+    // backends, the forty scenery closures and the data/net bundles are still
+    // in flight. Going offline inside that window would lose assets the
+    // previous cache still held a moment earlier. The first-visit boot win
+    // comes from deferring REGISTRATION (index.html), which costs nothing here.
     await pooled(stamped, 4, (u) => cacheOptionalAsset(cache, u));
+    await self.skipWaiting();
   })());
 });
 
