@@ -9,7 +9,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
-import { CIRCUITS, parseCircuits, circuitTag } from "../../tools/circuit-axis.mjs";
+import { CIRCUITS, parseCircuits, circuitTag } from "../../tools/ui/circuit-axis.mjs";
 
 test("the spread actually spans tall to wide", () => {
   const aspects = CIRCUITS.map(([, a]) => a);

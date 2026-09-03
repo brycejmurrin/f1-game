@@ -10,7 +10,7 @@ runs:
         EVENT: ${{ github.event_name }}
         PUSH_BEFORE: ${{ github.event.before }}
         PR_BASE: ${{ github.event.pull_request.base.sha }}
-      run: bash tools/ci-select-specs-step.sh
+      run: bash tools/ci/ci-select-specs-step.sh
 outputs:
   specs:
     description: space-separated spec paths

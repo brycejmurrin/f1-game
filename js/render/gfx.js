@@ -62,7 +62,7 @@
  *     index IS the MAT id; setMaterialMaps(maps|null) adopts/clears the baked
  *     arrays. assets.js supported() detects the pair (GLX + WGX + TLX).
  *   drawParticles(data, floatCount, additive)    transient FX vertex batch —
- *     js/game/particles.js feature-detects it (GLX + WGX + TLX).
+ *     js/fx/particles.js feature-detects it (GLX + WGX + TLX).
  *
  * Frame protocol (per rendered frame, in this order):
  *   shadowBegin(lightVP) -> castShadow(mesh,model) / castShadowChunked(mesh,model)

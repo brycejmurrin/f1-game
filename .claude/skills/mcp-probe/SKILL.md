@@ -9,17 +9,17 @@ One MCP server sits alongside the Playwright suite for live poking:
 **chrome-devtools** (`chrome_*`, working tree, canvas-visible, WebGPU flags
 from `webgpu-chrome-args.cjs`). The deployed site / public web is **not**
 reachable from a container browser — that is the **deploy-research** subagent
-(host fetch / WebFetch). `tools/probe-mcp.py` is a CLI (not MCP-attached since
+(host fetch / WebFetch). `tools/mcp/probe-mcp.py` is a CLI (not MCP-attached since
 2026-09) whose `chrome-start` daemon keeps ONE Chromium alive across `call`s.
 
 ## Entry
 
 ```sh
-python3 tools/probe-mcp.py list-tools
-python3 tools/probe-mcp.py chrome-start          # REQUIRED for multi-call chrome
-python3 tools/probe-mcp.py call chrome_...
-python3 tools/probe-mcp.py chrome-stop           # ALWAYS before test-bg.mjs
-node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
+python3 tools/mcp/probe-mcp.py list-tools
+python3 tools/mcp/probe-mcp.py chrome-start          # REQUIRED for multi-call chrome
+python3 tools/mcp/probe-mcp.py call chrome_...
+python3 tools/mcp/probe-mcp.py chrome-stop           # ALWAYS before test-bg.mjs
+node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
 
 A bare `call` without `chrome-start` spawns a **fresh** Chromium each time —
@@ -29,7 +29,7 @@ daemon or `mcp-cli probe` batching otherwise.
 
 Keep **`apex-tools` in root `.mcp.json`** so Cloud/Claude/this agent can load
 it. Cursor CLI also has `.cursor/mcp.json` (lockstep). If this session's host
-catalog is empty, use `./tools/apex-tools-mcp.sh call` or the daemon above.
+catalog is empty, use `./tools/mcp/apex-tools-mcp.sh call` or the daemon above.
 `version.json` / public web is subagent `deploy-research`. Do not attach this
 skill for a version.json STALE check.
 
@@ -38,7 +38,7 @@ vs playwright-official).
 
 | Need | Use |
 |---|---|
-| Local CLI wrap (`--fast`, shot/eval, pick-tests) | `apex-tools` / `./tools/apex-tools-mcp.sh` — not `chrome_*` |
+| Local CLI wrap (`--fast`, shot/eval, pick-tests) | `apex-tools` / `./tools/mcp/apex-tools-mcp.sh` — not `chrome_*` |
 | Live canvas / `__apex` / screenshot | `chrome_*` / `probe-mcp.py chrome-start` (`http://127.0.0.1`, not github.io) |
 | Deployed artifact / public web | `deploy-research` subagent (host fetch / WebFetch) — never a container browser |
 | Interactive host Chromium | repo MCP **playwright-official** (`browser_*`) — never with this Chrome |
@@ -55,12 +55,12 @@ vs playwright-official).
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
 4. SwiftShader WebGPU **executes** — visible WGX pixels come from the soft-present
    2D blit on `#game` (`gfx-probe.mjs` / `GLX.awaitSoftPresent()`), not from the
-   hidden swapchain canvas. Readback oracle: `node tools/wgx-capture.mjs <track>`
+   hidden swapchain canvas. Readback oracle: `node tools/gfx/wgx-capture.mjs <track>`
    → `frame.png` (optional; never call `getCurrentTexture()` on software
    adapters — it breaks `mapAsync` device-wide). Lavapipe A/B:
    `wgx-lavapipe-probe.mjs` (needs `mesa-vulkan-drivers`). TLX:
    `gfx-probe.mjs --backend three` (WebGL2 pin). Cloud env packages:
-   `AGENTS.md` §Cursor Cloud; `docs/research/CI-RENDERING-PERFORMANCE.md`
+   `AGENTS.md` §Cursor Cloud; `../../../docs/notes/CI-RENDERING-PERFORMANCE.md`
    §Cursor Cloud.
 5. Long fetch/search → `deploy-research` subagent, not the parent context.
 

@@ -8,7 +8,7 @@ geometry bug.
 1. **Identify the layer first.** If keys, wheel, or Escape go to the wrong
    place, inspect `UiLayers.top()` / `UiLayers.anyOpen()` before touching
    individual modules. New full-screen overlays must be added to the internal
-   `DEFS` array in `js/game/uilayers.js` (only `LAYER_IDS` is exported — do
+   `DEFS` array in `js/ui/layers.js` (only `LAYER_IDS` is exported — do
    not assign `UiLayers.DEFS`).
 
 2. **Use the declared close door.** For real dialogs, let `TopModal` mirror
@@ -44,8 +44,8 @@ geometry bug.
    pointer only; use `any-pointer` when the question is "does any attached
    input exist?"
 
-8. **Verify.** `npm run test:tooling-fast`, then `node tools/test-bg.mjs ui`.
-   If JS/CSS changed, `node tools/gen-shell.mjs --check` (no cache bump is needed (tags read `?v=dev`; `pages.yml` stamps the hashes at deploy) — after a `tools/manifest.cjs` change run `node tools/gen-shell.mjs`) before commit.
+8. **Verify.** `npm run test:tooling-fast`, then `node tools/ci/test-bg.mjs ui`.
+   If JS/CSS changed, `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`) before commit.
 
 ### Pause settings overlay
 

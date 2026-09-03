@@ -1,5 +1,5 @@
 /* offtrack-vm.test.mjs — tests/specs/offtrack.spec.js replayed in the Node VM
- * (tools/game-vm.cjs): prog↔s coupling, reversing, wrong-way, grass, the
+ * (tools/lib/game-vm.cjs): prog↔s coupling, reversing, wrong-way, grass, the
  * auto-rescues and the stopped-on-track contract — with the SAME assertions,
  * thresholds and PACE pin (setPhysics({ pace: 1 })).
  *
@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
 const lt = (a, b, m) => assert.ok(a < b, m || `${a} < ${b}`);

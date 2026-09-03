@@ -80,6 +80,10 @@ const TLX = (function () {
       // GPU error tally — see the onuncapturederror hook below.
       let _gpuErrors = 0, _gpuFirstError = null;
       const GPU_ERR_LOG_CAP = 8;
+      // Heal-gate counters live HERE, not by the gate: the error hooks install
+      // during bootRenderer's await, and on the WebGPU -> WebGL2 fallback an
+      // error arriving before the later declarations ran was a TDZ throw.
+      let _presentN = 0, _healTried = false, _gpuErrFrames = 0, _gpuErrLastPresent = -1;
       // Headless is a fact about PRESENTATION, not about silicon: headless
       // Chromium on a real GPU IS hardware. It belongs to _softBlit (which
       // exists because a headless swapchain does not composite) and never
@@ -276,7 +280,7 @@ const TLX = (function () {
           alpha: false,
           premultipliedAlpha: false,
           ...(glCtx ? { context: glCtx } : {}),
-          // js/render/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
+          // js/render/glx/glx.js's `antialias: !IS_MOBILE` 1:1 — "phones never take
           // the context-level AA path". This is NOT the scene target's MSAA
           // (msaa() below is honestly 1: the post chain deliberately has no
           // multisampled scene target — see the DEVIATION note in tlx-post.js).
@@ -371,6 +375,7 @@ const TLX = (function () {
                 const msg = (ev && ev.error && ev.error.message) || "gpu error";
                 if (!_gpuFirstError) _gpuFirstError = msg;
                 _gpuErrors++;
+                if (_gpuErrLastPresent !== _presentN) { _gpuErrLastPresent = _presentN; _gpuErrFrames++; }
                 if (_gpuErrors <= GPU_ERR_LOG_CAP) {
                   try { Log.warn("gfx", "TLX GPU error #" + _gpuErrors + ":", msg); } catch (_) { /* no Log in the node VM harness: the count is the load-bearing part */ }
                   if (_gpuErrors === GPU_ERR_LOG_CAP) {
@@ -408,6 +413,7 @@ const TLX = (function () {
                         const text = "WGSL " + label + " " + (m.lineNum | 0) + ":" + (m.linePos | 0) + " " + m.message;
                         if (!_gpuFirstError) _gpuFirstError = text;
                         _gpuErrors++;
+                        if (_gpuErrLastPresent !== _presentN) { _gpuErrLastPresent = _presentN; _gpuErrFrames++; }
                         if (_gpuErrors <= GPU_ERR_LOG_CAP) {
                           try { Log.warn("gfx", "TLX shader error #" + _gpuErrors + ":", text); } catch (_) { /* no Log in the node VM harness */ }
                         }
@@ -502,18 +508,17 @@ const TLX = (function () {
       // them all at once costs more llvmpipe seconds than a present budget
       // has, and a timeout would not say which path did it:
       //   sky | env | chunked | batches | shadow   (or "1" / "all")
-      // A/B switches for the WebKit-WebGPU investigation (THREE PATH: WEBGPU
-      // pinned on the phone). Each reverts ONE suspect without a deploy:
+      // A/B switch left from the WebKit-WebGPU investigation. It reverts ONE
+      // suspect without a deploy, and is reported by backendState() + the GOV
+      // `tlx` row:
       //   apex26.tlxArrayNearest=1  placeholders keep the pre-0a3f480
       //                             Nearest/Clamp state (textureLoad program)
-      //   apex26.tlxNoMrt=1         the scene pass never arms the SSR MRT
-      //                             second attachment (single-target)
-      // Both are reported by backendState() and the GOV `tlx` row.
+      // Its sibling `apex26.tlxNoMrt` is GONE (2026-09-03): it tested whether
+      // the SSR MRT attachment caused the sky-only iPhone, and the cause was
+      // WebKit's 8 KB var<private> cap (PATCHES.md §4) — a disproved switch
+      // costs three per-frame terms and an axis in every phone diag.
       const _arrayNearest = (function () {
         try { return localStorage.getItem("apex26.tlxArrayNearest") === "1"; } catch (_) { return false; }
-      })();
-      const _noMrt = (function () {
-        try { return localStorage.getItem("apex26.tlxNoMrt") === "1"; } catch (_) { return false; }
       })();
       const _forceHw = (function () {
         let raw = "";
@@ -617,7 +622,7 @@ const TLX = (function () {
           "(forceWebGL", forceWebGL, "pin", _glPin, "isMobile", isMobile + ")");
       } catch (_) { /* logging must never cost the backend its boot */ }
 
-      // ── CONTEXT / DEVICE LOSS RECOVERY (js/render/glx.js webglcontextlost) ──
+      // ── CONTEXT / DEVICE LOSS RECOVERY (js/render/glx/glx.js webglcontextlost) ──
       // three DETECTS a loss on both backends — the WebGL backend
       // preventDefault()s the canvas event, the WebGPU backend resolves
       // device.lost — and funnels both into renderer.onDeviceLost, whose
@@ -757,10 +762,14 @@ const TLX = (function () {
       // 0 = lit/post, 1 = TSL unlit, 2 = classic (no TSL). Latched on the
       // first present() throw so later frames do not recompile the dead graph.
       let _drawMatMode = 0;
-      // present() count since boot, and whether the AUTO self-heal below has
-      // already fired this session (it reloads, so once is all it can do).
-      let _presentN = 0, _healTried = false;
+      // The heal counts DISTINCT PRESENTS an error landed in (_gpuErrFrames,
+      // declared beside _gpuErrors above), not raw errors: one rejected
+      // pipeline raises an error per DRAW, so a broken program is dozens of
+      // "errors" in one frame, while a healthy tab can raise exactly one
+      // transient (resize race, texture freed on a track switch, the capture
+      // path). Healing on `> 0` reloaded the second case; WGX counts frames too.
       const HEAL_WINDOW = 120;
+      const HEAL_MIN_FRAMES = 2;   // distinct presents carrying an error (see _gpuErrFrames)
 
       const vizMode = (function () {
         try {
@@ -861,7 +870,7 @@ const TLX = (function () {
         envRT = null; envDummy = null;
       }
 
-      // ── Baked PBR material arrays (js/render/assets.js) ──────────────────
+      // ── Baked PBR material arrays (js/render/shared/assets.js) ──────────────────
       // Created as 1×1×17 mid-grey PLACEHOLDERS before the lit factory runs,
       // because tsl-lit.js binds its texture nodes once at factory time and the
       // asset pack loads asynchronously long after. setMaterialMaps() below
@@ -1323,6 +1332,23 @@ const TLX = (function () {
       let _poolBatch = 0;
       let _pruneLast = 0;
       const _tmpMat4 = new THREE.Matrix4(), _tmpMat4b = new THREE.Matrix4();
+      // GL→WebGPU clip depth remap — game.js builds GL projections (NDC z ∈ [-1,1]);
+      // three WebGPU rasterises z ∈ [0,1]. Same Z01 as WGX (js/render/webgpu/wgx.js).
+      const Z01 = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,0.5,0, 0,0,0.5,1]);
+      const Z01INV = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,2,0, 0,0,-1,1]);
+      const _projGpu = new Float32Array(16);
+      const _vpGpuTlx = new Float32Array(16);
+      const _invProjGpu = new Float32Array(16);
+      function _mul4Col(out, a, b) {
+        for (let c = 0; c < 4; c++) {
+          const b0 = b[c * 4], b1 = b[c * 4 + 1], b2 = b[c * 4 + 2], b3 = b[c * 4 + 3];
+          out[c * 4]     = a[0] * b0 + a[4] * b1 + a[8] * b2  + a[12] * b3;
+          out[c * 4 + 1] = a[1] * b0 + a[5] * b1 + a[9] * b2  + a[13] * b3;
+          out[c * 4 + 2] = a[2] * b0 + a[6] * b1 + a[10] * b2 + a[14] * b3;
+          out[c * 4 + 3] = a[3] * b0 + a[7] * b1 + a[11] * b2 + a[15] * b3;
+        }
+        return out;
+      }
 
       // ── M6 FX plumbing ───────────────────────────────────────────────────
       // Shared unit quad for blob shadows + per-mark skid stamps: the GLX
@@ -2118,7 +2144,7 @@ const TLX = (function () {
         // DataArrayTexture, so each ImageBitmap is read back once through a
         // scratch WebGL2 context; GLX can hand the bitmap straight to
         // texSubImage3D, which is why this readback lives here and not in
-        // js/render/assets.js. Returns null on any failure — the caller then
+        // js/render/shared/assets.js. Returns null on any failure — the caller then
         // keeps the procedural look.
         //
         // WHY WEBGL AND NOT A 2D CANVAS: drawImage()+getImageData() is
@@ -2413,7 +2439,7 @@ const TLX = (function () {
         },
 
         // ── Cull-test helpers (GLX parity) ──────────────────────────────────
-        // js/game/agentview.js calls GLX.makeFrustumPlanes/aabbInFrustum
+        // js/agent/agentview.js calls GLX.makeFrustumPlanes/aabbInFrustum
         // directly, so its "what is on screen" answer runs the SAME test the
         // draw path runs. These MUST be own properties of the backend object:
         // game.js installs a backend by descriptor-copy onto GLX
@@ -2515,14 +2541,29 @@ const TLX = (function () {
             : ((frame && frame.fogColor) || [0.04, 0.04, 0.06]);
           scene.background.setRGB(f[0], f[1], f[2]);
           camera.matrixWorldAutoUpdate = false;
+          const _wgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
           if (frame && frame.proj && frame.invProj && frame.viewProj) {
-            camera.projectionMatrix.fromArray(frame.proj);
-            camera.matrixWorldInverse.multiplyMatrices(
-              _tmpMat4.fromArray(frame.invProj),
-              _tmpMat4b.fromArray(frame.viewProj));
+            if (_wgpu) {
+              _mul4Col(_projGpu, Z01, frame.proj);
+              camera.projectionMatrix.fromArray(_projGpu);
+              if (renderer.coordinateSystem != null) camera.coordinateSystem = renderer.coordinateSystem;
+            } else {
+              camera.projectionMatrix.fromArray(frame.proj);
+            }
+            // Garage lens shift: keep P and V separate on WebGPU (Z01·(P·V) ≠ (Z01·P)·V).
+            _tmpMat4.fromArray(frame.invProj);
+            _tmpMat4b.fromArray(frame.viewProj);
+            camera.matrixWorldInverse.multiplyMatrices(_tmpMat4, _tmpMat4b);
             camera.matrixWorld.copy(camera.matrixWorldInverse).invert();
           } else if (frame && frame.viewProj) {
-            camera.projectionMatrix.fromArray(frame.viewProj);
+            if (_wgpu) {
+              // No proj/invProj split — fold VP (OK when P is on-axis, e.g. legacy paths).
+              _mul4Col(_vpGpuTlx, Z01, frame.viewProj);
+              camera.projectionMatrix.fromArray(_vpGpuTlx);
+              if (renderer.coordinateSystem != null) camera.coordinateSystem = renderer.coordinateSystem;
+            } else {
+              camera.projectionMatrix.fromArray(frame.viewProj);
+            }
             camera.matrixWorldInverse.identity();
             camera.matrixWorld.identity();
           }
@@ -2542,7 +2583,12 @@ const TLX = (function () {
           if (frame && frame.viewProj) _frameVP.set(frame.viewProj);
           frameCullDist = (frame && frame.cullDist) || 0;
           _postF.proj = (frame && frame.proj) || null;
-          _postF.invProj = (frame && frame.invProj) || null;
+          if (_wgpu && frame && frame.invProj && frame.invProj.length >= 16) {
+            _mul4Col(_invProjGpu, frame.invProj, Z01INV);
+            _postF.invProj = _invProjGpu;
+          } else {
+            _postF.invProj = (frame && frame.invProj) || null;
+          }
           _postF.invVP = (frame && frame.invViewProj) || null;
           _postF.sunVS = (frame && frame.sunViewDir) || null;
           _postF.upVS = (frame && frame.upViewDir) || null;
@@ -2816,9 +2862,9 @@ const TLX = (function () {
               painted = true;   // nothing drawn this frame by design; the last blit stays up
             } else if (post && _postF.proj) {
               pinSkyMaterial();
-              if (!_noMrt && lit && lit.setSsrMrt) lit.setSsrMrt(true);
-              if (!_noMrt && fx && fx.setSsrMrt) fx.setSsrMrt(true);
-              const _hadMrt = !_noMrt && !!(TSL.mrt && renderer.setMRT);
+              if (lit && lit.setSsrMrt) lit.setSsrMrt(true);
+              if (fx && fx.setSsrMrt) fx.setSsrMrt(true);
+              const _hadMrt = !!(TSL.mrt && renderer.setMRT);
               const _prevMrt = _hadMrt && renderer.getMRT ? renderer.getMRT() : null;
               if (_hadMrt) renderer.setMRT(_ssrMrtNode());
               try {
@@ -2867,7 +2913,10 @@ const TLX = (function () {
           // ctxLostReloads cap so a tab that dies every boot cannot loop.
           // AUTO only: a pin is a user override. Never on a diagnostic run
           // (forceHw / soft-blit), where the error count IS the evidence.
-          if (painted && !_healTried && _gpuErrors > 0 && _presentN <= HEAL_WINDOW
+          // TWO distinct presents, not one error: a broken pipeline fails
+          // every frame it is drawn in, a transient does not. The iPhone case
+          // this exists for (a rejected lit program) trips it on frame two.
+          if (painted && !_healTried && _gpuErrFrames >= HEAL_MIN_FRAMES && _presentN <= HEAL_WINDOW
               && renderer.backend && renderer.backend.isWebGPUBackend
               && _glPin !== "0" && _glPin !== "1" && !_forceHw.on && !_softBlit) {
             _healTried = true;
@@ -3072,12 +3121,12 @@ const TLX = (function () {
               // phone screenshot of the GOV panel carries these, which is the
               // evidence a "see-through car" report has never had.
               gpuErrors: _gpuErrors, gpuFirstError: _gpuFirstError,
-              presents: _presentN, healed: _healTried,
+              presents: _presentN, healed: _healTried, gpuErrFrames: _gpuErrFrames,
               // three refreshes every OBJECT-group uniform per draw (r185
               // NodeManager), so the draw count is the CPU lever on a phone;
               // reported here so the GOV `tlx` row can show it (`dc N`).
               calls: (renderer && renderer.info && renderer.info.render) ? (renderer.info.render.drawCalls | 0) : null,
-              arrayNearest: _arrayNearest, noMrt: _noMrt,
+              arrayNearest: _arrayNearest,
               hasMaterialMaps: !!(lit && lit.hasMaterialMaps),
               packLive: !!matOwnedAlbedo,
               drawMatMode: _drawMatMode,

@@ -6,7 +6,7 @@
  * ran its whole distance on the oscillator fallback. setEngine() now restarts
  * the engine once, the first time it sees samples it is not using.
  *
- * js/game/audio.js has no other node harness: this is a fake AudioContext just
+ * js/audio/engine.js has no other node harness: this is a fake AudioContext just
  * wide enough for createCtx/startEngine/setEngine/stopEngine (every node is a
  * generic connect/start/stop object with AudioParam-shaped fields). The fetch
  * of the two sample files is held back until the test releases it.
@@ -22,7 +22,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC_PATH = process.env.APEX_AUDIO_SRC || path.join(ROOT, "js/game/audio.js");
+const SRC_PATH = process.env.APEX_AUDIO_SRC || path.join(ROOT, "js/audio/engine.js");
 const SRC = fs.readFileSync(SRC_PATH, "utf8").replace(/^const\b/gm, "var");
 
 function param(v) {
@@ -41,7 +41,7 @@ function sampleBuf(seconds, sr) {
   return { sampleRate: sr, length: len, duration: seconds, numberOfChannels: 1, getChannelData: () => d };
 }
 
-function boot() {
+function boot(extra = {}) {
   const counts = {};
   const held = [];   // fetch resolvers, released by the test
   const ctx = {
@@ -61,10 +61,11 @@ function boot() {
     AudioContext: function () { return ctx; },
     fetch: () => new Promise((res) => held.push(() => res({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
   };
+  Object.assign(sb, extra);
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/mat4.js" });
-  vm.runInContext(SRC, vctx, { filename: "js/game/audio.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(SRC, vctx, { filename: "js/audio/engine.js" });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
   return { GameAudio, counts, release };
@@ -89,4 +90,25 @@ test("an engine started on the synth voice upgrades to the samples once they dec
   GameAudio.setEngine(0.7, 0, false, 0.7, 5, {});
   GameAudio.setEngine(0.8, 0, false, 0.8, 6, {});
   assert.equal(counts.src, srcAfter, "one restart, not one per frame");
+});
+
+test("music PCM cache: a phone keeps only the playing track, desktop the two most recent", async () => {
+  // Decoded PCM is ~90 MB per song. The cache bound is the difference between
+  // a phone holding one song and holding two; fetch count is the observable
+  // (a cache hit never fetches).
+  const play = async (isMobile) => {
+    let fetches = 0;
+    const held = [];
+    const fetch = () => { fetches++; return new Promise((res) => held.push(() => res({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))); };
+    const { GameAudio } = boot({ fetch, ...(isMobile ? { GLX: { isMobile: true } } : {}) });
+    const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
+    GameAudio.init(); await release();           // engine samples (2 fetches)
+    const base = fetches;
+    GameAudio.playTrackId("builtin:menu");  await release();
+    GameAudio.playTrackId("builtin:song2"); await release();
+    GameAudio.playTrackId("builtin:menu");  await release();   // repeat: hit or miss?
+    return fetches - base;
+  };
+  assert.equal(await play(false), 2, "desktop: the two most recent stay decoded, so the repeat is a cache hit");
+  assert.equal(await play(true), 3, "phone: only the playing track is kept, so the repeat re-fetches (and re-decodes)");
 });

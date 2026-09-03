@@ -61,7 +61,7 @@
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──
     // sectors/turns: curated FIA-aligned sector splits + turn apexes as RACING-LAP
-    // fractions (post startFrac/reverse), never fmap'd — tools/rotate-markings.cjs
+    // fractions (post startFrac/reverse), never fmap'd — tools/track/rotate-markings.cjs
     // re-seats turns when the start line moves.
     // turns: the N strongest curvature peaks of THIS centreline in lap order, N = the
     // researched real turn count. No researched sectors — consumers fall back to thirds.
@@ -70,7 +70,7 @@
     kit: { marshal: "kiosk",     rail: "armco",       fence: "panelled",  tyre: "stack",   board: "monopole",  gantry: "portal",     camera: "monopole",  hoarding: "panel" },
     standSet: ["sandstone", "crimson", "darkSteel"],  // pale Thracian stone, Turkish red, modern steel
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,
-    // recentred, one lap, open loop. tools/import-circuit-path.mjs regenerates it.
+    // recentred, one lap, open loop. tools/track/import-circuit-path.mjs regenerates it.
     // Intercity Istanbul Park — Istanbul. Upstream tr-2005, stated 5338 m, projected 5313 m, trace winding CW.
     path: { len: 5313, pts: [[216,-561.4],[-10,-511.3],[-27.7,-503.2],[-36,-487.2],[-33.7,-474.1],[-19.1,-413.5],[-10.4,-381.7],[-10.4,-357.9],[-16.4,-324],[-36.9,-287.6],[-70.6,-255.2],[-138.7,-214.9],[-178.1,-198.5],[-227.1,-182.2],[-316.8,-165.1],[-374.1,-162.5],[-406.1,-162.1],[-451.7,-168.7],[-471.5,-165.9],[-493.1,-156.2],[-513.6,-135.8],[-524,-111.7],[-528.5,-88.2],[-518.8,-13.9],[-521.2,1.2],[-531.6,10.9],[-547.6,10.9],[-596,5],[-638.8,5],[-661.7,10.9],[-671.8,22.7],[-674.1,36.8],[-662.2,102.2],[-654.6,116.8],[-639.6,128.3],[-271.7,315.4],[-248.4,333.1],[-240.1,349.8],[-240.8,366.2],[-245.3,380.3],[-255.7,391.5],[-286.7,410.3],[-313.2,416.5],[-335.7,417.9],[-448,397.4],[-540.9,375.5],[-587.8,362],[-610.8,357.1],[-625.4,360.8],[-698.7,401.3],[-707.8,413.7],[-731.2,484.6],[-730.9,502.3],[-724.2,518.4],[-696.1,566.2],[-671.1,595.1],[-632.9,632.1],[-615.1,640.1],[-588.6,642.3],[-552.5,637.7],[-86.4,499.1],[-59.3,484.2],[-49.9,471.9],[-51.3,455.7],[-68.3,428.2],[-79.8,404.9],[-79.8,378.8],[68.7,-81.7],[87.1,-105.3],[116.1,-132.3],[717.6,-458.5],[728.8,-470.3],[731.2,-486.3],[728.5,-501.2],[715.9,-516.9],[702.7,-521.8],[662.7,-518.6],[651.6,-523.5],[646,-531.8],[647.4,-550.6],[658.8,-620],[657.2,-633.2],[647.7,-642.3],[634.2,-642.3]] },
   }

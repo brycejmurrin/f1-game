@@ -1,5 +1,5 @@
 // @ts-check
-// Gamepad input tests for js/game/input.js (W3C Gamepad API, "standard" mapping).
+// Gamepad input tests for js/input/input.js (W3C Gamepad API, "standard" mapping).
 //
 // These mock navigator.getGamepads() with a synthetic pad snapshot, call the
 // once-per-frame Input.poll(), then read the public Input surface the game loop
@@ -229,11 +229,11 @@ test("document becoming hidden releases held keyboard, pointer, and touch input"
 
 /* ---------------------------------------------------------------------------
  * GAMEPAD MENU NAVIGATION — the UWP gamepad/keyboard-parity mapping settled in
- * docs/research/PLATFORM-INPUT-NOTES.md §8, shipped in js/game/input.js
+ * docs/research/PLATFORM-INPUT-NOTES.md §8, shipped in js/input/input.js
  * (padNavPoll / padActivate / padEscape / padSeedFocus). pollGamepad() dispatches REAL
  * synthetic KeyboardEvents at `document` when UiLayers.anyOpen() is true, so
- * these tests exercise the same seam a keyboard uses — js/game/menunav.js and
- * js/game/topmodal.js — rather than a second focus-mover. A newly-open menu
+ * these tests exercise the same seam a keyboard uses — js/ui/menu-nav.js and
+ * js/ui/modal.js — rather than a second focus-mover. A newly-open menu
  * seeds one ArrowDown without waiting for a D-pad press (UWP "one focus visual
  * should always be visible"); menu sticks use PAD_NAV_DEADZONE (0.22), larger
  * than driving's PAD_DEADZONE (0.14).
@@ -333,7 +333,7 @@ test.describe("Gamepad menu navigation", () => {
      does NOT fire for a synthetic, untrusted KeyboardEvent — measured directly
      against a bare <dialog> with no listeners while building this feature.
      B must instead dispatch the `cancel` Event TopModal already listens for
-     on every dialog.screen (js/game/topmodal.js wire()), which is what this
+     on every dialog.screen (js/ui/modal.js wire()), which is what this
      pins: that #pausemenu (a real <dialog>) actually closes. */
   test("B closes a native <dialog> screen (pause menu)", async ({ page }) => {
     await page.evaluate(() => window.__apex.race("monza"));

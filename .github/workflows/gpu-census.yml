@@ -139,7 +139,7 @@ jobs:
       - name: WebGPU adapter census
         id: census
         shell: bash
-        run: node tools/gpu-census.mjs --json "census-${{ matrix.image }}.json"
+        run: node tools/gfx/gpu-census.mjs --json "census-${{ matrix.image }}.json"
 
       # Put the verdict in the job summary, not just the log. A job's log is a
       # 404 until the whole job ends, so a 20-minute game check hides a census
@@ -176,7 +176,7 @@ jobs:
         run: |
           FORCE="${{ inputs.force }}"
           LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
+          node tools/gfx/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
             --backend three --path webgpu \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
@@ -190,7 +190,7 @@ jobs:
         run: |
           FORCE="${{ inputs.force }}"
           LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
+          node tools/gfx/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
             --backend three --path webgl2 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
@@ -198,7 +198,7 @@ jobs:
 
       # GLX — the DEFAULT backend, and until now the only one this workflow
       # never looked at. Both checks above force three.js (TLX); a change to
-      # js/render/glx.js could regress every player's renderer and this job
+      # js/render/glx/glx.js could regress every player's renderer and this job
       # would still go green. That is how a flagged GLX path came to be
       # described as "gated on a real GPU" when nothing here could test it.
       - name: Game check — GLX / WebGL2 (the default backend)
@@ -208,7 +208,7 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
+          node tools/gfx/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
             --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
@@ -216,7 +216,7 @@ jobs:
       # WGX — the native WebGPU backend (js/render/webgpu/), opt-in for players.
       # Until 2026-09-02 the "webgpu" leg above was three.js on WebGPU (TLX), so
       # a WGX shader or present-path change had NO real-GPU evidence at all: the
-      # in-container Dawn validates but never executes (tools/wgx-validate.mjs).
+      # in-container Dawn validates but never executes (tools/gfx/wgx-validate.mjs).
       # The Verdict holds this leg to: WGX actually bound (GLX.softPresent is
       # exported by WGX only), the swapchain path on hardware (softPresent
       # false — the CPU blit is the SwiftShader path and the "WebGPU is laggy"
@@ -228,7 +228,7 @@ jobs:
         shell: bash
         run: |
           LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
+          node tools/gfx/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
             --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
@@ -277,7 +277,7 @@ jobs:
               `census anyHardware: ${hardware}`];
             // "glx" is the default backend. Its rows carry no backendState /
             // envState: gpu-game-check reads those only when g.__tlx exists
-            // (tools/gpu-game-check.mjs 205-207), so for GLX the gate is
+            // (tools/gfx/gpu-game-check.mjs 205-207), so for GLX the gate is
             // ok/phase and gpuErrors, which is the right gate for it anyway.
             // Every check below that touches an env/backend field is therefore
             // either absent-safe or scoped to tlxLeg — an absence check aimed

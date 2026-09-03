@@ -1,6 +1,6 @@
 # WebGPU vs WebGL2 — WGX parity research (2026-08)
 
-How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx.js`
+How to close the live gaps between the shipped WebGL2 renderer (`js/render/glx/glx.js`
 + `js/render/shaders/` + `js/render/glx/`) and the opt-in native WebGPU backend
 (`js/render/webgpu/wgx.js` + `wgsl-*.js`).
 
@@ -88,7 +88,7 @@ nearest-bin and chopped the dashes). `fs_main` uses `in.matTrk.xyz` on
 road draws. LUT `trkFromWorld` stays `buryRibbon` + material fallback.
 Vertex colour stays the real albedo (packing into RGB greys the grass
 shoulders).
-See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md) §3 and
+See [../notes/CI-RENDERING-PERFORMANCE.md](../notes/CI-RENDERING-PERFORMANCE.md) §3 and
 [ARCHITECTURE.md](../ARCHITECTURE.md) for the live caveat list.
 
 Companion provenance (do not treat as current structure): the original
@@ -123,7 +123,7 @@ Reproduce the live boot with:
 
 ```sh
 npx serve -l 3456 .        # the wrapper's Chrome needs a SECURE CONTEXT: 127.0.0.1
-node tools/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
+node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'
 ```
 
 A clean boot prints no `WGX` console line, `WGX.gpuErrors()` is 0, and
@@ -134,7 +134,7 @@ pair them with one positive check — drive a race and assert
 never hand back a WebGL2 context:
 
 ```sh
-node tools/mcp-cli.mjs probe --backend webgpu --wait 8000 \
+node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 8000 \
   --eval 'await __apex.race("monza"); await __apex.go();
           await new Promise(r=>setTimeout(r,7000));
           return String(document.querySelector("canvas").getContext("webgl2") === null);'
@@ -162,8 +162,8 @@ is 2D-blitted onto visible `#game` via ephemeral staging buffers
 (`_softDisplayEncode` / `_softDisplayFinish`). Readbacks wait for
 `onSubmittedWorkDone` before `mapAsync`; `awaitSoftPresent()` resolves only
 after a successful visible blit (non-blank pixels). `GLX.capturePixels()`
-reads the same texture as optional RGBA oracle — `tools/wgx-capture.mjs` →
-`frame.png`; primary visible gate is `tools/gfx-probe.mjs` → `canvas.png`.
+reads the same texture as optional RGBA oracle — `tools/gfx/wgx-capture.mjs` →
+`frame.png`; primary visible gate is `tools/gfx/gfx-probe.mjs` → `canvas.png`.
 The first capture pass found four latent WGX bugs in one afternoon (§1a below).
 SwiftShader remains non-representative for PERFORMANCE and for anything MSAA
 (software adapters force MSAA 1), but it is now a genuine visible-canvas +
@@ -239,7 +239,7 @@ function, which closes over a null `gl` and throws mid-frame. The 2026-08
 parity names (`gpuTimer`, texture arrays, lamp shadows, instancing,
 `drawParticles`, …) are real functions and remain listed for that reason.
 Gated by `tests/unit/backend-surface-parity.test.mjs`. Overview:
-[RENDERERS.md](../RENDERERS.md).
+[../ARCHITECTURE.md](../ARCHITECTURE.md).
 
 ---
 
@@ -251,7 +251,7 @@ surface is larger — several GLX features landed after the first WGX cut.
 | Gap | GLX today | WGX today | Kind | WebGPU primitive |
 |---|---|---|---|---|
 | **MSAA** | 4× on RGBA16F + `blitFramebuffer` resolve (`js/render/glx/post.js`; 2 then 0 if the format cannot) | `msaa() → 4` (1 on lite); color `resolveTarget` + manual MS-depth resolve. WebGPU sampleCount is 1 or 4 only — never 2 | Plumbing | Color: `resolveTarget`. Depth: `textureLoad` of `texture_depth_multisampled_2d` |
-| **PCSS quality** | 8-tap Poisson + dither; 4-tap far LOD; `uPcss` gate (`js/render/shaders/lit.js`) | Poisson-8 + far 4-tap; `pcss()` `true` | Shader | `textureSampleCompareLevel` + `blockerTex` |
+| **PCSS quality** | 8-tap Poisson + dither; 4-tap far LOD; `uPcss` gate (`js/render/glx/shaders/glsl-lit.js`) | Poisson-8 + far 4-tap; `pcss()` `true` | Shader | `textureSampleCompareLevel` + `blockerTex` |
 | **Lamp-fog** | Tunable `uLampFog` | `F.params8.x` scales lampFog (no hard `× 0.6`) | Shader + uniform | FRAME lane |
 | **Ground mist** | Lit FBM + `uGroundMist` | **Ported** in LIT | Done | — |
 | **God-ray / lamp vol** | World-space march through depth + sun/lamp shadow maps; separable blur | World-space 16-step march + double separable blur | Shader + binds | Same textures WGX already owns |
@@ -260,7 +260,7 @@ surface is larger — several GLX features landed after the first WGX cut.
 | **Env probe mips** | `generateMipmap` after the 6-face cycle; roughness LOD | Mip blit after the 6-face cycle; `textureSampleLevel(..., rough * maxLod)` | Helper | Same mip-gen blit as arrays |
 | **Lamp shadows** | 512² spot map + 4-tap PCF in lit + god-ray | `lampShadowBegin/End` + 4-tap PCF | API | Clone of the existing sun depth pass |
 | **Instancing** | Full family; `TrackGraph.batches()` consumer | Full family (`createInstancedBatch` … `castShadowInstanced`) | API | `drawIndexed(..., instanceCount)` + `stepMode: "instance"` |
-| **Particles** | `drawParticles` | `drawParticles` + `WGSLFx.PARTICLE` | API + shader | Port `PARTICLE_*` from `js/render/shaders/fx.js` |
+| **Particles** | `drawParticles` | `drawParticles` + `WGSLFx.PARTICLE` | API + shader | Port `PARTICLE_*` from `js/render/glx/shaders/glsl-fx.js` |
 | **`applyMaterial*`** | 14 procedural MAT ids, triplanar | Ported (`applyMaterial` / `applyMaterialNormal`) | Shader | No new API |
 | **Road markings** | `aTrk` / `vTrk` + `roadMarkings()` | Interpolated VS LUT `(s,x,hw)` in loc-3 xyz; no 4th vertex attr | Shader | Pack xyz; do not gate on interpolator `.w` |
 | **Heat haze** | Composite `uHaze*` | Composite `dirtFx.yzw` + time | Shader | Composite uniform |
@@ -370,7 +370,7 @@ GLX applies aniso on the MAT arrays because trilinear smears tarmac at range.
 ### 4.3 Baked material arrays (`createTextureArray` / `setMaterialMaps`)
 
 GLX: `texStorage3D` + per-layer `texSubImage3D` + `generateMipmap`; layer index
-**is** the MAT id; `matTexMix` ships at 1.0 (`js/render/assets.js` feature-detects
+**is** the MAT id; `matTexMix` ships at 1.0 (`js/render/shared/assets.js` feature-detects
 both methods; WGX leaves the pack off).
 
 WebGPU equivalent (core, no feature bit):
@@ -401,7 +401,7 @@ WGSL (LIT group 0 — pick free bindings; today 0–7 are taken):
 @group(0) @binding(8) var matAlbedo : texture_2d_array<f32>;
 @group(0) @binding(9) var matNormal : texture_2d_array<f32>;
 @group(0) @binding(10) var matSamp  : sampler;
-// then, matching applyMaterialTexNormal in js/render/shaders/lit.js:
+// then, matching applyMaterialTexNormal in js/render/glx/shaders/glsl-lit.js:
 let albedo = textureSample(matAlbedo, matSamp, uv, i32(matId));
 ```
 
@@ -420,7 +420,7 @@ No new resource. WGX already:
 - binds `shadowTex` + `sampler_comparison` and uses `textureSampleCompareLevel`
 - downsamples the sun map to `blockerTex` (`r16float`) and runs `findBlocker`
 
-GLX's remaining quality is in `sampleShadow` (`js/render/shaders/lit.js`):
+GLX's remaining quality is in `sampleShadow` (`js/render/glx/shaders/glsl-lit.js`):
 rotated Poisson 8-tap in the near field, 4-tap when
 `aDist ≥ 0.80 * shadowRange`, `uPcss` early-out when the blocker FBO is dead.
 
@@ -467,7 +467,7 @@ Clone the sun depth pass at 512²:
 - `lampShadowBegin(lightVP)` / `castShadow*` / `lampShadowEnd` — same
   depth-only pipeline, different target + VP
 - Bind as `texture_depth_2d` + the existing `sampler_comparison`
-- 4-tap PCF in LIT on the indexed floodlight (GLX `js/render/shaders/lit.js`)
+- 4-tap PCF in LIT on the indexed floodlight (GLX `js/render/glx/shaders/glsl-lit.js`)
 - Feed the same view to the world-space god-ray once that lands
 
 Replace the `undefined` exports. `lampShadowState()` already returns
@@ -574,14 +574,14 @@ No API research left:
 
 - **Particles** — port `PARTICLE_VS/FS`, implement `drawParticles`. Additive
   blend already exists on glow.
-- **`applyMaterial*`** — copy the 14-id tree from `js/render/shaders/lit.js`
+- **`applyMaterial*`** — copy the 14-id tree from `js/render/glx/shaders/glsl-lit.js`
   into `wgsl-chunks.js`. Same triplanar convention; no UVs on the lit mesh.
 - **`trk` / road markings** — `rgba32float` texture `@group(2)` +
   `textureLoad` at `vertex_index`. A 4th vertex attribute (and packed
   `pos.w`) was dropped on the road VBO; vertex-stage storage failed
   validation. The ribbon had been shading FLAT with paint gated off.
 - **Heat haze / car-paint SSR** — composite / SSR-consume ports from
-  `js/render/shaders/post.js`.
+  `js/render/glx/shaders/glsl-post.js`.
 
 ---
 
@@ -600,7 +600,7 @@ regresses.
 | Y flip | `copyExternalImageToTexture({flipY})` is per-call, not a pack state | Assuming GL `UNPACK_FLIP_Y` semantics globally |
 | Depth compare | WebGPU NDC z already [0,1] after `Z01`; shadow `refD` is not remapped again | A leftover `* 0.5 + 0.5` on shadow z |
 
-### 5a. Two WGSL rules the language enforces and a mock device cannot
+### 5a. Five WGSL rules the language enforces and a mock device cannot
 
 Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
 
@@ -646,7 +646,7 @@ Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
    TLX and WGX register the listener form first and keep the property as
    the fallback. This matters because WebKit's silent failures ARRIVE on
    that channel and nowhere else — the research ranking (2026-09-03,
-   `docs/RENDERERS.md` §WebKit silent draw drops): (1) the Metal PSO is
+   `../ARCHITECTURE.md` §WebKit silent draw drops): (1) the Metal PSO is
    compiled lazily at FIRST DRAW with `error:nil`; on failure WebKit skips
    `setRenderPipelineState` and still issues the draw, reporting an
    out-of-memory error "Render pipeline failed compilation likely due to
@@ -679,7 +679,7 @@ Moved from AGENTS.md 2026-09-01; the one-line rule stays there.
 
 Breaking either does not throw at the call site: WGX's boot self-test fails,
 the backend refuses, and the game falls back to GLX with one console warning —
-which is why `node tools/wgx-validate.mjs` (real Dawn WGSL + pipeline
+which is why `node tools/gfx/wgx-validate.mjs` (real Dawn WGSL + pipeline
 validation, ~5 s) runs on every `js/render/webgpu/` change.
 
 ---
@@ -712,7 +712,7 @@ with `--use-angle=swiftshader --enable-unsafe-webgpu`):
 | Boot blockers fixed this pass | illegal `sampleCount:2` → 1\|4; `rg11b10ufloat` post → `rgba16float`; geometry via `queue.writeBuffer` (not `mappedAtCreation`); MCP `--enable-unsafe-webgpu` |
 | LIT `dpdx` CF | hoisted; lifecycle unit test guards |
 | `create()` on software | **boots** WGX (MSAA 1 + 2D soft-present). No longer falls back to GLX. `apex26.gfxWgxAllowSoftware` is a legacy no-op. |
-| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0` — shader work EXECUTES (§0 correction / §1a). **Software compositor (2026-08-17, cache 1342+):** final pass → `COPY_SRC` soft-present texture (never `getCurrentTexture()`) → ephemeral readback → 2D blit on `#game`. Visible gate: `gfx-probe.mjs` / `awaitSoftPresent()`; readback: `wgx-capture.mjs` → `frame.png`. Gallery: `node tools/wgx-gallery.mjs --lite`. |
+| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0` — shader work EXECUTES (§0 correction / §1a). **Software compositor (2026-08-17, cache 1342+):** final pass → `COPY_SRC` soft-present texture (never `getCurrentTexture()`) → ephemeral readback → 2D blit on `#game`. Visible gate: `gfx-probe.mjs` / `awaitSoftPresent()`; readback: `wgx-capture.mjs` → `frame.png`. Gallery: `node tools/gfx/wgx-shot.mjs --gallery --lite`. |
 
 Do **not** add extra Dawn/Vulkan pins to `playwright.config.js` (they break
 headless boot). Do **not** probe WebGPU on a `data:` page. The chrome-devtools
@@ -740,7 +740,7 @@ slice that adds a method must declare it (real or `undefined`) before
 - **Using WebGPU to make CI faster.** The suite already gets a SwiftShader
   WebGPU adapter under the existing Playwright flags (see §6 table). That
   does not make frames cheaper: even a green LIT compile is still a CPU
-  rasteriser. See [CI-RENDERING-PERFORMANCE.md](CI-RENDERING-PERFORMANCE.md).
+  rasteriser. See [../notes/CI-RENDERING-PERFORMANCE.md](../notes/CI-RENDERING-PERFORMANCE.md).
 
 ---
 
@@ -752,9 +752,9 @@ slice that adds a method must declare it (real or `undefined`) before
 - `js/render/webgpu/wgsl-chunks.js` — LIT Poisson-8 PCSS, `params8.x` lamp-fog, env LOD
 - `js/render/webgpu/wgsl-post.js` — world-space god-ray, SSAO denoise, composite FX
 - `js/render/gfx.js` — seam contract; WGX is deferred opt-in (not the default)
-- `js/render/glx.js` / `js/render/glx/post.js` / `js/render/glx/shadow.js` —
+- `js/render/glx/glx.js` / `js/render/glx/post.js` / `js/render/glx/shadow.js` —
   MSAA blit, timer, arrays, lamp shadows, instancing
-- `js/render/shaders/lit.js` / `post.js` / `fx.js` — the GLSL to match
+- `js/render/glx/shaders/glsl-lit.js` / `post.js` / `fx.js` — the GLSL to match
 - `docs/ARCHITECTURE.md` — live caveat list
 - `tests/unit/backend-surface-parity.test.mjs` — absence-vs-`undefined` rule
 
@@ -869,7 +869,7 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    frame's draws to ~7%). Merged run length: median 1425 -> **22968** verts,
    max 24801 — that max is marginally above the largest N the repro tested
    (24576), a small extrapolation inside the same regime.
-   Evidence, in descending strength: (a) `tools/wgx-vid-repro.mjs` 30/30 OK
+   Evidence, in descending strength: (a) `tools/gfx/wgx-vid-repro.mjs` 30/30 OK
    on SwiftShader-Dawn incl. `firstVertex` and whole `draw(N)` to 24576 —
    a third run agreeing with round 4's two; (b) real-Dawn `wgx-validate`
    before vs after: `ok`, 0 GPU errors, 0 WGSL parse errors, and the
@@ -914,7 +914,7 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    (2026-08-27), implementation scheduled for its own round.** The block
    rested on a 2026-08-17 "vertex_index stays 0 on large non-indexed
    draws (and drawIndexed)" finding whose origin commit is beyond the
-   shallow-clone graft. `tools/wgx-vid-repro.mjs` (committed as the
+   shallow-clone graft. `tools/gfx/wgx-vid-repro.mjs` (committed as the
    re-runnable primary evidence) now measures the actual matrix: draw
    shapes {draw(N) whole, 4095-piece control, draw(n,1,firstVertex) over
    one shared vbuf, drawIndexed(N) identity} × N ∈ {4092, 4095, 4098,
@@ -943,7 +943,7 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    unculled chunk loop is covered by `_drawGeom` reading `mesh.first`). Road
    chunk AABBs for the lamp-mask cull turned out to be ALREADY DONE before
    the round: the road's cull exemption had been deleted, so `_chunkLampMask`
-   already covered it, and the other lineage's `js/render/lamp-chunks.js`
+   already covered it, and the other lineage's `js/render/shared/lamp-chunks.js`
    bake supersedes it per-chunk whenever `perChunkLights > 0`. Dash/marking
    verification by live capture is the one piece that did NOT land — see
    item 2 on the capture pipeline's noise floor; the Dawn coverage classifier

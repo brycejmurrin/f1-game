@@ -21,7 +21,7 @@ seedLogGlobal();
 const load = (rel, name) => eval(fs.readFileSync(path.join(ROOT, rel), "utf8") + ";" + name);
 // The shared math island, published so the files below resolve M4 at eval time
 // (a strict-mode direct eval keeps its own declarations to itself).
-globalThis.M4 = load("js/mat4.js", "M4");
+globalThis.M4 = load("js/core/mat4.js", "M4");
 const NetTransport = load("js/net/transport.js", "NetTransport");
 // session.js shares NetSnapshot's ONE toView() rather than keeping a second
 // copy that can drift. Loading it is not optional decoration: without it every

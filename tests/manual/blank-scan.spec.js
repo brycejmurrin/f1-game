@@ -36,7 +36,7 @@ for (const circuit of circuits()) {
   // keep that detection working without false timeouts. (Real GPUs render these
   // frames in well under a millisecond.)
   test(`blank scan: ${circuit}`, { timeout: 180_000 }, async ({ page }) => {
-    // The build reports its on-track culling through js/log.js at `info`, which
+    // The build reports its on-track culling through js/core/log.js at `info`, which
     // reaches the console only when the scenery namespace is turned up — so ask
     // the ring buffer instead of scraping console text.
     await loadTrack(page, circuit);

@@ -38,9 +38,9 @@ const UNDOCUMENTED = new Set([
   // subsystem doors) were documented in docs/DEBUG-HOOKS.md. Keep it empty.
 ]);
 
-/** Top-level keys of the `const api = {…}` literal in js/game/apex.js. */
+/** Top-level keys of the `const api = {…}` literal in js/agent/apex.js. */
 function hookNames() {
-  const src = read("js/game/apex.js");
+  const src = read("js/agent/apex.js");
   const body = src.slice(src.indexOf("const api = {"));
   const names = new Set();
   // `async foo(` is a hook too — without the optional prefix the three async
@@ -55,7 +55,7 @@ function documented(doc, name) {
   return new RegExp("__apex\\." + name + "\\b|`" + name + "\\(").test(doc);
 }
 
-// The generated hook index (tools/gen-hooks-table.mjs) lists EVERY hook by
+// The generated hook index (tools/gen/gen-hooks-table.mjs) lists EVERY hook by
 // construction, so it would satisfy `documented()` for all of them and turn
 // this ratchet vacuous. Strip it: the requirement here is a HAND section per
 // hook. tests/unit/generated-docs.test.mjs guards the index separately.
@@ -70,7 +70,7 @@ test("no NEW __apex hook ships undocumented", () => {
   const doc = handSections();
   const missing = [...hookNames()].filter((n) => !documented(doc, n) && !UNDOCUMENTED.has(n)).sort();
   assert.deepEqual(missing, [],
-    "a hook exists in js/game/apex.js with no section in docs/DEBUG-HOOKS.md. Write one — " +
+    "a hook exists in js/agent/apex.js with no section in docs/DEBUG-HOOKS.md. Write one — " +
     "the file calls itself the full reference, and a hook nobody can find is a hook nobody uses");
 });
 
@@ -85,11 +85,11 @@ test("the undocumented list does not name a hook that no longer exists", () => {
   const names = hookNames();
   const gone = [...UNDOCUMENTED].filter((n) => !names.has(n)).sort();
   assert.deepEqual(gone, [],
-    "these hooks are gone from js/game/apex.js — drop them from UNDOCUMENTED");
+    "these hooks are gone from js/agent/apex.js — drop them from UNDOCUMENTED");
 });
 
 test("openf1 and jolpica guard a missing path instead of fetching garbage", () => {
-  const src = read("js/game/apex.js");
+  const src = read("js/agent/apex.js");
   for (const name of ["openf1", "jolpica"]) {
     const m = src.match(new RegExp(name + "\\(path\\) \\{[\\s\\S]*?\\n  \\},"));
     assert.ok(m, name + " body not found");
@@ -100,7 +100,7 @@ test("openf1 and jolpica guard a missing path instead of fetching garbage", () =
 
 test("jump synchronises the HUD instead of depending on the next animation frame", () => {
   const game = read("js/game.js");
-  const apex = read("js/game/apex.js");
+  const apex = read("js/agent/apex.js");
   assert.match(game, /refreshHud:\s*\(\.\.\.a\)\s*=>\s*updateHud\(\.\.\.a\)/,
     "the shared facade must expose the real HUD updater through a deferred binding");
   const jump = apex.match(/jump\(frac, speed, lateral\) \{[\s\S]*?\n  \},/);

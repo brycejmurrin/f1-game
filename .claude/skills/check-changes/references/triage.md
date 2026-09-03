@@ -13,7 +13,7 @@ loaded runs and passed solo in 8.1 s / 69 s / 25.6 s — zero code delta.
 the browser couldn't even boot a context. Cross-check what ELSE ran during the
 window (`/proc/loadavg` now; other `artifacts/logs/*.log` timestamps; node
 sweeps, subagents, a second Playwright process — all count).
-→ Re-run the spec ALONE: `node tools/test-solo.mjs <spec> [-g "grep"]`.
+→ Re-run the spec ALONE: `node tools/ci/test-solo.mjs <spec> [-g "grep"]`.
 It refuses to start until the 1-min load is quiet, runs at 1 worker, and
 prints the load beside the verdict. PASS solo = contention, done — do NOT
 "fix" the test. FAIL solo = real; bisect.
@@ -49,10 +49,10 @@ order dependence — `docs/TESTING.md` §Field notes has the worked example.
   `physics` is allowed on 4 cores. Browser+browser pairing is the measured
   source of the entire 120 s class.
 - Everything long runs in the BACKGROUND with a log (`AGENTS.md`); check
-  `node tools/test-bg.mjs --status` and `/proc/loadavg < 3` before starting.
+  `node tools/ci/test-bg.mjs --status` and `/proc/loadavg < 3` before starting.
 - Verdicts come from the log's terminal line `= run <status>  (N/M done,
   K failed)` — match with `grep -E '= run (passed|failed|timedout|interrupted)'`
   (ERE alternation; fixed-string/BRE grep never matches) — never the process
   table.
-- `tools/verify-change.mjs` runs the whole selection serialized correctly and
+- `tools/ci/verify-change.mjs` runs the whole selection serialized correctly and
   labels timeout outcomes with the triage command.

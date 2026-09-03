@@ -12,7 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const PROBE = path.join(ROOT, "tools/probe-mcp.py");
+const PROBE = path.join(ROOT, "tools/mcp/probe-mcp.py");
 const MCP_JSON = path.join(ROOT, ".mcp.json");
 
 test("probe-mcp.py exists and says it is a CLI, not an attached server", () => {
@@ -36,9 +36,9 @@ test(".mcp.json does NOT register probe — chrome-devtools is the attached Chro
   assert.equal(cfg.mcpServers.probe, undefined);
   assert.equal(cfg.mcpServers.tinyfish, undefined);
   assert.equal(cfg.mcpServers["chrome-devtools"].command, "bash");
-  assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["tools/chrome-devtools-mcp.sh", "run"]);
+  assert.deepEqual(cfg.mcpServers["chrome-devtools"].args, ["tools/mcp/chrome-devtools-mcp.sh", "run"]);
   assert.equal(cfg.mcpServers["apex-tools"].command, "bash");
-  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/apex-tools-mcp.sh", "serve"]);
+  assert.deepEqual(cfg.mcpServers["apex-tools"].args, ["tools/mcp/apex-tools-mcp.sh", "serve"]);
   // The daemon flow is the reason the CLI survives the catalog trim.
   const help = spawnSync("python3", [PROBE, "help"], { encoding: "utf8" });
   assert.match(help.stdout, /chrome-start/);

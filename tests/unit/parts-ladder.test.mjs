@@ -9,7 +9,7 @@
 // `aero/diffuser` at 100 cr on all four. A player could only lose by buying it.
 //
 // The model, the derivation and the "convex price curve" failure mode are
-// documented in tools/parts-ladder.mjs. This file is the gate.
+// documented in tools/car/parts-ladder.mjs. This file is the gate.
 //
 // COST: node-only, no browser, ~0.3 s for the whole catalog — cheap enough for
 // the edit-loop suite, unlike its distinctness sibling.
@@ -18,8 +18,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadParts } from "../../tools/parts-sweep.mjs";
-import { liveSet, dominated, visibleRows, sweepLadder, LADDER } from "../../tools/parts-ladder.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { liveSet, dominated, visibleRows, sweepLadder, LADDER } from "../../tools/car/parts-ladder.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const M = loadParts();
@@ -45,7 +45,7 @@ test("never-optimal rows are a downward-only ratchet, and the exemptions are nam
   // should shrink the list.
   //
   // These two are now exempt on a MECHANISM rather than a promise: their
-  // advantage is `wetTread` and the WET_GRIP table in js/game/physics-consts.js
+  // advantage is `wetTread` and the WET_GRIP table in js/physics/consts.js
   // (docs/PHYSICS.md "Weather and tyres"), which the four dry stats do not and
   // should not model. When this list was written that advantage did not exist —
   // gripMult() read the weather and never the tyre, so they really were dead
@@ -54,7 +54,7 @@ test("never-optimal rows are a downward-only ratchet, and the exemptions are nam
   const dead = rows.flatMap((r) => r.dead.map((d) => `${r.cat}/${d.id}`)).sort();
   assert.deepEqual(dead, [...WEATHER_ONLY].sort(),
     "a row is never optimal under any taste at any price — reprice it (cost is " +
-    "economy-only) or give it a real trade; see tools/parts-ladder.mjs");
+    "economy-only) or give it a real trade; see tools/car/parts-ladder.mjs");
 });
 
 test("no category is flat on a stat the player is asked to choose over", () => {
@@ -91,7 +91,7 @@ test("the career budget cap clears the dearest works car and stays under the top
   // was 2035 and one rung of BUDGET_MULT put its budget at 2340 — the dearest
   // build the catalog can express, to the credit. The economy stopped
   // constraining anything, and RAISE THE CAP bought nothing.
-  const src = fs.readFileSync(path.join(ROOT, "js/game/career.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/career/career.js"), "utf8");
   assert.match(src, /_budgetCap = all - top;/, "budgetCap must be derived from the catalog");
   let all = 0, top = 0;
   for (const cat of M.Parts.CATALOG) {

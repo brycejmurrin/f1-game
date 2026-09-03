@@ -8,7 +8,7 @@
  * is one it recognises.
  *
  * That assertion listed four kinds — guardrail, fence, tyreWall, wall — while
- * js/track/scenery-structures.js had grown to eight: the grandstand family
+ * js/track/scenery/structures.js had grown to eight: the grandstand family
  * (bleacher, scaffoldStand, terrace, tieredBowl) became spans later, and the
  * spec was never updated. So the spec failed on any circuit that placed a
  * tiered bowl, and it failed with "tieredBowl is not in the list" rather than
@@ -32,12 +32,17 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
 // Every kind any emitter can hand to noteSpan, read off the call sites.
 function emittedKinds() {
-  const dir = path.join(ROOT, "js/track");
+  // RECURSIVE: the emitters live in js/track/scenery/ since the 2026-09-03
+  // move window, and a flat readdir of js/track/ silently found zero of them.
   const kinds = new Set();
-  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".js"))) {
-    const src = fs.readFileSync(path.join(dir, f), "utf8");
-    for (const m of src.matchAll(/\bnoteSpan\(\s*"([a-zA-Z][\w-]*)"/g)) kinds.add(m[1]);
-  }
+  (function walk(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) { walk(abs); continue; }
+      if (!e.name.endsWith(".js")) continue;
+      for (const m of fs.readFileSync(abs, "utf8").matchAll(/\bnoteSpan\(\s*"([a-zA-Z][\w-]*)"/g)) kinds.add(m[1]);
+    }
+  })(path.join(ROOT, "js/track"));
   return kinds;
 }
 

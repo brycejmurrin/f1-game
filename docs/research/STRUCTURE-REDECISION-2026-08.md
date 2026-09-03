@@ -19,7 +19,7 @@ All figures re-verified live in this session (commands: `wc -l`, grep counts, ju
 | Script tags | 146 | **146** src-carrying (149 `<script` occurrences) | matches |
 | `index.html` ids | — | 498, 0 duplicates | |
 | `js/game.js` | 8,002 ln | **8,002** vs ceiling **8,003** (`module-size.test.mjs:104`) | ONE line of headroom — ratchet saturated |
-| `js/game/apex.js` | 3,079 ln | **3,079** vs ceiling **3,080** | ONE line of headroom |
+| `js/agent/apex.js` | 3,079 ln | **3,079** vs ceiling **3,080** | ONE line of headroom |
 | `js/game/` files | 46 | **46**: 15 squashed multi-word, 13 hyphenated, 18 single-word | |
 | Self-init no-`create(G)` files in `js/game/` | — | **7** (scrollfade, sheetshape, topmodal, menunav, ariastate, uilayers, css-zoom) — grep confirms zero `create(G)` calls | new fact; see Q6 |
 | `css/` | 11 files, 7,826 ln | **11 files, 7,826 ln** | matches |
@@ -94,7 +94,7 @@ Both judges: UPHOLD (Judge 2 explicitly characterizes his conditional as an affi
 
 - **`.claude/skills/restructure-screens-css/SKILL.md` (rule 13):** annotate the "~1,390 static DOM" figure — it reproduces under no parse method; live counts are 952 (body elements, excl. scripts) / 1,133 (rule's own grep). The rule's *conclusion* (keep the monolith; the real cost is the class count) is re-affirmed with more headroom than it claimed. Also annotate "18 dialogs" → 17 (one grep hit is comment prose). Add a pointer to this record's node-count-ratchet endorsement.
 - **`docs/archive/research/UI-REMODEL-DECISION-2026-08.md`:** annotate that "38 screens" was the matrix's row count (sub-states/tabs), source truth being 20 screens / 25 layers — the survey's verdict stands on the corrected count; and annotate that its prescribed rule-11 class-count ratchet was not installed and the count crept 538→543 before this record ordered installation.
-- **`docs/ARCHITECTURE-REVIEW.md`:** annotate §7 that the `#track-detail` regression is fixed in-tree (index.html:688); annotate §8 that the backlog is confirmed as the live decomposition plan, now *forced* by ratchet saturation (8,002/8,003; 3,079/3,080), with extension candidates admitted only after function-body (brace-count) re-measurement — the gap-method figures circulated during this re-opening (endRace "383") are recorded here as discredited.
+- **`../notes/ARCHITECTURE-REVIEW.md`:** annotate §7 that the `#track-detail` regression is fixed in-tree (index.html:688); annotate §8 that the backlog is confirmed as the live decomposition plan, now *forced* by ratchet saturation (8,002/8,003; 3,079/3,080), with extension candidates admitted only after function-body (brace-count) re-measurement — the gap-method figures circulated during this re-opening (endRace "383") are recorded here as discredited.
 - **`docs/research/ARCHITECTURE-REDESIGN-2026-08.md`:** annotate the Status section that this record re-affirms Phase 2 (gen-manifest) as the authorized next structural work item, and that Q3 renames and the Q6 `js/ui/` wave are explicitly sequenced *behind* it.
 - **`docs/archive/research/CAMPAIGN-2026-08.md`:** no annotation needed — the R3 cut and the js/game rename NO-GO were both re-tested against fresh evidence and held.
 - **`docs/archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md`:** no annotation — its 4-step ordering is re-affirmed as binding on the Q5 cluster-collapse work.

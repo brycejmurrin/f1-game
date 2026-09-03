@@ -13,12 +13,12 @@ before proposing a delete or extract.
 
 ## The job
 
-1. Run `node tools/bloat-scan.mjs --json` (add the parent-named paths).
+1. Run `node tools/check/bloat-scan.mjs --json` (add the parent-named paths).
    Report ratchet slack and skill/agent line counts verbatim.
 2. Read the assigned file(s). Look for: extractable cohesive blocks
    (low `G` crossings), fat `SKILL.md` that restates a catalog, dead
    symbols, duplicate helpers, stale comments, tree-split candidates.
-3. Optional: `node tools/extract-module.mjs <file> <start> <end>`
+3. Optional: `node tools/check/extract-module.mjs <file> <start> <end>`
    (analyse only — no `--out` / `--g-out`). WebFetch / Context7-via-parent
    for official Agent Skills caps. Do **not** prove a dead `__apex` hook
    yourself — mark it `unverified` for the parent + **mcp-probe**.

@@ -71,7 +71,7 @@ test("Qatar uses the shared track foundation contracts", async ({ page }) => {
     //   • buildCenterline's shared `undulate` ripple adds ~0.199 m on top of
     //     that, and runs on every circuit that does not opt out. It alone puts a
     //     genuinely flat Qatar at 0.266 m, i.e. already over the old threshold.
-    // Measured headlessly (tools/verify-track.cjs harness): 6.699 m, and
+    // Measured headlessly (tools/track/verify-track.cjs harness): 6.699 m, and
     // identical across two consecutive Tracks.build() calls — the day<->night
     // rebuild adds nothing, so day and night are the same number.
     //

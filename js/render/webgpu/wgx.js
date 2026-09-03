@@ -30,7 +30,7 @@ const WGX = (function () {
   //   rung 2  minimal — lite + NO post chain (tonemap blit), no env probe,
   //                     DPR capped at 1 (scene+depth+swapchain only)
   // A loss ON rung 2 is the exit: session-skip this tab to GLX, keep the pick.
-  // An explicit RENDERER re-pick clears the ladder (js/game/gfx-quality.js).
+  // An explicit RENDERER re-pick clears the ladder (js/perf/quality-preset.js).
   let _wgxLevel = 0;
   try {
     _wgxLevel = parseInt(localStorage.getItem("apex26.gfxWgxLevel") || "0", 10) || 0;
@@ -147,7 +147,7 @@ const WGX = (function () {
   const DRAW_STRIDE = 256;
   const MAX_DRAWS = 4096;                               // per-frame draw slots
   // Per-chunk lamps (bindings 15/16). TRACK_LIGHT_CAP sits above the ~800-lamp
-  // bake ceiling in js/game/track-lights.js; CHUNK_IDX_CAP bounds the concatenated
+  // bake ceiling in js/lighting/track-lights.js; CHUNK_IDX_CAP bounds the concatenated
   // per-chunk index table across every chunked mesh in a bake generation
   // (measured visible-chunk counts are ~150 worst; whole-table sizes are far
   // smaller than 16384 at CAP 24 — overflow warns and falls back to global).
@@ -221,12 +221,18 @@ const WGX = (function () {
   const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
   // WebGPU allows sampleCount 1 or 4 — ONLY. (w3.org/TR/webgpu: "sampleCount
   // must be either 1 or 4"; Dawn agrees, 4 being the one portable MSAA level.)
-  // Desktop GRAPHICS: ULTRA (apex26.gfxHigh=1) keeps 4×; HIGH (gfxHigh=0) uses 1×
-  // — WebGPU cannot do 2×, so the savings mirror GLX capping HIGH at 2× MSAA.
-  // Missing key defaults to 4× (fresh install / harness) until gfx-quality runs.
+  // Desktop GRAPHICS: ULTRA keeps 4×; every other preset (and unset = the
+  // desktop default HIGH) uses 1× — no 2× on WebGPU, mirroring GLX's HIGH cap.
+  // `apex26.gfxPreset` is JSON-ENCODED by GameStore ("\"ultra\"" with quotes):
+  // decode before comparing, or ULTRA never matches (0a31155 shipped that).
+  // The legacy phone key apex26.gfxHigh counts only when no preset is stored.
   // `let` (not const): soft-adapter escape hatch may drop desktop 4 → 1.
-  let _wgxMsaa4 = true;
-  try { if (localStorage.getItem("apex26.gfxHigh") === "0") _wgxMsaa4 = false; } catch (_) { /* blocked storage: default 4× MSAA */ }
+  let _wgxMsaa4 = false;
+  try {
+    let _p = localStorage.getItem("apex26.gfxPreset");
+    try { _p = JSON.parse(_p); } catch (_) { /* raw string */ }
+    _wgxMsaa4 = _p === "ultra" || (_p == null && localStorage.getItem("apex26.gfxHigh") === "1");
+  } catch (_) { /* blocked storage: the cheaper of the two */ }
   let MSAA_COUNT = WGX_LITE ? 1 : (_wgxMsaa4 ? 4 : 1);
 
   // Every path that makes create() return null records WHY, both on the console
@@ -265,7 +271,7 @@ const WGX = (function () {
   // GLX does (a location-3 interpolator shards dashes on Dawn; drawIndexed
   // leaves vertex_index at 0 on that adapter). Every road marking the player
   // sees on WebGPU is computed from what this returns, which makes it worth
-  // being able to audit WITHOUT a GPU — tools/road-lut-census.mjs calls it
+  // being able to audit WITHOUT a GPU — tools/gfx/road-lut-census.mjs calls it
   // directly through the static surface. Returns the packed Float32Array, or
   // null when the geometry carries no usable road surface.
   function _roadLutTable(pos, trk, matArr) {
@@ -300,7 +306,7 @@ const WGX = (function () {
     // measuring distance along the lap, and the markings were painted down the
     // LENGTH of the road.
     //
-    // Measured before this existed (tools/road-lut-census.mjs): monza had a
+    // Measured before this existed (tools/gfx/road-lut-census.mjs): monza had a
     // lateral pair at 31.4% of stations and a rotated frame at 33.9% of ribbon
     // points — on a circuit with no folded geometry whatsoever, which is what
     // ruled out every "the track runs back near itself" explanation. Collapsing
@@ -334,7 +340,7 @@ const WGX = (function () {
     // only a section tens of metres away, and then trkFromWorld's search misses:
     // on a road draw a miss ZEROES trk, so lateral x reads 0 across the whole
     // surface and the marking shader paints its centre line down the length of
-    // the road. Measured before this (tools/road-lut-census.mjs): on baku the
+    // the road. Measured before this (tools/gfx/road-lut-census.mjs): on baku the
     // chosen nearest sample sat a median 47.6 m from the query point — on a
     // polyline whose samples are 4 m apart.
     const cellCx = (gx) => minX + (gx + 0.5) * extX / GW;
@@ -906,7 +912,7 @@ const WGX = (function () {
       let hidden = false;
       try { hidden = !!(typeof document !== "undefined" && document.hidden); } catch (_) { /* no document (harness) */ }
       if (!hidden) {
-        // BOTH opt-ins, not one. GLX's webglcontextlost (js/render/glx.js) and
+        // BOTH opt-ins, not one. GLX's webglcontextlost (js/render/glx/glx.js) and
         // TLX's onDeviceLost each disarm envProbeOff AND perChunkOff; WGX wrote
         // only the second, so a visible WGX loss that escalated to a GLX
         // session-skip handed GLX a tab with the env probe still armed — the
@@ -1040,6 +1046,8 @@ const WGX = (function () {
     const blitData  = new Float32Array(BLIT_BYTES / 4);
     const skyData   = new Float32Array(WGSLChunks.SKY_UNIFORM_BYTES / 4);
     const _vpGpu    = new Float32Array(16);   // Z01-remapped viewProj upload scratch
+    const _projZ01  = new Float32Array(16);   // Z01·P scratch (off-axis garage/setup)
+    const _viewScratch = new Float32Array(16); // V = invProj·viewProj scratch
     const _grInvTmp = new Float32Array(16);   // godray invVP mul scratch (was per-frame new)
     const _instDrawOpts = { _instanced: true }; // reused; fields overwritten each draw
     const _dynOff = [0];   // single-element dynamic-offset scratch
@@ -1366,7 +1374,7 @@ const WGX = (function () {
       // compare less-equal: SKY_VS puts the fullscreen tri at depth 1.0 (z=w), so
       // early sky paints the clear background, and late sky (opaque → sky →
       // glow) still only fills pixels the world left at the far plane — GLX
-      // parity (js/render/shaders/sky.js + glx.js drawSky depthMask false /
+      // parity (js/render/glx/shaders/glsl-sky.js + glx.js drawSky depthMask false /
       // LEQUAL). Was "always": correct only for sky-FIRST. After late sky
       // shipped, ALWAYS overwrote the entire lit colour buffer (hall-of-mirrors
       // / melted world; cars still visible because they draw after the sky).
@@ -1477,7 +1485,7 @@ const WGX = (function () {
       matPlaceNormalView = matPlaceAlbedoView; // shared 1×1×N dummy is enough
       matAlbedoView = matPlaceAlbedoView;
       matNormalView = matPlaceNormalView;
-      // maxAnisotropy 4 matches GLX (js/render/glx.js applies the same cap to the
+      // maxAnisotropy 4 matches GLX (js/render/glx/glx.js applies the same cap to the
       // MAT array) and TLX (anisotropy = 4). The road is the grazing-angle
       // surface these exist for — trilinear alone smears tarmac aggregate into
       // mip mush ~20 m ahead of the car. WebGPU only allows it when all three
@@ -1943,6 +1951,10 @@ const WGX = (function () {
     }
 
     let _swapCopyable = _capPref != null || (!_outProbeOff && !WGX_LITE);
+    // Set by _capEncode when a capture needs COPY_SRC and the swapchain has
+    // not got it; consumed at the TOP of begin(), the only point in the frame
+    // where reconfiguring cannot expire a texture already recorded against.
+    let _wantCopyable = false;
     function _configureCanvas() {
       if (!ctx || !device) return null;
       try {
@@ -3028,7 +3040,7 @@ const WGX = (function () {
       if (!data._keepPositions) { data.pos = null; data.idx = null; }
       return { _wgx: "chunked", vbuf, ibuf, sbuf, attrBG, chunks, count: total, indexFormat };
     }
-    // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx.js): a
+    // Deterministic LENS DIRT grime map (mirror GLX.makeDirtTex, js/render/glx/glx.js): a
     // 256×256 2D-canvas of value-noise + smudge blobs + dust specks + wipe
     // streaks, uploaded as an rgba8unorm texture the composite samples (.r). Same
     // seeded PRNG + draw ops as GLX, so the WebGPU grime matches the WebGL2 look.
@@ -3195,7 +3207,16 @@ const WGX = (function () {
     function _writeFrame(f) {
       const d = frameData;
       const vp = (f.viewProj && f.viewProj.length >= 16) ? f.viewProj : IDENT;
-      _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
+      const pj = f.proj, ipj = f.invProj;
+      // Setup preview / garage pass an off-axis proj (proj[8]/[9] lens shift).
+      // Z01·(P·V) != (Z01·P)·V when P carries that shear — remap on P first.
+      if (pj && pj.length >= 16 && ipj && ipj.length >= 16 && (pj[8] !== 0 || pj[9] !== 0)) {
+        _mul4(_viewScratch, ipj, vp);   // V = inv(P)·(P·V)
+        _mul4(_projZ01, Z01, pj);       // P′ = Z01·P
+        _mul4(_vpGpu, _projZ01, _viewScratch);
+      } else {
+        _mul4(_vpGpu, Z01, vp);   // GL clip (z -1..1) -> WebGPU clip (z 0..1)
+      }
 
       // TAA Halton jitter scaffolding — GATED OFF until a temporal RESOLVE pass
       // exists. Jittering the projection each frame with nothing accumulating
@@ -3259,7 +3280,7 @@ const WGX = (function () {
       // map can't leak shadows into a night scene.
       const sunUp = !sd || sd[1] > -0.05;
       d[72] = (_shadowRendered && sunUp) ? 1 : 0;
-      // SHADOW STRENGTH knob × KEY-luminance fade (GLX parity, js/render/glx.js lit
+      // SHADOW STRENGTH knob × KEY-luminance fade (GLX parity, js/render/glx/glx.js lit
       // begin): the night moon-key is deliberately held HIGH (sunDir.y ≈ 0.97
       // drives the sky glow), so the binary sunUp gate above never fires at
       // night — without this fade WebGPU kept full-strength terrain/road sun
@@ -3431,7 +3452,7 @@ const WGX = (function () {
         const AL = frameAllLights;
         const tn = Math.min(TRACK_LIGHT_CAP, (AL.length / 15) | 0), td = _tlScratch;
         // THIRTEEN of the sixteen lanes are baked-static — the same split
-        // js/game/frame-lights.js makes upstream, where only rgb can move. _tlScratch
+        // js/lighting/frame-lights.js makes upstream, where only rgb can move. _tlScratch
         // is module-scope and written nowhere else, so its static lanes survive
         // between frames and only need writing when the SET changes. Gen moves
         // every frame under flicker or the warm-up ramp, and that used to rewrite
@@ -3525,6 +3546,16 @@ const WGX = (function () {
       _presentCount++;   // frame counter for the GPU-error cap (errors are attributed to the frame they arrive in)
       if (_lost) return false;
       try {
+        // Before ANY of this frame's work: a pending capture that needs a
+        // copyable swapchain gets its reconfigure here, where nothing has been
+        // encoded yet and no view has been acquired (present() acquires it).
+        if (_wantCopyable && !_swapCopyable && !_softGpu) {
+          _wantCopyable = false; _swapCopyable = true;
+          // Commit only on success: left "copyable" after a failed configure, the
+          // next _capEncode would copy a non-COPY_SRC texture (a phantom GPU error).
+          const _cfgErr = _configureCanvas();
+          if (_cfgErr) { _swapCopyable = false; if (_capReq) { const r = _capReq; _capReq = null; r.reject(new Error("swapchain reconfigure failed: " + _cfgErr)); } }
+        }
         lastFrame = frame || null;
         if (width < 1) resize();
         ensureTargets();
@@ -3789,7 +3820,7 @@ const WGX = (function () {
       // chunks measured worst-case).
       // That sentence was load-bearing and unmeasured; it is measured now, and
       // it holds: 3 shared non-empty adjacent pairs of 909, 0 of 195
-      // (tools/chunk-share-census.mjs). Empty chunks DO share constantly and
+      // (tools/gfx/chunk-share-census.mjs). Empty chunks DO share constantly and
       // still do not merge — they are outfield the frustum never draws, ~2
       // visible a frame. Two audits have proposed this merge; both numbers and
       // the trap are in docs/PERF-FINDINGS.md §2b. Do not re-open it.
@@ -3908,7 +3939,7 @@ const WGX = (function () {
         //    trkFromWorld(wpos), never matTrkArr[vid]. If no LUT is bound the
         //    authored storage read is live and merging could shift it, so the
         //    merge refuses rather than relying on the argument holding.
-        //    Evidence for the shapes themselves: tools/wgx-vid-repro.mjs.
+        //    Evidence for the shapes themselves: tools/gfx/wgx-vid-repro.mjs.
         //  - no lamp mask, ROAD ONLY: a run ORs its chunks' masks, so merging
         //    the ribbon at night would hand a long run the UNION and turn
         //    cheap mask-skips back into full lamp evaluations over the road's
@@ -4041,27 +4072,44 @@ const WGX = (function () {
       }
     }
 
-    // GLX parity (js/render/glx.js envFaceBegin/End): capture ONE cube face of the world
+    // GLX parity (js/render/glx/glx.js envFaceBegin/End): capture ONE cube face of the world
     // around the player car per frame into a real RGBA16F cube; after a full 6-face
     // cycle the LIT car-paint block samples it (Block 7, envProbeStr). game.js re-issues
     // the world draws (track meshes then drawSky, NO cars) between begin/end — they record
     // into the face's own pass via litPass, so every lighting uniform matches the frame.
+    let _envInitFailed = false;   // a partial envInit is never retried: see the catch
     function envInit() {
-      if (envCubeTex) return;
+      if (envCubeTex || _envInitFailed) return;
       const envMips = Math.floor(Math.log2(ENV_SIZE)) + 1;
-      envCubeTex = device.createTexture({
-        size: [ENV_SIZE, ENV_SIZE, 6], dimension: "2d", format: SCENE_FORMAT,
-        mipLevelCount: envMips,
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-      });
-      envSampleView = envCubeTex.createView({ dimension: "cube" });
-      envFaceViews = [];
-      for (let f = 0; f < 6; f++)
-        envFaceViews.push(envCubeTex.createView({ dimension: "2d", baseArrayLayer: f, arrayLayerCount: 1, baseMipLevel: 0, mipLevelCount: 1 }));
-      envDepthTex = device.createTexture({
-        size: [ENV_SIZE, ENV_SIZE], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT,
-      });
-      envDepthView = envDepthTex.createView();
+      try {
+        envCubeTex = device.createTexture({
+          size: [ENV_SIZE, ENV_SIZE, 6], dimension: "2d", format: SCENE_FORMAT,
+          mipLevelCount: envMips,
+          usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+        });
+        envSampleView = envCubeTex.createView({ dimension: "cube" });
+        envFaceViews = [];
+        for (let f = 0; f < 6; f++)
+          envFaceViews.push(envCubeTex.createView({ dimension: "2d", baseArrayLayer: f, arrayLayerCount: 1, baseMipLevel: 0, mipLevelCount: 1 }));
+        envDepthTex = device.createTexture({
+          size: [ENV_SIZE, ENV_SIZE], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+        envDepthView = envDepthTex.createView();
+      } catch (e) {
+        // RELEASE WHAT WAS MADE, AND LATCH. envCubeTex was assigned first, so a
+        // throw from any later view/texture (OOM on the device class this
+        // probe is gated for) used to leave the re-entry guard satisfied with
+        // envFaceViews empty — and every following envFaceBegin passed an
+        // undefined view to beginRenderPass: one validation error per probe
+        // cycle for the life of the tab, enough to climb the GPU-error ladder
+        // off a working device. createMesh / _makeAttrBG / _capEncode already
+        // release on failure; this one was missed.
+        try { if (envCubeTex) envCubeTex.destroy(); } catch (_) { /* already invalid */ }
+        try { if (envDepthTex) envDepthTex.destroy(); } catch (_) { /* already invalid */ }
+        envCubeTex = null; envSampleView = null; envFaceViews = null; envDepthTex = null; envDepthView = null;
+        _envInitFailed = true;
+        try { Log.warn("gfx", "WGX env probe allocation failed — analytic reflections only:", e && e.message); } catch (_) { /* harness */ }
+      }
     }
 
     // Open the pass for one cube face: set the face camera, upload it as the frame
@@ -4078,7 +4126,7 @@ const WGX = (function () {
       // re-uploading the frame UBO and the light SBO, on the rung whose whole
       // point is the jetsam budget — the same gate the car map, lamp map and
       // SSR already honour on LITE. Desktop keeps the live mirror.
-      if (_lost || WGX_MINIMAL || WGX_LITE || !skyPipeline) return null;
+      if (_lost || WGX_MINIMAL || WGX_LITE || _envInitFailed || !skyPipeline) return null;
       if (!envCubeTex) envInit();
       _passSamples = 1;
       const F = ENV_FACES[face];
@@ -4213,11 +4261,14 @@ const WGX = (function () {
         // A LITE swapchain is configured without COPY_SRC (see
         // _configureCanvas). SAVE SCREENSHOT on such a device reconfigures
         // once, copyable, and reads the NEXT frame; this one is skipped.
-        if (!_softGpu && !_swapCopyable) {
-          _swapCopyable = true;
-          _configureCanvas();
-          return null;
-        }
+        // THE RECONFIGURE CANNOT HAPPEN HERE: this runs AFTER the frame is
+        // encoded against a view of the CURRENT swapchain texture and one
+        // statement before submit — ctx.configure() EXPIRES that texture, so
+        // the submit referenced a destroyed texture: a dropped frame and a
+        // phantom `err 1` in the GOV row / COPY DIAG, from inside the one
+        // instrument a phone has. Ask begin() instead; it reconfigures before
+        // the next frame acquires its view.
+        if (!_softGpu && !_swapCopyable) { _wantCopyable = true; return null; }
         const capTex = _softGpu ? softPresentTex : ctx.getCurrentTexture();
         if (!capTex) throw new Error("no frame texture");
         const w = capTex.width, h = capTex.height;
@@ -6007,7 +6058,7 @@ const WGX = (function () {
       lampShadowState: () => ({ enabled: !!lampShadowView && !WGX_LITE, arms: _lampArms, idx: _lampIdx, armed: _lampShadowArmed }),
 
       // extension: reads the next presented frame back as RGBA pixels — the
-      // container's pixel oracle (tools/wgx-capture.mjs); WGX-only, so the
+      // container's pixel oracle (tools/gfx/wgx-capture.mjs); WGX-only, so the
       // backend-surface-parity test imposes nothing on GLX/TLX for it.
       capturePixels,
       awaitSoftPresent,
@@ -6051,7 +6102,7 @@ const WGX = (function () {
   // __roadLutTable(pos, trk, mat): the pure road-LUT bake, exposed so it can be
   // audited with no GPU and no device. Every WebGPU road marking is computed
   // from this table, so "are the markings in the right place" is answerable
-  // headlessly — tools/road-lut-census.mjs replays the shader's search over the
+  // headlessly — tools/gfx/road-lut-census.mjs replays the shader's search over the
   // REAL baked table rather than reimplementing the bake, because a census that
   // re-derives what it audits agrees with itself while the shipped code is wrong.
   return {

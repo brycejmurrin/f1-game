@@ -5,10 +5,10 @@ import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 
 const scanSource = await readFile(new URL("../../js/net/scan.js", import.meta.url), "utf8");
-const musicSource = await readFile(new URL("../../js/game/music-lib.js", import.meta.url), "utf8");
+const musicSource = await readFile(new URL("../../js/audio/music-lib.js", import.meta.url), "utf8");
 const apiSource = await readFile(new URL("../../js/data/api.js", import.meta.url), "utf8");
 const liveSource = await readFile(new URL("../../js/data/live.js", import.meta.url), "utf8");
-const audioPanelSource = await readFile(new URL("../../js/game/audio-panel.js", import.meta.url), "utf8");
+const audioPanelSource = await readFile(new URL("../../js/audio/panel.js", import.meta.url), "utf8");
 
 function deferred() {
   let resolve, reject;
@@ -52,7 +52,7 @@ function audioPanelHarness() {
   };
   const context = vm.createContext({ GameAudio, Log: { info() {} } });
   vm.runInContext(`${audioPanelSource}\nglobalThis.__panel = AudioPanel;`, context,
-    { filename: "js/game/audio-panel.js" });
+    { filename: "js/audio/panel.js" });
   return { panel: context.__panel.create(G), G, nodes, calls, writes };
 }
 

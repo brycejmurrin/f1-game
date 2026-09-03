@@ -24,7 +24,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const { buildContext } = require("../../tools/verify-track.cjs");
+const { buildContext } = require("../../tools/track/verify-track.cjs");
 
 const T = buildContext();
 const track = T.build(T.LIST.find((t) => t.id === "suzuka"), { night: false });

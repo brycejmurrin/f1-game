@@ -5,7 +5,7 @@
 > rule, `cache-bump-only` deleted; unit-suite count 186), deploy merge
 > `3685460` (deploy branch tip), Phase 1-lite (tests-split + physics-baseline-present
 > deleted, mcp tests split fast/`test:mcp`, module-size → `tests/data/ratchets.json` +
-> `tools/ratchets.mjs`; unit-suite count 185). Live checklist: §Status and remaining steps.
+> `tools/check/ratchets.mjs`; unit-suite count 185). Live checklist: §Status and remaining steps.
 
 ## Context
 
@@ -104,17 +104,64 @@ Baseline (2026-09-03, branch `claude/project-structure-review-p6eu08`):
    forwarders, 8 `@skill` tags naming skills that no longer exist, ~27
    files with no functional caller. 31 skills; 22 route to siblings by name.
 
+### In flight at the last update (2026-09-03 17:30 UTC)
+
+Read this first if you are picking the work up mid-stream — it is the only
+part of this file that goes stale by the minute.
+
+| what | where | state |
+|---|---|---|
+| `tiny` browser group on the moved tree | `artifacts/logs/tiny.log` | running, ~30/73, 0 failed. Anchor on `grep -E '= run (passed\|failed\|timedout\|interrupted)'`. The ONE known-benign red is smoke.spec's "page loads without WebGL error" — its `page.goto` waits for `load` with no navigation timeout and this box boots in 54–150 s (docs/TESTING.md §Field notes 2026-09-03). Any OTHER failure is a real move regression. |
+| `ci.yml` push run for `f1ee501` | Actions | running; batches 1 and 2 already passed their own runs |
+| `ci.yml` dispatch `group: circuits` | Actions | running. NOTE: two earlier dispatches were CANCELLED externally by Actions concurrency contention across sessions, not by a failure — if it happens again, do not re-dispatch; the push run's smoke gate is the evidence. |
+| Phase 4 agent | worktree `claude/p4-tools` | surveying (a no-caller proof per deletion comes before any edit) |
+| Phase 5 agent | worktree `claude/p5-docs` | mid doc-merge, ~66 files touched |
+
+**The next decision** is the Phase 2b deploy: `node tools/ci/deploy.mjs --plan`,
+report the union, then the real `node tools/ci/deploy.mjs` (fast-forward push, no
+PR). It matters more than the earlier deploys because other sessions develop
+directly on the deploy branch — until the move lands there, every edit they
+make to a moved file is a rename-merge for somebody. `MOVED` in
+`tools/manifest.cjs` exists to make that legible and only helps once pushed.
+
+## Where this stands (2026-09-03, end of the Phase 2b move)
+
+Sessions so far have landed 38 commits on `claude/project-structure-review-p6eu08`,
+of which Phase 0, Phase 1-lite and Phase 2a are DEPLOYED (deploy branch tip
+`bfde168`) and Phase 2b's move is pushed but not yet deployed.
+
+**What the tree looks like now vs. the diagnosis this plan opened with:**
+
+| the diagnosis said | today |
+|---|---|
+| a new eager file costs 5-7 coordinated edits | file + ONE manifest line (`gen-shell` writes the rest) |
+| index.html in 77 of 199 commits, almost all hash bumps | tags read `?v=dev`; the deploy stamps hashes; the shell changes only when markup does |
+| `js/game/` holds six module lifecycles in one directory | `js/game/` no longer exists — 16 domain directories |
+| per-circuit data lives in seven homes | the def is the single home (`js/circuits/<id>.js`) |
+| eight ratchets with five different slack rules | one mechanism: `tests/data/ratchets.json` + `tools/check/ratchets.mjs` |
+| pick-tests routes by a filename list, one `|` per file | directory rules; blanket-only routing 33 -> 1 |
+
+**The four sweep blind spots** found while moving are worth recording because
+they are the reason the move was safe rather than lucky. Each was a class of
+path reference the exact-token sweep could not see, each would have silently
+broken files, and each is now fixed IN THE TOOL with a regression test:
+a `/`-prefixed relative suffix (`"../../js/log.js"`); the sweep eating its own
+move plans and the MOVED block's historical keys; a path written as an escaped
+regex; and a path built from separate quoted segments, which is now REPORTED
+at plan time rather than guessed at. The last one paid for itself immediately:
+it named all six of batch 4's hazards before that batch ran.
+
 ## Status and remaining steps (2026-09-03)
 
 Order of landing: **0 → 1-lite → 2 (splits, then the move window) → 1 → 3
 → 4 → 5**. Each step ends green on `test:tooling-fast`, is one commit or
-one PR on the session branch, and is deployed by `node tools/deploy.mjs`
+one PR on the session branch, and is deployed by `node tools/ci/deploy.mjs`
 (merge the deploy tip → local gate → fast-forward push; no PRs) at the
 windows marked ⚑. Browser evidence is capped at two groups per step and
 the boot group's verdict comes from the `ci.yml` runner shards, not this
 box (`docs/TESTING.md` §Field notes 2026-09-03).
 
-- [x] **Phase 0 / Commit A** `bcf17c8` — `tools/gen-shell.mjs`, marked blocks
+- [x] **Phase 0 / Commit A** `bcf17c8` — `tools/gen/gen-shell.mjs`, marked blocks
       in index.html / carview / sw.js, generated `js/roster.js`, game.js reads
       `ApexRoster` (9,274 → 9,202), load-order's seven mirror tests → one drift
       test.
@@ -138,13 +185,13 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
      section), move the stays-tools assertions into `tests/unit/mcp-cli.test.mjs`
      on the fast gate, move the proxy/serve assertions to a `test:mcp` node
      group off `tooling-fast`;
-  4. `tests/data/ratchets.json` + `tools/ratchets.mjs` (`--check` / `--update`
+  4. `tests/data/ratchets.json` + `tools/check/ratchets.mjs` (`--check` / `--update`
      / `--json`) + `tests/unit/ratchets.test.mjs` replace `module-size.test.mjs`;
      metrics `lines` (all old CEILINGS files), `codeLines` (game.js, apex.js),
      `gMembers` + `topLets` (game.js); one slack rule max(60, 4 %); history →
      `docs/notes/CEILING-HISTORY.md`; 20-file reference sweep incl. AGENTS.md,
      deploy.mjs + check-changes `deploy.md` merge rule, the guard pins.
-- [~] **Phase 2a — splits** merged on the session branch 2026-09-03 from four
+- [x] **Phase 2a — splits** DEPLOYED (`bfde168`); merged on the session branch 2026-09-03 from four
       parallel worktree branches: lighting `e345cdd` (lighting.js → knobs /
       track-lights / frame-lights behind a 16-line façade; the lt-* handlers
       → tuner), quali-store `8349abf` (quali model + quali-sheet; six modules'
@@ -157,29 +204,51 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       graph-parity 40/40 exact). Union verified: tooling-fast 137/137, game-vm 248/248, verify-track --all
       40 OK, state-unit 89/89; `test-bg tiny` 72/73 (the one red is the boot
       `load`-wait timeout, 147.8 s, the box — §Field notes 2026-09-03); runner
-      push run 2346 on 66b6618 green incl. the four fixed smoke shards;
-      `ci.yml group: circuits` (run 2347) — result recorded at deploy.
+      push run 2346 on 66b6618 green incl. the four fixed smoke shards. The
+      `ci.yml group: circuits` dispatch (run 2347) was CANCELLED externally
+      at 42 min (GitHub Actions concurrency contention across sessions, not
+      a code failure — several other runs cancelled the same window); not
+      re-dispatched, since the plain push-run smoke gate on the identical
+      commit already covered the boot group.
+      **DEPLOYED** `bfde168` (deploy tip merge — one real conflict:
+      `tests/unit/module-size.test.mjs` deleted on our side vs modified on
+      theirs; resolved by taking our deletion and running
+      `node tools/check/ratchets.mjs --update` on the union, which moved only
+      `wgx.js` 6037→6060 and `tlx.js` 3132→3144, both from their WebKit fix).
+      `node tools/ci/deploy.mjs`: 12 gate suites + verify-track on all 40
+      circuits, pushed in 1 attempt, 496 s. `pages.yml` run 1941 stamping.
       `tools/moves/phase2.json` maps 91 files for 2b.
-- [ ] **Phase 2b — the move window** ⚑ (≤ 1 h, one commit per target dir,
-      each with a scripted path sweep over docs/skills/tests/tools; squashed
-      names renamed in the same commit; `manifest.cjs` `MOVED` map for one
-      release; deploy.mjs prints the new path on a modify/delete conflict):
-      js/core, physics, race, career, lighting, camera, audio, perf, input, ui,
-      garage, car, data, net, agent, fx, render/{shared,glx}, track/{core,
-      scenery}, circuits unchanged, game.js at root. **WGX/TLX spike-out** to
-      `spike/backends/` in the same window (owner's decision): webgpu/, three/,
-      vendor/three, the nine GPU tools, their tests/docs/skills; DEFERRED
-      rosters, importmap, sw optional entries removed; `Gfx.create()` null →
-      GLX fallback; picker shrinks to WEBGL2; `backend-surface-parity` →
-      GLX-vs-header; gpu-census / ci renderer jobs moved or deleted; AGENTS.md
-      rows collapse to a pointer. Tools/guards rewritten in the window:
-      check-gctx walk, vstd-lint keys, game-vm SKIP path, pick-tests RULES →
-      directory rules, test-groups probe list, load-order recursive scan,
-      global-registry keys, `.cursor/rules` globs, `js/track/CLAUDE.md`
-      re-homed, ARCHITECTURE module table regenerated. Verification: per
-      commit tooling-fast; end: `verify-track --all`, `test:game-vm`,
-      `graph-parity --all`, GLX boot positive signal after `test-bg tiny`,
-      `ci.yml group: circuits`, one `gpu-census.yml census_only` dispatch.
+- [~] **Phase 2b — move DONE, phase OPEN** (spike-out + deploy still to come) — four batch commits
+      (`c78847b` core/physics/race/career 17, `ac2df8c` lighting/camera/audio/
+      perf/input 26, `5bd4fa6` ui/garage/agent/fx/data/car 24 — **js/game/ is
+      gone**, `f1ee501` render/{shared,glx} + track/{core,scenery} 24). 91
+      files into 16 domain directories; `tools/moves/phase2.json` + the four
+      batch maps are the record. Verified per batch and at the end:
+      tooling-fast 138/138, game-vm 248/248, verify-track --all 40 OK,
+      gen-shell --check, check-gctx and ratchets clean; `test-bg tiny` and
+      `ci.yml group: circuits` for the browser half.
+      FOUR sweep blind spots surfaced and were fixed IN THE TOOL, each with a
+      regression test, so the next move does not re-find them:
+      (1) tokenRe's leading boundary excluded `/`, missing every path written
+      as the suffix of a longer relative path (`"../../js/log.js"`);
+      (2) the sweep walked `tools/moves/` and `manifest.cjs`'s MOVED block,
+      corrupting the move plans and the historical keys deploy.mjs reads —
+      both now excluded, MOVED protected by byte range;
+      (3) a path written as an escaped REGEX (sw.js's optional-precache stamp
+      filter) has no token to match — one instance, fixed by hand;
+      (4) a path built from separate quoted segments
+      (`path.join(ROOT, "js", "track", "geom.js")`) likewise — now REPORTED
+      by `splitSegmentMentions()` at plan time, which named all six of batch
+      4's before that batch ran.
+      Also: move-tree's own test fixture used real repo paths, so a batch
+      rewrote it — it now uses names no move map can contain (`js/zzfix/…`).
+      pick-tests RULES are DIRECTORY rules now (the plan's item, possible
+      once js/game/ emptied); blanket-only routing 33 -> 1, and the guard
+      behind it became a COUNT ratchet in ratchets.json instead of a frozen
+      16-path array that would have needed a hand edit per move.
+      STILL TO DO in this phase: the WGX/TLX spike-out (map + checklist are
+      committed and validated, `tools/moves/spike-backends.json` +
+      `docs/notes/SPIKE-BACKENDS-CHECKLIST.md`), then the deploy ⚑.
 - [ ] **Phase 1 — test taxonomy + one ratchet mechanism** (no js change):
       `tests/{guards,tools,node,node/twins,sweeps,browser/<group>,manual}/`,
       `tests/groups.json` generating npm scripts / tooling-fast list /
@@ -201,7 +270,12 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       custom-team-ui → live weather → atmosphere; `hooks-documented` → the
       espree walker. `render()` / `updateCar()` stay whole. End: `driving` +
       `hooks` groups once.
-- [ ] **Phase 4 — tools/ 160 → ~95** in `tools/{lib,ci,check,gen,shot,gfx,
+- [~] **Phase 4 — tools/ 160 → ~95** IN FLIGHT 2026-09-03 as a worktree agent on
+      `claude/p4-tools` off 9486be6 (writes its own `tools/moves/phase4-tools.json`,
+      reads the mover's splitSegmentMentions report per batch, must prove
+      no-caller by grep before each deletion). Scope fenced to tools/ +
+      package.json + workflows + five named guards so it cannot collide with
+      the Phase 5 agent or the tests/ work. Original scope: in `tools/{lib,ci,check,gen,shot,gfx,
       track,car,ui,lighting,mcp,net,env}/`; delete the ~27 no-caller files
       (pins in tools-runnable / package.json first); families → one entry
       point with subcommands; three track-build harnesses → `track-build-vm`;
@@ -211,13 +285,47 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       tinyfish-rpc.py, probe-mcp.py, chrome-devtools-mcp.sh, mcp-cli.mjs,
       mcp-smoke.mjs) consolidates here — that is where the Phase 1-lite
       deferral is decided. Verification: tooling-fast.
-- [ ] **Phase 5 — docs/ + agent surface**: top level 28 → ~12 with generated
-      tables; `docs/notes/` ledgers path-checked only; ATTIC absorbs the
-      zero-citation research + superpowers/ + PNGs + workflow JS;
-      `docs/README.md` → reading order; AGENTS.md → ~120 lines of rules;
-      skills 31 → ~20 (owner's choice); `skill-progressive` loses its ~118
-      prose pins; doc-guard counts become generated numbers. Verification:
-      tooling-fast (`generated-docs`, `agent-surface`, `skill-progressive`).
+- [x] **Phase 5 — docs/ + agent surface** landed 2026-09-03 on
+      `claude/p5-docs`; `test:tooling-fast` 138/138, all four generators
+      byte-clean. **docs/ top level 28 → 23 files, of which 13 are documents
+      and 10 are one-line redirect stubs.** ~12 was not reachable: ten of the
+      absorbed docs are cited BY PATH from `js/`, `css/`, `tests/` or `tools/`
+      comments (PERF-FINDINGS 82 refs, ARCHITECTURE-REVIEW 12, SCENERY-GROUNDING
+      7, COCKPIT-DATUMS 3, RENDERERS 3, AGENT-WORLD-API 3, OCCLUSION-PROBE 3,
+      LAYOUT-AUDIT 3, CONSOLE-RECIPES 1, PARALLEL-WORK 1), and this phase's
+      scope excluded editing those trees. Merges: ARCHITECTURE ← RENDERERS +
+      RENDER-CLIPPING; CAREER ← PARTS; SCENERY-API ← SCENERY-GROUNDING +
+      TRACK-MIGRATION-CHECKLIST; LIGHTING (was LIGHTING-REF) ← KNOBS + PRESETS;
+      COMPONENTS ← LAYOUT-AUDIT; DEBUG-HOOKS ← AGENT-WORLD-API +
+      CONSOLE-RECIPES; PLATFORM (was iOS-OPTIMIZATION). TESTING's field notes
+      and the review's §7-8 became `notes/TESTING-FIELD-NOTES.md` and
+      `notes/DEFECT-LEDGER.md`. **The zero-citation claim was FALSE for four of
+      the five named research files** — re-grepped one by one: BROWSER-GRAPHICS
+      is the only genuine zero, CLEANUP-SWEEP and SURVEY-BUGS-PERF had one live
+      citer each (dropped, then archived), PERF-HUNT is cited by PERF-FINDINGS
+      §3 (→ notes/, not the attic), RENDERER-PERF-AUDIT has five citers
+      including `spike/backends/README.md` and `tools/moves/spike-backends.json`
+      and stays at its research/ path until the spike-out lands. `docs/research/`
+      itself could not be emptied: twelve of its files are cited by path from
+      `js/`/`tests/`/`tools/`. `look-survey/` stays (written by
+      `tools/lighting/look-survey-sheet.py`, pinned by `cdmcp-measure.test.mjs`);
+      `research/wgx-gallery/` stays (pinned by `tools/gfx/wgx-shot.mjs` and the
+      spike move map); `.claude/workflows/*.js` stays (three LIVE workflows,
+      not spent scripts). AGENTS.md 316 → 245 lines / 2858 → 2092 words — every
+      rule kept, ~770 words of evidence moved to
+      `notes/CI-RENDERING-PERFORMANCE.md` and `notes/TESTING-FIELD-NOTES.md`;
+      120 lines would have cost rules. Skills 31 → 26, not ~20: five folded
+      where the hub's `description` could absorb the trigger vocabulary
+      (car-viewer + debug-cameras → playwright-probe, game-feel → tune-physics,
+      restructure-screens-css → css-play, debug-tracks → agent-view), six kept
+      because the merge would have made them un-findable (see the reasoning
+      block in `.claude/skills/README.md`). Guard changes: `skill-progressive`
+      retargeted its fold pins and gained a STRUCTURAL check that each hub's
+      description carries the absorbed vocabulary; `docs-integrity` now walks
+      EVERY directory under docs/ for link resolution (nine dead links landed
+      with the notes/ move and nothing saw them) and exempts `docs/notes/` from
+      the archive-referrer rule, because a ledger citing its own provenance is
+      the point of a ledger.
 - [ ] **Close-out**: `docs/research/TREE-RESTRUCTURE-2026-09.md` gets its
       errata + landed SHAs per phase; `docs/ARCHITECTURE.md` and
       `docs/TESTING.md` describe the final tree; the `MOVED` map and the
@@ -238,7 +346,7 @@ phase, or tooling-fast is red at landing.
 
 ### Phase 0 — Kill the lockstep (`gen-shell`). Two commits.
 
-**Commit A (generator, byte-identical):** `tools/gen-shell.mjs` (grown from
+**Commit A (generator, byte-identical):** `tools/gen/gen-shell.mjs` (grown from
 `bump-cache.mjs`) regenerates three marked blocks from `tools/manifest.cjs`:
 the `<script>`/`<link>` block of `index.html` (`<!-- @gen-shell:scripts -->`
 markers around 1759-1904 and the `<link>` block ~70-81; the two hand
@@ -270,8 +378,8 @@ line; index.html changes only when markup changes.
 Also touched: `.claude/hooks/protect-worktree-files.sh:23` (add roster.js,
 gen-shell.mjs), `tools/apex-tools-mcp.{mjs,json}` (`apex_bump_cache_check`),
 `tests/unit/{agent-surface,change-driver-tools,ci-coverage,deploy-stamp,
-global-registry,skill-progressive}.test.mjs`, `tools/verify-change.mjs`,
-`tools/tooling-fast.mjs`, check-changes/pwa-cache skills and the seven
+global-registry,skill-progressive}.test.mjs`, `tools/ci/verify-change.mjs`,
+`tools/ci/tooling-fast.mjs`, check-changes/pwa-cache skills and the seven
 skills that say "bump-cache --apply", `AGENTS.md:180-206`,
 `docs/ARCHITECTURE.md:23-29 + §Deploy`, `docs/AGENT-SURFACE.md`.
 
@@ -301,24 +409,24 @@ with its reason):
    probe-serve assertions leave `tooling-fast` for a `test:mcp` node group
    run by the Pages gate's node suites (13 s off the fast gate).
 4. **module-size → one ratchet mechanism.** `tests/data/ratchets.json`
-   (file → {metric → ceiling}), `tools/ratchets.mjs` (`--check` default,
+   (file → {metric → ceiling}), `tools/check/ratchets.mjs` (`--check` default,
    `--update` snaps every ceiling to the current value, `--json`),
    `tests/unit/ratchets.test.mjs`. Metrics: `lines` (split-newline, the old
    metric, for every file the old CEILINGS named); `codeLines`
-   (non-comment, non-blank) for `js/game.js` and `js/game/apex.js`;
+   (non-comment, non-blank) for `js/game.js` and `js/agent/apex.js`;
    `gMembers` (`scanGameCtx().members.size` from check-gctx) and `topLets`
    (`^let ` at column 0 — 147 today) for `js/game.js`. ONE slack rule: a
    ceiling more than max(60, 4 %) above its value fails ("lower it"). The
    ~1,280 comment lines of ceiling history → `docs/notes/CEILING-HISTORY.md`.
    Reference sweep (20 files): AGENTS.md conventions bullet, deploy.mjs and
    check-changes `deploy.md` merge rule ("re-measure on the union" →
-   `node tools/ratchets.mjs --update` on the merged tree), tooling-fast
+   `node tools/check/ratchets.mjs --update` on the merged tree), tooling-fast
    list, the tools-runnable / hooks-documented / global-registry /
    css-class-ratchet / css-token-adoption / comment-citations pins,
    wait-polling-lint / bloat-scan mentions, ARCHITECTURE / TESTING /
    PERF-FINDINGS / ARCHITECTURE-REVIEW prose.
 
-Verification: tooling-fast + `npm run test:mcp` + `node tools/ratchets.mjs`
+Verification: tooling-fast + `npm run test:mcp` + `node tools/check/ratchets.mjs`
 clean; no browser run (no js/css change). One commit on the session
 branch; deployed with Phase 2a's splits or alone.
 
@@ -536,8 +644,8 @@ the same commit.
 
 ## Verification (per phase; two browser groups max, background, no js edits mid-run)
 
-- Phase 0: tooling-fast; `test:service-worker`; `node tools/game-vm.cjs monza`
-  (FULL still boots headless); `tools/offline-precache-check.cjs` in the
+- Phase 0: tooling-fast; `test:service-worker`; `node tools/lib/game-vm.cjs monza`
+  (FULL still boots headless); `tools/check/offline-precache-check.cjs` in the
   background (it stays a tool and joins the Pages gate); `test-bg tiny` once.
 - Phase 2: per commit tooling-fast (load-order, global-registry,
   check-gctx, docs-integrity). Phase end: `verify-track --all` (bg),

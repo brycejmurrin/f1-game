@@ -5,7 +5,7 @@ description: Use when steering, gamepad, touch steer, tilt/gyro, keyboard leaks 
 
 # Driving input — devices, not forces
 
-`js/game/input.js` owns **how a device becomes a steer/throttle/brake
+`js/input/input.js` owns **how a device becomes a steer/throttle/brake
 command**. `tune-physics` owns the bicycle model those commands hit.
 Mixing the two is the usual miss: a sticky gamepad is not understeer.
 
@@ -41,7 +41,7 @@ migration are different acts — both are usually needed. See
   (`docs/research/PLATFORM-INPUT-NOTES.md`).
 
 ```sh
-node tools/test-bg.mjs input
+node tools/ci/test-bg.mjs input
 ```
 
 ## Load on demand

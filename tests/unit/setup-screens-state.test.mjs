@@ -129,7 +129,7 @@ function loadCareerUi(careerOpts = {}) {
     Reliability: { REASONS: ["engine"], TIER_RISK: [0.02, 0.06] },
     PhysicsConsts: { DIFF: { EASY: 1 } },
   });
-  vm.runInNewContext(src("js/game/career-ui.js"), sb, { filename: "js/game/career-ui.js" });
+  vm.runInNewContext(src("js/career/career-ui.js"), sb, { filename: "js/career/career-ui.js" });
   const ui = sb.CareerUI.create(G);
   return { dom, ui, Career, G, $: G.$ };
 }
@@ -258,7 +258,7 @@ function loadSeasonUi(trackIds = ["a", "b"]) {
     },
     Tracks: { LIST: [{ id: "a", name: "A" }, { id: "b", name: "B" }, { id: "c", name: "C", country: "X" }] },
   });
-  vm.runInNewContext(src("js/game/season-ui.js"), sb, { filename: "js/game/season-ui.js" });
+  vm.runInNewContext(src("js/career/season-ui.js"), sb, { filename: "js/career/season-ui.js" });
   return { dom, ui: sb.SeasonUI.create(G), $: G.$ };
 }
 
@@ -320,7 +320,7 @@ function loadSetupUi() {
     M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
     PhysicsConsts: { WET_GRIP: { rain: [1, 1.2, 1.4] } },
   });
-  vm.runInNewContext(src("js/game/setup-ui.js"), sb, { filename: "js/game/setup-ui.js" });
+  vm.runInNewContext(src("js/garage/setup-sheet.js"), sb, { filename: "js/garage/setup-sheet.js" });
   return { dom, ui: sb.SetupUI.create(G), G, $: G.$, observers };
 }
 

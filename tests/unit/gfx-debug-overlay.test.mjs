@@ -4,7 +4,7 @@
  * This session spent rounds chasing a dark three.js/WebGPU frame with no way to
  * read the one number that settles it (GLX.gpuErrors()) on the machine that had
  * the bug: the reporter has no console, and this container has no GPU
- * (vulkaninfo: one PHYSICAL_DEVICE_TYPE_CPU, no /dev/dri). js/game/gfx-debug.js
+ * (vulkaninfo: one PHYSICAL_DEVICE_TYPE_CPU, no /dev/dri). js/perf/gfx-debug-overlay.js
  * turns the renderer's existing hooks into DOM the reporter can read and copy.
  *
  * The pins below are the properties that make it useful AND safe to ship:
@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
-const SRC = read("js/game/gfx-debug.js");
+const SRC = read("js/perf/gfx-debug-overlay.js");
 
 test("gfx-debug is opt-in and silent otherwise", () => {
   assert.match(SRC, /\[\?&\]gfxdebug=1/,
@@ -80,9 +80,9 @@ test("gfx-debug obeys the file conventions", () => {
   assert.match(SRC, /^const GfxDebug = \(\(\) => \{/m, "one file, one global");
   assert.match(SRC, /window\.GfxDebug = GfxDebug;/, "and it publishes that global");
   const manifest = read("tools/manifest.cjs");
-  assert.ok(manifest.includes('"js/game/gfx-debug.js"'),
+  assert.ok(manifest.includes('"js/perf/gfx-debug-overlay.js"'),
     "new-file lockstep: the module roster must list it");
   const html = read("index.html");
-  assert.match(html, /src="js\/game\/gfx-debug\.js\?v=[A-Za-z0-9._-]+"/,
+  assert.match(html, /src="js\/perf\/gfx-debug-overlay\.js\?v=[A-Za-z0-9._-]+"/,
     "new-file lockstep: a script tag in the shell (gen-shell writes it from the manifest)");
 });

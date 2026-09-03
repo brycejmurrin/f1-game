@@ -396,7 +396,7 @@
             const row = i % 2, off = (Math.floor(i / 2) - 1) * 12;
             const p = vadd(vadd(a.c, a.r, (row ? 1 : -1) * 5), a.t, off);
             // addPrism is BASE-anchored; 1.4 == half of size[1] (2.8) — the
-            // classic centre-anchor mistake (js/track/geom.js addPrism
+            // classic centre-anchor mistake (js/track/core/geom.js addPrism
             // note), leaving the true base 1.4 m clear of ground (measured
             // via float-audit as ~1.8 m on 3 of 6 tents). Small embed
             // instead of a bare 0 so the tents don't show a seam.

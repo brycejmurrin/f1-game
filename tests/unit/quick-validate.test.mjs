@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { evaluateLiveProbe, probeFailures } from "../../tools/quick-validate.mjs";
+import { evaluateLiveProbe, probeFailures } from "../../tools/check/quick-validate.mjs";
 
 const passing = {
   globals: { GLX: true },

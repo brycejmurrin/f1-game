@@ -1,5 +1,5 @@
 /* aero-zones-vm.test.mjs — tests/specs/aero-zones.spec.js replayed in the Node
- * VM (tools/game-vm.cjs): the authored activation zones, Monaco's zero,
+ * VM (tools/lib/game-vm.cjs): the authored activation zones, Monaco's zero,
  * inZone/zoneAhead, the overtake-mode rules active aero does NOT share, and
  * the X_VMAX_GAIN / X_DF_LOSS trade — with the SAME assertions and thresholds.
  *
@@ -18,14 +18,14 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const closeTo = (r, e, d, m) => assert.ok(Math.abs(e - r) < Math.pow(10, -d) / 2, m || `${r} not within 10^-${d}/2 of ${e}`);
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
 const lt = (a, b, m) => assert.ok(a < b, m || `${a} < ${b}`);
 const gte = (a, b, m) => assert.ok(a >= b, m || `${a} >= ${b}`);
 
-const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/game/aerozones.js
+const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/physics/aero-zones.js
 
 let g = null, PHYS0 = null;
 before(async () => { g = await createGame({ track: "monza" }); PHYS0 = { ...g.apex.tuning() }; });

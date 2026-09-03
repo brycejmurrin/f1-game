@@ -1,6 +1,6 @@
 /* game-vm.test.mjs — the REAL js/game.js boots and drives in a Node VM.
  *
- * tools/game-vm.cjs loads the full manifest order through game.js (renderer
+ * tools/lib/game-vm.cjs loads the full manifest order through game.js (renderer
  * stubbed, DOM inert, no browser) and hands back window.__apex. This file is
  * the harness's own contract: boot, race, drive, cross the line, and the JSON
  * hooks answer. The driving model's NUMBERS are pinned separately against the
@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const finite = (o, keys) => { for (const k of keys) assert.ok(Number.isFinite(o[k]), `${k} not finite: ${o[k]}`); };
 

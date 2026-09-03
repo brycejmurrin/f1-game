@@ -39,7 +39,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { loadBake, censusCircuit } from "../../tools/road-lut-census.mjs";
+import { loadBake, censusCircuit } from "../../tools/gfx/road-lut-census.mjs";
 
 // A frame SWAP is the defect. Real curvature at a hairpin tops out near 60.
 const SWAP_DEG = 75;

@@ -12,7 +12,7 @@
 // hand back a stale silhouette and the car would re-centre wrong — this goes red
 // first.
 //
-// Pure Node: tools/parts-sweep.mjs's loadParts runs car3d.js in a VM with no
+// Pure Node: tools/car/parts-sweep.mjs's loadParts runs car3d.js in a VM with no
 // browser, so this belongs in `npm run test:tooling`, not the Playwright projects.
 
 import { test } from "node:test";
@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { loadParts } from "../../tools/parts-sweep.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -75,7 +75,7 @@ test("SP_HULL_GEOM_FIELDS names exactly the fields whose PRESENCE moves a vertex
 // The turntable self-frames by BACKING OFF: spFitD = SP_FIT_HALF_W / (tan18 *
 // aspect * (1 - panelFrac)). That diverges as the visible region narrows, and
 // the only thing that ever bounded it was SP_DIST_MAX (15) — the MANUAL zoom
-// ceiling. js/game/garage-scene.js says a camera at 15 m "is outside the bay on
+// ceiling. js/garage/scene.js says a camera at 15 m "is outside the bay on
 // at least one axis nearly always", and that is what the owner reported as "the
 // camera is further back and appears to rotate around the outside of the room
 // till I zoom thru that wall".
@@ -83,10 +83,10 @@ test("SP_HULL_GEOM_FIELDS names exactly the fields whose PRESENCE moves a vertex
 // MEASURED in a real browser at the panel widths the sheet actually takes
 // (artifacts/garage-900x820-broken.png vs -fixed.png):
 //
-//   viewport    aspect  panelFrac   before   after
-//   1440x900     1.60     0.29       9.08     9.08   unchanged
-//   1280x800     1.60     0.33       9.62     9.62   unchanged
-//    844x390     2.16     0.498      9.49     9.49   unchanged
+//   viewport    aspect  panelFrac   before   after (3.15 half-W)
+//   1440x900     1.60     0.29       9.08     8.54
+//   1280x800     1.60     0.33       9.62     9.05
+//    844x390     2.16     0.498      9.49     8.95
 //    900x820     1.10     0.467     15.00    11.00   was pinned on the clamp
 //    390x844     0.46     0          15.00    11.00   was pinned on the clamp
 //
@@ -120,7 +120,7 @@ test("the garage auto-fit is capped below the manual zoom ceiling", () => {
 // defect above is unobservable: garageCam() reported setupPreviewDist (8.5)
 // while the camera sat at the 15 m clamp, so no hook and no test could see it.
 test("__apex.garageCam reports the effective distance, not just the stored zoom", () => {
-  const apex = readFileSync(new URL("../../js/game/apex.js", import.meta.url), "utf8");
+  const apex = readFileSync(new URL("../../js/agent/apex.js", import.meta.url), "utf8");
   // Bound the slice at the NEXT hook rather than by a character budget: this
   // block carries its own explanation, so a fixed window silently ran past the
   // end of it (or, with a shorter one, stopped before the fields).

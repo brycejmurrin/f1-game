@@ -28,7 +28,7 @@ import test from "node:test";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { auditCoverage } from "../../tools/test-coverage-audit.mjs";
+import { auditCoverage } from "../../tools/ci/test-coverage-audit.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 

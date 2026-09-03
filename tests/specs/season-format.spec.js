@@ -7,7 +7,7 @@
 // The config is SEEDED through localStorage rather than clicked into
 // #season-setup. Two reasons: it is ~20 s a case cheaper, and it keeps the RULES
 // under test separate from the SCREEN that writes them (the screen's own DOM is
-// covered by menu-survey). js/game/season-cal.js normalises whatever it reads,
+// covered by menu-survey). js/career/season-cal.js normalises whatever it reads,
 // so a seeded config is the same object the editor would have produced.
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";

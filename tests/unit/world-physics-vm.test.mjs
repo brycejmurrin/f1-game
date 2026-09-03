@@ -1,5 +1,5 @@
 /* world-physics-vm.test.mjs — tests/specs/world-physics.spec.js replayed in the
- * Node VM (tools/game-vm.cjs): the world-space player model's observable
+ * Node VM (tools/lib/game-vm.cjs): the world-space player model's observable
  * contract — progress with speed, steer direction, running wide with the
  * assist off, the AI getting away — with the SAME assertions and PACE pin.
  *
@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
-const { createGame } = require("../../tools/game-vm.cjs");
+const { createGame } = require("../../tools/lib/game-vm.cjs");
 
 const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
 const lt = (a, b, m) => assert.ok(a < b, m || `${a} < ${b}`);

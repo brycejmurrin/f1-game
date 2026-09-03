@@ -113,7 +113,7 @@ function bootMenuNav() {
   const { els, UiLayers } = layerStack(dom, ["overlay"]);
   const layer = els[0];
   const sb = sandbox(dom, { UiLayers });
-  vm.runInNewContext(src("js/game/menunav.js"), sb, { filename: "js/game/menunav.js" });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
   const key = (k) => {
     const e = { key: k, altKey: false, ctrlKey: false, metaKey: false, defaultPrevented: false, stopped: false };
     e.preventDefault = () => { e.defaultPrevented = true; };
@@ -129,8 +129,8 @@ function bootTopModal(ids) {
   const { els, UiLayers } = layerStack(dom, ids);
   const mo = moShim();
   const sb = sandbox(dom, { UiLayers, MutationObserver: mo.MutationObserver });
-  vm.runInNewContext(src("js/game/menunav.js"), sb, { filename: "js/game/menunav.js" });
-  vm.runInNewContext(src("js/game/topmodal.js"), sb, { filename: "js/game/topmodal.js" });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
+  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: "js/ui/modal.js" });
   const byId = Object.fromEntries(els.map((el) => [el.id, el]));
   return { dom, sb, TopModal: sb.TopModal, layer: (id) => byId[id], flip: mo.flip, flipAll: mo.flipAll,
     add: (parent, id, o) => control(dom, parent, id, o), focused: () => dom.document.activeElement && dom.document.activeElement.id };
@@ -354,7 +354,7 @@ test("TopModal: no focus is restored to a control whose screen is not up (a race
 });
 
 test("TopModal.scanLayers wires every non-dialog UiLayers layer except the two that manage themselves", () => {
-  const s = code("js/game/topmodal.js");
+  const s = code("js/ui/modal.js");
   assert.match(s, /"rotate-device":\s*1,\s*"photo-controls":\s*1/, "LAYER_SKIP names exactly the rotate blocker and the fly-cam");
   assert.match(s, /el\.tagName !== "DIALOG"\) wireLayer\(el\)/, "dialogs keep showModal()/close() focus handling");
   assert.match(s, /return \{ scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing \}/);
@@ -364,7 +364,7 @@ test("TopModal.scanLayers wires every non-dialog UiLayers layer except the two t
 
 function loadLayerIds() {
   const sb = sandbox(makeDom());
-  vm.runInNewContext(src("js/game/uilayers.js"), sb, { filename: "js/game/uilayers.js" });
+  vm.runInNewContext(src("js/ui/layers.js"), sb, { filename: "js/ui/layers.js" });
   return sb.UiLayers.LAYER_IDS;
 }
 
@@ -413,7 +413,7 @@ test("Escape/back is one behaviour: every layer names its own door, and every do
     assert.ok(inShell || built, `#${id} → #${via[1]} exists (shell or built by hub.js)`);
   }
   // Both Escape paths press the same control: the dialog `cancel` and the document keydown.
-  const tm = code("js/game/topmodal.js");
+  const tm = code("js/ui/modal.js");
   assert.match(tm, /el\.addEventListener\("cancel"[\s\S]*?getAttribute\("data-esc-close"\)[\s\S]*?btn\.click\(\)/);
   assert.match(tm, /function onEscape[\s\S]*?getAttribute\("data-esc-close"\)[\s\S]*?btn\.click\(\)/);
 });
@@ -429,8 +429,8 @@ function stringConst(file, name) {
 
 test("ScrollFade.SCREENS and AriaState.ROOTS cover every UiLayers layer that scrolls or selects", () => {
   const layers = loadLayerIds();
-  const screens = new Set(stringConst("js/game/scrollfade.js", "SCREENS").split(",").map((s) => s.trim().slice(1)));
-  const roots = new Set(stringConst("js/game/ariastate.js", "ROOTS").split(",").map((s) => s.trim().slice(1)));
+  const screens = new Set(stringConst("js/ui/scroll-fade.js", "SCREENS").split(",").map((s) => s.trim().slice(1)));
+  const roots = new Set(stringConst("js/ui/aria-state.js", "ROOTS").split(",").map((s) => s.trim().slice(1)));
   const SKIP = {
     "rotate-device": "CSS-gated, never toggled by `hidden`; two buttons, no scroll region, no selected state",
     "photo-controls": "no scroll region; its buttons are actions, none carries a selected class",

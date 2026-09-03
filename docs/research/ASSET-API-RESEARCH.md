@@ -17,11 +17,11 @@ what is still open. The research below is kept as the rationale.
 
 The lit pipeline is **vertex colour + a per-vertex procedural material id**.
 The interleaved lit vertex is `pos(3) + nrm(3) + col(3) [+ mat(1)] [+ trk(3)]`
-(`createMesh()` in `js/render/glx.js`) — **there is no UV channel at all** on
+(`createMesh()` in `js/render/glx/glx.js`) — **there is no UV channel at all** on
 the lit path, and none on the chunked prop path either (`createTexMesh()` is
 the *separate* textured-decal layout, and the only one carrying `uv`).
 
-Surface detail comes from `js/render/shaders/lit.js`:
+Surface detail comes from `js/render/glx/shaders/glsl-lit.js`:
 
 - `matBumpHeight(mid, uv)` (`lit.js:196`) — a scalar relief height per material
 - `applyMaterialNormal(mid, N, vd)` (`lit.js:247`) — 3-tap gradient → real
@@ -35,7 +35,7 @@ already has a UV-free coordinate convention with grazing-angle `fwidth()`
 antialiasing (`lit.js:266-267`) and distance fades. A texture can drop straight
 into that convention without the game ever needing to unwrap anything.
 
-`TrackGeom.MAT` (`js/track/geom.js:14-30`) is 17 ids: `FLAT, CONCRETE, BRICK,
+`TrackGeom.MAT` (`js/track/core/geom.js:14-30`) is 17 ids: `FLAT, CONCRETE, BRICK,
 GLASS, METAL, WOOD, FOLIAGE, FABRIC, SAND, GRASS, ROCK, SNOW, ROOF, STONE,
 RUST, FLAG, ASPHALT`.
 
@@ -58,7 +58,7 @@ Texture units in use: 0 (shadow), 5 (env cube), 6, 7 (blocker), 8 (car shadow),
 
 ### 1.3 There is already a model-import seam — and it is unused
 
-`js/render/gltf.js` is a 453-line binary-glTF reader that produces plain
+`js/render/shared/gltf.js` is a 453-line binary-glTF reader that produces plain
 `{pos, nrm, col, idx}`. Its header is explicit about what it drops
 (`gltf.js:24-25`): *"Intentionally NOT supported: textures/UVs, external .bin or
 image URIs, Draco / meshopt compression, animations, skins/morphs."* Material
@@ -68,7 +68,7 @@ colour comes from `baseColorFactor` only (`gltf.js:348-351`).
 `GLTF.toMesh`, and on success rebuilds every team mesh from it. It is
 **deliberately never auto-called** — the comment says *"Drop in a model then
 call this once a CC-licensed .glb is available."* It is exposed as
-`__apex.loadCarModel` (`js/game/apex.js:874`).
+`__apex.loadCarModel` (`js/agent/apex.js:874`).
 
 So a previous pass already built the door and left it unlocked. Nobody has
 walked through it because there is no asset acquisition story.
@@ -90,7 +90,7 @@ walked through it because there is no asset acquisition story.
   violates no-external-assets, no-build-step."* The proposal below is the
   argument for relaxing exactly one half of that: **no build step at *runtime*,
   but an offline bake tool in `tools/` is fine** — the same category as
-  `tools/verify-track.cjs`. `assets/` already ships fonts, icons, music and sfx.
+  `tools/track/verify-track.cjs`. `assets/` already ships fonts, icons, music and sfx.
 
 ---
 
@@ -186,17 +186,17 @@ committed.**
 Three independent pieces, each shippable and revertible on its own. Ordered by
 value-per-risk.
 
-### 3.1 The bake tool — `tools/assets.mjs` (author-time only)
+### 3.1 The bake tool — `tools/gen/assets.mjs` (author-time only)
 
-A Node CLI alongside `tools/verify-track.cjs`. Never loaded by the game, never
+A Node CLI alongside `tools/track/verify-track.cjs`. Never loaded by the game, never
 runs in CI for a normal test pass. Network access only here.
 
 ```sh
-node tools/assets.mjs search materials asphalt      # query PH + aCG, print candidates
-node tools/assets.mjs bake-material asphalt ambientcg:Asphalt026A --mat ASPHALT
-node tools/assets.mjs bake-model grandstand ./src/stand.glb --mat-map metal=METAL
-node tools/assets.mjs verify                        # md5s, licences, sizes, manifest
-node tools/assets.mjs credits                       # regenerate assets/pack/CREDITS.md
+node tools/gen/assets.mjs search materials asphalt      # query PH + aCG, print candidates
+node tools/gen/assets.mjs bake-material asphalt ambientcg:Asphalt026A --mat ASPHALT
+node tools/gen/assets.mjs bake-model grandstand ./src/stand.glb --mat-map metal=METAL
+node tools/gen/assets.mjs verify                        # md5s, licences, sizes, manifest
+node tools/gen/assets.mjs credits                       # regenerate assets/pack/CREDITS.md
 ```
 
 Outputs, all committed:
@@ -301,7 +301,7 @@ per-material draw state to a path that currently gets ~1 draw per visible chunk,
 and gain little: at the distances props are viewed, `MAT`-array texturing from
 §3.2 already covers them.
 
-So: **the model pipeline is a geometry pipeline.** `tools/assets.mjs bake-model`
+So: **the model pipeline is a geometry pipeline.** `tools/gen/assets.mjs bake-model`
 takes a `.glb`, runs it through glTF-Transform (`weld`, `simplify` for LODs,
 `dedup`, `prune`), bakes each source material down to a vertex colour +
 a `MAT` id via an explicit `--mat-map`, and writes the game's existing
@@ -315,7 +315,7 @@ independent circuit reviews named "all our grandstands look identical" a top-3
 issue. Six or eight baked stand/pit-building variants, dropped into the existing
 `scenery(api)` calls, fixes that without an engine change.
 
-Keep `js/render/gltf.js` runtime-only for the **car** — that seam
+Keep `js/render/shared/gltf.js` runtime-only for the **car** — that seam
 (`loadCarModel`) is already built, already validated, already exposed on
 `__apex`, and wants no changes.
 
@@ -333,7 +333,7 @@ complaint more cheaply than anything in §3.2.
 
 ## 4. Proposed runtime API
 
-One new IIFE global, `js/render/assets.js` → `Assets`, loaded before `glx.js`.
+One new IIFE global, `js/render/shared/assets.js` → `Assets`, loaded before `glx.js`.
 
 ```js
 Assets.manifest()                  // the baked catalog (id → files, MAT, licence)
@@ -372,7 +372,7 @@ does exactly that kind of pixel comparison.
 | phase | work | status |
 |---|---|---|
 | 0 | `MAT` ids for road/terrain | **was already done** — `mesh.js:412-424`, `:713` |
-| 1 | `tools/assets.mjs` + manifest + licence `verify` | **shipped**, guarded by `tests/unit/assets-pack.test.mjs` |
+| 1 | `tools/gen/assets.mjs` + manifest + licence `verify` | **shipped**, guarded by `tests/unit/assets-pack.test.mjs` |
 | 2 | `Assets` global + `createTextureArray` + `uMatTexMix` at 0 | **shipped** on GLX, TLX, and WGX |
 | 3 | Tune `matTexMix` per profile, bake into `light-presets.js` | **open** — needs a human eye on a real screen |
 | 4 | KTX2 container + vendored transcoder | **open** — the 561 KB PNG pack is far under budget, so this is not yet needed |
@@ -433,11 +433,11 @@ does exactly that kind of pixel comparison.
 
 ### Landed
 
-**`tools/assets.mjs`** — the author-time bake CLI. `bake-synthetic` needs no
+**`tools/gen/assets.mjs`** — the author-time bake CLI. `bake-synthetic` needs no
 network and no dependencies: it generates all 14 material layers from
 multi-octave tiling noise and encodes them with node's own zlib (a ~90-line PNG
 encoder), which is what makes the whole runtime path testable in CI and in a
-sandbox with no egress. `bake-model` runs the game's *own* `js/render/gltf.js`
+sandbox with no egress. `bake-model` runs the game's *own* `js/render/shared/gltf.js`
 in a VM, stamps a `MAT` id per vertex and writes the game's interleaved format.
 `bake-env`, `verify` (licence allow-list + md5 + 8 MB budget) and `credits` are
 there too. `APEX_PACK_DIR` redirects every write so tests can bake into a temp
@@ -450,7 +450,7 @@ round-trip. It is `Apex26-Procedural`-licensed — generated by our own tool fro
 our own noise, so it carries no third-party obligation at all. A real CC0 scan
 bake replaces it byte-for-byte through the same manifest.
 
-**`js/render/assets.js`** — the loader. Feature-detects
+**`js/render/shared/assets.js`** — the loader. Feature-detects
 `gfx.createTextureArray`, tiers on `gfx.isMobile`/`mobileTier`, and treats "no
 pack", "malformed pack" and "backend can't do it" as ordinary states that leave
 the procedural render untouched. Nothing it does is awaited by boot.
@@ -506,7 +506,7 @@ the pack lands asynchronously. That is the same trick `setEnvCube` already used.
 
 Both consumers now exist:
 
-- **`Assets.env()` is wired into `applyRaceSettings`** (`js/game/atmosphere.js`),
+- **`Assets.env()` is wired into `applyRaceSettings`** (`js/lighting/atmosphere.js`),
   applied straight after the palette base and before the weather branches — so a
   measured sky replaces the hand-picked hemisphere colours while overcast/rain/fog
   still scale it. No shader change, as predicted in §3.4.
@@ -528,7 +528,7 @@ Measured after the 2k→256 full-pack rebake + Chromium A/B (`matTex` 0 vs 1):
 
 1. **Tune world scales** — **done**: sand 6→11, rock 5→8, grass 3→4.5,
    foliage 3→4, snow 6→7, asphalt 4→3.5 (finer grit). Synced in
-   `tools/assets.mjs` SCALES, `webbake.js`, and `manifest.json` layers.
+   `tools/gen/assets.mjs` SCALES, `webbake.js`, and `manifest.json` layers.
 2. **HDRI → `Assets.env()`** — **done** for `*|default|day|dusk|dawn` via
    `bake-env-hdri` (Poly Haven 1k `.hdr` hemisphere sample). Night skipped on
    purpose. `atmosphere.js` now applies env after every non-night TOD base.

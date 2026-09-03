@@ -1,8 +1,8 @@
 # LIGHTING TUNER — the 183 sliders, and what each one drives
 
-Generated from `TUNE_DEFS` in `js/game/lighting-knobs.js`; that registry is the
+Generated from `TUNE_DEFS` in `js/lighting/knobs.js`; that registry is the
 source of truth and this table is a view of it. Regenerate rather than hand-edit:
-`node tools/gen-slider-doc.mjs` rewrites the marked block below and `--check`
+`node tools/gen/gen-slider-doc.mjs` rewrites the marked block below and `--check`
 (run by `tests/unit/generated-docs.test.mjs`) fails when it drifts.
 
 **2026-08-13 range pass:** every knob's step was halved (finer scrubbing), and
@@ -84,7 +84,7 @@ threshold. The five repaired knobs were all confirmed this way:
 | `overcastFogMul` | **overcast only** | `fogDensity` ×3.5 |
 | `fogWxMul` | **fog only** | `fogDensity` ×2.7 |
 
-The last two are why `tools/lighting-tuner-sweep.mjs` gained `day-overcast`/`day-fog`
+The last two are why `tools/lighting/lighting-tuner-sweep.mjs` gained `day-overcast`/`day-fog`
 conditions: their gates never open under dry/wet, so any pixel sweep would have
 scored them dead regardless of runtime.
 
@@ -345,7 +345,7 @@ wrong every time:
 |---|---|---|
 | `starBright` | stars are sub-pixel point features; a frame MEAN can't resolve a few dozen brightened pixels in a 160×90 capture | signal `max 22` vs noise `max 14`, `p99 1.33` vs `1.0` — the distribution TAIL moves even though the mean (0.19 vs 0.34) does not |
 | `starBright` (2nd cause) | `sky.js` multiplies stars by `(1 - cityCov)`; Vegas (`street_night`) has heavy city glow that suppresses the star field to near-zero regardless of `starBright` | re-probed on `bahrain` (desert, dark sky) with the camera tilted skyward — still measured no change purely from the mean-vs-point-feature issue above, confirming the FIRST cause is what matters, not the theme |
-| `lampCull` | `lampCap(carCount, …)` only applies the knob `carCount > 1`; the standard `park()` capture teleports every AI car away, leaving the player solo | traced the gate in `js/game/lighting.js`; a capture with traffic present (no `park()`, or a scripted grid start) would show it |
+| `lampCull` | `lampCap(carCount, …)` only applies the knob `carCount > 1`; the standard `park()` capture teleports every AI car away, leaving the player solo | traced the gate in `js/lighting/lighting.js`; a capture with traffic present (no `park()`, or a scripted grid start) would show it |
 | `tailLightMul` | `appendCarTailLights` only emits for cars within `tailRange` (160 m); `park()` scatters the field 600 m away, so there are zero tail lights to scale | same fix as above — needs cars in frame, not a parked solo car |
 | `beamCone` | build-only, changes lamp cone SHAPE not brightness — a subtler pixel delta than `poolEnergy` (its build-only sibling, same rebuild path), which DID move measurably in the same capture | `poolEnergy` moving proves `set()` → `rebuild:true` → `track._lights = null` fires correctly; `beamCone` rides the identical path |
 
@@ -358,8 +358,8 @@ scene event it drives even happening in this shot (traffic, dark sky, weather),
 and would this effect show up in a MEAN across the whole frame or only in a
 handful of pixels?
 
-`tools/slider-effect.mjs --live` now carries a **per-id recipe** for every
-`TUNE_DEFS` knob (`tools/slider-effect-live.mjs`). `--live --all --dry-run`
+`tools/lighting/slider-effect.mjs --live` now carries a **per-id recipe** for every
+`TUNE_DEFS` knob (`tools/lighting/slider-effect-live.mjs`). `--live --all --dry-run`
 prints the 183 plans grouped by `track|tod|wx|camera` so a real sweep parks
 once per condition, not once per slider. `--shots N` sets how many frames
 (default 2); without `--from`/`--to`, N>2 linspaces the slider's min→max.
@@ -374,7 +374,7 @@ corroboration; `lightState` is the verdict.
 ## The full day-dry sweep's 18 "no clear signal" knobs: all 18 confirmed live
 
 A later day-dry sweep over the 178 knobs that existed then
-(`tools/lighting-tuner-sweep.mjs --cond=day-dry`)
+(`tools/lighting/lighting-tuner-sweep.mjs --cond=day-dry`)
 carried 18 knobs through to a genuinely clean, isolated re-check (own noise
 floor ≈0.12, not the FLOOR=2.0 the sweep uses) that still showed no signal:
 `sunShaftMul`, `sunShaftDecay`, `mieScatter`, `flareStreak2`, `whites`,
@@ -414,7 +414,7 @@ sub-pixel-band blind spot as `starBright` above, just narrower.
 
 **`cloudDef` (the 18th) needed a THIRD trap fixed: `sky()`'s hardcoded ~58°
 pitch is the wrong angle to test it.** The cloud noise plane is sampled as
-`dir.xz / up * 0.42` (`js/render/shaders/sky.js`) — dividing by `up` means a
+`dir.xz / up * 0.42` (`js/render/glx/shaders/glsl-sky.js`) — dividing by `up` means a
 steep look-up angle compresses the sampled coordinate toward a single point,
 so every pixel in frame reads nearly the same noise value and the sky renders
 as a smooth gradient with no puffy structure regardless of `cloudDef`. All
@@ -461,7 +461,7 @@ notch. `fmtTune` derives its decimals from the step, so both were already
 printing two decimals — the mismatch was invisible in the text.
 
 It bites harder than a cosmetic mismatch, because `set()` in
-`js/game/light-store.js` stores a player override whenever the incoming value
+`js/lighting/profiles.js` stores a player override whenever the incoming value
 differs from `fallback(id)`, and `fallback` includes the shipped preset for the
 current condition. With `keyMul` shipped at 0.85 against a 0.02 grid the slider
 can only emit 0.84 or 0.86, so the first nudge persisted a value the player
@@ -487,7 +487,7 @@ off-grid.
 ---
 
 <!-- GENERATED: tune-defs -->
-_Generated by `node tools/gen-slider-doc.mjs` from `TUNE_DEFS` in `js/game/lighting-knobs.js` — 183 sliders in 11 groups. Do not edit the tables by hand; `--check` guards them (`tests/unit/generated-docs.test.mjs`)._
+_Generated by `node tools/gen/gen-slider-doc.mjs` from `TUNE_DEFS` in `js/lighting/knobs.js` — 183 sliders in 11 groups. Do not edit the tables by hand; `--check` guards them (`tests/unit/generated-docs.test.mjs`)._
 
 ## SUN & MOON  (12)
 
@@ -548,7 +548,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `poolEnergy` | POOL ENERGY | 0 … 1.375 | 0.55 | — | ✓ | track-lights.js×3 |
 | `lampRadiusMul` | POOL RADIUS | 0.4 … 1.9 | 1 | — | ✓ | track-lights.js×3 |
 | `bleedMul` | VALLEY BLEED | 0 … 2.5 | 1 | — | ✓ | track-lights.js×3 |
-| `glareStr` | LENS GLARE | 0 … 0.3 | 0.12 | — | ✓ | game.js×4, garage-scene.js |
+| `glareStr` | LENS GLARE | 0 … 0.3 | 0.12 | — | ✓ | game.js×4, scene.js |
 | `lampTemp` | LAMP TEMPERATURE | -3.3 … 8.3 | 0 | — | ✓ | game.js |
 | `lampFlicker` | LAMP FLICKER | 0 … 0.6 | 0.1 | — | ✓ | frame-lights.js |
 | `beamCone` | BEAM CONE WIDTH | 0.08 … 2.2 | 1 | — | ✓ | track-lights.js×3 |
@@ -568,8 +568,8 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `lampCullFade` | LAMP CULL FADE | 0.02 … 0.9 | 0.35 | — | ✓ | frame-lights.js×2 |
 | `lampGapFill` | DARK-GAP FILL | 0 … 150 | 60 | — |   | track-lights.js×2 |
 | `lampBehindBias` | BEHIND-CAM BIAS | 0.2 … 8 | 5.25 | — |   | frame-lights.js×3 |
-| `roadChunkLamps` | PER-CHUNK ROAD | 0 … 1 | 0 | — | ✓ | game.js×5, apex.js, chunked.js |
-| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | game.js×7, apex.js×3, frame-lights.js×2, tuner.js, glx.js, chunked.js×2 |
+| `roadChunkLamps` | PER-CHUNK ROAD | 0 … 1 | 0 | — | ✓ | apex.js, game.js×5, chunked.js |
+| `perChunkLights` | PER-CHUNK LAMPS | 0 … 1 | 0 | — | ✓ | apex.js×3, game.js×7, frame-lights.js×2, tuner-panel.js, chunked.js×2, glx.js |
 | `lampReach` | LAMP REACH AHEAD | 1 … 4 | 1 | — |   | frame-lights.js×2 |
 | `lampNearClamp` | LAMP NEAR CLAMP | 1 … 8.5 | 4 | `uLampNearClamp` | ✓ | glx.js×2 |
 
@@ -669,7 +669,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `cityGlowReach` | CITY GLOW REACH | 0.04 … 2.44 | 1 | `uCityGlowReach` | ✓ | game.js×2, glx.js×2 |
 | `cloudDef` | CLOUD DEFINITION | 0 … 1.2 | 1 | `uCloudDef` |   | game.js×2, glx.js×2 |
 | `skyColorSat` | SKY COLOUR SATURATION | 0 … 2.5 | 1 | — | ✓ | atmosphere.js×2 |
-| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — | ✓ | game.js×11, apex.js, glx.js×2 |
+| `wetness` | WETNESS | -0.05 … 1 | -0.05 | — | ✓ | apex.js, game.js×11, glx.js×2 |
 | `rainCount` | RAIN INTENSITY | 20 … 1000 | 360 | — | ✓ | particles.js |
 | `rainStreak` | RAIN STREAK LEN | 0.04 … 2.44 | 1 | — | ✓ | particles.js |
 | `rainSpeed` | RAIN FALL SPEED | 0.04 … 2.44 | 1 | — | ✓ | particles.js×2 |
@@ -690,7 +690,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | id | slider | range | def | uniform | preset | consumed in |
 |---|---|---|---|---|---|---|
 | `exposureMul` | EXPOSURE | 0.1 … 2.35 | 1 | — | ✓ | game.js |
-| `contrast` | CONTRAST | 0.5 … 2.05 | 1.12 | `uContrast` | ✓ | garage-scene.js×4, post.js×2 |
+| `contrast` | CONTRAST | 0.5 … 2.05 | 1.12 | `uContrast` | ✓ | scene.js×4, post.js×2 |
 | `shadows` | SHADOWS | -0.55 … 0.55 | 0 | — | ✓ | post.js×3 |
 | `midtones` | MIDTONES | -2 … 1.4 | 0 | — | ✓ | post.js×3 |
 | `highlights` | HIGHLIGHTS | -1 … 1.5 | 0 | — | ✓ | post.js×3 |
@@ -706,7 +706,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `gainG` | GAIN · GREEN | 0.4 … 2.5 | 1 | — | ✓ | post.js×4 |
 | `gainB` | GAIN · BLUE | 0.4 … 2.5 | 1 | — | ✓ | post.js×4 |
 | `vibrance` | VIBRANCE | 0 … 1.5 | 0.2 | `uVibrance` | ✓ | post.js×2 |
-| `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, gltf.js, post.js×2, geom.js, tracks.js |
+| `tint` | WARM / COOL | -6 … 6 | 0 | `uTint` | ✓ | track-lights.js×2, post.js×2, gltf.js, geom.js, tracks.js |
 | `gradeStr` | GRADE STRENGTH | 0 … 2.5 | 1 | — | ✓ | game.js |
 | `shadowHue` | SHADOW TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |
 | `hiHue` | HIGHLIGHT TINT HUE | -180 … 180 | 0 | — |   | game.js×2 |
@@ -779,29 +779,29 @@ Two tools exist for measuring and visualising slider effects. They use
 
 ```sh
 # No browser — classify all knobs in a group
-node tools/slider-effect.mjs --group LAMPS
-node tools/slider-effect.mjs --risk inert --json
+node tools/lighting/slider-effect.mjs --group LAMPS
+node tools/lighting/slider-effect.mjs --risk inert --json
 
 # Single knob A/B (default: shipped def → farther extreme)
-node tools/slider-effect.mjs --live saturation
-node tools/slider-effect.mjs --live glareStr   # auto-selects night + full 0→0.3 range
+node tools/lighting/slider-effect.mjs --live saturation
+node tools/lighting/slider-effect.mjs --live glareStr   # auto-selects night + full 0→0.3 range
 
 # Explicit range
-node tools/slider-effect.mjs --live saturation --from 0 --to 2
+node tools/lighting/slider-effect.mjs --live saturation --from 0 --to 2
 
 # 5-shot ramp (shows full range, not just two endpoints)
-node tools/slider-effect.mjs --live contrast --shots 5
+node tools/lighting/slider-effect.mjs --live contrast --shots 5
 
 # Batch — one park per shared condition
-node tools/slider-effect.mjs --live --ids bloomMul,bloomSpread,threshOff
-node tools/slider-effect.mjs --live --group "NIGHT GLOW & BLOOM"
+node tools/lighting/slider-effect.mjs --live --ids bloomMul,bloomSpread,threshOff
+node tools/lighting/slider-effect.mjs --live --group "NIGHT GLOW & BLOOM"
 
 # Dry-run: see recipes without launching a browser
-node tools/slider-effect.mjs --live --all --dry-run
-node tools/slider-effect.mjs --live glareStr --dry-run
+node tools/lighting/slider-effect.mjs --live --all --dry-run
+node tools/lighting/slider-effect.mjs --live glareStr --dry-run
 
 # Filter only (two existing PNGs, no game)
-node tools/slider-effect.mjs --filter --a a.png --b b.png --out dir/
+node tools/lighting/slider-effect.mjs --filter --a a.png --b b.png --out dir/
 ```
 
 ### look-survey quick reference
@@ -811,19 +811,19 @@ node tools/slider-effect.mjs --filter --a a.png --b b.png --out dir/
 npx serve -l 3456 .
 
 # All 20 conditions for a circuit
-python3 tools/cdmcp-cli.py look-survey monaco --frac 0.45
+python3 tools/mcp/cdmcp-cli.py look-survey monaco --frac 0.45
 
 # Subset
-python3 tools/cdmcp-cli.py look-survey bahrain --frac 0.12 \
+python3 tools/mcp/cdmcp-cli.py look-survey bahrain --frac 0.12 \
   --combos dawn|dry,day|dry,dusk|dry,night|dry,night|wet,night|rain
 
 # Batch plan (shoots only missing PNGs across all circuits)
-python3 tools/cdmcp-cli.py look-survey --plan artifacts/lighting/survey-plan.json
+python3 tools/mcp/cdmcp-cli.py look-survey --plan artifacts/lighting/survey-plan.json
 
 # Stitch the 4×5 contact sheet
-python3 tools/look-survey-sheet.py monaco
+python3 tools/lighting/look-survey-sheet.py monaco
 # Or all circuits that have shots:
-python3 tools/look-survey-sheet.py --ready
+python3 tools/lighting/look-survey-sheet.py --ready
 ```
 
 ### When a slider appears inert
@@ -831,12 +831,12 @@ python3 tools/look-survey-sheet.py --ready
 1. **Confirm the condition** — `--dry-run` shows which track/tod/weather the
    recipe picks. Night-gated knobs do nothing on a day track.
 2. **Check `lightState()`** — pixel MAD is the wrong measure for ambient/fog
-   knobs diluted across the frame. Run `node tools/slider-effect.mjs --live
+   knobs diluted across the frame. Run `node tools/lighting/slider-effect.mjs --live
    nightAmbLift --shots 2` and look at `result.json` → `movedFields`.
 3. **Check `result.stored`** — if `stored.a === stored.b` the value was not
    accepted (clamped, not in `APPLY_RACE_IDS`, or `rebuild:true` not triggering).
 4. **`--shots 5`** — the default 2-shot can land on a flat region; a ramp
    shows where the curve starts moving.
 
-See also: `tools/slider-effect.mjs --risk inert` lists knobs the static
+See also: `tools/lighting/slider-effect.mjs --risk inert` lists knobs the static
 classifier has flagged as conditionally or structurally inert.

@@ -1,6 +1,6 @@
 /* mini-dom.mjs — the smallest DOM that lets a js/game/* UI module run in a
  * Node VM: elements with attributes / dataset / classList / children, a
- * document with getElementById (auto-creating, like tools/game-vm.cjs's) and
+ * document with getElementById (auto-creating, like tools/lib/game-vm.cjs's) and
  * createElement, focus() that moves document.activeElement, and a selector
  * matcher just big enough for the queries the menu modules make
  * (`#id`, `.class`, `tag`, `[attr]`, `[attr="v"]`, `:scope > sel`, and

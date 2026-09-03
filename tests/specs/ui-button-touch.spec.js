@@ -88,7 +88,7 @@ test.describe("Lighting tuner — pause lifecycle", () => {
   // ESCAPE IS ONE STEP BACK, not the emergency exit it used to be. It called
   // setPaused(false), which threw away the fly-cam, the tuner panel AND the
   // pause in a single press — three screens for one key. #photo-controls is a
-  // layer in its own right now (js/game/uilayers.js) carrying
+  // layer in its own right now (js/ui/layers.js) carrying
   // data-esc-close="pc-exit", so the first press lands you back on the panel
   // you opened the camera from. The pause key and gamepad Start below keep the
   // old all-the-way-out behaviour, which is the point of the distinction.
@@ -131,7 +131,7 @@ test.describe("Lighting tuner — pause lifecycle", () => {
      #pausemenu is a <dialog>, so opening it from a keydown handler hands Chrome
      a close-watcher mid-keypress and the watcher consumes the KEYUP of the very
      Escape that opened it. Measured before the fix: shown on keydown, hidden
-     again on keyup, i.e. one press did nothing at all. js/game/input.js
+     again on keyup, i.e. one press did nothing at all. js/input/input.js
      preventDefaults the Escape it spends on PAUSE, which suppresses the close
      request. Without that line this test fails and the ladder above still
      passes, so it earns its place. */

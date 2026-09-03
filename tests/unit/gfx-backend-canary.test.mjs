@@ -51,7 +51,7 @@ function fnBody(src, name) {
 }
 
 test("gfx-probe cannot report a stale optional frame as fresh", () => {
-  const probe = read("tools/gfx-probe.mjs");
+  const probe = read("tools/gfx/gfx-probe.mjs");
   assert.match(probe, /ATTEMPT_ARTIFACTS\s*=\s*\[[^\]]*"frame\.png"/,
     "frame.png must be one of the owned artifacts cleared before every attempt");
   assert.match(probe, /for \(let attempt[^]*?clearAttemptArtifacts\(\);[^]*?runProbeAttempt\(attempt\)/,
@@ -96,9 +96,9 @@ test("RENDERER picker lives in renderer-picker.js, not game.js or gfx-quality.js
   // (UNAVAILABLE)" without navigator.gpu — is driven through bootPicker()
   // below; this is the ownership rule only.
   assert.doesNotMatch(code("js/game.js"), /getElementById\(\s*"pm-renderer"\s*\)|\$\(\s*"pm-renderer"\s*\)/);
-  assert.match(code("js/game/renderer-picker.js"), /getElementById\(\s*"pm-renderer"\s*\)/);
+  assert.match(code("js/perf/renderer-picker.js"), /getElementById\(\s*"pm-renderer"\s*\)/);
   // The preset file keeps the GRAPHICS button only — the split is the ownership rule.
-  assert.doesNotMatch(code("js/game/gfx-quality.js"), /pm-renderer|apex26\.gfxBackend/);
+  assert.doesNotMatch(code("js/perf/quality-preset.js"), /pm-renderer|apex26\.gfxBackend/);
 });
 
 test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", () => {
@@ -361,11 +361,11 @@ test("TLX material-map ownership keeps placeholders and reports pack state", () 
 });
 
 test("nextBackend / prevBackend wrap both ways around webgl2 → three → webgpu", () => {
-  const src = read("js/game/renderer-picker.js");
+  const src = read("js/perf/renderer-picker.js");
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: undefined });
   seedLog(ctx);
   seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/game/renderer-picker.js" });
+  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
   const G = vm.runInContext("RendererPicker", ctx);
   assert.equal(G.nextBackend("webgl2"), "three");
   assert.equal(G.nextBackend("three"), "webgpu");
@@ -396,7 +396,7 @@ test("RESET RENDERER is injected next to #pm-renderer, not written into the shel
 });
 
 test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality", () => {
-  const src = read("js/game/renderer-picker.js");
+  const src = read("js/perf/renderer-picker.js");
   const ls = makeStorage({
     "apex26.gfxBackend": "three",
     "apex26.gfxBackendProbe": "three",
@@ -423,7 +423,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   const ctx = vm.createContext({ window: {}, document: undefined, localStorage: ls, sessionStorage: ss });
   seedLog(ctx);
   seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/game/renderer-picker.js" });
+  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
   const G = vm.runInContext("RendererPicker", ctx);
   // Frozen deepEqual, not spot includes(): a round-6 audit found 7 of 12 keys
   // unasserted — a new crash latch omitted from the list would fail nothing
@@ -440,9 +440,53 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   ]);
   assert.deepEqual(Array.from(G.RENDERER_SS_KEYS), [
     "apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads",
-    "apex26.wgxCapture", "apex26.tlxAutoGL",
+    "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent",
   ]);
   assert.ok(!G.RENDERER_LS_KEYS.includes("apex26.gfxHigh"), "GRAPHICS quality is not renderer state");
+
+  // MECHANISM, not just the frozen copy: every apex26.* latch a BACKEND writes
+  // must be resettable. The deepEqual above catches someone editing the list;
+  // it cannot catch someone adding a setItem in js/render/ and never touching
+  // renderer-picker.js — which is how apex26.wgxHoldPresent shipped able to
+  // survive RESET RENDERER and keep a tab skipping the soft-present copy+map
+  // for good. Read-only pins (debug switches the game never writes) are not
+  // latches and stay out.
+  const READ_ONLY_PINS = new Set([
+    "apex26.gfxWgxAllowSoftware", "apex26.glErrDrain", "apex26.instCellCache",
+    "apex26.forceMobileTier", "apex26.tlxForceHw", "apex26.tlxForceBatches",
+    "apex26.tlxArrayNearest", "apex26.tlxMirrorSweep", "apex26.tlxChunkRelease",
+    "apex26.tlxMobile", "apex26.gfxHigh", "apex26.matTexMix",
+  ]);
+  // LANE-AWARE: clearRendererStorage removes each list from ITS OWN store, so a
+  // key written to localStorage but listed only in RENDERER_SS_KEYS would pass
+  // a merged check and never be cleared. Computed keys (`setItem(_rk, …)`) are
+  // invisible to the literal regex and are named here so a new one is noticed.
+  const lsResettable = new Set(G.RENDERER_LS_KEYS), ssResettable = new Set(G.RENDERER_SS_KEYS);
+  const COMPUTED_OK = new Set(["_rk", "rk"]);   // apex26.ctxLostReloads via a local (glx.js, tlx.js) — in RENDERER_SS_KEYS
+  const written = new Set();   // "ls:key" / "ss:key"
+  const renderDir = path.join(ROOT, "js/render");
+  const stack = [renderDir];
+  while (stack.length) {
+    for (const e of fs.readdirSync(stack.pop(), { withFileTypes: true })) {
+      const abs = path.join(e.parentPath || e.path, e.name);
+      if (e.isDirectory()) { stack.push(abs); continue; }
+      if (!e.name.endsWith(".js")) continue;
+      const src = fs.readFileSync(abs, "utf8");
+      for (const m of src.matchAll(/(local|session)Storage\.setItem\(\s*"(apex26\.[A-Za-z0-9_]+)"/g)) {
+        written.add((m[1] === "local" ? "ls:" : "ss:") + m[2]);
+      }
+      for (const m of src.matchAll(/(?:local|session)Storage\.setItem\(\s*([A-Za-z_$][\w$]*)\s*,/g)) {
+        assert.ok(COMPUTED_OK.has(m[1]), `${path.relative(ROOT, abs)}: setItem with a computed key "${m[1]}" — name it in COMPUTED_OK and make sure the key it holds is resettable`);
+      }
+    }
+  }
+  const unresettable = [...written].filter((k) => {
+    const [lane, key] = [k.slice(0, 2), k.slice(3)];
+    if (READ_ONLY_PINS.has(key)) return false;
+    return lane === "ls" ? !lsResettable.has(key) : !ssResettable.has(key);
+  }).sort();
+  assert.deepEqual(unresettable, [],
+    "these backend-written latches survive RESET RENDERER — add them to RENDERER_LS_KEYS/SS_KEYS (renderer-picker.js) or, if they are read-only debug pins, to READ_ONLY_PINS here");
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
   assert.equal(ls.getItem("apex26.gfxBackend"), null);
@@ -473,7 +517,7 @@ test("blocked sessionStorage skips the opt-in so this tab never claims the canva
 });
 
 test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", () => {
-  const src = read("js/game/renderer-picker.js");
+  const src = read("js/perf/renderer-picker.js");
   const ls = makeStorage({ "apex26.gfxBackend": "webgpu", "apex26.gfxHigh": "0" });
   const ss = makeStorage({ "apex26.gfxClaimFail": "1" });
   const kids = [];
@@ -513,7 +557,7 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   });
   seedLog(ctx);
   seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/game/renderer-picker.js" });
+  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
   const G = vm.runInContext("RendererPicker", ctx);
   G.init();
   const btn = byId["pm-renderer-reset"];
@@ -539,7 +583,7 @@ test("GLX pins the per-chunk uploadLightSet revert (arity 3)", () => {
   // build-1496 squash merge. Re-land the forwarding WITH a repro, and flip
   // this regex in the same commit. (The lost-context no-ops of draw() and
   // present() are behaviour in "GLX create* / draw* fail closed" above.)
-  const glx = code("js/render/glx.js");
+  const glx = code("js/render/glx/glx.js");
   assert.match(glx, /uploadLightSet:\s*\(\s*L\s*,\s*idx\s*,\s*n\s*\)\s*=>\s*uploadLightSet\(\s*L\s*,\s*idx\s*,\s*n\s*\)/);
 });
 
@@ -628,7 +672,7 @@ function verdictScript() {
   return body;
 }
 
-// Fixtures shaped like what tools/gpu-game-check.mjs actually writes: it reads
+// Fixtures shaped like what tools/gfx/gpu-game-check.mjs actually writes: it reads
 // backendState/envState ONLY when g.__tlx exists (gpu-game-check.mjs 205-207),
 // so the GLX leg legitimately carries neither.
 const tlxLegJson = (gfxOver = {}) => ({
@@ -678,7 +722,7 @@ test("gpu-game-check reports appearance, and can say when it could not measure i
   // human" was untrue: there was nothing to report. Both halves are pinned,
   // because writing the field WITHOUT the absence path just recreates a
   // silently-empty column. docs/PERF-FINDINGS.md 2l.
-  const ggc = read("tools/gpu-game-check.mjs");
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
   assert.match(ggc, /out\.frame = n\s*\?/, "the tool must write out.frame");
   assert.match(ggc, /meanLuma: \+\(sum \/ n\)\.toFixed\(1\)/);
   assert.match(ggc, /out\.frameReadFailed = /,
@@ -702,7 +746,7 @@ test("gpu-game-check's finally can actually reach the console buffer", () => {
   // `continue-on-error: true` on all four census steps swallowed the exit code
   // and checkpoint() had already written the JSON, so nothing looked wrong.
   // Measured after the fix: exit 0, root set, 7 console lines. PERF-FINDINGS 2l.
-  const ggc = read("tools/gpu-game-check.mjs");
+  const ggc = read("tools/gfx/gpu-game-check.mjs");
   const decl = ggc.indexOf("const console_ = [];");
   const tryAt = ggc.indexOf("\ntry {");
   const useAt = ggc.indexOf("out.console = console_");
@@ -832,7 +876,7 @@ test("the instancing gate is declared through the cache, never bracketed per dra
   // Source lints that the behaviour above cannot see: a raw write beside the
   // cache would desync it, and a lit draw bound outside litMaterial would skip
   // the declaration.
-  const glx = code("js/render/glx.js");
+  const glx = code("js/render/glx/glx.js");
   assert.doesNotMatch(glx, /gl\.uniform1f\(\s*litU\.uInstanced/, "uInstanced must go through uf1, not a raw uniform1f");
   const binds = glx.match(/useProg\(\s*litProg\s*\)/g) || [];
   assert.equal(binds.length, 2, "a new useProg(litProg) site must also declare uInstanced — see PERF-FINDINGS 2e");
@@ -862,7 +906,7 @@ test("uModel goes through the redundancy cache, not a raw upload", () => {
   h.reset();
   h.GLX.draw(mesh, new Float32Array(model), {});
   assert.equal(uploads(), 0, "an equal COPY is a hit — the cache compares values, not references");
-  assert.doesNotMatch(code("js/render/glx.js"), /gl\.uniformMatrix4fv\(\s*litU\.uModel/,
+  assert.doesNotMatch(code("js/render/glx/glx.js"), /gl\.uniformMatrix4fv\(\s*litU\.uModel/,
     "uModel must go through ufM4, not a raw uniformMatrix4fv");
 });
 
@@ -902,7 +946,7 @@ test("the debris pools instance behind a capability read, with the loop as fallb
   // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
   // 2h). GLX ships updateInstances; WGX and TLX have not been ported and MUST
   // keep the per-body path rather than silently drawing nothing.
-  const dw = code("js/game/debrisworld.js");
+  const dw = code("js/physics/debris-world.js");
   assert.match(dw, /gfx\.updateInstances\(/);
   assert.match(dw, /gfx\.drawInstanced\(/);
   assert.match(dw, /!gfx\.createInstancedBatch\s*\|\|\s*!gfx\.updateInstances\s*\|\|\s*!gfx\.drawInstanced/,
@@ -920,8 +964,8 @@ test("the interleaved uLight[] lanes agree between glx.js and shaders/lit.js", (
   // CALL COUNTS byte-identical and the render statistically indistinguishable
   // on a coarse metric — it moves or recolours lamp pools, which no counter
   // and no unit test would catch. This is the guard for that.
-  const glx = code("js/render/glx.js");
-  const lit = code("js/render/shaders/lit.js");
+  const glx = code("js/render/glx/glx.js");
+  const lit = code("js/render/glx/shaders/glsl-lit.js");
 
   // The four arrays must be GONE from both halves, or a stale reader survives.
   for (const n of ["uLightA", "uLightB", "uLightC", "uLightD"]) {
@@ -1082,7 +1126,7 @@ function makePickerDom(byId, hostKids) {
 }
 
 function bootPicker(opts) {
-  const src = read("js/game/renderer-picker.js");
+  const src = read("js/perf/renderer-picker.js");
   const ls = makeStorage(opts.ls || {});
   const ss = makeStorage(opts.ss || {});
   const hostKids = [];
@@ -1113,7 +1157,7 @@ function bootPicker(opts) {
   });
   seedLog(ctx);
   seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/game/renderer-picker.js" });
+  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
   const G = vm.runInContext("RendererPicker", ctx);
   // readyState is "complete", so the IIFE already called init().
   return { G, ls, ss, byId, hostKids, reloaded: () => reloaded, timers, winListeners };
@@ -1226,14 +1270,14 @@ test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () =>
 });
 
 test("presentStatus names the three screenshot paths in plain language", () => {
-  const src = read("js/game/renderer-picker.js");
+  const src = read("js/perf/renderer-picker.js");
   const ctx = vm.createContext({
     window: {}, document: undefined,
     localStorage: makeStorage({ "apex26.gfxBackend": "webgpu", "apex26.wgxCapture": "0" }),
     sessionStorage: makeStorage(),
   });
   seedStore(ctx);
-  vm.runInContext(src, ctx, { filename: "js/game/renderer-picker.js" });
+  vm.runInContext(src, ctx, { filename: "js/perf/renderer-picker.js" });
   const G = vm.runInContext("RendererPicker", ctx);
   assert.match(G.presentStatus(), /native swapchain/);
   G.applyShotMode("blit", { noReload: true });
@@ -1280,6 +1324,24 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(post, /ldrTarget:\s*\(\s*\)\s*=>\s*ldrRT\b/);
 });
 
+test("TLX WebGPU begin() remaps GL projections with Z01 like WGX", () => {
+  const tlx = code("js/render/three/tlx.js");
+  assert.match(tlx, /const Z01 = new Float32Array\(\[1,0,0,0,\s*0,1,0,0,\s*0,0,0\.5,0,\s*0,0,0\.5,1\]\)/);
+  assert.match(tlx, /const Z01INV = new Float32Array/);
+  assert.match(tlx, /_mul4Col\(_projGpu, Z01, frame\.proj\)/);
+  assert.match(tlx, /_mul4Col\(_invProjGpu, frame\.invProj, Z01INV\)/);
+  assert.match(fnBody(tlx, "begin"), /renderer\.backend\.isWebGPUBackend/);
+});
+
+test("WGX remaps off-axis proj (garage lens shift) with Z01·P before V", () => {
+  const wgx = code("js/render/webgpu/wgx.js");
+  const body = fnBody(wgx, "_writeFrame");
+  assert.match(body, /pj\[8\]\s*!==\s*0\s*\|\|\s*pj\[9\]\s*!==\s*0/);
+  assert.match(body, /_mul4\(_viewScratch,\s*ipj,\s*vp\)/);
+  assert.match(body, /_mul4\(_projZ01,\s*Z01,\s*pj\)/);
+  assert.match(body, /_mul4\(_vpGpu,\s*_projZ01,\s*_viewScratch\)/);
+});
+
 test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () => {
   const tlx = read("js/render/three/tlx.js");
   // MDN: one context type per canvas for life. three r185.1 configure() is
@@ -1309,7 +1371,7 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
  *      see-through. Only the bodywork: tyres, carbon, glass and wings keep
  *      alpha = the material's own, which is 1.
  *
- * GLX cannot hit this because it asks for `alpha: false` (js/render/glx.js), so
+ * GLX cannot hit this because it asks for `alpha: false` (js/render/glx/glx.js), so
  * the compositor ignores whatever it writes to alpha. TLX has to say the same
  * thing, and — the part worth a test — it has to say it TWICE, because three's
  * two backends read different inputs and neither reads the other's. Those two
@@ -1319,7 +1381,7 @@ test("TLX WebGPU path never claims #game as WebGL2 after renderer.init()", () =>
  *
  */
 const TLX = read("js/render/three/tlx.js");
-const GLX = read("js/render/glx.js");
+const GLX = read("js/render/glx/glx.js");
 const TSL_LIT = read("js/render/three/tsl-lit.js");
 const THREE_BUNDLE = read("vendor/three-0.185.1/three.webgpu.min.js");
 
@@ -1333,7 +1395,7 @@ test("GLX's env probe cannot latch _envActive against a disabled/null framebuffe
   // DEFAULT framebuffer at a 64px viewport and clear it every frame for the
   // life of the tab: a black canvas with a 64-pixel corner, no exception, no
   // console error. Two invariants keep that shut.
-  const glx = read("js/render/glx.js");
+  const glx = read("js/render/glx/glx.js");
   const beginFn = fnBody(glx, "envFaceBegin");
   assert.match(beginFn, /if \(!envTex\) \{ envInit\(\); if \(_envDisabled \|\| !envTex \|\| !envFBO\) return null; \}/,
     "envFaceBegin must re-test the disable latch AFTER the lazy envInit, and bail before arming _envActive");
@@ -1345,6 +1407,29 @@ test("GLX's env probe cannot latch _envActive against a disabled/null framebuffe
   const bailAt = endFn.indexOf("if (!gl || !envTex) return;");
   assert.ok(clearAt >= 0 && bailAt >= 0 && clearAt < bailAt,
     "envFaceEnd must lower _envActive BEFORE any early return — a texture that vanished mid-cycle is the same brick one frame later");
+});
+
+test("latches come down BEFORE early returns — the shape that bricked the GLX env probe", () => {
+  // 2026-09-03: envFaceEnd returned early with _envActive still set and the
+  // canvas went black for the life of the tab. Two more latches share the
+  // shape and are pinned here so the next early return cannot re-create it.
+  const shadow = read("js/render/glx/shadow.js");
+  for (const fn of ["carShadowEnd", "lampShadowEnd"]) {
+    const body = fnBody(shadow, fn);
+    const clearAt = body.indexOf("S.castCullVP = null");
+    const bailAt = body.indexOf("return;");
+    assert.ok(clearAt >= 0 && bailAt >= 0 && clearAt < bailAt,
+      `${fn}: castCullVP must be cleared before the enabled-check return — chunked.js reads castCullVP || lightVP for every caster`);
+  }
+  // A tab RETURN is not a race start: it must re-arm the sentinel without
+  // resetting the derived frame budget (sentinelArm(true) does both).
+  const game = read("js/game.js");
+  assert.match(game, /else if \(state === "race" \|\| state === "count"\) PerfGov\.sentinelResume\(\);/,
+    "the visibilitychange handler re-arms with sentinelResume(), not sentinelArm(true)");
+  assert.match(read("js/perf/governor.js"), /function sentinelResume\(\)/);
+  // The env-probe latch has the same player-reachable reset as the chunk latch.
+  assert.match(game, /id === "carEnvCube" && \+v > 0 && !\(\+LT\[id\] > 0\) && _envProbeOff/,
+    "ENV REFLECTION 0 -> >0 clears apex26.envProbeOff, like the chunk knobs clear perChunkOff");
 });
 
 test("the vendored three carries the swizzle patch — Chromium 141 rejects r185's string swizzle", () => {
@@ -1458,7 +1543,7 @@ test("TLX pack sampling skips car surface ids, matching GLX matTexUV", () => {
   // GLX/WGX refuse mid>16 before the fetch. TLX used to sample layer=mid
   // on every car fragment; SwiftShader returns black and the car vanishes
   // while the road (MAT 16) still draws.
-  const glxLit = read("js/render/shaders/lit.js");
+  const glxLit = read("js/render/glx/shaders/glsl-lit.js");
   assert.match(glxLit, /mid <= 0 \|\| mid > 16/,
     "GLX matTexUV lost its 1..16 pack gate — re-derive the TLX clamp");
   const src = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
@@ -1813,7 +1898,7 @@ test("TLX InstancedMesh preserves vertex colour and owns a capped placement tint
 });
 
 test("instanced cull cache only hits the transform pack resident in the GPU buffer", () => {
-  for (const file of ["js/render/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
     const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
     // fnBody, never a fixed window: the three backends' cullInstances are 1559
     // / 2446 / 2497 chars, so one 2800 window over-read all three by a
@@ -1950,7 +2035,7 @@ test("shadow state reports the frame-live armed flag, not just a lifetime count"
   // armed field, and deleting `armed: SHD.carArmed` stayed green on two of the
   // three backends. This is the same defect the arms pin above documents,
   // repeated in the same diff that documented it.
-  for (const file of ["js/render/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
+  for (const file of ["js/render/glx/glx.js", "js/render/webgpu/wgx.js", "js/render/three/tlx.js"]) {
     const src = code(file);
     for (const [which, sib] of [["carShadowState", "lampShadowState"],
                                 ["lampShadowState", "carShadowState"]]) {
@@ -2113,7 +2198,7 @@ test("WGX car-paint flake and orange-peel key in object space like GLX", () => {
   // World-space cells swam as the car translated (floor(wpos*45) + hash3).
   // GLX / TLX weld glitter to vObjPos / positionGeometry at 220 Hz + hash21.
   const chunks = read("js/render/webgpu/wgsl-chunks.js");
-  const lit = read("js/render/shaders/lit.js");
+  const lit = read("js/render/glx/shaders/glsl-lit.js");
   const tsl = read("js/render/three/tsl-lit.js");
   // location 3 is the road trk vec3; objPos shifted 7 → 5 with that pack.
   assert.match(chunks, /@location\(5\)\s+objPos\s*:\s*vec3<f32>/,
@@ -2186,7 +2271,7 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
   // to dFdx the bumped N, which widened roughness on every brick/concrete
   // seam and made WebGL2 walls duller than WebGPU. Snapshot after peel,
   // before the material bump; lighting still uses the bumped N.
-  const lit = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const lit = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const post = read("js/render/glx/post.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(lit, /vec3 Nsaa = N;/,
@@ -2200,11 +2285,126 @@ test("GLX/TLX SAA snapshot N before wall bump so walls match WGX", () => {
   assert.match(tsl, /dFdx\(Nsaa\)/,
     "TLX SAA must differentiate the pre-material snapshot");
   assert.match(post, /Math\.min\(4, cMax, dMax\)/,
-    "desktop GLX MSAA must pick 4× like WGX, not the old 2× cap");
+    "desktop GLX MSAA starts from min(4, cMax, dMax); the preset cap (ULTRA 4×, else 2×) is applied AFTER, see the gfxPreset test");
+});
+
+test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
+  // GameStore JSON-encodes every value: the key holds "\"ultra\"" WITH the
+  // quotes. 0a31155 compared the raw string to "ultra", so every desktop that
+  // had ever pressed the preset button — ULTRA included — shipped at 2×. The
+  // mock answers 4 samples for both formats, so the cap is the only thing
+  // that can move the number; behaviour, not source text, is what's pinned.
+  const msaaFor = (ls) => bootGlx({ ls }).GLX.msaa();
+  assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("ultra") }), 4,
+    "ULTRA stored the way GameStore stores it must keep 4×");
+  assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("high") }), 2,
+    "HIGH caps at 2×");
+  assert.equal(msaaFor({ "apex26.gfxPreset": "ultra" }), 4,
+    "a raw (unencoded) 'ultra' — a probe's --ls or an older writer — still reads as ULTRA");
+  assert.equal(msaaFor({}), 2,
+    "unset = the desktop default HIGH = capped");
+  assert.equal(msaaFor({ "apex26.gfxHigh": "1" }), 4,
+    "the legacy phone key is honoured only when the preset was never stored");
+  assert.equal(msaaFor({ "apex26.gfxPreset": JSON.stringify("high"), "apex26.gfxHigh": "1" }), 2,
+    "a stored preset outranks the legacy key");
+  // WGX makes the same decision at module scope; pin that it decodes too.
+  const wgx = read("js/render/webgpu/wgx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(wgx, /_p = JSON\.parse\(_p\)/, "WGX must JSON-decode apex26.gfxPreset before comparing");
+  assert.match(wgx, /_wgxMsaa4 = _p === "ultra" \|\| \(_p == null && localStorage\.getItem\("apex26\.gfxHigh"\) === "1"\)/,
+    "WGX: ULTRA → 4×, unset → legacy key, anything else 1× (agreeing with GLX's cap)");
+});
+
+test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is one shared array", () => {
+  // A hidden Mesh still references its geometry: after a track switch every
+  // shadow-pool slot the new track did not refill kept an old chunk alive.
+  const sh = read("js/render/three/tlx-shadow.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(sh, /const parkedGeo = new THREE\.BufferGeometry\(\)/, "one shared empty geometry for parked wrappers");
+  assert.match(sh, /for \(let i = used; i < pool\.length; i\+\+\) \{ pool\[i\]\.visible = false; pool\[i\]\.geometry = parkedGeo; \}/,
+    "endPass must release the discrete casters' geometry, not only hide them");
+  assert.match(sh, /iPool\[i\]\.visible = false; iPool\[i\]\.geometry = parkedGeo;/,
+    "and the instanced casters' geometry");
+  // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
+  // one array per skid mark per frame.
+  const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(glx, /setPolyOffset\(\[-4/, "no per-draw bias literal");
+  assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 3, "the three road decal draws share ROAD_BIAS");
+});
+
+test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {
+  // The deck used to ignore overcast entirely (no clamped sun, no grey mix),
+  // so heavy cloud read flatter and brighter on WGX than on GLX/TLX. Pin the
+  // terms that were missing, in the same shape GLX SKY_FS writes them.
+  const glx = read("js/render/glx/shaders/glsl-sky.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const wgsl = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  for (const [name, g, w] of [
+    ["overcast sun clamp", /mix\(sunBright, min\(sunBright, 0\.55\), overcast\)/, /mix\(sunBright, min\(sunBright, 0\.55\), overcast\)/],
+    ["grey tops", /vec3\(0\.62, 0\.63, 0\.65\), overcast \* 0\.65\)/, /vec3<f32>\(0\.62, 0\.63, 0\.65\), overcast \* 0\.65\)/],
+    ["grey bases", /vec3\(0\.19, 0\.19, 0\.22\), overcast \* 0\.60\)/, /vec3<f32>\(0\.19, 0\.19, 0\.22\), overcast \* 0\.60\)/],
+    ["golden tops", /mix\(1\.45, 2\.6, golden\)/, /mix\(1\.45, 2\.6, goldenCl\)/],
+    ["pink undersides", /vec3\(0\.9, 0\.42, 0\.5\) \* \(0\.22 \* golden/, /vec3<f32>\(0\.9, 0\.42, 0\.5\)\s*\* \(0\.22 \* goldenCl/],
+    ["day cap/base contrast", /cloudBot \* 0\.80, cloudTop \* 1\.14, capf\), daytime \* 0\.45\)/, /cloudBot \* 0\.80, cloudTop \* 1\.14, capf\), daytime \* 0\.45\)/],
+    ["twilight wash", /pow\(sd, 2\.5\) \* twilight \* 0\.30 \* \(1\.0 - overcast \* 0\.6\)/, /pow\(sd, 2\.5\) \* twilight \* 0\.30 \* \(1\.0 - overcast \* 0\.6\)/],
+    ["moon silver", /vec3\(0\.08, 0\.10, 0\.16\)/, /vec3<f32>\(0\.08, 0\.10, 0\.16\)/],
+  ]) {
+    assert.match(glx, g, `GLX still carries the ${name} term`);
+    assert.match(wgsl, w, `WGX must carry the ${name} term`);
+  }
+});
+
+test("boot audit: scenery loads are memoised, car assets warm in startRace, decal key prefix is cached", () => {
+  const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  // ensureScenery: four callers race the same circuit at boot; the promise memo
+  // is what stops each of them injecting its own copy of the closure.
+  const es = game.slice(game.indexOf("function ensureScenery("), game.indexOf("function ensureScenery(") + 600);
+  assert.match(es, /_sceneryLoads\.get\(def\.id\)/, "ensureScenery must consult the in-flight memo");
+  assert.match(es, /_sceneryLoads\.delete\(def\.id\)/, "and clear it on settle so a dropped fetch retries");
+  // warmCarAssets: the caches were lazy, so the first countdown frame built
+  // every mesh and atlas; startRace now does it before the first render.
+  const sr = game.slice(game.indexOf("async function startRace("), game.indexOf("function showTouchControls("));
+  assert.match(sr, /warmCarAssets\(\);\s*[^\n]*\n\s*DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
+  const wa = game.slice(game.indexOf("function warmCarAssets("), game.indexOf("function drawCarDecals("));
+  assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team\); else teamBodyMesh\(c\.team\);/, "same mesh cache keys the draw uses");
+  assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
+  // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
+  assert.match(game, /const key = decalKeyPrefix\(team\) \+/, "getCarDecalTexture builds its key from the memoised prefix");
+  assert.match(game, /if \(c && c\.rev === store\.rev\) return c\.val;[\s\S]{0,200}team\.id \+ ":" \+ getLiveryId\(team\.id\) \+ ":"/, "decalKeyPrefix invalidates on store.rev");
+});
+
+test("GLX links its core programs as one parallel batch when KHR_parallel_shader_compile exists", () => {
+  // Reading LINK_STATUS right after linkProgram forces the compile to finish
+  // before the next program is even issued — 18 programs in strict series.
+  // With the extension, the eight core links are issued first and their
+  // statuses read afterwards; without it, link() behaves exactly as before.
+  const order = (h) => {
+    const links = [], statuses = [];
+    h.calls.forEach((c, i) => {
+      if (c[0] === "linkProgram") links.push(i);
+      if (c[0] === "getProgramParameter" && c[1][1] === h.enums.LINK_STATUS) statuses.push(i);
+    });
+    return { links, statuses };
+  };
+  const par = order(bootGlx({ parallel: true }));
+  assert.ok(par.links.length >= 8, "the core batch links at least eight programs");
+  assert.ok(par.statuses.length >= 8, "every program's LINK_STATUS is still read (failures still surface)");
+  assert.ok(par.statuses[0] > par.links[7],
+    `parallel: the first LINK_STATUS read (call #${par.statuses[0]}) must come after the eighth linkProgram (call #${par.links[7]})`);
+  const seq = order(bootGlx());
+  assert.ok(seq.statuses[0] < seq.links[1],
+    "without the extension each link is checked before the next is issued (unchanged contract)");
+  const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(glx, /getExtension\("KHR_parallel_shader_compile"\)/, "init() requests the extension");
+});
+
+test("the TIME chip rebuilds the flyby track so GO does not pay a second Tracks.build", () => {
+  const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(game, /raceTimeOfDay = id; buildRaceSettings\(\); scheduleFlybyTrack\(\);/,
+    "a time-of-day pick must schedule the (memoised) flyby build while the menu is idle");
+  assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
+    "loadTrack's memo is what makes the extra call free when the session darkness did not change");
 });
 
 test("pcssPen help names desktop three.js WebGL2 as live", () => {
-  const lighting = read("js/game/lighting-knobs.js");
+  const lighting = read("js/lighting/knobs.js");
   assert.match(lighting, /three\.js desktop WebGL2/,
     "SHADOW SOFTEN help must not still say three.js WebGL2 is a no-op");
   assert.doesNotMatch(lighting, /this slider does nothing on that path only/,
@@ -2280,7 +2480,7 @@ test("TLX software/phone WebGL2 scales Poisson R from pcssPen", () => {
 });
 
 test("lamp bounce ALU is gated when bounceK is 0 on all three backends", () => {
-  const glx = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const wgsl = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(glx, /if \(uBounceK > 0\.0\)/,
@@ -2306,7 +2506,7 @@ test("HDR grade is gated on all three backends when knobs are neutral", () => {
   // applyHdrGrade at shipped defaults is an identity that still costs ~20 ALU
   // + transcendentals per full-res pixel. GLX/TLX skip it; WGX used to always
   // run it (and the max(c,0) clamp is the only non-identity).
-  const glx = read("js/render/shaders/post.js");
+  const glx = read("js/render/glx/shaders/glsl-post.js");
   assert.match(glx, /if \(uHdrGradeOn > 0\.5\) c = applyHdrGrade\(c\)/,
     "GLX composite must keep the uHdrGradeOn gate");
   const wgsl = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -2346,7 +2546,7 @@ test("TLX desktop WebGL2 builds a color-depth PCSS blocker", () => {
 test("WGX SSR car streak uses carGloss like GLX/TLX", () => {
   // A single tap left CAR GLOSS dead on WebGPU and night lamps as hard dots.
   const post = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  const glx = read("js/render/shaders/post.js");
+  const glx = read("js/render/glx/shaders/glsl-post.js");
   const tsl = read("js/render/three/tsl-post.js");
   assert.match(post, /gloss\s*:\s*vec4<f32>/,
     "SsrU must carry carGloss");
@@ -2434,7 +2634,7 @@ test("TLX SSAO does not flip N.z; SSR self-hit still does", () => {
 });
 
 test("road-marking mip uses unclamped fwX on all three backends", () => {
-  const glx = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const chunks = read("js/render/webgpu/wgsl-chunks.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(glx, /float fwX = max\(fwidth\(x\), 1e-4\)/,
@@ -2452,7 +2652,7 @@ test("road-marking mip uses unclamped fwX on all three backends", () => {
 test("SSAO tap setup is skipped when strength is 0 on all three backends", () => {
   // Contact shadows keep the pass live at aoStr=0; the 8 dependent depth
   // fetches must not still run. strength/uStrength is a uniform.
-  const glx = read("js/render/shaders/post.js");
+  const glx = read("js/render/glx/shaders/glsl-post.js");
   assert.match(glx, /if \(uStrength > 0\.0\)/,
     "GLX SSAO must keep the uStrength tap gate");
   const wgsl = read("js/render/webgpu/wgsl-post.js").replace(/^[ \t]*\/\/.*$/gm, "");
@@ -2545,7 +2745,7 @@ test("the hand-made WebGL2 context still matches three's own attribute set", () 
 });
 
 test("GLX and TLX road-marking mip use the raw footprint, like WGX", () => {
-  const glx = read("js/render/shaders/lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const glx = read("js/render/glx/shaders/glsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   const tsl = read("js/render/three/tsl-lit.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.match(glx, /float fwX = max\(fwidth\(x\), 1e-4\);/,
     "GLX must keep the unclamped lateral footprint for mip");
@@ -2688,7 +2888,7 @@ test("GLX caches uNumLights, and nothing else writes it on the lit program", () 
   // program. post.js's godray pass has its own uNumLights on its own program
   // and cannot collide; a SECOND writer on the lit program would make the
   // cache lie, and this is the assertion that would catch it.
-  const bare = code("js/render/glx.js");
+  const bare = code("js/render/glx/glx.js");
   const writers = bare.match(/uniform1i\(\s*litU\.uNumLights/g) || [];
   assert.equal(writers.length, 1,
     `litU.uNumLights has ${writers.length} writers — the cache is only valid with one; ` +
@@ -2741,7 +2941,7 @@ test("GLX's uf3 cache keeps float64 precision, and owns every lit/sky vec3", () 
   assert.equal(h.count("uniform3fv", (a) => a[0].name === "uAmbSky"), 1, "the cache compares values, not the caller's reference");
   // Single writer, the same property the uNumLights and uModel caches need: a
   // raw gl.uniform3fv on either program would desync the cache behind its back.
-  const bare = code("js/render/glx.js");
+  const bare = code("js/render/glx/glx.js");
   const raw = bare.match(/gl\.uniform3fv\(\s*(litU|skyU)\./g) || [];
   assert.equal(raw.length, 0,
     `${raw.length} raw gl.uniform3fv call(s) remain on the lit/sky programs (${raw.join(", ")}) — ` +
@@ -2876,7 +3076,7 @@ test("the attribute packer proves its precondition instead of assuming it", () =
 });
 
 test("the packing round-trip check is wired to the shader's own decisions", () => {
-  const tool = read("tools/tlx-pack-check.cjs");
+  const tool = read("tools/gfx/tlx-pack-check.cjs");
   // The tool must LIFT the packer out of the shipping file. A reimplementation
   // drifts, and then it verifies its own copy rather than what ships.
   assert.match(tool, /readFileSync\(path\.join\(ROOT, "js\/render\/three\/tlx-chunked\.js"\)/,
@@ -2884,7 +3084,7 @@ test("the packing round-trip check is wired to the shader's own decisions", () =
   // And it must gate on DECISIONS, not on raw error: MAT is legitimately
   // fractional, so a zero-error gate is wrong and would fail forever.
   for (const decision of [/floor\(o \+ 0\.5\) !== Math\.floor\(d \+ 0\.5\)/, /o >= 15 && o < 16/, /\(o \| 0\) === o && d !== o/])
-    assert.match(tool, decision, "a shader decision is no longer checked by tools/tlx-pack-check.cjs");
+    assert.match(tool, decision, "a shader decision is no longer checked by tools/gfx/tlx-pack-check.cjs");
   assert.match(tool, /if \(layerChanges \|\| flips \|\| intInexact\) \{/, "the check no longer FAILS on a changed decision");
 });
 

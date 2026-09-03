@@ -1,45 +1,48 @@
 {
-  "_doc": "Ratchets on the files that only ever grow. `node tools/ratchets.mjs` checks, `--update` snaps every ceiling to the current value (lower after an extraction; a raise is a deliberate edit with its reason in the commit). Metrics: lines (split-newline), codeLines (non-comment non-blank), gMembers (G facade members, check-gctx), topLets (column-0 `let`). History: docs/notes/CEILING-HISTORY.md.",
+  "_doc": "Ratchets on the files that only ever grow. `node tools/check/ratchets.mjs` checks, `--update` snaps every ceiling to the current value (lower after an extraction; a raise is a deliberate edit with its reason in the commit). Metrics: lines (split-newline), codeLines (non-comment non-blank), gMembers (G facade members, check-gctx), topLets (column-0 `let`). History: docs/notes/CEILING-HISTORY.md.",
   "files": {
     "js/game.js": {
-      "lines": 9235,
-      "codeLines": 5053,
-      "gMembers": 221,
+      "lines": 9290,
+      "codeLines": 5083,
+      "gMembers": 222,
       "topLets": 147
     },
-    "js/game/apex.js": {
+    "js/agent/apex.js": {
       "lines": 2600,
       "codeLines": 1975
     },
-    "js/game/agentview.js": {
+    "js/agent/agentview.js": {
       "lines": 2452
     },
     "js/car/car3d.js": {
-      "lines": 3582
+      "lines": 3588
     },
     "js/track/tracks.js": {
       "lines": 2399
     },
-    "js/game/light-presets.js": {
+    "js/lighting/presets.js": {
       "lines": 15508
     },
     "js/render/webgpu/wgx.js": {
-      "lines": 6068
+      "lines": 6119
     },
     "js/render/three/tlx.js": {
-      "lines": 3138
+      "lines": 3187
     },
-    "js/render/glx.js": {
-      "lines": 2271
+    "js/render/glx/glx.js": {
+      "lines": 2297
     },
     "js/render/webgpu/wgsl-chunks.js": {
-      "lines": 1934
+      "lines": 1951
     },
     "js/render/three/tsl-lit.js": {
       "lines": 1794
     },
     "js/net/lobby.js": {
       "lines": 1684
+    },
+    "tools/ci/pick-tests.mjs": {
+      "blanketOnlyRoutes": 1
     }
   }
 }

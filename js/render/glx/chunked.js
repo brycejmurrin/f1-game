@@ -1,4 +1,4 @@
-/* Apex 26 — GLX chunked-mesh subsystem (split out of js/render/glx.js). Frustum-culled chunked meshes for the heavy city/props geometry: one shared VBO/VAO with o… */
+/* Apex 26 — GLX chunked-mesh subsystem (split out of js/render/glx/glx.js). Frustum-culled chunked meshes for the heavy city/props geometry: one shared VBO/VAO with o… */
 "use strict";
 
 const GLXChunked = (function () {

@@ -1,4 +1,4 @@
-// The hazard-projection hint in js/game/debrisworld.js.
+// The hazard-projection hint in js/physics/debris-world.js.
 //
 // hazards() used to call Tracks.project with NO hint, which scans every
 // centreline segment (n = round(total/4): 824 on monaco, 1737 on spa) for every
@@ -29,15 +29,15 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
-const { buildContext } = require(path.join(ROOT, "tools", "track-build-vm.cjs"));
+const { buildContext } = require(path.join(ROOT, "tools", "lib", "track-build-vm.cjs"));
 
-const SRC_PATH = path.join(ROOT, "js/game/debrisworld.js");
+const SRC_PATH = path.join(ROOT, "js/physics/debris-world.js");
 const SRC = fs.readFileSync(SRC_PATH, "utf8");
 
 // ── pull the real projectHazard + HAZARD_Y_TOL out of the module ────────────
 function extractFn(src, name) {
   const i = src.indexOf(`function ${name}(`);
-  assert.ok(i >= 0, `${name}() not found in js/game/debrisworld.js — was it renamed?`);
+  assert.ok(i >= 0, `${name}() not found in js/physics/debris-world.js — was it renamed?`);
   let depth = 0;
   for (let k = src.indexOf("{", i); k < src.length; k++) {
     if (src[k] === "{") depth++;
@@ -90,7 +90,7 @@ function build(id) {
 }
 
 // consider()'s verdict, given a projection result and the body's height. Mirrors
-// js/game/debrisworld.js hazards(): at road height AND inside the half-width.
+// js/physics/debris-world.js hazards(): at road height AND inside the half-width.
 const verdict = (pr, y) =>
   Math.abs(y - _smp.p[1]) <= HAZARD_Y_TOL && Math.abs(pr.lat) <= (_smp.hw || 6);
 

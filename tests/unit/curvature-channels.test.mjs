@@ -29,7 +29,7 @@ function walk(dir, out = []) {
 // it destructures/aliases `curvature` out of Tracks/TrackSpline and calls the
 // alias. The alias detection is deliberately simple (a `curvature` identifier
 // appearing in a destructure plus a bare `curvature(` call) — both current
-// aliases (js/track/mesh.js, js/track/tracks.js) match it, and a new exotic
+// aliases (js/track/core/mesh.js, js/track/tracks.js) match it, and a new exotic
 // aliasing scheme showing up here should be a conversation anyway.
 function readsCurvature(src) {
   if (/\bTracks\.curvature\s*\(/.test(src)) return true;

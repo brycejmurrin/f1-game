@@ -1,4 +1,4 @@
-/* glx-mock.mjs — boot the REAL js/render/glx.js (plus its shader data and
+/* glx-mock.mjs — boot the REAL js/render/glx/glx.js (plus its shader data and
  * glx/ pass modules, in manifest order) against a recording WebGL2 mock.
  *
  * Why: the renderer's uniform caches, fail-closed guards and cull bookkeeping
@@ -15,7 +15,7 @@
  * bitmask tests on recorded arguments must compare against the mock's own
  * `gl.CONST` values (see `enums`).
  *
- *   const h = bootGlx();
+ *   const h = bootGlx();            // opts: { aniso, parallel, userAgent, ls: { key: value } }
  *   h.GLX.begin(h.frame());  h.reset();  h.GLX.begin(h.frame());
  *   h.count("uniform1f")                 // → 1 (only uTime moves)
  *
@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const MANIFEST = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
-const GLX_FILE = "js/render/glx.js";
+const GLX_FILE = "js/render/glx/glx.js";
 // Everything the manifest loads before glx.js is what glx.js needs: Log, M4,
 // the GLSL-as-data shader files, the split pass modules, LampChunks.
 const FILES = MANIFEST.FULL.slice(0, MANIFEST.FULL.indexOf(GLX_FILE) + 1);
@@ -49,10 +49,13 @@ export function bootGlx(opts = {}) {
   // the enum values are the real ones so a recorded texParameterf can be
   // matched on TEXTURE_MAX_ANISOTROPY_EXT.
   const ANISO = { MAX_TEXTURE_MAX_ANISOTROPY_EXT: 34047, TEXTURE_MAX_ANISOTROPY_EXT: 34046 };
+  // KHR_parallel_shader_compile, when a test asks for it (opts.parallel).
+  const PARALLEL = { COMPLETION_STATUS_KHR: 0x91B1 };
   const contextAttrs = [];
   const answers = {
     isContextLost: () => contextLost,
-    getExtension: (name) => (opts.aniso && /anisotropic/.test(String(name)) ? ANISO : null),
+    getExtension: (name) => (opts.aniso && /anisotropic/.test(String(name)) ? ANISO
+      : (opts.parallel && /parallel_shader_compile/.test(String(name)) ? PARALLEL : null)),
     getParameter: () => 16,
     // Desktop-class MSAA support, so glx/post.js takes its multisampled path.
     getInternalformatParameter: () => new Int32Array([4]),
@@ -114,6 +117,9 @@ export function bootGlx(opts = {}) {
     requestAnimationFrame: () => 0, Image: class {},
     addEventListener: noop, removeEventListener: noop,
   };
+  // opts.ls seeds localStorage BEFORE GLX.init reads it — the way the game
+  // stores it (GameStore JSON-encodes: `{ "apex26.gfxPreset": '"ultra"' }`).
+  for (const [k, v] of Object.entries(opts.ls || {})) sandbox.localStorage.setItem(k, v);
   sandbox.window = sandbox; sandbox.self = sandbox; sandbox.globalThis = sandbox;
   const ctx = vm.createContext(sandbox);
   for (const [f, src] of SOURCES) vm.runInContext(src, ctx, { filename: f });

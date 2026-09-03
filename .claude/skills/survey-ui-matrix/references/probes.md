@@ -1,6 +1,6 @@
 # UI-matrix probes, routes, diagnosis, mistakes
 
-Load this when a measurement looks wrong, when reaching a screen, or when a CSS change 'did nothing'. Setup ritual + screen enumeration: [setup.md](setup.md). Axes live in code, not prose: viewports (with injected iPhone safe-area insets) in `tools/menu-screens.mjs` `VIEWPORTS`, screens in its `SCREENS`, and the scale axis (40–200 %) in `tools/ui-scale-axis.mjs`.
+Load this when a measurement looks wrong, when reaching a screen, or when a CSS change 'did nothing'. Setup ritual + screen enumeration: [setup.md](setup.md). Axes live in code, not prose: viewports (with injected iPhone safe-area insets) in `tools/ui/menu-screens.mjs` `VIEWPORTS`, screens in its `SCREENS`, and the scale axis (40–200 %) in `tools/ui/ui-scale-axis.mjs`.
 
 ## 3. The probe — four questions, each with its trap
 
@@ -53,7 +53,7 @@ function truncIn(root) {
 // TRAP 1: read --tap off <body>, NOT :root. The touch ladder is declared
 //   `body:not(.desktop) { --tap: 52px }`. Asking documentElement returns the
 //   44px DESKTOP floor on every device — this bug was live in
-//   tools/layout-audit.mjs and undercounted every phone cell it ever produced.
+//   tools/ui/layout-audit.mjs and undercounted every phone cell it ever produced.
 // TRAP 2: the activation target is the UNION of a control and its wrapping
 //   <label>; measuring a bare checkbox reports 13x13 for something you tap at
 //   342x16.
@@ -129,7 +129,7 @@ document.body.classList.remove('in-race');
 ```
 
 **The screen-root inventory DRIFTS — enumerate it, don't trust this list.**
-The authoritative enumeration is `SCREENS` in `tools/layout-audit.mjs` (37
+The authoritative enumeration is `SCREENS` in `tools/ui/layout-audit.mjs` (37
 cells at last count); `index.html` currently holds 19 `<dialog>` roots (was 17
 when this skill was written — re-run `grep -c '<dialog' index.html`). Sweeping
 the seven or eight you can reach from the title in two clicks is the easy half
@@ -210,15 +210,15 @@ Sort by **failure mode, not by count**:
   preference between 24 and `--tap`
 - **document h-overflow** — always a defect here
 - **dead space beside cramped space in one composition** — a design finding, not
-  a bug; feed it to `restructure-screens-css`
+  a bug; feed it to `css-play` (`references/restructure.md`)
 
 Re-measure after every fix **in the shape you fixed it in and at least one other**
 — this session, a fix that was correct in landscape put a centred element hard
 against the left edge in portrait, and only the portrait sweep caught it.
 
-Then run the batch instrument to cover what you did not: `node tools/layout-audit.mjs`
+Then run the batch instrument to cover what you did not: `node tools/ui/layout-audit.mjs`
 (add `--shots` for a PNG per cell, `--scale=100,130,150` to add the scale axis).
-Finish with `node tools/pick-tests.mjs --staged` and the groups it names — for
+Finish with `node tools/ci/pick-tests.mjs --staged` and the groups it names — for
 menu/CSS work that is `test:ui`, whose `ui-audit.spec.js` is a capture harness that
 **asserts nothing**: read its PNGs, do not read its pass count. Expect
 `menu-baseline.spec.js` snapshots to change whenever menu geometry does, and

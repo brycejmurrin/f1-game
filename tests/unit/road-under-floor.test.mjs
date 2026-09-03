@@ -26,7 +26,7 @@ import path from "node:path";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const require = createRequire(import.meta.url);
-const { buildContext } = require(path.join(ROOT, "tools", "track-build-vm.cjs"));
+const { buildContext } = require(path.join(ROOT, "tools", "lib", "track-build-vm.cjs"));
 
 // Lowest vertex of an UPWARD-facing road triangle. The road mesh also carries a
 // downward skirt that hangs ~1.2 m under the tarmac to hide the terrain seam;

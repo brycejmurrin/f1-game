@@ -47,7 +47,7 @@ function loadTrackMaps() {
       runFile(entry);
     }
   }
-  runFile("js/track/maps.js");
+  runFile("js/ui/track-maps.js");
   return ctx;
 }
 

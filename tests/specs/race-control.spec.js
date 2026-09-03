@@ -4,7 +4,7 @@
  *
  * The state machine itself (thresholds, hysteresis, the time caps, the
  * drop-on-disable rule, the leader's-lap rule behind OVERTAKE, host-vs-guest)
- * is tested in tests/unit/race-control.test.mjs, which loads js/game/racecontrol.js
+ * is tested in tests/unit/race-control.test.mjs, which loads js/race/race-control.js
  * in a VM and hands it the hazard picture directly. That runs in milliseconds
  * and can assert things a browser cannot reach without staging debris badly.
  *

@@ -1,4 +1,4 @@
-/* Apex 26 — TLXShaders.chunks: shared TSL leaves for the three.js backend. The TSL sibling of js/render/shaders/chunks.js (GLXChunks) — the SURFACE- family noise … */
+/* Apex 26 — TLXShaders.chunks: shared TSL leaves for the three.js backend. The TSL sibling of js/render/glx/shaders/glsl-chunks.js (GLXChunks) — the SURFACE- family noise … */
 "use strict";
 
 (function () {

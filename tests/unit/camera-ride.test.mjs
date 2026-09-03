@@ -47,16 +47,16 @@ function loadGameCams(Tracks, CamTune) {
   if (CamTune) globals.CamTune = CamTune;
   const ctx = vm.createContext(globals);
   seedLog(ctx);
-  // js/mat4.js first — it is the second <script> tag in the shell and the home of
+  // js/core/mat4.js first — it is the second <script> tag in the shell and the home of
   // the shared scalar helpers (M4.clamp/lerp), which cameras.js binds at eval.
-  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/game/cameras.js"), "utf8"), ctx,
-    { filename: "js/game/cameras.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/camera/vantage.js"), "utf8"), ctx,
+    { filename: "js/camera/vantage.js" });
   return vm.runInContext("GameCams", ctx);
 }
 
 /* The CAMERA TUNER's HEIGHT knob, reduced to what this file needs: translate the
-   EYE only, leaving the aim point alone. That is exactly what js/game/cam-tune.js
+   EYE only, leaving the aim point alone. That is exactly what js/camera/offsets.js
    apply() does for `height` (the aim stays put so the car cannot leave frame). */
 function camTuneHeight(dh) {
   return { get: () => 0, apply: (mode, eye, tgt, fov) => { eye[1] += dh; return fov; } };

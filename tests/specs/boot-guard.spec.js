@@ -2,7 +2,7 @@
 // THE BOOT GUARD: a module that fails to load must not leave a dead game.
 //
 // WHY THIS EXISTS — a live incident, not a hypothetical. Build 1238 shipped
-// js/game/season-cal.js, a brand-new URL that had existed in no prior deploy.
+// js/career/season-cal.js, a brand-new URL that had existed in no prior deploy.
 // GitHub Pages served the updated index.html from an edge that did not yet have
 // the file, the browser cached that 404 against the VERSIONED url, and the game
 // then died on every load with a bare "Can't find variable: SeasonCal" — the
@@ -17,7 +17,7 @@
 // cannot put the page in a reload loop.
 import { test, expect } from "@playwright/test";
 
-const MODULE = "**/js/game/season-cal.js*";
+const MODULE = "**/js/career/season-cal.js*";
 
 /** Count main-frame navigations — the reload budget is the thing under test. */
 function trackNavs(page) {

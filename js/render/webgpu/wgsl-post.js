@@ -1,4 +1,4 @@
-/* Apex 26 — WGSL post-processing shaders (WGSLPost). WGSL port of js/render/shaders/post.js: SSAO, godray, bloom, SSR, composite, FXAA. Composes WGSLChunks leaves (fullscreenTri, tonemap). wgx.js owns pipelines/targets. */
+/* Apex 26 — WGSL post-processing shaders (WGSLPost). WGSL port of js/render/glx/shaders/glsl-post.js: SSAO, godray, bloom, SSR, composite, FXAA. Composes WGSLChunks leaves (fullscreenTri, tonemap). wgx.js owns pipelines/targets. */
 "use strict";
 
 const WGSLPost = (function () {
@@ -22,7 +22,7 @@ fn vs_main(@builtin(vertex_index) vi : u32) -> VOut {
 }`;
 
   // 1. BLOOM_DOWN — bright-pass threshold + 13-tap downsample.
-  //    Port of GLX BRIGHT_FS js/render/shaders/post.js folded into DOWN_FS js/render/shaders/post.js.
+  //    Port of GLX BRIGHT_FS js/render/glx/shaders/glsl-post.js folded into DOWN_FS js/render/glx/shaders/glsl-post.js.
   //    threshold > 0 -> bright-pass gate the result (first mip). threshold == 0
   //    -> pure downsample (subsequent mips).
   //
@@ -98,7 +98,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(s, 1.0);
 }`;
 
-  // 2. BLOOM_UP — 9-tap tent upsample. Port of GLX UP_FS js/render/shaders/post.js.
+  // 2. BLOOM_UP — 9-tap tent upsample. Port of GLX UP_FS js/render/glx/shaders/glsl-post.js.
   //    Additive combine is done by the PIPELINE BLEND STATE (src ONE, dst ONE),
   //    NOT in the shader — the shader just outputs the tent-filtered sample so
   //    every octave accumulates into the next-larger mip. wgx.js MUST configure
@@ -140,7 +140,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 }`;
 
   // 3. SSAO — depth-based horizon AO + optional contact shadow.
-  //    Port of GLX SSAO_FS js/render/shaders/post.js, reduced to 8 directional taps and
+  //    Port of GLX SSAO_FS js/render/glx/shaders/glsl-post.js, reduced to 8 directional taps and
   //    a 5-step contact march (mobile). Reconstructs view position from depth,
   //    a normal from depth derivatives (dpdx/dpdy), then counts neighbour taps
   //    rising above the tangent plane. Output: AO in .r (1 = unoccluded).
@@ -169,7 +169,7 @@ struct SsaoU {
 ${fullscreenTri}
 ${POST_VS}
 
-// First 8 of GLX/TLX K[12] (js/render/shaders/post.js, js/render/three/tsl-post.js).
+// First 8 of GLX/TLX K[12] (js/render/glx/shaders/glsl-post.js, js/render/three/tsl-post.js).
 const SSAO_K = array<vec2<f32>, 8>(
   vec2<f32>(0.0, 1.0), vec2<f32>(0.5, 0.866), vec2<f32>(0.866, 0.5), vec2<f32>(1.0, 0.0),
   vec2<f32>(0.866, -0.5), vec2<f32>(0.5, -0.866), vec2<f32>(0.0, -1.0), vec2<f32>(-0.5, -0.866)
@@ -212,7 +212,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // uStrength == 0 is supported: the pass still runs contact shadows
   // (haveAO arms on aoStr > 0 || contactStr > 0). Skip the 8 dependent
   // depth taps + the sin/cos rotation when AO itself is off — same as
-  // GLX SSAO_FS (js/render/shaders/post.js). strength is a uniform.
+  // GLX SSAO_FS (js/render/glx/shaders/glsl-post.js). strength is a uniform.
   var occ = 0.0;
   if (strength > 0.0) {
     let scr = clamp(radius / max(-P.z, 1.0) * 0.9, 0.004, 0.05);
@@ -451,7 +451,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 }`;
 
   // 5. COMPOSITE — final resolve to LDR.
-  //    Port of GLX COMPOSITE_FS (js/render/shaders/post.js COMPOSITE_FS), reduced: scene * SSAO,
+  //    Port of GLX COMPOSITE_FS (js/render/glx/shaders/glsl-post.js COMPOSITE_FS), reduced: scene * SSAO,
   //    + godray, * exposure, + bloom (tone-masked), ACES tonemap (shared leaf),
   //    lift-gamma-gain colour grade (contrast / vibrance / saturation / tint /
   //    split-tone shadow+hi / black-lift), soft lens-flare + ghosts, vignette,
@@ -598,7 +598,7 @@ fn applyHdrGrade(c_in : vec3<f32>) -> vec3<f32> {
   return max(c, vec3<f32>(0.0));
 }
 
-// Lift-gamma-gain colour grade (GLX colourGrade, js/render/shaders/post.js COMPOSITE_FS), reduced.
+// Lift-gamma-gain colour grade (GLX colourGrade, js/render/glx/shaders/glsl-post.js COMPOSITE_FS), reduced.
 fn colourGrade(c_in : vec3<f32>) -> vec3<f32> {
   var c = c_in;
   let contrast   = U.grade.x;
@@ -677,7 +677,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let sceneA = sceneS.a;
   let caDir = in.uv - vec2<f32>(0.5);
 
-  // CHROMATIC ABERRATION (GLX js/render/shaders/post.js COMPOSITE_FS): split R/B channels radially, the
+  // CHROMATIC ABERRATION (GLX js/render/glx/shaders/glsl-post.js COMPOSITE_FS): split R/B channels radially, the
   // fringe growing quadratically toward the frame corners (lens dispersion).
   // 0 = off. textureSampleLevel (explicit LOD) is legal in non-uniform flow.
   if (chromAb > 0.001) {
@@ -686,7 +686,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     c.b = textureSampleLevel(sceneTex, samp, in.uv - caDir * caAmt, 0.0).b;
   }
 
-  // SPEED BLUR (GLX js/render/shaders/post.js COMPOSITE_FS): radial smear from the frame centre outward,
+  // SPEED BLUR (GLX js/render/glx/shaders/glsl-post.js COMPOSITE_FS): radial smear from the frame centre outward,
   // scaled by the scalar (GLX folds car velocity into it). 4 taps toward centre.
   if (speedBlur > 0.001) {
     var acc = c;
@@ -699,7 +699,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     c = acc / wsum;
   }
 
-  // SHARPEN (GLX js/render/shaders/post.js COMPOSITE_FS): unsharp mask vs a 4-tap neighbour blur (uses
+  // SHARPEN (GLX js/render/glx/shaders/glsl-post.js COMPOSITE_FS): unsharp mask vs a 4-tap neighbour blur (uses
   // U.texel for the tap offset). Recovers kerb/wire crispness FXAA softens.
   if (sharpen > 0.001) {
     let bl = (textureSampleLevel(sceneTex, samp, in.uv + vec2<f32>(texel.x, 0.0), 0.0).rgb
@@ -784,7 +784,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     c = c + bloomSample * bloomAmt * bloomMask * exposure;
   }
 
-  // LENS DIRT veil (GLX js/render/shaders/post.js): grime on the lens
+  // LENS DIRT veil (GLX js/render/glx/shaders/glsl-post.js): grime on the lens
   // scatters incoming light into a smudgy film. Driven by the blurred bright-pass
   // (bloomSample), so it only appears where the frame carries bright energy (sun,
   // floodlights, neon) — a dark scene stays clean. The dirt value is reused by the
@@ -842,7 +842,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   c = acesTonemap(c / max(whitePoint, 1e-3), U.aces.x, U.aces.y, U.aces.z, U.aces.w, U.tuneFx.z);
   c = colourGrade(c);
 
-  // Lens flare: anamorphic streak + ghost circles (GLX js/render/shaders/post.js COMPOSITE_FS).
+  // Lens flare: anamorphic streak + ghost circles (GLX js/render/glx/shaders/glsl-post.js COMPOSITE_FS).
   // Occlusion: procedural flare would bleed through geometry; sample depth at sunUV.
   // Skip the depth fetch when the flare is off or the sun is off-screen
   // (uniform CF). Matches GLX post.js sunVis.
@@ -871,7 +871,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     flare = flare * flareStr * sunVis;
     // LENS DIRT breaks the clean procedural flare into a blotchy, smudged one —
     // bright spots where grime catches the glare, dimmer in the clean patches
-    // (GLX js/render/shaders/post.js). Reuses the dirt sample from the veil.
+    // (GLX js/render/glx/shaders/glsl-post.js). Reuses the dirt sample from the veil.
     if (lensDirt > 0.001) {
       flare = flare * mix(vec3<f32>(1.0), vec3<f32>(0.35 + dirt * 2.2), clamp(lensDirt * 2.0, 0.0, 0.85));
     }
@@ -889,7 +889,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let vr = length(q) * 0.70710678 / length(vec2<f32>(0.5 * vAspect, 0.5));
   // Outer edge is the CORNER (vr is corner-normalised => exactly 0.70710678 at
   // every aspect), not 0.95. The old form ran edge0 > edge1 and never finished
-  // its ramp. Mirrors js/render/shaders/post.js.
+  // its ramp. Mirrors js/render/glx/shaders/glsl-post.js.
   let vig = 1.0 - smoothstep(min(vignetteSoft, 0.69), 0.70710678, vr);
   c = c * mix(vignette, 1.0, vig);
 
@@ -916,7 +916,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(c, 1.0);
 }`;
 
-  // 6. FXAA — Timothy Lottes compact edge AA. Port of GLX FXAA_FS (js/render/shaders/post.js COMPOSITE_FS).
+  // 6. FXAA — Timothy Lottes compact edge AA. Port of GLX FXAA_FS (js/render/glx/shaders/glsl-post.js COMPOSITE_FS).
   //    Runs LAST on the tonemapped LDR image, straight to the swapchain.
   //
   //    BIND GROUP 0:
@@ -969,7 +969,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   // 7. SSR — wet-road + car-paint screen-space reflection (its own HALF-RES
   //    pass; COMPOSITE bilinear-upsamples it through linearSampler, the same
   //    free path the godray add uses). Port of the GLX COMPOSITE_FS wet-road
-  //    SSR block (js/render/shaders/post.js COMPOSITE_FS): road + car-paint
+  //    SSR block (js/render/glx/shaders/glsl-post.js COMPOSITE_FS): road + car-paint
   //    (.a tag) paths, 24-step reflected-ray march + 4-step binary refine —
   //    the SAME march GLX runs (its `for (int i = 0; i < 24…)`); an older
   //    comment here claimed "SHORT 12-step", which was never what either

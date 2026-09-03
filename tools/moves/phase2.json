@@ -1,22 +1,6 @@
 {
-  "_doc": "Phase 2b move map (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2). Applied by `node tools/move-tree.mjs tools/moves/phase2.json` in the move window, one target directory per commit (pass a filtered copy per commit). Covers every file on the tree after the Phase 2a splits merged (2026-09-03). Not in the map, handled in the window by hand: the generated js/roster.js (change gen-shell's output path, not this map) and the WGX/TLX spike-out (whole directories: js/render/webgpu, js/render/three, vendor/three-*).",
+  "_doc": "Phase 2b move map (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2). Applied by `node tools/move-tree.mjs tools/moves/phase2.json` in the move window, one target directory per commit (pass a filtered copy per commit). Covers every file on the tree after the Phase 2a splits merged (2026-09-03). Not in the map, handled in the window by hand: the generated js/roster.js (change gen-shell's output path, not this map) and the WGX/TLX spike-out (whole directories: js/render/webgpu, js/render/three, vendor/three-*). Batch b1-foundation (17 files) already applied and moved on disk; removed from this map.",
   "moves": {
-    "js/log.js": "js/core/log.js",
-    "js/mat4.js": "js/core/mat4.js",
-    "js/game/store.js": "js/core/store.js",
-    "js/game/physics-consts.js": "js/physics/consts.js",
-    "js/game/ai-drive.js": "js/physics/ai-drive.js",
-    "js/game/aerozones.js": "js/physics/aero-zones.js",
-    "js/game/bodyattitude.js": "js/physics/body-attitude.js",
-    "js/game/brake-cue.js": "js/physics/brake-cue.js",
-    "js/game/debrisworld.js": "js/physics/debris-world.js",
-    "js/game/incidentsim.js": "js/physics/incident-sim.js",
-    "js/game/racecontrol.js": "js/race/race-control.js",
-    "js/game/reliability.js": "js/race/reliability.js",
-    "js/game/career.js": "js/career/career.js",
-    "js/game/career-ui.js": "js/career/career-ui.js",
-    "js/game/season-cal.js": "js/career/season-cal.js",
-    "js/game/season-ui.js": "js/career/season-ui.js",
     "js/game/light-store.js": "js/lighting/profiles.js",
     "js/game/light-presets.js": "js/lighting/presets.js",
     "js/game/atmosphere.js": "js/lighting/atmosphere.js",
@@ -89,7 +73,6 @@
     "js/game/frame-lights.js": "js/lighting/frame-lights.js",
     "js/game/lighting.js": "js/lighting/lighting.js",
     "js/game/renderer-picker.js": "js/perf/renderer-picker.js",
-    "js/game/quali.js": "js/race/quali-model.js",
     "js/game/quali-sheet.js": "js/ui/quali-sheet.js",
     "js/track/scenery-data.js": "js/track/scenery/data.js"
   }

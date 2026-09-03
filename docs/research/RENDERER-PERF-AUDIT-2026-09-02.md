@@ -3,8 +3,8 @@
 Three read-only subagent audits (no edits, no browser runs) over the three
 backends, ranked by expected frame-time win. Landed items are marked; the rest
 are the backlog, with the proposed patch kept so the next round does not re-read
-the code. Evidence for landed items lives in `docs/RENDERERS.md`,
-`docs/research/PERF-FINDINGS.md` and `docs/research/WEBGPU-PARITY.md`.
+the code. Evidence for landed items lives in `../ARCHITECTURE.md`,
+`../notes/PERF-FINDINGS.md` and `docs/research/WEBGPU-PARITY.md`.
 
 Method notes shared by all three: nothing re-reports the items already landed
 before this date (uInstanced bracket, uNumLights/uModel caches, interleaved lamp
@@ -120,7 +120,7 @@ full pack), 914 prop chunks; monza 38 / 11,385; spa 33 / 6,017; singapore
    start the next frame until the GPU process has decoded this one. 0.3–1 ms
    on a laptop, more on Android. It exists for the real-GPU gate (PERF-FINDINGS
    §2e). Patch: `if (_glDrain) drainGlErrors("present")`, `_glDrain` true only
-   under `apex26.glErrDrain=1` (set by `tools/gpu-game-check.mjs`) or for the
+   under `apex26.glErrDrain=1` (set by `tools/gfx/gpu-game-check.mjs`) or for the
    first ~120 presents; `gpuErrors()` forces one drain on read. CONFIRMED call,
    PLAUSIBLE magnitude.
 2. **Dry-road SSR march for a 0.35×-damped sheen** — lighting.js:155-156
@@ -289,7 +289,7 @@ editing.
 
 ## The sun-shaft march, found twice independently — LANDED
 
-`js/render/shaders/post.js:1129` and `js/render/webgpu/wgsl-post.js:802` carry
+`js/render/glx/shaders/glsl-post.js:1129` and `js/render/webgpu/wgsl-post.js:802` carry
 the same composite block, and the GLX and WGX agents found the same defect in it
 without seeing each other's work:
 
@@ -377,7 +377,7 @@ The value of a second read is mostly in what it takes AWAY.
 
 - **GLX-8 (state brackets) is over-estimated.** Its "~200 redundant GL calls per
   frame" is contradicted by this repo's own census. A fresh
-  `tools/glx-call-census.mjs` run (vegas night, 40 frames) measured
+  `tools/gfx/glx-call-census.mjs` run (vegas night, 40 frames) measured
   **32.8 CULL_FACE toggles**, 8.3 `polygonOffset`, 7.5 `depthMask`, 11.3
   `colorMask` — the restores are ≤ ~45 calls, not 200, against 114.2 draws and
   ~540 total GL calls per frame. Rank it accordingly.
@@ -387,10 +387,10 @@ The value of a second read is mostly in what it takes AWAY.
   aniso tap on the road is the **albedo** one, guarded only by `far` (260 m).
 - **GLX-12's line numbers are stale**, and `begin()` runs 1-2× per frame in a
   race, not eight. The census puts `uniform1i` at 72/frame and `uniform1f` at
-  121.8/frame — the largest call categories by count — but `docs/PERF-FINDINGS.md`
+  121.8/frame — the largest call categories by count — but `../notes/PERF-FINDINGS.md`
   §3 already warns not to invent a millisecond claim from uniform elision, and
   that warning stands.
-- **WGX-5 (night road merge) is nearly dead work.** `tools/chunk-share-census.mjs`
+- **WGX-5 (night road merge) is nearly dead work.** `tools/gfx/chunk-share-census.mjs`
   already recorded the answer: 3 shared non-empty adjacent pairs out of 909.
   The merge would save about three draws. Rank it last.
 - **TLX-2's magnitude was wrong, its mechanism right.** `prunePool` does leak —
@@ -426,7 +426,7 @@ The value of a second read is mostly in what it takes AWAY.
    `glx/chunked.js:211`'s `!F.roadChunkLamps` is always true and PER-CHUNK ROAD
    is a dead knob on the default backend — while 24 shipped presets set it to 1
    and `game.js:6038` still builds the second GPU copy of the road for it. WGX
-   does the plumbing. `tools/slider-effect-live.mjs:124` already records the
+   does the plumbing. `tools/lighting/slider-effect-live.mjs:124` already records the
    verdict "inert"; this names why.
 4. **TLX: `tlx-shadow.castInstanced` has no update range at all** — pool slots
    are sized to the largest batch ever seen, so the upload is `cap × 64 B`, per
@@ -447,7 +447,7 @@ The value of a second read is mostly in what it takes AWAY.
    argument**. Four tests pin the exact `textureSample(` string for aniso
    parity; a macOS census is the sign-off.
 7. **CPU: a THIRD Δprog scan with no pre-reject** (`game.js:4211`), the same
-   shape `docs/PERF-FINDINGS.md` §3 records fixing twice at **5.01% of physics
+   shape `../notes/PERF-FINDINGS.md` §3 records fixing twice at **5.01% of physics
    CPU** — and worse than either, because it runs for every car, not just AI.
    462 pairs × 2 `fmod` per physics step. Every consumer is gated on `gapAhead <
    OT_GAP` in seconds, so the window must be `vTop()`-derived, never a literal.
@@ -473,7 +473,7 @@ The value of a second read is mostly in what it takes AWAY.
 11. **CPU: `makeFrustumPlanes` runs twice per frame** from the identical VP into
     the same pool (`game.js:6074` and `:7133`).
 12. **CPU: `putBoundedMesh` allocates its `create` closure on every call**,
-    including the ~66 cache hits a night frame takes. `js/track/mesh.js:398`
+    including the ~66 cache hits a night frame takes. `js/track/core/mesh.js:398`
     hoisted the identical arrow for exactly this reason.
 
 Deliberately NOT done, with the reason: **`applyMaterialNormal`'s `mid > 16`
@@ -484,7 +484,7 @@ Same reason backlog item 10 left `lit.js:1456` alone.
 
 ## A tool that reported ok on a file that would not parse
 
-`tools/wgx-validate.mjs --static` — the gate AGENTS.md names for WGSL edits, and
+`tools/gfx/wgx-validate.mjs --static` — the gate AGENTS.md names for WGSL edits, and
 the one a verify-agent runs — returned `{"ok": true}` on a `wgsl-post.js` whose
 JavaScript was **syntactically broken**. It only ever `readFileSync`'d `wgx.js`
 and `wgsl-chunks.js` as TEXT for a handful of regex invariants; it never read
@@ -503,9 +503,9 @@ backend file from node). Proved to bite by reintroducing the backtick.
 
 ## Instrumentation
 
-`tools/gpu-game-check.mjs` now records `__apex.renderScale()` and the census
+`tools/gfx/gpu-game-check.mjs` now records `__apex.renderScale()` and the census
 prints a `gov:` row with `tier / autoTier / userTier / scale / fps / floorMs /
-envFace`. §2t of `docs/PERF-FINDINGS.md` named this as the missing half: a
+envFace`. §2t of `../notes/PERF-FINDINGS.md` named this as the missing half: a
 `meanLuma` comparison between two legs is only a comparison if both ran the same
 content, and rung 1 of the governor's ladder is "env probe off". Run 25 read
 46.9 vs 66.2 across three's two backends with none of it recorded, and the gap is

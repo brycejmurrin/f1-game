@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci-coverage.mjs";
+import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
 
 const ciWorkflow = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
 const pagesWorkflow = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
@@ -308,7 +308,7 @@ test("the renderer job never passes --use-angle=vulkan (it drops macOS to SwiftS
 });
 
 test("the renderer job proves the adapter before trusting the run, and uploads on failure", () => {
-  assert.match(rendererJob, /node tools\/gpu-census\.mjs --json census-macos\.json/);
+  assert.match(rendererJob, /node tools\/gfx\/gpu-census\.mjs --json census-macos\.json/);
   assert.match(rendererJob, /r\.anyHardware !== true/, "the tri-state census must be compared with === true, never coerced");
   assert.equal(report.rendererGate.censusGated, true);
   assert.match(rendererJob, /if: failure\(\)\s*\n\s*uses: actions\/upload-artifact@v4/);
@@ -326,7 +326,7 @@ test("the renderer job is path-filtered on a cheap runner and stays out of the d
   // gpu-census.yml already gives every renderer commit its real-GPU verdict,
   // so the gfx specs on Metal are nightly or opt-in (`renderer_macos: true`)
   // — a push must never allocate that runner. The `!inputs.concurrency_key`
-  // term is what tools/ci-coverage.mjs reads to keep both jobs out of the
+  // term is what tools/ci/ci-coverage.mjs reads to keep both jobs out of the
   // deploy gate; it has to stay first.
   assert.match(rendererFilter, /if: \$\{\{ !inputs\.concurrency_key && \(github\.event_name == 'schedule' \|\| github\.event_name == 'workflow_dispatch'\) \}\}/);
   assert.match(rendererJob, /^    needs: renderer-filter$/m);
@@ -406,7 +406,7 @@ test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpu
   assert.match(gpuWorkflow, /if \(hardware && gfx\.wgx !== true\) bad\.push\(`wgx: WGX did not bind/);
   assert.match(gpuWorkflow, /else if \(hardware && gfx\.wgxSoftPresent === true && gfx\.headlessUa !== true\) bad\.push\(`wgx: WGX is soft-presenting/,
     "a headless UA blits by design (run 19); only a headed hardware run proves the swapchain path");
-  const check = fs.readFileSync(new URL("../../tools/gpu-game-check.mjs", import.meta.url), "utf8");
+  const check = fs.readFileSync(new URL("../../tools/gfx/gpu-game-check.mjs", import.meta.url), "utf8");
   assert.match(check, /r\.wgx = typeof g\.softPresent === "function";/);
   assert.match(check, /r\.wgxSoftPresent = !!g\.softPresent\(\)/);
 });

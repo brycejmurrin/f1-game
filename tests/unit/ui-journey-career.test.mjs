@@ -41,7 +41,7 @@ test("career.css does not reintroduce short-viewport height layout queries", () 
 
 test("guide and history contents rail keys on wide sheet shape, strip when compact", () => {
   const css = read("css/career.css");
-  const js = read("js/game/career-ui.js");
+  const js = read("js/career/career-ui.js");
   const html = read("index.html");
   assert.match(js, /mountContentsNav\("cg-body", "cg-contents", "Career guide sections"\)/);
   assert.match(js, /mountContentsNav\("ch-body", "ch-contents", "Career history sections"\)/);

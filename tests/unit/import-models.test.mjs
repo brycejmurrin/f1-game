@@ -1,8 +1,8 @@
-// import-models.test.mjs — guards tools/import-models.mjs, the node glTF -> AX26
+// import-models.test.mjs — guards tools/gen/import-models.mjs, the node glTF -> AX26
 // batch importer that the "Import CC0 models" GitHub Action runs on the runner.
 //
 // The two things worth pinning: (1) the AX26 output is exactly what
-// js/render/assets.js _parseModel reads, and (2) palette-atlas colour is sampled
+// js/render/shared/assets.js _parseModel reads, and (2) palette-atlas colour is sampled
 // into vertex colour — the step that makes a low-poly import look like the pack
 // instead of arriving flat grey.
 //
@@ -76,7 +76,7 @@ test("import-models bakes gltf+bin+atlas into AX26 with sampled colours", () => 
   try {
     buildFixture(src);
     const r = cp.spawnSync(process.execPath,
-      [path.join(ROOT, "tools", "import-models.mjs"), src, "--mat", "CONCRETE", "--height", "12", "--prefix", "q_"],
+      [path.join(ROOT, "tools", "gen", "import-models.mjs"), src, "--mat", "CONCRETE", "--height", "12", "--prefix", "q_"],
       { env: { ...process.env, APEX_PACK_DIR: out }, encoding: "utf8" });
     assert.equal(r.status, 0, `importer failed:\n${r.stdout}${r.stderr}`);
 
@@ -85,7 +85,7 @@ test("import-models bakes gltf+bin+atlas into AX26 with sampled colours", () => 
     assert.equal(man.models.q_building.licence, "CC0");
     assert.ok(man.models.q_building.source, "no source recorded");
 
-    // Parse the .bin exactly as js/render/assets.js _parseModel does.
+    // Parse the .bin exactly as js/render/shared/assets.js _parseModel does.
     const b = fs.readFileSync(path.join(out, man.models.q_building.file));
     const buf = b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
     const dv = new DataView(buf);
@@ -177,7 +177,7 @@ test("import-models samples indexed (colour-type 3) Kenney-style colormaps", () 
     fs.writeFileSync(path.join(src, "barrier.gltf"), JSON.stringify(gltf));
 
     const r = cp.spawnSync(process.execPath,
-      [path.join(ROOT, "tools", "import-models.mjs"), src, "--mat", "CONCRETE", "--height", "1", "--prefix", "k_"],
+      [path.join(ROOT, "tools", "gen", "import-models.mjs"), src, "--mat", "CONCRETE", "--height", "1", "--prefix", "k_"],
       { env: { ...process.env, APEX_PACK_DIR: out }, encoding: "utf8" });
     assert.equal(r.status, 0, `importer failed:\n${r.stdout}${r.stderr}`);
     const man = JSON.parse(fs.readFileSync(path.join(out, "manifest.json"), "utf8"));

@@ -7,7 +7,7 @@ import vm from "node:vm";
 import { seedStore } from "../helpers/seed-store.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = readFileSync(join(ROOT, "js/game/spotify.js"), "utf8");
+const SRC = readFileSync(join(ROOT, "js/audio/spotify.js"), "utf8");
 const TOKEN_KEY = "apex26.spotify.token";
 
 function token(refresh = "old-refresh") {
@@ -52,7 +52,7 @@ function load(fetchImpl) {
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   seedStore(ctx);   // spotify.js keeps its keys through GameStore.store's raw lane, over the fake localStorage above
-  vm.runInContext(SRC, ctx, { filename: "js/game/spotify.js" });
+  vm.runInContext(SRC, ctx, { filename: "js/audio/spotify.js" });
   return { SpotifyMusic: sandbox.SpotifyMusic, disk };
 }
 

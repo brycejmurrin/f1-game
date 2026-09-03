@@ -1,8 +1,8 @@
 /* seed-log.mjs — put the real `Log` IIFE into a Node VM or eval host.
  *
  * Product files call Log at create/bind time. Unit harnesses that load one
- * IIFE into a sandbox never ran js/log.js (the first <script> in the shell),
- * which then threw `Log is not defined`. Same idea as loading js/mat4.js first.
+ * IIFE into a sandbox never ran js/core/log.js (the first <script> in the shell),
+ * which then threw `Log is not defined`. Same idea as loading js/core/mat4.js first.
  *
  *   const ctx = vm.createContext({ console, Math });
  *   seedLog(ctx);
@@ -16,13 +16,13 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const LOG_JS = fs.readFileSync(
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/log.js"),
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../js/core/log.js"),
   "utf8",
 );
 
-/** Evaluate js/log.js into an existing VM context. */
+/** Evaluate js/core/log.js into an existing VM context. */
 export function seedLog(ctx) {
-  vm.runInContext(LOG_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/log.js" });
+  vm.runInContext(LOG_JS.replace(/^const\b/gm, "var"), ctx, { filename: "js/core/log.js" });
   return ctx;
 }
 

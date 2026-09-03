@@ -4,7 +4,7 @@ import {
   compareCircuit,
   MAX_SHAPE_ERROR,
   validateMappings,
-} from "../../tools/track-accuracy-validator.mjs";
+} from "../../tools/track/track-accuracy-validator.mjs";
 
 const square = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]];
 

@@ -18,7 +18,7 @@
 // outwash lip that the default endplate does not have.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loadParts } from "../../tools/parts-sweep.mjs";
+import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const M = loadParts();
 // addWheel(out, s*0.79, AXLES.wheelY, AXLES.frontZ, 0.34, 0.32, …) in

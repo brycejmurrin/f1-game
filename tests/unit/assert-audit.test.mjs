@@ -1,6 +1,6 @@
 // assert-audit — a test that asserts nothing is prose too.
 //
-// tools/test-observed.mjs answers "has this test ever run?". This is the
+// tools/ci/test-observed.mjs answers "has this test ever run?". This is the
 // question that survives a yes: when it ran, did it CHECK anything? A body with
 // no assertion passes as long as the page does not throw, and it reports as a
 // green tick beside real tests.
@@ -17,7 +17,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanSource, audit, CAPTURE_HARNESSES } from "../../tools/assert-audit.mjs";
+import { scanSource, audit, CAPTURE_HARNESSES } from "../../tools/ci/assert-audit.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
