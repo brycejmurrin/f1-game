@@ -11,6 +11,28 @@ generated block, a partial-file split, a rewritten assertion — each with
 file:line evidence read from the tree at 66b6618 (2026-09-03), plus the tests
 that go RED the moment the move lands and what fixes each.
 
+## Status: EXECUTED 2026-09-03 (`cc8d138`)
+
+This inventory was written before the move and is kept as the record of what
+was surveyed. The move ran against it and it held up well — but read
+`spike/backends/README.md` for what actually landed, because three things
+differ from the list below:
+
+1. `tools/lib/webgpu-chrome-args.cjs` and `tools/gfx/gpu-census.mjs` were in
+   the move map and **stayed shipped**: the first is required by
+   `tools/lib/harness.mjs` (so it launches Chromium for every browser test,
+   GLX included), the second proves a hardware adapter for `ci.yml`'s GLX
+   `test:gfx` job. This is the third and fourth instance of the correction this
+   document already makes for `ssr-probe.mjs` and `gpu-game-check.mjs`.
+2. `backend-surface-parity.test.mjs` and `gfx-backend-canary.test.mjs` were
+   NOT narrowed. They stay on the shipped gate reading `spike/`, deliberately.
+3. `js/perf/renderer-picker.js` was NOT narrowed — the one open follow-up.
+
+The RED table below was accurate in kind but not in extent: 24 suites went
+red, and it missed `image-grade-shaders` (GLSL-vs-WGSL parity),
+`fixture-consumer-audit` (a consumer spec left, moving both sides of its
+ratio), `gen-arch-table`'s row floor, and the `apex-tools-mcp` wrap count.
+
 ## Before you run it: revalidate the map
 
 `tools/moves/` is excluded from the mover's own path sweep, and that exclusion

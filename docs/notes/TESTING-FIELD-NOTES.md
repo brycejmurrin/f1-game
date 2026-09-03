@@ -784,3 +784,29 @@ Cumulative with `a6a1566`, the lit fragment is 359 434 B → 69 707 B. The
 figure this aims at is the census's 16.2 s three-WebGL2 first frame on
 ANGLE-Metal, which only `gpu-census.yml` can re-measure. `gpuErrors` 0 and
 24 pipelines in both dumps.
+
+### 2026-09-03 — the standing smoke boot red went green when the backends left
+
+`test-bg tiny` on the WGX/TLX spike-out commit (`cc8d138`):
+**`= run passed (73/73 done, 0 failed)`**.
+
+That is the first fully green `tiny` on this box in the restructure. The
+known-benign red every earlier run carried — `smoke.spec.js › Apex 26 — smoke ›
+page loads without WebGL error`, whose `page.goto` waits for `load` with no
+navigation timeout while this container boots in 54–154 s — did not reproduce.
+
+The likely cause is the change itself: the spike-out took `js/render/webgpu/`,
+`js/render/three/` and the 1.1 MB vendored three.js island out of the shipped
+tree, and although those files were DEFERRED (no `<script>` tag, injected only
+on an opt-in), the service worker seeded the three vendor bundles into its
+OPTIONAL precache set and the shell carried their importmap. Fewer bytes to
+fetch and parse before `load` fires is exactly the direction that moves a
+boot sitting on the edge of a timeout.
+
+Treat this as ONE observation, not a new baseline: it is a single run, the
+box's load varies, and the underlying defect (a `load` wait with no navigation
+timeout) is still there and will still bite on a slow run. The rule in
+`AGENTS.md` §Verification stands — read the FIRST failure's message before
+believing any red run. What this DOES retire is the assumption that a red
+smoke boot is unavoidable here; if it comes back, it is worth timing rather
+than waving through.
