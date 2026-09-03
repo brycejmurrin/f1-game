@@ -761,8 +761,9 @@ const GameAudio = (function () {
     const windOpen = s > 0.04 ? 1 : 0;
     const gust = harvLevel;   // already the smoothed decel signal, computed above
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
+    const tow = clamp01(ph.tow || 0);   // in a slipstream the air is already moving: less wind
     windGain.gain.setTargetAtTime(
-      (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * windOpen,
+      (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen,
       t, 0.10);
     windFilter.frequency.setTargetAtTime(450 + s * 1450 + rough * 260, t, 0.12);
 

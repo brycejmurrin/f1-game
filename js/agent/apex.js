@@ -469,6 +469,7 @@ const api = {
       aeroX: +(G.player.aeroX || 0).toFixed(3),
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
       vmaxNow: +(G.player._vmaxNow || 0).toFixed(3),
+      towing: +(G.player.towing || 0).toFixed(3),   // player slipstream 0..1 — folded into vmaxNow
       aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
       aeroDf: +G.aeroDfMult(G.player).toFixed(3),
       aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),

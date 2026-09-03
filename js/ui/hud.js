@@ -355,6 +355,7 @@ function updateHud(force) {
     hText(els.gapB, b ? gap("▼", b.code, gapSec(1, b, (player.prog - b.prog) / vFloor)) : "");
     // WHO: the neighbour's team colour as the chip's left bar (css/hud.css).
     hStyle(els.gapA, "--gap-team", a ? teamCss(a) : "");
+    if (a && (player.towing || 0) > 0.5) els.gapA.dataset.tow = "1"; else delete els.gapA.dataset.tow;   // in the tow
     hStyle(els.gapB, "--gap-team", b ? teamCss(b) : "");
   }
   // Sector split display (top-right) — cached span nodes, textContent per tick

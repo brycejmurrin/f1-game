@@ -1415,3 +1415,16 @@ live in `ratchets.json`.
   crossing is timed so the HUD's PURPLE is the timing screen's session best
   (the FIELD's), not the player's own; the player's curated split logic is
   untouched. Green = personal best, yellow = slower, white = no reference.
+- `js/game.js` 9305 -> **9345** lines / 5095 -> **5120** code (2026-09-03):
+  player SLIPSTREAM. The AI had towed since day one (their traffic scan sets
+  `towCar`); the human never did, so a whole racing mechanic was AI-only. The
+  player block scans the same 0.5–34 m / |dx|<4 window with the same
+  `AiDrive.towGain`, gated on DRIVER state (not braking, wheel near straight)
+  rather than the AI's curvature lookahead, so the arc stays off the driver.
+  Plus render-only lock-up (`wheelLock` freezes the fronts at the top of the
+  friction budget, `flatSpot` wobbles them once per rev and heals over 90 s)
+  and after-fire for every car, not only the player.
+- `js/agent/apex.js` 2600 -> **2601** lines / 1975 -> **1976** code (2026-09-03):
+  `physState().towing` — the player's slipstream 0..1, so a harness can tell
+  a tow apart from an X-mode gain in `vmaxNow` (aero-zones-vm parks the field
+  half a lap away and asserts it is 0 before reading the ratio).

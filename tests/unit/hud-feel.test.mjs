@@ -247,3 +247,13 @@ test("timing columns use the bundled condensed numerals with tabular figures", (
   assert.match(results, /prefers-reduced-motion: no-preference\)[^}]*#results-table \.res-row \{ animation: row-in/s,
     "the results stagger lives inside the no-preference query");
 });
+
+test("the ahead chip marks the slipstream from player.towing", () => {
+  const { els, G, tick, player } = boot();
+  const lead = { ...player, code: "LEA", prog: (player.prog || 0) + 20, rank: 1, team: { color: [0, 0, 1] }, isPlayer: false };
+  player.rank = 2; G.cars = [lead, player]; G.ranked = [lead, player];
+  player.towing = 0.9; tick();
+  assert.equal(els.gapA.dataset.tow, "1", "towing > 0.5 stamps data-tow on the ahead chip");
+  player.towing = 0.1; tick();
+  assert.equal(els.gapA.dataset.tow, undefined, "and it clears when the tow fades");
+});
