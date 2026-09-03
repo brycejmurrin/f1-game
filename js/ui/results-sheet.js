@@ -232,7 +232,8 @@ function buildTTResults() {
 
   // leaderboard header
   const lbHead = document.createElement("div");
-  lbHead.style.cssText = "margin-top:12px;color:#e10600;font-weight:800;font-style:italic";
+  lbHead.className = "sel-label";
+  lbHead.id = "res-tt-board";
   lbHead.textContent = "LEADERBOARD — " + track.def.name;
   els.resultsTable.appendChild(lbHead);
 
@@ -255,10 +256,10 @@ function buildTTResults() {
   // DAILY: the shareable line, copied on tap (clipboard needs a secure
   // context; the fallback shows the text where the button was).
   if (G.daily && G.daily.isActive()) {
-    const row = document.createElement("div");
-    row.style.cssText = "margin-top:10px;text-align:center";
     const btn = document.createElement("button");
-    btn.style.cssText = "font-size:11px;padding:4px 10px";
+    btn.type = "button";
+    btn.className = "sel-chip";
+    btn.id = "res-daily-share";
     btn.textContent = "COPY DAILY RESULT";
     btn.onclick = () => {
       const text = G.daily.shareText(Ghost.medal());
@@ -266,16 +267,15 @@ function buildTTResults() {
       if (ok) navigator.clipboard.writeText(text).then(() => { btn.textContent = "COPIED"; }, () => { btn.textContent = text; });
       else btn.textContent = text;
     };
-    row.appendChild(btn);
-    els.resultsTable.appendChild(row);
+    els.resultsTable.appendChild(btn);
   }
 
   // Ghost clear link
   if (Ghost.hasGhost()) {
-    const clrRow = document.createElement("div");
-    clrRow.style.cssText = "margin-top:10px;text-align:center";
     const clrBtn = document.createElement("button");
-    clrBtn.style.cssText = "font-size:11px;padding:4px 10px;opacity:0.6";
+    clrBtn.type = "button";
+    clrBtn.className = "sel-chip";
+    clrBtn.id = "res-ghost-clear";
     clrBtn.textContent = "✕ CLEAR GHOST";
     clrBtn.onclick = () => {
       Ghost.clear(track.def.id);
@@ -283,8 +283,7 @@ function buildTTResults() {
       G.ttRecord = remaining.length ? remaining[0].t : Infinity;
       buildTTResults();
     };
-    clrRow.appendChild(clrBtn);
-    els.resultsTable.appendChild(clrRow);
+    els.resultsTable.appendChild(clrBtn);
   }
 
   els.resNext.textContent = "TRY AGAIN";

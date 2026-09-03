@@ -870,8 +870,11 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    phone, with the rest black. 760px matches #pmsettings and #customize, which
    are the other two that carry a form in two columns. */
 #vsfriend    { --sheet-w: 760px; }
-#vsfriend-inner { --fit-at: 280px; }
+#vsfriend-inner { --fit-at: 280px; --compact-at: 480px; }
 #vsfriend-inner:not([data-shape="tall"]) { --fit-at: 200px; }
+#results .sheet,
+#standings .sheet,
+#customize .sheet { --compact-at: 480px; }
 
 /* Dialogs stack over a full screen (the team picker sits on the select screen),
    so the scrim has to actually separate them — 0.6 left the sheet looking
@@ -1045,6 +1048,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    not spend more than one primary control row on that navigation. */
 #pmsettings-inner {
   --fit-at: 300px;
+  --compact-at: 480px;
 }
 #pmsettings-inner:not([data-shape="tall"]) { --fit-at: 220px; }
 #pm-settings-body {

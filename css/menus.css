@@ -1295,6 +1295,9 @@ h3.sel-label {
   padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.83);
   letter-spacing: var(--ls-3);
 }
+/* Daily challenge is a banner, not a fourth filter. Full-width first so
+   ALL / SEASON / CLASSICS keep sharing one row. */
+#sel-daily { flex: 1 0 100%; }
 #sel-track-search {
   flex: 1 0 100%;
   min-width: 0;
@@ -1316,7 +1319,9 @@ h3.sel-label {
 #sel-track-empty { padding: var(--pad); text-align: center; }
 /* Compact landscape toolbar: one pan-x row, stacked or paired. --fit-at can
    inflate local width past a px query while the row is still starving, so
-   this keys on density. Chips keep intrinsic width; search stays ≥ 12rem. */
+   this keys on density. Chips keep intrinsic width; search stays ≥ 12rem.
+   Daily drops the weather/tod/best span and stops claiming 100% so TODAY
+   sits as a short chip instead of shoving ALL / SEASON / CLASSICS off-screen. */
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter {
   flex-wrap: nowrap;
   align-items: center;
@@ -1331,6 +1336,11 @@ h3.sel-label {
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
   display: none;
 }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-daily {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-daily > span { display: none; }
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter .sel-chip {
   flex: 0 0 auto;
   min-width: max-content;
@@ -1487,13 +1497,9 @@ h3.sel-label {
   min-width: 0;
 }
 /* WEATHER on the wide + compact sheet (the sheet's width is capped, so this
-   is every landscape phone AND the desktop): five chips in a ~164px column are ~52px each, and
-   "RAIN" / "CLOUDY" / "FOG" with their icons painted past the borders
-   (screenshot at 844x390, 2026-09-02). Wrapping to a second row pushed the
-   DIFFICULTY row under the footer; the icons go (an aria-hidden span in
-   game.js — no class) AND the labels wrap 3 + 2, which is two chip rows:
-   five labels in the 166px column would be ~28px each and "CLOUDY" needs
-   ~45px even without its icon. */
+   is every landscape phone AND the desktop): five weather chips plus MIXED
+   in a ~164px column. Icons go (an aria-hidden span in game.js — no class)
+   and the labels wrap 3 + 3 at flex-basis 30%. */
 :where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-weather {
   flex-wrap: wrap;
 }

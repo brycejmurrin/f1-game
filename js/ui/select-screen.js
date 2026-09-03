@@ -266,11 +266,16 @@ function trackFilterBar() {
     b.type = "button";
     b.className = "sel-chip";
     b.id = "sel-daily";
-    b.textContent = "TODAY · " + p.trackName.toUpperCase() + " · " + p.weather.toUpperCase() + " · " + p.tod.toUpperCase()
-      + (done && done.best != null ? " · ★ " + fmtTime(done.best) : "");
+    const extraBits = [p.weather.toUpperCase(), p.tod.toUpperCase()];
+    if (done && done.best != null) extraBits.push("★ " + fmtTime(done.best));
+    b.textContent = "TODAY · " + p.trackName.toUpperCase();
+    const extra = document.createElement("span");
+    extra.textContent = " · " + extraBits.join(" · ");
+    b.appendChild(extra);
+    b.setAttribute("aria-label", "Today: " + p.trackName + " · " + extraBits.join(" · "));
     b.title = "Today's challenge (" + p.day + " UTC): the same circuit and conditions for everyone";
     b.onclick = (e) => { e.stopPropagation(); tickUi(); G.daily.open(); };
-    bar.appendChild(b);
+    bar.insertBefore(b, bar.firstChild);
   }
   const search = document.createElement("input");
   search.id = "sel-track-search";

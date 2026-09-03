@@ -853,10 +853,43 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "season setup shares #sel-inner's 480 compact floor, not the 380 default");
   assert.equal(decl(css("css/career.css"), "#cr-inner", "--pair-compact"), "off",
     "career compact always stacks — pair-on starves the hub left column");
+  assert.equal(decl(css("css/career.css"), "#cr-inner", "--compact-at"), "480px",
+    "career hub shares the 480 phone-landscape compact floor");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner", "--compact-at"), "480px");
+  assert.equal(decl(css("css/overlays.css"), "#howtoplay-inner", "--compact-at"), "480px");
+  assert.equal(decl(css("css/tuner.css"), "#audioset-inner, #spotifypanel-inner", "--compact-at"), "520px",
+    "audio / Spotify pack earlier than the 380 default — two stacked sections plus notes");
+  assert.equal(decl(css("css/components.css"), "#vsfriend-inner", "--compact-at"), "480px");
+  assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
+  assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
   assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
     "garage compact always stacks — pair-on starves #cs-options");
   assert.equal(decl(css("css/carsetup.css"), '#cs-inner[data-density="compact"] .cs-opt-desc', "display"), "none",
     "compact garage hides part blurbs so more option rows fit");
+  assert.equal(decl(css("css/carsetup.css"), '#cs-inner[data-density="compact"] #cs-options .cs-liv-editor > .adv-help:not(#cs-rake-readout)', "display"), "none",
+    "compact SETUP hides the long tune note and keeps the rake readout");
+  assert.equal(decl(css("css/menus.css"), "#sel-daily", "flex"), "1 0 100%",
+    "roomy SELECT treats TODAY as a banner, not a fourth filter");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-daily', "flex"), "0 0 auto",
+    "compact landscape TODAY is a short chip so the filter row can still pan");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-daily > span', "display"), "none");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "calc(36svh / var(--hud-z))",
+    "compact race banners sit below the flag, not on top of it");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "calc(72px + var(--sat) / var(--hud-z))");
+  assert.equal(decl(css("css/career.css"), '#quali .sheet[data-density="compact"] #q-foot', "display"), "grid");
+  assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");
+  const selectJs = code("js/ui/select-screen.js");
+  assert.match(selectJs, /b\.id\s*=\s*"sel-daily"/);
+  assert.match(selectJs, /textContent\s*=\s*"TODAY · "\s*\+\s*p\.trackName/,
+    "daily chip label is TODAY · circuit; weather/tod/best live in a child span");
+  assert.match(selectJs, /bar\.insertBefore\(\s*b\s*,\s*bar\.firstChild\s*\)/,
+    "TODAY leads the filter bar so a wrapping sheet paints it as the banner");
+  assert.match(code("js/garage/setup-sheet.js"), /rakeOut\.id\s*=\s*"cs-rake-readout"/);
+  const resultsJs = code("js/ui/results-sheet.js");
+  assert.match(resultsJs, /btn\.id\s*=\s*"res-daily-share"/);
+  assert.match(resultsJs, /clrBtn\.id\s*=\s*"res-ghost-clear"/);
+  assert.match(resultsJs, /lbHead\.className\s*=\s*"sel-label"/);
+  assert.doesNotMatch(resultsJs, /font-size:11px/, "TT share/clear chips use .sel-chip, not inline type");
   const shell = read("index.html");
   assert.match(shell, /id="sel-inner"[^>]*pair-foot-full/,
     "SELECT foot spans both pair columns so BACK / YOUR CAR / NEXT share the sheet");
