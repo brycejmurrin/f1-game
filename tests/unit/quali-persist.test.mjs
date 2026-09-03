@@ -17,7 +17,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const SRC = fs.readFileSync(path.join(ROOT, "js/game/quali.js"), "utf8");
+const SRC = fs.readFileSync(path.join(ROOT, "js/race/quali-model.js"), "utf8");
 const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
 
 function car(id, code, name, team, isPlayer) {
@@ -81,7 +81,7 @@ function loadQuali(opts = {}) {
   };
   vm.createContext(ctx);
   seedLog(ctx);
-  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/game/quali.js" });
+  vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: "js/race/quali-model.js" });
   return { q: ctx.Quali.create(G), G, saved };
 }
 

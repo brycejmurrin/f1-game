@@ -13,7 +13,7 @@
  * natively, asynchronously, with a quota measured in a share of free disk, and
  * hands the bytes back as a Blob we can turn into an object URL that the
  * existing fetch()+decodeAudioData path in js/game/audio.js already knows how
- * to play. The rest of the game's persistence (js/game/store.js) stays on
+ * to play. The rest of the game's persistence (js/core/store.js) stays on
  * localStorage — this is the one thing that cannot live there.
  *
  * THE FEATURE MUST NEVER THROW AT THE CALLER. IndexedDB is absent or poisoned

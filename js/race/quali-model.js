@@ -133,7 +133,7 @@ function create(G) {
   // whichever career happened to be on the device, at whatever round it was
   // sitting on: delete the career and the same sim seed produced a different
   // grid, and two players on the same seed never agreed. Career.hash is exported
-  // for exactly this substitution — js/game/reliability.js already does it.
+  // for exactly this substitution — js/race/reliability.js already does it.
   function simLap(c, track, grip, round, seed) {
     const cap = capFor(c);
     const base = lapTime(track, cap, grip) + standingLoss(cap);

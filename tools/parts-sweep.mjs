@@ -99,7 +99,7 @@ export function loadParts() {
   // reference at all; liverytex.js has five, none of them reached by
   // carDecalData) — but that is the boundary: anything that RASTERISES a livery
   // texture still needs a browser and stays in tests/specs/.
-  for (const f of ["js/log.js", "js/mat4.js", "js/car/teams.js", "js/car/parts.js",
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/car/teams.js", "js/car/parts.js",
                    "js/car/liverytex.js", "js/car/car3d.js", "js/game/carmesh.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   // Every one of these is `const X = (function(){})()` at script level — a

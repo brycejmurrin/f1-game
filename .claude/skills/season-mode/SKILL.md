@@ -5,7 +5,7 @@ description: Use when standalone Season calendar, weekend format, sprint, quali-
 
 # Standalone Season — calendar vs format
 
-`js/game/season-cal.js` is **rules, no DOM**. `js/game/season-ui.js` is
+`js/career/season-cal.js` is **rules, no DOM**. `js/career/season-ui.js` is
 the SETUP screen. Career is **not** customisable and stays on
 `Tracks.SEASON` — do not wire `SeasonCal` calendar reads into a career
 weekend.

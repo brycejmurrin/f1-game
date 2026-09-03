@@ -272,7 +272,7 @@ export function collectUsage(rel) {
   });
 
   const hits = [];
-  // Queue, not a fixed list: THE CTX GETS ALIASED. js/game/incidentsim.js holds a
+  // Queue, not a fixed list: THE CTX GETS ALIASED. js/physics/incident-sim.js holds a
   // module-level `let G = null` and its create(ctx) does `G = ctx`, so following
   // only the parameter binding missed every one of that file's façade reads —
   // a checker that silently covers less than it claims. Assignments and

@@ -28,10 +28,10 @@ const repoRoot = join(__dirname, "..");
 const src = readFileSync(
   join(repoRoot, (await import("node:module")).createRequire(import.meta.url)("./manifest.cjs").PATHS.GLTF),
   "utf8");
-const logSrc = readFileSync(join(repoRoot, "js/log.js"), "utf8");
+const logSrc = readFileSync(join(repoRoot, "js/core/log.js"), "utf8");
 // The module does `const GLTF = (function(){...})();` at top level. Eval'd in a
 // function scope that const stays local, so append an assignment to export it.
-// js/log.js first: toMesh() calls Log.enabled without a try/catch.
+// js/core/log.js first: toMesh() calls Log.enabled without a try/catch.
 const factory = new Function("globalThis", "TextDecoder", "Buffer", "atob",
   logSrc + "\n" + src + "\nreturn GLTF;");
 const GLTF = factory(globalThis, TextDecoder, Buffer, globalThis.atob);

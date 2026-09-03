@@ -74,7 +74,7 @@ async function precacheAssetLists() {
     // OPTIONAL for the same reason as three.js: most sessions never scan, and
     // an install must not fail over 257 KB they will not run.
     "vendor/jsqr-1.4.0/jsQR.js",
-    // Rapier (js/game/debrisworld.js) is dynamic-import()ed, never tagged, so
+    // Rapier (js/physics/debris-world.js) is dynamic-import()ed, never tagged, so
     // the parser below cannot find it either. Unlike the entries around it this
     // one is ON by default — an installed-but-not-yet-raced PWA that never
     // seeded it loses debris/incident physics offline. Still OPTIONAL, not

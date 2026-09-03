@@ -21,7 +21,7 @@ const SRC = readFileSync(join(ROOT, "js/car/car3d.js"), "utf8");
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
-  for (const f of ["js/mat4.js", "js/car/teams.js", "js/car/parts.js", "js/car/car3d.js"]) {
+  for (const f of ["js/core/mat4.js", "js/car/teams.js", "js/car/parts.js", "js/car/car3d.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return vm.runInContext("({ Car3D, Parts, Teams })", ctx);

@@ -27,9 +27,9 @@ async function dataReady(page) {
   // before everything); this standalone harness threw "Log is not defined"
   // the moment either ran — red since the logging landed, whenever the suite
   // actually ran.
-  await page.addScriptTag({ url: "/js/log.js" });
+  await page.addScriptTag({ url: "/js/core/log.js" });
   await page.addScriptTag({ url: "/js/game/topmodal.js" });
-  await page.addScriptTag({ url: "/js/mat4.js" });
+  await page.addScriptTag({ url: "/js/core/mat4.js" });
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.addScriptTag({ url: "/js/data/telemetry.js" });
   await page.addScriptTag({ url: "/js/data/export.js" });
@@ -170,7 +170,7 @@ test("meeting session lists refresh recent meetings but retain historic lists", 
 
   await page.goto("/version.json");
   await page.setContent("<div></div>");
-  await page.addScriptTag({ url: "/js/log.js" });   // warnFetchFail logs through Log
+  await page.addScriptTag({ url: "/js/core/log.js" });   // warnFetchFail logs through Log
   await page.addScriptTag({ url: "/js/data/api.js" });
   await page.waitForFunction(() => typeof F1API !== "undefined");
   await page.evaluate(async () => {

@@ -25,7 +25,7 @@ const gt = (a, b, m) => assert.ok(a > b, m || `${a} > ${b}`);
 const lt = (a, b, m) => assert.ok(a < b, m || `${a} < ${b}`);
 const gte = (a, b, m) => assert.ok(a >= b, m || `${a} >= ${b}`);
 
-const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/game/aerozones.js
+const X_ZONE_MIN = 210;   // m — X_STRAIGHT_T * X_ZONE_VREF in js/physics/aero-zones.js
 
 let g = null, PHYS0 = null;
 before(async () => { g = await createGame({ track: "monza" }); PHYS0 = { ...g.apex.tuning() }; });

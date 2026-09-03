@@ -48,9 +48,9 @@ function evalGlobals(files, extras) {
     { Math, JSON, Object, Array, String, Number, isNaN, isFinite, console },
     extras || {}));
   seedLog(ctx);
-  // js/mat4.js first, always: it is the second <script> tag in the shell and the
+  // js/core/mat4.js first, always: it is the second <script> tag in the shell and the
   // home of the shared scalar helpers (M4.clamp), which agentview.js binds at eval.
-  for (const f of ["js/mat4.js", ...files]) {
+  for (const f of ["js/core/mat4.js", ...files]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return (name) => vm.runInContext(name, ctx);

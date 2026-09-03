@@ -48,11 +48,11 @@ function load() {
     Parts: { getFactorySetup: () => ({}) },
     Tracks: { LIST: [] },
   });
-  // js/mat4.js first — the shared scalar helpers (M4.clamp) career.js binds at eval.
+  // js/core/mat4.js first — the shared scalar helpers (M4.clamp) career.js binds at eval.
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/game/career.js"), "utf8"), ctx,
-    { filename: "js/game/career.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
+    { filename: "js/career/career.js" });
   return vm.runInContext("Career", ctx);
 }
 
@@ -177,9 +177,9 @@ function loadDriver(ratings, opts = {}) {
     },
   });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/game/career.js"), "utf8"), ctx,
-    { filename: "js/game/career.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
+    { filename: "js/career/career.js" });
   return vm.runInContext("Career", ctx);
 }
 
@@ -312,9 +312,9 @@ function loadWithSeason(n) {
     },
   });
   seedLog(ctx);
-  vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
-  vm.runInContext(readFileSync(join(ROOT, "js/game/career.js"), "utf8"), ctx,
-    { filename: "js/game/career.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
+  vm.runInContext(readFileSync(join(ROOT, "js/career/career.js"), "utf8"), ctx,
+    { filename: "js/career/career.js" });
   return vm.runInContext("Career", ctx);
 }
 

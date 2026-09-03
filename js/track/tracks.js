@@ -10,7 +10,7 @@ const Tracks = (function () {
   const { cr, sample, curvatureRaw, curvature, project, wallAt } = TrackSpline;
   const { upOf, hash, findCorners, bankingProfile, bankOffsetAt, onKerb, bankAngle, banking,
           nodeGrid, buildRoad, buildTerrain, buildFloor } = TrackMesh;
-  const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/models.js (this file is AT its module-size ceiling — one line only)
+  const lerp = M4.lerp, __M = Math, __isFinite = Number.isFinite;   // js/core/mat4.js helper + the contextified-global aliases measured above `firstNonFinite` in js/track/models.js (this file is AT its module-size ceiling — one line only)
 
   function buildCenterline(def) {
     ensurePoints(def);

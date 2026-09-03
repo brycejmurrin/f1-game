@@ -178,7 +178,7 @@ test("the boot group is not selected for a blanket source edit — the fixed smo
   assert.equal(dropBootFallback(g), true);
   assert.ok(!g.has("tiny"), "the selected gate drops the boot group when only the blanket rules named it");
   // A group named for a specific reason stays.
-  const specific = new Map([["tiny", new Set(["js/log.js"])]]);
+  const specific = new Map([["tiny", new Set(["js/core/log.js"])]]);
   assert.equal(dropBootFallback(specific), false);
   assert.ok(specific.has("tiny"));
 });

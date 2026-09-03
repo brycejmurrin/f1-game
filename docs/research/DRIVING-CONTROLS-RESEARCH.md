@@ -473,7 +473,7 @@ fact about `Fyf` saturation that they have no other way to learn.
 
 Investigated while building the above, and the finding is blunt: **`js/game.js`
 contained zero `Log` calls.** Not "few" — zero, alongside zero bare `console.*`.
-`js/log.js` defines the `game` namespace as covering *"game loop, race logic,
+`js/core/log.js` defines the `game` namespace as covering *"game loop, race logic,
 physics (js/game.js, js/game/**)"*, and the file it was created for never used
 it. Across `js/game/` only `apex.js` (5 calls) and `debrisworld.js` (1) log at
 all.
@@ -659,7 +659,7 @@ helps still off — presets-first still matches the industry table in
 
 ### What is still worth building (unchanged, now with live reasons)
 
-1. **Braking CUE — shipped 2026-08-18** (`js/game/brake-cue.js`). Pulse rate
+1. **Braking CUE — shipped 2026-08-18** (`js/physics/brake-cue.js`). Pulse rate
    + lookahead slider (1 = OFF). LIGHT/FULL takeover is still not built.
 2. **Rate half on the simple sheet — shipped.** Adaptive Buttons defaults to
    notch 6 and sits next to Racing Line, not inside Advanced.

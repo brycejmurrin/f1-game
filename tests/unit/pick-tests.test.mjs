@@ -125,7 +125,7 @@ test("every manifest file matches at least one pick-tests rule", () => {
 // exactly the regression the tree move can cause). The Phase 2 window
 // rewrites RULES to directory rules, which should empty this list.
 const BLANKET_ONLY = [
-  "js/mat4.js",
+  "js/core/mat4.js",
   "js/roster.js",
   "js/render/lamp-chunks.js",
   "js/render/gltf.js",
@@ -135,7 +135,7 @@ const BLANKET_ONLY = [
   "js/track/landmark-kit.js",
   "js/track/circuit-kit.js",
   "js/game/light-store.js",
-  "js/game/ai-drive.js",
+  "js/physics/ai-drive.js",
   "js/game/css-zoom.js",
   "js/game/settings-nav.js",
   "js/game/skidmarks.js",

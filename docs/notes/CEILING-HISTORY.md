@@ -16,7 +16,7 @@ lines to ~4,700, and that it is back over 8,000: "extraction moved code out
 once and nothing stopped it accumulating again, because no guard bounds the
 file."
 This session watched that happen in miniature. Two extractions
-(js/game/aerozones.js, js/game/skidmarks.js) took 91 lines out of game.js,
+(js/physics/aero-zones.js, js/game/skidmarks.js) took 91 lines out of game.js,
 and a concurrent branch put 130 back in over the same period. Nobody did
 anything wrong — there was simply nothing that would notice, and the net
 direction of an unbounded file is always up.
@@ -40,7 +40,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - Lowered from 7975 after the R1 audio-panel extraction (AUDIT-SYNTHESIS)
 - took the MUSIC & SOUND panel out — the ratchet follows the file down.
 - 7795 -> 7804 for aTop(): the ground-truth acceleration next to vTop(), plus
-- the comment recording the mismatch it fixes (js/game/quali.js modelled the
+- the comment recording the mismatch it fixes (js/race/quali-model.js modelled the
 - field at pace-5 acceleration into a pace-scaled ceiling). It belongs beside
 - vTop()/vStd()/aStd() and nowhere else, so this is a bug-explaining growth of
 - exactly the kind the note above tolerates — not a feature.
@@ -292,7 +292,7 @@ as the FLOOR in tools/fixture-consumer-audit.mjs.
 - -> 8333 perf-hunt: S3 propBatches draw/free/shadow + envCull road chunk.
 - -> 8321 bug-hunt: qualiRivalDriverIds() before NetPlay hand-off (+10).
 - -> 8361 smarter AI drivers: wire AiDrive (OT/ERS/brake/lane + rating axes)
-- into updateCar. Decision math lives in js/game/ai-drive.js (188 lines);
+- into updateCar. Decision math lives in js/physics/ai-drive.js (188 lines);
 - this raise is call-site glue + nearbyN / soft brakeLvl path.
 - -> 8377 deploy∪perf-hunt∪WGX-present: AiDrive + energy short-circuit +
 - propBatches/envCull + WGX software-present merge (split-newline count).

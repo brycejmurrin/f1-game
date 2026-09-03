@@ -24,7 +24,7 @@ const DEV_RELIEF = 0.40;
 const BUILD_RELIEF = 0.33;
 const BUILD_CATS = ["engine", "gearbox"];
 
-const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
+const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 
 function draw(seed, ...parts) { return Career.hash(seed, ...parts); }
 

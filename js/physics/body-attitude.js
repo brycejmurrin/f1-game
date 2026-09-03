@@ -21,7 +21,7 @@ const TELEPORT_DY = 1.5;               // m ground jump that means "teleport, re
 const MAX_DT      = 0.05;              // ONE dt clamp, matching render()'s Math.min(dt, 1/20)
 
 const ZERO = Object.freeze({ pitch: 0, roll: 0, heave: 0 });
-const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
+const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 
 function crit(s, to, omega, dt) {
   const c1 = s.x - to;

@@ -63,7 +63,7 @@ function boot() {
   };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/mat4.js" });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
   vm.runInContext(SRC, vctx, { filename: "js/game/audio.js" });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };

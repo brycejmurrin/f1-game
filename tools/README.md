@@ -192,7 +192,11 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **clip-baseline.json** | `clip-audit.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/prop-clipping.test.mjs` |
 | **coplanar-baseline.json** | `coplanar-audit.cjs`, `tests/unit/coplanar-faces.test.mjs` |
 | **float-baseline.json** | `tests/unit/scenery-grounding.test.mjs` |
-| **moves/phase2.json** | — |
+| **moves/batches/b1-foundation.json** | `move-tree.mjs` |
+| **moves/batches/b2-presentation.json** | — |
+| **moves/batches/b3-domain.json** | — |
+| **moves/batches/b4-render-track.json** | — |
+| **moves/phase2.json** | `move-tree.mjs` |
 | **moves/spike-backends.json** | — |
 
 ## Subdirectories (R3 families)

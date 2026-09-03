@@ -33,7 +33,15 @@ export const SWEEP_ROOTS = ["js", "tools", "tests", "docs", "types", ".claude", 
 // Never descend into another checkout: .claude/worktrees/ holds subagent
 // worktrees (each with its own .git), and a nested .git anywhere means the
 // same — rewriting those would edit a sibling branch's files in place.
-export const SWEEP_SKIP = /^(docs\/archive|node_modules|artifacts|scratch|vendor|assets|\.claude\/worktrees|\.git)(\/|$)/;
+// tools/moves/ holds the move PLANS themselves (old -> new JSON maps). A
+// plan's own "from" keys are exact-path tokens too, so sweeping this
+// directory rewrote a just-applied batch's keys to old===new identity
+// entries AND corrupted phase2.json's not-yet-applied entries for paths a
+// prior batch happened to touch (found 2026-09-03 applying batch 1: 17
+// entries in both b1-foundation.json and phase2.json flipped to identity).
+// Move plans are DATA describing renames, not code/docs that should track
+// them — exclude the whole directory.
+export const SWEEP_SKIP = /^(docs\/archive|node_modules|artifacts|scratch|vendor|assets|\.claude\/worktrees|\.git|tools\/moves)(\/|$)/;
 export const SWEEP_EXT = /\.(js|mjs|cjs|json|md|mdc|yml|yaml|sh|py|ts|html|css)$/;
 
 function walk(root, rel, out) {
@@ -54,7 +62,15 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 // An exact path token: not preceded by a path char, not followed by one that
 // would extend it (so a `.js` path does not match its `.json` or `.js.map`
 // sibling, and a longer name that starts with the path never matches it).
-const tokenRe = (p) => new RegExp(`(?<![A-Za-z0-9_./-])${esc(p)}(?![A-Za-z0-9_-])`, "g");
+// A `/` immediately before the match is a legitimate path separator
+// (`../../js/core/log.js`, `some/js/core/log.js`) — every move `from` is a known
+// top-level manifest path, so a `/`-prefixed occurrence is the SAME file,
+// just referenced relatively; excluding `/` here silently missed every
+// citation written that way (2026-09-03, found mid-move: seed-log.mjs's
+// `path.resolve(dirname, "../../js/core/log.js")` never got rewritten). Only
+// alnum/underscore/dot/hyphen can extend a real filename or dirname, so
+// those still block a match on a name that merely SHARES a suffix, or on the `.json` sibling of a `.js` path.
+const tokenRe = (p) => new RegExp(`(?<![A-Za-z0-9_.-])${esc(p)}(?![A-Za-z0-9_-])`, "g");
 
 export function loadMoves(file) {
   const data = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -80,6 +96,25 @@ export function validate(root, moves) {
   return errors;
 }
 
+// tools/manifest.cjs's `const MOVED = { "old": "new", … };` block is a
+// frozen historical record (recordMoved() below appends to it) — its KEYS
+// are the pre-move literal path on purpose and must never themselves look
+// like a live citation to a later sweep. Every sweep after the one that
+// wrote an entry walks tools/manifest.cjs again (a later batch, or a
+// deliberate re-sweep to catch a boundary-regex fix), and the key text
+// the old literal is indistinguishable from any other citation once it is
+// sitting in the file — so protect the block's byte range instead of
+// trying to out-clever the regex. Found 2026-09-03: a re-sweep after fixing
+// tokenRe's `/`-boundary bug flipped every batch-1 MOVED key to old===new.
+function withMovedBlockProtected(text, fn) {
+  const at = text.indexOf("const MOVED = {");
+  if (at < 0) return fn(text);
+  const end = text.indexOf("};", at);
+  if (end < 0) return fn(text);
+  const close = end + 2;
+  return fn(text.slice(0, at)) + text.slice(at, close) + fn(text.slice(close));
+}
+
 /** Rewrite exact path tokens in every swept file. Longest paths first so a
  *  directory move listed alongside its files cannot double-rewrite. */
 export function sweep(root, moves, { write = true } = {}) {
@@ -88,9 +123,13 @@ export function sweep(root, moves, { write = true } = {}) {
   for (const rel of SWEEP_ROOTS.flatMap((r) => walk(root, r, []))) {
     const abs = path.join(root, rel);
     const before = fs.readFileSync(abs, "utf8");
-    let after = before;
     let hits = 0;
-    for (const { from, to } of ordered) after = after.replace(tokenRe(from), () => { hits++; return to; });
+    const rewrite = (chunk) => {
+      let out = chunk;
+      for (const { from, to } of ordered) out = out.replace(tokenRe(from), () => { hits++; return to; });
+      return out;
+    };
+    const after = rel === "tools/manifest.cjs" ? withMovedBlockProtected(before, rewrite) : rewrite(before);
     if (hits) {
       changed.push({ file: rel, hits });
       if (write) fs.writeFileSync(abs, after);
@@ -108,7 +147,7 @@ export function leftovers(root, moves) {
   for (const rel of SWEEP_ROOTS.flatMap((r) => walk(root, r, []))) {
     const text = fs.readFileSync(path.join(root, rel), "utf8");
     for (const m of names) {
-      const re = new RegExp(`(?<![A-Za-z0-9_./-])${esc(m.base)}(?![A-Za-z0-9_-])`, "g");
+      const re = new RegExp(`(?<![A-Za-z0-9_.-])${esc(m.base)}(?![A-Za-z0-9_-])`, "g"); // same boundary fix as tokenRe
       const n = (text.match(re) || []).length;
       if (n) out.push({ file: rel, name: m.base, now: m.to, hits: n });
     }

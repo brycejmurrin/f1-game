@@ -19,7 +19,7 @@ let world = null;        // RAPIER.World
 let _worldTrack = null;  // track identity the trimesh was built for
 let _mirrors = [];       // one kinematicPositionBased body per car (cars[] order)
 let _worldGen = 0;       // bumped every buildWorld — the incident sim aborts a takeover if this changes under it
-// Incident-sim takeover (R2/R3/C1, js/game/incidentsim.js): indices whose mirror
+// Incident-sim takeover (R2/R3/C1, js/physics/incident-sim.js): indices whose mirror
 // has been promoted kinematic→DYNAMIC and is owned by IncidentSim. step()'s
 // mirror-sync loop SKIPS these (a dynamic body must not be pose-driven), so the
 // bespoke->Rapier handover keeps a single authority for the duration.
@@ -65,7 +65,7 @@ let _furnBuilt = false;  // furniture built into the current world?
 // ── Group B gameplay-adjacent flags (all DEFAULT ON, each its own disable flag) ─
 // These READ the deterministic side-world and influence race logic (flags/grip)
 // but NEVER write px/pz/head/(s,x)/speed. The caution machine lives in
-// js/game/racecontrol.js and reads
+// js/race/race-control.js and reads
 // hazards() from here; B2 promotes barrier panels here; B3 returns a grip scalar.
 let _breakBarriers = true;   // B2 — apex26.breakBarriers ("0" disables)
 let _marbleGripOn = true;    // B3 — apex26.marbleGrip ("0" disables)
@@ -209,7 +209,7 @@ function create(ctx) {
   // already diverged from the real export (it was missing prime).
 }
 
-// ── Incident-sim takeover interface (consumed by js/game/incidentsim.js) ─────
+// ── Incident-sim takeover interface (consumed by js/physics/incident-sim.js) ─────
 // These promote/read/restore a car MIRROR as a Rapier 6-DoF dynamic body for a
 // bounded, flagged, fallback-guarded incident window. They NEVER write a car —
 // IncidentSim reads carBodyPose() back and does all the guarded writeback. When
@@ -879,7 +879,7 @@ function updatePanels(dt, px, pz) {
 // monza, 1543 on vegas, 1737 on spa. With a hint it evaluates ±16 nodes = 33
 // (js/track/spline.js). This ran unhinted for every live shard (cap 48), every
 // disturbed cone and every broken panel at the caution machine's 4 Hz
-// (QUERY_EVERY in js/game/racecontrol.js) — while every one of those records
+// (QUERY_EVERY in js/race/race-control.js) — while every one of those records
 // already carries the arc it was placed at.
 //
 // WHY A FALLBACK. The hint RESTRICTS the search to ±64 m of arc rather than
@@ -914,7 +914,7 @@ function updatePanels(dt, px, pz) {
 // lower road, 8 m below, and consider() then discards it as airborne. The hint
 // keeps it on the deck it is actually on. That is a behaviour change, on one
 // circuit, at one place, in the direction of correctness — and hazards() is not
-// a replicated surface (js/game/racecontrol.js: debris "is NOT replicated, so
+// a replicated surface (js/race/race-control.js: debris "is NOT replicated, so
 // two peers genuinely see different hazards"; the guest adopts the host's flag).
 function projectHazard(track, x, y, z, hint) {
   if (hint != null) {
@@ -936,7 +936,7 @@ function projectHazard(track, x, y, z, hint) {
 
 // ── B1: hazard query — settled bodies resting ON the racing surface ─────────
 // Deterministic read of the side-world consumed by the caution state machine
-// (js/game/racecontrol.js). A body counts when it is (a) asleep (isSleeping), (b) roughly at road
+// (js/race/race-control.js). A body counts when it is (a) asleep (isSleeping), (b) roughly at road
 // height, and (c) inside the road half-width once projected back to (s, lat).
 // A3 cones count ONLY after being knocked FURN_DISTURB_M off their placed home —
 // an untouched apex cone is scene dressing, not a yellow-flag hazard. Returns

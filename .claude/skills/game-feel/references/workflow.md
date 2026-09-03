@@ -13,7 +13,7 @@ Generic trauma-shake math: [feedback-recipes.md](feedback-recipes.md).
 | Wall/car-car sparks | `Particles.sparks` | Wall scrape from `Tracks.wallAt` proximity; collision via `c.fxSparkI`. |
 | Off-track kickup | `Particles.kickup` | Only when `c.offroad` (`Math.abs(c.x) > hw && !c.onKerb`). Kerbs never get kickup. |
 | Tyre marks | `js/game/skidmarks.js` | Stamp from measured slip; keep the ring bounded. |
-| Chassis attitude | `js/game/bodyattitude.js` | Visual only; never write back into physics. |
+| Chassis attitude | `js/physics/body-attitude.js` | Visual only; never write back into physics. |
 | Gear-shift punch | `GameAudio.shift()` | Layer sfx/camera tick; do not retune physics. |
 | HUD/menu pop | `js/game/hud.js`, `js/game/menus.js` | Prefer CSS/DOM transitions. |
 | Perf fallback | `js/game/perf.js` | Lower counts before dropping simulation quality. |

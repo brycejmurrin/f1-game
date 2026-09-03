@@ -68,7 +68,7 @@ fields one in every category via `FACTORY_PRESETS`, except the four on a
 manufacturer-exclusive FACTORY power unit (that unit is already team-unique).
 `FACTORY_PRESETS` drives AI meshes and the works aero/ERS the AI now runs, and
 seeds a new career save's `owned` + `fitted` build via `Parts.getFactorySetup`
-(`js/game/career.js`); a non-career garage build still goes through the
+(`js/career/career.js`); a non-career garage build still goes through the
 garage, not this table.
 
 ---

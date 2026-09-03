@@ -64,7 +64,7 @@ function bootResults({ state = "menu", season, cars, netPlay }) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
-  vm.runInContext(src("js/game/season-cal.js"), ctx, { filename: "js/game/season-cal.js" });
+  vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: "js/career/season-cal.js" });
   vm.runInContext(src("js/game/results.js"), ctx, { filename: "js/game/results.js" });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
   const els = { resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next") };

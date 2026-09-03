@@ -8,7 +8,7 @@ function init(opts) {
   if (opts && opts.vmax) VMAX = opts.vmax;
 }
 
-const clamp = M4.clamp, lerp = M4.lerp;       // shared scalar helpers (js/mat4.js)
+const clamp = M4.clamp, lerp = M4.lerp;       // shared scalar helpers (js/core/mat4.js)
 
 // Scratch samples reused every call (no per-frame allocation).
 const cvA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
@@ -47,7 +47,7 @@ const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
 const CHASE_SIDE_FRAC = 0.3;
 // CHASE g-response: the camera leans with longitudinal weight transfer even
 // though it is bolted to nothing. Driven by the SMOOTHED body pitch
-// (js/game/bodyattitude.js, spring ω=9, clamped ±0.024 rad ≈ 1.4°), NEVER raw
+// (js/physics/body-attitude.js, spring ω=9, clamped ±0.024 rad ≈ 1.4°), NEVER raw
 // accel — so it cannot reintroduce the fore/aft jitter the car-frame camera
 // damping just removed. baPitch > 0 = nose-down = braking.
 const CHASE_G_DOLLY = 14;    // m of nose-IN per rad of dive (≈0.34 m at full braking)
@@ -162,7 +162,7 @@ function rideGrade(track, s) {
 }
 
 // AN ONBOARD CAMERA IS BOLTED TO THE CHASSIS, so it inherits what the chassis
-// does. js/game/bodyattitude.js already pitches, rolls and heaves the car BODY
+// does. js/physics/body-attitude.js already pitches, rolls and heaves the car BODY
 // under braking, power and cornering — visibly, on the mesh — but the onboard
 // eye was built purely from the road, so the one view where you sit IN the car
 // was the one view that could not feel it: brake from 300 and the world stayed

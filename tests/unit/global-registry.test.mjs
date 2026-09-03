@@ -54,7 +54,7 @@ const report = checkGraph(scan);
 
 // Files allowed to eval-assign MORE than one global, with the exact set.
 const MULTI_GLOBAL = {
-  "js/mat4.js": ["M4", "V3"], // grandfathered pair — the matrix+vector math island
+  "js/core/mat4.js": ["M4", "V3"], // grandfathered pair — the matrix+vector math island
 };
 
 // Globals deliberately written by MANY files (accumulator idiom:

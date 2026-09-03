@@ -420,7 +420,7 @@ const NetLobby = (function () {
       // filed under this connection's id (never a `from` in the payload — the
       // same reasoning as HELLO above), and seat exclusivity makes team:seat
       // a driver identity; the id format is seasonDriverId's
-      // (js/game/store.js): "team:driver". No profile yet means no claim —
+      // (js/core/store.js): "team:driver". No profile yet means no claim —
       // HELLO is sent at connect, long before anyone can drive a lap. On a
       // guest there is nothing to narrow to: its one connection is the host's,
       // and the host legitimately speaks for the whole field.

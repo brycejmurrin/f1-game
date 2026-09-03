@@ -12,8 +12,8 @@ function load(file, name, globals = {}) {
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   vm.runInContext(
-    fs.readFileSync(path.join(ROOT, "js/log.js"), "utf8").replace(/^const\b/gm, "var"),
-    ctx, { filename: "js/log.js" },
+    fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8").replace(/^const\b/gm, "var"),
+    ctx, { filename: "js/core/log.js" },
   );
   const source = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
   vm.runInContext(source, ctx, { filename: file });

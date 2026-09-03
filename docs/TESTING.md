@@ -223,7 +223,7 @@ at all.
 
 ### Turning diagnostics up
 
-Levels come from `js/log.js`. `APEX_LOG` is written to `localStorage` before any
+Levels come from `js/core/log.js`. `APEX_LOG` is written to `localStorage` before any
 game script evaluates, so a spec needs no change to become verbose:
 
 ```sh
@@ -699,7 +699,7 @@ show the work is irreducible, and write the arithmetic down where the next
 reader will look for the waste.
 
 One trap on the way: the ERS test's per-pass `reload` looks like the same
-redundancy and is not. `store` (`js/game/store.js`) caches every key it has
+redundancy and is not. `store` (`js/core/store.js`) caches every key it has
 read, so seeding `localStorage` without a reload leaves the game answering from
 `_cache` — all three passes would measure the same setup and every assertion
 would still pass.
@@ -906,7 +906,7 @@ what it covers.
 | `agent-determinism.spec.js` | same seed + same inputs ⇒ same result |
 | `agentview-api-contract.test.mjs` | freezes the shape of the agent-view API |
 | `assets-api.spec.js` | the baked asset pack's runtime path, and that every failure degrades to procedural |
-| `logging.spec.js` | `js/log.js` in a real page: `Log` live before any game module evaluates, retention never lagging the console level, single namespace prefix, records flattened rather than holding references, `logs()` filters, a bad spec ignored not thrown |
+| `logging.spec.js` | `js/core/log.js` in a real page: `Log` live before any game module evaluates, retention never lagging the console level, single namespace prefix, records flattened rather than holding references, `logs()` filters, a bad spec ignored not thrown |
 | `persistence.spec.js` | localStorage failing is REPORTED (Log + `persistState()`) and the session still reads back what it wrote — the silent-data-loss case: iOS Private Browsing sets the quota to 0 |
 | `wake-lock.spec.js` | the screen wake lock held for the duration of a race: requested on start, released on finish and on a mid-race quit (no results screen), released on hide and re-acquired on return, and degrades silently when the API is missing or its request rejects |
 
@@ -929,7 +929,7 @@ what it covers.
 | `audit.spec.js` | edge cases from the codebase audit the other suites missed |
 | `active-aero.spec.js` | X-mode / Z-mode: flap travel, the downforce/drag trade, the 400 ms transition cap |
 | `aero-zones.spec.js` | fixed ACTIVATION ZONES per circuit, Monaco having none, and the overtake gate on lap 1 / under caution driven through a REAL opening lap |
-| `aero-zones-turns.test.mjs` | `AERO_ZONE_TURNS` (`js/game/aerozones.js`) reproduces exactly the length-only `ZONE_COUNT` selection in turn-keyed form for every named circuit; bahrain/jeddah never get a turn-pair entry |
+| `aero-zones-turns.test.mjs` | `AERO_ZONE_TURNS` (`js/physics/aero-zones.js`) reproduces exactly the length-only `ZONE_COUNT` selection in turn-keyed form for every named circuit; bahrain/jeddah never get a turn-pair entry |
 | `debris.spec.js` | the Rapier debris side-world — and that it never moves a game car |
 | `race-control.spec.js` | the CAUTION layer in a real page: defaults ON, and the setting survives a reload (which is the guard on its storage format). The machine itself is `race-control.test.mjs` |
 | `autopilot.spec.js` | a closed-loop driver that actually completes laps (monza, suzuka) |
@@ -938,7 +938,7 @@ what it covers.
 | `touch-steer.spec.js` | canvas touch steering as an anchored DRAG (proportional, relative, ramped on release, most-recently-MOVED finger wins), the on-screen arrows ramping like a key, and pedal TRAVEL on the touch pedals reaching the physics |
 | `tilt-pipeline.spec.js` | the tilt chain end to end — dead zone (subtracted, so no step at its edge), the `MAX_TILT` map and its `steerToTilt` inverse, the 1.6x release/tighten slew asymmetry, calibrating out a held grip offset, One-Euro smoothing as lag rather than gain, and the LIVE `deviceorientation` path pinned to the harness |
 | `understeer-cue.spec.js` | the front-axle saturation haptic: it fires when the front stops answering the steering, stays quiet under gentle input, below the 1.5 m/s floor and off-track, repeats no faster than its cooldown allows, tightens with saturation depth, and at the same DEPTH in the grip envelope responds identically at any PACE |
-| `brake-cue.test.mjs` | braking CUE math in `js/game/brake-cue.js`: slider 1 is OFF, urgency is 0 when the apex is already made, braking already done cuts the pulse, and the function returns 0..1 never a brake command |
+| `brake-cue.test.mjs` | braking CUE math in `js/physics/brake-cue.js`: slider 1 is OFF, urgency is 0 when the apex is already made, braking already done cuts the pulse, and the function returns 0..1 never a brake command |
 | `steer-migration.spec.js` | the `STEER_SCHEMA` store migration LADDER — v2's one-time `drivingHelp`/`raceLine` reset runs for a stale store; v3's RACE PACE regrid maps all ten old notches onto the 19-notch geometric grid and leaves a store that never set one alone; every step is a NO-OP at or above its own version (so a schema bump cannot re-apply an earlier step and discard a choice the player made after it), and no step touches `steerRate`/`steerSmooth` |
 | `gamepad.spec.js` | gamepad mapping — driving (steer/throttle/brake/boost/overtake/camera) and, once a menu is open, the UWP-parity menu-nav mapping (D-pad+stick→arrows with hold-repeat, A→click, B→Escape including the native-`<dialog>` `cancel`-event seam, triggers→PageUp/PageDown, bumpers→horizontal paging) with a regression guard that driving is unaffected |
 
@@ -968,7 +968,7 @@ what it covers.
 | `road-under-floor.test.mjs` | no visible road surface may sit below the flat floor plane |
 | `coplanar-faces.test.mjs` | ratchet: SAME-FACING coplanar faces — the pairs that z-fight at every distance, which `clip-audit` structurally cannot see |
 | `debris-step-skip.test.mjs` | source contract for DebrisWorld's two-tier idle: skip `world.step(_events)` when live bodies are asleep and no car is in `FURN_WAKE_M`, but keep `_ageAndCullPool` + panel `force = 0` so `marbleGrip()` and `PANEL_IDLE_DESPAWN_S` stay honest |
-| `debris-hazard-hint.test.mjs` | `projectHazard` in `js/game/debrisworld.js`: the hazard query seeds `Tracks.project` with each body's own placed arc (33 segments instead of all ~1500) and must fall back to the full scan whenever that seed cannot be trusted. Sweeps monza/monaco/spa/miami at every staleness up to a 2 km wrong hint for a single changed accept/reject verdict, and pins suzuka — a figure-of-eight whose legs cross 1.43 m apart in XZ and 8.07 m apart in Y, where the height half of the trust test is the only thing that stops a hint on one deck being trusted for a body on the other. The subject is extracted from the real source, and two deliberately-broken variants keep the assertions honest |
+| `debris-hazard-hint.test.mjs` | `projectHazard` in `js/physics/debris-world.js`: the hazard query seeds `Tracks.project` with each body's own placed arc (33 segments instead of all ~1500) and must fall back to the full scan whenever that seed cannot be trusted. Sweeps monza/monaco/spa/miami at every staleness up to a 2 km wrong hint for a single changed accept/reject verdict, and pins suzuka — a figure-of-eight whose legs cross 1.43 m apart in XZ and 8.07 m apart in Y, where the height half of the trust test is the only thing that stops a hint on one deck being trusted for a body on the other. The subject is extracted from the real source, and two deliberately-broken variants keep the assertions honest |
 | `spline-project-height.test.mjs` | `Tracks.project` in `js/track/spline.js` searches in XZ only, so on a circuit that crosses ITSELF it cannot tell the two legs apart even in principle — the information was absent, not mis-weighted. Pins the optional `wy` argument that adds a height term: on suzuka's crossover (~2.6 m apart in XZ, ~8.3 m in Y) a body on the upper deck displaced toward the road beneath projects onto the WRONG leg at every offset tried without it, ~2368 m away in arc, and onto the right one at all of them with it. Carries an anti-vacuity assertion that the flat search must still be wrong somewhere, and checks that away from the crossover the two forms agree exactly, so existing callers are unaffected |
 | `f1-track-accuracy.spec.js` | each def's `path` OSM trace vs a pinned subset of real GeoJSON outlines (direction, shape) |
 | `track-foundation.test.mjs` | Node contracts for TrackSpace, TrackSurface, TrackModels, atomic diagnostics, terrain grounding, mesh validation |
@@ -1177,9 +1177,9 @@ what it covers.
 | `setup-screens-state.test.mjs` | the SETUP-family sheets (CAREER, SEASON SETUP, GARAGE) as BEHAVIOUR on `tests/helpers/mini-dom.mjs`, from the 2026-09-02 audit: `CareerUI.close()` drops the NEW CAREER draft and an armed DELETE? (siblings of the `draftFrom` leak fixed 2026-09-01), `SetupUI` discards the paint editor and `G.livDraftOverride` when `#carsetup` is hidden (BACK/DONE never cleared them and `resolveLivery()` painted the unsaved draft on the race car), the factory / fitted-cap upgrade cards print `SHORT N cr` when disabled, and the unit/precision pins — team tiles and the RE-SIGN card say `cr / round`, THE CAR Fitted row groups thousands like the garage, history Points carries `pts`, SEASON SETUP distance chips read `N LAPS` with no `(FULL)` (FULL is per-circuit on the race-settings sibling) and the sprint note says `pts`. CSS through `css-rules.mjs`: the extended lines wrap |
 | `career-cross-tab.test.mjs` | an active career refuses to overwrite a newer foreign save, while an idle career refreshes to the winning tab |
 | `async-lifecycle.test.mjs` | late QR streams/video playback, decoder retries, IndexedDB late success and a hung fetch releasing the shared queue |
-| `ai-drive.test.mjs` | Pure AI racecraft helpers in `js/game/ai-drive.js` — rating→behaviour maps, situation OT fire rate, ERS want/bank, wantX, aeroLoad corner limit, racing-line hold mix, multi-sample soft brake, adaptive lane, street pack seating, team houseStyle, seat/#2 let-by orders, consistency brake band — in a VM with no browser |
+| `ai-drive.test.mjs` | Pure AI racecraft helpers in `js/physics/ai-drive.js` — rating→behaviour maps, situation OT fire rate, ERS want/bank, wantX, aeroLoad corner limit, racing-line hold mix, multi-sample soft brake, adaptive lane, street pack seating, team houseStyle, seat/#2 let-by orders, consistency brake band — in a VM with no browser |
 | `factory-ai-setup.test.mjs` | Works-car aeroLoad / ERS deploy must differ across FACTORY_PRESETS (McLaren flex vs Williams low-drag), and `makeCars()` must assign those values plus `houseStats` to AI cars instead of the old 0.5 midpoint `null` |
-| `shared-math.test.mjs` | the shared scalar helpers on `M4` (js/mat4.js) — clamp/lerp/`wrapDelta` semantics including the two edges that made the one DIVERGENT clamp copy different (inverted range, non-number argument), `wrapDelta` proved equal to the single-fold ladder every migrated site hand-wrote across four periods, plus a RATCHET: no js/ file may declare a private clamp/lerp again (the sanctioned spelling is the alias `const clamp = M4.clamp;`), with an anti-vacuity case pinning that the regex fires on the shapes it is meant to catch |
+| `shared-math.test.mjs` | the shared scalar helpers on `M4` (js/core/mat4.js) — clamp/lerp/`wrapDelta` semantics including the two edges that made the one DIVERGENT clamp copy different (inverted range, non-number argument), `wrapDelta` proved equal to the single-fold ladder every migrated site hand-wrote across four periods, plus a RATCHET: no js/ file may declare a private clamp/lerp again (the sanctioned spelling is the alias `const clamp = M4.clamp;`), with an anti-vacuity case pinning that the regex fires on the shapes it is meant to catch |
 | `store-cross-tab.test.mjs` | `GameStore`'s `storage` listener in a VM over a fake localStorage — two tabs used to silently overwrite each other's saves because `_cache` is filled on first read and never invalidated. Asserts the module ARMS ITS OWN listener, that a foreign apex26. write drops exactly that key (an unrelated key stays cached — invalidating everything would put getItem/JSON.parse back in the render loop), that `rev` bumps, that a foreign `clear()` empties the cache, and that another origin-key's write is inert |
 | `incident-gate.test.mjs` | IncidentSim's notifyCar entry gate vs preStep's per-kind authority in a VM — an r2-only config still queues+promotes a launch at `>= R2_CAR_V`, an r3-band contact under that config promotes nothing (enabling one kind never widens the others), sub-threshold bumps never queue, all-off is inert, and the shipped defaults still resolve a relV=30 pair as r2 |
 | `camera-ride.test.mjs` | `GameCams.vantage` in a VM over a synthetic hill: the chase rig must not turn the road's fine undulation into camera bob on a gradient (measured against a raw two-point rig on the same profile), while still framing flat road and constant slopes exactly as before, still climbing the hill, and still honouring the ground clamp. The elevation profile is an argument here, so the threshold pins the CAMERA rather than whatever terrain a circuit happens to ship |
@@ -1237,7 +1237,7 @@ what it covers.
 
 - [`tests/manual/README.md`](../tests/manual/README.md) — the human-run suites
 - `docs/DEBUG-HOOKS.md` — the full `__apex` reference
-- `js/log.js` — the logging facility the fixtures capture
+- `js/core/log.js` — the logging facility the fixtures capture
 - `playwright.config.js`, `tests/helpers/fixtures.js`, `tests/helpers/global-setup.js`,
   `tests/helpers/live-reporter.js` — the infrastructure sources
 - `tools/pick-tests.mjs`, `tools/test-bg.mjs`, `tools/test-shards.sh` — the runners

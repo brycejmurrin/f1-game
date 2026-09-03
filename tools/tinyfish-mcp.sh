@@ -433,7 +433,7 @@ cmd_deploy_check() {
 cmd_deploy_js() {
   parse_common_flags "$@"
   set -- "${PARSE_REST[@]}"
-  local rel="${1:?usage: $0 deploy-js [--json] <path-under-site>   e.g. js/log.js}"
+  local rel="${1:?usage: $0 deploy-js [--json] <path-under-site>   e.g. js/core/log.js}"
   # Accept "js/foo.js", "/js/foo.js", or "foo.js" (→ js/foo.js).
   rel="${rel#/}"
   if [[ "$rel" != js/* && "$rel" != css/* && "$rel" != *.* ]]; then

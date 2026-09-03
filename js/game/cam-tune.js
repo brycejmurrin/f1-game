@@ -5,7 +5,7 @@ const CamTune = (function () {
 const { store } = GameStore;
 const KEY = "camTune";
 const DEG = Math.PI / 180;
-const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
+const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 
 // The six knobs, in panel order. `def` is 0 for all of them by construction:
 // zero MUST mean "the framing js/game/cameras.js shipped", so RESET is exact

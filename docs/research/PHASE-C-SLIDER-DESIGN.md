@@ -401,7 +401,7 @@ per-version ladder before it changes the constant.
 
 **CLEARED.** `STEER_MIGRATIONS` is now a list of `{to, apply}` steps and
 `migrateSteerStore()` runs only those above the stored schema — the shape
-`CAREER_MIGRATIONS` in `js/game/store.js` already used. Every key a step rewrites
+`CAREER_MIGRATIONS` in `js/core/store.js` already used. Every key a step rewrites
 goes through `migSet()`, which logs the old and new value to `Log.info("game")`
 when it actually moves, so a migration that changes a player's settings leaves a
 record in the ring buffer. The lossy old-9/old-10 collision gets its own

@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * js/log.js in a real page — the levels, the ring buffer, and the __apex door.
+ * js/core/log.js in a real page — the levels, the ring buffer, and the __apex door.
  *
  * Every assertion here corresponds to a way the facility can be quietly useless
  * rather than broken: retention that silently lags the console level, a ring

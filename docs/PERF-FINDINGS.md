@@ -84,7 +84,7 @@ expensive one (see the `perf.js` crash-sentinel header on shipping `vendor/`).
 `pairContact` + `resolveCollisions` is a further ~9.5 %.
 
 *Traced, not a defect:* `buildWorld` also appears at 0.6 %, but
-`js/game/debrisworld.js` has `if (!world) buildWorld(track, cars);` — the
+`js/physics/debris-world.js` has `if (!world) buildWorld(track, cars);` — the
 one-time lazy build landing inside the sample window. Recorded so it is not
 re-derived.
 
@@ -194,7 +194,7 @@ Two rules fall out of that:
 - **`test:api` is not in CI at all**, so it rots. Found 11 specs failing on a
   bug that predated the session by weeks: `js/data/telemetry.js` aliases
   `M4.clamp` at EVAL time, and the two standalone js/data harnesses did not load
-  `js/mat4.js`, so telemetry.js threw, `DataTelemetry` was stranded in its
+  `js/core/mat4.js`, so telemetry.js threw, `DataTelemetry` was stranded in its
   temporal dead zone, and hub.js's top-level `DataTelemetry.create()` threw in
   turn — surfacing three links away as `ReferenceError: DataHub is not defined`.
   Diagnosed by evaluating the eight modules in a **Node VM with DOM stubs**
@@ -518,7 +518,7 @@ Six taken. Five are the section heading above wearing new hats; the sixth is a
 different animal and is the one worth reading.
 
 **The hitch: the Rapier side-world was built on the LIGHTS-OUT frame.**
-`js/game/debrisworld.js` `step()` builds lazily on first call, and `update()`
+`js/physics/debris-world.js` `step()` builds lazily on first call, and `update()`
 returns at `if (state !== "race") return;` (`js/game.js`) for the whole
 countdown — so "first call" was always the first RACE step. Line-attributed
 from a `profile-gameloop.mjs vegas physics` profile (`positionTicks`):
@@ -2930,7 +2930,7 @@ exists, check that the state it defends is still reachable.
 Do not re-investigate these; they were checked and are fine.
 
 `js/game/particles.js` (struct-of-arrays pool, zero steady-state allocation),
-`js/game/skidmarks.js`, `js/game/perf.js`, `js/game/bodyattitude.js`,
+`js/game/skidmarks.js`, `js/game/perf.js`, `js/physics/body-attitude.js`,
 `js/game/hud.js` (fully write-cached via WeakMaps, no layout reads anywhere —
 the best-behaved file audited), the `LIT_FS` point-light loop, `GLXChunked`
 frustum culling, the bloom skip, `cssSize()` caching, and the spatial grid

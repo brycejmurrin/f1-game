@@ -1,4 +1,4 @@
-/* Apex 26 — the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/game/quali.js has already produced. No timing, no ordering, no persistence — hand it `quali.rows()` and it paints. */
+/* Apex 26 — the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. No timing, no ordering, no persistence — hand it `quali.rows()` and it paints. */
 const QualiSheet = (function () {
   "use strict";
 

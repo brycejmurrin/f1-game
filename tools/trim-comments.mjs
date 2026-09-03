@@ -120,7 +120,7 @@ function shortenFileHeader(src) {
 function narrativeOkForFile(rel) {
   if (!stripNarrative) return false;
   if (rel.includes("js/render/webgpu/")) return false;
-  if (rel === "js/game/perf.js" || rel === "js/game/cameras.js" || rel === "js/game/debrisworld.js") return false;
+  if (rel === "js/game/perf.js" || rel === "js/game/cameras.js" || rel === "js/physics/debris-world.js") return false;
   return true;
 }
 

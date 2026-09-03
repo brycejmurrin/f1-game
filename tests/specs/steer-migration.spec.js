@@ -11,7 +11,7 @@
 //
 // A reset that runs ONCE is a migration. The same reset running a second time is
 // data loss, which is why the guard is a per-version LADDER (STEER_MIGRATIONS,
-// one step per version, the shape of CAREER_MIGRATIONS in js/game/store.js) and
+// one step per version, the shape of CAREER_MIGRATIONS in js/core/store.js) and
 // not a single "have I run ANY migration?" check. This file pins every half of
 // that: each step runs for a store below its version, no step runs for a store
 // already at or past it, and a step reaches only the keys it owns.
@@ -27,7 +27,7 @@
 // the top of tests/specs/gamepad.spec.js).
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
 
-// The store (js/game/store.js) prefixes every key with "apex26." and JSON-encodes
+// The store (js/core/store.js) prefixes every key with "apex26." and JSON-encodes
 // the value, so these two helpers are the store's own on-disk format and nothing
 // more. Seeding has to happen in an init script: the migration runs while
 // js/game.js evaluates (SteerTuning.create(G) -> applySteerTuning()), which is

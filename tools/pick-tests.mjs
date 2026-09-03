@@ -98,8 +98,8 @@ export const RULES = [
 
   // ── spec-backed js/game files that used to reach only tiny + tooling-fast ──
   [/^js\/game\/ui-scale\.js/, ["ui"], "ui-scale.spec.js"],
-  [/^js\/game\/racecontrol\.js/, ["driving"], "race-control.spec.js rides in test:driving"],
-  [/^js\/game\/aerozones\.js/, ["driving"], "aero-zones.spec.js rides in test:driving"],
+  [/^(js\/game\/racecontrol|js\/race\/race-control)\.js/, ["driving"], "race-control.spec.js rides in test:driving"],
+  [/^(js\/game\/aerozones|js\/physics\/aero-zones)\.js/, ["driving"], "aero-zones.spec.js rides in test:driving"],
   [/^js\/game\/garage-scene\.js/, ["car"], "garage-aero.spec.js rides in test:car"],
 
   // ── car ─────────────────────────────────────────────────────────────────
@@ -121,17 +121,17 @@ export const RULES = [
   // physics/collision/behaviour/debris, api/hooks/agent/map, and
   // circuit/foundation/scenery sets, so the SPEC union is unchanged.
   [/^js\/game\.js/, ["driving", "hooks", "circuits"], "the loop: physics, AI, race logic"],
-  [/^js\/game\/physics-consts\.js/, ["driving", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
+  [/^(js\/game\/physics-consts|js\/physics\/consts)\.js/, ["driving", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
   [/^js\/game\/(cameras|cam-tune|cam-tuner|cam-modes)\.js/, ["input"], ""],
   [/^js\/game\/(input|steer-tuning|uilayers)\.js/, ["input"], ""],
-  [/^js\/game\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
+  [/^(js\/game|js\/physics)\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
   [/^js\/game\/(hud|results|menus|setup-ui|scrollfade|menunav|ariastate|topmodal|uilayers|cam-modes|gfx-quality|renderer-picker|metrics|cockpit-opts|sheetshape|quali-sheet)\.js/, ["ui"], "DOM screens"],
   [/^js\/game\/(lighting|lighting-knobs|track-lights|frame-lights|light-presets|atmosphere|tuner)\.js/, ["gfx"], ""],
-  [/^js\/game\/(career|career-ui|reliability|quali)\.js/, ["modes", "state-unit"], ""],
+  [/^js\/game\/(career|career-ui|reliability|quali)\.js|^js\/career\/(career|career-ui)\.js|^js\/race\/(reliability|quali-model)\.js/, ["modes", "state-unit"], ""],
   // The season calendar/format. `modes` is season+career+TT+quali (career is a
   // championship too, and the endRace award path is shared); `ui` because the
   // SETUP screen is DOM the menu specs click through.
-  [/^js\/game\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
+  [/^js\/game\/season-(cal|ui)\.js|^js\/career\/season-(cal|ui)\.js/, ["modes", "ui", "state-unit"], "calendar + weekend format"],
   [/^js\/game\/(audio|music-lib)\.js/, ["ui", "lifecycle-unit"], ""],
   [/^js\/game\/spotify\.js/, ["ui", "audio-unit", "lifecycle-unit"], "token refresh races + browser integration"],
   // The MUSIC & SOUND panel is DOM the menu specs click through, not just audio
@@ -143,10 +143,10 @@ export const RULES = [
   // centreline, and debris-hazard-hint.test.mjs is the circuit-rebuilding sweep
   // that checks that projection — it lives with the other track-build-vm suites,
   // so a debrisworld edit would otherwise never run its own Node gate.
-  [/^js\/game\/(debrisworld|incidentsim)\.js/, ["driving", "sweeps"], ""],
-  [/^js\/game\/(particles|carmesh|bodyattitude|photomode)\.js/, ["ui"], "visual-only layers"],
-  [/^js\/game\/(store|perf|tables)\.js/, ["hooks", "modes", "state-unit"], ""],
-  [/^js\/log\.js/, ["hooks", "tooling-fast"], "every module logs through it"],
+  [/^js\/game\/(debrisworld|incidentsim)\.js|^js\/physics\/(debris-world|incident-sim)\.js/, ["driving", "sweeps"], ""],
+  [/^js\/game\/(particles|carmesh|bodyattitude|photomode)\.js|^js\/physics\/body-attitude\.js/, ["ui"], "visual-only layers"],
+  [/^js\/game\/(store|perf|tables)\.js|^js\/core\/store\.js/, ["hooks", "modes", "state-unit"], ""],
+  [/^js\/log\.js|^js\/core\/log\.js/, ["hooks", "tooling-fast"], "every module logs through it"],
 
   // ── the rest ────────────────────────────────────────────────────────────
   [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],

@@ -3,7 +3,7 @@ const GameHud = (function () {
   "use strict";
 
 const { IDLE_RPM, MAX_RPM } = PhysicsConsts;   // eval-time read: HARD_EDGES pins physics-consts.js first
-const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
+const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 
 function create(G) {
 Log.info("ui", "GameHud.create");
@@ -360,7 +360,7 @@ function updateHud(force) {
     }
   }
   // B1 caution flag (local yellow / VSC / safety car) — driven by the caution
-  // state machine in js/game/racecontrol.js, read via G.cautionInfo (READ-ONLY
+  // state machine in js/race/race-control.js, read via G.cautionInfo (READ-ONLY
   // w.r.t. the cars; the debris side-world never moves one). Hidden when green.
   if (els.flag) {
     const cn = G.cautionInfo ? G.cautionInfo() : null;

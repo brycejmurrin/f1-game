@@ -4,12 +4,12 @@ Long-form progression on top of the race loop: a season is a chapter, not the
 whole story. Two front-ends — **DRIVER CAREER** (you are a driver signed to a
 team) and **MY TEAM** (you own the twelfth team) — share one core.
 
-- **Rules and save:** `js/game/career.js` (global `Career`) — no DOM.
-- **Reliability / DNFs:** `js/game/reliability.js` (global `Reliability`).
-- **Screens:** `js/game/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
-- **Qualifying:** `js/game/quali.js` (global `Quali`) — the model: session timing, ordering, the persisted grid; `js/game/quali-sheet.js` (global `QualiSheet`) — `#quali`, the sheet that paints `quali.rows()`.
+- **Rules and save:** `js/career/career.js` (global `Career`) — no DOM.
+- **Reliability / DNFs:** `js/race/reliability.js` (global `Reliability`).
+- **Screens:** `js/career/career-ui.js` (global `CareerUI`) — `#career`, `#career-offers`.
+- **Qualifying:** `js/race/quali-model.js` (global `Quali`) — the model: session timing, ordering, the persisted grid; `js/game/quali-sheet.js` (global `QualiSheet`) — `#quali`, the sheet that paints `quali.rows()`.
 - **Ratings:** `js/car/driver-ratings.js` (global `DriverRatings`).
-- **Persistence + migration:** `GameStore.migrateCareer` in `js/game/store.js`.
+- **Persistence + migration:** `GameStore.migrateCareer` in `js/core/store.js`.
 - **Styles:** `css/career.css`.
 
 ---
@@ -415,7 +415,7 @@ cruising in a good one does not.
 
 ## Reliability and retirements
 
-`js/game/reliability.js` (global `Reliability`) decides whether a car reaches the
+`js/race/reliability.js` (global `Reliability`) decides whether a car reaches the
 flag. Without it every one of the twenty-two finishes every race forever, which
 makes a championship a pure pace ranking — and a career flat, because a points
 finish in a bad car is only earned if the good cars can break.
@@ -724,7 +724,7 @@ points, championships, best championship finish, teams driven for — then **SEA
 BY SEASON**, one `.res-row` per archived year, newest first.
 
 **Every total is derived, none is stored.** `careerTotals()` in
-`js/game/career-ui.js` walks `career.history` and adds the season in progress from
+`js/career/career-ui.js` walks `career.history` and adds the season in progress from
 `career.results` and `career.season.pts`. A totals block on the save would be one
 more rung on the migration ladder for numbers that are a sum over data already
 there — and a total written once is a total that goes stale, which no migration

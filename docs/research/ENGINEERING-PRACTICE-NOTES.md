@@ -230,7 +230,7 @@ because it is a user-facing failure with no diagnostics, not a style question.
 
 ## What this repo does with that
 
-`js/game/store.js`:
+`js/core/store.js`:
 
 ```js
 set(k, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) {} }
@@ -281,7 +281,7 @@ that a failed write is indistinguishable from a successful one.
 None of this was implemented in this pass — it is a behaviour change to the
 persistence layer and deserves its own commit and its own test.
 
-> **Postscript (2026-08): the fix shipped.** `js/game/store.js` no longer
+> **Postscript (2026-08): the fix shipped.** `js/core/store.js` no longer
 > swallows anything: every failed read or write goes through `noteBroken()`,
 > which records the DOMException name on `store.broken`, emits one loud
 > `Log.warn("game", …)` on the FIRST failure ("settings and saves will NOT
@@ -317,8 +317,8 @@ file, it becomes a work list. Counting `catch (` against `Log.<level>(` across
 | `js/net/lobby.js` | 25 | **0** | 14 |
 | `js/render/webgpu/wgx.js` | 26 | 2 | 12 |
 | `js/render/three/tlx.js` | 29 | 9 | 11 |
-| `js/game/debrisworld.js` | 17 | 1 | 12 |
-| `js/game/incidentsim.js` | 12 | **0** | 7 |
+| `js/physics/debris-world.js` | 17 | 1 | 12 |
+| `js/physics/incident-sim.js` | 12 | **0** | 7 |
 
 **Totals: 379 `catch`, 165 of them completely empty.**
 

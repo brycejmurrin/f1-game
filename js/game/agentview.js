@@ -38,7 +38,7 @@ const AgentView = (function () {
 
   const r1 = (v) => Math.round(v * 10) / 10;
   const r2 = (v) => Math.round(v * 100) / 100;
-  const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
+  const clamp = M4.clamp;                     // shared scalar helper (js/core/mat4.js)
 
   // Every comparison against NaN is false, so a non-numeric argument does not
   // announce itself — it silently disables whatever test it feeds. A string

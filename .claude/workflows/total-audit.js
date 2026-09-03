@@ -67,7 +67,7 @@ const R1 = [
   { k: 'render-alt',   scope: 'js/render/three/ EXCLUDING vendor/, and js/render/webgpu/. Emphasis: parity claims vs reality, descriptor-copy installation, frozen-backend drift. vendor/three-0.185.1 is vendored — do not audit it.' },
   { k: 'net',          scope: 'every js/net/ file plus worker/. Emphasis: wire-format comments vs code, handshake state machines, the host-authority rules in docs/MULTIPLAYER.md vs implementation.' },
   { k: 'data',         scope: 'every js/data/ file. Emphasis: cache TTLs vs prose, tab lifecycle, API-client error paths, write-only state.' },
-  { k: 'car',          scope: 'every js/car/ file plus js/mat4.js and js/log.js. Emphasis: catalog/table coherence (parts vs docs/PARTS.md), driver-ratings keys vs teams.js codes, log namespace discipline.' },
+  { k: 'car',          scope: 'every js/car/ file plus js/core/mat4.js and js/core/log.js. Emphasis: catalog/table coherence (parts vs docs/PARTS.md), driver-ratings keys vs teams.js codes, log namespace discipline.' },
   { k: 'shell',        scope: 'index.html (all of it), every css/ file, sw.js, manifest.json, version.json. Emphasis: dead selectors, ?v= coherence, DOM ids referenced by no JS, precache derivation, aria/text truth.' },
   { k: 'tools-1',      scope: 'every tools/ file whose basename starts with a through m, plus tools/README.md rows for them. Emphasis: does each tool still run against the current layout; stale ROOT assumptions; index truth.' },
   { k: 'tools-2',      scope: 'every tools/ file whose basename starts with n through z, plus their tools/README.md rows. Same emphases.' },

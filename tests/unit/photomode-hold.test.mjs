@@ -40,7 +40,7 @@ function boot() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/log.js", "js/mat4.js", "js/game/input.js", "js/game/photomode.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/game/input.js", "js/game/photomode.js"]) vm.runInContext(src(f), ctx, { filename: f });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, photoCam: { pos: [0, 0, 0], pitch: 0, yaw: 0, fov: 60 },
     photoKeys: {}, photoMouse: {}, photoMove: {}, photoLook: {},

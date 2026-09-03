@@ -21,7 +21,7 @@ scenery-dress; `debug-state` → agent-view; `cross-backend-parity` →
 | Skill | Use it when |
 |---|---|
 | **agent-view** | Drive Apex 26 without screenshots — `world()`, `field()`, `rollout()`, headless lap, deterministic runs; telemetry / slip-grip / field gaps / sector timing / `lightState` / the headless `reset`-`act` loop (`references/state.md`). |
-| **ai-racecraft** | AI overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck, `js/game/ai-drive.js`. |
+| **ai-racecraft** | AI overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck, `js/physics/ai-drive.js`. |
 | **asset-pack** | Baking or verifying `assets/pack`, `js/render/assets.js`, `matTexMix`/baked PBR blend, MAT layer mismatches. |
 | **audio-debug** | Engine sounds flat at high speed, sfx not triggering, gear-shift audio wrong, music cuts out, WebAudio debugging. |
 | **car-viewer** | Inspecting the car in isolation (no track) — `tools/carview.html`, `tools/car/render-car.mjs`, `tools/car/carshot.mjs`. |

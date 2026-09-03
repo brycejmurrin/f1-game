@@ -75,7 +75,7 @@ function rnd(...parts) {
   return hash(career ? career.seed : 0, ...parts);
 }
 
-const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
+const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 
 // SIX SAVES: three DRIVER-career slots and three MY TEAM slots, kept in separate
 // sets so the two modes can never compete for room. `apex26.career.<flavour>.<i>`
@@ -500,7 +500,7 @@ function research(opt) {
   return true;
 }
 // Raise the fitted-cost cap one rung of BUDGET_MULT. Wired to the RAISE THE CAP
-// card in js/game/career-ui.js, beside the FACILITY card it is modelled on.
+// card in js/career/career-ui.js, beside the FACILITY card it is modelled on.
 //
 // The two sinks are deliberately different in kind, which is why both exist: the
 // factory cuts what every FUTURE part costs (it compounds, and never runs out),

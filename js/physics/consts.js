@@ -84,7 +84,7 @@ window.PhysicsConsts = {
   // corners (roll ∝ lateral g) and pitches to the road gradient, and the wheels
   // spin with speed + steer with input — all on a smoothed visual layer, the way
   // SuperTuxKart keeps a rigid physics body and animates only the model.
-  // (chassis cornering-lean cap now lives in js/game/bodyattitude.js as ROLL_MAX)
+  // (chassis cornering-lean cap now lives in js/physics/body-attitude.js as ROLL_MAX)
   WHEEL_R: 0.34,         // wheel radius (m) — matches Car3D geometry, for spin rate
   WHEEL_STEER_VIS: 0.5,  // rad of visible front-wheel steer at full lock
 
@@ -117,8 +117,8 @@ window.PhysicsConsts = {
 
   // DIFFICULTY presets — the AI field's pace scale (`ai`, a ground-speed
   // multiplier on TIER_V) and the rubber-band tolerance (`band`). Keyed by the
-  // settings value; read by game.js (makeCars), js/game/quali.js (the modelled
-  // field's lap) and js/game/career-ui.js (the guide lists the keys).
+  // settings value; read by game.js (makeCars), js/race/quali-model.js (the modelled
+  // field's lap) and js/career/career-ui.js (the guide lists the keys).
   DIFF: {
     easy:   { ai: 0.86, band: 0.18 },
     normal: { ai: 0.92, band: 0.08 },

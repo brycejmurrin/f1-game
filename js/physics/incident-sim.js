@@ -60,7 +60,7 @@ const IncidentSim = (function () {
     };
   }
   function fin(v) { return typeof v === "number" && Number.isFinite(v); }
-  const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)
+  const clamp = M4.clamp;                     // shared scalar helper (js/core/mat4.js)
 
   function create(ctx) {
     Log.info("game", "IncidentSim.create");

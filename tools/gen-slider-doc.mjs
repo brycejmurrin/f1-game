@@ -19,7 +19,7 @@
  *   js/ minus the deferred three/ + webgpu/ backends, minus light-presets.js
  *   which is preset DATA, minus the TUNE_DEFS block itself)
  *
- * TUNE_DEFS is loaded the way tools/slider-effect.mjs loads it — js/log.js +
+ * TUNE_DEFS is loaded the way tools/slider-effect.mjs loads it — js/core/log.js +
  * the lighting files (js/game/lighting-knobs.js + its siblings) evaluated in a Node VM.
  *
  *   node tools/gen-slider-doc.mjs            # write

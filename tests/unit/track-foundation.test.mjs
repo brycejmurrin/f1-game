@@ -13,7 +13,7 @@ const P = MANIFEST.PATHS;
 
 // Read one js/ file into a fresh sandbox, converting top-level `const` to `var`
 // so the global lands as a sandbox property (same trick as verify-track.cjs).
-// js/mat4.js goes in FIRST every time: it is the second <script> tag in the real
+// js/core/mat4.js goes in FIRST every time: it is the second <script> tag in the real
 // shell and the home of the shared scalar helpers (M4.clamp/lerp/wrapDelta), so
 // a file loaded without it is not the file the browser evaluates.
 function runInto(ctx, file) {
@@ -24,8 +24,8 @@ function loadGlobal(file, name) {
   const sandbox = { console, Math, Array, Object, Number, Float32Array, Float64Array, Uint32Array, ArrayBuffer, Map, Set };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
-  runInto(ctx, "js/log.js");
-  runInto(ctx, "js/mat4.js");
+  runInto(ctx, "js/core/log.js");
+  runInto(ctx, "js/core/mat4.js");
   runInto(ctx, file);
   return sandbox[name];
 }

@@ -195,7 +195,7 @@ const NODE_CEILING = 1064;   // 1234 -> 1238 was the MY TEAM LOGO DETAIL row
 // cockpit HALO). Its SETTINGS button is injected at runtime and costs no shell
 // node, exactly like PerfTry's — the tag itself is the whole +1.
 // +12 2026-08-14: the SEASON calendar/format feature — two <script> tags
-// (js/game/season-cal.js, js/game/season-ui.js) and 10 markup nodes for the whole
+// (js/career/season-cal.js, js/career/season-ui.js) and 10 markup nodes for the whole
 // #season-setup screen, because both of its panes are EMPTY and season-ui.js
 // fills them (the shape #career established at index.html:438). It is also a
 // <dialog>, so nothing but the head/foot is in the tree until it is opened, and

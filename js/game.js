@@ -351,7 +351,7 @@ function initRainDrops() {
 }
 
 // ---------- settings ----------
-// Persistence lives in js/game/store.js (GameStore): the cached localStorage
+// Persistence lives in js/core/store.js (GameStore): the cached localStorage
 // wrapper, the TT leaderboard, season identity/migration, hex<->rgb.
 const { store, ttBoard, ttBoardAdd, hexToRgb, rgbToHex, seasonDriverId } = GameStore;
 
@@ -417,7 +417,7 @@ function restoreFreePlaySelection() {
   if (!(driverIdx >= 0 && driverIdx < Teams.LIST[teamIdx].drivers.length)) driverIdx = 0;
 }
 let difficulty = store.get("difficulty", "normal");
-// RELIABILITY — "off" | "low" | "real" (js/game/reliability.js). A standing
+// RELIABILITY — "off" | "low" | "real" (js/race/reliability.js). A standing
 // preference like difficulty, so it persists. Ships OFF: store.get returns the
 // stored value whenever the key exists, so a new default only ever reaches a
 // fresh install — and this key is new for EVERY save, which means the default is
@@ -452,7 +452,7 @@ let season = store.get("season", null);      // {round, pts:{driverId:n}, teamPt
 function migrateSeasonPoints() { season = GameStore.migrateSeasonPoints(season); }
 
 // ---------- physics constants ----------
-// The immutable numbers live in js/game/physics-consts.js (global PhysicsConsts)
+// The immutable numbers live in js/physics/consts.js (global PhysicsConsts)
 // together with the rationale that tuned them; game.js destructures them once
 // here. Everything slider- or harness-tunable stays a `let` below.
 const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
@@ -497,7 +497,7 @@ function dashKph(v) { return vStd(v) * 3.6; }
 function aStd(a) { return a / Math.max(PACE, 0.05); }
 // And the other direction: what the car ACTUALLY pulls on the ground right now,
 // as vTop() is what it actually tops out at. Anything modelling the car from
-// outside the driving loop needs this, not the bare constant — js/game/quali.js
+// outside the driving loop needs this, not the bare constant — js/race/quali-model.js
 // took `G.ACCEL` and so simulated a field that accelerated at pace-5 rates into
 // a pace-scaled vTop() ceiling, which is exactly the mismatch the G façade's own
 // comment promises does not exist ("off the SAME numbers the driving model
@@ -686,7 +686,7 @@ function otCoolFor(c) { return lerp(OT_COOL_HI, OT_COOL_LO, ersDeployOf(c)); }
 
 let aeroZ = null;   // AeroZones.create(G), assigned once G exists (below)
 // -- ACTIVE AERO: ACTIVATION ZONES -------------------------------------------
-// The zone GEOMETRY lives in js/game/aerozones.js (AeroZones.create(G), wired
+// The zone GEOMETRY lives in js/physics/aero-zones.js (AeroZones.create(G), wired
 // after the G façade as `aeroZ`). It is pure circuit geometry — curvature in,
 // arc-metre spans out — and knows nothing about a car. What stays here is the
 // half that reads car state: whether THIS car is in a zone, and what opening
@@ -738,7 +738,7 @@ function simRnd() {
 // the revs a lot in the low gears and less up top, and every shift lands back in
 // the ~8.7-11.3k power band (F1's optimal ~8-12k) before climbing to the limit —
 // rather than dropping to idle or barely dropping at all. Top speed fraction of VMAX.
-// F1-authentic 8 gears (GEARS / GEAR_TOP / IDLE_RPM / MAX_RPM: js/game/physics-consts.js).
+// F1-authentic 8 gears (GEARS / GEAR_TOP / IDLE_RPM / MAX_RPM: js/physics/consts.js).
 // GEAR_TOP is a fraction of the speed ENVELOPE, so these track vTop() rather than
 // the bare VMAX: all eight gears stay reachable at any OVERALL SPEED setting, the
 // tach sweeps its whole band, and the manual top-gear limiter (which caps speedCap
@@ -777,7 +777,7 @@ let track = null, builtTrackId = null, builtTrackNight = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
 // B1 — RACE CONTROL (local yellow / VSC / safety car) lives in
-// js/game/racecontrol.js. A READ-ONLY race-logic layer: it consumes
+// js/race/race-control.js. A READ-ONLY race-logic layer: it consumes
 // DebrisWorld.hazards() and drives the HUD flag, and NEVER writes speed, px,
 // pz, head or (s, x). The five below are thin passes through to it, kept as
 // hoisted function declarations so the G façade below can name them directly.
@@ -860,7 +860,7 @@ const isChampionship = () => flow === "season" || flow === "career";
 // classification it never ran would read a stale one.
 const gridFromQuali = () => (isChampionship() && SeasonCal.quali()) || (raceQuali && !isTimeTrial());
 // The ONE way `flow` is written. Career's save is loaded at boot and stays loaded,
-// so js/game/career.js has to be told whether its rules apply to the session that
+// so js/career/career.js has to be told whether its rules apply to the session that
 // is running — otherwise a Grand Prix would quietly inherit the career's team
 // development and its garage. Funnelling every write through here means that flag
 // can never drift out of step with the mode.
@@ -1151,7 +1151,7 @@ const smp = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };  // reusable sa
 const smp2 = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 
 // ---------- helpers ----------
-const clamp = M4.clamp, lerp = M4.lerp;   // shared scalar helpers (js/mat4.js) — ALIASED, not called through M4, so every hot-path site keeps its old call shape
+const clamp = M4.clamp, lerp = M4.lerp;   // shared scalar helpers (js/core/mat4.js) — ALIASED, not called through M4, so every hot-path site keeps its old call shape
 // Rotate an RGB grade-tint's HUE around the luminance axis by `deg`. Tints sit
 // near [1,1,1]; we rotate the chroma OFFSET from grey so a neutral tint stays
 // neutral. Standard NTSC-luma hue matrix. Used by SHADOW/HIGHLIGHT TINT HUE.
@@ -1210,7 +1210,7 @@ function sectorAt(s) {
 function lerpS(prev, cur, a) {
   if (prev === undefined || a >= 1) return cur;
   const L = track.total;
-  const d = M4.wrapDelta(cur - prev, L);   // shortest way round (js/mat4.js)
+  const d = M4.wrapDelta(cur - prev, L);   // shortest way round (js/core/mat4.js)
   return wrapS(prev + d * a);
 }
 // Every car is drawn from interpolated world px/pz when that mirror exists.
@@ -1638,7 +1638,7 @@ function driverSkill(team, d, di) {
   const roll = simRnd();
   const r = DriverRatings.get(d.code, team.tier, Career.devFor(team.id, di));
   // The pace-skill scalar PLUS the racecraft axes (0..1) the driving loop reads
-  // for attack/defence/OT/ERS/lane (see updateCar + js/game/ai-drive.js). Still
+  // for attack/defence/OT/ERS/lane (see updateCar + js/physics/ai-drive.js). Still
   // exactly ONE simRnd() draw — the stream-position contract reliability.js and
   // career.spec.js depend on.
   return {
@@ -1687,7 +1687,7 @@ function makeCars() {
       // yours is the hire by construction: the custom team fields one entry
       // everywhere except a MY TEAM career (see gridDrivers), so free play and
       // driver careers cannot reach this. It fixes a guide that was lying —
-      // js/game/career-ui.js says "Both cars run your build" — and a
+      // js/career/career-ui.js says "Both cars run your build" — and a
       // constructors' championship your R&D only ever contested with one car.
       const mate = !isP && ti === teamIdx && !!team.custom;
       const resolvedParts = isP || mate ? savedParts : factoryParts;
@@ -1732,7 +1732,7 @@ function makeCars() {
         xOn: false, aeroX: 0, xArmed: false,
         lapTime: 0, best: Infinity, totalT: 0,
         finished: false, finishT: 0, finPos: 0,
-        // Retirement (js/game/reliability.js). `retired`/`dnf` are the record;
+        // Retirement (js/race/reliability.js). `retired`/`dnf` are the record;
         // dnfAt/dnfWhy are the plan Reliability.arm() draws at the green light.
         // Declared here so every car has the shape whether or not a race arms it.
         retired: false, dnf: null, dnfAt: null, dnfWhy: null,
@@ -2543,7 +2543,7 @@ let raceIndex = 0;
 // Draw the field's retirements for the race about to start (or the round about to
 // be simulated). The seed is the CAREER's inside a career and the SIM seed
 // outside one — the two places a run's reproducibility is already anchored.
-// Nothing here draws from simRnd: see js/game/reliability.js.
+// Nothing here draws from simRnd: see js/race/reliability.js.
 function armReliability(field) {
   const c = Career.data();
   const team = player ? player.team : Teams.LIST[teamIdx];
@@ -2571,7 +2571,7 @@ function armReliability(field) {
 // on a flying lap and timing a driven lap from a standstill against it would
 // lose you the launch every weekend by construction. The answer to that is not
 // to fake the player's start, though: it is to charge the MODEL the same
-// standing start (see STANDING_LOSS in js/game/quali.js), so both sides of the
+// standing start (see STANDING_LOSS in js/race/quali-model.js), so both sides of the
 // comparison begin from rest and the two remain on one scale.
 //
 // Written in TRACK coordinates and pushed back out through worldFromTrack,
@@ -2675,7 +2675,7 @@ async function startRace() {
   // THE ENVELOPE THIS RACE WILL BE DRIVEN IN, recorded once at the green light.
   //
   // js/game.js held ZERO Log calls before this one, despite `game` being the
-  // namespace js/log.js defines for exactly this file. That mattered more than
+  // namespace js/core/log.js defines for exactly this file. That mattered more than
   // it sounds: the buffer retains at `info` whether or not it prints, and
   // tests/helpers/fixtures.js attaches the ring to EVERY failure — so a physics spec
   // that failed on "speed was 43, expected > 50" had nothing in its attachment
@@ -2911,7 +2911,7 @@ function endRace(forcedOrder) {
   const order = netOrder(forcedOrder || fin.concat(run, out));
   order.forEach((c, i) => { c.finPos = i + 1; });
   if (isChampionship()) {
-    // POINTS, and whether the WEEKEND is over — js/game/season-cal.js owns both:
+    // POINTS, and whether the WEEKEND is over — js/career/season-cal.js owns both:
     // a season may sprint before the Grand Prix, and only the second of those two
     // scoring sessions closes the round. A career never sprints, so award() there
     // is the old block verbatim.
@@ -2959,7 +2959,7 @@ const G = {
   // which is exactly what the setters below do.
   get flow() { return flow; }, set flow(v) { setFlow(v); },
   get session() { return session; }, set session(v) { session = v; },
-  // The career SAVE lives in js/game/career.js, which owns it outright — this is a
+  // The career SAVE lives in js/career/career.js, which owns it outright — this is a
   // read-through so there is exactly one copy, never a stale mirror in a closure.
   get career() { return Career.data(); },
   get careerSettlement() { return careerSettlement; },
@@ -3141,12 +3141,12 @@ const G = {
   smp, smp2, canvas,
   get gfx() { return gfx; },
   // Local (s,x)↔world helpers for the incident sim's guarded handover writeback
-  // (js/game/incidentsim.js). trackFrom is the LOCAL predictor+Newton read (never
+  // (js/physics/incident-sim.js). trackFrom is the LOCAL predictor+Newton read (never
   // a global search — see its comment), worldFromTrack its exact inverse.
   trackFrom: (px, pz, sp) => trackFrom(px, pz, sp),
   worldFromTrack: (s, x) => worldFromTrack(s, x, smp2),
   GAME_LAPS, TT_LAPS, LONG_GRIP, COUNTDOWN_S,
-  // The friction-circle constants, for js/game/quali.js: it runs a quasi-steady
+  // The friction-circle constants, for js/race/quali-model.js: it runs a quasi-steady
   // lap simulation off the SAME numbers the driving model uses, so a simulated
   // qualifying time and a driven one are on one scale by construction.
   // LAT_MAX and BRAKE are absolute in the driving model (cornering grip and
@@ -3207,7 +3207,7 @@ const G = {
 // the module wires: it reads the saved profiles at construction, and
 // Atmosphere's applyRaceSettings — created a few lines down — calls into it.
 ltStore = LightStore.create(G);
-// Race control: the caution flag state machine (js/game/racecontrol.js).
+// Race control: the caution flag state machine (js/race/race-control.js).
 raceCtl = RaceControl.create(G);
 // Results / TT-leaderboard / standings DOM builders (js/game/results.js).
 const { buildResults, buildTTResults, buildStandings, buildChampion } = GameResults.create(G);
@@ -3223,16 +3223,16 @@ const { buildSelect, updateTrackPreview, openTrackDetail, closeTrackDetail, setT
 // UI SIZE / HUD SIZE + RESOLUTION (js/game/ui-scale.js). After Menus so the
 // first applyUiScale can refresh an already-built select preview.
 const { setScale, applyResMode } = UiScale.create(G);
-// CAREER screen — new-career setup + season hub (js/game/career-ui.js). The rules
-// and the save live in js/game/career.js, which is a plain global and needs no ctx.
+// CAREER screen — new-career setup + season hub (js/career/career-ui.js). The rules
+// and the save live in js/career/career.js, which is a plain global and needs no ctx.
 const careerUi = CareerUI.create(G);
-// SEASON SETUP screen (js/game/season-ui.js) — the calendar and weekend format.
-// Same split: the rules and the save live in js/game/season-cal.js.
+// SEASON SETUP screen (js/career/season-ui.js) — the calendar and weekend format.
+// Same split: the rules and the save live in js/career/season-cal.js.
 const seasonUi = SeasonUI.create(G);
-// QUALIFYING — the model (js/game/quali.js: the flying lap plus the simulated field,
+// QUALIFYING — the model (js/race/quali-model.js: the flying lap plus the simulated field,
 // holding the classification between session and grid) and its sheet (quali-sheet.js).
 const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
-// ACTIVE AERO activation zones (js/game/aerozones.js) — pure circuit geometry.
+// ACTIVE AERO activation zones (js/physics/aero-zones.js) — pure circuit geometry.
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/game/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
@@ -3244,10 +3244,10 @@ const { refreshLightTunePanel, closeLightTuner } = TunerPanel.create(G);
 const { closeCamTuner } = CamTunerPanel.create(G);
 // Steering-tuning sliders + presets (js/game/steer-tuning.js).
 const { applySteerTuning } = SteerTuning.create(G);
-// Rapier debris side-world (js/game/debrisworld.js) — render-only, opt-in,
+// Rapier debris side-world (js/physics/debris-world.js) — render-only, opt-in,
 // inert (a single boolean check) unless enabled via apex26.debris/__apex.debris.
 DebrisWorld.create(G);
-// R2/R3/C1 bounded-takeover incident sim (js/game/incidentsim.js) — the ONLY
+// R2/R3/C1 bounded-takeover incident sim (js/physics/incident-sim.js) — the ONLY
 // additive-Rapier layer allowed to move a car, and only inside a bounded,
 // flagged, fallback-guarded window (extends the sacred xPinned + (prog,x)
 // exceptions). Inert (owns() is a Set read) unless a flag is on AND the debris
@@ -3289,7 +3289,7 @@ let netLobby = {
   status: () => ({ role: null, connected: false }),
   reportQuali: () => {}, reportQualiLive: () => {},
 };
-// C2 visual suspension (js/game/bodyattitude.js) — render-only cosmetic chassis
+// C2 visual suspension (js/physics/body-attitude.js) — render-only cosmetic chassis
 // pitch/roll/heave springs; DEFAULT ON, disable via apex26.bodyAttitude/__apex.bodyAttitude.
 const bodyAttitude = BodyAttitude.create(G);
 // MUSIC & SOUND panel (js/game/audio-panel.js) — the mixer screen, the ♪
@@ -3407,7 +3407,7 @@ function quitToMenu() {
   // screen describes the standalone season again.
   season = store.get("season", null);
   // Standings once an active season has scored. hasProgress(), not `round > 0`:
-  // a sprint banks points while its round is still open (js/game/season-cal.js).
+  // a sprint banks points while its round is still open (js/career/season-cal.js).
   const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
   $("mb-standings").hidden = !hasSeason;
   refreshCareerButton();
@@ -4048,7 +4048,7 @@ function updateCar(c, dt, ranked) {
   // in our lane, and a "stuck" timer. Shared by the braking and steering logic
   // so the AI can pick the open side, commit to a pass, and dig itself out when
   // wedged — instead of grinding to a halt against a car or wall. Rating axes
-  // (js/game/ai-drive.js) scale how quickly they dig out and how much space they
+  // (js/physics/ai-drive.js) scale how quickly they dig out and how much space they
   // leave when following.
   let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false;
   let towCar = null, towGap = Infinity;   // nearest car ahead in the slipstream (wider than the blocker box)
@@ -4199,7 +4199,7 @@ function updateCar(c, dt, ranked) {
     throttleLvl = inp ? (inp.throttleLevel ?? 1) : (autoThrottle() ? 1 : Math.max(0, Input.throttleLevel()));
   } else {
     // AI: multi-sample brake target (compound corners) + soft pedal + craft
-    // late-brake when a pass is on — see js/game/ai-drive.js.
+    // late-brake when a pass is on — see js/physics/ai-drive.js.
     const look = clamp(c.speed * 1.7, 30, 160);
     AiDrive.beginLook();
     let kMax = 0;
@@ -4409,7 +4409,7 @@ function updateCar(c, dt, ranked) {
       // three, so a driver who cut eight times paid 25s having been told nothing
       // since the third. `cutWarn` is the counter that resets; `cuts` stays the
       // LIFETIME total because the career `clean` objective and the archive read
-      // it (js/game/career.js) and "no cuts at all" must not become satisfiable
+      // it (js/career/career.js) and "no cuts at all" must not become satisfiable
       // by cutting four more times.
       c.cutWarn = (c.cutWarn | 0) + 1;
       if (c.cutWarn >= 4) {
@@ -5019,7 +5019,7 @@ function updateCar(c, dt, ranked) {
   // toward the road (that re-orients the driver to the arc). AI/no-head damp.
   if (!(c.human && c.head != null)) c.yawVis = damp(c.yawVis, yawTarget, 6, dt);
   // Chassis pitch/roll/heave (brake dive, throttle squat, cornering lean, kerb
-  // bob) now live in the C2 visual-suspension springs (js/game/bodyattitude.js),
+  // bob) now live in the C2 visual-suspension springs (js/physics/body-attitude.js),
   // advanced per car in the render loop from axEstSm/speed/yawRateCur/kCur +
   // road height. Render-only — see BodyAttitude.
   // Brake-disc heat (render-only): glows up while braking at speed, cools after.

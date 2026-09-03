@@ -17,7 +17,7 @@ attitude.
 - **Particles** → `js/game/particles.js`. Render-path only.
 - **Audio** → `js/game/audio.js` (shifts, kerb, wall, ERS, sector/lap).
 - **Tyre marks** → `js/game/skidmarks.js` from real slip/contact.
-- **Chassis motion** → `js/game/bodyattitude.js` — visual only.
+- **Chassis motion** → `js/physics/body-attitude.js` — visual only.
 - **Budget** → `js/game/perf.js` / `PerfGov`. Cap and decay.
 
 ## When NOT to use

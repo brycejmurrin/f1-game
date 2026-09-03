@@ -113,10 +113,10 @@ interface CarState {
   [key: string]: unknown;
 }
 
-/** The season standings/calendar save — js/game/store.js migrateSeasonPoints. */
+/** The season standings/calendar save — js/core/store.js migrateSeasonPoints. */
 type SeasonState = Opaque;
 
-/** The career save. Owner: js/game/career.js (Career.data()). */
+/** The career save. Owner: js/career/career.js (Career.data()). */
 type CareerSave = Opaque;
 
 /** What Career.settleRound() resolved for the round just finished, or null. */
@@ -129,7 +129,7 @@ type FrameState = Opaque;
     Phase 3 replaces this with the authored `RendererBackend` interface. */
 type GfxBackend = Opaque;
 
-/** The cached localStorage wrapper — js/game/store.js. All keys "apex26."-prefixed. */
+/** The cached localStorage wrapper — js/core/store.js. All keys "apex26."-prefixed. */
 interface StoreApi {
   /** Parsed value for `k`, or `d` when absent/unreadable. */
   get<T>(k: string, d: T): T;
@@ -175,7 +175,7 @@ interface TestInput { steer: number; throttle: boolean; brake: boolean; }
 /** A scheduled weather transition — startWeatherArc(). */
 interface WeatherArc { from: string; to: string; t: number; dur: number; seq: unknown; }
 
-/** An ACTIVE AERO activation zone, in arc metres. Owner: js/game/aerozones.js. */
+/** An ACTIVE AERO activation zone, in arc metres. Owner: js/physics/aero-zones.js. */
 interface AeroZone { start: number; end: number; len: number; }
 
 /** A pooled centreline sample (position, tangent, right, half-width). */
@@ -197,7 +197,7 @@ interface PhotoAxis { x: number; y: number; }
     Owner: js/game/light-store.js; tuner.js mutates it for RESET/COPY VALUES. */
 type LightProfiles = Record<string, Record<string, unknown>>;
 
-/** The caution/flag picture race control publishes — js/game/racecontrol.js. */
+/** The caution/flag picture race control publishes — js/race/race-control.js. */
 interface CautionInfo {
   level: number; sector: number; frac: number; total: number;
   sectors: [number, number, number]; sinceT: number; cause: string;
@@ -304,7 +304,7 @@ interface GameCtx {
   /** flow/session are the authority; seasonMode/timeTrial are derived views. */
   flow: FlowMode;
   session: SessionMode;
-  /** Read-through to js/game/career.js — one copy, never a stale mirror. */
+  /** Read-through to js/career/career.js — one copy, never a stale mirror. */
   readonly career: CareerSave;
   readonly careerSettlement: CareerSettlement | null;
   readonly openCareer: () => void;
@@ -493,7 +493,7 @@ interface GameCtx {
   readonly trackFrom: (px: number, pz: number, sPredicted: number) => { s: number; x: number };
   readonly worldFromTrack: (s: number, x: number) => { x: number; z: number };
 
-  // ── Model constants published for js/game/quali.js and the net layer ──────
+  // ── Model constants published for js/race/quali-model.js and the net layer ──────
   readonly GAME_LAPS: number;
   readonly TT_LAPS: number;
   readonly LONG_GRIP: number;

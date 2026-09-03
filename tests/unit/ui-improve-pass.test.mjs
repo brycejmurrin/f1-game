@@ -632,7 +632,7 @@ function bootInput() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/log.js", "js/mat4.js", "js/game/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/game/input.js"]) vm.runInContext(src(f), ctx, { filename: f });
   const Input = vm.runInContext("Input", ctx);
   const pad = (ax, buttons = [], ax2 = 0) => ({
     connected: true, axes: [ax, 0, ax2, 0],

@@ -44,7 +44,7 @@ function hash32(str) {
   return h >>> 0;
 }
 
-const clamp = M4.clamp;                       // shared scalar helper (js/mat4.js)
+const clamp = M4.clamp;                       // shared scalar helper (js/core/mat4.js)
 const rClamp = (v, lo, hi) => Math.round(clamp(v, lo, hi));
 
 // Fallback for a code not in BASE. Anchored on the car's tier (a tier-4 seat
@@ -75,7 +75,7 @@ function get(code, tier, deltas) {
 
 // A single headline number, weighted the way F1 25 weights it — mostly pace,
 // with racecraft second. NOT display-only: career's silly season ranks the
-// grid with it (the seat-swap gate and weakerSeat() in js/game/career.js), so
+// grid with it (the seat-swap gate and weakerSeat() in js/career/career.js), so
 // a weighting change moves who changes teams in a saved career.
 function overall(r) {
   if (!r) return 0;

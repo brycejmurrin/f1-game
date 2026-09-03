@@ -173,7 +173,7 @@ function stripTuneDefs(src) {
 }
 
 function seedLog(root, ctx) {
-  vm.runInContext(read(root, "js/log.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/log.js" });
+  vm.runInContext(read(root, "js/core/log.js").replace(/^const\b/gm, "var"), ctx, { filename: "js/core/log.js" });
 }
 
 export function loadTuneDefs(root) {

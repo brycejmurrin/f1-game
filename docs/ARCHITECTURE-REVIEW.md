@@ -89,7 +89,7 @@ this one class were found across three passes before the rule got its guard:
 raw `.speed`-vs-literal comparison unless the absoluteness is justified in
 place. The lint sees speeds only; the acceleration case is recorded in its
 header rather than asserted. Physics constants now live in
-`js/game/physics-consts.js`, extracted from game.js under the size
+`js/physics/consts.js`, extracted from game.js under the size
 ratchet.
 
 ---
@@ -100,9 +100,9 @@ Easy to mistake for one system:
 
 - **The driving model** — the per-axle bicycle model: deterministic,
   authoritative, the only thing that decides where the player's car is.
-- **`js/game/debrisworld.js`** — a Rapier side-world for debris and kinematic
+- **`js/physics/debris-world.js`** — a Rapier side-world for debris and kinematic
   car mirrors. It **never moves a game car**; that is its whole contract.
-- **`js/game/incidentsim.js`** — the bounded exception: a windowed takeover
+- **`js/physics/incident-sim.js`** — the bounded exception: a windowed takeover
   that *may* move a car, safety contract in its header. `startRace()` calls
   `IncidentSim.reset()` before `makeCars()` because ownership is by `cars[]`
   index and a stale index would own a different car.
@@ -592,7 +592,7 @@ Deferred with reasoning, none lost:
   un-extractable `G` façade block to it, and figures derived that way are
   discredited. The `updateCar()` and `render()` megablocks stay fenced.
 - **`wrapDelta` / shared `clamp`/`lerp` — RESOLVED.** All three now live on
-  `M4` (`js/mat4.js`, the 2nd script tag, so every consumer including the
+  `M4` (`js/core/mat4.js`, the 2nd script tag, so every consumer including the
   deferred backends can bind them at eval; they hang off the existing global
   rather than becoming a third one). Consumers ALIAS
   (`const clamp = M4.clamp;`), so hot paths keep their old call shape. 16 clamp

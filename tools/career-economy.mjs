@@ -129,7 +129,7 @@ season that visibly changes the car while still making you pick.
 The SPREAD matters as much as the middle. A back-marker earning far less than a
 midfield car compounds the wrong way, because the mode already gave them the
 slower car — that is exactly the bug this tool was written and immediately found
-(salaryFor's tier term had the wrong sign; see js/game/career.js).
+(salaryFor's tier term had the wrong sign; see js/career/career.js).
 
 RESEARCH_MULT is the single knob — it scales the whole economy against a catalog
 that stays the source of truth for what a part is worth. Re-measure after any

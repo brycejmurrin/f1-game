@@ -192,7 +192,7 @@ function refreshMacros() {
 // and receives V2'S RESET A SECOND TIME, silently discarding a drivingHelp or
 // raceLine the player deliberately set AFTER v2 ran. Hence the ladder — each step
 // declares the schema it brings the store UP TO, and a store at N runs only the
-// steps above N. Same shape as CAREER_MIGRATIONS in js/game/store.js.
+// steps above N. Same shape as CAREER_MIGRATIONS in js/core/store.js.
 //
 // Every key a step rewrites goes through migSet(), so the rewrite lands in the
 // Log ring buffer whether or not anyone was watching. A migration that quietly

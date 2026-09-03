@@ -1421,7 +1421,7 @@ const api = {
     return st;
   },
 
-  // bodyAttitude(arg?) — the C2 visual-suspension springs (js/game/bodyattitude.js).
+  // bodyAttitude(arg?) — the C2 visual-suspension springs (js/physics/body-attitude.js).
   //   bodyAttitude()            → status { enabled, offsets:{pitch,roll,heave,enabled} }
   //                               (offsets are the player's current render offsets,
   //                               radians for pitch/roll, metres for heave)

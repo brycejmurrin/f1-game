@@ -9,7 +9,7 @@
  * one the review flags as dangerous: a copy that folds the wrong way sends a car
  * backwards down the whole lap, once per lap.
  *
- * They now live on M4 (js/mat4.js, the second <script> tag) and every consumer
+ * They now live on M4 (js/core/mat4.js, the second <script> tag) and every consumer
  * ALIASES them — `const clamp = M4.clamp;` — so hot paths keep the exact call
  * shape their private copy had. Two things are asserted here:
  *
@@ -35,7 +35,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // mat4.js declares `const M4` at script top level, which lands in the context's
 // global LEXICAL scope rather than on the global object — read it back by name.
 const ctx = vm.createContext({});
-vm.runInContext(readFileSync(join(ROOT, "js/mat4.js"), "utf8"), ctx, { filename: "js/mat4.js" });
+vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: "js/core/mat4.js" });
 const M4 = vm.runInContext("M4", ctx);
 
 // ---------------------------------------------------------------------------
@@ -130,9 +130,9 @@ function jsFiles() {
 // different signatures and are deliberately out of scope — \b ends the name.
 const PRIVATE_DEF = /(?:^|\s)(?:const|let|var)\s+(clamp|lerp)\b\s*=\s*(?:function\s*)?\(|(?:^|\s)function\s+(clamp|lerp)\s*\(/;
 
-// js/mat4.js is the home. js/render/three/ is the vendored-three TSL island,
+// js/core/mat4.js is the home. js/render/three/ is the vendored-three TSL island,
 // where `clamp` is a NODE-graph function imported from three, not this scalar.
-const EXEMPT = (rel) => rel === "js/mat4.js" || rel.startsWith("js/render/three/");
+const EXEMPT = (rel) => rel === "js/core/mat4.js" || rel.startsWith("js/render/three/");
 
 test("no js/ file re-declares a private clamp or lerp", () => {
   const bad = [];
@@ -146,7 +146,7 @@ test("no js/ file re-declares a private clamp or lerp", () => {
   }
   assert.deepEqual(bad, [],
     "a private clamp/lerp came back. Alias the shared one instead — " +
-    "`const clamp = M4.clamp;` (js/mat4.js) — which costs nothing at the call " +
+    "`const clamp = M4.clamp;` (js/core/mat4.js) — which costs nothing at the call " +
     "site because it is the same function object");
 });
 
@@ -161,7 +161,7 @@ test("the ratchet's regex actually fires on the shapes it is meant to catch", ()
   ]) assert.ok(PRIVATE_DEF.test(shape), `should have matched: ${shape}`);
   // …and stays off the sanctioned alias and the differently-shaped neighbours.
   for (const shape of [
-    "const clamp = M4.clamp;                     // shared scalar helper (js/mat4.js)",
+    "const clamp = M4.clamp;                     // shared scalar helper (js/core/mat4.js)",
     "const clamp = M4.clamp, lerp = M4.lerp;",
     "  const clamp01 = (v) => Math.max(0, Math.min(1, v));",
     "  function lerpWrapped(a, b, u, period) {",
@@ -171,7 +171,7 @@ test("the ratchet's regex actually fires on the shapes it is meant to catch", ()
 
 test("the shared helpers are actually consumed — the migration is not decorative", () => {
   const users = jsFiles().filter((rel) =>
-    rel !== "js/mat4.js" && /\bM4\.(clamp|lerp|wrapDelta)\b/.test(readFileSync(join(ROOT, rel), "utf8")));
+    rel !== "js/core/mat4.js" && /\bM4\.(clamp|lerp|wrapDelta)\b/.test(readFileSync(join(ROOT, rel), "utf8")));
   assert.ok(users.length >= 18,
     `only ${users.length} files bind a shared scalar helper — the aliases were removed, ` +
     "not the duplication: " + users.join(", "));

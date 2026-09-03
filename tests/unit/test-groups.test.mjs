@@ -71,8 +71,8 @@ test("a js/game file with its own browser spec routes to that spec's group", () 
   // are excluded here on purpose, so this cannot pass vacuously.
   const specBacked = [
     ["js/game/ui-scale.js", "ui"],
-    ["js/game/racecontrol.js", "driving"],
-    ["js/game/aerozones.js", "driving"],
+    ["js/race/race-control.js", "driving"],
+    ["js/physics/aero-zones.js", "driving"],
     ["js/game/garage-scene.js", "car"],
   ];
   const specific = RULES.slice(2);

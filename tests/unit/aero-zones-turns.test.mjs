@@ -1,4 +1,4 @@
-// aero-zones-turns.test.mjs — AERO_ZONE_TURNS (js/game/aerozones.js) must
+// aero-zones-turns.test.mjs — AERO_ZONE_TURNS (js/physics/aero-zones.js) must
 // reproduce EXACTLY the zone set the length-only selection already ships,
 // for every circuit it names. That is the whole safety property: the table
 // re-expresses an already-sourced selection (ZONE_COUNT) in turn-keyed form,
@@ -28,14 +28,14 @@ const X_ZONE_STEP = 8;
 
 function loadAeroZones(Tracks) {
   const ctx = Tracks._vmContext;
-  const src = fs.readFileSync(path.join(ROOT, "js/game/aerozones.js"), "utf8")
+  const src = fs.readFileSync(path.join(ROOT, "js/physics/aero-zones.js"), "utf8")
     .replace(/^const\b/gm, "var");
-  vm.runInContext(src, ctx, { filename: "js/game/aerozones.js" });
+  vm.runInContext(src, ctx, { filename: "js/physics/aero-zones.js" });
   return ctx.AeroZones;
 }
 
 // Independent re-implementation of the length-only "N longest straights"
-// selection, mirroring js/game/aerozones.js's build() but WITHOUT consulting
+// selection, mirroring js/physics/aero-zones.js's build() but WITHOUT consulting
 // AERO_ZONE_TURNS — the reference this test checks the real module against.
 function lengthOnlyZones(Tracks, def, want) {
   const track = Tracks.buildCenterline(def);

@@ -1550,7 +1550,7 @@ test.describe("ERS parts drive the battery and overtake", () => {
     const rows = [];
     // NO BOOT AT ALL NOW, where this once cost six navigations and then four.
     // The reload was load-bearing for two reasons and both are answered in
-    // place: `store` (js/game/store.js) caches every key it has read, so a bare
+    // place: `store` (js/core/store.js) caches every key it has read, so a bare
     // localStorage.setItem left the game answering from _cache — the seed goes
     // through store.set, which writes the cache and the disk together; and the
     // team index is read once at boot into a `let` — #mb-race re-reads it

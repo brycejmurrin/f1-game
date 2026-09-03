@@ -71,9 +71,23 @@ const PLACEHOLDERS = new Set([
 // match mid-extension.
 const PATH_RE = /(?<![A-Za-z0-9_./-])((?:js|tools|tests|css|assets|spike|vendor|docs)\/[A-Za-z0-9_.<>/-]+\.(?:json|mjs|cjs|css|js|md|sh))(?![A-Za-z0-9])/g;
 
+// tools/manifest.cjs's MOVED map (tools/move-tree.mjs) keys itself on the
+// OLD path of every file the Phase 2b window relocates — that key is
+// SUPPOSED to be gone from disk; it is the whole reason deploy.mjs can name
+// the new path when a conflicted file was moved. Scan everything BUT that
+// object literal.
+function stripMovedBlock(text) {
+  const at = text.indexOf("const MOVED = {");
+  if (at < 0) return text;
+  const end = text.indexOf("};", at);
+  return end < 0 ? text : text.slice(0, at) + text.slice(end + 2);
+}
+
 function brokenPathsIn(file) {
   const bad = [];
-  for (const m of new Set(read(file).match(PATH_RE) || [])) {
+  let text = read(file);
+  if (file === "tools/manifest.cjs") text = stripMovedBlock(text);
+  for (const m of new Set(text.match(PATH_RE) || [])) {
     if (PLACEHOLDERS.has(m) || m.includes("<") || m.includes("*")) continue;
     if (!fs.existsSync(path.join(ROOT, m))) bad.push(m);
   }
@@ -107,6 +121,8 @@ const SOURCE_EXEMPT = new Map([
   ["js/game/nope.js", /move-tree\.test\.mjs|docs-integrity/],
   ["js/perf/x.js", /move-tree\.test\.mjs|docs-integrity/],
   ["tools/nested/README.md", /move-tree\.test\.mjs|docs-integrity/],
+  ["tests/helpers/seed-perf.mjs", /move-tree\.test\.mjs|docs-integrity/],
+  ["js/game/perfect2.js", /move-tree\.test\.mjs|docs-integrity/],
   // Fake package.json scripts inside the coverage-audit's own fixtures.
   ["tests/alpha.spec.js", /test-coverage-audit\.test\.mjs|docs-integrity/],
   ["tests/worker.test.mjs", /test-coverage-audit\.test\.mjs|docs-integrity/],

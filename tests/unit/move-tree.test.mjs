@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { apply, loadMoves, validate } from "../../tools/move-tree.mjs";
+import { apply, loadMoves, validate, sweep } from "../../tools/move-tree.mjs";
 
 // Fixture comment markers are built at runtime so the docs-integrity comment
 // scan does not read the scratch tree's example paths as citations.
@@ -18,6 +18,7 @@ function scratch() {
   w("js/game/perfect.js", '"use strict";\n');
   w("tools/manifest.cjs", 'const FULL = [\n  "js/game/perf.js",\n  "js/game/perfect.js",\n];\nmodule.exports = {\n  FULL,\n};\n');
   w("tests/unit/perf.test.mjs", `const P = "js/game/perf.js"; ${SL} perf.js is the governor\n`);
+  w("tests/helpers/seed-perf.mjs", 'path.resolve(dirname, "../../js/game/perf.js");\n');
   w("docs/ARCHITECTURE.md", "| `js/game/perf.js` | governor |\n| `js/game/perfect.js` | other |\n");
   w("docs/archive/OLD.md", "js/game/perf.js stays as history\n");
   w(".claude/worktrees/agent-x/docs/NOTE.md", "js/game/perf.js in a sibling worktree\n");
@@ -43,12 +44,37 @@ test("a move rewrites exact path citations, leaves bare names and the archive, r
     assert.match(manifest, /module\.exports = \{\n  MOVED,/);
     assert.equal(fs.readFileSync(path.join(root, "tests/unit/perf.test.mjs"), "utf8"),
       `const P = "js/perf/governor.js"; ${SL} perf.js is the governor\n`, "the exact path moved; the bare name stayed");
+    assert.equal(fs.readFileSync(path.join(root, "tests/helpers/seed-perf.mjs"), "utf8"),
+      'path.resolve(dirname, "../../js/perf/governor.js");\n',
+      "a target path that is the SUFFIX of a longer relative path (../../js/game/perf.js) still gets rewritten — a `/` right before the match is a separator, not a name-extending character");
     assert.match(fs.readFileSync(path.join(root, "docs/ARCHITECTURE.md"), "utf8"), /`js\/perf\/governor\.js`[\s\S]*`js\/game\/perfect\.js`/);
     assert.equal(fs.readFileSync(path.join(root, "docs/archive/OLD.md"), "utf8"), "js/game/perf.js stays as history\n");
     assert.equal(fs.readFileSync(path.join(root, ".claude/worktrees/agent-x/docs/NOTE.md"), "utf8"), "js/game/perf.js in a sibling worktree\n", "subagent worktrees are never swept");
     assert.equal(fs.readFileSync(path.join(root, "tools/nested/README.md"), "utf8"), "js/game/perf.js inside a nested checkout\n", "a directory with its own .git is another checkout");
     assert.match(fs.readFileSync(path.join(root, "js/perf/governor.js"), "utf8"), /see js\/perf\/governor\.js and js\/game\/perfect\.js/);
     assert.ok(res.leftovers.some((l) => l.file === "tests/unit/perf.test.mjs" && l.name === "perf.js"), "the bare-name mention is reported for a human");
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a re-sweep never rewrites the MOVED block's own historical keys", () => {
+  const root = scratch();
+  try {
+    const moves = loadMoves(path.join(root, "moves.json"));
+    apply(root, moves, { git: false, genShell: false });
+    // Simulate a second sweep over the tree AFTER the move landed (a later
+    // batch, or a deliberate re-sweep) naming a DIFFERENT file whose target
+    // path happens to share no text with the first move — the MOVED block
+    // must still read exactly as it did right after the first apply.
+    const before = fs.readFileSync(path.join(root, "tools/manifest.cjs"), "utf8");
+    sweep(root, [{ from: "js/game/perfect.js", to: "js/game/perfect2.js" }], { write: true });
+    const after = fs.readFileSync(path.join(root, "tools/manifest.cjs"), "utf8");
+    assert.match(after, /const MOVED = \{\n  "js\/game\/perf\.js": "js\/perf\/governor\.js",\n\};/,
+      "the MOVED key stays the pre-move literal even after a later, unrelated sweep touches the same file");
+    // And a sweep for the SAME already-recorded move (idempotent re-run,
+    // e.g. after fixing a boundary-regex bug) must not touch the key either.
+    sweep(root, moves, { write: true });
+    assert.equal(fs.readFileSync(path.join(root, "tools/manifest.cjs"), "utf8").includes('"js/perf/governor.js": "js/perf/governor.js"'), false,
+      "re-sweeping the move that was just recorded must not flip its own MOVED entry to an identity mapping");
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
