@@ -480,33 +480,30 @@ test("capture/shot.mjs clips the canvas instead of locator.screenshot", () => {
   assert.match(src, /from ["']\.\.\/harness\.mjs["']/);
 });
 
-test("ui-survey.mjs is a layout-audit recipe, not a second Playwright probe", async () => {
-  const src = fs.readFileSync(path.join(TOOLS, "ui-survey.mjs"), "utf8");
-  assert.match(src, /layout-audit\.mjs/);
-  assert.match(src, /ios-iphone-landscape/);
-  assert.doesNotMatch(src, /from ["']\.\/harness\.mjs["']/,
-    "the alias must not boot its own Chromium — layout-audit already does");
-  const { buildLayoutAuditArgs } = await import("../../tools/ui-survey.mjs");
-  const def = buildLayoutAuditArgs([]);
-  assert.ok(def.some((a) => a.startsWith("--screens=title,select,garage")));
-  assert.ok(def.includes("--viewports=ios-iphone-landscape"));
-  assert.ok(def.includes("--jobs=1"));
-  const over = buildLayoutAuditArgs(["--screens=title", "--viewports=desktop-1280x800", "--jobs=4"]);
-  assert.equal(over.filter((a) => a.startsWith("--screens=")).length, 1);
-  assert.ok(over.includes("--screens=title"));
-  assert.ok(over.includes("--viewports=desktop-1280x800"));
-  assert.ok(over.includes("--jobs=4"));
-  assert.ok(!over.includes("--jobs=1"));
-});
-
-test("wgx-gallery.mjs forwards to wgx-shot --gallery", () => {
-  const src = fs.readFileSync(path.join(TOOLS, "wgx-gallery.mjs"), "utf8");
-  assert.match(src, /wgx-shot\.mjs/);
-  assert.match(src, /--gallery/);
-  const shot = fs.readFileSync(path.join(TOOLS, "wgx-shot.mjs"), "utf8");
+test("wgx-shot.mjs owns the gallery path (its forwarder is gone)", () => {
+  // `wgx-gallery.mjs` was a two-line forwarder; `npm run wgx:gallery` calls
+  // wgx-shot directly, so the forwarder had no caller left. The assertions that
+  // mattered were always about wgx-shot's own surface — they stay here.
+  assert.equal(FILES.some((f) => f.rel.endsWith("wgx-gallery.mjs")), false,
+    "wgx-gallery.mjs must stay gone — the gallery lives on wgx-shot --gallery");
+  const shot = fs.readFileSync(FILES.find((f) => f.rel.endsWith("wgx-shot.mjs")).abs, "utf8");
+  assert.match(shot, /--gallery/);
   assert.match(shot, /export async function runWgxShot/);
   assert.match(shot, /export async function runWgxGallery/);
   assert.match(shot, /export const WGX_GALLERY_SHOTS/);
   assert.doesNotMatch(shot, /locator\(["']#game["']\)\.screenshot/);
   assert.match(shot, /page\.screenshot\(\s*\{\s*path[^}]*clip/);
+});
+
+test("the survey forwarders are gone — layout-audit --survey is the entry point", () => {
+  // Two stacked forwarders (ui-mcp-survey.mjs -> ui-survey.mjs -> layout-audit
+  // --survey) with nothing calling either: package.json's `ui:survey` already
+  // names layout-audit.mjs. The recipe they encoded lives in layout-audit.
+  for (const gone of ["ui-survey.mjs", "ui-mcp-survey.mjs"])
+    assert.equal(FILES.some((f) => f.rel.endsWith(gone)), false, `${gone} must stay gone`);
+  const audit = FILES.find((f) => f.rel.endsWith("layout-audit.mjs"));
+  assert.ok(audit, "layout-audit.mjs missing from the walk");
+  const src = fs.readFileSync(audit.abs, "utf8");
+  assert.match(src, /--survey/);
+  assert.match(src, /ios-iphone-landscape/);
 });

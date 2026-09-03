@@ -1,5 +1,5 @@
 // move-tree.mjs — move source files and rewrite every path that named them.
-// @doc Phase 2b mover: `git mv` from a JSON old→new map, rewrite the paths in manifest / tools / tests / docs / skills, record MOVED, regenerate the shell. `--plan` dry-run.
+// @doc Tree mover: renames from a JSON old→new map, sweeps every citing path, records MOVED, regenerates the shell; `--plan`.
 //
 //   node tools/move-tree.mjs <moves.json> --plan     # what would move, what would be rewritten
 //   node tools/move-tree.mjs <moves.json>            # do it (git mv + sweep + MOVED + gen-shell)

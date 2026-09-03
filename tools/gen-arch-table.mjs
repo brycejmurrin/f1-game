@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * gen-arch-table.mjs — the module index of docs/ARCHITECTURE.md, from the manifest.
- * @doc Generates the module index block of `docs/ARCHITECTURE.md` from `tools/manifest.cjs` + each file's header; `--check` drift.
+ * @doc Generates the module index block of `docs/ARCHITECTURE.md` from the manifest + each file's header; `--check` drift.
  * @skill check-changes
  *
  * One row per rostered js/ file, grouped by directory: the global it assigns,

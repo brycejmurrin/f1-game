@@ -90,7 +90,7 @@ Do **not** extract collisions or `updateCar` unless physics work is the task.
 
 ## Agent-surface / tools (no deletes)
 
-Forwarders (`tools/ui-mcp-survey.mjs`, `.claude/skills/playwright-probe/shot.mjs`)
+Forwarders (`ui-mcp-survey.mjs`, `.claude/skills/playwright-probe/shot.mjs`)
 and the official/wrapper MCP pairs stay: `agent-surface.test.mjs` locksteps them.
 WGX probe variants (`validate` / `capture` / `shot` / `gfx-probe`) each caught
 a distinct boot defect — collapsing them is not cleanup.

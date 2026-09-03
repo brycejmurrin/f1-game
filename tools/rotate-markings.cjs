@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Apex 26 — rotate a circuit's curated turn apexes onto a corrected start line.
- * @doc Rotates each circuit's `turns` (js/circuits/<id>.js) onto a corrected start line by the scenery's arc shift, then re-sorts them.
+ * @doc Rotates each circuit's `turns` onto a corrected start line by the scenery's arc shift, then re-sorts them; `--check`.
  * @skill new-track
  *
  * A def's `sectors` / `turns` (js/circuits/<id>.js) are authored in RACING-LAP

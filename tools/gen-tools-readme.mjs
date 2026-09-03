@@ -79,9 +79,24 @@ function readersOf(name, files) {
 
 const cell = (s) => String(s).replace(/\|/g, "\\|");
 
+/** The skills that exist. A `@skill` tag naming anything else is drift: eight
+ *  tools carried tags for skills that had been merged away or never existed
+ *  (`apex-env-setup`, `perf-profile`, `motion-capture`, `gpu-census.yml`,
+ *  `debug-state`, `cross-backend-parity`, `scene-graph-instancing`), so the
+ *  index sent readers to a workflow they could not open. Validated here rather
+ *  than in a test, because the generator is what publishes the name. */
+export function liveSkills() {
+  const dir = path.join(ROOT, ".claude/skills");
+  if (!fs.existsSync(dir)) return null;
+  return new Set(fs.readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && fs.existsSync(path.join(dir, e.name, "SKILL.md")))
+    .map((e) => e.name));
+}
+
 /** Collect every row; throws with the full list of problems on any defect. */
 export function collect() {
   const files = walkTools();
+  const SKILLS = liveSkills();
   const problems = [], warnings = [];
   const main = [], runner = [], data = [];
   for (const rel of files) {
@@ -104,6 +119,11 @@ export function collect() {
       doc = doc.slice(0, DOC_MAX - 1).replace(/\s+\S*$/, "") + "…";
     }
     if (/undefined/.test(doc)) problems.push(`${rel}: @doc contains "undefined"`);
+    if (tags.skill && SKILLS) {
+      for (const name of tags.skill.split("/").map((x) => x.trim()).filter(Boolean))
+        if (!SKILLS.has(name))
+          problems.push(`${rel}: \`@skill ${name}\` names no skill under .claude/skills/ — retarget it or drop the tag`);
+    }
     const row = { rel, doc, skill: tags.skill || "—", section: tags.section || "" };
     if (row.section === "runner") runner.push(row);
     else if (row.section) problems.push(`${rel}: unknown @section "${row.section}" (only "runner" exists)`);
@@ -140,7 +160,7 @@ deliberately NOT moved — their consumers hardcode the flat paths):
 
 - \`net/\` — WebRTC/Nostr end-to-end harnesses and the local relay/TURN servers
 - \`car/\` — car renders (carshot, render-car)
-- \`capture/\` — frame capture (apex-capture, backend-compare, baked-scenery, motion-capture, shot, garage-shot, synthetic-gallery)
+- \`capture/\` — frame capture (apex-capture, backend-compare, baked-scenery, motion-capture, shot)
 - \`lighting/\` — ab-lighting; \`lighting-campaign/\` is the batch lighting-sweep package (\`tests/unit/lighting-campaign.test.mjs\`)
 `;
 

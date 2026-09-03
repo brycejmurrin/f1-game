@@ -712,7 +712,7 @@ with `--use-angle=swiftshader --enable-unsafe-webgpu`):
 | Boot blockers fixed this pass | illegal `sampleCount:2` → 1\|4; `rg11b10ufloat` post → `rgba16float`; geometry via `queue.writeBuffer` (not `mappedAtCreation`); MCP `--enable-unsafe-webgpu` |
 | LIT `dpdx` CF | hoisted; lifecycle unit test guards |
 | `create()` on software | **boots** WGX (MSAA 1 + 2D soft-present). No longer falls back to GLX. `apex26.gfxWgxAllowSoftware` is a legacy no-op. |
-| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0` — shader work EXECUTES (§0 correction / §1a). **Software compositor (2026-08-17, cache 1342+):** final pass → `COPY_SRC` soft-present texture (never `getCurrentTexture()`) → ephemeral readback → 2D blit on `#game`. Visible gate: `gfx-probe.mjs` / `awaitSoftPresent()`; readback: `wgx-capture.mjs` → `frame.png`. Gallery: `node tools/wgx-gallery.mjs --lite`. |
+| With allow-software | binds (`GLX.backend=webgpu`), `present()` runs, `gpuErrors=0` — shader work EXECUTES (§0 correction / §1a). **Software compositor (2026-08-17, cache 1342+):** final pass → `COPY_SRC` soft-present texture (never `getCurrentTexture()`) → ephemeral readback → 2D blit on `#game`. Visible gate: `gfx-probe.mjs` / `awaitSoftPresent()`; readback: `wgx-capture.mjs` → `frame.png`. Gallery: `node tools/wgx-shot.mjs --gallery --lite`. |
 
 Do **not** add extra Dawn/Vulkan pins to `playwright.config.js` (they break
 headless boot). Do **not** probe WebGPU on a `data:` page. The chrome-devtools

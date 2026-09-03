@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // motion-capture.mjs — capture RENDERED MOTION headless (the one thing screenshots
 // @doc Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker.
-// @skill motion-capture
+// @skill playwright-probe
 // can't do here). Headless Chromium under SwiftShader freezes requestAnimationFrame
 // at 0 fps, so the game loop never advances on its own and consecutive
 // page.screenshot()s of a "driven" lap are identical. `__apex.step()` advances

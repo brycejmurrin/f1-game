@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // bump-cache.mjs — the DEPLOY-side content hasher; a consistency check in the repo.
-// @doc Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); in the repo, `--check` confirms every tag reads `?v=dev`.
+// @doc Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`.
 // @skill check-changes
 //
 // THERE IS NO CACHE BUMP IN DEVELOPMENT (2026-09-03). Every tagged JS/CSS URL

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // junit-failed — which SPEC FILES failed, read from Playwright's junit.xml.
-// @doc Lists the spec files with a failed or errored testcase in artifacts/test-results-*/junit.xml, as `tests/specs/...` paths for select-specs --failed-from.
+// @doc Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`.
 // @section runner
 //
 // The change-aware gate carries last run's failures forward through this

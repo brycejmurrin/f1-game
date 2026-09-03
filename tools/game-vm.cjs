@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // @doc Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser.
-// @skill debug-state
 // game-vm.cjs — boot the REAL js/game.js headless in a Node VM.
 //
 // The sibling of track-build-vm.cjs one level up: where that harness loads the

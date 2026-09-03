@@ -70,8 +70,7 @@ Live session: **mcp-probe** with
 `render({what:"view"})` is the cheap scene truth; for visible WGX pixels use
 `node tools/gfx-probe.mjs --backend webgpu <track>` (`#game` after
 `awaitSoftPresent`). Multi-track gallery: `node tools/wgx-shot.mjs --gallery`
-(or `npm run wgx:gallery`). Legacy path `wgx-gallery.mjs` forwards to the same
-flags.
+(or `npm run wgx:gallery`).
 Readback oracle: `node tools/wgx-capture.mjs <track>`.
 
 ## Load on demand

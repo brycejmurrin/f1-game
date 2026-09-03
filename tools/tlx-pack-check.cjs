@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /* Apex 26 — does TLX's vertex-attribute packing change what the SHADER reads?
  * @doc Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser.
- * @skill cross-backend-parity
  *
  * tlx-chunked's packAttr quantises normals to Int16, and colours / MAT ids to
  * half-float, to cut the CPU copies three retains forever (measured 50 -> 28.6
