@@ -457,6 +457,24 @@ const HUD_PROFILES = ["minimal", "standard", "broadcast"];
 let hudProfile = store.get("hudProfile", "standard");
 if (HUD_PROFILES.indexOf(hudProfile) < 0) hudProfile = "standard";
 function hudProfileLabel() { return "HUD: " + hudProfile.toUpperCase(); }
+const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
+let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
+if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
+function hudMetricsLayoutLabel() { return "METRICS: " + hudMetricsLayout.toUpperCase(); }
+const HUD_VIS_MODES = ["auto", "on", "off"];
+let hudMapVis = store.get("hudMapVis", "auto");
+let hudGapsVis = store.get("hudGapsVis", "auto");
+if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "auto";
+if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "auto";
+function hudMapVisLabel() { return "MAP: " + hudMapVis.toUpperCase(); }
+function hudGapsVisLabel() { return "GAPS: " + hudGapsVis.toUpperCase(); }
+function syncMetricsOverlayCompact() {
+  const metrics = document.getElementById("game-metrics");
+  if (!metrics) return;
+  const compact = hudProfile === "minimal" || hudMetricsLayout === "compact";
+  if (compact) metrics.dataset.compact = "1";
+  else delete metrics.dataset.compact;
+}
 // Manual gears: tilt (thumbs free) or desktop keyboard. BUTTONS already owns
 // both thumbs (arrows + pedals); TOUCH auto-throttles — neither has a free
 // hand for a shifter.
@@ -3205,6 +3223,24 @@ const G = {
     if (HUD_PROFILES.indexOf(v) < 0) v = "standard";
     hudProfile = v;
     store.set("hudProfile", hudProfile);
+  },
+  get hudMetricsLayout() { return hudMetricsLayout; },
+  set hudMetricsLayout(v) {
+    if (HUD_MET_LAYOUTS.indexOf(v) < 0) v = "auto";
+    hudMetricsLayout = v;
+    store.set("hudMetricsLayout", hudMetricsLayout);
+  },
+  get hudMapVis() { return hudMapVis; },
+  set hudMapVis(v) {
+    if (HUD_VIS_MODES.indexOf(v) < 0) v = "auto";
+    hudMapVis = v;
+    store.set("hudMapVis", hudMapVis);
+  },
+  get hudGapsVis() { return hudGapsVis; },
+  set hudGapsVis(v) {
+    if (HUD_VIS_MODES.indexOf(v) < 0) v = "auto";
+    hudGapsVis = v;
+    store.set("hudGapsVis", hudGapsVis);
   },
   get camRoll() { return camRoll; }, set camRoll(v) { camRoll = v; },
   get camTgt() { return camTgt; }, set camTgt(v) { camTgt = v; },
@@ -9308,14 +9344,33 @@ if (pmHudProfile) {
     hudProfile = HUD_PROFILES[(HUD_PROFILES.indexOf(hudProfile) + 1) % HUD_PROFILES.length];
     store.set("hudProfile", hudProfile);
     pmHudProfile.textContent = hudProfileLabel();
-    const metrics = document.getElementById("game-metrics");
-    if (metrics) {
-      if (hudProfile === "minimal") metrics.dataset.compact = "1";
-      else delete metrics.dataset.compact;
-    }
+    syncMetricsOverlayCompact();
     updateHud(true);
   };
 }
+const pmHudMetrics = $("pm-hudmetrics");
+if (pmHudMetrics) {
+  pmHudMetrics.textContent = hudMetricsLayoutLabel();
+  pmHudMetrics.onclick = () => {
+    hudMetricsLayout = HUD_MET_LAYOUTS[(HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) + 1) % HUD_MET_LAYOUTS.length];
+    store.set("hudMetricsLayout", hudMetricsLayout);
+    pmHudMetrics.textContent = hudMetricsLayoutLabel();
+    syncMetricsOverlayCompact();
+    updateHud(true);
+  };
+}
+function wireHudVisBtn(id, read, write, labelFn) {
+  const btn = $(id);
+  if (!btn) return;
+  btn.textContent = labelFn();
+  btn.onclick = () => {
+    write(HUD_VIS_MODES[(HUD_VIS_MODES.indexOf(read()) + 1) % HUD_VIS_MODES.length]);
+    btn.textContent = labelFn();
+    updateHud(true);
+  };
+}
+wireHudVisBtn("pm-hudmap", () => hudMapVis, (v) => { hudMapVis = v; store.set("hudMapVis", hudMapVis); }, hudMapVisLabel);
+wireHudVisBtn("pm-hudgaps", () => hudGapsVis, (v) => { hudGapsVis = v; store.set("hudGapsVis", hudGapsVis); }, hudGapsVisLabel);
 
 // ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
 // both answer "how much of the car do you operate yourself?". Takes effect
@@ -9548,6 +9603,8 @@ Input.setSteerMode(steerMode);
 // DataHub at boot to initialise.
 $("pm-steer").textContent = steerLabel();
 if (pmHudProfile) pmHudProfile.textContent = hudProfileLabel();
+if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
+syncMetricsOverlayCompact();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
 audioPanel.init();

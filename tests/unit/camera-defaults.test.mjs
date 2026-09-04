@@ -27,9 +27,11 @@ test("HUD applies camera/profile body classes", () => {
   const src = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
   assert.match(src, /hud-onboard/);
   assert.match(src, /hud-bcam/);
+  assert.match(src, /hud-hide-map/);
   assert.match(src, /hud-prof-minimal/);
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   assert.match(css, /body\.hud-bcam #hud-gearbox/);
+  assert.match(css, /body\.hud-hide-map #minimap/);
   assert.match(css, /body\.hud-prof-minimal #minimap/);
 });
 

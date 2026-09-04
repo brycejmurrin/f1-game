@@ -872,26 +872,35 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(code("js/ui/select-screen.js"), /besidePair/,
     "pair-on beside maps do not self-heal the pin down to a stale stamp");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"ui sample"\s*"hud sample"/,
-    "DISPLAY stacks UI SIZE + HUD SIZE beside the live sample");
+    /"ui profile"\s*"hud sample"/,
+    "DISPLAY stacks UI SIZE beside HUD profile and HUD SIZE beside the live sample");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale)', "grid-area"), "hud");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "grid-area"), "sample");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "justify-self"), "start",
     "HUD sample sits against the sliders, not floating in the leftover column");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudprofile', "grid-area"), "profile",
+    "HUD: STANDARD sits beside HUD SIZE, not as a leftover full-width plate");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
     "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open])', "grid-template-areas"),
     /"metrics metrics"/,
     "an open METRICS submenu takes the full DISPLAY row so HIDE HUD is not stranded");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-density="compact"] #pm-hud-sample::before', "display"), "none",
-    "compact DISPLAY drops the HUD SIZE PREVIEW caption — the slider already names it");
+  assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
+    /HUD SIZE PREVIEW/,
+    "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "align-self"), "start",
+    "HUD sample grows down its cell instead of centering over HUD: STANDARD");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details > summary", "height"), "var(--tap)",
     "METRICS summary matches the HIDE HUD tap row");
   assert.equal(decl(css("css/components.css"), '#pm-metrics-details [role="group"]', "display"), "flex",
-    "METRICS body defaults to a column; wide/compact override to a 2-up grid");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-metrics-details \[role="group"\]/, "display"), "grid",
-    "compact METRICS packs 2-up via SheetShape density, not a height media");
+    "METRICS body is a quiet column — not a 2-up plate grid");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details [role=\"group\"] > button", "background"), "transparent",
+    "METRICS inner rows drop plate chrome");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-label b", "color"), "var(--text)",
+    "DISPLAY slider values are text, not tuner red");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-row input[type=\"range\"]", "accent-color"), "var(--steel)",
+    "DISPLAY slider track is steel, not tuner red");
   assert.match(code("js/perf/renderer-picker.js"), /pm-display-adv/,
     "DISPLAY recovery / screenshot / diag fold into a JS-built ADVANCED details");
   assert.doesNotMatch(read("index.html"), /id="pm-display-adv"/,
@@ -906,6 +915,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "ADVANCED body defaults to a column; wide/compact override to a 2-up grid");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv \[role="group"\]/, "display"), "grid",
     "compact ADVANCED packs 2-up via SheetShape density, not a height media");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv [role=\"group\"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag)", "background"), "transparent",
+    "SCREENSHOTS / SAVE / COPY DIAG are secondary rows, not peer plates of RESET");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv [role=\"group\"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status)", "grid-column"), "1 / -1",
+    "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
     "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "color"), "var(--steel)",
@@ -925,6 +938,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "METRICS submenu no longer keys packing on viewport height");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("margin: 6px"),
     "unlayered inject must not offset METRICS off the HIDE HUD row");
+  assert.match(code("js/perf/metrics-overlay.js"), /page\(\) === "log"/,
+    "LOG NS / LOG SHOW stay hidden unless the overlay page is LOG");
+  assert.match(code("js/perf/metrics-overlay.js"), /METRICS · /,
+    "closed METRICS summary carries ON/page state");
+  assert.ok(!code("js/perf/metrics-overlay.js").includes("det.open = true"),
+    "METRICS does not auto-open and blow the HIDE HUD pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",
     "compact wide season setup keeps the calendar + pool pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--compact-at"), "480px",

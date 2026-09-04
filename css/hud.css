@@ -226,8 +226,8 @@
 body.hud-prof-minimal #minimap,
 body.hud-prof-minimal .hud-gaps,
 body.hud-prof-minimal #hud-sectors { display: none !important; }
-body.hud-onboard #minimap,
-body.hud-onboard .hud-gaps { display: none !important; }
+body.hud-hide-map #minimap { display: none !important; }
+body.hud-hide-gaps .hud-gaps { display: none !important; }
 body.hud-bcam #hud-gearbox,
 body.hud-bcam #hud-ot,
 body.hud-bcam #hud-aero,
@@ -240,29 +240,23 @@ body.hud-prof-broadcast .hud-top {
   left: calc(10px + var(--sal) / var(--hud-z));
   transform: none;
   gap: 0;
-  background: rgba(8, 8, 14, 0.84);
+  background: var(--plate-opaque);
   border-radius: var(--r-sm);
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
 }
 body.hud-prof-broadcast .hud-box {
   border-left: none;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid var(--plate-line);
   border-radius: 0;
   box-shadow: none;
-  padding: 4px 11px;
-  min-width: 54px;
+  padding: calc(var(--gap) / 3) var(--gap);
 }
 body.hud-prof-broadcast .hud-box:last-child { border-right: none; }
 body.hud-prof-broadcast .hud-box:nth-child(4) { display: none; }   /* BEST: tower shows POS/LAP/TIME */
-body.hud-prof-broadcast .hud-label { letter-spacing: 0.14em; font-size: 10px; }
-body.hud-prof-broadcast .hud-value { font-size: 17px; font-style: normal; font-weight: 700; }
+body.hud-prof-broadcast .hud-label { letter-spacing: var(--ls-4); }
+body.hud-prof-broadcast .hud-value { font-style: normal; }
 body.hud-prof-broadcast .hud-gaps {
-  background: rgba(8, 8, 14, 0.78);
   border-left: 3px solid var(--accent);
-  padding: 3px 10px 3px 8px;
-  font-size: min(11px, calc(14px / var(--hud-z)));
-  letter-spacing: 0.04em;
   font-style: normal;
 }
 /* Cinematic/broadcast cam + broadcast HUD: clean frame — tower carries timing. */
@@ -272,6 +266,22 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
   font-style: normal;
   top: calc(14svh / var(--hud-z));
 }
+
+/* Metrics layout — which cluster wins (js/ui/hud.js resolveMetricsLayout). */
+body.hud-met-timing .hud-bottom { display: none !important; }
+body.hud-met-driver #minimap,
+body.hud-met-driver .hud-gaps,
+body.hud-met-driver #hud-sectors,
+body.hud-met-driver .hud-top .hud-box:nth-child(4) { display: none !important; }
+/* Metrics layout — compact keeps pos/lap/time/speed/gear only. */
+body.hud-met-compact #minimap,
+body.hud-met-compact .hud-gaps,
+body.hud-met-compact #hud-sectors,
+body.hud-met-compact #hud-energy,
+body.hud-met-compact #hud-ot,
+body.hud-met-compact #hud-aero { display: none !important; }
+body.hud-met-compact #hud-limits,
+body.hud-met-compact .hud-top .hud-box:nth-child(4) { display: none !important; }
 
 #hud-energy {
   width: 130px; height: 14px;

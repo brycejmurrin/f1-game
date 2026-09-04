@@ -48,6 +48,57 @@ let _limitsDots = null;
 let _hudCamKey = "";
 const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1 };
 const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1 };
+const MET_LAYOUTS = ["full", "timing", "driver", "compact"];
+// Body classes toggled: hud-met-full, hud-met-timing, hud-met-driver, hud-met-compact.
+function bandCapped(cssVar) {
+  const root = document.documentElement;
+  const scale = +root.style.getPropertyValue("--hud-scale") || 1;
+  const cap = +root.style.getPropertyValue(cssVar);
+  return cap > 0 && cap < scale - 0.001;
+}
+function resolveMetricsLayout() {
+  const want = G.hudMetricsLayout || "auto";
+  if (want !== "auto") return want;
+  const prof = G.hudProfile || "standard";
+  const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : null;
+  const modeId = (modes && modes[G.camMode]) ? modes[G.camMode].id : "chase";
+  if (prof === "minimal") return "compact";
+  if (prof === "broadcast" && BCAM_IDS[modeId]) return "timing";
+  if (bandCapped("--hud-z-top") && bandCapped("--hud-z-bot")) return "compact";
+  if (bandCapped("--hud-z-bot")) return "timing";
+  if (bandCapped("--hud-z-top")) return "driver";
+  return "full";
+}
+let _hudLayoutKey = "";
+function resolveHudVis(want, autoHide) {
+  want = want || "auto";
+  if (want === "on") return false;
+  if (want === "off") return true;
+  return !!autoHide;
+}
+let _hudVisKey = "";
+function syncHudVisClasses(modeId) {
+  const onboard = !!ONBOARD_IDS[modeId];
+  const hideMap = resolveHudVis(G.hudMapVis, onboard);
+  const hideGaps = resolveHudVis(G.hudGapsVis, onboard);
+  const key = (G.hudMapVis || "auto") + "|" + (G.hudGapsVis || "auto") + "|" + modeId + "|" + hideMap + "|" + hideGaps;
+  if (key === _hudVisKey) return;
+  _hudVisKey = key;
+  const body = document.body;
+  body.classList.toggle("hud-hide-map", hideMap);
+  body.classList.toggle("hud-hide-gaps", hideGaps);
+}
+function syncHudLayoutClasses() {
+  const resolved = resolveMetricsLayout();
+  const want = G.hudMetricsLayout || "auto";
+  const key = resolved + "|" + want;
+  if (key === _hudLayoutKey) return;
+  _hudLayoutKey = key;
+  const body = document.body;
+  for (let i = 0; i < MET_LAYOUTS.length; i++) {
+    body.classList.toggle("hud-met-" + MET_LAYOUTS[i], resolved === MET_LAYOUTS[i]);
+  }
+}
 function syncHudCamClasses() {
   const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : null;
   const modeId = (modes && modes[G.camMode]) ? modes[G.camMode].id : "chase";
@@ -60,6 +111,7 @@ function syncHudCamClasses() {
   body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
   body.classList.toggle("hud-prof-minimal", prof === "minimal");
   body.classList.toggle("hud-prof-broadcast", prof === "broadcast");
+  syncHudVisClasses(modeId);
 }
 function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
 function buildSecRows() {
@@ -330,6 +382,7 @@ function updateHud(force) {
   if (!force && hudT > 0) return;
   hudT = 6; // ~10Hz at 60fps
   fitHud();                    // below the throttle: this reads layout, per TICK not per frame
+  syncHudLayoutClasses();
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).
