@@ -81,10 +81,11 @@ before(async () => {
 });
 after(() => { if (g) g.close(); });
 
-/** Pump one render frame and return the recorded call names in order. */
-function pumpNames() {
+/** Pump one render frame and return the recorded call names in order.
+ *  Pass `now` to pin `tick`'s timestamp — two pumps at the same `now` have dt=0. */
+function pumpNames(now) {
   drawLog.length = 0;
-  g.pumpFrame();
+  g.pumpFrame(now);
   return drawLog.map((c) => c[0]);
 }
 const lastWorldDraw = (names) => Math.max(names.lastIndexOf("drawChunked"), names.lastIndexOf("drawInstanced"));
@@ -142,14 +143,19 @@ test("AI cars outside an 8 m frustum sphere are not drawn — shadows are enqueu
   const open = [0, 0, 0, 1e6];
   const withD = (d) => [[0, 0, 0, d], open, open, open, open, open];
   const counts = (names) => ({ draw: names.filter((n) => n === "draw").length, shadow: names.filter((n) => n === "drawShadow").length, decal: names.filter((n) => n === "drawDecal").length });
+  // Pin lastFrame, then measure both plane sets at the same `now`. Two live
+  // rAF stamps let cars move: a rival can cross the behind-camera cull
+  // (which drops its shadow BEFORE enqueue) between pumps and flake 13 vs 12.
+  const t = 1e6;
+  g.pumpFrame(t);
   FRUSTUM.planes = withD(-7.99);
-  const kept = counts(pumpNames());
+  const kept = counts(pumpNames(t));
   FRUSTUM.planes = withD(-8.01);
-  const culled = counts(pumpNames());
+  const culled = counts(pumpNames(t));
   FRUSTUM.planes = null;
   assert.ok(kept.draw > culled.draw + 20, `culling every rival must drop many draws: ${kept.draw} → ${culled.draw}`);
   assert.ok(kept.decal > culled.decal, "culled rivals draw no decals");
-  assert.equal(kept.shadow, culled.shadow, "the shadow enqueue precedes the side-frustum cull — an off-camera rival still casts");
+  assert.equal(kept.shadow, culled.shadow, `shadows must survive side cull (kept ${kept.shadow} vs culled ${culled.shadow})`);
   assert.ok(culled.shadow >= 2, "the player and the rivals' shadows are still drawn");
 });
 
