@@ -350,6 +350,15 @@ const LiveryTex = (function () {
   const CREST_DISC = Object.freeze({
     redbull: { cx: 0.494, cy: 0.498, r: 0.190 },
   });
+  // A plate that stays on the shark-fin badge, not only on the engine cover.
+  // Red Bull's sun is authored (the trace could not carry a disc). Ferrari's
+  // shield is a traced `plate` role. Dropping either on the fin made the tail
+  // a different logo than the spine / garage wall — HORSE without SHIELD.
+  function crestKeepsPlate(teamId) {
+    if (CREST_DISC[teamId]) return true;
+    const spec = typeof CrestPaths !== "undefined" && CrestPaths[teamId];
+    return !!(spec && spec.roles && spec.roles.includes("plate"));
+  }
 
   // The floor every mark clears against whatever it lands on. 4.2 and not
   // INK_FLOOR's 3.0 because it is also the bound parts-livery-contrast.spec.js
@@ -400,14 +409,13 @@ const LiveryTex = (function () {
     else slot = SECOND_DRAWN[teamId] || "alt";   // the monogram's box is `alt`
     if (!bare) return slot;
     // The fin badge is a different CONSTRUCTION, not a smaller copy: crestHaas's
-    // ring and crestGeneric's box are both gated on !bare, and crestTraced skips
-    // a traced backing plate there. A slot nothing paints is a dead colour
-    // picker, so those fall through to the outline — measured, not assumed:
-    // haas/badge came back MISSING from the paint census until this line
-    // existed. An authored DISC is the exception and the reason this branch is
-    // no longer blanket: it is drawn at every size, so SUN DISC keeps meaning
-    // the sun on the badge instead of quietly becoming a rim.
-    if (slot === "plate" && !CREST_DISC[teamId]) return "outline";
+    // ring and crestGeneric's box are both gated on !bare. A slot nothing
+    // paints is a dead colour picker, so those fall through to the outline —
+    // measured, not assumed: haas/badge came back MISSING from the paint
+    // census until this line existed. A plate the badge actually draws
+    // (Ferrari's shield, Red Bull's sun) stays a plate: remapping it made
+    // SHIELD paint as a rim and the tail stopped matching the spine.
+    if (slot === "plate" && !crestKeepsPlate(teamId)) return "outline";
     if (slot === "alt" && !(roles && roles.includes("alt"))) return "outline";
     return slot;
   }
@@ -483,9 +491,10 @@ const LiveryTex = (function () {
     //    for. A null brand plate means "this mark has no backing", permanently.
     const wantsPlate = !!(MARK_BRAND[teamId] && MARK_BRAND[teamId].plate);
     const disc = CREST_DISC[teamId] || null;
+    const keepPlate = crestKeepsPlate(teamId);
     const slot2 = secondSlot(teamId, bare);
     let plate = null;
-    if (wantsPlate && (!bare || disc)) {
+    if (wantsPlate && (!bare || keepPlate)) {
       // An authored LOGO DETAIL colour IS the plate for the two marks that have
       // one, and it wins OUTRIGHT rather than being layered over a resolved
       // candidate. Gating it on a candidate having resolved first left the
@@ -503,7 +512,7 @@ const LiveryTex = (function () {
       // to read on it. The disc is identity; legibility is the MARK's floor,
       // and `under` now holds both the disc and the paint so it is really
       // asked. Only reachable on the team's own livery — B is null on any other.
-      else if (disc && B && B.plate) plate = B.plate.slice();
+      else if (keepPlate && B && B.plate) plate = B.plate.slice();
       else {
         const cands = [B && B.plate, liv && liv.pod, liv && liv.c1, liv && liv.c2];
         // Against the PRIMARY paint only. A plate is opaque and covers whatever
@@ -650,10 +659,11 @@ const LiveryTex = (function () {
       // Null keeps every shipped mark pixel-identical, which is why it is opt-in.
       //
       // `logo2` still lands here for the four single-loop silhouettes and on
-      // the badges whose construction drops their second shape — ferrari's
-      // shield, haas's ring, the monogram's box (see secondSlot):
-      // liveries saved before OUTLINE had a key of its own carry the colour in
-      // logo2, and dropping that on read would blank a paint job someone saved.
+      // the badges whose construction drops their second shape — haas's ring,
+      // the monogram's box (see secondSlot). Ferrari's shield stays a plate
+      // on the badge. Liveries saved before OUTLINE had a key of its own
+      // carry the colour in logo2, and dropping that on read would blank a
+      // paint job someone saved.
       outline: (liv && liv.logo3) ? liv.logo3.slice()
              : (liv && liv.logo2 && slot2 === "outline") ? liv.logo2.slice() : null,
     };
@@ -696,9 +706,10 @@ const LiveryTex = (function () {
   }
 
   // One crest function for every traced mark. Layers paint back to front and
-  // each takes the palette colour its role names; "plate" layers are dropped on
-  // the fin badge, which is why bare mode needs no special case — drop
-  // Ferrari's yellow shield and its horse is left standing on its own.
+  // each takes the palette colour its role names. A plate the badge keeps
+  // (Ferrari's shield, Red Bull's sun via CREST_DISC) still paints here —
+  // dropping it left a bare horse on the tail next to the full lockup on
+  // the spine and the garage wall.
   function crestTraced(ctx, R, P, bare, teamId) {
     const spec = typeof CrestPaths !== "undefined" && CrestPaths[teamId];
     if (!spec) { crestGeneric(ctx, R, P, bare, teamId); return; }
@@ -716,9 +727,9 @@ const LiveryTex = (function () {
     }
     for (let i = 0; i < spec.d.length; i++) {
       const role = spec.roles[i] || "mark";
-      // P.plate is already null on the badge for a mark whose backing is a
-      // traced panel, so this drops Ferrari's shield there without a `bare`
-      // test of its own — and keeps the disc, which markPalette resolves.
+      // Skip a plate layer only when the palette has no plate. Ferrari keeps
+      // its shield on the badge (crestKeepsPlate); marks whose badge drops
+      // the backing arrive here with P.plate already null.
       if (role === "plate" && !P.plate) continue;
       // `part` is a SAME-INK island — a shape the trace found to share no pixel
       // with the rest of its layer, like Racing Bulls' bull beside its letters.
@@ -1223,17 +1234,21 @@ const LiveryTex = (function () {
     const markHalo = (img, bg, ink) =>
       (img && img._avg && contrast(img._avg, bg) < 2.6 ? ink : null);
     const emblemRim = colors.logo3 || colors.logo2 || null;
+    // ONE lockup for the engine cover and the fin badge. Resolving the badge
+    // against the fin wash used to drop Ferrari's shield (and recolour the
+    // horse) so top-down / the garage wall disagreed with the tail.
+    const lockup = markPalette(teamId, colors, [c1, c2], false);
     if (LOGOS[teamId]) {
       drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
                     markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
-    } else drawCrest(ctx, teamId, REGIONS.crest, { liv: colors, field: [c1, c2], bare: false });
+    } else drawCrest(ctx, teamId, REGIONS.crest, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
     const finWash = finArt || [stripe, c1, accent, inkFin].filter(Boolean)
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
     drawTailGraphic(ctx, teamId, REGIONS.fin, c1, finPaint, finWash);
     if (LOGOS[teamId]) {
       drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
                     markHalo(LOGOS[teamId], finPaint, inkFin), emblemRim);
-    } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true });
+    } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true, palette: lockup });
 
     // Sponsor wordmarks.
     const pack = colors.sponsors && SPONSOR_PACKS[colors.sponsors];
@@ -1282,7 +1297,7 @@ const LiveryTex = (function () {
            MARK_FLOOR, INK_FLOOR,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE,
-           CRESTS, CREST_DISC, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
+           CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;
