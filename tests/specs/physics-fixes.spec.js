@@ -17,7 +17,23 @@ async function start(page, circuit) {
   await page.evaluate(() => window.__apex.go());
 }
 
+// MEASURED COST, DECLARED so tools/ci/select-specs.mjs EXCLUDES this spec
+// rather than selecting it into a gate its BOOT alone cannot clear. An
+// undeclared budget is UNKNOWN, not safe.
+//
+// Pages runs 2019/2020/2022/2024 all failed the change-aware gate on this
+// file, and the cost is the boot, not the assertions: on CI the page log shows
+// `4505ms build mclaren` then `164677ms build mercedes` — a 160-SECOND gap
+// while parallel race fixtures share one runner. Same file on an idle box:
+// 110.1 s, green. Raising the gate 120 -> 180 s did not help, because the
+// fixture's inner `waitForFunction` carries its own BOOT_MS = 45000 and
+// expires first (see docs/notes/TESTING-FIELD-NOTES.md, "BOOT_MS is an
+// IDLE-box number"). The blocked deploy is the reason this is declared now;
+// the real fix is deriving BOOT_MS from test.info().timeout, which is an
+// 88-import change wanting its own measurement on a LOADED runner.
+// 300 s matches the other over-cap specs on this tree.
 test.describe("Apex 26 — physics robustness", () => {
+  test.describe.configure({ timeout: 300_000 });
   // Monaco's hairpins put the inbound and outbound legs metres apart — the
   // geometry that could make the world→(s) projection flip onto the wrong leg
   // and teleport lap distance. This drives wide through the whole lap and
