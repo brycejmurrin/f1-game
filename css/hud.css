@@ -514,7 +514,7 @@ body[data-density="compact"] #announce {
   pointer-events: auto;
   text-align: left;
   max-width: min(22ch, 32vw);
-  max-height: min(36svh, calc(100svh - var(--gm-top) - var(--gm-dock)));
+  max-height: min(28svh, calc(100svh - var(--gm-top) - var(--gm-dock)));
   overflow: hidden;
   resize: both;
   overscroll-behavior-y: contain;

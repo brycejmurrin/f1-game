@@ -157,6 +157,7 @@ test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   assert.match(hud, /#game-metrics\[data-size="l"\]/);
   assert.match(hud, /#game-metrics[\s\S]*resize:\s*both/);
   assert.match(hud, /max-width:\s*min\(22ch,\s*32vw\)/);
+  assert.match(hud, /max-height:\s*min\(28svh/);
 });
 
 test("without a HUD digit, snapshot speed is ground km/h from probe()", () => {
