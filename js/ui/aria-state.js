@@ -22,10 +22,12 @@
 // classes on a live element every frame, and a subtree observer over it would
 // be a per-frame cost for a surface that has no option groups at all.
 //
-// ON/OFF WORDS. The same walk wraps a trailing ON/OFF on menu buttons and
-// summaries so CSS can paint gold / red. One observer, not a call site in
-// every painter (HUD, HALO, SOUND, OVERLAY, REPEAT, season chips, …).
-// Option-group chips that are not the words ON/OFF are left alone.
+// TWO KINDS OF PAIR, THEN NAMES. Gold/red is enablement (ON/OFF). Green/blue
+// is agency, and only on a 2-state AUTO/MANUAL control (GEARS, ACTIVE AERO).
+// AUTO on a longer cycle (LAYOUT, RESOLUTION, THREE PATH) is a name — it
+// stays the button's ink, like STANDARD / TILT / WEBGL2. Settings rows are
+// inline-flex, so a wrap after ":" uses NBSP or the space collapses.
+// Option-group chips (5 LAPS, DRY) stay unpainted.
 //
 // The module owns no game state and self-initialises.
 window.AriaState = (function () {
@@ -86,9 +88,16 @@ window.AriaState = (function () {
 
   function wrapOnOff(text) {
     const t = String(text || "").replace(/\s+/g, " ").trim();
+    const agency = t.match(/^(GEARS|ACTIVE AERO):\s*(AUTO|MANUAL)$/);
+    if (agency) {
+      return agency[1] + ":\u00a0<span data-fold=\"" + agency[2].toLowerCase() + "\">" +
+        agency[2] + "</span>";
+    }
     if (!/\b(ON|OFF)\b/.test(t)) return null;
     return t.replace(/\b(ON|OFF)\b/g, (w) =>
-      '<span data-fold="' + w.toLowerCase() + '">' + w + "</span>");
+      '<span data-fold="' + w.toLowerCase() + '">' + w + "</span>")
+      .replace(/:\s+<span/g, ":\u00a0<span")
+      .replace(/·\s+<span/g, "·\u00a0<span");
   }
 
   function paintOnOff(root) {
@@ -100,7 +109,7 @@ window.AriaState = (function () {
         if (!c.hasAttribute("data-fold")) { foreign = true; break; }
       }
       if (foreign) continue;
-      if (el.querySelector('[data-fold="on"], [data-fold="off"]')) continue;
+      if (el.querySelector("[data-fold]")) continue;
       const html = wrapOnOff(el.textContent);
       if (html) el.innerHTML = html;
     }
