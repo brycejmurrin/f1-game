@@ -978,7 +978,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(music, /id="as-sound-sum"/);
   assert.doesNotMatch(music, /id="as-music-details"[^>]*\sopen/, "MUSIC starts closed like DISPLAY");
   assert.doesNotMatch(music, /id="as-sound-details"[^>]*\sopen/, "SOUND starts closed like DISPLAY");
-  assert.doesNotMatch(music, /<summary[^>]*>[\s\S]*id="as-music-on"/, "MUSIC ON/OFF lives in the fold body");
+  const musicSum = music.match(/<summary[^>]*id="as-music-sum"[^>]*>[\s\S]*?<\/summary>/);
+  assert.ok(musicSum && !/as-music-on/.test(musicSum[0]), "MUSIC ON/OFF lives in the fold body");
   assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary/, "color"), "var(--steel)",
     "STEERING folds use the same disclosure chrome as DISPLAY");

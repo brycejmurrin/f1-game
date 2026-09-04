@@ -353,7 +353,6 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   background: rgba(0, 0, 0, 0.5); border: 1px solid var(--card-line);
   border-radius: var(--r-sm); padding: calc(var(--gap) * 0.5);
 }
-.adv-intro { font-size: var(--fs-micro); opacity: 0.7; margin: 0 0 calc(var(--gap) * 0.5); line-height: 1.45; }
 .adv-sec {
   color: var(--steel); font-size: var(--fs-micro); letter-spacing: var(--ls-4);
   margin: calc(var(--gap) * 4 / 3) 0 calc(var(--gap) * 2 / 3); padding-bottom: calc(var(--gap) / 3);

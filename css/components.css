@@ -113,7 +113,7 @@ input[type="range"]:disabled { cursor: default; }
    orphan at the end of a paragraph of help text. Both are cheap and inert where
    unsupported. */
 h1, h2, h3, .sheet-head h2, .adv-sec, .pm-group-h, .tune-label { text-wrap: balance; }
-p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
+p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 
 /* Some people turn transparency down at the OS level, and every sheet here is
    translucent over a moving 3D scene — the worst case for legibility. Give them
@@ -1622,7 +1622,6 @@ summary [data-fold="off"] {
 #advanced-inner .opt-btn {
   font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
 }
-#advanced-inner .adv-intro,
 #advanced-inner .tune-label {
   font-size: clamp(var(--fs-micro), calc(1.7 * var(--vwz)), var(--fs-3));
 }
@@ -1656,7 +1655,6 @@ summary [data-fold="off"] {
   align-content: start;
 }
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; }
-#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-intro,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .preset-row { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #advanced-inner details,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-sec { grid-column: 1 / -1; }
