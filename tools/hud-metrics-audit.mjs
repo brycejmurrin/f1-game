@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-/* One-shot HUD metrics + resize audit — screenshots + DOM state JSON. */
+// One-shot HUD metrics + resize audit — Playwright screenshots and DOM JSON.
+// @doc Playwright HUD metrics audit: screenshots + DOM JSON across viewports, cameras, MAP/GAPS/METRICS settings.
 import { chromium } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";

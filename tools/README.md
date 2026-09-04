@@ -25,6 +25,7 @@ Root — the load-order truth and the car studio page; every consumer hardcodes 
 | Tool | Does | Paired skill |
 |---|---|---|
 | **carview.html** | Standalone isolated car photo studio (no track, no game.js): Car3D + LiveryTex via GLX; headless API `window.CARVIEW`. | playwright-probe |
+| **hud-metrics-audit.mjs** | Playwright HUD metrics audit: screenshots + DOM JSON across viewports, cameras, MAP/GAPS/METRICS settings. | — |
 | **manifest.cjs** | Load-order single source of truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`; index.html must match. | check-changes |
 
 ### `tools/lib/`
