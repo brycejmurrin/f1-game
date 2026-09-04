@@ -336,9 +336,9 @@ body { --compact-at: 600px; --wide-at: 620px; }
 :where(body[data-shape="tall"]) #overlay {
   grid-template-rows: auto minmax(0, 1fr);
   align-content: stretch;
-  /* Brand/doors gap was clamp(20px, 4vh, 40px). On a phone that is a
-     third of a door; shave it so more of the leftover row is doors. */
-  gap: clamp(12px, 2.4vh, 28px);
+  /* Brand/doors gap was clamp(20px, 4vh, 40px). Token gap is one door-gutter
+     instead of a third of a door, so more of the leftover row is doors. */
+  gap: var(--gap);
 }
 :where(body[data-shape="tall"]) #menu-brand { grid-row: 1; }
 :where(body[data-shape="tall"]) #menu-buttons {
@@ -359,9 +359,9 @@ body { --compact-at: 600px; --wide-at: 620px; }
 /* Slightly tighter wordmark on tall so the leftover row starts higher.
    Doors and the disclaimer stay; only brand chrome shrinks. */
 :where(body[data-shape="tall"]) #title { font-size: clamp(30px, calc(8 * var(--vwz)), 72px); }
-:where(body[data-shape="tall"]) #title::after { margin: 6px 0 0; }
-:where(body[data-shape="tall"]) #subtitle { margin: 6px 0 0; }
-:where(body[data-shape="tall"]) #menu-meta { margin-top: 10px; gap: 4px; }
+:where(body[data-shape="tall"]) #title::after { margin: calc(var(--gap) * 0.5) 0 0; }
+:where(body[data-shape="tall"]) #subtitle { margin: calc(var(--gap) * 0.5) 0 0; }
+:where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.85); gap: calc(var(--gap) / 3); }
 /* LANDSCAPE COMPACT: side-by-side brand + buttons.
    Uses body[data-shape="wide"] (zoom-corrected, set by SheetShape classifyBody)
    in place of @media (orientation: landscape). The two agree in result — the
