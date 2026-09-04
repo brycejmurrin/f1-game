@@ -232,6 +232,7 @@ const AudioPanel = (() => {
       // to "team" for anything it does not recognise, so a hand-edited or
       // stale-schema value lands on the shipped sound either way.
       GameAudio.setProfile(store.get("sndProfile", "team"));
+      if (GameAudio.setGranular) GameAudio.setGranular(store.get("sndGranular", true));
       const savedTune = store.get("sndTune", null);
       if (savedTune && typeof savedTune === "object") GameAudio.setTune(savedTune);
       const savedLayers = store.get("sndLayers", null);
@@ -265,6 +266,15 @@ const AudioPanel = (() => {
       // ENGINE TONE block absent these two were the only unguarded reads left,
       // and create() threw here and took the music transport and both volume
       // sliders down with it.
+      if (granularBtn && GameAudio.granular) {
+        const g = GameAudio.granular();
+        granularBtn.classList.toggle("active", g.on);
+        granularBtn.setAttribute("aria-pressed", g.on ? "true" : "false");
+        // "on but not active" is a real state: no audioWorklet, a blocked
+        // fetch, or the samples not decoded yet. Say so rather than lighting a
+        // switch for a core that is not running.
+        granularBtn.textContent = g.on && !g.active ? "GRANULAR…" : "GRANULAR";
+      }
       const note = $("as-p-note");
       if (note) note.textContent = toneProfile() === "custom"
         ? "Your own tune. RESET returns to your team's engine sound."
@@ -309,6 +319,16 @@ const AudioPanel = (() => {
         if (G.soundOn) GameAudio.uiTick();
       };
     }
+    // GRAIN is deliberately NOT in TONE_LAYERS: those are gain switches on nodes
+    // that exist, and this picks which pitching core runs at all.
+    const granularBtn = $("as-t-granular");
+    if (granularBtn) granularBtn.onclick = () => {
+      const on = GameAudio.setGranular(!GameAudio.granular().on);
+      store.set("sndGranular", on);
+      syncTonePanel();
+      if (G.soundOn) GameAudio.uiTick();
+    };
+
     const resetBtn = $("as-t-reset");
     if (resetBtn) resetBtn.onclick = () => {
       for (const l of TONE_LAYERS) GameAudio.setLayer(l.k, true);

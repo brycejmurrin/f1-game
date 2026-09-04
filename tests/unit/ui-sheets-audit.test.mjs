@@ -338,7 +338,11 @@ function bootAudio({ soundOn, musicEnabled }) {
     tune: () => ({ pitch: 1, detune: 1, revRange: 1, brightness: 1, whine: 1, sub: 1, limiter: 1 }),
     layers: () => ({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true }),
     setProfile: (v) => v,
+    granular: () => ({ on: true, ready: true, active: true, period: 80 }),
+    setGranular: (v) => v,
     profile: () => "team",
+    grain: () => ({ on: true, ready: true, active: true, period: 80 }),
+    setGrain: (v) => v,
   };
   const GameAudio = new Proxy({}, { get: (_, k) => (k === "trackName" ? () => "Song A" : k === "musicSource" ? () => "builtin"
     : k === "sourceCounts" ? () => ({ builtin: 4, user: 0 }) : k === "setMusicSource" ? (v) => v

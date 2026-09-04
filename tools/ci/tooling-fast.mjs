@@ -204,6 +204,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/phone-touch-surface.test.mjs",
   "tests/unit/audio-sample-upgrade.test.mjs",
   "tests/unit/audio-tune.test.mjs",
+  "tests/unit/granular-psola.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",

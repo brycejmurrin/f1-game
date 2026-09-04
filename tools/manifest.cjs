@@ -1,5 +1,5 @@
 // manifest.cjs — the single source of truth for script load order.
-// @doc Load-order single source of truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `HARD_EDGES`, `TRACK_VM`; index.html must match.
+// @doc Load-order truth: `FULL`, `DEFERRED`, `LAZY_AGENT`, `WORKLETS`, `HARD_EDGES`, `TRACK_VM`; index.html must match.
 // @skill check-changes
 //
 // index.html's tag blocks, tools/carview.html's tags, sw.js's optional
@@ -23,7 +23,8 @@
 //  - DEFERRED is renderer backends with no tag, injected at runtime by
 //    game.js when opted into. LAZY_AGENT is the __apex / agentview surface
 //    (same "no tag" rule, but NOT SW-optional — V8 full-compiles install
-//    puts). FULL ∪ DEFERRED ∪ LAZY_AGENT must cover js/**/*.js.
+//    puts). WORKLETS are fetched by audioWorklet.addModule(). FULL ∪
+//    DEFERRED ∪ LAZY_AGENT ∪ WORKLETS must cover js/**/*.js.
 //  - The circuit tags ("@circuits") stay in their curated order — that
 //    order IS Tracks.LIST, which is the track-picker order. The season
 //    calendar is Tracks.SEASON, the `classic: false` prefix of that list, so
@@ -453,6 +454,18 @@ const LAZY_AGENT = [
   "js/agent/agentview.js",
   "js/agent/apex.js",
 ];
+// AUDIO WORKLETS. Tagless like the two lists above, but loaded by neither a
+// <script> nor game.js: audioWorklet.addModule() fetches these into the audio
+// thread's own module scope, which is also why granular-worklet.js is an ES module
+// where every other file here is an IIFE — the loader defines that context, not
+// us. They still have to be ACCOUNTED for, or "created the file, forgot to load
+// it" stops being catchable, which is the whole point of the coverage rule.
+// sw.js seeds them by hand (see its OPTIONAL block): they are requested by bare
+// path with no ?v=, so the tag parser and the stamped set both miss them.
+const WORKLETS = [
+  "js/audio/granular-worklet.js",
+];
+
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
 ];
@@ -908,7 +921,7 @@ const MOVED = {
 module.exports = {
   MOVED,
   CIRCUITS, CIRCUITS_DIR, FULL, CSS, CSS_PRELOAD, CSS_DEFERRED, SHELL_NOTES, CARVIEW, TRACK_VM, HARD_EDGES,
-  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE,
+  DEFERRED, DEFERRED_EDGES, LAZY_AGENT, LAZY_EDGES, LAZY_RACE, WORKLETS,
   LAZY_DATA, LAZY_DATA_EDGES, LAZY_NET, LAZY_NET_EDGES,
   SCENERY_DIR, LAZY_SCENERY, sceneryPath,
   PATHS, circuitPath,

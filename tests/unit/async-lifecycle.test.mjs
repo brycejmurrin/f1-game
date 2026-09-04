@@ -50,6 +50,11 @@ function audioPanelHarness() {
     setTune(v) { return v; },
     layers() { return { whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true }; },
     setLayer(k, v) { return v; },
+    // The granular (PSOLA) core switch: AudioPanel.init() restores it, and the
+    // panel reads its live state back on every sync.
+    granular() { return { on: true, ready: false, active: false, period: 0 }; },
+    setGranular(v) { return v; },
+    grain() { return { on: true, ready: false, active: false, period: 0 }; }, setGrain(v) { return v; },
   };
   const G = {
     $, els: { soundbtn: $("soundbtn") },

@@ -72,6 +72,13 @@ async function precacheAssetLists() {
     "vendor/three-0.185.1/three.core.min.js",
     "vendor/three-0.185.1/three.tsl.min.js",
     "vendor/jsqr-1.4.0/jsQR.js",
+    // The PSOLA engine voice (js/audio/granular-worklet.js), loaded by
+    // audioWorklet.addModule() at runtime rather than by a <script> tag, so the
+    // parser below cannot see it. Requested by BARE path with no ?v=, which is
+    // why it is not in the stamped set further down. OPTIONAL: a miss just
+    // leaves the engine on the playbackRate core, which is the same fallback
+    // any browser without audioWorklet already takes.
+    "js/audio/granular-worklet.js",
     // Rapier (js/physics/debris-world.js) is dynamic-import()ed, never tagged, so
     // the parser below cannot find it either. Unlike the entries around it this
     // one is ON by default — an installed-but-not-yet-raced PWA that never
