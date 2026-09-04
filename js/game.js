@@ -472,10 +472,8 @@ const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
 // AUTO IS ALWAYS THE FULL SET. fitHud scales / stacks / drops gaps instead
-// of hiding a cluster. The label still names the stored choice, and AUTO
-// names what the body class resolved to (always FULL) so the first two
-// stops stay distinguishable. `hud-met-full` has no hide CSS; it IS show
-// everything. Forced names stay on the cycle for the overlay compact flag.
+// of hiding a cluster. AUTO names the body class (always FULL). Forced
+// names stay on the cycle for the overlay compact flag; no hide CSS.
 function hudMetricsLayoutLabel() {
   if (hudMetricsLayout !== "auto") return "LAYOUT: " + hudMetricsLayout.toUpperCase();
   const m = document.body.className.match(/hud-met-([a-z]+)/);
@@ -488,6 +486,18 @@ if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "on";
 if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
 function hudMapVisLabel() { return "MAP: " + hudMapVis.toUpperCase(); }
 function hudGapsVisLabel() { return "GAPS: " + hudGapsVis.toUpperCase(); }
+function hudDetailsSummary() {
+  let s = "HUD · " + hudProfile.toUpperCase() + " · " + hudMetricsLayout.toUpperCase();
+  if (hudMapVis === "on") s += " · MAP";
+  else if (hudMapVis === "off") s += " · NO MAP";
+  if (hudGapsVis === "off") s += " · NO GAPS";
+  else s += " · GAPS";
+  return s;
+}
+function paintHudDetailsSummary() {
+  const sum = $("pm-hud-details-sum");
+  if (sum) sum.textContent = hudDetailsSummary();
+}
 function syncMetricsOverlayCompact() {
   const metrics = document.getElementById("game-metrics");
   if (!metrics) return;
@@ -8563,10 +8573,8 @@ function syncSettingsAvailability() {
   $("pm-camtune").disabled = !inRace;
 }
 function openSettings() {
-  // AUTO is always the full set; the label still names the stored choice
-  // (and AUTO · FULL) so a click that landed on a forced name stays honest.
-  // Re-read on open: the body class is written from the HUD tick, and a
-  // label written only at boot would miss the first resolution.
+  // AUTO is always the full set; re-read the label on open so AUTO · FULL
+  // is written after the first HUD tick, not only at boot.
   if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
@@ -9365,10 +9373,12 @@ $("pm-gears").onclick = () => {
 const pmHudProfile = $("pm-hudprofile");
 if (pmHudProfile) {
   pmHudProfile.textContent = hudProfileLabel();
-  pmHudProfile.onclick = () => {
+  pmHudProfile.onclick = (e) => {
+    e.stopPropagation();
     hudProfile = HUD_PROFILES[(HUD_PROFILES.indexOf(hudProfile) + 1) % HUD_PROFILES.length];
     store.set("hudProfile", hudProfile);
     pmHudProfile.textContent = hudProfileLabel();
+    paintHudDetailsSummary();
     syncMetricsOverlayCompact();
     updateHud(true);
   };
@@ -9376,10 +9386,12 @@ if (pmHudProfile) {
 const pmHudMetrics = $("pm-hudmetrics");
 if (pmHudMetrics) {
   pmHudMetrics.textContent = hudMetricsLayoutLabel();
-  pmHudMetrics.onclick = () => {
+  pmHudMetrics.onclick = (e) => {
+    e.stopPropagation();
     hudMetricsLayout = HUD_MET_LAYOUTS[(HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) + 1) % HUD_MET_LAYOUTS.length];
     store.set("hudMetricsLayout", hudMetricsLayout);
     pmHudMetrics.textContent = hudMetricsLayoutLabel();
+    paintHudDetailsSummary();
     syncMetricsOverlayCompact();
     updateHud(true);
   };
@@ -9388,9 +9400,11 @@ function wireHudVisBtn(id, read, write, labelFn) {
   const btn = $(id);
   if (!btn) return;
   btn.textContent = labelFn();
-  btn.onclick = () => {
+  btn.onclick = (e) => {
+    e.stopPropagation();
     write(HUD_VIS_MODES[(HUD_VIS_MODES.indexOf(read()) + 1) % HUD_VIS_MODES.length]);
     btn.textContent = labelFn();
+    paintHudDetailsSummary();
     updateHud(true);
   };
 }
@@ -9629,6 +9643,7 @@ Input.setSteerMode(steerMode);
 $("pm-steer").textContent = steerLabel();
 if (pmHudProfile) pmHudProfile.textContent = hudProfileLabel();
 if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
+paintHudDetailsSummary();
 syncMetricsOverlayCompact();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();

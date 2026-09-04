@@ -223,11 +223,19 @@
 #hud-tach.redline #hud-rpm-fill { background: var(--red); animation: pulse 0.4s infinite; }
 
 /* Camera + HUD profile integration (js/ui/hud.js syncHudCamClasses). */
-body.hud-prof-minimal #minimap,
-body.hud-prof-minimal .hud-gaps,
 body.hud-prof-minimal #hud-sectors { display: none !important; }
 body.hud-hide-map #minimap { display: none !important; }
 body.hud-hide-gaps .hud-gaps { display: none !important; }
+/* Broadcast tower takes the top-left — park map + gaps under it.
+   Same --hud-top-h stack as body.hud-prof-broadcast below (measured tower
+   height, not a guessed 68px). */
+body.hud-map-low #minimap,
+body.hud-gaps-low .hud-gaps {
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 0px) + 8px);
+}
+body.hud-gaps-low.hud-hide-map .hud-gaps {
+  left: calc(10px + var(--sal) / var(--hud-z));
+}
 body.hud-bcam #hud-gearbox,
 body.hud-bcam #hud-ot,
 body.hud-bcam #hud-aero,
@@ -283,7 +291,8 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
 
 /* LAYOUT modes used to hide a cluster (timing/driver/compact). AUTO now
    keeps every widget painted and fitHud adapts; the hud-met-* body classes
-   remain as labels only. MAP/GAPS still hide via hud-hide-map / hud-hide-gaps. */
+   remain as labels only. MAP/GAPS still hide via hud-hide-map / hud-hide-gaps.
+   Broadcast parks map+gaps under the tower via hud-map-low / hud-gaps-low. */
 
 #hud-energy {
   width: 130px; height: 14px;
@@ -625,6 +634,11 @@ body.in-race:has(.screen.dim:not([hidden])) :is(
   .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #btn-cam, .dock, #pausebtn
 ) {
   visibility: hidden;
+}
+/* DISPLAY settings: keep the live HUD (tower / map / gaps) so LAYOUT/MAP/GAPS
+   toggles can be seen without closing the sheet. */
+body.in-race:has(#pmsettings:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
+  visibility: visible;
 }
 #photo-controls > * { pointer-events: auto; }
 /* UI SIZE APPLIES TO THE FLY-CAM CONTROLS TOO. They sit beside the LIGHTING
