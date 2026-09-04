@@ -1962,3 +1962,9 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   the profiles, which would have been cheaper and worse: a sub-octave is real
   body under a recording that has none, and the granular core hands us the
   fundamental to track it against for free.
+- `js/game.js` 9731 -> **9734** lines / 5386 -> **5387** code, `shellNodes` 1129 -> **1130** (2026-09-04): two lines for rival engine
+  audio — `RivalAudio.create(G)` beside the other module wirings, and the
+  `GameAudio.setRivals(...)` call beside `setEngine`. The 50 lines that reduce a
+  21-car field to the nearest four went into `js/audio/rivals.js` instead,
+  where they belong: game.js is the loop, not the place track geometry gets
+  turned into pan positions.

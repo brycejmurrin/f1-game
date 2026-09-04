@@ -209,7 +209,7 @@ const AudioPanel = (() => {
       { k: "whine",   id: "as-l-whine" },   { k: "harvest", id: "as-l-harvest" },
       { k: "ers",     id: "as-l-ers" },     { k: "wind",    id: "as-l-wind" },
       { k: "limiter", id: "as-l-limiter" }, { k: "screech", id: "as-l-screech" },
-      { k: "sub",     id: "as-l-sub" },
+      { k: "sub",     id: "as-l-sub" },     { k: "rivals",  id: "as-l-rivals" },
     ];
     const PROFILE_BTN = [["as-p-team", "team"], ["as-p-broadcast", "broadcast"],
       ["as-p-trackside", "trackside"], ["as-p-cockpit", "cockpit"], ["as-p-v10", "v10"]];
