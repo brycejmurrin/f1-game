@@ -1962,3 +1962,25 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   the profiles, which would have been cheaper and worse: a sub-octave is real
   body under a recording that has none, and the granular core hands us the
   fundamental to track it against for free.
+- `js/game.js` lines 9731 -> **9747**, codeLines 5386 -> **5394**, topLets
+  156 -> **157** (2026-09-04): splitting `loadAgentSurface()` out of
+  `bootAgentSurface()` and handing it to the METRICS overlay. The panel is
+  player-facing — SETTINGS > DISPLAY, and its own header calls a phone
+  screenshot of it the evidence a renderer report never carried — but CAR and
+  PHYS read entirely through `window.__apex`, which is LAZY_AGENT and by
+  design absent for every player on github.io. Measured on the shipped tree by
+  diffing snapshot()'s populated fields with the surface present vs nulled:
+  PHYS lost ALL SEVENTEEN physics rows, CAR kept only the speed digit it
+  scrapes out of the HUD, and GOV lost scale/auto/strikes/tierFloor plus the
+  whole session and build lines. Silent by construction — every read sits in a
+  try/catch against a null `__apex` — and tests/unit/metrics.test.mjs pinned
+  the graceful degradation without anyone noticing that the degradation IS the
+  shipped panel.
+  The +16 buys the on-demand path and NOT a wider boot gate: `wantAgentSurface()`
+  is untouched, the inject is memoised on its in-flight promise (the
+  ensureScenery / ensureDataHub idiom already in this file), and a player who
+  never opens METRICS still downloads nothing — which is the one constraint
+  LAZY_AGENT exists to protect. The `topLet` is `_agentLoad`, that memo.
+  The cheaper alternative was porting seventeen physics fields onto the `G`
+  contract in types/game-ctx.d.ts, which is more lines in more places and
+  leaves the next debug surface with the same problem.
