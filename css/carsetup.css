@@ -488,13 +488,13 @@
      for the off-screen rows. BLOCK axis only — a length here would also become
      the min-content width and blow the sheet's inline size (the exact failure
      .sheet-body's min-width:0 comment records). 86px is exact, not averaged:
-     6+40+4+2lh(2x16.1)+4 with the name reserved at two lines below, so the
+     6+52+4+2lh(2x16.1)+4 with the name reserved at two lines below, so the
      estimate equals the real height and scrollHeight never breathes under the
      scroll-fade thumb. Keyboard End/Home reach past the render boundary via
      menunav's checkVisibility scope; layout-audit neutralizes skipping at boot
      so the tap sweep still sees every card. */
   content-visibility: auto;
-  contain-intrinsic-block-size: auto 86px;
+  contain-intrinsic-block-size: auto 98px;
 }
 #cs-options.cs-liv-grid > .cs-liv-row > .cs-liv {
   flex: none;
@@ -510,7 +510,10 @@
 #cs-options.cs-liv-grid .cs-opt-dot,
 #cs-options.cs-liv-grid .cs-opt-cost { display: none; }
 #cs-options.cs-liv-grid .cs-liv-swatch {
-  width: 56px; height: 40px; align-self: center;
+  width: 56px; height: 52px; align-self: center;
+}
+#cs-options.cs-liv-grid .cs-liv-swatch canvas {
+  display: block; width: 100%; height: 100%;
 }
 #cs-options.cs-liv-grid .cs-opt-main {
   width: 100%;
@@ -532,7 +535,19 @@
   /* Wrap, do not ellipsis on one line: the name IS the information
      (measured 2026-08-18: "Stealth Papaya" needed 91px in a 69px cell). */
 }
-#cs-options.cs-liv-grid .cs-opt-tag { display: none; }
+#cs-options.cs-liv-grid .cs-opt-tag {
+  display: inline-block;
+  position: absolute;
+  bottom: 1px;
+  left: 1px;
+  margin-left: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+#cs-options.cs-liv-grid .cs-liv-swatch .cs-opt-tag + .cs-opt-tag {
+  left: auto;
+  right: 1px;
+}
 #cs-options.cs-liv-grid .cs-liv-edit,
 #cs-options.cs-liv-grid .cs-liv-del {
   position: absolute;
