@@ -1,6 +1,6 @@
 // @ts-check
 // ONE BOOT PER WORKER (sharedTest): five goto("/") contexts became one. The
-// first-load contract (SOUND OFF + clamped volumes) KEES one reload — those
+// first-load contract (SOUND OFF + clamped volumes) keeps one reload — those
 // keys must be in localStorage before AudioPanel.init, and a shared page only
 // gets that on the next navigation (docs/TESTING.md §sharedTest / addInitScript).
 // Closing a WebGL+AudioContext page between tests was the other half: CI died
@@ -45,6 +45,10 @@ test("GameAudio initialises without console errors", async ({ page, pageErrors, 
 // body timed out at 134s / 119.4s. After a cold boot the same navigation
 // is ~75s. Seed everything, assert both, then the enable click.
 test("persisted SOUND OFF and out-of-range volumes apply on first load", async ({ page }) => {
+  // Measured 115.5s solo on an idle 4-core (2026-09-04): cold reload, WebGL
+  // boot, settings, enable gesture. The 120s default is the hang backstop,
+  // not this boot — raise the one test, do not shrug (test-solo warning).
+  test.setTimeout(180_000);
   const engineRequests = [];
   page.on("request", (request) => {
     if (/assets\/sfx\/f1_(?:engine|rev)\.mp3(?:\?|$)/.test(request.url())) {
