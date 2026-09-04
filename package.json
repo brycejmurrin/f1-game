@@ -22,7 +22,7 @@
     "test:ui": "node tools/ci/run-playwright.mjs tests/specs/ui-button-touch.spec.js tests/specs/ui-resize.spec.js tests/specs/ui-scale.spec.js tests/specs/ui-redesign.spec.js tests/specs/hud-layout.spec.js tests/specs/hud-audit.spec.js tests/specs/menu-survey.spec.js tests/specs/menu-keyboard.spec.js tests/specs/rotation-recovery.spec.js tests/specs/audio-smoke.spec.js tests/specs/music-library.spec.js",
     "test:gallery": "node tools/ci/run-playwright.mjs tests/specs/ui-audit.spec.js",
     "test:baseline": "node tools/ci/run-playwright.mjs tests/specs/menu-baseline.spec.js",
-    "test:audio-unit": "node --test tests/unit/spotify-refresh.test.mjs tests/unit/audio-sample-upgrade.test.mjs tests/unit/audio-tune.test.mjs tests/unit/photomode-hold.test.mjs",
+    "test:audio-unit": "node --test tests/unit/spotify-refresh.test.mjs tests/unit/audio-sample-upgrade.test.mjs tests/unit/audio-tune.test.mjs tests/unit/granular-psola.test.mjs tests/unit/photomode-hold.test.mjs",
     "test:modes": "node tools/ci/run-playwright.mjs tests/specs/season.spec.js tests/specs/season-format.spec.js tests/specs/time-trial.spec.js tests/specs/career.spec.js tests/specs/quali.spec.js",
     "test:agent-contract": "node --test tests/unit/agentview-api-contract.test.mjs",
     "test:net": "node tools/ci/run-playwright.mjs tests/specs/multiplayer-roles.spec.js tests/specs/multiplayer-session.spec.js tests/specs/multiplayer-lobby.spec.js tests/specs/multiplayer-scan.spec.js tests/specs/multiplayer-scan-cancel.spec.js tests/specs/multiplayer-room.spec.js tests/specs/multiplayer-seats.spec.js tests/specs/multiplayer-npeer.spec.js",

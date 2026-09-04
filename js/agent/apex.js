@@ -2380,7 +2380,7 @@ const api = {
     return noAudio() || { ok: true, profile: GameAudio.profile(), profiles: GameAudio.profiles(),
       voice: GameAudio.voiceName(), voices: GameAudio.voices(),
       tune: GameAudio.tune(), range: GameAudio.tuneRange(), defaults: GameAudio.tuneDefaults(),
-      layers: GameAudio.layers(), rate: GameAudio.rate(), limiterDepth: GameAudio.limiterDepth(),
+      layers: GameAudio.layers(), granular: GameAudio.granular(), rate: GameAudio.rate(), limiterDepth: GameAudio.limiterDepth(),
       windLevel: GameAudio.windLevel(), debug: GameAudio.debug() };
   },
   audioTune(patch) {
