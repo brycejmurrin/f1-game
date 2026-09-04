@@ -43,6 +43,57 @@
   .grain::before { display: none; }
 }
 
+/* Menu <input type=range> — one chrome for every sheet (SETTINGS, lighting /
+   camera tuner, ADVANCED STEERING, MUSIC, Spotify, free-cam FOV).
+   Height is --slider (32 painted px): it divides by --ui-scale so UI SIZE
+   zoom does not grow the track. Track ~8 painted px, thumb ~22. color /
+   currentColor carries the accent (tuner red, DISPLAY steel, disabled grey)
+   so this is not a new colour family. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: var(--slider);
+  min-height: var(--slider);
+  background: transparent;
+  color: var(--red);
+  accent-color: currentColor;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: calc(var(--slider) * 0.25);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 28%, transparent);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: calc(var(--slider) * 0.6875);
+  height: calc(var(--slider) * 0.6875);
+  margin-top: calc(var(--slider) * -0.21875);
+  border: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+input[type="range"]::-moz-range-track {
+  height: calc(var(--slider) * 0.25);
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 28%, transparent);
+}
+input[type="range"]::-moz-range-thumb {
+  width: calc(var(--slider) * 0.6875);
+  height: calc(var(--slider) * 0.6875);
+  border: 0;
+  border-radius: 50%;
+  background: currentColor;
+}
+input[type="range"]::-moz-range-progress {
+  height: calc(var(--slider) * 0.25);
+  border-radius: 999px;
+  background: currentColor;
+}
+
 /* ---------- screen: full-viewport overlay ---------- */
 .screen {
   position: fixed; inset: 0;
@@ -1135,8 +1186,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 .pm-group .tune-row input[type="range"] {
   width: 100%;
-  height: var(--tap-min);
-  min-height: var(--tap-min);
+  height: var(--slider);
+  min-height: var(--slider);
   margin: 0;
   box-sizing: border-box;
 }
@@ -1250,7 +1301,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: ui; }
 /* DISPLAY sliders are settings rows, not tuner rows: steel label, text
    value (tuner red is the loud bit), no extra tap-height padding around
-   a track that is already --tap-min. */
+   a track that is already --slider. */
 #pm-panel-display .tune-row {
   min-height: 0;
   gap: 0;
@@ -1264,6 +1315,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-size: var(--fs-micro);
 }
 #pm-panel-display .tune-row input[type="range"] {
+  color: var(--steel);
   accent-color: var(--steel);
 }
 #pm-hud-details #pm-hud-sample,
