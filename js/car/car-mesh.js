@@ -8,6 +8,12 @@ function init(gfx) { Log.info("game", "CarMesh.init"); _gfx = gfx; }
 const _carDecalMeshes = {};
 const _carDecalOrder = [];
 const CAR_DECAL_CACHE_MAX = 24;
+// FIFO-with-cap, not LRU: a hit below does not move its key in _carDecalOrder,
+// so eviction always drops the oldest-inserted key even if it is still in use.
+// Left as-is: both are plain objects/arrays (no Map), so true LRU needs an
+// indexOf+splice reorder on every hit; a race uses only a handful of distinct
+// (level, fin, drs, anchor) keys, far under the 24-entry cap, so eviction —
+// and the FIFO/LRU distinction — is never reached in practice.
 function carDecalData(aLvl, parts, legacyBody, teamId) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
@@ -251,6 +257,11 @@ function getErsLight() {
 const _flapMeshes = {};
 const _flapOrder = [];
 const FLAP_CACHE_MAX = 128;
+// FIFO-with-cap, not LRU (same tradeoff as _carDecalMeshes above): a hit on
+// `key` below does not reorder _flapOrder, and this key build runs per flap
+// per car per frame, so an indexOf+splice reorder on every hit is not free
+// here. Distinct flap signatures per race stay well under 128, so eviction
+// order is moot at realistic cardinality.
 function getAeroFlap(aLvl, col, idx, style, el, finish) {
   const c = col || [0.9, 0.9, 0.1];
   // aLvl is passed through RAW — catalog options use fractional levels and the

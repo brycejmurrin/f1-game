@@ -2753,6 +2753,57 @@ binding a destroyed texture through `drawDecal`'s cached bind group.
 
 Verified: `spike/backends/tools/wgx-validate.mjs` (real Dawn, montreal, 60 frames) exit 0.
 
+## 2y. The pooling refactor was proved by DIFFERENCE, after two weaker oracles failed (2026-09-04)
+
+`js/camera/vantage.js` said "Scratch samples reused every call (no per-frame
+allocation)" in its header while allocating `p`, both `eye`/`tgt`, `straight`,
+`dir` and every `aheadPt()` return on every call — once per rendered frame,
+across 11 mutually exclusive mode branches. Converting all of it to module-level
+pools is the obvious fix and a genuinely risky one: nothing in the node suites
+renders a camera, and an aliasing mistake does not crash, it just puts the
+camera somewhere wrong in one mode.
+
+**Two oracles were tried and both were too weak. That is the transferable part.**
+
+*Oracle 1 — a full frame through the VM.* `pumpFrame()` crashes with AI cars in
+the field: `js/game.js`'s side-frustum walk reads `_carCullPlanes[i]` and gets
+`undefined`, because the harness's GLX stub returns a truthy planes value whose
+entries are not populated. **Confirmed pre-existing** — the identical crash
+reproduces at `48cc011`, so it is a harness gap, not a code defect, and it means
+no VM test can currently render a frame with rivals near the camera.
+
+*Oracle 2 — an A→B→A invariant.* Sample a mode, run every other mode to pollute
+the pools, sample it again, and require the two to match. This is a real test
+and it passes. It is also **blind to the bug it was written for**: a deliberate
+alias (`_aheadOut = _vantTgtW`) injected into a throwaway worktree did not trip
+it, because self-aliasing yields a *consistently* wrong value — A and A' are
+equally wrong and therefore equal. An invariant cannot detect deterministic
+wrongness. Exercising the two opt-in blends that read a pooled value after
+writing it (`CamTune cornerLead`, `CockpitOpts turnChaseLead`, both default 0 —
+so the default path is not the risky path) did not rescue it either.
+
+*Oracle 3, the one that works — DIFFERENCE against the pre-refactor tree.* A
+behaviour-preserving refactor has an exact oracle available: the code it
+replaced. Boot the pre-pooling commit and the current tree as two game-vm
+instances, call `GameCams.vantage()` on both over a grid of
+mode x arc x lateral x speed x carPos-present (936 cases), and compare
+serialized `eye`/`tgt`/`fov`.
+
+| arm | result |
+|---|---|
+| pre-pooling vs the INJECTED alias (control) | **72 of 936 diverge** — chase target x 350.07 -> 573.66 |
+| pre-pooling vs shipped | **bit-identical, 936/936** |
+
+The control arm is what makes the green arm evidence: a differential test with
+no demonstrated failure mode proves only that two things agree, not that the
+comparison works.
+
+**The rule.** For a refactor that must not change behaviour, do not invent an
+invariant — diff against the thing you replaced, and prove the diff can fail
+before believing that it did not. The script is not committed: it needs two
+worktrees, so it is a measurement, not a standing gate.
+
+
 ## 3. Left on the table
 
 The pre-08-18 narrative behind this list — the O(n²) AI scans that were

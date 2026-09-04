@@ -98,12 +98,21 @@ export function plan() {
 // deploy gate's node half. Empty (and logged) if the step is ever renamed, so
 // a rename shows up as a missing verdict entry rather than a silent skip.
 function gateNodeSuites() {
+  // THROWS rather than returning []. The comment above used to promise a rename
+  // would "show up as a missing verdict entry rather than a silent skip" — but
+  // verdict.verified simply omitted the nine scripts, nothing set ok:false, and
+  // main() pushed to the DEPLOY BRANCH having run only tooling-fast. This leg
+  // exists because two deploys went red on pins tooling-fast never runs, so
+  // losing it to a workflow rename is exactly the failure it was added to stop.
   let ci = "";
-  try { ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8"); } catch (e) { return []; }
+  try { ci = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8"); }
+  catch (e) { throw new Error("deploy: cannot read .github/workflows/ci.yml — the node half of the gate is undefined: " + e.message); }
   const at = ci.indexOf("- name: Pure-node unit suites");
-  if (at < 0) { log("WARN ci.yml has no 'Pure-node unit suites' step — gate suites not run"); return []; }
+  if (at < 0) throw new Error("deploy: ci.yml has no 'Pure-node unit suites' step — the node half of the gate cannot be derived. Fix the step name or update gateNodeSuites().");
   const body = ci.slice(at).split(/\n      - name: /)[0];
-  return [...body.matchAll(/^\s+npm run (test:[\w-]+)\s*$/gm)].map((m) => m[1]);
+  const scripts = [...body.matchAll(/^\s+npm run (test:[\w-]+)\s*$/gm)].map((m) => m[1]);
+  if (!scripts.length) throw new Error("deploy: the 'Pure-node unit suites' step parsed to ZERO scripts — refusing to push on a gate that measured nothing.");
+  return scripts;
 }
 
 // tools/manifest.cjs MOVED (written by tools/gen/move-tree.mjs): old path -> new.
