@@ -595,7 +595,7 @@ test("variable control clusters use one content-driven balanced-row primitive", 
   assert.equal(decl(components, ".balanced-row", "display"), "flex");
   assert.equal(decl(components, ".balanced-row", "flex-wrap"), "wrap");
   assert.match(decl(components, /^\.balanced-row > :not\(\[hidden\]\)$/, "flex") || "", /^1 1 var\(--balance-basis/);
-  for (const id of ["pm-category-tabs", "menu-secondary", "rs-laps", "rs-weather",
+  for (const id of ["menu-secondary", "rs-laps", "rs-weather",
     "rs-time", "rs-diff", "rs-quali", "rs-caution", "rs-reliab", "lt-tabs", "ct-modes"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*class="[^"]*balanced-row`), `${id} must balance from local space`);
   }
@@ -789,42 +789,56 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
 });
 
 /* ── SettingsNav on the mini DOM ────────────────────────────────────────── */
-function bootSettingsNav(stored) {
+function bootSettingsNav() {
   const dom = makeDom();
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
-  const st = { ...stored };
+  const steer = dom.document.createElement("button");
+  steer.id = "pm-steer";
+  dom.byId("pm-panel-controls").appendChild(steer);
   let selected = 0;
-  const nav = sb.SettingsNav.create({ get: (k, d) => (k in st ? st[k] : d), set: (k, v) => { st[k] = v; } }, () => selected++);
-  return { dom, nav, st, selected: () => selected, panel: (id) => dom.byId("pm-panel-" + id), tab: (id) => dom.byId("pm-tab-" + id) };
+  const nav = sb.SettingsNav.create({ get: (_k, d) => d, set() {} }, () => selected++);
+  return {
+    dom, nav, selected: () => selected,
+    index: () => dom.byId("pm-settings-index"),
+    panel: (id) => dom.byId("pm-panel-" + id),
+    door: (id) => dom.byId("pm-open-" + id),
+    title: () => dom.byId("dlg-settings"),
+  };
 }
 
 test("title settings, pause standings, and career modes stay reachable", () => {
-  // SettingsNav BEHAVIOUR: showCurrent() re-shows the stored category WITHOUT
-  // moving focus (title Settings lands on MORE without a second click).
-  const h = bootSettingsNav({ settingsCategory: "more" });
-  assert.deepEqual(Object.keys(h.nav).sort(), ["show", "showCurrent"]);
-  assert.equal(h.panel("more").hidden, false, "create() shows the stored category");
+  // SettingsNav BEHAVIOUR: always land on the door index. A stored
+  // settingsCategory must not reopen MORE / DISPLAY.
+  const h = bootSettingsNav();
+  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "show", "showCurrent"]);
+  assert.equal(h.index().hidden, false, "create() shows the door index");
   assert.equal(h.panel("controls").hidden, true);
+  assert.equal(h.panel("display").hidden, true);
+  assert.equal(h.title().textContent, "SETTINGS");
   assert.equal(h.dom.document.activeElement, null, "create() does not steal focus");
   h.nav.show("controls", true);
-  assert.equal(h.dom.document.activeElement, h.tab("controls"), "show(id, true) focuses the tab");
-  assert.equal(h.st.settingsCategory, "controls", "the pick persists");
+  assert.equal(h.panel("controls").hidden, false);
+  assert.equal(h.index().hidden, true);
+  assert.equal(h.title().textContent, "CONTROLS");
+  assert.equal(h.dom.document.activeElement, h.panel("controls").querySelector("button, input, select")
+    || h.door("controls"), "show(id, true) focuses the page");
   h.dom.document.activeElement = null;
   h.nav.showCurrent();
-  assert.equal(h.panel("controls").hidden, false);
+  assert.equal(h.index().hidden, false, "showCurrent() always returns home");
+  assert.equal(h.panel("controls").hidden, true);
   assert.equal(h.dom.document.activeElement, null, "showCurrent() never focuses");
-  h.nav.show("more", false);
-  assert.equal(h.panel("more").hidden, false);
-  assert.equal(h.tab("more").getAttribute("aria-selected"), "true");
-  assert.equal(h.tab("controls").getAttribute("aria-selected"), "false");
-  assert.equal(h.tab("more").tabIndex, 0);
-  assert.equal(h.tab("controls").tabIndex, -1, "roving tab stop");
+  h.nav.show("display", false);
+  assert.equal(h.nav.back(), false, "BACK on a page pops to home");
+  assert.equal(h.index().hidden, false);
+  assert.equal(h.nav.back(), true, "BACK on home tells the caller to close");
   const game = code("js/game.js");
   assert.match(game, /\$\(\s*"mb-settings"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*soundOn\s*\)\s*GameAudio\.init\(\s*\)\s*;\s*openSettings\(\s*\)/,
-    "title Settings reopens the last category via openSettings → showCurrent");
+    "title Settings opens the same stack via openSettings → showCurrent");
   assert.doesNotMatch(game, /mb-settings"\)\.onclick[\s\S]{0,120}settingsNav\.show\(\s*"more"/,
     "title Settings must not force MORE");
+  assert.match(game, /\$\(\s*"pm-settings-close"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*settingsNav\.back\(\s*\)\s*\)\s*closeSettings\(\s*\)/,
+    "settings BACK pops the stack before closing");
   assert.match(game, /els\.selGo\.onclick[\s\S]{0,400}openRaceSettings\(\s*"select"\s*\)/,
     "SELECT NEXT opens race settings, not the garage");
   assert.match(game, /\$\(\s*"sel-car"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*openGarage\(\s*"select"\s*\)/,
@@ -847,16 +861,113 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/career.css"), "#career-history", "--sheet-w"), "760px");
   assert.equal(decl(css("css/career.css"), "#quali", "--sheet-w"), "760px");
   assert.equal(decl(css("css/career.css"), "#career-guide", "--sheet-w"), "760px");
+  assert.equal(decl(css("css/menus.css"), "#sel-inner", "--pair-split"), "minmax(0, 56%)",
+    "SELECT spends the side column on the circuit outline, not a 42% leftover");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview', "--sel-map-w"), "100%",
+    "pair-on stacked maps use the whole preview column");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section > #sel-track-preview', "flex"), "1 1 auto",
+    "pair-on preview card fills the side column instead of centering a stamp");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview[data-map-shape="beside"] #sel-preview-map', "max-height"), "100%",
+    "tall-circuit pair-on maps spend the pane height; facts already sit beside");
+  assert.match(code("js/ui/select-screen.js"), /besidePair/,
+    "pair-on beside maps do not self-heal the pin down to a stale stamp");
+  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
+    /"ui sample"\s*"hud sample"/,
+    "DISPLAY stacks UI SIZE + HUD SIZE beside the live sample");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale)', "grid-area"), "hud");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "grid-area"), "sample");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "justify-self"), "start",
+    "HUD sample sits against the sliders, not floating in the leftover column");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
+    "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
+  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open])', "grid-template-areas"),
+    /"metrics metrics"/,
+    "an open METRICS submenu takes the full DISPLAY row so HIDE HUD is not stranded");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-density="compact"] #pm-hud-sample::before', "display"), "none",
+    "compact DISPLAY drops the HUD SIZE PREVIEW caption — the slider already names it");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details > summary", "height"), "var(--tap)",
+    "METRICS summary matches the HIDE HUD tap row");
+  assert.equal(decl(css("css/components.css"), '#pm-metrics-details [role="group"]', "display"), "flex",
+    "METRICS body defaults to a column; wide/compact override to a 2-up grid");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-metrics-details \[role="group"\]/, "display"), "grid",
+    "compact METRICS packs 2-up via SheetShape density, not a height media");
+  assert.match(code("js/perf/renderer-picker.js"), /pm-display-adv/,
+    "DISPLAY recovery / screenshot / diag fold into a JS-built ADVANCED details");
+  assert.doesNotMatch(read("index.html"), /id="pm-display-adv"/,
+    "ADVANCED is injected — the shell-node ratchet must not see a new tag");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv)', "grid-column"), "1 / -1",
+    "ADVANCED spans the DISPLAY row; it is not a fourth named area");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
+    "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "height"), "var(--tap)",
+    "ADVANCED summary matches the METRICS / HIDE HUD tap row");
+  assert.equal(decl(css("css/components.css"), '#pm-display-adv [role="group"]', "display"), "flex",
+    "ADVANCED body defaults to a column; wide/compact override to a 2-up grid");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv \[role="group"\]/, "display"), "grid",
+    "compact ADVANCED packs 2-up via SheetShape density, not a height media");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
+    "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "color"), "var(--steel)",
+    "METRICS / ADVANCED summaries use heading steel, not button text");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "background-color"), "transparent",
+    "disclosure summaries are headings, not .adv-more-btn plates");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary::after/, "content"), "none",
+    "right-side chevron is the dropdown mark — disclosures do not use it");
+  assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary::before$/, "content") || "",
+    /25BE/,
+    "disclosure chevron sits on the left, like a tree, not a select");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
+    "COCKPIT is a section break after the renderer row");
+  assert.match(code("js/camera/cockpit-opts.js"), /pm-display-adv/,
+    "COCKPIT inserts above ADVANCED so player headings stay with player buttons");
+  assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
+    "METRICS submenu no longer keys packing on viewport height");
+  assert.ok(!code("js/perf/metrics-overlay.js").includes("margin: 6px"),
+    "unlayered inject must not offset METRICS off the HIDE HUD row");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",
     "compact wide season setup keeps the calendar + pool pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--compact-at"), "480px",
     "season setup shares #sel-inner's 480 compact floor, not the 380 default");
   assert.equal(decl(css("css/career.css"), "#cr-inner", "--pair-compact"), "off",
     "career compact always stacks — pair-on starves the hub left column");
+  assert.equal(decl(css("css/career.css"), "#cr-inner", "--compact-at"), "480px",
+    "career hub shares the 480 phone-landscape compact floor");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner", "--compact-at"), "480px");
+  assert.equal(decl(css("css/overlays.css"), "#howtoplay-inner", "--compact-at"), "480px");
+  assert.equal(decl(css("css/tuner.css"), "#audioset-inner, #spotifypanel-inner", "--compact-at"), "520px",
+    "audio / Spotify pack earlier than the 380 default — two stacked sections plus notes");
+  assert.equal(decl(css("css/components.css"), "#vsfriend-inner", "--compact-at"), "480px");
+  assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
+  assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
   assert.equal(decl(css("css/carsetup.css"), "#cs-inner", "--pair-compact"), "off",
     "garage compact always stacks — pair-on starves #cs-options");
   assert.equal(decl(css("css/carsetup.css"), '#cs-inner[data-density="compact"] .cs-opt-desc', "display"), "none",
     "compact garage hides part blurbs so more option rows fit");
+  assert.equal(decl(css("css/carsetup.css"), '#cs-inner[data-density="compact"] #cs-options .cs-liv-editor > .adv-help:not(#cs-rake-readout)', "display"), "none",
+    "compact SETUP hides the long tune note and keeps the rake readout");
+  assert.equal(decl(css("css/menus.css"), "#sel-daily", "flex"), "1 0 100%",
+    "roomy SELECT treats TODAY as a banner, not a fourth filter");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-daily', "flex"), "0 0 auto",
+    "compact landscape TODAY is a short chip so the filter row can still pan");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-daily > span', "display"), "none");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "calc(36svh / var(--hud-z))",
+    "compact race banners sit below the flag, not on top of it");
+  assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "calc(72px + var(--sat) / var(--hud-z))");
+  assert.equal(decl(css("css/career.css"), '#quali .sheet[data-density="compact"] #q-foot', "display"), "grid");
+  assert.equal(decl(css("css/career.css"), '#quali.q-done .sheet[data-density="compact"] #q-foot #q-go', "grid-column"), "1 / -1");
+  const selectJs = code("js/ui/select-screen.js");
+  assert.match(selectJs, /b\.id\s*=\s*"sel-daily"/);
+  assert.match(selectJs, /textContent\s*=\s*"TODAY · "\s*\+\s*p\.trackName/,
+    "daily chip label is TODAY · circuit; weather/tod/best live in a child span");
+  assert.match(selectJs, /bar\.insertBefore\(\s*b\s*,\s*bar\.firstChild\s*\)/,
+    "TODAY leads the filter bar so a wrapping sheet paints it as the banner");
+  assert.match(code("js/garage/setup-sheet.js"), /rakeOut\.id\s*=\s*"cs-rake-readout"/);
+  const resultsJs = code("js/ui/results-sheet.js");
+  assert.match(resultsJs, /btn\.id\s*=\s*"res-daily-share"/);
+  assert.match(resultsJs, /clrBtn\.id\s*=\s*"res-ghost-clear"/);
+  assert.match(resultsJs, /lbHead\.className\s*=\s*"sel-label"/);
+  assert.doesNotMatch(resultsJs, /font-size:11px/, "TT share/clear chips use .sel-chip, not inline type");
   const shell = read("index.html");
   assert.match(shell, /id="sel-inner"[^>]*pair-foot-full/,
     "SELECT foot spans both pair columns so BACK / YOUR CAR / NEXT share the sheet");
@@ -888,8 +999,6 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(tokens, /:root/, "--plate"), "color-mix(in oklab, var(--carbon) 62%, transparent)");
   assert.equal(decl(tokens, /:root/, "--plate-line"), "rgba(255, 255, 255, 0.16)");
   assert.match(decl(tokens, /:root/, "--plate-on") || "", /^color-mix\(in oklab, var\(--red\) 18%/);
-  assert.equal(decl(components, "#pm-category-tabs > button", "background"), "var(--plate)");
-  assert.ok(rulesFor(components, /^#pm-category-tabs > button\.active,/).some((r) => r.decls.get("background") === "var(--plate-on)"));
   assert.equal(decl(components, ".bigbtn.alt", "background"), "var(--plate-opaque)");
   assert.equal(decl(menus, ".sel-chip", "background"), "var(--plate)");
   assert.equal(decl(menus, ".sel-chip.active", "background"), "var(--plate-on)");
@@ -914,7 +1023,7 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
   assert.equal(decl(components, ".pm-doors", "--balance-basis"), "12rem");
   assert.equal(decl(components, ".sheet-foot .bigbtn:only-child", "flex"), "0 1 auto");
   assert.equal(decl(components, ".pm-group .tune-row .tune-label", "position"), "static");
-  assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="tabpanel"] button', "white-space"), "normal");
+  assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="region"] button', "white-space"), "normal");
   assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 360px)")));
   assert.equal(decl(css("css/career.css"), ".cr-cheats .sel-chip", "min-width"), "0");
 });

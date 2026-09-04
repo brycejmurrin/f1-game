@@ -416,23 +416,23 @@
   </div>
 </dialog>
 
-<!-- settings sub-menu — opened from the pause menu; keeps the pause screen itself
-     down to the essentials. All the tuning/toggle controls live here. -->
+<!-- settings sub-menu — opened from pause or title. Door index, then
+     CONTROLS / DISPLAY pages. Tuner doors stay on the index. -->
 <dialog id="pmsettings" class="screen dim" data-esc-close="pm-settings-close" aria-labelledby="dlg-settings" hidden>
   <div id="pmsettings-inner" class="sheet">
     <div class="sheet-head"><h2 id="dlg-settings">SETTINGS</h2></div>
     <div id="pm-settings-body" class="sheet-body pane">
-      <div id="pm-category-tabs" class="balanced-row" role="tablist" aria-label="Settings categories">
-        <button id="pm-tab-controls" class="active" type="button" role="tab" aria-label="Controls"
-          aria-selected="true" aria-controls="pm-panel-controls" tabindex="0">CONTROLS</button>
-        <button id="pm-tab-display" type="button" role="tab" aria-label="Display"
-          aria-selected="false" aria-controls="pm-panel-display" tabindex="-1">DISPLAY</button>
-        <button id="pm-tab-more" type="button" role="tab"
-          aria-selected="false" aria-controls="pm-panel-more" tabindex="-1">MORE</button>
-      </div>
+      <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
+        <button id="pm-open-controls" type="button">CONTROLS&hellip;</button>
+        <button id="pm-open-display" type="button">DISPLAY&hellip;</button>
+        <button id="pm-advanced">ADVANCED STEERING&hellip;</button>
+        <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
+        <button id="pm-camtune">CAMERA TUNER&hellip;</button>
+        <button id="pm-audio">MUSIC &amp; SOUND&hellip;</button>
+      </nav>
       <div class="pm-groups">
-        <section id="pm-panel-controls" class="pm-group" role="tabpanel"
-          aria-labelledby="pm-tab-controls" tabindex="0">
+        <section id="pm-panel-controls" class="pm-group" role="region"
+          aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">DRIVING CONTROLS</h3>
           <button id="pm-steer">STEER: TILT</button>
           <button id="pm-calib">RECALIBRATE TILT</button>
@@ -449,8 +449,8 @@
                forgets it is simply slower than the AI, which takes every zone. -->
           <button id="pm-aero">ACTIVE AERO: MANUAL</button>
         </section>
-        <section id="pm-panel-display" class="pm-group" role="tabpanel"
-          aria-labelledby="pm-tab-display" tabindex="0" hidden>
+        <section id="pm-panel-display" class="pm-group" role="region"
+          aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">DISPLAY</h3>
           <button id="pm-hidehud">HIDE HUD</button>
           <!-- step 0.5 — layout tiers (`--pair-at` / `--compact-at` via
@@ -475,18 +475,10 @@
           <div id="pm-hud-sample" aria-hidden="true"><div class="hud-box"><div class="hud-label">SPEED</div><div class="hud-value">312</div></div></div>
           <button id="pm-res">RESOLUTION: AUTO</button>
           <button id="pm-renderer">RENDERER: WEBGL2</button>
-          <!-- THREE PATH / SCREENSHOTS / SAVE SCREENSHOT / status are injected
-               by js/game/gfx-quality.js (same body-node reason as RESET RENDERER). -->
+          <!-- RESET / THREE PATH / SCREENSHOTS / SAVE / COPY DIAG / status
+               fold into a JS-built #pm-display-adv (same body-node reason). -->
           <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
         </section>
-        <nav id="pm-panel-more" class="pm-doors" role="tabpanel"
-          aria-labelledby="pm-tab-more" tabindex="0" hidden>
-          <h3 class="pm-group-h">TOOLS &amp; HELP</h3>
-          <button id="pm-advanced">ADVANCED STEERING&hellip;</button>
-          <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
-          <button id="pm-camtune">CAMERA TUNER&hellip;</button>
-          <button id="pm-audio">MUSIC &amp; SOUND&hellip;</button>
-        </nav>
       </div>
     </div>
     <div class="sheet-foot"><button id="pm-settings-close" autofocus class="bigbtn alt">BACK</button></div>
@@ -1705,9 +1697,16 @@
       <label class="lt-help-toggle"><input id="ct-help-on" type="checkbox"> Show explanations</label>
     </div>
     <div id="ct-rows" class="pane" role="tabpanel"></div>
+    <div id="ct-previews" class="balanced-row" aria-label="Corner preview shots">
+      <button type="button" id="ct-prev-monza" title="Jump to Monza T1 for a live framing check">MONZA T1</button>
+      <button type="button" id="ct-prev-spa" title="Jump to Spa Eau Rouge for a live framing check">SPA EAU ROUGE</button>
+      <button type="button" id="ct-prev-monaco" title="Jump to Monaco chicane for a live framing check">MONACO CHICANE</button>
+    </div>
+    <textarea id="ct-json" readonly hidden aria-label="Exported camera tuning values"></textarea>
     <div class="sheet-foot balanced-row">
       <button id="ct-reset" title="Reset framing offsets for the camera mode currently being edited. Other modes are untouched.">RESET CAM</button>
       <button id="ct-reset-all" title="Reset every camera mode to shipped defaults.">RESET ALL</button>
+      <button id="ct-copy">COPY VALUES</button>
       <button id="ct-close" class="bigbtn">DONE</button>
     </div>
   </div>

@@ -130,6 +130,23 @@ const measure = (page, ctrl, hud, W, H, ins) => page.evaluate(([c, h, w, ht, i])
 
 for (const v of VIEWS) {
   test.describe(v.name, () => {
+    // DECLARE THE BUDGET. Every test below boots a full race — 22 cars, a built
+    // circuit, the maps pass — just to measure HUD box geometry, and the page
+    // log puts that fixture at 76-80 s before the body starts on a CI runner.
+    //
+    // With nothing declared, tools/ci/select-specs.mjs had no way to know: its
+    // `EXCLUDED (declares Ns test budget > gate 120s)` guard keys on
+    // test.setTimeout, so this spec alone slipped through into the 120 s
+    // change-aware gate that every other race-fixture spec is excluded from.
+    // It then failed 6 of its first 7 tests at exactly "Test timeout of
+    // 120000ms exceeded" and burned the job's whole 26-minute cap, which
+    // CANCELLED Pages #1967 (run 33822785596, job 100868882762) — a deploy
+    // stopped by a spec that never had a chance to pass.
+    //
+    // 300 s is the value its peers on this same fixture already carry
+    // (bahrain/cota/monaco/montreal-foundation, autopilot). The number is the
+    // spec saying what it costs; the gate then decides whether it can afford it.
+    test.setTimeout(300_000);
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
     for (const steer of ["tilt", "buttons", "touch"]) {
       for (const manual of [false, true]) {

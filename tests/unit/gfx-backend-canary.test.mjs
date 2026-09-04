@@ -400,11 +400,12 @@ function makeStorage(seed) {
 }
 
 test("RESET RENDERER is injected next to #pm-renderer, not written into the shell", () => {
-  // The injection itself (a <button> created and placed after #pm-renderer,
+  // The injection itself (a <button> created inside #pm-display-adv,
   // labelled RESET RENDERER) is driven below in "RESET RENDERER click wipes
   // storage, disarms the sentinel, and reloads"; this pins only that the
-  // shell does not carry a static copy.
+  // shell does not carry a static copy of the recovery row or its submenu.
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-reset"/);
+  assert.doesNotMatch(read("index.html"), /id="pm-display-adv"/);
 });
 
 test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality", () => {
@@ -534,10 +535,19 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   const ss = makeStorage({ "apex26.gfxClaimFail": "1" });
   const kids = [];
   const resetHost = {
-    insertBefore(node, _ref) { kids.push(node); return node; },
+    insertBefore(node, _ref) { kids.push(node); node.parentNode = resetHost; return node; },
+    replaceChild(node, old) {
+      const i = kids.indexOf(old);
+      if (i >= 0) kids[i] = node;
+      else kids.push(node);
+      node.parentNode = resetHost;
+      if (old) old.parentNode = null;
+      return old;
+    },
   };
   const rendererBtn = { id: "pm-renderer", parentNode: resetHost, nextSibling: null };
-  const gfxBtn = { id: "pm-gfx", textContent: "", hidden: true, onclick: null };
+  rendererBtn.replaceWith = (next) => { resetHost.replaceChild(next, rendererBtn); };
+  const gfxBtn = { id: "pm-gfx", textContent: "", hidden: true, onclick: null, parentNode: resetHost };
   const byId = { "pm-renderer": rendererBtn, "pm-gfx": gfxBtn };
   let reloaded = 0;
   let sentinel = true;
@@ -547,13 +557,16 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
     document: {
       getElementById: (id) => byId[id] || null,
       createElement: (tag) => {
-        const el = { tagName: tag, id: "", textContent: "", title: "", onclick: null };
-        if (tag === "button") {
-          Object.defineProperty(el, "id", {
-            get() { return this._id || ""; },
-            set(v) { this._id = v; byId[v] = this; },
-          });
-        }
+        const kids = [];
+        const el = {
+          tagName: tag, id: "", textContent: "", title: "", onclick: null, children: kids,
+          appendChild(c) { kids.push(c); c.parentNode = this; return c; },
+          setAttribute() {},
+        };
+        Object.defineProperty(el, "id", {
+          get() { return this._id || ""; },
+          set(v) { this._id = v; byId[v] = this; },
+        });
         return el;
       },
       readyState: "complete",
@@ -578,7 +591,9 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   const btn = byId["pm-renderer-reset"];
   assert.ok(btn, "reset button was injected");
   assert.equal(btn.textContent, "RESET RENDERER");
-  assert.equal(kids[0], btn);
+  assert.ok(byId["pm-display-adv"], "ADVANCED disclosure was injected on the host");
+  assert.ok(kids.includes(byId["pm-display-adv"]), "ADVANCED sits on the DISPLAY host, after the picker row");
+  assert.equal(btn.parentNode && btn.parentNode.id, "pm-display-adv-body");
   btn.onclick();
   assert.equal(ls.getItem("apex26.gfxBackend"), null);
   assert.equal(ss.getItem("apex26.gfxClaimFail"), null);
@@ -1275,7 +1290,13 @@ test("RENDERER control becomes a select with prev/next, not a one-way cycle", ()
   assert.ok(byId["pm-renderer-prev"], "‹ steps backward");
   assert.ok(byId["pm-renderer-next"], "› steps forward");
   assert.equal(byId["pm-renderer-row"].children.length, 3);
-  assert.ok(hostKids.some((n) => n.id === "pm-renderer-reset"));
+  assert.ok(byId["pm-display-adv"], "ADVANCED disclosure is JS-built");
+  assert.ok(byId["pm-display-adv-body"]);
+  assert.ok(byId["pm-renderer-reset"]);
+  assert.equal(byId["pm-renderer-reset"].parentNode && byId["pm-renderer-reset"].parentNode.id, "pm-display-adv-body",
+    "RESET RENDERER lives in ADVANCED, not on the DISPLAY sheet");
+  assert.ok(hostKids.some((n) => n.id === "pm-display-adv"));
+  assert.ok(!hostKids.some((n) => n.id === "pm-renderer-reset"));
 });
 
 test("selecting THREE persists the pick and reloads; WEBGPU without gpu does not", () => {

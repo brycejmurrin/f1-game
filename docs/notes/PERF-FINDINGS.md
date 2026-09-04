@@ -819,8 +819,14 @@ callers use three different frusta inside one frame, so while driving it never
 hits (see §2b's neighbour — this is the same "the condition no longer holds"
 shape).
 
-`apex26.instCellCache=1` keys the resident pack on the surviving CELL SET
-instead. Sound because the pack is a deterministic function of that set:
+The cell-set key keys the resident pack on the surviving CELL SET instead.
+**It SHIPS ON** — `apex26.instCellCache=0` is the escape hatch, the shape
+`__apex.matTex(0)` gives the baked-material path. (It was opt-in `=1` when the
+table below was measured, and this paragraph plus the comment inside
+`cullInstances` both still said "off by default" on 2026-09-04, long after
+`let _instCellCache = true` landed. A stale default in a perf note is worse
+than none: it sends the next reader looking for a lever that is already
+pulled.) Sound because the pack is a deterministic function of that set:
 `batch.cells` order and each cell's `idx` order are fixed at build time and
 never mutated. Measured A/B, same box, same instrument, flag the only change:
 
@@ -833,7 +839,72 @@ never mutated. Measured A/B, same box, same instrument, flag the only change:
 
 The residual 326.8 KiB is real work: the shadow ortho, the probe faces and the
 camera genuinely select different cells, so only same-caller-across-frames
-hits. The failure mode is props drawn from the wrong resident pack, which is
+hits.
+
+### 2c-bis — WHERE the upload bytes go (attributed, 2026-09-04)
+
+The table above is an aggregate: it says the renderer uploads a lot and
+nothing about which line to go and look at. `glx-call-census.mjs` now buckets
+every `bufferSubData` by call site (one stack per call — only this counter
+carries it, because it is the one whose SIZE varies per site).
+
+Vegas / night / 40 frames / `pack`, cell cache ON:
+
+| site | calls/f | KiB/f | share |
+|---|---|---|---|
+| `glx.js:1840` instance matrices | 19.2 | **859.4** | **85.2%** |
+| `glx.js:1843` instance colours | 5.9 | 144.9 | 14.4% |
+| `glx.js:2117` glow | 1.0 | 3.8 | 0.4% |
+| `glx.js:1884` | 1.0 | 1.1 | 0.1% |
+
+**One site is 85% of a megabyte a frame.** Note what is NOT here:
+`shadow.js:228` restores the full source matrices on every shadow-casting
+batch and looks like an obvious double-upload — it does not appear at all in
+this frame. That is exactly why the attribution exists; the obvious suspect
+was wrong.
+
+Same scene, flag the only change (a packed grid, so the numbers differ from
+the `jump(0.30)` run in the table above — a scene is part of a measurement):
+
+| | off | on |
+|---|---|---|
+| bufferSubData KiB | 1239.3 | **1009.2** (-18.6%) |
+| bufferSubData calls | 43.0 | **27.1** (-37.0%) |
+| bindBuffer | 48.6 | 32.8 (-32.5%) |
+| drawElements / Instanced | 120.2 / 30.4 | 120.2 / 30.4 (identical) |
+
+Identical draw counts across the flag is the soundness check: the cache
+changes which bytes are re-sent, never which geometry is drawn.
+
+The remaining lever is per-CALLER residency. The residual is not redundant
+work at one caller — it is the camera, the shadow ortho and the probe faces
+each repacking the one GPU buffer to their own cell set inside a frame. One
+resident pack per caller would turn that into a hit, at one instance buffer
+per caller per batch: bandwidth for memory, on a phone that is short of both.
+Not attempted, and not worth attempting without a phone-side reading first.
+
+**Do not read a per-car conclusion out of this run.** `carsNearPlayer` was 1.
+See 2c-ter.
+
+### 2c-ter — the census guard that never fired
+
+`carsInField` reported `null` for its entire life. It asked `__apex.field()`,
+the agentview raster, rather than the car roster, so both shape branches
+missed and even the catch was never reached — and its own comment says the
+per-car counts "cannot be read at all" without it.
+
+That silence cost two runs. An A/B of a car-LOD change (skip the eight wheel
+draws on distant rivals) came back BYTE-IDENTICAL on every counter, which read
+as "no effect" and was actually "nothing measured": the field was strung out
+around the circuit with no rival near the camera. The LOD was dropped rather
+than shipped on an unmeasured claim.
+
+It now reports `carsInField` and `carsNearPlayer` (a difference of two
+`fieldState` gaps — no camera maths, no new hook) and warns on stderr under
+three. `pack` is NOT the cure on its own: it bunches the field on the grid,
+where they sit BEHIND a player who starts at the front and the frustum drops
+them. Measured `carsNearPlayer: 1` even with `pack`. A per-car A/B needs a
+scene built for it. The failure mode is props drawn from the wrong resident pack, which is
 why the hit path deliberately does NOT stamp `_cullPlanes` (that snapshot must
 keep describing whichever frustum physically wrote the buffer).
 `gfx-backend-canary.test.mjs` now pins that.

@@ -811,6 +811,54 @@ believing any red run. What this DOES retire is the assumption that a red
 smoke boot is unavoidable here; if it comes back, it is worth timing rather
 than waving through.
 
+## The change-aware gate can be cancelled by a spec that never had a chance
+
+**Pages #1967, run 33822785596, job 100868882762, 2026-09-04.** The run reported
+`cancelled` with zero failing jobs, in `Selected specs (change-aware gate)`:
+
+```
+running 6/32 done, 6 failed
+x FAIL 7/32 hud-layout.spec.js › notched-portrait › tilt / auto gears (134.3s)
+   Test timeout of 120000ms exceeded.
+```
+
+The job's own header derives its 26-minute cap from a worst case of "10 tests x
+120 s + ~4 min setup". It selected 32 tests and spent the whole cap failing the
+first seven, then died at the cap — and `ci.yml`'s own header already records
+that a cancelled job reads as "0 failures". Second time in one night that a
+timeout wore a cancellation's clothes; the first was `guards`.
+
+**The cause is not the budget model.** `select-specs.mjs` already has the right
+guard — `EXCLUDED (declares Ns test budget > gate 120s)` — and 32 race-fixture
+specs are excluded by it. It keys on `test.setTimeout`, and `hud-layout.spec.js`
+declared nothing, so `fit()` read "undeclared" as "fits in 120 s". It boots a
+full race (22 cars, a built circuit, the maps pass) for each of ~19 generated
+cases; the page log puts that fixture at **76-80 s before the test body starts**.
+It was never going to pass at 120 s. Fixed by declaring 300 s, the value its
+peers on the same fixture already carry, and pinned in
+`tests/unit/select-specs.test.mjs` as a RULE (above whatever the gate's cap is),
+not as the number.
+
+Two things this leaves open, both stated rather than guessed at:
+
+- **48 race-fixture specs still declare <= 120 s** (`maxDeclaredTimeout`, against
+  a `race(`/`loadTrack`/`goToRace` probe). Only ONE of them has been measured
+  failing. Declaring budgets for the other 47 on a heuristic would be the
+  unmeasured change this repo forbids, so they are named here and left alone.
+  The honest read is that an UNDECLARED budget is unknown, not safe — and the
+  gate currently treats the two as the same.
+- **A cancelled job writes no junit**, so `junit-failed.mjs` logged "no failures
+  to carry" and the failing-spec cache learned nothing from the run that most
+  needed remembering. The gate's fail-fast memory is blind to exactly the
+  failures that kill it.
+
+> **These two are the same gate failing from opposite ends, on the same day.**
+> Above: a spec with no declared budget was selected and blew the cap.
+> Below: a diff that touched `ratchets.json` selected nothing at all. One
+> says the selection can pick what it cannot afford; the other says it can
+> decline to pick anything. Both leave the standing gates as the whole
+> story, and neither is visible in a green check.
+
 ## The change-aware gate has a coverage inversion (measured 2026-09-04)
 
 Measured on the 13-file audit push (`0f5daac..227070f`), which changed

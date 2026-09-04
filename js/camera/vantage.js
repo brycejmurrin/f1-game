@@ -58,6 +58,10 @@ const _dirScr = [0, 0, 0];
 const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
 
 const CHASE_SIDE_FRAC = 0.3;
+// Shipped chase/far corner lead — blends toward road-frame aim so the rig swings
+// into bends. The tuner knob replaces this when cornerLead is stored for the mode
+// (including 0 = explicitly flat). Untuned installs get this without opening the panel.
+const CHASE_CORNER_LEAD_DEFAULT = 0.18;
 // CHASE g-response: the camera leans with longitudinal weight transfer even
 // though it is bolted to nothing. Driven by the SMOOTHED body pitch
 // (js/physics/body-attitude.js, spring ω=9, clamped ±0.024 rad ≈ 1.4°), NEVER raw
@@ -250,9 +254,12 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // so computing it unconditionally spent that every frame in chase, cockpit, hood,
   // tcam, rear, drift, low, overhead and reverse — i.e. in every mode anyone
   // actually races in — to throw the answer away.
-  const kA = (mode === "heli" || mode === "side" || mode === "cinematic")
-    ? Tracks.curvature(track, wrapS(s + lerp(15, 45, spN)))
-    : 0;
+  let kA = 0;
+  if (mode === "heli" || mode === "side" || mode === "cinematic") {
+    const kNear = Tracks.curvature(track, wrapS(s + lerp(15, 45, spN)));
+    const kFar = Tracks.curvature(track, wrapS(s + lerp(35, 65, spN)));
+    kA = Math.abs(kFar) > Math.abs(kNear) + 0.0003 ? kFar : kNear;
+  }
   // Street-circuit camera corridor: city tracks run a continuous building wall a
   // few metres past the barriers, and the wide broadcast offsets (15-25 m) put
   // the eye INSIDE the towers — the whole view fills with a glowing facade
@@ -312,7 +319,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
       fov = lerp(64, 78, spN) + dep * 3;             // wider = faster feel
     }
   } else if (mode === "overhead") {
-    eye[0] = p[0] - t[0] * 9; eye[1] = p[1] + 42; eye[2] = p[2] - t[2] * 9;
+    eye[0] = p[0] - t[0] * 9; eye[1] = p[1] + 34; eye[2] = p[2] - t[2] * 9;
     tgt[0] = p[0] + t[0] * 12; tgt[1] = p[1]; tgt[2] = p[2] + t[2] * 12;
     fov = 46;
   } else if (mode === "heli") {
@@ -324,9 +331,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const sgn = kA > 0.001 ? 1 : kA < -0.001 ? -1 : 1;
     const hl = Math.min(18, corr);              // stay inside the street canyon
     eye[0] = cvB.p[0] + cvB.r[0] * hl * sgn;
-    eye[1] = centreY(track, s - 26) + 21 + (18 - hl) * 0.6 + bankDy;
+    eye[1] = centreY(track, s - 26) + 17 + (18 - hl) * 0.6 + bankDy;
     eye[2] = cvB.p[2] + cvB.r[2] * hl * sgn;
-    tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
+    const heliAim = aheadPt(14, 0.9, x * 0.2);
+    tgt[0] = heliAim[0]; tgt[1] = heliAim[1]; tgt[2] = heliAim[2];
     fov = 36 + dep * 2;
   } else if (mode === "reverse") {
     eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + 1.35; eye[2] = p[2] + t[2] * 5.5;
@@ -336,7 +344,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // TV trackside: sits on the OUTSIDE of the bend looking across the apex.
     const sgn = kA > 0.002 ? 1 : kA < -0.002 ? -1 : 1;
     const sl = Math.min(25, corr);              // stay inside the street canyon
-    eye[0] = p[0] + r[0] * sgn * sl; eye[1] = p[1] + 5.5 + (25 - sl) * 0.30; eye[2] = p[2] + r[2] * sgn * sl;
+    eye[0] = p[0] + r[0] * sgn * sl; eye[1] = p[1] + 6.0 + (25 - sl) * 0.30; eye[2] = p[2] + r[2] * sgn * sl;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
     fov = 44 + (25 - sl) * 0.5;                 // closer eye → widen so framing holds
   } else if (mode === "cinematic") {
@@ -346,12 +354,13 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // the track tangent, so the framing reads consistently corner to corner.
     // +kA = LEFT bend → outside is +r → positive angle (same fix as heli above).
     const base = kA === 0 ? 0.6 : (kA > 0 ? 1 : -1) * 1.15;
-    const a = base + Math.sin(now * 0.00022) * 0.5;
-    const od = Math.min(15, corr);
+    const a = base + Math.sin(now * 0.00022) * 0.25;
+    const od = Math.min(22, corr);
     const dir = _dirScr;
     dir[0] = Math.cos(a) * t[0] + Math.sin(a) * r[0]; dir[1] = 0; dir[2] = Math.cos(a) * t[2] + Math.sin(a) * r[2];
-    eye[0] = p[0] + dir[0] * od; eye[1] = p[1] + 6.5 + (15 - od) * 0.45; eye[2] = p[2] + dir[2] * od;
-    tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
+    eye[0] = p[0] + dir[0] * od; eye[1] = p[1] + 6.5 + (22 - od) * 0.45; eye[2] = p[2] + dir[2] * od;
+    const cinAim = aheadPt(lerp(12, 22, spN), 0.85, x * 0.15);
+    tgt[0] = cinAim[0]; tgt[1] = cinAim[1]; tgt[2] = cinAim[2];
     fov = lerp(50, 60, spN);
   } else if (mode === "low") {
     Tracks.sample(track, wrapS(s - 10), cvB);
@@ -373,14 +382,14 @@ function vantage(track, mode, s, x, spd, now, extra) {
     // camera under oversteer, then settles directly behind once the car hooks up.
     const slipN = clamp((extra.slipLat || 0) / 8, -1, 1);
     Tracks.sample(track, wrapS(s - 6.2), cvB);
-    const cx = x * 0.5 - slipN * 5.5;
+    const cx = x * 0.5 - slipN * 6.5;
     eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 6.2) + 2.4 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
     tgt[0] = p[0]; tgt[1] = p[1] + 0.75; tgt[2] = p[2];
     fov = lerp(55, 70, spN) + dep * 3;
   } else {
     const far = mode === "far";
     const back  = far ? 10.5 : 5.8;
-    const eyeUp = far ? 4.2 : 2.1;
+    const eyeUp = far ? 3.6 : 2.1;
     Tracks.sample(track, wrapS(s - back), cvB);
     const cx = x * 0.5;
     const lead = far ? 9 : 6;
@@ -394,13 +403,15 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const side = back * CHASE_SIDE_FRAC;
       eye[0] = extra.carPos[0] - hx * back + rx * side; eye[1] = rideEye + eyeUp + bankDy; eye[2] = extra.carPos[1] - hz * back + rz * side;
       tgt[0] = extra.carPos[0] + hx * lead; tgt[1] = rideC + bankDy + tgtUp; tgt[2] = extra.carPos[1] + hz * lead;
-      // CORNER LEAD (CAMERA TUNER, opt-in, default 0). Blend the whole rig toward
+      // CORNER LEAD (CAMERA TUNER, opt-in, shipped 0.18). Blend the whole rig toward
       // the road-frame chase below — eye an arc-distance back along the ROAD, aim
       // at the curved centreline ahead — so the camera leads and swings INTO the
       // bend, the classic chase feel. This is the one place the arc is allowed to
       // reach the chase view, and only because the player asked for it on a slider:
       // it moves where the camera looks, never the car (px/pz/(s,x) are untouched).
-      const lead2 = (typeof CamTune !== "undefined") ? clamp(CamTune.get(mode, "cornerLead") || 0, 0, 1) : 0;
+      const leadStored = (typeof CamTune !== "undefined" && typeof CamTune.cornerLead === "function")
+        ? CamTune.cornerLead(mode) : null;
+      const lead2 = clamp(leadStored != null ? leadStored : CHASE_CORNER_LEAD_DEFAULT, 0, 1);
       if (lead2 > 0) {
         const eyeR0 = cvB.p[0] + cvB.r[0] * cx, eyeR1 = rideEye + eyeUp + bankDy, eyeR2 = cvB.p[2] + cvB.r[2] * cx;
         const tgtR = aheadPt(lead, 0, x * 0.4);
@@ -523,5 +534,5 @@ function vantage(track, mode, s, x, spd, now, extra) {
   return _vantOut;
 }
 
-return { init, vantage, COCKPIT_EYE_FWD, COCKPIT_EYE_UP };
+return { init, vantage, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, CHASE_CORNER_LEAD_DEFAULT };
 })();

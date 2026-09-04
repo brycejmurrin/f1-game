@@ -42,9 +42,14 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 // Same shape as tests/unit/race-control.test.mjs.
 function loadGameCams(Tracks, CamTune) {
   const globals = { Math, JSON, Object, Array, Number, console, Tracks };
-  // Left UNDEFINED unless a test supplies one — cameras.js guards every use with
-  // `typeof CamTune !== "undefined"`, so an absent tuner is the shipped default.
-  if (CamTune) globals.CamTune = CamTune;
+  // Pin flat chase in the harness: shipped installs get corner lead from
+  // js/camera/offsets.js, but these tests assert the ride-height math with
+  // cornerLead explicitly at 0.
+  globals.CamTune = CamTune || {
+    get: () => 0,
+    cornerLead: () => 0,
+    apply: (_, __, ___, fov) => fov,
+  };
   const ctx = vm.createContext(globals);
   seedLog(ctx);
   // js/core/mat4.js first — it is the second <script> tag in the shell and the home of
@@ -59,7 +64,11 @@ function loadGameCams(Tracks, CamTune) {
    EYE only, leaving the aim point alone. That is exactly what js/camera/offsets.js
    apply() does for `height` (the aim stays put so the car cannot leave frame). */
 function camTuneHeight(dh) {
-  return { get: () => 0, apply: (mode, eye, tgt, fov) => { eye[1] += dh; return fov; } };
+  return {
+    get: () => 0,
+    cornerLead: () => 0,
+    apply: (mode, eye, tgt, fov) => { eye[1] += dh; return fov; },
+  };
 }
 
 /* A straight track running along +Z with the elevation profile `heightAt(s)`.
@@ -196,7 +205,7 @@ test("far chase gets the same treatment", () => {
   const roadY = (s) => HILL(s) + RIPPLE(s);
   for (let s = 700; s < 1700; s += STEP) {
     pitch.push(pitchOf(chaseAt(cams, track, s, "far")));
-    rawPitch.push(Math.atan2((roadY(s) + 1.0) - (roadY(s - 10.5) + 4.2), 19.5) * 180 / Math.PI);
+    rawPitch.push(Math.atan2((roadY(s) + 1.0) - (roadY(s - 10.5) + 3.6), 19.5) * 180 / Math.PI);
   }
   const bob = rms(ripple(pitch, STEP)), rawBob = rms(ripple(rawPitch, STEP));
   assert.ok(rawBob > 0.05, `reference rig should bob, got ${rawBob.toFixed(4)}°`);

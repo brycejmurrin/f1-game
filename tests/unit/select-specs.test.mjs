@@ -205,3 +205,30 @@ test("junit-failed reads Playwright's junit shape (system-out BEFORE the failure
   assert.deepEqual(failedSpecsFrom(xml), ["tests/specs/boot-guard.spec.js", "tests/specs/logging.spec.js"]);
   assert.deepEqual(failedSpecsFrom("<testsuites></testsuites>"), []);
 });
+
+test("a spec that cannot pass at the gate's per-test cap declares so, and is excluded", () => {
+  // hud-layout.spec.js boots a full race — 22 cars, a built circuit, the maps
+  // pass — for every one of its ~19 generated cases, just to measure HUD box
+  // geometry. On a CI runner the page log puts that fixture at 76-80 s before
+  // the test body starts.
+  //
+  // It declared no budget, so `fit()` read "undeclared" as "fits in 120 s" and
+  // let it into the change-aware gate that every other race-fixture spec is
+  // excluded from. It then failed 6 of its first 7 cases at exactly "Test
+  // timeout of 120000ms exceeded" and burned the job's whole 26-minute cap,
+  // which CANCELLED Pages #1967 — run 33822785596, job 100868882762. A deploy
+  // stopped by a spec that never had a chance to pass.
+  //
+  // Pinned as the RULE, not the number: whatever the gate's cap is, this spec
+  // must sit above it and must therefore be excluded. Raising the gate later
+  // does not quietly re-admit it.
+  const own = maxDeclaredTimeout("tests/specs/hud-layout.spec.js");
+  assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
+    `hud-layout.spec.js declares ${own / 1000}s, at or under the ${SELECTED_GATE.perTestTimeoutSec}s gate — ` +
+    "it boots a full race per case and cannot pass there; see Pages #1967");
+
+  const r = fit(["tests/specs/hud-layout.spec.js"], 26);
+  assert.deepEqual(r.selected, [], "the gate must not select it");
+  assert.ok(r.overBudgetSpecs.some((s) => s.file === "tests/specs/hud-layout.spec.js"),
+    "and must NAME it as over budget — silent truncation reads as covered");
+});

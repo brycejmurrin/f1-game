@@ -1131,11 +1131,29 @@ jobs:
       - name: Install browser
         if: steps.sel.outputs.specs != ''
         run: npx playwright install --with-deps chromium
+      # STOP AT THREE, don't grind to the cap. Pages #1967 selected 32 tests,
+      # failed 6 of the first 7 at the per-test timeout, and kept going until
+      # the job's 26-minute cap killed it — so the run was CANCELLED, the whole
+      # cap was spent re-learning news it had after the first failure, and
+      # `junit-failed.mjs` logged "no failures to carry" because a killed job
+      # writes no junit. The fail-fast memory two steps below was blind to
+      # exactly the failures that killed the job it lives in.
+      #
+      # --max-failures stops GRACEFULLY, which is the whole point: the reporters
+      # still finalise. Verified locally on a 4-test throwaway project at
+      # --max-failures=2 — "2 did not run", and junit.xml carried
+      # failures="2" with both failing test names. That is what the job cap
+      # cannot do at any timeout value.
+      #
+      # Three, not one: one failure cannot distinguish "this spec is broken"
+      # from "this change broke everything", and the budget below is already
+      # modelled on surviving a timeout. Three bounds the failure cost at
+      # 3 x 120 s = 6 min inside a 26-minute cap while still showing a pattern.
       - name: Run the selection
         if: steps.sel.outputs.specs != ''
         env:
           APEX_WORKERS: 1
-        run: npm test -- ${{ steps.sel.outputs.specs }} --retries=0 --timeout=120000
+        run: npm test -- ${{ steps.sel.outputs.specs }} --retries=0 --timeout=120000 --max-failures=3
       # Record what failed so the NEXT run hoists it to the front. junit.xml is
       # the machine-readable half of the reporter set playwright.config already
       # writes; parsing it here keeps the tool free of CI-specific formats.
