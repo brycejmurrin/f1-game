@@ -219,8 +219,16 @@ test("garage stacked categories are a horizontal strip", () => {
   assert.equal(decl(css("css/components.css"), ".pane-pair", "--pair-compact"), "off",
     "compact garage / season stack to the horizontal strip via --pair-compact");
   const packed = '#cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs';
-  assert.equal(decl(carsetup, packed, "grid-template-columns"), "repeat(7, minmax(0, 1fr))",
-    "short wide stacked garage packs fourteen tabs as two rows of seven");
+  // THE COLUMN COUNT IS DERIVED, NOT WRITTEN DOWN. This assertion used to pin
+  // the literal `repeat(7, …)` — 14 slots — and that is precisely how the
+  // defect shipped: the roster grew to 15 tabs (TEAM + 12 catalogue categories
+  // + SETUP + LIVERY), the fifteenth landed on an implicit third row that the
+  // two-row max-height clips, and LIVERY rendered 53x6 px with 0 % visible and
+  // no scrollable ancestor at 852x393. A guard that pins a number cannot notice
+  // the number going stale; pin the mechanism instead, and let
+  // garage-interior-gate.test.mjs assert the arithmetic against the real count.
+  assert.equal(decl(carsetup, packed, "grid-template-columns"), "repeat(var(--cs-tab-cols, 7), minmax(0, 1fr))",
+    "short wide stacked garage takes its column count from the tab roster, two rows deep");
   assert.ok(decl(carsetup, packed, "max-height"), "wrapped play-shape tabs cap at two rows so #cs-options keeps a list");
   assert.ok(!declares(carsetup, /^#cs-inner:not\(\[data-pair="on"\]\):is\(\[data-shape="tall"\], \[data-density="compact"\]\) #cs-tabs$/, "flex-wrap", "wrap"),
     "tall stacked garage must keep the horizontal strip — wrapping 14 tabs starved options");

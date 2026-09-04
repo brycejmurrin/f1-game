@@ -1039,5 +1039,81 @@ its own measured 300 s, so the gate excludes it instead of selecting it into a
 route (hud-layout, multiplayer-scan, multiplayer-scan-cancel,
 parts-factory-presets, rotation-recovery); 43 candidates remain unmeasured.
 
+**Sixth: `parts-ers.spec.js` (2026-09-04, Pages run 2002 / 33904063866).** The
+backlog is not theoretical and it does not wait to be worked through — it fires
+whenever a diff pulls a fresh spec into the selection. A `js/garage/` change
+brought in `test:car`, the selector picked this file for the first time, and
+three of its tests failed on a plain 120 s timeout having RUN for 195.1 s,
+175.4 s and 150.9 s. Not an assertion: the state dump showed the game healthy
+(real `phys`, twelve cars built) with the first car build logged at 186218 ms.
+The whole cost is the first boot — `sharedTest` hands the same page to the rest,
+which is why two of the four take 0.2 s. Same file on this box: 4/4 green,
+slowest test 29.4 s. Runner, not code. Declared 300 s; the gate now names it
+EXCLUDED instead of going red on it, and the deploy it was blocking can move.
+
+That is the shape to expect from the remaining 42: a healthy spec, a
+deterministic false red, and a blocked deploy — one per newly-touched area.
+
 Note the containment held: `--max-failures=3` stopped the job at 3/7 in 12m18s
 against a 26-minute cap, wrote its junit, and carried the failing spec forward.
+
+## The `test:ui` group has NO blocking coverage on a push (2026-09-04)
+
+The route above — a spec declares its measured budget, the change-aware gate
+excludes it by name rather than selecting it into a budget it cannot clear — is
+the right behaviour and the selector is loud about it. What was never checked is
+where the excluded specs land afterwards. The answer, on a push, is nowhere.
+
+Enumerated on the deploy tip against a `css/` + `js/ui/` + `js/garage/` diff
+(`node tools/ci/select-specs.mjs --since <ref>`): groups `test:car, test:ui`,
+then
+
+```
+EXCLUDED (declares 360s test budget > gate 120s): ui-scale.spec.js
+EXCLUDED (declares 300s test budget > gate 120s): hud-layout.spec.js
+EXCLUDED (declares 300s test budget > gate 120s): ui-resize.spec.js
+EXCLUDED  … custom-team, parts-budget, parts-factory-presets,
+            parts-mesh-cache, rotation-recovery
+UNREACHABLE (declares N tests > the whole 10-test cap — this gate can NEVER
+            run it): menu-survey 11, music-library 13, parts-setup-ids 14,
+            parts-catalog 16, menu-keyboard 19, ui-button-touch 20,
+            parts-physics 69
+```
+
+Every one of those is in `test:ui` or `test:car`. Neither group runs on a push:
+ci.yml's only group step is
+
+```yaml
+- name: Boot group (nightly) / dispatched group
+  if: … && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+  … npm run "test:${GROUP:-tiny}"
+```
+
+— schedule or dispatch only, and defaulting to `tiny`, not `ui`. So the blocking
+browser coverage of a push is `smoke.spec.js` (4 shards, boot only),
+`physics-characterization.spec.js`, and whatever `Selected specs` can fit. For a
+UI diff that is: nothing.
+
+**This is not hypothetical.** `ui-scale.spec.js` was red on five landscape
+garage cases (`#cs-tab-livery` clipped to 53x6 px, 0 % visible, unreachable at
+every UI SIZE — see the 15-tabs-in-14-slots fix). It was red on 5502e403 before
+this branch touched anything, it stayed red through several deploys, and no
+blocking job ever ran it. Pages run 1998's `Selected specs` job reported
+**success having skipped "Run the selection" outright** — the gate passed by not
+looking.
+
+Three ways out, none taken here because runner spend is the owner's call:
+
+1. **A fixed job for `ui-scale.spec.js`**, the way `smoke` and
+   `physics-characterization` already have one — `FIXED_GATE_SPECS` in
+   select-specs.mjs exists for exactly "this spec has its own blocking job with
+   its own timeout policy", and those two are its only members. One runner, and
+   it is the highest-value UI spec there is: 6 screens x 5 scales x 2
+   orientations. This is the recommendation.
+2. A `ui` shard in the push matrix — four runners, full group, much more cost.
+3. Shrinking the declared timeouts to fit the 120 s gate — rejected: 300-360 s is
+   what those specs MEASURE on a loaded runner, and cutting them buys green by
+   making them flaky, which is the failure mode this whole file exists to stop.
+
+What must NOT happen is leaving it as it is on the assumption that "the gate is
+green". It is green because it declined to look, and it said so in its own log.
