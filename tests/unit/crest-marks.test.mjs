@@ -623,6 +623,37 @@ test("a plated lockup is the same mark on the cover, the fin, and the wall", () 
   assert.deepEqual(bad, [], "plated lockup drifted across surfaces");
 });
 
+test("the number board carries the same lockup as the cover", () => {
+  // REGIONS.num maps to the nose AND both rear endplates. Those used to be
+  // driver-number only; the lockup now sits in the top of the board so the
+  // same mark is on every surface the car shows a team identity.
+  assert.equal(typeof LT.numCrestBox, "function", "numCrestBox is not exported");
+  const bad = [];
+  for (const team of Teams.LIST) {
+    const liv = Liveries.forTeam(team)[0];
+    const lockup = LT.markPalette(team.id, liv, [liv.c1, liv.c2], false);
+    const cover = replay(LT, team.id, LT.REGIONS.crest, lockup, false);
+    const board = replay(LT, team.id, LT.numCrestBox(), lockup, true);
+    const cols = (m) => [...m.colours].filter(Boolean).sort().join("|");
+    if (cols(cover) !== cols(board))
+      bad.push(`${team.id} number-board [${cols(board)}] vs cover [${cols(cover)}]`);
+    const second = LT.markSlots(team.id).find((r) => r.key === "logo2");
+    if (!second) continue;
+    const pick = [1, 0.55, 0];
+    const authored = { ...liv, logo2: pick };
+    const P = LT.markPalette(team.id, authored, [liv.c1, liv.c2], false);
+    const ctxCover = new RecCtx();
+    const ctxNum = new RecCtx();
+    LT.drawCrest(ctxCover, team.id, LT.REGIONS.crest, { palette: P, bare: false });
+    LT.drawCrest(ctxNum, team.id, LT.numCrestBox(), { palette: P, bare: true });
+    const want = cssOf(pick);
+    const hits = (ctx) => ctx.ops.some((o) => o.style === want || o.shadow === want);
+    if (hits(ctxCover) && !hits(ctxNum))
+      bad.push(`${team.id} ${second.label} paints on the cover and not the number board`);
+  }
+  assert.deepEqual(bad, [], "number board lockup drifted from the spine");
+});
+
 test("every team's lockup paints the same colours on the cover and the fin", () => {
   // buildAtlas resolves ONE palette and hands it to both surfaces. The badge
   // used to drop Haas's ring, Audi's weave, and Ferrari's shield, so the tail

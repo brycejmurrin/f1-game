@@ -9,7 +9,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
-  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS } from "../../tools/ci/select-specs.mjs";
+  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
+  scopeCarryForward } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
@@ -126,6 +127,24 @@ test("the import graph finds specs a path RULE cannot — helper -> spec", () =>
   assert.ok(hit.length < 10, "a NARROW helper must not fan out to the whole suite");
   assert.deepEqual(specsImporting(["js/game.js"]), [],
     "js/ is invisible to the import graph in this architecture — say so by returning nothing");
+});
+
+test("carry-forward only reorders specs this change already routed", () => {
+  // Pages 33927358590: a livery lockup routed only test:car, but
+  // .selected-failed.txt injected albert-park-foundation + physics-fixes,
+  // those timed out first, and carview-parts never ran.
+  const routed = ["tests/specs/carview-parts.spec.js", "tests/specs/garage-aero.spec.js"];
+  const failed = [
+    "tests/specs/albert-park-foundation.spec.js",
+    "tests/specs/physics-fixes.spec.js",
+    "tests/specs/garage-aero.spec.js",
+  ];
+  const { inScope, dropped } = scopeCarryForward(failed, routed);
+  assert.deepEqual(inScope, ["tests/specs/garage-aero.spec.js"]);
+  assert.deepEqual(dropped, [
+    "tests/specs/albert-park-foundation.spec.js",
+    "tests/specs/physics-fixes.spec.js",
+  ]);
 });
 
 test("fail-fast order: edited, then previously-failed, then imported, then routed", () => {

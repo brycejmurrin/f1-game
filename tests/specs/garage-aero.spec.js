@@ -19,10 +19,24 @@ import { toMenu } from "../helpers/shared-page.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
+async function clickId(page, id) {
+  await page.evaluate((i) => {
+    const el = document.getElementById(i);
+    if (!el) throw new Error("garage-aero: missing #" + i);
+    el.click();
+  }, id);
+}
+
 async function openGarage(page) {
   await toMenu(page);
-  await page.locator("#mb-garage").click();
-  await page.locator("#carsetup").waitFor({ state: "visible" });
+  // evaluate click, not locator.click: a Playwright click on the title flyby
+  // costs 80-113 s (docs/TESTING.md) and was the 120 s Selected-specs timeout
+  // on 1e94cdf0 (garage-aero "MOVES the wing" 146 s / "WHOLE-CAR preset" 125 s).
+  await clickId(page, "mb-garage");
+  await page.waitForFunction(() => {
+    const el = document.getElementById("carsetup");
+    return el && !el.hidden;
+  }, null, { polling: 100, timeout: 20000 });
   await page.evaluate(() => {
     window.__apex.garageAero(false);
     window.__apex.garageStep(1 / 60, 120);   // 2 s of closing: X_CLOSE_RATE reaches 0 well inside it
@@ -87,7 +101,7 @@ test.describe("garage active aero", () => {
     const before = await page.evaluate(() => window.__apex.garageCam());
     expect(before.spin, "the garage opens on the turntable").toBe(true);
 
-    await page.locator("#cs-aero").click();
+    await clickId(page, "cs-aero");
     const after = await page.evaluate(() => window.__apex.garageCam());
     // The flaps rotate about the car's X axis; the turntable looks very nearly
     // ALONG it, where the sweep projects to almost nothing. Pressing the button
@@ -101,23 +115,23 @@ test.describe("garage active aero", () => {
 
   test("it also aims when a WHOLE-CAR preset is showing, not just the turntable", async ({ page }) => {
     await openGarage(page);
-    await page.locator("#cs-cam").click();
-    await page.locator('[data-cs-view="rear"]').click();     // 8.4 m — dead-on, hides the sweep
+    await clickId(page, "cs-cam");
+    await page.evaluate(() => document.querySelector('[data-cs-view="rear"]').click());
     const wide = await page.evaluate(() => window.__apex.garageCam());
     expect(wide.spin).toBe(false);
     expect(wide.dist).toBeGreaterThan(5);
-    await page.locator("#cs-aero").click();
+    await clickId(page, "cs-aero");
     expect((await page.evaluate(() => window.__apex.garageCam())).dist).toBeLessThan(3.2);
   });
 
   test("a player who has aimed the camera keeps their angle", async ({ page }) => {
     await openGarage(page);
-    await page.locator("#cs-cam").click();
-    await page.locator('[data-cs-view="side"]').click();
+    await clickId(page, "cs-cam");
+    await page.evaluate(() => document.querySelector('[data-cs-view="side"]').click());
     // ...then move in close, which is the "I have aimed this deliberately" signal.
     await page.evaluate(() => { for (let i = 0; i < 24; i++) document.getElementById("cs-view-in").click(); });
     const chosen = await page.evaluate(() => window.__apex.garageCam());
-    await page.locator("#cs-aero").click();
+    await clickId(page, "cs-aero");
     const after = await page.evaluate(() => window.__apex.garageCam());
     expect(after.az).toBeCloseTo(chosen.az, 5);
     expect(after.dist).toBeCloseTo(chosen.dist, 5);
