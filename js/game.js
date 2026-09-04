@@ -471,7 +471,16 @@ function hudProfileLabel() { return "HUD: " + hudProfile.toUpperCase(); }
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
-function hudMetricsLayoutLabel() { return "METRICS: " + hudMetricsLayout.toUpperCase(); }
+// AUTO NAMES WHAT IT RESOLVED TO. Five stops, and the first two are the same
+// picture whenever auto lands on "full" — which it does on any roomy band, and
+// on the BROADCAST profile with a non-broadcast camera. `hud-met-full` has no
+// CSS at all (it is the base state: show everything), so two clicks changed
+// nothing and the control read as broken. It was not; it was silent.
+function hudMetricsLayoutLabel() {
+  if (hudMetricsLayout !== "auto") return "LAYOUT: " + hudMetricsLayout.toUpperCase();
+  const m = document.body.className.match(/hud-met-([a-z]+)/);
+  return "LAYOUT: AUTO" + (m ? " \u00b7 " + m[1].toUpperCase() : "");
+}
 const HUD_VIS_MODES = ["auto", "on", "off"];
 let hudMapVis = store.get("hudMapVis", "auto");
 let hudGapsVis = store.get("hudGapsVis", "auto");
@@ -8554,6 +8563,11 @@ function syncSettingsAvailability() {
   $("pm-camtune").disabled = !inRace;
 }
 function openSettings() {
+  // AUTO's resolved layout moves with the CAMERA and the band caps, so the
+  // METRICS label has to be re-read on open — it is written at boot and on
+  // click, and a resolution that went stale between the two would be a worse
+  // lie than the silence this replaced.
+  if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }
