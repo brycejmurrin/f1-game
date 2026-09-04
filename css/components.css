@@ -1172,6 +1172,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-weight: 600;
   letter-spacing: var(--ls-2);
   color: var(--text);
+  /* Same dark plate as the door index — not the glassier default --plate. */
+  background: var(--plate-opaque);
+  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
 }
 #pmsettings-inner .pm-group :is(.opt-btn, .preset-btn) {
   width: auto;

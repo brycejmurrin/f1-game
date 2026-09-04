@@ -1172,6 +1172,7 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab", "color"), "var(--text)");
   assert.equal(decl(css("css/tuner.css"), ".adv-sec", "color"), "var(--steel)", "section chrome, not a leftover red headline");
   assert.equal(decl(menus, ".track-row.active .track-row-name", "color"), "var(--text)");
+  assert.equal(decl(components, "#pmsettings-inner .pm-group button, #pmsettings-inner .pm-doors button", "background"), "var(--plate-opaque)");
   assert.equal(decl(components, "#pmsettings-inner .pm-doors button", "background"), "var(--plate-opaque)");
 });
 
