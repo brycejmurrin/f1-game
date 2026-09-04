@@ -50,11 +50,15 @@ const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1 };
 const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1 };
 const MET_LAYOUTS = ["full", "timing", "driver", "compact"];
 // Body classes toggled: hud-met-full, hud-met-timing, hud-met-driver, hud-met-compact.
-// AUTO is always the full set. fitHud() scales / stacks / drops gaps when a
-// band is tight — the old resolver hid a cluster from profile or those caps,
-// which made MAP+GAPS+timing+driver mutually exclusive. Forced LAYOUT names
-// stay on the stored cycle (and the overlay compact flag) but no longer
-// strip chrome; css/hud.css has no hud-met-* hide rules.
+// AUTO is always the full set: fitHud() scales / stacks / drops the gap strip
+// when a band is tight, so nothing has to be hidden to make room. The old
+// resolver hid a cluster from the PROFILE or from those caps too, which made
+// MAP+GAPS+timing+driver mutually exclusive and let a layout overrule the
+// player's own MAP toggle.
+// A FORCED NAME STILL STRIPS CHROME, because that is the only thing the LAYOUT
+// control means — and with the hide rules gone from AUTO it can no longer fire
+// behind the player's back. css/hud.css keys those rules on hud-met-timing /
+// -driver / -compact, which this resolver emits ONLY for a forced name.
 function resolveMetricsLayout() {
   const want = G.hudMetricsLayout || "auto";
   if (want !== "auto") return want;
@@ -191,6 +195,10 @@ const GAP_DROP_AT  = { narrow: 550, wide: 800 };
 // which decide whether the strip actually fits — so the measurement wins
 // wherever there is one.
 let _gapTight = null, _gapDrop = null;
+// [short, long] intrinsic width of `.hud-gaps`, each learned the tick it is on
+// screen. fitHud needs BOTH to answer its two questions without feeding its own
+// output back in — see the rung comment there.
+const _gapW = [0, 0];
 // The gap is distance ÷ the PLAYER'S OWN speed, so under braking the divisor
 // halves within a second and the tenths jumped 2x between ticks (10 Hz) with
 // the rival not having moved relative to the car. Smooth the displayed
@@ -288,7 +296,16 @@ function fitHud() {
   // is layout-free; a length change re-fits on the next tick.
   const gapLen = (els.gapA ? els.gapA.textContent.length : 0) * 100 +
     (els.gapB ? els.gapB.textContent.length : 0);
-  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "|" + gapLen + "|" + document.body.className;
+  // The sector box grows from bare padding to three rows the first time
+  // buildSecRows runs, and --hud-sec-h (the offset the track-limits chip hangs
+  // off) is measured from it. Nothing else in this key moves at that moment, so
+  // without the row count the published height stayed at the empty box's for
+  // the whole 3 s same-key backoff. childElementCount costs no layout.
+  const secRows = els.hudSectors ? els.hudSectors.childElementCount : 0;
+  // BUTTON SIZE is a second slider on the same layer, so it belongs in the key:
+  // moving it changes the dock's intrinsic height and nothing else here does.
+  const btnScale = +root.style.getPropertyValue("--hud-btn-scale") || scale;
+  const key = window.innerWidth + "x" + window.innerHeight + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "|" + document.body.className;
   if (key === _fitKey && --_fitWait > 0) return;
   // A CHANGED key (resize / hud-scale) re-fits at the next tick; the counter
   // only paces the same-key safety re-measure: 30 ticks at the ~10 Hz HUD
@@ -330,16 +347,35 @@ function fitHud() {
   // hud-layout.spec.js, which only ever compared HUD boxes against CONTROLS.
   // Measured off the elements themselves rather than read from env(), which is
   // not resolvable from script: the map's own left edge is `sal + z·10`.
+  //
+  // AND A HIDDEN ANCHOR HAS NO INSET TO READ. `display:none` gives an all-zero
+  // rect, so `innerWidth - 0 - 10*sz` made `sar` the WHOLE VIEWPORT — and then
+  // `(half - sar)` is negative, `capFor` returns a negative cap, and set()'s
+  // 0.4 floor painted the entire HUD at 40 % zoom. Both profiles that hide the
+  // sector box do it: `hud-prof-minimal` and every broadcast CAMERA outside the
+  // broadcast profile (css/hud.css). That is the "the simple HUD just makes
+  // everything tiny" report — the profile removed one box and the fit maths
+  // read the removal as a viewport-wide inset. hud-layout.spec.js pins the
+  // invariant it broke: in MINIMAL, the band's zoom with the sector box hidden
+  // must not be SMALLER than with it forced back — removing a widget can only
+  // ever need less room. Guarded on the rect having a WIDTH (laid out)
+  // rather than on the class, so any future hide rule is covered too; the
+  // fallback is the other side's measurement, which is right on every phone
+  // whose notch is symmetric in landscape and never worse than the 0 this
+  // used to fall back to on the left.
+  const mmR = els.minimap ? els.minimap.getBoundingClientRect() : null;
+  const scR = els.hudSectors ? els.hudSectors.getBoundingClientRect() : null;
   const mz = (els.minimap && els.minimap.currentCSSZoom) || 1;
   const sz = (els.hudSectors && els.hudSectors.currentCSSZoom) || 1;
-  const sal = els.minimap ? Math.max(0, els.minimap.getBoundingClientRect().left - 10 * mz) : 0;
-  const sar = els.hudSectors ? Math.max(0, window.innerWidth - els.hudSectors.getBoundingClientRect().right - 10 * sz) : 0;
+  const salM = mmR && mmR.width ? Math.max(0, mmR.left - 10 * mz) : null;
+  const sarM = scR && scR.width ? Math.max(0, window.innerWidth - scR.right - 10 * sz) : null;
+  const sal = salM != null ? salM : (sarM != null ? sarM : 0);
+  const sar = sarM != null ? sarM : (salM != null ? salM : 0);
   // WITH the gap strip and WITHOUT it. When the band fits at the player's own
   // HUD SIZE once the strip steps out of the row, that is the cheaper trade:
   // move one chip rather than shrink the map and all four timing tiles on
   // every notched phone. Only when it does not fit even without the strip
   // does the cap actually bite.
-  const leftG = (map ? 10 + map + 8 + gaps : 0) + FIT_AIR;
   const leftN = (map ? 10 + map : 0) + FIT_AIR;
   const right = wide(els.hudSectors) + 10 + FIT_AIR;
   // WHERE IS THE TOWER? The model below splits the viewport at the centre and
@@ -360,14 +396,32 @@ function fitHud() {
     ? (window.innerWidth - sal - sar) / Math.max(Math.max(top, l) + right, 1)
     : Math.min((half - sal) / Math.max(l + top / 2, 1),
                (half - sar) / Math.max(right + top / 2, 1)));
-  const capWith = capFor(leftG), capNo = capFor(leftN);
-  // Rung 1: the strip does not fit inline AS RENDERED -> shorten. Rung 2: it is
-  // already short and still does not fit -> drop below `.hud-top`. Reading the
-  // rendered spelling off the same attribute gapForm() writes keeps one source
-  // of truth; a remembered flag here would desync from the DOM it describes.
-  _gapTight = capWith < scale;
-  _gapDrop = _gapTight && ("gapShort" in root.dataset);
-  const capTop = Math.max(capWith, Math.min(scale, capNo));
+  // EACH RUNG IS JUDGED AGAINST THE SPELLING IT DECIDES, NOT THE ONE ON SCREEN.
+  //
+  // Both used to read the RENDERED width, and that is a feedback loop with no
+  // fixed point wherever the true fit lands between the two spellings: long
+  // does not fit -> shorten -> the short strip DOES fit -> lengthen -> it does
+  // not fit -> ... every 10 Hz tick, with `drop` (which is gated on the short
+  // state) flickering along with it. A strip that alternates between beside the
+  // band and below it is a candidate for the "sometimes the gap doesn't slide
+  // all the way up" report, though the loop was found by reading this code
+  // rather than by catching it in the act — what IS measured is the state
+  // after: 40 consecutive ticks at 640x360, both rungs held (2026-09-04).
+  //
+  // Fixed by asking each question about a FIXED width: shorten iff the LONG
+  // spelling does not fit, drop iff the SHORT one does not fit inline either.
+  // Neither answer depends on the current state, so there is nothing to
+  // oscillate. Only the rendered spelling can be measured, so each is
+  // remembered as it is seen; until both have been, they share one number and
+  // this behaves exactly as it did before — one tick, then it converges.
+  if (gaps) _gapW["gapShort" in root.dataset ? 0 : 1] = gaps;
+  const wShort = _gapW[0] || gaps, wLong = _gapW[1] || gaps;
+  const leftFor = (w) => (map ? 10 + map + 8 + w : 0) + FIT_AIR;
+  const capLong = capFor(leftFor(wLong)), capShort = capFor(leftFor(wShort));
+  const capNo = capFor(leftN);
+  _gapTight = capLong < scale;
+  _gapDrop = _gapTight && capShort < scale;
+  const capTop = Math.max(_gapDrop ? 0 : (_gapTight ? capShort : capLong), Math.min(scale, capNo));
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
   // pushes a dock", css/overlays.css), so its rect is the COMPRESSED width and its
@@ -406,8 +460,60 @@ function fitHud() {
   // The dock's SCREEN width over the CHROME's zoom: #hud-limits is inside the
   // --hud-z-top group, so its `right:` needs the stand-off in that space, and
   // the dock's own zoom (the raw slider) never enters it.
+  // THE SECTOR BOX'S HEIGHT, for the chip that hangs off its bottom edge.
+  // #hud-limits derived that offset from a hand-computed `4.8em` (three rows at
+  // line-height 1.6) — which is only the box's height while the box EXISTS. Every
+  // profile that hides it (MINIMAL, and a broadcast camera outside the broadcast
+  // profile) left the chip hanging in mid-air below an empty corner, reported
+  // from a phone as "LIMITS floats in the middle of the screen". Measured, in
+  // the chip's own zoom units, it is 0 exactly when the box is gone.
+  const secH = tall(els.hudSectors);
+  root.style.setProperty("--hud-sec-h", secH.toFixed(1) + "px");
   const chromeZ = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
-  const dockRW = _dockR ? _dockR.getBoundingClientRect().width / chromeZ : 0;
+  // THE RIGHT DOCK'S WIDTH — BUT ONLY WHEN THE CHIP ACTUALLY REACHES IT.
+  // Standing off unconditionally dragged a top-right chip halfway across the
+  // screen on any viewport tall enough for the two never to meet (the second
+  // half of the same phone report). #hud-dock is bottom-anchored and only as
+  // tall as its tallest column, so the test is one rect comparison: does the
+  // chip's bottom edge reach the dock's top edge? The chip's own box cannot be
+  // measured — it is `hidden` until the player takes a strike — so its top is
+  // reconstructed from the column it hangs in: #pausebtn's bottom edge plus the
+  // same 4 px of air css/hud.css puts between them, then the sector box, then
+  // the 15 px offset. CHIP_H is its one line plus padding at --fs-micro.
+  const CHIP_H = 26, CHIP_DROP = 15;
+  const pauseR = els.pausebtn ? els.pausebtn.getBoundingClientRect() : null;
+  const colTop = scR && scR.height ? scR.top : (pauseR && pauseR.height ? pauseR.bottom + 4 : 0);
+  const limBot = colTop + (secH + CHIP_DROP + CHIP_H) * chromeZ;
+  const dockR = _dockR ? _dockR.getBoundingClientRect() : null;
+  const hitsRight = !!(dockR && dockR.width && limBot > dockR.top);
+  // WHEN THE RIGHT COLUMN IS FULL, GO LEFT — DO NOT WALK INTO THE MIDDLE.
+  // Standing off the dock's width is the only way to stay right-anchored, and
+  // on a phone that dock is ~150px: the chip landed a third of the way across
+  // the screen, over the track, which is the second half of the same report.
+  // The LEFT column has room the right one does not — the map ends well above
+  // the steering arrows — so the chip moves there instead, and only falls back
+  // to the horizontal stand-off when the left is full too.
+  //
+  // --hud-left-h is that column's occupied BOTTOM EDGE, measured off whatever
+  // is actually in it: the map, the gap strip, either, or neither (both have
+  // their own OFF switches, and the strip drops into that column on its own).
+  // It is a screen y over the shared --hud-z-top, which is the chip's own
+  // coordinate space, so the CSS adds its air and nothing else. The BROADCAST
+  // tower lives in this column too, so it is a floor on the same measurement.
+  const gapsEl = els.gapA ? els.gapA.parentNode : null;
+  const gapsR = gapsEl ? gapsEl.getBoundingClientRect() : null;
+  let leftBot = bcast && _hudTop ? _hudTop.getBoundingClientRect().bottom : 0;
+  if (mmR && mmR.width) leftBot = Math.max(leftBot, mmR.bottom);
+  if (gapsR && gapsR.width) leftBot = Math.max(leftBot, gapsR.bottom);
+  root.style.setProperty("--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
+  const dockL = _dockL ? _dockL.getBoundingClientRect() : null;
+  const leftRoom = !(dockL && dockL.width && leftBot + (8 + CHIP_H) * chromeZ > dockL.top);
+  const limLeft = hitsRight && leftRoom;
+  if (limLeft !== ("limitsLeft" in root.dataset)) {
+    if (limLeft) root.dataset.limitsLeft = "1";
+    else delete root.dataset.limitsLeft;
+  }
+  const dockRW = hitsRight && !limLeft ? dockR.width / chromeZ : 0;
   root.style.setProperty("--dock-r-w", (dockRW > 0 ? dockRW + 8 : 0).toFixed(1) + "px");
   const dockH = Math.max(tall(_dockL), tall(_dockR));
   const capDock = dockH ? (window.innerHeight - 3 * FIT_AIR) / dockH : Infinity;
@@ -420,13 +526,18 @@ function fitHud() {
   // forever and re-measuring them every tick is the cost the backoff exists
   // to avoid.
   if (!dockH && !document.body.classList.contains("desktop")) { if (++_fitRetry <= 30) _fitKey = ""; } else _fitRetry = 0;
-  const set = (prop, cap) => {
-    if (cap >= scale) root.style.removeProperty(prop);   // fits: the player's number, untouched
+  // EACH CAP IS COMPARED AGAINST THE SLIDER THAT DRIVES IT. The readout bands
+  // ride --hud-scale; the touch dock rides --hud-btn-scale (BUTTON SIZE, its
+  // own slider — css/overlays.css), which defaults to --hud-scale and is only
+  // inline once the player has moved it. Comparing the dock's cap against the
+  // wrong slider would either pin a cap that fits or drop one that does not.
+  const set = (prop, cap, base) => {
+    if (cap >= base) root.style.removeProperty(prop);   // fits: the player's number, untouched
     else root.style.setProperty(prop, String(Math.max(0.4, Math.round(cap * 1000) / 1000)));
   };
-  set("--hud-z-top", capTop);
-  set("--hud-z-bot", capBot);
-  set("--hud-z-dock", capDock);
+  set("--hud-z-top", capTop, scale);
+  set("--hud-z-bot", capBot, scale);
+  set("--hud-z-dock", capDock, btnScale);
 }
 
 function updateHud(force) {

@@ -85,9 +85,13 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
     const tap = rung(r.decls.get("--tap"), "dock --tap"), hold = rung(r.decls.get("--hold"), "dock --hold");
     assert.ok(tap >= 44, `${r.context.join(" ")} --tap ${tap}px >= 44`);
     assert.ok(hold >= tap, `held controls (${hold}px) are never smaller than tapped ones (${tap}px)`);
-    // The 24px painted floor survives HUD SIZE below 100 % (2026-08 axis audit).
-    assert.match(r.decls.get("--tap"), /calc\(24px \/ var\(--hud-scale\)\)/);
-    assert.match(r.decls.get("--hold"), /calc\(24px \/ var\(--hud-scale\)\)/);
+    // The 24px painted floor survives BUTTON SIZE below 100 % (2026-08 axis
+    // audit). --hud-btn-scale, not --hud-scale: the dock got its own slider
+    // (2026-09-04) because it and the readouts compete for the same edges, and
+    // the floor has to divide by the axis the dock actually zooms by or it
+    // stops being a floor the moment the two part.
+    assert.match(r.decls.get("--tap"), /calc\(24px \/ var\(--hud-btn-scale\)\)/);
+    assert.match(r.decls.get("--hold"), /calc\(24px \/ var\(--hud-btn-scale\)\)/);
   }
   const ov = css("css/overlays.css");
   assert.equal(decl(ov, "body:not(.desktop) .dock .touchbtn", "width"), "var(--tap)");
@@ -143,8 +147,12 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   const hud = read("js/ui/hud.js");
   const air = +(/const FIT_AIR = (\d+)/.exec(hud) || [])[1];
   assert.ok(air > 0, "hud.js declares FIT_AIR");
-  assert.match(hud, /set\("--hud-z-dock", capDock\)/, "fitHud writes --hud-z-dock");
-  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, var(--hud-scale))", "the dock zooms by the capped value, slider as fallback");
+  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, var(--hud-btn-scale))", "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback");
+  // And fitHud compares that cap against the SAME slider — against --hud-scale
+  // it would either pin a cap that fits or drop one that does not, the moment a
+  // player set the two apart.
+  assert.match(hud, /set\("--hud-z-dock", capDock, btnScale\)/, "the dock cap is judged against BUTTON SIZE");
+  assert.match(hud, /getPropertyValue\("--hud-btn-scale"\) \|\| scale/, "and falls back to HUD SIZE while unset");
   const capTilt = (H - 3 * air) / tallestTilt;
   assert.ok(capTilt >= 2, `tilt/manual cap (${capTilt.toFixed(2)}) only bites past 200 % on 390px — the raw slider fits every setting`);
   const capButtons = (H - 3 * air) / tallestButtons;

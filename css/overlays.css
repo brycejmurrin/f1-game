@@ -336,9 +336,12 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      The two sizes are VARIABLES because the alignment rule below has to do
      arithmetic on them; as literals repeated in two media queries they went
      stale the moment either one moved. */
-  /* --hud-scale, with the HUD: the dock is a control rather than a readout, but
-     it is on screen only while driving and competes with the HUD for the same
-     edges, so one slider owns everything you see during a race. */
+  /* --hud-btn-scale, the dock's OWN slider (BUTTON SIZE, css/tokens.css). The
+     dock is a control rather than a readout, and it competes with the HUD for
+     the same edges — which is precisely why the two stopped sharing one knob:
+     shrinking the buttons is how a player buys the readouts room back, and one
+     slider could only trade them for the whole screen at once. It DEFAULTS to
+     --hud-scale, so a player who never touches it sees no change at all. */
   /* max() on the HUD axis: these local values SHADOW the global floored
      --tap for the whole dock subtree, and the dock zooms by the RAW
      --hud-scale (not the capped --hud-z) — so the bare 54px painted
@@ -348,14 +351,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      literals win and nothing moves. The only tap targets inside any
      HUD-zoom subtree (2026-08 axis audit). */
   body:not(.desktop) .dock {
-    --tap: max(54px, calc(24px / var(--hud-scale)));
-    --hold: max(72px, calc(24px / var(--hud-scale)));
+    --tap: max(54px, calc(24px / var(--hud-btn-scale)));
+    --hold: max(72px, calc(24px / var(--hud-btn-scale)));
     /* --hud-z-dock: fitHud's height cap for the pedal/shift columns — the
        raw slider let the 2-high pedal stack outgrow a 390px landscape
        viewport from 150% and put BRAKE off the top edge. Same mechanism as
        the --hud-z-top/bot caps on the readout clusters; absent when the
        player's setting fits. */
-    zoom: var(--hud-z-dock, var(--hud-scale));
+    zoom: var(--hud-z-dock, var(--hud-btn-scale));
   }
   body:not(.desktop) .dock .touchbtn { width: var(--tap); height: var(--tap); font-size: var(--fs-micro); }
   body:not(.desktop) .dock .pedal,
@@ -384,8 +387,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   @media (max-width: 700px) {
     /* Same HUD-axis floor as the base dock values above. */
     body:not(.desktop) .dock {
-      --tap: max(48px, calc(24px / var(--hud-scale)));
-      --hold: max(64px, calc(24px / var(--hud-scale)));
+      --tap: max(48px, calc(24px / var(--hud-btn-scale)));
+      --hold: max(64px, calc(24px / var(--hud-btn-scale)));
     }
     body:not(.desktop) .dock .touchbtn { font-size: var(--fs-micro); }
     body:not(.desktop) .dock .pedal,

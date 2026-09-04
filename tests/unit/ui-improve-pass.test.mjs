@@ -885,10 +885,20 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
     "METRICS sits on its own DISPLAY row, not beside HUD");
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
-    /HUD SIZE PREVIEW/,
+    /SIZE PREVIEW/,
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hud-sample"/,
     "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
+  // The sample carries BOTH sliders now: a readout box for HUD SIZE and a pad
+  // for BUTTON SIZE, which has exactly the same no-feedback problem (every real
+  // cluster is hidden behind the .dim sheet). The pad divides the block's own
+  // --hud-scale zoom back out, so what the drag shows is the RATIO of the two.
+  assert.match(decl(css("css/components.css"), "#pm-hud-sample::after", "--pad") || "",
+    /var\(--hud-btn-scale\) \/ var\(--hud-scale\)/,
+    "the button pad previews BUTTON SIZE relative to HUD SIZE");
+  // BUTTON SIZE sits with HUD SIZE inside the fold, not stranded on the sheet.
+  assert.match(read("index.html"), /id="pm-hudscale"[\s\S]*id="pm-btnscale"/,
+    "BUTTON SIZE follows HUD SIZE in the HUD fold");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--tap)",
     "METRICS summary matches the HIDE HUD tap row");
   assert.equal(decl(css("css/components.css"), /#pm-metrics-details \[role="group"\]/, "display"), "flex",

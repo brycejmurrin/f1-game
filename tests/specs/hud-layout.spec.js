@@ -63,7 +63,7 @@ async function race(page, steer, manual, ins, opts) {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(([s, m, prof]) => {
+  await page.evaluate(([s, m, prof, lay]) => {
     localStorage.setItem("apex26.steerMode", JSON.stringify(s));
     localStorage.setItem("apex26.manual", JSON.stringify(m));
     // THE PROFILE IS A BOOT KEY. Every case below used the DEFAULT profile on a
@@ -71,7 +71,11 @@ async function race(page, steer, manual, ins, opts) {
     // from centre to the top-LEFT corner, into #minimap's own slot — was never
     // once measured here. It shipped painting the tower over the POS tile.
     if (prof) localStorage.setItem("apex26.hudProfile", JSON.stringify(prof));
-  }, [steer, manual, o.profile || null]);
+    // LAYOUT is a boot key too, and until 2026-09-04 it was the only HUD control
+    // with no stylesheet behind it at all — three names that set a body class
+    // and changed nothing on screen.
+    if (lay) localStorage.setItem("apex26.hudMetricsLayout", JSON.stringify(lay));
+  }, [steer, manual, o.profile || null, o.layout || null]);
   await page.reload();
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.addStyleTag({ content:
@@ -210,6 +214,108 @@ for (const c of [
     });
   });
 }
+
+// REMOVING A WIDGET MUST NEVER SHRINK THE HUD.
+//
+// fitHud() reads the safe-area insets off the two elements that carry them —
+// #minimap on the left, #hud-sectors on the right — because env() is not
+// resolvable from script. A `display:none` element has an all-zero rect, so
+// once a profile hid the sector box the right inset came out as
+// `innerWidth - 0 - 10z`, i.e. the WHOLE VIEWPORT: the cap went negative and
+// set()'s 0.4 floor painted every cluster at 40 %. Two shipped profiles hit it
+// (MINIMAL, and any broadcast camera outside the broadcast profile), which is
+// what "the simple HUD just makes everything tiny" was.
+//
+// Asserted as a RELATIVE invariant, in ONE boot: read the band's zoom with the
+// sector box gone, force it back (`!important`, to beat the profile's own
+// `!important` hide), let two HUD ticks re-fit, read again. Fewer widgets can
+// only ever need LESS room, so the first number must not be the smaller one.
+// Before the fix it was 0.4 against ~1.
+test.describe("minimal profile", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test("hiding the sector box does not shrink every other cluster", async ({ page }) => {
+    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    await race(page, "buttons", false, v, { profile: "minimal" });
+    const zoomNow = () => page.evaluate(() => {
+      const r = document.documentElement;
+      const s = +r.style.getPropertyValue("--hud-z-top");
+      // Unset means "fits at the player's own number" — that IS the scale.
+      return s || +r.style.getPropertyValue("--hud-scale") || 1;
+    });
+    const hidden = await zoomNow();
+    await page.evaluate(() => {
+      const el = document.getElementById("hud-sectors");
+      if (el) el.style.setProperty("display", "flex", "important");
+    });
+    await page.waitForFunction(() => {
+      const el = document.getElementById("hud-sectors");
+      return !!el && el.getBoundingClientRect().width > 0;
+    }, null, { polling: 100, timeout: 10000 });
+    await page.waitForTimeout(400);   // two 10 Hz HUD ticks, so fitHud re-runs
+    const shown = await zoomNow();
+    await page.evaluate(() => {
+      const el = document.getElementById("hud-sectors");
+      if (el) el.style.removeProperty("display");
+    });
+    expect(hidden).toBeGreaterThan(0);
+    expect(hidden, "a profile that removes a cluster must not shrink the rest")
+      .toBeGreaterThanOrEqual(shown);
+  });
+
+  // And the profile has to earn its name: MINIMAL means fewer widgets, not
+  // smaller ones. These four are what it drops (css/hud.css).
+  test("drops the analysis widgets and keeps what you drive by", async ({ page }) => {
+    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    await race(page, "buttons", false, v, { profile: "minimal" });
+    const r = await page.evaluate(() => {
+      const w = (sel) => {
+        const el = document.querySelector(sel);
+        return el ? el.getBoundingClientRect().width : -1;
+      };
+      return {
+        sectors: w("#hud-sectors"), energy: w("#hud-energy"),
+        ot: w("#hud-ot"), aero: w("#hud-aero"),
+        best: w(".hud-top .hud-box:nth-child(4)"),
+        pos: w("#hud-pos"), speed: w("#hud-speed"), gear: w("#hud-gear"),
+      };
+    });
+    for (const k of ["sectors", "energy", "ot", "aero", "best"])
+      expect(r[k], `MINIMAL must drop ${k}`).toBe(0);
+    for (const k of ["pos", "speed", "gear"])
+      expect(r[k], `MINIMAL must keep ${k}`).toBeGreaterThan(0);
+  });
+});
+
+// THE LAYOUT CONTROL HAS TO DO SOMETHING. It was reported twice as inert, and
+// it was: hud-met-timing / -driver / -compact were body classes with no rule
+// behind them. COMPACT is the one that drops both halves, so one boot pins both
+// directions — and MAP/GAPS, which have their own controls, must survive it.
+test.describe("metrics layout", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test("COMPACT drops both metric halves and leaves MAP and GAPS alone", async ({ page }) => {
+    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    await race(page, "buttons", false, v, { layout: "compact" });
+    const r = await page.evaluate(() => {
+      const w = (sel) => {
+        const el = document.querySelector(sel);
+        return el ? el.getBoundingClientRect().width : -1;
+      };
+      return {
+        cls: document.body.className.match(/hud-met-[a-z]+/g) || [],
+        sectors: w("#hud-sectors"), energy: w("#hud-energy"),
+        best: w(".hud-top .hud-box:nth-child(4)"),
+        pos: w("#hud-pos"), map: w("#minimap"), gaps: w(".hud-gaps"),
+      };
+    });
+    expect(r.cls, "a forced name must reach the body").toEqual(["hud-met-compact"]);
+    for (const k of ["sectors", "energy", "best"])
+      expect(r[k], `COMPACT must drop ${k}`).toBe(0);
+    for (const k of ["pos", "map", "gaps"])
+      expect(r[k], `COMPACT must not touch ${k}`).toBeGreaterThan(0);
+  });
+});
 
 // THE CHIP THAT IS ONLY EVER HIDDEN IN A FIXTURE. #hud-limits is `hidden`
 // until player.cutWarn > 0, so every case above measures it as absent and a
