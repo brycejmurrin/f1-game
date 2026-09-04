@@ -128,9 +128,18 @@ const STEER_LEVELS = {
   sim:    { steerRate: 7, steerExpo: 6, steerLock: 7, steerSpeed: 7 },
 };
 const STEER_LEVEL_ORDER = ["easy", "assist", "normal", "sim"];
+const STEER_LEVEL_LABEL = { easy: "SUPER EASY", assist: "ASSISTED", normal: "NORMAL", sim: "SIM" };
 const STEER_DEFAULTS = { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5 };
 const HELP_LEVELS = { low: 1, med: 5, high: 9 };   // low = OFF (see helpFromSlider)
+const HELP_LABEL = { low: "LOW", med: "MEDIUM", high: "HIGH" };
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
+const LINE_FOLD = { off: "LINE OFF", corner: "CORNERS", full: "FULL" };
+
+function paintFold(el, bits) {
+  if (!el) return;
+  el.innerHTML = bits.map((p, i) => (i ? '<span data-fold="sep"> · </span>' : "") +
+    '<span data-fold="' + p[0] + '">' + p[1] + "</span>").join("");
+}
 function applyPreset(name) {
   const p = PRESETS[name];
   if (!p) return;
@@ -176,6 +185,17 @@ function refreshMacros() {
   for (const n of ["off", "corner", "full"]) {
     const b = $("pm-line-" + n); if (b) b.classList.toggle("active", n === lb);
   }
+  paintFold($("adv-feel-sum"), [
+    ["k", "FEEL"],
+    ["val", STEER_LEVEL_LABEL[lvl] || "CUSTOM"],
+    ["val", "TILT " + ts],
+  ]);
+  paintFold($("adv-aids-sum"), [
+    ["k", "AIDS"],
+    dh <= 1 ? ["off", "OFF"] : ["val", HELP_LABEL[hb]],
+    [lb === "off" ? "off" : "val", LINE_FOLD[lb]],
+  ]);
+  paintFold($("adv-more"), [["k", "ADVANCED"]]);
 }
 
 //
@@ -446,7 +466,7 @@ Input.setSpeedProvider(function () {
   if (!p) return 0;
   return Math.abs(p.speed || 0) / Math.max(G.PACE || 1, 0.05);
 });
-$("adv-details").addEventListener("toggle", () => {
+$("advanced-inner").addEventListener("toggle", () => {
   if (G.soundOn) GameAudio.uiSelect();
 });
 // Any granular Advanced edit refreshes the simplified controls (events bubble up).

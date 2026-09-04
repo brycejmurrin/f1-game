@@ -353,7 +353,6 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   background: rgba(0, 0, 0, 0.5); border: 1px solid var(--card-line);
   border-radius: var(--r-sm); padding: calc(var(--gap) * 0.5);
 }
-.adv-intro { font-size: var(--fs-micro); opacity: 0.7; margin: 0 0 calc(var(--gap) * 0.5); line-height: 1.45; }
 .adv-sec {
   color: var(--steel); font-size: var(--fs-micro); letter-spacing: var(--ls-4);
   margin: calc(var(--gap) * 4 / 3) 0 calc(var(--gap) * 2 / 3); padding-bottom: calc(var(--gap) / 3);
@@ -391,40 +390,58 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   width: 100%; margin: 0; accent-color: var(--red); height: var(--slider); cursor: pointer;
 }
 /* ---------- MUSIC & SOUND panel ----------
-   Two sections, each a header row with a small ON/OFF beside it and one slider
-   under it. The switches are deliberately small: they are two-state, so they do
-   not need the thumb-sized target a primary action does, and full-width halves
-   made a four-control panel scroll on a landscape phone. */
-.as-sec { margin-bottom: calc(var(--gap) * 0.9); }
-.as-sec + .as-sec { border-top: 1px solid rgba(255,255,255,0.08); padding-top: calc(var(--gap) * 0.8); }
-/* .as-head is now a <summary> (each section is a <details>) — list-style and
-   cursor are the only things a <summary> needs that a <div> didn't; the flex
-   row it already was carries over unchanged since the class, not the tag,
-   supplies it. The ON/OFF switch inside MUSIC/SOUND EFFECTS' summaries stops
-   its own click from reaching this element (js/game/audio-panel.js), so
-   pressing it changes the setting without also toggling the section. */
-.as-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); list-style: none; cursor: pointer; }
-.as-head::-webkit-details-marker { display: none; }
-.as-head .adv-sec { margin: 0; }
-/* The marker sits on the LABEL, not .as-head itself: .as-head is a two-child
-   flex row (label, switch) with space-between, and a marker as a third flex
-   child there would get its own evenly-spaced slot instead of sitting next to
-   the text it belongs to. */
-.as-head .adv-sec::before { content: "\25BE"; font-size: var(--fs-micro); opacity: 0.6; margin-right: calc(var(--gap) * 0.5); display: inline-block; }
-details[open] > .as-head .adv-sec::before { content: "\25B4"; }
+   Five closed folds, same disclosure language as DISPLAY. ON/OFF lives in
+   the fold body so a summary tap only opens. */
+.as-sec { margin-bottom: calc(var(--gap) * 0.45); }
+#pmsettings-inner #audioset .as-sec > summary,
+#pmsettings-inner #audioset .as-sec > summary:active {
+  color: var(--steel);
+  font-style: italic;
+  opacity: 1;
+  background-color: transparent;
+  background-image: var(--grad-rule);
+  background-position: bottom left;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  box-sizing: border-box;
+  cursor: pointer;
+  justify-content: flex-start;
+  font-size: clamp(var(--fs-2), calc(1.8 * var(--vwz)), var(--fs-4));
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
+}
+@media (hover: hover) {
+  #pmsettings-inner #audioset .as-sec > summary:hover {
+    color: var(--text);
+    background-color: transparent;
+    background-image: var(--grad-rule);
+    background-position: bottom left;
+    background-size: 100% 1px;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+  }
+}
+#pmsettings-inner #audioset .as-sec > summary::after { content: none; }
+#pmsettings-inner #audioset .as-sec > summary::before { content: "\25BE"; }
+#pmsettings-inner #audioset .as-sec[open] > summary::before { content: "\25B4"; }
 /* Qualified with .opt-row on purpose: the generic `.opt-row .opt-btn` rule below
    has the same specificity and comes later in the file, so an unqualified
    `.as-toggle .opt-btn` loses and the buttons collapse to their flex basis. */
-.opt-row.as-toggle { flex: 0 0 auto; width: auto; gap: calc(var(--gap) / 3); margin-top: 0; }
+.opt-row.as-toggle { width: 100%; gap: calc(var(--gap) / 3); margin-top: calc(var(--gap) * 0.45); }
 .opt-row.as-toggle .opt-btn {
-  flex: 0 0 auto; width: auto;
+  flex: 1 1 0; width: auto;
   min-width: 52px; min-height: var(--tap-sm);
   padding: calc(var(--gap) / 3) var(--gap); font-size: var(--fs-micro); letter-spacing: var(--ls-3);
-}
-@container sheet (max-width: 240px) {
-  #audioset-inner .as-head { flex-wrap: wrap; }
-  #audioset-inner .opt-row.as-toggle { width: 100%; }
-  #audioset-inner .opt-row.as-toggle .opt-btn { flex: 1 1 0; min-width: var(--tap-min); }
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 /* NOW PLAYING card. The old row put a SKIP button first and the track name in
    11px dim text after it, so the least important control was the most
@@ -466,10 +483,13 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .as-tbtn:disabled { opacity: 0.35; cursor: default; }
 .as-note { font-size: var(--fs-micro); color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
 #audioset-inner, #spotifypanel-inner { --compact-at: 520px; }
+#pmsettings-inner[data-density="compact"] #audioset-inner .as-sec,
 #audioset-inner[data-density="compact"] .as-sec,
 #spotifypanel-inner[data-density="compact"] .as-sec { margin-bottom: calc(var(--gap) * 0.45); }
+#pmsettings-inner[data-density="compact"] #audioset-inner .as-sec + .as-sec,
 #audioset-inner[data-density="compact"] .as-sec + .as-sec,
 #spotifypanel-inner[data-density="compact"] .as-sec + .as-sec { padding-top: calc(var(--gap) * 0.4); }
+#pmsettings-inner[data-density="compact"] #audioset-inner .as-note,
 #audioset-inner[data-density="compact"] .as-note,
 #spotifypanel-inner[data-density="compact"] .as-note {
   line-height: 1.2;
@@ -544,6 +564,18 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .opt-btn.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
   box-shadow: var(--plate-on-glow);
+}
+/* Settings: a named pick still gets a red ring (STANDARD vs PRO has no
+   gold/red word). The glow is the old "lighted" plate — drop it. ON/OFF
+   pairs drop the ring too: the selected word is the whole signal. */
+#pmsettings-inner :is(.opt-btn, .preset-btn).active {
+  box-shadow: none;
+}
+#pmsettings-inner .as-toggle .opt-btn.active {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: inherit;
 }
 /* THE ACTION BAR IS NOT ALLOWED OFF THE BOTTOM. #lt-rows is meant to absorb all
    the overflow so the panel itself never scrolls (see the head of this file),
@@ -881,6 +913,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
    apply to <summary>, so the button chrome is repeated here explicitly), and
    the default triangle marker is replaced with one that flips on [open]
    since the built-in marker cannot be positioned to match the old glyph. */
+#advanced-inner > details { margin: calc(var(--gap) * 0.35) 0 0; }
 #adv-details { margin: calc(var(--gap) * 7 / 6) 0 calc(var(--gap) / 6); }
 .adv-more-btn {
   display: flex; align-items: center; justify-content: center; gap: calc(var(--gap) * 0.5);

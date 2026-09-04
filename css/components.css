@@ -113,7 +113,7 @@ input[type="range"]:disabled { cursor: default; }
    orphan at the end of a paragraph of help text. Both are cheap and inert where
    unsupported. */
 h1, h2, h3, .sheet-head h2, .adv-sec, .pm-group-h, .tune-label { text-wrap: balance; }
-p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
+p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 
 /* Some people turn transparency down at the OS level, and every sheet here is
    translucent over a moving 3D scene — the worst case for legibility. Give them
@@ -866,8 +866,6 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    cap long explanations wrapped heavily; 1000px uses available desktop width
    while viewport fitting still protects constrained/high-scale sheets. */
 #howtoplay   { --sheet-w: 1000px; }
-#advanced    { --sheet-w: 820px; --fit-at: 300px; }
-#audioset    { --sheet-w: 760px; --fit-at: 300px; }
 #spotifypanel { --sheet-w: 760px; --fit-at: 300px; }
 /* 760, not 560: on an 852 landscape phone the old cap left ~200px of
    safe width unused while CLOUDY / 57 (FULL) wrapped inside a 180px
@@ -889,9 +887,7 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
 #results .sheet:not([data-shape="tall"])     { --fit-at: 220px; }
 #standings .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
 #race-settings .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
-#audioset .sheet:not([data-shape="tall"])    { --fit-at: 220px; }
 #spotifypanel .sheet:not([data-shape="tall"]) { --fit-at: 220px; }
-#advanced .sheet:not([data-shape="tall"])    { --fit-at: 220px; }
 #customize .sheet:not([data-shape="tall"])   { --fit-at: 220px; }
 #pausemenu .sheet:not([data-shape="tall"])   { --fit-at: 180px; }
 /* Wide enough for three columns of rows on a landscape phone. At 560px the form
@@ -958,11 +954,6 @@ body:has(#teampicker:not([hidden])) #carsetup {
 /* #datahub is dialog.screen since round 11, so the generic rule above owns
    fading the title under it — its bespoke copy of that rule left with the
    migration. */
-body:has(#advanced:not([hidden])) #pmsettings,
-body:has(#audioset:not([hidden])) #pmsettings {
-  opacity: 0;
-  pointer-events: none;
-}
 body:has(#howtoplay:not([hidden])) #pmsettings {
   opacity: 0;
   pointer-events: none;
@@ -1110,7 +1101,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 /* Sheet title names CONTROLS / DISPLAY. Later DISPLAY headings
    (HUD / RENDERER / COCKPIT) stay. */
 #pm-panel-controls > .pm-group-h:first-child,
-#pm-panel-display > .pm-group-h:first-child {
+#pm-panel-display > .pm-group-h:first-child,
+#advanced > .pm-group-h:first-child,
+#audioset > .pm-group-h:first-child {
   display: none;
 }
 .pm-group button { margin: 0; width: 100%; }
@@ -1134,6 +1127,36 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-weight: 600;
   letter-spacing: var(--ls-2);
   color: var(--text);
+}
+#pmsettings-inner .pm-group :is(.opt-btn, .preset-btn) {
+  width: auto;
+  justify-content: center;
+  text-align: center;
+}
+#pmsettings-inner #as-prev,
+#pmsettings-inner #as-play,
+#pmsettings-inner #as-skip {
+  width: var(--tap-sm);
+  height: var(--tap-sm);
+  min-height: var(--tap-sm);
+  padding: 0;
+}
+#pmsettings-inner #as-play {
+  width: calc(var(--tap-sm) * 1.22);
+  height: calc(var(--tap-sm) * 1.22);
+}
+#advanced .tune-label,
+#audioset .tune-label {
+  color: var(--steel);
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: var(--ls-5);
+  text-transform: uppercase;
+}
+#advanced .tune-label b,
+#audioset .tune-label b {
+  color: inherit;
+  font-style: italic;
 }
 #pmsettings-inner .pm-doors button {
   width: auto;
@@ -1445,6 +1468,57 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
 }
+#pmsettings-inner #advanced-inner details > summary,
+#pmsettings-inner #advanced-inner details > summary:active {
+  color: var(--steel);
+  font-style: italic;
+  opacity: 1;
+  background-color: transparent;
+  background-image: var(--grad-rule);
+  background-position: bottom left;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+@media (hover: hover) {
+  #pmsettings-inner #advanced-inner details > summary:hover {
+    color: var(--text);
+    background-color: transparent;
+    background-image: var(--grad-rule);
+    background-position: bottom left;
+    background-size: 100% 1px;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+  }
+}
+#pmsettings-inner #advanced-inner details > summary::after { content: none; }
+#pmsettings-inner #advanced-inner details > summary::before { content: "\25BE"; }
+#pmsettings-inner #advanced-inner details[open] > summary::before { content: "\25B4"; }
+#pmsettings-inner #advanced-inner details > summary {
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  box-sizing: border-box;
+  cursor: pointer;
+  justify-content: flex-start;
+  font-size: clamp(var(--fs-2), calc(1.8 * var(--vwz)), var(--fs-4));
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  opacity: 1;
+  padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
+}
+#advanced-inner > .pm-group-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+#advanced-inner > .pm-group-h b {
+  color: inherit;
+  font-style: italic;
+  font-weight: 700;
+}
 /* Name stays steel. Gold/red = enablement. Green/blue = 2-state
    AUTO/MANUAL agency only. Named cycles stay --text. */
 button [data-fold="on"],
@@ -1466,6 +1540,12 @@ summary [data-fold="manual"] {
 /* Any menu row, not only Settings: flex ate the space after ":" / "·". */
 button:has(> [data-fold]) {
   column-gap: 0.35em;
+}
+/* ON/OFF option chips: only the selected word is gold/red. Lighting both
+   plates (and the idle sibling) made red mean OFF and SELECTED at once. */
+#pmsettings-inner .opt-btn:not(.active) [data-fold="on"],
+#pmsettings-inner .opt-btn:not(.active) [data-fold="off"] {
+  color: inherit;
 }
 #pmsettings-inner details > summary [data-fold="k"] {
   color: var(--steel);
@@ -1570,7 +1650,6 @@ button:has(> [data-fold]) {
 #advanced-inner .opt-btn {
   font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
 }
-#advanced-inner .adv-intro,
 #advanced-inner .tune-label {
   font-size: clamp(var(--fs-micro), calc(1.7 * var(--vwz)), var(--fs-3));
 }
@@ -1587,8 +1666,13 @@ button:has(> [data-fold]) {
    naming either width here.
    The section headings inside the ADVANCED disclosure span the full width so
    the list still reads as grouped rather than as one undifferentiated field. */
-#advanced-inner[data-shape="wide"] .sheet-body,
-#advanced-inner[data-shape="wide"] #adv-extra {
+#pmsettings-inner[data-shape="wide"] #advanced-inner,
+#pmsettings-inner[data-shape="wide"] #audioset-inner {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+#pmsettings-inner[data-shape="wide"] #advanced-inner,
+#pmsettings-inner[data-shape="wide"] #advanced-inner #adv-extra {
   display: grid;
   /* min(...) floor: a bare `minmax(215px, …)` cannot shrink below 215 even
      when the container is narrower, and overflows it. Shape, not a 620px
@@ -1598,12 +1682,11 @@ button:has(> [data-fold]) {
   column-gap: var(--pad); row-gap: calc(var(--gap) * 0.5);
   align-content: start;
 }
-#advanced-inner[data-shape="wide"] .adv-item { margin: 0; min-width: 0; }
-#advanced-inner[data-shape="wide"] .adv-intro,
-#advanced-inner[data-shape="wide"] .preset-row,
-#advanced-inner[data-shape="wide"] #adv-details,
-#advanced-inner[data-shape="wide"] .adv-sec { grid-column: 1 / -1; }
-#advanced-inner[data-shape="wide"] .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
+#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; }
+#pmsettings-inner[data-shape="wide"] #advanced-inner .preset-row { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] #advanced-inner details,
+#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-sec { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
 /* MY TEAM logo upload: the file input itself is hidden (its native button is
    unstyleable), so the <label> is the visible control.
    NOTE: this block used to sit AFTER the layer's closing brace, which made it

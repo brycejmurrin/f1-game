@@ -79,6 +79,25 @@ function goertzel(x, f) {
   for (let i = 0; i < x.length; i++) { const s = x[i] + c * s1 - s2; s2 = s1; s1 = s; }
   return Math.sqrt(Math.max(0, s1 * s1 + s2 * s2 - c * s1 * s2)) / x.length;
 }
+/** SPECTRAL FLATNESS — geometric mean over arithmetic mean of the magnitude
+ *  spectrum. Near 0 is tonal (energy in a few partials); near 1 is white noise.
+ *
+ *  This exists because the centroid test below was NOT ENOUGH and shipped a
+ *  defect past itself. A click train holds a high centroid exactly as well as a
+ *  preserved formant does, so "the centroid did not collapse" was satisfied by
+ *  the artefact it was supposed to rule out — the core went out sounding like
+ *  loud noise with a green test suite behind it. Measured on the real asset:
+ *  playbackRate falls to 0.13 flatness at ratio 0.25 as it gets more tonal,
+ *  while the granular core sat at 0.46. Centroid saw none of that. */
+function flatness(x) {
+  let logSum = 0, sum = 0, n = 0;
+  for (let f = 100; f <= 8000; f += 50) {
+    const m = Math.max(1e-12, goertzel(x, f));
+    logSum += Math.log(m); sum += m; n++;
+  }
+  return Math.exp(logSum / n) / (sum / n);
+}
+
 function centroid(x) {
   let num = 0, den = 0;
   for (let f = 100; f <= 5000; f += 25) { const m = goertzel(x, f); num += f * m; den += m; }
@@ -185,4 +204,42 @@ test("output stays bounded and finite at every ratio and overlap", () => {
     assert.ok(peak > 0, `ratio ${r}: silent output`);
     assert.ok(peak < 4, `ratio ${r}: peak ${peak.toFixed(2)} — overlap-add is not being normalised`);
   }
+});
+
+
+test("CHARACTERISATION: the granular core is still noisier than resampling", () => {
+  // The defect, pinned. Not an aspiration — a record of where it actually is,
+  // so the day somebody fixes it this test FAILS and forces the default to be
+  // reconsidered in the same change rather than drifting apart from it.
+  //
+  // When this assertion starts failing because `grained < resampled`: the fix
+  // worked. Flip `granularOn` to true in js/audio/engine.js, flip the panel's
+  // restore default with it, and invert this into the assertion it wants to be.
+  //
+  // Measured on the real f1_engine.mp3 through Chromium's decoder, which is
+  // where the number that matters lives: playbackRate 0.481 -> 0.130 flatness
+  // across ratio 1.0 -> 0.25 (more tonal as it pitches down, as an engine
+  // should), granular 0.484 -> 0.459 (broadband the whole way).
+  const Cls = loadProcessor();
+  const src = source(SR * 2);
+  const p0 = SR / F0;
+  const resampled = flatness(naive(src, 0.25, SR));
+  const grained = flatness(render(Cls, src, p0, 0.25, SR));
+  assert.ok(grained > resampled,
+    `the granular core is expected to still be the noisier of the two ` +
+    `(granular ${grained.toFixed(3)} vs resampled ${resampled.toFixed(3)}). ` +
+    "If this failed, the phase problem is fixed — see the comment above.");
+});
+
+test("the granular core is OFF by default, and says so in one place", () => {
+  // It ships off because it sounds like loud noise (see the flatness note
+  // above). The default lives in js/audio/engine.js; js/audio/panel.js must
+  // restore the SAME default, or a fresh profile would get the broken core
+  // back on its first boot.
+  const engine = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8");
+  const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
+  assert.match(engine, /let granularOn = false;/,
+    "the granular core must default OFF until the flatness figure comes down");
+  assert.match(panel, /store\.get\("sndGranular", false\)/,
+    "and the panel's restore default must agree with it");
 });

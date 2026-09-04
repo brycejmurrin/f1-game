@@ -713,6 +713,49 @@ function restoreBuffer() {
   _raisedBuffer = null;
 }
 
+// THE PANEL IS PLAYER-FACING; ITS DATA SOURCE WAS NOT. Everything on CAR and
+// PHYS comes from window.__apex, which is LAZY_AGENT: wantAgentSurface() in
+// js/game.js gates it to tests, localhost and ?apex=1 and NEVER admits a
+// player on github.io — bootAgentSurface() returns at its first line — so on the only
+// build that matters PHYS painted "—" in every row and CAR kept just the speed
+// digit it scrapes out of the HUD. MEASURED on the shipped tree, snapshot()
+// field lists with the surface present vs nulled:
+//   GOV   loses scale auto strikes tierFloor gpuMs track state flow cam
+//         caution build
+//   CAR   loses lap pos total gear energy times gaps sector s x angle k hw
+//   PHYS  loses ALL SEVENTEEN — slipDeg vLat yawRate slipFactor axEstSm
+//         axFrac slope wrongWay rescueT head vmaxNow aeroGrip aeroDf xOn
+//         xArmed aeroLoad aeroX
+// Every read sits in a try/catch against a NULL __apex, so the failure is
+// silent by construction and tests/unit/metrics.test.mjs pinned the graceful
+// degradation without anyone noticing the degradation IS the shipped panel.
+//
+// So ASK for the surface when the player opens the panel, rather than moving
+// it onto the boot wall. game.js hands us the memoised loader; a player who
+// never opens METRICS still downloads nothing, which is the one constraint
+// LAZY_AGENT exists to protect. Requested once — a refused or failed inject
+// leaves the panel exactly as degraded as it is today, never a retry loop.
+let _telemetryLoad = null;    // game.js's memoised loadAgentSurface, or null
+let _telemetryAsked = false;
+// Installed by game.js AFTER its boot await chain, which is later than the
+// DOMContentLoaded initUI that handles a player booting with METRICS already
+// on — so that path reaches ensureTelemetry() with no loader yet and correctly
+// declines WITHOUT burning the one-shot latch. Ask again here, or a panel that
+// was already on would stay degraded until it was toggled off and back on.
+function setTelemetryLoader(fn) {
+  _telemetryLoad = typeof fn === "function" ? fn : null;
+  if (_telemetryLoad && on()) ensureTelemetry();
+}
+function ensureTelemetry() {
+  if (_telemetryAsked || !_telemetryLoad) return;
+  // Already live (localhost, ?apex=1, a spec): nothing to fetch.
+  if (typeof window !== "undefined" && window.__apex) return;
+  _telemetryAsked = true;
+  try {
+    Promise.resolve(_telemetryLoad()).then(function () { paintOverlay(); }, function () { /* offline: stay degraded */ });
+  } catch (_) { /* loader threw synchronously: stay degraded */ }
+}
+
 function set(v) {
   const next = !!v;
   _on = next;
@@ -720,6 +763,7 @@ function set(v) {
   try { Log.info("game", "metrics " + (next ? "on " + page() : "off")); } catch (_) { /* Log not loaded */ }
   if (next) {
     raiseBuffer();
+    ensureTelemetry();
     paintOverlay();
     startLoop();
   } else {
@@ -940,7 +984,7 @@ function initUI() {
     });
   }
 
-  if (on()) { raiseBuffer(); paintOverlay(); startLoop(); }
+  if (on()) { raiseBuffer(); ensureTelemetry(); paintOverlay(); startLoop(); }
 }
 
 if (typeof document !== "undefined") {
@@ -1024,6 +1068,6 @@ return {
   pos, setPos, nextPos, resolvePos,
   size, setSize, nextSize,
   logNs, setLogNs, nextLogNs, logLvl, setLogLvl, nextLogLvl,
-  snapshot, PANEL_STYLE,
+  snapshot, PANEL_STYLE, setTelemetryLoader,
 };
 })();

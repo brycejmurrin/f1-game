@@ -265,6 +265,10 @@ test("Settings is a door-index stack with labelled pages", () => {
   for (const id of ["controls", "display"]) {
     assert.match(html, new RegExp(`id="pm-panel-${id}"[^>]*role="region"[\\s\\S]{0,180}aria-labelledby="dlg-settings"`));
   }
+  for (const id of ["advanced", "audioset"]) {
+    assert.match(html, new RegExp(`id="${id}"[^>]*role="region"[\\s\\S]{0,180}aria-labelledby="dlg-settings"`));
+  }
+  assert.doesNotMatch(html, /<dialog id="advanced"|<dialog id="audioset"/);
   assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
 });
 

@@ -41,8 +41,6 @@ window.UiLayers = (function () {
     { id: "customize" },
     { id: "carsetup" },
     { id: "howtoplay" },
-    { id: "advanced" },
-    { id: "audioset" },
     { id: "spotifypanel" },
     { id: "track-detail" },
     { id: "lighting" },

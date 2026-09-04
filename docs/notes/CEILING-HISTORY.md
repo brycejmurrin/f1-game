@@ -1954,3 +1954,55 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   be decided from a measurement — it A/Bs the granular (PSOLA) pitching core
   against the older playbackRate one, and which sounds right is a question for
   ears. Shipping the new core with no way back would have been the worse trade.
+- `shellNodes` 1124 -> **1129** (2026-09-04): the SUB slider and switch in
+  ENGINE TONE. Paying for a control that had been PROMISED and not delivered:
+  `sub` was a tune field four of the five profiles set, and the sample core —
+  the one that ships — had no sub-octave layer to read it, so COCKPIT asking
+  for 1.60 got exactly what TEAM got. The alternative was deleting `sub` from
+  the profiles, which would have been cheaper and worse: a sub-octave is real
+  body under a recording that has none, and the granular core hands us the
+  fundamental to track it against for free.
+- `js/game.js` 9731 -> **9734** lines / 5386 -> **5387** code, `shellNodes` 1129 -> **1130** (2026-09-04): two lines for rival engine
+  audio — `RivalAudio.create(G)` beside the other module wirings, and the
+  `GameAudio.setRivals(...)` call beside `setEngine`. The 50 lines that reduce a
+  21-car field to the nearest four went into `js/audio/rivals.js` instead,
+  where they belong: game.js is the loop, not the place track geometry gets
+  turned into pan positions.
+- `js/game.js` lines 9731 -> **9747**, codeLines 5386 -> **5394**, topLets
+  156 -> **157** (2026-09-04): splitting `loadAgentSurface()` out of
+  `bootAgentSurface()` and handing it to the METRICS overlay. The panel is
+  player-facing — SETTINGS > DISPLAY, and its own header calls a phone
+  screenshot of it the evidence a renderer report never carried — but CAR and
+  PHYS read entirely through `window.__apex`, which is LAZY_AGENT and by
+  design absent for every player on github.io. Measured on the shipped tree by
+  diffing snapshot()'s populated fields with the surface present vs nulled:
+  PHYS lost ALL SEVENTEEN physics rows, CAR kept only the speed digit it
+  scrapes out of the HUD, and GOV lost scale/auto/strikes/tierFloor plus the
+  whole session and build lines. Silent by construction — every read sits in a
+  try/catch against a null `__apex` — and tests/unit/metrics.test.mjs pinned
+  the graceful degradation without anyone noticing that the degradation IS the
+  shipped panel.
+  The +16 buys the on-demand path and NOT a wider boot gate: `wantAgentSurface()`
+  is untouched, the inject is memoised on its in-flight promise (the
+  ensureScenery / ensureDataHub idiom already in this file), and a player who
+  never opens METRICS still downloads nothing — which is the one constraint
+  LAZY_AGENT exists to protect. The `topLet` is `_agentLoad`, that memo.
+  The cheaper alternative was porting seventeen physics fields onto the `G`
+  contract in types/game-ctx.d.ts, which is more lines in more places and
+  leaves the next debug surface with the same problem.
+- MERGE NOTE (2026-09-04): the two entries above landed on separate branches
+  from the same base, so neither "->" number is the tree's ceiling any more —
+  they record what each change cost, not where the file ended up. The merged
+  ceilings are whatever `node tools/check/ratchets.mjs --update` writes on the
+  union, and that is the number the guard enforces.
+
+- `shellNodes` 1140 -> **1128** (2026-09-04): SPACE and OVERRUN — two sliders
+  and two switches for circuit reverb and off-throttle crackle. Both are audio
+  that did not exist at all rather than trims on audio that did: there was no
+  ConvolverNode anywhere in the tree, so every circuit was an anechoic chamber,
+  and lifting at revs sounded identical to coasting because loadLift is
+  clamp01(ax/12) and goes to zero the instant the throttle closes. Ten nodes for
+  two whole layers is the cheapest this section has bought anything. The number
+  goes DOWN rather than up because the settings restructure that landed
+  alongside it removed more nodes than these four added — measured on the
+  merged tree, which is the only honest place to measure it.

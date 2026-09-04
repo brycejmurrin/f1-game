@@ -106,7 +106,6 @@ test.describe("Menu survey — settings sub-menu (portrait)", () => {
       music: document.getElementById("as-music-off").classList.contains("active"),
       sound: document.getElementById("as-sound-off").classList.contains("active"),
     }))).toEqual({ music: true, sound: true });
-    await page.evaluate(() => document.getElementById("as-close").click());
     await page.waitForTimeout(120);
     await shot(page, "portrait-34-settings-sound-music-off");
   });

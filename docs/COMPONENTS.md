@@ -140,7 +140,7 @@ file changes a screen owned by another.
   `menus` + `carsetup`; `.sel-edit-row` — `menus` + `carsetup`.
 - `.cs-tab` / `.cs-opt` / `.cs-unlimited-btn` — `carsetup` + `components`
 - `.lt-tab` — `components` + `tuner`; `.pc-nopanel` — `hud` + `tuner`;
-  `.adv-sec` / `.adv-help` / `.adv-intro` / `.as-note` — `components` + `tuner`
+  `.adv-sec` / `.adv-help` / `.as-note` — `components` + `tuner`
 
 **State classes** (`.active`, `.on`, `.armed`, `.desktop`, `.p1`, `.you`,
 `.screen`, `.dim`, `.in-race`) are shared by design and are listed here only so nobody

@@ -2966,7 +2966,7 @@ async function startRace() {
   // RESUME's latch bug (see Input.clearEdges) at the menu→race seam: edges
   // mashed on the title (navOpen() false) would fire at lights-out.
   Input.clearEdges();
-  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
+  if (soundOn) { GameAudio.setVoice(player && player.team && player.team.engine); GameAudio.setVenue(track.def); GameAudio.startEngine(); GameAudio.startMusic(trackIdx); }
   if (soundOn && isRaining()) GameAudio.startRain();   // rain patter — a damp "wet" track is silent
   warmCarAssets();            // meshes + atlases HERE, not on the first countdown frame (see warmCarAssets)
   DebrisWorld.prime(); updateHud(true);   // prime: build the side-world HERE, not on the lights-out frame (see DebrisWorld.prime)
@@ -3510,6 +3510,7 @@ const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
+const rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals
 // Photo mode (js/camera/photo-cam.js).
 const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
@@ -3961,6 +3962,9 @@ function update(dt) {
     // genuine slide down a straight was silent. Fixing the visual copy alone left
     // the most audible arc-coupling in the game untouched.
     GameAudio.setSkid(player.skidIntensity || 0, isWetRoad());
+    // The field around you: panned, distance-rolled and Doppler-shifted. Before
+    // this there was no opponent audio at all, so a car alongside was silent.
+    GameAudio.setRivals(rivalAudio.collect(player));
   }
 }
 
@@ -8588,9 +8592,8 @@ $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings()
 // door index. closeSettings() already only returns to the pause menu when
 // actually paused, so from here it just closes back to the title.
 $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
-// Advanced steering: opened from the settings menu, closes back to it.
-$("pm-advanced").onclick = () => { $("advanced").hidden = false; };
-$("adv-close").onclick = () => { $("advanced").hidden = true; };
+// STEERING and MUSIC are SettingsNav pages (js/ui/settings-tabs.js). Lighting
+// and camera tuners still open as their own docks from the door index.
 // ── LIGHTING TUNER ── opened from the settings sub-menu; that menu hides while
 // it's open so the live preview is unobstructed (tick() keeps render() running
 // with physics paused), and DONE returns to it. Rows are generated
@@ -9677,19 +9680,36 @@ requestAnimationFrame(tick);
 // a call-time read: an eval-time ApexApi.create is a ReferenceError on the
 // player path and a FULL toposort miss in scan-globals.
 window.__apex = null;
+// The INJECT, split from the boot GATE below so a player-facing consumer can
+// ask for it later. Memoised on the in-flight promise (the ensureScenery /
+// ensureDataHub idiom): boot and a METRICS toggle must never fetch it twice.
+let _agentLoad = null;
+function loadAgentSurface() {
+  if (!_agentLoad) _agentLoad = (async () => {
+    // js/net comes WITH the agent surface. apex.js reads NetTransport /
+    // NetSession / NetSnapshot at eval-adjacent call sites and drives 22
+    // netLobby methods the stub does not carry, so a dev session or a spec that
+    // got __apex without the real net would fail on the multiplayer hooks
+    // instead of on anything this change is about. Awaited BEFORE apex.js so
+    // ApexApi.create(G) sees the real objects through the G getters.
+    await ensureNet();
+    await loadBackendScripts(AGENT_FILES, AGENT_EDGES);
+    if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G);
+  })();
+  return _agentLoad;
+}
 async function bootAgentSurface() {
   if (!wantAgentSurface()) return;
-  // js/net comes WITH the agent surface. apex.js reads NetTransport /
-  // NetSession / NetSnapshot at eval-adjacent call sites and drives 22
-  // netLobby methods the stub does not carry, so a dev session or a spec that
-  // got __apex without the real net would fail on the multiplayer hooks
-  // instead of on anything this change is about. Awaited BEFORE apex.js so
-  // ApexApi.create(G) sees the real objects through the G getters.
-  await ensureNet();
-  await loadBackendScripts(AGENT_FILES, AGENT_EDGES);
-  if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G);
+  await loadAgentSurface();
 }
 await bootAgentSurface();
+// SETTINGS > DISPLAY > METRICS reads CAR and PHYS entirely through __apex, so
+// on a Pages build — where wantAgentSurface() is false by design — those two
+// pages painted "—" in every row for the only audience the panel exists for.
+// Hand the overlay the loader rather than widening the gate: nothing is
+// fetched until a player actually switches METRICS on.
+if (typeof GameMetrics !== "undefined" && GameMetrics.setTelemetryLoader)
+  GameMetrics.setTelemetryLoader(loadAgentSurface);
 
 // THE RACE PAYLOAD (LAZY_RACE in tools/manifest.cjs). NOT awaited, on purpose:
 // awaiting it here would put the 338 KB straight back on the critical path,
