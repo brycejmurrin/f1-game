@@ -733,7 +733,7 @@ the order the spec clicked them:
 |---|---|---|
 | `#pausebtn` | racing | **85031 ms** |
 | `#pm-settings` | paused, tuner shut | **469 ms** |
-| `#pm-tab-more` | paused, tuner shut | 585 ms |
+| settings index door (was `#pm-tab-more`) | paused, tuner shut | 585 ms |
 | `#pm-lighting` | paused, tuner shut | 281 ms |
 | `IMAGE & COLOUR` tab | tuner open | **82928 ms** |
 | `#lt-tod-dusk` | tuner open | 113385 ms |

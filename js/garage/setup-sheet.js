@@ -443,7 +443,7 @@ function buildTuneOptions(container, team) {
   wrap.appendChild(csLabel("SETUP SHEET — " + team.short));
   const cur = SetupTune.get(team.id);
   const rows = {};
-  const rakeOut = document.createElement("p"); rakeOut.className = "adv-help";
+  const rakeOut = document.createElement("p"); rakeOut.id = "cs-rake-readout"; rakeOut.className = "adv-help";
   const refresh = () => {
     const t = SetupTune.get(team.id);
     for (const k of SetupTune.FIELDS) { rows[k].b.textContent = t[k] + SetupTune.RANGE[k].unit; rows[k].inp.value = t[k]; }

@@ -261,6 +261,9 @@ body[data-density="compact"] #track-detail-header {
   /* Sectors below the repositioned CHASE: 8 + 2*tap + 8. The WHOLE offset
      divides by --hud-z (css/hud.css: #hud-sectors rides zoom). */
   #hud-sectors { top: calc((8px + 2 * var(--tap) + 8px + var(--sat)) / var(--hud-z)); }
+  /* …and the LIMITS chip with it. Without this it kept the LANDSCAPE anchor
+     while the sectors box dropped ~56px, so the chip started INSIDE it. */
+  #hud-limits { top: calc((8px + 2 * var(--tap) + 8px + var(--sat)) / var(--hud-z) + 4.8em + 15px); }
 }
 
 /* Cockpit cam: gear + speed live on the steering-wheel LCD — hide the floating

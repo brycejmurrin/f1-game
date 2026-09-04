@@ -61,7 +61,16 @@ function initUI() {
   const head = document.createElement("h3");
   head.className = "pm-group-h";
   head.textContent = "COCKPIT";
-  host.appendChild(head);
+  // Player cockpit switches sit above ADVANCED (recovery / shots / diag).
+  // renderer-picker.js loads first and leaves #pm-display-adv at the end;
+  // insertBefore keeps the heading+buttons together when either order runs.
+  const adv = document.getElementById("pm-display-adv");
+  const before = (adv && adv.parentNode === host) ? adv : null;
+  function place(el) {
+    if (before && typeof host.insertBefore === "function") host.insertBefore(el, before);
+    else host.appendChild(el);
+  }
+  place(head);
 
   for (const sw of SWITCHES) {
     const b = document.createElement("button");
@@ -73,7 +82,7 @@ function initUI() {
       paint(b, sw);
       try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { }
     };
-    host.appendChild(b);
+    place(b);
   }
 }
 

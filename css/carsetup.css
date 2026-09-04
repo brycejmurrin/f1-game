@@ -1249,6 +1249,8 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
 #cs-inner[data-density="compact"] .cs-opt-deltas { margin-top: 2px; gap: 3px; }
 #cs-inner[data-density="compact"] .cs-opt-desc { display: none; }
 #cs-inner[data-density="compact"] #cs-options { gap: calc(var(--gap) * 0.45); }
+#cs-inner[data-density="compact"] #cs-options .cs-liv-editor { gap: calc(var(--gap) * 0.35); }
+#cs-inner[data-density="compact"] #cs-options .cs-liv-editor > .adv-help:not(#cs-rake-readout) { display: none; }
 #cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
 #cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }

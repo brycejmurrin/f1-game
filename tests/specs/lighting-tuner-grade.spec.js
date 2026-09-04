@@ -42,7 +42,7 @@ test.describe.configure({ timeout: 300_000 });
 //
 //   #pausebtn          85031 ms   (mid-race: the game is rendering)
 //   #pm-settings         469 ms   (paused, tuner shut: the loop returns early)
-//   #pm-tab-more         585 ms
+//   settings index door  585 ms (was #pm-tab-more)
 //   #pm-lighting         281 ms
 //   IMAGE & COLOUR tab 82928 ms   (tuner open: the loop renders again)
 //   #lt-spread-edits      78 s    (tuner open)
@@ -62,7 +62,7 @@ test.describe.configure({ timeout: 300_000 });
 // enabled and hit-testable. That is not this file's subject (grading and COPY
 // ALL semantics are), and it is already covered by real Playwright clicks on
 // the SAME ids in tests/specs/ui-button-touch.spec.js (openLightingPhotoMode:
-// #pm-settings, #pm-tab-more, #pm-lighting) and by menu-survey. The dispatched
+// #pm-settings, #pm-lighting) and by menu-survey. The dispatched
 // form here is the one tests/specs/ui-redesign.spec.js already uses for this
 // exact walk, so it is the established idiom for this path, not a new one.
 const walkToImageTuner = async (page) => {
@@ -89,7 +89,6 @@ const walkToImageTuner = async (page) => {
   await page.evaluate(() => {
     document.getElementById("pausebtn").click();
     document.getElementById("pm-settings").click();
-    document.getElementById("pm-tab-more").click();
     document.getElementById("pm-lighting").click();
     // pm-lighting's handler builds the tab strip synchronously, so the tab
     // exists by the next statement — the same assumption ui-redesign makes.

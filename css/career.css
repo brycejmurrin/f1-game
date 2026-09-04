@@ -32,7 +32,7 @@
 @media (prefers-reduced-transparency: reduce) {
   #career { background: var(--scrim-heavy); }
 }
-#cr-inner { --sheet-w: 1020px; --fit-at: 300px; }
+#cr-inner { --sheet-w: 1020px; --fit-at: 300px; --compact-at: 480px; }
 #cr-inner:not([data-shape="tall"]) { --fit-at: 220px; }
 
 /* ---------- head ---------- */
@@ -465,6 +465,10 @@
    opened FROM the hub, and neither can be open at once. */
 #career-guide { --sheet-w: 760px; --fit-at: 300px; }
 /* Lower fit-at on wide-shaped sheets (zoom-corrected, not viewport orientation). */
+#career-offers .sheet,
+#career-history .sheet,
+#career-guide .sheet,
+#quali .sheet { --compact-at: 480px; }
 #career-offers .sheet:not([data-shape="tall"]),
 #career-history .sheet:not([data-shape="tall"]),
 #career-guide .sheet:not([data-shape="tall"]),
@@ -694,9 +698,15 @@
 #career-guide .sheet[data-density="compact"] #cg-body .sel-label { margin-top: calc(var(--gap) * 0.65); }
 #career-guide .sheet[data-density="compact"] .cg-card { gap: calc(var(--gap) * 0.35); }
 #career-guide .sheet[data-density="compact"] .cg-p { line-height: 1.35; }
+#quali .sheet[data-density="compact"] #q-foot {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.6);
+}
 #quali .sheet[data-density="compact"] #q-foot .bigbtn {
-  min-height: var(--tap-min); padding-block: 0; font-size: var(--fs-micro);
+  min-height: var(--tap-min); min-width: 0; margin: 0;
+  padding-block: 0; font-size: var(--fs-micro);
 }
 #quali .sheet[data-density="compact"] #q-foot #q-drive,
 #quali .sheet[data-density="compact"] #q-foot #q-go { flex: 1 1 auto; }
+#quali.q-done .sheet[data-density="compact"] #q-foot #q-go { grid-column: 1 / -1; }
 } /* @layer components */

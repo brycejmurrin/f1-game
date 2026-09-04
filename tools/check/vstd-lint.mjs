@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 //
-// @doc The PACE invariant as a check: flags `.speed` compared to a literal without `vStd()` in a manifest-derived file set.
+// @doc REPORT, not a gate: lists every `.speed`-vs-literal comparison, always exits 0. The gate is tests/unit/vstd-invariant.
 // @skill tune-physics
 // vstd-lint — the asserted form of the PACE invariant in AGENTS.md:
 //
@@ -232,6 +232,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const list = args.length
     ? args.flatMap(expand).map((a) => path.relative(ROOT, a))
     : defaultFiles();
+  // ALWAYS EXITS 0, deliberately. The approved-absolute set (ALLOWED +
+  // SUSPECT) lives in tests/unit/vstd-invariant.test.mjs, which imports this
+  // module — so this CLI cannot know it without a cycle, and every hit it
+  // prints on a clean tree (21 today) is already justified there. That test
+  // is the gate; this is the listing. An exit code here would be a guard that
+  // fails on a healthy tree, which is worse than no guard at all.
   const hits = speedLiteralViolations(readFiles(list));
   if (!hits.length) {
     console.log("✓ no raw speed-vs-literal comparisons");

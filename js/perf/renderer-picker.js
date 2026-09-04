@@ -1,4 +1,4 @@
-/* Apex 26 — RendererPicker: the RENDERER control in SETTINGS > DISPLAY. Owns #pm-renderer (a <select> with ‹ › steps over WEBGL2 / THREE.JS / WEBGPU), RESET RENDERER, THREE PATH, SCREENSHOTS, SAVE SCREENSHOT, COPY DIAG and the #pm-gfx-status line; the apex26.gfxBackend / gfxWgx* / tlxForceGL / wgxCapture keys those write; and the in-race two-tap reload confirm (raceGuard / ARM_MS) every reloading control shares.
+/* Apex 26 — RendererPicker: the RENDERER control in SETTINGS > DISPLAY. Owns #pm-renderer (a <select> with ‹ › steps over WEBGL2 / THREE.JS / WEBGPU) and the ADVANCED disclosure (#pm-display-adv) that holds RESET RENDERER, THREE PATH, SCREENSHOTS, SAVE SCREENSHOT, COPY DIAG and the #pm-gfx-status line; the apex26.gfxBackend / gfxWgx* / tlxForceGL / wgxCapture keys those write; and the in-race two-tap reload confirm (raceGuard / ARM_MS) every reloading control shares.
 
    Split out of js/perf/quality-preset.js (Phase 2a of docs/research/TREE-RESTRUCTURE-2026-09.md): that file is the GRAPHICS quality PRESET model and button; this one is which backend boots. Same load-order stance — every global read (GLX, PerfGov, GameAudio, __apex) is resolved at CALL time, never at eval, so the file has no HARD_EDGES pair and can sit anywhere in the shell. */
 const RendererPicker = (function () {
@@ -407,18 +407,50 @@ function saveScreenshot() {
   run();
   return true;
 }
-function initPresentControls() {
-  const reset = typeof document !== "undefined" ? document.getElementById("pm-renderer-reset") : null;
-  const slot = rendererSlot(typeof document !== "undefined" ? document.getElementById("pm-renderer") : null);
-  const host = (reset && reset.parentNode) || (slot && slot.parentNode);
-  if (!host || document.getElementById("pm-three-path")) return;
-  if (typeof document.createElement !== "function") return;
+function ensureAdvHost() {
+  const existing = typeof document !== "undefined" ? document.getElementById("pm-display-adv-body") : null;
+  if (existing) return existing;
+  if (typeof document === "undefined" || typeof document.createElement !== "function") return null;
+  const panel = document.getElementById("pm-panel-display");
+  const slot = rendererSlot(document.getElementById("pm-renderer"));
+  const gfx = document.getElementById("pm-gfx");
+  const host = panel || (slot && slot.parentNode) || (gfx && gfx.parentNode);
+  if (!host) return null;
 
-  let after = reset || slot;
+  const details = document.createElement("details");
+  details.id = "pm-display-adv";
+  const summary = document.createElement("summary");
+  summary.className = "adv-more-btn";
+  summary.textContent = "ADVANCED";
+  summary.title = "Renderer recovery, THREE PATH, screenshots, and diagnostics";
+  const body = document.createElement("div");
+  body.id = "pm-display-adv-body";
+  if (typeof body.setAttribute === "function") {
+    body.setAttribute("role", "group");
+    body.setAttribute("aria-label", "Advanced display");
+  }
+  if (typeof details.appendChild === "function") {
+    details.appendChild(summary);
+    details.appendChild(body);
+  }
+  // After GRAPHICS when it is a sibling (player quality stays on the sheet);
+  // otherwise after the renderer row. JS-built so the shell-node ratchet
+  // does not see a new tag — same reason RESET RENDERER is injected.
+  const after = (gfx && gfx.parentNode === host) ? gfx
+    : (slot && slot.parentNode === host) ? slot
+    : null;
+  if (typeof host.insertBefore === "function") host.insertBefore(details, after ? after.nextSibling : null);
+  else if (typeof host.appendChild === "function") host.appendChild(details);
+  return body;
+}
+
+function initPresentControls() {
+  if (typeof document !== "undefined" && document.getElementById("pm-three-path")) return;
+  const host = ensureAdvHost();
+  if (!host || typeof document.createElement !== "function") return;
+
   function add(el) {
-    if (typeof host.insertBefore === "function") host.insertBefore(el, after ? after.nextSibling : null);
-    else if (typeof host.appendChild === "function") host.appendChild(el);
-    after = el;
+    if (typeof host.appendChild === "function") host.appendChild(el);
     return el;
   }
   function addBtn(id, title) {
@@ -517,10 +549,9 @@ function copyDiag(btn) {
 }
 
 function initReset() {
-  const anchor = typeof document !== "undefined" ? document.getElementById("pm-renderer") : null;
-  const slot = rendererSlot(anchor);
-  const host = slot && slot.parentNode;
-  if (!host || document.getElementById("pm-renderer-reset")) return;
+  if (typeof document !== "undefined" && document.getElementById("pm-renderer-reset")) return;
+  const host = ensureAdvHost();
+  if (!host || typeof document.createElement !== "function") return;
   // Injected, not written into index.html: same reason CockpitOpts generates
   // its SETTINGS rows — the shell's DOM-node ratchet counts tags in the file,
   // and this button mints no new CSS class.
@@ -528,7 +559,7 @@ function initReset() {
   btn.id = "pm-renderer-reset";
   btn.textContent = "RESET RENDERER";
   btn.title = "Forget the saved renderer pick, THREE PATH, SCREENSHOTS, and the crash/fallback flags, then reload on WebGL2. Use this if THREE.JS or WEBGPU crashed or will not load, especially on iPhone.";
-  host.insertBefore(btn, slot.nextSibling);
+  if (typeof host.appendChild === "function") host.appendChild(btn);
   btn.onclick = () => {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
     if (!raceGuard(btn, "RESET RENDERER: END THIS RACE & RELOAD?", () => { btn.textContent = "RESET RENDERER"; })) return;
@@ -601,10 +632,10 @@ function initRenderer() {
 
 function init() {
   Log.info("game", "RendererPicker.init");
-  // The same order GfxQuality.init() ran these in before the split: the
-  // <select> row first, RESET RENDERER after it, then the present controls
-  // and status line after RESET — each injects relative to the previous one.
+  // Picker row first (player-facing), then the ADVANCED disclosure that
+  // owns RESET + present controls + status. Each inject is idempotent.
   initRenderer();
+  ensureAdvHost();
   initReset();
   initPresentControls();
 }

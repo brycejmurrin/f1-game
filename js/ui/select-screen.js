@@ -266,11 +266,16 @@ function trackFilterBar() {
     b.type = "button";
     b.className = "sel-chip";
     b.id = "sel-daily";
-    b.textContent = "TODAY · " + p.trackName.toUpperCase() + " · " + p.weather.toUpperCase() + " · " + p.tod.toUpperCase()
-      + (done && done.best != null ? " · ★ " + fmtTime(done.best) : "");
+    const extraBits = [p.weather.toUpperCase(), p.tod.toUpperCase()];
+    if (done && done.best != null) extraBits.push("★ " + fmtTime(done.best));
+    b.textContent = "TODAY · " + p.trackName.toUpperCase();
+    const extra = document.createElement("span");
+    extra.textContent = " · " + extraBits.join(" · ");
+    b.appendChild(extra);
+    b.setAttribute("aria-label", "Today: " + p.trackName + " · " + extraBits.join(" · "));
     b.title = "Today's challenge (" + p.day + " UTC): the same circuit and conditions for everyone";
     b.onclick = (e) => { e.stopPropagation(); tickUi(); G.daily.open(); };
-    bar.appendChild(b);
+    bar.insertBefore(b, bar.firstChild);
   }
   const search = document.createElement("input");
   search.id = "sel-track-search";
@@ -682,10 +687,11 @@ function updateTrackPreview() {
       // content, so bounding the map by the CARD's own height is circular.
       sectionH: section ? section.clientHeight : 0,
       labelH: label ? label.offsetHeight : 0,
-      // In the non-tall pair the caption sits BESIDE the map in a flex row —
-      // charging its height to the vertical budget is regression 2 of the
-      // planner's test file. Only a tall sheet stacks it underneath.
-      infoH: (tallSheet && info) ? info.offsetHeight : 0,
+      // Tall sheets and pair-on stacked plans put the caption UNDER the map.
+      // Beside (Jeddah) still ignores infoH inside planPreview. Charging it
+      // on every pair-on plan lets a stacked Bahrain use the column instead
+      // of a 260px clamp.
+      infoH: (info && (tallSheet || (classified && sheet.dataset.pair === "on"))) ? info.offsetHeight : 0,
       padY: cardCS ? px(cardCS.paddingTop) + px(cardCS.paddingBottom) : 0,
       gap: cardCS ? (px(cardCS.rowGap) || px(cardCS.gap)) : 0,
       // Pair-on clips its section ("FIT THE PREVIEW, DO NOT SCROLL IT" in
@@ -739,7 +745,12 @@ function updateTrackPreview() {
   if (measurable) {
     void map.offsetWidth;
     const gW = map.clientWidth, gH = map.clientHeight;
-    if (gW && gH && (fit.w - gW > 2 || fit.h - gH > 2)) {
+    // Pair-on beside already spends the pane (max-height: 100%). Shrinking
+    // the pin to the first granted box ratcheted a 513px plan down to the
+    // previous 345px stamp and left the desktop column half empty.
+    const besidePair = !!(card && card.getAttribute("data-map-shape") === "beside"
+      && sheet && sheet.dataset.pair === "on");
+    if (!besidePair && gW && gH && (fit.w - gW > 2 || fit.h - gH > 2)) {
       fit = TrackMaps.fitCanvas(map, Math.min(fit.w, gW), Math.min(fit.h, gH), t, true);
     }
   }
