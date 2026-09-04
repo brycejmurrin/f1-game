@@ -259,7 +259,14 @@ const AudioPanel = (() => {
         const b = $(id);
         if (b) b.classList.toggle("active", toneProfile() === name);
       }
-      $("as-p-note").textContent = toneProfile() === "custom"
+      // Guarded like every other lookup in this section, and for the reason
+      // js/game.js already records: optional markup must not turn one missing
+      // element into a whole-panel failure. Measured, not assumed — with the
+      // ENGINE TONE block absent these two were the only unguarded reads left,
+      // and create() threw here and took the music transport and both volume
+      // sliders down with it.
+      const note = $("as-p-note");
+      if (note) note.textContent = toneProfile() === "custom"
         ? "Your own tune. RESET returns to your team's engine sound."
         : (PROFILE_NOTE[toneProfile()] || "");
     }
@@ -302,7 +309,8 @@ const AudioPanel = (() => {
         if (G.soundOn) GameAudio.uiTick();
       };
     }
-    $("as-t-reset").onclick = () => {
+    const resetBtn = $("as-t-reset");
+    if (resetBtn) resetBtn.onclick = () => {
       for (const l of TONE_LAYERS) GameAudio.setLayer(l.k, true);
       store.set("sndLayers", GameAudio.layers());
       setToneProfile("team");
