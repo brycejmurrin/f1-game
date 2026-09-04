@@ -156,7 +156,33 @@ test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   assert.match(hud, /#game-metrics\[data-size="m"\]/);
   assert.match(hud, /#game-metrics\[data-size="l"\]/);
   assert.match(hud, /#game-metrics[\s\S]*resize:\s*both/);
-  assert.match(hud, /max-width:\s*min\(22ch,\s*32vw\)/);
+  // THE STEPS ARE SIZED IN THE UNITS THE CONTENT IS MEASURED IN, and this used
+  // to pin the literal `min(22ch, 32vw)` — a number, not a mechanism, and the
+  // number was wrong. MEASURED with a 20-char probe in the body's own font:
+  // the narrow layout's longest line is 25 ch and the wide layout's is 52, but
+  // the boxes held 19/25/37 ch on desktop and 15/18/25 on a 393 phone, so seven
+  // of nine desktop cases and all nine phone cases CUT their text — lost, since
+  // white-space:pre inside overflow:hidden does not scroll. Pin the SHAPE (a ch
+  // step bounded by a vw cap) and the floor that makes it correct: S must hold
+  // the narrow layout, L must be able to hold the wide one.
+  const step = (sel) => {
+    const at = sel ? hud.indexOf(sel) : hud.indexOf("#game-metrics {");
+    assert.ok(at >= 0, `no rule for ${sel || "#game-metrics"}`);
+    // To the rule's own closing brace, not a fixed window: these blocks carry
+    // long measurement notes and a fixed slice silently stopped reaching the
+    // declaration it was meant to check.
+    const end = hud.indexOf("\n}", at);
+    const m = /(?<!max-)width:\s*min\((\d+)ch,\s*(\d+)vw\)/.exec(hud.slice(at, end > 0 ? end : undefined));
+    assert.ok(m, `no ch/vw max-width step for ${sel || "#game-metrics"}`);
+    return { ch: +m[1], vw: +m[2] };
+  };
+  // Real widths, not caps — see the note on fitsWide() in the overlay.
+  const S = step(null), M = step('#game-metrics[data-size="m"]'), L = step('#game-metrics[data-size="l"]');
+  assert.ok(S.ch >= 26, `S must hold the narrow layout's 25-char line, got ${S.ch}ch`);
+  assert.ok(L.ch >= 53, `L must be able to hold the wide layout's 52-char line, got ${L.ch}ch`);
+  assert.ok(S.ch < M.ch && M.ch < L.ch, "the three steps must still be ordered");
+  for (const [n, v] of [["S", S], ["M", M], ["L", L]])
+    assert.ok(v.vw > 0 && v.vw <= 92, `${n} keeps a vw bound so a step cannot eat the display`);
   assert.match(hud, /max-height:\s*min\(28svh/);
 });
 
@@ -428,4 +454,33 @@ test("game.js hands the overlay the memoised loader, not a widened boot gate", (
   assert.match(game, /GameMetrics\.setTelemetryLoader\(loadAgentSurface\)/);
   // bootAgentSurface still gates, and now defers to the shared loader.
   assert.match(game, /if \(!wantAgentSurface\(\)\) return;\s*\n\s*await loadAgentSurface\(\);/);
+});
+
+// THE LAYOUT PICKER MUST NOT MEASURE ITS OWN OUTPUT. Choosing wide/narrow from
+// the panel's PAINTED width latched: the panel sizes to its content, so the
+// narrow layout produced a small box, the small box failed the "can I afford
+// wide?" test, and the layout could never climb back — a one-way door. It cost
+// the S/M/L control too, since all three steps then painted the same width.
+// MEASURED after the fix, boxW by size: desktop 221/339/457, phone 187/288/346,
+// with desktop L reaching the wide layout (53 ch afforded, 52 needed) and the
+// phone staying narrow (47 afforded) because 52-char rows do not fit 393 px.
+// The granted width comes from the CSS step and does not depend on what was
+// painted into it, which is what makes the decision stable.
+test("the wide/narrow choice reads the granted width, never the painted one", () => {
+  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  // To fitsWide()'s OWN closing brace: snapshot() is declared earlier in the
+  // file, so anchoring the slice on it produced an empty string and every
+  // assertion below passed vacuously.
+  const at = src.indexOf("function fitsWide()");
+  assert.ok(at >= 0, "fitsWide() must exist");
+  const fn = src.slice(at, src.indexOf("\n}", at));
+  assert.match(fn, /getComputedStyle\(_panel\)/);
+  assert.match(fn, /parseFloat\(cs\.width\)/);
+  assert.equal(/_body\s*&&\s*_body\.clientWidth/.test(fn), false,
+    "reading the painted box width here latches the layout — use the granted width");
+  // The chrome is subtracted, or the step's border box is mistaken for text room.
+  assert.match(fn, /paddingLeft/);
+  assert.match(fn, /borderLeftWidth/);
+  // An unmeasurable box is UNKNOWN, not small: it must not force narrow.
+  assert.match(fn, /metricsRatio\(\) >= 480/);
 });
