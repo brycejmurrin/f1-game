@@ -1222,14 +1222,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
-/* DISPLAY: UI SIZE and HUD SIZE stack in the left column; the live sample
-   sits beside both instead of a leftover full-width slider row plus a
-   third sample row. Named areas so METRICS opening cannot steal the hole.
-   dense lets GRAPHICS sit beside RESOLUTION after the spanning renderer row. */
+/* DISPLAY: HIDE HUD | METRICS; UI SIZE | HUD profile; HUD SIZE | sample.
+   Named areas so METRICS opening cannot steal the hole. dense lets
+   GRAPHICS sit beside RESOLUTION after the spanning renderer row. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
   grid-template-areas:
     "hide metrics"
-    "ui sample"
+    "ui profile"
     "hud sample";
   grid-auto-flow: dense;
 }
@@ -1237,7 +1236,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   grid-template-areas:
     "hide hide"
     "metrics metrics"
-    "ui sample"
+    "ui profile"
     "hud sample";
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud { grid-area: hide; }
@@ -1251,37 +1250,52 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale) { grid-area: hud; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample {
   grid-area: sample;
-  align-self: center;
+  align-self: start;
   justify-self: start;
   margin-top: 0;
+  min-width: 0;
+  max-width: 100%;
+  padding-left: calc(var(--gap) * 0.5);
 }
-#pmsettings-inner[data-density="compact"] #pm-panel-display .tune-row {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudprofile {
+  grid-area: profile;
+  align-self: center;
+}
+/* DISPLAY sliders are settings rows, not tuner rows: steel label, text
+   value (tuner red is the loud bit), no extra tap-height padding around
+   a track that is already --tap-min. */
+#pm-panel-display .tune-row {
   min-height: 0;
   gap: 0;
+}
+#pm-panel-display .tune-label {
+  color: var(--steel);
+  font-size: var(--fs-micro);
+}
+#pm-panel-display .tune-label b {
+  color: var(--text);
+  font-size: var(--fs-micro);
+}
+#pm-panel-display .tune-row input[type="range"] {
+  accent-color: var(--steel);
 }
 #pmsettings-inner[data-density="compact"] #pm-hud-sample {
   margin-top: 0;
 }
-#pmsettings-inner[data-density="compact"] #pm-hud-sample::before {
-  display: none;
-}
-/* DISPLAY: HIDE HUD | METRICS share the wide pair. Inner metrics buttons
-   go 2-up whenever the sheet is wide or compact — SheetShape density, not
-   a viewport max-height media (the injected submenu used to key on 420px). */
+/* METRICS fold: a quiet column, not a 2-up plate grid. Two or three
+   rows fit without a scroll cage — the sheet pane already scrolls. */
 #pm-metrics-details [role="group"] {
   display: flex;
   flex-direction: column;
-  gap: calc(var(--gap) / 3);
-  padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
-  max-height: min(280px, calc(100 * var(--svhz, 1svh) - 9rem));
-  overflow-y: auto;
-  overflow-x: hidden;
-  overscroll-behavior-y: contain;
-  touch-action: pan-y;
+  gap: 0;
+  padding: calc(var(--gap) / 6) 0 0;
 }
 #pm-metrics-details [role="group"] > button {
   width: 100%;
   margin: 0;
+}
+#pm-metrics-details [role="group"] > button[hidden] {
+  display: none !important;
 }
 #pmsettings-inner #pm-metrics-details > summary {
   height: var(--tap);
@@ -1296,20 +1310,22 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
 }
 #pm-metrics-details[open] > summary::before { content: "\25B4"; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details [role="group"],
-#pmsettings-inner[data-density="compact"] #pm-metrics-details [role="group"] {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
-  max-height: min(160px, calc(100 * var(--svhz, 1svh) - 7rem));
+#pmsettings-inner #pm-metrics-details [role="group"] > button {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--steel) 22%, transparent);
+  border-radius: 0;
+  box-shadow: none;
+  font-weight: 600;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details [role="group"] > button,
-#pmsettings-inner[data-density="compact"] #pm-metrics-details [role="group"] > button {
-  width: auto;
+#pmsettings-inner #pm-metrics-details [role="group"] > button:last-child {
+  border-bottom: none;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details .as-note,
-#pmsettings-inner[data-density="compact"] #pm-metrics-details .as-note {
-  grid-column: 1 / -1;
+@media (hover: hover) {
+  #pmsettings-inner #pm-metrics-details [role="group"] > button:hover {
+    background: color-mix(in oklab, var(--steel) 12%, transparent);
+    box-shadow: none;
+  }
 }
 /* DISPLAY ADVANCED: same disclosure primitive as METRICS (summary.adv-more-btn
    + [role=group]), ID-scoped so the class ratchet does not move. Auto-places
@@ -1395,6 +1411,29 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"] > button,
 #pmsettings-inner[data-density="compact"] #pm-display-adv [role="group"] > button {
   width: auto;
+}
+/* Capture / diag sit under RESET | THREE PATH as secondary rows, not
+   a third pair of equally loud plates. They always span — when
+   SCREENSHOTS is absent (GLX-only tree) SAVE must not sit in the
+   empty THREE PATH cell beside RESET. */
+#pmsettings-inner #pm-display-adv [role="group"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status) {
+  grid-column: 1 / -1;
+}
+#pmsettings-inner #pm-display-adv [role="group"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag) {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid color-mix(in oklab, var(--steel) 22%, transparent);
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--steel);
+  font-weight: 600;
+}
+@media (hover: hover) {
+  #pmsettings-inner #pm-display-adv [role="group"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag):hover {
+    background: color-mix(in oklab, var(--steel) 12%, transparent);
+    color: var(--text);
+    box-shadow: none;
+  }
 }
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px; }

@@ -52,8 +52,12 @@ they pop the same way.
 Settings and pause Settings land on the same index.
 
 **DISPLAY keeps its packing + ADVANCED fold + COCKPIT above ADVANCED.**
-Player-facing stays HIDE HUD, METRICS, UI SIZE, HUD SIZE + sample,
-RESOLUTION, renderer picker, GRAPHICS, COCKPIT, then ADVANCED.
+Player-facing stays HIDE HUD, METRICS, UI SIZE, HUD SIZE + HUD profile
++ sample, RESOLUTION, renderer picker, GRAPHICS, COCKPIT, then ADVANCED.
+Sliders are settings rows (steel track, text value), not tuner-red.
+METRICS is a quiet column; the closed summary carries ON/page state;
+LOG filters hide unless PAGE is LOG. SCREENSHOTS / SAVE / COPY DIAG
+are secondary rows under ADVANCED, not peer plates of RESET.
 
 **Control language stays.** Button = filled plate, no chevron. Door =
 plate + `…`. Heading = steel + `--grad-rule`, not clickable. Disclosure

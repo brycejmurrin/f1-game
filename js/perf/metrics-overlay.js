@@ -1,8 +1,9 @@
 /* Apex 26 — GameMetrics: toggleable in-game FPS / car / log overlay.
 
-   SETTINGS > DISPLAY — METRICS (on/off), METRICS PAGE (gov/car/phys/log),
+   SETTINGS > DISPLAY — METRICS (on/off), PAGE (gov/car/phys/log),
    LOG NS, and LOG SHOW, folded into one METRICS <details> submenu this file
-   builds (see the bottom). Or ` (backtick) / F9 on the canvas. Persists as
+   builds (see the bottom). Log filters stay hidden unless PAGE is LOG.
+   Or ` (backtick) / F9 on the canvas. Persists as
    apex26.metrics. URL `?metrics=1` overrides for the session without writing
    storage, same shape as CockpitOpts.
 
@@ -531,13 +532,13 @@ function startLoop() {
 
 function paintBtn(btn) {
   if (!btn) return;
-  btn.textContent = "METRICS: " + (on() ? "ON" : "OFF");
+  btn.textContent = "OVERLAY: " + (on() ? "ON" : "OFF");
   btn.setAttribute("aria-pressed", on() ? "true" : "false");
 }
 
 function paintPageBtn(btn) {
   if (!btn) return;
-  btn.textContent = "METRICS PAGE: " + page().toUpperCase();
+  btn.textContent = "PAGE: " + page().toUpperCase();
   btn.setAttribute("aria-pressed", on() ? "true" : "false");
 }
 
@@ -551,11 +552,26 @@ function paintLogLvlBtn(btn) {
   btn.textContent = "LOG SHOW: " + logLvl().toUpperCase();
 }
 
+function paintSummary() {
+  var det = typeof document !== "undefined" ? document.getElementById("pm-metrics-details") : null;
+  var sum = det && det.querySelector ? det.querySelector("summary") : null;
+  if (!sum) return;
+  sum.textContent = on() ? ("METRICS · " + page().toUpperCase()) : "METRICS · OFF";
+}
+
+function paintLogVisibility() {
+  var show = page() === "log";
+  if (_logNsBtn) _logNsBtn.hidden = !show;
+  if (_logLvlBtn) _logLvlBtn.hidden = !show;
+}
+
 function paintSettingBtns() {
   paintBtn(_btn);
   paintPageBtn(_pageBtn);
   paintLogNsBtn(_logNsBtn);
   paintLogLvlBtn(_logLvlBtn);
+  paintLogVisibility();
+  paintSummary();
 }
 
 function raiseBuffer() {
@@ -766,29 +782,13 @@ if (on()) raiseBuffer();
 
 /* ── SETTINGS > DISPLAY — the METRICS submenu ──────────────────────────
  Folds #pm-metrics / PAGE / LOG NS / LOG SHOW into one <details> under HIDE
- HUD, compact on short/high-scale viewports. Used to be a second IIFE in
- js/camera/cockpit-opts.js; it is this overlay's own settings row. */
-function injectCss() {
-  if (document.getElementById("pm-metrics-sub-css")) return;
-  var s = document.createElement("style");
-  s.id = "pm-metrics-sub-css";
-  s.textContent = [
-    "#pm-metrics-details.pm-metrics-sub > summary.adv-more-btn { cursor: pointer; }",
-    "#pm-metrics-details .pm-metrics-hint {",
-    "  margin: 4px 0 0; opacity: .7; font-size: 11px; line-height: 1.3;",
-    "}",
-    /* Body layout (flex vs 2-up grid, max-height) lives in
-       css/components.css so @layer components can win. An unlayered
-       display:flex here beat the density grid. */
-  ].join("\n");
-  (document.head || document.documentElement).appendChild(s);
-}
-
+ HUD. Layout lives in css/components.css. Closed summary carries ON/page
+ state so the fold does not have to open to be read. LOG filters hide
+ unless PAGE is LOG. Used to be a second IIFE in cockpit-opts.js. */
 function buildSubmenu() {
   if (typeof document === "undefined") return;
-  injectCss();
   var onBtn = document.getElementById("pm-metrics");   // the button — a local named like the module's on() shadowed it
-  var page = document.getElementById("pm-metrics-page");
+  var pageBtn = document.getElementById("pm-metrics-page");
   var ns = document.getElementById("pm-metrics-logns");
   var lvl = document.getElementById("pm-metrics-loglvl");
   if (!onBtn || document.getElementById("pm-metrics-details")) return;
@@ -801,7 +801,7 @@ function buildSubmenu() {
 
   var sum = document.createElement("summary");
   sum.className = "adv-more-btn";
-  sum.textContent = "METRICS";
+  sum.textContent = "METRICS · OFF";
   sum.title = "Live FPS / car / phys / log overlay controls";
   det.appendChild(sum);
 
@@ -810,16 +810,11 @@ function buildSubmenu() {
   body.setAttribute("role", "group");
   body.setAttribute("aria-label", "Metrics controls");
 
-  [onBtn, page, ns, lvl].forEach(function (btn) {
+  [onBtn, pageBtn, ns, lvl].forEach(function (btn) {
     if (!btn) return;
     btn.addEventListener("click", function (e) { e.stopPropagation(); });
     body.appendChild(btn);
   });
-
-  var hint = document.createElement("p");
-  hint.className = "pm-metrics-hint as-note";
-  hint.textContent = "Live ~4×/sec while ON. ` / F9 toggle · [ ] page · 1–4 jump";
-  body.appendChild(hint);
   det.appendChild(body);
 
   var hide = document.getElementById("pm-hidehud");
@@ -830,15 +825,7 @@ function buildSubmenu() {
     host.appendChild(det);
   }
 
-  try {
-    if (on()) det.open = true;
-  } catch (_) { /* not ready */ }
-
-  onBtn.addEventListener("click", function () {
-    try {
-      if (on()) det.open = true;
-    } catch (_) { /* ignore */ }
-  });
+  paintSettingBtns();
 }
 
 function scheduleSubmenu() {
