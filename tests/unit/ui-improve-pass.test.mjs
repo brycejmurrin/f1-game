@@ -736,7 +736,6 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   assert.equal(wrap("HUD: ON"), "HUD:\u00a0<span data-fold=\"on\">ON</span>");
   assert.equal(wrap("HALO: OFF"), "HALO:\u00a0<span data-fold=\"off\">OFF</span>");
   assert.equal(wrap("♪ SOUND OFF"), "♪ SOUND <span data-fold=\"off\">OFF</span>");
-  assert.equal(wrap("QUALIFYING LAP · ON"), "QUALIFYING LAP · <span data-fold=\"on\">ON</span>");
   assert.equal(wrap("ON"), '<span data-fold="on">ON</span>');
   assert.equal(wrap("STYLE: STANDARD"), null, "named styles stay unpainted");
   assert.equal(wrap("LAYOUT: AUTO"), null, "AUTO on a named cycle is not agency");
@@ -745,6 +744,12 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   assert.equal(wrap("GEARS: MANUAL"), "GEARS:\u00a0<span data-fold=\"manual\">MANUAL</span>");
   assert.equal(wrap("ACTIVE AERO: MANUAL"), "ACTIVE AERO:\u00a0<span data-fold=\"manual\">MANUAL</span>");
   assert.equal(wrap("STEER: TILT"), null);
+  assert.equal(wrap("♪ SOUND ON"), "♪ SOUND <span data-fold=\"on\">ON</span>");
+  assert.equal(wrap("REPEAT: OFF"), "REPEAT:\u00a0<span data-fold=\"off\">OFF</span>");
+  assert.equal(wrap("UNLIMITED · ON"), "UNLIMITED ·\u00a0<span data-fold=\"on\">ON</span>");
+  assert.equal(wrap("UNLIMITED · OFF"), "UNLIMITED ·\u00a0<span data-fold=\"off\">OFF</span>");
+  assert.equal(wrap("∞ FREE BUILD: ON"), "∞ FREE BUILD:\u00a0<span data-fold=\"on\">ON</span>");
+  assert.equal(wrap("QUALIFYING LAP · ON"), "QUALIFYING LAP ·\u00a0<span data-fold=\"on\">ON</span>");
   assert.equal(wrap("5 LAPS"), null, "option-group chips that are not ON/OFF stay unpainted");
   assert.match(code("js/ui/scroll-fade.js"), /"#menu-buttons"/,
     "title chrome fade watches the zoomed #menu-buttons scroller");
@@ -1004,6 +1009,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), 'button [data-fold="manual"], summary [data-fold="manual"]', "color"), "var(--manual)");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner .pm-group button, #pmsettings-inner .pm-doors button", "gap"), "0.35em",
     "flex gap keeps a space after LABEL: when the value is a painted span");
+  assert.equal(decl(css("css/components.css"), "button:has(> [data-fold])", "column-gap"), "0.35em",
+    "every menu button, not only Settings, keeps a space before a painted value");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("det.open = true"),
     "METRICS does not auto-open and blow the HIDE HUD pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",

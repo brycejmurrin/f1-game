@@ -1463,6 +1463,10 @@ button [data-fold="manual"],
 summary [data-fold="manual"] {
   color: var(--manual);
 }
+/* Any menu row, not only Settings: flex ate the space after ":" / "·". */
+button:has(> [data-fold]) {
+  column-gap: 0.35em;
+}
 #pmsettings-inner details > summary [data-fold="k"] {
   color: var(--steel);
   font-style: italic;

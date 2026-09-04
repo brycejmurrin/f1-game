@@ -70,7 +70,10 @@ on a 2-state AUTO / MANUAL control (GEARS, ACTIVE AERO). AUTO on a
 longer cycle (LAYOUT, RESOLUTION, THREE PATH, SCREENSHOTS, MAP: AUTO)
 is a name and stays `--text`, like STANDARD / TILT / WEBGL2. Settings
 `LABEL: VALUE` rows keep a space after the colon (NBSP + flex gap —
-inline-flex collapses a wrap's ordinary space).
+inline-flex collapses a wrap's ordinary space). The same wrap and
+inks run on every menu AriaState already watches (title SOUND,
+MUSIC & SOUND chips, Spotify REPEAT, career UNLIMITED, season
+QUALIFYING / SPRINT, garage FREE BUILD, race-settings labels).
 METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO

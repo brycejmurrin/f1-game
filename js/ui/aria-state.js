@@ -97,7 +97,8 @@ window.AriaState = (function () {
     if (!/\b(ON|OFF)\b/.test(t)) return null;
     return t.replace(/\b(ON|OFF)\b/g, (w) =>
       '<span data-fold="' + w.toLowerCase() + '">' + w + "</span>")
-      .replace(/:\s+<span/g, ":\u00a0<span");
+      .replace(/:\s+<span/g, ":\u00a0<span")
+      .replace(/·\s+<span/g, "·\u00a0<span");
   }
 
   function paintOnOff(root) {
