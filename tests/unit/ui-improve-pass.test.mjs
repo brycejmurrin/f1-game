@@ -872,21 +872,18 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(code("js/ui/select-screen.js"), /besidePair/,
     "pair-on beside maps do not self-heal the pin down to a stale stamp");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"ui ui"[\s\S]*"hudopts metrics"[\s\S]*"renopts renopts"/,
-    "DISPLAY is UI SIZE, then HUD fold beside METRICS, then the RENDERER fold");
+    /"ui ui"[\s\S]*"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
+    "DISPLAY is UI SIZE, then HUD, METRICS, and RENDERER each on their own row");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
-    "HUD fold sits beside METRICS, not under a reprint HUD heading");
+    "HUD fold is its own row, not under a reprint HUD heading");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
   assert.doesNotMatch(read("index.html"), /id="pm-hud-h"/);
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
   assert.match(read("index.html"), /id="pm-display-adv-body"[\s\S]*id="pm-res"/);
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
-    "DISPLAY METRICS sits beside the HUD fold on a wide sheet");
-  assert.match(decl(css("css/components.css"), /#pm-panel-display:has\(:is\(#pm-metrics-details, #pm-hud-details, #pm-display-adv\)\[open\]\)/, "grid-template-areas"),
-    /"hudopts hudopts"[\s\S]*"metrics metrics"/,
-    "an open HUD / METRICS / RENDERER fold spans the DISPLAY row so the sibling is not stranded");
+    "METRICS sits on its own DISPLAY row, not beside HUD");
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
     /HUD SIZE PREVIEW/,
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
@@ -922,10 +919,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
     "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--steel)",
-    "METRICS / ADVANCED summaries use heading steel, not button text");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "transparent",
-    "disclosure summaries are headings, not .adv-more-btn plates");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--text)",
+    "HUD / METRICS / RENDERER summaries use text, not heading steel");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "opacity"), "1",
+    ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay white");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "var(--surf-3)",
+    "fold summaries sit on a raised surface so they read as dropdowns, not steel headings");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::after/, "content"), "none",
     "right-side chevron is the dropdown mark — disclosures do not use it");
   assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::before$/, "content") || "",
