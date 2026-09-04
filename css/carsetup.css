@@ -246,7 +246,15 @@
    (compact already drops .cs-tab-cur). */
 #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-tabs {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  /* COLUMNS COME FROM THE ROSTER (js/garage/setup-sheet.js sets --cs-tab-cols
+     to ceil(tabs / 2) as it builds the strip). It was `repeat(7, ...)` — 14
+     slots, exactly the 14 tabs that existed when the two rows below were
+     measured. The catalogue has since grown to 15, and the fifteenth fell onto
+     an implicit third row that the max-height clips: LIVERY rendered 53x6 px,
+     0 % visible, with no scrollable ancestor, on the primary play shape.
+     A count that is derived cannot go stale; the 7 stays only as the fallback
+     for a strip that is somehow rendered before the setter runs. */
+  grid-template-columns: repeat(var(--cs-tab-cols, 7), minmax(0, 1fr));
   /* Two fixed rows sized at 28px each (instead of chip-h ~40px): 14 tabs fit
      7+7 and the total tab strip shrinks from chip-h*2+gap (~88px) to 60px,
      freeing ~28px extra for #cs-options on a 343px landscape phone. The label
@@ -280,7 +288,10 @@
      to prevent. 8px is measured, not aesthetic: SUSPENSION is the widest
      label and at 852x393 it needs 47px against a 47px column interior —
      9.5px needs 55px and still clips. min() restores the measured size and
-     still shrinks if the token ever drops below 11px. */
+     still shrinks if the token ever drops below 11px.
+     Kept at 8px even though the derived column count is now WIDER than the 7
+     this was measured against: the floor has to hold for the narrowest roster
+     and the narrowest sheet that reaches this tier, not for today's count. */
   font-size: min(8px, calc(var(--fs-micro) - 3px));
   letter-spacing: 0;
   text-align: center;
