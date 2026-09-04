@@ -228,6 +228,44 @@ body.hud-bcam #hud-energy,
 body.hud-bcam #hud-limits { display: none !important; }
 body.hud-bcam:not(.hud-prof-broadcast) #hud-sectors { display: none !important; }
 
+/* Broadcast profile: left timing-tower strip (upright data, fused panels). */
+body.hud-prof-broadcast .hud-top {
+  left: calc(10px + var(--sal) / var(--hud-z));
+  transform: none;
+  gap: 0;
+  background: rgba(8, 8, 14, 0.84);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+body.hud-prof-broadcast .hud-box {
+  border-left: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 4px 11px;
+  min-width: 54px;
+}
+body.hud-prof-broadcast .hud-box:last-child { border-right: none; }
+body.hud-prof-broadcast .hud-box:nth-child(4) { display: none; }   /* BEST: tower shows POS/LAP/TIME */
+body.hud-prof-broadcast .hud-label { letter-spacing: 0.14em; font-size: 10px; }
+body.hud-prof-broadcast .hud-value { font-size: 17px; font-style: normal; font-weight: 700; }
+body.hud-prof-broadcast .hud-gaps {
+  background: rgba(8, 8, 14, 0.78);
+  border-left: 3px solid var(--accent);
+  padding: 3px 10px 3px 8px;
+  font-size: min(11px, calc(14px / var(--hud-z)));
+  letter-spacing: 0.04em;
+  font-style: normal;
+}
+/* Cinematic/broadcast cam + broadcast HUD: clean frame — tower carries timing. */
+body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none !important; }
+body.hud-prof-broadcast #announce[data-kind="race"] {
+  font-size: clamp(22px, calc(5.5 * var(--vwzh)), 48px);
+  font-style: normal;
+  top: calc(14svh / var(--hud-z));
+}
+
 #hud-energy {
   width: 130px; height: 14px;
   /* A plate under the fill, like the tach: with none, the bar's empty half was

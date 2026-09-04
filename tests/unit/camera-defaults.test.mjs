@@ -45,3 +45,12 @@ test("announce suppresses low-priority banners on broadcast cameras unless broad
   assert.match(src, /hudProfile !== "broadcast"/);
   assert.match(src, /if \(pri < 4\) return;/);
 });
+
+test("broadcast HUD profile keeps two-decimal gaps", () => {
+  const src = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
+  assert.match(src, /function gapDecimals\(\)/);
+  assert.match(src, /=== "broadcast" \? 2 : 1/);
+  const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
+  assert.match(css, /body\.hud-prof-broadcast \.hud-top/);
+  assert.match(css, /body\.hud-prof-broadcast\.hud-bcam \.hud-bottom/);
+});
