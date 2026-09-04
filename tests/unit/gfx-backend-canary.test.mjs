@@ -388,11 +388,12 @@ function makeStorage(seed) {
 }
 
 test("RESET RENDERER is injected next to #pm-renderer, not written into the shell", () => {
-  // The injection itself (a <button> created and placed after #pm-renderer,
+  // The injection itself (a <button> created inside #pm-display-adv,
   // labelled RESET RENDERER) is driven below in "RESET RENDERER click wipes
   // storage, disarms the sentinel, and reloads"; this pins only that the
-  // shell does not carry a static copy.
+  // shell does not carry a static copy of the recovery row or its submenu.
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-reset"/);
+  assert.doesNotMatch(read("index.html"), /id="pm-display-adv"/);
 });
 
 test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality", () => {
@@ -1175,7 +1176,13 @@ test("RENDERER control becomes a select with prev/next, not a one-way cycle", ()
   assert.ok(byId["pm-renderer-prev"], "‹ steps backward");
   assert.ok(byId["pm-renderer-next"], "› steps forward");
   assert.equal(byId["pm-renderer-row"].children.length, 3);
-  assert.ok(hostKids.some((n) => n.id === "pm-renderer-reset"));
+  assert.ok(byId["pm-display-adv"], "ADVANCED disclosure is JS-built");
+  assert.ok(byId["pm-display-adv-body"]);
+  assert.ok(byId["pm-renderer-reset"]);
+  assert.equal(byId["pm-renderer-reset"].parentNode && byId["pm-renderer-reset"].parentNode.id, "pm-display-adv-body",
+    "RESET RENDERER lives in ADVANCED, not on the DISPLAY sheet");
+  assert.ok(hostKids.some((n) => n.id === "pm-display-adv"));
+  assert.ok(!hostKids.some((n) => n.id === "pm-renderer-reset"));
 });
 
 test("selecting THREE persists the pick and reloads; WEBGPU without gpu does not", () => {

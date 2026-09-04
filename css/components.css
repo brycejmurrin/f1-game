@@ -1288,15 +1288,17 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    so folding the ids in with the classes would silently promote .tune-row
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status) { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
 /* DISPLAY: UI SIZE and HUD SIZE stack in the left column; the live sample
    sits beside both instead of a leftover full-width slider row plus a
-   third sample row. Named areas so METRICS opening cannot steal the hole. */
+   third sample row. Named areas so METRICS opening cannot steal the hole.
+   dense lets GRAPHICS sit beside RESOLUTION after the spanning renderer row. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
   grid-template-areas:
     "hide metrics"
     "ui sample"
     "hud sample";
+  grid-auto-flow: dense;
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]) {
   grid-template-areas:
@@ -1375,6 +1377,49 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details .as-note,
 #pmsettings-inner[data-density="compact"] #pm-metrics-details .as-note {
   grid-column: 1 / -1;
+}
+/* DISPLAY ADVANCED: same disclosure primitive as METRICS (summary.adv-more-btn
+   + [role=group]), ID-scoped so the class ratchet does not move. Auto-places
+   after RESOLUTION / RENDERER / GRAPHICS — do not add a named "adv" area. */
+#pm-display-adv {
+  margin: 0;
+  min-width: 0;
+}
+#pm-display-adv [role="group"] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
+}
+#pm-display-adv [role="group"] > button {
+  width: 100%;
+  margin: 0;
+}
+#pm-display-adv [role="group"] > #pm-gfx-status {
+  grid-column: 1 / -1;
+}
+#pmsettings-inner #pm-display-adv > summary {
+  height: var(--tap);
+  min-height: var(--tap);
+  box-sizing: border-box;
+  cursor: pointer;
+  justify-content: flex-start;
+  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-weight: 600;
+  letter-spacing: var(--ls-2);
+  opacity: 1;
+  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+}
+#pm-display-adv[open] > summary::after { content: "\25B4"; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"],
+#pmsettings-inner[data-density="compact"] #pm-display-adv [role="group"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"] > button,
+#pmsettings-inner[data-density="compact"] #pm-display-adv [role="group"] > button {
+  width: auto;
 }
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px; }

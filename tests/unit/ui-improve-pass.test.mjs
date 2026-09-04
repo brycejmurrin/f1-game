@@ -878,6 +878,20 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "METRICS body defaults to a column; wide/compact override to a 2-up grid");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-metrics-details \[role="group"\]/, "display"), "grid",
     "compact METRICS packs 2-up via SheetShape density, not a height media");
+  assert.match(code("js/perf/renderer-picker.js"), /pm-display-adv/,
+    "DISPLAY recovery / screenshot / diag fold into a JS-built ADVANCED details");
+  assert.doesNotMatch(read("index.html"), /id="pm-display-adv"/,
+    "ADVANCED is injected — the shell-node ratchet must not see a new tag");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv)', "grid-column"), "1 / -1",
+    "ADVANCED spans the DISPLAY row; it is not a fourth named area");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
+    "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "height"), "var(--tap)",
+    "ADVANCED summary matches the METRICS / HIDE HUD tap row");
+  assert.equal(decl(css("css/components.css"), '#pm-display-adv [role="group"]', "display"), "flex",
+    "ADVANCED body defaults to a column; wide/compact override to a 2-up grid");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv \[role="group"\]/, "display"), "grid",
+    "compact ADVANCED packs 2-up via SheetShape density, not a height media");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
     "METRICS submenu no longer keys packing on viewport height");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("margin: 6px"),
