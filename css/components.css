@@ -1222,21 +1222,15 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
-/* DISPLAY: UI SIZE on top, then HUD fold | METRICS, then the RENDERER fold.
+/* DISPLAY: UI SIZE, then HUD / METRICS / RENDERER each on their own row.
    Named areas so an open fold cannot steal the hole. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
-  grid-template-areas:
-    "ui ui"
-    "hudopts metrics"
-    "renopts renopts";
-  grid-auto-flow: dense;
-}
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(:is(#pm-metrics-details, #pm-hud-details, #pm-display-adv)[open]) {
   grid-template-areas:
     "ui ui"
     "hudopts hudopts"
     "metrics metrics"
     "renopts renopts";
+  grid-auto-flow: dense;
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
   grid-area: metrics;
@@ -1365,33 +1359,26 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
 }
-/* Disclosures share section-heading chrome, not .adv-more-btn plates.
-   Steel + fading rule + italic — same family as .pm-group-h — so METRICS
-   / ADVANCED cannot be mistaken for HIDE HUD / RESET.
-   Chevron is ::before (tree/open-in-place). A right-side ::after is the
-   dropdown convention the native RENDERER <select> already owns. */
+/* Fold summaries are tappable dropdowns, not quiet steel headings.
+   --text + plate so HUD / METRICS / RENDERER read as controls against
+   COCKPIT's italic steel. Chevron stays on the left (::before);
+   ::after is the native <select> mark and stays off. */
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary,
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:active {
-  color: var(--steel);
-  font-style: italic;
-  background-color: transparent;
-  background-image: var(--grad-rule);
-  background-position: bottom left;
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
-  border: none;
-  border-radius: 0;
+  color: var(--text);
+  font-style: normal;
+  background-color: var(--plate);
+  background-image: none;
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-md);
   box-shadow: none;
 }
 @media (hover: hover) {
   #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:hover {
-    color: var(--steel);
-    background-color: transparent;
-    background-image: var(--grad-rule);
-    background-position: bottom left;
-    background-size: 100% 1px;
-    background-repeat: no-repeat;
-    border: none;
+    color: var(--text);
+    background-color: var(--plate-hover);
+    background-image: none;
+    border: 1px solid var(--plate-line);
     box-shadow: none;
   }
 }

@@ -51,8 +51,9 @@ they pop the same way.
 **Always open on home.** Do not restore `settingsCategory`. Title
 Settings and pause Settings land on the same index.
 
-**DISPLAY is UI SIZE, then three folds, then COCKPIT.** No reprint HUD /
-RENDERER headings — the fold summaries are the labels. HUD fold: ON/OFF,
+**DISPLAY is UI SIZE, then three stacked folds, then COCKPIT.** No reprint
+HUD / RENDERER headings — the fold summaries are the labels (plate +
+`--text`, not steel heading chrome). HUD fold: ON/OFF,
 STYLE, LAYOUT, MAP, GAPS, HUD SIZE + sample. METRICS is a sibling fold.
 RENDERER fold (`#pm-display-adv`) holds RESOLUTION, the backend picker,
 GRAPHICS, RESET, THREE PATH, SCREENSHOTS, SAVE, COPY DIAG. LAYOUT AUTO
