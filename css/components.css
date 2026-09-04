@@ -1367,6 +1367,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:active {
   color: var(--text);
   font-style: normal;
+  opacity: 1;
   background-color: var(--surf-3);
   background-image: none;
   border: 1px solid color-mix(in oklab, var(--text) 34%, transparent);

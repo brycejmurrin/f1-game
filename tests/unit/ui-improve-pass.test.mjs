@@ -921,6 +921,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--text)",
     "HUD / METRICS / RENDERER summaries use text, not heading steel");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "opacity"), "1",
+    ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay white");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "var(--surf-3)",
     "fold summaries sit on a raised surface so they read as dropdowns, not steel headings");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::after/, "content"), "none",
