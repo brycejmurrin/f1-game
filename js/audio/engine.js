@@ -26,6 +26,20 @@ const GameAudio = (function () {
   let windSrc = null, windFilter = null, windGain = null; // airflow over the car
   let subOctOsc = null, subOctGain = null;        // sub-octave weight under the sample/granular core
 
+  // RIVAL ENGINES. The game had no opponent audio at all and no panner anywhere
+  // in the graph, so a car alongside was silent and the only cue you had for it
+  // was the mirror. This is the one audio layer that changes how the game PLAYS
+  // rather than how it sounds.
+  //
+  // A small fixed POOL, not a voice per car: 21 rivals cannot each have an
+  // engine, and the ones that matter are the handful you can nearly touch.
+  // game.js hands over the nearest few already reduced to track-frame numbers
+  // (lateral metres, arc metres, rev, closing speed) — the audio module does no
+  // track maths, which is also why this needs no heading convention to be right.
+  const RIVAL_VOICES = 4;
+  const RIVAL_RANGE = 70;         // metres of arc beyond which a rival is inaudible
+  let rivalVoices = [];           // { src, filt, gain, pan } while the engine runs
+
   // Per-manufacturer engine character, keyed by team.engine (js/data/teams.js).
   // Every field is CONSTANT TIMBRE — a fixed multiplier or filter, never a
   // function of rev — so tools/check/audio-test.cjs's invariants (pitch monotonic in
@@ -69,7 +83,7 @@ const GameAudio = (function () {
   // gain target of 0 — and because every muted layer goes through aimGain, its
   // steady state costs no per-frame scheduling at all (the _apexAimTgt guard,
   // the same idiom limGain/lfoG use further down).
-  const LAYER_DEF = Object.freeze({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true, sub: true });
+  const LAYER_DEF = Object.freeze({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true, sub: true, rivals: true });
   let layers = Object.assign({}, LAYER_DEF);
 
   // Named tune presets the player picks INSTEAD of inheriting the team's
@@ -625,6 +639,26 @@ const GameAudio = (function () {
       subOctOsc.connect(subOctGain).connect(sfxBus);
     }
 
+    // Rival voices. Cheap on purpose — one looping source through a lowpass,
+    // a gain and a panner each. They share engBuf with the player's own voice,
+    // so they cost no extra fetch, decode or memory.
+    rivalVoices = [];
+    if (usingSamples && ctx.createStereoPanner) {
+      for (let i = 0; i < RIVAL_VOICES; i++) {
+        const src = ctx.createBufferSource();
+        src.buffer = engBuf; src.loop = true;
+        const li = findStableLoop(engBuf);
+        src.loopStart = li.start; src.loopEnd = li.end;
+        src.playbackRate.value = 0.4;
+        const filt = ctx.createBiquadFilter();
+        filt.type = "lowpass"; filt.frequency.value = 2000;
+        const gain = ctx.createGain(); gain.gain.value = 0;
+        const pan = ctx.createStereoPanner(); pan.pan.value = 0;
+        src.connect(filt).connect(gain).connect(pan).connect(sfxBus);
+        rivalVoices.push({ src, filt, gain, pan });
+      }
+    }
+
     // turbo whine: faint high sine riding above the core
     whineOsc = ctx.createOscillator();
     whineGain = ctx.createGain();
@@ -711,6 +745,7 @@ const GameAudio = (function () {
     else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
     if (subOctOsc) subOctOsc.start();
+    for (const v of rivalVoices) v.src.start(0, v.src.loopStart);
     harvSrc.start();
     ersOsc.start();
     lfo.start();
@@ -758,6 +793,7 @@ const GameAudio = (function () {
     if (limOsc) { limOsc.stop(t0 + 0.35); limOsc = null; limGain = null; }
     whineOsc.stop(t0 + 0.35);
     if (subOctOsc) subOctOsc.stop(t0 + 0.35);
+    for (const v of rivalVoices) { try { v.gain.gain.setTargetAtTime(0, t0, 0.06); v.src.stop(t0 + 0.35); } catch (e) { /* already stopped */ } }
     harvSrc.stop(t0 + 0.35);
     ersOsc.stop(t0 + 0.35);
     windSrc.stop(t0 + 0.35);
@@ -783,6 +819,10 @@ const GameAudio = (function () {
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = null;
     subOctOsc = subOctGain = null;
+    // Same disconnect-or-they-keep-rendering rule as the block above.
+    const deadRivals = rivalVoices.slice();
+    setTimeout(() => { for (const v of deadRivals) { try { v.filt.disconnect(); v.gain.disconnect(); v.pan.disconnect(); } catch (e) { /* torn down */ } } }, 450);
+    rivalVoices = [];
     idleGainRamped = false;
     engineOn = false;
   }
@@ -1261,6 +1301,68 @@ const GameAudio = (function () {
     return granularOn;
   }
 
+  /* setRivals(list) — the cars around you, in the PLAYER'S track frame.
+   * Each entry: { lat, arc, rev, approach }
+   *   lat      metres to the RIGHT (negative = your left)
+   *   arc      metres AHEAD (negative = behind)
+   *   rev      0..1, their engine speed
+   *   approach metres/second of closing (positive = coming at you)
+   * Sorted nearest-first by game.js; anything past RIVAL_VOICES is dropped.
+   *
+   * Safe to call every frame, and safe to call with [] — an empty list is how
+   * the field goes quiet when you drive away from it.
+   */
+  function setRivals(list) {
+    if (!engineOn || !rivalVoices.length) return;
+    const t = now();
+    const n = layers.rivals && list ? Math.min(list.length, rivalVoices.length) : 0;
+    for (let i = 0; i < rivalVoices.length; i++) {
+      const v = rivalVoices[i];
+      if (i >= n) { aimGain(v.gain, 0, t, 0.12); continue; }
+      const r = list[i];
+      const lat = +r.lat || 0, arc = +r.arc || 0;
+      const dist = Math.hypot(lat, arc);
+      if (!(dist < RIVAL_RANGE)) { aimGain(v.gain, 0, t, 0.12); continue; }
+
+      // PAN by the angle, not by the lateral offset alone: a car two metres to
+      // your right is hard right when it is alongside and dead ahead when it is
+      // fifty metres up the road. Dividing by the arc distance is that angle,
+      // near enough, and it keeps the image from flicking side to side as a
+      // distant car weaves.
+      // ...and never FULLY hard: at ±1 a car alongside disappears from one ear
+      // entirely, which on headphones reads as detached from the scene rather
+      // than beside you. 0.85 keeps a little of it in the far ear, which is
+      // what having two of them is for.
+      const pan = 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
+      if (v.pan.pan._apexPanTgt !== pan) { v.pan.pan.setTargetAtTime(pan, t, 0.06); v.pan.pan._apexPanTgt = pan; }
+
+      // Level falls off with distance and is quieter behind you than ahead —
+      // your own engine is between you and it.
+      const near = 1 - dist / RIVAL_RANGE;
+      const behind = arc < 0 ? 0.7 : 1;
+      aimGain(v.gain, 0.055 * near * near * behind * (0.45 + 0.55 * clamp01(r.rev)), t, 0.10);
+
+      // Air absorbs the top end with distance, which is most of why a far car
+      // reads as far rather than merely quiet.
+      const cut = 1200 + 5200 * near * near;
+      if (Math.abs((v.filt.frequency._apexCut ?? -1) - cut) > 60) {
+        v.filt.frequency.setTargetAtTime(cut, t, 0.12);
+        v.filt.frequency._apexCut = cut;
+      }
+
+      // DOPPLER. Their pitch from their own revs, shifted by how fast the gap is
+      // closing — the rise as a car comes past you is the cue, and it falls out
+      // of one multiply. Clamped: a 340 m/s closing speed is not a race, it is
+      // a divide-by-zero waiting to happen.
+      const dop = 1 + Math.max(-60, Math.min(60, +r.approach || 0)) / 343;
+      const rate = (0.25 + clamp01(r.rev) * 0.45) * dop;
+      if (Math.abs((v.src.playbackRate._apexRate ?? -1) - rate) > 0.002) {
+        v.src.playbackRate.setTargetAtTime(rate, t, 0.06);
+        v.src.playbackRate._apexRate = rate;
+      }
+    }
+  }
+
   function setLayer(name, on) {
     if (Object.prototype.hasOwnProperty.call(LAYER_DEF, name)) layers[name] = !!on;
     return Object.assign({}, layers);
@@ -1652,6 +1754,17 @@ const GameAudio = (function () {
     setProfile,
     setLayer,
     setGranular,
+    setRivals,
+    // Test hooks: each rival voice's live pan/level/pitch. They sit behind their
+    // own panners on sfxBus, so nothing downstream of the engine can see them.
+    rivalState() {
+      return rivalVoices.map((v) => ({
+        gain: +v.gain.gain.value.toFixed(5),
+        pan: +v.pan.pan.value.toFixed(4),
+        rate: +v.src.playbackRate.value.toFixed(4),
+        cut: Math.round(v.filt.frequency.value),
+      }));
+    },
     granular() { return { on: granularOn, ready: granularReady, active: usingGranular, period: enginePeriod }; },
     tune() { return Object.assign({}, tune); },
     tuneRange() { return JSON.parse(JSON.stringify(TUNE_RANGE)); },

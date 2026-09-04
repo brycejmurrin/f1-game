@@ -654,6 +654,7 @@ declare const DailyChallenge: GameModuleFactory;
 declare const Onboard: GameModuleFactory;
 declare const SetupUI: GameModuleFactory;
 declare const SkidMarks: GameModuleFactory;
+declare const RivalAudio: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;

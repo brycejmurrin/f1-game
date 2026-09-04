@@ -3510,6 +3510,7 @@ const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
+const rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals
 // Photo mode (js/camera/photo-cam.js).
 const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
 // LIGHTING TUNER panel UI (js/lighting/tuner-panel.js).
@@ -3961,6 +3962,9 @@ function update(dt) {
     // genuine slide down a straight was silent. Fixing the visual copy alone left
     // the most audible arc-coupling in the game untouched.
     GameAudio.setSkid(player.skidIntensity || 0, isWetRoad());
+    // The field around you: panned, distance-rolled and Doppler-shifted. Before
+    // this there was no opponent audio at all, so a car alongside was silent.
+    GameAudio.setRivals(rivalAudio.collect(player));
   }
 }
 
