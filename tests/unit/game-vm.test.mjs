@@ -79,3 +79,24 @@ test("the JSON hooks answer: obs / act / probe / cars / setInput / reset", () =>
   assert.equal(a.seed(), 5);
   assert.equal(Math.round(a.physState().speed), 30);
 });
+
+// The whole gear/rpm block used to live inside `if (c.human)`, so every AI car
+// spent the race at IDLE_RPM in gear 1 — dark rev lights, a stuck gear digit,
+// and (once rivals had engine audio) twenty opponents droning at idle tape
+// speed. The readout is a pure function of speed, so the guard is: after a
+// stretch of racing, the cars that are MOVING are also REVVING.
+test("every car's gear and rpm track its speed, not just the player's", () => {
+  const a = g.apex;
+  a.setInput({ throttle: true, steer: 0 });
+  g.step(180);
+  a.clearInput();
+  const { IDLE_RPM } = g.G.PhysicsConsts || { IDLE_RPM: 5000 };
+  const moving = g.G.cars.filter((c) => !c.human && (c.speed || 0) > 12);
+  assert.ok(moving.length >= 5, `only ${moving.length} AI cars are up to speed`);
+  assert.ok(moving.every((c) => c.rpm > IDLE_RPM),
+    `an AI car is still pinned at idle: ${JSON.stringify(moving.map((c) => ({ v: c.speed | 0, rpm: c.rpm | 0 })).slice(0, 4))}`);
+  assert.ok(moving.some((c) => c.gear > 1), "no AI car ever left first gear");
+  // ...and the human's own readout is unchanged by that: still a real gear.
+  const p = g.G.cars.find((c) => c.human);
+  assert.ok(p.rpm > IDLE_RPM || p.speed < 12, "the player's own rpm regressed");
+});

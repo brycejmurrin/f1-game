@@ -17,7 +17,10 @@
  */
 const RivalAudio = (() => {
   const SLOTS = 4;
-  const RANGE = 70;              // metres; past this a rival is inaudible anyway
+  // Must not be TIGHTER than engine.js's RIVAL_RANGE or the level curve there
+  // never gets to run out: a car would wink off at the collector's edge
+  // instead of fading. Kept equal to it.
+  const RANGE = 150;             // metres; past this a rival is inaudible anyway
   const slots = Array.from({ length: SLOTS },
     () => ({ lat: 0, arc: 0, rev: 0, approach: 0, dist: 0 }));
   const out = [];

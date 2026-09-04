@@ -4711,16 +4711,20 @@ function updateCar(c, dt, ranked) {
       c.speed = Math.min(vmax * 1.06, c.speed + a * dt);
     }
   }
-  if (c.human) {
-    const gearSpeed = Math.max(0, c.speed);   // gearbox readout ignores reverse crawl
-    if (!gearsManual()) {
-      const ng = naturalGear(gearSpeed);
-      // auto upshift/downshift cue: same shift sound as manual when the box changes
-      if (ng !== c.gear && state === "race" && soundOn) GameAudio.shift(ng > c.gear);
-      c.gear = ng;
-    }
-    c.rpm = rpmFor(c.gear, gearSpeed);
-  }
+  // EVERY car, not just the human one. This whole block used to sit inside
+  // `if (c.human)`, so an AI car's rpm never left IDLE_RPM for the entire race —
+  // which made its rev lights dark, its gear digit stuck on 1, and (once rival
+  // engine audio existed) every opponent drone at idle tape speed no matter what
+  // it was doing. rpmFor/naturalGear are pure functions of speed and nothing in
+  // the AI physics reads c.gear, so this is a readout fix, not a handling one.
+  // The SHIFT CUE stays human-only: it is your gearbox you hear, not theirs.
+  const gearSpeed = Math.max(0, c.speed);   // gearbox readout ignores reverse crawl
+  if (c.human && !gearsManual()) {
+    const ng = naturalGear(gearSpeed);
+    if (ng !== c.gear && state === "race" && soundOn) GameAudio.shift(ng > c.gear);
+    c.gear = ng;
+  } else if (!c.human) c.gear = naturalGear(gearSpeed);
+  c.rpm = rpmFor(c.gear, gearSpeed);
 
   // Kerb vs off-track: a kerb sits just outside the road edge and is DRIVABLE
   // (rumble + a little grip loss), whereas going past the edge with no kerb is

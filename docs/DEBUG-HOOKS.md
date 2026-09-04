@@ -832,6 +832,23 @@ Everything about the current engine sound in one read. `rate` is the live
 gain. `debug` is `GameAudio.debug()`'s bundle (context state, `samplesReady`,
 `usingSamples`, `engineOn`).
 
+`GameAudio` carries three more reads that only the tests want:
+`engineCut()` (the core's live lowpass corner), `engineLevel()` (its gain, which
+is `level - limiterDepth`) and `limiterHz()` (the chop rate). The pair
+`engineLevel`/`limiterDepth` is what says whether the rev-limiter gate CUTS the
+note or inverts it: `engGain`'s base is `level - depth` and the square swings
+±depth on top, so a depth past half the level drives the gain negative. It is
+capped there — a full ignition cut is the physical maximum, and the rest of the
+LIMITER trim buys chop RATE instead (9.75 Hz at 0, the stock 13 Hz at 1,
+22.75 Hz wide open).
+
+BRIGHTNESS has the mirror-image trap: the shape caps (11 kHz on the sample core)
+bound the rev-driven part of the corner, and the trims scale it, so the FINAL
+value is what has to stay in range. Clamping before the trim let a widened
+BRIGHTNESS run the product past Nyquist, where a `BiquadFilter` pins it
+silently — the top of the slider moved a number that no longer moved the sound.
+The ceiling is `sampleRate * 0.45`, so the pin is ours and audible.
+
 ```js
 __apex.audio().tune;            // { pitch: 1, detune: 1, revRange: 1, … }
 __apex.audio().rate;            // 0 unless the engine is running
@@ -862,14 +879,35 @@ the note), `rivals` (the cars around you), `reverb` (circuit acoustics) and
 and then costs no per-frame scheduling.
 
 ### The field, the space and the overrun
-`audio().granular` aside, three layers are worth naming because none of them
-existed before and each answers a question the mix could not:
+Three layers are worth naming because none of them existed before and each
+answers a question the mix could not:
 
 - **RIVALS** — `GameAudio.setRivals(list)`, fed by `js/audio/rivals.js` from the
   player's TRACK frame. Four voices, panned by ANGLE (lateral over arc
   distance), rolled off and lowpassed with distance, Doppler-shifted by the
   closing rate. There was no panner in the graph at all before, so a car
-  alongside was silent.
+  alongside was silent. `GameAudio.rivalState()` reports each voice's live
+  `{gain, pan, rate, cut}`.
+
+  Four things were wrong with the first cut and are worth not re-doing:
+  **the AI cars had no revs.** `c.gear`/`c.rpm` were computed inside
+  `if (c.human)` in game.js, so every opponent sat at `IDLE_RPM` in gear 1 for
+  the whole race — rivals droned at idle tape speed and took the bottom of the
+  level curve too. It read as a mixing problem and was a readout bug.
+  **The four voices were one voice.** Phase-coherent copies of one loop at one
+  rate SUM rather than thicken; each slot now carries a fixed detune
+  (-22/-8/+9/+24 cents) and starts a different fraction into the loop.
+  **A StereoPanner is equal power**, so a mono source through one is 3 dB under
+  the same source wired straight to the bus — which is how the player's own
+  engine is wired. `PAN_MAKEUP = sqrt(2)` pays that back, pan-independently.
+  **The radius was 70 m**, inside which the inverse-distance law had not
+  finished falling, so cars popped in mid-straight; 150 m fades instead and
+  costs nothing, because the four voices exist either way.
+
+  Doppler is the stationary-observer form `343/(343 - closing)`, not its
+  first-order expansion — they agree at pit speed and diverge at 300 km/h — with
+  the RATIO clamped to `[0.80, 1.25]`, because `approach` comes from two speeds
+  sampled a frame apart and one bad frame must not chirp.
 - **SPACE** — `GameAudio.setVenue(def)` picks the circuit's acoustics from data
   the definitions already carry (`street: true`, `theme`). The impulse
   responses are generated, not shipped. `audio().venue` reports the live send.
@@ -912,44 +950,12 @@ and re-laid at another rate are noise however they are placed.
 **If you measure a change to the engine voice, measure flatness too.** Centroid
 alone will pass a defect it was written to catch.
 
-### The field, the space and the overrun
-`audio().granular` aside, three layers are worth naming because none of them
-existed before and each answers a question the mix could not:
-
-- **RIVALS** — `GameAudio.setRivals(list)`, fed by `js/audio/rivals.js` from the
-  player's TRACK frame. Four voices, panned by ANGLE (lateral over arc
-  distance), rolled off and lowpassed with distance, Doppler-shifted by the
-  closing rate. There was no panner in the graph at all before, so a car
-  alongside was silent.
-- **SPACE** — `GameAudio.setVenue(def)` picks the circuit's acoustics from data
-  the definitions already carry (`street: true`, `theme`). The impulse
-  responses are generated, not shipped. `audio().venue` reports the live send.
-- **OVERRUN** — crackle on a trailing throttle. `loadLift` is `clamp01(ax/12)`
-  and so is zero the instant the throttle closes, which is why lifting used to
-  sound exactly like coasting. `GameAudio.overrunState()` reports `{fired,
-  nextAt, now}`; one-shots have no persistent node to read.
-
-**Do not time the overrun from a headless probe here.** With no audio device
-this container's `ctx.currentTime` free-runs at roughly 100x wall — measured, 25
-seconds of context time per 200 ms of real time — so a live probe shows the
-GATING correctly and tells you nothing about the rate.
-`tests/unit/audio-tune.test.mjs` steps the clock by hand and is where the rate
-is pinned.
-
-### The two cores
-`audio().granular` reports `{on, ready, active, period}`. `on` is the player
-switch, `ready` means the worklet module loaded into this context, `active` is
-whether the engine actually STARTED on it — they differ when there is no
-`audioWorklet`, the fetch was blocked, the context is insecure, or the sample
-has not decoded yet. `GameAudio.setGranular(false)` A/Bs against the old
-`playbackRate` core mid-race; both are handed the same ratio, so only the
-timbre moves.
-
-Two trims are core-dependent, and both do the same job either way:
-`detune` is cents on a BufferSource's `detune` under the sample core and the
-same cents folded into the ratio under the granular one (which has no detune
-param — its pitch IS the ratio); `sub` weights `engC` in the oscillator
-fallback and a dedicated sub-octave oscillator under both sample cores.
+### The two trims that depend on the core
+`detune` is cents on the sample core's own `detune` param; under the oscillator
+fallback it is the spread between the two saws. `sub` weights `engC` in that
+fallback and a dedicated sub-octave oscillator on the sample core. (The
+`granular` core and its `audio().granular` report were removed on 2026-09-04 —
+see above for why.)
 
 ```js
 __apex.audioLayer("limiter", false);     // kill the redline stutter
