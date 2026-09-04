@@ -44,7 +44,7 @@ test("camTune() reports the knob registry and defaults to zero everywhere", asyn
 // (jump → snapCam → camState) on a real corner instead.
 const liveCam = (page, mode, frac, cornerLead) => page.evaluate(({ mode, frac, cornerLead }) => {
   __apex.camTune("chase", null);
-  if (cornerLead) __apex.camTune("chase", { cornerLead });
+  if (cornerLead != null) __apex.camTune("chase", { cornerLead });
   __apex.camera(mode); __apex.jump(frac, 60); __apex.freeze(true); __apex.snapCam();
   const c = __apex.camState();
   return { eye: c.eye.slice(), tgt: c.tgt.slice() };
@@ -58,21 +58,28 @@ test("CORNER LEAD only applies to chase/far, and leads the chase into corners", 
   expect(def.min).toBe(0); expect(def.max).toBe(1);
 
   // at a mid-lap corner, cornerLead swings the aim INTO the bend, scaling with
-  // the knob; and returns to the exact default at 0.
+  // the knob; explicit 0 disables the shipped default lead.
   const FC = 0.24;
-  const base = await liveCam(page, "chase", FC, 0);
+  const shipped = await liveCam(page, "chase", FC, null);
+  const flat = await page.evaluate(() => {
+    __apex.camTune("chase", { cornerLead: 0 });
+    __apex.camera("chase"); __apex.jump(0.24, 60); __apex.freeze(true); __apex.snapCam();
+    return __apex.camState().tgt.slice();
+  });
+  expect(Math.hypot(flat[0] - shipped.tgt[0], flat[1] - shipped.tgt[1], flat[2] - shipped.tgt[2]))
+    .toBeGreaterThan(0.05);
   const half = await liveCam(page, "chase", FC, 0.5);
   const full = await liveCam(page, "chase", FC, 1);
-  const tgtMove = (v) => Math.hypot(v.tgt[0] - base.tgt[0], v.tgt[1] - base.tgt[1], v.tgt[2] - base.tgt[2]);
+  const tgtMove = (v) => Math.hypot(v.tgt[0] - shipped.tgt[0], v.tgt[1] - shipped.tgt[1], v.tgt[2] - shipped.tgt[2]);
   const mFull = tgtMove(full), mHalf = tgtMove(half);
   expect(mFull).toBeGreaterThan(0.5);          // the aim genuinely leads into the corner
   expect(mHalf).toBeGreaterThan(0.1);
   expect(mHalf).toBeLessThan(mFull);           // scales with the knob
-  const reset = await liveCam(page, "chase", FC, 0);
-  expect(reset.tgt[0]).toBeCloseTo(base.tgt[0], 3);   // 0 == the shipped framing, exactly
+  const reset = await liveCam(page, "chase", FC, null);
+  expect(reset.tgt[0]).toBeCloseTo(shipped.tgt[0], 3);
 
   // cockpit ignores it entirely (free-world onboard branch never reads it)
-  const cpBase = await liveCam(page, "cockpit", FC, 0);
+  const cpBase = await liveCam(page, "cockpit", FC, null);
   await page.evaluate(() => __apex.camTune("chase", { cornerLead: 1 }));
   const cpWithLead = await page.evaluate(() => {
     __apex.camera("cockpit"); __apex.jump(0.24, 60); __apex.freeze(true); __apex.snapCam();

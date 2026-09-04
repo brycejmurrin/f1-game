@@ -1229,6 +1229,12 @@ function fmtTime(t) {
 function announce(msg, dur, kind) {
   kind = kind || "race";
   const pri = ANN_PRI[kind] || 2;
+  if (hudProfile !== "broadcast") {
+    const camId = CAM_MODES[camMode].id;
+    if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead") {
+      if (pri < 4) return;
+    }
+  }
   if (announceT > 0 && pri <= _annPri) {
     if (!_annQueue || pri > (_annQueue.pri || 0)) _annQueue = { msg, dur, kind, pri };
     return;
@@ -3194,6 +3200,12 @@ const G = {
   get camFov() { return camFov; }, set camFov(v) { camFov = v; },
   get camMode() { return camMode; }, set camMode(v) { camMode = v; },
   get camCutT() { return camCutT; }, set camCutT(v) { camCutT = v; },   // for cam-modes.js
+  get hudProfile() { return hudProfile; },
+  set hudProfile(v) {
+    if (HUD_PROFILES.indexOf(v) < 0) v = "standard";
+    hudProfile = v;
+    store.set("hudProfile", hudProfile);
+  },
   get camRoll() { return camRoll; }, set camRoll(v) { camRoll = v; },
   get camTgt() { return camTgt; }, set camTgt(v) { camTgt = v; },
   get dbgCam() { return dbgCam; }, set dbgCam(v) { dbgCam = v; },
@@ -9296,6 +9308,12 @@ if (pmHudProfile) {
     hudProfile = HUD_PROFILES[(HUD_PROFILES.indexOf(hudProfile) + 1) % HUD_PROFILES.length];
     store.set("hudProfile", hudProfile);
     pmHudProfile.textContent = hudProfileLabel();
+    const metrics = document.getElementById("game-metrics");
+    if (metrics) {
+      if (hudProfile === "minimal") metrics.dataset.compact = "1";
+      else delete metrics.dataset.compact;
+    }
+    updateHud(true);
   };
 }
 

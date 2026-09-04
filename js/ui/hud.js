@@ -45,6 +45,22 @@ const teamCss = (c) => {
 let _secRows = null;
 let _secFlash = [0, 0, 0];
 let _limitsDots = null;
+let _hudCamKey = "";
+const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1 };
+const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1 };
+function syncHudCamClasses() {
+  const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : null;
+  const modeId = (modes && modes[G.camMode]) ? modes[G.camMode].id : "chase";
+  const prof = G.hudProfile || "standard";
+  const key = modeId + "|" + prof;
+  if (key === _hudCamKey) return;
+  _hudCamKey = key;
+  const body = document.body;
+  body.classList.toggle("hud-onboard", !!ONBOARD_IDS[modeId]);
+  body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
+  body.classList.toggle("hud-prof-minimal", prof === "minimal");
+  body.classList.toggle("hud-prof-broadcast", prof === "broadcast");
+}
 function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
 function buildSecRows() {
   // S2 is NOT the brand #e10600: at 14px bold on the 72% plate that red measures
@@ -125,10 +141,15 @@ let _gapTight = null;
 // seconds (EMA, ~0.3 s at 10 Hz) per slot; a neighbour change resets the
 // slot so a new rival never inherits the old one's lag.
 const _gapSm = [NaN, NaN], _gapWho = [null, null];
+function gapDecimals() {
+  // F1 2026 dropped to one decimal on TV and fans pushed back hard — broadcast
+  // profile keeps two so 0.95 vs 1.04 stays readable; standard stays at one.
+  return (G.hudProfile || "standard") === "broadcast" ? 2 : 1;
+}
 function gapSec(slot, who, raw) {
   if (who !== _gapWho[slot] || !isFinite(_gapSm[slot])) { _gapWho[slot] = who; _gapSm[slot] = raw; }
   else _gapSm[slot] += (raw - _gapSm[slot]) * 0.3;
-  return _gapSm[slot].toFixed(1);
+  return _gapSm[slot].toFixed(gapDecimals());
 }
 function gapForm() {
   const root = document.documentElement;
@@ -300,6 +321,7 @@ function fitHud() {
 function updateHud(force) {
   const player = G.player, cars = G.cars, timeTrial = G.timeTrial;
   if (!player) return;
+  syncHudCamClasses();
   if (player.team && player.team.id !== _teamSkin) {
     _teamSkin = player.team.id;
     document.documentElement.dataset.team = _teamSkin;

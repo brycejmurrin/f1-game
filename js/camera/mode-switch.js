@@ -13,19 +13,19 @@
 // apex.js, agentview.js and game.js read it through CamModes.CAM_MODES.
 window.CamModes = (function () {
   const CAM_MODES = [
-    { id: "chase",     label: "CHASE" },
-    { id: "far",       label: "FAR" },
-    { id: "drift",     label: "DRIFT" },
-    { id: "cockpit",   label: "COCKPIT" },
-    { id: "hood",      label: "HOOD" },
-    { id: "overhead",  label: "OVERHEAD" },
-    { id: "heli",      label: "HELI" },
-    { id: "reverse",   label: "REVERSE" },
-    { id: "side",      label: "TV SIDE" },
-    { id: "cinematic", label: "CINEMATIC" },
-    { id: "low",       label: "LOW" },
-    { id: "tcam",      label: "T-CAM" },
-    { id: "rear",      label: "REAR CAM" },
+    { id: "chase",     label: "CHASE",     cut: 0.35 },
+    { id: "far",       label: "FAR",       cut: 0.35 },
+    { id: "drift",     label: "DRIFT",     cut: 0.35 },
+    { id: "cockpit",   label: "COCKPIT",   cut: 0 },
+    { id: "hood",      label: "HOOD",      cut: 0 },
+    { id: "overhead",  label: "OVERHEAD",  cut: 0.5 },
+    { id: "heli",      label: "HELI",      cut: 0.55 },
+    { id: "reverse",   label: "REVERSE",   cut: 0.35 },
+    { id: "side",      label: "TV SIDE",   cut: 0.45 },
+    { id: "cinematic", label: "CINEMATIC", cut: 0.6 },
+    { id: "low",       label: "LOW",       cut: 0.4 },
+    { id: "tcam",      label: "T-CAM",     cut: 0 },
+    { id: "rear",      label: "REAR CAM",  cut: 0.15 },
   ];
 
   function create(G) {
@@ -42,7 +42,7 @@ window.CamModes = (function () {
       G.camMode = ((m % CAM_MODES.length) + CAM_MODES.length) % CAM_MODES.length;
       G.store.set("camMode", G.camMode);
       if (G.camMode !== prev) {
-        G.camCutT = 0.35;   // brief eased glide into the new angle
+        G.camCutT = (CAM_MODES[G.camMode] || CAM_MODES[0]).cut || 0.35;
         Log.info("game", "CamModes.setCamMode " + CAM_MODES[prev].id + " -> " + CAM_MODES[G.camMode].id);
       }
       refreshCamBtn();   // the CAM button label is the only mode indicator (no big announce)
