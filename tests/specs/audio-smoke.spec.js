@@ -76,6 +76,30 @@ test("persisted SOUND OFF stays off and defers WebAudio until a trusted enable c
   await expect.poll(() => engineRequests.length).toBe(2);
 });
 
+// GameAudio.setMusicVolume/setSfxVolume clamp to 0..1 and RETURN the clamped
+// value; the panel used to discard that return and show the raw localStorage
+// number. Reload test: keep it BEFORE the race tests — after the unlock
+// gesture this body ran 119.4s solo (2026-09-04), 0.6s under the 120s budget.
+test("an out-of-range stored volume clamps both the audio gain and the panel's own label", async ({ page }) => {
+  await bootWithStore(page, {
+    "apex26.volMusic": "40",    // way over the 0..1 gain range
+    "apex26.volSfx": "-3",      // way under it
+  });
+  expect(await page.evaluate(() => GameAudio.volumes())).toEqual({ music: 1, sfx: 0 });
+
+  await page.locator("#mb-settings").click();
+  await page.locator("#pm-audio").click();
+  await expect(page.locator("#audioset")).toBeVisible();
+  const shown = await page.evaluate(() => ({
+    mvolInput: document.getElementById("as-mvol").value,
+    mvolLabel: document.getElementById("as-mvol-v").textContent,
+    svolInput: document.getElementById("as-svol").value,
+    svolLabel: document.getElementById("as-svol-v").textContent,
+  }));
+  // 0..1 gain maps to the panel's 0..10 slider by x10 — 1 -> "10", 0 -> "0".
+  expect(shown).toEqual({ mvolInput: "10", mvolLabel: "10", svolInput: "0", svolLabel: "0" });
+});
+
 test("re-enabling sound during a race restarts race music", async ({ page, loadTrack }) => {
   await toMenu(page);
   // startRace() is async (ensureScenery). loadTrack waits for the build AND
@@ -123,30 +147,4 @@ test("real GameAudio unlock and engine synthesis run after a user gesture", asyn
   const state = await page.evaluate(() => GameAudio.debug());
   expect(state.contextState).toBe("running");
   expect(state.engineOn).toBe(true);
-});
-
-// GameAudio.setMusicVolume/setSfxVolume clamp to 0..1 and RETURN the clamped
-// value; js/audio/panel.js used to call them at boot and discard that
-// return, keeping its OWN musicVol/sfxVol (the pair the MUSIC & SOUND panel's
-// slider label reads) at whatever raw number came out of localStorage. The
-// gain itself was always safe — only the number shown on the slider could
-// disagree with it.
-test("an out-of-range stored volume clamps both the audio gain and the panel's own label", async ({ page }) => {
-  await bootWithStore(page, {
-    "apex26.volMusic": "40",    // way over the 0..1 gain range
-    "apex26.volSfx": "-3",      // way under it
-  });
-  expect(await page.evaluate(() => GameAudio.volumes())).toEqual({ music: 1, sfx: 0 });
-
-  await page.locator("#mb-settings").click();
-  await page.locator("#pm-audio").click();
-  await expect(page.locator("#audioset")).toBeVisible();
-  const shown = await page.evaluate(() => ({
-    mvolInput: document.getElementById("as-mvol").value,
-    mvolLabel: document.getElementById("as-mvol-v").textContent,
-    svolInput: document.getElementById("as-svol").value,
-    svolLabel: document.getElementById("as-svol-v").textContent,
-  }));
-  // 0..1 gain maps to the panel's 0..10 slider by x10 — 1 -> "10", 0 -> "0".
-  expect(shown).toEqual({ mvolInput: "10", mvolLabel: "10", svolInput: "0", svolLabel: "0" });
 });
