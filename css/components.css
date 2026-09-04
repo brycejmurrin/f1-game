@@ -1283,6 +1283,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-style: italic;
   letter-spacing: var(--ls-5);
   text-transform: uppercase;
+  opacity: 1;
   padding-bottom: calc(var(--gap) / 3);
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }

@@ -945,6 +945,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), "#pm-panel-display > .tune-row .tune-label", "font-style"), "italic",
     "UI SIZE uses the same steel italic heading as COCKPIT");
   assert.equal(decl(css("css/components.css"), "#pm-panel-display > .tune-row .tune-label", "font-weight"), "700");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-display > .tune-row .tune-label", "opacity"), "1",
+    "tuner .tune-label is 0.9 — pin full opacity so UI SIZE matches COCKPIT");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="on"]', "color"), "var(--gold)",
     "fold ON chips pick up the live gold the inner ON buttons name");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="off"]', "color"), "var(--dim)");
