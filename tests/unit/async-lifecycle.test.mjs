@@ -21,6 +21,10 @@ function audioPanelHarness() {
   const element = () => ({
     hidden: false, disabled: false, value: "", textContent: "", innerHTML: "",
     classList: { toggle() {} }, setAttribute() {}, closest() { return this; },
+    // AudioPanel.addEventListener on #pm-audio so SettingsNav can keep its
+    // own onclick (the door opens the MUSIC page). This harness never clicks
+    // that door — a no-op is enough to let create() finish.
+    addEventListener() {},
   });
   const $ = (id) => {
     if (!nodes.has(id)) nodes.set(id, element());
