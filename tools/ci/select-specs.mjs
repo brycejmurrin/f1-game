@@ -242,6 +242,21 @@ export function prioritise(specs, { changedSpecs = [], failed = [], imported = [
   return [...specs].sort((a, b) => rank(a.file) - rank(b.file) || a.tests - b.tests);
 }
 
+/** Previously-failing specs only ride along when this change already routes
+ *  to them. Carry-forward is fail-fast ORDER, not a second selector.
+ *
+ *  Pages 33927358590 (livery lockup, groups: test:car) unioned
+ *  albert-park-foundation + physics-fixes from .selected-failed.txt into the
+ *  candidate set, ran them first, hit max-failures=3 at 180 s, and never
+ *  reached carview-parts. The same three circuit specs then wrote themselves
+ *  back into the cache — a budget flake became a branch-wide red. */
+export function scopeCarryForward(failed, routed) {
+  const allow = new Set(routed);
+  const inScope = [], dropped = [];
+  for (const f of failed) (allow.has(f) ? inScope : dropped).push(f);
+  return { inScope, dropped };
+}
+
 // The boot group reaches this gate only through pick-tests' two blanket
 // rules ("any source edit: does the page still boot", "script tags + DOM
 // shell"). That question is already answered on every push and every deploy
@@ -282,14 +297,16 @@ export function select(changedRef, budgetMin = 15, opts = {}) {
     && fs.existsSync(path.join(ROOT, f)));
   const imported = specsImporting(changed);
   const failed = (opts.failed || []).filter((f) => fs.existsSync(path.join(ROOT, f)));
-  const candidates = [...new Set([...changedSpecs, ...failed, ...imported, ...specs])];
+  const routed = [...new Set([...changedSpecs, ...imported, ...specs])];
+  const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);
+  const candidates = routed;
   const reason = !changed.length ? "none"
     : tracked.length ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
   const cut = fit(candidates, budgetMin);
   const r = { reason, changed: changed.length, tracked, groups: browserGroups, bootCoveredBySmoke,
-              changedSpecs, imported, failed, ...cut,
-              selected: prioritise(cut.selected, { changedSpecs, failed, imported }) };
+              changedSpecs, imported, failed: failedInScope, failedDropped, ...cut,
+              selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   // On "infra" the selection is reported but NOT run — the gates own that push.
   if (reason === "infra") { r.skipped = [...r.selected, ...r.skipped]; r.selected = []; r.testsSelected = 0; }
   return r;
@@ -320,6 +337,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `any spec, so nothing is selected and the GATES own this push.`);
   if (r.reason === "unmatched") console.error(
     "SELECTION NOT TRUSTWORTHY: files changed but no pick-tests rule claimed them.");
+  for (const s of r.failedDropped || []) console.error(
+    `CARRY-FORWARD DROPPED (not routed by this change): ${s}`);
   console.error(`budget fits ${r.testsFit} tests (retries ${SELECTED_GATE.retries}, ` +
     `${SELECTED_GATE.perTestTimeoutSec}s/test, surviving 1 timeout); selected ${r.testsSelected}`);
   for (const s of r.overBudgetSpecs) console.error(

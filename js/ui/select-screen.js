@@ -118,12 +118,31 @@ const teamPicker = () => $("teampicker");
 // able to reach them — removed 2026-08.
 let previewOpenRaf = 0;
 
+function fittedLivery(t) {
+  const id = store.get("livery." + t.id, "default");
+  const custom = store.get("livery.custom." + t.id, []) || [];
+  const list = ((typeof Liveries !== "undefined" && Liveries.forTeam) ? Liveries.forTeam(t) : []).concat(custom);
+  return list.find((l) => l.id === id) || list[0] || null;
+}
+
 function teamSwatch(t) {
   const sw = document.createElement("span");
   sw.className = "tm-colour";
-  // Two-tone: the livery's primary with its accent as a stripe, which is what
-  // makes teams distinguishable at a glance (several 2026 cars are near-black).
-  sw.style.background = "linear-gradient(135deg," + cssCol(t.color) + " 62%," + cssCol(t.color2 || t.color) + " 62%)";
+  const liv = fittedLivery(t);
+  const c1 = (liv && liv.c1) || t.color;
+  const c2 = (liv && liv.c2) || t.color2 || t.color;
+  // Fitted scheme, not the factory pair: a player who painted the car should
+  // see that paint on the TEAM tile. The lockup is the same crest the garage
+  // wall and the car share.
+  if (typeof LiveryTex !== "undefined" && LiveryTex.paintSwatch) {
+    const c = document.createElement("canvas");
+    c.width = 48; c.height = 48;
+    c.setAttribute("aria-hidden", "true");
+    LiveryTex.paintSwatch(c.getContext("2d"), t.id, liv || { c1, c2 }, c.width, c.height);
+    sw.appendChild(c);
+  } else {
+    sw.style.background = "linear-gradient(135deg," + cssCol(c1) + " 62%," + cssCol(c2) + " 62%)";
+  }
   sw.setAttribute("aria-hidden", "true");
   return sw;
 }

@@ -928,14 +928,24 @@ function paintDress(team, liv, info) {
       : null;
     LiveryTex.drawCrest(ctx, team.id, inner, { liv, field, bare: false, palette: lockup || undefined });
   }
-  // Team wordmark strip.
+  // Team wordmark strip — the same lockup as the lightbox, left of the name.
   ctx.fillStyle = css(scale(c1, 0.55)); ctx.fillRect(D_WORD.x, D_WORD.y, D_WORD.w, D_WORD.h);
   ctx.fillStyle = css(c2); ctx.fillRect(D_WORD.x, D_WORD.y + D_WORD.h - 9, D_WORD.w, 9);
+  const wordMark = { x: D_WORD.x + 12, y: D_WORD.y + 16, w: 96, h: 96 };
+  if (img && LiveryTex.drawLogoImage) {
+    LiveryTex.drawLogoImage(ctx, img, wordMark, (liv && liv.logo) || null, null,
+                            (liv && (liv.logo3 || liv.logo2)) || null);
+  } else if (LiveryTex.drawCrest) {
+    const wordLockup = LiveryTex.markPalette
+      ? LiveryTex.markPalette(team.id, liv, [liv && liv.c1, liv && liv.c2], false)
+      : null;
+    LiveryTex.drawCrest(ctx, team.id, wordMark, { liv, field, bare: true, palette: wordLockup || undefined });
+  }
   ctx.fillStyle = "#f2f3f5";
-  ctx.font = "700 62px system-ui, sans-serif";
-  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.font = "700 48px system-ui, sans-serif";
+  ctx.textAlign = "left"; ctx.textBaseline = "middle";
   ctx.fillText(String(team.name || team.short || "").toUpperCase(),
-    D_WORD.x + D_WORD.w / 2, D_WORD.y + D_WORD.h / 2 - 4, D_WORD.w - 30);
+    D_WORD.x + 120, D_WORD.y + D_WORD.h / 2 - 4, D_WORD.w - 136);
   // Pit board: team header, then the two drivers' numbers and codes.
   ctx.fillStyle = "#0a0b0d"; ctx.fillRect(D_BOARD.x, D_BOARD.y, D_BOARD.w, D_BOARD.h);
   ctx.fillStyle = css(c1); ctx.fillRect(D_BOARD.x, D_BOARD.y, D_BOARD.w, 56);

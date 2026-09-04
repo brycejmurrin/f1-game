@@ -20,7 +20,7 @@ const LiveryTex = (function () {
     titleA: { x: 500, y: 40,  w: 484, h: 170 },  // primary sponsor wordmark
     titleB: { x: 500, y: 240, w: 484, h: 130 },  // secondary sponsor
     wing:   { x: 40,  y: 520, w: 620, h: 150 },  // rear-wing sponsor band
-    num:    { x: 700, y: 420, w: 284, h: 284 },  // large car number
+    num:    { x: 700, y: 420, w: 284, h: 284 },  // nose + both rear endplates: lockup over the driver number
     strip:  { x: 40,  y: 720, w: 944, h: 130 },  // long thin sponsor strip (sidepod lower)
     fin:    { x: 40,  y: 856, w: 430, h: 160 },  // shark-fin tail: the painted graphic, stretched over the whole swept fin
     finBadge: { x: 500, y: 856, w: 160, h: 160 },
@@ -181,7 +181,20 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  function drawNumber(ctx, n, R, ink, accent, bg, fontId) {
+  // Crest box on the number board (nose + both rear endplates). Same lockup as
+  // the spine / fin / garage wall, shrunk into the top of REGIONS.num so the
+  // digit still reads. Exported so crest-marks can assert the second-row colour
+  // lands here too, rather than restating the fractions.
+  function numCrestBox(R) {
+    R = R || REGIONS.num;
+    const s = Math.round(Math.min(R.w, R.h) * 0.32);
+    return { x: R.x + Math.round((R.w - s) / 2), y: R.y + Math.round(R.h * 0.08), w: s, h: s };
+  }
+  // Fraction of REGIONS.num reserved above the digit for numCrestBox. The box
+  // sits at 0.08 of the board and is 0.32 tall, plus a 2 px gutter.
+  const NUM_CREST_HEAD = 0.42;
+
+  function drawNumber(ctx, n, R, ink, accent, bg, fontId, reserveTop) {
     const recipe = NUM_FONTS[fontId] || NUM_FONTS.default;
     if (bg) {
       // Rounded number-board patch: base-paint fill + thin accent keyline.
@@ -200,9 +213,11 @@ const LiveryTex = (function () {
       ctx.strokeStyle = cssA(accent, 0.9);
       ctx.stroke();
     }
+    const head = reserveTop ? Math.round(R.h * reserveTop) : 0;
+    const box = head ? { x: R.x, y: R.y + head, w: R.w, h: R.h - head } : R;
     const pad = 10;
-    const maxH = R.h - pad * 2;
-    const maxW = R.w - pad * 2;
+    const maxH = box.h - pad * 2;
+    const maxW = box.w - pad * 2;
     const text = String(n);
     const font = recipe.font;
     // Same closed-form + walk as drawWordmark: advance is linear in px.
@@ -213,12 +228,12 @@ const LiveryTex = (function () {
     while (size < maxH && (ctx.font = font(size + 1), ctx.measureText(text).width <= maxW)) size++;
     ctx.save();
     ctx.beginPath();
-    ctx.rect(R.x, R.y, R.w, R.h);
+    ctx.rect(box.x, box.y, box.w, box.h);
     ctx.clip();
     ctx.font = font(size);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    const cx = R.x + R.w / 2, cy = R.y + R.h / 2;
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
     // soft drop shadow (offset dark) for a painted-on depth cue
     ctx.fillStyle = "rgba(0,0,0,0.28)";
     ctx.fillText(text, cx + size * 0.03, cy + size * 0.035);
@@ -258,8 +273,8 @@ const LiveryTex = (function () {
       // base paint. Cut widths scale with the size so they survive the mips.
       const cut = Math.max(3, size * 0.045);
       ctx.fillStyle = css(bg || accent);
-      ctx.fillRect(R.x, cy - size * 0.18 - cut / 2, R.w, cut);
-      ctx.fillRect(R.x, cy + size * 0.2 - cut / 2, R.w, cut);
+      ctx.fillRect(box.x, cy - size * 0.18 - cut / 2, box.w, cut);
+      ctx.fillRect(box.x, cy + size * 0.2 - cut / 2, box.w, cut);
     }
     ctx.restore();
   }
@@ -1263,7 +1278,13 @@ const LiveryTex = (function () {
 
     const num = numberOverride != null ? numberOverride
               : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
-    drawNumber(ctx, num, REGIONS.num, ink, accent, c1, colors.numFont);
+    drawNumber(ctx, num, REGIONS.num, ink, accent, c1, colors.numFont, NUM_CREST_HEAD);
+    // Same lockup as the spine / fin, on the nose and both rear endplates.
+    const numBadge = numCrestBox(REGIONS.num);
+    if (LOGOS[teamId]) {
+      drawLogoImage(ctx, LOGOS[teamId], numBadge, logo,
+                    markHalo(LOGOS[teamId], c1, ink), emblemRim);
+    } else drawCrest(ctx, teamId, numBadge, { liv: colors, field: [c1, c2], bare: true, palette: lockup });
 
     // Mobile tier: upload at 512² instead of 1024². All layout stays authored at
     // SIZE (UVs are FRACTIONS of the atlas — resolution-independent), only the
@@ -1282,6 +1303,34 @@ const LiveryTex = (function () {
     return canvas;
   }
 
+  // Mini lockup for the LIVERY cards and TEAM picker tiles: paint + stripe +
+  // the same crest buildAtlas puts on the car. One function so the two pickers
+  // cannot drift from each other or from the atlas.
+  function paintSwatch(ctx, teamId, liv, w, h) {
+    const c1 = (liv && liv.c1) || [0.20, 0.20, 0.22];
+    const c2 = (liv && liv.c2) || c1;
+    ctx.fillStyle = css(c1);
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = css(c2);
+    ctx.fillRect(Math.round(w * 0.56), 0, w, h);
+    if (liv && liv.stripe) {
+      const sw = Math.max(4, Math.round(w * 0.08));
+      ctx.fillStyle = css(liv.stripe);
+      ctx.fillRect(Math.round(w * 0.5 - sw / 2), 0, sw, h);
+    }
+    const pad = Math.round(Math.min(w, h) * 0.08);
+    const R = { x: pad, y: pad, w: w - pad * 2, h: Math.round(h * 0.78) };
+    const field = [c1, c2];
+    if (LOGOS[teamId]) {
+      drawLogoImage(ctx, LOGOS[teamId], R, (liv && liv.logo) || null, null,
+                    (liv && (liv.logo3 || liv.logo2)) || null);
+    } else {
+      drawCrest(ctx, teamId, R, {
+        liv, field, bare: true, palette: markPalette(teamId, liv, field, false),
+      });
+    }
+  }
+
   // drawLogoImage is exported for the GARAGE back-wall crest (js/garage/scene.js):
   // aspect-fit + tint + halo is exactly the same job there, and reimplementing
   // the fit maths in a second place is how the two drift apart.
@@ -1289,7 +1338,7 @@ const LiveryTex = (function () {
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
   return { SIZE, REGIONS, buildAtlas, drawCrest, markBase, markPalette,
-           MARK_FLOOR, INK_FLOOR,
+           MARK_FLOOR, INK_FLOOR, numCrestBox, paintSwatch,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
