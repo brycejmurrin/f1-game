@@ -113,13 +113,16 @@ function syncHudCamClasses() {
   const modeId = (modes && modes[G.camMode]) ? modes[G.camMode].id : "chase";
   const prof = G.hudProfile || "standard";
   const key = modeId + "|" + prof;
-  if (key === _hudCamKey) return;
-  _hudCamKey = key;
-  const body = document.body;
-  body.classList.toggle("hud-onboard", !!ONBOARD_IDS[modeId]);
-  body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
-  body.classList.toggle("hud-prof-minimal", prof === "minimal");
-  body.classList.toggle("hud-prof-broadcast", prof === "broadcast");
+  if (key !== _hudCamKey) {
+    _hudCamKey = key;
+    const body = document.body;
+    body.classList.toggle("hud-onboard", !!ONBOARD_IDS[modeId]);
+    body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
+    body.classList.toggle("hud-prof-minimal", prof === "minimal");
+    body.classList.toggle("hud-prof-broadcast", prof === "broadcast");
+  }
+  // MAP/GAPS (and broadcast park) must re-run when only the setting
+  // changes — camera+profile stay put, so the key above does not.
   syncHudVisClasses(modeId);
 }
 function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
