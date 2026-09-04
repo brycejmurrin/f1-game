@@ -460,14 +460,26 @@ function hudProfileLabel() { return "HUD: " + hudProfile.toUpperCase(); }
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
-function hudMetricsLayoutLabel() { return "METRICS: " + hudMetricsLayout.toUpperCase(); }
+function hudMetricsLayoutLabel() { return "LAYOUT: " + hudMetricsLayout.toUpperCase(); }
 const HUD_VIS_MODES = ["auto", "on", "off"];
 let hudMapVis = store.get("hudMapVis", "auto");
-let hudGapsVis = store.get("hudGapsVis", "auto");
+let hudGapsVis = store.get("hudGapsVis", "on");
 if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "auto";
-if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "auto";
+if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
 function hudMapVisLabel() { return "MAP: " + hudMapVis.toUpperCase(); }
 function hudGapsVisLabel() { return "GAPS: " + hudGapsVis.toUpperCase(); }
+function hudDetailsSummary() {
+  let s = "HUD · " + hudProfile.toUpperCase() + " · " + hudMetricsLayout.toUpperCase();
+  if (hudMapVis === "on") s += " · MAP";
+  else if (hudMapVis === "off") s += " · NO MAP";
+  if (hudGapsVis === "off") s += " · NO GAPS";
+  else s += " · GAPS";
+  return s;
+}
+function paintHudDetailsSummary() {
+  const sum = $("pm-hud-details-sum");
+  if (sum) sum.textContent = hudDetailsSummary();
+}
 function syncMetricsOverlayCompact() {
   const metrics = document.getElementById("game-metrics");
   if (!metrics) return;
@@ -9340,10 +9352,12 @@ $("pm-gears").onclick = () => {
 const pmHudProfile = $("pm-hudprofile");
 if (pmHudProfile) {
   pmHudProfile.textContent = hudProfileLabel();
-  pmHudProfile.onclick = () => {
+  pmHudProfile.onclick = (e) => {
+    e.stopPropagation();
     hudProfile = HUD_PROFILES[(HUD_PROFILES.indexOf(hudProfile) + 1) % HUD_PROFILES.length];
     store.set("hudProfile", hudProfile);
     pmHudProfile.textContent = hudProfileLabel();
+    paintHudDetailsSummary();
     syncMetricsOverlayCompact();
     updateHud(true);
   };
@@ -9351,10 +9365,12 @@ if (pmHudProfile) {
 const pmHudMetrics = $("pm-hudmetrics");
 if (pmHudMetrics) {
   pmHudMetrics.textContent = hudMetricsLayoutLabel();
-  pmHudMetrics.onclick = () => {
+  pmHudMetrics.onclick = (e) => {
+    e.stopPropagation();
     hudMetricsLayout = HUD_MET_LAYOUTS[(HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) + 1) % HUD_MET_LAYOUTS.length];
     store.set("hudMetricsLayout", hudMetricsLayout);
     pmHudMetrics.textContent = hudMetricsLayoutLabel();
+    paintHudDetailsSummary();
     syncMetricsOverlayCompact();
     updateHud(true);
   };
@@ -9363,9 +9379,11 @@ function wireHudVisBtn(id, read, write, labelFn) {
   const btn = $(id);
   if (!btn) return;
   btn.textContent = labelFn();
-  btn.onclick = () => {
+  btn.onclick = (e) => {
+    e.stopPropagation();
     write(HUD_VIS_MODES[(HUD_VIS_MODES.indexOf(read()) + 1) % HUD_VIS_MODES.length]);
     btn.textContent = labelFn();
+    paintHudDetailsSummary();
     updateHud(true);
   };
 }
@@ -9604,6 +9622,7 @@ Input.setSteerMode(steerMode);
 $("pm-steer").textContent = steerLabel();
 if (pmHudProfile) pmHudProfile.textContent = hudProfileLabel();
 if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
+paintHudDetailsSummary();
 syncMetricsOverlayCompact();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();

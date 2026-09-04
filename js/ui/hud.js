@@ -79,14 +79,22 @@ function resolveHudVis(want, autoHide) {
 let _hudVisKey = "";
 function syncHudVisClasses(modeId) {
   const onboard = !!ONBOARD_IDS[modeId];
-  const hideMap = resolveHudVis(G.hudMapVis, onboard);
-  const hideGaps = resolveHudVis(G.hudGapsVis, onboard);
-  const key = (G.hudMapVis || "auto") + "|" + (G.hudGapsVis || "auto") + "|" + modeId + "|" + hideMap + "|" + hideGaps;
+  const prof = G.hudProfile || "standard";
+  // MAP AUTO: hide onboard (cockpit/hood/tcam) so the view stays clear.
+  // GAPS AUTO: keep the relative-distance widget — only MINIMAL hides it.
+  const hideMap = resolveHudVis(G.hudMapVis, onboard || prof === "minimal");
+  const hideGaps = resolveHudVis(G.hudGapsVis, prof === "minimal");
+  const mapLow = !hideMap && prof === "broadcast";
+  const gapsLow = !hideGaps && prof === "broadcast";
+  const key = (G.hudMapVis || "auto") + "|" + (G.hudGapsVis || "auto") + "|" + modeId + "|" + prof + "|" + hideMap + "|" + hideGaps + "|" + mapLow;
   if (key === _hudVisKey) return;
   _hudVisKey = key;
+  _fitKey = "";
   const body = document.body;
   body.classList.toggle("hud-hide-map", hideMap);
   body.classList.toggle("hud-hide-gaps", hideGaps);
+  body.classList.toggle("hud-map-low", mapLow);
+  body.classList.toggle("hud-gaps-low", gapsLow);
 }
 function syncHudLayoutClasses() {
   const resolved = resolveMetricsLayout();
@@ -94,6 +102,7 @@ function syncHudLayoutClasses() {
   const key = resolved + "|" + want;
   if (key === _hudLayoutKey) return;
   _hudLayoutKey = key;
+  _fitKey = "";
   const body = document.body;
   for (let i = 0; i < MET_LAYOUTS.length; i++) {
     body.classList.toggle("hud-met-" + MET_LAYOUTS[i], resolved === MET_LAYOUTS[i]);
@@ -381,8 +390,8 @@ function updateHud(force) {
   hudT -= 1;
   if (!force && hudT > 0) return;
   hudT = 6; // ~10Hz at 60fps
+  syncHudLayoutClasses();      // before fitHud: show/hide/park changes what gets measured
   fitHud();                    // below the throttle: this reads layout, per TICK not per frame
-  syncHudLayoutClasses();
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).

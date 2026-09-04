@@ -223,11 +223,19 @@
 #hud-tach.redline #hud-rpm-fill { background: var(--red); animation: pulse 0.4s infinite; }
 
 /* Camera + HUD profile integration (js/ui/hud.js syncHudCamClasses). */
-body.hud-prof-minimal #minimap,
-body.hud-prof-minimal .hud-gaps,
 body.hud-prof-minimal #hud-sectors { display: none !important; }
 body.hud-hide-map #minimap { display: none !important; }
 body.hud-hide-gaps .hud-gaps { display: none !important; }
+/* Broadcast tower takes the top-left — park map + gaps under it. */
+body.hud-map-low #minimap {
+  top: calc(68px + var(--sat) / var(--hud-z));
+}
+body.hud-gaps-low .hud-gaps {
+  top: calc(68px + var(--sat) / var(--hud-z));
+}
+body.hud-gaps-low.hud-hide-map .hud-gaps {
+  left: calc(10px + var(--sal) / var(--hud-z));
+}
 body.hud-bcam #hud-gearbox,
 body.hud-bcam #hud-ot,
 body.hud-bcam #hud-aero,
@@ -269,13 +277,10 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
 
 /* Metrics layout — which cluster wins (js/ui/hud.js resolveMetricsLayout). */
 body.hud-met-timing .hud-bottom { display: none !important; }
-body.hud-met-driver #minimap,
-body.hud-met-driver .hud-gaps,
+/* Map/gaps follow MAP/GAPS vis + broadcast park — LAYOUT never steals them. */
 body.hud-met-driver #hud-sectors,
 body.hud-met-driver .hud-top .hud-box:nth-child(4) { display: none !important; }
-/* Metrics layout — compact keeps pos/lap/time/speed/gear only. */
-body.hud-met-compact #minimap,
-body.hud-met-compact .hud-gaps,
+/* LAYOUT compact keeps pos/lap/time/speed/gear; map/gaps stay if ON. */
 body.hud-met-compact #hud-sectors,
 body.hud-met-compact #hud-energy,
 body.hud-met-compact #hud-ot,
@@ -553,6 +558,11 @@ body.in-race:has(.screen.dim:not([hidden])) :is(
   .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #btn-cam, .dock, #pausebtn
 ) {
   visibility: hidden;
+}
+/* DISPLAY settings: keep the live HUD (tower / map / gaps) so LAYOUT/MAP/GAPS
+   toggles can be seen without closing the sheet. */
+body.in-race:has(#pmsettings:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
+  visibility: visible;
 }
 #photo-controls > * { pointer-events: auto; }
 /* UI SIZE APPLIES TO THE FLY-CAM CONTROLS TOO. They sit beside the LIGHTING

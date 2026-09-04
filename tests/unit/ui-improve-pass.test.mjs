@@ -872,30 +872,33 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(code("js/ui/select-screen.js"), /besidePair/,
     "pair-on beside maps do not self-heal the pin down to a stale stamp");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"ui profile"\s*"hud sample"/,
-    "DISPLAY stacks UI SIZE beside HUD profile and HUD SIZE beside the live sample");
+    /"ui hudopts"\s*"hud sample"/,
+    "DISPLAY stacks UI SIZE beside HUD options and HUD SIZE beside the live sample");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale)', "grid-area"), "hud");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "grid-area"), "sample");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "justify-self"), "start",
     "HUD sample sits against the sliders, not floating in the leftover column");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudprofile', "grid-area"), "profile",
-    "HUD: STANDARD sits beside HUD SIZE, not as a leftover full-width plate");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
+    "HUD options fold sits beside UI SIZE, not as orphaned half-width plates");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
     "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open])', "grid-template-areas"),
     /"metrics metrics"/,
     "an open METRICS submenu takes the full DISPLAY row so HIDE HUD is not stranded");
+  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-hud-details[open])', "grid-template-areas"),
+    /"hudopts hudopts"/,
+    "an open HUD submenu spans the row so its tap rows stay full width");
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
     /HUD SIZE PREVIEW/,
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "align-self"), "start",
     "HUD sample grows down its cell instead of centering over HUD: STANDARD");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details > summary", "height"), "var(--tap)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--tap)",
     "METRICS summary matches the HIDE HUD tap row");
-  assert.equal(decl(css("css/components.css"), '#pm-metrics-details [role="group"]', "display"), "flex",
+  assert.equal(decl(css("css/components.css"), /#pm-metrics-details \[role="group"\]/, "display"), "flex",
     "METRICS body is a quiet column — not a 2-up plate grid");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details [role=\"group\"] > button", "background"), "transparent",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details \[role="group"\] > button/, "background"), "transparent",
     "METRICS inner rows drop plate chrome");
   assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-label b", "color"), "var(--text)",
     "DISPLAY slider values are text, not tuner red");
@@ -921,13 +924,13 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
     "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--steel)",
     "METRICS / ADVANCED summaries use heading steel, not button text");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "background-color"), "transparent",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "transparent",
     "disclosure summaries are headings, not .adv-more-btn plates");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary::after/, "content"), "none",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::after/, "content"), "none",
     "right-side chevron is the dropdown mark — disclosures do not use it");
-  assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary::before$/, "content") || "",
+  assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::before$/, "content") || "",
     /25BE/,
     "disclosure chevron sits on the left, like a tree, not a select");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
