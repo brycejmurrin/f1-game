@@ -8500,7 +8500,7 @@ $("mb-data").onclick = () => {
 };
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 // Same sheet from the pause stack — the controls reference is most wanted
-// mid-session. #howtoplay outranks #pausemenu in z-index, so BACK returns
+// mid-session. #howtoplay outranks #pausemenu in z-index, so CLOSE returns
 // to the pause menu with nothing else to restore.
 $("pm-howto").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
 $("htp-close").onclick = () => {

@@ -563,33 +563,8 @@
 #career-history .sheet:has(> #ch-contents) {
   grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
-#cg-contents, #ch-contents {
-  display: flex; align-items: center; justify-content: flex-start;
-  gap: calc(var(--gap) * 0.4); min-width: 0;
-  padding: 0 var(--pad) calc(var(--gap) * 0.35);
-  overflow-x: auto; overflow-y: hidden;
-  overscroll-behavior-x: contain; touch-action: pan-x;
-  scrollbar-width: none;
-}
-#cg-contents > :first-child, #ch-contents > :first-child { margin-inline-start: auto; }
-#cg-contents::-webkit-scrollbar, #ch-contents::-webkit-scrollbar { display: none; }
-#cg-contents a, #ch-contents a {
-  display: inline-flex; align-items: center; justify-content: center;
-  flex: 0 0 auto; min-height: var(--chip-h);
-  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.65);
-  border: 1px solid var(--plate-line); border-radius: var(--r-pill);
-  background: var(--plate); color: var(--dim);
-  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
-  text-decoration: none;
-}
-@media (hover: hover) {
-  #cg-contents a:hover, #ch-contents a:hover { background: var(--plate-hover); color: var(--text); }
-}
-#cg-contents a:active, #ch-contents a:active { background: var(--plate-press); color: var(--text); }
-#cg-contents a:focus-visible, #ch-contents a:focus-visible {
-  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
-  outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
-}
+/* Strip + chip box live in css/components.css. Idle ink stays dim here. */
+#cg-contents a, #ch-contents a { color: var(--dim); }
 #cg-body .sel-label[id], #ch-body .sel-label[id] { scroll-margin-block-start: var(--gap); }
 
 /* :has(> #cg-contents) carries that ID's specificity, so the 4-row

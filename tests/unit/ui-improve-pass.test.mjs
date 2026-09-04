@@ -579,8 +579,9 @@ test("How to Play exposes pinned semantic jump landmarks", () => {
     assert.match(html, new RegExp(`href="#htp-${id}"`));
     assert.match(html, new RegExp(`<dt id="htp-${id}">`));
   }
-  assert.equal(decl(overlays, "#htp-contents", "overflow-x"), "auto");
-  assert.equal(decl(overlays, "#htp-contents a", "min-height"), "var(--chip-h)");
+  const components = css("css/components.css");
+  assert.equal(decl(components, /#htp-contents/, "overflow-x"), "auto");
+  assert.equal(decl(components, /#htp-contents a/, "min-height"), "var(--chip-h)");
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-shape="wide"\] > #htp-contents/));
   assert.ok(ruleFor(overlays, /^#howtoplay-inner\[data-density="compact"\] > #htp-contents/));
   assert.match(html, /id="vsfriend-inner"/);
@@ -622,8 +623,9 @@ test("variable control clusters use one content-driven balanced-row primitive", 
 
 test("overflowing Help navigation keeps its first landmark reachable", () => {
   const overlays = css("css/overlays.css");
-  assert.equal(decl(overlays, "#htp-contents", "justify-content"), "flex-start");
-  assert.equal(decl(overlays, "#htp-contents > :first-child", "margin-inline-start"), "auto");
+  const components = css("css/components.css");
+  assert.equal(decl(components, /#htp-contents/, "justify-content"), "flex-start");
+  assert.equal(decl(components, /#htp-contents > :first-child/, "margin-inline-start"), "auto");
 });
 
 /* ── Input (gamepad menu nav) in a VM ───────────────────────────────────── */
@@ -730,6 +732,10 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
     "inputs own only the caret keys (Left/Right/Home/End) so Up/Down leave the row");
   assert.match(code("js/ui/aria-state.js"), /#vsfriend,\s*#season-setup/,
     "AriaState watches the two DOM-built overlays UiLayers already lists");
+  assert.match(code("js/ui/aria-state.js"), /const ON = \["active", "on"\]/,
+    "menu .active and leftover .on both announce as pressed");
+  assert.match(code("js/ui/aria-state.js"), /hashchange/,
+    "term-rail aria-current follows location.hash");
   const wrapSb = uiSandbox(makeDom({ readyState: "loading" }));
   vm.runInNewContext(src("js/ui/aria-state.js"), wrapSb);
   const wrap = wrapSb.AriaState.wrapOnOff;
@@ -751,6 +757,27 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   assert.equal(wrap("∞ FREE BUILD: ON"), "∞ FREE BUILD:\u00a0<span data-fold=\"on\">ON</span>");
   assert.equal(wrap("QUALIFYING LAP · ON"), "QUALIFYING LAP ·\u00a0<span data-fold=\"on\">ON</span>");
   assert.equal(wrap("5 LAPS"), null, "option-group chips that are not ON/OFF stay unpainted");
+
+  const loc = { hash: "#htp-racing" };
+  const hashDom = makeDom({ readyState: "loading" });
+  const nav = hashDom.document.createElement("nav");
+  nav.id = "htp-contents";
+  const a1 = hashDom.document.createElement("a");
+  a1.setAttribute("href", "#htp-controls");
+  const a2 = hashDom.document.createElement("a");
+  a2.setAttribute("href", "#htp-racing");
+  nav.appendChild(a1);
+  nav.appendChild(a2);
+  hashDom.byId("howtoplay").appendChild(nav);
+  const hashSb = uiSandbox(hashDom, { location: loc });
+  vm.runInNewContext(src("js/ui/aria-state.js"), hashSb);
+  hashSb.AriaState.sync();
+  assert.equal(a2.getAttribute("aria-current"), "true", "matching term-rail hash is current");
+  assert.equal(a1.getAttribute("aria-current"), null, "other term-rail links are not current");
+  loc.hash = "#htp-controls";
+  hashSb.AriaState.sync();
+  assert.equal(a1.getAttribute("aria-current"), "true");
+  assert.equal(a2.getAttribute("aria-current"), null);
   assert.match(code("js/ui/scroll-fade.js"), /"#menu-buttons"/,
     "title chrome fade watches the zoomed #menu-buttons scroller");
   assert.match(code("js/ui/scroll-fade.js"), /\boverflowX\b/,
@@ -1094,6 +1121,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(resultsJs, /btn\.id\s*=\s*"res-daily-share"/);
   assert.match(resultsJs, /clrBtn\.id\s*=\s*"res-ghost-clear"/);
   assert.match(resultsJs, /lbHead\.className\s*=\s*"sel-label"/);
+  assert.doesNotMatch(resultsJs, /#e10600/, "results/standings heads use .sel-label, not leftover red ink");
   assert.doesNotMatch(resultsJs, /font-size:11px/, "TT share/clear chips use .sel-chip, not inline type");
   const shell = read("index.html");
   assert.match(shell, /id="sel-inner"[^>]*pair-foot-full/,
@@ -1103,11 +1131,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
   assert.match(shell, /id="sel-car"[^>]*>YOUR CAR</);
   assert.match(shell, /id="sel-go"[^>]*>NEXT</);
-  assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is BACK on the alt plate");
-  assert.match(shell, /id="htp-close"[^>]*>BACK</, "How to Play returns to its parent, it does not commit");
+  assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is CLOSE on the alt plate");
+  assert.match(shell, /id="htp-close"[^>]*>CLOSE</, "How to Play overlay dismiss is CLOSE");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
   assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");
-  assert.match(shell, /id="sp-close"[^>]*>BACK</, "sp-close returns to its parent");
+  assert.match(shell, /id="sp-close"[^>]*>CLOSE</, "sp-close overlay dismiss is CLOSE");
+  assert.match(shell, /id="pm-advanced">STEERING/, "settings door is STEERING, not ADVANCED STEERING");
   assert.match(shell, /id="cz-cancel"[^>]*>BACK</, "customize cancel is BACK beside SAVE");
   assert.match(shell, /id="lt-close"[^>]*class="bigbtn"/, "lighting tuner DONE stays a live-commit primary");
   assert.doesNotMatch(shell, /id="lt-close"[^>]*class="bigbtn alt"/);
@@ -1130,13 +1159,16 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(menus, "#race-settings .sel-chip.active", "background"), "var(--plate-on)");
   assert.equal(decl(carsetup, ".cs-tab", "background"), "var(--plate)");
   assert.equal(decl(carsetup, ".cs-tab.active", "background"), "var(--plate-on)");
-  assert.equal(decl(data, ".dh-pill.dh-active", "background"), "var(--plate-on)");
-  assert.equal(decl(data, ".dh-livebtn.dh-active", "background"), "var(--plate-on)");
+  assert.equal(decl(data, ".dh-pill.active", "background"), "var(--plate-on)");
+  assert.equal(decl(data, ".dh-livebtn.active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-tab", "color"), "var(--text)", "idle hub tabs are ink, not dim-as-disabled");
   assert.equal(decl(data, ".dh-sortbtn", "color"), "var(--text)");
   assert.equal(decl(components, ".sel-label", "color"), "var(--steel)", "section chrome, not leftover dim");
   assert.equal(decl(carsetup, ".cs-tab-lbl", "color"), "var(--text)");
   assert.equal(decl(css("css/overlays.css"), "#htp-contents a", "color"), "var(--text)");
+  assert.equal(decl(components, /#htp-contents a\[aria-current/, "box-shadow"), "var(--plate-on-glow)",
+    "term-rail selected uses leftover-sheet chip glow");
+  assert.equal(decl(css("css/overlays.css"), /#results-table > \.sel-label/, "margin-top"), "calc(var(--gap) * 1.2)");
   assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab", "color"), "var(--text)");
   assert.equal(decl(css("css/tuner.css"), ".adv-sec", "color"), "var(--steel)", "section chrome, not a leftover red headline");
   assert.equal(decl(menus, ".track-row.active .track-row-name", "color"), "var(--text)");

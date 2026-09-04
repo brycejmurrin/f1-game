@@ -174,7 +174,9 @@ most-shared class in the project and had no entry at all:
 - `.sheet-head` — `components` + `overlays`
 - `.sheet-body` — `components` + `overlays`. How to Play, Career guide, and
   Career history place the shared body on the sheet grid for the wide contents
-  rail (`#htp-contents` / `#cg-contents` / `#ch-contents`).
+  rail (`#htp-contents` / `#cg-contents` / `#ch-contents`). The shared strip
+  + chip box lives in `components.css`; idle ink and wide/compact placement
+  stay on the screen sheets.
 - `.team-tile` — `components` + `menus`
 - `.track-row` — `components` + `menus`
 - `.tune-label` — `components` + `tuner`
