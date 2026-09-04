@@ -491,8 +491,8 @@ function create(G) {
         // When the set is FULL (-1) do NOT touch the slot pointer: useSlot(id, 0)
         // here loaded slot 0's EXISTING save, so Career.active() went true and
         // START CAREER silently continued someone's old career instead of the
-        // one being configured. Career.start() falls back to the live slot of
-        // the set it is actually writing to.
+        // one being configured. Career.start() then REFUSES a full set it was
+        // given no slot for, and cr-go opens the picker — it does not pick.
         const free = Career.firstFree(id);
         if (free >= 0) { draft.slot = free; Career.useSlot(id, free); }
         else delete draft.slot;
@@ -1191,8 +1191,12 @@ function create(G) {
     // are choosing another one), so the "no career yet" branch below would never
     // be reached and NEW CAREER would silently go racing instead.
     if (!Career.active()) {
+      // start() REFUSES (null) when the chosen mode's slots are all used and
+      // no slot was named — it will not pick one to overwrite. Send the
+      // player to the picker so the replacement is their call, and leave
+      // draftFrom alone so BACK still works.
+      if (!Career.start(draft)) { openSlots(); return; }   // draft.slot, when the picker set one
       draftFrom = null;             // committed: the new slot IS the live one now
-      Career.start(draft);          // draft.slot, when the picker set one
       G.openCareer();          // re-enters the hub with the save in place
       return;
     }

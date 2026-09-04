@@ -53,6 +53,7 @@
     "tests/unit/span-kinds.test.mjs",
     "tests/unit/load-order.test.mjs",
     "tests/unit/global-registry.test.mjs",
+    "tests/unit/shell-ids.test.mjs",
     "tests/unit/game-ctx-surface.test.mjs",
     "tests/unit/vstd-invariant.test.mjs",
     "tests/unit/deploy-staging.test.mjs",
@@ -441,6 +442,7 @@
       "kind": "node",
       "files": [
         "tests/unit/game-vm.test.mjs",
+        "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",

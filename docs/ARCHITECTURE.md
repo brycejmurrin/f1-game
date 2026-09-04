@@ -435,9 +435,11 @@ The mechanisms that keep a no-build, script-tag codebase coherent after the spli
   detection lives in `glx.js`.
 - **`TUNE_DEFS` mirror-comment invariants** in `glx.js`/`gfx.js` — comments that
   must track the registry by hand; replace with a checked mapping.
-- **~~WebGPU lazy-load~~ (done)** — `js/render/webgpu/*` and `js/render/three/*`
-  are now DEFERRED: no `<script>` tag, injected by `js/game.js` only when
-  `apex26.gfxBackend` selects one. See `tools/manifest.cjs`'s `DEFERRED` map;
+- **~~WebGPU lazy-load~~ (done, then SPIKED OUT)** — both backends became
+  DEFERRED (no `<script>` tag, injected by `js/game.js` on the pick), and
+  Phase 2b then moved them to `spike/backends/` outright. `DEFERRED` is `{}`
+  now, so the injection has nothing to fetch and every pick resolves to GLX.
+  See `tools/manifest.cjs`'s `DEFERRED` map;
   `tests/unit/load-order.test.mjs` pins the manifest, game.js's loader table and
   `sw.js`'s optional precache seed to each other.
 - **~~`css/*.css` split~~ (done)** — eleven sheets under a declared `@layer`
@@ -502,7 +504,10 @@ DEPTH) on the shared `GLXShaders` global. Replaces the old monolithic
 `js/render/glx/shaders/glsl-lit.js`. `glx.js` destructures `GLXShaders` at the top of
 its IIFE, so these files must load first (a manifest `HARD_EDGES` entry).
 
-## js/render/glx/glx.js (+ js/render/glx/) / spike/backends/webgpu/wgx.js / js/render/three/* / js/render/gfx.js — renderers
+## js/render/glx/glx.js (+ js/render/glx/) / js/render/gfx.js — renderers
+
+(GLX is the only renderer in the shipped tree. WGX and TLX live in
+`spike/backends/`; the subsections below describe them for re-attach work.)
 
 Boot / pipeline / parity map: **[RENDERERS.md](RENDERERS.md)**. This section
 is the module contract and GLX API sketch.
@@ -572,7 +577,7 @@ function. The 2026-08 parity pass (recipes in
 
 GLX stays the default. Nothing here flips that.
 
-**TLX (`js/render/three/`)** is the three.js/TSL backend: classic-IIFE scripts
+**TLX (`spike/backends/three/`, SPIKE)** is the three.js/TSL backend: classic-IIFE scripts
 (`tlx.js` core + `tlx-shadow.js` / `tlx-post.js` / `tlx-chunked.js` passes +
 `tsl-*.js` shader-node factories on a `TLXShaders` global) that dynamically
 `import("three/webgpu")` inside `TLX.create()`. The `import` never touches
@@ -1174,7 +1179,7 @@ would keep GLX’s dead closure).
 | Backend | Role | Entry | Shaders |
 |---|---|---|---|
 | **GLX** | Default always-tagged WebGL2 | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
-| **WGX** | Opt-in WebGPU, hand-ported WGSL | `spike/backends/webgpu/wgx.js` | `js/render/webgpu/wgsl-{chunks,post,fx}.js` |
+| **WGX** | Opt-in WebGPU, hand-ported WGSL | `spike/backends/webgpu/wgx.js` | `spike/backends/webgpu/wgsl-{chunks,post,fx}.js` |
 | **TLX** | Opt-in Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `spike/backends/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/shared/gltf.js`,

@@ -550,7 +550,7 @@ const GameAudio = (function () {
   function stopEngine() {
     if (!engineOn) return;
     const t0 = now();
-    if (musicGain) musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL, t0, 0.3);   // release the engine duck
+    if (musicGain) { musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL, t0, 0.3); musicGain._apexDuckTgt = null; }   // release the engine duck
     engGain.gain.cancelScheduledValues(t0);
     engGain.gain.setTargetAtTime(0, t0, 0.06);
     whineGain.gain.setTargetAtTime(0, t0, 0.06);
@@ -704,7 +704,17 @@ const GameAudio = (function () {
     // lvl·0.55 and the square wave swings it 0.10–1.00 × lvl.
     const limOn = rev > 0.985 && s > 0.05;
     const limDepth = limOn ? lvl * 0.45 : 0;
-    if (limGain) limGain.gain.setTargetAtTime(limDepth, t, 0.02);
+    // Guarded on the TARGET, like lfoG below and for the same reason: above
+    // 98.5% is a sliver of a race, so an unguarded call scheduled the target 0
+    // onto a value already converged to 0, 120x a second for the whole race —
+    // the sixth-constant defect that comment describes, re-introduced. The
+    // cache lives ON THE NODE so a stopEngine/startEngine pair cannot leave a
+    // module variable stale (a fresh GainNode has no _apexLimTgt, which never
+    // equals a number, so the first call after any restart re-issues).
+    if (limGain && limGain._apexLimTgt !== limDepth) {
+      limGain.gain.setTargetAtTime(limDepth, t, 0.02);
+      limGain._apexLimTgt = limDepth;
+    }
     engGain.gain.setTargetAtTime((lvl - limDepth) * (1 - 0.55 * shiftDuck), t, 0.03);
 
     // Turbo whine: in low gears (1-3) mechanical supercharger character — the
@@ -738,7 +748,15 @@ const GameAudio = (function () {
     // Music sits under the ENGINE, not the reverse: a flat musicVol·MUSIC_FULL
     // competed with the note at redline. A gentle rev-keyed duck (−25% at
     // full revs, 250 ms tau) lets the engine win exactly when it should.
-    if (musicGain) musicGain.gain.setTargetAtTime(musicVol * MUSIC_FULL * (1 - 0.25 * rev), t, 0.25);
+    // The duck target moves with `rev`, so an exact-equality guard would never
+    // hit; threshold it instead. Below 0.5% of full scale the 250 ms ramp is
+    // inaudible, so re-scheduling buys nothing and costs a cross-thread
+    // timeline insertion per physics step.
+    const duckTgt = musicVol * MUSIC_FULL * (1 - 0.25 * rev);
+    if (musicGain && !(Math.abs((musicGain._apexDuckTgt ?? -1) - duckTgt) < 0.005)) {
+      musicGain.gain.setTargetAtTime(duckTgt, t, 0.25);
+      musicGain._apexDuckTgt = duckTgt;
+    }
     const deploy = clamp01(ph.deploy || 0);
     const energy = ph.energy != null ? clamp01(ph.energy) : 1;
     const low = energy < 0.2 ? energy / 0.2 : 1;
@@ -746,7 +764,14 @@ const GameAudio = (function () {
     const ersLvl = deploy > 0
       ? (0.010 + 0.018 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias
       : 0;
-    ersGain.gain.setTargetAtTime(ersLvl, t, deploy > 0 ? 0.05 : 0.10);
+    // Cached on the node, same idiom as lfoG/limGain above: ersLvl is 0 whenever
+    // the car isn't deploying. The time constant varies with deploy>0, but a
+    // 0->0 call is a no-op regardless of time constant, so gating on the
+    // cached TARGET alone (not the tau) is still correct.
+    if (ersGain._apexErsTgt !== ersLvl) {
+      ersGain.gain.setTargetAtTime(ersLvl, t, deploy > 0 ? 0.05 : 0.10);
+      ersGain._apexErsTgt = ersLvl;
+    }
     if (deploy > 0)
       ersOsc.frequency.setTargetAtTime((2400 + rev * 900) * (0.88 + 0.12 * low), t, 0.06);
 
@@ -1181,7 +1206,7 @@ const GameAudio = (function () {
   }
   function setMusicVolume(v) {
     musicVol = clamp01(typeof v === "number" ? v : 0.5);
-    if (musicGain) musicGain.gain.value = musicVol * MUSIC_FULL;
+    if (musicGain) { musicGain.gain.value = musicVol * MUSIC_FULL; musicGain._apexDuckTgt = null; }   // a direct write invalidates the duck cache
     if (backend) { try { backend.setVolume(musicVol); } catch (e) {} }
     return musicVol;
   }

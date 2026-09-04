@@ -728,7 +728,7 @@ const Car3D = (function () {
         const uy = Math.cos(a), uz = Math.sin(a), py = -Math.sin(a), pz = Math.cos(a);
         const hw = 0.014, thick = 0.008;
         const ri = hcR * 1.08, ro = rimR * 0.90;
-        const xsF = ss[0] + dir * 0.026, xsB = ss[0] + dir * (0.026 - dir * thick);
+        const xsF = ss[0] + dir * 0.026, xsB = ss[0] + dir * 0.026 - dir * thick;
         const P = (xs, rad, sgn) => [xs, cy + uy * rad + py * hw * sgn, cz + uz * rad + pz * hw * sgn];
         addQuad(out, P(xsF, ri, 1), P(xsF, ro, 1), P(xsF, ro, -1), P(xsF, ri, -1), HUBCAP, SURFACES.metal);
         addQuad(out, P(xsB, ri, -1), P(xsB, ro, -1), P(xsB, ro, 1), P(xsB, ri, 1), HUBCAP, SURFACES.metal);
@@ -2347,7 +2347,7 @@ const Car3D = (function () {
                         inlet.width * 0.34, inlet.height * 0.88, c1, 0.060, 0.010);
       } else {
         // Reverse-P (2026 field majority): tall inboard stem, not a square scoop.
-        addInletMouth(out, s * (inlet.x - s * inlet.width * 0.12),
+        addInletMouth(out, s * (inlet.x - inlet.width * 0.12),
                       inlet.y + inlet.height * 0.08, inlet.z,
                       inlet.width * 0.48, inlet.height * 0.88, c1, 0.055, 0.012);
       }

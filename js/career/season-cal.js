@@ -271,7 +271,7 @@ function scored() { return lastScored; }
 function netPts(season, id) {
   const gross = (season && season.pts && season.pts[id]) || 0;
   const drop = fmtActive() ? config().drop : 0;
-  if (!drop) return gross;
+  if (!drop || !season) return gross;   // rank() has always tolerated a null season; so must this
   const row = (season.roundPts && season.roundPts[id]) || [];
   const played = (season.round || 0) + (midWeekend(season) ? 1 : 0);
   const keep = Math.max(1, rounds() - drop);

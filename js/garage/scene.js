@@ -261,7 +261,7 @@ function buildShell(out, liv) {
 // prop does not, so without the grouping a tyre stack would hang in mid-air in
 // front of a wall that had already culled away. The test is one sign compare.
 //
-// Everything at FLOOR level sits outboard of x +/-3.6: SP_FIT_HALF_W (3.15) is
+// Everything at FLOOR level sits outboard of x +/-3.6: SP_FIT_HALF_W (3.10) is
 // the framing radius the auto-turntable holds, so anything inside that band
 // crops into the car's frame at the default distance. It is a floor rule, not
 // an absolute one — the ceiling LED housings reach x 2.70 and are fine, because

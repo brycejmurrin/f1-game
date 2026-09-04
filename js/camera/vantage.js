@@ -10,10 +10,23 @@ function init(opts) {
 
 const clamp = M4.clamp, lerp = M4.lerp;       // shared scalar helpers (js/core/mat4.js)
 
-// Scratch samples reused every call (no per-frame allocation).
+// Scratch samples reused every call (no per-frame allocation). vantage() itself
+// allocates nothing per frame either: every eye/tgt/p/aheadPt/straight/dir
+// value below is written into one of the module-level pools declared here.
 const cvA = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const cvB = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };
 const _bankScr = { dy: 0, roll: 0 };   // pooled Tracks.banking out-param (ground clamp)
+// Pooled working arrays for vantage()'s per-mode eye/tgt solve — see the note
+// by _vantEye/_vantTgt below. p/aheadPt/straight/dir are read-then-consumed
+// temporaries inside a single branch, but each still gets its own pool: `p`
+// must survive past where eye/tgt start being written (several branches read
+// p again AFTER eye is computed), and aheadPt/straight/dir must never alias
+// eye/tgt/each other while their values are still live.
+const _vantP = [0, 0, 0];
+const _vantEyeW = [0, 0, 0], _vantTgtW = [0, 0, 0];
+const _aheadOut = [0, 0, 0];
+const _straightScr = [0, 0, 0];
+const _dirScr = [0, 0, 0];
 
 // Cockpit eye offsets from the car origin (fwd along tangent, up in metres).
 // Shared by vantage() and the camera-anchored cockpit-rig draw in render() —
@@ -213,15 +226,23 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // is what an onboard camera is FOR.
   const onboard = mode === "cockpit" || mode === "hood";
   const elevY = (at) => (onboard ? null : centreY(track, at));
-  const p = [cvA.p[0] + cvA.r[0] * x,
-             (onboard ? cvA.p[1] : centreY(track, s)) + bankDy,
-             cvA.p[2] + cvA.r[2] * x];
+  const p = _vantP;
+  p[0] = cvA.p[0] + cvA.r[0] * x;
+  p[1] = (onboard ? cvA.p[1] : centreY(track, s)) + bankDy;
+  p[2] = cvA.p[2] + cvA.r[2] * x;
   const t = cvA.t, r = cvA.r;
+  // Pooled return: safe because every branch below calls aheadPt() at most
+  // once per vantage() invocation (the mode branches are mutually exclusive,
+  // and no branch calls it twice with both results needed live at once).
   const aheadPt = (d, h, lat) => {
     Tracks.sample(track, wrapS(s + d), cvB);
     const lx = lat || 0;
     const ey = elevY(s + d);
-    return [cvB.p[0] + cvB.r[0] * lx, (ey === null ? cvB.p[1] : ey) + (h || 0), cvB.p[2] + cvB.r[2] * lx];
+    const o = _aheadOut;
+    o[0] = cvB.p[0] + cvB.r[0] * lx;
+    o[1] = (ey === null ? cvB.p[1] : ey) + (h || 0);
+    o[2] = cvB.p[2] + cvB.r[2] * lx;
+    return o;
   };
   // Curvature of the bend we're approaching (speed-scaled look-ahead) — drives the
   // broadcast cams to the OUTSIDE of the corner so they shoot across the apex.
@@ -241,7 +262,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
   // (furniture is never on the tarmac) and trade the lost width for extra
   // height — a crane-over-the-circuit shot. Open circuits keep the full framing.
   const corr = track.def && track.def.street ? Math.max(cvA.hw - 1.0, 4) : Infinity;
-  let eye, tgt, fov;
+  let eye = _vantEyeW, tgt = _vantTgtW, fov;   // pooled; every branch below writes IN PLACE
   if (mode === "cockpit" || mode === "hood") {
     const eyeFwd = mode === "cockpit" ? COCKPIT_EYE_FWD : 0.55;
     const eyeUp  = mode === "cockpit" ? COCKPIT_EYE_UP : 0.95;
@@ -258,7 +279,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
       // The road still supplies eye HEIGHT and the gradient the view pitches
       // with (t[1]) — surface, not line.
       const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
-      eye = [extra.carPos[0] + hx * eyeFwd, p[1] + eyeUp, extra.carPos[1] + hz * eyeFwd];
+      eye[0] = extra.carPos[0] + hx * eyeFwd; eye[1] = p[1] + eyeUp; eye[2] = extra.carPos[1] + hz * eyeFwd;
       const aimUp = mode === "cockpit" ? eyeUp - 0.15 : eyeUp + 1.2;
       // TURN CHASING (SETTINGS > COCKPIT, default OFF — js/camera/cockpit-opts.js).
       // At 0 the aim is the car's heading and NOTHING else, which is the state
@@ -272,25 +293,27 @@ function vantage(track, mode, s, x, spd, now, extra) {
         aimX = aimX * (1 - tcL) + lp[0] * tcL;
         aimZ = aimZ * (1 - tcL) + lp[2] * tcL;
       }
-      tgt = [aimX, p[1] + aimUp + t[1] * 30, aimZ];
+      tgt[0] = aimX; tgt[1] = p[1] + aimUp + t[1] * 30; tgt[2] = aimZ;
       fov = lerp(64, 78, spN) + dep * 3;
     } else {
-      eye = [p[0] + t[0] * eyeFwd, p[1] + eyeUp, p[2] + t[2] * eyeFwd];
+      eye[0] = p[0] + t[0] * eyeFwd; eye[1] = p[1] + eyeUp; eye[2] = p[2] + t[2] * eyeFwd;
       if (mode === "cockpit") {
-        const straight = [p[0] + t[0] * 30, p[1] + eyeUp - 0.15 + t[1] * 30, p[2] + t[2] * 30];
+        const straight = _straightScr;
+        straight[0] = p[0] + t[0] * 30; straight[1] = p[1] + eyeUp - 0.15 + t[1] * 30; straight[2] = p[2] + t[2] * 30;
         const w = typeof CockpitOpts !== "undefined" ? CockpitOpts.turnChaseLead() : 0;
         const lead = w > 0 ? aheadPt(30, eyeUp - 0.15, x * 0.4) : straight;
-        tgt = [straight[0] * (1 - w) + lead[0] * w,
-               straight[1] * (1 - w) + lead[1] * w,
-               straight[2] * (1 - w) + lead[2] * w];
+        tgt[0] = straight[0] * (1 - w) + lead[0] * w;
+        tgt[1] = straight[1] * (1 - w) + lead[1] * w;
+        tgt[2] = straight[2] * (1 - w) + lead[2] * w;
       } else {
-        tgt = aheadPt(30, eyeUp + 1.2, x * 0.6);
+        const av = aheadPt(30, eyeUp + 1.2, x * 0.6);
+        tgt[0] = av[0]; tgt[1] = av[1]; tgt[2] = av[2];
       }
       fov = lerp(64, 78, spN) + dep * 3;             // wider = faster feel
     }
   } else if (mode === "overhead") {
-    eye = [p[0] - t[0] * 9, p[1] + 42, p[2] - t[2] * 9];
-    tgt = [p[0] + t[0] * 12, p[1], p[2] + t[2] * 12];
+    eye[0] = p[0] - t[0] * 9; eye[1] = p[1] + 42; eye[2] = p[2] - t[2] * 9;
+    tgt[0] = p[0] + t[0] * 12; tgt[1] = p[1]; tgt[2] = p[2] + t[2] * 12;
     fov = 46;
   } else if (mode === "heli") {
     // Broadcast helicopter — corner-aware: hovers on the OUTSIDE of the
@@ -300,19 +323,21 @@ function vantage(track, mode, s, x, spd, now, extra) {
     Tracks.sample(track, wrapS(s - 26), cvB);
     const sgn = kA > 0.001 ? 1 : kA < -0.001 ? -1 : 1;
     const hl = Math.min(18, corr);              // stay inside the street canyon
-    eye = [cvB.p[0] + cvB.r[0] * hl * sgn, centreY(track, s - 26) + 21 + (18 - hl) * 0.6 + bankDy, cvB.p[2] + cvB.r[2] * hl * sgn];
-    tgt = [p[0], p[1] + 0.8, p[2]];
+    eye[0] = cvB.p[0] + cvB.r[0] * hl * sgn;
+    eye[1] = centreY(track, s - 26) + 21 + (18 - hl) * 0.6 + bankDy;
+    eye[2] = cvB.p[2] + cvB.r[2] * hl * sgn;
+    tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
     fov = 36 + dep * 2;
   } else if (mode === "reverse") {
-    eye = [p[0] + t[0] * 5.5, p[1] + 1.35, p[2] + t[2] * 5.5];
-    tgt = [p[0] - t[0] * 26, p[1] + 0.9, p[2] - t[2] * 26];
+    eye[0] = p[0] + t[0] * 5.5; eye[1] = p[1] + 1.35; eye[2] = p[2] + t[2] * 5.5;
+    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.9; tgt[2] = p[2] - t[2] * 26;
     fov = lerp(60, 72, spN);
   } else if (mode === "side") {
     // TV trackside: sits on the OUTSIDE of the bend looking across the apex.
     const sgn = kA > 0.002 ? 1 : kA < -0.002 ? -1 : 1;
     const sl = Math.min(25, corr);              // stay inside the street canyon
-    eye = [p[0] + r[0] * sgn * sl, p[1] + 5.5 + (25 - sl) * 0.30, p[2] + r[2] * sgn * sl];
-    tgt = [p[0], p[1] + 0.8, p[2]];
+    eye[0] = p[0] + r[0] * sgn * sl; eye[1] = p[1] + 5.5 + (25 - sl) * 0.30; eye[2] = p[2] + r[2] * sgn * sl;
+    tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
     fov = 44 + (25 - sl) * 0.5;                 // closer eye → widen so framing holds
   } else if (mode === "cinematic") {
     // Outside-of-corner cinematic that gently breathes its angle instead of doing
@@ -323,23 +348,25 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const base = kA === 0 ? 0.6 : (kA > 0 ? 1 : -1) * 1.15;
     const a = base + Math.sin(now * 0.00022) * 0.5;
     const od = Math.min(15, corr);
-    const dir = [Math.cos(a) * t[0] + Math.sin(a) * r[0], 0, Math.cos(a) * t[2] + Math.sin(a) * r[2]];
-    eye = [p[0] + dir[0] * od, p[1] + 6.5 + (15 - od) * 0.45, p[2] + dir[2] * od];
-    tgt = [p[0], p[1] + 0.8, p[2]];
+    const dir = _dirScr;
+    dir[0] = Math.cos(a) * t[0] + Math.sin(a) * r[0]; dir[1] = 0; dir[2] = Math.cos(a) * t[2] + Math.sin(a) * r[2];
+    eye[0] = p[0] + dir[0] * od; eye[1] = p[1] + 6.5 + (15 - od) * 0.45; eye[2] = p[2] + dir[2] * od;
+    tgt[0] = p[0]; tgt[1] = p[1] + 0.8; tgt[2] = p[2];
     fov = lerp(50, 60, spN);
   } else if (mode === "low") {
     Tracks.sample(track, wrapS(s - 10), cvB);
     const cx = x * 0.3;
-    eye = [cvB.p[0] + cvB.r[0] * cx, centreY(track, s - 10) + 0.45 + bankDy, cvB.p[2] + cvB.r[2] * cx];
-    tgt = [p[0], p[1] + 0.6, p[2]];
+    eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 10) + 0.45 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
+    tgt[0] = p[0]; tgt[1] = p[1] + 0.6; tgt[2] = p[2];
     fov = lerp(55, 68, spN);
   } else if (mode === "tcam") {
-    eye = [p[0] - t[0] * 0.52, p[1] + 1.46, p[2] - t[2] * 0.52];
-    tgt = aheadPt(20, 0.35, x * 0.5);
+    eye[0] = p[0] - t[0] * 0.52; eye[1] = p[1] + 1.46; eye[2] = p[2] - t[2] * 0.52;
+    const avT = aheadPt(20, 0.35, x * 0.5);
+    tgt[0] = avT[0]; tgt[1] = avT[1]; tgt[2] = avT[2];
     fov = 46 + dep * 2;
   } else if (mode === "rear") {
-    eye = [p[0] - t[0] * 0.95, p[1] + 1.38, p[2] - t[2] * 0.95];
-    tgt = [p[0] - t[0] * 26, p[1] + 0.7, p[2] - t[2] * 26];
+    eye[0] = p[0] - t[0] * 0.95; eye[1] = p[1] + 1.38; eye[2] = p[2] - t[2] * 0.95;
+    tgt[0] = p[0] - t[0] * 26; tgt[1] = p[1] + 0.7; tgt[2] = p[2] - t[2] * 26;
     fov = lerp(58, 70, spN) + dep * 2;
   } else if (mode === "drift") {
     // Action chase that swings to the OUTSIDE of the slide so the car's flank faces
@@ -347,8 +374,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
     const slipN = clamp((extra.slipLat || 0) / 8, -1, 1);
     Tracks.sample(track, wrapS(s - 6.2), cvB);
     const cx = x * 0.5 - slipN * 5.5;
-    eye = [cvB.p[0] + cvB.r[0] * cx, centreY(track, s - 6.2) + 2.4 + bankDy, cvB.p[2] + cvB.r[2] * cx];
-    tgt = [p[0], p[1] + 0.75, p[2]];
+    eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = centreY(track, s - 6.2) + 2.4 + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
+    tgt[0] = p[0]; tgt[1] = p[1] + 0.75; tgt[2] = p[2];
     fov = lerp(55, 70, spN) + dep * 3;
   } else {
     const far = mode === "far";
@@ -365,8 +392,8 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
       const rx = hz, rz = -hx;
       const side = back * CHASE_SIDE_FRAC;
-      eye = [extra.carPos[0] - hx * back + rx * side, rideEye + eyeUp + bankDy, extra.carPos[1] - hz * back + rz * side];
-      tgt = [extra.carPos[0] + hx * lead, rideC + bankDy + tgtUp, extra.carPos[1] + hz * lead];
+      eye[0] = extra.carPos[0] - hx * back + rx * side; eye[1] = rideEye + eyeUp + bankDy; eye[2] = extra.carPos[1] - hz * back + rz * side;
+      tgt[0] = extra.carPos[0] + hx * lead; tgt[1] = rideC + bankDy + tgtUp; tgt[2] = extra.carPos[1] + hz * lead;
       // CORNER LEAD (CAMERA TUNER, opt-in, default 0). Blend the whole rig toward
       // the road-frame chase below — eye an arc-distance back along the ROAD, aim
       // at the curved centreline ahead — so the camera leads and swings INTO the
@@ -378,16 +405,18 @@ function vantage(track, mode, s, x, spd, now, extra) {
         const eyeR0 = cvB.p[0] + cvB.r[0] * cx, eyeR1 = rideEye + eyeUp + bankDy, eyeR2 = cvB.p[2] + cvB.r[2] * cx;
         const tgtR = aheadPt(lead, 0, x * 0.4);
         tgtR[1] = rideTgtAhead + tgtUp;
-        eye = [lerp(eye[0], eyeR0, lead2), lerp(eye[1], eyeR1, lead2), lerp(eye[2], eyeR2, lead2)];
-        tgt = [lerp(tgt[0], tgtR[0], lead2), lerp(tgt[1], tgtR[1], lead2), lerp(tgt[2], tgtR[2], lead2)];
+        // in-place lerp: each component reads its own OLD value before it is
+        // overwritten, so eye/tgt being the pooled arrays themselves is safe.
+        eye[0] = lerp(eye[0], eyeR0, lead2); eye[1] = lerp(eye[1], eyeR1, lead2); eye[2] = lerp(eye[2], eyeR2, lead2);
+        tgt[0] = lerp(tgt[0], tgtR[0], lead2); tgt[1] = lerp(tgt[1], tgtR[1], lead2); tgt[2] = lerp(tgt[2], tgtR[2], lead2);
       }
       const gP = (extra.att && extra.att.baPitch) || 0;
       eye[0] += hx * gP * CHASE_G_DOLLY; eye[2] += hz * gP * CHASE_G_DOLLY;   // +heading = toward the car
       tgt[1] -= gP * CHASE_G_AIM;
     } else {
-      eye = [cvB.p[0] + cvB.r[0] * cx, rideEye + eyeUp + bankDy, cvB.p[2] + cvB.r[2] * cx];
-      tgt = aheadPt(lead, 0, x * 0.4);   // XZ only; the height is the smoothed one
-      tgt[1] = rideTgtAhead + tgtUp;
+      eye[0] = cvB.p[0] + cvB.r[0] * cx; eye[1] = rideEye + eyeUp + bankDy; eye[2] = cvB.p[2] + cvB.r[2] * cx;
+      const avC = aheadPt(lead, 0, x * 0.4);   // XZ only; the height is the smoothed one
+      tgt[0] = avC[0]; tgt[1] = rideTgtAhead + tgtUp; tgt[2] = avC[2];
     }
     fov = lerp(57, 63, spN) + (far ? 4 : 0) + dep * 3;
   }

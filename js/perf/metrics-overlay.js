@@ -75,7 +75,9 @@ const PANEL_STYLE =
 // At < 480 use the compact (narrow) layout with 2 values per line.
 function metricsRatio() {
   try {
-    const s = +document.documentElement.style.getPropertyValue("--hud-scale") || 1;
+    const root = document.documentElement;
+    const s = +root.style.getPropertyValue("--hud-z-top")
+      || +root.style.getPropertyValue("--hud-scale") || 1;
     return window.innerWidth / s;
   } catch (_) { return 800; }
 }
@@ -208,8 +210,10 @@ function snapshot() {
     }
   } catch (_) { /* SwiftShader / no EXT */ }
   try {
-    if (typeof RendererPicker !== "undefined" && RendererPicker.readBackend)
-      out.backend = RendererPicker.readBackend() || "";
+    // liveBackend(), not readBackend(): the panel answers "what am I running",
+    // and a pick whose files left the tree is not what is running.
+    if (typeof RendererPicker !== "undefined" && RendererPicker.liveBackend)
+      out.backend = RendererPicker.liveBackend() || "";
   } catch (_) { /* quality module absent in a VM */ }
   try {
     if (!out.backend) out.backend = GameStore.store.raw("apex26.gfxBackend") || "";
@@ -368,7 +372,10 @@ function ensurePanel() {
   const el = document.createElement("pre");
   el.id = "game-metrics";
   el.setAttribute("aria-label", "Debug metrics");
-  el.style.cssText = PANEL_STYLE;
+  try {
+    const prof = GameStore.store.get("hudProfile", "standard");
+    if (prof === "minimal") el.dataset.compact = "1";
+  } catch (_) { /* store absent in isolated harness */ }
   document.body.appendChild(el);
   _panel = el;
   return el;

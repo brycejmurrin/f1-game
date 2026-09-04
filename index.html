@@ -351,6 +351,7 @@
   </div>
   <canvas id="minimap" width="140" height="140"></canvas>
   <div id="hud-sectors"></div>
+  <div id="hud-limits" hidden>LIMITS <span class="limits-dots"></span></div>
   <div id="hud-flag" hidden></div>
 </div>
 
@@ -463,6 +464,7 @@
             <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
           <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
             <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
+          <button id="pm-hudprofile">HUD: STANDARD</button>
           <!-- The slider's effect was invisible: css/hud.css hides every real
                HUD cluster while a .dim screen is open, and from the title
                there is no HUD at all — players dragged, saw nothing, and
