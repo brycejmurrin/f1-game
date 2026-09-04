@@ -186,3 +186,4 @@ test("output stays bounded and finite at every ratio and overlap", () => {
     assert.ok(peak < 4, `ratio ${r}: peak ${peak.toFixed(2)} — overlap-add is not being normalised`);
   }
 });
+

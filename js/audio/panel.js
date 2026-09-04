@@ -203,11 +203,13 @@ const AudioPanel = (() => {
       { k: "brightness", id: "as-t-bright", lo: 0.50, step: 0.05 },
       { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.25 },
       { k: "limiter",    id: "as-t-lim",    lo: 0,    step: 0.25 },
+      { k: "sub",        id: "as-t-sub",    lo: 0,    step: 0.25 },
     ];
     const TONE_LAYERS = [
       { k: "whine",   id: "as-l-whine" },   { k: "harvest", id: "as-l-harvest" },
       { k: "ers",     id: "as-l-ers" },     { k: "wind",    id: "as-l-wind" },
       { k: "limiter", id: "as-l-limiter" }, { k: "screech", id: "as-l-screech" },
+      { k: "sub",     id: "as-l-sub" },
     ];
     const PROFILE_BTN = [["as-p-team", "team"], ["as-p-broadcast", "broadcast"],
       ["as-p-trackside", "trackside"], ["as-p-cockpit", "cockpit"], ["as-p-v10", "v10"]];
