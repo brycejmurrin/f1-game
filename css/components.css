@@ -1114,7 +1114,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 /* ---------- settings sub-menu ----------
    Door index, then one page. Tabs hid MORE and spent a sticky row the
    phone-landscape sheet cannot spare (docs/research/PAUSE-SETTINGS-IA.md).
-   .pm-doors is a column of dark plates; pages reuse .pm-group. */
+   .pm-doors already balances the home list; pages reuse .pm-group. */
 #pmsettings-inner {
   --fit-at: 300px;
   --compact-at: 480px;
@@ -1172,9 +1172,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-weight: 600;
   letter-spacing: var(--ls-2);
   color: var(--text);
-  /* Same dark plate as the door index — not the glassier default --plate. */
-  background: var(--plate-opaque);
-  border-color: color-mix(in oklab, var(--steel) 42%, transparent);
 }
 #pmsettings-inner .pm-group :is(.opt-btn, .preset-btn) {
   width: auto;
@@ -1207,10 +1204,12 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-style: italic;
 }
 #pmsettings-inner .pm-doors button {
-  width: 100%;
-  /* A door, not a wrap tile: full-width dark plate, label on the left. */
-  justify-content: flex-start;
-  text-align: left;
+  width: auto;
+  /* A door, not a key/value row. */
+  justify-content: center;
+  text-align: center;
+  /* Title-room recipe: carbon tile + steel line. MORE doors sit on the
+     settings grain the same way #overlay alts sit on the title grain. */
   background: var(--plate-opaque);
   border-color: color-mix(in oklab, var(--steel) 42%, transparent);
 }
@@ -1292,17 +1291,23 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--dim);
 }
 .pm-doors {
-  /* One column of full-width dark plates — the older settings home. */
+  /* Same primitive as chips / title rooms: wrap into a grid when the
+     sheet is wide enough, stack when it is not. Heading stays full-bleed;
+     only the tool doors balance. */
   display: flex;
-  flex-direction: column;
-  gap: calc(var(--gap) * 0.75);
+  flex-wrap: wrap;
+  --balance-basis: 12rem;
+  --balance-min: 9rem;
+  gap: calc(var(--gap) * 0.5);
 }
 .pm-doors > .pm-group-h {
+  flex: 1 1 100%;
   width: 100%;
   margin: 0 0 calc(var(--gap) * 0.25);
 }
 .pm-doors > button {
-  width: 100%;
+  flex: 1 1 var(--balance-basis);
+  min-width: min(100%, var(--balance-min));
   margin: 0;
 }
 /* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't

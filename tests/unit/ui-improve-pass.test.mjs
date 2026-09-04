@@ -1172,16 +1172,12 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab", "color"), "var(--text)");
   assert.equal(decl(css("css/tuner.css"), ".adv-sec", "color"), "var(--steel)", "section chrome, not a leftover red headline");
   assert.equal(decl(menus, ".track-row.active .track-row-name", "color"), "var(--text)");
-  assert.equal(decl(components, "#pmsettings-inner .pm-group button, #pmsettings-inner .pm-doors button", "background"), "var(--plate-opaque)");
   assert.equal(decl(components, "#pmsettings-inner .pm-doors button", "background"), "var(--plate-opaque)");
 });
 
 test("tool doors and lone foot actions do not stretch into banners", () => {
   const components = css("css/components.css");
-  assert.equal(decl(components, ".pm-doors", "flex-direction"), "column");
-  assert.equal(decl(components, ".pm-doors > button", "width"), "100%");
-  assert.equal(decl(components, "#pmsettings-inner .pm-doors button", "width"), "100%");
-  assert.equal(decl(components, "#pmsettings-inner .pm-doors button", "justify-content"), "flex-start");
+  assert.equal(decl(components, ".pm-doors", "--balance-basis"), "12rem");
   assert.equal(decl(components, ".sheet-foot .bigbtn:only-child", "flex"), "0 1 auto");
   assert.equal(decl(components, ".pm-group .tune-row .tune-label", "position"), "static");
   assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="region"] button', "white-space"), "normal");
