@@ -1,6 +1,6 @@
 "use strict";
-/* Apex 26 — UI SIZE / HUD SIZE sliders + RESOLUTION pin.
-   UiScale.create(G). Extracted from game.js: the two zoom knobs and the
+/* Apex 26 — UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin.
+   UiScale.create(G). Extracted from game.js: the zoom knobs and the
    render-scale cycle. G already owned setScale / applyResMode; this file
    is the implementation. Menus.updateTrackPreview is reached through G
    (one deferred arrow added beside buildSelect).
@@ -11,11 +11,12 @@ const UiScale = (() => {
     Log.info("ui", "UiScale.create");
     const { $, els, store } = G;
 
-    // UI SIZE / HUD SIZE: how big the interface is, as a percentage, on two
-    // independent sliders. Each writes a custom property the stylesheets consume as
-    // a `zoom`:
-    //   --ui-scale   the menus  — .sheet (components.css), #overlay (menus.css)
-    //   --hud-scale  the race   — the HUD clusters (hud.css), the dock (overlays.css)
+    // UI SIZE / HUD SIZE / BUTTON SIZE: how big the interface is, as a percentage,
+    // on three independent sliders. Each writes a custom property the stylesheets
+    // consume as a `zoom`:
+    //   --ui-scale       the menus    — .sheet (components.css), #overlay (menus.css)
+    //   --hud-scale      the readouts — the HUD clusters (hud.css)
+    //   --hud-btn-scale  the dock     — the touch controls (overlays.css)
     //
     // TWO KNOBS BECAUSE THE TWO LAYERS ARE READ DIFFERENTLY. Menu type is read at
     // rest, with time to spare; the HUD is glanced at while driving, and the size
@@ -44,9 +45,16 @@ const UiScale = (() => {
       const n = Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
     };
+    // BUTTON SIZE's default is not a number, it is ANOTHER SLIDER: unset, the
+    // dock follows HUD SIZE (css/tokens.css declares --hud-btn-scale as
+    // var(--hud-scale)). Resolving that here rather than only in the widget
+    // keeps one answer — the range input, its % readout and __apex.btnScale()
+    // all report the axis actually in force, instead of the widget saying 130
+    // while the hook said 100. `stored` still separates "following" from "set".
+    const scaleDefaultFor = (k) => (k === "hudBtnScale" ? scalePct("hudScale") : scaleDefault());
     const scalePct = (k) => {
       const v = store.get(k, null);
-      return typeof v === "number" ? scaleSnap(v) : scaleDefault();
+      return typeof v === "number" ? scaleSnap(v) : scaleDefaultFor(k);
     };
     const scaleLabel = (pct) => {
       const t = scaleSnap(pct);
@@ -74,7 +82,17 @@ const UiScale = (() => {
         try { if (els.select && !els.select.hidden) G.updateTrackPreview(); } catch (e) { /* menus not ready */ }
       });
     }
-    function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
+    // Moving HUD SIZE moves the dock too while BUTTON SIZE is unset, so its
+    // widget has to be repainted or it reads a number the screen contradicts.
+    function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); applyBtnScale(); }
+    // BUTTON SIZE: the touch dock's own axis (--hud-btn-scale, css/tokens.css),
+    // which DEFAULTS to --hud-scale rather than to 1 — the dock and the readouts
+    // fight over the same edges, and shrinking the buttons is how a player buys
+    // the readouts room back. Unset it must therefore behave exactly as before,
+    // so applyScale's "nothing stored => no inline style" rule is what makes
+    // this safe: the :root declaration keeps the two locked together until the
+    // player moves this slider, and only then do they part.
+    function applyBtnScale() { applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale"); }
     $("pm-uiscale").oninput = (e) => {
       store.set("uiScale", scaleSnap(+e.target.value || scaleDefault()));
       applyUiScale();
@@ -83,13 +101,19 @@ const UiScale = (() => {
       store.set("hudScale", scaleSnap(+e.target.value || scaleDefault()));
       applyHudScale();
     };
+    $("pm-btnscale").oninput = (e) => {
+      store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefault()));
+      applyBtnScale();
+    };
     applyUiScale();
-    applyHudScale();
+    applyHudScale();   // calls applyBtnScale — an unset button slider follows it
     function setScale(key, prop, v) {
       if (v !== undefined) {
         if (v === null) store.set(key, null);
         else store.set(key, scaleSnap(+v || scaleDefault()));
-        if (key === "uiScale") applyUiScale(); else applyHudScale();
+        if (key === "uiScale") applyUiScale();
+        else if (key === "hudBtnScale") applyBtnScale();
+        else applyHudScale();
       }
       return { pct: scalePct(key), stored: store.get(key, null), min: SCALE_MIN, max: SCALE_MAX, step: SCALE_STEP };
     }
@@ -116,7 +140,7 @@ const UiScale = (() => {
     };
     applyResMode();
 
-    return { setScale, applyResMode, applyUiScale, applyHudScale };
+    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale };
   }
   return { create };
 })();

@@ -206,6 +206,26 @@ test.describe("UI scale", () => {
     await page.evaluate(() => window.__apex.hudScale(90));
     expect(await read(), "moving the HUD must not move the UI").toEqual({ ui: "1.5", hud: "0.9" });
 
+    // BUTTON SIZE is the third axis, and its default is not a number: unset, it
+    // FOLLOWS the HUD (css/tokens.css declares --hud-btn-scale: var(--hud-scale)),
+    // because the dock and the readouts used to share one knob and an untouched
+    // slider must be byte-identical to that. Once set it is independent — which
+    // is the whole point: shrinking the pedals is how a player buys the readouts
+    // room back on a phone.
+    const btn = () => page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--hud-btn-scale").trim());
+    await page.evaluate(() => window.__apex.btnScale(null));
+    expect(await btn(), "unset, the dock follows the HUD").toBe("0.9");
+    await page.evaluate(() => window.__apex.hudScale(120));
+    expect(await btn(), "and keeps following it").toBe("1.2");
+    await page.evaluate(() => window.__apex.btnScale(60));
+    expect(await btn(), "set, it is its own axis").toBe("0.6");
+    expect(await read(), "and moving it must not move the HUD").toEqual({ ui: "1.5", hud: "1.2" });
+    await page.evaluate(() => window.__apex.hudScale(90));
+    expect(await btn(), "nor does the HUD move it back").toBe("0.6");
+    await page.evaluate(() => window.__apex.btnScale(null));
+    expect(await btn(), "null hands the dock back to the HUD").toBe("0.9");
+
     // Out of range clamps rather than throwing — a stored value from an older
     // build with a wider range must not be able to produce a 4x interface.
     const hi = await page.evaluate(() => window.__apex.uiScale(9999));

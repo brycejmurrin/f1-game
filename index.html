@@ -472,6 +472,14 @@
               <button id="pm-hudgaps">GAPS: ON</button>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
                 <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
+              <!-- BUTTON SIZE is its own knob because the dock and the readouts
+                   compete for the same edges: shrinking the pedals is how a
+                   player buys the readouts room back, and one slider could only
+                   trade both at once. Unset it FOLLOWS HUD SIZE (css/tokens.css
+                   declares --hud-btn-scale as var(--hud-scale)), so an untouched
+                   slider changes nothing. -->
+              <label class="tune-row"><span class="tune-label">BUTTON SIZE <b id="pm-btnscale-v">100%</b></span>
+                <input id="pm-btnscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Touch button size"></label>
               <!-- The slider's effect was invisible: css/hud.css hides every real
                    HUD cluster while a .dim screen is open, and from the title
                    there is no HUD at all — players dragged, saw nothing, and

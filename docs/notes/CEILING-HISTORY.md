@@ -1932,3 +1932,20 @@ rather than growth of an existing one, and it pushed three ceilings at once.
 
 - tree `rawSpacing` 314 -> **313** (2026-09-04): free-cam climb/dive `.pc-btn`
   dropped the 64×58 / 46×42 literals for `var(--steer)`.
+- `js/agent/apex.js` 2641 -> **2642** lines / 2000 -> **2001** code and tree
+  `shellNodes` 1119 -> **1123** (2026-09-04): BUTTON SIZE, a third size slider.
+  (+1 and +4 exactly; the from-numbers are the deploy tip's, since this landed
+  in the same merge as the ENGINE TONE panel and the DISPLAY restack.)
+  The touch dock and the HUD readouts compete for the same screen edges, and one
+  knob could only trade them together — shrinking the pedals is exactly how a
+  player buys the readouts room back, and there was no way to ask for it. The
+  four shell nodes are the slider row (label / span / b / input); the one apex.js
+  line is `btnScale(v)`, which the spec needs to set the axis without driving a
+  range input. `--hud-btn-scale` is declared as `var(--hud-scale)`, so an
+  untouched slider is byte-identical to the old behaviour and nothing in the
+  default build moved.
+- tree `cssClasses` 548 -> **551** (2026-09-04, absorbed at the standing 551
+  ceiling, no raise): `hud-met-timing` / `-driver` / `-compact` get CSS rules for
+  the first time. They were body classes with no stylesheet behind them, which is
+  why the LAYOUT control was reported twice as doing nothing. Paid out of the
+  headroom the class ratchet already carried rather than raised.
