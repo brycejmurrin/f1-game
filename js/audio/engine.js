@@ -43,6 +43,57 @@ const GameAudio = (function () {
   };
   let voice = ENGINE_VOICES["default"];
   let voiceName = "default";
+
+  // PLAYER TUNE — a second trim layered OVER the manufacturer voice, owned by
+  // the player instead of the team. It keeps the SAME constant-timbre contract
+  // ENGINE_VOICES states above: every field is a fixed multiplier, never a
+  // function of rev, so tools/check/audio-test.cjs's invariants (pitch
+  // monotonic in rev per gear, gear1 < gear4 at redline) hold by construction.
+  //
+  // revRange is the one field that scales the rev->pitch SPAN rather than
+  // offsetting it, so it is the only one that changes the curve's shape. It is
+  // clamped strictly positive, which is exactly what monotonicity needs: the
+  // rev coefficient keeps its sign, and both gears take the same factor, so the
+  // ordering is untouched. `sub` weights the synth fallback's sub-octave only
+  // (the sample core has no such layer) and is set by profiles rather than a
+  // slider, which is why the UI carries six knobs and this table seven.
+  const TUNE_DEF = Object.freeze({ pitch: 1, detune: 1, revRange: 1, brightness: 1, whine: 1, sub: 1, limiter: 1 });
+  const TUNE_RANGE = Object.freeze({
+    pitch:      [0.80, 1.25], detune: [0, 3],    revRange: [0.40, 1.60],
+    brightness: [0.50, 1.60], whine:  [0, 2.5],  sub:      [0, 2.5], limiter: [0, 2],
+  });
+  let tune = Object.assign({}, TUNE_DEF);
+
+  // Layer switches. Each names a node that already exists, so muting one is a
+  // gain target of 0 — and because every muted layer goes through aimGain, its
+  // steady state costs no per-frame scheduling at all (the _apexAimTgt guard,
+  // the same idiom limGain/lfoG use further down).
+  const LAYER_DEF = Object.freeze({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true });
+  let layers = Object.assign({}, LAYER_DEF);
+
+  // Named tune presets the player picks INSTEAD of inheriting the team's
+  // engine. "team" is the shipped behaviour: identity trims, and ENGINE_VOICES
+  // still keys off team.engine. The rest layer over whatever voice the team
+  // gave, so a Ferrari on COCKPIT is still recognisably a Ferrari.
+  const SOUND_PROFILES = Object.freeze({
+    team:      null,
+    broadcast: { pitch: 1.02, detune: 0.9, revRange: 1.05, brightness: 1.18, whine: 1.30, sub: 0.80, limiter: 1.00 },
+    trackside: { pitch: 0.99, detune: 1.3, revRange: 1.00, brightness: 0.82, whine: 0.65, sub: 1.15, limiter: 0.85 },
+    cockpit:   { pitch: 1.00, detune: 1.0, revRange: 0.92, brightness: 0.68, whine: 0.85, sub: 1.60, limiter: 1.35 },
+    v10:       { pitch: 1.07, detune: 2.2, revRange: 1.28, brightness: 1.28, whine: 0.10, sub: 0.70, limiter: 1.15 },
+  });
+  let profileName = "team";
+
+  // Schedule a gain target only when it has MOVED. A muted layer converges to 0
+  // once and is then free; without this, every switch turned off would still
+  // cost a main-thread call plus a cross-thread timeline insertion per frame —
+  // the defect the lfoG/limGain comments below describe at length. The cache
+  // lives ON THE NODE so a stopEngine/startEngine pair cannot leave it stale.
+  function aimGain(node, target, t, tau) {
+    if (!node || node._apexAimTgt === target) return;
+    node.gain.setTargetAtTime(target, t, tau);
+    node._apexAimTgt = target;
+  }
   let engineOn = false;
   let lastSpeed = 0, lastEngT = 0, harvLevel = 0;
   let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
@@ -427,8 +478,12 @@ const GameAudio = (function () {
       engSrcIdle = ctx.createBufferSource(); engSrcIdle.buffer = engBuf; engSrcIdle.loop = true;
       engSrcAcc = ctx.createBufferSource(); engSrcAcc.buffer = accBuf; engSrcAcc.loop = true;
       // Voice detune is a base offset in cents; the offroad LFO adds on top.
-      engSrcIdle.detune.value = voice.detune;
-      engSrcAcc.detune.value = voice.detune;
+      // The player's detune trim must be folded in HERE too, not only in
+      // applyTuneNodes: game.js calls setVoice() before startEngine(), when
+      // these sources do not exist yet, so a start that read voice.detune alone
+      // would run on the bare manufacturer value until the next slider move.
+      engSrcIdle.detune.value = voice.detune + (tune.detune - 1) * 30;
+      engSrcAcc.detune.value = voice.detune + (tune.detune - 1) * 30;
       const li = findStableLoop(engBuf), la = findStableLoop(accBuf);
       engSrcIdle.loopStart = li.start; engSrcIdle.loopEnd = li.end;
       engSrcAcc.loopStart = la.start; engSrcAcc.loopEnd = la.end;
@@ -452,7 +507,7 @@ const GameAudio = (function () {
       // Sub-octave square rides through its own gain so a voice can weight it
       // (Red Bull Ford gravel vs Ferrari shriek). Torn down with engFilter.
       const sub = ctx.createGain();
-      sub.gain.value = voice.subLvl;
+      sub.gain.value = voice.subLvl * tune.sub;   // same restart reason as detune above
       engC.connect(sub).connect(engFilter);
       engC._apexSubGain = sub;
     }
@@ -646,7 +701,7 @@ const GameAudio = (function () {
       const gmul = g <= 3 ? LOW_GEAR_RATE[g - 1] : 1.0;
       // rateTrim is a CONSTANT per-manufacturer offset: pitch stays monotonic
       // in rev and the gear ordering is unchanged (same trim on both sides).
-      const rate = (0.25 + rev * 0.45) * (1 + 0.04 * b) * gmul * voice.rateTrim;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
+      const rate = (0.25 + rev * 0.45 * tune.revRange) * (1 + 0.04 * b) * gmul * voice.rateTrim * tune.pitch;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       // NOT a crossfade to the second recording: measured 2026-09-03 with
       // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load read
@@ -672,9 +727,9 @@ const GameAudio = (function () {
       if (!idleGainRamped) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
-      const base = (gIdle + rev * gSpan) * (1 + 0.12 * b) * voice.rateTrim;
+      const base = (gIdle + rev * gSpan * tune.revRange) * (1 + 0.12 * b) * voice.rateTrim * tune.pitch;
       engA.frequency.setTargetAtTime(base * 0.994, t, 0.025);
-      engB.frequency.setTargetAtTime(base * voice.synthSpread, t, 0.025);
+      engB.frequency.setTargetAtTime(base * (1 + (voice.synthSpread - 1) * tune.detune), t, 0.025);
       engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
     }
 
@@ -695,7 +750,7 @@ const GameAudio = (function () {
     const cut = (usingSamples
       ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500 + slipLoad * 2000 + brakeLoad * 1200)
       : Math.min(7200,  600  + s * 4200 + rev * 700  + b * 1400 + slipLoad * 1000 + brakeLoad * 600))
-      * voice.cutTrim * (1 + 0.22 * loadLift);
+      * voice.cutTrim * tune.brightness * (1 + 0.22 * loadLift);
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
     const lvl = (usingSamples
       ? (0.3 + s * 0.3 + rev * 0.08 + b * 0.08 + (offroad ? 0.03 : 0) + slipLoad * 0.8 + kerbLoad)
@@ -706,8 +761,8 @@ const GameAudio = (function () {
     // decoration. limOsc feeds engGain.gain through limDepth on the audio
     // thread, so the gate costs no per-frame scheduling: base drops to
     // lvl·0.55 and the square wave swings it 0.10–1.00 × lvl.
-    const limOn = rev > 0.985 && s > 0.05;
-    const limDepth = limOn ? lvl * 0.45 : 0;
+    const limOn = layers.limiter && rev > 0.985 && s > 0.05;
+    const limDepth = limOn ? lvl * 0.45 * tune.limiter : 0;
     // Guarded on the TARGET, like lfoG below and for the same reason: above
     // 98.5% is a sliver of a race, so an unguarded call scheduled the target 0
     // onto a value already converged to 0, 120x a second for the whole race —
@@ -725,9 +780,9 @@ const GameAudio = (function () {
     // frequency climbs faster but levels off earlier than at high speed.
     const lowGearFactor = g01 < 0.35 ? 0.85 + g01 * 0.43 : 1;   // compressed range in low gears
     whineOsc.frequency.setTargetAtTime((voice.whineHz + rev * 2000) * lowGearFactor, t, 0.05);
-    whineGain.gain.setTargetAtTime(
-      (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1)
-      * voice.whineLvl, t, 0.08);
+    aimGain(whineGain,
+      layers.whine ? (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1)
+        * voice.whineLvl * tune.whine : 0, t, 0.08);
 
     const dt = lastEngT ? Math.max(0.001, t - lastEngT) : 0;
     let target = 0;
@@ -741,7 +796,7 @@ const GameAudio = (function () {
     // MGU-K harvest is audible on BOTH cores now. It was created and started on
     // the sample path too but gated silent here — quieter over the recording,
     // which already carries some off-throttle character of its own.
-    harvGain.gain.setTargetAtTime(harvLevel * (usingSamples ? 0.035 : 0.06), t, 0.06);
+    aimGain(harvGain, layers.harvest ? harvLevel * (usingSamples ? 0.035 : 0.06) : 0, t, 0.06);
     harvFilter.frequency.setTargetAtTime(700 + s * 1600, t, 0.08);
 
     // ERS deploy whine: only while the battery is actually deploying (game.js
@@ -765,7 +820,7 @@ const GameAudio = (function () {
     const energy = ph.energy != null ? clamp01(ph.energy) : 1;
     const low = energy < 0.2 ? energy / 0.2 : 1;
     const partBias = ph.ersDeploy != null ? 0.8 + 0.4 * clamp01(ph.ersDeploy) : 1;
-    const ersLvl = deploy > 0
+    const ersLvl = (deploy > 0 && layers.ers)
       ? (0.010 + 0.018 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias
       : 0;
     // Cached on the node, same idiom as lfoG/limGain above: ersLvl is 0 whenever
@@ -791,8 +846,8 @@ const GameAudio = (function () {
     const gust = harvLevel;   // already the smoothed decel signal, computed above
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
     const tow = clamp01(ph.tow || 0);   // in a slipstream the air is already moving: less wind
-    windGain.gain.setTargetAtTime(
-      (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen,
+    aimGain(windGain,
+      layers.wind ? (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen : 0,
       t, 0.10);
     windFilter.frequency.setTargetAtTime(450 + s * 1450 + rough * 260, t, 0.12);
 
@@ -882,7 +937,7 @@ const GameAudio = (function () {
   function setSkid(x, wet) {
     if (!engineOn || !skidGain) return;
     const v = clamp01(x || 0);
-    skidGain.gain.value = v * (wet ? 0.10 : 0.16);   // wetter = quieter, sibilant
+    skidGain.gain.value = layers.screech ? v * (wet ? 0.10 : 0.16) : 0;   // wetter = quieter, sibilant
     if (v > 0) {
       const base = wet ? 480 : 760;                    // wet: lower splash vs dry: screech
       skidFilter.frequency.value = base + v * 320 + Math.sin(now() * 30) * 60;
@@ -966,6 +1021,76 @@ const GameAudio = (function () {
   function setVoice(engineName) {
     voice = ENGINE_VOICES[engineName] || ENGINE_VOICES["default"];
     voiceName = ENGINE_VOICES[engineName] ? engineName : "default";
+    applyTuneNodes();
+  }
+
+  // The two tune fields that are NOT per-frame expressions: detune lives on the
+  // sample sources and sub-octave weight on the gain engC was built behind, so
+  // both are written when the tune (or the voice) changes rather than 60x a
+  // second. Safe before the engine exists — every write is guarded on its node.
+  function applyTuneNodes() {
+    if (!ctx) return;
+    const t = now();
+    // Player detune rides ON TOP of the manufacturer's cents, so the voice's
+    // character survives the slider: 1.0 is exactly voice.detune, and the range
+    // [0,3] spans -30..+60 cents around it. That is a tenth of what the PITCH
+    // slider covers, which is the point — this is chorus/character width, not
+    // a second pitch control.
+    const cents = voice.detune + (tune.detune - 1) * 30;
+    for (const src of [engSrcIdle, engSrcAcc]) if (src && src.detune) src.detune.setTargetAtTime(cents, t, 0.05);
+    const subGain = engC && engC._apexSubGain;
+    if (subGain) subGain.gain.setTargetAtTime(voice.subLvl * tune.sub, t, 0.05);
+  }
+
+  // Clamp into TUNE_RANGE and drop anything not in the table: these values come
+  // from a slider and from localStorage, and a NaN reaching playbackRate throws
+  // the whole engine graph out for the rest of the session.
+  function setTune(patch) {
+    if (patch) for (const k of Object.keys(TUNE_DEF)) {
+      const v = patch[k];
+      if (typeof v !== "number" || !isFinite(v)) continue;
+      const [lo, hi] = TUNE_RANGE[k];
+      tune[k] = Math.max(lo, Math.min(hi, v));
+    }
+    // A trim that no longer matches the named profile makes the name a LIE —
+    // and profile() is what the panel lights and what __apex.audio() reports,
+    // so the lie would be visible in two places. Recomputed rather than set
+    // unconditionally: restoring a saved tune that happens to equal its profile
+    // must stay on that profile, not read as hand-edited.
+    profileName = nameForTune();
+    applyTuneNodes();
+    return Object.assign({}, tune);
+  }
+
+  // The profile the live tune actually IS, or "custom". Derived rather than
+  // latched: dragging a slider away and back again should relight the preset it
+  // matches, and a one-way flip to "custom" would leave the row dark until the
+  // player pressed RESET. The current name wins any tie so identical presets
+  // could never make the row jump between two equally-true labels.
+  function nameForTune() {
+    const fits = (name) => {
+      if (!Object.prototype.hasOwnProperty.call(SOUND_PROFILES, name)) return false;
+      const want = Object.assign({}, TUNE_DEF, SOUND_PROFILES[name] || {});
+      return Object.keys(TUNE_DEF).every((k) => Math.abs(tune[k] - want[k]) < 1e-9);
+    };
+    if (fits(profileName)) return profileName;
+    return Object.keys(SOUND_PROFILES).find(fits) || "custom";
+  }
+
+  // A profile is a named tune. Picking one REPLACES the trims (any field it
+  // omits falls back to the default rather than lingering from the last
+  // profile); "team" restores identity, which is the shipped sound.
+  function setProfile(name) {
+    const key = Object.prototype.hasOwnProperty.call(SOUND_PROFILES, name) ? name : "team";
+    profileName = key;
+    tune = Object.assign({}, TUNE_DEF, SOUND_PROFILES[key] || {});
+    applyTuneNodes();
+    return key;
+  }
+
+  function setLayer(name, on) {
+    if (Object.prototype.hasOwnProperty.call(LAYER_DEF, name)) layers[name] = !!on;
+    return Object.assign({}, layers);
   }
 
   // whoosh: filtered noise sweeping up + a rising saw underneath
@@ -1350,6 +1475,18 @@ const GameAudio = (function () {
     deployBoost,
     xMode,
     setVoice,
+    setTune,
+    setProfile,
+    setLayer,
+    tune() { return Object.assign({}, tune); },
+    tuneRange() { return JSON.parse(JSON.stringify(TUNE_RANGE)); },
+    tuneDefaults() { return Object.assign({}, TUNE_DEF); },
+    layers() { return Object.assign({}, layers); },
+    layerDefaults() { return Object.assign({}, LAYER_DEF); },
+    profile() { return profileName; },
+    profiles() { return Object.keys(SOUND_PROFILES); },
+    voiceName() { return voiceName; },
+    voices() { return Object.keys(ENGINE_VOICES); },
     collision,
     offtrack,
     rumble,
@@ -1389,6 +1526,10 @@ const GameAudio = (function () {
     // centroidHz() (which taps engGain, upstream of the bus) cannot see it —
     // this is the only way to assert the layer actually tracks speed.
     windLevel() { return windGain ? +windGain.gain.value : 0; },
+    // Same shape as windLevel: the rev-limiter chop lives on limGain, which
+    // feeds engGain.gain on the audio thread, so nothing downstream of the
+    // engine output can observe its depth.
+    limiterDepth() { return limGain ? +limGain.gain.value : 0; },
     rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
     centroidHz() {
       if (!ctx || !engineOn || !engGain) return 0;

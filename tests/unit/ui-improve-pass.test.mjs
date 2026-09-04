@@ -899,8 +899,6 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "DISPLAY slider values are text, not tuner red");
   assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-row input[type=\"range\"]", "accent-color"), "var(--steel)",
     "DISPLAY slider track is steel, not tuner red");
-  assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-row input[type=\"range\"]", "color"), "var(--steel)",
-    "DISPLAY range thumb follows steel via currentColor, not tuner red");
   assert.match(code("js/perf/renderer-picker.js"), /pm-display-adv/,
     "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
   assert.match(read("index.html"), /id="pm-display-adv"/,
@@ -1123,12 +1121,11 @@ test("menu range sliders share a painted-size token that cancels UI SIZE zoom", 
     "--slider is 32 painted px: divide by --ui-scale so sheet zoom does not grow the track");
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "height"), "var(--slider)");
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "min-height"), "var(--slider)");
-  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]::-webkit-slider-thumb", "width"),
-    "calc(var(--slider) * 0.6875)",
-    "thumb is ~22 painted px (easier grab) and scales with the same token");
-  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]::-webkit-slider-runnable-track", "height"),
-    "calc(var(--slider) * 0.25)",
-    "track is ~8 painted px — thicker than the UA hairline, not a second control ladder");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "accent-color"), "var(--red)",
+    "native accent fill, not a custom red-dot thumb");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "appearance"), null,
+    "leave the UA slider chrome — appearance:none was the red-dot-on-grey look");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]::-webkit-slider-thumb", "width"), null);
   assert.equal(decl(css("css/tuner.css"), ".tune-row input[type=\"range\"]", "height"), "var(--slider)");
   assert.equal(decl(css("css/components.css"), ".pm-group .tune-row input[type=\"range\"]", "height"), "var(--slider)");
   assert.equal(decl(css("css/hud.css"), ".pc-fovlab input[type=\"range\"]", "height"), "var(--slider)");

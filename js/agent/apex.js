@@ -3,6 +3,12 @@ const ApexApi = (function () {
   "use strict";
 
 function create(G) {
+// The four audio hooks share one precondition. `null` when GameAudio is there,
+// so each hook reads `return noAudio() || <the real answer>` rather than
+// repeating a three-line guard four times.
+const noAudio = () => (typeof GameAudio === "undefined"
+  ? { ok: false, error: "no_audio", message: "GameAudio is not loaded", fix: "reload the page" }
+  : null);
 // Stable bindings (functions + consts) from the game.js closure.
 const { els, smp, smp2, gfx, canvas, GAME_LAPS, TT_LAPS, LONG_GRIP,
         applyRaceSettings, camVantage, endRace, gridUp, gripMult, isErsDeploying,
@@ -2359,6 +2365,31 @@ const api = {
   logs(filter) {
     if (typeof Log === "undefined") return [];
     return Log.records(filter);
+  },
+
+  // audio() — the engine voice, the player tune and the layer switches in one
+  // read. `debug` is GameAudio.debug()'s existing bundle; the rest is the tuner
+  // surface (js/audio/engine.js), which had no hook at all before it had a UI.
+  //
+  //   __apex.audio()                          // { profile, voice, tune, layers, … }
+  //   __apex.audioTune({ pitch: 1.1 })        // clamped into range, returns the tune
+  //   __apex.audioProfile("cockpit")          // returns the profile actually set
+  //   __apex.audioLayer("wind", false)        // returns the layer map
+  audio() {
+    return noAudio() || { ok: true, profile: GameAudio.profile(), profiles: GameAudio.profiles(),
+      voice: GameAudio.voiceName(), voices: GameAudio.voices(),
+      tune: GameAudio.tune(), range: GameAudio.tuneRange(), defaults: GameAudio.tuneDefaults(),
+      layers: GameAudio.layers(), rate: GameAudio.rate(), limiterDepth: GameAudio.limiterDepth(),
+      windLevel: GameAudio.windLevel(), debug: GameAudio.debug() };
+  },
+  audioTune(patch) {
+    return noAudio() || GameAudio.setTune(patch);
+  },
+  audioProfile(name) {
+    return noAudio() || GameAudio.setProfile(name);
+  },
+  audioLayer(name, on) {
+    return noAudio() || GameAudio.setLayer(name, on);
   },
 
   // logLevel(spec?) — read or move the console/buffer thresholds.

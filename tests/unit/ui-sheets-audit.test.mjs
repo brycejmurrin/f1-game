@@ -328,8 +328,21 @@ function bootAudio({ soundOn, musicEnabled }) {
     row.appendChild(dom.byId(id)); dom.body.appendChild(row);
   }
   const calls = [];
+  // The ENGINE TONE section reads its state back from the engine on every
+  // sync, so the catch-all arm (which returns undefined) is not enough for it:
+  // `GameAudio.profiles().includes(...)` needs a real array. These mirror the
+  // shapes js/audio/engine.js returns; tests/unit/audio-tune.test.mjs is what
+  // holds the two in step.
+  const TONE_STUB = {
+    profiles: () => ["team", "broadcast", "trackside", "cockpit", "v10"],
+    tune: () => ({ pitch: 1, detune: 1, revRange: 1, brightness: 1, whine: 1, sub: 1, limiter: 1 }),
+    layers: () => ({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true }),
+    setProfile: (v) => v,
+    profile: () => "team",
+  };
   const GameAudio = new Proxy({}, { get: (_, k) => (k === "trackName" ? () => "Song A" : k === "musicSource" ? () => "builtin"
     : k === "sourceCounts" ? () => ({ builtin: 4, user: 0 }) : k === "setMusicSource" ? (v) => v
+    : TONE_STUB[k] ? TONE_STUB[k]
     : k === "setMusicVolume" || k === "setSfxVolume" ? (v) => v : (...a) => { calls.push([k, ...a]); }) });
   const sb = { Math, JSON, Object, Array, String, Number, console, document: dom.document, GameAudio };
   sb.window = sb;
