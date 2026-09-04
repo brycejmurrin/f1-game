@@ -31,7 +31,7 @@ const CAM_TUNE_DEFS = [
   // 1 = the old corner-following chase. Only chase/far read it — `modes` gates
   // which cameras show the slider.
   { id: "cornerLead", label: "CORNER LEAD", min: 0, max: 1, step: 0.02, def: 0, unit: "", modes: ["chase", "far"],
-    help: "Let the chase camera lead and swing INTO corners like the classic chase. 0 stays locked behind the car; higher follows the bend. Purely visual — never affects the car." },
+    help: "Let the chase camera lead and swing INTO corners like the classic chase. Shipped chase/far use a small default lead; 0 on the slider locks flat behind the car; higher follows the bend. Purely visual — never affects the car." },
 ];
 const DEF_BY_ID = {};
 for (const d of CAM_TUNE_DEFS) DEF_BY_ID[d.id] = d;
@@ -77,6 +77,23 @@ function get(mode, id) {
   if (!d) return 0;
   const prof = _store[mode];
   return prof && typeof prof[id] === "number" ? prof[id] : d.def;
+}
+function stored(mode, id) {
+  const prof = _store[mode];
+  return !!(prof && typeof prof[id] === "number");
+}
+// Resolved chase/far corner lead: null = use js/camera/vantage.js shipped default.
+function cornerLead(mode) {
+  if (mode !== "chase" && mode !== "far") return null;
+  return stored(mode, "cornerLead") ? clamp(get(mode, "cornerLead"), 0, 1) : null;
+}
+function exportEdits() {
+  const out = {};
+  for (const mode of Object.keys(_store)) {
+    const prof = _store[mode];
+    if (prof && Object.keys(prof).length) out[mode] = { ...prof };
+  }
+  return out;
 }
 // How many knobs this mode has moved off default (drives the panel's "(3 tuned)").
 function count(mode) { return _store[mode] ? Object.keys(_store[mode]).length : 0; }
@@ -139,6 +156,7 @@ function apply(mode, eye, tgt, fov) {
 }
 
 return { CAM_TUNE_DEFS, FOV_MIN, FOV_MAX,
-         apply, values, get, set, reset, resetAll, count, tunedModes, all, load, persist,
+         apply, values, get, stored, cornerLead, exportEdits, set, reset, resetAll,
+         count, tunedModes, all, load, persist,
          defs: () => CAM_TUNE_DEFS, active: () => _any };
 })();

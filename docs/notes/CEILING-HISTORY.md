@@ -1836,3 +1836,30 @@ The scans' own history, moved out of the ceiling comments:
   // subs, How-to-Play rules, and data-hub numerals moved onto tokens.
   // 2026-09-03 leftover pass: 185 -> 184 with rawColor 334 -> 330.
 ```
+
+### Re-measured on the deploy union, 2026-09-04
+
+The four CSS counts moved on their first merge after joining the ratchet, and
+the union's numbers are HIGHER than either side wrote — which is the whole
+reason the merge rule says to re-measure rather than pick a side. This branch
+had 314/326 (measured before the fold), the deploy branch had raised its copies
+to 315/330, and the tree they merge into is at 317/334, because CSS landed after
+both measurements.
+
+| count | this branch | deploy branch | union |
+|---|---|---|---|
+| `subFloorFontSize` | 5 | 5 | **7** |
+| `rawSpacing` | 314 | 315 | **317** |
+| `rawColor` | 326 | 330 | **334** |
+| `rawColorDistinct` | 181 | 181 | **182** |
+
+`subFloorFontSize` 5 -> 7 is the one worth naming rather than absorbing: both
+new declarations are in `css/hud.css`, from the broadcast-tower HUD layout
+(`6c2a5aa6`) — a `letter-spacing`-tracked 10px `.hud-label` and a
+`min(11px, …)` tower row. That file already carries the one blessed sub-floor
+exception (`.hud-gaps`: a peripheral glance during a lap, not menu chrome a
+stopped player reads), and these are plausibly the same class — a cinematic TV
+tower is read at a glance, not studied. But they were not argued for, they were
+measured, and this is the record that they were RAISED rather than earned. If
+the broadcast profile is the right place for a sub-floor rung, say so at the
+declarations; if not, they are the next two to migrate.

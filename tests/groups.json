@@ -148,6 +148,7 @@
     "tests/unit/incident-gate.test.mjs",
     "tests/unit/debris-step-skip.test.mjs",
     "tests/unit/camera-ride.test.mjs",
+    "tests/unit/camera-defaults.test.mjs",
     "tests/unit/hooks-documented.test.mjs",
     "tests/unit/source-integrity.test.mjs",
     "tests/unit/scroll-strips.test.mjs",
@@ -443,6 +444,7 @@
       "kind": "node",
       "files": [
         "tests/unit/game-vm.test.mjs",
+        "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",

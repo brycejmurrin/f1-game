@@ -52,14 +52,14 @@
    --hud-z is each band's OWN effective zoom, and every anchor below divides by
    THAT rather than by --hud-scale: the compensation has to use the number the
    element is actually zoomed by, or a capped band double-counts its notch. */
-.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors,
+.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits,
 #lights, #announce { --hud-z: var(--hud-z-top, var(--hud-scale)); zoom: var(--hud-z); }
 .hud-bottom { --hud-z: var(--hud-z-bot, var(--hud-scale)); zoom: var(--hud-z); }
 /* Re-derive the compensated vw against the band's EFFECTIVE zoom: the :root
    token divides by the raw slider, but these subtrees paint at the fitHud-
    capped --hud-z — two adjacent declarations on #announce used to divide by
    two different numbers. */
-.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors,
+.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits,
 #lights, #announce, .hud-bottom { --vwzh: calc(1vw / var(--hud-z)); }
 .hud-top {
   position: absolute;
@@ -212,7 +212,60 @@
   height: 100%; width: 0%; position: relative; z-index: 1;
   background: linear-gradient(90deg in oklab, #2ad1ff, #aeea00 65%, #ffd600 88%);
 }
-#hud-tach.redline #hud-rpm-fill { background: var(--red); animation: pulse 0.4s infinite; }
+:root { --hud-pulse: 0.8s; }
+@keyframes pulse { 50% { opacity: 0.55; } }
+
+/* Camera + HUD profile integration (js/ui/hud.js syncHudCamClasses). */
+body.hud-prof-minimal #minimap,
+body.hud-prof-minimal .hud-gaps,
+body.hud-prof-minimal #hud-sectors { display: none !important; }
+body.hud-onboard #minimap,
+body.hud-onboard .hud-gaps { display: none !important; }
+body.hud-bcam #hud-gearbox,
+body.hud-bcam #hud-ot,
+body.hud-bcam #hud-aero,
+body.hud-bcam #hud-energy,
+body.hud-bcam #hud-limits { display: none !important; }
+body.hud-bcam:not(.hud-prof-broadcast) #hud-sectors { display: none !important; }
+
+/* Broadcast profile: left timing-tower strip (upright data, fused panels). */
+body.hud-prof-broadcast .hud-top {
+  left: calc(10px + var(--sal) / var(--hud-z));
+  transform: none;
+  gap: 0;
+  background: rgba(8, 8, 14, 0.84);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+body.hud-prof-broadcast .hud-box {
+  border-left: none;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 4px 11px;
+  min-width: 54px;
+}
+body.hud-prof-broadcast .hud-box:last-child { border-right: none; }
+body.hud-prof-broadcast .hud-box:nth-child(4) { display: none; }   /* BEST: tower shows POS/LAP/TIME */
+body.hud-prof-broadcast .hud-label { letter-spacing: 0.14em; font-size: 10px; }
+body.hud-prof-broadcast .hud-value { font-size: 17px; font-style: normal; font-weight: 700; }
+body.hud-prof-broadcast .hud-gaps {
+  background: rgba(8, 8, 14, 0.78);
+  border-left: 3px solid var(--accent);
+  padding: 3px 10px 3px 8px;
+  font-size: min(11px, calc(14px / var(--hud-z)));
+  letter-spacing: 0.04em;
+  font-style: normal;
+}
+/* Cinematic/broadcast cam + broadcast HUD: clean frame — tower carries timing. */
+body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none !important; }
+body.hud-prof-broadcast #announce[data-kind="race"] {
+  font-size: clamp(22px, calc(5.5 * var(--vwzh)), 48px);
+  font-style: normal;
+  top: calc(14svh / var(--hud-z));
+}
+
 #hud-energy {
   width: 130px; height: 14px;
   /* A plate under the fill, like the tach: with none, the bar's empty half was
@@ -242,7 +295,7 @@
    made the old palette hard to learn: the state you were in and the control
    you press for it were never the same colour. */
 #hud-ot.ot-off { color: var(--dim); border: 1px solid var(--plate-line); }
-#hud-ot.ot-armed { color: #2b2400; background: #ffd21a; animation: pulse 0.8s infinite; }
+#hud-ot.ot-armed { color: #2b2400; background: #ffd21a; animation: pulse var(--hud-pulse) infinite; }
 #hud-ot.ot-active { color: #ffeeae; background: #7e5c00; box-shadow: 0 0 14px rgba(225,175,20,0.55); }
 #hud-ot.ot-cool { color: var(--dim); border: 1px solid var(--plate-line); opacity: 0.5; }
 /* Same chip metrics as #hud-ot so the pair stacks evenly in the cluster. */
@@ -258,7 +311,6 @@
    "not here, yet" and "not on this track" is the difference between waiting and
    never pressing the button again. */
 #hud-aero.ax-none { color: rgba(255,255,255,0.28); border: 1px dashed var(--plate-line); text-decoration: line-through; }
-@keyframes pulse { 50% { opacity: 0.55; } }
 #minimap {
   position: absolute;
   left: calc(10px + var(--sal) / var(--hud-z));
@@ -277,15 +329,16 @@
 /* B1 caution flag variants (debris cautions): local yellow, VSC, safety car. */
 #hud-flag.flag-yellow { background: #ffd600; color: #000; }
 #hud-flag.flag-vsc { background: #ffb300; color: #201400;
-  animation: flag-vsc-pulse 1s ease-in-out infinite; }
+  animation: pulse var(--hud-pulse) ease-in-out infinite; }
 #hud-flag.flag-sc { background: #f4f6ff; color: #101018; }
 #hud-flag.flag-red { background: var(--slower); color: var(--text); }   /* the red flag: the session is stopped */
-@keyframes flag-vsc-pulse { 0%,100% { opacity: 0.72; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
   #hud-flag.flag-vsc { animation: none; }
   #hud-tach.redline #hud-rpm-fill,
   #hud-ot.ot-armed { animation: none; }
+  .sec-row.sec-flash { animation: none; }
 }
+:root[data-gap-drop] #hud-flag { top: calc(132px + var(--sat) / var(--hud-z)); }
 #hud-sectors {
   position: fixed;
   /* DERIVED FROM --tap, not the old hard-coded 56 — the same fix, on the other
@@ -312,9 +365,33 @@
   line-height: 1.6;
   border-left: 3px solid var(--accent-dim);
 }
-.sec-row { display: flex; gap: calc(var(--gap) * 0.5); align-items: baseline; }
+.sec-row { display: flex; gap: calc(var(--gap) * 0.5); align-items: baseline; border-left: 3px solid transparent; padding-left: calc(var(--gap) / 2); margin-left: calc(var(--gap) / -2); }
 .sec-lbl { font-weight: 800; font-size: var(--fs-micro); letter-spacing: 0.1em; min-width: 16px; }
 .sec-val { color: var(--text); text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+.sec-row.sec-flash { animation: sec-flash 0.35s ease-out 1; }
+.sec-row.sec-flash-pb { border-left-color: var(--faster); }
+.sec-row.sec-flash-slow { border-left-color: var(--sec-slow); }
+@keyframes sec-flash {
+  0% { background: color-mix(in srgb, var(--text) 22%, transparent); }
+  100% { background: transparent; }
+}
+#hud-limits {
+  position: fixed;
+  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z) + 4.9em);
+  right: calc(10px + var(--sar) / var(--hud-z));
+  background: rgba(8, 8, 14, 0.72);
+  border-radius: var(--r-sm);
+  padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75);
+  font-family: var(--font-hud);
+  font-size: var(--fs-micro);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  border-left: 3px solid color-mix(in srgb, var(--sec-slow) 55%, transparent);
+  color: var(--text);
+}
+#hud-limits.limits-warn { border-left-color: #ffb300; color: var(--sec-slow); }
+#hud-limits.limits-hot { border-left-color: var(--slower); color: var(--slower); animation: pulse var(--hud-pulse) infinite; }
+.limits-dots { letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
 
 /* Short local height (UI SIZE included): tighten HUD clusters so 200% HUD on
    852×393 does not stack minimap, chips, and pause. Viewport max-height cannot
@@ -361,6 +438,57 @@ body[data-density="compact"] .hud-bottom { gap: calc(var(--gap) * 0.25); }
   text-align: center;
   text-wrap: balance;
 }
+#announce[data-kind="info"],
+#announce[data-kind="coach"] {
+  font-size: clamp(22px, calc(5 * var(--vwzh)), 40px);
+  font-style: normal;
+  top: calc(22svh / var(--hud-z));
+  text-shadow: 0 0 16px rgba(0, 0, 0, 0.85);
+}
+#announce[data-kind="penalty-warn"] {
+  font-size: clamp(20px, calc(4.5 * var(--vwzh)), 36px);
+  font-style: normal;
+  top: calc(18svh / var(--hud-z));
+  color: var(--sec-slow);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--sec-slow) 75%, transparent);
+}
+#announce[data-kind="penalty-hit"] {
+  font-size: clamp(26px, calc(6 * var(--vwzh)), 48px);
+  font-style: normal;
+  top: calc(24svh / var(--hud-z));
+  color: var(--slower);
+  text-shadow: 0 0 22px color-mix(in srgb, var(--slower) 85%, transparent);
+}
+
+/* ---------- in-game metrics overlay (js/perf/metrics-overlay.js) ---------- */
+#game-metrics {
+  position: fixed;
+  right: calc(8px + var(--sar, 0px));
+  top: calc(12px + var(--tap, 44px) + var(--sat, 0px) + min(120px, calc(80px * var(--hud-z-top, var(--hud-scale, 1)))));
+  z-index: 11;
+  margin: 0;
+  padding: 10px 12px;
+  font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--faster);
+  background: var(--plate-opaque);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  pointer-events: auto;
+  white-space: pre;
+  text-align: left;
+  max-width: min(52ch, calc(100vw - 16px - var(--sal, 0px) - var(--sar, 0px)));
+  max-height: calc(100svh - 12px - var(--tap, 44px) - var(--sat, 0px) - min(120px, calc(80px * var(--hud-z-top, var(--hud-scale, 1)))) - max(80px, calc(72px + var(--sab, 0px))));
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  letter-spacing: 0.01em;
+}
+#game-metrics[data-compact="1"] {
+  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 2 / 3);
+  font-size: var(--fs-micro);
+  line-height: 1.35;
+  background: color-mix(in srgb, var(--plate-opaque) 80%, transparent);
+}
 
 /* ---------- photo mode (free-fly camera) ---------- */
 /* Full-screen click-through overlay; only the sticks/buttons take pointer input
@@ -390,7 +518,7 @@ body:has(.screen.dim:not([hidden])) #campicker { display: none; }
    Hide the clusters, not only the bottom. Gated on body.in-race so menu-time
    dialogs do not touch a HUD that is already hidden. */
 body.in-race:has(.screen.dim:not([hidden])) :is(
-  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #btn-cam, .dock, #pausebtn
+  .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #btn-cam, .dock, #pausebtn
 ) {
   visibility: hidden;
 }

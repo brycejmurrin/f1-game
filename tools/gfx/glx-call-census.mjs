@@ -106,18 +106,48 @@ try {
     for (const m of METHODS) if (C[m]) per[m] = +(C[m] / F).toFixed(1);
     for (const m of STATE) if (C[m]) state[m] = +(C[m] / F).toFixed(1);
     for (const k of Object.keys(caps).sort()) state[k] = +(caps[k] / F).toFixed(1);
-    // How many cars actually SURVIVED the culls — without this the bind counts
-    // cannot be read at all (a one-car frame makes any batching look useless).
-    let drawn = null;
+    // HOW MANY CARS ARE ACTUALLY NEAR THE CAMERA — without this the per-car
+    // counts cannot be read at all, which is not a hypothetical: this field
+    // reported `null` on every run for its whole life, and two A/B censuses of
+    // a per-car draw change came back BYTE-IDENTICAL because the field was
+    // strung out around the circuit and the change had nothing to act on.
+    // Silence read as "no effect" instead of "nothing measured".
+    //
+    // It was null because it asked `__apex.field()`, which is the AGENTVIEW
+    // raster (a different shape, and lazily injected), not the car roster —
+    // so both branches missed and the catch was never even reached. And the
+    // roster length would not have helped anyway: it is 20 whether the field
+    // is packed on the grid or spread over a lap, while what a per-car change
+    // needs is how many cars are in FRONT of the camera.
+    //
+    // fieldState() gives every car's `gap` to the leader in metres, so the
+    // prog delta to the player is a difference of two gaps — no camera maths,
+    // no new hook. 200 m is generous for "could plausibly be on screen"; the
+    // point is to separate 2 from 15, not to model the frustum.
+    let near = null, roster = null;
     try {
-      const f = __apex.field ? __apex.field() : null;
-      drawn = Array.isArray(f) ? f.length : (f && f.cars ? f.cars.length : null);
-    } catch (_) { /* no field hook */ }
+      const f = __apex.fieldState ? __apex.fieldState() : null;
+      if (Array.isArray(f) && f.length) {
+        roster = f.length;
+        const me = f.find((c) => c.isPlayer);
+        if (me) near = f.filter((c) => Math.abs(c.gap - me.gap) < 200).length;
+      }
+    } catch (_) { /* no fieldState hook: reported as null, and the caller says so */ }
     return { per, state, bufferSubDataKiBPerFrame: +((subBytes / F) / 1024).toFixed(1),
-             carsInField: drawn,
+             carsInField: roster, carsNearPlayer: near,
              preset: (__apex.lightState && __apex.lightState().preset) || null };
   }, FRAMES);
   console.log(JSON.stringify({ track: TRACK, tod: TOD, frames: FRAMES, flags: LS, ...out }, null, 1));
+  // A PER-CAR QUESTION NEEDS CARS. Said on stderr rather than thrown: the
+  // totals are still valid for scenery, post and state-change work — it is
+  // only a per-car A/B that this frame cannot answer. `pack` is not the cure
+  // on its own either; it puts the field BEHIND a player who starts at the
+  // front, where the frustum drops them.
+  if (out.carsNearPlayer != null && out.carsNearPlayer < 3) {
+    console.error(`WARNING: only ${out.carsNearPlayer} car(s) within 200 m of the player — ` +
+      "per-car counts here measure nothing. Two censuses of a car-LOD change came back " +
+      "byte-identical for this reason (2026-09-03).");
+  }
   // A CENSUS THAT MEASURED NOTHING MUST NOT EXIT 0. This tool printed `per: {}`
   // with a success code for an entire session after startRace went async: the
   // render loop was dead, every counter was zero, and "no calls" was

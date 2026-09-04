@@ -11,16 +11,17 @@ const TURN_CHASE = 0.35;
 
 let _halo = null, _tc = null;
 
-function read(key, urlName) {
+function read(key, urlName, defaultOn) {
   let v = GameStore.store.raw(key);
   try {
     const q = new RegExp("[?&]" + urlName + "=(1|0|on|off|true|false)", "i").exec(location.search);
     if (q) v = /^(1|on|true)$/i.test(q[1]) ? "1" : "0";
   } catch (_) { }
+  if (v == null || v === "") return !!defaultOn;
   return v === "1";
 }
 
-function halo() { if (_halo === null) _halo = read(KEY, "halo"); return _halo; }
+function halo() { if (_halo === null) _halo = read(KEY, "halo", false); return _halo; }
 
 function setHalo(on) {
   _halo = !!on;
@@ -28,7 +29,7 @@ function setHalo(on) {
   return _halo;
 }
 
-function turnChase() { if (_tc === null) _tc = read(KEY_TC, "turnchase"); return _tc; }
+function turnChase() { if (_tc === null) _tc = read(KEY_TC, "turnchase", true); return _tc; }
 
 function setTurnChase(on) {
   _tc = !!on;

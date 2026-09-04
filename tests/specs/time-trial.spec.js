@@ -144,7 +144,7 @@ test.describe("Time Trial — sector splits", () => {
     expect(result.sectors.last[2]).toBeGreaterThan(0);
   });
 
-  test("sector announce fires when crossing S1→S2 boundary", async ({ page }) => {
+  test("sector strip updates when crossing S1→S2 boundary", async ({ page }) => {
     await enterTT(page);
 
     // Start just before this track's curated S1→S2 boundary at low speed so the
@@ -165,11 +165,13 @@ test.describe("Time Trial — sector splits", () => {
       window.__apex.headless(false);
     });
 
-    // Announce textContent is set at sector crossing and persists even after hiding
-    const announced = await page.evaluate(
-      () => (document.getElementById("announce") || {}).textContent || ""
-    );
-    expect(announced).toMatch(/S1/);
+    const split = await page.evaluate(() => {
+      const last = window.__apex.sectorState().last;
+      const flash = document.querySelector("#hud-sectors .sec-flash, #hud-sectors .sec-flash-pb");
+      return { s1: last[0], flashed: !!flash };
+    });
+    expect(split.s1).not.toBeNull();
+    expect(split.s1).toBeGreaterThan(0);
   });
 });
 

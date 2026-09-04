@@ -23,6 +23,23 @@ function knobApplies(d, mode) { return !d.modes || d.modes.indexOf(mode) !== -1;
 function applyLive() {
   if (G.player && G.track) G.snapGameCam();
 }
+const CT_PREVIEWS = {
+  monza: { id: "monza", frac: 0.055, speed: 55 },
+  spa: { id: "spa", frac: 0.34, speed: 62 },
+  monaco: { id: "monaco", frac: 0.78, speed: 42 },
+};
+function previewCorner(key) {
+  const p = CT_PREVIEWS[key];
+  if (!p || !G.player) return;
+  const idx = Tracks.LIST.findIndex((t) => t.id === p.id);
+  if (idx < 0) return;
+  if (G.trackIdx !== idx) G.loadTrack(idx);
+  if (typeof __apex !== "undefined") {
+    __apex.jump(p.frac, p.speed);
+    __apex.snapCam();
+  }
+  applyLive();
+}
 function selectCamMode(index, focus) {
   G.setCamMode(index);
   applyLive();
@@ -124,6 +141,7 @@ function openCamTuner() {
   Log.info("game", "CamTunerPanel.open");
   buildCamTunePanel();
   $("camtune").hidden = false;
+  $("ct-json").hidden = true;
   document.body.classList.add("lt-open");   // hide race HUD + touch controls underneath
   els.pmsettings.hidden = true;             // unobstructed live preview (opened from settings)
   applyLive();
@@ -137,9 +155,54 @@ function closeCamTuner(showPauseMenu) {
 $("pm-camtune").onclick = openCamTuner;
 $("ct-close").onclick = () => closeCamTuner(true);
 $("ct-reset").onclick = () => { CamTune.reset(curMode()); CamTune.persist(); applyLive(); refreshCamTunePanel(); };
-$("ct-reset-all").onclick = () => { CamTune.resetAll(); CamTune.persist(); applyLive(); refreshCamTunePanel(); };
+$("ct-reset-all").onclick = () => { CamTune.resetAll(); CamTune.persist(); applyLive(); refreshCamTunePanel(); $("ct-json").hidden = true; };
 $("ct-help-on").onchange = () => {
   document.getElementById("camtune-inner").classList.toggle("lt-show-help", $("ct-help-on").checked);
+};
+$("ct-prev-monza").onclick = () => previewCorner("monza");
+$("ct-prev-spa").onclick = () => previewCorner("spa");
+$("ct-prev-monaco").onclick = () => previewCorner("monaco");
+$("ct-copy").onclick = () => {
+  const btn = $("ct-copy");
+  const S = CamTune.exportEdits();
+  const keys = Object.keys(S);
+  if (!keys.length) {
+    btn.textContent = "NOTHING TUNED";
+    setTimeout(() => { btn.textContent = "COPY VALUES"; }, 1800);
+    return;
+  }
+  const mode = curMode();
+  const entry = (k) => '  "' + k + '": ' + JSON.stringify(S[k], null, 2).replace(/\n/g, "\n  ");
+  const lines = ["window.CameraEdits = {"];
+  if (keys.includes(mode)) {
+    lines.push("  // THIS MODE — " + curLabel().toUpperCase() +
+      "  (" + Object.keys(S[mode]).length + " tuned)");
+    lines.push(entry(mode) + (keys.length > 1 ? "," : ""));
+  } else {
+    lines.push("  // THIS MODE — nothing tuned here yet");
+  }
+  const rest = keys.filter((k) => k !== mode);
+  if (rest.length) {
+    lines.push("  // EVERY OTHER TUNED MODE — " + rest.length +
+      (rest.length === 1 ? " mode" : " modes"));
+    rest.forEach((k, i) => lines.push(entry(k) + (i < rest.length - 1 ? "," : "")));
+  }
+  lines.push("};");
+  const json = lines.join("\n");
+  const ta = $("ct-json");
+  ta.value = json; ta.hidden = false;
+  ta.focus(); ta.setSelectionRange(0, json.length);
+  let ok = false;
+  try { ok = !!(document.execCommand && document.execCommand("copy")); } catch (_) { /* not available */ }
+  const flash = (good) => {
+    btn.textContent = good ? "COPIED ✓" : "SELECT & COPY ↑";
+    setTimeout(() => { btn.textContent = "COPY VALUES"; }, 1800);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(json).then(() => flash(true), () => flash(ok));
+    return;
+  }
+  flash(ok);
 };
 _refresh = () => { if (isOpen()) refreshCamTunePanel(); };
 return { buildCamTunePanel, refreshCamTunePanel, openCamTuner, closeCamTuner, isOpen };

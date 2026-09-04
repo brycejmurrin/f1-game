@@ -37,8 +37,8 @@ in this section: `docs/notes/TESTING-FIELD-NOTES.md`.
 | docs, tools, tests only | `npm run test:tooling-fast` |
 | one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
-| WGX / `js/render/webgpu/` | `node spike/backends/tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU |
-| TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the same with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest`, read its Verdict step. A software probe is NOT evidence about a player's machine (two shipped defects were invisible to every software test). `ci.yml`'s renderer-macos job is nightly; dispatch it with `renderer_macos: true` when a gfx spec or its launch config changed |
+| WGX / `spike/backends/webgpu/` (SPIKE, not shipped) | `node spike/backends/tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU |
+| TLX / `spike/backends/three/`, WGX / `spike/backends/webgpu/` (SPIKE, not shipped) | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the same with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest`, read its Verdict step. A software probe is NOT evidence about a player's machine (two shipped defects were invisible to every software test). `ci.yml`'s renderer-macos job is nightly; dispatch it with `renderer_macos: true` when a gfx spec or its launch config changed |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, CAPPED at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch | the above + `npm run test:sweeps` |
 | a desktop-viewport browser group this box cannot time | dispatch `ci.yml` with `group: <name>` — read the four Smoke jobs. ONE group per change, the most specific one: a dispatch is four runners plus the macOS minutes. Pushes touching only `docs/**`, `*.md`, `.claude/**`, `.cursor/**` start no CI at all |
@@ -100,6 +100,8 @@ never attach `mcp-probe` for a `version.json` check.
 
 **A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS** — a mock
 device stayed green while four defects made the real backend refuse to boot.
+(The WGX recipe below is for work on the SPIKE. The shipped tree boots GLX, so
+there `canvas.getContext("webgl2")` is non-null — the inverse signal.)
 Boot it live (`npx serve -l 3456 .`, a SECURE CONTEXT, then `node
 tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'`)
 and confirm with one POSITIVE signal: a clean WGX boot writes nothing, so
@@ -119,10 +121,13 @@ Per-directory module tables: `docs/ARCHITECTURE.md`.
 - `js/game.js` is the entry (loop, physics, AI, race flow); it hands the `G`
   façade to the extracted modules — one `Module.create(G)` per file, and a
   module NEVER reaches into game.js. `js/agent/apex.js` is the `__apex` dev API.
-- `js/render/` — `gfx.js` façade → GLX (WebGL2 default) in `glx/` with its
-  passes and GLSL-as-data; `shared/` is what every backend uses. DEFERRED
-  backends, no script tag, injected at boot: `webgpu/` WGX, `three/` TLX
-  (`apex26.gfxBackend`).
+- `js/render/` — `gfx.js` façade → GLX in `glx/` with its passes and
+  GLSL-as-data; `shared/` is the backend-agnostic half. **GLX (WebGL2) is the
+  ONLY SHIPPED RENDERER** — Phase 2b moved WGX and TLX to `spike/backends/`, so
+  `ApexRoster.DEFERRED` is `{}` and the boot injection has nothing to fetch.
+  `apex26.gfxBackend` still persists a pick (a re-attach restores it), and the
+  SETTINGS stops whose files are gone read UNAVAILABLE rather than writing a
+  pref boot ignores.
 - `js/track/` — `core/`, `scenery/`, `tracks.js`. Only GENERIC tables live
   here; the 111-member `scenery(api)` contract is frozen by
   `tests/unit/scenery-api-contract.test.mjs`.
