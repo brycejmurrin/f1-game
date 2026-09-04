@@ -99,12 +99,60 @@ const GameAudio = (function () {
   let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
   let idleGainRamped = false;          // the sample voice's one-time fade-in (see setEngine)
 
-  let engBuf = null, accBuf = null, samplesReady = false;
-  let engSrcIdle = null, engSrcAcc = null, engGainIdle = null, engGainAcc = null;
+  let engBuf = null, samplesReady = false;
+  let lastRate = 0;               // the ratio setEngine last asked for (see rate())
+  // GRANULAR (PSOLA) CORE — js/audio/granular-worklet.js. It replaces the PITCHING
+  // MECHANISM only: the ratio it is handed is the same number playbackRate got,
+  // so the pitch curve, the gear ordering and rate() are untouched. What changes
+  // is that the engine's fixed resonances stop sliding down with the revs.
+  // Measured on f1_engine.mp3 through Chromium's own decoder: across ratio
+  // 1.0 -> 0.25 the spectral centroid goes 1526 -> 798 Hz on playbackRate and
+  // 1522 -> 1525 Hz here. tests/unit/granular-psola.test.mjs holds it.
+  const GRANULAR_WORKLET = "js/audio/granular-worklet.js";
+  let granularReady = false;        // the worklet module has loaded into this ctx
+  let granularNode = null;          // live AudioWorkletNode while the engine runs
+  let granularOn = true;            // player switch — the A/B against the old core
+  let usingGranular = false;        // what this engine actually started on
+  let enginePeriod = 0;          // source period in samples, measured once at decode
+
+  // Dominant period of the loop region, by autocorrelation. Bounded on BOTH
+  // axes so this stays a ~10 ms main-thread cost paid once: an 8192-sample
+  // window (the loop is steady, so more buys nothing) and lags spanning
+  // 50 Hz-800 Hz, which covers any engine recording worth looping.
+  function detectPeriod(buf) {
+    const d = buf.getChannelData(0), sr = buf.sampleRate;
+    const from = Math.floor(d.length * 0.3);
+    const n = Math.min(8192, d.length - from);
+    if (n < 2048) return 0;
+    const x = d.subarray(from, from + n);
+    const loLag = Math.max(2, Math.floor(sr / 800)), hiLag = Math.min(n >> 1, Math.ceil(sr / 50));
+    // NORMALISED, and then the SHORTEST lag that is nearly as good as the best.
+    // Raw autocorrelation octave-errors: a signal periodic at P is also
+    // periodic at 2P and 4P, and the longer lags win on plain sum-of-products.
+    // Measured on f1_engine.mp3 this picked 335 samples where the true period
+    // is ~82 — a 4th subharmonic. PSOLA fed a period 4x too long cuts grains
+    // covering eight real cycles, so each grain carries the RECORDING's pitch
+    // and the output sings at that instead of the rev it was asked for, which
+    // is the exact failure this whole rewrite exists to avoid.
+    const score = new Float32Array(hiLag);
+    let best = 0;
+    for (let lag = loLag; lag < hiLag; lag++) {
+      let acc = 0, e1 = 0, e2 = 0;
+      for (let i = 0; i + lag < n; i++) { const a1 = x[i], b1 = x[i + lag]; acc += a1 * b1; e1 += a1 * a1; e2 += b1 * b1; }
+      const d = Math.sqrt(e1 * e2);
+      const v = d > 0 ? acc / d : 0;
+      score[lag] = v;
+      if (v > best) best = v;
+    }
+    if (!(best > 0)) return 0;
+    const floor = best * 0.9;
+    for (let lag = loLag; lag < hiLag; lag++) if (score[lag] >= floor) return lag;
+    return 0;
+  }
+  let engSrcIdle = null, engGainIdle = null;
   let usingSamples = false;
   let dbgAnalyser = null;          // taps the engine output so tests can measure pitch
   const SFX_ENGINE = "assets/sfx/f1_engine.mp3";   // sustained F1 drone (primary)
-  const SFX_ACCEL = "assets/sfx/f1_rev.mp3";        // high-rev layer
 
   // Music: streamed CC0 tracks (assets/music/), lazy-loaded + cached
   let musicOn = false;
@@ -237,11 +285,35 @@ const GameAudio = (function () {
     const grab = (url) => fetch(url)
       .then((r) => r.arrayBuffer())
       .then((ab) => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)));
-    Promise.all([grab(SFX_ENGINE), grab(SFX_ACCEL)])
-      .then(([e, a]) => { engBuf = e; accBuf = a; samplesReady = true; Log.debug("audio", "engine samples decoded"); })
+    // ONE sample. f1_rev.mp3 used to be fetched, decoded, loop-scanned and given
+    // a running BufferSourceNode beside this one — all behind a gain written to
+    // 0 at creation and never to anything else, ever since the rev-crossfade was
+    // removed for measuring DARKER under load. Dead weight is the small half:
+    // the fetch was inside a Promise.all and `usingSamples` gated on it, so a
+    // 404 or a corrupt byte in the layer nobody could hear dropped every player
+    // to the oscillator fallback while the file the voice actually uses sat
+    // decoded beside it. The asset stays on disk; nothing loads it.
+    grab(SFX_ENGINE)
+      .then((e) => {
+        engBuf = e; samplesReady = true;
+        enginePeriod = detectPeriod(e);
+        Log.debug("audio", "engine sample decoded, period=" + enginePeriod);
+        loadGranularModule();
+      })
       .catch((err) => {
         Log.warn("audio", "engine sample load/decode failed, using synth voice: " + ((err && err.message) || err));
       });
+
+  }
+
+  // Load the PSOLA processor into this context. Failure is not an error worth
+  // shouting about: no audioWorklet (older Safari), a blocked fetch or an
+  // insecure context all just mean the engine keeps the playbackRate core.
+  function loadGranularModule() {
+    if (!ctx || !ctx.audioWorklet || granularReady || !(enginePeriod > 1)) return;
+    ctx.audioWorklet.addModule(GRANULAR_WORKLET)
+      .then(() => { granularReady = true; Log.debug("audio", "granular worklet ready"); })
+      .catch((err) => { Log.debug("audio", "granular worklet unavailable: " + ((err && err.message) || err)); });
   }
 
   function init() {
@@ -319,7 +391,8 @@ const GameAudio = (function () {
     rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
     for (const k in musicBuffers) delete musicBuffers[k];  // buffers are ctx-bound
     _bufKeys.length = 0;
-    engBuf = accBuf = null; samplesReady = false;           // ctx-bound; reload for new ctx
+    engBuf = null; samplesReady = false;                    // ctx-bound; reload for new ctx
+    granularReady = false; granularNode = null; usingGranular = false;   // worklet modules are ctx-bound too
     noisePoolBuf = null;                                    // ctx-bound too — a buffer from the
                                                             // old ctx throws on the new one
     dbgAnalyser = null;    // ctx-bound; stopEngine() nulls it but this path inlines its own
@@ -409,7 +482,7 @@ const GameAudio = (function () {
      (harv, skid, rain) keep their own buffers: those allocate once per start,
      and rain in particular needs a seamless 4 s loop.
 
-     Context-bound like engBuf/accBuf, so rebuildCtx() must clear it. */
+     Context-bound like engBuf, so rebuildCtx() must clear it. */
   const NOISE_POOL_S = 3;
   let noisePoolBuf = null;
   function noisePool() {
@@ -470,27 +543,43 @@ const GameAudio = (function () {
     // a hook whose only caller is a test (audio-smoke's expect.poll absorbs
     // the first-read warm-up).
 
-    usingSamples = !!(samplesReady && engBuf && accBuf);
+    usingSamples = !!(samplesReady && engBuf);
+    usingGranular = !!(usingSamples && granularOn && granularReady && enginePeriod > 1);
     engA = engB = engC = null;
-    engSrcIdle = engSrcAcc = engGainIdle = engGainAcc = null;
+    engSrcIdle = engGainIdle = null;
     idleGainRamped = false;   // new gain node, so the fade-in must happen again
-    if (usingSamples) {
+    if (usingGranular) {
+      // The PSOLA core. One node, one AudioParam; the PCM crosses to the audio
+      // thread once at construction rather than per frame. If construction
+      // throws (a context that reports audioWorklet but refuses the node) fall
+      // straight through to the playbackRate core rather than to silence.
+      try {
+        granularNode = new AudioWorkletNode(ctx, "apex-granular", { numberOfInputs: 0, outputChannelCount: [1] });
+        const loop = findStableLoop(engBuf);
+        const ch = engBuf.getChannelData(0);
+        granularNode.port.postMessage({
+          pcm: ch.slice(), p0: enginePeriod,
+          loopStart: Math.floor(loop.start * engBuf.sampleRate),
+          loopEnd: Math.floor(loop.end * engBuf.sampleRate),
+        });
+        granularNode.connect(engFilter);
+      } catch (err) {
+        Log.warn("audio", "granular node refused, using the sample core: " + ((err && err.message) || err));
+        granularNode = null; usingGranular = false;
+      }
+    }
+    if (usingSamples && !usingGranular) {
       engSrcIdle = ctx.createBufferSource(); engSrcIdle.buffer = engBuf; engSrcIdle.loop = true;
-      engSrcAcc = ctx.createBufferSource(); engSrcAcc.buffer = accBuf; engSrcAcc.loop = true;
       // Voice detune is a base offset in cents; the offroad LFO adds on top.
       // The player's detune trim must be folded in HERE too, not only in
       // applyTuneNodes: game.js calls setVoice() before startEngine(), when
       // these sources do not exist yet, so a start that read voice.detune alone
       // would run on the bare manufacturer value until the next slider move.
       engSrcIdle.detune.value = voice.detune + (tune.detune - 1) * 30;
-      engSrcAcc.detune.value = voice.detune + (tune.detune - 1) * 30;
-      const li = findStableLoop(engBuf), la = findStableLoop(accBuf);
+      const li = findStableLoop(engBuf);
       engSrcIdle.loopStart = li.start; engSrcIdle.loopEnd = li.end;
-      engSrcAcc.loopStart = la.start; engSrcAcc.loopEnd = la.end;
       engGainIdle = ctx.createGain(); engGainIdle.gain.value = 0;
-      engGainAcc = ctx.createGain(); engGainAcc.gain.value = 0;
       engSrcIdle.connect(engGainIdle).connect(engFilter);
-      engSrcAcc.connect(engGainAcc).connect(engFilter);
     } else {
       // synth fallback: two detuned saws + a square
       engA = ctx.createOscillator();
@@ -552,9 +641,14 @@ const GameAudio = (function () {
     lfo.frequency.value = 8;
     lfoG.gain.value = 0;
     lfo.connect(lfoG);
-    if (usingSamples) {
+    if (usingGranular) {
+      // The granular core has no `detune`: its pitch IS the ratio param, and an
+      // AudioParam sums its inputs with the value setEngine schedules, so the
+      // wobble rides on top for free. Units differ though — detune is cents,
+      // ratio is a multiplier — which is why LFO_DEPTH below is per-core.
+      lfoG.connect(granularNode.parameters.get("ratio"));
+    } else if (usingSamples) {
       lfoG.connect(engSrcIdle.detune);
-      lfoG.connect(engSrcAcc.detune);
     } else {
       lfoG.connect(engA.detune);
       lfoG.connect(engB.detune);
@@ -589,7 +683,7 @@ const GameAudio = (function () {
     windGain.gain.value = 0;
     windSrc.connect(windFilter).connect(windGain).connect(sfxBus);
 
-    if (usingSamples) { engSrcIdle.start(0, engSrcIdle.loopStart); engSrcAcc.start(0, engSrcAcc.loopStart); }
+    if (usingSamples && !usingGranular) engSrcIdle.start(0, engSrcIdle.loopStart);
     else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
     harvSrc.start();
@@ -619,13 +713,22 @@ const GameAudio = (function () {
     skidGain.gain.setTargetAtTime(0, t0, 0.04);
     if (usingSamples) {
       if (engGainIdle) engGainIdle.gain.setTargetAtTime(0, t0, 0.06);
-      if (engGainAcc) engGainAcc.gain.setTargetAtTime(0, t0, 0.06);
+
       if (engSrcIdle) engSrcIdle.stop(t0 + 0.35);
-      if (engSrcAcc) engSrcAcc.stop(t0 + 0.35);
+
     } else {
       engA.stop(t0 + 0.35); engB.stop(t0 + 0.35); engC.stop(t0 + 0.35);
     }
-    engSrcIdle = engSrcAcc = engGainIdle = engGainAcc = null;
+    engSrcIdle = engGainIdle = null;
+    if (granularNode) {
+      // disconnect() throws if the node was never connected (the construction
+      // path below can fail after `new` but before connect). Dropping the
+      // reference is the teardown that matters; the graph edge goes with the
+      // context either way.
+      try { granularNode.disconnect(); } catch (e) { /* never connected */ }
+      granularNode = null;
+    }
+    usingGranular = false;
     if (limGain) limGain.gain.setTargetAtTime(0, t0, 0.02);
     if (limOsc) { limOsc.stop(t0 + 0.35); limOsc = null; limGain = null; }
     whineOsc.stop(t0 + 0.35);
@@ -666,7 +769,8 @@ const GameAudio = (function () {
     // voice. Restart once: stopEngine() fades the synth chain out over 0.35 s
     // and startEngine() re-reads samplesReady, so the swap is one crossfade
     // at the moment the samples arrive — never a per-frame flip.
-    if (!usingSamples && samplesReady && engBuf && accBuf) { stopEngine(); startEngine(); }
+    // Upgrade once when the sample (or the worklet behind it) arrives mid-race.
+    if (samplesReady && engBuf && (!usingSamples || (granularOn && granularReady && !usingGranular))) { stopEngine(); startEngine(); }
     const rev = clamp01(rev01 || 0);
     const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));
@@ -702,7 +806,14 @@ const GameAudio = (function () {
       // rateTrim is a CONSTANT per-manufacturer offset: pitch stays monotonic
       // in rev and the gear ordering is unchanged (same trim on both sides).
       const rate = (0.25 + rev * 0.45 * tune.revRange) * (1 + 0.04 * b) * gmul * voice.rateTrim * tune.pitch;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
-      engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
+      lastRate = rate;
+      // ONE number, TWO cores. The granular core is handed exactly the ratio
+      // playbackRate would have received, which is why swapping them cannot
+      // move the pitch curve, the gear ordering, or what rate() reports — the
+      // difference is only whether the engine's fixed resonances travel with
+      // the revs (playbackRate) or stay put (granular).
+      if (usingGranular) granularNode.parameters.get("ratio").setTargetAtTime(rate, t, 0.035);
+      else engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       // NOT a crossfade to the second recording: measured 2026-09-03 with
       // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load read
       // DARKER (centroid 1489 -> 1389 Hz at the same rev), the same defect
@@ -724,7 +835,7 @@ const GameAudio = (function () {
       //                          fading over the 0.05 s tau.
       // Each was a main-thread call plus a cross-thread timeline insertion, 60
       // times a second, for the whole race.
-      if (!idleGainRamped) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
+      if (!idleGainRamped && engGainIdle) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
       const base = (gIdle + rev * gSpan * tune.revRange) * (1 + 0.12 * b) * voice.rateTrim * tune.pitch;
@@ -864,7 +975,11 @@ const GameAudio = (function () {
     // variable would go stale across a restart and silence the wobble. A new
     // node has no _apexLfoTgt, which never equals a number, so the first call
     // after any restart always re-issues — matching the node's own initial 0.
-    const lfoTgt = offroad ? 45 : 0;
+    // 45 cents on a detune param; ~2.6% of the ratio is the same wobble in the
+    // granular core's units (2^(45/1200) - 1), applied additively to a ratio that
+    // spans 0.25-0.70, so it lands between 4% and 10% — close enough for a
+    // "you are off the road" cue, and it cannot drive the ratio negative.
+    const lfoTgt = offroad ? (usingGranular ? 0.015 : 45) : 0;
     if (lfoG._apexLfoTgt !== lfoTgt) {
       lfoG.gain.setTargetAtTime(lfoTgt, t, 0.05);
       lfoG._apexLfoTgt = lfoTgt;
@@ -1037,7 +1152,7 @@ const GameAudio = (function () {
     // slider covers, which is the point — this is chorus/character width, not
     // a second pitch control.
     const cents = voice.detune + (tune.detune - 1) * 30;
-    for (const src of [engSrcIdle, engSrcAcc]) if (src && src.detune) src.detune.setTargetAtTime(cents, t, 0.05);
+    if (engSrcIdle && engSrcIdle.detune) engSrcIdle.detune.setTargetAtTime(cents, t, 0.05);
     const subGain = engC && engC._apexSubGain;
     if (subGain) subGain.gain.setTargetAtTime(voice.subLvl * tune.sub, t, 0.05);
   }
@@ -1086,6 +1201,17 @@ const GameAudio = (function () {
     tune = Object.assign({}, TUNE_DEF, SOUND_PROFILES[key] || {});
     applyTuneNodes();
     return key;
+  }
+
+  // The A/B against the old core. Restarts the engine because which core runs
+  // is decided once, in startEngine — the same reason the sample upgrade
+  // restarts rather than swapping a node under a live voice.
+  function setGranular(on) {
+    const want = !!on;
+    if (want === granularOn) return granularOn;
+    granularOn = want;
+    if (engineOn) { stopEngine(); startEngine(); }
+    return granularOn;
   }
 
   function setLayer(name, on) {
@@ -1478,6 +1604,8 @@ const GameAudio = (function () {
     setTune,
     setProfile,
     setLayer,
+    setGranular,
+    granular() { return { on: granularOn, ready: granularReady, active: usingGranular, period: enginePeriod }; },
     tune() { return Object.assign({}, tune); },
     tuneRange() { return JSON.parse(JSON.stringify(TUNE_RANGE)); },
     tuneDefaults() { return Object.assign({}, TUNE_DEF); },
@@ -1530,7 +1658,14 @@ const GameAudio = (function () {
     // feeds engGain.gain on the audio thread, so nothing downstream of the
     // engine output can observe its depth.
     limiterDepth() { return limGain ? +limGain.gain.value : 0; },
-    rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
+    // Ground-truth pitch multiplier, whichever core is running. The granular node's
+    // AudioParam only converges to the target over its own tau, so the value
+    // this reports is the one setEngine last ASKED for — the same thing
+    // playbackRate.value settled to, and what every pitch test compares.
+    rate() {
+      if (usingGranular) return +lastRate.toFixed(4);
+      return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0;
+    },
     centroidHz() {
       if (!ctx || !engineOn || !engGain) return 0;
       if (!dbgAnalyser) {

@@ -1949,3 +1949,8 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   the first time. They were body classes with no stylesheet behind them, which is
   why the LAYOUT control was reported twice as doing nothing. Paid out of the
   headroom the class ratchet already carried rather than raised.
+- `shellNodes` 1123 -> **1124** (2026-09-04): the GRAIN switch in ENGINE TONE.
+  One button, and the only control on that screen whose correct setting cannot
+  be decided from a measurement — it A/Bs the granular (PSOLA) pitching core
+  against the older playbackRate one, and which sounds right is a question for
+  ears. Shipping the new core with no way back would have been the worse trade.
