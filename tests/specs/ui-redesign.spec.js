@@ -1,7 +1,7 @@
 // @ts-check
 // Focused browser contract for the redesign foundation. One page visits every
 // changed surface so SwiftShader boot cost is paid once rather than per assertion.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 
 test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
 
@@ -414,12 +414,15 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
 
   // Camera picker: the popup exposes a radio-menu contract, wraps keyboard
   // focus, restores focus on Escape, and an input-free pause still closes it.
-  await page.evaluate(async () => {
-    document.getElementById("vs-close").click();
-    await window.__apex.race("monza");
-  });
-  await page.waitForFunction(() => window.__apex.info().track === "monza",
-    null, { polling: 100, timeout: BOOT_MS });
+  // race() is sync and only KICKS startRace (async ensureScenery). A 45 s
+  // info().track poll died on Selected specs after VS FRIEND — startRace was
+  // still building (maps/DebrisWorld in the ring, no `race monza` line yet)
+  // when BOOT_MS expired. Close the lobby first, then wait on build progress.
+  await page.evaluate(() => document.getElementById("vs-close").click());
+  await page.waitForFunction(() => document.getElementById("vsfriend").hidden,
+    null, { polling: 100, timeout: 10_000 });
+  await page.evaluate(() => window.__apex.race("monza"));
+  await awaitTrackBuild(page);
   await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 40); });
   // Lighting tuner is race-only (`pm-lighting` is disabled on the title). Open
   // it from pause → settings → MORE at 200% on the short landscape sheet.
