@@ -1117,3 +1117,71 @@ Three ways out, none taken here because runner spend is the owner's call:
 
 What must NOT happen is leaving it as it is on the assumption that "the gate is
 green". It is green because it declined to look, and it said so in its own log.
+
+## 2026-09-04 — the gate's timeout bounded the MEAN test, not the slowest
+
+The fourth occurrence of the family above, and the one that showed the class is
+wider than "a spec that is silent about its cost". Pages #2019 and #2020 both
+failed `Selected specs` on the same three:
+
+| spec | measured, IDLE box, one worker | gate was |
+|---|---|---|
+| `physics-fixes` › lap distance … through Monaco | **124.2 s** | 120 s |
+| `albert-park-foundation` › fountains and safe water | **110.1 s** | 120 s |
+| `abudhabi-foundation` › contracts hold at night | timed out setting up context | 120 s |
+
+All three PASS locally. Monaco was over the gate outright, so it failed every
+time the selector picked it; Albert Park sat at 92 % of budget, which any runner
+contention closes. Neither declares a budget, so the exclusion guard could not
+see them — and excluding them was not the right answer anyway, since they are
+exactly the specs the gate exists to run.
+
+**Where the 120 came from, and why it was wrong.** `select-budget.mjs` derives
+the gate from a MEASURED 79.7 s/test. That is the right input for *how many
+tests fit* and the wrong one for *the per-test timeout*, which has to clear the
+SLOWEST spec that could be selected, not the average one. The mean was 79.7 s;
+the slowest was 124.2 s. Nothing in the model made that gap visible.
+
+**Two wrong turns worth not repeating.** The first read was "starved runner" —
+the failures are all timeouts, one was `while setting up "context"` (Playwright
+could not create a context, which no game code reaches), and Albert Park's page
+log stops at 6090 ms while the test runs to 194 s. Every one of those points at
+infrastructure, and the 124.2 s local pass on an idle box refutes all of them.
+The second was that the loop was the cost: the Monaco test drives 4500 `step()`
+calls, each also drawing a frame through SwiftShader, so `headless(true)` (which
+short-circuits `render()` and touches no physics) looked like the fix. Measured:
+124.2 → **120.4 s**. Four seconds. The render was never the cost — the sibling
+test in the same file runs 100 steps and still takes 57.3 s, so ~55 s of each is
+Monaco boot + track build, which no test-side change removes.
+
+**The carry-forward cache turns one budget defect into a branch-wide red.**
+`.selected-failed.txt` is keyed by branch and re-runs the last run's failures
+FIRST. With `--max-failures=3`, three over-budget specs are hoisted to the front
+of every subsequent push, fail again, stop the job before anything behind them
+reports, and re-save themselves. #2020's own diff selected only `ui-redesign`;
+the other three came entirely from the cache. A budget defect therefore reads as
+a spreading regression on unrelated commits, which is how it cost three deploys
+before anyone measured a spec.
+
+**Fix: 120 → 180 s, and `timeout-minutes` 26 → 36** (`cap >= tests × timeout +
+setup + margin` = 10 × 180 s + ~4 min). Shrinking the selection instead was
+rejected on the model's own numbers: at 15 min surviving one failure, 180 s/
+retries-0 fits **10 tests — the same 10 as at 120 s**. The selection capacity
+does not move, because a PASSING test never reaches its timeout; only the
+worst-case ceiling does, for a case that essentially never happens. Paying
+coverage on every run to save minutes only the pathological run spends is the
+wrong trade.
+
+`select-specs.test.mjs` now pins the gate against the slowest MEASURED spec with
+25 % margin, and asserts `ci.yml` actually runs the number the selector models —
+only the workflow is the one the runner obeys.
+
+**Raising it found a FIFTH copy of the number.** `ci-coverage.test.mjs` asserted
+`--timeout=120000` as a literal and went red the moment `ci.yml` moved, so the
+guard that exists to catch drift was itself the thing that drifted. It now
+imports `SELECTED_GATE` and derives the value, as `select-specs.test.mjs` does.
+Count the copies before changing a CI constant here: `ci.yml` (the run step and
+the `timeout-minutes` derivation), `select-specs.mjs` (`SELECTED_GATE`, the
+owner), `select-budget.mjs` (the variant table), and two test files. Only the
+first is what the runner obeys; the rest have to be derived from the owner or
+they are four chances to describe a job that does not exist.

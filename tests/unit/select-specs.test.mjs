@@ -14,6 +14,11 @@ import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity } from "../../tools/ci/select-budget.mjs";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const SCRIPTS = {
   "test:one": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js",
@@ -85,7 +90,7 @@ test("a spec that reserves more than the selected-gate timeout is EXCLUDED by na
     "the spec that fits the selected-gate budget must still be selected");
 });
 
-test("fixed blocking specs can never run under the selected gate's 120 s timeout", () => {
+test("fixed blocking specs can never run under the selected gate's timeout", () => {
   assert.ok(FIXED_GATE_SPECS.has("tests/specs/smoke.spec.js"));
   assert.ok(FIXED_GATE_SPECS.has("tests/specs/physics-characterization.spec.js"));
   const r = fit([...FIXED_GATE_SPECS], 60);
@@ -157,11 +162,11 @@ test("FAULTY-CHANGE RECALL: no real regression is dropped in silence", () => {
 });
 
 test("the selected-gate settings match select-budget's recommendation", () => {
-  // retries 0 halves the failure cost; 120 s per-test halves it again. If
-  // either drifts back to smoke's gate settings, the budget maths silently
-  // stops describing the job that runs.
+  // retries 0 halves the failure cost, and a per-test timeout under smoke's
+  // 240 s halves it again. If either drifts back to smoke's gate settings, the
+  // budget maths silently stops describing the job that runs.
   assert.equal(SELECTED_GATE.retries, 0);
-  assert.equal(SELECTED_GATE.perTestTimeoutSec, 120);
+  assert.equal(SELECTED_GATE.perTestTimeoutSec, 180);
   const gate = capacity(15, 1, MEASURED);
   const selected = capacity(15, 1, { ...MEASURED, ...SELECTED_GATE });
   assert.ok(selected.tests > gate.tests,
@@ -231,4 +236,33 @@ test("a spec that cannot pass at the gate's per-test cap declares so, and is exc
   assert.deepEqual(r.selected, [], "the gate must not select it");
   assert.ok(r.overBudgetSpecs.some((s) => s.file === "tests/specs/hud-layout.spec.js"),
     "and must NAME it as over budget — silent truncation reads as covered");
+});
+
+test("the gate's per-test timeout clears the SLOWEST spec, not the average one", () => {
+  // The defect this pins: 120 s bounded the mean test (79.7 s) and not the
+  // slowest, so the gate failed specs that pass. Measured on an idle box,
+  // one worker, 2026-09-04 — raise these only against a fresh measurement.
+  const SLOWEST_MEASURED_SEC = 124.2;   // physics-fixes, Monaco lap continuity
+  assert.ok(SELECTED_GATE.perTestTimeoutSec > SLOWEST_MEASURED_SEC,
+    `gate ${SELECTED_GATE.perTestTimeoutSec}s does not clear the slowest measured ` +
+    `spec (${SLOWEST_MEASURED_SEC}s) — it will fail specs that pass`);
+  // ...with real margin, not by a second: CI runners are shared and slower.
+  assert.ok(SELECTED_GATE.perTestTimeoutSec > SLOWEST_MEASURED_SEC * 1.25,
+    "a timeout that only just clears the slowest spec fails on any contention");
+});
+
+test("ci.yml runs the selected gate with the settings the selector models", () => {
+  // Three files encode this one number (select-specs, select-budget, ci.yml) and
+  // the workflow is the only one the runner actually obeys. When they drifted,
+  // the model described a job that did not exist.
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const ms = SELECTED_GATE.perTestTimeoutSec * 1000;
+  assert.match(yml, new RegExp(`--retries=0 --timeout=${ms} --max-failures=3`),
+    `ci.yml's selected step does not run --timeout=${ms}`);
+  // cap >= (tests x per-test timeout) + setup + margin, per the job's own comment.
+  const cap = Number(/name: Selected specs[\s\S]*?timeout-minutes: (\d+)/.exec(yml)?.[1]);
+  const worstCaseMin = (10 * SELECTED_GATE.perTestTimeoutSec) / 60 + 4;
+  assert.ok(cap >= worstCaseMin,
+    `timeout-minutes ${cap} is under the worst case (${worstCaseMin.toFixed(0)} min): ` +
+    "the job would be CANCELLED, which reads as 0 failures and hides a dead deploy");
 });

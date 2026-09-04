@@ -35,7 +35,26 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
 // The selected gate's settings, per select-budget's table. It has no retry so a
 // failure reports promptly while smoke retains the retry used for deploy safety.
-export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 120 };
+//
+// 180, NOT 120. The budget model reasons about the MEAN test (79.7 s), but a
+// per-test timeout has to clear the SLOWEST one, and it did not. Measured on an
+// idle box, 2026-09-04, one worker, no contention:
+//
+//   physics-fixes    "lap distance ... through Monaco"   124.2 s   (over 120 outright)
+//   albert-park-foundation                               110.1 s   (92% of budget)
+//
+// So Monaco failed EVERY time the selector picked it, on a tree where it passes,
+// and Albert Park failed on any runner contention at all. Worse, the
+// carry-forward cache then re-ran both first on every later push to the branch,
+// which made a budget defect look like a spreading regression and cost three
+// deploys. Neither is slow in the loop — Monaco's sibling test in the same file
+// runs 100 steps and still takes 57 s, so ~55 s of each is Monaco boot + track
+// build, which no test-side change removes. (Skipping the render via
+// headless(true) was tried: 124.2 -> 120.4 s. Not the cost.)
+//
+// 180 clears the slowest measured spec by 44%. Re-derive ci.yml's
+// `timeout-minutes` with it: cap >= (tests x timeout) + setup + margin.
+export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
 
 // These specs already have independent blocking jobs with runner-measured
 // timeout policies. Re-running them in the selected job used its generic 120 s
