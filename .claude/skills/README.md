@@ -53,6 +53,7 @@ stayed separate in the 2026-09-03 pass.
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`; game feel / juice — shake, hit-stop, kerb and collision feedback that must not touch determinism (`references/game-feel.md`). |
 | **ui-menu-a11y** | Menus, dialogs, Escape/back behavior, keyboard navigation, selected-state announcements, scroll affordances, touch layout. |
 | **webgl-debug** | Blank/dark GLX canvas, shadow acne, bloom, HDR, shader/uniform bugs, GLX renderer artifacts. |
+| **webgpu-debug** | WGX black screen, NaN-white road, WGSL compile/validation failures, device lost, silent fallback to WebGL2. |
 
 Cache busting is the deploy's job: the committed shell reads `?v=dev` on
 every tag and `pages.yml` stamps content hashes while staging. Nothing to

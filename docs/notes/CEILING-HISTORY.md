@@ -946,7 +946,7 @@ as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 - backend. An ungated "*|<tod>|<wx>" layer is where these lines come back;
 - until then per-track keys are the only encoding that reaches every player.
 
-## `spike/backends/webgpu/wgx.js` — last ceiling 6037
+## `js/render/webgpu/wgx.js` — last ceiling 6037
 
 - 5821 -> 5905: the WebGPU road markings. The LUT that WGX reconstructs
 - (s, lateral x, half-width) from — because it cannot read the per-vertex trk
@@ -1027,7 +1027,7 @@ as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 - MERGED: both lineages landed; re-measured with this suite's own metric.
 - 5944 -> 6037 (split-newline count) 2026-09-03 audit: hidden device loss keeps the rung; error cap spans 3 frames; per-mesh attr storage buffer dropped once the road LUT exists; createMesh/_makeAttrBG/_capEncode release on failure; gpuReadBuf always unmaps; COPY_SRC only when capture is on; env probe off on LITE; backendState   // MERGED and RE-MEASURED on the union (5943 lines), not added on paper. This branch: +18 litPipelineStats — the hook that EXCLUDED lazy pipeline compilation as the "WebGPU lags at first, then runs fine" cause (8 of 9 variants exist before the first frame, none minted while driving; PERF-FINDINGS.md §2x). Kept so the hypothesis cannot come back without re-running the measurement. Deploy side: +7 (this branch): lampShadowKeep returns, keyed by the caller on the map's CONTENT (lamp world position + a quantised key over the cars in it) rather than on a slot into a per-frame re-sorted array; _shadowRendered stays OUT of envProbeReset (that reset shipped and came back out — loadTrack already nulls the sun snap keys before the call, and the tier-shed caller cannot re-arm the latch it clears)// +15: _shadowRendered joins envProbeReset. It gated the light VP the LIT pass and the god-ray march both sample, and had no reset on track change, tier change, resize or quit — a latch with no invalidation is how the shadow-flag class of bug starts.   // +26: carShadowKeep/lampShadowKeep and the armed flag in the state hooks (the flag the shader reads was unobservable, which is why the strobe was invisible)   // 2026-09-02 R17: COPY_SRC on sceneTex, uniform maxTextureDimension2D clamp, 4-row output probe, freeTexture/freeChunkedMesh teardown (PERF-FINDINGS 2v)   // 2026-09-02 R16: settle window in _cssSize (PERF-FINDINGS 2u); earlier bug hunt: the shadow pass packs into its OWN instance buffer (frame-order bug: the camera cull rewrote instBuf before the deferred shadow submit); earlier: cell-set cull key ported from GLX + DebrisWorld updateInstances (audit round)
 
-## `spike/backends/three/tlx.js` — last ceiling 3132
+## `js/render/three/tlx.js` — last ceiling 3132
 
 - 5821 -> 5835 (deploy branch): _setIB joins _setPipe/_setBG0/_setVB0/_setVB1. setIndexBuffer was the one state call outside the redundancy filter the doctrine comment above those helpers says EVERY state call must route through, and createChunkedMesh gives every chunk of a mesh the same index buffer — so the per-chunk-lamp path and castShadow's chunk loop re-set an identical buffer once per visible chunk. drawDecal's raw call routes through it too, since a bare one beside the cache desyncs it.
 - -7 (this branch): _shadowRendered LEAVES envProbeReset. That reset shipped this morning and came back out — loadTrack already nulls the sun snap keys BEFORE this call, so the track-change motivation was void, while the tier-shed caller clears the latch with no way to re-arm it (sun shadows off until the eye crosses a 20 m cell, indefinitely for a parked car). lampShadowKeep goes with the producer that called it.
@@ -1294,17 +1294,17 @@ as the FLOOR in tools/ci/fixture-consumer-audit.mjs.
 - invisible to every test in the suite.
 - 2156 -> 2259 (split-newline count) 2026-09-03 audit: hidden context loss defers its reload; env-probe FBO completeness check; compare-mode depth dummy on unit 0 when shadows are off; sampler-unit ints and light VPs cached; MAX_FRAGMENT_UNIFORM_VECTORS warning; drain 30; CSS recheck 8   // 2026-09-02 R16: cssSize() distrusts its cache after a viewport change + the canWatchCss fallback (PERF-FINDINGS 2u); earlier bug hunt: drain re-arm on track switch, env-face re-entrancy restore; earlier: gated per-present getError drain (audit round)
 
-## `spike/backends/webgpu/wgsl-chunks.js` — last ceiling 1934
+## `js/render/webgpu/wgsl-chunks.js` — last ceiling 1934
 
 - 1907 -> 1934: trkFromWorld's along-track window. best2 exists only to give
 - best a tangent, so it must be best's neighbour along the LAP — spatial
 - distance cannot tell that apart from a sample on another part of the
 - circuit. Belt-and-braces rather than load-bearing once the bake is fixed
-- (measured: 3 points on baku, NO_SWIN=1 in spike/backends/tools/road-lut-census.mjs A/Bs
+- (measured: 3 points on baku, NO_SWIN=1 in tools/gfx/road-lut-census.mjs A/Bs
 - it), which is exactly why the number is written down instead of assumed.
 - 2026-09-01: trkFromWorldIf uniform gate (largest WGX-only fragment cost)
 
-## `spike/backends/three/tsl-lit.js` — last ceiling 1777
+## `js/render/three/tsl-lit.js` — last ceiling 1777
 
 - three.js TSL lit-material port; tracks lit.js feature-for-feature.
 - 1725 -> 1768: the same four finishes, the pearlescent term and the carbon
@@ -1338,7 +1338,7 @@ Recorded here because these four moved on `claude/rendering-bugs-optimizations-3
 while this file was being created on the deploy branch; the numbers themselves
 live in `ratchets.json`.
 
-- `spike/backends/three/tlx.js` 3144 -> **3138** (LOWER): the reverted
+- `js/render/three/tlx.js` 3144 -> **3138** (LOWER): the reverted
   `_envNeverComing()` term's dead body and its two write-only latches removed
   (added and reverted 2026-09-02; zero callers). The reverted design is
   preserved in `gfx-backend-canary.test.mjs`.
@@ -1348,22 +1348,22 @@ live in `ratchets.json`.
   incomplete left `_envActive` armed against a null framebuffer and the
   player got a permanently black canvas with a 64-pixel corner. Bug-fixing
   growth, pinned in the canary.
-- `spike/backends/three/tsl-lit.js` 1777 -> **1794**: `apexMatBumpHeight`
+- `js/render/three/tsl-lit.js` 1777 -> **1794**: `apexMatBumpHeight`
   `setLayout` (three inlined the 15-branch chain at all six call sites — 31 KB
   of the 99 KB lit fragment) plus the `carbonFinish` metalness parity fix.
-- `spike/backends/webgpu/wgx.js` 6060 -> **6068**: `device.lost` disarms
+- `js/render/webgpu/wgx.js` 6060 -> **6068**: `device.lost` disarms
   `envProbeOff` as well as `perChunkOff`, matching GLX and TLX — both are
   shared cross-backend keys and WGX wrote only one.
-- `spike/backends/webgpu/wgx.js` 6068 -> **6086** (2026-09-03): the SAVE SCREENSHOT
+- `js/render/webgpu/wgx.js` 6068 -> **6086** (2026-09-03): the SAVE SCREENSHOT
   reconfigure moves out of `_capEncode` (which runs after the frame is encoded
   and one statement before submit, so `ctx.configure()` expired a texture the
   submit still referenced) into the top of `begin()`. Bug-fixing growth; the
   comment is the reason.
-- `spike/backends/three/tlx.js` 3138 -> **3152** (2026-09-03): the AUTO self-heal
+- `js/render/three/tlx.js` 3138 -> **3152** (2026-09-03): the AUTO self-heal
   counts DISTINCT PRESENTS carrying an error, not raw errors — one rejected
   pipeline is dozens of errors in one frame, one transient is one error, and
   `> 0` reloaded the healthy tab. Mirrors WGX's `GPU_ERR_ESCALATE_FRAMES`.
-- `spike/backends/webgpu/wgx.js` 6086 -> **6093** (2026-09-03): the desktop MSAA cap
+- `js/render/webgpu/wgx.js` 6086 -> **6093** (2026-09-03): the desktop MSAA cap
   read `apex26.gfxHigh`, which `GfxQuality.syncBootTier()` only ever writes on a
   PHONE — so on desktop the read never saw "0" and every preset shipped 4x,
   the opposite of the block's purpose. Now reads `apex26.gfxPreset`. Same
@@ -1374,7 +1374,7 @@ live in `ratchets.json`.
   also discards the renderer pick; and the visibilitychange handler re-arms the
   crash sentinel with `sentinelResume()` instead of `sentinelArm(true)`, which
   was resetting the derived frame budget on every tab return.
-- `spike/backends/webgpu/wgx.js` 6093 -> **6110** (2026-09-03): `envInit()` releases
+- `js/render/webgpu/wgx.js` 6093 -> **6110** (2026-09-03): `envInit()` releases
   what it made on a partial failure and latches `_envInitFailed`; before, a
   throw after `envCubeTex` was assigned satisfied the re-entry guard with an
   empty `envFaceViews` and every probe cycle passed an undefined view to
@@ -1385,7 +1385,7 @@ live in `ratchets.json`.
   of one scene, and cloud drift between them was the Metal-CI flake; a clock
   that can only be SET, not held, could not pin it (a software runner renders
   <1 FPS, so one frame is a second of drift).
-- `spike/backends/webgpu/wgsl-chunks.js` 1934 -> **1951** (2026-09-03): the sky's
+- `js/render/webgpu/wgsl-chunks.js` 1934 -> **1951** (2026-09-03): the sky's
   cloud-deck shading ported term for term from GLX SKY_FS — overcast clamp and
   grey mixes, golden-hour tops and pink undersides, the daytime cap/base
   contrast, twilight wash, moon silver. The largest remaining WGX visual gap

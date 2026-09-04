@@ -154,7 +154,7 @@ implementations or it is a divergence. WGX now publishes the GLX draw-API
 surface (gpuTimer, texture arrays, lamp shadows, instancing, particles,
 MSAA 2×) and stays opt-in; GLX remains the default. The tax is keeping the
 two shader trees in sync, not an API wall. See
-[../../spike/backends/docs/WEBGPU-PARITY.md](../../spike/backends/docs/WEBGPU-PARITY.md).
+[../../docs/research/WEBGPU-PARITY.md](../../docs/research/WEBGPU-PARITY.md).
 
 ---
 

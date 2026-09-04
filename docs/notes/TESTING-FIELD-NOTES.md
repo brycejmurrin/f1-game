@@ -178,19 +178,19 @@ grass, walls and cars looked fine. Two more spec violations sat alongside it:
 MSAA count 2 (WebGPU permits only 1 and 4 — invalid on EVERY device) and
 rg11b10ufloat render targets without the `rg11b10ufloat-renderable` feature.
 All three were one-line Dawn errors the moment the code ran on a real device.
-`node spike/backends/tools/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
+`node tools/gfx/wgx-validate.mjs` (~5 s) is that device: the FULL Playwright
 Chromium (the headless shell has no `navigator.gpu`) with `--headless=new
 --enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=swiftshader
 --use-webgpu-adapter=swiftshader` exposes a real Dawn adapter that parses
 every WGSL module and validates every pipeline. The ceiling, corrected
-2026-08-17: Dawn here EXECUTES shader work — `node spike/backends/tools/wgx-capture.mjs`
+2026-08-17: Dawn here EXECUTES shader work — `node tools/gfx/wgx-capture.mjs`
 returns real rendered pixels (offscreen mode; see
-`spike/backends/docs/WEBGPU-PARITY.md` §1a for the four bugs the first capture
+`docs/research/WEBGPU-PARITY.md` §1a for the four bugs the first capture
 found). **Software compositor (2026-08-17, cache 1342+):** WGX soft-presents
 the final pass into a `COPY_SRC` texture and 2D-blits onto visible `#game` —
 play with this in SETTINGS ▸ SCREENSHOTS (AUTO / 2D BLIT / NATIVE) and the
 three.js counterpart SETTINGS ▸ THREE PATH (AUTO / WEBGL2 / WEBGPU).
-`node spike/backends/tools/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
+`node tools/gfx/gfx-probe.mjs --backend webgpu` is the primary visible-canvas
 gate; native swapchain screenshots stay black. `GLX.capturePixels()` readback
 (`wgx-capture.mjs` → `frame.png`) is a secondary oracle and can still flake on
 SwiftShader when concurrent with display readback. Still environmental: the
@@ -220,8 +220,8 @@ SwiftShader even with a quiet GPU; do not widen assertion tolerances.
 swapchain present stays black on SwiftShader/Lavapipe; WGX soft-presents to
 visible `#game` via a 2D blit (auto on software adapters +
 `sessionStorage apex26.wgxCapture=1`). Primary probe:
-`node spike/backends/tools/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
-`awaitSoftPresent`). Readback oracle: `node spike/backends/tools/wgx-capture.mjs`. Lavapipe
+`node tools/gfx/gfx-probe.mjs --backend webgpu|three` (checks `#game` after
+`awaitSoftPresent`). Readback oracle: `node tools/gfx/wgx-capture.mjs`. Lavapipe
 needs `mesa-vulkan-drivers` (`lvp_icd.json`); stock Cloud images lacked
 `/usr/share/vulkan/icd.d/` until that package was installed and the env
 snapshot Saved. TLX CI stays on WebGL2 (`--backend three` / `tlxForceGL`);
@@ -604,7 +604,7 @@ the outer backstop; a scratch script has none. Measure liveness with a counter
 read across two ordinary `waitForTimeout`s instead.
 
 **A screenshot of the WebGPU canvas needs `GLX.awaitSoftPresent()` first**
-(`spike/backends/tools/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
+(`tools/gfx/gfx-probe.mjs:301`). A raw CDP `Page.captureScreenshot` reads the
 un-blitted canvas and produces a confident, wrong answer — it cost one fully
 written-up "WGX mis-frames the garage" reproduction that had to be retracted
 (PERF-FINDINGS.md §2t).
@@ -655,7 +655,7 @@ tier 2, and the software probe reports a confident 4.8 % road coverage with
 zero GPU errors in every arm. Set BOTH:
 
 ```sh
-node spike/backends/tools/gfx-probe.mjs --backend three --lite \
+node tools/gfx/gfx-probe.mjs --backend three --lite \
   --ls apex26.forceMobileTier=1 --ls 'apex26.gfxPreset="low"' montreal
 ```
 
@@ -719,7 +719,7 @@ to carry: three-WebGL2 on ANGLE-Metal spent **16.2 s in a single first frame**
 themselves are on Azure blob storage the container proxy denies — read them in
 the Actions UI.
 
-`spike/backends/tools/wgx-validate.mjs` (live run) now prepends
+`tools/gfx/wgx-validate.mjs` (live run) now prepends
 `diagnostic(error, derivative_uniformity);` to every module it compiles,
 because that is WebKit's default severity and Dawn's is a console warning:
 a WGSL module that only warns here refuses to build on an iPhone and WGX falls

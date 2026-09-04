@@ -65,7 +65,7 @@ export const RUNTIME_IDS = {
   // null-guarded and its else branch ("say so plainly when there is not") is
   // the documented answer, so this is correct-but-dead rather than a defect.
   // It comes back with the backend; delete both together if it does not.
-  "game-soft":         "spike/backends/three/tlx.js only — null-guarded, else-branch is the documented answer",
+  "game-soft":         "js/render/three/tlx.js only — null-guarded, else-branch is the documented answer",
 };
 
 const jsFiles = (dir, out = []) => {

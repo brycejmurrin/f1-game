@@ -479,7 +479,7 @@ test("capture/shot.mjs clips the canvas instead of locator.screenshot", () => {
 });
 
 // The wgx-shot gallery test that stood here (and the wgx-validate --static
-// smoke case above) covered tools that left for spike/backends/tools/ in the
+// smoke case above) covered tools that left for tools/gfx/ in the
 // 2026-09-03 spike-out. They are not shipped tools any more, so this shipped
 // guard has nothing to say about them; they travel with the backend.
 

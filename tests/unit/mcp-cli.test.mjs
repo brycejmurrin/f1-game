@@ -83,7 +83,7 @@ test("probe --backend sets the pick BEFORE reloading (order is the whole point)"
 });
 
 test("gfx-probe --tlx-webgpu unpins TLX ForceGL and --lavapipe uses the Lavapipe ICD", () => {
-  const src = fs.readFileSync(path.join(ROOT, "spike/backends/tools/gfx-probe.mjs"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "tools/gfx/gfx-probe.mjs"), "utf8");
   assert.match(src, /--tlx-webgpu/);
   assert.match(src, /--lavapipe/);
   assert.match(src, /tlxForceGL", wantTlxGpu \? "0" : "1"/);
@@ -133,7 +133,7 @@ process.stdin.on("data", chunk => {
 });
 
 test("probe --backend three pins three to WebGL2 unless --tlx-webgpu / --tlx-auto", () => {
-  // Default pin matches spike/backends/tests/specs/tlx-probes.spec.js (CI WebGL2).
+  // Default pin matches tests/specs/tlx-probes.spec.js (CI WebGL2).
   // --tlx-webgpu forces three's WebGPU path; --tlx-auto leaves the pin unset.
   // --tlx-auto-gl is AUTO after the stay-GL latch (three WebGL2, still TLX).
   assert.match(dryRun("--backend", "three")[1].arguments.function,

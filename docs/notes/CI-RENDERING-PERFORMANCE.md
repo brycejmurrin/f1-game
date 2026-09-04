@@ -62,9 +62,9 @@ Three software paths matter for Apex probing; they are **not interchangeable**:
 Commands that produced the table:
 
 ```sh
-node spike/backends/tools/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
-node spike/backends/tools/gfx-probe.mjs --backend webgpu --lite montreal
-node spike/backends/tools/wgx-lavapipe-probe.mjs montreal --lite
+node tools/gfx/wgpu-flag-test.mjs                    # swiftshader / lavapipe / lavapipe_xvfb
+node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal
+node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite
 APEX_CHROME_ARGS="…lavapipe flags…" VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
   node tools/mcp/mcp-cli.mjs probe --backend webgpu --lite --wait 12000 --eval '…'
 ```
@@ -126,7 +126,7 @@ soft, which is the only part software genuinely cannot do. Force them
 individually — forcing all of them at once costs more llvmpipe seconds than the
 `awaitSoftPresent` budget has, and the timeout does not say which path did it
 (measured: `tlxForceHw=1` timed out at 60 s twice; each single gate presents in
-10–25 s). `spike/backends/tools/gfx-probe.mjs --ls key=value` sets any `apex26.*` knob before
+10–25 s). `tools/gfx/gfx-probe.mjs --ls key=value` sets any `apex26.*` knob before
 boot.
 
 Bisect on montreal, TLX + Dawn + Lavapipe, `GLX.gpuErrors()` after `park()`:
@@ -266,11 +266,11 @@ agent loses Lavapipe again.
 
 | Want | Do this |
 |------|---------|
-| WGX visible `#game` | `node spike/backends/tools/gfx-probe.mjs --backend webgpu --lite montreal` |
-| WGX readback oracle | `node spike/backends/tools/wgx-capture.mjs montreal --lite` → `frame.png` (optional; can flake on SwiftShader) |
-| WGX on Lavapipe | `node spike/backends/tools/wgx-lavapipe-probe.mjs montreal --lite` |
-| TLX pixels (ForceGL / SwiftShader WebGL2) | `node spike/backends/tools/gfx-probe.mjs --backend three --lite montreal` |
-| TLX WebGPU pixels (Lavapipe soft-present) | `node spike/backends/tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal` |
+| WGX visible `#game` | `node tools/gfx/gfx-probe.mjs --backend webgpu --lite montreal` |
+| WGX readback oracle | `node tools/gfx/wgx-capture.mjs montreal --lite` → `frame.png` (optional; can flake on SwiftShader) |
+| WGX on Lavapipe | `node tools/gfx/wgx-lavapipe-probe.mjs montreal --lite` |
+| TLX pixels (ForceGL / SwiftShader WebGL2) | `node tools/gfx/gfx-probe.mjs --backend three --lite montreal` |
+| TLX WebGPU pixels (Lavapipe soft-present) | `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe --lite montreal` |
 | Prove ICD | `test -f /usr/share/vulkan/icd.d/lvp_icd.json && vulkaninfo --summary \| head` |
 
 Agent index: `AGENTS.md` §Seeing the game / §Cursor Cloud. Tool rows:
@@ -344,13 +344,13 @@ commentary about it is stale.
 **What this does NOT imply.** It is not an argument to flip the default
 renderer. §6 of `ARCHITECTURE-REVIEW.md` makes the real point: the cost
 is *one look in three shading languages*. The 2026-08 WGX parity pass closed
-the documented API/shader gaps (see [WEBGPU-PARITY.md](../../spike/backends/docs/WEBGPU-PARITY.md));
+the documented API/shader gaps (see [WEBGPU-PARITY.md](../../docs/research/WEBGPU-PARITY.md));
 keeping two shader trees in sync is still the tax. Broader platform support
 does not reduce that cost. The honest options are still "invest in one of
 TLX/WGX" or "keep GLX and let the seam be insurance", and this finding only
 changes the input to that decision, not the answer. The API recipes and
 slice order live in
-[WEBGPU-PARITY.md](../../spike/backends/docs/WEBGPU-PARITY.md) — every listed gap is implementable in
+[WEBGPU-PARITY.md](../../docs/research/WEBGPU-PARITY.md) — every listed gap is implementable in
 core WebGPU; the freeze was a cost call, not an API wall.
 
 ---
@@ -555,11 +555,11 @@ non-blank visible blit.
 
 | Backend | Command / path | Checks |
 |---------|----------------|--------|
-| **WGX visible canvas** | `node spike/backends/tools/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
-| **WGX readback** | `node spike/backends/tools/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
-| **WGX A/B** | `node spike/backends/tools/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
-| **TLX / three** | `node spike/backends/tools/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
-| **TLX WebGPU** | `node spike/backends/tools/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
+| **WGX visible canvas** | `node tools/gfx/gfx-probe.mjs --backend webgpu [--lite] <track>` | `#game` screenshot + `getImageData` (primary gate) |
+| **WGX readback** | `node tools/gfx/wgx-capture.mjs <track>` → `frame.png` | `GLX.capturePixels()` — optional; can flake after soft-present on SwiftShader |
+| **WGX A/B** | `node tools/gfx/wgx-lavapipe-probe.mjs <track> [--lite]` | `mesa-vulkan-drivers` + `VK_ICD_FILENAMES=…/lvp_icd.json` |
+| **TLX / three** | `node tools/gfx/gfx-probe.mjs --backend three [--lite] <track>` | CI pin WebGL2 (`tlxForceGL=1`). AUTO is WebGPU (lite stack). `mappedAtCreation` → `queue.writeBuffer`. |
+| **TLX WebGPU** | `node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe [--lite] <track>` | Soft-present 2D blit (Lavapipe). Never `getCurrentTexture()` on software. |
 
 ### The real GPU, in one paragraph
 

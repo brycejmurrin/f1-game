@@ -94,7 +94,7 @@ test("wrap map is exactly the ten kept wraps", () => {
   assert.equal(catalog.tools.length, 10,
     "30 → 12 on 2026-09, then 12 → 10 on 2026-09-03 when apex_gfx_probe and " +
     "apex_wgx_validate_static left with the WGX/TLX spike-out (their CLIs are in " +
-    "spike/backends/tools/ now); grow it on purpose, in the doc too");
+    "tools/gfx/ now); grow it on purpose, in the doc too");
 });
 
 test("never-wrap table names the load-bearing refuses", () => {

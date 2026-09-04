@@ -37,8 +37,8 @@ in this section: `docs/notes/TESTING-FIELD-NOTES.md`.
 | docs, tools, tests only | `npm run test:tooling-fast` |
 | one circuit (`js/circuits/<id>.js`) | `node tools/track/verify-track.cjs <id>`, then that circuit's foundation spec ALONE |
 | one subsystem with its own spec | that spec — `npm test -- tests/specs/<file>.spec.js`; prefer single specs over their whole group |
-| WGX / `spike/backends/webgpu/` (SPIKE, not shipped) | `node spike/backends/tools/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU |
-| TLX / `spike/backends/three/`, WGX / `spike/backends/webgpu/` (SPIKE, not shipped) | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the same with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest`, read its Verdict step. A software probe is NOT evidence about a player's machine (two shipped defects were invisible to every software test). `ci.yml`'s renderer-macos job is nightly; dispatch it with `renderer_macos: true` when a gfx spec or its launch config changed |
+| WGX / `js/render/webgpu/` | `node tools/gfx/wgx-validate.mjs` (~5 s, REAL Dawn WGSL+pipeline validation in-container — never ship "read-verified" WGSL) + the `webgpu-lifecycle` unit suite; pixel truth needs a real GPU |
+| TLX / `js/render/three/`, WGX / `js/render/webgpu/` | `gfx-probe --backend three --tlx-webgpu --lavapipe montreal`, then the same with `--ls apex26.tlxForceHw=env` (and `sky`/`batches`/`chunked`/`shadow` when touched) — `gpuErrors` 0 in every run. **THEN DISPATCH THE REAL GPU**: `gpu-census.yml` on `macos-latest`, read its Verdict step. A software probe is NOT evidence about a player's machine (two shipped defects were invisible to every software test). `ci.yml`'s renderer-macos job is nightly; dispatch it with `renderer_macos: true` when a gfx spec or its launch config changed |
 | engine / physics / `js/game.js` | the groups `pick-tests` names, CAPPED at two browser groups: run the two most specific, name the rest as not-run in the PR |
 | geometry pushed to the deploy branch | the above + `npm run test:sweeps` |
 | a desktop-viewport browser group this box cannot time | dispatch `ci.yml` with `group: <name>` — read the four Smoke jobs. ONE group per change, the most specific one: a dispatch is four runners plus the macOS minutes. Pushes touching only `docs/**`, `*.md`, `.claude/**`, `.cursor/**` start no CI at all |
@@ -123,11 +123,12 @@ Per-directory module tables: `docs/ARCHITECTURE.md`.
   module NEVER reaches into game.js. `js/agent/apex.js` is the `__apex` dev API.
 - `js/render/` — `gfx.js` façade → GLX in `glx/` with its passes and
   GLSL-as-data; `shared/` is the backend-agnostic half. **GLX (WebGL2) is the
-  ONLY SHIPPED RENDERER** — Phase 2b moved WGX and TLX to `spike/backends/`, so
-  `ApexRoster.DEFERRED` is `{}` and the boot injection has nothing to fetch.
-  `apex26.gfxBackend` still persists a pick (a re-attach restores it), and the
-  SETTINGS stops whose files are gone read UNAVAILABLE rather than writing a
-  pref boot ignores.
+  DEFAULT RENDERER**, with WGX (WebGPU) and TLX (three.js/TSL) as opt-in
+  alternates in `webgpu/` and `three/`. They are DEFERRED — no `<script>` tag;
+  `js/game.js` injects the group `apex26.gfxBackend` names. Phase 2b spiked both
+  out on 2026-09-03 and they were re-attached on 2026-09-04; the SETTINGS stops
+  derive from `ApexRoster.DEFERRED`, so a stop whose files are absent reads
+  UNAVAILABLE rather than writing a pref boot ignores.
 - `js/track/` — `core/`, `scenery/`, `tracks.js`. Only GENERIC tables live
   here; the 111-member `scenery(api)` contract is frozen by
   `tests/unit/scenery-api-contract.test.mjs`.
@@ -236,7 +237,7 @@ iOS/Safari 26.0–26.5 (register `addEventListener("uncapturederror")` first);
 and WebKit caps module-scope `var<private>` at 8,192 bytes per module (three
 r185 declares every node variable that way — see the vendor patch). Breaking
 any of them makes the backend refuse SILENTLY and fall back:
-`spike/backends/docs/WEBGPU-PARITY.md` §5a.
+`docs/research/WEBGPU-PARITY.md` §5a.
 
 ## Git branch & deploy
 

@@ -16,9 +16,9 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SOURCES = [
-  ["spike/backends/webgpu/wgx.js", "wgx"],
+  ["js/render/webgpu/wgx.js", "wgx"],
   ["js/render/glx/post.js", "glx"],
-  ["spike/backends/three/tlx-post.js", "tlx"],
+  ["js/render/three/tlx-post.js", "tlx"],
 ];
 
 function extract(path) {

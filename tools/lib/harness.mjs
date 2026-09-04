@@ -29,7 +29,7 @@
 //
 // WGX needs the FULL Chromium binary (not the headless shell — no navigator.gpu)
 // plus Vulkan/SwiftShader pins. The old `--use-angle=swiftshader
-// --enable-unsafe-webgpu` pair alone refuses MSAA>1; see spike/backends/tools/wgx-validate.mjs.
+// --enable-unsafe-webgpu` pair alone refuses MSAA>1; see tools/gfx/wgx-validate.mjs.
 //
 // SwiftShader: Dawn validation oracle — native swapchain compositor blank; WGX
 // soft-presents to visible #game via 2D blit. Lavapipe (+ xvfb-run for headed):
