@@ -894,8 +894,15 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     /"hudopts hudopts"/,
     "an open HUD submenu spans the row so its tap rows stay full width");
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
-    /HUD SIZE PREVIEW/,
+    /SIZE PREVIEW/,
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
+  // The sample carries BOTH sliders now: a readout box for HUD SIZE and a pad
+  // for BUTTON SIZE, which has exactly the same no-feedback problem (every real
+  // cluster is hidden behind the .dim sheet). The pad divides the block's own
+  // --hud-scale zoom back out, so what the drag shows is the RATIO of the two.
+  assert.match(decl(css("css/components.css"), "#pm-hud-sample::after", "--pad") || "",
+    /var\(--hud-btn-scale\) \/ var\(--hud-scale\)/,
+    "the button pad previews BUTTON SIZE relative to HUD SIZE");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "align-self"), "start",
     "HUD sample grows down its cell instead of centering over HUD: STANDARD");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--tap)",

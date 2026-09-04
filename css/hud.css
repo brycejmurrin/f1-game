@@ -173,9 +173,18 @@
    smaller than any spelling of the readout — see the threshold table there. The
    widget keeps its column (still beside the minimap, still top-left) and moves
    below `.hud-top`'s bottom edge, where the strip is empty to the far side of
-   the screen. 62px is that edge — a constant 58 in this element's own zoomed
-   units, because `.hud-top` rides the same `zoom` group — plus 4px of air. */
-:root[data-gap-drop] .hud-gaps { top: calc(62px + var(--sat) / var(--hud-z)); }
+   the screen.
+   THAT EDGE IS MEASURED, NOT ASSUMED. It was a literal 62px — the band's height
+   at the default density and profile — so on every layout where the band is
+   SHORTER than that (compact density, BROADCAST's fused tower, a HUD SIZE that
+   caps the top band below the bottom one) the strip parked in dead space below
+   it and read as "the gap doesn't slide all the way up". --hud-top-h is the
+   band's own rendered height, published by fitHud in this element's zoom units
+   (both ride --hud-z-top), so the strip now sits 4px under wherever the band
+   actually ends. The 54px fallback is the old 62 less the shared 8px top. */
+:root[data-gap-drop] .hud-gaps {
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px);
+}
 .hud-bottom {
   position: absolute;
   bottom: calc(12px + var(--sab) / var(--hud-z));
@@ -223,7 +232,19 @@
 #hud-tach.redline #hud-rpm-fill { background: var(--red); animation: pulse 0.4s infinite; }
 
 /* Camera + HUD profile integration (js/ui/hud.js syncHudCamClasses). */
-body.hud-prof-minimal #hud-sectors { display: none !important; }
+/* MINIMAL MEANS FEWER THINGS, NOT SMALLER ONES. It used to hide the sector box
+   and stop — so "simple" left every remaining cluster at the same size and the
+   profile read as a no-op, while a fit-maths defect (js/ui/hud.js: a hidden
+   #hud-sectors made the right inset the whole viewport) floored the HUD to 40 %
+   zoom and made it read as "simple just makes everything tiny". With that fixed
+   the profile has to earn its name: keep what you drive by — position, lap,
+   clock, speed, gear, revs, and any penalty warning — and drop the analysis.
+   BEST is the fourth .hud-box, the same one BROADCAST folds into its tower. */
+body.hud-prof-minimal #hud-sectors,
+body.hud-prof-minimal .hud-box:nth-child(4),
+body.hud-prof-minimal #hud-energy,
+body.hud-prof-minimal #hud-ot,
+body.hud-prof-minimal #hud-aero { display: none !important; }
 body.hud-hide-map #minimap { display: none !important; }
 body.hud-hide-gaps .hud-gaps { display: none !important; }
 /* Broadcast tower takes the top-left — park map + gaps under it.
@@ -289,10 +310,49 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
   top: calc(14svh / var(--hud-z));
 }
 
-/* LAYOUT modes used to hide a cluster (timing/driver/compact). AUTO now
-   keeps every widget painted and fitHud adapts; the hud-met-* body classes
-   remain as labels only. MAP/GAPS still hide via hud-hide-map / hud-hide-gaps.
+/* THE CHIP CROSSES TO THE LEFT COLUMN when the right one has no room below the
+   sector box — see js/ui/hud.js. --hud-left-h is that column's measured
+   occupied bottom (map / gap strip / broadcast tower, whichever are there), in
+   this element's own zoom space and already carrying --sat, so the only thing
+   left to add is the 8px of air every cluster on this screen uses. The
+   horizontal stand-off is not applied in this mode: it exists to clear the
+   right dock, and the chip is no longer over it. */
+:root[data-limits-left] #hud-limits {
+  right: auto;
+  left: calc(10px + var(--sal) / var(--hud-z));
+  top: calc(var(--hud-left-h, 112px) + 8px);
+}
+
+/* ---------- LAYOUT (metrics) ----------
+   AUTO keeps every widget painted and lets fitHud scale / stack / drop the gap
+   strip — that is what the auto resolver is for, and it is why the hide rules
+   were pulled out of here once: driving them from AUTO made MAP, GAPS, timing
+   and driver mutually exclusive, and a player who had turned the map ON watched
+   the layout turn it off again.
+   A FORCED NAME IS A DIFFERENT ANIMAL. resolveMetricsLayout() only ever emits
+   hud-met-timing / -driver / -compact when the player picked that name off the
+   LAYOUT control, so a rule keyed on one of them cannot fire from AUTO. Without
+   these the control was inert — three names that changed a body class and
+   nothing else, which is exactly how it was reported ("I'm still not sure
+   layout changes anything"). Each name drops the half of the metrics the other
+   half is named for:
+     TIMING  the clock and the field — sectors and gaps stay, the car-state
+             chips (energy, overtake, active aero) go.
+     DRIVER  the car — the chips stay, the sector box and BEST go.
+     COMPACT both, i.e. position / lap / time plus the gearbox column.
+   MAP and GAPS are NOT touched here: they have their own controls, and a layout
+   silently overruling an explicit toggle is the defect this block used to be.
    Broadcast parks map+gaps under the tower via hud-map-low / hud-gaps-low. */
+body.hud-met-timing #hud-energy,
+body.hud-met-timing #hud-ot,
+body.hud-met-timing #hud-aero,
+body.hud-met-compact #hud-energy,
+body.hud-met-compact #hud-ot,
+body.hud-met-compact #hud-aero { display: none !important; }
+body.hud-met-driver #hud-sectors,
+body.hud-met-driver .hud-box:nth-child(4),
+body.hud-met-compact #hud-sectors,
+body.hud-met-compact .hud-box:nth-child(4) { display: none !important; }
 
 #hud-energy {
   width: 130px; height: 14px;
@@ -366,7 +426,11 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
   #hud-ot.ot-armed { animation: none; }
   .sec-row.sec-flash { animation: none; }
 }
-:root[data-gap-drop] #hud-flag { top: calc(132px + var(--sat) / var(--hud-z)); }
+/* The flag clears the DROPPED strip, so it tracks the same measured edge: 70px
+   below it is the clearance the old pair of literals (62 / 132) encoded. */
+:root[data-gap-drop] #hud-flag {
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 74px);
+}
 #hud-sectors {
   position: fixed;
   /* DERIVED FROM --tap, not the old hard-coded 56 — the same fix, on the other
@@ -411,7 +475,12 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
      shipped with is 68.6px, so the chip painted over the S3 row every time a
      track-limits warning showed. Same lesson as #hud-sectors' own top above:
      never pin HUD chrome to a constant a sibling's rendered height decides. */
-  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z) + 4.8em + 15px);
+  /* --hud-sec-h is that box MEASURED (js/ui/hud.js), which the 4.8em could not
+     be: every profile that hides #hud-sectors — MINIMAL, and a broadcast camera
+     outside the broadcast profile — left this chip hanging 77px below an empty
+     corner. The var is 0 exactly when the box is gone, so the chip rides up
+     into the slot the sectors vacated. The em keeps the pre-fit paint honest. */
+  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z) + var(--hud-sec-h, 4.8em) + 15px);
   /* STAND OFF THE DOCK. This chip sits BELOW #hud-sectors, and on a touch phone
      that row is the BOOST pedal — so a track-limits warning painted straight
      over a tap target (reported from a phone). --dock-r-w is the right dock's
@@ -426,7 +495,9 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   background: rgba(8, 8, 14, 0.72);
   border-radius: var(--r-sm);
-  padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75);
+  /* Tighter than the sector box above it: this is a four-state indicator, not a
+     column of times, and it only ever appears over a driver already busy. */
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.5);
   font-family: var(--font-hud);
   font-size: var(--fs-micro);
   font-weight: 800;

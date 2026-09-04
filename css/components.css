@@ -813,17 +813,39 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
   align-self: start;
   pointer-events: none;
   margin-top: calc(var(--gap) * 0.5);
+  /* Caption on its own line, then the readout box and the button pad side by
+     side: BUTTON SIZE has the same no-feedback problem HUD SIZE had, and a
+     second sample element would have cost four shell nodes for a picture. */
+  display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * 0.5);
 }
 /* Say what it is. A bare SPEED 312 box under the slider read as a real,
    stuck readout ("why does the pause menu show speed?"). The caption is a
    ::before so it costs no shell node; dividing by the zoom keeps its painted
    size constant while the sample itself scales with the slider. */
 #pm-hud-sample::before {
-  content: "HUD SIZE PREVIEW";
-  display: block;
+  content: "SIZE PREVIEW";
+  display: block; flex-basis: 100%;
   font-size: calc(var(--fs-micro) / var(--hud-scale));
   font-weight: 700; letter-spacing: var(--ls-4); color: var(--dim);
   margin-bottom: calc(var(--gap) / 3 / var(--hud-scale));
+}
+/* The BUTTON SIZE half of the same picture: a pad at the dock's own diameter.
+   This block already zooms by --hud-scale, so the pad divides it back out and
+   multiplies by --hud-btn-scale — what the drag shows is the true RATIO of the
+   two sliders, which is the whole point of having them apart. 54px is the
+   dock's base --tap (css/overlays.css); the two move together or the picture
+   lies. Pseudo-element, so it costs no shell node — same trick as the caption. */
+#pm-hud-sample::after {
+  content: "GAS";
+  --pad: calc(54px * var(--hud-btn-scale) / var(--hud-scale));
+  width: var(--pad); height: var(--pad);
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--card-line);
+  background: var(--plate-opaque);
+  font-family: var(--font-hud); font-weight: 800;
+  font-size: calc(var(--fs-micro) / var(--hud-scale));
+  letter-spacing: var(--ls-4); color: var(--dim);
 }
 #results     { --sheet-w: 760px; --fit-at: 300px; }
 #standings   { --sheet-w: 760px; --fit-at: 300px; }

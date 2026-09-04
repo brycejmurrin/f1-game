@@ -8,8 +8,8 @@
       "topLets": 156
     },
     "js/agent/apex.js": {
-      "lines": 2610,
-      "codeLines": 1981
+      "lines": 2611,
+      "codeLines": 1982
     },
     "js/agent/agentview.js": {
       "lines": 2452
@@ -39,7 +39,7 @@
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1076,
+      "ceiling": 1080,
       "slack": 25
     },
     "bareCatches": {

@@ -185,7 +185,7 @@ _141 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `menu-nav.js` | `MenuNav` | tag | MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls the panel you are looking at, and arrow keys that move through it. |
 | `aria-state.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
-| `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE sliders + RESOLUTION pin. |
+| `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
 | `quali-sheet.js` | `QualiSheet` | tag | the QUALIFYING sheet (`#quali`): pure DOM assembly of a classification the model in js/race/quali-model.js has already produced. |

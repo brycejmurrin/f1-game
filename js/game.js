@@ -471,9 +471,11 @@ function hudProfileLabel() { return "HUD: " + hudProfile.toUpperCase(); }
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
-// AUTO IS ALWAYS THE FULL SET. fitHud scales / stacks / drops gaps instead
-// of hiding a cluster. AUTO names the body class (always FULL). Forced
-// names stay on the cycle for the overlay compact flag; no hide CSS.
+// AUTO IS ALWAYS THE FULL SET: fitHud scales / stacks / drops gaps instead of
+// hiding a cluster, and the label names what AUTO resolved to. A FORCED name
+// strips the half of the metrics the other half is named for (css/hud.css) —
+// TIMING keeps sectors+gaps, DRIVER keeps the car-state chips, COMPACT neither.
+// MAP and GAPS have their own controls and no layout touches them.
 function hudMetricsLayoutLabel() {
   if (hudMetricsLayout !== "auto") return "LAYOUT: " + hudMetricsLayout.toUpperCase();
   const m = document.body.className.match(/hud-met-([a-z]+)/);

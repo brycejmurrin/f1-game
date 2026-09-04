@@ -1469,6 +1469,7 @@ const api = {
 
   uiScale(v) { return G.setScale("uiScale", "--ui-scale", v); },
   hudScale(v) { return G.setScale("hudScale", "--hud-scale", v); },
+  btnScale(v) { return G.setScale("hudBtnScale", "--hud-btn-scale", v); },
 
   safeMode(v) {
     if (v === undefined) return { strikes: PerfGov.strikes(), tierFloor: PerfGov.tierFloor(), tier: PerfGov.tier() };

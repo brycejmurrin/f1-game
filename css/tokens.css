@@ -609,6 +609,15 @@ body:not(.desktop) {
    1.25 * 1.6 = 2x. Wide/tall screens continue to consume --ui-scale directly. */
 :root {
   --ui-scale: 1; --hud-scale: 1;
+  /* BUTTON SIZE is a THIRD knob on the same layer as HUD SIZE, and it defaults
+     to it: the touch dock and the readouts compete for the same edges, but a
+     thumb and an eye do not want the same answer — a player who needs big
+     pedals does not necessarily want a big lap counter, and shrinking the dock
+     is the cheapest way to buy the HUD room back. Declared as a REFERENCE
+     rather than a literal 1 so an untouched slider is byte-identical to the
+     old behaviour; js/ui/scale.js only writes an inline value once the player
+     moves it, exactly as the other two do. */
+  --hud-btn-scale: var(--hud-scale);
   --ui-compact-brand-scale: min(var(--ui-scale), 1);
   --ui-compact-scale: min(var(--ui-scale), 1.25);
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
@@ -618,7 +627,7 @@ body:not(.desktop) {
    scaleDefault() (100). The media query stays as the place a future touch-only
    default would live, so the CSS/JS agreement note above still holds. */
 @media (pointer: coarse) {
-  :root { --ui-scale: 1; --hud-scale: 1; }
+  :root { --ui-scale: 1; --hud-scale: 1; --hud-btn-scale: var(--hud-scale); }
 }
 
 /* VIEWPORT UNITS ARE THE ONE UNIT FAMILY `zoom` GETS WRONG, so inside a zoomed
