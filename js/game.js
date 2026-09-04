@@ -471,18 +471,18 @@ function hudProfileLabel() { return "HUD: " + hudProfile.toUpperCase(); }
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
-// LAYOUT, not METRICS: the overlay details already own that word.
-// AUTO names what it resolved to so the first two clicks are not silent
-// when auto lands on "full" (the unstyled base state).
+// AUTO IS ALWAYS THE FULL SET. fitHud scales / stacks / drops gaps instead
+// of hiding a cluster. AUTO names the body class (always FULL). Forced
+// names stay on the cycle for the overlay compact flag; no hide CSS.
 function hudMetricsLayoutLabel() {
   if (hudMetricsLayout !== "auto") return "LAYOUT: " + hudMetricsLayout.toUpperCase();
   const m = document.body.className.match(/hud-met-([a-z]+)/);
   return "LAYOUT: AUTO" + (m ? " \u00b7 " + m[1].toUpperCase() : "");
 }
 const HUD_VIS_MODES = ["auto", "on", "off"];
-let hudMapVis = store.get("hudMapVis", "auto");
+let hudMapVis = store.get("hudMapVis", "on");
 let hudGapsVis = store.get("hudGapsVis", "on");
-if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "auto";
+if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "on";
 if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
 function hudMapVisLabel() { return "MAP: " + hudMapVis.toUpperCase(); }
 function hudGapsVisLabel() { return "GAPS: " + hudGapsVis.toUpperCase(); }
@@ -3262,13 +3262,13 @@ const G = {
   },
   get hudMapVis() { return hudMapVis; },
   set hudMapVis(v) {
-    if (HUD_VIS_MODES.indexOf(v) < 0) v = "auto";
+    if (HUD_VIS_MODES.indexOf(v) < 0) v = "on";
     hudMapVis = v;
     store.set("hudMapVis", hudMapVis);
   },
   get hudGapsVis() { return hudGapsVis; },
   set hudGapsVis(v) {
-    if (HUD_VIS_MODES.indexOf(v) < 0) v = "auto";
+    if (HUD_VIS_MODES.indexOf(v) < 0) v = "on";
     hudGapsVis = v;
     store.set("hudGapsVis", hudGapsVis);
   },
@@ -8573,10 +8573,8 @@ function syncSettingsAvailability() {
   $("pm-camtune").disabled = !inRace;
 }
 function openSettings() {
-  // AUTO's resolved layout moves with the CAMERA and the band caps, so the
-  // LAYOUT label has to be re-read on open — it is written at boot and on
-  // click, and a resolution that went stale between the two would be a worse
-  // lie than the silence this replaced.
+  // AUTO is always the full set; re-read the label on open so AUTO · FULL
+  // is written after the first HUD tick, not only at boot.
   if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
