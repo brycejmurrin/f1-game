@@ -683,7 +683,7 @@ body[data-density="compact"] #campicker {
   margin-inline: auto;
 }
 #res-ghost-clear { opacity: 0.6; }
-#results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot, #advanced .sheet-foot { justify-content: center; }
+#results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot { justify-content: center; }
 #res-settle-unsaved { margin-top: var(--gap); color: #ffd180; font-weight: 800; }
 
 #save-warning {

@@ -32,7 +32,7 @@ disclosure.
 
 **Settings is a drill-down stack, not tabs, not one long scroll.**
 
-Pages: `home` | `controls` | `display`.
+Pages: `home` | `controls` | `display` | `advanced` | `audio`.
 
 Settings home (`#pm-settings-index`, `.pm-doors`) is a door list:
 
@@ -43,13 +43,31 @@ Settings home (`#pm-settings-index`, `.pm-doors`) is a door list:
 5. CAMERA TUNER…
 6. MUSIC & SOUND…
 
-Tuner doors stay on the index and still open their existing dialogs.
+STEERING and MUSIC are in-sheet pages, same chrome as DISPLAY
+(`#advanced` / `#audioset` inside `#pm-groups`). Lighting and camera
+tuner doors stay on the index and still open their existing docks.
 BACK on a page pops to home. BACK on home closes settings (to pause or
 title). Escape / pause-key / gamepad B press the same BACK control, so
 they pop the same way.
 
 **Always open on home.** Do not restore `settingsCategory`. Title
 Settings and pause Settings land on the same index.
+
+**STEERING is presets + OVERALL SPEED, then three stacked folds.** Presets
+are the always-visible primary (set everything). PACE is the field-wide
+slider, same heading + bare range as UI SIZE — it is not a handling feel
+and does not live inside a fold. FEEL holds tilt sensitivity and the
+four-way STEERING steps. AIDS holds driving help, racing line, adaptive
+buttons, and brake cue. ADVANCED stays the granular knobs (`#adv-extra`).
+Folds start closed. Summaries are disclosures (steel + rule + left
+chevron) and carry the live choice (`FEEL · NORMAL · TILT 6`). No intro
+paragraph — How to Play already covers this. Control ids stay.
+
+**MUSIC is five closed folds.** MUSIC / SOUND / ENGINE TONE / YOUR TRACKS
+/ SPOTIFY. Summaries carry state (`MUSIC · ON · ALL`). ON/OFF lives
+inside the fold body so a summary tap only opens. MUSIC and SOUND start
+closed, same as ENGINE TONE — the 2026-08 “leave the two most-used
+open” default was the DISPLAY wall again. Control ids stay.
 
 **DISPLAY is UI SIZE, then three stacked folds, then COCKPIT.** No reprint
 HUD / RENDERER headings — the fold summaries are disclosures (steel +
@@ -66,6 +84,10 @@ same steel italic + rule as COCKPIT; HUD SIZE stays a caption.
 Fold summaries are chip-height; the name is steel, ON is gold, OFF is
 red, values are `--text` (steel-on-steel hid the choices). The same
 gold / red pair paints the ON/OFF word on any menu switch.
+On an ON/OFF pair the selected word is the only selected mark — do not
+also light the plate (a red ring on gold ON made red mean OFF and
+chosen). The idle sibling stays steel. Named picks (presets, ALL /
+DEFAULT, STEERING steps) still get a red ring, without the glow.
 METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO
@@ -83,8 +105,9 @@ plate + `…`. Heading = steel + `--grad-rule`, not clickable. Disclosure
 = steel + rule + left chevron. Picker = `‹ value ›`.
 
 **No new class families.** Index reuses `.pm-doors`. Panels stay
-`.pm-group`. Sheet `h2#dlg-settings` reads SETTINGS / CONTROLS / DISPLAY
-so the first-child `.pm-group-h` on those pages stays hidden.
+`.pm-group`. Sheet `h2#dlg-settings` reads SETTINGS / CONTROLS / DISPLAY /
+STEERING / MUSIC & SOUND so the first-child `.pm-group-h` on those pages
+stays hidden.
 
 ## Rejected
 

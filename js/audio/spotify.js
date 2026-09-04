@@ -275,10 +275,12 @@ window.SpotifyMusic = (function () {
   function reopenPanel() {
     setTimeout(function () {
       try {
-        const el = document.getElementById("audioset");
-        if (!el) return;
-        el.hidden = false;
+        const settings = document.getElementById("pmsettings");
+        if (!settings) return;
+        settings.hidden = false;
+        if (typeof SettingsNav !== "undefined" && SettingsNav.show) SettingsNav.show("audio", false);
         const wrap = document.getElementById("as-sp-wrap");
+        if (wrap) wrap.open = true;
         if (wrap && wrap.scrollIntoView) wrap.scrollIntoView({ block: "center" });
       } catch (e) { /* the sign-in still succeeded — this is only the landing */ }
     }, 0);
@@ -1089,7 +1091,8 @@ window.SpotifyMusic = (function () {
     on("sp-refresh2", "click", () => loadDevices());
     on("sp-close", "click", () => {
       const p = el("spotifypanel"); if (p) p.hidden = true;
-      const audio = el("audioset"); if (audio) audio.hidden = false;
+      const settings = el("pmsettings"); if (settings) settings.hidden = false;
+      if (typeof SettingsNav !== "undefined" && SettingsNav.show) SettingsNav.show("audio", false);
     });
     let searchT = null;
     on("sp-search", "input", (e) => {
@@ -1145,8 +1148,8 @@ window.SpotifyMusic = (function () {
     context: contextUri, setContext, play() { return playChosen(); },
     mode, setMode, setDevice, deviceList() { return devices.slice(); },
     openPanel() {
-      const audio = el("audioset");
-      if (audio) audio.hidden = true;
+      const settings = el("pmsettings");
+      if (settings) settings.hidden = true;
       const p = el("spotifypanel");
       if (p) p.hidden = false;
       Log.info("audio", "SpotifyMusic.openPanel");

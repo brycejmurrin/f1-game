@@ -15,8 +15,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 
-const SESSION = ["results", "standings", "race-settings", "pausemenu", "audioset",
-  "advanced", "customize"];
+const SESSION = ["results", "standings", "race-settings", "pausemenu", "customize"];
 
 /** `#id { … --fit-at: … }` or a grouped selector list that includes `#id`. */
 function fitAtBlocks(css, id) {
@@ -37,8 +36,6 @@ test("session dialogs declare --fit-at next to --sheet-w so classifyFit can shri
   assert.match(css, /#results\s*\{[^}]*--fit-at:\s*300px/);
   assert.match(css, /#standings\s*\{[^}]*--fit-at:\s*300px/);
   assert.match(css, /#race-settings\s*\{[^}]*--fit-at:\s*300px/);
-  assert.match(css, /#audioset\s*\{[^}]*--fit-at:\s*300px/);
-  assert.match(css, /#advanced\s*\{[^}]*--fit-at:\s*300px/);
   assert.match(css, /#customize\s*\{[^}]*--fit-at:\s*300px/);
   assert.match(css, /#pausemenu\s*\{[^}]*--fit-at:\s*260px/,
     "pause is a short button stack — slightly smaller floor than Settings");
@@ -47,7 +44,7 @@ test("session dialogs declare --fit-at next to --sheet-w so classifyFit can shri
 test("landscape --fit-at uses zoom-correct data-shape selector (not @media orientation)", () => {
   const css = read("css/components.css");
   // Converted from @media (orientation: landscape) to data-shape="wide" (sheetshape.js).
-  for (const id of ["results", "standings", "race-settings", "audioset", "advanced", "customize"]) {
+  for (const id of ["results", "standings", "race-settings", "customize"]) {
     assert.match(css, new RegExp(`#${id} \\.sheet:not\\(\\[data-shape="tall"\\]\\)[^{]*\\{[^}]*--fit-at:\\s*220px`),
       `${id} --fit-at must use data-shape selector`);
   }

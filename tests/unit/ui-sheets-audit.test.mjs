@@ -390,16 +390,16 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   const via = (id) => (esc(id).match(/data-esc-close="([^"]+)"/) || [])[1];
   assert.equal(via("pausemenu"), "pm-resume", "Escape on PAUSED resumes");
   assert.equal(via("pmsettings"), "pm-settings-close", "Escape on SETTINGS is BACK (to the pause menu when paused)");
-  assert.equal(via("audioset"), "as-close");
-  assert.equal(via("advanced"), "adv-close");
   assert.equal(via("howtoplay"), "htp-close");
   assert.equal(via("lighting"), "lt-close");
   assert.equal(via("camtune"), "ct-close");
   assert.equal(via("standings"), "standings-close");
   assert.match(esc("results"), /data-esc="none"/, "RESULTS refuses Escape: nothing to go back to, NEXT is a decision");
-  for (const id of ["pm-resume", "pm-settings-close", "as-close", "adv-close", "htp-close", "lt-close", "ct-close", "standings-close"]) {
+  for (const id of ["pm-resume", "pm-settings-close", "htp-close", "lt-close", "ct-close", "standings-close"]) {
     assert.ok(html.includes(`id="${id}"`), `${id} exists for Escape to press`);
   }
+  assert.doesNotMatch(html, /id="as-close"|id="adv-close"/,
+    "STEERING and MUSIC pop via settings BACK, not their own dialogs");
   // Pause button order: RESUME first (autofocus), QUIT last, no destructive
   // control between the two primaries.
   const pause = html.slice(html.indexOf('id="pausemenu"'), html.indexOf("</dialog>", html.indexOf('id="pausemenu"')));

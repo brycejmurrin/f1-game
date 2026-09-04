@@ -417,7 +417,8 @@
 </dialog>
 
 <!-- settings sub-menu — opened from pause or title. Door index, then
-     CONTROLS / DISPLAY pages. Tuner doors stay on the index. -->
+     CONTROLS / DISPLAY / STEERING / MUSIC pages. Lighting and camera
+     tuners stay on the index as their own docks. -->
 <dialog id="pmsettings" class="screen dim" data-esc-close="pm-settings-close" aria-labelledby="dlg-settings" hidden>
   <div id="pmsettings-inner" class="sheet">
     <div class="sheet-head"><h2 id="dlg-settings">SETTINGS</h2></div>
@@ -498,6 +499,327 @@
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
             </div>
           </details>
+        </section>
+        <section id="advanced" class="pm-group" role="region"
+          aria-labelledby="dlg-settings" hidden>
+          <h3 class="pm-group-h">STEERING</h3>
+          <div id="advanced-inner">
+    <!-- Same shape as DISPLAY: one always-visible primary (presets + pace),
+         then closed folds whose summaries carry the live choice. -->
+    <div class="preset-row balanced-row">
+      <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
+      <button id="pm-preset-standard" class="preset-btn">STANDARD<small>balanced default</small></button>
+      <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
+    </div>
+
+    <h3 class="pm-group-h" id="pm-pace-h">OVERALL SPEED <b id="pm-pace-v">84%</b></h3>
+    <label class="tune-row">
+      <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed"></label>
+
+    <details id="adv-feel-details">
+    <summary id="adv-feel-sum" class="adv-more-btn">FEEL · NORMAL</summary>
+    <div role="group" aria-label="Steering feel">
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">TILT SENSITIVITY <b id="pm-tiltsimple-v">6</b></span>
+        <input id="pm-tiltsimple" type="range" min="1" max="10" step="1" value="6" aria-label="Tilt sensitivity"></label>
+      <p class="adv-help">How sharply the car answers your phone tilt. Higher = less tilt needed for full lock (more sensitive); lower = relaxed, bigger tilts.</p>
+    </div>
+    <div class="adv-item">
+      <span class="tune-label">STEERING</span>
+      <div class="opt-row balanced-row" role="group" aria-label="Steering feel">
+        <button id="pm-steer-easy" class="opt-btn">SUPER EASY</button>
+        <button id="pm-steer-assist" class="opt-btn">ASSISTED</button>
+        <button id="pm-steer-normal" class="opt-btn">NORMAL</button>
+        <button id="pm-steer-sim" class="opt-btn">SIM</button>
+      </div>
+      <p class="adv-help">Overall steering feel, from forgiving and stable to sharp and direct.</p>
+    </div>
+    </div>
+    </details>
+
+    <details id="adv-aids-details">
+    <summary id="adv-aids-sum" class="adv-more-btn">AIDS · LOW</summary>
+    <div role="group" aria-label="Driving aids">
+    <div class="adv-item">
+      <span class="tune-label">DRIVING HELP</span>
+      <div class="opt-row balanced-row" role="group" aria-label="Driving help">
+        <button id="pm-help-low" class="opt-btn">LOW</button>
+        <button id="pm-help-med" class="opt-btn">MEDIUM</button>
+        <button id="pm-help-high" class="opt-btn">HIGH</button>
+      </div>
+      <p class="adv-help">How much of each corner the car steers for you. Higher = easier to stay on track.</p>
+    </div>
+    <div class="adv-item">
+      <span class="tune-label">RACING LINE</span>
+      <div class="opt-row balanced-row" role="group" aria-label="Racing line assist">
+        <button id="pm-line-off" class="opt-btn">OFF</button>
+        <button id="pm-line-corner" class="opt-btn">CORNERS</button>
+        <button id="pm-line-full" class="opt-btn">FULL</button>
+      </div>
+      <p class="adv-help">Optional gentle pull toward the ideal line. Never overrides your steering.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">6</b></span>
+        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="6" aria-label="Adaptive buttons"></label>
+      <p class="adv-help">Slows the keys and on-screen arrows at speed so a tap is a smaller correction. OFF (1) is the old snap. Does not change the stick, tilt, or a drag on the track. SPEED STEER still picks the speed that feels heavy.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">BRAKE CUE <b id="pm-brakecue-v">CUE 6</b></span>
+        <input id="pm-brakecue" type="range" min="1" max="10" step="1" value="6" aria-label="Brake cue"></label>
+      <p class="adv-help">A tick that speeds up when you need to brake for a corner. 1 is OFF. Higher = earlier warning (more lookahead). Takes over nothing.</p>
+    </div>
+    </div>
+    </details>
+
+    <!-- Native disclosure: expanded/collapsed state, keyboard toggling (Enter/
+         Space on the summary) and screen-reader "expanded" announcement all
+         come from the element for free, and the JS handler in
+         steer-tuning.js only has to play the click sound. -->
+    <details id="adv-details">
+    <summary id="adv-more" class="adv-more-btn">ADVANCED</summary>
+    <div id="adv-extra">
+    <h3 class="adv-sec">TILT INPUT <span>how phone motion becomes steering (tilt mode)</span></h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">TILT RANGE <b id="pm-tiltdeg-v">5</b></span>
+        <input id="pm-tiltdeg" type="range" min="1" max="10" step="1" value="5" aria-label="Tilt range"></label>
+      <p class="adv-help">The same sensitivity as the top slider, with a finer label: how far you tilt the phone for full lock. Higher = less tilt needed; lower = relaxed, big tilts.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
+        <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6" aria-label="Steer smoothing"></label>
+      <p class="adv-help">How steady the tilt filter holds the wheel. Higher = smoother and calmer at rest (kills hand jitter) with a touch more lag; lower = more immediate.</p>
+    </div>
+
+    <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">DRIVING HELP <b id="pm-help-v">6</b></span>
+        <input id="pm-help" type="range" min="1" max="10" step="1" value="6"></label>
+      <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
+        <input id="pm-rate" type="range" min="1" max="10" step="1" value="5"></label>
+      <p class="adv-help">Turn-in snappiness (shorter wheelbase). Higher = sharper, faster turn-in; lower = lazier and more stable.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">5</b></span>
+        <input id="pm-expo" type="range" min="1" max="10" step="1" value="5"></label>
+      <p class="adv-help">Input curve. Low = gentle near centre for fine corrections; high = direct, 1:1 response. Raise it if steering feels mushy near centre.</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">5</b></span>
+        <input id="pm-lock" type="range" min="1" max="10" step="1" value="5"></label>
+      <p class="adv-help">Maximum turn angle at full lock. Higher = tighter cornering, but easier to over-rotate. (Auto-tapers at high speed.)</p>
+    </div>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">5</b></span>
+        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5"></label>
+      <p class="adv-help">How much steering you keep at high speed. Higher = sharper and more responsive flat-out; lower = calmer and more stable.</p>
+    </div>
+
+    <h3 class="adv-sec">DRIVER AID</h3>
+    <div class="adv-item">
+      <label class="tune-row"><span class="tune-label">RACING LINE <b id="pm-line-v">OFF</b></span>
+        <input id="pm-line" type="range" min="-5" max="5" step="1" value="0"></label>
+      <p class="adv-help">Optional bias toward the line. PULL (+) eases toward the apex; PUSH (&minus;) runs wider; OFF = pure manual. Never overrides your steering.</p>
+    </div>
+    </div><!-- /#adv-extra -->
+    </details>
+    </div>
+        </section>
+        <section id="audioset" class="pm-group" role="region"
+          aria-labelledby="dlg-settings" hidden>
+          <h3 class="pm-group-h">MUSIC &amp; SOUND</h3>
+          <div id="audioset-inner">
+      <!-- Closed like DISPLAY: the summary is the label and carries ON / source.
+           ON/OFF live in the body so a summary tap only opens the fold. -->
+      <details id="as-music-details" class="as-sec">
+        <summary class="adv-more-btn" id="as-music-sum">MUSIC · ON · ALL</summary>
+        <div class="opt-row as-toggle" role="group" aria-label="Music on or off">
+          <button id="as-music-on" class="opt-btn" type="button">ON</button>
+          <button id="as-music-off" class="opt-btn" type="button">OFF</button>
+        </div>
+        <label class="tune-row"><span class="tune-label">VOLUME <b id="as-mvol-v">5</b></span>
+          <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
+        <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
+             once it is connected; picking another source releases it without
+             signing out. -->
+        <div class="opt-row" role="group" aria-label="Music source">
+          <button id="as-src-all" class="opt-btn" type="button">ALL</button>
+          <button id="as-src-builtin" class="opt-btn" type="button">DEFAULT</button>
+          <button id="as-src-user" class="opt-btn" type="button">MY TRACKS</button>
+          <button id="as-src-spotify" class="opt-btn" type="button">SPOTIFY</button>
+        </div>
+        <p id="as-src-note" class="as-note"></p>
+        <!-- NOW PLAYING. Was a lone SKIP button beside a run of small text, so
+             the track name was the least prominent thing in its own row and
+             there was no way back to the previous track. It is now a card: the
+             title is the biggest thing in it, the source sits under it as a
+             caption, and the transport is a real three-button group. -->
+        <div class="as-now-card">
+          <div class="as-now-meta">
+            <span class="as-now-cap">NOW PLAYING</span>
+            <b id="as-now" class="as-now-title">&mdash;</b>
+            <span id="as-now-src" class="as-now-sub"></span>
+          </div>
+          <div class="as-transport" role="group" aria-label="Music transport">
+            <button id="as-prev" class="as-tbtn" type="button" aria-label="Previous track">&#9198;</button>
+            <button id="as-play" class="as-tbtn as-tbtn-main" type="button" aria-label="Play or pause">&#9654;</button>
+            <button id="as-skip" class="as-tbtn" type="button" aria-label="Next track">&#9197;</button>
+          </div>
+        </div>
+      </details>
+
+      <details id="as-sound-details" class="as-sec">
+        <summary class="adv-more-btn" id="as-sound-sum">SOUND · ON</summary>
+        <div class="opt-row as-toggle" role="group" aria-label="Sound effects on or off">
+          <button id="as-sound-on" class="opt-btn" type="button">ON</button>
+          <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
+        </div>
+        <label class="tune-row"><span class="tune-label">VOLUME <b id="as-svol-v">10</b></span>
+          <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
+        <p class="as-note">Engine, tyres, rain and menu clicks. Independent of the music.</p>
+      </details>
+
+      <!-- ENGINE TONE: the player's own trim, layered OVER the manufacturer
+           voice that team.engine already picks (js/audio/engine.js ENGINE_VOICES).
+           A profile REPLACES the six trims; moving any slider afterwards leaves
+           the profile row unlit, because the tune is then the player's and no
+           longer that preset's. Closed by default, like YOUR TRACKS and SPOTIFY
+           — an opt-in workflow, same closed default as MUSIC / SOUND.
+
+           Every knob here is a CONSTANT multiplier, never a function of rev:
+           that is the contract tools/check/audio-test.cjs and
+           tests/unit/audio-tune.test.mjs both hold the engine to, and it is why
+           no slider position can make pitch fall as the revs rise. -->
+      <details id="as-engine-details" class="as-sec">
+        <summary class="adv-more-btn" id="as-engine-sum">ENGINE TONE · TEAM</summary>
+        <div class="opt-row" role="group" aria-label="Sound profile">
+          <button id="as-p-team" class="opt-btn" type="button">TEAM</button>
+          <button id="as-p-broadcast" class="opt-btn" type="button">BROADCAST</button>
+          <button id="as-p-trackside" class="opt-btn" type="button">TRACKSIDE</button>
+          <button id="as-p-cockpit" class="opt-btn" type="button">COCKPIT</button>
+          <button id="as-p-v10" class="opt-btn" type="button">V10</button>
+        </div>
+        <p id="as-p-note" class="as-note"></p>
+        <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">100</b></span>
+          <input id="as-t-pitch" type="range" min="0" max="18" step="1" value="8" aria-label="Engine pitch"></label>
+        <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">100</b></span>
+          <input id="as-t-range" type="range" min="0" max="12" step="1" value="6" aria-label="Rev range"></label>
+        <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">100</b></span>
+          <input id="as-t-detune" type="range" min="0" max="12" step="1" value="4" aria-label="Engine detune"></label>
+        <label class="tune-row"><span class="tune-label">BRIGHTNESS <b id="as-t-bright-v">100</b></span>
+          <input id="as-t-bright" type="range" min="0" max="22" step="1" value="10" aria-label="Engine brightness"></label>
+        <label class="tune-row"><span class="tune-label">TURBO <b id="as-t-whine-v">100</b></span>
+          <input id="as-t-whine" type="range" min="0" max="10" step="1" value="4" aria-label="Turbo whine level"></label>
+        <label class="tune-row"><span class="tune-label">LIMITER <b id="as-t-lim-v">100</b></span>
+          <input id="as-t-lim" type="range" min="0" max="8" step="1" value="4" aria-label="Rev limiter chop depth"></label>
+        <label class="tune-row"><span class="tune-label">SUB <b id="as-t-sub-v">100</b></span>
+          <input id="as-t-sub" type="range" min="0" max="10" step="1" value="4" aria-label="Sub-octave weight"></label>
+        <label class="tune-row"><span class="tune-label">SPACE <b id="as-t-rev-v">100</b></span>
+          <input id="as-t-rev" type="range" min="0" max="10" step="1" value="4" aria-label="Circuit reverb amount"></label>
+        <label class="tune-row"><span class="tune-label">OVERRUN <b id="as-t-ovr-v">100</b></span>
+          <input id="as-t-ovr" type="range" min="0" max="10" step="1" value="4" aria-label="Off-throttle crackle"></label>
+        <!-- Layer switches. Each names a real node in the engine graph, so an
+             off layer is silent rather than merely quiet. -->
+        <div id="as-layer-row" class="opt-row" role="group" aria-label="Engine layers">
+          <button id="as-l-whine" class="opt-btn" type="button" aria-pressed="true">TURBO</button>
+          <button id="as-l-harvest" class="opt-btn" type="button" aria-pressed="true">HARVEST</button>
+          <button id="as-l-ers" class="opt-btn" type="button" aria-pressed="true">ERS</button>
+          <button id="as-l-wind" class="opt-btn" type="button" aria-pressed="true">WIND</button>
+          <button id="as-l-limiter" class="opt-btn" type="button" aria-pressed="true">LIMITER</button>
+          <button id="as-l-screech" class="opt-btn" type="button" aria-pressed="true">TYRES</button>
+          <button id="as-l-sub" class="opt-btn" type="button" aria-pressed="true">SUB</button>
+          <button id="as-l-rivals" class="opt-btn" type="button" aria-pressed="true">RIVALS</button>
+          <button id="as-l-reverb" class="opt-btn" type="button" aria-pressed="true">SPACE</button>
+          <button id="as-l-overrun" class="opt-btn" type="button" aria-pressed="true">OVERRUN</button>
+          <!-- Not a layer: it swaps the PITCHING CORE between the granular
+               (PSOLA) voice and the older playbackRate one. Sits here because
+               it is the A/B a player wants next to the rest of the engine
+               switches, and it is the only control on this screen whose right
+               setting can only be decided by ear. -->
+          <button id="as-t-granular" class="opt-btn" type="button" aria-pressed="false">GRANULAR</button>
+        </div>
+        <button id="as-t-reset" class="adv-more-btn" type="button">RESET TO TEAM SOUND</button>
+      </details>
+
+      <!-- YOUR TRACKS: uploaded audio files, stored in IndexedDB by
+           js/game/music-lib.js and appended to the same playlist as the shipped
+           songs, so SKIP walks through both. Closed by default — an upload
+           workflow most players never touch, and the biggest single chunk of
+           this screen's control count after Spotify. -->
+      <details id="as-tracks-details" class="as-sec">
+        <summary class="adv-more-btn" id="as-tracks-sum">YOUR TRACKS</summary>
+        <button id="as-add" class="adv-more-btn" type="button">&#43; ADD MP3s</button>
+        <!-- The extension list is not redundant: Android WebViews that report an
+             empty MIME type filter those files out of a bare audio/* picker. -->
+        <input id="as-file" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.oga,.wav,.flac,.opus" multiple hidden aria-label="Add music files">
+        <div id="as-tracks" class="music-list"></div>
+        <p id="as-lib-msg" class="as-note">Files stay on this device &mdash; nothing is uploaded anywhere.</p>
+      </details>
+
+      <!-- SPOTIFY: personal-use only, and dormant until a Client ID is entered.
+           Spotify's developer policy does not permit shipping their audio as a
+           game soundtrack, and a Development Mode app only works for the
+           owner's own allowlisted Premium accounts — so no client ID is
+           committed and the whole block does nothing until one is pasted in.
+           Closed by default: this is the single largest section on the screen
+           (15+ controls) and stays inert for every player who never pastes in
+           a client id — id kept on the <details> itself (js/game/spotify.js
+           reads dataset.spState off #as-sp-wrap; tag-agnostic, untouched). -->
+      <details id="as-sp-wrap" class="as-sec">
+        <summary class="adv-more-btn" id="as-sp-sum">SPOTIFY · OFF</summary>
+        <!-- autocapitalize/autocorrect off: a client id is 32 hex characters and
+             a phone keyboard will happily capitalise and "fix" it. -->
+        <label class="tune-row"><span class="tune-label">CLIENT ID</span>
+          <input id="as-sp-id" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="paste your Spotify app client id" aria-label="Spotify client ID"></label>
+        <div class="opt-row">
+          <button id="as-sp-save" class="opt-btn" type="button">SAVE</button>
+          <button id="as-sp-connect" class="opt-btn" type="button">CONNECT</button>
+          <button id="as-sp-disconnect" class="opt-btn" type="button">DISCONNECT</button>
+        </div>
+        <!-- HOW TO PLAY. REMOTE drives Spotify on a device you already have
+             (phone, laptop) over the Web API — no DRM, no SDK, works on iOS.
+             IN BROWSER makes this tab the player via the Web Playback SDK,
+             which iOS Safari cannot run at all. -->
+        <div class="opt-row" role="group" aria-label="Spotify playback mode">
+          <button id="as-sp-mode-remote" class="opt-btn" type="button">REMOTE</button>
+          <button id="as-sp-mode-browser" class="opt-btn" type="button">IN BROWSER</button>
+        </div>
+        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so it shows up below. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
+        <label class="tune-row"><span class="tune-label">DEVICE</span>
+          <select id="as-sp-device" aria-label="Spotify device"></select></label>
+        <button id="as-sp-refresh" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
+
+        <!-- WHAT TO PLAY. Connecting only makes this browser a Spotify device;
+             it does not queue anything, and a browser that has never played has
+             no context to resume — which is why "connected" could be silent. -->
+        <label class="tune-row"><span class="tune-label">PLAY FROM</span>
+          <select id="as-sp-playlist" aria-label="Spotify playlist"></select></label>
+        <div class="opt-row">
+          <button id="as-sp-play" class="opt-btn" type="button">&#9654; PLAY</button>
+          <button id="as-sp-pause" class="opt-btn" type="button">&#10074;&#10074; PAUSE</button>
+          <button id="as-sp-next" class="opt-btn" type="button">&#9197; NEXT</button>
+        </div>
+        <!-- CHECK ACCOUNT asks Spotify's own API which of the two invisible
+             causes is the real one: plan (GET /me -> product) or a token with no
+             streaming permission. Without it both surface as one opaque error. -->
+        <button id="as-sp-check" class="adv-more-btn" type="button">CHECK ACCOUNT</button>
+        <!-- The full player (art, progress, shuffle/repeat, device volume,
+             playlist search) lives in its own sheet — too much to inline here,
+             and worth keeping. It is reached from beside the settings that
+             enable it rather than from a permanently-greyed pause-menu button. -->
+        <button id="as-sp-open" class="adv-more-btn" type="button" disabled>&#9835; OPEN PLAYER&hellip;</button>
+        <p class="as-note">Status: <b id="as-sp-status">not configured</b></p>
+        <p class="as-note">Playing: <b id="as-sp-now">&mdash;</b></p>
+        <!-- The setup rules are static, so they live here rather than being
+             burned into the live status line. -->
+        <p class="as-note">Personal use only. Needs Spotify <b>Premium</b> (not Mini/Lite), your own app at developer.spotify.com, and your account on that app&rsquo;s user allowlist. Register this exact Redirect URI on it:</p>
+        <p class="as-note"><b id="as-sp-uri" class="sp-uri">&mdash;</b></p>
+        <p class="as-note">CONNECT sends you to Spotify to sign in and reloads the game on the way back &mdash; do it from the menu, not mid-race. This panel reopens when you return.</p>
+        <p class="as-note">Running it locally? Serve from <b>http://127.0.0.1:&lt;port&gt;/</b> &mdash; Spotify rejects <b>localhost</b> as a redirect URI.</p>
+      </details>
+      </div>
         </section>
       </div>
     </div>
@@ -1322,342 +1644,6 @@
         code instead. Both of you need the same version of the game</dd>
     </dl>
     <div class="sheet-foot"><button id="htp-close" autofocus class="bigbtn alt">BACK</button></div>
-  </div>
-</dialog>
-
-<!-- advanced steering options -->
-<dialog id="advanced" class="screen dim" data-esc-close="adv-close" aria-labelledby="dlg-advanced" hidden>
-  <div id="advanced-inner" class="sheet">
-    <div class="sheet-head"><h2 id="dlg-advanced">STEERING &amp; ASSISTS</h2></div>
-    <!-- Scrollable body between the fixed title and the fixed DONE bar, so the
-         action button never floats over (or hides) the last controls. -->
-    <div class="sheet-body pane">
-    <p class="adv-intro">Pick a preset to set everything at once &mdash; most players never need more. Adjust the few controls below to taste, or open <b>Advanced</b> for the full set of knobs. Everything takes effect immediately and is saved.</p>
-
-    <div class="preset-row balanced-row">
-      <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
-      <button id="pm-preset-standard" class="preset-btn">STANDARD<small>balanced default</small></button>
-      <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
-    </div>
-
-    <!-- simplified, player-facing controls (most players never need more) -->
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">TILT SENSITIVITY <b id="pm-tiltsimple-v">6</b></span>
-        <input id="pm-tiltsimple" type="range" min="1" max="10" step="1" value="6" aria-label="Tilt sensitivity"></label>
-      <p class="adv-help">How sharply the car answers your phone tilt. Higher = less tilt needed for full lock (more sensitive); lower = relaxed, bigger tilts.</p>
-    </div>
-    <div class="adv-item">
-      <span class="tune-label">STEERING</span>
-      <div class="opt-row balanced-row" role="group" aria-label="Steering feel">
-        <button id="pm-steer-easy" class="opt-btn">SUPER EASY</button>
-        <button id="pm-steer-assist" class="opt-btn">ASSISTED</button>
-        <button id="pm-steer-normal" class="opt-btn">NORMAL</button>
-        <button id="pm-steer-sim" class="opt-btn">SIM</button>
-      </div>
-      <p class="adv-help">Overall steering feel, from forgiving and stable to sharp and direct.</p>
-    </div>
-    <div class="adv-item">
-      <span class="tune-label">DRIVING HELP</span>
-      <div class="opt-row balanced-row" role="group" aria-label="Driving help">
-        <button id="pm-help-low" class="opt-btn">LOW</button>
-        <button id="pm-help-med" class="opt-btn">MEDIUM</button>
-        <button id="pm-help-high" class="opt-btn">HIGH</button>
-      </div>
-      <p class="adv-help">How much of each corner the car steers for you. Higher = easier to stay on track.</p>
-    </div>
-    <div class="adv-item">
-      <span class="tune-label">RACING LINE</span>
-      <div class="opt-row balanced-row" role="group" aria-label="Racing line assist">
-        <button id="pm-line-off" class="opt-btn">OFF</button>
-        <button id="pm-line-corner" class="opt-btn">CORNERS</button>
-        <button id="pm-line-full" class="opt-btn">FULL</button>
-      </div>
-      <p class="adv-help">Optional gentle pull toward the ideal line. Never overrides your steering.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">ADAPTIVE BUTTONS <b id="pm-adaptbtn-v">6</b></span>
-        <input id="pm-adaptbtn" type="range" min="1" max="10" step="1" value="6" aria-label="Adaptive buttons"></label>
-      <p class="adv-help">Slows the keys and on-screen arrows at speed so a tap is a smaller correction. OFF (1) is the old snap. Does not change the stick, tilt, or a drag on the track. SPEED STEER still picks the speed that feels heavy.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">BRAKE CUE <b id="pm-brakecue-v">CUE 6</b></span>
-        <input id="pm-brakecue" type="range" min="1" max="10" step="1" value="6" aria-label="Brake cue"></label>
-      <p class="adv-help">A tick that speeds up when you need to brake for a corner. 1 is OFF. Higher = earlier warning (more lookahead). Takes over nothing.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">OVERALL SPEED <b id="pm-pace-v">84%</b></span>
-        <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed"></label>
-      <p class="adv-help">How fast the whole field actually covers the track &mdash; you and the AI together. Shown as a share of reference pace: 100% is full speed, and every notch is 6% either way. Your dash and gearbox keep their full range at every setting; higher just means everyone laps quicker.</p>
-    </div>
-
-    <!-- Native disclosure: expanded/collapsed state, keyboard toggling (Enter/
-         Space on the summary) and screen-reader "expanded" announcement all
-         come from the element for free, and the JS handler in
-         steer-tuning.js only has to play the click sound. -->
-    <details id="adv-details">
-    <summary id="adv-more" class="adv-more-btn">ADVANCED</summary>
-    <div id="adv-extra">
-    <h3 class="adv-sec">TILT INPUT <span>how phone motion becomes steering (tilt mode)</span></h3>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">TILT RANGE <b id="pm-tiltdeg-v">5</b></span>
-        <input id="pm-tiltdeg" type="range" min="1" max="10" step="1" value="5" aria-label="Tilt range"></label>
-      <p class="adv-help">The same sensitivity as the top slider, with a finer label: how far you tilt the phone for full lock. Higher = less tilt needed; lower = relaxed, big tilts.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">STEER SMOOTHING <b id="pm-smooth-v">6</b></span>
-        <input id="pm-smooth" type="range" min="1" max="10" step="1" value="6" aria-label="Steer smoothing"></label>
-      <p class="adv-help">How steady the tilt filter holds the wheel. Higher = smoother and calmer at rest (kills hand jitter) with a touch more lag; lower = more immediate.</p>
-    </div>
-
-    <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">DRIVING HELP <b id="pm-help-v">6</b></span>
-        <input id="pm-help" type="range" min="1" max="10" step="1" value="6"></label>
-      <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
-        <input id="pm-rate" type="range" min="1" max="10" step="1" value="5"></label>
-      <p class="adv-help">Turn-in snappiness (shorter wheelbase). Higher = sharper, faster turn-in; lower = lazier and more stable.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">5</b></span>
-        <input id="pm-expo" type="range" min="1" max="10" step="1" value="5"></label>
-      <p class="adv-help">Input curve. Low = gentle near centre for fine corrections; high = direct, 1:1 response. Raise it if steering feels mushy near centre.</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">5</b></span>
-        <input id="pm-lock" type="range" min="1" max="10" step="1" value="5"></label>
-      <p class="adv-help">Maximum turn angle at full lock. Higher = tighter cornering, but easier to over-rotate. (Auto-tapers at high speed.)</p>
-    </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">5</b></span>
-        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5"></label>
-      <p class="adv-help">How much steering you keep at high speed. Higher = sharper and more responsive flat-out; lower = calmer and more stable.</p>
-    </div>
-
-    <h3 class="adv-sec">DRIVER AID</h3>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">RACING LINE <b id="pm-line-v">OFF</b></span>
-        <input id="pm-line" type="range" min="-5" max="5" step="1" value="0"></label>
-      <p class="adv-help">Optional bias toward the line. PULL (+) eases toward the apex; PUSH (&minus;) runs wider; OFF = pure manual. Never overrides your steering.</p>
-    </div>
-    </div><!-- /#adv-extra -->
-    </details>
-    </div><!-- /.sheet-body -->
-    <div class="sheet-foot"><button id="adv-close" autofocus class="bigbtn alt">BACK</button></div>
-  </div>
-</dialog>
-
-<!-- music & sound: the audio mixer. Its own screen rather than more buttons in
-     the settings grid, because two sliders and a now-playing readout do not fit
-     a one-line-per-control column. -->
-<dialog id="audioset" class="screen dim" data-esc-close="as-close" aria-labelledby="dlg-audioset" hidden>
-  <div id="audioset-inner" class="sheet">
-    <div class="sheet-head"><h2 id="dlg-audioset">MUSIC &amp; SOUND</h2></div>
-    <div class="sheet-body pane">
-      <!-- Each section is a header row with its switch on the right, then its
-           slider. The two are independent: music with no effects is a normal way
-           to play, so neither switch touches the other.
-
-           Each section is now a <details> — MUSIC and SOUND EFFECTS open by
-           default (every player's two most-used controls; the ON/OFF switch is
-           in the summary itself so it's reachable either way), YOUR TRACKS and
-           SPOTIFY closed (opt-in workflows most players never touch — SPOTIFY
-           is "dormant until a Client ID is entered" even when it IS open).
-           The switch buttons inside MUSIC/SOUND EFFECTS' summaries stop click
-           propagation (js/game/audio-panel.js) so pressing ON/OFF changes the
-           setting without also toggling the section — the alternative the
-           2026-08 menu review considered and rejected was relocating them out
-           of the header, which would have reversed the full-width-halves
-           decision two rules below records. -->
-      <details id="as-music-details" class="as-sec" open>
-        <summary class="as-head">
-          <h3 class="adv-sec">MUSIC</h3>
-          <div class="opt-row as-toggle" role="group" aria-label="Music on or off">
-            <button id="as-music-on" class="opt-btn" type="button">ON</button>
-            <button id="as-music-off" class="opt-btn" type="button">OFF</button>
-          </div>
-        </summary>
-        <label class="tune-row"><span class="tune-label">VOLUME <b id="as-mvol-v">5</b></span>
-          <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
-        <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
-             once it is connected; picking another source releases it without
-             signing out. -->
-        <div class="opt-row" role="group" aria-label="Music source">
-          <button id="as-src-all" class="opt-btn" type="button">ALL</button>
-          <button id="as-src-builtin" class="opt-btn" type="button">DEFAULT</button>
-          <button id="as-src-user" class="opt-btn" type="button">MY TRACKS</button>
-          <button id="as-src-spotify" class="opt-btn" type="button">SPOTIFY</button>
-        </div>
-        <p id="as-src-note" class="as-note"></p>
-        <!-- NOW PLAYING. Was a lone SKIP button beside a run of small text, so
-             the track name was the least prominent thing in its own row and
-             there was no way back to the previous track. It is now a card: the
-             title is the biggest thing in it, the source sits under it as a
-             caption, and the transport is a real three-button group. -->
-        <div class="as-now-card">
-          <div class="as-now-meta">
-            <span class="as-now-cap">NOW PLAYING</span>
-            <b id="as-now" class="as-now-title">&mdash;</b>
-            <span id="as-now-src" class="as-now-sub"></span>
-          </div>
-          <div class="as-transport" role="group" aria-label="Music transport">
-            <button id="as-prev" class="as-tbtn" type="button" aria-label="Previous track">&#9198;</button>
-            <button id="as-play" class="as-tbtn as-tbtn-main" type="button" aria-label="Play or pause">&#9654;</button>
-            <button id="as-skip" class="as-tbtn" type="button" aria-label="Next track">&#9197;</button>
-          </div>
-        </div>
-      </details>
-
-      <details id="as-sound-details" class="as-sec" open>
-        <summary class="as-head">
-          <h3 class="adv-sec">SOUND EFFECTS</h3>
-          <div class="opt-row as-toggle" role="group" aria-label="Sound effects on or off">
-            <button id="as-sound-on" class="opt-btn" type="button">ON</button>
-            <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
-          </div>
-        </summary>
-        <label class="tune-row"><span class="tune-label">VOLUME <b id="as-svol-v">10</b></span>
-          <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
-        <p class="as-note">Engine, tyres, rain and menu clicks. Independent of the music.</p>
-      </details>
-
-      <!-- ENGINE TONE: the player's own trim, layered OVER the manufacturer
-           voice that team.engine already picks (js/audio/engine.js ENGINE_VOICES).
-           A profile REPLACES the six trims; moving any slider afterwards leaves
-           the profile row unlit, because the tune is then the player's and no
-           longer that preset's. Closed by default, like YOUR TRACKS and SPOTIFY
-           — an opt-in workflow, not one of the two controls every player wants.
-
-           Every knob here is a CONSTANT multiplier, never a function of rev:
-           that is the contract tools/check/audio-test.cjs and
-           tests/unit/audio-tune.test.mjs both hold the engine to, and it is why
-           no slider position can make pitch fall as the revs rise. -->
-      <details id="as-engine-details" class="as-sec">
-        <summary class="as-head"><h3 class="adv-sec">ENGINE TONE</h3></summary>
-        <div class="opt-row" role="group" aria-label="Sound profile">
-          <button id="as-p-team" class="opt-btn" type="button">TEAM</button>
-          <button id="as-p-broadcast" class="opt-btn" type="button">BROADCAST</button>
-          <button id="as-p-trackside" class="opt-btn" type="button">TRACKSIDE</button>
-          <button id="as-p-cockpit" class="opt-btn" type="button">COCKPIT</button>
-          <button id="as-p-v10" class="opt-btn" type="button">V10</button>
-        </div>
-        <p id="as-p-note" class="as-note"></p>
-        <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">100</b></span>
-          <input id="as-t-pitch" type="range" min="0" max="18" step="1" value="8" aria-label="Engine pitch"></label>
-        <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">100</b></span>
-          <input id="as-t-range" type="range" min="0" max="12" step="1" value="6" aria-label="Rev range"></label>
-        <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">100</b></span>
-          <input id="as-t-detune" type="range" min="0" max="12" step="1" value="4" aria-label="Engine detune"></label>
-        <label class="tune-row"><span class="tune-label">BRIGHTNESS <b id="as-t-bright-v">100</b></span>
-          <input id="as-t-bright" type="range" min="0" max="22" step="1" value="10" aria-label="Engine brightness"></label>
-        <label class="tune-row"><span class="tune-label">TURBO <b id="as-t-whine-v">100</b></span>
-          <input id="as-t-whine" type="range" min="0" max="10" step="1" value="4" aria-label="Turbo whine level"></label>
-        <label class="tune-row"><span class="tune-label">LIMITER <b id="as-t-lim-v">100</b></span>
-          <input id="as-t-lim" type="range" min="0" max="8" step="1" value="4" aria-label="Rev limiter chop depth"></label>
-        <label class="tune-row"><span class="tune-label">SUB <b id="as-t-sub-v">100</b></span>
-          <input id="as-t-sub" type="range" min="0" max="10" step="1" value="4" aria-label="Sub-octave weight"></label>
-        <!-- Layer switches. Each names a real node in the engine graph, so an
-             off layer is silent rather than merely quiet. -->
-        <div id="as-layer-row" class="opt-row" role="group" aria-label="Engine layers">
-          <button id="as-l-whine" class="opt-btn" type="button" aria-pressed="true">TURBO</button>
-          <button id="as-l-harvest" class="opt-btn" type="button" aria-pressed="true">HARVEST</button>
-          <button id="as-l-ers" class="opt-btn" type="button" aria-pressed="true">ERS</button>
-          <button id="as-l-wind" class="opt-btn" type="button" aria-pressed="true">WIND</button>
-          <button id="as-l-limiter" class="opt-btn" type="button" aria-pressed="true">LIMITER</button>
-          <button id="as-l-screech" class="opt-btn" type="button" aria-pressed="true">TYRES</button>
-          <button id="as-l-sub" class="opt-btn" type="button" aria-pressed="true">SUB</button>
-          <button id="as-l-rivals" class="opt-btn" type="button" aria-pressed="true">RIVALS</button>
-          <!-- Not a layer: it swaps the PITCHING CORE between the granular
-               (PSOLA) voice and the older playbackRate one. Sits here because
-               it is the A/B a player wants next to the rest of the engine
-               switches, and it is the only control on this screen whose right
-               setting can only be decided by ear. -->
-          <button id="as-t-granular" class="opt-btn" type="button" aria-pressed="true">GRANULAR</button>
-        </div>
-        <button id="as-t-reset" class="adv-more-btn" type="button">RESET TO TEAM SOUND</button>
-      </details>
-
-      <!-- YOUR TRACKS: uploaded audio files, stored in IndexedDB by
-           js/game/music-lib.js and appended to the same playlist as the shipped
-           songs, so SKIP walks through both. Closed by default — an upload
-           workflow most players never touch, and the biggest single chunk of
-           this screen's control count after Spotify. -->
-      <details id="as-tracks-details" class="as-sec">
-        <summary class="as-head"><h3 class="adv-sec">YOUR TRACKS</h3></summary>
-        <button id="as-add" class="adv-more-btn" type="button">&#43; ADD MP3s</button>
-        <!-- The extension list is not redundant: Android WebViews that report an
-             empty MIME type filter those files out of a bare audio/* picker. -->
-        <input id="as-file" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.oga,.wav,.flac,.opus" multiple hidden aria-label="Add music files">
-        <div id="as-tracks" class="music-list"></div>
-        <p id="as-lib-msg" class="as-note">Files stay on this device &mdash; nothing is uploaded anywhere.</p>
-      </details>
-
-      <!-- SPOTIFY: personal-use only, and dormant until a Client ID is entered.
-           Spotify's developer policy does not permit shipping their audio as a
-           game soundtrack, and a Development Mode app only works for the
-           owner's own allowlisted Premium accounts — so no client ID is
-           committed and the whole block does nothing until one is pasted in.
-           Closed by default: this is the single largest section on the screen
-           (15+ controls) and stays inert for every player who never pastes in
-           a client id — id kept on the <details> itself (js/game/spotify.js
-           reads dataset.spState off #as-sp-wrap; tag-agnostic, untouched). -->
-      <details id="as-sp-wrap" class="as-sec">
-        <summary class="as-head"><h3 class="adv-sec">SPOTIFY</h3></summary>
-        <!-- autocapitalize/autocorrect off: a client id is 32 hex characters and
-             a phone keyboard will happily capitalise and "fix" it. -->
-        <label class="tune-row"><span class="tune-label">CLIENT ID</span>
-          <input id="as-sp-id" type="text" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" placeholder="paste your Spotify app client id" aria-label="Spotify client ID"></label>
-        <div class="opt-row">
-          <button id="as-sp-save" class="opt-btn" type="button">SAVE</button>
-          <button id="as-sp-connect" class="opt-btn" type="button">CONNECT</button>
-          <button id="as-sp-disconnect" class="opt-btn" type="button">DISCONNECT</button>
-        </div>
-        <!-- HOW TO PLAY. REMOTE drives Spotify on a device you already have
-             (phone, laptop) over the Web API — no DRM, no SDK, works on iOS.
-             IN BROWSER makes this tab the player via the Web Playback SDK,
-             which iOS Safari cannot run at all. -->
-        <div class="opt-row" role="group" aria-label="Spotify playback mode">
-          <button id="as-sp-mode-remote" class="opt-btn" type="button">REMOTE</button>
-          <button id="as-sp-mode-browser" class="opt-btn" type="button">IN BROWSER</button>
-        </div>
-        <p class="as-note">REMOTE plays through the Spotify app on your phone or computer &mdash; open it once so it shows up below. IN BROWSER plays here, but needs desktop Chrome/Edge/Firefox.</p>
-        <label class="tune-row"><span class="tune-label">DEVICE</span>
-          <select id="as-sp-device" aria-label="Spotify device"></select></label>
-        <button id="as-sp-refresh" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
-
-        <!-- WHAT TO PLAY. Connecting only makes this browser a Spotify device;
-             it does not queue anything, and a browser that has never played has
-             no context to resume — which is why "connected" could be silent. -->
-        <label class="tune-row"><span class="tune-label">PLAY FROM</span>
-          <select id="as-sp-playlist" aria-label="Spotify playlist"></select></label>
-        <div class="opt-row">
-          <button id="as-sp-play" class="opt-btn" type="button">&#9654; PLAY</button>
-          <button id="as-sp-pause" class="opt-btn" type="button">&#10074;&#10074; PAUSE</button>
-          <button id="as-sp-next" class="opt-btn" type="button">&#9197; NEXT</button>
-        </div>
-        <!-- CHECK ACCOUNT asks Spotify's own API which of the two invisible
-             causes is the real one: plan (GET /me -> product) or a token with no
-             streaming permission. Without it both surface as one opaque error. -->
-        <button id="as-sp-check" class="adv-more-btn" type="button">CHECK ACCOUNT</button>
-        <!-- The full player (art, progress, shuffle/repeat, device volume,
-             playlist search) lives in its own sheet — too much to inline here,
-             and worth keeping. It is reached from beside the settings that
-             enable it rather than from a permanently-greyed pause-menu button. -->
-        <button id="as-sp-open" class="adv-more-btn" type="button" disabled>&#9835; OPEN PLAYER&hellip;</button>
-        <p class="as-note">Status: <b id="as-sp-status">not configured</b></p>
-        <p class="as-note">Playing: <b id="as-sp-now">&mdash;</b></p>
-        <!-- The setup rules are static, so they live here rather than being
-             burned into the live status line. -->
-        <p class="as-note">Personal use only. Needs Spotify <b>Premium</b> (not Mini/Lite), your own app at developer.spotify.com, and your account on that app&rsquo;s user allowlist. Register this exact Redirect URI on it:</p>
-        <p class="as-note"><b id="as-sp-uri" class="sp-uri">&mdash;</b></p>
-        <p class="as-note">CONNECT sends you to Spotify to sign in and reloads the game on the way back &mdash; do it from the menu, not mid-race. This panel reopens when you return.</p>
-        <p class="as-note">Running it locally? Serve from <b>http://127.0.0.1:&lt;port&gt;/</b> &mdash; Spotify rejects <b>localhost</b> as a redirect URI.</p>
-      </details>
-
-    </div>
-    <div class="sheet-foot"><button id="as-close" autofocus class="bigbtn alt">BACK</button></div>
   </div>
 </dialog>
 

@@ -1995,3 +1995,14 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   they record what each change cost, not where the file ended up. The merged
   ceilings are whatever `node tools/check/ratchets.mjs --update` writes on the
   union, and that is the number the guard enforces.
+
+- `shellNodes` 1140 -> **1128** (2026-09-04): SPACE and OVERRUN — two sliders
+  and two switches for circuit reverb and off-throttle crackle. Both are audio
+  that did not exist at all rather than trims on audio that did: there was no
+  ConvolverNode anywhere in the tree, so every circuit was an anechoic chamber,
+  and lifting at revs sounded identical to coasting because loadLift is
+  clamp01(ax/12) and goes to zero the instant the throttle closes. Ten nodes for
+  two whole layers is the cheapest this section has bought anything. The number
+  goes DOWN rather than up because the settings restructure that landed
+  alongside it removed more nodes than these four added — measured on the
+  merged tree, which is the only honest place to measure it.
