@@ -839,6 +839,44 @@ peers on the same fixture already carry, and pinned in
 `tests/unit/select-specs.test.mjs` as a RULE (above whatever the gate's cap is),
 not as the number.
 
+### …and WHY it looked affordable (added after the fix, from the CI log)
+
+The fix works — Pages #1972's gate printed, on a healthy 7m29s job:
+
+```
+fits 10 tests; selected 0 across 0 specs
+EXCLUDED (declares 300s timeout): tests/specs/hud-layout.spec.js (2 tests)
+```
+
+**"(2 tests)".** It runs 25 — 4 VIEWS x 3 steer modes x 2 gear modes, plus one
+desktop case. `declaredTests` counts literal `test(...)` calls by AST, and 24
+of those 25 come from one `test(...)` call inside two nested `for` loops.
+
+So the budget priced this spec at 2 x 79.7 s ~= 160 s. The truth is ~25 x 130 s
+~= 54 minutes. THAT is why an undeclared 120 s budget looked affordable: the
+missing declaration was the trigger, but a 12x undercount is what made the
+selector willing to take it. My first write-up above credited only the
+declaration, and that was half the story.
+
+The undercount is not unique to it. Seventeen specs of 114 generate tests in a
+loop, so for all of them `declaredTests` returns a LOWER BOUND, not a count —
+the same figure `tools/ci/select-budget.mjs` already cites from
+`tools/ci/test-observed.mjs` ("17 across 16 specs"):
+
+```
+  44 of 44 looped  ui-audit.spec.js          3 of  3  menu-baseline.spec.js
+   4 of  7 looped  hud-layout.spec.js        3 of 11  ui-scale.spec.js
+   2 of  5 looped  autopilot.spec.js         2 of  8  elevation-tracks.spec.js
+   2 of  5 looped  tracks-walls.spec.js      + 10 more with 1 each
+```
+
+Most are already excluded by a declared budget. The principled fix is that an
+unknown count should be treated as unknown rather than as small — the same
+shape as "an undeclared budget is unknown, not safe" — but that changes what
+the gate selects, and it is not a change to make on a hunch at the end of a
+long session. The damage is already bounded by `--max-failures=3`, which stops
+any such spec in ~6 minutes instead of 26.
+
 Two things this leaves open, both stated rather than guessed at:
 
 - **48 race-fixture specs still declare <= 120 s** (`maxDeclaredTimeout`, against
