@@ -14,6 +14,10 @@ test("HUD metrics layout AUTO keeps every cluster and lets fitHud adapt", () => 
   assert.match(game, /store\.get\("hudGapsVis", "on"\)/);
   assert.match(game, /hud-met-\(\[a-z\]\+\)/);
   assert.match(game, /hudMapVisLabel/);
+  assert.match(game, /hudMapVis === "off" \? "off" : "on"/,
+    "HUD fold paints MAP gold when the map is on, red NO MAP when off");
+  assert.match(game, /hudGapsVis === "off" \? "off" : "on"/,
+    "HUD fold paints GAPS the same gold/red pair");
   assert.match(game, /return "LAYOUT: " \+ hudMetricsLayout\.toUpperCase\(\)/);
   assert.match(game, /LAYOUT: AUTO/);
   assert.match(hud, /function resolveMetricsLayout\(\)/);
