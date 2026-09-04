@@ -299,11 +299,19 @@ const NetTransport = (function () {
     catch (e) { return false; }
   }
 
+  // The derived username encodes its own 24h expiry (below); mirror
+  // iceCredFresh()'s pattern so a tab left open past that re-derives instead
+  // of racing with a credential coturn will by then reject.
+  const DERIVED_TTL_MS = 23 * 60 * 60 * 1000;
   let derived = null;
+  let derivedAt = 0;
   let deriving = null;
+  function derivedFresh() {
+    return !!(derived && (Date.now() - derivedAt) < DERIVED_TTL_MS);
+  }
   function derivedRelays() {
     if (!freeTurnOn()) return Promise.resolve(null);
-    if (derived) return Promise.resolve(derived);
+    if (derivedFresh()) return Promise.resolve(derived);
     if (deriving) return deriving;
     const sub = (typeof crypto !== "undefined" && crypto.subtle) ? crypto.subtle : null;
     if (!sub) return Promise.resolve(null);      // no WebCrypto: freestun only
@@ -317,6 +325,7 @@ const NetTransport = (function () {
         for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
         const credential = btoa(bin);
         derived = OPEN_RELAY_HOSTS.map((urls) => ({ urls, username, credential }));
+        derivedAt = Date.now();
         return derived;
       })
       .catch(() => null)
@@ -362,7 +371,7 @@ const NetTransport = (function () {
     // INTENT — yours, then your operator's, then whatever is free — means a
     // free entry can never displace one that works.
     if (freeTurnOn()) {
-      if (derived) list.push(...derived);
+      if (derivedFresh()) list.push(...derived);
       list.push(...FREE_TURN);
     }
     return list;

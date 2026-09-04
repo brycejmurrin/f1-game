@@ -109,6 +109,31 @@ on the 08-18 perf-hunt board, not this register.
   identical verdict. Unseen because `test:scenery` is not in the CI smoke job —
   the same gap that let `agent-drive-bench` sit red, and the standing argument
   for why "a guard nobody runs is prose with extra steps" (§9).
+- **`groundPatch`/`groundedSegments`/`waterField` take no side flip on a reverse
+  circuit — RAISED AND NOT ACTIONED, deliberately.** An audit pass flagged that
+  `js/track/tracks.js` wraps `tyreWall`/`wall`/`hedge` with
+  `SIDE(side) = def.reverse ? -side : side` but wraps `groundPatch`/`waterField`
+  with the origin-shift `SK()` only, so a runoff patch authored with the same
+  literal `side` as its paired tyre wall lands on the opposite side of the
+  corner (cited: `redbull.js:95` vs `:102-103`, `monza.js:230` vs `:228`,
+  `cota.js:457` vs `:441`, `spa.js:230` vs `:226`).
+  **The mechanism is real; the conclusion does not follow.** `tracks.js:277-280`
+  states the default is ORIGIN SHIFT ONLY — "no side flip, no reverse/mirror
+  remap … deliberate and conservative … giving them the full treatment here
+  would silently move already-shipped geometry." Authors place these by eye
+  against what the engine actually does, so a literal that disagrees with a
+  wrapped sibling's is expected rather than evidence of misplacement.
+  **This is the SECOND time an audit has read a documented asymmetry as a
+  defect** (the first was `hwZones` index-vs-arc space, withdrawn the same day
+  after the circuit files turned out to annotate both spaces). The lesson for
+  the next pass: in `js/track/`, a convention that looks inconsistent between
+  two emitters is usually written down within twenty lines of the code — read
+  the surrounding comment before costing a fix.
+  Settling any individual patch needs a rendered check per circuit
+  (`__apex.render({what:"map"})` against `modelDiagnostics()` positions), not a
+  code change; `tools/track/graph-parity.cjs` would show what any engine-level
+  fix moved.
+
 - **Per-circuit vertex budgets are ad hoc; the repo-wide gate is missing.**
   Qatar itself is resolved — cut 340,858 → 299,386 (a redundant street-lamp
   dressing pass and an over-tripled flood run) with the budget re-set to

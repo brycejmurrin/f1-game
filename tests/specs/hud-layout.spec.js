@@ -53,7 +53,10 @@ const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed"];
 // docs/research/PLATFORM-INPUT-NOTES.md §9: a real geometric fact that does
 // not reach the player because something else sits in front of it, and the
 // fix is to stop asserting on it, not to move CSS nobody will ever see move.
-const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors"];
+// #hud-limits joined this list after it shipped overlapping #hud-sectors by
+// 8.6px: the clash check only ever looked at elements named here, so a NEW
+// fixed-position HUD element is invisible to it until someone adds it.
+const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors", "#hud-limits"];
 
 async function race(page, steer, manual, ins) {
   await page.goto("/");

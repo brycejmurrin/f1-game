@@ -810,3 +810,45 @@ timeout) is still there and will still bite on a slow run. The rule in
 believing any red run. What this DOES retire is the assumption that a red
 smoke boot is unavoidable here; if it comes back, it is worth timing rather
 than waving through.
+
+## The change-aware gate has a coverage inversion (measured 2026-09-04)
+
+Measured on the 13-file audit push (`0f5daac..227070f`), which changed
+`js/game.js`, `car3d.js`, `career*`, `gltf.js`, `onboard.js`, `vantage.js`,
+`engine.js` and `tuner-panel.js`:
+
+```
+$ node tools/ci/select-specs.mjs --since 0f5daac
+13 changed file(s) [infra] -> groups: test:car, test:circuits, test:driving,
+                                      test:gfx, test:hooks, test:input, test:modes, test:ui
+SELECTION NOT MEANINGFUL: this diff touches 1 tracked/infra path(s)
+  (tests/data/ratchets.json) -- a change there can affect any spec, so nothing
+  is selected and the GATES own this push.
+budget fits 10 tests (retries 0, 120s/test, surviving 1 timeout); selected 0
+```
+
+and CI's "Selected specs (change-aware gate)" job accordingly skipped its
+Install-browser and Run-the-selection steps. **This is by design and the design
+is defensible** — the gates (4x Smoke, Driving model characterization, geometry
+sweeps, the parts census, the node suites) did run and did pass. But two rules
+compose into an inversion worth knowing about:
+
+1. **Touching `tests/data/ratchets.json` zeroes the selection.** Reasonable in
+   isolation. It is also the file that a large change is most likely to touch,
+   because any file crossing its ceiling forces an edit there.
+2. **The 120 s/10-test budget skips by size.** Every remaining spec printed
+   `SKIPPED (over budget)` — `camera-hooks`, `world-physics`, `longitudinal`,
+   `debris`, `drift`, `season`, `audit`, and 18 more.
+
+So a diff touching one file gets a targeted spec selection; a diff touching
+thirteen gets none. The breadth comes from the standing gates, not the
+selection, and the two are sized independently — the gates do not widen when
+the selection empties.
+
+Not proposing a change: raising the budget makes every push slower, and the
+`ratchets.json` rule exists because that file really can affect any spec. What
+is worth having is the awareness that on a big push the targeted layer
+contributes nothing, so the gates are the whole story — and it is the gates,
+not the selection, that should be argued about when deciding what a deploy has
+actually verified.
+
