@@ -19,7 +19,31 @@ const stored = (page, key) => page.evaluate((k) => JSON.parse(localStorage.getIt
 const activeName = (page) => page.evaluate(() =>
   ["relax", "standard", "pro"].find((n) => document.getElementById("pm-preset-" + n).classList.contains("active")) || null);
 
+// DECLARED BUDGET, because an UNDECLARED one is UNKNOWN rather than safe — and
+// unknown is what turned a healthy spec into a deterministic false red that
+// skipped the deploy job on Pages run 2015.
+//
+// The failures were NOT assertions. Both read `Test timeout of 120000ms
+// exceeded while setting up "context"` — Playwright could not create a browser
+// context at all. The CI pattern says the same thing: each worker passed one
+// test and then failed the next on setup, and a fresh worker again managed
+// exactly one. That is worker churn on a loaded runner, not this file.
+//
+// Same file on this box: 4/4 green, but the FIRST test costs 1.7 min (102 s) of
+// boot against the 120 s default, with the other three at 13.7 / 9.9 / 9.9 s.
+// The whole cost is that first boot; sharedTest hands the same page to the rest.
+// 102 s of headroom on an IDLE container is no headroom on a loaded runner —
+// parts-ers measured 29 s here against 195 s there, a 6.6x stretch.
+//
+// 300 s matches the other over-cap specs, so select-specs EXCLUDES this file by
+// name rather than selecting it into a gate its boot alone cannot clear.
+// This is the third instance of the shape documented in
+// docs/notes/TESTING-FIELD-NOTES.md: a healthy spec, a false red, a blocked
+// deploy, one per newly-touched area. It reached the gate because a css/hud.css
+// diff pulled it into the change-aware selection for the first time. 80 of 115
+// specs still declare no budget.
 test.describe("Apex 26 — presets", () => {
+  test.setTimeout(300_000);
   test("RELAX is more forgiving than PRO (more help, calmer steering)", async ({ page }) => {
     await load(page);
     await clickPreset(page, "relax");
