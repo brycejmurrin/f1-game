@@ -157,11 +157,22 @@ test("FAULTY-CHANGE RECALL: no real regression is dropped in silence", () => {
 });
 
 test("the selected-gate settings match select-budget's recommendation", () => {
-  // retries 0 halves the failure cost; 120 s per-test halves it again. If
-  // either drifts back to smoke's gate settings, the budget maths silently
-  // stops describing the job that runs.
+  // THE GATE'S CHEAPNESS MUST COME FROM `retries: 0`, NOT FROM A TIMEOUT BELOW
+  // THE COST OF THE WORK. This used to pin the literal 120 s, and that number
+  // was the defect: a spec that builds a circuit needs more than 120 s on these
+  // runners, so the gate killed healthy specs and skipped the deploy job on
+  // Pages runs 2015 and 2020. Pinning it protected the bug.
+  //
+  // retries 0 is the real saving and stays pinned — a retry doubles the cost of
+  // the very news this job exists to deliver. The timeout now has a FLOOR
+  // instead of a fixed value: never below MEASURED.perTestTimeoutSec, the
+  // allowance ci.yml already gives the smoke shards for the same circuit builds.
+  // Raising it is allowed; dropping under the measured cost is not.
   assert.equal(SELECTED_GATE.retries, 0);
-  assert.equal(SELECTED_GATE.perTestTimeoutSec, 120);
+  assert.ok(SELECTED_GATE.perTestTimeoutSec >= MEASURED.perTestTimeoutSec,
+    `the gate's per-test timeout (${SELECTED_GATE.perTestTimeoutSec}s) is below the measured ` +
+    `cost the rest of CI allows (${MEASURED.perTestTimeoutSec}s) — that is what made healthy ` +
+    "specs false-red and blocked the deploy");
   const gate = capacity(15, 1, MEASURED);
   const selected = capacity(15, 1, { ...MEASURED, ...SELECTED_GATE });
   assert.ok(selected.tests > gate.tests,

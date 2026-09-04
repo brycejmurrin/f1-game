@@ -1049,7 +1049,7 @@ jobs:
     #
     # The budget maths is tools/ci/select-budget.mjs (measured: 79.7 s/test at one
     # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).
-    # Hence retries 0 and --timeout=120000 here — the selector's settings, not
+    # Hence retries 0 and --timeout=240000 here — the selector's settings, not
     # smoke's gate settings (420 s, one retry): a retry only doubles the cost
     # of the news this job exists to deliver. The fixed smoke and driving-model
     # specs are excluded here because their independent blocking jobs own their
@@ -1153,7 +1153,7 @@ jobs:
         if: steps.sel.outputs.specs != ''
         env:
           APEX_WORKERS: 1
-        run: npm test -- ${{ steps.sel.outputs.specs }} --retries=0 --timeout=120000 --max-failures=3
+        run: npm test -- ${{ steps.sel.outputs.specs }} --retries=0 --timeout=240000 --max-failures=3
       # Record what failed so the NEXT run hoists it to the front. junit.xml is
       # the machine-readable half of the reporter set playwright.config already
       # writes; parsing it here keeps the tool free of CI-specific formats.
