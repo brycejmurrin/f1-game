@@ -1285,7 +1285,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   align-items: baseline;
 }
 #pm-panel-display > .pm-group-h b {
-  color: var(--text);
+  color: inherit;
   font-style: italic;
   font-weight: 700;
 }
