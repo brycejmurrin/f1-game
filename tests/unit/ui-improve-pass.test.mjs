@@ -995,10 +995,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "named modes stay text so gold still means enabled");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="auto"]', "color"), "var(--faster)",
     "AUTO is timing-green: the car is doing it");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="manual"]', "color"), "#4df",
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="manual"]', "color"), "var(--manual)",
     "MANUAL is garage-cool: you are doing it");
   assert.equal(decl(css("css/components.css"), 'button [data-fold="auto"], summary [data-fold="auto"]', "color"), "var(--faster)");
-  assert.equal(decl(css("css/components.css"), 'button [data-fold="manual"], summary [data-fold="manual"]', "color"), "#4df");
+  assert.equal(decl(css("css/components.css"), 'button [data-fold="manual"], summary [data-fold="manual"]', "color"), "var(--manual)");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("det.open = true"),
     "METRICS does not auto-open and blow the HIDE HUD pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",

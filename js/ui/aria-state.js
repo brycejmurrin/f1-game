@@ -23,7 +23,7 @@
 // be a per-frame cost for a surface that has no option groups at all.
 //
 // BINARY + HANDS. Gold is enabled, red is disabled. AUTO is timing-green
-// (--faster): the car is doing it. MANUAL is garage-cool (#4df): you are.
+// (--faster): the car is doing it. MANUAL is garage-cool (--manual): you are.
 // Other mode names (STANDARD, TILT, HIGH, WEBGL2) stay the button's ink.
 // Option-group chips (5 LAPS, DRY) stay unpainted.
 //

@@ -66,7 +66,7 @@ same steel italic + rule as COCKPIT; HUD SIZE stays a caption.
 Fold summaries are chip-height; the name is steel. Gold is enabled
 (ON, MAP / GAPS when those clusters show), red is disabled (OFF, NO
 MAP, NO GAPS). AUTO is `--faster` green (the car is doing it); MANUAL
-is garage-cool `#4df` (you are). Other mode names (STANDARD, TILT,
+is `--manual` garage-cool (you are). Other mode names (STANDARD, TILT,
 HIGH, WEBGL2) stay `--text`. The same inks paint those words on any
 menu switch.
 METRICS

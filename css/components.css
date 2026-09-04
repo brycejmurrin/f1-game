@@ -1445,7 +1445,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   content: "\25B4";
 }
 /* Name stays steel. Gold = enabled, red = disabled, green = AUTO
-   (--faster), blue = MANUAL (garage cool). Other names stay --text. */
+   (--faster), blue = MANUAL (--manual). Other names stay --text. */
 button [data-fold="on"],
 summary [data-fold="on"] {
   color: var(--gold);
@@ -1460,7 +1460,7 @@ summary [data-fold="auto"] {
 }
 button [data-fold="manual"],
 summary [data-fold="manual"] {
-  color: #4df;
+  color: var(--manual);
 }
 #pmsettings-inner details > summary [data-fold="k"] {
   color: var(--steel);
@@ -1488,7 +1488,7 @@ summary [data-fold="manual"] {
   font-weight: 700;
 }
 #pmsettings-inner details > summary [data-fold="manual"] {
-  color: #4df;
+  color: var(--manual);
   font-style: italic;
   font-weight: 700;
 }
