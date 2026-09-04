@@ -238,8 +238,8 @@ function buildSetup() {
   }
   if (unlimitedBtn) {
     unlimitedBtn.hidden = !!owned;
-    unlimitedBtn.textContent = unlimited ? "∞ FREE BUILD: ON" : "∞ FREE BUILD";
-    unlimitedBtn.className = "cs-unlimited-btn" + (unlimited ? " on" : "");
+    unlimitedBtn.textContent = unlimited ? "∞ FREE BUILD: ON" : "∞ FREE BUILD: OFF";
+    unlimitedBtn.className = "cs-unlimited-btn" + (unlimited ? " active" : "");
   }
 
   if (!csActiveCat) csActiveCat = store.get("garageTab", "team");

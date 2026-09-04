@@ -882,7 +882,7 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
    358 own px, so measuring the content kept a 1280×800 desktop (776 px of
    room; the normal two-column layout is 514) on the phone layout for good.
    Room 776 ≥ 760 → normal; a 390-tall landscape phone (366) stays compact. */
-#race-settings .sheet { --compact-at: 760px; }
+#race-settings .sheet { --compact-at: 480px; }
 /* --fit-at on wide-shaped sheets (zoom-corrected), not viewport orientation. */
 #results .sheet:not([data-shape="tall"])     { --fit-at: 220px; }
 #standings .sheet:not([data-shape="tall"])   { --fit-at: 220px; }

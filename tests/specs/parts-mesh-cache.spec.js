@@ -116,7 +116,7 @@ async function openSetup(page) {
 }
 
 async function ensureUnlimited(page) {
-  const on = await page.locator("#cs-unlimited").evaluate((el) => el.classList.contains("on"));
+  const on = await page.locator("#cs-unlimited").evaluate((el) => el.classList.contains("active"));
   if (!on) await page.locator("#cs-unlimited").click();
 }
 

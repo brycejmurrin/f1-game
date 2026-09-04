@@ -65,7 +65,7 @@ angle and saturates at a friction limit, so cornering is grip-limited — overco
 a corner and the front washes wide (understeer); loosen the rear and it steps out
 (oversteer). Brake for the corners; the car rewards a tidy line.
 
-**ADVANCED STEERING…** in the pause menu opens **STEERING & ASSISTS** —
+**STEERING…** in the pause menu opens **STEERING & ASSISTS** —
 **RELAX / STANDARD / PRO** presets, **STEERING** feel, **TILT SENSITIVITY**,
 **DRIVING HELP**, **RACING LINE**, **ADAPTIVE BUTTONS** (keys / on-screen
 arrows; default ON) and **BRAKE CUE** (a tick, never a takeover) — with lock,

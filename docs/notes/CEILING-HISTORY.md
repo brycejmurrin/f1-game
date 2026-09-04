@@ -1854,6 +1854,8 @@ The scans' own history, moved out of the ceiling comments:
   // 2026-09-03 deep pass: 374 -> 367 / 189 -> 188. Customize rows, title
   // subs, How-to-Play rules, and data-hub numerals moved onto tokens.
   // 2026-09-03 leftover pass: 185 -> 184 with rawColor 334 -> 330.
+  // 2026-09-04 UI consistency pass: rawColor 329 -> 313, distinct 181 -> 177.
+  // Garage #0c8 / #4df selected and delta inks moved onto --plate-on / --manual.
 ```
 
 ### Re-measured on the deploy union, 2026-09-04

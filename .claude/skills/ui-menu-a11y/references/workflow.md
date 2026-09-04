@@ -32,7 +32,7 @@ geometry bug.
    same tick a screen opens; waiting only for `ResizeObserver` creates a
    one-frame wrong layout.
 
-6. **Make visual state audible.** If a group uses `.active`, `.dh-active`, or
+6. **Make visual state audible.** If a group uses `.active` or
    an equivalent selected state, ensure `AriaState` observes that root/class
    or add explicit semantics (`aria-selected`, `aria-checked`, `role=option`,
    `role=tab`). Keep HUD roots out of broad observers.

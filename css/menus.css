@@ -898,14 +898,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
   cursor: pointer;
 }
 /* hover/press fills come from the button base (css/tokens.css) */
-/* Selected mark is the settings-tab recipe (left inset bar + glow), never an
-   `outline`. An outline paints outside the border box, and these chips sit
-   flush against the inline-start edge of a hidden-overflow scroller — so an
+/* Selected mark is --plate-on + a red ring, never an outline or glow.
+   An outline paints outside the border box, and these chips sit flush
+   against the inline-start edge of a hidden-overflow scroller — so an
    outset ring on the leftmost chip gets sliced. The inset bar cannot. */
 .sel-chip.active {
   border-color: var(--red);
   background: var(--plate-on);
-  box-shadow: var(--plate-on-glow);
+  box-shadow: none;
   color: var(--text);
 }
 .sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
@@ -1425,7 +1425,7 @@ h3.sel-label {
 /* ---------- race settings ---------- */
 .rs-row { margin-bottom: var(--gap); }
 #race-settings .sel-chip { font-size: clamp(var(--fs-micro), calc(1.6 * var(--vwz)), var(--fs-3)); padding: 8px 14px; }
-#race-settings .sel-chip.active { background: var(--plate-on); box-shadow: var(--plate-on-glow); color: var(--text); font-weight: 700; }
+#race-settings .sel-chip.active { background: var(--plate-on); box-shadow: none; color: var(--text); font-weight: 700; }
 /* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
 @container sheet (min-width: 440px) {
   #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
@@ -1639,9 +1639,9 @@ h3.sel-label {
    nothing here is a selection in the red sense either — it is a pressed
    toggle, so it steps up the elevation ladder and brightens its label. */
 .cz-liv-none.active {
-  background: var(--surf-3);
+  background: var(--plate-on);
   color: var(--text);
-  border-color: rgba(255, 255, 255, 0.42);
+  border-color: var(--red);
 }
 /* FINISH is a MATERIAL, not a colour, so its row carries a 3-way choice made of
    the same pill buttons instead of a colour well + NONE. Exactly one is active. */

@@ -152,12 +152,12 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   .dh-tab:hover { color: var(--text); }
 }
 .dh-tab:active { color: var(--text); }
-.dh-tab.dh-active {
+.dh-tab.active {
   background: var(--plate-on);
   border-color: var(--red);
   color: var(--text);
   font-weight: 800;
-  box-shadow: var(--plate-on-glow);
+  box-shadow: none;
 }
 /* UI SIZE can turn a physically short screen into a very short LOCAL card.
    body[data-density] is measured in those same zoom-adjusted units; compact
@@ -400,7 +400,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   border-left-width: 3px;
   color: var(--text);
 }
-.dh-dchip.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-dchip.active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: none; }
 .dh-telem-detail { display: flex; flex-direction: column; gap: 10px; }
 .dh-canvas {
   width: 100%; max-width: 600px; height: auto;
@@ -483,7 +483,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   color: var(--text);
 }
 .dh-trestart { padding: 7px var(--gap); }
-.dh-tplay.dh-tplaying { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-tplay.dh-tplaying { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: none; }
 .dh-trates { display: flex; gap: calc(var(--gap) / 3); }
 .dh-ratebtn {
   font-size: var(--fs-2); font-weight: 800;
@@ -492,7 +492,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-ratebtn.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-ratebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: none; }
 .dh-thint { font-size: var(--fs-2); color: var(--steel); font-style: italic; margin-left: auto; }
 /* On very narrow portrait, hide the scrub hint to keep transport on one row */
 body[data-width="narrow"] .dh-thint { display: none; }
@@ -532,7 +532,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-livebtn.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-livebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: none; }
 /* ---------- compare lanes (multi-driver + cross-session telemetry) ---------- */
 /* session badge on a lane row / header / legend chip (R, Q, P2, …) */
 .dh-lane-ses {
@@ -578,7 +578,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-sortbtn.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-sortbtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: none; }
 
 /* ---------- session picker (LIVE + TELEMETRY) ---------- */
 .dh-picker {
@@ -601,7 +601,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   color: var(--text);
   flex: 0 0 auto;
 }
-.dh-pill.dh-active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-pill.active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: none; }
 .dh-pill:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- TAP TARGETS ----------

@@ -81,7 +81,7 @@
   --pair-split: minmax(0, 1fr);
   --pair-main: minmax(0, 1.05fr);
   --pair-gap: calc(var(--pad) * 0.9);
-  --pair-compact: off;
+  --pair-compact: wide;
 }
 
 /* Keyed on the ATTRIBUTE, not on a second copy of the 620px threshold. Two
@@ -105,9 +105,8 @@
   border-right: 1px solid var(--card-line);
 }
 
-/* SHORT SHEET: `--pair-compact: off` stacks this sheet so #cr-body is the
-   scroller. Measured 852×393 @115%: pair-on left SLOT 3 and the guide CTAs
-   ~83px past #cr-inner. */
+/* SHORT SHEET: `--pair-compact: wide` keeps the pair on a wide compact
+   sheet, same as select / season. */
 /* Modes picker: DRIVER | MY TEAM side by side on any WIDE stacked sheet.
    Compact-wide used to stack (we hid the unused column) and wasted the
    axis there is plenty of; two-up + a two-line note clamp fits SLOT 1–3
@@ -204,13 +203,14 @@
   display: flex; flex-direction: column; gap: 4px;
   padding: calc(var(--pad) * 0.7);
 }
-/* Selection reuses the .sel-chip.active / .team-tile.active treatment: an inset
-   red rule plus a red wash and glow. A border-colour swap alone reads as noise
-   at a glance — the first build of this screen looked like nothing was picked. */
+/* Selection reuses the .sel-chip.active / .team-tile.active treatment:
+   --plate-on + a red ring, no glow. A border-colour swap alone reads as
+   noise at a glance — the first build of this screen looked like nothing
+   was picked. */
 .cr-flavour.active, .cr-teamtile.active, .cr-seat.active {
   border-color: var(--red);
-  background: var(--plate-on-strong);
-  box-shadow: inset 0 0 0 2px var(--red), var(--lift-sel);
+  background: var(--plate-on);
+  box-shadow: none;
 }
 .cr-flavour.active .cr-flavour-blurb,
 .cr-teamtile.active .cr-teamtile-meta,
@@ -343,6 +343,7 @@
 .cr-record-cta {
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-5); color: var(--red);
 }
+.cr-record-cta::after { content: "\2026"; }
 
 /* The position column carries a "P" here, unlike the championship block on the
    hub where the same component numbers rows 1..5 — these rows are sorted by YEAR,

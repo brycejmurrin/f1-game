@@ -812,7 +812,8 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.equal(decl(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) > :is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\)$/, "grid-row"), "3");
   assert.equal(decl(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) :is\(#rs-laps, #rs-weather\)$/, "flex-wrap"), "nowrap");
   assert.ok(rulesFor(menus, /^\.sheet\[data-shape="tall"\] #rs-body:not\(:has\(#rs-quali\[hidden\]\)\) #rs-caution-section,/).some((r) => r.decls.get("grid-row") === "4"));
-  assert.equal(decl(css("css/components.css"), "#race-settings .sheet", "--compact-at"), "760px");
+  assert.equal(decl(css("css/components.css"), "#race-settings .sheet", "--compact-at"), "480px",
+    "race-settings shares the 480 phone-landscape floor");
   assert.match(spotify, /settings\.hidden\s*=\s*true\b/);
   assert.match(spotify, /settings\.hidden\s*=\s*false\b/);
 });
@@ -1056,14 +1057,16 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact wide season setup keeps the calendar + pool pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--compact-at"), "480px",
     "season setup shares #sel-inner's 480 compact floor, not the 380 default");
-  assert.equal(decl(css("css/career.css"), "#cr-inner", "--pair-compact"), "off",
-    "career compact always stacks — pair-on starves the hub left column");
+  assert.equal(decl(css("css/career.css"), "#cr-inner", "--pair-compact"), "wide",
+    "career compact-wide keeps the pair, same as select / season");
   assert.equal(decl(css("css/career.css"), "#cr-inner", "--compact-at"), "480px",
     "career hub shares the 480 phone-landscape compact floor");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner", "--compact-at"), "480px");
   assert.equal(decl(css("css/overlays.css"), "#howtoplay-inner", "--compact-at"), "480px");
   assert.equal(decl(css("css/tuner.css"), "#audioset-inner, #spotifypanel-inner", "--compact-at"), "520px",
     "audio / Spotify pack earlier than the 380 default — two stacked sections plus notes");
+  assert.equal(decl(css("css/tuner.css"), "#lighting-inner, #camtune-inner", "--compact-at"), "620px",
+    "tuners stay 620 — twelve chips; a 573px phone at 115% must stay compact");
   assert.equal(decl(css("css/components.css"), "#vsfriend-inner", "--compact-at"), "480px");
   assert.equal(decl(css("css/components.css"), "#results .sheet, #standings .sheet, #customize .sheet", "--compact-at"), "480px");
   assert.equal(decl(css("css/career.css"), "#career-offers .sheet, #career-history .sheet, #career-guide .sheet, #quali .sheet", "--compact-at"), "480px");
@@ -1094,6 +1097,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(resultsJs, /btn\.id\s*=\s*"res-daily-share"/);
   assert.match(resultsJs, /clrBtn\.id\s*=\s*"res-ghost-clear"/);
   assert.match(resultsJs, /lbHead\.className\s*=\s*"sel-label"/);
+  assert.doesNotMatch(resultsJs, /#e10600/, "standings heads use .sel-label, not inline brand red");
+  assert.match(resultsJs, /head\.className\s*=\s*"sel-label"/);
   assert.doesNotMatch(resultsJs, /font-size:11px/, "TT share/clear chips use .sel-chip, not inline type");
   const shell = read("index.html");
   assert.match(shell, /id="sel-inner"[^>]*pair-foot-full/,
@@ -1103,6 +1108,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");
   assert.match(shell, /id="sel-car"[^>]*>YOUR CAR</);
   assert.match(shell, /id="sel-go"[^>]*>NEXT</);
+  assert.match(shell, /id="pm-advanced"[^>]*>STEERING&hellip;</,
+    "settings door is STEERING…, same word as the page it opens");
+  assert.match(shell, /id="sel-detail-chip"[^>]*>CIRCUIT DETAIL&hellip;</,
+    "circuit-detail door uses …, not a chevron");
   assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is BACK on the alt plate");
   assert.match(shell, /id="htp-close"[^>]*>BACK</, "How to Play returns to its parent, it does not commit");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
@@ -1130,8 +1139,10 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(menus, "#race-settings .sel-chip.active", "background"), "var(--plate-on)");
   assert.equal(decl(carsetup, ".cs-tab", "background"), "var(--plate)");
   assert.equal(decl(carsetup, ".cs-tab.active", "background"), "var(--plate-on)");
-  assert.equal(decl(data, ".dh-pill.dh-active", "background"), "var(--plate-on)");
-  assert.equal(decl(data, ".dh-livebtn.dh-active", "background"), "var(--plate-on)");
+  assert.equal(decl(carsetup, '#cs-cam[aria-expanded="true"]', "background"), "var(--plate-on)");
+  assert.equal(decl(carsetup, ".cs-view-btn.active", "background"), "var(--plate-on)");
+  assert.equal(decl(data, ".dh-pill.active", "background"), "var(--plate-on)");
+  assert.equal(decl(data, ".dh-livebtn.active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-tab", "color"), "var(--text)", "idle hub tabs are ink, not dim-as-disabled");
   assert.equal(decl(data, ".dh-sortbtn", "color"), "var(--text)");
   assert.equal(decl(components, ".sel-label", "color"), "var(--steel)", "section chrome, not leftover dim");

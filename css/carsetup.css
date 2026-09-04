@@ -158,17 +158,17 @@
 }
 #cs-budget.tight { color: var(--spark); }
 #cs-budget.over  { color: var(--red); }
-#cs-budget.unlimited { color: #0c8; }
+#cs-budget.unlimited { color: var(--gold); }
 .cs-unlimited-btn {
   flex: 0 0 auto; width: auto; margin: 0;
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4);
   padding: 4px 10px; border-radius: var(--r-sm);
-  background: var(--plate); color: var(--dim);
-  border: 1px solid var(--card-line);
+  background: transparent; color: var(--dim);
+  border: 1px solid transparent;
 }
-.cs-unlimited-btn.on {
-  background: rgba(0,204,136,0.18); color: #0c8;
-  border-color: rgba(0,204,136,0.4);
+.cs-unlimited-btn.active {
+  background: transparent; color: inherit;
+  border-color: transparent;
 }
 
 /* ---------- stat bars ---------- */
@@ -204,7 +204,7 @@
   font-size: var(--fs-2); font-weight: 700; color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-.cs-stat-val.up { color: #4df; }
+.cs-stat-val.up { color: var(--manual); }
 .cs-stat-val.down { color: var(--spark); }
 
 /* ---------- body: category pane + option pane ---------- */
@@ -342,9 +342,9 @@
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0; color: var(--text);
 }
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: color-mix(in oklab, var(--text) 40%, transparent); }
-.cs-tab.upgraded .cs-tab-lbl { color: #4df; }
+.cs-tab.upgraded .cs-tab-lbl { color: var(--manual); }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
-.cs-tab.active { background: var(--plate-on); border-color: var(--red); box-shadow: var(--plate-on-glow); }
+.cs-tab.active { background: var(--plate-on); border-color: var(--red); box-shadow: none; }
 .cs-tab.active .cs-tab-lbl { color: var(--text); }
 .cs-tab.active .cs-tab-cur { color: color-mix(in oklab, var(--text) 72%, transparent); }
 
@@ -369,7 +369,7 @@
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-2);
   padding: 1px 5px; border-radius: var(--r-xs);
 }
-.cs-delta.up { background: rgba(80,210,255,0.16); color: #4df; }
+.cs-delta.up { background: rgba(80,210,255,0.16); color: var(--manual); }
 .cs-delta.down { background: color-mix(in oklab, var(--spark) 16%, transparent); color: var(--spark); }
 .cs-opt-desc { font-size: var(--fs-2); color: var(--dim); line-height: 1.35; margin-top: 6px; }
 .cs-opt-cost {
@@ -380,7 +380,7 @@
 .cs-opt-cost.free { color: rgba(255,255,255,0.3); font-weight: 600; }
 .cs-opt.active {
   background: var(--plate-on); border-color: var(--red);
-  box-shadow: var(--plate-on-glow);
+  box-shadow: none;
 }
 .cs-opt.active .cs-opt-dot { border-color: var(--red); background: radial-gradient(circle, #fff 0 3px, var(--red) 4px); }
 .cs-opt.active .cs-opt-cost { color: #fff; }
@@ -606,7 +606,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   .cs-liv-edit:hover { background: color-mix(in srgb, var(--edit-fill) 24%, transparent); color: #fff; }
 }
 .cs-liv-edit:active { background: color-mix(in srgb, var(--edit-fill) 32%, transparent); color: #fff; }
-.cs-liv-custom .cs-opt-tag { background: rgba(80,210,255,0.18); color: #4df; }
+.cs-liv-custom .cs-opt-tag { background: rgba(80,210,255,0.18); color: var(--manual); }
 
 /* ---------- inline livery creator ---------- */
 .cs-liv-editor { display: flex; flex-direction: column; gap: calc(var(--gap) * 0.7); padding: 2px; }
@@ -937,8 +937,8 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 }
 .cs-cam-caret { font-size: var(--fs-micro); line-height: 1; transition: transform 0.15s ease; }
 #cs-cam[aria-expanded="true"] {
-  background: rgba(0,204,136,0.18); color: #0c8;
-  border-color: rgba(0,204,136,0.4);
+  background: var(--plate-on); color: var(--text);
+  border-color: var(--red);
 }
 #cs-cam[aria-expanded="true"] .cs-cam-caret { transform: rotate(180deg); }
 
@@ -1065,8 +1065,8 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    keeps the attribute purely a screen-reader concern. Only SPIN ever takes it;
    the view chips are momentary jumps, not a selection. */
 .cs-view-btn.active {
-  background: rgba(0,204,136,0.18); color: #0c8;
-  border-color: rgba(0,204,136,0.4);
+  background: var(--plate-on); color: var(--text);
+  border-color: var(--red);
 }
 /* `contents` keeps the span as the chips' DOM PARENT — which is the whole point
    of it, since AriaState groups by parent — while taking its box out of the
