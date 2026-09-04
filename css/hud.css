@@ -673,11 +673,10 @@ body.in-race:has(#pmsettings:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #
    `min(88vw, 380px)` formula here, which stopped being true the moment the
    panel grew to 560px in its wide-and-short rail layout, and everything laid
    out to clear 380px landed on top of it.
-   The controls also shrink: at 852x393 the strip left of a 560px panel is
-   ~276px, which will not hold two 118px sticks and a 64px column at full size. */
-body.lt-open:not(.pc-nopanel) .pc-stick { width: 84px; height: 84px; }
-body.lt-open:not(.pc-nopanel) .pc-nub { width: 34px; height: 34px; margin: -17px 0 0 -17px; }
-body.lt-open:not(.pc-nopanel) .pc-btn { width: 46px; height: 42px; font-size: 14px; }
+   Sticks stay the full 118px pad (same as HIDE PANEL) and climb/dive uses
+   `--steer` (84px — the steering-arrow diameter in css/overlays.css). The
+   old 84/46 shrink was sized against a 560px rail panel; flying `--dock-w`
+   is now 300px, so the free strip on 852×393 holds the driving-sized pads. */
 body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(10px + var(--sal) / var(--ui-scale)); }
 /* --dock-px, not --dock-w: the PANEL is zoomed — it is a `.sheet`, and
    css/components.css puts `zoom: var(--ui-scale)` on every sheet — so it paints
@@ -698,7 +697,8 @@ body.lt-open:not(.pc-nopanel) .pc-altcol {
   left: auto; right: calc(var(--dock-px) / var(--ui-scale) + 14px);
 }
 body.lt-open:not(.pc-nopanel) .pc-look-wrap {
-  left: auto; right: calc(var(--dock-px) / var(--ui-scale) + 66px);
+  /* 14px air + the climb/dive column (`--steer`) + 8px gap before LOOK. */
+  left: auto; right: calc(var(--dock-px) / var(--ui-scale) + 14px + var(--steer) + 8px);
 }
 .pc-lbl { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
 .pc-stick {
@@ -718,12 +718,12 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
   display: flex; flex-direction: column; gap: 10px;
 }
 .pc-btn {
-  width: 64px; height: 58px; border-radius: var(--r-lg); margin: 0;
-  /* WCAG floor for the zoomed photo column: 64x58 paints 25.6x23.2 at UI
-     SIZE 40% and the lt-open 46x42 variant paints 18.4x16.8 (2026-08-21
-     sweep). Inert at >=100%. */
+  /* Same diameter as `.steerbtn` (`--steer`: 84px). The old 64×58 / 46×42
+     pads read as a different, smaller control family next to the driving
+     arrows the player just came from. */
+  width: var(--steer); height: var(--steer); border-radius: var(--r-lg); margin: 0;
   min-width: var(--tap-min); min-height: var(--tap-min);
-  font-size: 18px; font-weight: 800;
+  font-size: 22px; font-weight: 800;
   background: rgba(20,20,30,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.25);
   display: flex; align-items: center; justify-content: center;
 }
