@@ -1125,6 +1125,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
+  gap: 0.35em;
   text-align: left;
   width: 100%;
   padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
@@ -1444,8 +1445,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
 }
-/* Name stays steel. Gold = enabled, red = disabled, green = AUTO
-   (--faster), blue = MANUAL (--manual). Other names stay --text. */
+/* Name stays steel. Gold/red = enablement. Green/blue = 2-state
+   AUTO/MANUAL agency only. Named cycles stay --text. */
 button [data-fold="on"],
 summary [data-fold="on"] {
   color: var(--gold);

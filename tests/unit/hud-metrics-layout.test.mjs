@@ -18,8 +18,8 @@ test("HUD metrics layout AUTO keeps every cluster and lets fitHud adapt", () => 
     "HUD fold paints MAP gold when the map is on, red NO MAP when off");
   assert.match(game, /hudGapsVis === "off" \? "off" : "on"/,
     "HUD fold paints GAPS the same gold/red pair");
-  assert.match(game, /hudMetricsLayout === "auto" \? "auto" : "val"/,
-    "HUD fold paints LAYOUT AUTO timing-green, forced names stay text");
+  assert.match(game, /\["val", hudMetricsLayout\.toUpperCase\(\)\]/,
+    "LAYOUT AUTO is a named cycle — fold chip stays text, not agency green");
   assert.match(game, /return "LAYOUT: " \+ hudMetricsLayout\.toUpperCase\(\)/);
   assert.match(game, /LAYOUT: AUTO/);
   assert.match(hud, /function resolveMetricsLayout\(\)/);

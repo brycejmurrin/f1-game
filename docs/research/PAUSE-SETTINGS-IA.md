@@ -63,12 +63,14 @@ does not hide a cluster). MAP and GAPS default ON; AUTO on the map still
 hides onboard, OFF is the explicit hide. Sliders stay
 settings rows (steel track, text value). UI SIZE uses the
 same steel italic + rule as COCKPIT; HUD SIZE stays a caption.
-Fold summaries are chip-height; the name is steel. Gold is enabled
-(ON, MAP / GAPS when those clusters show), red is disabled (OFF, NO
-MAP, NO GAPS). AUTO is `--faster` green (the car is doing it); MANUAL
-is `--manual` garage-cool (you are). Other mode names (STANDARD, TILT,
-HIGH, WEBGL2) stay `--text`. The same inks paint those words on any
-menu switch.
+Fold summaries are chip-height; the name is steel. Two pair kinds,
+then names: gold / red is enablement (ON, OFF, MAP / GAPS when those
+clusters show, NO MAP / NO GAPS). Green / blue is agency, and only
+on a 2-state AUTO / MANUAL control (GEARS, ACTIVE AERO). AUTO on a
+longer cycle (LAYOUT, RESOLUTION, THREE PATH, SCREENSHOTS, MAP: AUTO)
+is a name and stays `--text`, like STANDARD / TILT / WEBGL2. Settings
+`LABEL: VALUE` rows keep a space after the colon (NBSP + flex gap —
+inline-flex collapses a wrap's ordinary space).
 METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO

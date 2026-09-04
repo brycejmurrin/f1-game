@@ -493,7 +493,7 @@ function paintHudDetailsSummary() {
   if (!sum) return;
   const on = !document.body.classList.contains("hud-hidden");
   const bits = [["k", "HUD"], [on ? "on" : "off", on ? "ON" : "OFF"],
-    ["val", hudProfile.toUpperCase()], [hudMetricsLayout === "auto" ? "auto" : "val", hudMetricsLayout.toUpperCase()],
+    ["val", hudProfile.toUpperCase()], ["val", hudMetricsLayout.toUpperCase()],
     [hudMapVis === "off" ? "off" : "on", hudMapVis === "off" ? "NO MAP" : "MAP"],
     [hudGapsVis === "off" ? "off" : "on", hudGapsVis === "off" ? "NO GAPS" : "GAPS"]];
   sum.innerHTML = bits.map((p, i) => (i ? '<span data-fold="sep"> · </span>' : "") +
