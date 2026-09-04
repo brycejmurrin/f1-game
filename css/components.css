@@ -1367,18 +1367,18 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:active {
   color: var(--text);
   font-style: normal;
-  background-color: var(--plate);
+  background-color: var(--surf-3);
   background-image: none;
-  border: 1px solid var(--plate-line);
+  border: 1px solid color-mix(in oklab, var(--text) 34%, transparent);
   border-radius: var(--r-md);
   box-shadow: none;
 }
 @media (hover: hover) {
   #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:hover {
     color: var(--text);
-    background-color: var(--plate-hover);
+    background-color: var(--plate-press);
     background-image: none;
-    border: 1px solid var(--plate-line);
+    border: 1px solid color-mix(in oklab, var(--text) 48%, transparent);
     box-shadow: none;
   }
 }
