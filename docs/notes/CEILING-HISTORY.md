@@ -1472,6 +1472,9 @@ live in `ratchets.json`.
   `shellNodes` 1065 -> **1062** (2026-09-04): re-measured on the union with
   `claude/f1-game-project-26h3ng`. The +3 is the settings BACK stack on top
   of their HUD pack; the shell-node drop is tabs → door index.
+- `js/game.js` 9629 -> **9632** lines / 5292 -> **5295** code, tree
+  `shellNodes` 1071 -> **1068** (2026-09-04): second union (camera-hud
+  defaults landed on deploy while we merged). Same +3 / −3 shape.
 
 ## Tree-wide ratchets (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-03)
 
