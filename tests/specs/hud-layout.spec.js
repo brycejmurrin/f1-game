@@ -58,14 +58,20 @@ const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed"];
 // fixed-position HUD element is invisible to it until someone adds it.
 const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors", "#hud-limits"];
 
-async function race(page, steer, manual, ins) {
+async function race(page, steer, manual, ins, opts) {
+  const o = opts || {};
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(([s, m]) => {
+  await page.evaluate(([s, m, prof]) => {
     localStorage.setItem("apex26.steerMode", JSON.stringify(s));
     localStorage.setItem("apex26.manual", JSON.stringify(m));
-  }, [steer, manual]);
+    // THE PROFILE IS A BOOT KEY. Every case below used the DEFAULT profile on a
+    // chase camera, so the whole broadcast layout — which re-anchors `.hud-top`
+    // from centre to the top-LEFT corner, into #minimap's own slot — was never
+    // once measured here. It shipped painting the tower over the POS tile.
+    if (prof) localStorage.setItem("apex26.hudProfile", JSON.stringify(prof));
+  }, [steer, manual, o.profile || null]);
   await page.reload();
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   await page.addStyleTag({ content:
@@ -73,6 +79,9 @@ async function race(page, steer, manual, ins) {
   await page.evaluate(() => window.__apex.race("monza"));
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => { window.__apex.go(); window.__apex.jump(0.1, 60, 0); });
+  // The CAMERA decides half the adaptive rules (ONBOARD_IDS / BCAM_IDS in
+  // js/ui/hud.js), so a spec that never leaves chase cannot see them.
+  if (o.cam) await page.evaluate((c) => { window.__apex.camera(c); }, o.cam);
   await page.waitForTimeout(300);
 }
 
@@ -171,6 +180,34 @@ for (const v of VIEWS) {
         });
       }
     }
+  });
+}
+
+// THE ADAPTIVE COMBINATIONS. Everything above drives the DEFAULT profile on a
+// chase camera, which is why the broadcast tower shipped painted over the POS
+// tile: `body.hud-prof-broadcast .hud-top` re-anchors from `left: 50%` to the
+// top-LEFT corner — #minimap's own slot — and nothing here had ever laid that
+// out. One notched landscape phone, the profile x camera pairs that actually
+// change the anchoring.
+for (const c of [
+  { name: "broadcast + cockpit", profile: "broadcast", cam: "cockpit" },
+  { name: "broadcast + heli",    profile: "broadcast", cam: "heli" },
+  { name: "minimal + cockpit",   profile: "minimal",   cam: "cockpit" },
+]) {
+  test.describe(c.name, () => {
+    test.setTimeout(300_000);
+    test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+    test("no HUD element sits on another, and none leaves the safe area", async ({ page }) => {
+      const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+      await race(page, "buttons", false, v, { profile: c.profile, cam: c.cam });
+      const r = await measure(page, CTRL, [...HUD, ...HUD_LANDSCAPE_ONLY], v.w, v.h, v);
+      expect(r.overlaps, "controls must not sit on each other").toEqual([]);
+      // The one this pass exists for: a HUD readout painting over another HUD
+      // readout. A hidden element has no box, so a profile that legitimately
+      // drops the map or the gaps simply contributes nothing here.
+      expect(r.hudClash, "no HUD readout may sit on another HUD readout").toEqual([]);
+      expect(r.unsafe, "nothing may sit under the notch or the home indicator").toEqual([]);
+    });
   });
 }
 
