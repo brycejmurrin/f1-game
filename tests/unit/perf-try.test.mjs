@@ -143,9 +143,11 @@ test("AI cars outside an 8 m frustum sphere are not drawn — shadows are enqueu
   const open = [0, 0, 0, 1e6];
   const withD = (d) => [[0, 0, 0, d], open, open, open, open, open];
   const counts = (names) => ({ draw: names.filter((n) => n === "draw").length, shadow: names.filter((n) => n === "drawShadow").length, decal: names.filter((n) => n === "drawDecal").length });
-  // Pin lastFrame, then measure both plane sets at the same `now`. Two live
-  // rAF stamps let cars move: a rival can cross the behind-camera cull
-  // (which drops its shadow BEFORE enqueue) between pumps and flake 13 vs 12.
+  // Two live rAF stamps are different frames: the caster set is still settling
+  // (13 on the opening frames, 12 from the third on) and cars can cross the
+  // behind-camera cull (which drops a shadow BEFORE enqueue). Either path
+  // flakes 13 vs 12. Pin lastFrame, then measure both plane sets at the same
+  // `now` so dt=0 — only the stub frustum changes.
   const t = 1e6;
   g.pumpFrame(t);
   FRUSTUM.planes = withD(-7.99);
