@@ -1529,6 +1529,12 @@ button [data-fold="off"],
 summary [data-fold="off"] {
   color: var(--red);
 }
+/* ON/OFF option chips: only the selected word is gold/red. Lighting both
+   plates (and the idle sibling) made red mean OFF and SELECTED at once. */
+#pmsettings-inner .opt-btn:not(.active) [data-fold="on"],
+#pmsettings-inner .opt-btn:not(.active) [data-fold="off"] {
+  color: inherit;
+}
 #pmsettings-inner details > summary [data-fold="k"] {
   color: var(--steel);
   font-style: italic;

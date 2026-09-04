@@ -439,6 +439,9 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   flex: 1 1 0; width: auto;
   min-width: 52px; min-height: var(--tap-sm);
   padding: calc(var(--gap) / 3) var(--gap); font-size: var(--fs-micro); letter-spacing: var(--ls-3);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 /* NOW PLAYING card. The old row put a SKIP button first and the track name in
    11px dim text after it, so the least important control was the most
@@ -561,6 +564,18 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .opt-btn.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
   box-shadow: var(--plate-on-glow);
+}
+/* Settings: a named pick still gets a red ring (STANDARD vs PRO has no
+   gold/red word). The glow is the old "lighted" plate — drop it. ON/OFF
+   pairs drop the ring too: the selected word is the whole signal. */
+#pmsettings-inner :is(.opt-btn, .preset-btn).active {
+  box-shadow: none;
+}
+#pmsettings-inner .as-toggle .opt-btn.active {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: inherit;
 }
 /* THE ACTION BAR IS NOT ALLOWED OFF THE BOTTOM. #lt-rows is meant to absorb all
    the overflow so the panel itself never scrolls (see the head of this file),

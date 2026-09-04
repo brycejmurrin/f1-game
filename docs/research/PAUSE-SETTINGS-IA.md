@@ -84,6 +84,10 @@ same steel italic + rule as COCKPIT; HUD SIZE stays a caption.
 Fold summaries are chip-height; the name is steel, ON is gold, OFF is
 red, values are `--text` (steel-on-steel hid the choices). The same
 gold / red pair paints the ON/OFF word on any menu switch.
+On an ON/OFF pair the selected word is the only selected mark — do not
+also light the plate (a red ring on gold ON made red mean OFF and
+chosen). The idle sibling stays steel. Named picks (presets, ALL /
+DEFAULT, STEERING steps) still get a red ring, without the glow.
 METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO
