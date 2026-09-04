@@ -476,11 +476,12 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   margin: 0;
 }
 
-/* A slider follows its switch: RED while the thing it controls is on, GREY when
-   it is off. Grey via accent-color rather than a low opacity — a ghosted control
-   reads as "still loading", a grey one reads as "off". It keeps its row either
-   way, so flipping the switch back never reflows the panel. */
-.tune-row input[type="range"]:disabled { accent-color: #6a6a75; cursor: default; }
+/* MUSIC / Spotify volume only: GREY while the matching switch is off. Every
+   other range stays red, including a disabled lighting/camera knob. Grey via
+   accent-color rather than a low opacity — a ghosted control reads as "still
+   loading", a grey one reads as "off". */
+#audioset .tune-row input[type="range"]:disabled,
+#spotifypanel .tune-row input[type="range"]:disabled { accent-color: #6a6a75; }
 .tune-row.tune-off { opacity: 0.75; }
 .tune-row.tune-off .tune-label { color: var(--dim); }
 .tune-row.tune-off .tune-label b { color: var(--dim); }

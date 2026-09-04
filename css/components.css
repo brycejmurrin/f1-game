@@ -43,10 +43,10 @@
   .grain::before { display: none; }
 }
 
-/* Menu <input type=range> — native accent chrome (filled track + UA thumb),
-   not a custom red-dot-on-grey-line. Height is --slider (32 painted px): it
-   divides by --ui-scale so UI SIZE zoom does not grow the hit. Tuner red,
-   DISPLAY steel, disabled grey stay on accent-color. */
+/* Menu <input type=range> — native accent chrome (filled track + UA thumb).
+   Height is --slider (32 painted px): it divides by --ui-scale so UI SIZE
+   zoom does not grow the hit. Every range is red; only MUSIC / Spotify
+   volume goes grey while the matching switch is off. */
 input[type="range"] {
   height: var(--slider);
   min-height: var(--slider);
@@ -54,6 +54,7 @@ input[type="range"] {
   cursor: pointer;
   touch-action: manipulation;
 }
+input[type="range"]:disabled { cursor: default; }
 
 /* ---------- screen: full-viewport overlay ---------- */
 .screen {
@@ -1278,7 +1279,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-size: var(--fs-micro);
 }
 /* UI SIZE heading: same .pm-group-h as COCKPIT. The % sits on the right
-   in text, not tuner red. Hidden .tune-label keeps the slider row labeled. */
+   in heading steel (not tuner red). Hidden .tune-label keeps the slider
+   row labeled. The range itself inherits the shared red accent. */
 #pm-panel-display > .pm-group-h {
   display: flex;
   justify-content: space-between;
@@ -1288,9 +1290,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: inherit;
   font-style: italic;
   font-weight: 700;
-}
-#pm-panel-display .tune-row input[type="range"] {
-  accent-color: var(--steel);
 }
 #pm-hud-details #pm-hud-sample,
 #pmsettings-inner[data-density="compact"] #pm-hud-sample {

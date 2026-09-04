@@ -898,8 +898,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "METRICS inner rows drop plate chrome");
   assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-label b", "color"), "var(--text)",
     "DISPLAY slider values are text, not tuner red");
-  assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-row input[type=\"range\"]", "accent-color"), "var(--steel)",
-    "DISPLAY slider track is steel, not tuner red");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-row input[type=\"range\"]", "accent-color"), null,
+    "DISPLAY sliders inherit the shared red accent — no steel override");
   assert.match(code("js/perf/renderer-picker.js"), /pm-display-adv/,
     "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
   assert.match(read("index.html"), /id="pm-display-adv"/,
@@ -1131,7 +1131,9 @@ test("menu range sliders share a painted-size token that cancels UI SIZE zoom", 
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "height"), "var(--slider)");
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "min-height"), "var(--slider)");
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "accent-color"), "var(--red)",
-    "native accent fill, not a custom red-dot thumb");
+    "every menu range is red, including DISPLAY");
+  assert.equal(decl(css("css/tuner.css"), /#audioset .tune-row input\[type="range"\]:disabled/, "accent-color"), "#6a6a75",
+    "MUSIC volume is grey only while its switch is off");
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "appearance"), null,
     "leave the UA slider chrome — appearance:none was the red-dot-on-grey look");
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]::-webkit-slider-thumb", "width"), null);
