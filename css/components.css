@@ -870,8 +870,11 @@ p, .adv-help, .as-note, .adv-intro, .dh-race-sub, .dh-error-msg { text-wrap: pre
    phone, with the rest black. 760px matches #pmsettings and #customize, which
    are the other two that carry a form in two columns. */
 #vsfriend    { --sheet-w: 760px; }
-#vsfriend-inner { --fit-at: 280px; }
+#vsfriend-inner { --fit-at: 280px; --compact-at: 480px; }
 #vsfriend-inner:not([data-shape="tall"]) { --fit-at: 200px; }
+#results .sheet,
+#standings .sheet,
+#customize .sheet { --compact-at: 480px; }
 
 /* Dialogs stack over a full screen (the team picker sits on the select screen),
    so the scrim has to actually separate them — 0.6 left the sheet looking
@@ -1038,13 +1041,12 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 
 /* ---------- settings sub-menu ----------
-   One category at a time. Tabs stay a single equal-width row (flex, not a
-   3-col grid) so CONTROLS / DISPLAY / MORE share a top edge with the first
-   setting. A side rail plus a duplicate .pm-group-h left a dead strip above
-   the tabs and a 3-vs-2 column that never looked level. High UI sizes must
-   not spend more than one primary control row on that navigation. */
+   Door index, then one page. Tabs hid MORE and spent a sticky row the
+   phone-landscape sheet cannot spare (docs/research/PAUSE-SETTINGS-IA.md).
+   .pm-doors already balances the home list; pages reuse .pm-group. */
 #pmsettings-inner {
   --fit-at: 300px;
+  --compact-at: 480px;
 }
 #pmsettings-inner:not([data-shape="tall"]) { --fit-at: 220px; }
 #pm-settings-body {
@@ -1053,75 +1055,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   gap: var(--gap);
   align-items: start;
 }
-#pm-category-tabs {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  --balance-basis: 7.25rem;
-  --balance-min: 7.25rem;
-  gap: calc(var(--gap) * 0.5);
-  padding-bottom: calc(var(--gap) * 0.6);
-  /* Match the sheet surface so sticky tabs do not flash --bg through scroll. */
-  background: var(--surf-1);
-}
-/* Equal segments: override .balanced-row's 7.25rem basis so three tabs stay
-   one even row instead of wrapping MORE onto a lonely second line. */
-#pm-category-tabs > button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: var(--tap);
-  margin: 0;
-  padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.5) calc(var(--gap) * 0.6) calc(var(--gap) * 0.84);
-  border: 1px solid var(--plate-line);
-  border-radius: var(--r-sm);
-  background: var(--plate);
-  /* Same ink as the doors under the tab. Selected is the red plate, not a
-     second type colour — steel is section chrome, not a control label. */
-  color: var(--text);
-  font-family: var(--font-hud);
-  font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
-  font-weight: 700;
-  letter-spacing: var(--ls-3);
-  text-align: center;
-}
-#pm-category-tabs > button.active,
-#pm-category-tabs > button[aria-selected="true"] {
-  color: var(--text);
-  border-color: var(--red);
-  background: var(--plate-on);
-  /* Edge tick + plate glow: selected = two signals (not colour alone). */
-  box-shadow: inset 3px 0 0 var(--red), var(--plate-on-glow);
-}
-/* At very high UI zoom a phone sheet can be under 250 LOCAL px even though it
-   fills the physical viewport. Keep the aria-label as the accessible name,
-   but paint deliberate compact labels instead of clipping half a word. */
-@container sheet (max-width: 250px) {
-  #pm-tab-controls,
-  #pm-tab-display { font-size: 0; }
-  #pm-tab-controls::after,
-  #pm-tab-display::after { font-size: var(--fs-1); }
-  #pm-tab-controls::after { content: "CTRL"; }
-  #pm-tab-display::after { content: "DISP"; }
-}
-/* Compact + locally narrow: lock one row. Equal flex still fills the
-   sheet; overflow-x is the escape if a label cannot shrink further. */
-@container sheet (max-width: 519px) {
-  #pmsettings-inner[data-density="compact"] #pm-category-tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto; overflow-y: hidden;
-    overscroll-behavior-x: contain; touch-action: pan-x;
-    scrollbar-width: none;
-  }
-  #pmsettings-inner[data-density="compact"] #pm-category-tabs::-webkit-scrollbar { display: none; }
-}
+#pm-settings-index[hidden],
+.pm-groups > [role="region"][hidden] { display: none !important; }
 .pm-groups { min-width: 0; }
-.pm-groups > [role="tabpanel"] { min-width: 0; }
-.pm-groups > [role="tabpanel"][hidden] { display: none !important; }
+.pm-groups > [role="region"] { min-width: 0; }
 .pm-group { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
   /* Steel section chrome — red is reserved for the rule under the label. */
@@ -1135,10 +1072,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
-/* Tab already names the category. Keep later headings (COCKPIT). */
+/* Sheet title names CONTROLS / DISPLAY. Later DISPLAY headings
+   (COCKPIT) stay. */
 #pm-panel-controls > .pm-group-h:first-child,
-#pm-panel-display > .pm-group-h:first-child,
-#pm-panel-more > .pm-group-h:first-child {
+#pm-panel-display > .pm-group-h:first-child {
   display: none;
 }
 .pm-group button { margin: 0; width: 100%; }
@@ -1164,7 +1101,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pmsettings-inner .pm-doors button {
   width: auto;
-  /* Same rank as the category tabs: a door, not a key/value row. */
+  /* A door, not a key/value row. */
   justify-content: center;
   text-align: center;
   /* Title-room recipe: carbon tile + steel line. MORE doors sit on the
@@ -1284,7 +1221,181 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    so folding the ids in with the classes would silently promote .tune-row
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status) { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
+/* DISPLAY: UI SIZE and HUD SIZE stack in the left column; the live sample
+   sits beside both instead of a leftover full-width slider row plus a
+   third sample row. Named areas so METRICS opening cannot steal the hole.
+   dense lets GRAPHICS sit beside RESOLUTION after the spanning renderer row. */
+#pmsettings-inner[data-shape="wide"] #pm-panel-display {
+  grid-template-areas:
+    "hide metrics"
+    "ui sample"
+    "hud sample";
+  grid-auto-flow: dense;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]) {
+  grid-template-areas:
+    "hide hide"
+    "metrics metrics"
+    "ui sample"
+    "hud sample";
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud { grid-area: hide; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
+  grid-area: metrics;
+  margin: 0;
+  align-self: start;
+  min-width: 0;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: ui; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale) { grid-area: hud; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample {
+  grid-area: sample;
+  align-self: center;
+  justify-self: start;
+  margin-top: 0;
+}
+#pmsettings-inner[data-density="compact"] #pm-panel-display .tune-row {
+  min-height: 0;
+  gap: 0;
+}
+#pmsettings-inner[data-density="compact"] #pm-hud-sample {
+  margin-top: 0;
+}
+#pmsettings-inner[data-density="compact"] #pm-hud-sample::before {
+  display: none;
+}
+/* DISPLAY: HIDE HUD | METRICS share the wide pair. Inner metrics buttons
+   go 2-up whenever the sheet is wide or compact — SheetShape density, not
+   a viewport max-height media (the injected submenu used to key on 420px). */
+#pm-metrics-details [role="group"] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
+  max-height: min(280px, calc(100 * var(--svhz, 1svh) - 9rem));
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+}
+#pm-metrics-details [role="group"] > button {
+  width: 100%;
+  margin: 0;
+}
+#pmsettings-inner #pm-metrics-details > summary {
+  height: var(--tap);
+  min-height: var(--tap);
+  box-sizing: border-box;
+  cursor: pointer;
+  justify-content: flex-start;
+  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-weight: 700;
+  letter-spacing: var(--ls-5);
+  opacity: 1;
+  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+}
+#pm-metrics-details[open] > summary::before { content: "\25B4"; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details [role="group"],
+#pmsettings-inner[data-density="compact"] #pm-metrics-details [role="group"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
+  max-height: min(160px, calc(100 * var(--svhz, 1svh) - 7rem));
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details [role="group"] > button,
+#pmsettings-inner[data-density="compact"] #pm-metrics-details [role="group"] > button {
+  width: auto;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details .as-note,
+#pmsettings-inner[data-density="compact"] #pm-metrics-details .as-note {
+  grid-column: 1 / -1;
+}
+/* DISPLAY ADVANCED: same disclosure primitive as METRICS (summary.adv-more-btn
+   + [role=group]), ID-scoped so the class ratchet does not move. Auto-places
+   after RESOLUTION / RENDERER / GRAPHICS — do not add a named "adv" area. */
+#pm-display-adv {
+  margin: 0;
+  min-width: 0;
+}
+#pm-display-adv [role="group"] {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--gap) / 3);
+  padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
+}
+#pm-display-adv [role="group"] > button {
+  width: 100%;
+  margin: 0;
+}
+#pm-display-adv [role="group"] > #pm-gfx-status {
+  grid-column: 1 / -1;
+}
+#pmsettings-inner #pm-display-adv > summary {
+  height: var(--tap);
+  min-height: var(--tap);
+  box-sizing: border-box;
+  cursor: pointer;
+  justify-content: flex-start;
+  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-weight: 700;
+  letter-spacing: var(--ls-5);
+  opacity: 1;
+  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+}
+/* Disclosures share section-heading chrome, not .adv-more-btn plates.
+   Steel + fading rule + italic — same family as .pm-group-h — so METRICS
+   / ADVANCED cannot be mistaken for HIDE HUD / RESET.
+   Chevron is ::before (tree/open-in-place). A right-side ::after is the
+   dropdown convention the native RENDERER <select> already owns. */
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary,
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary:active {
+  color: var(--steel);
+  font-style: italic;
+  background-color: transparent;
+  background-image: var(--grad-rule);
+  background-position: bottom left;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+@media (hover: hover) {
+  #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary:hover {
+    color: var(--steel);
+    background-color: transparent;
+    background-image: var(--grad-rule);
+    background-position: bottom left;
+    background-size: 100% 1px;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+  }
+}
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary::after {
+  content: none;
+}
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary::before {
+  content: "\25BE";
+}
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv)[open] > summary::before {
+  content: "\25B4";
+}
+#pmsettings-inner #pm-panel-display > .pm-group-h {
+  margin-top: calc(var(--gap) * 0.5);
+  padding-top: calc(var(--gap) / 3);
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"],
+#pmsettings-inner[data-density="compact"] #pm-display-adv [role="group"] {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"] > button,
+#pmsettings-inner[data-density="compact"] #pm-display-adv [role="group"] > button {
+  width: auto;
+}
 .sheet[data-density="compact"] .pm-group { gap: 4px; }
 .sheet[data-density="compact"] .pm-doors { gap: 4px; }
 #pmsettings-inner.sheet[data-density="compact"] .pm-doors button {
@@ -1304,7 +1415,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-size: var(--fs-3);
 }
 @container sheet (min-width: 620px) {
-  #pmsettings-inner .pm-groups > [role="tabpanel"] button {
+  #pmsettings-inner .pm-groups > [role="region"] button {
     font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
     padding-inline: calc(var(--pad) * 0.75);
     white-space: normal; overflow: visible; text-overflow: clip;

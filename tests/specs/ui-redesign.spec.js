@@ -303,26 +303,21 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     return sheet && !sheet.hidden && scale >= 1.9;
   }, null, { polling: 100, timeout: 5_000 });
   const settings = await page.evaluate(() => {
-    const nav = document.getElementById("pm-category-tabs");
-    const body = document.getElementById("pm-settings-body");
-    const first = nav.firstElementChild.getBoundingClientRect();
-    const last = nav.lastElementChild.getBoundingClientRect();
-    const active = document.querySelector("#pm-settings-body [role=tabpanel]:not([hidden])");
-    const ar = active.getBoundingClientRect();
+    const nav = document.getElementById("pm-settings-index");
+    const doors = [...nav.querySelectorAll("button")];
     return {
-      oneRow: Math.abs(first.top - last.top) < 2,
-      panelPainted: ar.width > 0 && ar.height > 0,
-      bodyH: body.getBoundingClientRect().height,
-      navH: nav.getBoundingClientRect().height,
+      doorCount: doors.length,
+      allPainted: doors.every((d) => {
+        const r = d.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      }),
       overflowX: document.documentElement.scrollWidth - innerWidth,
     };
   });
-  expect(settings.oneRow).toBe(true);
-  expect(settings.panelPainted).toBe(true);
-  expect(settings.navH).toBeLessThan(settings.bodyH);
+  expect(settings.doorCount).toBe(6);
+  expect(settings.allPainted).toBe(true);
   expect(settings.overflowX).toBeLessThanOrEqual(1);
   await page.evaluate(() => {
-    document.getElementById("pm-tab-more").click();
     document.getElementById("pm-advanced").click();
   });
   await page.waitForSelector("#advanced:not([hidden])");
@@ -412,7 +407,6 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     window.__apex.uiScale(200);
     document.getElementById("pausebtn").click();
     document.getElementById("pm-settings").click();
-    document.getElementById("pm-tab-more").click();
     document.getElementById("pm-lighting").click();
     window.SheetShape?.reclassify();
   });
@@ -661,16 +655,13 @@ test("balanced control rows derive their shape from local room", async ({ page }
   expect(title.rowCounts).toEqual([3, 2]);
   expect(title.lastFill).toBeGreaterThan(0.9);
 
-  // The same primitive makes three settings categories 2 + a full-width final
-  // action when the sheet is locally narrow; no viewport-specific rule decides.
+  // Settings home is a .pm-doors list. The guard this test keeps is full
+  // rows with no sliver, which lastFill still holds.
   await page.setViewportSize({ width: 390, height: 844 });
   await page.click("#mb-settings");
   await page.waitForSelector("#pmsettings:not([hidden])");
-  const settings = await report("#pm-category-tabs");
+  const settings = await report("#pm-settings-index");
   expect(settings.display).toBe("flex");
-  // One row now, not the old 2 + full-width final: the category tabs have
-  // tightened across the adaptive-UI rounds and three fit 390px. The guard
-  // this test keeps is full rows with no sliver, which lastFill still holds.
-  expect(settings.rowCounts).toEqual([3]);
+  expect(settings.rowCounts.reduce((n, c) => n + c, 0)).toBe(6);
   expect(settings.lastFill).toBeGreaterThan(0.9);
 });

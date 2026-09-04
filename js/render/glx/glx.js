@@ -1795,7 +1795,7 @@ const GLX = (function () {
       }
     }
     if (samePack) { batch.visible = batch._cullN; return batch._cullN; }
-    // CELL-SET KEY (apex26.instCellCache, off by default; docs/PERF-FINDINGS 2c).
+    // CELL-SET KEY (ON; apex26.instCellCache=0 disables — docs/notes/PERF-FINDINGS 2c).
     // The pack is a deterministic function of the surviving cell set, so this
     // is a strictly stronger key than the frustum. Skips the copy loop and the
     // upload, not the AABB sweep.

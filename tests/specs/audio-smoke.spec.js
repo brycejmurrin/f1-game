@@ -129,7 +129,6 @@ test("an out-of-range stored volume clamps both the audio gain and the panel's o
   expect(await page.evaluate(() => GameAudio.volumes())).toEqual({ music: 1, sfx: 0 });
 
   await page.locator("#mb-settings").click();
-  await page.locator("#pm-tab-more").click();
   await page.locator("#pm-audio").click();
   await expect(page.locator("#audioset")).toBeVisible();
   const shown = await page.evaluate(() => ({

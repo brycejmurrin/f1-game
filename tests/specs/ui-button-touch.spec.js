@@ -44,6 +44,12 @@ async function openPauseSettings(page) {
   await page.locator("#pmsettings").waitFor({ state: "visible" });
 }
 
+async function openPauseControls(page) {
+  await openPauseSettings(page);
+  await page.locator("#pm-open-controls").click();
+  await page.locator("#pm-panel-controls").waitFor({ state: "visible" });
+}
+
 async function cycleToPauseSteerMode(page, targetText) {
   // Click pm-steer up to 3 times to cycle to the desired mode
   for (let i = 0; i < 3; i++) {
@@ -56,7 +62,6 @@ async function cycleToPauseSteerMode(page, targetText) {
 
 async function openLightingPhotoMode(page) {
   await openPauseSettings(page);
-  await page.locator("#pm-tab-more").click();
   await page.locator("#pm-lighting").click();
   await page.locator("#pc-toggle").click();
   await expect(page.locator("body")).toHaveClass(/lt-open/);
@@ -318,7 +323,7 @@ test.describe("Pause menu — tilt mode", () => {
   test("calibrate button enabled in tilt mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseSettings(page);
+    await openPauseControls(page);
     await cycleToPauseSteerMode(page, "tilt");
     await page.waitForTimeout(200);
     const calib = page.locator("#pm-calib");
@@ -334,7 +339,7 @@ test.describe("Pause menu — button mode", () => {
   test("calibrate button disabled (still visible) in button mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseSettings(page);
+    await openPauseControls(page);
     await cycleToPauseSteerMode(page, "button");
     await page.waitForTimeout(200);
     // Disabled, NOT hidden — hiding it reflowed the settings grid so the next
@@ -352,7 +357,7 @@ test.describe("Pause menu — touch mode", () => {
   test("calibrate button disabled (still visible) in touch mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseSettings(page);
+    await openPauseControls(page);
     await cycleToPauseSteerMode(page, "touch");
     await page.waitForTimeout(200);
     const calib = page.locator("#pm-calib");
@@ -372,7 +377,7 @@ test.describe("Pause settings — stable layout", () => {
   test("buttons keep their positions when steer mode changes", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseSettings(page);
+    await openPauseControls(page);
     await cycleToPauseSteerMode(page, "tilt");
     await page.waitForTimeout(200);
 
@@ -395,7 +400,8 @@ test.describe("Pause settings — stable layout", () => {
     // and the button aimed at AFTER the change still receives the tap. RESOLUTION
     // replaces the old SOUND toggle here: it is a same-grid cycling button, so it
     // still proves the tap landed on the control the thumb was aimed at.
-    await page.locator("#pm-tab-display").click();
+    await page.locator("#pm-settings-close").click();
+    await page.locator("#pm-open-display").click();
     const resBefore = await page.locator("#pm-res").textContent();
     await page.locator("#pm-res").click();
     await expect(page.locator("#pm-res")).not.toHaveText(resBefore);
@@ -452,9 +458,10 @@ test.describe("Auto-throttle in button/touch mode", () => {
   test("throttle button visible in button mode", async ({ page }) => {
     await page.goto("/");
     await waitReady(page);
-    await openPauseSettings(page);
+    await openPauseControls(page);
     await cycleToPauseSteerMode(page, "button");
-    await page.locator("#pm-settings-close").click();   // back to the pause menu
+    await page.locator("#pm-settings-close").click();   // CONTROLS → home
+    await page.locator("#pm-settings-close").click();   // home → pause
     await page.locator("#pm-resume").click();
     await page.locator("#pausemenu").waitFor({ state: "hidden" });
 
