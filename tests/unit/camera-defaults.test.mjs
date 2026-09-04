@@ -29,6 +29,15 @@ test("shipped chase corner lead is baked into vantage.js", () => {
   assert.match(src, /CamTune\.cornerLead\(mode\)/);
 });
 
+test("cockpit interior uses the heading viewmodel, not a road-locked basis", () => {
+  const src = fs.readFileSync(path.join(root, "js/game.js"), "utf8");
+  assert.match(src, /GameCams\.cockpitViewmodelAxes/,
+    "the cockpit draw must yaw with the body; a raw smp2.t basis crabs through turns");
+  assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
+    /cockpitRigOnly[\s\S]{0,250}basisMat\(sR, _cockU, sF/,
+    "do not restore the road-tangent cockpit basis");
+});
+
 test("cockpit turn chasing is a 0–1 look-ahead blend, shipped at 0.35", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/cockpit-opts.js"), "utf8");
   assert.match(src, /LEAD_DEFAULT\s*=\s*0\.35/,

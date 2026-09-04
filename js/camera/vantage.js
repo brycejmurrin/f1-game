@@ -57,6 +57,24 @@ const _dirScr = [0, 0, 0];
 // ckpt monocoque cap and the coaming are all positioned against this number.
 const COCKPIT_EYE_FWD = -0.20, COCKPIT_EYE_UP = 0.82;
 
+// Cockpit viewmodel basis: same yawVis as the drawn body (heading vs road
+// tangent), origin subtracted along those axes so the eye stays at
+// (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in rig space. Pitch/roll/lean stay off
+// this basis — those shoved the eye into the carbon. Writes into the
+// caller-owned out* slots; nothing is allocated.
+function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP) {
+  const cy = Math.cos(yv), sy = Math.sin(yv);
+  for (let i = 0; i < 3; i++) {
+    outF[i] = sF[i] * cy + sR[i] * sy;
+    outR[i] = sR[i] * cy - sF[i] * sy;
+  }
+  outU[0] = outR[1] * outF[2] - outR[2] * outF[1];
+  outU[1] = outR[2] * outF[0] - outR[0] * outF[2];
+  outU[2] = outR[0] * outF[1] - outR[1] * outF[0];
+  for (let i = 0; i < 3; i++)
+    outP[i] = eye[i] - outU[i] * COCKPIT_EYE_UP - outF[i] * COCKPIT_EYE_FWD;
+}
+
 const CHASE_SIDE_FRAC = 0.3;
 // Shipped chase/far corner lead — blends toward road-frame aim so the rig swings
 // into bends. The tuner knob replaces this when cornerLead is stored for the mode
@@ -534,5 +552,5 @@ function vantage(track, mode, s, x, spd, now, extra) {
   return _vantOut;
 }
 
-return { init, vantage, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, CHASE_CORNER_LEAD_DEFAULT };
+return { init, vantage, cockpitViewmodelAxes, COCKPIT_EYE_FWD, COCKPIT_EYE_UP, CHASE_CORNER_LEAD_DEFAULT };
 })();

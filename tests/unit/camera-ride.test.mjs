@@ -333,3 +333,38 @@ test("the ground clamp still catches an eye below the surface", () => {
       `eye ${v.eye[1].toFixed(3)} sank below the clamp floor ${(groundHere + CLIFF_CLEAR).toFixed(3)} at s=${s}`);
   }
 });
+
+test("the cockpit viewmodel yaws with heading, not the road tangent", () => {
+  // THE BUG THIS GUARDS. The cockpit interior used the plain road tangent as
+  // its basis while the camera looked along c.head (+ turn-chase). Steering
+  // changed where you LOOKED and where you WENT, but the halo / wheel / nose
+  // stayed glued to the road — the body crabbed diagonally through the turn.
+  // yawVis is heading vs tangent; applying it here is the same psi the chase
+  // body already uses. Pitch/roll stay off (clipping).
+  const cams = loadGameCams(makeTracksStub(makeTrack(() => 0)));
+  assert.equal(typeof cams.cockpitViewmodelAxes, "function");
+  const sR = [1, 0, 0], sF = [0, 0, 1];
+  const eye = [0, 1, 0];
+  const outR = [0, 0, 0], outU = [0, 0, 0], outF = [0, 0, 0], outP = [0, 0, 0];
+  cams.cockpitViewmodelAxes(sR, sF, 0, eye, outR, outU, outF, outP);
+  assert.deepEqual(outF.map((n) => +n.toFixed(6)), [0, 0, 1],
+    "zero yaw stays on the road tangent");
+  assert.deepEqual(outR.map((n) => +n.toFixed(6)), [1, 0, 0]);
+  const { COCKPIT_EYE_FWD, COCKPIT_EYE_UP } = cams;
+  const recon = [
+    outP[0] + outU[0] * COCKPIT_EYE_UP + outF[0] * COCKPIT_EYE_FWD,
+    outP[1] + outU[1] * COCKPIT_EYE_UP + outF[1] * COCKPIT_EYE_FWD,
+    outP[2] + outU[2] * COCKPIT_EYE_UP + outF[2] * COCKPIT_EYE_FWD,
+  ];
+  assert.deepEqual(recon.map((n) => +n.toFixed(9)), eye,
+    "origin + FWD/UP along the yawed axes must land back on camEye");
+
+  cams.cockpitViewmodelAxes(sR, sF, Math.PI / 2, eye, outR, outU, outF, outP);
+  assert.deepEqual(outF.map((n) => +n.toFixed(6)), [1, 0, 0],
+    "+π/2 yawVis (nose right of the road) must rotate the viewmodel, not crab it");
+  assert.deepEqual(outR.map((n) => +n.toFixed(6)), [0, 0, -1]);
+
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /cockpitRigOnly[\s\S]{0,400}cockpitViewmodelAxes\(smp2\.r, smp2\.t, yv, camEye/,
+    "the live cockpit draw must consume heading yaw, not a raw tangent basis");
+});
