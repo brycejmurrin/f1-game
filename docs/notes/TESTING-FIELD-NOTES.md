@@ -1003,3 +1003,41 @@ generic cap. Only the second is a budgeting mistake, and it is self-identifying
 at the moment it happens. Reporting it as a BUDGET failure that names its own
 fix ("declare `test.setTimeout` so the gate can exclude this spec") would turn
 a confusing red into an instruction, without guessing at 65 files up front.
+
+
+## BOOT_MS is an IDLE-box number, and the gate is never idle
+
+**Pages #1987, run 33881691888, 2026-09-04.** All three `rotation-recovery`
+tests failed the change-aware gate on `waitForFunction: Timeout 45000ms
+exceeded`, at 83.1 s / 74.4 s / 72.4 s. Nothing asserted was wrong. The page
+log shows the fixture stalling:
+
+```
+ 3634ms  [car] build mclaren
+77029ms  [car] build mercedes     <- a 73-second gap
+```
+
+Three parallel workers each booting a full race on one shared runner.
+
+`tests/helpers/fixtures.js` sets `BOOT_MS = 45000`, and its own comment is
+careful about where that came from: **"MEASURED on an idle container (loadavg
+0.00)"**, worst case 24.6 s. It is a good number for the box it was measured
+on. The change-aware gate is not that box — it runs several race fixtures at
+once, and the same boot takes 77 s there.
+
+**88 specs import BOOT_MS**, so this is not a one-spec problem. It is also not
+one to fix by guessing a bigger constant: the honest fix is the shape
+`smoke.spec.js` already uses after Pages #1953/#1954 — derive the wait from
+`test.info().timeout` with today's constant as the FLOOR, so nothing gets
+looser locally and CI scales up. That is an 88-import change and wants its own
+measurement on a LOADED runner, which this box cannot take reliably while it
+is itself the loaded runner.
+
+Recorded, not attempted. What IS done: `rotation-recovery.spec.js` declares
+its own measured 300 s, so the gate excludes it instead of selecting it into a
+120 s budget its boot alone cannot clear. That is the fifth spec through this
+route (hud-layout, multiplayer-scan, multiplayer-scan-cancel,
+parts-factory-presets, rotation-recovery); 43 candidates remain unmeasured.
+
+Note the containment held: `--max-failures=3` stopped the job at 3/7 in 12m18s
+against a 26-minute cap, wrote its junit, and carried the failing spec forward.
