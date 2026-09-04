@@ -491,6 +491,53 @@ function pageTabs(cur) {
 // Two-column row: label (padded to L chars) then value.
 const L = 8;
 function row(label, value) { return (label + ":").padEnd(L) + " " + value; }
+// CAN THE BOX ACTUALLY HOLD THE WIDE LAYOUT? The old test was
+// `metricsRatio() < 480`, a VIEWPORT proxy, while the width came from a vw cap
+// in css/hud.css — two different notions of "room", and they disagreed. So the
+// wide layout got chosen for boxes that could not hold it and the tail was CUT
+// (white-space:pre inside overflow:hidden — lost, not scrolled).
+// MEASURED with a 20-character probe in the body's own font, both viewports:
+//   narrow longest 25 ch, wide longest 52 ch (GOV is the widest page)
+//   desktop boxes 170/221/322 px at ch 8.57 -> 19/25/37 fit
+//   phone   boxes 111/134/189 px at ch 7.35 -> 15/18/25 fit
+// Seven of nine desktop cases and nine of nine phone cases cut. WIDE_CH is that
+// measured 52 plus one, and the CSS steps were re-sized in the same units.
+// The measurement forces layout, so it is cached on (font-size, box width) —
+// this runs at 4 Hz and must not reflow every paint.
+const WIDE_CH = 53;
+let _chW = 0, _chKey = "";
+function chWidth() {
+  if (!_body || typeof document === "undefined") return 0;
+  const cs = (typeof getComputedStyle === "function") ? getComputedStyle(_body) : null;
+  const key = (cs && cs.fontSize) || "";
+  if (_chW && key === _chKey) return _chW;
+  try {
+    const probe = document.createElement("span");
+    probe.textContent = "00000000000000000000";           // 20, so rounding is 1/20th
+    probe.style.cssText = "position:absolute;visibility:hidden;white-space:pre";
+    _body.appendChild(probe);
+    const w = probe.getBoundingClientRect().width / 20;
+    _body.removeChild(probe);
+    if (w > 0) { _chW = w; _chKey = key; }
+  } catch (_) { /* detached / no layout: fall through to the proxy below */ }
+  return _chW;
+}
+function fitsWide() {
+  const ch = chWidth();
+  // The GRANTED width, never the PAINTED one. Reading _body.clientWidth here
+  // latched: the panel sizes to its content, so narrow content gave a small box,
+  // a small box failed this test, and the layout could never climb back to wide
+  // — a one-way door that measured its own output. The panel's resolved width
+  // comes from the CSS step and does not depend on what was painted into it.
+  if (!ch || !_panel || typeof getComputedStyle !== "function") return metricsRatio() >= 480;
+  const cs = getComputedStyle(_panel);
+  const granted = parseFloat(cs.width) || 0;
+  if (!granted) return metricsRatio() >= 480;   // unmeasurable is UNKNOWN, not small
+  // The step is the border box; the text lives inside the padding and border.
+  const chrome = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) +
+                 (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0);
+  return Math.floor(Math.max(0, granted - chrome) / ch) >= WIDE_CH;
+}
 function sep() { return "─".repeat(24); }
 
 // Compact two-value pair for narrow screens.
@@ -516,7 +563,7 @@ function paintOverlay() {
       if (b.setAttribute) b.setAttribute("aria-pressed", onPage ? "true" : "false");
     }
   }
-  const narrow = metricsRatio() < 480 || size() === "s";
+  const narrow = size() === "s" || !fitsWide();
   const hdr = "";
   let lines;
 

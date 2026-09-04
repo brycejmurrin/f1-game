@@ -637,7 +637,23 @@ body[data-density="compact"] #announce {
   border-radius: var(--r-sm);
   pointer-events: auto;
   text-align: left;
-  max-width: min(22ch, 32vw);
+  /* WIDE ENOUGH TO SHOW THE LINES IT EMITS. MEASURED, both viewports, with a
+     20-character probe in the body's own font (ch is 8.57px at 14, 7.35 at 12):
+       narrow layout  longest line 25 ch  ->  needs 171-214 px
+       wide   layout  longest line 52 ch  ->  needs 242-446 px
+       boxes were      s 170 / m 221 / l 322 px on desktop
+                       s 111 / m 134 / l 189 px on a 393 phone
+     Seven of nine desktop cases and all nine phone cases CUT — white-space:pre
+     inside overflow:hidden, so the tail was lost, not scrolled, and no test
+     looked because the sweep only ever checked scrollHeight.
+     So the steps are now sized in the units the CONTENT is measured in: S holds
+     the narrow layout, L holds the wide one, M sits between. +2ch over the
+     content figure absorbs this element's own padding and border (measured at
+     15.4px, ~1.8ch). 92vw is the upper bound so a step can still never eat the
+     display; on a phone it wins for L, which is why the layout picker in
+     js/perf/metrics-overlay.js must also decide on FIT rather than on a
+     viewport proxy — the two halves only work together. */
+  width: min(28ch, 92vw);
   max-height: min(28svh, calc(100svh - var(--gm-top) - var(--gm-dock)));
   overflow: hidden;
   resize: both;
@@ -646,11 +662,11 @@ body[data-density="compact"] #announce {
   letter-spacing: 0.01em;
 }
 #game-metrics[data-size="m"] {
-  max-width: min(28ch, 38vw);
+  width: min(42ch, 92vw);
   max-height: calc(100svh - var(--gm-top) - var(--gm-dock));
 }
 #game-metrics[data-size="l"] {
-  max-width: min(40ch, 52vw);
+  width: min(56ch, 92vw);
   max-height: calc(100svh - var(--gm-top) - var(--gm-dock));
 }
 #game-metrics[data-pos="right"] {
