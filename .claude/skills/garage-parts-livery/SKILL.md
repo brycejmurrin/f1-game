@@ -28,8 +28,10 @@ authored geometry (`CREST_DISC`), not traced: the gold cluster traces to the
 union of the sun and both bulls, so painting it drew a rim and no sun.
 The garage wall crest is the same `drawCrest`, but it picks its OWN field, so
 it asks `LiveryTex.markOnField` what lands there — the BACKING when a mark has
-one, never just the mark. `ALT_INSIDE` names the marks whose second colour is
-drawn inside the mark and so answers to the mark alone.
+one, never just the mark. Plated lockups (Ferrari's shield, Red Bull's disc)
+keep that backing on the fin badge; `buildAtlas` shares one `markPalette` so
+the tail matches the spine and the wall. `ALT_INSIDE` names the marks whose
+second colour is drawn inside the mark and so answers to the mark alone.
 
 ## When to Use
 

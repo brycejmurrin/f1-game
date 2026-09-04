@@ -3,13 +3,13 @@
   "files": {
     "js/game.js": {
       "lines": 9751,
-      "codeLines": 5396,
+      "codeLines": 5398,
       "gMembers": 235,
       "topLets": 157
     },
     "js/agent/apex.js": {
-      "lines": 2642,
-      "codeLines": 2001
+      "lines": 2643,
+      "codeLines": 2002
     },
     "js/agent/agentview.js": {
       "lines": 2452

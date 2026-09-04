@@ -923,7 +923,10 @@ function paintDress(team, liv, info) {
     LiveryTex.drawLogoImage(ctx, img, inner, (liv && liv.logo) || null, halo,
                             (liv && (liv.logo3 || liv.logo2)) || null);
   } else {
-    LiveryTex.drawCrest(ctx, team.id, inner, { liv, field, bare: false });
+    const lockup = LiveryTex.markPalette
+      ? LiveryTex.markPalette(team.id, liv, [liv && liv.c1, liv && liv.c2], false)
+      : null;
+    LiveryTex.drawCrest(ctx, team.id, inner, { liv, field, bare: false, palette: lockup || undefined });
   }
   // Team wordmark strip.
   ctx.fillStyle = css(scale(c1, 0.55)); ctx.fillRect(D_WORD.x, D_WORD.y, D_WORD.w, D_WORD.h);
