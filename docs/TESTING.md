@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 198 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 199 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1074,6 +1074,7 @@ what it covers.
 | `audio-sample-upgrade.test.mjs` | fake-AudioContext harness for `GameAudio`: an engine started on the synth voice (samples not yet decoded) upgrades to the samples at the next `setEngine` once they are ready, exactly once |
 | `audio-tune.test.mjs` | the player ENGINE TONE layer keeps the engine's timbre contract: pitch stays monotonic in rev and gear 1 below gear 4 at redline under EVERY profile and at both ends of every slider, a non-finite stored value cannot reach `playbackRate`, a profile replaces rather than merges, muted layers go silent — plus the static seam between `js/audio/panel.js`'s id/key tables and the shell |
 | `granular-psola.test.mjs` | the granular (PSOLA) engine voice moves PITCH without moving the engine's fixed resonances: pitch tracks the ratio monotonically, the spectral centroid stays within 20% of the source at every ratio where plain resampling loses over 30%, and the output stays bounded and finite — the same centroid measurement that condemned the earlier rev-crossfade |
+| `rival-audio.test.mjs` | the field around you in the player's TRACK frame: left/right lateral sign, ahead/behind arc sign ACROSS the start-finish wrap, closing-vs-opening for a car ahead and behind, nearest-four selection, retired/self exclusion, and the reused-row contract that keeps it allocation-free in the hot path |
 | `photomode-hold.test.mjs` | mini-DOM + VM over the real `input.js` and `photomode.js`: a boundary `pointerleave` and a WebKit capture steal keep a photo-mode hold; a hidden button and a plain lift release it |
 | `ui-sheets-audit.test.mjs` | the PAUSE / SETTINGS / RESULTS sheet audit (2026-09-02) as behaviour on `mini-dom`: RESULTS top-10 and the WORLD CHAMPION panel rank by `SeasonCal.rank` countback like STANDINGS (a points tie used to crown the field-order driver), STANDINGS titles a sprint weekend by the round it is in and calls the race being driven IN PROGRESS from the pause menu; `js/perf/renderer-picker.js`'s in-race two-tap reload confirm EXPIRES (`ARM_MS`) back to the real label, never carries an armed flag into the next race, clears a stale one outside a race, and puts the question on the `<select>`'s option instead of wiping the options; MUSIC & SOUND blames the master SOUND gate when that is what is shut and captions DEFAULT as "Default"; the pause → settings → sub-sheet Escape ladder, the pause button order, and the `.sheet` / `.pane` scroll rules every sheet relies on at a short viewport |
 | `title-menu-even.test.mjs` | title 2-up doors share equal flex cells and overlay columns use `--vwz`, not a pixel cap |

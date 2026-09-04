@@ -1962,6 +1962,12 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   the profiles, which would have been cheaper and worse: a sub-octave is real
   body under a recording that has none, and the granular core hands us the
   fundamental to track it against for free.
+- `js/game.js` 9731 -> **9734** lines / 5386 -> **5387** code, `shellNodes` 1129 -> **1130** (2026-09-04): two lines for rival engine
+  audio — `RivalAudio.create(G)` beside the other module wirings, and the
+  `GameAudio.setRivals(...)` call beside `setEngine`. The 50 lines that reduce a
+  21-car field to the nearest four went into `js/audio/rivals.js` instead,
+  where they belong: game.js is the loop, not the place track geometry gets
+  turned into pan positions.
 - `js/game.js` lines 9731 -> **9747**, codeLines 5386 -> **5394**, topLets
   156 -> **157** (2026-09-04): splitting `loadAgentSurface()` out of
   `bootAgentSurface()` and handing it to the METRICS overlay. The panel is
@@ -1984,3 +1990,8 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   The cheaper alternative was porting seventeen physics fields onto the `G`
   contract in types/game-ctx.d.ts, which is more lines in more places and
   leaves the next debug surface with the same problem.
+- MERGE NOTE (2026-09-04): the two entries above landed on separate branches
+  from the same base, so neither "->" number is the tree's ceiling any more —
+  they record what each change cost, not where the file ended up. The merged
+  ceilings are whatever `node tools/check/ratchets.mjs --update` writes on the
+  union, and that is the number the guard enforces.

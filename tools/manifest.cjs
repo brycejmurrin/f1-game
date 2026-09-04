@@ -116,6 +116,7 @@ const FULL = [
   "js/audio/engine.js",
   "js/audio/music-lib.js",
   "js/audio/spotify.js",
+  "js/audio/rivals.js",
   "js/audio/panel.js",
   "js/car/parts.js",
   "js/car/liveries.js",
