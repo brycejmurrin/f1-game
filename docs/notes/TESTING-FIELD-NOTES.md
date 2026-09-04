@@ -1039,6 +1039,21 @@ its own measured 300 s, so the gate excludes it instead of selecting it into a
 route (hud-layout, multiplayer-scan, multiplayer-scan-cancel,
 parts-factory-presets, rotation-recovery); 43 candidates remain unmeasured.
 
+**Sixth: `parts-ers.spec.js` (2026-09-04, Pages run 2002 / 33904063866).** The
+backlog is not theoretical and it does not wait to be worked through — it fires
+whenever a diff pulls a fresh spec into the selection. A `js/garage/` change
+brought in `test:car`, the selector picked this file for the first time, and
+three of its tests failed on a plain 120 s timeout having RUN for 195.1 s,
+175.4 s and 150.9 s. Not an assertion: the state dump showed the game healthy
+(real `phys`, twelve cars built) with the first car build logged at 186218 ms.
+The whole cost is the first boot — `sharedTest` hands the same page to the rest,
+which is why two of the four take 0.2 s. Same file on this box: 4/4 green,
+slowest test 29.4 s. Runner, not code. Declared 300 s; the gate now names it
+EXCLUDED instead of going red on it, and the deploy it was blocking can move.
+
+That is the shape to expect from the remaining 42: a healthy spec, a
+deterministic false red, and a blocked deploy — one per newly-touched area.
+
 Note the containment held: `--max-failures=3` stopped the job at 3/7 in 12m18s
 against a 26-minute cap, wrote its junit, and carried the failing spec forward.
 
