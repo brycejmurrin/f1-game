@@ -1444,9 +1444,17 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
 }
-/* Name stays steel (the heading). Choices use the inner-button colors:
-   ON gold, OFF dim, values bright text — steel-on-steel made STANDARD /
+/* Name stays steel (the heading). Choices use the live switch colors:
+   ON gold, OFF red, values bright text — steel-on-steel made STANDARD /
    AUTO / WEBGL2 disappear into the chrome. */
+button [data-fold="on"],
+summary [data-fold="on"] {
+  color: var(--gold);
+}
+button [data-fold="off"],
+summary [data-fold="off"] {
+  color: var(--red);
+}
 #pmsettings-inner details > summary [data-fold="k"] {
   color: var(--steel);
   font-style: italic;
@@ -1458,10 +1466,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-weight: 700;
 }
 #pmsettings-inner details > summary [data-fold="off"] {
-  color: var(--dim);
+  color: var(--red);
   font-style: italic;
   font-weight: 600;
-  opacity: 0.62;
 }
 #pmsettings-inner details > summary [data-fold="val"] {
   color: var(--text);

@@ -81,7 +81,7 @@ function paintRendererSummary(pref, fallback) {
   if (!sum) return;
   sum.innerHTML = '<span data-fold="k">RENDERER</span><span data-fold="sep"> · </span><span data-fold="val">' +
     backendLabel(pref) + "</span>" + (fallback
-      ? '<span data-fold="sep"> · </span><span data-fold="off">WEBGL2</span>' : "");
+      ? '<span data-fold="sep"> · </span><span data-fold="val">WEBGL2</span>' : "");
 }
 function markReloading(rb, next) {
   const msg = backendLabel(next) + " — RELOADING…";

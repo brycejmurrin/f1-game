@@ -22,6 +22,11 @@
 // classes on a live element every frame, and a subtree observer over it would
 // be a per-frame cost for a surface that has no option groups at all.
 //
+// ON/OFF WORDS. The same walk wraps a trailing ON/OFF on menu buttons and
+// summaries so CSS can paint gold / red. One observer, not a call site in
+// every painter (HUD, HALO, SOUND, OVERLAY, REPEAT, season chips, …).
+// Option-group chips that are not the words ON/OFF are left alone.
+//
 // The module owns no game state and self-initialises.
 window.AriaState = (function () {
   const ON = ["active", "dh-active"];
@@ -80,8 +85,33 @@ window.AriaState = (function () {
     }
   }
 
+  function wrapOnOff(text) {
+    const t = String(text || "").replace(/\s+/g, " ").trim();
+    if (!/\b(ON|OFF)\b/.test(t)) return null;
+    return t.replace(/\b(ON|OFF)\b/g, (w) =>
+      '<span data-fold="' + w.toLowerCase() + '">' + w + "</span>");
+  }
+
+  function paintOnOff(root) {
+    if (!root) return;
+    for (const el of root.querySelectorAll("button, summary")) {
+      if (el.closest("#hud, #game-metrics")) continue;
+      let foreign = false;
+      for (const c of el.children) {
+        if (!c.hasAttribute("data-fold")) { foreign = true; break; }
+      }
+      if (foreign) continue;
+      if (el.querySelector('[data-fold="on"], [data-fold="off"]')) continue;
+      const html = wrapOnOff(el.textContent);
+      if (html) el.innerHTML = html;
+    }
+  }
+
   function syncAll() {
-    for (const r of document.querySelectorAll(ROOTS)) syncRoot(r);
+    for (const r of document.querySelectorAll(ROOTS)) {
+      syncRoot(r);
+      paintOnOff(r);
+    }
   }
 
   // Coalesce: a rebuilt list fires one mutation per row, and the answer for the
@@ -104,11 +134,16 @@ window.AriaState = (function () {
     Log.info("game", "AriaState.init");
     const obs = new MutationObserver((records) => {
       for (const r of records) {
-        if (r.type === "childList" || r.type === "attributes") { schedule(); return; }
+        if (r.type === "childList" || r.type === "attributes" || r.type === "characterData") {
+          schedule(); return;
+        }
       }
     });
     for (const r of document.querySelectorAll(ROOTS)) {
-      obs.observe(r, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+      obs.observe(r, {
+        subtree: true, childList: true, characterData: true,
+        attributes: true, attributeFilter: ["class"],
+      });
     }
     syncAll();
   }
@@ -120,5 +155,5 @@ window.AriaState = (function () {
     init();
   }
 
-  return { sync: syncAll };
+  return { sync: syncAll, wrapOnOff };
 })();
