@@ -1968,3 +1968,10 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   21-car field to the nearest four went into `js/audio/rivals.js` instead,
   where they belong: game.js is the loop, not the place track geometry gets
   turned into pan positions.
+- `shellNodes` 1130 -> **1140** (2026-09-04): SPACE and OVERRUN — two sliders
+  and two switches for circuit reverb and off-throttle crackle. Both are audio
+  that did not exist at all rather than trims on audio that did: there was no
+  ConvolverNode anywhere in the tree, so every circuit was an anechoic chamber,
+  and lifting at revs sounded identical to coasting because loadLift is
+  clamp01(ax/12) and goes to zero the instant the throttle closes. Ten nodes for
+  two whole layers is the cheapest this section has bought anything.

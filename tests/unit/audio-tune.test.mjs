@@ -47,7 +47,8 @@ function param(v) {
   };
   return p;
 }
-function node(kind) {
+function node(kind, counts) {
+  if (counts) counts[kind] = (counts[kind] || 0) + 1;
   return { kind, connect: (t) => t, disconnect() {}, start() {}, stop() {}, type: "", loop: false,
            loopStart: 0, loopEnd: 0, buffer: null, onended: null, fftSize: 0, frequencyBinCount: 0,
            getFloatFrequencyData() {}, gain: param(1), frequency: param(440), detune: param(0),
@@ -61,12 +62,15 @@ function sampleBuf(seconds, sr) {
 
 function boot() {
   const held = [];
+  const counts = {};
   const ctx = {
-    currentTime: 0, state: "running", sampleRate: SR, destination: node("dest"),
-    createGain: () => node("gain"), createBiquadFilter: () => node("biquad"),
-    createOscillator: () => node("osc"), createBufferSource: () => node("src"),
-    createAnalyser: () => node("analyser"),
-    createDynamicsCompressor: () => Object.assign(node("comp"),
+    currentTime: 0, state: "running", sampleRate: SR, destination: node("dest", counts),
+    createGain: () => node("gain", counts), createBiquadFilter: () => node("biquad", counts),
+    createOscillator: () => node("osc", counts), createBufferSource: () => node("src", counts),
+    createAnalyser: () => node("analyser", counts),
+    createConvolver: () => Object.assign(node("convolver", counts), { buffer: null }),
+    createStereoPanner: () => Object.assign(node("panner", counts), { pan: param(0) }),
+    createDynamicsCompressor: () => Object.assign(node("comp", counts),
       { threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25) }),
     createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
     decodeAudioData: (ab, res) => res(sampleBuf(4, SR)),
@@ -96,8 +100,12 @@ function boot() {
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: "js/core/mat4.js" });
   vm.runInContext(SRC, vctx, { filename: "js/audio/engine.js" });
   const GameAudio = vm.runInContext("GameAudio", vctx);
+  // The crackle scheduler is TIME-driven: it fires when ctx.currentTime passes
+  // the next due moment, so a harness with a frozen clock would see one burst
+  // and then silence forever. Tests step it by hand.
+  const ctxTime = (dt) => { ctx.currentTime += dt; };
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
-  return { GameAudio, release, workletNodes };
+  return { GameAudio, release, workletNodes, counts, ctxTime };
 }
 
 // The sample core is the SHIPPED path, so every invariant below is measured on
@@ -272,8 +280,8 @@ test("every id the ENGINE TONE panel looks up exists in the shell", () => {
   const sliders = [...panel.matchAll(/\{ k: "\w+",\s*id: "([\w-]+)",/g)].map((m) => m[1]);
   const layers = [...panel.matchAll(/\{ k: "\w+",\s+id: "([\w-]+)" \}/g)].map((m) => m[1]);
   const profiles = [...panel.matchAll(/\["(as-p-[\w-]+)", "\w+"\]/g)].map((m) => m[1]);
-  assert.equal(sliders.length, 7, "expected the seven tuner sliders — the table shape changed, so does this check");
-  assert.equal(layers.length, 8, "expected the eight layer switches");
+  assert.equal(sliders.length, 9, "expected the nine tuner sliders — the table shape changed, so does this check");
+  assert.equal(layers.length, 10, "expected the ten layer switches");
   assert.equal(profiles.length, 5, "expected the five sound profiles");
 
   const missing = [];
@@ -385,4 +393,82 @@ test("SUB is audible on the shipped core, not just the oscillator fallback", asy
   assert.ok(drift < 0.02,
     `sub must stay an octave under the fundamental at both ends, not pin against a clamp ` +
     `(${lowF.toFixed(1)}Hz @ rate ${lowR} vs ${hiF.toFixed(1)}Hz @ rate ${hiR})`);
+});
+
+test("the circuit's acoustics come from the definition it already carries", async () => {
+  // Before this there was no ConvolverNode anywhere in the graph: every circuit
+  // was an anechoic chamber, and Monaco between the barriers sounded exactly
+  // like Spa in the trees. The mapping uses data the circuits ALREADY have —
+  // `street: true` on five of them, and `theme` — rather than a new per-track
+  // field somebody would have to fill in forty times.
+  const A = await sampleEngine();
+  assert.equal(A.setVenue({ street: true, theme: "street_day" }), "street");
+  const street = A.venue();
+  assert.equal(A.setVenue({ theme: "green" }), "green");
+  const green = A.venue();
+  assert.equal(A.setVenue({ theme: "desert" }), "desert");
+  assert.equal(A.setVenue({ theme: "modern" }), "modern");
+  assert.equal(A.setVenue(null), "modern", "an unknown or missing definition must not throw");
+  assert.equal(A.setVenue({}), "modern");
+
+  // Hard walls a couple of metres away must ring longer and louder than trees.
+  assert.ok(street.decay > green.decay,
+    `a street circuit should ring longer than a park one (${street.decay}s vs ${green.decay}s)`);
+  assert.ok(street.level > green.level,
+    `and louder (${street.level} vs ${green.level})`);
+});
+
+test("SPACE and its switch both reach the live reverb return", async () => {
+  const A = await sampleEngine();
+  A.setVenue({ street: true, theme: "street_day" });
+  A.setTune(A.tuneDefaults());
+  const base = A.venue().level;
+  assert.ok(base > 0, "a street circuit must actually be wet");
+  A.setTune({ reverb: 2.5 });
+  assert.ok(A.venue().level > base * 2, "the SPACE trim must scale it");
+  A.setTune({ reverb: 0 });
+  assert.equal(A.venue().level, 0, "and zero must be dry, not merely quieter");
+  A.setTune({ reverb: 1 });
+  A.setLayer("reverb", false);
+  assert.equal(A.venue().level, 0, "the switch is the hard off whatever the trim says");
+  A.setLayer("reverb", true);
+  assert.ok(A.venue().level > 0, "and back on restores it");
+});
+
+test("overrun crackles on a trailing throttle, and not while coasting or braking", async () => {
+  // The state that sounded identical to coasting: loadLift is clamp01(ax/12),
+  // so it is zero the instant you lift and nothing else in the mix noticed a
+  // closed throttle at revs. Crackles are one-shots with no persistent gain, so
+  // the observable is NODE CONSTRUCTION — each burst builds its own source.
+  const { GameAudio: A, release, counts, ctxTime } = boot();
+  A.init();
+  await release();
+  A.startEngine();
+  const burstsOver = (frames, phys) => {
+    const before = counts.src || 0;
+    // now() advances with ctx.currentTime, which this harness holds still, so
+    // step it by hand — the crackle scheduler is time-driven by design.
+    for (let i = 0; i < frames; i++) { ctxTime(0.05); A.setEngine(0.7, 0, false, 0.6, 5, phys); }
+    return (counts.src || 0) - before;
+  };
+  // 40 frames x 50 ms = TWO SECONDS of context time, stepped by hand. The rate
+  // has to be pinned here and not in a browser: with no audio device this
+  // container's ctx.currentTime free-runs at roughly 100x wall (measured: 25
+  // seconds of context time per 200 ms of real time), so a live probe can see
+  // the GATING but can tell you nothing about how often it fires.
+  const lifting = burstsOver(40, { ax: -4 });
+  assert.ok(lifting >= 6 && lifting <= 45,
+    `two seconds of lifting should crackle a handful of times, got ${lifting} — ` +
+    "too few is inaudible, too many is a machine gun rather than an exhaust");
+  const coasting = burstsOver(40, { ax: 0 });
+  assert.equal(coasting, 0, "a steady throttle must be silent — that is the state it was confused with");
+  const pulling = burstsOver(40, { ax: 8 });
+  assert.equal(pulling, 0, "accelerating must not crackle");
+  const braking = burstsOver(40, { ax: -40 });
+  assert.equal(braking, 0, "hard braking has its own sound; stacking crackle on it is just noise");
+  // The switch and the trim.
+  A.setLayer("overrun", false);
+  assert.equal(burstsOver(40, { ax: -4 }), 0, "switched off is silent");
+  A.setLayer("overrun", true);
+  assert.ok(burstsOver(40, { ax: -4 }) > 0, "and back on crackles again");
 });

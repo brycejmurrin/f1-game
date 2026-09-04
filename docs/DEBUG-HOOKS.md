@@ -856,9 +856,34 @@ always gives the same tune. An unknown name falls back to `team`.
 
 ### `audioLayer(name, on) → layers`
 Switch one engine layer: `whine` (turbo), `harvest` (MGU-K), `ers`, `wind`,
-`limiter` (the rev-limiter chop), `screech` (tyres), `sub` (the sub-octave
-under the note). A muted layer is silent, not merely quiet, and then costs no
-per-frame scheduling.
+`limiter` (the rev-limiter chop), `screech` (tyres), `sub` (the sub-octave under
+the note), `rivals` (the cars around you), `reverb` (circuit acoustics) and
+`overrun` (off-throttle crackle). A muted layer is silent, not merely quiet,
+and then costs no per-frame scheduling.
+
+### The field, the space and the overrun
+`audio().granular` aside, three layers are worth naming because none of them
+existed before and each answers a question the mix could not:
+
+- **RIVALS** — `GameAudio.setRivals(list)`, fed by `js/audio/rivals.js` from the
+  player's TRACK frame. Four voices, panned by ANGLE (lateral over arc
+  distance), rolled off and lowpassed with distance, Doppler-shifted by the
+  closing rate. There was no panner in the graph at all before, so a car
+  alongside was silent.
+- **SPACE** — `GameAudio.setVenue(def)` picks the circuit's acoustics from data
+  the definitions already carry (`street: true`, `theme`). The impulse
+  responses are generated, not shipped. `audio().venue` reports the live send.
+- **OVERRUN** — crackle on a trailing throttle. `loadLift` is `clamp01(ax/12)`
+  and so is zero the instant the throttle closes, which is why lifting used to
+  sound exactly like coasting. `GameAudio.overrunState()` reports `{fired,
+  nextAt, now}`; one-shots have no persistent node to read.
+
+**Do not time the overrun from a headless probe here.** With no audio device
+this container's `ctx.currentTime` free-runs at roughly 100x wall — measured, 25
+seconds of context time per 200 ms of real time — so a live probe shows the
+GATING correctly and tells you nothing about the rate.
+`tests/unit/audio-tune.test.mjs` steps the clock by hand and is where the rate
+is pinned.
 
 ### The two cores
 `audio().granular` reports `{on, ready, active, period}`. `on` is the player
