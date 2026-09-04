@@ -1363,7 +1363,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
 }
-#pm-metrics-details[open] > summary::after { content: "\25B4"; }
+#pm-metrics-details[open] > summary::before { content: "\25B4"; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details [role="group"],
 #pmsettings-inner[data-density="compact"] #pm-metrics-details [role="group"] {
   display: grid;
@@ -1413,9 +1413,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 /* Disclosures share section-heading chrome, not .adv-more-btn plates.
    Steel + fading rule + italic — same family as .pm-group-h — so METRICS
-   / ADVANCED cannot be mistaken for HIDE HUD / RESET. */
+   / ADVANCED cannot be mistaken for HIDE HUD / RESET.
+   Chevron is ::before (tree/open-in-place). A right-side ::after is the
+   dropdown convention the native RENDERER <select> already owns. */
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary,
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary:is(:hover, :active) {
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary:active {
   color: var(--steel);
   font-style: italic;
   background-color: transparent;
@@ -1427,11 +1429,31 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   border-radius: 0;
   box-shadow: none;
 }
+@media (hover: hover) {
+  #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary:hover {
+    color: var(--steel);
+    background-color: transparent;
+    background-image: var(--grad-rule);
+    background-position: bottom left;
+    background-size: 100% 1px;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+  }
+}
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary::after {
+  content: none;
+}
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary::before {
+  content: "\25BE";
+}
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv)[open] > summary::before {
+  content: "\25B4";
+}
 #pmsettings-inner #pm-panel-display > .pm-group-h {
   margin-top: calc(var(--gap) * 0.5);
   padding-top: calc(var(--gap) / 3);
 }
-#pm-display-adv[open] > summary::after { content: "\25B4"; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"],
 #pmsettings-inner[data-density="compact"] #pm-display-adv [role="group"] {
   display: grid;

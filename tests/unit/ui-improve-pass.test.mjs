@@ -898,6 +898,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "METRICS / ADVANCED summaries use heading steel, not button text");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "background-color"), "transparent",
     "disclosure summaries are headings, not .adv-more-btn plates");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary::after/, "content"), "none",
+    "right-side chevron is the dropdown mark — disclosures do not use it");
+  assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary::before$/, "content") || "",
+    /25BE/,
+    "disclosure chevron sits on the left, like a tree, not a select");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
     "COCKPIT is a section break after the renderer row");
   assert.match(code("js/camera/cockpit-opts.js"), /pm-display-adv/,
