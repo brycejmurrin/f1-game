@@ -10,6 +10,16 @@ const RendererPicker = (function () {
 // The control is a <select> plus ‹ › so a tap can jump WEBGL2 ↔ WEBGPU
 // without opening THREE (the one-way cycle forced that path).
 const BACKENDS = ["webgl2", "three", "webgpu"];
+// A stop is UNAVAILABLE when the device cannot run it OR its files are not in
+// the tree — both reach the same affordance the header describes, so the label
+// stays visible and says so instead of writing a pref boot silently ignores.
+// Derived, not hardcoded: DEFERRED is {} since the 2026-09-03 WGX/TLX
+// spike-out, so both alternates are file-absent today and the stops come back
+// on their own if the backends are ever re-attached.
+const hasBackendFiles = (b) => b === "webgl2" ||
+  !!(typeof ApexRoster !== "undefined" && ApexRoster.DEFERRED &&
+     (ApexRoster.DEFERRED[b] || []).length);
+const available = (b) => hasBackendFiles(b) && (b !== "webgpu" || hasWebGPU());
 function readBackend() {
   const v = GameStore.store.raw("apex26.gfxBackend");
   return v === "webgpu" || v === "three" ? v : "webgl2";
@@ -118,15 +128,15 @@ function applyBackend(next, rb) {
   if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?", () => paintRenderer(rb))) return false;
   Log.info("game", "RendererPicker.applyBackend " + next);
   try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
-  if (next === "webgpu" && !hasWebGPU()) {
+  if (!available(next)) {
     if (isSelect(rb) && rb.options) {
       const opts = rb.options;
       for (let i = 0; i < opts.length; i++) {
-        if (opts[i].value === "webgpu") opts[i].textContent = "WEBGPU (UNAVAILABLE)";
+        if (opts[i].value === next) opts[i].textContent = backendLabel(next) + " (UNAVAILABLE)";
       }
       rb.value = readBackend();
     } else if (rb) {
-      rb.textContent = "RENDERER: WEBGPU (UNAVAILABLE)";
+      rb.textContent = "RENDERER: " + backendLabel(next) + " (UNAVAILABLE)";
     }
     setTimeout(() => { paintRenderer(rb); }, 900);
     return false;
@@ -406,10 +416,21 @@ function initPresentControls() {
     return add(btn);
   }
 
-  const pathBtn = addBtn("pm-three-path",
-    "three.js GPU path. AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, except on Safari/iOS (three WebGL2). WEBGL2 / WEBGPU pin one path.");
-  const shotBtn = addBtn("pm-screenshots",
-    "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.");
+  // THREE PATH and SCREENSHOTS steer WGX/TLX-only behaviour — the three.js GPU
+  // path, and the soft-present blit those two backends need to show a frame on
+  // a software GPU. With DEFERRED empty neither can do anything, so they are not
+  // injected at all rather than shipped inert. Derived from the roster, like the
+  // stops above, so they return with the backends and need no edit here.
+  //
+  // SAVE SCREENSHOT and COPY DIAG deliberately STAY: saveScreenshot() feature-
+  // tests GLX.awaitSoftPresent / GLX.softPresent, which real GLX does not carry,
+  // and falls through to a plain canvas capture — and the diag copy is the phone
+  // bug-report path, which is backend-agnostic.
+  const backendTools = hasBackendFiles("three") || hasBackendFiles("webgpu");
+  const pathBtn = backendTools ? addBtn("pm-three-path",
+    "three.js GPU path. AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, except on Safari/iOS (three WebGL2). WEBGL2 / WEBGPU pin one path.") : null;
+  const shotBtn = backendTools ? addBtn("pm-screenshots",
+    "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.") : null;
   const saveBtn = addBtn("pm-save-shot",
     "Download the visible #game canvas as a PNG. Waits for the 2D blit first (WGX or TLX-WebGPU).");
   // The label was only ever written by saveScreenshot()'s done() — the button
@@ -428,11 +449,11 @@ function initPresentControls() {
 
   paintPresent();
   try { window.addEventListener("apex-gfx-live", paintPresent); } catch (_) { /* no window */ }
-  pathBtn.onclick = function () {
+  if (pathBtn) pathBtn.onclick = function () {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
     applyThreePath(cycleOf(THREE_PATHS, readThreePath()));
   };
-  shotBtn.onclick = function () {
+  if (shotBtn) shotBtn.onclick = function () {
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio optional */ }
     applyShotMode(cycleOf(SHOT_MODES, readShotMode()));
   };

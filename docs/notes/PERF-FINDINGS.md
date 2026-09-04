@@ -2769,12 +2769,72 @@ bump no longer cold-compiles every script); the eight `readyState ===
 Catmull-Rom boot cost). `defer` itself and the 346 KB dev surface continued
 in the 08-18 hunt below.
 
-**Still open** (repeated at the end of every leftover round; do not re-open the
-08-18 union banner items): lazy circuit tags, script-tag `defer`, WGX
-whole-UBO skip, TLX road `trk` so `chunkedTrackCoords` can flip on. Any boot
-A/B needs a quiet box (`loadavg < 2`), a do-nothing control arm, rotated arm
-order, and the MINIMUM reported beside the median — the ledger records how the
-first attempt was VOID without those.
+**Still open** — ONE item, corrected 2026-09-03. This banner listed four for
+several rounds and three of them were already answered:
+
+| was listed | actual state |
+|---|---|
+| lazy circuit tags | **genuinely open** — but see the correction below; it is not a tag drop |
+| script-tag `defer` | **SHIPPED.** 140 of index.html's 141 `<script>` tags carry `defer`; the one that does not is the inline `type="importmap"`, which fetches nothing. This same document records it as done ("`defer` on all 157 tags") — the banner was never updated |
+| WGX whole-UBO skip | **MOOT** — `js/render/webgpu/` left the shipped tree in the 2026-09-03 spike-out |
+| TLX road `trk` | **MOOT** — `js/render/three/` left with it |
+
+A stale open-list is worse than none: it sends the next session to re-derive an
+answer the file already holds three sections above.
+
+**The circuit-tag item, corrected.** "39 of 40 defs are unused per session" is
+wrong as a plan. All 40 ARE read at menu time — `LIST` copies ~35 fields off
+every def, and the picker rows need name, country, classic, street, night,
+length and id for the search filter. Of 208 KB across the 40 files, only about
+**9.4 KB is metadata that must stay eager**; the deferrable part is payload,
+with centreline `path` traces about a third of the bytes. So this needs a
+metadata manifest plus hydration, not a lazy tag — and the expensive half
+already shipped (the ~1.1 MB of scenery closures under LAZY_SCENERY, and the
+`points` getter). Anyone re-measuring should note `du` on `js/circuits` reports
+1.5 MB because it descends into the already-lazy scenery directory.
+
+Any boot A/B still needs a quiet box (`loadavg < 2`), a do-nothing control arm,
+rotated arm order, and the MINIMUM reported beside the median — the ledger
+records how the first attempt was VOID without those.
+
+## 2y. Two things a 2026-09-03 audit found, and one it got wrong
+
+### The frame loop is clean EXCEPT the shadow path
+
+A hunt for per-frame allocation across `render()` (js/game.js, brace-matched
+6191-7916, 1,725 lines) and `updateCar()` (1,333 lines) found `updateCar` clean
+and `render` clean of the churn this ledger has spent rounds removing — no
+`.map`/`.filter`/`.slice`, no object literals, no push growth.
+
+What it does still allocate is all in ONE place: the shadow rebuild. A closure
+is constructed inside the sun-shadow recentre branch, which is entered whenever
+the snapped texel centre or the sun vector moves — most frames the camera or
+time-of-day changes — plus array literals there and three more per lamp-shadow
+rebuild on night circuits.
+
+**The method note matters more than the finding.** The first pass reported ZERO
+allocations because it grepped for `= []`, `= {}` and `.map(` — patterns that
+cannot see an inline array literal passed as an argument, or an arrow function
+assigned to a const. An adversarial re-read found them. A grep for allocation
+shapes is not an allocation audit; if this is re-run, look for `(` followed by
+`[` and for `=>` inside the body, not just assignment forms.
+
+### The lazy discipline was applied to JS and never to CSS
+
+Every stylesheet is eager: 558 KB across 11 files, all `rel="stylesheet"` in
+the shell. Four of them style surfaces that sit behind a button — data hub
+(49.7 KB), car setup (72.9), tuner panels (57.2), career (35.2) — about **215
+KB**, while the JS for those same surfaces is already deferred (LAZY_DATA alone
+holds 154 KB behind the DATA button). They are cleanly namespaced (`.dh-*`,
+`#cs-*`, `.lt-*`, `#cr-inner`), so each could travel with its module.
+
+**NOT taken, and the two blockers are the point.** `sw.js` builds its precache
+by parsing the shell's tags and puts every `rel="stylesheet"` in the ESSENTIAL
+set — so removing a `<link>` silently drops that CSS from offline. And
+`career.css` styles `#quali`, which opens in GP, season and multiplayer, not
+just career; deferring it would unstyle the quali sheet in a plain GP weekend.
+This is a feature with an offline story and a FOUC decision, not a link-tag
+move. Do not attempt it as a quick win.
 
 ### Added 2026-08-18 — hunt after the 08-17 board shipped
 

@@ -266,6 +266,18 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   assert.ok(refused > 0);
   assert.match(game.slice(refused, refused + 3000), /removeItem\(\s*"apex26\.gfxBackendProbe"\s*\)/, "a refused create disarms the probe");
   assert.doesNotMatch(game, /create\(\)\s*refused[\s\S]{0,250}setItem\(\s*"apex26\.gfxBackend"\s*,\s*"webgl2"\s*\)/);
+  // A STORED PICK MUST NOT OUTLIVE ITS FILES. With DEFERRED = {} after the
+  // 2026-09-03 spike-out, BACKEND_FILES.three is undefined; the boot armed the
+  // probe and then threw inside loadBackendScripts on `files.map`. It was caught
+  // and GLX rendered, and the next boot's revert cleared the pick — so it
+  // self-healed and no test saw it. The gate below is what stops the throw and
+  // the "never presented a frame" warning about a backend that was never
+  // fetched. Nothing here executes the boot block, so this is a source pin.
+  assert.match(game, /const group = pref === "three" \? BACKEND_FILES\.three/,
+    "the opt-in must resolve its DEFERRED group before arming anything");
+  assert.match(game, /const optIn = [^;]*group && group\.length/,
+    "optIn must require the group to exist and be non-empty — a pick for files that are gone is not an opt-in");
+
   const wgx = code("spike/backends/webgpu/wgx.js");
   assert.match(wgx, /device\.lost[\s\S]{0,600}_wgxEscalate\(/, "device.lost climbs the ladder through _wgxEscalate");
   assert.match(fnBody(wgx, "_wgxEscalate"), /apex26\.gfxClaimFail/, "the last rung surrenders the tab to GLX via the claim-fail latch");
@@ -554,6 +566,9 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
     PerfGov: { setUserTier() {}, sentinelArm(on) { sentinel = !!on; } },
     GameStore: { store: { get() { return null; }, set() {} } },
     GLX: { isMobile: true },
+    // This inline context has no opts; the backends-present world is what this
+    // test is about (RESET RENDERER semantics), so state it directly.
+    ApexRoster: { DEFERRED: { webgpu: ["w"], three: ["t"] } },
   });
   seedLog(ctx);
   seedStore(ctx);
@@ -1160,6 +1175,13 @@ function bootPicker(opts) {
     PerfGov: { setUserTier() {}, sentinelArm() {} },
     GameStore: { store: { get() { return null; }, set() {} } },
     GLX: { isMobile: true },
+    // The picker asks the roster whether a backend's files are in the tree, so
+    // a stop whose files are gone can say UNAVAILABLE rather than write a pref
+    // boot would ignore. These tests are about picker SEMANTICS, so the default
+    // is the backends-present world they were written for; pass `deferred: {}`
+    // to exercise the spiked-out one.
+    ApexRoster: { DEFERRED: opts.deferred !== undefined ? opts.deferred
+      : { webgpu: ["spike/backends/webgpu/wgx.js"], three: ["spike/backends/three/tlx.js"] } },
   });
   seedLog(ctx);
   seedStore(ctx);
@@ -1168,6 +1190,41 @@ function bootPicker(opts) {
   // readyState is "complete", so the IIFE already called init().
   return { G, ls, ss, byId, hostKids, reloaded: () => reloaded, timers, winListeners };
 }
+
+test("WGX/TLX-only DISPLAY controls are not injected when their files are gone", () => {
+  // THREE PATH and SCREENSHOTS steer the three.js GPU path and the soft-present
+  // blit — nothing GLX can use. Shipping them inert is worse than not shipping
+  // them: they read as controls that do nothing. SAVE SCREENSHOT and COPY DIAG
+  // must survive, though: the first feature-tests the soft-present API and
+  // falls through to a plain canvas capture, and the second is the phone
+  // bug-report path.
+  const gone = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" }, deferred: {} });
+  assert.equal(gone.byId["pm-three-path"], undefined, "THREE PATH is WGX/TLX-only");
+  assert.equal(gone.byId["pm-screenshots"], undefined, "SCREENSHOTS is WGX/TLX-only");
+  assert.ok(gone.byId["pm-save-shot"], "SAVE SCREENSHOT works on GLX and must stay");
+  assert.ok(gone.byId["pm-copy-diag"], "COPY DIAG is backend-agnostic and must stay");
+
+  // ...and they come back with the backends, with no code change.
+  const back = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" } });
+  assert.ok(back.byId["pm-three-path"], "re-attaching the backends restores the control");
+  assert.ok(back.byId["pm-screenshots"]);
+});
+
+test("a stop whose files left the tree says UNAVAILABLE instead of writing the pref", () => {
+  // The spiked-out world: DEFERRED is {} (tools/manifest.cjs), so neither
+  // alternate can bind. The header's rule is that a stop stays VISIBLE and
+  // names itself unavailable — the same affordance a phone without
+  // navigator.gpu already got — rather than persisting a pick that boot
+  // silently ignores. Derived from the roster, so the stops come back on their
+  // own if the backends are ever re-attached.
+  const a = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" }, gpu: {}, deferred: {} });
+  const sel = a.byId["pm-renderer"];
+  assert.equal(sel.options.length, 3, "the stop is still SHOWN — hiding it is what the header argues against");
+  sel.value = "three";
+  sel.dispatchEvent("change");
+  assert.equal(a.ls.getItem("apex26.gfxBackend"), "webgl2", "the dead pick is not persisted");
+  assert.match(sel.options[1].textContent, /UNAVAILABLE/, "and the stop says why");
+});
 
 test("RENDERER control becomes a select with prev/next, not a one-way cycle", () => {
   const { byId, hostKids } = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" } });
