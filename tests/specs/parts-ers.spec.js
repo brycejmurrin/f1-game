@@ -12,15 +12,21 @@
 // boot on empty storage gave for free; the shared page has whatever the last
 // test fitted (parts-physics fits an ERS pack), so load() pins it before every
 // race. UNVERIFIED IN A BROWSER at conversion time.
-import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { sharedTest as test, expect, awaitTrackBuild } from "../helpers/fixtures.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 async function load(page) {
   await toMenu(page);
   // Default team, no parts, and the race in the same evaluate (see pinFreePlay).
+  // startRace() is async (ensureScenery): race() returns before info().track
+  // is monza. A 45s waitForFunction then loses to the 120s test timeout while
+  // the page is still building — Selected specs 2026-09-04, both this branch
+  // and deploy, 195–240s "Test timeout of 120000ms exceeded".
   await pinFreePlay(page, { race: ["monza"] });
-  await page.waitForFunction(() => window.__apex.info().track === "monza", null, { polling: 100, timeout: BOOT_MS });
-  await page.evaluate(() => { window.__apex.go(); });
+  await awaitTrackBuild(page);
+  const id = await page.evaluate(() => window.__apex.info().track);
+  if (id !== "monza") throw new Error("load: expected monza, got " + id);
+  await page.evaluate(() => { window.__apex.headless(true); window.__apex.go(); });
 }
 
 // Hold BOOST at a given speed for a fixed time and report the energy spent and
