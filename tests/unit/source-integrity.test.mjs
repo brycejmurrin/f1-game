@@ -257,13 +257,15 @@ test("tools/ui/menu-screens.mjs knows about every screen in the shell", () => {
     "rather than leaving the gap unstated");
 });
 
-test("Settings uses labelled category tabs with matching panels", () => {
+test("Settings is a door-index stack with labelled pages", () => {
   const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
-  for (const id of ["controls", "display", "more"]) {
-    assert.match(html, new RegExp(`id="pm-tab-${id}"[^>]*role="tab"[\\s\\S]{0,180}aria-controls="pm-panel-${id}"`));
-    assert.match(html, new RegExp(`id="pm-panel-${id}"[^>]*role="tabpanel"[\\s\\S]{0,180}aria-labelledby="pm-tab-${id}"`));
+  assert.match(html, /id="pm-settings-index"[^>]*class="[^"]*pm-doors"/);
+  assert.match(html, /id="pm-open-controls"/);
+  assert.match(html, /id="pm-open-display"/);
+  for (const id of ["controls", "display"]) {
+    assert.match(html, new RegExp(`id="pm-panel-${id}"[^>]*role="region"[\\s\\S]{0,180}aria-labelledby="dlg-settings"`));
   }
-  assert.match(html, /id="pm-category-tabs"[^>]*role="tablist"/);
+  assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
 });
 
 test("portrait race blocker is an actionable accessible dialog", () => {

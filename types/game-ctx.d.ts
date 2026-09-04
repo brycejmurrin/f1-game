@@ -356,6 +356,7 @@ interface GameCtx {
   camCutT: number;
   camRoll: number;
   camTgt: Vec3;
+  hudProfile: string;
   dbgCam: DebugCam | null;
 
   // ── Per-frame render + race clocks ────────────────────────────────────────

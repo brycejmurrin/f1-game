@@ -1229,6 +1229,12 @@ function fmtTime(t) {
 function announce(msg, dur, kind) {
   kind = kind || "race";
   const pri = ANN_PRI[kind] || 2;
+  if (hudProfile !== "broadcast") {
+    const camId = CAM_MODES[camMode].id;
+    if (camId === "heli" || camId === "side" || camId === "cinematic" || camId === "low" || camId === "overhead") {
+      if (pri < 4) return;
+    }
+  }
   if (announceT > 0 && pri <= _annPri) {
     if (!_annQueue || pri > (_annQueue.pri || 0)) _annQueue = { msg, dur, kind, pri };
     return;
@@ -3194,6 +3200,12 @@ const G = {
   get camFov() { return camFov; }, set camFov(v) { camFov = v; },
   get camMode() { return camMode; }, set camMode(v) { camMode = v; },
   get camCutT() { return camCutT; }, set camCutT(v) { camCutT = v; },   // for cam-modes.js
+  get hudProfile() { return hudProfile; },
+  set hudProfile(v) {
+    if (HUD_PROFILES.indexOf(v) < 0) v = "standard";
+    hudProfile = v;
+    store.set("hudProfile", hudProfile);
+  },
   get camRoll() { return camRoll; }, set camRoll(v) { camRoll = v; },
   get camTgt() { return camTgt; }, set camTgt(v) { camTgt = v; },
   get dbgCam() { return dbgCam; }, set dbgCam(v) { dbgCam = v; },
@@ -8500,11 +8512,11 @@ function openSettings() {
 }
 function closeSettings() { els.pmsettings.hidden = true; if (paused) els.pausemenu.hidden = false; syncRotateBlocker(false); }
 $("pm-settings").onclick = openSettings;
-$("pm-settings-close").onclick = closeSettings;
+$("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings(); };
 // The same settings screen from the TITLE menu, so steering, audio and the
-// tuners are reachable without starting a race first. closeSettings() already
-// only returns to the pause menu when actually paused, so from here it just
-// closes back to the title.
+// tuners are reachable without starting a race first. Always opens on the
+// door index. closeSettings() already only returns to the pause menu when
+// actually paused, so from here it just closes back to the title.
 $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
 // Advanced steering: opened from the settings menu, closes back to it.
 $("pm-advanced").onclick = () => { $("advanced").hidden = false; };
@@ -9296,6 +9308,12 @@ if (pmHudProfile) {
     hudProfile = HUD_PROFILES[(HUD_PROFILES.indexOf(hudProfile) + 1) % HUD_PROFILES.length];
     store.set("hudProfile", hudProfile);
     pmHudProfile.textContent = hudProfileLabel();
+    const metrics = document.getElementById("game-metrics");
+    if (metrics) {
+      if (hudProfile === "minimal") metrics.dataset.compact = "1";
+      else delete metrics.dataset.compact;
+    }
+    updateHud(true);
   };
 }
 
@@ -9482,8 +9500,8 @@ refreshCareerButton();
 // Escape means PAUSE or BACK — hand it the answer rather than have it guess one
 // from the DOM. Same pair setPaused() gates on.
 UiLayers.setRaceGetter(() => state === "race" || state === "count");
-// Pause key: when the settings sub-menu is open it acts as a BACK to the pause
-// menu; otherwise it toggles pause as usual.
+// Pause key: when the settings sub-menu is open it presses the same BACK
+// path (pop a page, then close); otherwise it toggles pause as usual.
 Input.init(canvas, { onPause: () => {
   // Innermost sheet first: HOW TO PLAY lays OVER the settings menu, so a pause
   // press there has to close the help sheet, not the menu underneath it (which
@@ -9491,7 +9509,10 @@ Input.init(canvas, { onPause: () => {
   // via the pause BUTTON / gamepad Start — a keyboard Esc never gets here while a
   // menu sheet is up (onKey returns early on menuOverlayOpen(), js/input/input.js).
   if (paused && els.howtoplay && !els.howtoplay.hidden) { els.howtoplay.hidden = true; return; }
-  if (paused && els.pmsettings && !els.pmsettings.hidden) { closeSettings(); return; }
+  if (paused && els.pmsettings && !els.pmsettings.hidden) {
+    if (settingsNav.back()) closeSettings();
+    return;
+  }
   setPaused(!paused);
 } });
 // The subtitle is DERIVED on both paths. It used to be hardcoded "24 real

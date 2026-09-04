@@ -673,6 +673,13 @@ body[data-density="compact"] #campicker {
    in css/components.css, and so are the .res-* row rules now that four screens
    use them. Only what is specific to THIS container stays here. */
 #results-table { font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
+#res-daily-share, #res-ghost-clear {
+  display: flex;
+  width: max-content;
+  margin-top: var(--gap);
+  margin-inline: auto;
+}
+#res-ghost-clear { opacity: 0.6; }
 #results .sheet-foot, #standings .sheet-foot, #howtoplay .sheet-foot, #advanced .sheet-foot { justify-content: center; }
 #res-settle-unsaved { margin-top: var(--gap); color: #ffd180; font-weight: 800; }
 
@@ -716,6 +723,7 @@ body[data-density="compact"] #campicker {
    either way. Links never wrap into a second row of chrome. */
 #howtoplay-inner {
   --fit-at: 200px;
+  --compact-at: 480px;
   /* Head, contents strip, body, foot — four rows so the nav can live as a
      sheet child (wide rail) without creating an implicit extra track. */
   grid-template-rows: auto auto minmax(0, 1fr) auto;

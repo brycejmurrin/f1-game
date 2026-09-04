@@ -1464,6 +1464,17 @@ live in `ratchets.json`.
   members (2026-09-03): the first-run COACH MARKS (`js/ui/onboard.js`) — a
   `create` line, the per-frame `onboard.tick(dt)` beside `BrakeCue.tick()`, and
   `G.announceBusy` so a mark can never stomp LIGHTS OUT! or a sector split.
+- `js/game.js` 9499 -> **9502** lines / 5219 -> **5222** code (2026-09-04):
+  settings BACK pops the page stack (`settingsNav.back()`) before
+  `closeSettings()`, on both the foot button and the pause-key path. Raised
+  rather than packed: the extra lines are the stack, not leftover.
+- `js/game.js` 9611 -> **9614** lines / 5274 -> **5277** code, tree
+  `shellNodes` 1065 -> **1062** (2026-09-04): re-measured on the union with
+  `claude/f1-game-project-26h3ng`. The +3 is the settings BACK stack on top
+  of their HUD pack; the shell-node drop is tabs → door index.
+- `js/game.js` 9629 -> **9632** lines / 5292 -> **5295** code, tree
+  `shellNodes` 1071 -> **1068** (2026-09-04): second union (camera-hud
+  defaults landed on deploy while we merged). Same +3 / −3 shape.
 
 ## Tree-wide ratchets (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-03)
 
