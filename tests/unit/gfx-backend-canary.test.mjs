@@ -523,10 +523,19 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   const ss = makeStorage({ "apex26.gfxClaimFail": "1" });
   const kids = [];
   const resetHost = {
-    insertBefore(node, _ref) { kids.push(node); return node; },
+    insertBefore(node, _ref) { kids.push(node); node.parentNode = resetHost; return node; },
+    replaceChild(node, old) {
+      const i = kids.indexOf(old);
+      if (i >= 0) kids[i] = node;
+      else kids.push(node);
+      node.parentNode = resetHost;
+      if (old) old.parentNode = null;
+      return old;
+    },
   };
   const rendererBtn = { id: "pm-renderer", parentNode: resetHost, nextSibling: null };
-  const gfxBtn = { id: "pm-gfx", textContent: "", hidden: true, onclick: null };
+  rendererBtn.replaceWith = (next) => { resetHost.replaceChild(next, rendererBtn); };
+  const gfxBtn = { id: "pm-gfx", textContent: "", hidden: true, onclick: null, parentNode: resetHost };
   const byId = { "pm-renderer": rendererBtn, "pm-gfx": gfxBtn };
   let reloaded = 0;
   let sentinel = true;
@@ -568,7 +577,7 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   assert.ok(btn, "reset button was injected");
   assert.equal(btn.textContent, "RESET RENDERER");
   assert.ok(byId["pm-display-adv"], "ADVANCED disclosure was injected on the host");
-  assert.equal(kids[0], byId["pm-display-adv"]);
+  assert.ok(kids.includes(byId["pm-display-adv"]), "ADVANCED sits on the DISPLAY host, after the picker row");
   assert.equal(btn.parentNode && btn.parentNode.id, "pm-display-adv-body");
   btn.onclick();
   assert.equal(ls.getItem("apex26.gfxBackend"), null);

@@ -388,9 +388,10 @@ function ensureAdvHost() {
   const existing = typeof document !== "undefined" ? document.getElementById("pm-display-adv-body") : null;
   if (existing) return existing;
   if (typeof document === "undefined" || typeof document.createElement !== "function") return null;
+  const panel = document.getElementById("pm-panel-display");
   const slot = rendererSlot(document.getElementById("pm-renderer"));
   const gfx = document.getElementById("pm-gfx");
-  const host = (slot && slot.parentNode) || (gfx && gfx.parentNode);
+  const host = panel || (slot && slot.parentNode) || (gfx && gfx.parentNode);
   if (!host) return null;
 
   const details = document.createElement("details");
@@ -412,7 +413,9 @@ function ensureAdvHost() {
   // After GRAPHICS when it is a sibling (player quality stays on the sheet);
   // otherwise after the renderer row. JS-built so the shell-node ratchet
   // does not see a new tag — same reason RESET RENDERER is injected.
-  const after = (gfx && gfx.parentNode === host) ? gfx : slot;
+  const after = (gfx && gfx.parentNode === host) ? gfx
+    : (slot && slot.parentNode === host) ? slot
+    : null;
   if (typeof host.insertBefore === "function") host.insertBefore(details, after ? after.nextSibling : null);
   else if (typeof host.appendChild === "function") host.appendChild(details);
   return body;
