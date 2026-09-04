@@ -158,6 +158,7 @@ const AudioPanel = (() => {
       $("as-play").disabled = !G.soundOn;
       if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
       syncMusicSrcRow();
+      syncTonePanel();
     }
 
     $("pm-audio").onclick = () => { syncAudioPanel(); $("audioset").hidden = false; };
@@ -187,6 +188,127 @@ const AudioPanel = (() => {
       store.set("volSfx", sfxVol);
       $("as-svol-v").textContent = String(Math.round(sfxVol * 10));
     };
+    /* ENGINE TONE — profiles, tuner sliders and layer switches over the
+       manufacturer voice. The engine owns the clamping and the timbre contract
+       (js/audio/engine.js); this is the surface and the persistence.
+
+       Each slider is an integer 0..max in the DOM mapped through {lo, step},
+       chosen per field so that an EXACT integer lands on 1.0 — a slider whose
+       centre is 0.9975 would mean the panel could not express the shipped
+       sound, which is the one value it must always be able to return to. */
+    const TONE = [
+      { k: "pitch",      id: "as-t-pitch",  lo: 0.80, step: 0.025 },
+      { k: "revRange",   id: "as-t-range",  lo: 0.40, step: 0.10 },
+      { k: "detune",     id: "as-t-detune", lo: 0,    step: 0.25 },
+      { k: "brightness", id: "as-t-bright", lo: 0.50, step: 0.05 },
+      { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.25 },
+      { k: "limiter",    id: "as-t-lim",    lo: 0,    step: 0.25 },
+    ];
+    const TONE_LAYERS = [
+      { k: "whine",   id: "as-l-whine" },   { k: "harvest", id: "as-l-harvest" },
+      { k: "ers",     id: "as-l-ers" },     { k: "wind",    id: "as-l-wind" },
+      { k: "limiter", id: "as-l-limiter" }, { k: "screech", id: "as-l-screech" },
+    ];
+    const PROFILE_BTN = [["as-p-team", "team"], ["as-p-broadcast", "broadcast"],
+      ["as-p-trackside", "trackside"], ["as-p-cockpit", "cockpit"], ["as-p-v10", "v10"]];
+    const PROFILE_NOTE = {
+      team: "Follows your team's engine — the default sound.",
+      broadcast: "Bright and forward, with the turbo up. The TV mix.",
+      trackside: "Darker, further away, more air and tyre.",
+      cockpit: "Heavy and muffled, with the rev limiter loud. From inside the car.",
+      v10: "Wide, screaming and long-geared. No turbo.",
+    };
+    // The engine owns which profile is live — it flips itself to "custom" the
+    // moment a trim stops matching the named preset (setTune, js/audio/engine.js).
+    // The panel deliberately keeps no second copy: two records of the same fact
+    // is how the row ends up lighting a preset the tune has been edited away
+    // from. "custom" is not in profiles(), so the row simply lights nothing.
+    const toneProfile = () => GameAudio.profile();
+
+    function toneSlider(t) { return $(t.id); }
+
+    function applyStoredTone() {
+      // No need to validate the stored name first: setProfile already falls back
+      // to "team" for anything it does not recognise, so a hand-edited or
+      // stale-schema value lands on the shipped sound either way.
+      GameAudio.setProfile(store.get("sndProfile", "team"));
+      const savedTune = store.get("sndTune", null);
+      if (savedTune && typeof savedTune === "object") GameAudio.setTune(savedTune);
+      const savedLayers = store.get("sndLayers", null);
+      if (savedLayers && typeof savedLayers === "object") {
+        for (const l of TONE_LAYERS) if (typeof savedLayers[l.k] === "boolean") GameAudio.setLayer(l.k, savedLayers[l.k]);
+      }
+    }
+
+    function syncTonePanel() {
+      const tune = GameAudio.tune();
+      for (const t of TONE) {
+        const el = toneSlider(t);
+        if (!el) continue;
+        el.value = String(Math.round((tune[t.k] - t.lo) / t.step));
+        $(t.id + "-v").textContent = String(Math.round(tune[t.k] * 100));
+      }
+      const layers = GameAudio.layers();
+      for (const l of TONE_LAYERS) {
+        const b = $(l.id);
+        if (!b) continue;
+        b.classList.toggle("active", !!layers[l.k]);
+        b.setAttribute("aria-pressed", layers[l.k] ? "true" : "false");
+      }
+      for (const [id, name] of PROFILE_BTN) {
+        const b = $(id);
+        if (b) b.classList.toggle("active", toneProfile() === name);
+      }
+      $("as-p-note").textContent = toneProfile() === "custom"
+        ? "Your own tune. RESET returns to your team's engine sound."
+        : (PROFILE_NOTE[toneProfile()] || "");
+    }
+
+    function setToneProfile(name) {
+      GameAudio.setProfile(name);
+      persistTone();
+      syncTonePanel();
+    }
+    function persistTone() {
+      store.set("sndProfile", toneProfile());
+      store.set("sndTune", GameAudio.tune());
+    }
+
+    for (const [id, name] of PROFILE_BTN) {
+      const b = $(id);
+      if (b) b.onclick = () => { setToneProfile(name); if (G.soundOn) GameAudio.uiTick(); };
+    }
+    for (const t of TONE) {
+      const el = toneSlider(t);
+      if (!el) continue;
+      // `input` so the engine follows the thumb — the whole point is hearing the
+      // change while dragging. The WRITE is on `change`: oninput fires per pixel
+      // of drag and every one of those would be a localStorage round-trip.
+      el.oninput = () => {
+        GameAudio.setTune({ [t.k]: t.lo + (+el.value || 0) * t.step });
+        $(t.id + "-v").textContent = String(Math.round(GameAudio.tune()[t.k] * 100));
+        syncTonePanel();   // the engine may have just flipped itself to "custom"
+      };
+      el.onchange = persistTone;
+    }
+    for (const l of TONE_LAYERS) {
+      const b = $(l.id);
+      if (!b) continue;
+      b.onclick = () => {
+        const on = !GameAudio.layers()[l.k];
+        GameAudio.setLayer(l.k, on);
+        store.set("sndLayers", GameAudio.layers());
+        syncTonePanel();
+        if (G.soundOn) GameAudio.uiTick();
+      };
+    }
+    $("as-t-reset").onclick = () => {
+      for (const l of TONE_LAYERS) GameAudio.setLayer(l.k, true);
+      store.set("sndLayers", GameAudio.layers());
+      setToneProfile("team");
+      if (G.soundOn) GameAudio.uiTick();
+    };
+
     function audioTransport(fn) {
       const name = fn();
       if (name) { $("as-now").textContent = name; $("as-now").title = name; }
@@ -200,6 +322,10 @@ const AudioPanel = (() => {
 
     function init() {
       Log.info("audio", "AudioPanel.init sound=" + !!G.soundOn);
+      // Before setSound: it can start the engine, and the engine reads the tune
+      // on its first frame. Restoring after would run one race's worth of
+      // frames on the default voice and only correct on the next setEngine.
+      applyStoredTone();
       setSound(G.soundOn, false);
       setMusic(G.musicEnabled, false);
       // A STORED "spotify" IS NOT WHAT IS PLAYING. Spotify never auto-connects,

@@ -534,6 +534,13 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
   display: inline-flex; align-items: center; justify-content: center;
   letter-spacing: var(--ls-1);
 }
+/* ENGINE TONE carries five profile chips and six layer switches — more than any
+   other row in this sheet, and .opt-row above does not wrap. Without this they
+   squash below the tap floor on a narrow sheet instead of moving to a second
+   line. Scoped by id, not a new class: the cssClasses ratchet has three tokens
+   of headroom and this needs none of them. */
+#as-engine-details .opt-row { flex-wrap: wrap; }
+#as-engine-details .opt-row .opt-btn { flex: 1 1 auto; min-width: var(--tap-min); }
 .opt-btn.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
   box-shadow: var(--plate-on-glow);

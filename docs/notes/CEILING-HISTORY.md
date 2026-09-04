@@ -1894,5 +1894,41 @@ declarations; if not, they are the next two to migrate.
   and `openSettings()` re-reads it because the resolution moves with the camera
   — a label written only at boot and on click would go stale, and a stale
   resolution is a worse lie than the silence it replaced.
+
+### ENGINE TONE (2026-09-04) — three ceilings, one feature
+
+Player-facing engine-sound tuning: five profiles, six tuner sliders and six
+layer switches over the manufacturer voice `team.engine` already picks. The
+shipped tree exposed NONE of this — `ENGINE_VOICES` was chosen by the team
+alone and the trims behind it were unreachable — so the feature is new surface
+rather than growth of an existing one, and it pushed three ceilings at once.
+
+- `shellNodes` 1076 -> **1119**: the section's static markup in `#audioset`.
+  (1118 on this branch alone; re-measured on the merged tree, which also carries
+  a node from the concurrent DISPLAY work — the union is the only honest value.)
+  A RAISE, not an absorption: the metric sat at exactly its ceiling, so this
+  could not land without one. The nodes are static on purpose — `index.html`
+  is the shell and owns ALL static DOM, so building the section from
+  `js/audio/panel.js` would have dodged this ceiling by breaking a louder rule.
+  If the section is ever folded into a generic tuner-row renderer, this is the
+  first 40 nodes to win back.
+- `dynamicIdReads` 43 -> **50**: the panel drives those controls from tables,
+  so its lookups are `$(t.id)` and `$(t.id + "-v")` rather than literals. The
+  guard is right that those are unverifiable — so the raise is PAID FOR rather
+  than merely taken: `tests/unit/audio-tune.test.mjs` proves statically that
+  every id in those tables is declared in `index.html`, and that every profile,
+  layer and trim the panel names is one the engine defines (and the reverse —
+  an engine-side rename would otherwise leave a button that lights up and does
+  nothing, which is worse than one that throws). That is STRONGER than what the
+  literal form gets, since it also covers the key names. Unrolling the tables
+  into 17 literal `$()` calls would have satisfied the counter while making the
+  panel worse.
+- `js/agent/apex.js` 2610 -> **2641** lines / 1981 -> **2000** code: the four
+  `audio*` hooks and their reference comment. `__apex` had no audio hook at
+  all, which is why the engine's pitch curve could only ever be checked by a
+  browser test; these make it assertable from a script. The four share one
+  precondition through a `noAudio()` helper rather than four copies of the same
+  three-line guard.
+
 - tree `rawSpacing` 314 -> **313** (2026-09-04): free-cam climb/dive `.pc-btn`
   dropped the 64×58 / 46×42 literals for `var(--steer)`.

@@ -41,6 +41,15 @@ function audioPanelHarness() {
     sourceCounts() { return { builtin: 3, user: 0 }; }, musicSource() { return "all"; },
     setMusicSource(v) { return v; }, trackName() { return ""; },
     uiTick() {}, skipTrack() {}, prevTrack() {},
+    // ENGINE TONE: the panel reads the live profile/tune/layers back from the
+    // engine on every sync rather than keeping a second copy, so these are part
+    // of the contract init() depends on. Shapes mirror js/audio/engine.js;
+    // tests/unit/audio-tune.test.mjs is what holds the two in step.
+    profile() { return "team"; }, setProfile(v) { return v; },
+    tune() { return { pitch: 1, detune: 1, revRange: 1, brightness: 1, whine: 1, sub: 1, limiter: 1 }; },
+    setTune(v) { return v; },
+    layers() { return { whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true }; },
+    setLayer(k, v) { return v; },
   };
   const G = {
     $, els: { soundbtn: $("soundbtn") },

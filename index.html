@@ -1514,6 +1514,52 @@
         <p class="as-note">Engine, tyres, rain and menu clicks. Independent of the music.</p>
       </details>
 
+      <!-- ENGINE TONE: the player's own trim, layered OVER the manufacturer
+           voice that team.engine already picks (js/audio/engine.js ENGINE_VOICES).
+           A profile REPLACES the six trims; moving any slider afterwards leaves
+           the profile row unlit, because the tune is then the player's and no
+           longer that preset's. Closed by default, like YOUR TRACKS and SPOTIFY
+           — an opt-in workflow, not one of the two controls every player wants.
+
+           Every knob here is a CONSTANT multiplier, never a function of rev:
+           that is the contract tools/check/audio-test.cjs and
+           tests/unit/audio-tune.test.mjs both hold the engine to, and it is why
+           no slider position can make pitch fall as the revs rise. -->
+      <details id="as-engine-details" class="as-sec">
+        <summary class="as-head"><h3 class="adv-sec">ENGINE TONE</h3></summary>
+        <div class="opt-row" role="group" aria-label="Sound profile">
+          <button id="as-p-team" class="opt-btn" type="button">TEAM</button>
+          <button id="as-p-broadcast" class="opt-btn" type="button">BROADCAST</button>
+          <button id="as-p-trackside" class="opt-btn" type="button">TRACKSIDE</button>
+          <button id="as-p-cockpit" class="opt-btn" type="button">COCKPIT</button>
+          <button id="as-p-v10" class="opt-btn" type="button">V10</button>
+        </div>
+        <p id="as-p-note" class="as-note"></p>
+        <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">100</b></span>
+          <input id="as-t-pitch" type="range" min="0" max="18" step="1" value="8" aria-label="Engine pitch"></label>
+        <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">100</b></span>
+          <input id="as-t-range" type="range" min="0" max="12" step="1" value="6" aria-label="Rev range"></label>
+        <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">100</b></span>
+          <input id="as-t-detune" type="range" min="0" max="12" step="1" value="4" aria-label="Engine detune"></label>
+        <label class="tune-row"><span class="tune-label">BRIGHTNESS <b id="as-t-bright-v">100</b></span>
+          <input id="as-t-bright" type="range" min="0" max="22" step="1" value="10" aria-label="Engine brightness"></label>
+        <label class="tune-row"><span class="tune-label">TURBO <b id="as-t-whine-v">100</b></span>
+          <input id="as-t-whine" type="range" min="0" max="10" step="1" value="4" aria-label="Turbo whine level"></label>
+        <label class="tune-row"><span class="tune-label">LIMITER <b id="as-t-lim-v">100</b></span>
+          <input id="as-t-lim" type="range" min="0" max="8" step="1" value="4" aria-label="Rev limiter chop depth"></label>
+        <!-- Layer switches. Each names a real node in the engine graph, so an
+             off layer is silent rather than merely quiet. -->
+        <div id="as-layer-row" class="opt-row" role="group" aria-label="Engine layers">
+          <button id="as-l-whine" class="opt-btn" type="button" aria-pressed="true">TURBO</button>
+          <button id="as-l-harvest" class="opt-btn" type="button" aria-pressed="true">HARVEST</button>
+          <button id="as-l-ers" class="opt-btn" type="button" aria-pressed="true">ERS</button>
+          <button id="as-l-wind" class="opt-btn" type="button" aria-pressed="true">WIND</button>
+          <button id="as-l-limiter" class="opt-btn" type="button" aria-pressed="true">LIMITER</button>
+          <button id="as-l-screech" class="opt-btn" type="button" aria-pressed="true">TYRES</button>
+        </div>
+        <button id="as-t-reset" class="adv-more-btn" type="button">RESET TO TEAM SOUND</button>
+      </details>
+
       <!-- YOUR TRACKS: uploaded audio files, stored in IndexedDB by
            js/game/music-lib.js and appended to the same playlist as the shipped
            songs, so SKIP walks through both. Closed by default — an upload
