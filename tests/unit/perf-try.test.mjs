@@ -142,11 +142,27 @@ test("AI cars outside an 8 m frustum sphere are not drawn — shadows are enqueu
   const open = [0, 0, 0, 1e6];
   const withD = (d) => [[0, 0, 0, d], open, open, open, open, open];
   const counts = (names) => ({ draw: names.filter((n) => n === "draw").length, shadow: names.filter((n) => n === "drawShadow").length, decal: names.filter((n) => n === "drawDecal").length });
-  FRUSTUM.planes = withD(-7.99);
-  const kept = counts(pumpNames());
-  FRUSTUM.planes = withD(-8.01);
-  const culled = counts(pumpNames());
+  // THE TWO SAMPLES ARE DIFFERENT FRAMES, so anything else that moves between
+  // them reads as a culling effect. One thing does: the shadow-caster set is
+  // still SETTLING for the first frames after the boot — measured 2026-09-04,
+  // 13 casters on the opening frames and 12 from the third on. Whether this
+  // test lands before or after that step depends on how many frames the tests
+  // above it happened to pump, which is why it passed for weeks and then failed
+  // once on CI (Pages run 1999) with exactly `kept 13 / culled 12`.
+  //
+  // So prove the frame is steady instead of assuming it: bracket the culled
+  // sample between two KEPT samples and only compare once the brackets agree.
+  // A difference then can only be the cull, which is what the assertion claims.
+  let kept = null, culled = null, keptAgain = null;
+  for (let i = 0; i < 20; i++) {
+    FRUSTUM.planes = withD(-7.99); kept = counts(pumpNames());
+    FRUSTUM.planes = withD(-8.01); culled = counts(pumpNames());
+    FRUSTUM.planes = withD(-7.99); keptAgain = counts(pumpNames());
+    if (kept.shadow === keptAgain.shadow) break;
+  }
   FRUSTUM.planes = null;
+  assert.equal(kept.shadow, keptAgain.shadow,
+    "the shadow count must be steady frame to frame before it can measure a cull");
   assert.ok(kept.draw > culled.draw + 20, `culling every rival must drop many draws: ${kept.draw} → ${culled.draw}`);
   assert.ok(kept.decal > culled.decal, "culled rivals draw no decals");
   assert.equal(kept.shadow, culled.shadow, "the shadow enqueue precedes the side-frustum cull — an off-camera rival still casts");
