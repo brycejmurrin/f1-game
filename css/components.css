@@ -1275,25 +1275,17 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--text);
   font-size: var(--fs-micro);
 }
-/* UI SIZE is the DISPLAY section label — same steel italic + rule as COCKPIT.
-   HUD SIZE inside the HUD fold stays a quiet slider caption. */
-#pm-panel-display > .tune-row .tune-label {
-  font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
-  font-weight: 700;
-  font-style: italic;
-  letter-spacing: var(--ls-5);
-  text-transform: uppercase;
-  opacity: 1;
-  padding-bottom: calc(var(--gap) / 3);
-  background: var(--grad-rule) bottom left / 100% 1px no-repeat;
+/* UI SIZE heading: same .pm-group-h as COCKPIT. The % sits on the right
+   in text, not tuner red. Hidden .tune-label keeps the slider row labeled. */
+#pm-panel-display > .pm-group-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
 }
-#pm-panel-display > .tune-row .tune-label b {
-  font-size: inherit;
-  font-weight: 700;
+#pm-panel-display > .pm-group-h b {
+  color: var(--text);
   font-style: italic;
-}
-#pm-panel-display > .tune-row {
-  gap: calc(var(--gap) * 0.25);
+  font-weight: 700;
 }
 #pm-panel-display .tune-row input[type="range"] {
   accent-color: var(--steel);
