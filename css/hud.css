@@ -259,6 +259,20 @@ body.hud-prof-broadcast .hud-gaps {
   border-left: 3px solid var(--accent);
   font-style: normal;
 }
+/* THE LEFT CLUSTER STACKS UNDER THE TOWER. `.hud-top` above re-anchors from
+   `left: 50%` to the top-LEFT corner — which is exactly where `#minimap` and,
+   beside it, `.hud-gaps` already live. Nothing moved them, so the tower painted
+   straight over the POS tile (reported from a phone in broadcast + COCKPIT).
+   Scaling cannot fix a direct collision, and fitHud could not even see this one:
+   its cap budgeted a CENTRED band (js/ui/hud.js, now broadcast-aware).
+
+   --hud-top-h is the tower's measured height, published by fitHud against the
+   same --hud-z-top these elements zoom by, so adding it here costs no
+   double-counting. The 8px matches the gap the two carry everywhere else. */
+body.hud-prof-broadcast #minimap,
+body.hud-prof-broadcast .hud-gaps {
+  top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 0px) + 8px);
+}
 /* Cinematic/broadcast cam + broadcast HUD: clean frame — tower carries timing. */
 body.hud-prof-broadcast.hud-bcam .hud-bottom { display: none !important; }
 body.hud-prof-broadcast #announce[data-kind="race"] {

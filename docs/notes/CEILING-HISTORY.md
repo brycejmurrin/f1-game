@@ -1874,3 +1874,15 @@ tower is read at a glance, not studied. But they were not argued for, they were
 measured, and this is the record that they were RAISED rather than earned. If
 the broadcast profile is the right place for a sub-floor rung, say so at the
 declarations; if not, they are the next two to migrate.
+- `js/game.js` 9689 -> **9703** lines / 5352 -> **5357** code (2026-09-04): the
+  METRICS control stops reading as broken. `HUD_MET_LAYOUTS` has five stops and
+  the first two paint the same picture whenever `auto` resolves to `full` —
+  which it does on any roomy band, and on the BROADCAST profile with a
+  non-broadcast camera (`BCAM_IDS` is heli/side/cinematic/low/overhead, so
+  COCKPIT falls through). `hud-met-full` has no CSS rule anywhere; it IS the
+  base state. So two clicks changed nothing and the control looked inert.
+  `hudMetricsLayoutLabel()` now names what auto resolved to, read off the body
+  class rather than by duplicating `resolveMetricsLayout()` in a second file,
+  and `openSettings()` re-reads it because the resolution moves with the camera
+  — a label written only at boot and on click would go stale, and a stale
+  resolution is a worse lie than the silence it replaced.

@@ -80,7 +80,12 @@ let _hudVisKey = "";
 function syncHudVisClasses(modeId) {
   const onboard = !!ONBOARD_IDS[modeId];
   const hideMap = resolveHudVis(G.hudMapVis, onboard);
-  const hideGaps = resolveHudVis(G.hudGapsVis, onboard);
+  // GAPS DO NOT AUTO-HIDE ONBOARD. The map is scenery you can glance away from,
+  // but from a cockpit you cannot see the car behind you at all — the ahead/
+  // behind readout is MORE useful there, not less, and auto-hiding it was the
+  // "where did my relative distance widget go" this pass came from. GAPS: OFF
+  // still hides it; only the AUTO default changes.
+  const hideGaps = resolveHudVis(G.hudGapsVis, false);
   const key = (G.hudMapVis || "auto") + "|" + (G.hudGapsVis || "auto") + "|" + modeId + "|" + hideMap + "|" + hideGaps;
   if (key === _hudVisKey) return;
   _hudVisKey = key;
@@ -321,8 +326,24 @@ function fitHud() {
   const leftG = (map ? 10 + map + 8 + gaps : 0) + FIT_AIR;
   const leftN = (map ? 10 + map : 0) + FIT_AIR;
   const right = wide(els.hudSectors) + 10 + FIT_AIR;
-  const capFor = (l) => Math.min((half - sal) / Math.max(l + top / 2, 1),
-                                 (half - sar) / Math.max(right + top / 2, 1));
+  // WHERE IS THE TOWER? The model below splits the viewport at the centre and
+  // charges each half its own cluster plus HALF the band — which is only true
+  // while `.hud-top` is `left: 50%; translateX(-50%)`. The BROADCAST profile
+  // re-anchors it to `left: calc(10px + var(--sal) ...)` (css/hud.css), i.e.
+  // into the very slot `#minimap` already occupies, and then this maths cannot
+  // even see the collision: it keeps budgeting a centred band, returns a cap
+  // near 1, never fires, and the tower paints straight over the map. Reported
+  // from a phone in broadcast + COCKPIT, and invisible to hud-layout.spec.js,
+  // which only ever exercised the DEFAULT profile on a chase camera.
+  //
+  // In broadcast the left cluster is STACKED under the tower rather than beside
+  // it, so the horizontal budget is the WIDER of the two, once, against the
+  // whole viewport less both insets — not a sum across a centre line.
+  const bcast = document.body.classList.contains("hud-prof-broadcast");
+  const capFor = (l) => (bcast
+    ? (window.innerWidth - sal - sar) / Math.max(Math.max(top, l) + right, 1)
+    : Math.min((half - sal) / Math.max(l + top / 2, 1),
+               (half - sar) / Math.max(right + top / 2, 1)));
   const capWith = capFor(leftG), capNo = capFor(leftN);
   _gapTight = capWith < scale;               // consumed by gapForm(), below
   const capTop = Math.max(capWith, Math.min(scale, capNo));
@@ -350,6 +371,12 @@ function fitHud() {
     if (!r.height) return 0;
     return r.height / (el.currentCSSZoom || 1);
   };
+  // THE TOWER'S HEIGHT, for the broadcast stack. `.hud-top` and `#minimap`
+  // share --hud-z-top, so dividing the rect by that same zoom gives a length
+  // the map's own `top: calc(...)` can add without double-counting the zoom.
+  // Written unconditionally: the CSS only consumes it under .hud-prof-broadcast,
+  // and a var that is only sometimes present is a var that is sometimes 0.
+  root.style.setProperty("--hud-top-h", tall(_hudTop).toFixed(1) + "px");
   const dockH = Math.max(tall(_dockL), tall(_dockR));
   const capDock = dockH ? (window.innerHeight - 3 * FIT_AIR) / dockH : Infinity;
   // An empty dock on a TOUCH body is "not populated yet", not "no dock" —
