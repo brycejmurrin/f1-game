@@ -27,6 +27,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { pick } from "./pick-tests.mjs";
 import { MEASURED, capacity, declaredTests } from "./select-budget.mjs";
+import { isTwinned, TWINNED } from "./twinned-specs.mjs";
 import { referencesIn } from "../check/cross-file-paths.mjs";
 import * as espree from "espree";
 
@@ -108,12 +109,23 @@ export function specsOf(scriptNames, scripts) {
 export function fit(specs, budgetMin) {
   const m = { ...MEASURED, ...SELECTED_GATE };
   const cap = capacity(budgetMin, 1, m);
-  const counted = [], overBudgetSpecs = [], coveredByFixedGates = [];
+  const counted = [], overBudgetSpecs = [], coveredByFixedGates = [], coveredByVmTwin = [];
   for (const file of specs) {
     const tests = declaredTests(file);
     if (tests == null) continue;
     if (FIXED_GATE_SPECS.has(file)) {
       coveredByFixedGates.push({ file, tests });
+      continue;
+    }
+    // A spec whose assertions a VM twin replays test-for-test, in a node group
+    // the Pages gate runs unconditionally. Running the browser copy here spends
+    // SwiftShader minutes the budget then denies to a spec with NO twin, which
+    // is the opposite of what a budgeted gate is for. tools/ci/twinned-specs.mjs
+    // holds the pairs and the drift check that keeps the substitution honest —
+    // it is on the fast gate, so a twin that stops covering fails there rather
+    // than leaving the spec quietly unchecked in both places.
+    if (isTwinned(file)) {
+      coveredByVmTwin.push({ file, tests, twin: TWINNED[file] });
       continue;
     }
     const own = maxDeclaredTimeout(file);
@@ -139,7 +151,7 @@ export function fit(specs, budgetMin) {
     if (used + r.tests <= cap.tests) { selected.push(r); used += r.tests; }
     else skipped.push(r);
   }
-  return { selected, skipped, unreachable, overBudgetSpecs, coveredByFixedGates,
+  return { selected, skipped, unreachable, overBudgetSpecs, coveredByFixedGates, coveredByVmTwin,
     testsSelected: used, testsFit: cap.tests, cap };
 }
 
@@ -295,6 +307,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `EXCLUDED (declares ${s.ownTimeoutSec}s test budget > gate ${SELECTED_GATE.perTestTimeoutSec}s): ${s.file}`);
   for (const s of r.coveredByFixedGates) console.error(
     `COVERED BY FIXED BLOCKING GATE: ${s.file} (${s.tests} tests)`);
+  for (const s of r.coveredByVmTwin || []) console.error(
+    `COVERED BY A VM TWIN ON THE NODE GATE: ${s.file} (${s.tests} tests) -> ${s.twin}`);
   for (const s of r.unreachable) console.error(
     `UNREACHABLE (declares ${s.tests} tests > the whole ${r.testsFit}-test cap — this gate can ` +
     `NEVER run it): ${s.file}`);

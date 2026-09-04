@@ -44,6 +44,7 @@ Baseline (2026-09-03, branch `claude/project-structure-review-p6eu08`):
 | css/ | 11 | 9,988 | |
 | tests/unit | 188 | 45,577 | 140 in `test:tooling-fast`; 1,848 source-text pins |
 | tests/specs | 115 | 32,739 | 55 need a browser; 25 VM-portable; 11 fully twinned |
+| tests/specs *(re-measured 2026-09-04)* | **114** | **32,286** | the 115th entry was the `menu-baseline.spec.js-snapshots` DIRECTORY, not a file. **14** specs have a named VM twin (4,307 lines); 11 are twinned test-for-test |
 | tools/ | 160 | ~39,400 | flat; ~27 with no functional caller |
 | docs/ | 137 | 39,575 | 28 top-level; research 22; archive 16.5k |
 | .claude/skills | 31 skills / 75 files | 6,454 | |
@@ -84,14 +85,24 @@ Baseline (2026-09-03, branch `claude/project-structure-review-p6eu08`):
    at 9 sites and explained only in `space.js:53-90`; `segs` is dead in all
    24 defs that carry it; 10 of 111 frozen scenery(api) members are used by
    no circuit and 6 by one; the 16 foundation specs are hand-authored files
-   sharing only their import line, and their entire hook set is
+   sharing only their import line (WRONG, re-measured 2026-09-04: they do not
+   share the import line either — THREE distinct import forms, 11 of them on
+   raw `@playwright/test`. ~65 % of their 293 assertions carry per-circuit
+   constants that must move into the data file verbatim, and six — monza, spa,
+   zandvoort, bahrain, cota, montreal — carry circuit-specific CODE, not just
+   data: they rebuild a centreline with `Tracks.buildCenterline` and apply
+   `Tracks.banking().dy` to convert a raw gap into a road-relative one. The
+   parametrisation is real but it is not one shape with 16 constants), and their entire hook set is
    VM-computable (two VM foundation tests already exist).
 5. **The test tree encodes kind in headers, not names.** 188 flat unit
    files: 30 structural guards, 8 ratchets with 5 different slack rules, 15
    meta-tests of the test infrastructure, 5 MCP-wrapper tests (two for
    unattached wrappers), 16 source-text-pin files, 70 behavioural, 13 VM
    twins. Browser specs: 11 are twinned test-for-test by VM tests yet still
-   run (3,118 lines); 37 declare timeouts above the 120 s selected gate as
+   run (3,118 lines — both numbers CONFIRMED 2026-09-04 by reading both sides
+   of every pair; the set, however, is 14: `world-physics.spec.js` is twinned
+   5-of-6 and appears nowhere in this plan, and `new-hooks` / 
+   `physics-characterization` are handled separately below); 37 declare timeouts above the 120 s selected gate as
    `select-specs.mjs` counts them, so never gate a deploy; 39 use raw
    `@playwright/test` and lose the `__apex` failure attachments. Group
    membership is a 140-entry list plus 54 npm scripts; one new test forces
@@ -551,10 +562,26 @@ its 2 s budget), `vstd-lint.mjs:52-58` + `vstd-invariant` ALLOWED keys,
   behaviour. The remaining ratchets (css-class, css-token-adoption
   [exact-equality today], silent-catch, wait-polling) join ratchets.json.
 - Browser specs: the 11 twinned specs go nightly-only now and are deleted
-  after two green nightlies; galleries + material-shimmer → manual; the 16
+  after two green nightlies (**DONE 2026-09-04**, `58ac3ee5` — they are skipped
+  on the SELECTED gate by name via `tools/ci/twinned-specs.mjs`, which also
+  holds the drift check that keeps the substitution honest: same declared test
+  count on both sides, and the twin's group must still be one the Pages gate
+  runs unconditionally, DERIVED from ci.yml rather than listed.
+  `world-physics.spec.js` is deliberately excluded until its one DOM-slider
+  test is split out — adding it would fail that count check); galleries + material-shimmer → manual; the 16
   foundation specs → one VM-parametrised test with
   `tests/data/foundation/<id>.json` (keep the 4 `lightState` assertions in
-  a browser); multiplayer 8 → 3, parts 10 → 3, camera 4 → 1 (convert the
+  a browser — **corrected 2026-09-04**: the number is right by coincidence and
+  the SET is wrong. `lightState` has SIX assertion sites across two files, and
+  two of them (`builtNight`, set at track BUILD, not per frame) are
+  VM-computable — `new-hooks-vm` already does a day→night rebuild without a
+  browser. The four that are not are `skyStars`, `floodEmit`, `ambientSky` and
+  `numLights`, all assigned inside `render(dt)`, which the VM never runs. So the
+  residue is ONE Qatar test and ONE Vegas test, not a general lighting
+  carve-out. Also corrected: "two VM foundation tests already exist" is true
+  only weakly — the three candidates are either def-object or engine-level
+  checks with ZERO overlap with the specs' per-circuit assertions, so the
+  per-circuit hooks have no VM coverage today and this is a port, not a merge); multiplayer 8 → 3, parts 10 → 3, camera 4 → 1 (convert the
   raw-import / 3 s-sleep specs to `sharedTest` + `racePage` first); split
   the hidden >120 s tests (autopilot, custom-team, new-hooks Madrid,
   parts-budget, parts-mesh-cache, ui-resize, terrain/props-over-road, career

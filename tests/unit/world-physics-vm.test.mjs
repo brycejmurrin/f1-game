@@ -3,11 +3,14 @@
  * contract — progress with speed, steer direction, running wide with the
  * assist off, the AI getting away — with the SAME assertions and PACE pin.
  *
- * Ported: 5 of 6 tests. "loads and runs with no uncaught errors" reads the
+ * Ported: 6 of 7 tests. "loads and runs with no uncaught errors" reads the
  * VM's console/rejection record where the browser reads pageerror + console
  * error events (an exception inside step() throws straight into the test).
- * Not portable: "RESPONSE slider changes turn-in (wheelbase)" — it drives the
- * `#pm-rate` DOM slider with an input event; the VM's DOM is inert.
+ * Not portable: "RESPONSE slider is wired to the wheelbase" — it drives the
+ * `#pm-rate` DOM slider with an input event; the VM's DOM is inert. That test
+ * used to also carry the PHYSICS claim, which meant the claim that can break
+ * silently was pinned only behind a slider and could not be replayed here. The
+ * spec split them; this ports the half that is physics.
  *
  * The browser spec stays the truth until CI has run this twin.
  * Run: node --test tests/unit/world-physics-vm.test.mjs   (~6 s, one boot)
@@ -130,4 +133,25 @@ test("AI stays on track and progresses after the racing-line flip", async () => 
   assert.equal(offTrack, 0);
   gt(minGain, 100, "an AI car barely left its grid slot");
   gt(minSpeed, 2, "an AI car is stationary 10 s after the green light");
+});
+
+test("a shorter wheelbase turns in more", async () => {
+  // The physics half of what was the RESPONSE-slider test, set through the hook
+  // the slider ultimately writes (G.WHEELBASE, apex.js setPhysics). The wiring
+  // half stays in the browser spec, where the DOM is.
+  await startRace();
+  const a = g.apex;
+  const turnAt = (wheelbase) => {
+    a.setPhysics({ wheelbase });
+    a.jump(0.0, 40, 0);
+    a.setInput({ steer: 1, throttle: false });
+    const a0 = a.probe().angle;
+    for (let i = 0; i < 10; i++) a.step(1 / 60, 1);
+    const a1 = a.probe().angle;
+    a.clearInput();
+    return Math.abs(a1 - a0);
+  };
+  const lazy = turnAt(4.4);    // slider 2, long wheelbase
+  const snappy = turnAt(2.6);  // slider 9, short wheelbase
+  gt(snappy, lazy * 1.15, `snappy=${snappy} lazy=${lazy}`);
 });
