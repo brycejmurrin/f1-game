@@ -1238,7 +1238,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    Named areas so an open fold cannot steal the hole. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
   grid-template-areas:
-    "ui ui"
+    "uih uih"
+    "uis uis"
     "hudopts hudopts"
     "metrics metrics"
     "renopts renopts";
@@ -1259,7 +1260,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv {
   grid-area: renopts;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: ui; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h { grid-area: uih; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: uis; }
 /* DISPLAY sliders are settings rows, not tuner rows: steel label, text
    value (tuner red is the loud bit), no extra tap-height padding around
    a track that is already --slider. */

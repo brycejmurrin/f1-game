@@ -872,9 +872,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(code("js/ui/select-screen.js"), /besidePair/,
     "pair-on beside maps do not self-heal the pin down to a stale stamp");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"ui ui"[\s\S]*"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
-    "DISPLAY is UI SIZE, then HUD, METRICS, and RENDERER each on their own row");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
+    /"uih uih"[\s\S]*"uis uis"[\s\S]*"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
+    "DISPLAY is UI SIZE heading + slider, then HUD, METRICS, and RENDERER");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h', "grid-area"), "uih");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "uis");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
     "HUD fold is its own row, not under a reprint HUD heading");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
@@ -942,7 +943,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "LOG NS / LOG SHOW stay hidden unless the overlay page is LOG");
   assert.match(code("js/perf/metrics-overlay.js"), /data-fold="k">METRICS/,
     "closed METRICS summary carries ON/page state");
-  assert.match(read("index.html"), /<h3 class="pm-group-h">UI SIZE/,
+  assert.match(read("index.html"), /id="pm-uiscale-h"/,
     "UI SIZE is a real COCKPIT-style heading, not a tuner caption");
   assert.equal(decl(css("css/components.css"), "#pm-panel-display > .pm-group-h", "display"), "flex",
     "UI SIZE heading shares the row with the live %");
