@@ -460,7 +460,7 @@ function hudProfileLabel() { return "HUD: " + hudProfile.toUpperCase(); }
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
-function hudMetricsLayoutLabel() { return "METRICS: " + hudMetricsLayout.toUpperCase(); }
+function hudMetricsLayoutLabel() { return "LAYOUT: " + hudMetricsLayout.toUpperCase(); }
 const HUD_VIS_MODES = ["auto", "on", "off"];
 let hudMapVis = store.get("hudMapVis", "auto");
 let hudGapsVis = store.get("hudGapsVis", "auto");

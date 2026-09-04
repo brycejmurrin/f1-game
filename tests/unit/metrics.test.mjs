@@ -34,7 +34,7 @@ function load(opts) {
       addEventListener() {},
       getElementById() { return null; },
     }, opts.document) : undefined,
-    window: undefined,
+    window: opts.window,
     requestAnimationFrame: undefined,
     PerfGov: opts.PerfGov,
     __apex: opts.apex,
@@ -149,7 +149,10 @@ test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   assert.match(hud, /#game-metrics[\s\S]*--hud-z-top/);
   assert.match(hud, /#game-metrics[\s\S]*--tap/);
   assert.match(hud, /#game-metrics[\s\S]*z-index:\s*11/);
-  assert.doesNotMatch(hud, /#game-metrics[\s\S]*left:\s*8px/);
+  assert.match(hud, /#game-metrics\[data-pos="left"\]/);
+  assert.match(hud, /#game-metrics\[data-pos="right"\]/);
+  assert.match(hud, /#game-metrics-bar/);
+  assert.match(hud, /#game-metrics-bar > button[\s\S]*min-height:\s*var\(--tap-sm\)/);
 });
 
 test("without a HUD digit, snapshot speed is ground km/h from probe()", () => {
@@ -161,6 +164,30 @@ test("without a HUD digit, snapshot speed is ground km/h from probe()", () => {
   assert.equal(gnd.speedKph, 72);
   assert.equal(gnd.gndKph, 72);
   assert.equal(gnd.speedIsDash, false);
+});
+
+test("overlay SIDE persists and AUTO docks left on a short viewport", () => {
+  const { M, disk } = load({});
+  assert.equal(M.POS_KEY, "apex26.metricsPos");
+  assert.equal(M.POSITIONS.join(","), "auto,left,right");
+  assert.equal(M.pos(), "auto");
+  assert.equal(M.setPos("left"), "left");
+  assert.equal(disk.get("apex26.metricsPos"), "left");
+  assert.equal(M.nextPos(1), "right");
+  const pinned = load({ store: { "apex26.metricsPos": "right" }, search: "?metricsPos=left" });
+  assert.equal(pinned.M.pos(), "left");
+  pinned.M.setPos("auto");
+  assert.equal(pinned.disk.get("apex26.metricsPos"), "right", "URL side must not write storage");
+  const short = load({ window: { innerHeight: 393, innerWidth: 852 } });
+  assert.equal(short.M.pos(), "auto");
+  assert.equal(short.M.resolvePos(), "left");
+  const wide = load({ window: { innerHeight: 900, innerWidth: 1280 } });
+  assert.equal(wide.M.resolvePos(), "right");
+  const forced = load({
+    window: { innerHeight: 393, innerWidth: 852 },
+    store: { "apex26.metricsPos": "right" },
+  });
+  assert.equal(forced.M.resolvePos(), "right");
 });
 
 test("pages persist and URL metricsPage is session-only", () => {
@@ -291,6 +318,7 @@ test("initUI injects separate metrics, page, and log settings buttons", () => {
       getElementById(id) {
         if (id === "pm-hidehud") return anchor;
         if (id === "pm-metrics" || id === "pm-metrics-page" ||
+            id === "pm-metrics-pos" ||
             id === "pm-metrics-logns" || id === "pm-metrics-loglvl") return null;
         return null;
       },
@@ -298,6 +326,7 @@ test("initUI injects separate metrics, page, and log settings buttons", () => {
   });
   assert.ok(host.children.some((n) => n.id === "pm-metrics"));
   assert.ok(host.children.some((n) => n.id === "pm-metrics-page"));
+  assert.ok(host.children.some((n) => n.id === "pm-metrics-pos"));
   assert.ok(host.children.some((n) => n.id === "pm-metrics-logns"));
   assert.ok(host.children.some((n) => n.id === "pm-metrics-loglvl"));
   const metricsBtn = host.children.find((n) => n.id === "pm-metrics");
@@ -305,6 +334,9 @@ test("initUI injects separate metrics, page, and log settings buttons", () => {
   M.setPage("car");
   const pageBtn = host.children.find((n) => n.id === "pm-metrics-page");
   assert.match(pageBtn.textContent, /^PAGE: CAR$/);
+  M.setPos("left");
+  const posBtn = host.children.find((n) => n.id === "pm-metrics-pos");
+  assert.match(posBtn.textContent, /^SIDE: LEFT$/);
 });
 
 test("HIDE HUD CSS leaves #game-metrics visible", () => {

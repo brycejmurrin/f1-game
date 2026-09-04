@@ -51,13 +51,17 @@ they pop the same way.
 **Always open on home.** Do not restore `settingsCategory`. Title
 Settings and pause Settings land on the same index.
 
-**DISPLAY keeps its packing + ADVANCED fold + COCKPIT above ADVANCED.**
-Player-facing stays HIDE HUD, METRICS, UI SIZE, HUD SIZE + HUD profile
-+ sample, RESOLUTION, renderer picker, GRAPHICS, COCKPIT, then ADVANCED.
-Sliders are settings rows (steel track, text value), not tuner-red.
-METRICS is a quiet column; the closed summary carries ON/page state;
-LOG filters hide unless PAGE is LOG. SCREENSHOTS / SAVE / COPY DIAG
-are secondary rows under ADVANCED, not peer plates of RESET.
+**DISPLAY groups HUD then RENDERER, then the existing COCKPIT + ADVANCED
+folds.** HUD: HIDE HUD, METRICS fold, UI SIZE, HUD SIZE + sample, HUD
+profile, LAYOUT, MAP, GAPS. RENDERER: RESOLUTION, renderer picker,
+GRAPHICS. Sliders stay settings rows (steel track, text value). METRICS
+is a quiet column; the closed summary carries ON/page state; SIDE is
+`auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO
+docks left on a short or narrow viewport so the overlay cannot cover
+GAS/BRAKE. The overlay is `#game-metrics` + a tappable
+`#game-metrics-bar`. LOG filters hide unless PAGE is LOG. SCREENSHOTS /
+SAVE / COPY DIAG stay secondary rows under ADVANCED, not peer plates of
+RESET.
 
 **Control language stays.** Button = filled plate, no chevron. Door =
 plate + `…`. Heading = steel + `--grad-rule`, not clickable. Disclosure

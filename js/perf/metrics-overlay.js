@@ -1,17 +1,18 @@
 /* Apex 26 — GameMetrics: toggleable in-game FPS / car / log overlay.
 
    SETTINGS > DISPLAY — METRICS (on/off), PAGE (gov/car/phys/log),
-   LOG NS, and LOG SHOW, folded into one METRICS <details> submenu this file
-   builds (see the bottom). Log filters stay hidden unless PAGE is LOG.
-   Or ` (backtick) / F9 on the canvas. Persists as
-   apex26.metrics. URL `?metrics=1` overrides for the session without writing
-   storage, same shape as CockpitOpts.
+   SIDE (auto/left/right), LOG NS, and LOG SHOW, folded into one METRICS
+   <details> submenu this file builds (see the bottom). Log filters stay
+   hidden unless PAGE is LOG. Or ` (backtick) / F9 on the canvas. Persists
+   as apex26.metrics. URL `?metrics=1` overrides for the session without
+   writing storage, same shape as CockpitOpts.
 
    WHY ITS OWN FILE. This is not a quality tier. The overlay is DOM the
    player asked for, so it lives next to the other injected SETTINGS buttons
    (CockpitOpts) rather than growing js/game.js. The panel is created at
-   runtime — no index.html node, no new CSS class (inline styles on a
-   <pre id="game-metrics">).
+   runtime — no index.html node. Layout lives in css/hud.css (#game-metrics
+   + #game-metrics-bar). AUTO side is left on a short/narrow viewport so
+   the panel cannot cover the right dock.
 
    Tick is its own rAF at ~4 Hz. It never runs when OFF, and it never logs
    per frame. Turning ON raises the Log BUFFER to debug for the session so
@@ -25,22 +26,28 @@ const GameMetrics = (function () {
 
 const KEY = "apex26.metrics";
 const PAGE_KEY = "apex26.metricsPage";
+const POS_KEY = "apex26.metricsPos";
 const LOG_NS_KEY = "apex26.metricsLogNs";
 const LOG_LVL_KEY = "apex26.metricsLogLvl";
 const PAINT_MS = 250;
 const PAGES = ["gov", "car", "phys", "log"];
+const POSITIONS = ["auto", "left", "right"];
 const LOG_NS = ["*", "track", "gfx", "game", "scenery", "car", "ui", "input", "net", "data", "audio", "assets"];
 const LOG_LVLS = ["warn", "info", "debug"];
 
 let _on = null;
 let _page = null;
+let _pos = null;
 let _logNs = null;
 let _logLvl = null;
 let _raf = 0;
 let _lastPaint = 0;
 let _panel = null;
+let _body = null;
+let _bar = null;
 let _btn = null;
 let _pageBtn = null;
+let _posBtn = null;
 let _logNsBtn = null;
 let _logLvlBtn = null;
 let _keysBound = false;
@@ -50,13 +57,9 @@ let _raisedBuffer = null;
 // is the slot proxy. Two display densities:
 //   WIDE  (ratio >= 480): label column + value, full rows, up to 12 rows
 //   NARROW (ratio < 480): compact, two values per line, fewer rows
-// Position: right-anchored, below the sector strip (top = tap + sat + hud
-// offset), above the bottom HUD dock. The 80px * hud-scale term is clamped
-// to 120px so at 150% HUD the panel doesn't descend into the mid-screen.
-// Safe-area aware: fixed (not under zoom) — raw env insets, same as #pausebtn.
-// House height unit is svh, not dvh (toolbar jitter). Bottom = dock + --sab.
-// (Was a one-string sibling file, metrics-panel-style.js, loaded before this
-// one; the overlay's layout is its own concern.)
+// Live layout is css/hud.css (#game-metrics[data-pos]). PANEL_STYLE is the
+// exported snapshot tests still read — do not apply it inline or it fights
+// the stylesheet (side, size, the tap bar).
 const HUD_TOP_OFFSET = "min(120px, calc(80px * var(--hud-scale, 1)))";
 const PANEL_STYLE =
   "position:fixed;" +
@@ -120,6 +123,35 @@ function readLogLvl() {
   const v = GameStore.store.raw(LOG_LVL_KEY);
   if (LOG_LVLS.indexOf(v) >= 0) return v;
   return "warn";
+}
+
+function readPos() {
+  const q = qFlag(/[?&]metricsPos=(auto|left|right)/i);
+  if (q) return q[1].toLowerCase();
+  const v = GameStore.store.raw(POS_KEY);
+  if (POSITIONS.indexOf(v) >= 0) return v;
+  return "auto";
+}
+
+function pos() {
+  if (_pos === null) _pos = readPos();
+  return _pos;
+}
+
+function resolvePos() {
+  const want = pos();
+  if (want === "left" || want === "right") return want;
+  try {
+    if (window.innerHeight <= 520 || window.innerWidth < 900) return "left";
+  } catch (_) { /* no window */ }
+  return "right";
+}
+
+function applyPos(el) {
+  if (!el) return resolvePos();
+  const side = resolvePos();
+  el.dataset.pos = side;
+  return side;
 }
 
 function on() {
@@ -370,15 +402,40 @@ function snapshot() {
 
 function ensurePanel() {
   if (_panel || typeof document === "undefined") return _panel;
-  const el = document.createElement("pre");
+  const el = document.createElement("div");
   el.id = "game-metrics";
   el.setAttribute("aria-label", "Debug metrics");
+  const bar = document.createElement("div");
+  bar.id = "game-metrics-bar";
+  if (typeof bar.setAttribute === "function") bar.setAttribute("role", "toolbar");
+  PAGES.forEach(function (p) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.dataset.page = p;
+    b.textContent = p.toUpperCase();
+    bar.appendChild(b);
+  });
+  bar.addEventListener("click", function (e) {
+    const t = e.target;
+    const pageId = t && t.dataset && t.dataset.page;
+    if (!pageId) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setPage(pageId);
+  });
+  const body = document.createElement("pre");
+  body.id = "game-metrics-body";
+  el.appendChild(bar);
+  el.appendChild(body);
   try {
     const prof = GameStore.store.get("hudProfile", "standard");
     if (prof === "minimal") el.dataset.compact = "1";
   } catch (_) { /* store absent in isolated harness */ }
+  applyPos(el);
   document.body.appendChild(el);
   _panel = el;
+  _bar = bar;
+  _body = body;
   return el;
 }
 
@@ -414,8 +471,17 @@ function paintOverlay() {
   if (!on()) { el.hidden = true; return; }
   el.hidden = false;
   const s = snapshot();
+  applyPos(el);
+  if (_bar) {
+    const kids = _bar.children || [];
+    for (let i = 0; i < kids.length; i++) {
+      const b = kids[i];
+      const onPage = !!(b.dataset && b.dataset.page === s.page);
+      if (b.setAttribute) b.setAttribute("aria-pressed", onPage ? "true" : "false");
+    }
+  }
   const narrow = metricsRatio() < 480;
-  const hdr = "● " + pageTabs(s.page) + "  ] [  1-4";
+  const hdr = "";
   let lines;
 
   if (s.page === "car") {
@@ -511,7 +577,8 @@ function paintOverlay() {
       ]);
     }
   }
-  el.textContent = lines.join("\n");
+  const out = _body || el;
+  out.textContent = lines.filter(Boolean).join("\n");
 }
 
 function loop(now) {
@@ -565,9 +632,15 @@ function paintLogVisibility() {
   if (_logLvlBtn) _logLvlBtn.hidden = !show;
 }
 
+function paintPosBtn(btn) {
+  if (!btn) return;
+  btn.textContent = "SIDE: " + pos().toUpperCase();
+}
+
 function paintSettingBtns() {
   paintBtn(_btn);
   paintPageBtn(_pageBtn);
+  paintPosBtn(_posBtn);
   paintLogNsBtn(_logNsBtn);
   paintLogLvlBtn(_logLvlBtn);
   paintLogVisibility();
@@ -629,6 +702,22 @@ function nextPage(dir) {
   const i = PAGES.indexOf(page());
   const d = dir < 0 ? -1 : 1;
   return setPage(PAGES[(i + d + PAGES.length) % PAGES.length]);
+}
+
+function setPos(name) {
+  const next = String(name || "").toLowerCase();
+  if (POSITIONS.indexOf(next) < 0) return pos();
+  _pos = next;
+  store(POS_KEY, next, /[?&]metricsPos=/i);
+  if (_panel) applyPos(_panel);
+  paintSettingBtns();
+  return _pos;
+}
+
+function nextPos(dir) {
+  const i = POSITIONS.indexOf(pos());
+  const d = dir < 0 ? -1 : 1;
+  return setPos(POSITIONS[(Math.max(0, i) + d + POSITIONS.length) % POSITIONS.length]);
 }
 
 function setLogNs(name) {
@@ -713,6 +802,14 @@ function initUI() {
     );
     ins = insertAfter(host, ins, _pageBtn);
 
+    _posBtn = makeMetricsBtn(
+      "pm-metrics-pos",
+      "Which side the metrics overlay docks on. AUTO is left on a short or narrow viewport so the panel cannot cover GAS/BRAKE.",
+      paintPosBtn,
+      () => { nextPos(1); },
+    );
+    ins = insertAfter(host, ins, _posBtn);
+
     _logNsBtn = makeMetricsBtn(
       "pm-metrics-logns",
       "Filter the LOG overlay tail to one namespace (* = all). = / - cycle while the overlay is up.",
@@ -767,6 +864,9 @@ function initUI() {
         nextLogLvl(1);
       }
     });
+    window.addEventListener("resize", function () {
+      if (_panel) applyPos(_panel);
+    });
   }
 
   if (on()) { raiseBuffer(); paintOverlay(); startLoop(); }
@@ -781,14 +881,16 @@ if (typeof document !== "undefined") {
 if (on()) raiseBuffer();
 
 /* ── SETTINGS > DISPLAY — the METRICS submenu ──────────────────────────
- Folds #pm-metrics / PAGE / LOG NS / LOG SHOW into one <details> under HIDE
- HUD. Layout lives in css/components.css. Closed summary carries ON/page
- state so the fold does not have to open to be read. LOG filters hide
- unless PAGE is LOG. Used to be a second IIFE in cockpit-opts.js. */
+ Folds #pm-metrics / PAGE / SIDE / LOG NS / LOG SHOW into one <details>
+ under HIDE HUD. Layout lives in css/components.css. Closed summary
+ carries ON/page state so the fold does not have to open to be read.
+ LOG filters hide unless PAGE is LOG. Used to be a second IIFE in
+ cockpit-opts.js. */
 function buildSubmenu() {
   if (typeof document === "undefined") return;
   var onBtn = document.getElementById("pm-metrics");   // the button — a local named like the module's on() shadowed it
   var pageBtn = document.getElementById("pm-metrics-page");
+  var posBtn = document.getElementById("pm-metrics-pos");
   var ns = document.getElementById("pm-metrics-logns");
   var lvl = document.getElementById("pm-metrics-loglvl");
   if (!onBtn || document.getElementById("pm-metrics-details")) return;
@@ -810,7 +912,7 @@ function buildSubmenu() {
   body.setAttribute("role", "group");
   body.setAttribute("aria-label", "Metrics controls");
 
-  [onBtn, pageBtn, ns, lvl].forEach(function (btn) {
+  [onBtn, pageBtn, posBtn, ns, lvl].forEach(function (btn) {
     if (!btn) return;
     btn.addEventListener("click", function (e) { e.stopPropagation(); });
     body.appendChild(btn);
@@ -841,8 +943,9 @@ function scheduleSubmenu() {
 scheduleSubmenu();
 
 return {
-  KEY, PAGE_KEY, LOG_NS_KEY, LOG_LVL_KEY, PAGES, LOG_NS, LOG_LVLS,
+  KEY, PAGE_KEY, POS_KEY, LOG_NS_KEY, LOG_LVL_KEY, PAGES, POSITIONS, LOG_NS, LOG_LVLS,
   on, set, toggle, page, setPage, nextPage,
+  pos, setPos, nextPos, resolvePos,
   logNs, setLogNs, nextLogNs, logLvl, setLogLvl, nextLogLvl,
   snapshot, PANEL_STYLE,
 };
