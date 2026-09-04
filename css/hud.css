@@ -513,12 +513,21 @@ body[data-density="compact"] #announce {
   border-radius: var(--r-sm);
   pointer-events: auto;
   text-align: left;
-  max-width: min(34ch, 44vw);
-  max-height: calc(100svh - var(--gm-top) - var(--gm-dock));
+  max-width: min(22ch, 32vw);
+  max-height: min(36svh, calc(100svh - var(--gm-top) - var(--gm-dock)));
   overflow: hidden;
+  resize: both;
   overscroll-behavior-y: contain;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
   letter-spacing: 0.01em;
+}
+#game-metrics[data-size="m"] {
+  max-width: min(28ch, 38vw);
+  max-height: calc(100svh - var(--gm-top) - var(--gm-dock));
+}
+#game-metrics[data-size="l"] {
+  max-width: min(40ch, 52vw);
+  max-height: calc(100svh - var(--gm-top) - var(--gm-dock));
 }
 #game-metrics[data-pos="right"] {
   right: calc(8px + var(--sar, 0px));
@@ -554,6 +563,10 @@ body[data-density="compact"] #announce {
 #game-metrics-bar > button[aria-pressed="true"] {
   color: var(--faster);
   border-color: color-mix(in oklab, var(--faster) 45%, transparent);
+}
+#game-metrics-bar > button[data-size-cycle] {
+  flex: 0 0 auto;
+  min-width: var(--tap-min);
 }
 @media (hover: hover) {
   #game-metrics-bar > button:hover {

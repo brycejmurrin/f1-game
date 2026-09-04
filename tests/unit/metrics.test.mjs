@@ -153,6 +153,10 @@ test("overlay sits below the zoomed sector stack, not on the minimap", () => {
   assert.match(hud, /#game-metrics\[data-pos="right"\]/);
   assert.match(hud, /#game-metrics-bar/);
   assert.match(hud, /#game-metrics-bar > button[\s\S]*min-height:\s*var\(--tap-sm\)/);
+  assert.match(hud, /#game-metrics\[data-size="m"\]/);
+  assert.match(hud, /#game-metrics\[data-size="l"\]/);
+  assert.match(hud, /#game-metrics[\s\S]*resize:\s*both/);
+  assert.match(hud, /max-width:\s*min\(22ch,\s*32vw\)/);
 });
 
 test("without a HUD digit, snapshot speed is ground km/h from probe()", () => {
@@ -188,6 +192,21 @@ test("overlay SIDE persists and AUTO docks left on a short viewport", () => {
     store: { "apex26.metricsPos": "right" },
   });
   assert.equal(forced.M.resolvePos(), "right");
+});
+
+test("overlay SIZE persists, defaults to S, and URL is session-only", () => {
+  const { M, disk } = load({});
+  assert.equal(M.SIZE_KEY, "apex26.metricsSize");
+  assert.equal(M.SIZES.join(","), "s,m,l");
+  assert.equal(M.size(), "s");
+  assert.equal(M.setSize("m"), "m");
+  assert.equal(disk.get("apex26.metricsSize"), "m");
+  assert.equal(M.nextSize(1), "l");
+  assert.equal(M.nextSize(1), "s");
+  const pinned = load({ store: { "apex26.metricsSize": "l" }, search: "?metricsSize=m" });
+  assert.equal(pinned.M.size(), "m");
+  pinned.M.setSize("s");
+  assert.equal(pinned.disk.get("apex26.metricsSize"), "l", "URL size must not write storage");
 });
 
 test("pages persist and URL metricsPage is session-only", () => {
@@ -318,7 +337,7 @@ test("initUI injects separate metrics, page, and log settings buttons", () => {
       getElementById(id) {
         if (id === "pm-hidehud") return anchor;
         if (id === "pm-metrics" || id === "pm-metrics-page" ||
-            id === "pm-metrics-pos" ||
+            id === "pm-metrics-pos" || id === "pm-metrics-size" ||
             id === "pm-metrics-logns" || id === "pm-metrics-loglvl") return null;
         return null;
       },
@@ -327,6 +346,7 @@ test("initUI injects separate metrics, page, and log settings buttons", () => {
   assert.ok(host.children.some((n) => n.id === "pm-metrics"));
   assert.ok(host.children.some((n) => n.id === "pm-metrics-page"));
   assert.ok(host.children.some((n) => n.id === "pm-metrics-pos"));
+  assert.ok(host.children.some((n) => n.id === "pm-metrics-size"));
   assert.ok(host.children.some((n) => n.id === "pm-metrics-logns"));
   assert.ok(host.children.some((n) => n.id === "pm-metrics-loglvl"));
   const metricsBtn = host.children.find((n) => n.id === "pm-metrics");
@@ -337,6 +357,9 @@ test("initUI injects separate metrics, page, and log settings buttons", () => {
   M.setPos("left");
   const posBtn = host.children.find((n) => n.id === "pm-metrics-pos");
   assert.match(posBtn.textContent, /^SIDE: LEFT$/);
+  M.setSize("l");
+  const sizeBtn = host.children.find((n) => n.id === "pm-metrics-size");
+  assert.match(sizeBtn.textContent, /^SIZE: L$/);
 });
 
 test("HIDE HUD CSS leaves #game-metrics visible", () => {

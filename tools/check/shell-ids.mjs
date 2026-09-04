@@ -58,6 +58,7 @@ export const RUNTIME_IDS = {
   "pm-metrics":        "metrics-overlay makeMetricsBtn(), guarded by its own getElementById check",
   "pm-metrics-page":   "metrics-overlay makeMetricsBtn()",
   "pm-metrics-pos":    "metrics-overlay makeMetricsBtn()",
+  "pm-metrics-size":   "metrics-overlay makeMetricsBtn()",
   "pm-metrics-logns":  "metrics-overlay makeMetricsBtn()",
   "pm-metrics-loglvl": "metrics-overlay makeMetricsBtn()",
   "pm-halo":           "cockpit-opts builds its rows from a table whose entries carry `id`",

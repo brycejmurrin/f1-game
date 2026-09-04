@@ -58,8 +58,11 @@ GRAPHICS. Sliders stay settings rows (steel track, text value). METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO
 docks left on a short or narrow viewport so the overlay cannot cover
-GAS/BRAKE. The overlay is `#game-metrics` + a tappable
-`#game-metrics-bar`. LOG filters hide unless PAGE is LOG. SCREENSHOTS /
+GAS/BRAKE. SIZE is `s`/`m`/`l` (`apex26.metricsSize`, URL
+`?metricsSize=`), default S; the overlay bar's S/M/L chip cycles it
+and the panel also accepts a desktop corner drag (`resize: both`).
+The overlay is `#game-metrics` + a tappable `#game-metrics-bar`. LOG
+filters hide unless PAGE is LOG. SCREENSHOTS /
 SAVE / COPY DIAG stay secondary rows under ADVANCED, not peer plates of
 RESET.
 

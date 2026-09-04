@@ -1,18 +1,19 @@
 /* Apex 26 — GameMetrics: toggleable in-game FPS / car / log overlay.
 
    SETTINGS > DISPLAY — METRICS (on/off), PAGE (gov/car/phys/log),
-   SIDE (auto/left/right), LOG NS, and LOG SHOW, folded into one METRICS
-   <details> submenu this file builds (see the bottom). Log filters stay
-   hidden unless PAGE is LOG. Or ` (backtick) / F9 on the canvas. Persists
-   as apex26.metrics. URL `?metrics=1` overrides for the session without
-   writing storage, same shape as CockpitOpts.
+   SIDE (auto/left/right), SIZE (s/m/l), LOG NS, and LOG SHOW, folded
+   into one METRICS <details> submenu this file builds (see the bottom).
+   Log filters stay hidden unless PAGE is LOG. Or ` (backtick) / F9 on
+   the canvas. Persists as apex26.metrics. URL `?metrics=1` overrides
+   for the session without writing storage, same shape as CockpitOpts.
 
    WHY ITS OWN FILE. This is not a quality tier. The overlay is DOM the
    player asked for, so it lives next to the other injected SETTINGS buttons
    (CockpitOpts) rather than growing js/game.js. The panel is created at
    runtime — no index.html node. Layout lives in css/hud.css (#game-metrics
    + #game-metrics-bar). AUTO side is left on a short/narrow viewport so
-   the panel cannot cover the right dock.
+   the panel cannot cover the right dock. SIZE defaults to S; the bar's
+   S/M/L chip and the SETTINGS row cycle it.
 
    Tick is its own rAF at ~4 Hz. It never runs when OFF, and it never logs
    per frame. Turning ON raises the Log BUFFER to debug for the session so
@@ -27,17 +28,20 @@ const GameMetrics = (function () {
 const KEY = "apex26.metrics";
 const PAGE_KEY = "apex26.metricsPage";
 const POS_KEY = "apex26.metricsPos";
+const SIZE_KEY = "apex26.metricsSize";
 const LOG_NS_KEY = "apex26.metricsLogNs";
 const LOG_LVL_KEY = "apex26.metricsLogLvl";
 const PAINT_MS = 250;
 const PAGES = ["gov", "car", "phys", "log"];
 const POSITIONS = ["auto", "left", "right"];
+const SIZES = ["s", "m", "l"];
 const LOG_NS = ["*", "track", "gfx", "game", "scenery", "car", "ui", "input", "net", "data", "audio", "assets"];
 const LOG_LVLS = ["warn", "info", "debug"];
 
 let _on = null;
 let _page = null;
 let _pos = null;
+let _size = null;
 let _logNs = null;
 let _logLvl = null;
 let _raf = 0;
@@ -48,6 +52,7 @@ let _bar = null;
 let _btn = null;
 let _pageBtn = null;
 let _posBtn = null;
+let _sizeBtn = null;
 let _logNsBtn = null;
 let _logLvlBtn = null;
 let _keysBound = false;
@@ -136,6 +141,25 @@ function readPos() {
 function pos() {
   if (_pos === null) _pos = readPos();
   return _pos;
+}
+
+function readSize() {
+  const q = qFlag(/[?&]metricsSize=(s|m|l)/i);
+  if (q) return q[1].toLowerCase();
+  const v = GameStore.store.raw(SIZE_KEY);
+  if (SIZES.indexOf(v) >= 0) return v;
+  return "s";
+}
+
+function size() {
+  if (_size === null) _size = readSize();
+  return _size;
+}
+
+function applySize(el) {
+  if (!el) return size();
+  el.dataset.size = size();
+  return size();
 }
 
 function resolvePos() {
@@ -415,13 +439,19 @@ function ensurePanel() {
     b.textContent = p.toUpperCase();
     bar.appendChild(b);
   });
+  const sizeChip = document.createElement("button");
+  sizeChip.type = "button";
+  sizeChip.dataset.sizeCycle = "1";
+  sizeChip.setAttribute("aria-label", "Overlay size");
+  sizeChip.textContent = size().toUpperCase();
+  bar.appendChild(sizeChip);
   bar.addEventListener("click", function (e) {
     const t = e.target;
-    const pageId = t && t.dataset && t.dataset.page;
-    if (!pageId) return;
+    if (!t || !t.dataset) return;
     e.preventDefault();
     e.stopPropagation();
-    setPage(pageId);
+    if (t.dataset.sizeCycle) { nextSize(1); return; }
+    if (t.dataset.page) setPage(t.dataset.page);
   });
   const body = document.createElement("pre");
   body.id = "game-metrics-body";
@@ -432,6 +462,7 @@ function ensurePanel() {
     if (prof === "minimal") el.dataset.compact = "1";
   } catch (_) { /* store absent in isolated harness */ }
   applyPos(el);
+  applySize(el);
   document.body.appendChild(el);
   _panel = el;
   _bar = bar;
@@ -472,15 +503,20 @@ function paintOverlay() {
   el.hidden = false;
   const s = snapshot();
   applyPos(el);
+  applySize(el);
   if (_bar) {
     const kids = _bar.children || [];
     for (let i = 0; i < kids.length; i++) {
       const b = kids[i];
+      if (b.dataset && b.dataset.sizeCycle) {
+        b.textContent = size().toUpperCase();
+        continue;
+      }
       const onPage = !!(b.dataset && b.dataset.page === s.page);
       if (b.setAttribute) b.setAttribute("aria-pressed", onPage ? "true" : "false");
     }
   }
-  const narrow = metricsRatio() < 480;
+  const narrow = metricsRatio() < 480 || size() === "s";
   const hdr = "";
   let lines;
 
@@ -637,10 +673,16 @@ function paintPosBtn(btn) {
   btn.textContent = "SIDE: " + pos().toUpperCase();
 }
 
+function paintSizeBtn(btn) {
+  if (!btn) return;
+  btn.textContent = "SIZE: " + size().toUpperCase();
+}
+
 function paintSettingBtns() {
   paintBtn(_btn);
   paintPageBtn(_pageBtn);
   paintPosBtn(_posBtn);
+  paintSizeBtn(_sizeBtn);
   paintLogNsBtn(_logNsBtn);
   paintLogLvlBtn(_logLvlBtn);
   paintLogVisibility();
@@ -718,6 +760,23 @@ function nextPos(dir) {
   const i = POSITIONS.indexOf(pos());
   const d = dir < 0 ? -1 : 1;
   return setPos(POSITIONS[(Math.max(0, i) + d + POSITIONS.length) % POSITIONS.length]);
+}
+
+function setSize(name) {
+  const next = String(name || "").toLowerCase();
+  if (SIZES.indexOf(next) < 0) return size();
+  _size = next;
+  store(SIZE_KEY, next, /[?&]metricsSize=/i);
+  if (_panel) applySize(_panel);
+  if (on()) paintOverlay();
+  paintSettingBtns();
+  return _size;
+}
+
+function nextSize(dir) {
+  const i = SIZES.indexOf(size());
+  const d = dir < 0 ? -1 : 1;
+  return setSize(SIZES[(Math.max(0, i) + d + SIZES.length) % SIZES.length]);
 }
 
 function setLogNs(name) {
@@ -810,6 +869,14 @@ function initUI() {
     );
     ins = insertAfter(host, ins, _posBtn);
 
+    _sizeBtn = makeMetricsBtn(
+      "pm-metrics-size",
+      "How large the metrics overlay is. S is the phone default. The S/M/L chip on the overlay also cycles this.",
+      paintSizeBtn,
+      () => { nextSize(1); },
+    );
+    ins = insertAfter(host, ins, _sizeBtn);
+
     _logNsBtn = makeMetricsBtn(
       "pm-metrics-logns",
       "Filter the LOG overlay tail to one namespace (* = all). = / - cycle while the overlay is up.",
@@ -865,7 +932,7 @@ function initUI() {
       }
     });
     window.addEventListener("resize", function () {
-      if (_panel) applyPos(_panel);
+      if (_panel) { applyPos(_panel); applySize(_panel); }
     });
   }
 
@@ -881,16 +948,17 @@ if (typeof document !== "undefined") {
 if (on()) raiseBuffer();
 
 /* ── SETTINGS > DISPLAY — the METRICS submenu ──────────────────────────
- Folds #pm-metrics / PAGE / SIDE / LOG NS / LOG SHOW into one <details>
- under HIDE HUD. Layout lives in css/components.css. Closed summary
- carries ON/page state so the fold does not have to open to be read.
- LOG filters hide unless PAGE is LOG. Used to be a second IIFE in
- cockpit-opts.js. */
+ Folds #pm-metrics / PAGE / SIDE / SIZE / LOG NS / LOG SHOW into one
+ <details> under HIDE HUD. Layout lives in css/components.css. Closed
+ summary carries ON/page state so the fold does not have to open to be
+ read. LOG filters hide unless PAGE is LOG. Used to be a second IIFE
+ in cockpit-opts.js. */
 function buildSubmenu() {
   if (typeof document === "undefined") return;
   var onBtn = document.getElementById("pm-metrics");   // the button — a local named like the module's on() shadowed it
   var pageBtn = document.getElementById("pm-metrics-page");
   var posBtn = document.getElementById("pm-metrics-pos");
+  var sizeBtn = document.getElementById("pm-metrics-size");
   var ns = document.getElementById("pm-metrics-logns");
   var lvl = document.getElementById("pm-metrics-loglvl");
   if (!onBtn || document.getElementById("pm-metrics-details")) return;
@@ -912,7 +980,7 @@ function buildSubmenu() {
   body.setAttribute("role", "group");
   body.setAttribute("aria-label", "Metrics controls");
 
-  [onBtn, pageBtn, posBtn, ns, lvl].forEach(function (btn) {
+  [onBtn, pageBtn, posBtn, sizeBtn, ns, lvl].forEach(function (btn) {
     if (!btn) return;
     btn.addEventListener("click", function (e) { e.stopPropagation(); });
     body.appendChild(btn);
@@ -943,9 +1011,11 @@ function scheduleSubmenu() {
 scheduleSubmenu();
 
 return {
-  KEY, PAGE_KEY, POS_KEY, LOG_NS_KEY, LOG_LVL_KEY, PAGES, POSITIONS, LOG_NS, LOG_LVLS,
+  KEY, PAGE_KEY, POS_KEY, SIZE_KEY, LOG_NS_KEY, LOG_LVL_KEY,
+  PAGES, POSITIONS, SIZES, LOG_NS, LOG_LVLS,
   on, set, toggle, page, setPage, nextPage,
   pos, setPos, nextPos, resolvePos,
+  size, setSize, nextSize,
   logNs, setLogNs, nextLogNs, logLvl, setLogLvl, nextLogLvl,
   snapshot, PANEL_STYLE,
 };
