@@ -72,6 +72,7 @@ export const TREE_METRICS = {
   bareCatches: async () => (await import("./tree-counts.mjs")).bareCatches(),
   waitNoPolling: async () => (await import("./tree-counts.mjs")).waitNoPolling(),
   subFloorFontSize: async () => (await import("./tree-counts.mjs")).subFloorFontSize(),
+  dynamicIdReads: async () => (await import("./shell-ids.mjs")).dynamicIdReads(),
 };
 
 /** A ceiling entry is a bare number, or {ceiling, slack} when its guard is tighter. */

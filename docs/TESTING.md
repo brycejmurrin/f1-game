@@ -1,6 +1,6 @@
 # Testing reference
 
-114 root Playwright spec files (`tests/specs/*.spec.js`) + 189 `node --test` unit suites
+114 root Playwright spec files (`tests/specs/*.spec.js`) + 190 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -1207,6 +1207,7 @@ what it covers.
 | `lighting-tuner-sweep.test.mjs` | `lighting-tuner-sweep.mjs` gate/push/verdict helpers — night-only knobs gated on day-dry, sunElev push direction, PCSS software skip, report verdict buckets (no browser) |
 | `slider-effect.test.mjs` | LIGHTING TUNER classifier + visual A/B: `--help`, knob catalog, gates/risk/tags, `--live --dry-run` recipe, `slider-effect-view.py` changed-pixel filter |
 | `test-groups.test.mjs` | the taxonomy: pick-tests rules name real groups and route every source dir; this document lists every group and every test file; `RENDER_SPECS` partitions cleanly; the manual suites stay out of default discovery |
+| `shell-ids.test.mjs` | the shell&#8596;JS id contract: every element id the source looks up by name exists in `index.html`, is created at runtime, or is a documented `RUNTIME_IDS` exemption. `$` is `getElementById`, and nearly every call site dereferences immediately, so a renamed shell id is a TypeError inside an IIFE — `js/game.js` had already guarded exactly one such call against it. STATIC by necessity: `game-vm`'s `getElementById` manufactures an element for any id, so the 248 VM tests are blind to this class. Lookups built from a variable are counted, not checked (`dynamicIdReads` ratchet) |
 | `test-groups-generated.test.mjs` | `tests/groups.json` is the single definition of a group: package.json's `test:*` scripts and tooling-fast's file list regenerate from it, every group names files that exist, and the tooling-fast notes stay comments rather than leaking into the runtime array |
 | `circuit-def-fields.test.mjs` | every field authored in `js/circuits/<id>.js` survives the field-by-field copy into `Tracks.LIST`, or is named engine-only with a reason — an uncopied field reads as `undefined` at every consumer, silently, and the circuit renders as though it was never written |
 | `backend-surface-parity.test.mjs` | every name GLX publishes is an own property of WGX and TLX (`undefined` allowed, absent not) — game.js installs a backend by descriptor-copy, so an absent name keeps GLX's own function running against a null `gl`/`CHK`, and every feature test for it passes before throwing |

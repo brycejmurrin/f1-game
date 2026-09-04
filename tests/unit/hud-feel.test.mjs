@@ -257,3 +257,19 @@ test("the ahead chip marks the slipstream from player.towing", () => {
   player.towing = 0.1; tick();
   assert.equal(els.gapA.dataset.tow, undefined, "and it clears when the tow fades");
 });
+
+test("tiered announce styles stay smaller than the race banner", () => {
+  const hud = read("css/hud.css");
+  assert.match(hud, /#announce \{[\s\S]*?font-size:\s*clamp\(30px/);
+  assert.match(hud, /#announce\[data-kind="info"\][\s\S]*?font-size:\s*clamp\(22px/);
+  assert.match(hud, /#announce\[data-kind="penalty-hit"\][\s\S]*?font-size:\s*clamp\(26px/);
+});
+
+test("sector flash, limits chip, and announce queue are wired in source", () => {
+  const g = read("js/game.js");
+  assert.doesNotMatch(g, /announce\(sign \+ \(prevSector \+ 1\)/);
+  assert.match(g, /hud\.flashSector\(prevSector\)/);
+  assert.match(g, /hudLimits:\s*\$\("hud-limits"\)/);
+  assert.match(read("css/hud.css"), /#hud-limits/);
+  assert.match(read("css/hud.css"), /\.sec-row\.sec-flash/);
+});

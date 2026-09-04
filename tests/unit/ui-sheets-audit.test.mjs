@@ -225,6 +225,10 @@ function bootGfx() {
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; },
     clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].fn = null; },
     addEventListener() {}, removeEventListener() {},
+    // The picker only offers a stop whose files are in the tree. These tests
+    // are about the two-tap race guard, not the spike-out, so state the
+    // backends-present world they were written for.
+    ApexRoster: { DEFERRED: { webgpu: ["w"], three: ["t"] } },
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);

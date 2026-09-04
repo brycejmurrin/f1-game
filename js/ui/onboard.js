@@ -49,7 +49,7 @@ const Onboard = (function () {
       shown |= BIT[key];
       store.set(KEY, shown);
       cool = GAP;
-      G.announce(verb(G, key) + " — " + TAIL[key], 2.5);
+      G.announce(verb(G, key) + " — " + TAIL[key], 2.5, "coach");
       Log.info("ui", "Onboard " + key);
       return true;
     }

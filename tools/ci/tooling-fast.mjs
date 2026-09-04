@@ -76,6 +76,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/span-kinds.test.mjs",
   "tests/unit/load-order.test.mjs",
   "tests/unit/global-registry.test.mjs",
+  "tests/unit/shell-ids.test.mjs",
   "tests/unit/game-ctx-surface.test.mjs",
   "tests/unit/vstd-invariant.test.mjs",
   "tests/unit/deploy-staging.test.mjs",

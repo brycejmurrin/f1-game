@@ -69,7 +69,7 @@ not.
 | `tdc-` | 10 | `track-detail.css` | — |
 | `co-`, `pm-`, `pane-`, `music-` | ~9 each | career / components / components / tuner | — |
 
-The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`,
+The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
 `season-`, `pair-`, `build-`, `mb-`) is one file each and needs no map.
