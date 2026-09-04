@@ -1231,9 +1231,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     "renopts renopts";
   grid-auto-flow: dense;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]),
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-hud-details[open]),
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-display-adv[open]) {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(:is(#pm-metrics-details, #pm-hud-details, #pm-display-adv)[open]) {
   grid-template-areas:
     "ui ui"
     "hudopts hudopts"
