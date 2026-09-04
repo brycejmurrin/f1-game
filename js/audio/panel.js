@@ -228,8 +228,10 @@ const AudioPanel = (() => {
     function toneSlider(t) { return $(t.id); }
 
     function applyStoredTone() {
-      const saved = store.get("sndProfile", "team");
-      if (GameAudio.profiles().includes(saved)) GameAudio.setProfile(saved);
+      // No need to validate the stored name first: setProfile already falls back
+      // to "team" for anything it does not recognise, so a hand-edited or
+      // stale-schema value lands on the shipped sound either way.
+      GameAudio.setProfile(store.get("sndProfile", "team"));
       const savedTune = store.get("sndTune", null);
       if (savedTune && typeof savedTune === "object") GameAudio.setTune(savedTune);
       const savedLayers = store.get("sndLayers", null);
