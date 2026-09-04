@@ -460,21 +460,21 @@ function hudProfileLabel() { return "HUD: " + hudProfile.toUpperCase(); }
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
-// AUTO NAMES WHAT IT RESOLVED TO. Five stops, and the first two are the same
-// picture whenever auto lands on "full" — which it does on any roomy band, and
-// on the BROADCAST profile with a non-broadcast camera. `hud-met-full` has no
-// CSS at all (it is the base state: show everything), so two clicks changed
-// nothing and the control read as broken. It was not; it was silent.
+// AUTO IS ALWAYS THE FULL SET. fitHud scales / stacks / drops gaps instead
+// of hiding a cluster. The label still names the stored choice, and AUTO
+// names what the body class resolved to (always FULL) so the first two
+// stops stay distinguishable. `hud-met-full` has no hide CSS; it IS show
+// everything. Forced names stay on the cycle for the overlay compact flag.
 function hudMetricsLayoutLabel() {
   if (hudMetricsLayout !== "auto") return "LAYOUT: " + hudMetricsLayout.toUpperCase();
   const m = document.body.className.match(/hud-met-([a-z]+)/);
   return "LAYOUT: AUTO" + (m ? " \u00b7 " + m[1].toUpperCase() : "");
 }
 const HUD_VIS_MODES = ["auto", "on", "off"];
-let hudMapVis = store.get("hudMapVis", "auto");
-let hudGapsVis = store.get("hudGapsVis", "auto");
-if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "auto";
-if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "auto";
+let hudMapVis = store.get("hudMapVis", "on");
+let hudGapsVis = store.get("hudGapsVis", "on");
+if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "on";
+if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
 function hudMapVisLabel() { return "MAP: " + hudMapVis.toUpperCase(); }
 function hudGapsVisLabel() { return "GAPS: " + hudGapsVis.toUpperCase(); }
 function syncMetricsOverlayCompact() {
@@ -3241,13 +3241,13 @@ const G = {
   },
   get hudMapVis() { return hudMapVis; },
   set hudMapVis(v) {
-    if (HUD_VIS_MODES.indexOf(v) < 0) v = "auto";
+    if (HUD_VIS_MODES.indexOf(v) < 0) v = "on";
     hudMapVis = v;
     store.set("hudMapVis", hudMapVis);
   },
   get hudGapsVis() { return hudGapsVis; },
   set hudGapsVis(v) {
-    if (HUD_VIS_MODES.indexOf(v) < 0) v = "auto";
+    if (HUD_VIS_MODES.indexOf(v) < 0) v = "on";
     hudGapsVis = v;
     store.set("hudGapsVis", hudGapsVis);
   },
@@ -8552,10 +8552,10 @@ function syncSettingsAvailability() {
   $("pm-camtune").disabled = !inRace;
 }
 function openSettings() {
-  // AUTO's resolved layout moves with the CAMERA and the band caps, so the
-  // METRICS label has to be re-read on open — it is written at boot and on
-  // click, and a resolution that went stale between the two would be a worse
-  // lie than the silence this replaced.
+  // AUTO is always the full set; the label still names the stored choice
+  // (and AUTO · FULL) so a click that landed on a forced name stays honest.
+  // Re-read on open: the body class is written from the HUD tick, and a
+  // label written only at boot would miss the first resolution.
   if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
