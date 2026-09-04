@@ -210,8 +210,10 @@ function snapshot() {
     }
   } catch (_) { /* SwiftShader / no EXT */ }
   try {
-    if (typeof RendererPicker !== "undefined" && RendererPicker.readBackend)
-      out.backend = RendererPicker.readBackend() || "";
+    // liveBackend(), not readBackend(): the panel answers "what am I running",
+    // and a pick whose files left the tree is not what is running.
+    if (typeof RendererPicker !== "undefined" && RendererPicker.liveBackend)
+      out.backend = RendererPicker.liveBackend() || "";
   } catch (_) { /* quality module absent in a VM */ }
   try {
     if (!out.backend) out.backend = GameStore.store.raw("apex26.gfxBackend") || "";

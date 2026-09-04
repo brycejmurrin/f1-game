@@ -1226,6 +1226,43 @@ test("a stop whose files left the tree says UNAVAILABLE instead of writing the p
   assert.match(sel.options[1].textContent, /UNAVAILABLE/, "and the stop says why");
 });
 
+test("a STORED pick whose files left the tree is labelled (WEBGL2), not left claiming the backend", () => {
+  // The case the UNAVAILABLE test above does NOT cover: the pick was already in
+  // localStorage before the spike-out. Anyone who tried the stops is in it.
+  //
+  // The "(WEBGL2)" suffix exists for exactly this, but it was gated on
+  // sessionStorage apex26.gfxBound — and the ONLY writers of that key were
+  // wgx.js and tlx.js, which left with the backends. Nothing in the shipped
+  // tree has written it since, so boundIsGlx() is permanently false and the
+  // label read a flat "THREE.JS" while GLX drew every frame. `available()` is
+  // the signal gfxBound used to be.
+  for (const stale of ["three", "webgpu"]) {
+    const a = bootPicker({ ls: { "apex26.gfxBackend": stale }, gpu: {}, deferred: {} });
+    const sel = a.byId["pm-renderer"];
+    const label = sel.options.find((o) => o.value === stale).textContent;
+    assert.match(label, /\(WEBGL2\)/, `a stored ${stale} pick painted no fallback marker`);
+    assert.equal(a.ls.getItem("apex26.gfxBackend"), stale,
+      "the stored pick must SURVIVE — it is what a re-attach restores");
+  }
+  // With the backends present the marker must NOT appear: gfxBound is unset and
+  // the pick is genuinely bindable, so nothing has fallen back.
+  const ok = bootPicker({ ls: { "apex26.gfxBackend": "three" }, gpu: {} });
+  const okSel = ok.byId["pm-renderer"];
+  assert.doesNotMatch(okSel.options.find((o) => o.value === "three").textContent, /\(WEBGL2\)/);
+});
+
+test("the metrics panel reports what is DRAWING, not what is stored", () => {
+  // js/perf/metrics-overlay.js reads this for its `backend` line. It called
+  // readBackend(), the PICK, and so agreed with the picker's lie — the one
+  // panel someone would open to check whether the switch worked.
+  const gone = bootPicker({ ls: { "apex26.gfxBackend": "three" }, gpu: {}, deferred: {} });
+  assert.equal(gone.G.liveBackend(), "webgl2");
+  assert.equal(gone.G.readBackend(), "three", "readBackend stays the PICK — the select's value");
+
+  const back = bootPicker({ ls: { "apex26.gfxBackend": "three" }, gpu: {} });
+  assert.equal(back.G.liveBackend(), "three", "a bindable pick is what is drawing");
+});
+
 test("RENDERER control becomes a select with prev/next, not a one-way cycle", () => {
   const { byId, hostKids } = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" } });
   const sel = byId["pm-renderer"];

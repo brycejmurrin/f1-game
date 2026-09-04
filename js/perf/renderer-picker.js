@@ -25,6 +25,11 @@ function readBackend() {
   return v === "webgpu" || v === "three" ? v : "webgl2";
 }
 function backendLabel(v) { return v === "three" ? "THREE.JS" : String(v).toUpperCase(); }
+// What is actually DRAWING, as opposed to what is stored. readBackend() is the
+// PICK and must stay that way — the select's value, and the value a re-attach
+// restores — but the metrics overlay's `backend` line is a diagnostic, and it
+// reported "three" on a build that cannot load three.
+function liveBackend() { return available(readBackend()) ? readBackend() : "webgl2"; }
 function stepBackend(cur, dir) {
   const n = BACKENDS.length;
   const i = BACKENDS.indexOf(cur);
@@ -42,7 +47,15 @@ function paintRenderer(rb) {
   const pref = readBackend();
   // Preference is what the picker shows. Live may be GLX after a
   // device.lost / create refuse — saying WEBGPU then was the lie.
-  const fallback = boundIsGlx() && (pref === "webgpu" || pref === "three");
+  //
+  // …and it is GLX for a second reason now: a pick whose FILES are gone. That
+  // case cannot reach boundIsGlx(), because the only writers of
+  // apex26.gfxBound were wgx.js and tlx.js and they left with the backends —
+  // nothing in the shipped tree has written that key since the spike-out. So a
+  // returning player still holding apex26.gfxBackend="three" (anyone who tried
+  // the stops before today) read a flat "RENDERER: THREE.JS" while GLX drew
+  // every frame. `available()` is the signal gfxBound used to be.
+  const fallback = (boundIsGlx() || !available(pref)) && (pref === "webgpu" || pref === "three");
   if (isSelect(rb)) {
     rb.value = pref;
     const opts = rb.options || [];
@@ -603,7 +616,7 @@ if (typeof document !== "undefined") {
 }
 
 return { BACKENDS, init,
-  nextBackend, prevBackend, applyBackend, backendLabel, readBackend, clearRendererStorage,
+  nextBackend, prevBackend, applyBackend, backendLabel, readBackend, liveBackend, clearRendererStorage,
   RENDERER_LS_KEYS, RENDERER_SS_KEYS,
   THREE_PATHS, SHOT_MODES, readThreePath, applyThreePath, threePathLabel, liveThreeApi,
   readShotMode, applyShotMode, shotModeLabel, presentStatus, saveScreenshot, ARM_MS };
