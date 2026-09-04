@@ -386,9 +386,9 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 .tune-label b { color: var(--red); font-size: var(--fs-micro); flex: none; margin-left: auto; }
 .tune-row input[type="range"] {
-  /* --tap-min, not 24px: this sat exactly on the WCAG floor, so any UI SIZE below
-     100% put it under (19px at 80). See css/tokens.css. */
-  width: 100%; margin: 0; accent-color: var(--red); height: var(--tap-min); cursor: pointer;
+  /* --slider, not --tap-min: painted 32px hit at every UI SIZE. Native
+     accent-color chrome (not a custom thumb). See css/tokens.css. */
+  width: 100%; margin: 0; accent-color: var(--red); height: var(--slider); cursor: pointer;
 }
 /* ---------- MUSIC & SOUND panel ----------
    Two sections, each a header row with a small ON/OFF beside it and one slider

@@ -43,6 +43,18 @@
   .grain::before { display: none; }
 }
 
+/* Menu <input type=range> — native accent chrome (filled track + UA thumb),
+   not a custom red-dot-on-grey-line. Height is --slider (32 painted px): it
+   divides by --ui-scale so UI SIZE zoom does not grow the hit. Tuner red,
+   DISPLAY steel, disabled grey stay on accent-color. */
+input[type="range"] {
+  height: var(--slider);
+  min-height: var(--slider);
+  accent-color: var(--red);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 /* ---------- screen: full-viewport overlay ---------- */
 .screen {
   position: fixed; inset: 0;
@@ -1135,8 +1147,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 .pm-group .tune-row input[type="range"] {
   width: 100%;
-  height: var(--tap-min);
-  min-height: var(--tap-min);
+  height: var(--slider);
+  min-height: var(--slider);
   margin: 0;
   box-sizing: border-box;
 }
@@ -1222,47 +1234,16 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
-/* DISPLAY: HUD block then RENDERER block. Named areas so METRICS
-   opening cannot steal the hole. dense lets GRAPHICS sit beside
-   RESOLUTION after the spanning renderer row. */
+/* DISPLAY: UI SIZE, then HUD / METRICS / RENDERER each on their own row.
+   Named areas so an open fold cannot steal the hole. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
   grid-template-areas:
-    "hudh hudh"
-    "hide metrics"
-    "ui hudopts"
-    "hud sample"
-    "renh renh";
+    "ui ui"
+    "hudopts hudopts"
+    "metrics metrics"
+    "renopts renopts";
   grid-auto-flow: dense;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]) {
-  grid-template-areas:
-    "hudh hudh"
-    "hide hide"
-    "metrics metrics"
-    "ui hudopts"
-    "hud sample"
-    "renh renh";
-}
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-hud-details[open]) {
-  grid-template-areas:
-    "hudh hudh"
-    "hide metrics"
-    "hudopts hudopts"
-    "ui sample"
-    "hud hud"
-    "renh renh";
-}
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]):has(#pm-hud-details[open]) {
-  grid-template-areas:
-    "hudh hudh"
-    "hide hide"
-    "metrics metrics"
-    "hudopts hudopts"
-    "ui sample"
-    "hud hud"
-    "renh renh";
-}
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud { grid-area: hide; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
   grid-area: metrics;
   margin: 0;
@@ -1275,23 +1256,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   align-self: start;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: ui; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale) { grid-area: hud; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample {
-  grid-area: sample;
-  align-self: start;
-  justify-self: start;
-  margin-top: 0;
-  min-width: 0;
-  max-width: 100%;
-  padding-left: calc(var(--gap) * 0.5);
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv {
+  grid-area: renopts;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-h { grid-area: hudh; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-renderer-h { grid-area: renh; }
-#pmsettings-inner #pm-panel-display > #pm-hud-h { margin-top: 0; padding-top: 0; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: ui; }
 /* DISPLAY sliders are settings rows, not tuner rows: steel label, text
    value (tuner red is the loud bit), no extra tap-height padding around
-   a track that is already --tap-min. */
+   a track that is already --slider. */
 #pm-panel-display .tune-row {
   min-height: 0;
   gap: 0;
@@ -1307,8 +1278,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pm-panel-display .tune-row input[type="range"] {
   accent-color: var(--steel);
 }
+#pm-hud-details #pm-hud-sample,
 #pmsettings-inner[data-density="compact"] #pm-hud-sample {
   margin-top: 0;
+}
+#pm-hud-details .tune-row {
+  width: 100%;
+  padding-top: calc(var(--gap) / 4);
 }
 /* METRICS fold: a quiet column, not a 2-up plate grid. Two or three
    rows fit without a scroll cage — the sheet pane already scrolls. */
@@ -1380,7 +1356,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   width: 100%;
   margin: 0;
 }
-#pm-display-adv [role="group"] > #pm-gfx-status {
+#pm-display-adv [role="group"] > :is(#pm-renderer-row, #pm-gfx-status) {
   grid-column: 1 / -1;
 }
 #pmsettings-inner #pm-display-adv > summary {
@@ -1395,33 +1371,27 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
 }
-/* Disclosures share section-heading chrome, not .adv-more-btn plates.
-   Steel + fading rule + italic — same family as .pm-group-h — so METRICS
-   / ADVANCED cannot be mistaken for HIDE HUD / RESET.
-   Chevron is ::before (tree/open-in-place). A right-side ::after is the
-   dropdown convention the native RENDERER <select> already owns. */
+/* Fold summaries are tappable dropdowns, not quiet steel headings.
+   --text + plate so HUD / METRICS / RENDERER read as controls against
+   COCKPIT's italic steel. Chevron stays on the left (::before);
+   ::after is the native <select> mark and stays off. */
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary,
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:active {
-  color: var(--steel);
-  font-style: italic;
-  background-color: transparent;
-  background-image: var(--grad-rule);
-  background-position: bottom left;
-  background-size: 100% 1px;
-  background-repeat: no-repeat;
-  border: none;
-  border-radius: 0;
+  color: var(--text);
+  font-style: normal;
+  opacity: 1;
+  background-color: var(--surf-3);
+  background-image: none;
+  border: 1px solid color-mix(in oklab, var(--text) 34%, transparent);
+  border-radius: var(--r-md);
   box-shadow: none;
 }
 @media (hover: hover) {
   #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:hover {
-    color: var(--steel);
-    background-color: transparent;
-    background-image: var(--grad-rule);
-    background-position: bottom left;
-    background-size: 100% 1px;
-    background-repeat: no-repeat;
-    border: none;
+    color: var(--text);
+    background-color: var(--plate-press);
+    background-image: none;
+    border: 1px solid color-mix(in oklab, var(--text) 48%, transparent);
     box-shadow: none;
   }
 }

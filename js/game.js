@@ -467,7 +467,7 @@ let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "button
 const HUD_PROFILES = ["minimal", "standard", "broadcast"];
 let hudProfile = store.get("hudProfile", "standard");
 if (HUD_PROFILES.indexOf(hudProfile) < 0) hudProfile = "standard";
-function hudProfileLabel() { return "HUD: " + hudProfile.toUpperCase(); }
+function hudProfileLabel() { return "STYLE: " + hudProfile.toUpperCase(); }
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
@@ -487,7 +487,7 @@ if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
 function hudMapVisLabel() { return "MAP: " + hudMapVis.toUpperCase(); }
 function hudGapsVisLabel() { return "GAPS: " + hudGapsVis.toUpperCase(); }
 function hudDetailsSummary() {
-  let s = "HUD · " + hudProfile.toUpperCase() + " · " + hudMetricsLayout.toUpperCase();
+  let s = "HUD · " + (document.body.classList.contains("hud-hidden") ? "OFF" : "ON") + " · " + hudProfile.toUpperCase() + " · " + hudMetricsLayout.toUpperCase();
   if (hudMapVis === "on") s += " · MAP";
   else if (hudMapVis === "off") s += " · NO MAP";
   if (hudGapsVis === "off") s += " · NO GAPS";
@@ -9287,14 +9287,14 @@ function setPaused(p) {
 els.pausebtn.onclick = () => setPaused(true);
 
 // ---- Hide-HUD (clean-screen) mode ----
-// "HIDE HUD" (pause menu) strips every overlay via a body class (see style.css)
-// for a cinematic/clean view; the small #hud-restore eye is the only thing left
-// and brings it all back. Session-only — reset to shown on each race start.
+// HUD: OFF (DISPLAY ▸ HUD fold) strips every overlay via a body class
+// (css/overlays.css) for a cinematic view; the small #hud-restore eye is
+// the only thing left and brings it all back. Session-only — reset on race start.
 function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);
   const btn = $("pm-hidehud");
-  if (btn) btn.textContent = v ? "SHOW HUD" : "HIDE HUD";
-  if (v) { const p = $("campicker"); if (p) p.hidden = true; }
+  if (btn) btn.textContent = v ? "HUD: OFF" : "HUD: ON";
+  paintHudDetailsSummary(); if (v) { const p = $("campicker"); if (p) p.hidden = true; }
 }
 $("pm-hidehud").onclick = () => {
   const willHide = !document.body.classList.contains("hud-hidden");

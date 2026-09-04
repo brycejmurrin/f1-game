@@ -1479,6 +1479,10 @@ live in `ratchets.json`.
   (2026-09-04): DISPLAY HUD / RENDERER headings (`#pm-hud-h`,
   `#pm-renderer-h`). Overlay dock reused existing 8/12/44/80/120 px
   so the spacing count dropped one.
+- tree `shellNodes` 1076 -> **1077** (2026-09-04): those reprint
+  headings came out; the RENDERER fold (`#pm-display-adv` + summary +
+  body) moved into the shell so RESOLUTION / GRAPHICS live with the
+  picker. Net +1 (details+summary+div − two h3s).
 
 ## Tree-wide ratchets (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-03)
 
@@ -1899,7 +1903,9 @@ shipped tree exposed NONE of this — `ENGINE_VOICES` was chosen by the team
 alone and the trims behind it were unreachable — so the feature is new surface
 rather than growth of an existing one, and it pushed three ceilings at once.
 
-- `shellNodes` 1076 -> **1118**: the section's static markup in `#audioset`.
+- `shellNodes` 1076 -> **1119**: the section's static markup in `#audioset`.
+  (1118 on this branch alone; re-measured on the merged tree, which also carries
+  a node from the concurrent DISPLAY work — the union is the only honest value.)
   A RAISE, not an absorption: the metric sat at exactly its ceiling, so this
   could not land without one. The nodes are static on purpose — `index.html`
   is the shell and owns ALL static DOM, so building the section from
@@ -1924,3 +1930,5 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   precondition through a `noAudio()` helper rather than four copies of the same
   three-line guard.
 
+- tree `rawSpacing` 314 -> **313** (2026-09-04): free-cam climb/dive `.pc-btn`
+  dropped the 64×58 / 46×42 literals for `var(--steer)`.
