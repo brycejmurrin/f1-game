@@ -72,9 +72,23 @@ test.describe("scanning a code", () => {
     //
     // 300 s is the value its peers on a race fixture already carry, and it
     // clears the MEASURED worst case with the same ~25 % margin ci.yml's own
-    // caps were chosen to give: 229.7 s for `the camera reads a code and puts it where it belongs`.
+    // caps were chosen to give: 229.7 s (#1974) / 179.6 s (#1977).
     // This raises a BUDGET, not a tolerance — no assertion changed, and a test
     // that genuinely hangs still goes red, just later.
+    //
+    // WHAT THIS DOES NOT FIX, said plainly so the next reader does not assume
+    // a green gate means a green spec: `the camera reads a code …` does not
+    // fail on the TEST budget, it fails the `toHaveValue` below, which carries
+    // its own { timeout: 45000 }. test.setTimeout does not extend an expect
+    // timeout — the two budgets are independent. On #1977 the page reached
+    // `scan start` only at 57.8 s (starved runner, 257 KB decoder fetched on
+    // demand, fake-webcam stream, SwiftShader boot), so the 45 s assertion
+    // window had to cover a decode that had not started; the `handshake accept
+    // fail corrupt_code` line lands 20 ms after `scan stop`, during teardown,
+    // so it is the abandoned scan's consequence and not evidence that the QR
+    // path is broken. Declaring 300 s takes this spec OFF a gate it could
+    // never pay for; it does not make this test pass on a loaded runner.
+    // See docs/notes/TESTING-FIELD-NOTES.md 2026-09-04.
     test.setTimeout(300_000);
   test("the camera reads a code and puts it where it belongs", async ({ page }) => {
     await openJoin(page);
