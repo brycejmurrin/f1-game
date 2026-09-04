@@ -65,7 +65,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ratchets.mjs** | Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update` snaps every ceiling down, `--json`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
-| **check/tree-counts.mjs** | Tree-wide counts behind the `tree` ratchets: CSS class tokens, shell DOM nodes, bare catches, unpolled waits. | — |
+| **check/tree-counts.mjs** | Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, unpolled waits. `--offenders`. | — |
 | **check/trim-comments.mjs** | Strips low-signal `//` comments (dividers, loc pointers, orphans); `--headers --narrative` compresses file headers. | slim-bloat |
 | **check/vstd-lint.mjs** | The PACE invariant as a check: flags `.speed` compared to a literal without `vStd()` in a manifest-derived file set. | tune-physics |
 

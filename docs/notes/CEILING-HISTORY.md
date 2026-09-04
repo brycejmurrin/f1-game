@@ -1667,3 +1667,172 @@ adoption was 54.
   rather than calling `endChangeable()`, because that also drops `wxArcPlan` —
   and a HOST's plan for the race about to start is set before `startRace` runs,
   so calling it there threw the plan away. Caught by the game-VM suite.)
+
+## CSS token adoption (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-04)
+
+Four counts left `tests/unit/css-token-adoption.test.mjs` for the one ratchet
+mechanism: `subFloorFontSize` 5, `rawSpacing` 314, `rawColor` 326,
+`rawColorDistinct` 181. All four carry `slack: 0` — they have always asserted
+EXACT equality ("lower it to lock the win in"), which the ratchet expresses as a
+slack of zero rather than as a second mechanism. The measurements moved verbatim
+into `tools/check/tree-counts.mjs` and reproduce every frozen number exactly;
+`node tools/check/tree-counts.mjs --offenders` prints the per-file breakdown and
+the colour-fork groups that the old assertion messages carried inline.
+
+The scans' own history, moved out of the ceiling comments:
+
+```
+  // font-size declarations written as a raw px literal below --fs-micro.
+  // 2026-08-13: was 126 (menus 40, tuner 28, overlays 16, hud 15, data 10,
+  // track-detail 8, responsive 4, carsetup 3, career 2) — all migrated onto
+  // var(--fs-micro) in the same pass that added this guard. Now ZERO, which is
+  // the one number that needs no justification.
+  // 2026-08-14: 0 -> 3, and the count is only 3 because the check was widened in
+  // the same pass to read px literals inside min()/clamp() (see below). Two of
+  // the three predate this: the `clamp(11px, …)` / `clamp(12px, …)` viewport
+  // ramps in css/responsive.css, whose lower bound is a floor for a phone, not a
+  // chosen size. The third is `.hud-gaps` in css/hud.css: the ahead/behind gap
+  // readout is a peripheral glance during a lap rather than menu chrome a
+  // stopped player reads, and at --fs-micro it rendered as a banner beside the
+  // minimap. Same class of exception as #hud-speed's raw 34px.
+  // 2026-08-18: 1a3975c5 briefly added two 10px #subtitle eyebrows (3→5);
+  // eedad021 restored the color system and those decls left (back to 3).
+  // 2026-08-18: 3 → 4. 8d82b062 menu-hierarchy redesign added `#subtitle`
+  // `font-size: 11px` on the title eyebrow (already red on deploy tip).
+  // 2026-08-18: 4 → 5. 0ccd1b4c dashboard/season menu composition added another
+  // sub-floor literal on the union.
+  // 2026-08-18: 5 → 3. 864f5b32 / 8e01353c tokenised the title-screen menu
+  // and locked the win back to the pre-redesign floor.
+  // 2026-08-19: 3 → 4. adaptive-ui / audio work (build 1515) added one more
+  // sub-floor literal (measured on deploy tip c3df0ee1).
+  // 2026-08-27: 4 → 5, deliberate. The garage stacked-grid chip labels cap
+  // at min(8px, --fs-micro - 3px): the relative form alone was written
+  // against an 11px token and broke to 11px when the token moved to 14px
+  // (labels ellipsised below tap size). 8px is measured against the 7-column
+  // grid — SUSPENSION needs 47px in a 47px column interior at 852x393. The
+  // comment at the declaration carries the measurement.
+  // padding / gap / margin declarations containing a raw px literal.
+  // POLICY (rewritten 2026-08-26, deliberately — user-approved): a raw px
+  // spacing value converts when it has an EXACT token form, including
+  // division forms (22/11 -> --pad; 12/24/18/9/6/3 -> --gap multiples;
+  // 2/4/8/14/16 -> --gap sixths, thirds, two-thirds, 7/6, 4/3 written as
+  // calc(var(--gap) / 3) style divisions so the arithmetic stays exact).
+  // What stays literal: values with NO exact form (5/7/10px), measured
+  // pairs whose comments record px arithmetic, position ANCHORS, and any
+  // declaration inside a compact/rail-tier rule — those operate at
+  // --gap: 8, where a 12-derived multiple is wrong at the rule's only
+  // operating point. The old "a hairline should stay a hairline" rule was
+  // retired when the tuner migration showed the density ladder SHOULD
+  // tighten hairlines with everything else — that was the goal, not noise.
+  // 2026-08-13: 529 -> 479. The four sheets that read NO spacing token at all
+  // (data, hud, overlays, track-detail) were migrated in the same pass, for
+  // exact simple ratios only (the division forms came 2026-08-26).
+  // 2026-08-14: 475 -> 474. `.hud-gaps` lost an inert `gap: 4px` (it was never
+  // a flex container) when the widget was resized in the HUD SIZE pass.
+  // 2026-08-18: 471 -> 470. Data Hub Last Race column-hide rules lost a
+  // duplicate landscape `padding` when they moved onto body[data-width].
+  // 2026-08-18: 470 -> 467. Short-landscape HUD shrink left responsive.css
+  // (`padding`/`gap` on .hud-box / .hud-top / #hud-sectors).
+  // 2026-08-18: 467 → 476. Same 8d82b062 title-menu block added nine raw
+  // padding/gap/margin decls (brand clamp, #subtitle, #menu-meta, button stacks).
+  // 2026-08-18: 476 → 490. 0ccd1b4c dashboard/season menu block (+14 in menus.css).
+  // 2026-08-18: 490 → 467. Title-screen tokenisation restored the 467 lock.
+  // 2026-08-18: 467 → 481. Deploy `45dc6cb1` short-landscape / mid-width
+  // menu compress (css/menus.css) added 14 raw padding/gap/margin decls
+  // and did not remasure the ceiling; the union is 481.
+  // 2026-08-18: 481 → 467. Tokenised that short-landscape / mid-width
+  // compress onto --gap / --pad so density and UI SIZE still scale it.
+  // 2026-08-18: 467 → 466. Settings remodel moved the 620px control pad
+  // onto --pad so the list rows follow the density ladder.
+  // 2026-08-19: 466 → 467. adaptive-ui / audio work (build 1515) added one
+  // raw px spacing decl (measured on deploy tip c3df0ee1).
+  // 2026-08-26: 467 → 466. Round-7 consistency sweep — one raw spacing decl
+  // fell out with the token conversions (alpha-band / plate-family pass).
+  // 2026-08-26: 466 → 453. Tuner spacing migration, the policy-safe set only:
+  // 13 declarations with exact token ratios (6/3/9 -> --gap halves, quarters,
+  // three-quarters) converted so the density ladder finally reaches the
+  // lighting/camera panel's own layout. The hairline set (2/4/5/8/10px), the
+  // measured pairs, the compact/rail tiers (already at --gap:8, so a 12-based
+  // multiple is wrong at their only operating point), and the .lt-tabs
+  // full-bleed triple stay raw per the policy note below.
+  // 2026-08-26: 453 → 422. The 1b division set under the rewritten policy
+  // above: 29 more tuner declarations onto exact --gap fractions (thirds,
+  // sixths, two-thirds, 7/6, 4/3). Still raw in tuner.css: the .lt-tabs
+  // full-bleed triple (next commit, atomic), the measured pairs, the
+  // .adv-item 11px/7px inversion pair, and every compact/rail-tier value.
+  // 2026-08-26: 422 → 419. The .lt-tabs full-bleed triple, atomically: the
+  // panel's 18px inline pad and the strip's -18px margin + 18px re-pad are
+  // ONE number three ways; all three are calc(var(--gap) * 1.5) now, so the
+  // bleed stays exact at every density instead of only at --gap: 12.
+  // 2026-08-26: 419 → 418. The track-detail close button's bespoke rule
+  // (its padding: 0 among them) was deleted when the button joined the
+  // shared .dh-close recipe.
+  // 2026-08-27: 418 -> 363. css/data.css executed the division-form policy
+  // (55 declarations; the hub was the largest single-file share). The three
+  // negative pull-up margins (-2/-4 on the map legend, legend and delta
+  // readouts) stay raw deliberately: they are optical anchors against a
+  // canvas edge, the exclusion the policy names for anchors, and the tree
+  // has no negative-division precedent to copy.
+  // 2026-08-27: 363 -> 325. css/hud.css and css/overlays.css in one pass —
+  // they share the HUD component (the hud-unit and gearbox sibling overrides
+  // live across both), so migrating one alone would have split a single
+  // widget's ladder across two densities. --btn-gap stays literal: it is a
+  // token DEFINITION inside the measured --btn-pitch touch-dock pair, and
+  // converting it would make the dock slot pitch density-dependent — a
+  // behaviour change, not a spelling one. The centring anchors
+  // (margin: -17px style) stay as anchors.
+  // 2026-08-27: 325 -> 324. The career pressable-card carve deduplicated the
+  // teamtile/seat padding pair into one shared declaration.
+  // 2026-08-27: 324 -> 323. Round-13 season-row de-buttoning dropped the
+  // rows' raw margin-bottom (the hairline grammar needs no stacking gap).
+  // 2026-09-03: 323 -> 322. Compact-wide title dropped a redundant
+  // `#menu-hero .bigbtn { padding-block }` that the following
+  // `#menu-buttons .bigbtn { padding }` shorthand already overrode.
+  // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
+  // declaration value; tokens.css custom-property DEFINITIONS excluded — the
+  // definition site is the system, not drift; url() interiors excluded).
+  // POLICY: a literal converts when an existing token IS that value and that
+  // meaning. What stays literal, with reasons in place: the mask-image alpha
+  // stencils (a stencil's black is not a colour), the QR raster's pure
+  // white/black (scanners), FIA flag signal colours (externally defined),
+  // canvas-matched values whose comments record the pairing (.dh-gradbar,
+  // .dh-canvas), gradient RAMP stops chosen against each other (tach,
+  // energy), and the BOOST/OT/AERO ladder whose alphas are measured
+  // compositing arithmetic. Set 2026-08-27 with the guard.
+  // 2026-08-27: 379 -> 376. Round-11 de-buttoning: .trb-* and .tdf-* lost
+  // their borders (three 0.3/0.4-alpha border tints left with them), .spf-dir
+  // stepped under the hover fill, .spf-corner moved off --plate-on onto a
+  // color-mix tint (no literal), .tdc-corner gained one sub-floor neutral.
+  // 2026-08-27: 376 -> 377, deliberate. The season calendar rows adopt the
+  // circuit-list hairline (the .track-row separator spelling, so distinct
+  // stays flat); the rows they replace carried tokens only, nothing to trade.
+  // 2026-08-27: 377 -> 378, deliberate. The track-detail full-bleed header
+  // restates --grad-head's sheen layer (the token's own 0.07 white, an
+  // existing spelling — distinct stays flat) to run the red bleed to 100%
+  // on the one sheet head wider than the token was tuned for.
+  // 2026-08-29: 378 -> 376. The touch-button transparency pass: two BYTE-
+  // IDENTICAL restatements of #btn-throttle's idle fill came out of the
+  // buttons-mode blocks in overlays.css. They were not decoration — at
+  // (1,1,1) they outranked #btn-throttle:active (1,1,0), so GAS could not
+  // light up under a thumb in the one steering mode that used them. The
+  // ladder's own alphas moved with it (pedals to 0.85, presses to 0.95) but
+  // traded one spelling for another, so distinct stays flat.
+  // 2026-09-03 matching pass: 348 -> 334. Idle-tab / selected-chip / headline
+  // ink left #fff and leftover red section chrome for --text / --steel.
+  // 2026-09-03 leftover pass: 334 -> 330. Sort/label/live-updated chrome
+  // left #7a7a85 and leftover dim for --steel / --text.
+  // 2026-09-03 union with the timing-colour pass: --faster/--slower replace the
+  // laneboard literals; the count is the merged tree's.
+  // distinct colour VALUES after normalising spelling: space-after-comma,
+  // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
+  // canonical form. This is the fork guard — identical paint must not hide
+  // behind different spellings, because grep-based dedup is how conversions
+  // get planned. Set 2026-08-27 with the guard.
+  // 2026-08-27: 194 -> 190 in the same pass — the deleted border tints were
+  // the only users of their values.
+  // 2026-09-03: 190 -> 189 with rawColor 375 -> 374. Title secondary rooms
+  // left rgba(255,255,255,0.78) for color-mix(var(--text)).
+  // 2026-09-03 deep pass: 374 -> 367 / 189 -> 188. Customize rows, title
+  // subs, How-to-Play rules, and data-hub numerals moved onto tokens.
+  // 2026-09-03 leftover pass: 185 -> 184 with rawColor 334 -> 330.
+```
