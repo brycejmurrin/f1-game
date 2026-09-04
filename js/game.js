@@ -8588,9 +8588,8 @@ $("pm-settings-close").onclick = () => { if (settingsNav.back()) closeSettings()
 // door index. closeSettings() already only returns to the pause menu when
 // actually paused, so from here it just closes back to the title.
 $("mb-settings").onclick = () => { if (soundOn) GameAudio.init(); openSettings(); };
-// Advanced steering: opened from the settings menu, closes back to it.
-$("pm-advanced").onclick = () => { $("advanced").hidden = false; };
-$("adv-close").onclick = () => { $("advanced").hidden = true; };
+// STEERING and MUSIC are SettingsNav pages (js/ui/settings-tabs.js). Lighting
+// and camera tuners still open as their own docks from the door index.
 // ── LIGHTING TUNER ── opened from the settings sub-menu; that menu hides while
 // it's open so the live preview is unobstructed (tick() keeps render() running
 // with physics paused), and DONE returns to it. Rows are generated

@@ -32,7 +32,7 @@ disclosure.
 
 **Settings is a drill-down stack, not tabs, not one long scroll.**
 
-Pages: `home` | `controls` | `display`.
+Pages: `home` | `controls` | `display` | `advanced` | `audio`.
 
 Settings home (`#pm-settings-index`, `.pm-doors`) is a door list:
 
@@ -43,7 +43,9 @@ Settings home (`#pm-settings-index`, `.pm-doors`) is a door list:
 5. CAMERA TUNER…
 6. MUSIC & SOUND…
 
-Tuner doors stay on the index and still open their existing dialogs.
+STEERING and MUSIC are in-sheet pages, same chrome as DISPLAY
+(`#advanced` / `#audioset` inside `#pm-groups`). Lighting and camera
+tuner doors stay on the index and still open their existing docks.
 BACK on a page pops to home. BACK on home closes settings (to pause or
 title). Escape / pause-key / gamepad B press the same BACK control, so
 they pop the same way.
@@ -83,8 +85,9 @@ plate + `…`. Heading = steel + `--grad-rule`, not clickable. Disclosure
 = steel + rule + left chevron. Picker = `‹ value ›`.
 
 **No new class families.** Index reuses `.pm-doors`. Panels stay
-`.pm-group`. Sheet `h2#dlg-settings` reads SETTINGS / CONTROLS / DISPLAY
-so the first-child `.pm-group-h` on those pages stays hidden.
+`.pm-group`. Sheet `h2#dlg-settings` reads SETTINGS / CONTROLS / DISPLAY /
+STEERING / MUSIC & SOUND so the first-child `.pm-group-h` on those pages
+stays hidden.
 
 ## Rejected
 

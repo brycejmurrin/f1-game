@@ -540,7 +540,7 @@ test("camera picker is a keyboard radio menu and cannot outlive the race layer",
 test("How to Play names every input and drops the retired screen-half lie", () => {
   const html = read("index.html");
   const start = html.indexOf('id="howtoplay"');
-  const end = html.indexOf('id="advanced"');
+  const end = html.indexOf('id="spotifypanel"');
   assert.ok(start > 0 && end > start, "howtoplay sheet is in the shell");
   const htp = html.slice(start, end);
   assert.match(htp, /<dt id="htp-controls">PC \/ KEYBOARD<\/dt>/);
@@ -612,7 +612,7 @@ test("variable control clusters use one content-driven balanced-row primitive", 
   assert.match(html, /class="opt-row balanced-row" role="group" aria-label="Steering feel"/);
   assert.match(html, /class="opt-row balanced-row" role="group" aria-label="Driving help"/);
   assert.match(html, /class="opt-row balanced-row" role="group" aria-label="Racing line assist"/);
-  assert.ok(rulesFor(components, /#advanced-inner\[data-shape="wide"\] \.adv-sec/).some((r) =>
+  assert.ok(rulesFor(components, /#pmsettings-inner\[data-shape="wide"\] #advanced-inner \.adv-sec/).some((r) =>
     r.decls.get("grid-column") === "1 / -1"),
     "advanced section headings still span the wide body grid");
   const all = [html, read("css/components.css"), read("css/menus.css"), read("css/tuner.css"), read("js/camera/mode-switch.js")].join("\n");
@@ -819,7 +819,7 @@ function bootSettingsNav() {
   return {
     dom, nav, selected: () => selected,
     index: () => dom.byId("pm-settings-index"),
-    panel: (id) => dom.byId("pm-panel-" + id),
+    panel: (id) => dom.byId(({ advanced: "advanced", audio: "audioset" })[id] || ("pm-panel-" + id)),
     door: (id) => dom.byId("pm-open-" + id),
     title: () => dom.byId("dlg-settings"),
   };
@@ -846,6 +846,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(h.index().hidden, false, "showCurrent() always returns home");
   assert.equal(h.panel("controls").hidden, true);
   assert.equal(h.dom.document.activeElement, null, "showCurrent() never focuses");
+  h.nav.show("advanced", false);
+  assert.equal(h.panel("advanced").hidden, false);
+  assert.equal(h.title().textContent, "STEERING");
+  h.nav.show("audio", false);
+  assert.equal(h.panel("audio").hidden, false);
+  assert.equal(h.title().textContent, "MUSIC & SOUND");
   h.nav.show("display", false);
   assert.equal(h.nav.back(), false, "BACK on a page pops to home");
   assert.equal(h.index().hidden, false);
@@ -873,7 +879,6 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "race settings spends the same safe width as settings / customize");
   assert.equal(decl(css("css/components.css"), "#standings", "--sheet-w"), "760px");
   assert.equal(decl(css("css/components.css"), "#results", "--sheet-w"), "760px");
-  assert.equal(decl(css("css/components.css"), "#audioset", "--sheet-w"), "760px");
   assert.equal(decl(css("css/components.css"), "#spotifypanel", "--sheet-w"), "760px");
   assert.equal(decl(css("css/career.css"), "#career-offers", "--sheet-w"), "760px");
   assert.equal(decl(css("css/career.css"), "#career-history", "--sheet-w"), "760px");
@@ -945,8 +950,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SCREENSHOTS / SAVE / COPY DIAG are secondary rows, not peer plates of RESET");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv [role=\"group\"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status)", "grid-column"), "1 / -1",
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
-  assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
-    "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child, #advanced > .pm-group-h:first-child, #audioset > .pm-group-h:first-child", "display"), "none",
+    "sheet title already names CONTROLS / DISPLAY / STEERING / MUSIC; do not reprint the heading");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--steel)",
     "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "opacity"), "1",
@@ -1046,10 +1051,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(shell, /id="htp-close"[^>]*class="bigbtn alt"/, "How to Play dismiss is BACK on the alt plate");
   assert.match(shell, /id="htp-close"[^>]*>BACK</, "How to Play returns to its parent, it does not commit");
   assert.match(shell, /id="standings-close"[^>]*class="bigbtn alt"/, "Standings CLOSE is dismiss, not a red commit");
-  for (const id of ["adv-close", "as-close", "sp-close"]) {
-    assert.match(shell, new RegExp(`id="${id}"[^>]*class="bigbtn alt"`), `${id} dismiss is the alt plate`);
-    assert.match(shell, new RegExp(`id="${id}"[^>]*>BACK<`), `${id} returns to its parent`);
-  }
+  assert.match(shell, /id="sp-close"[^>]*class="bigbtn alt"/, "sp-close dismiss is the alt plate");
+  assert.match(shell, /id="sp-close"[^>]*>BACK</, "sp-close returns to its parent");
   assert.match(shell, /id="cz-cancel"[^>]*>BACK</, "customize cancel is BACK beside SAVE");
   assert.match(shell, /id="lt-close"[^>]*class="bigbtn"/, "lighting tuner DONE stays a live-commit primary");
   assert.doesNotMatch(shell, /id="lt-close"[^>]*class="bigbtn alt"/);

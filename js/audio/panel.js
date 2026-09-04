@@ -1,7 +1,7 @@
 "use strict";
-/* MUSIC & SOUND panel — the mixer screen plus the master-sound plumbing.
-   The mixer lives on its own screen: two sliders and a now-playing readout do
-   not fit the settings grid, which is one control per line. Levels persist.
+/* MUSIC & SOUND panel — the mixer plus the master-sound plumbing.
+   The mixer is a SettingsNav page (same sheet as DISPLAY), not its own dialog.
+   Levels persist.
 
    Owns: the ♪ master button, MUSIC/SFX switches, both volume sliders, the
    music-source row (ALL / DEFAULT / MY TRACKS / SPOTIFY) and the transport.
@@ -161,7 +161,7 @@ const AudioPanel = (() => {
       syncTonePanel();
     }
 
-    $("pm-audio").onclick = () => { syncAudioPanel(); $("audioset").hidden = false; };
+    $("pm-audio").addEventListener("click", () => { syncAudioPanel(); });
     if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.onChange) {
       SpotifyMusic.onChange(() => { if (!$("audioset").hidden) syncMusicSrcRow(); });
     }
@@ -172,7 +172,6 @@ const AudioPanel = (() => {
     $("as-sp-open").onclick = () => {
       if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
     };
-    $("as-close").onclick = () => { $("audioset").hidden = true; };
     $("as-music-on").onclick = (e) => { e.stopPropagation(); setMusic(true); if (G.soundOn) GameAudio.uiTick(); };
     $("as-music-off").onclick = (e) => { e.stopPropagation(); setMusic(false); if (G.soundOn) GameAudio.uiTick(); };
     $("as-sound-on").onclick = (e) => { e.stopPropagation(); setSfx(true); GameAudio.uiTick(); };

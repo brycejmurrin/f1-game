@@ -466,10 +466,13 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
 .as-tbtn:disabled { opacity: 0.35; cursor: default; }
 .as-note { font-size: var(--fs-micro); color: var(--dim); margin: calc(var(--gap) * 0.4) 0 0; line-height: 1.35; }
 #audioset-inner, #spotifypanel-inner { --compact-at: 520px; }
+#pmsettings-inner[data-density="compact"] #audioset-inner .as-sec,
 #audioset-inner[data-density="compact"] .as-sec,
 #spotifypanel-inner[data-density="compact"] .as-sec { margin-bottom: calc(var(--gap) * 0.45); }
+#pmsettings-inner[data-density="compact"] #audioset-inner .as-sec + .as-sec,
 #audioset-inner[data-density="compact"] .as-sec + .as-sec,
 #spotifypanel-inner[data-density="compact"] .as-sec + .as-sec { padding-top: calc(var(--gap) * 0.4); }
+#pmsettings-inner[data-density="compact"] #audioset-inner .as-note,
 #audioset-inner[data-density="compact"] .as-note,
 #spotifypanel-inner[data-density="compact"] .as-note {
   line-height: 1.2;

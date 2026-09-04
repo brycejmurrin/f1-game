@@ -31,11 +31,10 @@
 window.AriaState = (function () {
   const ON = ["active", "dh-active"];
   // Roots to watch: everything that is a menu, plus the two DOM-built overlays.
-  const ROOTS = "#overlay,#select,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay,#advanced," +
-    "#pmsettings,#pausemenu,#lighting,#camtune,#audioset,#results,#quali,#standings," +
+  const ROOTS = "#overlay,#select,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay," +
+    "#pmsettings,#pausemenu,#lighting,#camtune,#results,#quali,#standings," +
     // #spotifypanel's SHUFFLE/REPEAT are the same `.active`-class opt-row shape as
-    // the Spotify mode toggles inside #audioset, which ARE synced — one widget
-    // family must not announce its state in one panel and go silent in the other.
+    // the Spotify mode toggles on the MUSIC page (#audioset, inside #pmsettings).
     // #vsfriend / #season-setup are already in UiLayers; they were the two
     // DOM-built overlays this observer had never heard of.
     "#race-settings,#customize,#datahub,#track-detail,#spotifypanel,#vsfriend,#season-setup";

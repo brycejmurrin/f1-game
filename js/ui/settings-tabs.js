@@ -1,32 +1,45 @@
 /* SettingsNav — page stack for the pause/title Settings sheet.
-   Home is a door index; CONTROLS and DISPLAY are pages. BACK pops.
+   Home is a door index; CONTROLS, DISPLAY, STEERING and MUSIC are pages.
+   Lighting / camera tuners stay as their own docks. BACK pops.
    Decisions: docs/research/PAUSE-SETTINGS-IA.md.
    game.js still owns availability and all individual controls. */
 const SettingsNav = (function () {
   "use strict";
-  const PAGES = ["home", "controls", "display"];
-  const TITLES = { home: "SETTINGS", controls: "CONTROLS", display: "DISPLAY" };
+  const PAGES = {
+    home: { title: "SETTINGS" },
+    controls: { title: "CONTROLS", panel: "pm-panel-controls", door: "pm-open-controls" },
+    display: { title: "DISPLAY", panel: "pm-panel-display", door: "pm-open-display" },
+    advanced: { title: "STEERING", panel: "advanced", door: "pm-advanced" },
+    audio: { title: "MUSIC & SOUND", panel: "audioset", door: "pm-audio" },
+  };
+
+  let live = null;
+
+  function panelEl(id) {
+    const def = PAGES[id];
+    return def && def.panel ? document.getElementById(def.panel) : null;
+  }
 
   function create(_store, onSelect) {
     Log.info("game", "SettingsNav.create");
     let current = "home";
 
     function show(id, focus) {
-      if (!PAGES.includes(id)) id = "home";
+      if (!PAGES[id]) id = "home";
       current = id;
       const index = document.getElementById("pm-settings-index");
       const title = document.getElementById("dlg-settings");
-      if (title) title.textContent = TITLES[id];
-      index.hidden = id !== "home";
-      PAGES.forEach((name) => {
-        if (name === "home") return;
-        document.getElementById("pm-panel-" + name).hidden = name !== id;
+      if (title) title.textContent = PAGES[id].title;
+      if (index) index.hidden = id !== "home";
+      Object.keys(PAGES).forEach((name) => {
+        const el = panelEl(name);
+        if (el) el.hidden = name !== id;
       });
       Log.info("game", "SettingsNav.show " + id);
       if (focus) {
         const target = id === "home"
           ? document.getElementById("pm-open-controls")
-          : document.getElementById("pm-panel-" + id).querySelector("button, input, select");
+          : (panelEl(id) && panelEl(id).querySelector("button, input, select"));
         if (target) target.focus();
       }
       const body = document.getElementById("pm-settings-body");
@@ -42,15 +55,23 @@ const SettingsNav = (function () {
       return true;
     }
 
-    ["controls", "display"].forEach((id) => {
-      document.getElementById("pm-open-" + id).onclick = () => {
+    Object.keys(PAGES).forEach((id) => {
+      const door = PAGES[id].door;
+      if (!door) return;
+      const el = document.getElementById(door);
+      if (!el) return;
+      el.onclick = () => {
         show(id, false);
-        if (onSelect) onSelect();
+        if (onSelect) onSelect(id);
       };
     });
     show("home", false);
-    return { showCurrent: () => show("home", false), show, back };
+    live = { showCurrent: () => show("home", false), show, back };
+    return live;
   }
 
-  return { create };
+  return {
+    create,
+    show: (id, focus) => { if (live) live.show(id, focus); },
+  };
 })();
