@@ -22,10 +22,10 @@
 // classes on a live element every frame, and a subtree observer over it would
 // be a per-frame cost for a surface that has no option groups at all.
 //
-// CHOICE WORDS. The same walk wraps ON/OFF and a trailing LABEL: VALUE
-// (STYLE: STANDARD, LAYOUT: AUTO, STEER: TILT, RESOLUTION: HIGH, …) so CSS
-// can paint gold / red. One observer, not a call site in every painter.
-// Option-group chips (5 LAPS, DRY) and prose labels stay unpainted.
+// BINARY WORDS. Gold is enabled, red is disabled — not "the current choice"
+// (STANDARD / AUTO / TILT would all go gold and the color would mean nothing).
+// The walk wraps ON/OFF only. Mode names stay the button's text color.
+// Option-group chips (5 LAPS, DRY) stay unpainted.
 //
 // The module owns no game state and self-initialises.
 window.AriaState = (function () {
@@ -87,15 +87,9 @@ window.AriaState = (function () {
 
   function wrapOnOff(text) {
     const t = String(text || "").replace(/\s+/g, " ").trim();
-    if (!t) return null;
-    if (/\b(ON|OFF)\b/.test(t)) {
-      return t.replace(/\b(ON|OFF)\b/g, (w) =>
-        '<span data-fold="' + w.toLowerCase() + '">' + w + "</span>");
-    }
-    // Current choice after a label: STYLE: STANDARD, STEER: TILT (NO GYRO).
-    // All-caps values only — "BUDGET: 12 cr remaining" and sentences stay put.
-    const m = /^(.+?: )([A-Z0-9][A-Z0-9 ./%()+\-–—×]*)$/.exec(t);
-    return m ? (m[1] + '<span data-fold="val">' + m[2] + "</span>") : null;
+    if (!/\b(ON|OFF)\b/.test(t)) return null;
+    return t.replace(/\b(ON|OFF)\b/g, (w) =>
+      '<span data-fold="' + w.toLowerCase() + '">' + w + "</span>");
   }
 
   function paintOnOff(root) {

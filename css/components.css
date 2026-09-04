@@ -1444,13 +1444,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
 }
-/* Name stays steel (the heading). Choices use the live switch colors:
-   ON / current value gold, OFF red — steel-on-steel hid STANDARD /
-   AUTO / WEBGL2 in the chrome. */
+/* Name stays steel. Gold = enabled, red = disabled. Mode names
+   (STANDARD / AUTO / WEBGL2) stay --text or they all read as ON. */
 button [data-fold="on"],
-summary [data-fold="on"],
-button [data-fold="val"],
-summary [data-fold="val"] {
+summary [data-fold="on"] {
   color: var(--gold);
 }
 button [data-fold="off"],
@@ -1473,7 +1470,7 @@ summary [data-fold="off"] {
   font-weight: 600;
 }
 #pmsettings-inner details > summary [data-fold="val"] {
-  color: var(--gold);
+  color: var(--text);
   font-style: italic;
   font-weight: 700;
 }

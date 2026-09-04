@@ -63,10 +63,11 @@ does not hide a cluster). MAP and GAPS default ON; AUTO on the map still
 hides onboard, OFF is the explicit hide. Sliders stay
 settings rows (steel track, text value). UI SIZE uses the
 same steel italic + rule as COCKPIT; HUD SIZE stays a caption.
-Fold summaries are chip-height; the name is steel, ON and the current
-choice (STANDARD, AUTO, MAP, WEBGL2) are gold, OFF / NO MAP are red.
-The same gold / red pair paints `LABEL: VALUE` readouts on any menu
-(STYLE, LAYOUT, STEER, GEARS, RESOLUTION, …).
+Fold summaries are chip-height; the name is steel. Gold is enabled
+(ON, MAP / GAPS when those clusters show), red is disabled (OFF, NO
+MAP, NO GAPS). Mode names (STANDARD, AUTO, WEBGL2) are `--text` — gold
+on every current choice made the color meaningless. The same pair
+paints the ON/OFF word on any menu switch, not STYLE: STANDARD.
 METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO
