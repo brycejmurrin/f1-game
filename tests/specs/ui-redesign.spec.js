@@ -152,18 +152,24 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   }, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.ScrollFade && window.ScrollFade.refresh());
   const stackedSel = await page.evaluate(() => {
+    const inner = document.getElementById("sel-inner");
     const body = document.getElementById("sel-body");
     const list = document.getElementById("sel-tracks");
     const preview = document.getElementById("sel-track-section");
+    const foot = inner.querySelector(".sheet-foot");
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     const out = {
-      pair: document.getElementById("sel-inner").dataset.pair,
+      pair: inner.dataset.pair,
+      classes: inner.className,
       bodyOY: getComputedStyle(body).overflowY,
       listOY: getComputedStyle(list).overflowY,
       listMaxH: getComputedStyle(list).maxHeight,
       bodyH: body.getBoundingClientRect().height,
       listH: list.getBoundingClientRect().height,
       previewH: preview.getBoundingClientRect().height,
+      innerH: inner.getBoundingClientRect().height,
+      innerW: inner.getBoundingClientRect().width,
+      footW: foot.getBoundingClientRect().width,
       previewTop: preview.getBoundingClientRect().top,
       listTop: list.getBoundingClientRect().top,
       bodySf: body.classList.contains("sf-scroll"),
@@ -183,8 +189,15 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(stackedSel.innerSf).toEqual(["sel-tracks"]);
   expect(stackedSel.listMaxH).toBe("none");
   expect(stackedSel.listH).toBeGreaterThan(80);
-  expect(stackedSel.listH / stackedSel.bodyH).toBeGreaterThan(0.45);
-  expect(stackedSel.listH).toBeGreaterThan(stackedSel.previewH);
+  // pair-on sets #sel-body to display:contents, so bodyH is 0. Share of the
+  // sheet is the real "list still has a column" check.
+  expect(stackedSel.listH / stackedSel.innerH).toBeGreaterThan(0.4);
+  // #sel-inner is pair-foot-full: list and preview share row 2, so their
+  // painted heights match. listH > previewH was the pre-ff024251 span into
+  // the foot row; BACK / YOUR CAR / NEXT are a full-width bar now.
+  expect(stackedSel.classes).toContain("pair-foot-full");
+  expect(Math.abs(stackedSel.listH - stackedSel.previewH)).toBeLessThan(2);
+  expect(stackedSel.footW / stackedSel.innerW).toBeGreaterThan(0.95);
   expect(stackedSel.active).toBe(true);
   expect(stackedSel.shown).toBeGreaterThan(0);
 
@@ -647,12 +660,11 @@ test("balanced control rows derive their shape from local room", async ({ page }
   await page.evaluate(() => { document.getElementById("mb-standings").hidden = false; });
   const title = await report("#menu-secondary");
   expect(title.display).toBe("flex");
-  // 3+2, not the old 2+2+1: HOW TO PLAY joined the group when its permanent
-  // `hidden` came off (round 6 — the handler had been live the whole time),
-  // and the five buttons' widths now pack three on the first row. The shape
-  // is the flex wrap's business; what this test guards is that the group
-  // wraps into full rows instead of leaving a sliver.
-  expect(title.rowCounts).toEqual([3, 2]);
+  // Five rooms (STANDINGS unhidden). Wrap count is flex + overlay zoom's
+  // business — 860×560 currently packs 4+1 after --balance-basis: 5.5rem
+  // and min-width:0 on the doors. What this guards is no leftover sliver:
+  // every visible door is present, and a lone last row fills the track.
+  expect(title.rowCounts.reduce((n, c) => n + c, 0)).toBe(5);
   expect(title.lastFill).toBeGreaterThan(0.9);
 
   // Settings home is a .pm-doors list. The guard this test keeps is full

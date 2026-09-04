@@ -32,7 +32,7 @@ test("HUD applies camera/profile body classes", () => {
   const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
   assert.match(css, /body\.hud-bcam #hud-gearbox/);
   assert.match(css, /body\.hud-hide-map #minimap/);
-  assert.match(css, /body\.hud-prof-minimal #minimap/);
+  assert.match(css, /body\.hud-map-low #minimap/);
 });
 
 test("CamTune exports player edits as window.CameraEdits", () => {

@@ -1229,10 +1229,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   grid-template-areas:
     "hudh hudh"
     "hide metrics"
-    "ui ui"
+    "ui hudopts"
     "hud sample"
-    "prof lay"
-    "map gaps"
     "renh renh";
   grid-auto-flow: dense;
 }
@@ -1241,15 +1239,38 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     "hudh hudh"
     "hide hide"
     "metrics metrics"
-    "ui ui"
+    "ui hudopts"
     "hud sample"
-    "prof lay"
-    "map gaps"
+    "renh renh";
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-hud-details[open]) {
+  grid-template-areas:
+    "hudh hudh"
+    "hide metrics"
+    "hudopts hudopts"
+    "ui sample"
+    "hud hud"
+    "renh renh";
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]):has(#pm-hud-details[open]) {
+  grid-template-areas:
+    "hudh hudh"
+    "hide hide"
+    "metrics metrics"
+    "hudopts hudopts"
+    "ui sample"
+    "hud hud"
     "renh renh";
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud { grid-area: hide; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
   grid-area: metrics;
+  margin: 0;
+  align-self: start;
+  min-width: 0;
+}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details {
+  grid-area: hudopts;
   margin: 0;
   align-self: start;
   min-width: 0;
@@ -1265,15 +1286,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   max-width: 100%;
   padding-left: calc(var(--gap) * 0.5);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudprofile {
-  grid-area: prof;
-  align-self: center;
-}
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-h { grid-area: hudh; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-renderer-h { grid-area: renh; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudmetrics { grid-area: lay; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudmap { grid-area: map; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudgaps { grid-area: gaps; }
 #pmsettings-inner #pm-panel-display > #pm-hud-h { margin-top: 0; padding-top: 0; }
 /* DISPLAY sliders are settings rows, not tuner rows: steel label, text
    value (tuner red is the loud bit), no extra tap-height padding around
@@ -1298,20 +1312,24 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 /* METRICS fold: a quiet column, not a 2-up plate grid. Two or three
    rows fit without a scroll cage — the sheet pane already scrolls. */
-#pm-metrics-details [role="group"] {
+#pm-metrics-details [role="group"],
+#pm-hud-details [role="group"] {
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: calc(var(--gap) / 6) 0 0;
 }
-#pm-metrics-details [role="group"] > button {
+#pm-metrics-details [role="group"] > button,
+#pm-hud-details [role="group"] > button {
   width: 100%;
   margin: 0;
 }
-#pm-metrics-details [role="group"] > button[hidden] {
+#pm-metrics-details [role="group"] > button[hidden],
+#pm-hud-details [role="group"] > button[hidden] {
   display: none !important;
 }
-#pmsettings-inner #pm-metrics-details > summary {
+#pmsettings-inner #pm-metrics-details > summary,
+#pmsettings-inner #pm-hud-details > summary {
   height: var(--tap);
   min-height: var(--tap);
   box-sizing: border-box;
@@ -1324,7 +1342,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
 }
 #pm-metrics-details[open] > summary::before { content: "\25B4"; }
-#pmsettings-inner #pm-metrics-details [role="group"] > button {
+#pm-hud-details[open] > summary::before { content: "\25B4"; }
+#pmsettings-inner #pm-metrics-details [role="group"] > button,
+#pmsettings-inner #pm-hud-details [role="group"] > button {
   background: transparent;
   border: none;
   border-bottom: 1px solid color-mix(in oklab, var(--steel) 22%, transparent);
@@ -1332,11 +1352,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   box-shadow: none;
   font-weight: 600;
 }
-#pmsettings-inner #pm-metrics-details [role="group"] > button:last-child {
+#pmsettings-inner #pm-metrics-details [role="group"] > button:last-child,
+#pmsettings-inner #pm-hud-details [role="group"] > button:last-child {
   border-bottom: none;
 }
 @media (hover: hover) {
-  #pmsettings-inner #pm-metrics-details [role="group"] > button:hover {
+  #pmsettings-inner #pm-metrics-details [role="group"] > button:hover,
+  #pmsettings-inner #pm-hud-details [role="group"] > button:hover {
     background: color-mix(in oklab, var(--steel) 12%, transparent);
     box-shadow: none;
   }
@@ -1378,8 +1400,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    / ADVANCED cannot be mistaken for HIDE HUD / RESET.
    Chevron is ::before (tree/open-in-place). A right-side ::after is the
    dropdown convention the native RENDERER <select> already owns. */
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary,
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary:active {
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary,
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:active {
   color: var(--steel);
   font-style: italic;
   background-color: transparent;
@@ -1392,7 +1414,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   box-shadow: none;
 }
 @media (hover: hover) {
-  #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary:hover {
+  #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:hover {
     color: var(--steel);
     background-color: transparent;
     background-image: var(--grad-rule);
@@ -1403,13 +1425,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     box-shadow: none;
   }
 }
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary::after {
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary::after {
   content: none;
 }
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary::before {
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary::before {
   content: "\25BE";
 }
-#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv)[open] > summary::before {
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
 }
 #pmsettings-inner #pm-panel-display > .pm-group-h {

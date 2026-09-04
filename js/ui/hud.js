@@ -79,19 +79,23 @@ function resolveHudVis(want, autoHide) {
 let _hudVisKey = "";
 function syncHudVisClasses(modeId) {
   const onboard = !!ONBOARD_IDS[modeId];
-  const hideMap = resolveHudVis(G.hudMapVis, onboard);
-  // GAPS DO NOT AUTO-HIDE ONBOARD. The map is scenery you can glance away from,
-  // but from a cockpit you cannot see the car behind you at all — the ahead/
-  // behind readout is MORE useful there, not less, and auto-hiding it was the
-  // "where did my relative distance widget go" this pass came from. GAPS: OFF
-  // still hides it; only the AUTO default changes.
-  const hideGaps = resolveHudVis(G.hudGapsVis, false);
-  const key = (G.hudMapVis || "auto") + "|" + (G.hudGapsVis || "auto") + "|" + modeId + "|" + hideMap + "|" + hideGaps;
+  const prof = G.hudProfile || "standard";
+  // MAP AUTO: hide onboard (cockpit/hood/tcam) or MINIMAL so the view stays clear.
+  const hideMap = resolveHudVis(G.hudMapVis, onboard || prof === "minimal");
+  // GAPS do not AUTO-hide onboard — from a cockpit you cannot see the car
+  // behind you. GAPS: OFF still hides it. MINIMAL still auto-hides chrome.
+  const hideGaps = resolveHudVis(G.hudGapsVis, prof === "minimal");
+  const mapLow = !hideMap && prof === "broadcast";
+  const gapsLow = !hideGaps && prof === "broadcast";
+  const key = (G.hudMapVis || "auto") + "|" + (G.hudGapsVis || "auto") + "|" + modeId + "|" + prof + "|" + hideMap + "|" + hideGaps + "|" + mapLow;
   if (key === _hudVisKey) return;
   _hudVisKey = key;
+  _fitKey = "";
   const body = document.body;
   body.classList.toggle("hud-hide-map", hideMap);
   body.classList.toggle("hud-hide-gaps", hideGaps);
+  body.classList.toggle("hud-map-low", mapLow);
+  body.classList.toggle("hud-gaps-low", gapsLow);
 }
 function syncHudLayoutClasses() {
   const resolved = resolveMetricsLayout();
@@ -99,6 +103,7 @@ function syncHudLayoutClasses() {
   const key = resolved + "|" + want;
   if (key === _hudLayoutKey) return;
   _hudLayoutKey = key;
+  _fitKey = "";
   const body = document.body;
   for (let i = 0; i < MET_LAYOUTS.length; i++) {
     body.classList.toggle("hud-met-" + MET_LAYOUTS[i], resolved === MET_LAYOUTS[i]);
@@ -109,13 +114,16 @@ function syncHudCamClasses() {
   const modeId = (modes && modes[G.camMode]) ? modes[G.camMode].id : "chase";
   const prof = G.hudProfile || "standard";
   const key = modeId + "|" + prof;
-  if (key === _hudCamKey) return;
-  _hudCamKey = key;
-  const body = document.body;
-  body.classList.toggle("hud-onboard", !!ONBOARD_IDS[modeId]);
-  body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
-  body.classList.toggle("hud-prof-minimal", prof === "minimal");
-  body.classList.toggle("hud-prof-broadcast", prof === "broadcast");
+  if (key !== _hudCamKey) {
+    _hudCamKey = key;
+    const body = document.body;
+    body.classList.toggle("hud-onboard", !!ONBOARD_IDS[modeId]);
+    body.classList.toggle("hud-bcam", !!BCAM_IDS[modeId]);
+    body.classList.toggle("hud-prof-minimal", prof === "minimal");
+    body.classList.toggle("hud-prof-broadcast", prof === "broadcast");
+  }
+  // MAP/GAPS (and broadcast park) must re-run when only the setting
+  // changes — camera+profile stay put, so the key above does not.
   syncHudVisClasses(modeId);
 }
 function flashSector(i) { if (i >= 0 && i < 3) _secFlash[i] = 0.35; }
@@ -408,8 +416,8 @@ function updateHud(force) {
   hudT -= 1;
   if (!force && hudT > 0) return;
   hudT = 6; // ~10Hz at 60fps
+  syncHudLayoutClasses();      // before fitHud: show/hide/park changes what gets measured
   fitHud();                    // below the throttle: this reads layout, per TICK not per frame
-  syncHudLayoutClasses();
   // A retirement has no race position left to hold — `rank` is whatever it was
   // when the car stopped, and the field it was measured against no longer
   // contains it (see the ranked build in game.js).
