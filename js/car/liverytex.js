@@ -408,15 +408,13 @@ const LiveryTex = (function () {
                     : (roles.includes("plate") || CREST_DISC[teamId]) ? "plate" : "outline";
     else slot = SECOND_DRAWN[teamId] || "alt";   // the monogram's box is `alt`
     if (!bare) return slot;
-    // The fin badge is a different CONSTRUCTION, not a smaller copy: crestHaas's
-    // ring and crestGeneric's box are both gated on !bare. A slot nothing
-    // paints is a dead colour picker, so those fall through to the outline —
-    // measured, not assumed: haas/badge came back MISSING from the paint
-    // census until this line existed. A plate the badge actually draws
-    // (Ferrari's shield, Red Bull's sun) stays a plate: remapping it made
-    // SHIELD paint as a rim and the tail stopped matching the spine.
+    // A slot nothing paints is a dead colour picker and falls through to the
+    // outline. Haas's ring and the monogram box used to be in that set (gated
+    // on !bare); they now draw on the badge so RING / MONOGRAM BOX match the
+    // spine and the wall. Cadillac's alt is traced and always painted.
     if (slot === "plate" && !crestKeepsPlate(teamId)) return "outline";
-    if (slot === "alt" && !(roles && roles.includes("alt"))) return "outline";
+    if (slot === "alt" && !(roles && roles.includes("alt")) &&
+        teamId !== "haas" && teamId !== "custom") return "outline";
     return slot;
   }
 
@@ -751,8 +749,9 @@ const LiveryTex = (function () {
   // markPalette): P.mark for the dominant shape, P.alt for counters, second
   // colour and lettering, P.plate for a backing shield. No baked colours except
   // the two national bands called out below, no alpha, no destination-out.
-  // `bare` is the shark-fin badge: no plates, no lettering, and for three marks
-  // a genuinely simpler silhouette, because that badge bottoms out at 34 px.
+  // `bare` is the shark-fin badge: no fillText lettering (34 px cannot carry
+  // a wordmark). The lockup itself — shield, disc, ring, weave, box — is the
+  // same construction as the engine cover and the garage wall.
 
   // Mercedes — three-point star inside a ring. Two shapes, and the RING is the
   // one this mark can hand to the DETAIL row: `P.part` is same-ink-unless-
@@ -787,23 +786,22 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
-  // Haas — slashed H inside a ring. The ring goes on the fin badge.
+  // Haas — slashed H inside a ring. The ring is the lockup, on the fin too.
   function crestHaas(ctx, R, P, bare, teamId) {
     const f = fit(R, CREST_MARGIN);
     ctx.save();
-    if (!bare) {
-      ctx.strokeStyle = css(P.alt);
-      ctx.lineWidth = swMin(f, 0.085);
-      ctx.beginPath();
-      ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.42), 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    ctx.strokeStyle = css(P.alt);
+    ctx.lineWidth = swMin(f, 0.085);
+    ctx.beginPath();
+    ctx.arc(f.X(0.5), f.Y(0.5), f.S(0.42), 0, Math.PI * 2);
+    ctx.stroke();
     // The H used to CROSS the ring: uprights spanned y 0.20..0.80 with outer
     // edges at 0.24 and 0.76, and at y 0.20 the ring's inner half-width is only
     // 0.229 (x 0.271..0.729). These bounds are the inscribed box instead —
-    // corner distance 0.33 against an inner radius of 0.3775.
-    const xa = bare ? 0.06 : 0.27, xb = bare ? 0.235 : 0.38;
-    const y0 = bare ? 0.06 : 0.26, y1 = bare ? 0.94 : 0.74;
+    // corner distance 0.33 against an inner radius of 0.3775. Same box on the
+    // badge: a full-height H with the ring around it is a different logo.
+    const xa = 0.27, xb = 0.38;
+    const y0 = 0.26, y1 = 0.74;
     ctx.fillStyle = css(P.mark);
     ctx.fillRect(f.X(xa), f.Y(y0), f.S(xb - xa), f.S(y1 - y0));            // left upright
     ctx.fillRect(f.X(1 - xb), f.Y(y0), f.S(xb - xa), f.S(y1 - y0));        // right upright
@@ -847,7 +845,8 @@ const LiveryTex = (function () {
     for (let i = 0; i < 4; i++) ring(i);
     // Weave: re-stroke the OVER ring inside each overlap, alternating which one
     // that is. Four independent arcs lie flat on each other and never interlock.
-    if (!bare) for (let i = 0; i < 3; i++) {
+    // Same weave on the badge — a flat four-ring is a different logo.
+    for (let i = 0; i < 3; i++) {
       const mid = (xs[i] + xs[i + 1]) / 2;
       ctx.save();
       ctx.beginPath();
@@ -863,15 +862,11 @@ const LiveryTex = (function () {
   // whenever it has no uploaded emblem.
   function crestGeneric(ctx, R, P, bare, teamId) {
     const f = fit(R, CREST_MARGIN);
-    const box = bare
-      ? { x: f.X(0.02), y: f.Y(0.20), w: f.S(0.96), h: f.S(0.60) }
-      : { x: f.X(0.06), y: f.Y(0.22), w: f.S(0.88), h: f.S(0.56) };
+    const box = { x: f.X(0.06), y: f.Y(0.22), w: f.S(0.88), h: f.S(0.56) };
     ctx.save();
-    if (!bare) {
-      ctx.strokeStyle = css(P.alt);
-      ctx.lineWidth = swMin(f, 0.055);
-      ctx.strokeRect(box.x, box.y, box.w, box.h);
-    }
+    ctx.strokeStyle = css(P.alt);
+    ctx.lineWidth = swMin(f, 0.055);
+    ctx.strokeRect(box.x, box.y, box.w, box.h);
     drawWordmark(ctx, teamShort(teamId), box, P.mark, { align: "center", pad: f.S(0.06) });
     ctx.restore();
   }

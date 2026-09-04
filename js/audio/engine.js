@@ -75,7 +75,13 @@ const GameAudio = (function () {
   // Rivals were paying that tax and nothing else was. sqrt(2) pays it back, and
   // being pan-independent it does not disturb the pan law itself.
   const PAN_MAKEUP = Math.SQRT2;
-  let rivalVoices = [];           // { src, filt, gain, pan } while the engine runs
+  // Peak rival level, set per CORE at startEngine. Sawtooth oscillators are far
+  // hotter than the recording, which is why the player's own synth fallback runs
+  // at roughly a fifth of the sample core's level (0.145 vs 0.76 at full song);
+  // rivals have to pay the same discount or the fallback puts the field louder
+  // than the car you are sitting in.
+  let rivalPeak = 0.28;
+  let rivalVoices = [];           // { filt, gain, pan, detune, start, stop, setPitch }
 
   // Per-manufacturer engine character, keyed by team.engine (js/data/teams.js).
   // Every field is CONSTANT TIMBRE — a fixed multiplier or filter, never a
@@ -676,25 +682,73 @@ const GameAudio = (function () {
     // Rival voices. Cheap on purpose — one looping source through a lowpass,
     // a gain and a panner each. They share engBuf with the player's own voice,
     // so they cost no extra fetch, decode or memory.
+    // Rival voices, on WHICHEVER core is running. They used to be built only
+    // `if (usingSamples)`, so the one situation where you most need to know a
+    // car is beside you — the recording failed to load and the whole mix is the
+    // fallback — was the one where the field went silent. Every other layer
+    // degrades to the synth; these now do too.
+    //
+    // The tail (lowpass -> gain -> panner -> bus, plus the reverb send) is the
+    // same either way; only the HEAD and how you pitch it differ, so each voice
+    // carries its own start/stop/setPitch and setRivals never asks which core
+    // it is talking to. The closures are built once here, not per frame.
+    rivalPeak = usingSamples ? 0.28 : 0.055;
     rivalVoices = [];
-    if (usingSamples && ctx.createStereoPanner) {
+    if (ctx.createStereoPanner) {
       for (let i = 0; i < RIVAL_VOICES; i++) {
-        const src = ctx.createBufferSource();
-        src.buffer = engBuf; src.loop = true;
-        const li = findStableLoop(engBuf);
-        src.loopStart = li.start; src.loopEnd = li.end;
-        src.playbackRate.value = 0.4;
         const filt = ctx.createBiquadFilter();
         filt.type = "lowpass"; filt.frequency.value = 2000;
         const gain = ctx.createGain(); gain.gain.value = 0;
         const pan = ctx.createStereoPanner(); pan.pan.value = 0;
-        src.connect(filt).connect(gain).connect(pan).connect(sfxBus);
+        filt.connect(gain).connect(pan).connect(sfxBus);
         if (revSend) pan.connect(revSend);   // a rival in a tunnel echoes too
-        // Start each voice a different fraction of the way into the loop, so the
-        // four are decorrelated from the first sample rather than drifting apart
-        // over seconds as their detune ratios do the work alone.
-        const off = li.start + (li.end - li.start) * (i / RIVAL_VOICES);
-        rivalVoices.push({ src, filt, gain, pan, detune: RIVAL_DETUNE[i % RIVAL_DETUNE.length], startOff: off });
+        const v = { filt, gain, pan, detune: RIVAL_DETUNE[i % RIVAL_DETUNE.length],
+                    src: null, oscs: null, start: null, stop: null, setPitch: null };
+        if (usingSamples) {
+          const src = ctx.createBufferSource();
+          src.buffer = engBuf; src.loop = true;
+          const li = findStableLoop(engBuf);
+          src.loopStart = li.start; src.loopEnd = li.end;
+          src.playbackRate.value = 0.4;
+          src.connect(filt);
+          // Start each voice a different fraction of the way into the loop, so
+          // the four are decorrelated from the first sample rather than drifting
+          // apart over seconds as their detune ratios do the work alone.
+          const off = li.start + (li.end - li.start) * (i / RIVAL_VOICES);
+          v.src = src;
+          v.start = () => src.start(0, off);
+          v.stop = (t) => src.stop(t);
+          v.setPitch = (t, rev01, mul) => {
+            const rate = (0.25 + rev01 * 0.45) * mul;
+            if (Math.abs((src.playbackRate._apexRate ?? -1) - rate) > 0.002) {
+              src.playbackRate.setTargetAtTime(rate, t, 0.06);
+              src.playbackRate._apexRate = rate;
+            }
+          };
+        } else {
+          // Two saws a hair apart — the same shape the player's own fallback
+          // uses, and the cheapest thing that is not a buzz.
+          const a = ctx.createOscillator(), b = ctx.createOscillator();
+          a.type = "sawtooth"; b.type = "sawtooth";
+          a.frequency.value = 160; b.frequency.value = 160;
+          b.detune.value = 14;                 // ~1.008x, the fallback's spread
+          a.connect(filt); b.connect(filt);
+          v.oscs = [a, b];
+          v.start = () => { a.start(); b.start(); };
+          v.stop = (t) => { a.stop(t); b.stop(t); };
+          v.setPitch = (t, rev01, mul) => {
+            // There is no gear to read for someone else's car, so the module's
+            // own unknown-gear defaults stand in (95 Hz idle, 700 Hz span) —
+            // which is exactly what they are there for.
+            const f = (95 + rev01 * 700) * mul;
+            if (Math.abs((a.frequency._apexHz ?? -1) - f) > 0.5) {
+              a.frequency.setTargetAtTime(f, t, 0.06);
+              b.frequency.setTargetAtTime(f, t, 0.06);
+              a.frequency._apexHz = f;
+            }
+          };
+        }
+        rivalVoices.push(v);
       }
     }
 
@@ -778,7 +832,7 @@ const GameAudio = (function () {
     else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
     if (subOctOsc) subOctOsc.start();
-    for (const v of rivalVoices) v.src.start(0, v.startOff);
+    for (const v of rivalVoices) v.start();
     harvSrc.start();
     ersOsc.start();
     lfo.start();
@@ -817,7 +871,7 @@ const GameAudio = (function () {
     if (limOsc) { limOsc.stop(t0 + 0.35); limOsc = null; limGain = null; }
     whineOsc.stop(t0 + 0.35);
     if (subOctOsc) subOctOsc.stop(t0 + 0.35);
-    for (const v of rivalVoices) { try { v.gain.gain.setTargetAtTime(0, t0, 0.06); v.src.stop(t0 + 0.35); } catch (e) { /* already stopped */ } }
+    for (const v of rivalVoices) { try { v.gain.gain.setTargetAtTime(0, t0, 0.06); v.stop(t0 + 0.35); } catch (e) { /* already stopped */ } }
     harvSrc.stop(t0 + 0.35);
     ersOsc.stop(t0 + 0.35);
     windSrc.stop(t0 + 0.35);
@@ -1459,7 +1513,7 @@ const GameAudio = (function () {
       // car alongside, not as a rumour.
       const near = RIVAL_REF / (RIVAL_REF + 1.15 * Math.max(0, dist - RIVAL_REF));
       const behind = arc < 0 ? 0.78 : 1;   // your own engine is between you and it
-      aimGain(v.gain, PAN_MAKEUP * 0.28 * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10);
+      aimGain(v.gain, PAN_MAKEUP * rivalPeak * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10);
 
       // Air absorbs the top end with distance, which is most of why a far car
       // reads as far rather than merely quiet. A POWER LAW, not a scale of the
@@ -1483,11 +1537,7 @@ const GameAudio = (function () {
       // speeds sampled a frame apart and one bad frame must not chirp.
       const closing = Math.max(-90, Math.min(90, +r.approach || 0));
       const dop = Math.max(0.80, Math.min(1.25, 343 / (343 - closing)));
-      const rate = (0.25 + clamp01(r.rev) * 0.45) * dop * v.detune;
-      if (Math.abs((v.src.playbackRate._apexRate ?? -1) - rate) > 0.002) {
-        v.src.playbackRate.setTargetAtTime(rate, t, 0.06);
-        v.src.playbackRate._apexRate = rate;
-      }
+      v.setPitch(t, clamp01(r.rev), dop * v.detune);
     }
   }
 
@@ -1895,7 +1945,10 @@ const GameAudio = (function () {
       return rivalVoices.map((v) => ({
         gain: +v.gain.gain.value.toFixed(5),
         pan: +v.pan.pan.value.toFixed(4),
-        rate: +v.src.playbackRate.value.toFixed(4),
+        // One of the two, by core: `rate` is the sample voice's playbackRate,
+        // `hz` the synth voice's fundamental. The other reads 0.
+        rate: v.src ? +v.src.playbackRate.value.toFixed(4) : 0,
+        hz: v.oscs ? +v.oscs[0].frequency.value.toFixed(2) : 0,
         cut: Math.round(v.filt.frequency.value),
       }));
     },

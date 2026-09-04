@@ -35,41 +35,26 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
 // The selected gate's settings, per select-budget's table. It has no retry so a
 // failure reports promptly while smoke retains the retry used for deploy safety.
-// 240 s, matching MEASURED.perTestTimeoutSec in ./select-budget.mjs and the
-// --timeout ci.yml already gives physics-characterization. This gate was the
-// ONLY place running at half that, and the gap was not survivable: a spec that
-// builds a circuit costs 190-225 s on these runners, so the 120 s cap sat at
-// roughly HALF the price of the work and turned healthy specs into false reds
-// whenever a diff first selected them.
 //
-// OBSERVED on the runs it blocked, all on 2026-09-04:
-//   physics-fixes  Monaco          killed at 120 s, job line 224.5 s
-//   albert-park    run 2020        killed at 120 s, job line 194.0 s
-//   parts-ers      run 2002        killed at 120 s, job lines 195.1/175.4/150.9 s
-//   abudhabi night run 2020        died in context SETUP at the 120 s mark
-// READ THOSE NUMBERS CAREFULLY. The larger figure is wall time until Playwright
-// gave up AND finished tearing down, not what the test needed: each was killed
-// at exactly 120 s and the remainder is timeout handling on a loaded runner. So
-// what is actually established is that these tests need MORE than 120 s and
-// their true cost is UNKNOWN — not that they fit in any particular larger
-// number. 240 is chosen because it is MEASURED.perTestTimeoutSec, the value
-// ci.yml already gives the smoke shards and physics-characterization for the
-// same kind of circuit-building work, not because a test was seen finishing in
-// it. If 240 still proves short the evidence will say so the same way, and the
-// next move is a measurement of what a circuit build actually costs here rather
-// than another doubling.
-// Pages runs 2015 and 2020 both failed at this gate and SKIPPED the deploy job,
-// so nothing published all day.
+// 180, NOT 120. The budget model reasons about the MEAN test (79.7 s), but a
+// per-test timeout has to clear the SLOWEST one, and it did not. Measured on an
+// idle box, 2026-09-04, one worker, no contention:
 //
-// SPEND IS UNCHANGED: capacity() prices a failure at timeout x (1 + retries),
-// so doubling this halves the test count the same budget affords. The gate
-// trades breadth for a per-test allowance that matches what a test costs —
-// which is the right trade, because a cap below the work's cost does not buy
-// coverage, it buys false reds.
+//   physics-fixes    "lap distance ... through Monaco"   124.2 s   (over 120 outright)
+//   albert-park-foundation                               110.1 s   (92% of budget)
 //
-// The three patches before this one — FIXED_GATE_SPECS, then seven specs
-// declaring their own budgets — were all treating symptoms of this number.
-export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 240 };
+// So Monaco failed EVERY time the selector picked it, on a tree where it passes,
+// and Albert Park failed on any runner contention at all. Worse, the
+// carry-forward cache then re-ran both first on every later push to the branch,
+// which made a budget defect look like a spreading regression and cost three
+// deploys. Neither is slow in the loop — Monaco's sibling test in the same file
+// runs 100 steps and still takes 57 s, so ~55 s of each is Monaco boot + track
+// build, which no test-side change removes. (Skipping the render via
+// headless(true) was tried: 124.2 -> 120.4 s. Not the cost.)
+//
+// 180 clears the slowest measured spec by 44%. Re-derive ci.yml's
+// `timeout-minutes` with it: cap >= (tests x timeout) + setup + margin.
+export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
 
 // These specs already have independent blocking jobs with runner-measured
 // timeout policies. Re-running them in the selected job used its generic 120 s
@@ -163,13 +148,7 @@ export function fit(specs, budgetMin) {
       continue;
     }
     const own = maxDeclaredTimeout(file);
-    // >=, not >: a spec that declares the WHOLE gate has no headroom for runner
-    // variance, and runner variance is the entire lesson here — parts-ers ran
-    // 29.4 s locally against 195 s on CI, a 6.6x stretch. Selecting a spec whose
-    // own declaration says it may need every second the gate has is selecting a
-    // coin flip. At 240 s this keeps the four specs declaring exactly 240 out
-    // while admitting the ones declaring 180, which genuinely fit.
-    if (own >= SELECTED_GATE.perTestTimeoutSec * 1000) {
+    if (own > SELECTED_GATE.perTestTimeoutSec * 1000) {
       overBudgetSpecs.push({ file, tests, ownTimeoutSec: own / 1000 });
       continue;
     }

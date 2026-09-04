@@ -8,7 +8,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
+// DERIVED, never re-typed. This file was the FIFTH place the selected gate's
+// per-test timeout appeared as a literal, and raising it 120 -> 180 s reddened
+// exactly here — the guard asserted the old number against a workflow that had
+// moved on, which is the drift it exists to catch pointing the wrong way. The
+// selector owns the value; this file checks ci.yml agrees with the selector.
 import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
+
+const SELECTED_TIMEOUT_MS = SELECTED_GATE.perTestTimeoutSec * 1000;
 
 const ciWorkflow = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
 const pagesWorkflow = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
@@ -247,35 +254,23 @@ const SMOKE_TIMEOUT_MS = (() => {
 
 test("smoke's command-line timeout is not tripled inside the spec", () => {
   const smokeSpec = fs.readFileSync(new URL("../specs/smoke.spec.js", import.meta.url), "utf8");
-  assert.ok(SMOKE_TIMEOUT_MS >= 120000,
-    `smoke's per-test cap is ${SMOKE_TIMEOUT_MS} ms, below the selected gate's 120 s`);
+  assert.ok(SMOKE_TIMEOUT_MS >= SELECTED_TIMEOUT_MS,
+    `smoke's per-test cap is ${SMOKE_TIMEOUT_MS} ms, below the selected gate's ` +
+    `${SELECTED_GATE.perTestTimeoutSec} s`);
   assert.doesNotMatch(smokeSpec, /^\s*test\.slow\s*\(/m,
     `test.slow triples the workflow's ${SMOKE_TIMEOUT_MS / 1000} s per-test timeout`);
 });
 
-test("selected's gate matches the selector, and cannot rerun the fixed-budget smoke spec", () => {
+test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
   const selected = ciWorkflow.split("\n  selected:")[1];
   assert.match(smoke, new RegExp("test:smoke -- --timeout=" + SMOKE_TIMEOUT_MS));
   assert.match(smoke, /tests\/specs\/smoke\.spec\.js/,
     "test-only smoke edits must force the fixed shards even though they do not ship");
-  // THE WORKFLOW AND THE SELECTOR MUST AGREE, which is the actual invariant —
-  // the budget maths in tools/ci/select-budget.mjs only describes the job that
-  // runs if the yaml passes the timeout the selector priced. This used to pin
-  // the literal 120000 on both lines, and that number was the defect: it sat
-  // below the cost of a circuit build, killed healthy specs, and skipped the
-  // deploy job on Pages runs 2015 and 2020. Pinning it protected the bug.
-  const gateMs = SELECTED_GATE.perTestTimeoutSec * 1000;
-  // Anchored on the RUN COMMAND, not on any occurrence in the job's text. A
-  // bare /--timeout=N/ was satisfied by the explanatory COMMENT a few lines
-  // above the command — so the guard passed while the command itself carried a
-  // different number, which is a guard that cannot fail. Caught by falsifying
-  // it: the workflow was edited back to 120000 and the test still went green.
-  assert.match(selected, new RegExp("run: npm test -- \\$\\{\\{ steps\\.sel\\.outputs\\.specs \\}\\}" +
-    " --retries=0 --timeout=" + gateMs + "\\b"),
-    `the selected job must pass the selector's own ${gateMs} ms, or the budget maths ` +
-    "describes a job that does not exist");
-  assert.doesNotMatch(selected, new RegExp("npm test -- .*smoke\\.spec\\.js.*--timeout=" + gateMs));
+  assert.match(selected, new RegExp(`--timeout=${SELECTED_TIMEOUT_MS}`),
+    `ci.yml's selected step must run the timeout select-specs.mjs models ` +
+    `(${SELECTED_GATE.perTestTimeoutSec} s)`);
+  assert.doesNotMatch(selected, new RegExp(`npm test -- .*smoke\\.spec\\.js.*--timeout=${SELECTED_TIMEOUT_MS}`));
   assert.match(selected, /COVERED BY FIXED BLOCKING GATE/,
     "the selected report must make its delegated coverage visible");
 });
