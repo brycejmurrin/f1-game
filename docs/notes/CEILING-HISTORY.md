@@ -1464,6 +1464,10 @@ live in `ratchets.json`.
   members (2026-09-03): the first-run COACH MARKS (`js/ui/onboard.js`) — a
   `create` line, the per-frame `onboard.tick(dt)` beside `BrakeCue.tick()`, and
   `G.announceBusy` so a mark can never stomp LIGHTS OUT! or a sector split.
+- `js/game.js` 9499 -> **9502** lines / 5219 -> **5222** code (2026-09-04):
+  settings BACK pops the page stack (`settingsNav.back()`) before
+  `closeSettings()`, on both the foot button and the pause-key path. Raised
+  rather than packed: the extra lines are the stack, not leftover.
 
 ## Tree-wide ratchets (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-03)
 
