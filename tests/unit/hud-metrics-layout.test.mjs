@@ -22,6 +22,16 @@ test("metrics layout CSS hides the right clusters", () => {
   assert.match(css, /body\.hud-hide-map #minimap/);
   assert.match(css, /body\.hud-hide-gaps \.hud-gaps/);
   assert.match(css, /body\.hud-met-timing \.hud-bottom/);
-  assert.match(css, /body\.hud-met-driver #minimap/);
+  assert.doesNotMatch(css, /body\.hud-met-driver #minimap/);
+  assert.match(css, /body\.hud-met-driver #hud-sectors/);
   assert.match(css, /body\.hud-met-compact #hud-energy/);
+});
+
+test("HUD layout options live in a full-width pause submenu", () => {
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  const css = fs.readFileSync(path.join(root, "css/components.css"), "utf8");
+  assert.match(html, /id="pm-hud-details"/);
+  assert.match(html, /id="pm-hudmap"/);
+  assert.match(css, /#pm-hud-details \[role="group"\]/);
+  assert.match(css, /grid-area:\s*hudopts/);
 });

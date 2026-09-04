@@ -464,10 +464,15 @@
             <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
           <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
             <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
-          <button id="pm-hudprofile">HUD: STANDARD</button>
-          <button id="pm-hudmetrics">METRICS: AUTO</button>
-          <button id="pm-hudmap">MAP: AUTO</button>
-          <button id="pm-hudgaps">GAPS: AUTO</button>
+          <details id="pm-hud-details" class="pm-hud-sub">
+            <summary class="adv-more-btn" id="pm-hud-details-sum">HUD · STANDARD</summary>
+            <div role="group" aria-label="HUD layout">
+              <button id="pm-hudprofile">HUD: STANDARD</button>
+              <button id="pm-hudmetrics">METRICS: AUTO</button>
+              <button id="pm-hudmap">MAP: AUTO</button>
+              <button id="pm-hudgaps">GAPS: AUTO</button>
+            </div>
+          </details>
           <!-- The slider's effect was invisible: css/hud.css hides every real
                HUD cluster while a .dim screen is open, and from the title
                there is no HUD at all — players dragged, saw nothing, and

@@ -269,13 +269,10 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
 
 /* Metrics layout — which cluster wins (js/ui/hud.js resolveMetricsLayout). */
 body.hud-met-timing .hud-bottom { display: none !important; }
-body.hud-met-driver #minimap,
-body.hud-met-driver .hud-gaps,
+/* Map/gaps follow hud-hide-map / hud-hide-gaps only — MAP:GAPS ON must win. */
 body.hud-met-driver #hud-sectors,
 body.hud-met-driver .hud-top .hud-box:nth-child(4) { display: none !important; }
 /* Metrics layout — compact keeps pos/lap/time/speed/gear only. */
-body.hud-met-compact #minimap,
-body.hud-met-compact .hud-gaps,
 body.hud-met-compact #hud-sectors,
 body.hud-met-compact #hud-energy,
 body.hud-met-compact #hud-ot,
