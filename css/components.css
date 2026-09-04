@@ -1467,8 +1467,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
 }
-#pmsettings-inner #adv-details > summary,
-#pmsettings-inner #adv-details > summary:active {
+#pmsettings-inner #advanced-inner details > summary,
+#pmsettings-inner #advanced-inner details > summary:active {
   color: var(--steel);
   font-style: italic;
   opacity: 1;
@@ -1482,7 +1482,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   box-shadow: none;
 }
 @media (hover: hover) {
-  #pmsettings-inner #adv-details > summary:hover {
+  #pmsettings-inner #advanced-inner details > summary:hover {
     color: var(--text);
     background-color: transparent;
     background-image: var(--grad-rule);
@@ -1493,9 +1493,31 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
     box-shadow: none;
   }
 }
-#pmsettings-inner #adv-details > summary::after { content: none; }
-#pmsettings-inner #adv-details > summary::before { content: "\25BE"; }
-#pmsettings-inner #adv-details[open] > summary::before { content: "\25B4"; }
+#pmsettings-inner #advanced-inner details > summary::after { content: none; }
+#pmsettings-inner #advanced-inner details > summary::before { content: "\25BE"; }
+#pmsettings-inner #advanced-inner details[open] > summary::before { content: "\25B4"; }
+#pmsettings-inner #advanced-inner details > summary {
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  box-sizing: border-box;
+  cursor: pointer;
+  justify-content: flex-start;
+  font-size: clamp(var(--fs-2), calc(1.8 * var(--vwz)), var(--fs-4));
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  opacity: 1;
+  padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
+}
+#advanced-inner > .pm-group-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+#advanced-inner > .pm-group-h b {
+  color: inherit;
+  font-style: italic;
+  font-weight: 700;
+}
 /* Name stays steel (the heading). Choices use the live switch colors:
    ON gold, OFF red, values bright text — steel-on-steel made STANDARD /
    AUTO / WEBGL2 disappear into the chrome. */
@@ -1636,7 +1658,7 @@ summary [data-fold="off"] {
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; }
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-intro,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .preset-row { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] #advanced-inner #adv-details,
+#pmsettings-inner[data-shape="wide"] #advanced-inner details,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-sec { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }
 /* MY TEAM logo upload: the file input itself is hidden (its native button is

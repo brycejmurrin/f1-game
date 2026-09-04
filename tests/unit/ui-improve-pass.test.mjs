@@ -963,6 +963,33 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::before$/, "content") || "",
     /25BE/,
     "disclosure chevron sits on the left, like a tree, not a select");
+  const settingsHtml = read("index.html");
+  const adv = settingsHtml.slice(settingsHtml.indexOf('id="advanced"'), settingsHtml.indexOf('id="audioset"'));
+  const musicAt = settingsHtml.indexOf('id="audioset"');
+  const music = settingsHtml.slice(musicAt, settingsHtml.indexOf('<button id="pm-settings-close"', musicAt));
+  assert.doesNotMatch(adv, /class="adv-intro"/, "STEERING drops the tutorial wall — How to Play covers it");
+  assert.match(adv, /id="pm-pace-h"/, "OVERALL SPEED is a UI SIZE heading, not a buried slider");
+  assert.match(adv, /id="adv-feel-details"/);
+  assert.match(adv, /id="adv-aids-details"/);
+  assert.match(adv, /id="adv-feel-details"[\s\S]*id="pm-tiltsimple"/);
+  assert.match(adv, /id="adv-aids-details"[\s\S]*id="pm-help-low"/);
+  assert.doesNotMatch(adv, /<details[^>]+open/, "STEERING folds start closed");
+  assert.match(music, /id="as-music-sum"/);
+  assert.match(music, /id="as-sound-sum"/);
+  assert.doesNotMatch(music, /id="as-music-details"[^>]*\sopen/, "MUSIC starts closed like DISPLAY");
+  assert.doesNotMatch(music, /id="as-sound-details"[^>]*\sopen/, "SOUND starts closed like DISPLAY");
+  assert.doesNotMatch(music, /<summary[^>]*>[\s\S]*id="as-music-on"/, "MUSIC ON/OFF lives in the fold body");
+  assert.doesNotMatch(music, /class="as-head"/, "music summaries reuse adv-more-btn, not a second head family");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary/, "color"), "var(--steel)",
+    "STEERING folds use the same disclosure chrome as DISPLAY");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #advanced-inner details > summary::after/, "content"), "none");
+  assert.match(decl(css("css/tuner.css"), /#pmsettings-inner #audioset \.as-sec > summary::before/, "content") || "",
+    /25BE/,
+    "MUSIC fold chevron sits on the left");
+  assert.match(code("js/input/steer-tuning.js"), /\["k", "FEEL"\]/,
+    "closed FEEL summary carries the live steer step");
+  assert.match(code("js/audio/panel.js"), /\["k", "MUSIC"\]/,
+    "closed MUSIC summary carries ON and source");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
     "COCKPIT is a section break after the renderer row");
   assert.match(code("js/camera/cockpit-opts.js"), /pm-display-adv/,

@@ -504,15 +504,21 @@
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">STEERING</h3>
           <div id="advanced-inner">
-    <p class="adv-intro">Pick a preset to set everything at once &mdash; most players never need more. Adjust the few controls below to taste, or open <b>Advanced</b> for the full set of knobs. Everything takes effect immediately and is saved.</p>
-
+    <!-- Same shape as DISPLAY: one always-visible primary (presets + pace),
+         then closed folds whose summaries carry the live choice. -->
     <div class="preset-row balanced-row">
       <button id="pm-preset-relax" class="preset-btn">RELAX<small>easiest &mdash; the car helps you</small></button>
       <button id="pm-preset-standard" class="preset-btn">STANDARD<small>balanced default</small></button>
       <button id="pm-preset-pro" class="preset-btn">PRO<small>sharp &mdash; full control</small></button>
     </div>
 
-    <!-- simplified, player-facing controls (most players never need more) -->
+    <h3 class="pm-group-h" id="pm-pace-h">OVERALL SPEED <b id="pm-pace-v">84%</b></h3>
+    <label class="tune-row">
+      <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed"></label>
+
+    <details id="adv-feel-details">
+    <summary id="adv-feel-sum" class="adv-more-btn">FEEL · NORMAL</summary>
+    <div role="group" aria-label="Steering feel">
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">TILT SENSITIVITY <b id="pm-tiltsimple-v">6</b></span>
         <input id="pm-tiltsimple" type="range" min="1" max="10" step="1" value="6" aria-label="Tilt sensitivity"></label>
@@ -528,6 +534,12 @@
       </div>
       <p class="adv-help">Overall steering feel, from forgiving and stable to sharp and direct.</p>
     </div>
+    </div>
+    </details>
+
+    <details id="adv-aids-details">
+    <summary id="adv-aids-sum" class="adv-more-btn">AIDS · LOW</summary>
+    <div role="group" aria-label="Driving aids">
     <div class="adv-item">
       <span class="tune-label">DRIVING HELP</span>
       <div class="opt-row balanced-row" role="group" aria-label="Driving help">
@@ -556,11 +568,8 @@
         <input id="pm-brakecue" type="range" min="1" max="10" step="1" value="6" aria-label="Brake cue"></label>
       <p class="adv-help">A tick that speeds up when you need to brake for a corner. 1 is OFF. Higher = earlier warning (more lookahead). Takes over nothing.</p>
     </div>
-    <div class="adv-item">
-      <label class="tune-row"><span class="tune-label">OVERALL SPEED <b id="pm-pace-v">84%</b></span>
-        <input id="pm-pace" type="range" min="1" max="19" step="1" value="11" aria-label="Overall speed"></label>
-      <p class="adv-help">How fast the whole field actually covers the track &mdash; you and the AI together. Shown as a share of reference pace: 100% is full speed, and every notch is 6% either way. Your dash and gearbox keep their full range at every setting; higher just means everyone laps quicker.</p>
     </div>
+    </details>
 
     <!-- Native disclosure: expanded/collapsed state, keyboard toggling (Enter/
          Space on the summary) and screen-reader "expanded" announcement all
@@ -622,14 +631,14 @@
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">MUSIC &amp; SOUND</h3>
           <div id="audioset-inner">
-      <details id="as-music-details" class="as-sec" open>
-        <summary class="as-head">
-          <h3 class="adv-sec">MUSIC</h3>
-          <div class="opt-row as-toggle" role="group" aria-label="Music on or off">
-            <button id="as-music-on" class="opt-btn" type="button">ON</button>
-            <button id="as-music-off" class="opt-btn" type="button">OFF</button>
-          </div>
-        </summary>
+      <!-- Closed like DISPLAY: the summary is the label and carries ON / source.
+           ON/OFF live in the body so a summary tap only opens the fold. -->
+      <details id="as-music-details" class="as-sec">
+        <summary class="adv-more-btn" id="as-music-sum">MUSIC · ON · ALL</summary>
+        <div class="opt-row as-toggle" role="group" aria-label="Music on or off">
+          <button id="as-music-on" class="opt-btn" type="button">ON</button>
+          <button id="as-music-off" class="opt-btn" type="button">OFF</button>
+        </div>
         <label class="tune-row"><span class="tune-label">VOLUME <b id="as-mvol-v">5</b></span>
           <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
         <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
@@ -661,14 +670,12 @@
         </div>
       </details>
 
-      <details id="as-sound-details" class="as-sec" open>
-        <summary class="as-head">
-          <h3 class="adv-sec">SOUND EFFECTS</h3>
-          <div class="opt-row as-toggle" role="group" aria-label="Sound effects on or off">
-            <button id="as-sound-on" class="opt-btn" type="button">ON</button>
-            <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
-          </div>
-        </summary>
+      <details id="as-sound-details" class="as-sec">
+        <summary class="adv-more-btn" id="as-sound-sum">SOUND · ON</summary>
+        <div class="opt-row as-toggle" role="group" aria-label="Sound effects on or off">
+          <button id="as-sound-on" class="opt-btn" type="button">ON</button>
+          <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
+        </div>
         <label class="tune-row"><span class="tune-label">VOLUME <b id="as-svol-v">10</b></span>
           <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
         <p class="as-note">Engine, tyres, rain and menu clicks. Independent of the music.</p>
@@ -679,14 +686,14 @@
            A profile REPLACES the six trims; moving any slider afterwards leaves
            the profile row unlit, because the tune is then the player's and no
            longer that preset's. Closed by default, like YOUR TRACKS and SPOTIFY
-           — an opt-in workflow, not one of the two controls every player wants.
+           — an opt-in workflow, same closed default as MUSIC / SOUND.
 
            Every knob here is a CONSTANT multiplier, never a function of rev:
            that is the contract tools/check/audio-test.cjs and
            tests/unit/audio-tune.test.mjs both hold the engine to, and it is why
            no slider position can make pitch fall as the revs rise. -->
       <details id="as-engine-details" class="as-sec">
-        <summary class="as-head"><h3 class="adv-sec">ENGINE TONE</h3></summary>
+        <summary class="adv-more-btn" id="as-engine-sum">ENGINE TONE · TEAM</summary>
         <div class="opt-row" role="group" aria-label="Sound profile">
           <button id="as-p-team" class="opt-btn" type="button">TEAM</button>
           <button id="as-p-broadcast" class="opt-btn" type="button">BROADCAST</button>
@@ -732,7 +739,7 @@
            workflow most players never touch, and the biggest single chunk of
            this screen's control count after Spotify. -->
       <details id="as-tracks-details" class="as-sec">
-        <summary class="as-head"><h3 class="adv-sec">YOUR TRACKS</h3></summary>
+        <summary class="adv-more-btn" id="as-tracks-sum">YOUR TRACKS</summary>
         <button id="as-add" class="adv-more-btn" type="button">&#43; ADD MP3s</button>
         <!-- The extension list is not redundant: Android WebViews that report an
              empty MIME type filter those files out of a bare audio/* picker. -->
@@ -751,7 +758,7 @@
            a client id — id kept on the <details> itself (js/game/spotify.js
            reads dataset.spState off #as-sp-wrap; tag-agnostic, untouched). -->
       <details id="as-sp-wrap" class="as-sec">
-        <summary class="as-head"><h3 class="adv-sec">SPOTIFY</h3></summary>
+        <summary class="adv-more-btn" id="as-sp-sum">SPOTIFY · OFF</summary>
         <!-- autocapitalize/autocorrect off: a client id is 32 hex characters and
              a phone keyboard will happily capitalise and "fix" it. -->
         <label class="tune-row"><span class="tune-label">CLIENT ID</span>
