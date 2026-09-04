@@ -1041,11 +1041,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 
 /* ---------- settings sub-menu ----------
-   One category at a time. Tabs stay a single equal-width row (flex, not a
-   3-col grid) so CONTROLS / DISPLAY / MORE share a top edge with the first
-   setting. A side rail plus a duplicate .pm-group-h left a dead strip above
-   the tabs and a 3-vs-2 column that never looked level. High UI sizes must
-   not spend more than one primary control row on that navigation. */
+   Door index, then one page. Tabs hid MORE and spent a sticky row the
+   phone-landscape sheet cannot spare (docs/research/PAUSE-SETTINGS-IA.md).
+   .pm-doors already balances the home list; pages reuse .pm-group. */
 #pmsettings-inner {
   --fit-at: 300px;
   --compact-at: 480px;
@@ -1057,75 +1055,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   gap: var(--gap);
   align-items: start;
 }
-#pm-category-tabs {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  flex-wrap: wrap;
-  --balance-basis: 7.25rem;
-  --balance-min: 7.25rem;
-  gap: calc(var(--gap) * 0.5);
-  padding-bottom: calc(var(--gap) * 0.6);
-  /* Match the sheet surface so sticky tabs do not flash --bg through scroll. */
-  background: var(--surf-1);
-}
-/* Equal segments: override .balanced-row's 7.25rem basis so three tabs stay
-   one even row instead of wrapping MORE onto a lonely second line. */
-#pm-category-tabs > button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: var(--tap);
-  margin: 0;
-  padding: calc(var(--gap) * 0.6) calc(var(--gap) * 0.5) calc(var(--gap) * 0.6) calc(var(--gap) * 0.84);
-  border: 1px solid var(--plate-line);
-  border-radius: var(--r-sm);
-  background: var(--plate);
-  /* Same ink as the doors under the tab. Selected is the red plate, not a
-     second type colour — steel is section chrome, not a control label. */
-  color: var(--text);
-  font-family: var(--font-hud);
-  font-size: clamp(var(--fs-1), calc(1.7 * var(--vwz)), var(--fs-3));
-  font-weight: 700;
-  letter-spacing: var(--ls-3);
-  text-align: center;
-}
-#pm-category-tabs > button.active,
-#pm-category-tabs > button[aria-selected="true"] {
-  color: var(--text);
-  border-color: var(--red);
-  background: var(--plate-on);
-  /* Edge tick + plate glow: selected = two signals (not colour alone). */
-  box-shadow: inset 3px 0 0 var(--red), var(--plate-on-glow);
-}
-/* At very high UI zoom a phone sheet can be under 250 LOCAL px even though it
-   fills the physical viewport. Keep the aria-label as the accessible name,
-   but paint deliberate compact labels instead of clipping half a word. */
-@container sheet (max-width: 250px) {
-  #pm-tab-controls,
-  #pm-tab-display { font-size: 0; }
-  #pm-tab-controls::after,
-  #pm-tab-display::after { font-size: var(--fs-1); }
-  #pm-tab-controls::after { content: "CTRL"; }
-  #pm-tab-display::after { content: "DISP"; }
-}
-/* Compact + locally narrow: lock one row. Equal flex still fills the
-   sheet; overflow-x is the escape if a label cannot shrink further. */
-@container sheet (max-width: 519px) {
-  #pmsettings-inner[data-density="compact"] #pm-category-tabs {
-    flex-wrap: nowrap;
-    overflow-x: auto; overflow-y: hidden;
-    overscroll-behavior-x: contain; touch-action: pan-x;
-    scrollbar-width: none;
-  }
-  #pmsettings-inner[data-density="compact"] #pm-category-tabs::-webkit-scrollbar { display: none; }
-}
+#pm-settings-index[hidden],
+.pm-groups > [role="region"][hidden] { display: none !important; }
 .pm-groups { min-width: 0; }
-.pm-groups > [role="tabpanel"] { min-width: 0; }
-.pm-groups > [role="tabpanel"][hidden] { display: none !important; }
+.pm-groups > [role="region"] { min-width: 0; }
 .pm-group { display: flex; flex-direction: column; gap: 6px; }
 .pm-group-h {
   /* Steel section chrome — red is reserved for the rule under the label. */
@@ -1139,9 +1072,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
-/* Tab already names CONTROLS / DISPLAY. MORE is a bin — TOOLS & HELP
-   names the door list so those plates do not read as toggles. Later
-   DISPLAY headings (COCKPIT) stay. */
+/* Sheet title names CONTROLS / DISPLAY. Later DISPLAY headings
+   (COCKPIT) stay. */
 #pm-panel-controls > .pm-group-h:first-child,
 #pm-panel-display > .pm-group-h:first-child {
   display: none;
@@ -1169,7 +1101,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pmsettings-inner .pm-doors button {
   width: auto;
-  /* Same rank as the category tabs: a door, not a key/value row. */
+  /* A door, not a key/value row. */
   justify-content: center;
   text-align: center;
   /* Title-room recipe: carbon tile + steel line. MORE doors sit on the
@@ -1483,7 +1415,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-size: var(--fs-3);
 }
 @container sheet (min-width: 620px) {
-  #pmsettings-inner .pm-groups > [role="tabpanel"] button {
+  #pmsettings-inner .pm-groups > [role="region"] button {
     font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
     padding-inline: calc(var(--pad) * 0.75);
     white-space: normal; overflow: visible; text-overflow: clip;

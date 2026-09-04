@@ -271,11 +271,15 @@ test("GLSL / WGSL / TSL keep only the gated ON path", () => {
   assert.doesNotMatch(tslPost, /flareGate|PerfTry/);
 });
 
-test("SETTINGS still has GRAPHICS: HIGH and three category tabs", () => {
+test("SETTINGS still has GRAPHICS: HIGH and a door-index stack", () => {
   const html = read("index.html");
   assert.match(html, /GRAPHICS: HIGH/);
   assert.doesNotMatch(html, /GRAPHICS: STANDARD/);
-  for (const id of ["pm-tab-controls", "pm-tab-display", "pm-tab-more"]) assert.match(html, new RegExp(`id="${id}"`));
+  assert.match(html, /id="pm-settings-index"/);
+  for (const id of ["pm-open-controls", "pm-open-display", "pm-advanced", "pm-lighting"]) {
+    assert.match(html, new RegExp(`id="${id}"`));
+  }
+  assert.doesNotMatch(html, /id="pm-category-tabs"|id="pm-tab-more"|id="pm-panel-more"/);
   const rules = cssRules(read("css/components.css"));
   assert.ok(ruleFor(rules, /^\.balanced-row\s*>\s*:not\(\[hidden\]\)$/), "the balanced-row child rule exists");
   assert.ok(!rules.some((r) => r.decls.get("grid-template-columns") === "repeat(4, minmax(0, 1fr))"),

@@ -38,7 +38,7 @@ window.ScrollFade = (function () {
     // scrolls when the door column outgrows a short / high-scale window.
     "#overlay", "#menu-buttons",
     "#sel-track-filter", "#htp-contents", "#cg-contents", "#ch-contents",
-    ".dh-tabs", ".dh-pick-years", "#pm-category-tabs", ".lt-tabs",
+    ".dh-tabs", ".dh-pick-years", "#pm-settings-index", ".lt-tabs",
   ].join(",");
   // Overlays whose [hidden] flip is what first gives their regions a box. The
   // data hub (#datahub) and track detail (#track-detail) are toggled by the

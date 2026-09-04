@@ -595,7 +595,7 @@ test("variable control clusters use one content-driven balanced-row primitive", 
   assert.equal(decl(components, ".balanced-row", "display"), "flex");
   assert.equal(decl(components, ".balanced-row", "flex-wrap"), "wrap");
   assert.match(decl(components, /^\.balanced-row > :not\(\[hidden\]\)$/, "flex") || "", /^1 1 var\(--balance-basis/);
-  for (const id of ["pm-category-tabs", "menu-secondary", "rs-laps", "rs-weather",
+  for (const id of ["menu-secondary", "rs-laps", "rs-weather",
     "rs-time", "rs-diff", "rs-quali", "rs-caution", "rs-reliab", "lt-tabs", "ct-modes"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*class="[^"]*balanced-row`), `${id} must balance from local space`);
   }
@@ -789,42 +789,56 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
 });
 
 /* ── SettingsNav on the mini DOM ────────────────────────────────────────── */
-function bootSettingsNav(stored) {
+function bootSettingsNav() {
   const dom = makeDom();
   const sb = uiSandbox(dom, { ResizeObserver: class { observe() {} }, ScrollFade: { refresh() {} } });
   vm.runInNewContext(src("js/ui/settings-tabs.js"), sb, { filename: "js/ui/settings-tabs.js" });
-  const st = { ...stored };
+  const steer = dom.document.createElement("button");
+  steer.id = "pm-steer";
+  dom.byId("pm-panel-controls").appendChild(steer);
   let selected = 0;
-  const nav = sb.SettingsNav.create({ get: (k, d) => (k in st ? st[k] : d), set: (k, v) => { st[k] = v; } }, () => selected++);
-  return { dom, nav, st, selected: () => selected, panel: (id) => dom.byId("pm-panel-" + id), tab: (id) => dom.byId("pm-tab-" + id) };
+  const nav = sb.SettingsNav.create({ get: (_k, d) => d, set() {} }, () => selected++);
+  return {
+    dom, nav, selected: () => selected,
+    index: () => dom.byId("pm-settings-index"),
+    panel: (id) => dom.byId("pm-panel-" + id),
+    door: (id) => dom.byId("pm-open-" + id),
+    title: () => dom.byId("dlg-settings"),
+  };
 }
 
 test("title settings, pause standings, and career modes stay reachable", () => {
-  // SettingsNav BEHAVIOUR: showCurrent() re-shows the stored category WITHOUT
-  // moving focus (title Settings lands on MORE without a second click).
-  const h = bootSettingsNav({ settingsCategory: "more" });
-  assert.deepEqual(Object.keys(h.nav).sort(), ["show", "showCurrent"]);
-  assert.equal(h.panel("more").hidden, false, "create() shows the stored category");
+  // SettingsNav BEHAVIOUR: always land on the door index. A stored
+  // settingsCategory must not reopen MORE / DISPLAY.
+  const h = bootSettingsNav();
+  assert.deepEqual(Object.keys(h.nav).sort(), ["back", "show", "showCurrent"]);
+  assert.equal(h.index().hidden, false, "create() shows the door index");
   assert.equal(h.panel("controls").hidden, true);
+  assert.equal(h.panel("display").hidden, true);
+  assert.equal(h.title().textContent, "SETTINGS");
   assert.equal(h.dom.document.activeElement, null, "create() does not steal focus");
   h.nav.show("controls", true);
-  assert.equal(h.dom.document.activeElement, h.tab("controls"), "show(id, true) focuses the tab");
-  assert.equal(h.st.settingsCategory, "controls", "the pick persists");
+  assert.equal(h.panel("controls").hidden, false);
+  assert.equal(h.index().hidden, true);
+  assert.equal(h.title().textContent, "CONTROLS");
+  assert.equal(h.dom.document.activeElement, h.panel("controls").querySelector("button, input, select")
+    || h.door("controls"), "show(id, true) focuses the page");
   h.dom.document.activeElement = null;
   h.nav.showCurrent();
-  assert.equal(h.panel("controls").hidden, false);
+  assert.equal(h.index().hidden, false, "showCurrent() always returns home");
+  assert.equal(h.panel("controls").hidden, true);
   assert.equal(h.dom.document.activeElement, null, "showCurrent() never focuses");
-  h.nav.show("more", false);
-  assert.equal(h.panel("more").hidden, false);
-  assert.equal(h.tab("more").getAttribute("aria-selected"), "true");
-  assert.equal(h.tab("controls").getAttribute("aria-selected"), "false");
-  assert.equal(h.tab("more").tabIndex, 0);
-  assert.equal(h.tab("controls").tabIndex, -1, "roving tab stop");
+  h.nav.show("display", false);
+  assert.equal(h.nav.back(), false, "BACK on a page pops to home");
+  assert.equal(h.index().hidden, false);
+  assert.equal(h.nav.back(), true, "BACK on home tells the caller to close");
   const game = code("js/game.js");
   assert.match(game, /\$\(\s*"mb-settings"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*soundOn\s*\)\s*GameAudio\.init\(\s*\)\s*;\s*openSettings\(\s*\)/,
-    "title Settings reopens the last category via openSettings → showCurrent");
+    "title Settings opens the same stack via openSettings → showCurrent");
   assert.doesNotMatch(game, /mb-settings"\)\.onclick[\s\S]{0,120}settingsNav\.show\(\s*"more"/,
     "title Settings must not force MORE");
+  assert.match(game, /\$\(\s*"pm-settings-close"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*\{\s*if\s*\(\s*settingsNav\.back\(\s*\)\s*\)\s*closeSettings\(\s*\)/,
+    "settings BACK pops the stack before closing");
   assert.match(game, /els\.selGo\.onclick[\s\S]{0,400}openRaceSettings\(\s*"select"\s*\)/,
     "SELECT NEXT opens race settings, not the garage");
   assert.match(game, /\$\(\s*"sel-car"\s*\)\.onclick\s*=\s*\(\)\s*=>\s*openGarage\(\s*"select"\s*\)/,
@@ -893,7 +907,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv \[role="group"\]/, "display"), "grid",
     "compact ADVANCED packs 2-up via SheetShape density, not a height media");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
-    "CONTROLS / DISPLAY tabs already name the panel; do not reprint the heading");
+    "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "color"), "var(--steel)",
     "METRICS / ADVANCED summaries use heading steel, not button text");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "background-color"), "transparent",
@@ -985,8 +999,6 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(tokens, /:root/, "--plate"), "color-mix(in oklab, var(--carbon) 62%, transparent)");
   assert.equal(decl(tokens, /:root/, "--plate-line"), "rgba(255, 255, 255, 0.16)");
   assert.match(decl(tokens, /:root/, "--plate-on") || "", /^color-mix\(in oklab, var\(--red\) 18%/);
-  assert.equal(decl(components, "#pm-category-tabs > button", "background"), "var(--plate)");
-  assert.ok(rulesFor(components, /^#pm-category-tabs > button\.active,/).some((r) => r.decls.get("background") === "var(--plate-on)"));
   assert.equal(decl(components, ".bigbtn.alt", "background"), "var(--plate-opaque)");
   assert.equal(decl(menus, ".sel-chip", "background"), "var(--plate)");
   assert.equal(decl(menus, ".sel-chip.active", "background"), "var(--plate-on)");
@@ -1011,7 +1023,7 @@ test("tool doors and lone foot actions do not stretch into banners", () => {
   assert.equal(decl(components, ".pm-doors", "--balance-basis"), "12rem");
   assert.equal(decl(components, ".sheet-foot .bigbtn:only-child", "flex"), "0 1 auto");
   assert.equal(decl(components, ".pm-group .tune-row .tune-label", "position"), "static");
-  assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="tabpanel"] button', "white-space"), "normal");
+  assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="region"] button', "white-space"), "normal");
   assert.ok(rulesFor(css("css/overlays.css"), "#howtoplay dl").some((r) => r.context.includes("@container sheet (max-width: 360px)")));
   assert.equal(decl(css("css/career.css"), ".cr-cheats .sel-chip", "min-width"), "0");
 });

@@ -328,40 +328,35 @@ test.describe("UI scale", () => {
     });
   });
 
-  test("SETTINGS categories adapt to sheet width and expose one panel", async ({ page }) => {
+  test("SETTINGS is a door-index stack that pops BACK to home", async ({ page }) => {
     await page.setViewportSize(LANDSCAPE);
     await boot(page);
     await page.locator("#mb-settings").click();
-    await page.locator("#pm-tab-display").click();
-    await expect(page.locator("#pm-tab-display")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#pm-settings-index")).toBeVisible();
+    await page.locator("#pm-open-display").click();
     await expect(page.locator("#pm-panel-display")).toBeVisible();
+    await expect(page.locator("#pm-settings-index")).toBeHidden();
     await expect(page.locator("#pm-panel-controls")).toBeHidden();
     const wide = await page.evaluate(() => {
       const layout = getComputedStyle(document.getElementById("pm-settings-body"));
-      const tabs = getComputedStyle(document.getElementById("pm-category-tabs"));
-      return { layoutCols: layout.gridTemplateColumns.split(" ").length,
-        tabCols: tabs.gridTemplateColumns.split(" ").length };
+      return { layoutCols: layout.gridTemplateColumns.split(" ").length };
     });
     expect(wide.layoutCols).toBe(1);
-    expect(wide.tabCols).toBe(1); // flex row reports grid-template-columns: none
-    await page.locator("#pm-tab-display").focus();
-    await page.keyboard.press("ArrowRight");
-    await expect(page.locator("#pm-tab-more")).toBeFocused();
+    await page.locator("#pm-settings-close").click();
+    await expect(page.locator("#pm-settings-index")).toBeVisible();
+    await expect(page.locator("#pm-panel-display")).toBeHidden();
+    await expect(page.locator("#pmsettings")).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
     const narrow = await page.evaluate(() => {
       const layout = getComputedStyle(document.getElementById("pm-settings-body"));
-      const tabs = getComputedStyle(document.getElementById("pm-category-tabs"));
-      return { layoutCols: layout.gridTemplateColumns.split(" ").length,
-        tabCols: tabs.gridTemplateColumns.split(" ").length };
+      return { layoutCols: layout.gridTemplateColumns.split(" ").length };
     });
     expect(narrow.layoutCols).toBe(1);
-    expect(narrow.tabCols).toBe(1);
-
-    await page.locator("#pm-tab-display").focus();
-    await page.keyboard.press("ArrowRight");
-    await expect(page.locator("#pm-tab-more")).toBeFocused();
-    await expect(page.locator("#pm-panel-more")).toBeVisible();
+    await page.locator("#pm-open-controls").click();
+    await expect(page.locator("#pm-panel-controls")).toBeVisible();
+    await page.locator("#pm-settings-close").click();
+    await expect(page.locator("#pm-settings-index")).toBeVisible();
   });
 
   // HUD SIZE is half the feature, so it gets the same containment test — one
