@@ -1,7 +1,7 @@
 "use strict";
-/* MUSIC & SOUND panel — the mixer screen plus the master-sound plumbing.
-   The mixer lives on its own screen: two sliders and a now-playing readout do
-   not fit the settings grid, which is one control per line. Levels persist.
+/* MUSIC & SOUND panel — the mixer plus the master-sound plumbing.
+   The mixer is a SettingsNav page (same sheet as DISPLAY), not its own dialog.
+   Levels persist.
 
    Owns: the ♪ master button, MUSIC/SFX switches, both volume sliders, the
    music-source row (ALL / DEFAULT / MY TRACKS / SPOTIFY) and the transport.
@@ -99,6 +99,47 @@ const AudioPanel = (() => {
       syncAudioPanel();
     }
 
+    function paintFold(el, bits) {
+      if (!el) return;
+      el.innerHTML = bits.map((p, i) => (i ? '<span data-fold="sep"> · </span>' : "") +
+        '<span data-fold="' + p[0] + '">' + p[1] + "</span>").join("");
+    }
+
+    function paintAudioFolds() {
+      const SRC_FOLD = { all: "ALL", builtin: "DEFAULT", user: "MY TRACKS", spotify: "SPOTIFY" };
+      const srcOn = (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
+        ? "spotify" : ((typeof GameAudio !== "undefined" && GameAudio.musicSource)
+          ? GameAudio.musicSource() : musicSrc);
+      paintFold($("as-music-sum"), [
+        ["k", "MUSIC"],
+        [G.musicEnabled ? "on" : "off", G.musicEnabled ? "ON" : "OFF"],
+        ["val", SRC_FOLD[srcOn] || "ALL"],
+      ]);
+      paintFold($("as-sound-sum"), [
+        ["k", "SOUND"],
+        [sfxOn ? "on" : "off", sfxOn ? "ON" : "OFF"],
+      ]);
+      const prof = (typeof GameAudio !== "undefined" && GameAudio.profile) ? GameAudio.profile() : "team";
+      paintFold($("as-engine-sum"), [
+        ["k", "ENGINE TONE"],
+        ["val", (prof || "team").toUpperCase()],
+      ]);
+      const counts = (typeof GameAudio !== "undefined" && GameAudio.sourceCounts)
+        ? GameAudio.sourceCounts() : { user: 0 };
+      const n = counts.user || 0;
+      paintFold($("as-tracks-sum"), n
+        ? [["k", "YOUR TRACKS"], ["val", String(n)]]
+        : [["k", "YOUR TRACKS"]]);
+      let spKind = "off", spWord = "OFF";
+      if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.debug) {
+        const st = (SpotifyMusic.debug().state || "off");
+        if (st === "connected") { spKind = "on"; spWord = "ON"; }
+        else if (st === "configured" || st === "connecting") { spKind = "val"; spWord = "SAVED"; }
+        else if (st === "error") { spKind = "off"; spWord = "ERR"; }
+      }
+      paintFold($("as-sp-sum"), [["k", "SPOTIFY"], [spKind, spWord]]);
+    }
+
     function syncMusicSrcRow() {
       const counts = GameAudio.sourceCounts ? GameAudio.sourceCounts() : { builtin: 0, user: 0 };
       const spot = spotifyReady();
@@ -123,6 +164,7 @@ const AudioPanel = (() => {
             ? "Playing the " + counts.builtin + " shipped tracks. Add your own under YOUR TRACKS to use MY TRACKS."
           : "Playing everything: " + counts.builtin + " shipped + " + counts.user + " of yours.";
       }
+      paintAudioFolds();
     }
 
     function syncAudioPanel() {
@@ -159,9 +201,10 @@ const AudioPanel = (() => {
       if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
       syncMusicSrcRow();
       syncTonePanel();
+      paintAudioFolds();
     }
 
-    $("pm-audio").onclick = () => { syncAudioPanel(); $("audioset").hidden = false; };
+    $("pm-audio").addEventListener("click", () => { syncAudioPanel(); });
     if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.onChange) {
       SpotifyMusic.onChange(() => { if (!$("audioset").hidden) syncMusicSrcRow(); });
     }
@@ -172,7 +215,6 @@ const AudioPanel = (() => {
     $("as-sp-open").onclick = () => {
       if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
     };
-    $("as-close").onclick = () => { $("audioset").hidden = true; };
     $("as-music-on").onclick = (e) => { e.stopPropagation(); setMusic(true); if (G.soundOn) GameAudio.uiTick(); };
     $("as-music-off").onclick = (e) => { e.stopPropagation(); setMusic(false); if (G.soundOn) GameAudio.uiTick(); };
     $("as-sound-on").onclick = (e) => { e.stopPropagation(); setSfx(true); GameAudio.uiTick(); };
@@ -284,6 +326,7 @@ const AudioPanel = (() => {
       if (note) note.textContent = toneProfile() === "custom"
         ? "Your own tune. RESET returns to your team's engine sound."
         : (PROFILE_NOTE[toneProfile()] || "");
+      paintAudioFolds();
     }
 
     function setToneProfile(name) {

@@ -336,13 +336,14 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   await page.waitForSelector("#advanced:not([hidden])");
   await page.evaluate(() => window.SheetShape?.reclassify());
   const advanced = await page.evaluate(() => {
-    const inner = document.getElementById("advanced-inner");
-    return { fit: inner.dataset.fit, h: inner.getBoundingClientRect().height };
+    const inner = document.getElementById("pmsettings-inner");
+    const panel = document.getElementById("advanced");
+    return { fit: inner.dataset.fit, h: panel.getBoundingClientRect().height };
   });
-  expect(advanced.fit, "advanced 200% short landscape").toBe("on");
+  expect(advanced.fit, "settings 200% short landscape").toBe("on");
   expect(advanced.h).toBeGreaterThan(80);
   await page.evaluate(() => {
-    document.getElementById("adv-close").click();
+    document.getElementById("pm-settings-close").click();
     document.getElementById("pm-settings-close").click();
   });
 

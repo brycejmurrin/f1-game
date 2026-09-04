@@ -376,3 +376,56 @@ test("photo-mode HIDE HUD CSS hides #game-metrics", () => {
   const css = readFileSync(join(ROOT, "css/hud.css"), "utf8");
   assert.match(css, /body\.pc-uihidden #game-metrics/);
 });
+
+// THE PANEL IS PLAYER-FACING AND ITS DATA SOURCE WAS NOT. window.__apex is
+// LAZY_AGENT — js/game.js injects it for tests, localhost and ?apex=1, and
+// never for a player on github.io. Every CAR and PHYS field in snapshot()
+// reads through it, inside a try/catch against a NULL __apex, so on the
+// shipped build PHYS painted "—" in all seventeen rows and CAR kept only the
+// speed digit it scrapes from the HUD. MEASURED on the tree by diffing
+// snapshot()'s populated fields with the surface present vs nulled.
+//
+// The test above ("never throws without __apex") pinned the graceful
+// degradation and nobody noticed that degradation WAS the shipped panel, so
+// these pin the REQUEST instead: the overlay asks game.js for the surface when
+// a player opens it, exactly once, and never when it is already resident.
+test("turning METRICS on asks game.js for the telemetry surface", () => {
+  const { M } = load({ window: {} });
+  let calls = 0;
+  M.setTelemetryLoader(() => { calls++; return Promise.resolve(); });
+  assert.equal(calls, 0, "installing the loader must not fetch while OFF");
+  M.set(true);
+  assert.equal(calls, 1);
+  M.set(false); M.set(true);
+  assert.equal(calls, 1, "one-shot: a failed or slow inject must not become a retry loop");
+});
+
+test("a resident __apex is never re-fetched, and a booted-ON panel still asks", () => {
+  // localhost / ?apex=1 / a spec: the surface is already there.
+  const live = load({ window: { __apex: { perf: () => ({}) } }, store: { "apex26.metrics": "1" } });
+  let liveCalls = 0;
+  live.M.setTelemetryLoader(() => { liveCalls++; return Promise.resolve(); });
+  assert.equal(liveCalls, 0, "already resident — nothing to fetch");
+
+  // A player who left METRICS on: initUI runs at DOMContentLoaded, BEFORE
+  // game.js installs the loader, so the install itself has to ask.
+  const cold = load({ window: {}, store: { "apex26.metrics": "1" } });
+  let coldCalls = 0;
+  cold.M.setTelemetryLoader(() => { coldCalls++; return Promise.resolve(); });
+  assert.equal(coldCalls, 1, "booted ON with no loader yet must not silently stay degraded");
+});
+
+test("game.js hands the overlay the memoised loader, not a widened boot gate", () => {
+  const game = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  // The gate stays exactly as narrow as it was: no metrics key in it.
+  const gate = game.slice(game.indexOf("function wantAgentSurface()"),
+                          game.indexOf("function preloadThreeVendor"));
+  assert.equal(/metrics/i.test(gate), false,
+    "METRICS must not put the agent surface on the player boot wall — it is fetched on demand");
+  // The inject is split out and memoised, and the overlay gets it.
+  assert.match(game, /function loadAgentSurface\(\)/);
+  assert.match(game, /if \(!_agentLoad\) _agentLoad = \(async \(\) => \{/);
+  assert.match(game, /GameMetrics\.setTelemetryLoader\(loadAgentSurface\)/);
+  // bootAgentSurface still gates, and now defers to the shared loader.
+  assert.match(game, /if \(!wantAgentSurface\(\)\) return;\s*\n\s*await loadAgentSurface\(\);/);
+});

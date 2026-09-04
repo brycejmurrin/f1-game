@@ -99,7 +99,7 @@ test("persisted SOUND OFF and out-of-range volumes apply on first load", async (
 
   // Re-enable with a real click. init() must run synchronously in this gesture
   // so autoplay policies permit resume, and only now may samples be requested.
-  await page.locator("#as-close").click();
+  await page.locator("#pm-settings-close").click();
   await page.locator("#pm-settings-close").click();
   await page.locator("#soundbtn").click();
   await expect.poll(() => page.evaluate(() => GameAudio.debug().contextState))
