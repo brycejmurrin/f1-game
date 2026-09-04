@@ -410,7 +410,7 @@
          the page and ~7:1 on the red primary button — legible on every surface
          this UI has.
      (2) Meaning: red already means SELECTED here (.sel-chip.active,
-         .track-row.active, .dh-dchip.active all carry a red ring or tint).
+         .track-row.active, .dh-dchip.dh-active all carry a red ring or tint).
          A red focus ring on an already-selected chip is invisible — the two
          states rendered identically. Different colour, different meaning. */
   --focus: #fff;
@@ -456,8 +456,9 @@
      WRITE THE CLOSER AS "star-slash" IN PROSE, never literally: the first
      version of THIS comment quoted the two characters verbatim, which closed
      the comment mid-sentence and fed the rest to error recovery — eating the
-     next declaration. The bug's own description reintroduced the bug one
-     line lower (caught live, round 7). */
+     --plate-on-glow declaration below. The bug's own description reintroduced
+     the bug one line lower (caught live, round 7). */
+  --plate-on-glow: inset 3px 0 0 var(--red), 0 0 12px color-mix(in oklab, var(--red) 28%, transparent);
   /* The STRONG selected wash — the picker-tile tier (team tile, career
      flavour/seat, career slot). Three sites hand-mixed 16/24/24% washes with
      12/14/16px glows at 28/36/38%; one pair of tokens makes the three tiles

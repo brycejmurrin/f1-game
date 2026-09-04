@@ -169,7 +169,7 @@ const DataTelemetry = (function () {
 
       function syncChips() {
         drivers.forEach(function (d) {
-          chipByNum[d.num].classList.toggle("active", trayHas(d.num, meta.sessionKey));
+          chipByNum[d.num].classList.toggle("dh-active", trayHas(d.num, meta.sessionKey));
         });
         clear(detail);
         if (tray.length === 0) {
@@ -777,12 +777,12 @@ const DataTelemetry = (function () {
 
     const rates = el("div", "dh-trates");
     [1, 2, 4].forEach(function (r) {
-      const b = el("button", "dh-ratebtn" + (r === view.rate ? " active" : ""), r + "×");
+      const b = el("button", "dh-ratebtn" + (r === view.rate ? " dh-active" : ""), r + "×");
       b.type = "button";
       b.addEventListener("click", function () {
         view.rate = r;
         const bs = rates.querySelectorAll(".dh-ratebtn");
-        for (let i = 0; i < bs.length; i++) bs[i].classList.toggle("active", bs[i] === b);
+        for (let i = 0; i < bs.length; i++) bs[i].classList.toggle("dh-active", bs[i] === b);
       });
       rates.appendChild(b);
     });

@@ -208,18 +208,18 @@ const DataExport = (function () {
     for (let y = Math.max(new Date().getFullYear(), OPENF1_FIRST_YEAR); y >= OPENF1_FIRST_YEAR; y--) years.push(y);
     const sel = { year: years[0] };
     years.forEach(function (y) {
-      const b = el("button", "dh-pill" + (y === sel.year ? " active" : ""), String(y));
+      const b = el("button", "dh-pill" + (y === sel.year ? " dh-active" : ""), String(y));
       b.addEventListener("click", function () {
         sel.year = y;
         for (let i = 0; i < yearRow.children.length; i++)
-          yearRow.children[i].classList.toggle("active", yearRow.children[i] === b);
+          yearRow.children[i].classList.toggle("dh-active", yearRow.children[i] === b);
       });
       yearRow.appendChild(b);
     });
     wrap.appendChild(yearRow);
 
     const row = el("div", "dh-export-row");
-    const gatherBtn = el("button", "dh-pill active", "Gather");
+    const gatherBtn = el("button", "dh-pill dh-active", "Gather");
     const dlBtn = el("button", "dh-pill", "Download");
     gatherBtn.setAttribute("data-aria-action", "");
     dlBtn.setAttribute("data-aria-action", "");

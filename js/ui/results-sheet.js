@@ -134,7 +134,7 @@ function buildResults(order) {
   if (G.seasonMode) {
     // Driver championship (top 10)
     const head = document.createElement("div");
-    head.className = "sel-label";
+    head.style.cssText = "margin-top:14px;color:#e10600;font-weight:800;font-style:italic";
     head.textContent = sprint ? "DRIVERS — AFTER THE SPRINT" : "DRIVERS — AFTER ROUND " + season.round;
     els.resultsTable.appendChild(head);
     // SeasonCal.rank, not a bare points sort: equal points fall to countback
@@ -153,7 +153,7 @@ function buildResults(order) {
     });
     // Team championship (top 5)
     const tmHead = document.createElement("div");
-    tmHead.className = "sel-label";
+    tmHead.style.cssText = "margin-top:10px;color:#e10600;font-weight:800;font-style:italic";
     tmHead.textContent = "CONSTRUCTORS";
     els.resultsTable.appendChild(tmHead);
     const tmList = Object.entries(season.teamPts).sort((a, b) => b[1] - a[1]).slice(0, 5);
@@ -306,7 +306,7 @@ function buildStandings() {
 
   // Driver standings — all cars sorted by pts
   const drHead = document.createElement("div");
-  drHead.className = "sel-label";
+  drHead.style.cssText = "color:#e10600;font-weight:800;font-style:italic;margin-bottom:6px";
   drHead.textContent = "DRIVERS";
   body.appendChild(drHead);
 
@@ -332,7 +332,7 @@ function buildStandings() {
 
   // Team standings
   const tmHead = document.createElement("div");
-  tmHead.className = "sel-label";
+  tmHead.style.cssText = "color:#e10600;font-weight:800;font-style:italic;margin:14px 0 6px";
   tmHead.textContent = "CONSTRUCTORS";
   body.appendChild(tmHead);
 
@@ -382,7 +382,7 @@ function buildChampion() {
   teamBanner.textContent = champ.team.name.toUpperCase();
   els.resultsTable.append(banner, teamBanner);
   const head = document.createElement("div");
-  head.className = "sel-label";
+  head.style.cssText = "color:#e10600;font-weight:800;font-style:italic;margin-bottom:4px;font-size:0.85em";
   head.textContent = "FINAL STANDINGS";
   els.resultsTable.appendChild(head);
   sorted.forEach((c, i) => {

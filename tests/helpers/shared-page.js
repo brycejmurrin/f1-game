@@ -184,7 +184,7 @@ export async function garageTeam(page, teamId) {
 export async function freeBuildOff(page) {
   return page.evaluate(() => {
     const b = document.getElementById("cs-unlimited");
-    if (!b || !b.classList.contains("active")) return false;
+    if (!b || !b.classList.contains("on")) return false;
     b.click();
     return true;
   });

@@ -651,8 +651,8 @@ body.hud-hidden #hud-restore { display: block; }
   color: var(--text);
 }
 #campicker button.active {
-  background: var(--plate-on);
-  border-color: var(--red);
+  background: color-mix(in srgb, var(--red) 75%, transparent);
+  border-color: rgba(255, 255, 255, 0.35);
 }
 /* Compact: keep the grid in the CAM/pause corner. Density, not a viewport
    max-height gate — 852×393 is already body compact (body --compact-at 600). */
@@ -676,9 +676,6 @@ body[data-density="compact"] #campicker {
    in css/components.css, and so are the .res-* row rules now that four screens
    use them. Only what is specific to THIS container stays here. */
 #results-table { font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
-#results-table .sel-label,
-#standings-body .sel-label { margin-top: var(--gap); }
-#standings-body .sel-label:first-child { margin-top: 0; }
 #res-daily-share, #res-ghost-clear {
   display: flex;
   width: max-content;
@@ -767,23 +764,23 @@ body[data-density="compact"] #campicker {
 }
 #howtoplay:has(#htp-controls:target) #htp-contents a[href="#htp-controls"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: none;
+  box-shadow: var(--plate-on-glow);
 }
 #howtoplay:has(#htp-racing:target) #htp-contents a[href="#htp-racing"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: none;
+  box-shadow: var(--plate-on-glow);
 }
 #howtoplay:has(#htp-setup:target) #htp-contents a[href="#htp-setup"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: none;
+  box-shadow: var(--plate-on-glow);
 }
 #howtoplay:has(#htp-modes:target) #htp-contents a[href="#htp-modes"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: none;
+  box-shadow: var(--plate-on-glow);
 }
 #howtoplay:has(#htp-friends:target) #htp-contents a[href="#htp-friends"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: none;
+  box-shadow: var(--plate-on-glow);
 }
 /* Wide sheets: contents as a left rail, body is still the only vertical scroller
    for the reference itself. data-shape is the sheet's own aspect, not viewport

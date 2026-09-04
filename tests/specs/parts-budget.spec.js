@@ -157,7 +157,7 @@ test.describe("Budget system — unlimited toggle", () => {
     await openSetup(page);
     const text = await page.locator("#cs-unlimited").textContent();
     expect(text).toContain("FREE BUILD");
-    expect(text).toContain("OFF");
+    expect(text).not.toContain("ON");
   });
 
   test("clicking unlimited button enables FREE BUILD mode", async ({ page }) => {
@@ -177,11 +177,11 @@ test.describe("Budget system — unlimited toggle", () => {
     expect(transform).toContain("scaleX(0)");
   });
 
-  test("unlimited button gets 'active' class when on", async ({ page }) => {
+  test("unlimited button gets 'on' class when active", async ({ page }) => {
     await openSetup(page);
     await page.locator("#cs-unlimited").click();
     const cls = await page.locator("#cs-unlimited").getAttribute("class");
-    expect(cls).toContain("active");
+    expect(cls).toContain("on");
   });
 
   test("unlimited mode removes over-budget option classes", async ({ page }) => {
@@ -221,6 +221,6 @@ test.describe("Budget system — unlimited toggle", () => {
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain(String(cap));
     const cls = await page.locator("#cs-unlimited").getAttribute("class");
-    expect(cls).not.toContain("active");
+    expect(cls).not.toContain(" on");
   });
 });

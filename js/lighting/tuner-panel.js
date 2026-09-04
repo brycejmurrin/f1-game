@@ -56,8 +56,8 @@ const LT_TODS = ["dawn", "day", "dusk", "night", "default"];
 const LT_WX = ["dry", "wet", "rain", "fog", "overcast"];
 function refreshLtPreviewActive() {
   const tod = setTimeOfDay(), wx = weather();
-  for (const t of LT_TODS) { const el = $("lt-tod-" + t); if (el) el.classList.toggle("active", t === tod); }
-  for (const w of LT_WX) { const el = $("lt-wx-" + w); if (el) el.classList.toggle("active", w === wx); }
+  for (const t of LT_TODS) { const el = $("lt-tod-" + t); if (el) el.classList.toggle("on", t === tod); }
+  for (const w of LT_WX) { const el = $("lt-wx-" + w); if (el) el.classList.toggle("on", w === wx); }
 }
 // Show which per-condition profile is being edited, e.g. "MONZA · NIGHT · WET".
 function updateLtProfileLabel() {
@@ -202,7 +202,7 @@ function setLtTab(group, focus) {
   }
   if (tabs) for (const t of tabs.children) {
     const on = t.dataset.group === group;
-    t.classList.toggle("active", on);
+    t.classList.toggle("on", on);
     t.setAttribute("aria-selected", on ? "true" : "false");
     t.tabIndex = on ? 0 : -1;
     if (on) {

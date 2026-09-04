@@ -276,9 +276,9 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { color: var(--text); }
 }
 #lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { color: var(--text); }
-#lt-tabs .lt-tab.active, #ct-modes .lt-tab.active {
+#lt-tabs .lt-tab.on, #ct-modes .lt-tab.on {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: none;
+  box-shadow: var(--plate-on-glow);
 }
 .lt-group { display: none; }
 .lt-group.active { display: block; }
@@ -305,9 +305,9 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    (2026-08-21 sweep). The token arm wins only below 100%, so the dense
    100% layout is untouched. Height was already floored. */
 .lt-preview-row .opt-btn { flex: 1 1 0; min-width: max(42px, var(--tap-min)); min-height: var(--tap-min); margin: 0; padding: calc(var(--gap) / 3) calc(var(--gap) * 0.25); font-size: var(--fs-micro); }
-.lt-preview-row .opt-btn.active {
+.lt-preview-row .opt-btn.on {
   background: var(--plate-on); color: var(--text); border-color: var(--red);
-  box-shadow: none;
+  box-shadow: var(--plate-on-glow);
 }
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
   display: flex; gap: calc(var(--gap) * 2 / 3); flex-shrink: 0;
@@ -334,7 +334,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    the selected chip — the panel shows one camera at a time, so this is the only
    way to see at a glance which of the 13 you have already tuned. */
 #ct-modes .lt-tab.tuned { border-color: var(--red); color: var(--text); }
-#ct-modes .lt-tab.tuned.active { border-color: var(--red); }
+#ct-modes .lt-tab.tuned.on { border-color: var(--red); }
 #lt-json, #ct-json {
   /* field-sizing lets the export box grow to whatever COPY VALUES produced
      instead of scrolling inside a fixed 72px; the height stays as the fallback
@@ -541,7 +541,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 .preset-btn.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: none;
+  box-shadow: var(--plate-on-glow);
 }
 .preset-btn.active small { opacity: 0.85; }
 /* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
@@ -563,7 +563,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 #as-engine-details .opt-row .opt-btn { flex: 1 1 auto; min-width: var(--tap-min); }
 .opt-btn.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: none;
+  box-shadow: var(--plate-on-glow);
 }
 /* Settings: a named pick still gets a red ring (STANDARD vs PRO has no
    gold/red word). The glow is the old "lighted" plate — drop it. ON/OFF
@@ -923,12 +923,12 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   border: 1px solid var(--plate-line); border-radius: var(--r-md); padding: 10px 18px;
 }
 .adv-more-btn::-webkit-details-marker { display: none; }
-summary.adv-more-btn::after { content: "\25BE"; }     /* ▾, flips to ▴ via [open] below */
+.adv-more-btn::after { content: "\25BE"; }     /* ▾, flips to ▴ via [open] below */
 @media (hover: hover) {
   .adv-more-btn:hover { background: var(--plate-press); }
 }
 .adv-more-btn:active { background: rgba(255, 255, 255, 0.2); }
-#adv-details[open] > summary.adv-more-btn::after { content: "\25B4"; }
+#adv-details[open] > .adv-more-btn::after { content: "\25B4"; }
 #adv-extra { margin-top: calc(var(--gap) / 3); }
 
 /* ---------- MUSIC & SOUND: the player's own uploaded tracks ----------

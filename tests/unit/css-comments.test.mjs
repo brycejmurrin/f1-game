@@ -100,8 +100,8 @@ test("no orphaned comment-closer survives stripping", () => {
   // pair literally (tokens.css round 7: prose said `*/` in backticks) closes
   // itself mid-sentence. When the garbage lands inside a DECLARATION BLOCK,
   // error recovery eats to the next `;` — no long prelude ever forms, and the
-  // eaten declaration was the next token after the comment. But the
-  // comment's INTENDED closer is still in the
+  // eaten declaration was --plate-on-glow: every selected-state glow in the
+  // app, gone silently. But the comment's INTENDED closer is still in the
   // file, and after tokenizer-faithful stripping it survives as an orphaned
   // `*` `/` pair — which a healthy stylesheet never contains.
   const bad = [];
