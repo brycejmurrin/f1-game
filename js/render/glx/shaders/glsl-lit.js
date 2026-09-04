@@ -58,10 +58,16 @@ void main() {
   vWorldPos = wp.xyz;
   vObjPos = aPos;                 // object space: paint flake/orange-peel pattern
                                   // is glued to the panels, not streaming in world.
-  // NOTE mat3(M), not an inverse-transpose: an instance matrix here is a scaled
-  // ORTHONORMAL basis (TrackGraph builds columns r*sx, u*sy, t*sz), so this is
-  // correct up to a length the shader normalises anyway — the same assumption
-  // uModel already relied on.
+  // NOTE mat3(M), not an inverse-transpose. For non-uniform scale that is correct
+  // ONLY on an axis-aligned normal: M*e_axis picks one column, so the direction
+  // survives and normalize() erases the length. It is NOT "correct up to a
+  // length" in general — a rotated-basis or non-box model given a non-uniform
+  // scale shades wrong SILENTLY, and nothing catches it. TrackGraph's
+  // nonUniformXZ test does NOT cover this: that guard is about a cylinder's
+  // ROUND CROSS-SECTION (replay bakes via max(|sx|,|sz|), so sx!==sz would make
+  // the baked and instanced paths disagree), not about normals. Today every
+  // non-uniform instanced placement is a box, so this holds; the day one is not,
+  // this is where it breaks.
   vNrm = mat3(M) * aNrm;
   vCol = aCol * aInstCol;
   vMat = aMat;                    // constant across the face (flat) — procedural material key

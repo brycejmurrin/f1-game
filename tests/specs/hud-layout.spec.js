@@ -53,7 +53,10 @@ const HUD = ["hud-aero", "hud-ot", "hud-gearbox", "hud-energy", "hud-speed"];
 // docs/research/PLATFORM-INPUT-NOTES.md §9: a real geometric fact that does
 // not reach the player because something else sits in front of it, and the
 // fix is to stop asserting on it, not to move CSS nobody will ever see move.
-const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors"];
+// #hud-limits joined this list after it shipped overlapping #hud-sectors by
+// 8.6px: the clash check only ever looked at elements named here, so a NEW
+// fixed-position HUD element is invisible to it until someone adds it.
+const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors", "#hud-limits"];
 
 async function race(page, steer, manual, ins) {
   await page.goto("/");
@@ -141,8 +144,12 @@ for (const v of VIEWS) {
     // stopped by a spec that never had a chance to pass.
     //
     // 300 s is the value its peers on this same fixture already carry
-    // (bahrain/cota/monaco/montreal-foundation, autopilot). The number is the
-    // spec saying what it costs; the gate then decides whether it can afford it.
+    // (bahrain/cota/monaco/montreal-foundation, autopilot), and MEASURED here
+    // rather than only inherited: a local run of the notched-landscape block
+    // (6/6 passed, 2026-09-04) timed `tilt / auto gears` at 149 s — already
+    // past the 120 s gate on a quiet box, against 134.3 s when CI killed it.
+    // The number is the spec saying what it costs; the gate then decides
+    // whether it can afford it.
     test.setTimeout(300_000);
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
     for (const steer of ["tilt", "buttons", "touch"]) {

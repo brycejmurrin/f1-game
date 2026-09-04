@@ -48,6 +48,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/deploy.mjs** | the ONE deploy: fetch → merge → tooling-fast → verify-track → push the deploy branch (or --pr); pages.yml stamps it | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy (`playwright test` / `@playwright/mcp`) — the MCP lock's oracle. | check-changes |
+| **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 
 ### `tools/check/`
 
@@ -65,9 +66,9 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ratchets.mjs** | Size ratchets from `tests/data/ratchets.json`: `--check` (default), `--update` snaps every ceiling down, `--json`. | — |
 | **check/scan-globals.mjs** | Derives the REAL global-reference graph of the IIFE build (espree/eslint-scope): assigns, eval-time reads, edges. | check-changes |
 | **check/shell-ids.mjs** | Every element id the JS looks up must exist: shell, runtime-created, or reported as dynamic. `--json`. | check-changes |
-| **check/tree-counts.mjs** | Tree-wide counts behind the `tree` ratchets: CSS class tokens, shell DOM nodes, bare catches, unpolled waits. | — |
+| **check/tree-counts.mjs** | Counts behind the `tree` ratchets: CSS classes/spacing/colour, shell nodes, bare catches, unpolled waits. `--offenders`. | — |
 | **check/trim-comments.mjs** | Strips low-signal `//` comments (dividers, loc pointers, orphans); `--headers --narrative` compresses file headers. | slim-bloat |
-| **check/vstd-lint.mjs** | The PACE invariant as a check: flags `.speed` compared to a literal without `vStd()` in a manifest-derived file set. | tune-physics |
+| **check/vstd-lint.mjs** | REPORT, not a gate: lists every `.speed`-vs-literal comparison, always exits 0. The gate is tests/unit/vstd-invariant. | tune-physics |
 
 ### `tools/gen/`
 

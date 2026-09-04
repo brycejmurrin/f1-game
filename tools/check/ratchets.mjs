@@ -22,7 +22,8 @@
 //
 // Two scopes: `files` (a metric of ONE file) and `tree` (a metric of a whole
 // subtree — CSS classes across css/, bare catches across js/). A tree metric
-// takes no file; it is named directly in the `tree` map.
+// takes no file; it is named directly in the `tree` map, and
+// `node tools/check/tree-counts.mjs --offenders` prints the breakdown behind it.
 //
 // ONE slack rule, with a declared exception: a ceiling more than
 // max(SLACK_MIN, SLACK_PCT of itself) above its value has stopped ratcheting;
@@ -72,6 +73,9 @@ export const TREE_METRICS = {
   bareCatches: async () => (await import("./tree-counts.mjs")).bareCatches(),
   waitNoPolling: async () => (await import("./tree-counts.mjs")).waitNoPolling(),
   subFloorFontSize: async () => (await import("./tree-counts.mjs")).subFloorFontSize(),
+  rawSpacing: async () => (await import("./tree-counts.mjs")).rawSpacing(),
+  rawColor: async () => (await import("./tree-counts.mjs")).rawColor(),
+  rawColorDistinct: async () => (await import("./tree-counts.mjs")).rawColorDistinct(),
   dynamicIdReads: async () => (await import("./shell-ids.mjs")).dynamicIdReads(),
 };
 
@@ -143,7 +147,10 @@ async function main() {
   try { v = verdict(await measure()); }
   catch (e) { console.error(`ratchets: ${e.message}`); process.exitCode = 2; return; }
   if (argv.includes("--json")) { console.log(JSON.stringify(v, null, 2)); process.exitCode = v.ok ? 0 : 1; return; }
-  for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}) — extract, or raise it deliberately and say why in the commit`);
+  // A tree metric's number says something drifted; --offenders says WHERE, which
+  // is the half a bare count cannot carry.
+  const where = (r) => (r.tree ? " — breakdown: node tools/check/tree-counts.mjs --offenders" : "");
+  for (const r of v.over) console.log(`OVER   ${r.file} ${r.metric}: ${r.value} > ceiling ${r.ceiling} (+${r.over}) — extract, or raise it deliberately and say why in the commit${where(r)}`);
   for (const r of v.loose) console.log(`LOOSE  ${r.file} ${r.metric}: ${r.value} but ceiling ${r.ceiling} (slack ${r.slack} > ${r.slackMax}) — lower it: node tools/check/ratchets.mjs --update`);
   if (v.ok) {
     const d = load();

@@ -271,6 +271,10 @@ const GameAudio = (function () {
     engBuf = accBuf = null; samplesReady = false;           // ctx-bound; reload for new ctx
     noisePoolBuf = null;                                    // ctx-bound too — a buffer from the
                                                             // old ctx throws on the new one
+    dbgAnalyser = null;    // ctx-bound; stopEngine() nulls it but this path inlines its own
+                            // teardown, so without this a stale analyser on the closed ctx would
+                            // survive and centroidHz() would read a dead node (latent: only
+                            // tests/tools call centroidHz() today, not the game loop)
     if (!createCtx()) return;
     if (wasMusic) startMusic(wasTrack);
     if (wasEngine) startEngine();
