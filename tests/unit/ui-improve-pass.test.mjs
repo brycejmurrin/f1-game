@@ -1021,6 +1021,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "any menu ON word is gold, not only DISPLAY fold chips");
   assert.equal(decl(css("css/components.css"), 'button [data-fold="off"], summary [data-fold="off"]', "color"), "var(--red)",
     "any menu OFF word is red");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner \.opt-btn:not\(\.active\) \[data-fold="on"\]/, "color"), "inherit",
+    "unselected ON/OFF chips stay steel — both words shouting hid which one is live");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner \.as-toggle \.opt-btn\.active/, "background"), "transparent",
+    "MUSIC ON/OFF is not a lighted plate — the selected word is the mark");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner :is\(\.opt-btn, \.preset-btn\)\.active/, "box-shadow"), "none",
+    "settings named picks keep a ring, not the glow");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="val"]', "color"), "var(--text)",
     "fold values are bright text — steel-on-steel hid STANDARD / AUTO / WEBGL2");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("det.open = true"),
