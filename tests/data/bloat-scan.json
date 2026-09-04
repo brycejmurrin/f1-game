@@ -1,0 +1,221 @@
+{
+  "ok": true,
+  "files": [
+    {
+      "path": "js/lighting/presets.js",
+      "lines": 15508,
+      "kind": "ratchet",
+      "ceiling": 15508,
+      "slack": 0
+    },
+    {
+      "path": "js/game.js",
+      "lines": 9708,
+      "kind": "ratchet",
+      "ceiling": 9708,
+      "slack": 0
+    },
+    {
+      "path": "js/car/car3d.js",
+      "lines": 3588,
+      "kind": "ratchet",
+      "ceiling": 3588,
+      "slack": 0
+    },
+    {
+      "path": "js/agent/apex.js",
+      "lines": 2610,
+      "kind": "ratchet",
+      "ceiling": 2610,
+      "slack": 0
+    },
+    {
+      "path": "js/agent/agentview.js",
+      "lines": 2452,
+      "kind": "ratchet",
+      "ceiling": 2452,
+      "slack": 0
+    },
+    {
+      "path": "js/track/tracks.js",
+      "lines": 2399,
+      "kind": "ratchet",
+      "ceiling": 2399,
+      "slack": 0
+    },
+    {
+      "path": "js/render/glx/glx.js",
+      "lines": 2297,
+      "kind": "ratchet",
+      "ceiling": 2297,
+      "slack": 0
+    },
+    {
+      "path": "js/net/lobby.js",
+      "lines": 1712,
+      "kind": "ratchet",
+      "ceiling": 1712,
+      "slack": 0
+    },
+    {
+      "path": "AGENTS.md",
+      "lines": 257,
+      "kind": "always-on"
+    },
+    {
+      "path": ".claude/skills/career-mode/SKILL.md",
+      "lines": 98,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/agent-view/SKILL.md",
+      "lines": 96,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/playwright-probe/SKILL.md",
+      "lines": 88,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/webgl-debug/SKILL.md",
+      "lines": 88,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/lighting-tuner/SKILL.md",
+      "lines": 87,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/race-incidents-control/SKILL.md",
+      "lines": 84,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/multiplayer-debug/SKILL.md",
+      "lines": 82,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/SKILL.md",
+      "lines": 80,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/new-track/SKILL.md",
+      "lines": 76,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/garage-parts-livery/SKILL.md",
+      "lines": 73,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/css-play/SKILL.md",
+      "lines": 64,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/tune-physics/SKILL.md",
+      "lines": 63,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/agents/deploy-research.md",
+      "lines": 61,
+      "kind": "agent"
+    },
+    {
+      "path": ".claude/skills/pwa-cache-service-worker/SKILL.md",
+      "lines": 59,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/check-changes/SKILL.md",
+      "lines": 54,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/survey-track/SKILL.md",
+      "lines": 54,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/asset-pack/SKILL.md",
+      "lines": 53,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/agents/bloat-auditor.md",
+      "lines": 53,
+      "kind": "agent"
+    },
+    {
+      "path": ".claude/skills/input-controls/SKILL.md",
+      "lines": 52,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/scenery-dress/SKILL.md",
+      "lines": 52,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/ui-menu-a11y/SKILL.md",
+      "lines": 52,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/agents/track-surveyor.md",
+      "lines": 51,
+      "kind": "agent"
+    },
+    {
+      "path": ".claude/agents/verify-agent.md",
+      "lines": 49,
+      "kind": "agent"
+    },
+    {
+      "path": ".claude/skills/audio-debug/SKILL.md",
+      "lines": 45,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/slim-bloat/SKILL.md",
+      "lines": 44,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/agents/README.md",
+      "lines": 42,
+      "kind": "agent"
+    },
+    {
+      "path": ".claude/skills/data-hub/SKILL.md",
+      "lines": 41,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/survey-ui-matrix/SKILL.md",
+      "lines": 39,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/ai-racecraft/SKILL.md",
+      "lines": 36,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/skills/season-mode/SKILL.md",
+      "lines": 36,
+      "kind": "skill"
+    },
+    {
+      "path": ".claude/agents/physics-contract-auditor.md",
+      "lines": 30,
+      "kind": "agent"
+    }
+  ]
+}

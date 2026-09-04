@@ -894,9 +894,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "align-self"), "start",
     "HUD sample grows down its cell instead of centering over HUD: STANDARD");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details > summary", "height"), "var(--tap)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--tap)",
     "METRICS summary matches the HIDE HUD tap row");
-  assert.equal(decl(css("css/components.css"), '#pm-metrics-details [role="group"]', "display"), "flex",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-hud-details > summary/, "height"), "var(--tap)",
+    "HUD options summary matches the HIDE HUD tap row");
+  assert.equal(decl(css("css/components.css"), /#pm-metrics-details \[role="group"\]/, "display"), "flex",
     "METRICS body is a quiet column — not a 2-up plate grid");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details [role=\"group\"] > button", "background"), "transparent",
     "METRICS inner rows drop plate chrome");
@@ -924,13 +926,13 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
     "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "color"), "var(--steel)",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--steel)",
     "METRICS / ADVANCED summaries use heading steel, not button text");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "background-color"), "transparent",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "transparent",
     "disclosure summaries are headings, not .adv-more-btn plates");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary::after/, "content"), "none",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::after/, "content"), "none",
     "right-side chevron is the dropdown mark — disclosures do not use it");
-  assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary::before$/, "content") || "",
+  assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::before$/, "content") || "",
     /25BE/,
     "disclosure chevron sits on the left, like a tree, not a select");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
