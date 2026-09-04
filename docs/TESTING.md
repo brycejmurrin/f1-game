@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 198 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 199 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -310,7 +310,7 @@ eat them.
 | `generated-docs` | freshness of the generated tools index, slider table and hook index (`npm run gen:docs` regenerates) |
 | `parts-unit` | the catalog LADDER in Node — no paid option dominated by a cheaper one, no row that is never optimal at any price (bar the two wet compounds), no flat category stat, and a career budget cap that clears the dearest works car without reaching the top shelf |
 | `garage-unit` | the garage bay's per-vertex material column — present, right length, and not uniformly FLAT |
-| `steering-unit` | braking CUE math in Node — slider 1 is OFF, urgency is 0..1 never a brake command |
+| `steering-unit` | braking CUE math and the DIGITAL steer ramp in Node — slider 1 is OFF, urgency is 0..1 never a brake command; counter-steering unwinds as fast as letting go |
 | `audio-unit` | Spotify token refresh ownership, rotation races, and retryable failures in a Node VM |
 | `agent-contract` | freezes the shape of the agent-view API |
 | `net-unit` | the `js/net` wire as pure logic, no browser: loopback transport, invite codec, snapshot quantisation, clock sync. Under a second |
@@ -952,6 +952,7 @@ what it covers.
 | `tilt-pipeline.spec.js` | the tilt chain end to end — dead zone (subtracted, so no step at its edge), the `MAX_TILT` map and its `steerToTilt` inverse, the 1.6x release/tighten slew asymmetry, calibrating out a held grip offset, One-Euro smoothing as lag rather than gain, and the LIVE `deviceorientation` path pinned to the harness |
 | `understeer-cue.spec.js` | the front-axle saturation haptic: it fires when the front stops answering the steering, stays quiet under gentle input, below the 1.5 m/s floor and off-track, repeats no faster than its cooldown allows, tightens with saturation depth, and at the same DEPTH in the grip envelope responds identically at any PACE |
 | `brake-cue.test.mjs` | braking CUE math in `js/physics/brake-cue.js`: slider 1 is OFF, urgency is 0 when the apex is already made, braking already done cuts the pulse, and the function returns 0..1 never a brake command |
+| `digital-steer.test.mjs` | the ramp behind ARROW KEYS and the on-screen turn buttons, driven through the real `js/input/input.js` in a VM with a hand-stepped clock: pressing the OPPOSITE arrow unwinds at the RELEASE rate rather than the slow build rate (it was 350 ms against 133 ms at 41.7 m/s, so release-wait-press beat counter-steering), a frame that crosses centre spends its leftover time building the new lock, and ADAPTIVE BUTTONS still slows how fast lock BUILDS at speed |
 | `steer-migration.spec.js` | the `STEER_SCHEMA` store migration LADDER — v2's one-time `drivingHelp`/`raceLine` reset runs for a stale store; v3's RACE PACE regrid maps all ten old notches onto the 19-notch geometric grid and leaves a store that never set one alone; every step is a NO-OP at or above its own version (so a schema bump cannot re-apply an earlier step and discard a choice the player made after it), and no step touches `steerRate`/`steerSmooth` |
 | `gamepad.spec.js` | gamepad mapping — driving (steer/throttle/brake/boost/overtake/camera) and, once a menu is open, the UWP-parity menu-nav mapping (D-pad+stick→arrows with hold-repeat, A→click, B→Escape including the native-`<dialog>` `cancel`-event seam, triggers→PageUp/PageDown, bumpers→horizontal paging) with a regression guard that driving is unaffected |
 
