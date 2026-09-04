@@ -13,9 +13,10 @@ const BACKENDS = ["webgl2", "three", "webgpu"];
 // A stop is UNAVAILABLE when the device cannot run it OR its files are not in
 // the tree — both reach the same affordance the header describes, so the label
 // stays visible and says so instead of writing a pref boot silently ignores.
-// Derived, not hardcoded: DEFERRED is {} since the 2026-09-03 WGX/TLX
-// spike-out, so both alternates are file-absent today and the stops come back
-// on their own if the backends are ever re-attached.
+// Derived, not hardcoded — and that derivation is why this file needed NO edit
+// when the backends came back on 2026-09-04: the stops greyed out because
+// DEFERRED was {} after the spike-out, and went live again the moment it was
+// repopulated. A hardcoded list would have had to be found and changed twice.
 const hasBackendFiles = (b) => b === "webgl2" ||
   !!(typeof ApexRoster !== "undefined" && ApexRoster.DEFERRED &&
      (ApexRoster.DEFERRED[b] || []).length);

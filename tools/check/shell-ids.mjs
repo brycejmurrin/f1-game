@@ -57,6 +57,8 @@ export const RUNTIME_IDS = {
   "pm-save-shot":      "renderer-picker addBtn()",
   "pm-metrics":        "metrics-overlay makeMetricsBtn(), guarded by its own getElementById check",
   "pm-metrics-page":   "metrics-overlay makeMetricsBtn()",
+  "pm-metrics-pos":    "metrics-overlay makeMetricsBtn()",
+  "pm-metrics-size":   "metrics-overlay makeMetricsBtn()",
   "pm-metrics-logns":  "metrics-overlay makeMetricsBtn()",
   "pm-metrics-loglvl": "metrics-overlay makeMetricsBtn()",
   "pm-halo":           "cockpit-opts builds its rows from a table whose entries carry `id`",
@@ -65,7 +67,7 @@ export const RUNTIME_IDS = {
   // null-guarded and its else branch ("say so plainly when there is not") is
   // the documented answer, so this is correct-but-dead rather than a defect.
   // It comes back with the backend; delete both together if it does not.
-  "game-soft":         "spike/backends/three/tlx.js only — null-guarded, else-branch is the documented answer",
+  "game-soft":         "js/render/three/tlx.js only — null-guarded, else-branch is the documented answer",
 };
 
 const jsFiles = (dir, out = []) => {

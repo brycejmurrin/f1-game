@@ -237,10 +237,10 @@ test("env-probe radial cull is 300 m without a toggle", () => {
 
   // WGX / TLX: the same 300 m cap, read from source (no shared mock-device
   // harness in this file; the WGX one lives in webgpu-lifecycle.test.mjs).
-  const wgx = shader("spike/backends/webgpu/wgx.js");
+  const wgx = shader("js/render/webgpu/wgx.js");
   assert.match(wgx, /cullDist\s*=\s*\w+\s*>\s*0\s*\?\s*Math\.min\(\s*\w+\s*,\s*300\s*\)\s*:\s*300/, "WGX probe caps at 300 m and keeps a tighter cull");
   assert.doesNotMatch(wgx, /_perfWgsl|typeof PerfTry|PerfTry\.(on|defines|withWgslConsts)/);
-  const tlx = shader("spike/backends/three/tlx.js");
+  const tlx = shader("js/render/three/tlx.js");
   assert.match(tlx, /\bENV_CULL_M\s*=\s*300\b/);
   assert.match(tlx, /cullDist\s*=\s*_envSvCull\s*>\s*0\s*\?\s*Math\.min\(\s*_envSvCull\s*,\s*ENV_CULL_M\s*\)\s*:\s*ENV_CULL_M/);
   assert.match(tlx, /chunkedSys\.cull\(\s*rec\.chunked\s*,\s*faceVP\s*,\s*faceEye\s*,\s*faceCull\s*\)/, "the probe face culls chunks against ITS frustum and cap");
@@ -256,15 +256,15 @@ test("GLSL / WGSL / TSL keep only the gated ON path", () => {
   assert.doesNotMatch(lit, /#ifdef OPT_LAMPFOGGATE/);
   assert.match(lit, /if\s*\(\s*uLampFog\s*>\s*0\.0\s*\)/);
 
-  const chunks = shader("spike/backends/webgpu/wgsl-chunks.js");
-  const wgslPost = shader("spike/backends/webgpu/wgsl-post.js");
+  const chunks = shader("js/render/webgpu/wgsl-chunks.js");
+  const wgslPost = shader("js/render/webgpu/wgsl-post.js");
   assert.doesNotMatch(chunks, /OPT_LAMPFOGGATE/);
   assert.match(chunks, /if\s*\(\s*F\.params8\.x\s*>\s*0\.0\s*\)/);
   assert.doesNotMatch(wgslPost, /OPT_FLAREGATE/);
   assert.match(wgslPost, /flareStr\s*>\s*0\.0\s*&&\s*sunUV\.x\s*>=\s*0\.0/);
 
-  const tslLit = shader("spike/backends/three/tsl-lit.js");
-  const tslPost = shader("spike/backends/three/tsl-post.js");
+  const tslLit = shader("js/render/three/tsl-lit.js");
+  const tslPost = shader("js/render/three/tsl-post.js");
   assert.match(tslLit, /If\(\s*U\.lampFog\.greaterThan\(\s*0\.0\s*\)/);
   assert.doesNotMatch(tslLit, /lampFogGate|PerfTry/);
   assert.match(tslPost, /If\(\s*C\.flareStr\.greaterThan\(\s*0\.0\s*\)/);
@@ -292,10 +292,10 @@ test("sun GGX and clearcoat skip backfaces on all three backends", () => {
   const lit = shader("js/render/glx/shaders/glsl-lit.js");
   assert.match(lit, /if\s*\(\s*NoL\s*>\s*0\.0\s*\)\s*\{\s*float\s+D\s*=\s*D_GGX/);
   assert.match(lit, /NoLg\s*=\s*max\(\s*dot\(\s*Ngeo\s*,\s*L\s*\)\s*,\s*0\.0\s*\);[\s\S]{0,300}?if\s*\(\s*NoLg\s*>\s*0\.0\s*\)/);
-  const chunks = shader("spike/backends/webgpu/wgsl-chunks.js");
+  const chunks = shader("js/render/webgpu/wgsl-chunks.js");
   assert.match(chunks, /if\s*\(\s*NoL\s*>\s*0\.0\s*\)\s*\{\s*let\s+Dg\s*=\s*D_GGX/);
   assert.match(chunks, /NoLg\s*=\s*max\(\s*dot\(\s*Ngeo\s*,\s*L\s*\)\s*,\s*0\.0\s*\);[\s\S]{0,300}?if\s*\(\s*NoLg\s*>\s*0\.0\s*\)/);
-  const tsl = shader("spike/backends/three/tsl-lit.js");
+  const tsl = shader("js/render/three/tsl-lit.js");
   assert.match(tsl, /If\(\s*NoL\.greaterThan\(\s*0\.0\s*\)\s*,/);
   assert.match(tsl, /If\(\s*NoLg\.greaterThan\(\s*0\.0\s*\)\s*,/);
 });
@@ -329,13 +329,13 @@ test("composite skips dummy SSAO / bloom / godray fetches", () => {
   assert.equal(h.count("uniform1f", (a) => a[0].name === "uHaveGodray" && a[1] === 0), 0,
     "uHaveGodray goes through the redundancy cache — an unchanged 0 is not re-uploaded");
 
-  const wgsl = shader("spike/backends/webgpu/wgsl-post.js");
+  const wgsl = shader("js/render/webgpu/wgsl-post.js");
   assert.match(wgsl, /fn\s+ssaoViewPosFromD\s*\(/);
   assert.match(wgsl, /P\s*=\s*ssaoViewPosFromD\(\s*in\.uv\s*,\s*dCentre\s*\)/);
   assert.match(wgsl, /if\s*\(\s*bloomAmt\s*>\s*0\.001\s*\)\s*\{\s*bloomSample\s*=\s*textureSampleLevel\(\s*bloomTex/);
   assert.match(wgsl, /if\s*\(\s*U\.lift\.w\s*>\s*0\.5\s*\)\s*\{\s*c\s*=\s*c\s*\+\s*textureSampleLevel\(\s*godrayTex/);
 
-  const wgx = shader("spike/backends/webgpu/wgx.js");
+  const wgx = shader("js/render/webgpu/wgx.js");
   assert.match(wgx, /_needDepth\s*=\s*_haveAOEarly\s*\|\|\s*_haveGREarly\s*\|\|\s*_ssrEarly\s*\|\|\s*_flareEarly/);
   assert.match(wgx, /if\s*\(\s*_needDepth\s*&&\s*_passSamples\s*>\s*1\s*&&\s*pDepthResolve/);
   assert.match(wgx, /_carReflEarly\s*=\s*o\.carReflect\s*!=\s*null\s*\?\s*o\.carReflect[\s\S]{0,120}?:\s*0\.05/, "WGX omitted carReflect is the 0.05 default");
@@ -343,12 +343,12 @@ test("composite skips dummy SSAO / bloom / godray fetches", () => {
   // Skipped SSAO / bloom / godray no longer pay a dummy clear.
   assert.doesNotMatch(wgx, /_clearTarget\(\s*(?:godrayView|ssaoView|bloomLv)/);
 
-  const tslPost = shader("spike/backends/three/tsl-post.js");
+  const tslPost = shader("js/render/three/tsl-post.js");
   assert.match(tslPost, /haveGodray:\s*uniform\(\s*0\s*\)/);
   assert.match(tslPost, /If\(\s*C\.haveGodray\.greaterThan\(\s*0\.5\s*\)/);
   assert.match(tslPost, /If\(\s*C\.bloomAmt\.greaterThan\(\s*0\.001\s*\)/);
   assert.match(tslPost, /If\(\s*C\.sunShaft\.greaterThan\(\s*0\.0\s*\)\.and\(\s*C\.bloomAmt\.greaterThan\(\s*0\.001\s*\)\s*\)/);
-  assert.match(shader("spike/backends/three/tlx-post.js"), /C\.haveGodray\.value\s*=\s*haveGR\s*\?\s*1\s*:\s*0/);
+  assert.match(shader("js/render/three/tlx-post.js"), /C\.haveGodray\.value\s*=\s*haveGR\s*\?\s*1\s*:\s*0/);
 });
 
 test("SSAO reconstructs the centre from one depth sample", () => {
@@ -357,9 +357,9 @@ test("SSAO reconstructs the centre from one depth sample", () => {
   assert.match(post, /vec3\s+P\s*=\s*viewPosD\(\s*vUV\s*,\s*d\s*\);/);
   // The 1-arg wrapper stays for contact-shadow sample sites (no overload in ES 3.00).
   assert.match(post, /vec3\s+viewPos\s*\(\s*vec2\s+uv\s*\)\s*\{\s*return\s+viewPosD\(\s*uv\s*,\s*texture\(\s*uDepth\s*,\s*uv\s*\)\.r\s*\);\s*\}/);
-  const wgsl = shader("spike/backends/webgpu/wgsl-post.js");
+  const wgsl = shader("js/render/webgpu/wgsl-post.js");
   assert.match(wgsl, /dCentre\s*=\s*ssaoDepth\(\s*in\.uv\s*\);\s*let\s+P\s*=\s*ssaoViewPosFromD\(\s*in\.uv\s*,\s*dCentre\s*\)/);
-  const tsl = shader("spike/backends/three/tsl-post.js");
+  const tsl = shader("js/render/three/tsl-post.js");
   assert.match(tsl, /ssaoViewPosFromD\s*=\s*\(\s*uvGl\s*,\s*d\s*\)\s*=>/);
   assert.match(tsl, /P0\s*=\s*vec3\(\s*ssaoViewPosFromD\(\s*vUV\s*,\s*d\s*\)\s*\)\.toVar\(\)/);
 });
@@ -372,7 +372,7 @@ test("frustum-plane helpers are exported by GLX and TLX for the car cull", () =>
   const out = Array.from({ length: 6 }, () => [0, 0, 0, 0]);
   assert.equal(h.GLX.makeFrustumPlanes(new Float32Array(16).fill(0.5), out), out, "a preallocated `out` is filled in place and returned (no per-frame allocation)");
   assert.ok(out.some((p) => p[3] !== 0), "the planes were written into `out`");
-  const tlx = shader("spike/backends/three/tlx.js");
+  const tlx = shader("js/render/three/tlx.js");
   assert.match(tlx, /makeFrustumPlanes\s*\(\s*viewProj\s*,\s*out\s*\)\s*\{\s*return\s+TLXShaders\.makeFrustumPlanes\(\s*viewProj\s*,\s*out\s*\)/);
 });
 
@@ -389,10 +389,10 @@ test("fog stack skips pow/exp when density and mist are off", () => {
   // when the density is 0.
   assert.match(lit, /if\s*\(\s*uFogDensity\s*>\s*0\.0\s*\)\s*\{[\s\S]*?sunAmt4\s*=\s*sunAmt2\s*\*\s*sunAmt2[\s\S]*?sunAmt16\s*\*=\s*sunAmt16/);
   assert.doesNotMatch(lit, /pow\(\s*sunAmt\s*,\s*(4|16)\.0\s*\)/, "the integer sun powers are multiplies now, not pow()");
-  const chunks = shader("spike/backends/webgpu/wgsl-chunks.js");
+  const chunks = shader("js/render/webgpu/wgsl-chunks.js");
   assert.match(chunks, /if\s*\(\s*fogDensity\s*>\s*0\.0\s*\|\|\s*mistK\s*>\s*0\.001\s*\)/);
   assert.match(chunks, /if\s*\(\s*fogDensity\s*>\s*0\.0\s*\)\s*\{[\s\S]*?pow\(\s*sunAmt\s*,\s*4\.0\s*\)/);
-  const tsl = shader("spike/backends/three/tsl-lit.js");
+  const tsl = shader("js/render/three/tsl-lit.js");
   assert.match(tsl, /If\(\s*U\.fogDensity\.greaterThan\(\s*0\.0\s*\)\.or\(\s*U\.groundMist\.greaterThan\(\s*0\.001\s*\)\s*\)/);
   assert.match(tsl, /If\(\s*U\.fogDensity\.greaterThan\(\s*0\.0\s*\)\s*,/);
 });
@@ -402,9 +402,9 @@ test("window sun flash skips pow(_,22) when wet or the knobs are off", () => {
   // envBlend high then multiplies the flash by 0.
   const lit = shader("js/render/glx/shaders/glsl-lit.js");
   assert.match(lit, /if\s*\(\s*\(\s*1\.0\s*-\s*wetSheen\s*\)\s*\*\s*uWindowSunFlash\s*\*\s*uKeyMul\s*>\s*0\.001\s*\)\s*\{[\s\S]{0,300}?pow\(\s*max\(\s*envSunAlign\s*,\s*1e-4\s*\)\s*,\s*22\.0\s*\)/);
-  const chunks = shader("spike/backends/webgpu/wgsl-chunks.js");
+  const chunks = shader("js/render/webgpu/wgsl-chunks.js");
   assert.match(chunks, /if\s*\(\s*\(\s*1\.0\s*-\s*wetSheen\s*\)\s*\*\s*F\.params9\.z\s*\*\s*keyMul\s*>\s*0\.001\s*\)\s*\{[\s\S]{0,300}?pow\(\s*max\(\s*envSunAlign\s*,\s*1e-4\s*\)\s*,\s*22\.0\s*\)/);
-  const tsl = shader("spike/backends/three/tsl-lit.js");
+  const tsl = shader("js/render/three/tsl-lit.js");
   assert.match(tsl, /If\(\s*wetSheen\.oneMinus\(\)\.mul\(\s*U\.windowSunFlash\s*\)\.mul\(\s*U\.keyMul\s*\)\.greaterThan\(\s*0\.001\s*\)/);
 });
 
@@ -412,8 +412,8 @@ test("sky golden-hour and low-sun band skip when sunE >= 0.72", () => {
   // First factor is (1-smoothstep(0, 0.72, sunE)). Identically 0 on
   // default day (~0.95) and night moon-key (~1). Dawn/dusk still enter.
   assert.match(shader("js/render/glx/shaders/glsl-sky.js"), /if\s*\(\s*sunE\s*<\s*0\.72\s*\)\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
-  assert.match(shader("spike/backends/webgpu/wgsl-chunks.js"), /if\s*\(\s*sunE\s*<\s*0\.72\s*\)\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
-  assert.match(shader("spike/backends/three/tsl-sky.js"), /If\(\s*sunE\.lessThan\(\s*0\.72\s*\)\s*,\s*\(\)\s*=>\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
+  assert.match(shader("js/render/webgpu/wgsl-chunks.js"), /if\s*\(\s*sunE\s*<\s*0\.72\s*\)\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
+  assert.match(shader("js/render/three/tsl-sky.js"), /If\(\s*sunE\.lessThan\(\s*0\.72\s*\)\s*,\s*\(\)\s*=>\s*\{[\s\S]*?goldenAmt[\s\S]*?lowBand/);
 });
 
 test("WGX composite godray fetch is gated on lift.w haveGR", () => {
@@ -422,12 +422,12 @@ test("WGX composite godray fetch is gated on lift.w haveGR", () => {
   // producer side (lift.w = haveGR, 0 with no godray) is pinned as BEHAVIOUR
   // by webgpu-lifecycle.test.mjs ("lift.w is haveGR — harness present() has
   // no godray"), so it is not repeated as source text here.
-  const post = shader("spike/backends/webgpu/wgsl-post.js");
+  const post = shader("js/render/webgpu/wgsl-post.js");
   assert.match(post, /let\s+ssrWet\s*=\s*U\.lift\.w/);
   assert.match(post, /if\s*\(\s*U\.lift\.w\s*>\s*0\.5\s*\)\s*\{\s*c\s*=\s*c\s*\+\s*textureSampleLevel\(\s*godrayTex/);
   assert.equal((post.match(/textureSampleLevel\(\s*godrayTex/g) || []).length, 1,
     "godray fetch must exist exactly once, inside the haveGR gate");
-  assert.doesNotMatch(shader("spike/backends/webgpu/wgx.js"), /_clearTarget\(/);
+  assert.doesNotMatch(shader("js/render/webgpu/wgx.js"), /_clearTarget\(/);
 });
 
 test("sky twilight cloud wash skips pow(sd,2.5) when twilight is 0", () => {
@@ -435,7 +435,7 @@ test("sky twilight cloud wash skips pow(sd,2.5) when twilight is 0", () => {
   // Identically 0 on default day (~0.95) and night. Default cloud is 0.4
   // so the cloud block is live — the pow was * 0. WGSL has no twilight wash.
   assert.match(shader("js/render/glx/shaders/glsl-sky.js"), /if\s*\(\s*twilight\s*>\s*0\.001\s*\)\s*\{\s*lit\s*\+=\s*uSunColor\s*\*\s*pow\(\s*sd\s*,\s*2\.5\s*\)\s*\*\s*twilight/);
-  assert.match(shader("spike/backends/three/tsl-sky.js"), /If\(\s*twilight\.greaterThan\(\s*0\.001\s*\)\s*,\s*\(\)\s*=>\s*\{[\s\S]{0,300}?pow\(\s*sd\s*,\s*2\.5\s*\)/);
+  assert.match(shader("js/render/three/tsl-sky.js"), /If\(\s*twilight\.greaterThan\(\s*0\.001\s*\)\s*,\s*\(\)\s*=>\s*\{[\s\S]{0,300}?pow\(\s*sd\s*,\s*2\.5\s*\)/);
 });
 
 test("godray sun HG and TSL sun-half skip when shaft strength is 0", () => {
@@ -445,17 +445,17 @@ test("godray sun HG and TSL sun-half skip when shaft strength is 0", () => {
   assert.match(post, /if\s*\(\s*uStr\s*>\s*0\.0\s*\)\s*\{\s*float\s+hSun/);
   assert.match(post, /vec3\s+sunTerm\s*=\s*vec3\(\s*0\.0\s*\);\s*if\s*\(\s*uStr\s*>\s*0\.0\s*\)\s*\{/);
   assert.match(post, /outColor\s*=\s*vec4\(\s*sunTerm\s*\+\s*lampAccum\s*,\s*1\.0\s*\)/);
-  const wgsl = shader("spike/backends/webgpu/wgsl-post.js");
+  const wgsl = shader("js/render/webgpu/wgsl-post.js");
   assert.match(wgsl, /var\s+sunTerm\s*=\s*vec3<f32>\(\s*0\.0\s*\);\s*if\s*\(\s*uStr\s*>\s*0\.0\s*\)\s*\{/);
   assert.match(wgsl, /return\s+vec4<f32>\(\s*sunTerm\s*\+\s*lampAccum\s*,\s*1\.0\s*\)/);
-  const tsl = shader("spike/backends/three/tsl-post.js");
+  const tsl = shader("js/render/three/tsl-post.js");
   assert.match(tsl, /If\(\s*grU\.str\.greaterThan\(\s*0\.0\s*\)\s*,\s*\(\)\s*=>\s*\{[\s\S]*?gCloud\(\s*p\s*\)/);
   assert.match(tsl, /If\(\s*grU\.lampStr\.greaterThan\(\s*0\.0\s*\)[\s\S]*?hLamp\s*=\s*exp/);
   assert.match(tsl, /If\(\s*grU\.str\.greaterThan\(\s*0\.0\s*\)\s*,\s*\(\)\s*=>\s*\{[\s\S]*?hgAniso/);
 });
 
 test("TSL heat-haze tests the plume before the scene-tag fetch", () => {
-  const tsl = shader("spike/backends/three/tsl-post.js");
+  const tsl = shader("js/render/three/tsl-post.js");
   assert.match(tsl, /hm\s*=\s*exp\(\s*dot\(\s*hd\s*,\s*hd\s*\)\.mul\(\s*-70\.0\s*\)\s*\)[\s\S]{0,120}?If\(\s*hm\.greaterThan\(\s*0\.003\s*\)[\s\S]{0,200}?tagT\.sample/);
   assert.doesNotMatch(tsl, /tagT\.sample\(\s*TL\(\s*vUV\s*\)\s*\)[\s\S]{0,200}?dot\(\s*hd\s*,\s*hd\s*\)/);
 });
@@ -466,7 +466,7 @@ test("WGX SSR pass omitted carReflect is the 0.05 tuner default", () => {
   // pass, and COMPOSITE fetched a target that never ran. Both reads of
   // the option must share the default; the GLX twin of this rule is the
   // blit-mask behaviour test above.
-  const wgx = shader("spike/backends/webgpu/wgx.js");
+  const wgx = shader("js/render/webgpu/wgx.js");
   for (const name of ["_carRefl", "_carReflEarly"]) {
     assert.match(wgx, new RegExp(`${name}\\s*=\\s*o\\.carReflect\\s*!=\\s*null\\s*\\?\\s*o\\.carReflect[\\s\\S]{0,120}?:\\s*0\\.05\\s*\\)`),
       `${name} must default an omitted carReflect to 0.05`);

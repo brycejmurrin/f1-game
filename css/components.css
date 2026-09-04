@@ -1073,7 +1073,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
 /* Sheet title names CONTROLS / DISPLAY. Later DISPLAY headings
-   (COCKPIT) stay. */
+   (HUD / RENDERER / COCKPIT) stay. */
 #pm-panel-controls > .pm-group-h:first-child,
 #pm-panel-display > .pm-group-h:first-child {
   display: none;
@@ -1222,22 +1222,30 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
-/* DISPLAY: HIDE HUD | METRICS; UI SIZE | HUD profile; HUD SIZE | sample.
-   Named areas so METRICS opening cannot steal the hole. dense lets
-   GRAPHICS sit beside RESOLUTION after the spanning renderer row. */
+/* DISPLAY: HUD block then RENDERER block. Named areas so METRICS
+   opening cannot steal the hole. dense lets GRAPHICS sit beside
+   RESOLUTION after the spanning renderer row. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
   grid-template-areas:
+    "hudh hudh"
     "hide metrics"
-    "ui profile"
-    "hud sample";
+    "ui ui"
+    "hud sample"
+    "prof lay"
+    "map gaps"
+    "renh renh";
   grid-auto-flow: dense;
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]) {
   grid-template-areas:
+    "hudh hudh"
     "hide hide"
     "metrics metrics"
-    "ui profile"
-    "hud sample";
+    "ui ui"
+    "hud sample"
+    "prof lay"
+    "map gaps"
+    "renh renh";
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud { grid-area: hide; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
@@ -1258,9 +1266,15 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   padding-left: calc(var(--gap) * 0.5);
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudprofile {
-  grid-area: profile;
+  grid-area: prof;
   align-self: center;
 }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-h { grid-area: hudh; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-renderer-h { grid-area: renh; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudmetrics { grid-area: lay; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudmap { grid-area: map; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hudgaps { grid-area: gaps; }
+#pmsettings-inner #pm-panel-display > #pm-hud-h { margin-top: 0; padding-top: 0; }
 /* DISPLAY sliders are settings rows, not tuner rows: steel label, text
    value (tuner red is the loud bit), no extra tap-height padding around
    a track that is already --tap-min. */

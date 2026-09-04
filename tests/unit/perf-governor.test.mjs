@@ -470,8 +470,8 @@ test("tier 2 sheds car-paint SSR with the wet-road march, not via po.reflect", (
   // opts.carReflect = 0 at tier ≥ 2, and both present() paths must honour it.
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
   const post = fs.readFileSync(path.join(ROOT, "js/render/glx/post.js"), "utf8");
-  const tlx = fs.readFileSync(path.join(ROOT, "spike/backends/three/tlx-post.js"), "utf8");
-  const wgx = fs.readFileSync(path.join(ROOT, "spike/backends/webgpu/wgx.js"), "utf8");
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
+  const wgx = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgx.js"), "utf8");
   assert.match(game, /po\.reflect = PerfGov\.tier\(\) >= 2 \? 0 : _ssr/);
   assert.match(game, /po\.carReflect = PerfGov\.tier\(\) >= 2 \? 0 : undefined/);
   assert.match(post, /opts && opts\.carReflect != null \? opts\.carReflect/);
@@ -494,8 +494,8 @@ test("sun-shadow fade origin is yaw-invariant (eye XZ, look-target Y)", () => {
   // swept a 58% strength swing at 70 m on a pinned-eye yaw. The box stays
   // forward-biased (texel allocation); the fade must not.
   const lit = fs.readFileSync(path.join(ROOT, "js/render/glx/shaders/glsl-lit.js"), "utf8");
-  const tsl = fs.readFileSync(path.join(ROOT, "spike/backends/three/tsl-lit.js"), "utf8");
-  const wgsl = fs.readFileSync(path.join(ROOT, "spike/backends/webgpu/wgsl-chunks.js"), "utf8");
+  const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
+  const wgsl = fs.readFileSync(path.join(ROOT, "js/render/webgpu/wgsl-chunks.js"), "utf8");
   assert.match(lit, /distance\(wpos,\s*vec3\(uEye\.x,\s*uShadowCtr\.y,\s*uEye\.z\)\)/);
   assert.match(tsl, /cameraPosition\.x[\s\S]{0,80}shadowCtr\.y[\s\S]{0,80}cameraPosition\.z/);
   assert.match(wgsl, /F\.eye\.x[\s\S]{0,60}F\.shadowCtr\.y[\s\S]{0,60}F\.eye\.z/);
@@ -503,14 +503,14 @@ test("sun-shadow fade origin is yaw-invariant (eye XZ, look-target Y)", () => {
 
 test("TLX zeros sunShaft when bloom is shed, matching GLX doBloom gate", () => {
   const glx = fs.readFileSync(path.join(ROOT, "js/render/glx/post.js"), "utf8");
-  const tlx = fs.readFileSync(path.join(ROOT, "spike/backends/three/tlx-post.js"), "utf8");
+  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx-post.js"), "utf8");
   assert.match(glx, /doBloom \? sunShaft \*/);
   assert.match(tlx, /haveBloom \? sunShaft \*/);
 });
 
 test("TLX wet analytic mirror and chrome MIRROR id 27 match GLX", () => {
   const lit = fs.readFileSync(path.join(ROOT, "js/render/glx/shaders/glsl-lit.js"), "utf8");
-  const tsl = fs.readFileSync(path.join(ROOT, "spike/backends/three/tsl-lit.js"), "utf8");
+  const tsl = fs.readFileSync(path.join(ROOT, "js/render/three/tsl-lit.js"), "utf8");
   assert.match(lit, /wetSheen \* 0\.55/);
   assert.match(tsl, /wetSheen\.mul\(0\.55\)/);
   // The classification RANGE and every finish id in it must agree across the
