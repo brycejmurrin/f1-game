@@ -1,45 +1,54 @@
 // @ts-check
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+// ONE BOOT PER WORKER (sharedTest): five goto("/") contexts became one. The two
+// first-load tests KEEP their reload — SOUND OFF and the volume clamp must see
+// localStorage before AudioPanel.init, and a shared page only gets that on the
+// next navigation (docs/TESTING.md §sharedTest / addInitScript). Closing a
+// WebGL+AudioContext page between tests was the other half: CI died with
+// `Test timeout of 120000ms exceeded while setting up "context"` on the next
+// fixture (Selected specs 2026-09-04). Reload keeps the same context.
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { toMenu } from "../helpers/shared-page.js";
 
-test("GameAudio initialises without console errors", async ({ page, pageErrors }) => {
-  const errors = [];
-  page.on("console", (msg) => {
-    if (msg.type() === "error") errors.push(msg.text());
-  });
-  await page.goto("/");
-  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
+async function waitApex(page) {
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+}
+
+/** Seed keys, then reload so AudioPanel.init reads them on a virgin heap. */
+async function bootWithStore(page, entries) {
+  await page.evaluate((pairs) => {
+    for (const [k, v] of pairs) localStorage.setItem(k, v);
+  }, Object.entries(entries));
+  await page.reload();
+  await waitApex(page);
+}
+
+test("GameAudio initialises without console errors", async ({ page, pageErrors, consoleLines }) => {
   const defined = await page.evaluate(
     () =>
       typeof GameAudio === "object" || typeof GameAudio === "function"
   );
   expect(defined).toBe(true);
-  const audioErrors = errors.filter(
+  const audioErrors = consoleLines.filter(
     (e) =>
-      e.includes("AudioContext") ||
-      e.includes("decodeAudioData") ||
-      e.includes("GameAudio")
+      (e.startsWith("error:") || e.startsWith("pageerror:")) &&
+      (e.includes("AudioContext") ||
+        e.includes("decodeAudioData") ||
+        e.includes("GameAudio"))
   );
   expect(audioErrors).toHaveLength(0);
   expect(pageErrors).toEqual([]);
 });
 
 test("persisted SOUND OFF stays off and defers WebAudio until a trusted enable click", async ({ page }) => {
-  await page.addInitScript(() => {
-    // MUSIC is intentionally still on: these independent saved states used to
-    // make AudioPanel.init() lift the master back on during boot.
-    localStorage.setItem("apex26.sound", "false");
-    localStorage.setItem("apex26.music", "true");
-  });
   const engineRequests = [];
   page.on("request", (request) => {
     if (/assets\/sfx\/f1_(?:engine|rev)\.mp3(?:\?|$)/.test(request.url())) {
       engineRequests.push(request.url());
     }
   });
-
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+  // MUSIC is intentionally still on: these independent saved states used to
+  // make AudioPanel.init() lift the master back on during boot.
+  await bootWithStore(page, { "apex26.sound": "false", "apex26.music": "true" });
 
   // This is a genuine first pointer gesture and also exercises the Settings
   // button's formerly unconditional GameAudio.init().
@@ -67,9 +76,15 @@ test("persisted SOUND OFF stays off and defers WebAudio until a trusted enable c
   await expect.poll(() => engineRequests.length).toBe(2);
 });
 
-test("re-enabling sound during a race restarts race music", async ({ page }) => {
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
+test("re-enabling sound during a race restarts race music", async ({ page, loadTrack }) => {
+  await toMenu(page);
+  // startRace() is async (ensureScenery). loadTrack waits for the build AND
+  // go() so the race-start startMusic has already fired before we wrap.
+  // The old body called race()+go() in one evaluate, cleared the spy, then
+  // clicked at once — startRace's startMusic landed AFTER the clear and the
+  // re-enable assertion saw [monza, monza].
+  await loadTrack("monza");
+  await page.evaluate(() => window.__apex.headless(true));
   const monzaIdx = await page.evaluate(() => {
     const calls = [];
     const startMusic = GameAudio.startMusic;
@@ -78,10 +93,6 @@ test("re-enabling sound during a race restarts race music", async ({ page }) => 
       return startMusic.apply(this, arguments);
     };
     window.__raceMusicCalls = calls;
-    window.__apex.headless(true);
-    window.__apex.race("monza");
-    window.__apex.go();
-    calls.length = 0;
     return window.__apex.tracks().find((track) => track.id === "monza").i;
   });
 
@@ -99,11 +110,12 @@ test("re-enabling sound during a race restarts race music", async ({ page }) => 
 });
 
 test("real GameAudio unlock and engine synthesis run after a user gesture", async ({ page }) => {
-  await page.goto("/");
+  await toMenu(page);
   await page.locator("#mb-race").click();
   await page.locator("#sel-go").click();
   await page.locator("#rs-go").click();
-  await page.waitForFunction(() => typeof GameAudio !== "undefined" && GameAudio.debug().engineOn);
+  await page.waitForFunction(() => typeof GameAudio !== "undefined" && GameAudio.debug().engineOn,
+    null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => {
     GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
   });
@@ -120,12 +132,10 @@ test("real GameAudio unlock and engine synthesis run after a user gesture", asyn
 // gain itself was always safe — only the number shown on the slider could
 // disagree with it.
 test("an out-of-range stored volume clamps both the audio gain and the panel's own label", async ({ page }) => {
-  await page.addInitScript(() => {
-    localStorage.setItem("apex26.volMusic", "40");    // way over the 0..1 gain range
-    localStorage.setItem("apex26.volSfx", "-3");       // way under it
+  await bootWithStore(page, {
+    "apex26.volMusic": "40",    // way over the 0..1 gain range
+    "apex26.volSfx": "-3",      // way under it
   });
-  await page.goto("/");
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
   expect(await page.evaluate(() => GameAudio.volumes())).toEqual({ music: 1, sfx: 0 });
 
   await page.locator("#mb-settings").click();
