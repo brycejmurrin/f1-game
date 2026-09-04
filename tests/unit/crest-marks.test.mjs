@@ -211,11 +211,13 @@ test("every mark clears MARK_FLOOR on every livery, on every surface it lands on
           bad.push(`${team.id}/${liv.id}/${where} alt ${LT.contrast(P.alt, under[0]).toFixed(2)}` +
                    `/${LT.contrast(P.alt, P.mark).toFixed(2)}`);
         // A backing PANEL must separate from the paint or the mark floats on it.
-        // A brand DISC is exempt: it is the sun, not a legibility device, and
-        // the mark is floored against the disc AND the paint above (P.under),
-        // so nothing is resting on this number. Red Bull's gold on Red Bull's
-        // yellow fin is 1.10 and is the actual mark.
-        if (P.plate && !(LT.CREST_DISC[team.id] && P.brandPair) &&
+        // An identity lockup (Red Bull's sun, Ferrari's shield) is exempt: it
+        // is the mark, not a legibility device, and it is kept on the fin so
+        // the badge does not become a different logo than the spine / wall.
+        // The mark is floored against P.under, so nothing is resting on this
+        // number. Red Bull's gold on Red Bull's yellow fin is 1.10; Ferrari's
+        // yellow shield on a white tail-graphic is the same kind of pairing.
+        if (P.plate && !(LT.crestKeepsPlate(team.id) && P.brandPair) &&
             LT.contrast(P.plate, fields[0]) < 1.6)
           bad.push(`${team.id}/${liv.id}/${where} plate ${LT.contrast(P.plate, fields[0]).toFixed(2)}`);
 
@@ -568,6 +570,57 @@ test("the garage lightbox shows the brand lockup, not a re-fitted one", () => {
       bad.push(`${team.id} wall inner detail is grey ${P.alt.map((v) => v.toFixed(2)).join()}`);
   }
   assert.deepEqual(bad, [], "the garage wall drifted from the brand lockup");
+});
+
+test("a plated lockup is the same mark on the cover, the fin, and the wall", () => {
+  // The garage editor's HORSE / SHIELD rows look like they paint one logo.
+  // They did not: the engine cover and the wall drew Ferrari's yellow shield,
+  // and the shark-fin badge dropped the plate (bare mode remapped SHIELD to
+  // an outline). Top-down vs the tail then showed two different crests.
+  // Identity lockups stay assembled on every surface; the horse/bulls colour
+  // and the shield/disc colour are the same triple.
+  const plated = Teams.LIST.filter((t) => LT.crestKeepsPlate(t.id));
+  assert.ok(plated.some((t) => t.id === "ferrari"), "Ferrari is no longer a plated lockup");
+  assert.ok(plated.some((t) => t.id === "redbull"), "Red Bull is no longer a plated lockup");
+  const bad = [];
+  for (const team of plated) {
+    const liv = Liveries.forTeam(team)[0];
+    const cover = LT.markPalette(team.id, liv, [liv.c1, liv.c2], false);
+    const badge = LT.markPalette(team.id, liv, [(liv.fin || liv.c2)], true);
+    const wallField = (() => {
+      const on = LT.markOnField(team.id, liv);
+      const tinted = liv.c1.map((v) => v * 0.30);
+      const worst = Math.min(...on.map((c) => LT.contrast(c, tinted)));
+      return worst < 2.2 ? LT.inkOn(on) : tinted;
+    })();
+    const wall = LT.markPalette(team.id, liv, wallField, false);
+    if (!cover.plate) bad.push(`${team.id} cover has no plate`);
+    if (!badge.plate) bad.push(`${team.id} badge dropped the plate`);
+    if (cover.plate && badge.plate && cover.plate.join() !== badge.plate.join())
+      bad.push(`${team.id} badge plate ${badge.plate.join()} vs cover ${cover.plate.join()}`);
+    if (cover.plate && wall.plate && cover.plate.join() !== wall.plate.join())
+      bad.push(`${team.id} wall plate ${wall.plate.join()} vs cover ${cover.plate.join()}`);
+    if (cover.mark.join() !== badge.mark.join())
+      bad.push(`${team.id} badge mark ${badge.mark.join()} vs cover ${cover.mark.join()}`);
+    const pick = [1, 0.55, 0];
+    const authored = { ...liv, logo: pick, logo2: pick };
+    const aCover = LT.markPalette(team.id, authored, [liv.c1, liv.c2], false);
+    const aBadge = LT.markPalette(team.id, authored, [(liv.fin || liv.c2)], true);
+    if (aCover.plate.join() !== aBadge.plate.join())
+      bad.push(`${team.id} authored SHIELD split: badge ${aBadge.plate.join()} vs cover ${aCover.plate.join()}`);
+    const paintsPlate = (bare, P) => {
+      const R = bare ? LT.REGIONS.finBadge : LT.REGIONS.crest;
+      const ctx = new RecCtx();
+      LT.drawCrest(ctx, team.id, R, { palette: P, bare });
+      const want = cssOf(P.plate);
+      return ctx.ops.some((o) => o.style === want);
+    };
+    if (cover.plate && !paintsPlate(false, cover))
+      bad.push(`${team.id} cover does not paint its plate`);
+    if (badge.plate && !paintsPlate(true, badge))
+      bad.push(`${team.id} badge does not paint its plate`);
+  }
+  assert.deepEqual(bad, [], "plated lockup drifted across surfaces");
 });
 
 test("an uploaded emblem offers no picker it cannot paint", () => {
