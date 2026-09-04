@@ -900,7 +900,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "HUD options summary matches the HIDE HUD tap row");
   assert.equal(decl(css("css/components.css"), /#pm-metrics-details \[role="group"\]/, "display"), "flex",
     "METRICS body is a quiet column — not a 2-up plate grid");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details [role=\"group\"] > button", "background"), "transparent",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details \[role="group"\] > button/, "background"), "transparent",
     "METRICS inner rows drop plate chrome");
   assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-label b", "color"), "var(--text)",
     "DISPLAY slider values are text, not tuner red");
