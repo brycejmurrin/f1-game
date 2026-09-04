@@ -623,6 +623,39 @@ test("a plated lockup is the same mark on the cover, the fin, and the wall", () 
   assert.deepEqual(bad, [], "plated lockup drifted across surfaces");
 });
 
+test("every team's lockup paints the same colours on the cover and the fin", () => {
+  // buildAtlas resolves ONE palette and hands it to both surfaces. The badge
+  // used to drop Haas's ring, Audi's weave, and Ferrari's shield, so the tail
+  // was a different logo than the spine / garage wall. Same palette, same
+  // construction (minus fillText, which no roster mark uses).
+  const bad = [];
+  for (const team of Teams.LIST) {
+    const liv = Liveries.forTeam(team)[0];
+    const lockup = LT.markPalette(team.id, liv, [liv.c1, liv.c2], false);
+    const cover = replay(LT, team.id, LT.REGIONS.crest, lockup, false);
+    const badge = replay(LT, team.id, LT.REGIONS.finBadge, lockup, true);
+    const cols = (m) => [...m.colours].filter(Boolean).sort().join("|");
+    if (cols(cover) !== cols(badge))
+      bad.push(`${team.id} colours cover [${cols(cover)}] vs badge [${cols(badge)}]`);
+    if (badge.fonts.length)
+      bad.push(`${team.id} badge draws text: ${badge.fonts.map((f) => f.text)}`);
+    const second = LT.markSlots(team.id).find((r) => r.key === "logo2");
+    if (!second) continue;
+    const pick = [1, 0.55, 0];
+    const authored = { ...liv, logo2: pick };
+    const P = LT.markPalette(team.id, authored, [liv.c1, liv.c2], false);
+    const ctxCover = new RecCtx();
+    const ctxBadge = new RecCtx();
+    LT.drawCrest(ctxCover, team.id, LT.REGIONS.crest, { palette: P, bare: false });
+    LT.drawCrest(ctxBadge, team.id, LT.REGIONS.finBadge, { palette: P, bare: true });
+    const want = cssOf(pick);
+    const hits = (ctx) => ctx.ops.some((o) => o.style === want || o.shadow === want);
+    if (hits(ctxCover) && !hits(ctxBadge))
+      bad.push(`${team.id} ${second.label} paints on the cover and not the fin`);
+  }
+  assert.deepEqual(bad, [], "a team's fin is a different logo than its spine");
+});
+
 test("an uploaded emblem offers no picker it cannot paint", () => {
   // The custom team can upload arbitrary art, and buildAtlas then takes the
   // drawLogoImage branch — where the monogram is never drawn and the function
