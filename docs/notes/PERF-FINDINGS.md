@@ -883,6 +883,31 @@ resident pack per caller would turn that into a hit, at one instance buffer
 per caller per batch: bandwidth for memory, on a phone that is short of both.
 Not attempted, and not worth attempting without a phone-side reading first.
 
+#### …and the MOBILE path barely pays it
+
+Same command with `--ls apex26.forceMobileTier=1` (the mobile CODE PATH on a
+desktop viewport and SwiftShader — not a phone, and not a substitute for one):
+
+| | desktop tier | mobile tier |
+|---|---|---|
+| upload KiB/frame | 1009.2 | **55.7** (-94.5%) |
+| bufferSubData calls | 27.1 | **3.8** (-86.0%) |
+| drawElementsInstanced | 30.4 | 20.6 (-32.2%) |
+| drawElements | 120.2 | 105.5 (-12.2%) |
+
+**This closes the lead above rather than opening one.** The obvious reading —
+"the mobile tier just draws less" — does not survive the asymmetry: draws fall
+12-32%, uploads fall 94.5%. If it were only a smaller scene the two would move
+together. What actually happens is that the tier's tighter `frame.cullDist`
+(js/game.js, gated on `PerfGov.tier()`) leaves a SMALLER and far more STABLE
+set of visible cells, so the cell-set key of 2c hits almost every frame and the
+repack never runs. The cache earns most of its keep exactly where the device
+can least afford the traffic.
+
+So: per-caller residency (the lever named above) is a DESKTOP-tier optimisation.
+A phone on the mobile tier is already at 56 KiB/frame and whatever is costing it
+frames is somewhere else. Do not spend the memory there on a phone's behalf.
+
 **Do not read a per-car conclusion out of this run.** `carsNearPlayer` was 1.
 See 2c-ter.
 

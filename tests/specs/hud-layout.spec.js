@@ -144,8 +144,12 @@ for (const v of VIEWS) {
     // stopped by a spec that never had a chance to pass.
     //
     // 300 s is the value its peers on this same fixture already carry
-    // (bahrain/cota/monaco/montreal-foundation, autopilot). The number is the
-    // spec saying what it costs; the gate then decides whether it can afford it.
+    // (bahrain/cota/monaco/montreal-foundation, autopilot), and MEASURED here
+    // rather than only inherited: a local run of the notched-landscape block
+    // (6/6 passed, 2026-09-04) timed `tilt / auto gears` at 149 s — already
+    // past the 120 s gate on a quiet box, against 134.3 s when CI killed it.
+    // The number is the spec saying what it costs; the gate then decides
+    // whether it can afford it.
     test.setTimeout(300_000);
     test.use({ viewport: { width: v.w, height: v.h }, hasTouch: true });
     for (const steer of ["tilt", "buttons", "touch"]) {
