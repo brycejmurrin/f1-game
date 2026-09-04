@@ -79,7 +79,9 @@ function paintRendererSummary(pref, fallback) {
     ? document.getElementById("pm-renderer-details-sum")
     : null;
   if (!sum) return;
-  sum.textContent = "RENDERER · " + backendLabel(pref) + (fallback ? " · WEBGL2" : "");
+  sum.innerHTML = '<span data-fold="k">RENDERER</span><span data-fold="sep"> · </span><span data-fold="val">' +
+    backendLabel(pref) + "</span>" + (fallback
+      ? '<span data-fold="sep"> · </span><span data-fold="val">WEBGL2</span>' : "");
 }
 function markReloading(rb, next) {
   const msg = backendLabel(next) + " — RELOADING…";

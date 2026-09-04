@@ -730,6 +730,16 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
     "inputs own only the caret keys (Left/Right/Home/End) so Up/Down leave the row");
   assert.match(code("js/ui/aria-state.js"), /#vsfriend,\s*#season-setup/,
     "AriaState watches the two DOM-built overlays UiLayers already lists");
+  const wrapSb = uiSandbox(makeDom({ readyState: "loading" }));
+  vm.runInNewContext(src("js/ui/aria-state.js"), wrapSb);
+  const wrap = wrapSb.AriaState.wrapOnOff;
+  assert.equal(wrap("HUD: ON"), 'HUD: <span data-fold="on">ON</span>');
+  assert.equal(wrap("HALO: OFF"), 'HALO: <span data-fold="off">OFF</span>');
+  assert.equal(wrap("♪ SOUND OFF"), '♪ SOUND <span data-fold="off">OFF</span>');
+  assert.equal(wrap("QUALIFYING LAP · ON"), 'QUALIFYING LAP · <span data-fold="on">ON</span>');
+  assert.equal(wrap("ON"), '<span data-fold="on">ON</span>');
+  assert.equal(wrap("MAP: AUTO"), null, "ternary MAP/GAPS AUTO is not an ON/OFF word");
+  assert.equal(wrap("5 LAPS"), null, "option-group chips that are not ON/OFF stay unpainted");
   assert.match(code("js/ui/scroll-fade.js"), /"#menu-buttons"/,
     "title chrome fade watches the zoomed #menu-buttons scroller");
   assert.match(code("js/ui/scroll-fade.js"), /\boverflowX\b/,
@@ -880,9 +890,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(code("js/ui/select-screen.js"), /besidePair/,
     "pair-on beside maps do not self-heal the pin down to a stale stamp");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"ui ui"[\s\S]*"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
-    "DISPLAY is UI SIZE, then HUD, METRICS, and RENDERER each on their own row");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
+    /"uih uih"[\s\S]*"uis uis"[\s\S]*"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
+    "DISPLAY is UI SIZE heading + slider, then HUD, METRICS, and RENDERER");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h', "grid-area"), "uih");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "uis");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
     "HUD fold is its own row, not under a reprint HUD heading");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
@@ -897,6 +908,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hud-sample"/,
     "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--chip-h)",
+    "METRICS summary is a chip row — slightly shorter than a full --tap door");
   // The sample carries BOTH sliders now: a readout box for HUD SIZE and a pad
   // for BUTTON SIZE, which has exactly the same no-feedback problem (every real
   // cluster is hidden behind the .dim sheet). The pad divides the block's own
@@ -904,11 +917,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::after", "--pad") || "",
     /var\(--hud-btn-scale\) \/ var\(--hud-scale\)/,
     "the button pad previews BUTTON SIZE relative to HUD SIZE");
-  // BUTTON SIZE sits with HUD SIZE inside the fold, not stranded on the sheet.
   assert.match(read("index.html"), /id="pm-hudscale"[\s\S]*id="pm-btnscale"/,
     "BUTTON SIZE follows HUD SIZE in the HUD fold");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--tap)",
-    "METRICS summary matches the HIDE HUD tap row");
   assert.equal(decl(css("css/components.css"), /#pm-metrics-details \[role="group"\]/, "display"), "flex",
     "METRICS body is a quiet column — not a 2-up plate grid");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details \[role="group"\] > button/, "background"), "transparent",
@@ -925,8 +935,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "ADVANCED spans the DISPLAY row; it is not a fourth named area");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "height"), "var(--tap)",
-    "ADVANCED summary matches the METRICS / HIDE HUD tap row");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "height"), "var(--chip-h)",
+    "RENDERER summary matches the HUD / METRICS chip row");
   assert.equal(decl(css("css/components.css"), '#pm-display-adv [role="group"]', "display"), "flex",
     "ADVANCED body defaults to a column; wide/compact override to a 2-up grid");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv \[role="group"\]/, "display"), "grid",
@@ -937,12 +947,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
     "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--text)",
-    "HUD / METRICS / RENDERER summaries use text, not heading steel");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--steel)",
+    "HUD / METRICS / RENDERER names are disclosure headings, not button plates");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "opacity"), "1",
-    ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay white");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "var(--surf-3)",
-    "fold summaries sit on a raised surface so they read as dropdowns, not steel headings");
+    ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay readable");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "transparent",
+    "fold summaries drop the plate so they do not copy HALO / TURN CHASING");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::after/, "content"), "none",
     "right-side chevron is the dropdown mark — disclosures do not use it");
   assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::before$/, "content") || "",
@@ -958,8 +968,28 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "unlayered inject must not offset METRICS off the HIDE HUD row");
   assert.match(code("js/perf/metrics-overlay.js"), /page\(\) === "log"/,
     "LOG NS / LOG SHOW stay hidden unless the overlay page is LOG");
-  assert.match(code("js/perf/metrics-overlay.js"), /METRICS · /,
+  assert.match(code("js/perf/metrics-overlay.js"), /data-fold="k">METRICS/,
     "closed METRICS summary carries ON/page state");
+  assert.match(code("js/perf/renderer-picker.js"), /data-fold="val">WEBGL2/,
+    "WEBGL2 fallback is a value chip, not OFF — red would lie");
+  assert.match(read("index.html"), /id="pm-uiscale-h"/,
+    "UI SIZE is a real COCKPIT-style heading, not a tuner caption");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-display > .pm-group-h", "display"), "flex",
+    "UI SIZE heading shares the row with the live %");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="k"]', "color"), "var(--steel)",
+    "fold names stay heading steel");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="on"]', "color"), "var(--gold)",
+    "fold ON chips pick up the live gold the inner ON buttons name");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="off"]', "color"), "var(--red)",
+    "fold OFF is the same red as a live warning, not dim");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="off"]', "opacity"), null,
+    "OFF must stay fully opaque — faded red reads as dim again");
+  assert.equal(decl(css("css/components.css"), 'button [data-fold="on"], summary [data-fold="on"]', "color"), "var(--gold)",
+    "any menu ON word is gold, not only DISPLAY fold chips");
+  assert.equal(decl(css("css/components.css"), 'button [data-fold="off"], summary [data-fold="off"]', "color"), "var(--red)",
+    "any menu OFF word is red");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="val"]', "color"), "var(--text)",
+    "fold values are bright text — steel-on-steel hid STANDARD / AUTO / WEBGL2");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("det.open = true"),
     "METRICS does not auto-open and blow the HIDE HUD pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",

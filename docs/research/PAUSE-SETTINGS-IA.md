@@ -52,15 +52,21 @@ they pop the same way.
 Settings and pause Settings land on the same index.
 
 **DISPLAY is UI SIZE, then three stacked folds, then COCKPIT.** No reprint
-HUD / RENDERER headings — the fold summaries are the labels (plate +
-`--text`, not steel heading chrome). HUD fold: ON/OFF,
+HUD / RENDERER headings — the fold summaries are disclosures (steel +
+rule + left chevron, same language as COCKPIT). A plate made them copies
+of HALO / TURN CHASING. HUD fold: ON/OFF,
 STYLE, LAYOUT, MAP, GAPS, HUD SIZE + sample. METRICS is a sibling fold.
 RENDERER fold (`#pm-display-adv`) holds RESOLUTION, the backend picker,
 GRAPHICS, RESET, THREE PATH, SCREENSHOTS, SAVE, COPY DIAG. LAYOUT AUTO
 is always the full widget set (`fitHud` scales / stacks / drops gaps; it
 does not hide a cluster). MAP and GAPS default ON; AUTO on the map still
 hides onboard, OFF is the explicit hide. Sliders stay
-settings rows (steel track, text value). METRICS
+settings rows (steel track, text value). UI SIZE uses the
+same steel italic + rule as COCKPIT; HUD SIZE stays a caption.
+Fold summaries are chip-height; the name is steel, ON is gold, OFF is
+red, values are `--text` (steel-on-steel hid the choices). The same
+gold / red pair paints the ON/OFF word on any menu switch.
+METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO
 docks left on a short or narrow viewport so the overlay cannot cover

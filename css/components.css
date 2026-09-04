@@ -1261,7 +1261,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    Named areas so an open fold cannot steal the hole. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
   grid-template-areas:
-    "ui ui"
+    "uih uih"
+    "uis uis"
     "hudopts hudopts"
     "metrics metrics"
     "renopts renopts";
@@ -1282,7 +1283,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv {
   grid-area: renopts;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: ui; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-uiscale-h { grid-area: uih; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: uis; }
 /* DISPLAY sliders are settings rows, not tuner rows: steel label, text
    value (tuner red is the loud bit), no extra tap-height padding around
    a track that is already --slider. */
@@ -1297,6 +1299,19 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pm-panel-display .tune-label b {
   color: var(--text);
   font-size: var(--fs-micro);
+}
+/* UI SIZE heading: same .pm-group-h as COCKPIT. The % sits on the right
+   in heading steel (not tuner red). Hidden .tune-label keeps the slider
+   row labeled. The range itself inherits the shared red accent. */
+#pm-panel-display > .pm-group-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+#pm-panel-display > .pm-group-h b {
+  color: inherit;
+  font-style: italic;
+  font-weight: 700;
 }
 #pm-hud-details #pm-hud-sample,
 #pmsettings-inner[data-density="compact"] #pm-hud-sample {
@@ -1326,16 +1341,16 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pmsettings-inner #pm-metrics-details > summary,
 #pmsettings-inner #pm-hud-details > summary {
-  height: var(--tap);
-  min-height: var(--tap);
+  height: var(--chip-h);
+  min-height: var(--chip-h);
   box-sizing: border-box;
   cursor: pointer;
   justify-content: flex-start;
-  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-size: clamp(var(--fs-2), calc(1.8 * var(--vwz)), var(--fs-4));
   font-weight: 700;
-  letter-spacing: var(--ls-5);
+  letter-spacing: var(--ls-2);
   opacity: 1;
-  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+  padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
 #pm-metrics-details[open] > summary::before { content: "\25B4"; }
 #pm-hud-details[open] > summary::before { content: "\25B4"; }
@@ -1380,38 +1395,43 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   grid-column: 1 / -1;
 }
 #pmsettings-inner #pm-display-adv > summary {
-  height: var(--tap);
-  min-height: var(--tap);
+  height: var(--chip-h);
+  min-height: var(--chip-h);
   box-sizing: border-box;
   cursor: pointer;
   justify-content: flex-start;
-  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-size: clamp(var(--fs-2), calc(1.8 * var(--vwz)), var(--fs-4));
   font-weight: 700;
-  letter-spacing: var(--ls-5);
+  letter-spacing: var(--ls-2);
   opacity: 1;
-  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+  padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
-/* Fold summaries are tappable dropdowns, not quiet steel headings.
-   --text + plate so HUD / METRICS / RENDERER read as controls against
-   COCKPIT's italic steel. Chevron stays on the left (::before);
-   ::after is the native <select> mark and stays off. */
+/* Fold summaries are disclosures, not plates: steel + rule + left chevron
+   (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate made
+   HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary,
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:active {
-  color: var(--text);
-  font-style: normal;
+  color: var(--steel);
+  font-style: italic;
   opacity: 1;
-  background-color: var(--surf-3);
-  background-image: none;
-  border: 1px solid color-mix(in oklab, var(--text) 34%, transparent);
-  border-radius: var(--r-md);
+  background-color: transparent;
+  background-image: var(--grad-rule);
+  background-position: bottom left;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  border: none;
+  border-radius: 0;
   box-shadow: none;
 }
 @media (hover: hover) {
   #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:hover {
     color: var(--text);
-    background-color: var(--plate-press);
-    background-image: none;
-    border: 1px solid color-mix(in oklab, var(--text) 48%, transparent);
+    background-color: transparent;
+    background-image: var(--grad-rule);
+    background-position: bottom left;
+    background-size: 100% 1px;
+    background-repeat: no-repeat;
+    border: none;
     box-shadow: none;
   }
 }
@@ -1423,6 +1443,41 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
+}
+/* Name stays steel (the heading). Choices use the live switch colors:
+   ON gold, OFF red, values bright text — steel-on-steel made STANDARD /
+   AUTO / WEBGL2 disappear into the chrome. */
+button [data-fold="on"],
+summary [data-fold="on"] {
+  color: var(--gold);
+}
+button [data-fold="off"],
+summary [data-fold="off"] {
+  color: var(--red);
+}
+#pmsettings-inner details > summary [data-fold="k"] {
+  color: var(--steel);
+  font-style: italic;
+  font-weight: 700;
+}
+#pmsettings-inner details > summary [data-fold="on"] {
+  color: var(--gold);
+  font-style: italic;
+  font-weight: 700;
+}
+#pmsettings-inner details > summary [data-fold="off"] {
+  color: var(--red);
+  font-style: italic;
+  font-weight: 600;
+}
+#pmsettings-inner details > summary [data-fold="val"] {
+  color: var(--text);
+  font-style: italic;
+  font-weight: 700;
+}
+#pmsettings-inner details > summary [data-fold="sep"] {
+  color: color-mix(in oklab, var(--steel) 55%, transparent);
+  font-weight: 400;
 }
 #pmsettings-inner #pm-panel-display > .pm-group-h {
   margin-top: calc(var(--gap) * 0.5);

@@ -288,10 +288,10 @@ function vantage(track, mode, s, x, spd, now, extra) {
       const hx = Math.sin(extra.carHead || 0), hz = Math.cos(extra.carHead || 0);
       eye[0] = extra.carPos[0] + hx * eyeFwd; eye[1] = p[1] + eyeUp; eye[2] = extra.carPos[1] + hz * eyeFwd;
       const aimUp = mode === "cockpit" ? eyeUp - 0.15 : eyeUp + 1.2;
-      // TURN CHASING (SETTINGS > COCKPIT, default OFF — js/camera/cockpit-opts.js).
-      // At 0 the aim is the car's heading and NOTHING else, which is the state
-      // AGENTS.md's "the arc must not reach the driver" rule asks for: no read of
-      // curvature or the racing line reaches the player unless they switch it on.
+      // TURN CHASING (SETTINGS > COCKPIT slider, js/camera/cockpit-opts.js).
+      // 0 = the car's heading and NOTHING else — AGENTS.md's "the arc must not
+      // reach the driver" state. The player opts in with the slider (shipped
+      // 0.35, the old ON blend). This moves where the camera looks, never the car.
       const tcL = mode === "cockpit" && typeof CockpitOpts !== "undefined"
         ? CockpitOpts.turnChaseLead() : 0;
       let aimX = extra.carPos[0] + hx * 30, aimZ = extra.carPos[1] + hz * 30;
@@ -307,7 +307,7 @@ function vantage(track, mode, s, x, spd, now, extra) {
       if (mode === "cockpit") {
         const straight = _straightScr;
         straight[0] = p[0] + t[0] * 30; straight[1] = p[1] + eyeUp - 0.15 + t[1] * 30; straight[2] = p[2] + t[2] * 30;
-        const w = typeof CockpitOpts !== "undefined" ? CockpitOpts.turnChaseLead() : 0;
+        const w = typeof CockpitOpts !== "undefined" ? CockpitOpts.turnChaseLead() : 0; // 0 = nose-locked; shipped 0.35
         const lead = w > 0 ? aheadPt(30, eyeUp - 0.15, x * 0.4) : straight;
         tgt[0] = straight[0] * (1 - w) + lead[0] * w;
         tgt[1] = straight[1] * (1 - w) + lead[1] * w;
