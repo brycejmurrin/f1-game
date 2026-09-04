@@ -56,6 +56,8 @@ function bandCapped(cssVar) {
   const cap = +root.style.getPropertyValue(cssVar);
   return cap > 0 && cap < scale - 0.001;
 }
+// FULL = every cluster. TIMING = hide .hud-bottom (speed/gear/ERS).
+// DRIVER = hide sectors + BEST. COMPACT = pos/lap/time/speed/gear only.
 function resolveMetricsLayout() {
   const want = G.hudMetricsLayout || "auto";
   if (want !== "auto") return want;

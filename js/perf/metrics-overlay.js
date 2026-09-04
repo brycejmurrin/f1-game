@@ -839,7 +839,8 @@ function makeMetricsBtn(id, title, paint, onClick) {
 function initUI() {
   try { Log.info("game", "GameMetrics.initUI"); } catch (_) { /* Log not loaded */ }
   if (typeof document === "undefined") return;
-  const anchor = document.getElementById("pm-hidehud");
+  const anchor = document.getElementById("pm-hud-details")
+    || document.getElementById("pm-hidehud");
   const host = anchor && anchor.parentNode;
   if (host && !document.getElementById("pm-metrics")) {
     let ins = anchor;
@@ -949,7 +950,7 @@ if (on()) raiseBuffer();
 
 /* ── SETTINGS > DISPLAY — the METRICS submenu ──────────────────────────
  Folds #pm-metrics / PAGE / SIDE / SIZE / LOG NS / LOG SHOW into one
- <details> under HIDE HUD. Layout lives in css/components.css. Closed
+ <details> after the HUD fold. Layout lives in css/components.css. Closed
  summary carries ON/page state so the fold does not have to open to be
  read. LOG filters hide unless PAGE is LOG. Used to be a second IIFE
  in cockpit-opts.js. */
@@ -987,9 +988,12 @@ function buildSubmenu() {
   });
   det.appendChild(body);
 
+  var fold = document.getElementById("pm-hud-details");
   var hide = document.getElementById("pm-hidehud");
-  if (hide && hide.parentNode === host) {
-    if (hide.nextSibling) host.insertBefore(det, hide.nextSibling);
+  var place = (fold && fold.parentNode === host) ? fold
+    : (hide && hide.parentNode === host) ? hide : null;
+  if (place) {
+    if (place.nextSibling) host.insertBefore(det, place.nextSibling);
     else host.appendChild(det);
   } else {
     host.appendChild(det);

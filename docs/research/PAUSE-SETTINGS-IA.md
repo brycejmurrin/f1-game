@@ -52,9 +52,10 @@ they pop the same way.
 Settings and pause Settings land on the same index.
 
 **DISPLAY groups HUD then RENDERER, then the existing COCKPIT + ADVANCED
-folds.** HUD: HIDE HUD, METRICS fold, UI SIZE, HUD SIZE + sample, HUD
-profile, LAYOUT, MAP, GAPS. RENDERER: RESOLUTION, renderer picker,
-GRAPHICS. Sliders stay settings rows (steel track, text value). METRICS
+folds.** HUD fold: HUD ON/OFF (was HIDE HUD), STYLE (minimal/standard/broadcast),
+LAYOUT, MAP, GAPS. METRICS is a sibling fold after the HUD fold, not a pair
+with the cinematic switch. Then UI SIZE, HUD SIZE + sample. RENDERER:
+RESOLUTION, renderer picker, GRAPHICS. Sliders stay settings rows (steel track, text value). METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO
 docks left on a short or narrow viewport so the overlay cannot cover

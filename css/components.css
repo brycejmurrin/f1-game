@@ -1222,47 +1222,29 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
-/* DISPLAY: HUD block then RENDERER block. Named areas so METRICS
-   opening cannot steal the hole. dense lets GRAPHICS sit beside
-   RESOLUTION after the spanning renderer row. */
+/* DISPLAY: HUD fold (on/off + style + layout) then METRICS, then sliders,
+   then RENDERER. Named areas so an open fold cannot steal the hole.
+   dense lets GRAPHICS sit beside RESOLUTION after the spanning renderer row. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
   grid-template-areas:
     "hudh hudh"
-    "hide metrics"
-    "ui hudopts"
-    "hud sample"
+    "hudopts metrics"
+    "ui sample"
+    "hud hud"
     "renh renh";
   grid-auto-flow: dense;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]) {
-  grid-template-areas:
-    "hudh hudh"
-    "hide hide"
-    "metrics metrics"
-    "ui hudopts"
-    "hud sample"
-    "renh renh";
-}
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-hud-details[open]) {
-  grid-template-areas:
-    "hudh hudh"
-    "hide metrics"
-    "hudopts hudopts"
-    "ui sample"
-    "hud hud"
-    "renh renh";
-}
+#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]),
+#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-hud-details[open]),
 #pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]):has(#pm-hud-details[open]) {
   grid-template-areas:
     "hudh hudh"
-    "hide hide"
-    "metrics metrics"
     "hudopts hudopts"
+    "metrics metrics"
     "ui sample"
     "hud hud"
     "renh renh";
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hidehud { grid-area: hide; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
   grid-area: metrics;
   margin: 0;

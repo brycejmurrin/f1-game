@@ -872,8 +872,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(code("js/ui/select-screen.js"), /besidePair/,
     "pair-on beside maps do not self-heal the pin down to a stale stamp");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"hudh hudh"[\s\S]*"ui hudopts"\s*"hud sample"[\s\S]*"renh renh"/,
-    "DISPLAY groups HUD then RENDERER; UI SIZE sits beside the HUD fold");
+    /"hudh hudh"[\s\S]*"hudopts metrics"[\s\S]*"ui sample"\s*"hud hud"[\s\S]*"renh renh"/,
+    "DISPLAY groups HUD fold beside METRICS, then sliders, then RENDERER");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale)', "grid-area"), "hud");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "grid-area"), "sample");
@@ -886,18 +886,18 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(read("index.html"), /id="pm-hud-h"/);
   assert.match(read("index.html"), /id="pm-renderer-h"/);
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
-    "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
-  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open])', "grid-template-areas"),
+    "DISPLAY METRICS sits beside the HUD fold on a wide sheet");
+  assert.match(decl(css("css/components.css"), /#pm-panel-display:has\(#pm-metrics-details\[open\]\)/, "grid-template-areas"),
     /"metrics metrics"/,
-    "an open METRICS submenu takes the full DISPLAY row so HIDE HUD is not stranded");
-  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-hud-details[open])', "grid-template-areas"),
+    "an open METRICS submenu takes the full DISPLAY row so the HUD fold is not stranded");
+  assert.match(decl(css("css/components.css"), /#pm-panel-display:has\(#pm-hud-details\[open\]\)/, "grid-template-areas"),
     /"hudopts hudopts"/,
     "an open HUD submenu spans the row so its tap rows stay full width");
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
     /HUD SIZE PREVIEW/,
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "align-self"), "start",
-    "HUD sample grows down its cell instead of centering over HUD: STANDARD");
+    "HUD sample grows down its cell instead of centering over STYLE: STANDARD");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--tap)",
     "METRICS summary matches the HIDE HUD tap row");
   assert.equal(decl(css("css/components.css"), /#pm-metrics-details \[role="group"\]/, "display"), "flex",
