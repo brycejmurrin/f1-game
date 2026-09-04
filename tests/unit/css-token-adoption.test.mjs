@@ -102,7 +102,9 @@ const CEILING = {
   // (labels ellipsised below tap size). 8px is measured against the 7-column
   // grid — SUSPENSION needs 47px in a 47px column interior at 852x393. The
   // comment at the declaration carries the measurement.
-  subFloorFontSize: 5,
+  // 2026-09-04: 5 → 7. Union with the HUD polish / camera-hud deploy tip
+  // (hud.css +3). Measured on the merged tree; not a settings-stack add.
+  subFloorFontSize: 7,
   // padding / gap / margin declarations containing a raw px literal.
   // POLICY (rewritten 2026-08-26, deliberately — user-approved): a raw px
   // spacing value converts when it has an EXACT token form, including
@@ -180,7 +182,8 @@ const CEILING = {
   // 2026-09-03: 323 -> 322. Compact-wide title dropped a redundant
   // `#menu-hero .bigbtn { padding-block }` that the following
   // `#menu-buttons .bigbtn { padding }` shorthand already overrode.
-  rawSpacing: 315,
+  // 2026-09-04: 315 → 317. Same HUD/camera-hud union.
+  rawSpacing: 317,
   // colour declarations carrying a raw literal (rgb()/rgba()/#hex in any
   // declaration value; tokens.css custom-property DEFINITIONS excluded — the
   // definition site is the system, not drift; url() interiors excluded).
@@ -216,7 +219,8 @@ const CEILING = {
   // left #7a7a85 and leftover dim for --steel / --text.
   // 2026-09-03 union with the timing-colour pass: --faster/--slower replace the
   // laneboard literals; the count is the merged tree's.
-  rawColor: 330,
+  // 2026-09-04: 330 → 334. Same HUD/camera-hud union (hud.css).
+  rawColor: 334,
   // distinct colour VALUES after normalising spelling: space-after-comma,
   // trailing zero, leading dot, and hex-vs-rgb notation all fold to one
   // canonical form. This is the fork guard — identical paint must not hide
@@ -229,7 +233,8 @@ const CEILING = {
   // 2026-09-03 deep pass: 374 -> 367 / 189 -> 188. Customize rows, title
   // subs, How-to-Play rules, and data-hub numerals moved onto tokens.
   // 2026-09-03 leftover pass: 185 -> 184 with rawColor 334 -> 330.
-  rawColorDistinct: 181,
+  // 2026-09-04: 181 → 182. Same HUD/camera-hud union.
+  rawColorDistinct: 182,
 };
 
 test("no new font-size below the --fs-micro floor", () => {
