@@ -1444,8 +1444,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
 }
-/* Name stays steel. Gold = enabled, red = disabled. Mode names
-   (STANDARD / AUTO / WEBGL2) stay --text or they all read as ON. */
+/* Name stays steel. Gold = enabled, red = disabled, green = AUTO
+   (--faster), blue = MANUAL (garage cool). Other names stay --text. */
 button [data-fold="on"],
 summary [data-fold="on"] {
   color: var(--gold);
@@ -1453,6 +1453,14 @@ summary [data-fold="on"] {
 button [data-fold="off"],
 summary [data-fold="off"] {
   color: var(--red);
+}
+button [data-fold="auto"],
+summary [data-fold="auto"] {
+  color: var(--faster);
+}
+button [data-fold="manual"],
+summary [data-fold="manual"] {
+  color: #4df;
 }
 #pmsettings-inner details > summary [data-fold="k"] {
   color: var(--steel);
@@ -1471,6 +1479,16 @@ summary [data-fold="off"] {
 }
 #pmsettings-inner details > summary [data-fold="val"] {
   color: var(--text);
+  font-style: italic;
+  font-weight: 700;
+}
+#pmsettings-inner details > summary [data-fold="auto"] {
+  color: var(--faster);
+  font-style: italic;
+  font-weight: 700;
+}
+#pmsettings-inner details > summary [data-fold="manual"] {
+  color: #4df;
   font-style: italic;
   font-weight: 700;
 }
