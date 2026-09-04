@@ -9,7 +9,7 @@ mismatch.
 (`js/track/core/geom.js`) and `MAT_LAYERS` in both `tools/gen/assets.mjs` and
 `js/render/shared/assets.js`. If you change the layer count, `17` is also hardcoded
 in `js/render/glx/shaders/glsl-lit.js` (`uMatTexScale[17]`, `mid > 16` in `matTexUV()`)
-and `spike/backends/three/tsl-lit.js` (`uniformArray(new Array(17)...)` and the
+and `js/render/three/tsl-lit.js` (`uniformArray(new Array(17)...)` and the
 `for (let i = 0; i < 17; i++)` upload loop). Miss either and the extra
 layer's scale silently reads `0.0` (GLX) or is dropped (TLX).
 

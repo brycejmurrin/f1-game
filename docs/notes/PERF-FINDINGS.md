@@ -570,7 +570,7 @@ and counted rather than timed:
   unobservable. (Late-sky footnote: the reorder only holds if the sky pipeline
   actually depth-tests — WGX's declared `depthCompare:"always"` and the late
   sky erased the whole WebGPU world; fixed to `"less-equal"`, pinned by
-  spike/backends/tests/unit/webgpu-lifecycle.test.mjs.)
+  tests/unit/webgpu-lifecycle.test.mjs.)
 - **`sky.js` day gradient band** — an **`atan2`**, one of the costliest GPU
   transcendentals, feeding a `vnoise`, per pixel, whole frame, multiplied by
   `daytime`. `daytime` is exactly 0 on every night frame AND every dawn/dusk
@@ -763,7 +763,7 @@ eye than `farPlane` (`far / cos(halfFov)`).
 Recorded because **two independent audits have now proposed it**, and a third
 would too. In per-chunk lamp mode both backends give up the adjacent-run draw
 merge that is worth 76-87 % fewer scenery draws in the normal path, on the
-strength of one sentence in `spike/backends/webgpu/wgx.js`: *"adjacent chunks almost
+strength of one sentence in `js/render/webgpu/wgx.js`: *"adjacent chunks almost
 never share an index list"*. That sentence was load-bearing and unmeasured.
 
 It is now measured, `tools/gfx/chunk-share-census.mjs` (vegas night, LOW, knob 0.3):
@@ -1963,7 +1963,7 @@ over a number from a different instrument. `tlx-chunked.build()` gives every
 chunk of a mesh the **same** `position` / `normal` / `color` / `mat`
 `BufferAttribute` objects and only the index differs — so chunk residency can
 free index arrays and nothing else. Building montreal in a VM and totalling the
-buffers by kind (`spike/backends/tools/tlx-pack-check.cjs` shares the harness):
+buffers by kind (`tools/gfx/tlx-pack-check.cjs` shares the harness):
 
 | | vertex | index | chunks |
 |---|---|---|---|
@@ -2058,7 +2058,7 @@ the A/B tried first drifted the camera and the countdown between arms, and the
 OFF frame showed trees the ON frame did not for reasons that had nothing to do
 with packing. Screenshots could not settle this.
 
-`spike/backends/tools/tlx-pack-check.cjs` settles it: it **lifts the real packer out of the
+`tools/gfx/tlx-pack-check.cjs` settles it: it **lifts the real packer out of the
 shipping file** (a reimplementation drifts, then verifies its own copy), feeds
 it the real attribute arrays from a real build, decodes what the GPU would read
 back, and gates on the three things `tsl-lit` actually DOES with `mat` —
@@ -2467,7 +2467,7 @@ because there was no pixel to disagree with.
 **WGX binds and renders on hardware.** `bound=true`, no `softAdapter`, luma
 76.4. Every in-container claim that WGX showed a frozen canvas or the wrong
 framing was a SwiftShader artifact from a screenshot taken without
-`GLX.awaitSoftPresent()` (the trap `spike/backends/tools/gfx-probe.mjs:301` already guards
+`GLX.awaitSoftPresent()` (the trap `tools/gfx/gfx-probe.mjs:301` already guards
 against and an ad-hoc CDP `Page.captureScreenshot` does not). Those claims are
 retracted.
 
@@ -2751,7 +2751,7 @@ Also hardened: `freeTexture` nulls `t.view` and `t._wgxDecalBG`, so a caller tha
 frees a livery texture and redraws hits the existing `!tex.view` guard instead of
 binding a destroyed texture through `drawDecal`'s cached bind group.
 
-Verified: `spike/backends/tools/wgx-validate.mjs` (real Dawn, montreal, 60 frames) exit 0.
+Verified: `tools/gfx/wgx-validate.mjs` (real Dawn, montreal, 60 frames) exit 0.
 
 ## 2y. The pooling refactor was proved by DIFFERENCE, after two weaker oracles failed (2026-09-04)
 
@@ -3174,7 +3174,7 @@ cost on GLX (GL blocks in draw calls) but only CPU-side cadence on WGX
   PASS (#game road coverage 43.6%, roadLutReady).
 - Commands: mcp-cli raw batches (detached page-side measurement + pollers,
   MCP_CLI_TIMEOUT_MS=170000) in artifacts/r5-{glx,wgx}-ab*.log;
-  node spike/backends/tools/gfx-probe.mjs --backend webgpu --lite vegas.
+  node tools/gfx/gfx-probe.mjs --backend webgpu --lite vegas.
 - DECISION: ULTRA-night conditional layer ships `perChunkLights: 0.3`
   (light-presets.js "*|night"), predicate in light-store condLayer.
 
@@ -3565,7 +3565,7 @@ problem — iOS tab memory — answered:
 
 I read that as a third and decisive failure mode and removed the whole lever on
 the strength of it. **That was wrong, and the code says so.** Apex 26 does not
-use three's in-place restore path at all: `spike/backends/three/tlx.js:474-533`
+use three's in-place restore path at all: `js/render/three/tlx.js:474-533`
 (mirroring `js/render/glx/glx.js:407-460`) handles `webglcontextlost` by latching
 the downgrade and handles `webglcontextrestored` with `location.reload()`. A
 reload re-runs `Tracks.build` and rebuilds every geometry from source, so what
@@ -3694,7 +3694,7 @@ pair is a new RenderObject, and building its pipeline calls
 _getVertexFormat(e){const{itemSize:t,normalized:r}=e,s=e.array.constructor, ...
 ```
 
-— `spike/backends/vendor/three-0.185.1/three.webgpu.min.js`, no null guard.
+— `vendor/three-0.185.1/three.webgpu.min.js`, no null guard.
 `createShaderVertexBuffers` reads `s.array.constructor` on the same object.
 So `null.constructor` throws, both rungs burn in one frame, and the ladder
 lands on `refuseTab()`.

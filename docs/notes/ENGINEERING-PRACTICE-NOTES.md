@@ -315,8 +315,8 @@ file, it becomes a work list. Counting `catch (` against `Log.<level>(` across
 | `js/audio/spotify.js` | 35 | **0** | 17 |
 | `js/game.js` | 26 | **0** | 16 |
 | `js/net/lobby.js` | 25 | **0** | 14 |
-| `spike/backends/webgpu/wgx.js` | 26 | 2 | 12 |
-| `spike/backends/three/tlx.js` | 29 | 9 | 11 |
+| `js/render/webgpu/wgx.js` | 26 | 2 | 12 |
+| `js/render/three/tlx.js` | 29 | 9 | 11 |
 | `js/physics/debris-world.js` | 17 | 1 | 12 |
 | `js/physics/incident-sim.js` | 12 | **0** | 7 |
 

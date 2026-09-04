@@ -1167,7 +1167,7 @@ test.describe("Parts module — visual recipes", () => {
 
   test("WebGL and WebGPU share the same car environment-surface gate", async ({ page }) => {
     await load(page);
-    // LOAD THE DEFERRED BACKEND FIRST. spike/backends/webgpu/wgsl-chunks.js has NO
+    // LOAD THE DEFERRED BACKEND FIRST. js/render/webgpu/wgsl-chunks.js has NO
     // SCRIPT TAG — index.html says so where the tags end ("js/render/webgpu/*
     // (WGX) and js/render/three/* (TLX) have NO tags"); game.js injects it
     // through loadBackendScripts only when apex26.gfxBackend asks for WebGPU.
@@ -1176,7 +1176,7 @@ test.describe("Parts module — visual recipes", () => {
     // was written. It failed FAST rather than by timeout, which is the same
     // asymmetry docs/TESTING.md records: a throwing predicate propagates
     // without polling while a merely-false one burns the budget.
-    await page.addScriptTag({ url: "/spike/backends/webgpu/wgsl-chunks.js" });
+    await page.addScriptTag({ url: "/js/render/webgpu/wgsl-chunks.js" });
     const sources = await page.evaluate(() => ({
       glsl: GLXShaders.LIT_FS,
       wgsl: WGSLChunks.LIT,

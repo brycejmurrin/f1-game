@@ -143,7 +143,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/garage-interior-gate.test.mjs",
   "tests/unit/track-night-override.test.mjs",
   // The WebGPU road-marking frame. Three circuits (~3 s); the full 40-circuit
-  // sweep is `node spike/backends/tools/road-lut-census.mjs --all` (~34 s), run before a deploy
+  // sweep is `node tools/gfx/road-lut-census.mjs --all` (~34 s), run before a deploy
+  "tests/unit/road-lut-frame.test.mjs",
+  "tests/unit/webgpu-lifecycle.test.mjs",
+  "tests/unit/renderer-soft-lifecycle.test.mjs",
   // that touches the LUT rather than on every edit.
   // The three raster/spawn-heavy car files (cockpit-pale-surfaces 69 s,
   // crest-marks 41 s, slider-effect 42 s — 48 % of this loop, measured

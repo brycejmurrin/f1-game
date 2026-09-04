@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
 const GLSL = readFileSync(new URL(`../../${P.GLX_SHADERS_POST}`, import.meta.url), "utf8");
+const WGSL = readFileSync(new URL(`../../${P.WGSL_POST}`, import.meta.url), "utf8");
 const LUMA = [0.2126, 0.7152, 0.0722];
 const luma = (c) => c[0] * LUMA[0] + c[1] * LUMA[1] + c[2] * LUMA[2];
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
@@ -85,14 +86,31 @@ test("GLSL exposes the exact safe packed HDR grade contract", () => {
   assert.match(GLSL, /return max\(c, vec3\(0\.0\)\)/);
 });
 
-// NARROWED 2026-09-03. A test here asserted the WGSL grade mirrored the GLSL
-// one function for function — the same masks, guards and composite order — and
-// it was catching a real class of parity drift. WGX left the shipped tree in
-// the spike-out, so there is no second implementation to compare against and
-// the GLSL contract below now stands alone. This is a LOST guarantee, not a
-// tidied test: if WGX is re-attached (spike/backends/README.md), restore this
-// test with it, or the two grades will drift silently the way they did before
-// it existed.
+test("WGSL mirrors exact HDR masks, safety guards, and composite order", () => {
+  assert.match(WGSL, /fn gradeZoneWeights\(/);
+  assert.match(WGSL, /fn applyToeShoulder\(/);
+  assert.match(WGSL, /fn applyHdrGrade\(/);
+  assert.match(WGSL, /let z = log2\(max\(y, 1e-6\) \/ 0\.18\)/);
+  assert.match(WGSL, /1\.0 - smoothstep\(-4\.0, -0\.75, z\)/);
+  assert.match(WGSL, /smoothstep\(-4\.0, -1\.5, z\) \* \(1\.0 - smoothstep\(-1\.0, 0\.75, z\)\)/);
+  assert.match(WGSL, /smoothstep\(-2\.5, -0\.5, z\) \* \(1\.0 - smoothstep\(0\.5, 2\.5, z\)\)/);
+  assert.match(WGSL, /smoothstep\(0\.0, 1\.5, z\) \* \(1\.0 - smoothstep\(3\.0, 5\.0, z\)\)/);
+  assert.match(WGSL, /smoothstep\(2\.5, 5\.0, z\)/);
+  assert.match(WGSL, /max\(U\.gain\.xyz, vec3<f32>\(1e-3\)\)/);
+  assert.match(WGSL, /1\.0 \/ max\(U\.gamma\.xyz, vec3<f32>\(1e-3\)\)/);
+  assert.match(WGSL, /pow\(max\(c_in, vec3<f32>\(0\.0\)\)/);
+  assert.match(WGSL, /exp2\(clamp\(stops, -4\.0, 4\.0\)\)/);
+  assert.match(WGSL, /dot\(c, vec3<f32>\(0\.2126, 0\.7152, 0\.0722\)\)/);
+  assert.match(WGSL, /exp2\(clamp\(toe, -1\.0, 1\.0\)\)/);
+  assert.match(WGSL, /exp2\(clamp\(-shoulder, -1\.0, 1\.0\)\)/);
+  assert.match(WGSL, /newY \/ max\(oldY, 1e-6\)/);
+  assert.match(WGSL, /return max\(c, vec3<f32>\(0\.0\)\)/);
+  assert.match(
+    WGSL,
+    /c = c \+ bloomSample[\s\S]*?c = applyHdrGrade\(c\);[\s\S]*?c = acesTonemap\(/,
+    "HDR grade must run after bloom composition and before ACES",
+  );
+});
 
 test("neutral HDR grade preserves representative linear samples", () => {
   const samples = [

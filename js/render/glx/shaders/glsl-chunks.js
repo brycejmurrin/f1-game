@@ -1,4 +1,4 @@
-/* Apex 26 — GLXChunks: shared GLSL leaves for the WebGL2 shader sources. The GLSL-side sibling of spike/backends/webgpu/wgsl-chunks.js (WGSLChunks) — the maintainabili… */
+/* Apex 26 — GLXChunks: shared GLSL leaves for the WebGL2 shader sources. The GLSL-side sibling of js/render/webgpu/wgsl-chunks.js (WGSLChunks) — the maintainabili… */
 "use strict";
 
 const GLXChunks = (function () {

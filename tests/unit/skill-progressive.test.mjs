@@ -148,7 +148,7 @@ test("the 2026-09 skill set: folded and deleted skills stay gone, the pointer st
   const dirs = fs.readdirSync(SKILLS, { withFileTypes: true }).filter((d) => d.isDirectory());
   // 26 -> 25 on 2026-09-03: webgpu-debug left with the WGX/TLX spike-out and
   // lives at spike/backends/skills/webgpu-debug/. It comes back with the backends.
-  assert.equal(dirs.length, 25, `expected 25 skills, got ${dirs.length}`);
+  assert.equal(dirs.length, 26, `expected 25 skills, got ${dirs.length}`);
   // cross-backend-parity was a 15-line pointer at the renderers doc; that doc
   // was absorbed into docs/ARCHITECTURE.md in Phase 5 and the section moved
   // with it (docs/RENDERERS.md is a redirect stub now).
@@ -258,9 +258,9 @@ test("skills only name real test-bg groups", () => {
 });
 
 test("wgx-validate Usage lists --static as the no-browser gate", () => {
-  const text = fs.readFileSync(path.join(ROOT, "spike/backends/tools/wgx-validate.mjs"), "utf8");
+  const text = fs.readFileSync(path.join(ROOT, "tools/gfx/wgx-validate.mjs"), "utf8");
   const usage = text.match(/Usage:[\s\S]*?\n\/\/\n\/\/ PASS/);
-  assert.ok(usage, "could not find the Usage block in spike/backends/tools/wgx-validate.mjs");
+  assert.ok(usage, "could not find the Usage block in tools/gfx/wgx-validate.mjs");
   assert.match(usage[0], /wgx-validate\.mjs --static/);
   assert.match(usage[0], /parent session only/);
 });
