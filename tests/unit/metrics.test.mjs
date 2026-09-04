@@ -304,7 +304,7 @@ test("initUI injects separate metrics, page, and log settings buttons", () => {
   assert.match(metricsBtn.textContent, /^METRICS: OFF$/);
   M.setPage("car");
   const pageBtn = host.children.find((n) => n.id === "pm-metrics-page");
-  assert.match(pageBtn.textContent, /^METRICS PAGE: CAR$/);
+  assert.match(pageBtn.textContent, /^PAGE: CAR$/);
 });
 
 test("HIDE HUD CSS leaves #game-metrics visible", () => {
