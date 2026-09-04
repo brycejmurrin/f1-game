@@ -75,8 +75,8 @@ function surfaceOf(relPath) {
 
 const GLX_FILE = "js/render/glx/glx.js";
 const BACKENDS = [
-  ["WGX (WebGPU)", "spike/backends/webgpu/wgx.js"],
-  ["TLX (three.js/TSL)", "spike/backends/three/tlx.js"],
+  ["WGX (WebGPU)", "js/render/webgpu/wgx.js"],
+  ["TLX (three.js/TSL)", "js/render/three/tlx.js"],
 ];
 
 test("the scanner actually finds a surface in each backend", () => {

@@ -320,7 +320,7 @@ box (`docs/TESTING.md` §Field notes 2026-09-03).
       itself could not be emptied: twelve of its files are cited by path from
       `js/`/`tests/`/`tools/`. `look-survey/` stays (written by
       `tools/lighting/look-survey-sheet.py`, pinned by `cdmcp-measure.test.mjs`);
-      `research/wgx-gallery/` stays (pinned by `spike/backends/tools/wgx-shot.mjs` and the
+      `research/wgx-gallery/` stays (pinned by `tools/gfx/wgx-shot.mjs` and the
       spike move map); `.claude/workflows/*.js` stays (three LIVE workflows,
       not spent scripts). AGENTS.md 316 → 245 lines / 2858 → 2092 words — every
       rule kept, ~770 words of evidence moved to
@@ -508,8 +508,8 @@ Dropped from the earlier draft: per-circuit `<id>/` directories (they break
 WGX/GPU tools (`wgx-*.mjs`, `gfx-probe.mjs --tlx-webgpu` path,
 `gpu-game-check.mjs` legs, `tlx-pack-check.cjs`, `ssr-probe.mjs`,
 `webgpu-chrome-args.cjs`, `wgpu-flag-test.mjs`), `tests/unit/{webgpu-lifecycle,
-renderer-soft-lifecycle,road-lut-frame}.test.mjs`, `spike/backends/tests/specs/tlx-probes.spec.js`,
-`spike/backends/docs/WEBGPU-PARITY.md` and the WGX/TLX sections of
+renderer-soft-lifecycle,road-lut-frame}.test.mjs`, `tests/specs/tlx-probes.spec.js`,
+`docs/research/WEBGPU-PARITY.md` and the WGX/TLX sections of
 `RENDERER-PERF-AUDIT` into `spike/backends/` (replacing today's closed
 `spike/`), with a README stating how to re-attach. In the shipped tree:
 delete `DEFERRED`/`DEFERRED_EDGES` from `manifest.cjs:370-388,480-493` and

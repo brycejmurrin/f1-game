@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_128 rows over 26 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_141 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -299,6 +299,29 @@ _128 rows over 26 directories, in load order. `tag` = a `<script>` in index.html
 | `gfx-debug-overlay.js` | `GfxDebug` | tag | ON-SCREEN GFX DIAGNOSTIC (?gfxdebug=1 / apex26.gfxDebug="1") The renderer's own verdict, rendered as DOM, for the case this project kept losing to: a player… |
 | `metrics-overlay.js` | `GameMetrics` | tag | GameMetrics: toggleable in-game FPS / car / log overlay. |
 
+**`js/render/webgpu/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `wgsl-chunks.js` | `WGSLChunks` | DEFERRED:webgpu | WGSL shader chunks (WGSLChunks). |
+| `wgsl-post.js` | `WGSLPost` | DEFERRED:webgpu | WGSL post-processing shaders (WGSLPost). |
+| `wgsl-fx.js` | `WGSLFx` | DEFERRED:webgpu | WGSL foreground-FX shaders (WGSLFx). |
+| `wgx.js` | `WGX` | DEFERRED:webgpu | WebGPU renderer backend (WGX). |
+
+**`js/render/three/`**
+
+| File | Global | Loaded | Purpose (header, first sentence) |
+|---|---|---|---|
+| `tsl-chunks.js` | `TLXShaders` | DEFERRED:three | TLXShaders.chunks: shared TSL leaves for the three.js backend. |
+| `tsl-lit.js` | `TLXShaders` | DEFERRED:three | TLXShaders.lit: the TSL lit-shader core for the TLX backend (M3). |
+| `tsl-sky.js` | `TLXShaders` | DEFERRED:three | TLXShaders.sky: the procedural sky for the TLX backend (M5). |
+| `tsl-fx.js` | `TLXShaders` | DEFERRED:three | TLXShaders.fx: the FX materials for the TLX backend (M6). |
+| `tsl-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.post: the TSL post-chain shaders for the TLX backend (M8). |
+| `tlx-shadow.js` | `TLXShaders` | DEFERRED:three | TLXShaders.shadowSys: the three-map shadow subsystem for the TLX backend (M4). |
+| `tlx-chunked.js` | `TLXShaders` | DEFERRED:three | TLXShaders.chunked: the chunked-mesh subsystem for the TLX backend (M7). |
+| `tlx-post.js` | `TLXShaders` | DEFERRED:three | TLXShaders.postChain: the post-processing ORCHESTRATION for the TLX backend (M8). |
+| `tlx.js` | `TLX` | DEFERRED:three | TLX: three.js/TSL renderer backend. |
+
 **`js/agent/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
@@ -523,7 +546,7 @@ resolves the localStorage key `apex26.gfxBackend` to a backend and returns it
 |---|---|---|
 | unset / `"webgl2"` | **GLX** | WebGL2 — the shipped default |
 | `"three"` | **TLX** | three.js r185.1 + TSL; WebGPU with automatic WebGL2 fallback inside three |
-| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [../spike/backends/docs/WEBGPU-PARITY.md](../spike/backends/docs/WEBGPU-PARITY.md) |
+| `"webgpu"` | **WGX** | native WebGPU; requires `navigator.gpu`; opt-in. Parity recipes: [../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md) |
 
 GLX remains the default; TLX and WGX are **opt-in only**. The pause-menu
 **RENDERER** control is a 3-state cycle (WEBGL2 → THREE → WEBGPU) that writes
@@ -564,7 +587,7 @@ survivable, not a claim that every phone looks right.
 feature exists there until you have read the backend object — a missing name
 must stay an explicit `undefined` so game.js does not inherit a dead GLX
 function. The 2026-08 parity pass (recipes in
-[../spike/backends/docs/WEBGPU-PARITY.md](../spike/backends/docs/WEBGPU-PARITY.md)) landed:
+[../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md)) landed:
 
 - `gpuTimer` / `gpuMs` via `"timestamp-query"` (unsupported if the bit is absent)
 - baked material arrays (`createTextureArray` / `setMaterialMaps` / `matTexMix`)
@@ -1133,7 +1156,7 @@ project").
 
 How GLX, WGX, and TLX share one draw-API seam. Module contracts and API
 signatures live in [ARCHITECTURE.md](ARCHITECTURE.md); WGX gap recipes in
-[../spike/backends/docs/WEBGPU-PARITY.md](../spike/backends/docs/WEBGPU-PARITY.md). This page is the
+[../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md). This page is the
 boot / pipeline / parity map.
 
 ### Mental model
@@ -1179,8 +1202,8 @@ would keep GLX’s dead closure).
 | Backend | Role | Entry | Shaders |
 |---|---|---|---|
 | **GLX** | Default always-tagged WebGL2 | `js/render/glx/glx.js` + `glx/{shadow,post,chunked}.js` | GLSL strings in `js/render/shaders/` |
-| **WGX** | Opt-in WebGPU, hand-ported WGSL | `spike/backends/webgpu/wgx.js` | `spike/backends/webgpu/wgsl-{chunks,post,fx}.js` |
-| **TLX** | Opt-in Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `spike/backends/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
+| **WGX** | Opt-in WebGPU, hand-ported WGSL | `js/render/webgpu/wgx.js` | `spike/backends/webgpu/wgsl-{chunks,post,fx}.js` |
+| **TLX** | Opt-in Three `WebGPURenderer` (`forceWebGL` when `tlxForceGL=1`, or on AUTO when `navigator.gpu` is absent / `tlxAutoGL` is set; WebKit (Safari/iOS) takes three WebGL2 on AUTO since 2026-09-03; THREE PATH: WEBGPU pins the lite WebGPU path) | `js/render/three/tlx.js` | TSL factories on `TLXShaders`; vendor `vendor/three-0.185.1/` |
 
 **Shared always-on:** `js/render/gfx.js` (`create` only), `js/render/shared/gltf.js`,
 `js/render/shared/assets.js` (MAT `TEXTURE_2D_ARRAY`). Deferred lists live in
@@ -1223,7 +1246,7 @@ because iOS 26.0–26.5 never fires `device.onuncapturederror = fn` (WebKit
 689ebe5, 2026-04-26, bug 291775); three r185 and both our backends used the
 property. Both now register `addEventListener("uncapturederror")` first.
 With the ear open, the WebKit-source ranking of what drops draws without a
-word (full list and commits: `spike/backends/docs/WEBGPU-PARITY.md` §5a rule 4):
+word (full list and commits: `docs/research/WEBGPU-PARITY.md` §5a rule 4):
 
 | # | mechanism | discriminator | A/B on the phone |
 |---|---|---|---|
@@ -1243,7 +1266,7 @@ layouted noise helpers in `tsl-chunks.js` (compile once, not inlined ~50×)
 plus vendor PATCHES.md §4 (node variables declared inside `main()`). None
 of the ranked mechanisms above was it; they stay as the bisect list for the
 NEXT silent drop. AUTO on WebKit stays on three's WebGL2 backend until the
-WebGPU path has a lap of phone evidence (`spike/backends/docs/WEBGPU-PARITY.md`
+WebGPU path has a lap of phone evidence (`docs/research/WEBGPU-PARITY.md`
 §5a rule 5).
 
 ### Screenshots — why WebGPU can look black
@@ -1271,7 +1294,7 @@ whole device.
 | **WEBGPU** | Soft-present: final pass → `COPY_SRC` texture → ephemeral readback → `putImageData` on `#game`. Forced by SCREENSHOTS: 2D BLIT or a software adapter. SCREENSHOTS: NATIVE leaves the swapchain black. | `GLX.awaitSoftPresent()` then `#game`; optional `GLX.capturePixels()` |
 | **THREE.JS** | AUTO can be **WebGPU or three WebGL2**. SETTINGS shows `AUTO (WEBGPU)` / `AUTO (WEBGL2)` from the live backend. It tries WebGPU wherever `navigator.gpu` exists (phones/Safari: lite stack, same as WGX_LITE; since 2026-09-02 a phone that picks THREE.JS BINDS it despite the §2m memory risk — `apex26.tlxMobile=0` declines back to GLX, and the boot canary reverts a load that never presented). It lands on three WebGL2 when GPU is missing, `apex26.tlxAutoGL=1` after this tab lost WebGPU, `init()` threw before `#game` was claimed, **or the browser is WebKit (Safari, every iOS browser) — since 2026-09-03: two deploys drew three-WebGPU wrongly on an iPhone with zero reported errors (bodywork missing, then sky-only at `c6d8fd3`); THREE PATH: WEBGPU still pins it for the investigation, with `apex26.tlxArrayNearest=1` / `apex26.tlxNoMrt=1` as the on-device A/B switches and SETTINGS ▸ COPY DIAG as the report** — still TLX, not game WEBGL2 (`gfxClaimFail` is what binds GLX). Software WebGPU 2D-blits the LDR target. `mappedAtCreation` uploads go through `queue.writeBuffer`. THREE PATH: WEBGL2 / WEBGPU pins one path. | Same façade: `GLX.capturePixels()` / `awaitSoftPresent()` — WebGL2 `readPixels`; WebGPU LDR readback |
 
-Probes: `node spike/backends/tools/gfx-probe.mjs --backend webgpu|three <track>`.
+Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
 
 ### Parity snapshot
 
@@ -1366,7 +1389,7 @@ auditing drift after a lighting or rendering change. Night-looks-wrong is a
 
 **The rule: a GLX fix is not done until it is mirrored in WGX and TLX — or
 recorded as a gap** in §Parity snapshot above and in the defect inventory
-[../spike/backends/docs/WEBGPU-PARITY.md](../spike/backends/docs/WEBGPU-PARITY.md).
+[../docs/research/WEBGPU-PARITY.md](../docs/research/WEBGPU-PARITY.md).
 
 1. `node --test tests/unit/backend-surface-parity.test.mjs` first — the
    façade must carry the same member names on all three backends (a missing
@@ -1376,12 +1399,12 @@ recorded as a gap** in §Parity snapshot above and in the defect inventory
    `webgpu/wgsl-*.js`, TSL factories in `three/`, and the CPU plumbing that
    feeds the uniforms — a knob that reaches one shader family and not the
    others is the usual drift.
-3. WGX: `node spike/backends/tools/wgx-validate.mjs --static` (real Dawn WGSL validation,
+3. WGX: `node tools/gfx/wgx-validate.mjs --static` (real Dawn WGSL validation,
    ~5 s). A live-device Dawn run is parent-session only → `webgpu-debug`.
 4. Same-scene shots per backend: `node tools/shot/backend-compare.mjs
    <track> …` (one deterministic framing, N backends, numeric pixel diff —
    MAD and %px changed — plus per-backend console errors), or
-   `spike/backends/tools/gfx-probe.mjs --backend webgpu|three <track>` (`playwright-probe`
+   `tools/gfx/gfx-probe.mjs --backend webgpu|three <track>` (`playwright-probe`
    skill). `__apex.diag({download:false}).env.backend` is what actually
    bound — a fallback to GLX is silent, so never trust the pick alone.
 
@@ -1422,10 +1445,10 @@ leaves `sessionStorage["apex26.gfxBound"]` absent (that key means it refused)
 a success test is not a test. Drive a race and assert
 `canvas.getContext("webgl2") === null`, which only holds once WebGPU has
 claimed the canvas. SwiftShader is a validation oracle; for WGX **visible**
-pixels use `spike/backends/tools/gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for the
-readback oracle use `spike/backends/tools/wgx-capture.mjs` → `frame.png`. Full trap list:
+pixels use `tools/gfx/gfx-probe.mjs` (`#game` after `awaitSoftPresent`); for the
+readback oracle use `tools/gfx/wgx-capture.mjs` → `frame.png`. Full trap list:
 `.claude/skills/mcp-probe/references/recipes.md` §Probing a specific renderer.
-WGSL validation without a browser: `node spike/backends/tools/wgx-validate.mjs` (real Dawn,
+WGSL validation without a browser: `node tools/gfx/wgx-validate.mjs` (real Dawn,
 ~5 s) — never ship "read-verified" WGSL. The live run compiles every module
 at WebKit's ERROR-severity uniformity default (Dawn only warns), so a pass
 here is evidence about an iPhone too; `--lax-uniformity` opts out to bisect.

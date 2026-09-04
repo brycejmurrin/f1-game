@@ -3,7 +3,7 @@
 /* gpu-game-check.mjs — run the ACTUAL GAME on whatever GPU this machine has,
  * and report the renderer's own verdict.
  *
- * The portable sibling of spike/backends/tools/gfx-probe.mjs. gfx-probe is tuned for this
+ * The portable sibling of tools/gfx/gfx-probe.mjs. gfx-probe is tuned for this
  * container (Lavapipe ICD, soft-present blit, Linux paths); this one assumes
  * nothing but Playwright and a static server, so it runs on a GitHub macOS or
  * Windows image where a real adapter may exist. It answers the question the

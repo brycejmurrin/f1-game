@@ -64,6 +64,13 @@ async function precacheAssetLists() {
     // someone scans an answer code, so the tag parser below never sees it.
     // OPTIONAL for the same reason as three.js: most sessions never scan, and
     // an install must not fail over 257 KB they will not run.
+    // The vendored three.js island TLX imports at runtime. Hand-authored
+    // because it is reached through the importmap, not a <script> tag, so
+    // the parser below cannot see it. OPTIONAL: an install must not fail
+    // over a backend most sessions never select.
+    "vendor/three-0.185.1/three.webgpu.min.js",
+    "vendor/three-0.185.1/three.core.min.js",
+    "vendor/three-0.185.1/three.tsl.min.js",
     "vendor/jsqr-1.4.0/jsQR.js",
     // Rapier (js/physics/debris-world.js) is dynamic-import()ed, never tagged, so
     // the parser below cannot find it either. Unlike the entries around it this
@@ -92,6 +99,19 @@ async function precacheAssetLists() {
     "assets/fonts/rajdhani-latin-700-normal.woff2",
     // @gen-shell:sw-optional
     // DEFERRED renderer backends (no <script> tag; injected on opt-in)
+    "js/render/webgpu/wgsl-chunks.js",
+    "js/render/webgpu/wgsl-post.js",
+    "js/render/webgpu/wgsl-fx.js",
+    "js/render/webgpu/wgx.js",
+    "js/render/three/tsl-chunks.js",
+    "js/render/three/tsl-lit.js",
+    "js/render/three/tsl-sky.js",
+    "js/render/three/tsl-fx.js",
+    "js/render/three/tsl-post.js",
+    "js/render/three/tlx-shadow.js",
+    "js/render/three/tlx-chunked.js",
+    "js/render/three/tlx-post.js",
+    "js/render/three/tlx.js",
     // LAZY_RACE + LAZY_SCENERY — the race payload; a miss builds a bare circuit offline
     "js/lighting/presets.js",
     "js/circuits/scenery/bahrain.js",
@@ -261,7 +281,7 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     const stamped = urls.optional.map((u) =>
-      /^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
+      /^js\/render\/(webgpu|three)\/|^js\/circuits\/scenery\/|^js\/data\/|^js\/net\/|^js\/lighting\/presets\.js$/.test(u)
         ? u + "?v=" + build : u);
     // SKIPWAITING STAYS LAST, deliberately. Hoisting it above this pool lets a
     // returning player's new worker activate — and `activate` both claims

@@ -75,9 +75,8 @@ export const RULES = [
   // absent, so generating them re-opens the question instead of leaving a
   // stale exclusion behind.
   [/^js\/render\/(glx\/|gfx)/, ["gfx"], "the shipped WebGL2 path and its GLSL leaves"],
-  // The js/render/webgpu/ and js/render/three/ rules left with the 2026-09-03
-  // spike-out — neither directory exists in the shipped tree now. They come
-  // back with the backends (spike/backends/README.md).
+  [/^js\/render\/webgpu\//, ["gfx"], "WGX is feature-detected; GLX must still boot"],
+  [/^js\/render\/three\//, ["gfx"], "the three.js backend has its own probe spec"],
   [/^js\/render\/shared\//, ["hooks", "gfx"], "the baked-pack loader, glTF and the lamp chunks every backend shares"],
 
   // ── track engine + circuit data ─────────────────────────────────────────

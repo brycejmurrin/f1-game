@@ -216,6 +216,17 @@ function wantAgentSurface() {
   const h = typeof location !== "undefined" ? location.hostname : "";
   return h === "127.0.0.1" || h === "localhost" || h === "[::1]";
 }
+// Warm the vendored three island for a stored THREE pick, so TLX is not
+// waiting on a cold module fetch after the roster injects it.
+function preloadThreeVendor() {
+  for (const href of ["vendor/three-0.185.1/three.webgpu.min.js", "vendor/three-0.185.1/three.tsl.min.js"]) {
+    const el = document.createElement("link");
+    el.rel = "modulepreload";
+    el.href = href;
+    el.crossOrigin = "anonymous";
+    document.head.appendChild(el);
+  }
+}
 let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
   let pref = null;
@@ -247,14 +258,13 @@ try {
     try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem(PROBE_KEY); } catch (_) { /* the in-memory revert above still holds for this load */ } }
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
-  // A pick can only be honoured while its DEFERRED group still exists. Since the
-  // 2026-09-03 WGX/TLX spike-out DEFERRED is {}, so BACKEND_FILES.three was
-  // `undefined` and loadBackendScripts(undefined) threw on `files.map` — caught
-  // below, GLX rendered, but the probe had already been armed one line earlier,
-  // so the NEXT boot logged "backend three never presented a frame" about a
-  // backend that was never fetched, then reverted the pick. Harmless and
-  // self-healing, but it is a thrown exception and a warning that lies. No
-  // group, no opt-in: the pick then reads as the documented GLX fallback.
+  // A pick can only be honoured while its DEFERRED group still exists. Both
+  // groups are back (2026-09-04 re-attach), but the guard stays: during the
+  // spike-out BACKEND_FILES.three was `undefined`, loadBackendScripts(undefined)
+  // threw on `files.map`, and because the probe had already been armed one line
+  // earlier the NEXT boot warned that a backend "never presented a frame" when
+  // it had never been fetched. No group, no opt-in — that is what keeps a
+  // future detach honest instead of arming a probe over nothing.
   const group = pref === "three" ? BACKEND_FILES.three
               : pref === "webgpu" ? BACKEND_FILES.webgpu : null;
   const optIn = !skipClaim && !!(group && group.length) &&
@@ -277,6 +287,7 @@ try {
     // is simply absent, and Gfx.create already treats that as "unavailable"
     // (`typeof TLX === "undefined"`) and returns null, which falls through to
     // GLX below exactly as an unsupported browser always has.
+    if (pref === "three") preloadThreeVendor();
     await loadBackendScripts(pref === "three" ? BACKEND_FILES.three : BACKEND_FILES.webgpu);
     const backend = await Gfx.create(canvas, {});
     if (backend) {

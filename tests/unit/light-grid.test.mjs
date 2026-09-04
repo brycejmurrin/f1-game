@@ -244,7 +244,7 @@ test("WGX god-ray knobs read TUNE_DEFS ids, not stale aliases", () => {
   // WGX used to pack T.hgAniso / T.hgFloor — ids that do not exist on LT — so
   // GOD-RAY FOCUS and GOD-RAY HAZE were stuck at the 0.60 / 0.020 fallbacks
   // on WebGPU no matter where the sliders sat.
-  const wgx = read("spike/backends/webgpu/wgx.js");
+  const wgx = read("js/render/webgpu/wgx.js");
   assert.match(wgx, /T\.godrayAniso/, "WGX must read T.godrayAniso");
   assert.match(wgx, /T\.godrayFloor/, "WGX must read T.godrayFloor");
   assert.doesNotMatch(wgx, /T\.hgAniso/, "stale T.hgAniso alias is dead — the slider id is godrayAniso");
@@ -253,7 +253,7 @@ test("WGX god-ray knobs read TUNE_DEFS ids, not stale aliases", () => {
 
 test("WGX T.* reads are TUNE_DEFS ids (no silent fallbacks)", () => {
   const ids = new Set(defs().map((d) => d.id));
-  const wgx = read("spike/backends/webgpu/wgx.js");
+  const wgx = read("js/render/webgpu/wgx.js");
   const keys = [...wgx.matchAll(/\bT\.(\w+)/g)].map((m) => m[1]);
   const unknown = [...new Set(keys)].filter((k) => !ids.has(k));
   assert.deepEqual(unknown, [],
@@ -265,9 +265,9 @@ test("TLX k()/gk() keys are TUNE_DEFS ids (no silent fallbacks)", () => {
   // Same defect class as WGX T.hgAniso: a typo'd gk("hgAniso") would compile,
   // upload the fallback, and leave the slider dead on three.js only.
   const ids = new Set(defs().map((d) => d.id));
-  const src = ["spike/backends/three/tsl-lit.js", "spike/backends/three/tlx-post.js",
-    "spike/backends/three/tsl-fx.js", "spike/backends/three/tsl-sky.js",
-    "spike/backends/three/tlx.js"].map(read).join("\n");
+  const src = ["js/render/three/tsl-lit.js", "js/render/three/tlx-post.js",
+    "js/render/three/tsl-fx.js", "js/render/three/tsl-sky.js",
+    "js/render/three/tlx.js"].map(read).join("\n");
   const keys = [...src.matchAll(/\b(?:k|gk)\(\s*["'](\w+)["']/g)].map((m) => m[1]);
   const unknown = [...new Set(keys)].filter((k) => !ids.has(k));
   assert.deepEqual(unknown, [],
@@ -281,11 +281,11 @@ test("every TUNE_DEFS uniform lives on GLX, WGX, and TLX", () => {
   const glx = ["js/render/glx/glx.js", "js/render/glx/post.js", "js/render/glx/shadow.js",
     "js/render/glx/shaders/glsl-lit.js", "js/render/glx/shaders/glsl-post.js", "js/render/glx/shaders/glsl-sky.js"]
     .map(read).join("\n");
-  const wgx = ["spike/backends/webgpu/wgx.js", "spike/backends/webgpu/wgsl-chunks.js",
-    "spike/backends/webgpu/wgsl-post.js"].map(read).join("\n");
-  const tlx = ["spike/backends/three/tlx.js", "spike/backends/three/tlx-post.js",
-    "spike/backends/three/tsl-lit.js", "spike/backends/three/tsl-post.js",
-    "spike/backends/three/tsl-sky.js", "spike/backends/three/tsl-fx.js"].map(read).join("\n");
+  const wgx = ["js/render/webgpu/wgx.js", "js/render/webgpu/wgsl-chunks.js",
+    "js/render/webgpu/wgsl-post.js"].map(read).join("\n");
+  const tlx = ["js/render/three/tlx.js", "js/render/three/tlx-post.js",
+    "js/render/three/tsl-lit.js", "js/render/three/tsl-post.js",
+    "js/render/three/tsl-sky.js", "js/render/three/tsl-fx.js"].map(read).join("\n");
   const hit = (src, d) => {
     const names = [d.id, d.u].filter(Boolean);
     return names.some((n) => src.includes(n));
