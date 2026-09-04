@@ -659,7 +659,10 @@ function paintSummary() {
   var det = typeof document !== "undefined" ? document.getElementById("pm-metrics-details") : null;
   var sum = det && det.querySelector ? det.querySelector("summary") : null;
   if (!sum) return;
-  sum.textContent = on() ? ("METRICS · " + page().toUpperCase()) : "METRICS · OFF";
+  sum.innerHTML = '<span data-fold="k">METRICS</span><span data-fold="sep"> · </span>' +
+    (on()
+      ? '<span data-fold="on">ON</span><span data-fold="sep"> · </span><span data-fold="val">' + page().toUpperCase() + "</span>"
+      : '<span data-fold="off">OFF</span>');
 }
 
 function paintLogVisibility() {
@@ -972,7 +975,7 @@ function buildSubmenu() {
 
   var sum = document.createElement("summary");
   sum.className = "adv-more-btn";
-  sum.textContent = "METRICS · OFF";
+  sum.innerHTML = '<span data-fold="k">METRICS</span><span data-fold="sep"> · </span><span data-fold="off">OFF</span>';
   sum.title = "Live FPS / car / phys / log overlay controls";
   det.appendChild(sum);
 

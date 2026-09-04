@@ -486,17 +486,16 @@ if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "on";
 if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
 function hudMapVisLabel() { return "MAP: " + hudMapVis.toUpperCase(); }
 function hudGapsVisLabel() { return "GAPS: " + hudGapsVis.toUpperCase(); }
-function hudDetailsSummary() {
-  let s = "HUD · " + (document.body.classList.contains("hud-hidden") ? "OFF" : "ON") + " · " + hudProfile.toUpperCase() + " · " + hudMetricsLayout.toUpperCase();
-  if (hudMapVis === "on") s += " · MAP";
-  else if (hudMapVis === "off") s += " · NO MAP";
-  if (hudGapsVis === "off") s += " · NO GAPS";
-  else s += " · GAPS";
-  return s;
-}
 function paintHudDetailsSummary() {
   const sum = $("pm-hud-details-sum");
-  if (sum) sum.textContent = hudDetailsSummary();
+  if (!sum) return;
+  const on = !document.body.classList.contains("hud-hidden");
+  const bits = [["k", "HUD"], [on ? "on" : "off", on ? "ON" : "OFF"],
+    ["val", hudProfile.toUpperCase()], ["val", hudMetricsLayout.toUpperCase()],
+    [hudMapVis === "off" ? "off" : "val", hudMapVis === "off" ? "NO MAP" : "MAP"],
+    [hudGapsVis === "off" ? "off" : "val", hudGapsVis === "off" ? "NO GAPS" : "GAPS"]];
+  sum.innerHTML = bits.map((p, i) => (i ? '<span data-fold="sep"> · </span>' : "") +
+    '<span data-fold="' + p[0] + '">' + p[1] + "</span>").join("");
 }
 function syncMetricsOverlayCompact() {
   const metrics = document.getElementById("game-metrics");

@@ -1275,6 +1275,25 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--text);
   font-size: var(--fs-micro);
 }
+/* UI SIZE is the DISPLAY section label — same steel italic + rule as COCKPIT.
+   HUD SIZE inside the HUD fold stays a quiet slider caption. */
+#pm-panel-display > .tune-row .tune-label {
+  font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: var(--ls-5);
+  text-transform: uppercase;
+  padding-bottom: calc(var(--gap) / 3);
+  background: var(--grad-rule) bottom left / 100% 1px no-repeat;
+}
+#pm-panel-display > .tune-row .tune-label b {
+  font-size: inherit;
+  font-weight: 700;
+  font-style: italic;
+}
+#pm-panel-display > .tune-row {
+  gap: calc(var(--gap) * 0.25);
+}
 #pm-panel-display .tune-row input[type="range"] {
   accent-color: var(--steel);
 }
@@ -1306,16 +1325,16 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pmsettings-inner #pm-metrics-details > summary,
 #pmsettings-inner #pm-hud-details > summary {
-  height: var(--tap);
-  min-height: var(--tap);
+  height: var(--chip-h);
+  min-height: var(--chip-h);
   box-sizing: border-box;
   cursor: pointer;
   justify-content: flex-start;
-  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-size: clamp(var(--fs-2), calc(1.8 * var(--vwz)), var(--fs-4));
   font-weight: 700;
-  letter-spacing: var(--ls-5);
+  letter-spacing: var(--ls-2);
   opacity: 1;
-  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+  padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
 #pm-metrics-details[open] > summary::before { content: "\25B4"; }
 #pm-hud-details[open] > summary::before { content: "\25B4"; }
@@ -1360,16 +1379,16 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   grid-column: 1 / -1;
 }
 #pmsettings-inner #pm-display-adv > summary {
-  height: var(--tap);
-  min-height: var(--tap);
+  height: var(--chip-h);
+  min-height: var(--chip-h);
   box-sizing: border-box;
   cursor: pointer;
   justify-content: flex-start;
-  font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
+  font-size: clamp(var(--fs-2), calc(1.8 * var(--vwz)), var(--fs-4));
   font-weight: 700;
-  letter-spacing: var(--ls-5);
+  letter-spacing: var(--ls-2);
   opacity: 1;
-  padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+  padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
 /* Fold summaries are tappable dropdowns, not quiet steel headings.
    --text + plate so HUD / METRICS / RENDERER read as controls against
@@ -1403,6 +1422,27 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
+}
+/* Choice chips inside the fold label — ON gold, OFF dim, values steel italic,
+   matching the words the inner buttons already use. */
+#pmsettings-inner details > summary [data-fold="on"] {
+  color: var(--gold);
+  font-style: italic;
+  font-weight: 700;
+}
+#pmsettings-inner details > summary [data-fold="off"] {
+  color: var(--dim);
+  font-style: italic;
+  font-weight: 600;
+}
+#pmsettings-inner details > summary [data-fold="val"] {
+  color: var(--steel);
+  font-style: italic;
+  font-weight: 700;
+}
+#pmsettings-inner details > summary [data-fold="sep"] {
+  color: color-mix(in oklab, var(--text) 34%, transparent);
+  font-weight: 400;
 }
 #pmsettings-inner #pm-panel-display > .pm-group-h {
   margin-top: calc(var(--gap) * 0.5);

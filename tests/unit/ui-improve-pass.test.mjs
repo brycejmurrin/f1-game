@@ -889,8 +889,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
   assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hud-sample"/,
     "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--tap)",
-    "METRICS summary matches the HIDE HUD tap row");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--chip-h)",
+    "METRICS summary is a chip row — slightly shorter than a full --tap door");
   assert.equal(decl(css("css/components.css"), /#pm-metrics-details \[role="group"\]/, "display"), "flex",
     "METRICS body is a quiet column — not a 2-up plate grid");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details \[role="group"\] > button/, "background"), "transparent",
@@ -907,8 +907,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "ADVANCED spans the DISPLAY row; it is not a fourth named area");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "height"), "var(--tap)",
-    "ADVANCED summary matches the METRICS / HIDE HUD tap row");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "height"), "var(--chip-h)",
+    "RENDERER summary matches the HUD / METRICS chip row");
   assert.equal(decl(css("css/components.css"), '#pm-display-adv [role="group"]', "display"), "flex",
     "ADVANCED body defaults to a column; wide/compact override to a 2-up grid");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv \[role="group"\]/, "display"), "grid",
@@ -940,8 +940,15 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "unlayered inject must not offset METRICS off the HIDE HUD row");
   assert.match(code("js/perf/metrics-overlay.js"), /page\(\) === "log"/,
     "LOG NS / LOG SHOW stay hidden unless the overlay page is LOG");
-  assert.match(code("js/perf/metrics-overlay.js"), /METRICS · /,
+  assert.match(code("js/perf/metrics-overlay.js"), /data-fold="k">METRICS/,
     "closed METRICS summary carries ON/page state");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-display > .tune-row .tune-label", "font-style"), "italic",
+    "UI SIZE uses the same steel italic heading as COCKPIT");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-display > .tune-row .tune-label", "font-weight"), "700");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="on"]', "color"), "var(--gold)",
+    "fold ON chips pick up the live gold the inner ON buttons name");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="off"]', "color"), "var(--dim)");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="val"]', "color"), "var(--steel)");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("det.open = true"),
     "METRICS does not auto-open and blow the HIDE HUD pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",
