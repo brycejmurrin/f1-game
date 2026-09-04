@@ -1406,27 +1406,32 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.7) calc(var(--pad) * 0.55);
 }
-/* Fold summaries are tappable dropdowns, not quiet steel headings.
-   --text + plate so HUD / METRICS / RENDERER read as controls against
-   COCKPIT's italic steel. Chevron stays on the left (::before);
-   ::after is the native <select> mark and stays off. */
+/* Fold summaries are disclosures, not plates: steel + rule + left chevron
+   (same language as COCKPIT / UI SIZE). A raised .adv-more-btn plate made
+   HUD / METRICS / RENDERER read as copies of HALO / TURN CHASING. */
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary,
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:active {
-  color: var(--text);
-  font-style: normal;
+  color: var(--steel);
+  font-style: italic;
   opacity: 1;
-  background-color: var(--surf-3);
-  background-image: none;
-  border: 1px solid color-mix(in oklab, var(--text) 34%, transparent);
-  border-radius: var(--r-md);
+  background-color: transparent;
+  background-image: var(--grad-rule);
+  background-position: bottom left;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  border: none;
+  border-radius: 0;
   box-shadow: none;
 }
 @media (hover: hover) {
   #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details) > summary:hover {
     color: var(--text);
-    background-color: var(--plate-press);
-    background-image: none;
-    border: 1px solid color-mix(in oklab, var(--text) 48%, transparent);
+    background-color: transparent;
+    background-image: var(--grad-rule);
+    background-position: bottom left;
+    background-size: 100% 1px;
+    background-repeat: no-repeat;
+    border: none;
     box-shadow: none;
   }
 }
@@ -1439,8 +1444,14 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
 }
-/* Choice chips inside the fold label — ON gold, OFF dim, values steel italic,
-   matching the words the inner buttons already use. */
+/* Name stays steel (the heading). Choices use the inner-button colors:
+   ON gold, OFF dim, values bright text — steel-on-steel made STANDARD /
+   AUTO / WEBGL2 disappear into the chrome. */
+#pmsettings-inner details > summary [data-fold="k"] {
+  color: var(--steel);
+  font-style: italic;
+  font-weight: 700;
+}
 #pmsettings-inner details > summary [data-fold="on"] {
   color: var(--gold);
   font-style: italic;
@@ -1450,14 +1461,15 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   color: var(--dim);
   font-style: italic;
   font-weight: 600;
+  opacity: 0.62;
 }
 #pmsettings-inner details > summary [data-fold="val"] {
-  color: var(--steel);
+  color: var(--text);
   font-style: italic;
   font-weight: 700;
 }
 #pmsettings-inner details > summary [data-fold="sep"] {
-  color: color-mix(in oklab, var(--text) 34%, transparent);
+  color: color-mix(in oklab, var(--steel) 55%, transparent);
   font-weight: 400;
 }
 #pmsettings-inner #pm-panel-display > .pm-group-h {
