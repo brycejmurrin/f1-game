@@ -472,3 +472,79 @@ test("every slider spans its trim's FULL range and can land exactly on 1.0", () 
       `${key}: the default position is ${lo + dflt * step}, not 1.0 — the panel cannot return to the shipped sound`);
   }
 });
+
+test("BRIGHTNESS keeps moving the corner across its whole range, and stops below Nyquist", async () => {
+  const A = await sampleEngine();
+  const at = (b) => { A.setTune({ brightness: b }); A.setEngine(0.8, 0, false, 0.6, 6, {}); return A.engineCut(); };
+  const [lo, hi] = A.tuneRange().brightness;
+  const NY = 44100 * 0.5;
+  let last = -1;
+  for (const b of [lo, 0.6, 1, 1.5, 2, hi]) {
+    const cut = at(b);
+    assert.ok(cut > last, `BRIGHTNESS ${b} did not open the filter further (${last} -> ${cut})`);
+    assert.ok(cut < NY, `corner ${cut} Hz is at or past Nyquist, where the node pins it silently`);
+    last = cut;
+  }
+});
+
+test("the LIMITER trim never inverts the gate, and spends its top half on the chop rate", async () => {
+  const A = await sampleEngine();
+  const atLimiter = () => A.setEngine(0.99, 0, false, 0.9, 7, {});
+  const [, hi] = A.tuneRange().limiter;
+  let lastHz = -1;
+  for (const k of [0, 0.5, 1, 2, hi]) {
+    A.setTune({ limiter: k });
+    atLimiter();
+    // engGain's base is (lvl - depth) and the square swings +-depth on top, so
+    // the trough is lvl - 2*depth. Negative there is a phase flip, not a cut.
+    const depth = A.limiterDepth(), lvl = A.engineLevel() + depth;
+    assert.ok(depth <= lvl * 0.5 + 1e-9,
+      `LIMITER ${k}: depth ${depth} exceeds half of level ${lvl} — the gate inverts`);
+    const hz = A.limiterHz();
+    assert.ok(hz > lastHz, `LIMITER ${k}: the chop rate stopped rising (${lastHz} -> ${hz})`);
+    lastHz = hz;
+  }
+  A.setTune({ limiter: 1 });
+  atLimiter();
+  assert.ok(Math.abs(A.limiterHz() - 13) < 0.01, "1.0 is still the stock 13 Hz cut");
+});
+
+test("rival voices are four distinct cars, not one car four times", async () => {
+  const A = await sampleEngine();
+  // Four cars in a line, all at the same rev: the only thing separating their
+  // pitches is the per-slot detune spread, so they must still all differ.
+  A.setRivals([0, 1, 2, 3].map((i) => ({ lat: 0, arc: 4 + i * 4, rev: 0.6, approach: 0 })));
+  const rates = A.rivalState().map((v) => v.rate);
+  assert.equal(new Set(rates).size, 4, `four voices share a pitch: ${rates.join(", ")}`);
+  const spread = Math.max(...rates) / Math.min(...rates);
+  assert.ok(spread > 1.001 && spread < 1.05, `spread ${spread} is not a few cents`);
+});
+
+test("a rival close alongside is heard, and one far up the road fades instead of popping", async () => {
+  const A = await sampleEngine();
+  const one = (arc, lat = 0, rev = 0.8) => {
+    A.setRivals([{ lat, arc, rev, approach: 0 }]);
+    return A.rivalState()[0];
+  };
+  const near = one(1, 4), far = one(100), gone = one(200);   // alongside on the right
+  assert.ok(near.gain > 0.2, `a car three metres away is at ${near.gain}, which is a rumour`);
+  assert.ok(far.gain > 0 && far.gain < near.gain, "a hundred metres up the road is quiet but present");
+  assert.equal(gone.gain, 0, "past the audible radius it is gone");
+  assert.ok(near.pan > 0.6, "a car alongside on your right is on your right");
+  assert.ok(near.cut > far.cut, "and the far one has lost its top end to the air");
+});
+
+test("Doppler is bounded however hard two cars close on each other", async () => {
+  const A = await sampleEngine();
+  const rate = (approach) => {
+    A.setRivals([{ lat: 0, arc: 5, rev: 0.5, approach }]);
+    return A.rivalState()[0].rate;
+  };
+  const still = rate(0);
+  assert.ok(rate(40) > still, "a car closing rises in pitch");
+  assert.ok(rate(-40) < still, "one dropping away falls");
+  for (const v of [1e6, -1e6, NaN, Infinity]) {
+    const r = rate(v);
+    assert.ok(Number.isFinite(r) && r > 0.05 && r < 2, `approach ${v} produced playbackRate ${r}`);
+  }
+});

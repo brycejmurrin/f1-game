@@ -484,3 +484,49 @@ test("the wide/narrow choice reads the granted width, never the painted one", ()
   // An unmeasurable box is UNKNOWN, not small: it must not force narrow.
   assert.match(fn, /metricsRatio\(\) >= 480/);
 });
+
+// physState() RETURNED THESE AND THE PANEL DROPPED THEM. Eight fields came back
+// on every PHYS paint and none reached the screen: towing, xVmaxGain, xDfLoss,
+// drain, regen, brakeBias, otTime, otCool. No new data path was needed — the
+// fetch was already happening. MEASURED rendering, Monza at 72 m/s:
+//   x cost:  vmax +0.096   df -0.567
+//   tow:     0.00   brakeBias 0.560
+//   ers:     drain 0.234   regen 0.105
+//   ot:      3.6 s   cooldown 12.9 s
+// Names match the __apex hook so a player's screenshot maps onto physState().
+test("the PHYS page renders every physState field it fetches", () => {
+  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  const carried = ["towing", "xVmaxGain", "xDfLoss", "drain", "regen", "brakeBias", "otTime", "otCool"];
+  const snap = src.slice(src.indexOf("function snapshot()"), src.indexOf("function ensurePanel()"));
+  for (const f of carried) {
+    assert.match(snap, new RegExp(`if \\(p\\.${f} != null\\) out\\.${f} = p\\.${f};`),
+      `snapshot() must carry ${f} — physState() already returns it`);
+  }
+  // And they must actually be PAINTED, in both densities: carrying a field into
+  // the snapshot and never drawing it is the exact defect being fixed.
+  const paint = src.slice(src.indexOf("function paintOverlay()"));
+  for (const f of carried)
+    assert.ok(paint.includes("s." + f), `the PHYS page must render s.${f}`);
+});
+
+// LINE LENGTH IS A HARD BUDGET, not a preference: white-space:pre inside
+// overflow:hidden CUTS a long line. The width work measured the layouts at 25
+// (narrow) and 52 (wide) characters and sized the CSS steps to hold exactly
+// that, so a new row wider than its budget silently truncates on a phone.
+test("new PHYS rows stay inside the measured line budgets", () => {
+  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  // The widest value each new row can render, with every number at full width.
+  const wide = [
+    "x cost:  vmax +0.000   df -0.000",
+    "tow:     0.00   brakeBias 0.000",
+    "ers:     drain 0.000   regen 0.000",
+    "ot:      0.0 s   cooldown 0.0 s",
+  ];
+  for (const line of wide)
+    assert.ok(line.length <= 52, `wide row "${line}" is ${line.length} ch, budget 52`);
+  const narrow = ["tow 0.00   bb 0.00", "xdv 0.000   xdf 0.000", "drn 0.000   rgn 0.000", "ot 0.0   cool 0.0"];
+  for (const line of narrow)
+    assert.ok(line.length <= 25, `narrow row "${line}" is ${line.length} ch, budget 25`);
+  // The budgets themselves must still be the ones the CSS is sized for.
+  assert.match(src, /const WIDE_CH = 53;/);
+});

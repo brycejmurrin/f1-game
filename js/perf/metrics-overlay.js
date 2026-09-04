@@ -235,6 +235,13 @@ function snapshot() {
     axEstSm: null, axFrac: null, slope: null, wrongWay: null, rescueT: null,
     head: null, vmaxNow: null, aeroGrip: null, aeroDf: null,
     xOn: null, xArmed: null, aeroLoad: null,
+    // physState() already RETURNS these every paint and the panel dropped them
+    // on the floor. No new data path, no sim work — the PHYS page simply never
+    // rendered eight of the fields it was already fetching. Field names match
+    // the __apex hook on purpose: a player's screenshot then maps straight onto
+    // physState() when they report something.
+    towing: null, xVmaxGain: null, xDfLoss: null,
+    drain: null, regen: null, brakeBias: null, otTime: null, otCool: null,
     logConsole: "", logBuffer: "", logN: 0, logShown: 0,
     logs: [],
   };
@@ -379,6 +386,14 @@ function snapshot() {
         if (p.xOn != null) out.xOn = p.xOn;
         if (p.xArmed != null) out.xArmed = p.xArmed;
         if (p.aeroLoad != null) out.aeroLoad = p.aeroLoad;
+        if (p.towing != null) out.towing = p.towing;
+        if (p.xVmaxGain != null) out.xVmaxGain = p.xVmaxGain;
+        if (p.xDfLoss != null) out.xDfLoss = p.xDfLoss;
+        if (p.drain != null) out.drain = p.drain;
+        if (p.regen != null) out.regen = p.regen;
+        if (p.brakeBias != null) out.brakeBias = p.brakeBias;
+        if (p.otTime != null) out.otTime = p.otTime;
+        if (p.otCool != null) out.otCool = p.otCool;
         if (out.aeroX == null && p.aeroX != null) out.aeroX = p.aeroX;
       }
     }
@@ -601,6 +616,13 @@ function paintOverlay() {
         pair("ax",   fmt(s.axEstSm, 2), "slope", fmt(s.slope, 3)),
         pair("vmax", fmt(s.vmaxNow, 1), "ww", fmt(s.wrongWay)),
         pair("grip", fmt(s.aeroGrip, 3), "xOn", fmt(s.xOn)),
+        // The eight physState() fields the panel used to fetch and drop. Kept
+        // inside the 25-char narrow budget the width work measured — a longer
+        // line here is CUT, not scrolled.
+        pair("tow", fmt(s.towing, 2), "bb", fmt(s.brakeBias, 2)),
+        pair("xdv", fmt(s.xVmaxGain, 3), "xdf", fmt(s.xDfLoss, 3)),
+        pair("drn", fmt(s.drain, 3), "rgn", fmt(s.regen, 3)),
+        pair("ot", fmt(s.otTime, 1), "cool", fmt(s.otCool, 1)),
       ];
     } else {
       lines = [
@@ -612,6 +634,18 @@ function paintOverlay() {
         row("vmax",   fmt(s.vmaxNow, 1) + " m/s   head " + fmt(s.head, 2)),
         row("aero",   "grip " + fmt(s.aeroGrip, 3) + "   df " + fmt(s.aeroDf, 2) + "   load " + fmt(s.aeroLoad, 2)),
         row("DRS",    "on " + fmt(s.xOn) + "   armed " + fmt(s.xArmed) + "   aeroX " + fmt(s.aeroX, 2)),
+        // X-MODE'S PRICE, not just its state. xVmaxGain / xDfLoss are what the
+        // open wing actually buys and costs; every F1 game shows DRS as a lit
+        // letter and never what it is worth. Both already come back from
+        // physState().
+        row("x cost", "vmax +" + fmt(s.xVmaxGain, 3) + "   df -" + fmt(s.xDfLoss, 3)),
+        // TOW is the slipstream the player is sitting in (0..1, folded into
+        // vmaxNow). No F1 title surfaces it; on a phone, where the aero cannot
+        // be felt, it is the difference between "hold station" and "pull out".
+        row("tow",    fmt(s.towing, 2) + "   brakeBias " + fmt(s.brakeBias, 3)),
+        // ERS FLOW rather than the level the HUD bar already shows.
+        row("ers",    "drain " + fmt(s.drain, 3) + "   regen " + fmt(s.regen, 3)),
+        row("ot",     fmt(s.otTime, 1) + " s   cooldown " + fmt(s.otCool, 1) + " s"),
       ];
     }
   } else if (s.page === "log") {

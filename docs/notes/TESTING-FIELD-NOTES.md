@@ -1057,6 +1057,41 @@ deterministic false red, and a blocked deploy — one per newly-touched area.
 Note the containment held: `--max-failures=3` stopped the job at 3/7 in 12m18s
 against a 26-minute cap, wrote its junit, and carried the failing spec forward.
 
+**Seventh: `presets.spec.js` (2026-09-04, Pages run 2015 / 33921254382).** The
+prediction written under the sixth entry — "a healthy spec, a false red, a
+blocked deploy, one per newly-touched area" — came true within the day, and the
+newly-touched area was `css/hud.css`. The metrics-panel width work pulled this
+file into the selection for the first time and it took the deploy down with it:
+`Selected specs` failed, so `current-tip`, `deploy` and `verify-live` were all
+SKIPPED and the commit sat on the branch un-published.
+
+Two details worth keeping, because both were misleading at first glance.
+
+The failures were NOT slow tests hitting a cap. Both read `Test timeout of
+120000ms exceeded WHILE SETTING UP "context"` — Playwright never got a browser
+context, so the spec's own code never ran. The per-worker pattern says the same:
+each worker passed exactly ONE test and failed the next during setup, whereupon
+Playwright span up a fresh worker that again managed exactly one. That is worker
+churn on a loaded runner, and no assertion was ever reached.
+
+And the local run does NOT look like parts-ers. 4/4 green here, but the first
+test costs 1.7 min (102 s) of boot against the 120 s default, with the other
+three at 13.7 / 9.9 / 9.9 s. So this file was already sitting ~15 % under the cap
+on an IDLE box before the runner added anything — where parts-ers had 29.4 s
+local against 195 s on CI, a 6.6x stretch with room to spare locally. Two
+different distances from the same cliff, the same landing.
+
+Declared 300 s, so select-specs EXCLUDES it by name. Verified: the same diff now
+selects `ui-redesign.spec.js` alone, which passed on the failing run.
+
+**80 of 115 specs still declare no budget.** Every one is a deploy blocked at
+the moment some future diff first reaches it, and the cost of finding out is
+always a failed Pages run rather than a red local suite. The measurement is
+cheap — one `npx playwright test <spec>` and read the slowest line — and the
+declaration is one line. What is expensive is discovering them one deploy at a
+time, which is now three for three.
+
+
 ## The `test:ui` group has NO blocking coverage on a push (2026-09-04)
 
 The route above — a spec declares its measured budget, the change-aware gate

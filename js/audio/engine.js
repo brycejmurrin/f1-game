@@ -58,8 +58,23 @@ const GameAudio = (function () {
   const _irCache = new Map();     // keyed by venue name; ctx-bound, cleared on rebuild
 
   const RIVAL_VOICES = 4;
-  const RIVAL_RANGE = 70;         // metres of arc beyond which a rival is inaudible
+  // Audible radius. 70 m was chosen to bound the work, but the inverse-distance
+  // law below is already inaudible well before its own edge, so the only thing
+  // 70 bought was a POP: a car materialising mid-straight as it crossed the line.
+  // 150 m fades in instead, and costs nothing — the four voices exist either way.
+  const RIVAL_RANGE = 150;        // metres of arc beyond which a rival is inaudible
   const RIVAL_REF = 6;            // metres inside which a rival is at full level
+  // Four sources sharing one buffer at one rate are one source four times as
+  // loud: phase-coherent copies SUM instead of thickening. A few cents apart
+  // each (and started at different points in the loop, below) is what makes
+  // four cars sound like four cars. Cents -> ratio, fixed per slot.
+  const RIVAL_DETUNE = Object.freeze([-22, -8, 9, 24].map((c) => Math.pow(2, c / 1200)));
+  // A StereoPanner is EQUAL POWER: at pan 0 each channel gets cos(PI/4) = 0.707,
+  // so a mono source routed through one is 3 dB under the same source wired
+  // straight to the bus — which is exactly how the player's own engine is wired.
+  // Rivals were paying that tax and nothing else was. sqrt(2) pays it back, and
+  // being pan-independent it does not disturb the pan law itself.
+  const PAN_MAKEUP = Math.SQRT2;
   let rivalVoices = [];           // { src, filt, gain, pan } while the engine runs
 
   // Per-manufacturer engine character, keyed by team.engine (js/data/teams.js).
@@ -675,7 +690,11 @@ const GameAudio = (function () {
         const pan = ctx.createStereoPanner(); pan.pan.value = 0;
         src.connect(filt).connect(gain).connect(pan).connect(sfxBus);
         if (revSend) pan.connect(revSend);   // a rival in a tunnel echoes too
-        rivalVoices.push({ src, filt, gain, pan });
+        // Start each voice a different fraction of the way into the loop, so the
+        // four are decorrelated from the first sample rather than drifting apart
+        // over seconds as their detune ratios do the work alone.
+        const off = li.start + (li.end - li.start) * (i / RIVAL_VOICES);
+        rivalVoices.push({ src, filt, gain, pan, detune: RIVAL_DETUNE[i % RIVAL_DETUNE.length], startOff: off });
       }
     }
 
@@ -759,7 +778,7 @@ const GameAudio = (function () {
     else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
     if (subOctOsc) subOctOsc.start();
-    for (const v of rivalVoices) v.src.start(0, v.src.loopStart);
+    for (const v of rivalVoices) v.src.start(0, v.startOff);
     harvSrc.start();
     ersOsc.start();
     lfo.start();
@@ -927,10 +946,17 @@ const GameAudio = (function () {
     // asserts the brightening.
     const loadLift  = clamp01((ph.ax || 0) / 12);
 
-    const cut = (usingSamples
+    // The shape caps (11 k / 7.2 k) bound the REV-DRIVEN part; the trims then
+    // scale it, and the FINAL value is what has to stay in range. It used to be
+    // the other way round, so once BRIGHTNESS was widened past 1 the product ran
+    // off past Nyquist, where a BiquadFilter silently pins it — the top of the
+    // slider moved a number that no longer moved the sound. Ceiling is just
+    // under Nyquist so the pin is ours and audible, not the node's and silent.
+    const ceil = ctx.sampleRate * 0.45;
+    const cut = Math.min(ceil, (usingSamples
       ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500 + slipLoad * 2000 + brakeLoad * 1200)
       : Math.min(7200,  600  + s * 4200 + rev * 700  + b * 1400 + slipLoad * 1000 + brakeLoad * 600))
-      * voice.cutTrim * tune.brightness * (1 + 0.22 * loadLift);
+      * voice.cutTrim * tune.brightness * (1 + 0.22 * loadLift));
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
     // Compensate the tape-speed tilt. lastRate is the pitch ratio the core was
     // just handed, ~0.25 idle to ~0.70 redline; resampling costs roughly
@@ -954,7 +980,13 @@ const GameAudio = (function () {
     // thread, so the gate costs no per-frame scheduling: base drops to
     // lvl·0.55 and the square wave swings it 0.10–1.00 × lvl.
     const limOn = layers.limiter && rev > 0.985 && s > 0.05;
-    const limDepth = limOn ? lvl * 0.45 * tune.limiter : 0;
+    // CAPPED AT HALF THE LEVEL. engGain's base is (lvl - limDepth) and the
+    // square swings +-limDepth on top, so the trough is lvl - 2*limDepth: past
+    // limDepth = lvl/2 the gain goes NEGATIVE and the chop stops getting deeper
+    // and starts inverting phase. With the trim widened to [0,3] that began at
+    // 1.111, so most of the slider was buying an artefact. A full ignition cut
+    // is the physical maximum; there is nothing deeper than all of it.
+    const limDepth = limOn ? Math.min(lvl * 0.5, lvl * 0.45 * tune.limiter) : 0;
     // Guarded on the TARGET, like lfoG below and for the same reason: above
     // 98.5% is a sliver of a race, so an unguarded call scheduled the target 0
     // onto a value already converged to 0, 120x a second for the whole race —
@@ -1323,6 +1355,14 @@ const GameAudio = (function () {
 
     const subGain = engC && engC._apexSubGain;
     if (subGain) subGain.gain.setTargetAtTime(voice.subLvl * tune.sub, t, 0.05);
+
+    // CHOP RATE. The depth saturates at a full ignition cut (see setEngine), so
+    // above ~1.1 the trim had nothing left to buy. Real limiters differ in how
+    // FAST they cut as much as how hard, and the rate is what tells a soft cut
+    // from a hard one by ear, so the rest of the range spends itself here:
+    // 9.75 Hz at 0, the stock 13 Hz at 1, 22.75 Hz wide open. Set once per tune
+    // change, not per frame — it is a function of the trim and nothing else.
+    if (limOsc) limOsc.frequency.setTargetAtTime(13 * (0.75 + 0.25 * tune.limiter), t, 0.05);
     applyVenue();   // the REVERB trim and its layer switch both land here
   }
 
@@ -1419,22 +1459,31 @@ const GameAudio = (function () {
       // car alongside, not as a rumour.
       const near = RIVAL_REF / (RIVAL_REF + 1.15 * Math.max(0, dist - RIVAL_REF));
       const behind = arc < 0 ? 0.78 : 1;   // your own engine is between you and it
-      aimGain(v.gain, 0.28 * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10);
+      aimGain(v.gain, PAN_MAKEUP * 0.28 * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10);
 
       // Air absorbs the top end with distance, which is most of why a far car
-      // reads as far rather than merely quiet.
-      const cut = 1400 + 6600 * near;
+      // reads as far rather than merely quiet. A POWER LAW, not a scale of the
+      // level curve: `near` falls off fast enough that reusing it shut a car at
+      // twenty metres down to a muffle it has no business being at. Real air
+      // absorption is a few dB per hundred metres at 4 kHz, so the exponent is
+      // small and the near field stays open.
+      const cut = Math.max(700, Math.min(12000,
+        12000 * Math.pow(RIVAL_REF / Math.max(dist, RIVAL_REF), 0.35)));
       if (Math.abs((v.filt.frequency._apexCut ?? -1) - cut) > 60) {
         v.filt.frequency.setTargetAtTime(cut, t, 0.12);
         v.filt.frequency._apexCut = cut;
       }
 
       // DOPPLER. Their pitch from their own revs, shifted by how fast the gap is
-      // closing — the rise as a car comes past you is the cue, and it falls out
-      // of one multiply. Clamped: a 340 m/s closing speed is not a race, it is
-      // a divide-by-zero waiting to happen.
-      const dop = 1 + Math.max(-60, Math.min(60, +r.approach || 0)) / 343;
-      const rate = (0.25 + clamp01(r.rev) * 0.45) * dop;
+      // closing — the rise as a car comes past you is the cue.
+      // The textbook stationary-observer form, 343/(343 - v), not its first-order
+      // expansion 1 + v/343: they agree to a few cents at pit speed and diverge
+      // where the effect actually matters, which is a car arriving at 300 km/h.
+      // The ratio clamp is the real guard — the approach figure comes from two
+      // speeds sampled a frame apart and one bad frame must not chirp.
+      const closing = Math.max(-90, Math.min(90, +r.approach || 0));
+      const dop = Math.max(0.80, Math.min(1.25, 343 / (343 - closing)));
+      const rate = (0.25 + clamp01(r.rev) * 0.45) * dop * v.detune;
       if (Math.abs((v.src.playbackRate._apexRate ?? -1) - rate) > 0.002) {
         v.src.playbackRate.setTargetAtTime(rate, t, 0.06);
         v.src.playbackRate._apexRate = rate;
@@ -1902,6 +1951,15 @@ const GameAudio = (function () {
     // feeds engGain.gain on the audio thread, so nothing downstream of the
     // engine output can observe its depth.
     limiterDepth() { return limGain ? +limGain.gain.value : 0; },
+    // The chop RATE, which is where the top half of the LIMITER trim goes once
+    // the depth has saturated at a full ignition cut.
+    limiterHz() { return limOsc ? +limOsc.frequency.value.toFixed(2) : 0; },
+    // The engine core's live lowpass corner, so the BRIGHTNESS trim's ceiling
+    // is assertable rather than a thing you can only hear.
+    engineCut() { return engFilter ? Math.round(engFilter.frequency.value) : 0; },
+    // The core's own gain, which is (level - limiterDepth): the pair is what
+    // says whether the rev-limiter gate cuts the note or inverts it.
+    engineLevel() { return engGain ? +engGain.gain.value : 0; },
     // Same shape again: the sub-octave sits on its own gain straight into
     // sfxBus, so centroidHz() (which taps engGain) cannot see it either.
     subLevel() { return subOctGain ? +subOctGain.gain.value : 0; },
