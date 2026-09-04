@@ -106,14 +106,27 @@ test.describe("Apex 26 — world-space player physics", () => {
     }
   });
 
-  test("RESPONSE slider changes turn-in (wheelbase): high = snappier", async ({ page }) => {
+  // This was ONE test asserting two different things at once: that the RESPONSE
+  // slider is wired to G.WHEELBASE, and that a shorter wheelbase turns in more.
+  // Splitting them showed the wiring half was already covered, and better:
+  // sliders.spec.js drives `pm-rate` through a table that checks the mapped
+  // `tuning().wheelbase`, its DIRECTION, its label and its localStorage key —
+  // everything this file asserted about the slider and three things more. So
+  // the wiring half is deleted rather than moved, and what stays here is the
+  // physics claim, set through the hook the slider ultimately writes.
+  //
+  // That matters beyond tidiness: the physics claim is the one that can break
+  // silently, and pinning it behind a DOM slider was the only thing keeping the
+  // whole spec off the VM twin. It is replayed in world-physics-vm now.
+
+  test("a shorter wheelbase turns in more", async ({ page }) => {
+    // The PHYSICS half, set through the hook the slider ultimately writes, so
+    // it says what it means and the VM twin can replay it verbatim.
+    // Hold the same steer from a straight at each extreme and compare how far
+    // the heading swings in a short burst.
     await startRace(page);
-    // Hold the same steer from a straight at each RESPONSE extreme and compare
-    // how far the heading swings in a short burst. Higher slider must turn more.
-    const turnAt = (slider) => page.evaluate((s) => {
-      const el = document.getElementById("pm-rate");
-      el.value = String(s);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
+    const turnAt = (wheelbase) => page.evaluate((wb) => {
+      window.__apex.setPhysics({ wheelbase: wb });
       window.__apex.jump(0.0, 40, 0);
       window.__apex.setInput({ steer: 1, throttle: false });
       const a0 = window.__apex.probe().angle;
@@ -121,10 +134,10 @@ test.describe("Apex 26 — world-space player physics", () => {
       const a1 = window.__apex.probe().angle;
       window.__apex.clearInput();
       return Math.abs(a1 - a0);
-    }, slider);
-    const low = await turnAt(2);    // long wheelbase = lazy
-    const high = await turnAt(9);   // short wheelbase = snappy
-    expect(high).toBeGreaterThan(low * 1.15);
+    }, wheelbase);
+    const lazy = await turnAt(4.4);    // slider 2, long wheelbase
+    const snappy = await turnAt(2.6);  // slider 9, short wheelbase
+    expect(snappy).toBeGreaterThan(lazy * 1.15);
   });
 
   test("AI stays on track and progresses after the racing-line flip", async ({ page }) => {

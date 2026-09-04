@@ -810,3 +810,168 @@ timeout) is still there and will still bite on a slow run. The rule in
 believing any red run. What this DOES retire is the assumption that a red
 smoke boot is unavoidable here; if it comes back, it is worth timing rather
 than waving through.
+
+## The change-aware gate can be cancelled by a spec that never had a chance
+
+**Pages #1967, run 33822785596, job 100868882762, 2026-09-04.** The run reported
+`cancelled` with zero failing jobs, in `Selected specs (change-aware gate)`:
+
+```
+running 6/32 done, 6 failed
+x FAIL 7/32 hud-layout.spec.js › notched-portrait › tilt / auto gears (134.3s)
+   Test timeout of 120000ms exceeded.
+```
+
+The job's own header derives its 26-minute cap from a worst case of "10 tests x
+120 s + ~4 min setup". It selected 32 tests and spent the whole cap failing the
+first seven, then died at the cap — and `ci.yml`'s own header already records
+that a cancelled job reads as "0 failures". Second time in one night that a
+timeout wore a cancellation's clothes; the first was `guards`.
+
+**The cause is not the budget model.** `select-specs.mjs` already has the right
+guard — `EXCLUDED (declares Ns test budget > gate 120s)` — and 32 race-fixture
+specs are excluded by it. It keys on `test.setTimeout`, and `hud-layout.spec.js`
+declared nothing, so `fit()` read "undeclared" as "fits in 120 s". It boots a
+full race (22 cars, a built circuit, the maps pass) for each of ~19 generated
+cases; the page log puts that fixture at **76-80 s before the test body starts**.
+It was never going to pass at 120 s. Fixed by declaring 300 s, the value its
+peers on the same fixture already carry, and pinned in
+`tests/unit/select-specs.test.mjs` as a RULE (above whatever the gate's cap is),
+not as the number.
+
+### …and WHY it looked affordable (added after the fix, from the CI log)
+
+The fix works — Pages #1972's gate printed, on a healthy 7m29s job:
+
+```
+fits 10 tests; selected 0 across 0 specs
+EXCLUDED (declares 300s timeout): tests/specs/hud-layout.spec.js (2 tests)
+```
+
+**"(2 tests)".** It runs 25 — 4 VIEWS x 3 steer modes x 2 gear modes, plus one
+desktop case. `declaredTests` counts literal `test(...)` calls by AST, and 24
+of those 25 come from one `test(...)` call inside two nested `for` loops.
+
+So the budget priced this spec at 2 x 79.7 s ~= 160 s. The truth is ~25 x 130 s
+~= 54 minutes. THAT is why an undeclared 120 s budget looked affordable: the
+missing declaration was the trigger, but a 12x undercount is what made the
+selector willing to take it. My first write-up above credited only the
+declaration, and that was half the story.
+
+The undercount is not unique to it. Seventeen specs of 114 generate tests in a
+loop, so for all of them `declaredTests` returns a LOWER BOUND, not a count —
+the same figure `tools/ci/select-budget.mjs` already cites from
+`tools/ci/test-observed.mjs` ("17 across 16 specs"):
+
+```
+  44 of 44 looped  ui-audit.spec.js          3 of  3  menu-baseline.spec.js
+   4 of  7 looped  hud-layout.spec.js        3 of 11  ui-scale.spec.js
+   2 of  5 looped  autopilot.spec.js         2 of  8  elevation-tracks.spec.js
+   2 of  5 looped  tracks-walls.spec.js      + 10 more with 1 each
+```
+
+Most are already excluded by a declared budget. The principled fix is that an
+unknown count should be treated as unknown rather than as small — the same
+shape as "an undeclared budget is unknown, not safe" — but that changes what
+the gate selects, and it is not a change to make on a hunch at the end of a
+long session. The damage is already bounded by `--max-failures=3`, which stops
+any such spec in ~6 minutes instead of 26.
+
+Two things this leaves open, both stated rather than guessed at:
+
+- **48 race-fixture specs still declare <= 120 s** (`maxDeclaredTimeout`, against
+  a `race(`/`loadTrack`/`goToRace` probe). Only ONE of them has been measured
+  failing. Declaring budgets for the other 47 on a heuristic would be the
+  unmeasured change this repo forbids, so they are named here and left alone.
+  The honest read is that an UNDECLARED budget is unknown, not safe — and the
+  gate currently treats the two as the same.
+- **A cancelled job writes no junit**, so `junit-failed.mjs` logged "no failures
+  to carry" and the failing-spec cache learned nothing from the run that most
+  needed remembering. The gate's fail-fast memory is blind to exactly the
+  failures that kill it.
+
+> **These two are the same gate failing from opposite ends, on the same day.**
+> Above: a spec with no declared budget was selected and blew the cap.
+> Below: a diff that touched `ratchets.json` selected nothing at all. One
+> says the selection can pick what it cannot afford; the other says it can
+> decline to pick anything. Both leave the standing gates as the whole
+> story, and neither is visible in a green check.
+
+## The change-aware gate has a coverage inversion (measured 2026-09-04)
+
+Measured on the 13-file audit push (`0f5daac..227070f`), which changed
+`js/game.js`, `car3d.js`, `career*`, `gltf.js`, `onboard.js`, `vantage.js`,
+`engine.js` and `tuner-panel.js`:
+
+```
+$ node tools/ci/select-specs.mjs --since 0f5daac
+13 changed file(s) [infra] -> groups: test:car, test:circuits, test:driving,
+                                      test:gfx, test:hooks, test:input, test:modes, test:ui
+SELECTION NOT MEANINGFUL: this diff touches 1 tracked/infra path(s)
+  (tests/data/ratchets.json) -- a change there can affect any spec, so nothing
+  is selected and the GATES own this push.
+budget fits 10 tests (retries 0, 120s/test, surviving 1 timeout); selected 0
+```
+
+and CI's "Selected specs (change-aware gate)" job accordingly skipped its
+Install-browser and Run-the-selection steps. **This is by design and the design
+is defensible** — the gates (4x Smoke, Driving model characterization, geometry
+sweeps, the parts census, the node suites) did run and did pass. But two rules
+compose into an inversion worth knowing about:
+
+1. **Touching `tests/data/ratchets.json` zeroes the selection.** Reasonable in
+   isolation. It is also the file that a large change is most likely to touch,
+   because any file crossing its ceiling forces an edit there.
+2. **The 120 s/10-test budget skips by size.** Every remaining spec printed
+   `SKIPPED (over budget)` — `camera-hooks`, `world-physics`, `longitudinal`,
+   `debris`, `drift`, `season`, `audit`, and 18 more.
+
+So a diff touching one file gets a targeted spec selection; a diff touching
+thirteen gets none. The breadth comes from the standing gates, not the
+selection, and the two are sized independently — the gates do not widen when
+the selection empties.
+
+Not proposing a change: raising the budget makes every push slower, and the
+`ratchets.json` rule exists because that file really can affect any spec. What
+is worth having is the awareness that on a big push the targeted layer
+contributes nothing, so the gates are the whole story — and it is the gates,
+not the selection, that should be argued about when deciding what a deploy has
+actually verified.
+
+
+## 2026-09-04 — the third spec family billed at a rate it cannot pay
+
+`tools/ci/select-specs.mjs` excludes a spec from the 120 s change-aware gate
+when the spec DECLARES a budget bigger than the gate's — `EXCLUDED (declares
+Ns test budget > gate 120s)`. The guard keys on `test.setTimeout` /
+`describe.configure({timeout})` / `test.slow()`, so it can only see a cost the
+spec states. A spec that is silent about a 240 s cost is billed at 120 s,
+selected, and killed at exactly "Test timeout of 120000ms exceeded" with
+nothing asserted wrong.
+
+That has now happened three times in two days:
+
+| when | spec(s) | measured | outcome |
+|---|---|---|---|
+| Pages #1967 | `hud-layout.spec.js` | 134.3 s killed / 149 s local | 6 of 7 tests red, burned the job cap, CANCELLED the deploy |
+| Pages #1974 | `parts-factory-presets` | 240.1 s | 3-failure stop; the run's only red job |
+| Pages #1974 | `multiplayer-scan-cancel` › CANCEL stops the camera | 238.2 s | same run |
+| Pages #1974 | `multiplayer-scan` › the camera reads a code | 229.7 s | same run |
+
+All four now declare 300 s — the value their peers on a race fixture already
+carry — so the gate excludes them BY NAME and reports it. That is the fix for
+these four, not for the class.
+
+**A blanket "declare your budget" guard was considered and rejected on a
+measurement.** 65 of the 114 specs match a naive boot-heavy-fixture heuristic
+(`racePage|sharedTest|BOOT_MS|__apex.race(`) while declaring nothing, and most
+of them are legitimately cheap per test — `headless-api` runs 24 tests on ONE
+shared boot. A guard flagging 65 files would be noise, and noise is how the
+`multiplayer-session` "SKIPPED (over budget)" line sat unread for weeks.
+
+The narrower mechanism, not yet built: the gate already knows the difference
+between a test killed by ITS OWN declared budget and one killed by the gate's
+generic cap. Only the second is a budgeting mistake, and it is self-identifying
+at the moment it happens. Reporting it as a BUDGET failure that names its own
+fix ("declare `test.setTimeout` so the gate can exclude this spec") would turn
+a confusing red into an instruction, without guessing at 65 files up front.

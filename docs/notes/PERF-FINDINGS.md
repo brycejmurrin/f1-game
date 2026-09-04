@@ -819,8 +819,14 @@ callers use three different frusta inside one frame, so while driving it never
 hits (see §2b's neighbour — this is the same "the condition no longer holds"
 shape).
 
-`apex26.instCellCache=1` keys the resident pack on the surviving CELL SET
-instead. Sound because the pack is a deterministic function of that set:
+The cell-set key keys the resident pack on the surviving CELL SET instead.
+**It SHIPS ON** — `apex26.instCellCache=0` is the escape hatch, the shape
+`__apex.matTex(0)` gives the baked-material path. (It was opt-in `=1` when the
+table below was measured, and this paragraph plus the comment inside
+`cullInstances` both still said "off by default" on 2026-09-04, long after
+`let _instCellCache = true` landed. A stale default in a perf note is worse
+than none: it sends the next reader looking for a lever that is already
+pulled.) Sound because the pack is a deterministic function of that set:
 `batch.cells` order and each cell's `idx` order are fixed at build time and
 never mutated. Measured A/B, same box, same instrument, flag the only change:
 
@@ -833,7 +839,97 @@ never mutated. Measured A/B, same box, same instrument, flag the only change:
 
 The residual 326.8 KiB is real work: the shadow ortho, the probe faces and the
 camera genuinely select different cells, so only same-caller-across-frames
-hits. The failure mode is props drawn from the wrong resident pack, which is
+hits.
+
+### 2c-bis — WHERE the upload bytes go (attributed, 2026-09-04)
+
+The table above is an aggregate: it says the renderer uploads a lot and
+nothing about which line to go and look at. `glx-call-census.mjs` now buckets
+every `bufferSubData` by call site (one stack per call — only this counter
+carries it, because it is the one whose SIZE varies per site).
+
+Vegas / night / 40 frames / `pack`, cell cache ON:
+
+| site | calls/f | KiB/f | share |
+|---|---|---|---|
+| `glx.js:1840` instance matrices | 19.2 | **859.4** | **85.2%** |
+| `glx.js:1843` instance colours | 5.9 | 144.9 | 14.4% |
+| `glx.js:2117` glow | 1.0 | 3.8 | 0.4% |
+| `glx.js:1884` | 1.0 | 1.1 | 0.1% |
+
+**One site is 85% of a megabyte a frame.** Note what is NOT here:
+`shadow.js:228` restores the full source matrices on every shadow-casting
+batch and looks like an obvious double-upload — it does not appear at all in
+this frame. That is exactly why the attribution exists; the obvious suspect
+was wrong.
+
+Same scene, flag the only change (a packed grid, so the numbers differ from
+the `jump(0.30)` run in the table above — a scene is part of a measurement):
+
+| | off | on |
+|---|---|---|
+| bufferSubData KiB | 1239.3 | **1009.2** (-18.6%) |
+| bufferSubData calls | 43.0 | **27.1** (-37.0%) |
+| bindBuffer | 48.6 | 32.8 (-32.5%) |
+| drawElements / Instanced | 120.2 / 30.4 | 120.2 / 30.4 (identical) |
+
+Identical draw counts across the flag is the soundness check: the cache
+changes which bytes are re-sent, never which geometry is drawn.
+
+The remaining lever is per-CALLER residency. The residual is not redundant
+work at one caller — it is the camera, the shadow ortho and the probe faces
+each repacking the one GPU buffer to their own cell set inside a frame. One
+resident pack per caller would turn that into a hit, at one instance buffer
+per caller per batch: bandwidth for memory, on a phone that is short of both.
+Not attempted, and not worth attempting without a phone-side reading first.
+
+#### …and the MOBILE path barely pays it
+
+Same command with `--ls apex26.forceMobileTier=1` (the mobile CODE PATH on a
+desktop viewport and SwiftShader — not a phone, and not a substitute for one):
+
+| | desktop tier | mobile tier |
+|---|---|---|
+| upload KiB/frame | 1009.2 | **55.7** (-94.5%) |
+| bufferSubData calls | 27.1 | **3.8** (-86.0%) |
+| drawElementsInstanced | 30.4 | 20.6 (-32.2%) |
+| drawElements | 120.2 | 105.5 (-12.2%) |
+
+**This closes the lead above rather than opening one.** The obvious reading —
+"the mobile tier just draws less" — does not survive the asymmetry: draws fall
+12-32%, uploads fall 94.5%. If it were only a smaller scene the two would move
+together. What actually happens is that the tier's tighter `frame.cullDist`
+(js/game.js, gated on `PerfGov.tier()`) leaves a SMALLER and far more STABLE
+set of visible cells, so the cell-set key of 2c hits almost every frame and the
+repack never runs. The cache earns most of its keep exactly where the device
+can least afford the traffic.
+
+So: per-caller residency (the lever named above) is a DESKTOP-tier optimisation.
+A phone on the mobile tier is already at 56 KiB/frame and whatever is costing it
+frames is somewhere else. Do not spend the memory there on a phone's behalf.
+
+**Do not read a per-car conclusion out of this run.** `carsNearPlayer` was 1.
+See 2c-ter.
+
+### 2c-ter — the census guard that never fired
+
+`carsInField` reported `null` for its entire life. It asked `__apex.field()`,
+the agentview raster, rather than the car roster, so both shape branches
+missed and even the catch was never reached — and its own comment says the
+per-car counts "cannot be read at all" without it.
+
+That silence cost two runs. An A/B of a car-LOD change (skip the eight wheel
+draws on distant rivals) came back BYTE-IDENTICAL on every counter, which read
+as "no effect" and was actually "nothing measured": the field was strung out
+around the circuit with no rival near the camera. The LOD was dropped rather
+than shipped on an unmeasured claim.
+
+It now reports `carsInField` and `carsNearPlayer` (a difference of two
+`fieldState` gaps — no camera maths, no new hook) and warns on stderr under
+three. `pack` is NOT the cure on its own: it bunches the field on the grid,
+where they sit BEHIND a player who starts at the front and the frustum drops
+them. Measured `carsNearPlayer: 1` even with `pack`. A per-car A/B needs a
+scene built for it. The failure mode is props drawn from the wrong resident pack, which is
 why the hit path deliberately does NOT stamp `_cullPlanes` (that snapshot must
 keep describing whichever frustum physically wrote the buffer).
 `gfx-backend-canary.test.mjs` now pins that.
@@ -2656,6 +2752,57 @@ frees a livery texture and redraws hits the existing `!tex.view` guard instead o
 binding a destroyed texture through `drawDecal`'s cached bind group.
 
 Verified: `spike/backends/tools/wgx-validate.mjs` (real Dawn, montreal, 60 frames) exit 0.
+
+## 2y. The pooling refactor was proved by DIFFERENCE, after two weaker oracles failed (2026-09-04)
+
+`js/camera/vantage.js` said "Scratch samples reused every call (no per-frame
+allocation)" in its header while allocating `p`, both `eye`/`tgt`, `straight`,
+`dir` and every `aheadPt()` return on every call — once per rendered frame,
+across 11 mutually exclusive mode branches. Converting all of it to module-level
+pools is the obvious fix and a genuinely risky one: nothing in the node suites
+renders a camera, and an aliasing mistake does not crash, it just puts the
+camera somewhere wrong in one mode.
+
+**Two oracles were tried and both were too weak. That is the transferable part.**
+
+*Oracle 1 — a full frame through the VM.* `pumpFrame()` crashes with AI cars in
+the field: `js/game.js`'s side-frustum walk reads `_carCullPlanes[i]` and gets
+`undefined`, because the harness's GLX stub returns a truthy planes value whose
+entries are not populated. **Confirmed pre-existing** — the identical crash
+reproduces at `48cc011`, so it is a harness gap, not a code defect, and it means
+no VM test can currently render a frame with rivals near the camera.
+
+*Oracle 2 — an A→B→A invariant.* Sample a mode, run every other mode to pollute
+the pools, sample it again, and require the two to match. This is a real test
+and it passes. It is also **blind to the bug it was written for**: a deliberate
+alias (`_aheadOut = _vantTgtW`) injected into a throwaway worktree did not trip
+it, because self-aliasing yields a *consistently* wrong value — A and A' are
+equally wrong and therefore equal. An invariant cannot detect deterministic
+wrongness. Exercising the two opt-in blends that read a pooled value after
+writing it (`CamTune cornerLead`, `CockpitOpts turnChaseLead`, both default 0 —
+so the default path is not the risky path) did not rescue it either.
+
+*Oracle 3, the one that works — DIFFERENCE against the pre-refactor tree.* A
+behaviour-preserving refactor has an exact oracle available: the code it
+replaced. Boot the pre-pooling commit and the current tree as two game-vm
+instances, call `GameCams.vantage()` on both over a grid of
+mode x arc x lateral x speed x carPos-present (936 cases), and compare
+serialized `eye`/`tgt`/`fov`.
+
+| arm | result |
+|---|---|
+| pre-pooling vs the INJECTED alias (control) | **72 of 936 diverge** — chase target x 350.07 -> 573.66 |
+| pre-pooling vs shipped | **bit-identical, 936/936** |
+
+The control arm is what makes the green arm evidence: a differential test with
+no demonstrated failure mode proves only that two things agree, not that the
+comparison works.
+
+**The rule.** For a refactor that must not change behaviour, do not invent an
+invariant — diff against the thing you replaced, and prove the diff can fail
+before believing that it did not. The script is not committed: it needs two
+worktrees, so it is a measurement, not a standing gate.
+
 
 ## 3. Left on the table
 

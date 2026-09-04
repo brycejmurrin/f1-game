@@ -214,6 +214,13 @@
 }
 :root { --hud-pulse: 0.8s; }
 @keyframes pulse { 50% { opacity: 0.55; } }
+/* REDLINE. dc40f95a unified every other pulse onto --hud-pulse but DELETED this
+   rule instead of converting it, so the tach stopped flashing at redline while
+   js/ui/hud.js kept toggling .redline and the reduced-motion block below kept
+   disabling an animation that no longer existed. Deliberately FASTER than
+   --hud-pulse: redline is the most urgent cue on the cluster and was 0.4s before
+   the unification — do not fold it into the shared token. */
+#hud-tach.redline #hud-rpm-fill { background: var(--red); animation: pulse 0.4s infinite; }
 
 /* Camera + HUD profile integration (js/ui/hud.js syncHudCamClasses). */
 body.hud-prof-minimal #minimap,
@@ -377,7 +384,13 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
 }
 #hud-limits {
   position: fixed;
-  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z) + 4.9em);
+  /* DERIVED from #hud-sectors' own box, not guessed: that box is three .sec-row
+     children at line-height 1.6 (4.8em) plus its 5px top+bottom padding (10px),
+     in the same --fs-micro this element uses = 77.2px at default. The 4.9em this
+     shipped with is 68.6px, so the chip painted over the S3 row every time a
+     track-limits warning showed. Same lesson as #hud-sectors' own top above:
+     never pin HUD chrome to a constant a sibling's rendered height decides. */
+  top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z) + 4.8em + 15px);
   right: calc(10px + var(--sar) / var(--hud-z));
   background: rgba(8, 8, 14, 0.72);
   border-radius: var(--r-sm);

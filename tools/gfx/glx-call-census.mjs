@@ -18,7 +18,7 @@ const srv = await startStaticServer(process.cwd());
 const browser = await launchChromium();
 try {
   const page = await browser.newPage({ viewport: { width: 900, height: 500 } });
-  // Optional localStorage flags, e.g. --ls apex26.instCellCache=1 — the same
+  // Optional localStorage flags, e.g. --ls apex26.instCellCache=0 — the same
   // escape-hatch shape gfx-probe uses, so an opt-in renderer path can be A/B'd
   // without a rebuild.
   const LS = process.argv.filter((a) => a.startsWith("apex26."));
@@ -80,8 +80,17 @@ try {
                      "SAMPLE_ALPHA_TO_COVERAGE"]) {
       if (gl[n] !== undefined) capName.set(gl[n], n);
     }
+    try { Error.stackTraceLimit = 50; } catch (_) { /* not V8: the scan just sees fewer frames */ }
     const C = {}, caps = {}, orig = {};
     let subBytes = 0;
+    // WHERE do the uploaded bytes come from? A single KiB/frame total says the
+    // renderer uploads a lot and nothing about which call to go and look at —
+    // and a packed grid measured 1009 KiB/frame with no way to attribute it.
+    // One stack per bufferSubData, bucketed by the first frame inside js/,
+    // is the whole diagnosis. Only bufferSubData carries this: it is the one
+    // counter whose SIZE varies per call site, and a stack per gl call would
+    // dominate the very frame time the census is trying not to disturb.
+    const subBy = {};
     for (const m of METHODS.concat(STATE)) {
       if (typeof gl[m] !== "function") continue;   // never invent a counter for a method this context lacks
       C[m] = 0; orig[m] = gl[m];
@@ -91,7 +100,25 @@ try {
           const src = a[2];
           if (src && src.BYTES_PER_ELEMENT) {
             const len = a[4] != null ? a[4] : src.length;
-            subBytes += len * src.BYTES_PER_ELEMENT;
+            const bytes = len * src.BYTES_PER_ELEMENT;
+            subBytes += bytes;
+            // `a[4] == null` means the call passed no length — it uploads the
+            // WHOLE array whatever the visible count is. Worth seeing as its
+            // own column: that is a different bug from "uploads too often".
+            let site = "?";
+            const st = (new Error()).stack || "";
+            for (const line of st.split("\n")) {
+              // `?v=dev` sits between the .js and the line number — every shell
+              // tag carries it (AGENTS.md: the deploy rewrites it to a content
+              // hash). A regex anchoring ":<line>" straight onto ".js" matched
+              // NOTHING and bucketed every byte under "?", which is how the
+              // first attributed run came back useless.
+              const hit = line.match(/(js\/[\w./-]+\.js)(?:\?[^\s:)]*)?:(\d+)/);
+              if (hit) { site = hit[1] + ":" + hit[2]; break; }
+            }
+            const key = site + (a[4] == null ? " (FULL)" : "");
+            const e = subBy[key] || (subBy[key] = { calls: 0, bytes: 0 });
+            e.calls++; e.bytes += bytes;
           }
         } else if (m === "enable" || m === "disable") {
           const k = m + ":" + (capName.get(a[0]) || ("0x" + Number(a[0]).toString(16)));
@@ -133,7 +160,13 @@ try {
         if (me) near = f.filter((c) => Math.abs(c.gap - me.gap) < 200).length;
       }
     } catch (_) { /* no fieldState hook: reported as null, and the caller says so */ }
+    // Biggest uploader first — that is the only order anyone reads this in.
+    const uploads = Object.entries(subBy)
+      .sort((a, b) => b[1].bytes - a[1].bytes)
+      .map(([site, e]) => ({ site, callsPerFrame: +(e.calls / F).toFixed(1),
+                             kiBPerFrame: +((e.bytes / F) / 1024).toFixed(1) }));
     return { per, state, bufferSubDataKiBPerFrame: +((subBytes / F) / 1024).toFixed(1),
+             uploadsBySite: uploads,
              carsInField: roster, carsNearPlayer: near,
              preset: (__apex.lightState && __apex.lightState().preset) || null };
   }, FRAMES);

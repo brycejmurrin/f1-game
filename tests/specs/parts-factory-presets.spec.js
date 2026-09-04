@@ -9,6 +9,17 @@ import { sharedTest as test, expect } from "../helpers/fixtures.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 test("AI full-body meshes use deterministic factory presets instead of saved setups", async ({ page }) => {
+  // DECLARE THE BUDGET. One test, on the shared per-worker boot — so it pays
+  // the whole worker's page boot, race fixture and garage mesh build before its
+  // body starts. Silent about that cost, it was billed at the change-aware
+  // gate's generic 120 s and selected; it then failed at exactly "Test timeout
+  // of 120000ms exceeded" on Pages #1974 (run 33830189400, job 100891344583),
+  // after a MEASURED 240.1 s. Nothing asserted was wrong.
+  //
+  // 300 s clears that worst case with the ~25 % margin ci.yml's caps use, and
+  // tools/ci/select-specs.mjs now EXCLUDES this spec by name and says so
+  // instead of picking a spec it cannot pay for. A BUDGET, not a tolerance.
+  test.setTimeout(300_000);
   await toMenu(page);
   await pinFreePlay(page, {
     team: "mclaren",
