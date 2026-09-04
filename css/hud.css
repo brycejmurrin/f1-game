@@ -214,6 +214,20 @@
 }
 :root { --hud-pulse: 0.8s; }
 @keyframes pulse { 50% { opacity: 0.55; } }
+
+/* Camera + HUD profile integration (js/ui/hud.js syncHudCamClasses). */
+body.hud-prof-minimal #minimap,
+body.hud-prof-minimal .hud-gaps,
+body.hud-prof-minimal #hud-sectors { display: none !important; }
+body.hud-onboard #minimap,
+body.hud-onboard .hud-gaps { display: none !important; }
+body.hud-bcam #hud-gearbox,
+body.hud-bcam #hud-ot,
+body.hud-bcam #hud-aero,
+body.hud-bcam #hud-energy,
+body.hud-bcam #hud-limits { display: none !important; }
+body.hud-bcam:not(.hud-prof-broadcast) #hud-sectors { display: none !important; }
+
 #hud-energy {
   width: 130px; height: 14px;
   /* A plate under the fill, like the tach: with none, the bar's empty half was

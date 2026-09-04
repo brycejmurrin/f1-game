@@ -1705,9 +1705,16 @@
       <label class="lt-help-toggle"><input id="ct-help-on" type="checkbox"> Show explanations</label>
     </div>
     <div id="ct-rows" class="pane" role="tabpanel"></div>
+    <div id="ct-previews" class="balanced-row" aria-label="Corner preview shots">
+      <button type="button" id="ct-prev-monza" title="Jump to Monza T1 for a live framing check">MONZA T1</button>
+      <button type="button" id="ct-prev-spa" title="Jump to Spa Eau Rouge for a live framing check">SPA EAU ROUGE</button>
+      <button type="button" id="ct-prev-monaco" title="Jump to Monaco chicane for a live framing check">MONACO CHICANE</button>
+    </div>
+    <textarea id="ct-json" readonly hidden aria-label="Exported camera tuning values"></textarea>
     <div class="sheet-foot balanced-row">
       <button id="ct-reset" title="Reset framing offsets for the camera mode currently being edited. Other modes are untouched.">RESET CAM</button>
       <button id="ct-reset-all" title="Reset every camera mode to shipped defaults.">RESET ALL</button>
+      <button id="ct-copy">COPY VALUES</button>
       <button id="ct-close" class="bigbtn">DONE</button>
     </div>
   </div>

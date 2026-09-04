@@ -223,7 +223,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   padding-right: 10px;
 }
 #lt-rows.sf-scroll::before, #ct-rows.sf-scroll::before { margin-right: -8px; }
-#lt-json { flex-shrink: 0; }
+#lt-json, #ct-json { flex-shrink: 0; }
 #lighting-inner .adv-item, #camtune-inner .adv-item { margin: 7px 0; }
 #lighting-inner .adv-help, #camtune-inner .adv-help { display: none; }        /* hidden unless "Show explanations" is on… */
 #lighting-inner.lt-show-help .adv-help,
@@ -335,7 +335,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    way to see at a glance which of the 13 you have already tuned. */
 #ct-modes .lt-tab.tuned { border-color: var(--red); color: var(--text); }
 #ct-modes .lt-tab.tuned.on { border-color: var(--red); }
-#lt-json {
+#lt-json, #ct-json {
   /* field-sizing lets the export box grow to whatever COPY VALUES produced
      instead of scrolling inside a fixed 72px; the height stays as the fallback
      where it is unsupported, and the max keeps it from swallowing the panel.
@@ -614,7 +614,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
      DONE were the last three controls under the WCAG floor in the 1900-cell run. */
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .sheet-foot button { padding: 6px 10px; font-size: var(--fs-micro); min-height: var(--tap-min); }
   :is(#lighting-inner, #camtune-inner)[data-density="compact"] .adv-item { margin: 5px 0; }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"] #lt-json { height: 96px; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"] :is(#lt-json, #ct-json) { height: 96px; }
 
   /* At extreme local widths a wrapped 2+1 footer becomes the largest thing in
      the panel and its sticky position covers the tab strip. Rail-off compact
@@ -753,7 +753,7 @@ details[open] > .as-head .adv-sec::before { content: "\25B4"; }
     grid-column: 2; grid-row: 1;
     min-height: 0; max-height: none;
   }
-  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] #lt-json { grid-column: 2; grid-row: 2; }
+  :is(#lighting-inner, #camtune-inner)[data-density="compact"][data-rail="on"] :is(#lt-json, #ct-json) { grid-column: 2; grid-row: 2; }
   /* The action bar is the foot of the RAIL, so its height comes out of the
      rail's column and not out of the slider list beside it. The balanced row
      fits two actions, then grows the final DONE action across the last line. */
