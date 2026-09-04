@@ -13,6 +13,7 @@ test("pause dialog hides bottom HUD chrome while open mid-race", () => {
   assert.match(css, /\.hud-top/);
   assert.match(css, /#btn-cam/);
   assert.match(css, /\.dock/);
+  assert.match(css, /body\.in-race:has\(#pmsettings:not\(\[hidden\]\)\)\s*:is\(/);
 });
 
 test("compact pause stack tightens without changing type tokens", () => {

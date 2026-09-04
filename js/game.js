@@ -471,11 +471,9 @@ function hudProfileLabel() { return "HUD: " + hudProfile.toUpperCase(); }
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
-// AUTO NAMES WHAT IT RESOLVED TO. Five stops, and the first two are the same
-// picture whenever auto lands on "full" — which it does on any roomy band, and
-// on the BROADCAST profile with a non-broadcast camera. `hud-met-full` has no
-// CSS at all (it is the base state: show everything), so two clicks changed
-// nothing and the control read as broken. It was not; it was silent.
+// LAYOUT, not METRICS: the overlay details already own that word.
+// AUTO names what it resolved to so the first two clicks are not silent
+// when auto lands on "full" (the unstyled base state).
 function hudMetricsLayoutLabel() {
   if (hudMetricsLayout !== "auto") return "LAYOUT: " + hudMetricsLayout.toUpperCase();
   const m = document.body.className.match(/hud-met-([a-z]+)/);
@@ -483,11 +481,23 @@ function hudMetricsLayoutLabel() {
 }
 const HUD_VIS_MODES = ["auto", "on", "off"];
 let hudMapVis = store.get("hudMapVis", "auto");
-let hudGapsVis = store.get("hudGapsVis", "auto");
+let hudGapsVis = store.get("hudGapsVis", "on");
 if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "auto";
-if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "auto";
+if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
 function hudMapVisLabel() { return "MAP: " + hudMapVis.toUpperCase(); }
 function hudGapsVisLabel() { return "GAPS: " + hudGapsVis.toUpperCase(); }
+function hudDetailsSummary() {
+  let s = "HUD · " + hudProfile.toUpperCase() + " · " + hudMetricsLayout.toUpperCase();
+  if (hudMapVis === "on") s += " · MAP";
+  else if (hudMapVis === "off") s += " · NO MAP";
+  if (hudGapsVis === "off") s += " · NO GAPS";
+  else s += " · GAPS";
+  return s;
+}
+function paintHudDetailsSummary() {
+  const sum = $("pm-hud-details-sum");
+  if (sum) sum.textContent = hudDetailsSummary();
+}
 function syncMetricsOverlayCompact() {
   const metrics = document.getElementById("game-metrics");
   if (!metrics) return;
@@ -8564,7 +8574,7 @@ function syncSettingsAvailability() {
 }
 function openSettings() {
   // AUTO's resolved layout moves with the CAMERA and the band caps, so the
-  // METRICS label has to be re-read on open — it is written at boot and on
+  // LAYOUT label has to be re-read on open — it is written at boot and on
   // click, and a resolution that went stale between the two would be a worse
   // lie than the silence this replaced.
   if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
@@ -9365,10 +9375,12 @@ $("pm-gears").onclick = () => {
 const pmHudProfile = $("pm-hudprofile");
 if (pmHudProfile) {
   pmHudProfile.textContent = hudProfileLabel();
-  pmHudProfile.onclick = () => {
+  pmHudProfile.onclick = (e) => {
+    e.stopPropagation();
     hudProfile = HUD_PROFILES[(HUD_PROFILES.indexOf(hudProfile) + 1) % HUD_PROFILES.length];
     store.set("hudProfile", hudProfile);
     pmHudProfile.textContent = hudProfileLabel();
+    paintHudDetailsSummary();
     syncMetricsOverlayCompact();
     updateHud(true);
   };
@@ -9376,10 +9388,12 @@ if (pmHudProfile) {
 const pmHudMetrics = $("pm-hudmetrics");
 if (pmHudMetrics) {
   pmHudMetrics.textContent = hudMetricsLayoutLabel();
-  pmHudMetrics.onclick = () => {
+  pmHudMetrics.onclick = (e) => {
+    e.stopPropagation();
     hudMetricsLayout = HUD_MET_LAYOUTS[(HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) + 1) % HUD_MET_LAYOUTS.length];
     store.set("hudMetricsLayout", hudMetricsLayout);
     pmHudMetrics.textContent = hudMetricsLayoutLabel();
+    paintHudDetailsSummary();
     syncMetricsOverlayCompact();
     updateHud(true);
   };
@@ -9388,9 +9402,11 @@ function wireHudVisBtn(id, read, write, labelFn) {
   const btn = $(id);
   if (!btn) return;
   btn.textContent = labelFn();
-  btn.onclick = () => {
+  btn.onclick = (e) => {
+    e.stopPropagation();
     write(HUD_VIS_MODES[(HUD_VIS_MODES.indexOf(read()) + 1) % HUD_VIS_MODES.length]);
     btn.textContent = labelFn();
+    paintHudDetailsSummary();
     updateHud(true);
   };
 }
@@ -9629,6 +9645,7 @@ Input.setSteerMode(steerMode);
 $("pm-steer").textContent = steerLabel();
 if (pmHudProfile) pmHudProfile.textContent = hudProfileLabel();
 if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
+paintHudDetailsSummary();
 syncMetricsOverlayCompact();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
