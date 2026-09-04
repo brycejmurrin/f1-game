@@ -175,8 +175,8 @@
 @property --chip-h { syntax: "<length>"; inherits: true; initial-value: 40px; }
 @property --tap-min { syntax: "<length>"; inherits: true; initial-value: 24px; }
 /* Menu range hit-band. Painted 32px at every UI SIZE: the token divides by
-   --ui-scale so sheet zoom does not grow the track. Unregistered, a
-   parseFloat reader would see the calc() string. */
+   --ui-scale so sheet zoom does not grow the track (8px groove / 22px thumb).
+   Unregistered, a parseFloat reader would see the calc() string. */
 @property --slider { syntax: "<length>"; inherits: true; initial-value: 32px; }
 /* --tap-sm completes the set: unregistered it left the audit tool's floor
    read non-deterministic between cells (44-fallback on most iPhone rows). */

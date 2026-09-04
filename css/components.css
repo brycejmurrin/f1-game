@@ -46,7 +46,7 @@
 /* Menu <input type=range> — one chrome for every sheet (SETTINGS, lighting /
    camera tuner, ADVANCED STEERING, MUSIC, Spotify, free-cam FOV).
    Height is --slider (32 painted px): it divides by --ui-scale so UI SIZE
-   zoom does not grow the track. Track ~6 painted px, thumb ~20. color /
+   zoom does not grow the track. Track ~8 painted px, thumb ~22. color /
    currentColor carries the accent (tuner red, DISPLAY steel, disabled grey)
    so this is not a new colour family. */
 input[type="range"] {
@@ -61,35 +61,35 @@ input[type="range"] {
   touch-action: manipulation;
 }
 input[type="range"]::-webkit-slider-runnable-track {
-  height: calc(var(--slider) * 0.1875);
+  height: calc(var(--slider) * 0.25);
   border-radius: 999px;
-  background: var(--plate-line);
+  background: color-mix(in srgb, var(--text) 28%, transparent);
 }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: calc(var(--slider) * 0.625);
-  height: calc(var(--slider) * 0.625);
+  width: calc(var(--slider) * 0.6875);
+  height: calc(var(--slider) * 0.6875);
   margin-top: calc(var(--slider) * -0.21875);
   border: 0;
   border-radius: 50%;
   background: currentColor;
 }
 input[type="range"]::-moz-range-track {
-  height: calc(var(--slider) * 0.1875);
+  height: calc(var(--slider) * 0.25);
   border: 0;
   border-radius: 999px;
-  background: var(--plate-line);
+  background: color-mix(in srgb, var(--text) 28%, transparent);
 }
 input[type="range"]::-moz-range-thumb {
-  width: calc(var(--slider) * 0.625);
-  height: calc(var(--slider) * 0.625);
+  width: calc(var(--slider) * 0.6875);
+  height: calc(var(--slider) * 0.6875);
   border: 0;
   border-radius: 50%;
   background: currentColor;
 }
 input[type="range"]::-moz-range-progress {
-  height: calc(var(--slider) * 0.1875);
+  height: calc(var(--slider) * 0.25);
   border-radius: 999px;
   background: currentColor;
 }

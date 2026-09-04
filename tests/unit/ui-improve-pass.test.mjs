@@ -1131,11 +1131,11 @@ test("menu range sliders share a painted-size token that cancels UI SIZE zoom", 
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "height"), "var(--slider)");
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "min-height"), "var(--slider)");
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]::-webkit-slider-thumb", "width"),
-    "calc(var(--slider) * 0.625)",
-    "thumb is ~20 painted px (easier grab) and scales with the same token");
+    "calc(var(--slider) * 0.6875)",
+    "thumb is ~22 painted px (easier grab) and scales with the same token");
   assert.equal(decl(css("css/components.css"), "input[type=\"range\"]::-webkit-slider-runnable-track", "height"),
-    "calc(var(--slider) * 0.1875)",
-    "track is ~6 painted px — thicker than the UA hairline, not a second control ladder");
+    "calc(var(--slider) * 0.25)",
+    "track is ~8 painted px — thicker than the UA hairline, not a second control ladder");
   assert.equal(decl(css("css/tuner.css"), ".tune-row input[type=\"range\"]", "height"), "var(--slider)");
   assert.equal(decl(css("css/components.css"), ".pm-group .tune-row input[type=\"range\"]", "height"), "var(--slider)");
   assert.equal(decl(css("css/hud.css"), ".pc-fovlab input[type=\"range\"]", "height"), "var(--slider)");
