@@ -8,6 +8,14 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { report, ALL_SPECS, expand, groupSpecs } from "../../tools/ci/ci-coverage.mjs";
+// DERIVED, never re-typed. This file was the FIFTH place the selected gate's
+// per-test timeout appeared as a literal, and raising it 120 -> 180 s reddened
+// exactly here — the guard asserted the old number against a workflow that had
+// moved on, which is the drift it exists to catch pointing the wrong way. The
+// selector owns the value; this file checks ci.yml agrees with the selector.
+import { SELECTED_GATE } from "../../tools/ci/select-specs.mjs";
+
+const SELECTED_TIMEOUT_MS = SELECTED_GATE.perTestTimeoutSec * 1000;
 
 const ciWorkflow = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
 const pagesWorkflow = fs.readFileSync(new URL("../../.github/workflows/pages.yml", import.meta.url), "utf8");
@@ -246,20 +254,23 @@ const SMOKE_TIMEOUT_MS = (() => {
 
 test("smoke's command-line timeout is not tripled inside the spec", () => {
   const smokeSpec = fs.readFileSync(new URL("../specs/smoke.spec.js", import.meta.url), "utf8");
-  assert.ok(SMOKE_TIMEOUT_MS >= 120000,
-    `smoke's per-test cap is ${SMOKE_TIMEOUT_MS} ms, below the selected gate's 120 s`);
+  assert.ok(SMOKE_TIMEOUT_MS >= SELECTED_TIMEOUT_MS,
+    `smoke's per-test cap is ${SMOKE_TIMEOUT_MS} ms, below the selected gate's ` +
+    `${SELECTED_GATE.perTestTimeoutSec} s`);
   assert.doesNotMatch(smokeSpec, /^\s*test\.slow\s*\(/m,
     `test.slow triples the workflow's ${SMOKE_TIMEOUT_MS / 1000} s per-test timeout`);
 });
 
-test("selected's 120 s gate cannot rerun the fixed-budget smoke spec", () => {
+test("the selected gate cannot rerun the fixed-budget smoke spec", () => {
   const smoke = ciWorkflow.split("\n  smoke:")[1].split("\n  driving-model:")[0];
   const selected = ciWorkflow.split("\n  selected:")[1];
   assert.match(smoke, new RegExp("test:smoke -- --timeout=" + SMOKE_TIMEOUT_MS));
   assert.match(smoke, /tests\/specs\/smoke\.spec\.js/,
     "test-only smoke edits must force the fixed shards even though they do not ship");
-  assert.match(selected, /--timeout=120000/);
-  assert.doesNotMatch(selected, /npm test -- .*smoke\.spec\.js.*--timeout=120000/);
+  assert.match(selected, new RegExp(`--timeout=${SELECTED_TIMEOUT_MS}`),
+    `ci.yml's selected step must run the timeout select-specs.mjs models ` +
+    `(${SELECTED_GATE.perTestTimeoutSec} s)`);
+  assert.doesNotMatch(selected, new RegExp(`npm test -- .*smoke\\.spec\\.js.*--timeout=${SELECTED_TIMEOUT_MS}`));
   assert.match(selected, /COVERED BY FIXED BLOCKING GATE/,
     "the selected report must make its delegated coverage visible");
 });

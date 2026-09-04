@@ -109,6 +109,17 @@ async function sampleEngine() {
   return GameAudio;
 }
 
+// The OSCILLATOR FALLBACK: never release the held fetches, so the decode never
+// lands and startEngine takes the synth path — which is what a player whose
+// f1_engine.mp3 404s or is blocked actually gets.
+function synthEngine() {
+  const { GameAudio } = boot();
+  GameAudio.init();
+  GameAudio.startEngine();
+  assert.equal(GameAudio.debug().usingSamples, false, "precondition: measuring the synth fallback");
+  return GameAudio;
+}
+
 const REVS = [0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 0.95, 1];
 
 test("defaults are identity — the shipped sound is untouched by the tune layer", async () => {
@@ -547,4 +558,34 @@ test("Doppler is bounded however hard two cars close on each other", async () =>
     const r = rate(v);
     assert.ok(Number.isFinite(r) && r > 0.05 && r < 2, `approach ${v} produced playbackRate ${r}`);
   }
+});
+
+test("the field is audible on the oscillator fallback too, and not louder than you", async () => {
+  const A = synthEngine();
+  const one = (arc, rev = 0.8) => {
+    A.setRivals([{ lat: 0, arc, rev, approach: 0 }]);
+    return A.rivalState()[0];
+  };
+  const near = one(3);
+  assert.ok(near.gain > 0, "a car three metres away is silent on the fallback");
+  assert.equal(near.rate, 0, "the synth voice has no playbackRate to report");
+  assert.ok(near.hz > 100, `the synth voice is not pitched: ${near.hz} Hz`);
+  assert.ok(one(3, 0.2).hz < near.hz, "and it does not rise with their revs");
+
+  // The saws are far hotter than the recording, which is why the player's own
+  // fallback runs at about a fifth of the sample core's level. A rival that
+  // ignored that discount would be louder than the car you are sitting in.
+  A.setEngine(0.9, 0, false, 0.9, 6, {});
+  const mine = A.engineLevel() + A.limiterDepth();
+  assert.ok(near.gain < mine, `a rival at ${near.gain} is over your own engine at ${mine}`);
+
+  const gone = one(200);
+  assert.equal(gone.gain, 0, "and it still goes away past the audible radius");
+});
+
+test("four fallback voices are four cars as well", () => {
+  const A = synthEngine();
+  A.setRivals([0, 1, 2, 3].map((i) => ({ lat: 0, arc: 4 + i * 4, rev: 0.6, approach: 0 })));
+  const hz = A.rivalState().map((v) => v.hz);
+  assert.equal(new Set(hz).size, 4, `four fallback voices share a pitch: ${hz.join(", ")}`);
 });
