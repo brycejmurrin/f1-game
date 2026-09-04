@@ -375,24 +375,42 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   });
   await page.waitForFunction(() => !document.getElementById("vsfriend").hidden,
     null, { polling: 100, timeout: 10_000 });
+  // Compact density is what puts HOST/JOIN on one row and CLOSE in the head.
+  // `hidden === false` is not enough: Selected specs 2026-09-04 failed this
+  // in 10.7s (same body passed in 36.8s the run before) after a slider-only
+  // CSS merge that cannot move these boxes. SheetShape's RO had not fired.
+  await page.evaluate(() => window.SheetShape?.reclassify());
+  await page.waitForFunction(() => {
+    const inner = document.getElementById("vsfriend-inner");
+    const host = document.getElementById("vs-host");
+    const join = document.getElementById("vs-join");
+    if (!inner || inner.dataset.density !== "compact" || !host || !join) return false;
+    const hr = host.getBoundingClientRect();
+    const jr = join.getBoundingClientRect();
+    return hr.width > 0 && jr.width > 0 && Math.abs(hr.top - jr.top) < 2;
+  }, null, { polling: 100, timeout: 10_000 });
   const versus = await page.evaluate(() => {
     const rect = (id) => document.getElementById(id).getBoundingClientRect();
     const body = rect("vs-body"), host = rect("vs-host"), join = rect("vs-join");
     const head = document.querySelector("#vsfriend .sheet-head").getBoundingClientRect();
     const close = rect("vs-close");
+    const inner = document.getElementById("vsfriend-inner");
     return {
+      density: inner.dataset.density,
       hostInside: host.left >= body.left - 1 && host.right <= body.right + 1,
       joinInside: join.left >= body.left - 1 && join.right <= body.right + 1,
       sameRow: Math.abs(host.top - join.top) < 2,
       closeInHead: close.top >= head.top - 1 && close.bottom <= head.bottom + 2,
       overflowX: document.documentElement.scrollWidth - innerWidth,
+      boxes: { body, host, join, head, close },
     };
   });
-  expect(versus.hostInside).toBe(true);
-  expect(versus.joinInside).toBe(true);
-  expect(versus.sameRow).toBe(true);
-  expect(versus.closeInHead).toBe(true);
-  expect(versus.overflowX).toBeLessThanOrEqual(1);
+  const versusDump = JSON.stringify(versus);
+  expect(versus.hostInside, "vs host inside body " + versusDump).toBe(true);
+  expect(versus.joinInside, "vs join inside body " + versusDump).toBe(true);
+  expect(versus.sameRow, "vs host/join one row " + versusDump).toBe(true);
+  expect(versus.closeInHead, "vs CLOSE in head " + versusDump).toBe(true);
+  expect(versus.overflowX, versusDump).toBeLessThanOrEqual(1);
 
   // Camera picker: the popup exposes a radio-menu contract, wraps keyboard
   // focus, restores focus on Escape, and an input-free pause still closes it.
