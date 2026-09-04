@@ -34,22 +34,26 @@ test("the selected gate actually skips them, and says so", () => {
 });
 
 test("a twin that loses a test is caught", async () => {
-  // The failure this exists for, on real files: the count check is the only
-  // thing standing between "the browser copy is redundant" and "nobody runs
-  // these assertions". Exercised by asking the checker about a pair that is
-  // deliberately mismatched rather than by trusting that it would notice.
-  //
-  // world-physics is that pair for real: 5 of its 6 tests are ported verbatim,
-  // and the sixth reads document.getElementById("pm-rate") and dispatches an
-  // input event, so it cannot be. It is NOT in TWINNED, and this pins why.
+  // The failure this exists for: the count check is the only thing standing
+  // between "the browser copy is redundant" and "nobody runs these assertions".
+  // Exercised on a scratch pair rather than trusted — the same prove-it-bites
+  // discipline tools/gen/move-tree.mjs uses for its sweep.
   const { declaredTests } = await import("../../tools/ci/select-budget.mjs");
-  const spec = declaredTests("tests/specs/world-physics.spec.js");
-  const twin = declaredTests("tests/unit/world-physics-vm.test.mjs");
-  assert.notEqual(spec, twin,
-    "world-physics's twin now declares as many tests as its spec — if the DOM slider test was ported " +
-    "or split out, add the pair to TWINNED in tools/ci/twinned-specs.mjs and delete this test");
-  assert.ok(!isTwinned("tests/specs/world-physics.spec.js"),
-    "world-physics is only partially twinned and must keep gating in a browser");
+  const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "apex-twin-"));
+  try {
+    const spec = path.join(dir, "a.spec.js"), twin = path.join(dir, "a.test.mjs");
+    fs.writeFileSync(spec, 'test("one", () => {});\ntest("two", () => {});\n');
+    fs.writeFileSync(twin, 'test("one", () => {});\n');
+    const rel = (f) => path.relative(path.resolve(ROOT), f);
+    assert.equal(declaredTests(rel(spec)), 2);
+    assert.equal(declaredTests(rel(twin)), 1,
+      "the counter must see the drift the check is built on");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+
+  // And the real pairs are all equal right now, which is what makes the
+  // exclusion in select-specs sound rather than merely convenient.
+  for (const { spec, twin, specTests, twinTests } of verify().rows)
+    assert.equal(specTests, twinTests, `${spec} vs ${twin}`);
 });
 
 test("the gated-node set is derived from ci.yml, not copied", () => {

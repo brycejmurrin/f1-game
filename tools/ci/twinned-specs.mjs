@@ -46,12 +46,18 @@
  * "Pure-node unit suites" job runs unconditionally. Same guarantee, different
  * job; a hard-coded group name would have been wrong on the day it shipped.
  *
- * The check has already earned itself: tests/specs/world-physics.spec.js reads
- * as twinned (5 of its 6 tests are ported verbatim) and is NOT listed, because
- * its sixth reads `document.getElementById("pm-rate")` and dispatches an input
- * event — genuinely browser-only. Adding it would fail this tool's own count
- * check rather than quietly dropping that test from the gate. It needs its DOM
- * test split out first.
+ * The count check earned itself on the first spec it refused.
+ * tests/specs/world-physics.spec.js read as twinned — 5 of its 6 tests ported
+ * verbatim — and the check would not take it, because its sixth drove the
+ * `#pm-rate` DOM slider. Following that refusal instead of overriding it found
+ * the test was doing two jobs: asserting the slider is WIRED to G.WHEELBASE,
+ * and asserting a shorter wheelbase TURNS IN more. Splitting them showed the
+ * wiring half was already covered, and better — sliders.spec.js drives the same
+ * slider through a table checking the mapped `tuning().wheelbase`, its
+ * direction, its label and its storage key. So the duplicate went, the physics
+ * claim moved onto the hook the slider writes, and the pair is 6-for-6 and
+ * listed. The claim that could break silently is now gated in the VM, where it
+ * was previously reachable only through a DOM slider.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -74,6 +80,7 @@ export const TWINNED = {
   "tests/specs/longitudinal.spec.js":       "tests/unit/longitudinal-vm.test.mjs",
   "tests/specs/obs-act-edge.spec.js":       "tests/unit/obs-act-edge-vm.test.mjs",
   "tests/specs/offtrack.spec.js":           "tests/unit/offtrack-vm.test.mjs",
+  "tests/specs/world-physics.spec.js":      "tests/unit/world-physics-vm.test.mjs",
 };
 
 export const isTwinned = (file) => Object.hasOwn(TWINNED, file);
