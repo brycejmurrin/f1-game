@@ -75,11 +75,7 @@ function boot() {
     createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
     decodeAudioData: (ab, res) => res(sampleBuf(4, SR)),
     resume: () => Promise.resolve(), close() {},
-    // The granular core needs a worklet to exist. addModule resolving is what
-    // flips grainReady; AudioWorkletNode below is what startEngine constructs.
-    audioWorklet: { addModule: () => Promise.resolve() },
   };
-  const workletNodes = [];
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error,
     parseFloat, parseInt, isFinite, Float32Array,
@@ -87,12 +83,6 @@ function boot() {
     document: { addEventListener() {}, hidden: false }, addEventListener() {}, removeEventListener() {},
     setTimeout: () => 0, clearTimeout() {}, navigator: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     AudioContext: function () { return ctx; },
-    AudioWorkletNode: function (c, name) {
-      const params = new Map([["ratio", param(1)]]);
-      const node = { name, parameters: { get: (k) => params.get(k) }, connect: (t) => t, disconnect() {}, port: { postMessage() {} } };
-      workletNodes.push(node);
-      return node;
-    },
     fetch: () => new Promise((res) => held.push(() => res({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
   };
   sb.window = sb;
@@ -105,7 +95,7 @@ function boot() {
   // and then silence forever. Tests step it by hand.
   const ctxTime = (dt) => { ctx.currentTime += dt; };
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
-  return { GameAudio, release, workletNodes, counts, ctxTime };
+  return { GameAudio, release, counts, ctxTime };
 }
 
 // The sample core is the SHIPPED path, so every invariant below is measured on
@@ -316,45 +306,23 @@ test("every sound profile and layer the panel offers is one the engine knows", (
 // so they boot the engine without the sample decode the others wait for.
 function await_boot() { return boot().GameAudio; }
 
-test("DETUNE reaches the granular core, which has no detune param of its own", async () => {
-  // It did not, and that is the bug this covers: engSrcIdle.detune is the only
-  // place the trim landed, and the granular core never creates that node — so
-  // the slider moved and nothing happened on the DEFAULT core. Grain-onset
-  // scatter was tried instead and measured to destroy pitch definition
-  // outright, so the cents go onto the ratio, which is where this core's pitch
-  // lives. Same slider, same documented cents, both cores.
-  const { GameAudio, release, workletNodes } = boot();
-  GameAudio.init();
-  await release();
-  // Opt IN: the granular core ships off (it sounds like loud noise — see
-  // tests/unit/granular-psola.test.mjs). This covers the trim's routing on that
-  // core, which still has to be right for the day the core is fixed or removed.
-  GameAudio.setGranular(true);
-  GameAudio.startEngine();
-  assert.equal(GameAudio.granular().active, true, "precondition: the granular core is the one running");
-  assert.equal(workletNodes.length, 1, "exactly one worklet node per engine start");
-  const ratio = workletNodes[0].parameters.get("ratio");
-
-  GameAudio.setTune(GameAudio.tuneDefaults());
-  GameAudio.setEngine(0.6, 0, false, 0.6, 5, {});
-  const neutral = ratio.value;
-  assert.ok(neutral > 0, "the ratio param must actually be driven");
-  assert.ok(Math.abs(neutral - GameAudio.rate()) < 1e-6, "at detune 1.0 the ratio is exactly what rate() reports");
-
-  // detune 3 -> voice.detune + (3-1)*30 = +60 cents on the "default" voice.
-  GameAudio.setTune({ detune: 3 });
-  GameAudio.setEngine(0.6, 0, false, 0.6, 5, {});
-  const want = GameAudio.rate() * Math.pow(2, 60 / 1200);
-  assert.ok(Math.abs(ratio.value - want) / want < 1e-6,
-    `detune 3 should put the ratio at ${want.toFixed(5)}, got ${ratio.value.toFixed(5)}`);
-  assert.ok(ratio.value > neutral, "and it must be an audible move, not a no-op");
-
-  // detune 0 -> -30 cents, the other side of neutral.
-  GameAudio.setTune({ detune: 0 });
-  GameAudio.setEngine(0.6, 0, false, 0.6, 5, {});
-  assert.ok(ratio.value < neutral, "detune 0 must fall below neutral");
-  // ...and it is a FINE trim: an order of magnitude under what PITCH spans.
-  assert.ok(Math.abs(ratio.value / neutral - 1) < 0.05, "detune must stay a fine trim, not a second pitch control");
+test("DETUNE lands on the sample core's own detune param", async () => {
+  // It once did not: for the life of the granular core, engSrcIdle.detune was
+  // the only place this trim landed and that core never built the node, so the
+  // slider moved and nothing happened. The granular core is gone; this pins the
+  // remaining path so the trim cannot go quietly inert again.
+  const A = await sampleEngine();
+  A.setTune(A.tuneDefaults());
+  const neutral = A.detuneCents();
+  A.setTune({ detune: 3 });          // +60 cents on the "default" voice
+  assert.ok(Math.abs(A.detuneCents() - (neutral + 60)) < 1e-6,
+    `detune 3 should sit 60 cents above neutral, got ${A.detuneCents()} vs ${neutral}`);
+  A.setTune({ detune: 0 });          // -30 cents
+  assert.ok(Math.abs(A.detuneCents() - (neutral - 30)) < 1e-6,
+    `detune 0 should sit 30 cents below neutral, got ${A.detuneCents()}`);
+  // A FINE trim: an order of magnitude under what PITCH spans.
+  assert.ok(Math.abs(Math.pow(2, (A.detuneCents() - neutral) / 1200) - 1) < 0.05,
+    "detune must stay a fine trim, not a second pitch control");
 });
 
 test("SUB is audible on the shipped core, not just the oscillator fallback", async () => {
@@ -475,4 +443,108 @@ test("overrun crackles on a trailing throttle, and not while coasting or braking
   assert.equal(burstsOver(40, { ax: -4 }), 0, "switched off is silent");
   A.setLayer("overrun", true);
   assert.ok(burstsOver(40, { ax: -4 }) > 0, "and back on crackles again");
+});
+
+test("every slider spans its trim's FULL range and can land exactly on 1.0", () => {
+  // Three numbers have to agree for a slider to be usable, and they live in
+  // three files: the engine's TUNE_RANGE, the panel's {lo, step}, and the
+  // shell's min/max/value. Hand-checking them is how a range gets widened in
+  // one place and not the others — a slider that stops short of its trim's
+  // maximum is a control the player cannot reach the end of, and one that
+  // cannot hit 1.0 exactly is a panel that cannot return to the shipped sound.
+  const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
+  const shell = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  const A = boot().GameAudio;
+  const range = A.tuneRange();
+
+  const rows = [...panel.matchAll(/\{ k: "(\w+)",\s*id: "([\w-]+)",\s*lo: ([\d.]+),\s*step: ([\d.]+) \}/g)];
+  assert.equal(rows.length, 9, "expected nine tuner sliders");
+  for (const [, key, id, loS, stepS] of rows) {
+    const lo = Number(loS), step = Number(stepS);
+    const m = shell.match(new RegExp(`<input id="${id}" type="range" min="0" max="(\\d+)" step="1" value="(\\d+)"`));
+    assert.ok(m, `${id} is missing from the shell, or its attributes changed shape`);
+    const max = Number(m[1]), dflt = Number(m[2]);
+    const [rLo, rHi] = range[key];
+    assert.ok(Math.abs(lo - rLo) < 1e-9, `${key}: the panel starts at ${lo}, the engine's range at ${rLo}`);
+    assert.ok(Math.abs(lo + max * step - rHi) < 1e-9,
+      `${key}: the slider tops out at ${lo + max * step}, the engine allows ${rHi} — the player cannot reach the end`);
+    assert.ok(Math.abs(lo + dflt * step - 1) < 1e-9,
+      `${key}: the default position is ${lo + dflt * step}, not 1.0 — the panel cannot return to the shipped sound`);
+  }
+});
+
+test("BRIGHTNESS keeps moving the corner across its whole range, and stops below Nyquist", async () => {
+  const A = await sampleEngine();
+  const at = (b) => { A.setTune({ brightness: b }); A.setEngine(0.8, 0, false, 0.6, 6, {}); return A.engineCut(); };
+  const [lo, hi] = A.tuneRange().brightness;
+  const NY = 44100 * 0.5;
+  let last = -1;
+  for (const b of [lo, 0.6, 1, 1.5, 2, hi]) {
+    const cut = at(b);
+    assert.ok(cut > last, `BRIGHTNESS ${b} did not open the filter further (${last} -> ${cut})`);
+    assert.ok(cut < NY, `corner ${cut} Hz is at or past Nyquist, where the node pins it silently`);
+    last = cut;
+  }
+});
+
+test("the LIMITER trim never inverts the gate, and spends its top half on the chop rate", async () => {
+  const A = await sampleEngine();
+  const atLimiter = () => A.setEngine(0.99, 0, false, 0.9, 7, {});
+  const [, hi] = A.tuneRange().limiter;
+  let lastHz = -1;
+  for (const k of [0, 0.5, 1, 2, hi]) {
+    A.setTune({ limiter: k });
+    atLimiter();
+    // engGain's base is (lvl - depth) and the square swings +-depth on top, so
+    // the trough is lvl - 2*depth. Negative there is a phase flip, not a cut.
+    const depth = A.limiterDepth(), lvl = A.engineLevel() + depth;
+    assert.ok(depth <= lvl * 0.5 + 1e-9,
+      `LIMITER ${k}: depth ${depth} exceeds half of level ${lvl} — the gate inverts`);
+    const hz = A.limiterHz();
+    assert.ok(hz > lastHz, `LIMITER ${k}: the chop rate stopped rising (${lastHz} -> ${hz})`);
+    lastHz = hz;
+  }
+  A.setTune({ limiter: 1 });
+  atLimiter();
+  assert.ok(Math.abs(A.limiterHz() - 13) < 0.01, "1.0 is still the stock 13 Hz cut");
+});
+
+test("rival voices are four distinct cars, not one car four times", async () => {
+  const A = await sampleEngine();
+  // Four cars in a line, all at the same rev: the only thing separating their
+  // pitches is the per-slot detune spread, so they must still all differ.
+  A.setRivals([0, 1, 2, 3].map((i) => ({ lat: 0, arc: 4 + i * 4, rev: 0.6, approach: 0 })));
+  const rates = A.rivalState().map((v) => v.rate);
+  assert.equal(new Set(rates).size, 4, `four voices share a pitch: ${rates.join(", ")}`);
+  const spread = Math.max(...rates) / Math.min(...rates);
+  assert.ok(spread > 1.001 && spread < 1.05, `spread ${spread} is not a few cents`);
+});
+
+test("a rival close alongside is heard, and one far up the road fades instead of popping", async () => {
+  const A = await sampleEngine();
+  const one = (arc, lat = 0, rev = 0.8) => {
+    A.setRivals([{ lat, arc, rev, approach: 0 }]);
+    return A.rivalState()[0];
+  };
+  const near = one(1, 4), far = one(100), gone = one(200);   // alongside on the right
+  assert.ok(near.gain > 0.2, `a car three metres away is at ${near.gain}, which is a rumour`);
+  assert.ok(far.gain > 0 && far.gain < near.gain, "a hundred metres up the road is quiet but present");
+  assert.equal(gone.gain, 0, "past the audible radius it is gone");
+  assert.ok(near.pan > 0.6, "a car alongside on your right is on your right");
+  assert.ok(near.cut > far.cut, "and the far one has lost its top end to the air");
+});
+
+test("Doppler is bounded however hard two cars close on each other", async () => {
+  const A = await sampleEngine();
+  const rate = (approach) => {
+    A.setRivals([{ lat: 0, arc: 5, rev: 0.5, approach }]);
+    return A.rivalState()[0].rate;
+  };
+  const still = rate(0);
+  assert.ok(rate(40) > still, "a car closing rises in pitch");
+  assert.ok(rate(-40) < still, "one dropping away falls");
+  for (const v of [1e6, -1e6, NaN, Infinity]) {
+    const r = rate(v);
+    assert.ok(Number.isFinite(r) && r > 0.05 && r < 2, `approach ${v} produced playbackRate ${r}`);
+  }
 });

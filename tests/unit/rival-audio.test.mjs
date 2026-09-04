@@ -90,7 +90,16 @@ test("only the nearest few survive, nearest first, and the far field is dropped"
   for (let i = 1; i < got.length; i++)
     assert.ok(got[i].dist >= got[i - 1].dist, "nearest first");
   assert.deepEqual(got.map((r) => r.arc), [5, 10, 15, 20], "and they are the four nearest");
-  assert.ok(got.every((r) => r.dist <= 70), "nothing beyond the audible range is returned");
+  assert.ok(got.every((r) => r.dist <= 150), "nothing beyond the audible range is returned");
+});
+
+test("the audible radius reaches out to 150 m, and stops there", () => {
+  const me = car({ s: 500 });
+  const far = car({ s: 620 });     // 120 m up the road: fading, but there
+  const gone = car({ s: 660 });    // 160 m: past the edge
+  const got = make([me, far, gone]).collect(me);
+  assert.equal(got.length, 1, "one of the two is in range");
+  assert.equal(got[0].arc, 120, "and it is the nearer one");
 });
 
 test("retired cars and the player are never in the field", () => {

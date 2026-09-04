@@ -81,9 +81,17 @@ does not hide a cluster). MAP and GAPS default ON; AUTO on the map still
 hides onboard, OFF is the explicit hide. Sliders stay
 settings rows (steel track, text value). UI SIZE uses the
 same steel italic + rule as COCKPIT; HUD SIZE stays a caption.
-Fold summaries are chip-height; the name is steel, ON is gold, OFF is
-red, values are `--text` (steel-on-steel hid the choices). The same
-gold / red pair paints the ON/OFF word on any menu switch.
+Fold summaries are chip-height; the name is steel. Two pair kinds,
+then names: gold / red is enablement (ON, OFF, MAP / GAPS when those
+clusters show, NO MAP / NO GAPS). Green / blue is agency, and only
+on a 2-state AUTO / MANUAL control (GEARS, ACTIVE AERO). AUTO on a
+longer cycle (LAYOUT, RESOLUTION, THREE PATH, SCREENSHOTS, MAP: AUTO)
+is a name and stays `--text`, like STANDARD / TILT / WEBGL2. Settings
+`LABEL: VALUE` rows keep a space after the colon (NBSP + flex gap —
+inline-flex collapses a wrap's ordinary space). The same wrap and
+inks run on every menu AriaState already watches (title SOUND,
+MUSIC & SOUND chips, Spotify REPEAT, career UNLIMITED, season
+QUALIFYING / SPRINT, garage FREE BUILD, race-settings labels).
 On an ON/OFF pair the selected word is the only selected mark — do not
 also light the plate (a red ring on gold ON made red mean OFF and
 chosen). The idle sibling stays steel. Named picks (presets, ALL /

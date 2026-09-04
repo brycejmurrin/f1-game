@@ -115,7 +115,7 @@ test("service-worker registration derives the shell build", () => {
     "service-worker registration must append the parsed build once");
 });
 
-test("every js/**/*.js appears in FULL ∪ DEFERRED ∪ LAZY_AGENT ∪ WORKLETS (and vice versa)", () => {
+test("every js/**/*.js appears in FULL ∪ DEFERRED ∪ LAZY_AGENT (and vice versa)", () => {
   const files = [];
   (function walk(dir) {
     for (const name of readdirSync(join(ROOT, dir)).sort()) {
@@ -127,10 +127,10 @@ test("every js/**/*.js appears in FULL ∪ DEFERRED ∪ LAZY_AGENT ∪ WORKLETS 
   // FULL ∪ DEFERRED ∪ LAZY_AGENT: a tagless file has no <script> by design, but
   // it must still be accounted for, or "created the file, forgot to load it"
   // stops being catchable.
-  const known = new Set([...MANIFEST.FULL, ...deferredFiles(), ...lazyFiles(), ...MANIFEST.WORKLETS]);
+  const known = new Set([...MANIFEST.FULL, ...deferredFiles(), ...lazyFiles()]);
   const missing = files.filter((f) => !known.has(f));
   const dead = [...known].filter((f) => !files.includes(f));
-  assert.deepEqual(missing, [], `js/ files with no manifest entry (add a <script> tag + manifest line, a DEFERRED entry, a LAZY_AGENT entry, or a WORKLETS entry): ${missing}`);
+  assert.deepEqual(missing, [], `js/ files with no manifest entry (add a <script> tag + manifest line, a DEFERRED entry, or a LAZY_AGENT entry): ${missing}`);
   assert.deepEqual(dead, [], `manifest entries with no file on disk: ${dead}`);
 });
 

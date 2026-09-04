@@ -509,6 +509,9 @@
   --del-fill: rgb(255, 60, 50);
   --edit-ink: rgba(120, 200, 255, 0.9);
   --edit-fill: rgb(60, 150, 255);
+  /* Hands-on counterpart to --faster: AUTO is timing-green, MANUAL is
+     the garage cool the livery EDIT family already uses (#4df). */
+  --manual: #4df;
   /* A lit lip along the top AND the far edge falling into shade. The lip on
      its own reads as a sticker laid on the page; the pair reads as a slab with
      thickness, which is the whole point of an elevation system. */

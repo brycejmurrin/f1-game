@@ -39,7 +39,7 @@
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1128,
+      "ceiling": 1127,
       "slack": 25
     },
     "bareCatches": {

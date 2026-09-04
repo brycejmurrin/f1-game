@@ -1118,6 +1118,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   display: inline-flex;
   align-items: center;
   justify-content: flex-start;
+  gap: 0.35em;
   text-align: left;
   width: 100%;
   padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
@@ -1518,9 +1519,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-style: italic;
   font-weight: 700;
 }
-/* Name stays steel (the heading). Choices use the live switch colors:
-   ON gold, OFF red, values bright text — steel-on-steel made STANDARD /
-   AUTO / WEBGL2 disappear into the chrome. */
+/* Name stays steel. Gold/red = enablement. Green/blue = 2-state
+   AUTO/MANUAL agency only. Named cycles stay --text. */
 button [data-fold="on"],
 summary [data-fold="on"] {
   color: var(--gold);
@@ -1528,6 +1528,18 @@ summary [data-fold="on"] {
 button [data-fold="off"],
 summary [data-fold="off"] {
   color: var(--red);
+}
+button [data-fold="auto"],
+summary [data-fold="auto"] {
+  color: var(--faster);
+}
+button [data-fold="manual"],
+summary [data-fold="manual"] {
+  color: var(--manual);
+}
+/* Any menu row, not only Settings: flex ate the space after ":" / "·". */
+button:has(> [data-fold]) {
+  column-gap: 0.35em;
 }
 /* ON/OFF option chips: only the selected word is gold/red. Lighting both
    plates (and the idle sibling) made red mean OFF and SELECTED at once. */
@@ -1552,6 +1564,16 @@ summary [data-fold="off"] {
 }
 #pmsettings-inner details > summary [data-fold="val"] {
   color: var(--text);
+  font-style: italic;
+  font-weight: 700;
+}
+#pmsettings-inner details > summary [data-fold="auto"] {
+  color: var(--faster);
+  font-style: italic;
+  font-weight: 700;
+}
+#pmsettings-inner details > summary [data-fold="manual"] {
+  color: var(--manual);
   font-style: italic;
   font-weight: 700;
 }

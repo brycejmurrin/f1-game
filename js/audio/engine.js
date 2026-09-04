@@ -24,7 +24,8 @@ const GameAudio = (function () {
   let voiceFormant = null;                       // per-manufacturer peaking EQ
   let ersOsc = null, ersHp = null, ersGain = null; // continuous ERS deploy whine
   let windSrc = null, windFilter = null, windGain = null; // airflow over the car
-  let subOctOsc = null, subOctGain = null;        // sub-octave weight under the sample/granular core
+  let subOctOsc = null, subOctGain = null;        // sub-octave weight under the sample core
+  let tiltEq = null;                              // rev-compensating high shelf (see setEngine)
 
   // RIVAL ENGINES. The game had no opponent audio at all and no panner anywhere
   // in the graph, so a car alongside was silent and the only cue you had for it
@@ -57,7 +58,23 @@ const GameAudio = (function () {
   const _irCache = new Map();     // keyed by venue name; ctx-bound, cleared on rebuild
 
   const RIVAL_VOICES = 4;
-  const RIVAL_RANGE = 70;         // metres of arc beyond which a rival is inaudible
+  // Audible radius. 70 m was chosen to bound the work, but the inverse-distance
+  // law below is already inaudible well before its own edge, so the only thing
+  // 70 bought was a POP: a car materialising mid-straight as it crossed the line.
+  // 150 m fades in instead, and costs nothing — the four voices exist either way.
+  const RIVAL_RANGE = 150;        // metres of arc beyond which a rival is inaudible
+  const RIVAL_REF = 6;            // metres inside which a rival is at full level
+  // Four sources sharing one buffer at one rate are one source four times as
+  // loud: phase-coherent copies SUM instead of thickening. A few cents apart
+  // each (and started at different points in the loop, below) is what makes
+  // four cars sound like four cars. Cents -> ratio, fixed per slot.
+  const RIVAL_DETUNE = Object.freeze([-22, -8, 9, 24].map((c) => Math.pow(2, c / 1200)));
+  // A StereoPanner is EQUAL POWER: at pan 0 each channel gets cos(PI/4) = 0.707,
+  // so a mono source routed through one is 3 dB under the same source wired
+  // straight to the bus — which is exactly how the player's own engine is wired.
+  // Rivals were paying that tax and nothing else was. sqrt(2) pays it back, and
+  // being pan-independent it does not disturb the pan law itself.
+  const PAN_MAKEUP = Math.SQRT2;
   let rivalVoices = [];           // { src, filt, gain, pan } while the engine runs
 
   // Per-manufacturer engine character, keyed by team.engine (js/data/teams.js).
@@ -93,10 +110,17 @@ const GameAudio = (function () {
   // (the sample core has no such layer) and is set by profiles rather than a
   // slider, which is why the UI carries six knobs and this table seven.
   const TUNE_DEF = Object.freeze({ pitch: 1, detune: 1, revRange: 1, brightness: 1, whine: 1, sub: 1, limiter: 1, reverb: 1, overrun: 1 });
+  // WIDER THAN IS SENSIBLE, on purpose. The first cut of these ranges was
+  // conservative enough that several trims could not be pushed far enough to
+  // hear at all — a tuner whose extremes sound like its middle is a tuner
+  // nobody can learn. Every range still contains 1.0 EXACTLY (the panel's step
+  // table is chosen so an integer slider position lands on it), and revRange
+  // stays strictly positive, which is the whole of what the pitch invariants
+  // need. The far ends are meant to be too much; that is what ends are for.
   const TUNE_RANGE = Object.freeze({
-    pitch:      [0.80, 1.25], detune: [0, 3],    revRange: [0.40, 1.60],
-    brightness: [0.50, 1.60], whine:  [0, 2.5],  sub:      [0, 2.5], limiter: [0, 2],
-    reverb:     [0, 2.5],   overrun: [0, 2.5],
+    pitch:      [0.60, 1.60], detune: [0, 4],    revRange: [0.20, 2.50],
+    brightness: [0.30, 2.50], whine:  [0, 4],    sub:      [0, 4],   limiter: [0, 3],
+    reverb:     [0, 4],     overrun: [0, 4],
   });
   let tune = Object.assign({}, TUNE_DEF);
 
@@ -139,38 +163,12 @@ const GameAudio = (function () {
 
   let engBuf = null, samplesReady = false;
   let lastRate = 0;               // the ratio setEngine last asked for (see rate())
-  // DETUNE as a frequency multiplier. On the sample core it is cents on a
-  // BufferSource; the granular core has no detune param — its pitch IS the
-  // ratio — so the same cents are folded into the ratio there. Cached because
-  // it only moves when the tune or the voice does, not per frame.
-  let detuneMul = 1;
-  // GRANULAR (PSOLA) CORE — js/audio/granular-worklet.js. It replaces the PITCHING
-  // MECHANISM only: the ratio it is handed is the same number playbackRate got,
-  // so the pitch curve, the gear ordering and rate() are untouched. What changes
-  // is that the engine's fixed resonances stop sliding down with the revs.
-  // Measured on f1_engine.mp3 through Chromium's own decoder: across ratio
-  // 1.0 -> 0.25 the spectral centroid goes 1526 -> 798 Hz on playbackRate and
-  // 1522 -> 1525 Hz here. tests/unit/granular-psola.test.mjs holds it.
-  const GRANULAR_WORKLET = "js/audio/granular-worklet.js";
-  let granularReady = false;        // the worklet module has loaded into this ctx
-  let granularNode = null;          // live AudioWorkletNode while the engine runs
-  // OFF BY DEFAULT — it sounds like loud noise, and it was shipped ON.
-  //
-  // The centroid measurement that justified it (1526 -> 798 Hz on playbackRate
-  // vs 1522 -> 1525 here) was real but MEASURED THE WRONG THING: a click train
-  // holds a high spectral centroid just as well as a preserved formant, so the
-  // metric could not tell the fix from the artefact. Spectral FLATNESS can, and
-  // says the output is broadband at every downshift — 0.41-0.46 where the
-  // playbackRate core falls to 0.13 as it gets more tonal.
-  //
-  // The cause is phase, not centroid: the detected period is a high partial
-  // (89 samples, 539 Hz) rather than a firing fundamental, and consecutive
-  // grains cut at that stride and laid at a DIFFERENT spacing meet out of
-  // phase, so every grain boundary is a click. Fixing it needs phase-aligned
-  // placement (WSOLA), not a tweak.
-  let granularOn = false;           // player switch — the A/B against the old core
-  let usingGranular = false;        // what this engine actually started on
-  let enginePeriod = 0;          // source period in samples, measured once at decode
+  // The source recording's dominant period, measured once at decode. It was the
+  // grain stride of a granular (PSOLA) pitching core that has since been
+  // removed — it shipped sounding like loud noise, and the flatness measurement
+  // in docs/DEBUG-HOOKS.md records why the idea does not survive this asset.
+  // The SUB-OCTAVE layer still needs it to know the engine's own fundamental.
+  let enginePeriod = 0;
 
   // Dominant period of the loop region, by autocorrelation. Bounded on BOTH
   // axes so this stays a ~10 ms main-thread cost paid once: an 8192-sample
@@ -355,7 +353,6 @@ const GameAudio = (function () {
         engBuf = e; samplesReady = true;
         enginePeriod = detectPeriod(e);
         Log.debug("audio", "engine sample decoded, period=" + enginePeriod);
-        loadGranularModule();
       })
       .catch((err) => {
         Log.warn("audio", "engine sample load/decode failed, using synth voice: " + ((err && err.message) || err));
@@ -363,15 +360,6 @@ const GameAudio = (function () {
 
   }
 
-  // Load the PSOLA processor into this context. Failure is not an error worth
-  // shouting about: no audioWorklet (older Safari), a blocked fetch or an
-  // insecure context all just mean the engine keeps the playbackRate core.
-  function loadGranularModule() {
-    if (!ctx || !ctx.audioWorklet || granularReady || !(enginePeriod > 1)) return;
-    ctx.audioWorklet.addModule(GRANULAR_WORKLET)
-      .then(() => { granularReady = true; Log.debug("audio", "granular worklet ready"); })
-      .catch((err) => { Log.debug("audio", "granular worklet unavailable: " + ((err && err.message) || err)); });
-  }
 
   function init() {
     // init is only ever called from a user gesture
@@ -450,7 +438,6 @@ const GameAudio = (function () {
     _bufKeys.length = 0;
     engBuf = null; samplesReady = false;                    // ctx-bound; reload for new ctx
     _irCache.clear();                                       // AudioBuffers are ctx-bound too
-    granularReady = false; granularNode = null; usingGranular = false;   // worklet modules are ctx-bound too
     noisePoolBuf = null;                                    // ctx-bound too — a buffer from the
                                                             // old ctx throws on the new one
     dbgAnalyser = null;    // ctx-bound; stopEngine() nulls it but this path inlines its own
@@ -585,48 +572,45 @@ const GameAudio = (function () {
     engFilter.type = "lowpass";
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
+
+    // REV TILT. playbackRate is tape speed: pitching the recording down to 0.25x
+    // for idle drags the whole spectrum with it, and the centroid measurably
+    // collapses 1526 -> 798 Hz across the rev range. That is the "muffled at low
+    // revs" complaint, and it is real.
+    //
+    // The granular core tried to fix the CAUSE by not moving the formants, and
+    // sounded like noise. This fixes the SYMPTOM instead: a high shelf that
+    // lifts as the ratio falls, putting back roughly the top end resampling took
+    // away. It is not physically honest — the resonances are still sliding — but
+    // it moves no phase, so it cannot manufacture the broadband mush that
+    // approach did, and the flatness measurement says so.
+    tiltEq = ctx.createBiquadFilter();
+    tiltEq.type = "highshelf";
+    tiltEq.frequency.value = 1400;
+    tiltEq.gain.value = 0;
+
     if (voice.formantGain > 0) {
       voiceFormant = ctx.createBiquadFilter();
       voiceFormant.type = "peaking";
       voiceFormant.frequency.value = voice.formantHz;
       voiceFormant.Q.value = 1.1;
       voiceFormant.gain.value = voice.formantGain;
-      engFilter.connect(voiceFormant).connect(engGain).connect(sfxBus);
+      engFilter.connect(voiceFormant).connect(tiltEq).connect(engGain).connect(sfxBus);
     } else {
       voiceFormant = null;
-      engFilter.connect(engGain).connect(sfxBus);
+      engFilter.connect(tiltEq).connect(engGain).connect(sfxBus);
     }
+
     // The debug analyser tap is created LAZILY in centroidHz() — a 16384-fft
     // AnalyserNode copying every render quantum was shipping in every race for
     // a hook whose only caller is a test (audio-smoke's expect.poll absorbs
     // the first-read warm-up).
 
     usingSamples = !!(samplesReady && engBuf);
-    usingGranular = !!(usingSamples && granularOn && granularReady && enginePeriod > 1);
     engA = engB = engC = null;
     engSrcIdle = engGainIdle = null;
     idleGainRamped = false;   // new gain node, so the fade-in must happen again
-    if (usingGranular) {
-      // The PSOLA core. One node, one AudioParam; the PCM crosses to the audio
-      // thread once at construction rather than per frame. If construction
-      // throws (a context that reports audioWorklet but refuses the node) fall
-      // straight through to the playbackRate core rather than to silence.
-      try {
-        granularNode = new AudioWorkletNode(ctx, "apex-granular", { numberOfInputs: 0, outputChannelCount: [1] });
-        const loop = findStableLoop(engBuf);
-        const ch = engBuf.getChannelData(0);
-        granularNode.port.postMessage({
-          pcm: ch.slice(), p0: enginePeriod,
-          loopStart: Math.floor(loop.start * engBuf.sampleRate),
-          loopEnd: Math.floor(loop.end * engBuf.sampleRate),
-        });
-        granularNode.connect(engFilter);
-      } catch (err) {
-        Log.warn("audio", "granular node refused, using the sample core: " + ((err && err.message) || err));
-        granularNode = null; usingGranular = false;
-      }
-    }
-    if (usingSamples && !usingGranular) {
+    if (usingSamples) {
       engSrcIdle = ctx.createBufferSource(); engSrcIdle.buffer = engBuf; engSrcIdle.loop = true;
       // Voice detune is a base offset in cents; the offroad LFO adds on top.
       // The player's detune trim must be folded in HERE too, not only in
@@ -665,8 +649,8 @@ const GameAudio = (function () {
     // set and nothing on the shipped path read. COCKPIT asking for 1.60 got
     // exactly what TEAM got. This gives the recording the same body the synth
     // already had: a sine an octave under the engine's own fundamental, which
-    // the granular core hands us for free (the period it is laying grains at).
-    // Only built for the sample/granular cores — the synth already has engC,
+    // measured off the recording at decode (detectPeriod).
+    // Only built for the sample core — the synth already has engC,
     // and running both would double it.
     if (usingSamples) {
       subOctOsc = ctx.createOscillator();
@@ -706,7 +690,11 @@ const GameAudio = (function () {
         const pan = ctx.createStereoPanner(); pan.pan.value = 0;
         src.connect(filt).connect(gain).connect(pan).connect(sfxBus);
         if (revSend) pan.connect(revSend);   // a rival in a tunnel echoes too
-        rivalVoices.push({ src, filt, gain, pan });
+        // Start each voice a different fraction of the way into the loop, so the
+        // four are decorrelated from the first sample rather than drifting apart
+        // over seconds as their detune ratios do the work alone.
+        const off = li.start + (li.end - li.start) * (i / RIVAL_VOICES);
+        rivalVoices.push({ src, filt, gain, pan, detune: RIVAL_DETUNE[i % RIVAL_DETUNE.length], startOff: off });
       }
     }
 
@@ -750,13 +738,7 @@ const GameAudio = (function () {
     lfo.frequency.value = 8;
     lfoG.gain.value = 0;
     lfo.connect(lfoG);
-    if (usingGranular) {
-      // The granular core has no `detune`: its pitch IS the ratio param, and an
-      // AudioParam sums its inputs with the value setEngine schedules, so the
-      // wobble rides on top for free. Units differ though — detune is cents,
-      // ratio is a multiplier — which is why LFO_DEPTH below is per-core.
-      lfoG.connect(granularNode.parameters.get("ratio"));
-    } else if (usingSamples) {
+    if (usingSamples) {
       lfoG.connect(engSrcIdle.detune);
     } else {
       lfoG.connect(engA.detune);
@@ -792,11 +774,11 @@ const GameAudio = (function () {
     windGain.gain.value = 0;
     windSrc.connect(windFilter).connect(windGain).connect(sfxBus);
 
-    if (usingSamples && !usingGranular) engSrcIdle.start(0, engSrcIdle.loopStart);
+    if (usingSamples) engSrcIdle.start(0, engSrcIdle.loopStart);
     else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
     if (subOctOsc) subOctOsc.start();
-    for (const v of rivalVoices) v.src.start(0, v.src.loopStart);
+    for (const v of rivalVoices) v.src.start(0, v.startOff);
     harvSrc.start();
     ersOsc.start();
     lfo.start();
@@ -831,15 +813,6 @@ const GameAudio = (function () {
       engA.stop(t0 + 0.35); engB.stop(t0 + 0.35); engC.stop(t0 + 0.35);
     }
     engSrcIdle = engGainIdle = null;
-    if (granularNode) {
-      // disconnect() throws if the node was never connected (the construction
-      // path below can fail after `new` but before connect). Dropping the
-      // reference is the teardown that matters; the graph edge goes with the
-      // context either way.
-      try { granularNode.disconnect(); } catch (e) { /* never connected */ }
-      granularNode = null;
-    }
-    usingGranular = false;
     if (limGain) limGain.gain.setTargetAtTime(0, t0, 0.02);
     if (limOsc) { limOsc.stop(t0 + 0.35); limOsc = null; limGain = null; }
     whineOsc.stop(t0 + 0.35);
@@ -864,11 +837,11 @@ const GameAudio = (function () {
     // complete: stopped sources GC on their own, but Gain/Biquad nodes routed
     // into sfxBus keep RENDERING until disconnect() (Web Audio contract) — a
     // tab-hide/show cycle used to strand ~8 nodes each time, forever.
-    const dead = [engFilter, engGain, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
+    const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
                   voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain];
     setTimeout(() => { for (const n of dead) { try { if (n) n.disconnect(); } catch (e) {} } }, 450);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
-    voiceFormant = ersHp = ersGain = windFilter = windGain = null;
+    voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
     subOctOsc = subOctGain = null;
     // Same disconnect-or-they-keep-rendering rule as the block above.
     const deadReverb = [revSend, convolver, revReturn];
@@ -891,7 +864,7 @@ const GameAudio = (function () {
     // and startEngine() re-reads samplesReady, so the swap is one crossfade
     // at the moment the samples arrive — never a per-frame flip.
     // Upgrade once when the sample (or the worklet behind it) arrives mid-race.
-    if (samplesReady && engBuf && (!usingSamples || (granularOn && granularReady && !usingGranular))) { stopEngine(); startEngine(); }
+    if (samplesReady && engBuf && !usingSamples) { stopEngine(); startEngine(); }
     const rev = clamp01(rev01 || 0);
     const s = clamp01(typeof speed01 === "number" ? speed01 : (rev01 || 0));
     const b = clamp01(typeof boost01 === "number" ? boost01 : (boost01 ? 1 : 0));
@@ -928,13 +901,7 @@ const GameAudio = (function () {
       // in rev and the gear ordering is unchanged (same trim on both sides).
       const rate = (0.25 + rev * 0.45 * tune.revRange) * (1 + 0.04 * b) * gmul * voice.rateTrim * tune.pitch;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       lastRate = rate;
-      // ONE number, TWO cores. The granular core is handed exactly the ratio
-      // playbackRate would have received, which is why swapping them cannot
-      // move the pitch curve, the gear ordering, or what rate() reports — the
-      // difference is only whether the engine's fixed resonances travel with
-      // the revs (playbackRate) or stay put (granular).
-      if (usingGranular) granularNode.parameters.get("ratio").setTargetAtTime(rate * detuneMul, t, 0.035);
-      else engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
+      engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       // NOT a crossfade to the second recording: measured 2026-09-03 with
       // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load read
       // DARKER (centroid 1489 -> 1389 Hz at the same rev), the same defect
@@ -979,11 +946,30 @@ const GameAudio = (function () {
     // asserts the brightening.
     const loadLift  = clamp01((ph.ax || 0) / 12);
 
-    const cut = (usingSamples
+    // The shape caps (11 k / 7.2 k) bound the REV-DRIVEN part; the trims then
+    // scale it, and the FINAL value is what has to stay in range. It used to be
+    // the other way round, so once BRIGHTNESS was widened past 1 the product ran
+    // off past Nyquist, where a BiquadFilter silently pins it — the top of the
+    // slider moved a number that no longer moved the sound. Ceiling is just
+    // under Nyquist so the pin is ours and audible, not the node's and silent.
+    const ceil = ctx.sampleRate * 0.45;
+    const cut = Math.min(ceil, (usingSamples
       ? Math.min(11000, 2600 + s * 5800 + rev * 2400 + b * 1500 + slipLoad * 2000 + brakeLoad * 1200)
       : Math.min(7200,  600  + s * 4200 + rev * 700  + b * 1400 + slipLoad * 1000 + brakeLoad * 600))
-      * voice.cutTrim * tune.brightness * (1 + 0.22 * loadLift);
+      * voice.cutTrim * tune.brightness * (1 + 0.22 * loadLift));
     engFilter.frequency.setTargetAtTime(cut, t, 0.05);
+    // Compensate the tape-speed tilt. lastRate is the pitch ratio the core was
+    // just handed, ~0.25 idle to ~0.70 redline; resampling costs roughly
+    // -20*log10(rate) dB of perceived top end, so put a fraction of that back.
+    // Scaled by the BRIGHTNESS trim, so a player who wants the old muffled idle
+    // can still have it, and capped so it cannot turn into a treble boost.
+    if (tiltEq && lastRate > 0.02) {
+      const want = Math.min(12, Math.max(0, -12 * Math.log10(lastRate)) * 0.75 * tune.brightness);
+      if (Math.abs((tiltEq.gain._apexTilt ?? -99) - want) > 0.05) {
+        tiltEq.gain.setTargetAtTime(want, t, 0.08);
+        tiltEq.gain._apexTilt = want;
+      }
+    }
     const lvl = (usingSamples
       ? (0.3 + s * 0.3 + rev * 0.08 + b * 0.08 + (offroad ? 0.03 : 0) + slipLoad * 0.8 + kerbLoad)
       : (0.05 + s * 0.05 + rev * 0.02 + b * 0.025 + (offroad ? 0.012 : 0) + slipLoad * 0.2 + kerbLoad * 0.3))
@@ -994,7 +980,13 @@ const GameAudio = (function () {
     // thread, so the gate costs no per-frame scheduling: base drops to
     // lvl·0.55 and the square wave swings it 0.10–1.00 × lvl.
     const limOn = layers.limiter && rev > 0.985 && s > 0.05;
-    const limDepth = limOn ? lvl * 0.45 * tune.limiter : 0;
+    // CAPPED AT HALF THE LEVEL. engGain's base is (lvl - limDepth) and the
+    // square swings +-limDepth on top, so the trough is lvl - 2*limDepth: past
+    // limDepth = lvl/2 the gain goes NEGATIVE and the chop stops getting deeper
+    // and starts inverting phase. With the trim widened to [0,3] that began at
+    // 1.111, so most of the slider was buying an artefact. A full ignition cut
+    // is the physical maximum; there is nothing deeper than all of it.
+    const limDepth = limOn ? Math.min(lvl * 0.5, lvl * 0.45 * tune.limiter) : 0;
     // Guarded on the TARGET, like lfoG below and for the same reason: above
     // 98.5% is a sliver of a race, so an unguarded call scheduled the target 0
     // onto a value already converged to 0, 120x a second for the whole race —
@@ -1018,7 +1010,7 @@ const GameAudio = (function () {
 
     // SUB-OCTAVE, an octave under the engine's own fundamental. That
     // fundamental is sampleRate*rate/period on both sample cores — the same
-    // period the granular core lays grains at — so the weight tracks the note
+    // period measured from the recording — so the weight tracks the note
     // instead of sitting at a fixed drone. Clamped into 25-240 Hz: below 25 it
     // is inaudible on a phone and just eats headroom. The ceiling was 160 and
     // that was WRONG — measured live, it pinned from about rev 0.8 upward, so
@@ -1139,11 +1131,7 @@ const GameAudio = (function () {
     // variable would go stale across a restart and silence the wobble. A new
     // node has no _apexLfoTgt, which never equals a number, so the first call
     // after any restart always re-issues — matching the node's own initial 0.
-    // 45 cents on a detune param; ~2.6% of the ratio is the same wobble in the
-    // granular core's units (2^(45/1200) - 1), applied additively to a ratio that
-    // spans 0.25-0.70, so it lands between 4% and 10% — close enough for a
-    // "you are off the road" cue, and it cannot drive the ratio negative.
-    const lfoTgt = offroad ? (usingGranular ? 0.015 : 45) : 0;
+    const lfoTgt = offroad ? 45 : 0;
     if (lfoG._apexLfoTgt !== lfoTgt) {
       lfoG.gain.setTargetAtTime(lfoTgt, t, 0.05);
       lfoG._apexLfoTgt = lfoTgt;
@@ -1363,11 +1351,18 @@ const GameAudio = (function () {
     // slider covers, which is the point — this is chorus/character width, not
     // a second pitch control.
     const cents = voice.detune + (tune.detune - 1) * 30;
-    detuneMul = Math.pow(2, cents / 1200);
     if (engSrcIdle && engSrcIdle.detune) engSrcIdle.detune.setTargetAtTime(cents, t, 0.05);
 
     const subGain = engC && engC._apexSubGain;
     if (subGain) subGain.gain.setTargetAtTime(voice.subLvl * tune.sub, t, 0.05);
+
+    // CHOP RATE. The depth saturates at a full ignition cut (see setEngine), so
+    // above ~1.1 the trim had nothing left to buy. Real limiters differ in how
+    // FAST they cut as much as how hard, and the rate is what tells a soft cut
+    // from a hard one by ear, so the rest of the range spends itself here:
+    // 9.75 Hz at 0, the stock 13 Hz at 1, 22.75 Hz wide open. Set once per tune
+    // change, not per frame — it is a function of the trim and nothing else.
+    if (limOsc) limOsc.frequency.setTargetAtTime(13 * (0.75 + 0.25 * tune.limiter), t, 0.05);
     applyVenue();   // the REVERB trim and its layer switch both land here
   }
 
@@ -1417,17 +1412,6 @@ const GameAudio = (function () {
     return key;
   }
 
-  // The A/B against the old core. Restarts the engine because which core runs
-  // is decided once, in startEngine — the same reason the sample upgrade
-  // restarts rather than swapping a node under a live voice.
-  function setGranular(on) {
-    const want = !!on;
-    if (want === granularOn) return granularOn;
-    granularOn = want;
-    if (engineOn) { stopEngine(); startEngine(); }
-    return granularOn;
-  }
-
   /* setRivals(list) — the cars around you, in the PLAYER'S track frame.
    * Each entry: { lat, arc, rev, approach }
    *   lat      metres to the RIGHT (negative = your left)
@@ -1463,26 +1447,43 @@ const GameAudio = (function () {
       const pan = 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
       if (v.pan.pan._apexPanTgt !== pan) { v.pan.pan.setTargetAtTime(pan, t, 0.06); v.pan.pan._apexPanTgt = pan; }
 
-      // Level falls off with distance and is quieter behind you than ahead —
-      // your own engine is between you and it.
-      const near = 1 - dist / RIVAL_RANGE;
-      const behind = arc < 0 ? 0.7 : 1;
-      aimGain(v.gain, 0.055 * near * near * behind * (0.45 + 0.55 * clamp01(r.rev)), t, 0.10);
+      // LEVEL. The first cut put a rival 5 m away at gain 0.040 against the
+      // player's own engine at ~0.54 — 22 dB down, which is not "present but
+      // not distracting", it is inaudible, and the player said so.
+      //
+      // Inverse-distance now, the model games actually use, rather than a
+      // squared linear fade: full level inside REF metres, then falling as
+      // ref/(ref + rolloff*(d - ref)), which is loud when a car is on top of
+      // you and still there at forty. Peak is ~0.28, about 6 dB under the
+      // player's own engine at speed — you should hear a car alongside as a
+      // car alongside, not as a rumour.
+      const near = RIVAL_REF / (RIVAL_REF + 1.15 * Math.max(0, dist - RIVAL_REF));
+      const behind = arc < 0 ? 0.78 : 1;   // your own engine is between you and it
+      aimGain(v.gain, PAN_MAKEUP * 0.28 * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10);
 
       // Air absorbs the top end with distance, which is most of why a far car
-      // reads as far rather than merely quiet.
-      const cut = 1200 + 5200 * near * near;
+      // reads as far rather than merely quiet. A POWER LAW, not a scale of the
+      // level curve: `near` falls off fast enough that reusing it shut a car at
+      // twenty metres down to a muffle it has no business being at. Real air
+      // absorption is a few dB per hundred metres at 4 kHz, so the exponent is
+      // small and the near field stays open.
+      const cut = Math.max(700, Math.min(12000,
+        12000 * Math.pow(RIVAL_REF / Math.max(dist, RIVAL_REF), 0.35)));
       if (Math.abs((v.filt.frequency._apexCut ?? -1) - cut) > 60) {
         v.filt.frequency.setTargetAtTime(cut, t, 0.12);
         v.filt.frequency._apexCut = cut;
       }
 
       // DOPPLER. Their pitch from their own revs, shifted by how fast the gap is
-      // closing — the rise as a car comes past you is the cue, and it falls out
-      // of one multiply. Clamped: a 340 m/s closing speed is not a race, it is
-      // a divide-by-zero waiting to happen.
-      const dop = 1 + Math.max(-60, Math.min(60, +r.approach || 0)) / 343;
-      const rate = (0.25 + clamp01(r.rev) * 0.45) * dop;
+      // closing — the rise as a car comes past you is the cue.
+      // The textbook stationary-observer form, 343/(343 - v), not its first-order
+      // expansion 1 + v/343: they agree to a few cents at pit speed and diverge
+      // where the effect actually matters, which is a car arriving at 300 km/h.
+      // The ratio clamp is the real guard — the approach figure comes from two
+      // speeds sampled a frame apart and one bad frame must not chirp.
+      const closing = Math.max(-90, Math.min(90, +r.approach || 0));
+      const dop = Math.max(0.80, Math.min(1.25, 343 / (343 - closing)));
+      const rate = (0.25 + clamp01(r.rev) * 0.45) * dop * v.detune;
       if (Math.abs((v.src.playbackRate._apexRate ?? -1) - rate) > 0.002) {
         v.src.playbackRate.setTargetAtTime(rate, t, 0.06);
         v.src.playbackRate._apexRate = rate;
@@ -1885,7 +1886,6 @@ const GameAudio = (function () {
     setTune,
     setProfile,
     setLayer,
-    setGranular,
     setRivals,
     setVenue,
     venue() { return { name: venueName, level: revReturn ? +revReturn.gain.value.toFixed(4) : 0, decay: venue.decay }; },
@@ -1899,7 +1899,6 @@ const GameAudio = (function () {
         cut: Math.round(v.filt.frequency.value),
       }));
     },
-    granular() { return { on: granularOn, ready: granularReady, active: usingGranular, period: enginePeriod }; },
     tune() { return Object.assign({}, tune); },
     tuneRange() { return JSON.parse(JSON.stringify(TUNE_RANGE)); },
     tuneDefaults() { return Object.assign({}, TUNE_DEF); },
@@ -1952,6 +1951,15 @@ const GameAudio = (function () {
     // feeds engGain.gain on the audio thread, so nothing downstream of the
     // engine output can observe its depth.
     limiterDepth() { return limGain ? +limGain.gain.value : 0; },
+    // The chop RATE, which is where the top half of the LIMITER trim goes once
+    // the depth has saturated at a full ignition cut.
+    limiterHz() { return limOsc ? +limOsc.frequency.value.toFixed(2) : 0; },
+    // The engine core's live lowpass corner, so the BRIGHTNESS trim's ceiling
+    // is assertable rather than a thing you can only hear.
+    engineCut() { return engFilter ? Math.round(engFilter.frequency.value) : 0; },
+    // The core's own gain, which is (level - limiterDepth): the pair is what
+    // says whether the rev-limiter gate cuts the note or inverts it.
+    engineLevel() { return engGain ? +engGain.gain.value : 0; },
     // Same shape again: the sub-octave sits on its own gain straight into
     // sfxBus, so centroidHz() (which taps engGain) cannot see it either.
     subLevel() { return subOctGain ? +subOctGain.gain.value : 0; },
@@ -1959,14 +1967,11 @@ const GameAudio = (function () {
     // no persistent node to read, so this is the only way to observe the layer.
     overrunState() { return { fired: overrunFired, nextAt: +overrunT.toFixed(3), now: +now().toFixed(3) }; },
     subHz() { return subOctOsc ? +subOctOsc.frequency.value : 0; },
-    // Ground-truth pitch multiplier, whichever core is running. The granular node's
-    // AudioParam only converges to the target over its own tau, so the value
-    // this reports is the one setEngine last ASKED for — the same thing
-    // playbackRate.value settled to, and what every pitch test compares.
-    rate() {
-      if (usingGranular) return +lastRate.toFixed(4);
-      return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0;
-    },
+    // The DETUNE trim as it lands on the sample source, in cents.
+    detuneCents() { return engSrcIdle && engSrcIdle.detune ? +engSrcIdle.detune.value.toFixed(4) : 0; },
+    // The rev-compensating shelf, in dB. Rises as the engine pitches down.
+    tiltDb() { return tiltEq ? +tiltEq.gain.value.toFixed(2) : 0; },
+    rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value.toFixed(4) : 0; },
     centroidHz() {
       if (!ctx || !engineOn || !engGain) return 0;
       if (!dbgAnalyser) {

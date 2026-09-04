@@ -239,10 +239,10 @@ const AudioPanel = (() => {
        centre is 0.9975 would mean the panel could not express the shipped
        sound, which is the one value it must always be able to return to. */
     const TONE = [
-      { k: "pitch",      id: "as-t-pitch",  lo: 0.80, step: 0.025 },
-      { k: "revRange",   id: "as-t-range",  lo: 0.40, step: 0.10 },
+      { k: "pitch",      id: "as-t-pitch",  lo: 0.60, step: 0.05 },
+      { k: "revRange",   id: "as-t-range",  lo: 0.20, step: 0.10 },
       { k: "detune",     id: "as-t-detune", lo: 0,    step: 0.25 },
-      { k: "brightness", id: "as-t-bright", lo: 0.50, step: 0.05 },
+      { k: "brightness", id: "as-t-bright", lo: 0.30, step: 0.05 },
       { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.25 },
       { k: "limiter",    id: "as-t-lim",    lo: 0,    step: 0.25 },
       { k: "sub",        id: "as-t-sub",    lo: 0,    step: 0.25 },
@@ -279,7 +279,6 @@ const AudioPanel = (() => {
       // to "team" for anything it does not recognise, so a hand-edited or
       // stale-schema value lands on the shipped sound either way.
       GameAudio.setProfile(store.get("sndProfile", "team"));
-      if (GameAudio.setGranular) GameAudio.setGranular(store.get("sndGranular", false));
       const savedTune = store.get("sndTune", null);
       if (savedTune && typeof savedTune === "object") GameAudio.setTune(savedTune);
       const savedLayers = store.get("sndLayers", null);
@@ -313,15 +312,6 @@ const AudioPanel = (() => {
       // ENGINE TONE block absent these two were the only unguarded reads left,
       // and create() threw here and took the music transport and both volume
       // sliders down with it.
-      if (granularBtn && GameAudio.granular) {
-        const g = GameAudio.granular();
-        granularBtn.classList.toggle("active", g.on);
-        granularBtn.setAttribute("aria-pressed", g.on ? "true" : "false");
-        // "on but not active" is a real state: no audioWorklet, a blocked
-        // fetch, or the samples not decoded yet. Say so rather than lighting a
-        // switch for a core that is not running.
-        granularBtn.textContent = g.on && !g.active ? "GRANULAR…" : "GRANULAR";
-      }
       const note = $("as-p-note");
       if (note) note.textContent = toneProfile() === "custom"
         ? "Your own tune. RESET returns to your team's engine sound."
@@ -367,16 +357,6 @@ const AudioPanel = (() => {
         if (G.soundOn) GameAudio.uiTick();
       };
     }
-    // GRAIN is deliberately NOT in TONE_LAYERS: those are gain switches on nodes
-    // that exist, and this picks which pitching core runs at all.
-    const granularBtn = $("as-t-granular");
-    if (granularBtn) granularBtn.onclick = () => {
-      const on = GameAudio.setGranular(!GameAudio.granular().on);
-      store.set("sndGranular", on);
-      syncTonePanel();
-      if (G.soundOn) GameAudio.uiTick();
-    };
-
     const resetBtn = $("as-t-reset");
     if (resetBtn) resetBtn.onclick = () => {
       for (const l of TONE_LAYERS) GameAudio.setLayer(l.k, true);

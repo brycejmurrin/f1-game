@@ -494,8 +494,8 @@ function paintHudDetailsSummary() {
   const on = !document.body.classList.contains("hud-hidden");
   const bits = [["k", "HUD"], [on ? "on" : "off", on ? "ON" : "OFF"],
     ["val", hudProfile.toUpperCase()], ["val", hudMetricsLayout.toUpperCase()],
-    [hudMapVis === "off" ? "off" : "val", hudMapVis === "off" ? "NO MAP" : "MAP"],
-    [hudGapsVis === "off" ? "off" : "val", hudGapsVis === "off" ? "NO GAPS" : "GAPS"]];
+    [hudMapVis === "off" ? "off" : "on", hudMapVis === "off" ? "NO MAP" : "MAP"],
+    [hudGapsVis === "off" ? "off" : "on", hudGapsVis === "off" ? "NO GAPS" : "GAPS"]];
   sum.innerHTML = bits.map((p, i) => (i ? '<span data-fold="sep"> · </span>' : "") +
     '<span data-fold="' + p[0] + '">' + p[1] + "</span>").join("");
 }
@@ -4711,16 +4711,20 @@ function updateCar(c, dt, ranked) {
       c.speed = Math.min(vmax * 1.06, c.speed + a * dt);
     }
   }
-  if (c.human) {
-    const gearSpeed = Math.max(0, c.speed);   // gearbox readout ignores reverse crawl
-    if (!gearsManual()) {
-      const ng = naturalGear(gearSpeed);
-      // auto upshift/downshift cue: same shift sound as manual when the box changes
-      if (ng !== c.gear && state === "race" && soundOn) GameAudio.shift(ng > c.gear);
-      c.gear = ng;
-    }
-    c.rpm = rpmFor(c.gear, gearSpeed);
-  }
+  // EVERY car, not just the human one. This whole block used to sit inside
+  // `if (c.human)`, so an AI car's rpm never left IDLE_RPM for the entire race —
+  // which made its rev lights dark, its gear digit stuck on 1, and (once rival
+  // engine audio existed) every opponent drone at idle tape speed no matter what
+  // it was doing. rpmFor/naturalGear are pure functions of speed and nothing in
+  // the AI physics reads c.gear, so this is a readout fix, not a handling one.
+  // The SHIFT CUE stays human-only: it is your gearbox you hear, not theirs.
+  const gearSpeed = Math.max(0, c.speed);   // gearbox readout ignores reverse crawl
+  if (c.human && !gearsManual()) {
+    const ng = naturalGear(gearSpeed);
+    if (ng !== c.gear && state === "race" && soundOn) GameAudio.shift(ng > c.gear);
+    c.gear = ng;
+  } else if (!c.human) c.gear = naturalGear(gearSpeed);
+  c.rpm = rpmFor(c.gear, gearSpeed);
 
   // Kerb vs off-track: a kerb sits just outside the road edge and is DRIVABLE
   // (rumble + a little grip loss), whereas going past the edge with no kerb is
@@ -7728,38 +7732,16 @@ function render(dt) {
       if (_out) continue;
     }
     // Cockpit view: the interior is a VIEWMODEL — anchored to the CAMERA, not to
-    // the car's rendered position. Orientation is the stabilized track basis
-    // (plain tangent/right at the car, no visual yaw/pitch/roll/lean), but the
-    // ORIGIN is derived by subtracting the cockpit eye offsets from the live,
-    // final camEye. The eye therefore sits at exactly (COCKPIT_EYE_FWD,
-    // COCKPIT_EYE_UP) in rig space EVERY frame, by construction. Previously the
-    // rig sat at the car's render position while the eye carried collision
-    // SHAKE (±0.45 m on pack contact — race starts, being tapped under braking),
-    // speed vibration, and the damped-lateral (xVis) vs raw-lateral mismatch on
-    // corner entry — any of which shoved the eye inside the black carbon
-    // bodywork ("black box at the start / when braking"). Anchoring the rig to
-    // the eye makes that entire class of clipping impossible: whatever moves
-    // the camera moves the cockpit with it. (Shadow above still uses the real
-    // animated tmpMat at the car's true position.)
-    //
-    // The offset MUST be subtracted along the rig's own axes — it is the exact
-    // inverse of the basisMat below. Subtracting it on WORLD axes instead
-    // (sF.x/sF.z for forward, +Y for up) only inverts the basis when the road is
-    // FLAT: sF is the full 3-D tangent, so on a gradient θ the 0.99 m up-offset
-    // leaks into forward and the eye creeps to rig z = FWD·cos²θ + UP·sinθ. At
-    // ~4° of climb that closes the proven 0.46 m eye-to-fascia gap past the 0.3 m
-    // near plane and the plane eats the wheel face — the instrument slab (LEDs,
-    // LCD, digits, buttons) is 3-12 mm thin and sits at the driver-facing extreme,
-    // so it vanished whole while the 25-62 mm body boxes behind it kept drawing.
-    // Downhill the same term pushed the wheel ~15 cm too far away instead.
+    // the car's rendered position. Orientation is the same yawVis as the body
+    // (heading vs road tangent) so the nose rotates when the car does. Pitch,
+    // roll and lean stay off this basis — those shoved the eye into the carbon.
+    // The ORIGIN is still camEye minus the cockpit eye offsets along the
+    // YAWed axes, so the eye sits at (COCKPIT_EYE_FWD, COCKPIT_EYE_UP) in
+    // rig space every frame. A road-locked basis made turn-chasing glance
+    // the view while the halo and wheel sat still on the tangent.
     if (c.isPlayer && cockpitRigOnly) {
-      const sR = smp2.r, sF = smp2.t;
-      _cockU[0] = sR[1]*sF[2] - sR[2]*sF[1];
-      _cockU[1] = sR[2]*sF[0] - sR[0]*sF[2];
-      _cockU[2] = sR[0]*sF[1] - sR[1]*sF[0];
-      for (let i = 0; i < 3; i++)
-        _cockP[i] = camEye[i] - _cockU[i] * COCKPIT_EYE_UP - sF[i] * COCKPIT_EYE_FWD;
-      basisMat(sR, _cockU, sF, _cockP, _cockMat);
+      GameCams.cockpitViewmodelAxes(smp2.r, smp2.t, yv, camEye, tmpR, _cockU, tmpF, _cockP);
+      basisMat(tmpR, _cockU, tmpF, _cockP, _cockMat);
       drawCockpitRig(c, _cockMat, dt, paint);
       continue;
     }
