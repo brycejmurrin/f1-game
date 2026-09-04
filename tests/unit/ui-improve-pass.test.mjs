@@ -307,8 +307,9 @@ test("compact title column scrolls instead of clipping at high UI SIZE", () => {
   assert.ok(has("padding-inline", /var\(--gap\)/));
   // Portrait is the zoom-aware body[data-shape="tall"] flag, never a viewport
   // media query (the old text pin here matched a COMMENT that said so).
+  // Leftover-row is ALL tall — a 393×844 phone is above --compact-at.
   assert.ok(!menus.some((r) => r.context.some((c) => /orientation:\s*portrait/.test(c))), "no @media (orientation: portrait) rule in menus.css");
-  assert.ok(rulesFor(menus, /data-shape="tall"/).some((r) => [...r.decls.values()].some((v) => /minmax\(0,\s*1fr\)/.test(v))),
+  assert.ok(rulesFor(menus, /body\[data-shape="tall"\]\)\s*#overlay/).some((r) => [...r.decls.values()].some((v) => /minmax\(0,\s*1fr\)/.test(v))),
     "the tall shape hands leftover rows to a minmax(0, 1fr) column");
   // HOW TO PLAY carries an icon like the other doors.
   assert.match(read("index.html"), /id="mb-help"[^>]*>[\s\S]*?btn-ico[\s\S]*?HOW TO PLAY/);
@@ -1170,6 +1171,13 @@ test("neutral buttons share the settings tab-header plate", () => {
     "term-rail selected uses leftover-sheet chip glow");
   assert.equal(decl(css("css/overlays.css"), /#results-table > \.sel-label/, "margin-top"), "calc(var(--gap) * 1.2)");
   assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab", "color"), "var(--text)");
+  const narrowTabs = rulesFor(css("css/tuner.css"), /^\.lt-tabs$/).find((r) =>
+    r.context.includes("@container sheet (max-width: 480px)"));
+  assert.ok(narrowTabs, "narrow lighting tabs become a pan strip without waiting for compact");
+  assert.equal(narrowTabs.decls.get("flex-wrap"), "nowrap");
+  assert.equal(narrowTabs.decls.get("overflow-x"), "auto");
+  assert.equal(narrowTabs.decls.get("overscroll-behavior-x"), "contain");
+  assert.equal(narrowTabs.decls.get("touch-action"), "pan-x");
   assert.equal(decl(css("css/tuner.css"), ".adv-sec", "color"), "var(--steel)", "section chrome, not a leftover red headline");
   assert.equal(decl(menus, ".track-row.active .track-row-name", "color"), "var(--text)");
   assert.equal(decl(components, "#pmsettings-inner .pm-doors button", "background"), "var(--plate-opaque)");

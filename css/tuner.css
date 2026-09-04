@@ -902,6 +902,21 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
     white-space: nowrap; flex: 0 0 auto;
   }
 
+/* Narrow sheet, any density: one sideways strip. The compact nowrap above
+   only fires when the PANEL is short. A landscape dock can be locally
+   narrow while still tall enough to stay `data-density="normal"`, and
+   then AMBIENT & BOUNCE wraps/clips inside an 8rem balanced cell
+   (measured phone-landscape gallery). Rail-on is a 560px panel, so this
+   480 cap does not undo the vertical chip grid. */
+@container sheet (max-width: 480px) {
+  .lt-tabs {
+    display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    scrollbar-width: none;
+  }
+  #lt-tabs .lt-tab, #ct-modes .lt-tab { white-space: nowrap; flex: 0 0 auto; }
+  .lt-tabs::-webkit-scrollbar { display: none; }
+}
 /* At extreme UI sizes the dock can be locally narrower than its header even in
    a wide physical viewport. Keep the action inside and let the slider pane own
    the width rather than clipping the FREE CAMERA control. */

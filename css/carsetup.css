@@ -981,6 +981,11 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 @media (max-width: 700px) {
   #cs-stack { display: none; }
 }
+/* CAMERA / ACTIVE AERO / Z-MODE sit over the garage canvas, outside #hud.
+   A dim sheet (teampicker, customize) must stand them down — they painted
+   through the scrim on landscape garage. Garage itself is `.screen` without
+   `.dim`, so the stack stays up at rest. */
+body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 /* ACTIVE AERO — top level beside CAMERA, never inside the panel: it changes the
    CAR, not the view of it, and it is the one control here you tap over and over
    to watch something happen. Its own wrapper so AriaState sees a single-button
