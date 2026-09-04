@@ -279,7 +279,7 @@ const AudioPanel = (() => {
       // to "team" for anything it does not recognise, so a hand-edited or
       // stale-schema value lands on the shipped sound either way.
       GameAudio.setProfile(store.get("sndProfile", "team"));
-      if (GameAudio.setGranular) GameAudio.setGranular(store.get("sndGranular", true));
+      if (GameAudio.setGranular) GameAudio.setGranular(store.get("sndGranular", false));
       const savedTune = store.get("sndTune", null);
       if (savedTune && typeof savedTune === "object") GameAudio.setTune(savedTune);
       const savedLayers = store.get("sndLayers", null);

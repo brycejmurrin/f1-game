@@ -154,7 +154,21 @@ const GameAudio = (function () {
   const GRANULAR_WORKLET = "js/audio/granular-worklet.js";
   let granularReady = false;        // the worklet module has loaded into this ctx
   let granularNode = null;          // live AudioWorkletNode while the engine runs
-  let granularOn = true;            // player switch — the A/B against the old core
+  // OFF BY DEFAULT — it sounds like loud noise, and it was shipped ON.
+  //
+  // The centroid measurement that justified it (1526 -> 798 Hz on playbackRate
+  // vs 1522 -> 1525 here) was real but MEASURED THE WRONG THING: a click train
+  // holds a high spectral centroid just as well as a preserved formant, so the
+  // metric could not tell the fix from the artefact. Spectral FLATNESS can, and
+  // says the output is broadband at every downshift — 0.41-0.46 where the
+  // playbackRate core falls to 0.13 as it gets more tonal.
+  //
+  // The cause is phase, not centroid: the detected period is a high partial
+  // (89 samples, 539 Hz) rather than a firing fundamental, and consecutive
+  // grains cut at that stride and laid at a DIFFERENT spacing meet out of
+  // phase, so every grain boundary is a click. Fixing it needs phase-aligned
+  // placement (WSOLA), not a tweak.
+  let granularOn = false;           // player switch — the A/B against the old core
   let usingGranular = false;        // what this engine actually started on
   let enginePeriod = 0;          // source period in samples, measured once at decode
 

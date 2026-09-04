@@ -326,6 +326,10 @@ test("DETUNE reaches the granular core, which has no detune param of its own", a
   const { GameAudio, release, workletNodes } = boot();
   GameAudio.init();
   await release();
+  // Opt IN: the granular core ships off (it sounds like loud noise — see
+  // tests/unit/granular-psola.test.mjs). This covers the trim's routing on that
+  // core, which still has to be right for the day the core is fixed or removed.
+  GameAudio.setGranular(true);
   GameAudio.startEngine();
   assert.equal(GameAudio.granular().active, true, "precondition: the granular core is the one running");
   assert.equal(workletNodes.length, 1, "exactly one worklet node per engine start");
