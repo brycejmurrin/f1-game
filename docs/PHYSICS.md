@@ -54,9 +54,14 @@ collapse onto one new notch. See `docs/research/PHASE-C-SLIDER-DESIGN.md`.
 
 **Combined-slip (friction ellipse)**: `LONG_GRIP = 34 m/s²` is the longitudinal
 axis of the traction circle. Braking or accelerating consumes longitudinal grip;
-`slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip. Trail-braking
-rotates the car; hard braking mid-corner understeers. Exposed via `physState()`
-fields `axEstSm`, `axFrac`, `slipFactor`. **Brake bias** (the SETUP sheet,
+`slipFactor = sqrt(1 − (axUsed/LONG_GRIP)²)` scales lateral grip. Weight
+transfer still reads faded `axEstSm` (no fake unload at vmax). The circle
+itself uses `max(|axEstSm|, throttleDemand)`: demand is unfaded
+`ACCEL · PACE · throttle · THR_ELLIPSE` (`THR_ELLIPSE = 2.2` in
+`js/physics/consts.js`) so planting the throttle mid-corner spends grip even
+when speed-limited. Braking still costs more (`BRAKE` 22 vs ~15 m/s²).
+Trail-braking rotates the car; hard braking mid-corner understeers. Exposed via
+`physState()` fields `axEstSm`, `axFrac`, `slipFactor`. **Brake bias** (the SETUP sheet,
 `js/garage/setup-tune.js`) splits that budget per axle UNDER BRAKING only:
 the front spends `bb / BB_REF` of it and the rear `(1 − bb) / (1 − BB_REF)`
 (`BB_REF = 0.56`, `js/physics/consts.js`), so `muF`/`muR` carry their own
@@ -178,6 +183,11 @@ seconds (it used to read `OVERTAKE` at half opacity, which is not a message).
 `tests/specs/aero-zones.spec.js` pins both halves, driving a REAL opening lap —
 `setLap()` moves only the player's counter, so a teleport cannot exercise a
 leader-based gate.
+
+**Slope gravity** adds up to `vmax × 1.06` on a descent and never confiscates
+speed already above that margin (ERS / X leftover). On the flat or a climb,
+speed above the margin bleeds at `0.35 × COAST_DRAG`. A hard `min(vmax×1.06)`
+assign used to snap hills.
 
 **The player is a world-space rigid body.** `px`/`pz`/`head` are the authority:
 the car integrates its own position in world metres from tyre forces alone and

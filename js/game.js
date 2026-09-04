@@ -526,7 +526,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         WT_LONG, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
         X_DF_LOSS_HI, X_COAST_CUT_LO, X_COAST_CUT_HI, X_OPEN_RATE, X_CLOSE_RATE,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
-        LONG_GRIP, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
+        LONG_GRIP, THR_ELLIPSE, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
         DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, DRAIN_LO, DRAIN_HI,
         REGEN_LO, REGEN_HI, OT_TIME_LO, OT_TIME_HI, OT_COOL_LO, OT_COOL_HI,
         OT_GAP, WET_GRIP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF } = PhysicsConsts;
@@ -604,12 +604,12 @@ function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c
 // sliders. FRONT_GRIP: front friction bias (<1) for an understeer-safe default.
 // YAW_DAMP: yaw damping for arcade stability. YAW_INERTIA: rotational inertia
 // scale (<1 = snappier turn-in). PLAYER_GRIP: forgiveness headroom over the AI.
-let FRONT_GRIP = 0.89;
+let FRONT_GRIP = 0.94;
 let YAW_DAMP = 1.0;
-let YAW_INERTIA = 0.7;      // scales the car's rotational inertia: <1 = snappier turn-in
+let YAW_INERTIA = 0.58;     // scales the car's rotational inertia: <1 = snappier turn-in
                             // (quicker direction changes through chicanes) without
-                            // touching steady-state grip. Too low over-rotates into slip
-                            // (washes wide); 0.7 keeps turn-in lively but settled.
+                            // touching steady-state grip. 0.89/0.7 washed the nose and
+                            // lagged the body; 0.94/0.58 still understeers first.
 let PLAYER_GRIP = 1.15;     // player-only grip headroom over the AI's LAT_MAX baseline:
                             // keeps the dynamic model's character but forgiving enough
                             // that a tidy line holds the road (neutral-simcade target)
@@ -4706,10 +4706,16 @@ function updateCar(c, dt, ranked) {
     } else {                                        // downhill: feed, with a small
       // overspeed margin so a long descent actually gives you something (a hard
       // clamp to vmax made steep downhills feel inert once at pace).
-      // NOTE: this also confiscates existing overspeed on any descent; the
-      // characterization baseline pins that snap (BUG-HUNT-2026-09-02 §Round 2).
-      c.speed = Math.min(vmax * 1.06, c.speed + a * dt);
+      // Gravity may ADD up to the 6 % margin; it must not confiscate ERS/X
+      // leftover already above it (that snap is what made hills clip).
+      const cap = vmax * 1.06;
+      if (c.speed < cap) c.speed = Math.min(cap, c.speed + a * dt);
     }
+  }
+  // Flat / climb: bleed leftover overspeed toward the 6 % margin. Skip on a
+  // real descent so gravity-kept ERS/X speed survives the hill.
+  if (state === "race" && c.speed > vmax * 1.06 && slopeSin >= -0.03) {
+    c.speed = Math.max(vmax * 1.06, c.speed - COAST_DRAG * 0.35 * dt);
   }
   if (c.human) {
     const gearSpeed = Math.max(0, c.speed);   // gearbox readout ignores reverse crawl
@@ -5046,12 +5052,17 @@ function updateCar(c, dt, ranked) {
     // hard mid-corner understeers wide, while trail-braking (easing off as you
     // turn in) progressively returns grip to the front tyres and rotates the car.
     // Weather thins the longitudinal budget too, so braking bites grip in the wet.
-    // NOTE (deliberate asymmetry): the on-throttle axEst uses the DEPLOY_A-scale
-    // accel, not the full engine ACCEL, so power-on costs far less cornering
-    // grip than braking does — arcade forgiveness on corner exits. Making the
-    // circle symmetric (power-limited exits) is a feel/design change, not a fix.
-    const axFrac = Math.min(1, Math.abs(c.axEstSm ?? 0) / (LONG_GRIP * gripMult(c)));
+    // Weight transfer still uses faded axEstSm (no fake unload at vmax).
+    // The circle itself uses throttle DEMAND without the vmax fade, scaled by
+    // THR_ELLIPSE, so planting the throttle mid-corner spends grip even when
+    // speed-limited. Braking still costs more (BRAKE > ACCEL·THR_ELLIPSE).
+    const axThrDemand = onThrottle
+      ? (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * gearMult) * THR_ELLIPSE + Math.max(0, deploy)
+      : 0;
+    const axUsed = Math.max(Math.abs(c.axEstSm ?? 0), axThrDemand);
+    const axFrac = Math.min(1, axUsed / (LONG_GRIP * gripMult(c)));
     const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
+    c.axFrac = axFrac;
     c.slipFactor = slipFactor;   // setEngine() reads it for slip01; unassigned it read a constant 1
     // LOCK-UP (render + feel only): braking at the top of the friction budget
     // stops the fronts turning; a lock leaves a flat spot that wobbles the

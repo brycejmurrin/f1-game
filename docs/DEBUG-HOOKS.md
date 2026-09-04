@@ -1055,7 +1055,7 @@ Three combined-slip fields expose the traction-circle state in real time:
 | Field | Meaning |
 |---|---|
 | `axEstSm` | Smoothed longitudinal acceleration (m/s²) — positive = accelerating, negative = braking |
-| `axFrac` | `|axEstSm| / (LONG_GRIP × gripMult)` clamped to 1 — fraction of the longitudinal grip budget consumed |
+| `axFrac` | `max(\|axEstSm\|, throttleDemand) / (LONG_GRIP × gripMult)` clamped to 1 — fraction of the longitudinal grip budget consumed (`physState` reads `player.axFrac` once the bicycle has run) |
 | `slipFactor` | `sqrt(1 − axFrac²)` — fraction of lateral grip remaining (1 = none consumed, 0 = all consumed) |
 
 `slipFactor` < 1 means the car is braking or accelerating hard enough to reduce cornering grip. When it approaches 0 the car will wash wide (understeer). Trail-braking — easing off the brake while turning in — lets `slipFactor` rise and rotates the car.

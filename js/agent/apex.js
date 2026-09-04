@@ -461,7 +461,8 @@ const api = {
     if (!G.player || G.player.px == null) return null;
     const slip = Math.atan2(G.player.vLat || 0, Math.max(1, G.player.speed));
     Tracks.sample(G.track, G.player.s, smp);
-    const axFrac = Math.min(1, Math.abs(G.player.axEstSm ?? 0) / (LONG_GRIP * gripMult()));
+    const axFrac = G.player.axFrac ?? Math.min(1, Math.abs(G.player.axEstSm ?? 0) / (LONG_GRIP * gripMult()));
+    const slipFactor = G.player.slipFactor ?? Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
     return {
       s: G.player.s, x: G.player.x, speed: G.player.speed, prog: G.player.prog,
       px: G.player.px, pz: G.player.pz,
@@ -471,7 +472,7 @@ const api = {
       wrongWay: !!G.player.wrongWay, rescueT: G.player.rescueT || 0, lap: G.player.lap,
       axEstSm: +(G.player.axEstSm ?? 0).toFixed(2),
       axFrac: +axFrac.toFixed(3),
-      slipFactor: +Math.sqrt(Math.max(0, 1 - axFrac * axFrac)).toFixed(3),
+      slipFactor: +slipFactor.toFixed(3),
       brakeBias: G.player.brakeBias != null ? +G.player.brakeBias.toFixed(3) : null,   // the SETUP sheet's split (null = BB_REF)
       aeroX: +(G.player.aeroX || 0).toFixed(3),
       xOn: !!G.player.xOn, xArmed: !!G.player.xArmed,
