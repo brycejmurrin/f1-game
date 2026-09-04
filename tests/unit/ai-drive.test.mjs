@@ -210,9 +210,81 @@ test("isBoxed: a street follow-train is not a wedge", () => {
   assert.equal(A.isBoxed({
     contactT: 0, roomL: 1.2, roomR: 1.1, blocker: true, blockerGap: 4, street: true,
   }), true);
-  // Sandwich or contact still boxes anywhere.
-  assert.equal(A.isBoxed({ contactT: 0.2, roomL: 4, roomR: 4, street: true }), true);
+  // A sandwich boxes anywhere.
   assert.equal(A.isBoxed({ contactT: 0, roomL: 1.0, roomR: 1.0, street: false }), true);
+});
+
+test("isBoxed: contact needs the room to be gone too", () => {
+  // THE DEFECT: `contactT > 0` was the first line of isBoxed, so any rub — even
+  // side by side on a 15 m permanent — read as wedged. Boxed feeds stuckT feeds
+  // unstuckActive, which cancels braking and yanks the car sideways, so leaning
+  // on an AI switched it into dig-out mode with a whole lane still free.
+  assert.equal(A.isBoxed({ contactT: 0.22, roomL: 5, roomR: 5, street: false }), false);
+  assert.equal(A.isBoxed({ contactT: 0.22, roomL: 5, roomR: 5, street: true }), false);
+  // Contact with the room actually gone is still a wedge, on both surfaces.
+  assert.equal(A.isBoxed({ contactT: 0.22, roomL: 1.4, roomR: 1.5, street: false }), true);
+  assert.equal(A.isBoxed({ contactT: 0.22, roomL: 1.4, roomR: 1.5, street: true }), true);
+  // …and the contact clause is the ONLY thing separating those two rows: with
+  // it cleared, the same tight-but-not-sandwiched room is not boxed.
+  assert.equal(A.isBoxed({ contactT: 0, roomL: 1.4, roomR: 1.5, street: false }), false);
+});
+
+test("aiRescueDelay: contact is patience, never a veto", () => {
+  const free = A.aiRescueDelay(false), held = A.aiRescueDelay(true);
+  assert.ok(Number.isFinite(held), "a contacting car must still be rescuable");
+  assert.ok(held > free, `contact should wait longer, got ${held} vs ${free}`);
+  assert.equal(free, 4, "the no-contact delay is the one that shipped");
+});
+
+test("otSide: a tie does not send the whole queue one way", () => {
+  const flat = { roomL: 4, roomR: 4, kAhead: 0, lane: 0 };
+  // Clearly freer side always wins, whatever the corner or the lane says.
+  assert.equal(A.otSide({ ...flat, roomR: 6, kAhead: 0.01, lane: -0.5 }), 1);
+  assert.equal(A.otSide({ ...flat, roomL: 6, kAhead: -0.01, lane: 0.5 }), -1);
+  // Even room: the inside of the next corner. +k is a LEFT-hander (measured,
+  // AGENTS.md), so the inside is -x — the same -sign(k) the racing line uses.
+  assert.equal(A.otSide({ ...flat, kAhead: 0.01 }), -1);
+  assert.equal(A.otSide({ ...flat, kAhead: -0.01 }), 1);
+  // Even room on a straight: the car's own lane sign, so a pack fans out both
+  // ways instead of every car picking the same side (the old `>=` default).
+  assert.equal(A.otSide({ ...flat, lane: 0.4 }), 1);
+  assert.equal(A.otSide({ ...flat, lane: -0.4 }), -1);
+});
+
+test("otPull: a queue-limited car pulls out even though it is slower", () => {
+  const base = {
+    street: false, traits: { craft: 0.8, awareness: 0.7, experience: 0.8 },
+    blockerSpeed: 40, blockerGap: 8, roomL: 4, roomR: 4, kAhead: 0, lane: 0,
+    team: null, seat: null, stats: null, other: null,
+  };
+  // THE DEFECT: the trigger was "I am ALREADY faster than the car ahead", which
+  // a queued car can never be — the queue cap holds it ~6 m/s BELOW the
+  // blocker's pace by construction, so the one car that most needed to pull out
+  // never did and the train never broke up.
+  assert.equal(A.otPull({ ...base, speed: 34, freeSpeed: 0 }), 0, "the old trigger, unchanged");
+  assert.notEqual(A.otPull({ ...base, speed: 34, freeSpeed: 55 }), 0,
+    "a car whose free pace clears the blocker must commit even while capped");
+  // …and a car that is genuinely no quicker still stays put, capped or not.
+  assert.equal(A.otPull({ ...base, speed: 34, freeSpeed: 41 }), 0);
+  // The already-closing path is untouched.
+  assert.notEqual(A.otPull({ ...base, speed: 46, freeSpeed: 0 }), 0);
+});
+
+test("letPass: awareness commits earlier, yield fits a permanent lane", () => {
+  const shy = { craft: 0.5, awareness: 0.2, experience: 0.2 };
+  const alert = { craft: 0.5, awareness: 0.95, experience: 0.9 };
+  assert.ok(A.letPassDelay(alert) < A.letPassDelay(shy), "awareness yields sooner");
+  assert.ok(A.letPassDelay(shy) < 6, "a patience window, not a race-long one");
+  // The pull must fit inside the room the caller gates on (freeRoom > 1.6).
+  for (const t of [shy, alert]) {
+    assert.ok(A.letPassPull(t, false) > 0 && A.letPassPull(t, false) < 1.6);
+    assert.ok(A.letPassPull(t, true) < A.letPassPull(t, false), "streets yield less");
+  }
+  // The ease is a nudge off the throttle, not a lift.
+  for (const t of [shy, alert]) {
+    const e = A.letPassEase(t);
+    assert.ok(e > 0.9 && e < 1, `letPassEase out of band: ${e}`);
+  }
 });
 
 test("minLatGap and racingLineMix keep street home seats", () => {
