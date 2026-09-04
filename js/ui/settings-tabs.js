@@ -5,41 +5,45 @@
    game.js still owns availability and all individual controls. */
 const SettingsNav = (function () {
   "use strict";
-  const PAGES = {
-    home: { title: "SETTINGS" },
-    controls: { title: "CONTROLS", panel: "pm-panel-controls", door: "pm-open-controls" },
-    display: { title: "DISPLAY", panel: "pm-panel-display", door: "pm-open-display" },
-    advanced: { title: "STEERING", panel: "advanced", door: "pm-advanced" },
-    audio: { title: "MUSIC & SOUND", panel: "audioset", door: "pm-audio" },
+  const TITLES = {
+    home: "SETTINGS",
+    controls: "CONTROLS",
+    display: "DISPLAY",
+    advanced: "STEERING",
+    audio: "MUSIC & SOUND",
   };
 
   let live = null;
-
-  function panelEl(id) {
-    const def = PAGES[id];
-    return def && def.panel ? document.getElementById(def.panel) : null;
-  }
 
   function create(_store, onSelect) {
     Log.info("game", "SettingsNav.create");
     let current = "home";
 
     function show(id, focus) {
-      if (!PAGES[id]) id = "home";
+      if (!TITLES[id]) id = "home";
       current = id;
       const index = document.getElementById("pm-settings-index");
       const title = document.getElementById("dlg-settings");
-      if (title) title.textContent = PAGES[id].title;
+      if (title) title.textContent = TITLES[id];
       if (index) index.hidden = id !== "home";
-      Object.keys(PAGES).forEach((name) => {
-        const el = panelEl(name);
-        if (el) el.hidden = name !== id;
-      });
+      const controls = document.getElementById("pm-panel-controls");
+      const display = document.getElementById("pm-panel-display");
+      const advanced = document.getElementById("advanced");
+      const audio = document.getElementById("audioset");
+      if (controls) controls.hidden = id !== "controls";
+      if (display) display.hidden = id !== "display";
+      if (advanced) advanced.hidden = id !== "advanced";
+      if (audio) audio.hidden = id !== "audio";
       Log.info("game", "SettingsNav.show " + id);
       if (focus) {
+        const page = id === "controls" ? controls
+          : id === "display" ? display
+          : id === "advanced" ? advanced
+          : id === "audio" ? audio
+          : null;
         const target = id === "home"
           ? document.getElementById("pm-open-controls")
-          : (panelEl(id) && panelEl(id).querySelector("button, input, select"));
+          : (page && page.querySelector("button, input, select"));
         if (target) target.focus();
       }
       const body = document.getElementById("pm-settings-body");
@@ -55,16 +59,18 @@ const SettingsNav = (function () {
       return true;
     }
 
-    Object.keys(PAGES).forEach((id) => {
-      const door = PAGES[id].door;
-      if (!door) return;
-      const el = document.getElementById(door);
-      if (!el) return;
-      el.onclick = () => {
-        show(id, false);
-        if (onSelect) onSelect(id);
-      };
-    });
+    document.getElementById("pm-open-controls").onclick = () => {
+      show("controls", false); if (onSelect) onSelect("controls");
+    };
+    document.getElementById("pm-open-display").onclick = () => {
+      show("display", false); if (onSelect) onSelect("display");
+    };
+    document.getElementById("pm-advanced").onclick = () => {
+      show("advanced", false); if (onSelect) onSelect("advanced");
+    };
+    document.getElementById("pm-audio").onclick = () => {
+      show("audio", false); if (onSelect) onSelect("audio");
+    };
     show("home", false);
     live = { showCurrent: () => show("home", false), show, back };
     return live;

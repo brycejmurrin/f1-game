@@ -802,8 +802,8 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.equal(decl(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) :is\(#rs-laps, #rs-weather\)$/, "flex-wrap"), "nowrap");
   assert.ok(rulesFor(menus, /^\.sheet\[data-shape="tall"\] #rs-body:not\(:has\(#rs-quali\[hidden\]\)\) #rs-caution-section,/).some((r) => r.decls.get("grid-row") === "4"));
   assert.equal(decl(css("css/components.css"), "#race-settings .sheet", "--compact-at"), "760px");
-  assert.match(spotify, /audio\.hidden\s*=\s*true\b/);
-  assert.match(spotify, /audio\.hidden\s*=\s*false\b/);
+  assert.match(spotify, /settings\.hidden\s*=\s*true\b/);
+  assert.match(spotify, /settings\.hidden\s*=\s*false\b/);
 });
 
 /* ── SettingsNav on the mini DOM ────────────────────────────────────────── */

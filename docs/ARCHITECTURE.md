@@ -217,7 +217,7 @@ _141 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `engine.js` | `GameAudio` | tag | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
 | `music-lib.js` | `MusicLib` | tag | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | tag | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
-| `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer screen plus the master-sound plumbing. |
+| `panel.js` | `AudioPanel` | tag | MUSIC & SOUND panel — the mixer plus the master-sound plumbing. |
 
 **`js/physics/`**
 

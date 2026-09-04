@@ -1132,13 +1132,15 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   justify-content: center;
   text-align: center;
 }
-#pmsettings-inner .pm-group .as-tbtn {
+#pmsettings-inner #as-prev,
+#pmsettings-inner #as-play,
+#pmsettings-inner #as-skip {
   width: var(--tap-sm);
   height: var(--tap-sm);
   min-height: var(--tap-sm);
   padding: 0;
 }
-#pmsettings-inner .pm-group .as-tbtn-main {
+#pmsettings-inner #as-play {
   width: calc(var(--tap-sm) * 1.22);
   height: calc(var(--tap-sm) * 1.22);
 }
@@ -1465,10 +1467,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner :is(#pm-metrics-details, #pm-display-adv, #pm-hud-details)[open] > summary::before {
   content: "\25B4";
 }
-/* STEERING / MUSIC folds use the same disclosure language as DISPLAY.
-   Separate selectors so the DISPLAY pin stays a three-id :is(). */
-#pmsettings-inner :is(#adv-details, #audioset .as-sec) > summary,
-#pmsettings-inner :is(#adv-details, #audioset .as-sec) > summary:active {
+#pmsettings-inner #adv-details > summary,
+#pmsettings-inner #adv-details > summary:active {
   color: var(--steel);
   font-style: italic;
   opacity: 1;
@@ -1482,7 +1482,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   box-shadow: none;
 }
 @media (hover: hover) {
-  #pmsettings-inner :is(#adv-details, #audioset .as-sec) > summary:hover {
+  #pmsettings-inner #adv-details > summary:hover {
     color: var(--text);
     background-color: transparent;
     background-image: var(--grad-rule);
@@ -1635,7 +1635,7 @@ summary [data-fold="off"] {
 }
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-item { margin: 0; min-width: 0; }
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-intro,
-#pmsettings-inner[data-shape="wide"] #advanced-inner .preset-row,
+#pmsettings-inner[data-shape="wide"] #advanced-inner .preset-row { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #advanced-inner #adv-details,
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-sec { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] #advanced-inner .adv-more-btn { margin: calc(var(--gap) * 0.5) 0 0; }

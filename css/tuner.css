@@ -404,6 +404,32 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    its own click from reaching this element (js/game/audio-panel.js), so
    pressing it changes the setting without also toggling the section. */
 .as-head { display: flex; align-items: center; justify-content: space-between; gap: var(--gap); list-style: none; cursor: pointer; }
+#pmsettings-inner #audioset .as-sec > summary,
+#pmsettings-inner #audioset .as-sec > summary:active {
+  color: var(--steel);
+  font-style: italic;
+  opacity: 1;
+  background-color: transparent;
+  background-image: var(--grad-rule);
+  background-position: bottom left;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+@media (hover: hover) {
+  #pmsettings-inner #audioset .as-sec > summary:hover {
+    color: var(--text);
+    background-color: transparent;
+    background-image: var(--grad-rule);
+    background-position: bottom left;
+    background-size: 100% 1px;
+    background-repeat: no-repeat;
+    border: none;
+    box-shadow: none;
+  }
+}
 .as-head::-webkit-details-marker { display: none; }
 .as-head .adv-sec { margin: 0; }
 /* The marker sits on the LABEL, not .as-head itself: .as-head is a two-child
