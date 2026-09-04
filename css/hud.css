@@ -593,20 +593,67 @@ body[data-density="compact"] #announce {
 #game-metrics {
   --gm-top: calc(12px + var(--sat, 0px) + min(120px, calc(80px * var(--hud-z-top, var(--hud-scale, 1)))));
   --gm-dock: max(120px, calc(80px * var(--hud-z-dock, var(--hud-scale, 1)) + var(--sab, 0px)));
+  /* THE BAND SCALE THIS PANEL LIVES IN — the same expression --gm-top above
+     already uses to POSITION itself, and the same one metricsRatio() reads in
+     js/perf/metrics-overlay.js to choose the narrow vs wide layout. Sharing it
+     is the point: size, position and layout cannot then disagree about how big
+     the HUD is. The CAPPED --hud-z-top rather than the raw slider, because on a
+     screen too tight for the request fitHud has already shrunk the band, and a
+     panel that kept the full request would overrun a HUD that gave way.
+     MEASURED before this at 1280x720, HUD SIZE 60/100/150: the panel's top
+     tracked the slider — 104 / 136 / 176 px — while its font stayed 14px and
+     its bar buttons stayed 30px at every setting. BUTTON SIZE 60% moved
+     neither, and --hud-btn-scale read 0.6 with nothing consuming it. The panel
+     MOVED for the HUD and never RESIZED with it, which is the whole defect. */
+  --gm-z: var(--hud-z-top, var(--hud-scale, 1));
+  /* BUTTON SIZE reaches this panel's own chips, as it already reaches the
+     dock's (css/overlays.css). MULTIPLIED, not divided: nothing zooms this
+     subtree, so these resolve straight to painted pixels — the shared tokens
+     divide because they sit inside a zoom, and copying that here would shrink
+     the chips as the setting went up. The 24px WCAG 2.5.8 AA floor stays
+     OUTSIDE the multiply so lowering the setting can never cross it. At 100%
+     both are byte-identical to the tokens they shadow (30px and 24px). */
+  --tap-sm: max(24px, calc(30px * var(--hud-btn-scale, 1)));
+  --tap-min: max(24px, calc(24px * var(--hud-btn-scale, 1)));
   position: fixed;
   z-index: 11;
   display: flex;
   flex-direction: column;
   margin: 0;
   padding: calc(var(--gap) * 0.4) calc(var(--gap) * 0.55);
-  font: var(--fs-micro)/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* FLOORED, for the same reason --tap-sm above is. Scaling alone regressed the
+     small end: MEASURED at HUD SIZE 60% this painted 8.4px (14 x 0.6), where
+     the UNSCALED panel had been a legible 14 — a player who wants a small HUD
+     was handed an unreadable one, which is a worse bug than the one being
+     fixed. 12px is the visual floor css/tokens.css states for this tree (its
+     --fs-micro sits at 14 only because the menu sheets paint inside a 0.9
+     zoom; nothing zooms this panel, so CSS px are painted px here and 12 is 12).
+     Outside the multiply, so the floor cannot itself be scaled away.
+     At 100% max() picks 14 and the panel is byte-identical to before. */
+  font: max(12px, calc(var(--fs-micro) * var(--gm-z)))/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--faster);
   background: var(--plate-opaque);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-sm);
   pointer-events: auto;
   text-align: left;
-  max-width: min(22ch, 32vw);
+  /* WIDE ENOUGH TO SHOW THE LINES IT EMITS. MEASURED, both viewports, with a
+     20-character probe in the body's own font (ch is 8.57px at 14, 7.35 at 12):
+       narrow layout  longest line 25 ch  ->  needs 171-214 px
+       wide   layout  longest line 52 ch  ->  needs 242-446 px
+       boxes were      s 170 / m 221 / l 322 px on desktop
+                       s 111 / m 134 / l 189 px on a 393 phone
+     Seven of nine desktop cases and all nine phone cases CUT — white-space:pre
+     inside overflow:hidden, so the tail was lost, not scrolled, and no test
+     looked because the sweep only ever checked scrollHeight.
+     So the steps are now sized in the units the CONTENT is measured in: S holds
+     the narrow layout, L holds the wide one, M sits between. +2ch over the
+     content figure absorbs this element's own padding and border (measured at
+     15.4px, ~1.8ch). 92vw is the upper bound so a step can still never eat the
+     display; on a phone it wins for L, which is why the layout picker in
+     js/perf/metrics-overlay.js must also decide on FIT rather than on a
+     viewport proxy — the two halves only work together. */
+  width: min(28ch, 92vw);
   max-height: min(28svh, calc(100svh - var(--gm-top) - var(--gm-dock)));
   overflow: hidden;
   resize: both;
@@ -615,11 +662,11 @@ body[data-density="compact"] #announce {
   letter-spacing: 0.01em;
 }
 #game-metrics[data-size="m"] {
-  max-width: min(28ch, 38vw);
+  width: min(42ch, 92vw);
   max-height: calc(100svh - var(--gm-top) - var(--gm-dock));
 }
 #game-metrics[data-size="l"] {
-  max-width: min(40ch, 52vw);
+  width: min(56ch, 92vw);
   max-height: calc(100svh - var(--gm-top) - var(--gm-dock));
 }
 #game-metrics[data-pos="right"] {
