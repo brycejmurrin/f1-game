@@ -443,6 +443,7 @@
       "kind": "node",
       "files": [
         "tests/unit/game-vm.test.mjs",
+        "tests/unit/quali-handoff-vm.test.mjs",
         "tests/unit/physics-characterization-vm.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
