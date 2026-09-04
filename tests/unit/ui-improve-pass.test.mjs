@@ -872,32 +872,26 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(code("js/ui/select-screen.js"), /besidePair/,
     "pair-on beside maps do not self-heal the pin down to a stale stamp");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"hudh hudh"[\s\S]*"ui hudopts"\s*"hud sample"[\s\S]*"renh renh"/,
-    "DISPLAY groups HUD then RENDERER; UI SIZE sits beside the HUD fold");
+    /"ui ui"[\s\S]*"hudopts metrics"[\s\S]*"renopts renopts"/,
+    "DISPLAY is UI SIZE, then HUD fold beside METRICS, then the RENDERER fold");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale)', "grid-area"), "hud");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "grid-area"), "sample");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "justify-self"), "start",
-    "HUD sample sits against the sliders, not floating in the leftover column");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
-    "HUD options fold sits beside UI SIZE, not as orphaned half-width plates");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-h', "grid-area"), "hudh");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-renderer-h', "grid-area"), "renh");
-  assert.match(read("index.html"), /id="pm-hud-h"/);
-  assert.match(read("index.html"), /id="pm-renderer-h"/);
+    "HUD fold sits beside METRICS, not under a reprint HUD heading");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
+  assert.doesNotMatch(read("index.html"), /id="pm-hud-h"/);
+  assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
+  assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
+  assert.match(read("index.html"), /id="pm-display-adv-body"[\s\S]*id="pm-res"/);
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
-    "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
-  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open])', "grid-template-areas"),
-    /"metrics metrics"/,
-    "an open METRICS submenu takes the full DISPLAY row so HIDE HUD is not stranded");
-  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-hud-details[open])', "grid-template-areas"),
-    /"hudopts hudopts"/,
-    "an open HUD submenu spans the row so its tap rows stay full width");
+    "DISPLAY METRICS sits beside the HUD fold on a wide sheet");
+  assert.match(decl(css("css/components.css"), /#pm-panel-display:has\(:is\(#pm-metrics-details, #pm-hud-details, #pm-display-adv\)\[open\]\)/, "grid-template-areas"),
+    /"hudopts hudopts"[\s\S]*"metrics metrics"/,
+    "an open HUD / METRICS / RENDERER fold spans the DISPLAY row so the sibling is not stranded");
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
     /HUD SIZE PREVIEW/,
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "align-self"), "start",
-    "HUD sample grows down its cell instead of centering over HUD: STANDARD");
+  assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hud-sample"/,
+    "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--tap)",
     "METRICS summary matches the HIDE HUD tap row");
   assert.equal(decl(css("css/components.css"), /#pm-metrics-details \[role="group"\]/, "display"), "flex",
@@ -911,9 +905,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-row input[type=\"range\"]", "color"), "var(--steel)",
     "DISPLAY range thumb follows steel via currentColor, not tuner red");
   assert.match(code("js/perf/renderer-picker.js"), /pm-display-adv/,
-    "DISPLAY recovery / screenshot / diag fold into a JS-built ADVANCED details");
-  assert.doesNotMatch(read("index.html"), /id="pm-display-adv"/,
-    "ADVANCED is injected — the shell-node ratchet must not see a new tag");
+    "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
+  assert.match(read("index.html"), /id="pm-display-adv"/,
+    "the RENDERER fold is the shell host; RESET / shots still inject into its body");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv)', "grid-column"), "1 / -1",
     "ADVANCED spans the DISPLAY row; it is not a fourth named area");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
@@ -942,7 +936,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
     "COCKPIT is a section break after the renderer row");
   assert.match(code("js/camera/cockpit-opts.js"), /pm-display-adv/,
-    "COCKPIT inserts above ADVANCED so player headings stay with player buttons");
+    "COCKPIT inserts after the RENDERER fold so player switches stay off the backend list");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
     "METRICS submenu no longer keys packing on viewport height");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("margin: 6px"),

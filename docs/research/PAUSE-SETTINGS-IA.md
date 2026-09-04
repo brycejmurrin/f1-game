@@ -51,13 +51,15 @@ they pop the same way.
 **Always open on home.** Do not restore `settingsCategory`. Title
 Settings and pause Settings land on the same index.
 
-**DISPLAY groups HUD then RENDERER, then the existing COCKPIT + ADVANCED
-folds.** HUD: HIDE HUD, METRICS fold, UI SIZE, HUD SIZE + sample, HUD
-profile, LAYOUT, MAP, GAPS. LAYOUT AUTO is always the full widget set
-(`fitHud` scales / stacks / drops gaps; it does not hide a cluster). MAP
-and GAPS default ON; AUTO on the map still hides onboard, OFF is the
-explicit hide. RENDERER: RESOLUTION, renderer picker,
-GRAPHICS. Sliders stay settings rows (steel track, text value). METRICS
+**DISPLAY is UI SIZE, then three folds, then COCKPIT.** No reprint HUD /
+RENDERER headings — the fold summaries are the labels. HUD fold: ON/OFF,
+STYLE, LAYOUT, MAP, GAPS, HUD SIZE + sample. METRICS is a sibling fold.
+RENDERER fold (`#pm-display-adv`) holds RESOLUTION, the backend picker,
+GRAPHICS, RESET, THREE PATH, SCREENSHOTS, SAVE, COPY DIAG. LAYOUT AUTO
+is always the full widget set (`fitHud` scales / stacks / drops gaps; it
+does not hide a cluster). MAP and GAPS default ON; AUTO on the map still
+hides onboard, OFF is the explicit hide. Sliders stay
+settings rows (steel track, text value). METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO
 docks left on a short or narrow viewport so the overlay cannot cover
@@ -66,8 +68,8 @@ GAS/BRAKE. SIZE is `s`/`m`/`l` (`apex26.metricsSize`, URL
 and the panel also accepts a desktop corner drag (`resize: both`).
 The overlay is `#game-metrics` + a tappable `#game-metrics-bar`. LOG
 filters hide unless PAGE is LOG. SCREENSHOTS /
-SAVE / COPY DIAG stay secondary rows under ADVANCED, not peer plates of
-RESET.
+SAVE / COPY DIAG stay secondary rows under the RENDERER fold, not peer
+plates of RESET.
 
 **Control language stays.** Button = filled plate, no chevron. Door =
 plate + `…`. Heading = steel + `--grad-rule`, not clickable. Disclosure

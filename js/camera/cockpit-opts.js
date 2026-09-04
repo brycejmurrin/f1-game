@@ -54,21 +54,21 @@ function paint(btn, sw) {
 function initUI() {
   Log.info("game", "CockpitOpts.initUI");
   if (typeof document === "undefined") return;
-  const anchor = document.getElementById("pm-res");
-  const host = anchor && anchor.parentNode;
+  const panel = document.getElementById("pm-panel-display");
+  const host = panel || (document.getElementById("pm-res") && document.getElementById("pm-res").parentNode);
   if (!host || document.getElementById("pm-halo")) return;
 
   const head = document.createElement("h3");
   head.className = "pm-group-h";
   head.textContent = "COCKPIT";
-  // Player cockpit switches sit above ADVANCED (recovery / shots / diag).
-  // renderer-picker.js loads first and leaves #pm-display-adv at the end;
-  // insertBefore keeps the heading+buttons together when either order runs.
+  // Player cockpit switches sit after the RENDERER fold, not inside it.
   const adv = document.getElementById("pm-display-adv");
-  const before = (adv && adv.parentNode === host) ? adv : null;
+  let ins = (adv && adv.parentNode === host) ? adv : null;
   function place(el) {
-    if (before && typeof host.insertBefore === "function") host.insertBefore(el, before);
-    else host.appendChild(el);
+    if (ins && ins.parentNode === host && typeof host.insertBefore === "function") {
+      host.insertBefore(el, ins.nextSibling);
+      ins = el;
+    } else host.appendChild(el);
   }
   place(head);
 

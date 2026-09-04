@@ -1479,6 +1479,10 @@ live in `ratchets.json`.
   (2026-09-04): DISPLAY HUD / RENDERER headings (`#pm-hud-h`,
   `#pm-renderer-h`). Overlay dock reused existing 8/12/44/80/120 px
   so the spacing count dropped one.
+- tree `shellNodes` 1076 -> **1077** (2026-09-04): those reprint
+  headings came out; the RENDERER fold (`#pm-display-adv` + summary +
+  body) moved into the shell so RESOLUTION / GRAPHICS live with the
+  picker. Net +1 (details+summary+div − two h3s).
 
 ## Tree-wide ratchets (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-03)
 
