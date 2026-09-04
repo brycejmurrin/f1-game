@@ -886,8 +886,11 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open])', "grid-template-areas"),
     /"metrics metrics"/,
     "an open METRICS submenu takes the full DISPLAY row so HIDE HUD is not stranded");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-density="compact"] #pm-hud-sample::before', "display"), "none",
-    "compact DISPLAY drops the HUD SIZE PREVIEW caption — the slider already names it");
+  assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
+    /HUD SIZE PREVIEW/,
+    "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "align-self"), "start",
+    "HUD sample grows down its cell instead of centering over HUD: STANDARD");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-metrics-details > summary", "height"), "var(--tap)",
     "METRICS summary matches the HIDE HUD tap row");
   assert.equal(decl(css("css/components.css"), '#pm-metrics-details [role="group"]', "display"), "flex",
@@ -914,8 +917,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact ADVANCED packs 2-up via SheetShape density, not a height media");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv [role=\"group\"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag)", "background"), "transparent",
     "SCREENSHOTS / SAVE / COPY DIAG are secondary rows, not peer plates of RESET");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv [role=\"group\"] > :is(#pm-screenshots, #pm-gfx-status)", "grid-column"), "1 / -1",
-    "SCREENSHOTS spans the ADVANCED row; SAVE and COPY share the next");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv [role=\"group\"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status)", "grid-column"), "1 / -1",
+    "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
     "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "color"), "var(--steel)",

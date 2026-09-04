@@ -532,7 +532,7 @@ function startLoop() {
 
 function paintBtn(btn) {
   if (!btn) return;
-  btn.textContent = "METRICS: " + (on() ? "ON" : "OFF");
+  btn.textContent = "OVERLAY: " + (on() ? "ON" : "OFF");
   btn.setAttribute("aria-pressed", on() ? "true" : "false");
 }
 
