@@ -1475,6 +1475,10 @@ live in `ratchets.json`.
 - `js/game.js` 9629 -> **9632** lines / 5292 -> **5295** code, tree
   `shellNodes` 1071 -> **1068** (2026-09-04): second union (camera-hud
   defaults landed on deploy while we merged). Same +3 / −3 shape.
+- tree `shellNodes` 1071 -> **1073**, `rawSpacing` 315 -> **314**
+  (2026-09-04): DISPLAY HUD / RENDERER headings (`#pm-hud-h`,
+  `#pm-renderer-h`). Overlay dock reused existing 8/12/44/80/120 px
+  so the spacing count dropped one.
 
 ## Tree-wide ratchets (moved into `tests/data/ratchets.json` scope `tree`, 2026-09-03)
 

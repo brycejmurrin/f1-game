@@ -872,8 +872,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(code("js/ui/select-screen.js"), /besidePair/,
     "pair-on beside maps do not self-heal the pin down to a stale stamp");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"ui hudopts"\s*"hud sample"/,
-    "DISPLAY stacks UI SIZE beside HUD options and HUD SIZE beside the live sample");
+    /"hudh hudh"[\s\S]*"ui hudopts"\s*"hud sample"[\s\S]*"renh renh"/,
+    "DISPLAY groups HUD then RENDERER; UI SIZE sits beside the HUD fold");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale)', "grid-area"), "hud");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "grid-area"), "sample");
@@ -881,6 +881,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "HUD sample sits against the sliders, not floating in the leftover column");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
     "HUD options fold sits beside UI SIZE, not as orphaned half-width plates");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-h', "grid-area"), "hudh");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-renderer-h', "grid-area"), "renh");
+  assert.match(read("index.html"), /id="pm-hud-h"/);
+  assert.match(read("index.html"), /id="pm-renderer-h"/);
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
     "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open])', "grid-template-areas"),

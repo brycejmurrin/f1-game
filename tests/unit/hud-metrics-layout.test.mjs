@@ -14,6 +14,8 @@ test("HUD metrics layout modes are stored and resolved in hud.js", () => {
   assert.match(game, /LAYOUT: AUTO/);
   assert.match(game, /hud-met-\(\[a-z\]\+\)/);
   assert.match(game, /hudMapVisLabel/);
+  assert.match(game, /return "LAYOUT: " \+ hudMetricsLayout\.toUpperCase\(\)/);
+  assert.match(game, /LAYOUT: AUTO/);
   assert.match(hud, /function resolveMetricsLayout\(\)/);
   assert.match(hud, /function syncHudVisClasses\(/);
   const camSync = hud.slice(hud.indexOf("function syncHudCamClasses"), hud.indexOf("function flashSector"));
