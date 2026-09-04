@@ -738,8 +738,13 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   assert.equal(wrap("♪ SOUND OFF"), '♪ SOUND <span data-fold="off">OFF</span>');
   assert.equal(wrap("QUALIFYING LAP · ON"), 'QUALIFYING LAP · <span data-fold="on">ON</span>');
   assert.equal(wrap("ON"), '<span data-fold="on">ON</span>');
-  assert.equal(wrap("MAP: AUTO"), null, "ternary MAP/GAPS AUTO is not an ON/OFF word");
-  assert.equal(wrap("5 LAPS"), null, "option-group chips that are not ON/OFF stay unpainted");
+  assert.equal(wrap("STYLE: STANDARD"), 'STYLE: <span data-fold="val">STANDARD</span>');
+  assert.equal(wrap("LAYOUT: AUTO"), 'LAYOUT: <span data-fold="val">AUTO</span>');
+  assert.equal(wrap("MAP: AUTO"), 'MAP: <span data-fold="val">AUTO</span>');
+  assert.equal(wrap("STEER: TILT (NO GYRO)"), 'STEER: <span data-fold="val">TILT (NO GYRO)</span>');
+  assert.equal(wrap("RESOLUTION: HIGH"), 'RESOLUTION: <span data-fold="val">HIGH</span>');
+  assert.equal(wrap("5 LAPS"), null, "option-group chips that are not a readout stay unpainted");
+  assert.equal(wrap("BUDGET: 12 cr remaining"), null, "prose after a colon is not a choice chip");
   assert.match(code("js/ui/scroll-fade.js"), /"#menu-buttons"/,
     "title chrome fade watches the zoomed #menu-buttons scroller");
   assert.match(code("js/ui/scroll-fade.js"), /\boverflowX\b/,
@@ -984,12 +989,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "fold OFF is the same red as a live warning, not dim");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="off"]', "opacity"), null,
     "OFF must stay fully opaque — faded red reads as dim again");
-  assert.equal(decl(css("css/components.css"), 'button [data-fold="on"], summary [data-fold="on"]', "color"), "var(--gold)",
-    "any menu ON word is gold, not only DISPLAY fold chips");
+  assert.equal(decl(css("css/components.css"), 'button [data-fold="on"], summary [data-fold="on"], button [data-fold="val"], summary [data-fold="val"]', "color"), "var(--gold)",
+    "any menu ON word or current VALUE is gold, not only DISPLAY fold chips");
   assert.equal(decl(css("css/components.css"), 'button [data-fold="off"], summary [data-fold="off"]', "color"), "var(--red)",
     "any menu OFF word is red");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="val"]', "color"), "var(--text)",
-    "fold values are bright text — steel-on-steel hid STANDARD / AUTO / WEBGL2");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="val"]', "color"), "var(--gold)",
+    "fold values (STANDARD / AUTO / WEBGL2) are the same gold as ON");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("det.open = true"),
     "METRICS does not auto-open and blow the HIDE HUD pair");
   assert.equal(decl(css("css/menus.css"), "#ss-inner", "--pair-compact"), "wide",

@@ -1445,10 +1445,12 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   content: "\25B4";
 }
 /* Name stays steel (the heading). Choices use the live switch colors:
-   ON gold, OFF red, values bright text — steel-on-steel made STANDARD /
-   AUTO / WEBGL2 disappear into the chrome. */
+   ON / current value gold, OFF red — steel-on-steel hid STANDARD /
+   AUTO / WEBGL2 in the chrome. */
 button [data-fold="on"],
-summary [data-fold="on"] {
+summary [data-fold="on"],
+button [data-fold="val"],
+summary [data-fold="val"] {
   color: var(--gold);
 }
 button [data-fold="off"],
@@ -1471,7 +1473,7 @@ summary [data-fold="off"] {
   font-weight: 600;
 }
 #pmsettings-inner details > summary [data-fold="val"] {
-  color: var(--text);
+  color: var(--gold);
   font-style: italic;
   font-weight: 700;
 }
