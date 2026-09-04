@@ -703,23 +703,23 @@
         </div>
         <p id="as-p-note" class="as-note"></p>
         <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">100</b></span>
-          <input id="as-t-pitch" type="range" min="0" max="18" step="1" value="8" aria-label="Engine pitch"></label>
+          <input id="as-t-pitch" type="range" min="0" max="20" step="1" value="8" aria-label="Engine pitch"></label>
         <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">100</b></span>
-          <input id="as-t-range" type="range" min="0" max="12" step="1" value="6" aria-label="Rev range"></label>
+          <input id="as-t-range" type="range" min="0" max="23" step="1" value="8" aria-label="Rev range"></label>
         <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">100</b></span>
-          <input id="as-t-detune" type="range" min="0" max="12" step="1" value="4" aria-label="Engine detune"></label>
+          <input id="as-t-detune" type="range" min="0" max="16" step="1" value="4" aria-label="Engine detune"></label>
         <label class="tune-row"><span class="tune-label">BRIGHTNESS <b id="as-t-bright-v">100</b></span>
-          <input id="as-t-bright" type="range" min="0" max="22" step="1" value="10" aria-label="Engine brightness"></label>
+          <input id="as-t-bright" type="range" min="0" max="44" step="1" value="14" aria-label="Engine brightness"></label>
         <label class="tune-row"><span class="tune-label">TURBO <b id="as-t-whine-v">100</b></span>
-          <input id="as-t-whine" type="range" min="0" max="10" step="1" value="4" aria-label="Turbo whine level"></label>
+          <input id="as-t-whine" type="range" min="0" max="16" step="1" value="4" aria-label="Turbo whine level"></label>
         <label class="tune-row"><span class="tune-label">LIMITER <b id="as-t-lim-v">100</b></span>
-          <input id="as-t-lim" type="range" min="0" max="8" step="1" value="4" aria-label="Rev limiter chop depth"></label>
+          <input id="as-t-lim" type="range" min="0" max="12" step="1" value="4" aria-label="Rev limiter chop depth"></label>
         <label class="tune-row"><span class="tune-label">SUB <b id="as-t-sub-v">100</b></span>
-          <input id="as-t-sub" type="range" min="0" max="10" step="1" value="4" aria-label="Sub-octave weight"></label>
+          <input id="as-t-sub" type="range" min="0" max="16" step="1" value="4" aria-label="Sub-octave weight"></label>
         <label class="tune-row"><span class="tune-label">SPACE <b id="as-t-rev-v">100</b></span>
-          <input id="as-t-rev" type="range" min="0" max="10" step="1" value="4" aria-label="Circuit reverb amount"></label>
+          <input id="as-t-rev" type="range" min="0" max="16" step="1" value="4" aria-label="Circuit reverb amount"></label>
         <label class="tune-row"><span class="tune-label">OVERRUN <b id="as-t-ovr-v">100</b></span>
-          <input id="as-t-ovr" type="range" min="0" max="10" step="1" value="4" aria-label="Off-throttle crackle"></label>
+          <input id="as-t-ovr" type="range" min="0" max="16" step="1" value="4" aria-label="Off-throttle crackle"></label>
         <!-- Layer switches. Each names a real node in the engine graph, so an
              off layer is silent rather than merely quiet. -->
         <div id="as-layer-row" class="opt-row" role="group" aria-label="Engine layers">
@@ -733,12 +733,6 @@
           <button id="as-l-rivals" class="opt-btn" type="button" aria-pressed="true">RIVALS</button>
           <button id="as-l-reverb" class="opt-btn" type="button" aria-pressed="true">SPACE</button>
           <button id="as-l-overrun" class="opt-btn" type="button" aria-pressed="true">OVERRUN</button>
-          <!-- Not a layer: it swaps the PITCHING CORE between the granular
-               (PSOLA) voice and the older playbackRate one. Sits here because
-               it is the A/B a player wants next to the rest of the engine
-               switches, and it is the only control on this screen whose right
-               setting can only be decided by ear. -->
-          <button id="as-t-granular" class="opt-btn" type="button" aria-pressed="false">GRANULAR</button>
         </div>
         <button id="as-t-reset" class="adv-more-btn" type="button">RESET TO TEAM SOUND</button>
       </details>

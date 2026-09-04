@@ -2006,3 +2006,7 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   goes DOWN rather than up because the settings restructure that landed
   alongside it removed more nodes than these four added — measured on the
   merged tree, which is the only honest place to measure it.
+- `shellNodes` 1128 -> **1127** (2026-09-04): the GRANULAR switch, removed with
+  the core behind it. Down, not up — the pitching core it A/B'd sounded like
+  loud noise and is gone; see docs/DEBUG-HOOKS.md for the flatness measurement
+  that condemned it and the centroid one that failed to.

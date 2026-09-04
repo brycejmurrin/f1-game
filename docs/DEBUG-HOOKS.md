@@ -885,6 +885,57 @@ GATING correctly and tells you nothing about the rate.
 `tests/unit/audio-tune.test.mjs` steps the clock by hand and is where the rate
 is pinned.
 
+### Why there is no granular core (and what fooled the metric)
+A pitch-synchronous (PSOLA) pitching core shipped here on 2026-09-04 and was
+removed the same day: it sounded like loud noise. The measurement that
+justified it — spectral CENTROID, 1526 -> 798 Hz on playbackRate versus
+1522 -> 1525 Hz granular across ratio 1.0 -> 0.25 — was accurate and useless,
+because a click train holds a high centroid exactly as well as a preserved
+formant does. The metric could not tell the fix from the artefact.
+
+Spectral FLATNESS can (geometric over arithmetic mean of the magnitude
+spectrum; ~0 tonal, ~1 white noise). On the shipped asset:
+
+| ratio | playbackRate | granular |
+|---|---|---|
+| 1.00 | 0.481 | 0.484 |
+| 0.50 | 0.293 | 0.406 |
+| 0.25 | **0.130** | **0.459** |
+
+Resampling gets steadily MORE tonal pitching down — an engine's partials crowd
+together at low revs. The granular core stayed broadband the whole way. Phase
+alignment (WSOLA) moved it 0.459 -> 0.448; sweeping the grain period over
+89/178/267/356/445/890 samples never beat 0.289. PSOLA assumes a quasi-periodic
+voiced signal and `f1_engine.mp3` is a broadband drone, so grains cut from it
+and re-laid at another rate are noise however they are placed.
+
+**If you measure a change to the engine voice, measure flatness too.** Centroid
+alone will pass a defect it was written to catch.
+
+### The field, the space and the overrun
+`audio().granular` aside, three layers are worth naming because none of them
+existed before and each answers a question the mix could not:
+
+- **RIVALS** — `GameAudio.setRivals(list)`, fed by `js/audio/rivals.js` from the
+  player's TRACK frame. Four voices, panned by ANGLE (lateral over arc
+  distance), rolled off and lowpassed with distance, Doppler-shifted by the
+  closing rate. There was no panner in the graph at all before, so a car
+  alongside was silent.
+- **SPACE** — `GameAudio.setVenue(def)` picks the circuit's acoustics from data
+  the definitions already carry (`street: true`, `theme`). The impulse
+  responses are generated, not shipped. `audio().venue` reports the live send.
+- **OVERRUN** — crackle on a trailing throttle. `loadLift` is `clamp01(ax/12)`
+  and so is zero the instant the throttle closes, which is why lifting used to
+  sound exactly like coasting. `GameAudio.overrunState()` reports `{fired,
+  nextAt, now}`; one-shots have no persistent node to read.
+
+**Do not time the overrun from a headless probe here.** With no audio device
+this container's `ctx.currentTime` free-runs at roughly 100x wall — measured, 25
+seconds of context time per 200 ms of real time — so a live probe shows the
+GATING correctly and tells you nothing about the rate.
+`tests/unit/audio-tune.test.mjs` steps the clock by hand and is where the rate
+is pinned.
+
 ### The two cores
 `audio().granular` reports `{on, ready, active, period}`. `on` is the player
 switch, `ready` means the worklet module loaded into this context, `active` is
