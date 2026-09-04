@@ -336,7 +336,7 @@ test("initUI injects separate metrics, page, and log settings buttons", () => {
           title: "", onclick: null, setAttribute() {}, style: {} };
       },
       getElementById(id) {
-        if (id === "pm-hidehud") return anchor;
+        if (id === "pm-hud-details" || id === "pm-hidehud") return anchor;
         if (id === "pm-metrics" || id === "pm-metrics-page" ||
             id === "pm-metrics-pos" || id === "pm-metrics-size" ||
             id === "pm-metrics-logns" || id === "pm-metrics-loglvl") return null;

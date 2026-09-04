@@ -405,7 +405,8 @@ test("RESET RENDERER is injected next to #pm-renderer, not written into the shel
   // storage, disarms the sentinel, and reloads"; this pins only that the
   // shell does not carry a static copy of the recovery row or its submenu.
   assert.doesNotMatch(read("index.html"), /id="pm-renderer-reset"/);
-  assert.doesNotMatch(read("index.html"), /id="pm-display-adv"/);
+  assert.match(read("index.html"), /id="pm-display-adv"/,
+    "RENDERER fold is in the shell; RESET still injects into its body");
 });
 
 test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality", () => {

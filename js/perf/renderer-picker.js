@@ -1,4 +1,4 @@
-/* Apex 26 — RendererPicker: the RENDERER control in SETTINGS > DISPLAY. Owns #pm-renderer (a <select> with ‹ › steps over WEBGL2 / THREE.JS / WEBGPU) and the ADVANCED disclosure (#pm-display-adv) that holds RESET RENDERER, THREE PATH, SCREENSHOTS, SAVE SCREENSHOT, COPY DIAG and the #pm-gfx-status line; the apex26.gfxBackend / gfxWgx* / tlxForceGL / wgxCapture keys those write; and the in-race two-tap reload confirm (raceGuard / ARM_MS) every reloading control shares.
+/* Apex 26 — RendererPicker: the RENDERER control in SETTINGS > DISPLAY. Owns #pm-renderer (a <select> with ‹ › steps over WEBGL2 / THREE.JS / WEBGPU) and the RENDERER fold (#pm-display-adv) whose shell body holds RESOLUTION / the picker / GRAPHICS; RESET RENDERER, THREE PATH, SCREENSHOTS, SAVE SCREENSHOT, COPY DIAG and #pm-gfx-status inject into that body. The apex26.gfxBackend / gfxWgx* / tlxForceGL / wgxCapture keys those write; the in-race two-tap reload confirm (raceGuard / ARM_MS) is shared by every reloading control.
 
    Split out of js/perf/quality-preset.js (Phase 2a of docs/research/TREE-RESTRUCTURE-2026-09.md): that file is the GRAPHICS quality PRESET model and button; this one is which backend boots. Same load-order stance — every global read (GLX, PerfGov, GameAudio, __apex) is resolved at CALL time, never at eval, so the file has no HARD_EDGES pair and can sit anywhere in the shell. */
 const RendererPicker = (function () {
@@ -66,11 +66,20 @@ function paintRenderer(rb) {
       if (fallback && opt.value === pref) t += " (WEBGL2)";
       opt.textContent = t;
     }
+    paintRendererSummary(pref, fallback);
     return;
   }
   rb.textContent = fallback
     ? ("RENDERER: " + backendLabel(pref) + " (WEBGL2)")
     : ("RENDERER: " + backendLabel(pref));
+  paintRendererSummary(pref, fallback);
+}
+function paintRendererSummary(pref, fallback) {
+  const sum = typeof document !== "undefined"
+    ? document.getElementById("pm-renderer-details-sum")
+    : null;
+  if (!sum) return;
+  sum.textContent = "RENDERER · " + backendLabel(pref) + (fallback ? " · WEBGL2" : "");
 }
 function markReloading(rb, next) {
   const msg = backendLabel(next) + " — RELOADING…";
@@ -421,9 +430,10 @@ function ensureAdvHost() {
   const details = document.createElement("details");
   details.id = "pm-display-adv";
   const summary = document.createElement("summary");
+  summary.id = "pm-renderer-details-sum";
   summary.className = "adv-more-btn";
-  summary.textContent = "ADVANCED";
-  summary.title = "Renderer recovery, THREE PATH, screenshots, and diagnostics";
+  summary.textContent = "RENDERER · WEBGL2";
+  summary.title = "Resolution, backend, quality, recovery, screenshots, and diagnostics";
   const body = document.createElement("div");
   body.id = "pm-display-adv-body";
   if (typeof body.setAttribute === "function") {
@@ -633,8 +643,9 @@ function initRenderer() {
 
 function init() {
   Log.info("game", "RendererPicker.init");
-  // Picker row first (player-facing), then the ADVANCED disclosure that
-  // owns RESET + present controls + status. Each inject is idempotent.
+  // Picker row first (player-facing), then the RENDERER fold that owns
+  // RESOLUTION / GRAPHICS plus RESET + present controls + status. Each
+  // inject is idempotent; the shell already has the fold.
   initRenderer();
   ensureAdvHost();
   initReset();

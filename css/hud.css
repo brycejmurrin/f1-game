@@ -849,10 +849,9 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 }
 .pc-hint { font-size: var(--fs-micro); color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
 .pc-fovlab { display: flex; align-items: center; font-size: var(--fs-micro); font-weight: 700; color: var(--dim); }
-/* The one range slider in the app with no height floor: the UA default
-   (~20 local px) painted ~8px at UI SIZE 40% inside the zoomed #pc-bar. Same
-   var(--tap-min) floor as .tune-row and .pm-group range inputs. */
-.pc-fovlab input[type="range"] { width: 110px; margin-left: calc(var(--gap) * 0.5); height: var(--tap-min); min-height: var(--tap-min); }
+/* Free-cam FOV — same painted --slider hit as every menu range, so UI SIZE
+   zoom does not shrink this one below the SETTINGS / tuner tracks. */
+.pc-fovlab input[type="range"] { width: 110px; margin-left: calc(var(--gap) * 0.5); height: var(--slider); min-height: var(--slider); }
 #pc-exit, #pc-panel, #pc-hud {
   width: auto; margin: 0; padding: 7px 16px; border-radius: var(--r-md);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.06em;

@@ -81,9 +81,25 @@ test("re-enabling sound during a race restarts race music", async ({ page }) => 
     window.__apex.headless(true);
     window.__apex.race("monza");
     window.__apex.go();
-    calls.length = 0;
     return window.__apex.tracks().find((track) => track.id === "monza").i;
   });
+
+  // startRace() is async and suspends on its FIRST line (await ensureScenery),
+  // and __apex.race() does not await it — so the race's own startMusic
+  // (js/game.js, the `if (soundOn)` line) lands after the evaluate above has
+  // already returned. Clearing the recorder inside that block therefore threw
+  // away nothing and then counted the race's call as if the clicks below had
+  // made it, so the assertion saw two calls where one was simply the race
+  // starting normally. Proven by stack: call 1 comes from startRace, call 2
+  // from setSound.
+  //
+  // The fix is to WAIT for the race's call and then clear, not to widen the
+  // assertion — this guard is about what the SOUND button re-issues, and that
+  // is exactly as strict as it was. Left as-is it fails or passes on how long
+  // ensureScenery takes, which is a property of the box, not of the code.
+  await page.waitForFunction(() => window.__raceMusicCalls.length > 0, null,
+    { polling: 100, timeout: BOOT_MS });
+  await page.evaluate(() => { window.__raceMusicCalls.length = 0; });
 
   // What this guards is a game.js behaviour: when SOUND comes back the game
   // re-issues GameAudio.startMusic with the RACE track index. That is the

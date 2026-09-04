@@ -872,30 +872,23 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(code("js/ui/select-screen.js"), /besidePair/,
     "pair-on beside maps do not self-heal the pin down to a stale stamp");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
-    /"hudh hudh"[\s\S]*"ui hudopts"\s*"hud sample"[\s\S]*"renh renh"/,
-    "DISPLAY groups HUD then RENDERER; UI SIZE sits beside the HUD fold");
+    /"ui ui"[\s\S]*"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
+    "DISPLAY is UI SIZE, then HUD, METRICS, and RENDERER each on their own row");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale)', "grid-area"), "ui");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale)', "grid-area"), "hud");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "grid-area"), "sample");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "justify-self"), "start",
-    "HUD sample sits against the sliders, not floating in the leftover column");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-details', "grid-area"), "hudopts",
-    "HUD options fold sits beside UI SIZE, not as orphaned half-width plates");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-h', "grid-area"), "hudh");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-renderer-h', "grid-area"), "renh");
-  assert.match(read("index.html"), /id="pm-hud-h"/);
-  assert.match(read("index.html"), /id="pm-renderer-h"/);
+    "HUD fold is its own row, not under a reprint HUD heading");
+  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv', "grid-area"), "renopts");
+  assert.doesNotMatch(read("index.html"), /id="pm-hud-h"/);
+  assert.doesNotMatch(read("index.html"), /id="pm-renderer-h"/);
+  assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
+  assert.match(read("index.html"), /id="pm-display-adv-body"[\s\S]*id="pm-res"/);
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details', "grid-area"), "metrics",
-    "DISPLAY METRICS sits beside HIDE HUD on a wide sheet");
-  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open])', "grid-template-areas"),
-    /"metrics metrics"/,
-    "an open METRICS submenu takes the full DISPLAY row so HIDE HUD is not stranded");
-  assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-hud-details[open])', "grid-template-areas"),
-    /"hudopts hudopts"/,
-    "an open HUD submenu spans the row so its tap rows stay full width");
+    "METRICS sits on its own DISPLAY row, not beside HUD");
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::before", "content") || "",
     /SIZE PREVIEW/,
     "SPEED 312 keeps its preview caption — compact used to hide it and the box read as a live readout");
+  assert.match(read("index.html"), /id="pm-hud-details"[\s\S]*id="pm-hud-sample"/,
+    "HUD SIZE preview lives in the HUD fold, not on the DISPLAY sheet");
   // The sample carries BOTH sliders now: a readout box for HUD SIZE and a pad
   // for BUTTON SIZE, which has exactly the same no-feedback problem (every real
   // cluster is hidden behind the .dim sheet). The pad divides the block's own
@@ -903,8 +896,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.match(decl(css("css/components.css"), "#pm-hud-sample::after", "--pad") || "",
     /var\(--hud-btn-scale\) \/ var\(--hud-scale\)/,
     "the button pad previews BUTTON SIZE relative to HUD SIZE");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample', "align-self"), "start",
-    "HUD sample grows down its cell instead of centering over HUD: STANDARD");
+  // BUTTON SIZE sits with HUD SIZE inside the fold, not stranded on the sheet.
+  assert.match(read("index.html"), /id="pm-hudscale"[\s\S]*id="pm-btnscale"/,
+    "BUTTON SIZE follows HUD SIZE in the HUD fold");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > summary/, "height"), "var(--tap)",
     "METRICS summary matches the HIDE HUD tap row");
   assert.equal(decl(css("css/components.css"), /#pm-metrics-details \[role="group"\]/, "display"), "flex",
@@ -913,12 +907,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "METRICS inner rows drop plate chrome");
   assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-label b", "color"), "var(--text)",
     "DISPLAY slider values are text, not tuner red");
-  assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-row input[type=\"range\"]", "accent-color"), "var(--steel)",
-    "DISPLAY slider track is steel, not tuner red");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-row input[type=\"range\"]", "accent-color"), null,
+    "DISPLAY sliders inherit the shared red accent — no steel override");
   assert.match(code("js/perf/renderer-picker.js"), /pm-display-adv/,
-    "DISPLAY recovery / screenshot / diag fold into a JS-built ADVANCED details");
-  assert.doesNotMatch(read("index.html"), /id="pm-display-adv"/,
-    "ADVANCED is injected — the shell-node ratchet must not see a new tag");
+    "DISPLAY recovery / screenshot / diag land in the RENDERER fold");
+  assert.match(read("index.html"), /id="pm-display-adv"/,
+    "the RENDERER fold is the shell host; RESET / shots still inject into its body");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv)', "grid-column"), "1 / -1",
     "ADVANCED spans the DISPLAY row; it is not a fourth named area");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-auto-flow"), "dense",
@@ -935,10 +929,12 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
     "CONTROLS / DISPLAY sheet title already names the panel; do not reprint the heading");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--steel)",
-    "METRICS / ADVANCED summaries use heading steel, not button text");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "transparent",
-    "disclosure summaries are headings, not .adv-more-btn plates");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "color"), "var(--text)",
+    "HUD / METRICS / RENDERER summaries use text, not heading steel");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "opacity"), "1",
+    ".adv-more-btn ships at 0.85 — pin full opacity so the folds stay white");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary/, "background-color"), "var(--surf-3)",
+    "fold summaries sit on a raised surface so they read as dropdowns, not steel headings");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::after/, "content"), "none",
     "right-side chevron is the dropdown mark — disclosures do not use it");
   assert.match(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv, #pm-hud-details\) > summary::before$/, "content") || "",
@@ -947,7 +943,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
     "COCKPIT is a section break after the renderer row");
   assert.match(code("js/camera/cockpit-opts.js"), /pm-display-adv/,
-    "COCKPIT inserts above ADVANCED so player headings stay with player buttons");
+    "COCKPIT inserts after the RENDERER fold so player switches stay off the backend list");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
     "METRICS submenu no longer keys packing on viewport height");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("margin: 6px"),
@@ -1128,6 +1124,32 @@ test("COPY VALUES exports the player's edits under a name bake.mjs will refuse",
   assert.equal(h.dom.byId("lt-json").hidden, false, "the textarea is revealed with the text selected");
   const none = bootCopyValues({ store: { "*": {} } });
   assert.equal(none.btn.textContent, "NOTHING TUNED", "no overrides → the button says so instead of exporting an empty object");
+});
+
+test("menu range sliders share a painted-size token that cancels UI SIZE zoom", () => {
+  assert.equal(decl(css("css/tokens.css"), ":root", "--slider"), "calc(32px / var(--ui-scale))",
+    "--slider is 32 painted px: divide by --ui-scale so sheet zoom does not grow the track");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "height"), "var(--slider)");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "min-height"), "var(--slider)");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "accent-color"), "var(--red)",
+    "every menu range is red, including DISPLAY");
+  assert.equal(decl(css("css/tuner.css"), /#audioset .tune-row input\[type="range"\]:disabled/, "accent-color"), "#6a6a75",
+    "MUSIC volume is grey only while its switch is off");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]", "appearance"), null,
+    "leave the UA slider chrome — appearance:none was the red-dot-on-grey look");
+  assert.equal(decl(css("css/components.css"), "input[type=\"range\"]::-webkit-slider-thumb", "width"), null);
+  assert.equal(decl(css("css/tuner.css"), ".tune-row input[type=\"range\"]", "height"), "var(--slider)");
+  assert.equal(decl(css("css/components.css"), ".pm-group .tune-row input[type=\"range\"]", "height"), "var(--slider)");
+  assert.equal(decl(css("css/hud.css"), ".pc-fovlab input[type=\"range\"]", "height"), "var(--slider)");
+  for (const file of ["css/tokens.css", "css/components.css", "css/tuner.css", "css/hud.css", "css/menus.css"]) {
+    for (const r of css(file)) {
+      if (!/input\[type=["']range["']\]/.test(r.selector)) continue;
+      for (const prop of ["height", "min-height"]) {
+        const v = r.decls.get(prop);
+        if (v) assert.match(v, /--slider/, `${r.selector} ${prop} in ${file} must use --slider, not ${v}`);
+      }
+    }
+  }
 });
 
 test("COPY VALUES tries the synchronous copy while the click still has activation", () => {
