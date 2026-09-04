@@ -1177,7 +1177,10 @@ test("neutral buttons share the settings tab-header plate", () => {
 
 test("tool doors and lone foot actions do not stretch into banners", () => {
   const components = css("css/components.css");
-  assert.equal(decl(components, ".pm-doors", "--balance-basis"), "12rem");
+  assert.equal(decl(components, ".pm-doors", "flex-direction"), "column");
+  assert.equal(decl(components, ".pm-doors > button", "width"), "100%");
+  assert.equal(decl(components, "#pmsettings-inner .pm-doors button", "width"), "100%");
+  assert.equal(decl(components, "#pmsettings-inner .pm-doors button", "justify-content"), "flex-start");
   assert.equal(decl(components, ".sheet-foot .bigbtn:only-child", "flex"), "0 1 auto");
   assert.equal(decl(components, ".pm-group .tune-row .tune-label", "position"), "static");
   assert.equal(decl(components, '#pmsettings-inner .pm-groups > [role="region"] button', "white-space"), "normal");
