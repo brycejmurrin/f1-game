@@ -11,7 +11,7 @@
 // numbers describe is the default McLaren with nothing fitted, which a fresh
 // boot on empty storage gave for free; the shared page has whatever the last
 // test fitted (parts-physics fits an ERS pack), so load() pins it before every
-// race. UNVERIFIED IN A BROWSER at conversion time.
+// race, then awaitTrackBuild + headless + go().
 import { sharedTest as test, expect, awaitTrackBuild } from "../helpers/fixtures.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
