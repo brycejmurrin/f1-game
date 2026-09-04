@@ -900,3 +900,40 @@ contributes nothing, so the gates are the whole story — and it is the gates,
 not the selection, that should be argued about when deciding what a deploy has
 actually verified.
 
+
+## 2026-09-04 — the third spec family billed at a rate it cannot pay
+
+`tools/ci/select-specs.mjs` excludes a spec from the 120 s change-aware gate
+when the spec DECLARES a budget bigger than the gate's — `EXCLUDED (declares
+Ns test budget > gate 120s)`. The guard keys on `test.setTimeout` /
+`describe.configure({timeout})` / `test.slow()`, so it can only see a cost the
+spec states. A spec that is silent about a 240 s cost is billed at 120 s,
+selected, and killed at exactly "Test timeout of 120000ms exceeded" with
+nothing asserted wrong.
+
+That has now happened three times in two days:
+
+| when | spec(s) | measured | outcome |
+|---|---|---|---|
+| Pages #1967 | `hud-layout.spec.js` | 134.3 s killed / 149 s local | 6 of 7 tests red, burned the job cap, CANCELLED the deploy |
+| Pages #1974 | `parts-factory-presets` | 240.1 s | 3-failure stop; the run's only red job |
+| Pages #1974 | `multiplayer-scan-cancel` › CANCEL stops the camera | 238.2 s | same run |
+| Pages #1974 | `multiplayer-scan` › the camera reads a code | 229.7 s | same run |
+
+All four now declare 300 s — the value their peers on a race fixture already
+carry — so the gate excludes them BY NAME and reports it. That is the fix for
+these four, not for the class.
+
+**A blanket "declare your budget" guard was considered and rejected on a
+measurement.** 65 of the 114 specs match a naive boot-heavy-fixture heuristic
+(`racePage|sharedTest|BOOT_MS|__apex.race(`) while declaring nothing, and most
+of them are legitimately cheap per test — `headless-api` runs 24 tests on ONE
+shared boot. A guard flagging 65 files would be noise, and noise is how the
+`multiplayer-session` "SKIPPED (over budget)" line sat unread for weeks.
+
+The narrower mechanism, not yet built: the gate already knows the difference
+between a test killed by ITS OWN declared budget and one killed by the gate's
+generic cap. Only the second is a budgeting mistake, and it is self-identifying
+at the moment it happens. Reporting it as a BUDGET failure that names its own
+fix ("declare `test.setTimeout` so the gate can exclude this spec") would turn
+a confusing red into an instruction, without guessing at 65 files up front.

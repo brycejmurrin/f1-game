@@ -57,6 +57,25 @@ const liveTracks = (page) => page.evaluate(() => {
 });
 
 test.describe("scanning a code", () => {
+    // DECLARE THE BUDGET. Each test here launches its OWN Chromium — the fake
+    // Y4M webcam is a browser LAUNCH argument (see the header), so the per-test
+    // fixture is deliberate and every test pays a full browser start, page boot
+    // and getUserMedia handshake before its body runs.
+    //
+    // With nothing declared, tools/ci/select-specs.mjs had no way to know. Its
+    // `EXCLUDED (declares Ns test budget > gate 120s)` guard keys on
+    // test.setTimeout, so a spec that is silent about its cost is billed at the
+    // gate's generic 120 s and selected. This one then failed at exactly "Test
+    // timeout of 120000ms exceeded" on Pages #1974 (run 33830189400, job
+    // 100891344583) and helped trip the run's 3-failure stop. No assertion
+    // failed — the gate simply could not afford what it picked.
+    //
+    // 300 s is the value its peers on a race fixture already carry, and it
+    // clears the MEASURED worst case with the same ~25 % margin ci.yml's own
+    // caps were chosen to give: 229.7 s for `the camera reads a code and puts it where it belongs`.
+    // This raises a BUDGET, not a tolerance — no assertion changed, and a test
+    // that genuinely hangs still goes red, just later.
+    test.setTimeout(300_000);
   test("the camera reads a code and puts it where it belongs", async ({ page }) => {
     await openJoin(page);
     await page.click("#vs-scan-invite");
