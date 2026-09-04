@@ -1,11 +1,12 @@
 // @ts-check
-// ONE BOOT PER WORKER (sharedTest): five goto("/") contexts became one. The two
-// first-load tests KEEP their reload — SOUND OFF and the volume clamp must see
-// localStorage before AudioPanel.init, and a shared page only gets that on the
-// next navigation (docs/TESTING.md §sharedTest / addInitScript). Closing a
-// WebGL+AudioContext page between tests was the other half: CI died with
-// `Test timeout of 120000ms exceeded while setting up "context"` on the next
-// fixture (Selected specs 2026-09-04). Reload keeps the same context.
+// ONE BOOT PER WORKER (sharedTest): five goto("/") contexts became one. The
+// first-load contract (SOUND OFF + clamped volumes) KEES one reload — those
+// keys must be in localStorage before AudioPanel.init, and a shared page only
+// gets that on the next navigation (docs/TESTING.md §sharedTest / addInitScript).
+// Closing a WebGL+AudioContext page between tests was the other half: CI died
+// with `Test timeout of 120000ms exceeded while setting up "context"` on the
+// next fixture (Selected specs 2026-09-04). A second reload after SOUND ON
+// costs ~120s on this box; seed both contracts on the cold reload.
 import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { toMenu } from "../helpers/shared-page.js";
 
@@ -39,7 +40,11 @@ test("GameAudio initialises without console errors", async ({ page, pageErrors, 
   expect(pageErrors).toEqual([]);
 });
 
-test("persisted SOUND OFF stays off and defers WebAudio until a trusted enable click", async ({ page }) => {
+// One reload, two first-load contracts. A second reload after SOUND ON
+// (or after the unlock race) costs ~120s on this box — the volume-only
+// body timed out at 134s / 119.4s. After a cold boot the same navigation
+// is ~75s. Seed everything, assert both, then the enable click.
+test("persisted SOUND OFF and out-of-range volumes apply on first load", async ({ page }) => {
   const engineRequests = [];
   page.on("request", (request) => {
     if (/assets\/sfx\/f1_(?:engine|rev)\.mp3(?:\?|$)/.test(request.url())) {
@@ -48,7 +53,17 @@ test("persisted SOUND OFF stays off and defers WebAudio until a trusted enable c
   });
   // MUSIC is intentionally still on: these independent saved states used to
   // make AudioPanel.init() lift the master back on during boot.
-  await bootWithStore(page, { "apex26.sound": "false", "apex26.music": "true" });
+  // volMusic/volSfx: setMusicVolume/setSfxVolume clamp to 0..1 and RETURN
+  // the clamped value; the panel used to discard that return and show the
+  // raw localStorage number.
+  await bootWithStore(page, {
+    "apex26.sound": "false",
+    "apex26.music": "true",
+    "apex26.volMusic": "40",    // way over the 0..1 gain range
+    "apex26.volSfx": "-3",      // way under it
+  });
+
+  expect(await page.evaluate(() => GameAudio.volumes())).toEqual({ music: 1, sfx: 0 });
 
   // This is a genuine first pointer gesture and also exercises the Settings
   // button's formerly unconditional GameAudio.init().
@@ -67,27 +82,6 @@ test("persisted SOUND OFF stays off and defers WebAudio until a trusted enable c
   });
   expect(engineRequests).toEqual([]);
 
-  // Re-enable with a real click. init() must run synchronously in this gesture
-  // so autoplay policies permit resume, and only now may samples be requested.
-  await page.locator("#pm-settings-close").click();
-  await page.locator("#soundbtn").click();
-  await expect.poll(() => page.evaluate(() => GameAudio.debug().contextState))
-    .not.toBe("uninitialised");
-  await expect.poll(() => engineRequests.length).toBe(2);
-});
-
-// GameAudio.setMusicVolume/setSfxVolume clamp to 0..1 and RETURN the clamped
-// value; the panel used to discard that return and show the raw localStorage
-// number. Reload test: keep it BEFORE the race tests — after the unlock
-// gesture this body ran 119.4s solo (2026-09-04), 0.6s under the 120s budget.
-test("an out-of-range stored volume clamps both the audio gain and the panel's own label", async ({ page }) => {
-  await bootWithStore(page, {
-    "apex26.volMusic": "40",    // way over the 0..1 gain range
-    "apex26.volSfx": "-3",      // way under it
-  });
-  expect(await page.evaluate(() => GameAudio.volumes())).toEqual({ music: 1, sfx: 0 });
-
-  await page.locator("#mb-settings").click();
   await page.locator("#pm-audio").click();
   await expect(page.locator("#audioset")).toBeVisible();
   const shown = await page.evaluate(() => ({
@@ -98,6 +92,15 @@ test("an out-of-range stored volume clamps both the audio gain and the panel's o
   }));
   // 0..1 gain maps to the panel's 0..10 slider by x10 — 1 -> "10", 0 -> "0".
   expect(shown).toEqual({ mvolInput: "10", mvolLabel: "10", svolInput: "0", svolLabel: "0" });
+
+  // Re-enable with a real click. init() must run synchronously in this gesture
+  // so autoplay policies permit resume, and only now may samples be requested.
+  await page.locator("#as-close").click();
+  await page.locator("#pm-settings-close").click();
+  await page.locator("#soundbtn").click();
+  await expect.poll(() => page.evaluate(() => GameAudio.debug().contextState))
+    .not.toBe("uninitialised");
+  await expect.poll(() => engineRequests.length).toBe(2);
 });
 
 test("re-enabling sound during a race restarts race music", async ({ page, loadTrack }) => {
