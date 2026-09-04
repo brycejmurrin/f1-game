@@ -536,13 +536,16 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
     document: {
       getElementById: (id) => byId[id] || null,
       createElement: (tag) => {
-        const el = { tagName: tag, id: "", textContent: "", title: "", onclick: null };
-        if (tag === "button") {
-          Object.defineProperty(el, "id", {
-            get() { return this._id || ""; },
-            set(v) { this._id = v; byId[v] = this; },
-          });
-        }
+        const kids = [];
+        const el = {
+          tagName: tag, id: "", textContent: "", title: "", onclick: null, children: kids,
+          appendChild(c) { kids.push(c); c.parentNode = this; return c; },
+          setAttribute() {},
+        };
+        Object.defineProperty(el, "id", {
+          get() { return this._id || ""; },
+          set(v) { this._id = v; byId[v] = this; },
+        });
         return el;
       },
       readyState: "complete",
@@ -564,7 +567,9 @@ test("RESET RENDERER click wipes storage, disarms the sentinel, and reloads", ()
   const btn = byId["pm-renderer-reset"];
   assert.ok(btn, "reset button was injected");
   assert.equal(btn.textContent, "RESET RENDERER");
-  assert.equal(kids[0], btn);
+  assert.ok(byId["pm-display-adv"], "ADVANCED disclosure was injected on the host");
+  assert.equal(kids[0], byId["pm-display-adv"]);
+  assert.equal(btn.parentNode && btn.parentNode.id, "pm-display-adv-body");
   btn.onclick();
   assert.equal(ls.getItem("apex26.gfxBackend"), null);
   assert.equal(ss.getItem("apex26.gfxClaimFail"), null);
