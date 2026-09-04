@@ -81,6 +81,12 @@ function activateCsCat(id, focus) {
     if (G.soundOn) GameAudio.uiTick();
     buildSetup();
     const pane = $("cs-options"); if (pane) pane.scrollTop = 0;
+    // LIVERY is about the wall crest as much as the paint chips: frame FRONT
+    // on the category change only, never again while the tab stays open.
+    if (id === "livery") {
+      const front = document.querySelector('#cs-stack [data-cs-view="front"]');
+      if (front) front.click();
+    }
   }
   if (focus) {
     const tab = document.getElementById(csTabId(id));
