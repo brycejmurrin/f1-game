@@ -962,6 +962,34 @@ All four now declare 300 s — the value their peers on a race fixture already
 carry — so the gate excludes them BY NAME and reports it. That is the fix for
 these four, not for the class.
 
+**CORRECTION, from the fuller #1977 log.** Three of the four are budget kills
+("Test timeout of 120000ms exceeded", nothing asserted wrong). The fourth,
+`multiplayer-scan › the camera reads a code and puts it where it belongs`, is
+NOT — and the first read of the #1974 tail, which only showed the other two
+failures in detail, said it was. It fails an ASSERTION:
+
+    expect(locator('#vs-invite-in')).toHaveValue(…)  Expected: "APEX1.s.aB3…"  Received: ""
+    179410ms [net] info: scan stop
+    179431ms [net] warn: handshake accept fail corrupt_code
+
+That assertion carries its own `{ timeout: 45000 }`, and `test.setTimeout` does
+NOT extend an expect timeout — the two budgets are independent. The page log
+shows why it expires: `scan start` lands at 57.8 s on a starved runner (the
+decoder is 257 KB fetched on demand, on top of a SwiftShader boot and a fake-
+webcam video stream), leaving the 45 s assertion window to cover a decode that
+had not begun. The `corrupt_code` line arrives 20 ms after `scan stop`, i.e.
+during teardown, so it is a CONSEQUENCE of the abandoned scan rather than
+evidence that the QR path is broken.
+
+So the 300 s declaration is still right for this spec — it costs far more than
+the gate's 120 s and does not belong on it — but it does NOT make this test
+pass, and must not be described as having fixed it. What that one needs is a
+measurement of how long the scan actually takes to first decode on a loaded
+runner, and then either a wait budget set from that number or a fixture that
+does not pay the on-demand decoder fetch inside the assertion window. That is a
+`js/net` decision with no measurement behind it yet, so it is recorded here
+rather than guessed at.
+
 **A blanket "declare your budget" guard was considered and rejected on a
 measurement.** 65 of the 114 specs match a naive boot-heavy-fixture heuristic
 (`racePage|sharedTest|BOOT_MS|__apex.race(`) while declaring nothing, and most
