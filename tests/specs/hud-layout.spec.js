@@ -211,6 +211,48 @@ for (const c of [
   });
 }
 
+// THE CHIP THAT IS ONLY EVER HIDDEN IN A FIXTURE. #hud-limits is `hidden`
+// until player.cutWarn > 0, so every case above measures it as absent and a
+// collision check over absent boxes passes for free — the same
+// absence-reads-as-normal shape that let it ship painted over the BOOST pedal.
+//
+// Asserted as GEOMETRY rather than by faking race state: un-hide, read the rect
+// and restore INSIDE one evaluate, so the 10 Hz HUD tick cannot re-hide it
+// between the write and the read (one task, one forced layout, no race).
+test.describe("track-limits chip", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 852, height: 393 }, hasTouch: true });
+  test("clears the touch dock when a warning shows", async ({ page }) => {
+    const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
+    await race(page, "buttons", false, v);
+    const r = await page.evaluate(() => {
+      const el = document.getElementById("hud-limits");
+      if (!el) return { missing: true };
+      const was = el.hidden;
+      el.hidden = false;
+      const span = el.querySelector("span");
+      const text = span ? span.textContent : "";
+      if (span) span.textContent = "\u25cf\u25cf\u25cf\u25cb";   // the widest state: 3 of 4 struck
+      const box = el.getBoundingClientRect();
+      const hits = [];
+      for (const id of ["btn-boost", "btn-ot", "btn-brake", "btn-aero", "btn-throttle"]) {
+        const c = document.getElementById(id);
+        if (!c || c.hidden) continue;
+        const b = c.getBoundingClientRect();
+        if (!b.width) continue;
+        if (box.left < b.right && b.left < box.right && box.top < b.bottom && b.top < box.bottom) hits.push(id);
+      }
+      el.hidden = was;
+      if (span) span.textContent = text;
+      return { hits, w: box.width, right: box.right, vw: window.innerWidth };
+    });
+    expect(r.missing, "#hud-limits must exist to be asserted about").toBeFalsy();
+    expect(r.w, "the chip must actually have a box once un-hidden").toBeGreaterThan(0);
+    expect(r.hits, "a track-limits warning must not paint over a tap target").toEqual([]);
+    expect(r.right, "and must stay on screen").toBeLessThanOrEqual(r.vw);
+  });
+});
+
 test.describe("desktop", () => {
   test.use({ viewport: { width: 1440, height: 900 }, hasTouch: false });
   test("hides the whole touch stack, keeping only the pause button", async ({ page }) => {

@@ -1894,3 +1894,5 @@ declarations; if not, they are the next two to migrate.
   and `openSettings()` re-reads it because the resolution moves with the camera
   — a label written only at boot and on click would go stale, and a stale
   resolution is a worse lie than the silence it replaced.
+- tree `rawSpacing` 314 -> **313** (2026-09-04): free-cam climb/dive `.pc-btn`
+  dropped the 64×58 / 46×42 literals for `var(--steer)`.

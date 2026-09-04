@@ -55,7 +55,10 @@ Settings and pause Settings land on the same index.
 RENDERER headings — the fold summaries are the labels. HUD fold: ON/OFF,
 STYLE, LAYOUT, MAP, GAPS, HUD SIZE + sample. METRICS is a sibling fold.
 RENDERER fold (`#pm-display-adv`) holds RESOLUTION, the backend picker,
-GRAPHICS, RESET, THREE PATH, SCREENSHOTS, SAVE, COPY DIAG. Sliders stay
+GRAPHICS, RESET, THREE PATH, SCREENSHOTS, SAVE, COPY DIAG. LAYOUT AUTO
+is always the full widget set (`fitHud` scales / stacks / drops gaps; it
+does not hide a cluster). MAP and GAPS default ON; AUTO on the map still
+hides onboard, OFF is the explicit hide. Sliders stay
 settings rows (steel track, text value). METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO

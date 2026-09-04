@@ -93,7 +93,7 @@ rather than rewriting the record.
 | [research/TREE-RESTRUCTURE-2026-09.md](research/TREE-RESTRUCTURE-2026-09.md) | The verified diagnosis and the approved six-phase restructuring plan: generate the shell from the manifest (Phase 0), js/ domain directories (Phase 2), the test-tree taxonomy, game.js carves, tools/ and docs/ consolidation. | `js/perf/renderer-picker.js`, 2 tests, 3 tools |
 | [research/RENDERER-PERF-AUDIT-2026-09-02.md](research/RENDERER-PERF-AUDIT-2026-09-02.md) | Three read-only renderer perf audits (GLX / WGX / TLX), ranked findings with proposed patches; landed items marked. Held at this path by the pending WGX/TLX spike-out. | `spike/backends/README.md`, `tools/moves/spike-backends.json` |
 | [research/steering-research.md](research/steering-research.md) | Steering-model source notes + citations. | `.claude/skills/tune-physics` |
-| [research/wgx-gallery/](research/wgx-gallery/) | WGX reference frames + `wgx-gallery-manifest.json`, read by `tools/gfx/wgx-shot.mjs`. Re-attached with the backends. | `tools/gfx/wgx-shot.mjs` |
+| [research/wgx-gallery/](research/wgx-gallery/) | WGX reference frames + `wgx-gallery-manifest.json`, read by `tools/gfx/wgx-shot.mjs`. Left with the spike-out on 2026-09-03 and **back at this path** with the 2026-09-04 re-attach. | `tools/gfx/wgx-shot.mjs` |
 
 ## `archive/` — provenance only
 

@@ -16,11 +16,38 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import cp from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 const ls = (dir, re) => fs.readdirSync(path.join(ROOT, dir)).filter((f) => re.test(f));
+
+// A doc link resolves only if its target is IN GIT — not merely on this disk.
+// docs/README.md pointed at ../spike/backends/docs/wgx-gallery/ for a day: the
+// re-attach moved the gallery back under docs/research/ and left the SOURCE
+// directory behind, empty, and git does not track empty directories. So
+// existsSync answered yes on every machine that had run the move and no in a
+// fresh clone — the gate was green locally and red in Pages #1984, which is
+// the worst shape a guard can take. Resolving against `git ls-files` makes the
+// two answers one. Outside a checkout (a tarball, a vendored copy) there is no
+// index to consult and disk is the only answer available.
+const TRACKED = (() => {
+  let out;
+  try { out = cp.execSync("git ls-files -z", { cwd: ROOT, maxBuffer: 1 << 28 }); } catch { return null; }
+  const files = new Set(out.toString("utf8").split("\0").filter(Boolean));
+  const dirs = new Set();
+  for (const f of files) for (let d = path.dirname(f); d && d !== "."; d = path.dirname(d)) dirs.add(d);
+  return { files, dirs };
+})();
+const linkResolves = (dir, href) => {
+  const abs = path.resolve(dir, href);
+  if (!fs.existsSync(abs)) return false;
+  if (!TRACKED) return true;
+  const rel = path.relative(ROOT, abs);
+  if (!rel || rel.startsWith("..")) return true;      // outside the repo — the index says nothing
+  return TRACKED.files.has(rel) || TRACKED.dirs.has(rel);
+};
 
 // ---------------------------------------------------------------------------
 // Docs that describe the CURRENT code. Everything else under docs/ is a dated
@@ -660,7 +687,7 @@ test("every relative link in EVERY live doc resolves", () => {
     for (const m of read(doc).matchAll(/\]\(([^)#:\s]+)(?:#[^)]*)?\)/g)) {
       const href = m[1].trim();
       if (/^(https?:)?\/\//.test(href)) continue;        // external
-      if (!fs.existsSync(path.resolve(dir, href))) dead.push(`${doc} -> ${href}`);
+      if (!linkResolves(dir, href)) dead.push(`${doc} -> ${href}`);
     }
   }
   assert.deepEqual(dead, [], "a live doc links to a path that does not exist");
@@ -684,7 +711,7 @@ test("every relative link inside docs/archive/ resolves", () => {
     for (const m of read(doc).matchAll(/\]\(([^)#:\s]+)(?:#[^)]*)?\)/g)) {
       const href = m[1].trim();
       if (/^(https?:)?\/\//.test(href)) continue;
-      if (!fs.existsSync(path.resolve(dir, href))) dead.push(`${doc} -> ${href}`);
+      if (!linkResolves(dir, href)) dead.push(`${doc} -> ${href}`);
     }
   }
   assert.deepEqual(dead, [], "an archived doc links to a path that does not exist");

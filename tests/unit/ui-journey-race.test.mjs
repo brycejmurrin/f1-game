@@ -67,6 +67,16 @@ test("HUD clusters zoom with --hud-z, never --ui-scale on #lights / .hud-bottom"
   }
 });
 
+test("free-cam pads match the steering-arrow diameter", () => {
+  const hud = read("css/hud.css");
+  const overlays = read("css/overlays.css");
+  assert.match(overlays, /--steer:\s*84px/);
+  assert.match(hud, /\.pc-btn\s*\{[^}]*width:\s*var\(--steer\)/);
+  assert.match(hud, /\.pc-stick\s*\{[^}]*width:\s*118px/);
+  assert.doesNotMatch(hud, /body\.lt-open:not\(\.pc-nopanel\) \.pc-stick \{ width: 84px/);
+  assert.doesNotMatch(hud, /body\.lt-open:not\(\.pc-nopanel\) \.pc-btn \{ width: 46px/);
+});
+
 test("photo-mode restore eye is #pc-restore when controls are hidden", () => {
   const hud = read("css/hud.css");
   assert.match(hud, /#pc-restore\s*\{/);

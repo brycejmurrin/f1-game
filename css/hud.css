@@ -289,18 +289,10 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
   top: calc(14svh / var(--hud-z));
 }
 
-/* Metrics layout — which cluster wins (js/ui/hud.js resolveMetricsLayout). */
-body.hud-met-timing .hud-bottom { display: none !important; }
-/* Map/gaps follow MAP/GAPS vis + broadcast park — LAYOUT never steals them. */
-body.hud-met-driver #hud-sectors,
-body.hud-met-driver .hud-top .hud-box:nth-child(4) { display: none !important; }
-/* LAYOUT compact keeps pos/lap/time/speed/gear; map/gaps stay if ON. */
-body.hud-met-compact #hud-sectors,
-body.hud-met-compact #hud-energy,
-body.hud-met-compact #hud-ot,
-body.hud-met-compact #hud-aero { display: none !important; }
-body.hud-met-compact #hud-limits,
-body.hud-met-compact .hud-top .hud-box:nth-child(4) { display: none !important; }
+/* LAYOUT modes used to hide a cluster (timing/driver/compact). AUTO now
+   keeps every widget painted and fitHud adapts; the hud-met-* body classes
+   remain as labels only. MAP/GAPS still hide via hud-hide-map / hud-hide-gaps.
+   Broadcast parks map+gaps under the tower via hud-map-low / hud-gaps-low. */
 
 #hud-energy {
   width: 130px; height: 14px;
@@ -420,7 +412,18 @@ body.hud-met-compact .hud-top .hud-box:nth-child(4) { display: none !important; 
      track-limits warning showed. Same lesson as #hud-sectors' own top above:
      never pin HUD chrome to a constant a sibling's rendered height decides. */
   top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z) + 4.8em + 15px);
-  right: calc(10px + var(--sar) / var(--hud-z));
+  /* STAND OFF THE DOCK. This chip sits BELOW #hud-sectors, and on a touch phone
+     that row is the BOOST pedal — so a track-limits warning painted straight
+     over a tap target (reported from a phone). --dock-r-w is the right dock's
+     width in this element's own zoom space, published by fitHud; it is 0 on a
+     desktop body with no dock, so nothing there moves.
+     Why this was never caught: the chip is `hidden` until the player takes a
+     track-limits strike (cutWarn above zero — written without a leading dot on
+     purpose: tools/check/tree-counts.mjs counts class tokens by regex and reads
+     a dotted member in a COMMENT as one),
+     so in every spec fixture it has no box at all and contributes nothing to a
+     collision check — absence reading as a pass. */
+  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   background: rgba(8, 8, 14, 0.72);
   border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75);
@@ -681,11 +684,10 @@ body.in-race:has(#pmsettings:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #
    `min(88vw, 380px)` formula here, which stopped being true the moment the
    panel grew to 560px in its wide-and-short rail layout, and everything laid
    out to clear 380px landed on top of it.
-   The controls also shrink: at 852x393 the strip left of a 560px panel is
-   ~276px, which will not hold two 118px sticks and a 64px column at full size. */
-body.lt-open:not(.pc-nopanel) .pc-stick { width: 84px; height: 84px; }
-body.lt-open:not(.pc-nopanel) .pc-nub { width: 34px; height: 34px; margin: -17px 0 0 -17px; }
-body.lt-open:not(.pc-nopanel) .pc-btn { width: 46px; height: 42px; font-size: 14px; }
+   Sticks stay the full 118px pad (same as HIDE PANEL) and climb/dive uses
+   `--steer` (84px — the steering-arrow diameter in css/overlays.css). The
+   old 84/46 shrink was sized against a 560px rail panel; flying `--dock-w`
+   is now 300px, so the free strip on 852×393 holds the driving-sized pads. */
 body.lt-open:not(.pc-nopanel) .pc-move-wrap { left: calc(10px + var(--sal) / var(--ui-scale)); }
 /* --dock-px, not --dock-w: the PANEL is zoomed — it is a `.sheet`, and
    css/components.css puts `zoom: var(--ui-scale)` on every sheet — so it paints
@@ -706,7 +708,8 @@ body.lt-open:not(.pc-nopanel) .pc-altcol {
   left: auto; right: calc(var(--dock-px) / var(--ui-scale) + 14px);
 }
 body.lt-open:not(.pc-nopanel) .pc-look-wrap {
-  left: auto; right: calc(var(--dock-px) / var(--ui-scale) + 66px);
+  /* 14px air + the climb/dive column (`--steer`) + 8px gap before LOOK. */
+  left: auto; right: calc(var(--dock-px) / var(--ui-scale) + 14px + var(--steer) + 8px);
 }
 .pc-lbl { font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.14em; color: rgba(255,255,255,0.72); text-shadow: 0 1px 3px #000; }
 .pc-stick {
@@ -726,12 +729,12 @@ body.lt-open:not(.pc-nopanel) .pc-look-wrap {
   display: flex; flex-direction: column; gap: 10px;
 }
 .pc-btn {
-  width: 64px; height: 58px; border-radius: var(--r-lg); margin: 0;
-  /* WCAG floor for the zoomed photo column: 64x58 paints 25.6x23.2 at UI
-     SIZE 40% and the lt-open 46x42 variant paints 18.4x16.8 (2026-08-21
-     sweep). Inert at >=100%. */
+  /* Same diameter as `.steerbtn` (`--steer`: 84px). The old 64×58 / 46×42
+     pads read as a different, smaller control family next to the driving
+     arrows the player just came from. */
+  width: var(--steer); height: var(--steer); border-radius: var(--r-lg); margin: 0;
   min-width: var(--tap-min); min-height: var(--tap-min);
-  font-size: 18px; font-weight: 800;
+  font-size: 22px; font-weight: 800;
   background: rgba(20,20,30,0.5); color: #fff; border: 1px solid rgba(255,255,255,0.25);
   display: flex; align-items: center; justify-content: center;
 }

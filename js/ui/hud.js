@@ -50,25 +50,14 @@ const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1 };
 const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1 };
 const MET_LAYOUTS = ["full", "timing", "driver", "compact"];
 // Body classes toggled: hud-met-full, hud-met-timing, hud-met-driver, hud-met-compact.
-function bandCapped(cssVar) {
-  const root = document.documentElement;
-  const scale = +root.style.getPropertyValue("--hud-scale") || 1;
-  const cap = +root.style.getPropertyValue(cssVar);
-  return cap > 0 && cap < scale - 0.001;
-}
-// FULL = every cluster. TIMING = hide .hud-bottom (speed/gear/ERS).
-// DRIVER = hide sectors + BEST. COMPACT = pos/lap/time/speed/gear only.
+// AUTO is always the full set. fitHud() scales / stacks / drops gaps when a
+// band is tight — the old resolver hid a cluster from profile or those caps,
+// which made MAP+GAPS+timing+driver mutually exclusive. Forced LAYOUT names
+// stay on the stored cycle (and the overlay compact flag) but no longer
+// strip chrome; css/hud.css has no hud-met-* hide rules.
 function resolveMetricsLayout() {
   const want = G.hudMetricsLayout || "auto";
   if (want !== "auto") return want;
-  const prof = G.hudProfile || "standard";
-  const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : null;
-  const modeId = (modes && modes[G.camMode]) ? modes[G.camMode].id : "chase";
-  if (prof === "minimal") return "compact";
-  if (prof === "broadcast" && BCAM_IDS[modeId]) return "timing";
-  if (bandCapped("--hud-z-top") && bandCapped("--hud-z-bot")) return "compact";
-  if (bandCapped("--hud-z-bot")) return "timing";
-  if (bandCapped("--hud-z-top")) return "driver";
   return "full";
 }
 let _hudLayoutKey = "";
@@ -201,7 +190,7 @@ const GAP_DROP_AT  = { narrow: 550, wide: 800 };
 // the notch, the live gap string or the chip's own padding — all three of
 // which decide whether the strip actually fits — so the measurement wins
 // wherever there is one.
-let _gapTight = null;
+let _gapTight = null, _gapDrop = null;
 // The gap is distance ÷ the PLAYER'S OWN speed, so under braking the divisor
 // halves within a second and the tenths jumped 2x between ticks (10 Hz) with
 // the rival not having moved relative to the car. Smooth the displayed
@@ -224,7 +213,24 @@ function gapForm() {
             +root.style.getPropertyValue("--hud-scale") || 1;
   const ratio = window.innerWidth / s;
   const k = window.innerWidth >= 1200 ? "wide" : "narrow";
-  const drop = _gapTight != null ? _gapTight : ratio <= GAP_DROP_AT[k];
+  // SHORTEN FIRST, DROP SECOND — they were wired to different signals, so the
+  // widget fell to its own line while still painting the WIDEST spelling
+  // ("▲ STR +6.3s" below the map, reported from a phone). `drop` read the
+  // measured fit; `short` still read the ratio table below, which on a roomy
+  // ratio says "no need", and the two never agreed.
+  //
+  // Both are measured now, and the rungs are ordered by what they cost:
+  // shorten (loses the driver code) before drop (loses the alignment with the
+  // top of the minimap). fitHud settles it in at most two passes without any
+  // width model — `gapLen` is part of its re-run key, so changing the spelling
+  // re-measures on the next tick, and `_gapDrop` only latches once the strip
+  // is ALREADY short and still does not fit.
+  const short = _gapTight != null ? _gapTight : ratio <= GAP_SHORT_AT[k];
+  const drop = _gapDrop != null ? _gapDrop : ratio <= GAP_DROP_AT[k];
+  if (short !== ("gapShort" in root.dataset)) {
+    if (short) root.dataset.gapShort = "1";
+    else delete root.dataset.gapShort;
+  }
   // Compared against the DOM rather than a remembered value: a module-level cache
   // desyncs the moment anything else touches the attribute (a dev tool, a probe,
   // a future panel) and then never repairs itself. Reading an attribute is as
@@ -233,7 +239,7 @@ function gapForm() {
     if (drop) root.dataset.gapDrop = "1";
     else delete root.dataset.gapDrop;
   }
-  return ratio <= GAP_SHORT_AT[k] ? _gapFormShort : _gapFormLong;
+  return short ? _gapFormShort : _gapFormLong;
 }
 // Hoisted: gapForm runs every HUD tick — returning fresh arrows was 2 closures
 // per call for two constant formats.
@@ -355,7 +361,12 @@ function fitHud() {
     : Math.min((half - sal) / Math.max(l + top / 2, 1),
                (half - sar) / Math.max(right + top / 2, 1)));
   const capWith = capFor(leftG), capNo = capFor(leftN);
-  _gapTight = capWith < scale;               // consumed by gapForm(), below
+  // Rung 1: the strip does not fit inline AS RENDERED -> shorten. Rung 2: it is
+  // already short and still does not fit -> drop below `.hud-top`. Reading the
+  // rendered spelling off the same attribute gapForm() writes keeps one source
+  // of truth; a remembered flag here would desync from the DOM it describes.
+  _gapTight = capWith < scale;
+  _gapDrop = _gapTight && ("gapShort" in root.dataset);
   const capTop = Math.max(capWith, Math.min(scale, capNo));
   // THE BOTTOM BAND IS MEASURED BY ITS CHILDREN, not by its own box. `.hud-bottom`
   // is a flex ITEM inside #hud-dock carrying `min-width: 0` ("may shrink before it
@@ -387,6 +398,17 @@ function fitHud() {
   // Written unconditionally: the CSS only consumes it under .hud-prof-broadcast,
   // and a var that is only sometimes present is a var that is sometimes 0.
   root.style.setProperty("--hud-top-h", tall(_hudTop).toFixed(1) + "px");
+  // THE RIGHT DOCK'S WIDTH, so right-anchored HUD chrome can stand off it.
+  // #hud-limits is `right: 10px` and sits BELOW #hud-sectors — which is exactly
+  // where the BOOST pedal is on a touch phone, so a track-limits warning painted
+  // over a tap target. Published in the chrome's own zoom space (the dock zooms
+  // by the RAW slider, the chrome by --hud-z-top) so the CSS can add it directly.
+  // The dock's SCREEN width over the CHROME's zoom: #hud-limits is inside the
+  // --hud-z-top group, so its `right:` needs the stand-off in that space, and
+  // the dock's own zoom (the raw slider) never enters it.
+  const chromeZ = +root.style.getPropertyValue("--hud-z-top") || scale || 1;
+  const dockRW = _dockR ? _dockR.getBoundingClientRect().width / chromeZ : 0;
+  root.style.setProperty("--dock-r-w", (dockRW > 0 ? dockRW + 8 : 0).toFixed(1) + "px");
   const dockH = Math.max(tall(_dockL), tall(_dockR));
   const capDock = dockH ? (window.innerHeight - 3 * FIT_AIR) / dockH : Infinity;
   // An empty dock on a TOUCH body is "not populated yet", not "no dock" —
