@@ -7,13 +7,27 @@ name: CI
 #
 # The jobs are split by what they cost, so the common case stays fast:
 #
-#   guards   ~1 min, no browser  — the structural invariants (load order, docs
+#   guards   ~2m20s, no browser — the structural invariants (load order, docs
 #                                  integrity, test taxonomy, scenery contract,
-#                                  deploy allow-list) plus the pure-node unit
-#                                  suites. This is the job that must never be
+#                                  deploy allow-list). MEASURED 2026-09-03:
+#                                  tooling-fast 136s; the "~1 min" this line
+#                                  claimed predated half of what it runs.
+#                                  This is the job that must never be
 #                                  red; everything it asserts is a property a
 #                                  compiler would enforce in a language that had
 #                                  one.
+#   node-     ~5m05s, no browser — the pure-node unit suites: net, service
+#   suites                         worker, lifecycle, state, agent contract,
+#                                  audio, mcp, node-slow and the game VM.
+#                                  MEASURED 2026-09-03 warm: 12/4/0/1/0/0/12/
+#                                  115/161 s = 305 s. Its OWN job since that
+#                                  date: as a step inside guards it shared a
+#                                  10-minute cap with npm ci and tooling-fast,
+#                                  timed out on Pages #1959 and #1961, and
+#                                  reported `cancelled` with zero failures —
+#                                  blocking two deploys. Splitting it also puts
+#                                  it in PARALLEL with guards, so the gate got
+#                                  faster, not slower.
 #   sweeps   15 min, no browser  — the per-circuit geometry sweeps, and the one
 #                                  job that is CONDITIONAL: the steps are
 #                                  skipped unless the diff touches js/track/,
@@ -82,6 +96,10 @@ name: CI
 #
 # Both figures above are MEASURED on run 31023778264 — the first run that ever
 # completed end to end — not estimated: sweeps 15m12s, smoke 14m24s, guards 25s.
+# That guards figure is HISTORICAL and was true when the job ran only the
+# structural guards. It kept being quoted after the ten-group node-suite step
+# was added, which is how the job came to sit at a 10-minute cap it could not
+# meet. Current figures are on the two entries above, measured 2026-09-03.
 # driving-model is measured on 31197770813: 42 s of test.
 #
 # THE NUMBERS ABOVE ARE THE BUDGET, AND `timeout-minutes` MUST STAY ABOVE THEM.
@@ -219,9 +237,22 @@ concurrency:
 
 jobs:
   guards:
-    name: Structural guards + unit suites
+    name: Structural guards
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # RE-TIMED 2026-09-03, after this job timed out on Pages #1959 and #1961 and
+    # blocked two deploys. It was `timeout-minutes: 10` while running npm ci
+    # (3m32s and 5m02s on those two runs) plus tooling-fast plus a TEN-GROUP
+    # node-suite step — and a timed-out job reports `cancelled`, so both runs
+    # showed zero failures with every test passing right up to the kill. That is
+    # the exact trap the header above already describes happening once before.
+    # The node suites are their own job now (`node-suites`, below) rather than a
+    # bigger number here: a step inherits its job's fate, which is why
+    # driving-model was split out of smoke for the same reason. They run in
+    # PARALLEL, so the gate's wall time is the larger of the two, not the sum,
+    # and both still gate the deploy — pages.yml aggregates every job in this
+    # workflow, so a new job joins the gate by itself.
+    # MEASURED locally 2026-09-03: tooling-fast 136s. + npm ci ~5 min on CI.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -258,6 +289,23 @@ jobs:
       # guards the TOOL, which is where a guard belongs.
       - name: What does this gate cover?
         run: node tools/ci/ci-coverage.mjs
+
+  node-suites:
+    name: Pure-node unit suites
+    runs-on: ubuntu-latest
+    # MEASURED locally 2026-09-03, warm: net 12s, service-worker 4s, lifecycle
+    # 0s, state 1s, agent-contract 0s, audio 0s, mcp 12s, node-slow 115s,
+    # game-vm 161s = 305s total. Plus npm ci, which cost 3m32s and 5m02s on the
+    # two runs that died. 25 = roughly 2x the measured work on top of the worst
+    # npm ci seen, the same 2x convention sweeps-parts uses below.
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
       - name: Pure-node unit suites
         run: |
           npm run test:net-unit
