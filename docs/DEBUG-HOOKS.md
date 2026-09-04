@@ -856,8 +856,24 @@ always gives the same tune. An unknown name falls back to `team`.
 
 ### `audioLayer(name, on) → layers`
 Switch one engine layer: `whine` (turbo), `harvest` (MGU-K), `ers`, `wind`,
-`limiter` (the rev-limiter chop), `screech` (tyres). A muted layer is silent,
-not merely quiet, and then costs no per-frame scheduling.
+`limiter` (the rev-limiter chop), `screech` (tyres), `sub` (the sub-octave
+under the note). A muted layer is silent, not merely quiet, and then costs no
+per-frame scheduling.
+
+### The two cores
+`audio().granular` reports `{on, ready, active, period}`. `on` is the player
+switch, `ready` means the worklet module loaded into this context, `active` is
+whether the engine actually STARTED on it — they differ when there is no
+`audioWorklet`, the fetch was blocked, the context is insecure, or the sample
+has not decoded yet. `GameAudio.setGranular(false)` A/Bs against the old
+`playbackRate` core mid-race; both are handed the same ratio, so only the
+timbre moves.
+
+Two trims are core-dependent, and both do the same job either way:
+`detune` is cents on a BufferSource's `detune` under the sample core and the
+same cents folded into the ratio under the granular one (which has no detune
+param — its pitch IS the ratio); `sub` weights `engC` in the oscillator
+fallback and a dedicated sub-octave oscillator under both sample cores.
 
 ```js
 __apex.audioLayer("limiter", false);     // kill the redline stutter

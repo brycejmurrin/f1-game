@@ -1954,3 +1954,11 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   be decided from a measurement — it A/Bs the granular (PSOLA) pitching core
   against the older playbackRate one, and which sounds right is a question for
   ears. Shipping the new core with no way back would have been the worse trade.
+- `shellNodes` 1124 -> **1129** (2026-09-04): the SUB slider and switch in
+  ENGINE TONE. Paying for a control that had been PROMISED and not delivered:
+  `sub` was a tune field four of the five profiles set, and the sample core —
+  the one that ships — had no sub-octave layer to read it, so COCKPIT asking
+  for 1.60 got exactly what TEAM got. The alternative was deleting `sub` from
+  the profiles, which would have been cheaper and worse: a sub-octave is real
+  body under a recording that has none, and the granular core hands us the
+  fundamental to track it against for free.

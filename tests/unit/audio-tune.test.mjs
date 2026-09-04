@@ -27,6 +27,11 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/audio/engine.js"), "utf8").replace(/^const\b/gm, "var");
+// A REAL device rate. The sub-octave layer derives its frequency from
+// ctx.sampleRate, so the 8 kHz stand-in this harness used to fake put it under
+// the 25 Hz floor at every rev — the layer read as a fixed drone that no actual
+// device would produce, and the test would have passed a bug.
+const SR = 44100;
 
 // A recording AudioParam: setTargetAtTime lands in .value so rate() and the
 // layer-gain reads below see what the audio thread would have received. `sets`
@@ -57,16 +62,20 @@ function sampleBuf(seconds, sr) {
 function boot() {
   const held = [];
   const ctx = {
-    currentTime: 0, state: "running", sampleRate: 8000, destination: node("dest"),
+    currentTime: 0, state: "running", sampleRate: SR, destination: node("dest"),
     createGain: () => node("gain"), createBiquadFilter: () => node("biquad"),
     createOscillator: () => node("osc"), createBufferSource: () => node("src"),
     createAnalyser: () => node("analyser"),
     createDynamicsCompressor: () => Object.assign(node("comp"),
       { threshold: param(-24), knee: param(30), ratio: param(12), attack: param(0.003), release: param(0.25) }),
     createBuffer: (ch, len, sr) => ({ sampleRate: sr, length: len, duration: len / sr, numberOfChannels: ch, getChannelData: () => new Float32Array(len) }),
-    decodeAudioData: (ab, res) => res(sampleBuf(4, 8000)),
+    decodeAudioData: (ab, res) => res(sampleBuf(4, SR)),
     resume: () => Promise.resolve(), close() {},
+    // The granular core needs a worklet to exist. addModule resolving is what
+    // flips grainReady; AudioWorkletNode below is what startEngine constructs.
+    audioWorklet: { addModule: () => Promise.resolve() },
   };
+  const workletNodes = [];
   const sb = {
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error,
     parseFloat, parseInt, isFinite, Float32Array,
@@ -74,6 +83,12 @@ function boot() {
     document: { addEventListener() {}, hidden: false }, addEventListener() {}, removeEventListener() {},
     setTimeout: () => 0, clearTimeout() {}, navigator: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     AudioContext: function () { return ctx; },
+    AudioWorkletNode: function (c, name) {
+      const params = new Map([["ratio", param(1)]]);
+      const node = { name, parameters: { get: (k) => params.get(k) }, connect: (t) => t, disconnect() {}, port: { postMessage() {} } };
+      workletNodes.push(node);
+      return node;
+    },
     fetch: () => new Promise((res) => held.push(() => res({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
   };
   sb.window = sb;
@@ -82,7 +97,7 @@ function boot() {
   vm.runInContext(SRC, vctx, { filename: "js/audio/engine.js" });
   const GameAudio = vm.runInContext("GameAudio", vctx);
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
-  return { GameAudio, release };
+  return { GameAudio, release, workletNodes };
 }
 
 // The sample core is the SHIPPED path, so every invariant below is measured on
@@ -257,8 +272,8 @@ test("every id the ENGINE TONE panel looks up exists in the shell", () => {
   const sliders = [...panel.matchAll(/\{ k: "\w+",\s*id: "([\w-]+)",/g)].map((m) => m[1]);
   const layers = [...panel.matchAll(/\{ k: "\w+",\s+id: "([\w-]+)" \}/g)].map((m) => m[1]);
   const profiles = [...panel.matchAll(/\["(as-p-[\w-]+)", "\w+"\]/g)].map((m) => m[1]);
-  assert.equal(sliders.length, 6, "expected the six tuner sliders — the table shape changed, so does this check");
-  assert.equal(layers.length, 6, "expected the six layer switches");
+  assert.equal(sliders.length, 7, "expected the seven tuner sliders — the table shape changed, so does this check");
+  assert.equal(layers.length, 7, "expected the seven layer switches");
   assert.equal(profiles.length, 5, "expected the five sound profiles");
 
   const missing = [];
@@ -292,3 +307,82 @@ test("every sound profile and layer the panel offers is one the engine knows", (
 // The tune tests above need a running engine; these two only need the tables,
 // so they boot the engine without the sample decode the others wait for.
 function await_boot() { return boot().GameAudio; }
+
+test("DETUNE reaches the granular core, which has no detune param of its own", async () => {
+  // It did not, and that is the bug this covers: engSrcIdle.detune is the only
+  // place the trim landed, and the granular core never creates that node — so
+  // the slider moved and nothing happened on the DEFAULT core. Grain-onset
+  // scatter was tried instead and measured to destroy pitch definition
+  // outright, so the cents go onto the ratio, which is where this core's pitch
+  // lives. Same slider, same documented cents, both cores.
+  const { GameAudio, release, workletNodes } = boot();
+  GameAudio.init();
+  await release();
+  GameAudio.startEngine();
+  assert.equal(GameAudio.granular().active, true, "precondition: the granular core is the one running");
+  assert.equal(workletNodes.length, 1, "exactly one worklet node per engine start");
+  const ratio = workletNodes[0].parameters.get("ratio");
+
+  GameAudio.setTune(GameAudio.tuneDefaults());
+  GameAudio.setEngine(0.6, 0, false, 0.6, 5, {});
+  const neutral = ratio.value;
+  assert.ok(neutral > 0, "the ratio param must actually be driven");
+  assert.ok(Math.abs(neutral - GameAudio.rate()) < 1e-6, "at detune 1.0 the ratio is exactly what rate() reports");
+
+  // detune 3 -> voice.detune + (3-1)*30 = +60 cents on the "default" voice.
+  GameAudio.setTune({ detune: 3 });
+  GameAudio.setEngine(0.6, 0, false, 0.6, 5, {});
+  const want = GameAudio.rate() * Math.pow(2, 60 / 1200);
+  assert.ok(Math.abs(ratio.value - want) / want < 1e-6,
+    `detune 3 should put the ratio at ${want.toFixed(5)}, got ${ratio.value.toFixed(5)}`);
+  assert.ok(ratio.value > neutral, "and it must be an audible move, not a no-op");
+
+  // detune 0 -> -30 cents, the other side of neutral.
+  GameAudio.setTune({ detune: 0 });
+  GameAudio.setEngine(0.6, 0, false, 0.6, 5, {});
+  assert.ok(ratio.value < neutral, "detune 0 must fall below neutral");
+  // ...and it is a FINE trim: an order of magnitude under what PITCH spans.
+  assert.ok(Math.abs(ratio.value / neutral - 1) < 0.05, "detune must stay a fine trim, not a second pitch control");
+});
+
+test("SUB is audible on the shipped core, not just the oscillator fallback", async () => {
+  // `sub` was a tune field FOUR of the five profiles set and the sample core
+  // never read: the sub-octave lived only on engC, which exists in the synth
+  // fallback. COCKPIT asking for 1.60 got exactly what TEAM got. The layer now
+  // sits under the sample/granular core too, so the number means something.
+  const A = await sampleEngine();
+  const loud = () => A.setEngine(0.8, 0, false, 0.7, 5, {});
+  A.setTune(A.tuneDefaults());
+  loud();
+  const base = A.subLevel();
+  assert.ok(base > 0, "the sub layer must be audible on the core that actually ships");
+  A.setTune({ sub: 2.5 });
+  loud();
+  assert.ok(A.subLevel() > base * 2, "the SUB trim must scale it");
+  A.setTune({ sub: 0 });
+  loud();
+  assert.equal(A.subLevel(), 0, "and zero must be silent, not merely quiet");
+  // The switch is the hard off, independent of the trim.
+  A.setTune({ sub: 1 });
+  A.setLayer("sub", false);
+  loud();
+  assert.equal(A.subLevel(), 0, "switching the layer off silences it whatever the trim says");
+  A.setLayer("sub", true);
+  loud();
+  assert.ok(A.subLevel() > 0, "and back on restores it");
+  // It tracks the NOTE, and keeps tracking it at the top. The first cut clamped
+  // at 160 Hz and pinned from about rev 0.8 up — measured live — so the layer
+  // stopped following exactly where the engine is loudest and turned into the
+  // fixed drone the clamp exists to prevent. Proportionality catches that
+  // wherever the ceiling sits: sub is an octave under the fundamental, so
+  // subHz/rate must hold across the range.
+  A.setEngine(0.2, 0, false, 0.7, 5, {});
+  const lowF = A.subHz(), lowR = A.rate();
+  A.setEngine(0.95, 0, false, 0.7, 5, {});
+  const hiF = A.subHz(), hiR = A.rate();
+  assert.ok(hiF > lowF, `sub should rise with the engine: ${lowF} -> ${hiF}`);
+  const drift = Math.abs((hiF / hiR) / (lowF / lowR) - 1);
+  assert.ok(drift < 0.02,
+    `sub must stay an octave under the fundamental at both ends, not pin against a clamp ` +
+    `(${lowF.toFixed(1)}Hz @ rate ${lowR} vs ${hiF.toFixed(1)}Hz @ rate ${hiR})`);
+});

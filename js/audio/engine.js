@@ -24,6 +24,7 @@ const GameAudio = (function () {
   let voiceFormant = null;                       // per-manufacturer peaking EQ
   let ersOsc = null, ersHp = null, ersGain = null; // continuous ERS deploy whine
   let windSrc = null, windFilter = null, windGain = null; // airflow over the car
+  let subOctOsc = null, subOctGain = null;        // sub-octave weight under the sample/granular core
 
   // Per-manufacturer engine character, keyed by team.engine (js/data/teams.js).
   // Every field is CONSTANT TIMBRE — a fixed multiplier or filter, never a
@@ -68,7 +69,7 @@ const GameAudio = (function () {
   // gain target of 0 — and because every muted layer goes through aimGain, its
   // steady state costs no per-frame scheduling at all (the _apexAimTgt guard,
   // the same idiom limGain/lfoG use further down).
-  const LAYER_DEF = Object.freeze({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true });
+  const LAYER_DEF = Object.freeze({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true, sub: true });
   let layers = Object.assign({}, LAYER_DEF);
 
   // Named tune presets the player picks INSTEAD of inheriting the team's
@@ -101,6 +102,11 @@ const GameAudio = (function () {
 
   let engBuf = null, samplesReady = false;
   let lastRate = 0;               // the ratio setEngine last asked for (see rate())
+  // DETUNE as a frequency multiplier. On the sample core it is cents on a
+  // BufferSource; the granular core has no detune param — its pitch IS the
+  // ratio — so the same cents are folded into the ratio there. Cached because
+  // it only moves when the tune or the voice does, not per frame.
+  let detuneMul = 1;
   // GRANULAR (PSOLA) CORE — js/audio/granular-worklet.js. It replaces the PITCHING
   // MECHANISM only: the ratio it is handed is the same number playbackRate got,
   // so the pitch curve, the gear ordering and rate() are untouched. What changes
@@ -601,6 +607,24 @@ const GameAudio = (function () {
       engC._apexSubGain = sub;
     }
 
+    // SUB-OCTAVE. The oscillator fallback has had one since the first voice
+    // (engC, a square an octave down, weighted by voice.subLvl) but the SAMPLE
+    // core never did — so `sub` was a tune field that four of the five profiles
+    // set and nothing on the shipped path read. COCKPIT asking for 1.60 got
+    // exactly what TEAM got. This gives the recording the same body the synth
+    // already had: a sine an octave under the engine's own fundamental, which
+    // the granular core hands us for free (the period it is laying grains at).
+    // Only built for the sample/granular cores — the synth already has engC,
+    // and running both would double it.
+    if (usingSamples) {
+      subOctOsc = ctx.createOscillator();
+      subOctGain = ctx.createGain();
+      subOctOsc.type = "sine";
+      subOctOsc.frequency.value = 60;
+      subOctGain.gain.value = 0;
+      subOctOsc.connect(subOctGain).connect(sfxBus);
+    }
+
     // turbo whine: faint high sine riding above the core
     whineOsc = ctx.createOscillator();
     whineGain = ctx.createGain();
@@ -686,6 +710,7 @@ const GameAudio = (function () {
     if (usingSamples && !usingGranular) engSrcIdle.start(0, engSrcIdle.loopStart);
     else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
+    if (subOctOsc) subOctOsc.start();
     harvSrc.start();
     ersOsc.start();
     lfo.start();
@@ -732,6 +757,7 @@ const GameAudio = (function () {
     if (limGain) limGain.gain.setTargetAtTime(0, t0, 0.02);
     if (limOsc) { limOsc.stop(t0 + 0.35); limOsc = null; limGain = null; }
     whineOsc.stop(t0 + 0.35);
+    if (subOctOsc) subOctOsc.stop(t0 + 0.35);
     harvSrc.stop(t0 + 0.35);
     ersOsc.stop(t0 + 0.35);
     windSrc.stop(t0 + 0.35);
@@ -752,10 +778,11 @@ const GameAudio = (function () {
     // into sfxBus keep RENDERING until disconnect() (Web Audio contract) — a
     // tab-hide/show cycle used to strand ~8 nodes each time, forever.
     const dead = [engFilter, engGain, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
-                  voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub];
+                  voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain];
     setTimeout(() => { for (const n of dead) { try { if (n) n.disconnect(); } catch (e) {} } }, 450);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = null;
+    subOctOsc = subOctGain = null;
     idleGainRamped = false;
     engineOn = false;
   }
@@ -812,7 +839,7 @@ const GameAudio = (function () {
       // move the pitch curve, the gear ordering, or what rate() reports — the
       // difference is only whether the engine's fixed resonances travel with
       // the revs (playbackRate) or stay put (granular).
-      if (usingGranular) granularNode.parameters.get("ratio").setTargetAtTime(rate, t, 0.035);
+      if (usingGranular) granularNode.parameters.get("ratio").setTargetAtTime(rate * detuneMul, t, 0.035);
       else engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       // NOT a crossfade to the second recording: measured 2026-09-03 with
       // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load read
@@ -894,6 +921,24 @@ const GameAudio = (function () {
     aimGain(whineGain,
       layers.whine ? (0.004 + rev * 0.013 + b * 0.008) * (s > 0.04 ? 1 : 0) * (usingSamples ? 0.50 : 1)
         * voice.whineLvl * tune.whine : 0, t, 0.08);
+
+    // SUB-OCTAVE, an octave under the engine's own fundamental. That
+    // fundamental is sampleRate*rate/period on both sample cores — the same
+    // period the granular core lays grains at — so the weight tracks the note
+    // instead of sitting at a fixed drone. Clamped into 25-240 Hz: below 25 it
+    // is inaudible on a phone and just eats headroom. The ceiling was 160 and
+    // that was WRONG — measured live, it pinned from about rev 0.8 upward, so
+    // the layer stopped tracking exactly where the engine is loudest and became
+    // the fixed drone this clamp exists to avoid. 240 clears an octave under
+    // redline (f0 ~386 Hz there) and only bites under extreme PITCH/REV RANGE.
+    if (subOctGain && subOctOsc) {
+      const f0 = enginePeriod > 1 ? (ctx.sampleRate * lastRate) / enginePeriod : 0;
+      const subF = Math.max(25, Math.min(240, f0 * 0.5));
+      if (subOctOsc._apexSubF !== subF) { subOctOsc.frequency.setTargetAtTime(subF, t, 0.05); subOctOsc._apexSubF = subF; }
+      aimGain(subOctGain, layers.sub
+        ? (0.012 + rev * 0.016 + b * 0.006) * (s > 0.04 ? 1 : 0) * voice.subLvl * tune.sub
+        : 0, t, 0.08);
+    }
 
     const dt = lastEngT ? Math.max(0.001, t - lastEngT) : 0;
     let target = 0;
@@ -1152,7 +1197,9 @@ const GameAudio = (function () {
     // slider covers, which is the point — this is chorus/character width, not
     // a second pitch control.
     const cents = voice.detune + (tune.detune - 1) * 30;
+    detuneMul = Math.pow(2, cents / 1200);
     if (engSrcIdle && engSrcIdle.detune) engSrcIdle.detune.setTargetAtTime(cents, t, 0.05);
+
     const subGain = engC && engC._apexSubGain;
     if (subGain) subGain.gain.setTargetAtTime(voice.subLvl * tune.sub, t, 0.05);
   }
@@ -1658,6 +1705,10 @@ const GameAudio = (function () {
     // feeds engGain.gain on the audio thread, so nothing downstream of the
     // engine output can observe its depth.
     limiterDepth() { return limGain ? +limGain.gain.value : 0; },
+    // Same shape again: the sub-octave sits on its own gain straight into
+    // sfxBus, so centroidHz() (which taps engGain) cannot see it either.
+    subLevel() { return subOctGain ? +subOctGain.gain.value : 0; },
+    subHz() { return subOctOsc ? +subOctOsc.frequency.value : 0; },
     // Ground-truth pitch multiplier, whichever core is running. The granular node's
     // AudioParam only converges to the target over its own tau, so the value
     // this reports is the one setEngine last ASKED for — the same thing

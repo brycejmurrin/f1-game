@@ -111,6 +111,12 @@ class GrainProcessor extends AudioWorkletProcessor {
 
     // Lay every grain whose onset falls inside the block we are about to emit.
     const blockEnd = this.readHead + n;
+    // NO onset scatter. It was tried for the DETUNE slider and measured: with
+    // grains laid at random offsets the inter-grain period smears while the
+    // formant ringing INSIDE each grain does not, so the ringing out-correlates
+    // the pitch and the note stops being findable at all — 65 samples measured
+    // where 686 was wanted, at every scatter width down to ±0.3% of the period.
+    // Onsets stay exact; DETUNE moves the ratio instead (js/audio/engine.js).
     while (this.nextAt < blockEnd) {
       const at = Math.round(this.nextAt);
       const from = this.loopStart + Math.round((this.mark % marks) * this.p0);
