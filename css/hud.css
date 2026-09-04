@@ -415,7 +415,18 @@ body.hud-met-compact .hud-top .hud-box:nth-child(4) { display: none !important; 
      track-limits warning showed. Same lesson as #hud-sectors' own top above:
      never pin HUD chrome to a constant a sibling's rendered height decides. */
   top: calc((8px + var(--tap) + 4px + var(--sat)) / var(--hud-z) + 4.8em + 15px);
-  right: calc(10px + var(--sar) / var(--hud-z));
+  /* STAND OFF THE DOCK. This chip sits BELOW #hud-sectors, and on a touch phone
+     that row is the BOOST pedal — so a track-limits warning painted straight
+     over a tap target (reported from a phone). --dock-r-w is the right dock's
+     width in this element's own zoom space, published by fitHud; it is 0 on a
+     desktop body with no dock, so nothing there moves.
+     Why this was never caught: the chip is `hidden` until the player takes a
+     track-limits strike (cutWarn above zero — written without a leading dot on
+     purpose: tools/check/tree-counts.mjs counts class tokens by regex and reads
+     a dotted member in a COMMENT as one),
+     so in every spec fixture it has no box at all and contributes nothing to a
+     collision check — absence reading as a pass. */
+  right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
   background: rgba(8, 8, 14, 0.72);
   border-radius: var(--r-sm);
   padding: calc(var(--gap) * 0.375) calc(var(--gap) * 0.75);
