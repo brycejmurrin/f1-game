@@ -1220,3 +1220,18 @@ the `timeout-minutes` derivation), `select-specs.mjs` (`SELECTED_GATE`, the
 owner), `select-budget.mjs` (the variant table), and two test files. Only the
 first is what the runner obeys; the rest have to be derived from the owner or
 they are four chances to describe a job that does not exist.
+
+## 2026-09-04 — Selected-specs 180s cap then caught audio-smoke
+`pages.yml` Selected on `6fe9bee1` (`run 33930263150`) routed
+`test:car` + `test:ui`. `audio-smoke` declares exactly 180s, so
+`own > 180000` is false and Selected **includes** it. The persisted
+SOUND OFF case then hit the ceiling at 192.1s (`Test timeout of
+180000ms exceeded`) — hang is cold `page.reload` + settings +
+`#soundbtn`, not an assertion. Earlier red Selected runs
+(`33927358590`, `33926744372`, `33924077769`, `33923442435`)
+**excluded** `audio-smoke` (gate was still 120s, or the 180s declare
+was already over-cap) and died on Albert Park / physics-fixes /
+Abu Dhabi via the carry-forward cache. Same route as hud-layout:
+the spec now declares 300s so Selected EXCLUDES it; smoke
+(`test:ui` shard) keeps running it. Do not raise
+`SELECTED_GATE.perTestTimeoutSec`.

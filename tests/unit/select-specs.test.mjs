@@ -257,6 +257,23 @@ test("a spec that cannot pass at the gate's per-test cap declares so, and is exc
     "and must NAME it as over budget — silent truncation reads as covered");
 });
 
+test("audio-smoke first-load cannot pass at the selected-gate cap, and is excluded", () => {
+  // Pages 33930263150 (`6fe9bee1`): audio-smoke declared exactly 180s, so
+  // `own > 180000` was false and Selected included it. The persisted SOUND
+  // OFF case then timed out at 192.1s. Same rule as hud-layout: sit above
+  // the gate and be named over-budget. Raising the gate later must not
+  // quietly re-admit it.
+  const own = maxDeclaredTimeout("tests/specs/audio-smoke.spec.js");
+  assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
+    `audio-smoke.spec.js declares ${own / 1000}s, at or under the ${SELECTED_GATE.perTestTimeoutSec}s gate — ` +
+    "its first-load reload cannot pass there; see Pages 33930263150");
+
+  const r = fit(["tests/specs/audio-smoke.spec.js"], 26);
+  assert.deepEqual(r.selected, [], "the gate must not select it");
+  assert.ok(r.overBudgetSpecs.some((s) => s.file === "tests/specs/audio-smoke.spec.js"),
+    "and must NAME it as over budget — silent truncation reads as covered");
+});
+
 test("the gate's per-test timeout clears the SLOWEST spec, not the average one", () => {
   // The defect this pins: 120 s bounded the mean test (79.7 s) and not the
   // slowest, so the gate failed specs that pass. Measured on an idle box,
