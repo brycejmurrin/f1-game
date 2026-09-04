@@ -41,6 +41,7 @@ test("HUD layout options live in a full-width pause submenu", () => {
   const css = fs.readFileSync(path.join(root, "css/components.css"), "utf8");
   assert.match(html, /id="pm-hud-details"/);
   assert.match(html, /id="pm-hud-details"[\s\S]*id="pm-hidehud"/);
+  assert.match(html, /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
   assert.match(html, /HUD: ON/);
   assert.match(html, /STYLE: STANDARD/);
   assert.match(html, /LAYOUT: AUTO/);

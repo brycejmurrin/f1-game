@@ -1222,28 +1222,23 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
-/* DISPLAY: HUD fold (on/off + style + layout) then METRICS, then sliders,
-   then RENDERER. Named areas so an open fold cannot steal the hole.
-   dense lets GRAPHICS sit beside RESOLUTION after the spanning renderer row. */
+/* DISPLAY: UI SIZE on top, then HUD fold | METRICS, then the RENDERER fold.
+   Named areas so an open fold cannot steal the hole. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
   grid-template-areas:
-    "hudh hudh"
+    "ui ui"
     "hudopts metrics"
-    "ui sample"
-    "hud hud"
-    "renh renh";
+    "renopts renopts";
   grid-auto-flow: dense;
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]),
 #pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-hud-details[open]),
-#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-metrics-details[open]):has(#pm-hud-details[open]) {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display:has(#pm-display-adv[open]) {
   grid-template-areas:
-    "hudh hudh"
+    "ui ui"
     "hudopts hudopts"
     "metrics metrics"
-    "ui sample"
-    "hud hud"
-    "renh renh";
+    "renopts renopts";
 }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-metrics-details {
   grid-area: metrics;
@@ -1257,20 +1252,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   align-self: start;
   min-width: 0;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: ui; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-hudscale) { grid-area: hud; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-sample {
-  grid-area: sample;
-  align-self: start;
-  justify-self: start;
-  margin-top: 0;
-  min-width: 0;
-  max-width: 100%;
-  padding-left: calc(var(--gap) * 0.5);
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv {
+  grid-area: renopts;
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-hud-h { grid-area: hudh; }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-renderer-h { grid-area: renh; }
-#pmsettings-inner #pm-panel-display > #pm-hud-h { margin-top: 0; padding-top: 0; }
+#pmsettings-inner[data-shape="wide"] #pm-panel-display .tune-row:has(#pm-uiscale) { grid-area: ui; }
 /* DISPLAY sliders are settings rows, not tuner rows: steel label, text
    value (tuner red is the loud bit), no extra tap-height padding around
    a track that is already --tap-min. */
@@ -1289,8 +1274,13 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pm-panel-display .tune-row input[type="range"] {
   accent-color: var(--steel);
 }
+#pm-hud-details #pm-hud-sample,
 #pmsettings-inner[data-density="compact"] #pm-hud-sample {
   margin-top: 0;
+}
+#pm-hud-details .tune-row {
+  width: 100%;
+  padding-top: calc(var(--gap) / 4);
 }
 /* METRICS fold: a quiet column, not a 2-up plate grid. Two or three
    rows fit without a scroll cage — the sheet pane already scrolls. */
@@ -1362,7 +1352,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   width: 100%;
   margin: 0;
 }
-#pm-display-adv [role="group"] > #pm-gfx-status {
+#pm-display-adv [role="group"] > :is(#pm-renderer-row, #pm-gfx-status) {
   grid-column: 1 / -1;
 }
 #pmsettings-inner #pm-display-adv > summary {

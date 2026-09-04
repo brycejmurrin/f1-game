@@ -452,7 +452,6 @@
         <section id="pm-panel-display" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">DISPLAY</h3>
-          <h3 class="pm-group-h" id="pm-hud-h">HUD</h3>
           <!-- step 0.5 — layout tiers (`--pair-at` / `--compact-at` via
                SheetShape) sit INSIDE this range, so a notch can flip arrangement
                not just size. MEASURED garage portrait: two columns at 80%,
@@ -462,8 +461,6 @@
                applyScale() clamps to SCALE_MIN/MAX and snaps to 0.5. -->
           <label class="tune-row"><span class="tune-label">UI SIZE <b id="pm-uiscale-v">100%</b></span>
             <input id="pm-uiscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="Interface size"></label>
-          <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
-            <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
           <details id="pm-hud-details" class="pm-hud-sub">
             <summary class="adv-more-btn" id="pm-hud-details-sum">HUD · ON · STANDARD</summary>
             <div role="group" aria-label="HUD layout">
@@ -472,22 +469,26 @@
               <button id="pm-hudmetrics" title="Which clusters show. AUTO follows STYLE and camera. FULL=all. TIMING=hide speed/gear/ERS. DRIVER=hide sectors and best. COMPACT=pos/lap/time/speed/gear.">LAYOUT: AUTO</button>
               <button id="pm-hudmap">MAP: AUTO</button>
               <button id="pm-hudgaps">GAPS: AUTO</button>
+              <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
+                <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
+              <!-- The slider's effect was invisible: css/hud.css hides every real
+                   HUD cluster while a .dim screen is open, and from the title
+                   there is no HUD at all — players dragged, saw nothing, and
+                   overshot. This SAMPLE zooms by the same raw --hud-scale the
+                   dock takes, so the drag resizes it live without touching the
+                   measured hide rule. aria-hidden: it is a picture of a control,
+                   not a control. -->
+              <div id="pm-hud-sample" aria-hidden="true"><div class="hud-box"><div class="hud-label">SPEED</div><div class="hud-value">312</div></div></div>
             </div>
           </details>
-          <!-- The slider's effect was invisible: css/hud.css hides every real
-               HUD cluster while a .dim screen is open, and from the title
-               there is no HUD at all — players dragged, saw nothing, and
-               overshot. This SAMPLE zooms by the same raw --hud-scale the
-               dock takes, so the drag resizes it live without touching the
-               measured hide rule. aria-hidden: it is a picture of a control,
-               not a control. -->
-          <div id="pm-hud-sample" aria-hidden="true"><div class="hud-box"><div class="hud-label">SPEED</div><div class="hud-value">312</div></div></div>
-          <h3 class="pm-group-h" id="pm-renderer-h">RENDERER</h3>
-          <button id="pm-res">RESOLUTION: AUTO</button>
-          <button id="pm-renderer">RENDERER: WEBGL2</button>
-          <!-- RESET / THREE PATH / SCREENSHOTS / SAVE / COPY DIAG / status
-               fold into a JS-built #pm-display-adv (same body-node reason). -->
-          <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
+          <details id="pm-display-adv" class="pm-renderer-sub">
+            <summary class="adv-more-btn" id="pm-renderer-details-sum">RENDERER · WEBGL2</summary>
+            <div id="pm-display-adv-body" role="group" aria-label="Renderer">
+              <button id="pm-res">RESOLUTION: AUTO</button>
+              <button id="pm-renderer">RENDERER: WEBGL2</button>
+              <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
+            </div>
+          </details>
         </section>
       </div>
     </div>
