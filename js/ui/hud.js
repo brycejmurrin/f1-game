@@ -50,23 +50,14 @@ const BCAM_IDS = { heli: 1, side: 1, cinematic: 1, low: 1, overhead: 1 };
 const ONBOARD_IDS = { cockpit: 1, hood: 1, tcam: 1 };
 const MET_LAYOUTS = ["full", "timing", "driver", "compact"];
 // Body classes toggled: hud-met-full, hud-met-timing, hud-met-driver, hud-met-compact.
-function bandCapped(cssVar) {
-  const root = document.documentElement;
-  const scale = +root.style.getPropertyValue("--hud-scale") || 1;
-  const cap = +root.style.getPropertyValue(cssVar);
-  return cap > 0 && cap < scale - 0.001;
-}
+// AUTO is always the full set. fitHud() scales / stacks / drops gaps when a
+// band is tight — the old resolver hid a cluster from profile or those caps,
+// which made MAP+GAPS+timing+driver mutually exclusive. Forced LAYOUT names
+// stay on the stored cycle (and the overlay compact flag) but no longer
+// strip chrome; css/hud.css has no hud-met-* hide rules.
 function resolveMetricsLayout() {
   const want = G.hudMetricsLayout || "auto";
   if (want !== "auto") return want;
-  const prof = G.hudProfile || "standard";
-  const modes = typeof CamModes !== "undefined" ? CamModes.CAM_MODES : null;
-  const modeId = (modes && modes[G.camMode]) ? modes[G.camMode].id : "chase";
-  if (prof === "minimal") return "compact";
-  if (prof === "broadcast" && BCAM_IDS[modeId]) return "timing";
-  if (bandCapped("--hud-z-top") && bandCapped("--hud-z-bot")) return "compact";
-  if (bandCapped("--hud-z-bot")) return "timing";
-  if (bandCapped("--hud-z-top")) return "driver";
   return "full";
 }
 let _hudLayoutKey = "";

@@ -289,18 +289,10 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
   top: calc(14svh / var(--hud-z));
 }
 
-/* Metrics layout — which cluster wins (js/ui/hud.js resolveMetricsLayout). */
-body.hud-met-timing .hud-bottom { display: none !important; }
-/* Map/gaps follow MAP/GAPS vis + broadcast park — LAYOUT never steals them. */
-body.hud-met-driver #hud-sectors,
-body.hud-met-driver .hud-top .hud-box:nth-child(4) { display: none !important; }
-/* LAYOUT compact keeps pos/lap/time/speed/gear; map/gaps stay if ON. */
-body.hud-met-compact #hud-sectors,
-body.hud-met-compact #hud-energy,
-body.hud-met-compact #hud-ot,
-body.hud-met-compact #hud-aero { display: none !important; }
-body.hud-met-compact #hud-limits,
-body.hud-met-compact .hud-top .hud-box:nth-child(4) { display: none !important; }
+/* LAYOUT modes used to hide a cluster (timing/driver/compact). AUTO now
+   keeps every widget painted and fitHud adapts; the hud-met-* body classes
+   remain as labels only. MAP/GAPS still hide via hud-hide-map / hud-hide-gaps.
+   Broadcast parks map+gaps under the tower via hud-map-low / hud-gaps-low. */
 
 #hud-energy {
   width: 130px; height: 14px;

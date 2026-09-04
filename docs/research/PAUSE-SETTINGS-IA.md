@@ -53,7 +53,10 @@ Settings and pause Settings land on the same index.
 
 **DISPLAY groups HUD then RENDERER, then the existing COCKPIT + ADVANCED
 folds.** HUD: HIDE HUD, METRICS fold, UI SIZE, HUD SIZE + sample, HUD
-profile, LAYOUT, MAP, GAPS. RENDERER: RESOLUTION, renderer picker,
+profile, LAYOUT, MAP, GAPS. LAYOUT AUTO is always the full widget set
+(`fitHud` scales / stacks / drops gaps; it does not hide a cluster). MAP
+and GAPS default ON; AUTO on the map still hides onboard, OFF is the
+explicit hide. RENDERER: RESOLUTION, renderer picker,
 GRAPHICS. Sliders stay settings rows (steel track, text value). METRICS
 is a quiet column; the closed summary carries ON/page state; SIDE is
 `auto`/`left`/`right` (`apex26.metricsPos`, URL `?metricsPos=`); AUTO
