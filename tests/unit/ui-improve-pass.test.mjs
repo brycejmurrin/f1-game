@@ -892,6 +892,16 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "ADVANCED body defaults to a column; wide/compact override to a 2-up grid");
   assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv \[role="group"\]/, "display"), "grid",
     "compact ADVANCED packs 2-up via SheetShape density, not a height media");
+  assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child", "display"), "none",
+    "CONTROLS / DISPLAY tabs already name the panel; do not reprint the heading");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "color"), "var(--steel)",
+    "METRICS / ADVANCED summaries use heading steel, not button text");
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner :is\(#pm-metrics-details, #pm-display-adv\) > summary/, "background-color"), "transparent",
+    "disclosure summaries are headings, not .adv-more-btn plates");
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-panel-display > .pm-group-h", "margin-top"), "calc(var(--gap) * 0.5)",
+    "COCKPIT is a section break after the renderer row");
+  assert.match(code("js/camera/cockpit-opts.js"), /pm-display-adv/,
+    "COCKPIT inserts above ADVANCED so player headings stay with player buttons");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("@media (max-height:"),
     "METRICS submenu no longer keys packing on viewport height");
   assert.ok(!code("js/perf/metrics-overlay.js").includes("margin: 6px"),

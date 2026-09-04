@@ -1139,10 +1139,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0; padding-bottom: 4px;
   background: var(--grad-rule) bottom left / 100% 1px no-repeat;
 }
-/* Tab already names the category. Keep later headings (COCKPIT). */
+/* Tab already names CONTROLS / DISPLAY. MORE is a bin — TOOLS & HELP
+   names the door list so those plates do not read as toggles. Later
+   DISPLAY headings (COCKPIT) stay. */
 #pm-panel-controls > .pm-group-h:first-child,
-#pm-panel-display > .pm-group-h:first-child,
-#pm-panel-more > .pm-group-h:first-child {
+#pm-panel-display > .pm-group-h:first-child {
   display: none;
 }
 .pm-group button { margin: 0; width: 100%; }
@@ -1357,8 +1358,8 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   cursor: pointer;
   justify-content: flex-start;
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
-  font-weight: 600;
-  letter-spacing: var(--ls-2);
+  font-weight: 700;
+  letter-spacing: var(--ls-5);
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
 }
@@ -1405,10 +1406,30 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   cursor: pointer;
   justify-content: flex-start;
   font-size: clamp(var(--fs-2), calc(2.2 * var(--vwz)), var(--fs-5));
-  font-weight: 600;
-  letter-spacing: var(--ls-2);
+  font-weight: 700;
+  letter-spacing: var(--ls-5);
   opacity: 1;
   padding-inline: calc(var(--pad) * 0.85) calc(var(--pad) * 0.65);
+}
+/* Disclosures share section-heading chrome, not .adv-more-btn plates.
+   Steel + fading rule + italic — same family as .pm-group-h — so METRICS
+   / ADVANCED cannot be mistaken for HIDE HUD / RESET. */
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary,
+#pmsettings-inner :is(#pm-metrics-details, #pm-display-adv) > summary:is(:hover, :active) {
+  color: var(--steel);
+  font-style: italic;
+  background-color: transparent;
+  background-image: var(--grad-rule);
+  background-position: bottom left;
+  background-size: 100% 1px;
+  background-repeat: no-repeat;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+#pmsettings-inner #pm-panel-display > .pm-group-h {
+  margin-top: calc(var(--gap) * 0.5);
+  padding-top: calc(var(--gap) / 3);
 }
 #pm-display-adv[open] > summary::after { content: "\25B4"; }
 #pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"],
