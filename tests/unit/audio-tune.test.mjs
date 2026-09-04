@@ -273,7 +273,7 @@ test("every id the ENGINE TONE panel looks up exists in the shell", () => {
   const layers = [...panel.matchAll(/\{ k: "\w+",\s+id: "([\w-]+)" \}/g)].map((m) => m[1]);
   const profiles = [...panel.matchAll(/\["(as-p-[\w-]+)", "\w+"\]/g)].map((m) => m[1]);
   assert.equal(sliders.length, 7, "expected the seven tuner sliders — the table shape changed, so does this check");
-  assert.equal(layers.length, 7, "expected the seven layer switches");
+  assert.equal(layers.length, 8, "expected the eight layer switches");
   assert.equal(profiles.length, 5, "expected the five sound profiles");
 
   const missing = [];
