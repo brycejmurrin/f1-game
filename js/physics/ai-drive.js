@@ -125,6 +125,25 @@ const AiDrive = (function () {
     return lerp(5.5, 12.5, t.experience);
   }
 
+  // THE WELD, and it is two mechanisms locking each other. The queue cap
+  // (`blocker.speed + clamp(gap - follow, -6, 8)`) goes NEGATIVE behind a car
+  // that has stopped inside the follow distance, so an AI that caught a parked
+  // player was commanded to a dead stop — and a stopped car has ZERO lateral
+  // authority, because latFac scales with speed. It could neither drive past
+  // nor steer around, so it sat welded to the player for the rest of the race.
+  // Two floors break it: the queue never commands a standstill, and a car that
+  // has been declared stuck may shuffle sideways at walking pace.
+  //
+  // Both are FLOORS ON THE AI'S OWN COMMAND, never on the car: the caller caps
+  // the crawl at whatever vmax race control already granted, so a VSC or red
+  // flag still stops the field.
+  function queueFloor(street) {
+    return street ? 2.5 : 3.5;
+  }
+  function unstuckLatFloor(street) {
+    return street ? 0.10 : 0.16;
+  }
+
   function unstuckPull(t, street) {
     const pull = lerp(3.4, 2.0, t.experience);
     return street ? pull * 0.55 : pull;
@@ -270,9 +289,19 @@ const AiDrive = (function () {
     const street = !!ctx.street;
     const t = ctx.traits;
     const gap = ctx.blockerGap;
-    if ((ctx.speed || 0) < (ctx.blockerSpeed || 0) + (street ? 4 : 5)) return 0;
     if (gap >= (street ? 14 : 16)) return 0;
-    const side = (ctx.roomR || 0) >= (ctx.roomL || 0) ? 1 : -1;
+    // The old trigger was "I am ALREADY going faster than the car ahead", which
+    // a queued car can never be: the queue cap holds it 6 m/s BELOW the
+    // blocker's pace by construction, so the one car that most needs to pull
+    // out was the one car that never did. A train therefore formed and stayed
+    // formed — the "they just sit behind me" complaint. The incentive is the
+    // car's FREE pace (vmax before the queue cap), the same comparison MOBIL
+    // makes: would I be going faster if this car were not there?
+    const margin = street ? 4 : 5;
+    const closing = (ctx.speed || 0) >= (ctx.blockerSpeed || 0) + margin;
+    const held = (ctx.freeSpeed || 0) >= (ctx.blockerSpeed || 0) + margin;
+    if (!closing && !held) return 0;
+    const side = otSide(ctx);
     const need = side > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
     const house = houseMulCtx(ctx, 0.90, 1.12, "attack")
       * ordersMul(ctx.team, ctx.seat, ctx.other, "ot");
@@ -313,13 +342,65 @@ const AiDrive = (function () {
     return street ? 12 : 12;
   }
 
+  // CONTACT IS NOT CONFINEMENT. `contactT > 0 => boxed` used to be the first
+  // line here, so ANY rub — including a clean side-by-side on a 15 m-wide
+  // permanent — declared the car wedged. Boxed feeds stuckT, which feeds
+  // unstuckActive, which cancels braking and yanks the car sideways; a driver
+  // leaning on an AI therefore switched it into dig-out mode while it still had
+  // a whole lane free. Contact now only counts when the room is already gone,
+  // which is the state the flag was named for.
   function isBoxed(ctx) {
-    if ((ctx.contactT || 0) > 0) return true;
     const roomL = ctx.roomL || 0, roomR = ctx.roomR || 0;
     if (roomL < 1.3 && roomR < 1.3) return true;
+    if ((ctx.contactT || 0) > 0 && roomL < 1.6 && roomR < 1.6) return true;
     if (!(ctx.blocker && ctx.blockerGap < 6)) return false;
     if (ctx.street) return roomL < 1.8 && roomR < 1.8;
     return true;
+  }
+
+  // How long an AI must sit slow before the rescue unwedges it. Contact used to
+  // VETO the rescue outright (`contactT === 0` in the aiStuck conjunction), so
+  // the commonest way to be genuinely stuck — welded to another car — was the
+  // one case that could never recover. It is a patience knob now, not a veto:
+  // a pack shuffle clears long before the contact timer elapses.
+  function aiRescueDelay(contacting) {
+    return contacting ? 7 : 4;
+  }
+
+  // Which way to go around a blocker. `roomR >= roomL ? 1 : -1` was the whole
+  // rule, and behind a car holding the racing line the two sides are equal — so
+  // every pursuer picked RIGHT, single file, and the queue never split. A clear
+  // difference still wins; a tie breaks toward the inside of the next corner
+  // (where the pass completes), then toward the car's own lane so a pack fans
+  // out both ways instead of stacking. Same tiebreak shape as unstuckSide.
+  function otSide(ctx) {
+    const roomL = ctx.roomL || 0, roomR = ctx.roomR || 0;
+    const diff = roomR - roomL;
+    if (Math.abs(diff) >= 0.6) return diff > 0 ? 1 : -1;
+    const kA = ctx.kAhead || 0;
+    if (Math.abs(kA) > 0.002) return kA > 0 ? -1 : 1;   // inside = -sign(k)
+    const lane = ctx.lane || 0;
+    if (Math.abs(lane) > 0.05) return lane > 0 ? 1 : -1;
+    return diff >= 0 ? 1 : -1;
+  }
+
+  // LET PASS. A car that is faster, right behind, and not held up by anything
+  // ahead of us is going past whatever we do; fighting it just wastes both
+  // laps and is where the "AI welded to my bumper" pile-ups start. After a
+  // patience window (awareness commits earlier) the AI moves toward its free
+  // side and stops accelerating away — TORCS' OPP_LETPASS, minus the blue flag.
+  function letPassDelay(t) {
+    return lerp(4.2, 1.8, t.awareness);
+  }
+  // Lateral metres of yield, bounded by the room the caller gates on
+  // (freeRoom > 1.6) so it can never ask for more lane than was just checked;
+  // the caller scales it by that room too, the same shape otPull uses.
+  function letPassPull(t, street) {
+    const pull = lerp(0.9, 1.5, t.experience);
+    return street ? pull * 0.5 : pull;
+  }
+  function letPassEase(t) {
+    return lerp(0.965, 0.99, t.experience);
   }
 
   function minLatGap(hw, street) {
@@ -338,6 +419,7 @@ const AiDrive = (function () {
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
     defendPull, isBoxed, minLatGap, racingLineMix, wallHitLoss, wallSteerScrub,
-    wallAiScrub, beginLook, pushLook, endLook,
+    wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
+    letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
   };
 })();

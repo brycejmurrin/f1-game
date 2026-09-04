@@ -1,10 +1,26 @@
 // @ts-check
 import { test, expect } from "../helpers/fixtures.js";
 
+// MEASURED COST, DECLARED so tools/ci/select-specs.mjs EXCLUDES this spec
+// rather than selecting it into a gate its BOOT alone cannot clear. An
+// undeclared budget is UNKNOWN, not safe.
+//
+// Pages runs 2019/2020/2022/2024 all failed the change-aware gate on this
+// file, and the cost is the boot, not the assertions: on CI the page log shows
+// `4505ms build mclaren` then `164677ms build mercedes` — a 160-SECOND gap
+// while parallel race fixtures share one runner. Same file on an idle box:
+// 110.1 s, green. Raising the gate 120 -> 180 s did not help, because the
+// fixture's inner `waitForFunction` carries its own BOOT_MS = 45000 and
+// expires first (see docs/notes/TESTING-FIELD-NOTES.md, "BOOT_MS is an
+// IDLE-box number"). The blocked deploy is the reason this is declared now;
+// the real fix is deriving BOOT_MS from test.info().timeout, which is an
+// 88-import change wanting its own measurement on a LOADED runner.
+// 300 s matches the other over-cap specs on this tree.
 test("Albert Park runtime build emits required fountains and safe water geometry", async ({
   racePage,
   pageErrors,
 }) => {
+  test.setTimeout(300_000);
   await racePage.evaluate(() => window.__apex.race("albert_park", "day", "dry"));
   await racePage.waitForFunction(() => window.__apex.info().track === "albert_park");
 
