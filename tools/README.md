@@ -48,6 +48,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/bump-cache.mjs** | Deploy-time content hashing of a STAGED shell (`--apply --at N --root _site`); `--check` in the repo asserts `?v=dev`. | check-changes |
 | **ci/deploy.mjs** | the ONE deploy: fetch → merge → tooling-fast → verify-track → push the deploy branch (or --pr); pages.yml stamps it | — |
 | **ci/playwright-occupancy.mjs** | Classifies process-table lines for Playwright occupancy (`playwright test` / `@playwright/mcp`) — the MCP lock's oracle. | check-changes |
+| **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
 
 ### `tools/check/`
 
