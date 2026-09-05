@@ -2057,7 +2057,67 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   module split's home for them and is unit-tested there. `bareCatches`
   158 -> **157** in the same commit: the tree simply has one fewer.
 
-## 2026-09-05 — selection grammar: shellNodes 1133 → 1214, game.js 9938 → 9929
+- `js/game.js` lines 9938 -> **9951**, codeLines 5469 -> **5477**;
+  `js/agent/apex.js` lines 2649 -> **2650**, codeLines 2004 -> **2005**
+  (2026-09-05): the start pack. Every AI car accelerated identically off the
+  line, so a 22-car grid kept its 8 m pitch to T1 (start-trace: median gap
+  8.0-8.6 m for fifteen seconds, all speeds within 2 m/s, three order changes in
+  ten seconds). Eight code lines: the per-race launch hash and plan in `gridUp`
+  (3), the launch multiplier and its release in the AI acceleration (3), the
+  AI's smoothed acceleration for `otWant`'s crawl gate (1), the pace-phase
+  multiplier on `vmax` (1); apex.js clears `launchOn` on a car placed at speed
+  by `rival()`/`rivals()`. The plans, the fade and the phase live in
+  `js/physics/ai-drive.js` (unit-tested), so game.js again keeps only the call
+  sites. After: speeds span 8 m/s at t=4 and 17 order changes in ten seconds
+  (`tests/unit/ai-racecraft-vm.test.mjs`, the start test).
+
+- `shellNodes` 1133 -> **1158** (2026-09-05): the ENGINE TONE redesign. The
+  tuner's pitch curve was two knobs and PITCH scaled both ends, so a low,
+  grumbling idle could only be bought by pulling the whole curve down and REV
+  RANGE (capped at 2.5) could not put the redline back — measured, PITCH 0.6 +
+  REV RANGE 2.5 reached a redline rate of 0.83 against the stock 0.70, a fifth
+  of an octave for a knob that read 2.5x. The curve is now four independent
+  knobs (IDLE / PITCH / REV RANGE / CURVE, `rate = (0.25·idle +
+  0.45·revRange·rev^curve)·pitch`, a 50:1 reach), plus GRAVEL (crank-rate
+  roughness that fades with rev), BRAKES (carbon roar under deceleration) and
+  SHIFT (gear-crack level), each a slider of four nodes (20), GRAVEL and
+  BRAKES switches (2), and three `h3.adv-sec` group headers (3) so fourteen
+  sliders read as PITCH CURVE / CHARACTER / LAYERS rather than a list. All
+  static DOM, as the shell rule wants; `tests/unit/audio-tune.test.mjs` holds
+  every id, range and default position against the engine's tables.
+
+- `shellNodes` 1158 -> **1192** (2026-09-05): the second ENGINE TONE pass.
+  The LIMITER trim spent its top half on chop rate because depth saturates at
+  a full ignition cut — but a slow deep cut and a fast shallow one are
+  different limiters and one slider could not express either, so it is three
+  knobs now (DEPTH / RATE / PITCH SAG, the last a square into the core's
+  detune so the note drops with the ignition). BOOST gets LEVEL and REV LIFT,
+  and HARVEST / WIND / TYRES / RIVALS get the level trim they had always
+  lacked beside their switch. Eight sliders (32) and two group headers (2).
+
+- `js/game.js` lines 9951 -> **9994**, codeLines 5477 -> **5489** (2026-09-05):
+  what a contact costs the player. Twelve code lines net: room to the ROAD edge
+  for the pass latch and the squeeze test (+1 — the run-off allowance in
+  roomL/R let an AI "pass" on the grass at Lesmo for as long as the car ahead
+  held its line), the real impulse with
+  restitution and the human punt cap (+3, replacing the `0.5 * relV` and its
+  `* 0.8`), the laterally-nearest alongside pick (+1), the directional contact
+  compliance (+1), the once-a-frame rub (0 — `if (last)` on existing lines),
+  and the SQUEEZE back-out (+6: a yielder in contact with no lane to yield into
+  drops under the other car's speed with a dab of brake and abandons its pass)
+  — needed because once a rub stopped costing 48 m/s^2, AI pairs ground along
+  a barrier for seconds where the old scrub had knocked the trailing car back
+  (prolonged-contact pairs 0 -> 4 on monaco, back to 0 with it). The rest is
+  the comments that carry the measurements. Measured before ->
+  after on monza's start straight (`scratch/collision-bench.mjs`): a player
+  boxed between two AI cars at 40 m/s lost 18 m/s in a second -> 0; a
+  wheel-to-wheel lean cost 15 m/s -> 0; a rear-end bump left 55 % of the
+  closing speed per pass -> <= 15 %. The knobs (`rubDecel`, `bumpRestitution`,
+  `humanPuntCap`, the half-car `SIDE_LEVEL`) live in `js/physics/ai-drive.js`
+  with their unit tests; `tests/unit/collision-contact-vm.test.mjs` pins the
+  three behaviours.
+
+## 2026-09-05 — selection grammar: shellNodes 1192 → 1273, game.js 9994 → 9985 (measured on the merged tree)
 
 `shellNodes` RAISED by 81, deliberately. Every enumerated preference on the
 Settings sheet (STEER, GEARS, ACTIVE AERO, HUD, STYLE, LAYOUT, MAP, GAPS,
@@ -2069,7 +2129,7 @@ reads and works the same way at every UI SIZE (`docs/COMPONENTS.md`
 them from JS would hide the cost the ratchet exists to show. A first pass the
 same day used labelled chip rows (2 + N nodes each); the layout audit measured
 those at 3.8 screens deep for three settings on a landscape phone at 150%, and
-the row replaced them. The pause menu also gained the MUSIC page's NOW PLAYING card (shown only while music plays). `js/game.js` 9938 → 9929 (the cycle handlers moved to
+the row replaced them. The pause menu also gained the MUSIC page's NOW PLAYING card (shown only while music plays). `js/game.js` 9994 → 9985 on the merged tree (the cycle handlers moved to
 `js/ui/setting-row.js`); `cssClasses` 549 → 549 (`.as-toggle` retired,
 `.set-row` added); `rawColor` 329 → 325 (the cam picker, garage SPIN and
 track-row washes use tokens; the unread `--manual` token is gone).

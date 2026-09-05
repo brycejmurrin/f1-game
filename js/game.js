@@ -1995,6 +1995,11 @@ function gridUp(preOrder) {
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0;
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
+    // The launch plan and the pace phase (AiDrive): one hash per car per race,
+    // never a simRnd() draw — the stream's draw count is a contract.
+    const h = DriverRatings.hash32(simSeed() + ":" + i + ":" + c.skill);
+    c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
+    c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536;
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
   // physics tick (the `c.px == null` init in update()). The chase rig has two
@@ -4076,7 +4081,7 @@ const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
-const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0 };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const LCAR = 4.8, WCAR = 2.0;
@@ -4232,10 +4237,15 @@ function _colResolvePair(a, b, last, rubScrub) {
     // their original meaning: the human's gates their stuck rescue (a car
     // rubbing another is shuffling, not wedged), the AI's makes it compliant so
     // a player leaning on it can move it. The yielder still pays the scrub.
+    // `rubScrub` is this STEP's speed loss (AiDrive.rubDecel x dt) and this runs
+    // once per relaxation pass — four times a frame — so it is taken on the last
+    // pass only. The old form was a 0.995 factor applied on every pass: 2 % a
+    // frame, 48 m/s^2 at 40 m/s, and a player rubbing wheels lost 18 m/s in a
+    // second (collision bench S5). The flag is idempotent and stays.
     if (corr > CORR_EPS) {
       if (a.human || b.human) a.contactT = b.contactT = 0.22;
-      if (AiDrive.sideYieldsA(dProg, a.x, b.x)) { a.speed *= rubScrub; a.contactT = 0.22; }
-      else { b.speed *= rubScrub; b.contactT = 0.22; }
+      if (AiDrive.sideYieldsA(dProg, a.x, b.x)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }
+      else { if (last) b.speed = Math.max(0, b.speed - rubScrub); b.contactT = 0.22; }
     }
     if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
   } else {
@@ -4253,13 +4263,27 @@ function _colResolvePair(a, b, last, rubScrub) {
       // also skipped in _colSepPair; this is the same rule at the impulse.
       // notifyCar still queues a shunt; below threshold it no-ops (C3).
       if (!(incidentSim.owns(a) || incidentSim.owns(b))) {
-        const jImp = 0.5 * relV / iSum;
+        // A real impulse: j = (1 + e) * relV / (invA + invB). The old 0.5 was
+        // (1 + e) = 0.5, i.e. e = -0.5 — after it the cars were STILL closing at
+        // half speed, and penetration plus the position passes ate the rest over
+        // ~30 frames: a bump read as being pushed along (collision bench S1,
+        // both cars welded at the slop distance at one speed). Real cars are
+        // near-inelastic at racing speeds (COR ~0.1 above ~7 m/s); below 1 m/s
+        // closing the contact is resting and e is 0 (Box2D's velocity
+        // threshold), so a following car does not jitter off a bumper.
+        const e = AiDrive.bumpRestitution(relV);
+        const jImp = (1 + e) * relV / iSum;
+        // The car in front takes the punt in full — that is the kick you feel
+        // and see. A HUMAN in front is capped: an AI misjudging a braking zone
+        // must not launch the player down the road (the cap is a closing speed,
+        // pace-scaled), while the AI behind still pays its whole share.
+        const capV = AiDrive.humanPuntCap() * Math.max(PACE, 0.05);
         if (sgn >= 0) {
           b.speed = Math.max(0, b.speed - iB * jImp);
-          a.speed += iA * jImp * 0.8;
+          a.speed += iA * (a.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
         } else {
           a.speed = Math.max(0, a.speed - iA * jImp);
-          b.speed += iB * jImp * 0.8;
+          b.speed += iB * (b.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
         }
       }
       if (corr > CORR_EPS) a.contactT = b.contactT = 0.22;   // see the side branch: settled pairs must let it decay
@@ -4325,10 +4349,9 @@ function resolveCollisions(ranked, dt) {
   // Snapshot the player's road coords so the writeback at the end can tell
   // whether this pass actually shoved it (see there for why that matters).
   const _preColS = player ? player.s : 0, _preColX = player ? player.x : 0;
-  // Side-rub speed scrub as a RATE: 0.995/frame was authored at the fixed
-  // 1/60 step (identical there: 0.995^1), but the headless harness steps at
-  // arbitrary dt — unscaled, a rub scrubbed per CALL, not per second.
-  const rubScrub = Math.pow(0.995, (dt || 1 / 60) * 60);
+  // Side-rub speed loss for this step, in m/s: a deceleration (AiDrive.rubDecel)
+  // times the step, so the headless harness's arbitrary dt scrubs per second.
+  const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || 1 / 60);
   // Tiny fields: all-pairs is fine and avoids bucket rebuild cost. Larger
   // fields (MP / expanded AI) use arc buckets so pairContact stays O(n·k).
   const useBuckets = ranked.length > 12;
@@ -4455,16 +4478,23 @@ function updateCar(c, dt, ranked) {
   // wedged — instead of grinding to a halt against a car or wall. Rating axes
   // (js/physics/ai-drive.js) scale how quickly they dig out and how much space they
   // leave when following.
-  let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false, letPass = false, aiFreeSpeed = 0;
-  let alongO = null, alongDx = 0, alongDprog = 0, alongAdp = Infinity;   // nearest car overlapping us longitudinally (see the side-rub constraint)
+  let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false, letPass = false, aiFreeSpeed = 0, squeezed = false, roadL = Infinity, roadR = Infinity;
+  let alongO = null, alongDx = 0, alongDprog = 0, alongAdx = Infinity;   // the LATERALLY nearest car overlapping us longitudinally (see the side-rub constraint)
   let towCar = null, towGap = Infinity;   // nearest car ahead in the slipstream (wider than the blocker box)
   let chaser = null, chaserGap = Infinity; // nearest car close BEHIND in our lane (for defending)
   let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
   const aiT = c.human ? null : AiDrive.traits(c);
+  if (!c.human) vmax *= AiDrive.pacePhase(raceT, aiT.consistency, c.phaseRoll);   // a stint drifts; lockstep never passes
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
     const edge = track.street ? hw - 0.8 : hw + 5;
+    // Room to the ROAD edge, each side. roomL/R below measure to `edge`, which
+    // on a permanent circuit is 5 m into the run-off so the AI flows past
+    // barrier-lined corners; the pass latch and the squeeze test read THESE, or
+    // an AI "passes" on the grass at x = hw + 0.5 for as long as the car ahead
+    // holds its line (contact diagnostics, Lesmo: 1.5 s of rear-corner rub).
+    roadL = c.x + hw - 0.5; roadR = hw - 0.5 - c.x;
     roomL = edge + c.x;            // clearance to the left edge from our position
     roomR = edge - c.x;            // clearance to the right edge
     // FULL FIELD, and it has to be: `ranked` sorts by CUMULATIVE prog while the
@@ -4490,7 +4520,12 @@ function updateCar(c, dt, ranked) {
       if (adp < 5.5) {            // alongside: eats the room on its side
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
         else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
-        if (adp < alongAdp) { alongO = o; alongDx = dx; alongDprog = dprog; alongAdp = adp; }
+        // Nearest ACROSS the road, not along it: with a car on each side, the one
+        // half a metre closer in arc but two lanes away was chosen over the one
+        // we were touching, so the rub constraint below aimed at the wrong car
+        // (collision bench S5: two seconds of contact with nobody yielding).
+        const adx = dx < 0 ? -dx : dx;
+        if (adx < alongAdx) { alongO = o; alongDx = dx; alongDprog = dprog; alongAdx = adx; }
       }
       if (adp < 6.5) {
         nearbyN++;
@@ -4704,6 +4739,15 @@ function updateCar(c, dt, ranked) {
     // The other half of LET PASS: stop accelerating away. A multiplier, not a
     // threshold, so it eases at every OVERALL SPEED by construction.
     if (letPass) vmax *= AiDrive.letPassEase(aiT);
+    // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
+    // yield to, with no lane to yield into — back out under its speed, brake
+    // dabbed, until we are clear. The pass latch below reads it too.
+    squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x) &&
+        (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
+    if (squeezed) {
+      vmax = Math.min(vmax, alongO.speed * AiDrive.squeezeEase(!!track.street));
+      if (!unstuckActive) { braking = true; brakeLvl = Math.max(brakeLvl, AiDrive.squeezeBrake()); }
+    }
     // when wedged in/stopped, power out instead of braking
     if (unstuckActive) { braking = false; brakeLvl = 0; }
   }
@@ -4804,7 +4848,13 @@ function updateCar(c, dt, ranked) {
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
     c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   } else {
-    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    // The AI's launch (AiDrive.launchPlan): no throttle before its reaction, then
+    // its own getaway for three seconds. A grid that accelerated as one held its
+    // 8 m pitch to T1 — see the start test in ai-racecraft-vm.
+    const launch = c.launchOn ? AiDrive.launchMul(raceT, c.launch) : 1;
+    if (c.launchOn && AiDrive.launchDone(raceT, c.launch)) c.launchOn = false;
+    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    if (!c.human) c.accSm = damp(c.accSm ?? 0, a, 6, dt);   // what this car is pulling — AiDrive.otWant reads it on the blocker
     // speedCap is an ACCELERATION ceiling, not a teleport: a cap that drops under
     // the car (VSC vmax cut, limiter downshift) used to scrub 25 m/s in one step.
     c.speed = c.speed > speedCap ? Math.max(speedCap, c.speed - COAST_DRAG * dt)
@@ -4965,10 +5015,11 @@ function updateCar(c, dt, ranked) {
       const po = c.passOf;
       let dp = po.prog - c.prog;
       dp = ((dp + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
-      const sideRoom = c.passSide > 0 ? roomR : roomL;
+      const sideRoom = c.passSide > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL);   // the ROAD's room, not the run-off's
       if (po.finished || po.retired || dp > 16 || !Number.isFinite(dp)) { c.passOf = null; }           // lost it: no penalty
       else if (dp < -(LCAR + 1.5)) { c.passOf = null; }                                              // PAST: done
       else if (sideRoom < WCAR) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed
+      else if (squeezed) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }             // walked to the edge: abandon it
       else {
         // Patience refreshes while we GAIN on the car; it runs down while we do not.
         if (dp < c.passBest - 0.3) { c.passBest = dp; c.passT = AiDrive.passHold(aiT); }
@@ -4990,11 +5041,12 @@ function updateCar(c, dt, ranked) {
       // speed is their pace, so the fallback (0 -> blockerSpeed) is the read.
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0); _aiOtPull.vTop = vTop();
+      _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage: a clear lane on the chosen side, and no cooldown from a pass we
       // just gave up on this same stretch.
       if (!c.passOf && c.passCool <= 0 && AiDrive.otWant(_aiOtPull)) {
         const side = AiDrive.otSide(_aiOtPull);
-        if ((side > 0 ? roomR : roomL) >= CLEAR) {
+        if ((side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
           c.passOf = blocker; c.passSide = side; c.passBest = blockerGap; c.passT = AiDrive.passHold(aiT);
         }
       }
@@ -5396,8 +5448,12 @@ function updateCar(c, dt, ranked) {
     // While rubbing another car (contactT>0) the AI goes compliant: it stops
     // driving hard back to its racing line, so a player leaning on it can
     // actually move it sideways instead of bouncing off a rigid, on-rails line.
-    // Awareness scales how much they yield (AiDrive.contactGive).
-    const give = AiDrive.contactGive((c.contactT || 0) > 0, aiT, !!track.street);
+    // Awareness scales how much they yield (AiDrive.contactGive). TOWARD the
+    // contact only: a yielder steering AWAY keeps its full authority, or the
+    // compliance that lets a player move an AI also held the AI against the
+    // player it was trying to leave (collision bench S5: a whole second of rub).
+    const toward = !alongO || Math.sign(steer) === Math.sign(alongDx);
+    const give = AiDrive.contactGive((c.contactT || 0) > 0 && toward, aiT, !!track.street);
     // Same off-track lateral fade the player gets via surfMu — AI used to keep
     // full STEER_VMAX authority on grass, skating wide while the human path
     // was already grip-thinned. Continuous in |x| past the edge (player idiom).

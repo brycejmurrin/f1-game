@@ -124,6 +124,44 @@ const AiDrive = (function () {
     return street ? 0.42 : 0.5;
   }
 
+  // Side-rub deceleration, m/s^2 — a FORCE, absolute like BRAKE (the offroad
+  // block says why a scrub rate does not ride the pace scale). Bodywork on
+  // bodywork costs little speed; wheels interlocking is the incident sim's job.
+  // It replaced a proportional 0.5 %/frame (12 m/s^2 at 40 m/s, and applied per
+  // relaxation pass, 48): the racecraft bench's alongside standoffs were pairs
+  // sitting at the throttle-vs-scrub balance that rate produced.
+  function rubDecel(street) {
+    return street ? 3.5 : 3;
+  }
+
+  // Rear-end restitution by closing speed: 0 below 1 m/s (a resting contact —
+  // Box2D's velocity threshold, so a car sitting on a bumper does not jitter
+  // off it), 0.1 from 3 m/s up (crash reconstruction's floor for real cars at
+  // speed), a ramp between. Zero to a tenth: bumps are near-inelastic.
+  function bumpRestitution(relV) {
+    const v = relV || 0;
+    if (v <= 1) return 0;
+    if (v >= 3) return 0.1;
+    return 0.1 * (v - 1) / 2;
+  }
+  // Closing speed (m/s at PACE 1) above which the player's forward punt from a
+  // rear-end stops growing. The AI behind pays its full share regardless.
+  function humanPuntCap() { return 8; }
+
+  // SQUEEZED: in contact, ours to yield, and no room on the side away from the
+  // other car. A yielder that can move away does (the planner constraint); one
+  // that cannot backs OUT — its pace ceiling drops under the other car's speed
+  // until it is clear. Without this the rub being cheap (rubDecel) let AI pairs
+  // grind along a barrier for seconds (racecraft bench: prolonged-contact pairs
+  // 0 -> 4 on monaco once the old scrub stopped knocking the trailing car back).
+  function squeezeEase(street) {
+    return street ? 0.88 : 0.9;
+  }
+  // ...and a dab of brake with it: a vmax cap only stops the car accelerating,
+  // and at 5 % under the other car it took three seconds to drop a car length —
+  // the rub lasted that long (contact diagnostics, Lesmo). BRAKE x this.
+  function squeezeBrake() { return 0.25; }
+
   function contactGive(contacting, t, street) {
     if (!contacting) return 1;
     const give = lerp(0.55, 0.25, t.awareness);
@@ -338,10 +376,55 @@ const AiDrive = (function () {
     // follower behind it sits on the queue crawl floor, which is below the
     // closing margin, so neither test below could ever fire — measured as an
     // AI creeping at 3 m/s into the back of a parked player and welding there.
-    const crawling = (ctx.blockerSpeed || 0) < 0.12 * ref;
+    // ...unless it is PULLING AWAY: at lights-out every car ahead is under that
+    // speed for four seconds, and without the acceleration test the whole grid
+    // latched a pass on the car ahead (measured: 21 of 22 at t=1). ~1.5 m/s^2
+    // at PACE 1, scaled like everything else.
+    const crawling = (ctx.blockerSpeed || 0) < 0.12 * ref && (ctx.blockerAccel || 0) < 0.016 * ref;
     const closing = (ctx.speed || 0) >= (ctx.blockerSpeed || 0) + margin;
     const held = (ctx.freeSpeed || 0) >= bv + margin;
     return crawling || closing || held;
+  }
+
+  // THE LAUNCH. Real lights-out is a reaction (a driver-dependent fraction of a
+  // second) and a getaway that varies car to car; the model had neither, so a
+  // 22-car field held its 8 m grid pitch for fifteen seconds and braked for T1
+  // as one train (measured: median gap 8.0-8.6 m from t=1 to t=15, every speed
+  // within 2 m/s of every other). The plan is drawn once per car per race from
+  // a hash, NOT from simRnd(): the seeded stream's draw count is a contract.
+  //   react — seconds after lights-out before the throttle goes down; awareness
+  //           reads the lights, the roll is the day.
+  //   grip  — the getaway's acceleration multiplier, fading to 1 over 3 s; craft
+  //           and skill manage the wheelspin, the roll is the clutch bite.
+  const _launch = { react: 0, grip: 1 };
+  function launchPlan(t, roll) {
+    const r = roll || 0, r2 = (r * 7919) % 1;
+    _launch.react = clamp(lerp(0.52, 0.16, t.awareness) + (r - 0.5) * 0.22, 0.05, 0.75);
+    const hands = 0.5 * t.craft + 0.5 * clamp((t.skill - 0.9) * 10, 0, 1);
+    _launch.grip = clamp(lerp(0.80, 1.0, hands) + (r2 - 0.5) * 0.2, 0.7, 1.08);
+    return { react: _launch.react, grip: _launch.grip };
+  }
+  const LAUNCH_FADE = 3;   // seconds over which the getaway becomes ordinary acceleration
+  function launchMul(tSince, plan) {
+    if (!plan) return 1;
+    if (tSince < plan.react) return 0;
+    return lerp(plan.grip, 1, clamp((tSince - plan.react) / LAUNCH_FADE, 0, 1));
+  }
+  function launchDone(tSince, plan) { return !plan || tSince > plan.react + LAUNCH_FADE; }
+
+  // PACE PHASE. Two AI cars of equal pace ran in lockstep for a whole race:
+  // identical vmax, identical acceleration, so the gap between them never
+  // changed and neither ever had a reason to pass (the field spread and the
+  // train counts in the racecraft bench). A driver's pace drifts over a stint —
+  // tyres, traffic, focus — so each AI car carries a slow sinusoid on its vmax:
+  // ±0.5 % for a metronome, ±1.6 % for a rookie, period 24-60 s, phase from the
+  // same per-race hash as the launch. Zero-mean, so lap times keep their centre;
+  // AI-only, so nothing here reaches the driver.
+  function pacePhase(t, consistency, roll) {
+    const r = roll || 0;
+    const amp = lerp(0.016, 0.005, consistency == null ? 0.75 : consistency);
+    const period = 24 + r * 36;
+    return 1 + amp * Math.sin((t || 0) * (2 * Math.PI / period) + r * 6 * Math.PI);
   }
 
   // A PASS IS A POSITION, NOT A BIAS. otPull's return is a lateral offset
@@ -386,10 +469,17 @@ const AiDrive = (function () {
   // the centreline yields, which on a corner is the outside car — bt's
   // filterSColl and usr's asymmetric side margin both give the inside car the
   // road. Deterministic, so the symmetry is broken on frame one.
+  // "Behind" is LESS THAN HALF ALONGSIDE, not "half a metre back". The old ±0.5 m
+  // band made a car 0.6 m back — 87 % of a 4.8 m car alongside — the one that
+  // yields, which is how a player rubbing wheels with an AI a bumper ahead was
+  // scrubbed to a crawl. Racing's own rule (the FIA driving standards' "a
+  // significant portion alongside" — front axle past the other car's mirror) is
+  // half a car: inside that, both must leave room, so the OUTER car concedes.
+  const SIDE_LEVEL = 2.4;
   function sideYieldsA(dProg, xA, xB) {
-    if (dProg < -0.5) return true;        // A is behind B
-    if (dProg > 0.5) return false;        // A is ahead
-    return Math.abs(xA) >= Math.abs(xB);  // level: the outer car concedes
+    if (dProg < -SIDE_LEVEL) return true;        // A is behind B
+    if (dProg > SIDE_LEVEL) return false;        // A is ahead
+    return Math.abs(xA) >= Math.abs(xB);         // level: the outer car concedes
   }
 
   function defendPull(ctx) {
@@ -501,5 +591,6 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
     otWant, passTarget, passHold, passCooldown, sideYieldsA,
+    launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
   };
 })();

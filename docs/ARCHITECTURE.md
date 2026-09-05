@@ -901,17 +901,35 @@ with a saw+square synth pair ~90–700 Hz as the fallback when decode fails.
 Continuous layers over it, all on `sfxBus`: turbo whine (high sine), MGU-K
 harvest whirr under deceleration, ERS deploy whine while the battery is
 deploying (level tracks charge, pitch sags under 20%), AIRFLOW (broadband
-bandpass rising with speed², plus kerb/offroad buffeting and wet spray), an
-offroad pitch LFO, and the tyre screech. Per-manufacturer timbre comes from
-`ENGINE_VOICES` keyed by `team.engine` — `setVoice()` before `startEngine()`.
-Must init from a user gesture.
+bandpass rising with speed², plus kerb/offroad buffeting and wet spray), BRAKES
+(bandpass noise gain-following deceleration × speed), an offroad pitch LFO, and
+the tyre screech. Two more ride the engine's own gain on the audio thread: the
+rev-limiter chop (13 Hz square above 98.5%) and GRAVEL (a sine at the crank
+rate, `f0/3`, whose depth dies as `(1-rev)²` — a lumpy idle that is smooth by
+redline). One-shots: gear-shift crack, overrun crackle on a trailing throttle,
+and the turbo wastegate dump on a lift after ≥0.5 s under load. Per-manufacturer
+timbre comes from `ENGINE_VOICES` keyed by `team.engine` — `setVoice()` before
+`startEngine()`. Must init from a user gesture.
+
+The player's ENGINE TONE tune (`js/audio/panel.js`) is a second trim over the
+voice. Every field is a constant multiplier, never a function of rev, so the
+pitch invariants (`tools/check/audio-test.cjs`, `tests/unit/audio-tune.test.mjs`)
+hold by construction. The pitch curve is four independent knobs,
+`rate(rev) = (0.25·idle + 0.45·revRange·rev^curve) · pitch`: IDLE the idle end,
+REV RANGE the span, PITCH a transpose, CURVE the bend (>1 hangs low and climbs
+late). Character: GRAVEL, DETUNE, BRIGHTNESS, SUB. LIMITER: DEPTH, RATE (Hz),
+PITCH SAG (cents in step with the cut). BOOST: LEVEL (ERS whine + whoosh),
+REV LIFT. Layer levels: TURBO (whine + wastegate), HARVEST, WIND, TYRES,
+BRAKES, SHIFT, RIVALS, SPACE, OVERRUN. Twelve layer switches are hard offs. Reach and the reason the curve was split: `docs/DEBUG-HOOKS.md`
+§`audio()`.
 
 ```
 GameAudio.init()  GameAudio.setEnabled(b)  GameAudio.enabled() -> bool
 GameAudio.setVoice(engineName)   // "Mercedes" | "Ferrari" | "Red Bull Ford" | "Honda" | "Audi"
 GameAudio.startEngine() / stopEngine()
 GameAudio.setEngine(rev01, boost01, offroad, speed01, gear, physics?)
-  // physics (optional): { slip, ax, onKerb, wet, deploy, energy, ersDeploy }
+  // physics (optional): { slip, ax, onKerb, wet, tow, deploy, energy, ersDeploy }
+GameAudio.setTune(patch) / setProfile(name) / setLayer(name, on)   // the ENGINE TONE tuner
 GameAudio.setSkid(x 0..1)
 SFX: lightOn(i 0..4), lightsOut(), overtakeReady(), deployBoost(), xMode(on),
      collision(), offtrack(), lap(), finish(), uiTick(), uiSelect(), penalty()
@@ -957,7 +975,7 @@ global directly and load before hub.js.
 |---|---|---|
 | `schedule.js` | `DataSchedule` | SCHEDULE |
 | `standings.js` | `DataStandings` | STANDINGS (drivers + constructors) |
-| `results.js` | `DataResults` | RESULTS (any session of any 2023+ weekend, via the shared picker) |
+| `results.js` | `DataResults` | RESULTS (any session of any 2023+ weekend, via the shared picker; qualifying adds OVERALL / Q1 / Q2 / Q3 round views) |
 | `live.js` | `DataLive` | LIVE (30 s refresh loop) |
 | `telemetry.js` | `DataTelemetry` | TELEMETRY (trace viewer/map/playback; also returns `closeTelemPopup` — the shell closes the popup on tab switch / hub close) |
 | `export.js` | `DataExport` | EXPORT dev tool (GPS traces → ZIP) |

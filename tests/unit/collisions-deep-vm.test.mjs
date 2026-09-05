@@ -49,12 +49,25 @@ test("driver↔AI side contact pushes the PLAYER and the push sticks", async () 
   a.jump(0.3, 40, 0);          // player centred
   a.rival(0, 1.0);             // AI 1 m to the right, overlapping (<2 m)
   a.setInput({ steer: 0, throttle: false });
-  for (let i = 0; i < 30; i++) a.step(1 / 60, 1);
-  const p = a.probe();
+  let minX = Infinity, clearAt = null;
+  for (let i = 0; i < 30; i++) {
+    a.step(1 / 60, 1);
+    const p = a.probe(); minX = Math.min(minX, p.x);
+    const ai = a.cars().find((c) => !c.p);
+    if (clearAt == null && Math.abs(ai.x - p.x) >= 2.0) clearAt = i;
+  }
   a.clearInput();
-  // The AI is on the player's right (+x); contact must shove the player LEFT
-  // and it must persist.
-  lt(p.x, -0.3);
+  // The AI is on the player's right (+x); contact must shove the player LEFT —
+  // the player's share of the separation (a third: AiDrive.humanInvMass) is
+  // real and lands in one frame. It used to be asserted at frame 30 as "and it
+  // must persist", which measured the AI's inability to get out of the way: a
+  // contact-compliant AI (contactGive on every steer) could not steer clear, so
+  // the resolver kept shoving both for the whole window. The AI now steers away
+  // at full authority (compliance applies only TOWARD the contact), the pair is
+  // clear within a few frames, and the player's x thereafter is road drift on a
+  // fixed heading, not contact. Assert the shove and the clean release.
+  lt(minX, -0.15);
+  assert.ok(clearAt != null && clearAt < 12, `the AI never steered clear (${clearAt})`);
 });
 
 test("driver↔AI: player can't be driven through an overlapping rival", async () => {
@@ -220,16 +233,19 @@ test("a single AI rub only nudges the player apart — never launches it", async
   a.setPhysics({ drift: 0 });
   a.jump(0.3, 40, 0);
   a.rivals([{ dProg: 0, dx: 1.0 }]);   // overlapping to the right
-  let maxStep = 0, prev = a.probe().x;
+  let maxStep = 0, prev = a.probe().x, minX = Infinity;
   for (let i = 0; i < 40; i++) {
     a.setInput({ steer: 0, throttle: false });
     a.step(1 / 60, 1);
     const x = a.probe().x;
     maxStep = Math.max(maxStep, Math.abs(x - prev));   // per-frame displacement
-    prev = x;
+    prev = x; minX = Math.min(minX, x);
   }
   a.clearInput();
-  lt(prev, 0);        // shoved away from the rival (to the left)
+  // Shoved away from the rival (to the left) — at the contact, not at frame 40:
+  // the AI steers clear within a few frames now (see the "push sticks" test) and
+  // the player's later x is road drift on a fixed heading.
+  lt(minX, -0.1);
   lt(maxStep, 0.6);   // gentle rub, never a launch/teleport
 });
 

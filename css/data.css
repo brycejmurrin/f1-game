@@ -352,7 +352,9 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 }
 .dh-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
 @media (hover: hover) {
-  .dh-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+  /* :not(.dh-cut) — an elimination band is a rule across the table, not a row
+     of data, so it does not light up when the pointer passes over it. */
+  .dh-table tbody tr:not(.dh-cut):hover { background: rgba(255,255,255,0.03); }
 }
 .dh-table td { padding: 7px calc(var(--gap) * 0.5); vertical-align: middle; }
 .dh-td-pos { width: 26px; text-align: right; color: var(--dim); }
@@ -371,6 +373,18 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
    size across that swap, so picking FP2 does not collapse the panel to the
    spinner's height and bounce it back. */
 .dh-res-body { margin-top: var(--gap); min-height: 160px; }
+/* The qualifying round selector (OVERALL / Q1 / Q2 / Q3), reusing .dh-pill —
+   the same chip the year row uses, so it inherits the tap-target floor below. */
+.dh-rounds { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 3); margin-bottom: var(--gap); }
+/* The band where a round's cut fell. Read as a rule across the table, not as a
+   row of data — no hover, no podium tint, and it must survive the narrow
+   breakpoint's column hiding, so it is styled on the cell not the columns. */
+.dh-cut td {
+  padding: calc(var(--gap) / 3) calc(var(--gap) * 0.5);
+  font-size: var(--fs-1); font-weight: 700; letter-spacing: var(--ls-4);
+  color: var(--dim); background: var(--plate);
+  border-top: 1px solid var(--red); text-align: center;
+}
 .dh-table tbody tr.dh-lr-p1 { color: var(--gold); background: color-mix(in srgb, var(--gold) 7%, transparent); border-left: 3px solid var(--gold); }
 .dh-table tbody tr.dh-lr-p2 { color: var(--silver); background: color-mix(in srgb, var(--silver) 5%, transparent); border-left: 3px solid var(--silver); }
 .dh-table tbody tr.dh-lr-p3 { color: var(--bronze); background: color-mix(in srgb, var(--bronze) 5%, transparent); border-left: 3px solid var(--bronze); }
