@@ -205,6 +205,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/audio-sample-upgrade.test.mjs",
   "tests/unit/audio-tune.test.mjs",
   "tests/unit/rival-audio.test.mjs",
+  // The RESULTS tab drives OpenF1's session_result, whose duration and gap
+  // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
+  "tests/unit/data-results.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",

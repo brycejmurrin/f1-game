@@ -6,7 +6,17 @@ const Input = (function () {
   let MAX_TILT = 36;          // degrees of tilt for full steering lock (higher = less sensitive)
   let DEADZONE = 2.5;         // degrees ignored around neutral — fixed small; not a player knob
   const TILT_SLEW = 8;        // fixed safety cap (steer units/s): a last guard so a hand jolt
-  let KEY_RAMP_IN = 6;        // steer units/s toward full lock
+  // 4, not 6, and the 6 was not wrong when it was written — it became wrong when
+  // the ramp moved into SHAPED space (see digitalStep). At 6 raw-units/s the old
+  // curve crossed 50 % of road-wheel angle at 125 ms; a LINEAR ramp at 6 crosses
+  // it at 83 ms, so simply removing the lurch would have handed the player a
+  // QUICKER car than before, which is the opposite of the report ("too snappy
+  // and lightweight on the on-screen buttons"). 4.01/s reproduces that 125 ms
+  // midpoint exactly, so the mid-corner timing a player already has in their
+  // hands is preserved and only the lurch goes. Full lock now takes 250 ms
+  // rather than 167 — a thumb cannot feather a hold, so the weight has to come
+  // from the rate.
+  let KEY_RAMP_IN = 4;        // steer units/s toward full lock (ROAD-WHEEL units)
   let KEY_RAMP_OUT = 8;       // steer units/s back to centre (quicker: releasing
   let adaptiveMix = 0;
   let steerSpeedRef = 41.7;   // default SPEED STEER v5; pushed from steer-tuning
@@ -331,15 +341,17 @@ const Input = (function () {
    * direction change at one rate per frame.
    */
   function digitalStep(val, target, dt) {
-    if (target === 0) return moveToward(val, 0, KEY_RAMP_OUT * dt);
-    if (val * target < 0) {
-      const toCentre = Math.abs(val);
+    // Work in shaped (road-wheel) space, return raw so game.js's expo undoes it.
+    const v = toShaped(val), t = target;   // target is -1 / 0 / +1; shaping is identity there
+    if (t === 0) return fromShaped(moveToward(v, 0, KEY_RAMP_OUT * dt));
+    if (v * t < 0) {
+      const toCentre = Math.abs(v);
       const unwind = KEY_RAMP_OUT * dt;
-      if (unwind < toCentre) return moveToward(val, 0, unwind);
+      if (unwind < toCentre) return fromShaped(moveToward(v, 0, unwind));
       const spare = (unwind - toCentre) / KEY_RAMP_OUT;   // seconds still unspent
-      return moveToward(0, target, digitalRateIn() * spare);
+      return fromShaped(moveToward(0, t, digitalRateIn() * spare));
     }
-    return moveToward(val, target, digitalRateIn() * dt);
+    return fromShaped(moveToward(v, t, digitalRateIn() * dt));
   }
 
   function digitalRateIn() {
@@ -1093,6 +1105,31 @@ const Input = (function () {
     if (typeof v === "boolean") { adaptiveMix = v ? 1 : 0; return; }
     if (typeof v === "number" && isFinite(v)) adaptiveMix = clamp(v, 0, 1);
   }
+  /* RAMP IN SHAPED SPACE — the road-wheel angle, not the raw stick value.
+   *
+   * js/game.js applies `shaped = sign(s)*|s|^STEER_EXPO` to whatever this
+   * returns, and digitalStep was ramping `s` LINEARLY in time. So the angle the
+   * car actually gets rose as t^2.389 at the shipped LINEARITY: a hold of 25 ms
+   * bought 1.1 % of final lock, 100 ms bought 29.5 %, 150 ms bought 77.7 %.
+   * Nothing, then everything — which is exactly the "too snappy on buttons"
+   * report, and it is worst on the on-screen arrows because a thumb cannot
+   * feather a hold the way a stick feathers a deflection.
+   *
+   * The ramp exists to make a digital source feel analog. The expo undid it.
+   *
+   * So ramp the SHAPED value linearly and hand back its exact inverse: game.js
+   * raises it to STEER_EXPO and gets the linear ramp we intended. Analog sources
+   * are untouched — they never enter digitalStep — and no physics constant
+   * moves, so the characterization baseline is unaffected (it drives through
+   * __apex.setInput, which bypasses this file entirely).
+   */
+  let steerExpo = 2.3889;     // pushed from steer-tuning; the shipped LINEARITY 5
+  function setSteerExpo(e) {
+    if (typeof e === "number" && isFinite(e) && e > 0.05) steerExpo = e;
+  }
+  const toShaped = (v) => (v < 0 ? -1 : 1) * Math.pow(Math.abs(v), steerExpo);
+  const fromShaped = (v) => (v < 0 ? -1 : 1) * Math.pow(Math.abs(v), 1 / steerExpo);
+
   function setSteerSpeedRef(ref) {
     if (typeof ref === "number" && isFinite(ref) && ref > 1) steerSpeedRef = ref;
   }
@@ -1385,6 +1422,7 @@ const Input = (function () {
     setSteerMode,
     setAdaptiveButtons,
     setSteerSpeedRef,
+    setSteerExpo,
     setSpeedStd,
     setSpeedProvider,
     setTimeScale,

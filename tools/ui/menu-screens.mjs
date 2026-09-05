@@ -399,7 +399,7 @@ export const SCREENS = [
   // The data hub's other four tabs. SCHEDULE and TELEMETRY were already covered;
   // these three are tables and one is a form, and a table is where a narrow
   // sheet runs out of width.
-  ...["standings", "lastrace", "live", "export"].map((tab) => ({
+  ...["standings", "results", "live", "export"].map((tab) => ({
     id: "data" + tab, name: "Data hub — " + tab, root: "#datahub", open: async (p) => {
       await p.click("#mb-data"); await p.waitForSelector("#datahub:not([hidden])", { timeout: 15000 });
       await p.waitForTimeout(1200);

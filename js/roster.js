@@ -95,7 +95,7 @@
     "js/data/export.js",
     "js/data/schedule.js",
     "js/data/standings.js",
-    "js/data/lastrace.js",
+    "js/data/results.js",
     "js/data/live.js",
     "js/data/hub.js"
   ],
@@ -121,7 +121,7 @@
       "js/data/hub.js"
     ],
     [
-      "js/data/lastrace.js",
+      "js/data/results.js",
       "js/data/hub.js"
     ],
     [

@@ -130,7 +130,7 @@ _142 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `export.js` | `DataExport` | LAZY_DATA | the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… |
 | `schedule.js` | `DataSchedule` | LAZY_DATA | — (no header comment) |
 | `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
-| `lastrace.js` | `DataLastRace` | LAZY_DATA | — (no header comment) |
+| `results.js` | `DataResults` | LAZY_DATA | the data hub's RESULTS tab: classification for ANY session of any 2023+ weekend (practice, qualifying, sprint, race), not just the latest Grand Prix. |
 | `live.js` | `DataLive` | LAZY_DATA | — (no header comment) |
 | `hub.js` | `DataHub` | LAZY_DATA | DataHub: F1 data overlay (#datahub). |
 
@@ -936,6 +936,10 @@ F1API.latestSession()         -> {sessionKey, name, type, circuit, country, date
 F1API.weather(sessionKey)     -> {airT, trackT, humidity, rainfall, windSpeed} | null
 F1API.positions(sessionKey)   -> [{num, pos}] | null      // folded latest per driver
 F1API.sessionDrivers(sessionKey) -> [{num, code, name, team, color}] | null
+F1API.sessionResult(sessionKey)  -> [{pos, num, laps, points, dnf, dns, dsq, duration, gap}]
+     duration/gap are a NUMBER for practice/sprint/race and a [Q1,Q2,Q3] ARRAY for
+     qualifying; a lapped finisher's gap can be a string ("+1 LAP"). Empty [] when the
+     session has published nothing yet — OpenF1 answers 200 {detail:"No results found."}.
 ```
 
 ## js/data/ — the hub and its tabs
@@ -952,7 +956,7 @@ global directly and load before hub.js.
 |---|---|---|
 | `schedule.js` | `DataSchedule` | SCHEDULE |
 | `standings.js` | `DataStandings` | STANDINGS (drivers + constructors) |
-| `lastrace.js` | `DataLastRace` | LAST RACE |
+| `results.js` | `DataResults` | RESULTS (any session of any 2023+ weekend, via the shared picker) |
 | `live.js` | `DataLive` | LIVE (30 s refresh loop) |
 | `telemetry.js` | `DataTelemetry` | TELEMETRY (trace viewer/map/playback; also returns `closeTelemPopup` — the shell closes the popup on tab switch / hub close) |
 | `export.js` | `DataExport` | EXPORT dev tool (GPS traces → ZIP) |
