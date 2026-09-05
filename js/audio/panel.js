@@ -238,14 +238,21 @@ const AudioPanel = (() => {
        chosen per field so that an EXACT integer lands on 1.0 — a slider whose
        centre is 0.9975 would mean the panel could not express the shipped
        sound, which is the one value it must always be able to return to. */
+    // Same order as the shell: the PITCH CURVE group (idle end, whole-curve
+    // transpose, span, bend), then CHARACTER, then the LAYER levels.
     const TONE = [
+      { k: "idle",       id: "as-t-idle",   lo: 0.50, step: 0.05 },
       { k: "pitch",      id: "as-t-pitch",  lo: 0.60, step: 0.05 },
       { k: "revRange",   id: "as-t-range",  lo: 0.20, step: 0.10 },
+      { k: "curve",      id: "as-t-curve",  lo: 0.40, step: 0.10 },
+      { k: "gravel",     id: "as-t-gravel", lo: 0,    step: 0.25 },
       { k: "detune",     id: "as-t-detune", lo: 0,    step: 0.25 },
       { k: "brightness", id: "as-t-bright", lo: 0.30, step: 0.05 },
+      { k: "sub",        id: "as-t-sub",    lo: 0,    step: 0.25 },
       { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.25 },
       { k: "limiter",    id: "as-t-lim",    lo: 0,    step: 0.25 },
-      { k: "sub",        id: "as-t-sub",    lo: 0,    step: 0.25 },
+      { k: "brakes",     id: "as-t-brakes", lo: 0,    step: 0.25 },
+      { k: "shift",      id: "as-t-shift",  lo: 0,    step: 0.25 },
       { k: "reverb",     id: "as-t-rev",    lo: 0,    step: 0.25 },
       { k: "overrun",    id: "as-t-ovr",    lo: 0,    step: 0.25 },
     ];
@@ -253,17 +260,18 @@ const AudioPanel = (() => {
       { k: "whine",   id: "as-l-whine" },   { k: "harvest", id: "as-l-harvest" },
       { k: "ers",     id: "as-l-ers" },     { k: "wind",    id: "as-l-wind" },
       { k: "limiter", id: "as-l-limiter" }, { k: "screech", id: "as-l-screech" },
-      { k: "sub",     id: "as-l-sub" },     { k: "rivals",  id: "as-l-rivals" },
+      { k: "sub",     id: "as-l-sub" },     { k: "gravel",  id: "as-l-gravel" },
+      { k: "brakes",  id: "as-l-brakes" },  { k: "rivals",  id: "as-l-rivals" },
       { k: "reverb",  id: "as-l-reverb" },  { k: "overrun", id: "as-l-overrun" },
     ];
     const PROFILE_BTN = [["as-p-team", "team"], ["as-p-broadcast", "broadcast"],
       ["as-p-trackside", "trackside"], ["as-p-cockpit", "cockpit"], ["as-p-v10", "v10"]];
     const PROFILE_NOTE = {
       team: "Follows your team's engine — the default sound.",
-      broadcast: "Bright and forward, with the turbo up. The TV mix.",
-      trackside: "Darker, further away, more air and tyre.",
-      cockpit: "Heavy and muffled, with the rev limiter loud. From inside the car.",
-      v10: "Wide, screaming and long-geared. No turbo.",
+      broadcast: "Bright and forward, with the turbo up and the idle clean. The TV mix.",
+      trackside: "Darker, further away, lumpier at idle, more air, tyre and brake.",
+      cockpit: "Heavy and muffled, with the rev limiter, brakes and gearbox loud. From inside the car.",
+      v10: "Low lazy idle, then a late climb to a scream. No turbo.",
     };
     // The engine owns which profile is live — it flips itself to "custom" the
     // moment a trim stops matching the named preset (setTune, js/audio/engine.js).

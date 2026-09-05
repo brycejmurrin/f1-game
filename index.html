@@ -731,7 +731,7 @@
 
       <!-- ENGINE TONE: the player's own trim, layered OVER the manufacturer
            voice that team.engine already picks (js/audio/engine.js ENGINE_VOICES).
-           A profile REPLACES the six trims; moving any slider afterwards leaves
+           A profile REPLACES the trims; moving any slider afterwards leaves
            the profile row unlit, because the tune is then the player's and no
            longer that preset's. Closed by default, like YOUR TRACKS and SPOTIFY
            — an opt-in workflow, same closed default as MUSIC / SOUND.
@@ -739,7 +739,11 @@
            Every knob here is a CONSTANT multiplier, never a function of rev:
            that is the contract tools/check/audio-test.cjs and
            tests/unit/audio-tune.test.mjs both hold the engine to, and it is why
-           no slider position can make pitch fall as the revs rise. -->
+           no slider position can make pitch fall as the revs rise. The three
+           groups are the engine's own split: PITCH CURVE is the four knobs of
+           rate(rev) — the idle end, the whole-curve transpose, the span and the
+           bend between them — CHARACTER is timbre, LAYERS are the levels of
+           the sounds stacked over the core. -->
       <details id="as-engine-details" class="as-sec">
         <summary class="adv-more-btn" id="as-engine-sum">ENGINE TONE · TEAM</summary>
         <div class="opt-row" role="group" aria-label="Sound profile">
@@ -750,20 +754,33 @@
           <button id="as-p-v10" class="opt-btn" type="button">V10</button>
         </div>
         <p id="as-p-note" class="as-note"></p>
+        <h3 class="adv-sec">PITCH CURVE</h3>
+        <label class="tune-row"><span class="tune-label">IDLE <b id="as-t-idle-v">100</b></span>
+          <input id="as-t-idle" type="range" min="0" max="22" step="1" value="10" aria-label="Idle pitch"></label>
         <label class="tune-row"><span class="tune-label">PITCH <b id="as-t-pitch-v">100</b></span>
-          <input id="as-t-pitch" type="range" min="0" max="20" step="1" value="8" aria-label="Engine pitch"></label>
+          <input id="as-t-pitch" type="range" min="0" max="24" step="1" value="8" aria-label="Engine pitch"></label>
         <label class="tune-row"><span class="tune-label">REV RANGE <b id="as-t-range-v">100</b></span>
-          <input id="as-t-range" type="range" min="0" max="23" step="1" value="8" aria-label="Rev range"></label>
+          <input id="as-t-range" type="range" min="0" max="38" step="1" value="8" aria-label="Rev range"></label>
+        <label class="tune-row"><span class="tune-label">CURVE <b id="as-t-curve-v">100</b></span>
+          <input id="as-t-curve" type="range" min="0" max="21" step="1" value="6" aria-label="Rev curve bend: low hangs low and climbs late, high rises early"></label>
+        <h3 class="adv-sec">CHARACTER</h3>
+        <label class="tune-row"><span class="tune-label">GRAVEL <b id="as-t-gravel-v">100</b></span>
+          <input id="as-t-gravel" type="range" min="0" max="16" step="1" value="4" aria-label="Low-rev roughness"></label>
         <label class="tune-row"><span class="tune-label">DETUNE <b id="as-t-detune-v">100</b></span>
           <input id="as-t-detune" type="range" min="0" max="16" step="1" value="4" aria-label="Engine detune"></label>
         <label class="tune-row"><span class="tune-label">BRIGHTNESS <b id="as-t-bright-v">100</b></span>
           <input id="as-t-bright" type="range" min="0" max="44" step="1" value="14" aria-label="Engine brightness"></label>
-        <label class="tune-row"><span class="tune-label">TURBO <b id="as-t-whine-v">100</b></span>
-          <input id="as-t-whine" type="range" min="0" max="16" step="1" value="4" aria-label="Turbo whine level"></label>
-        <label class="tune-row"><span class="tune-label">LIMITER <b id="as-t-lim-v">100</b></span>
-          <input id="as-t-lim" type="range" min="0" max="12" step="1" value="4" aria-label="Rev limiter chop depth"></label>
         <label class="tune-row"><span class="tune-label">SUB <b id="as-t-sub-v">100</b></span>
           <input id="as-t-sub" type="range" min="0" max="16" step="1" value="4" aria-label="Sub-octave weight"></label>
+        <h3 class="adv-sec">LAYERS</h3>
+        <label class="tune-row"><span class="tune-label">TURBO <b id="as-t-whine-v">100</b></span>
+          <input id="as-t-whine" type="range" min="0" max="16" step="1" value="4" aria-label="Turbo whine and wastegate level"></label>
+        <label class="tune-row"><span class="tune-label">LIMITER <b id="as-t-lim-v">100</b></span>
+          <input id="as-t-lim" type="range" min="0" max="12" step="1" value="4" aria-label="Rev limiter chop depth"></label>
+        <label class="tune-row"><span class="tune-label">BRAKES <b id="as-t-brakes-v">100</b></span>
+          <input id="as-t-brakes" type="range" min="0" max="16" step="1" value="4" aria-label="Brake roar level"></label>
+        <label class="tune-row"><span class="tune-label">SHIFT <b id="as-t-shift-v">100</b></span>
+          <input id="as-t-shift" type="range" min="0" max="12" step="1" value="4" aria-label="Gear-shift crack level"></label>
         <label class="tune-row"><span class="tune-label">SPACE <b id="as-t-rev-v">100</b></span>
           <input id="as-t-rev" type="range" min="0" max="16" step="1" value="4" aria-label="Circuit reverb amount"></label>
         <label class="tune-row"><span class="tune-label">OVERRUN <b id="as-t-ovr-v">100</b></span>
@@ -778,6 +795,8 @@
           <button id="as-l-limiter" class="opt-btn" type="button" aria-pressed="true">LIMITER</button>
           <button id="as-l-screech" class="opt-btn" type="button" aria-pressed="true">TYRES</button>
           <button id="as-l-sub" class="opt-btn" type="button" aria-pressed="true">SUB</button>
+          <button id="as-l-gravel" class="opt-btn" type="button" aria-pressed="true">GRAVEL</button>
+          <button id="as-l-brakes" class="opt-btn" type="button" aria-pressed="true">BRAKES</button>
           <button id="as-l-rivals" class="opt-btn" type="button" aria-pressed="true">RIVALS</button>
           <button id="as-l-reverb" class="opt-btn" type="button" aria-pressed="true">SPACE</button>
           <button id="as-l-overrun" class="opt-btn" type="button" aria-pressed="true">OVERRUN</button>

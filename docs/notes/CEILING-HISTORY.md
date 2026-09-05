@@ -2070,3 +2070,18 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   `js/physics/ai-drive.js` (unit-tested), so game.js again keeps only the call
   sites. After: speeds span 8 m/s at t=4 and 17 order changes in ten seconds
   (`tests/unit/ai-racecraft-vm.test.mjs`, the start test).
+
+- `shellNodes` 1133 -> **1158** (2026-09-05): the ENGINE TONE redesign. The
+  tuner's pitch curve was two knobs and PITCH scaled both ends, so a low,
+  grumbling idle could only be bought by pulling the whole curve down and REV
+  RANGE (capped at 2.5) could not put the redline back — measured, PITCH 0.6 +
+  REV RANGE 2.5 reached a redline rate of 0.83 against the stock 0.70, a fifth
+  of an octave for a knob that read 2.5x. The curve is now four independent
+  knobs (IDLE / PITCH / REV RANGE / CURVE, `rate = (0.25·idle +
+  0.45·revRange·rev^curve)·pitch`, a 50:1 reach), plus GRAVEL (crank-rate
+  roughness that fades with rev), BRAKES (carbon roar under deceleration) and
+  SHIFT (gear-crack level), each a slider of four nodes (20), GRAVEL and
+  BRAKES switches (2), and three `h3.adv-sec` group headers (3) so fourteen
+  sliders read as PITCH CURVE / CHARACTER / LAYERS rather than a list. All
+  static DOM, as the shell rule wants; `tests/unit/audio-tune.test.mjs` holds
+  every id, range and default position against the engine's tables.

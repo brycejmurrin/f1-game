@@ -2382,8 +2382,8 @@ const api = {
     return noAudio() || { ok: true, profile: GameAudio.profile(), profiles: GameAudio.profiles(),
       voice: GameAudio.voiceName(), voices: GameAudio.voices(),
       tune: GameAudio.tune(), range: GameAudio.tuneRange(), defaults: GameAudio.tuneDefaults(),
-      layers: GameAudio.layers(), rate: GameAudio.rate(), limiterDepth: GameAudio.limiterDepth(),
-      windLevel: GameAudio.windLevel(), debug: GameAudio.debug() };
+      layers: GameAudio.layers(), rate: GameAudio.rate(), limiterDepth: GameAudio.limiterDepth(), windLevel: GameAudio.windLevel(),
+      gravelDepth: GameAudio.gravelDepth(), brakeLevel: GameAudio.brakeLevel(), wastegate: GameAudio.wastegateState(), debug: GameAudio.debug() };
   },
   audioTune(patch) {
     return noAudio() || GameAudio.setTune(patch);

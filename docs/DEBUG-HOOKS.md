@@ -825,16 +825,37 @@ gear 1 below gear 4 at redline, whatever the sliders say — pinned headlessly b
 rev-to-pitch SPAN rather than offsetting it, and it is clamped strictly
 positive for exactly that reason.
 
-### `audio() → {profile, profiles, voice, voices, tune, range, defaults, layers, rate, limiterDepth, windLevel, debug}`
+### `audio() → {profile, profiles, voice, voices, tune, range, defaults, layers, rate, limiterDepth, windLevel, gravelDepth, brakeLevel, wastegate, debug}`
 Everything about the current engine sound in one read. `rate` is the live
 `playbackRate` (ground-truth pitch — perceived pitch scales linearly with it),
 `limiterDepth` the rev-limiter chop's depth, `windLevel` the airflow layer's
-gain. `debug` is `GameAudio.debug()`'s bundle (context state, `samplesReady`,
-`usingSamples`, `engineOn`).
+gain, `gravelDepth` the crank-rate roughness swing on the engine gain,
+`brakeLevel` the brake roar's gain and `wastegate` `{fired, pullT}` — dumps so
+far and the seconds under load arming the next. `debug` is
+`GameAudio.debug()`'s bundle (context state, `samplesReady`, `usingSamples`,
+`engineOn`).
 
-`GameAudio` carries three more reads that only the tests want:
-`engineCut()` (the core's live lowpass corner), `engineLevel()` (its gain, which
-is `level - limiterDepth`) and `limiterHz()` (the chop rate). The pair
+**The pitch curve is four independent knobs**, and `tune` carries all four:
+
+```
+rate(rev) = (0.25·idle + 0.45·revRange·rev^curve) · pitch   (× gear, boost, voice)
+```
+
+`idle` moves the idle end alone, `revRange` the span alone, `pitch` transposes
+the finished curve, `curve` bends the path (above 1 the note hangs low through
+the mid-range and climbs late; below 1 it rises early). They were two knobs
+once, and `pitch` scaled both ends: a low grumbling idle could only be had by
+dragging the whole curve down, and REV RANGE (then capped at 2.5) could not
+put the redline back — measured, PITCH 0.6 + REV RANGE 2.5 reached a redline
+rate of 0.83 against the stock 0.70. `tests/unit/audio-tune.test.mjs` pins the
+independence and the reach (idle an octave under stock with a redline an
+octave over it, in one tune).
+
+`GameAudio` carries more reads that only the tests want: `engineCut()` (the
+core's live lowpass corner), `engineLevel()` (its gain, which is
+`level - limiterDepth`), `limiterHz()` (the chop rate), `gravelHz()` (the
+roughness rate — the crank rate, `f0/3`, clamped into 18–140 Hz) and
+`shiftState()` (`{fired, peak}`, the last gear-change crack's level). The pair
 `engineLevel`/`limiterDepth` is what says whether the rev-limiter gate CUTS the
 note or inverts it: `engGain`'s base is `level - depth` and the square swings
 ±depth on top, so a depth past half the level drives the gain negative. It is
@@ -850,7 +871,7 @@ silently — the top of the slider moved a number that no longer moved the sound
 The ceiling is `sampleRate * 0.45`, so the pin is ours and audible.
 
 ```js
-__apex.audio().tune;            // { pitch: 1, detune: 1, revRange: 1, … }
+__apex.audio().tune;            // { pitch: 1, idle: 1, revRange: 1, curve: 1, gravel: 1, … }
 __apex.audio().rate;            // 0 unless the engine is running
 ```
 
@@ -862,6 +883,7 @@ for the rest of the session. Returns the tune actually in force.
 
 ```js
 __apex.audioTune({ pitch: 1.15, brightness: 1.4 });
+__apex.audioTune({ idle: 0.6, revRange: 2.5, curve: 1.3, gravel: 2 });   // low lumpy idle, late climb to a scream
 __apex.audioTune({ pitch: NaN });        // no-op, not a crash
 ```
 
@@ -874,9 +896,11 @@ always gives the same tune. An unknown name falls back to `team`.
 ### `audioLayer(name, on) → layers`
 Switch one engine layer: `whine` (turbo), `harvest` (MGU-K), `ers`, `wind`,
 `limiter` (the rev-limiter chop), `screech` (tyres), `sub` (the sub-octave under
-the note), `rivals` (the cars around you), `reverb` (circuit acoustics) and
-`overrun` (off-throttle crackle). A muted layer is silent, not merely quiet,
-and then costs no per-frame scheduling.
+the note), `gravel` (crank-rate roughness at low revs), `brakes` (the carbon
+roar under deceleration), `rivals` (the cars around you), `reverb` (circuit
+acoustics) and `overrun` (off-throttle crackle). The wastegate dump on a lift
+belongs to `whine`. A muted layer is silent, not merely quiet, and then costs
+no per-frame scheduling.
 
 ### The field, the space and the overrun
 Three layers are worth naming because none of them existed before and each

@@ -26,6 +26,8 @@ const GameAudio = (function () {
   let windSrc = null, windFilter = null, windGain = null; // airflow over the car
   let subOctOsc = null, subOctGain = null;        // sub-octave weight under the sample core
   let tiltEq = null;                              // rev-compensating high shelf (see setEngine)
+  let gravOsc = null, gravGain = null;            // low-rev roughness: crank-rate AM into engGain.gain
+  let brakeSrc = null, brakeFilter = null, brakeGain = null; // carbon-brake roar under deceleration
 
   // RIVAL ENGINES. The game had no opponent audio at all and no panner anywhere
   // in the graph, so a car alongside was silent and the only cue you had for it
@@ -139,25 +141,42 @@ const GameAudio = (function () {
   // function of rev, so tools/check/audio-test.cjs's invariants (pitch
   // monotonic in rev per gear, gear1 < gear4 at redline) hold by construction.
   //
-  // revRange is the one field that scales the rev->pitch SPAN rather than
-  // offsetting it, so it is the only one that changes the curve's shape. It is
-  // clamped strictly positive, which is exactly what monotonicity needs: the
-  // rev coefficient keeps its sign, and both gears take the same factor, so the
-  // ordering is untouched. `sub` weights the synth fallback's sub-octave only
-  // (the sample core has no such layer) and is set by profiles rather than a
-  // slider, which is why the UI carries six knobs and this table seven.
-  const TUNE_DEF = Object.freeze({ pitch: 1, detune: 1, revRange: 1, brightness: 1, whine: 1, sub: 1, limiter: 1, reverb: 1, overrun: 1 });
+  // THE PITCH CURVE IS FOUR KNOBS, and they are independent on purpose.
+  //   rate(rev) = (IDLE_RATE * idle + SPAN_RATE * revRange * rev^curve) * pitch
+  // The first cut had only `pitch` and `revRange`, and `pitch` scaled BOTH
+  // ends: the only way to a lower, lumpier idle was to pull the whole curve
+  // down, and REV RANGE topped out well before it could put the redline back.
+  // Measured: PITCH 0.6 + REV RANGE 2.5 reached a redline rate of 0.83 against
+  // the stock 0.70 — a fifth of an octave, for a slider that reads "2.5x". A
+  // low grumble at idle with a proper scream at the top was simply not in the
+  // reachable set. So `idle` now moves the idle end ALONE, `revRange` the span
+  // alone, `pitch` transposes the finished curve, and `curve` bends the path
+  // between them — an exponent on rev, so above 1 the note hangs low through
+  // the mid-range and climbs late, which is the V10-era shape; below 1 it
+  // rises early and flattens.
+  //
+  // Every one of them is clamped strictly positive and none is a function of
+  // rev, which is exactly what monotonicity needs: the rev term keeps its sign
+  // (rev^curve is increasing for any curve > 0), and both gears take the same
+  // factors, so the ordering is untouched. `sub` weights the sub-octave;
+  // `gravel` the crank-rate roughness that fades with rev; `brakes` the
+  // carbon-brake roar; `shift` the gear-change crack.
+  const TUNE_DEF = Object.freeze({ pitch: 1, idle: 1, revRange: 1, curve: 1, detune: 1, brightness: 1, gravel: 1, whine: 1, sub: 1, limiter: 1, brakes: 1, shift: 1, reverb: 1, overrun: 1 });
   // WIDER THAN IS SENSIBLE, on purpose. The first cut of these ranges was
   // conservative enough that several trims could not be pushed far enough to
   // hear at all — a tuner whose extremes sound like its middle is a tuner
   // nobody can learn. Every range still contains 1.0 EXACTLY (the panel's step
-  // table is chosen so an integer slider position lands on it), and revRange
-  // stays strictly positive, which is the whole of what the pitch invariants
-  // need. The far ends are meant to be too much; that is what ends are for.
+  // table is chosen so an integer slider position lands on it), and the four
+  // pitch-curve fields stay strictly positive, which is the whole of what the
+  // pitch invariants need. The far ends are meant to be too much; that is what
+  // ends are for. Reach, at the corners, on the sample core: idle rate 0.075
+  // (IDLE 0.5 x PITCH 0.6) up to a redline rate of 3.96 (IDLE 1.6, REV RANGE
+  // 4, PITCH 1.8) — a 50:1 spread against the stock 2.8:1.
   const TUNE_RANGE = Object.freeze({
-    pitch:      [0.60, 1.60], detune: [0, 4],    revRange: [0.20, 2.50],
-    brightness: [0.30, 2.50], whine:  [0, 4],    sub:      [0, 4],   limiter: [0, 3],
-    reverb:     [0, 4],     overrun: [0, 4],
+    pitch:      [0.60, 1.80], idle:  [0.50, 1.60], revRange: [0.20, 4.00], curve: [0.40, 2.50],
+    detune:     [0, 4],       brightness: [0.30, 2.50], gravel: [0, 4],
+    whine:      [0, 4],       sub:   [0, 4],       limiter:  [0, 3],
+    brakes:     [0, 4],       shift: [0, 3],       reverb:   [0, 4],    overrun: [0, 4],
   });
   let tune = Object.assign({}, TUNE_DEF);
 
@@ -165,19 +184,23 @@ const GameAudio = (function () {
   // gain target of 0 — and because every muted layer goes through aimGain, its
   // steady state costs no per-frame scheduling at all (the _apexAimTgt guard,
   // the same idiom limGain/lfoG use further down).
-  const LAYER_DEF = Object.freeze({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true, sub: true, rivals: true, reverb: true, overrun: true });
+  const LAYER_DEF = Object.freeze({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true, sub: true, gravel: true, brakes: true, rivals: true, reverb: true, overrun: true });
   let layers = Object.assign({}, LAYER_DEF);
 
   // Named tune presets the player picks INSTEAD of inheriting the team's
   // engine. "team" is the shipped behaviour: identity trims, and ENGINE_VOICES
   // still keys off team.engine. The rest layer over whatever voice the team
   // gave, so a Ferrari on COCKPIT is still recognisably a Ferrari.
+  // Fields a profile omits fall back to TUNE_DEF (setProfile), so a preset
+  // only names what it moves.
   const SOUND_PROFILES = Object.freeze({
     team:      null,
-    broadcast: { pitch: 1.02, detune: 0.9, revRange: 1.05, brightness: 1.18, whine: 1.30, sub: 0.80, limiter: 1.00 },
-    trackside: { pitch: 0.99, detune: 1.3, revRange: 1.00, brightness: 0.82, whine: 0.65, sub: 1.15, limiter: 0.85 },
-    cockpit:   { pitch: 1.00, detune: 1.0, revRange: 0.92, brightness: 0.68, whine: 0.85, sub: 1.60, limiter: 1.35 },
-    v10:       { pitch: 1.07, detune: 2.2, revRange: 1.28, brightness: 1.28, whine: 0.10, sub: 0.70, limiter: 1.15 },
+    broadcast: { pitch: 1.02, detune: 0.9, revRange: 1.05, brightness: 1.18, whine: 1.30, sub: 0.80, limiter: 1.00, gravel: 0.60, brakes: 0.90, shift: 1.10 },
+    trackside: { pitch: 0.99, detune: 1.3, revRange: 1.00, brightness: 0.82, whine: 0.65, sub: 1.15, limiter: 0.85, idle: 0.95, gravel: 1.40, brakes: 1.20, shift: 0.90 },
+    cockpit:   { pitch: 1.00, detune: 1.0, revRange: 0.92, brightness: 0.68, whine: 0.85, sub: 1.60, limiter: 1.35, curve: 0.95, gravel: 1.30, brakes: 1.50, shift: 1.40 },
+    // A V10 idles low and lazy, hangs there, then climbs to a shriek: low idle,
+    // wide span, a late curve, and almost none of the turbo-era roughness.
+    v10:       { pitch: 1.07, detune: 2.2, revRange: 1.60, brightness: 1.28, whine: 0.10, sub: 0.70, limiter: 1.15, idle: 0.85, curve: 1.25, gravel: 0.30, brakes: 0.80, shift: 1.20 },
   });
   let profileName = "team";
 
@@ -223,6 +246,9 @@ const GameAudio = (function () {
   let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
   let overrunT = 0;                    // when the next overrun crackle is due
   let overrunFired = 0;                // crackles emitted this session (test hook)
+  let pullT = 0;                       // seconds the engine has been under load (wastegate arming)
+  let wasteFired = 0;                  // wastegate dumps emitted this session (test hook)
+  let shiftFired = 0, shiftPeak = 0;   // gear-shift cracks emitted, and the last one's level (test hook)
   let idleGainRamped = false;          // the sample voice's one-time fade-in (see setEngine)
 
   let engBuf = null, samplesReady = false;
@@ -656,6 +682,20 @@ const GameAudio = (function () {
     limGain = ctx.createGain(); limGain.gain.value = 0;
     limOsc.connect(limGain).connect(engGain.gain);
     limOsc.start();
+    // GRAVEL. The recording is a steady drone, and pitching it down for idle
+    // gives a LOWER drone, not a lumpier one — every cycle is the same as the
+    // last, which is what the "too clean at idle" complaint is. Real
+    // roughness is amplitude modulation at the crank rate: the note wobbles
+    // once per revolution as cylinders fire unevenly, and at idle that lands
+    // in the 20-100 Hz band the ear reads as grit rather than as a tone. Same
+    // wiring as the rev limiter — a sine into engGain.gain on the audio
+    // thread, so the modulation costs no per-frame scheduling — with its rate
+    // tracking the engine's fundamental (setEngine) and its depth fading with
+    // rev, because a screaming F1 top end is smooth.
+    gravOsc = ctx.createOscillator(); gravOsc.type = "sine"; gravOsc.frequency.value = 40;
+    gravGain = ctx.createGain(); gravGain.gain.value = 0;
+    gravOsc.connect(gravGain).connect(engGain.gain);
+    gravOsc.start();
     engFilter.type = "lowpass";
     engFilter.frequency.value = 600;
     engGain.gain.value = 0;
@@ -916,6 +956,23 @@ const GameAudio = (function () {
     windGain.gain.value = 0;
     windSrc.connect(windFilter).connect(windGain).connect(sfxBus);
 
+    // BRAKES. Braking had a load term on the engine (brakeLoad, a filter lift)
+    // and a beep for the assist, and no sound of its own — a 5 g stop from
+    // 300 km/h was the engine note falling and nothing else. Carbon discs
+    // under load roar: broadband, low-mid, rising with how hard the pedal is
+    // in. Looped noise through a bandpass that gain-follows deceleration
+    // (setEngine's brakeFrac), own buffer because it loops.
+    brakeSrc = ctx.createBufferSource();
+    brakeSrc.buffer = noiseBuf(0.6);
+    brakeSrc.loop = true;
+    brakeFilter = ctx.createBiquadFilter();
+    brakeFilter.type = "bandpass";
+    brakeFilter.frequency.value = 900;
+    brakeFilter.Q.value = 0.9;
+    brakeGain = ctx.createGain();
+    brakeGain.gain.value = 0;
+    brakeSrc.connect(brakeFilter).connect(brakeGain).connect(sfxBus);
+
     if (usingSamples) engSrcIdle.start(0, engSrcIdle.loopStart);
     else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
@@ -926,12 +983,14 @@ const GameAudio = (function () {
     lfo.start();
     skidSrc.start();
     windSrc.start();
+    brakeSrc.start();
 
     lastSpeed = 0;
     lastEngT = 0;
     harvLevel = 0;
     shiftDuck = 0;
     shiftDuckT = 0;
+    pullT = 0;
     engineOn = true;
   }
 
@@ -946,6 +1005,7 @@ const GameAudio = (function () {
     ersGain.gain.setTargetAtTime(0, t0, 0.04);
     windGain.gain.setTargetAtTime(0, t0, 0.06);
     skidGain.gain.setTargetAtTime(0, t0, 0.04);
+    if (brakeGain) brakeGain.gain.setTargetAtTime(0, t0, 0.06);
     const stopAt = (n, t) => { try { if (n) n.stop(t); } catch (e) { /* already stopped */ } };
     if (usingSamples) {
       if (engGainIdle) engGainIdle.gain.setTargetAtTime(0, t0, 0.06);
@@ -960,6 +1020,12 @@ const GameAudio = (function () {
     if (limGain) limGain.gain.setTargetAtTime(0, t0, 0.02);
     const deadLimGain = limGain;                       // disconnected with `dead` below
     if (limOsc) { stopAt(limOsc, t0 + 0.35); limOsc = null; limGain = null; }
+    // Same shape as limGain: gravGain feeds an AudioParam, so it is invisible
+    // to a graph walk and has to be buried by name.
+    if (gravGain) gravGain.gain.setTargetAtTime(0, t0, 0.02);
+    const deadGravGain = gravGain;
+    if (gravOsc) { stopAt(gravOsc, t0 + 0.35); gravOsc = null; gravGain = null; }
+    stopAt(brakeSrc, t0 + 0.35);
     stopAt(whineOsc, t0 + 0.35);
     stopAt(subOctOsc, t0 + 0.35);
     for (const v of rivalVoices) { try { v.gain.gain.setTargetAtTime(0, t0, 0.06); v.stop(t0 + 0.35); } catch (e) { /* already stopped */ } }
@@ -974,6 +1040,7 @@ const GameAudio = (function () {
     harvSrc = null;
     ersOsc = null;
     windSrc = null;
+    brakeSrc = null;
     lfo = null;
     skidSrc = null;
     // Disconnect the test analyser tap so it doesn't accumulate across restarts.
@@ -994,11 +1061,13 @@ const GameAudio = (function () {
     // graph for outputs.
     const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
                   voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain,
-                  deadIdleGain, deadLimGain, revSend, convolver, revReturn];
+                  deadIdleGain, deadLimGain, deadGravGain, brakeFilter, brakeGain,
+                  revSend, convolver, revReturn];
     for (const v of rivalVoices) { dead.push(v.filt, v.gain, v.pan); }
     queueDying(dead);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
+    brakeFilter = brakeGain = null;
     subOctOsc = subOctGain = null;
     convolver = revSend = revReturn = null;
     rivalVoices = [];
@@ -1046,14 +1115,22 @@ const GameAudio = (function () {
       if (shiftDuck < 0.0001) shiftDuck = 0;
     }
 
+    // The pitch curve's rev term, bent by CURVE (see TUNE_DEF): an exponent
+    // keeps it 0 at idle, 1 at redline and increasing in between whatever the
+    // trim, which is the monotonicity the checks pin.
+    const revC = Math.pow(rev, tune.curve);
+    let f0 = 0;   // the core's live fundamental, Hz — the sub-octave and the gravel rate hang off it
     if (usingSamples) {
       const g = (typeof gear === "number" && isFinite(gear)) ? Math.max(1, Math.min(8, Math.round(gear))) : 8;
       const gmul = g <= 3 ? LOW_GEAR_RATE[g - 1] : 1.0;
       // rateTrim is a CONSTANT per-manufacturer offset: pitch stays monotonic
       // in rev and the gear ordering is unchanged (same trim on both sides).
-      const rate = (0.25 + rev * 0.45 * tune.revRange) * (1 + 0.04 * b) * gmul * voice.rateTrim * tune.pitch;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
+      // IDLE moves only the 0.25 end, REV RANGE only the 0.45 span, PITCH the
+      // sum — the decoupling TUNE_DEF explains.
+      const rate = (0.25 * tune.idle + revC * 0.45 * tune.revRange) * (1 + 0.04 * b) * gmul * voice.rateTrim * tune.pitch;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       lastRate = rate;
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
+      f0 = enginePeriod > 1 ? (ctx.sampleRate * rate) / enginePeriod : 0;
       // NOT a crossfade to the second recording: measured 2026-09-03 with
       // tools/check/audio-test.cjs, blending f1_rev.mp3 in under load read
       // DARKER (centroid 1489 -> 1389 Hz at the same rev), the same defect
@@ -1078,10 +1155,11 @@ const GameAudio = (function () {
       if (!idleGainRamped && engGainIdle) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
-      const base = (gIdle + rev * gSpan * tune.revRange) * (1 + 0.12 * b) * voice.rateTrim * tune.pitch;
+      const base = (gIdle * tune.idle + revC * gSpan * tune.revRange) * (1 + 0.12 * b) * voice.rateTrim * tune.pitch;
       engA.frequency.setTargetAtTime(base * 0.994, t, 0.025);
       engB.frequency.setTargetAtTime(base * (1 + (voice.synthSpread - 1) * tune.detune), t, 0.025);
       engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
+      f0 = base;
     }
 
     // Engine load from traction loss: when wheels are sliding the engine works
@@ -1150,7 +1228,28 @@ const GameAudio = (function () {
       limGain.gain.setTargetAtTime(limDepth, t, 0.02);
       limGain._apexLimTgt = limDepth;
     }
-    engGain.gain.setTargetAtTime((lvl - limDepth) * (1 - 0.55 * shiftDuck), t, 0.03);
+    const engBase = (lvl - limDepth) * (1 - 0.55 * shiftDuck);
+    engGain.gain.setTargetAtTime(engBase, t, 0.03);
+
+    // GRAVEL (see startEngine). Rate is the CRANK rate: the recording's
+    // fundamental is its firing rate, and a V6 fires three times a turn, so
+    // f0/3 is once per revolution — 45 Hz at the stock idle, sliding up with
+    // the note. Clamped into 18-140 Hz: below that it is a flutter, above it
+    // a second tone rather than roughness. Depth is a share of the engine's own
+    // level that dies as the square of rev (a quarter left at half revs,
+    // nothing at redline), then CAPPED so the trough of the swing can never
+    // take engGain negative — the same inversion the limiter's cap prevents,
+    // and both swings share the one param: base - limDepth is what is left.
+    if (gravOsc && gravGain) {
+      const gravF = Math.max(18, Math.min(140, f0 / 3));
+      if (Math.abs((gravOsc.frequency._apexHz ?? -1) - gravF) > 0.5) {
+        gravOsc.frequency.setTargetAtTime(gravF, t, 0.05);
+        gravOsc.frequency._apexHz = gravF;
+      }
+      const lump = (1 - rev) * (1 - rev);
+      const want = layers.gravel ? engBase * 0.55 * lump * tune.gravel : 0;
+      aimGain(gravGain, Math.min(want, Math.max(0, engBase - limDepth)), t, 0.05);
+    }
 
     // Turbo whine: in low gears (1-3) mechanical supercharger character — the
     // frequency climbs faster but levels off earlier than at high speed.
@@ -1269,6 +1368,45 @@ const GameAudio = (function () {
       layers.wind ? (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen : 0,
       t, 0.10);
     windFilter.frequency.setTargetAtTime(450 + s * 1450 + rough * 260, t, 0.12);
+
+    // BRAKES (see startEngine). Level follows how hard the car is stopping
+    // (brakeFrac: 60 m/s² is the full pedal) and how fast it is going — the
+    // same deceleration is a roar at 300 km/h and a scuff at 50. The centre
+    // climbs with speed and with pedal, so a stamp from top speed opens up
+    // and a trail into the apex settles down; a wet disc is a touch quieter
+    // and duller. Off the brakes it is exactly 0 through aimGain, so a
+    // straight costs nothing per frame.
+    if (brakeGain) {
+      // `> 0`, not a bare product: clamp01(-(0)/60) is -0, and a -0 target
+      // is a real value to aimGain and a different one to Object.is.
+      const brk = brakeFrac > 0 ? brakeFrac * Math.min(1, 0.25 + s) : 0;
+      aimGain(brakeGain, (layers.brakes && brk > 0) ? brk * (0.020 + 0.050 * s) * (wet ? 0.8 : 1) * tune.brakes : 0, t, 0.06);
+      if (brk > 0) {
+        const bf = (600 + s * 900 + brakeFrac * 500) * (wet ? 0.85 : 1);
+        if (Math.abs((brakeFilter.frequency._apexHz ?? -1) - bf) > 20) {
+          brakeFilter.frequency.setTargetAtTime(bf, t, 0.08);
+          brakeFilter.frequency._apexHz = bf;
+        }
+      }
+    }
+
+    // WASTEGATE. A turbo held on boost and then dumped vents through the
+    // wastegate — the "pssh" that follows every upshift-into-lift on a
+    // broadcast. It is armed by TIME UNDER LOAD (pullT, the seconds ax has
+    // read a real pull at revs) rather than by rev alone, so a blip in the
+    // pits cannot fire it, and it fires ONCE per lift: the counter resets the
+    // moment the throttle closes, and re-arms only through another pull. It
+    // is the turbo's sound, so the TURBO trim and switch own it.
+    const ax = ph.ax || 0;
+    if (ax > 5 && rev > 0.45) pullT += dt;
+    else if (ax < 0.5) {
+      if (pullT > 0.5 && layers.whine && s > 0.1) {
+        wasteFired++;
+        const k = (0.4 + 0.6 * rev) * voice.whineLvl * tune.whine;
+        hiss(0.055 * k, 0.16, 3800, 1300);
+      }
+      pullT = 0;
+    }
 
     // offroad: ~8 Hz pitch wobble via the LFO (gain is cents of detune)
     // THE SIXTH CONSTANT setTargetAtTime, missed by the pass that removed five
@@ -1394,14 +1532,19 @@ const GameAudio = (function () {
     osc.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
     f.frequency.setValueAtTime((isUp ? 1400 : 900) * voice.cutTrim, t0);
     f.frequency.exponentialRampToValueAtTime((isUp ? 600 : 700) * voice.cutTrim, t0 + dur);
-    env(g, t0, isUp ? 0.12 : 0.1, 0.004, dur);
+    // The SHIFT trim scales the crack and its click together; the rev-cut
+    // (shiftDuck) is left alone, because that is the engine's behaviour and
+    // this is how loud the gearbox is over it.
+    shiftPeak = (isUp ? 0.12 : 0.1) * tune.shift;
+    shiftFired++;
+    env(g, t0, Math.max(0.0001, shiftPeak), 0.004, dur);
     osc.connect(f).connect(g).connect(sfxBus);
     osc.start(t0);
     osc.stop(t0 + dur + 0.05);
     osc.onended = () => { osc.disconnect(); f.disconnect(); g.disconnect(); };
 
     // a touch of mechanical click via short filtered noise
-    noise(isUp ? 0.05 : 0.045, 0.05, (isUp ? 2600 : 1800) * voice.cutTrim);
+    if (tune.shift > 0) noise((isUp ? 0.05 : 0.045) * tune.shift, 0.05, (isUp ? 2600 : 1800) * voice.cutTrim);
   }
 
   // i 0..4 — each start light a touch higher than the last
@@ -1690,6 +1833,25 @@ const GameAudio = (function () {
     blip(150, "sine", 0.34 * (0.4 + 0.6 * k), 0.005, 0.25, 45);
     noise(0.26 * (0.4 + 0.6 * k), 0.18, 900);
     if (k > 0.6) blip(70, "sine", 0.3 * (k - 0.6) / 0.4, 0.004, 0.3, 40);   // the bang under a real hit
+  }
+  // A falling band-passed hiss — air venting. f0 -> f1 over the decay, so a
+  // wastegate dump starts sharp and rounds off as the pressure goes. Shares
+  // the noise pool like every other one-shot.
+  function hiss(peak, decay, f0, f1) {
+    if (!sfxOk() || !(peak > 0)) return;   // TURBO at 0 is a silent turbo, not a zero-height envelope
+    const t0 = now();
+    const src = ctx.createBufferSource();
+    const off = bindNoise(src, decay + 0.15);
+    const f = ctx.createBiquadFilter();
+    f.type = "bandpass"; f.Q.value = 1.4;
+    f.frequency.setValueAtTime(f0, t0);
+    f.frequency.exponentialRampToValueAtTime(f1, t0 + decay);
+    const g = ctx.createGain();
+    env(g, t0, peak, 0.008, decay);
+    src.connect(f).connect(g).connect(sfxBus);
+    src.start(t0, off);
+    src.stop(t0 + decay + 0.1);
+    src.onended = () => { src.disconnect(); f.disconnect(); g.disconnect(); };
   }
   // Band-passed noise burst — metal on barrier. Shares the noise pool.
   function scrapeNoise(peak, decay) {
@@ -2154,6 +2316,16 @@ const GameAudio = (function () {
     // Crackles emitted since boot, and when the next one is due. One-shots have
     // no persistent node to read, so this is the only way to observe the layer.
     overrunState() { return { fired: overrunFired, nextAt: +overrunT.toFixed(3), now: +now().toFixed(3) }; },
+    // Same shape for the other one-shots the tune reaches: wastegate dumps
+    // (and how long the engine has been under load, which arms them) and the
+    // gear-shift crack with the level the SHIFT trim gave the last one.
+    wastegateState() { return { fired: wasteFired, pullT: +pullT.toFixed(3) }; },
+    shiftState() { return { fired: shiftFired, peak: +shiftPeak.toFixed(4) }; },
+    // The gravel modulation's live depth (a swing on engGain.gain, invisible
+    // downstream) and its crank rate; and the brake roar's live gain.
+    gravelDepth() { return gravGain ? +gravGain.gain.value : 0; },
+    gravelHz() { return gravOsc ? +gravOsc.frequency.value.toFixed(2) : 0; },
+    brakeLevel() { return brakeGain ? +brakeGain.gain.value : 0; },
     subHz() { return subOctOsc ? +subOctOsc.frequency.value : 0; },
     // The DETUNE trim as it lands on the sample source, in cents.
     detuneCents() { return engSrcIdle && engSrcIdle.detune ? +engSrcIdle.detune.value.toFixed(4) : 0; },
