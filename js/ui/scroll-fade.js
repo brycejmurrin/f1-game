@@ -37,7 +37,8 @@ window.ScrollFade = (function () {
     // overflow-y is a dead letter; #menu-buttons is the node that actually
     // scrolls when the door column outgrows a short / high-scale window.
     "#overlay", "#menu-buttons",
-    "#sel-track-filter", "#htp-contents", "#cg-contents", "#ch-contents",
+    // The circuit picker's flag strip and its toolbar: sideways scrollers.
+    "#sel-tracks", "#sel-track-filter", "#htp-contents", "#cg-contents", "#ch-contents",
     ".dh-tabs", ".dh-pick-years", "#pm-settings-index", ".lt-tabs",
   ].join(",");
   // Overlays whose [hidden] flip is what first gives their regions a box. The
@@ -73,7 +74,7 @@ window.ScrollFade = (function () {
   function measure(el) {
     // overflow:hidden still reports scrollHeight > clientHeight. Painting a
     // thumb there made Circuit Select look like two vertical catalogues:
-    // the clipped sheet body plus #sel-tracks.pane (the real list). The same
+    // the clipped sheet body plus the real list. The same
     // trap is why a sideways strip (#cs-tabs stacked, #sel-track-filter) used
     // to skip the fade entirely: overflow-y is hidden there on purpose.
     const cs = getComputedStyle(el);

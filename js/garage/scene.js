@@ -1016,10 +1016,32 @@ function paintDress(team, liv, info) {
       ctx.fillText(String(12 + ((h >> (r * 3)) & 7) * 3) + " LAPS", R.x + R.w - 18, y);
     }
   }
-  // ── information boards ───────────────────────────────────────────────────
-  // `info` is what the player is actually deciding on. Null (no parts handle
-  // yet, or Parts absent) leaves these regions transparent, and the quads then
-  // paint nothing rather than showing a board full of zeroes.
+  // SIGN — the team wordmark on its own, for the floor mark and the lit sign
+  // over the door. Transparent field so it reads on whatever it is laid on.
+  ctx.clearRect(D_SIGN.x, D_SIGN.y, D_SIGN.w, D_SIGN.h);
+  ctx.fillStyle = "#e9ecef"; ctx.font = "700 30px system-ui, sans-serif";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(String(team.name || team.short || "").toUpperCase(),
+    D_SIGN.x + D_SIGN.w / 2, D_SIGN.y + D_SIGN.h / 2, D_SIGN.w - 16);
+  return { canvas: cv };
+}
+// ── information boards ─────────────────────────────────────────────────────
+// `info` is what the player is actually deciding on. Null (no parts handle
+// yet, or Parts absent) leaves these regions transparent, and the quads then
+// paint nothing rather than showing a board full of zeroes.
+//
+// A SEPARATE PASS over the SAME canvas, because these four regions are the only
+// part of the atlas a part pick changes. paintDress used to be one function
+// keyed on everything, so fitting a brake duct repainted the crest lightbox,
+// the wordmarks, the pit board, six telemetry screens and the strategy strip
+// to arrive at the same pixels — and rebuild() threw the whole bay's geometry
+// away with it. The boards repaint over their own opaque panels, so no clear
+// is needed between passes.
+function paintBoards(cv, team, liv, info) {
+  if (!info) return;
+  const ctx = cv.getContext("2d");
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
   const panel = (R, title) => {
     ctx.fillStyle = "#0a0c10"; ctx.fillRect(R.x, R.y, R.w, R.h);
     ctx.fillStyle = css(scale(c1, 0.75)); ctx.fillRect(R.x, R.y, R.w, 44);
@@ -1028,69 +1050,66 @@ function paintDress(team, liv, info) {
     ctx.fillText(title, R.x + 18, R.y + 23);
     ctx.textAlign = "center";
   };
-  if (info) {
-    // STATS — the same four numbers the panel quotes, from the same curve
-    // (Parts.displayStat), so the wall and the panel can never disagree.
-    panel(D_STATS, "CAR PERFORMANCE");
-    const keys = Parts.STAT_KEYS;
-    for (let i = 0; i < keys.length; i++) {
-      const st = info.stats[i], y = D_STATS.y + 74 + i * 46;
-      ctx.textAlign = "left"; ctx.fillStyle = "#9aa4b2"; ctx.font = "700 21px system-ui, sans-serif";
-      ctx.fillText(keys[i].label, D_STATS.x + 18, y);
-      const bx = D_STATS.x + 168, bw = 250;
-      ctx.fillStyle = "#191d24"; ctx.fillRect(bx, y - 11, bw, 22);
-      ctx.fillStyle = css(c2);
-      ctx.fillRect(bx, y - 11, Math.max(2, bw * Math.min(1, st.value / 120)), 22);
-      ctx.textAlign = "right"; ctx.fillStyle = "#f2f3f5"; ctx.font = "700 24px system-ui, sans-serif";
-      ctx.fillText(String(st.value), D_STATS.x + D_STATS.w - 66, y);
-      // The delta against the bare chassis is the whole point of a parts screen.
-      ctx.font = "700 18px system-ui, sans-serif";
-      ctx.fillStyle = st.delta > 0 ? "#4ad07a" : st.delta < 0 ? "#e2645a" : "#6b7480";
-      ctx.fillText(st.delta > 0 ? "+" + st.delta : String(st.delta), D_STATS.x + D_STATS.w - 14, y);
-      ctx.textAlign = "center";
-    }
-    // BUDGET — spent against the cap, with a bar that empties as you spend.
-    panel(D_BUDGET, "BUDGET");
-    ctx.textAlign = "left"; ctx.fillStyle = "#f2f3f5"; ctx.font = "700 40px system-ui, sans-serif";
-    ctx.fillText(info.left + " cr", D_BUDGET.x + 18, D_BUDGET.y + 84);
-    ctx.fillStyle = "#8f98a6"; ctx.font = "700 20px system-ui, sans-serif";
-    ctx.fillText("OF " + info.budget + " REMAINING", D_BUDGET.x + 190, D_BUDGET.y + 88);
-    const rw = D_BUDGET.w - 36;
-    ctx.fillStyle = "#191d24"; ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw, 12);
+  // STATS — the same four numbers the panel quotes, from the same curve
+  // (Parts.displayStat), so the wall and the panel can never disagree.
+  panel(D_STATS, "CAR PERFORMANCE");
+  const keys = Parts.STAT_KEYS;
+  for (let i = 0; i < keys.length; i++) {
+    const st = info.stats[i], y = D_STATS.y + 74 + i * 46;
+    ctx.textAlign = "left"; ctx.fillStyle = "#9aa4b2"; ctx.font = "700 21px system-ui, sans-serif";
+    ctx.fillText(keys[i].label, D_STATS.x + 18, y);
+    const bx = D_STATS.x + 168, bw = 250;
+    ctx.fillStyle = "#191d24"; ctx.fillRect(bx, y - 11, bw, 22);
     ctx.fillStyle = css(c2);
-    ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw * Math.max(0, Math.min(1, info.left / info.budget)), 12);
+    ctx.fillRect(bx, y - 11, Math.max(2, bw * Math.min(1, st.value / 120)), 22);
+    ctx.textAlign = "right"; ctx.fillStyle = "#f2f3f5"; ctx.font = "700 24px system-ui, sans-serif";
+    ctx.fillText(String(st.value), D_STATS.x + D_STATS.w - 66, y);
+    // The delta against the bare chassis is the whole point of a parts screen.
+    ctx.font = "700 18px system-ui, sans-serif";
+    ctx.fillStyle = st.delta > 0 ? "#4ad07a" : st.delta < 0 ? "#e2645a" : "#6b7480";
+    ctx.fillText(st.delta > 0 ? "+" + st.delta : String(st.delta), D_STATS.x + D_STATS.w - 14, y);
     ctx.textAlign = "center";
-    // DRIVER — the SELECTED seat, not simply the first one on the entry list.
-    panel(D_DRIVER, "DRIVER");
-    ctx.fillStyle = css(c2); ctx.font = "700 96px system-ui, sans-serif";
-    ctx.fillText(info.driver.num == null ? "--" : String(info.driver.num),
-      D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 122);
-    ctx.fillStyle = "#f2f3f5"; ctx.font = "700 30px system-ui, sans-serif";
-    ctx.fillText(String(info.driver.code || ""), D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 180);
-    ctx.fillStyle = "#9aa4b2"; ctx.font = "600 19px system-ui, sans-serif";
-    ctx.fillText(String(info.driver.name || ""), D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 218, D_DRIVER.w - 20);
-    // SIGN — the team wordmark on its own, for the floor mark and the lit sign
-    // over the door. Transparent field so it reads on whatever it is laid on.
-    ctx.clearRect(D_SIGN.x, D_SIGN.y, D_SIGN.w, D_SIGN.h);
-    ctx.fillStyle = "#e9ecef"; ctx.font = "700 30px system-ui, sans-serif";
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText(String(team.name || team.short || "").toUpperCase(),
-      D_SIGN.x + D_SIGN.w / 2, D_SIGN.y + D_SIGN.h / 2, D_SIGN.w - 16);
-    // SPEC — every fitted component, two columns of six.
-    panel(D_SPEC, "FITTED SPEC");
-    for (let i = 0; i < info.spec.length && i < 12; i++) {
-      const col = i < 6 ? 0 : 1, row = i % 6;
-      const sx = D_SPEC.x + 16 + col * (D_SPEC.w / 2), sy = D_SPEC.y + 74 + row * 30;
-      ctx.textAlign = "left";
-      ctx.fillStyle = "#79828f"; ctx.font = "700 15px system-ui, sans-serif";
-      ctx.fillText(info.spec[i].cat, sx, sy);
-      ctx.fillStyle = "#e8eaee"; ctx.font = "600 17px system-ui, sans-serif";
-      ctx.fillText(info.spec[i].label, sx + 92, sy, D_SPEC.w / 2 - 112);
-      ctx.textAlign = "center";
-    }
   }
-  return { canvas: cv };
+  // BUDGET — spent against the cap, with a bar that empties as you spend.
+  panel(D_BUDGET, "BUDGET");
+  ctx.textAlign = "left"; ctx.fillStyle = "#f2f3f5"; ctx.font = "700 40px system-ui, sans-serif";
+  ctx.fillText(info.left + " cr", D_BUDGET.x + 18, D_BUDGET.y + 84);
+  ctx.fillStyle = "#8f98a6"; ctx.font = "700 20px system-ui, sans-serif";
+  ctx.fillText("OF " + info.budget + " REMAINING", D_BUDGET.x + 190, D_BUDGET.y + 88);
+  const rw = D_BUDGET.w - 36;
+  ctx.fillStyle = "#191d24"; ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw, 12);
+  ctx.fillStyle = css(c2);
+  ctx.fillRect(D_BUDGET.x + 18, D_BUDGET.y + 104, rw * Math.max(0, Math.min(1, info.left / info.budget)), 12);
+  ctx.textAlign = "center";
+  // DRIVER — the SELECTED seat, not simply the first one on the entry list.
+  panel(D_DRIVER, "DRIVER");
+  ctx.fillStyle = css(c2); ctx.font = "700 96px system-ui, sans-serif";
+  ctx.fillText(info.driver.num == null ? "--" : String(info.driver.num),
+    D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 122);
+  ctx.fillStyle = "#f2f3f5"; ctx.font = "700 30px system-ui, sans-serif";
+  ctx.fillText(String(info.driver.code || ""), D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 180);
+  ctx.fillStyle = "#9aa4b2"; ctx.font = "600 19px system-ui, sans-serif";
+  ctx.fillText(String(info.driver.name || ""), D_DRIVER.x + D_DRIVER.w / 2, D_DRIVER.y + 218, D_DRIVER.w - 20);
+  // SPEC — every fitted component, two columns of six. The row that CHANGED
+  // since the last paint carries the accent, so the wall answers "what did I
+  // just fit" without a glance back at the panel; the marker fades with the
+  // next pick because a board full of highlights marks nothing.
+  panel(D_SPEC, "FITTED SPEC");
+  for (let i = 0; i < info.spec.length && i < 12; i++) {
+    const col = i < 6 ? 0 : 1, row = i % 6;
+    const sx = D_SPEC.x + 16 + col * (D_SPEC.w / 2), sy = D_SPEC.y + 74 + row * 30;
+    const changed = lastSpec && lastSpec[i] !== undefined && lastSpec[i] !== info.spec[i].label;
+    ctx.textAlign = "left";
+    if (changed) { ctx.fillStyle = css(c2); ctx.fillRect(sx - 8, sy - 11, 4, 22); }
+    ctx.fillStyle = changed ? css(c2) : "#79828f"; ctx.font = "700 15px system-ui, sans-serif";
+    ctx.fillText(info.spec[i].cat, sx, sy);
+    ctx.fillStyle = "#e8eaee"; ctx.font = "600 17px system-ui, sans-serif";
+    ctx.fillText(info.spec[i].label, sx + 92, sy, D_SPEC.w / 2 - 112);
+    ctx.textAlign = "center";
+  }
+  lastSpec = info.spec.map((s) => s.label);
 }
+let lastSpec = null;
 
 // UV rect for an atlas region. v is flipped because createTexture uploads with
 // FLIP_Y, exactly as carDecalData's uvOf does — but U is NOT pre-flipped here:
@@ -1252,6 +1271,14 @@ const DRESS_OPTS = { glow: 0.62 };
 let floorMesh = null, cacheKey = "";
 const dressMesh = {};
 let dressTex = null, dressFail = 0;
+// TWO keys, not one. Everything above is GEOMETRY and depends on the team and
+// its colours; the dress atlas additionally carries boardKey(info), which
+// changes on every part pick. One combined key made a brake-duct choice
+// rebuild the shell, the LED strips, the floor, every prop AND repaint the
+// full 1024² atlas — measured 12 ms here on top of the car's own rebuild, and
+// the owner's "the turntable stops when I pick a part". Geometry now survives a
+// part pick; only the four boards repaint and re-upload.
+let geomKey = "", dressCanvas = null;
 const propMesh = {};
 // `mat` is a PER-VERTEX MATERIAL ID, and its absence is why this whole room was
 // untextured. GLX wires the attribute only when `data.mat.length === vCount`
@@ -1275,45 +1302,56 @@ function rebuild(team, liv, info) {
   const livKey = kc(liv && liv.c1) + "/" + kc(liv && (liv.accent || liv.stripe || liv.c2)) +
                  "/" + kc(liv && liv.c2) + "/" + kc(liv && liv.logo) +
                  "/" + kc(liv && liv.logo2) + "/" + kc(liv && liv.logo3);
-  const key = (team && team.id) + "|" + livKey +
-              "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num)) +
-              "|" + boardKey(info);
+  const gKey = (team && team.id) + "|" + livKey +
+               "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num));
+  const key = gKey + "|" + boardKey(info);
   if (key === cacheKey && shellMesh) return;
-  if (shellMesh) _gfx.freeMesh(shellMesh);
-  for (let i = 0; i < SIDES.length; i++)
-    if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
-  if (floorMesh) _gfx.freeMesh(floorMesh);
-  for (let i = 0; i < SIDES.length; i++)
-    if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
-  const shell = acc();
-  buildShell(shell, liv);
-  shellMesh = _gfx.createMesh(shell);
-  const led = {};
-  for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
-  buildLed(led, liv);
-  for (let i = 0; i < SIDES.length; i++)
-    if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
-  const flr = acc();
-  buildApron(flr); buildPitLane(flr, liv); buildBayFloor(flr, liv);
-  floorMesh = _gfx.createMesh(flr);
-  const g = {};
-  for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
-  buildProps(g, liv);
-  for (let i = 0; i < SIDES.length; i++) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
+  if (gKey !== geomKey || !shellMesh) {
+    if (shellMesh) _gfx.freeMesh(shellMesh);
+    for (let i = 0; i < SIDES.length; i++)
+      if (ledMesh[SIDES[i]]) { _gfx.freeMesh(ledMesh[SIDES[i]]); ledMesh[SIDES[i]] = null; }
+    if (floorMesh) _gfx.freeMesh(floorMesh);
+    for (let i = 0; i < SIDES.length; i++)
+      if (propMesh[SIDES[i]]) { _gfx.freeMesh(propMesh[SIDES[i]]); propMesh[SIDES[i]] = null; }
+    const shell = acc();
+    buildShell(shell, liv);
+    shellMesh = _gfx.createMesh(shell);
+    const led = {};
+    for (let i = 0; i < SIDES.length; i++) led[SIDES[i]] = acc();
+    buildLed(led, liv);
+    for (let i = 0; i < SIDES.length; i++)
+      if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
+    const flr = acc();
+    buildApron(flr); buildPitLane(flr, liv); buildBayFloor(flr, liv);
+    floorMesh = _gfx.createMesh(flr);
+    const g = {};
+    for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
+    buildProps(g, liv);
+    for (let i = 0; i < SIDES.length; i++) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
+    for (let i = 0; i < SIDES.length; i++)
+      if (dressMesh[SIDES[i]]) { _gfx.freeMesh(dressMesh[SIDES[i]]); dressMesh[SIDES[i]] = null; }
+    // A new team or paint: the whole atlas repaints, and the "what changed"
+    // marker on the spec board starts over — every row differs from the last
+    // team's, and a board of twelve highlights marks nothing.
+    dressCanvas = null; lastSpec = null;
+    geomKey = gKey;
+  }
   // Team dress. Three strikes then stop trying: an unbranded bay is far better
   // than a canvas that throws once a frame forever.
   if (dressTex && _gfx.freeTexture) _gfx.freeTexture(dressTex);
   dressTex = null;
-  for (let i = 0; i < SIDES.length; i++)
-    if (dressMesh[SIDES[i]]) { _gfx.freeMesh(dressMesh[SIDES[i]]); dressMesh[SIDES[i]] = null; }
   if (dressFail < 3 && _gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") {
     try {
-      dressTex = _gfx.createTexture(paintDress(team, liv, info).canvas);
-      const dg = buildDress();
-      for (let i = 0; i < SIDES.length; i++)
-        if (dg[SIDES[i]].idx.length) dressMesh[SIDES[i]] = _gfx.createTexMesh(dg[SIDES[i]]);
+      if (!dressCanvas) dressCanvas = paintDress(team, liv).canvas;
+      paintBoards(dressCanvas, team, liv, info);
+      dressTex = _gfx.createTexture(dressCanvas);
+      if (!dressMesh.back) {
+        const dg = buildDress();
+        for (let i = 0; i < SIDES.length; i++)
+          if (dg[SIDES[i]].idx.length) dressMesh[SIDES[i]] = _gfx.createTexMesh(dg[SIDES[i]]);
+      }
     } catch (e) {
-      dressFail++; dressTex = null;
+      dressFail++; dressTex = null; dressCanvas = null;
       Log.warn("game", "GarageScene dress failed: " + (e && e.message));
     }
   }
@@ -1367,18 +1405,50 @@ function draw(team, liv, eye, getParts, driverIdx) {
 // centre to within 0.005 NDC (~2 px) in a sweep where the 8 bbox corners were
 // out by 0.027 (~13 px). x is negated at build time because the preview draws
 // the car through MAT_REFLECT_X.
+//
+// Sorting all ~19k points was the cost (14 ms measured, paid on every part
+// pick). The Akl–Toussaint pass first finds the four axis-extreme points and
+// discards everything strictly inside their quadrilateral — a point inside
+// that quad is inside the hull, so the answer is unchanged and the sort runs
+// over the few hundred that remain.
 function framingHull(data) {
   const p = data && data.pos;
   if (!p || !p.length) return null;
-  const pts = [];
+  const n = p.length / 3;
   let ylo = 1e9, yhi = -1e9;
-  for (let i = 0; i < p.length; i += 3) {
-    pts.push([-p[i], p[i + 2]]);
-    if (p[i + 1] < ylo) ylo = p[i + 1];
-    if (p[i + 1] > yhi) yhi = p[i + 1];
+  // Eight support directions, not four: a car is a rectangle with a wheel at
+  // each corner, and the axis-extreme QUAD is a diamond that leaves every
+  // corner outside it (10.6k of 18.8k survived). The octagon keeps 3.6k.
+  const M = 8, best = new Float64Array(M).fill(-1e9), bi = new Int32Array(M);
+  const dx = new Float64Array(M), dz = new Float64Array(M);
+  for (let k = 0; k < M; k++) { const a = Math.PI + 2 * Math.PI * k / M; dx[k] = Math.cos(a); dz[k] = Math.sin(a); }
+  for (let i = 0; i < n; i++) {
+    const x = -p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
+    if (y < ylo) ylo = y;
+    if (y > yhi) yhi = y;
+    for (let k = 0; k < M; k++) {
+      const v = x * dx[k] + z * dz[k];
+      if (v > best[k]) { best[k] = v; bi[k] = i; }
+    }
+  }
+  const cross2 = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  // The octagon, walked counter-clockwise in the (x, z) plane. Scalar edge
+  // tests, no per-point allocation — arrays are minted only for the survivors.
+  // A degenerate (repeated) vertex makes its edge test 0, which keeps every
+  // point: slower, never wrong.
+  const qx = new Float64Array(M), qz = new Float64Array(M);
+  for (let k = 0; k < M; k++) { qx[k] = -p[bi[k] * 3]; qz[k] = p[bi[k] * 3 + 2]; }
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const x = -p[i * 3], z = p[i * 3 + 2];
+    let inside = true;
+    for (let k = 0; k < M && inside; k++) {
+      const j = (k + 1) % M;
+      if ((qx[j] - qx[k]) * (z - qz[k]) - (qz[j] - qz[k]) * (x - qx[k]) <= 0) inside = false;
+    }
+    if (!inside) pts.push([x, z]);
   }
   pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  const cross2 = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const half = (arr) => {
     const h = [];
     for (let i = 0; i < arr.length; i++) {
@@ -1420,10 +1490,46 @@ function recentre(proj, view, vp, panelFrac, on, hull) {
   M4.mulTo(vp, proj, view);
 }
 
-function debug() {
-  return { bay: [HALF_W * 2, Z_DOOR - Z_BACK, CEIL_Y], lights: lights(null).length / 15, key: cacheKey };
+// ── the turntable's car meshes ─────────────────────────────────────────────
+// Keyed on team + resolved parts + livery id (js/game.js getSetupPreviewMesh
+// builds the key). A garage session is A/B comparison — fit the duct, look,
+// fit the other one, look again — and a single-slot cache paid Car3D.build
+// (~16 ms here, several times that on a phone) for every return to an option
+// already seen. Six slots, least-recently-used out; the hull is kept beside
+// its mesh AND in its own map, because a colour-only repaint drops the meshes
+// (the paint is baked into the vertex colours) while the silhouette it was
+// computed from has not moved.
+const PREVIEW_SLOTS = 6;
+const previewMeshes = new Map(), previewHulls = new Map();
+function previewMesh(key, hullKey, build) {
+  let ent = previewMeshes.get(key);
+  if (ent) { previewMeshes.delete(key); previewMeshes.set(key, ent); return ent; }
+  const data = build();
+  let hull = previewHulls.get(hullKey);
+  if (!hull) { hull = framingHull(data); previewHulls.set(hullKey, hull); }
+  ent = { mesh: _gfx.createMesh(data), hull };
+  previewMeshes.set(key, ent);
+  while (previewMeshes.size > PREVIEW_SLOTS) {
+    const old = previewMeshes.keys().next().value;
+    _gfx.freeMesh(previewMeshes.get(old).mesh);
+    previewMeshes.delete(old);
+  }
+  return ent;
+}
+// Every cached car is on the old paint after a livery edit — drop them all.
+// The hulls stay: presence-keyed, and a hue never moves a vertex
+// (tests/unit/setup-preview-hull.test.mjs).
+function dropPreviewMeshes() {
+  for (const ent of previewMeshes.values()) _gfx.freeMesh(ent.mesh);
+  previewMeshes.clear();
 }
 
-  return { init, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, glareStr, draw, framingHull, recentre, debug };
+function debug() {
+  return { bay: [HALF_W * 2, Z_DOOR - Z_BACK, CEIL_Y], lights: lights(null).length / 15, key: cacheKey,
+           geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
+}
+
+  return { init, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, glareStr, draw, framingHull, recentre,
+           previewMesh, dropPreviewMeshes, debug };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;

@@ -138,7 +138,9 @@ test.describe("Garage — TEAM tab owns team, driver and MY TEAM", () => {
     expect(tabs[0]).toBe("team");
     expect(tabs[tabs.length - 1]).toBe("livery");
     const catIds = await page.evaluate(() => Parts.CATALOG.map((c) => c.id));
-    expect(tabs.slice(1, -1)).toEqual(catIds);
+    // ...with the SETUP pseudo-tab (`tune`, setup-sheet.js pseudoTab) between the
+    // last catalog category and LIVERY — it has no catalog entry by design.
+    expect(tabs.slice(1, -1)).toEqual(catIds.concat(["tune"]));
   });
 
   test("picking a team from the garage stores it and repaints the header", async ({ page }) => {

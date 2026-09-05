@@ -3382,7 +3382,7 @@ const G = {
   get _ltNextT() { return _ltNextT; }, set _ltNextT(v) { _ltNextT = v; },
   // Mutable state consumed by js/garage/setup-sheet.js.
   get livDraftOverride() { return livDraftOverride; }, set livDraftOverride(v) { livDraftOverride = v; },
-  get _spMeshKey() { return _spMeshKey; }, set _spMeshKey(v) { _spMeshKey = v; },
+  get _spMeshKey() { return _spMeshKey; }, set _spMeshKey(v) { if (v === "") spMeshBust(); else _spMeshKey = v; },
   get setupPreviewOn() { return setupPreviewOn; }, set setupPreviewOn(v) { setupPreviewOn = v; },
   // Read-only garage-camera state for __apex.garageCam().
   get setupPreviewSpin() { return setupPreviewSpin; },
@@ -6377,38 +6377,32 @@ function resetSetupCam() {
   setSetupSpin(true);
 }
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
-// mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. gfx.freeMesh
-// releases the previous mesh's GL buffers so repeated chip clicks don't leak.
-let _spMesh = null, _spMeshKey = "", _spHull = null, _spHullKey = "";
+// mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
+// live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
+let _spMesh = null, _spMeshKey = "", _spHull = null;
 // Which livery fields can MOVE a vertex, as opposed to only recolouring one.
 // Measured (tests/unit/setup-preview-hull.test.mjs builds the car both ways and
 // compares positions byte for byte): a hue change never moves anything, and only
 // the PRESENCE of these four does — they gate optional strip geometry. finShape
 // is the one non-colour entry: it picks the shark fin's outline (or no fin).
 const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape"];
+// The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
+function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
 function getSetupPreviewMesh() {
   const team = Teams.LIST[teamIdx];
   const key = team.id + ":" + partsVisualKey(team.id);
   if (key !== _spMeshKey) {
-    if (_spMesh) gfx.freeMesh(_spMesh);
     const liv = resolveLivery(team);
-    const spData = Car3D.build(liv.c1, liv.c2, {
+    // The hull depends on POSITIONS ONLY: keyed on the geometry-gating fields, it
+    // survives the per-value colour-drag busts livePreviewDraft issues.
+    const hullKey = key + "|" + SP_HULL_GEOM_FIELDS.map((f) => (typeof liv[f] === "string" ? liv[f] : liv[f] ? 1 : 0)).join(",");
+    const ent = GarageScene.previewMesh(key, hullKey, () => Car3D.build(liv.c1, liv.c2, {
       livery: liv,
       teamId: team.id,   // per-team chassis style shows in the setup turntable too
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team),
-    });
-    // A convex hull over every vertex (~19k positions — 16 ms measured) that
-    // depends on POSITIONS ONLY. livePreviewDraft busts _spMeshKey on every
-    // distinct colour value and an <input type=color> emits those continuously
-    // while dragged, so the turntable paid the hull once per frame of a colour
-    // drag to arrive at the same silhouette. Rebuild only on a geometry change.
-    const hullKey = key + "|" + SP_HULL_GEOM_FIELDS.map((f) => (liv[f] ? 1 : 0)).join("");
-    if (hullKey !== _spHullKey || !_spHull) {
-      _spHull = GarageScene.framingHull(spData);   // silhouette proxy for the turntable re-centre
-      _spHullKey = hullKey;
-    }
-    _spMesh = gfx.createMesh(spData);
+    }));
+    _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
   }
   return _spMesh;
@@ -6445,7 +6439,13 @@ function renderSetupPreview(dt) {
     const pr = (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect();
     const cw = canvasEl.clientWidth, ch = canvasEl.clientHeight;
     if (cw - pr.width >= ch - pr.height) panelFrac = clamp(pr.width / cw, 0, 0.85);
-    else panelFracY = clamp(pr.bottom / ch, 0, 0.85);
+    else {
+      // Portrait: centre the car in what is left between the sheet and the OPEN
+      // camera panel (bottom of the same gap), not behind the buttons that aim it.
+      const cam = $("cs-cam-panel"), camTop = cam && !cam.hidden && cam.offsetParent !== null
+        ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top : ch;
+      panelFracY = clamp((pr.bottom + Math.min(camTop, ch) - ch) / ch, 0, 0.85);
+    }
   }
   // FIT THE VISIBLE REGION, NOT THE WHOLE CANVAS. SP_DIST_DEF was chosen so the
   // car cleared the full frustum — but a third of that frustum is behind the
@@ -9211,9 +9211,9 @@ function czPreview() {
   // "custom" — it shows on the turntable behind the dialog whenever MY TEAM
   // is the selected team, exactly like the sibling editor.
   livDraftOverride = { teamId: "custom", liv: { c1: hexToArr($("cz-color").value), c2: hexToArr($("cz-color2").value) } };
-  _spMeshKey = "";
+  spMeshBust();
 }
-function czClearPreview() { livDraftOverride = null; _spMeshKey = ""; }
+function czClearPreview() { livDraftOverride = null; spMeshBust(); }
 function openCustomize() {
   const ct = loadCustomTeam();
   $("cz-name").value = ct.name;
@@ -9792,7 +9792,7 @@ $("cz-logofile").addEventListener("change", (e) => {
     applyCustomLogo(dataUrl);
     refreshCustomLogoUi(dataUrl);
     invalidateDecalTextures("custom");
-    _spMeshKey = "";
+    spMeshBust();
     if (soundOn) GameAudio.uiSelect();
   });
   e.target.value = "";       // let the same file be re-picked after a CLEAR
@@ -9802,7 +9802,7 @@ $("cz-logo-clear").onclick = () => {
   applyCustomLogo(null);
   refreshCustomLogoUi(null);
   invalidateDecalTextures("custom");
-  _spMeshKey = "";
+  spMeshBust();
   if (soundOn) GameAudio.uiTick();
 };
 
@@ -9813,7 +9813,7 @@ $("cz-logo-clear").onclick = () => {
 if (typeof LiveryTex !== "undefined" && LiveryTex.onMarkChange) {
   LiveryTex.onMarkChange(() => {
     invalidateDecalTextures("custom");
-    _spMeshKey = "";   // force the garage turntable to repaint too
+    spMeshBust();   // force the garage turntable to repaint too
     // setTeamLogo decodes ASYNCHRONOUSLY, so LOGOS is still empty in the file
     // picker's own handler — this is the moment the answer actually changes.
     czSyncMarkRows();
