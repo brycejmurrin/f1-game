@@ -276,7 +276,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
   #lt-tabs .lt-tab:hover, #ct-modes .lt-tab:hover { color: var(--text); }
 }
 #lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { color: var(--text); }
-#lt-tabs .lt-tab.on, #ct-modes .lt-tab.on {
+#lt-tabs .lt-tab.active, #ct-modes .lt-tab.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
   box-shadow: var(--plate-on-glow);
 }
@@ -305,6 +305,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    (2026-08-21 sweep). The token arm wins only below 100%, so the dense
    100% layout is untouched. Height was already floored. */
 .lt-preview-row .opt-btn { flex: 1 1 0; min-width: max(42px, var(--tap-min)); min-height: var(--tap-min); margin: 0; padding: calc(var(--gap) / 3) calc(var(--gap) * 0.25); font-size: var(--fs-micro); }
+.lt-preview-row .opt-btn.active,
 .lt-preview-row .opt-btn.on {
   background: var(--plate-on); color: var(--text); border-color: var(--red);
   box-shadow: var(--plate-on-glow);
@@ -334,7 +335,7 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
    the selected chip — the panel shows one camera at a time, so this is the only
    way to see at a glance which of the 13 you have already tuned. */
 #ct-modes .lt-tab.tuned { border-color: var(--red); color: var(--text); }
-#ct-modes .lt-tab.tuned.on { border-color: var(--red); }
+#ct-modes .lt-tab.tuned.active { border-color: var(--red); }
 #lt-json, #ct-json {
   /* field-sizing lets the export box grow to whatever COPY VALUES produced
      instead of scrolling inside a fixed 72px; the height stays as the fallback
@@ -901,6 +902,21 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
     white-space: nowrap; flex: 0 0 auto;
   }
 
+/* Narrow sheet, any density: one sideways strip. The compact nowrap above
+   only fires when the PANEL is short. A landscape dock can be locally
+   narrow while still tall enough to stay `data-density="normal"`, and
+   then AMBIENT & BOUNCE wraps/clips inside an 8rem balanced cell
+   (measured phone-landscape gallery). Rail-on is a 560px panel, so this
+   480 cap does not undo the vertical chip grid. */
+@container sheet (max-width: 480px) {
+  .lt-tabs {
+    display: flex; flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    scrollbar-width: none;
+  }
+  #lt-tabs .lt-tab, #ct-modes .lt-tab { white-space: nowrap; flex: 0 0 auto; }
+  .lt-tabs::-webkit-scrollbar { display: none; }
+}
 /* At extreme UI sizes the dock can be locally narrower than its header even in
    a wide physical viewport. Keep the action inside and let the slider pane own
    the width rather than clipping the FREE CAMERA control. */

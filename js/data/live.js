@@ -123,7 +123,7 @@ const DataLive = (function () {
       const bar = el("div", "dh-livecontrols");
       const refreshBtn = el("button", "dh-livebtn", "↻ REFRESH");
       refreshBtn.type = "button";
-      const autoBtn = el("button", "dh-livebtn" + (liveOpts.auto ? " dh-active" : ""), "AUTO");
+      const autoBtn = el("button", "dh-livebtn" + (liveOpts.auto ? " active" : ""), "AUTO");
       autoBtn.type = "button";
       autoBtn.title = "Auto-refresh every 30s";
       autoBtn.setAttribute("data-aria-toggle", "");
@@ -184,7 +184,7 @@ const DataLive = (function () {
           if (gateErr) {
             dataEl.appendChild(emptyMsg(gateErr.message));
             liveOpts.auto = false;
-            autoBtn.classList.remove("dh-active");
+            autoBtn.classList.remove("active");
             autoBtn.setAttribute("aria-pressed", "false");
             stopLiveAuto();
             return;
@@ -214,7 +214,7 @@ const DataLive = (function () {
       refreshBtn.addEventListener("click", refresh);
       autoBtn.addEventListener("click", () => {
         liveOpts.auto = !liveOpts.auto;
-        autoBtn.classList.toggle("dh-active", liveOpts.auto);
+        autoBtn.classList.toggle("active", liveOpts.auto);
         autoBtn.setAttribute("aria-pressed", liveOpts.auto ? "true" : "false");
         stopLiveAuto();
         resumeLiveAuto();
@@ -295,7 +295,7 @@ const DataLive = (function () {
       function renderRows() {
         for (const k in sortBtns) {
           const on = k === liveOpts.sort;
-          sortBtns[k].classList.toggle("dh-active", on);
+          sortBtns[k].classList.toggle("active", on);
           sortBtns[k].setAttribute("aria-pressed", on ? "true" : "false");
         }
         clear(rows);

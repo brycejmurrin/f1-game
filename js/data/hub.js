@@ -257,7 +257,7 @@ const DataHub = (function () {
     if (id !== "live") stopLiveAuto();  // stop auto-refresh when leaving live tab
     active = id;
     for (const k in tabButtons) {
-      tabButtons[k].classList.toggle("dh-active", k === id);
+      tabButtons[k].classList.toggle("active", k === id);
       tabButtons[k].setAttribute("aria-selected", k === id ? "true" : "false");
       tabButtons[k].tabIndex = k === id ? 0 : -1;
     }
@@ -413,13 +413,13 @@ const DataHub = (function () {
     const box = el("div", "dh-picker");
     const yearRow = el("div", "dh-pick-years");
     apiYears().forEach(function (y) {
-      const b = el("button", "dh-pill" + (y === sel.year ? " dh-active" : ""), String(y));
+      const b = el("button", "dh-pill" + (y === sel.year ? " active" : ""), String(y));
       b.type = "button";
       b.addEventListener("click", function () {
         if (y === sel.year) return;
         sel.year = y; sel.meetingKey = null; sel.sessionKey = null; sel.pinned = false;
         for (let i = 0; i < yearRow.children.length; i++) {
-          yearRow.children[i].classList.toggle("dh-active", yearRow.children[i] === b);
+          yearRow.children[i].classList.toggle("active", yearRow.children[i] === b);
         }
         loadGPs(true);
       });

@@ -410,7 +410,7 @@
          the page and ~7:1 on the red primary button — legible on every surface
          this UI has.
      (2) Meaning: red already means SELECTED here (.sel-chip.active,
-         .track-row.active, .dh-dchip.dh-active all carry a red ring or tint).
+         .track-row.active, .dh-dchip.active all carry a red ring or tint).
          A red focus ring on an already-selected chip is invisible — the two
          states rendered identically. Different colour, different meaning. */
   --focus: #fff;

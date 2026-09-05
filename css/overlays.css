@@ -676,6 +676,9 @@ body[data-density="compact"] #campicker {
    in css/components.css, and so are the .res-* row rules now that four screens
    use them. Only what is specific to THIS container stays here. */
 #results-table { font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
+#results-table > .sel-label,
+#standings-body > .sel-label { margin-top: calc(var(--gap) * 1.2); }
+#standings-body > .sel-label:first-child { margin-top: 0; }
 #res-daily-share, #res-ghost-clear {
   display: flex;
   width: max-content;
@@ -731,37 +734,9 @@ body[data-density="compact"] #campicker {
      sheet child (wide rail) without creating an implicit extra track. */
   grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
-#htp-contents {
-  display: flex; align-items: center; justify-content: flex-start;
-  gap: calc(var(--gap) * 0.4); min-width: 0;
-  padding: 0 var(--pad) calc(var(--gap) * 0.35);
-  overflow-x: auto; overflow-y: hidden;
-  overscroll-behavior-x: contain; touch-action: pan-x;
-  scrollbar-width: none;
-}
-/* Auto margin right-aligns the rail only while every link fits. When it
-   overflows the margin collapses to zero, leaving CONTROLS at the reachable
-   scroll origin; `justify-content:flex-end` instead placed that origin at a
-   negative offset and clipped the first links on a portrait phone. */
-#htp-contents > :first-child { margin-inline-start: auto; }
-#htp-contents::-webkit-scrollbar { display: none; }
-#htp-contents a {
-  display: inline-flex; align-items: center; justify-content: center;
-  flex: 0 0 auto; min-height: var(--chip-h);
-  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.65);
-  border: 1px solid var(--plate-line); border-radius: var(--r-pill);
-  background: var(--plate); color: var(--text);
-  font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-3);
-  text-decoration: none;
-}
-@media (hover: hover) {
-  #htp-contents a:hover { background: var(--plate-hover); color: var(--text); }
-}
-#htp-contents a:active { background: var(--plate-press); color: var(--text); }
-#htp-contents a:focus-visible {
-  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
-  outline-offset: calc(-1 * max(2px, calc(2px / var(--ui-scale, 1))));
-}
+/* Strip + chip box live in css/components.css. Idle ink stays here so HTP
+   chips stay `--text` while career guide/history stay `--dim`. */
+#htp-contents a { color: var(--text); }
 #howtoplay:has(#htp-controls:target) #htp-contents a[href="#htp-controls"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
   box-shadow: var(--plate-on-glow);
