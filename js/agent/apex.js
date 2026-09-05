@@ -2599,6 +2599,12 @@ const api = {
       // Console errors are not captured retroactively — see docs/CONSOLE-RECIPES.md
       // for the one-liner that installs a collector BEFORE reproducing a bug.
       errors: safe(() => (window.__apexErrors || []).slice(-40), []),
+      // Counted rather than swallowed by index.html's handler. A non-zero count
+      // is layout thrash, not a crash — but it was invisible before, and one IS
+      // firing on the live site.
+      roLoops: safe(() => window.__apexROLoops || 0, 0),
+      // Survives a deploy, unlike perf.crashStrikes — see PerfGov.crashSeen().
+      crashSeen: safe(() => PerfGov.crashSeen(), null),
     };
     try { Log.info("apex", d); } catch (_) {}
     if (o.download !== false) {
