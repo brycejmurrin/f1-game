@@ -35,7 +35,7 @@ async function dataReady(page) {
   await page.addScriptTag({ url: "/js/data/export.js" });
   await page.addScriptTag({ url: "/js/data/schedule.js" });
   await page.addScriptTag({ url: "/js/data/standings.js" });
-  await page.addScriptTag({ url: "/js/data/lastrace.js" });
+  await page.addScriptTag({ url: "/js/data/results.js" });
   await page.addScriptTag({ url: "/js/data/live.js" });
   await page.addScriptTag({ url: "/js/data/hub.js" });
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
@@ -76,6 +76,7 @@ async function installPickerApi(page, options = {}) {
     F1API.driverStandings = () => Promise.resolve([]);
     F1API.constructorStandings = () => Promise.resolve([]);
     F1API.lastRace = () => Promise.resolve(null);
+    F1API.sessionResult = () => Promise.resolve([]);
     F1API.latestSession = () => Promise.resolve(sessions[0]);
     F1API.meetings = (year) => {
       if (year === 2026 && !config.deferCurrentMeetings) return Promise.resolve(meetings);

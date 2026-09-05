@@ -1,6 +1,6 @@
 # Testing reference
 
-115 root Playwright spec files (`tests/specs/*.spec.js`) + 200 `node --test` unit suites
+115 root Playwright spec files (`tests/specs/*.spec.js`) + 201 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -312,6 +312,7 @@ eat them.
 | `garage-unit` | the garage bay's per-vertex material column — present, right length, and not uniformly FLAT |
 | `steering-unit` | braking CUE math and the DIGITAL steer ramp in Node — slider 1 is OFF, urgency is 0..1 never a brake command; counter-steering unwinds as fast as letting go |
 | `audio-unit` | Spotify token refresh ownership, rotation races, and retryable failures in a Node VM |
+| `data-unit` | the data hub's RESULTS tab over OpenF1's `session_result` — one endpoint whose `duration`/`gap_to_leader` are scalars for practice, sprint and race and `[Q1,Q2,Q3]` arrays for qualifying |
 | `agent-contract` | freezes the shape of the agent-view API |
 | `net-unit` | the `js/net` wire as pure logic, no browser: loopback transport, invite codec, snapshot quantisation, clock sync. Under a second |
 | `lifecycle-unit` | deferred scanner, data fetch and IndexedDB ownership races in Node VMs |
@@ -1075,6 +1076,7 @@ what it covers.
 | `audio-sample-upgrade.test.mjs` | fake-AudioContext harness for `GameAudio`: an engine started on the synth voice (samples not yet decoded) upgrades to the samples at the next `setEngine` once they are ready, exactly once |
 | `audio-tune.test.mjs` | the player ENGINE TONE layer keeps the engine's timbre contract: pitch stays monotonic in rev and gear 1 below gear 4 at redline under EVERY profile and at both ends of every slider, a non-finite stored value cannot reach `playbackRate`, a profile replaces rather than merges, muted layers go silent — plus the static seam between `js/audio/panel.js`'s id/key tables and the shell |
 | `rival-audio.test.mjs` | the field around you in the player's TRACK frame: left/right lateral sign, ahead/behind arc sign ACROSS the start-finish wrap, closing-vs-opening for a car ahead and behind, nearest-four selection, retired/self exclusion, and the reused-row contract that keeps it allocation-free in the hot path |
+| `data-results.test.mjs` | the data hub's RESULTS tab against OpenF1's `session_result`, whose `duration`/`gap_to_leader` change SHAPE with the session: scalars for practice, sprint and race, `[Q1,Q2,Q3]` arrays for qualifying. Drives the real render path for each shape and reads the cells back — column set per session kind, a sprint keeping its points column while "Sprint Qualifying" takes the Q1/Q2/Q3 branch, unclassified rows sorting last with their status in the TIME cell, an unpublished session reading as empty rather than as an error, and a failed `/drivers` costing names but not the classification |
 | `photomode-hold.test.mjs` | mini-DOM + VM over the real `input.js` and `photomode.js`: a boundary `pointerleave` and a WebKit capture steal keep a photo-mode hold; a hidden button and a plain lift release it |
 | `ui-sheets-audit.test.mjs` | the PAUSE / SETTINGS / RESULTS sheet audit (2026-09-02) as behaviour on `mini-dom`: RESULTS top-10 and the WORLD CHAMPION panel rank by `SeasonCal.rank` countback like STANDINGS (a points tie used to crown the field-order driver), STANDINGS titles a sprint weekend by the round it is in and calls the race being driven IN PROGRESS from the pause menu; `js/perf/renderer-picker.js`'s in-race two-tap reload confirm EXPIRES (`ARM_MS`) back to the real label, never carries an armed flag into the next race, clears a stale one outside a race, and puts the question on the `<select>`'s option instead of wiping the options; MUSIC & SOUND blames the master SOUND gate when that is what is shut and captions DEFAULT as "Default"; the pause → settings → sub-sheet Escape ladder, the pause button order, and the `.sheet` / `.pane` scroll rules every sheet relies on at a short viewport |
 | `title-menu-even.test.mjs` | title 2-up doors share equal flex cells and overlay columns use `--vwz`, not a pixel cap |

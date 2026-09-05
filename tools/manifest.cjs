@@ -470,7 +470,7 @@ const LAZY_RACE = [
 ];
 
 // THE DATA HUB (js/data/*), 154 KB behind ONE menu button. Jolpica/OpenF1
-// schedule, standings, last race, live timing, telemetry and export — none of
+// schedule, standings, session results, live timing, telemetry and export — none of
 // which a session that never opens DATA will run a byte of. Nothing outside
 // js/data/ names any of its eight globals except DataHub.init/.open in
 // game.js and a `typeof F1API` read in js/agent/apex.js, so the whole directory
@@ -481,7 +481,7 @@ const LAZY_DATA = [
   "js/data/export.js",
   "js/data/schedule.js",
   "js/data/standings.js",
-  "js/data/lastrace.js",
+  "js/data/results.js",
   "js/data/live.js",
   "js/data/hub.js",
 ];

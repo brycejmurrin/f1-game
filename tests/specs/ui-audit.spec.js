@@ -358,15 +358,15 @@ for (const [orient, vp] of [["portrait", PORTRAIT], ["landscape", LANDSCAPE]]) {
       await shot(page, `${orient}-25-datahub-standings`);
     });
 
-    test("26 data hub last race tab", async ({ page }) => {
+    test("26 data hub results tab", async ({ page }) => {
       await setupApiMocks(page);
       await page.goto("/");
       await waitReady(page);
       await page.locator("#mb-data").click();
       await page.locator("#datahub").waitFor({ state: "visible" });
-      await page.locator(".dh-tab").filter({ hasText: "LAST RACE" }).click();
+      await page.locator(".dh-tab").filter({ hasText: "RESULTS" }).click();
       await waitTabLoaded(page);
-      await shot(page, `${orient}-26-datahub-lastrace`);
+      await shot(page, `${orient}-26-datahub-results`);
     });
 
     test("27 data hub live tab", async ({ page }) => {

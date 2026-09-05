@@ -373,7 +373,7 @@ lighting tuner's failure was in a state the grid had no entry for.
 | `hudmanual` | MANUAL moves the gearbox into the right thumb column and relocates BOOST/OT/AERO — a different control stack, not a restyle |
 
 Also measured, added when the gaps above were closed: `datastandings`,
-`datalastrace`, `datalive`, `dataexport` (the rest of the hub's tabs),
+`dataresults`, `datalive`, `dataexport` (the rest of the hub's tabs),
 `resultsseason` (the same root carrying a championship table, ten rows taller
 than a Grand Prix classification), `hudtouch` and `hudbuttons` (the two remaining
 steering modes — "touch" hides the gas pedal, "buttons" adds an explicit GAS), and

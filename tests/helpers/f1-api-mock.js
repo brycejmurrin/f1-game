@@ -263,6 +263,39 @@ const OPENF1_LOCATION = (function () {
   return data;
 })();
 
+// session_result: the RESULTS tab's source. Three shapes, because OpenF1's
+// `duration`/`gap_to_leader` change type with the session — a scalar for
+// practice and race, a [Q1,Q2,Q3] array for qualifying.
+const OPENF1_SESSION_RESULT = (function () {
+  const nums = OPENF1_DRIVERS.map((d) => d.driver_number);
+  const race = nums.map((n, i) => ({
+    position: i < 19 ? i + 1 : null,
+    driver_number: n,
+    number_of_laps: i < 19 ? 70 : 44,
+    points: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1][i] ?? 0,
+    dnf: i >= 19, dns: false, dsq: false,
+    duration: i < 19 ? 4920.318 + i * 3.4 : null,
+    gap_to_leader: i === 0 ? 0 : (i < 19 ? +(i * 3.4).toFixed(3) : null)
+  }));
+  const practice = nums.map((n, i) => ({
+    position: i + 1, driver_number: n, number_of_laps: 24 + (i % 7),
+    dnf: false, dns: false, dsq: false,
+    duration: +(71.884 + i * 0.121).toFixed(3),
+    gap_to_leader: i === 0 ? 0 : +(i * 0.121).toFixed(3)
+  }));
+  const quali = nums.map((n, i) => ({
+    position: i + 1, driver_number: n, number_of_laps: 18 + (i % 5),
+    dnf: false, dns: false, dsq: false,
+    duration: [
+      +(72.695 + i * 0.14).toFixed(3),
+      i < 15 ? +(71.628 + i * 0.13).toFixed(3) : null,
+      i < 10 ? +(71.163 + i * 0.12).toFixed(3) : null
+    ],
+    gap_to_leader: [+(i * 0.14).toFixed(3), i < 15 ? +(i * 0.13).toFixed(3) : null, i < 10 ? +(i * 0.12).toFixed(3) : null]
+  }));
+  return { 9999: race, 9997: quali, 9994: practice, 9995: practice, 9996: practice };
+})();
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Route installer
 // ──────────────────────────────────────────────────────────────────────────────
@@ -291,6 +324,10 @@ export async function setupApiMocks(page) {
     const url = request.url();
     const json = (obj) => route.fulfill({ contentType: "application/json", body: JSON.stringify(obj) });
 
+    if (url.includes("/session_result")) {
+      const m = /session_key=(\d+)/.exec(url);
+      return json((m && OPENF1_SESSION_RESULT[m[1]]) || []);
+    }
     if (url.includes("/sessions") && url.includes("session_key=latest"))  return json(OPENF1_SESSIONS_LATEST);
     if (url.includes("/sessions") && url.includes("meeting_key="))        return json(OPENF1_SESSIONS_MEETING_1234);
     if (url.includes("/meetings"))                                          return json(OPENF1_MEETINGS_2026);

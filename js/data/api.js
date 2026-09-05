@@ -639,6 +639,44 @@ const F1API = (function () {
     });
   }
 
+  // `duration` and `gap_to_leader` change SHAPE with the session type: a number
+  // for practice, sprint and race, a 3-element [Q1,Q2,Q3] array for qualifying,
+  // and occasionally a string ("+1 LAP") for a lapped finisher. Passed through
+  // in whichever shape arrived — results.js picks columns from the same signal.
+  function durVal(v) {
+    if (Array.isArray(v)) {
+      return v.map(function (x) { return (typeof x === "number" && isFinite(x)) ? x : null; });
+    }
+    if (typeof v === "number" && isFinite(v)) return v;
+    return str(v);
+  }
+
+  // Classification for ANY session — practice, qualifying, sprint or race.
+  // Jolpica's /last/results only ever describes the most recent GRAND PRIX, so
+  // this is the only path to "how did FP2 go".
+  function sessionResult(sessionKey, ttl) {
+    const url = OPENF1 + "/session_result?session_key=" + encodeURIComponent(sessionKey);
+    return request(url, ttl != null ? ttl : sessionTtl(sessionKey)).then(function (list) {
+      // A session with nothing published answers {detail:"No results found."} —
+      // an OBJECT, and a 200. arr() flattens that to [], which the tab renders
+      // as "not published yet" rather than as a failed fetch.
+      return arr(list).map(function (r) {
+        r = r || {};
+        return {
+          pos: num(r.position),
+          num: num(r.driver_number),
+          laps: num(r.number_of_laps),
+          points: num(r.points),
+          dnf: !!r.dnf,
+          dns: !!r.dns,
+          dsq: !!r.dsq,
+          duration: durVal(r.duration),
+          gap: durVal(r.gap_to_leader)
+        };
+      });
+    });
+  }
+
   function sessionLaps(sessionKey, driverNumber) {
     const url = OPENF1 + "/laps?session_key=" + encodeURIComponent(sessionKey) +
       "&driver_number=" + encodeURIComponent(driverNumber);
@@ -775,6 +813,7 @@ const F1API = (function () {
     intervals: intervals,
     liveIntervals: liveIntervals,
     sessionDrivers: sessionDrivers,
+    sessionResult: sessionResult,
     fastestLap: fastestLap,
     carData: carData,
     locationData: locationData,

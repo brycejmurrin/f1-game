@@ -23,7 +23,7 @@ async function dataReady(page) {
   // the logging landed, whenever the suite actually ran.
   await page.addScriptTag({ url: "/js/core/log.js" });
   await page.addScriptTag({ url: "/js/core/mat4.js" });
-  for (const u of ["api", "telemetry", "export", "schedule", "standings", "lastrace", "live", "hub"])
+  for (const u of ["api", "telemetry", "export", "schedule", "standings", "results", "live", "hub"])
     await page.addScriptTag({ url: "/js/data/" + u + ".js" });
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
 }
@@ -58,6 +58,7 @@ async function stubApi(page) {
     F1API.driverStandings = () => Promise.resolve([]);
     F1API.constructorStandings = () => Promise.resolve([]);
     F1API.lastRace = () => Promise.resolve(null);
+    F1API.sessionResult = () => Promise.resolve([]);
     F1API.latestSession = () => Promise.resolve(SESSIONS[1]);   // default to Race
     F1API.meetings = () => Promise.resolve([{ meetingKey: 1234, name: "Canadian GP", year: 2026 }]);
     F1API.sessionsForMeeting = () => Promise.resolve(SESSIONS);

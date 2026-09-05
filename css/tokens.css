@@ -480,7 +480,7 @@
      (0.42 light dim, 0.92 near-solid backdrop). */
   --scrim: rgba(6, 6, 10, 0.42);
   --scrim-heavy: rgba(6, 6, 10, 0.92);
-  /* Podium metals — the P1/P2/P3 rows in RESULTS and the data hub's LAST RACE
+  /* Podium metals — the P1/P2/P3 rows in the race-results screen and the data hub's RESULTS
      table each hand-wrote the same three colours with slightly different wash
      alphas. The metals are named once; each site keeps its own wash strength
      via color-mix. */

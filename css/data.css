@@ -367,6 +367,11 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-td-grid { width: 30px; text-align: center; color: var(--dim); }
 .dh-td-time { width: 88px; text-align: right; color: #c4c4c8; font-size: var(--fs-micro); }
 .dh-td-pts  { width: 34px; text-align: right; font-weight: 700; }
+/* RESULTS: the picker stays at the top and everything under it is replaced
+   whole as the player moves between sessions. The min-height holds the card's
+   size across that swap, so picking FP2 does not collapse the panel to the
+   spinner's height and bounce it back. */
+.dh-res-body { margin-top: var(--gap); min-height: 160px; }
 .dh-table tbody tr.dh-lr-p1 { color: var(--gold); background: color-mix(in srgb, var(--gold) 7%, transparent); border-left: 3px solid var(--gold); }
 .dh-table tbody tr.dh-lr-p2 { color: var(--silver); background: color-mix(in srgb, var(--silver) 5%, transparent); border-left: 3px solid var(--silver); }
 .dh-table tbody tr.dh-lr-p3 { color: var(--bronze); background: color-mix(in srgb, var(--bronze) 5%, transparent); border-left: 3px solid var(--bronze); }

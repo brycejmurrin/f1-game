@@ -1,4 +1,4 @@
-/* Apex 26 — DataHub: F1 data overlay (#datahub). Tabs: SCHEDULE | STANDINGS | LAST RACE | LIVE | TELEMETRY | EXPORT. All API-derived DOM is built with createEleme… */
+/* Apex 26 — DataHub: F1 data overlay (#datahub). Tabs: SCHEDULE | STANDINGS | RESULTS | LIVE | TELEMETRY | EXPORT. All API-derived DOM is built with createEleme… */
 const DataHub = (function () {
   "use strict";
 
@@ -6,10 +6,12 @@ const DataHub = (function () {
     "(free data is delayed until ~30 min after each session).";
   const NO_TELEM_MSG = "No telemetry available yet. The latest completed F1 session " +
     "(2023+) appears here once its data is published (~30–60 min after the session).";
+  const NO_RESULT_MSG = "No classification for this session yet — results are published " +
+    "shortly after the chequered flag. Pick another session above.";
 
   const MINUTE = 60 * 1000;
   // re-fetch a tab if its rendered content is older than this when shown again
-  const MAX_AGE = { schedule: 6 * 60 * MINUTE, standings: 60 * MINUTE, lastrace: 60 * MINUTE, live: 5 * MINUTE, telemetry: 15 * MINUTE, export: 24 * 60 * MINUTE };
+  const MAX_AGE = { schedule: 6 * 60 * MINUTE, standings: 60 * MINUTE, results: 60 * MINUTE, live: 5 * MINUTE, telemetry: 15 * MINUTE, export: 24 * 60 * MINUTE };
 
   // tyre compound colors
   const COMPOUND = {
@@ -20,7 +22,7 @@ const DataHub = (function () {
   const TABS = [
     { id: "schedule", label: "SCHEDULE", load: function () { return loadSchedule(); } },
     { id: "standings", label: "STANDINGS", load: function () { return loadStandings(); } },
-    { id: "lastrace", label: "LAST RACE", load: function () { return loadLastRace(); } },
+    { id: "results", label: "RESULTS", load: function () { return loadResults(); } },
     { id: "live", label: "LIVE", load: function () { return loadLive(); } },
     { id: "telemetry", label: "TELEMETRY", load: function () { return loadTelemetry(); } },
     { id: "export", label: "EXPORT", load: function () { return loadExport(); } }
@@ -237,8 +239,13 @@ const DataHub = (function () {
     // work nobody would ever render.
     for (const k in gen) gen[k] = (gen[k] || 0) + 1;
     F1API.cancelAll();
+    // Every picker-driven tab, for the reason above: cancelAll() rejects
+    // whatever loadGPs/loadSessions had in flight, which leaves "error" in
+    // the selects of a node that would otherwise be REUSED for the next
+    // hour. Dropping the node makes reopening rebuild the picker.
     state.live = null;
     state.telemetry = null;
+    state.results = null;
     root.hidden = true;
     openFlag = false;
     if (returnFocus && returnFocus.isConnected && returnFocus.focus) returnFocus.focus();
@@ -350,8 +357,6 @@ const DataHub = (function () {
 
   const { loadStandings } = DataStandings.create({ el, emptyMsg, teamChip, findTeam, cssColor });
 
-  const { loadLastRace } = DataLastRace.create({ el, emptyMsg, teamChip, fmtDate });
-
   const OPENF1_FIRST_YEAR = 2023;
   // Per call, not at boot — api.js's rule: a tab left open across New Year must
   // roll over instead of pinning the season it booted in (export.js does the same).
@@ -393,7 +398,7 @@ const DataHub = (function () {
 
   // Force the sibling session-tab to re-render for a newly picked session.
   function invalidateOther(except) {
-    ["live", "telemetry"].forEach(function (id) {
+    ["live", "telemetry", "results"].forEach(function (id) {
       if (id !== except) { state[id] = null; gen[id] = (gen[id] || 0) + 1; }
     });
   }
@@ -503,6 +508,14 @@ const DataHub = (function () {
     loadGPs(false);   // reflect current selection without firing onPick
     return box;
   }
+
+  // Implementation: js/data/results.js. Built after buildPicker — the RESULTS
+  // tab drives the same `sel` selection as LIVE and TELEMETRY, so picking FP2
+  // in one leaves all three describing the same session.
+  const { loadResults } = DataResults.create({
+    el, clear, emptyMsg, spinner, sel, ensureSession, buildPicker,
+    invalidateOther, teamChip, fmtDateTime, NO_RESULT_MSG
+  });
 
   const { loadLive, stopLiveAuto, disarmLiveAuto } = DataLive.create({
     el, clear, emptyMsg, spinner, ensureSession, sel, buildPicker,
