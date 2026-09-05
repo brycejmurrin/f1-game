@@ -2070,3 +2070,25 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   `js/physics/ai-drive.js` (unit-tested), so game.js again keeps only the call
   sites. After: speeds span 8 m/s at t=4 and 17 order changes in ten seconds
   (`tests/unit/ai-racecraft-vm.test.mjs`, the start test).
+
+- `js/game.js` lines 9951 -> **9994**, codeLines 5477 -> **5489** (2026-09-05):
+  what a contact costs the player. Twelve code lines net: room to the ROAD edge
+  for the pass latch and the squeeze test (+1 — the run-off allowance in
+  roomL/R let an AI "pass" on the grass at Lesmo for as long as the car ahead
+  held its line), the real impulse with
+  restitution and the human punt cap (+3, replacing the `0.5 * relV` and its
+  `* 0.8`), the laterally-nearest alongside pick (+1), the directional contact
+  compliance (+1), the once-a-frame rub (0 — `if (last)` on existing lines),
+  and the SQUEEZE back-out (+6: a yielder in contact with no lane to yield into
+  drops under the other car's speed with a dab of brake and abandons its pass)
+  — needed because once a rub stopped costing 48 m/s^2, AI pairs ground along
+  a barrier for seconds where the old scrub had knocked the trailing car back
+  (prolonged-contact pairs 0 -> 4 on monaco, back to 0 with it). The rest is
+  the comments that carry the measurements. Measured before ->
+  after on monza's start straight (`scratch/collision-bench.mjs`): a player
+  boxed between two AI cars at 40 m/s lost 18 m/s in a second -> 0; a
+  wheel-to-wheel lean cost 15 m/s -> 0; a rear-end bump left 55 % of the
+  closing speed per pass -> <= 15 %. The knobs (`rubDecel`, `bumpRestitution`,
+  `humanPuntCap`, the half-car `SIDE_LEVEL`) live in `js/physics/ai-drive.js`
+  with their unit tests; `tests/unit/collision-contact-vm.test.mjs` pins the
+  three behaviours.
