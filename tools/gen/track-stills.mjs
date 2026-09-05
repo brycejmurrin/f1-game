@@ -148,10 +148,15 @@ try {
       for (const el of document.body.children) if (el.id !== "game" && el.tagName !== "CANVAS") el.style.visibility = "hidden";
     }, { frac });
     await sleep(500);
-    const box = await page.locator("canvas#game").boundingBox({ timeout: 15000 }).catch(() => null);
+    // 240 s, not Playwright's 30 s or shot.mjs's 60 s: a night street circuit
+    // (Singapore, Las Vegas — thousands of lit windows) costs SwiftShader
+    // several seconds a frame, and the screenshot waits for a frame. Under
+    // load those two timed out three passes running while every other
+    // circuit shot in under 90 s.
+    const box = await page.locator("canvas#game").boundingBox({ timeout: 30000 }).catch(() => null);
     const png = box
-      ? await page.screenshot({ clip: box, timeout: 60000 })
-      : await page.screenshot({ timeout: 60000 });
+      ? await page.screenshot({ clip: box, timeout: 240000, animations: "disabled" })
+      : await page.screenshot({ timeout: 240000, animations: "disabled" });
     const webp = await sharp(png).resize(STILL_W, STILL_H, { fit: "cover" }).webp({ quality: 78 }).toBuffer();
     writeFileSync(resolve(OUT_DIR, id + ".webp"), webp);
     console.log(`${id} @${frac} ${tod}: ${(webp.length / 1024).toFixed(1)} KB in ${((Date.now() - t0) / 1000).toFixed(0)} s`);
