@@ -1,9 +1,17 @@
 // @ts-check
 // Contract tests for __apex.mapPts() and __apex.trackBounds()
-import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+// Imports from ../helpers/fixtures.js, not @playwright/test: a failure then
+// attaches apex-state / apex-logs / page-console, and the pageErrors guard is on.
+import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 
 test("mapPts and trackBounds hooks", async ({ page }) => {
+  // DECLARE THE BUDGET. This boots the default track and then a SECOND circuit
+  // (Monaco) — two builds in one test. Silent about that cost it was billed at
+  // the change-aware gate's 180 s rate and ran 185-190 s on a CI runner (Pages
+  // #2048, both attempts), so tools/ci/select-specs.mjs kept selecting it into a
+  // gate it could not fit. Declared above the gate it is excluded by name and
+  // runs in its own group. Measured 55-63 s on the dev box.
+  test.setTimeout(300_000);
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
@@ -14,10 +22,9 @@ test("mapPts and trackBounds hooks", async ({ page }) => {
   const nullPts = await page.evaluate(() => __apex.mapPts());
   expect(nullPts).not.toBeNull(); // default track pre-loads on startup
 
-  await page.evaluate(async () => {
-    __apex.race("monaco");
-    await new Promise(r => setTimeout(r, 3000));
-  });
+  // Wait for the build, not a fixed 3 s: on a slow box the map is read half-built.
+  await page.evaluate(() => { __apex.race("monaco"); });
+  await awaitTrackBuild(page);
 
   const pts = await page.evaluate(() => __apex.mapPts());
   expect(pts).not.toBeNull();
