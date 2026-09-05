@@ -37,6 +37,7 @@ function load(opts) {
     window: opts.window,
     requestAnimationFrame: undefined,
     PerfGov: opts.PerfGov,
+    GLX: opts.GLX,
     __apex: opts.apex,
   };
   const ctx = vm.createContext(sandbox);
@@ -452,8 +453,28 @@ test("game.js hands the overlay the memoised loader, not a widened boot gate", (
   assert.match(game, /function loadAgentSurface\(\)/);
   assert.match(game, /if \(!_agentLoad\) _agentLoad = \(async \(\) => \{/);
   assert.match(game, /GameMetrics\.setTelemetryLoader\(loadAgentSurface\)/);
+  // Pages METRICS must not pull LAZY_NET. Net stays on the wantAgentSurface
+  // (localhost / ?apex=1 / spec) path only.
+  const loadAt = game.indexOf("function loadAgentSurface()");
+  const loadFn = game.slice(loadAt, game.indexOf("function bootAgentSurface", loadAt));
+  assert.match(loadFn, /if \(wantAgentSurface\(\)\) await ensureNet\(\)/);
+  assert.equal(/^\s*await ensureNet\(\);/m.test(loadFn), false,
+    "unconditional ensureNet() inside loadAgentSurface pulls WebRTC for every METRICS toggle");
   // bootAgentSurface still gates, and now defers to the shared loader.
   assert.match(game, /if \(!wantAgentSurface\(\)\) return;\s*\n\s*await loadAgentSurface\(\);/);
+});
+
+test("a phone METRICS toggle does not ask for the agent surface", () => {
+  const { M } = load({ GLX: { isMobile: true, mobileTier: 2 } });
+  let calls = 0;
+  M.setTelemetryLoader(() => { calls++; return Promise.resolve(); });
+  M.set(true);
+  assert.equal(calls, 0, "phone overlay stays on PerfGov/GLX — no LAZY_AGENT fetch");
+  const desk = load({ GLX: { isMobile: false, mobileTier: 0 } });
+  let deskCalls = 0;
+  desk.M.setTelemetryLoader(() => { deskCalls++; return Promise.resolve(); });
+  desk.M.set(true);
+  assert.equal(deskCalls, 1, "desktop Pages still asks once so CAR/PHYS can fill");
 });
 
 // THE LAYOUT PICKER MUST NOT MEASURE ITS OWN OUTPUT. Choosing wide/narrow from

@@ -831,6 +831,12 @@ function ensureTelemetry() {
   if (_telemetryAsked || !_telemetryLoad) return;
   // Already live (localhost, ?apex=1, a spec): nothing to fetch.
   if (typeof window !== "undefined" && window.__apex) return;
+  // A phone that opens DISPLAY > METRICS (or left it persisted ON) must not
+  // pull LAZY_AGENT mid-session. CAR/PHYS stay "—" ; GOV still paints from
+  // PerfGov / GLX. Do not latch — a later desktop session can still ask.
+  try {
+    if (typeof GLX !== "undefined" && (GLX.isMobile || GLX.mobileTier)) return;
+  } catch (_) { /* GLX absent in a VM — fetch like desktop */ }
   _telemetryAsked = true;
   try {
     Promise.resolve(_telemetryLoad()).then(function () { paintOverlay(); }, function () { /* offline: stay degraded */ });

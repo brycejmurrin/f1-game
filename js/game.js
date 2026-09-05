@@ -9733,13 +9733,13 @@ window.__apex = null;
 let _agentLoad = null;
 function loadAgentSurface() {
   if (!_agentLoad) _agentLoad = (async () => {
-    // js/net comes WITH the agent surface. apex.js reads NetTransport /
-    // NetSession / NetSnapshot at eval-adjacent call sites and drives 22
-    // netLobby methods the stub does not carry, so a dev session or a spec that
-    // got __apex without the real net would fail on the multiplayer hooks
-    // instead of on anything this change is about. Awaited BEFORE apex.js so
-    // ApexApi.create(G) sees the real objects through the G getters.
-    await ensureNet();
+    // Dev/test boot still pulls js/net with the surface: apex.js net hooks
+    // read NetTransport / NetSession / NetSnapshot, and a localhost session
+    // that got __apex without the real net would fail on those methods.
+    // METRICS on github.io must not — that path is 257 KB plus NetLobby.wire()
+    // mid-session, and the overlay never calls a net hook. ApexApi.create(G)
+    // only resolves Net* when those methods run.
+    if (wantAgentSurface()) await ensureNet();
     await loadBackendScripts(AGENT_FILES, AGENT_EDGES);
     if (typeof ApexApi !== "undefined") window.__apex = ApexApi.create(G);
   })();
