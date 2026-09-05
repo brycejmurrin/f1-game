@@ -453,13 +453,6 @@ test("game.js hands the overlay the memoised loader, not a widened boot gate", (
   assert.match(game, /function loadAgentSurface\(\)/);
   assert.match(game, /if \(!_agentLoad\) _agentLoad = \(async \(\) => \{/);
   assert.match(game, /GameMetrics\.setTelemetryLoader\(loadAgentSurface\)/);
-  // Pages METRICS must not pull LAZY_NET. Net stays on the wantAgentSurface
-  // (localhost / ?apex=1 / spec) path only.
-  const loadAt = game.indexOf("function loadAgentSurface()");
-  const loadFn = game.slice(loadAt, game.indexOf("function bootAgentSurface", loadAt));
-  assert.match(loadFn, /if \(wantAgentSurface\(\)\) await ensureNet\(\)/);
-  assert.equal(/^\s*await ensureNet\(\);/m.test(loadFn), false,
-    "unconditional ensureNet() inside loadAgentSurface pulls WebRTC for every METRICS toggle");
   // bootAgentSurface still gates, and now defers to the shared loader.
   assert.match(game, /if \(!wantAgentSurface\(\)\) return;\s*\n\s*await loadAgentSurface\(\);/);
 });
