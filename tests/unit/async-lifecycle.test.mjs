@@ -32,6 +32,11 @@ function audioPanelHarness() {
   };
   const calls = [];
   const writes = new Map();
+  // The panel's picks are setting rows (js/ui/setting-row.js). This harness has
+  // no DOM, so a two-method stand-in records each row's read/write pair by id;
+  // the tests below drive a pick through `wired.get(id).write(v)`.
+  const wired = new Map();
+  const SettingRow = { wire(id, o) { wired.set(id, o); return null; }, paint() {}, optionDisabled() {}, disable() {}, labels: (l) => l.map((v) => [v, v]) };
   const GameAudio = {
     init() { calls.push("init"); },
     setEnabled(v) { calls.push(`enabled:${v}`); },
@@ -68,10 +73,10 @@ function audioPanelHarness() {
     },
     soundOn: false, musicEnabled: true, state: "menu",
   };
-  const context = vm.createContext({ GameAudio, Log: { info() {} } });
+  const context = vm.createContext({ GameAudio, SettingRow, Log: { info() {} } });
   vm.runInContext(`${audioPanelSource}\nglobalThis.__panel = AudioPanel;`, context,
     { filename: "js/audio/panel.js" });
-  return { panel: context.__panel.create(G), G, nodes, calls, writes };
+  return { panel: context.__panel.create(G), G, nodes, calls, writes, wired };
 }
 
 test("audio boot restore keeps saved master sound off when music is on", () => {
@@ -98,12 +103,12 @@ test("the sound button unlocks WebAudio synchronously after enabling its master"
 });
 
 test("music and SFX enable clicks also unlock a saved-off master synchronously", () => {
-  for (const id of ["as-music-on", "as-sound-on"]) {
-    const { panel, G, nodes, calls } = audioPanelHarness();
+  for (const id of ["as-music", "as-sound"]) {
+    const { panel, G, wired, calls } = audioPanelHarness();
     panel.init();
     calls.length = 0;
 
-    nodes.get(id).onclick({ stopPropagation() {} });
+    wired.get(id).write("on");
 
     assert.equal(G.soundOn, true, `${id} should lift the master`);
     assert.deepEqual(calls.slice(0, 2), ["enabled:true", "init"],

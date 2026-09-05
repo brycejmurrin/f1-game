@@ -49,13 +49,22 @@ async function openSettings(page, track = "bahrain", tod = "day", wx = "dry") {
   await page.waitForTimeout(200);
 }
 // Cycle a labelled toggle in-page until its text contains `want`.
-async function cycleTo(page, id, want, max = 4) {
-  await page.evaluate(({ id, want, max }) => {
-    const b = document.getElementById(id);
-    for (let i = 0; i < max && !b.textContent.toUpperCase().includes(want.toUpperCase()); i++) b.click();
-  }, { id, want, max });
+// Settings choices are setting rows (js/ui/setting-row.js): `#<id>-sel` is a
+// native select whose options are the values. Pick the option whose label
+// contains `want` the way a player would (change event), then return the
+// selected label (the old cycle helper returned the button label, and the
+// callers still `toContain` it).
+async function cycleTo(page, id, want) {
+  await page.evaluate(({ id, want }) => {
+    const sel = document.getElementById(id + "-sel");
+    const opt = [...sel.options].find((o) => o.textContent.toUpperCase().includes(want.toUpperCase()));
+    if (opt && sel.value !== opt.value) { sel.value = opt.value; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+  }, { id, want });
   await page.waitForTimeout(120);
-  return labelOf(page, id);
+  return page.evaluate((id) => {
+    const sel = document.getElementById(id + "-sel");
+    return sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : "";
+  }, id);
 }
 
 test.describe("Menu survey — settings sub-menu (portrait)", () => {

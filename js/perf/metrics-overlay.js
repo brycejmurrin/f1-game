@@ -714,27 +714,20 @@ function startLoop() {
   if (!_raf) _raf = requestAnimationFrame(loop);
 }
 
-function paintBtn(btn) {
-  if (!btn) return;
-  btn.textContent = "OVERLAY: " + (on() ? "ON" : "OFF");
-  btn.setAttribute("aria-pressed", on() ? "true" : "false");
+/* The six SETTINGS rows are setting rows (js/ui/setting-row.js) — the same
+   LABEL ‹ VALUE › control as every other Settings pick. A harness that loads
+   this file without SettingRow (tests/unit/metrics.test.mjs) gets the old
+   one-button cycle, painted as `LABEL: VALUE`, so its stubs still drive it. */
+function isRow(el) { return !!(el && el.classList && typeof el.classList.contains === "function" && el.classList.contains("set-row")); }
+function paintRow(el, label, value) {
+  if (!el) return;
+  if (isRow(el)) { SettingRow.paint(el, value); return; }
+  el.textContent = label + ": " + String(value).toUpperCase();
 }
-
-function paintPageBtn(btn) {
-  if (!btn) return;
-  btn.textContent = "PAGE: " + page().toUpperCase();
-  btn.setAttribute("aria-pressed", on() ? "true" : "false");
-}
-
-function paintLogNsBtn(btn) {
-  if (!btn) return;
-  btn.textContent = "LOG NS: " + logNs().toUpperCase();
-}
-
-function paintLogLvlBtn(btn) {
-  if (!btn) return;
-  btn.textContent = "LOG SHOW: " + logLvl().toUpperCase();
-}
+function paintBtn(btn) { paintRow(btn, "OVERLAY", on() ? "on" : "off"); }
+function paintPageBtn(btn) { paintRow(btn, "PAGE", page()); }
+function paintLogNsBtn(btn) { paintRow(btn, "LOG NS", logNs()); }
+function paintLogLvlBtn(btn) { paintRow(btn, "LOG SHOW", logLvl()); }
 
 function paintSummary() {
   var det = typeof document !== "undefined" ? document.getElementById("pm-metrics-details") : null;
@@ -752,15 +745,8 @@ function paintLogVisibility() {
   if (_logLvlBtn) _logLvlBtn.hidden = !show;
 }
 
-function paintPosBtn(btn) {
-  if (!btn) return;
-  btn.textContent = "SIDE: " + pos().toUpperCase();
-}
-
-function paintSizeBtn(btn) {
-  if (!btn) return;
-  btn.textContent = "SIZE: " + size().toUpperCase();
-}
+function paintPosBtn(btn) { paintRow(btn, "SIDE", pos()); }
+function paintSizeBtn(btn) { paintRow(btn, "SIZE", size()); }
 
 function paintSettingBtns() {
   paintBtn(_btn);
@@ -950,19 +936,32 @@ function insertAfter(host, anchor, el) {
   return anchor = el;
 }
 
-function makeMetricsBtn(id, title, paint, onClick) {
-  const b = document.createElement("button");
-  b.id = id;
-  b.type = "button";
-  b.title = title;
-  paint(b);
-  b.onclick = () => {
-    onClick();
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
-    catch (_) { /* audio not up yet; the toggle still applies */ }
-  };
-  return b;
+function uiSelect() {
+  try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); }
+  catch (_) { /* audio not up yet; the pick still applies */ }
 }
+// values: [[v, label], …]; read(): v; write(v). Falls back to a cycle button
+// where SettingRow is absent (see paintRow).
+function makeMetricsRow(id, label, title, values, read, write, paint) {
+  if (typeof SettingRow === "undefined") {
+    const b = document.createElement("button");
+    b.id = id;
+    b.type = "button";
+    b.title = title;
+    paint(b);
+    b.onclick = () => {
+      const vs = values.map((p) => p[0]);
+      write(vs[(vs.indexOf(String(read())) + 1) % vs.length]);
+      uiSelect();
+    };
+    return b;
+  }
+  const r = SettingRow.build(id, label, values);
+  r.row.title = title;
+  SettingRow.wire(r.row, { values, read, write: (v) => { write(v); uiSelect(); } });
+  return r.row;
+}
+const up = (list) => list.map((v) => [v, String(v).toUpperCase()]);
 
 function initUI() {
   try { Log.info("game", "GameMetrics.initUI"); } catch (_) { /* Log not loaded */ }
@@ -972,53 +971,47 @@ function initUI() {
   const host = anchor && anchor.parentNode;
   if (host && !document.getElementById("pm-metrics")) {
     let ins = anchor;
-    _btn = makeMetricsBtn(
-      "pm-metrics",
+    _btn = makeMetricsRow(
+      "pm-metrics", "OVERLAY",
       "Show the live metrics overlay on the canvas. ` or F9 also toggles it. " +
         "Each page shows different data: GOV = perf/session, CAR = timing/speed, " +
         "PHYS = grip/forces, LOG = filtered log tail.",
-      paintBtn,
-      () => { toggle(); },
+      up(["on", "off"]), () => (on() ? "on" : "off"), (v) => { set(v === "on"); }, paintBtn,
     );
     ins = insertAfter(host, ins, _btn);
 
-    _pageBtn = makeMetricsBtn(
-      "pm-metrics-page",
+    _pageBtn = makeMetricsRow(
+      "pm-metrics-page", "PAGE",
       "Which overlay page is shown while METRICS is ON. Pick a page before turning on, or use [ ] / 1–4 in-game.",
-      paintPageBtn,
-      () => { nextPage(1); },
+      up(PAGES), page, setPage, paintPageBtn,
     );
     ins = insertAfter(host, ins, _pageBtn);
 
-    _posBtn = makeMetricsBtn(
-      "pm-metrics-pos",
+    _posBtn = makeMetricsRow(
+      "pm-metrics-pos", "SIDE",
       "Which side the metrics overlay docks on. AUTO is left on a short or narrow viewport so the panel cannot cover GAS/BRAKE.",
-      paintPosBtn,
-      () => { nextPos(1); },
+      up(POSITIONS), pos, setPos, paintPosBtn,
     );
     ins = insertAfter(host, ins, _posBtn);
 
-    _sizeBtn = makeMetricsBtn(
-      "pm-metrics-size",
+    _sizeBtn = makeMetricsRow(
+      "pm-metrics-size", "SIZE",
       "How large the metrics overlay is. S is the phone default. The S/M/L chip on the overlay also cycles this.",
-      paintSizeBtn,
-      () => { nextSize(1); },
+      up(SIZES), size, setSize, paintSizeBtn,
     );
     ins = insertAfter(host, ins, _sizeBtn);
 
-    _logNsBtn = makeMetricsBtn(
-      "pm-metrics-logns",
+    _logNsBtn = makeMetricsRow(
+      "pm-metrics-logns", "LOG NS",
       "Filter the LOG overlay tail to one namespace (* = all). = / - cycle while the overlay is up.",
-      paintLogNsBtn,
-      () => { nextLogNs(1); },
+      up(LOG_NS), logNs, setLogNs, paintLogNsBtn,
     );
     ins = insertAfter(host, ins, _logNsBtn);
 
-    _logLvlBtn = makeMetricsBtn(
-      "pm-metrics-loglvl",
+    _logLvlBtn = makeMetricsRow(
+      "pm-metrics-loglvl", "LOG SHOW",
       "How verbose the LOG overlay tail is (warn / info / debug). ; cycles while the overlay is up.",
-      paintLogLvlBtn,
-      () => { nextLogLvl(1); },
+      up(LOG_LVLS), logLvl, setLogLvl, paintLogLvlBtn,
     );
     insertAfter(host, ins, _logLvlBtn);
   }

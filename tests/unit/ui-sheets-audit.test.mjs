@@ -352,6 +352,13 @@ function bootAudio({ soundOn, musicEnabled }) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   seedLog(ctx);
+  // The panel's picks are setting rows (js/ui/setting-row.js): load the real
+  // module and stand the four rows up in the mini DOM, ids as the shell has them.
+  vm.runInContext(src("js/ui/setting-row.js"), ctx, { filename: "js/ui/setting-row.js" });
+  const SettingRow = vm.runInContext("SettingRow", ctx);
+  for (const [id, label] of [["as-music", "MUSIC"], ["as-sound", "SOUND EFFECTS"], ["as-src", "SOURCE"], ["as-p", "PROFILE"]]) {
+    dom.body.appendChild(SettingRow.build(id, label).row);
+  }
   vm.runInContext(src("js/audio/panel.js"), ctx, { filename: "js/audio/panel.js" });
   const store = stubStore();
   store.set("musicSource", "builtin");
@@ -364,7 +371,7 @@ test("MUSIC & SOUND names the gate that is shut and captions DEFAULT as DEFAULT"
   const h = bootAudio({ soundOn: false, musicEnabled: true });
   h.api.init();
   h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
-  assert.equal(h.dom.byId("as-music-on").classList.contains("active"), true, "the MUSIC switch shows ON (its saved state)");
+  assert.equal(h.dom.byId("as-music-sel").value, "on", "the MUSIC row shows ON (its saved state)");
   assert.equal(h.dom.byId("as-mvol").disabled, true);
   assert.equal(h.dom.byId("as-now").textContent, "Sound off", "the readout blames the master SOUND gate, not music");
   assert.match(h.dom.byId("as-now-src").textContent, /^Master sound is off/, "and the caption says how to lift it");
@@ -374,7 +381,8 @@ test("MUSIC & SOUND names the gate that is shut and captions DEFAULT as DEFAULT"
   on.dom.dispatch(on.dom.byId("pm-audio"), { type: "click" });
   assert.equal(on.dom.byId("as-now").textContent, "Song A");
   assert.equal(on.dom.byId("as-now-src").textContent, "Default", "the caption uses the source button's own word");
-  assert.equal(on.dom.byId("as-src-builtin").classList.contains("active"), true);
+  assert.equal(on.dom.byId("as-src-sel").value, "builtin");
+  assert.equal(on.dom.byId("as-src-sel").children.find((o) => o.value === "user").disabled, true, "MY TRACKS is shown but unpickable with nothing uploaded");
   assert.equal(on.dom.byId("as-src-note").textContent, "Playing the 4 shipped tracks only.", "the note describes the SELECTED source, not the disabled MY TRACKS button");
 
   const off = bootAudio({ soundOn: true, musicEnabled: false });
@@ -403,8 +411,11 @@ test("the pause → settings → sub-sheet Escape ladder presses each sheet's ow
   // Pause button order: RESUME first (autofocus), QUIT last, no destructive
   // control between the two primaries.
   const pause = html.slice(html.indexOf('id="pausemenu"'), html.indexOf("</dialog>", html.indexOf('id="pausemenu"')));
-  const ids = [...pause.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]);
+  // The NOW PLAYING card's transport (pm-prev / pm-play / pm-skip) sits after
+  // QUIT and only while music is live; it is not a menu action.
+  const ids = [...pause.matchAll(/<button id="([^"]+)"/g)].map((m) => m[1]).filter((id) => !/^pm-(prev|play|skip)$/.test(id));
   assert.deepEqual(ids, ["pm-resume", "pm-restart", "pm-settings", "pm-howto", "pm-standings", "pm-quit"]);
+  assert.match(pause, /<div id="pm-now-card" class="as-now-card" hidden>/, "the pause NOW PLAYING card starts hidden; panel.js shows it while music plays");
   assert.match(pause, /id="pm-resume" autofocus/);
 });
 
@@ -425,8 +436,8 @@ test("pause, settings, results and standings all scroll inside the sheet on a sh
   // METRICS is two or three quiet rows — the sheet pane scrolls, so the
   // fold does not grow its own --svhz cage (that cage forced a nested
   // scroller under four plates).
-  assert.equal(decl(comp, /#pm-metrics-details \[role="group"\]/, "display"), "flex");
-  assert.equal(decl(comp, /#pm-hud-details \[role="group"\]/, "display"), "flex");
-  assert.equal(decl(comp, /#pm-metrics-details \[role="group"\]/, "max-height"), null,
+  assert.equal(decl(comp, /#pm-metrics-details > \[role="group"\]/, "display"), "flex");
+  assert.equal(decl(comp, /#pm-hud-details > \[role="group"\]/, "display"), "flex");
+  assert.equal(decl(comp, /#pm-metrics-details > \[role="group"\]/, "max-height"), null,
     "METRICS body does not own a height cage");
 });

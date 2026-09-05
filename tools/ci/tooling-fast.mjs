@@ -209,6 +209,9 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // The RESULTS tab drives OpenF1's session_result, whose duration and gap
   // change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.
   "tests/unit/data-results.test.mjs",
+  // The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):
+  // Car3D outline maths and the atlas painter, headless, ~0.5 s.
+  "tests/unit/fin-design.test.mjs",
   "tests/unit/photomode-hold.test.mjs",
   "tests/unit/title-menu-even.test.mjs",
   "tests/unit/change-driver-tools.test.mjs",

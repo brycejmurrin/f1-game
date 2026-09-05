@@ -129,3 +129,32 @@ test("two AI cars dropped side by side sort themselves out — one yields, neith
   const touched = after.filter((r) => r.cta > 0 || r.ctb > 0).length;
   assert.ok(touched === 0, `pair made contact ${touched} times after resolving`);
 });
+
+test("a standing start is a launch, not a procession — the grid pitch breaks in the first seconds", async () => {
+  const A = g.apex;
+  await g.race("monza");
+  A.headless(true);
+  const cars = g.G.cars;
+  A.carRole(cars.findIndex((c) => c.isPlayer), { human: false });
+  A.go();
+  g.G.raceT = 0;   // go() jumps the clock to 0.5 s; the reactions live inside that
+  const byProg = () => cars.slice().sort((a, b) => b.prog - a.prog);
+  let last = byProg().map((c) => c.id ?? cars.indexOf(c)), changes = 0, spreadAt4 = 0;
+  for (let i = 0; i < 10 * 60; i++) {
+    A.step(DT, 1);
+    const ord = byProg();
+    const ids = ord.map((c) => c.id ?? cars.indexOf(c));
+    if (ids.some((id, k) => id !== last[k])) changes++;
+    last = ids;
+    if (i === 4 * 60 - 1) { const v = ord.map((c) => c.speed); spreadAt4 = Math.max(...v) - Math.min(...v); }
+  }
+  A.headless(false);
+  // Anti-vacuity: everyone left the line.
+  assert.ok(cars.every((c) => c.speed > 10), "a car never launched");
+  // Measured before the launch plan: speeds within 4 m/s of each other at t=4
+  // and 3 order changes in ten seconds. After: 8 m/s and 17 changes. (The count
+  // of sub-12 m gaps at t=5 was 18 before and 14-17 after — too noisy to gate.)
+  const seen = `speed spread ${spreadAt4.toFixed(1)} m/s at t=4, ${changes} order changes in 10 s`;
+  assert.ok(spreadAt4 >= 6, `the field still accelerates as one: ${seen}`);
+  assert.ok(changes >= 6, `a procession: ${seen}`);
+});

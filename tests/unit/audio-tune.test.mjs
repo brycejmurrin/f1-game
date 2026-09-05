@@ -149,7 +149,8 @@ test("defaults are identity — the shipped sound is untouched by the tune layer
   assert.deepEqual(A.tune(), A.tuneDefaults(), "a fresh engine carries no trim");
   assert.equal(A.profile(), "team", "and follows the team's engine, as it always did");
   // The pre-tune formula, verbatim from the commit that introduced the trim.
-  const LOW = [0.6, 0.72, 0.84];   // LOW_GEAR_RATE, engine.js:656
+  // IDLE and CURVE at 1 must reduce the four-knob curve to exactly this.
+  const LOW = [0.6, 0.72, 0.84];   // LOW_GEAR_RATE, engine.js
   for (const gear of [1, 2, 3, 4, 6, 8]) {
     for (const rev of REVS) {
       for (const b of [0, 1]) {
@@ -286,6 +287,37 @@ test("the rev-limiter chop is switchable and its depth is a knob", async () => {
   assert.ok(A.limiterDepth() > 0, "and comes back");
 });
 
+test("in top gear the rev-limiter chop is a burst, not a wall", async () => {
+  // The chop is a shift cue. Pinned at top speed in 8th there is no gear to
+  // shift into, and the cut used to hammer for the whole straight — the only
+  // way to stop it was to lift (player report, 2026-09-05). Below top gear it
+  // never fades.
+  const { GameAudio: A, release, ctxTime } = boot();
+  A.init(); await release(); A.startEngine();
+  const at = (gear, rev = 0.99) => A.setEngine(rev, 0, false, 0.95, gear, {});
+  at(8);
+  const full = A.limiterDepth();
+  assert.ok(full > 0, "the cut still opens in top gear");
+  assert.equal(A.limiterHeld(), 0, "the hold clock starts when the top-gear cut begins");
+  ctxTime(0.3); at(8);
+  assert.ok(A.limiterDepth() >= full * 0.99, "first half second: full depth — you hear that you are at the limit");
+  ctxTime(0.45); at(8);
+  const mid = A.limiterDepth();
+  assert.ok(mid > 0 && mid < full * 0.8, `then it fades (${mid} of ${full})`);
+  ctxTime(0.5); at(8);
+  assert.equal(A.limiterDepth(), 0, "a second in, the note holds steady at the limiter with no chop");
+  assert.equal(A.limiterCents(), 0, "and the pitch sag fades with it");
+  at(8, 0.9);
+  assert.equal(A.limiterHeld(), null, "dipping under the gate re-arms it");
+  at(8);
+  assert.ok(A.limiterDepth() > 0, "the next straight gets its burst again");
+  // Gear 7 at the limiter for two seconds: the shift cue is never taken away.
+  at(7);
+  for (let i = 0; i < 20; i++) { ctxTime(0.1); at(7); }
+  assert.ok(A.limiterDepth() >= full * 0.99, "below top gear the chop holds full depth indefinitely");
+  assert.equal(A.limiterHeld(), null);
+});
+
 test("every id the ENGINE TONE panel looks up exists in the shell", () => {
   // js/audio/panel.js drives this section from tables, so its lookups are
   // `$(t.id)` and `$(t.id + "-v")` — dynamic reads, which
@@ -302,15 +334,18 @@ test("every id the ENGINE TONE panel looks up exists in the shell", () => {
 
   const sliders = [...panel.matchAll(/\{ k: "\w+",\s*id: "([\w-]+)",/g)].map((m) => m[1]);
   const layers = [...panel.matchAll(/\{ k: "\w+",\s+id: "([\w-]+)" \}/g)].map((m) => m[1]);
-  const profiles = [...panel.matchAll(/\["(as-p-[\w-]+)", "\w+"\]/g)].map((m) => m[1]);
-  assert.equal(sliders.length, 9, "expected the nine tuner sliders — the table shape changed, so does this check");
-  assert.equal(layers.length, 10, "expected the ten layer switches");
+  // The PROFILE setting row (js/ui/setting-row.js): five pickable names plus a
+  // shown-but-disabled CUSTOM; the row itself is #as-p in the shell.
+  const profiles = [...panel.matchAll(/\["(team|broadcast|trackside|cockpit|v10)", "[A-Z0-9]+"\]/g)].map((m) => m[1]);
+  assert.match(panel, /\["custom", "CUSTOM", true\]/, "CUSTOM is listed but unpickable");
+  assert.equal(sliders.length, 22, "expected the twenty-two tuner sliders — the table shape changed, so does this check");
+  assert.equal(layers.length, 12, "expected the twelve layer switches");
   assert.equal(profiles.length, 5, "expected the five sound profiles");
 
   const missing = [];
   // Each slider owns TWO nodes: the range input and the <b> that reads its value.
   for (const id of sliders) for (const suffix of ["", "-v"]) if (!declared.has(id + suffix)) missing.push(id + suffix);
-  for (const id of [...layers, ...profiles, "as-t-reset", "as-p-note", "as-engine-details"]) if (!declared.has(id)) missing.push(id);
+  for (const id of [...layers, "as-p", "as-p-sel", "as-t-reset", "as-p-note", "as-engine-details"]) if (!declared.has(id)) missing.push(id);
   assert.deepEqual(missing, [], "js/audio/panel.js looks up an id that index.html does not declare");
 });
 
@@ -321,7 +356,11 @@ test("every sound profile and layer the panel offers is one the engine knows", (
   // and does nothing, which is worse than one that throws.
   const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
   const A = await_boot();
-  const offered = [...panel.matchAll(/\["as-p-[\w-]+", "(\w+)"\]/g)].map((m) => m[1]);
+  // PROFILE_VALUES feeds the PROFILE setting row; the disabled CUSTOM entry
+  // (`, true`) is a state, not a pick, and the two-field regex skips it.
+  const at = panel.indexOf("PROFILE_VALUES = [");
+  const block = panel.slice(at, panel.indexOf("];", at));
+  const offered = [...block.matchAll(/\["(\w+)", "[A-Z0-9]+"\]/g)].map((m) => m[1]);
   assert.deepEqual(offered.filter((p) => !A.profiles().includes(p)), [],
     "the panel offers a profile SOUND_PROFILES does not define");
   assert.deepEqual([...A.profiles()].filter((p) => !offered.includes(p)), [],
@@ -449,6 +488,10 @@ test("overrun crackles on a trailing throttle, and not while coasting or braking
   A.init();
   await release();
   A.startEngine();
+  // The wastegate is ALSO a one-shot on a lift — braking after the "pulling"
+  // frames below is exactly when it dumps — and it builds a source too. It has
+  // its own test; here the TURBO switch takes it out so the count is overrun's.
+  A.setLayer("whine", false);
   const burstsOver = (frames, phys) => {
     const before = counts.src || 0;
     // now() advances with ctx.currentTime, which this harness holds still, so
@@ -491,7 +534,7 @@ test("every slider spans its trim's FULL range and can land exactly on 1.0", () 
   const range = A.tuneRange();
 
   const rows = [...panel.matchAll(/\{ k: "(\w+)",\s*id: "([\w-]+)",\s*lo: ([\d.]+),\s*step: ([\d.]+) \}/g)];
-  assert.equal(rows.length, 9, "expected nine tuner sliders");
+  assert.equal(rows.length, 22, "expected twenty-two tuner sliders");
   for (const [, key, id, loS, stepS] of rows) {
     const lo = Number(loS), step = Number(stepS);
     const m = shell.match(new RegExp(`<input id="${id}" type="range" min="0" max="(\\d+)" step="1" value="(\\d+)"`));
@@ -520,26 +563,115 @@ test("BRIGHTNESS keeps moving the corner across its whole range, and stops below
   }
 });
 
-test("the LIMITER trim never inverts the gate, and spends its top half on the chop rate", async () => {
+test("the LIMITER is three knobs: depth that never inverts the gate, a rate, and a pitch sag", async () => {
   const A = await sampleEngine();
   const atLimiter = () => A.setEngine(0.99, 0, false, 0.9, 7, {});
-  const [, hi] = A.tuneRange().limiter;
-  let lastHz = -1;
-  for (const k of [0, 0.5, 1, 2, hi]) {
+  const r = A.tuneRange();
+  A.setTune(A.tuneDefaults());
+  for (const k of [0, 0.5, 1, 2, r.limiter[1]]) {
     A.setTune({ limiter: k });
     atLimiter();
     // engGain's base is (lvl - depth) and the square swings +-depth on top, so
     // the trough is lvl - 2*depth. Negative there is a phase flip, not a cut.
     const depth = A.limiterDepth(), lvl = A.engineLevel() + depth;
     assert.ok(depth <= lvl * 0.5 + 1e-9,
-      `LIMITER ${k}: depth ${depth} exceeds half of level ${lvl} — the gate inverts`);
-    const hz = A.limiterHz();
-    assert.ok(hz > lastHz, `LIMITER ${k}: the chop rate stopped rising (${lastHz} -> ${hz})`);
-    lastHz = hz;
+      `DEPTH ${k}: depth ${depth} exceeds half of level ${lvl} — the gate inverts`);
+    assert.ok(Math.abs(A.limiterHz() - 13) < 0.01, "DEPTH must not move the chop rate — that is RATE's knob now");
   }
   A.setTune({ limiter: 1 });
-  atLimiter();
+  let lastHz = -1;
+  for (const k of [r.limRate[0], 0.7, 1, 2, r.limRate[1]]) {
+    A.setTune({ limRate: k });
+    const hz = A.limiterHz();
+    assert.ok(hz > lastHz, `RATE ${k}: the chop rate stopped rising (${lastHz} -> ${hz})`);
+    lastHz = hz;
+  }
+  A.setTune({ limRate: 1 });
   assert.ok(Math.abs(A.limiterHz() - 13) < 0.01, "1.0 is still the stock 13 Hz cut");
+  // PITCH SAG: cents of swing in step with the cut, only while the cut is on.
+  atLimiter();
+  const sag = A.limiterCents();
+  assert.ok(sag > 0, "the stock tune sags on each cut");
+  A.setTune({ limPitch: 3 });
+  atLimiter();
+  assert.ok(Math.abs(A.limiterCents() - sag * 3) < 1e-6, "PITCH SAG is a multiplier on the cents");
+  A.setTune({ limPitch: 0 });
+  atLimiter();
+  assert.equal(A.limiterCents(), 0, "zero is a steady note under the cut");
+  A.setTune({ limPitch: 1 });
+  A.setEngine(0.8, 0, false, 0.9, 7, {});
+  assert.equal(A.limiterCents(), 0, "and below the limiter the note never sags");
+  A.setLayer("limiter", false);
+  atLimiter();
+  assert.equal(A.limiterCents(), 0, "the switch is the hard off for the sag too");
+});
+
+test("BOOST is the ERS layers' level and the rev lift under deploy", async () => {
+  const A = await sampleEngine();
+  const deploying = () => A.setEngine(0.7, 1, false, 0.7, 6, { deploy: 1, energy: 1 });
+  const coasting = () => A.setEngine(0.7, 0, false, 0.7, 6, {});
+  A.setTune(A.tuneDefaults());
+  coasting();
+  const flat = A.rate();
+  deploying();
+  const lift = A.rate() / flat;
+  assert.ok(lift > 1.03 && lift < 1.05, `the stock deploy lift is 4%, got ${lift}`);
+  const whine = A.ersLevel();
+  assert.ok(whine > 0, "the stock tune whines while deploying");
+  A.setTune({ boostPitch: 3 });
+  deploying();
+  assert.ok(Math.abs((A.rate() / flat - 1) - 0.04 * 3) < 1e-6, "REV LIFT is a multiplier on the 4%");
+  A.setTune({ boostPitch: 0 });
+  deploying();
+  assert.ok(Math.abs(A.rate() - flat) < 1e-9, "zero lift leaves the note where coasting has it");
+  A.setTune({ boostPitch: 1, boost: 2.5 });
+  deploying();
+  assert.ok(A.ersLevel() > whine * 2, "LEVEL scales the deploy whine");
+  A.setTune({ boost: 0 });
+  deploying();
+  assert.equal(A.ersLevel(), 0, "zero is a silent hybrid");
+  // The deploy whoosh is a one-shot; its level is what the trim gave it.
+  A.setTune({ boost: 1 });
+  A.deployBoost();
+  const stock = A.boostState().peak;
+  assert.ok(stock > 0 && A.boostState().fired === 1, "a deploy fires one whoosh at the stock level");
+  A.setTune({ boost: 2 });
+  A.deployBoost();
+  assert.ok(Math.abs(A.boostState().peak - stock * 2) < 1e-9, "the trim scales the whoosh");
+});
+
+test("the layers that only had a switch now have a level", async () => {
+  const { GameAudio: A, release, ctxTime } = boot();
+  A.init();
+  await release();
+  A.startEngine();
+  A.setTune(A.tuneDefaults());
+  // Wind at speed, harvest under a lift, tyres sliding, a rival alongside.
+  const windy = () => A.setEngine(0.8, 0, false, 0.9, 6, {});
+  const harvesting = () => {   // the harvest layer follows the smoothed decel of speed01 over TIME
+    for (let i = 0; i < 8; i++) { ctxTime(0.05); A.setEngine(0.6, 0, false, 0.9 - i * 0.05, 5, { ax: -6 }); }
+  };
+  const sliding = () => A.setSkid(0.8, false);
+  const rival = () => { A.setRivals([{ lat: 3, arc: 1, rev: 0.8, approach: 0 }]); return A.rivalState()[0].gain; };
+  const cases = [
+    ["wind",    windy,      () => A.windLevel()],
+    ["harvest", harvesting, () => A.harvestLevel()],
+    ["screech", sliding,    () => A.skidLevel()],
+    ["rivals",  () => {},   rival],
+  ];
+  for (const [k, drive, read] of cases) {
+    A.setTune({ [k]: 1 });
+    drive();
+    const base = read();
+    assert.ok(base > 0, `${k}: precondition — the layer is audible on this frame`);
+    A.setTune({ [k]: 2.5 });
+    drive();
+    assert.ok(read() > base * 2, `${k}: the trim must scale it (${base} -> ${read()})`);
+    A.setTune({ [k]: 0 });
+    drive();
+    assert.equal(read(), 0, `${k}: zero must be silent`);
+    A.setTune({ [k]: 1 });
+  }
 });
 
 test("rival voices are four distinct cars, not one car four times", async () => {
@@ -715,4 +847,176 @@ test("two rival voices still give a LEFT and a RIGHT", async () => {
   assert.ok(l.pan < -0.3, `left-hand car panned ${l.pan}`);
   assert.ok(r.pan > 0.3, `right-hand car panned ${r.pan}`);
   assert.ok(l.gain > 0 && r.gain > 0, "both alongside cars must be audible");
+});
+
+test("IDLE and REV RANGE reach a low idle AND a high redline at once", async () => {
+  // The complaint that started the redesign: PITCH scaled both ends of the
+  // curve, so a low, grumbling idle could only be bought by dragging the whole
+  // curve down, and REV RANGE could not put the redline back. Measured on the
+  // old table: PITCH 0.6 + REV RANGE 2.5 gave a redline rate of 0.83 against
+  // the stock 0.70 — a fifth of an octave for a knob that read 2.5x. The four
+  // knobs are independent now, and this pins that a low end and a high end
+  // are reachable TOGETHER, not one at the other's expense.
+  const A = await sampleEngine();
+  const r = A.tuneRange();
+  const at = (rev) => { A.setEngine(rev, 0, false, 0.6, 6, {}); return A.rate(); };
+  A.setTune(A.tuneDefaults());
+  const stockIdle = at(0), stockTop = at(1);
+  // Idle an octave under stock, redline an octave over it, in the same tune.
+  A.setTune({ idle: 0.5, revRange: 3.0 });
+  assert.ok(at(0) <= stockIdle * 0.5 + 1e-9, `idle ${at(0)} is not an octave under stock ${stockIdle}`);
+  assert.ok(at(1) >= stockTop * 2, `redline ${at(1)} is not an octave over stock ${stockTop}`);
+  // IDLE moves only the idle end: the span (top - idle) is REV RANGE's alone.
+  A.setTune(A.tuneDefaults());
+  const span = at(1) - at(0);
+  A.setTune({ idle: r.idle[1] });
+  assert.ok(Math.abs((at(1) - at(0)) - span) < 1e-9, "IDLE changed the span, which is REV RANGE's job");
+  A.setTune(A.tuneDefaults());
+  A.setTune({ revRange: 2 });
+  assert.ok(Math.abs(at(0) - stockIdle) < 1e-9, "REV RANGE moved the idle end, which is IDLE's job");
+  // And PITCH is a transpose: it scales both ends by the same factor.
+  A.setTune(A.tuneDefaults());
+  A.setTune({ pitch: 1.5 });
+  assert.ok(Math.abs(at(0) / stockIdle - 1.5) < 1e-9 && Math.abs(at(1) / stockTop - 1.5) < 1e-9,
+    "PITCH must scale idle and redline alike");
+  // The corners: the widest spread the panel can reach, and it must still be
+  // a usable playbackRate at both ends.
+  A.setTune({ idle: r.idle[0], pitch: r.pitch[0], revRange: r.revRange[0] });
+  const lo = at(0);
+  A.setTune({ idle: r.idle[1], pitch: r.pitch[1], revRange: r.revRange[1] });
+  const hi = at(1);
+  assert.ok(lo > 0.05 && hi < 5, `corner rates ${lo}..${hi} left the range a BufferSource plays cleanly`);
+  assert.ok(hi / lo > 30, `the tuner's reach is ${(hi / lo).toFixed(1)}:1 — the redesign promised an order beyond stock`);
+});
+
+test("CURVE bends the path between idle and redline without moving either end", async () => {
+  const A = await sampleEngine();
+  const at = (rev) => { A.setEngine(rev, 0, false, 0.6, 6, {}); return A.rate(); };
+  A.setTune(A.tuneDefaults());
+  const idle = at(0), top = at(1), midLinear = at(0.5);
+  for (const c of [A.tuneRange().curve[0], 0.7, 1.4, A.tuneRange().curve[1]]) {
+    A.setTune({ curve: c });
+    assert.ok(Math.abs(at(0) - idle) < 1e-9 && Math.abs(at(1) - top) < 1e-9, `CURVE ${c} moved an end`);
+    const mid = at(0.5);
+    if (c > 1) assert.ok(mid < midLinear, `CURVE ${c} > 1 should hang low through the mid-range (${mid} vs ${midLinear})`);
+    else assert.ok(mid > midLinear, `CURVE ${c} < 1 should rise early (${mid} vs ${midLinear})`);
+  }
+});
+
+test("GRAVEL is roughness at idle that is gone by redline, and never inverts the engine", async () => {
+  const A = await sampleEngine();
+  const frame = (rev) => A.setEngine(rev, 0, false, 0.5, 5, {});
+  A.setTune(A.tuneDefaults());
+  frame(0);
+  const idle = A.gravelDepth();
+  assert.ok(idle > 0, "the shipped tune must carry some roughness at idle");
+  assert.ok(A.gravelHz() >= 18 && A.gravelHz() <= 140, `crank rate ${A.gravelHz()} Hz is outside the roughness band`);
+  const lowHz = A.gravelHz();
+  frame(0.5);
+  assert.ok(A.gravelDepth() < idle * 0.5, "half revs should carry well under half the roughness");
+  assert.ok(A.gravelHz() > lowHz, "the crank rate must rise with the engine");
+  frame(1);
+  assert.ok(A.gravelDepth() < 1e-6, `redline should be smooth, got ${A.gravelDepth()}`);
+  // The trim scales it, zero is silent, and the switch is the hard off.
+  frame(0);
+  A.setTune({ gravel: 3 });
+  frame(0);
+  assert.ok(A.gravelDepth() > idle, "the GRAVEL trim must deepen it");
+  // ...but a swing deeper than the engine's own level would take the gain
+  // through zero, which is a phase flip rather than more grit.
+  assert.ok(A.gravelDepth() <= A.engineLevel() + 1e-9,
+    `depth ${A.gravelDepth()} exceeds the engine level ${A.engineLevel()} — the modulation inverts`);
+  A.setTune({ gravel: 0 });
+  frame(0);
+  assert.equal(A.gravelDepth(), 0, "zero must be smooth, not merely smoother");
+  A.setTune({ gravel: 1 });
+  A.setLayer("gravel", false);
+  frame(0);
+  assert.equal(A.gravelDepth(), 0, "switched off is silent whatever the trim says");
+  A.setLayer("gravel", true);
+  frame(0);
+  assert.ok(A.gravelDepth() > 0, "and back on restores it");
+});
+
+test("BRAKES roar under deceleration at speed and are silent on the throttle", async () => {
+  const A = await sampleEngine();
+  const frame = (ax, s) => A.setEngine(0.6, 0, false, s, 5, { ax });
+  A.setTune(A.tuneDefaults());
+  frame(0, 0.8);
+  assert.equal(A.brakeLevel(), 0, "coasting is silent");
+  frame(10, 0.8);
+  assert.equal(A.brakeLevel(), 0, "and so is accelerating");
+  frame(-30, 0.8);
+  const fast = A.brakeLevel();
+  assert.ok(fast > 0, "a hard stop from speed must be audible");
+  frame(-30, 0.15);
+  assert.ok(A.brakeLevel() < fast, "the same stop from a crawl is quieter");
+  frame(-55, 0.8);
+  assert.ok(A.brakeLevel() > fast, "and a harder pedal is louder");
+  A.setTune({ brakes: 3 });
+  frame(-30, 0.8);
+  assert.ok(A.brakeLevel() > fast * 2, "the BRAKES trim must scale it");
+  A.setTune({ brakes: 0 });
+  frame(-30, 0.8);
+  assert.equal(A.brakeLevel(), 0, "zero is silent");
+  A.setTune({ brakes: 1 });
+  A.setLayer("brakes", false);
+  frame(-30, 0.8);
+  assert.equal(A.brakeLevel(), 0, "the switch is the hard off");
+  A.setLayer("brakes", true);
+  frame(-30, 0.8);
+  assert.ok(A.brakeLevel() > 0, "and back on restores it");
+});
+
+test("the wastegate dumps once per lift, and only after a real pull", async () => {
+  const { GameAudio: A, release, ctxTime } = boot();
+  A.init();
+  await release();
+  A.startEngine();
+  const run = (frames, ax, rev = 0.8) => {
+    for (let i = 0; i < frames; i++) { ctxTime(0.05); A.setEngine(rev, 0, false, 0.7, 5, { ax }); }
+  };
+  const fired = () => A.wastegateState().fired;
+  run(4, 0);
+  assert.equal(fired(), 0, "nothing on a cold start");
+  run(20, 10);                     // a second under load
+  assert.equal(fired(), 0, "no dump while still pulling");
+  run(2, -3);                      // the lift
+  assert.equal(fired(), 1, "one dump on the lift");
+  run(40, -3);
+  assert.equal(fired(), 1, "and only one — staying off the throttle must not repeat it");
+  run(4, 10);                      // a blip too short to build boost
+  run(4, -3);
+  assert.equal(fired(), 1, "a quarter-second stab of throttle is not a pull");
+  run(20, 10, 0.3);                // a long pull at idle revs
+  run(4, -3, 0.3);
+  assert.equal(fired(), 1, "pulling at low revs builds no boost to dump");
+  // It is the turbo's sound: the TURBO switch owns it.
+  A.setLayer("whine", false);
+  run(20, 10); run(4, -3);
+  assert.equal(fired(), 1, "switched off with the turbo");
+  A.setLayer("whine", true);
+  run(20, 10); run(4, -3);
+  assert.equal(fired(), 2, "and back with it");
+});
+
+test("the SHIFT trim scales the gear-change crack", async () => {
+  const A = await sampleEngine();
+  A.setTune(A.tuneDefaults());
+  A.shift(true);
+  const stock = A.shiftState().peak;
+  assert.ok(stock > 0 && A.shiftState().fired === 1, "a shift fires one crack at the stock level");
+  A.setTune({ shift: 2.5 });
+  A.shift(true);
+  assert.ok(Math.abs(A.shiftState().peak - stock * 2.5) < 1e-9, "the trim is a multiplier on the crack");
+  A.setTune({ shift: 0 });
+  A.shift(false);
+  assert.equal(A.shiftState().peak, 0, "zero is a silent gearbox");
+  // The rev-cut is the ENGINE's behaviour and must survive a silent gearbox:
+  // the next frame still dips.
+  A.setEngine(0.7, 0, false, 0.6, 5, {});
+  const ducked = A.engineLevel();
+  A.setTune({ shift: 1 });
+  for (let i = 0; i < 40; i++) A.setEngine(0.7, 0, false, 0.6, 5, {});
+  assert.ok(ducked <= A.engineLevel() + 1e-9, "the shift duck stays with the engine, not the trim");
 });

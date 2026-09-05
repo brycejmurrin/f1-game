@@ -35,6 +35,47 @@ Everything else is built on these. They live in `css/components.css`.
 | `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#season-setup`, `#carsetup` and `#career` (`#select` left it in the 2026-09 picker redesign: a flag strip over a hero is one column). Default foot sits under the side column; `.pair-foot-full` spans BACK / YOUR CAR / NEXT (and season APPLY) across both. Slots are named by POSITION, not role — see the note in `css/components.css` |
 | `.balanced-row` | a content-driven control cluster: items wrap from their preferred local width, every line shares its space evenly, and a lone final item fills the line without child-count-specific CSS |
 
+## Selection grammar — how a control says "this one"
+
+Three grammars used to coexist, sometimes on one screen (survey 2026-09-05): a
+ringed chip (STEERING, RACE SETTINGS, the garage, the data hub); a `KEY: VALUE`
+button that cycled on tap with the value word painted gold / red / green / cyan
+(the whole CONTROLS page, the HUD fold, Spotify REPEAT); and an ON | OFF pair
+with no ring where only the chosen word was coloured (MUSIC, SOUND). The ringed
+chip itself lit two ways — a red side bar plus halo (`--plate-on-glow`) in nine
+files, switched off again inside Settings. Now there are two controls, chosen
+by what the screen is FOR, and both are checkable:
+
+| what | rule | where it is held |
+|---|---|---|
+| **a preference on a settings sheet** (Settings pages, the Spotify panel, the injected RENDERER / GRAPHICS / METRICS rows) | the **setting row**: `LABEL  ‹ VALUE ›` — `.set-row` holding a `.tune-label`, then a `div` with `button[data-step=-1]`, a native `<select>`, `button[data-step=1]`. One line at every UI SIZE; the ‹ select › cluster drops to its own line, right-aligned, only when the label cannot share it. Tap the value for the platform picker (every option, a real combo box for a screen reader); chevrons step; a disabled option (CUSTOM, SPOTIFY unconnected) is shown but skipped. Booleans are the same row, ‹ ON \| OFF › | `js/ui/setting-row.js` (`wire` / `paint` / `disable` / `optionDisabled` / `build`); the rows are static DOM in `index.html`, the options come from the owning module's own value list; CSS in `css/components.css` |
+| **a pick that is the screen's content** (RACE SETTINGS laps / weather / time / difficulty, garage tabs and parts, team and track lists, data-hub pills, steering PRESETS) and **multi-select toggles** (engine layers) | chips — `.opt-btn` / `.sel-chip` / `.cs-tab` / `.dh-*` etc., one `.active` (or several for toggles), wrapping through `.balanced-row` | their owning files |
+| the chosen chip look | `background: var(--plate-on); border-color: var(--red)` and nothing else — no glow, no side bar, no coloured word inside the control | `css/tokens.css` "THE ONE SELECTED LOOK"; every `.active` chip / tab / pill rule uses exactly those two declarations |
+| a full-card tile | the STRONG tier: `--plate-on-strong` + `--lift-sel` (team tile, career flavour / seat / slot) | `css/tokens.css` |
+| a small square control (a row's ‹ ›, the NOW PLAYING ⏮ ⏸ ⏭ transport on the MUSIC page and in the pause menu) | one shape: a `--chip-h` plate square, `--r-sm` corners; play/pause is the same square, filled | `css/components.css` `.set-row > div > button`, `css/tuner.css` `.as-tbtn` |
+| a status word | gold ON / red OFF via `[data-fold]` — on READOUTS only: the closed fold summaries (`MUSIC · ON · ALL`) and the title-screen sound button. `AriaState.paintOnOff` skips `.opt-btn` | `css/components.css`, `js/ui/aria-state.js` |
+
+Why a row and not a chip row for settings — measured, not argued.
+`tools/ui/layout-audit.mjs` over the four settings pages at UI SIZE 100 / 150 /
+200 on phone, tablet and desktop: the labelled chip rows never clipped and never
+fell under the tap floor, but each setting cost a label, one to three chip lines
+and a help line — CONTROLS ran 3.8 screens deep at landscape 150% for THREE
+settings, and LAYOUT's five chips wrapped to three lines at 200%. A setting row
+costs one line however many options it has, which is also why console racing
+games settle on `‹ VALUE ›` for their options screens. Chips stay where seeing
+every option side by side IS the task.
+
+Deliberate exceptions, each carrying a meaning red would erase: the livery
+`NONE` / palette pills use a white ring because colour IS their content;
+`.cs-opt.exclusive.active` is gold because the part is exclusive; `#cs-aero`
+lights cyan because that is the X-mode colour the in-race HUD uses for the same
+system.
+
+`tests/unit/ui-improve-pass.test.mjs` asserts the glow token is gone from every
+file, that no Settings exception restates the chip look, that `paintOnOff` skips
+chips, and that every Settings pick is a `.set-row`; `tests/unit/hud-metrics-layout.test.mjs`
+pins the HUD fold's rows.
+
 ## Families, and the file that owns each
 
 "Owner" is the file with the most rules for that prefix; "also" means other files
@@ -67,7 +108,7 @@ not.
 | `team-` | 11 | `menus.css` | components |
 | `steer-` | 10 | `overlays.css` | — |
 | `tdc-` | 10 | `track-detail.css` | — |
-| `co-`, `pm-`, `pane-`, `music-` | ~9 each | career / components / components / tuner | — |
+| `co-`, `pm-`, `pane-`, `music-`, `set-` | ~9 each | career / components / components / tuner / components | — |
 
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `balanced-`, `rotate-`,
@@ -154,6 +195,7 @@ most-shared class in the project and had no entry at all:
 - `.alt` — `components` + `menus`. Alternate `.bigbtn` look on Select / Career;
   defined on `.bigbtn.alt` in `components`, re-tinted per-screen in `menus`
 - `.adv-item` — `components` + `tuner`
+- `.as-tbtn` — `tuner` + `components`. The NOW PLAYING transport square; `components` restates its --chip-h size inside Settings over the broad `.pm-group button` rules, the same way the setting-row chevrons are.
 - `.adv-more-btn` — `components` + `tuner`
 - `.cs-stat-bar-wrap` — `carsetup` + `menus` + `responsive`
 - `.cs-stat-label` — `carsetup` + `menus` + `responsive`

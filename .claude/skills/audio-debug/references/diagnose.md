@@ -7,14 +7,24 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 
 | Layer | What it does |
 |---|---|
-| Engine (sample core) | `assets/sfx/f1_engine.mp3` (idle) + `f1_rev.mp3` (high-rev), pitched via `playbackRate` |
+| Engine (sample core) | `assets/sfx/f1_engine.mp3` looped and pitched via `playbackRate` (`f1_rev.mp3` is on disk but nothing loads it) |
 | Engine (synth fallback) | Three detuned oscillators (saw×2 + square) through a speed-tracking lowpass until samples decode |
-| Turbo whine | Sine ~1500 Hz, level tracks throttle |
-| MGU-K harvest | Filtered noise when decelerating |
-| Rev-limiter / gear-shift pop | Short blip; `shift()` |
+| Pitch curve | `(0.25·idle + 0.45·revRange·rev^curve)·pitch` — four independent tune knobs; `GameAudio.rate()` reads the result |
+| Gravel | Sine at the crank rate (`f0/3`, 18–140 Hz) into `engGain.gain`; depth `(1-rev)²` × GRAVEL trim; `gravelDepth()` / `gravelHz()` |
+| Rev limiter | 13 Hz square into `engGain.gain` above 98.5% revs, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()`. In TOP gear the cut is a 0.5 s burst fading over 0.5 s to a steady note (`limiterHeld()` is the clock) — a car pinned at top speed has no gear to shift into. Below top gear it never fades |
+| Turbo whine + wastegate | Sine ~1500 Hz tracking rev; a falling hiss once per lift after ≥0.5 s under load (`wastegateState()`) |
+| MGU-K harvest / ERS deploy | Filtered noise when decelerating (HARVEST trim) / triangle whine while deploying + the deploy whoosh (BOOST level) and a rev lift under deploy (BOOST rev lift) |
+| Brakes | Bandpass noise, gain = deceleration × speed; `brakeLevel()` |
+| Gear shift | Saw crack + click, scaled by the SHIFT trim (`shiftState()`); the rev-cut duck is the engine's own |
+| Overrun | Irregular crackle one-shots on a trailing throttle (`overrunState()`) |
+| Wind / tyre screech / sub | Speed² bandpass noise / slip-driven bandpass noise / sine an octave under `f0` |
 | Collision thud | White-noise burst scaled to impact `dv` |
-| Tyre screech | Filtered noise proportional to lateral slip |
+| Rivals / space | Panned, Doppler-shifted voice pool / generated-IR convolver per venue (desktop only) |
 | Music | Streamed CC0 tracks (`assets/music/`) via `startMusic()` / `stopMusic()` |
+
+Every tune knob is a constant multiplier, never a function of rev: pitch stays
+monotonic in rev by construction. `__apex.audio()` / `audioTune()` are the
+hooks; `tests/unit/audio-tune.test.mjs` sweeps every profile and slider end.
 
 Signal path: engine/SFX → `sfxBus` → `master` → destination; music →
 `musicGain` → `master`. Muting music does **not** silence the engine.
@@ -39,8 +49,11 @@ engine idle still hums on the **sfx** bus. That is correct.
 
 Search `js/audio/engine.js` for `setEngine(rev01, boost01, offroad, speed01,
 gear)`. The sample core sets `playbackRate`; the synth fallback sets
-oscillator frequencies. After an edit, bump-cache and reload — WebAudio does
-not hot-reload. Confirm with `GameAudio.rate()` at the same speed.
+oscillator frequencies. After an edit, reload — WebAudio does not hot-reload
+(no cache bump: tags read `?v=dev`). Confirm with `GameAudio.rate()` at the
+same speed. A player-side complaint about the SHAPE of the curve (idle too
+high, top not high enough) is a tune question first: `__apex.audioTune({ idle,
+revRange, curve, pitch })` covers a 50:1 spread before any code changes.
 
 ```js
 GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);

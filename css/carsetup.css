@@ -344,7 +344,7 @@
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: color-mix(in oklab, var(--text) 40%, transparent); }
 .cs-tab.upgraded .cs-tab-lbl { color: #4df; }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
-.cs-tab.active { background: var(--plate-on); border-color: var(--red); box-shadow: var(--plate-on-glow); }
+.cs-tab.active { background: var(--plate-on); border-color: var(--red); }
 .cs-tab.active .cs-tab-lbl { color: var(--text); }
 .cs-tab.active .cs-tab-cur { color: color-mix(in oklab, var(--text) 72%, transparent); }
 
@@ -380,7 +380,6 @@
 .cs-opt-cost.free { color: rgba(255,255,255,0.3); font-weight: 600; }
 .cs-opt.active {
   background: var(--plate-on); border-color: var(--red);
-  box-shadow: var(--plate-on-glow);
 }
 .cs-opt.active .cs-opt-dot { border-color: var(--red); background: radial-gradient(circle, #fff 0 3px, var(--red) 4px); }
 .cs-opt.active .cs-opt-cost { color: #fff; }
@@ -990,10 +989,15 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
   min-width: 0;
 }
-/* Below this the sheet is the whole screen (its width floor is 430px) and there
-   is no car left to aim a camera at, so the controls would be pointing at
-   nothing. Portrait phones land here. */
-@media (max-width: 700px) {
+/* A narrow LANDSCAPE screen: the sheet's 410px floor takes most of the width
+   and the sliver beside it cannot hold a row of chips, so the controls would be
+   pointing at nothing. LANDSCAPE ONLY — this used to hide the stack on every
+   screen under 700px "because the sheet is the whole screen", which was the
+   pre-band portrait and stayed true in the CSS for a year after the band
+   arrived: a portrait phone shows the car across the bottom 30% and had no
+   way to aim at it. The portrait placement is with the other portrait rules
+   at the end of this file. */
+@media (max-width: 700px) and (orientation: landscape) {
   #cs-stack { display: none; }
 }
 /* CAMERA / ACTIVE AERO / Z-MODE sit over the garage canvas, outside #hud.
@@ -1083,10 +1087,11 @@ body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 /* `active` is the codebase's "this one is chosen" class (see AriaState's ON
    list), so the lit state hangs off it rather than off aria-pressed — that
    keeps the attribute purely a screen-reader concern. Only SPIN ever takes it;
-   the view chips are momentary jumps, not a selection. */
+   the view chips are momentary jumps, not a selection. Same ring as every
+   other chosen chip (css/tokens.css --plate-on) — it used to be green. */
 .cs-view-btn.active {
-  background: rgba(0,204,136,0.18); color: #0c8;
-  border-color: rgba(0,204,136,0.4);
+  background: var(--plate-on); color: var(--text);
+  border-color: var(--red);
 }
 /* `contents` keeps the span as the chips' DOM PARENT — which is the whole point
    of it, since AriaState groups by parent — while taking its box out of the
@@ -1365,5 +1370,31 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
      when the viewport can pay for them and otherwise yields at the safe-area
      edge instead of extending under the home indicator. */
   #cs-inner { width: 100%; height: 70%; min-height: min(340px, 100%); }
+  /* THE CAMERA STACK IN PORTRAIT. The base rule hugs the sheet's LEFT edge
+     (right: sheet width + gap), and a full-width sheet puts that edge past
+     the viewport — so even before the 700px rule hid it, the stack had no
+     place to be. Span the car band instead: both safe edges, bar at the
+     bottom, the same column the landscape stack is. */
+  #cs-stack {
+    left: calc(var(--safe-l) + var(--gap));
+    right: calc(var(--safe-r) + var(--gap));
+    width: auto; max-width: none;
+  }
+  /* OPEN CAMERA PANEL: THE SHEET YIELDS. Measured on 393x852: the band is
+     ~256px and the car at the fit distance is ~250px tall, so the band holds
+     the car and nothing else. The panel is ~250px on its own — over the band
+     it would cover the entire car you opened it to aim at. While it is open
+     the sheet drops to 42% (348 own px, still over its 340px content floor),
+     which leaves ~230px of car above the panel; renderSetupPreview reads the
+     panel's rect and centres the car in that gap, not behind the buttons.
+     Shut it and everything returns. */
+  #carsetup:has(#cs-cam-panel:not([hidden])) #cs-inner { height: 42%; }
+  /* THE STAT BLOCK STEPS ASIDE WITH IT. `data-density` is classified against
+     the HOST's room (roomOwn in sheet-shape), so a 42% sheet on a tall
+     viewport keeps the normal head, and measured that head + the category
+     strip + the foot came to more than 348 own px — the strip slid under
+     BACK/DONE. The four numbers are painted on the bay wall the camera is
+     aiming at, and they return the moment the panel shuts. */
+  #carsetup:has(#cs-cam-panel:not([hidden])) #cs-stats-inner { display: none; }
 }
 } /* @layer components */

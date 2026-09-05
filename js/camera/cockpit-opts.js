@@ -86,11 +86,6 @@ function setTurnChase(on) {
   return setTurnChaseLead(on ? LEAD_DEFAULT : 0);
 }
 
-function paintHalo(btn) {
-  btn.textContent = "HALO: " + (halo() ? "ON" : "OFF");
-  btn.setAttribute("aria-pressed", halo() ? "true" : "false");
-}
-
 function paintLead(inp, out) {
   const pct = Math.round(turnChaseLead() * 100);
   if (inp) inp.value = String(pct);
@@ -118,16 +113,15 @@ function initUI() {
   }
   place(head);
 
-  const haloBtn = document.createElement("button");
-  haloBtn.id = "pm-halo";
-  haloBtn.title = "Draw the halo (secondary roll structure) in the cockpit view.";
-  paintHalo(haloBtn);
-  haloBtn.onclick = () => {
-    setHalo(!halo());
-    paintHalo(haloBtn);
+  // HALO is a setting row like every other Settings pick (js/ui/setting-row.js)
+  // — it was a `HALO: ON` cycle button.
+  const haloRow = SettingRow.build("pm-halo", "HALO", [["on", "ON"], ["off", "OFF"]]);
+  haloRow.row.title = "Draw the halo (secondary roll structure) in the cockpit view.";
+  SettingRow.wire(haloRow.row, { read: () => (halo() ? "on" : "off"), write: (v) => {
+    setHalo(v === "on");
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { }
-  };
-  place(haloBtn);
+  } });
+  place(haloRow.row);
 
   const lab = document.createElement("label");
   lab.className = "tune-row";

@@ -475,7 +475,6 @@ let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "button
 const HUD_PROFILES = ["minimal", "standard", "broadcast"];
 let hudProfile = store.get("hudProfile", "standard");
 if (HUD_PROFILES.indexOf(hudProfile) < 0) hudProfile = "standard";
-function hudProfileLabel() { return "STYLE: " + hudProfile.toUpperCase(); }
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
@@ -484,22 +483,32 @@ if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
 // strips the half of the metrics the other half is named for (css/hud.css) —
 // TIMING keeps sectors+gaps, DRIVER keeps the car-state chips, COMPACT neither.
 // MAP and GAPS have their own controls and no layout touches them.
-function hudMetricsLayoutLabel() {
-  if (hudMetricsLayout !== "auto") return "LAYOUT: " + hudMetricsLayout.toUpperCase();
+// The help line under the LAYOUT chips names what AUTO resolved to, so the
+// player can see the forced name their screen would pick anyway.
+function hudLayoutNote() {
+  const base = "AUTO is the full set, scaled to fit. TIMING keeps sectors and gaps, DRIVER the car-state chips, COMPACT neither.";
+  if (hudMetricsLayout !== "auto") return base;
   const m = document.body.className.match(/hud-met-([a-z]+)/);
-  return "LAYOUT: AUTO" + (m ? " \u00b7 " + m[1].toUpperCase() : "");
+  return base + (m ? " Here AUTO is " + m[1].toUpperCase() + "." : "");
 }
 const HUD_VIS_MODES = ["auto", "on", "off"];
 let hudMapVis = store.get("hudMapVis", "on");
 let hudGapsVis = store.get("hudGapsVis", "on");
 if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "on";
 if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
-function hudMapVisLabel() { return "MAP: " + hudMapVis.toUpperCase(); }
-function hudGapsVisLabel() { return "GAPS: " + hudGapsVis.toUpperCase(); }
 function paintHudDetailsSummary() {
+  // One refresh for the whole HUD fold: the closed summary (a READOUT, so it
+  // keeps its gold/red words) and the setting rows inside it (js/ui/setting-row.js).
+  const on = !document.body.classList.contains("hud-hidden");
+  SettingRow.paint($("pm-hidehud"), on ? "on" : "off");
+  SettingRow.paint($("pm-hudprofile"), hudProfile);
+  SettingRow.paint($("pm-hudmetrics"), hudMetricsLayout);
+  SettingRow.paint($("pm-hudmap"), hudMapVis);
+  SettingRow.paint($("pm-hudgaps"), hudGapsVis);
+  const note = $("pm-hudmetrics-note");
+  if (note) note.textContent = hudLayoutNote();
   const sum = $("pm-hud-details-sum");
   if (!sum) return;
-  const on = !document.body.classList.contains("hud-hidden");
   const bits = [["k", "HUD"], [on ? "on" : "off", on ? "ON" : "OFF"],
     ["val", hudProfile.toUpperCase()], ["val", hudMetricsLayout.toUpperCase()],
     [hudMapVis === "off" ? "off" : "on", hudMapVis === "off" ? "NO MAP" : "MAP"],
@@ -1511,7 +1520,8 @@ function resolveLivery(team) {
     return { id: l.id || null, c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
-             logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null };
+             logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null,
+             finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1521,7 +1531,8 @@ function resolveLivery(team) {
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
-                      logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null }
+                      logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null,
+                      finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -1986,6 +1997,11 @@ function gridUp(preOrder) {
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0;
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
+    // The launch plan and the pace phase (AiDrive): one hash per car per race,
+    // never a simRnd() draw — the stream's draw count is a contract.
+    const h = DriverRatings.hash32(simSeed() + ":" + i + ":" + c.skill);
+    c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
+    c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536;
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
   // physics tick (the `c.px == null` init in update()). The chase rig has two
@@ -2168,7 +2184,7 @@ function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
   // keep its overlay on stable default/legacy anchors as setup options change.
   const legacyBody = !!carModelBuf;
   const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id) :
-    getCarDecalMesh(state.val, state.parts, legacyBody, team.id);
+    getCarDecalMesh(state.val, state.parts, legacyBody, team.id, resolveLivery(team).finShape);
   const tex = getCarDecalTexture(team, num, usePlayerSetup);
   if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
 }
@@ -3366,7 +3382,7 @@ const G = {
   get _ltNextT() { return _ltNextT; }, set _ltNextT(v) { _ltNextT = v; },
   // Mutable state consumed by js/garage/setup-sheet.js.
   get livDraftOverride() { return livDraftOverride; }, set livDraftOverride(v) { livDraftOverride = v; },
-  get _spMeshKey() { return _spMeshKey; }, set _spMeshKey(v) { _spMeshKey = v; },
+  get _spMeshKey() { return _spMeshKey; }, set _spMeshKey(v) { if (v === "") spMeshBust(); else _spMeshKey = v; },
   get setupPreviewOn() { return setupPreviewOn; }, set setupPreviewOn(v) { setupPreviewOn = v; },
   // Read-only garage-camera state for __apex.garageCam().
   get setupPreviewSpin() { return setupPreviewSpin; },
@@ -4067,7 +4083,7 @@ const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
-const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0 };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const LCAR = 4.8, WCAR = 2.0;
@@ -4223,10 +4239,15 @@ function _colResolvePair(a, b, last, rubScrub) {
     // their original meaning: the human's gates their stuck rescue (a car
     // rubbing another is shuffling, not wedged), the AI's makes it compliant so
     // a player leaning on it can move it. The yielder still pays the scrub.
+    // `rubScrub` is this STEP's speed loss (AiDrive.rubDecel x dt) and this runs
+    // once per relaxation pass — four times a frame — so it is taken on the last
+    // pass only. The old form was a 0.995 factor applied on every pass: 2 % a
+    // frame, 48 m/s^2 at 40 m/s, and a player rubbing wheels lost 18 m/s in a
+    // second (collision bench S5). The flag is idempotent and stays.
     if (corr > CORR_EPS) {
       if (a.human || b.human) a.contactT = b.contactT = 0.22;
-      if (AiDrive.sideYieldsA(dProg, a.x, b.x)) { a.speed *= rubScrub; a.contactT = 0.22; }
-      else { b.speed *= rubScrub; b.contactT = 0.22; }
+      if (AiDrive.sideYieldsA(dProg, a.x, b.x)) { if (last) a.speed = Math.max(0, a.speed - rubScrub); a.contactT = 0.22; }
+      else { if (last) b.speed = Math.max(0, b.speed - rubScrub); b.contactT = 0.22; }
     }
     if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
   } else {
@@ -4244,13 +4265,27 @@ function _colResolvePair(a, b, last, rubScrub) {
       // also skipped in _colSepPair; this is the same rule at the impulse.
       // notifyCar still queues a shunt; below threshold it no-ops (C3).
       if (!(incidentSim.owns(a) || incidentSim.owns(b))) {
-        const jImp = 0.5 * relV / iSum;
+        // A real impulse: j = (1 + e) * relV / (invA + invB). The old 0.5 was
+        // (1 + e) = 0.5, i.e. e = -0.5 — after it the cars were STILL closing at
+        // half speed, and penetration plus the position passes ate the rest over
+        // ~30 frames: a bump read as being pushed along (collision bench S1,
+        // both cars welded at the slop distance at one speed). Real cars are
+        // near-inelastic at racing speeds (COR ~0.1 above ~7 m/s); below 1 m/s
+        // closing the contact is resting and e is 0 (Box2D's velocity
+        // threshold), so a following car does not jitter off a bumper.
+        const e = AiDrive.bumpRestitution(relV);
+        const jImp = (1 + e) * relV / iSum;
+        // The car in front takes the punt in full — that is the kick you feel
+        // and see. A HUMAN in front is capped: an AI misjudging a braking zone
+        // must not launch the player down the road (the cap is a closing speed,
+        // pace-scaled), while the AI behind still pays its whole share.
+        const capV = AiDrive.humanPuntCap() * Math.max(PACE, 0.05);
         if (sgn >= 0) {
           b.speed = Math.max(0, b.speed - iB * jImp);
-          a.speed += iA * jImp * 0.8;
+          a.speed += iA * (a.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
         } else {
           a.speed = Math.max(0, a.speed - iA * jImp);
-          b.speed += iB * jImp * 0.8;
+          b.speed += iB * (b.human ? Math.min(jImp, (1 + e) * capV / iSum) : jImp);
         }
       }
       if (corr > CORR_EPS) a.contactT = b.contactT = 0.22;   // see the side branch: settled pairs must let it decay
@@ -4316,10 +4351,9 @@ function resolveCollisions(ranked, dt) {
   // Snapshot the player's road coords so the writeback at the end can tell
   // whether this pass actually shoved it (see there for why that matters).
   const _preColS = player ? player.s : 0, _preColX = player ? player.x : 0;
-  // Side-rub speed scrub as a RATE: 0.995/frame was authored at the fixed
-  // 1/60 step (identical there: 0.995^1), but the headless harness steps at
-  // arbitrary dt — unscaled, a rub scrubbed per CALL, not per second.
-  const rubScrub = Math.pow(0.995, (dt || 1 / 60) * 60);
+  // Side-rub speed loss for this step, in m/s: a deceleration (AiDrive.rubDecel)
+  // times the step, so the headless harness's arbitrary dt scrubs per second.
+  const rubScrub = AiDrive.rubDecel(!!track.street) * (dt || 1 / 60);
   // Tiny fields: all-pairs is fine and avoids bucket rebuild cost. Larger
   // fields (MP / expanded AI) use arc buckets so pairContact stays O(n·k).
   const useBuckets = ranked.length > 12;
@@ -4446,16 +4480,23 @@ function updateCar(c, dt, ranked) {
   // wedged — instead of grinding to a halt against a car or wall. Rating axes
   // (js/physics/ai-drive.js) scale how quickly they dig out and how much space they
   // leave when following.
-  let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false, letPass = false, aiFreeSpeed = 0;
-  let alongO = null, alongDx = 0, alongDprog = 0, alongAdp = Infinity;   // nearest car overlapping us longitudinally (see the side-rub constraint)
+  let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false, letPass = false, aiFreeSpeed = 0, squeezed = false, roadL = Infinity, roadR = Infinity;
+  let alongO = null, alongDx = 0, alongDprog = 0, alongAdx = Infinity;   // the LATERALLY nearest car overlapping us longitudinally (see the side-rub constraint)
   let towCar = null, towGap = Infinity;   // nearest car ahead in the slipstream (wider than the blocker box)
   let chaser = null, chaserGap = Infinity; // nearest car close BEHIND in our lane (for defending)
   let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
   const aiT = c.human ? null : AiDrive.traits(c);
+  if (!c.human) vmax *= AiDrive.pacePhase(raceT, aiT.consistency, c.phaseRoll);   // a stint drifts; lockstep never passes
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
     const edge = track.street ? hw - 0.8 : hw + 5;
+    // Room to the ROAD edge, each side. roomL/R below measure to `edge`, which
+    // on a permanent circuit is 5 m into the run-off so the AI flows past
+    // barrier-lined corners; the pass latch and the squeeze test read THESE, or
+    // an AI "passes" on the grass at x = hw + 0.5 for as long as the car ahead
+    // holds its line (contact diagnostics, Lesmo: 1.5 s of rear-corner rub).
+    roadL = c.x + hw - 0.5; roadR = hw - 0.5 - c.x;
     roomL = edge + c.x;            // clearance to the left edge from our position
     roomR = edge - c.x;            // clearance to the right edge
     // FULL FIELD, and it has to be: `ranked` sorts by CUMULATIVE prog while the
@@ -4481,7 +4522,12 @@ function updateCar(c, dt, ranked) {
       if (adp < 5.5) {            // alongside: eats the room on its side
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
         else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
-        if (adp < alongAdp) { alongO = o; alongDx = dx; alongDprog = dprog; alongAdp = adp; }
+        // Nearest ACROSS the road, not along it: with a car on each side, the one
+        // half a metre closer in arc but two lanes away was chosen over the one
+        // we were touching, so the rub constraint below aimed at the wrong car
+        // (collision bench S5: two seconds of contact with nobody yielding).
+        const adx = dx < 0 ? -dx : dx;
+        if (adx < alongAdx) { alongO = o; alongDx = dx; alongDprog = dprog; alongAdx = adx; }
       }
       if (adp < 6.5) {
         nearbyN++;
@@ -4695,6 +4741,15 @@ function updateCar(c, dt, ranked) {
     // The other half of LET PASS: stop accelerating away. A multiplier, not a
     // threshold, so it eases at every OVERALL SPEED by construction.
     if (letPass) vmax *= AiDrive.letPassEase(aiT);
+    // SQUEEZED (AiDrive.squeezeEase / squeezeBrake): touching a car we must
+    // yield to, with no lane to yield into — back out under its speed, brake
+    // dabbed, until we are clear. The pass latch below reads it too.
+    squeezed = (c.contactT || 0) > 0 && !!alongO && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x) &&
+        (alongDx <= 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) < AiDrive.minLatGap(hw, !!track.street);
+    if (squeezed) {
+      vmax = Math.min(vmax, alongO.speed * AiDrive.squeezeEase(!!track.street));
+      if (!unstuckActive) { braking = true; brakeLvl = Math.max(brakeLvl, AiDrive.squeezeBrake()); }
+    }
     // when wedged in/stopped, power out instead of braking
     if (unstuckActive) { braking = false; brakeLvl = 0; }
   }
@@ -4795,7 +4850,13 @@ function updateCar(c, dt, ranked) {
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
     c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   } else {
-    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    // The AI's launch (AiDrive.launchPlan): no throttle before its reaction, then
+    // its own getaway for three seconds. A grid that accelerated as one held its
+    // 8 m pitch to T1 — see the start test in ai-racecraft-vm.
+    const launch = c.launchOn ? AiDrive.launchMul(raceT, c.launch) : 1;
+    if (c.launchOn && AiDrive.launchDone(raceT, c.launch)) c.launchOn = false;
+    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    if (!c.human) c.accSm = damp(c.accSm ?? 0, a, 6, dt);   // what this car is pulling — AiDrive.otWant reads it on the blocker
     // speedCap is an ACCELERATION ceiling, not a teleport: a cap that drops under
     // the car (VSC vmax cut, limiter downshift) used to scrub 25 m/s in one step.
     c.speed = c.speed > speedCap ? Math.max(speedCap, c.speed - COAST_DRAG * dt)
@@ -4956,10 +5017,11 @@ function updateCar(c, dt, ranked) {
       const po = c.passOf;
       let dp = po.prog - c.prog;
       dp = ((dp + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
-      const sideRoom = c.passSide > 0 ? roomR : roomL;
+      const sideRoom = c.passSide > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL);   // the ROAD's room, not the run-off's
       if (po.finished || po.retired || dp > 16 || !Number.isFinite(dp)) { c.passOf = null; }           // lost it: no penalty
       else if (dp < -(LCAR + 1.5)) { c.passOf = null; }                                              // PAST: done
       else if (sideRoom < WCAR) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed
+      else if (squeezed) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }             // walked to the edge: abandon it
       else {
         // Patience refreshes while we GAIN on the car; it runs down while we do not.
         if (dp < c.passBest - 0.3) { c.passBest = dp; c.passT = AiDrive.passHold(aiT); }
@@ -4981,11 +5043,12 @@ function updateCar(c, dt, ranked) {
       // speed is their pace, so the fallback (0 -> blockerSpeed) is the read.
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0); _aiOtPull.vTop = vTop();
+      _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage: a clear lane on the chosen side, and no cooldown from a pass we
       // just gave up on this same stretch.
       if (!c.passOf && c.passCool <= 0 && AiDrive.otWant(_aiOtPull)) {
         const side = AiDrive.otSide(_aiOtPull);
-        if ((side > 0 ? roomR : roomL) >= CLEAR) {
+        if ((side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
           c.passOf = blocker; c.passSide = side; c.passBest = blockerGap; c.passT = AiDrive.passHold(aiT);
         }
       }
@@ -5387,8 +5450,12 @@ function updateCar(c, dt, ranked) {
     // While rubbing another car (contactT>0) the AI goes compliant: it stops
     // driving hard back to its racing line, so a player leaning on it can
     // actually move it sideways instead of bouncing off a rigid, on-rails line.
-    // Awareness scales how much they yield (AiDrive.contactGive).
-    const give = AiDrive.contactGive((c.contactT || 0) > 0, aiT, !!track.street);
+    // Awareness scales how much they yield (AiDrive.contactGive). TOWARD the
+    // contact only: a yielder steering AWAY keeps its full authority, or the
+    // compliance that lets a player move an AI also held the AI against the
+    // player it was trying to leave (collision bench S5: a whole second of rub).
+    const toward = !alongO || Math.sign(steer) === Math.sign(alongDx);
+    const give = AiDrive.contactGive((c.contactT || 0) > 0 && toward, aiT, !!track.street);
     // Same off-track lateral fade the player gets via surfMu — AI used to keep
     // full STEER_VMAX authority on grass, skating wide while the human path
     // was already grip-thinned. Continuous in |x| past the edge (player idiom).
@@ -6310,37 +6377,32 @@ function resetSetupCam() {
   setSetupSpin(true);
 }
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
-// mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. gfx.freeMesh
-// releases the previous mesh's GL buffers so repeated chip clicks don't leak.
-let _spMesh = null, _spMeshKey = "", _spHull = null, _spHullKey = "";
+// mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
+// live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
+let _spMesh = null, _spMeshKey = "", _spHull = null;
 // Which livery fields can MOVE a vertex, as opposed to only recolouring one.
 // Measured (tests/unit/setup-preview-hull.test.mjs builds the car both ways and
 // compares positions byte for byte): a hue change never moves anything, and only
-// the PRESENCE of these four does — they gate optional strip geometry.
-const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod"];
+// the PRESENCE of these four does — they gate optional strip geometry. finShape
+// is the one non-colour entry: it picks the shark fin's outline (or no fin).
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape"];
+// The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
+function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
 function getSetupPreviewMesh() {
   const team = Teams.LIST[teamIdx];
   const key = team.id + ":" + partsVisualKey(team.id);
   if (key !== _spMeshKey) {
-    if (_spMesh) gfx.freeMesh(_spMesh);
     const liv = resolveLivery(team);
-    const spData = Car3D.build(liv.c1, liv.c2, {
+    // The hull depends on POSITIONS ONLY: keyed on the geometry-gating fields, it
+    // survives the per-value colour-drag busts livePreviewDraft issues.
+    const hullKey = key + "|" + SP_HULL_GEOM_FIELDS.map((f) => (typeof liv[f] === "string" ? liv[f] : liv[f] ? 1 : 0)).join(",");
+    const ent = GarageScene.previewMesh(key, hullKey, () => Car3D.build(liv.c1, liv.c2, {
       livery: liv,
       teamId: team.id,   // per-team chassis style shows in the setup turntable too
       num: team.drivers && team.drivers[0] && team.drivers[0].num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team),
-    });
-    // A convex hull over every vertex (~19k positions — 16 ms measured) that
-    // depends on POSITIONS ONLY. livePreviewDraft busts _spMeshKey on every
-    // distinct colour value and an <input type=color> emits those continuously
-    // while dragged, so the turntable paid the hull once per frame of a colour
-    // drag to arrive at the same silhouette. Rebuild only on a geometry change.
-    const hullKey = key + "|" + SP_HULL_GEOM_FIELDS.map((f) => (liv[f] ? 1 : 0)).join("");
-    if (hullKey !== _spHullKey || !_spHull) {
-      _spHull = GarageScene.framingHull(spData);   // silhouette proxy for the turntable re-centre
-      _spHullKey = hullKey;
-    }
-    _spMesh = gfx.createMesh(spData);
+    }));
+    _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
   }
   return _spMesh;
@@ -6377,7 +6439,13 @@ function renderSetupPreview(dt) {
     const pr = (window.CssZoom && CssZoom.viewportRect(panelEl)) || panelEl.getBoundingClientRect();
     const cw = canvasEl.clientWidth, ch = canvasEl.clientHeight;
     if (cw - pr.width >= ch - pr.height) panelFrac = clamp(pr.width / cw, 0, 0.85);
-    else panelFracY = clamp(pr.bottom / ch, 0, 0.85);
+    else {
+      // Portrait: centre the car in what is left between the sheet and the OPEN
+      // camera panel (bottom of the same gap), not behind the buttons that aim it.
+      const cam = $("cs-cam-panel"), camTop = cam && !cam.hidden && cam.offsetParent !== null
+        ? ((window.CssZoom && CssZoom.viewportRect(cam)) || cam.getBoundingClientRect()).top : ch;
+      panelFracY = clamp((pr.bottom + Math.min(camTop, ch) - ch) / ch, 0, 0.85);
+    }
   }
   // FIT THE VISIBLE REGION, NOT THE WHOLE CANVAS. SP_DIST_DEF was chosen so the
   // car cleared the full frustum — but a third of that frustum is behind the
@@ -8545,13 +8613,20 @@ function tickBody(now) {
 
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
-function steerLabel() {
-  if (steerMode === "buttons") return "STEER: BUTTONS";
-  if (steerMode === "touch") return "STEER: TOUCH";
+// STEERING INPUT row (js/ui/setting-row.js) and the one-line note under it.
+// The note is ALWAYS present — its text changes, it is never hidden — so a
+// mode change cannot reflow the page under a finger; same rule that keeps
+// RECALIBRATE and GEARS disabled rather than hidden.
+function paintSteer() {
+  SettingRow.paint($("pm-steer"), steerMode);
+  const note = $("pm-steer-note");
+  if (!note) return;
   // Only warn when the gyro is genuinely unavailable/denied — not in the brief
-  // window before the first sensor reading arrives (which would falsely show
-  // "(NO GYRO)" on phones that have a working gyro).
-  return "STEER: TILT" + (Input.gyroDenied ? " (NO GYRO)" : "");
+  // window before the first sensor reading arrives (which would falsely say
+  // "no gyro" on phones that have a working gyro).
+  note.textContent = Input.gyroDenied
+    ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
+    : "TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.";
 }
 
 function enableTilt() {
@@ -8565,7 +8640,7 @@ function enableTilt() {
       // the car just follows ROAD_FOLLOW, appearing to "auto-drive" the racing line.)
       setSteerMode("buttons");
     }
-    $("pm-steer").textContent = steerLabel();
+    paintSteer();
     els.audiostate.textContent = ok && Input.tiltActive() ? "tilt steering ready"
       : (Input.gyroDenied ? "motion access denied — switched to buttons" : "");
   });
@@ -8761,14 +8836,14 @@ $("track-detail-close").onclick = closeTrackDetail;
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
 function syncSettingsAvailability() {
   const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* RendererPicker's reload buttons arm a two-tap confirm while this is set */ }
-  $("pm-hidehud").disabled = !inRace;
+  SettingRow.disable($("pm-hidehud"), !inRace);
   $("pm-lighting").disabled = !inRace;
   $("pm-camtune").disabled = !inRace;
 }
 function openSettings() {
-  // AUTO is always the full set; re-read the label on open so AUTO · FULL
-  // is written after the first HUD tick, not only at boot.
-  if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
+  // AUTO is always the full set; re-read the LAYOUT note on open so "Here
+  // AUTO is FULL" is written after the first HUD tick, not only at boot.
+  paintHudDetailsSummary();
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }
@@ -9136,9 +9211,9 @@ function czPreview() {
   // "custom" — it shows on the turntable behind the dialog whenever MY TEAM
   // is the selected team, exactly like the sibling editor.
   livDraftOverride = { teamId: "custom", liv: { c1: hexToArr($("cz-color").value), c2: hexToArr($("cz-color2").value) } };
-  _spMeshKey = "";
+  spMeshBust();
 }
-function czClearPreview() { livDraftOverride = null; _spMeshKey = ""; }
+function czClearPreview() { livDraftOverride = null; spMeshBust(); }
 function openCustomize() {
   const ct = loadCustomTeam();
   $("cz-name").value = ct.name;
@@ -9484,15 +9559,17 @@ els.pausebtn.onclick = () => setPaused(true);
 // the only thing left and brings it all back. Session-only — reset on race start.
 function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);
-  const btn = $("pm-hidehud");
-  if (btn) btn.textContent = v ? "HUD: OFF" : "HUD: ON";
-  paintHudDetailsSummary(); if (v) { const p = $("campicker"); if (p) p.hidden = true; }
+  paintHudDetailsSummary();   // repaints the HUD row too if (v) { const p = $("campicker"); if (p) p.hidden = true; }
 }
-$("pm-hidehud").onclick = () => {
-  const willHide = !document.body.classList.contains("hud-hidden");
-  setHudUserHidden(willHide);
-  if (willHide) setPaused(false);   // clean screen — drop the menu so you can actually see it
-};
+SettingRow.wire("pm-hidehud", {
+  values: SettingRow.labels(["on", "off"]),
+  read: () => (document.body.classList.contains("hud-hidden") ? "off" : "on"),
+  write: (v) => {
+    const willHide = v === "off";
+    setHudUserHidden(willHide);
+    if (willHide) setPaused(false);   // clean screen — drop the menu so you can actually see it
+  },
+});
 $("hud-restore").onclick = () => setHudUserHidden(false);
 
 // ---- player camera modes (CAM button / C key) ----
@@ -9524,14 +9601,14 @@ els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("stand
   }
 }
 
-// One STEER button cycles the single mode: TILT -> BUTTONS -> TOUCH.
+// STEERING INPUT: one row, ‹ TILT | BUTTONS | TOUCH › (was a button cycling the three).
 const STEER_MODES = ["tilt", "buttons", "touch"];
 function setSteerMode(mode) {
   steerMode = mode;
   store.set("steerMode", mode);
   Input.setSteerMode(mode);
   if (mode === "tilt") enableTilt();   // (re)request motion permission within this gesture
-  $("pm-steer").textContent = steerLabel();
+  paintSteer();
   // DISABLE (don't hide): hiding reflowed the settings grid mid-tap, so the
   // next tap landed on whatever button slid under the finger (worst case
   // HIDE HUD, which closes the whole menu). Same for the GEARS toggle below.
@@ -9541,9 +9618,8 @@ function setSteerMode(mode) {
   // the title/select screen (e.g. when gyro denial auto-switches to buttons mode).
   if (state === "race" || state === "count") showTouchControls(true);
 }
-$("pm-steer").onclick = () => {
-  setSteerMode(STEER_MODES[(STEER_MODES.indexOf(steerMode) + 1) % STEER_MODES.length]);
-};
+SettingRow.wire("pm-steer", { values: SettingRow.labels(STEER_MODES), read: () => steerMode,
+  write: (v) => { if (STEER_MODES.indexOf(v) >= 0) setSteerMode(v); } });
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 
 // Steering-tuning sliders, presets + macro levels live in
@@ -9552,56 +9628,33 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
 // Disabled — not hidden — on BUTTONS/TOUCH (see the pm-calib note in setSteerMode).
 function refreshGearsBtn() {
-  $("pm-gears").disabled = Input.touchControlsNeeded() && steerMode !== "tilt";
-  $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
+  SettingRow.disable($("pm-gears"), Input.touchControlsNeeded() && steerMode !== "tilt");
+  SettingRow.paint($("pm-gears"), manualMode ? "manual" : "auto");
 }
-$("pm-gears").onclick = () => {
-  manualMode = !manualMode;
+SettingRow.wire("pm-gears", { values: SettingRow.labels(["auto", "manual"]), read: () => (manualMode ? "manual" : "auto"), write: (v) => {
+  manualMode = v === "manual";
   store.set("manual", manualMode);
   refreshGearsBtn();
   if (player && !gearsManual()) player.gear = naturalGear(player.speed);
   showTouchControls(true);
-};
-const pmHudProfile = $("pm-hudprofile");
-if (pmHudProfile) {
-  pmHudProfile.textContent = hudProfileLabel();
-  pmHudProfile.onclick = (e) => {
-    e.stopPropagation();
-    hudProfile = HUD_PROFILES[(HUD_PROFILES.indexOf(hudProfile) + 1) % HUD_PROFILES.length];
-    store.set("hudProfile", hudProfile);
-    pmHudProfile.textContent = hudProfileLabel();
+} });
+// HUD fold setting rows. Each write repaints the whole fold through
+// paintHudDetailsSummary, so the summary and the chips can never disagree.
+function wireHudChips(id, list, read, write, after) {
+  SettingRow.wire(id, { values: SettingRow.labels(list), read, write: (v) => {
+    if (list.indexOf(v) < 0) return;
+    write(v);
     paintHudDetailsSummary();
-    syncMetricsOverlayCompact();
+    if (after) after();
     updateHud(true);
-  };
+  } });
 }
-const pmHudMetrics = $("pm-hudmetrics");
-if (pmHudMetrics) {
-  pmHudMetrics.textContent = hudMetricsLayoutLabel();
-  pmHudMetrics.onclick = (e) => {
-    e.stopPropagation();
-    hudMetricsLayout = HUD_MET_LAYOUTS[(HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) + 1) % HUD_MET_LAYOUTS.length];
-    store.set("hudMetricsLayout", hudMetricsLayout);
-    pmHudMetrics.textContent = hudMetricsLayoutLabel();
-    paintHudDetailsSummary();
-    syncMetricsOverlayCompact();
-    updateHud(true);
-  };
-}
-function wireHudVisBtn(id, read, write, labelFn) {
-  const btn = $(id);
-  if (!btn) return;
-  btn.textContent = labelFn();
-  btn.onclick = (e) => {
-    e.stopPropagation();
-    write(HUD_VIS_MODES[(HUD_VIS_MODES.indexOf(read()) + 1) % HUD_VIS_MODES.length]);
-    btn.textContent = labelFn();
-    paintHudDetailsSummary();
-    updateHud(true);
-  };
-}
-wireHudVisBtn("pm-hudmap", () => hudMapVis, (v) => { hudMapVis = v; store.set("hudMapVis", hudMapVis); }, hudMapVisLabel);
-wireHudVisBtn("pm-hudgaps", () => hudGapsVis, (v) => { hudGapsVis = v; store.set("hudGapsVis", hudGapsVis); }, hudGapsVisLabel);
+wireHudChips("pm-hudprofile", HUD_PROFILES, () => hudProfile,
+  (v) => { hudProfile = v; store.set("hudProfile", hudProfile); }, syncMetricsOverlayCompact);
+wireHudChips("pm-hudmetrics", HUD_MET_LAYOUTS, () => hudMetricsLayout,
+  (v) => { hudMetricsLayout = v; store.set("hudMetricsLayout", hudMetricsLayout); }, syncMetricsOverlayCompact);
+wireHudChips("pm-hudmap", HUD_VIS_MODES, () => hudMapVis, (v) => { hudMapVis = v; store.set("hudMapVis", hudMapVis); });
+wireHudChips("pm-hudgaps", HUD_VIS_MODES, () => hudGapsVis, (v) => { hudGapsVis = v; store.set("hudGapsVis", hudGapsVis); });
 
 // ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
 // both answer "how much of the car do you operate yourself?". Takes effect
@@ -9612,19 +9665,18 @@ wireHudVisBtn("pm-hudgaps", () => hudGapsVis, (v) => { hudGapsVis = v; store.set
 // only appeared at the next steering-mode switch — i.e. it looked broken
 // exactly when a player flipped the setting to see what it did.
 function refreshAeroBtn() {
-  const b = $("pm-aero");
-  if (b) b.textContent = "ACTIVE AERO: " + (raceAeroMode === "auto" ? "AUTO" : "MANUAL");
+  SettingRow.paint($("pm-aero"), raceAeroMode === "auto" ? "auto" : "manual");
   if (state === "race" || state === "count") showTouchControls(true);
 }
-$("pm-aero").onclick = () => {
-  raceAeroMode = raceAeroMode === "auto" ? "manual" : "auto";
+SettingRow.wire("pm-aero", { values: SettingRow.labels(["manual", "auto"]), read: () => (raceAeroMode === "auto" ? "auto" : "manual"), write: (v) => {
+  raceAeroMode = v === "auto" ? "auto" : "manual";
   store.set("aeroMode", raceAeroMode);
   refreshAeroBtn();
   // Dropping out of AUTO must not leave the wing latched open — the switch is
   // the player's again from this instant.
   if (raceAeroMode !== "auto" && player) player.xOn = false;
   if (soundOn) GameAudio.uiTick();
-};
+} });
 refreshAeroBtn();
 // A HIDDEN OR CLOSING TAB IS NOT A CRASH, and the boot canary must not read one
 // as a backend failure. PerfGov's sentinel already encodes this exact rule three
@@ -9740,7 +9792,7 @@ $("cz-logofile").addEventListener("change", (e) => {
     applyCustomLogo(dataUrl);
     refreshCustomLogoUi(dataUrl);
     invalidateDecalTextures("custom");
-    _spMeshKey = "";
+    spMeshBust();
     if (soundOn) GameAudio.uiSelect();
   });
   e.target.value = "";       // let the same file be re-picked after a CLEAR
@@ -9750,7 +9802,7 @@ $("cz-logo-clear").onclick = () => {
   applyCustomLogo(null);
   refreshCustomLogoUi(null);
   invalidateDecalTextures("custom");
-  _spMeshKey = "";
+  spMeshBust();
   if (soundOn) GameAudio.uiTick();
 };
 
@@ -9761,7 +9813,7 @@ $("cz-logo-clear").onclick = () => {
 if (typeof LiveryTex !== "undefined" && LiveryTex.onMarkChange) {
   LiveryTex.onMarkChange(() => {
     invalidateDecalTextures("custom");
-    _spMeshKey = "";   // force the garage turntable to repaint too
+    spMeshBust();   // force the garage turntable to repaint too
     // setTeamLogo decodes ASYNCHRONOUSLY, so LOGOS is still empty in the file
     // picker's own handler — this is the moment the answer actually changes.
     czSyncMarkRows();
@@ -9832,9 +9884,7 @@ Input.setSteerMode(steerMode);
 // DataHub.init(els.datahub) used to run here. It moved into ensureDataHub(),
 // which the DATA button awaits — js/data is LAZY_DATA now and there is no
 // DataHub at boot to initialise.
-$("pm-steer").textContent = steerLabel();
-if (pmHudProfile) pmHudProfile.textContent = hudProfileLabel();
-if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
+paintSteer();
 paintHudDetailsSummary();
 syncMetricsOverlayCompact();
 $("pm-calib").disabled = steerMode !== "tilt";

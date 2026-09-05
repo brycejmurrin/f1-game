@@ -157,7 +157,6 @@ body[data-width="wide"][data-density="normal"] .dh-card {
   border-color: var(--red);
   color: var(--text);
   font-weight: 800;
-  box-shadow: var(--plate-on-glow);
 }
 /* UI SIZE can turn a physically short screen into a very short LOCAL card.
    body[data-density] is measured in those same zoom-adjusted units; compact
@@ -353,7 +352,9 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 }
 .dh-table tbody tr { border-bottom: 1px solid rgba(255,255,255,0.05); }
 @media (hover: hover) {
-  .dh-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+  /* :not(.dh-cut) — an elimination band is a rule across the table, not a row
+     of data, so it does not light up when the pointer passes over it. */
+  .dh-table tbody tr:not(.dh-cut):hover { background: rgba(255,255,255,0.03); }
 }
 .dh-table td { padding: 7px calc(var(--gap) * 0.5); vertical-align: middle; }
 .dh-td-pos { width: 26px; text-align: right; color: var(--dim); }
@@ -372,6 +373,18 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
    size across that swap, so picking FP2 does not collapse the panel to the
    spinner's height and bounce it back. */
 .dh-res-body { margin-top: var(--gap); min-height: 160px; }
+/* The qualifying round selector (OVERALL / Q1 / Q2 / Q3), reusing .dh-pill —
+   the same chip the year row uses, so it inherits the tap-target floor below. */
+.dh-rounds { display: flex; flex-wrap: wrap; gap: calc(var(--gap) / 3); margin-bottom: var(--gap); }
+/* The band where a round's cut fell. Read as a rule across the table, not as a
+   row of data — no hover, no podium tint, and it must survive the narrow
+   breakpoint's column hiding, so it is styled on the cell not the columns. */
+.dh-cut td {
+  padding: calc(var(--gap) / 3) calc(var(--gap) * 0.5);
+  font-size: var(--fs-1); font-weight: 700; letter-spacing: var(--ls-4);
+  color: var(--dim); background: var(--plate);
+  border-top: 1px solid var(--red); text-align: center;
+}
 .dh-table tbody tr.dh-lr-p1 { color: var(--gold); background: color-mix(in srgb, var(--gold) 7%, transparent); border-left: 3px solid var(--gold); }
 .dh-table tbody tr.dh-lr-p2 { color: var(--silver); background: color-mix(in srgb, var(--silver) 5%, transparent); border-left: 3px solid var(--silver); }
 .dh-table tbody tr.dh-lr-p3 { color: var(--bronze); background: color-mix(in srgb, var(--bronze) 5%, transparent); border-left: 3px solid var(--bronze); }
@@ -405,7 +418,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
   border-left-width: 3px;
   color: var(--text);
 }
-.dh-dchip.active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-dchip.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 .dh-telem-detail { display: flex; flex-direction: column; gap: 10px; }
 .dh-canvas {
   width: 100%; max-width: 600px; height: auto;
@@ -488,7 +501,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   color: var(--text);
 }
 .dh-trestart { padding: 7px var(--gap); }
-.dh-tplay.dh-tplaying { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-tplay.dh-tplaying { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 .dh-trates { display: flex; gap: calc(var(--gap) / 3); }
 .dh-ratebtn {
   font-size: var(--fs-2); font-weight: 800;
@@ -497,7 +510,7 @@ button.dh-legend-item:active { background: rgba(255, 255, 255, 0.09); }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-ratebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-ratebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 .dh-thint { font-size: var(--fs-2); color: var(--steel); font-style: italic; margin-left: auto; }
 /* On very narrow portrait, hide the scrub hint to keep transport on one row */
 body[data-width="narrow"] .dh-thint { display: none; }
@@ -537,7 +550,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-livebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-livebtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 /* ---------- compare lanes (multi-driver + cross-session telemetry) ---------- */
 /* session badge on a lane row / header / legend chip (R, Q, P2, …) */
 .dh-lane-ses {
@@ -583,7 +596,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   border: 1px solid var(--plate-line);
   color: var(--text);
 }
-.dh-sortbtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-sortbtn.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 
 /* ---------- session picker (LIVE + TELEMETRY) ---------- */
 .dh-picker {
@@ -606,7 +619,7 @@ body[data-width="narrow"] .dh-thint { display: none; }
   color: var(--text);
   flex: 0 0 auto;
 }
-.dh-pill.active { background: var(--plate-on); border-color: var(--red); color: var(--text); box-shadow: var(--plate-on-glow); }
+.dh-pill.active { background: var(--plate-on); border-color: var(--red); color: var(--text); }
 .dh-pill:disabled { opacity: 0.4; cursor: default; }
 
 /* ---------- TAP TARGETS ----------
