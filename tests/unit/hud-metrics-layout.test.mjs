@@ -98,8 +98,21 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   // rather than walking into the middle — the stand-off is the last resort, not
   // the first answer, so the two are mutually exclusive.
   assert.match(css, /:root\[data-limits-left\] #hud-limits/);
-  assert.match(css, /top: calc\(var\(--hud-left-h, 112px\) \+ 8px\)/);
+  // The chip clears the LOWER of the two things that can occupy this column:
+  // the map/strip edge, and the metrics panel when it is parked here. Both
+  // widgets used to resolve to the same slot and the panel won, which the chip
+  // being `hidden` until a real strike kept out of every fixture.
+  assert.match(css, /top: calc\(max\(var\(--hud-left-h, 112px\), var\(--hud-metrics-b, 0px\)\) \+ 8px\)/);
   assert.match(hud, /setProperty\("--hud-left-h"/);
+  assert.match(hud, /setProperty\("--hud-metrics-b"/);
+  // ONE DIRECTION: the map decides where the panel goes, the panel decides
+  // where the chip goes. The panel's own bottom must never feed back into the
+  // column edge it is positioned from — that is a latch, and this file has been
+  // bitten by one before.
+  const leftPxCall = (hud.match(/setProperty\("--hud-left-px",[^;]*;/) || [""])[0];
+  assert.ok(leftPxCall, "--hud-left-px is not published at all");
+  assert.ok(!/gm/i.test(leftPxCall),
+    "--hud-left-px must not read the metrics panel's own box: " + leftPxCall);
   assert.match(hud, /const limLeft = hitsRight && leftRoom;/);
   assert.match(hud, /hitsRight && !limLeft \? dockR\.width \/ chromeZ : 0/);
 });

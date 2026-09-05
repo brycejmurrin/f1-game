@@ -511,8 +511,26 @@ function fitHud() {
   if (mmR && mmR.width) leftBot = Math.max(leftBot, mmR.bottom);
   if (gapsR && gapsR.width) leftBot = Math.max(leftBot, gapsR.bottom);
   root.style.setProperty("--hud-left-h", (leftBot / chromeZ).toFixed(1) + "px");
+  // THE SAME EDGE IN SCREEN PIXELS. #hud-limits reads --hud-left-h from INSIDE
+  // the chrome zoom, so it wants the divided value. #game-metrics is OUTSIDE it
+  // — nothing zooms that subtree (see its own note in css/hud.css) — so handing
+  // it the zoomed number would misplace the panel at every HUD SIZE but 100%.
+  // Two vars for one edge is cheaper than one var and a unit bug.
+  root.style.setProperty("--hud-left-px", leftBot.toFixed(1) + "px");
+  // …and the panel's OWN bottom, so the track-limits chip can stack BELOW it in
+  // left mode instead of under it. One direction only: the map decides where the
+  // panel goes, the panel decides where the chip goes. Feeding the panel's own
+  // bottom back into --hud-left-px would be a latch — a decision reading its own
+  // output — which is the defect shape this file has been bitten by before.
+  const gmEl = typeof document !== "undefined" ? document.getElementById("game-metrics") : null;
+  const gmR = gmEl && !gmEl.hidden ? gmEl.getBoundingClientRect() : null;
+  const gmBot = gmR && gmR.width ? gmR.bottom : 0;
+  root.style.setProperty("--hud-metrics-b", (gmBot / chromeZ).toFixed(1) + "px");
   const dockL = _dockL ? _dockL.getBoundingClientRect() : null;
-  const leftRoom = !(dockL && dockL.width && leftBot + (8 + CHIP_H) * chromeZ > dockL.top);
+  // The metrics panel is part of what fills this column now, so the room test
+  // measures from whichever is lower — the map/strip edge or the panel's bottom.
+  const leftFilled = Math.max(leftBot, gmBot);
+  const leftRoom = !(dockL && dockL.width && leftFilled + (8 + CHIP_H) * chromeZ > dockL.top);
   const limLeft = hitsRight && leftRoom;
   if (limLeft !== ("limitsLeft" in root.dataset)) {
     if (limLeft) root.dataset.limitsLeft = "1";

@@ -320,7 +320,13 @@ body.hud-prof-broadcast #announce[data-kind="race"] {
 :root[data-limits-left] #hud-limits {
   right: auto;
   left: calc(10px + var(--sal) / var(--hud-z));
-  top: calc(var(--hud-left-h, 112px) + 8px);
+  /* BELOW THE METRICS PANEL TOO, when that panel is in this column. Both
+     widgets resolved to the same slot — the chip is only `hidden` until a
+     track-limits strike, so in every fixture it has no box and the collision
+     could not be seen; the player found it by running wide. --hud-metrics-b is
+     the panel's measured bottom (0 when it is off or on the right), so this is
+     the lower of the two edges and nothing moves when the panel is absent. */
+  top: calc(max(var(--hud-left-h, 112px), var(--hud-metrics-b, 0px)) + 8px);
 }
 
 /* ---------- LAYOUT (metrics) ----------
@@ -677,7 +683,18 @@ body[data-density="compact"] #announce {
 #game-metrics[data-pos="left"] {
   left: calc(8px + var(--sal, 0px));
   right: auto;
-  top: var(--gm-top);
+  /* CLEAR THE MAP, MEASURED. --gm-top guesses `80px * --hud-z-top` capped at
+     120, which is 92px at HUD SIZE 100 — while #minimap's real bottom is
+     8px + 112px = 120px. So the panel painted 28px INTO the map, every time,
+     on the one side the map is on. Reported from a phone with the map's lower
+     third covered.
+     --hud-left-px is that column's occupied bottom MEASURED by fitHud off
+     whatever is actually there (map, gap strip, broadcast tower, or nothing),
+     in SCREEN pixels because this subtree is not zoomed. The same lesson
+     #hud-limits already carries two rules down: never pin HUD chrome to a
+     constant a sibling's rendered height decides. The fallback is the map's
+     own painted bottom, so a pre-fit frame still clears it. */
+  top: calc(var(--hud-left-px, 120px) + 8px);
 }
 #game-metrics-bar {
   display: flex;
@@ -935,6 +952,16 @@ body.pc-nopanel .pc-altcol   { left: auto; right: calc(152px + var(--sar) / var(
 body.pc-uihidden #photo-controls > :not(#pc-restore) { display: none !important; }
 body.pc-uihidden #lighting-inner { display: none !important; }
 body.pc-uihidden #game-metrics { display: none !important; }
+/* THE PANEL IS HUD CHROME AND FOLLOWS THE HUD. It is created at runtime with no
+   index.html node, so it inherited none of the rules that clear the screen for a
+   menu: it painted over the title screen, the garage and every sheet, and the
+   only way out was turning it off — which is not a thing a player should have to
+   do to read their own menus. Keyed off #hud[hidden], which game.js already
+   drives at race start and race end, rather than a list of screen ids that would
+   go stale the next time one is added. The .screen.dim arm is the same idiom
+   #photo-controls and #campicker use for a sheet opened OVER a live race. */
+body:has(#hud[hidden]) #game-metrics,
+body:has(.screen.dim:not([hidden])) #game-metrics { display: none !important; }
 body.pc-uihidden #hud,
 body.pc-uihidden #lights,
 body.pc-uihidden #announce,
