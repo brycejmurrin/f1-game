@@ -79,9 +79,13 @@ test("the AI is moving, and moving sideways, well before it is clear", async () 
   assert.ok(atFive.aiSpd > 1,
     `queue cap still commands a standstill at t=5: ${atFive.aiSpd.toFixed(2)} m/s`);
   // The lateral floor: it has shuffled off the player's line, which a car with
-  // latFac = 0 could not do however hard the dig-out pulled.
-  assert.ok(Math.abs(atFive.dx) > 1,
-    `no lateral escape at t=5: dx ${atFive.dx.toFixed(2)} m`);
+  // latFac = 0 could not do however hard the dig-out pulled. Sampled as "by
+  // t=5", not "at t=5": since the pass latch landed it is clear and back on
+  // the racing line before the fifth second (measured: |dx| 2.7 m at t=4.3,
+  // dProg +8 m at t=5), so the escape is earlier, not absent.
+  const escaped = trace.filter((r) => r.t <= 5).map((r) => Math.abs(r.dx));
+  assert.ok(Math.max(...escaped) > 1,
+    `no lateral escape by t=5: max |dx| ${Math.max(...escaped).toFixed(2)} m`);
 });
 
 test("contactT is armed while welded and clears once the cars are apart", async () => {
@@ -107,10 +111,17 @@ test("a correction of numerical dust does not count as contact", async () => {
   assert.ok(eps, "CORR_EPS is gone from js/game.js");
   assert.ok(Number(eps[1]) > 0, `CORR_EPS must be a real distance, got ${eps[1]}`);
   assert.ok(Number(eps[1]) < 0.01, `CORR_EPS must stay under a centimetre, got ${eps[1]}`);
-  // Every arm of contactT in the resolver sits behind that comparison.
-  const arms = src.match(/^.*\bcontactT = b\.contactT = 0\.22.*$/gm) || [];
-  assert.equal(arms.length, 2, `expected the two resolver arms, found ${arms.length}`);
+  // Every arm of contactT in the resolver sits behind that comparison. The
+  // rear-end arm flags both cars; the side arm flags both ONLY with a human in
+  // the pair (the human's flag gates their rescue, the AI's makes it compliant)
+  // and otherwise exactly the yielder (AiDrive.sideYieldsA), which is also the
+  // only car scrubbed — so an AI pair never mirrors each other into a standoff.
   const body = src.slice(src.indexOf("function _colResolvePair"), src.indexOf("function _colSepPair"));
+  const both = body.match(/contactT = b\.contactT = 0\.22/g) || [];
+  assert.equal(both.length, 2, `expected the rear-end and the human-pair both-car arms, found ${both.length}`);
+  assert.ok(body.includes("if (a.human || b.human) a.contactT = b.contactT = 0.22;"), "the side branch lost its human-pair arm");
+  assert.ok(body.includes("if (AiDrive.sideYieldsA(dProg, a.x, b.x)) { a.speed *= rubScrub; a.contactT = 0.22; }"),
+    "the side branch no longer scrubs and flags exactly the yielder");
   for (const guard of ["if (corr > CORR_EPS) {", "if (corr > CORR_EPS) a.contactT"])
     assert.ok(body.includes(guard), `_colResolvePair lost its guard: ${guard}`);
 });

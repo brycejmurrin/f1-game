@@ -299,6 +299,52 @@ tyre call worth ~35% more grip than every other car on track and turned a whole
 weather condition into a walkover. As it stands a correct call roughly matches
 the field and a wrong one costs about a quarter of your cornering.
 
+### Racecraft: who passes, who yields
+
+The AI's traffic decisions live in `js/physics/ai-drive.js` as pure rules; the
+O(n) scan and the Frenet lateral step that consume them stay in `updateCar`.
+Three rules keep the field from welding itself together, each with a measured
+defect behind it (`tests/unit/ai-stuck-vm.test.mjs`,
+`tests/unit/ai-racecraft-vm.test.mjs`, and `docs/notes/CEILING-HISTORY.md` for
+the numbers):
+
+- **Overtake want compares PACE with pace** (`AiDrive.otWant`). The pull fires
+  when the follower is closing, OR its free-running target speed beats the
+  blocker's own ceiling by ~7% of the top speed (5.5% on a street circuit), OR
+  the blocker is crawling (under 12% of the top speed — an obstacle whatever
+  its pace). So an AI blocker that is slow for a corner, but no slower over a
+  lap, is left alone; a genuinely slower car is attacked even while both are
+  slow; and a parked car is passed, not queued behind at the crawl floor
+  (measured: the crawl floor sits below the closing margin, so without the
+  third clause an AI crept into the back of a stopped player and welded). A
+  HUMAN blocker has no ceiling to read — `_vmaxNow` is the model's top speed
+  for every car — so the caller passes 0 and the human's speed is their pace.
+  Comparing instantaneous speeds alone let AI cars follow a slower car for
+  36 s (monza) and 43 s (monaco); the pace comparison halved both.
+- **A pass is a LATCH with a target beside the passed car** (`c.passOf`,
+  `AiDrive.passTarget/passHold/passCooldown`). Once committed, the passer aims
+  for a lateral position `minLatGap` beside the blocker rather than mirroring
+  its own line, and the queue cap releases it as soon as it is 1.8 m clear
+  laterally — before, the cap re-caught the passer the moment it fell back into
+  the blocker box, which is why a pass kept aborting. Patience runs
+  2.4–4.2 s by `craft`; a failed pass costs a 1.8–3.5 s cooldown by
+  `experience`. `queueBrake` adds a real brake command behind a blocker only
+  when the closing speed cannot be shed by lift alone within the gap.
+- **Exactly one car yields in an alongside pair** (`AiDrive.sideYieldsA`): the
+  car behind on arc, or the outer car when level. The same rule drives the
+  collision resolver's side branch (only the yielder is scrubbed and flagged;
+  with a human in the pair both are flagged, since the human's flag gates their
+  stuck rescue and the AI's makes it compliant to a player leaning on it) and a
+  hard planner constraint (the yielder's lane target is pushed clear of the
+  other car). Scrubbing and softening BOTH gave neither priority: pairs
+  sank to ~17 m/s at a 70 m/s ceiling for as long as the corner kept them
+  touching — six such standoffs per four minutes on monza, none after.
+
+Grid lanes interleave left/right by grid slot, so the start pack is already two
+lines rather than one file. All of this is AI-only — every read sits inside
+the `!c.human` arm, and `otSide`'s corner-inside tie-break is in the arc table
+below.
+
 ### Braking
 
 Weather never scaled `BRAKE` — it only ever touched lateral grip and the

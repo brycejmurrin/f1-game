@@ -1812,7 +1812,15 @@ function makeCars() {
       // Spread the field's preferred lanes evenly across the track width (with a
       // little jitter) so the AI fan out instead of all stacking on the racing
       // line. Used as a fraction of half-width in updateCar.
-      const lane = clamp(((idx / Math.max(1, total - 1)) * 2 - 1) * 0.78
+      // INTERLEAVED, not swept. A sweep in grid order gave the two cars that
+      // will actually race each other — adjacent on the grid, adjacent on the
+      // road — lines 0.48 m apart, and then the shared racing-line term pulled
+      // both toward the same apex. Alternating sides with the magnitude
+      // stepping every second slot puts grid neighbours ≥ 1.5 m apart at Monza,
+      // the way a real grid staggers, while keeping the same overall spread.
+      // ONE simRnd() per car as before, so the seeded stream is unchanged.
+      const half = Math.max(1, (total - 1) >> 1);
+      const lane = clamp((idx % 2 ? 1 : -1) * ((idx >> 1) / half) * 0.78
         + (simRnd() - 0.5) * 0.12, -0.85, 0.85);
       idx++;
       cars.push({
@@ -4059,7 +4067,7 @@ const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
-const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0 };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const LCAR = 4.8, WCAR = 2.0;
@@ -4204,9 +4212,21 @@ function _colResolvePair(a, b, last, rubScrub) {
     // what makes that guard actually hold. The FLAG takes the same gate:
     // contactT is not cosmetic (it gates the player's own stuck rescue), so it
     // must mean "we are colliding", not "we rounded".
+    // AI vs AI: ONE car yields (AiDrive.sideYieldsA — behind on arc, or the
+    // outer car when level) and only it is scrubbed AND flagged. Scrubbing and
+    // softening BOTH gave neither priority, so both mirrored each other and
+    // both sank to the throttle-vs-scrub balance (17.4 m/s at vmax 70) for as
+    // long as the corner geometry kept them touching; flagging both while
+    // scrubbing one was measured too (bench: prolonged-contact pairs 0 -> 3 on
+    // monza) — the leader going compliant is what keeps the rub alive.
+    // With a HUMAN in the pair there is no planner to mirror, so both flags keep
+    // their original meaning: the human's gates their stuck rescue (a car
+    // rubbing another is shuffling, not wedged), the AI's makes it compliant so
+    // a player leaning on it can move it. The yielder still pays the scrub.
     if (corr > CORR_EPS) {
-      a.speed *= rubScrub; b.speed *= rubScrub;
-      a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
+      if (a.human || b.human) a.contactT = b.contactT = 0.22;
+      if (AiDrive.sideYieldsA(dProg, a.x, b.x)) { a.speed *= rubScrub; a.contactT = 0.22; }
+      else { b.speed *= rubScrub; b.contactT = 0.22; }
     }
     if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
   } else {
@@ -4427,6 +4447,7 @@ function updateCar(c, dt, ranked) {
   // (js/physics/ai-drive.js) scale how quickly they dig out and how much space they
   // leave when following.
   let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false, letPass = false, aiFreeSpeed = 0;
+  let alongO = null, alongDx = 0, alongDprog = 0, alongAdp = Infinity;   // nearest car overlapping us longitudinally (see the side-rub constraint)
   let towCar = null, towGap = Infinity;   // nearest car ahead in the slipstream (wider than the blocker box)
   let chaser = null, chaserGap = Infinity; // nearest car close BEHIND in our lane (for defending)
   let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
@@ -4460,6 +4481,7 @@ function updateCar(c, dt, ranked) {
       if (adp < 5.5) {            // alongside: eats the room on its side
         if (dx >= 0) roomR = Math.min(roomR, Math.abs(dx) - 1.0);
         else roomL = Math.min(roomL, Math.abs(dx) - 1.0);
+        if (adp < alongAdp) { alongO = o; alongDx = dx; alongDprog = dprog; alongAdp = adp; }
       }
       if (adp < 6.5) {
         nearbyN++;
@@ -4650,17 +4672,24 @@ function updateCar(c, dt, ranked) {
     // queue behind the car blocking our lane (prog-based, immune to rank swaps):
     // cap our pace to it, braking if closing fast, so we tuck behind not ram.
     // Streets tuck at followBase 8 m (was 12). Awareness pads (AiDrive.followPad).
-    if (blocker && blockerGap < 16) {
+    // NOT against the car we are committed to passing once we are laterally
+    // clear of it: the cap re-binding at |dx| < 2.2 is exactly what turned every
+    // pull-out into a re-queue (the pass latch below owns that decision). 1.8 is
+    // inside the 2.2 blocker box on purpose — hysteresis, so the two edges
+    // cannot chatter against each other.
+    const capBlocks = blocker && blockerGap < 16 &&
+      !(blocker === c.passOf && Math.abs(c.x - blocker.x) >= 1.8);
+    if (blocker && blockerGap < 16) aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otWant)
+    if (capBlocks) {
       const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
       // Floored (AiDrive.queueFloor): the cap may match the blocker's pace but
       // must never command a STANDSTILL — which it did behind a stopped car,
       // and a stopped AI can never steer out. The crawl is itself capped at the
       // vmax race control already granted, so VSC and red flag still win.
-      aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otPull)
       const q = blocker.speed + clamp(blockerGap - follow, -6, 8);
       const crawl = Math.min(AiDrive.queueFloor(!!track.street) * Math.max(PACE, 0.05), vmax);
       vmax = Math.min(vmax, Math.max(q, crawl));
-      const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street);
+      const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street, blockerGap, follow);
       if (qb) { braking = true; brakeLvl = qb; }
     }
     // The other half of LET PASS: stop accelerating away. A multiplier, not a
@@ -4915,8 +4944,29 @@ function updateCar(c, dt, ranked) {
     // side is also tight (a car alongside or a wall), so we don't dive into a
     // gap that isn't there. Uses the prog-based blocker, immune to rank swaps.
     let overtake = 0;
-    // OT / defend pulls live in AiDrive (craft on permanents, awareness + open
-    // inside-room on streets). Tow is no longer permanent-only.
+    const CLEAR = AiDrive.minLatGap(hw, !!track.street);
+    c.passCool = Math.max(0, (c.passCool || 0) - dt);
+    // THE PASS LATCH. Once a pass is chosen it is held as a POSITION beside the
+    // car being passed (AiDrive.passTarget) with the side FROZEN, and it is
+    // released only on a real outcome: we are past, we lost the car, the side
+    // closed, or patience ran out. The old bias recomputed from zero every frame
+    // from a blocker classification the pass itself flips — see passTarget in
+    // ai-drive.js for the measured chatter that produced.
+    if (c.passOf) {
+      const po = c.passOf;
+      let dp = po.prog - c.prog;
+      dp = ((dp + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
+      const sideRoom = c.passSide > 0 ? roomR : roomL;
+      if (po.finished || po.retired || dp > 16 || !Number.isFinite(dp)) { c.passOf = null; }           // lost it: no penalty
+      else if (dp < -(LCAR + 1.5)) { c.passOf = null; }                                              // PAST: done
+      else if (sideRoom < WCAR) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed
+      else {
+        // Patience refreshes while we GAIN on the car; it runs down while we do not.
+        if (dp < c.passBest - 0.3) { c.passBest = dp; c.passT = AiDrive.passHold(aiT); }
+        else c.passT -= dt;
+        if (c.passT <= 0) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }
+      }
+    }
     if (blocker) {
       _aiOtPull.street = !!track.street; _aiOtPull.traits = aiT; _aiOtPull.speed = c.speed;
       _aiOtPull.team = c.team; _aiOtPull.seat = c.seat; _aiOtPull.stats = c.houseStats;
@@ -4924,10 +4974,24 @@ function updateCar(c, dt, ranked) {
       _aiOtPull.roomL = roomL; _aiOtPull.roomR = roomR; _aiOtPull.other = blocker;
       // Side-pick + incentive inputs. kA is the same AI-only curvature read the
       // racing line above already makes — the arc reaches the AI's choice of
-      // side, never the driver.
+      // side, never the driver. blockerVmax is the car's PACE, not its speed
+      // this instant (AiDrive.otWant says why that matters). A HUMAN has no
+      // pace ceiling to read — _vmaxNow is the model's top speed for every car,
+      // so a player doing 40 read as "pace 60" and was never attacked; their
+      // speed is their pace, so the fallback (0 -> blockerSpeed) is the read.
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
-      overtake = AiDrive.otPull(_aiOtPull);
+      _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0); _aiOtPull.vTop = vTop();
+      // Engage: a clear lane on the chosen side, and no cooldown from a pass we
+      // just gave up on this same stretch.
+      if (!c.passOf && c.passCool <= 0 && AiDrive.otWant(_aiOtPull)) {
+        const side = AiDrive.otSide(_aiOtPull);
+        if ((side > 0 ? roomR : roomL) >= CLEAR) {
+          c.passOf = blocker; c.passSide = side; c.passBest = blockerGap; c.passT = AiDrive.passHold(aiT);
+        }
+      }
+      if (!c.passOf) overtake = AiDrive.otPull(_aiOtPull);
     }
+    if (c.passOf) overtake = AiDrive.passTarget(c.passOf.x, c.passSide, CLEAR, hw) - targetX;
     // LET PASS moves aside instead of defending; the `!letPass` below is what
     // stops the AI covering a line it has already decided to concede.
     let yieldPull = 0;
@@ -4959,7 +5023,20 @@ function updateCar(c, dt, ranked) {
     sep = clamp(sep, -sepMax, sepMax);
     // clamp the combined target to the drivable surface so overtake/unstuck/
     // separation biases can never steer the AI off the track or into a wall.
-    const desiredX = clamp(targetX + overtake + defend + yieldPull + sep + unstuck, -(hw - 0.5), hw - 0.5);
+    let desiredX = clamp(targetX + overtake + defend + yieldPull + sep + unstuck, -(hw - 0.5), hw - 0.5);
+    // SIDE RUB AS A CONSTRAINT, NOT A SUGGESTION. `sep` is proportional to the
+    // deficit (≤ 0.8 m once touching) and the steering deadzone below drops
+    // anything under 0.3 m, while the shared racing line pulls the outer car up
+    // to 2.4 m INTO the pair — so two cars on lines half a metre apart settled
+    // at |dx| 1.5-1.8 and rubbed every frame (closed form in the audit; measured
+    // as every standoff in the bench sitting at dx ≈ 1.9). The car that yields
+    // (AiDrive.sideYieldsA — behind on arc, or the outer car when level) is held
+    // a full lane off the other on the side it is already on. A hard edge gives
+    // the deadzone an error it cannot swallow.
+    if (alongO && Math.abs(alongDx) < CLEAR && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x)) {
+      desiredX = alongDx <= 0 ? Math.max(desiredX, alongO.x + CLEAR) : Math.min(desiredX, alongO.x - CLEAR);
+      desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
+    }
     let err = desiredX - c.x;
     // Soft deadzone near the target: fade the correction out as the error gets
     // small so the AI stops making tiny frame-to-frame steering corrections

@@ -304,13 +304,77 @@ test("street OT scale still uses a clean gap after the seating fix", () => {
 test("street tow is half-size and queue brake eases in", () => {
   assert.equal(A.towGain(false), 0.045);
   assert.ok(A.towGain(true) > 0 && A.towGain(true) < A.towGain(false));
-  assert.equal(A.queueBrake(60, 56.9, false), 1);
+  // Permanents GRADE now, like streets always did. Full brakes at +3.1 m/s
+  // (22 m/s², and it takes the throttle branch away) killed every run at the
+  // car ahead: the pursuer arrived at the follow distance with no differential.
+  const hard = A.queueBrake(60, 56.9, false);
+  assert.ok(hard > 0 && hard < 1, `permanent +3.1 eases in, not full brake: ${hard}`);
   assert.equal(A.queueBrake(60, 57.5, false), 0, "permanent still waits for +3");
   assert.equal(A.queueBrake(60, 57.5, true), 0, "street +2.5 is still a follow close");
   const soft = A.queueBrake(60, 54.5, true);
   assert.ok(soft > 0 && soft < 1, `street ease-in ${soft}`);
   assert.equal(A.queueBrake(60, 50, true), 1);
+  assert.equal(A.queueBrake(60, 50, false), 1, "a real closing rate still gets full brake");
+  // TIME-TO-CONTACT GATE: closing at +4 from 15 m back with a 6 m follow
+  // distance is a car being CAUGHT, not hit — no brake until the gap can no
+  // longer absorb the closing rate.
+  assert.equal(A.queueBrake(44, 40, false, 15, 6), 0, "15 m back at +4: still absorbable");
+  assert.ok(A.queueBrake(44, 40, false, 8, 6) > 0, "8 m back at +4: brake");
 });
+
+test("otWant compares PACE with pace, scaled to the top speed", () => {
+  const base = { street: false, speed: 40, blockerSpeed: 40, vTop: 72 };
+  // A blocker slow THIS INSTANT (a corner) but with the same pace: no incentive.
+  assert.equal(A.otWant({ ...base, speed: 30, freeSpeed: 70, blockerSpeed: 30, blockerVmax: 70 }), false);
+  // A blocker with genuinely less pace: incentive, even while both are slow.
+  assert.equal(A.otWant({ ...base, speed: 30, freeSpeed: 70, blockerSpeed: 30, blockerVmax: 60 }), true);
+  // Margin rides the top speed: 7 % of 72 is ~5; at half pace it is ~2.5.
+  assert.equal(A.otWant({ ...base, vTop: 36, freeSpeed: 35, blockerVmax: 32 }), true);
+  assert.equal(A.otWant({ ...base, vTop: 72, freeSpeed: 35, blockerVmax: 32 }), false);
+  // Already closing fast still counts.
+  assert.equal(A.otWant({ ...base, speed: 46, freeSpeed: 0, blockerVmax: 0 }), true);
+});
+
+test("otWant treats a crawling car as an obstacle whatever its pace", () => {
+  // Measured: an AI on the 3 m/s queue floor behind a PARKED player (whose
+  // model top speed read as pace 60) failed both the closing and the held test
+  // and crept into its back. Under 12 % of the top speed the blocker is passed.
+  const base = { street: false, speed: 3, freeSpeed: 55, vTop: 60, blockerVmax: 60 };
+  assert.equal(A.otWant({ ...base, blockerSpeed: 0 }), true);
+  assert.equal(A.otWant({ ...base, blockerSpeed: 7 }), true);
+  assert.equal(A.otWant({ ...base, blockerSpeed: 7.3 }), false, "12 % of 60 is 7.2");
+  // A human blocker has no ceiling: the caller passes 0 and their SPEED is the pace.
+  assert.equal(A.otWant({ street: false, speed: 40, freeSpeed: 55, vTop: 60, blockerVmax: 0, blockerSpeed: 40 }), true);
+  assert.equal(A.otWant({ street: false, speed: 40, freeSpeed: 43, vTop: 60, blockerVmax: 0, blockerSpeed: 40 }), false);
+});
+
+test("passTarget is a position beside the passed car, inside the road", () => {
+  assert.equal(A.passTarget(0, 1, 2.8, 7), 2.8);
+  assert.equal(A.passTarget(-1.5, -1, 2.8, 7), -4.3);
+  // Clamped to the drivable width, never past the edge.
+  assert.equal(A.passTarget(5.5, 1, 2.8, 7), 6.4);
+  // Independent of where WE are — that is the anti-mirror property.
+  assert.equal(A.passTarget(1, 1, 2.8, 7), A.passTarget(1, 1, 2.8, 7));
+});
+
+test("pass patience and cooldown are per-car and bounded", () => {
+  const shy = { craft: 0.2, awareness: 0.5, experience: 0.2 }, sharp = { craft: 0.95, awareness: 0.5, experience: 0.95 };
+  assert.ok(A.passHold(sharp) > A.passHold(shy), "craft commits longer");
+  assert.ok(A.passHold(shy) >= 2 && A.passHold(sharp) <= 5, "a few seconds, not a lap");
+  assert.ok(A.passCooldown(sharp) < A.passCooldown(shy), "experience retries sooner");
+  assert.ok(A.passCooldown(sharp) > 1 && A.passCooldown(shy) < 5);
+});
+
+test("sideYieldsA: the overlapping car yields; level, the outer car does", () => {
+  assert.equal(A.sideYieldsA(-2, 0, 0), true, "A behind -> A yields");
+  assert.equal(A.sideYieldsA(2, 0, 0), false, "A ahead -> B yields");
+  assert.equal(A.sideYieldsA(0.2, 3.0, 1.0), true, "level: A is outer");
+  assert.equal(A.sideYieldsA(0.2, 1.0, 3.0), false, "level: B is outer");
+  // Deterministic and exhaustive: exactly one of the pair yields, always.
+  for (const dp of [-3, -0.6, 0, 0.6, 3]) for (const [xa, xb] of [[1, 2], [2, 1], [-3, 0.5]])
+    assert.equal(A.sideYieldsA(dp, xa, xb), !A.sideYieldsA(-dp, xb, xa), `symmetric ${dp} ${xa} ${xb}`);
+});
+
 
 test("street sep/mass/wall keep the player from bouncing into Armco", () => {
   assert.ok(A.sepClamp(true) < A.sepClamp(false));

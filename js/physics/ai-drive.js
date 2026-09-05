@@ -98,11 +98,21 @@ const AiDrive = (function () {
     return street ? 0.022 : 0.045;
   }
 
-  function queueBrake(speed, blockerSpeed, street) {
+  // FULL BRAKES AT +3 m/s, AT ANY GAP, was the shape on permanents — and it
+  // killed every run at the car ahead: a follower 15 m back closing at 4 m/s
+  // got brakeLvl 1 (22 m/s²), which also takes the throttle branch away, so it
+  // arrived at the follow distance with no speed differential left to pass
+  // with. The street branch already graded it; permanents now grade the same
+  // way, and neither fires while the closing rate can still be absorbed by the
+  // gap before the follow distance (a time-to-contact gate, the bt filterBColl
+  // idea: brake for a car you are actually going to hit, not one you are
+  // catching).
+  function queueBrake(speed, blockerSpeed, street, gap, follow) {
     const excess = (speed || 0) - (blockerSpeed || 0);
     const thresh = street ? 4.5 : 3;
     if (excess <= thresh) return 0;
-    return street ? clamp((excess - thresh) / 4, 0.2, 1) : 1;
+    if (gap != null && follow != null && gap > follow + excess * 1.2) return 0;
+    return clamp((excess - thresh) / (street ? 4 : 5), 0.2, 1);
   }
 
   // Metres of proactive lateral-sep bias. 2.6 m of yank is a wall on Monaco.
@@ -297,10 +307,7 @@ const AiDrive = (function () {
     // formed — the "they just sit behind me" complaint. The incentive is the
     // car's FREE pace (vmax before the queue cap), the same comparison MOBIL
     // makes: would I be going faster if this car were not there?
-    const margin = street ? 4 : 5;
-    const closing = (ctx.speed || 0) >= (ctx.blockerSpeed || 0) + margin;
-    const held = (ctx.freeSpeed || 0) >= (ctx.blockerSpeed || 0) + margin;
-    if (!closing && !held) return 0;
+    if (!otWant(ctx)) return 0;
     const side = otSide(ctx);
     const need = side > 0 ? (ctx.roomR || 0) : (ctx.roomL || 0);
     const house = houseMulCtx(ctx, 0.90, 1.12, "attack")
@@ -311,6 +318,78 @@ const AiDrive = (function () {
     }
     return side * lerp(0.8, 2.6, clamp(1 - gap / 16, 0, 1))
       * clamp(need / 2.2, 0, 1) * lerp(0.75, 1.3, t.craft) * house;
+  }
+
+  // THE INCENTIVE, on PACE rather than on the blocker's speed this instant.
+  // `held` used to compare our straight-line vmax with the blocker's live
+  // speed — so it was TRUE in every corner and braking zone (where a pass
+  // cannot complete) and FALSE at top speed on the straight (where it could),
+  // then released, and on release the pull snapped to zero and the car
+  // re-centred on the line it had just left. Inverted over the lap, with no
+  // memory. Compare vmax with vmax (every car stashes _vmaxNow; a human's is
+  // its live vmax too), and scale the margin with the top speed so OVERALL
+  // SPEED does not turn a 7 % edge into a 14 % one at pace 0.5.
+  function otWant(ctx) {
+    const street = !!ctx.street;
+    const ref = ctx.vTop > 0 ? ctx.vTop : 72;
+    const margin = (street ? 0.055 : 0.07) * ref;
+    const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
+    // A car under ~12 % of the top speed is an OBSTACLE whatever its pace: the
+    // follower behind it sits on the queue crawl floor, which is below the
+    // closing margin, so neither test below could ever fire — measured as an
+    // AI creeping at 3 m/s into the back of a parked player and welding there.
+    const crawling = (ctx.blockerSpeed || 0) < 0.12 * ref;
+    const closing = (ctx.speed || 0) >= (ctx.blockerSpeed || 0) + margin;
+    const held = (ctx.freeSpeed || 0) >= bv + margin;
+    return crawling || closing || held;
+  }
+
+  // A PASS IS A POSITION, NOT A BIAS. otPull's return is a lateral offset
+  // added to the follower's OWN target line — and the car it is passing sits
+  // on ITS target line, which for two grid neighbours is half a metre away.
+  // So a full 2.0-2.5 m pull landed the follower 2.0 ± 0.7 m from the blocker:
+  // straddling the 2.2 m edge of the box that DEFINES a blocker. Inside it,
+  // still queue-capped; at the edge the classification flickered, the pull
+  // snapped to zero, the car re-centred and was queued again. Measured on
+  // monaco: |dx| held at 2.16-2.23 and crossed 2.2 eighty-eight times in one
+  // 43 s dwell behind a car 14 % slower. The pursuer never committed because
+  // its incentive was a function of the very thing the pass changes.
+  //
+  // passTarget returns the ABSOLUTE lateral the pass wants — the passed car's
+  // x plus one clear lane on the chosen side — so game.js can express the
+  // pull as (target − targetX) and the box edge stops mattering. CLEAR is the
+  // same minLatGap the proactive separation pushes toward, so the two never
+  // fight over the last half metre.
+  function passTarget(passX, side, clear, hw) {
+    const lim = (hw || 5) - 0.6;
+    return clamp(passX + side * clear, -lim, lim);
+  }
+  // How long a committed pass is held without gaining ground before the car
+  // gives it up (patience), and how long it then waits before trying the same
+  // car again (the bt LAP_BACK_TIME_PENALTY shape, scaled to a same-lap fight).
+  // Craft commits longer; experience retries sooner. Both are per-car, which is
+  // also what stops twenty cars deciding the same thing on the same frame.
+  function passHold(t) {
+    return lerp(2.4, 4.2, t.craft);
+  }
+  function passCooldown(t) {
+    return lerp(3.5, 1.8, t.experience);
+  }
+
+  // SIDE RUB: WHO YIELDS. Two cars alongside used to get identical treatment —
+  // sepShares splits the push 50/50 for AI-AI, contactGive cut BOTH cars'
+  // steering authority to 0.25-0.55, and rubScrub bled BOTH by 0.5 %/frame.
+  // Nobody had priority, so both computed the mirror answer every frame and
+  // the pair sank to the speed where throttle and scrub balance — 17.4 m/s at
+  // vmax 70 (closed form; measured standoffs sat at 15-24). The car BEHIND on
+  // arc yields (it is the one overlapping); dead level, the car further from
+  // the centreline yields, which on a corner is the outside car — bt's
+  // filterSColl and usr's asymmetric side margin both give the inside car the
+  // road. Deterministic, so the symmetry is broken on frame one.
+  function sideYieldsA(dProg, xA, xB) {
+    if (dProg < -0.5) return true;        // A is behind B
+    if (dProg > 0.5) return false;        // A is ahead
+    return Math.abs(xA) >= Math.abs(xB);  // level: the outer car concedes
   }
 
   function defendPull(ctx) {
@@ -421,5 +500,6 @@ const AiDrive = (function () {
     defendPull, isBoxed, minLatGap, racingLineMix, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
+    otWant, passTarget, passHold, passCooldown, sideYieldsA,
   };
 })();
