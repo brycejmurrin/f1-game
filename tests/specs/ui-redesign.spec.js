@@ -88,8 +88,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(compactCatalogue.oneRow, "compact filter oneRow").toBe(true);
   expect(compactCatalogue.firstVisible, JSON.stringify(compactCatalogue.geometry)).toBeGreaterThanOrEqual(24);
   expect(compactCatalogue.heroH, "the still survives 150% on a notched phone").toBeGreaterThan(60);
-  // At the slider maximum the toolbar is horizontally pannable (it never
-  // wraps into the hero's height) and the strip still shows whole flags.
+  // At the slider maximum the toolbar stays ONE row (nowrap; it pans rather
+  // than wrap into the hero's height) and the strip still shows whole flags.
   await page.evaluate(() => {
     window.__apex.uiScale(200);
     window.SheetShape?.reclassify();
@@ -119,7 +119,8 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       },
     };
   });
-  expect(maxScaleCatalogue.horizontalToolbar, "200% pan-x toolbar " + JSON.stringify(maxScaleCatalogue.dump)).toBe(true);
+  expect(maxScaleCatalogue.dump.wrap, "200% one-row toolbar " + JSON.stringify(maxScaleCatalogue.dump)).toBe("nowrap");
+  expect(maxScaleCatalogue.dump.overflowX).toBe("auto");
   expect(maxScaleCatalogue.firstVisible).toBeGreaterThanOrEqual(24);
   await page.evaluate(() => {
     const root = document.documentElement.style;

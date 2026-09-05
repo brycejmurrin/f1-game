@@ -212,6 +212,8 @@ window.MenuNav = (function () {
   }
 
   function overlaps(a1, a2, b1, b2) { return Math.min(a2, b2) - Math.max(a1, b1) > 1; }
+  // distance from a point to an interval (0 inside it)
+  function gap(p, lo, hi) { return p < lo ? lo - p : p > hi ? p - hi : 0; }
 
   // Out-of-band horizontal: land in the adjacent column at similar height.
   // In-band scoring weights `across * 2` so a slightly-offset item in the same
@@ -279,7 +281,13 @@ window.MenuNav = (function () {
       const inBand = dx ? overlaps(a.t, a.b, b.t, b.b) : overlaps(a.l, a.r, b.l, b.r);
       if (!inBand) continue;
       if (along > 1) {
-        const across = dx ? Math.abs(b.y - a.y) : Math.abs(b.x - a.x);
+        // "Directly below" means the candidate's box SPANS your centre, not
+        // that its centre is near yours: across is the gap from your centre to
+        // the candidate's cross-axis interval, 0 when you are inside it. With
+        // centre distance a wide control (the hero's map button under the
+        // flag strip) lost ArrowDown to a narrow foot button that happened to
+        // sit closer to straight-down (measured: NEXT beat a 568px-wide hero).
+        const across = dx ? gap(a.y, b.t, b.b) : gap(a.x, b.l, b.r);
         const cost = along + across * 2;
         if (cost < bestCost) { bestCost = cost; best = el; }
       } else if (-along > edgeDist) {
