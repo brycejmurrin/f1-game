@@ -164,6 +164,19 @@ const HELP_LEVELS = { low: 1, med: 5, high: 9 };   // low = OFF (see helpFromSli
 const HELP_LABEL = { low: "LOW", med: "MEDIUM", high: "HIGH" };
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
 const LINE_FOLD = { off: "LINE OFF", corner: "CORNERS", full: "FULL" };
+// The three FEEL / AIDS setting rows (js/ui/setting-row.js). CUSTOM is a shown
+// but unpickable option: the state the ADVANCED sliders leave behind.
+const FEEL_VALUES = STEER_LEVEL_ORDER.map((n) => [n, STEER_LEVEL_LABEL[n]]).concat([["custom", "CUSTOM", true]]);
+const HELP_VALUES = ["low", "med", "high"].map((n) => [n, HELP_LABEL[n]]);
+const LINE_VALUES = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
+function helpBand() {
+  const dh = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);
+  return dh <= 3 ? "low" : dh <= 7 ? "med" : "high";
+}
+function lineBand() {
+  const rl = clamp(store.get("raceLine", 0), LINE_MIN, LINE_MAX);
+  return rl === 0 ? "off" : rl >= 5 ? "full" : "corner";
+}
 
 function paintFold(el, bits) {
   if (!el) return;
@@ -202,19 +215,12 @@ function refreshMacros() {
   const ts = clamp(store.get("tiltDeg", 6), SLIDER_MIN, SLIDER_MAX);
   if ($("pm-tiltsimple")) { $("pm-tiltsimple").value = ts; $("pm-tiltsimple-v").textContent = ts; }
   const lvl = matchSteerLevel();
-  for (const n of STEER_LEVEL_ORDER) {
-    const b = $("pm-steer-" + n); if (b) b.classList.toggle("active", n === lvl);
-  }
+  SettingRow.paint($("pm-feel"), lvl || "custom", FEEL_VALUES);
   const dh = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);
-  const hb = dh <= 3 ? "low" : dh <= 7 ? "med" : "high";
-  for (const n of ["low", "med", "high"]) {
-    const b = $("pm-help-" + n); if (b) b.classList.toggle("active", n === hb);
-  }
-  const rl = clamp(store.get("raceLine", 0), LINE_MIN, LINE_MAX);
-  const lb = rl === 0 ? "off" : rl >= 5 ? "full" : "corner";
-  for (const n of ["off", "corner", "full"]) {
-    const b = $("pm-line-" + n); if (b) b.classList.toggle("active", n === lb);
-  }
+  const hb = helpBand();
+  SettingRow.paint($("pm-helplevel"), hb, HELP_VALUES);
+  const lb = lineBand();
+  SettingRow.paint($("pm-linemode"), lb, LINE_VALUES);
   paintFold($("adv-feel-sum"), [
     ["k", "FEEL"],
     ["val", STEER_LEVEL_LABEL[lvl] || "CUSTOM"],
@@ -497,15 +503,15 @@ function applySteerLevel(name) {
   clearPreset(); applySteerTuning();
   if (G.soundOn) GameAudio.uiSelect();
 }
-for (const n of STEER_LEVEL_ORDER) $("pm-steer-" + n).onclick = () => applySteerLevel(n);
-for (const n of ["low", "med", "high"]) $("pm-help-" + n).onclick = () => {
+SettingRow.wire("pm-feel", { values: FEEL_VALUES, read: () => matchSteerLevel() || "custom", write: applySteerLevel });
+SettingRow.wire("pm-helplevel", { values: HELP_VALUES, read: helpBand, write: (n) => {
   store.set("drivingHelp", HELP_LEVELS[n]); clearPreset(); applySteerTuning();
   if (G.soundOn) GameAudio.uiSelect();
-};
-for (const n of ["off", "corner", "full"]) $("pm-line-" + n).onclick = () => {
+} });
+SettingRow.wire("pm-linemode", { values: LINE_VALUES, read: lineBand, write: (n) => {
   store.set("raceLine", LINE_LEVELS[n]); clearPreset(); applySteerTuning();
   if (G.soundOn) GameAudio.uiSelect();
-};
+} });
 // vStd(v) = v * VMAX / vTop() = v / max(PACE, 0.05). Same identity, no
 // game.js growth — adaptive digital rate must track the pace-5 scale the
 // SPEED STEER reference is written on.

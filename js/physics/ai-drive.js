@@ -124,6 +124,44 @@ const AiDrive = (function () {
     return street ? 0.42 : 0.5;
   }
 
+  // Side-rub deceleration, m/s^2 — a FORCE, absolute like BRAKE (the offroad
+  // block says why a scrub rate does not ride the pace scale). Bodywork on
+  // bodywork costs little speed; wheels interlocking is the incident sim's job.
+  // It replaced a proportional 0.5 %/frame (12 m/s^2 at 40 m/s, and applied per
+  // relaxation pass, 48): the racecraft bench's alongside standoffs were pairs
+  // sitting at the throttle-vs-scrub balance that rate produced.
+  function rubDecel(street) {
+    return street ? 3.5 : 3;
+  }
+
+  // Rear-end restitution by closing speed: 0 below 1 m/s (a resting contact —
+  // Box2D's velocity threshold, so a car sitting on a bumper does not jitter
+  // off it), 0.1 from 3 m/s up (crash reconstruction's floor for real cars at
+  // speed), a ramp between. Zero to a tenth: bumps are near-inelastic.
+  function bumpRestitution(relV) {
+    const v = relV || 0;
+    if (v <= 1) return 0;
+    if (v >= 3) return 0.1;
+    return 0.1 * (v - 1) / 2;
+  }
+  // Closing speed (m/s at PACE 1) above which the player's forward punt from a
+  // rear-end stops growing. The AI behind pays its full share regardless.
+  function humanPuntCap() { return 8; }
+
+  // SQUEEZED: in contact, ours to yield, and no room on the side away from the
+  // other car. A yielder that can move away does (the planner constraint); one
+  // that cannot backs OUT — its pace ceiling drops under the other car's speed
+  // until it is clear. Without this the rub being cheap (rubDecel) let AI pairs
+  // grind along a barrier for seconds (racecraft bench: prolonged-contact pairs
+  // 0 -> 4 on monaco once the old scrub stopped knocking the trailing car back).
+  function squeezeEase(street) {
+    return street ? 0.88 : 0.9;
+  }
+  // ...and a dab of brake with it: a vmax cap only stops the car accelerating,
+  // and at 5 % under the other car it took three seconds to drop a car length —
+  // the rub lasted that long (contact diagnostics, Lesmo). BRAKE x this.
+  function squeezeBrake() { return 0.25; }
+
   function contactGive(contacting, t, street) {
     if (!contacting) return 1;
     const give = lerp(0.55, 0.25, t.awareness);
@@ -431,10 +469,17 @@ const AiDrive = (function () {
   // the centreline yields, which on a corner is the outside car — bt's
   // filterSColl and usr's asymmetric side margin both give the inside car the
   // road. Deterministic, so the symmetry is broken on frame one.
+  // "Behind" is LESS THAN HALF ALONGSIDE, not "half a metre back". The old ±0.5 m
+  // band made a car 0.6 m back — 87 % of a 4.8 m car alongside — the one that
+  // yields, which is how a player rubbing wheels with an AI a bumper ahead was
+  // scrubbed to a crawl. Racing's own rule (the FIA driving standards' "a
+  // significant portion alongside" — front axle past the other car's mirror) is
+  // half a car: inside that, both must leave room, so the OUTER car concedes.
+  const SIDE_LEVEL = 2.4;
   function sideYieldsA(dProg, xA, xB) {
-    if (dProg < -0.5) return true;        // A is behind B
-    if (dProg > 0.5) return false;        // A is ahead
-    return Math.abs(xA) >= Math.abs(xB);  // level: the outer car concedes
+    if (dProg < -SIDE_LEVEL) return true;        // A is behind B
+    if (dProg > SIDE_LEVEL) return false;        // A is ahead
+    return Math.abs(xA) >= Math.abs(xB);         // level: the outer car concedes
   }
 
   function defendPull(ctx) {
@@ -546,6 +591,6 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
     otWant, passTarget, passHold, passCooldown, sideYieldsA,
-    launchPlan, launchMul, launchDone, pacePhase,
+    launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
   };
 })();

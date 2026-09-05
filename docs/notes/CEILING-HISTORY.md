@@ -2094,3 +2094,42 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   detune so the note drops with the ignition). BOOST gets LEVEL and REV LIFT,
   and HARVEST / WIND / TYRES / RIVALS get the level trim they had always
   lacked beside their switch. Eight sliders (32) and two group headers (2).
+
+- `js/game.js` lines 9951 -> **9994**, codeLines 5477 -> **5489** (2026-09-05):
+  what a contact costs the player. Twelve code lines net: room to the ROAD edge
+  for the pass latch and the squeeze test (+1 — the run-off allowance in
+  roomL/R let an AI "pass" on the grass at Lesmo for as long as the car ahead
+  held its line), the real impulse with
+  restitution and the human punt cap (+3, replacing the `0.5 * relV` and its
+  `* 0.8`), the laterally-nearest alongside pick (+1), the directional contact
+  compliance (+1), the once-a-frame rub (0 — `if (last)` on existing lines),
+  and the SQUEEZE back-out (+6: a yielder in contact with no lane to yield into
+  drops under the other car's speed with a dab of brake and abandons its pass)
+  — needed because once a rub stopped costing 48 m/s^2, AI pairs ground along
+  a barrier for seconds where the old scrub had knocked the trailing car back
+  (prolonged-contact pairs 0 -> 4 on monaco, back to 0 with it). The rest is
+  the comments that carry the measurements. Measured before ->
+  after on monza's start straight (`scratch/collision-bench.mjs`): a player
+  boxed between two AI cars at 40 m/s lost 18 m/s in a second -> 0; a
+  wheel-to-wheel lean cost 15 m/s -> 0; a rear-end bump left 55 % of the
+  closing speed per pass -> <= 15 %. The knobs (`rubDecel`, `bumpRestitution`,
+  `humanPuntCap`, the half-car `SIDE_LEVEL`) live in `js/physics/ai-drive.js`
+  with their unit tests; `tests/unit/collision-contact-vm.test.mjs` pins the
+  three behaviours.
+
+## 2026-09-05 — selection grammar: shellNodes 1192 → 1273, game.js 9994 → 9985 (measured on the merged tree)
+
+`shellNodes` RAISED by 81, deliberately. Every enumerated preference on the
+Settings sheet (STEER, GEARS, ACTIVE AERO, HUD, STYLE, LAYOUT, MAP, GAPS,
+RESOLUTION, STEERING feel, DRIVING HELP, RACING LINE, MUSIC, SOUND, SOURCE,
+PROFILE, Spotify SHUFFLE / REPEAT) is a SETTING ROW — `LABEL ‹ select ›`,
+six static nodes where a `KEY: VALUE` cycle button was one — so every pick
+reads and works the same way at every UI SIZE (`docs/COMPONENTS.md`
+§Selection grammar). The rows are static DOM in the shell on purpose: building
+them from JS would hide the cost the ratchet exists to show. A first pass the
+same day used labelled chip rows (2 + N nodes each); the layout audit measured
+those at 3.8 screens deep for three settings on a landscape phone at 150%, and
+the row replaced them. The pause menu also gained the MUSIC page's NOW PLAYING card (shown only while music plays). `js/game.js` 9994 → 9985 on the merged tree (the cycle handlers moved to
+`js/ui/setting-row.js`); `cssClasses` 549 → 549 (`.as-toggle` retired,
+`.set-row` added); `rawColor` 329 → 325 (the cam picker, garage SPIN and
+track-row washes use tokens; the unread `--manual` token is gone).

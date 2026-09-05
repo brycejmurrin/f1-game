@@ -185,6 +185,9 @@
     "// The RESULTS tab drives OpenF1's session_result, whose duration and gap",
     "// change SHAPE with the session type. Pure rules over a stub DOM, ~0.1 s.",
     "tests/unit/data-results.test.mjs",
+    "// The tail DESIGN picks (fin shape / tail style / fin badge / spine logo):",
+    "// Car3D outline maths and the atlas painter, headless, ~0.5 s.",
+    "tests/unit/fin-design.test.mjs",
     "tests/unit/photomode-hold.test.mjs",
     "tests/unit/title-menu-even.test.mjs",
     "tests/unit/change-driver-tools.test.mjs",
@@ -326,7 +329,8 @@
     "test:garage-unit": {
       "kind": "node",
       "files": [
-        "tests/unit/garage-mesh.test.mjs"
+        "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/fin-design.test.mjs"
       ]
     },
     "test:steering-unit": {
@@ -486,6 +490,7 @@
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collision-ai-fixes-vm.test.mjs",
+        "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",

@@ -16,7 +16,12 @@ clone of `equivalent` — mesh only. **`FACTORY_PRESETS`** drives **AI meshes
 only**. ERS/aero axes derive from the catalog (`ersProfile` / `aeroLoad`); a
 car with no parts (every AI) sits at the midpoint. Livery finish is
 `finish: "gloss" | "satin" | "chrome"` via `Car3D.FINISH_SURFACE`. Shark fin:
-`fin` (plate, defaults to `c2`) and `finArt` (must contrast or it vanishes).
+`fin` (plate, defaults to `c2`) and `finArt` (must contrast or it vanishes);
+the tail DESIGN is four enum fields with defaults that reproduce the shipped car —
+`finShape` (`Car3D.FIN_SHAPES` + `none`; the ONE non-colour livery field that moves
+a vertex, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,
+drives the fin panel AND the engine-cover wash), `finBadge` (`logo|number|none`) and
+`spineLogo` (`logo|none`). `drawTailGraphic` clips to its region.
 The mark takes up to THREE livery colours and the editor asks
 `LiveryTex.markSlots(teamId)` how many and what to call them — never assume a
 length. `logo` is the dominant shape; `logo2` is the mark's second SHAPE and

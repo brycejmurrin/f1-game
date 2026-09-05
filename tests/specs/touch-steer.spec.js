@@ -432,7 +432,8 @@ test("auto-throttle and the GAS button can never disagree, across mode switches"
     // directly would skip the very refresh this test exists to check.
     await page.evaluate(() => {
       document.getElementById("pausebtn")?.click();
-      document.getElementById("pm-steer")?.click();
+      // STEERING INPUT is a setting row: › steps to the next mode.
+      document.getElementById("pm-steer-next")?.click();
       document.getElementById("pm-resume")?.click();
     });
     await page.waitForTimeout(150);

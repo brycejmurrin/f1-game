@@ -344,7 +344,7 @@
 .cs-tab-cur { font-size: var(--fs-micro); font-weight: 600; color: color-mix(in oklab, var(--text) 40%, transparent); }
 .cs-tab.upgraded .cs-tab-lbl { color: #4df; }
 .cs-tab.upgraded .cs-tab-cur { color: rgba(80,210,255,0.7); }
-.cs-tab.active { background: var(--plate-on); border-color: var(--red); box-shadow: var(--plate-on-glow); }
+.cs-tab.active { background: var(--plate-on); border-color: var(--red); }
 .cs-tab.active .cs-tab-lbl { color: var(--text); }
 .cs-tab.active .cs-tab-cur { color: color-mix(in oklab, var(--text) 72%, transparent); }
 
@@ -380,7 +380,6 @@
 .cs-opt-cost.free { color: rgba(255,255,255,0.3); font-weight: 600; }
 .cs-opt.active {
   background: var(--plate-on); border-color: var(--red);
-  box-shadow: var(--plate-on-glow);
 }
 .cs-opt.active .cs-opt-dot { border-color: var(--red); background: radial-gradient(circle, #fff 0 3px, var(--red) 4px); }
 .cs-opt.active .cs-opt-cost { color: #fff; }
@@ -1088,10 +1087,11 @@ body:has(.screen.dim:not([hidden])) #cs-stack { visibility: hidden; }
 /* `active` is the codebase's "this one is chosen" class (see AriaState's ON
    list), so the lit state hangs off it rather than off aria-pressed — that
    keeps the attribute purely a screen-reader concern. Only SPIN ever takes it;
-   the view chips are momentary jumps, not a selection. */
+   the view chips are momentary jumps, not a selection. Same ring as every
+   other chosen chip (css/tokens.css --plate-on) — it used to be green. */
 .cs-view-btn.active {
-  background: rgba(0,204,136,0.18); color: #0c8;
-  border-color: rgba(0,204,136,0.4);
+  background: var(--plate-on); color: var(--text);
+  border-color: var(--red);
 }
 /* `contents` keeps the span as the chips' DOM PARENT — which is the whole point
    of it, since AriaState groups by parent — while taking its box out of the

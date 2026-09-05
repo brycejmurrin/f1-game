@@ -303,7 +303,10 @@ test("every id the ENGINE TONE panel looks up exists in the shell", () => {
 
   const sliders = [...panel.matchAll(/\{ k: "\w+",\s*id: "([\w-]+)",/g)].map((m) => m[1]);
   const layers = [...panel.matchAll(/\{ k: "\w+",\s+id: "([\w-]+)" \}/g)].map((m) => m[1]);
-  const profiles = [...panel.matchAll(/\["(as-p-[\w-]+)", "\w+"\]/g)].map((m) => m[1]);
+  // The PROFILE setting row (js/ui/setting-row.js): five pickable names plus a
+  // shown-but-disabled CUSTOM; the row itself is #as-p in the shell.
+  const profiles = [...panel.matchAll(/\["(team|broadcast|trackside|cockpit|v10)", "[A-Z0-9]+"\]/g)].map((m) => m[1]);
+  assert.match(panel, /\["custom", "CUSTOM", true\]/, "CUSTOM is listed but unpickable");
   assert.equal(sliders.length, 22, "expected the twenty-two tuner sliders — the table shape changed, so does this check");
   assert.equal(layers.length, 12, "expected the twelve layer switches");
   assert.equal(profiles.length, 5, "expected the five sound profiles");
@@ -311,7 +314,7 @@ test("every id the ENGINE TONE panel looks up exists in the shell", () => {
   const missing = [];
   // Each slider owns TWO nodes: the range input and the <b> that reads its value.
   for (const id of sliders) for (const suffix of ["", "-v"]) if (!declared.has(id + suffix)) missing.push(id + suffix);
-  for (const id of [...layers, ...profiles, "as-t-reset", "as-p-note", "as-engine-details"]) if (!declared.has(id)) missing.push(id);
+  for (const id of [...layers, "as-p", "as-p-sel", "as-t-reset", "as-p-note", "as-engine-details"]) if (!declared.has(id)) missing.push(id);
   assert.deepEqual(missing, [], "js/audio/panel.js looks up an id that index.html does not declare");
 });
 
@@ -322,7 +325,11 @@ test("every sound profile and layer the panel offers is one the engine knows", (
   // and does nothing, which is worse than one that throws.
   const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
   const A = await_boot();
-  const offered = [...panel.matchAll(/\["as-p-[\w-]+", "(\w+)"\]/g)].map((m) => m[1]);
+  // PROFILE_VALUES feeds the PROFILE setting row; the disabled CUSTOM entry
+  // (`, true`) is a state, not a pick, and the two-field regex skips it.
+  const at = panel.indexOf("PROFILE_VALUES = [");
+  const block = panel.slice(at, panel.indexOf("];", at));
+  const offered = [...block.matchAll(/\["(\w+)", "[A-Z0-9]+"\]/g)].map((m) => m[1]);
   assert.deepEqual(offered.filter((p) => !A.profiles().includes(p)), [],
     "the panel offers a profile SOUND_PROFILES does not define");
   assert.deepEqual([...A.profiles()].filter((p) => !offered.includes(p)), [],

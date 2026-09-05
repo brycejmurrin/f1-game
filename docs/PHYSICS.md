@@ -363,6 +363,64 @@ lines rather than one file. All of this is AI-only — every read sits inside
 the `!c.human` arm, and `otSide`'s corner-inside tie-break is in the arc table
 below.
 
+### Car-to-car contact: what a touch costs
+
+The resolver (`resolveCollisions` → `_colResolvePair` / `_colSepPair`) works in
+the `(prog, x)` plane on 4.8 × 2.0 m boxes, four relaxation passes and a
+separation pass per step. Its rules, each with the measurement that set it
+(`scratch/collision-bench.mjs`, `tests/unit/collision-contact-vm.test.mjs`):
+
+- **A rear-end is an impulse, `j = (1 + e) · relV / (invA + invB)`**, with
+  `AiDrive.bumpRestitution`: e = 0 below 1 m/s closing (a resting contact — a
+  car sitting on a bumper must not jitter off it), 0.1 from 3 m/s (real cars'
+  floor at speed), a ramp between. The old `0.5 · relV` was (1 + e) = 0.5: the
+  pair was still closing at half speed after it and penetration ate the rest
+  over ~30 frames, which is why a bump read as being pushed along. The car in
+  front takes the punt in full; a HUMAN in front is capped at a closing speed
+  of `AiDrive.humanPuntCap()` (8 m/s at PACE 1, pace-scaled) so an AI misjudging
+  a braking zone cannot launch the player, while the AI still pays its share.
+  The human's inverse mass stays 0.5 (`AiDrive.humanInvMass`): the player is
+  the heavy car in every exchange.
+- **A side rub is a small deceleration, taken once a frame**
+  (`AiDrive.rubDecel`, 3 m/s² permanent / 3.5 street, on the yielder only). It
+  was a 0.995 factor applied on every relaxation pass — 2 % a frame, 48 m/s² at
+  40 m/s — and a player boxed between two AI cars lost 18 m/s in a second with
+  zero slip. Bodywork on bodywork costs little; interlocking wheels are the
+  incident sim's business.
+- **"Behind" means less than half a car alongside** (`AiDrive.sideYieldsA`,
+  2.4 m of 4.8). The old ±0.5 m level band made a car a bumper back the one
+  that yields and pays the rub — that was the player, every time an AI was
+  marginally ahead. Inside half a car both must leave room, so the outer car
+  concedes; past it the leader may take the line. This is the FIA driving
+  standards' "significant portion alongside" (front axle past the mirror) in
+  arc-length.
+- **The yielding AI keeps its steering when steering AWAY.** Contact compliance
+  (`AiDrive.contactGive`) exists so a player leaning on an AI can move it; it
+  used to scale every lateral step, so the same compliance held the AI against
+  the car it was trying to leave. It now applies only toward the contact.
+- **The alongside constraint targets the LATERALLY nearest car.** With a car on
+  each side, the scan picked the one half a metre closer in arc and two lanes
+  away, so the constraint aimed at the wrong car and the sandwich rubbed for two
+  seconds with nobody yielding.
+- **A squeezed yielder backs out** (`AiDrive.squeezeEase` / `squeezeBrake`):
+  in contact, ours to yield, and no lane on the far side to yield into — the
+  pace ceiling drops to 90% of the other car's speed (88% street) with a quarter
+  brake, and any pass in progress is abandoned with its cooldown. This is what
+  a driver does when walked to the edge. It became necessary the moment a rub
+  stopped costing 48 m/s²: AI pairs then ground along a barrier for seconds
+  where the old scrub had knocked the trailing car back (prolonged-contact
+  pairs 0 → 4 on monaco; 0 again with the back-out).
+
+Measured on monza's start straight, before → after: boxed between two AI cars
+at 40 m/s, player loss over one second 18 → 0 m/s; a wheel-to-wheel lean 15 →
+0 m/s; a rear-end bump leaves ≤ 15 % of the closing speed instead of 55 % per
+pass. Left as is, deliberately: the aggressive position correction (~93 % of a
+penetration per step — Box2D would use 20 %) because a lateral shove of 2 cm a
+frame is what the player actually receives; and a pair sitting exactly at the
+5 cm slop exchanges momentum without raising `contactT` (the flag is gated on a
+real penetration), so a full-throttle push along a slower car rumbles through
+`collideFx` but does not flag either car as colliding.
+
 ### Braking
 
 Weather never scaled `BRAKE` — it only ever touched lateral grip and the

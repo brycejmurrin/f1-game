@@ -14,7 +14,7 @@ const CAR_DECAL_CACHE_MAX = 24;
 // indexOf+splice reorder on every hit; a race uses only a handful of distinct
 // (level, fin, drs, anchor) keys, far under the 24-entry cap, so eviction —
 // and the FIFO/LRU distinction — is never reached in practice.
-function carDecalData(aLvl, parts, legacyBody, teamId) {
+function carDecalData(aLvl, parts, legacyBody, teamId, finShape) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
   // Imported GLBs are static and do not consume the procedural parts recipe.
@@ -80,17 +80,24 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
   // the SAME outline the mesh used. sharkFinPanel/sharkFinBadge default to a
   // scale of 1 when this is absent, which is what every legacy caller gets.
   const finS = (parts && parts._visual && parts._visual.aero && parts._visual.aero.fin) || 1;
-  const fp = Car3D.sharkFinPanel ? Car3D.sharkFinPanel(null, null, finS)
-    : [{ x: 0.023, y: 0.655, z: -0.82 }, { x: 0.023, y: 0.655, z: -1.56 },
-       { x: 0.023, y: 0.945, z: -1.56 }, { x: 0.023, y: 0.945, z: -0.82 }];
-  const FIN_N = 0.78, FIN_NY = 0.62;      // normalised: 0.78² + 0.62² ≈ 1
-  const face = (c, region) => {
-    const v = (i, s) => [s * c[i].x, c[i].y, c[i].z];
-    quad([v(0, 1), v(1, 1), v(2, 1), v(3, 1)], [FIN_N, FIN_NY, 0], region);
-    quad([v(1, -1), v(0, -1), v(3, -1), v(2, -1)], [-FIN_N, FIN_NY, 0], region);
-  };
-  face(fp, R.fin);
-  if (Car3D.sharkFinBadge && R.finBadge) face(Car3D.sharkFinBadge(null, finS), R.finBadge);
+  // The livery's FIN SHAPE picks the outline the decal is stretched over — the
+  // same FIN_SHAPES entry build() cut the blade from — and "none" is no blade,
+  // so no panel and no badge either: a graphic hanging in the air behind the
+  // airbox is exactly what this branch exists to prevent.
+  const fShape = finShape || "standard";
+  if (fShape !== "none") {
+    const fp = Car3D.sharkFinPanel ? Car3D.sharkFinPanel(null, null, finS, fShape)
+      : [{ x: 0.023, y: 0.655, z: -0.82 }, { x: 0.023, y: 0.655, z: -1.56 },
+         { x: 0.023, y: 0.945, z: -1.56 }, { x: 0.023, y: 0.945, z: -0.82 }];
+    const FIN_N = 0.78, FIN_NY = 0.62;      // normalised: 0.78² + 0.62² ≈ 1
+    const face = (c, region) => {
+      const v = (i, s) => [s * c[i].x, c[i].y, c[i].z];
+      quad([v(0, 1), v(1, 1), v(2, 1), v(3, 1)], [FIN_N, FIN_NY, 0], region);
+      quad([v(1, -1), v(0, -1), v(3, -1), v(2, -1)], [-FIN_N, FIN_NY, 0], region);
+    };
+    face(fp, R.fin);
+    if (Car3D.sharkFinBadge && R.finBadge) face(Car3D.sharkFinBadge(null, finS, fShape), R.finBadge);
+  }
   const nR = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
   const nF = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
   quad([[-nF.topSide*0.84, nF.top+0.020, 2.10], [nF.topSide*0.84, nF.top+0.020, 2.10],
@@ -131,7 +138,7 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
   return out;
 }
-function getCarDecalMesh(aLvl, parts, legacyBody, teamId) {
+function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
   const anchorParts = legacyBody ? null : parts;
   const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId) : { key: "legacy" };
@@ -147,9 +154,11 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId) {
   // options by accident today — so this is latent, and a one-field aero edit is
   // all it takes to start painting the band 75 mm off the flap.
   const drsK = (parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0;
-  const k = level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + anchors.key;
+  // finShape is livery, not parts, so anchors.key cannot carry it: it joins here.
+  const shapeK = finShape || "standard";
+  const k = level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
   if (!_carDecalMeshes[k]) {
-    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody, teamId));
+    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody, teamId, shapeK));
     _carDecalOrder.push(k);
     while (_carDecalOrder.length > CAR_DECAL_CACHE_MAX) {
       const old = _carDecalOrder.shift(), mesh = _carDecalMeshes[old];

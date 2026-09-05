@@ -696,7 +696,6 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 #cg-contents a[aria-current="true"],
 #ch-contents a[aria-current="true"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: var(--plate-on-glow);
 }
 
 /* ---------- buttons ---------- */
@@ -1099,7 +1098,20 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pm-quit,
 #pm-standings,
 #pm-howto,
-#pm-build { grid-column: 1 / -1; }
+#pm-build,
+#pm-now-card { grid-column: 1 / -1; }   /* the NOW PLAYING card spans the pair grid like the build tag */
+/* The card's transport keeps the --chip-h square every other small control
+   has (css/tuner.css .as-tbtn): the stack's own button rules — full width,
+   compact padding — must not reshape it. */
+#pausemenu .sheet .stack .as-tbtn {
+  width: var(--chip-h);
+  min-width: var(--chip-h);
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  flex: 0 0 var(--chip-h);
+  padding: 0;
+  margin: 0;
+}
 #pausemenu .sheet-body.stack > button:not(#pm-resume):not(#pm-quit) {
   background: var(--plate-opaque);
   color: var(--text);
@@ -1178,28 +1190,36 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   justify-content: center;
   text-align: center;
 }
-#pmsettings-inner #as-prev,
-#pmsettings-inner #as-play,
-#pmsettings-inner #as-skip {
-  width: var(--tap-sm);
-  height: var(--tap-sm);
-  min-height: var(--tap-sm);
+/* A preset card carries a name AND a one-line blurb; the --tap row height
+   above clipped the blurb below the card (css-play 393x852, both before and
+   after the setting-row pass). Grow with the content, floor at the tap. */
+#pmsettings-inner .pm-group .preset-btn {
+  height: auto;
+  min-height: var(--tap);
+}
+/* NOW PLAYING transport: the same --chip-h plate square as a setting row's
+   chevrons (css/tuner.css .as-tbtn), restated at (1,2,1) over the broad
+   `.pm-group button` rules like the chevrons are. */
+#pmsettings-inner .pm-groups .as-tbtn {
+  width: var(--chip-h);
+  height: var(--chip-h);
+  min-height: var(--chip-h);
   padding: 0;
+  margin: 0;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
 }
-#pmsettings-inner #as-play {
-  width: calc(var(--tap-sm) * 1.22);
-  height: calc(var(--tap-sm) * 1.22);
-}
-#advanced .tune-label,
-#audioset .tune-label {
+/* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE
+   used to be the two plain-grey labels on a sheet of steel italics. */
+#pmsettings-inner .pm-group .tune-label {
   color: var(--steel);
   font-weight: 700;
   font-style: italic;
   letter-spacing: var(--ls-5);
   text-transform: uppercase;
 }
-#advanced .tune-label b,
-#audioset .tune-label b {
+#pmsettings-inner .pm-group .tune-label b {
   color: inherit;
   font-style: italic;
 }
@@ -1244,43 +1264,103 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0;
   box-sizing: border-box;
 }
-/* RENDERER picker is injected (‹ select ›) so the body-node ratchet stays
-   put. ID-scoped: no new class, and these beat `#pmsettings-inner .pm-group
-   button { width:100% }` so the chevrons stay tap-square. */
-#pmsettings-inner .pm-group #pm-renderer-row {
+/* ---------- SETTING ROW ----------   LABEL                 ‹ VALUE ›
+   The one control for an enumerated preference (js/ui/setting-row.js): every
+   pick on the Settings sheet, the Spotify panel, the injected RENDERER /
+   GRAPHICS / METRICS rows. One line at every UI SIZE: the label takes the
+   slack and the ‹ select › cluster keeps its width, dropping to its own line,
+   right-aligned, only when the two cannot share one (measured against the
+   chip rows it replaced: CONTROLS ran 3.8 screens deep at landscape 150%).
+   The select IS the value — a plate, no native arrow, the chevrons are the
+   arrows and each is a full --chip-h tap square. Element selectors, not
+   classes, for the three parts: the cssClasses ratchet pays for one name. */
+.set-row {
   display: flex;
-  align-items: stretch;
-  gap: calc(var(--gap) * 0.5);
-  height: var(--tap);
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: calc(var(--gap) * 0.6);
+  row-gap: calc(var(--gap) * 0.3);
   min-height: var(--tap);
-  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
-#pmsettings-inner .pm-group #pm-renderer-prev,
-#pmsettings-inner .pm-group #pm-renderer-next {
-  width: var(--tap);
-  min-width: var(--tap);
-  flex: 0 0 var(--tap);
+/* 5rem label basis + 7rem select basis + two --chip-h chevrons ≈ 293px: the
+   whole row shares ONE line on a 393px phone at UI SIZE 100% (measured: 7rem /
+   8.5rem wrapped every row). 7rem holds the longest value, BROADCAST /
+   TRACKSIDE / MY TRACKS, at --fs-3 bold. */
+.set-row > .tune-label { flex: 1 1 5rem; min-width: 0; margin: 0; }
+.set-row > div {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--gap) * 0.35);
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+}
+.set-row > div > button {
+  flex: 0 0 var(--chip-h);
+  width: var(--chip-h);
+  height: var(--chip-h);
+  min-height: var(--chip-h);
   padding: 0;
-  /* 1.5x the top rung and bold: the single-quote chevrons read as specks
-     in a 52px plate at --fs-5 (screenshot at 844x390, 2026-09-02). */
-  font-size: calc(var(--fs-5) * 1.5);
+  margin: 0;
+  /* 1.3x the top rung and bold: single-quote chevrons read as specks in a
+     plate at --fs-5 (screenshot at 844x390, 2026-09-02). */
+  font-size: calc(var(--fs-5) * 1.3);
   font-weight: 700;
   line-height: 1;
 }
-#pmsettings-inner .pm-group #pm-renderer {
-  flex: 1 1 auto;
-  min-width: 0;
-  width: auto;
-  height: var(--tap);
-  min-height: var(--tap);
+.set-row > div > select {
+  /* A FIXED 8rem, not a flex basis: with `width: auto` the select sized to
+     its longest option, so ON and ALL rows put their chevrons at different
+     x (measured 852x393). 8rem holds SUPER EASY / BROADCAST at --fs-3 bold;
+     it may only shrink, and only when the wrapped cluster still overflows. */
+  flex: 0 1 8rem;
+  width: 8rem;
+  min-width: 4rem;
+  height: var(--chip-h);
+  min-height: var(--chip-h);
   box-sizing: border-box;
+  margin: 0;
+  padding: 0 calc(var(--gap) * 0.5);
   font: inherit;
-  font-size: var(--fs-4);
+  font-size: var(--fs-3);
+  font-weight: 700;
+  letter-spacing: var(--ls-2);
+  text-transform: uppercase;
+  text-align: center;
+  text-align-last: center;
   color: var(--text);
   background: var(--plate);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-sm);
-  padding: 0 calc(var(--gap) * 0.75);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+.set-row > div > select:disabled,
+.set-row > div > button:disabled { opacity: 0.45; cursor: default; }
+.set-row + .adv-help { margin-top: 0; }
+/* Inside Settings the broad `.pm-group button` rules (full width, --tap tall,
+   left-aligned, viewport type) and the wide-sheet `.pm-groups > [role=region]
+   button` retune both outrank the generic row parts above, so the chevrons
+   are restated at (1,2,2). NOT a `:not(.set-row *)` guard on those rules:
+   that raised their specificity past `#advanced-inner :is(.opt-btn,
+   .preset-btn)` and pinned the STEERING preset cards to one tap height
+   (measured, css-play 393x852). */
+#pmsettings-inner .pm-groups .set-row > div > button {
+  flex: 0 0 var(--chip-h);
+  width: var(--chip-h);
+  height: var(--chip-h);
+  min-height: var(--chip-h);
+  padding: 0;
+  margin: 0;
+  justify-content: center;
+  text-align: center;
+  font-size: calc(var(--fs-5) * 1.3);
+  line-height: 1;
+  white-space: nowrap;
 }
 /* Injected SCREENSHOTS / THREE PATH status — ID-scoped, no new class. */
 #pmsettings-inner .pm-group #pm-gfx-status {
@@ -1325,7 +1405,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    so folding the ids in with the classes would silently promote .tune-row
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
-#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-renderer-row, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
 /* DISPLAY: UI SIZE, then HUD / METRICS / RENDERER each on their own row.
    Named areas so an open fold cannot steal the hole. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {
@@ -1391,27 +1471,35 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   padding-top: calc(var(--gap) / 4);
 }
 /* METRICS fold: a quiet column, not a 2-up plate grid. Two or three
-   rows fit without a scroll cage — the sheet pane already scrolls. */
-#pm-metrics-details [role="group"],
-#pm-hud-details [role="group"] {
+   rows fit without a scroll cage — the sheet pane already scrolls. The HUD
+   fold shares the column but holds labelled CHIP ROWS (js/ui/opt-group.js),
+   each its own role=group — hence the child combinator: a descendant match
+   would stack every chip row into a column too. */
+#pm-metrics-details > [role="group"],
+#pm-hud-details > [role="group"] {
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: calc(var(--gap) / 6) 0 0;
 }
-#pm-metrics-details [role="group"] > button,
-#pm-hud-details [role="group"] > button {
+#pm-metrics-details > [role="group"] > button {
   width: 100%;
   margin: 0;
 }
-#pm-metrics-details [role="group"] > button[hidden],
-#pm-hud-details [role="group"] > button[hidden] {
+#pm-metrics-details > [role="group"] > button[hidden] {
   display: none !important;
 }
+/* Fold summaries WRAP. They are readouts (HUD · ON · STANDARD · AUTO · MAP ·
+   GAPS) and at UI SIZE 150% on a phone a fixed --chip-h line clipped MAP and
+   GAPS off the right edge (layout-audit + css-play 393x852@150). Each
+   [data-fold] span stays whole (nowrap below), so the line breaks between
+   words, never inside "TILT 6". */
 #pmsettings-inner #pm-metrics-details > summary,
 #pmsettings-inner #pm-hud-details > summary {
-  height: var(--chip-h);
+  height: auto;
   min-height: var(--chip-h);
+  flex-wrap: wrap;
+  row-gap: 0;
   box-sizing: border-box;
   cursor: pointer;
   justify-content: flex-start;
@@ -1423,8 +1511,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pm-metrics-details[open] > summary::before { content: "\25B4"; }
 #pm-hud-details[open] > summary::before { content: "\25B4"; }
-#pmsettings-inner #pm-metrics-details [role="group"] > button,
-#pmsettings-inner #pm-hud-details [role="group"] > button {
+#pmsettings-inner #pm-metrics-details > [role="group"] > button {
   background: transparent;
   border: none;
   border-bottom: 1px solid color-mix(in oklab, var(--steel) 22%, transparent);
@@ -1432,13 +1519,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   box-shadow: none;
   font-weight: 600;
 }
-#pmsettings-inner #pm-metrics-details [role="group"] > button:last-child,
-#pmsettings-inner #pm-hud-details [role="group"] > button:last-child {
+#pmsettings-inner #pm-metrics-details > [role="group"] > button:last-child {
   border-bottom: none;
 }
 @media (hover: hover) {
-  #pmsettings-inner #pm-metrics-details [role="group"] > button:hover,
-  #pmsettings-inner #pm-hud-details [role="group"] > button:hover {
+  #pmsettings-inner #pm-metrics-details > [role="group"] > button:hover {
     background: color-mix(in oklab, var(--steel) 12%, transparent);
     box-shadow: none;
   }
@@ -1450,22 +1535,24 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0;
   min-width: 0;
 }
-#pm-display-adv [role="group"] {
+#pm-display-adv-body {
   display: flex;
   flex-direction: column;
   gap: calc(var(--gap) / 3);
   padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
 }
-#pm-display-adv [role="group"] > button {
+#pm-display-adv-body > button {
   width: 100%;
   margin: 0;
 }
-#pm-display-adv [role="group"] > :is(#pm-renderer-row, #pm-gfx-status) {
+#pm-display-adv-body > :is(.set-row, .adv-help, #pm-gfx-status) {
   grid-column: 1 / -1;
 }
 #pmsettings-inner #pm-display-adv > summary {
-  height: var(--chip-h);
+  height: auto;
   min-height: var(--chip-h);
+  flex-wrap: wrap;
+  row-gap: 0;
   box-sizing: border-box;
   cursor: pointer;
   justify-content: flex-start;
@@ -1543,8 +1630,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner #advanced-inner details > summary::before { content: "\25BE"; }
 #pmsettings-inner #advanced-inner details[open] > summary::before { content: "\25B4"; }
 #pmsettings-inner #advanced-inner details > summary {
-  height: var(--chip-h);
+  height: auto;
   min-height: var(--chip-h);
+  flex-wrap: wrap;
+  row-gap: 0;
   box-sizing: border-box;
   cursor: pointer;
   justify-content: flex-start;
@@ -1564,8 +1653,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-style: italic;
   font-weight: 700;
 }
-/* Name stays steel. Gold/red = enablement. Green/blue = 2-state
-   AUTO/MANUAL agency only. Named cycles stay --text. */
+/* Name stays steel. Gold/red = enablement, on READOUTS only: the closed fold
+   summaries and the title-screen sound button. A chip never paints its word
+   (css/tokens.css, THE ONE SELECTED LOOK). */
 button [data-fold="on"],
 summary [data-fold="on"] {
   color: var(--gold);
@@ -1574,24 +1664,11 @@ button [data-fold="off"],
 summary [data-fold="off"] {
   color: var(--red);
 }
-button [data-fold="auto"],
-summary [data-fold="auto"] {
-  color: var(--faster);
-}
-button [data-fold="manual"],
-summary [data-fold="manual"] {
-  color: var(--manual);
-}
 /* Any menu row, not only Settings: flex ate the space after ":" / "·". */
 button:has(> [data-fold]) {
   column-gap: 0.35em;
 }
-/* ON/OFF option chips: only the selected word is gold/red. Lighting both
-   plates (and the idle sibling) made red mean OFF and SELECTED at once. */
-#pmsettings-inner .opt-btn:not(.active) [data-fold="on"],
-#pmsettings-inner .opt-btn:not(.active) [data-fold="off"] {
-  color: inherit;
-}
+#pmsettings-inner details > summary [data-fold] { white-space: nowrap; }
 #pmsettings-inner details > summary [data-fold="k"] {
   color: var(--steel);
   font-style: italic;
@@ -1612,16 +1689,6 @@ button:has(> [data-fold]) {
   font-style: italic;
   font-weight: 700;
 }
-#pmsettings-inner details > summary [data-fold="auto"] {
-  color: var(--faster);
-  font-style: italic;
-  font-weight: 700;
-}
-#pmsettings-inner details > summary [data-fold="manual"] {
-  color: var(--manual);
-  font-style: italic;
-  font-weight: 700;
-}
 #pmsettings-inner details > summary [data-fold="sep"] {
   color: color-mix(in oklab, var(--steel) 55%, transparent);
   font-weight: 400;
@@ -1630,24 +1697,24 @@ button:has(> [data-fold]) {
   margin-top: calc(var(--gap) * 0.5);
   padding-top: calc(var(--gap) / 3);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"],
-#pmsettings-inner[data-density="compact"] #pm-display-adv [role="group"] {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv-body,
+#pmsettings-inner[data-density="compact"] #pm-display-adv-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"] > button,
-#pmsettings-inner[data-density="compact"] #pm-display-adv [role="group"] > button {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv-body > button,
+#pmsettings-inner[data-density="compact"] #pm-display-adv-body > button {
   width: auto;
 }
 /* Capture / diag sit under RESET | THREE PATH as secondary rows, not
    a third pair of equally loud plates. They always span — when
    SCREENSHOTS is absent (GLX-only tree) SAVE must not sit in the
    empty THREE PATH cell beside RESET. */
-#pmsettings-inner #pm-display-adv [role="group"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status) {
+#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status, .set-row, .adv-help) {
   grid-column: 1 / -1;
 }
-#pmsettings-inner #pm-display-adv [role="group"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag) {
+#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag) {
   background: transparent;
   border: none;
   border-bottom: 1px solid color-mix(in oklab, var(--steel) 22%, transparent);
@@ -1657,7 +1724,7 @@ button:has(> [data-fold]) {
   font-weight: 600;
 }
 @media (hover: hover) {
-  #pmsettings-inner #pm-display-adv [role="group"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag):hover {
+  #pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag):hover {
     background: color-mix(in oklab, var(--steel) 12%, transparent);
     color: var(--text);
     box-shadow: none;
@@ -1691,11 +1758,10 @@ button:has(> [data-fold]) {
     line-height: 1.15;
   }
 }
-#advanced-inner .preset-btn,
-#advanced-inner .opt-btn {
+#pmsettings-inner .pm-group :is(.preset-btn, .opt-btn) {
   font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
 }
-#advanced-inner .tune-label {
+#pmsettings-inner .pm-group .tune-label {
   font-size: clamp(var(--fs-micro), calc(1.7 * var(--vwz)), var(--fs-3));
 }
 

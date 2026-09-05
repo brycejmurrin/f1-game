@@ -24,9 +24,14 @@ import { loadParts } from "../../tools/car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-// Every optional livery colour the editor exposes (js/game.js CZ_LIV_FIELDS).
+// Every optional livery colour the editor exposes (js/game.js CZ_LIV_FIELDS)...
 const OPTIONAL = ["stripe", "noseStripe", "accent", "nose", "pod", "wing",
                   "fin", "finArt", "logo", "logo2", "logo3", "halo"];
+// ...plus the one non-colour field that shapes the body. Two values so the
+// "value change never moves a vertex" premise can be tested for it as well —
+// which it deliberately FAILS: a different outline IS a different hull, and
+// the field earns its place in SP_HULL_GEOM_FIELDS by presence, like the strips.
+const ENUM_GEOM = { finShape: ["swept", "stub"] };
 
 function declaredGeomFields() {
   const src = readFileSync(path.join(ROOT, "js/game.js"), "utf8");
@@ -47,6 +52,8 @@ const build = (liv) => M.Car3D.build(liv.c1, liv.c2, {
 const samePos = (a, b) =>
   a.pos.length === b.pos.length && a.pos.every((v, i) => v === b.pos[i]);
 const withField = (k, v) => Object.assign({}, BASE, { [k]: v });
+// A field's "on" value: a colour for the paint slots, the first enum for finShape.
+const onValue = (k) => ENUM_GEOM[k] ? ENUM_GEOM[k][0] : [0.3, 0.4, 0.5];
 
 test("a HUE change never moves a vertex — only presence can", () => {
   const base = build(BASE);
@@ -62,7 +69,8 @@ test("a HUE change never moves a vertex — only presence can", () => {
 
 test("SP_HULL_GEOM_FIELDS names exactly the fields whose PRESENCE moves a vertex", () => {
   const base = build(BASE);
-  const measured = OPTIONAL.filter((k) => !samePos(base, build(withField(k, [0.3, 0.4, 0.5]))));
+  const fields = OPTIONAL.concat(Object.keys(ENUM_GEOM));
+  const measured = fields.filter((k) => !samePos(base, build(withField(k, onValue(k)))));
   const declared = declaredGeomFields();
   assert.deepEqual(measured.slice().sort(), declared.slice().sort(),
     `js/game.js SP_HULL_GEOM_FIELDS is [${declared}] but Car3D.build moves geometry for ` +

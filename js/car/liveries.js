@@ -22,6 +22,19 @@
      the motif strokes of the painted tail. When absent it is chosen automatically
      to separate from the fin's own paint (the fin is one flat colour, so an art
      colour equal to it is invisible), which is what every livery got before.
+   finStyle? optional TAIL STYLE — which motif the tail graphic draws, on the
+     fin AND the engine-cover wash: "team" (absent; the per-team motif in
+     LiveryTex.TAIL_STYLE), "diag" | "sweep" | "chevron" | "streak" | "check"
+     to borrow another, or "none" for plain paint.
+   finBadge? optional FIN BADGE — what the shark fin carries: "logo" (absent;
+     the team crest), "number" (the race number, the real-F1 layout) or "none".
+   spineLogo? optional SPINE LOGO — "logo" (absent) draws the crest on the
+     engine-cover spine as well; "none" leaves the spine to the tail wash, so
+     the mark reads once from a chase camera instead of twice.
+   finShape? optional FIN SHAPE — the blade's outline: "standard" (absent),
+     "swept" (raked leading edge), "stub" (short rear blade) or "none" (no fin;
+     the fin's graphic and badge go with it). Geometry, not paint — the one
+     livery field besides the strips that moves a vertex (Car3D.FIN_SHAPES).
    halo?:[r,g,b] optional cockpit-HALO hoop tint (defaults to brushed titanium).
      All four are additive and fully optional — a livery without them renders
      exactly as before.
@@ -408,7 +421,7 @@ const Liveries = (function () {
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
     const ex = team.livery;
-    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors"]) if (ex[k]) def[k] = ex[k];
+    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape"]) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 

@@ -543,7 +543,8 @@ function buildLiveryOptions(container, team) {
     row.onclick = () => {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
                      noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "", logo2: "",
-                     logo3: "", halo: "", finish: "gloss", numFont: "default", sponsors: "default" };
+                     logo3: "", halo: "", finish: "gloss", numFont: "default", sponsors: "default",
+                     finStyle: "team", finBadge: "logo", spineLogo: "logo", finShape: "standard" };
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -594,6 +595,8 @@ function buildLiveryOptions(container, team) {
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
           logo3: liv.logo3 ? arrToHex(liv.logo3) : "",
           finish: liv.finish || "gloss", numFont: liv.numFont || "default", sponsors: liv.sponsors || "default",
+          finStyle: liv.finStyle || "team", finBadge: liv.finBadge || "logo",
+          spineLogo: liv.spineLogo || "logo", finShape: liv.finShape || "standard",
         };
         csLivEditId = liv.id;
         csLivCreating = true;
@@ -791,6 +794,13 @@ function buildLiveryCreator(container, team) {
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
   pillRow("SPONSORS", "sponsors", LT && LT.SPONSOR_PACK_IDS || ["default"], "default");
+  // The tail DESIGN: what the fin is shaped like, what is painted on it, what it
+  // carries, and whether the crest also repeats on the spine. Four single-choice
+  // fields, so four pill rows — the same node shape as FINISH above.
+  pillRow("FIN SHAPE", "finShape", Car3D.FIN_SHAPE_IDS || ["standard"], "standard");
+  pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team");
+  pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo");
+  pillRow("SPINE LOGO", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
 
   const nameRow = document.createElement("label"); nameRow.className = "cs-liv-ed-row";
   const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
@@ -827,6 +837,10 @@ function buildLiveryCreator(container, team) {
     if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
     if (d.numFont && d.numFont !== "default") liv.numFont = d.numFont;
     if (d.sponsors && d.sponsors !== "default") liv.sponsors = d.sponsors;
+    if (d.finStyle && d.finStyle !== "team") liv.finStyle = d.finStyle;
+    if (d.finBadge && d.finBadge !== "logo") liv.finBadge = d.finBadge;
+    if (d.spineLogo && d.spineLogo !== "logo") liv.spineLogo = d.spineLogo;
+    if (d.finShape && d.finShape !== "standard") liv.finShape = d.finShape;
     const existing = getCustomLiveries(team.id);
     // Edit-in-place replaces the entry that carried the OLD id; create appends.
     setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
@@ -860,7 +874,11 @@ function livePreviewDraft(team, d) {
     noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null,
     finish: d.finish && d.finish !== "gloss" ? d.finish : null,
     numFont: d.numFont && d.numFont !== "default" ? d.numFont : null,
-    sponsors: d.sponsors && d.sponsors !== "default" ? d.sponsors : null } };
+    sponsors: d.sponsors && d.sponsors !== "default" ? d.sponsors : null,
+    finStyle: d.finStyle && d.finStyle !== "team" ? d.finStyle : null,
+    finBadge: d.finBadge && d.finBadge !== "logo" ? d.finBadge : null,
+    spineLogo: d.spineLogo && d.spineLogo !== "logo" ? d.spineLogo : null,
+    finShape: d.finShape && d.finShape !== "standard" ? d.finShape : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
