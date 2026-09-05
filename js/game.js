@@ -97,7 +97,7 @@ function loadBackendScripts(files, edges) {
     // missing global IS the fallback), so a reload throws away a working
     // degradation path, and it is unbounded because the one-shot guard is
     // cleared by the `load` event that fired long before this fetch started.
-    el.dataset.apexLazy = "1";
+    if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
     el.onload = el.onerror = () => resolve();
     document.head.appendChild(el);
   });

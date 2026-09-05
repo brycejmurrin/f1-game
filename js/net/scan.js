@@ -27,7 +27,10 @@ const NetScan = (function () {
       // shell tag, so index.html's broken-install repair must not sweep every
       // cache and reload the page over it. The rejection path below already
       // reports "could not load the QR reader" — a reload made that dead code.
-      s.dataset.apexLazy = "1";
+      // GUARDED: a stubbed script element (the lifecycle suite's fake DOM) has
+      // no dataset, and a marker must never be the thing that stops onload from
+      // being wired — that would break the load path it exists to protect.
+      if (s.dataset) s.dataset.apexLazy = "1";
       s.onload = () => {
         if (typeof jsQR !== "undefined") { resolve(true); return; }
         // A syntactically valid response can still fail to register the global
