@@ -715,6 +715,12 @@ body { --compact-at: 600px; --wide-at: 620px; }
     overflow-y: auto; overscroll-behavior-y: contain;
     padding-right: calc(var(--gap) * 0.4);
   }
+  /* The door spans its column so that ArrowDown from a flag tile above the
+     numbers lands on it (MenuNav scores a candidate whose box spans your
+     position as directly below); tiles above the still land on the map
+     button. Without this the only control under the strip's right half was
+     NEXT in the foot. */
+  #sel-inner:not([data-shape="tall"]) #sel-detail-chip { align-self: stretch; }
 }
 /* 3. LOWER THIRD. (1,2,1) beats the beside rules' (1,1,1) at any width. */
 #sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-preview {
