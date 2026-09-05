@@ -128,15 +128,15 @@ const Car3D = (function () {
     // Paint is reflective, not a light source. Some team accent palettes are
     // intentionally HDR for LEDs; cap them when those colors dress bodywork so
     // wings and panels do not bloom like neon tubes.
-    const rgb = material === SURFACES.paint
-      ? [Math.min(col[0], 1), Math.min(col[1], 1), Math.min(col[2], 1)]
-      : col;
-    for (const p of [a, b, c]) {
-      out.pos.push(p[0], p[1], p[2]);
-      out.nrm.push(nx, ny, nz);
-      out.col.push(rgb[0], rgb[1], rgb[2]);
-      out.mat.push(material);
-    }
+    const paint = material === SURFACES.paint;
+    const r = paint ? Math.min(col[0], 1) : col[0], g = paint ? Math.min(col[1], 1) : col[1],
+          bl = paint ? Math.min(col[2], 1) : col[2];
+    // Unrolled, no per-triangle arrays: a third of Car3D.build's time (33% self,
+    // ~19k verts, paid on every garage part pick). Same numbers, same order.
+    out.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+    out.nrm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+    out.col.push(r, g, bl, r, g, bl, r, g, bl);
+    out.mat.push(material, material, material);
     out.idx.push(base, base + 1, base + 2);
   }
 

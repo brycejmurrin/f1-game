@@ -3863,3 +3863,77 @@ running. Second, this container cannot answer the question that was actually
 asked — a software rasterizer's queue drain is not a player's GPU. The real
 instrument for it is `bench.html` on the reporting device and the
 `gpu-census.yml` dispatch on `macos-latest`.
+
+## 2y. The garage part pick: one frame of everything (2026-09-05)
+
+Reported: "selecting a part (or any change) in the GARAGE makes the screen
+lag, as if the turntable stops". Measured in `page.evaluate` with
+`performance.now()` (`scratch/garage-measure.mjs`; headless composites no
+rAF here, so each piece was called directly), McLaren, ENGINE tab, this box:
+
+| piece of the click, before | ms |
+|---|---|
+| option `onclick` → `saveTeamParts` → `buildSetup()` (sync DOM rebuild, 18 rows) | 9–10 |
+| `Car3D.build` (18 794 verts) | 15.8 |
+| `GarageScene.framingHull` over those verts | 14.4 |
+| `GarageScene.draw` with only `boardKey` changed (driver flip) | 12.0 |
+| `GarageScene.draw`, nothing changed | 0.12 |
+
+So a part pick was ~50 ms of main thread on a desktop core, all landing on the
+next rendered frame — three to five times that on a phone is the reported
+stall. Three causes, three fixes, none of them the DOM:
+
+1. **`rebuild()` had ONE cache key** that folded `boardKey(info)` (fitted parts,
+   stats, budget, seat) in with the team and its colours, so a brake-duct
+   choice rebuilt the shell, the LED strips, the floor, every prop AND
+   repainted the full 1024² dress atlas. Split: a geometry key (team, colours,
+   logo generation, driver numbers) and a dress key on top of it. A part pick
+   now repaints only the four information boards over their own opaque panels
+   on the kept canvas and re-uploads; geometry survives.
+2. **`framingHull` sorted all ~19k points.** Akl–Toussaint pre-filter with
+   EIGHT support directions (the axis-extreme quad is a diamond and a car is a
+   rectangle with a wheel at each corner — the quad kept 10.6k points, the
+   octagon keeps 3.6k). Same hull byte for byte on every team × aero level
+   (`scratch/hull-equiv.mjs`).
+3. **The car mesh was a single slot.** A garage session is A/B comparison, and
+   every return to an option already seen paid the build again. Six-slot LRU in
+   `GarageScene.previewMesh`, hulls kept in their own map so a colour-only bust
+   (which drops every mesh — paint is baked into vertex colours) does not
+   recompute the silhouette.
+
+After, same script, same box (two runs; the browser numbers here are noisy to
+±30% — the second run overlapped `test:tooling-fast`):
+
+| piece of the click, after | ms |
+|---|---|
+| `GarageScene.draw` with only `boardKey` changed (dress-only path) | **0.73–0.75** (was 12.0) |
+| `GarageScene.draw` with a colour changed (geometry + dress, as before) | 14–18 |
+| `framingHull`, browser / Node idle | 8–9 / **3.6** (was 14.4 / 9.7) |
+| `GarageScene.previewMesh` hit | **0** |
+| `Car3D.build`, Node idle, after the `addTri` unroll | 8.7 (was 9.9) |
+
+`addTri` was a third of `Car3D.build`'s self time on two array allocations per
+triangle (`[a, b, c]` and the clamped rgb); unrolled, the output is identical
+on every team × aero level (`scratch/build-equiv.mjs`, 33 builds, 0 diffs). What
+is left of a FIRST pick is the build itself and `createMesh`'s interleave of
+19k vertices — inherent to a procedural car; a second look at any option is
+now free, and the bay never rebuilds for one.
+
+The `buildSetup()` DOM rebuild (~10 ms here) was left alone: it is the click's
+own frame, not the render's, and it is a fifth of what the render frame paid.
+
+**Portrait had no camera controls, and the reason was stale.** css/carsetup.css
+hid `#cs-stack` under 700px "because the sheet is the whole screen and there is
+no car to aim at" — true before the portrait car band shipped, and still in
+the CSS after it. The gallery shot (`layout-audit --gallery --screens=garage`)
+and a live shot (`scratch/garage-shot.mjs portrait`) both show the car across
+the bottom 30%. Now landscape-only for the hide; in portrait the stack spans
+the band. The open panel is ~250 px and the band ~256 px, so the sheet yields
+to 42% (and drops its stat block — the same numbers are on the wall) while the
+panel is open, and `renderSetupPreview` centres the car in the gap ABOVE the
+panel (it reads `#cs-cam-panel`'s rect). Measured 393×852: sheet 348 px, car
+whole in the 219 px gap, panel over the floor. Known limit: on a 667 px-tall
+phone the sheet's 340 px content floor wins and the open panel covers most of
+the band; shut it and the car is back. Landscape has the older version of the
+same problem — at 844×390 the open panel (343×249) covers the whole car region —
+and was left alone here; it wants a compact panel, not a taller band.

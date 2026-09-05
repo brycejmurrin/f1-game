@@ -826,7 +826,13 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   const spotify = code("js/audio/spotify.js");
   assert.equal(decl(garage, "#cs-stack", "left"), "auto");
   assert.equal(decl(garage, "#cs-stack", "width"), "max-content");
-  assert.ok(!declares(garage, "#cs-stack", "left", /calc\(var\(--safe-l\)/));
+  // The base (landscape) rule only: portrait has no sheet edge to hug — the
+  // sheet is the full width — so there the stack spans the car band from the
+  // left safe edge, and that rule lives under @media (orientation: portrait).
+  const stackBase = rulesFor(garage, "#cs-stack").filter((r) => !r.context.some((c) => /@media|@container/.test(c)));
+  assert.ok(stackBase.length && !stackBase.some((r) => /calc\(var\(--safe-l\)/.test(r.decls.get("left") || "")));
+  assert.ok(rulesFor(garage, "#cs-stack", { context: /orientation: portrait/ }).some((r) => r.decls.has("left")),
+    "portrait places the camera stack over the car band");
   // A qualifying championship hides the GRID chips and carries ON in the
   // label; every other flow gets the rule chips (pace order first, quali second).
   assert.match(game, /qEl\.hidden\s*=\s*!!qForced/);
