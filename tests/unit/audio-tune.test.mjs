@@ -68,7 +68,7 @@ function sampleBuf(seconds, sr) {
 }
 
 const pendingTimers = [];
-function boot() {
+function boot(opts) {
   const held = [];
   const counts = {};
   live.clear();
@@ -87,6 +87,9 @@ function boot() {
     resume: () => Promise.resolve(), close() {},
   };
   const sb = {
+    // GLX is what decides `mobileTier`; the engine reads it lazily at
+    // startEngine. Absent by default (desktop); mobileEngine() supplies it.
+    GLX: opts && opts.mobile ? { mobileTier: true } : undefined,
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error,
     parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
@@ -647,4 +650,40 @@ test("the same holds on the oscillator fallback, which builds a bigger graph", a
   }
   assert.deepEqual(new Set(marks).size, 1,
     `fallback live node count grew across pause/resume: ${marks.join(" -> ")}`);
+});
+
+test("a phone gets a cheaper graph: no convolver, half the rival voices", async () => {
+  // Every other pool here is mobile-tiered; the 2026-09-04 audio was not, and a
+  // ~1.5 s stereo ConvolverNode fed by the engine plus four looping rival voices
+  // is the most expensive thing this file asks for. Reported as an iPhone that
+  // had been fine that morning crashing — CPU contention, so it left no OOM
+  // strike and no context-loss marker.
+  const { GameAudio: A, release, counts } = boot({ mobile: true });
+  A.init();
+  await release();
+  A.startEngine();
+  assert.equal(A.debug().usingSamples, true, "precondition: the sample core");
+  assert.equal(counts.convolver || 0, 0, "a phone built a ConvolverNode");
+  assert.equal(A.rivalState().length, 2, "a phone built more than two rival voices");
+  assert.equal(A.venue().level, 0, "venue() must report OFF rather than lie about a reverb that is not there");
+
+  // ...and the desktop budget is untouched.
+  const D = await sampleEngine();
+  assert.equal(D.rivalState().length, 4, "desktop lost a rival voice");
+  assert.ok(D.venue().level >= 0, "desktop still has a venue send");
+});
+
+test("two rival voices still give a LEFT and a RIGHT", async () => {
+  // Halving the pool must not cost the thing the pool is FOR: a car alongside
+  // has to land on the correct side, or the cue is worse than absent.
+  const { GameAudio: A, release } = boot({ mobile: true });
+  A.init(); await release(); A.startEngine();
+  A.setRivals([
+    { lat: -4, arc: 1, rev: 0.7, approach: 0 },   // hard left
+    { lat: 4, arc: 1, rev: 0.7, approach: 0 },    // hard right
+  ]);
+  const [l, r] = A.rivalState();
+  assert.ok(l.pan < -0.3, `left-hand car panned ${l.pan}`);
+  assert.ok(r.pan > 0.3, `right-hand car panned ${r.pan}`);
+  assert.ok(l.gain > 0 && r.gain > 0, "both alongside cars must be audible");
 });

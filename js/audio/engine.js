@@ -57,7 +57,29 @@ const GameAudio = (function () {
   let convolver = null, revSend = null, revReturn = null;
   const _irCache = new Map();     // keyed by venue name; ctx-bound, cleared on rebuild
 
-  const RIVAL_VOICES = 4;
+  /* EVERY other pool in this tree is mobile-tiered — debris 48/16, marbles
+   * 16/6, furniture 24/12, the livery atlas 1024/512/256, even MUSIC_CACHE 2/1.
+   * The audio added on 2026-09-04 was the one subsystem that handed a phone
+   * exactly what it handed a desktop, and it is not a small hand: a ~1.5 s
+   * stereo ConvolverNode is among the most expensive nodes WebAudio has, and it
+   * was fed the engine PLUS four rival voices, each of which is a looping
+   * BufferSource + biquad + gain + StereoPanner running whether or not a rival
+   * is near enough to hear. Reported as the game crashing on an iPhone that had
+   * been fine that morning; the audio thread starving a phone already at 27.6
+   * fps is CPU contention, which is why it left no OOM strike and no
+   * context-loss marker to find.
+   *
+   * READ LAZILY, not at module eval: glx.js is tagged ahead of this file so GLX
+   * exists, but `mobileTier` is decided at ITS init, which has not run yet.
+   * startEngine() is late enough to get the real answer. */
+  function lowPower() {
+    try { return typeof GLX !== "undefined" && !!GLX.mobileTier; } catch (_) { return false; }
+  }
+  // Two voices still give a LEFT and a RIGHT — the pan is what carries "someone
+  // is alongside", and the nearest two are the ones a driver reacts to. Four
+  // remains the desktop budget.
+  const RIVAL_VOICES_DESKTOP = 4, RIVAL_VOICES_MOBILE = 2;
+  let RIVAL_VOICES = RIVAL_VOICES_DESKTOP;
   // Audible radius. 70 m was chosen to bound the work, but the inverse-distance
   // law below is already inaudible well before its own edge, so the only thing
   // 70 bought was a POP: a car materialising mid-straight as it crossed the line.
@@ -670,7 +692,13 @@ const GameAudio = (function () {
     // REVERB SEND. Fed from the engine output and the rival voices, returned to
     // sfxBus. Deliberately NOT fed FROM sfxBus: that is the same node the return
     // lands on, and the cycle would howl.
-    if (ctx.createConvolver) {
+    //
+    // NOT ON A PHONE. Convolution is the single most expensive thing this file
+    // asks for, it runs every frame of every race, and a circuit's acoustics are
+    // the most disposable thing in the mix — you lose a sense of the space and
+    // keep the car. The SPACE switch still reads and reports OFF (venue() sees a
+    // null return), so nothing lies about what is running.
+    if (ctx.createConvolver && !lowPower()) {
       convolver = ctx.createConvolver();
       revSend = ctx.createGain(); revSend.gain.value = 1;
       revReturn = ctx.createGain(); revReturn.gain.value = 0;
@@ -693,6 +721,7 @@ const GameAudio = (function () {
     // carries its own start/stop/setPitch and setRivals never asks which core
     // it is talking to. The closures are built once here, not per frame.
     rivalPeak = usingSamples ? 0.28 : 0.055;
+    RIVAL_VOICES = lowPower() ? RIVAL_VOICES_MOBILE : RIVAL_VOICES_DESKTOP;
     rivalVoices = [];
     if (ctx.createStereoPanner) {
       for (let i = 0; i < RIVAL_VOICES; i++) {
