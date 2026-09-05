@@ -478,9 +478,33 @@
         <section id="pm-panel-controls" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">DRIVING CONTROLS</h3>
-          <button id="pm-steer">STEER: TILT</button>
+          <!-- Every choice on this page is a labelled chip row (js/ui/opt-group.js):
+               the chosen chip carries the one selected ring, every option is
+               visible, one tap picks. These were `STEER: TILT` / `GEARS: AUTO`
+               buttons that cycled on tap with a coloured value word — a second
+               grammar for the idea STEERING and MUSIC already spoke as chips.
+               The group keeps the old id (#pm-steer, #pm-gears, #pm-aero); the
+               chips are `<id>-<value>`. -->
+          <div class="adv-item" id="pm-steer-item">
+            <span class="tune-label" id="pm-steer-label">STEERING INPUT</span>
+            <div id="pm-steer" class="opt-row balanced-row" role="group" aria-labelledby="pm-steer-label">
+              <button id="pm-steer-tilt" class="opt-btn" type="button" data-v="tilt">TILT</button>
+              <button id="pm-steer-buttons" class="opt-btn" type="button" data-v="buttons">BUTTONS</button>
+              <button id="pm-steer-touch" class="opt-btn" type="button" data-v="touch">TOUCH</button>
+            </div>
+            <!-- Always present, text set by game.js paintSteer(): a note that
+                 appeared only for a denied gyro would reflow the page mid-tap. -->
+            <p id="pm-steer-note" class="adv-help">TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.</p>
+          </div>
           <button id="pm-calib">RECALIBRATE TILT</button>
-          <button id="pm-gears">GEARS: AUTO</button>
+          <div class="adv-item">
+            <span class="tune-label" id="pm-gears-label">GEARS</span>
+            <div id="pm-gears" class="opt-row balanced-row" role="group" aria-labelledby="pm-gears-label">
+              <button id="pm-gears-auto" class="opt-btn" type="button" data-v="auto">AUTO</button>
+              <button id="pm-gears-manual" class="opt-btn" type="button" data-v="manual">MANUAL</button>
+            </div>
+            <p class="adv-help">MANUAL needs free thumbs: tilt steering, a keyboard or a pad.</p>
+          </div>
           <!-- ACTIVE AERO — whether the 2026 moveable wing switches itself inside
                an activation zone. It sits with GEARS because it is the same kind
                of choice: how much of the car you operate yourself. It was in RACE
@@ -491,7 +515,14 @@
                MANUAL by default: the button IS the mechanic. AUTO exists because
                inside a zone X-mode is never the wrong choice, so a player who
                forgets it is simply slower than the AI, which takes every zone. -->
-          <button id="pm-aero">ACTIVE AERO: MANUAL</button>
+          <div class="adv-item">
+            <span class="tune-label" id="pm-aero-label">ACTIVE AERO</span>
+            <div id="pm-aero" class="opt-row balanced-row" role="group" aria-labelledby="pm-aero-label">
+              <button id="pm-aero-manual" class="opt-btn" type="button" data-v="manual">MANUAL</button>
+              <button id="pm-aero-auto" class="opt-btn" type="button" data-v="auto">AUTO</button>
+            </div>
+            <p class="adv-help">MANUAL: the AERO button is yours in every zone. AUTO: the wing opens itself, like the AI.</p>
+          </div>
         </section>
         <section id="pm-panel-display" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -509,11 +540,56 @@
           <details id="pm-hud-details" class="pm-hud-sub">
             <summary class="adv-more-btn" id="pm-hud-details-sum">HUD · ON · STANDARD</summary>
             <div role="group" aria-label="HUD layout">
-              <button id="pm-hidehud" title="Cinematic off. Race only. The eye icon brings the HUD back.">HUD: ON</button>
-              <button id="pm-hudprofile" title="How the remaining chrome is arranged. MINIMAL tucks clusters. BROADCAST is the timing tower.">STYLE: STANDARD</button>
-              <button id="pm-hudmetrics" title="Which clusters show. AUTO is the full set; fitHud scales. FULL=all. TIMING / DRIVER / COMPACT stay named.">LAYOUT: AUTO</button>
-              <button id="pm-hudmap">MAP: ON</button>
-              <button id="pm-hudgaps">GAPS: ON</button>
+              <!-- Chip rows (js/ui/opt-group.js), painted by game.js
+                   paintHudDetailsSummary(). Were one-button cycle rows (HUD,
+                   STYLE, LAYOUT, MAP, GAPS) whose value word was coloured; the
+                   colour words now live only on the closed summary above, a
+                   readout. -->
+              <div class="adv-item">
+                <span class="tune-label" id="pm-hidehud-label">HUD</span>
+                <div id="pm-hidehud" class="opt-row balanced-row" role="group" aria-labelledby="pm-hidehud-label">
+                  <button id="pm-hidehud-on" class="opt-btn" type="button" data-v="on">ON</button>
+                  <button id="pm-hidehud-off" class="opt-btn" type="button" data-v="off">OFF</button>
+                </div>
+                <p class="adv-help">Race only. OFF is the clean cinematic screen; the eye icon brings the HUD back.</p>
+              </div>
+              <div class="adv-item">
+                <span class="tune-label" id="pm-hudprofile-label">STYLE</span>
+                <div id="pm-hudprofile" class="opt-row balanced-row" role="group" aria-labelledby="pm-hudprofile-label">
+                  <button id="pm-hudprofile-standard" class="opt-btn" type="button" data-v="standard">STANDARD</button>
+                  <button id="pm-hudprofile-minimal" class="opt-btn" type="button" data-v="minimal">MINIMAL</button>
+                  <button id="pm-hudprofile-broadcast" class="opt-btn" type="button" data-v="broadcast">BROADCAST</button>
+                </div>
+                <p class="adv-help">How the chrome is arranged. MINIMAL tucks the clusters away; BROADCAST is the TV timing tower.</p>
+              </div>
+              <div class="adv-item">
+                <span class="tune-label" id="pm-hudmetrics-label">LAYOUT</span>
+                <div id="pm-hudmetrics" class="opt-row balanced-row" role="group" aria-labelledby="pm-hudmetrics-label">
+                  <button id="pm-hudmetrics-auto" class="opt-btn" type="button" data-v="auto">AUTO</button>
+                  <button id="pm-hudmetrics-full" class="opt-btn" type="button" data-v="full">FULL</button>
+                  <button id="pm-hudmetrics-timing" class="opt-btn" type="button" data-v="timing">TIMING</button>
+                  <button id="pm-hudmetrics-driver" class="opt-btn" type="button" data-v="driver">DRIVER</button>
+                  <button id="pm-hudmetrics-compact" class="opt-btn" type="button" data-v="compact">COMPACT</button>
+                </div>
+                <p id="pm-hudmetrics-note" class="adv-help">AUTO is the full set, scaled to fit. TIMING keeps sectors and gaps, DRIVER the car-state chips, COMPACT neither.</p>
+              </div>
+              <div class="adv-item">
+                <span class="tune-label" id="pm-hudmap-label">MAP</span>
+                <div id="pm-hudmap" class="opt-row balanced-row" role="group" aria-labelledby="pm-hudmap-label">
+                  <button id="pm-hudmap-auto" class="opt-btn" type="button" data-v="auto">AUTO</button>
+                  <button id="pm-hudmap-on" class="opt-btn" type="button" data-v="on">ON</button>
+                  <button id="pm-hudmap-off" class="opt-btn" type="button" data-v="off">OFF</button>
+                </div>
+              </div>
+              <div class="adv-item">
+                <span class="tune-label" id="pm-hudgaps-label">GAPS</span>
+                <div id="pm-hudgaps" class="opt-row balanced-row" role="group" aria-labelledby="pm-hudgaps-label">
+                  <button id="pm-hudgaps-auto" class="opt-btn" type="button" data-v="auto">AUTO</button>
+                  <button id="pm-hudgaps-on" class="opt-btn" type="button" data-v="on">ON</button>
+                  <button id="pm-hudgaps-off" class="opt-btn" type="button" data-v="off">OFF</button>
+                </div>
+                <p class="adv-help">AUTO hides the map and the gaps only where the HUD style or the screen leaves no room.</p>
+              </div>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
                 <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
               <!-- BUTTON SIZE is its own knob because the dock and the readouts
@@ -537,7 +613,15 @@
           <details id="pm-display-adv" class="pm-renderer-sub">
             <summary class="adv-more-btn" id="pm-renderer-details-sum">RENDERER · WEBGL2</summary>
             <div id="pm-display-adv-body" role="group" aria-label="Renderer">
-              <button id="pm-res">RESOLUTION: AUTO</button>
+              <div class="adv-item">
+                <span class="tune-label" id="pm-res-label">RESOLUTION</span>
+                <div id="pm-res" class="opt-row balanced-row" role="group" aria-labelledby="pm-res-label">
+                  <button id="pm-res-auto" class="opt-btn" type="button" data-v="auto">AUTO</button>
+                  <button id="pm-res-low" class="opt-btn" type="button" data-v="low">LOW</button>
+                  <button id="pm-res-med" class="opt-btn" type="button" data-v="med">MED</button>
+                  <button id="pm-res-high" class="opt-btn" type="button" data-v="high">HIGH</button>
+                </div>
+              </div>
               <button id="pm-renderer">RENDERER: WEBGL2</button>
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
             </div>
@@ -683,9 +767,12 @@
            ON/OFF live in the body so a summary tap only opens the fold. -->
       <details id="as-music-details" class="as-sec">
         <summary class="adv-more-btn" id="as-music-sum">MUSIC · ON · ALL</summary>
-        <div class="opt-row as-toggle" role="group" aria-label="Music on or off">
-          <button id="as-music-on" class="opt-btn" type="button">ON</button>
-          <button id="as-music-off" class="opt-btn" type="button">OFF</button>
+        <div class="adv-item">
+          <span class="tune-label" id="as-music-label">MUSIC</span>
+          <div class="opt-row balanced-row" role="group" aria-labelledby="as-music-label">
+            <button id="as-music-on" class="opt-btn" type="button">ON</button>
+            <button id="as-music-off" class="opt-btn" type="button">OFF</button>
+          </div>
         </div>
         <label class="tune-row"><span class="tune-label">VOLUME <b id="as-mvol-v">5</b></span>
           <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
@@ -720,9 +807,12 @@
 
       <details id="as-sound-details" class="as-sec">
         <summary class="adv-more-btn" id="as-sound-sum">SOUND · ON</summary>
-        <div class="opt-row as-toggle" role="group" aria-label="Sound effects on or off">
-          <button id="as-sound-on" class="opt-btn" type="button">ON</button>
-          <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
+        <div class="adv-item">
+          <span class="tune-label" id="as-sound-label">SOUND EFFECTS</span>
+          <div class="opt-row balanced-row" role="group" aria-labelledby="as-sound-label">
+            <button id="as-sound-on" class="opt-btn" type="button">ON</button>
+            <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
+          </div>
         </div>
         <label class="tune-row"><span class="tune-label">VOLUME <b id="as-svol-v">10</b></span>
           <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
@@ -1710,9 +1800,22 @@
         <button id="sp-toggle" class="opt-btn" type="button" aria-label="Play or pause">&#9654;</button>
         <button id="sp-fwd" class="opt-btn" type="button" aria-label="Next track">&#9197;</button>
       </div>
-      <div class="opt-row">
-        <button id="sp-shuffle" class="opt-btn" type="button">SHUFFLE</button>
-        <button id="sp-repeat" class="opt-btn" type="button">REPEAT: OFF</button>
+      <!-- Two labelled chip rows (js/ui/opt-group.js). Was a ringed SHUFFLE
+           toggle beside a `REPEAT: OFF` word button — two grammars in one row. -->
+      <div class="adv-item">
+        <span class="tune-label" id="sp-shuffle-label">SHUFFLE</span>
+        <div id="sp-shuffle" class="opt-row" role="group" aria-labelledby="sp-shuffle-label">
+          <button id="sp-shuffle-off" class="opt-btn" type="button" data-v="off">OFF</button>
+          <button id="sp-shuffle-on" class="opt-btn" type="button" data-v="on">ON</button>
+        </div>
+      </div>
+      <div class="adv-item">
+        <span class="tune-label" id="sp-repeat-label">REPEAT</span>
+        <div id="sp-repeat" class="opt-row" role="group" aria-labelledby="sp-repeat-label">
+          <button id="sp-repeat-off" class="opt-btn" type="button" data-v="off">OFF</button>
+          <button id="sp-repeat-context" class="opt-btn" type="button" data-v="context">ALL</button>
+          <button id="sp-repeat-track" class="opt-btn" type="button" data-v="track">ONE</button>
+        </div>
       </div>
       <label class="tune-row"><span class="tune-label">DEVICE VOLUME <b id="sp-vol-v">&mdash;</b></span>
         <input id="sp-vol" type="range" min="0" max="100" step="5" value="50" aria-label="Spotify device volume"></label>
@@ -2007,6 +2110,7 @@
 <script defer crossorigin="anonymous" src="js/ui/modal.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/menu-nav.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/aria-state.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/opt-group.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-tabs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/aero-zones.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>

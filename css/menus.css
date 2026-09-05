@@ -929,7 +929,6 @@ body { --compact-at: 600px; --wide-at: 620px; }
 .sel-chip.active {
   border-color: var(--red);
   background: var(--plate-on);
-  box-shadow: var(--plate-on-glow);
   color: var(--text);
 }
 .sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
@@ -1420,7 +1419,7 @@ h3.sel-label {
   .track-row:hover { background: var(--plate); }
 }
 .track-row:active { background: var(--plate-hover); }
-.track-row.active { background: color-mix(in oklab, var(--red) 16%, transparent); border-left: 3px solid var(--red); padding-left: 9px; }
+.track-row.active { background: var(--plate-on); border-left: 3px solid var(--red); padding-left: 9px; }
 .track-row-name {
   flex: 1;
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
@@ -1449,7 +1448,6 @@ h3.sel-label {
 /* ---------- race settings ---------- */
 .rs-row { margin-bottom: var(--gap); }
 #race-settings .sel-chip { font-size: clamp(var(--fs-micro), calc(1.6 * var(--vwz)), var(--fs-3)); padding: 8px 14px; }
-#race-settings .sel-chip.active { background: var(--plate-on); box-shadow: var(--plate-on-glow); color: var(--text); font-weight: 700; }
 /* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
 @container sheet (min-width: 440px) {
   #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }

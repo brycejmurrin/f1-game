@@ -10,7 +10,7 @@
 
 /* ---------- DESKTOP / MOUSE (pointer: fine) ---------- */
 /* Hide phone-only controls that make no sense with a keyboard */
-body.desktop #pm-steer,
+body.desktop #pm-steer-item,
 body.desktop #pm-calib { display: none !important; }
 
 /* ---------- LARGE SCREENS (iPad, desktop) ---------- */

@@ -747,9 +747,12 @@ test("gamepad menu nav seeds focus on open and uses a larger stick deadzone than
   assert.equal(wrap("STYLE: STANDARD"), null, "named styles stay unpainted");
   assert.equal(wrap("LAYOUT: AUTO"), null, "AUTO on a named cycle is not agency");
   assert.equal(wrap("RESOLUTION: AUTO"), null);
-  assert.equal(wrap("GEARS: AUTO"), "GEARS:\u00a0<span data-fold=\"auto\">AUTO</span>");
-  assert.equal(wrap("GEARS: MANUAL"), "GEARS:\u00a0<span data-fold=\"manual\">MANUAL</span>");
-  assert.equal(wrap("ACTIVE AERO: MANUAL"), "ACTIVE AERO:\u00a0<span data-fold=\"manual\">MANUAL</span>");
+  // GEARS / ACTIVE AERO are chip rows now (js/ui/opt-group.js): no agency word
+  // to paint, and a chip is never painted — its ring is the mark.
+  assert.equal(wrap("GEARS: AUTO"), null, "no AUTO/MANUAL agency colour any more");
+  assert.equal(wrap("ACTIVE AERO: MANUAL"), null);
+  assert.match(code("js/ui/aria-state.js"), /classList\.contains\("opt-btn"\)\) continue/,
+    "paintOnOff skips .opt-btn chips — colour words are readouts, not controls");
   assert.equal(wrap("STEER: TILT"), null);
   assert.equal(wrap("♪ SOUND ON"), "♪ SOUND <span data-fold=\"on\">ON</span>");
   assert.equal(wrap("REPEAT: OFF"), "REPEAT:\u00a0<span data-fold=\"off\">OFF</span>");
@@ -963,9 +966,9 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "the button pad previews BUTTON SIZE relative to HUD SIZE");
   assert.match(read("index.html"), /id="pm-hudscale"[\s\S]*id="pm-btnscale"/,
     "BUTTON SIZE follows HUD SIZE in the HUD fold");
-  assert.equal(decl(css("css/components.css"), /#pm-metrics-details \[role="group"\]/, "display"), "flex",
+  assert.equal(decl(css("css/components.css"), /#pm-metrics-details > \[role="group"\]/, "display"), "flex",
     "METRICS body is a quiet column — not a 2-up plate grid");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details \[role="group"\] > button/, "background"), "transparent",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner #pm-metrics-details > \[role="group"\] > button/, "background"), "transparent",
     "METRICS inner rows drop plate chrome");
   assert.equal(decl(css("css/components.css"), "#pm-panel-display .tune-label b", "color"), "var(--text)",
     "DISPLAY slider values are text, not tuner red");
@@ -981,13 +984,15 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "GRAPHICS packs beside RESOLUTION after the spanning renderer row");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv > summary", "height"), "var(--chip-h)",
     "RENDERER summary matches the HUD / METRICS chip row");
-  assert.equal(decl(css("css/components.css"), '#pm-display-adv [role="group"]', "display"), "flex",
+  // The body is addressed by id (#pm-display-adv-body): RESOLUTION is a chip
+  // row inside it, its own role=group, and a descendant match would grid it.
+  assert.equal(decl(css("css/components.css"), "#pm-display-adv-body", "display"), "flex",
     "ADVANCED body defaults to a column; wide/compact override to a 2-up grid");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv \[role="group"\]/, "display"), "grid",
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner\[data-density="compact"\] #pm-display-adv-body/, "display"), "grid",
     "compact ADVANCED packs 2-up via SheetShape density, not a height media");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv [role=\"group\"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag)", "background"), "transparent",
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag)", "background"), "transparent",
     "SCREENSHOTS / SAVE / COPY DIAG are secondary rows, not peer plates of RESET");
-  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv [role=\"group\"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status)", "grid-column"), "1 / -1",
+  assert.equal(decl(css("css/components.css"), "#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status, .adv-item)", "grid-column"), "1 / -1",
     "capture rows always span so SAVE cannot sit in the empty THREE PATH cell");
   assert.equal(decl(css("css/components.css"), "#pm-panel-controls > .pm-group-h:first-child, #pm-panel-display > .pm-group-h:first-child, #advanced > .pm-group-h:first-child, #audioset > .pm-group-h:first-child", "display"), "none",
     "sheet title already names CONTROLS / DISPLAY / STEERING / MUSIC; do not reprint the heading");
@@ -1060,20 +1065,28 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "any menu ON word is gold — enabled, not merely selected");
   assert.equal(decl(css("css/components.css"), 'button [data-fold="off"], summary [data-fold="off"]', "color"), "var(--red)",
     "any menu OFF word is red");
-  assert.equal(decl(css("css/components.css"), /#pmsettings-inner \.opt-btn:not\(\.active\) \[data-fold="on"\]/, "color"), "inherit",
-    "unselected ON/OFF chips stay steel — both words shouting hid which one is live");
-  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner \.as-toggle \.opt-btn\.active/, "background"), "transparent",
-    "MUSIC ON/OFF is not a lighted plate — the selected word is the mark");
-  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner :is\(\.opt-btn, \.preset-btn\)\.active/, "box-shadow"), "none",
-    "settings named picks keep a ring, not the glow");
+  // THE ONE SELECTED LOOK (css/tokens.css): a chosen chip is plate-on + red
+  // ring everywhere, so the Settings-only exceptions are gone — no word-only
+  // MUSIC ON/OFF pair, no glow to switch off, no painted word inside a chip.
+  assert.doesNotMatch(read("index.html"), /as-toggle/, "MUSIC / SOUND ON|OFF are plain chip rows");
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner \.as-toggle \.opt-btn\.active/, "background"), null);
+  assert.equal(decl(css("css/tuner.css"), /#pmsettings-inner :is\(\.opt-btn, \.preset-btn\)\.active/, "box-shadow"), null);
+  assert.equal(decl(css("css/components.css"), /#pmsettings-inner \.opt-btn:not\(\.active\) \[data-fold="on"\]/, "color"), null);
+  assert.ok(!/--plate-on-glow:/.test(css("css/tokens.css")), "the glow token is retired");
+  for (const f of ["components", "menus", "tuner", "data", "carsetup", "overlays", "career"]) {
+    assert.ok(!css("css/" + f + ".css").includes("var(--plate-on-glow)"), f + ".css still lights a chip with the glow");
+  }
+  assert.equal(decl(css("css/tuner.css"), ".opt-btn.active", "background"), "var(--plate-on)");
+  assert.equal(decl(css("css/tuner.css"), ".opt-btn.active", "border-color"), "var(--red)");
+  assert.equal(decl(css("css/tuner.css"), ".opt-btn.active", "box-shadow"), null);
+  assert.equal(decl(css("css/overlays.css"), "#campicker button.active", "background"), "var(--plate-on)",
+    "the cam picker lights like every other chip, not a 75% red fill");
+  assert.equal(decl(css("css/carsetup.css"), ".cs-view-btn.active", "border-color"), "var(--red)",
+    "garage SPIN is a chosen chip, not a green one-off");
   assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="val"]', "color"), "var(--text)",
     "named modes stay text so gold still means enabled");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="auto"]', "color"), "var(--faster)",
-    "AUTO is timing-green: the car is doing it");
-  assert.equal(decl(css("css/components.css"), '#pmsettings-inner details > summary [data-fold="manual"]', "color"), "var(--manual)",
-    "MANUAL is garage-cool: you are doing it");
-  assert.equal(decl(css("css/components.css"), 'button [data-fold="auto"], summary [data-fold="auto"]', "color"), "var(--faster)");
-  assert.equal(decl(css("css/components.css"), 'button [data-fold="manual"], summary [data-fold="manual"]', "color"), "var(--manual)");
+  assert.equal(decl(css("css/components.css"), 'button [data-fold="auto"], summary [data-fold="auto"]', "color"), null,
+    "no control paints an AUTO/MANUAL agency word any more — GEARS / ACTIVE AERO are chip rows");
   assert.equal(decl(css("css/components.css"), "#pmsettings-inner .pm-group button, #pmsettings-inner .pm-doors button", "gap"), "0.35em",
     "flex gap keeps a space after LABEL: when the value is a painted span");
   assert.equal(decl(css("css/components.css"), "button:has(> [data-fold])", "column-gap"), "0.35em",
@@ -1157,7 +1170,8 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(components, ".bigbtn.alt", "background"), "var(--plate-opaque)");
   assert.equal(decl(menus, ".sel-chip", "background"), "var(--plate)");
   assert.equal(decl(menus, ".sel-chip.active", "background"), "var(--plate-on)");
-  assert.equal(decl(menus, "#race-settings .sel-chip.active", "background"), "var(--plate-on)");
+  assert.equal(decl(menus, "#race-settings .sel-chip.active", "background"), null,
+    "race settings inherit the one .sel-chip.active look — no per-screen restatement");
   assert.equal(decl(carsetup, ".cs-tab", "background"), "var(--plate)");
   assert.equal(decl(carsetup, ".cs-tab.active", "background"), "var(--plate-on)");
   assert.equal(decl(data, ".dh-pill.active", "background"), "var(--plate-on)");
@@ -1167,8 +1181,9 @@ test("neutral buttons share the settings tab-header plate", () => {
   assert.equal(decl(components, ".sel-label", "color"), "var(--steel)", "section chrome, not leftover dim");
   assert.equal(decl(carsetup, ".cs-tab-lbl", "color"), "var(--text)");
   assert.equal(decl(css("css/overlays.css"), "#htp-contents a", "color"), "var(--text)");
-  assert.equal(decl(components, /#htp-contents a\[aria-current/, "box-shadow"), "var(--plate-on-glow)",
-    "term-rail selected uses leftover-sheet chip glow");
+  assert.equal(decl(components, /#htp-contents a\[aria-current/, "background"), "var(--plate-on)",
+    "term-rail selected uses the one chip look (plate-on + red ring, no glow)");
+  assert.equal(decl(components, /#htp-contents a\[aria-current/, "box-shadow"), null);
   assert.equal(decl(css("css/overlays.css"), /#results-table > \.sel-label/, "margin-top"), "calc(var(--gap) * 1.2)");
   assert.equal(decl(css("css/tuner.css"), "#lt-tabs .lt-tab, #ct-modes .lt-tab", "color"), "var(--text)");
   const narrowTabs = rulesFor(css("css/tuner.css"), /^\.lt-tabs$/).find((r) =>

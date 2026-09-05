@@ -421,7 +421,7 @@ export const SCREENS = [
   // "touch" hides the gas pedal entirely (autoThrottle), "buttons" adds an
   // explicit GAS — so the control stack is a different shape, not a restyle.
   //
-  // Reached by CYCLING #pm-steer, which is the player's own route and takes
+  // Reached by PICKING a #pm-steer chip, which is the player's own route and takes
   // effect immediately. The first version set localStorage and reloaded, which
   // worked for these two cells and wrecked the sweep: `page.reload()` destroys
   // the execution context, so every screen AFTER them failed with "Execution
@@ -434,14 +434,10 @@ export const SCREENS = [
       await p.evaluate(async () => { await window.__apex.race("monza"); });
       await p.waitForFunction(() => window.__apex.info().track === "monza", null, { timeout: 40000 });
       await p.evaluate(() => { window.__apex.go(); window.__apex.jump(0.2, 45); });
-      // #pm-steer cycles TILT -> BUTTONS -> TOUCH; click until it reads the one
-      // we want, bounded so a renamed mode cannot spin forever.
+      // #pm-steer is a chip row (TILT | BUTTONS | TOUCH): click the chip.
       await p.evaluate((want) => {
-        const btn = document.getElementById("pm-steer");
-        for (let i = 0; i < 6; i++) {
-          if (new RegExp(want, "i").test(btn.textContent)) return;
-          btn.click();
-        }
+        const chip = document.getElementById("pm-steer-" + want);
+        if (chip && !chip.classList.contains("active")) chip.click();
       }, mode);
       await p.evaluate(() => window.__apex.snapCam());
       await p.waitForTimeout(600); } })),

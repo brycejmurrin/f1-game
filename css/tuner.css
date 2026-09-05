@@ -278,7 +278,6 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 #lt-tabs .lt-tab:active, #ct-modes .lt-tab:active { color: var(--text); }
 #lt-tabs .lt-tab.active, #ct-modes .lt-tab.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: var(--plate-on-glow);
 }
 .lt-group { display: none; }
 .lt-group.active { display: block; }
@@ -308,7 +307,6 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .lt-preview-row .opt-btn.active,
 .lt-preview-row .opt-btn.on {
   background: var(--plate-on); color: var(--text); border-color: var(--red);
-  box-shadow: var(--plate-on-glow);
 }
 #lighting-inner .sheet-foot, #camtune-inner .sheet-foot {
   display: flex; gap: calc(var(--gap) * 2 / 3); flex-shrink: 0;
@@ -432,18 +430,6 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 #pmsettings-inner #audioset .as-sec > summary::after { content: none; }
 #pmsettings-inner #audioset .as-sec > summary::before { content: "\25BE"; }
 #pmsettings-inner #audioset .as-sec[open] > summary::before { content: "\25B4"; }
-/* Qualified with .opt-row on purpose: the generic `.opt-row .opt-btn` rule below
-   has the same specificity and comes later in the file, so an unqualified
-   `.as-toggle .opt-btn` loses and the buttons collapse to their flex basis. */
-.opt-row.as-toggle { width: 100%; gap: calc(var(--gap) / 3); margin-top: calc(var(--gap) * 0.45); }
-.opt-row.as-toggle .opt-btn {
-  flex: 1 1 0; width: auto;
-  min-width: 52px; min-height: var(--tap-sm);
-  padding: calc(var(--gap) / 3) var(--gap); font-size: var(--fs-micro); letter-spacing: var(--ls-3);
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
 /* NOW PLAYING card. The old row put a SKIP button first and the track name in
    11px dim text after it, so the least important control was the most
    prominent thing and there was no way back a track. Title leads, source is a
@@ -507,17 +493,18 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 .tune-row.tune-off .tune-label { color: var(--dim); }
 .tune-row.tune-off .tune-label b { color: var(--dim); }
 .preset-row { display: flex; gap: calc(var(--gap) * 2 / 3); margin: calc(var(--gap) / 3) 0 calc(var(--gap) * 0.5); }
-/* STEERING & ASSISTS clusters join .balanced-row so a 4-way row wraps from
-   local width instead of shrinking SIM past the pane. The shared shrink
-   contract below still wins on every other .preset-row / .opt-row; these
-   ID-scoped children restore the wrap basis. Headings stay
+/* Settings chip rows join .balanced-row so a 4-way row wraps from local
+   width instead of shrinking SIM past the pane. The shared shrink contract
+   below still wins on every other .preset-row / .opt-row; these scoped
+   children restore the wrap basis. Was #advanced-inner only; CONTROLS and the
+   DISPLAY folds carry the same rows now (js/ui/opt-group.js). Headings stay
    `grid-column: 1 / -1` on the wide body grid. */
-#advanced-inner .preset-row.balanced-row,
-#advanced-inner .opt-row.balanced-row {
+#pmsettings-inner .preset-row.balanced-row,
+#pmsettings-inner .opt-row.balanced-row {
   --balance-basis: 6.5rem; --balance-min: 4.5rem;
 }
-#advanced-inner .preset-row.balanced-row > :not([hidden]),
-#advanced-inner .opt-row.balanced-row > :not([hidden]) {
+#pmsettings-inner .preset-row.balanced-row > :not([hidden]),
+#pmsettings-inner .opt-row.balanced-row > :not([hidden]) {
   flex: 1 1 var(--balance-basis);
   min-width: min(100%, var(--balance-min));
 }
@@ -542,7 +529,6 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 .preset-btn.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: var(--plate-on-glow);
 }
 .preset-btn.active small { opacity: 0.85; }
 /* segmented option groups (STEERING / DRIVING HELP / RACING LINE) */
@@ -564,19 +550,6 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 #as-engine-details .opt-row .opt-btn { flex: 1 1 auto; min-width: var(--tap-min); }
 .opt-btn.active {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: var(--plate-on-glow);
-}
-/* Settings: a named pick still gets a red ring (STANDARD vs PRO has no
-   gold/red word). The glow is the old "lighted" plate — drop it. ON/OFF
-   pairs drop the ring too: the selected word is the whole signal. */
-#pmsettings-inner :is(.opt-btn, .preset-btn).active {
-  box-shadow: none;
-}
-#pmsettings-inner .as-toggle .opt-btn.active {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  color: inherit;
 }
 /* THE ACTION BAR IS NOT ALLOWED OFF THE BOTTOM. #lt-rows is meant to absorb all
    the overflow so the panel itself never scrolls (see the head of this file),

@@ -696,7 +696,6 @@ p, .adv-help, .as-note, .dh-race-sub, .dh-error-msg { text-wrap: pretty; }
 #cg-contents a[aria-current="true"],
 #ch-contents a[aria-current="true"] {
   background: var(--plate-on); border-color: var(--red); color: var(--text);
-  box-shadow: var(--plate-on-glow);
 }
 
 /* ---------- buttons ---------- */
@@ -1190,16 +1189,16 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   width: calc(var(--tap-sm) * 1.22);
   height: calc(var(--tap-sm) * 1.22);
 }
-#advanced .tune-label,
-#audioset .tune-label {
+/* Every Settings page, not only STEERING / MUSIC: HUD SIZE and BUTTON SIZE
+   used to be the two plain-grey labels on a sheet of steel italics. */
+#pmsettings-inner .pm-group .tune-label {
   color: var(--steel);
   font-weight: 700;
   font-style: italic;
   letter-spacing: var(--ls-5);
   text-transform: uppercase;
 }
-#advanced .tune-label b,
-#audioset .tune-label b {
+#pmsettings-inner .pm-group .tune-label b {
   color: inherit;
   font-style: italic;
 }
@@ -1391,21 +1390,22 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   padding-top: calc(var(--gap) / 4);
 }
 /* METRICS fold: a quiet column, not a 2-up plate grid. Two or three
-   rows fit without a scroll cage — the sheet pane already scrolls. */
-#pm-metrics-details [role="group"],
-#pm-hud-details [role="group"] {
+   rows fit without a scroll cage — the sheet pane already scrolls. The HUD
+   fold shares the column but holds labelled CHIP ROWS (js/ui/opt-group.js),
+   each its own role=group — hence the child combinator: a descendant match
+   would stack every chip row into a column too. */
+#pm-metrics-details > [role="group"],
+#pm-hud-details > [role="group"] {
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: calc(var(--gap) / 6) 0 0;
 }
-#pm-metrics-details [role="group"] > button,
-#pm-hud-details [role="group"] > button {
+#pm-metrics-details > [role="group"] > button {
   width: 100%;
   margin: 0;
 }
-#pm-metrics-details [role="group"] > button[hidden],
-#pm-hud-details [role="group"] > button[hidden] {
+#pm-metrics-details > [role="group"] > button[hidden] {
   display: none !important;
 }
 #pmsettings-inner #pm-metrics-details > summary,
@@ -1423,8 +1423,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 #pm-metrics-details[open] > summary::before { content: "\25B4"; }
 #pm-hud-details[open] > summary::before { content: "\25B4"; }
-#pmsettings-inner #pm-metrics-details [role="group"] > button,
-#pmsettings-inner #pm-hud-details [role="group"] > button {
+#pmsettings-inner #pm-metrics-details > [role="group"] > button {
   background: transparent;
   border: none;
   border-bottom: 1px solid color-mix(in oklab, var(--steel) 22%, transparent);
@@ -1432,13 +1431,11 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   box-shadow: none;
   font-weight: 600;
 }
-#pmsettings-inner #pm-metrics-details [role="group"] > button:last-child,
-#pmsettings-inner #pm-hud-details [role="group"] > button:last-child {
+#pmsettings-inner #pm-metrics-details > [role="group"] > button:last-child {
   border-bottom: none;
 }
 @media (hover: hover) {
-  #pmsettings-inner #pm-metrics-details [role="group"] > button:hover,
-  #pmsettings-inner #pm-hud-details [role="group"] > button:hover {
+  #pmsettings-inner #pm-metrics-details > [role="group"] > button:hover {
     background: color-mix(in oklab, var(--steel) 12%, transparent);
     box-shadow: none;
   }
@@ -1450,17 +1447,17 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin: 0;
   min-width: 0;
 }
-#pm-display-adv [role="group"] {
+#pm-display-adv-body {
   display: flex;
   flex-direction: column;
   gap: calc(var(--gap) / 3);
   padding: calc(var(--gap) / 2) 0 calc(var(--gap) / 6);
 }
-#pm-display-adv [role="group"] > button {
+#pm-display-adv-body > button {
   width: 100%;
   margin: 0;
 }
-#pm-display-adv [role="group"] > :is(#pm-renderer-row, #pm-gfx-status) {
+#pm-display-adv-body > :is(#pm-renderer-row, #pm-gfx-status, .adv-item) {
   grid-column: 1 / -1;
 }
 #pmsettings-inner #pm-display-adv > summary {
@@ -1564,8 +1561,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   font-style: italic;
   font-weight: 700;
 }
-/* Name stays steel. Gold/red = enablement. Green/blue = 2-state
-   AUTO/MANUAL agency only. Named cycles stay --text. */
+/* Name stays steel. Gold/red = enablement, on READOUTS only: the closed fold
+   summaries and the title-screen sound button. A chip never paints its word
+   (css/tokens.css, THE ONE SELECTED LOOK). */
 button [data-fold="on"],
 summary [data-fold="on"] {
   color: var(--gold);
@@ -1574,23 +1572,9 @@ button [data-fold="off"],
 summary [data-fold="off"] {
   color: var(--red);
 }
-button [data-fold="auto"],
-summary [data-fold="auto"] {
-  color: var(--faster);
-}
-button [data-fold="manual"],
-summary [data-fold="manual"] {
-  color: var(--manual);
-}
 /* Any menu row, not only Settings: flex ate the space after ":" / "·". */
 button:has(> [data-fold]) {
   column-gap: 0.35em;
-}
-/* ON/OFF option chips: only the selected word is gold/red. Lighting both
-   plates (and the idle sibling) made red mean OFF and SELECTED at once. */
-#pmsettings-inner .opt-btn:not(.active) [data-fold="on"],
-#pmsettings-inner .opt-btn:not(.active) [data-fold="off"] {
-  color: inherit;
 }
 #pmsettings-inner details > summary [data-fold="k"] {
   color: var(--steel);
@@ -1612,16 +1596,6 @@ button:has(> [data-fold]) {
   font-style: italic;
   font-weight: 700;
 }
-#pmsettings-inner details > summary [data-fold="auto"] {
-  color: var(--faster);
-  font-style: italic;
-  font-weight: 700;
-}
-#pmsettings-inner details > summary [data-fold="manual"] {
-  color: var(--manual);
-  font-style: italic;
-  font-weight: 700;
-}
 #pmsettings-inner details > summary [data-fold="sep"] {
   color: color-mix(in oklab, var(--steel) 55%, transparent);
   font-weight: 400;
@@ -1630,24 +1604,24 @@ button:has(> [data-fold]) {
   margin-top: calc(var(--gap) * 0.5);
   padding-top: calc(var(--gap) / 3);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"],
-#pmsettings-inner[data-density="compact"] #pm-display-adv [role="group"] {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv-body,
+#pmsettings-inner[data-density="compact"] #pm-display-adv-body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: calc(var(--gap) / 3) calc(var(--gap) / 2);
 }
-#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv [role="group"] > button,
-#pmsettings-inner[data-density="compact"] #pm-display-adv [role="group"] > button {
+#pmsettings-inner[data-shape="wide"] #pm-panel-display #pm-display-adv-body > button,
+#pmsettings-inner[data-density="compact"] #pm-display-adv-body > button {
   width: auto;
 }
 /* Capture / diag sit under RESET | THREE PATH as secondary rows, not
    a third pair of equally loud plates. They always span — when
    SCREENSHOTS is absent (GLX-only tree) SAVE must not sit in the
    empty THREE PATH cell beside RESET. */
-#pmsettings-inner #pm-display-adv [role="group"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status) {
+#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag, #pm-gfx-status, .adv-item) {
   grid-column: 1 / -1;
 }
-#pmsettings-inner #pm-display-adv [role="group"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag) {
+#pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag) {
   background: transparent;
   border: none;
   border-bottom: 1px solid color-mix(in oklab, var(--steel) 22%, transparent);
@@ -1657,7 +1631,7 @@ button:has(> [data-fold]) {
   font-weight: 600;
 }
 @media (hover: hover) {
-  #pmsettings-inner #pm-display-adv [role="group"] > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag):hover {
+  #pmsettings-inner #pm-display-adv-body > :is(#pm-screenshots, #pm-save-shot, #pm-copy-diag):hover {
     background: color-mix(in oklab, var(--steel) 12%, transparent);
     color: var(--text);
     box-shadow: none;
@@ -1691,11 +1665,10 @@ button:has(> [data-fold]) {
     line-height: 1.15;
   }
 }
-#advanced-inner .preset-btn,
-#advanced-inner .opt-btn {
+#pmsettings-inner .pm-group :is(.preset-btn, .opt-btn) {
   font-size: clamp(var(--fs-2), calc(2 * var(--vwz)), var(--fs-5));
 }
-#advanced-inner .tune-label {
+#pmsettings-inner .pm-group .tune-label {
   font-size: clamp(var(--fs-micro), calc(1.7 * var(--vwz)), var(--fs-3));
 }
 

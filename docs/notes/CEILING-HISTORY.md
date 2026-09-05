@@ -2056,3 +2056,16 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   `sideYieldsA`, `queueBrake`) went to `js/physics/ai-drive.js`, which is the
   module split's home for them and is unit-tested there. `bareCatches`
   158 -> **157** in the same commit: the tree simply has one fewer.
+
+## 2026-09-05 — selection grammar: shellNodes 1133 → 1199, game.js 9938 → 9924
+
+`shellNodes` RAISED by 66, deliberately. The Settings `KEY: VALUE` cycle
+buttons (STEER, GEARS, ACTIVE AERO, HUD, STYLE, LAYOUT, MAP, GAPS, RESOLUTION,
+Spotify SHUFFLE / REPEAT) became labelled chip rows so every choice in the app
+lights the same way (`docs/COMPONENTS.md` §Selection grammar). A chip row is
+one label, one group and one button per option where the cycle button was one
+node, and the chips are static DOM in the shell on purpose — building them from
+JS would have hidden the cost the ratchet exists to show. `js/game.js` lost 14
+lines to `js/ui/opt-group.js`; `cssClasses` 549 → 548 (`.as-toggle` retired);
+`rawColor` 329 → 325 (the cam picker, garage SPIN and track-row washes now use
+tokens).

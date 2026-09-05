@@ -309,8 +309,8 @@ test.describe("Apex 26 — steering sliders", () => {
     const r = await page.evaluate(() => {
       // Desktop viewport => touchControlsNeeded() is false => gearsManual() goes
       // live as soon as the pause-menu toggle flips manualMode on.
-      const btn = document.getElementById("pm-gears");
-      if (!/MANUAL/.test(btn.textContent)) btn.click();
+      const manual = document.getElementById("pm-gears-manual");
+      if (!manual.classList.contains("active")) manual.click();
       const el = document.getElementById("pm-pace");
       el.value = "19"; el.dispatchEvent(new Event("input", { bubbles: true }));   // top of the grid, pace 1.338
       window.__apex.park(0.1); window.__apex.freeze(false);

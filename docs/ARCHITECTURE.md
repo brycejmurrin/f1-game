@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_142 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_143 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -184,6 +184,7 @@ _142 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `modal.js` | `TopModal` | tag | TOP MODAL — mirrors each dialog.screen's `hidden` onto showModal()/close(). |
 | `menu-nav.js` | `MenuNav` | tag | MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls the panel you are looking at, and arrow keys that move through it. |
 | `aria-state.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
+| `opt-group.js` | `OptGroup` | tag | OptGroup — the ONE way a menu offers a choice: a row of `.opt-btn` chips under a `.tune-label`, exactly one of them `.active`. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |

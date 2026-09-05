@@ -49,13 +49,22 @@ async function openSettings(page, track = "bahrain", tod = "day", wx = "dry") {
   await page.waitForTimeout(200);
 }
 // Cycle a labelled toggle in-page until its text contains `want`.
-async function cycleTo(page, id, want, max = 4) {
-  await page.evaluate(({ id, want, max }) => {
-    const b = document.getElementById(id);
-    for (let i = 0; i < max && !b.textContent.toUpperCase().includes(want.toUpperCase()); i++) b.click();
-  }, { id, want, max });
+// Settings choices are chip rows (js/ui/opt-group.js): `#<group>` holds one
+// `.opt-btn[data-v]` per value and the chosen one is `.active`. Pick by
+// clicking the chip, then return the active chip's text (the old cycle
+// helper returned the button label, and the callers still `toContain` it).
+async function cycleTo(page, id, want) {
+  await page.evaluate(({ id, want }) => {
+    const g = document.getElementById(id);
+    const chip = [...g.querySelectorAll(".opt-btn")].find((b) =>
+      b.textContent.toUpperCase().includes(want.toUpperCase()));
+    if (chip) chip.click();
+  }, { id, want });
   await page.waitForTimeout(120);
-  return labelOf(page, id);
+  return page.evaluate((id) => {
+    const on = document.getElementById(id).querySelector(".opt-btn.active");
+    return on ? on.textContent : "";
+  }, id);
 }
 
 test.describe("Menu survey — settings sub-menu (portrait)", () => {

@@ -51,13 +51,9 @@ async function openPauseControls(page) {
 }
 
 async function cycleToPauseSteerMode(page, targetText) {
-  // Click pm-steer up to 3 times to cycle to the desired mode
-  for (let i = 0; i < 3; i++) {
-    const text = await page.locator("#pm-steer").textContent();
-    if (text && text.toLowerCase().includes(targetText.toLowerCase())) break;
-    await page.locator("#pm-steer").click({ force: true });
-    await page.waitForTimeout(300);
-  }
+  // STEERING INPUT is a chip row: click the chip that names the mode.
+  await page.locator("#pm-steer-" + targetText.toLowerCase()).click({ force: true });
+  await page.waitForTimeout(300);
 }
 
 async function openLightingPhotoMode(page) {
@@ -392,19 +388,20 @@ test.describe("Pause settings — stable layout", () => {
     }, ids);
 
     const before = await grab();
-    await page.locator("#pm-steer").click();   // tilt -> buttons (hides nothing now)
+    await page.locator("#pm-steer-buttons").click();   // tilt -> buttons (hides nothing now)
     await page.waitForTimeout(200);
     const after = await grab();
     expect(after).toEqual(before);
 
-    // and the button aimed at AFTER the change still receives the tap. RESOLUTION
-    // replaces the old SOUND toggle here: it is a same-grid cycling button, so it
+    // and the control aimed at AFTER the change still receives the tap. RESOLUTION
+    // replaces the old SOUND toggle here: it is a same-grid chip row, so it
     // still proves the tap landed on the control the thumb was aimed at.
     await page.locator("#pm-settings-close").click();
     await page.locator("#pm-open-display").click();
-    const resBefore = await page.locator("#pm-res").textContent();
-    await page.locator("#pm-res").click();
-    await expect(page.locator("#pm-res")).not.toHaveText(resBefore);
+    await page.locator("#pm-display-adv > summary").click();
+    await expect(page.locator("#pm-res-high")).not.toHaveClass(/active/);
+    await page.locator("#pm-res-high").click();
+    await expect(page.locator("#pm-res-high")).toHaveClass(/active/);
     await expect(page.locator("#pmsettings")).toBeVisible();   // menu did not collapse
   });
 });

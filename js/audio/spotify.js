@@ -680,11 +680,14 @@ window.SpotifyMusic = (function () {
     api("/me/player/shuffle?state=" + (on ? "true" : "false") +
         (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(afterCommand);
   }
-  function cycleRepeat() {
+  function setRepeat(next) {
     if (!BACKEND.active() || mode() !== "remote") return;
-    const next = repeatMode === "off" ? "context" : repeatMode === "context" ? "track" : "off";
+    if (next !== "off" && next !== "context" && next !== "track") return;
     api("/me/player/repeat?state=" + next +
         (deviceId2() ? "&device_id=" + encodeURIComponent(deviceId2()) : ""), { method: "PUT" }).then(afterCommand);
+  }
+  function cycleRepeat() {
+    setRepeat(repeatMode === "off" ? "context" : repeatMode === "context" ? "track" : "off");
   }
   function setDeviceVolume(pct) {
     if (!BACKEND.active() || mode() !== "remote") return;
@@ -980,11 +983,14 @@ window.SpotifyMusic = (function () {
       tog.textContent = paused ? "▶" : "❚❚";
       tog.setAttribute("aria-label", paused ? "Play" : "Pause");
     }
-    const sh = el("sp-shuffle");
-    if (sh) sh.classList.toggle("active", shuffleOn);
-    txt("sp-repeat", "REPEAT: " + (repeatMode === "context" ? "ALL" : repeatMode === "track" ? "ONE" : "OFF"));
-    const rp = el("sp-repeat");
-    if (rp) rp.classList.toggle("active", repeatMode !== "off");
+    // SHUFFLE / REPEAT are chip rows (js/ui/opt-group.js): the ring is the
+    // state. They were a ringed SHUFFLE beside a `REPEAT: OFF` word button.
+    if (typeof OptGroup !== "undefined") {
+      OptGroup.paint(el("sp-shuffle"), shuffleOn ? "on" : "off");
+      OptGroup.paint(el("sp-repeat"), repeatMode);
+      OptGroup.disable(el("sp-shuffle"), !live);
+      OptGroup.disable(el("sp-repeat"), !live);
+    }
     const vol = el("sp-vol");
     if (vol && devVol !== null && document.activeElement !== vol) vol.value = String(devVol);
     txt("sp-vol-v", devVol === null ? "—" : String(devVol));
@@ -993,7 +999,7 @@ window.SpotifyMusic = (function () {
       : devSupportsVol ? "Sets the volume on " + (devName || "the device") + " itself."
       : "This device does not accept remote volume — use its own volume buttons. " +
         "(Spotify reports supports_volume: false, usually a phone.)");
-    ["sp-prev", "sp-toggle", "sp-fwd", "sp-shuffle", "sp-repeat", "sp-refresh2"].forEach((i) => dis(i, !live));
+    ["sp-prev", "sp-toggle", "sp-fwd", "sp-refresh2"].forEach((i) => dis(i, !live));
     fillSelect("sp-playlist2", playlistOpts(), contextUri(), !live);
     fillSelect("sp-device2", deviceOpts(), deviceId2(), !live);
     txt("sp-status2", message || (live ? "" : "Not connected — open MUSIC & SOUND to set Spotify up."));
@@ -1082,8 +1088,10 @@ window.SpotifyMusic = (function () {
     on("sp-prev", "click", prev);
     on("sp-toggle", "click", () => { activate(); toggle(); });
     on("sp-fwd", "click", () => BACKEND.skip());
-    on("sp-shuffle", "click", () => setShuffle(!shuffleOn));
-    on("sp-repeat", "click", cycleRepeat);
+    if (typeof OptGroup !== "undefined") {
+      OptGroup.wire("sp-shuffle", () => (shuffleOn ? "on" : "off"), (v) => setShuffle(v === "on"));
+      OptGroup.wire("sp-repeat", () => repeatMode, setRepeat);
+    }
     on("sp-vol", "input", (e) => { txt("sp-vol-v", e.target.value); });
     on("sp-vol", "change", (e) => setDeviceVolume(+e.target.value || 0));
     on("sp-playlist2", "change", (e) => { activate(); setContext(e.target.value); if (e.target.value) playChosen(); });

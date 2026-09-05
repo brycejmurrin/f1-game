@@ -35,6 +35,38 @@ Everything else is built on these. They live in `css/components.css`.
 | `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#select`, `#season-setup`, `#carsetup` and `#career`. Default foot sits under the side column; `.pair-foot-full` spans BACK / YOUR CAR / NEXT (and season APPLY) across both. Slots are named by POSITION, not role — see the note in `css/components.css` |
 | `.balanced-row` | a content-driven control cluster: items wrap from their preferred local width, every line shares its space evenly, and a lone final item fills the line without child-count-specific CSS |
 
+## Selection grammar — how a control says "this one"
+
+Three grammars used to coexist, sometimes on one screen (survey 2026-09-05): a
+ringed chip (STEERING, RACE SETTINGS, the garage, the data hub); a `KEY: VALUE`
+button that cycled on tap with the value word painted gold / red / green / cyan
+(the whole CONTROLS page, the HUD fold, Spotify REPEAT); and an ON | OFF pair
+with no ring where only the chosen word was coloured (MUSIC, SOUND). The ringed
+chip itself lit two ways — a red side bar plus halo (`--plate-on-glow`) in nine
+files, switched off again inside Settings. Now there is one grammar, and it is
+checkable:
+
+| what | rule | where it is held |
+|---|---|---|
+| a choice among N | a labelled chip row — `.tune-label` + `.opt-row` of `.opt-btn[data-v]`, one `.active` | `js/ui/opt-group.js` (`wire` / `paint` / `disable` / `build`); the rows are static DOM in `index.html` |
+| a boolean setting | the same row with two chips, ON \| OFF (MUSIC, SOUND, HUD, HALO, SHUFFLE) | same |
+| the chosen look | `background: var(--plate-on); border-color: var(--red)` and nothing else — no glow, no side bar, no coloured word inside the control | `css/tokens.css` "THE ONE SELECTED LOOK"; every `.active` chip / tab / pill rule uses exactly those two declarations |
+| a full-card tile | the STRONG tier: `--plate-on-strong` + `--lift-sel` (team tile, career flavour / seat / slot) | `css/tokens.css` |
+| a status word | gold ON / red OFF via `[data-fold]` — on READOUTS only: the closed fold summaries (`MUSIC · ON · ALL`) and the title-screen sound button. `AriaState.paintOnOff` skips `.opt-btn` | `css/components.css`, `js/ui/aria-state.js` |
+
+Deliberate exceptions, each carrying a meaning red would erase: the livery
+`NONE` / palette pills use a white ring because colour IS their content;
+`.cs-opt.exclusive.active` is gold because the part is exclusive; `#cs-aero`
+lights cyan because that is the X-mode colour the in-race HUD uses for the same
+system. The METRICS fold and the RENDERER / GRAPHICS rows in the renderer fold
+stay JS-injected `KEY: VALUE` rows (developer diagnostics with availability
+states) — the one remaining cycle-button family, listed here so it is a known
+one.
+
+`tests/unit/ui-improve-pass.test.mjs` asserts the glow token is gone from every
+file, that no Settings exception restates the look, and that `paintOnOff` skips
+chips; `tests/unit/hud-metrics-layout.test.mjs` pins the HUD fold's chip ids.
+
 ## Families, and the file that owns each
 
 "Owner" is the file with the most rules for that prefix; "also" means other files

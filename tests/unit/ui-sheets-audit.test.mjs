@@ -425,8 +425,8 @@ test("pause, settings, results and standings all scroll inside the sheet on a sh
   // METRICS is two or three quiet rows — the sheet pane scrolls, so the
   // fold does not grow its own --svhz cage (that cage forced a nested
   // scroller under four plates).
-  assert.equal(decl(comp, /#pm-metrics-details \[role="group"\]/, "display"), "flex");
-  assert.equal(decl(comp, /#pm-hud-details \[role="group"\]/, "display"), "flex");
-  assert.equal(decl(comp, /#pm-metrics-details \[role="group"\]/, "max-height"), null,
+  assert.equal(decl(comp, /#pm-metrics-details > \[role="group"\]/, "display"), "flex");
+  assert.equal(decl(comp, /#pm-hud-details > \[role="group"\]/, "display"), "flex");
+  assert.equal(decl(comp, /#pm-metrics-details > \[role="group"\]/, "max-height"), null,
     "METRICS body does not own a height cage");
 });

@@ -22,12 +22,14 @@
 // classes on a live element every frame, and a subtree observer over it would
 // be a per-frame cost for a surface that has no option groups at all.
 //
-// TWO KINDS OF PAIR, THEN NAMES. Gold/red is enablement (ON/OFF). Green/blue
-// is agency, and only on a 2-state AUTO/MANUAL control (GEARS, ACTIVE AERO).
-// AUTO on a longer cycle (LAYOUT, RESOLUTION, THREE PATH) is a name — it
-// stays the button's ink, like STANDARD / TILT / WEBGL2. Settings rows are
-// inline-flex, so a wrap after ":" uses NBSP or the space collapses.
-// Option-group chips (5 LAPS, DRY) stay unpainted.
+// COLOUR WORDS ARE READOUTS, NOT CONTROLS. Gold/red is enablement (ON/OFF) on
+// a button whose whole text is a status — the title-screen "♪ SOUND ON" — and
+// on the closed fold summaries, which paint themselves. An `.opt-btn` CHIP is
+// never painted: its ring is the selection, and a gold word inside a red ring
+// said two things at once. (GEARS / ACTIVE AERO used to be `KEY: AUTO` rows
+// with a green/cyan word; they are chip rows now — js/ui/opt-group.js.)
+// Settings rows are inline-flex, so a wrap after ":" uses NBSP or the space
+// collapses.
 //
 // The module owns no game state and self-initialises.
 window.AriaState = (function () {
@@ -88,11 +90,6 @@ window.AriaState = (function () {
 
   function wrapOnOff(text) {
     const t = String(text || "").replace(/\s+/g, " ").trim();
-    const agency = t.match(/^(GEARS|ACTIVE AERO):\s*(AUTO|MANUAL)$/);
-    if (agency) {
-      return agency[1] + ":\u00a0<span data-fold=\"" + agency[2].toLowerCase() + "\">" +
-        agency[2] + "</span>";
-    }
     if (!/\b(ON|OFF)\b/.test(t)) return null;
     return t.replace(/\b(ON|OFF)\b/g, (w) =>
       '<span data-fold="' + w.toLowerCase() + '">' + w + "</span>")
@@ -104,6 +101,7 @@ window.AriaState = (function () {
     if (!root) return;
     for (const el of root.querySelectorAll("button, summary")) {
       if (el.closest("#hud, #game-metrics")) continue;
+      if (el.classList.contains("opt-btn")) continue;   // a chip's ring is its mark
       let foreign = false;
       for (const c of el.children) {
         if (!c.hasAttribute("data-fold")) { foreign = true; break; }

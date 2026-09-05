@@ -456,9 +456,17 @@
      WRITE THE CLOSER AS "star-slash" IN PROSE, never literally: the first
      version of THIS comment quoted the two characters verbatim, which closed
      the comment mid-sentence and fed the rest to error recovery — eating the
-     --plate-on-glow declaration below. The bug's own description reintroduced
-     the bug one line lower (caught live, round 7). */
-  --plate-on-glow: inset 3px 0 0 var(--red), 0 0 12px color-mix(in oklab, var(--red) 28%, transparent);
+     next declaration (then --plate-on-glow, since retired). The bug's own
+     description reintroduced the bug one line lower (caught live, round 7). */
+  /* THE ONE SELECTED LOOK. A chosen chip / tab / pill / option anywhere in the
+     menus is `background: var(--plate-on); border-color: var(--red)` — and
+     nothing else: no glow, no side bar, no coloured word inside the control.
+     The old --plate-on-glow (inset red bar + 12px halo) was applied by nine
+     files and switched off again inside Settings, so the same .opt-btn lit two
+     different ways depending on the sheet it sat in. Colour WORDS (gold ON /
+     red OFF / green AUTO / cyan MANUAL via [data-fold]) are for READOUTS —
+     the closed fold summaries, the title-screen sound button — never for a
+     chip that is also ringed. Tiles use the STRONG tier below. */
   /* The STRONG selected wash — the picker-tile tier (team tile, career
      flavour/seat, career slot). Three sites hand-mixed 16/24/24% washes with
      12/14/16px glows at 28/36/38%; one pair of tokens makes the three tiles
@@ -509,9 +517,6 @@
   --del-fill: rgb(255, 60, 50);
   --edit-ink: rgba(120, 200, 255, 0.9);
   --edit-fill: rgb(60, 150, 255);
-  /* Hands-on counterpart to --faster: AUTO is timing-green, MANUAL is
-     the garage cool the livery EDIT family already uses (#4df). */
-  --manual: #4df;
   /* A lit lip along the top AND the far edge falling into shade. The lip on
      its own reads as a sticker laid on the page; the pair reads as a slab with
      thickness, which is the whole point of an elevation system. */

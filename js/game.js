@@ -475,7 +475,6 @@ let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "button
 const HUD_PROFILES = ["minimal", "standard", "broadcast"];
 let hudProfile = store.get("hudProfile", "standard");
 if (HUD_PROFILES.indexOf(hudProfile) < 0) hudProfile = "standard";
-function hudProfileLabel() { return "STYLE: " + hudProfile.toUpperCase(); }
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
 let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
@@ -484,22 +483,32 @@ if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
 // strips the half of the metrics the other half is named for (css/hud.css) —
 // TIMING keeps sectors+gaps, DRIVER keeps the car-state chips, COMPACT neither.
 // MAP and GAPS have their own controls and no layout touches them.
-function hudMetricsLayoutLabel() {
-  if (hudMetricsLayout !== "auto") return "LAYOUT: " + hudMetricsLayout.toUpperCase();
+// The help line under the LAYOUT chips names what AUTO resolved to, so the
+// player can see the forced name their screen would pick anyway.
+function hudLayoutNote() {
+  const base = "AUTO is the full set, scaled to fit. TIMING keeps sectors and gaps, DRIVER the car-state chips, COMPACT neither.";
+  if (hudMetricsLayout !== "auto") return base;
   const m = document.body.className.match(/hud-met-([a-z]+)/);
-  return "LAYOUT: AUTO" + (m ? " \u00b7 " + m[1].toUpperCase() : "");
+  return base + (m ? " Here AUTO is " + m[1].toUpperCase() + "." : "");
 }
 const HUD_VIS_MODES = ["auto", "on", "off"];
 let hudMapVis = store.get("hudMapVis", "on");
 let hudGapsVis = store.get("hudGapsVis", "on");
 if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "on";
 if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
-function hudMapVisLabel() { return "MAP: " + hudMapVis.toUpperCase(); }
-function hudGapsVisLabel() { return "GAPS: " + hudGapsVis.toUpperCase(); }
 function paintHudDetailsSummary() {
+  // One refresh for the whole HUD fold: the closed summary (a READOUT, so it
+  // keeps its gold/red words) and the chip rows inside it (js/ui/opt-group.js).
+  const on = !document.body.classList.contains("hud-hidden");
+  OptGroup.paint($("pm-hidehud"), on ? "on" : "off");
+  OptGroup.paint($("pm-hudprofile"), hudProfile);
+  OptGroup.paint($("pm-hudmetrics"), hudMetricsLayout);
+  OptGroup.paint($("pm-hudmap"), hudMapVis);
+  OptGroup.paint($("pm-hudgaps"), hudGapsVis);
+  const note = $("pm-hudmetrics-note");
+  if (note) note.textContent = hudLayoutNote();
   const sum = $("pm-hud-details-sum");
   if (!sum) return;
-  const on = !document.body.classList.contains("hud-hidden");
   const bits = [["k", "HUD"], [on ? "on" : "off", on ? "ON" : "OFF"],
     ["val", hudProfile.toUpperCase()], ["val", hudMetricsLayout.toUpperCase()],
     [hudMapVis === "off" ? "off" : "on", hudMapVis === "off" ? "NO MAP" : "MAP"],
@@ -8545,13 +8554,20 @@ function tickBody(now) {
 
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
-function steerLabel() {
-  if (steerMode === "buttons") return "STEER: BUTTONS";
-  if (steerMode === "touch") return "STEER: TOUCH";
+// STEERING INPUT chips (js/ui/opt-group.js) and the one-line note under them.
+// The note is ALWAYS present — its text changes, it is never hidden — so a
+// mode change cannot reflow the page under a finger; same rule that keeps
+// RECALIBRATE and GEARS disabled rather than hidden.
+function paintSteer() {
+  OptGroup.paint($("pm-steer"), steerMode);
+  const note = $("pm-steer-note");
+  if (!note) return;
   // Only warn when the gyro is genuinely unavailable/denied — not in the brief
-  // window before the first sensor reading arrives (which would falsely show
-  // "(NO GYRO)" on phones that have a working gyro).
-  return "STEER: TILT" + (Input.gyroDenied ? " (NO GYRO)" : "");
+  // window before the first sensor reading arrives (which would falsely say
+  // "no gyro" on phones that have a working gyro).
+  note.textContent = Input.gyroDenied
+    ? "Motion access is denied on this device, so TILT cannot steer here — pick BUTTONS or TOUCH."
+    : "TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.";
 }
 
 function enableTilt() {
@@ -8565,7 +8581,7 @@ function enableTilt() {
       // the car just follows ROAD_FOLLOW, appearing to "auto-drive" the racing line.)
       setSteerMode("buttons");
     }
-    $("pm-steer").textContent = steerLabel();
+    paintSteer();
     els.audiostate.textContent = ok && Input.tiltActive() ? "tilt steering ready"
       : (Input.gyroDenied ? "motion access denied — switched to buttons" : "");
   });
@@ -8761,14 +8777,14 @@ $("track-detail-close").onclick = closeTrackDetail;
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
 function syncSettingsAvailability() {
   const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* RendererPicker's reload buttons arm a two-tap confirm while this is set */ }
-  $("pm-hidehud").disabled = !inRace;
+  OptGroup.disable($("pm-hidehud"), !inRace);
   $("pm-lighting").disabled = !inRace;
   $("pm-camtune").disabled = !inRace;
 }
 function openSettings() {
-  // AUTO is always the full set; re-read the label on open so AUTO · FULL
-  // is written after the first HUD tick, not only at boot.
-  if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
+  // AUTO is always the full set; re-read the LAYOUT note on open so "Here
+  // AUTO is FULL" is written after the first HUD tick, not only at boot.
+  paintHudDetailsSummary();
   syncSettingsAvailability(); settingsNav.showCurrent();
   els.pmsettings.hidden = false; els.pausemenu.hidden = true;
 }
@@ -9484,15 +9500,13 @@ els.pausebtn.onclick = () => setPaused(true);
 // the only thing left and brings it all back. Session-only — reset on race start.
 function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);
-  const btn = $("pm-hidehud");
-  if (btn) btn.textContent = v ? "HUD: OFF" : "HUD: ON";
-  paintHudDetailsSummary(); if (v) { const p = $("campicker"); if (p) p.hidden = true; }
+  paintHudDetailsSummary();   // repaints the HUD ON | OFF chips too if (v) { const p = $("campicker"); if (p) p.hidden = true; }
 }
-$("pm-hidehud").onclick = () => {
-  const willHide = !document.body.classList.contains("hud-hidden");
+OptGroup.wire("pm-hidehud", () => (document.body.classList.contains("hud-hidden") ? "off" : "on"), (v) => {
+  const willHide = v === "off";
   setHudUserHidden(willHide);
   if (willHide) setPaused(false);   // clean screen — drop the menu so you can actually see it
-};
+});
 $("hud-restore").onclick = () => setHudUserHidden(false);
 
 // ---- player camera modes (CAM button / C key) ----
@@ -9524,14 +9538,14 @@ els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("stand
   }
 }
 
-// One STEER button cycles the single mode: TILT -> BUTTONS -> TOUCH.
+// STEERING INPUT: one chip per mode (was a single button cycling TILT -> BUTTONS -> TOUCH).
 const STEER_MODES = ["tilt", "buttons", "touch"];
 function setSteerMode(mode) {
   steerMode = mode;
   store.set("steerMode", mode);
   Input.setSteerMode(mode);
   if (mode === "tilt") enableTilt();   // (re)request motion permission within this gesture
-  $("pm-steer").textContent = steerLabel();
+  paintSteer();
   // DISABLE (don't hide): hiding reflowed the settings grid mid-tap, so the
   // next tap landed on whatever button slid under the finger (worst case
   // HIDE HUD, which closes the whole menu). Same for the GEARS toggle below.
@@ -9541,9 +9555,7 @@ function setSteerMode(mode) {
   // the title/select screen (e.g. when gyro denial auto-switches to buttons mode).
   if (state === "race" || state === "count") showTouchControls(true);
 }
-$("pm-steer").onclick = () => {
-  setSteerMode(STEER_MODES[(STEER_MODES.indexOf(steerMode) + 1) % STEER_MODES.length]);
-};
+OptGroup.wire("pm-steer", () => steerMode, (v) => { if (STEER_MODES.indexOf(v) >= 0) setSteerMode(v); });
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 
 // Steering-tuning sliders, presets + macro levels live in
@@ -9552,56 +9564,33 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
 // Disabled — not hidden — on BUTTONS/TOUCH (see the pm-calib note in setSteerMode).
 function refreshGearsBtn() {
-  $("pm-gears").disabled = Input.touchControlsNeeded() && steerMode !== "tilt";
-  $("pm-gears").textContent = "GEARS: " + (manualMode ? "MANUAL" : "AUTO");
+  OptGroup.disable($("pm-gears"), Input.touchControlsNeeded() && steerMode !== "tilt");
+  OptGroup.paint($("pm-gears"), manualMode ? "manual" : "auto");
 }
-$("pm-gears").onclick = () => {
-  manualMode = !manualMode;
+OptGroup.wire("pm-gears", () => (manualMode ? "manual" : "auto"), (v) => {
+  manualMode = v === "manual";
   store.set("manual", manualMode);
   refreshGearsBtn();
   if (player && !gearsManual()) player.gear = naturalGear(player.speed);
   showTouchControls(true);
-};
-const pmHudProfile = $("pm-hudprofile");
-if (pmHudProfile) {
-  pmHudProfile.textContent = hudProfileLabel();
-  pmHudProfile.onclick = (e) => {
-    e.stopPropagation();
-    hudProfile = HUD_PROFILES[(HUD_PROFILES.indexOf(hudProfile) + 1) % HUD_PROFILES.length];
-    store.set("hudProfile", hudProfile);
-    pmHudProfile.textContent = hudProfileLabel();
+});
+// HUD fold chip rows. Each write repaints the whole fold through
+// paintHudDetailsSummary, so the summary and the chips can never disagree.
+function wireHudChips(id, list, read, write, after) {
+  OptGroup.wire(id, read, (v) => {
+    if (list.indexOf(v) < 0) return;
+    write(v);
     paintHudDetailsSummary();
-    syncMetricsOverlayCompact();
+    if (after) after();
     updateHud(true);
-  };
+  });
 }
-const pmHudMetrics = $("pm-hudmetrics");
-if (pmHudMetrics) {
-  pmHudMetrics.textContent = hudMetricsLayoutLabel();
-  pmHudMetrics.onclick = (e) => {
-    e.stopPropagation();
-    hudMetricsLayout = HUD_MET_LAYOUTS[(HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) + 1) % HUD_MET_LAYOUTS.length];
-    store.set("hudMetricsLayout", hudMetricsLayout);
-    pmHudMetrics.textContent = hudMetricsLayoutLabel();
-    paintHudDetailsSummary();
-    syncMetricsOverlayCompact();
-    updateHud(true);
-  };
-}
-function wireHudVisBtn(id, read, write, labelFn) {
-  const btn = $(id);
-  if (!btn) return;
-  btn.textContent = labelFn();
-  btn.onclick = (e) => {
-    e.stopPropagation();
-    write(HUD_VIS_MODES[(HUD_VIS_MODES.indexOf(read()) + 1) % HUD_VIS_MODES.length]);
-    btn.textContent = labelFn();
-    paintHudDetailsSummary();
-    updateHud(true);
-  };
-}
-wireHudVisBtn("pm-hudmap", () => hudMapVis, (v) => { hudMapVis = v; store.set("hudMapVis", hudMapVis); }, hudMapVisLabel);
-wireHudVisBtn("pm-hudgaps", () => hudGapsVis, (v) => { hudGapsVis = v; store.set("hudGapsVis", hudGapsVis); }, hudGapsVisLabel);
+wireHudChips("pm-hudprofile", HUD_PROFILES, () => hudProfile,
+  (v) => { hudProfile = v; store.set("hudProfile", hudProfile); }, syncMetricsOverlayCompact);
+wireHudChips("pm-hudmetrics", HUD_MET_LAYOUTS, () => hudMetricsLayout,
+  (v) => { hudMetricsLayout = v; store.set("hudMetricsLayout", hudMetricsLayout); }, syncMetricsOverlayCompact);
+wireHudChips("pm-hudmap", HUD_VIS_MODES, () => hudMapVis, (v) => { hudMapVis = v; store.set("hudMapVis", hudMapVis); });
+wireHudChips("pm-hudgaps", HUD_VIS_MODES, () => hudGapsVis, (v) => { hudGapsVis = v; store.set("hudGapsVis", hudGapsVis); });
 
 // ACTIVE AERO: MANUAL / AUTO. Same shape as GEARS and for the same reason —
 // both answer "how much of the car do you operate yourself?". Takes effect
@@ -9612,19 +9601,18 @@ wireHudVisBtn("pm-hudgaps", () => hudGapsVis, (v) => { hudGapsVis = v; store.set
 // only appeared at the next steering-mode switch — i.e. it looked broken
 // exactly when a player flipped the setting to see what it did.
 function refreshAeroBtn() {
-  const b = $("pm-aero");
-  if (b) b.textContent = "ACTIVE AERO: " + (raceAeroMode === "auto" ? "AUTO" : "MANUAL");
+  OptGroup.paint($("pm-aero"), raceAeroMode === "auto" ? "auto" : "manual");
   if (state === "race" || state === "count") showTouchControls(true);
 }
-$("pm-aero").onclick = () => {
-  raceAeroMode = raceAeroMode === "auto" ? "manual" : "auto";
+OptGroup.wire("pm-aero", () => (raceAeroMode === "auto" ? "auto" : "manual"), (v) => {
+  raceAeroMode = v === "auto" ? "auto" : "manual";
   store.set("aeroMode", raceAeroMode);
   refreshAeroBtn();
   // Dropping out of AUTO must not leave the wing latched open — the switch is
   // the player's again from this instant.
   if (raceAeroMode !== "auto" && player) player.xOn = false;
   if (soundOn) GameAudio.uiTick();
-};
+});
 refreshAeroBtn();
 // A HIDDEN OR CLOSING TAB IS NOT A CRASH, and the boot canary must not read one
 // as a backend failure. PerfGov's sentinel already encodes this exact rule three
@@ -9832,9 +9820,7 @@ Input.setSteerMode(steerMode);
 // DataHub.init(els.datahub) used to run here. It moved into ensureDataHub(),
 // which the DATA button awaits — js/data is LAZY_DATA now and there is no
 // DataHub at boot to initialise.
-$("pm-steer").textContent = steerLabel();
-if (pmHudProfile) pmHudProfile.textContent = hudProfileLabel();
-if (pmHudMetrics) pmHudMetrics.textContent = hudMetricsLayoutLabel();
+paintSteer();
 paintHudDetailsSummary();
 syncMetricsOverlayCompact();
 $("pm-calib").disabled = steerMode !== "tilt";
