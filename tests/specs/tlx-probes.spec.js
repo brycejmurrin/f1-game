@@ -280,6 +280,17 @@ test.describe("TLX — boot", () => {
     // the stamp gate holds for steps 47..80 (x 8.2→9.2 offroad, speed 38→10).
     // 55 frames stops mid-window — x=9.21, speed 29 — margin on both sides.
     //
+    // R2 MUST BE OFF FOR THIS STINT. The first wall strike (measured: xOver
+    // 0.46 m at 69 m/s, sev=37.8) clears IncidentSim's R2_WALL_SEV=34. On a
+    // machine where Rapier is already live (macos Metal gfx job:
+    // DebrisWorld.buildWorld + "IncidentSim start r2" during race()),
+    // notifyWall takes the player; postStep clamps x to wallAt and retains
+    // ~0.7× speed, so 55 frames end at s=591, x=7.58, speed=22 — still
+    // on-road, stamp gate unsatisfiable, byte-identical across retries.
+    // game-vm never loads Rapier, so the same evaluate walked the run-off.
+    // Same sanctioned bypass as collisions-deep.spec.js (driver↔wall). Do
+    // NOT lower |x|>8 to match the takeover pose.
+    //
     // freeze() IN THE SAME evaluate as the stint. An off-road end state is
     // TRANSIENT: each spec round trip lets live rAF frames run, and one
     // SwiftShader frame is seconds of sim time — grass drag and the wrong-way/
@@ -288,6 +299,7 @@ test.describe("TLX — boot", () => {
     // stint+freeze pins the measured window state exactly; the premise reads
     // AFTER freeze, from state that can no longer move.
     await page.evaluate(() => {
+      window.__apex.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
       window.__apex.park(0.1);
       window.__apex.jump(0.1, 70);
       window.__apex.act({ steer: 1, throttle: true }, 1 / 60, 55);
