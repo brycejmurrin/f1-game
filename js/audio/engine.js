@@ -866,8 +866,10 @@ const GameAudio = (function () {
     } else {
       engA.stop(t0 + 0.35); engB.stop(t0 + 0.35); engC.stop(t0 + 0.35);
     }
+    const deadIdleGain = engGainIdle;                  // disconnected with `dead` below
     engSrcIdle = engGainIdle = null;
     if (limGain) limGain.gain.setTargetAtTime(0, t0, 0.02);
+    const deadLimGain = limGain;                       // disconnected with `dead` below
     if (limOsc) { limOsc.stop(t0 + 0.35); limOsc = null; limGain = null; }
     whineOsc.stop(t0 + 0.35);
     if (subOctOsc) subOctOsc.stop(t0 + 0.35);
@@ -891,8 +893,19 @@ const GameAudio = (function () {
     // complete: stopped sources GC on their own, but Gain/Biquad nodes routed
     // into sfxBus keep RENDERING until disconnect() (Web Audio contract) — a
     // tab-hide/show cycle used to strand ~8 nodes each time, forever.
+    // engGainIdle and limGain were NULLED but never DISCONNECTED, so every
+    // pause/resume cycle stranded two GainNodes that keep RENDERING — the Web
+    // Audio contract this list's own comment states. Measured with a fake
+    // context that drops a node only on disconnect(): +2 non-source nodes per
+    // cycle on the sample core, at EVERY point in this file's history, so it
+    // predates the rival voices rather than arriving with them. setPaused() in
+    // js/game.js stops the engine on pause and starts it on resume, so a long
+    // session pays it again and again. limGain feeds engGain.gain — an
+    // AudioParam, not a node — which is why it is invisible when you read the
+    // graph for outputs.
     const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
-                  voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain];
+                  voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain,
+                  deadIdleGain, deadLimGain];
     setTimeout(() => { for (const n of dead) { try { if (n) n.disconnect(); } catch (e) {} } }, 450);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
