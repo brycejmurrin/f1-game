@@ -1134,6 +1134,18 @@ const LiveryTex = (function () {
     fn(ctx, R, P, !!o.bare, teamId);
   }
 
+  // The four motif kinds below plus `check`. "team" is the row's default: the
+  // per-team TAIL_STYLE. "none" paints nothing — no wash, no strokes — so the
+  // fin and the cover read as plain paint.
+  const TAIL_STYLE_IDS = ["team", "diag", "sweep", "chevron", "streak", "check", "none"];
+  // What sits on the shark fin. "number" is the real-F1 layout (the race number
+  // rides the fin, the crest stays on the spine); "none" leaves the plate to
+  // the tail graphic alone.
+  const FIN_BADGE_IDS = ["logo", "number", "none"];
+  // Whether the crest is also drawn on the engine-cover spine. With the badge
+  // on the fin AND the spine the same mark reads twice from a chase camera,
+  // which is the duplication the owner asked about.
+  const SPINE_LOGO_IDS = ["logo", "none"];
   const TAIL_STYLE = {
     redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
     racingbulls: { kind: "diag",    a: 0.70 },   // youthful bold slash
@@ -1147,11 +1159,26 @@ const LiveryTex = (function () {
     haas:        { kind: "diag",    a: 0.68 },   // industrial hard slash
     cadillac:    { kind: "chevron", a: 0.60 },   // bold Detroit chevrons
   };
-  function drawTailGraphic(ctx, teamId, R, c1, c2, stripe) {
-    const st = TAIL_STYLE[teamId] || { kind: "diag", a: 0.6 };
+  // `styleId` is the livery's TAIL STYLE pick: "team" (or absent) keeps the
+  // per-team motif, a kind name overrides it at the team's own strength, and
+  // "none" returns before a single pixel — the player asked for a plain fin.
+  function drawTailGraphic(ctx, teamId, R, c1, c2, stripe, styleId) {
+    if (styleId === "none") return;
+    const team = TAIL_STYLE[teamId] || { kind: "diag", a: 0.6 };
+    const st = (styleId && styleId !== "team" && TAIL_STYLE_IDS.indexOf(styleId) !== -1)
+      ? { kind: styleId, a: team.a } : team;
     const acc = stripe || c2;
     const X = R.x, Y = R.y, W = R.w, H = R.h;
     ctx.save();
+    // Clip to the panel. The motif strokes are authored PAST the region edges
+    // (a sweep ends at X + 1.08 W, a slash at Y - 0.08 H) so their round caps
+    // never show inside it — and the overshoot used to land on the atlas: the
+    // sweep's tail reached x 504 in a fin region ending at 470, four pixels
+    // into the fin BADGE region next door, hidden only because the crest was
+    // always painted over it. With the badge optional it would have shown.
+    ctx.beginPath();
+    ctx.rect(X, Y, W, H);
+    ctx.clip();
     const g = ctx.createLinearGradient(X, Y + H, X + W, Y);
     g.addColorStop(0.0, cssA(acc, 0));
     g.addColorStop(0.5, cssA(acc, st.a * 0.85));
@@ -1193,6 +1220,24 @@ const LiveryTex = (function () {
         ctx.moveTo(o, Y + H);
         ctx.lineTo(o + W * 0.42, Y);
         ctx.stroke();
+      }
+    } else if (st.kind === "check") {
+      // Chequered flag: two rows of squares that fade rearward, skewed to the
+      // same rake as the slashes so it reads as speed and not as a tablecloth.
+      const n = 8, cw = W / n, ch = H / 2, skew = W * 0.06;
+      for (let r = 0; r < 2; r++) {
+        for (let i = 0; i < n; i++) {
+          if ((i + r) % 2) continue;
+          // Fades rearward like the other motifs but from a higher floor: a
+          // flag that is half gone by mid-fin reads as dirt, not as a flag.
+          const a2 = st.a * (1.10 - 0.7 * i / n);
+          ctx.fillStyle = cssA(acc, Math.max(0.22, a2));
+          const x0 = X + i * cw + skew * (1 - r), y0 = Y + r * ch;
+          ctx.beginPath();
+          ctx.moveTo(x0, y0 + ch); ctx.lineTo(x0 + cw, y0 + ch);
+          ctx.lineTo(x0 + cw - skew, y0); ctx.lineTo(x0 - skew, y0);
+          ctx.closePath(); ctx.fill();
+        }
       }
     } else { // diag slash
       // Bold parallel slashes charging up to the right — hero stroke leads.
@@ -1291,7 +1336,11 @@ const LiveryTex = (function () {
     }
 
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
-    drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe);
+    // The three DESIGN picks. Absent = today's atlas, pixel for pixel.
+    const tailStyle = colors.finStyle || "team";
+    const finBadge = colors.finBadge || "logo";
+    const spineLogo = colors.spineLogo || "logo";
+    drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe, tailStyle);
     const markHalo = (img, bg, ink) =>
       (img && img._avg && contrast(img._avg, bg) < 2.6 ? ink : null);
     const emblemRim = colors.logo3 || colors.logo2 || null;
@@ -1299,17 +1348,28 @@ const LiveryTex = (function () {
     // against the fin wash used to drop Ferrari's shield (and recolour the
     // horse) so top-down / the garage wall disagreed with the tail.
     const lockup = markPalette(teamId, colors, [c1, c2], false);
-    if (LOGOS[teamId]) {
-      drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
-                    markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
-    } else drawCrest(ctx, teamId, REGIONS.crest, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+    if (spineLogo !== "none") {
+      if (LOGOS[teamId]) {
+        drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
+                      markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
+      } else drawCrest(ctx, teamId, REGIONS.crest, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+    }
     const finWash = finArt || [stripe, c1, accent, inkFin].filter(Boolean)
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
-    drawTailGraphic(ctx, teamId, REGIONS.fin, c1, finPaint, finWash);
-    if (LOGOS[teamId]) {
-      drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
-                    markHalo(LOGOS[teamId], finPaint, inkFin), emblemRim);
-    } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true, palette: lockup });
+    drawTailGraphic(ctx, teamId, REGIONS.fin, c1, finPaint, finWash, tailStyle);
+    if (finBadge === "logo") {
+      if (LOGOS[teamId]) {
+        drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
+                      markHalo(LOGOS[teamId], finPaint, inkFin), emblemRim);
+      } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true, palette: lockup });
+    } else if (finBadge === "number") {
+      // The race number on the fin, inked for the FIN paint (the badge box is
+      // wholly on the plate) with no board patch and no crest head — the plate
+      // is the board. `num` is resolved below for the nose; hoist its value.
+      const finNum = numberOverride != null ? numberOverride
+                   : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
+      drawNumber(ctx, finNum, REGIONS.finBadge, inkFin, finWash, null, colors.numFont, 0);
+    }
 
     // Sponsor wordmarks.
     const pack = colors.sponsors && SPONSOR_PACKS[colors.sponsors];
@@ -1393,6 +1453,6 @@ const LiveryTex = (function () {
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
-           NUM_FONT_IDS, SPONSOR_PACK_IDS };
+           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

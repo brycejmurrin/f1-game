@@ -1520,7 +1520,8 @@ function resolveLivery(team) {
     return { id: l.id || null, c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
-             logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null };
+             logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null,
+             finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1530,7 +1531,8 @@ function resolveLivery(team) {
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
-                      logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null }
+                      logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null,
+                      finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -2182,7 +2184,7 @@ function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
   // keep its overlay on stable default/legacy anchors as setup options change.
   const legacyBody = !!carModelBuf;
   const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id) :
-    getCarDecalMesh(state.val, state.parts, legacyBody, team.id);
+    getCarDecalMesh(state.val, state.parts, legacyBody, team.id, resolveLivery(team).finShape);
   const tex = getCarDecalTexture(team, num, usePlayerSetup);
   if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
 }
@@ -6381,8 +6383,9 @@ let _spMesh = null, _spMeshKey = "", _spHull = null, _spHullKey = "";
 // Which livery fields can MOVE a vertex, as opposed to only recolouring one.
 // Measured (tests/unit/setup-preview-hull.test.mjs builds the car both ways and
 // compares positions byte for byte): a hue change never moves anything, and only
-// the PRESENCE of these four does — they gate optional strip geometry.
-const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod"];
+// the PRESENCE of these four does — they gate optional strip geometry. finShape
+// is the one non-colour entry: it picks the shark fin's outline (or no fin).
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape"];
 function getSetupPreviewMesh() {
   const team = Teams.LIST[teamIdx];
   const key = team.id + ":" + partsVisualKey(team.id);

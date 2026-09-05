@@ -164,6 +164,10 @@ class RecCtx {
   clearRect() {}
   getImageData() { return { data: new Uint8ClampedArray(4) }; }
   putImageData() {}
+  // The rounded number-board patch (LiveryTex.drawNumber) is the one arcTo in
+  // the atlas. Recorded as its two tangent points: the corner radius is under
+  // a mip at every size this is read at, and nothing here measures a board.
+  arcTo(x1, y1, x2, y2) { this.lineTo(x1, y1); this.lineTo(x2, y2); }
   translate() {} scale() {} rotate() {} setTransform() {} transform() {}
 }
 

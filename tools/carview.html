@@ -223,6 +223,10 @@
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null,
              noseStripe: l.noseStripe || null,
+             // The tail DESIGN picks (js/car/liveries.js): geometry AND paint,
+             // so the studio shows the same fin the game builds.
+             finShape: l.finShape || null, finStyle: l.finStyle || null,
+             finBadge: l.finBadge || null, spineLogo: l.spineLogo || null,
              // ?finish= overrides the livery's own, so a finish can be inspected
              // without authoring a livery for it (Car3D.FINISH_SURFACE).
              finish: S.finish || l.finish || null };
@@ -251,7 +255,8 @@
     flapCol = liv.wing || liv.c2 || team.color2;
     // Shared runtime implementation: same body anchors, segmentation and bounded
     // cache as the race renderer.
-    decalMesh = CarMesh.getCarDecalMesh(Car3D.aeroLevelOf(tiers), tiers, false);
+    // finShape rides with the livery (5th arg): no fin means no fin decal.
+    decalMesh = CarMesh.getCarDecalMesh(Car3D.aeroLevelOf(tiers), tiers, false, undefined, liv.finShape);
     if (decalTex && GLX.freeTexture) GLX.freeTexture(decalTex);
     try { decalTex = GLX.createTexture(LiveryTex.buildAtlas(team.id, liv, num)); } catch (e) { decalTex = null; }
     paint = paintFromRefl(S.refl);   // kept live in frame() too, so CARVIEW.set({refl}) responds without a rebuild
