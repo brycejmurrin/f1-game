@@ -135,7 +135,22 @@ const GameAudio = (function () {
   // steady state costs no per-frame scheduling at all (the _apexAimTgt guard,
   // the same idiom limGain/lfoG use further down).
   const LAYER_DEF = Object.freeze({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true, sub: true, rivals: true, reverb: true, overrun: true });
+  // REVERB IS DESKTOP-DEFAULT, NOT DESKTOP-ONLY. A ConvolverNode is the most
+  // expensive node type in Web Audio — a 0.9-1.9 s stereo impulse response,
+  // partitioned-FFT convolved on the audio render thread, which on iOS has
+  // 2.67 ms per 128-frame quantum at 48 kHz. It shipped ungated alongside four
+  // new rival voices (BufferSource + biquad + gain + panner each), taking the
+  // steady-state graph from ~30 to ~50 nodes. When that thread misses its
+  // deadline WebKit glitches and drops the audio BEFORE the main thread shows
+  // any sign — which is why the report was "the sound cuts out first".
+  //
+  // Off by DEFAULT on a phone, not removed: SPACE in the audio panel still
+  // turns it on for anyone who wants it, and desktop is untouched. isMobile is
+  // read at CALL time (GLX loads before this file, but the typeof guard is the
+  // standalone harness) — same idiom MUSIC_CACHE above uses.
+  const _phone = () => !!(typeof GLX !== "undefined" && GLX && GLX.isMobile);
   let layers = Object.assign({}, LAYER_DEF);
+  layers.reverb = !_phone();
 
   // Named tune presets the player picks INSTEAD of inheriting the team's
   // engine. "team" is the shipped behaviour: identity trims, and ENGINE_VOICES
@@ -224,6 +239,7 @@ const GameAudio = (function () {
   let currentUrl = null;
   let musicToken = 0;
   const musicBuffers = {};                 // url -> decoded AudioBuffer (per ctx)
+  const _musicLoads = {};                  // url -> in-flight fetch+decode (see playIndex)
   const _bufKeys = [];                     // insertion order of cached urls (bound: MUSIC_CACHE)
   // Decoded PCM is ~90 MB per four-minute track at a 48 kHz context. Desktop
   // keeps the 2 most recent so a two-track playlist alternates without a
@@ -441,7 +457,13 @@ const GameAudio = (function () {
     rainPending = null;
     rainSrc = null; rainGain = null; rainHp = null; rainLp = null;
     for (const k in musicBuffers) delete musicBuffers[k];  // buffers are ctx-bound
+    for (const k in _musicLoads) delete _musicLoads[k];    // decodes in flight were against the OLD ctx
     _bufKeys.length = 0;
+    // Ctx-bound too, and the biggest single object in the heap. Without this the
+    // OLD track stayed resident while the new context fetched and decoded the
+    // next one — two full buffers alive at ~150 MB, on the iOS resume path,
+    // which is exactly the moment the device is already short of memory.
+    musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
     engBuf = null; samplesReady = false;                    // ctx-bound; reload for new ctx
     _irCache.clear();                                       // AudioBuffers are ctx-bound too
     noisePoolBuf = null;                                    // ctx-bound too — a buffer from the
@@ -1382,7 +1404,15 @@ const GameAudio = (function () {
 
   function applyVenue() {
     if (!ctx || !convolver || !revReturn) return;
-    convolver.buffer = buildIR(venue);
+    // ASSIGN ONLY ON A REAL CHANGE. buildIR is memoised, so the AudioBuffer is
+    // not re-allocated — but assigning ConvolverNode.buffer re-runs the whole
+    // impulse-response preparation even when the buffer is identical: WebKit
+    // builds partitioned FFT kernels over ~91k stereo frames and spawns its
+    // background stage thread. applyTuneNodes() routes here, and a slider fires
+    // `input` at frame rate, so a single drag reconfigured the audio render
+    // thread ~60 times a second. That is a guaranteed dropout while dragging.
+    const ir = buildIR(venue);
+    if (convolver.buffer !== ir) convolver.buffer = ir;
     revReturn.gain.setTargetAtTime(layers.reverb ? venue.level * tune.reverb : 0, now(), 0.2);
   }
 
@@ -1757,7 +1787,15 @@ const GameAudio = (function () {
     const builtin = !!PLAYLIST[musicIndex].builtin;
     if (ctx.state !== "running") { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
     if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
-    fetch(url)
+    // ONE DECODE IN FLIGHT PER URL. musicToken suppresses stale PLAYBACK but
+    // never cancelled the fetch or the decode, and decodeAudioData allocates the
+    // full PCM before it resolves — so two taps on NEXT put ~150 MB of decoded
+    // audio in the air at once and three put ~225 MB, none of it bounded by the
+    // MUSIC_CACHE eviction that only runs in the .then. Sharing the in-flight
+    // promise makes a repeat tap free; the entry is dropped on settle so a
+    // failed load still retries.
+    if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); }, () => {}); return; }
+    const _load = fetch(url)
       .then(r => r.arrayBuffer())
       .then(ab => new Promise((res, rej) => { ctx.decodeAudioData(ab, res, rej); }))
       .then(buf => {
@@ -1769,12 +1807,19 @@ const GameAudio = (function () {
         _bufKeys.push(url);
         while (_bufKeys.length > MUSIC_CACHE) delete musicBuffers[_bufKeys.shift()];
         playMusicBuffer(buf, token);
+        return buf;
       })
       .catch((err) => {
         // Music is optional and the game plays on without it. Retained rather
         // than printed: a soundtrack that never starts is otherwise invisible.
         Log.warn("audio", "music load/decode failed for " + url + ": " + ((err && err.message) || err));
+        return null;
       });
+    _musicLoads[url] = _load;
+    // Drop the entry on settle, success or failure, so a later tap retries a
+    // load that failed rather than replaying its null forever.
+    _load.then(function () { if (_musicLoads[url] === _load) delete _musicLoads[url]; },
+               function () { if (_musicLoads[url] === _load) delete _musicLoads[url]; });
   }
 
   /* ---------------- mixer ----------------
@@ -1909,8 +1954,21 @@ const GameAudio = (function () {
     musicOn = false;
     currentUrl = null;
     musicToken++;                                // cancel any in-flight load
-    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); musicSrc.disconnect(); } } catch (e) {}
+    // stop() and disconnect() get their OWN try each. Sharing one meant a throw
+    // from stop() (stop-before-start is the documented case) skipped the
+    // disconnect, stranding a BufferSource that keeps rendering AND pins its
+    // 71-83 MB AudioBuffer — the same shape as the two stranded GainNodes.
+    try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); } } catch (e) {}
+    try { if (musicSrc) musicSrc.disconnect(); } catch (e) { /* Already detached, or the ctx closed under it: the node is unreachable either way and musicSrc is nulled below. */ }
     musicSrc = null;
+    // THE RESUME BUFFER IS A WHOLE DECODED TRACK — 71-83 MB at a 48 kHz context,
+    // measured from the shipped MP3 frame headers. It was never nulled anywhere:
+    // not here, not in stopMusic/setMusicEnabled, and not in rebuildCtx, which
+    // clears every OTHER ctx-bound cache by name. So MUSIC OFF freed nothing and
+    // the buffer outlived the context that owned it. Dropping the reference also
+    // drops the resume offset, which is correct: music that was stopped resumes
+    // from the top, and the offset is only meaningful while a track is live.
+    musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
   }
 
   function stopMusic() {
