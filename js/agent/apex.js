@@ -878,6 +878,7 @@ const api = {
     ai.s = wrapS(G.player.s + (dProg || 0));
     ai.x = G.player.x + (dx || 0);
     ai.xVis = ai.x; ai.speed = G.player.speed; ai.finished = false; ai.lap = G.player.lap;
+    ai.launchOn = false;   // placed at speed: no standing-start reaction or getaway
     G.cars.forEach((c) => { if (c !== ai && !c.isPlayer) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
     return { rival: G.cars.indexOf(ai) };
   },
@@ -892,7 +893,7 @@ const api = {
       c.s = wrapS(G.player.s + (spec.dProg || 0));
       c.x = G.player.x + (spec.dx || 0);
       c.xVis = c.x; c.speed = spec.speed != null ? spec.speed : G.player.speed;
-      c.finished = false; c.lap = G.player.lap;
+      c.finished = false; c.lap = G.player.lap; c.launchOn = false;
       used.push(c);
     });
     ai.forEach((c) => { if (!used.includes(c)) { c.prog -= 800; c.s = wrapS(c.s - 800); } });
@@ -2288,7 +2289,7 @@ const api = {
     for (const c of G.cars) {
       c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
       c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
-      c.stuckT = 0; c.letPassT = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
+      c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
       delete c.vertLoad;

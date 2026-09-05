@@ -2031,3 +2031,42 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   sites and the measurements. The cheaper alternative — reverting `isBoxed` and
   the `contactT` arming so the pile-up dig-out stayed on longer — passed the
   jam gate and left the reported defect in place, so it was not cheaper.
+
+- `js/game.js` lines 9797 -> **9938**, codeLines 5417 -> **5469** (2026-09-05):
+  the second racecraft pass — the owner's "AI still bunched up or gets stuck
+  with each other or gets stuck behind me" after the weld fix shipped. Fifty-one
+  code lines, three mechanisms, all measured in the VM harness
+  (`scratch/racecraft-bench.mjs`, before -> after, 4 min per circuit):
+  monza standoff pairs 6 -> 0, prolonged-contact pairs 2 -> 0, field spread SD
+  521 -> 246 m, longest dwell behind a slower car 36.5 -> 15 s; monaco
+  standoffs 3 -> 1 (a hairpin pair at 23/19 m/s, not a weld), dwell 43 -> 25 s,
+  cars that started behind the slow car and got past 9/10. Two lessons cost a
+  bench run each: flagging BOTH cars of an AI pair in contact while scrubbing
+  one brought prolonged-contact pairs back (0 -> 3, monza) — the leader going
+  compliant keeps the rub alive, so only a pair with a human in it flags both;
+  and a human's `_vmaxNow` is the model's top speed, not their pace, so the
+  AI read a player doing 40 as "pace 60" and never attacked (the crawl clause
+  in `otWant` and the human fallback to speed fixed the parked-player case
+  the touch-steer rescue row caught). The lines: the pass latch (`passOf` / `passSide` /
+  `passT` / `passCool` maintenance, engage and release) ~28, the alongside
+  hard constraint on `desiredX` 6, the queue-cap release for a committed passer
+  and `queueBrake` 6, the scan's nearest-alongside bookkeeping 6, the one-yielder
+  resolver branch 3, the interleaved grid lanes 2. The decision functions
+  themselves (`otWant`, `passTarget`, `passHold`, `passCooldown`,
+  `sideYieldsA`, `queueBrake`) went to `js/physics/ai-drive.js`, which is the
+  module split's home for them and is unit-tested there. `bareCatches`
+  158 -> **157** in the same commit: the tree simply has one fewer.
+
+- `js/game.js` lines 9938 -> **9951**, codeLines 5469 -> **5477**;
+  `js/agent/apex.js` lines 2649 -> **2650**, codeLines 2004 -> **2005**
+  (2026-09-05): the start pack. Every AI car accelerated identically off the
+  line, so a 22-car grid kept its 8 m pitch to T1 (start-trace: median gap
+  8.0-8.6 m for fifteen seconds, all speeds within 2 m/s, three order changes in
+  ten seconds). Eight code lines: the per-race launch hash and plan in `gridUp`
+  (3), the launch multiplier and its release in the AI acceleration (3), the
+  AI's smoothed acceleration for `otWant`'s crawl gate (1), the pace-phase
+  multiplier on `vmax` (1); apex.js clears `launchOn` on a car placed at speed
+  by `rival()`/`rivals()`. The plans, the fade and the phase live in
+  `js/physics/ai-drive.js` (unit-tested), so game.js again keeps only the call
+  sites. After: speeds span 8 m/s at t=4 and 17 order changes in ten seconds
+  (`tests/unit/ai-racecraft-vm.test.mjs`, the start test).
