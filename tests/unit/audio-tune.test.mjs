@@ -304,7 +304,7 @@ test("every id the ENGINE TONE panel looks up exists in the shell", () => {
   const sliders = [...panel.matchAll(/\{ k: "\w+",\s*id: "([\w-]+)",/g)].map((m) => m[1]);
   const layers = [...panel.matchAll(/\{ k: "\w+",\s+id: "([\w-]+)" \}/g)].map((m) => m[1]);
   const profiles = [...panel.matchAll(/\["(as-p-[\w-]+)", "\w+"\]/g)].map((m) => m[1]);
-  assert.equal(sliders.length, 14, "expected the fourteen tuner sliders — the table shape changed, so does this check");
+  assert.equal(sliders.length, 22, "expected the twenty-two tuner sliders — the table shape changed, so does this check");
   assert.equal(layers.length, 12, "expected the twelve layer switches");
   assert.equal(profiles.length, 5, "expected the five sound profiles");
 
@@ -496,7 +496,7 @@ test("every slider spans its trim's FULL range and can land exactly on 1.0", () 
   const range = A.tuneRange();
 
   const rows = [...panel.matchAll(/\{ k: "(\w+)",\s*id: "([\w-]+)",\s*lo: ([\d.]+),\s*step: ([\d.]+) \}/g)];
-  assert.equal(rows.length, 14, "expected fourteen tuner sliders");
+  assert.equal(rows.length, 22, "expected twenty-two tuner sliders");
   for (const [, key, id, loS, stepS] of rows) {
     const lo = Number(loS), step = Number(stepS);
     const m = shell.match(new RegExp(`<input id="${id}" type="range" min="0" max="(\\d+)" step="1" value="(\\d+)"`));
@@ -525,26 +525,115 @@ test("BRIGHTNESS keeps moving the corner across its whole range, and stops below
   }
 });
 
-test("the LIMITER trim never inverts the gate, and spends its top half on the chop rate", async () => {
+test("the LIMITER is three knobs: depth that never inverts the gate, a rate, and a pitch sag", async () => {
   const A = await sampleEngine();
   const atLimiter = () => A.setEngine(0.99, 0, false, 0.9, 7, {});
-  const [, hi] = A.tuneRange().limiter;
-  let lastHz = -1;
-  for (const k of [0, 0.5, 1, 2, hi]) {
+  const r = A.tuneRange();
+  A.setTune(A.tuneDefaults());
+  for (const k of [0, 0.5, 1, 2, r.limiter[1]]) {
     A.setTune({ limiter: k });
     atLimiter();
     // engGain's base is (lvl - depth) and the square swings +-depth on top, so
     // the trough is lvl - 2*depth. Negative there is a phase flip, not a cut.
     const depth = A.limiterDepth(), lvl = A.engineLevel() + depth;
     assert.ok(depth <= lvl * 0.5 + 1e-9,
-      `LIMITER ${k}: depth ${depth} exceeds half of level ${lvl} — the gate inverts`);
-    const hz = A.limiterHz();
-    assert.ok(hz > lastHz, `LIMITER ${k}: the chop rate stopped rising (${lastHz} -> ${hz})`);
-    lastHz = hz;
+      `DEPTH ${k}: depth ${depth} exceeds half of level ${lvl} — the gate inverts`);
+    assert.ok(Math.abs(A.limiterHz() - 13) < 0.01, "DEPTH must not move the chop rate — that is RATE's knob now");
   }
   A.setTune({ limiter: 1 });
-  atLimiter();
+  let lastHz = -1;
+  for (const k of [r.limRate[0], 0.7, 1, 2, r.limRate[1]]) {
+    A.setTune({ limRate: k });
+    const hz = A.limiterHz();
+    assert.ok(hz > lastHz, `RATE ${k}: the chop rate stopped rising (${lastHz} -> ${hz})`);
+    lastHz = hz;
+  }
+  A.setTune({ limRate: 1 });
   assert.ok(Math.abs(A.limiterHz() - 13) < 0.01, "1.0 is still the stock 13 Hz cut");
+  // PITCH SAG: cents of swing in step with the cut, only while the cut is on.
+  atLimiter();
+  const sag = A.limiterCents();
+  assert.ok(sag > 0, "the stock tune sags on each cut");
+  A.setTune({ limPitch: 3 });
+  atLimiter();
+  assert.ok(Math.abs(A.limiterCents() - sag * 3) < 1e-6, "PITCH SAG is a multiplier on the cents");
+  A.setTune({ limPitch: 0 });
+  atLimiter();
+  assert.equal(A.limiterCents(), 0, "zero is a steady note under the cut");
+  A.setTune({ limPitch: 1 });
+  A.setEngine(0.8, 0, false, 0.9, 7, {});
+  assert.equal(A.limiterCents(), 0, "and below the limiter the note never sags");
+  A.setLayer("limiter", false);
+  atLimiter();
+  assert.equal(A.limiterCents(), 0, "the switch is the hard off for the sag too");
+});
+
+test("BOOST is the ERS layers' level and the rev lift under deploy", async () => {
+  const A = await sampleEngine();
+  const deploying = () => A.setEngine(0.7, 1, false, 0.7, 6, { deploy: 1, energy: 1 });
+  const coasting = () => A.setEngine(0.7, 0, false, 0.7, 6, {});
+  A.setTune(A.tuneDefaults());
+  coasting();
+  const flat = A.rate();
+  deploying();
+  const lift = A.rate() / flat;
+  assert.ok(lift > 1.03 && lift < 1.05, `the stock deploy lift is 4%, got ${lift}`);
+  const whine = A.ersLevel();
+  assert.ok(whine > 0, "the stock tune whines while deploying");
+  A.setTune({ boostPitch: 3 });
+  deploying();
+  assert.ok(Math.abs((A.rate() / flat - 1) - 0.04 * 3) < 1e-6, "REV LIFT is a multiplier on the 4%");
+  A.setTune({ boostPitch: 0 });
+  deploying();
+  assert.ok(Math.abs(A.rate() - flat) < 1e-9, "zero lift leaves the note where coasting has it");
+  A.setTune({ boostPitch: 1, boost: 2.5 });
+  deploying();
+  assert.ok(A.ersLevel() > whine * 2, "LEVEL scales the deploy whine");
+  A.setTune({ boost: 0 });
+  deploying();
+  assert.equal(A.ersLevel(), 0, "zero is a silent hybrid");
+  // The deploy whoosh is a one-shot; its level is what the trim gave it.
+  A.setTune({ boost: 1 });
+  A.deployBoost();
+  const stock = A.boostState().peak;
+  assert.ok(stock > 0 && A.boostState().fired === 1, "a deploy fires one whoosh at the stock level");
+  A.setTune({ boost: 2 });
+  A.deployBoost();
+  assert.ok(Math.abs(A.boostState().peak - stock * 2) < 1e-9, "the trim scales the whoosh");
+});
+
+test("the layers that only had a switch now have a level", async () => {
+  const { GameAudio: A, release, ctxTime } = boot();
+  A.init();
+  await release();
+  A.startEngine();
+  A.setTune(A.tuneDefaults());
+  // Wind at speed, harvest under a lift, tyres sliding, a rival alongside.
+  const windy = () => A.setEngine(0.8, 0, false, 0.9, 6, {});
+  const harvesting = () => {   // the harvest layer follows the smoothed decel of speed01 over TIME
+    for (let i = 0; i < 8; i++) { ctxTime(0.05); A.setEngine(0.6, 0, false, 0.9 - i * 0.05, 5, { ax: -6 }); }
+  };
+  const sliding = () => A.setSkid(0.8, false);
+  const rival = () => { A.setRivals([{ lat: 3, arc: 1, rev: 0.8, approach: 0 }]); return A.rivalState()[0].gain; };
+  const cases = [
+    ["wind",    windy,      () => A.windLevel()],
+    ["harvest", harvesting, () => A.harvestLevel()],
+    ["screech", sliding,    () => A.skidLevel()],
+    ["rivals",  () => {},   rival],
+  ];
+  for (const [k, drive, read] of cases) {
+    A.setTune({ [k]: 1 });
+    drive();
+    const base = read();
+    assert.ok(base > 0, `${k}: precondition — the layer is audible on this frame`);
+    A.setTune({ [k]: 2.5 });
+    drive();
+    assert.ok(read() > base * 2, `${k}: the trim must scale it (${base} -> ${read()})`);
+    A.setTune({ [k]: 0 });
+    drive();
+    assert.equal(read(), 0, `${k}: zero must be silent`);
+    A.setTune({ [k]: 1 });
+  }
 });
 
 test("rival voices are four distinct cars, not one car four times", async () => {

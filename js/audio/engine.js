@@ -17,6 +17,7 @@ const GameAudio = (function () {
   let engA = null, engB = null, engC = null;     // saw, saw, square (synth fallback)
   let engFilter = null, engGain = null;
   let limOsc = null, limGain = null;               // rev-limiter gate (audio-thread)
+  let limPitch = null;                             // the same square into the core's detune: the cut's pitch sag
   let whineOsc = null, whineGain = null;          // turbo whine
   let harvSrc = null, harvFilter = null, harvGain = null; // MGU-K harvest whirr
   let lfo = null, lfoG = null;                    // offroad pitch wobble (8 Hz)
@@ -161,7 +162,19 @@ const GameAudio = (function () {
   // factors, so the ordering is untouched. `sub` weights the sub-octave;
   // `gravel` the crank-rate roughness that fades with rev; `brakes` the
   // carbon-brake roar; `shift` the gear-change crack.
-  const TUNE_DEF = Object.freeze({ pitch: 1, idle: 1, revRange: 1, curve: 1, detune: 1, brightness: 1, gravel: 1, whine: 1, sub: 1, limiter: 1, brakes: 1, shift: 1, reverb: 1, overrun: 1 });
+  //
+  // The LIMITER is three knobs because a chop has three things to hear:
+  // `limiter` is the DEPTH of the cut, `limRate` how many times a second it
+  // cuts (13 Hz stock), `limPitch` how far the note sags on each cut, which is
+  // the rpm dropping under a dead ignition. BOOST is two: `boost` the level of
+  // the ERS whine and the deploy whoosh, `boostPitch` the rev lift under
+  // deploy (4% stock). `harvest`, `wind`, `screech` and `rivals` are levels
+  // for layers that only had a switch.
+  const TUNE_DEF = Object.freeze({
+    pitch: 1, idle: 1, revRange: 1, curve: 1, detune: 1, brightness: 1, gravel: 1, sub: 1,
+    limiter: 1, limRate: 1, limPitch: 1, boost: 1, boostPitch: 1,
+    whine: 1, harvest: 1, wind: 1, screech: 1, brakes: 1, shift: 1, rivals: 1, reverb: 1, overrun: 1,
+  });
   // WIDER THAN IS SENSIBLE, on purpose. The first cut of these ranges was
   // conservative enough that several trims could not be pushed far enough to
   // hear at all — a tuner whose extremes sound like its middle is a tuner
@@ -174,9 +187,11 @@ const GameAudio = (function () {
   // 4, PITCH 1.8) — a 50:1 spread against the stock 2.8:1.
   const TUNE_RANGE = Object.freeze({
     pitch:      [0.60, 1.80], idle:  [0.50, 1.60], revRange: [0.20, 4.00], curve: [0.40, 2.50],
-    detune:     [0, 4],       brightness: [0.30, 2.50], gravel: [0, 4],
-    whine:      [0, 4],       sub:   [0, 4],       limiter:  [0, 3],
-    brakes:     [0, 4],       shift: [0, 3],       reverb:   [0, 4],    overrun: [0, 4],
+    detune:     [0, 4],       brightness: [0.30, 2.50], gravel: [0, 4],    sub: [0, 4],
+    limiter:    [0, 3],       limRate: [0.40, 3.00], limPitch: [0, 4],
+    boost:      [0, 4],       boostPitch: [0, 4],
+    whine:      [0, 4],       harvest: [0, 4],     wind:     [0, 4],    screech: [0, 4],
+    brakes:     [0, 4],       shift: [0, 3],       rivals:   [0, 4],    reverb:  [0, 4],   overrun: [0, 4],
   });
   let tune = Object.assign({}, TUNE_DEF);
 
@@ -195,12 +210,13 @@ const GameAudio = (function () {
   // only names what it moves.
   const SOUND_PROFILES = Object.freeze({
     team:      null,
-    broadcast: { pitch: 1.02, detune: 0.9, revRange: 1.05, brightness: 1.18, whine: 1.30, sub: 0.80, limiter: 1.00, gravel: 0.60, brakes: 0.90, shift: 1.10 },
-    trackside: { pitch: 0.99, detune: 1.3, revRange: 1.00, brightness: 0.82, whine: 0.65, sub: 1.15, limiter: 0.85, idle: 0.95, gravel: 1.40, brakes: 1.20, shift: 0.90 },
-    cockpit:   { pitch: 1.00, detune: 1.0, revRange: 0.92, brightness: 0.68, whine: 0.85, sub: 1.60, limiter: 1.35, curve: 0.95, gravel: 1.30, brakes: 1.50, shift: 1.40 },
+    broadcast: { pitch: 1.02, detune: 0.9, revRange: 1.05, brightness: 1.18, whine: 1.30, sub: 0.80, limiter: 1.00, gravel: 0.60, brakes: 0.90, shift: 1.10, boost: 1.20, rivals: 1.20, wind: 0.80 },
+    trackside: { pitch: 0.99, detune: 1.3, revRange: 1.00, brightness: 0.82, whine: 0.65, sub: 1.15, limiter: 0.85, idle: 0.95, gravel: 1.40, brakes: 1.20, shift: 0.90, wind: 1.40, screech: 1.30, rivals: 1.50, limPitch: 0.70 },
+    cockpit:   { pitch: 1.00, detune: 1.0, revRange: 0.92, brightness: 0.68, whine: 0.85, sub: 1.60, limiter: 1.35, curve: 0.95, gravel: 1.30, brakes: 1.50, shift: 1.40, limPitch: 1.30, harvest: 1.20, wind: 0.70, boost: 1.10 },
     // A V10 idles low and lazy, hangs there, then climbs to a shriek: low idle,
-    // wide span, a late curve, and almost none of the turbo-era roughness.
-    v10:       { pitch: 1.07, detune: 2.2, revRange: 1.60, brightness: 1.28, whine: 0.10, sub: 0.70, limiter: 1.15, idle: 0.85, curve: 1.25, gravel: 0.30, brakes: 0.80, shift: 1.20 },
+    // wide span, a late curve, almost none of the turbo-era roughness, a hard
+    // fast limiter — and no hybrid, so the ERS layers all but vanish.
+    v10:       { pitch: 1.07, detune: 2.2, revRange: 1.60, brightness: 1.28, whine: 0.10, sub: 0.70, limiter: 1.15, idle: 0.85, curve: 1.25, gravel: 0.30, brakes: 0.80, shift: 1.20, limRate: 1.30, limPitch: 1.50, boost: 0.15, boostPitch: 0.50, harvest: 0.20 },
   });
   let profileName = "team";
 
@@ -249,6 +265,7 @@ const GameAudio = (function () {
   let pullT = 0;                       // seconds the engine has been under load (wastegate arming)
   let wasteFired = 0;                  // wastegate dumps emitted this session (test hook)
   let shiftFired = 0, shiftPeak = 0;   // gear-shift cracks emitted, and the last one's level (test hook)
+  let boostFired = 0, boostPeak = 0;   // deploy whooshes emitted, and the last one's level (test hook)
   let idleGainRamped = false;          // the sample voice's one-time fade-in (see setEngine)
 
   let engBuf = null, samplesReady = false;
@@ -681,6 +698,11 @@ const GameAudio = (function () {
     limOsc = ctx.createOscillator(); limOsc.type = "square"; limOsc.frequency.value = 13;
     limGain = ctx.createGain(); limGain.gain.value = 0;
     limOsc.connect(limGain).connect(engGain.gain);
+    // The cut's PITCH SAG: the same square, in cents, into the core's detune —
+    // wired to the sources further down, where they exist (beside the offroad
+    // LFO, which does exactly this with a sine). Depth is limCents in setEngine.
+    limPitch = ctx.createGain(); limPitch.gain.value = 0;
+    limOsc.connect(limPitch);
     limOsc.start();
     // GRAVEL. The recording is a steady drone, and pitching it down for idle
     // gives a LOWER drone, not a lumpier one — every cycle is the same as the
@@ -922,10 +944,14 @@ const GameAudio = (function () {
     lfo.connect(lfoG);
     if (usingSamples) {
       lfoG.connect(engSrcIdle.detune);
+      limPitch.connect(engSrcIdle.detune);
     } else {
       lfoG.connect(engA.detune);
       lfoG.connect(engB.detune);
       lfoG.connect(engC.detune);
+      limPitch.connect(engA.detune);
+      limPitch.connect(engB.detune);
+      limPitch.connect(engC.detune);
     }
 
     // tire screech: looped noise through a bandpass, silent until setSkid
@@ -1019,7 +1045,9 @@ const GameAudio = (function () {
     engSrcIdle = engGainIdle = null;
     if (limGain) limGain.gain.setTargetAtTime(0, t0, 0.02);
     const deadLimGain = limGain;                       // disconnected with `dead` below
-    if (limOsc) { stopAt(limOsc, t0 + 0.35); limOsc = null; limGain = null; }
+    if (limPitch) limPitch.gain.setTargetAtTime(0, t0, 0.02);
+    const deadLimPitch = limPitch;                     // feeds a param too: buried by name
+    if (limOsc) { stopAt(limOsc, t0 + 0.35); limOsc = null; limGain = null; limPitch = null; }
     // Same shape as limGain: gravGain feeds an AudioParam, so it is invisible
     // to a graph walk and has to be buried by name.
     if (gravGain) gravGain.gain.setTargetAtTime(0, t0, 0.02);
@@ -1061,7 +1089,7 @@ const GameAudio = (function () {
     // graph for outputs.
     const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
                   voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain,
-                  deadIdleGain, deadLimGain, deadGravGain, brakeFilter, brakeGain,
+                  deadIdleGain, deadLimGain, deadLimPitch, deadGravGain, brakeFilter, brakeGain,
                   revSend, convolver, revReturn];
     for (const v of rivalVoices) { dead.push(v.filt, v.gain, v.pan); }
     queueDying(dead);
@@ -1127,7 +1155,7 @@ const GameAudio = (function () {
       // in rev and the gear ordering is unchanged (same trim on both sides).
       // IDLE moves only the 0.25 end, REV RANGE only the 0.45 span, PITCH the
       // sum — the decoupling TUNE_DEF explains.
-      const rate = (0.25 * tune.idle + revC * 0.45 * tune.revRange) * (1 + 0.04 * b) * gmul * voice.rateTrim * tune.pitch;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
+      const rate = (0.25 * tune.idle + revC * 0.45 * tune.revRange) * (1 + 0.04 * b * tune.boostPitch) * gmul * voice.rateTrim * tune.pitch;   // idle ~0.25x .. redline ~0.70x, lower in gears 1-3
       lastRate = rate;
       engSrcIdle.playbackRate.setTargetAtTime(rate, t, 0.035);
       f0 = enginePeriod > 1 ? (ctx.sampleRate * rate) / enginePeriod : 0;
@@ -1155,7 +1183,7 @@ const GameAudio = (function () {
       if (!idleGainRamped && engGainIdle) { engGainIdle.gain.setTargetAtTime(0.9, t, 0.05); idleGainRamped = true; }
     } else {
       // synth fallback: detuned saws + sub follow the per-gear frequency
-      const base = (gIdle * tune.idle + revC * gSpan * tune.revRange) * (1 + 0.12 * b) * voice.rateTrim * tune.pitch;
+      const base = (gIdle * tune.idle + revC * gSpan * tune.revRange) * (1 + 0.12 * b * tune.boostPitch) * voice.rateTrim * tune.pitch;
       engA.frequency.setTargetAtTime(base * 0.994, t, 0.025);
       engB.frequency.setTargetAtTime(base * (1 + (voice.synthSpread - 1) * tune.detune), t, 0.025);
       engC.frequency.setTargetAtTime(base * 0.5, t, 0.025);
@@ -1227,6 +1255,15 @@ const GameAudio = (function () {
     if (limGain && limGain._apexLimTgt !== limDepth) {
       limGain.gain.setTargetAtTime(limDepth, t, 0.02);
       limGain._apexLimTgt = limDepth;
+    }
+    // The sag: ±limCents around the note, in step with the cut. 30 cents at
+    // the stock trim is the rpm visibly dropping on a dead cylinder bank; the
+    // top of the range (120) is a stutter you could not mistake for anything
+    // else. Gated with the depth so the note is steady everywhere below 98.5%.
+    const limCents = limOn ? 30 * tune.limPitch : 0;
+    if (limPitch && limPitch._apexCents !== limCents) {
+      limPitch.gain.setTargetAtTime(limCents, t, 0.02);
+      limPitch._apexCents = limCents;
     }
     const engBase = (lvl - limDepth) * (1 - 0.55 * shiftDuck);
     engGain.gain.setTargetAtTime(engBase, t, 0.03);
@@ -1314,7 +1351,7 @@ const GameAudio = (function () {
     // MGU-K harvest is audible on BOTH cores now. It was created and started on
     // the sample path too but gated silent here — quieter over the recording,
     // which already carries some off-throttle character of its own.
-    aimGain(harvGain, layers.harvest ? harvLevel * (usingSamples ? 0.035 : 0.06) : 0, t, 0.06);
+    aimGain(harvGain, layers.harvest ? harvLevel * (usingSamples ? 0.035 : 0.06) * tune.harvest : 0, t, 0.06);
     harvFilter.frequency.setTargetAtTime(700 + s * 1600, t, 0.08);
 
     // ERS deploy whine: only while the battery is actually deploying (game.js
@@ -1339,7 +1376,7 @@ const GameAudio = (function () {
     const low = energy < 0.2 ? energy / 0.2 : 1;
     const partBias = ph.ersDeploy != null ? 0.8 + 0.4 * clamp01(ph.ersDeploy) : 1;
     const ersLvl = (deploy > 0 && layers.ers)
-      ? (0.010 + 0.018 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias
+      ? (0.010 + 0.018 * deploy * (0.35 + 0.65 * energy)) * (0.4 + 0.6 * low) * partBias * tune.boost
       : 0;
     // Cached on the node, same idiom as lfoG/limGain above: ersLvl is 0 whenever
     // the car isn't deploying. The time constant varies with deploy>0, but a
@@ -1365,7 +1402,7 @@ const GameAudio = (function () {
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
     const tow = clamp01(ph.tow || 0);   // in a slipstream the air is already moving: less wind
     aimGain(windGain,
-      layers.wind ? (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen : 0,
+      layers.wind ? (0.006 + 0.030 * s * s) * (1 + 0.45 * rough + 0.30 * gust) * (wet ? 1.25 : 1) * (1 - 0.35 * tow) * windOpen * tune.wind : 0,
       t, 0.10);
     windFilter.frequency.setTargetAtTime(450 + s * 1450 + rough * 260, t, 0.12);
 
@@ -1494,7 +1531,7 @@ const GameAudio = (function () {
   function setSkid(x, wet) {
     if (!engineOn || !skidGain) return;
     const v = clamp01(x || 0);
-    skidGain.gain.value = layers.screech ? v * (wet ? 0.10 : 0.16) : 0;   // wetter = quieter, sibilant
+    skidGain.gain.value = layers.screech ? v * (wet ? 0.10 : 0.16) * tune.screech : 0;   // wetter = quieter, sibilant
     if (v > 0) {
       const base = wet ? 480 : 760;                    // wet: lower splash vs dry: screech
       skidFilter.frequency.value = base + v * 320 + Math.sin(now() * 30) * 60;
@@ -1657,13 +1694,13 @@ const GameAudio = (function () {
     const subGain = engC && engC._apexSubGain;
     if (subGain) subGain.gain.setTargetAtTime(voice.subLvl * tune.sub, t, 0.05);
 
-    // CHOP RATE. The depth saturates at a full ignition cut (see setEngine), so
-    // above ~1.1 the trim had nothing left to buy. Real limiters differ in how
-    // FAST they cut as much as how hard, and the rate is what tells a soft cut
-    // from a hard one by ear, so the rest of the range spends itself here:
-    // 9.75 Hz at 0, the stock 13 Hz at 1, 22.75 Hz wide open. Set once per tune
-    // change, not per frame — it is a function of the trim and nothing else.
-    if (limOsc) limOsc.frequency.setTargetAtTime(13 * (0.75 + 0.25 * tune.limiter), t, 0.05);
+    // CHOP RATE. Its own knob now: 5.2 Hz at the bottom, the stock 13 Hz at 1,
+    // 39 Hz wide open, which is past a stutter and into a buzz. (It used to be
+    // the top half of the DEPTH trim, because depth saturates at a full
+    // ignition cut and had nothing left to buy above ~1.1 — but a slow deep
+    // cut and a fast shallow one are different limiters, and one slider could
+    // not express either.) Set once per tune change, not per frame.
+    if (limOsc) limOsc.frequency.setTargetAtTime(13 * tune.limRate, t, 0.05);
     applyVenue();   // the REVERB trim and its layer switch both land here
   }
 
@@ -1766,7 +1803,7 @@ const GameAudio = (function () {
       // car alongside, not as a rumour.
       const near = RIVAL_REF / (RIVAL_REF + 1.15 * Math.max(0, dist - RIVAL_REF));
       const behind = arc < 0 ? 0.78 : 1;   // your own engine is between you and it
-      aimGain(v.gain, PAN_MAKEUP * rivalPeak * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10);
+      aimGain(v.gain, PAN_MAKEUP * rivalPeak * tune.rivals * near * behind * (0.55 + 0.45 * clamp01(r.rev)), t, 0.10);
 
       // Air absorbs the top end with distance, which is most of why a far car
       // reads as far rather than merely quiet. A POWER LAW, not a scale of the
@@ -1806,7 +1843,9 @@ const GameAudio = (function () {
 
   // whoosh: filtered noise sweeping up + a rising saw underneath
   function deployBoost() {
-    if (!sfxOk()) return;
+    boostPeak = 0.3 * tune.boost;
+    boostFired++;
+    if (!sfxOk() || !(boostPeak > 0)) return;   // BOOST at 0 is a silent deploy, not a zero-height envelope
     const t0 = now();
     const src = ctx.createBufferSource();
     const off = bindNoise(src, 0.7);        // start(t0, off) -> stop(t0 + 0.6)
@@ -1816,12 +1855,12 @@ const GameAudio = (function () {
     f.frequency.setValueAtTime(320, t0);
     f.frequency.exponentialRampToValueAtTime(4800, t0 + 0.45);
     const g = ctx.createGain();
-    env(g, t0, 0.3, 0.03, 0.45);
+    env(g, t0, boostPeak, 0.03, 0.45);
     src.connect(f).connect(g).connect(sfxBus);
     src.start(t0, off);
     src.stop(t0 + 0.6);
     src.onended = () => { try { src.disconnect(); f.disconnect(); g.disconnect(); } catch (e) {} };
-    blip(220, "sawtooth", 0.12, 0.03, 0.4, 880);
+    blip(220, "sawtooth", 0.12 * tune.boost, 0.03, 0.4, 880);
   }
 
   // Contact. `impact` 0..1 is what collideFx already computes (and used to
@@ -2304,6 +2343,13 @@ const GameAudio = (function () {
     // The chop RATE, which is where the top half of the LIMITER trim goes once
     // the depth has saturated at a full ignition cut.
     limiterHz() { return limOsc ? +limOsc.frequency.value.toFixed(2) : 0; },
+    // The cut's pitch sag, in cents of swing, and the levels behind the trims
+    // that used to be switch-only.
+    limiterCents() { return limPitch ? +limPitch.gain.value.toFixed(3) : 0; },
+    ersLevel() { return ersGain ? +ersGain.gain.value : 0; },
+    harvestLevel() { return harvGain ? +harvGain.gain.value : 0; },
+    skidLevel() { return skidGain ? +skidGain.gain.value : 0; },
+    boostState() { return { fired: boostFired, peak: +boostPeak.toFixed(4) }; },
     // The engine core's live lowpass corner, so the BRIGHTNESS trim's ceiling
     // is assertable rather than a thing you can only hear.
     engineCut() { return engFilter ? Math.round(engFilter.frequency.value) : 0; },

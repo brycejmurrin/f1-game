@@ -742,8 +742,9 @@
            no slider position can make pitch fall as the revs rise. The three
            groups are the engine's own split: PITCH CURVE is the four knobs of
            rate(rev) — the idle end, the whole-curve transpose, the span and the
-           bend between them — CHARACTER is timbre, LAYERS are the levels of
-           the sounds stacked over the core. -->
+           bend between them — CHARACTER is timbre, LIMITER is the cut's depth,
+           rate and pitch sag, BOOST the ERS deploy's level and rev lift, and
+           LAYERS are the levels of the sounds stacked over the core. -->
       <details id="as-engine-details" class="as-sec">
         <summary class="adv-more-btn" id="as-engine-sum">ENGINE TONE · TEAM</summary>
         <div class="opt-row" role="group" aria-label="Sound profile">
@@ -772,15 +773,33 @@
           <input id="as-t-bright" type="range" min="0" max="44" step="1" value="14" aria-label="Engine brightness"></label>
         <label class="tune-row"><span class="tune-label">SUB <b id="as-t-sub-v">100</b></span>
           <input id="as-t-sub" type="range" min="0" max="16" step="1" value="4" aria-label="Sub-octave weight"></label>
+        <h3 class="adv-sec">LIMITER</h3>
+        <label class="tune-row"><span class="tune-label">DEPTH <b id="as-t-lim-v">100</b></span>
+          <input id="as-t-lim" type="range" min="0" max="12" step="1" value="4" aria-label="Rev limiter chop depth"></label>
+        <label class="tune-row"><span class="tune-label">RATE <b id="as-t-limrate-v">100</b></span>
+          <input id="as-t-limrate" type="range" min="0" max="26" step="1" value="6" aria-label="Rev limiter chop rate"></label>
+        <label class="tune-row"><span class="tune-label">PITCH SAG <b id="as-t-limsag-v">100</b></span>
+          <input id="as-t-limsag" type="range" min="0" max="16" step="1" value="4" aria-label="Rev limiter pitch sag on each cut"></label>
+        <h3 class="adv-sec">BOOST</h3>
+        <label class="tune-row"><span class="tune-label">LEVEL <b id="as-t-boost-v">100</b></span>
+          <input id="as-t-boost" type="range" min="0" max="16" step="1" value="4" aria-label="ERS deploy whine and whoosh level"></label>
+        <label class="tune-row"><span class="tune-label">REV LIFT <b id="as-t-boostlift-v">100</b></span>
+          <input id="as-t-boostlift" type="range" min="0" max="16" step="1" value="4" aria-label="Engine pitch lift while deploying"></label>
         <h3 class="adv-sec">LAYERS</h3>
         <label class="tune-row"><span class="tune-label">TURBO <b id="as-t-whine-v">100</b></span>
           <input id="as-t-whine" type="range" min="0" max="16" step="1" value="4" aria-label="Turbo whine and wastegate level"></label>
-        <label class="tune-row"><span class="tune-label">LIMITER <b id="as-t-lim-v">100</b></span>
-          <input id="as-t-lim" type="range" min="0" max="12" step="1" value="4" aria-label="Rev limiter chop depth"></label>
+        <label class="tune-row"><span class="tune-label">HARVEST <b id="as-t-harvest-v">100</b></span>
+          <input id="as-t-harvest" type="range" min="0" max="16" step="1" value="4" aria-label="MGU-K harvest whirr level"></label>
+        <label class="tune-row"><span class="tune-label">WIND <b id="as-t-wind-v">100</b></span>
+          <input id="as-t-wind" type="range" min="0" max="16" step="1" value="4" aria-label="Airflow level"></label>
+        <label class="tune-row"><span class="tune-label">TYRES <b id="as-t-tyres-v">100</b></span>
+          <input id="as-t-tyres" type="range" min="0" max="16" step="1" value="4" aria-label="Tyre screech level"></label>
         <label class="tune-row"><span class="tune-label">BRAKES <b id="as-t-brakes-v">100</b></span>
           <input id="as-t-brakes" type="range" min="0" max="16" step="1" value="4" aria-label="Brake roar level"></label>
         <label class="tune-row"><span class="tune-label">SHIFT <b id="as-t-shift-v">100</b></span>
           <input id="as-t-shift" type="range" min="0" max="12" step="1" value="4" aria-label="Gear-shift crack level"></label>
+        <label class="tune-row"><span class="tune-label">RIVALS <b id="as-t-rivals-v">100</b></span>
+          <input id="as-t-rivals" type="range" min="0" max="16" step="1" value="4" aria-label="Rival engine level"></label>
         <label class="tune-row"><span class="tune-label">SPACE <b id="as-t-rev-v">100</b></span>
           <input id="as-t-rev" type="range" min="0" max="16" step="1" value="4" aria-label="Circuit reverb amount"></label>
         <label class="tune-row"><span class="tune-label">OVERRUN <b id="as-t-ovr-v">100</b></span>

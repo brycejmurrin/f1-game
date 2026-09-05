@@ -11,9 +11,9 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 | Engine (synth fallback) | Three detuned oscillators (saw×2 + square) through a speed-tracking lowpass until samples decode |
 | Pitch curve | `(0.25·idle + 0.45·revRange·rev^curve)·pitch` — four independent tune knobs; `GameAudio.rate()` reads the result |
 | Gravel | Sine at the crank rate (`f0/3`, 18–140 Hz) into `engGain.gain`; depth `(1-rev)²` × GRAVEL trim; `gravelDepth()` / `gravelHz()` |
-| Rev limiter | 13 Hz square into `engGain.gain` above 98.5% revs; `limiterDepth()` / `limiterHz()` |
+| Rev limiter | 13 Hz square into `engGain.gain` above 98.5% revs, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()` |
 | Turbo whine + wastegate | Sine ~1500 Hz tracking rev; a falling hiss once per lift after ≥0.5 s under load (`wastegateState()`) |
-| MGU-K harvest / ERS deploy | Filtered noise when decelerating / triangle whine while deploying |
+| MGU-K harvest / ERS deploy | Filtered noise when decelerating (HARVEST trim) / triangle whine while deploying + the deploy whoosh (BOOST level) and a rev lift under deploy (BOOST rev lift) |
 | Brakes | Bandpass noise, gain = deceleration × speed; `brakeLevel()` |
 | Gear shift | Saw crack + click, scaled by the SHIFT trim (`shiftState()`); the rev-cut duck is the engine's own |
 | Overrun | Irregular crackle one-shots on a trailing throttle (`overrunState()`) |

@@ -916,9 +916,10 @@ pitch invariants (`tools/check/audio-test.cjs`, `tests/unit/audio-tune.test.mjs`
 hold by construction. The pitch curve is four independent knobs,
 `rate(rev) = (0.25·idle + 0.45·revRange·rev^curve) · pitch`: IDLE the idle end,
 REV RANGE the span, PITCH a transpose, CURVE the bend (>1 hangs low and climbs
-late). Character: GRAVEL, DETUNE, BRIGHTNESS, SUB. Layer levels: TURBO (whine
-+ wastegate), LIMITER, BRAKES, SHIFT, SPACE, OVERRUN. Twelve layer switches
-are hard offs. Reach and the reason the curve was split: `docs/DEBUG-HOOKS.md`
+late). Character: GRAVEL, DETUNE, BRIGHTNESS, SUB. LIMITER: DEPTH, RATE (Hz),
+PITCH SAG (cents in step with the cut). BOOST: LEVEL (ERS whine + whoosh),
+REV LIFT. Layer levels: TURBO (whine + wastegate), HARVEST, WIND, TYRES,
+BRAKES, SHIFT, RIVALS, SPACE, OVERRUN. Twelve layer switches are hard offs. Reach and the reason the curve was split: `docs/DEBUG-HOOKS.md`
 §`audio()`.
 
 ```

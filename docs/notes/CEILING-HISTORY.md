@@ -2085,3 +2085,12 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   sliders read as PITCH CURVE / CHARACTER / LAYERS rather than a list. All
   static DOM, as the shell rule wants; `tests/unit/audio-tune.test.mjs` holds
   every id, range and default position against the engine's tables.
+
+- `shellNodes` 1158 -> **1192** (2026-09-05): the second ENGINE TONE pass.
+  The LIMITER trim spent its top half on chop rate because depth saturates at
+  a full ignition cut — but a slow deep cut and a fast shallow one are
+  different limiters and one slider could not express either, so it is three
+  knobs now (DEPTH / RATE / PITCH SAG, the last a square into the core's
+  detune so the note drops with the ignition). BOOST gets LEVEL and REV LIFT,
+  and HARVEST / WIND / TYRES / RIVALS get the level trim they had always
+  lacked beside their switch. Eight sliders (32) and two group headers (2).

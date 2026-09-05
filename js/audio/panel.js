@@ -238,8 +238,9 @@ const AudioPanel = (() => {
        chosen per field so that an EXACT integer lands on 1.0 — a slider whose
        centre is 0.9975 would mean the panel could not express the shipped
        sound, which is the one value it must always be able to return to. */
-    // Same order as the shell: the PITCH CURVE group (idle end, whole-curve
-    // transpose, span, bend), then CHARACTER, then the LAYER levels.
+    // Same order as the shell: PITCH CURVE (idle end, whole-curve transpose,
+    // span, bend), CHARACTER, the three LIMITER knobs, the two BOOST knobs,
+    // then the LAYER levels.
     const TONE = [
       { k: "idle",       id: "as-t-idle",   lo: 0.50, step: 0.05 },
       { k: "pitch",      id: "as-t-pitch",  lo: 0.60, step: 0.05 },
@@ -249,10 +250,18 @@ const AudioPanel = (() => {
       { k: "detune",     id: "as-t-detune", lo: 0,    step: 0.25 },
       { k: "brightness", id: "as-t-bright", lo: 0.30, step: 0.05 },
       { k: "sub",        id: "as-t-sub",    lo: 0,    step: 0.25 },
-      { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.25 },
       { k: "limiter",    id: "as-t-lim",    lo: 0,    step: 0.25 },
+      { k: "limRate",    id: "as-t-limrate", lo: 0.40, step: 0.10 },
+      { k: "limPitch",   id: "as-t-limsag", lo: 0,    step: 0.25 },
+      { k: "boost",      id: "as-t-boost",  lo: 0,    step: 0.25 },
+      { k: "boostPitch", id: "as-t-boostlift", lo: 0, step: 0.25 },
+      { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.25 },
+      { k: "harvest",    id: "as-t-harvest", lo: 0,   step: 0.25 },
+      { k: "wind",       id: "as-t-wind",   lo: 0,    step: 0.25 },
+      { k: "screech",    id: "as-t-tyres",  lo: 0,    step: 0.25 },
       { k: "brakes",     id: "as-t-brakes", lo: 0,    step: 0.25 },
       { k: "shift",      id: "as-t-shift",  lo: 0,    step: 0.25 },
+      { k: "rivals",     id: "as-t-rivals", lo: 0,    step: 0.25 },
       { k: "reverb",     id: "as-t-rev",    lo: 0,    step: 0.25 },
       { k: "overrun",    id: "as-t-ovr",    lo: 0,    step: 0.25 },
     ];
@@ -271,7 +280,7 @@ const AudioPanel = (() => {
       broadcast: "Bright and forward, with the turbo up and the idle clean. The TV mix.",
       trackside: "Darker, further away, lumpier at idle, more air, tyre and brake.",
       cockpit: "Heavy and muffled, with the rev limiter, brakes and gearbox loud. From inside the car.",
-      v10: "Low lazy idle, then a late climb to a scream. No turbo.",
+      v10: "Low lazy idle, then a late climb to a scream. Hard fast limiter, no turbo, no hybrid.",
     };
     // The engine owns which profile is live — it flips itself to "custom" the
     // moment a trim stops matching the named preset (setTune, js/audio/engine.js).

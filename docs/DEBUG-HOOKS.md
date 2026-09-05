@@ -851,17 +851,27 @@ rate of 0.83 against the stock 0.70. `tests/unit/audio-tune.test.mjs` pins the
 independence and the reach (idle an octave under stock with a redline an
 octave over it, in one tune).
 
+**The LIMITER is three knobs**: `limiter` is the DEPTH of the cut, `limRate`
+the chop rate (13 Hz stock, 5.2–39 Hz), `limPitch` the pitch sag on each cut
+(30 cents of swing stock — the same square wave into the core's detune, so
+the note drops with the ignition). **BOOST is two**: `boost` the level of the
+ERS deploy whine and the deploy whoosh, `boostPitch` the rev lift while
+deploying (4% stock). `harvest`, `wind`, `screech` and `rivals` are levels for
+layers that used to have only a switch.
+
 `GameAudio` carries more reads that only the tests want: `engineCut()` (the
 core's live lowpass corner), `engineLevel()` (its gain, which is
-`level - limiterDepth`), `limiterHz()` (the chop rate), `gravelHz()` (the
-roughness rate — the crank rate, `f0/3`, clamped into 18–140 Hz) and
-`shiftState()` (`{fired, peak}`, the last gear-change crack's level). The pair
+`level - limiterDepth`), `limiterHz()` (the chop rate), `limiterCents()` (the
+sag swing), `gravelHz()` (the roughness rate — the crank rate, `f0/3`,
+clamped into 18–140 Hz), `ersLevel()` / `harvestLevel()` / `skidLevel()`,
+`shiftState()` and `boostState()` (`{fired, peak}`, the last crack's or
+whoosh's level). The pair
 `engineLevel`/`limiterDepth` is what says whether the rev-limiter gate CUTS the
 note or inverts it: `engGain`'s base is `level - depth` and the square swings
 ±depth on top, so a depth past half the level drives the gain negative. It is
-capped there — a full ignition cut is the physical maximum, and the rest of the
-LIMITER trim buys chop RATE instead (9.75 Hz at 0, the stock 13 Hz at 1,
-22.75 Hz wide open).
+capped there — a full ignition cut is the physical maximum. (The chop RATE used
+to be the top half of the same trim for that reason; it is its own knob now,
+because a slow deep cut and a fast shallow one are different limiters.)
 
 BRIGHTNESS has the mirror-image trap: the shape caps (11 kHz on the sample core)
 bound the rev-driven part of the corner, and the trims scale it, so the FINAL
@@ -884,6 +894,8 @@ for the rest of the session. Returns the tune actually in force.
 ```js
 __apex.audioTune({ pitch: 1.15, brightness: 1.4 });
 __apex.audioTune({ idle: 0.6, revRange: 2.5, curve: 1.3, gravel: 2 });   // low lumpy idle, late climb to a scream
+__apex.audioTune({ limiter: 1.2, limRate: 1.6, limPitch: 2 });          // a hard, fast, stuttering cut
+__apex.audioTune({ boost: 0, boostPitch: 0, harvest: 0 });               // no hybrid at all
 __apex.audioTune({ pitch: NaN });        // no-op, not a crash
 ```
 
