@@ -116,3 +116,12 @@ test("HUD layout options live in a full-width pause submenu", () => {
   assert.match(css, /#pm-hud-details \[role="group"\]/);
   assert.match(css, /grid-area:\s*hudopts/);
 });
+
+test("a hidden HUD does not keep measuring or painting the map", () => {
+  const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
+  const fit = hud.slice(hud.indexOf("function fitHud"), hud.indexOf("function updateHud"));
+  assert.match(fit, /classList.contains\("hud-hidden"\)/);
+  const mm = hud.slice(hud.indexOf("function drawMinimap"), hud.indexOf("function drawMinimap") + 800);
+  assert.match(mm, /if \(!player \|\| !track \|\| !track\.map\) return;/);
+  assert.match(mm, /classList.contains\("hud-hidden"\)/);
+});

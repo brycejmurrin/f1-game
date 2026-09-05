@@ -89,7 +89,9 @@ function boot(opts) {
   const sb = {
     // GLX is what decides `mobileTier`; the engine reads it lazily at
     // startEngine. Absent by default (desktop); mobileEngine() supplies it.
-    GLX: opts && opts.mobile ? { mobileTier: true } : undefined,
+    GLX: opts && opts.mobile === "high"
+      ? { isMobile: true, mobileTier: false }
+      : opts && opts.mobile ? { isMobile: true, mobileTier: true } : undefined,
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error,
     parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
@@ -652,6 +654,23 @@ test("the same holds on the oscillator fallback, which builds a bigger graph", a
     `fallback live node count grew across pause/resume: ${marks.join(" -> ")}`);
 });
 
+test("resume does not keep the fading graph rendering under the new one", async () => {
+  // setPaused stop+start used to leave the old chain on sfxBus for 450 ms
+  // (disconnect was deferred). Two full graphs — player + rivals + optional
+  // convolver — is the pause-menu fps dip. startEngine now buries the dying
+  // nodes before it builds.
+  const { GameAudio, release, flushTimers, liveNodes } = boot();
+  GameAudio.init();
+  await release();
+  GameAudio.startEngine();
+  const one = liveNodes();
+  GameAudio.stopEngine();
+  GameAudio.startEngine();          // no flushTimers — the overlap window
+  assert.equal(liveNodes(), one, "resume stacked the fading graph under the new one");
+  flushTimers();
+  assert.equal(liveNodes(), one, "the deferred disconnect must not drop the live graph");
+});
+
 test("a phone gets a cheaper graph: no convolver, half the rival voices", async () => {
   // Every other pool here is mobile-tiered; the 2026-09-04 audio was not, and a
   // ~1.5 s stereo ConvolverNode fed by the engine plus four looping rival voices
@@ -671,6 +690,16 @@ test("a phone gets a cheaper graph: no convolver, half the rival voices", async 
   const D = await sampleEngine();
   assert.equal(D.rivalState().length, 4, "desktop lost a rival voice");
   assert.ok(D.venue().level >= 0, "desktop still has a venue send");
+});
+
+test("GRAPHICS HIGH on a phone still gets the cheap audio graph", async () => {
+  // mobileTier is IS_MOBILE && !gfxHigh. HIGH used to undo the phone cut.
+  const { GameAudio: A, release, counts } = boot({ mobile: "high" });
+  A.init();
+  await release();
+  A.startEngine();
+  assert.equal(counts.convolver || 0, 0, "gfx-high phone built a ConvolverNode");
+  assert.equal(A.rivalState().length, 2, "gfx-high phone built desktop rival voices");
 });
 
 test("two rival voices still give a LEFT and a RIGHT", async () => {

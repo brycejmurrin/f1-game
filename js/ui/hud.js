@@ -280,6 +280,11 @@ const FIT_AIR = 10;              // px of daylight required between two clusters
 let _fitKey = "", _fitWait = 0, _fitRetry = 0;   // _fitRetry: ticks spent re-measuring while nothing is laid out
 let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the four fit handles never change identity
 function fitHud() {
+  // Cinematic HUD: OFF and "any open .screen" hide #hud via display:none.
+  // Measuring then is a forced reflow on a 0×0 box (~10 Hz) that cannot
+  // change a cap — skip until the HUD is visible again (className is in
+  // the fit key, so the next tick re-fits).
+  if (document.body.classList.contains("hud-hidden")) return;
   const root = document.documentElement;
   const scale = +root.style.getPropertyValue("--hud-scale") || 1;
   // body.className is part of the key: cycling STEERING MODE re-parents the
@@ -719,6 +724,8 @@ function updateHud(force) {
 
 function drawMinimap() {
   const player = G.player, cars = G.cars, track = G.track, timeTrial = G.timeTrial;
+  if (!player || !track || !track.map) return;
+  if (document.body.classList.contains("hud-hidden")) return;
   // Logical space = the element's LOCAL CSS box (clientWidth is pre-zoom px,
   // the same convention sheetshape.js relies on). Bitmap = local x effective
   // zoom x DPR so one drawn pixel is one physical pixel — mirroring the menu

@@ -71,9 +71,18 @@ const GameAudio = (function () {
    *
    * READ LAZILY, not at module eval: glx.js is tagged ahead of this file so GLX
    * exists, but `mobileTier` is decided at ITS init, which has not run yet.
-   * startEngine() is late enough to get the real answer. */
+   * startEngine() is late enough to get the real answer.
+   *
+   * Device, not GRAPHICS: HIGH. `mobileTier` is `IS_MOBILE && !gfxHigh`, so
+   * HIGH on a phone rebuilt the desktop graph (convolver + 4 rivals) and
+   * undid the 2026-09-05 phone cut — the setting people reach for when fps
+   * is already bad. Audio follows the device; the renderer keeps its own
+   * HIGH path. */
   function lowPower() {
-    try { return typeof GLX !== "undefined" && !!GLX.mobileTier; } catch (_) { return false; }
+    try {
+      if (typeof GLX === "undefined" || !GLX) return false;
+      return !!(GLX.isMobile || GLX.mobileTier);
+    } catch (_) { return false; }
   }
   // Two voices still give a LEFT and a RIGHT — the pan is what carries "someone
   // is alongside", and the nearest two are the ones a driver reacts to. Four
@@ -183,6 +192,21 @@ const GameAudio = (function () {
     node._apexAimTgt = target;
   }
   let engineOn = false;
+  // Nodes from the last stopEngine() that still sit on sfxBus until their
+  // 0.35 s fade ends. A resume that starts a new graph BEFORE that timeout
+  // used to leave both graphs rendering (~450 ms of doubled CPU, stacked
+  // on every pause/hide). startEngine() buries them first.
+  let _dying = [];
+  function flushDying() {
+    for (let i = 0; i < _dying.length; i++) {
+      try { const n = _dying[i]; if (n && n.disconnect) n.disconnect(); } catch (e) { /* torn down */ }
+    }
+    _dying.length = 0;
+  }
+  function queueDying(nodes) {
+    for (let i = 0; i < nodes.length; i++) { const n = nodes[i]; if (n) _dying.push(n); }
+    setTimeout(flushDying, 450);
+  }
   let lastSpeed = 0, lastEngT = 0, harvLevel = 0;
   let shiftDuck = 0, shiftDuckT = 0;   // transient engine-gain dip from a gear shift
   let overrunT = 0;                    // when the next overrun crackle is due
@@ -586,6 +610,7 @@ const GameAudio = (function () {
 
   function startEngine() {
     if (!ctx || engineOn) return;
+    flushDying();   // kill the fading previous graph before building another
 
     // shared lowpass + master gain for the engine core (samples or synth).
     // The per-manufacturer voice inserts one peaking EQ (its formant) between
@@ -887,27 +912,28 @@ const GameAudio = (function () {
     ersGain.gain.setTargetAtTime(0, t0, 0.04);
     windGain.gain.setTargetAtTime(0, t0, 0.06);
     skidGain.gain.setTargetAtTime(0, t0, 0.04);
+    const stopAt = (n, t) => { try { if (n) n.stop(t); } catch (e) { /* already stopped */ } };
     if (usingSamples) {
       if (engGainIdle) engGainIdle.gain.setTargetAtTime(0, t0, 0.06);
 
-      if (engSrcIdle) engSrcIdle.stop(t0 + 0.35);
+      stopAt(engSrcIdle, t0 + 0.35);
 
     } else {
-      engA.stop(t0 + 0.35); engB.stop(t0 + 0.35); engC.stop(t0 + 0.35);
+      stopAt(engA, t0 + 0.35); stopAt(engB, t0 + 0.35); stopAt(engC, t0 + 0.35);
     }
     const deadIdleGain = engGainIdle;                  // disconnected with `dead` below
     engSrcIdle = engGainIdle = null;
     if (limGain) limGain.gain.setTargetAtTime(0, t0, 0.02);
     const deadLimGain = limGain;                       // disconnected with `dead` below
-    if (limOsc) { limOsc.stop(t0 + 0.35); limOsc = null; limGain = null; }
-    whineOsc.stop(t0 + 0.35);
-    if (subOctOsc) subOctOsc.stop(t0 + 0.35);
+    if (limOsc) { stopAt(limOsc, t0 + 0.35); limOsc = null; limGain = null; }
+    stopAt(whineOsc, t0 + 0.35);
+    stopAt(subOctOsc, t0 + 0.35);
     for (const v of rivalVoices) { try { v.gain.gain.setTargetAtTime(0, t0, 0.06); v.stop(t0 + 0.35); } catch (e) { /* already stopped */ } }
-    harvSrc.stop(t0 + 0.35);
-    ersOsc.stop(t0 + 0.35);
-    windSrc.stop(t0 + 0.35);
-    lfo.stop(t0 + 0.35);
-    skidSrc.stop(t0 + 0.35);
+    stopAt(harvSrc, t0 + 0.35);
+    stopAt(ersOsc, t0 + 0.35);
+    stopAt(windSrc, t0 + 0.35);
+    stopAt(lfo, t0 + 0.35);
+    stopAt(skidSrc, t0 + 0.35);
     const deadSub = (engC && engC._apexSubGain) || null;   // synth sub-osc gain
     engA = engB = engC = null;
     whineOsc = null;
@@ -934,17 +960,13 @@ const GameAudio = (function () {
     // graph for outputs.
     const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
                   voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain,
-                  deadIdleGain, deadLimGain];
-    setTimeout(() => { for (const n of dead) { try { if (n) n.disconnect(); } catch (e) {} } }, 450);
+                  deadIdleGain, deadLimGain, revSend, convolver, revReturn];
+    for (const v of rivalVoices) { dead.push(v.filt, v.gain, v.pan); }
+    queueDying(dead);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
     subOctOsc = subOctGain = null;
-    // Same disconnect-or-they-keep-rendering rule as the block above.
-    const deadReverb = [revSend, convolver, revReturn];
-    setTimeout(() => { for (const n of deadReverb) { try { if (n) n.disconnect(); } catch (e) { /* torn down */ } } }, 450);
     convolver = revSend = revReturn = null;
-    const deadRivals = rivalVoices.slice();
-    setTimeout(() => { for (const v of deadRivals) { try { v.filt.disconnect(); v.gain.disconnect(); v.pan.disconnect(); } catch (e) { /* torn down */ } } }, 450);
     rivalVoices = [];
     idleGainRamped = false;
     engineOn = false;
