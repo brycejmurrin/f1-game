@@ -45,7 +45,10 @@ function param(v) {
     exponentialRampToValueAtTime(x) { p.sets++; p.value = x; },
     cancelScheduledValues() {},
   };
-  return p;
+  // WebKit AudioParam is a host object: a new expando throws in strict mode.
+  // Sealing the fake makes that class of hot-path crash fail this file
+  // instead of a player's rAF loop.
+  return Object.preventExtensions(p);
 }
 // `live` makes a LEAK observable: a node enters on creation and leaves only on
 // disconnect(), which is the Web Audio contract that matters — a stopped source
@@ -605,6 +608,25 @@ test("four fallback voices are four cars as well", () => {
   A.setRivals([0, 1, 2, 3].map((i) => ({ lat: 0, arc: 4 + i * 4, rev: 0.6, approach: 0 })));
   const hz = A.rivalState().map((v) => v.hz);
   assert.equal(new Set(hz).size, 4, `four fallback voices share a pitch: ${hz.join(", ")}`);
+});
+
+test("hot-path caches survive non-extensible AudioParams", async () => {
+  // param() above is preventExtensions. 180 frames of the same writes the
+  // rAF loop makes — setEngine (tilt) + setRivals (pan/cut/rate). A leftover
+  // AudioParam expando throws here instead of killing the player's loop.
+  const A = await sampleEngine();
+  for (let i = 0; i < 180; i++) {
+    A.setEngine(0.3 + (i % 50) / 100, 0, false, 0.5, 4, {});
+    A.setRivals([{ lat: 2, arc: 6, rev: 0.5, approach: 10 }]);
+  }
+  assert.equal(A.debug().engineOn, true);
+  assert.ok(A.rivalState()[0].gain > 0, "a nearby rival still has a voice");
+  const B = synthEngine();
+  for (let i = 0; i < 60; i++) {
+    B.setEngine(0.6, 0, false, 0.6, 5, {});
+    B.setRivals([{ lat: -2, arc: 4, rev: 0.7, approach: -8 }]);
+  }
+  assert.ok(B.rivalState()[0].hz > 0, "fallback pitch still schedules");
 });
 
 test("pausing and resuming does not strand nodes that keep rendering", async () => {

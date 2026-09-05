@@ -720,9 +720,12 @@ const GameAudio = (function () {
           v.stop = (t) => src.stop(t);
           v.setPitch = (t, rev01, mul) => {
             const rate = (0.25 + rev01 * 0.45) * mul;
-            if (Math.abs((src.playbackRate._apexRate ?? -1) - rate) > 0.002) {
+            // Cache on the VOICE, not the AudioParam: WebKit host params
+            // reject expandos in strict mode, and a throw here is every
+            // frame → LoopHealth cap → dead loop.
+            if (Math.abs((v._apexRate ?? -1) - rate) > 0.002) {
               src.playbackRate.setTargetAtTime(rate, t, 0.06);
-              src.playbackRate._apexRate = rate;
+              v._apexRate = rate;
             }
           };
         } else {
@@ -741,10 +744,10 @@ const GameAudio = (function () {
             // own unknown-gear defaults stand in (95 Hz idle, 700 Hz span) —
             // which is exactly what they are there for.
             const f = (95 + rev01 * 700) * mul;
-            if (Math.abs((a.frequency._apexHz ?? -1) - f) > 0.5) {
+            if (Math.abs((v._apexHz ?? -1) - f) > 0.5) {
               a.frequency.setTargetAtTime(f, t, 0.06);
               b.frequency.setTargetAtTime(f, t, 0.06);
-              a.frequency._apexHz = f;
+              v._apexHz = f;
             }
           };
         }
@@ -1032,9 +1035,9 @@ const GameAudio = (function () {
     // can still have it, and capped so it cannot turn into a treble boost.
     if (tiltEq && lastRate > 0.02) {
       const want = Math.min(12, Math.max(0, -12 * Math.log10(lastRate)) * 0.75 * tune.brightness);
-      if (Math.abs((tiltEq.gain._apexTilt ?? -99) - want) > 0.05) {
+      if (Math.abs((tiltEq._apexTilt ?? -99) - want) > 0.05) {
         tiltEq.gain.setTargetAtTime(want, t, 0.08);
-        tiltEq.gain._apexTilt = want;
+        tiltEq._apexTilt = want;
       }
     }
     const lvl = (usingSamples
@@ -1512,7 +1515,7 @@ const GameAudio = (function () {
       // than beside you. 0.85 keeps a little of it in the far ear, which is
       // what having two of them is for.
       const pan = 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
-      if (v.pan.pan._apexPanTgt !== pan) { v.pan.pan.setTargetAtTime(pan, t, 0.06); v.pan.pan._apexPanTgt = pan; }
+      if (v._apexPanTgt !== pan) { v.pan.pan.setTargetAtTime(pan, t, 0.06); v._apexPanTgt = pan; }
 
       // LEVEL. The first cut put a rival 5 m away at gain 0.040 against the
       // player's own engine at ~0.54 — 22 dB down, which is not "present but
@@ -1536,9 +1539,9 @@ const GameAudio = (function () {
       // small and the near field stays open.
       const cut = Math.max(700, Math.min(12000,
         12000 * Math.pow(RIVAL_REF / Math.max(dist, RIVAL_REF), 0.35)));
-      if (Math.abs((v.filt.frequency._apexCut ?? -1) - cut) > 60) {
+      if (Math.abs((v._apexCut ?? -1) - cut) > 60) {
         v.filt.frequency.setTargetAtTime(cut, t, 0.12);
-        v.filt.frequency._apexCut = cut;
+        v._apexCut = cut;
       }
 
       // DOPPLER. Their pitch from their own revs, shifted by how fast the gap is

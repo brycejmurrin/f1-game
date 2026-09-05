@@ -26,8 +26,10 @@ const SRC_PATH = process.env.APEX_AUDIO_SRC || path.join(ROOT, "js/audio/engine.
 const SRC = fs.readFileSync(SRC_PATH, "utf8").replace(/^const\b/gm, "var");
 
 function param(v) {
-  return { value: v, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {},
-           exponentialRampToValueAtTime() {}, cancelScheduledValues() {} };
+  return Object.preventExtensions({
+    value: v, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {},
+    exponentialRampToValueAtTime() {}, cancelScheduledValues() {},
+  });
 }
 function node(counts, kind) {
   counts[kind] = (counts[kind] || 0) + 1;
