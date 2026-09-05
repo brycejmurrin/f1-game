@@ -707,12 +707,38 @@ const LiveryTex = (function () {
       return parseFloat(d.slice(st, i));
     };
     ctx.beginPath();
+    // EVERY ITERATION MUST CONSUME A CHARACTER. Two branches here could spin
+    // forever on input this parser does not handle, and an infinite loop in a
+    // livery build is the worst failure shape the game has: the tab locks with
+    // no exception, nothing in __apex.logs(), no crash strike and no
+    // webglcontextlost, because the OS watchdog takes the whole process. That is
+    // indistinguishable from the jetsam kill we spent a night hunting.
+    //
+    //   "M0 0L1 1Z\n"        spins at the newline
+    //   "M0 0L1 1z"          spins at a LOWERCASE command
+    //   "M0 0L1 1Zm2 2l3 3z" spins at the relative moveto
+    //
+    // `Z` continued before any i++, so anything after a close that was not an
+    // uppercase letter looped; and num() returns parseFloat("") = NaN having
+    // consumed NOTHING when it meets a character outside its set.
+    //
+    // js/car/crest-paths.js is GENERATED (tools/car/trace-logo.mjs) and its
+    // current output is clean — I checked every `d` string for characters
+    // outside [A-Z0-9 ,.+-eE]. This is a latent trap, not a live one, and the
+    // last day added six new crest-trace surfaces (nose, endplate, fin, spine,
+    // garage wall, picker tiles), so the next regeneration is the risk.
+    let guard = d.length * 4 + 16;   // no legal path needs four passes per char
     while (i < d.length) {
+      if (guard-- <= 0) { Log.warn("car", "tracePath: no progress in '" + d.slice(0, 40) + "' at " + i); break; }
       const c = d[i];
       if (c === " " || c === ",") { i++; continue; }
       if (c >= "A" && c <= "Z") { cmd = c; i++; }
-      if (cmd === "Z") { ctx.closePath(); continue; }
+      else if (!(c >= "0" && c <= "9") && "-+.".indexOf(c) < 0) { i++; continue; }   // lowercase / unknown: skip it
+      if (cmd === "Z") { ctx.closePath(); cmd = ""; continue; }
+      const before = i;
       const x = num(), y = num();
+      if (i === before) { i++; continue; }              // num() consumed nothing
+      if (!isFinite(x) || !isFinite(y)) continue;
       if (cmd === "M") { ctx.moveTo(f.X(x), f.Y(y)); cmd = "L"; }
       else ctx.lineTo(f.X(x), f.Y(y));
     }
@@ -1190,10 +1216,35 @@ const LiveryTex = (function () {
     ctx.restore();
   }
 
+  // ONE scratch canvas for the whole grid, on phones only.
+  //
+  // The mobile tier below shrinks what is UPLOADED and never touched what is
+  // PAINTED: every atlas was authored on its own fresh 1024x1024 canvas — 4 MB
+  // of backing store — downscaled, and thrown away. warmCarAssets() in
+  // js/game.js builds all 22 before the first frame, synchronously, with no
+  // yield point, so the peak was ~88 MB of transient canvas in one burst at
+  // race start. WebKit frees a canvas backing store when the element is
+  // collected, and a synchronous loop gives the collector no opening; Safari's
+  // canvas accounting is process-wide and is an input to jetsam. That is the
+  // same 88 MB the comment below claims to have saved — it was saved on the GPU
+  // and left in place on the CPU.
+  //
+  // Reused rather than shrunk because the whole atlas is authored in SIZE units
+  // (the comment below says so, and buildAtlas reads canvas.width nowhere but
+  // its own two assignments), so painting small would mean rescaling every
+  // coordinate. Setting .width RESETS a canvas per spec — even to the same
+  // value — so the assignments already clear it between cars for free.
+  // DESKTOP IS UNCHANGED: it returns this very canvas, so it must own it.
+  let _scratch = null;
+  function scratchAtlas() {
+    if (!_scratch) _scratch = document.createElement("canvas");
+    return _scratch;
+  }
+
   // ── main ─────────────────────────────────────────────────────────────────
   function buildAtlas(teamId, colors, numberOverride, isPlayer) {
     Log.info("car", "livery " + (teamId || "?"));
-    const canvas = document.createElement("canvas");
+    const canvas = IS_MOBILE ? scratchAtlas() : document.createElement("canvas");
     canvas.width = SIZE;
     canvas.height = SIZE;
     const ctx = canvas.getContext("2d");

@@ -115,9 +115,22 @@ const NetPlay = (function () {
       // everyone; the same s also indexes Tracks.sample() below.
       const _total = (G.track && G.track.total) || 0;
       const _s = Number(st.s), _lap = Number(st.lap);
+      // head/x/speed were NOT validated, and `head` reaches two unbounded angle
+      // wraps — `while (psi > Math.PI) psi -= 2*Math.PI` here and the same shape
+      // in headInterp/yawVisInterp on the render path. A peer sending
+      // head: Infinity hangs the tab forever; head: 1e9 costs ~1.6e8 iterations
+      // PER FRAME, which is a freeze in practice. Same class as the out-of-range
+      // `s` this block was already written to reject, and a peer packet is the
+      // one input here that is genuinely untrusted.
+      const _head = +st.head, _x = +st.x, _sp = +st.speed;
       st = Object.assign({}, st, {
         s: Number.isFinite(_s) ? Math.min(Math.max(_s, 0), _total || _s) : 0,
         lap: Number.isFinite(_lap) ? Math.min(Math.max(Math.floor(_lap), 0), (G.lapsTarget || 0) + 1) : 0,
+        // Wrapped, not clamped: a heading IS periodic, so folding it is lossless
+        // for any finite value and the wraps downstream then terminate at once.
+        head: Number.isFinite(_head) ? Math.atan2(Math.sin(_head), Math.cos(_head)) : 0,
+        x: Number.isFinite(_x) ? Math.min(Math.max(_x, -200), 200) : 0,
+        speed: Number.isFinite(_sp) ? Math.min(Math.max(_sp, -200), 200) : 0,
       });
       c.s = st.s;
       c.x = st.x;

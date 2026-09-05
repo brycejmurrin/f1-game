@@ -90,6 +90,14 @@ function loadBackendScripts(files, edges) {
     const el = document.createElement("script");
     el.src = src + "?v=" + (window.__APEX_BUILD || 0);
     el.crossOrigin = "anonymous";
+    // MARKED so index.html's broken-install repair leaves it alone. That handler
+    // sweeps every service-worker cache and reloads the page, which is right for
+    // a shell tag the CDN has not published yet and catastrophic for a lazy
+    // inject: a load error here already RESOLVES (see the contract above — a
+    // missing global IS the fallback), so a reload throws away a working
+    // degradation path, and it is unbounded because the one-shot guard is
+    // cleared by the `load` event that fired long before this fetch started.
+    if (el.dataset) el.dataset.apexLazy = "1";   // guarded: a stubbed element has none
     el.onload = el.onerror = () => resolve();
     document.head.appendChild(el);
   });
@@ -2444,6 +2452,22 @@ function getPlayerWheelMeshes() {
 // planted spinning pair, not glued to the chassis. Own cache so garage swaps
 // cannot evict the field (WHEEL_MESH_CACHE_MAX is a player-parts bound).
 const fieldWheelCache = {};
+// UNBOUNDED AND NEVER FREED until this order array existed — the one GPU cache
+// in the tree with no cap, no LRU and no free path, while its sibling two
+// functions up is putBoundedMesh'd with freeWheelPair. Each entry is FOUR
+// meshes (F/R rotating + F/R fixed) = 12 GL objects and ~205 KB of buffers.
+//
+// The key is the team's FITTED tyre:brake:wheel ids, so in career/MyTeam the AI
+// teams' parts change as the season's R&D lands and fresh keys keep appearing
+// inside one page load; the catalog spans 27 x 27 x 22 combos. Ten new
+// combinations over a session is +2 MB and 120 orphaned GL objects that live as
+// long as the tab does. Slow, monotonic, and it never comes back.
+//
+// 12 rather than 8: this is the whole FIELD, and evicting a set another car is
+// still drawing costs a rebuild every frame. The grid is 22 cars but they share
+// factory parts, so distinct fitted combos in one race are far fewer.
+const fieldWheelOrder = [];
+const FIELD_WHEEL_CACHE_MAX = 12;
 function getFieldWheelMeshes(team) {
   const vt = teamDecalState(team, false).parts;   // permanently cached factory resolve — was ~1260 resolveSetup/s across the drawn field
   const key = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1");
@@ -2464,6 +2488,12 @@ function getFieldWheelMeshes(team) {
     RFixed: gfx.createMesh(rear.fixed),
   };
   fieldWheelCache[key] = mesh;
+  fieldWheelOrder.push(key);
+  while (fieldWheelOrder.length > FIELD_WHEEL_CACHE_MAX) {
+    const old = fieldWheelOrder.shift(), victim = fieldWheelCache[old];
+    delete fieldWheelCache[old];
+    freeWheelPair(victim);   // the same freer the player-parts cache uses
+  }
   return mesh;
 }
 function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
