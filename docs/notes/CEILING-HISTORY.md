@@ -2056,3 +2056,17 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   `sideYieldsA`, `queueBrake`) went to `js/physics/ai-drive.js`, which is the
   module split's home for them and is unit-tested there. `bareCatches`
   158 -> **157** in the same commit: the tree simply has one fewer.
+
+- `js/game.js` lines 9938 -> **9951**, codeLines 5469 -> **5477**;
+  `js/agent/apex.js` lines 2649 -> **2650**, codeLines 2004 -> **2005**
+  (2026-09-05): the start pack. Every AI car accelerated identically off the
+  line, so a 22-car grid kept its 8 m pitch to T1 (start-trace: median gap
+  8.0-8.6 m for fifteen seconds, all speeds within 2 m/s, three order changes in
+  ten seconds). Eight code lines: the per-race launch hash and plan in `gridUp`
+  (3), the launch multiplier and its release in the AI acceleration (3), the
+  AI's smoothed acceleration for `otWant`'s crawl gate (1), the pace-phase
+  multiplier on `vmax` (1); apex.js clears `launchOn` on a car placed at speed
+  by `rival()`/`rivals()`. The plans, the fade and the phase live in
+  `js/physics/ai-drive.js` (unit-tested), so game.js again keeps only the call
+  sites. After: speeds span 8 m/s at t=4 and 17 order changes in ten seconds
+  (`tests/unit/ai-racecraft-vm.test.mjs`, the start test).

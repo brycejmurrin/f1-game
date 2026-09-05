@@ -338,10 +338,55 @@ const AiDrive = (function () {
     // follower behind it sits on the queue crawl floor, which is below the
     // closing margin, so neither test below could ever fire — measured as an
     // AI creeping at 3 m/s into the back of a parked player and welding there.
-    const crawling = (ctx.blockerSpeed || 0) < 0.12 * ref;
+    // ...unless it is PULLING AWAY: at lights-out every car ahead is under that
+    // speed for four seconds, and without the acceleration test the whole grid
+    // latched a pass on the car ahead (measured: 21 of 22 at t=1). ~1.5 m/s^2
+    // at PACE 1, scaled like everything else.
+    const crawling = (ctx.blockerSpeed || 0) < 0.12 * ref && (ctx.blockerAccel || 0) < 0.016 * ref;
     const closing = (ctx.speed || 0) >= (ctx.blockerSpeed || 0) + margin;
     const held = (ctx.freeSpeed || 0) >= bv + margin;
     return crawling || closing || held;
+  }
+
+  // THE LAUNCH. Real lights-out is a reaction (a driver-dependent fraction of a
+  // second) and a getaway that varies car to car; the model had neither, so a
+  // 22-car field held its 8 m grid pitch for fifteen seconds and braked for T1
+  // as one train (measured: median gap 8.0-8.6 m from t=1 to t=15, every speed
+  // within 2 m/s of every other). The plan is drawn once per car per race from
+  // a hash, NOT from simRnd(): the seeded stream's draw count is a contract.
+  //   react — seconds after lights-out before the throttle goes down; awareness
+  //           reads the lights, the roll is the day.
+  //   grip  — the getaway's acceleration multiplier, fading to 1 over 3 s; craft
+  //           and skill manage the wheelspin, the roll is the clutch bite.
+  const _launch = { react: 0, grip: 1 };
+  function launchPlan(t, roll) {
+    const r = roll || 0, r2 = (r * 7919) % 1;
+    _launch.react = clamp(lerp(0.52, 0.16, t.awareness) + (r - 0.5) * 0.22, 0.05, 0.75);
+    const hands = 0.5 * t.craft + 0.5 * clamp((t.skill - 0.9) * 10, 0, 1);
+    _launch.grip = clamp(lerp(0.80, 1.0, hands) + (r2 - 0.5) * 0.2, 0.7, 1.08);
+    return { react: _launch.react, grip: _launch.grip };
+  }
+  const LAUNCH_FADE = 3;   // seconds over which the getaway becomes ordinary acceleration
+  function launchMul(tSince, plan) {
+    if (!plan) return 1;
+    if (tSince < plan.react) return 0;
+    return lerp(plan.grip, 1, clamp((tSince - plan.react) / LAUNCH_FADE, 0, 1));
+  }
+  function launchDone(tSince, plan) { return !plan || tSince > plan.react + LAUNCH_FADE; }
+
+  // PACE PHASE. Two AI cars of equal pace ran in lockstep for a whole race:
+  // identical vmax, identical acceleration, so the gap between them never
+  // changed and neither ever had a reason to pass (the field spread and the
+  // train counts in the racecraft bench). A driver's pace drifts over a stint —
+  // tyres, traffic, focus — so each AI car carries a slow sinusoid on its vmax:
+  // ±0.5 % for a metronome, ±1.6 % for a rookie, period 24-60 s, phase from the
+  // same per-race hash as the launch. Zero-mean, so lap times keep their centre;
+  // AI-only, so nothing here reaches the driver.
+  function pacePhase(t, consistency, roll) {
+    const r = roll || 0;
+    const amp = lerp(0.016, 0.005, consistency == null ? 0.75 : consistency);
+    const period = 24 + r * 36;
+    return 1 + amp * Math.sin((t || 0) * (2 * Math.PI / period) + r * 6 * Math.PI);
   }
 
   // A PASS IS A POSITION, NOT A BIAS. otPull's return is a lateral offset
@@ -501,5 +546,6 @@ const AiDrive = (function () {
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
     otWant, passTarget, passHold, passCooldown, sideYieldsA,
+    launchPlan, launchMul, launchDone, pacePhase,
   };
 })();

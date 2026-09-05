@@ -340,6 +340,24 @@ the numbers):
   sank to ~17 m/s at a 70 m/s ceiling for as long as the corner kept them
   touching — six such standoffs per four minutes on monza, none after.
 
+- **A standing start is a launch** (`AiDrive.launchPlan` / `launchMul`). Every
+  AI car used to accelerate identically, so a 22-car grid held its 8 m pitch for
+  fifteen seconds and braked for T1 as one train (measured: median gap 8.0–8.6 m
+  from t=1 to t=15, all speeds within 2 m/s). Each car now draws, per race, a
+  reaction (0.05–0.75 s, shorter with awareness) and a getaway multiplier
+  (0.7–1.08, better with craft and skill) that fades to ordinary acceleration
+  over three seconds. The draw is a hash of the seed and grid slot, never a
+  `simRnd()` — the stream's draw count is a contract. After: speeds span 8 m/s
+  at t=4 and the first ten seconds see 17 order changes instead of 3.
+- **Pace drifts over a stint** (`AiDrive.pacePhase`). Two cars of equal pace ran
+  in lockstep for a whole race with no reason to pass; each AI car's `vmax` now
+  carries a zero-mean sinusoid — ±0.5% for a consistent driver, ±1.6% for a
+  rookie, period 24–60 s, phase from the same hash — so equal-pace pairs cross
+  over and races happen inside the field, not only at its pace boundaries.
+- **A crawling blocker is one that is not pulling away**: the `otWant` crawl
+  clause reads the blocker's acceleration (`c.accSm` on an AI car, `axEstSm` on
+  a human), so a launching grid is not 21 cars latching a pass on the car ahead.
+
 Grid lanes interleave left/right by grid slot, so the start pack is already two
 lines rather than one file. All of this is AI-only — every read sits inside
 the `!c.human` arm, and `otSide`'s corner-inside tie-break is in the arc table

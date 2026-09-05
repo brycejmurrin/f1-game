@@ -573,3 +573,66 @@ test("updateCar does not allocate AiDrive ctx literals", () => {
   assert.match(src, /const _aiDefend = \{/);
   assert.match(src, /const _aiBoxed = \{/);
 });
+
+test("launchPlan: awareness reads the lights, hands manage the getaway, the roll is the day", () => {
+  const sharp = { craft: 0.9, awareness: 0.95, experience: 0.8, skill: 0.99, consistency: 0.8 };
+  const green = { craft: 0.4, awareness: 0.3, experience: 0.3, skill: 0.92, consistency: 0.5 };
+  const a = A.launchPlan(sharp, 0.5), b = A.launchPlan(green, 0.5);
+  assert.ok(a.react < b.react, `awareness must shorten the reaction: ${a.react} vs ${b.react}`);
+  assert.ok(a.grip > b.grip, `craft+skill must improve the getaway: ${a.grip} vs ${b.grip}`);
+  // Bounded whatever the roll — a reaction is never instant and never a nap.
+  for (const r of [0, 0.13, 0.5, 0.87, 0.999]) for (const t of [sharp, green]) {
+    const p = A.launchPlan(t, r);
+    assert.ok(p.react >= 0.05 && p.react <= 0.75, `react out of range: ${p.react}`);
+    assert.ok(p.grip >= 0.7 && p.grip <= 1.08, `grip out of range: ${p.grip}`);
+  }
+  // Two different rolls are two different launches (the per-race hash matters).
+  assert.notEqual(A.launchPlan(sharp, 0.2).react, A.launchPlan(sharp, 0.8).react);
+  // Returned by value: the next plan does not rewrite the last car's.
+  const p1 = A.launchPlan(sharp, 0.2); A.launchPlan(green, 0.9);
+  assert.equal(p1.react, A.launchPlan(sharp, 0.2).react);
+});
+
+test("launchMul: nothing before the reaction, the getaway at it, ordinary after three seconds", () => {
+  const plan = { react: 0.3, grip: 0.85 };
+  assert.equal(A.launchMul(0, plan), 0);
+  assert.equal(A.launchMul(0.29, plan), 0);
+  assert.equal(A.launchMul(0.3, plan), 0.85);
+  const mid = A.launchMul(1.8, plan);
+  assert.ok(mid > 0.85 && mid < 1, `fade must be monotone: ${mid}`);
+  assert.equal(A.launchMul(3.3, plan), 1);
+  assert.equal(A.launchMul(10, plan), 1);
+  assert.equal(A.launchMul(0, null), 1, "no plan (a human, or before gridUp) is no effect");
+  assert.equal(A.launchDone(3.29, plan), false);
+  assert.equal(A.launchDone(3.31, plan), true);
+  assert.equal(A.launchDone(0, null), true);
+});
+
+test("pacePhase is a zero-mean drift whose amplitude falls with consistency", () => {
+  const sample = (cons, roll) => {
+    let mn = Infinity, mx = -Infinity, sum = 0, n = 0;
+    for (let t = 0; t < 600; t += 0.25) { const v = A.pacePhase(t, cons, roll); mn = Math.min(mn, v); mx = Math.max(mx, v); sum += v; n++; }
+    return { mn, mx, mean: sum / n };
+  };
+  const rookie = sample(0.3, 0.4), metronome = sample(1.0, 0.4);
+  assert.ok(rookie.mx - rookie.mn > metronome.mx - metronome.mn, "a consistent driver drifts less");
+  assert.ok(rookie.mx <= 1.0165 && rookie.mn >= 0.9835, `rookie amplitude past 1.6 %: ${rookie.mn}..${rookie.mx}`);
+  assert.ok(metronome.mx <= 1.0055 && metronome.mn >= 0.9945, `metronome amplitude past 0.5 %: ${metronome.mn}..${metronome.mx}`);
+  assert.ok(Math.abs(rookie.mean - 1) < 0.001, `not zero-mean over ten minutes: ${rookie.mean}`);
+  // Two cars with different rolls are out of phase — that is the whole point.
+  let same = 0; for (let t = 0; t < 120; t += 1) if (Math.sign(A.pacePhase(t, 0.5, 0.1) - 1) === Math.sign(A.pacePhase(t, 0.5, 0.7) - 1)) same++;
+  assert.ok(same < 100, `two rolls moved together ${same}/120 s`);
+  assert.equal(A.pacePhase(0, undefined, undefined), 1, "no consistency, no roll: phase zero at t=0");
+});
+
+test("otWant: a blocker that is slow but PULLING AWAY is a launching car, not an obstacle", () => {
+  const base = { street: false, speed: 3, freeSpeed: 55, vTop: 60, blockerVmax: 60, blockerSpeed: 4 };
+  assert.equal(A.otWant({ ...base, blockerAccel: 0 }), true, "parked: pass it");
+  assert.equal(A.otWant({ ...base, blockerAccel: 0.5 }), true, "creeping: still an obstacle");
+  assert.equal(A.otWant({ ...base, blockerAccel: 5 }), false, "launching at 5 m/s^2: leave it");
+  // Scaled to the top speed like the rest: at half pace both thresholds halve
+  // (crawl speed 3.6 m/s, acceleration 0.48 m/s^2).
+  assert.equal(A.otWant({ ...base, vTop: 30, blockerSpeed: 2, blockerAccel: 0.6 }), false);
+  assert.equal(A.otWant({ ...base, vTop: 30, blockerSpeed: 2, blockerAccel: 0.4 }), true);
+  assert.equal(A.otWant({ ...base, vTop: 30, blockerSpeed: 4, blockerAccel: 0 }), false, "4 m/s is not a crawl at half pace");
+});

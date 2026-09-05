@@ -1986,6 +1986,11 @@ function gridUp(preOrder) {
     c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0;
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
+    // The launch plan and the pace phase (AiDrive): one hash per car per race,
+    // never a simRnd() draw — the stream's draw count is a contract.
+    const h = DriverRatings.hash32(simSeed() + ":" + i + ":" + c.skill);
+    c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
+    c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536;
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
   // physics tick (the `c.px == null` init in update()). The chase rig has two
@@ -4067,7 +4072,7 @@ const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
-const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0 };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const LCAR = 4.8, WCAR = 2.0;
@@ -4452,6 +4457,7 @@ function updateCar(c, dt, ranked) {
   let chaser = null, chaserGap = Infinity; // nearest car close BEHIND in our lane (for defending)
   let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
   const aiT = c.human ? null : AiDrive.traits(c);
+  if (!c.human) vmax *= AiDrive.pacePhase(raceT, aiT.consistency, c.phaseRoll);   // a stint drifts; lockstep never passes
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
@@ -4795,7 +4801,13 @@ function updateCar(c, dt, ranked) {
     else if (c.speed < 0) c.speed = Math.min(0, c.speed + cd * dt);
     c.energy = Math.min(1, c.energy + regenFor(c) * dt);
   } else {
-    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    // The AI's launch (AiDrive.launchPlan): no throttle before its reaction, then
+    // its own getaway for three seconds. A grid that accelerated as one held its
+    // 8 m pitch to T1 — see the start test in ai-racecraft-vm.
+    const launch = c.launchOn ? AiDrive.launchMul(raceT, c.launch) : 1;
+    if (c.launchOn && AiDrive.launchDone(raceT, c.launch)) c.launchOn = false;
+    const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
+    if (!c.human) c.accSm = damp(c.accSm ?? 0, a, 6, dt);   // what this car is pulling — AiDrive.otWant reads it on the blocker
     // speedCap is an ACCELERATION ceiling, not a teleport: a cap that drops under
     // the car (VSC vmax cut, limiter downshift) used to scrub 25 m/s in one step.
     c.speed = c.speed > speedCap ? Math.max(speedCap, c.speed - COAST_DRAG * dt)
@@ -4981,6 +4993,7 @@ function updateCar(c, dt, ranked) {
       // speed is their pace, so the fallback (0 -> blockerSpeed) is the read.
       _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       _aiOtPull.blockerVmax = blocker.human ? 0 : (blocker._vmaxNow || 0); _aiOtPull.vTop = vTop();
+      _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage: a clear lane on the chosen side, and no cooldown from a pass we
       // just gave up on this same stretch.
       if (!c.passOf && c.passCool <= 0 && AiDrive.otWant(_aiOtPull)) {
