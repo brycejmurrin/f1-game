@@ -120,10 +120,15 @@ test("a single frame can hold both halves of a direction change", () => {
   // Two calls, because the first only seeds the ramp's timestamp (dt = 0).
   for (let i = 0; i < 2; i++) { clock.t += STEP; Input.steer(); }
   const small = Input.steer();
-  // Shallower than one frame of unwind (RAMP_OUT 8/s x 1/60 s = 0.133), or the
-  // frame cannot reach centre at all and the test would be asserting nothing.
-  assert.ok(small > 0 && small < 8 / 60,
-    `precondition: wanted an angle inside one frame of unwind, got ${small}`);
+  // The ramp runs in SHAPED (road-wheel) space, so the budget comparison has to
+  // as well: steer() hands back the raw stick value whose expo-th power is the
+  // shaped one. Raw 0.38 is shaped 0.10 at the default LINEARITY — inside one
+  // frame of unwind (RAMP_OUT 8/s x 1/60 s = 0.133), which is what makes the
+  // frame able to reach centre at all.
+  const EXPO = 2.3889;                       // the shipped LINEARITY 5
+  const shaped = Math.pow(small, EXPO);
+  assert.ok(small > 0 && shaped < 8 / 60,
+    `precondition: wanted a shaped angle inside one frame of unwind, got ${shaped} (raw ${small})`);
   key("ArrowRight", false); key("ArrowLeft", true);
   clock.t += STEP;                                  // ONE frame
   assert.ok(Input.steer() < 0,

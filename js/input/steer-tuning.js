@@ -30,6 +30,9 @@ const LINE_MIN = -5, LINE_MAX = 5;               // index.html #pm-line min/max
 //  pm-lock     STEER LOCK     STEER_MAX_SLIP — max road-wheel steer angle (rad).
 //  pm-speedsteer SPEED STEER  STEER_SPEED_REF — high slider = keeps more steering
 //                             at speed (sharper); low = calmer/stabler at speed.
+//  pm-weight   WEIGHT         YAW_INERTIA + YAW_DAMP — high slider = a heavier,
+//                             more planted car; low = snappier. Notch 5 is the
+//                             shipped feel exactly, so the default is a no-op.
 //  pm-adaptbtn ADAPTIVE BUTTONS 1..10 mix of the digital-steer rate half of
 //                             SPEED STEER + analog travel. v1 = OFF, default 6.
 //  pm-brakecue BRAKE CUE      1 = OFF; 2..10 = pulse-rate cue + lookahead.
@@ -53,6 +56,33 @@ function cutoffFromSmooth(v) { return 1000 / (2 * Math.PI * lagFromSmooth(v)); }
 // docs/research/PHASE-C-SLIDER-DESIGN.md §3.
 function wheelbaseFromSlider(v) { return 4.4 + (2.6 - 4.4) * (v - 1) / 9; } // 4.4..2.6, v5=3.60
 function expoFromSlider(v)   { return 3.5 + (1.0 - 3.5) * (v - 1) / 9; } // 3.5..1.0
+// WEIGHT -> YAW_INERTIA (+ YAW_DAMP, which rides with it). The car's rotational
+// inertia: <1 is snappier, higher is lazier and more planted.
+//
+// PIECEWISE, with the knee AT THE DEFAULT NOTCH, and that is the whole point:
+// notch 5 returns 0.58 exactly — today's shipped value — so the default boot is
+// bit-identical and tests/specs/physics-characterization.spec.js needs no
+// re-baseline (it never touches a slider, so it runs at notch 5). A straight
+// line through 0.58 at notch 5 could only reach ~0.73 at notch 10, which is not
+// far enough to feel planted; the knee buys the whole 0.58..1.00 range above
+// centre while keeping a little travel below for anyone who liked it lighter.
+//
+// Reported as "way too snappy and lightweight" in cockpit with the on-screen
+// buttons. Two things had just compounded: YAW_INERTIA went 0.70 -> 0.58 (a
+// deliberate "snappier turn-in"), and the cockpit viewmodel started yawing with
+// the car instead of the road — so the yaw got faster and visible in the same
+// day. A slider rather than a new constant, because which of those a player
+// wants is taste, and picking for them would just reverse someone else's pick.
+function weightFromSlider(v) {
+  return v <= 5 ? 0.50 + (0.58 - 0.50) * (v - 1) / 4
+                : 0.58 + (1.00 - 0.58) * (v - 5) / 5;
+}
+// Damping is what stops a heavy car FLOATING — inertia alone makes it lazy AND
+// wallowy. Same knee, same reason: notch 5 is the shipped 1.0.
+function yawDampFromSlider(v) {
+  return v <= 5 ? 0.90 + (1.00 - 0.90) * (v - 1) / 4
+                : 1.00 + (1.40 - 1.00) * (v - 5) / 5;
+}
 function lockFromSlider(v)   { return 0.18 + (0.42 - 0.18) * (v - 1) / 9; } // rad, .18..0.42, v5≈0.29
 // SPEED STEER -> STEER_SPEED_REF, the reference speed for the lock taper in
 // js/game.js. That taper is now `1 / (1 + v/ref)` (hyperbolic — see the comment
@@ -359,16 +389,22 @@ function applySteerTuning() {
   const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
   const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
   const adapt   = clamp(store.get("adaptiveButtons", 6), SLIDER_MIN, SLIDER_MAX);
+  const weight  = clamp(store.get("carWeight", 5), SLIDER_MIN, SLIDER_MAX);   // 5 = as shipped
   G.PACE           = paceFromSlider(pace);
   G.WHEELBASE      = wheelbaseFromSlider(rate);
   G.STEER_EXPO     = expoFromSlider(expo);
   G.STEER_MAX_SLIP = lockFromSlider(lock);
   G.STEER_SPEED_REF = speedRefFromSlider(spdsteer);
   G.ROAD_FOLLOW    = helpFromSlider(help);
+  G.YAW_INERTIA    = weightFromSlider(weight);
+  G.YAW_DAMP       = yawDampFromSlider(weight);
   Input.setTiltSmoothing(cutoffFromSmooth(smooth));
   Input.setTiltSensitivity(tiltDegFromRange(tiltdeg));
   Input.setAdaptiveButtons(adaptMixFromSlider(adapt));
   Input.setSteerSpeedRef(G.STEER_SPEED_REF);
+  // LINEARITY reaches the digital ramp too: it ramps in SHAPED space so a held
+  // button builds road-wheel angle linearly instead of as t^expo.
+  if (Input.setSteerExpo) Input.setSteerExpo(G.STEER_EXPO);
   G.raceLineAssist = line / 5;
   const cue = clamp(store.get("brakeCue", 6), SLIDER_MIN, SLIDER_MAX);
   if (window.BrakeCue) BrakeCue.setLevel(cue);
@@ -378,6 +414,7 @@ function applySteerTuning() {
   $("pm-tiltdeg").value = tiltdeg; $("pm-tiltdeg-v").textContent = tiltdeg;
   $("pm-lock").value    = lock;    $("pm-lock-v").textContent    = lock;
   $("pm-speedsteer").value = spdsteer; $("pm-speedsteer-v").textContent = spdsteer;
+  if ($("pm-weight")) { $("pm-weight").value = weight; $("pm-weight-v").textContent = weight; }
   if ($("pm-adaptbtn")) { $("pm-adaptbtn").value = adapt; $("pm-adaptbtn-v").textContent = adaptLabel(adapt); }
   if ($("pm-brakecue")) { $("pm-brakecue").value = cue; $("pm-brakecue-v").textContent = (window.BrakeCue && BrakeCue.labelOf) ? BrakeCue.labelOf(cue) : (cue <= 1 ? "OFF" : "CUE " + cue); }
   $("pm-help").value    = help;    $("pm-help-v").textContent    = help;
@@ -392,7 +429,12 @@ $("pm-rate").oninput = (e) => {
 };
 $("pm-expo").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerExpo", v);
-  G.STEER_EXPO = expoFromSlider(v); $("pm-expo-v").textContent = v; clearPreset();
+  G.STEER_EXPO = expoFromSlider(v);
+  // LINEARITY reaches the DIGITAL ramp too — it ramps in shaped (road-wheel)
+  // space, so the curve has to follow the slider or a held button goes back to
+  // building angle as t^expo (see digitalStep in js/input/input.js).
+  if (Input.setSteerExpo) Input.setSteerExpo(G.STEER_EXPO);
+  $("pm-expo-v").textContent = v; clearPreset();
 };
 $("pm-smooth").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("steerSmooth", v);
@@ -411,6 +453,12 @@ $("pm-speedsteer").oninput = (e) => {
   G.STEER_SPEED_REF = speedRefFromSlider(v);
   Input.setSteerSpeedRef(G.STEER_SPEED_REF);
   $("pm-speedsteer-v").textContent = v; clearPreset();
+};
+if ($("pm-weight")) $("pm-weight").oninput = (e) => {
+  const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("carWeight", v);
+  G.YAW_INERTIA = weightFromSlider(v);
+  G.YAW_DAMP = yawDampFromSlider(v);
+  $("pm-weight-v").textContent = v; clearPreset();
 };
 if ($("pm-adaptbtn")) $("pm-adaptbtn").oninput = (e) => {
   const v = clamp(+e.target.value, SLIDER_MIN, SLIDER_MAX); store.set("adaptiveButtons", v);
