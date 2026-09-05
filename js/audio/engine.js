@@ -486,6 +486,21 @@ const GameAudio = (function () {
       if (musicOn) stopMusic();
       if (engineOn) stopEngine();
       if (rainWanted) stopRain(true);
+      // SUSPEND THE CONTEXT, not only its sources. Stopping the nodes leaves
+      // master, the DynamicsCompressor, sfxBus, tiltEq, the voice formant and
+      // the whole rival voice bank wired up, and an AudioContext in `running`
+      // keeps its render thread going at 128 frames a quantum with the audio
+      // hardware unit powered — on a backgrounded iOS tab that is a battery and
+      // eviction trigger, and `grep "\.suspend("` over js/ found NOTHING.
+      //
+      // The file already knows the platform half of this: it handles iOS
+      // suspending the context on lock and never resuming it by itself. It just
+      // never did so deliberately. resumeIfNeeded() in the else branch below is
+      // already the matching resume, so this needs no new machinery.
+      //
+      // The stops above are still right: they are what makes the resume a clean
+      // restart rather than a graph re-entering mid-note.
+      try { if (ctx && ctx.state === "running" && ctx.suspend) ctx.suspend(); } catch (_) { /* a context mid-teardown must not break the hide path */ }
     } else {
       resumeIfNeeded();
       if (resumeMusic) startMusic(lastTrackIdx); // restarts re-synced to the clock

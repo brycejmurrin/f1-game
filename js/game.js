@@ -2606,6 +2606,27 @@ async function loadCarModel(url) {
 // ---------- track loading ----------
 function loadTrack(idx) {
   const def = Tracks.LIST[idx];
+  // ARM THE CRASH SENTINEL ACROSS THE BUILD. This function's own comment calls
+  // the build's transient peak "the moment a near-limit phone gets jetsam
+  // killed", and it runs from scheduleFlybyTrack() 120 ms after the player
+  // settles on a circuit in the PICKER — i.e. in the menu, where the sentinel
+  // was armed only at race start. A kill here therefore left crashStrikes 0 and
+  // no webglcontextlost (a jetsam takes the whole process, so the handler never
+  // runs), which is exactly the state the affected iPhone reported and exactly
+  // why the memory hunt kept coming back empty.
+  //
+  // Diagnostic, not a behaviour change: the flag is what the NEXT boot reads to
+  // know the last session died. Cleared below whether or not the build throws.
+  try { PerfGov.sentinelArm(true); } catch (_) { /* governor absent in a stub */ }
+  try {
+    return _loadTrackBody(idx, def);
+  } finally {
+    // Only disarm if a RACE is not the thing that armed it — a build during a
+    // live race must not clear the race's own flag.
+    try { if (state !== "race") PerfGov.sentinelArm(false); } catch (_) { /* as above */ }
+  }
+}
+function _loadTrackBody(idx, def) {
   // Invalidate the sun-shadow snap cache: it's only ever written inside the
   // re-render gate, so a new track whose first snapped cell + sunDir happen to
   // match the old track's last values would keep the PREVIOUS track's shadow
@@ -7044,7 +7065,20 @@ function render(dt) {
       const _castRibbonSh = (geo, key, plain, allow = true) => {
         if (track.meshes[key] === undefined) {
           track.meshes[key] = null;
-          if (allow && geo && gfx.createChunkedMesh) {
+          // TIER GATE. Tracks.build() only chunks the ribbons when
+          // PerfGov.tier() < 3; above that it writes the FUSED mesh and leaves
+          // roadChunked/terrainChunked undefined. This lazy build then made a
+          // SECOND GPU copy of road and terrain anyway — measured +2.78 MiB
+          // median, +3.81 on spa — on precisely the devices that had already
+          // been told to spend less: tier() is max(crash-strike floor, the
+          // player's GRAPHICS preset, the governor's own shed), so a phone that
+          // has been killed twice and a player who picked LOW both silently paid
+          // for a duplicate.
+          //
+          // Falling through leaves the key null and the branch below casts the
+          // fused mesh instead, which is what the tier asked for.
+          const tierOk = typeof PerfGov === "undefined" || PerfGov.tier() < 3;
+          if (allow && tierOk && geo && gfx.createChunkedMesh) {
             geo._keepPositions = true;
             track.meshes[key] = gfx.createChunkedMesh(geo, 72);
           }

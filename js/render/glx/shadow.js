@@ -166,7 +166,14 @@ const GLXShadow = (function () {
       }
 
       S.pcssEnabled = false;
-      if (ok) {
+      // Desktop only, matching carTex and lampTex above. PCSS is a soft-shadow
+      // refinement — the penumbra grows with blocker distance — and it costs a
+      // 512x512 R16F target (0.5 MiB) plus a per-frame blocker-search pass. Its
+      // two siblings in this same function are already `ok && !core.IS_MOBILE`
+      // for exactly that reasoning; this one was just `ok`, so every phone paid
+      // for a refinement it cannot afford on a shadow map that is already
+      // halved to 1024 on the same tier.
+      if (ok && !core.IS_MOBILE) {
         blockerProg = link(POST_VS, BLOCKER_FS);
         if (blockerProg) {
           blockerU = locs(blockerProg, ["uDepthTex", "uSrcTexel"]);

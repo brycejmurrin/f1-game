@@ -226,7 +226,19 @@ function rainSeed(drizzle) {
   const dzCount = LT.drizzleCount != null ? LT.drizzleCount : 0.3;
   const dzLen   = LT.drizzleLen   != null ? LT.drizzleLen   : 0.5;
   const dzSpeed = LT.drizzleSpeed != null ? LT.drizzleSpeed : 0.6;
-  _rainDrops = Array.from({ length: Math.round(LT.rainCount * (drizzle ? dzCount : 1)) }, () => ({
+  // TIERED, like the 3D pool at the top of this file (MAX 96 vs 256) — and for
+  // a stronger reason, because these drops are drawn by the CPU. Every frame
+  // this clears a full-viewport 2D canvas, walks ~500 drops emitting a moveTo +
+  // lineTo each, strokes them, and hands the compositor a second full-screen
+  // surface to blend over #game. LT.rainCount is 450-650 across the wet presets.
+  //
+  // It also survives the ENTIRE governor ladder: no PerfGov.tier() gate, no
+  // mobileTier gate, so it is still running at full count on a device that has
+  // shed lamp shadows, SSR, god rays and the whole heavy post stack. That is the
+  // wrong shape — the cheapest thing to keep should not be the last thing to go.
+  const wetCap = (_gfx && _gfx.mobileTier) ? 140 : Infinity;
+  const count = Math.min(wetCap, Math.round(LT.rainCount * (drizzle ? dzCount : 1)));
+  _rainDrops = Array.from({ length: count }, () => ({
     x: Math.random() * _rainCanvas.width,
     y: Math.random() * _rainCanvas.height,
     len: (14 + Math.random() * 22) * LT.rainStreak * (drizzle ? dzLen : 1),

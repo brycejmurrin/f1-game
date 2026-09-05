@@ -368,7 +368,15 @@ test("game keeps the sole prebuilt ribbon usable across envCull and tier changes
   assert.match(source, /track\.meshes\.terrain \|\| track\.meshes\.terrainChunked/);
   assert.match(source, /track\.meshes\.road \|\| track\.meshes\.roadChunked/);
   assert.match(source, /_wantRoadChunk = gfx\.chunkedTrackCoords !== false/);
-  assert.match(source, /if \(allow && geo && gfx\.createChunkedMesh\)/);
+  // The lazy shadow-ribbon build is TIER-GATED. Above tier 3 Tracks.build()
+  // writes a FUSED ribbon for perf and leaves roadChunked/terrainChunked
+  // undefined — and this lazy build then made a second GPU copy anyway
+  // (+2.78 MiB median, +3.81 on spa), charged to precisely the devices already
+  // told to spend less: the crash-strike floor, GRAPHICS: LOW, or the
+  // governor's own shed all raise tier(). Without the gate the fused/chunked
+  // split above buys nothing on the tier that needs it most.
+  assert.match(source, /const tierOk = typeof PerfGov === "undefined" \|\| PerfGov\.tier\(\) < 3;/);
+  assert.match(source, /if \(allow && tierOk && geo && gfx\.createChunkedMesh\)/);
   assert.match(source, /"roadChunked", track\.meshes\.road, gfx\.chunkedTrackCoords !== false/);
   const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
   assert.match(tlx, /chunkedTrackCoords:\s*false/);
