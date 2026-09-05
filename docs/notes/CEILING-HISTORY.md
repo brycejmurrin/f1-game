@@ -2071,6 +2071,30 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   sites. After: speeds span 8 m/s at t=4 and 17 order changes in ten seconds
   (`tests/unit/ai-racecraft-vm.test.mjs`, the start test).
 
+- `shellNodes` 1133 -> **1158** (2026-09-05): the ENGINE TONE redesign. The
+  tuner's pitch curve was two knobs and PITCH scaled both ends, so a low,
+  grumbling idle could only be bought by pulling the whole curve down and REV
+  RANGE (capped at 2.5) could not put the redline back — measured, PITCH 0.6 +
+  REV RANGE 2.5 reached a redline rate of 0.83 against the stock 0.70, a fifth
+  of an octave for a knob that read 2.5x. The curve is now four independent
+  knobs (IDLE / PITCH / REV RANGE / CURVE, `rate = (0.25·idle +
+  0.45·revRange·rev^curve)·pitch`, a 50:1 reach), plus GRAVEL (crank-rate
+  roughness that fades with rev), BRAKES (carbon roar under deceleration) and
+  SHIFT (gear-crack level), each a slider of four nodes (20), GRAVEL and
+  BRAKES switches (2), and three `h3.adv-sec` group headers (3) so fourteen
+  sliders read as PITCH CURVE / CHARACTER / LAYERS rather than a list. All
+  static DOM, as the shell rule wants; `tests/unit/audio-tune.test.mjs` holds
+  every id, range and default position against the engine's tables.
+
+- `shellNodes` 1158 -> **1192** (2026-09-05): the second ENGINE TONE pass.
+  The LIMITER trim spent its top half on chop rate because depth saturates at
+  a full ignition cut — but a slow deep cut and a fast shallow one are
+  different limiters and one slider could not express either, so it is three
+  knobs now (DEPTH / RATE / PITCH SAG, the last a square into the core's
+  detune so the note drops with the ignition). BOOST gets LEVEL and REV LIFT,
+  and HARVEST / WIND / TYRES / RIVALS get the level trim they had always
+  lacked beside their switch. Eight sliders (32) and two group headers (2).
+
 - `js/game.js` lines 9951 -> **9994**, codeLines 5477 -> **5489** (2026-09-05):
   what a contact costs the player. Twelve code lines net: room to the ROAD edge
   for the pass latch and the squeeze test (+1 — the run-off allowance in

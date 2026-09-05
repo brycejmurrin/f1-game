@@ -35,11 +35,11 @@
   },
   "tree": {
     "cssClasses": {
-      "ceiling": 549,
+      "ceiling": 551,
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1133,
+      "ceiling": 1192,
       "slack": 25
     },
     "bareCatches": {

@@ -33,8 +33,16 @@ const BASE = process.argv[2] || "http://localhost:8099";
   const page = await b.newPage();
   const errs = []; page.on("pageerror", (e) => errs.push(e.message));
   await page.goto(BASE + "/index.html?v=" + Date.now(), { waitUntil: "networkidle" });
+  // Boot on SwiftShader takes ~35 s here (measured 2026-09-05: __apex at 34 s),
+  // and a click issued into that keeps the main thread's queue until the
+  // default 30 s timeout — the run died before any audio code ran. Wait for
+  // the boot, then treat the click as the gesture it is meant to be: the
+  // second browser below already guards it this way, and with
+  // --autoplay-policy=no-user-gesture-required the init works either way.
+  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 120000 });
   await page.waitForTimeout(400);
-  await page.click("#mb-race"); await page.waitForTimeout(400);   // gesture -> audio init
+  try { await page.click("#mb-race", { timeout: 8000, noWaitAfter: true }); } catch (_) { /* boot still busy */ }
+  await page.waitForTimeout(400);
   await page.evaluate(() => { GameAudio.init(); GameAudio.setEnabled(true); });
   await page.waitForTimeout(1400);                                 // decode samples
   await page.evaluate(() => GameAudio.startEngine());
@@ -88,6 +96,7 @@ const BASE = process.argv[2] || "http://localhost:8099";
   const page2 = await b2.newPage();
   const errs2 = []; page2.on("pageerror", (e) => errs2.push(e.message));
   await page2.goto(BASE + "/index.html?v=" + Date.now() + 1, { waitUntil: "networkidle" });
+  await page2.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 120000 });
   await page2.waitForTimeout(400);
   try { await page2.click("#mb-race", { timeout: 8000, noWaitAfter: true }); } catch (_) { /* boot still busy */ }
   await page2.waitForTimeout(400);

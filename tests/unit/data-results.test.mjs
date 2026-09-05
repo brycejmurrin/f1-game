@@ -38,7 +38,11 @@ function makeDom() {
       text: text === undefined || text === null ? null : String(text),
       children: [],
       classList: { add(c) { node.cls = node.cls ? node.cls + " " + c : c; } },
-      appendChild(c) { node.children.push(c); return c; }
+      appendChild(c) { node.children.push(c); return c; },
+      listeners: {},
+      addEventListener(ev, fn) { (node.listeners[ev] = node.listeners[ev] || []).push(fn); },
+      setAttribute(k, v) { node[k] = v; },
+      fire(ev) { (node.listeners[ev] || []).forEach((fn) => fn()); }
     };
     return node;
   }
@@ -53,11 +57,34 @@ function find(node, pred, out = []) {
 const hasCls = (n, c) => (n.cls || "").split(" ").indexOf(c) !== -1;
 // el() writes textContent, so every cell reads back as a STRING — the
 // expectations below quote the numeric columns for that reason.
+// Cut bands (one full-width cell) are EXCLUDED here and asserted separately by
+// cuts(); folding them into rows() would let a band land in the wrong place
+// without any assertion noticing.
 function rows(tree) {
-  return find(tree, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td"))
+  return find(tree, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td") && !hasCls(n, "dh-cut"))
     .map((tr) => tr.children.map((td) => (td.tag === "td" && td.children.length
       ? td.children.map((c) => c.text).filter(Boolean).join(" ")
       : td.text)));
+}
+// Each band's text plus the position of the row directly above it, so "the cut
+// fell in the right PLACE" is assertable and not just "a band exists".
+function cuts(tree) {
+  const trs = find(tree, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "td"));
+  const out = [];
+  trs.forEach((tr, i) => {
+    if (!hasCls(tr, "dh-cut")) return;
+    const above = trs[i - 1];
+    out.push([above ? above.children[0].text : null, tr.children[0].text]);
+  });
+  return out;
+}
+function pills(tree) {
+  return find(tree, (n) => hasCls(n, "dh-pill")).map((b) => b.text);
+}
+function clickPill(tree, label) {
+  const b = find(tree, (n) => hasCls(n, "dh-pill") && n.text === label)[0];
+  assert.ok(b, `no pill labelled ${label}`);
+  b.fire("click");
 }
 function headers(tree) {
   const hr = find(tree, (n) => n.tag === "tr" && n.children.some((c) => c.tag === "th"))[0];
@@ -127,6 +154,92 @@ test("qualifying spreads the [Q1,Q2,Q3] array across three columns", async () =>
   assert.deepEqual(r[1].slice(3), ["1:13.400", "—", "—"]);
 });
 
+// The real Zandvoort 2026 qualifying, trimmed to eight cars but keeping every
+// property that matters: Q1's order is NOT the classification's order (car 81
+// set the fastest Q1 lap and finished 4th), the per-round gap is to THAT
+// round's leader, and the field thinned 8 -> 6 -> 5 rather than by any fixed
+// count — 2026 keeps 16 through Q1 where 2025 kept 15, which is exactly why
+// nothing here may be derived from a cutoff.
+const ZANDVOORT = [
+  { pos: 1, num: 1,  laps: 21, points: null, dnf: false, dns: false, dsq: false, duration: [72.695, 71.628, 71.163], gap: [0.085, 0.0,   0.0] },
+  { pos: 2, num: 63, laps: 20, points: null, dnf: false, dns: false, dsq: false, duration: [72.924, 71.959, 71.265], gap: [0.314, 0.331, 0.102] },
+  { pos: 3, num: 12, laps: 21, points: null, dnf: false, dns: false, dsq: false, duration: [73.022, 71.915, 71.296], gap: [0.412, 0.287, 0.133] },
+  { pos: 4, num: 81, laps: 19, points: null, dnf: false, dns: false, dsq: false, duration: [72.610, 71.641, 71.305], gap: [0.0,   0.013, 0.142] },
+  { pos: 5, num: 44, laps: 18, points: null, dnf: false, dns: false, dsq: false, duration: [72.673, 71.970, 71.494], gap: [0.063, 0.342, 0.331] },
+  { pos: 6, num: 10, laps: 17, points: null, dnf: false, dns: false, dsq: false, duration: [73.115, 72.616, null],   gap: [0.505, 0.988, null] },
+  { pos: 7, num: 55, laps: 16, points: null, dnf: false, dns: false, dsq: false, duration: [73.574, null,   null],   gap: [0.964, null,  null] },
+  { pos: 8, num: 77, laps: 15, points: null, dnf: false, dns: false, dsq: false, duration: [74.371, null,   null],   gap: [1.761, null,  null] }
+];
+const Z_DRIVERS = [
+  { num: 1,  code: "VER", name: "Max Verstappen",  team: "Red Bull Racing" },
+  { num: 63, code: "RUS", name: "George Russell",  team: "Mercedes" },
+  { num: 12, code: "ANT", name: "Kimi Antonelli",  team: "Mercedes" },
+  { num: 81, code: "PIA", name: "Oscar Piastri",   team: "McLaren" },
+  { num: 44, code: "HAM", name: "Lewis Hamilton",  team: "Ferrari" },
+  { num: 10, code: "GAS", name: "Pierre Gasly",    team: "Alpine" },
+  { num: 55, code: "SAI", name: "Carlos Sainz",    team: "Williams" },
+  { num: 77, code: "BOT", name: "Valtteri Bottas", team: "Cadillac" }
+];
+const QUALI_META = { sessionKey: 11349, name: "Qualifying", type: "Qualifying" };
+
+test("the overall qualifying table bands the field where each cut fell", async () => {
+  const tree = await render(QUALI_META, ZANDVOORT, Z_DRIVERS);
+  assert.deepEqual(pills(tree), ["OVERALL", "Q1", "Q2", "Q3"]);
+  // Under P5 (last of the Q3 runners) and under P6 (the only Q2 casualty here),
+  // each naming the round the group BELOW it went out in — not the round it
+  // never reached, which is the plausible-looking way to get this wrong.
+  assert.deepEqual(cuts(tree), [["5", "ELIMINATED IN Q2"], ["6", "ELIMINATED IN Q1"]]);
+});
+
+test("a round view re-sorts on THAT round's time, not the classification", async () => {
+  const tree = await render(QUALI_META, ZANDVOORT, Z_DRIVERS);
+  clickPill(tree, "Q1");
+  assert.deepEqual(headers(tree), ["POS", "DRIVER", "TEAM", "Q1", "GAP"]);
+  const r = rows(tree);
+  // Piastri set the fastest Q1 lap and finished P4; Verstappen took pole from
+  // third in Q1. Those two orders differing is the whole point of this view.
+  assert.deepEqual(r.map((x) => x[1]), [
+    "PIA Oscar Piastri", "HAM Lewis Hamilton", "VER Max Verstappen", "RUS George Russell",
+    "ANT Kimi Antonelli", "GAS Pierre Gasly", "SAI Carlos Sainz", "BOT Valtteri Bottas"
+  ]);
+  // Gap is to THIS round's leader, so the pole-sitter reads +0.085 here.
+  assert.deepEqual(r[0].slice(3), ["1:12.610", "—"]);
+  assert.deepEqual(r[2].slice(3), ["1:12.695", "+0.085"]);
+  assert.deepEqual(cuts(tree), [["6", "ELIMINATED IN Q1"]]);
+});
+
+test("a round view lists only the cars that ran that round", async () => {
+  const tree = await render(QUALI_META, ZANDVOORT, Z_DRIVERS);
+  clickPill(tree, "Q2");
+  const r = rows(tree);
+  assert.equal(r.length, 6, "the two knocked out in Q1 are not in Q2");
+  assert.deepEqual(r.map((x) => x[1]), [
+    "VER Max Verstappen", "PIA Oscar Piastri", "ANT Kimi Antonelli",
+    "RUS George Russell", "HAM Lewis Hamilton", "GAS Pierre Gasly"
+  ]);
+  assert.deepEqual(cuts(tree), [["5", "ELIMINATED IN Q2"]]);
+});
+
+test("the final round has no cut band and can be left again", async () => {
+  const tree = await render(QUALI_META, ZANDVOORT, Z_DRIVERS);
+  clickPill(tree, "Q3");
+  assert.equal(rows(tree).length, 5);
+  assert.deepEqual(cuts(tree), [], "nobody is eliminated in the last round");
+  clickPill(tree, "OVERALL");
+  assert.deepEqual(headers(tree), ["POS", "DRIVER", "TEAM", "Q1", "Q2", "Q3"]);
+  assert.equal(rows(tree).length, 8);
+});
+
+// A red-flagged session that never reached Q3 must offer the rounds it RAN.
+// Offering an empty Q3 pill is the same class of bug as assuming how many cars
+// each round keeps.
+test("only the rounds that ran get a pill", async () => {
+  const tree = await render(QUALI_META, ZANDVOORT.map((r) => ({
+    ...r, duration: [r.duration[0], r.duration[1], null], gap: [r.gap[0], r.gap[1], null]
+  })), Z_DRIVERS);
+  assert.deepEqual(pills(tree), ["OVERALL", "Q1", "Q2"]);
+});
+
 test("a race shows points and formats the winner's distance as a clock", async () => {
   const tree = await render(
     { sessionKey: 11353, name: "Race", type: "Race" },
@@ -156,14 +269,19 @@ test("a sprint keeps the points column", async () => {
 });
 
 // "Sprint Qualifying" is a THREE-PART session like any other qualifying, so it
-// must take the Q1/Q2/Q3 branch even though its name starts with "Sprint".
-test("sprint qualifying is a qualifying, not a sprint", async () => {
+// must take the Q1/Q2/Q3 branch even though its name starts with "Sprint" —
+// and its rounds are SQ1-SQ3, which is what the session actually ran.
+test("sprint qualifying is a qualifying, and its rounds are named SQ", async () => {
   const tree = await render(
     { sessionKey: 11344, name: "Sprint Qualifying", type: "Qualifying" },
     [{ pos: 1, num: 1, laps: 9, points: null, dnf: false, dns: false, dsq: false,
-       duration: [70.1, 69.9, 69.5], gap: [0, 0, 0] }]
+       duration: [70.1, 69.9, 69.5], gap: [0, 0, 0] },
+     { pos: 2, num: 63, laps: 8, points: null, dnf: false, dns: false, dsq: false,
+       duration: [70.4, 70.2, null], gap: [0.3, 0.3, null] }]
   );
-  assert.deepEqual(headers(tree), ["POS", "DRIVER", "TEAM", "Q1", "Q2", "Q3"]);
+  assert.deepEqual(headers(tree), ["POS", "DRIVER", "TEAM", "SQ1", "SQ2", "SQ3"]);
+  assert.deepEqual(pills(tree), ["OVERALL", "SQ1", "SQ2", "SQ3"]);
+  assert.deepEqual(cuts(tree), [["1", "ELIMINATED IN SQ2"]]);
 });
 
 test("retirements sort last and say why in the time column", async () => {
