@@ -257,23 +257,6 @@ test("a spec that cannot pass at the gate's per-test cap declares so, and is exc
     "and must NAME it as over budget — silent truncation reads as covered");
 });
 
-test("audio-smoke first-load cannot pass at the selected-gate cap, and is excluded", () => {
-  // Pages 33930263150 (`6fe9bee1`): audio-smoke declared exactly 180s, so
-  // `own > 180000` was false and Selected included it. The persisted SOUND
-  // OFF case then timed out at 192.1s. Same rule as hud-layout: sit above
-  // the gate and be named over-budget. Raising the gate later must not
-  // quietly re-admit it.
-  const own = maxDeclaredTimeout("tests/specs/audio-smoke.spec.js");
-  assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
-    `audio-smoke.spec.js declares ${own / 1000}s, at or under the ${SELECTED_GATE.perTestTimeoutSec}s gate — ` +
-    "its first-load reload cannot pass there; see Pages 33930263150");
-
-  const r = fit(["tests/specs/audio-smoke.spec.js"], 26);
-  assert.deepEqual(r.selected, [], "the gate must not select it");
-  assert.ok(r.overBudgetSpecs.some((s) => s.file === "tests/specs/audio-smoke.spec.js"),
-    "and must NAME it as over budget — silent truncation reads as covered");
-});
-
 test("the gate's per-test timeout clears the SLOWEST spec, not the average one", () => {
   // The defect this pins: 120 s bounded the mean test (79.7 s) and not the
   // slowest, so the gate failed specs that pass. Measured on an idle box,
@@ -301,4 +284,31 @@ test("ci.yml runs the selected gate with the settings the selector models", () =
   assert.ok(cap >= worstCaseMin,
     `timeout-minutes ${cap} is under the worst case (${worstCaseMin.toFixed(0)} min): ` +
     "the job would be CANCELLED, which reads as 0 failures and hides a dead deploy");
+});
+
+test("raising the gate must not enrol specs that opted out of the lower one", () => {
+  // The defect: the exclusion used `own > gate`, so a spec declaring EXACTLY
+  // the gate's budget was SELECTED with zero headroom and then killed at its
+  // own declared figure. Raising the gate 120 -> 180 s silently pulled in all
+  // five specs that declare exactly 180 s — audio-smoke (115.5 s SOLO on an
+  // idle 4-core), material-shimmer, and the qatar/spa/suzuka foundations —
+  // each of which had opted out of the 120 s gate on purpose.
+  //
+  // The rule is about what must NOT happen (be selected), not about which
+  // channel catches it: a spec can also be excluded earlier for being covered
+  // by a fixed gate or replayed by a VM twin, and aero-zones.spec.js (540 s)
+  // legitimately arrives that way.
+  const gateMs = SELECTED_GATE.perTestTimeoutSec * 1000;
+  const files = fs.readdirSync(path.join(ROOT, "tests/specs"))
+    .filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`);
+  const r = fit(files, 15);
+  const selected = new Set(r.selected.map((x) => x.file));
+  const atOrOver = files.filter((f) => maxDeclaredTimeout(f) >= gateMs);
+  assert.ok(atOrOver.length > 0, "no spec declares at or over the gate — this test is vacuous");
+  for (const f of atOrOver) {
+    assert.ok(!selected.has(f),
+      `${f} declares ${maxDeclaredTimeout(f) / 1000}s against a ` +
+      `${SELECTED_GATE.perTestTimeoutSec}s gate but was SELECTED — ` +
+      "it would be killed at its own declared budget, which reads as a code failure");
+  }
 });

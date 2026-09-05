@@ -148,7 +148,19 @@ export function fit(specs, budgetMin) {
       continue;
     }
     const own = maxDeclaredTimeout(file);
-    if (own > SELECTED_GATE.perTestTimeoutSec * 1000) {
+    // >=, NOT >. A spec that declares EXACTLY the gate's budget is saying it
+    // needs all of it, with nothing left for a runner slower than the box that
+    // number was measured on — and the gate's runner always is. Under `>` such
+    // a spec is SELECTED and then killed at its own declared figure, which
+    // reads as a code failure and is not one.
+    //
+    // This was not hypothetical: raising the gate 120 -> 180 s silently pulled
+    // in the five specs that declare exactly 180 s (audio-smoke,
+    // material-shimmer, qatar/spa/suzuka-foundation), every one of them
+    // boot-heavy and previously excluded. audio-smoke measures 115.5 s SOLO on
+    // an idle 4-core. Raising a gate must never enrol specs that opted out of
+    // the lower one; with `>=` the boundary moves with the gate instead.
+    if (own >= SELECTED_GATE.perTestTimeoutSec * 1000) {
       overBudgetSpecs.push({ file, tests, ownTimeoutSec: own / 1000 });
       continue;
     }

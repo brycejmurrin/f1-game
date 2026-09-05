@@ -46,13 +46,14 @@ test("GameAudio initialises without console errors", async ({ page, pageErrors, 
 // is ~75s. Seed everything, assert both, then the enable click.
 test("persisted SOUND OFF and out-of-range volumes apply on first load", async ({ page }) => {
   // Measured 115.5s solo on an idle 4-core (2026-09-04): cold reload, WebGL
-  // boot, settings, enable gesture. Selected on Pages 33930263150 then
-  // hit the 180s gate at 192.1s (`Test timeout of 180000ms exceeded`) —
-  // hang is cold page.reload + settings + #soundbtn, not an assertion.
-  // 300s matches the other over-cap specs so Selected EXCLUDES this file
-  // (`own > 180000`); smoke (`test:ui` shard) keeps the wall. Do not raise
-  // SELECTED_GATE.perTestTimeoutSec to re-admit it.
-  test.setTimeout(300_000);
+  // boot, settings, enable gesture. The 120s default is the hang backstop,
+  // not this boot — raise the one test, do not shrug (test-solo warning).
+  // Selected on Pages 33930263150 then killed this case at 192.1s because
+  // 180s is not `> 180s` (`own > gate` enrolled it). The gate now uses
+  // `>=`, so this declare keeps the spec EXCLUDED. Do not raise the
+  // number to 300s — that would drop it out of the exact-180s set the
+  // membership pin enumerates.
+  test.setTimeout(180_000);
   const engineRequests = [];
   page.on("request", (request) => {
     if (/assets\/sfx\/f1_(?:engine|rev)\.mp3(?:\?|$)/.test(request.url())) {

@@ -1221,17 +1221,36 @@ owner), `select-budget.mjs` (the variant table), and two test files. Only the
 first is what the runner obeys; the rest have to be derived from the owner or
 they are four chances to describe a job that does not exist.
 
-## 2026-09-04 — Selected-specs 180s cap then caught audio-smoke
-`pages.yml` Selected on `6fe9bee1` (`run 33930263150`) routed
-`test:car` + `test:ui`. `audio-smoke` declares exactly 180s, so
-`own > 180000` is false and Selected **includes** it. The persisted
-SOUND OFF case then hit the ceiling at 192.1s (`Test timeout of
-180000ms exceeded`) — hang is cold `page.reload` + settings +
-`#soundbtn`, not an assertion. Earlier red Selected runs
-(`33927358590`, `33926744372`, `33924077769`, `33923442435`)
-**excluded** `audio-smoke` (gate was still 120s, or the 180s declare
-was already over-cap) and died on Albert Park / physics-fixes /
-Abu Dhabi via the carry-forward cache. Same route as hud-layout:
-the spec now declares 300s so Selected EXCLUDES it; smoke
-(`test:ui` shard) keeps running it. Do not raise
-`SELECTED_GATE.perTestTimeoutSec`.
+## 2026-09-04 — raising a gate ENROLLED the specs that had opted out of it
+
+Immediately after the 120 -> 180 s raise above, `audio-smoke.spec.js` failed the
+change-aware gate for the first time. It had not changed, and neither had the
+audio code under it. Measured on Pages `6fe9bee1` (`run 33930263150`):
+Selected routed `test:car` + `test:ui`, included `audio-smoke` because
+180s is not `> 180s`, and the persisted SOUND OFF case died at 192.1s
+(cold `page.reload` + settings + `#soundbtn`). Earlier red Selected
+runs (`33927358590`, `33926744372`, `33924077769`, `33923442435`)
+still excluded it and died on Albert Park / physics-fixes / Abu Dhabi.
+
+The exclusion read `own > SELECTED_GATE.perTestTimeoutSec * 1000`. A spec
+declaring EXACTLY the gate's budget is therefore SELECTED — with zero headroom,
+on a runner slower than the box its number was measured on — and then killed at
+its own declared figure, which reads as a code failure and is not one.
+
+Five specs declare exactly 180 s and every one of them was pulled in by the
+raise: `audio-smoke` (115.5 s SOLO on an idle 4-core), `material-shimmer`, and
+the `qatar` / `spa` / `suzuka` foundations. All five had opted out of the 120 s
+gate deliberately.
+
+`>=`, not `>`. A spec that says it needs the whole budget does not fit in it,
+and the boundary then moves with the gate instead of sweeping up whatever sits
+on it. `select-specs.test.mjs` pins the rule as "never SELECTED", not "lands in
+overBudgetSpecs" — a spec can also be excluded earlier for being covered by a
+fixed gate or replayed by a VM twin, which is how `aero-zones.spec.js` (540 s)
+legitimately arrives.
+
+**The general lesson: raising a gate is not only a budget change, it is a
+MEMBERSHIP change.** Every spec that opted out by declaring a number between the
+old gate and the new one silently opts back in. Enumerate that set before
+moving the number — the one-liner is `maxDeclaredTimeout(f)` over
+`tests/specs/*.spec.js`, filtered to `> old && <= new`.
