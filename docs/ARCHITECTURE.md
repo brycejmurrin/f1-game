@@ -956,7 +956,7 @@ global directly and load before hub.js.
 |---|---|---|
 | `schedule.js` | `DataSchedule` | SCHEDULE |
 | `standings.js` | `DataStandings` | STANDINGS (drivers + constructors) |
-| `results.js` | `DataResults` | RESULTS (any session of any 2023+ weekend, via the shared picker) |
+| `results.js` | `DataResults` | RESULTS (any session of any 2023+ weekend, via the shared picker; qualifying adds OVERALL / Q1 / Q2 / Q3 round views) |
 | `live.js` | `DataLive` | LIVE (30 s refresh loop) |
 | `telemetry.js` | `DataTelemetry` | TELEMETRY (trace viewer/map/playback; also returns `closeTelemPopup` — the shell closes the popup on tab switch / hub close) |
 | `export.js` | `DataExport` | EXPORT dev tool (GPS traces → ZIP) |
