@@ -880,7 +880,23 @@ and then costs no per-frame scheduling.
 
 ### The field, the space and the overrun
 Three layers are worth naming because none of them existed before and each
-answers a question the mix could not:
+answers a question the mix could not.
+
+**They are MOBILE-TIERED, and were not on the day they shipped.** A phone gets
+NO convolver at all and TWO rival voices instead of four; `venue()` reports a
+level of 0 there rather than pretending to a reverb that is not running. Every
+other pool in this tree is tiered — debris 48/16, marbles 16/6, furniture 24/12,
+the livery atlas 1024/512/256, `MUSIC_CACHE` 2/1 — and this was the one
+subsystem handing a phone what it handed a desktop. It is not a small hand: a
+~1.5 s stereo ConvolverNode is the most expensive thing `engine.js` asks for and
+it was fed the engine PLUS four looping rival voices, each a BufferSource +
+biquad + gain + StereoPanner running whether or not a rival is near enough to
+hear. It was reported as an iPhone that had been fine that morning crashing
+mid-session — CPU contention on the audio thread, which is why it left no OOM
+strike and no context-loss marker for any of the memory hunting to find.
+`GLX.mobileTier` is read LAZILY at `startEngine()`, not at module eval: glx.js
+is tagged ahead of this file so `GLX` exists, but the tier is decided at its own
+init, which has not run yet.
 
 - **RIVALS** — `GameAudio.setRivals(list)`, fed by `js/audio/rivals.js` from the
   player's TRACK frame. Four voices, panned by ANGLE (lateral over arc
