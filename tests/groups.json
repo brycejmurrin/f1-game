@@ -490,6 +490,7 @@
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collision-ai-fixes-vm.test.mjs",
+        "tests/unit/collision-contact-vm.test.mjs",
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",

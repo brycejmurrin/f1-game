@@ -206,10 +206,14 @@ function clearRendererStorage() {
   return removed;
 }
 
+// The row that holds the select. A setting row nests the select one level
+// down (label, then the ‹ select › cluster), so walk up to the row id.
 function rendererSlot(el) {
   if (!el) return null;
-  const p = el.parentNode;
-  return (p && p.id === "pm-renderer-row") ? p : el;
+  for (let p = el.parentNode, n = 0; p && n < 3; p = p.parentNode, n++) {
+    if (p.id === "pm-renderer-row") return p;
+  }
+  return el;
 }
 
 const THREE_PATHS = ["auto", "webgl2", "webgpu"];
@@ -593,19 +597,30 @@ function replaceNode(old, next) {
 function mountRendererPicker(old) {
   if (!old || isSelect(old)) return old;
   if (typeof document === "undefined" || typeof document.createElement !== "function") return old;
+  // The same SETTING ROW shape as every other Settings pick
+  // (js/ui/setting-row.js, css/components.css .set-row): LABEL ‹ select ›.
+  // Built by hand rather than through SettingRow.build because this file also
+  // runs in harnesses that load it alone.
   const row = document.createElement("div");
+  const label = document.createElement("span");
+  const ctl = document.createElement("div");
   const prev = document.createElement("button");
   const sel = document.createElement("select");
   const next = document.createElement("button");
   if (typeof row.appendChild !== "function" || typeof sel.appendChild !== "function") return old;
   row.id = "pm-renderer-row";
+  row.className = "set-row";
+  if (typeof row.setAttribute === "function") { row.setAttribute("role", "group"); row.setAttribute("aria-labelledby", "pm-renderer-label"); }
+  label.id = "pm-renderer-label";
+  label.className = "tune-label";
+  label.textContent = "RENDERER";
   prev.id = "pm-renderer-prev";
   prev.type = "button";
   prev.textContent = "‹";
-  if (typeof prev.setAttribute === "function") prev.setAttribute("aria-label", "Previous renderer");
+  if (typeof prev.setAttribute === "function") { prev.setAttribute("data-step", "-1"); prev.setAttribute("aria-label", "Previous renderer"); }
   sel.id = "pm-renderer";
   sel.title = "WEBGL2 paints the canvas (screenshots work). THREE.JS is the three.js backend — use THREE PATH for WebGL2 vs WebGPU. WEBGPU is hand-written WebGPU — use SCREENSHOTS for 2D blit vs native swapchain.";
-  if (typeof sel.setAttribute === "function") sel.setAttribute("aria-label", "Renderer");
+  if (typeof sel.setAttribute === "function") sel.setAttribute("aria-labelledby", "pm-renderer-label");
   for (let i = 0; i < BACKENDS.length; i++) {
     const opt = document.createElement("option");
     opt.value = BACKENDS[i];
@@ -615,10 +630,12 @@ function mountRendererPicker(old) {
   next.id = "pm-renderer-next";
   next.type = "button";
   next.textContent = "›";
-  if (typeof next.setAttribute === "function") next.setAttribute("aria-label", "Next renderer");
-  row.appendChild(prev);
-  row.appendChild(sel);
-  row.appendChild(next);
+  if (typeof next.setAttribute === "function") { next.setAttribute("data-step", "1"); next.setAttribute("aria-label", "Next renderer"); }
+  ctl.appendChild(prev);
+  ctl.appendChild(sel);
+  ctl.appendChild(next);
+  row.appendChild(label);
+  row.appendChild(ctl);
   if (!replaceNode(old, row)) return old;
   return sel;
 }

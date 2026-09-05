@@ -140,18 +140,21 @@ const AudioPanel = (() => {
       paintFold($("as-sp-sum"), [["k", "SPOTIFY"], [spKind, spWord]]);
     }
 
+    // SOURCE is a setting row (js/ui/setting-row.js): MY TRACKS and SPOTIFY
+    // are shown but unpickable until there is something behind them.
+    const SRC_VALUES = [["all", "ALL"], ["builtin", "DEFAULT"], ["user", "MY TRACKS"], ["spotify", "SPOTIFY"]];
+    const ONOFF = [["on", "ON"], ["off", "OFF"]];
+    function srcOn() {
+      return (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
+        ? "spotify" : GameAudio.musicSource();
+    }
     function syncMusicSrcRow() {
       const counts = GameAudio.sourceCounts ? GameAudio.sourceCounts() : { builtin: 0, user: 0 };
       const spot = spotifyReady();
-      const on = (typeof SpotifyMusic !== "undefined" && SpotifyMusic.inUse && SpotifyMusic.inUse())
-        ? "spotify" : GameAudio.musicSource();
-      [["as-src-all", "all"], ["as-src-builtin", "builtin"],
-       ["as-src-user", "user"], ["as-src-spotify", "spotify"]].forEach(([id, v]) => {
-        const b = $(id);
-        if (!b) return;
-        b.classList.toggle("active", on === v);
-        b.disabled = v === "user" ? counts.user === 0 : v === "spotify" ? !spot : false;
-      });
+      const on = srcOn();
+      SettingRow.paint($("as-src"), on, SRC_VALUES);
+      SettingRow.optionDisabled($("as-src"), "user", counts.user === 0);
+      SettingRow.optionDisabled($("as-src"), "spotify", !spot);
       const note = $("as-src-note");
       if (note) {
         // The SELECTED source first: with DEFAULT lit and nothing uploaded the
@@ -170,10 +173,8 @@ const AudioPanel = (() => {
     function syncAudioPanel() {
       const musicLive = G.musicEnabled && G.soundOn;
       const sfxLive = sfxOn && G.soundOn;
-      $("as-music-on").classList.toggle("active", G.musicEnabled);
-      $("as-music-off").classList.toggle("active", !G.musicEnabled);
-      $("as-sound-on").classList.toggle("active", sfxOn);
-      $("as-sound-off").classList.toggle("active", !sfxOn);
+      SettingRow.paint($("as-music"), G.musicEnabled ? "on" : "off", ONOFF);
+      SettingRow.paint($("as-sound"), sfxOn ? "on" : "off", ONOFF);
       $("as-mvol").disabled = !musicLive;
       $("as-svol").disabled = !sfxLive;
       $("as-mvol").closest(".tune-row").classList.toggle("tune-off", !musicLive);
@@ -188,16 +189,25 @@ const AudioPanel = (() => {
       // line ellipsises (css/tuner.css .as-now-title), so the way out goes on
       // the caption under it, which wraps.
       const nowText = musicLive ? (GameAudio.trackName() || "—") : G.soundOn ? "Music off" : "Sound off";
-      $("as-now").textContent = nowText;
-      $("as-now").title = nowText;
-      // Same words as the source buttons (ALL / DEFAULT / MY TRACKS / SPOTIFY):
-      // the caption said "Built-in" for the button labelled DEFAULT.
+      // Same words as the SOURCE row (ALL / DEFAULT / MY TRACKS / SPOTIFY):
+      // the caption said "Built-in" for the value labelled DEFAULT.
       const SRC_LABEL = { all: "All music", builtin: "Default", user: "My tracks", spotify: "Spotify" };
-      $("as-now-src").textContent = musicLive ? (SRC_LABEL[musicSrc] || "") : G.soundOn ? "" : "Master sound is off — MUSIC ON or SOUND EFFECTS ON turns it on";
-      $("as-play").innerHTML = G.musicEnabled ? "&#10074;&#10074;" : "&#9654;";
-      $("as-play").setAttribute("aria-label", G.musicEnabled ? "Pause music" : "Play music");
-      for (const id of ["as-prev", "as-skip"]) $(id).disabled = !musicLive;
-      $("as-play").disabled = !G.soundOn;
+      const srcText = musicLive ? (SRC_LABEL[musicSrc] || "") : G.soundOn ? "" : "Master sound is off — MUSIC ON or SOUND EFFECTS ON turns it on";
+      // Two copies of the NOW PLAYING card: the MUSIC page's (as-*) and the
+      // pause menu's (pm-*), which is only shown while music is live.
+      for (const p of ["as", "pm"]) {
+        const now = $(p + "-now"), src = $(p + "-now-src"), play = $(p + "-play");
+        if (!now || !play) continue;
+        now.textContent = nowText;
+        now.title = nowText;
+        if (src) src.textContent = srcText;
+        play.innerHTML = G.musicEnabled ? "&#10074;&#10074;" : "&#9654;";
+        play.setAttribute("aria-label", G.musicEnabled ? "Pause music" : "Play music");
+        for (const id of [p + "-prev", p + "-skip"]) if ($(id)) $(id).disabled = !musicLive;
+        play.disabled = !G.soundOn;
+      }
+      const pmCard = $("pm-now-card");
+      if (pmCard) pmCard.hidden = !musicLive;
       if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
       syncMusicSrcRow();
       syncTonePanel();
@@ -208,17 +218,17 @@ const AudioPanel = (() => {
     if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.onChange) {
       SpotifyMusic.onChange(() => { if (!$("audioset").hidden) syncMusicSrcRow(); });
     }
-    $("as-src-all").onclick = () => { setMusicSrc("all"); if (G.soundOn) GameAudio.uiTick(); };
-    $("as-src-builtin").onclick = () => { setMusicSrc("builtin"); if (G.soundOn) GameAudio.uiTick(); };
-    $("as-src-user").onclick = () => { setMusicSrc("user"); if (G.soundOn) GameAudio.uiTick(); };
-    $("as-src-spotify").onclick = () => { setMusicSrc("spotify"); if (G.soundOn) GameAudio.uiTick(); };
+    SettingRow.wire("as-src", { values: SRC_VALUES, read: srcOn,
+      write: (v) => { setMusicSrc(v); if (G.soundOn) GameAudio.uiTick(); } });
     $("as-sp-open").onclick = () => {
       if (typeof SpotifyMusic !== "undefined" && SpotifyMusic.openPanel) SpotifyMusic.openPanel();
     };
-    $("as-music-on").onclick = (e) => { e.stopPropagation(); setMusic(true); if (G.soundOn) GameAudio.uiTick(); };
-    $("as-music-off").onclick = (e) => { e.stopPropagation(); setMusic(false); if (G.soundOn) GameAudio.uiTick(); };
-    $("as-sound-on").onclick = (e) => { e.stopPropagation(); setSfx(true); GameAudio.uiTick(); };
-    $("as-sound-off").onclick = (e) => { e.stopPropagation(); GameAudio.uiTick(); setSfx(false); };
+    SettingRow.wire("as-music", { values: ONOFF, read: () => (G.musicEnabled ? "on" : "off"),
+      write: (v) => { setMusic(v === "on"); if (G.soundOn) GameAudio.uiTick(); } });
+    // ON enables before the tick so the tick has a context to play in; OFF
+    // ticks first, while the bus is still open.
+    SettingRow.wire("as-sound", { values: ONOFF, read: () => (sfxOn ? "on" : "off"),
+      write: (v) => { if (v === "on") { setSfx(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setSfx(false); } } });
     // `input` not `change`: the level should follow the thumb while dragged.
     $("as-mvol").oninput = (e) => {
       musicVol = GameAudio.setMusicVolume((+e.target.value || 0) / 10);
@@ -238,14 +248,30 @@ const AudioPanel = (() => {
        chosen per field so that an EXACT integer lands on 1.0 — a slider whose
        centre is 0.9975 would mean the panel could not express the shipped
        sound, which is the one value it must always be able to return to. */
+    // Same order as the shell: PITCH CURVE (idle end, whole-curve transpose,
+    // span, bend), CHARACTER, the three LIMITER knobs, the two BOOST knobs,
+    // then the LAYER levels.
     const TONE = [
+      { k: "idle",       id: "as-t-idle",   lo: 0.50, step: 0.05 },
       { k: "pitch",      id: "as-t-pitch",  lo: 0.60, step: 0.05 },
       { k: "revRange",   id: "as-t-range",  lo: 0.20, step: 0.10 },
+      { k: "curve",      id: "as-t-curve",  lo: 0.40, step: 0.10 },
+      { k: "gravel",     id: "as-t-gravel", lo: 0,    step: 0.25 },
       { k: "detune",     id: "as-t-detune", lo: 0,    step: 0.25 },
       { k: "brightness", id: "as-t-bright", lo: 0.30, step: 0.05 },
-      { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.25 },
-      { k: "limiter",    id: "as-t-lim",    lo: 0,    step: 0.25 },
       { k: "sub",        id: "as-t-sub",    lo: 0,    step: 0.25 },
+      { k: "limiter",    id: "as-t-lim",    lo: 0,    step: 0.25 },
+      { k: "limRate",    id: "as-t-limrate", lo: 0.40, step: 0.10 },
+      { k: "limPitch",   id: "as-t-limsag", lo: 0,    step: 0.25 },
+      { k: "boost",      id: "as-t-boost",  lo: 0,    step: 0.25 },
+      { k: "boostPitch", id: "as-t-boostlift", lo: 0, step: 0.25 },
+      { k: "whine",      id: "as-t-whine",  lo: 0,    step: 0.25 },
+      { k: "harvest",    id: "as-t-harvest", lo: 0,   step: 0.25 },
+      { k: "wind",       id: "as-t-wind",   lo: 0,    step: 0.25 },
+      { k: "screech",    id: "as-t-tyres",  lo: 0,    step: 0.25 },
+      { k: "brakes",     id: "as-t-brakes", lo: 0,    step: 0.25 },
+      { k: "shift",      id: "as-t-shift",  lo: 0,    step: 0.25 },
+      { k: "rivals",     id: "as-t-rivals", lo: 0,    step: 0.25 },
       { k: "reverb",     id: "as-t-rev",    lo: 0,    step: 0.25 },
       { k: "overrun",    id: "as-t-ovr",    lo: 0,    step: 0.25 },
     ];
@@ -253,17 +279,20 @@ const AudioPanel = (() => {
       { k: "whine",   id: "as-l-whine" },   { k: "harvest", id: "as-l-harvest" },
       { k: "ers",     id: "as-l-ers" },     { k: "wind",    id: "as-l-wind" },
       { k: "limiter", id: "as-l-limiter" }, { k: "screech", id: "as-l-screech" },
-      { k: "sub",     id: "as-l-sub" },     { k: "rivals",  id: "as-l-rivals" },
+      { k: "sub",     id: "as-l-sub" },     { k: "gravel",  id: "as-l-gravel" },
+      { k: "brakes",  id: "as-l-brakes" },  { k: "rivals",  id: "as-l-rivals" },
       { k: "reverb",  id: "as-l-reverb" },  { k: "overrun", id: "as-l-overrun" },
     ];
-    const PROFILE_BTN = [["as-p-team", "team"], ["as-p-broadcast", "broadcast"],
-      ["as-p-trackside", "trackside"], ["as-p-cockpit", "cockpit"], ["as-p-v10", "v10"]];
+    // PROFILE setting row; CUSTOM is shown, not pickable — it is the state the
+    // trim sliders leave behind.
+    const PROFILE_VALUES = [["team", "TEAM"], ["broadcast", "BROADCAST"], ["trackside", "TRACKSIDE"],
+      ["cockpit", "COCKPIT"], ["v10", "V10"], ["custom", "CUSTOM", true]];
     const PROFILE_NOTE = {
       team: "Follows your team's engine — the default sound.",
-      broadcast: "Bright and forward, with the turbo up. The TV mix.",
-      trackside: "Darker, further away, more air and tyre.",
-      cockpit: "Heavy and muffled, with the rev limiter loud. From inside the car.",
-      v10: "Wide, screaming and long-geared. No turbo.",
+      broadcast: "Bright and forward, with the turbo up and the idle clean. The TV mix.",
+      trackside: "Darker, further away, lumpier at idle, more air, tyre and brake.",
+      cockpit: "Heavy and muffled, with the rev limiter, brakes and gearbox loud. From inside the car.",
+      v10: "Low lazy idle, then a late climb to a scream. Hard fast limiter, no turbo, no hybrid.",
     };
     // The engine owns which profile is live — it flips itself to "custom" the
     // moment a trim stops matching the named preset (setTune, js/audio/engine.js).
@@ -302,10 +331,7 @@ const AudioPanel = (() => {
         b.classList.toggle("active", !!layers[l.k]);
         b.setAttribute("aria-pressed", layers[l.k] ? "true" : "false");
       }
-      for (const [id, name] of PROFILE_BTN) {
-        const b = $(id);
-        if (b) b.classList.toggle("active", toneProfile() === name);
-      }
+      SettingRow.paint($("as-p"), toneProfile(), PROFILE_VALUES);
       // Guarded like every other lookup in this section, and for the reason
       // js/game.js already records: optional markup must not turn one missing
       // element into a whole-panel failure. Measured, not assumed — with the
@@ -329,10 +355,8 @@ const AudioPanel = (() => {
       store.set("sndTune", GameAudio.tune());
     }
 
-    for (const [id, name] of PROFILE_BTN) {
-      const b = $(id);
-      if (b) b.onclick = () => { setToneProfile(name); if (G.soundOn) GameAudio.uiTick(); };
-    }
+    SettingRow.wire("as-p", { values: PROFILE_VALUES, read: toneProfile,
+      write: (name) => { setToneProfile(name); if (G.soundOn) GameAudio.uiTick(); } });
     for (const t of TONE) {
       const el = toneSlider(t);
       if (!el) continue;
@@ -366,15 +390,31 @@ const AudioPanel = (() => {
     };
 
     function audioTransport(fn) {
-      const name = fn();
-      if (name) { $("as-now").textContent = name; $("as-now").title = name; }
+      fn();
       if (typeof MusicLib !== "undefined" && MusicLib.refresh) MusicLib.refresh();
-      syncAudioPanel();
+      syncAudioPanel();   // repaints both NOW PLAYING cards
       if (G.soundOn) GameAudio.uiTick();
     }
-    $("as-skip").onclick = () => audioTransport(() => GameAudio.skipTrack());
-    $("as-prev").onclick = () => audioTransport(() => GameAudio.prevTrack());
-    $("as-play").onclick = () => { setMusic(!G.musicEnabled); if (G.soundOn) GameAudio.uiTick(); };
+    for (const p of ["as", "pm"]) {
+      const skip = $(p + "-skip"), prev = $(p + "-prev"), play = $(p + "-play");
+      if (skip) skip.onclick = () => audioTransport(() => GameAudio.skipTrack());
+      if (prev) prev.onclick = () => audioTransport(() => GameAudio.prevTrack());
+      if (play) play.onclick = () => { setMusic(!G.musicEnabled); if (G.soundOn) GameAudio.uiTick(); };
+    }
+    // The pause card must read the track that is playing WHEN THE MENU OPENS,
+    // and a track that ends while the menu is up advances underneath it — so
+    // repaint on open and tick while it is visible. Attribute observer, not a
+    // hook in game.js's setPaused: the panel owns its own cards.
+    const pauseMenu = $("pausemenu");
+    if (pauseMenu && typeof MutationObserver !== "undefined" && typeof setInterval === "function") {
+      let tick = 0;
+      const follow = () => {
+        if (pauseMenu.hidden) { if (tick) { clearInterval(tick); tick = 0; } return; }
+        syncAudioPanel();
+        if (!tick) tick = setInterval(syncAudioPanel, 1000);
+      };
+      new MutationObserver(follow).observe(pauseMenu, { attributes: true, attributeFilter: ["hidden"] });
+    }
 
     function init() {
       Log.info("audio", "AudioPanel.init sound=" + !!G.soundOn);

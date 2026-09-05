@@ -365,11 +365,18 @@ test("pass patience and cooldown are per-car and bounded", () => {
   assert.ok(A.passCooldown(sharp) > 1 && A.passCooldown(shy) < 5);
 });
 
-test("sideYieldsA: the overlapping car yields; level, the outer car does", () => {
-  assert.equal(A.sideYieldsA(-2, 0, 0), true, "A behind -> A yields");
-  assert.equal(A.sideYieldsA(2, 0, 0), false, "A ahead -> B yields");
+test("sideYieldsA: the car less than half alongside yields; level, the outer car does", () => {
+  assert.equal(A.sideYieldsA(-3, 0, 0), true, "A behind -> A yields");
+  assert.equal(A.sideYieldsA(3, 0, 0), false, "A ahead -> B yields");
   assert.equal(A.sideYieldsA(0.2, 3.0, 1.0), true, "level: A is outer");
   assert.equal(A.sideYieldsA(0.2, 1.0, 3.0), false, "level: B is outer");
+  // Half a car (2.4 m of 4.8) is the line — the FIA's "significant portion
+  // alongside". A bumper ahead is NOT ahead: measured, a player 0.6 m back was
+  // "behind" and paid the whole rub.
+  assert.equal(A.sideYieldsA(0.63, -1.9, 0.0), true, "A 0.63 m ahead but outer: A yields");
+  assert.equal(A.sideYieldsA(2.0, 1.0, 3.0), false, "2 m ahead, B outer: B yields");
+  assert.equal(A.sideYieldsA(2.0, 3.0, 1.0), true, "2 m ahead, A outer: A yields");
+  assert.equal(A.sideYieldsA(2.6, 3.0, 1.0), false, "past half a car: A is simply ahead");
   // Deterministic and exhaustive: exactly one of the pair yields, always.
   for (const dp of [-3, -0.6, 0, 0.6, 3]) for (const [xa, xb] of [[1, 2], [2, 1], [-3, 0.5]])
     assert.equal(A.sideYieldsA(dp, xa, xb), !A.sideYieldsA(-dp, xb, xa), `symmetric ${dp} ${xa} ${xb}`);
@@ -635,4 +642,30 @@ test("otWant: a blocker that is slow but PULLING AWAY is a launching car, not an
   assert.equal(A.otWant({ ...base, vTop: 30, blockerSpeed: 2, blockerAccel: 0.6 }), false);
   assert.equal(A.otWant({ ...base, vTop: 30, blockerSpeed: 2, blockerAccel: 0.4 }), true);
   assert.equal(A.otWant({ ...base, vTop: 30, blockerSpeed: 4, blockerAccel: 0 }), false, "4 m/s is not a crawl at half pace");
+});
+
+test("rubDecel is a small absolute deceleration, a touch firmer on streets", () => {
+  assert.equal(A.rubDecel(false), 3);
+  assert.ok(A.rubDecel(true) > A.rubDecel(false));
+  // Sanity: a second of rub at any speed costs a few m/s, not a third of it —
+  // the proportional 0.995/frame it replaced took 26 % a second (x4 per pass).
+  assert.ok(A.rubDecel(true) * 1 < 5);
+});
+
+test("bumpRestitution: resting below 1 m/s, a tenth from 3 m/s, a ramp between", () => {
+  assert.equal(A.bumpRestitution(0), 0);
+  assert.equal(A.bumpRestitution(0.9), 0);
+  assert.equal(A.bumpRestitution(2), 0.05);
+  assert.equal(A.bumpRestitution(3), 0.1);
+  assert.equal(A.bumpRestitution(30), 0.1, "never bouncier than a tenth");
+  assert.equal(A.bumpRestitution(undefined), 0);
+  assert.ok(A.humanPuntCap() >= 5 && A.humanPuntCap() <= 12, "a cap a player notices but is not launched by");
+});
+
+test("squeezeEase drops a pinned yielder under the other car's speed, more so on a street", () => {
+  assert.ok(A.squeezeEase(false) < 1 && A.squeezeEase(false) >= 0.85);
+  assert.ok(A.squeezeEase(true) < A.squeezeEase(false));
+  // A dab, not a stop: a quarter of BRAKE ends a rub in under a second without
+  // parking the car in the pack behind.
+  assert.ok(A.squeezeBrake() > 0.1 && A.squeezeBrake() <= 0.4);
 });

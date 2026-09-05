@@ -309,8 +309,8 @@ test.describe("Apex 26 — steering sliders", () => {
     const r = await page.evaluate(() => {
       // Desktop viewport => touchControlsNeeded() is false => gearsManual() goes
       // live as soon as the pause-menu toggle flips manualMode on.
-      const btn = document.getElementById("pm-gears");
-      if (!/MANUAL/.test(btn.textContent)) btn.click();
+      const gears = document.getElementById("pm-gears-sel");
+      if (gears.value !== "manual") { gears.value = "manual"; gears.dispatchEvent(new Event("change", { bubbles: true })); }
       const el = document.getElementById("pm-pace");
       el.value = "19"; el.dispatchEvent(new Event("input", { bubbles: true }));   // top of the grid, pace 1.338
       window.__apex.park(0.1); window.__apex.freeze(false);
@@ -361,23 +361,29 @@ const click = (page, id) =>
   page.evaluate((id) => document.getElementById(id).click(), id);
 const isActive = (page, id) =>
   page.evaluate((id) => document.getElementById(id).classList.contains("active"), id);
+// Setting rows (js/ui/setting-row.js): pick a value the way a player would and
+// read the select back. CUSTOM is the shown-but-unpickable state the granular
+// sliders leave behind.
+const pick = (page, id, v) => page.evaluate(({ id, v }) => {
+  const sel = document.getElementById(id + "-sel");
+  sel.value = v; sel.dispatchEvent(new Event("change", { bubbles: true }));
+}, { id, v });
+const picked = (page, id) => page.evaluate((id) => document.getElementById(id + "-sel").value, id);
 const num = async (page, key) => Number(await stored(page, key));
 
 test.describe("Apex 26 — simplified controls", () => {
   test("STEERING levels fan out to the cornering keys and mirror active state", async ({ page }) => {
     await load(page);
-    await click(page, "pm-steer-sim");
+    await pick(page, "pm-feel", "sim");
     expect(await num(page, "steerRate")).toBe(7);
     expect(await num(page, "steerLock")).toBe(7);
     expect(await num(page, "steerSpeed")).toBe(7);
-    expect(await isActive(page, "pm-steer-sim")).toBe(true);
-    expect(await isActive(page, "pm-steer-normal")).toBe(false);
+    expect(await picked(page, "pm-feel")).toBe("sim");
 
-    await click(page, "pm-steer-easy");
+    await pick(page, "pm-feel", "easy");
     expect(await num(page, "steerRate")).toBe(4);
     expect(await num(page, "steerSpeed")).toBe(4);
-    expect(await isActive(page, "pm-steer-easy")).toBe(true);
-    expect(await isActive(page, "pm-steer-sim")).toBe(false);
+    expect(await picked(page, "pm-feel")).toBe("easy");
   });
 
   test("TILT SENSITIVITY macro drives tiltDeg / maxTilt", async ({ page }) => {
@@ -392,26 +398,26 @@ test.describe("Apex 26 — simplified controls", () => {
 
   test("DRIVING HELP and RACING LINE buttons set their store keys", async ({ page }) => {
     await load(page);
-    await click(page, "pm-help-high");
+    await pick(page, "pm-helplevel", "high");
     expect(await num(page, "drivingHelp")).toBe(9);
-    expect(await isActive(page, "pm-help-high")).toBe(true);
+    expect(await picked(page, "pm-helplevel")).toBe("high");
 
-    await click(page, "pm-line-full");
+    await pick(page, "pm-linemode", "full");
     expect(await num(page, "raceLine")).toBe(5);
-    expect(await isActive(page, "pm-line-full")).toBe(true);
-    await click(page, "pm-line-off");
+    expect(await picked(page, "pm-linemode")).toBe("full");
+    await pick(page, "pm-linemode", "off");
     expect(await num(page, "raceLine")).toBe(0);
-    expect(await isActive(page, "pm-line-off")).toBe(true);
+    expect(await picked(page, "pm-linemode")).toBe("off");
   });
 
   test("presets light up the matching simplified controls", async ({ page }) => {
     await load(page);
     await click(page, "pm-preset-pro");
-    expect(await isActive(page, "pm-steer-sim")).toBe(true);   // PRO → sim
+    expect(await picked(page, "pm-feel")).toBe("sim");     // PRO → sim
     await click(page, "pm-preset-relax");
-    expect(await isActive(page, "pm-steer-easy")).toBe(true);  // RELAX → easy
+    expect(await picked(page, "pm-feel")).toBe("easy");    // RELAX → easy
     await click(page, "pm-preset-standard");
-    expect(await isActive(page, "pm-steer-normal")).toBe(true);// STANDARD → normal
+    expect(await picked(page, "pm-feel")).toBe("normal");  // STANDARD → normal
   });
 
   test("ADVANCED toggle shows and hides the granular sliders", async ({ page }) => {
@@ -429,8 +435,8 @@ test.describe("Apex 26 — simplified controls", () => {
   test("editing a granular Advanced slider updates the simplified view", async ({ page }) => {
     await load(page);
     await click(page, "pm-preset-standard");
-    expect(await isActive(page, "pm-steer-normal")).toBe(true);
+    expect(await picked(page, "pm-feel")).toBe("normal");
     await setSlider(page, "pm-speedsteer", 8);   // nudge one cornering key off NORMAL
-    expect(await isActive(page, "pm-steer-normal")).toBe(false);  // no longer a clean level
+    expect(await picked(page, "pm-feel")).toBe("custom");  // no longer a clean level
   });
 });

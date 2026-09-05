@@ -2,8 +2,8 @@
   "_doc": "Ratchets on the files that only ever grow. `node tools/check/ratchets.mjs` checks, `--update` snaps every ceiling to the current value (lower after an extraction; a raise is a deliberate edit with its reason in the commit). Metrics: lines (split-newline), codeLines (non-comment non-blank), gMembers (G facade members, check-gctx), topLets (column-0 `let`). Tree-wide metrics (scope `tree`, measured by tools/check/tree-counts.mjs): cssClasses (distinct class tokens in css/), shellNodes (index.html tag occurrences less script/link), bareCatches (empty, uncommented catch blocks in js/), waitNoPolling (waitForFunction with a declared timeout and no polling), and the four CSS token-adoption counts subFloorFontSize / rawSpacing / rawColor / rawColorDistinct, which carry `slack: 0` because they have always asserted exact equality — a migration must lower them, not bank headroom. `node tools/check/tree-counts.mjs --offenders` prints the breakdown behind any of them. An entry may declare its own `slack` when its guard is TIGHTER than the default max(60, 4%) — all four of these are, and a slack looser than the default is refused, so consolidating mechanisms cannot quietly widen one. History: docs/notes/CEILING-HISTORY.md.",
   "files": {
     "js/game.js": {
-      "lines": 9954,
-      "codeLines": 5479,
+      "lines": 9988,
+      "codeLines": 5472,
       "gMembers": 235,
       "topLets": 157
     },
@@ -39,11 +39,11 @@
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1133,
+      "ceiling": 1273,
       "slack": 25
     },
     "bareCatches": {
-      "ceiling": 157,
+      "ceiling": 156,
       "slack": 15
     },
     "waitNoPolling": {
@@ -51,7 +51,7 @@
       "slack": 39
     },
     "dynamicIdReads": {
-      "ceiling": 50,
+      "ceiling": 53,
       "slack": 5
     },
     "subFloorFontSize": {
@@ -63,7 +63,7 @@
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 329,
+      "ceiling": 325,
       "slack": 0
     },
     "rawColorDistinct": {

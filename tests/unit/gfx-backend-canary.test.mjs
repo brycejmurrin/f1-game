@@ -1290,7 +1290,9 @@ test("RENDERER control becomes a select with prev/next, not a one-way cycle", ()
   assert.equal(sel.options[2].value, "webgpu");
   assert.ok(byId["pm-renderer-prev"], "‹ steps backward");
   assert.ok(byId["pm-renderer-next"], "› steps forward");
-  assert.equal(byId["pm-renderer-row"].children.length, 3);
+  // A setting row (css .set-row): label, then the ‹ select › cluster.
+  assert.equal(byId["pm-renderer-row"].children.length, 2);
+  assert.equal(byId["pm-renderer-row"].children[1].children.length, 3);
   assert.ok(byId["pm-display-adv"], "ADVANCED disclosure is JS-built");
   assert.ok(byId["pm-display-adv-body"]);
   assert.ok(byId["pm-renderer-reset"]);
