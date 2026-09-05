@@ -127,17 +127,17 @@ const UiScale = (() => {
     let resMode = store.get("resMode", "auto");
     function applyResMode() {
       const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
-      OptGroup.paint($("pm-res"), m.id);
+      SettingRow.paint($("pm-res"), m.id);
       const gfx = G.gfx;
       if (m.v != null) { PerfGov.setAutoRes(false); if (gfx.setRenderScale) gfx.setRenderScale(m.v); }
       else PerfGov.setAutoRes(true);   // governor takes over from wherever the scale sits now
     }
-    OptGroup.wire("pm-res", () => resMode, (v) => {
+    SettingRow.wire("pm-res", { values: RES_MODES.map((r) => [r.id, r.label]), read: () => resMode, write: (v) => {
       resMode = (RES_MODES.find((r) => r.id === v) || RES_MODES[0]).id;
       store.set("resMode", resMode);
       applyResMode();
       if (G.soundOn) GameAudio.uiSelect();
-    });
+    } });
     applyResMode();
 
     return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale };

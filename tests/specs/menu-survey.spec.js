@@ -49,21 +49,21 @@ async function openSettings(page, track = "bahrain", tod = "day", wx = "dry") {
   await page.waitForTimeout(200);
 }
 // Cycle a labelled toggle in-page until its text contains `want`.
-// Settings choices are chip rows (js/ui/opt-group.js): `#<group>` holds one
-// `.opt-btn[data-v]` per value and the chosen one is `.active`. Pick by
-// clicking the chip, then return the active chip's text (the old cycle
-// helper returned the button label, and the callers still `toContain` it).
+// Settings choices are setting rows (js/ui/setting-row.js): `#<id>-sel` is a
+// native select whose options are the values. Pick the option whose label
+// contains `want` the way a player would (change event), then return the
+// selected label (the old cycle helper returned the button label, and the
+// callers still `toContain` it).
 async function cycleTo(page, id, want) {
   await page.evaluate(({ id, want }) => {
-    const g = document.getElementById(id);
-    const chip = [...g.querySelectorAll(".opt-btn")].find((b) =>
-      b.textContent.toUpperCase().includes(want.toUpperCase()));
-    if (chip) chip.click();
+    const sel = document.getElementById(id + "-sel");
+    const opt = [...sel.options].find((o) => o.textContent.toUpperCase().includes(want.toUpperCase()));
+    if (opt && sel.value !== opt.value) { sel.value = opt.value; sel.dispatchEvent(new Event("change", { bubbles: true })); }
   }, { id, want });
   await page.waitForTimeout(120);
   return page.evaluate((id) => {
-    const on = document.getElementById(id).querySelector(".opt-btn.active");
-    return on ? on.textContent : "";
+    const sel = document.getElementById(id + "-sel");
+    return sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : "";
   }, id);
 }
 

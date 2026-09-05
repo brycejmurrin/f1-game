@@ -113,15 +113,15 @@ function initUI() {
   }
   place(head);
 
-  // HALO is an ON | OFF chip pair like every other Settings boolean
-  // (js/ui/opt-group.js) — it was a `HALO: ON` cycle button.
-  const haloRow = OptGroup.build("pm-halo", "HALO", [["on", "ON"], ["off", "OFF"]]);
+  // HALO is a setting row like every other Settings pick (js/ui/setting-row.js)
+  // — it was a `HALO: ON` cycle button.
+  const haloRow = SettingRow.build("pm-halo", "HALO", [["on", "ON"], ["off", "OFF"]]);
   haloRow.row.title = "Draw the halo (secondary roll structure) in the cockpit view.";
-  OptGroup.wire(haloRow.row, () => (halo() ? "on" : "off"), (v) => {
+  SettingRow.wire(haloRow.row, { read: () => (halo() ? "on" : "off"), write: (v) => {
     setHalo(v === "on");
     try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { }
-  });
-  place(haloRow.item);
+  } });
+  place(haloRow.row);
 
   const lab = document.createElement("label");
   lab.className = "tune-row";

@@ -91,20 +91,36 @@ function set(id, opts) {
   // that boundary on a DESKTOP therefore needs the same reload the mobile
   // boot tier takes, or the new sample count applies only on the next visit.
   const needsReload = syncBootTier() || (!_isMobile && !!prev && prev.mobileHigh !== p.mobileHigh);
-  const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
-  if (btn) btn.textContent = needsReload ? label() + " — RELOADING…" : label();
+  paintGfx(needsReload ? " — RELOADING…" : "");
   if (needsReload && !(opts && opts.noReload)) {
     // In a race the preset is already live; the boot-tier half waits for the
     // next natural reload instead of ending the race here (2026-09-01 survey).
     let inRace = false;
     try { inRace = typeof document !== "undefined" && !!document.body && document.body.dataset.race === "1"; } catch (_) { /* no body */ }
-    if (inRace) { if (btn) btn.textContent = label() + " — FULLY APPLIES AFTER A RELOAD"; return true; }
+    if (inRace) { paintGfx(" — FULLY APPLIES AFTER A RELOAD"); return true; }
     try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
     setTimeout(() => { try { location.reload(); } catch (_) {} }, 260);
   }
   return true;
 }
 
+// The GRAPHICS setting row (js/ui/setting-row.js). `_row` is the mounted row;
+// a harness without SettingRow (or a host that cannot replace the shell
+// button) keeps the one-button cycle, so the canary's stubs still drive it.
+let _row = null;
+// `note` is appended to the CURRENT preset's label (" — RELOADING…" while a
+// tier change reloads; " — FULLY APPLIES AFTER A RELOAD" mid-race).
+function gfxValues(note) {
+  return PRESETS.map((p) => [p.id, p.label + (note && p.id === _cur ? note : "")]);
+}
+function paintGfx(note) {
+  if (_row) { SettingRow.paint(_row, _cur, gfxValues(note || "")); return; }
+  const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
+  if (btn) btn.textContent = label() + (note || "");
+}
+function uiSelect() {
+  try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) { /* audio not up yet */ }
+}
 function cycle() {
   const i = PRESETS.findIndex((p) => p.id === _cur);
   return set(PRESETS[(i + 1) % PRESETS.length].id);
@@ -125,12 +141,19 @@ function init() {
 
   const btn = typeof document !== "undefined" ? document.getElementById("pm-gfx") : null;
   if (!btn) return;      // shell without the button: the tier floor still applied above
+  const host = btn.parentNode;
+  if (typeof SettingRow !== "undefined" && host && typeof host.replaceChild === "function" && !_row) {
+    const r = SettingRow.build("pm-gfx", "GRAPHICS", gfxValues(""));
+    r.row.title = btn.title || "";
+    host.replaceChild(r.row, btn);
+    _row = r.row;
+    SettingRow.wire(_row, { values: gfxValues(""), read: () => _cur, write: (v) => { set(v); uiSelect(); } });
+    paintGfx("");
+    return;
+  }
   btn.hidden = false;
   btn.textContent = label();
-  btn.onclick = () => {
-    cycle();
-    try { if (typeof GameAudio !== "undefined" && GameAudio.uiSelect) GameAudio.uiSelect(); } catch (_) {}
-  };
+  btn.onclick = () => { cycle(); uiSelect(); };
 }
 
 if (typeof document !== "undefined") {

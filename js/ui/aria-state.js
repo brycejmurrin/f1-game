@@ -27,7 +27,7 @@
 // on the closed fold summaries, which paint themselves. An `.opt-btn` CHIP is
 // never painted: its ring is the selection, and a gold word inside a red ring
 // said two things at once. (GEARS / ACTIVE AERO used to be `KEY: AUTO` rows
-// with a green/cyan word; they are chip rows now — js/ui/opt-group.js.)
+// with a green/cyan word; they are setting rows now — js/ui/setting-row.js.)
 // Settings rows are inline-flex, so a wrap after ":" uses NBSP or the space
 // collapses.
 //

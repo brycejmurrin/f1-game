@@ -2057,15 +2057,19 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   module split's home for them and is unit-tested there. `bareCatches`
   158 -> **157** in the same commit: the tree simply has one fewer.
 
-## 2026-09-05 — selection grammar: shellNodes 1133 → 1199, game.js 9938 → 9924
+## 2026-09-05 — selection grammar: shellNodes 1133 → 1214, game.js 9938 → 9929
 
-`shellNodes` RAISED by 66, deliberately. The Settings `KEY: VALUE` cycle
-buttons (STEER, GEARS, ACTIVE AERO, HUD, STYLE, LAYOUT, MAP, GAPS, RESOLUTION,
-Spotify SHUFFLE / REPEAT) became labelled chip rows so every choice in the app
-lights the same way (`docs/COMPONENTS.md` §Selection grammar). A chip row is
-one label, one group and one button per option where the cycle button was one
-node, and the chips are static DOM in the shell on purpose — building them from
-JS would have hidden the cost the ratchet exists to show. `js/game.js` lost 14
-lines to `js/ui/opt-group.js`; `cssClasses` 549 → 548 (`.as-toggle` retired);
-`rawColor` 329 → 325 (the cam picker, garage SPIN and track-row washes now use
-tokens).
+`shellNodes` RAISED by 81, deliberately. Every enumerated preference on the
+Settings sheet (STEER, GEARS, ACTIVE AERO, HUD, STYLE, LAYOUT, MAP, GAPS,
+RESOLUTION, STEERING feel, DRIVING HELP, RACING LINE, MUSIC, SOUND, SOURCE,
+PROFILE, Spotify SHUFFLE / REPEAT) is a SETTING ROW — `LABEL ‹ select ›`,
+six static nodes where a `KEY: VALUE` cycle button was one — so every pick
+reads and works the same way at every UI SIZE (`docs/COMPONENTS.md`
+§Selection grammar). The rows are static DOM in the shell on purpose: building
+them from JS would hide the cost the ratchet exists to show. A first pass the
+same day used labelled chip rows (2 + N nodes each); the layout audit measured
+those at 3.8 screens deep for three settings on a landscape phone at 150%, and
+the row replaced them. The pause menu also gained the MUSIC page's NOW PLAYING card (shown only while music plays). `js/game.js` 9938 → 9929 (the cycle handlers moved to
+`js/ui/setting-row.js`); `cssClasses` 549 → 549 (`.as-toggle` retired,
+`.set-row` added); `rawColor` 329 → 325 (the cam picker, garage SPIN and
+track-row washes use tokens; the unread `--manual` token is gone).

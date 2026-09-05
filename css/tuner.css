@@ -450,16 +450,19 @@ body.photo-mode:not(.pc-nopanel) #lighting-inner[data-density="compact"] .lt-hel
 }
 .as-now-sub { font-size: var(--fs-micro); color: var(--dim); }
 .as-transport { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex: 0 0 auto; }
+ /* One shape for every small square control on a settings sheet: the same
+    --chip-h plate square as a setting row's ‹ › (css/components.css .set-row).
+    Was a --tap-sm circle with a 1.22x play button — a third button shape on a
+    sheet that already had two. */
 .as-tbtn {
-  width: var(--tap-sm); height: var(--tap-sm); min-height: var(--tap-sm);
+  width: var(--chip-h); height: var(--chip-h); min-height: var(--chip-h);
   display: flex; align-items: center; justify-content: center;
-  padding: 0; font-size: 14px; line-height: 1; border-radius: 50%;
+  padding: 0; font-size: 15px; line-height: 1; border-radius: var(--r-sm);
   border: 1px solid var(--plate-line); background: var(--plate);
   color: var(--text); cursor: pointer;
 }
-/* Play/pause is the primary action of the three, so it is bigger and filled. */
+/* Play/pause is the primary action of the three: same square, filled. */
 .as-tbtn-main {
-  width: calc(var(--tap-sm) * 1.22); height: calc(var(--tap-sm) * 1.22);
   font-size: 16px; background: rgba(255,255,255,0.15);
   border-color: rgba(255,255,255,0.28);
 }

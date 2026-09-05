@@ -498,13 +498,13 @@ if (HUD_VIS_MODES.indexOf(hudMapVis) < 0) hudMapVis = "on";
 if (HUD_VIS_MODES.indexOf(hudGapsVis) < 0) hudGapsVis = "on";
 function paintHudDetailsSummary() {
   // One refresh for the whole HUD fold: the closed summary (a READOUT, so it
-  // keeps its gold/red words) and the chip rows inside it (js/ui/opt-group.js).
+  // keeps its gold/red words) and the setting rows inside it (js/ui/setting-row.js).
   const on = !document.body.classList.contains("hud-hidden");
-  OptGroup.paint($("pm-hidehud"), on ? "on" : "off");
-  OptGroup.paint($("pm-hudprofile"), hudProfile);
-  OptGroup.paint($("pm-hudmetrics"), hudMetricsLayout);
-  OptGroup.paint($("pm-hudmap"), hudMapVis);
-  OptGroup.paint($("pm-hudgaps"), hudGapsVis);
+  SettingRow.paint($("pm-hidehud"), on ? "on" : "off");
+  SettingRow.paint($("pm-hudprofile"), hudProfile);
+  SettingRow.paint($("pm-hudmetrics"), hudMetricsLayout);
+  SettingRow.paint($("pm-hudmap"), hudMapVis);
+  SettingRow.paint($("pm-hudgaps"), hudGapsVis);
   const note = $("pm-hudmetrics-note");
   if (note) note.textContent = hudLayoutNote();
   const sum = $("pm-hud-details-sum");
@@ -8554,12 +8554,12 @@ function tickBody(now) {
 
 function tickUi() { if (soundOn) GameAudio.uiTick(); }
 
-// STEERING INPUT chips (js/ui/opt-group.js) and the one-line note under them.
+// STEERING INPUT row (js/ui/setting-row.js) and the one-line note under it.
 // The note is ALWAYS present — its text changes, it is never hidden — so a
 // mode change cannot reflow the page under a finger; same rule that keeps
 // RECALIBRATE and GEARS disabled rather than hidden.
 function paintSteer() {
-  OptGroup.paint($("pm-steer"), steerMode);
+  SettingRow.paint($("pm-steer"), steerMode);
   const note = $("pm-steer-note");
   if (!note) return;
   // Only warn when the gyro is genuinely unavailable/denied — not in the brief
@@ -8777,7 +8777,7 @@ $("track-detail-close").onclick = closeTrackDetail;
 const settingsNav = SettingsNav.create(store, () => { if (soundOn) GameAudio.uiSelect(); });
 function syncSettingsAvailability() {
   const inRace = state === "race"; try { if (inRace) document.body.dataset.race = "1"; else delete document.body.dataset.race; } catch (_) { /* RendererPicker's reload buttons arm a two-tap confirm while this is set */ }
-  OptGroup.disable($("pm-hidehud"), !inRace);
+  SettingRow.disable($("pm-hidehud"), !inRace);
   $("pm-lighting").disabled = !inRace;
   $("pm-camtune").disabled = !inRace;
 }
@@ -9500,12 +9500,16 @@ els.pausebtn.onclick = () => setPaused(true);
 // the only thing left and brings it all back. Session-only — reset on race start.
 function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);
-  paintHudDetailsSummary();   // repaints the HUD ON | OFF chips too if (v) { const p = $("campicker"); if (p) p.hidden = true; }
+  paintHudDetailsSummary();   // repaints the HUD row too if (v) { const p = $("campicker"); if (p) p.hidden = true; }
 }
-OptGroup.wire("pm-hidehud", () => (document.body.classList.contains("hud-hidden") ? "off" : "on"), (v) => {
-  const willHide = v === "off";
-  setHudUserHidden(willHide);
-  if (willHide) setPaused(false);   // clean screen — drop the menu so you can actually see it
+SettingRow.wire("pm-hidehud", {
+  values: SettingRow.labels(["on", "off"]),
+  read: () => (document.body.classList.contains("hud-hidden") ? "off" : "on"),
+  write: (v) => {
+    const willHide = v === "off";
+    setHudUserHidden(willHide);
+    if (willHide) setPaused(false);   // clean screen — drop the menu so you can actually see it
+  },
 });
 $("hud-restore").onclick = () => setHudUserHidden(false);
 
@@ -9538,7 +9542,7 @@ els.pmStandings && (els.pmStandings.onclick = () => { buildStandings(); $("stand
   }
 }
 
-// STEERING INPUT: one chip per mode (was a single button cycling TILT -> BUTTONS -> TOUCH).
+// STEERING INPUT: one row, ‹ TILT | BUTTONS | TOUCH › (was a button cycling the three).
 const STEER_MODES = ["tilt", "buttons", "touch"];
 function setSteerMode(mode) {
   steerMode = mode;
@@ -9555,7 +9559,8 @@ function setSteerMode(mode) {
   // the title/select screen (e.g. when gyro denial auto-switches to buttons mode).
   if (state === "race" || state === "count") showTouchControls(true);
 }
-OptGroup.wire("pm-steer", () => steerMode, (v) => { if (STEER_MODES.indexOf(v) >= 0) setSteerMode(v); });
+SettingRow.wire("pm-steer", { values: SettingRow.labels(STEER_MODES), read: () => steerMode,
+  write: (v) => { if (STEER_MODES.indexOf(v) >= 0) setSteerMode(v); } });
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 
 // Steering-tuning sliders, presets + macro levels live in
@@ -9564,26 +9569,26 @@ $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 // GEARS toggle: usable when thumbs are free (tilt or desktop keyboard).
 // Disabled — not hidden — on BUTTONS/TOUCH (see the pm-calib note in setSteerMode).
 function refreshGearsBtn() {
-  OptGroup.disable($("pm-gears"), Input.touchControlsNeeded() && steerMode !== "tilt");
-  OptGroup.paint($("pm-gears"), manualMode ? "manual" : "auto");
+  SettingRow.disable($("pm-gears"), Input.touchControlsNeeded() && steerMode !== "tilt");
+  SettingRow.paint($("pm-gears"), manualMode ? "manual" : "auto");
 }
-OptGroup.wire("pm-gears", () => (manualMode ? "manual" : "auto"), (v) => {
+SettingRow.wire("pm-gears", { values: SettingRow.labels(["auto", "manual"]), read: () => (manualMode ? "manual" : "auto"), write: (v) => {
   manualMode = v === "manual";
   store.set("manual", manualMode);
   refreshGearsBtn();
   if (player && !gearsManual()) player.gear = naturalGear(player.speed);
   showTouchControls(true);
-});
-// HUD fold chip rows. Each write repaints the whole fold through
+} });
+// HUD fold setting rows. Each write repaints the whole fold through
 // paintHudDetailsSummary, so the summary and the chips can never disagree.
 function wireHudChips(id, list, read, write, after) {
-  OptGroup.wire(id, read, (v) => {
+  SettingRow.wire(id, { values: SettingRow.labels(list), read, write: (v) => {
     if (list.indexOf(v) < 0) return;
     write(v);
     paintHudDetailsSummary();
     if (after) after();
     updateHud(true);
-  });
+  } });
 }
 wireHudChips("pm-hudprofile", HUD_PROFILES, () => hudProfile,
   (v) => { hudProfile = v; store.set("hudProfile", hudProfile); }, syncMetricsOverlayCompact);
@@ -9601,10 +9606,10 @@ wireHudChips("pm-hudgaps", HUD_VIS_MODES, () => hudGapsVis, (v) => { hudGapsVis 
 // only appeared at the next steering-mode switch — i.e. it looked broken
 // exactly when a player flipped the setting to see what it did.
 function refreshAeroBtn() {
-  OptGroup.paint($("pm-aero"), raceAeroMode === "auto" ? "auto" : "manual");
+  SettingRow.paint($("pm-aero"), raceAeroMode === "auto" ? "auto" : "manual");
   if (state === "race" || state === "count") showTouchControls(true);
 }
-OptGroup.wire("pm-aero", () => (raceAeroMode === "auto" ? "auto" : "manual"), (v) => {
+SettingRow.wire("pm-aero", { values: SettingRow.labels(["manual", "auto"]), read: () => (raceAeroMode === "auto" ? "auto" : "manual"), write: (v) => {
   raceAeroMode = v === "auto" ? "auto" : "manual";
   store.set("aeroMode", raceAeroMode);
   refreshAeroBtn();
@@ -9612,7 +9617,7 @@ OptGroup.wire("pm-aero", () => (raceAeroMode === "auto" ? "auto" : "manual"), (v
   // the player's again from this instant.
   if (raceAeroMode !== "auto" && player) player.xOn = false;
   if (soundOn) GameAudio.uiTick();
-});
+} });
 refreshAeroBtn();
 // A HIDDEN OR CLOSING TAB IS NOT A CRASH, and the boot canary must not read one
 // as a backend failure. PerfGov's sentinel already encodes this exact rule three

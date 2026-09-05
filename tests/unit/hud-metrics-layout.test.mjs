@@ -13,9 +13,9 @@ test("HUD metrics layout AUTO keeps every cluster and lets fitHud adapt", () => 
   assert.match(game, /store\.get\("hudMapVis", "on"\)/);
   assert.match(game, /store\.get\("hudGapsVis", "on"\)/);
   assert.match(game, /hud-met-\(\[a-z\]\+\)/);
-  // MAP / GAPS / LAYOUT are chip rows painted from one refresh (js/ui/opt-group.js).
-  assert.match(game, /OptGroup\.paint\(\$\("pm-hudmap"\), hudMapVis\)/);
-  assert.match(game, /OptGroup\.paint\(\$\("pm-hudgaps"\), hudGapsVis\)/);
+  // MAP / GAPS / LAYOUT are setting rows painted from one refresh (js/ui/setting-row.js).
+  assert.match(game, /SettingRow\.paint\(\$\("pm-hudmap"\), hudMapVis\)/);
+  assert.match(game, /SettingRow\.paint\(\$\("pm-hudgaps"\), hudGapsVis\)/);
   assert.match(game, /wireHudChips\("pm-hudmetrics", HUD_MET_LAYOUTS/);
   assert.match(game, /hudMapVis === "off" \? "off" : "on"/,
     "HUD fold paints MAP gold when the map is on, red NO MAP when off");
@@ -126,10 +126,11 @@ test("HUD layout options live in a full-width pause submenu", () => {
   assert.match(html, /id="pm-hud-details"/);
   assert.match(html, /id="pm-hud-details"[\s\S]*id="pm-hidehud"/);
   assert.match(html, /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
-  // Chip rows (js/ui/opt-group.js), one per HUD setting, not KEY: VALUE cycles.
-  assert.match(html, /id="pm-hidehud-on"[^>]*data-v="on"/);
-  assert.match(html, /id="pm-hudprofile-standard"[^>]*data-v="standard"/);
-  assert.match(html, /id="pm-hudmetrics-auto"[^>]*data-v="auto"/);
+  // Setting rows (js/ui/setting-row.js), one per HUD setting, not KEY: VALUE cycles.
+  for (const id of ["pm-hidehud", "pm-hudprofile", "pm-hudmetrics", "pm-hudmap", "pm-hudgaps"]) {
+    assert.match(html, new RegExp(`id="${id}" class="set-row" role="group" aria-labelledby="${id}-label"`), id + " is a setting row");
+    assert.match(html, new RegExp(`<select id="${id}-sel" aria-labelledby="${id}-label">`), id + " has its select");
+  }
   assert.doesNotMatch(html, /HUD: ON|STYLE: STANDARD|LAYOUT: AUTO/);
   assert.match(css, /#pm-hud-details > \[role="group"\]/, "the fold's own group is child-scoped so the chip rows inside stay rows");
   assert.match(css, /grid-area:\s*hudopts/);

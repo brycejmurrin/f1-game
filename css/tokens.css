@@ -466,7 +466,10 @@
      different ways depending on the sheet it sat in. Colour WORDS (gold ON /
      red OFF / green AUTO / cyan MANUAL via [data-fold]) are for READOUTS —
      the closed fold summaries, the title-screen sound button — never for a
-     chip that is also ringed. Tiles use the STRONG tier below. */
+     chip that is also ringed. Tiles use the STRONG tier below. A PREFERENCE
+     on a settings sheet is not a chip at all but a setting row — LABEL
+     ‹ VALUE › (css/components.css .set-row, js/ui/setting-row.js): the value
+     is the state, so it carries no ring. docs/COMPONENTS.md §Selection grammar. */
   /* The STRONG selected wash — the picker-tile tier (team tile, career
      flavour/seat, career slot). Three sites hand-mixed 16/24/24% washes with
      12/14/16px glows at 28/36/38%; one pair of tokens makes the three tiles

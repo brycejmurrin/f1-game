@@ -983,13 +983,13 @@ window.SpotifyMusic = (function () {
       tog.textContent = paused ? "▶" : "❚❚";
       tog.setAttribute("aria-label", paused ? "Play" : "Pause");
     }
-    // SHUFFLE / REPEAT are chip rows (js/ui/opt-group.js): the ring is the
-    // state. They were a ringed SHUFFLE beside a `REPEAT: OFF` word button.
-    if (typeof OptGroup !== "undefined") {
-      OptGroup.paint(el("sp-shuffle"), shuffleOn ? "on" : "off");
-      OptGroup.paint(el("sp-repeat"), repeatMode);
-      OptGroup.disable(el("sp-shuffle"), !live);
-      OptGroup.disable(el("sp-repeat"), !live);
+    // SHUFFLE / REPEAT are setting rows (js/ui/setting-row.js). They were a
+    // ringed SHUFFLE toggle beside a `REPEAT: OFF` word button.
+    if (typeof SettingRow !== "undefined") {
+      SettingRow.paint(el("sp-shuffle"), shuffleOn ? "on" : "off");
+      SettingRow.paint(el("sp-repeat"), repeatMode);
+      SettingRow.disable(el("sp-shuffle"), !live);
+      SettingRow.disable(el("sp-repeat"), !live);
     }
     const vol = el("sp-vol");
     if (vol && devVol !== null && document.activeElement !== vol) vol.value = String(devVol);
@@ -1088,9 +1088,11 @@ window.SpotifyMusic = (function () {
     on("sp-prev", "click", prev);
     on("sp-toggle", "click", () => { activate(); toggle(); });
     on("sp-fwd", "click", () => BACKEND.skip());
-    if (typeof OptGroup !== "undefined") {
-      OptGroup.wire("sp-shuffle", () => (shuffleOn ? "on" : "off"), (v) => setShuffle(v === "on"));
-      OptGroup.wire("sp-repeat", () => repeatMode, setRepeat);
+    if (typeof SettingRow !== "undefined") {
+      SettingRow.wire("sp-shuffle", { values: [["off", "OFF"], ["on", "ON"]],
+        read: () => (shuffleOn ? "on" : "off"), write: (v) => setShuffle(v === "on") });
+      SettingRow.wire("sp-repeat", { values: [["off", "OFF"], ["context", "ALL"], ["track", "ONE"]],
+        read: () => repeatMode, write: setRepeat });
     }
     on("sp-vol", "input", (e) => { txt("sp-vol-v", e.target.value); });
     on("sp-vol", "change", (e) => setDeviceVolume(+e.target.value || 0));
