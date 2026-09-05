@@ -183,6 +183,12 @@ const SENT_ACTIVE = "apex26.raceActive", SENT_STRIKES = "apex26.crashStrikes";
 // that happened: shipping vendor/ switched a Rapier world on, phones started
 // dying, and fixing it changed nothing on the devices already in safe mode.
 const SENT_BUILD = "apex26.crashStrikesBuild";
+// DIAGNOSTIC ONLY, and deliberately NOT build-keyed: a lifetime count of races
+// that ended without a clean finish, plus the build the last one died on. The
+// strike ledger above expires with the code because it drives the quality
+// floor; this one has to outlive a deploy or it cannot answer "is this thing
+// being killed at all", which is the first question any field report asks.
+const SENT_SEEN = "apex26.crashSeen", SENT_SEEN_BUILD = "apex26.crashSeenBuild";
 let _crashStrikes = 0;
 // Safe-mode floor the governor's restore path can't climb below (per session —
 // only strikes paying off across boots lift it): one strike starts with
@@ -257,9 +263,23 @@ function init(gfx) {
     const st = GameStore.store;   // raw lane: bare strings, read live, never throws
     const build = String((typeof window !== "undefined" && window.__APEX_BUILD) || 0);
     if (st.raw(SENT_BUILD) !== build) {
-      // New code, clean slate. Also clears any in-flight race flag: a race
-      // that was running when the update landed did not crash, it was
-      // replaced.
+      // New code, clean slate for the LADDER: a strike is evidence about code
+      // that no longer exists, so the safe-mode floor must not outlive it.
+      //
+      // But the EVIDENCE is recorded first. This branch used to drop SENT_ACTIVE
+      // on the floor, and SENT_ACTIVE is the only trace a jetsam kill leaves —
+      // so on a day with 188 commits (a fresh build roughly every 8 minutes, and
+      // the shell version guard pushes returning players straight onto it) the
+      // record was wiped between essentially every crash and the next launch.
+      // `crashStrikes: 0` was then read as "no OOM kill has happened", which the
+      // field could not have said either way. This counter is DIAGNOSTIC ONLY —
+      // it feeds no tier, no floor, nothing the player can feel — so it can
+      // survive a deploy without the safe-mode one-way door the comment on
+      // SENT_BUILD warns about.
+      if (st.raw(SENT_ACTIVE) === "1") {
+        st.rawSet(SENT_SEEN, String((parseInt(st.raw(SENT_SEEN), 10) || 0) + 1));
+        st.rawSet(SENT_SEEN_BUILD, st.raw(SENT_BUILD) || "?");
+      }
       st.rawSet(SENT_BUILD, build);
       st.rawSet(SENT_STRIKES, "0");
       st.rawDel(SENT_ACTIVE);
@@ -602,6 +622,15 @@ return {
     if (_live) _govCool = Math.max(_govCool, VERIFY_COOL);   // see _live: never before the first race tick
   },
   strikes: () => _crashStrikes,
+  // The lifetime, NOT build-keyed, kill count — see SENT_SEEN. `strikes` can be
+  // 0 on a device that has been killed repeatedly, because a deploy resets it;
+  // this cannot.
+  crashSeen: () => {
+    try {
+      const st = GameStore.store;
+      return { seen: parseInt(st.raw(SENT_SEEN), 10) || 0, lastBuild: st.raw(SENT_SEEN_BUILD) || null };
+    } catch (_) { return { seen: 0, lastBuild: null }; }
+  },
   // {frames, maxMs, slow} for the first OPEN_FRAMES of the current race — the
   // instrument for a "laggy at first, fine afterwards" report. See _openN.
   openWindow: () => ({ frames: _openN, maxMs: +_openMax.toFixed(1), slow: _openSlow }),

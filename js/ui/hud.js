@@ -802,9 +802,26 @@ function drawMinimap() {
   mm.clearRect(0, 0, cssW, cssH);
   mm.drawImage(minimapBg, 0, 0, cssW, cssH);
   const map = track.map, n = map.length;
+  // THE NaN AMPLIFIER. `Math.floor(NaN) % n` is NaN, `map[NaN]` is undefined,
+  // and `p[0]` then throws — so ANY car whose `s` goes non-finite turns a
+  // silent physics NaN into a hard TypeError here. It is the only consumer of a
+  // bad `s` that throws; every other one (Tracks.sample and friends) degrades
+  // quietly. A negative `s` is the same trap: JS `%` keeps the sign.
+  //
+  // The throw lands AFTER render() in tickBody, so the world keeps moving and
+  // only the HUD freezes; js/perf/loop-health.js then swallows it, and because
+  // this path is throttled to ~10 Hz it never trips the 8-consecutive-fault
+  // rail — it grinds to the 240 lifetime cap and paints the error overlay
+  // ~24 s later at 60 fps. "HUD froze, then it died half a minute afterwards"
+  // is the signature, and it is a miserable one to trace back to a NaN.
+  const at = (v) => {
+    const i = Math.floor(v / track.total * n) % n;
+    return Number.isFinite(i) ? map[(i + n) % n] : null;
+  };
   for (const c of cars) {
     if (c === player) continue;
-    const p = map[Math.floor(c.s / track.total * n) % n];
+    const p = at(c.s);
+    if (!p) continue;
     const x = 6 + p[0] * (cssW - 16), y = 6 + p[1] * (cssH - 16);
     mm.fillStyle = c.team._cssColor || (c.team._cssColor = G.cssCol(c.team.color));   // team colours are static — compute once
     if (c.human && !c.local) {
@@ -822,14 +839,16 @@ function drawMinimap() {
   if (timeTrial && Ghost.hasGhost()) {
     const gh = Ghost.at(player.lapTime);
     if (gh) {
-      const gp = map[Math.floor((gh.s / track.total) * n) % n];
+      const gp = at(gh.s);   // a persisted ghost is stored input: never trust its s
+      if (!gp) return;
       mm.fillStyle = "rgba(120, 220, 255, 0.95)";
       mm.beginPath();
       mm.arc(8 + gp[0] * (cssW - 16), 8 + gp[1] * (cssH - 16), 3.4, 0, 7);
       mm.fill();
     }
   }
-  const p = map[Math.floor(player.s / track.total * n) % n];
+  const p = at(player.s);
+  if (!p) return;
   mm.fillStyle = "#fff";
   mm.beginPath();
   mm.arc(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, 0, 7);

@@ -23,6 +23,11 @@ const NetScan = (function () {
       const s = document.createElement("script");
       s.src = VENDOR;
       s.async = true;
+      // Same marker js/game.js's injector sets: this is a RUNTIME inject, not a
+      // shell tag, so index.html's broken-install repair must not sweep every
+      // cache and reload the page over it. The rejection path below already
+      // reports "could not load the QR reader" — a reload made that dead code.
+      s.dataset.apexLazy = "1";
       s.onload = () => {
         if (typeof jsQR !== "undefined") { resolve(true); return; }
         // A syntactically valid response can still fail to register the global
