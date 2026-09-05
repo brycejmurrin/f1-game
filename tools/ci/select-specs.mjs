@@ -35,7 +35,26 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 
 // The selected gate's settings, per select-budget's table. It has no retry so a
 // failure reports promptly while smoke retains the retry used for deploy safety.
-export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 120 };
+//
+// 180, NOT 120. The budget model reasons about the MEAN test (79.7 s), but a
+// per-test timeout has to clear the SLOWEST one, and it did not. Measured on an
+// idle box, 2026-09-04, one worker, no contention:
+//
+//   physics-fixes    "lap distance ... through Monaco"   124.2 s   (over 120 outright)
+//   albert-park-foundation                               110.1 s   (92% of budget)
+//
+// So Monaco failed EVERY time the selector picked it, on a tree where it passes,
+// and Albert Park failed on any runner contention at all. Worse, the
+// carry-forward cache then re-ran both first on every later push to the branch,
+// which made a budget defect look like a spreading regression and cost three
+// deploys. Neither is slow in the loop — Monaco's sibling test in the same file
+// runs 100 steps and still takes 57 s, so ~55 s of each is Monaco boot + track
+// build, which no test-side change removes. (Skipping the render via
+// headless(true) was tried: 124.2 -> 120.4 s. Not the cost.)
+//
+// 180 clears the slowest measured spec by 44%. Re-derive ci.yml's
+// `timeout-minutes` with it: cap >= (tests x timeout) + setup + margin.
+export const SELECTED_GATE = { retries: 0, perTestTimeoutSec: 180 };
 
 // These specs already have independent blocking jobs with runner-measured
 // timeout policies. Re-running them in the selected job used its generic 120 s
@@ -129,7 +148,19 @@ export function fit(specs, budgetMin) {
       continue;
     }
     const own = maxDeclaredTimeout(file);
-    if (own > SELECTED_GATE.perTestTimeoutSec * 1000) {
+    // >=, NOT >. A spec that declares EXACTLY the gate's budget is saying it
+    // needs all of it, with nothing left for a runner slower than the box that
+    // number was measured on — and the gate's runner always is. Under `>` such
+    // a spec is SELECTED and then killed at its own declared figure, which
+    // reads as a code failure and is not one.
+    //
+    // This was not hypothetical: raising the gate 120 -> 180 s silently pulled
+    // in the five specs that declare exactly 180 s (audio-smoke,
+    // material-shimmer, qatar/spa/suzuka-foundation), every one of them
+    // boot-heavy and previously excluded. audio-smoke measures 115.5 s SOLO on
+    // an idle 4-core. Raising a gate must never enrol specs that opted out of
+    // the lower one; with `>=` the boundary moves with the gate instead.
+    if (own >= SELECTED_GATE.perTestTimeoutSec * 1000) {
       overBudgetSpecs.push({ file, tests, ownTimeoutSec: own / 1000 });
       continue;
     }
@@ -223,6 +254,21 @@ export function prioritise(specs, { changedSpecs = [], failed = [], imported = [
   return [...specs].sort((a, b) => rank(a.file) - rank(b.file) || a.tests - b.tests);
 }
 
+/** Previously-failing specs only ride along when this change already routes
+ *  to them. Carry-forward is fail-fast ORDER, not a second selector.
+ *
+ *  Pages 33927358590 (livery lockup, groups: test:car) unioned
+ *  albert-park-foundation + physics-fixes from .selected-failed.txt into the
+ *  candidate set, ran them first, hit max-failures=3 at 180 s, and never
+ *  reached carview-parts. The same three circuit specs then wrote themselves
+ *  back into the cache — a budget flake became a branch-wide red. */
+export function scopeCarryForward(failed, routed) {
+  const allow = new Set(routed);
+  const inScope = [], dropped = [];
+  for (const f of failed) (allow.has(f) ? inScope : dropped).push(f);
+  return { inScope, dropped };
+}
+
 // The boot group reaches this gate only through pick-tests' two blanket
 // rules ("any source edit: does the page still boot", "script tags + DOM
 // shell"). That question is already answered on every push and every deploy
@@ -263,14 +309,16 @@ export function select(changedRef, budgetMin = 15, opts = {}) {
     && fs.existsSync(path.join(ROOT, f)));
   const imported = specsImporting(changed);
   const failed = (opts.failed || []).filter((f) => fs.existsSync(path.join(ROOT, f)));
-  const candidates = [...new Set([...changedSpecs, ...failed, ...imported, ...specs])];
+  const routed = [...new Set([...changedSpecs, ...imported, ...specs])];
+  const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);
+  const candidates = routed;
   const reason = !changed.length ? "none"
     : tracked.length ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
   const cut = fit(candidates, budgetMin);
   const r = { reason, changed: changed.length, tracked, groups: browserGroups, bootCoveredBySmoke,
-              changedSpecs, imported, failed, ...cut,
-              selected: prioritise(cut.selected, { changedSpecs, failed, imported }) };
+              changedSpecs, imported, failed: failedInScope, failedDropped, ...cut,
+              selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   // On "infra" the selection is reported but NOT run — the gates own that push.
   if (reason === "infra") { r.skipped = [...r.selected, ...r.skipped]; r.selected = []; r.testsSelected = 0; }
   return r;
@@ -301,6 +349,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `any spec, so nothing is selected and the GATES own this push.`);
   if (r.reason === "unmatched") console.error(
     "SELECTION NOT TRUSTWORTHY: files changed but no pick-tests rule claimed them.");
+  for (const s of r.failedDropped || []) console.error(
+    `CARRY-FORWARD DROPPED (not routed by this change): ${s}`);
   console.error(`budget fits ${r.testsFit} tests (retries ${SELECTED_GATE.retries}, ` +
     `${SELECTED_GATE.perTestTimeoutSec}s/test, surviving 1 timeout); selected ${r.testsSelected}`);
   for (const s of r.overBudgetSpecs) console.error(

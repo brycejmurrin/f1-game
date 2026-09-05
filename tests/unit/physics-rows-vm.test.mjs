@@ -5,6 +5,9 @@
  * mocked). Every pin was red on the code before its fix (HEAD's file swapped
  * back in) and is green after; none moves physics-characterization-vm.
  *
+ * Plus the 2026-09-04 drive-feel rows (turn-in triad, throttle ellipse,
+ * downhill overspeed): source pins plus one behavioural probe each.
+ *
  * Run: node --test tests/unit/physics-rows-vm.test.mjs   (npm run test:game-vm)
  */
 import { test, before, after } from "node:test";
@@ -220,4 +223,108 @@ test("the AI look-ahead bank is |bank|, like the player's bankRoll", async () =>
   }
   assert.ok(seen.length > 0, "the AI look-ahead sampled the bank");
   assert.ok(seen.every((b) => b === 0.35), `every sample is |bank| (min ${Math.min(...seen)})`);
+});
+
+// ---------------------------------------------------------------------------
+// Drive-feel 2026-09-04 — turn-in triad, throttle ellipse, downhill overspeed.
+// Source pins fail closed if someone restores 0.89 / 0.7 / vmax-faded axFrac /
+// the confiscating min(vmax*1.06) assign. Behavioural probes fail if the
+// shipped numbers do not actually rotate more, spend the circle on power, or
+// keep ERS/X leftover on a descent.
+// ---------------------------------------------------------------------------
+test("shipped turn-in is snappier than the understeer-safe 0.89 / 0.7 pair", async () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /let FRONT_GRIP = 0\.94/, "FRONT_GRIP default must stay 0.94 (was 0.89)");
+  assert.match(src, /let YAW_INERTIA = 0\.58/, "YAW_INERTIA default must stay 0.58 (was 0.7)");
+  await startRace();
+  const a = g.apex;
+  const t = a.tuning();
+  assert.equal(t.frontGrip, 0.94);
+  assert.equal(t.yawInertia, 0.58);
+  const yawAt = (frontGrip, yawInertia) => {
+    a.setPhysics({ frontGrip, yawInertia, pace: 1, roadFollow: 0 });
+    a.jump(0.0, 40, 0);
+    a.setInput({ steer: 1, throttle: false });
+    const h0 = a.probe().angle;
+    for (let i = 0; i < 12; i++) a.step(1 / 60, 1);
+    const h1 = a.probe().angle;
+    a.clearInput();
+    return Math.abs(h1 - h0);
+  };
+  const old = yawAt(0.89, 0.7);
+  const now = yawAt(0.94, 0.58);
+  a.setPhysics(PHYS0);
+  assert.ok(now > old * 1.04, `new triad must yaw more (now=${now.toFixed(4)} old=${old.toFixed(4)})`);
+});
+
+test("power-on spends the friction ellipse even when speed-limited", async () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(src, /THR_ELLIPSE/, "throttle demand must be a named PhysicsConsts scale");
+  assert.match(src, /axThrDemand/, "ellipse cost is throttle demand, not only faded axEst");
+  assert.doesNotMatch(src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
+    /axFrac[\s\S]{0,180}clamp\(1 - c\.speed/,
+    "do not restore vmax-faded axEst as the only ellipse cost");
+  await startRace();
+  const a = g.apex;
+  a.setPhysics({ pace: 1, roadFollow: 0 });
+  const sample = (throttle) => {
+    a.jump(0.28, 70, 0);
+    a.setInput({ steer: 0.5, throttle, brake: false });
+    let slip = 1;
+    for (let i = 0; i < 20; i++) {
+      a.step(1 / 60, 1);
+      slip = g.G.player.slipFactor ?? 1;
+    }
+    a.clearInput();
+    return slip;
+  };
+  const coast = sample(false);
+  const power = sample(true);
+  a.setPhysics(PHYS0);
+  assert.ok(coast > 0.97, `coasting must keep the circle (slipFactor=${coast})`);
+  assert.ok(power < coast - 0.03, `throttle must spend the circle (power=${power} coast=${coast})`);
+});
+
+test("a descent does not confiscate existing overspeed; flat throttle bleeds it", async () => {
+  const src = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.doesNotMatch(src, /c\.speed = Math\.min\(vmax \* 1\.06, c\.speed \+ a \* dt\)/,
+    "do not restore the confiscating downhill clamp");
+  assert.match(src, /c\.speed < cap/, "downhill gravity only adds below the 6% margin");
+  g.apex.setPhysics(PHYS0); g.apex.headless(false);
+  await g.race("spa", "day", "dry");
+  g.apex.setPhysics({ ...PHYS0, pace: 1, roadFollow: 0 });
+  const a = g.apex;
+  let dnAt = 0, dn = 0;
+  for (let i = 0; i < 300; i++) {
+    const f = i / 300;
+    a.jump(f, 40, 0); a.step(1 / 60, 1);
+    const s = a.physState().slope;
+    if (s < dn) { dn = s; dnAt = f; }
+  }
+  a.jump(dnAt, 40, 0);
+  const vmax = a.physState().vmaxNow || 72;
+  const over = vmax * 1.18;
+  a.jump(dnAt, over, 0);
+  a.setInput({ steer: 0, throttle: true });
+  let minDn = over;
+  for (let i = 0; i < 45; i++) {
+    a.step(1 / 60, 1);
+    minDn = Math.min(minDn, a.physState().speed);
+  }
+  assert.ok(minDn > vmax * 1.10, `descent must keep overspeed (min=${minDn.toFixed(2)} vmax=${vmax.toFixed(2)})`);
+  // Bleed probe on Monza's start straight — Spa's flattest LUT node is not a
+  // safe 85 m/s line (walls / grass eat the car and look like a teleport).
+  await g.race("monza", "day", "dry");
+  a.setPhysics({ ...PHYS0, pace: 1, roadFollow: 0 });
+  a.jump(0.0, over, 0);
+  a.setInput({ steer: 0, throttle: true });
+  let flatEnd = over;
+  for (let i = 0; i < 180; i++) {
+    a.step(1 / 60, 1);
+    flatEnd = a.physState().speed;
+  }
+  a.clearInput();
+  a.setPhysics(PHYS0);
+  assert.ok(flatEnd < over - 1, `flat throttle must bleed overspeed (end=${flatEnd.toFixed(2)} start=${over.toFixed(2)})`);
+  assert.ok(flatEnd > vmax * 0.95, `bleed is a drag, not a teleport (end=${flatEnd.toFixed(2)})`);
 });

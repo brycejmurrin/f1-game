@@ -526,7 +526,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         WT_LONG, DOWNFORCE, X_VMAX_GAIN_LO, X_VMAX_GAIN_HI, X_DF_LOSS_LO,
         X_DF_LOSS_HI, X_COAST_CUT_LO, X_COAST_CUT_HI, X_OPEN_RATE, X_CLOSE_RATE,
         X_MIN_SPEED, OT_MIN_SPEED, OFF_GRIP, ASSIST_KUS, LINE_PURSUIT,
-        LONG_GRIP, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
+        LONG_GRIP, THR_ELLIPSE, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
         DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, DRAIN_LO, DRAIN_HI,
         REGEN_LO, REGEN_HI, OT_TIME_LO, OT_TIME_HI, OT_COOL_LO, OT_COOL_HI,
         OT_GAP, WET_GRIP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF } = PhysicsConsts;
@@ -604,12 +604,12 @@ function xCoastCut(c) { return lerp(X_COAST_CUT_LO, X_COAST_CUT_HI, aeroLoadOf(c
 // sliders. FRONT_GRIP: front friction bias (<1) for an understeer-safe default.
 // YAW_DAMP: yaw damping for arcade stability. YAW_INERTIA: rotational inertia
 // scale (<1 = snappier turn-in). PLAYER_GRIP: forgiveness headroom over the AI.
-let FRONT_GRIP = 0.89;
+let FRONT_GRIP = 0.94;
 let YAW_DAMP = 1.0;
-let YAW_INERTIA = 0.7;      // scales the car's rotational inertia: <1 = snappier turn-in
+let YAW_INERTIA = 0.58;     // scales the car's rotational inertia: <1 = snappier turn-in
                             // (quicker direction changes through chicanes) without
-                            // touching steady-state grip. Too low over-rotates into slip
-                            // (washes wide); 0.7 keeps turn-in lively but settled.
+                            // touching steady-state grip. 0.89/0.7 washed the nose and
+                            // lagged the body; 0.94/0.58 still understeers first.
 let PLAYER_GRIP = 1.15;     // player-only grip headroom over the AI's LAT_MAX baseline:
                             // keeps the dynamic model's character but forgiving enough
                             // that a tidy line holds the road (neutral-simcade target)
@@ -4008,10 +4008,15 @@ const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
-const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const LCAR = 4.8, WCAR = 2.0;
+// "This frame actually separated them" is a millimetre, never `corr > 0`: at
+// the slop distance the penetration is `LCAR - |dProg|` with LCAR's own
+// rounding still in it, so corr lands at ~3e-16 — positive, and therefore true
+// — while nothing moves. Measured at dProg = -4.75.
+const CORR_EPS = 1e-3;
 // Arc-bucket broadphase for resolveCollisions. Bucket width = LCAR so any
 // contacting pair shares a bucket or sits in adjacent ones (wrap-aware).
 const COL_BUCKET_M = LCAR;
@@ -4143,10 +4148,15 @@ function _colResolvePair(a, b, last, rubScrub) {
     const corr = Math.max(penLat - 0.05, 0) * 0.35;   // gentler push -> rub, not bounce
     a.x += sgn * corr * sA;
     b.x -= sgn * corr * sB;
-    // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr
-    // side contact was draining speed without separating the cars.
-    if (corr > 0) { a.speed *= rubScrub; b.speed *= rubScrub; }
-    a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
+    // Skip scrub when corr≈0 (nest-edge / at-slop) — perpetual zero-corr side
+    // contact was draining speed without separating the cars, and CORR_EPS is
+    // what makes that guard actually hold. The FLAG takes the same gate:
+    // contactT is not cosmetic (it gates the player's own stuck rescue), so it
+    // must mean "we are colliding", not "we rounded".
+    if (corr > CORR_EPS) {
+      a.speed *= rubScrub; b.speed *= rubScrub;
+      a.contactT = b.contactT = 0.22;   // "rubbing" — AI eases off steering
+    }
     if (last) collideFx(a, b, Math.abs(aSp - bSp) * 0.02 + 0.18);
   } else {
     // rear-end: separate along the track and nudge speeds together (gentle,
@@ -4172,7 +4182,7 @@ function _colResolvePair(a, b, last, rubScrub) {
           b.speed += iB * jImp * 0.8;
         }
       }
-      a.contactT = b.contactT = 0.22;
+      if (corr > CORR_EPS) a.contactT = b.contactT = 0.22;   // see the side branch: settled pairs must let it decay
       if (last) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
       // Debris hook (render-only side-world): closing speed = severity.
       if (last && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);
@@ -4365,7 +4375,7 @@ function updateCar(c, dt, ranked) {
   // wedged — instead of grinding to a halt against a car or wall. Rating axes
   // (js/physics/ai-drive.js) scale how quickly they dig out and how much space they
   // leave when following.
-  let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false;
+  let roomL = Infinity, roomR = Infinity, blocker = null, blockerGap = Infinity, unstuckActive = false, letPass = false, aiFreeSpeed = 0;
   let towCar = null, towGap = Infinity;   // nearest car ahead in the slipstream (wider than the blocker box)
   let chaser = null, chaserGap = Infinity; // nearest car close BEHIND in our lane (for defending)
   let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
@@ -4416,6 +4426,15 @@ function updateCar(c, dt, ranked) {
     if (state === "race" && c.speed < 7 && boxed) c.stuckT = (c.stuckT || 0) + dt;
     else c.stuckT = Math.max(0, (c.stuckT || 0) - dt * 1.5);
     unstuckActive = c.stuckT > AiDrive.stuckThreshold(aiT);
+    // LET PASS (AiDrive.letPass*): a quicker car on our gearbox with nothing
+    // ahead of US holding it up is getting through whatever we do, and
+    // defendPull was the only answer the AI had. Speeds compare to each other,
+    // never to a literal, so the window holds at every OVERALL SPEED.
+    const letPassCase = state === "race" && !blocker && chaser
+      && chaserGap < 9 && chaser.speed > c.speed + 2.5;
+    if (letPassCase) c.letPassT = (c.letPassT || 0) + dt;
+    else c.letPassT = Math.max(0, (c.letPassT || 0) - dt * 1.5);
+    letPass = (c.letPassT || 0) > AiDrive.letPassDelay(aiT);
   }
 
   // --- electric deploy ---
@@ -4582,10 +4601,20 @@ function updateCar(c, dt, ranked) {
     // Streets tuck at followBase 8 m (was 12). Awareness pads (AiDrive.followPad).
     if (blocker && blockerGap < 16) {
       const follow = AiDrive.followBase(!!track.street) + AiDrive.followPad(aiT, !!track.street, c.team, c.seat, blocker, c.houseStats);
-      vmax = Math.min(vmax, blocker.speed + clamp(blockerGap - follow, -6, 8));
+      // Floored (AiDrive.queueFloor): the cap may match the blocker's pace but
+      // must never command a STANDSTILL — which it did behind a stopped car,
+      // and a stopped AI can never steer out. The crawl is itself capped at the
+      // vmax race control already granted, so VSC and red flag still win.
+      aiFreeSpeed = vmax;   // our pace with this car gone (AiDrive.otPull)
+      const q = blocker.speed + clamp(blockerGap - follow, -6, 8);
+      const crawl = Math.min(AiDrive.queueFloor(!!track.street) * Math.max(PACE, 0.05), vmax);
+      vmax = Math.min(vmax, Math.max(q, crawl));
       const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street);
       if (qb) { braking = true; brakeLvl = qb; }
     }
+    // The other half of LET PASS: stop accelerating away. A multiplier, not a
+    // threshold, so it eases at every OVERALL SPEED by construction.
+    if (letPass) vmax *= AiDrive.letPassEase(aiT);
     // when wedged in/stopped, power out instead of braking
     if (unstuckActive) { braking = false; brakeLvl = 0; }
   }
@@ -4706,10 +4735,16 @@ function updateCar(c, dt, ranked) {
     } else {                                        // downhill: feed, with a small
       // overspeed margin so a long descent actually gives you something (a hard
       // clamp to vmax made steep downhills feel inert once at pace).
-      // NOTE: this also confiscates existing overspeed on any descent; the
-      // characterization baseline pins that snap (BUG-HUNT-2026-09-02 §Round 2).
-      c.speed = Math.min(vmax * 1.06, c.speed + a * dt);
+      // Gravity may ADD up to the 6 % margin; it must not confiscate ERS/X
+      // leftover already above it (that snap is what made hills clip).
+      const cap = vmax * 1.06;
+      if (c.speed < cap) c.speed = Math.min(cap, c.speed + a * dt);
     }
+  }
+  // Flat / climb: bleed leftover overspeed toward the 6 % margin. Skip on a
+  // real descent so gravity-kept ERS/X speed survives the hill.
+  if (state === "race" && c.speed > vmax * 1.06 && slopeSin >= -0.03) {
+    c.speed = Math.max(vmax * 1.06, c.speed - COAST_DRAG * 0.35 * dt);
   }
   // EVERY car, not just the human one. This whole block used to sit inside
   // `if (c.human)`, so an AI car's rpm never left IDLE_RPM for the entire race —
@@ -4836,10 +4871,22 @@ function updateCar(c, dt, ranked) {
       _aiOtPull.team = c.team; _aiOtPull.seat = c.seat; _aiOtPull.stats = c.houseStats;
       _aiOtPull.blockerSpeed = blocker.speed; _aiOtPull.blockerGap = blockerGap;
       _aiOtPull.roomL = roomL; _aiOtPull.roomR = roomR; _aiOtPull.other = blocker;
+      // Side-pick + incentive inputs. kA is the same AI-only curvature read the
+      // racing line above already makes — the arc reaches the AI's choice of
+      // side, never the driver.
+      _aiOtPull.kAhead = kA; _aiOtPull.lane = c.lane; _aiOtPull.freeSpeed = aiFreeSpeed;
       overtake = AiDrive.otPull(_aiOtPull);
     }
+    // LET PASS moves aside instead of defending; the `!letPass` below is what
+    // stops the AI covering a line it has already decided to concede.
+    let yieldPull = 0;
+    if (letPass) {
+      const freeSide = roomR >= roomL ? 1 : -1;
+      const freeRoom = freeSide > 0 ? roomR : roomL;
+      if (freeRoom > 1.6) yieldPull = freeSide * AiDrive.letPassPull(aiT, !!track.street) * clamp(freeRoom / 2.4, 0, 1);
+    }
     let defend = 0;
-    if (chaser && !blocker) {
+    if (chaser && !blocker && !letPass) {
       _aiDefend.street = !!track.street; _aiDefend.traits = aiT; _aiDefend.speed = c.speed;
       _aiDefend.team = c.team; _aiDefend.seat = c.seat; _aiDefend.stats = c.houseStats;
       _aiDefend.chaser = true; _aiDefend.chaserGap = chaserGap; _aiDefend.chaserSpeed = chaser.speed;
@@ -4861,7 +4908,7 @@ function updateCar(c, dt, ranked) {
     sep = clamp(sep, -sepMax, sepMax);
     // clamp the combined target to the drivable surface so overtake/unstuck/
     // separation biases can never steer the AI off the track or into a wall.
-    const desiredX = clamp(targetX + overtake + defend + sep + unstuck, -(hw - 0.5), hw - 0.5);
+    const desiredX = clamp(targetX + overtake + defend + yieldPull + sep + unstuck, -(hw - 0.5), hw - 0.5);
     let err = desiredX - c.x;
     // Soft deadzone near the target: fade the correction out as the error gets
     // small so the AI stops making tiny frame-to-frame steering corrections
@@ -5050,12 +5097,17 @@ function updateCar(c, dt, ranked) {
     // hard mid-corner understeers wide, while trail-braking (easing off as you
     // turn in) progressively returns grip to the front tyres and rotates the car.
     // Weather thins the longitudinal budget too, so braking bites grip in the wet.
-    // NOTE (deliberate asymmetry): the on-throttle axEst uses the DEPLOY_A-scale
-    // accel, not the full engine ACCEL, so power-on costs far less cornering
-    // grip than braking does — arcade forgiveness on corner exits. Making the
-    // circle symmetric (power-limited exits) is a feel/design change, not a fix.
-    const axFrac = Math.min(1, Math.abs(c.axEstSm ?? 0) / (LONG_GRIP * gripMult(c)));
+    // Weight transfer still uses faded axEstSm (no fake unload at vmax).
+    // The circle itself uses throttle DEMAND without the vmax fade, scaled by
+    // THR_ELLIPSE, so planting the throttle mid-corner spends grip even when
+    // speed-limited. Braking still costs more (BRAKE > ACCEL·THR_ELLIPSE).
+    const axThrDemand = onThrottle
+      ? (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : 1) * gearMult) * THR_ELLIPSE + Math.max(0, deploy)
+      : 0;
+    const axUsed = Math.max(Math.abs(c.axEstSm ?? 0), axThrDemand);
+    const axFrac = Math.min(1, axUsed / (LONG_GRIP * gripMult(c)));
     const slipFactor = Math.sqrt(Math.max(0, 1 - axFrac * axFrac));
+    c.axFrac = axFrac;
     c.slipFactor = slipFactor;   // setEngine() reads it for slip01; unassigned it read a constant 1
     // LOCK-UP (render + feel only): braking at the top of the friction budget
     // stops the fronts turning; a lock leaves a flat spot that wobbles the
@@ -5214,7 +5266,11 @@ function updateCar(c, dt, ranked) {
     // was already grip-thinned. Continuous in |x| past the edge (player idiom).
     const aiOffDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
     const aiSurfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, aiOffDepth);
-    c.x += steer * STEER_VMAX * latFac * gripScale * kerbGrip * gripMult(c) * bankMu * give * aiSurfMu * dt;
+    // latFac is zero at a standstill — the exact state the dig-out exists for,
+    // so the pull it computes could never be applied. Floored while
+    // unstuckActive ONLY (AiDrive.unstuckLatFloor); slow running is untouched.
+    const aiLat = unstuckActive ? Math.max(latFac, AiDrive.unstuckLatFloor(!!track.street)) : latFac;
+    c.x += steer * STEER_VMAX * aiLat * gripScale * kerbGrip * gripMult(c) * bankMu * give * aiSurfMu * dt;
     // Debris side-world (A2): AI cars don't run the slip model, so estimate a
     // slide from lateral-g demand (|k|·v²/g) and treat hard braking at speed as
     // lock-up. READ-ONLY, cosmetic — matches the player marble hook.
@@ -5654,20 +5710,29 @@ function updateCar(c, dt, ranked) {
     if (c.rescueT > 3) { rescuePlayer(c); c.rescueT = 0; }
   } else if (!c.human && state === "race" && !c.finished) {
     // Lightweight AI rescue: an AI beached in the grass or pinned against a
-    // barrier (and NOT just shuffling in a pack — contactT/unstuckActive exclude
-    // that) gets put back on the drivable surface after a few seconds, so it
-    // can't crawl in a run-off for the rest of the race. AI is kinematic, so the
-    // reset just clamps lateral position onto the track and restores some speed.
+    // barrier or another car gets put back on the drivable surface after a few
+    // seconds, so it can't crawl in a run-off — or stay welded to the player —
+    // for the rest of the race. AI is kinematic, so the reset just clamps
+    // lateral position onto the track and restores some speed.
+    //
+    // contactT used to VETO this conjunction, to keep a pack shuffle from
+    // teleporting cars — so the commonest way to be genuinely stuck, wedged
+    // against another car, was the one case that could never be rescued. It is
+    // a PATIENCE knob now (AiDrive.aiRescueDelay): a shuffle clears in well
+    // under a second and never reaches the longer contact timer.
     const aiStuck = (c.offroad && c.offT > 0.5) ||
-      (c.speed < 5 && raceT > 2 && (c.contactT || 0) === 0 && !unstuckActive);
+      (c.speed < 5 && raceT > 2 && !unstuckActive);
     if (aiStuck) c.rescueT = (c.rescueT || 0) + dt;
     else c.rescueT = Math.max(0, (c.rescueT || 0) - dt * 1.5);
-    if (c.rescueT > 4) {
+    if (c.rescueT > AiDrive.aiRescueDelay((c.contactT || 0) > 0)) {
       Tracks.sample(track, c.s, smp);
+      // Break the weld SIDEWAYS first: a car pinned against another is stuck
+      // laterally, and a bare speed restore re-loads the same contact next frame.
+      if ((c.contactT || 0) > 0) c.x += (roomR >= roomL ? 1 : -1) * 1.2;
       c.x = clamp(c.x, -(smp.hw - 1.5), smp.hw - 1.5);   // back onto the track
       // Pace-scaled restore floor (same shape as coast()); never above vTop().
       c.speed = Math.min(vTop(), Math.max(c.speed, 14 * Math.max(PACE, 0.05)));
-      c.rescueT = 0; c.offT = 0; c.stuckT = 0;
+      c.rescueT = 0; c.offT = 0; c.stuckT = 0; c.contactT = 0;
     }
   }
   // AI authority is (s, x). Mirror world metres AFTER this step's s/x writes

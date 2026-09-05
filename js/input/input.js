@@ -312,6 +312,36 @@ const Input = (function () {
     }
     return 0;
   }
+  /* One ramp step for a DIGITAL source (arrows, on-screen buttons).
+   *
+   * UNWINDING IS NOT THE SAME ACT AS BUILDING LOCK, and the old step did not
+   * know that: `moveToward(val, target, (target !== 0 ? rateIn : RAMP_OUT))`
+   * used the BUILD rate for any non-zero target, so pressing the OPPOSITE arrow
+   * crossed back through centre at the build rate rather than the release rate.
+   * Measured at 41.7 m/s with ADAPTIVE BUTTONS on (rateIn 3/s vs RAMP_OUT 8/s):
+   * full lock to centre took 0.33 s by pressing the other way and 0.125 s by
+   * simply letting go — so the fastest way through a chicane was release, wait,
+   * press, which is not a technique anyone should have to find. It is worse
+   * exactly where it matters most, because the assist slows the build rate with
+   * speed and never touched the release rate.
+   *
+   * Unwind at the release rate, build at the build rate, switch at centre. A
+   * frame at 60 Hz can contain both halves, so the leftover time is spent at
+   * the build rate rather than thrown away — otherwise the step quietly caps a
+   * direction change at one rate per frame.
+   */
+  function digitalStep(val, target, dt) {
+    if (target === 0) return moveToward(val, 0, KEY_RAMP_OUT * dt);
+    if (val * target < 0) {
+      const toCentre = Math.abs(val);
+      const unwind = KEY_RAMP_OUT * dt;
+      if (unwind < toCentre) return moveToward(val, 0, unwind);
+      const spare = (unwind - toCentre) / KEY_RAMP_OUT;   // seconds still unspent
+      return moveToward(0, target, digitalRateIn() * spare);
+    }
+    return moveToward(val, target, digitalRateIn() * dt);
+  }
+
   function digitalRateIn() {
     if (adaptiveMix <= 0) return KEY_RAMP_IN;
     const ref = steerSpeedRef > 1 ? steerSpeedRef : 41.7;
@@ -324,11 +354,7 @@ const Input = (function () {
     const dt = (keySteerT ? Math.min(0.1, (t - keySteerT) / 1000) : 0) * timeScale;
     keySteerT = t;
     const target = (keyRight ? 1 : 0) - (keyLeft ? 1 : 0);
-    if (target !== 0) {
-      keySteerVal = moveToward(keySteerVal, target, digitalRateIn() * dt);
-    } else {
-      keySteerVal = moveToward(keySteerVal, 0, KEY_RAMP_OUT * dt);
-    }
+    keySteerVal = digitalStep(keySteerVal, target, dt);
     return keySteerVal;
   }
 
@@ -531,7 +557,7 @@ const Input = (function () {
     const left = btnSteerLeft ? (1 + (btnSteerLeftVal - 1) * adaptiveMix) : 0;
     const right = btnSteerRight ? (1 + (btnSteerRightVal - 1) * adaptiveMix) : 0;
     const target = right - left;
-    btnSteerVal = moveToward(btnSteerVal, target, (target !== 0 ? digitalRateIn() : KEY_RAMP_OUT) * dt);
+    btnSteerVal = digitalStep(btnSteerVal, target, dt);
     return btnSteerVal;
   }
 

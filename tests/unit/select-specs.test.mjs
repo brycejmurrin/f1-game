@@ -9,11 +9,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
-  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS } from "../../tools/ci/select-specs.mjs";
+  SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
+  scopeCarryForward } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
 import { failedSpecsFrom } from "../../tools/ci/junit-failed.mjs";
 import { recall } from "../../tools/ci/select-recall.mjs";
 import { MEASURED, capacity } from "../../tools/ci/select-budget.mjs";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const SCRIPTS = {
   "test:one": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js",
@@ -85,7 +91,7 @@ test("a spec that reserves more than the selected-gate timeout is EXCLUDED by na
     "the spec that fits the selected-gate budget must still be selected");
 });
 
-test("fixed blocking specs can never run under the selected gate's 120 s timeout", () => {
+test("fixed blocking specs can never run under the selected gate's timeout", () => {
   assert.ok(FIXED_GATE_SPECS.has("tests/specs/smoke.spec.js"));
   assert.ok(FIXED_GATE_SPECS.has("tests/specs/physics-characterization.spec.js"));
   const r = fit([...FIXED_GATE_SPECS], 60);
@@ -123,6 +129,24 @@ test("the import graph finds specs a path RULE cannot — helper -> spec", () =>
     "js/ is invisible to the import graph in this architecture — say so by returning nothing");
 });
 
+test("carry-forward only reorders specs this change already routed", () => {
+  // Pages 33927358590: a livery lockup routed only test:car, but
+  // .selected-failed.txt injected albert-park-foundation + physics-fixes,
+  // those timed out first, and carview-parts never ran.
+  const routed = ["tests/specs/carview-parts.spec.js", "tests/specs/garage-aero.spec.js"];
+  const failed = [
+    "tests/specs/albert-park-foundation.spec.js",
+    "tests/specs/physics-fixes.spec.js",
+    "tests/specs/garage-aero.spec.js",
+  ];
+  const { inScope, dropped } = scopeCarryForward(failed, routed);
+  assert.deepEqual(inScope, ["tests/specs/garage-aero.spec.js"]);
+  assert.deepEqual(dropped, [
+    "tests/specs/albert-park-foundation.spec.js",
+    "tests/specs/physics-fixes.spec.js",
+  ]);
+});
+
 test("fail-fast order: edited, then previously-failed, then imported, then routed", () => {
   // Fowler's TIA survey records Microsoft and Google Testar both running
   // newly-added and previously-failing tests unconditionally; Playwright's CI
@@ -157,11 +181,11 @@ test("FAULTY-CHANGE RECALL: no real regression is dropped in silence", () => {
 });
 
 test("the selected-gate settings match select-budget's recommendation", () => {
-  // retries 0 halves the failure cost; 120 s per-test halves it again. If
-  // either drifts back to smoke's gate settings, the budget maths silently
-  // stops describing the job that runs.
+  // retries 0 halves the failure cost, and a per-test timeout under smoke's
+  // 240 s halves it again. If either drifts back to smoke's gate settings, the
+  // budget maths silently stops describing the job that runs.
   assert.equal(SELECTED_GATE.retries, 0);
-  assert.equal(SELECTED_GATE.perTestTimeoutSec, 120);
+  assert.equal(SELECTED_GATE.perTestTimeoutSec, 180);
   const gate = capacity(15, 1, MEASURED);
   const selected = capacity(15, 1, { ...MEASURED, ...SELECTED_GATE });
   assert.ok(selected.tests > gate.tests,
@@ -231,4 +255,60 @@ test("a spec that cannot pass at the gate's per-test cap declares so, and is exc
   assert.deepEqual(r.selected, [], "the gate must not select it");
   assert.ok(r.overBudgetSpecs.some((s) => s.file === "tests/specs/hud-layout.spec.js"),
     "and must NAME it as over budget — silent truncation reads as covered");
+});
+
+test("the gate's per-test timeout clears the SLOWEST spec, not the average one", () => {
+  // The defect this pins: 120 s bounded the mean test (79.7 s) and not the
+  // slowest, so the gate failed specs that pass. Measured on an idle box,
+  // one worker, 2026-09-04 — raise these only against a fresh measurement.
+  const SLOWEST_MEASURED_SEC = 124.2;   // physics-fixes, Monaco lap continuity
+  assert.ok(SELECTED_GATE.perTestTimeoutSec > SLOWEST_MEASURED_SEC,
+    `gate ${SELECTED_GATE.perTestTimeoutSec}s does not clear the slowest measured ` +
+    `spec (${SLOWEST_MEASURED_SEC}s) — it will fail specs that pass`);
+  // ...with real margin, not by a second: CI runners are shared and slower.
+  assert.ok(SELECTED_GATE.perTestTimeoutSec > SLOWEST_MEASURED_SEC * 1.25,
+    "a timeout that only just clears the slowest spec fails on any contention");
+});
+
+test("ci.yml runs the selected gate with the settings the selector models", () => {
+  // Three files encode this one number (select-specs, select-budget, ci.yml) and
+  // the workflow is the only one the runner actually obeys. When they drifted,
+  // the model described a job that did not exist.
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const ms = SELECTED_GATE.perTestTimeoutSec * 1000;
+  assert.match(yml, new RegExp(`--retries=0 --timeout=${ms} --max-failures=3`),
+    `ci.yml's selected step does not run --timeout=${ms}`);
+  // cap >= (tests x per-test timeout) + setup + margin, per the job's own comment.
+  const cap = Number(/name: Selected specs[\s\S]*?timeout-minutes: (\d+)/.exec(yml)?.[1]);
+  const worstCaseMin = (10 * SELECTED_GATE.perTestTimeoutSec) / 60 + 4;
+  assert.ok(cap >= worstCaseMin,
+    `timeout-minutes ${cap} is under the worst case (${worstCaseMin.toFixed(0)} min): ` +
+    "the job would be CANCELLED, which reads as 0 failures and hides a dead deploy");
+});
+
+test("raising the gate must not enrol specs that opted out of the lower one", () => {
+  // The defect: the exclusion used `own > gate`, so a spec declaring EXACTLY
+  // the gate's budget was SELECTED with zero headroom and then killed at its
+  // own declared figure. Raising the gate 120 -> 180 s silently pulled in all
+  // five specs that declare exactly 180 s — audio-smoke (115.5 s SOLO on an
+  // idle 4-core), material-shimmer, and the qatar/spa/suzuka foundations —
+  // each of which had opted out of the 120 s gate on purpose.
+  //
+  // The rule is about what must NOT happen (be selected), not about which
+  // channel catches it: a spec can also be excluded earlier for being covered
+  // by a fixed gate or replayed by a VM twin, and aero-zones.spec.js (540 s)
+  // legitimately arrives that way.
+  const gateMs = SELECTED_GATE.perTestTimeoutSec * 1000;
+  const files = fs.readdirSync(path.join(ROOT, "tests/specs"))
+    .filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`);
+  const r = fit(files, 15);
+  const selected = new Set(r.selected.map((x) => x.file));
+  const atOrOver = files.filter((f) => maxDeclaredTimeout(f) >= gateMs);
+  assert.ok(atOrOver.length > 0, "no spec declares at or over the gate — this test is vacuous");
+  for (const f of atOrOver) {
+    assert.ok(!selected.has(f),
+      `${f} declares ${maxDeclaredTimeout(f) / 1000}s against a ` +
+      `${SELECTED_GATE.perTestTimeoutSec}s gate but was SELECTED — ` +
+      "it would be killed at its own declared budget, which reads as a code failure");
+  }
 });

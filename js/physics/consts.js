@@ -57,6 +57,10 @@ window.PhysicsConsts = {
   LINE_PURSUIT: 2.6,
 
   LONG_GRIP: 34,
+  // Power-on friction-circle cost: unfaded ACCEL·PACE·throttle, times this.
+  // 1.0 is only ~2 % lateral at racing speed (ACCEL/LONG_GRIP); 2.2 is a
+  // noticeable exit tax without matching full brake (BRAKE/LONG_GRIP ≈ 0.65).
+  THR_ELLIPSE: 2.2,
 
   // Road grip in the wet, by TYRE TREAD CLASS: [slick, intermediate, full wet],
   // indexed by the fitted compound's `wetTread` in the Parts catalog. Read by

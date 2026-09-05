@@ -101,8 +101,8 @@ function carDecalData(aLvl, parts, legacyBody, teamId) {
         [nsR.topSide*0.82, nsR.top+0.014, 1.16], [-nsR.topSide*0.82, nsR.top+0.014, 1.16]], [0, 1, 0.10], R.titleB);
   // Sidepod lower flank → long sponsor strip.
   podDecal(R.strip, 0.08, 0.30, 0.020);   // sits wholly on the c2 accent band
-  // Rear-wing endplate number boards → the driver number again (classic F1 — the
-  // number reads on the nose AND the rear-wing endplates). The board height/pos
+  // Rear-wing endplate number boards → the driver number plus the team lockup
+  // (classic F1 — identity reads on the nose AND the rear-wing endplates). The board height/pos
   // TRACKS the wing: Car3D.numberBoard(aLvl) is the SAME function the car mesh
   // uses to place the physical board, so the digit lands on it at every downforce
   // level (mesh is cached per aLvl — see getCarDecalMesh).

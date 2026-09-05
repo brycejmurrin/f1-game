@@ -19,10 +19,10 @@ absolute magnitudes.
 | `speedRef` (`STEER_SPEED_REF` ≈41.7 m/s) | lock taper | keeps lock at speed |
 | `drift` (`DRIFT` 0) | rear looseness | more tail-out (debug) |
 | `roadFollow` (`ROAD_FOLLOW` **0**, ships OFF) | curvature assist | more auto-drive |
-| `frontGrip` (`FRONT_GRIP` 0.89) | front friction bias | less understeer |
+| `frontGrip` (`FRONT_GRIP` 0.94) | front friction bias | less understeer |
 | `playerGrip` (`PLAYER_GRIP` 1.15) | player vs AI headroom | more forgiving |
 | `yawDamp` (`YAW_DAMP` 1.0) | yaw damping | calmer |
-| `yawInertia` (`YAW_INERTIA` 0.7) | rotational inertia | lazier (`<1` snappier) |
+| `yawInertia` (`YAW_INERTIA` 0.58) | rotational inertia | lazier (`<1` snappier) |
 | `pace` (`PACE` 0.840) | ground-speed scale | faster everywhere |
 
 Boot-effective defaults come from `js/input/steer-tuning.js`

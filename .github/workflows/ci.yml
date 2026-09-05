@@ -1049,7 +1049,7 @@ jobs:
     #
     # The budget maths is tools/ci/select-budget.mjs (measured: 79.7 s/test at one
     # worker on a shared runner; a TIMING-OUT test costs timeout x (1+retries)).
-    # Hence retries 0 and --timeout=120000 here — the selector's settings, not
+    # Hence retries 0 and --timeout=180000 here — the selector's settings, not
     # smoke's gate settings (420 s, one retry): a retry only doubles the cost
     # of the news this job exists to deliver. The fixed smoke and driving-model
     # specs are excluded here because their independent blocking jobs own their
@@ -1059,19 +1059,34 @@ jobs:
     # pick-tests' groups into specs, fits them to the budget surviving one
     # timeout, and NAMES every spec it skips — silent truncation would read as
     # "covered".
-    # 26, DERIVED, not guessed — and 20 was wrong. The budget models the
-    # EXPECTED cost (one failure at 120 s + nine passes at 79.7 s = ~14 min),
-    # but the TRUE worst case is every selected test hitting the per-test
-    # timeout: 10 x 120 s = 20 min, plus ~4 min of setup (npm ci + chromium)
-    # = ~24 min. At 20 the job would have been CANCELLED in that case — and
-    # this workflow's own header records that a cancelled job reads as "0
-    # failures" and once hid a dead deploy. A selected gate that dies of its
-    # own cap teaches nothing; 26 covers the worst case with margin, and the
-    # budget (not the cap) stays the thing that bounds the selection.
+    # 36, DERIVED, not guessed — and both 20 and 26 were wrong, for different
+    # reasons. The budget models the EXPECTED cost (one failure + nine passes at
+    # 79.7 s = ~15 min), but the TRUE worst case is every selected test hitting
+    # the per-test timeout: 10 x 180 s = 30 min, plus ~4 min of setup (npm ci +
+    # chromium) = ~34 min. At 20 the job would have been CANCELLED in that case
+    # — and this workflow's own header records that a cancelled job reads as "0
+    # failures" and once hid a dead deploy. A selected gate that dies of its own
+    # cap teaches nothing; 36 covers the worst case with margin, and the budget
+    # (not the cap) stays the thing that bounds the selection.
+    #
+    # The CAP is a ceiling for a case that essentially never happens, not the
+    # spend: a run whose tests PASS costs the same at 180 s as at 120 s, because
+    # a passing test never reaches its timeout. That is why the fix for the
+    # measurement below was the timeout and not a smaller selection — shrinking
+    # the selection would have cost coverage on every single run to save minutes
+    # only the pathological run ever spends.
+    #
+    # 120 was too tight to be a timeout at all. It bounded the MEAN test (79.7 s)
+    # but not the slowest: physics-fixes' Monaco test measures 124.2 s and
+    # albert-park-foundation 110.1 s on an IDLE box (2026-09-04), so the first
+    # failed every time the selector picked it and the second failed on any
+    # contention. The carry-forward cache below then hoisted both to the front of
+    # every later run, which made a budget defect look like a spreading
+    # regression. See tools/ci/select-specs.mjs SELECTED_GATE for the numbers.
     #
     # Re-derive this if the budget, the per-test timeout, or the retry count
     # changes: cap >= (tests x per-test timeout) + setup + margin.
-    timeout-minutes: 26
+    timeout-minutes: 36
     steps:
       - uses: actions/checkout@v4
         with:
@@ -1153,7 +1168,7 @@ jobs:
         if: steps.sel.outputs.specs != ''
         env:
           APEX_WORKERS: 1
-        run: npm test -- ${{ steps.sel.outputs.specs }} --retries=0 --timeout=120000 --max-failures=3
+        run: npm test -- ${{ steps.sel.outputs.specs }} --retries=0 --timeout=180000 --max-failures=3
       # Record what failed so the NEXT run hoists it to the front. junit.xml is
       # the machine-readable half of the reporter set playwright.config already
       # writes; parsing it here keeps the tool free of CI-specific formats.

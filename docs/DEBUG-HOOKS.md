@@ -887,7 +887,19 @@ answers a question the mix could not:
   distance), rolled off and lowpassed with distance, Doppler-shifted by the
   closing rate. There was no panner in the graph at all before, so a car
   alongside was silent. `GameAudio.rivalState()` reports each voice's live
-  `{gain, pan, rate, cut}`.
+  `{gain, pan, rate, hz, cut}` — `rate` on the sample core, `hz` on the
+  oscillator fallback, the other reading 0.
+
+  They run on WHICHEVER core is running. Building them only `if (usingSamples)`
+  made the field go silent in the one situation where you most need to know a
+  car is beside you: the recording failed and the whole mix is the fallback.
+  Each voice carries its own `start`/`stop`/`setPitch`, so `setRivals` never
+  asks which core it is talking to. The fallback voice is two saws 14 cents
+  apart at `95 + rev*700` Hz — the module's own unknown-gear defaults, which is
+  the right stand-in when the gear belongs to someone else's car — and it takes
+  the same level discount the player's synth does (`rivalPeak` 0.055 vs 0.28),
+  because saws are far hotter than the recording and a rival must never be
+  louder than the car you are sitting in.
 
   Four things were wrong with the first cut and are worth not re-doing:
   **the AI cars had no revs.** `c.gear`/`c.rpm` were computed inside
@@ -1061,7 +1073,7 @@ Three combined-slip fields expose the traction-circle state in real time:
 | Field | Meaning |
 |---|---|
 | `axEstSm` | Smoothed longitudinal acceleration (m/s²) — positive = accelerating, negative = braking |
-| `axFrac` | `|axEstSm| / (LONG_GRIP × gripMult)` clamped to 1 — fraction of the longitudinal grip budget consumed |
+| `axFrac` | `max(\|axEstSm\|, throttleDemand) / (LONG_GRIP × gripMult)` clamped to 1 — fraction of the longitudinal grip budget consumed (`physState` reads `player.axFrac` once the bicycle has run) |
 | `slipFactor` | `sqrt(1 − axFrac²)` — fraction of lateral grip remaining (1 = none consumed, 0 = all consumed) |
 
 `slipFactor` < 1 means the car is braking or accelerating hard enough to reduce cornering grip. When it approaches 0 the car will wash wide (understeer). Trail-braking — easing off the brake while turning in — lets `slipFactor` rise and rotates the car.

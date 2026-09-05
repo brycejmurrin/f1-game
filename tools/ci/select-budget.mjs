@@ -25,7 +25,16 @@ export const VARIANTS = [
   { ...MEASURED, retries: 0, perTestTimeoutSec: 240 },
   { ...MEASURED, retries: 1, perTestTimeoutSec: 120 },
   { ...MEASURED, retries: 0, perTestTimeoutSec: 120 },
+  { ...MEASURED, retries: 0, perTestTimeoutSec: 180 },   // what the selected gate runs
 ];
+
+// A CAVEAT THIS MODEL CANNOT SEE, and it cost three deploys. `secPerTest` is a
+// MEAN (79.7 s), which is the right input for "how many fit"; it is the wrong
+// input for choosing the per-test TIMEOUT, which has to clear the slowest spec
+// rather than the average one. At 120 s it did not: physics-fixes' Monaco test
+// measures 124.2 s and albert-park-foundation 110.1 s on an idle box
+// (2026-09-04), so the gate failed specs that pass. Read a timeout row here
+// against the SLOWEST spec you might select, never against secPerTest.
 
 /** Declared `test(...)` / `it(...)` calls in a spec, by AST — a grep miscounts
  *  the loop-generated ones (17 across 16 specs, per tools/ci/test-observed.mjs). */

@@ -54,9 +54,14 @@ collapse onto one new notch. See `docs/research/PHASE-C-SLIDER-DESIGN.md`.
 
 **Combined-slip (friction ellipse)**: `LONG_GRIP = 34 m/s²` is the longitudinal
 axis of the traction circle. Braking or accelerating consumes longitudinal grip;
-`slipFactor = sqrt(1 − (axEstSm/LONG_GRIP)²)` scales lateral grip. Trail-braking
-rotates the car; hard braking mid-corner understeers. Exposed via `physState()`
-fields `axEstSm`, `axFrac`, `slipFactor`. **Brake bias** (the SETUP sheet,
+`slipFactor = sqrt(1 − (axUsed/LONG_GRIP)²)` scales lateral grip. Weight
+transfer still reads faded `axEstSm` (no fake unload at vmax). The circle
+itself uses `max(|axEstSm|, throttleDemand)`: demand is unfaded
+`ACCEL · PACE · throttle · THR_ELLIPSE` (`THR_ELLIPSE = 2.2` in
+`js/physics/consts.js`) so planting the throttle mid-corner spends grip even
+when speed-limited. Braking still costs more (`BRAKE` 22 vs ~15 m/s²).
+Trail-braking rotates the car; hard braking mid-corner understeers. Exposed via
+`physState()` fields `axEstSm`, `axFrac`, `slipFactor`. **Brake bias** (the SETUP sheet,
 `js/garage/setup-tune.js`) splits that budget per axle UNDER BRAKING only:
 the front spends `bb / BB_REF` of it and the rear `(1 − bb) / (1 − BB_REF)`
 (`BB_REF = 0.56`, `js/physics/consts.js`), so `muF`/`muR` carry their own
@@ -178,6 +183,11 @@ seconds (it used to read `OVERTAKE` at half opacity, which is not a message).
 `tests/specs/aero-zones.spec.js` pins both halves, driving a REAL opening lap —
 `setLap()` moves only the player's counter, so a teleport cannot exercise a
 leader-based gate.
+
+**Slope gravity** adds up to `vmax × 1.06` on a descent and never confiscates
+speed already above that margin (ERS / X leftover). On the flat or a climb,
+speed above the margin bleeds at `0.35 × COAST_DRAG`. A hard `min(vmax×1.06)`
+assign used to snap hills.
 
 **The player is a world-space rigid body.** `px`/`pz`/`head` are the authority:
 the car integrates its own position in world metres from tyre forces alone and
@@ -324,7 +334,7 @@ it lands.
 | file | sites (symbol) | channel | why it never reaches the player with assists off |
 |---|---|---|---|
 | `js/game.js` | `updateCar` k/`c.kCur` cache | **assist-gated** | every player-path use is multiplied by `ROAD_FOLLOW` (def 0) or sits inside `if (raceLineAssist !== 0)` (def 0); `c.kCur` feeds only BodyAttitude (render-only) |
-| `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target | **AI-only** | each inside the `!c.human` arm |
+| `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target / overtake side pick | **AI-only** | each inside the `!c.human` arm. The side pick passes the SAME `kA` the lane target already sampled into `AiDrive.otSide`, which breaks an equal-room tie toward the inside of the next corner — the arc chooses which way an AI goes around another AI, and touches no player force path |
 | `js/game.js` | `updateCar` RACING LINE assist | **assist-gated** | inside `if (raceLineAssist !== 0)`; slider def 0 |
 | `js/game.js` | `coast` | **broadcast-only** | runs only on `c.finished` cars — driving control is already disconnected. Any future reuse of `coast()` on a live car is a BLOCKER |
 | `js/physics/aero-zones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |

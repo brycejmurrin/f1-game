@@ -81,6 +81,12 @@ function activateCsCat(id, focus) {
     if (G.soundOn) GameAudio.uiTick();
     buildSetup();
     const pane = $("cs-options"); if (pane) pane.scrollTop = 0;
+    // LIVERY is about the wall crest as much as the paint chips: frame FRONT
+    // on the category change only, never again while the tab stays open.
+    if (id === "livery") {
+      const front = document.querySelector('#cs-stack [data-cs-view="front"]');
+      if (front) front.click();
+    }
   }
   if (focus) {
     const tab = document.getElementById(csTabId(id));
@@ -435,13 +441,29 @@ function statDeltaChips(opt) {
   return any ? wrap : null;
 }
 
-function livSwatch(liv) {
+function livSwatch(team, liv, tags) {
   const sw = document.createElement("span"); sw.className = "cs-liv-swatch";
-  sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
-  if (liv.stripe) {
-    const st = document.createElement("span"); st.className = "cs-liv-stripe";
-    st.style.background = cssCol(liv.stripe);
-    sw.appendChild(st);
+  if (typeof LiveryTex !== "undefined" && LiveryTex.paintSwatch) {
+    const c = document.createElement("canvas");
+    c.width = 112; c.height = 80;
+    c.setAttribute("aria-hidden", "true");
+    LiveryTex.paintSwatch(c.getContext("2d"), team.id, liv, c.width, c.height);
+    sw.appendChild(c);
+  } else {
+    sw.style.background = "linear-gradient(120deg, " + cssCol(liv.c1) + " 0 56%, " + cssCol(liv.c2) + " 56% 100%)";
+    if (liv.stripe) {
+      const st = document.createElement("span"); st.className = "cs-liv-stripe";
+      st.style.background = cssCol(liv.stripe);
+      sw.appendChild(st);
+    }
+  }
+  if (tags && tags.length) {
+    for (const label of tags) {
+      const tg = document.createElement("span");
+      tg.className = "cs-opt-tag";
+      tg.textContent = label;
+      sw.appendChild(tg);
+    }
   }
   return sw;
 }
@@ -544,18 +566,14 @@ function buildLiveryOptions(container, team) {
     rowWrap.appendChild(row);
 
     const dot = document.createElement("span"); dot.className = "cs-opt-dot"; row.appendChild(dot);
-    row.appendChild(livSwatch(liv));
+    const tags = [];
+    if (isCustom) tags.push("MINE");
+    if (liv.finish && liv.finish !== "gloss") tags.push(liv.finish.toUpperCase());
+    row.appendChild(livSwatch(team, liv, tags));
 
     const main = document.createElement("div"); main.className = "cs-opt-main";
     const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
     nameRow.appendChild(document.createTextNode(liv.name));
-    if (isCustom) { const tg = document.createElement("span"); tg.className = "cs-opt-tag"; tg.textContent = "MINE"; nameRow.appendChild(tg); }
-    if (liv.finish && liv.finish !== "gloss") {
-      const tg = document.createElement("span");
-      tg.className = "cs-opt-tag";
-      tg.textContent = liv.finish.toUpperCase();
-      nameRow.appendChild(tg);
-    }
     main.appendChild(nameRow);
     row.appendChild(main);
 
