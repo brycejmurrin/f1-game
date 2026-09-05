@@ -751,22 +751,25 @@ body:has(.screen.dim:not([hidden])) #photo-controls { display: none; }
    is the CSS twin so #campicker cannot paint in the dim beside the pause card
    if the hidden attribute lags. Same :has() as #photo-controls above. */
 body:has(.screen.dim:not([hidden])) #campicker { display: none; }
-/* Same moment: stand the race chrome down while a dim dialog is open.
+/* Same moment: stand the race chrome down while ANY menu screen is open.
    Measured MCP 852×393 @ UI SIZE 150%: #pm-quit overlapped #hud-speed /
    #hud-gear / #hud-energy (quit bot 401 on vh 393) and the touch pads still
    painted through the sheet. Top timing/map used to stay because they
    cleared the card box — they still read through the scrim (POS/LAP/CHASE
    beside PAUSED) and make the pause sheet look like a sticker on the HUD.
-   Hide the clusters, not only the bottom. Gated on body.in-race so menu-time
-   dialogs do not touch a HUD that is already hidden. */
-body.in-race:has(.screen.dim:not([hidden])) :is(
+   Hide the clusters, not only the bottom.
+   Gated on `.screen`, not `.screen.dim` + `in-race`: #career / #select /
+   #carsetup / #datahub are full-viewport pages without `.dim`, and their
+   scrims still show POS/LAP/CHASE/BOOST through the wash. A HUD that is
+   already hidden at menu time is a no-op under visibility. */
+body:has(.screen:not([hidden])) :is(
   .hud-bottom, .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #btn-cam, .dock, #pausebtn
 ) {
   visibility: hidden;
 }
 /* DISPLAY settings: keep the live HUD (tower / map / gaps) so LAYOUT/MAP/GAPS
    toggles can be seen without closing the sheet. */
-body.in-race:has(#pmsettings:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
+body:has(#pmsettings:not([hidden])) :is(.hud-top, .hud-gaps, #minimap, #hud-sectors) {
   visibility: visible;
 }
 #photo-controls > * { pointer-events: auto; }

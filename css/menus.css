@@ -326,19 +326,42 @@ body { --compact-at: 600px; --wide-at: 620px; }
    Uses body[data-shape="tall"] set by SheetShape classifyBody() from the
    zoom-corrected viewport dimensions (innerWidth/Height ÷ --ui-scale), which
    agrees with @media orientation in result but is combinable with data-density
-   in a single selector without a nested media query. */
-:where(body[data-shape="tall"][data-density="compact"]) #overlay {
+   in a single selector without a nested media query.
+   ALL tall, not only compact. A 393×844 phone is tall and still above
+   --compact-at (600), so the compact leftover-row never fired there —
+   CAREER + the 2×2 play doors filled the first screen and DATA HUB /
+   GARAGE / SETTINGS / HOW TO PLAY sat ~228px under the fold with no
+   working parent scroller (#overlay overflow-y is a dead letter under
+   zoom-on-children). */
+:where(body[data-shape="tall"]) #overlay {
   grid-template-rows: auto minmax(0, 1fr);
   align-content: stretch;
+  /* Brand/doors gap was clamp(20px, 4vh, 40px). Token gap is one door-gutter
+     instead of a third of a door, so more of the leftover row is doors. */
+  gap: var(--gap);
 }
-:where(body[data-shape="tall"][data-density="compact"]) #menu-brand { grid-row: 1; }
-:where(body[data-shape="tall"][data-density="compact"]) #menu-buttons {
+:where(body[data-shape="tall"]) #menu-brand { grid-row: 1; }
+:where(body[data-shape="tall"]) #menu-buttons {
   grid-row: 2;
   align-self: stretch;
   min-height: 0;
   max-height: none; /* the 1fr row is the cap */
   height: 100%;
+  /* Tall-not-compact never inherited the compact overflow-y. The leftover
+     row is only a cap if the column itself scrolls. */
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: center;
+  align-content: safe center;
+  padding-inline: var(--gap);
 }
+/* Slightly tighter wordmark on tall so the leftover row starts higher.
+   Doors and the disclaimer stay; only brand chrome shrinks. */
+:where(body[data-shape="tall"]) #title { font-size: clamp(30px, calc(8 * var(--vwz)), 72px); }
+:where(body[data-shape="tall"]) #title::after { margin: calc(var(--gap) * 0.5) 0 0; }
+:where(body[data-shape="tall"]) #subtitle { margin: calc(var(--gap) * 0.5) 0 0; }
+:where(body[data-shape="tall"]) #menu-meta { margin-top: calc(var(--gap) * 0.85); gap: calc(var(--gap) / 3); }
 /* LANDSCAPE COMPACT: side-by-side brand + buttons.
    Uses body[data-shape="wide"] (zoom-corrected, set by SheetShape classifyBody)
    in place of @media (orientation: landscape). The two agree in result — the

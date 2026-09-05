@@ -31,7 +31,7 @@
 //
 // The module owns no game state and self-initialises.
 window.AriaState = (function () {
-  const ON = ["active", "dh-active"];
+  const ON = ["active", "on"];
   // Roots to watch: everything that is a menu, plus the two DOM-built overlays.
   const ROOTS = "#overlay,#select,#career,#career-offers,#career-history,#career-guide,#teampicker,#carsetup,#howtoplay," +
     "#pmsettings,#pausemenu,#lighting,#camtune,#results,#quali,#standings," +
@@ -115,10 +115,24 @@ window.AriaState = (function () {
     }
   }
 
+  function syncHashNav(root) {
+    const navs = root.querySelectorAll("#htp-contents, #cg-contents, #ch-contents");
+    if (!navs.length) return;
+    const hash = typeof location !== "undefined" ? location.hash : "";
+    navs.forEach((nav) => {
+      nav.querySelectorAll("a").forEach((a) => {
+        const href = a.getAttribute("href") || "";
+        if (href.charAt(0) === "#" && hash === href) a.setAttribute("aria-current", "true");
+        else a.removeAttribute("aria-current");
+      });
+    });
+  }
+
   function syncAll() {
     for (const r of document.querySelectorAll(ROOTS)) {
       syncRoot(r);
       paintOnOff(r);
+      syncHashNav(r);
     }
   }
 
@@ -153,6 +167,7 @@ window.AriaState = (function () {
         attributes: true, attributeFilter: ["class"],
       });
     }
+    window.addEventListener("hashchange", syncAll);
     syncAll();
   }
 

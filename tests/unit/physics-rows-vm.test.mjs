@@ -7,6 +7,7 @@
  *
  * Plus the 2026-09-04 drive-feel rows (turn-in triad, throttle ellipse,
  * downhill overspeed): source pins plus one behavioural probe each.
+ * Plus the 2026-09-05 TLX M6 skid-stint premise (incidents off, |x|>8).
  *
  * Run: node --test tests/unit/physics-rows-vm.test.mjs   (npm run test:game-vm)
  */
@@ -327,4 +328,27 @@ test("a descent does not confiscate existing overspeed; flat throttle bleeds it"
   a.setPhysics(PHYS0);
   assert.ok(flatEnd < over - 1, `flat throttle must bleed overspeed (end=${flatEnd.toFixed(2)} start=${over.toFixed(2)})`);
   assert.ok(flatEnd > vmax * 0.95, `bleed is a drag, not a teleport (end=${flatEnd.toFixed(2)})`);
+});
+
+// ---------------------------------------------------------------------------
+// TLX M6 skid-batch premise — tests/specs/tlx-probes.spec.js. 55 frames of
+// full-lock throttle from park(0.1)/jump(70) must still be off-road and
+// moving so skids.stamp() can fire. First-contact sev is 37.8 ≥ R2_WALL_SEV
+// 34; Rapier live (macos gfx) takes the player and pins x at wallAt≈7.58.
+// Same incident({flags}) bypass as the wall rows above. Do not lower |x|>8.
+// ---------------------------------------------------------------------------
+test("TLX M6 skid stint still clears Monza hw with incidents off", async () => {
+  await startRace();
+  const a = g.apex;
+  a.incident({ flags: { r2Airborne: false, r3Contact: false, c1Pileup: false } });
+  a.headless(true);
+  a.park(0.1);
+  a.jump(0.1, 70);
+  a.act({ steer: 1, throttle: true }, 1 / 60, 55);
+  const p = a.physState();
+  a.headless(false);
+  a.incident({ flags: { r2Airborne: true, r3Contact: true, c1Pileup: true } });
+  a.setPhysics(PHYS0);
+  assert.ok(p.speed > 10, `speed ${p.speed} > 10`);
+  assert.ok(Math.abs(p.x) > 8, `|x| ${p.x} > 8 (do not lower the TLX spec gate)`);
 });

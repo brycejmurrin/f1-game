@@ -48,6 +48,28 @@ test("compact landscape title doors fit without a nested scroller", () => {
   );
 });
 
+test("tall title leftover-row is not gated on compact density", () => {
+  const menus = read("css/menus.css");
+  // A 393×844 phone is tall and still above --compact-at (600). The
+  // leftover-row used to require both, so secondaries sat under the fold
+  // with no working parent scroller.
+  assert.match(
+    menus,
+    /body\[data-shape="tall"\]\) #overlay \{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\)/,
+    "every tall title hands leftover height to the door column",
+  );
+  assert.doesNotMatch(
+    menus,
+    /body\[data-shape="tall"\]\[data-density="compact"\]\) #overlay \{[^}]*grid-template-rows/,
+    "leftover-row must not still require compact",
+  );
+  assert.match(
+    menus,
+    /body\[data-shape="tall"\]\) #menu-buttons \{[^}]*overflow-y:\s*auto/,
+    "the leftover column itself scrolls — #overlay overflow is a dead letter",
+  );
+});
+
 test("title overlay columns grow with --vwz instead of a pixel cap", () => {
   const menus = read("css/menus.css");
   const responsive = read("css/responsive.css");

@@ -14,7 +14,8 @@
  *     garage #cs-tabs           contain        pan-x          hidden
  *     data hub .dh-tabs         MISSING        MISSING        hidden
  *     tuner .lt-tabs (compact)  contain        pan-x          hidden
- *     tuner .lt-tabs (flying)   MISSING        pan-x          MISSING
+ *     tuner .lt-tabs (narrow)   contain        pan-x          hidden
+ *     tuner .lt-tabs (flying)   contain        pan-x          hidden
  *
  * Neither omission is cosmetic. Without `touch-action: pan-x` the browser may
  * hand a diagonal drag to an ancestor, so the strip feels dead or the panel

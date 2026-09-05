@@ -181,7 +181,22 @@
   // Exposed so same-origin try/catch (e.g. the game loop) can report the REAL
   // error object — window.onerror censors cross-origin script errors to a bare
   // "Script error." with no message/stack; a caught error keeps full detail.
+  // THE RING __apex.diag() READS. It had no writer anywhere in the tree — one
+  // read in js/agent/apex.js and nothing else — so `errors: []` came back empty
+  // from a page that was on fire, and a field report could not tell a JS throw
+  // from a jetsam kill from a self-inflicted reload. Written here because this
+  // handler already holds the error object; kept to 40 and stringified on the
+  // way in so the ring cannot retain a live DOM node or a whole scope.
+  window.__apexErrors = window.__apexErrors || [];
+  function recordError(kind, msg, detail) {
+    try {
+      window.__apexErrors.push({ t: Date.now(), kind: kind, msg: String(msg || "").slice(0, 400),
+                                 detail: String(detail || "").slice(0, 800) });
+      if (window.__apexErrors.length > 40) window.__apexErrors.shift();
+    } catch (_) { /* never let reporting be the thing that throws */ }
+  }
   window.__apexReportError = function (where, err) {
+    recordError("caught", "Caught @ " + where + ": " + ((err && (err.message || err)) || "unknown"), err && err.stack);
     show("Caught @ " + where, (err && (err.message || err)) || "unknown", err && err.stack);
   };
   window.addEventListener("error", function (e) {
@@ -192,11 +207,20 @@
     // (e.g. when the data-hub telemetry popup sizes its canvases) is far worse
     // than the thing it is reporting.
     var m = (e && e.message) || "";
-    if (m.indexOf("ResizeObserver loop") !== -1) return;
+    // Still not an overlay — it is benign as a CRASH signal. It is not benign as
+    // a COST signal, and swallowing it silently is why nobody could see how
+    // often it fires on a real phone. Counted, and surfaced in __apex.diag().
+    if (m.indexOf("ResizeObserver loop") !== -1) {
+      window.__apexROLoops = (window.__apexROLoops || 0) + 1;
+      return;
+    }
+    recordError("error", m || String(e), (e && e.error && e.error.stack) || (e && e.filename + ":" + e.lineno + ":" + e.colno));
     show("JS error", m || String(e), (e && e.error && e.error.stack) || (e && e.filename + ":" + e.lineno + ":" + e.colno));
   });
   window.addEventListener("unhandledrejection", function (e) {
-    var r = e && e.reason; show("Promise rejection", (r && (r.message || r)) || "unknown", r && r.stack);
+    var r = e && e.reason;
+    recordError("rejection", (r && (r.message || r)) || "unknown", r && r.stack);
+    show("Promise rejection", (r && (r.message || r)) || "unknown", r && r.stack);
   });
 
   // ── A SCRIPT TAG THAT NEVER LOADED IS NOT A JS ERROR: IT IS A BROKEN INSTALL ─
@@ -227,6 +251,25 @@
     var el = e && e.target;
     if (!el || el.tagName !== "SCRIPT" || !el.src) return;   // not a resource error
     if (el.src.indexOf(location.origin) !== 0) return;       // our own files only
+    // ONLY THE SHELL'S OWN TAGS. This repair exists for a &lt;script&gt; the SHELL
+    // names that the CDN edge has not published yet — a broken install, where a
+    // reload with the caches swept is the only way out. js/game.js injects ~64
+    // MORE files at runtime (lighting presets on every boot, a scenery closure
+    // per circuit, the deferred backends, the QR decoder) and those resolve to
+    // absolute same-origin URLs too, so they passed both guards above and took
+    // the same branch: one flaky fetch on a mobile radio deleted EVERY service
+    // worker cache and reloaded the page, mid-menu or mid-race.
+    //
+    // It was also unbounded. The sessionStorage one-shot is cleared by every
+    // clean `load` (below), and a lazy inject fails long AFTER load — so the
+    // next failure reloads again, and again. On iOS Private Browsing the quota
+    // is zero, setItem throws into an empty catch, and the bound never existed
+    // at all.
+    //
+    // js/game.js's injector already treats a load error as success ("a missing
+    // global is already the fallback") and every lazy module has a documented
+    // degradation path. Reloading stepped on all of it.
+    if (el.dataset && el.dataset.apexLazy === "1") { recordError("lazy-script", el.src, "injected at runtime; graceful fallback applies"); return; }
     scriptFailed = true;
     var already;
     try { already = sessionStorage.getItem(RETRY_KEY); } catch (_) { already = "1"; }
@@ -426,7 +469,7 @@
       <nav id="pm-settings-index" class="pm-doors" aria-label="Settings">
         <button id="pm-open-controls" type="button">CONTROLS&hellip;</button>
         <button id="pm-open-display" type="button">DISPLAY&hellip;</button>
-        <button id="pm-advanced">ADVANCED STEERING&hellip;</button>
+        <button id="pm-advanced">STEERING&hellip;</button>
         <button id="pm-lighting">LIGHTING TUNER&hellip;</button>
         <button id="pm-camtune">CAMERA TUNER&hellip;</button>
         <button id="pm-audio">MUSIC &amp; SOUND&hellip;</button>
@@ -1605,7 +1648,7 @@
       <dt>&#9881; SETTINGS</dt>
       <dd>Pause (<span class="key">P</span> or the <span class="key">&#10074;&#10074;</span> button; <span class="key">Esc</span> only if nothing is open) then <span class="key">SETTINGS</span> for everything below &mdash; steering, gears, lighting, sound, music and HUD. <span class="key">BACK</span> returns to the pause screen</dd>
       <dt>&#127918; CHANGE STEERING</dt>
-      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles tilt / buttons / touch on a phone. A keyboard and a plugged-in pad always work on desktop. <span class="key">ADVANCED STEERING</span> opens STEERING &amp; ASSISTS — presets, driving help, the racing line, <span class="key">ADAPTIVE BUTTONS</span> (keys and on-screen arrows only; 1 is OFF, default ON) and <span class="key">BRAKE CUE</span> (1 is OFF — a tick, never a takeover). The ADVANCED disclosure is lock, speed steer and the rest. Everything applies instantly and is saved</dd>
+      <dd>In <span class="key">SETTINGS</span>: <span class="key">STEER</span> cycles tilt / buttons / touch on a phone. A keyboard and a plugged-in pad always work on desktop. <span class="key">STEERING</span> opens STEERING &amp; ASSISTS — presets, driving help, the racing line, <span class="key">ADAPTIVE BUTTONS</span> (keys and on-screen arrows only; 1 is OFF, default ON) and <span class="key">BRAKE CUE</span> (1 is OFF — a tick, never a takeover). The ADVANCED disclosure is lock, speed steer and the rest. Everything applies instantly and is saved</dd>
       <dt>&#128161; LIGHTING</dt>
       <dd>In <span class="key">SETTINGS</span> tap <span class="key">LIGHTING TUNER</span> for a live tuner &mdash; time of day, exposure, colour grade and more, with a real-time preview. Values are saved per track / time / weather</dd>
       <dt>&#128266; SOUND &amp; HUD</dt>
@@ -1637,7 +1680,7 @@
         anything you can send a message on will do. In the same room, scan the QR
         code instead. Both of you need the same version of the game</dd>
     </dl>
-    <div class="sheet-foot"><button id="htp-close" autofocus class="bigbtn alt">BACK</button></div>
+    <div class="sheet-foot"><button id="htp-close" autofocus class="bigbtn alt">CLOSE</button></div>
   </div>
 </dialog>
 
@@ -1683,7 +1726,7 @@
       <button id="sp-refresh2" class="adv-more-btn" type="button">&#8635; REFRESH DEVICES</button>
       <p id="sp-status2" class="as-note"></p>
     </div>
-    <div class="sheet-foot"><button id="sp-close" autofocus class="bigbtn alt">BACK</button></div>
+    <div class="sheet-foot"><button id="sp-close" autofocus class="bigbtn alt">CLOSE</button></div>
   </div>
 </dialog>
 

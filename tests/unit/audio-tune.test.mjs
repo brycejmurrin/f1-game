@@ -47,12 +47,19 @@ function param(v) {
   };
   return p;
 }
+// `live` makes a LEAK observable: a node enters on creation and leaves only on
+// disconnect(), which is the Web Audio contract that matters — a stopped source
+// is collected on its own, but a Gain/Biquad still wired into the bus keeps
+// RENDERING until something disconnects it.
+const live = new Set();
 function node(kind, counts) {
   if (counts) counts[kind] = (counts[kind] || 0) + 1;
-  return { kind, connect: (t) => t, disconnect() {}, start() {}, stop() {}, type: "", loop: false,
+  const self = { kind, connect: (t) => t, disconnect() { live.delete(self); }, start() {}, stop() {}, type: "", loop: false,
            loopStart: 0, loopEnd: 0, buffer: null, onended: null, fftSize: 0, frequencyBinCount: 0,
            getFloatFrequencyData() {}, gain: param(1), frequency: param(440), detune: param(0),
            Q: param(1), playbackRate: param(1) };
+  live.add(self);
+  return self;
 }
 function sampleBuf(seconds, sr) {
   const len = Math.floor(seconds * sr), d = new Float32Array(len);
@@ -60,9 +67,12 @@ function sampleBuf(seconds, sr) {
   return { sampleRate: sr, length: len, duration: seconds, numberOfChannels: 1, getChannelData: () => d };
 }
 
-function boot() {
+const pendingTimers = [];
+function boot(opts) {
   const held = [];
   const counts = {};
+  live.clear();
+  pendingTimers.length = 0;
   const ctx = {
     currentTime: 0, state: "running", sampleRate: SR, destination: node("dest", counts),
     createGain: () => node("gain", counts), createBiquadFilter: () => node("biquad", counts),
@@ -77,11 +87,17 @@ function boot() {
     resume: () => Promise.resolve(), close() {},
   };
   const sb = {
+    // GLX is what decides `mobileTier`; the engine reads it lazily at
+    // startEngine. Absent by default (desktop); mobileEngine() supplies it.
+    GLX: opts && opts.mobile ? { mobileTier: true } : undefined,
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error,
     parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     document: { addEventListener() {}, hidden: false }, addEventListener() {}, removeEventListener() {},
-    setTimeout: () => 0, clearTimeout() {}, navigator: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    // stopEngine defers its disconnects behind setTimeout; a harness that
+    // swallows them can never see a leak, so they are queued and fired by hand.
+    setTimeout: (fn) => { pendingTimers.push(fn); return pendingTimers.length; },
+    clearTimeout() {}, navigator: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     AudioContext: function () { return ctx; },
     fetch: () => new Promise((res) => held.push(() => res({ arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }))),
   };
@@ -95,7 +111,11 @@ function boot() {
   // and then silence forever. Tests step it by hand.
   const ctxTime = (dt) => { ctx.currentTime += dt; };
   const release = async () => { for (const r of held.splice(0)) r(); for (let i = 0; i < 8; i++) await new Promise((r) => setImmediate(r)); };
-  return { GameAudio, release, counts, ctxTime };
+  const flushTimers = () => { while (pendingTimers.length) { const fn = pendingTimers.shift(); try { fn(); } catch (e) { /* torn down */ } } };
+  // Sources are excluded: a STOPPED BufferSource/Oscillator is collected without
+  // a disconnect, so counting them would report a leak this file cannot fix.
+  const liveNodes = () => [...live].filter((n) => n.kind !== "src" && n.kind !== "osc").length;
+  return { GameAudio, release, counts, ctxTime, flushTimers, liveNodes, ctx };
 }
 
 // The sample core is the SHIPPED path, so every invariant below is measured on
@@ -588,4 +608,82 @@ test("four fallback voices are four cars as well", () => {
   A.setRivals([0, 1, 2, 3].map((i) => ({ lat: 0, arc: 4 + i * 4, rev: 0.6, approach: 0 })));
   const hz = A.rivalState().map((v) => v.hz);
   assert.equal(new Set(hz).size, 4, `four fallback voices share a pitch: ${hz.join(", ")}`);
+});
+
+test("pausing and resuming does not strand nodes that keep rendering", async () => {
+  // setPaused() in js/game.js stops the engine on pause and starts it on resume, so a long
+  // session runs this cycle many times. engGainIdle and limGain were NULLED but
+  // never DISCONNECTED, stranding two GainNodes per cycle — and a Gain still
+  // wired into the bus keeps RENDERING (Web Audio contract), so this cost CPU as
+  // well as memory. Measured at +2/cycle across EVERY point in engine.js's
+  // history, so it predated the rival voices rather than arriving with them.
+  const { GameAudio, release, flushTimers, liveNodes, ctx } = boot();
+  GameAudio.init();
+  await release();
+  GameAudio.startEngine();
+  assert.equal(GameAudio.debug().usingSamples, true, "precondition: the shipped core");
+
+  const marks = [];
+  for (let i = 0; i < 6; i++) {
+    GameAudio.stopEngine();
+    ctx.currentTime += 1;
+    flushTimers();               // stopEngine defers its disconnects
+    GameAudio.startEngine();
+    marks.push(liveNodes());
+  }
+  assert.deepEqual(new Set(marks).size, 1,
+    `the live node count must not grow across pause/resume: ${marks.join(" -> ")}`);
+});
+
+test("the same holds on the oscillator fallback, which builds a bigger graph", async () => {
+  const { GameAudio, flushTimers, liveNodes, ctx } = boot();
+  GameAudio.init();                       // never release(): the synth path
+  GameAudio.startEngine();
+  assert.equal(GameAudio.debug().usingSamples, false, "precondition: the fallback");
+  const marks = [];
+  for (let i = 0; i < 6; i++) {
+    GameAudio.stopEngine();
+    ctx.currentTime += 1;
+    flushTimers();
+    GameAudio.startEngine();
+    marks.push(liveNodes());
+  }
+  assert.deepEqual(new Set(marks).size, 1,
+    `fallback live node count grew across pause/resume: ${marks.join(" -> ")}`);
+});
+
+test("a phone gets a cheaper graph: no convolver, half the rival voices", async () => {
+  // Every other pool here is mobile-tiered; the 2026-09-04 audio was not, and a
+  // ~1.5 s stereo ConvolverNode fed by the engine plus four looping rival voices
+  // is the most expensive thing this file asks for. Reported as an iPhone that
+  // had been fine that morning crashing — CPU contention, so it left no OOM
+  // strike and no context-loss marker.
+  const { GameAudio: A, release, counts } = boot({ mobile: true });
+  A.init();
+  await release();
+  A.startEngine();
+  assert.equal(A.debug().usingSamples, true, "precondition: the sample core");
+  assert.equal(counts.convolver || 0, 0, "a phone built a ConvolverNode");
+  assert.equal(A.rivalState().length, 2, "a phone built more than two rival voices");
+  assert.equal(A.venue().level, 0, "venue() must report OFF rather than lie about a reverb that is not there");
+
+  // ...and the desktop budget is untouched.
+  const D = await sampleEngine();
+  assert.equal(D.rivalState().length, 4, "desktop lost a rival voice");
+  assert.ok(D.venue().level >= 0, "desktop still has a venue send");
+});
+
+test("two rival voices still give a LEFT and a RIGHT", async () => {
+  // Halving the pool must not cost the thing the pool is FOR: a car alongside
+  // has to land on the correct side, or the cue is worse than absent.
+  const { GameAudio: A, release } = boot({ mobile: true });
+  A.init(); await release(); A.startEngine();
+  A.setRivals([
+    { lat: -4, arc: 1, rev: 0.7, approach: 0 },   // hard left
+    { lat: 4, arc: 1, rev: 0.7, approach: 0 },    // hard right
+  ]);
+  const [l, r] = A.rivalState();
+  assert.ok(l.pan < -0.3, `left-hand car panned ${l.pan}`);
+  assert.ok(r.pan > 0.3, `right-hand car panned ${r.pan}`);
+  assert.ok(l.gain > 0 && r.gain > 0, "both alongside cars must be audible");
 });

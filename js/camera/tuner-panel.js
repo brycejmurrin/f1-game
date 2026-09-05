@@ -111,7 +111,7 @@ function updateCtProfileLabel() {
   const modes = $("ct-modes");
   if (modes) for (const b of modes.children) {
     const on = b.dataset.mode === curMode();
-    b.classList.toggle("on", on);
+    b.classList.toggle("active", on);
     b.classList.toggle("tuned", CamTune.count(b.dataset.mode) > 0);
     // These chips carry role="tab" but never announced their selected state —
     // the active camera was invisible to assistive tech (the lighting tuner

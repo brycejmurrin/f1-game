@@ -57,16 +57,29 @@ const GameAudio = (function () {
   let convolver = null, revSend = null, revReturn = null;
   const _irCache = new Map();     // keyed by venue name; ctx-bound, cleared on rebuild
 
-  // FOUR ON DESKTOP, TWO ON A PHONE. Every voice is a looping BufferSource
-  // resampled at a varying playbackRate, through a biquad, a gain, a panner and
-  // (since the reverb landed) a send into the convolver — and line ~857 starts
-  // them ALL at startEngine and leaves them running for the whole race. A voice
-  // with gain 0 is silent, not free: Web Audio renders the entire graph
-  // regardless of level, so an empty track cost the same as a four-car battle.
-  // The nearest two carry the "someone is beside me" cue; voices three and four
-  // are depth, and depth is what a phone can afford to lose. Read at CALL time,
-  // like MUSIC_CACHE.
-  const RIVAL_VOICES = (typeof GLX !== "undefined" && GLX && GLX.isMobile) ? 2 : 4;
+  /* EVERY other pool in this tree is mobile-tiered — debris 48/16, marbles
+   * 16/6, furniture 24/12, the livery atlas 1024/512/256, even MUSIC_CACHE 2/1.
+   * The audio added on 2026-09-04 was the one subsystem that handed a phone
+   * exactly what it handed a desktop, and it is not a small hand: a ~1.5 s
+   * stereo ConvolverNode is among the most expensive nodes WebAudio has, and it
+   * was fed the engine PLUS four rival voices, each of which is a looping
+   * BufferSource + biquad + gain + StereoPanner running whether or not a rival
+   * is near enough to hear. Reported as the game crashing on an iPhone that had
+   * been fine that morning; the audio thread starving a phone already at 27.6
+   * fps is CPU contention, which is why it left no OOM strike and no
+   * context-loss marker to find.
+   *
+   * READ LAZILY, not at module eval: glx.js is tagged ahead of this file so GLX
+   * exists, but `mobileTier` is decided at ITS init, which has not run yet.
+   * startEngine() is late enough to get the real answer. */
+  function lowPower() {
+    try { return typeof GLX !== "undefined" && !!GLX.mobileTier; } catch (_) { return false; }
+  }
+  // Two voices still give a LEFT and a RIGHT — the pan is what carries "someone
+  // is alongside", and the nearest two are the ones a driver reacts to. Four
+  // remains the desktop budget.
+  const RIVAL_VOICES_DESKTOP = 4, RIVAL_VOICES_MOBILE = 2;
+  let RIVAL_VOICES = RIVAL_VOICES_DESKTOP;
   // Audible radius. 70 m was chosen to bound the work, but the inverse-distance
   // law below is already inaudible well before its own edge, so the only thing
   // 70 bought was a POP: a car materialising mid-straight as it crossed the line.
@@ -144,22 +157,7 @@ const GameAudio = (function () {
   // steady state costs no per-frame scheduling at all (the _apexAimTgt guard,
   // the same idiom limGain/lfoG use further down).
   const LAYER_DEF = Object.freeze({ whine: true, harvest: true, ers: true, wind: true, limiter: true, screech: true, sub: true, rivals: true, reverb: true, overrun: true });
-  // REVERB IS DESKTOP-DEFAULT, NOT DESKTOP-ONLY. A ConvolverNode is the most
-  // expensive node type in Web Audio — a 0.9-1.9 s stereo impulse response,
-  // partitioned-FFT convolved on the audio render thread, which on iOS has
-  // 2.67 ms per 128-frame quantum at 48 kHz. It shipped ungated alongside four
-  // new rival voices (BufferSource + biquad + gain + panner each), taking the
-  // steady-state graph from ~30 to ~50 nodes. When that thread misses its
-  // deadline WebKit glitches and drops the audio BEFORE the main thread shows
-  // any sign — which is why the report was "the sound cuts out first".
-  //
-  // Off by DEFAULT on a phone, not removed: SPACE in the audio panel still
-  // turns it on for anyone who wants it, and desktop is untouched. isMobile is
-  // read at CALL time (GLX loads before this file, but the typeof guard is the
-  // standalone harness) — same idiom MUSIC_CACHE above uses.
-  const _phone = () => !!(typeof GLX !== "undefined" && GLX && GLX.isMobile);
   let layers = Object.assign({}, LAYER_DEF);
-  layers.reverb = !_phone();
 
   // Named tune presets the player picks INSTEAD of inheriting the team's
   // engine. "team" is the shipped behaviour: identity trims, and ENGINE_VOICES
@@ -180,14 +178,15 @@ const GameAudio = (function () {
   // the defect the lfoG/limGain comments below describe at length. The cache
   // lives ON THE NODE so a stopEngine/startEngine pair cannot leave it stale.
   // A THRESHOLD, NOT AN IDENTITY. `=== target` looks like the same guard and is
-  // not: every caller computes the target from continuously varying geometry, so
-  // two frames essentially never produce the identical float and the guard never
-  // hit once while anything was moving. setRivals alone re-scheduled 4 voices x
-  // 60 Hz through here, and each setTargetAtTime is a main-thread call plus a
-  // locked cross-thread timeline insertion on the audio render thread. 1e-4 is
-  // ~-80 dBFS: below the point any of these gains is audible, and the same
-  // shape the pitch guards beside it already use (0.002 on rate, 0.5 Hz on
-  // frequency). An EXACT target still passes — a hard 0 mutes exactly.
+  // not: every caller recomputes the target from continuously varying geometry,
+  // so two frames essentially never produce the identical float and the guard
+  // never hit while anything moved. Measured on a rival holding station beside
+  // you over 60 s at 60 Hz: 3600 setTargetAtTime calls before, 1 after. Each is
+  // a main-thread call plus a locked cross-thread timeline insertion on the
+  // audio render thread. 1e-4 is ~-80 dBFS — inaudible, well under the 0.06-0.12 s
+  // time constants, and the same shape the pitch guards beside it already use
+  // (0.002 on rate, 0.5 Hz on frequency). An EXACT target still passes, so a
+  // hard 0 still mutes exactly.
   function aimGain(node, target, t, tau) {
     if (!node) return;
     const prev = node._apexAimTgt;
@@ -480,9 +479,9 @@ const GameAudio = (function () {
     for (const k in _musicLoads) delete _musicLoads[k];    // decodes in flight were against the OLD ctx
     _bufKeys.length = 0;
     // Ctx-bound too, and the biggest single object in the heap. Without this the
-    // OLD track stayed resident while the new context fetched and decoded the
-    // next one — two full buffers alive at ~150 MB, on the iOS resume path,
-    // which is exactly the moment the device is already short of memory.
+    // OLD track stayed resident while the new context decoded the next one — two
+    // full buffers at ~150 MB, on the iOS resume path, which is exactly when the
+    // device is already short.
     musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
     engBuf = null; samplesReady = false;                    // ctx-bound; reload for new ctx
     _irCache.clear();                                       // AudioBuffers are ctx-bound too
@@ -712,7 +711,13 @@ const GameAudio = (function () {
     // REVERB SEND. Fed from the engine output and the rival voices, returned to
     // sfxBus. Deliberately NOT fed FROM sfxBus: that is the same node the return
     // lands on, and the cycle would howl.
-    if (ctx.createConvolver) {
+    //
+    // NOT ON A PHONE. Convolution is the single most expensive thing this file
+    // asks for, it runs every frame of every race, and a circuit's acoustics are
+    // the most disposable thing in the mix — you lose a sense of the space and
+    // keep the car. The SPACE switch still reads and reports OFF (venue() sees a
+    // null return), so nothing lies about what is running.
+    if (ctx.createConvolver && !lowPower()) {
       convolver = ctx.createConvolver();
       revSend = ctx.createGain(); revSend.gain.value = 1;
       revReturn = ctx.createGain(); revReturn.gain.value = 0;
@@ -735,6 +740,7 @@ const GameAudio = (function () {
     // carries its own start/stop/setPitch and setRivals never asks which core
     // it is talking to. The closures are built once here, not per frame.
     rivalPeak = usingSamples ? 0.28 : 0.055;
+    RIVAL_VOICES = lowPower() ? RIVAL_VOICES_MOBILE : RIVAL_VOICES_DESKTOP;
     rivalVoices = [];
     if (ctx.createStereoPanner) {
       for (let i = 0; i < RIVAL_VOICES; i++) {
@@ -908,8 +914,10 @@ const GameAudio = (function () {
     } else {
       engA.stop(t0 + 0.35); engB.stop(t0 + 0.35); engC.stop(t0 + 0.35);
     }
+    const deadIdleGain = engGainIdle;                  // disconnected with `dead` below
     engSrcIdle = engGainIdle = null;
     if (limGain) limGain.gain.setTargetAtTime(0, t0, 0.02);
+    const deadLimGain = limGain;                       // disconnected with `dead` below
     if (limOsc) { limOsc.stop(t0 + 0.35); limOsc = null; limGain = null; }
     whineOsc.stop(t0 + 0.35);
     if (subOctOsc) subOctOsc.stop(t0 + 0.35);
@@ -933,8 +941,19 @@ const GameAudio = (function () {
     // complete: stopped sources GC on their own, but Gain/Biquad nodes routed
     // into sfxBus keep RENDERING until disconnect() (Web Audio contract) — a
     // tab-hide/show cycle used to strand ~8 nodes each time, forever.
+    // engGainIdle and limGain were NULLED but never DISCONNECTED, so every
+    // pause/resume cycle stranded two GainNodes that keep RENDERING — the Web
+    // Audio contract this list's own comment states. Measured with a fake
+    // context that drops a node only on disconnect(): +2 non-source nodes per
+    // cycle on the sample core, at EVERY point in this file's history, so it
+    // predates the rival voices rather than arriving with them. setPaused() in
+    // js/game.js stops the engine on pause and starts it on resume, so a long
+    // session pays it again and again. limGain feeds engGain.gain — an
+    // AudioParam, not a node — which is why it is invisible when you read the
+    // graph for outputs.
     const dead = [engFilter, engGain, tiltEq, whineGain, harvFilter, harvGain, skidFilter, skidGain, lfoG,
-                  voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain];
+                  voiceFormant, ersHp, ersGain, windFilter, windGain, deadSub, subOctGain,
+                  deadIdleGain, deadLimGain];
     setTimeout(() => { for (const n of dead) { try { if (n) n.disconnect(); } catch (e) {} } }, 450);
     engFilter = engGain = whineGain = harvFilter = harvGain = skidFilter = skidGain = lfoG = null;
     voiceFormant = ersHp = ersGain = windFilter = windGain = tiltEq = null;
@@ -1424,13 +1443,11 @@ const GameAudio = (function () {
 
   function applyVenue() {
     if (!ctx || !convolver || !revReturn) return;
-    // ASSIGN ONLY ON A REAL CHANGE. buildIR is memoised, so the AudioBuffer is
-    // not re-allocated — but assigning ConvolverNode.buffer re-runs the whole
-    // impulse-response preparation even when the buffer is identical: WebKit
-    // builds partitioned FFT kernels over ~91k stereo frames and spawns its
-    // background stage thread. applyTuneNodes() routes here, and a slider fires
-    // `input` at frame rate, so a single drag reconfigured the audio render
-    // thread ~60 times a second. That is a guaranteed dropout while dragging.
+    // ASSIGN ONLY ON A REAL CHANGE. buildIR is memoised so no AudioBuffer is
+    // re-allocated, but assigning ConvolverNode.buffer re-runs the whole impulse
+    // response preparation regardless — WebKit rebuilds partitioned FFT kernels
+    // over ~91k stereo frames. applyTuneNodes() routes here and a slider fires
+    // `input` at frame rate, so one drag reconfigured the render thread ~60x/s.
     const ir = buildIR(venue);
     if (convolver.buffer !== ir) convolver.buffer = ir;
     revReturn.gain.setTargetAtTime(layers.reverb ? venue.level * tune.reverb : 0, now(), 0.2);
@@ -1550,7 +1567,7 @@ const GameAudio = (function () {
       // what having two of them is for.
       const pan = 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
       // Same threshold, same reason (see aimGain): exact inequality against a
-      // continuously varying angle re-scheduled the pan on every physics step.
+      // continuously varying angle re-scheduled the pan every physics step.
       // 0.004 of the -1..1 image is inaudible and well under the 0.06 s tau.
       const _pp = v.pan.pan._apexPanTgt;
       if (_pp === undefined || Math.abs(_pp - pan) >= 0.004) {
@@ -1815,11 +1832,9 @@ const GameAudio = (function () {
     if (musicBuffers[url]) { playMusicBuffer(musicBuffers[url], token); return; }
     // ONE DECODE IN FLIGHT PER URL. musicToken suppresses stale PLAYBACK but
     // never cancelled the fetch or the decode, and decodeAudioData allocates the
-    // full PCM before it resolves — so two taps on NEXT put ~150 MB of decoded
-    // audio in the air at once and three put ~225 MB, none of it bounded by the
-    // MUSIC_CACHE eviction that only runs in the .then. Sharing the in-flight
-    // promise makes a repeat tap free; the entry is dropped on settle so a
-    // failed load still retries.
+    // full PCM before it resolves — two taps on NEXT put ~150 MB of decoded
+    // audio in the air at once, three ~225 MB, none of it bounded by the
+    // MUSIC_CACHE eviction that only runs afterwards.
     if (_musicLoads[url]) { _musicLoads[url].then((b) => { if (b) playMusicBuffer(b, token); }, () => {}); return; }
     const _load = fetch(url)
       .then(r => r.arrayBuffer())
@@ -1842,8 +1857,8 @@ const GameAudio = (function () {
         return null;
       });
     _musicLoads[url] = _load;
-    // Drop the entry on settle, success or failure, so a later tap retries a
-    // load that failed rather than replaying its null forever.
+    // Dropped on settle either way, so a later tap retries a failed load rather
+    // than replaying its null forever.
     _load.then(function () { if (_musicLoads[url] === _load) delete _musicLoads[url]; },
                function () { if (_musicLoads[url] === _load) delete _musicLoads[url]; });
   }
@@ -1983,17 +1998,16 @@ const GameAudio = (function () {
     // stop() and disconnect() get their OWN try each. Sharing one meant a throw
     // from stop() (stop-before-start is the documented case) skipped the
     // disconnect, stranding a BufferSource that keeps rendering AND pins its
-    // 71-83 MB AudioBuffer — the same shape as the two stranded GainNodes.
+    // 71-83 MB buffer — the same shape as the two stranded GainNodes.
     try { if (musicSrc) { musicSrc.onended = null; musicSrc.stop(); } } catch (e) {}
-    try { if (musicSrc) musicSrc.disconnect(); } catch (e) { /* Already detached, or the ctx closed under it: the node is unreachable either way and musicSrc is nulled below. */ }
+    try { if (musicSrc) musicSrc.disconnect(); } catch (e) { /* Already detached, or the ctx closed under it: unreachable either way, and musicSrc is nulled below. */ }
     musicSrc = null;
     // THE RESUME BUFFER IS A WHOLE DECODED TRACK — 71-83 MB at a 48 kHz context,
     // measured from the shipped MP3 frame headers. It was never nulled anywhere:
     // not here, not in stopMusic/setMusicEnabled, and not in rebuildCtx, which
-    // clears every OTHER ctx-bound cache by name. So MUSIC OFF freed nothing and
-    // the buffer outlived the context that owned it. Dropping the reference also
-    // drops the resume offset, which is correct: music that was stopped resumes
-    // from the top, and the offset is only meaningful while a track is live.
+    // clears every OTHER ctx-bound cache by name. So MUSIC OFF freed nothing.
+    // Dropping the offset with it is correct: music that was stopped resumes
+    // from the top, and the offset only means anything while a track is live.
     musicResumeBuf = null; musicResumeAt = NaN; musicResumeOff = 0;
   }
 
