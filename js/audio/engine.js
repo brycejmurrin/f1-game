@@ -57,7 +57,16 @@ const GameAudio = (function () {
   let convolver = null, revSend = null, revReturn = null;
   const _irCache = new Map();     // keyed by venue name; ctx-bound, cleared on rebuild
 
-  const RIVAL_VOICES = 4;
+  // FOUR ON DESKTOP, TWO ON A PHONE. Every voice is a looping BufferSource
+  // resampled at a varying playbackRate, through a biquad, a gain, a panner and
+  // (since the reverb landed) a send into the convolver — and line ~857 starts
+  // them ALL at startEngine and leaves them running for the whole race. A voice
+  // with gain 0 is silent, not free: Web Audio renders the entire graph
+  // regardless of level, so an empty track cost the same as a four-car battle.
+  // The nearest two carry the "someone is beside me" cue; voices three and four
+  // are depth, and depth is what a phone can afford to lose. Read at CALL time,
+  // like MUSIC_CACHE.
+  const RIVAL_VOICES = (typeof GLX !== "undefined" && GLX && GLX.isMobile) ? 2 : 4;
   // Audible radius. 70 m was chosen to bound the work, but the inverse-distance
   // law below is already inaudible well before its own edge, so the only thing
   // 70 bought was a POP: a car materialising mid-straight as it crossed the line.
@@ -170,8 +179,19 @@ const GameAudio = (function () {
   // cost a main-thread call plus a cross-thread timeline insertion per frame —
   // the defect the lfoG/limGain comments below describe at length. The cache
   // lives ON THE NODE so a stopEngine/startEngine pair cannot leave it stale.
+  // A THRESHOLD, NOT AN IDENTITY. `=== target` looks like the same guard and is
+  // not: every caller computes the target from continuously varying geometry, so
+  // two frames essentially never produce the identical float and the guard never
+  // hit once while anything was moving. setRivals alone re-scheduled 4 voices x
+  // 60 Hz through here, and each setTargetAtTime is a main-thread call plus a
+  // locked cross-thread timeline insertion on the audio render thread. 1e-4 is
+  // ~-80 dBFS: below the point any of these gains is audible, and the same
+  // shape the pitch guards beside it already use (0.002 on rate, 0.5 Hz on
+  // frequency). An EXACT target still passes — a hard 0 mutes exactly.
   function aimGain(node, target, t, tau) {
-    if (!node || node._apexAimTgt === target) return;
+    if (!node) return;
+    const prev = node._apexAimTgt;
+    if (prev === target || (prev !== undefined && Math.abs(prev - target) < 1e-4)) return;
     node.gain.setTargetAtTime(target, t, tau);
     node._apexAimTgt = target;
   }
@@ -1529,7 +1549,13 @@ const GameAudio = (function () {
       // than beside you. 0.85 keeps a little of it in the far ear, which is
       // what having two of them is for.
       const pan = 0.85 * Math.max(-1, Math.min(1, lat / Math.max(3, Math.abs(arc) + 3)));
-      if (v.pan.pan._apexPanTgt !== pan) { v.pan.pan.setTargetAtTime(pan, t, 0.06); v.pan.pan._apexPanTgt = pan; }
+      // Same threshold, same reason (see aimGain): exact inequality against a
+      // continuously varying angle re-scheduled the pan on every physics step.
+      // 0.004 of the -1..1 image is inaudible and well under the 0.06 s tau.
+      const _pp = v.pan.pan._apexPanTgt;
+      if (_pp === undefined || Math.abs(_pp - pan) >= 0.004) {
+        v.pan.pan.setTargetAtTime(pan, t, 0.06); v.pan.pan._apexPanTgt = pan;
+      }
 
       // LEVEL. The first cut put a rival 5 m away at gain 0.040 against the
       // player's own engine at ~0.54 — 22 dB down, which is not "present but
