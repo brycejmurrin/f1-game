@@ -144,7 +144,13 @@ const ALLOWED = [
   },
   {
     file: "js/game.js", expr: "c.speed < 5",
-    code: "(c.speed < 5 && raceT > 2 && (c.contactT || 0) === 0 && !unstuckActive);",
+    code: "(c.speed < 5 && raceT > 2 && !unstuckActive);",
+    // The `(c.contactT || 0) === 0` clause that used to sit in this conjunction
+    // was a VETO: an AI wedged against another car — the commonest way to be
+    // genuinely stuck — was the one case that could never be rescued, so the
+    // pair stayed welded for the rest of the race. Contact is now a patience
+    // knob on the delay instead (AiDrive.aiRescueDelay); the absolute-speed
+    // justification below is unchanged, because the threshold itself is.
     why: "AI standstill detector — exactly |REVERSE_MAX|, the absolute crawl bound",
   },
   // ── world-space visual emission ──

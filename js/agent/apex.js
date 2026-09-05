@@ -2288,7 +2288,7 @@ const api = {
     for (const c of G.cars) {
       c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
       c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
-      c.stuckT = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
+      c.stuckT = 0; c.letPassT = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
       delete c.vertLoad;

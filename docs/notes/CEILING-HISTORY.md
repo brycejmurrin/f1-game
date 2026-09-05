@@ -2010,3 +2010,24 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   the core behind it. Down, not up — the pitching core it A/B'd sounded like
   loud noise and is gone; see docs/DEBUG-HOOKS.md for the flatness measurement
   that condemned it and the centroid one that failed to.
+
+- `js/game.js` lines 9751 -> **9797**, codeLines 5398 -> **5417** (2026-09-04):
+  the AI-behind-a-stopped-player weld. Nineteen code lines for a defect the
+  owner reported as "they get stuck behind me and then collision is weird so I
+  can't move and they are dumb", which measured on monza as three mechanisms
+  locking each other: the queue cap `blocker.speed + clamp(gap - follow, -6, 8)`
+  goes NEGATIVE behind a car stopped inside the follow distance, so the AI was
+  commanded to a dead stop; `latFac` scales with speed, so a stopped car has
+  zero lateral authority and the dig-out pull it computed could never move it;
+  and `contactT` vetoed the AI rescue outright, so the state most in need of a
+  rescue was the one state that could never get one. Fifteen seconds after the
+  pair touched, dProg was still pinned at -4.75 m and the AI at 0.00 m/s. After:
+  it is clear of the player in about four seconds
+  (`tests/unit/ai-stuck-vm.test.mjs`, which measures both numbers).
+  The lines split roughly: two floors (queue crawl, unstuck lateral) 6, the
+  rescue conjunction 3, LET PASS 7, the `otPull` free-pace incentive wiring 3.
+  Most of the reasoning went to `js/physics/ai-drive.js` rather than here, which
+  is where the module split says decision knobs belong; game.js keeps the call
+  sites and the measurements. The cheaper alternative — reverting `isBoxed` and
+  the `contactT` arming so the pile-up dig-out stayed on longer — passed the
+  jam gate and left the reported defect in place, so it was not cheaper.

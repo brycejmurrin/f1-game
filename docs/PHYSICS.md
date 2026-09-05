@@ -334,7 +334,7 @@ it lands.
 | file | sites (symbol) | channel | why it never reaches the player with assists off |
 |---|---|---|---|
 | `js/game.js` | `updateCar` k/`c.kCur` cache | **assist-gated** | every player-path use is multiplied by `ROAD_FOLLOW` (def 0) or sits inside `if (raceLineAssist !== 0)` (def 0); `c.kCur` feeds only BodyAttitude (render-only) |
-| `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target | **AI-only** | each inside the `!c.human` arm |
+| `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target / overtake side pick | **AI-only** | each inside the `!c.human` arm. The side pick passes the SAME `kA` the lane target already sampled into `AiDrive.otSide`, which breaks an equal-room tie toward the inside of the next corner — the arc chooses which way an AI goes around another AI, and touches no player force path |
 | `js/game.js` | `updateCar` RACING LINE assist | **assist-gated** | inside `if (raceLineAssist !== 0)`; slider def 0 |
 | `js/game.js` | `coast` | **broadcast-only** | runs only on `c.finished` cars — driving control is already disconnected. Any future reuse of `coast()` on a live car is a BLOCKER |
 | `js/physics/aero-zones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |
