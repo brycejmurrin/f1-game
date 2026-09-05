@@ -518,9 +518,38 @@ window.SheetShape = (function () {
   function init() {
     Log.info("ui", "SheetShape.init");
     if (typeof ResizeObserver === "function") {
+      // BOX-KEY GUARD, the same one js/ui/select-screen.js's previewRo and
+      // detailRO already carry ("Without that guard this is a classic RO
+      // feedback loop", it says).
+      //
+      // classify() writes SEVEN layout-affecting things onto the element it was
+      // just told about — --sheet-scale, --sheet-eff-scale, data-fit, data-shape,
+      // data-density, data-rail, data-pair — and --sheet-scale IS that element's
+      // `zoom` (css/components.css). So every delivery changed the observed box
+      // and re-delivered. The per-threshold hysteresis cannot close the cycle,
+      // because the cycle HOPS between thresholds: a scale step moves the local
+      // box by tens of px, which is many times the 8 px pair band, which flips
+      // data-pair, which flips the 1-col/2-col grid, which moves the height,
+      // which flips data-density, which redefines --pair-compact, which flips
+      // data-pair back.
+      //
+      // "ResizeObserver loop completed with undelivered notifications" is firing
+      // on the live site, and index.html swallowed it as benign — which it is as
+      // a CRASH signal and is not as a COST signal: each delivery is a forced
+      // style recalc plus ~7 getComputedStyle over a document with 76 .sheet
+      // elements, and reclassify() walks all of them on every resize. That is
+      // the layout thrash that arrived with the menu and metrics work; both move
+      // sheet geometry, and an unguarded observer on a zoomed element turns any
+      // such change into a feedback loop.
+      //
+      // Rounded to whole px: sub-pixel jitter from a zoom step is exactly the
+      // noise this must not chase.
       ro = new ResizeObserver((entries) => {
         for (const e of entries) {
           const r = e.target.getBoundingClientRect();
+          const key = Math.round(r.width) + "x" + Math.round(r.height);
+          if (e.target._apexBox === key) continue;
+          e.target._apexBox = key;
           classify(e.target, r.width, r.height);
         }
       });
