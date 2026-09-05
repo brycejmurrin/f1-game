@@ -70,10 +70,23 @@ const GameAudio = (function () {
    * context-loss marker to find.
    *
    * READ LAZILY, not at module eval: glx.js is tagged ahead of this file so GLX
-   * exists, but `mobileTier` is decided at ITS init, which has not run yet.
-   * startEngine() is late enough to get the real answer. */
+   * exists, but `mobileTier` / `isMobile` are decided at ITS init.
+   * startEngine() is late enough to get the real answer.
+   *
+   * isMobile, not mobileTier: GRAPHICS: HIGH clears mobileTier so the GPU
+   * path can take desktop budgets, and that used to restore the stereo
+   * Convolver plus four looping rival voices on the same iPhone that
+   * crashed at 27 fps. Audio-thread CPU is not a quality upgrade. */
   function lowPower() {
-    try { return typeof GLX !== "undefined" && !!GLX.mobileTier; } catch (_) { return false; }
+    try {
+      if (typeof GLX === "undefined" || !GLX) return false;
+      return !!(GLX.isMobile || GLX.mobileTier);
+    } catch (_) { return false; }
+  }
+  function startVoice(v) {
+    if (!v || v._apexStarted || !v.start) return;
+    try { v.start(); v._apexStarted = true; }
+    catch (e) { Log.warn("audio", "rival start: " + ((e && e.message) || e)); }
   }
   // Two voices still give a LEFT and a RIGHT — the pan is what carries "someone
   // is alongside", and the nearest two are the ones a driver reacts to. Four
@@ -743,7 +756,10 @@ const GameAudio = (function () {
           // Start each voice a different fraction of the way into the loop, so
           // the four are decorrelated from the first sample rather than drifting
           // apart over seconds as their detune ratios do the work alone.
-          const off = li.start + (li.end - li.start) * (i / RIVAL_VOICES);
+          const span = Math.max(0, li.end - li.start);
+          const raw = li.start + span * (i / Math.max(1, RIVAL_VOICES));
+          const dur = engBuf.duration || 0;
+          const off = dur > 0 ? Math.max(0, Math.min(raw, dur * 0.99)) : 0;
           v.src = src;
           v.start = () => src.start(0, off);
           v.stop = (t) => src.stop(t);
@@ -860,11 +876,19 @@ const GameAudio = (function () {
     windGain.gain.value = 0;
     windSrc.connect(windFilter).connect(windGain).connect(sfxBus);
 
-    if (usingSamples) engSrcIdle.start(0, engSrcIdle.loopStart);
-    else { engA.start(); engB.start(); engC.start(); }
+    if (usingSamples) {
+      try {
+        const dur = engBuf && engBuf.duration || 0;
+        const off = dur > 0 ? Math.max(0, Math.min(engSrcIdle.loopStart, dur * 0.99)) : 0;
+        engSrcIdle.start(0, off);
+      } catch (e) { Log.warn("audio", "engine start: " + ((e && e.message) || e)); }
+    } else { engA.start(); engB.start(); engC.start(); }
     whineOsc.start();
     if (subOctOsc) subOctOsc.start();
-    for (const v of rivalVoices) v.start();
+    // Desktop starts the pool now so the first nearby car is already
+    // looping. A phone pays two looping BufferSources for silence until
+    // someone is in range — start those on the first audible setRivals.
+    if (!lowPower()) { for (const v of rivalVoices) startVoice(v); }
     harvSrc.start();
     ersOsc.start();
     lfo.start();
@@ -1533,6 +1557,7 @@ const GameAudio = (function () {
       const lat = +r.lat || 0, arc = +r.arc || 0;
       const dist = Math.hypot(lat, arc);
       if (!(dist < RIVAL_RANGE)) { aimGain(v.gain, 0, t, 0.12); continue; }
+      startVoice(v);
 
       // PAN by the angle, not by the lateral offset alone: a car two metres to
       // your right is hard right when it is alongside and dead ahead when it is
@@ -2087,6 +2112,6 @@ const GameAudio = (function () {
       return den > 0 ? Math.round(num / den) : 0;
     },
     // debug/telemetry: lets tests confirm the recorded engine samples loaded
-    debug() { return { contextState: ctx ? ctx.state : "uninitialised", samplesReady, usingSamples, engineOn, voice: voiceName, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
+    debug() { return { contextState: ctx ? ctx.state : "uninitialised", samplesReady, usingSamples, engineOn, voice: voiceName, rivalStarted: rivalVoices.filter((v) => v._apexStarted).length, loop: engSrcIdle ? { s: +engSrcIdle.loopStart.toFixed(2), e: +engSrcIdle.loopEnd.toFixed(2) } : null }; },
   };
 })();

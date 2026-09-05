@@ -92,7 +92,9 @@ function boot(opts) {
   const sb = {
     // GLX is what decides `mobileTier`; the engine reads it lazily at
     // startEngine. Absent by default (desktop); mobileEngine() supplies it.
-    GLX: opts && opts.mobile ? { mobileTier: true } : undefined,
+    GLX: opts && opts.mobile
+      ? { isMobile: true, mobileTier: !(opts && opts.gfxHigh) }
+      : undefined,
     Math, console, Object, Array, Number, String, JSON, Map, Set, WeakMap, Promise, Date, Error,
     parseFloat, parseInt, isFinite, Float32Array,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
@@ -693,6 +695,33 @@ test("a phone gets a cheaper graph: no convolver, half the rival voices", async 
   const D = await sampleEngine();
   assert.equal(D.rivalState().length, 4, "desktop lost a rival voice");
   assert.ok(D.venue().level >= 0, "desktop still has a venue send");
+});
+
+test("GRAPHICS HIGH on a phone still skips the convolver and keeps two voices", async () => {
+  // HIGH clears mobileTier so the GPU can take desktop budgets. Audio-thread
+  // CPU is not a quality upgrade — the 7812 iPhone crash was already at
+  // governor tier 2. isMobile must still win.
+  const { GameAudio: A, release, counts } = boot({ mobile: true, gfxHigh: true });
+  A.init();
+  await release();
+  A.startEngine();
+  assert.equal(counts.convolver || 0, 0, "HIGH on a phone built a ConvolverNode");
+  assert.equal(A.rivalState().length, 2, "HIGH on a phone restored four rival voices");
+});
+
+test("a phone does not start rival sources until a car is in range", async () => {
+  const { GameAudio: A, release } = boot({ mobile: true });
+  A.init();
+  await release();
+  A.startEngine();
+  assert.equal(A.debug().rivalStarted, 0, "rivals were looping before anyone was nearby");
+  A.setRivals([{ lat: 3, arc: 4, rev: 0.6, approach: 0 }]);
+  assert.equal(A.debug().rivalStarted, 1, "the first nearby car did not start a voice");
+  A.setRivals([
+    { lat: -3, arc: 4, rev: 0.6, approach: 0 },
+    { lat: 3, arc: 5, rev: 0.5, approach: 0 },
+  ]);
+  assert.equal(A.debug().rivalStarted, 2);
 });
 
 test("two rival voices still give a LEFT and a RIGHT", async () => {
