@@ -92,8 +92,8 @@ window.MenuNav = (function () {
   // Which pane a gesture at (x, y) meant. Pair-on garage still has a rail and
   // an options list, so "nearest" weighs the horizontal axis hardest: a swipe
   // over the left column is about the left column even when the right one is
-  // the taller, more obvious target. Circuit Select's preview column is not a
-  // scroller; the wheel redirects to #sel-tracks.
+  // the taller, more obvious target. Circuit Select's hero section is its one
+  // vertical pane; its flag strip is sideways (see hStrip in onWheel).
   function nearestPane(layer, x, y, dy) {
     const list = panes(layer, dy);
     if (list.length < 2) return list[0] || null;
@@ -154,8 +154,35 @@ window.MenuNav = (function () {
       if (canScroll(el, dy, oy)) return;
       if (isRegion(el, oy)) return;
     }
-    const pane = nearestPane(layer, e.clientX, e.clientY, dy);
-    if (pane && scrollPane(pane, dy)) e.preventDefault();
+    // A SIDEWAYS STRIP TAKES THE WHEEL TOO. The circuit picker's flag strip
+    // (#sel-tracks, data-orientation="horizontal") is the one scroll region on
+    // that screen a mouse wheel cannot move natively — a vertical wheel over a
+    // horizontal scroller does nothing. Over the strip, or when no vertical
+    // pane can take the gesture, the wheel pans the strip instead.
+    const strip = hStrip(layer);
+    const overStrip = strip && strip.contains(e.target);
+    const pane = overStrip ? null : nearestPane(layer, e.clientX, e.clientY, dy);
+    if (pane && scrollPane(pane, dy)) { e.preventDefault(); return; }
+    if (strip && scrollStrip(strip, dy)) e.preventDefault();
+  }
+
+  function hStrip(layer) {
+    for (const el of layer.querySelectorAll('[data-orientation="horizontal"]')) {
+      if (!shown(el)) continue;
+      const ox = getComputedStyle(el).overflowX;
+      if (ox !== "auto" && ox !== "scroll" && ox !== "overlay") continue;
+      if (el.scrollWidth - el.clientWidth > 1) return el;
+    }
+    return null;
+  }
+
+  function scrollStrip(strip, px) {
+    const local = (window.CssZoom && CssZoom.toLocalDelta(strip, px)) || px;
+    const before = strip.scrollLeft;
+    strip.scrollLeft = before + local;
+    if (strip.scrollLeft === before) return false;
+    if (window.ScrollFade) window.ScrollFade.paint(strip);
+    return true;
   }
 
   /* ---------------- arrow-key navigation ---------------- */
@@ -305,10 +332,15 @@ window.MenuNav = (function () {
     return list[0] || null;
   }
 
+  // A sideways strip (data-orientation="horizontal") is a region too: Home/End
+  // address its first and last tile, PageDown/PageUp pan it a strip-width.
+  const isStrip = (n) => n.getAttribute && n.getAttribute("data-orientation") === "horizontal"
+    && n.scrollWidth - n.clientWidth > 1;
   function scrollerOf(el, layer) {
     for (let n = el; n && n !== layer.parentNode; n = n.parentElement) {
-      if (n.nodeType === 1 && n.matches && n.matches(SCROLLERS) &&
-          n.scrollHeight - n.clientHeight > 1) return n;
+      if (n.nodeType !== 1 || !n.matches) continue;
+      if (n.matches(SCROLLERS) && n.scrollHeight - n.clientHeight > 1) return n;
+      if (isStrip(n)) return n;
     }
     return null;
   }
@@ -472,10 +504,11 @@ window.MenuNav = (function () {
       // clientHeight is local — feed it local×zoom or a page step travels
       // local/zoom² of the pane: 225% at UI SIZE 40% (1.35 pane-heights
       // skipped unseen), 45% at 200%. Gamepad LT/RT land here too.
+      const strip = pane && isStrip(pane);
       const page = pane &&
-        sign * pane.clientHeight * PAGE_FRAC *
+        sign * (strip ? pane.clientWidth : pane.clientHeight) * PAGE_FRAC *
           ((window.CssZoom && CssZoom.of(pane)) || 1);
-      if (!pane || !scrollPane(pane, page)) return;
+      if (!pane || !(strip ? scrollStrip(pane, page) : scrollPane(pane, page))) return;
       e.preventDefault();
       // FOCUS TRAVELS WITH THE PAGE. Paging moved the pane and left focus behind,
       // stranded off the top or bottom of it — so the row the keyboard was on was

@@ -35,11 +35,11 @@
   },
   "tree": {
     "cssClasses": {
-      "ceiling": 549,
+      "ceiling": 544,
       "slack": 5
     },
     "shellNodes": {
-      "ceiling": 1133,
+      "ceiling": 1140,
       "slack": 25
     },
     "bareCatches": {
@@ -59,15 +59,15 @@
       "slack": 0
     },
     "rawSpacing": {
-      "ceiling": 313,
+      "ceiling": 300,
       "slack": 0
     },
     "rawColor": {
-      "ceiling": 329,
+      "ceiling": 319,
       "slack": 0
     },
     "rawColorDistinct": {
-      "ceiling": 181,
+      "ceiling": 175,
       "slack": 0
     }
   }

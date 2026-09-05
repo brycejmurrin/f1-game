@@ -32,7 +32,7 @@ Everything else is built on these. They live in `css/components.css`.
 | `.screen` | a full-viewport overlay, inset by the OS safe area, that centres its child |
 | `.sheet` | a card with a fixed head, ONE scrolling body and a pinned foot; also the `sheet` **query container** every layout decision inside it keys on. Dense sheets may declare `--fit-at` (minimum functional local height); `SheetShape` then caps only that panel's effective zoom when the safe viewport cannot supply it. Phone-landscape floors: select / season / garage / career / settings / howtoplay / results / standings / customize / vs-friend / quali use `--compact-at: 480px`; audio / Spotify use `520px`; the generic floor is `380px` |
 | `.pane` | a scroll region that says so — an edge fade on whichever side has more |
-| `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#select`, `#season-setup`, `#carsetup` and `#career`. Default foot sits under the side column; `.pair-foot-full` spans BACK / YOUR CAR / NEXT (and season APPLY) across both. Slots are named by POSITION, not role — see the note in `css/components.css` |
+| `.pane-pair` | the shared **list-detail** layout (`.pair-side` + `.pair-main`), used by `#season-setup`, `#carsetup` and `#career` (`#select` left it in the 2026-09 picker redesign: a flag strip over a hero is one column). Default foot sits under the side column; `.pair-foot-full` spans BACK / YOUR CAR / NEXT (and season APPLY) across both. Slots are named by POSITION, not role — see the note in `css/components.css` |
 | `.balanced-row` | a content-driven control cluster: items wrap from their preferred local width, every line shares its space evenly, and a lone final item fills the line without child-count-specific CSS |
 
 ## Families, and the file that owns each
@@ -69,7 +69,7 @@ not.
 | `tdc-` | 10 | `track-detail.css` | — |
 | `co-`, `pm-`, `pane-`, `music-` | ~9 each | career / components / components / tuner | — |
 
-The long tail (`sf-`, `q-`, `cg-`, `tm-`, `spf-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
+The long tail (`sf-`, `q-`, `cg-`, `tm-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
 `sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
 `season-`, `pair-`, `build-`, `mb-`) is one file each and needs no map.

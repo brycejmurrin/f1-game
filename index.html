@@ -928,10 +928,14 @@
   </div>
 </div>
 
-<!-- select screen — two panes: WHO you are on the left, WHERE you race on the
-     right. The circuit preview is PINNED at the top of the right pane and only
-     the track list under it scrolls, so the map of the circuit you picked never
-     scrolls away while you browse the others. -->
+<!-- select screen — the CIRCUIT PICKER, built like a broadcast graphic: a
+     horizontal STRIP of national flags across the top (one tile per circuit,
+     the calendar in season mode), and under it the HERO — an in-game still of
+     the chosen circuit's signature section (assets/stills/<id>.webp) with the
+     lap outline drawn over it and the circuit's numbers beside it. The strip is
+     the only horizontal scroller; the hero section is the only vertical one
+     (when the caption does not fit). The map button is still the one door to
+     CIRCUIT DETAIL (turns, sectors, DRS metres). Redesigned 2026-09. -->
 <!-- CAREER. A full-screen page like #select (not a .dim modal), because in career
      it REPLACES #select: the calendar decides where you race, so the only thing
      left to choose is whether you are ready. Two states share the sheet — the
@@ -993,44 +997,56 @@
 </dialog>
 
 <div id="select" class="screen" role="region" aria-labelledby="select-title" data-esc-close="sel-back" hidden>
-  <div id="sel-inner" class="sheet pane-pair pair-foot-full">
+  <div id="sel-inner" class="sheet">
 
     <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
 
     <div class="sheet-body" id="sel-body">
-      <!-- WHAT YOU ARE TAKING OUT: a summary of the car, and the way through
-           to the garage where it is configured. One scrolling column. -->
-      <!-- WHERE YOU RACE: label + preview are pinned, #sel-tracks scrolls. -->
-      <section class="pair-side" id="sel-track-section">
+      <!-- THE SHELF: filter + search toolbar (js builds #sel-track-filter into
+           it, before the strip), then the flag strip. #sel-tracks is the strip
+           itself — one .track-row button per circuit, a flag over a name — and
+           the ONE horizontal scroller on the screen (data-orientation tells the
+           keyboard/gamepad walker and the wheel redirect which axis it runs;
+           a data- attribute, not aria-orientation, which ARIA does not allow
+           on a group). -->
+      <div id="sel-shelf">
+        <div id="sel-tracks" role="group" aria-labelledby="sel-circuit-label" data-orientation="horizontal"></div>
+      </div>
+      <!-- THE HERO: the still, the outline over it, the caption on it, the
+           numbers beside it. The section is the vertical scroller when the
+           caption does not fit (a short landscape phone at a raised UI SIZE). -->
+      <section class="pane" id="sel-track-section">
         <h3 class="sel-label" id="sel-circuit-label">CIRCUIT</h3>
         <div id="sel-track-preview">
-          <!-- A REAL BUTTON around the map: the only door to CIRCUIT DETAIL was
-               a bare onclick on this canvas — no tabindex, no role, no focus
-               ring — so a keyboard or gamepad player could never reach the
-               corner list or DRS metres. display: contents keeps the wrapper
-               out of the preview card's measured flex layout entirely
-               (updateTrackPreview's budget arithmetic sees the canvas as
-               before); the chip after it is the door on tiny sheets where the
-               canvas itself is display: none. -->
-          <button id="sel-map-btn" type="button" class="sel-map-btn" aria-label="Circuit detail"><canvas id="sel-preview-map" width="520" height="300" role="img" aria-label="Circuit layout preview"></canvas></button>
-          <button id="sel-detail-chip" type="button" class="sel-chip">CIRCUIT DETAIL ▸</button>
-          <div id="sel-preview-info">
-            <div id="sel-preview-name"></div>
-            <div id="sel-preview-gp"></div>
-            <div id="sel-preview-meta"></div>
-            <div id="sel-preview-rec"></div>
+          <div id="sel-hero">
+            <!-- The in-game still. `hidden` until its src decodes (js flips
+                 it), so a missing or slow file shows the hero's own gradient
+                 instead of a broken-image glyph; alt is empty because the
+                 caption already names the circuit. -->
+            <img id="sel-still" alt="" decoding="async" hidden>
+            <!-- A REAL BUTTON around the map: the only door to CIRCUIT DETAIL was
+                 a bare onclick on this canvas — no tabindex, no role, no focus
+                 ring — so a keyboard or gamepad player could never reach the
+                 corner list or DRS metres. The chip in the caption below is
+                 the same door where the canvas is too small to read. -->
+            <button id="sel-map-btn" type="button" class="sel-map-btn" aria-label="Circuit detail"><canvas id="sel-preview-map" width="520" height="300" role="img" aria-label="Circuit layout preview"></canvas></button>
+            <div id="sel-hero-cap">
+              <span id="sel-preview-flag"></span>
+              <div id="sel-preview-title">
+                <div id="sel-preview-name"></div>
+                <div id="sel-preview-gp"></div>
+              </div>
+            </div>
             <div id="sel-preview-facts"></div>
+          </div>
+          <div id="sel-preview-info">
+            <dl id="sel-preview-meta"></dl>
+            <div id="sel-preview-rec"></div>
             <canvas id="sel-preview-elev" width="280" height="36" role="img" aria-label="Elevation profile"></canvas>
+            <button id="sel-detail-chip" type="button" class="sel-chip">CIRCUIT DETAIL ▸</button>
           </div>
         </div>
       </section>
-      <!-- The list is a SIBLING of the label+preview section, not a child of it,
-           so the two-column layout can make it a grid item of the sheet itself
-           (css/menus.css). A nested grid cannot span a row of its parent. The
-           action bar is `.pair-foot-full` so BACK / YOUR CAR / NEXT span both
-           columns — three 110px buttons no longer wrap inside the preview
-           column. Stacked: label, compact preview band, then the list. -->
-      <div id="sel-tracks" class="pane pair-main" role="group" aria-labelledby="sel-circuit-label"></div>
     </div>
 
     <div class="sheet-foot">
@@ -1999,6 +2015,7 @@
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-ui.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scroll-fade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/css-zoom.js?v=dev"></script>

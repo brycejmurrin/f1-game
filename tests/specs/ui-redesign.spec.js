@@ -16,7 +16,9 @@ async function waitReady(page) {
 test("catalogue, garage, settings, data table, and compact multiplayer fit", async ({ page }) => {
   await waitReady(page);
 
-  // Circuit Select: search filters in place without rebuilding/focusing away.
+  // Circuit Select (2026-09 redesign): a flag strip across the top, the hero
+  // (still + outline + numbers) under it. Search filters tiles in place
+  // without rebuilding/focusing away.
   await page.evaluate(() => document.getElementById("mb-race").click());
   await page.waitForFunction(() => document.querySelectorAll("#sel-tracks .track-row").length > 20,
     null, { polling: 100, timeout: 10_000 });
@@ -26,30 +28,36 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   const initialSelect = await page.evaluate(() => {
     const sel = document.getElementById("sel-inner");
     const map = /** @type {HTMLCanvasElement} */ (document.getElementById("sel-preview-map"));
+    const hero = document.getElementById("sel-hero").getBoundingClientRect();
+    const strip = document.getElementById("sel-tracks");
+    const sr = strip.getBoundingClientRect();
     const r = map.getBoundingClientRect();
     const zoom = map.currentCSSZoom || 1;
     const bufferAspect = map.width / Math.max(1, map.height);
-    const boxH = r.height / zoom;
-    const boxW = r.width / zoom;
-    const boxAspect = boxW / Math.max(1, boxH);
+    const boxAspect = (r.width / zoom) / Math.max(1, r.height / zoom);
     return {
       pair: sel.dataset.pair,
       density: sel.dataset.density,
-      buffer: [map.width, map.height],
-      box: [boxW, boxH],
-      display: getComputedStyle(map).display,
+      classes: sel.className,
+      stripPans: strip.scrollWidth - strip.clientWidth > 1,
+      stripAboveHero: sr.bottom <= hero.top + 1,
+      heroH: hero.height,
+      mapInsideHero: r.top >= hero.top - 1 && r.bottom <= hero.bottom + 1 && r.left >= hero.left - 1 && r.right <= hero.right + 1,
       skew: Math.abs(bufferAspect - boxAspect) / Math.max(bufferAspect, boxAspect, 0.001),
     };
   });
-  // 852×393 is under #sel-inner --compact-at 480, but the sheet is wide, so
-  // --pair-compact: wide keeps the catalogue in the right column.
+  // 852×393 is under #sel-inner's --compact-at 480; there is no pane to pair.
   expect(initialSelect.density, JSON.stringify(initialSelect)).toBe("compact");
-  expect(initialSelect.pair).toBe("on");
+  expect(initialSelect.pair, "SELECT left the pane-pair primitive").toBeUndefined();
+  expect(initialSelect.classes).not.toContain("pane-pair");
+  expect(initialSelect.stripPans, "40 flags pan sideways on a landscape phone").toBe(true);
+  expect(initialSelect.stripAboveHero, "the strip sits above the hero").toBe(true);
+  expect(initialSelect.heroH, "the hero keeps a real still slot").toBeGreaterThan(80);
+  expect(initialSelect.mapInsideHero, "the outline is drawn inside the hero").toBe(true);
+  expect(initialSelect.skew, "the outline canvas is not CSS-squashed").toBeLessThan(0.05);
   // Match a landscape iPhone's notched safe area at a larger user-selected UI
-  // size. That reproducibly enters the compact single-column layout; at the
-  // default size this viewport correctly retains the roomy paired catalogue.
-  // The filter must not consume the whole list viewport: a real circuit needs
-  // to be visible before the player scrolls either nested pane.
+  // size. The toolbar must stay one pannable row and the strip must keep at
+  // least one whole tile in view before the player scrolls anything.
   await page.evaluate(() => {
     const root = document.documentElement.style;
     root.setProperty("--sal", "59px"); root.setProperty("--sar", "59px");
@@ -58,31 +66,30 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   });
   await page.waitForFunction(() => {
     const sel = document.getElementById("sel-inner");
-    return sel?.dataset.pair === "on" && sel.dataset.density === "compact"
-      && sel.dataset.shape !== "tall";
+    return sel?.dataset.density === "compact" && sel.dataset.shape !== "tall";
   }, null, { polling: 100, timeout: 10_000 });
   const compactCatalogue = await page.evaluate(() => {
     const list = document.getElementById("sel-tracks").getBoundingClientRect();
     const first = document.querySelector("#sel-tracks .track-row:not([hidden])").getBoundingClientRect();
-    const body = document.getElementById("sel-body").getBoundingClientRect();
-    const preview = document.getElementById("sel-track-section").getBoundingClientRect();
+    const hero = document.getElementById("sel-hero").getBoundingClientRect();
     const filter = document.getElementById("sel-track-filter").getBoundingClientRect();
     const controls = [...document.querySelectorAll("#sel-track-filter .sel-chip, #sel-track-search")]
       .map((el) => el.getBoundingClientRect());
     return {
-      firstVisible: Math.max(0, Math.min(list.bottom, first.bottom) - Math.max(list.top, first.top)),
+      firstVisible: Math.max(0, Math.min(list.right, first.right) - Math.max(list.left, first.left)),
       oneRow: Math.max(...controls.map((r) => r.top)) - Math.min(...controls.map((r) => r.top)) < 2,
+      heroH: hero.height,
       geometry: {
-        body: [body.top, body.bottom, body.height], preview: [preview.top, preview.bottom, preview.height],
         filter: [filter.top, filter.bottom, filter.height], list: [list.top, list.bottom, list.height],
-        first: [first.top, first.bottom, first.height],
+        first: [first.left, first.right, first.width], hero: [hero.top, hero.bottom, hero.height],
       },
     };
   });
   expect(compactCatalogue.oneRow, "compact filter oneRow").toBe(true);
   expect(compactCatalogue.firstVisible, JSON.stringify(compactCatalogue.geometry)).toBeGreaterThanOrEqual(24);
-  // At the slider maximum the toolbar becomes horizontally pannable and stops
-  // being sticky, so vertical scrolling can still reveal real circuit rows.
+  expect(compactCatalogue.heroH, "the still survives 150% on a notched phone").toBeGreaterThan(60);
+  // At the slider maximum the toolbar is horizontally pannable (it never
+  // wraps into the hero's height) and the strip still shows whole flags.
   await page.evaluate(() => {
     window.__apex.uiScale(200);
     window.SheetShape?.reclassify();
@@ -94,13 +101,12 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const sel = document.getElementById("sel-inner");
     const list = document.getElementById("sel-tracks");
     const filter = document.getElementById("sel-track-filter");
-    list.scrollTop = filter.scrollHeight;
     const lr = list.getBoundingClientRect();
     const rr = document.querySelector("#sel-tracks .track-row:not([hidden])").getBoundingClientRect();
     const cs = getComputedStyle(filter);
     return {
       horizontalToolbar: filter.scrollWidth > filter.clientWidth,
-      firstVisible: Math.max(0, Math.min(lr.bottom, rr.bottom) - Math.max(lr.top, rr.top)),
+      firstVisible: Math.max(0, Math.min(lr.right, rr.right) - Math.max(lr.left, rr.left)),
       dump: {
         localW: sel.clientWidth,
         zoom: getComputedStyle(sel).zoom,
@@ -127,7 +133,7 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
     const rows = [...document.querySelectorAll("#sel-tracks .track-row")];
     return {
       active: document.activeElement === input,
-      shown: rows.filter((row) => !row.hidden).map((row) => row.textContent.trim()),
+      shown: rows.filter((row) => !row.hidden).map((row) => row.getAttribute("aria-label")),
       hidden: rows.filter((row) => row.hidden).length,
       emptyHidden: document.getElementById("sel-track-empty").hidden,
     };
@@ -138,43 +144,41 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   expect(searched.hidden).toBeGreaterThan(20);
   expect(searched.emptyHidden, "empty hidden").toBe(true);
 
-  // Short landscape select: still wide-shaped, so --pair-compact: wide
-  // keeps pair-on (list on the right). Body is not a scroller.
+  // Short landscape select: the body is not a scroller; the strip stays a
+  // sideways strip; the hero section is the ONLY vertical scroll region and the
+  // foot spans the sheet.
   await page.evaluate(() => {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
     input.value = ""; input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await page.setViewportSize({ width: 568, height: 320 });
   await page.waitForFunction(() => {
-    const inner = document.getElementById("sel-inner");
-    const list = document.getElementById("sel-tracks");
-    return inner && inner.dataset.pair === "on" && list && list.getBoundingClientRect().height > 80;
+    const hero = document.getElementById("sel-hero");
+    return hero && hero.getBoundingClientRect().height > 40;
   }, null, { polling: 100, timeout: 10_000 });
   await page.evaluate(() => window.ScrollFade && window.ScrollFade.refresh());
   const stackedSel = await page.evaluate(() => {
     const inner = document.getElementById("sel-inner");
     const body = document.getElementById("sel-body");
     const list = document.getElementById("sel-tracks");
-    const preview = document.getElementById("sel-track-section");
+    const section = document.getElementById("sel-track-section");
     const foot = inner.querySelector(".sheet-foot");
     const input = /** @type {HTMLInputElement} */ (document.getElementById("sel-track-search"));
+    const vertical = [...inner.querySelectorAll("*")].filter((el) => {
+      const oy = getComputedStyle(el).overflowY;
+      return (oy === "auto" || oy === "scroll") && el.scrollHeight - el.clientHeight > 1;
+    }).map((el) => el.id || el.className);
     const out = {
-      pair: inner.dataset.pair,
-      classes: inner.className,
       bodyOY: getComputedStyle(body).overflowY,
+      listOX: getComputedStyle(list).overflowX,
       listOY: getComputedStyle(list).overflowY,
-      listMaxH: getComputedStyle(list).maxHeight,
-      bodyH: body.getBoundingClientRect().height,
-      listH: list.getBoundingClientRect().height,
-      previewH: preview.getBoundingClientRect().height,
+      sectionOY: getComputedStyle(section).overflowY,
+      vertical,
       innerH: inner.getBoundingClientRect().height,
       innerW: inner.getBoundingClientRect().width,
       footW: foot.getBoundingClientRect().width,
-      previewTop: preview.getBoundingClientRect().top,
-      listTop: list.getBoundingClientRect().top,
-      bodySf: body.classList.contains("sf-scroll"),
-      listSf: list.classList.contains("sf-scroll"),
-      innerSf: [...document.querySelectorAll("#sel-inner .sf-scroll")].map((el) => el.id),
+      stripTop: list.getBoundingClientRect().top,
+      heroTop: document.getElementById("sel-hero").getBoundingClientRect().top,
     };
     input.focus(); input.value = "spa";
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -182,21 +186,14 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
       .filter((row) => !row.hidden).length;
     return { ...out, active: document.activeElement === input, shown };
   });
-  expect(stackedSel.pair).toBe("on");
   expect(["auto", "scroll"]).not.toContain(stackedSel.bodyOY);
-  expect(["auto", "scroll", "overlay"]).toContain(stackedSel.listOY);
-  expect(stackedSel.bodySf).toBe(false);
-  expect(stackedSel.innerSf).toEqual(["sel-tracks"]);
-  expect(stackedSel.listMaxH).toBe("none");
-  expect(stackedSel.listH).toBeGreaterThan(80);
-  // pair-on sets #sel-body to display:contents, so bodyH is 0. Share of the
-  // sheet is the real "list still has a column" check.
-  expect(stackedSel.listH / stackedSel.innerH).toBeGreaterThan(0.4);
-  // #sel-inner is pair-foot-full: list and preview share row 2, so their
-  // painted heights match. listH > previewH was the pre-ff024251 span into
-  // the foot row; BACK / YOUR CAR / NEXT are a full-width bar now.
-  expect(stackedSel.classes).toContain("pair-foot-full");
-  expect(Math.abs(stackedSel.listH - stackedSel.previewH)).toBeLessThan(2);
+  expect(["auto", "scroll", "overlay"]).toContain(stackedSel.listOX);
+  expect(stackedSel.listOY).toBe("hidden");
+  expect(["auto", "scroll", "overlay"]).toContain(stackedSel.sectionOY);
+  // Whatever scrolls vertically here is the hero section (or its numbers
+  // column) — never the body, never the strip.
+  expect(stackedSel.vertical.every((id) => id === "sel-track-section" || id === "sel-preview-info"), JSON.stringify(stackedSel.vertical)).toBe(true);
+  expect(stackedSel.stripTop).toBeLessThan(stackedSel.heroTop);
   expect(stackedSel.footW / stackedSel.innerW).toBeGreaterThan(0.95);
   expect(stackedSel.active).toBe(true);
   expect(stackedSel.shown).toBeGreaterThan(0);

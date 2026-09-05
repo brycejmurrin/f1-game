@@ -35,8 +35,10 @@ const wheelOver = (page, sel, deltaY = 300) =>
   page.evaluate(({ sel, deltaY }) => {
     const el = document.querySelector(sel);
     if (!el) return { missing: true };
+    // The flag strip pans SIDEWAYS: a vertical wheel anywhere on the screen
+    // that no vertical pane can take is redirected to its scrollLeft.
     const list = document.getElementById("sel-tracks");
-    list.scrollTop = 0;
+    list.scrollLeft = 0;
     const r = el.getBoundingClientRect();
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     const target = document.elementFromPoint(x, y) || el;
@@ -44,7 +46,7 @@ const wheelOver = (page, sel, deltaY = 300) =>
       deltaY, deltaMode: 0, clientX: x, clientY: y, bubbles: true, cancelable: true,
     });
     target.dispatchEvent(ev);
-    return { top: list.scrollTop, prevented: ev.defaultPrevented };
+    return { top: list.scrollLeft, prevented: ev.defaultPrevented };
   }, { sel, deltaY });
 
 const focusInfo = (page) =>
@@ -54,41 +56,41 @@ const focusInfo = (page) =>
       id: a.id || "",
       cls: String(a.className || ""),
       text: (a.textContent || "").trim().replace(/\s+/g, " ").slice(0, 40),
-      listTop: document.getElementById("sel-tracks").scrollTop,
+      listTop: document.getElementById("sel-tracks").scrollLeft,
     };
   });
 
 test.describe("Menu keyboard + trackpad (desktop)", () => {
   test.use({ viewport: DESKTOP });
 
-  test("wheel outside the pane still scrolls the circuit list", async ({ page }) => {
+  test("wheel anywhere on the screen pans the flag strip", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
 
-    // Sanity: the list really is the only scroll region on this screen.
-    const scrollers = await page.evaluate(() =>
-      [...document.querySelectorAll("#select *")]
-        .filter((el) => {
-          const oy = getComputedStyle(el).overflowY;
-          return (oy === "auto" || oy === "scroll") && el.scrollHeight - el.clientHeight > 1;
-        })
-        .map((el) => el.id || el.className));
-    expect(scrollers).toContain("sel-tracks");
+    // Sanity: the strip really is a sideways scroller with more tiles than fit.
+    const strip = await page.evaluate(() => {
+      const el = document.getElementById("sel-tracks");
+      return { ox: getComputedStyle(el).overflowX, pans: el.scrollWidth - el.clientWidth > 1,
+               orient: el.getAttribute("data-orientation") };
+    });
+    expect(strip.orient).toBe("horizontal");
+    expect(["auto", "scroll"]).toContain(strip.ox);
+    expect(strip.pans, "40 flags do not fit a 1440px sheet").toBe(true);
 
-    for (const sel of ["#sel-preview-map", "#sel-preview-info", ".sheet-head", ".sheet-foot"]) {
+    for (const sel of ["#sel-preview-map", ".sheet-head", ".sheet-foot", "#sel-tracks .track-row"]) {
       const r = await wheelOver(page, sel);
       expect(r.missing, `${sel} exists`).toBeFalsy();
-      expect(r.top, `wheel over ${sel} scrolls the list`).toBeGreaterThan(0);
+      expect(r.top, `wheel over ${sel} pans the strip`).toBeGreaterThan(0);
       expect(r.prevented, `wheel over ${sel} is consumed`).toBe(true);
     }
   });
 
-  test("a pane already at the end does not swallow the gesture", async ({ page }) => {
+  test("a strip already at its end does not swallow the gesture", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
     const r = await page.evaluate(() => {
       const list = document.getElementById("sel-tracks");
-      list.scrollTop = list.scrollHeight;      // pinned at the bottom
+      list.scrollLeft = list.scrollWidth;      // pinned at the far end
       const head = document.querySelector(".sheet-head").getBoundingClientRect();
       const x = head.left + 10, y = head.top + 10;
       const ev = new WheelEvent("wheel", { deltaY: 300, clientX: x, clientY: y, bubbles: true, cancelable: true });
@@ -108,27 +110,35 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     expect(await page.evaluate(() => document.getElementById("select").contains(document.activeElement))).toBe(true);
   });
 
-  test("ArrowDown walks the circuit list and scrolls it into view", async ({ page }) => {
+  test("ArrowRight walks the flag strip and scrolls it into view; ArrowDown leaves it for the hero", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
-    // Left/right cross the select screen's two columns; up/down stay in one. Enter
-    // the list the way a player would, then walk it. GARAGE is the only control
-    // in the left column's action row now (MY TEAM and CAR SETUP were folded into
-    // the garage itself), so one ArrowRight from it has nowhere to go but across.
-    await page.evaluate(() => document.getElementById("sel-go").focus());
-    await page.keyboard.press("ArrowRight");
-    expect((await focusInfo(page)).cls, "ArrowRight crosses into the circuit column").toContain("track-row");
-
+    // The strip runs ACROSS the top of the sheet: left/right walk the tiles,
+    // down drops onto the hero (the map button that opens CIRCUIT DETAIL).
+    await page.evaluate(() => {
+      const list = document.getElementById("sel-tracks");
+      list.scrollLeft = 0;
+      list.querySelector(".track-row").focus();
+    });
     const start = await focusInfo(page);
+    expect(start.cls).toContain("track-row");
     let moved = start;
-    for (let i = 0; i < 14; i++) {
-      await page.keyboard.press("ArrowDown");
+    for (let i = 0; i < 30; i++) {
+      await page.keyboard.press("ArrowRight");
       moved = await focusInfo(page);
-      expect(moved.cls, "ArrowDown stays in the list").toContain("track-row");
+      expect(moved.cls, "ArrowRight stays in the strip").toContain("track-row");
       if (moved.listTop > 0) break;
     }
-    expect(moved.text, "focus moved down the list").not.toBe(start.text);
-    expect(moved.listTop, "the list scrolled to follow focus").toBeGreaterThan(0);
+    expect(moved.text, "focus moved along the strip").not.toBe(start.text);
+    expect(moved.listTop, "the strip scrolled to follow focus").toBeGreaterThan(0);
+
+    await page.keyboard.press("ArrowDown");
+    const below = await page.evaluate(() => {
+      const a = document.activeElement;
+      return { inStrip: !!a.closest("#sel-tracks"), inHero: !!a.closest("#sel-track-section"), id: a.id };
+    });
+    expect(below.inStrip, "ArrowDown leaves the strip").toBe(false);
+    expect(below.inHero, `ArrowDown lands on the hero (${below.id})`).toBe(true);
   });
 
   test("Home / End jump to the ends of the open menu", async ({ page }) => {
@@ -156,15 +166,15 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
       await page.waitForTimeout(150);
       const r = await page.evaluate(() => {
         const list = document.getElementById("sel-tracks");
-        list.scrollTop = 0;
+        list.scrollLeft = 0;
         const row = list.querySelector(".track-row");
         row.focus();
         row.dispatchEvent(new KeyboardEvent("keydown", { key: "PageDown", bubbles: true, cancelable: true }));
-        return { moved: list.scrollTop, pane: list.clientHeight,
-                 max: list.scrollHeight - list.clientHeight };
+        return { moved: list.scrollLeft, pane: list.clientWidth,
+                 max: list.scrollWidth - list.clientWidth };
       });
       if (r.max < r.pane) continue; // not enough content to measure a full page at this scale
-      expect(r.moved / r.pane, `travel at ${pct}% is ~0.9 pane-heights`).toBeGreaterThan(0.7);
+      expect(r.moved / r.pane, `travel at ${pct}% is ~0.9 strip-widths`).toBeGreaterThan(0.7);
       expect(r.moved / r.pane, `travel at ${pct}% is not a double page`).toBeLessThan(1.05);
     }
     await page.evaluate(() => window.__apex.uiScale(null));
