@@ -11,7 +11,7 @@ Load this when the engine is silent, pitch is flat, or a mute toggle did the
 | Engine (synth fallback) | Three detuned oscillators (saw×2 + square) through a speed-tracking lowpass until samples decode |
 | Pitch curve | `(0.25·idle + 0.45·revRange·rev^curve)·pitch` — four independent tune knobs; `GameAudio.rate()` reads the result |
 | Gravel | Sine at the crank rate (`f0/3`, 18–140 Hz) into `engGain.gain`; depth `(1-rev)²` × GRAVEL trim; `gravelDepth()` / `gravelHz()` |
-| Rev limiter | 13 Hz square into `engGain.gain` above 98.5% revs, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()` |
+| Rev limiter | 13 Hz square into `engGain.gain` above 98.5% revs, and into the core's detune for the pitch sag; DEPTH / RATE / PITCH SAG trims; `limiterDepth()` / `limiterHz()` / `limiterCents()`. In TOP gear the cut is a 0.5 s burst fading over 0.5 s to a steady note (`limiterHeld()` is the clock) — a car pinned at top speed has no gear to shift into. Below top gear it never fades |
 | Turbo whine + wastegate | Sine ~1500 Hz tracking rev; a falling hiss once per lift after ≥0.5 s under load (`wastegateState()`) |
 | MGU-K harvest / ERS deploy | Filtered noise when decelerating (HARVEST trim) / triangle whine while deploying + the deploy whoosh (BOOST level) and a rev lift under deploy (BOOST rev lift) |
 | Brakes | Bandpass noise, gain = deceleration × speed; `brakeLevel()` |

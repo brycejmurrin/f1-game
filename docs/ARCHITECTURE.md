@@ -904,7 +904,9 @@ deploying (level tracks charge, pitch sags under 20%), AIRFLOW (broadband
 bandpass rising with speed², plus kerb/offroad buffeting and wet spray), BRAKES
 (bandpass noise gain-following deceleration × speed), an offroad pitch LFO, and
 the tyre screech. Two more ride the engine's own gain on the audio thread: the
-rev-limiter chop (13 Hz square above 98.5%) and GRAVEL (a sine at the crank
+rev-limiter chop (13 Hz square above 98.5%; in TOP gear it is a 0.5 s burst that
+fades to a steady held note, since there is no gear to shift into — it never
+fades below top gear) and GRAVEL (a sine at the crank
 rate, `f0/3`, whose depth dies as `(1-rev)²` — a lumpy idle that is smooth by
 redline). One-shots: gear-shift crack, overrun crackle on a trailing throttle,
 and the turbo wastegate dump on a lift after ≥0.5 s under load. Per-manufacturer
