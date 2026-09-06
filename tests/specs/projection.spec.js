@@ -10,24 +10,22 @@
 // Imports from ./fixtures.js, NOT from @playwright/test, so a failure attaches
 // apex-state / apex-logs / page-console — a bare "expected 43 to be greater than
 // 50" arrives with the car's state and the retained log ring beside it.
-import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { test, expect } from "../helpers/fixtures.js";
 
-async function startLiveRace(page) {
-  await page.goto("/");
-  await page.locator("#mb-race").click();
-  await page.locator("#sel-go").click();
-  await page.locator("#rs-go").click();
-  // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
-  await page.waitForFunction(
-    () => window.__apex && window.__apex.info().track != null,
-    null, { polling: 100, timeout: BOOT_MS }
-  );
-  await page.evaluate(() => window.__apex.go());
+// The race through the shared fixture, and HEADLESS: projTest reads track
+// geometry (Tracks.sample / Tracks.project) and never a pixel. This used to
+// open the race with three locator.click()s on the title flyby, which is the
+// 80-113 s click docs/TESTING.md prices — and then kept rendering the race
+// while twelve evaluate round trips waited on the same held thread. It timed
+// out at 120 s on the deploy gate (run 2048, both attempts) and at 144-182 s
+// on this box, on the tip BEFORE and after the change that selected it.
+async function startLiveRace(loadTrack) {
+  await loadTrack("monza", "day", "dry", { headless: true });
 }
 
 test.describe("Apex 26 — world<->track projection", () => {
-  test("round-trips (s, lateral) all around the lap and across the width", async ({ page }) => {
-    await startLiveRace(page);
+  test("round-trips (s, lateral) all around the lap and across the width", async ({ loadTrack, page }) => {
+    await startLiveRace(loadTrack);
     const fracs = [0, 0.07, 0.18, 0.26, 0.33, 0.41, 0.5, 0.62, 0.74, 0.83, 0.91, 0.97];
     const lats = [-6, -3, -1, 0, 1, 3, 6];
     let worstS = 0, worstLat = 0;
@@ -48,8 +46,8 @@ test.describe("Apex 26 — world<->track projection", () => {
     expect(worstLat).toBeLessThan(0.5);   // metres of lateral error
   });
 
-  test("a point on the centreline projects to lateral ~0", async ({ page }) => {
-    await startLiveRace(page);
+  test("a point on the centreline projects to lateral ~0", async ({ loadTrack, page }) => {
+    await startLiveRace(loadTrack);
     for (const frac of [0.1, 0.35, 0.6, 0.85]) {
       const r = await page.evaluate((f) => window.__apex.projTest(f, 0), frac);
       expect(Math.abs(r.got.lat)).toBeLessThan(0.25);
@@ -57,8 +55,8 @@ test.describe("Apex 26 — world<->track projection", () => {
     }
   });
 
-  test("lateral sign matches the +right convention", async ({ page }) => {
-    await startLiveRace(page);
+  test("lateral sign matches the +right convention", async ({ loadTrack, page }) => {
+    await startLiveRace(loadTrack);
     // +lateral is to the right of the centreline; project must recover a +lat.
     const right = await page.evaluate(() => window.__apex.projTest(0.3, 5));
     const left = await page.evaluate(() => window.__apex.projTest(0.3, -5));

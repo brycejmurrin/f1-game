@@ -1,23 +1,27 @@
 // @ts-check
 // Contract tests for __apex.mapPts() and __apex.trackBounds()
 import { test, expect } from "@playwright/test";
-import { BOOT_MS } from "../helpers/fixtures.js";
+import { BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 
 test("mapPts and trackBounds hooks", async ({ page }) => {
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  // HEADLESS from here: every hook below reads geometry, none reads a pixel,
+  // and each evaluate round trip otherwise waits on a SwiftShader frame that
+  // holds the main thread for seconds (docs/TESTING.md). With the flyby and
+  // then Monaco rendering underneath, this one test took 185-190 s on the
+  // deploy gate (run 2048, both attempts) against a 180 s cap.
+  await page.evaluate(() => __apex.headless(true));
 
   // A default track pre-loads on startup, so mapPts() is already populated here
   // (it is NOT null before an explicit race() — the old comment claimed otherwise).
   const nullPts = await page.evaluate(() => __apex.mapPts());
   expect(nullPts).not.toBeNull(); // default track pre-loads on startup
 
-  await page.evaluate(async () => {
-    __apex.race("monaco");
-    await new Promise(r => setTimeout(r, 3000));
-  });
+  await page.evaluate(() => __apex.race("monaco"));
+  await awaitTrackBuild(page);   // on PROGRESS, not a 3 s guess a slow box outlives
 
   const pts = await page.evaluate(() => __apex.mapPts());
   expect(pts).not.toBeNull();

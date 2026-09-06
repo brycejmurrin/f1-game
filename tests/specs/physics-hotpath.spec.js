@@ -13,8 +13,11 @@ import { test, expect } from "../helpers/fixtures.js";
 
 test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrack, page }) => {
   test.setTimeout(120_000);
-  await loadTrack("monza");
-  await page.evaluate(() => window.__apex.headless(true));
+  // headless BEFORE the build, via the fixture: the render loop was already
+  // off for the 180 steps below, but the build wait and the countdown ran
+  // under a full-scale SwiftShader race, and on the deploy gate's 2-core
+  // runner that alone was the 120 s budget (run 2048, both attempts).
+  await loadTrack("monza", "day", "dry", { headless: true });
   await page.addScriptTag({
     content: "window.__AiDrive = AiDrive;",
   });
