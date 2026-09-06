@@ -1292,7 +1292,40 @@ const Car3D = (function () {
       topTE:  [-1.65, 0.93],   baseTE: [-1.70, 0.6197],
       halfBase: 0.020, halfTop: 0.013,
     }),
+    // Ferrari's SF-26 fin: a tall front blade dropping a step to a lower rear
+    // section (Motorsport.com, 2026 early tech trends). The outline is the FRONT
+    // blade — the panel and badge sit on it — and `step` is the lower block
+    // build() adds behind it. baseTE is the standard base line at z -1.45.
+    stepped: Object.freeze({
+      baseLE: [-0.65, 0.7935], topLE: [-1.15, 0.97],
+      topTE:  [-1.43, 0.97],   baseTE: [-1.45, 0.6611],
+      halfBase: 0.022, halfTop: 0.014,
+      step: Object.freeze({ top: 0.885, baseTE: [-1.70, 0.6197] }),
+    }),
   });
+  // Detail picks a livery carries that are MESH, not paint, so their id lists
+  // live here beside FIN_SHAPE_IDS rather than in LiveryTex.
+  // T-cam: the real rule paints car 1's housing black and car 2's yellow — the
+  // one on-car cue that says which of a team's two drivers this is
+  // (autoevolution, onboard-camera colours). "team" is the accent housing the
+  // game shipped; "auto" reads the driver slot off Teams.
+  const TCAM_IDS = Object.freeze(["team", "auto", "black", "yellow"]);
+  const TCAM_BLACK = Object.freeze([0.05, 0.05, 0.06]);
+  const TCAM_YELLOW = Object.freeze([0.96, 0.78, 0.08]);
+  function tcamColour(pick, teamId, num, accent) {
+    if (pick === "black") return TCAM_BLACK;
+    if (pick === "yellow") return TCAM_YELLOW;
+    if (pick === "auto") {
+      const t = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST.find((x) => x.id === teamId);
+      const first = t && t.drivers && t.drivers[0] ? t.drivers[0].num : null;
+      return (first != null && num != null && num !== first) ? TCAM_YELLOW : TCAM_BLACK;
+    }
+    return accent;
+  }
+  // Engine-cover cooling: "gills" are the rows of slits on the flanks that real
+  // teams swap track to track (Autosport 2024 tech gallery); "spine" is one
+  // slot along the ridge (AMR24), ahead of the shark-fin root so the two never meet.
+  const COVER_VENT_IDS = Object.freeze(["none", "gills", "spine"]);
   const FIN_SHAPE_IDS = Object.freeze(Object.keys(FIN_SHAPES).concat(["none"]));
   const FIN = FIN_SHAPES.standard;
   const finOf = (shape) => FIN_SHAPES[shape] || FIN;
@@ -1371,6 +1404,26 @@ const Car3D = (function () {
     const yAt = (u, v) => { const yB = finMix(F.baseLE[1], F.baseTE[1], u); return yB + (tp - yB) * v; };
     const at = (u, v) => { const z = zAt(u), y = yAt(u, v); return { x: finXAt(z, y, p, fin, shape), y, z }; };
     return [at(u0, B.v0), at(u1, B.v0), at(u1, B.v1), at(u0, B.v1)];
+  }
+  // Where the 2026 amber "stopped / under 20 km/h" lamps sit (The Race, 2026
+  // rear-lights explainer): the outboard face of each mirror housing. The same
+  // numbers the mirror section of build() uses, so a team style or a wider
+  // stalk carries the lamp with it. Cached per (team, scale): game.js asks
+  // once per drawn car per frame, and a fresh pair of objects there is garbage
+  // in the hot loop.
+  const _mirrorAnchorCache = new Map();
+  function mirrorLightAnchors(teamId, mirrorScale) {
+    const mScale = Math.max(0.85, Math.min(1.35, mirrorScale || 1));
+    const k = teamId + "|" + mScale.toFixed(3);
+    let a = _mirrorAnchorCache.get(k);
+    if (a) return a;
+    const mSty = teamStyleOf(teamId).mirror;
+    const mx = (0.34 + (mSty === 1 ? 0.035 : 0)) * mScale;
+    const mW = mSty === 1 ? 0.235 : 0.215;
+    const y = 0.735 + (mSty === 2 ? -0.032 : 0);
+    a = Object.freeze([{ x: -(mx + mW / 2 + 0.004), y, z: 0.26 }, { x: mx + mW / 2 + 0.004, y, z: 0.26 }]);
+    _mirrorAnchorCache.set(k, a);
+    return a;
   }
   function mergeRecipe(defaults, recipe) {
     return Object.assign(defaults, recipe || {});
@@ -2099,9 +2152,11 @@ const Car3D = (function () {
       const podY = (engSnork ? 1.085 : 0.76 + 0.10 * inScale) + 0.052;
       const podZ = engSnork ? -0.34 : -0.26;
       addBox(out, 0, podY - 0.048, podZ - 0.015, 0.028, 0.055, 0.030, CARBON, SURFACES.carbon);
+      // Housing colour is the livery's T-CAM pick (tcamColour): the shipped
+      // accent by default, or the real black / yellow driver code.
       addSpan(out, { z: podZ + 0.055, y: podY, w: 0.118, h: 0.056, t: 0.88 },
                    { z: podZ - 0.062, y: podY - 0.003, w: 0.101, h: 0.050, t: 0.82 },
-              accentC, [0.05, 0.05, 0.06]);
+              tcamColour(liv.tcam, opts && opts.teamId, opts && opts.num, accentC), [0.05, 0.05, 0.06]);
       addBox(out, 0, podY + 0.002, podZ + 0.062, 0.052, 0.026, 0.012,
              [0.02, 0.02, 0.03], SURFACES.metal);   // lens boss on the front face
 
@@ -2956,6 +3011,44 @@ const Car3D = (function () {
         [-fb, bTE, F.baseTE[0]], [fb, bTE, F.baseTE[0]],
         [ft, tp, F.topTE[0]],    [-ft, tp, F.topTE[0]],
       ], finC);
+      if (F.step) {
+        // The lower rear section of a stepped fin, scaled about the base line
+        // by the same aero factor as the blade so the step stays proportional.
+        const S = F.step, f = Math.max(0.55, Math.min(1.45, (aeroStyle && aeroStyle.fin) || 1));
+        const tp2 = F.baseTE[1] + (S.top - F.baseTE[1]) * f;
+        const bTE2 = root(S.baseTE[0], S.baseTE[1]);
+        addBlock(out, [
+          [-fb, bTE, F.baseTE[0]],   [fb, bTE, F.baseTE[0]],
+          [ft, tp2, F.baseTE[0]],    [-ft, tp2, F.baseTE[0]],
+          [-fb, bTE2, S.baseTE[0]],  [fb, bTE2, S.baseTE[0]],
+          [ft, tp2, S.baseTE[0] + 0.03], [-ft, tp2, S.baseTE[0] + 0.03],
+        ], finC);
+      }
+    }
+    // COVER VENTS (liv.coverVents; ids in COVER_VENT_IDS). Dark carbon boxes just
+    // proud of the cover — a decal would need an atlas region the flanks lack.
+    const vents = liv.coverVents || "none";
+    if (!ckpt && vents === "gills") {
+      for (const s of [-1, 1]) for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) {
+        const z = -0.98 - i * 0.11, p = anchors.coverAt(z);
+        if (!p) continue;
+        addBox(out, s * (p.x + 0.006), p.top - 0.045 - r * 0.045, z, 0.012, 0.014, 0.075, CARBON, SURFACES.carbon);
+      }
+    } else if (!ckpt && vents === "spine") {
+      // Along the ridge where it is FREE — of the fin root AND of the crest decal
+      // (car-mesh maps REGIONS.crest onto z -0.62..-1.28): the first cut ran the
+      // slot straight through the horse, measured in the studio. A full-chord fin
+      // roots at z -0.65, so only the short gap behind the airbox is open; with a
+      // stub or no fin and no spine crest the bare ridge ahead of the root takes
+      // a long slot (the AMR24 look); with no fin but a crest it sits behind the
+      // crest. Nowhere else is honest, so nowhere else is offered.
+      const finRootZ = finShape === "none" ? -1.70 : finOf(finShape).baseLE[0];
+      const crestOn = (liv.spineLogo || "logo") !== "none";
+      let zc = -0.56, len = 0.14;
+      if (!crestOn && finRootZ < -1.0) { len = Math.min(0.5, (-0.66 - finRootZ) - 0.06); zc = -0.69 - len / 2; }
+      else if (crestOn && finShape === "none") { zc = -1.47; len = 0.30; }
+      const p = anchors.coverAt(zc);
+      if (p) addBox(out, 0, p.top + 0.004, zc, 0.05, 0.008, len, CARBON, SURFACES.carbon);
     }
 
     part("sponsorBoard");
@@ -3629,5 +3722,6 @@ const Car3D = (function () {
            endplate: endplateGeom, numberBoard,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
            sharkFin: FIN, sharkFinPanel, sharkFinBadge, FIN_SHAPES, FIN_SHAPE_IDS,
+           TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors,
            aeroLevelOf, aeroStyleOf };
 })();

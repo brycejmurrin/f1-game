@@ -31,7 +31,10 @@ const OPTIONAL = ["stripe", "noseStripe", "accent", "nose", "pod", "wing",
 // "value change never moves a vertex" premise can be tested for it as well —
 // which it deliberately FAILS: a different outline IS a different hull, and
 // the field earns its place in SP_HULL_GEOM_FIELDS by presence, like the strips.
-const ENUM_GEOM = { finShape: ["swept", "stub"] };
+const ENUM_GEOM = { finShape: ["swept", "stub"], coverVents: ["gills", "spine"] };
+// ...and the enum that is a COLOUR: the T-cam housing. It must behave like a
+// hue — two values, byte-identical positions — or the hull would need it.
+const ENUM_PAINT = { tcam: ["black", "yellow"] };
 
 function declaredGeomFields() {
   const src = readFileSync(path.join(ROOT, "js/game.js"), "utf8");
@@ -64,6 +67,10 @@ test("a HUE change never moves a vertex — only presence can", () => {
     const on = build(withField(k, [0.3, 0.4, 0.5]));
     const on2 = build(withField(k, [0.9, 0.1, 0.2]));
     assert.ok(samePos(on, on2), `a hue change of \`${k}\` moved geometry`);
+  }
+  for (const [k, vals] of Object.entries(ENUM_PAINT)) {
+    assert.ok(samePos(base, build(withField(k, vals[0]))) && samePos(base, build(withField(k, vals[1]))),
+      `\`${k}\` is a colour pick and must not move a vertex`);
   }
 });
 

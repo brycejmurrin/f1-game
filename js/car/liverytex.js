@@ -1141,7 +1141,15 @@ const LiveryTex = (function () {
   // What sits on the shark fin. "number" is the real-F1 layout (the race number
   // rides the fin, the crest stays on the spine); "none" leaves the plate to
   // the tail graphic alone.
-  const FIN_BADGE_IDS = ["logo", "number", "none"];
+  // "code" is the driver's three-letter abbreviation (LEC), which the FIA
+  // requires on external bodywork at 150 mm anyway (Autosport / FIA); the fin
+  // is where most teams put it.
+  const FIN_BADGE_IDS = ["logo", "number", "code", "none"];
+  function driverCode(teamId, num) {
+    const t = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST.find((x) => x.id === teamId);
+    const d = t && t.drivers && t.drivers.find((x) => x.num === num);
+    return (d && d.code) || teamShort(teamId);
+  }
   // Whether the crest is also drawn on the engine-cover spine. With the badge
   // on the fin AND the spine the same mark reads twice from a chase camera,
   // which is the duplication the owner asked about.
@@ -1362,13 +1370,15 @@ const LiveryTex = (function () {
         drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
                       markHalo(LOGOS[teamId], finPaint, inkFin), emblemRim);
       } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true, palette: lockup });
-    } else if (finBadge === "number") {
-      // The race number on the fin, inked for the FIN paint (the badge box is
-      // wholly on the plate) with no board patch and no crest head — the plate
-      // is the board. `num` is resolved below for the nose; hoist its value.
+    } else if (finBadge === "number" || finBadge === "code") {
+      // The race number (or the driver's code) on the fin, inked for the FIN
+      // paint — the badge box is wholly on the plate — with no board patch and
+      // no crest head: the plate is the board. `num` is resolved below for the
+      // nose; hoist its value.
       const finNum = numberOverride != null ? numberOverride
                    : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
-      drawNumber(ctx, finNum, REGIONS.finBadge, inkFin, finWash, null, colors.numFont, 0);
+      const text = finBadge === "code" ? driverCode(teamId, finNum) : finNum;
+      drawNumber(ctx, text, REGIONS.finBadge, inkFin, finWash, null, colors.numFont, 0);
     }
 
     // Sponsor wordmarks.

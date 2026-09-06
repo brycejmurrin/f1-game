@@ -569,7 +569,8 @@ function buildLiveryOptions(container, team) {
       csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
                      noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "", logo2: "",
                      logo3: "", halo: "", finish: "gloss", numFont: "default", sponsors: "default",
-                     finStyle: "team", finBadge: "logo", spineLogo: "logo", finShape: "standard" };
+                     finStyle: "team", finBadge: "logo", spineLogo: "logo", finShape: "standard",
+                     tcam: "team", coverVents: "none" };
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -622,6 +623,7 @@ function buildLiveryOptions(container, team) {
           finish: liv.finish || "gloss", numFont: liv.numFont || "default", sponsors: liv.sponsors || "default",
           finStyle: liv.finStyle || "team", finBadge: liv.finBadge || "logo",
           spineLogo: liv.spineLogo || "logo", finShape: liv.finShape || "standard",
+          tcam: liv.tcam || "team", coverVents: liv.coverVents || "none",
         };
         csLivEditId = liv.id;
         csLivCreating = true;
@@ -826,6 +828,10 @@ function buildLiveryCreator(container, team) {
   pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team");
   pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo");
   pillRow("SPINE LOGO", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
+  // Body details: the T-cam housing colour (the real car-1 / car-2 code) and
+  // the engine-cover cooling vents. Both are mesh, so their id lists are Car3D's.
+  pillRow("T-CAM", "tcam", Car3D.TCAM_IDS || ["team"], "team");
+  pillRow("COVER VENTS", "coverVents", Car3D.COVER_VENT_IDS || ["none"], "none");
 
   const nameRow = document.createElement("label"); nameRow.className = "cs-liv-ed-row";
   const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
@@ -866,6 +872,8 @@ function buildLiveryCreator(container, team) {
     if (d.finBadge && d.finBadge !== "logo") liv.finBadge = d.finBadge;
     if (d.spineLogo && d.spineLogo !== "logo") liv.spineLogo = d.spineLogo;
     if (d.finShape && d.finShape !== "standard") liv.finShape = d.finShape;
+    if (d.tcam && d.tcam !== "team") liv.tcam = d.tcam;
+    if (d.coverVents && d.coverVents !== "none") liv.coverVents = d.coverVents;
     const existing = getCustomLiveries(team.id);
     // Edit-in-place replaces the entry that carried the OLD id; create appends.
     setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
@@ -903,7 +911,9 @@ function livePreviewDraft(team, d) {
     finStyle: d.finStyle && d.finStyle !== "team" ? d.finStyle : null,
     finBadge: d.finBadge && d.finBadge !== "logo" ? d.finBadge : null,
     spineLogo: d.spineLogo && d.spineLogo !== "logo" ? d.spineLogo : null,
-    finShape: d.finShape && d.finShape !== "standard" ? d.finShape : null } };
+    finShape: d.finShape && d.finShape !== "standard" ? d.finShape : null,
+    tcam: d.tcam && d.tcam !== "team" ? d.tcam : null,
+    coverVents: d.coverVents && d.coverVents !== "none" ? d.coverVents : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
