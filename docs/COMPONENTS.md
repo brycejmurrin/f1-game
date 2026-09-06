@@ -48,8 +48,8 @@ by what the screen is FOR, and both are checkable:
 
 | what | rule | where it is held |
 |---|---|---|
-| **a preference on a settings sheet** (Settings pages, the Spotify panel, the injected RENDERER / GRAPHICS / METRICS rows) | the **setting row**: `LABEL  ‹ VALUE ›` — `.set-row` holding a `.tune-label`, then a `div` with `button[data-step=-1]`, a native `<select>`, `button[data-step=1]`. One line at every UI SIZE; the ‹ select › cluster drops to its own line, right-aligned, only when the label cannot share it. Tap the value for the platform picker (every option, a real combo box for a screen reader); chevrons step; a disabled option (CUSTOM, SPOTIFY unconnected) is shown but skipped. Booleans are the same row, ‹ ON \| OFF › | `js/ui/setting-row.js` (`wire` / `paint` / `disable` / `optionDisabled` / `build`); the rows are static DOM in `index.html`, the options come from the owning module's own value list; CSS in `css/components.css` |
-| **a pick that is the screen's content** (RACE SETTINGS laps / weather / time / difficulty, garage tabs and parts, team and track lists, data-hub pills, steering PRESETS) and **multi-select toggles** (engine layers) | chips — `.opt-btn` / `.sel-chip` / `.cs-tab` / `.dh-*` etc., one `.active` (or several for toggles), wrapping through `.balanced-row` | their owning files |
+| **a preference on a settings sheet, or a property of the race about to start** (Settings pages, RACE SETTINGS, the Spotify panel, the injected RENDERER / GRAPHICS / METRICS rows) | the **setting row**: `LABEL  ‹ VALUE ›` — `.set-row` holding a `.tune-label`, then a `div` with `button[data-step=-1]`, a native `<select>`, `button[data-step=1]`. One line at every UI SIZE; the ‹ select › cluster drops to its own line, right-aligned, only when the label cannot share it. Tap the value for the platform picker (every option, a real combo box for a screen reader); chevrons step; a disabled option (CUSTOM, SPOTIFY unconnected) is shown but skipped. Booleans are the same row, ‹ ON \| OFF › | `js/ui/setting-row.js` (`wire` / `paint` / `disable` / `optionDisabled` / `build`); the rows are static DOM in `index.html`, the options come from the owning module's own value list; CSS in `css/components.css` |
+| **a pick that is the screen's content** (garage tabs and parts, team and track lists, data-hub pills, steering PRESETS, the circuit filter) and **multi-select toggles** (engine layers) | chips — `.opt-btn` / `.sel-chip` / `.cs-tab` / `.dh-*` etc., one `.active` (or several for toggles), wrapping through `.balanced-row` | their owning files |
 | the chosen chip look | `background: var(--plate-on); border-color: var(--red)` and nothing else — no glow, no side bar, no coloured word inside the control | `css/tokens.css` "THE ONE SELECTED LOOK"; every `.active` chip / tab / pill rule uses exactly those two declarations |
 | a full-card tile | the STRONG tier: `--plate-on-strong` + `--lift-sel` (team tile, career flavour / seat / slot) | `css/tokens.css` |
 | a small square control (a row's ‹ ›, the NOW PLAYING ⏮ ⏸ ⏭ transport on the MUSIC page and in the pause menu) | one shape: a `--chip-h` plate square, `--r-sm` corners; play/pause is the same square, filled | `css/components.css` `.set-row > div > button`, `css/tuner.css` `.as-tbtn` |
@@ -63,7 +63,19 @@ and a help line — CONTROLS ran 3.8 screens deep at landscape 150% for THREE
 settings, and LAYOUT's five chips wrapped to three lines at 200%. A setting row
 costs one line however many options it has, which is also why console racing
 games settle on `‹ VALUE ›` for their options screens. Chips stay where seeing
-every option side by side IS the task.
+every option side by side IS the task. RACE SETTINGS was the last screen on
+chips (2026-09-05, later the same day): its seven chip groups needed ~130 lines
+of shape- and density-keyed grid placement to fit a landscape phone, CAUTIONS
+had drifted into the coloured-word grammar, and DIFFICULTY squeezed to three
+cramped chips in portrait. Eight rows fit two columns at every shape with two
+CSS rules, and MIXED weather became its own CONDITIONS row instead of a toggle
+hiding among the weathers. Two things the row learned there, both measured with
+`scratch`-style Playwright probes rather than eyeballed: a grid that holds rows
+needs `grid-auto-rows: max-content`, because Chromium sizes an `auto` track from
+a wrapping row's single-line height and wrapped rows painted over each other at
+150%; and the ‹ › squares may shrink to `--tap-min` so that at 200% on a 393px
+phone the value keeps its room (MANUAL / DEFAULT no longer clip; values of eight
+or more characters still do there — the only shape that clips anything).
 
 Deliberate exceptions, each carrying a meaning red would erase: the livery
 `NONE` / palette pills use a white ring because colour IS their content;
@@ -111,7 +123,7 @@ not.
 | `co-`, `pm-`, `pane-`, `music-`, `set-` | ~9 each | career / components / components / tuner / components | — |
 
 The long tail (`sf-`, `q-`, `cg-`, `tm-`, `ot-`, `ax-`, `flag-`, `sec-`, `limits-`,
-`sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `rs-`, `balanced-`, `rotate-`,
+`sur-`, `trb-`, `tdf-`, `tds-`, `tdd-`, `balanced-`, `rotate-`,
 `cockpit-`, `budget-`, `over-`, `dock-`, `in-`, `btn-`, `chip-`,
 `season-`, `pair-`, `build-`, `mb-`) is one file each and needs no map.
 

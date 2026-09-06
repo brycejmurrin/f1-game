@@ -15,9 +15,9 @@
 // label, one to three chip lines and a help line: measured with
 // tools/ui/layout-audit.mjs the CONTROLS page ran 3.8 screens deep at landscape
 // 150% for THREE settings, and LAYOUT's five chips wrapped to three lines at
-// 200%. Chips stay where comparing options IS the task (RACE SETTINGS, the
-// garage, team and track pickers) and for multi-select toggles (engine
-// layers); a persisted preference in a list is a row.
+// 200%. Chips stay where comparing options IS the task (the garage, team and
+// track pickers) and for multi-select toggles (engine layers); a preference in
+// a list is a row — pause > SETTINGS and RACE SETTINGS alike.
 //
 // CONTRACT. The row is static DOM in index.html:
 //   <div id="X" class="set-row" role="group" aria-labelledby="X-label">

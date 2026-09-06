@@ -139,10 +139,8 @@ export const SCREENS = [
   { id: "quali", name: "Qualifying", root: "#quali", open: async (p) => {
       await p.click("#mb-race"); await p.waitForSelector("#select:not([hidden])", { timeout: 15000 });
       await p.click("#sel-go"); await p.waitForSelector("#race-settings:not([hidden])", { timeout: 15000 });
-      // QUALIFYING LAP ships OFF, so the chip has to be turned on before GO —
-      // the chips are generated, hence the text match rather than an id.
-      await p.evaluate(() => { const c = [...document.querySelectorAll("#rs-quali .sel-chip")];
-        (c.find((e) => /^on$/i.test(e.textContent.trim())) || c[c.length - 1])?.click(); });
+      // GRID ships on PACE ORDER, so the row is set to QUALIFYING LAP before GO.
+      await p.selectOption("#rs-quali-sel", "quali");
       await p.click("#rs-go");
       await p.waitForSelector("#quali:not([hidden])", { timeout: 60000 }); } },
 
