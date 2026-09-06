@@ -35,7 +35,7 @@ const samePos = (a, b) => a.pos.length === b.pos.length && a.pos.every((v, i) =>
 
 test("an absent finShape is the shipped car, byte for byte", () => {
   assert.ok(samePos(build({}), build({ finShape: "standard" })));
-  assert.deepEqual(M.Car3D.FIN_SHAPE_IDS, ["standard", "swept", "stub", "none"]);
+  assert.deepEqual(M.Car3D.FIN_SHAPE_IDS, ["standard", "swept", "stub", "stepped", "none"]);
 });
 
 // car-mesh.js calls sharkFinBadge()/sharkFinPanel() with NO shape, as every
@@ -142,4 +142,75 @@ test("finBadge number puts the race number on the fin; none leaves the plate bar
   const def = A.paint("ferrari", BASE);
   assert.ok(!opsIn(def, R.finBadge).some((op) => op.kind === "text" && op.text === "16"), "the crest badge already carried the number");
   assert.equal(opsIn(A.paint("ferrari", { ...BASE, finBadge: "none" }), R.finBadge).length, 0);
+});
+
+// ── body details, same editor, same defaults-reproduce-the-car rule ──────────
+
+const sameCol = (a, b) => a.col.length === b.col.length && a.col.every((v, i) => v === b.col[i]);
+
+test("the stepped fin adds a rear block behind an unchanged front-blade outline", () => {
+  const std = build({}), st = build({ finShape: "stepped" });
+  assert.ok(st.pos.length > std.pos.length, "the step is extra geometry");
+  // The panel and badge are placed off the FRONT blade, whose base ends at z -1.45.
+  const badge = M.Car3D.sharkFinBadge(null, 1, "stepped");
+  assert.ok(badge.every((c) => c.z >= -1.45 && c.z <= -0.65), "badge stays on the front blade");
+  assert.ok(M.Car3D.FIN_SHAPE_IDS.includes("stepped") && M.Car3D.FIN_SHAPE_IDS.at(-1) === "none", "\"none\" stays last");
+});
+
+test("cover vents are geometry; the T-cam pick is colour only", () => {
+  const base = build({});
+  for (const v of ["gills", "spine"]) {
+    assert.ok(build({ coverVents: v }).pos.length > base.pos.length, `coverVents ${v} adds vertices`);
+  }
+  const bl = build({ tcam: "black" }), ye = build({ tcam: "yellow" });
+  assert.ok(samePos(bl, ye) && !sameCol(bl, ye), "black vs yellow: same vertices, different colours");
+  assert.ok(samePos(base, build({ tcam: "team" })) && sameCol(base, build({ tcam: "team" })), "\"team\" is the shipped car");
+});
+
+// The real rule, read off the driver slot: car 1 black, car 2 yellow. Compared
+// at the SAME number each time — the number already colours other parts of the
+// mesh, so a cross-number comparison says nothing about the T-cam.
+test("T-cam auto paints car 1 black and car 2 yellow", () => {
+  const team = M.Teams.LIST.find((t) => t.id === "ferrari");
+  const parts = M.Parts.getVisualTiers(M.Parts.defaults ? M.Parts.defaults() : {}, team);
+  const b = (liv, num) => M.Car3D.build([0.9, 0.1, 0.1], [1, 1, 1], { livery: liv, teamId: "ferrari", num, parts });
+  const [n1, n2] = team.drivers.map((d) => d.num);
+  assert.ok(sameCol(b({ tcam: "auto" }, n1), b({ tcam: "black" }, n1)), "car 1 reads black");
+  assert.ok(sameCol(b({ tcam: "auto" }, n2), b({ tcam: "yellow" }, n2)), "car 2 reads yellow");
+});
+
+test("finBadge code puts the driver's three letters on the fin", () => {
+  // Ferrari, car 16 (A.paint's fixed number), badge "code" -> LEC in the badge box.
+  const ops = A.paint("ferrari", { ...BASE, finBadge: "code" });
+  const texts = opsIn(ops, R.finBadge).filter((o) => o.kind === "text").map((o) => o.text);
+  assert.ok(texts.includes("LEC"), `fin badge texts: ${JSON.stringify(texts)}`);
+  assert.ok(!opsIn(A.paint("ferrari", { ...BASE, finBadge: "number" }), R.finBadge).some((o) => o.kind === "text" && o.text === "LEC"),
+    "the number badge does not also carry the code");
+});
+
+test("mirror lamp anchors follow the team's mirror style and are cached", () => {
+  const a = M.Car3D.mirrorLightAnchors("ferrari", 1);
+  assert.equal(a.length, 2);
+  assert.ok(a[0].x < 0 && a[1].x > 0 && a[0].x === -a[1].x, "one per side, mirrored");
+  assert.strictEqual(M.Car3D.mirrorLightAnchors("ferrari", 1), a, "same call, same object — no per-frame garbage");
+  // Mercedes runs the swept (wider) housing: its lamp sits further outboard.
+  assert.ok(M.Car3D.mirrorLightAnchors("mercedes", 1)[1].x > a[1].x);
+});
+
+// The 2026 code, sampled across one second. Two things must hold: the deploy
+// flash is SHORT (one pulse a second, not a strobe — the note in game.js
+// records why), and a cruising car returns -1 so the weather / night gate keeps
+// its old behaviour untouched.
+test("the ERS light code flashes once at full deploy, rapidly when clipping, and stands aside otherwise", () => {
+  const code = M.CarMesh.ersLightCode;
+  const sample = (c) => Array.from({ length: 40 }, (_, i) => code(c, i / 40));
+  const dep = sample({ deploying: true, energy: 0.5 });
+  assert.ok(dep.every((v) => v === 0 || v === 1), "deploying: the code owns the lamp");
+  const lit = dep.filter((v) => v === 1).length;
+  assert.ok(lit >= 4 && lit <= 12, `one short pulse per second, not a strobe (lit ${lit}/40)`);
+  const clip = sample({ deploying: false, energy: 1, axEstSm: -6 });
+  assert.ok(clip.filter((v, i) => i > 0 && v !== clip[i - 1]).length >= 6, "clipping: rapid flash");
+  assert.ok(sample({ deploying: false, energy: 0.6, axEstSm: 0 }).every((v) => v === -1), "cruising: gate decides");
+  assert.ok(sample({ deploying: false, energy: 1, axEstSm: 0 }).every((v) => v === -1), "full but not braking: no clip");
+  assert.equal(code(null, 0), -1);
 });

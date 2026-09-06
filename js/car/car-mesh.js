@@ -556,6 +556,48 @@ function drawRearLights(mat, emissive) {
     _gfx.draw(getEndplateLight(), W, _RL_FX);
   }
 }
+// 2026 amber mirror lamps: a car under 20 km/h or stopped lights amber on both
+// mirror housings (The Race, 2026 rear-lights explainer). A SIDE-facing quad in
+// the yz plane — the rear lights face -z and would read edge-on here.
+let _mirrorLightMesh = null;
+function getMirrorLight() {
+  if (_mirrorLightMesh) return _mirrorLightMesh;
+  const A = [2.3, 1.25, 0.12], out = { pos: [], nrm: [], col: [], idx: [] };
+  const h = 0.018, d = 0.030;
+  out.pos.push(0, -h, -d,  0, -h, d,  0, h, d,  0, h, -d);
+  for (let i = 0; i < 4; i++) { out.nrm.push(1, 0, 0); out.col.push(A[0], A[1], A[2]); }
+  out.idx.push(0, 2, 1, 0, 3, 2,  0, 1, 2, 0, 2, 3);   // both windings — reads from either side
+  _mirrorLightMesh = _gfx.createMesh(out);
+  return _mirrorLightMesh;
+}
+// `anchors` is Car3D.mirrorLightAnchors(teamId, scale): one {x,y,z} per side.
+function drawMirrorLights(mat, anchors) {
+  _RL_FX.emissive = 1;
+  const W = _rlW;
+  for (let i = 0; i < anchors.length; i++) {
+    const a = anchors[i];
+    W.set(mat);
+    W[12] += W[0] * a.x + W[4] * a.y + W[8] * a.z;
+    W[13] += W[1] * a.x + W[5] * a.y + W[9] * a.z;
+    W[14] += W[2] * a.x + W[6] * a.y + W[10] * a.z;
+    _gfx.draw(getMirrorLight(), W, _RL_FX);
+  }
+}
+// The 2026 rear-light ERS code (The Race): ONE short flash, repeating, while the
+// MGU-K deploys at full power; a RAPID flash when the battery is full and the K
+// is being clipped. The rule's third state — two flashes for "neither deploying
+// nor harvesting" — is deliberately absent: it is the ordinary state for most of
+// a lap, and game.js records that an always-on ERS strobe was tried and
+// reverted for exactly that. Returns 1 lit / 0 dark while a code applies, or -1
+// when none does and the weather / night gate decides as before. Pure, so the
+// unit test can walk it through a second of each state.
+function ersLightCode(c, t) {
+  if (!c) return -1;
+  if (c.deploying) return ((t * 1.25) % 1) < 0.18 ? 1 : 0;
+  const full = (c.energy || 0) >= 0.985;
+  if (full && (c.axEstSm || 0) < -2.5) return ((t * 8) % 1) < 0.5 ? 1 : 0;
+  return -1;
+}
 let _otArmedMesh = null, _otActiveMesh = null;
 function getOtLamp(active) {
   if (active ? _otActiveMesh : _otArmedMesh) return active ? _otActiveMesh : _otArmedMesh;
@@ -566,5 +608,5 @@ function getOtLamp(active) {
   return m;
 }
 
-  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, gridStrobe };
+  return { init, carDecalData, getCarDecalMesh, getCockpitDecalMesh, getBrakeRing, getExhaustFlame, getBoostFlame, getErsLight, getAeroFlap, getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit, getErsBar, getOtLamp, drawWheelExtras, drawRearLights, drawMirrorLights, ersLightCode, gridStrobe };
 })();

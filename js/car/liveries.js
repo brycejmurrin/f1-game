@@ -27,7 +27,14 @@
      LiveryTex.TAIL_STYLE), "diag" | "sweep" | "chevron" | "streak" | "check"
      to borrow another, or "none" for plain paint.
    finBadge? optional FIN BADGE — what the shark fin carries: "logo" (absent;
-     the team crest), "number" (the race number, the real-F1 layout) or "none".
+     the team crest), "number" (the race number, the real-F1 layout), "code"
+     (the driver's three-letter abbreviation) or "none".
+   tcam? optional T-CAM housing colour: "team" (absent; the accent housing),
+     "auto" (the real rule — car 1 black, car 2 yellow, read off the driver
+     slot), "black" or "yellow". Mesh colour, not paint (Car3D.TCAM_IDS).
+   coverVents? optional COVER VENTS: "none" (absent), "gills" (rows of cooling
+     slits on the engine-cover flanks) or "spine" (one slot along the ridge).
+     Geometry — the second livery field besides finShape that moves a vertex.
    spineLogo? optional SPINE LOGO — "logo" (absent) draws the crest on the
      engine-cover spine as well; "none" leaves the spine to the tail wash, so
      the mark reads once from a chase camera instead of twice.
@@ -421,7 +428,7 @@ const Liveries = (function () {
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
     const ex = team.livery;
-    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape"]) if (ex[k]) def[k] = ex[k];
+    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape", "tcam", "coverVents"]) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 
