@@ -2133,3 +2133,17 @@ the row replaced them. The pause menu also gained the MUSIC page's NOW PLAYING c
 `js/ui/setting-row.js`); `cssClasses` 549 → 549 (`.as-toggle` retired,
 `.set-row` added); `rawColor` 329 → 325 (the cam picker, garage SPIN and
 track-row washes use tokens; the unread `--manual` token is gone).
+
+## 2026-09-05 — RACE SETTINGS on setting rows: shellNodes 1273 → 1307
+
+`shellNodes` RAISED by 34, deliberately, for the same reason as the entry above:
+RACE SETTINGS was the last screen on chips, and its seven `h3 + chip-row`
+sections (two static nodes each; the chips were built by JS) are eight setting
+rows of six static nodes — LAPS, WEATHER, CONDITIONS (MIXED weather, which was
+a toggle chip hiding among the weathers, is its own row now), TIME OF DAY,
+DIFFICULTY, GRID, CAUTIONS, RELIABILITY. What the raise buys: one selection
+grammar across the two screens a player sees around every race, and the ~130
+lines of shape- and density-keyed grid placement in `css/menus.css` that fitted
+the chip groups on a landscape phone are two rules. `js/game.js` shrank (the
+seven chip-building loops are eight `SettingRow.paint` calls and one wiring
+function); `cssClasses` fell (`.rs-row` retired).

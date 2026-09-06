@@ -349,15 +349,13 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
     await page.locator("#sel-go").click();
     await expect(page.locator("#race-settings")).toBeVisible();
   }
-  // Chips carry no ids, so they are clicked by index inside the page.
-  const pickGrid = (page, i) => page.evaluate((n) => {
-    const c = [...document.querySelectorAll("#rs-quali .sel-chip")];
-    if (c[n]) c[n].click();
-  }, i);
+  // GRID is a setting row (js/ui/setting-row.js): option 0 is the pace-order
+  // grid and option 1 the qualifying lap, picked by index as the chips were.
+  const pickGrid = (page, i) => page.locator("#rs-quali-sel").selectOption({ index: i });
 
   test("OFF goes straight to the lights from P12, as it always has", async ({ page }) => {
     await toSettings(page);
-    await expect(page.locator("#rs-quali-section")).toBeVisible();
+    await expect(page.locator("#rs-quali")).toBeVisible();
     await pickGrid(page, 0);
     await page.locator("#rs-go").click();
     await page.waitForFunction(() => ["count", "race"].includes(window.__apex.info().state), null, { polling: 100, timeout: 60_000 });
@@ -389,16 +387,15 @@ test.describe("QUALIFYING LAP: a one-off race can qualify", () => {
   test("a championship forces it on, and says so rather than hiding it", async ({ page }) => {
     // The choice is not the player's in a season — the weekend decides the grid
     // — but "why did this race qualify" is a question the screen should answer.
-    // Dead ON/OFF chips looked tappable and did nothing; the label carries it.
+    // Dead ON/OFF chips looked tappable and did nothing; now the row is
+    // DISABLED and reads QUALIFYING LAP — the setting is shown, not offered.
     await boot(page);
     await page.locator("#mb-season").click();
     await page.locator("#sel-go").click();
-    await expect(page.locator("#rs-quali-section")).toBeVisible();
-    const state = await page.evaluate(() => ({
-      label: document.getElementById("rs-quali-label").textContent,
-      chipsHidden: document.getElementById("rs-quali").hidden,
-    }));
-    expect(state.label).toMatch(/ON/);
-    expect(state.chipsHidden).toBe(true);
+    await expect(page.locator("#rs-quali")).toBeVisible();
+    const sel = page.locator("#rs-quali-sel");
+    await expect(sel).toBeDisabled();
+    await expect(sel).toHaveValue("quali");
+    await expect(page.locator("#rs-quali-next")).toBeDisabled();
   });
 });

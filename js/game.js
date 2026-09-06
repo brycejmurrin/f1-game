@@ -8879,143 +8879,95 @@ function buildRaceSettings() {
   // other player — it does not drop the lights. A button saying RACE! there is
   // a lie about what the next tap does.
   $("rs-go").textContent = netRoom ? "CONFIRM" : "RACE!";
+  wireRaceSettings();
+  const tt = isTimeTrial();
   // TT list includes 4 because TT_LAPS = 4 is the openRaceSettings default —
-  // without it the screen opened with no LAPS chip highlighted.
+  // without it the screen opened with no LAPS option selected.
   // FULL is this CIRCUIT's grand prix distance (def.gpLaps — the real
   // regulation, derived in js/track/tracks.js), not a flat 57 offered on all
   // forty. Monaco is 78 laps and Spa is 44; one number could only ever be right
   // for one of them, and 57 was not right for either. Filtered so the ladder
   // stays strictly increasing on a short circuit-free layout.
   const full = (Tracks.LIST[trackIdx] && Tracks.LIST[trackIdx].gpLaps) || 57;
-  const lapOpts = isTimeTrial() ? [3, 4, 5, 8]
-                                : [3, 5, 10, 25].filter((n) => n < full).concat(full);
+  const lapOpts = tt ? [3, 4, 5, 8] : [3, 5, 10, 25].filter((n) => n < full).concat(full);
   // FULL now MOVES with the circuit, so a selection made at Monaco (78) is off
   // the ladder at Spa (44) — and a 57 (FULL) picked at Silverstone is off it at
-  // Monaco (78) too, BELOW full, so a > full clamp still left no chip lit.
-  if (!isTimeTrial() && !lapOpts.includes(raceLaps)) raceLaps = full;   // a full race stays a full race
-  const lapsEl = $("rs-laps");
-  lapsEl.innerHTML = "";
-  for (const n of lapOpts) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceLaps === n ? " active" : "");
-    b.textContent = !isTimeTrial() && n === full ? full + " (FULL)" : String(n);
-    b.onclick = () => { raceLaps = n; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
-    lapsEl.appendChild(b);
-  }
-  const weatherEl = $("rs-weather");
-  weatherEl.innerHTML = "";
-  for (const [id, label, icon] of [["dry", "DRY", "☀"], ["wet", "WET", "💧"], ["rain", "RAIN", "🌧"], ["overcast", "CLOUDY", "☁"], ["fog", "FOG", "🌫"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceWeather === id ? " active" : "");
-    const ic = document.createElement("span"); ic.setAttribute("aria-hidden", "true"); ic.textContent = icon; b.append(ic, " " + label);   // icon in its own span: the wide-compact shape hides it so five labels fit one row
-    b.onclick = () => { raceWeather = id; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
-    weatherEl.appendChild(b);
-  }
-  // MIXED: changeable conditions — the race STARTS in the weather picked above
-  // and walks to a target the host decides. A toggle, not a sixth weather.
-  if (!isTimeTrial()) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceChangeable ? " active" : "");
-    b.setAttribute("aria-pressed", raceChangeable ? "true" : "false");
-    b.title = "Changeable conditions — the weather moves during the race";
-    const ic = document.createElement("span"); ic.setAttribute("aria-hidden", "true"); ic.textContent = "⇄"; b.append(ic, " MIXED");
-    b.onclick = () => { raceChangeable = !raceChangeable; wxArcPlan = null; buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
-    weatherEl.appendChild(b);
-  }
-  const timeEl = $("rs-time");
-  timeEl.innerHTML = "";
-  for (const [id, label] of [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceTimeOfDay === id ? " active" : "");
-    b.textContent = label;
-    // scheduleFlybyTrack: loadTrack is memoised on (circuit, sessionDark), and
-    // a TIME pick that flips sessionDark used to leave the flyby's build stale
-    // so GO paid a second full Tracks.build (0.9–3.3 s measured) on top of the
-    // first. Rebuilding on the click lands it in menu idle instead.
-    b.onclick = () => { raceTimeOfDay = id; buildRaceSettings(); scheduleFlybyTrack(); if (soundOn) GameAudio.uiTick(); };
-    timeEl.appendChild(b);
-  }
+  // Monaco (78) too, BELOW full, so a > full clamp still left nothing selected.
+  if (!tt && !lapOpts.includes(raceLaps)) raceLaps = full;   // a full race stays a full race
+  SettingRow.paint("rs-laps", raceLaps, lapOpts.map((n) => [n, !tt && n === full ? full + " (FULL)" : String(n)]));
+  SettingRow.paint("rs-weather", raceWeather, RS_WEATHER);
+  // CONDITIONS — changeable weather: the race STARTS in the weather picked
+  // above and walks to a target the host decides. Its own row, not a sixth
+  // weather: it is a second question about the same sky.
+  $("rs-mixed").hidden = tt;
+  SettingRow.paint("rs-mixed", raceChangeable ? "mixed" : "stable", RS_CONDITIONS);
+  SettingRow.paint("rs-time", raceTimeOfDay, RS_TIME);
   // DIFFICULTY — a race setting like the rest, so it is built here rather than
   // on the select screen. Unlike laps/weather/time it PERSISTS (store), because
   // it is a standing preference rather than a per-race choice.
-  $("rs-diff-section").hidden = isTimeTrial();  // no AI to rate in a time trial
-  const diffEl = $("rs-diff");
-  diffEl.innerHTML = "";
-  for (const d of ["easy", "normal", "hard"]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (difficulty === d ? " active" : "");
-    b.setAttribute("aria-pressed", difficulty === d ? "true" : "false");
-    b.textContent = d.toUpperCase();
-    b.onclick = () => { difficulty = d; store.set("difficulty", d); buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
-    diffEl.appendChild(b);
-  }
-  // RELIABILITY — same idiom, same persistence, and hidden alongside DIFFICULTY
-  // in a time trial for the same reason: neither has anything to act on there.
-  // (ACTIVE AERO used to sit here. It is a CONTROL preference, not a property of
-  // the event, so it lives in pause > SETTINGS > DRIVING next to GEARS — where
-  // it can also be changed mid-race, which is when a player discovers they want
-  // it. See refreshAeroBtn.)
-  // Hidden in a time trial (no grid). A championship weekend decides the grid,
-  // so the chips go away and the label carries ON/OFF — dead chips looked live
-  // enough to tap and did nothing. Qualifying IS offered in a friend race.
+  $("rs-diff").hidden = tt;  // no AI to rate in a time trial
+  SettingRow.paint("rs-diff", difficulty, RS_DIFF);
+  // GRID — hidden in a time trial (no grid). A championship weekend that
+  // qualifies decides the grid itself, so the row is DISABLED showing
+  // QUALIFYING LAP rather than hidden: "why did this race qualify" is a
+  // question the screen should answer, and a dead control that still says
+  // what it is set to answers it. Option 0 is always the pace-order grid and
+  // option 1 the qualifying lap — the values quali.spec.js selects. Labels say
+  // what the rule IS (REVERSE TOP 10 is Formula 2's sprint rule, not an F1
+  // one; REVERSED is the standings upside down) in TEN characters, the most
+  // the row's 8rem value holds at --fs-3 bold: measured 2026-09-05 the select's
+  // inner width is 112px on a 393px phone, "QUALIFYING LAP" needed 125 and
+  // "REVERSE TOP 10 · F2" 159. Qualifying IS offered in a friend race.
+  // (RELIABILITY and CAUTIONS below hide in a time trial for the same reason
+  // DIFFICULTY does: alone on an empty track there is nothing to act on.
+  // ACTIVE AERO used to sit here; it is a CONTROL preference, so it lives in
+  // pause > SETTINGS > DRIVING next to GEARS — see refreshAeroBtn.)
   const champ = isChampionship();
-  $("rs-quali-section").hidden = isTimeTrial();
-  const qEl = $("rs-quali");
-  qEl.innerHTML = "";
+  $("rs-quali").hidden = tt;
   const qForced = champ ? SeasonCal.quali() : null;
-  // A championship that qualifies grids off the session, full stop (the label
-  // carries ON); one that does not still picks among the non-qualifying rules.
-  // Chip 0 is always the pace-order grid and chip 1 the qualifying lap — the
-  // indices quali.spec.js clicks. Labels say what the rule IS, and where it
-  // comes from: REVERSE TOP 10 is Formula 2's sprint rule, not an F1 one.
-  $("rs-quali-label").textContent = qForced ? "QUALIFYING LAP · ON" : "GRID";
-  qEl.hidden = !!qForced;
-  const rules = champ
-    ? [["tier", "PACE ORDER"], ["revchamp", "REVERSE STANDINGS"], ["random", "RANDOM"]]
-    : [["tier", "PACE ORDER"], ["quali", "QUALIFYING LAP"], ["rev10", "REVERSE TOP 10 · F2"], ["random", "RANDOM"]];
-  const cur = rules.some(([r]) => r === raceGrid) ? raceGrid : "tier";   // a rule this flow has no chip for gridOrderFor() ignores
-  if (!qForced) for (const [rule, label] of rules) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (cur === rule ? " active" : "");
-    b.setAttribute("aria-pressed", cur === rule ? "true" : "false");
-    b.textContent = label;
-    b.onclick = () => {
-      raceGrid = rule; store.set("raceGrid", rule);
-      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
-    };
-    qEl.appendChild(b);
-  }
-  // CAUTIONS — the flag layer. Hidden in a time trial for the same reason
-  // RELIABILITY is: alone on an empty track there is nothing to caution.
-  $("rs-caution-section").hidden = isTimeTrial();
-  const cauEl = $("rs-caution");
-  cauEl.innerHTML = "";
-  const cautionOn = raceCtl.enabled;
-  for (const [on, label] of [[false, "OFF"], [true, "ON"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (cautionOn === on ? " active" : "");
-    b.setAttribute("aria-pressed", cautionOn === on ? "true" : "false");
-    b.textContent = label;
-    b.onclick = () => {
-      setCautionEnabled(on);
-      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
-    };
-    cauEl.appendChild(b);
-  }
-  $("rs-reliab-section").hidden = isTimeTrial();
-  const relEl = $("rs-reliab");
-  relEl.innerHTML = "";
-  for (const [id, label] of [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]]) {
-    const b = document.createElement("button");
-    b.className = "sel-chip" + (raceReliability === id ? " active" : "");
-    b.setAttribute("aria-pressed", raceReliability === id ? "true" : "false");
-    b.textContent = label;
-    b.onclick = () => {
-      raceReliability = id; store.set("reliability", id);
-      buildRaceSettings(); if (soundOn) GameAudio.uiTick();
-    };
-    relEl.appendChild(b);
-  }
+  const rules = qForced ? [["quali", "QUALIFYING"]]
+    : champ ? [["tier", "PACE ORDER"], ["revchamp", "REVERSED"], ["random", "RANDOM"]]
+    : [["tier", "PACE ORDER"], ["quali", "QUALIFYING"], ["rev10", "REVERSE 10"], ["random", "RANDOM"]];
+  // A rule this flow has no option for gridOrderFor() ignores.
+  const cur = qForced ? "quali" : rules.some(([r]) => r === raceGrid) ? raceGrid : "tier";
+  SettingRow.paint("rs-quali", cur, rules);
+  SettingRow.disable("rs-quali", !!qForced);
+  $("rs-caution").hidden = tt;
+  SettingRow.paint("rs-caution", raceCtl.enabled ? "on" : "off", RS_ONOFF);
+  $("rs-reliab").hidden = tt;
+  SettingRow.paint("rs-reliab", raceReliability, RS_RELIAB);
+}
+// The option lists are data; the rows in index.html hold no options of their
+// own, so the list the store validates against and the list the player sees
+// cannot drift. Icons ride inside the label (a <select> option is text-only).
+const RS_WEATHER = [["dry", "☀ DRY"], ["wet", "💧 WET"], ["rain", "🌧 RAIN"], ["overcast", "☁ CLOUDY"], ["fog", "🌫 FOG"]];
+const RS_CONDITIONS = [["stable", "STABLE"], ["mixed", "MIXED"]];
+const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dusk", "DUSK"], ["night", "NIGHT"]];
+const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
+const RS_ONOFF = [["off", "OFF"], ["on", "ON"]];
+const RS_RELIAB = [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]];
+// Wire the eight rows ONCE (a listener per build would stack); every build
+// after that is a paint. Each write repaints the whole screen, because LAPS
+// and GRID depend on state a neighbour can change. The mark lives on the body
+// so the DOM says whether it is wired (no top-level let).
+function wireRaceSettings() {
+  const body = $("rs-body");
+  if (body.dataset.wired) return;
+  body.dataset.wired = "1";
+  const after = () => { buildRaceSettings(); if (soundOn) GameAudio.uiTick(); };
+  const wire = (id, read, write) => SettingRow.wire(id, { read, write: (v) => { write(v); after(); } });
+  wire("rs-laps", () => raceLaps, (v) => { raceLaps = +v; });
+  wire("rs-weather", () => raceWeather, (v) => { raceWeather = v; });
+  wire("rs-mixed", () => (raceChangeable ? "mixed" : "stable"), (v) => { raceChangeable = v === "mixed"; wxArcPlan = null; });
+  // scheduleFlybyTrack: loadTrack is memoised on (circuit, sessionDark), and a
+  // TIME pick that flips sessionDark used to leave the flyby's build stale so
+  // GO paid a second full Tracks.build (0.9–3.3 s measured) on top of the
+  // first. Rebuilding on the pick lands it in menu idle instead.
+  wire("rs-time", () => raceTimeOfDay, (v) => { raceTimeOfDay = v; scheduleFlybyTrack(); });
+  wire("rs-diff", () => difficulty, (v) => { difficulty = v; store.set("difficulty", v); });
+  wire("rs-quali", () => raceGrid, (v) => { raceGrid = v; store.set("raceGrid", v); });
+  wire("rs-caution", () => (raceCtl.enabled ? "on" : "off"), (v) => { setCautionEnabled(v === "on"); });
+  wire("rs-reliab", () => raceReliability, (v) => { raceReliability = v; store.set("reliability", v); });
 }
 
 // RACE SETTINGS is reachable from #select and (in career) from #career, so it

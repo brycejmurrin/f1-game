@@ -2524,9 +2524,11 @@ test("GLX links its core programs as one parallel batch when KHR_parallel_shader
   assert.match(glx, /getExtension\("KHR_parallel_shader_compile"\)/, "init() requests the extension");
 });
 
-test("the TIME chip rebuilds the flyby track so GO does not pay a second Tracks.build", () => {
+test("the TIME OF DAY row rebuilds the flyby track so GO does not pay a second Tracks.build", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  assert.match(game, /raceTimeOfDay = id; buildRaceSettings\(\); scheduleFlybyTrack\(\);/,
+  // The row's write (js/ui/setting-row.js) — every write then repaints the
+  // screen through wireRaceSettings' `after`, so only the flyby call is pinned.
+  assert.match(game, /wire\("rs-time", \(\) => raceTimeOfDay, \(v\) => \{ raceTimeOfDay = v; scheduleFlybyTrack\(\); \}\)/,
     "a time-of-day pick must schedule the (memoised) flyby build while the menu is idle");
   assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
     "loadTrack's memo is what makes the extra call free when the session darkness did not change");

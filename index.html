@@ -1466,56 +1466,80 @@
 <dialog id="race-settings" class="screen dim" data-esc-close="rs-cancel" aria-labelledby="dlg-racesettings" hidden>
   <div class="sheet">
     <div class="sheet-head"><h2 id="dlg-racesettings">RACE SETTINGS</h2></div>
+    <!-- Eight SETTING ROWS (js/ui/setting-row.js), the same control as pause >
+         SETTINGS: LABEL ‹ VALUE ›. This screen was the last one on chips, and
+         it needed ~130 lines of shape-and-density grid CSS to fit seven chip
+         groups on a landscape phone; eight rows fit in two columns at every
+         shape without any of it. The OPTIONS are data in game.js
+         (buildRaceSettings): LAPS follows the circuit's grand-prix distance,
+         GRID follows the flow (a qualifying championship pins it and disables
+         the row rather than hiding it), and the five race-only rows —
+         CONDITIONS, DIFFICULTY, GRID, CAUTIONS, RELIABILITY — hide in a time
+         trial, where there is no field to apply them to. -->
     <div class="sheet-body pane" id="rs-body">
-      <div class="rs-row">
-        <h3 class="sel-label" id="rs-laps-label">LAPS</h3>
-        <div id="rs-laps" class="chip-row balanced-row" role="group" aria-labelledby="rs-laps-label"></div>
+      <div id="rs-laps" class="set-row" role="group" aria-labelledby="rs-laps-label">
+        <span class="tune-label" id="rs-laps-label">LAPS</span>
+        <div>
+          <button id="rs-laps-prev" type="button" data-step="-1" aria-label="Previous lap count">&lsaquo;</button>
+          <select id="rs-laps-sel" aria-labelledby="rs-laps-label"></select>
+          <button id="rs-laps-next" type="button" data-step="1" aria-label="Next lap count">&rsaquo;</button>
+        </div>
       </div>
-      <div class="rs-row">
-        <h3 class="sel-label" id="rs-weather-label">WEATHER</h3>
-        <div id="rs-weather" class="chip-row balanced-row" role="group" aria-labelledby="rs-weather-label"></div>
+      <div id="rs-weather" class="set-row" role="group" aria-labelledby="rs-weather-label">
+        <span class="tune-label" id="rs-weather-label">WEATHER</span>
+        <div>
+          <button id="rs-weather-prev" type="button" data-step="-1" aria-label="Previous weather">&lsaquo;</button>
+          <select id="rs-weather-sel" aria-labelledby="rs-weather-label"></select>
+          <button id="rs-weather-next" type="button" data-step="1" aria-label="Next weather">&rsaquo;</button>
+        </div>
       </div>
-      <div class="rs-row" id="rs-time-section">
-        <h3 class="sel-label" id="rs-time-label">TIME OF DAY</h3>
-        <div id="rs-time" class="chip-row balanced-row" role="group" aria-labelledby="rs-time-label"></div>
+      <div id="rs-mixed" class="set-row" role="group" aria-labelledby="rs-mixed-label">
+        <span class="tune-label" id="rs-mixed-label">CONDITIONS</span>
+        <div>
+          <button id="rs-mixed-prev" type="button" data-step="-1" aria-label="Previous conditions">&lsaquo;</button>
+          <select id="rs-mixed-sel" aria-labelledby="rs-mixed-label"></select>
+          <button id="rs-mixed-next" type="button" data-step="1" aria-label="Next conditions">&rsaquo;</button>
+        </div>
       </div>
-      <!-- DIFFICULTY lives here with the other race settings, not on the select
-           screen: it is a property of the race you are about to start, the same
-           as laps and weather. Hidden in a time trial — there is no AI to rate. -->
-      <div class="rs-row" id="rs-diff-section">
-        <h3 class="sel-label" id="rs-diff-label">DIFFICULTY</h3>
-        <div id="rs-diff" class="chip-row balanced-row" role="group" aria-labelledby="rs-diff-label"></div>
+      <div id="rs-time" class="set-row" role="group" aria-labelledby="rs-time-label">
+        <span class="tune-label" id="rs-time-label">TIME OF DAY</span>
+        <div>
+          <button id="rs-time-prev" type="button" data-step="-1" aria-label="Previous time of day">&lsaquo;</button>
+          <select id="rs-time-sel" aria-labelledby="rs-time-label"></select>
+          <button id="rs-time-next" type="button" data-step="1" aria-label="Next time of day">&rsaquo;</button>
+        </div>
       </div>
-      <!-- RELIABILITY — whether cars can retire. A standing preference like
-           DIFFICULTY, and OFF by default so no existing save starts losing cars.
-           Hidden in a time trial: there is no race to be retired from. -->
-      <!-- QUALIFYING LAP — whether this race is qualified for. A one-off Grand
-           Prix has always dropped you at P12 and gone straight to the lights;
-           that is a quick blast, and it is also the only mode where where you
-           START owes nothing to how fast you are. ON runs the one-lap session
-           the championship weekend uses, so the grid is earned.
-           It belongs HERE and not in pause > SETTINGS: it is a property of the
-           race you are about to run, like LAPS and WEATHER, not a control
-           preference like GEARS or ACTIVE AERO. Hidden in a time trial — there
-           is no grid to set. -->
-      <div class="rs-row" id="rs-quali-section">
-        <h3 class="sel-label" id="rs-quali-label">QUALIFYING LAP</h3>
-        <div id="rs-quali" class="chip-row balanced-row" role="group" aria-labelledby="rs-quali-label"></div>
+      <div id="rs-diff" class="set-row" role="group" aria-labelledby="rs-diff-label">
+        <span class="tune-label" id="rs-diff-label">DIFFICULTY</span>
+        <div>
+          <button id="rs-diff-prev" type="button" data-step="-1" aria-label="Previous difficulty">&lsaquo;</button>
+          <select id="rs-diff-sel" aria-labelledby="rs-diff-label"></select>
+          <button id="rs-diff-next" type="button" data-step="1" aria-label="Next difficulty">&rsaquo;</button>
+        </div>
       </div>
-      <!-- CAUTIONS — race control's flags: local yellow, VSC, safety car, raised
-           when enough debris settles on the racing surface. Genuinely a property
-           of the EVENT (unlike ACTIVE AERO, which moved to pause > SETTINGS), so
-           it belongs beside RELIABILITY. Until now it was only switchable by
-           setting the apex26.caution localStorage key by hand, which meant a
-           whole race-control layer nobody could find. Hidden in a time trial:
-           alone on track there is nothing to be cautioned about. -->
-      <div class="rs-row" id="rs-caution-section">
-        <h3 class="sel-label" id="rs-caution-label">CAUTIONS</h3>
-        <div id="rs-caution" class="chip-row balanced-row" role="group" aria-labelledby="rs-caution-label"></div>
+      <div id="rs-quali" class="set-row" role="group" aria-labelledby="rs-quali-label">
+        <span class="tune-label" id="rs-quali-label">GRID</span>
+        <div>
+          <button id="rs-quali-prev" type="button" data-step="-1" aria-label="Previous grid rule">&lsaquo;</button>
+          <select id="rs-quali-sel" aria-labelledby="rs-quali-label"></select>
+          <button id="rs-quali-next" type="button" data-step="1" aria-label="Next grid rule">&rsaquo;</button>
+        </div>
       </div>
-      <div class="rs-row" id="rs-reliab-section">
-        <h3 class="sel-label" id="rs-reliab-label">RELIABILITY</h3>
-        <div id="rs-reliab" class="chip-row balanced-row" role="group" aria-labelledby="rs-reliab-label"></div>
+      <div id="rs-caution" class="set-row" role="group" aria-labelledby="rs-caution-label">
+        <span class="tune-label" id="rs-caution-label">CAUTIONS</span>
+        <div>
+          <button id="rs-caution-prev" type="button" data-step="-1" aria-label="Previous cautions">&lsaquo;</button>
+          <select id="rs-caution-sel" aria-labelledby="rs-caution-label"></select>
+          <button id="rs-caution-next" type="button" data-step="1" aria-label="Next cautions">&rsaquo;</button>
+        </div>
+      </div>
+      <div id="rs-reliab" class="set-row" role="group" aria-labelledby="rs-reliab-label">
+        <span class="tune-label" id="rs-reliab-label">RELIABILITY</span>
+        <div>
+          <button id="rs-reliab-prev" type="button" data-step="-1" aria-label="Previous reliability">&lsaquo;</button>
+          <select id="rs-reliab-sel" aria-labelledby="rs-reliab-label"></select>
+          <button id="rs-reliab-next" type="button" data-step="1" aria-label="Next reliability">&rsaquo;</button>
+        </div>
       </div>
     </div>
     <div class="sheet-foot">

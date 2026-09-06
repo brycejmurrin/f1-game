@@ -151,14 +151,14 @@ test.describe("Season — the weekend format", () => {
     expect(myPts(await saved(page))).toBe(10);
   });
 
-  test("the format PRESELECTS the lap chips without taking them over", async ({ page }) => {
+  test("the format PRESELECTS the LAPS row without taking it over", async ({ page }) => {
     // The distance is a format choice, but #rs-laps stays the one source of truth
-    // for THIS race — three tests in season.spec.js set a chip and assert the race
+    // for THIS race — three tests in season.spec.js set the row and assert the race
     // honours it, and that has to keep working inside a customised season.
     await boot(page, { trackIds: ["monza", "monaco"], laps: 10 });
     await toRaceSettings(page);
-    await expect(page.locator("#rs-laps .sel-chip.active")).toHaveText("10");
-    await page.locator("#rs-laps .sel-chip").filter({ hasText: /^5$/ }).click();
+    await expect(page.locator("#rs-laps-sel")).toHaveValue("10");
+    await page.locator("#rs-laps-sel").selectOption("5");
     await toTheGrid(page);
     expect(await page.evaluate(() => window.__apex.info().lapsTarget)).toBe(5);
   });

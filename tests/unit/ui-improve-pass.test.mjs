@@ -612,10 +612,15 @@ test("variable control clusters use one content-driven balanced-row primitive", 
   assert.equal(decl(components, ".balanced-row", "display"), "flex");
   assert.equal(decl(components, ".balanced-row", "flex-wrap"), "wrap");
   assert.match(decl(components, /^\.balanced-row > :not\(\[hidden\]\)$/, "flex") || "", /^1 1 var\(--balance-basis/);
-  for (const id of ["menu-secondary", "rs-laps", "rs-weather",
-    "rs-time", "rs-diff", "rs-quali", "rs-caution", "rs-reliab", "lt-tabs", "ct-modes"]) {
+  for (const id of ["menu-secondary", "lt-tabs", "ct-modes"]) {
     assert.match(html, new RegExp(`id="${id}"[^>]*class="[^"]*balanced-row`), `${id} must balance from local space`);
   }
+  // RACE SETTINGS left the chip grammar on 2026-09-05: eight setting rows, the
+  // pause > SETTINGS control, and none of them balances anything.
+  for (const id of ["rs-laps", "rs-weather", "rs-mixed", "rs-time", "rs-diff", "rs-quali", "rs-caution", "rs-reliab"]) {
+    assert.match(html, new RegExp(`id="${id}" class="set-row" role="group" aria-labelledby="${id}-label"`), `${id} is a setting row`);
+  }
+  assert.doesNotMatch(html, /id="rs-[a-z]+" class="chip-row/, "no race-settings chip row survives");
   assert.equal(bootCamModes().open().className, "balanced-row", "the camera picker is a balanced-row too");
   assert.match(html, /class="preset-row balanced-row"/, "STEERING & ASSISTS presets wrap from local space");
   // STEERING / DRIVING HELP / RACING LINE are one-line setting rows now
@@ -845,19 +850,23 @@ test("garage preview chips hug the sheet and season quali is a label", () => {
   assert.ok(stackBase.length && !stackBase.some((r) => /calc\(var\(--safe-l\)/.test(r.decls.get("left") || "")));
   assert.ok(rulesFor(garage, "#cs-stack", { context: /orientation: portrait/ }).some((r) => r.decls.has("left")),
     "portrait places the camera stack over the car band");
-  // A qualifying championship hides the GRID chips and carries ON in the
-  // label; every other flow gets the rule chips (pace order first, quali second).
-  assert.match(game, /qEl\.hidden\s*=\s*!!qForced/);
-  assert.match(game, /qForced\s*\?\s*"QUALIFYING LAP · ON"\s*:\s*"GRID"/);
+  // A qualifying championship DISABLES the GRID row at QUALIFYING LAP rather
+  // than hiding it (the setting is shown, not offered); every other flow gets
+  // the rules, pace order first and the qualifying lap second — the option
+  // indices quali.spec.js selects.
+  assert.match(game, /SettingRow\.disable\("rs-quali", !!qForced\)/);
+  assert.match(game, /qForced \? \[\["quali", "QUALIFYING"\]\]/);
+  assert.match(game, /\[\["tier", "PACE ORDER"\], \["quali", "QUALIFYING"\]/);
   const menus = css("css/menus.css");
-  const quali = ruleFor(menus, /#rs-quali-section:has\(#rs-quali\[hidden\]\)$/);
-  assert.ok(quali && quali.decls.get("grid-column") === "1 / -1" && quali.decls.get("grid-row") === "1");
-  assert.equal(decl(menus, /#rs-body:has\(#rs-quali\[hidden\]\) > :is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\)$/, "grid-row"), "3");
-  assert.equal(decl(menus, /#rs-body$/, "overflow-y"), "auto", "the race-settings body is the one scroller (compact wide)");
-  assert.ok(rulesFor(menus, /#rs-reliab,[\s\S]*#rs-diff$/).some((r) => r.decls.get("flex-wrap") === "nowrap"));
-  assert.equal(decl(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) > :is\(#rs-diff-section, #rs-caution-section, #rs-reliab-section\)$/, "grid-row"), "3");
-  assert.equal(decl(menus, /#rs-body:not\(:has\(#rs-quali\[hidden\]\)\) :is\(#rs-laps, #rs-weather\)$/, "flex-wrap"), "nowrap");
-  assert.ok(rulesFor(menus, /^\.sheet\[data-shape="tall"\] #rs-body:not\(:has\(#rs-quali\[hidden\]\)\) #rs-caution-section,/).some((r) => r.decls.get("grid-row") === "4"));
+  // The race-settings body is a plain one-or-two column grid of rows now: the
+  // data-shape / data-density grid-row placement that fitted seven chip groups
+  // must not come back with the chips.
+  assert.equal(decl(menus, /#rs-body$/, "display"), "grid");
+  assert.equal(decl(menus, /#rs-body$/, "overflow-y"), "auto", "the race-settings body is the one scroller");
+  assert.ok(rulesFor(menus, /^#rs-body$/, { context: /@container sheet \(min-width: 440px\)/ }).some((r) =>
+    /1fr\) minmax\(0, 1fr\)$/.test(r.decls.get("grid-template-columns") || "")), "two columns once the sheet is wide");
+  assert.equal(rulesFor(menus, /#rs-/).filter((r) => r.decls.has("grid-row")).length, 0, "no per-section grid-row placement");
+  assert.equal(rulesFor(menus, /data-shape|data-density/).filter((r) => /#rs-|race-settings/.test(r.selector)).length, 0);
   assert.equal(decl(css("css/components.css"), "#race-settings .sheet", "--compact-at"), "760px");
   assert.match(spotify, /settings\.hidden\s*=\s*true\b/);
   assert.match(spotify, /settings\.hidden\s*=\s*false\b/);
