@@ -2539,9 +2539,15 @@ test("the flyby belongs to race settings alone: no boot build, no tile or door r
     "the boot no longer builds a world for the title");
   assert.doesNotMatch(read("js/ui/select-screen.js"), /scheduleFlybyTrack/,
     "a circuit tile updates the hero, never the world behind the sheet");
-  // Under a world-less menu the canvas is hidden so a finished race's last
-  // frame never sits behind the title; race settings shows it again.
-  assert.match(game, /const menuBlank = state === "menu" && _rsEl\.hidden;/);
+  // Under a menu that draws nothing the canvas is hidden — so neither a finished
+  // race's last frame nor the garage's car sits behind the title; race settings
+  // and the garage preview show it again. The gate runs before every early return.
+  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| _rsEl\.hidden\);/);
+  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1200);
+  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn) { renderSetupPreview(dt); return; }"),
+    "the visibility gate precedes the garage-preview return");
+  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
+    "the visibility gate precedes the no-track return");
   assert.match(game, /const vis = menuBlank \? "hidden" : "";\s*if \(canvas\.style\.visibility !== vis\) canvas\.style\.visibility = vis;/);
   assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
     "loadTrack's memo still makes a repeat build free");
