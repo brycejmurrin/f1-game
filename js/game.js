@@ -4735,7 +4735,7 @@ function updateCar(c, dt, ranked) {
       const q = blocker.speed + clamp(blockerGap - follow, -6, 8);
       const crawl = Math.min(AiDrive.queueFloor(!!track.street) * Math.max(PACE, 0.05), vmax);
       vmax = Math.min(vmax, Math.max(q, crawl));
-      const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street, blockerGap, follow);
+      const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street, blockerGap, follow, BRAKE);
       if (qb) { braking = true; brakeLvl = qb; }
     }
     // The other half of LET PASS: stop accelerating away. A multiplier, not a
@@ -5071,6 +5071,10 @@ function updateCar(c, dt, ranked) {
       _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser;
       defend = AiDrive.defendPull(_aiDefend);
     }
+    // One defensive move per straight (AiDrive.defendOnce); the side resets in
+    // the braking zone, where defending is over anyway (holdLine below).
+    if (braking) c.defendSide = 0;
+    else { const d1 = AiDrive.defendOnce(defend, c.defendSide || 0); defend = d1.defend; c.defendSide = d1.side; }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side, but when both sides are similar fall back to the car's
     // own lane sign so a piled-up group fans out BOTH ways instead of all diving
@@ -5087,6 +5091,17 @@ function updateCar(c, dt, ranked) {
     // clamp the combined target to the drivable surface so overtake/unstuck/
     // separation biases can never steer the AI off the track or into a wall.
     let desiredX = clamp(targetX + overtake + defend + yieldPull + sep + unstuck, -(hw - 0.5), hw - 0.5);
+    // NO MOVING UNDER BRAKING (AiDrive.holdLineGap): braking with a car within a
+    // second behind, and not ourselves attacking, the offset from the racing
+    // line is frozen at what it was when the brakes went on — the line itself
+    // still sweeps into the corner. Measured before: 128 line changes over
+    // 1.5 m in half a second under braking with a chaser, per four minutes at
+    // monza. The rub constraint below still overrides it (safety first).
+    const holdLine = braking && chaser && !c.passOf && !unstuckActive && chaserGap < AiDrive.holdLineGap(c.speed);
+    if (holdLine) {
+      if (c.holdOff == null) c.holdOff = desiredX - targetX;
+      desiredX = clamp(targetX + c.holdOff, -(hw - 0.5), hw - 0.5);
+    } else c.holdOff = null;
     // SIDE RUB AS A CONSTRAINT, NOT A SUGGESTION. `sep` is proportional to the
     // deficit (≤ 0.8 m once touching) and the steering deadzone below drops
     // anything under 0.3 m, while the shared racing line pulls the outer car up
