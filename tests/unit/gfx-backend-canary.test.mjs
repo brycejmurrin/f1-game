@@ -2524,12 +2524,27 @@ test("GLX links its core programs as one parallel batch when KHR_parallel_shader
   assert.match(glx, /getExtension\("KHR_parallel_shader_compile"\)/, "init() requests the extension");
 });
 
-test("the TIME chip rebuilds the flyby track so GO does not pay a second Tracks.build", () => {
+test("the flyby belongs to race settings alone: no boot build, no tile or door rebuild", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  // The picker shows the chosen circuit itself (still + outline + numbers) and
+  // the title sits on the plain page, so exactly TWO schedules remain: opening
+  // RACE SETTINGS and re-lighting it from the TIME chip.
+  const calls = game.match(/scheduleFlybyTrack\(\);/g) || [];
+  assert.equal(calls.length, 2, "scheduleFlybyTrack() is scheduled from race settings only");
+  assert.match(game, /\$\("race-settings"\)\.hidden = false;\s*scheduleFlybyTrack\(\);/,
+    "opening race settings schedules the flyby of the chosen circuit");
   assert.match(game, /raceTimeOfDay = id; buildRaceSettings\(\); scheduleFlybyTrack\(\);/,
-    "a time-of-day pick must schedule the (memoised) flyby build while the menu is idle");
+    "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
+  assert.doesNotMatch(game, /\n\s*scheduleFlybyTrack\(\);\s*\n\s*window\.addEventListener\("resize"/,
+    "the boot no longer builds a world for the title");
+  assert.doesNotMatch(read("js/ui/select-screen.js"), /scheduleFlybyTrack/,
+    "a circuit tile updates the hero, never the world behind the sheet");
+  // Under a world-less menu the canvas is hidden so a finished race's last
+  // frame never sits behind the title; race settings shows it again.
+  assert.match(game, /const menuBlank = state === "menu" && _rsEl\.hidden;/);
+  assert.match(game, /const vis = menuBlank \? "hidden" : "";\s*if \(canvas\.style\.visibility !== vis\) canvas\.style\.visibility = vis;/);
   assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
-    "loadTrack's memo is what makes the extra call free when the session darkness did not change");
+    "loadTrack's memo still makes a repeat build free");
 });
 
 test("driving feel: the player tows on car positions only, the fronts lock, every car pops on lift", () => {

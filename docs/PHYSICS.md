@@ -358,6 +358,26 @@ the numbers):
   clause reads the blocker's acceleration (`c.accSm` on an AI car, `axEstSm` on
   a human), so a launching grid is not 21 cars latching a pass on the car ahead.
 
+- **No moving under braking** (`AiDrive.holdLineGap`). Braking with a car
+  within a second behind (eight metres at least), and not itself attacking,
+  an AI freezes its offset from the racing line at what it was when the brakes
+  went on — the line itself still sweeps into the corner. This is the FIA
+  guideline's "no change of direction by the defending car once the
+  deceleration phase has begun, except to follow the racing line", and it
+  removes the class of contact a player can do nothing about: the car ahead
+  changing line as you commit to a side. Measured: line changes over 1.5 m in
+  half a second under braking with a chaser fell 128 → 93 per four minutes at
+  monza, 155 → 135 at monaco; what remains is the line sweep and attackers.
+- **One defensive move per straight** (`AiDrive.defendOnce`). The first
+  defensive pull fixes the side; a pull the other way on the same straight is a
+  second change of direction and is refused. The side resets in the braking
+  zone, so the next straight is new.
+- **Braking for the car ahead reads the time to collision** (`queueBrake`'s
+  second gate, after Speed Dreams' simplix): catch time under 3 s and a required
+  deceleration above 5 m/s² brake in proportion to the need (`aReq / BRAKE`),
+  so a creep the closing-rate gate could not see is caught early and a train
+  brakes smoothly instead of tapping and stamping.
+
 Grid lanes interleave left/right by grid slot, so the start pack is already two
 lines rather than one file. All of this is AI-only — every read sits inside
 the `!c.human` arm, and `otSide`'s corner-inside tie-break is in the arc table

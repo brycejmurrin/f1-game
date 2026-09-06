@@ -15,7 +15,7 @@ const Menus = (function () {
 function create(G) {
 Log.info("ui", "Menus.create");
 // Stable helpers from the game.js closure.
-const { $, els, store, cssCol, fmtTime, ttBoard, tickUi, scheduleFlybyTrack } = G;
+const { $, els, store, cssCol, fmtTime, ttBoard, tickUi } = G;
 
 // localStorage can be unavailable even while the game remains fully playable.
 // Surface that distinction globally: the in-memory cache preserves this
@@ -476,7 +476,8 @@ function buildSelect() {
         });
         updateTrackPreview();
         tickUi();
-        scheduleFlybyTrack();
+        // No background rebuild: the still IS the preview. The flyby of the
+        // chosen circuit belongs to race settings (js/game.js openRaceSettings).
       };
       els.selTracks.appendChild(row);
     });
@@ -497,14 +498,14 @@ function buildSelect() {
   // deliver its callback (the audit caught intermittent 1x1 maps when three
   // SwiftShader contexts competed). The strip has a box by then too, so the
   // chosen tile can be scrolled into view.
-  // FIRST, A ZERO-DELAY TIMER. scheduleFlybyTrack() builds the background
-  // circuit 120 ms after this screen opens and holds the main thread for
-  // seconds on a slow device — long enough that the rAF pair and the hero's
-  // ResizeObserver below both land AFTER it, and the outline sits at its
-  // 520x300 attribute size until then (measured 5 s on SwiftShader). A timer
-  // queued now runs before that build, so a synchronous reveal (reduced
-  // motion, or a browser without view transitions) fits on the first frame;
-  // the crossfade case still waits a frame and is caught by the pair below.
+  // FIRST, A ZERO-DELAY TIMER. Anything heavy queued right after this screen
+  // opens (the boot flyby build used to land here and hold the main thread
+  // for seconds on a slow device) pushes the rAF pair and the hero's
+  // ResizeObserver behind it, leaving the outline at its 520x300 attribute
+  // size until then (measured 5 s on SwiftShader). A timer queued now runs
+  // first, so a synchronous reveal (reduced motion, or a browser without view
+  // transitions) fits on the first frame; the crossfade case still waits a
+  // frame and is caught by the pair below.
   setTimeout(() => { if (els.select && !els.select.hidden) { updateTrackPreview(); revealActiveTile(); } }, 0);
   if (previewOpenRaf) cancelAnimationFrame(previewOpenRaf);
   previewOpenRaf = requestAnimationFrame(() => {
