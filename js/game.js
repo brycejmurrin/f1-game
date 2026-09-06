@@ -2735,10 +2735,12 @@ function _loadTrackBody(idx, def) {
 }
 
 // The full 3D track build (loadTrack -> Tracks.build) is heavy. On the menu it's
-// only needed for the background flyby, so don't run it synchronously inside a
-// click handler — defer + debounce it to the final selection so browsing the
-// grid (and entering the GP screen) stays instant. startRace() builds the real
-// track when the race actually starts, so racing never depends on this.
+// only needed for the background flyby, so don't run it synchronously — defer +
+// debounce it. startRace() builds the real track when the race actually starts,
+// so racing never depends on this.
+// RACE SETTINGS ONLY (2026-09). This used to run under EVERY menu (boot, every
+// tile, every door: 0.9–3.3 s a tap on a phone). The picker now shows the chosen
+// circuit itself and the title sits on the plain page; openRaceSettings + TIME chip only.
 let flybyBuildTimer = 0;
 function scheduleFlybyTrack() {
   clearTimeout(flybyBuildTimer);
@@ -3422,7 +3424,7 @@ const G = {
   // Mutable state + helpers consumed by js/ui/select-screen.js.
   get driverIdx() { return driverIdx; }, set driverIdx(v) { driverIdx = v; },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
-  store, tickUi, scheduleFlybyTrack,
+  store, tickUi,
   // Same deferred-arrow trick for the garage <-> select plumbing: setup-ui.js is
   // created before menus.js, and openGarage/openCustomize are declared further
   // down this file, so none of these can be referenced directly at create time.
@@ -4735,7 +4737,7 @@ function updateCar(c, dt, ranked) {
       const q = blocker.speed + clamp(blockerGap - follow, -6, 8);
       const crawl = Math.min(AiDrive.queueFloor(!!track.street) * Math.max(PACE, 0.05), vmax);
       vmax = Math.min(vmax, Math.max(q, crawl));
-      const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street, blockerGap, follow);
+      const qb = AiDrive.queueBrake(c.speed, blocker.speed, !!track.street, blockerGap, follow, BRAKE);
       if (qb) { braking = true; brakeLvl = qb; }
     }
     // The other half of LET PASS: stop accelerating away. A multiplier, not a
@@ -5071,6 +5073,10 @@ function updateCar(c, dt, ranked) {
       _aiDefend.kA = kA; _aiDefend.roomL = roomL; _aiDefend.roomR = roomR; _aiDefend.other = chaser;
       defend = AiDrive.defendPull(_aiDefend);
     }
+    // One defensive move per straight (AiDrive.defendOnce); the side resets in
+    // the braking zone, where defending is over anyway (holdLine below).
+    if (braking) c.defendSide = 0;
+    else { const d1 = AiDrive.defendOnce(defend, c.defendSide || 0); defend = d1.defend; c.defendSide = d1.side; }
     // Stuck recovery: if we've been wedged/slow, commit hard to dig out. Pick the
     // clearly-freer side, but when both sides are similar fall back to the car's
     // own lane sign so a piled-up group fans out BOTH ways instead of all diving
@@ -5087,6 +5093,17 @@ function updateCar(c, dt, ranked) {
     // clamp the combined target to the drivable surface so overtake/unstuck/
     // separation biases can never steer the AI off the track or into a wall.
     let desiredX = clamp(targetX + overtake + defend + yieldPull + sep + unstuck, -(hw - 0.5), hw - 0.5);
+    // NO MOVING UNDER BRAKING (AiDrive.holdLineGap): braking with a car within a
+    // second behind, and not ourselves attacking, the offset from the racing
+    // line is frozen at what it was when the brakes went on — the line itself
+    // still sweeps into the corner. Measured before: 128 line changes over
+    // 1.5 m in half a second under braking with a chaser, per four minutes at
+    // monza. The rub constraint below still overrides it (safety first).
+    const holdLine = braking && chaser && !c.passOf && !unstuckActive && chaserGap < AiDrive.holdLineGap(c.speed);
+    if (holdLine) {
+      if (c.holdOff == null) c.holdOff = desiredX - targetX;
+      desiredX = clamp(targetX + c.holdOff, -(hw - 0.5), hw - 0.5);
+    } else c.holdOff = null;
     // SIDE RUB AS A CONSTRAINT, NOT A SUGGESTION. `sep` is proportional to the
     // deficit (≤ 0.8 m once touching) and the steering deadzone below drops
     // anything under 0.3 m, while the shared racing line pulls the outer car up
@@ -6772,15 +6789,22 @@ const _hazeWorld = [0, 0, 0];
 let _hazeStr = 0;
 const _hazeOpts = { u: 0, v: 0, str: 0 };
 // ---------- render ----------
+const _rsEl = $("race-settings");      // the one menu screen that shows the flyby
 function render(dt) {
   if (headlessMode) return;
+  // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
+  // race-settings flyby, or the garage's car preview; under every other menu it is
+  // HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat behind the
+  // title, title → GARAGE → MENU). First, before every early return; written on change.
+  const menuBlank = state === "menu" && !setupPreviewOn && (!track || _rsEl.hidden);
+  const vis = menuBlank ? "hidden" : "";
+  if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
+  if (menuBlank) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
-  // No track yet — live only since boot deferred the flyby build (scheduleFlybyTrack(),
-  // end of file). DRAW NOTHING rather than present the old, dead fogColor clear:
-  // alpha:false makes an undrawn canvas composite as opaque BLACK, which is what the
-  // blessed menu baselines already encode — corners read 4-9/255, i.e. #overlay's
-  // 0.55-alpha wash over black, not the tens a lit flyby would push through it.
+  // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
+  // scheduleFlybyTrack): DRAW NOTHING. alpha:false composites an undrawn canvas
+  // as opaque BLACK, which the blessed menu baselines encode (corners 4-9/255).
   if (!track) return;
   _frameNo++;
 
@@ -8677,7 +8701,6 @@ $("mb-race").onclick = () => {
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack();
 };
 // Optional markup must not turn one missing screen into a whole-app boot failure.
 if ($("mb-vs")) $("mb-vs").onclick = () => {
@@ -8694,7 +8717,6 @@ $("mb-tt").onclick = () => {
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack();
 };
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
@@ -8712,7 +8734,6 @@ $("mb-season").onclick = () => {
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack();
 };
 // Career's calendar is fixed, so its hub replaces the circuit picker.
 function openCareer() {
@@ -8730,7 +8751,6 @@ function openCareer() {
   careerUi.openHub();
   els.overlay.hidden = true;
   if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack();
 }
 // The same entry, stopping at the slot picker. Deliberately does NOT engage the
 // career flow: nothing has been chosen yet, so a save's rules must not be live —
@@ -8739,7 +8759,6 @@ function openCareerSlots() {
   careerUi.openSlots();
   els.overlay.hidden = true;
   if (soundOn) GameAudio.uiSelect();
-  scheduleFlybyTrack();
 }
 // The title-screen button reads CONTINUE once a career exists, so the player can
 // tell at a glance whether pressing it resumes or starts something.
@@ -9006,6 +9025,9 @@ function openRaceSettings(from) {
   buildRaceSettings();
   $(rsReturn).hidden = true;
   $("race-settings").hidden = false;
+  // The ONE menu flyby: the circuit you just chose, behind the last screen before
+  // the lights. It also pre-warms the build GO would otherwise pay (memoised).
+  scheduleFlybyTrack();
 }
 els.selGo.onclick = () => {
   if (soundOn) GameAudio.uiSelect();
@@ -9842,17 +9864,11 @@ syncMetricsOverlayCompact();
 $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
 audioPanel.init();
-// THE BOOT PATH TAKES THE SAME DEFERRAL EVERY OTHER MENU TRACK CHANGE TAKES.
-// This was `loadTrack(trackIdx)` as the last statement of the IIFE — a
-// synchronous Tracks.build() inside DOMContentLoaded, measured at 938 ms
-// (monaco) to 3284 ms (vegas), mean ~2.1 s over 8 circuits, against a measured
-// DCL of 4712 ms. Nothing on the menu needs it (the picker and detail modal
-// draw from Tracks.LIST defs via TrackMaps; startRace()/openQuali() build the
-// real track themselves), so it is only ever the background flyby — which is
-// what scheduleFlybyTrack() exists for. __apex forces the build on first use
-// (lazyTrackEnsure, js/agent/apex.js) so the test harness keeps the synchronous
-// world every spec written before this assumed.
-scheduleFlybyTrack();
+// THE BOOT BUILDS NO WORLD. This was a synchronous Tracks.build() inside
+// DOMContentLoaded (938–3284 ms), then a deferred title flyby. Nothing on the menu
+// needs one: the picker draws from Tracks.LIST + the committed stills, startRace()/
+// openQuali() build the real track, RACE SETTINGS schedules the one menu flyby
+// (openRaceSettings), and __apex forces a build on first use (lazyTrackEnsure).
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
 requestAnimationFrame(tick);

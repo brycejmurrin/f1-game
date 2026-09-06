@@ -669,3 +669,40 @@ test("squeezeEase drops a pinned yielder under the other car's speed, more so on
   // parking the car in the pack behind.
   assert.ok(A.squeezeBrake() > 0.1 && A.squeezeBrake() <= 0.4);
 });
+
+test("queueBrake: the time-to-collision gate catches a slow creep the closing-rate gate misses", () => {
+  // 2.5 m/s closing, half a metre past the follow distance: 6.25 m/s^2 needed, catch in 0.2 s.
+  const creep = A.queueBrake(42.5, 40, false, 6.5, 6, 22);
+  assert.ok(creep > 0, "a creep that needs 6 m/s^2 must brake");
+  assert.ok(creep < 0.5, `in proportion to the need, not a stamp: ${creep}`);
+  // The same closing rate with room to lift: nothing.
+  assert.equal(A.queueBrake(42.5, 40, false, 20, 6, 22), 0);
+  // Under 5 m/s^2 required, or over 3 s away: nothing (the lift band).
+  assert.equal(A.queueBrake(42, 40, false, 8, 6, 22), 0, "4 m/s^2 is a lift");
+  assert.equal(A.queueBrake(41, 40, false, 10, 6, 22), 0, "4 s away");
+  // The original gate is unchanged where it fired before.
+  assert.equal(A.queueBrake(60, 50, true, undefined, undefined, 22), 1);
+  assert.ok(A.queueBrake(44, 40, false, 8, 6, 22) >= 0.2);
+  // Monotone in the need: closer is harder.
+  assert.ok(A.queueBrake(43, 40, false, 6.6, 6, 22) > A.queueBrake(43, 40, false, 7.5, 6, 22));
+});
+
+test("holdLineGap is a second behind, floored at eight metres", () => {
+  assert.equal(A.holdLineGap(60), 60);
+  assert.equal(A.holdLineGap(5), 8);
+  assert.equal(A.holdLineGap(undefined), 8);
+});
+
+test("defendOnce: the first pull fixes the side, the other way is refused, no pull keeps the side", () => {
+  // Field-wise: the module lives in a VM realm, so its objects fail strict deep equality on prototype.
+  const eq = (got, defend, side, why) => { assert.equal(got.defend, defend, why); assert.equal(got.side, side, why); };
+  let st = A.defendOnce(0.6, 0);
+  eq(st, 0.6, 1, "a fresh straight: the first pull fixes the side");
+  st = A.defendOnce(0.4, st.side);
+  eq(st, 0.4, 1, "same side: allowed");
+  st = A.defendOnce(-0.7, st.side);
+  eq(st, 0, 1, "the second change of direction is refused");
+  st = A.defendOnce(0, st.side);
+  eq(st, 0, 1, "no pull leaves the side latched until the braking zone");
+  eq(A.defendOnce(-0.7, 0), -0.7, -1, "a fresh straight may go either way once");
+});

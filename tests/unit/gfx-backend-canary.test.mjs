@@ -2524,14 +2524,35 @@ test("GLX links its core programs as one parallel batch when KHR_parallel_shader
   assert.match(glx, /getExtension\("KHR_parallel_shader_compile"\)/, "init() requests the extension");
 });
 
-test("the TIME OF DAY row rebuilds the flyby track so GO does not pay a second Tracks.build", () => {
+test("the flyby belongs to race settings alone: no boot build, no tile or door rebuild", () => {
   const game = read("js/game.js").replace(/^[ \t]*\/\/.*$/gm, "");
-  // The row's write (js/ui/setting-row.js) — every write then repaints the
+  // The picker shows the chosen circuit itself (still + outline + numbers) and
+  // the title sits on the plain page, so exactly TWO schedules remain: opening
+  // RACE SETTINGS and re-lighting it from the TIME chip.
+  const calls = game.match(/scheduleFlybyTrack\(\);/g) || [];
+  assert.equal(calls.length, 2, "scheduleFlybyTrack() is scheduled from race settings only");
+  assert.match(game, /\$\("race-settings"\)\.hidden = false;\s*scheduleFlybyTrack\(\);/,
+    "opening race settings schedules the flyby of the chosen circuit");
+  // The TIME OF DAY row's write (js/ui/setting-row.js): every write repaints the
   // screen through wireRaceSettings' `after`, so only the flyby call is pinned.
   assert.match(game, /wire\("rs-time", \(\) => raceTimeOfDay, \(v\) => \{ raceTimeOfDay = v; scheduleFlybyTrack\(\); \}\)/,
-    "a time-of-day pick must schedule the (memoised) flyby build while the menu is idle");
+    "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
+  assert.doesNotMatch(game, /\n\s*scheduleFlybyTrack\(\);\s*\n\s*window\.addEventListener\("resize"/,
+    "the boot no longer builds a world for the title");
+  assert.doesNotMatch(read("js/ui/select-screen.js"), /scheduleFlybyTrack/,
+    "a circuit tile updates the hero, never the world behind the sheet");
+  // Under a menu that draws nothing the canvas is hidden — so neither a finished
+  // race's last frame nor the garage's car sits behind the title; race settings
+  // and the garage preview show it again. The gate runs before every early return.
+  assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| _rsEl\.hidden\);/);
+  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1200);
+  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn) { renderSetupPreview(dt); return; }"),
+    "the visibility gate precedes the garage-preview return");
+  assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
+    "the visibility gate precedes the no-track return");
+  assert.match(game, /const vis = menuBlank \? "hidden" : "";\s*if \(canvas\.style\.visibility !== vis\) canvas\.style\.visibility = vis;/);
   assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
-    "loadTrack's memo is what makes the extra call free when the session darkness did not change");
+    "loadTrack's memo still makes a repeat build free");
 });
 
 test("driving feel: the player tows on car positions only, the fronts lock, every car pops on lift", () => {

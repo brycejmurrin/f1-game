@@ -2134,6 +2134,18 @@ the row replaced them. The pause menu also gained the MUSIC page's NOW PLAYING c
 `.set-row` added); `rawColor` 329 → 325 (the cam picker, garage SPIN and
 track-row washes use tokens; the unread `--manual` token is gone).
 
+- `js/game.js` lines 9994 -> **10009**, codeLines 5489 -> **5496**
+  (2026-09-05): the defending rules. Seven code lines: hold the line under
+  braking with a chaser (5 — the frozen offset from the racing line, `holdOff`),
+  one defensive move per straight (2 — `defendOnce` and the braking-zone reset),
+  and the time-to-collision gate rides the existing `queueBrake` call with one
+  extra argument. Measured (`scratch/brakeswerve-diag.mjs`, 4 min): line
+  changes over 1.5 m in half a second under braking with a car within 12 m
+  behind, monza 128 -> 93, monaco 155 -> 135 — the rest is the racing line
+  sweeping into the corner, which the rule allows, and attackers, which it does
+  not cover. The rules themselves are in `js/physics/ai-drive.js` with unit
+  tests; game.js keeps the call sites.
+
 ## 2026-09-05 — RACE SETTINGS on setting rows: shellNodes 1273 → 1307
 
 `shellNodes` RAISED by 34, deliberately, for the same reason as the entry above:
