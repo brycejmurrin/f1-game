@@ -74,6 +74,33 @@ const PSEUDO_CATS = ["team", "tune", "livery"];
 
 function csTabId(id) { return "cs-tab-" + String(id).replace(/[^a-z0-9_-]/gi, "-"); }
 
+// SHOW THE PART YOU JUST FITTED. Every catalog category changes the mesh
+// (js/car/parts.js: each option carries a `visual` recipe), but the turntable
+// kept whatever angle it was on, so an airbox swapped on a car facing away and
+// a caliper changed behind a sidepod read as "nothing happened" — the owner's
+// ask, in their words: "I want them to show the new part". One preset per
+// category, chosen for where its parts live on the car; the existing camera
+// bar presets, so a pick lands on exactly what SIDE or REAR would. Same idiom
+// as the LIVERY tab framing FRONT: the preset stops the turntable, and SPIN or
+// RESET hands it back. TEAM, SETUP and LIVERY are not parts and have no entry.
+const CAT_VIEW = {
+  engine: "hero",        // airbox, sidepods, engine cover: rear three-quarter
+  aero: "wingRear",      // the flap and DRS, orbiting the rear wing
+  suspension: "front",   // arms, pushrods and wishbones read head-on
+  brakes: "side",        // calipers, ducts, rotors
+  tyres: "side",
+  wheels: "side",
+  ers: "hero",           // LEDs, pack blister and conduit on the cover
+  gearbox: "rear",       // casing strakes, fin, louvres
+  fuel: "hero",          // filler, breather and hatch on the spine
+  exhaust: "rear",
+  floor: "side",         // fences, plank, edge lip
+  cockpit: "front",      // halo, screen, mirrors
+};
+function framePreset(name) {
+  const b = document.querySelector('#cs-stack [data-cs-view="' + name + '"]');
+  if (b) b.click();   // a display:none stack (narrow landscape) still runs the handler
+}
 function activateCsCat(id, focus) {
   if (csActiveCat !== id) {
     csActiveCat = id;
@@ -83,10 +110,7 @@ function activateCsCat(id, focus) {
     const pane = $("cs-options"); if (pane) pane.scrollTop = 0;
     // LIVERY is about the wall crest as much as the paint chips: frame FRONT
     // on the category change only, never again while the tab stays open.
-    if (id === "livery") {
-      const front = document.querySelector('#cs-stack [data-cs-view="front"]');
-      if (front) front.click();
-    }
+    if (id === "livery") framePreset("front");
   }
   if (focus) {
     const tab = document.getElementById(csTabId(id));
@@ -390,6 +414,7 @@ function buildSetup() {
       saveTeamParts(team.id, p);
       if (G.soundOn) GameAudio.uiSelect();
       buildSetup();
+      if (CAT_VIEW[activeCat.id]) framePreset(CAT_VIEW[activeCat.id]);   // show the part
       // The rebuild destroyed the focused row; without this a pad/keyboard
       // player's next arrow landed on the category TAB (first .active).
       const again = $("cs-options") && $("cs-options").querySelector('[data-cs-opt="' + opt.id + '"]');
