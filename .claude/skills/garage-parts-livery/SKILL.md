@@ -21,7 +21,11 @@ the tail DESIGN is four enum fields with defaults that reproduce the shipped car
 `finShape` (`Car3D.FIN_SHAPES` + `none`; the ONE non-colour livery field that moves
 a vertex, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,
 drives the fin panel AND the engine-cover wash), `finBadge` (`logo|number|none`) and
-`spineLogo` (`logo|none`). `drawTailGraphic` clips to its region.
+`spineLogo` (`logo|none`). `drawTailGraphic` clips to its region. Body details:
+`tcam` (`Car3D.TCAM_IDS`, mesh colour only) and `coverVents` (`Car3D.COVER_VENT_IDS`,
+geometry, also in `SP_HULL_GEOM_FIELDS`); `finBadge` also offers `code`. The 2026
+lights are draw-time, not livery: `CarMesh.ersLightCode` (pure) and
+`drawMirrorLights` at `Car3D.mirrorLightAnchors` under 20 km/h.
 The mark takes up to THREE livery colours and the editor asks
 `LiveryTex.markSlots(teamId)` how many and what to call them — never assume a
 length. `logo` is the dominant shape; `logo2` is the mark's second SHAPE and

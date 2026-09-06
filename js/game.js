@@ -1521,7 +1521,8 @@ function resolveLivery(team) {
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
              logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null,
-             finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null };
+             finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null,
+             tcam: l.tcam || null, coverVents: l.coverVents || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1532,7 +1533,8 @@ function resolveLivery(team) {
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
                       logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null,
-                      finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null }
+                      finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null,
+                      tcam: liv.tcam || null, coverVents: liv.coverVents || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -2082,7 +2084,7 @@ GarageScene.init(gfx);
 // js/fx/particles.js; same injected-renderer pattern as CarMesh above.
 Particles.init(gfx);
 const { carDecalData, getCarDecalMesh, getCockpitDecalMesh,
-        getBrakeRing, drawRearLights, getExhaustFlame, getErsLight,
+        getBrakeRing, drawRearLights, drawMirrorLights, getExhaustFlame, getErsLight,
         getCockpitWheel, getLedStrip, getGearDigit, getSpeedDigit,
         getErsBar, getOtLamp, drawWheelExtras } = CarMesh;
 const _decalTexCache = {}, _decalTexFail = {}, _decalTexOrder = [];
@@ -6385,7 +6387,7 @@ let _spMesh = null, _spMeshKey = "", _spHull = null;
 // compares positions byte for byte): a hue change never moves anything, and only
 // the PRESENCE of these four does — they gate optional strip geometry. finShape
 // is the one non-colour entry: it picks the shark fin's outline (or no fin).
-const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape"];
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
 function getSetupPreviewMesh() {
@@ -8078,16 +8080,36 @@ function render(dt) {
     // strobing it whenever the driver deploys ERS ran it through most of a
     // racing lap, and the pre-race blinking never appeared to stop. Night dry is
     // now steady whenever it draws, which is what the comment already claimed.
+    // The 2026 ERS code (CarMesh.ersLightCode) takes the light over whenever
+    // it applies — a short repeating flash at full deploy, a rapid one when a
+    // full battery clips the harvest — and hands back to the weather / night
+    // gate the moment it does not. Not on the grid: that is the recharging
+    // strobe above, and the two must not fight over one lamp.
+    const ersCode = preGrid ? -1 : CarMesh.ersLightCode(c, raceT);
     if (preGrid ? gridFlash
+                : ersCode >= 0 ? ersCode === 1
                 : ((wet && _ledStrobe) || (!wet && night))) {
       // Rivals: 40 m gate like brake rings. Player always draws. The grid spans
       // 22 x 8 m, so pre-race it opens up or the field ahead of you sits dark.
       const ldx = tmpP[0] - camEye[0], ldy = tmpP[1] - camEye[1], ldz = tmpP[2] - camEye[2];
       const lGate = preGrid ? 200 : 40;
       if (c.isPlayer || ldx * ldx + ldy * ldy + ldz * ldz < lGate * lGate) {
-        // Wet and grid strobes stay full-bright — a safety/status light must not
-        // dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
-        drawRearLights(tmpMat, (wet || preGrid) ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1)));
+        // Wet, grid and ERS-code lights stay full-bright — a status light must
+        // not dim with battery. Otherwise 0.45 (flat) -> 1.0 (full).
+        drawRearLights(tmpMat, (wet || preGrid || ersCode === 1) ? 1.0 : (0.45 + 0.55 * clamp(c.energy || 0, 0, 1)));
+      }
+    }
+    // 2026 amber mirror lamps: under 20 km/h or stopped — the pit lane, the grid,
+    // a spin. Same 40 m rival gate as the rear lights; the player always draws.
+    // Anchors come cached per team from Car3D, so this allocates nothing.
+    // vStd: "crawling" is relative to the car's envelope, so the lamp threshold
+    // scales with the PACE slider like every other speed threshold here.
+    if (!carModelBuf && c.speed < vStd(5.56)) {
+      const mdx = tmpP[0] - camEye[0], mdy = tmpP[1] - camEye[1], mdz = tmpP[2] - camEye[2];
+      if (c.isPlayer || mdx * mdx + mdy * mdy + mdz * mdz < 40 * 40) {
+        const mSt = teamDecalState(c.team, c.isPlayer);
+        const cm = mSt.parts && mSt.parts._visual && mSt.parts._visual.cockpit;
+        drawMirrorLights(tmpMat, Car3D.mirrorLightAnchors(c.team.id, cm && cm.mirror));
       }
     }
     // Electric ERS deployment has a pulsing status strip, never an exhaust flame.
