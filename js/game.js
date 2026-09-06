@@ -6794,19 +6794,20 @@ const _hazeOpts = { u: 0, v: 0, str: 0 };
 const _rsEl = $("race-settings");      // the one menu screen that shows the flyby
 function render(dt) {
   if (headlessMode) return;
+  // THE CANVAS SHOWS ONLY WHEN SOMETHING IS DRAWN ON IT (2026-09): a race, the
+  // race-settings flyby, or the garage's car preview; under every other menu it is
+  // HIDDEN (an undrawn canvas keeps its LAST frame — the garage car sat behind the
+  // title, title → GARAGE → MENU). First, before every early return; written on change.
+  const menuBlank = state === "menu" && !setupPreviewOn && (!track || _rsEl.hidden);
+  const vis = menuBlank ? "hidden" : "";
+  if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
+  if (menuBlank) return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
   // scheduleFlybyTrack): DRAW NOTHING. alpha:false composites an undrawn canvas
   // as opaque BLACK, which the blessed menu baselines encode (corners 4-9/255).
   if (!track) return;
-  // NO WORLD BEHIND THE MENUS (2026-09). Once a world EXISTS (the race-settings
-  // flyby, the circuit just raced) returning here would leave its LAST frame under
-  // the title — so hide the canvas; the page's --bg is the same dark. Write on change.
-  const menuBlank = state === "menu" && _rsEl.hidden;
-  const vis = menuBlank ? "hidden" : "";
-  if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
-  if (menuBlank) return;
   _frameNo++;
 
   // camera
@@ -9933,11 +9934,10 @@ $("pm-calib").disabled = steerMode !== "tilt";
 refreshGearsBtn();
 audioPanel.init();
 // THE BOOT BUILDS NO WORLD. This was a synchronous Tracks.build() inside
-// DOMContentLoaded (938–3284 ms measured), then a deferred title flyby. Nothing
-// on the menu needs one: the picker draws from Tracks.LIST via TrackMaps and the
-// committed stills, startRace()/openQuali() build the real track, and RACE
-// SETTINGS schedules the one menu flyby itself (openRaceSettings). __apex forces
-// a build on first use (lazyTrackEnsure) so the harness keeps its synchronous world.
+// DOMContentLoaded (938–3284 ms), then a deferred title flyby. Nothing on the menu
+// needs one: the picker draws from Tracks.LIST + the committed stills, startRace()/
+// openQuali() build the real track, RACE SETTINGS schedules the one menu flyby
+// (openRaceSettings), and __apex forces a build on first use (lazyTrackEnsure).
 window.addEventListener("resize", () => gfx.resize());
 lastFrame = performance.now();
 requestAnimationFrame(tick);
