@@ -223,14 +223,16 @@ test.describe("Qualifying — lap times", () => {
     // Monaco and Spa are ~30 s apart in reality; a length-independent estimate
     // would put them on top of each other.
     await boot(page);
-    const t = await page.evaluate(() => {
-      const out = {};
-      for (const id of ["monaco", "spa"]) {
-        window.__apex.race(id);
-        out[id] = window.__apex.qualiSim()[0].t;
-      }
-      return out;
-    });
+    // race() hands the build to the async lifecycle, so the model (which reads
+    // G.track and the field) is null until THIS circuit is the one built —
+    // read synchronously it was null on the deploy tip too (a62bcb2, 2026-09-06).
+    const t = {};
+    for (const id of ["monaco", "spa"]) {
+      await page.evaluate((id) => { window.__apex.race(id); }, id);
+      await page.waitForFunction((id) => window.__apex.info().track === id && window.__apex.qualiSim() != null, id,
+        { polling: 100, timeout: 60_000 });
+      t[id] = await page.evaluate(() => window.__apex.qualiSim()[0].t);
+    }
     expect(t.spa).toBeGreaterThan(t.monaco * 1.2);
   });
 });
