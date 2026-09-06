@@ -12,7 +12,15 @@
 import { test, expect } from "../helpers/fixtures.js";
 
 test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrack, page }) => {
-  test.setTimeout(120_000);
+  // DECLARE THE BUDGET, and declare it honestly. loadTrack boots a full race
+  // (22 cars, a built circuit) before the 180 steps run: 33 s on an idle dev box
+  // (llvmpipe), 126-132 s on the same box under load, 132-177 s on a CI runner
+  // (Pages #2048, both attempts). The old 120_000 sat UNDER the change-aware
+  // gate's 180 s per-test rate, so tools/ci/select-specs.mjs kept selecting this
+  // spec into a gate where its own budget killed it: the deploy failed twice at
+  // "Test timeout of 120000ms exceeded". Above the gate it is excluded by name
+  // and runs in the `driving` group, which is where a race-fixture spec belongs.
+  test.setTimeout(300_000);
   await loadTrack("monza");
   await page.evaluate(() => window.__apex.headless(true));
   await page.addScriptTag({

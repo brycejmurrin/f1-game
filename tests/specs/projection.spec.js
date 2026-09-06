@@ -26,6 +26,14 @@ async function startLiveRace(page) {
 }
 
 test.describe("Apex 26 — world<->track projection", () => {
+  // DECLARE THE BUDGET. All three tests start a LIVE race through the real menus
+  // (RACE → GO → RACE!) and then evaluate hundreds of projections: 116-125 s
+  // for the first test on a CI runner, and the next could not even get a
+  // browser context inside the 180 s gate once the first had run (Pages #2048,
+  // both attempts). Silent, this spec was billed at the change-aware gate's
+  // 180 s rate; declared, tools/ci/select-specs.mjs excludes it by name and it
+  // runs in the `driving` group.
+  test.setTimeout(300_000);
   test("round-trips (s, lateral) all around the lap and across the width", async ({ page }) => {
     await startLiveRace(page);
     const fracs = [0, 0.07, 0.18, 0.26, 0.33, 0.41, 0.5, 0.62, 0.74, 0.83, 0.91, 0.97];
