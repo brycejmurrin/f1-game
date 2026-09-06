@@ -228,6 +228,7 @@
              finShape: l.finShape || null, finStyle: l.finStyle || null,
              finBadge: l.finBadge || null, spineLogo: l.spineLogo || null,
              tcam: l.tcam || null, coverVents: l.coverVents || null,
+             spineHeight: l.spineHeight || null,
              // ?finish= overrides the livery's own, so a finish can be inspected
              // without authoring a livery for it (Car3D.FINISH_SURFACE).
              finish: S.finish || l.finish || null };
@@ -257,7 +258,7 @@
     // Shared runtime implementation: same body anchors, segmentation and bounded
     // cache as the race renderer.
     // finShape rides with the livery (5th arg): no fin means no fin decal.
-    decalMesh = CarMesh.getCarDecalMesh(Car3D.aeroLevelOf(tiers), tiers, false, undefined, liv.finShape);
+    decalMesh = CarMesh.getCarDecalMesh(Car3D.aeroLevelOf(tiers), tiers, false, undefined, liv.finShape, liv.spineHeight);
     if (decalTex && GLX.freeTexture) GLX.freeTexture(decalTex);
     try { decalTex = GLX.createTexture(LiveryTex.buildAtlas(team.id, liv, num)); } catch (e) { decalTex = null; }
     paint = paintFromRefl(S.refl);   // kept live in frame() too, so CARVIEW.set({refl}) responds without a rebuild

@@ -1522,7 +1522,7 @@ function resolveLivery(team) {
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
              logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null,
              finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null,
-             tcam: l.tcam || null, coverVents: l.coverVents || null };
+             tcam: l.tcam || null, coverVents: l.coverVents || null, spineHeight: l.spineHeight || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1534,7 +1534,7 @@ function resolveLivery(team) {
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
                       logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null,
                       finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null,
-                      tcam: liv.tcam || null, coverVents: liv.coverVents || null }
+                      tcam: liv.tcam || null, coverVents: liv.coverVents || null, spineHeight: liv.spineHeight || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -2185,8 +2185,9 @@ function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
   // A loaded GLB is a static body and does not consume procedural part recipes;
   // keep its overlay on stable default/legacy anchors as setup options change.
   const legacyBody = !!carModelBuf;
+  const rl = cockpit ? null : resolveLivery(team);
   const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id) :
-    getCarDecalMesh(state.val, state.parts, legacyBody, team.id, resolveLivery(team).finShape);
+    getCarDecalMesh(state.val, state.parts, legacyBody, team.id, rl.finShape, rl.spineHeight);
   const tex = getCarDecalTexture(team, num, usePlayerSetup);
   if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
 }
@@ -6404,7 +6405,8 @@ let _spMesh = null, _spMeshKey = "", _spHull = null;
 // compares positions byte for byte): a hue change never moves anything, and only
 // the PRESENCE of these four does — they gate optional strip geometry. finShape
 // is the one non-colour entry: it picks the shark fin's outline (or no fin).
-const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents"];
+// coverVents and spineHeight are the other two enums that move a vertex.
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
 function getSetupPreviewMesh() {

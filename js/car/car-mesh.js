@@ -14,7 +14,7 @@ const CAR_DECAL_CACHE_MAX = 24;
 // indexOf+splice reorder on every hit; a race uses only a handful of distinct
 // (level, fin, drs, anchor) keys, far under the 24-entry cap, so eviction —
 // and the FIFO/LRU distinction — is never reached in practice.
-function carDecalData(aLvl, parts, legacyBody, teamId, finShape) {
+function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
   // Imported GLBs are static and do not consume the procedural parts recipe.
@@ -22,7 +22,9 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape) {
   // teamId threads the per-team chassis style into the anchors so decals stay
   // glued to a styled (longer/slimmer/drooped) nose and inlet.
   const anchorParts = legacyBody ? null : parts;
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId) : null;
+  // spineHeight lifts the engine-cover crown the spine crest sits on (cf/cr
+  // below read coverAt().top), so the decal takes the same anchors as the mesh.
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight) : null;
   // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
   const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
   // corners in [BL, BR, TR, TL] order (upright as seen from outside) → the region.
@@ -138,10 +140,11 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape) {
   quad([[-ex, eyB, ezR], [-ex, eyB, ezF], [-ex, eyT, ezF], [-ex, eyT, ezR]], [-1, 0, 0], R.num);
   return out;
 }
-function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape) {
+function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   if (typeof LiveryTex === "undefined" || !_gfx.createTexMesh) return null;
   const anchorParts = legacyBody ? null : parts;
-  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId) : { key: "legacy" };
+  // spineHeight reaches the cache key through anchors.key (the lift is in it).
+  const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight) : { key: "legacy" };
   const level = aLvl == null ? 2 : Number(aLvl);
   // anchors.key covers the engine-cover fields and the team, NOT the aero
   // recipe — so a fin-height change alone would hit a cached decal mesh built
@@ -158,7 +161,7 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape) {
   const shapeK = finShape || "standard";
   const k = level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
   if (!_carDecalMeshes[k]) {
-    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody, teamId, shapeK));
+    _carDecalMeshes[k] = _gfx.createTexMesh(carDecalData(level, parts, legacyBody, teamId, shapeK, spineHeight));
     _carDecalOrder.push(k);
     while (_carDecalOrder.length > CAR_DECAL_CACHE_MAX) {
       const old = _carDecalOrder.shift(), mesh = _carDecalMeshes[old];

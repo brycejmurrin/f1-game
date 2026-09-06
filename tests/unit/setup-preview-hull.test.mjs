@@ -31,7 +31,7 @@ const OPTIONAL = ["stripe", "noseStripe", "accent", "nose", "pod", "wing",
 // "value change never moves a vertex" premise can be tested for it as well —
 // which it deliberately FAILS: a different outline IS a different hull, and
 // the field earns its place in SP_HULL_GEOM_FIELDS by presence, like the strips.
-const ENUM_GEOM = { finShape: ["swept", "stub"], coverVents: ["gills", "spine"] };
+const ENUM_GEOM = { finShape: ["swept", "stub"], coverVents: ["gills", "spine"], spineHeight: ["raised", "high"] };
 // ...and the enum that is a COLOUR: the T-cam housing. It must behave like a
 // hue — two values, byte-identical positions — or the hull would need it.
 const ENUM_PAINT = { tcam: ["black", "yellow"] };

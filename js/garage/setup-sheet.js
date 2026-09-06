@@ -545,7 +545,7 @@ function buildLiveryOptions(container, team) {
                      noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "", logo2: "",
                      logo3: "", halo: "", finish: "gloss", numFont: "default", sponsors: "default",
                      finStyle: "team", finBadge: "logo", spineLogo: "logo", finShape: "standard",
-                     tcam: "team", coverVents: "none" };
+                     tcam: "team", coverVents: "none", spineHeight: "standard" };
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -599,6 +599,7 @@ function buildLiveryOptions(container, team) {
           finStyle: liv.finStyle || "team", finBadge: liv.finBadge || "logo",
           spineLogo: liv.spineLogo || "logo", finShape: liv.finShape || "standard",
           tcam: liv.tcam || "team", coverVents: liv.coverVents || "none",
+          spineHeight: liv.spineHeight || "standard",
         };
         csLivEditId = liv.id;
         csLivCreating = true;
@@ -807,6 +808,8 @@ function buildLiveryCreator(container, team) {
   // the engine-cover cooling vents. Both are mesh, so their id lists are Car3D's.
   pillRow("T-CAM", "tcam", Car3D.TCAM_IDS || ["team"], "team");
   pillRow("COVER VENTS", "coverVents", Car3D.COVER_VENT_IDS || ["none"], "none");
+  // How tall the engine-cover crown runs behind the hoop — the no-fin dorsal look.
+  pillRow("SPINE HEIGHT", "spineHeight", Car3D.SPINE_HEIGHT_IDS || ["standard"], "standard");
 
   const nameRow = document.createElement("label"); nameRow.className = "cs-liv-ed-row";
   const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
@@ -849,6 +852,7 @@ function buildLiveryCreator(container, team) {
     if (d.finShape && d.finShape !== "standard") liv.finShape = d.finShape;
     if (d.tcam && d.tcam !== "team") liv.tcam = d.tcam;
     if (d.coverVents && d.coverVents !== "none") liv.coverVents = d.coverVents;
+    if (d.spineHeight && d.spineHeight !== "standard") liv.spineHeight = d.spineHeight;
     const existing = getCustomLiveries(team.id);
     // Edit-in-place replaces the entry that carried the OLD id; create appends.
     setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
@@ -888,7 +892,8 @@ function livePreviewDraft(team, d) {
     spineLogo: d.spineLogo && d.spineLogo !== "logo" ? d.spineLogo : null,
     finShape: d.finShape && d.finShape !== "standard" ? d.finShape : null,
     tcam: d.tcam && d.tcam !== "team" ? d.tcam : null,
-    coverVents: d.coverVents && d.coverVents !== "none" ? d.coverVents : null } };
+    coverVents: d.coverVents && d.coverVents !== "none" ? d.coverVents : null,
+    spineHeight: d.spineHeight && d.spineHeight !== "standard" ? d.spineHeight : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 

@@ -23,7 +23,10 @@ a vertex, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_
 drives the fin panel AND the engine-cover wash), `finBadge` (`logo|number|none`) and
 `spineLogo` (`logo|none`). `drawTailGraphic` clips to its region. Body details:
 `tcam` (`Car3D.TCAM_IDS`, mesh colour only) and `coverVents` (`Car3D.COVER_VENT_IDS`,
-geometry, also in `SP_HULL_GEOM_FIELDS`); `finBadge` also offers `code`. The 2026
+geometry, also in `SP_HULL_GEOM_FIELDS`); `spineHeight` (`Car3D.SPINE_HEIGHT_IDS`,
+lifts the cover crown top-only through `bodyAnchors(parts, teamId, spineHeight)` —
+pass it wherever anchors or `getCarDecalMesh` are taken, or the crest decal floats;
+geometry, in `SP_HULL_GEOM_FIELDS`); `finBadge` also offers `code`. The 2026
 lights are draw-time, not livery: `CarMesh.ersLightCode` (pure) and
 `drawMirrorLights` at `Car3D.mirrorLightAnchors` under 20 km/h.
 The mark takes up to THREE livery colours and the editor asks

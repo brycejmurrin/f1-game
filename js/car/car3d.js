@@ -1326,6 +1326,22 @@ const Car3D = (function () {
   // teams swap track to track (Autosport 2024 tech gallery); "spine" is one
   // slot along the ridge (AMR24), ahead of the shark-fin root so the two never meet.
   const COVER_VENT_IDS = Object.freeze(["none", "gills", "spine"]);
+  // SPINE HEIGHT (liv.spineHeight): how tall the engine-cover crown runs behind
+  // the roll hoop. "raised" and "high" lift the crown's TOP line only — the
+  // floor of the cover and the sidepods stay put — and taper the lift toward
+  // the tail (SPINE_TAIL), so the cover reads as a dorsal hump running back
+  // from the hoop (the no-fin 2026 look) rather than a taller box. The lift
+  // enters through bodyAnchors, so everything mounted off coverAt(z).top —
+  // service panels, vents, the spine slot, the fin root and the spine crest
+  // decal in car-mesh — rides up with the skin. The fin's TOP stays where the
+  // regulation ceiling puts it (finTop), so a raised spine shortens the blade
+  // rather than pushing it up: the real-car trade-off, and it keeps the fin
+  // decal exactly where sharkFinPanel/Badge place it. "high" is capped so the
+  // crown at z -0.55 (0.93) still sits under the hoop's rear crown (0.938).
+  const SPINE_HEIGHT_IDS = Object.freeze(["standard", "raised", "high"]);
+  const SPINE_RISE = Object.freeze({ standard: 0, raised: 0.06, high: 0.10 });
+  const SPINE_TAIL = 0.45;   // fraction of the lift that survives at the tail (z -2.0)
+  const spineRise = (id) => SPINE_RISE[id] || 0;
   const FIN_SHAPE_IDS = Object.freeze(Object.keys(FIN_SHAPES).concat(["none"]));
   const FIN = FIN_SHAPES.standard;
   const finOf = (shape) => FIN_SHAPES[shape] || FIN;
@@ -1694,19 +1710,24 @@ const Car3D = (function () {
 
   const _anchorCache = new WeakMap();
   const _anchorNullKey = {};   // stand-in for a null/undefined parts (legacy bodies)
-  function bodyAnchors(parts, teamId) {
+  function bodyAnchors(parts, teamId, spineHeight) {
     const outer = parts || _anchorNullKey;
     let byTeam = _anchorCache.get(outer);
     if (!byTeam) { byTeam = new Map(); _anchorCache.set(outer, byTeam); }
-    const tk = teamId || "";
+    // The livery's spine lift shares the per-parts map: a "standard" (or
+    // absent) spine keys exactly as before, so no caller that never heard of
+    // it sees a different object.
+    const rise = spineRise(spineHeight);
+    const tk = (teamId || "") + (rise ? "|" + spineHeight : "");
     const hit = byTeam.get(tk);
     if (hit) return hit;
-    const built = buildBodyAnchors(parts, teamId);
+    const built = buildBodyAnchors(parts, teamId, rise);
     byTeam.set(tk, built);
     return built;
   }
 
-  function buildBodyAnchors(parts, teamId) {
+  function buildBodyAnchors(parts, teamId, rise) {
+    rise = rise || 0;
     const T = parts || {};
     const tier = T.engine != null ? T.engine : 1;
     const eng = buildEngineParts(T._visual && T._visual.engine, tier);
@@ -1716,9 +1737,9 @@ const Car3D = (function () {
     const coverStations = [
       { z: -0.55, x: 0.28 * eng.tailWidth,
         bottom: 0.52 + 0.08 * (coverHeight - 1) - 0.31 * coverHeight,
-        top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight },
+        top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight + rise },
       { z: -2.00, x: 0.13 * eng.tailWidth,
-        bottom: 0.42 - 0.17 * coverHeight, top: 0.42 + 0.17 * coverHeight },
+        bottom: 0.42 - 0.17 * coverHeight, top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL },
     ];
     const noseStations = styledNoseStations(style).map((station) => ({
       z: station.z, side: station.w * 0.5, topSide: station.w * station.t * 0.5,
@@ -1726,7 +1747,7 @@ const Car3D = (function () {
     }));
     return {
       key: [eng.podWidth, eng.shoulderHeight, eng.undercut, eng.coke,
-            eng.tailWidth, eng.coverHeight,
+            eng.tailWidth, eng.coverHeight, rise,
             style === DEFAULT_STYLE ? "" : (teamId || "")].join(","),
       podAt(z) {
         const p = sampleStations(podStations, z);
@@ -1794,8 +1815,9 @@ const Car3D = (function () {
     };
   }
 
-  function buildEngineCoverBodywork(out, c1, accentC, eng, anchors) {
+  function buildEngineCoverBodywork(out, c1, accentC, eng, anchors, rise) {
     const coverHeight = Math.max(0.78, Math.min(1.28, eng.coverHeight));
+    rise = rise || 0;
     // t was 0.0 — frame() puts BOTH top corners on the centreline, so the engine
     // cover was a triangular tent that came to a zero-width knife along its
     // whole length. Three things were wrong with that. A real cover is a
@@ -1808,10 +1830,13 @@ const Car3D = (function () {
     // ±x*0.72) was a flat plate hanging over a knife edge. 0.72 is that 0.72:
     // it makes the crown exactly as wide as the decal that is painted on it,
     // and pulls every cover-mounted detail back to within ~0.06 m of the skin.
-    const front = { z: -0.55, y: 0.52 + 0.08 * (coverHeight - 1),
-                    w: 0.56 * eng.tailWidth, h: 0.62 * coverHeight, t: 0.72 };
-    const rear = { z: -2.00, y: 0.42, w: 0.26 * eng.tailWidth,
-                   h: 0.34 * coverHeight, t: 0.70 };
+    // The spine lift is TOP-ONLY: centre up by half, height up by the whole,
+    // which is exactly the coverStations top line in bodyAnchors (the floor
+    // y - h/2 is unchanged). The two must agree or the crest decal floats.
+    const front = { z: -0.55, y: 0.52 + 0.08 * (coverHeight - 1) + rise / 2,
+                    w: 0.56 * eng.tailWidth, h: 0.62 * coverHeight + rise, t: 0.72 };
+    const rear = { z: -2.00, y: 0.42 + rise * SPINE_TAIL / 2, w: 0.26 * eng.tailWidth,
+                   h: 0.34 * coverHeight + rise * SPINE_TAIL, t: 0.70 };
     addSpan(out, front, rear, c1, c1);
     const stripeFront = anchors.coverAt(-0.825), stripeRear = anchors.coverAt(-1.675);
     for (const side of [-1, 1]) {
@@ -1894,7 +1919,7 @@ const Car3D = (function () {
     const cockpitStyle = design.cockpit;
     const wheelStyle = design.wheels;
     const teamStyle = teamStyleOf(opts && opts.teamId);
-    const anchors = bodyAnchors(T, opts && opts.teamId);
+    const anchors = bodyAnchors(T, opts && opts.teamId, liv.spineHeight);
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
 
     part("chassis");
@@ -2110,7 +2135,7 @@ const Car3D = (function () {
                      h: Math.max(0.03, 0.968 - hoopF), t: 0.40 },
                    { z: -0.63, y: (hoopR + 0.938) / 2, w: 0.13 * inScale,
                      h: Math.max(0.03, 0.938 - hoopR), t: 0.38 }, c1);
-      coverGeom = buildEngineCoverBodywork(out, c1, accentC, engStyle, anchors);
+      coverGeom = buildEngineCoverBodywork(out, c1, accentC, engStyle, anchors, spineRise(liv.spineHeight));
       // Optional scoop lip on the roll-hoop mouth (recipe-gated; default 0).
       const scoopLip = Math.max(0, Math.min(2, Math.round((engStyle && engStyle.scoopLip) || 0)));
       if (scoopLip >= 1) {
@@ -3722,6 +3747,6 @@ const Car3D = (function () {
            endplate: endplateGeom, numberBoard,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
            sharkFin: FIN, sharkFinPanel, sharkFinBadge, FIN_SHAPES, FIN_SHAPE_IDS,
-           TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors,
+           TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors, SPINE_HEIGHT_IDS, spineRise,
            aeroLevelOf, aeroStyleOf };
 })();

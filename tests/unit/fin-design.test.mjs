@@ -167,6 +167,46 @@ test("cover vents are geometry; the T-cam pick is colour only", () => {
   assert.ok(samePos(base, build({ tcam: "team" })) && sameCol(base, build({ tcam: "team" })), "\"team\" is the shipped car");
 });
 
+// SPINE HEIGHT lifts the engine-cover crown's TOP line only, tapering to the
+// tail, and the lift flows through bodyAnchors so the crest decal, vents and
+// fin root all ride up with the skin. The fin's top must NOT move: it is where
+// the regulation ceiling puts it and where the fin decal is placed.
+test("spineHeight lifts the cover crown top-only and leaves the fin top alone", () => {
+  assert.deepEqual(Array.from(M.Car3D.SPINE_HEIGHT_IDS), ["standard", "raised", "high"]);
+  const base = build({}), std = build({ spineHeight: "standard" });
+  assert.ok(samePos(base, std), "\"standard\" is the shipped car");
+  const a0 = M.Car3D.bodyAnchors(parts, team.id), a1 = M.Car3D.bodyAnchors(parts, team.id, "raised"),
+        a2 = M.Car3D.bodyAnchors(parts, team.id, "high");
+  assert.strictEqual(M.Car3D.bodyAnchors(parts, team.id, "standard"), a0, "standard shares the cached anchors");
+  const rise = (a, z) => a.coverAt(z).top - a0.coverAt(z).top;
+  assert.ok(Math.abs(rise(a1, -0.55) - M.Car3D.spineRise("raised")) < 1e-9, "raised lifts the front crown by its rise");
+  assert.ok(Math.abs(rise(a2, -0.55) - M.Car3D.spineRise("high")) < 1e-9, "high lifts the front crown by its rise");
+  assert.ok(rise(a2, -2.0) > 0 && rise(a2, -2.0) < rise(a2, -0.55), "the lift tapers toward the tail but does not vanish");
+  assert.strictEqual(a2.coverAt(-0.55).bottom, a0.coverAt(-0.55).bottom, "the cover floor does not move");
+  assert.ok(a2.coverAt(-0.55).top < 0.938, "\"high\" stays under the roll hoop's rear crown");
+  // The mesh: the same triangles, lifted by at most the rise, and the fin's
+  // top (the tallest sharkFin vertex) exactly where it was.
+  const finTop = (liv) => {
+    const m = M.Car3D.build([0.9, 0.1, 0.1], [1, 1, 1], { livery: liv, teamId: team.id, num: 16, parts, measure: true });
+    const f = m.parts.find((p) => p.name === "sharkFin");
+    return f.centreM[1] + f.sizeM[1] / 2;
+  };
+  const top0 = finTop({});
+  for (const id of ["raised", "high"]) {
+    const m = build({ spineHeight: id });
+    assert.strictEqual(m.pos.length, base.pos.length, `${id}: same triangle count — a lift, not new parts`);
+    let maxDy = 0, lowered = 0;
+    for (let i = 1; i < m.pos.length; i += 3) {
+      const dy = m.pos[i] - base.pos[i];
+      if (dy > maxDy) maxDy = dy;
+      if (dy < -1e-6) lowered++;
+    }
+    assert.ok(Math.abs(maxDy - M.Car3D.spineRise(id)) < 1e-9, `${id}: the crown rises by exactly its rise (got ${maxDy})`);
+    assert.strictEqual(lowered, 0, `${id}: nothing moves DOWN — the floor and the fin stay put`);
+    assert.ok(Math.abs(finTop({ spineHeight: id }) - top0) < 1e-9, `${id}: the fin top stays on the regulation line`);
+  }
+});
+
 // The real rule, read off the driver slot: car 1 black, car 2 yellow. Compared
 // at the SAME number each time — the number already colours other parts of the
 // mesh, so a cross-number comparison says nothing about the T-cam.
