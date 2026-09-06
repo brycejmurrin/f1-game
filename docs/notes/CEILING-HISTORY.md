@@ -2116,3 +2116,15 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   `humanPuntCap`, the half-car `SIDE_LEVEL`) live in `js/physics/ai-drive.js`
   with their unit tests; `tests/unit/collision-contact-vm.test.mjs` pins the
   three behaviours.
+
+- `js/game.js` lines 9994 -> **10009**, codeLines 5489 -> **5496**
+  (2026-09-05): the defending rules. Seven code lines: hold the line under
+  braking with a chaser (5 — the frozen offset from the racing line, `holdOff`),
+  one defensive move per straight (2 — `defendOnce` and the braking-zone reset),
+  and the time-to-collision gate rides the existing `queueBrake` call with one
+  extra argument. Measured (`scratch/brakeswerve-diag.mjs`, 4 min): line
+  changes over 1.5 m in half a second under braking with a car within 12 m
+  behind, monza 128 -> 93, monaco 155 -> 135 — the rest is the racing line
+  sweeping into the corner, which the rule allows, and attackers, which it does
+  not cover. The rules themselves are in `js/physics/ai-drive.js` with unit
+  tests; game.js keeps the call sites.

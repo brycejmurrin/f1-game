@@ -107,12 +107,43 @@ const AiDrive = (function () {
   // gap before the follow distance (a time-to-contact gate, the bt filterBColl
   // idea: brake for a car you are actually going to hit, not one you are
   // catching).
-  function queueBrake(speed, blockerSpeed, street, gap, follow) {
+  // Two gates, the larger wins. The ORIGINAL one fires on a closing rate above
+  // the lift-only band (3 m/s permanent, 4.5 street) inside the gap lift can
+  // still absorb. The TIME-TO-COLLISION one (Speed Dreams simplix: catch time
+  // under 3 s AND the deceleration the gap demands above 5 m/s^2) catches the
+  // slow creep the first misses — a 2.5 m/s closing rate a metre from the
+  // follow distance needs 6 m/s^2 of braking NOW — and brakes in proportion to
+  // what the gap needs (aReq / BRAKE), so a train brakes smoothly instead of a
+  // car tapping the one ahead and then stamping on it.
+  function queueBrake(speed, blockerSpeed, street, gap, follow, brakeRef) {
     const excess = (speed || 0) - (blockerSpeed || 0);
     const thresh = street ? 4.5 : 3;
-    if (excess <= thresh) return 0;
-    if (gap != null && follow != null && gap > follow + excess * 1.2) return 0;
-    return clamp((excess - thresh) / (street ? 4 : 5), 0.2, 1);
+    let lvl = 0;
+    if (excess > thresh && !(gap != null && follow != null && gap > follow + excess * 1.2))
+      lvl = clamp((excess - thresh) / (street ? 4 : 5), 0.2, 1);
+    if (excess > 0.5 && gap != null && follow != null) {
+      const room = Math.max(gap - follow, 0.5);
+      const aReq = excess * excess / (2 * room);
+      if (room / excess < 3 && aReq > 5) lvl = Math.max(lvl, clamp(aReq / (brakeRef || 22), 0.15, 1));
+    }
+    return lvl;
+  }
+
+  // NO MOVING UNDER BRAKING (FIA driving standards: no change of direction by
+  // the defending car once the deceleration phase has begun, except to follow
+  // the racing line). The window is the chaser within about a second behind;
+  // eight metres is the floor so a slow corner still counts.
+  function holdLineGap(speed) {
+    return Math.max(8, speed || 0);
+  }
+  // ...and ONE defensive move per straight: the first pull fixes the side, a
+  // pull the other way is a second change of direction and is refused. The
+  // side resets when the braking zone begins — the next straight is new.
+  function defendOnce(defend, side) {
+    if (!defend) return { defend: 0, side };
+    const sgn = defend > 0 ? 1 : -1;
+    if (!side) return { defend, side: sgn };
+    return sgn === side ? { defend, side } : { defend: 0, side };
   }
 
   // Metres of proactive lateral-sep bias. 2.6 m of yank is a wall on Monaco.
@@ -592,5 +623,6 @@ const AiDrive = (function () {
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
     otWant, passTarget, passHold, passCooldown, sideYieldsA,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
+    holdLineGap, defendOnce,
   };
 })();
