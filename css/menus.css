@@ -470,6 +470,14 @@ body { --compact-at: 600px; --wide-at: 620px; }
 }
 
 /* ---------- select screen ---------- */
+/* THE CIRCUIT PICKER IS A BROADCAST GRAPHIC. A strip of national flags across
+   the top (#sel-shelf: the filter/search toolbar, then #sel-tracks, the one
+   sideways scroller), and under it the HERO (#sel-track-section): the in-game
+   still of the chosen circuit, its lap outline drawn over it, the flag and
+   name on the image, the numbers beside it. Redesigned 2026-09 from the
+   two-pane list/preview layout; the .pane-pair primitive is no longer used
+   here, so none of the data-pair branches remain. The sheet still classifies
+   density (--compact-at) and fit (--fit-at) through js/ui/sheet-shape.js. */
 #select {
   z-index: 25;
   background:
@@ -479,341 +487,411 @@ body { --compact-at: 600px; --wide-at: 620px; }
 @media (prefers-reduced-transparency: reduce) {
   #select { background: var(--scrim-heavy); }
 }
-#sel-inner { --sheet-w: 1020px; }
-/* STACKED: ONE LIST SCROLLER. The circuit map is context — a compact band —
-   not a second document. #sel-body is a flex column that does NOT scroll;
-   #sel-tracks fills the leftover height and is the only overflow-y:auto.
-   Document order is the visual order: preview band first, then the list.
-   Filter + search stay sticky at the top of that list (below). Start stays
-   pinned in .sheet-foot.
-   The previous hotfix made the body the scroller and capped the list at
-   min(40svhz, 300px) with order:-1 so the list sat above the map. That was
-   two nested vertical regions on a short sheet. Retired.
-   Gated on `:not([data-pair="on"])` — an ungated `#sel-body` rule is (1,0,0)
-   and beats the primitive's (0,3,0), so the body stayed a flex column while
-   the sheet was already two grid tracks. Keying on the pair attribute (not a
-   width query) also makes the unmeasured first frame a valid stack. */
-/* Fill the screen so the body row is definite. A content-sized sheet (one
-   filtered row) made flex-basis:0 on the list collapse — measured 29px
-   after a Monaco search, 116px with the full catalogue, same 568×320. */
-#sel-inner:not([data-pair="on"]) { height: 100%; }
-#sel-inner:not([data-pair="on"]) > #sel-body {
-  display: flex; flex-direction: column; gap: var(--gap);
-  min-height: 0;
-  overflow: hidden;
+#sel-inner {
+  --sheet-w: 1020px;
+  --fit-at: 260px;
+  /* The stats grid and the caption on the still start colliding under this
+     width; compact hides the extras and shrinks the tiles to flags. */
+  --compact-at: 480px;
+  /* Fill the screen so the body row is definite: the hero is a flex remainder
+     and a content-sized sheet would collapse it to its min-height. */
+  height: 100%;
 }
-#sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section {
+/* The body is a flex column that does NOT scroll: shelf, then hero section.
+   The section is the vertical scroller when its caption does not fit. */
+#sel-body {
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.7);
+  min-height: 0; overflow: hidden;
+}
+#sel-shelf {
+  flex: 0 0 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.5);
+}
+/* Toolbar: ALL / SEASON / CLASSICS (+ TODAY in time trial, CUSTOMISE SEASON in
+   season) with the search box taking the slack. One pan-x row at every
+   width — the chips keep their intrinsic width and the search keeps a
+   readable floor, so a 200% phone pans the row instead of wrapping it into
+   the hero's height. Reuses .sel-chip chrome already shared with race-settings. */
+#sel-track-filter {
+  display: flex; flex-wrap: nowrap; align-items: center;
+  gap: calc(var(--gap) * 0.5);
+  min-width: 0;
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+#sel-track-filter::-webkit-scrollbar { display: none; }
+#sel-track-filter .sel-chip {
+  flex: 0 0 auto;
+  min-width: max-content;
+  justify-content: center;
+  font-size: var(--fs-micro);
+  padding-inline: calc(var(--gap) * 0.83);
+  letter-spacing: var(--ls-3);
+}
+/* Daily challenge is a banner chip, not a fourth filter: first on the row. */
+#sel-daily { flex: 0 0 auto; }
+#sel-track-search {
+  flex: 1 1 12rem;
+  min-width: 12rem;
+  margin-left: auto;
+  min-height: var(--chip-h);
+  box-sizing: border-box;
+  padding: 0 calc(var(--gap) * 0.7);
+  border: 1px solid var(--plate-line);
+  border-radius: var(--r-sm);
+  background: var(--plate);
+  color: var(--text);
+  font: inherit;
+  /* 16px, not --fs-2 (15): the iOS focused-input auto-zoom floor stated at
+     the customize/tuner input rules applies to every typeable field, and a
+     sticky page zoom from tapping the circuit SEARCH box is the worst
+     possible trade for one type rung. */
+  font-size: 16px;
+}
+#sel-track-search::placeholder { color: var(--dim); opacity: 1; }
+/* Compact: the TODAY chip drops its weather/tod/best span so ALL / SEASON /
+   CLASSICS stay on screen; the search yields to the chips. */
+#sel-inner[data-density="compact"] #sel-daily > span { display: none; }
+#sel-inner[data-density="compact"] #sel-track-search { flex-basis: 9rem; min-width: 9rem; }
+
+/* THE STRIP. One .track-row per circuit — a flag over a name — in a single
+   row that pans sideways; snap so a flick settles on whole tiles. Group
+   dividers (CURRENT SEASON / CLASSIC CIRCUITS) stand between them as
+   vertical labels. In season mode the strip is the calendar: raced rounds
+   dimmed, the next race lit, nothing tappable. */
+#sel-tracks {
+  display: flex; align-items: stretch;
+  gap: calc(var(--gap) * 0.3);
+  min-width: 0;
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.4);
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: var(--pad);
+  scrollbar-width: thin;
+  border: 1px solid var(--card-line);
+  border-radius: var(--r-md);
+  background: var(--plate);
+}
+#sel-tracks .track-row {
+  flex: 0 0 auto; width: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: calc(var(--gap) * 0.3);
+  min-width: calc(var(--chip-h) * 2);
+  /* Padding, not a 3px inset bar + 9px: the selected mark here is the ring
+     around the flag, so the active rule below needs no geometry of its own. */
+  padding: calc(var(--gap) * 0.3) calc(var(--gap) * 0.45);
+  border: none; border-radius: var(--r-sm);
+  scroll-snap-align: center;
+  text-align: center;
+}
+#sel-tracks .track-row:last-child { border-bottom: none; }
+#sel-tracks .track-row.active {
+  border-left: none;
+  padding-left: calc(var(--gap) * 0.45);
+  background: var(--plate-on);
+  box-shadow: var(--plate-on-glow);
+}
+/* .track-row-meta is the FLAG box in the strip (the list rows in season setup
+   still use it for the country text — the tile look is scoped here). */
+#sel-tracks .track-row-meta {
+  display: block; flex: none;
+  width: calc(var(--chip-h) * 1.45);
+  aspect-ratio: 3 / 2;
+  border-radius: var(--r-xs);
+  overflow: hidden;
+  box-shadow: var(--edge);
+  /* the ring is the selected mark — an outline paints outside the border box
+     and is not sliced here, because the tile has padding around the flag */
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color 0.14s ease;
+}
+#sel-tracks .track-row-meta > svg,
+#sel-preview-flag > svg { display: block; width: 100%; height: 100%; }
+#sel-tracks .track-row.active .track-row-meta { outline-color: var(--red); }
+#sel-tracks .track-row-name {
+  flex: none;
+  max-width: calc(var(--chip-h) * 2.6);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--dim);
+  letter-spacing: var(--ls-1);
+}
+#sel-tracks .track-row[data-kind="classic"] .track-row-name { color: var(--bronze); }
+/* The type badges ride the tile for the SEASON-filter contract (no .trb-classic
+   shown) but the tile has no room for them; the hero caption shows them. */
+#sel-tracks .trb { display: none; }
+#sel-tracks .track-row-rec { flex: none; font-size: var(--fs-micro); }
+#sel-tracks .track-group-head {
+  position: static; flex: 0 0 auto;
+  writing-mode: vertical-rl;
+  display: flex; align-items: center;
+  /* Never taller than a tile: the label is a divider, and a divider that
+     stretches the row it divides is the bug the short text above avoids. */
+  max-height: calc(var(--chip-h) * 1.9);
+  overflow: hidden;
+  padding: 0 calc(var(--gap) * 0.15);
+  border-bottom: none;
+  border-right: 1px solid var(--card-line);
+  background: none;
+  letter-spacing: var(--ls-3);
+  white-space: nowrap;
+}
+#sel-track-empty { padding: var(--pad); text-align: center; align-self: center; margin: 0; }
+/* Season: the calendar strip is read-only. */
+#sel-tracks[data-mode="season"] .track-row { cursor: default; }
+#sel-tracks .track-row[data-done] { opacity: 0.45; }
+#sel-tracks .sur-rnd { min-width: 0; }
+/* Compact: flags only — the name moves to the hero — and the strip drops to
+   one tap-height row so the hero under it keeps its still (a 393px-tall phone
+   has ~200px of body to split between the two). */
+#sel-inner[data-density="compact"] #sel-tracks .track-row-name { display: none; }
+#sel-inner[data-density="compact"] #sel-tracks .track-row { min-width: 0; min-height: 0; padding-block: calc(var(--gap) * 0.2); }
+#sel-inner[data-density="compact"] #sel-tracks .track-row-meta { width: calc(var(--chip-h) * 1.2); }
+#sel-inner[data-density="compact"] #sel-tracks .track-group-head { max-height: calc(var(--chip-h) * 1.2); }
+#sel-inner[data-density="compact"] #sel-tracks { padding-block: calc(var(--gap) * 0.2); }
+#sel-inner[data-density="compact"] #sel-shelf { gap: calc(var(--gap) * 0.35); }
+
+/* THE HERO SECTION: the rest of the body, scrolling only when the caption
+   does not fit. .pane supplies the scroll region recipe. */
+#sel-track-section {
+  flex: 1 1 0; min-height: 0; min-width: 0;
   display: flex; flex-direction: column;
-  /* 0 1 auto, not 0 0 auto: a content-sized band that cannot shrink ate the
-     list (measured 2px of #sel-tracks on a 568×320 stacked sheet). Cap the
-     band at a share of the definite body so the list always has room. */
-  flex: 0 1 auto; min-height: 0; max-height: 42%;
+  padding: 0;
+}
+#sel-circuit-label { margin: 0 0 calc(var(--gap) * 0.35); flex: none; }
+#sel-inner[data-density="compact"] #sel-circuit-label { display: none; }
+/* THREE ARRANGEMENTS, KEYED ON THE SHEET'S MEASURED SHAPE AND DENSITY
+   (js/ui/sheet-shape.js writes data-shape / data-density in the sheet's own
+   zoom-corrected units, so UI SIZE and orientation both land here):
+   1. STACKED (the default; every tall sheet, every narrow one): a 16:9 still
+      across the full width, the numbers in a two-column grid under it, the
+      section scrolling when they do not fit. An upright phone or tablet.
+   2. BESIDE (wide-shaped AND >= 620 local px): the still fills the left 3/5
+      of the section, the numbers the right 2/5 in their own scroll column.
+      A desktop, a laptop, a landscape tablet.
+   3. LOWER THIRD (compact AND wide-shaped, at any width): a short landscape
+      phone — or any sheet at a raised UI SIZE — has no height for a stack
+      and no width for a column. The still takes the whole section and the
+      numbers run as ONE pan-x row under it, like a broadcast lower third. */
+#sel-track-preview {
+  flex: 1 1 auto; min-height: 0; min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: var(--gap);
+  align-content: start;
+}
+#sel-hero {
+  /* 1. STACKED: a 16:9 band (52cqw ≈ 9/16 of the sheet's inline size less its
+     padding), capped so a short sheet keeps the numbers in reach — --svhz is
+     the zoom-corrected small-viewport unit. A DEFINITE height, not
+     aspect-ratio + max-height: the grid sized its row from the ratio and the
+     cap then shrank the box... or the other way round — measured 2026-09-05,
+     the still painted 38px over the numbers under it on a 390x844 phone at
+     UI SIZE 200%. */
+  aspect-ratio: auto;
+  width: 100%;
+  height: min(52cqw, max(calc(var(--chip-h) * 3), calc(46 * var(--svhz))));
+  align-self: start;
+}
+@container sheet (min-width: 620px) {
+  /* 2. BESIDE — wide-shaped only; a tall 800px tablet keeps the stack. */
+  #sel-inner:not([data-shape="tall"]) #sel-track-preview {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: minmax(0, 1fr);
+    align-content: stretch;
+  }
+  #sel-inner:not([data-shape="tall"]) #sel-hero {
+    aspect-ratio: auto; max-height: none; height: 100%; align-self: stretch;
+  }
+  /* The numbers scroll in their own column if they must, so the still never
+     shrinks to make room for a long list. */
+  #sel-inner:not([data-shape="tall"]) #sel-preview-info {
+    min-height: 0;
+    overflow-y: auto; overscroll-behavior-y: contain;
+    padding-right: calc(var(--gap) * 0.4);
+  }
+  /* The door spans its column so that ArrowDown from a flag tile above the
+     numbers lands on it (MenuNav scores a candidate whose box spans your
+     position as directly below); tiles above the still land on the map
+     button. Without this the only control under the strip's right half was
+     NEXT in the foot. */
+  #sel-inner:not([data-shape="tall"]) #sel-detail-chip { align-self: stretch; }
+}
+/* 3. LOWER THIRD. (1,2,1) beats the beside rules' (1,1,1) at any width. */
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-preview {
+  grid-template-columns: minmax(0, 1fr);
+  /* The FLOOR IS ON THE ROW, not the hero: a min-height on the item let it
+     paint past a row the grid had already sized smaller (the still over the
+     numbers at 852x393 @150%). A floored row overflows the section instead,
+     and the section scrolls. */
+  /* The numbers row is a scroll container here (pan-x), and a scroll
+     container's minimum contribution is 0 — so `auto` alone collapsed it the
+     same way the stacked case's min-height did. A floor of one chip row plus
+     its label keeps it a lower third. */
+  grid-template-rows: minmax(calc(var(--chip-h) * 2.1), 1fr) minmax(calc(var(--chip-h) * 1.35), auto);
+  align-content: stretch;
+  gap: calc(var(--gap) * 0.5);
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-hero {
+  aspect-ratio: auto; max-height: none; height: auto; align-self: stretch;
+  min-height: 0;
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-info {
+  flex-direction: row; align-items: center; flex-wrap: nowrap;
+  gap: var(--gap);
+  padding: 0 0 calc(var(--gap) * 0.2);
+  overflow-x: auto; overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-info::-webkit-scrollbar { display: none; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta {
+  display: flex; flex: 0 0 auto; gap: var(--gap);
+}
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-meta > div { flex: 0 0 auto; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-preview-rec { flex: none; white-space: nowrap; }
+#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-detail-chip { flex: none; align-self: center; }
+#sel-hero {
+  position: relative; min-height: 0; min-width: 0;
+  border-radius: var(--r-lg);
   overflow: hidden;
+  border: 1px solid var(--card-line);
+  /* The fallback for a circuit with no still: the team-accent wash over a
+     dark plate, which is what the old preview card wore. */
+  background: var(--grad-accent),
+    linear-gradient(160deg in oklab, var(--surf-3), var(--carbon));
+  box-shadow: var(--edge);
 }
-#sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section {
-  /* Compact / high UI SIZE used to hide the map or stamp it at 2.6 chips.
-     Spend more of the stacked body on the outline so lower-res and zoomed
-     sheets still read the circuit, not a postage stamp. */
-  max-height: 58%;
+#sel-still {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center;
+  display: block;
 }
-#sel-inner:not([data-pair="on"]) > #sel-body > #sel-track-section > #sel-track-preview {
-  flex: 0 1 auto; min-height: 0;
-  /* The preview is a band in every stacked sheet: thumbnail beside caption.
-     A map-over-caption column spent the entire 42% height cap on the map and
-     clipped the circuit name even at 100% on a portrait phone. */
-  flex-direction: row;
-  align-items: center;
+#sel-still[hidden] { display: none; }
+/* Legibility scrim: dark up from the caption edge and down from the top, the
+   middle left clear for the outline. Drawn over the image, under the caption. */
+#sel-hero::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(to top, var(--scrim-heavy), transparent 48%),
+    linear-gradient(to bottom, var(--scrim), transparent 40%);
 }
-#sel-inner:not([data-pair="on"]) #sel-preview-info { display: block; }
-/* Token-based map cap so the band stays a band. --chip-h answers density;
-   object-fit keeps the outline true when the cap binds. */
-#sel-inner:not([data-pair="on"]) #sel-preview-map {
-  max-height: calc(var(--chip-h) * 3.5);
-  object-fit: contain;
+/* THE MAP BUTTON COVERS THE STILL: tapping anywhere on the image opens
+   CIRCUIT DETAIL, and the outline canvas is centred inside it. A real button
+   (focusable, labelled) — the base :focus-visible ring in css/tokens.css
+   paints on it. */
+.sel-map-btn {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; border: none; border-radius: 0;
+  background: none;
+  cursor: pointer;
 }
-/* Compact stacked: the band is a thumbnail + name. Rec / GP / meta / facts /
-   elev are the extras that turn a band into a second document. The CIRCUIT
-   label stays in the a11y tree via aria-labelledby; hiding it visually buys
-   the list a row on a 320-tall sheet. */
-#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-circuit-label,
-#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-gp { display: none; }
-#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-meta,
-#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-rec { display: none; }
-#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-facts,
-#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-elev { display: none; }
-#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-map {
-  /* Compact stacked landscape used to hide this whole section. Keep it a
-     band (name beside map, extras still display:none) but size the outline
-     as a readable preview — chip-h * 2.6 painted a stamp at 115%.
-     3.5 chips fits the 58% band so one catalogue row stays on screen. */
-  max-height: min(calc(var(--chip-h) * 3.5), 100%);
-  max-width: min(48%, calc(var(--chip-h) * 5.2));
-}
-/* The map's button wrapper contributes NO box (display: contents) — the
-   preview card's flex layout and updateTrackPreview's measurements see the
-   canvas exactly as before the wrapper existed. Ring and hover land on the
-   canvas because a boxless element cannot paint them itself. */
-.sel-map-btn { display: contents; }
-.sel-map-btn:focus-visible > #sel-preview-map {
-  outline: max(2px, calc(2px / var(--ui-scale, 1))) solid var(--focus);
-  outline-offset: -2px;
-}
+#sel-preview-map { display: block; max-width: 100%; max-height: 100%; }
 @media (hover: hover) {
   .sel-map-btn:hover > #sel-preview-map { filter: brightness(1.25); }
 }
-/* The fallback door: hidden wherever the canvas shows... */
-#sel-detail-chip { display: none; }
-/* Truly tiny sheets cannot seat a thumbnail beside the name. data-fit and
-   landscape-narrow used to hide the map on every zoomed / low-res phone;
-   those keep the outline and let the caps above bind.
-   — and shown where it does not: hiding the canvas used to make the WHOLE
-   circuit-detail screen unreachable on a small/high-zoom sheet. */
-@container sheet (max-width: 300px) {
-  #sel-inner[data-density="compact"] #sel-preview-map { display: none; }
-  #sel-inner[data-density="compact"] #sel-detail-chip { display: inline-flex; }
+/* Caption ON the still — flag, name, grand prix — top-left; the type badges
+   bottom-left. Both sit above the button and pass pointer events through. */
+#sel-hero-cap {
+  position: absolute; left: var(--pad); right: var(--pad); top: calc(var(--pad) * 0.7);
+  z-index: 2; pointer-events: none;
+  display: flex; align-items: center; gap: calc(var(--gap) * 0.7);
+  min-width: 0;
 }
-#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-track-preview {
-  /* A short/high-scale sheet cannot afford a map row followed by a caption
-     row. Keep the one surviving label beside the thumbnail so neither is
-     clipped by the preview band's height budget. */
-  flex-direction: row;
-  align-items: center;
-  padding: calc(var(--gap) * 0.4);
-  margin-bottom: 0;
-}
-#sel-inner:not([data-pair="on"])[data-density="compact"] #sel-preview-info {
-  display: block;
-}
-/* Compact stacked landscape keeps the thumbnail band (map + name). Hiding
-   the whole #sel-track-section dropped #sel-preview-map on play-shape. */
-#sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks {
-  /* Basis 0, not auto: auto is the 2,000px catalogue, so shrink eats the
-     list before grow can give it leftover body height. */
-  flex: 1 1 0; min-height: 0;
-  overflow-y: auto; overflow-x: hidden;
-  overscroll-behavior-y: contain;
-}
-/* The grid-item min-width guard for the circuit column. It used to be a
-   sel-section class carried by exactly one element in the whole app, which is a
-   context wearing a class's clothes — same collapse as the mb-prefix pair above
-   and the garage's chip variants (css/carsetup.css). The element's own id says
-   it better, and nothing else in css/ sets min-width on it, so the computed
-   value is unchanged. */
-#sel-track-section { min-width: 0; }
-
-/* The car's spec strip: the four numbers that change when you swap team or fit
-   parts. Numbers only — the bar chart belongs on CAR SETUP, the screen where
-   you actually change them.
-   ONE row, not the 2x2 grid this used to be. A single line reads better (all
-   four comparable in one glance) and costs ~20px less, which is most of what
-   DIFFICULTY needed to clear the fold on a landscape phone. Columns size to
-   their content and share the slack, so CORNERING gets the width it needs; if
-   the pane is ever too narrow the row just wraps back to two lines. */
-
-/* ONE COLUMN, the circuit list, using the whole sheet.
-   This used to be a two-column grid — identity | circuit — with the action bar
-   under the left column only. The identity column is gone (see index.html): the
-   screen asks WHERE, and START goes on to the garage, which is where WHO and
-   WHAT have always actually been chosen. What is left is a list, and a list
-   wants width.
-   The circuit section still spans the body row AND the foot row, which is what
-   lets it scroll down to the sheet floor rather than stopping ~50px above it. */
-/* THE COLUMNS AND ROWS LIVE HERE, NOT IN A @container BLOCK. #sel-inner IS the
-   `sheet` container, and a container query cannot style its own container — a
-   `@container sheet` rule targeting #sel-inner resolves against an outer
-   container that does not exist and silently never applies. (Measured: the
-   two-column template written inside the query did nothing, the sheet stayed on
-   its old single-column rule, and the items placed in "column 2" landed in an
-   implicit auto column — which is why the preview swelled to 60% of the sheet.)
-   Declared unconditionally instead, with every direct child spanning both
-   columns by default so the narrow layout is exactly the one-column stack it
-   was; the split only comes alive when the wide block below places items into
-   the individual columns.
-   PERCENT for the preview column, not fr: the map canvas carries an intrinsic
-   520px width, and an fr track takes content into account, so the preview kept
-   resolving WIDER than the list it is meant to be narrower than. */
-/* The columns, the spans and the foot placement come from `.pane-pair`
-   (css/components.css) — the shared list-detail primitive #carsetup and #career
-   also use. Only the threshold and the split are set here.
-   THE SPLIT IS 56%, NOT THE PRIMITIVE'S 42%. The side column here holds the
-   circuit MAP, which is the thing being chosen between; the main column holds
-   a name, a country and a distance per row and was measurably slack — at a
-   1020px sheet the 50% split still left a 260px clamp unused. 56% spends
-   that slack on the outline; the list keeps a wrapping-clear row. */
-#sel-inner {
-  --pair-at: 620px;
-  --pair-split: minmax(0, 56%);
-  --fit-at: 200px;
-  /* Preview facts start wrapping out of their capped band before the generic
-     380px sheet threshold (measured: phone portrait @125%, 432 own px). */
-  --compact-at: 480px;
-  /* Compact+horizontal keeps the list in the right column. Stacking a wide
-     short sheet left the map as a left stamp and wasted the rest of the row. */
-  --pair-compact: wide;
-}
-/* Wide sheet (landscape-shaped) can afford a slightly lower fit-at floor.
-   Uses data-shape which is measured in the sheet's own units by sheetshape.js,
-   not @media orientation which reads the viewport and is wrong at non-100% zoom. */
-#sel-inner:not([data-shape="tall"]) { --fit-at: 210px; }
-
-/* COLUMNS ARE FOR A WIDE SHEET; A TALL ONE GETS BANDS. Gating the two-column
-   split on width alone put an upright iPad (810px sheet, 1170px tall) into
-   side-by-side, where the preview column is only as wide as 42% of the sheet —
-   so the map, whose size is its column's width, stayed small while 750px of that
-   column sat empty underneath it. A tall sheet gets bands instead and spends the
-   width on the map.
-
-   THE SHAPE COMES FROM THE SHEET, NOT THE WINDOW. This used to read
-   `@media (orientation: landscape)`, which is a different question: a portrait
-   VIEWPORT does not give you a portrait SHEET. On a rotated 1080x1920 monitor
-   css/responsive.css caps #sel-inner at 720px tall, so a landscape-shaped sheet
-   sat in a portrait window, took the band branch meant for an upright tablet,
-   and left the circuit list two pixels of height. js/game/sheetshape.js measures
-   the sheet itself and writes data-shape="tall"|"wide"; CSS cannot ask, because
-   height/aspect-ratio queries need `container-type: size` and a size container
-   may not size itself from its contents, which this one does.
-
-   `:not([data-shape="tall"])` rather than `[data-shape="wide"]` so an unmeasured
-   sheet — the attribute is written on the first ResizeObserver callback, after
-   the screen is shown — lands on columns, the layout it had before. */
-/* WHAT ONLY THIS SCREEN WANTS WHEN THE PANES SPLIT. The placement itself — body
-   to `display: contents`, preview into column 1, list spanning the body row AND
-   the foot row down to the sheet floor, BACK/START under the preview — is
-   `.pane-pair`'s, and is no longer written here.
-   Keyed on `[data-pair="on"]`, not on a second copy of the 620px threshold: two
-   sources of truth for one decision disagree for a frame, because a container
-   query applies the instant a screen is shown while the attribute waits on a
-   ResizeObserver callback. The garage lost five buttons off the bottom of its
-   sheet exactly that way.
-   And `:not([data-shape="tall"])` throughout, because a TALL sheet takes the
-   band layout below instead — the second axis this screen has and the other two
-   do not. */
-#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview,
-#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-preview-map { min-width: 0; }
-/* Pair-on spends the SIDE column on the outline. Default is stacked (map
-   over caption at full column width). data-map-shape="beside" (JS, tall
-   circuits) keeps the row so Jeddah does not become a sliver. The old
-   clamp(140px, 50%, 260px) + safe-centered shrink-wrap left ~half the
-   column empty on 852×393. */
-#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview {
-  flex-direction: column;
-  align-items: stretch;
-  --sel-map-w: 100%;
-}
-#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview[data-map-shape="beside"] {
-  flex-direction: row;
-  align-items: stretch;
-  --sel-map-w: min(72%, 100%);
-}
-/* THE MAP YIELDS, THE FACTS DO NOT. Roomy pair still keeps chips; compact
-   hides them so the outline can take almost the card. object-fit holds the
-   circuit aspect when the cap binds. */
-#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview #sel-preview-map {
-  width: var(--sel-map-w, 100%);
-  max-height: 78%;
-  object-fit: contain;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview[data-map-shape="beside"] #sel-preview-map {
-  /* Facts sit beside a tall circuit — the 78% stacked reserve is wasted
-     band above and below the row. */
-  max-height: 100%;
-}
-#sel-inner[data-pair="on"]:not([data-shape="tall"])[data-density="compact"] #sel-track-preview #sel-preview-map {
-  max-height: 92%;
-}
-#sel-inner[data-pair="on"]:not([data-shape="tall"])[data-density="compact"] #sel-track-preview[data-map-shape="beside"] #sel-preview-map {
-  max-height: 100%;
-}
-/* FIT THE PREVIEW, DO NOT SCROLL IT. Pair-on already gives this column a
-   definite height (sheet grid row 2 is minmax(0, 1fr); body is display:contents).
-   A second overflow-y:auto here made the map column a document next to
-   #sel-tracks.pane. Shrink the card to the column; the map already yields
-   (max-height: 50% + object-fit). Compact density hides the extra facts
-   (below) so the band stays a band.
-   `safe center` still splits spare height above and below when the card
-   fits. An auto margin on the child would push overflow out both ends. */
-#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section {
+#sel-preview-flag {
+  display: block; flex: none;
+  width: calc(var(--chip-h) * 1.5);
+  aspect-ratio: 3 / 2;
+  border-radius: var(--r-xs);
   overflow: hidden;
-  display: flex; flex-direction: column;
-  min-height: 0;
-  justify-content: stretch;
-  padding: calc(var(--pad) * 0.25) 0 0 var(--pad);
+  box-shadow: var(--edge);
 }
-#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section > #sel-track-preview {
-  margin-block: 0;
-  flex: 1 1 auto; min-height: 0; max-height: 100%;
-  overflow: hidden;
+#sel-preview-title { min-width: 0; }
+#sel-preview-name {
+  font-size: var(--fs-5); font-weight: 800; font-style: italic;
+  color: var(--text); letter-spacing: var(--ls-1); line-height: 1.05;
+  text-shadow: 0 1px 2px var(--carbon);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-#sel-inner[data-pair="on"]:not([data-shape="tall"]) > #sel-body > #sel-tracks {
-  padding-right: var(--pad); padding-bottom: calc(var(--pad) * 0.5);
+#sel-preview-gp {
+  font-size: var(--fs-micro); color: var(--red); font-weight: 700;
+  letter-spacing: var(--ls-3); text-transform: uppercase;
+  margin-top: calc(var(--gap) * 0.15);
+  text-shadow: 0 1px 2px var(--carbon);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* A TALL SHEET TAKES THE BANDS, so the pair's placement has to be handed back:
-   the panes return to normal flow inside the body (the band rules below set that
-   up) and the action bar spans the full width again, because in that shape there
-   is no left column for it to sit under. Higher specificity than the primitive's
-   (1,2,0 against 0,3,0) — see the note in css/components.css. */
-#sel-inner[data-shape="tall"] > .sheet-foot { grid-column: 1 / -1; grid-row: auto; }
-
-/* ---------- A TALL WIDE SHEET: TOP AND BOTTOM, NOT LEFT AND RIGHT ----
-   An upright tablet has width to give the map and height to give the list, so
-   the preview becomes a BAND across the top and the list takes everything under
-   it down to the action bar. The map is the reason the card exists and it is
-   sized by width, so a full-width band is what makes it big: ~390px across on an
-   iPad instead of the 300 it got as a 42% column, with the facts beside it
-   rather than under it. The action bar stays full width here — in this shape
-   there is no left column for it to sit under. */
-@container sheet (min-width: 620px) {
-  #sel-inner[data-shape="tall"] > #sel-body {
-    display: flex; flex-direction: column; gap: var(--gap); min-height: 0;
-  }
-    /* THE BAND IS STILL CAPPED, AND THE MAP STILL YIELDS INSIDE IT.
-       This branch is now reached only by a sheet MEASURED taller than it is
-       wide (js/game/sheetshape.js), not by a portrait window — the rotated
-       1080x1920 monitor, whose sheet css/responsive.css caps at 720px tall, is
-       correctly `wide` and takes the columns above. The cap stays anyway: a
-       genuinely tall sheet sized purely by its content still lets a full-width
-       map band eat the list, and object-fit keeps the outline true when the cap
-       binds. Belt and braces, on the branch where the braces are cheap. */
-    /* THE BAND IS A DEFINITE HEIGHT, NOT A CAP. `flex: 0 1 auto` plus
-       `max-height: 52%` gave the section no height of its own — it sized to its
-       content, and its content is a card whose map is capped at a PERCENTAGE of
-       that same content-derived height. That circle resolves small: measured on
-       an upright iPad the map came out 743x74, a full-width smear about as tall
-       as one row of the list under it, on the one layout that exists to make the
-       map big. `flex: 0 0 52%` gives the band a real number, so the card fills
-       it and `calc(100% - 9.5rem)` below finally subtracts from something. Same
-       52 % of the body either way — the list still gets the other half. */
-    #sel-inner[data-shape="tall"] #sel-track-section {
-      display: flex; flex-direction: column;
-      flex: 0 0 52%; min-height: 0;
-      overflow: hidden;
-    }
-    /* The card FILLS the capped band, which gives it a definite height, and the
-       map is capped at that height minus the room the caption needs. A share of
-       the card (66%) was wrong: the caption's height is roughly fixed — name,
-       GP, meta, up to two chip rows, the elevation strip — while the band's is
-       not, so a percentage left the facts 50px on a rotated monitor and clipped
-       them. Subtracting a constant leaves the caption whole at every band size
-       and lets the map have the rest; where the map's own 520:300 height is
-       smaller than the cap, the cap simply does not bind. */
-    #sel-inner[data-shape="tall"] #sel-track-preview { flex: 1 1 auto; min-height: 0; }
-    #sel-inner[data-shape="tall"] #sel-track-preview #sel-preview-map {
-      max-height: calc(100% - 9.5rem);
-      object-fit: contain;
-    }
-    /* The card keeps the wide-sheet shape it already has — map across the top,
-       facts under it — and in a full-width band that makes the map ~765px on an
-       iPad instead of the ~300 it got as a 42% column. Nothing to set here: the
-       card's own wide-sheet rule below is not shape-gated, so the map is already
-       100% of the card. */
-    /* The list is the rest of the sheet, and it scrolls. Without flex: 1 it
-       sizes to content and the sheet's body row leaves it short. */
-    #sel-inner[data-shape="tall"] > #sel-body > #sel-tracks {
-      flex: 1 1 auto; min-height: 0; max-height: none;
-    }
+#sel-preview-facts {
+  position: absolute; left: var(--pad); bottom: calc(var(--pad) * 0.7);
+  z-index: 2; pointer-events: none;
+  display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.35);
 }
+#sel-preview-facts .trb { margin-left: 0; padding: calc(var(--gap) * 0.15) calc(var(--gap) * 0.45); }
+/* THE NUMBERS. A definition list of label-over-value pairs in two columns
+   (each pair is a <div> inside the <dl>, which HTML allows), then the record
+   line, the elevation strip and the CIRCUIT DETAIL door. */
+#sel-preview-info {
+  /* NO min-height: 0 HERE. In the stacked arrangements the numbers sit in an
+     `auto` grid row, and an auto track's base size is the item's MINIMUM
+     contribution — which `min-height: 0` makes zero, so with the section
+     shorter than the content the row resolved to 0px and the numbers vanished
+     (measured 390x844 @150%: rows "126px 0px", content 267px). Left at auto,
+     the row takes the content's min height, the grid overflows the section,
+     and the section scrolls. The beside branch sets min-height: 0 itself,
+     because there the row is minmax(0, 1fr) and the column scrolls instead. */
+  min-width: 0;
+  display: flex; flex-direction: column; gap: calc(var(--gap) * 0.6);
+}
+#sel-preview-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: calc(var(--gap) * 0.55) var(--gap);
+  margin: 0;
+}
+#sel-preview-meta > div { min-width: 0; }
+#sel-preview-meta dt {
+  font-size: var(--fs-micro); color: var(--dim);
+  letter-spacing: var(--ls-3); font-weight: 600;
+}
+#sel-preview-meta dd {
+  margin: 0;
+  font-size: var(--fs-3); font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+#sel-preview-rec {
+  font-size: var(--fs-2); color: var(--gold); font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+#sel-preview-rec:empty { display: none; }
+#sel-preview-elev {
+  display: block; width: 100%;
+  height: calc(var(--chip-h) * 0.9);
+  border-radius: var(--r-sm);
+  background: var(--plate);
+  opacity: 0.85;
+}
+#sel-detail-chip { align-self: flex-start; }
+/* Compact: the extras go — the badges, the elevation strip, the label — and
+   the caption steps down a rung so a 393px-tall phone keeps the still. */
+#sel-inner[data-density="compact"] #sel-preview-facts { display: none; }
+#sel-inner[data-density="compact"] #sel-preview-elev { display: none; }
+#sel-inner[data-density="compact"] #sel-preview-gp { display: none; }
+#sel-inner[data-density="compact"] #sel-preview-name { font-size: var(--fs-3); }
+/* Compact: the caption moves to the BOTTOM of a short still, over the
+   scrim, so the outline has the clear upper half to itself. */
+#sel-inner[data-density="compact"] #sel-hero-cap { top: auto; bottom: calc(var(--pad) * 0.6); }
+#sel-inner[data-density="compact"] .sel-map-btn { align-items: flex-start; padding-top: calc(var(--gap) * 0.5); }
+#sel-inner[data-density="compact"] #sel-preview-flag { width: calc(var(--chip-h) * 1.1); }
+#sel-inner[data-density="compact"] #sel-preview-meta dd { font-size: var(--fs-2); }
+#sel-inner[data-density="compact"] #sel-track-preview { gap: calc(var(--gap) * 0.6); }
 
 /* ---------- team card + team picker ----------
    The card is the YOUR CAR summary on the select screen (tap to open the
@@ -929,7 +1007,6 @@ body { --compact-at: 600px; --wide-at: 620px; }
 .sel-chip.active {
   border-color: var(--red);
   background: var(--plate-on);
-  box-shadow: var(--plate-on-glow);
   color: var(--text);
 }
 .sel-chip .swatch { display: inline-block; width: 12px; height: 12px; border-radius: var(--r-xs); margin-right: 6px; flex: none; }
@@ -949,285 +1026,11 @@ h3.sel-label {
   letter-spacing: var(--ls-4); color: var(--steel); text-transform: uppercase;
 }
 
-/* ---------- circuit preview ---------- */
-#sel-track-preview {
-  display: flex; gap: var(--gap); align-items: flex-start;
-  margin-bottom: calc(var(--gap) * 0.6); padding: calc(var(--gap) * 0.8);
-  border-radius: var(--r-lg);
-  border: 1px solid var(--card-line);
-  /* The card that says WHICH TEAM YOU ARE now shows it: --grad-accent is a
-     wash of the live --accent, so picking McLaren turns this papaya and Alpine
-     turns it blue, without a single per-team rule here. */
-  background: var(--grad-accent),
-    linear-gradient(150deg in oklab, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015));
-  flex-shrink: 0;
-}
-#sel-preview-map {
-  /* The map is the reason this panel exists — let it take about half the
-     preview's width instead of sitting as a thumbnail with dead space beside
-     it. clamp keeps it legible on a phone and stops it dwarfing the facts on a
-     desktop. */
-  /* Width is a KNOB, not a literal, because the layouts that need to change it
-     sit in @container blocks — and a container query adds no specificity, so
-     those rules tie with this one and win or lose on source order alone. Two
-     attempts at overriding it that way were silently discarded. A custom
-     property cascades by INHERITANCE from the card instead, which no ordering
-     can undo. */
-  /* object-fit: contain — belt when a max-height cap and a definite width would
-     otherwise squash the bitmap. JS (updateTrackPreview) also re-fits and pins
-     style width/height to the circuit aspect so the common case needs no
-     letterboxing. UI zoom (--ui-scale) still scales the whole sheet uniformly. */
-  flex: none; width: var(--sel-map-w, clamp(140px, 50%, 260px)); height: auto;
-  max-width: 100%;
-  aspect-ratio: 520 / 300;
-  object-fit: contain;
-  border-radius: var(--r-md);
-  background: rgba(0, 0, 0, 0.25);
-}
-#sel-preview-info { flex: 1 1 auto; min-width: 0; overflow: hidden; }
-
-/* MAP BESIDE THE CAPTION, WHEN THE CIRCUIT IS TALL.
-   js/game/menus.js:updateTrackPreview sets data-map-shape="beside" after
-   measuring that stacking would strand more than a third of the card's width
-   as dead space — which is what a portrait circuit (Jeddah, aspect 0.5) does
-   to a full-width slot. Attribute + ID is (1,1,0), so this beats the plain
-   `#sel-track-preview` (1,0,0) declarations inside the @container blocks below
-   whatever the source order — the same specificity trap --sel-map-w was
-   introduced to dodge. JS pins the canvas box, so no width knob is needed
-   here; this rule only chooses the axis. */
-#sel-track-preview[data-map-shape="beside"] {
-  flex-direction: row;
-  align-items: stretch;
-}
-/* `flex: 1 1 auto; min-width: 0` is the base rule, but the pair/container
-   branches re-declare this element and it computed to `0 0 auto` here — so the
-   caption kept its content width, ran past the card's right edge and had its
-   last fact chip clipped by the card's own `overflow: hidden`. Restate the
-   shrink explicitly on the arrangement that needs it. */
-#sel-track-preview[data-map-shape="beside"] #sel-preview-info {
-  display: block;
-  flex: 1 1 auto;
-  min-width: 0;
-  align-self: center;
-}
-
-/* PORTRAIT: THE MAP IS THE SUBJECT, THE FACTS ARE A CAPTION.
-   A phone held upright gives the card width and almost no height, and half of
-   that width was going to four short lines of text — the circuit outline, the
-   one thing you are actually choosing between, came out 160px wide. The map
-   takes 62% here and every readout under it drops a step, which buys the map
-   its width AND gives the list back the height the smaller type frees.
-   Only the type sizes are listed: the map's width is the inherited knob, so an
-   upright TABLET (which stacks map-over-facts at --sel-map-w: 100%) keeps its
-   full-width map and simply gets the smaller caption too. */
-/* TALL-SHEET (portrait-shaped) SELECT PREVIEW.
-   Uses data-shape="tall" set by sheetshape.js from the sheet's measured geometry,
-   not @media (orientation: portrait) which reads the viewport and is the wrong
-   proxy at non-100% zoom (measured: at 115% a phone's sheet is portrait-shaped
-   but the viewport pixel count may not be, so the media query misfires).
-
-   PHONE / SMALL TABLET PORTRAIT: MAP ON TOP, FACTS AS A CAPTION UNDER IT.
-   Widening the map inside the ROW layout backfired: at 62% the facts had 230px
-   left, so the meta wrapped to two lines and every chip took a row of its own,
-   and the card came out TALLER than when the map was small. Full width doubles
-   the map (160 → 323px) and the caption under it costs four short lines.
-   The elevation strip goes: at 323px wide and 22px tall it is a texture, not a
-   reading. Only the upright TABLET (wide enough to get a two-column sheet but
-   tall-shaped) keeps a full-width map via the container query below. */
-@container sheet (max-width: 619px) {
-  #sel-inner[data-shape="tall"] #sel-track-preview { flex-direction: column; align-items: stretch; --sel-map-w: 100%; }
-  #sel-inner[data-shape="tall"] #sel-preview-info { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
-  #sel-inner[data-shape="tall"] #sel-preview-name,
-  #sel-inner[data-shape="tall"] #sel-preview-gp,
-  #sel-inner[data-shape="tall"] #sel-preview-meta { margin: 0; }
-  #sel-inner[data-shape="tall"] #sel-preview-facts { flex-basis: 100%; }
-  /* Two IDs + attribute: the base `#sel-preview-elev { display: block }` is
-     declared later; a single-ID rule here would lose on source order. */
-  #sel-inner[data-shape="tall"] #sel-track-preview #sel-preview-elev { display: none; }
-}
-/* Type spacing (not re-declared later, so source-order doesn't matter here). */
-#sel-inner[data-shape="tall"] #sel-preview-facts { gap: 5px; margin-top: 5px; }
-#sel-inner[data-shape="tall"] #sel-preview-elev { height: 26px; margin-top: 4px; }
-
-/* TALL STACKED: BIGGER MAP.
-   The stacked rules force flex-direction:row and cap the map at chip-h*3.5
-   (~140px) to keep it a thumbnail band. On a tall sheet the map is the
-   centrepiece — full width, filling the section height. Override with three-ID
-   specificity to beat the two-ID stacked rule.
-   Applies whenever the sheet is tall-shaped, regardless of zoom level — which
-   is exactly what the old @media (orientation: portrait) failed to do. */
-/* THE BAND IS A DEFINITE HEIGHT, NOT A CAP — same fix as the wide-tall
-   branch above (see its 648-656 note): `flex: 0 1 auto` + a percentage
-   max-height sized the section to its own content, and the map cap below is
-   a percentage OF that content-derived height, so the circle either
-   resolved small or, with `max-height: none`, not at all — the map's
-   CSS-intrinsic height (width / circuit aspect) had NO ceiling, and a tall
-   circuit (Jeddah, aspect 0.5) painted ~626 local px inside a ~396px
-   section that cannot scroll: every #sel-preview-* below it clipped, at
-   every scale (2026-08-21 sweep, iPhone portrait, clipped 9). */
-#sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section {
-  /* 60, not the 55 authored for the old content-circular section: with the
-     band definite, the caption's own natural height (name/GP/meta/rec plus
-     two chip rows) measured 36 local px past a 55% band on a portrait phone
-     with the map already at its 40px sliver floor (2026-08-21). 60% seats
-     the caption and leaves the map whatever the circuit's shape affords. */
-  flex: 0 0 60%;
-}
-#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section {
-  flex: 0 0 62%;
-}
-/* The card FILLS the definite band so the map's percentage cap subtracts
-   from a real number — mirror of the wide-tall branch's 662-669 note. */
-#sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section > #sel-track-preview {
-  flex: 1 1 auto; min-height: 0;
-  flex-direction: column;
-  align-items: stretch;
-  --sel-map-w: 100%;
-}
-/* THE MAP IS THE FLEX REMAINDER, THE CAPTION IS NOT NEGOTIABLE. A constant
-   caption reserve (the wide-tall branch's 9.5rem) is wrong on a PHONE: the
-   chips wrap to two rows at 150% and one-per-row at 200%, so any constant
-   either clips the facts or starves the map. Instead the caption (below)
-   keeps its natural height and the map takes exactly what is left of the
-   definite band — flex-basis 0 also means the JS pin's inline height is
-   ignored in the main axis, so a stale plan cannot overrun the band.
-   min-height keeps a sliver of outline visible when the caption is greedy;
-   object-fit keeps it undistorted at whatever share it gets. */
-#sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section #sel-preview-map {
-  flex: 1 1 0;
-  min-height: 40px;
-  object-fit: contain;
-  max-width: 100%;
-  width: var(--sel-map-w, 100%);
-}
-#sel-inner[data-shape="tall"]:not([data-pair="on"]) > #sel-body > #sel-track-section #sel-preview-info {
-  flex: 0 0 auto;
-}
-#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section > #sel-track-preview {
-  flex: 1 1 auto; min-height: 0;
-  flex-direction: column;
-  align-items: stretch;
-  --sel-map-w: 100%;
-}
-#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section #sel-preview-map {
-  flex: 1 1 0;
-  min-height: 40px;
-  object-fit: contain;
-  max-width: 100%;
-}
-#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section #sel-preview-info {
-  flex: 0 0 auto;
-}
-/* Restore META (one short line) in tall compact view; the FACTS stay hidden.
-   Compact tall means 200%+ on a phone, where the caption column is ~175
-   local px and each chip wraps to its own row — four chip rows ate the whole
-   band and pushed the caption past the section (2026-08-21 sweep, @200
-   clipped 5). The chips return the moment density is normal again. */
-#sel-inner[data-shape="tall"]:not([data-pair="on"])[data-density="compact"] #sel-preview-meta { display: block; }
-
-/* THE PREVIEW CARD IN THE TWO-COLUMN LAYOUT.
-   Scoped through #sel-track-preview — two IDs — deliberately. A container query
-   adds no specificity, so a single-ID rule here ties with every other single-ID
-   rule for these elements and the winner is decided by source order alone. The
-   first attempt lost that race twice (measured: flex stuck at `0 0 auto`, then
-   width stuck at the base clamp), which is a silly thing to keep re-deriving.
-   The card fills its column, stacked map-over-facts so the map gets the FULL
-   column width rather than half of it, and the leftover height splits above and
-   below instead of pooling at the bottom. The map keeps its own 520:300
-   proportions — stretching a circuit outline to fill a box would misdraw the
-   one thing this card exists to show. */
-@container sheet (min-width: 620px) {
-  #sel-track-preview {
-    align-self: stretch; margin-bottom: 0;
-    flex-direction: column; align-items: stretch;
-    gap: calc(var(--gap) * 0.8);
-    --sel-map-w: 100%;          /* the whole column, not half of it */
-    /* FILLS ITS COLUMN, AND IS BOUNDED BY IT. Content-driven height was the bug:
-       on a 343px-tall landscape phone the card came out 269px inside a 239px
-       column and the section clipped the difference off the bottom, which is
-       where the facts are. `flex: 1 1 auto` with `min-height: 0` makes the
-       column the authority in both directions — the card cannot exceed it, and
-       on a tall pane (iPad portrait: a 352px card in a 1111px column) it no
-       longer leaves 750px of dead band underneath.
-       `safe center` rather than plain `center`: centring is what looks right
-       when the content fits, but when it does not, plain centring pushes the
-       overflow out BOTH ends and takes the circuit name off the top. The safe
-       keyword falls back to flex-start in exactly that case.
-       The card HUGS ITS CONTENT and is centred in the column by the section
-       below. Stretching it to fill a 1111px iPad-portrait column instead framed
-       a small cluster of map and chips in a mostly empty bordered box — worse
-       than the dead band it was meant to cure. The pane's spare height goes to
-       the MAP, by way of a wider column in portrait (see the media query above
-       the container block), not to the card's background. */
-    justify-content: safe center;
-    flex: 0 1 auto; min-height: 0;
-  }
-  #sel-preview-info { flex: 0 0 auto; }
-}
-/* NOTE: there used to be a second `}` here, and it closed `@layer components`
-   two hundred lines early — everything from this point to the marked close at
-   the end of the file was UNLAYERED. Unlayered normal declarations outrank every
-   cascade layer, so these base rules beat the narrow-sheet and portrait
-   overrides above no matter how specific those were made. That is the true cause
-   of the "a container query adds no specificity, so source order decides" notes
-   scattered through this file: source order was never the problem, layer
-   precedence was, and the two IDs and `--sel-map-w` knob added to win those
-   races were fixing the wrong thing. Measured: `#sel-track-preview
-   #sel-preview-elev { display: none }` (two IDs, inside the layer) lost to
-   `#sel-preview-elev { display: block }` (one ID, unlayered), so the elevation
-   strip the phone layout explicitly removes was on screen the whole time. */
-#sel-preview-name { font-size: var(--fs-2); font-weight: 800; font-style: italic; color: var(--text); letter-spacing: var(--ls-1); }
-#sel-preview-gp { font-size: var(--fs-micro); color: var(--red); font-weight: 700; margin-top: 2px; }
-#sel-preview-meta { font-size: var(--fs-micro); color: var(--dim); margin-top: 6px; line-height: 1.5; }
-#sel-preview-rec { font-size: var(--fs-micro); color: #f6d200; font-weight: 700; margin-top: 5px; font-variant-numeric: tabular-nums; }
-#sel-preview-facts { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
-#sel-preview-elev { display: block; width: 100%; height: 30px; margin-top: 6px; border-radius: var(--r-sm); opacity: 0.85; }
-.spf-fact { font-size: var(--fs-micro); font-weight: 700; padding: 2px 7px; border-radius: var(--r-lg); letter-spacing: var(--ls-1); }
-/* 0.05, under --plate-hover's 0.08: a readout must not wear the hover fill */
-.spf-dir { background: rgba(255,255,255,0.05); color: var(--text); }
-.spf-elev { background: rgba(56,183,240,0.18); color: #39b7f0; }
-.spf-drs { background: rgba(0,220,180,0.15); color: #00dcb4; }
-/* a red TINT, deliberately not --plate-on: that token is the SELECTED state
-   (sel-chips, tabs), and "T7 slowest" is information, not a pressed chip */
-.spf-corner { background: color-mix(in oklab, var(--red) 10%, transparent); color: var(--red); }
-/* A roomier preview once the sheet is wide. This used to widen the map to ~52%
-   of the card, which was right when the card sat above a full-width list and
-   its map and facts were side by side. In the two-column layout the map already
-   takes the whole card width, and re-setting the knob here just undid that —
-   the 620px rule and this one are both single-ID on the same element, so the
-   later one won, which is why an iPad in portrait (786px sheet) came out right
-   and a desktop (1020px) did not. Only the type scales now. */
-@container sheet (min-width: 820px) {
-  #sel-preview-name { font-size: var(--fs-5); }
-}
-/* Compact pair-on: the extras go, the NAME AND ONE FACT LINE stay — beside
-   the map, not under it. Hiding the whole caption left the band a row holding
-   one small outline with ~175 local px of dead width beside it (measured
-   852x393 @200%: a 42px-wide tall-circuit map alone in a 219px card). The
-   card is a flex ROW here, so a name beside the map costs no height — and a
-   bare name in that much room read as a missing feature (a phone screenshot
-   showed MONACO floating alone in a half-empty card). The meta line
-   (country · km · turns) is the one caption row cheap enough to keep: it is
-   already --fs-micro/dim, and the column's min-width:0 + overflow:hidden
-   truncate it before it can push the card. GP name, record, the chip row and
-   the elevation strip stay hidden — those are the bulk. */
-#sel-inner[data-pair="on"][data-density="compact"] #sel-circuit-label { display: none; }
-#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-gp,
-#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-rec { display: none; }
-#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-meta { margin-top: calc(var(--gap) / 6); }
-#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-facts,
-#sel-inner[data-pair="on"][data-density="compact"] #sel-preview-elev { display: none; }
-#sel-inner[data-pair="on"][data-density="compact"] #sel-track-preview { align-items: stretch; }
-
-/* Season upcoming rounds list */
+/* Season calendar rows (SEASON SETUP's list; the select strip carries .sur-rnd
+   on its tiles). No hover: the row declares cursor:default and nothing happens
+   on click. LIST GRAMMAR, NOT BUTTON CHROME — full-bleed rows split by a
+   hairline, the .track-row model. */
 .season-upcoming-head { font-size: var(--fs-micro); font-weight: 700; letter-spacing: var(--ls-5); color: var(--dim); margin-top: 10px; margin-bottom: 4px; padding: 0 4px; }
-/* No hover: the row declares cursor:default and nothing happens on click —
-   lighting up with the button hover fill promised an interaction it refused.
-   LIST GRAMMAR, NOT BUTTON CHROME: plate + border + radius is this app's
-   button recipe, and both round-12 judges read these rows as controls that
-   refused to press. .track-row (below) is the named model — full-bleed rows
-   split by a hairline — and these rows now follow it, so the calendar reads
-   as the circuit list does everywhere else. */
 .season-upcoming-row { display: flex; align-items: baseline; gap: calc(var(--gap) * 2 / 3); padding: calc(var(--gap) / 2) calc(var(--gap) * 5 / 6); border-bottom: 1px solid var(--card-line); cursor: default; }
 .season-upcoming-row:last-child { border-bottom: none; }
 .sur-rnd { font-size: var(--fs-micro); font-weight: 700; color: var(--red); letter-spacing: var(--ls-3); min-width: 24px; }
@@ -1307,89 +1110,9 @@ h3.sel-label {
 #ss-apply.armed { color: var(--text); border-color: var(--red); background: var(--armed-fill); }
 
 /* ---------- track picker rows ---------- */
-#sel-tracks {
-  border: 1px solid var(--card-line);
-  border-radius: var(--r-md);
-  overflow-x: hidden;
-}
-/* Sticky ALL / SEASON / CLASSICS filter — sticky so it stays while the 40-row
-   list scrolls. Reuses .sel-chip chrome already shared with race-settings. */
-#sel-track-filter {
-  position: sticky; top: 0; z-index: 2;
-  display: flex; flex-wrap: wrap; gap: calc(var(--gap) * 0.5);
-  padding: calc(var(--gap) * 0.66) calc(var(--gap) * 0.83);
-  background: color-mix(in oklab, var(--panel) 92%, #000);
-  border-bottom: 1px solid var(--card-line);
-}
-#sel-track-filter .sel-chip {
-  flex: 1 1 auto;
-  min-width: 0;
-  justify-content: center;
-  font-size: var(--fs-micro);
-  padding: calc(var(--gap) * 0.5) calc(var(--gap) * 0.83);
-  letter-spacing: var(--ls-3);
-}
-/* Daily challenge is a banner, not a fourth filter. Full-width first so
-   ALL / SEASON / CLASSICS keep sharing one row. */
-#sel-daily { flex: 1 0 100%; }
-#sel-track-search {
-  flex: 1 0 100%;
-  min-width: 0;
-  min-height: var(--chip-h);
-  box-sizing: border-box;
-  padding: 6px 10px;
-  border: 1px solid var(--plate-line);
-  border-radius: var(--r-sm);
-  background: var(--plate);
-  color: var(--text);
-  font: inherit;
-  /* 16px, not --fs-2 (15): the iOS focused-input auto-zoom floor stated at
-     the customize/tuner input rules applies to every typeable field, and a
-     sticky page zoom from tapping the circuit SEARCH box is the worst
-     possible trade for one type rung. */
-  font-size: 16px;
-}
-#sel-track-search::placeholder { color: var(--dim); opacity: 1; }
-#sel-track-empty { padding: var(--pad); text-align: center; }
-/* Compact landscape toolbar: one pan-x row, stacked or paired. --fit-at can
-   inflate local width past a px query while the row is still starving, so
-   this keys on density. Chips keep intrinsic width; search stays ≥ 12rem.
-   Daily drops the weather/tod/best span and stops claiming 100% so TODAY
-   sits as a short chip instead of shoving ALL / SEASON / CLASSICS off-screen. */
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter {
-  flex-wrap: nowrap;
-  align-items: center;
-  position: static;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  touch-action: pan-x;
-  scrollbar-width: none;
-}
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter::-webkit-scrollbar {
-  display: none;
-}
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-daily {
-  flex: 0 0 auto;
-  justify-content: flex-start;
-}
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-daily > span { display: none; }
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-filter .sel-chip {
-  flex: 0 0 auto;
-  min-width: max-content;
-  padding-inline: calc(var(--gap) * 0.55);
-}
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-track-search {
-  flex: 1 0 12rem;
-  min-width: 12rem;
-}
-/* The sticky filter already names SEASON and CLASSICS. Repeating that group
-   heading directly below it costs the only circuit row on a short landscape
-   sheet (measured 852×393, notched, UI SIZE 150%: 0px of the first row). */
-#sel-inner[data-density="compact"]:not([data-shape="tall"]) .track-group-head {
-  display: none;
-}
+/* The LIST form of .track-row: the season-setup circuit shelf (#ss-pool) and
+   any other vertical catalogue. The select screen's strip restyles these same
+   classes as flag tiles under #sel-tracks (see the select-screen section). */
 /* Compact keeps the meta: it rides the SAME flex line as the name (baseline
    row, right-aligned), so hiding it saved no height — it only cost the
    country and length on the screens players pick circuits from most. The
@@ -1420,7 +1143,7 @@ h3.sel-label {
   .track-row:hover { background: var(--plate); }
 }
 .track-row:active { background: var(--plate-hover); }
-.track-row.active { background: color-mix(in oklab, var(--red) 16%, transparent); border-left: 3px solid var(--red); padding-left: 9px; }
+.track-row.active { background: var(--plate-on); border-left: 3px solid var(--red); padding-left: 9px; }
 .track-row-name {
   flex: 1;
   font-size: var(--fs-micro); font-weight: 800; font-style: italic;
@@ -1449,7 +1172,6 @@ h3.sel-label {
 /* ---------- race settings ---------- */
 .rs-row { margin-bottom: var(--gap); }
 #race-settings .sel-chip { font-size: clamp(var(--fs-micro), calc(1.6 * var(--vwz)), var(--fs-3)); padding: 8px 14px; }
-#race-settings .sel-chip.active { background: var(--plate-on); box-shadow: var(--plate-on-glow); color: var(--text); font-weight: 700; }
 /* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
 @container sheet (min-width: 440px) {
   #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
@@ -1698,7 +1420,7 @@ h3.sel-label {
    css/tokens.css says --label is "the smallest type this UI has" and sets it
    to 13px on touch. These are the menu classes that sat under it on a phone —
    8-11px labels, badges and metadata on the three screens you actually read:
-   the circuit list, the circuit preview, and the season strip.
+   the flag strip, the circuit hero, and the season calendar.
 
    PLACED LAST, ON PURPOSE. The phone media queries higher up this file cannot
    raise any of these: the same selectors are re-declared afterwards at equal
@@ -1711,9 +1433,7 @@ h3.sel-label {
    Desktop is deliberately excluded: it reads these at a desk, not at arm's
    length, and its rows are already dense by choice. */
 body:not(.desktop) #sel-preview-gp { font-size: var(--fs-micro); }
-body:not(.desktop) #sel-preview-meta,
-body:not(.desktop) #sel-preview-rec { font-size: var(--fs-micro); }
-body:not(.desktop) .spf-fact { font-size: var(--fs-micro); padding: 3px 8px; }
+body:not(.desktop) #sel-preview-meta dt { font-size: var(--fs-micro); }
 body:not(.desktop) .track-row-meta,
 body:not(.desktop) .track-row-rec { font-size: var(--fs-micro); }
 body:not(.desktop) .trb { font-size: var(--fs-micro); }

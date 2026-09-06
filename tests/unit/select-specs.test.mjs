@@ -257,6 +257,32 @@ test("a spec that cannot pass at the gate's per-test cap declares so, and is exc
     "and must NAME it as over budget — silent truncation reads as covered");
 });
 
+test("every race-fixture spec the gate has starved DECLARES a budget above it", () => {
+  // Pages #2048 (2026-09-05) failed its selected gate twice on three specs none
+  // of which the change had touched: physics-hotpath declared 120 s (UNDER the
+  // 180 s gate, so it was admitted, then its own budget killed it at 132-177 s
+  // on the runner), map-hooks and projection declared nothing (read as "fits",
+  // ran 185-190 s and 116-125 s + a context that never came). Each boots a full
+  // race or two circuits; each belongs to a browser group, not the gate.
+  //
+  // Same RULE as hud-layout above, one row per victim: above whatever the gate's
+  // cap is, and NAMED as over budget in the report. Add a spec here the day the
+  // gate starves it — the declaration is the fix, this row keeps it fixed.
+  for (const spec of [
+    "tests/specs/physics-hotpath.spec.js",
+    "tests/specs/map-hooks.spec.js",
+    "tests/specs/projection.spec.js",
+  ]) {
+    const own = maxDeclaredTimeout(spec);
+    assert.ok(own > SELECTED_GATE.perTestTimeoutSec * 1000,
+      `${spec} declares ${own / 1000}s, at or under the ${SELECTED_GATE.perTestTimeoutSec}s gate — ` +
+      "it boots a race fixture and cannot pass there; see Pages #2048");
+    const r = fit([spec], 26);
+    assert.deepEqual(r.selected, [], `the gate must not select ${spec}`);
+    assert.ok(r.overBudgetSpecs.some((x) => x.file === spec), `${spec} must be NAMED as over budget`);
+  }
+});
+
 test("the gate's per-test timeout clears the SLOWEST spec, not the average one", () => {
   // The defect this pins: 120 s bounded the mean test (79.7 s) and not the
   // slowest, so the gate failed specs that pass. Measured on an idle box,

@@ -17,6 +17,15 @@ const GameAudio = (function () {
   let engA = null, engB = null, engC = null;     // saw, saw, square (synth fallback)
   let engFilter = null, engGain = null;
   let limOsc = null, limGain = null;               // rev-limiter gate (audio-thread)
+  // TOP-GEAR LIMITER FADE. The chop is a SHIFT cue — at the top of gears 1-7 it
+  // says "shift now", and there it never fades. In top gear there is no gear to
+  // shift into: a car pinned at top speed sat on the ignition cut for the whole
+  // straight and the only way to stop the hammering was to lift. So in top gear
+  // the cut plays LIM_HOLD s at full depth (you still hear that you are at the
+  // limit), then fades over LIM_FADE s to a steady note held at the limiter.
+  // Any dip below the gate or a downshift re-arms it. Clocked off ctx time.
+  const LIM_HOLD = 0.5, LIM_FADE = 0.5;
+  let limSince = null;                             // ctx time the top-gear cut began, or null
   let limPitch = null;                             // the same square into the core's detune: the cut's pitch sag
   let whineOsc = null, whineGain = null;          // turbo whine
   let harvSrc = null, harvFilter = null, harvGain = null; // MGU-K harvest whirr
@@ -1238,13 +1247,16 @@ const GameAudio = (function () {
     // thread, so the gate costs no per-frame scheduling: base drops to
     // lvl·0.55 and the square wave swings it 0.10–1.00 × lvl.
     const limOn = layers.limiter && rev > 0.985 && s > 0.05;
+    const topGear = gear >= ((typeof PhysicsConsts !== "undefined" && PhysicsConsts.GEARS) || 8);
+    if (limOn && topGear) { if (limSince == null) limSince = t; } else limSince = null;
+    const limFade = limSince == null ? 1 : clamp01(1 - (t - limSince - LIM_HOLD) / LIM_FADE);
     // CAPPED AT HALF THE LEVEL. engGain's base is (lvl - limDepth) and the
     // square swings +-limDepth on top, so the trough is lvl - 2*limDepth: past
     // limDepth = lvl/2 the gain goes NEGATIVE and the chop stops getting deeper
     // and starts inverting phase. With the trim widened to [0,3] that began at
     // 1.111, so most of the slider was buying an artefact. A full ignition cut
     // is the physical maximum; there is nothing deeper than all of it.
-    const limDepth = limOn ? Math.min(lvl * 0.5, lvl * 0.45 * tune.limiter) : 0;
+    const limDepth = limOn ? Math.min(lvl * 0.5, lvl * 0.45 * tune.limiter) * limFade : 0;
     // Guarded on the TARGET, like lfoG below and for the same reason: above
     // 98.5% is a sliver of a race, so an unguarded call scheduled the target 0
     // onto a value already converged to 0, 120x a second for the whole race —
@@ -1260,7 +1272,7 @@ const GameAudio = (function () {
     // the stock trim is the rpm visibly dropping on a dead cylinder bank; the
     // top of the range (120) is a stutter you could not mistake for anything
     // else. Gated with the depth so the note is steady everywhere below 98.5%.
-    const limCents = limOn ? 30 * tune.limPitch : 0;
+    const limCents = limOn ? 30 * tune.limPitch * limFade : 0;
     if (limPitch && limPitch._apexCents !== limCents) {
       limPitch.gain.setTargetAtTime(limCents, t, 0.02);
       limPitch._apexCents = limCents;
@@ -2340,6 +2352,9 @@ const GameAudio = (function () {
     // feeds engGain.gain on the audio thread, so nothing downstream of the
     // engine output can observe its depth.
     limiterDepth() { return limGain ? +limGain.gain.value : 0; },
+    // Seconds the TOP-GEAR cut has been held (null below top gear or off the
+    // gate): the fade's clock, so a test can watch the burst end.
+    limiterHeld() { return limSince == null ? null : +(ctx.currentTime - limSince).toFixed(3); },
     // The chop RATE, which is where the top half of the LIMITER trim goes once
     // the depth has saturated at a full ignition cut.
     limiterHz() { return limOsc ? +limOsc.frequency.value.toFixed(2) : 0; },

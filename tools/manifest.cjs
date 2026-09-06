@@ -142,6 +142,7 @@ const FULL = [
   "js/garage/setup-sheet.js",
   "js/career/career-ui.js",
   "js/career/season-ui.js",
+  "js/ui/flags.js",
   "js/ui/select-screen.js",
   "js/ui/scroll-fade.js",
   "js/ui/css-zoom.js",
@@ -150,6 +151,7 @@ const FULL = [
   "js/ui/modal.js",
   "js/ui/menu-nav.js",
   "js/ui/aria-state.js",
+  "js/ui/setting-row.js",
   "js/ui/settings-tabs.js",
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
@@ -379,6 +381,8 @@ const HARD_EDGES = [
   ["js/lighting/profiles.js", "js/game.js"],    // game.js calls LightStore.create(G) at eval time
   ["js/audio/panel.js", "js/game.js"],   // game.js calls AudioPanel.create(G) at eval time
   ["js/ui/scale.js", "js/game.js"],      // game.js calls UiScale.create(G) at eval time
+  ["js/ui/setting-row.js", "js/game.js"],  // game.js wires the Settings rows (SettingRow.wire) at eval time
+  ["js/ui/setting-row.js", "js/ui/scale.js"], // UiScale.create wires the RESOLUTION row
   ["js/ui/onboard.js", "js/game.js"],    // game.js calls Onboard.create(G) at eval time
   ["js/career/career.js", "js/race/reliability.js"],  // reliability draws through Career.hash (call time, keep ordered)
   ["js/car/parts.js", "js/race/reliability.js"],    // buildQuality resolves a setup through Parts (call time, keep ordered)

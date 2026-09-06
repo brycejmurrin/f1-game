@@ -862,7 +862,9 @@ layers that used to have only a switch.
 `GameAudio` carries more reads that only the tests want: `engineCut()` (the
 core's live lowpass corner), `engineLevel()` (its gain, which is
 `level - limiterDepth`), `limiterHz()` (the chop rate), `limiterCents()` (the
-sag swing), `gravelHz()` (the roughness rate — the crank rate, `f0/3`,
+sag swing), `limiterHeld()` (seconds the TOP-GEAR cut has run — its 0.5 s burst
+fades over 0.5 s to a steady note, since 8th has no gear to shift into; `null`
+below top gear, where the chop never fades), `gravelHz()` (the roughness rate — the crank rate, `f0/3`,
 clamped into 18–140 Hz), `ersLevel()` / `harvestLevel()` / `skidLevel()`,
 `shiftState()` and `boostState()` (`{fired, peak}`, the last crack's or
 whoosh's level). The pair

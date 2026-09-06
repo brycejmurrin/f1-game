@@ -448,6 +448,22 @@
       <button id="pm-howto">HOW TO PLAY&hellip;</button>
       <button id="pm-standings" hidden>STANDINGS</button>
       <button id="pm-quit">QUIT TO MENU</button>
+      <!-- NOW PLAYING — shown only while music is actually playing
+           (js/audio/panel.js paints it and sets hidden): the same card as
+           MUSIC & SOUND, so a song can be skipped without leaving the pause
+           menu. -->
+      <div id="pm-now-card" class="as-now-card" hidden>
+        <div class="as-now-meta">
+          <span class="as-now-cap">NOW PLAYING</span>
+          <b id="pm-now" class="as-now-title">&mdash;</b>
+          <span id="pm-now-src" class="as-now-sub"></span>
+        </div>
+        <div class="as-transport" role="group" aria-label="Music transport">
+          <button id="pm-prev" class="as-tbtn" type="button" aria-label="Previous track">&#9198;</button>
+          <button id="pm-play" class="as-tbtn as-tbtn-main" type="button" aria-label="Play or pause">&#9654;</button>
+          <button id="pm-skip" class="as-tbtn" type="button" aria-label="Next track">&#9197;</button>
+        </div>
+      </div>
       <!-- Which build am I actually running? index.html carries no ?v= of its
            own, so a stale shell or service-worker cache can serve old JS with no
            visible sign — a bug report and a fix can then disagree for hours with
@@ -478,9 +494,33 @@
         <section id="pm-panel-controls" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
           <h3 class="pm-group-h">DRIVING CONTROLS</h3>
-          <button id="pm-steer">STEER: TILT</button>
+          <!-- Every preference on this sheet is a SETTING ROW (js/ui/setting-row.js):
+               LABEL on the left, ‹ VALUE › on the right, one line at every UI
+               SIZE. The value is a native select (tap = the platform picker with
+               every option), the chevrons step. Options come from the owning
+               module's own value list. The row keeps the old id (#pm-steer,
+               #pm-gears, #pm-aero); the select is `<id>-sel`. -->
+          <div id="pm-steer-item">
+            <div id="pm-steer" class="set-row" role="group" aria-labelledby="pm-steer-label">
+              <span class="tune-label" id="pm-steer-label">STEERING INPUT</span>
+              <div>
+                <button id="pm-steer-prev" type="button" data-step="-1" aria-label="Previous steering input">&lsaquo;</button>
+                <select id="pm-steer-sel" aria-labelledby="pm-steer-label"></select>
+                <button id="pm-steer-next" type="button" data-step="1" aria-label="Next steering input">&rsaquo;</button>
+              </div>
+            </div>
+            <p id="pm-steer-note" class="adv-help">TILT leans the phone. BUTTONS adds on-screen arrows. TOUCH drags a finger on the track.</p>
+          </div>
           <button id="pm-calib">RECALIBRATE TILT</button>
-          <button id="pm-gears">GEARS: AUTO</button>
+          <div id="pm-gears" class="set-row" role="group" aria-labelledby="pm-gears-label">
+            <span class="tune-label" id="pm-gears-label">GEARS</span>
+            <div>
+              <button id="pm-gears-prev" type="button" data-step="-1" aria-label="Previous gears">&lsaquo;</button>
+              <select id="pm-gears-sel" aria-labelledby="pm-gears-label"></select>
+              <button id="pm-gears-next" type="button" data-step="1" aria-label="Next gears">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help">MANUAL needs free thumbs: tilt steering, a keyboard or a pad.</p>
           <!-- ACTIVE AERO — whether the 2026 moveable wing switches itself inside
                an activation zone. It sits with GEARS because it is the same kind
                of choice: how much of the car you operate yourself. It was in RACE
@@ -491,7 +531,15 @@
                MANUAL by default: the button IS the mechanic. AUTO exists because
                inside a zone X-mode is never the wrong choice, so a player who
                forgets it is simply slower than the AI, which takes every zone. -->
-          <button id="pm-aero">ACTIVE AERO: MANUAL</button>
+          <div id="pm-aero" class="set-row" role="group" aria-labelledby="pm-aero-label">
+            <span class="tune-label" id="pm-aero-label">ACTIVE AERO</span>
+            <div>
+              <button id="pm-aero-prev" type="button" data-step="-1" aria-label="Previous active aero">&lsaquo;</button>
+              <select id="pm-aero-sel" aria-labelledby="pm-aero-label"></select>
+              <button id="pm-aero-next" type="button" data-step="1" aria-label="Next active aero">&rsaquo;</button>
+            </div>
+          </div>
+          <p class="adv-help">MANUAL: the AERO button is yours in every zone. AUTO: the wing opens itself, like the AI.</p>
         </section>
         <section id="pm-panel-display" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -509,11 +557,53 @@
           <details id="pm-hud-details" class="pm-hud-sub">
             <summary class="adv-more-btn" id="pm-hud-details-sum">HUD · ON · STANDARD</summary>
             <div role="group" aria-label="HUD layout">
-              <button id="pm-hidehud" title="Cinematic off. Race only. The eye icon brings the HUD back.">HUD: ON</button>
-              <button id="pm-hudprofile" title="How the remaining chrome is arranged. MINIMAL tucks clusters. BROADCAST is the timing tower.">STYLE: STANDARD</button>
-              <button id="pm-hudmetrics" title="Which clusters show. AUTO is the full set; fitHud scales. FULL=all. TIMING / DRIVER / COMPACT stay named.">LAYOUT: AUTO</button>
-              <button id="pm-hudmap">MAP: ON</button>
-              <button id="pm-hudgaps">GAPS: ON</button>
+              <!-- Setting rows (js/ui/setting-row.js), painted by game.js
+                   paintHudDetailsSummary(). The colour words live only on the
+                   closed summary above, a readout. -->
+              <div id="pm-hidehud" class="set-row" role="group" aria-labelledby="pm-hidehud-label">
+                <span class="tune-label" id="pm-hidehud-label">HUD</span>
+                <div>
+                  <button id="pm-hidehud-prev" type="button" data-step="-1" aria-label="Previous hud">&lsaquo;</button>
+                  <select id="pm-hidehud-sel" aria-labelledby="pm-hidehud-label"></select>
+                  <button id="pm-hidehud-next" type="button" data-step="1" aria-label="Next hud">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">Race only. OFF is the clean cinematic screen; the eye icon brings the HUD back.</p>
+              <div id="pm-hudprofile" class="set-row" role="group" aria-labelledby="pm-hudprofile-label">
+                <span class="tune-label" id="pm-hudprofile-label">STYLE</span>
+                <div>
+                  <button id="pm-hudprofile-prev" type="button" data-step="-1" aria-label="Previous style">&lsaquo;</button>
+                  <select id="pm-hudprofile-sel" aria-labelledby="pm-hudprofile-label"></select>
+                  <button id="pm-hudprofile-next" type="button" data-step="1" aria-label="Next style">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">How the chrome is arranged. MINIMAL tucks the clusters away; BROADCAST is the TV timing tower.</p>
+              <div id="pm-hudmetrics" class="set-row" role="group" aria-labelledby="pm-hudmetrics-label">
+                <span class="tune-label" id="pm-hudmetrics-label">LAYOUT</span>
+                <div>
+                  <button id="pm-hudmetrics-prev" type="button" data-step="-1" aria-label="Previous layout">&lsaquo;</button>
+                  <select id="pm-hudmetrics-sel" aria-labelledby="pm-hudmetrics-label"></select>
+                  <button id="pm-hudmetrics-next" type="button" data-step="1" aria-label="Next layout">&rsaquo;</button>
+                </div>
+              </div>
+              <p id="pm-hudmetrics-note" class="adv-help">AUTO is the full set, scaled to fit. TIMING keeps sectors and gaps, DRIVER the car-state chips, COMPACT neither.</p>
+              <div id="pm-hudmap" class="set-row" role="group" aria-labelledby="pm-hudmap-label">
+                <span class="tune-label" id="pm-hudmap-label">MAP</span>
+                <div>
+                  <button id="pm-hudmap-prev" type="button" data-step="-1" aria-label="Previous map">&lsaquo;</button>
+                  <select id="pm-hudmap-sel" aria-labelledby="pm-hudmap-label"></select>
+                  <button id="pm-hudmap-next" type="button" data-step="1" aria-label="Next map">&rsaquo;</button>
+                </div>
+              </div>
+              <div id="pm-hudgaps" class="set-row" role="group" aria-labelledby="pm-hudgaps-label">
+                <span class="tune-label" id="pm-hudgaps-label">GAPS</span>
+                <div>
+                  <button id="pm-hudgaps-prev" type="button" data-step="-1" aria-label="Previous gaps">&lsaquo;</button>
+                  <select id="pm-hudgaps-sel" aria-labelledby="pm-hudgaps-label"></select>
+                  <button id="pm-hudgaps-next" type="button" data-step="1" aria-label="Next gaps">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">AUTO hides the map and the gaps only where the HUD style or the screen leaves no room.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
                 <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
               <!-- BUTTON SIZE is its own knob because the dock and the readouts
@@ -537,7 +627,14 @@
           <details id="pm-display-adv" class="pm-renderer-sub">
             <summary class="adv-more-btn" id="pm-renderer-details-sum">RENDERER · WEBGL2</summary>
             <div id="pm-display-adv-body" role="group" aria-label="Renderer">
-              <button id="pm-res">RESOLUTION: AUTO</button>
+              <div id="pm-res" class="set-row" role="group" aria-labelledby="pm-res-label">
+                <span class="tune-label" id="pm-res-label">RESOLUTION</span>
+                <div>
+                  <button id="pm-res-prev" type="button" data-step="-1" aria-label="Previous resolution">&lsaquo;</button>
+                  <select id="pm-res-sel" aria-labelledby="pm-res-label"></select>
+                  <button id="pm-res-next" type="button" data-step="1" aria-label="Next resolution">&rsaquo;</button>
+                </div>
+              </div>
               <button id="pm-renderer">RENDERER: WEBGL2</button>
               <button id="pm-gfx" hidden>GRAPHICS: HIGH</button>
             </div>
@@ -568,14 +665,15 @@
       <p class="adv-help">How sharply the car answers your phone tilt. Higher = less tilt needed for full lock (more sensitive); lower = relaxed, bigger tilts.</p>
     </div>
     <div class="adv-item">
-      <span class="tune-label">STEERING</span>
-      <div class="opt-row balanced-row" role="group" aria-label="Steering feel">
-        <button id="pm-steer-easy" class="opt-btn">SUPER EASY</button>
-        <button id="pm-steer-assist" class="opt-btn">ASSISTED</button>
-        <button id="pm-steer-normal" class="opt-btn">NORMAL</button>
-        <button id="pm-steer-sim" class="opt-btn">SIM</button>
+      <div id="pm-feel" class="set-row" role="group" aria-labelledby="pm-feel-label">
+        <span class="tune-label" id="pm-feel-label">STEERING</span>
+        <div>
+          <button id="pm-feel-prev" type="button" data-step="-1" aria-label="Previous steering">&lsaquo;</button>
+          <select id="pm-feel-sel" aria-labelledby="pm-feel-label"></select>
+          <button id="pm-feel-next" type="button" data-step="1" aria-label="Next steering">&rsaquo;</button>
+        </div>
       </div>
-      <p class="adv-help">Overall steering feel, from forgiving and stable to sharp and direct.</p>
+      <p class="adv-help">Overall steering feel, from forgiving and stable to sharp and direct. CUSTOM means the ADVANCED sliders moved off a named step.</p>
     </div>
     </div>
     </details>
@@ -584,20 +682,24 @@
     <summary id="adv-aids-sum" class="adv-more-btn">AIDS · LOW</summary>
     <div role="group" aria-label="Driving aids">
     <div class="adv-item">
-      <span class="tune-label">DRIVING HELP</span>
-      <div class="opt-row balanced-row" role="group" aria-label="Driving help">
-        <button id="pm-help-low" class="opt-btn">LOW</button>
-        <button id="pm-help-med" class="opt-btn">MEDIUM</button>
-        <button id="pm-help-high" class="opt-btn">HIGH</button>
+      <div id="pm-helplevel" class="set-row" role="group" aria-labelledby="pm-helplevel-label">
+        <span class="tune-label" id="pm-helplevel-label">DRIVING HELP</span>
+        <div>
+          <button id="pm-helplevel-prev" type="button" data-step="-1" aria-label="Previous driving help">&lsaquo;</button>
+          <select id="pm-helplevel-sel" aria-labelledby="pm-helplevel-label"></select>
+          <button id="pm-helplevel-next" type="button" data-step="1" aria-label="Next driving help">&rsaquo;</button>
+        </div>
       </div>
       <p class="adv-help">How much of each corner the car steers for you. Higher = easier to stay on track.</p>
     </div>
     <div class="adv-item">
-      <span class="tune-label">RACING LINE</span>
-      <div class="opt-row balanced-row" role="group" aria-label="Racing line assist">
-        <button id="pm-line-off" class="opt-btn">OFF</button>
-        <button id="pm-line-corner" class="opt-btn">CORNERS</button>
-        <button id="pm-line-full" class="opt-btn">FULL</button>
+      <div id="pm-linemode" class="set-row" role="group" aria-labelledby="pm-linemode-label">
+        <span class="tune-label" id="pm-linemode-label">RACING LINE</span>
+        <div>
+          <button id="pm-linemode-prev" type="button" data-step="-1" aria-label="Previous racing line">&lsaquo;</button>
+          <select id="pm-linemode-sel" aria-labelledby="pm-linemode-label"></select>
+          <button id="pm-linemode-next" type="button" data-step="1" aria-label="Next racing line">&rsaquo;</button>
+        </div>
       </div>
       <p class="adv-help">Optional gentle pull toward the ideal line. Never overrides your steering.</p>
     </div>
@@ -683,20 +785,26 @@
            ON/OFF live in the body so a summary tap only opens the fold. -->
       <details id="as-music-details" class="as-sec">
         <summary class="adv-more-btn" id="as-music-sum">MUSIC · ON · ALL</summary>
-        <div class="opt-row as-toggle" role="group" aria-label="Music on or off">
-          <button id="as-music-on" class="opt-btn" type="button">ON</button>
-          <button id="as-music-off" class="opt-btn" type="button">OFF</button>
+        <div id="as-music" class="set-row" role="group" aria-labelledby="as-music-label">
+          <span class="tune-label" id="as-music-label">MUSIC</span>
+          <div>
+            <button id="as-music-prev" type="button" data-step="-1" aria-label="Previous music">&lsaquo;</button>
+            <select id="as-music-sel" aria-labelledby="as-music-label"></select>
+            <button id="as-music-next" type="button" data-step="1" aria-label="Next music">&rsaquo;</button>
+          </div>
         </div>
         <label class="tune-row"><span class="tune-label">VOLUME <b id="as-mvol-v">5</b></span>
           <input id="as-mvol" type="range" min="0" max="10" step="1" value="5" aria-label="Music volume"></label>
         <!-- Which library the MUSIC controls drive. SPOTIFY is only selectable
              once it is connected; picking another source releases it without
              signing out. -->
-        <div class="opt-row" role="group" aria-label="Music source">
-          <button id="as-src-all" class="opt-btn" type="button">ALL</button>
-          <button id="as-src-builtin" class="opt-btn" type="button">DEFAULT</button>
-          <button id="as-src-user" class="opt-btn" type="button">MY TRACKS</button>
-          <button id="as-src-spotify" class="opt-btn" type="button">SPOTIFY</button>
+        <div id="as-src" class="set-row" role="group" aria-labelledby="as-src-label">
+          <span class="tune-label" id="as-src-label">SOURCE</span>
+          <div>
+            <button id="as-src-prev" type="button" data-step="-1" aria-label="Previous source">&lsaquo;</button>
+            <select id="as-src-sel" aria-labelledby="as-src-label"></select>
+            <button id="as-src-next" type="button" data-step="1" aria-label="Next source">&rsaquo;</button>
+          </div>
         </div>
         <p id="as-src-note" class="as-note"></p>
         <!-- NOW PLAYING. Was a lone SKIP button beside a run of small text, so
@@ -720,9 +828,13 @@
 
       <details id="as-sound-details" class="as-sec">
         <summary class="adv-more-btn" id="as-sound-sum">SOUND · ON</summary>
-        <div class="opt-row as-toggle" role="group" aria-label="Sound effects on or off">
-          <button id="as-sound-on" class="opt-btn" type="button">ON</button>
-          <button id="as-sound-off" class="opt-btn" type="button">OFF</button>
+        <div id="as-sound" class="set-row" role="group" aria-labelledby="as-sound-label">
+          <span class="tune-label" id="as-sound-label">SOUND EFFECTS</span>
+          <div>
+            <button id="as-sound-prev" type="button" data-step="-1" aria-label="Previous sound effects">&lsaquo;</button>
+            <select id="as-sound-sel" aria-labelledby="as-sound-label"></select>
+            <button id="as-sound-next" type="button" data-step="1" aria-label="Next sound effects">&rsaquo;</button>
+          </div>
         </div>
         <label class="tune-row"><span class="tune-label">VOLUME <b id="as-svol-v">10</b></span>
           <input id="as-svol" type="range" min="0" max="10" step="1" value="10" aria-label="Sound effects volume"></label>
@@ -747,12 +859,13 @@
            LAYERS are the levels of the sounds stacked over the core. -->
       <details id="as-engine-details" class="as-sec">
         <summary class="adv-more-btn" id="as-engine-sum">ENGINE TONE · TEAM</summary>
-        <div class="opt-row" role="group" aria-label="Sound profile">
-          <button id="as-p-team" class="opt-btn" type="button">TEAM</button>
-          <button id="as-p-broadcast" class="opt-btn" type="button">BROADCAST</button>
-          <button id="as-p-trackside" class="opt-btn" type="button">TRACKSIDE</button>
-          <button id="as-p-cockpit" class="opt-btn" type="button">COCKPIT</button>
-          <button id="as-p-v10" class="opt-btn" type="button">V10</button>
+        <div id="as-p" class="set-row" role="group" aria-labelledby="as-p-label">
+          <span class="tune-label" id="as-p-label">PROFILE</span>
+          <div>
+            <button id="as-p-prev" type="button" data-step="-1" aria-label="Previous profile">&lsaquo;</button>
+            <select id="as-p-sel" aria-labelledby="as-p-label"></select>
+            <button id="as-p-next" type="button" data-step="1" aria-label="Next profile">&rsaquo;</button>
+          </div>
         </div>
         <p id="as-p-note" class="as-note"></p>
         <h3 class="adv-sec">PITCH CURVE</h3>
@@ -966,10 +1079,14 @@
   </div>
 </div>
 
-<!-- select screen — two panes: WHO you are on the left, WHERE you race on the
-     right. The circuit preview is PINNED at the top of the right pane and only
-     the track list under it scrolls, so the map of the circuit you picked never
-     scrolls away while you browse the others. -->
+<!-- select screen — the CIRCUIT PICKER, built like a broadcast graphic: a
+     horizontal STRIP of national flags across the top (one tile per circuit,
+     the calendar in season mode), and under it the HERO — an in-game still of
+     the chosen circuit's signature section (assets/stills/<id>.webp) with the
+     lap outline drawn over it and the circuit's numbers beside it. The strip is
+     the only horizontal scroller; the hero section is the only vertical one
+     (when the caption does not fit). The map button is still the one door to
+     CIRCUIT DETAIL (turns, sectors, DRS metres). Redesigned 2026-09. -->
 <!-- CAREER. A full-screen page like #select (not a .dim modal), because in career
      it REPLACES #select: the calendar decides where you race, so the only thing
      left to choose is whether you are ready. Two states share the sheet — the
@@ -1031,44 +1148,56 @@
 </dialog>
 
 <div id="select" class="screen" role="region" aria-labelledby="select-title" data-esc-close="sel-back" hidden>
-  <div id="sel-inner" class="sheet pane-pair pair-foot-full">
+  <div id="sel-inner" class="sheet">
 
     <div class="sheet-head"><h2 id="select-title">SELECT</h2></div>
 
     <div class="sheet-body" id="sel-body">
-      <!-- WHAT YOU ARE TAKING OUT: a summary of the car, and the way through
-           to the garage where it is configured. One scrolling column. -->
-      <!-- WHERE YOU RACE: label + preview are pinned, #sel-tracks scrolls. -->
-      <section class="pair-side" id="sel-track-section">
+      <!-- THE SHELF: filter + search toolbar (js builds #sel-track-filter into
+           it, before the strip), then the flag strip. #sel-tracks is the strip
+           itself — one .track-row button per circuit, a flag over a name — and
+           the ONE horizontal scroller on the screen (data-orientation tells the
+           keyboard/gamepad walker and the wheel redirect which axis it runs;
+           a data- attribute, not aria-orientation, which ARIA does not allow
+           on a group). -->
+      <div id="sel-shelf">
+        <div id="sel-tracks" role="group" aria-labelledby="sel-circuit-label" data-orientation="horizontal"></div>
+      </div>
+      <!-- THE HERO: the still, the outline over it, the caption on it, the
+           numbers beside it. The section is the vertical scroller when the
+           caption does not fit (a short landscape phone at a raised UI SIZE). -->
+      <section class="pane" id="sel-track-section">
         <h3 class="sel-label" id="sel-circuit-label">CIRCUIT</h3>
         <div id="sel-track-preview">
-          <!-- A REAL BUTTON around the map: the only door to CIRCUIT DETAIL was
-               a bare onclick on this canvas — no tabindex, no role, no focus
-               ring — so a keyboard or gamepad player could never reach the
-               corner list or DRS metres. display: contents keeps the wrapper
-               out of the preview card's measured flex layout entirely
-               (updateTrackPreview's budget arithmetic sees the canvas as
-               before); the chip after it is the door on tiny sheets where the
-               canvas itself is display: none. -->
-          <button id="sel-map-btn" type="button" class="sel-map-btn" aria-label="Circuit detail"><canvas id="sel-preview-map" width="520" height="300" role="img" aria-label="Circuit layout preview"></canvas></button>
-          <button id="sel-detail-chip" type="button" class="sel-chip">CIRCUIT DETAIL ▸</button>
-          <div id="sel-preview-info">
-            <div id="sel-preview-name"></div>
-            <div id="sel-preview-gp"></div>
-            <div id="sel-preview-meta"></div>
-            <div id="sel-preview-rec"></div>
+          <div id="sel-hero">
+            <!-- The in-game still. `hidden` until its src decodes (js flips
+                 it), so a missing or slow file shows the hero's own gradient
+                 instead of a broken-image glyph; alt is empty because the
+                 caption already names the circuit. -->
+            <img id="sel-still" alt="" decoding="async" hidden>
+            <!-- A REAL BUTTON around the map: the only door to CIRCUIT DETAIL was
+                 a bare onclick on this canvas — no tabindex, no role, no focus
+                 ring — so a keyboard or gamepad player could never reach the
+                 corner list or DRS metres. The chip in the caption below is
+                 the same door where the canvas is too small to read. -->
+            <button id="sel-map-btn" type="button" class="sel-map-btn" aria-label="Circuit detail"><canvas id="sel-preview-map" width="520" height="300" role="img" aria-label="Circuit layout preview"></canvas></button>
+            <div id="sel-hero-cap">
+              <span id="sel-preview-flag"></span>
+              <div id="sel-preview-title">
+                <div id="sel-preview-name"></div>
+                <div id="sel-preview-gp"></div>
+              </div>
+            </div>
             <div id="sel-preview-facts"></div>
+          </div>
+          <div id="sel-preview-info">
+            <dl id="sel-preview-meta"></dl>
+            <div id="sel-preview-rec"></div>
             <canvas id="sel-preview-elev" width="280" height="36" role="img" aria-label="Elevation profile"></canvas>
+            <button id="sel-detail-chip" type="button" class="sel-chip">CIRCUIT DETAIL ▸</button>
           </div>
         </div>
       </section>
-      <!-- The list is a SIBLING of the label+preview section, not a child of it,
-           so the two-column layout can make it a grid item of the sheet itself
-           (css/menus.css). A nested grid cannot span a row of its parent. The
-           action bar is `.pair-foot-full` so BACK / YOUR CAR / NEXT span both
-           columns — three 110px buttons no longer wrap inside the preview
-           column. Stacked: label, compact preview band, then the list. -->
-      <div id="sel-tracks" class="pane pair-main" role="group" aria-labelledby="sel-circuit-label"></div>
     </div>
 
     <div class="sheet-foot">
@@ -1748,9 +1877,23 @@
         <button id="sp-toggle" class="opt-btn" type="button" aria-label="Play or pause">&#9654;</button>
         <button id="sp-fwd" class="opt-btn" type="button" aria-label="Next track">&#9197;</button>
       </div>
-      <div class="opt-row">
-        <button id="sp-shuffle" class="opt-btn" type="button">SHUFFLE</button>
-        <button id="sp-repeat" class="opt-btn" type="button">REPEAT: OFF</button>
+      <!-- Two setting rows (js/ui/setting-row.js). Was a ringed SHUFFLE toggle
+           beside a `REPEAT: OFF` word button — two grammars in one row. -->
+      <div id="sp-shuffle" class="set-row" role="group" aria-labelledby="sp-shuffle-label">
+        <span class="tune-label" id="sp-shuffle-label">SHUFFLE</span>
+        <div>
+          <button id="sp-shuffle-prev" type="button" data-step="-1" aria-label="Previous shuffle">&lsaquo;</button>
+          <select id="sp-shuffle-sel" aria-labelledby="sp-shuffle-label"></select>
+          <button id="sp-shuffle-next" type="button" data-step="1" aria-label="Next shuffle">&rsaquo;</button>
+        </div>
+      </div>
+      <div id="sp-repeat" class="set-row" role="group" aria-labelledby="sp-repeat-label">
+        <span class="tune-label" id="sp-repeat-label">REPEAT</span>
+        <div>
+          <button id="sp-repeat-prev" type="button" data-step="-1" aria-label="Previous repeat">&lsaquo;</button>
+          <select id="sp-repeat-sel" aria-labelledby="sp-repeat-label"></select>
+          <button id="sp-repeat-next" type="button" data-step="1" aria-label="Next repeat">&rsaquo;</button>
+        </div>
       </div>
       <label class="tune-row"><span class="tune-label">DEVICE VOLUME <b id="sp-vol-v">&mdash;</b></span>
         <input id="sp-vol" type="range" min="0" max="100" step="5" value="50" aria-label="Spotify device volume"></label>
@@ -2037,6 +2180,7 @@
 <script defer crossorigin="anonymous" src="js/garage/setup-sheet.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/career-ui.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/career/season-ui.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scroll-fade.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/css-zoom.js?v=dev"></script>
@@ -2045,6 +2189,7 @@
 <script defer crossorigin="anonymous" src="js/ui/modal.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/menu-nav.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/aria-state.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/setting-row.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-tabs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/aero-zones.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>

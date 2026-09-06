@@ -1,12 +1,13 @@
-/* Apex 26 — the select-screen UI for js/game.js: the track picker with its live
-   preview map + elevation canvases, and the fullscreen circuit-detail modal.
-   The screen answers WHERE you race and nothing else — who you are and what you
-   drive belong to the garage (js/garage/setup-sheet.js), opened from YOUR CAR.
-   NEXT goes to race settings. The old in-sheet car summary is gone.
+/* Apex 26 — the select-screen UI for js/game.js: the circuit picker as a flag
+   strip over a hero (the in-game still of the chosen circuit with its lap
+   outline drawn on top and its numbers beside it), plus the fullscreen
+   circuit-detail modal. The screen answers WHERE you race and nothing else —
+   who you are and what you drive belong to the garage (js/garage/setup-sheet.js),
+   opened from YOUR CAR. NEXT goes to race settings.
    Also owns the shared team-picker sheet (#teampicker) that the garage opens.
    Pure DOM; live selection state comes through the ctx façade G handed to
-   Menus.create(G). Consumes globals Teams, Tracks, TrackMaps, SeasonCal (the
-   season's calendar is the PLAYER's now — length, circuits and order).
+   Menus.create(G). Consumes globals Teams, Tracks, TrackMaps, Flags, SeasonCal
+   (the season's calendar is the PLAYER's now — length, circuits and order).
    Must load BEFORE js/game.js (see index.html). */
 const Menus = (function () {
   "use strict";
@@ -312,6 +313,53 @@ function trackFilterBar() {
   return bar;
 }
 
+// One tile per circuit: a flag over a name. `.track-row` is the picker's
+// row contract (aria-label = the circuit name, aria-pressed = chosen, hidden
+// when a search excludes it) — the same button the old vertical list was, so
+// the keyboard walker, the gamepad and every spec that names it still work;
+// only its shape changed. data-kind carries night/street/classic for the
+// stylesheet; the .trb badges stay in the DOM (hidden in the strip) because the
+// SEASON filter's "no classics shown" contract is asserted on them.
+function trackTile(t, i, opts) {
+  const row = document.createElement(opts && opts.readOnly ? "div" : "button");
+  if (!(opts && opts.readOnly)) row.type = "button";
+  row.className = "track-row" + (opts && opts.active ? " active" : "");
+  row.dataset.trackIdx = String(i);
+  row.dataset.kind = t.classic ? "classic" : t.night ? "night" : t.street ? "street" : "season";
+  row.setAttribute("aria-label", t.name);
+  // The country is the tooltip: five USA tiles and three Italian ones need
+  // it, and the strip has no room for a second line of text under each flag.
+  row.title = t.name + (t.country ? " · " + t.country : "");
+  const fl = document.createElement("span");
+  fl.className = "track-row-meta";
+  fl.innerHTML = Flags.svg(t.country);
+  row.appendChild(fl);
+  const nm = document.createElement("span");
+  nm.className = "track-row-name";
+  nm.textContent = t.name;
+  if (t.night) { const b = document.createElement("span"); b.className = "trb trb-night"; b.textContent = "NIGHT"; nm.appendChild(b); }
+  if (t.street) { const b = document.createElement("span"); b.className = "trb trb-street"; b.textContent = "STREET"; nm.appendChild(b); }
+  if (t.classic) { const b = document.createElement("span"); b.className = "trb trb-classic"; b.textContent = "CLASSIC"; nm.appendChild(b); }
+  row.appendChild(nm);
+  return row;
+}
+
+// The toolbar lives on the SHELF, before the strip — a sibling of #sel-tracks,
+// not a child, because the strip scrolls sideways and the filter must not.
+function mountToolbar(bar) {
+  const shelf = els.selTracks.parentNode;
+  const old = shelf.querySelector("#sel-track-filter");
+  if (old) old.remove();
+  if (bar) shelf.insertBefore(bar, els.selTracks);
+}
+
+// Bring the chosen tile into the strip's viewport — on open (the strip has no
+// box yet, hence the caller's rAF), on a filter change, on a season advance.
+function revealActiveTile() {
+  const on = els.selTracks.querySelector(".track-row.active");
+  if (on && on.scrollIntoView) on.scrollIntoView({ inline: "center", block: "nearest" });
+}
+
 function buildSelect() {
   // ONE QUESTION: WHERE. The car summary that used to share this screen is
   // gone (index.html) — WHO and WHAT are chosen in the garage via YOUR CAR.
@@ -328,60 +376,56 @@ function buildSelect() {
     : seasonComplete ? "SEASON COMPLETE"
     : G.seasonMode ? "SEASON — ROUND " + ((G.season && G.season.round || 0) + 1)
     : G.timeTrial ? "TIME TRIAL" : "GRAND PRIX";
-  // Track section: interactive circuit picker in GP/TT; read-only NEXT RACE preview in season
   els.selTrackSection.hidden = false;
   if (els.selCircuitLabel) els.selCircuitLabel.textContent = G.seasonMode ? "NEXT RACE" : "CIRCUIT";
+  els.selTracks.textContent = "";
+  els.selTracks.dataset.mode = G.seasonMode ? "season" : "pick";
   if (G.seasonMode) {
-    // Non-interactive preview of the upcoming season circuit
-    els.selTracks.textContent = "";
-    updateTrackPreview();       // …which also writes the "Round n of N" caption
+    // THE STRIP IS THE CALENDAR: every round as a flag, raced rounds dimmed,
+    // the next race lit. Read-only — the calendar decides where you race, so
+    // the tiles are not buttons. The way in to SEASON SETUP is the one control
+    // on the shelf. Built here rather than put in index.html so it exists ONLY
+    // in the season branch — #select's pixel golden is captured through GRAND
+    // PRIX (tests/specs/menu-baseline.spec.js), and a button in the shell
+    // would have moved it.
+    const bar = document.createElement("div");
+    bar.id = "sel-track-filter";
+    bar.className = "sel-chip-row";
+    bar.setAttribute("role", "group");
+    bar.setAttribute("aria-label", "Season controls");
     if (seasonComplete) {
       const done = document.createElement("div");
       done.className = "season-upcoming-head";
       done.textContent = "ALL " + SeasonCal.rounds() + " ROUNDS COMPLETE";
-      els.selTracks.appendChild(done);
+      bar.appendChild(done);
     }
-    const rnd = (G.season && G.season.round || 0) + 1;
-    // The way in to SEASON SETUP. Built here rather than put in index.html so it
-    // exists ONLY in the season branch — #select's pixel golden is captured
-    // through GRAND PRIX (tests/specs/menu-baseline.spec.js), and a button in the
-    // shell would have moved it. The title screen's SEASON button is unchanged
-    // too: a player who just wants to race should not have to dismiss an editor.
     const custom = document.createElement("button");
     custom.id = "sel-customise";
     custom.className = "sel-chip";
     custom.type = "button";
     custom.textContent = seasonComplete ? "START NEW SEASON" : "CUSTOMISE SEASON";
     custom.onclick = (e) => { e.stopPropagation(); G.openSeasonSetup(); };
-    els.selTracks.appendChild(custom);
-    // Upcoming rounds list — EVERY remaining round, not a preview. A hard cap
-    // of 5 made "UPCOMING" end in void: the judges read the cut as the list
-    // being 5 rounds long (round 1 of 24 showed 5 of 23 remaining, no fade, no
-    // count). The pane scrolls and now carries the fade + position indicator,
-    // so length is not a cost. Indexes SEASON, not LIST — classics are
-    // playable but never a championship round.
-    const upcoming = [];
-    for (let i = rnd; i < SeasonCal.rounds(); i++) upcoming.push({ n: i + 1, t: SeasonCal.track(i) });
-    if (upcoming.length) {
-      const upHead = document.createElement("div");
-      upHead.className = "season-upcoming-head";
-      upHead.textContent = "UPCOMING";
-      els.selTracks.appendChild(upHead);
-      upcoming.forEach(({ n, t }) => {
-        const row = document.createElement("div");
-        row.className = "season-upcoming-row";
-        const rndEl = document.createElement("span"); rndEl.className = "sur-rnd"; rndEl.textContent = "R" + n;
-        const nmEl = document.createElement("span"); nmEl.className = "sur-name"; nmEl.textContent = t.name;
-        const ctEl = document.createElement("span"); ctEl.className = "sur-country"; ctEl.textContent = t.country || "";
-        row.append(rndEl, nmEl, ctEl);
-        els.selTracks.appendChild(row);
-      });
+    bar.appendChild(custom);
+    mountToolbar(bar);
+    const rnd = (G.season && G.season.round || 0);
+    for (let r = 0; r < SeasonCal.rounds(); r++) {
+      const t = SeasonCal.track(r);
+      if (!t) continue;
+      const i = Tracks.LIST.indexOf(t);
+      const row = trackTile(t, i, { readOnly: true, active: !seasonComplete && r === rnd });
+      if (r < rnd || seasonComplete) row.dataset.done = "1";
+      if (!seasonComplete && r === rnd) row.setAttribute("aria-current", "step");
+      const rn = document.createElement("span");
+      rn.className = "sur-rnd";
+      rn.textContent = "R" + (r + 1);
+      row.insertBefore(rn, row.firstChild);
+      els.selTracks.appendChild(row);
     }
+    updateTrackPreview();       // …which also writes the "Round n of N" caption
   } else {
-    els.selTracks.textContent = "";
-    els.selTracks.appendChild(trackFilterBar());
+    mountToolbar(trackFilterBar());
     // Two groups: the championship calendar, then the retired circuits. Only the
-    // header changes — every row is a normal, selectable track either way.
+    // divider changes — every tile is a normal, selectable circuit either way.
     // Filter chips (ALL / SEASON / CLASSICS) hide a group rather than renumber
     // Tracks.LIST — selection still indexes into the full list.
     let group = null;
@@ -394,31 +438,18 @@ function buildSelect() {
         const head = document.createElement("div");
         head.className = "track-group-head";
         head.dataset.trackGroup = g;
-        head.textContent = g;
+        // Short, because the strip draws it as a VERTICAL rule between the two
+        // groups: the full "CLASSIC CIRCUITS" stood taller than the tiles and
+        // stretched the whole strip (measured 131px at 852x393). The filter
+        // chips beside the strip carry the long names.
+        head.textContent = t.classic ? "CLASSICS" : "SEASON";
         els.selTracks.appendChild(head);
       }
-      const row = document.createElement("button");
-      row.className = "track-row" + (i === G.trackIdx ? " active" : "");
-      row.dataset.trackIdx = String(i);
+      const row = trackTile(t, i, { active: i === G.trackIdx });
       row.dataset.trackGroup = g;
       row.dataset.search = [t.name, t.country, t.classic ? "classic" : "season", t.street ? "street" : "", t.night ? "night" : ""]
         .filter(Boolean).join(" ").toLocaleLowerCase();
-      row.setAttribute("aria-label", t.name);
       row.setAttribute("aria-pressed", i === G.trackIdx ? "true" : "false");
-
-      const nm = document.createElement("span");
-      nm.className = "track-row-name";
-      nm.textContent = t.name;
-      if (t.night) { const b = document.createElement("span"); b.className = "trb trb-night"; b.textContent = "NIGHT"; nm.appendChild(b); }
-      if (t.street) { const b = document.createElement("span"); b.className = "trb trb-street"; b.textContent = "STREET"; nm.appendChild(b); }
-      if (t.classic) { const b = document.createElement("span"); b.className = "trb trb-classic"; b.textContent = "CLASSIC"; nm.appendChild(b); }
-      row.appendChild(nm);
-
-      const mt = document.createElement("span");
-      mt.className = "track-row-meta";
-      mt.textContent = [t.country, t.lengthKm ? t.lengthKm.toFixed(1) + " km" : ""].filter(Boolean).join(" · ");
-      row.appendChild(mt);
-
       if (G.timeTrial) {
         const board = ttBoard(t.id);
         const rec = board.length ? board[0].t : Infinity;
@@ -427,7 +458,6 @@ function buildSelect() {
         recEl.textContent = isFinite(rec) ? "★ " + fmtTime(rec) : "—";
         row.appendChild(recEl);
       }
-
       row.onclick = () => {
         // The headline choice of this screen was the one silent control on it
         // (the filter chips beside it click) — a soundless tap reads as a miss.
@@ -462,15 +492,25 @@ function buildSelect() {
   // buildSelect runs while #select is still hidden at every entry point, so
   // the synchronous preview pass can only draw against placeholder geometry.
   // Refit after two frames: the first exposes and classifies the sheet, the
-  // second sees the settled data-pair/data-shape box. ResizeObserver remains
-  // the ongoing resize path, but first paint no longer depends on when a busy
-  // browser happens to deliver its callback (the audit caught intermittent
-  // 1x1 maps when three SwiftShader contexts competed).
+  // second sees the settled box. ResizeObserver remains the ongoing resize
+  // path, but first paint no longer depends on when a busy browser happens to
+  // deliver its callback (the audit caught intermittent 1x1 maps when three
+  // SwiftShader contexts competed). The strip has a box by then too, so the
+  // chosen tile can be scrolled into view.
+  // FIRST, A ZERO-DELAY TIMER. scheduleFlybyTrack() builds the background
+  // circuit 120 ms after this screen opens and holds the main thread for
+  // seconds on a slow device — long enough that the rAF pair and the hero's
+  // ResizeObserver below both land AFTER it, and the outline sits at its
+  // 520x300 attribute size until then (measured 5 s on SwiftShader). A timer
+  // queued now runs before that build, so a synchronous reveal (reduced
+  // motion, or a browser without view transitions) fits on the first frame;
+  // the crossfade case still waits a frame and is caught by the pair below.
+  setTimeout(() => { if (els.select && !els.select.hidden) { updateTrackPreview(); revealActiveTile(); } }, 0);
   if (previewOpenRaf) cancelAnimationFrame(previewOpenRaf);
   previewOpenRaf = requestAnimationFrame(() => {
     previewOpenRaf = requestAnimationFrame(() => {
       previewOpenRaf = 0;
-      if (els.select && !els.select.hidden) updateTrackPreview();
+      if (els.select && !els.select.hidden) { updateTrackPreview(); revealActiveTile(); }
     });
   });
 }
@@ -534,291 +574,157 @@ function drawElevProfile(cv, t, showEl) {
   return true;
 }
 
-// large preview of the currently-selected circuit: sector-coloured outline,
-// DRS zones, numbered corners, name / GP / length / turn count, track facts.
-/* THE PREVIEW CARD'S BOX IS NOT KNOWN WHEN THE SCREEN OPENS.
- * Same shape as js/ui/sheet-shape.js's own note: a hidden element measures
- * 0x0, so the first useful measurement is the ResizeObserver callback when its
+// THE HERO: the in-game still of the chosen circuit with the lap outline over
+// it, the flag + name + GP on the image, the type badges under them, and the
+// numbers (location, turns, length, direction, elevation, DRS, record) beside.
+/* THE HERO'S BOX IS NOT KNOWN WHEN THE SCREEN OPENS. A hidden element measures
+ * 0x0, so the first useful measurement is the ResizeObserver callback after the
  * screen is shown, not the call that showed it. updateTrackPreview() runs on
- * that first (unmeasurable) pass and deliberately does not pin; this refits
- * once the card has a box, and again whenever it changes — a UI SIZE change, an
- * orientation flip, or sheetshape.js flipping data-pair / data-shape, all of
- * which move the budget without changing the selected circuit.
- *
- * BOTH AXES. The budget in updateTrackPreview is driven by the card's WIDTH
- * (cardInnerW, and the `beside` switch that keys off it) as much as by the
- * section's height, so a width-only or height-only guard would sit out the
- * pair flip that changes the layout most.
- *
- * TERMINATION: refit only when the card's box actually differs from the one we
- * last fitted against. Without that guard this is a classic RO feedback loop —
- * the refit clears the map's pins and may set data-map-shape, either of which
- * can resize the card and fire the observer again. Sibling precedent: the
- * track-detail modal's own observer guards on a `lastFit` key for exactly this
- * reason. */
-let previewRo = null, previewCardBox = "";
-function watchPreviewCard(card) {
-  if (!card || typeof ResizeObserver !== "function") return;
-  if (previewRo) return;
+ * that first (unmeasurable) pass and deliberately does not pin the canvas; the
+ * observer refits once the hero has a box, and again whenever it changes — a UI
+ * SIZE change, an orientation flip, sheetshape.js flipping data-shape — all of
+ * which move the slot without changing the selected circuit.
+ * TERMINATION: refit only when the box actually differs from the one last
+ * fitted against (the refit pins the canvas, which cannot resize the hero — the
+ * canvas is absolutely positioned — but the key guard costs nothing and keeps
+ * the pattern identical to the track-detail modal's observer). */
+let previewRo = null, previewHeroBox = "";
+function watchHero(hero) {
+  if (!hero || typeof ResizeObserver !== "function" || previewRo) return;
   previewRo = new ResizeObserver(() => {
-    const w = card.clientWidth, h = card.clientHeight;
+    if (!els.select || els.select.hidden) return;
+    const w = hero.clientWidth, h = hero.clientHeight;
     if (w <= 0 || h <= 0) return;
     const key = w + "x" + h;
-    if (key === previewCardBox) return;
-    previewCardBox = key;
+    if (key === previewHeroBox) return;
+    previewHeroBox = key;
     updateTrackPreview();
   });
-  previewRo.observe(card);
+  previewRo.observe(hero);
+}
+// OBSERVED FROM THE START, NOT AFTER A LUCKY FIRST MEASUREMENT. The old card
+// attached its observer only from inside a pass that had already measured a
+// box — so when the double-rAF pass below landed on a frame where the hero
+// had none (measured 2026-09-05 on a compact 852x393 open: buffer still at
+// its 520x300 attribute, no inline pin, until a UI SIZE change happened to
+// refit it), nothing ever refitted. A ResizeObserver delivers its first
+// notification when the element first has a box, which is exactly the event
+// "the screen is now laid out" that a rAF only guesses at.
+watchHero(document.getElementById("sel-hero"));
+
+// The still: assets/stills/<id>.webp, one per circuit (tools/gen/track-stills.mjs).
+// Hidden until decoded so a swap never flashes the previous circuit or a broken
+// glyph; a circuit with no still keeps the hero's own gradient. The token
+// guards a slow decode landing after the player has already moved on.
+let stillToken = 0;
+function showStill(t) {
+  const img = document.getElementById("sel-still");
+  if (!img) return;
+  const src = "assets/stills/" + t.id + ".webp";
+  if (img.dataset.id === t.id && !img.hidden) return;
+  const token = ++stillToken;
+  img.hidden = true;
+  img.dataset.id = t.id;
+  img.onload = () => { if (token === stillToken) img.hidden = false; };
+  img.onerror = () => { if (token === stillToken) img.hidden = true; };
+  img.src = src;
 }
 
 function updateTrackPreview() {
   if (!els.selPreviewMap) return;
   const t = Tracks.LIST[G.trackIdx];
   if (!t) return;
-  /* Render the caption before measuring the map slot. planPreview subtracts
-     #sel-preview-info's real height from the section budget; measuring an empty
-     caption let the map claim the whole compact band, then the text written
-     below it was clipped until some later resize happened to refit the card. */
-  els.selPreviewName.textContent = t.name + (t.night ? " ☾" : "");
-  els.selPreviewGp.textContent = t.gp || "";
   const crns = TrackMaps.corners(t);
   const turns = crns.length;
-  els.selPreviewMeta.textContent = [
-    t.country,
-    t.lengthKm ? t.lengthKm.toFixed(1) + " km" : "",
-    turns ? turns + " turns" : ""
-  ].filter(Boolean).join("  ·  ");
-  if (G.timeTrial) {
-    const board = ttBoard(t.id);
-    const rec = board.length ? board[0].t : Infinity;
-    els.selPreviewRec.textContent = isFinite(rec) ? "Best  ★ " + fmtTime(rec) : "No time set";
-  } else if (G.seasonMode) {
+  const dir = TrackMaps.direction(t);
+  const elev = TrackMaps.elevRange(t);
+  const dz = TrackMaps.drsZones(t);
+  // Caption ON the still: flag, name, grand prix.
+  const flagEl = document.getElementById("sel-preview-flag");
+  if (flagEl) flagEl.innerHTML = Flags.svg(t.country);
+  els.selPreviewName.textContent = t.name + (t.night ? " ☾" : "");
+  els.selPreviewGp.textContent = t.gp || "";
+  // The type badges under the name — the same .trb chips the tiles carry.
+  const factsEl = document.getElementById("sel-preview-facts");
+  if (factsEl) {
+    const kinds = [];
+    if (t.night) kinds.push(["trb trb-night", "NIGHT RACE"]);
+    if (t.street) kinds.push(["trb trb-street", "STREET CIRCUIT"]);
+    if (t.classic) kinds.push(["trb trb-classic", "CLASSIC"]);
+    if (t.banked) kinds.push(["trb", "BANKED"]);
+    factsEl.textContent = "";
+    for (const [cls, label] of kinds) {
+      const b = document.createElement("span"); b.className = cls; b.textContent = label; factsEl.appendChild(b);
+    }
+  }
+  // The numbers beside the still, as a definition list (label over value).
+  const km = t.lengthKm || 0;
+  const rows = [
+    ["LOCATION", t.country || "—"],
+    ["TURNS", turns ? String(turns) : "—"],
+    ["CIRCUIT LENGTH", km ? km.toFixed(3) + " km / " + (km * 0.621371).toFixed(3) + " mi" : "—"],
+    ["DIRECTION", dir ? (dir === "CW" ? "Clockwise" : "Anti-clockwise") : "—"],
+    ["ELEVATION", elev > 2 ? "+" + elev + " m" : "Flat"],
+    ["DRS ZONES", dz && dz.length ? String(dz.length) : "None"],
+  ];
+  if (crns.length) {
+    const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
+    rows.push(["SLOWEST CORNER", "T" + slowest.n]);
+  }
+  els.selPreviewMeta.textContent = "";
+  for (const [k, v] of rows) {
+    // <div> groups inside a <dl> are valid HTML and are what lets the grid
+    // stack each label over its value instead of interleaving dt/dd cells.
+    const pair = document.createElement("div");
+    const dt = document.createElement("dt"); dt.textContent = k;
+    const dd = document.createElement("dd"); dd.textContent = v;
+    pair.append(dt, dd);
+    els.selPreviewMeta.appendChild(pair);
+  }
+  // The record line: the season's round, or the player's own lap record.
+  if (G.seasonMode) {
     els.selPreviewRec.textContent = G.season && !SeasonCal.canRace(G.season)
       ? "Final standings · " + SeasonCal.rounds() + " rounds"
       : "Round " + ((G.season && G.season.round || 0) + 1) + " of " + SeasonCal.rounds();
   } else {
-    els.selPreviewRec.textContent = "";
+    const board = ttBoard(t.id);
+    const rec = board.length ? board[0].t : Infinity;
+    els.selPreviewRec.textContent = isFinite(rec) ? "Lap record  ★ " + fmtTime(rec)
+      : G.timeTrial ? "No time set" : "";
   }
-  const factsEl = document.getElementById("sel-preview-facts");
-  if (factsEl) {
-    const dir = TrackMaps.direction(t);
-    const elev = TrackMaps.elevRange(t);
-    const facts = [];
-    const dz = TrackMaps.drsZones(t);
-    if (dir) facts.push('<span class="spf-fact spf-dir">' + (dir === "CW" ? "↻ Clockwise" : "↺ Anti-clockwise") + "</span>");
-    if (elev > 2) facts.push('<span class="spf-fact spf-elev">&#9650; ' + elev + " m elevation</span>");
-    if (dz && dz.length) facts.push('<span class="spf-fact spf-drs">' + dz.length + " DRS zone" + (dz.length > 1 ? "s" : "") + "</span>");
-    if (crns.length) {
-      const slowest = crns.reduce(function (a, b) { return b.v > a.v ? b : a; });
-      facts.push('<span class="spf-fact spf-corner">T' + slowest.n + " slowest</span>");
-    }
-    factsEl.innerHTML = facts.join("");
-  }
-  // While #select is hidden (buildSelect's synchronous pass) the card measures
-  // 0×0 — planPreview would fit against placeholder geometry and every open is
-  // followed by the double-rAF / ResizeObserver refit anyway. The captions
-  // above are written (the refit measures them); the raster below is skipped.
-  const rasterCard = els.selPreviewMap.closest("#sel-track-preview");
-  if (!rasterCard || rasterCard.clientWidth <= 0 || rasterCard.clientHeight <= 0) return;
+  showStill(t);
+  // While #select is hidden (buildSelect's synchronous pass) the hero measures
+  // 0×0 — every open is followed by the double-rAF / ResizeObserver refit
+  // anyway. The captions above are written; the raster below is skipped.
+  const hero = document.getElementById("sel-hero");
+  const sheet = hero && hero.closest(".sheet");
+  if (!hero || hero.clientWidth <= 0 || hero.clientHeight <= 0) return;
   drawElevProfile(document.getElementById("sel-preview-elev"), t);
 
-  // Size the bitmap to the circuit's own aspect inside the CSS slot. A fixed
-  // 520×300 canvas displayed under max-height caps (or UI zoom reshaping the
-  // card) was getting CSS-squashed; fitCanvas + object-fit:contain keep the
-  // outline true while --ui-scale zoom still enlarges the whole sheet.
+  // THE OUTLINE OVER THE STILL: a plain white lap line with a dark casing —
+  // sectors, corner numbers and DRS belong to CIRCUIT DETAIL, one tap away.
+  // Fit the canvas to ~2/3 of the hero in the circuit's own aspect; it is
+  // absolutely centred by the stylesheet, so pinning its box moves nothing.
   const map = els.selPreviewMap;
-  const a = TrackMaps.aspect(t);
-  // Clear prior pins so the stylesheet width / max-height slot can be measured.
-  map.style.width = "";
-  map.style.height = "";
-  map.style.maxWidth = "";
-  map.style.maxHeight = "";
-  map.style.aspectRatio = String(a);
-  const card = map.closest("#sel-track-preview");
-  const info = document.getElementById("sel-preview-info");
-  const section = map.closest("#sel-track-section");
-  const label = document.getElementById("sel-circuit-label");
-  // THE ARRANGEMENT FOLLOWS THE CIRCUIT, NOT ONLY THE VIEWPORT.
-  //
-  // The caption used to sit UNDER the map in every wide-card layout, and the
-  // map's height was capped by a `cardH - 9.5rem` guess at the caption's size.
-  // That is right for a wide circuit and badly wrong for a tall one: fitting a
-  // 2:1-TALL street circuit (Jeddah, aspect 0.5) into a full-width slot means
-  // only its HEIGHT can be spent, so the outline came out a 128px sliver with
-  // ~190px of dead card beside it and the numbers piled on top of each other.
-  // Measured at 1280x720: 128x255 in a 406x416 card.
-  //
-  // So MEASURE the real budget instead of guessing it, and hand the numbers to
-  // TrackMaps.planPreview — which owns the decision, and is unit-tested there
-  // precisely because every bug this logic has had was an arithmetic bug that
-  // a browser sweep took minutes to surface. This function's only job is to
-  // report the card's geometry honestly and apply what comes back.
-  if (card) card.removeAttribute("data-map-shape");
-  void map.offsetWidth;
-  const cardCS = card ? getComputedStyle(card) : null;
-  const px = (v) => parseFloat(v) || 0;
-  const padX = cardCS ? px(cardCS.paddingLeft) + px(cardCS.paddingRight) : 0;
-  // offsetHeight / clientWidth, NOT getBoundingClientRect(): every box here
-  // lives inside `zoom: var(--ui-scale)`, where gBCR reports VISUAL px while
-  // these report LOCAL (pre-zoom) px. Mixing the two subtracted a 1.75x-sized
-  // caption and label from a 1x-sized column budget at UI SIZE 175%, drove the
-  // budget negative and collapsed every map onto its floor (measured 36x72).
-  const sheet = card && card.closest(".sheet");
-  /* CLASSIFIED means SheetShape has written data-pair ("on" or "off"). Before
-     that, `pair !== "on"` conflates "measured: single column" with "not
-     measured yet" — and under main-thread load (SwiftShader + parallel audit
-     pages, or a slow phone still running the title scene) classification can
-     lag this call by whole frames. Measured 2026-08-21, full-matrix audit at
-     jobs=3: this ran on a transitional box, took the stacked branch, pinned a
-     40x59 map into a 1280x800 two-column layout, and the RO key guard then
-     saw no further box change to refit on. An unclassified sheet is treated
-     like an unmeasurable card: draw at the CSS slot, pin nothing, let the
-     refit that follows classification write the real numbers. */
-  const classified = !!(sheet && sheet.dataset.pair);
-  const stacked = !!(sheet && sheet.dataset.pair !== "on");
+  // A compact hero is short and its caption sits along the bottom edge; the
+  // outline is top-aligned there (css) and keeps clear of the caption.
   const compact = !!(sheet && sheet.dataset.density === "compact");
-  /* Use the sheet's measured shape (set by sheetshape.js in the sheet's own
-     zoom-corrected units) instead of matchMedia("orientation: portrait") which
-     reads the viewport and is the wrong proxy at non-100% zoom. */
-  const tallSheet = !!(sheet && sheet.dataset.shape === "tall");
-  const cardInnerW = card ? card.clientWidth - padX : 260;
-  const chipH = sheet ? px(getComputedStyle(sheet).getPropertyValue("--chip-h")) || 40 : 40;
-  /* In every WIDE stacked layout CSS makes the preview a thumbnail band beside
-     its caption. planPreview's 120px floor belongs to a full preview column, so
-     use the band's own token-based caps here and preserve the circuit aspect
-     inside them. One-and-a-half chip rows stays useful at 100% without
-     overrunning the band when a late density measurement switches a 200% sheet
-     to compact.
-     On a TALL sheet the CSS overrides switch to a column layout with no height
-     cap, so we use planPreview to fill the available section height. */
-  const plan = (stacked && !tallSheet)
-    ? {
-      shape: "beside",
-      // Match the compact CSS cap instead of pinning a 1.5-row canvas over it.
-      // fitCanvas pins max-height inline, so a disagreement here makes JS win.
-      slotW: Math.min(cardInnerW * (compact ? 0.48 : 0.42), chipH * (compact ? 5.2 : 3.5)),
-      slotH: chipH * 3.5
-    }
-    : TrackMaps.planPreview({
-      aspect: a,
-      cardInnerW: cardInnerW,
-      // The scrolling section is the honest ceiling: the card grows to its
-      // content, so bounding the map by the CARD's own height is circular.
-      sectionH: section ? section.clientHeight : 0,
-      labelH: label ? label.offsetHeight : 0,
-      // Tall sheets and pair-on stacked plans put the caption UNDER the map.
-      // Beside (Jeddah) still ignores infoH inside planPreview. Charging it
-      // on every pair-on plan lets a stacked Bahrain use the column instead
-      // of a 260px clamp.
-      infoH: (info && (tallSheet || (classified && sheet.dataset.pair === "on"))) ? info.offsetHeight : 0,
-      padY: cardCS ? px(cardCS.paddingTop) + px(cardCS.paddingBottom) : 0,
-      gap: cardCS ? (px(cardCS.rowGap) || px(cardCS.gap)) : 0,
-      // Pair-on clips its section ("FIT THE PREVIEW, DO NOT SCROLL IT" in
-      // css/menus.css) — the 240px scroll-column floor cannot be spent there.
-      noScroll: !tallSheet
-    });
-  if (card && plan.shape === "beside" && classified) {
-    // Gated on `classified` like the pin below: a beside attribute written
-    // from a transitional measure sticks until the next full update, and the
-    // stylesheet default is the safe arrangement to hold in the meantime.
-    card.setAttribute("data-map-shape", "beside");
-    void map.offsetWidth;
+  const slotW = hero.clientWidth * 0.62, slotH = hero.clientHeight * (compact ? 0.6 : 0.64);
+  const fit = TrackMaps.fitCanvas(map, slotW, slotH, t, true);
+  // CRISP AT UI SIZE > 100% AND ON HiDPI: the buffer is the fitted CSS box times
+  // the effective zoom x dpr (capped at 3 like the minimap); the draw params
+  // are scaled by the same ratio so the line stays the same visual weight.
+  const ratio = Math.min(3, Math.max(1, (map.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
+  if (ratio > 1.01) {
+    map.width = Math.round(fit.w * ratio);
+    map.height = Math.round(fit.h * ratio);
   }
-  // MEASURABLE means the card is actually laid out. The FIRST call never is:
-  // #select is opened by clearing `hidden`, so the card has no box yet and
-  // planPreview takes its own documented "pre-layout first paint" fallback —
-  // cardInnerW on its 80px floor, sectionH 0, height from the aspect alone.
-  // Those are placeholders, not measurements.
-  //
-  // THAT IS WHY THE PIN IS CONDITIONAL. fitCanvas(pinCss=true) writes inline
-  // width/height/max-width/max-height, and an inline style beats any stylesheet
-  // rule — so a plan computed from placeholders freezes into the element and
-  // nothing later undoes it. MEASURED at 852x393 from a cold load, before this
-  // guard: 344px of map in a 260px card, 23px past the viewport bottom, with
-  // the caption and all four track facts pushed out. It self-healed on the
-  // first circuit click — the one route any probe that clicks before measuring
-  // erases, which is why the audit matrix scored that cell green throughout.
-  //
-  // Unmeasurable: draw at the CSS slot and DO NOT pin, leaving the stylesheet's
-  // own caps authoritative for that frame. watchPreviewCard refits with real
-  // numbers as soon as the card has a box.
-  /* The planPreview path needs the SECTION measured too: with sectionH 0 it
-     takes its documented pre-layout fallback (height from cardInnerW/aspect
-     alone), which for a tall circuit is a map TALLER than the phone — and a
-     card with a width but a 0-height section is exactly what a half-laid-out
-     screen reports. Pinning that froze a 574px map into a 393-wide portrait
-     select (2026-08-21 sweep: every #sel-preview-* clipped past the section).
-     The stacked band branch never reads sectionH, so the card's own width is
-     enough evidence there. */
-  const sectionMeasured = (stacked && !tallSheet) || !!(section && section.clientHeight > 0);
-  const measurable = classified && sectionMeasured && !!(card && card.clientWidth > 0);
-  let fit = TrackMaps.fitCanvas(map, plan.slotW, plan.slotH, t, measurable);
-  // SELF-HEAL A STALE PLAN. The stylesheet caps (max-height: 50%/100% in the
-  // pair band) are the layout's last line of defence, and when one BINDS the
-  // pinned bitmap and the granted box disagree: a 162x240 pin clamped to a
-  // 63px band displays the outline as a 42px sliver hugging the row start
-  // (measured 852x393 @200%, select opened after the zoom change — the RO
-  // key never fired again to refit). One refit against the box the cascade
-  // actually granted converges: the second pin matches the box, so the
-  // guard is quiet from then on.
-  if (measurable) {
-    void map.offsetWidth;
-    const gW = map.clientWidth, gH = map.clientHeight;
-    // Pair-on beside already spends the pane (max-height: 100%). Shrinking
-    // the pin to the first granted box ratcheted a 513px plan down to the
-    // previous 345px stamp and left the desktop column half empty.
-    const besidePair = !!(card && card.getAttribute("data-map-shape") === "beside"
-      && sheet && sheet.dataset.pair === "on");
-    if (!besidePair && gW && gH && (fit.w - gW > 2 || fit.h - gH > 2)) {
-      fit = TrackMaps.fitCanvas(map, Math.min(fit.w, gW), Math.min(fit.h, gH), t, true);
-    }
-  }
-  watchPreviewCard(card);
-  // CRISP CANVAS AT UI SIZE > 100%.
-  // fitCanvas sizes the buffer to local CSS px (pre-zoom). Inside
-  // `zoom: var(--ui-scale)` the canvas is then scaled up visually, making
-  // the circuit outline look soft at 115%+. Multiply the bitmap by
-  // devicePixelRatio × ui-scale so one drawing pixel = one physical screen
-  // pixel at every zoom setting.
-  // CSS width/height stay at the local values (fit.w/fit.h) — only the
-  // bitmap expands. TrackMaps.draw uses the CSS-px reference (fit.w/fit.h)
-  // for marker scaling, so markers stay the right box-relative size even
-  // though the buffer is larger.
-  // currentCSSZoom, NOT the raw --ui-scale slider: the sheet paints at the
-  // fit-CAPPED --sheet-scale (≈1.76 on an 852x393 phone asking for 200%), so
-  // the slider over-allocated the exact way the minimap fix in js/ui/hud.js
-  // warns about. Capped at 3 like the minimap — DPR-3 phones at 200% were
-  // allocating 6x, and 200% browser zoom on a DPR-2 desktop 8x (~10 MB a
-  // redraw for a 260px slot).
-  const _pxRatio = Math.min(3, Math.max(1,
-    (map.currentCSSZoom || 1) * (window.devicePixelRatio || 1)));
-  if (_pxRatio > 1.01) {
-    map.width  = Math.round(fit.w * _pxRatio);
-    map.height = Math.round(fit.h * _pxRatio);
-  }
-  // Corner markers/casing are drawn at ABSOLUTE canvas px (see TrackMaps.draw),
-  // tuned for the canvas's old fixed 520x300 HTML size. fitCanvas now sizes the
-  // drawing buffer itself to the measured CSS slot (so a narrow layout gets a
-  // narrow buffer), and a fixed-radius marker on a shrunk buffer reads 3-4x
-  // oversized relative to the track outline — measured on the live select
-  // screen at normal desktop widths, markers overlapping into an unreadable
-  // blob. Scale every absolute-px draw param by how far the fitted buffer sits
-  // below that 520x300 reference so markers keep the same box-relative size
-  // the old fixed-buffer-plus-CSS-shrink rendering always had.
-  // NOTE: use fit.w/fit.h (CSS-px) as the reference, not the expanded buffer —
-  // but the PARAMS are consumed in BUFFER px (TrackMaps.draw reads
-  // canvas.width absolutely), so each one is scaled back up by the buffer
-  // ratio after the mk decision is made in CSS px. Without ×br every HiDPI
-  // screen halved the corner numbers, and raising UI SIZE to read the map
-  // made them smaller still (11px × mk 0.5 = 8 buffer px = 2.7 CSS px at
-  // ratio 3).
-  const mk = Math.min(1, fit.w / 520, fit.h / 300);
   const br = fit.w ? (map.width / fit.w) : 1;
+  const lw = Math.max(2, Math.round(Math.min(fit.w, fit.h) / 42));
   TrackMaps.draw(map, t, {
-    color: TrackMaps.themeColor(t), startColor: "#e10600",
-    width: Math.max(2 * br, Math.round(4 * mk * br)), pad: Math.max(10 * br, Math.round(24 * mk * br)),
-    corners: true, cornerR: Math.max(4 * br, Math.round(9 * mk * br)), cornerFont: Math.max(8 * br, Math.round(11 * mk * br)),
-    sectors: true, drs: true
+    color: "#ffffff", casing: "rgba(0,0,0,0.55)", startColor: "#e10600",
+    width: lw * br, pad: Math.round(lw * 1.5) * br,
+    corners: false, sectors: false, drs: false
   });
 }
 function openTrackDetail() {

@@ -128,15 +128,15 @@ const Car3D = (function () {
     // Paint is reflective, not a light source. Some team accent palettes are
     // intentionally HDR for LEDs; cap them when those colors dress bodywork so
     // wings and panels do not bloom like neon tubes.
-    const rgb = material === SURFACES.paint
-      ? [Math.min(col[0], 1), Math.min(col[1], 1), Math.min(col[2], 1)]
-      : col;
-    for (const p of [a, b, c]) {
-      out.pos.push(p[0], p[1], p[2]);
-      out.nrm.push(nx, ny, nz);
-      out.col.push(rgb[0], rgb[1], rgb[2]);
-      out.mat.push(material);
-    }
+    const paint = material === SURFACES.paint;
+    const r = paint ? Math.min(col[0], 1) : col[0], g = paint ? Math.min(col[1], 1) : col[1],
+          bl = paint ? Math.min(col[2], 1) : col[2];
+    // Unrolled, no per-triangle arrays: a third of Car3D.build's time (33% self,
+    // ~19k verts, paid on every garage part pick). Same numbers, same order.
+    out.pos.push(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2]);
+    out.nrm.push(nx, ny, nz, nx, ny, nz, nx, ny, nz);
+    out.col.push(r, g, bl, r, g, bl, r, g, bl);
+    out.mat.push(material, material, material);
     out.idx.push(base, base + 1, base + 2);
   }
 
@@ -1268,11 +1268,34 @@ const Car3D = (function () {
     const ep = endplateGeom(aLvl), h = 0.20;
     return { cy: ep.cy - ep.sy * 0.5 + 0.05 + h * 0.5, h };
   }
-  const FIN = Object.freeze({
-    baseLE: [-0.65, 0.7935], topLE: [-1.15, 0.97],
-    topTE:  [-1.65, 0.97],   baseTE: [-1.70, 0.6197],
-    halfBase: 0.022, halfTop: 0.014,
+  // The blade OUTLINES a livery may pick (liv.finShape). "standard" is the one
+  // frozen shape every car carried; the others keep its base line — the root
+  // into the engine cover and the decal maths below are both written against
+  // baseLE/baseTE — and move only the top corners. topLE.y === topTE.y in every
+  // shape, for the level-crown reason finTop() explains. "none" is a real id
+  // with no geometry: build() skips the block and car-mesh skips the decal.
+  const FIN_SHAPES = Object.freeze({
+    standard: Object.freeze({
+      baseLE: [-0.65, 0.7935], topLE: [-1.15, 0.97],
+      topTE:  [-1.65, 0.97],   baseTE: [-1.70, 0.6197],
+      halfBase: 0.022, halfTop: 0.014,
+    }),
+    // Raked: the leading edge sweeps back to a short crown — the 2023 RB19 look.
+    swept: Object.freeze({
+      baseLE: [-0.65, 0.7935], topLE: [-1.38, 0.97],
+      topTE:  [-1.66, 0.97],   baseTE: [-1.70, 0.6197],
+      halfBase: 0.022, halfTop: 0.012,
+    }),
+    // A short rear blade: half the chord, rooted where the cover is already low.
+    stub: Object.freeze({
+      baseLE: [-1.18, 0.7100], topLE: [-1.42, 0.93],
+      topTE:  [-1.65, 0.93],   baseTE: [-1.70, 0.6197],
+      halfBase: 0.020, halfTop: 0.013,
+    }),
   });
+  const FIN_SHAPE_IDS = Object.freeze(Object.keys(FIN_SHAPES).concat(["none"]));
+  const FIN = FIN_SHAPES.standard;
+  const finOf = (shape) => FIN_SHAPES[shape] || FIN;
   const finMix = (a, b, t) => a + (b - a) * t;
   // `fin` is the aero recipe's blade-height scale, applied about the base line
   // so the fin grows upward and its root stays where the engine cover put it.
@@ -1290,45 +1313,64 @@ const Car3D = (function () {
   // and the fin would grow a wedge crown — measured, and it walked the livery
   // decal off the blade. topLE and topTE are equal at stock for exactly this
   // reason; the scale keeps them equal.
-  const finTop = (fin) => {
+  const finTop = (fin, shape) => {
+    const F = finOf(shape);
     const f = Math.max(0.55, Math.min(1.45, fin || 1));
-    return FIN.baseLE[1] + (FIN.topLE[1] - FIN.baseLE[1]) * f;
+    return F.baseLE[1] + (F.topLE[1] - F.baseLE[1]) * f;
   };
-  function finXAt(z, y, proud, fin) {
-    const tp = finTop(fin);
-    const u = (z - FIN.baseLE[0]) / (FIN.baseTE[0] - FIN.baseLE[0]);   // along the base edge
-    const yBase = finMix(FIN.baseLE[1], FIN.baseTE[1], Math.max(0, Math.min(1, u)));
+  function finXAt(z, y, proud, fin, shape) {
+    const F = finOf(shape), tp = finTop(fin, shape);
+    const u = (z - F.baseLE[0]) / (F.baseTE[0] - F.baseLE[0]);   // along the base edge
+    const yBase = finMix(F.baseLE[1], F.baseTE[1], Math.max(0, Math.min(1, u)));
     const v = Math.max(0, Math.min(1, (y - yBase) / (tp - yBase)));
-    return finMix(FIN.halfBase, FIN.halfTop, v) + proud;
+    return finMix(F.halfBase, F.halfTop, v) + proud;
   }
-  function sharkFinPanel(inset, proud, fin) {
+  function sharkFinPanel(inset, proud, fin, shape) {
+    const F = finOf(shape);
     const i = inset != null ? inset : 0.05;
     const p = proud != null ? proud : 0.002;
-    const tp = finTop(fin);
+    const tp = finTop(fin, shape);
     const vBase = Math.max(i, 0.18);
     const at = (u, v) => {
       // bilinear over the outline: u = 0 leading → 1 trailing, v = 0 base → 1 top.
-      const bz = finMix(FIN.baseLE[0], FIN.baseTE[0], u), by = finMix(FIN.baseLE[1], FIN.baseTE[1], u);
-      const tz = finMix(FIN.topLE[0],  FIN.topTE[0],  u), ty = tp;
-      return { x: finMix(FIN.halfBase, FIN.halfTop, v) + p,
+      const bz = finMix(F.baseLE[0], F.baseTE[0], u), by = finMix(F.baseLE[1], F.baseTE[1], u);
+      const tz = finMix(F.topLE[0],  F.topTE[0],  u), ty = tp;
+      return { x: finMix(F.halfBase, F.halfTop, v) + p,
                y: finMix(by, ty, v), z: finMix(bz, tz, v) };
     };
     return [at(i, vBase), at(1 - i, vBase), at(1 - i, 1 - i), at(i, 1 - i)];
   }
   // v0/v1 are FRACTIONS of the blade, not absolute heights: at fin 0.55 the top
   // is at y 0.890, and the old fixed 0.725..0.955 window would have hung the
-  // badge off the end of the fin.
-  const FIN_BADGE = Object.freeze({ z0: -1.235, z1: -1.465, v0: 0.32, v1: 0.88 });
-  function sharkFinBadge(proud, fin) {
+  // badge off the end of the fin. u0/u1 are fractions of the BASE for the same
+  // reason across shapes: the stub's base is half the standard chord, and the
+  // old absolute z -1.235 would have put the badge's front edge off its nose.
+  // On the standard shape these fractions reproduce z -1.235 / -1.465 exactly.
+  // The WIDTH is not a fraction, though: it is the standard badge's aspect
+  // (0.23 m over its 0.153 m height at fin 1) re-applied to each shape's own
+  // blade height, centred on the same base fraction. Read as a fraction of the
+  // chord, the stub's half-length base squashed the horse to 0.11 m across a
+  // 0.14 m tall box — measured on the studio render — and every traced mark
+  // would have narrowed with it. Height is taken at fin scale 1 on purpose:
+  // the aero recipe's blade height already stretches the standard badge, and
+  // that is shipped behaviour on every AI car, so the width must not follow it.
+  const FIN_BADGE = Object.freeze({ uMid: 0.7 / 1.05, wStd: 0.23, v0: 0.32, v1: 0.88 });
+  const badgeHeight1 = (F) => {
+    const yB = finMix(F.baseLE[1], F.baseTE[1], FIN_BADGE.uMid);
+    return (F.topLE[1] - yB) * (FIN_BADGE.v1 - FIN_BADGE.v0);
+  };
+  const BADGE_ASPECT = FIN_BADGE.wStd / badgeHeight1(FIN);
+  function sharkFinBadge(proud, fin, shape) {
+    const F = finOf(shape);
     const p = proud != null ? proud : 0.0022;   // just outside the graphic panel
-    const B = FIN_BADGE, tp = finTop(fin);
-    const yAt = (z, v) => {
-      const u = Math.max(0, Math.min(1, (z - FIN.baseLE[0]) / (FIN.baseTE[0] - FIN.baseLE[0])));
-      const yB = finMix(FIN.baseLE[1], FIN.baseTE[1], u);
-      return yB + (tp - yB) * v;
-    };
-    const at = (z, v) => { const y = yAt(z, v); return { x: finXAt(z, y, p, fin), y, z }; };
-    return [at(B.z0, B.v0), at(B.z1, B.v0), at(B.z1, B.v1), at(B.z0, B.v1)];
+    const B = FIN_BADGE, tp = finTop(fin, shape);
+    const chord = F.baseLE[0] - F.baseTE[0];
+    const half = Math.min(0.45, BADGE_ASPECT * badgeHeight1(F) / chord / 2);
+    const u0 = B.uMid - half, u1 = B.uMid + half;
+    const zAt = (u) => finMix(F.baseLE[0], F.baseTE[0], u);
+    const yAt = (u, v) => { const yB = finMix(F.baseLE[1], F.baseTE[1], u); return yB + (tp - yB) * v; };
+    const at = (u, v) => { const z = zAt(u), y = yAt(u, v); return { x: finXAt(z, y, p, fin, shape), y, z }; };
+    return [at(u0, B.v0), at(u1, B.v0), at(u1, B.v1), at(u0, B.v1)];
   }
   function mergeRecipe(defaults, recipe) {
     return Object.assign(defaults, recipe || {});
@@ -2879,8 +2921,12 @@ const Car3D = (function () {
     }
 
     part("sharkFin");
-    if (!ckpt) {
-      const fb = FIN.halfBase, ft = FIN.halfTop;
+    // liv.finShape picks the outline (FIN_SHAPES); "none" builds no blade at
+    // all, and car-mesh reads the same field to leave the decal off too.
+    const finShape = liv.finShape || "standard";
+    if (!ckpt && finShape !== "none") {
+      const F = finOf(finShape);
+      const fb = F.halfBase, ft = F.halfTop;
       // The fin's base was FROZEN at y 0.7935 while the engine cover it stands
       // on moves with engine.coverHeight, which the catalog ships from 0.90 to
       // 1.272. Measured against anchors.coverAt(-0.65).top: at 0.90 the cover
@@ -2898,17 +2944,17 @@ const Car3D = (function () {
         const c = anchors.coverAt(z);
         return c && c.top != null ? Math.min(y0, c.top - 0.010) : y0;
       };
-      const bLE = root(FIN.baseLE[0], FIN.baseLE[1]);
-      const bTE = root(FIN.baseTE[0], FIN.baseTE[1]);
+      const bLE = root(F.baseLE[0], F.baseLE[1]);
+      const bTE = root(F.baseTE[0], F.baseTE[1]);
       // Blade height. The fin is 12 triangles carrying the largest flat plate at
       // the highest point on the car, so this is the cheapest silhouette on the
       // whole body — and it had no recipe at all.
-      const tp = finTop(aeroStyle && aeroStyle.fin);
+      const tp = finTop(aeroStyle && aeroStyle.fin, finShape);
       addBlock(out, [
-        [-fb, bLE, FIN.baseLE[0]], [fb, bLE, FIN.baseLE[0]],
-        [ft, tp, FIN.topLE[0]],    [-ft, tp, FIN.topLE[0]],
-        [-fb, bTE, FIN.baseTE[0]], [fb, bTE, FIN.baseTE[0]],
-        [ft, tp, FIN.topTE[0]],    [-ft, tp, FIN.topTE[0]],
+        [-fb, bLE, F.baseLE[0]], [fb, bLE, F.baseLE[0]],
+        [ft, tp, F.topLE[0]],    [-ft, tp, F.topLE[0]],
+        [-fb, bTE, F.baseTE[0]], [fb, bTE, F.baseTE[0]],
+        [ft, tp, F.topTE[0]],    [-ft, tp, F.topTE[0]],
       ], finC);
     }
 
@@ -3582,6 +3628,6 @@ const Car3D = (function () {
            TEAM_STYLE, teamStyleOf,
            endplate: endplateGeom, numberBoard,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
-           sharkFin: FIN, sharkFinPanel, sharkFinBadge,
+           sharkFin: FIN, sharkFinPanel, sharkFinBadge, FIN_SHAPES, FIN_SHAPE_IDS,
            aeroLevelOf, aeroStyleOf };
 })();

@@ -2117,6 +2117,23 @@ rather than growth of an existing one, and it pushed three ceilings at once.
   with their unit tests; `tests/unit/collision-contact-vm.test.mjs` pins the
   three behaviours.
 
+## 2026-09-05 — selection grammar: shellNodes 1192 → 1273, game.js 9994 → 9985 (measured on the merged tree)
+
+`shellNodes` RAISED by 81, deliberately. Every enumerated preference on the
+Settings sheet (STEER, GEARS, ACTIVE AERO, HUD, STYLE, LAYOUT, MAP, GAPS,
+RESOLUTION, STEERING feel, DRIVING HELP, RACING LINE, MUSIC, SOUND, SOURCE,
+PROFILE, Spotify SHUFFLE / REPEAT) is a SETTING ROW — `LABEL ‹ select ›`,
+six static nodes where a `KEY: VALUE` cycle button was one — so every pick
+reads and works the same way at every UI SIZE (`docs/COMPONENTS.md`
+§Selection grammar). The rows are static DOM in the shell on purpose: building
+them from JS would hide the cost the ratchet exists to show. A first pass the
+same day used labelled chip rows (2 + N nodes each); the layout audit measured
+those at 3.8 screens deep for three settings on a landscape phone at 150%, and
+the row replaced them. The pause menu also gained the MUSIC page's NOW PLAYING card (shown only while music plays). `js/game.js` 9994 → 9985 on the merged tree (the cycle handlers moved to
+`js/ui/setting-row.js`); `cssClasses` 549 → 549 (`.as-toggle` retired,
+`.set-row` added); `rawColor` 329 → 325 (the cam picker, garage SPIN and
+track-row washes use tokens; the unread `--manual` token is gone).
+
 - `js/game.js` lines 9994 -> **10009**, codeLines 5489 -> **5496**
   (2026-09-05): the defending rules. Seven code lines: hold the line under
   braking with a chaser (5 — the frozen offset from the racing line, `holdOff`),

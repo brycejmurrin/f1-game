@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_142 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_144 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -176,7 +176,8 @@ _142 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `track-maps.js` | `TrackMaps` | tag | TrackMaps: offline 2D circuit outlines for the track picker. |
-| `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the track picker with its live preview map + elevation canvases, and the fullscreen circuit-detail modal. |
+| `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
+| `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
 | `scroll-fade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
 | `css-zoom.js` | `CssZoom` | tag | CssZoom — one place for zoom ↔ viewport ↔ local conversions. |
 | `sheet-shape.js` | `SheetShape` | tag | SHEET SHAPE — one place decides whether a panel is TALL or WIDE. |
@@ -184,6 +185,7 @@ _142 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `modal.js` | `TopModal` | tag | TOP MODAL — mirrors each dialog.screen's `hidden` onto showModal()/close(). |
 | `menu-nav.js` | `MenuNav` | tag | MenuNav — desktop input for the menus: a mouse wheel / trackpad that scrolls the panel you are looking at, and arrow keys that move through it. |
 | `aria-state.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
+| `setting-row.js` | `SettingRow` | tag | SettingRow — the ONE control for an enumerated preference on a settings sheet: LABEL ‹ VALUE › One line at every UI SIZE and orientation. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
@@ -903,7 +905,9 @@ deploying (level tracks charge, pitch sags under 20%), AIRFLOW (broadband
 bandpass rising with speed², plus kerb/offroad buffeting and wet spray), BRAKES
 (bandpass noise gain-following deceleration × speed), an offroad pitch LFO, and
 the tyre screech. Two more ride the engine's own gain on the audio thread: the
-rev-limiter chop (13 Hz square above 98.5%) and GRAVEL (a sine at the crank
+rev-limiter chop (13 Hz square above 98.5%; in TOP gear it is a 0.5 s burst that
+fades to a steady held note, since there is no gear to shift into — it never
+fades below top gear) and GRAVEL (a sine at the crank
 rate, `f0/3`, whose depth dies as `(1-rev)²` — a lumpy idle that is smooth by
 redline). One-shots: gear-shift crack, overrun crackle on a trailing throttle,
 and the turbo wastegate dump on a lift after ≥0.5 s under load. Per-manufacturer

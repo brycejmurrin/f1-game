@@ -13,15 +13,18 @@ test("HUD metrics layout AUTO keeps every cluster and lets fitHud adapt", () => 
   assert.match(game, /store\.get\("hudMapVis", "on"\)/);
   assert.match(game, /store\.get\("hudGapsVis", "on"\)/);
   assert.match(game, /hud-met-\(\[a-z\]\+\)/);
-  assert.match(game, /hudMapVisLabel/);
+  // MAP / GAPS / LAYOUT are setting rows painted from one refresh (js/ui/setting-row.js).
+  assert.match(game, /SettingRow\.paint\(\$\("pm-hudmap"\), hudMapVis\)/);
+  assert.match(game, /SettingRow\.paint\(\$\("pm-hudgaps"\), hudGapsVis\)/);
+  assert.match(game, /wireHudChips\("pm-hudmetrics", HUD_MET_LAYOUTS/);
   assert.match(game, /hudMapVis === "off" \? "off" : "on"/,
     "HUD fold paints MAP gold when the map is on, red NO MAP when off");
   assert.match(game, /hudGapsVis === "off" \? "off" : "on"/,
     "HUD fold paints GAPS the same gold/red pair");
   assert.match(game, /\["val", hudMetricsLayout\.toUpperCase\(\)\]/,
     "LAYOUT AUTO is a named cycle — fold chip stays text, not agency green");
-  assert.match(game, /return "LAYOUT: " \+ hudMetricsLayout\.toUpperCase\(\)/);
-  assert.match(game, /LAYOUT: AUTO/);
+  assert.match(game, /function hudLayoutNote\(\)/, "the LAYOUT help line names what AUTO resolved to");
+  assert.match(game, /" Here AUTO is " \+ m\[1\]\.toUpperCase\(\)/);
   assert.match(hud, /function resolveMetricsLayout\(\)/);
   assert.match(hud, /return "full";/);
   assert.equal(hud.includes("bandCapped"), false);
@@ -123,10 +126,13 @@ test("HUD layout options live in a full-width pause submenu", () => {
   assert.match(html, /id="pm-hud-details"/);
   assert.match(html, /id="pm-hud-details"[\s\S]*id="pm-hidehud"/);
   assert.match(html, /id="pm-hud-details"[\s\S]*id="pm-hudscale"/);
-  assert.match(html, /HUD: ON/);
-  assert.match(html, /STYLE: STANDARD/);
-  assert.match(html, /LAYOUT: AUTO/);
-  assert.match(css, /#pm-hud-details \[role="group"\]/);
+  // Setting rows (js/ui/setting-row.js), one per HUD setting, not KEY: VALUE cycles.
+  for (const id of ["pm-hidehud", "pm-hudprofile", "pm-hudmetrics", "pm-hudmap", "pm-hudgaps"]) {
+    assert.match(html, new RegExp(`id="${id}" class="set-row" role="group" aria-labelledby="${id}-label"`), id + " is a setting row");
+    assert.match(html, new RegExp(`<select id="${id}-sel" aria-labelledby="${id}-label">`), id + " has its select");
+  }
+  assert.doesNotMatch(html, /HUD: ON|STYLE: STANDARD|LAYOUT: AUTO/);
+  assert.match(css, /#pm-hud-details > \[role="group"\]/, "the fold's own group is child-scoped so the chip rows inside stay rows");
   assert.match(css, /grid-area:\s*hudopts/);
 });
 
