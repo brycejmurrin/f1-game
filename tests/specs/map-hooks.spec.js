@@ -16,6 +16,13 @@ test("mapPts and trackBounds hooks", async ({ page }) => {
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: BOOT_MS });
+  // HEADLESS from here: every hook below reads geometry, none reads a pixel,
+  // and each evaluate round trip otherwise waits on a SwiftShader frame that
+  // holds the main thread for seconds (docs/TESTING.md, "A Playwright click
+  // costs 80-113 s while the game renders"). Measured alone on this box:
+  // 91 s rendering, 53 s headless. The budget above stays declared — two
+  // builds are two builds — but the render was the half nobody was using.
+  await page.evaluate(() => __apex.headless(true));
 
   // A default track pre-loads on startup, so mapPts() is already populated here
   // (it is NOT null before an explicit race() — the old comment claimed otherwise).
