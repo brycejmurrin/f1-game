@@ -142,6 +142,7 @@ const FULL = [
   "js/garage/setup-sheet.js",
   "js/career/career-ui.js",
   "js/career/season-ui.js",
+  "js/ui/flags.js",
   "js/ui/select-screen.js",
   "js/ui/scroll-fade.js",
   "js/ui/css-zoom.js",

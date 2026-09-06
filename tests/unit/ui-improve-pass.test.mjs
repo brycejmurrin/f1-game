@@ -139,24 +139,29 @@ function bootSheetShape(opts = {}) {
   return { dom, sb, SS: sb.SheetShape, vars, sheet, body: dom.body };
 }
 
-test("circuit select stacked uses one list scroller", () => {
+test("circuit select is a flag strip over a hero, not two panes", () => {
   const menus = css("css/menus.css");
   assert.ok(!menus.some((r) => [...r.decls.values()].some((v) => /40\s*\*\s*var\(--svhz\)/.test(v))),
     "the 300px / 40svhz list cap was the nested-scroller hotfix");
-  assert.ok(!declares(menus, '#sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks', "order", "-1"),
-    "list-above-preview order was only needed while the body scrolled");
-  assert.equal(decl(menus, '#sel-inner:not([data-pair="on"]) > #sel-body', "overflow"), "hidden",
-    "stacked body is a flex column, not a vertical scroller");
-  assert.equal(decl(menus, '#sel-inner:not([data-pair="on"]) > #sel-body > #sel-tracks', "flex"), "1 1 0",
-    "the track list fills leftover body height from a zero basis");
-  assert.equal(decl(menus, '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section', "overflow"), "hidden",
-    "wide preview column fits instead of scrolling as a second document");
-  assert.equal(decl(menus, "#sel-inner", "--pair-compact"), "wide",
-    "compact wide SELECT pairs so the catalogue sits in the right column");
+  assert.equal(decl(menus, "#sel-body", "overflow"), "hidden",
+    "the body is a flex column, not a vertical scroller");
+  assert.equal(decl(menus, "#sel-body", "flex-direction"), "column");
+  assert.equal(decl(menus, "#sel-tracks", "overflow-x"), "auto",
+    "the flag strip is the one sideways scroller");
+  assert.equal(decl(menus, "#sel-tracks", "overflow-y"), "hidden");
+  assert.equal(decl(menus, "#sel-tracks", "touch-action"), "pan-x");
+  assert.equal(decl(menus, "#sel-track-section", "flex"), "1 1 0",
+    "the hero section is the flex remainder under the shelf");
+  assert.ok(!declares(menus, "#sel-inner", "--pair-at"),
+    "#sel-inner is no longer a .pane-pair sheet — no pair threshold to declare");
+  const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
+  assert.match(html, /<div id="sel-tracks" role="group"[^>]*data-orientation="horizontal"/,
+    "the strip declares its axis for the keyboard walker and the wheel redirect");
+  assert.doesNotMatch(html, /<div id="sel-inner" class="[^"]*pane-pair/);
   // SheetShape BEHAVIOUR: `--pair-compact: wide` keeps a compact WIDE sheet
   // paired and stacks a compact TALL one; `off` stacks either.
   const h = bootSheetShape();
-  const wide = h.sheet("sel-inner", { w: 900, h: 300, vars: { "--pair-compact": "wide", "--compact-at": "380px", "--pair-at": "620px" } });
+  const wide = h.sheet("ss-inner", { w: 900, h: 300, vars: { "--pair-compact": "wide", "--compact-at": "380px", "--pair-at": "620px" } });
   h.SS.observe(wide.el);
   assert.equal(wide.el.dataset.density, "compact");
   assert.equal(wide.el.dataset.pair, "on", "compact + wide shape + `wide` mode keeps the pair");
@@ -249,29 +254,31 @@ test("circuit catalogue has a searchable filter toolbar", () => {
   assert.equal(decl(css("css/menus.css"), "#sel-track-search", "min-height"), "var(--chip-h)");
 });
 
-test("compact landscape catalogue spends its first viewport on a circuit", () => {
+test("compact catalogue keeps a pannable toolbar and shrinks the strip to flags", () => {
   const menus = css("css/menus.css");
-  const compactWide = '#sel-inner[data-density="compact"]:not([data-shape="tall"])';
-  assert.equal(decl(menus, `${compactWide} .track-group-head`, "display"), "none");
-  assert.equal(decl(menus, `${compactWide} #sel-track-filter`, "overflow-x"), "auto",
-    "compact landscape filter pans in both stacked and paired columns");
-  assert.equal(decl(menus, `${compactWide} #sel-track-search`, "min-width"), "12rem",
+  assert.equal(decl(menus, "#sel-track-filter", "overflow-x"), "auto",
+    "the filter/search toolbar pans at every width instead of wrapping into the hero");
+  assert.equal(decl(menus, "#sel-track-filter", "flex-wrap"), "nowrap");
+  assert.equal(decl(menus, "#sel-track-search", "min-width"), "12rem",
     "search keeps a readable floor so the row actually overflows at 200%");
   for (const w of [360, 420, 440]) {
     assert.ok(!menus.some((r) => r.context.some((c) => c === `@container sheet (max-width: ${w}px)`)), `no @container sheet (max-width: ${w}px) block`);
   }
-  assert.ok(!declares(menus, '#sel-inner[data-density="compact"]:not([data-pair="on"]):not([data-shape="tall"]) > #sel-body > #sel-track-section', "display", "none"),
-    "compact stacked landscape must keep the thumbnail band; hiding the section dropped the map");
-  assert.ok(menus.some((r) => r.decls.get("max-height") === "min(calc(var(--chip-h) * 3.5), 100%)"), "thumbnail slot height is 3.5 chips");
-  assert.ok(menus.some((r) => r.decls.get("max-width") === "min(48%, calc(var(--chip-h) * 5.2))"), "compact thumbnail slot width is 48% / 5.2 chips");
-  assert.equal(decl(menus, '#sel-inner:not([data-pair="on"])[data-density="compact"] > #sel-body > #sel-track-section', "max-height"), "58%",
-    "compact stacked band spends more of the body on the map without eating the list");
+  const compact = '#sel-inner[data-density="compact"]';
+  assert.equal(decl(menus, `${compact} #sel-tracks .track-row-name`, "display"), "none",
+    "compact strip is flags only — the name moves to the hero caption");
+  assert.equal(decl(menus, `${compact} #sel-preview-elev`, "display"), "none",
+    "compact hero drops the elevation strip, never the still");
+  assert.ok(!declares(menus, `${compact} #sel-hero`, "display", "none"));
+  assert.ok(!declares(menus, `${compact} #sel-preview-map`, "display", "none"));
   assert.ok(!declares(menus, '#sel-inner[data-fit="on"] #sel-preview-map', "display", "none"));
   const menusJs = code("js/ui/select-screen.js");
-  assert.match(menusJs, /cardInnerW\s*\*\s*\(\s*compact\s*\?\s*0\.48\s*:\s*0\.42\s*\)/);
-  assert.match(menusJs, /chipH\s*\*\s*\(\s*compact\s*\?\s*5\.2\s*:\s*3\.5\s*\)/);
-  assert.match(menusJs, /slotH:\s*chipH\s*\*\s*3\.5/, "CSS and JS stay in lockstep — fitCanvas pins max-height inline");
+  assert.match(menusJs, /assets\/stills\/" \+ t\.id \+ "\.webp"/, "the hero reads the committed still per circuit");
+  assert.match(menusJs, /Flags\.svg\(t\.country\)/, "tiles and caption draw the flag from js/ui/flags.js");
+  assert.match(menusJs, /corners: false, sectors: false, drs: false/,
+    "the hero outline is the plain lap line — sectors and turns belong to CIRCUIT DETAIL");
 });
+
 
 test("garage categories implement one roving tab system", () => {
   const js = code("js/garage/setup-sheet.js");
@@ -934,16 +941,14 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.equal(decl(css("css/career.css"), "#career-history", "--sheet-w"), "760px");
   assert.equal(decl(css("css/career.css"), "#quali", "--sheet-w"), "760px");
   assert.equal(decl(css("css/career.css"), "#career-guide", "--sheet-w"), "760px");
-  assert.equal(decl(css("css/menus.css"), "#sel-inner", "--pair-split"), "minmax(0, 56%)",
-    "SELECT spends the side column on the circuit outline, not a 42% leftover");
-  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview', "--sel-map-w"), "100%",
-    "pair-on stacked maps use the whole preview column");
-  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-section > #sel-track-preview', "flex"), "1 1 auto",
-    "pair-on preview card fills the side column instead of centering a stamp");
-  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-pair="on"]:not([data-shape="tall"]) #sel-track-preview[data-map-shape="beside"] #sel-preview-map', "max-height"), "100%",
-    "tall-circuit pair-on maps spend the pane height; facts already sit beside");
-  assert.match(code("js/ui/select-screen.js"), /besidePair/,
-    "pair-on beside maps do not self-heal the pin down to a stale stamp");
+  // SELECT: the still takes 3/5 of a wide sheet, the numbers the rest; a narrow
+  // sheet stacks them (2026-09 picker redesign — no pane-pair here any more).
+  const wideSel = css("css/menus.css").find((r) => r.selector === '#sel-inner:not([data-shape="tall"]) #sel-track-preview' && r.context.includes("@container sheet (min-width: 620px)"));
+  assert.ok(wideSel, "wide SELECT arranges the hero grid in a container query");
+  assert.equal(wideSel.decls.get("grid-template-columns"), "minmax(0, 3fr) minmax(0, 2fr)");
+  assert.equal(decl(css("css/menus.css"), "#sel-track-preview", "grid-template-columns"), "minmax(0, 1fr)",
+    "narrow SELECT stacks the still over the numbers");
+  assert.equal(decl(css("css/menus.css"), "#sel-still", "object-fit"), "cover");
   assert.match(decl(css("css/components.css"), '#pmsettings-inner[data-shape="wide"] #pm-panel-display', "grid-template-areas"),
     /"uih uih"[\s\S]*"uis uis"[\s\S]*"hudopts hudopts"[\s\S]*"metrics metrics"[\s\S]*"renopts renopts"/,
     "DISPLAY is UI SIZE heading + slider, then HUD, METRICS, and RENDERER");
@@ -1146,11 +1151,10 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "compact garage hides part blurbs so more option rows fit");
   assert.equal(decl(css("css/carsetup.css"), '#cs-inner[data-density="compact"] #cs-options .cs-liv-editor > .adv-help:not(#cs-rake-readout)', "display"), "none",
     "compact SETUP hides the long tune note and keeps the rake readout");
-  assert.equal(decl(css("css/menus.css"), "#sel-daily", "flex"), "1 0 100%",
-    "roomy SELECT treats TODAY as a banner, not a fourth filter");
-  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-daily', "flex"), "0 0 auto",
-    "compact landscape TODAY is a short chip so the filter row can still pan");
-  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"]:not([data-shape="tall"]) #sel-daily > span', "display"), "none");
+  assert.equal(decl(css("css/menus.css"), "#sel-daily", "flex"), "0 0 auto",
+    "TODAY is a chip on the pan-x toolbar, first in the row");
+  assert.equal(decl(css("css/menus.css"), '#sel-inner[data-density="compact"] #sel-daily > span', "display"), "none",
+    "compact TODAY drops its weather/tod/best span so the filters stay on screen");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #announce', "top"), "calc(36svh / var(--hud-z))",
     "compact race banners sit below the flag, not on top of it");
   assert.equal(decl(css("css/hud.css"), 'body[data-density="compact"] #hud-flag', "top"), "calc(72px + var(--sat) / var(--hud-z))");
@@ -1170,8 +1174,8 @@ test("title settings, pause standings, and career modes stay reachable", () => {
   assert.doesNotMatch(resultsJs, /#e10600/, "results/standings heads use .sel-label, not leftover red ink");
   assert.doesNotMatch(resultsJs, /font-size:11px/, "TT share/clear chips use .sel-chip, not inline type");
   const shell = read("index.html");
-  assert.match(shell, /id="sel-inner"[^>]*pair-foot-full/,
-    "SELECT foot spans both pair columns so BACK / YOUR CAR / NEXT share the sheet");
+  assert.doesNotMatch(shell, /id="sel-inner"[^>]*pane-pair/,
+    "SELECT is one column (strip over hero); its foot spans the sheet by default");
   assert.match(shell, /id="ss-inner"[^>]*pair-foot-full/,
     "season-setup foot spans both pair columns like SELECT");
   assert.match(shell, /id="sel-car"[^>]*class="bigbtn alt"/, "YOUR CAR sits on the alt plate beside NEXT");

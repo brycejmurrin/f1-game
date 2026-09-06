@@ -16,14 +16,23 @@ import { test, expect } from "../helpers/fixtures.js";
 // geometry (Tracks.sample / Tracks.project) and never a pixel. This used to
 // open the race with three locator.click()s on the title flyby, which is the
 // 80-113 s click docs/TESTING.md prices — and then kept rendering the race
-// while twelve evaluate round trips waited on the same held thread. It timed
-// out at 120 s on the deploy gate (run 2048, both attempts) and at 144-182 s
-// on this box, on the tip BEFORE and after the change that selected it.
+// while twelve evaluate round trips waited on the same held thread. Measured
+// alone on this box: 144-182 s per test that way, 24-26 s this way. The budget
+// declared below stays: it is what keeps the spec out of the change-aware gate.
 async function startLiveRace(loadTrack) {
   await loadTrack("monza", "day", "dry", { headless: true });
 }
 
 test.describe("Apex 26 — world<->track projection", () => {
+  // DECLARE THE BUDGET. All three tests start a live race and then evaluate
+  // hundreds of projections. Through the real menus that was 116-125 s for the
+  // first test on a CI runner, and the next could not even get a browser
+  // context inside the 180 s gate once the first had run (Pages #2048, both
+  // attempts). Silent, this spec was billed at the change-aware gate's 180 s
+  // rate; declared, tools/ci/select-specs.mjs excludes it by name and it runs
+  // in the `driving` group. Headless (above) it is ~25 s a test; the
+  // declaration stays because a race-fixture spec belongs in that group.
+  test.setTimeout(300_000);
   test("round-trips (s, lateral) all around the lap and across the width", async ({ loadTrack, page }) => {
     await startLiveRace(loadTrack);
     const fracs = [0, 0.07, 0.18, 0.26, 0.33, 0.41, 0.5, 0.62, 0.74, 0.83, 0.91, 0.97];

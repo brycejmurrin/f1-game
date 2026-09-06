@@ -1,18 +1,27 @@
 // @ts-check
 // Contract tests for __apex.mapPts() and __apex.trackBounds()
-import { test, expect } from "@playwright/test";
-import { BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
+// Imports from ../helpers/fixtures.js, not @playwright/test: a failure then
+// attaches apex-state / apex-logs / page-console, and the pageErrors guard is on.
+import { test, expect, BOOT_MS, awaitTrackBuild } from "../helpers/fixtures.js";
 
 test("mapPts and trackBounds hooks", async ({ page }) => {
+  // DECLARE THE BUDGET. This boots the default track and then a SECOND circuit
+  // (Monaco) — two builds in one test. Silent about that cost it was billed at
+  // the change-aware gate's 180 s rate and ran 185-190 s on a CI runner (Pages
+  // #2048, both attempts), so tools/ci/select-specs.mjs kept selecting it into a
+  // gate it could not fit. Declared above the gate it is excluded by name and
+  // runs in its own group. Measured 55-63 s on the dev box.
+  test.setTimeout(300_000);
   await page.setViewportSize({ width: 844, height: 390 });
   await page.goto("/");
   // BOOT_MS, not a hand-rolled 15 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
   await page.waitForFunction(() => window.__apex, null, { polling: 100, timeout: BOOT_MS });
   // HEADLESS from here: every hook below reads geometry, none reads a pixel,
   // and each evaluate round trip otherwise waits on a SwiftShader frame that
-  // holds the main thread for seconds (docs/TESTING.md). With the flyby and
-  // then Monaco rendering underneath, this one test took 185-190 s on the
-  // deploy gate (run 2048, both attempts) against a 180 s cap.
+  // holds the main thread for seconds (docs/TESTING.md, "A Playwright click
+  // costs 80-113 s while the game renders"). Measured alone on this box:
+  // 91 s rendering, 53 s headless. The budget above stays declared — two
+  // builds are two builds — but the render was the half nobody was using.
   await page.evaluate(() => __apex.headless(true));
 
   // A default track pre-loads on startup, so mapPts() is already populated here
@@ -20,8 +29,9 @@ test("mapPts and trackBounds hooks", async ({ page }) => {
   const nullPts = await page.evaluate(() => __apex.mapPts());
   expect(nullPts).not.toBeNull(); // default track pre-loads on startup
 
-  await page.evaluate(() => __apex.race("monaco"));
-  await awaitTrackBuild(page);   // on PROGRESS, not a 3 s guess a slow box outlives
+  // Wait for the build, not a fixed 3 s: on a slow box the map is read half-built.
+  await page.evaluate(() => { __apex.race("monaco"); });
+  await awaitTrackBuild(page);
 
   const pts = await page.evaluate(() => __apex.mapPts());
   expect(pts).not.toBeNull();

@@ -12,11 +12,19 @@
 import { test, expect } from "../helpers/fixtures.js";
 
 test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrack, page }) => {
-  test.setTimeout(120_000);
-  // headless BEFORE the build, via the fixture: the render loop was already
-  // off for the 180 steps below, but the build wait and the countdown ran
-  // under a full-scale SwiftShader race, and on the deploy gate's 2-core
-  // runner that alone was the 120 s budget (run 2048, both attempts).
+  // DECLARE THE BUDGET, and declare it honestly. loadTrack boots a full race
+  // (22 cars, a built circuit) before the 180 steps run: 33 s on an idle dev box
+  // (llvmpipe), 126-132 s on the same box under load, 132-177 s on a CI runner
+  // (Pages #2048, both attempts). The old 120_000 sat UNDER the change-aware
+  // gate's 180 s per-test rate, so tools/ci/select-specs.mjs kept selecting this
+  // spec into a gate where its own budget killed it: the deploy failed twice at
+  // "Test timeout of 120000ms exceeded". Above the gate it is excluded by name
+  // and runs in the `driving` group, which is where a race-fixture spec belongs.
+  test.setTimeout(300_000);
+  // ...and SPEND less of it: headless BEFORE the build, via the fixture. The
+  // render loop was already off for the 180 steps below, but the build wait
+  // and the countdown ran under a full-scale SwiftShader race, which is where
+  // the 126-177 s above went. Measured alone on this box: 86 s -> 23 s.
   await loadTrack("monza", "day", "dry", { headless: true });
   await page.addScriptTag({
     content: "window.__AiDrive = AiDrive;",
