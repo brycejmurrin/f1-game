@@ -2533,7 +2533,9 @@ test("the flyby belongs to race settings alone: no boot build, no tile or door r
   assert.equal(calls.length, 2, "scheduleFlybyTrack() is scheduled from race settings only");
   assert.match(game, /\$\("race-settings"\)\.hidden = false;\s*scheduleFlybyTrack\(\);/,
     "opening race settings schedules the flyby of the chosen circuit");
-  assert.match(game, /raceTimeOfDay = id; buildRaceSettings\(\); scheduleFlybyTrack\(\);/,
+  // The TIME OF DAY row's write (js/ui/setting-row.js): every write repaints the
+  // screen through wireRaceSettings' `after`, so only the flyby call is pinned.
+  assert.match(game, /wire\("rs-time", \(\) => raceTimeOfDay, \(v\) => \{ raceTimeOfDay = v; scheduleFlybyTrack\(\); \}\)/,
     "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
   assert.doesNotMatch(game, /\n\s*scheduleFlybyTrack\(\);\s*\n\s*window\.addEventListener\("resize"/,
     "the boot no longer builds a world for the title");

@@ -1444,10 +1444,11 @@ test.describe("Career — reliability", () => {
     await boot(page);
     await startCareer(page);
     await page.locator("#cr-go").click();
-    const chips = page.locator("#rs-reliab .sel-chip");
-    await expect(chips).toHaveCount(3);
-    await chips.nth(2).click();      // REAL
-    await expect(chips.nth(2)).toHaveAttribute("aria-pressed", "true");
+    // A setting row (js/ui/setting-row.js): the options are the select's.
+    const sel = page.locator("#rs-reliab-sel");
+    await expect(sel.locator("option")).toHaveCount(3);
+    await sel.selectOption("real");
+    await expect(sel).toHaveValue("real");
     expect(await page.evaluate(() => localStorage.getItem("apex26.reliability"))).toContain("real");
     await page.reload();
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
