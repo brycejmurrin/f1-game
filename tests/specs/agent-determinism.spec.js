@@ -93,6 +93,50 @@ test.describe("simulation determinism", () => {
     expect(r.viaReset).toBe(99);
   });
 
+  // The DIRECT form of the test above. "The same seed replays exactly" only
+  // catches a leak that happens to move the digest at this seed, on this track,
+  // over these four seconds — twenty-five leaking fields hid behind that for a
+  // long time, surfacing only as a permuted grid order at the back. This asks
+  // the question straight: after an episode, does a second reset put the cars
+  // back in the state the first one did? EPISODE_TRANSIENTS in apex.js is a
+  // written list, and a written list rots; this is what keeps it honest, and it
+  // names the offending FIELD instead of leaving a digest diff to interpret.
+  test("reset() leaves no episode state on the cars", async ({ page }) => {
+    await load(page);
+    const leaked = await page.evaluate(() => {
+      const A = window.__apex;
+      const snap = () => {
+        A.headless(true);
+        A.reset(0.02, 55, 0, 42);
+        const before = A.carState();
+        A.rollout({ seconds: 2, input: { steer: 0.05, throttle: true } });
+        A.headless(false);
+        return before;
+      };
+      const a = snap(), b = snap(), c = snap();
+      const diff = (x, y) => {
+        const out = [];
+        x.forEach((ca, i) => {
+          const cb = y[i];
+          for (const k of new Set(Object.keys(ca).concat(Object.keys(cb)))) {
+            if (ca[k] !== cb[k]) out.push(`car${i}.${k}: ${ca[k]} -> ${cb[k]}`);
+          }
+        });
+        return out;
+      };
+      // FIRST vs second catches a field an episode creates from nothing; second
+      // vs third catches one that keeps drifting every episode. Both happened.
+      return { firstVsSecond: diff(a, b), secondVsThird: diff(b, c),
+               cars: a.length, fields: Object.keys(a[0] || {}).length };
+    });
+    // A diff of nothing is not a pass: if carState() ever came back empty this
+    // would go green while checking nothing at all.
+    expect(leaked.cars, "carState() returned no cars").toBeGreaterThan(1);
+    expect(leaked.fields, "carState() returned a car with almost no fields").toBeGreaterThan(20);
+    expect(leaked.firstVsSecond, "fields an episode leaves behind on the cars").toEqual([]);
+    expect(leaked.secondVsThird, "fields that drift on every episode").toEqual([]);
+  });
+
   test("cosmetic randomness does not draw from the seeded stream", async ({ page }) => {
     await load(page);
     // Rendering frames between two identical episodes must not shift the sim.

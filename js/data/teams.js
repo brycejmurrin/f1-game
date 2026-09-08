@@ -6,6 +6,9 @@ const Teams = (function () {
   const LIST = [
     {
       id: "mercedes", name: "Mercedes-AMG Petronas", short: "MER",
+      /* The W17: twin stripes down the crown near each shoulder and the raked
+         bars along the flank, tapering to the rear. No tail fin. */
+      livery: { finShape: "none", spineHeight: "raised", spineLogo: "twin", spineSide: "slash" },
       color: [0.045, 0.055, 0.065], color2: [0.0, 0.706, 0.671],   /* black #0B0E10 / Petronas teal #00B4AB (2026 black car) */
       /* The W17 is a BLACK car with a SILVER engine cover: the launch photos show
          the airbox, roll structure and cover crown in bare-metal silver over a
@@ -20,6 +23,11 @@ const Teams = (function () {
     },
     {
       id: "ferrari", name: "Scuderia Ferrari HP", short: "FER",
+      /* The SF-26's engine cover: the pale saddle running the crown shoulder to
+         shoulder and down both flanks with a raked rear edge, the race number on
+         a plate inside it, no tail fin. See the redbull note below for why a
+         signature cover lives on the team record rather than in the picker. */
+      livery: { finShape: "none", spineHeight: "raised", spineLogo: "saddle", spineSide: "plate" },
       color: [0.863, 0.0, 0.0], color2: [1.0, 1.0, 1.0],           /* red #DC0000 / white */
       /* The SF-26 runs a WHITE engine cover over the red car — the strongest
          zone split on the 2026 grid, and the reason the cover colour exists. */
@@ -33,6 +41,9 @@ const Teams = (function () {
     },
     {
       id: "mclaren", name: "McLaren", short: "MCL",
+      /* The MCL40: a hard-edged panel down the crown with a raked leading edge,
+         the title sponsor the length of the flank, no tail fin. */
+      livery: { finShape: "none", spineHeight: "raised", spineLogo: "panel", spineSide: "wordmark" },
       color: [1.0, 0.502, 0.0], color2: [0.122, 0.122, 0.122],     /* papaya #FF8000 / anthracite #1F1F1F */
       engine: "Mercedes", tier: 1,
       stats: { speed: 93, accel: 94, cornering: 96, braking: 91 },
