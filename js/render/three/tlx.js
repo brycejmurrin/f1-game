@@ -556,7 +556,18 @@ const TLX = (function () {
       function skipBatches() {
         return _softAdapter && isWebGPU() && !_forceBatches && !_forceHw.has("batches");
       }
-      function softContent(part) { return (softwareGL || _softAdapter) && !_forceHw.has(part); }
+      // `softwareGL` ALREADY answers this for whichever backend bound — it is
+      // `forceWebGL ? detectSoftwareGL() : _softAdapter` (see its declaration),
+      // i.e. the WebGL renderer string on the WebGL2 path and the adapter sniff
+      // on the WebGPU one. ORing `_softAdapter` back in therefore only ever
+      // added the WEBGPU verdict to a WEBGL2 bind, where it describes an adapter
+      // the backend is not using: a machine whose navigator.gpu adapter looks
+      // software (trimmed adapter.info, conservative limits) took the fallback
+      // sky, a cleared env probe and shrunk shadow maps on hardware that renders
+      // them fine. WebKit takes three's WebGL2 backend on AUTO by construction,
+      // so that was every desktop Safari boot. On the WebGPU path the two terms
+      // are the same value, so nothing there changes.
+      function softContent(part) { return softwareGL && !_forceHw.has(part); }
       function softOutRT() { return softGpu() ? _ensureBlitRT(W, H) : null; }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.

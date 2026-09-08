@@ -353,6 +353,38 @@ test("_preferInstance skips fuse for full instancable nodes", () => {
   assert.equal(batches[0].count, 2);
 });
 
+// batches() plain is a CAPABILITY report — every test above depends on that, and
+// so does tools/track/graph-parity.cjs. A caller that UPLOADS it needs the
+// narrower set, or a placement already fused into some other buffer ships twice.
+// scenery/city.js is that caller's problem case: unlit window panes go to
+// `glassBuf`, which never carries _preferInstance, so their triangles are in the
+// glass mesh AND came back as an instanced unit-box batch (56,048 instances /
+// 1.35 M verts roster-wide; on ten circuits the duplicate is the whole glass
+// mesh vertex for vertex).
+test("batches({instancedOnly}) drops placements whose triangles were already fused", () => {
+  const g = TrackGraph.create({ raw: RAW });
+  const props = buf(), glass = buf();
+  props._preferInstance = true;                 // the default props soup
+  const box = (rec) => rec.box([0, 0.5, 0], [1, 1, 1], [1, 1, 1]);
+  const emit = emitter();
+  g.instance("box", AT([0, 0, 0]), box, { kind: "box" }, emit, props);
+  g.instance("box", AT([4, 0, 0]), box, { kind: "box" }, emit, props);
+  // Same model, routed to a SECOND buffer that never opts into instancing:
+  // replay() writes its triangles there, so an instanced draw would duplicate.
+  g.instance("box", AT([8, 0, 0]), box, { kind: "box" }, emit, glass);
+  assert.equal(props.pos.length, 0, "the instanced pair leaves no soup verts");
+  assert.ok(glass.pos.length > 0, "the fused placement DID write its own buffer");
+
+  const plainB = g.batches();
+  assert.equal(plainB.batches[0].count, 3, "plain batches() still reports all three");
+
+  const narrow = g.batches({ instancedOnly: true });
+  assert.equal(narrow.batches.length, 1);
+  assert.equal(narrow.batches[0].count, 2, "only the placements whose triangles were withheld");
+  assert.equal(narrow.bakeOnly.length, 0,
+    "a fused placement is not bakeOnly either — it is already in a buffer");
+});
+
 test("a malformed placement is dropped, not emitted as NaN geometry", () => {
   const g = TrackGraph.create({ raw: RAW });
   const out = buf();

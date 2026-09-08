@@ -71,6 +71,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/curvature-channels.test.mjs",
   "tests/unit/track-line.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",
+  "tests/unit/twin-drift.test.mjs",
   "tests/unit/storage-key-prefix.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
