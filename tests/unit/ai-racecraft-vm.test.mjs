@@ -38,9 +38,39 @@ const WCAR = 2.0;          // js/game.js — car width in the same plane
 const CLEAR = 2.8;         // AiDrive.minLatGap(hw, false) on a permanent circuit
 const DT = 1 / 60;
 
+// Steering reversals per km and lateral-acceleration RMS from a (s, x) trace
+// sampled every DT. Lateral velocity is Δx/Δt across consecutive frames; a
+// reversal is a sign flip of that velocity once it has exceeded ±0.25 m/s in
+// the new direction (hysteresis, so noise around zero does not count).
+function laneJitter(rows, dt, lapM) {
+  let prevV = 0, sign = 0, rev = 0, sumA2 = 0, nA = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const v = (rows[i].x - rows[i - 1].x) / dt;
+    if (i > 1) { const a = (v - prevV) / dt; sumA2 += a * a; nA++; }
+    if (v > 0.25 && sign <= 0) { if (sign < 0) rev++; sign = 1; }
+    else if (v < -0.25 && sign >= 0) { if (sign > 0) rev++; sign = -1; }
+    prevV = v;
+  }
+  return { revPerKm: rev / (lapM / 1000), jerkRms: nA ? Math.sqrt(sumA2 / nA) : 0 };
+}
+
 // The player car becomes an AI driver on a reduced pace ceiling (tierV is the
 // per-car top-speed scale the AI drives to) — a stand-in for a human mid-pack
 // that never parks, never leaves the road, and always keeps the racing line.
+// The player car's pace as the field was built, captured once. race() does not
+// rebuild the cars, so `pc.tierV *= tierMul` below COMPOUNDS across the tests
+// in this file: by the fourth test the car had been detuned three times and
+// drove a visibly different line (the racing-line test's approach measured
+// -2.00 m in the suite against -2.27 m in isolation, straddling its own
+// threshold). Every test that changes the player's pace now starts from these.
+let pristinePace = null;
+function restorePace(pIdx) {
+  const pc = g.G.cars[pIdx];
+  if (!pristinePace) { pristinePace = { tierV: pc.tierV, skill: pc.skill }; return pIdx; }
+  pc.tierV = pristinePace.tierV; pc.skill = pristinePace.skill;
+  return pIdx;
+}
+
 async function slowAiPlayer(frac, speed, tierMul) {
   const A = g.apex;
   await g.race("monza");
@@ -49,6 +79,7 @@ async function slowAiPlayer(frac, speed, tierMul) {
   const cars = A.cars();
   const pIdx = cars.findIndex((c) => c.p);
   A.carRole(pIdx, { human: false });
+  restorePace(pIdx);
   const pc = g.G.cars[pIdx];
   pc.tierV *= tierMul;
   pc.skill = Math.min(pc.skill || 0.97, 0.95);
@@ -165,6 +196,7 @@ test("the AI drives a racing line: outside on the approach, inside at the apex, 
   A.headless(true);
   const cars = g.G.cars, pIdx = cars.findIndex((c) => c.isPlayer);
   A.carRole(pIdx, { human: false });
+  restorePace(pIdx);                // undo the detuning the pass tests above leave behind
   A.rivals([]);                     // everyone else 800 m back: this car drives alone
   A.go();
   const c = cars[pIdx], trk = g.G.track, T = g.sandbox.Tracks;
@@ -180,11 +212,36 @@ test("the AI drives a racing line: outside on the approach, inside at the apex, 
   // A chicane's second half has no approach of its own (its turn-in is the
   // first half's exit, shared through the middle), so corners whose approach
   // point sits inside another corner's window are skipped.
+  // JITTER (2026-09-08): the same lap trace scores how calm the driving is.
+  // Reversals: sign changes of the lateral velocity with a 0.25 m/s hysteresis
+  // (a wobble is a reversal, a sweep through a chicane is one). Jerk: RMS of
+  // the lateral acceleration per frame. Baseline before the heading-state
+  // controller is recorded in docs/notes/RACING-LINE-RESEARCH.md §7; the caps
+  // hold the improved values so a regression to twitching reads here.
+  const jit = laneJitter(rows, DT, trk.total);
+  console.log(`[racecraft] monza solo lap: reversals/km=${jit.revPerKm.toFixed(1)} latJerkRms=${jit.jerkRms.toFixed(2)} m/s² samples=${rows.length}`);
+  // Measured 2026-09-08: position P-loop 5.4 /km and 10.0 m/s²; heading-state
+  // controller 4.7 /km and 5.9 m/s² (the reversals left are the chicanes and
+  // sub-degree heading crossings at the lane/line hand-overs on the straights).
+  assert.ok(jit.revPerKm <= 6.0, `steering reversals ${jit.revPerKm.toFixed(1)}/km — the AI is twitching again`);
+  assert.ok(jit.jerkRms <= 7.5, `lateral acceleration RMS ${jit.jerkRms.toFixed(2)} m/s² — the AI is twitching again`);
   const all = trk.lineCorners;
   const big = all.filter((k) => k.len > 40 && !all.some((o) => o !== k && Math.abs(o.sApex - k.sApex) < 120));
   assert.ok(big.length >= 3, `monza should bake several long corners with a clear approach, got ${big.length}`);
+  // The approach is a 30 m AVERAGE, not one sample. A lap of this simulation is
+  // chaotic — the shared RNG stream advances through the tests above, so a
+  // millimetre of line moves the car centimetres here — and a single sample at
+  // s0-45 sat exactly on this threshold (-2.00 against < -2), flipping on
+  // changes that leave the baked line identical to two decimal places
+  // (track-line-circuits pins the LINE at this corner at -6.75 m). Averaging
+  // the same quantity over the approach measures the same property with a
+  // usable estimator; the threshold is unchanged.
+  const win = (s0, s1, inside) => {
+    const q = rows.filter((r) => r.s >= s0 && r.s <= s1);
+    return q.length ? q.reduce((a, r) => a + r.x * inside, 0) / q.length : NaN;
+  };
   for (const k of big) {
-    const ap = near(k.s0 - 45).x * k.inside, apex = near(k.sApex).x * k.inside;   // + = toward the inside
+    const ap = win(k.s0 - 60, k.s0 - 30, k.inside), apex = near(k.sApex).x * k.inside;   // + = toward the inside
     assert.ok(ap < -2, `corner at s=${k.s0.toFixed(0)}: approach not outside (${ap.toFixed(2)} m toward the inside)`);
     assert.ok(apex > 3.5, `corner at s=${k.s0.toFixed(0)}: apex not inside (${apex.toFixed(2)} m)`);
   }

@@ -1081,6 +1081,7 @@ const TLX = (function () {
           (o.doubleSided ? "|ds" : "") +
           (o.noAlphaWrite ? "|na" : "") +
           (o.depthBias ? "|db" + o.depthBias[0] + "," + o.depthBias[1] : "") +
+          (o.noDepthTest ? "|nd" : "") +
           (chunked ? "|ch" : "") +
           (instanced ? "|in" : "");
         let m = matCache.get(key);
@@ -1485,6 +1486,25 @@ const TLX = (function () {
       const _chunkLast = { total: 0, visible: 0 };    // latched at present — __tlx.chunkState()
       const _mirrorRelease = [];    // chunked meshes whose first lit draw is THIS render
       const _fxFrame = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0, lineVerts: 0 };
+      // Diagnostic: what the mesh pool holds for the driving line (the strip
+      // is submitted every frame but a real GPU showed no pixels, 2026-09-08).
+      function _lineDiag() {
+        const out = { meshes: 0, visible: 0, inScene: 0, geo: null };
+        try {
+          if (!fx || !fx.lineMat) return out;
+          for (let i = 0; i < meshPool.length; i++) {
+            const pm = meshPool[i];
+            if (pm.material !== fx.lineMat) continue;
+            out.meshes++; if (pm.visible) out.visible++; if (pm.parent === scene) out.inScene++;
+            const g = pm.geometry;
+            out.geo = { index: g.index ? g.index.count : null, indexType: g.index ? g.index.array.constructor.name : null,
+              range: g.drawRange.count, pos: g.attributes.position ? g.attributes.position.count : null,
+              attrs: Object.keys(g.attributes), renderOrder: pm.renderOrder,
+              bs: g.boundingSphere ? [+g.boundingSphere.radius.toFixed(1)] : null };
+          }
+        } catch (e) { out.err = String(e && e.message || e); }
+        return out;
+      }
       const _fxLast = { shadows: 0, marks: 0, skidVerts: 0, glow: 0, particles: 0, decals: 0 };
       // M10 façade-wiring probe: how many meshes this backend actually created.
       // tracks.js resolves its gfx handle from Tracks.build's opts.gfx and routes
@@ -3211,6 +3231,7 @@ const TLX = (function () {
               // lineVerts > 0 means the strip was submitted with its material).
               fx: { shadows: _fxFrame.shadows, marks: _fxFrame.marks, skidVerts: _fxFrame.skidVerts, glow: _fxFrame.glow,
                     particles: _fxFrame.particles, decals: _fxFrame.decals, lineVerts: _fxFrame.lineVerts || 0 },
+              line: _lineDiag(),
               softRead: { gen: _softBlitGen, lastMs: Math.round(_softReadLastMs), fails: _softReadFails,
                           lastErr: _softReadLastErr, abandoned: _softReadAbandoned, pending: _softReadPending },
               // The runtime half: what the device has said since boot. A

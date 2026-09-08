@@ -27,10 +27,18 @@
       m.blendEquationAlpha = THREE.AddEquation;
       m.blendSrcAlpha = THREE.ZeroFactor;   // dst alpha preserved (SSR tag / canvas)
       m.blendDstAlpha = THREE.OneFactor;
-      if (o.offset) {           // GLX polygonOffset(-4,-8): no z-fight with the road
+      if (o.offset) {
+        // Decals sit ON the road. GLX draws them at polygonOffset(-4,-8) over an
+        // UNBIASED road; three honours the road's own depthBias [-8,-16]
+        // (game.js _wmRoad*, tsl-lit.js) on both backends, so a decal at -4/-8
+        // lands BEHIND the road and every fx quad — blob shadow, tyre mark,
+        // skid, the driving line — failed the depth test on real hardware
+        // (gpu-census 48, Apple GPU: chevrons on GLX and WGX, none on TLX;
+        // reproduced on lavapipe, artifacts/tlx-line 2026-09-08). Road bias
+        // plus GLX's decal margin: -12/-24.
         m.polygonOffset = true;
-        m.polygonOffsetFactor = -4;
-        m.polygonOffsetUnits = -8;
+        m.polygonOffsetFactor = -12;
+        m.polygonOffsetUnits = -24;
       }
       if (o.doubleSided) m.side = THREE.DoubleSide;   // GLX disables CULL_FACE
       m.lights = false;

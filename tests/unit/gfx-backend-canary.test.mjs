@@ -1740,6 +1740,55 @@ test("three still treats NoBlending as non-opaque (why the tag cannot live in op
     "whether NoBlending + opacityNode=tag still ghosts cars");
 });
 
+test("the garage floor reflection's noDepthTest reaches all three backends", () => {
+  // js/garage/scene.js draws the car a second time through MAT_MIRROR, under
+  // the floor, with { alpha: 0.26, noDepthTest: true }. It shipped GLX-only:
+  // gl.disable(DEPTH_TEST) was the whole implementation, so on WGX and TLX the
+  // mirrored car sat behind the floor's depth and never drew at all — the bug
+  // reads as "the garage has no reflection on three".
+  const scene = code("js/garage/scene.js");
+  assert.match(scene, /noDepthTest:\s*true/,
+    "the garage mirror no longer asks for noDepthTest — retire this pin with it");
+
+  const glx = code("js/render/glx/glx.js");
+  assert.match(glx, /opts\.noDepthTest/, "GLX draw() must read opts.noDepthTest");
+  assert.match(glx, /disable\(gl\.DEPTH_TEST\)/, "GLX must disable the depth test for it");
+
+  // WGX: the same state as its always-pass (decal) pipeline. Anchor on the
+  // depthCompare that bit selects, so folding it into some other flag name
+  // still has to keep "always" reachable from noDepthTest.
+  const wgx = code("js/render/webgpu/wgx.js");
+  assert.match(wgx, /opts\.noDepthTest/, "WGX _litPipeline must read opts.noDepthTest");
+  assert.match(wgx, /depthCompare:\s*\w+\s*\?\s*"always"/,
+    "WGX's always-pass pipeline is what noDepthTest has to select");
+  assert.match(wgx, /b\.noDepthTest\s*=\s*o\.noDepthTest/,
+    "the normalized _litOpts bag must carry noDepthTest, or the pooled path drops it");
+
+  // TLX has TWO halves, and the second is the one three hides: present() gives
+  // every draw renderOrder = submission index, but three renders the whole
+  // TRANSPARENT list after the whole opaque one whatever the renderOrder. Left
+  // transparent, an alpha<1 mirror paints LAST and ghosts over the props it
+  // should be hidden behind — so the material must stay in the opaque list.
+  const lit = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  const at = lit.indexOf("o.noDepthTest");
+  assert.ok(at > 0, "tsl-lit makeMaterial must read o.noDepthTest");
+  const body = lit.slice(at, at + 240);
+  assert.match(body, /depthTest\s*=\s*false/, "TLX must clear material.depthTest");
+  assert.match(body, /depthWrite\s*=\s*false/, "a mirror that writes depth clips the shell drawn after it");
+  assert.match(body, /transparent\s*=\s*false/,
+    "TLX must keep the mirror in the OPAQUE list — three defers the transparent " +
+    "list past every opaque draw, which is the clip this reflection relies on");
+  // The material cache is keyed by opts; without the flag a plain alpha-0.26
+  // material and the mirror share one entry and whichever minted first wins.
+  assert.match(TLX, /o\.noDepthTest\s*\?\s*"\|nd"/,
+    "tlx materialFor key must distinguish noDepthTest variants");
+  // three's own pipeline cache must also see it, or the state never reaches
+  // the GPU (the same class of miss as the polygonOffset backport above).
+  assert.match(THREE_BUNDLE, /r\.depthWrite,r\.depthTest,/,
+    "bundled three's pipeline cache key dropped depthTest — depthTest:false " +
+    "would silently share a pipeline with a depth-tested material");
+});
+
 test("TLX asks for an opaque canvas on the WebGPU backend", () => {
   assert.match(rendererParams(), /(^|[{,\s])alpha:\s*false/,
     "TLX must pass alpha:false — three's WebGPU backend turns it into " +
@@ -2483,6 +2532,17 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.doesNotMatch(glx, /setPolyOffset\(\[-4/, "no per-draw bias literal");
   // Four since 2026-09-08: shadow, mark, skid batch, and the DRIVING LINE ribbon.
   assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 4, "the four road decal draws share ROAD_BIAS");
+  // TLX: three honours the ROAD's own depthBias (game.js _wmRoad*, applied by
+  // tsl-lit.js) on both of its backends, GLX does not. An fx decal biased by
+  // GLX's -4/-8 therefore sits BEHIND the road on three — gpu-census 48 on an
+  // Apple GPU drew the driving line on GLX and WGX and nothing on TLX, with
+  // zero GPU errors (2026-09-08). The fx offset must be beyond the road's.
+  const tslFx = read("js/render/three/tsl-fx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const fxF = +tslFx.match(/polygonOffsetFactor = (-?[\d.]+)/)[1], fxU = +tslFx.match(/polygonOffsetUnits = (-?[\d.]+)/)[1];
+  const road = read("js/game.js").match(/_wmRoadDryD = \{[^}]*depthBias: \[(-?[\d.]+), (-?[\d.]+)\]/);
+  assert.ok(road, "the dry road material declares a depthBias");
+  assert.ok(fxF < +road[1] && fxU < +road[2],
+    `tsl-fx fx decal offset (${fxF},${fxU}) must be nearer the camera than the road's (${road[1]},${road[2]})`);
 });
 
 test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {

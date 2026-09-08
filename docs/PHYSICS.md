@@ -410,6 +410,21 @@ the numbers):
   Measured on a solo lap: monza 124.97 → 123.30 s, monaco 86.05 → 85.03 s, and
   the difficulty scales in `js/physics/consts.js` came down 1% so each level's
   lap time holds — the pace moved from the straights into the corners.
+  **The AI's lateral controller is a heading state** (2026-09-08, game.js
+  "--- lateral ---"): steered toward the target path's tangent plus a
+  Stanley cross-track term, yaw-rate capped by the lateral grip budget, with
+  the pass / defend / yield / separation biases slewed at 3 m/s; measured on
+  a solo Monza lap the lateral acceleration RMS fell 10.0 → 5.9 m/s²
+  (`docs/notes/RACING-LINE-RESEARCH.md` §7). Defending or passing blends
+  toward a baked line FAMILY (`TrackLine.at(track, s, fam)`: inner / outer)
+  rather than pushing the racing line sideways. The brake look samples every
+  curvature node, node-aligned, so the target no longer steps as the 14 m
+  stride slid across the nodes.
+  The line's GEOMETRY was relaxed on 2026-09-08 (`TrackLine.bake`: minimum
+  curvature plus a path-length term, `docs/notes/RACING-LINE-RESEARCH.md`);
+  `pathK` and its 85% floor did not change, so the AI's brake model and the
+  difficulty scales stay calibrated — the relaxation moves where the cars
+  are, not how fast the model lets them corner.
 - **The compound is the strategy** (`AiDrive.tyreClass` / `tyrePace`). There
   are no pit stops, so each AI car draws a class for the race distance
   (sprints on softs, long races mixed): a soft starts +0.4% and degrades

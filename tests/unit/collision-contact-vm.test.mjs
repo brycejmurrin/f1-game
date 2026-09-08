@@ -55,7 +55,12 @@ function laneSteer(xT) {
 test("boxed between two AI cars, the player keeps their speed", async () => {
   const A = g.apex;
   await straight(40, 0);
-  const [l, r] = A.rivals([{ dProg: 0.3, dx: -2.3, speed: 40 }, { dProg: -0.3, dx: 2.3, speed: 40 }]);
+  // Overlapped from the first frame (WCAR is 2.0 m). Until 2026-09-08 the pair
+  // started at ±2.3 and the position P-loop's overshoot pressed them into the
+  // player; the heading-state controller settles them at the ±2.8 m clean gap
+  // (AiDrive.minLatGap) and never touches — measured, scratch/sandwich.mjs —
+  // so the contact this test prices has to be given, not waited for.
+  const [l, r] = A.rivals([{ dProg: 0.3, dx: -1.8, speed: 40 }, { dProg: -0.3, dx: 1.8, speed: 40 }]);
   const cl = g.G.cars[l], cr = g.G.cars[r], p = g.G.player;
   let minV = 40, contact = 0;
   for (let i = 0; i < 120; i++) {
@@ -64,7 +69,7 @@ test("boxed between two AI cars, the player keeps their speed", async () => {
     if (p.contactT > 0) contact++;
   }
   A.headless(false);
-  // Anti-vacuity: the AIs really came in and touched (their lines pull to the centre).
+  // Anti-vacuity: the overlap really registered as contact.
   assert.ok(contact > 0, "the sandwich never made contact — wrong scenario");
   // Measured before: 21.7 m/s at t=1 (a loss of 18). After: no loss at all.
   assert.ok(minV >= 38.5, `boxed player lost ${(40 - minV).toFixed(1)} m/s`);

@@ -2442,6 +2442,12 @@ const api = {
     return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0 };
   },
 
+  // settingsFile(mode) — the SETTINGS FILE object (js/ui/settings-export.js):
+  // "changes" (default) = every preference that differs from its shipped
+  // default, with the default it replaced and the source that owns it; "all"
+  // = every preference's effective value. Never the garage, saves or accounts.
+  settingsFile(mode) { return SettingsExport.collect(mode === "all" ? "all" : "changes", G); },
+
   // save(data, filename) — hand a file back out of the browser.
   //
   // Exists because the reverse direction is the hard one: reading state OUT of

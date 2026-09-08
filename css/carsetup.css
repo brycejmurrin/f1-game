@@ -652,12 +652,28 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 }
 /* FINISH row: three of the same pill buttons acting as one radio group, with the
    chosen one lifted a step up the elevation ladder (same language as the custom
-   team's NONE toggles — a pressed toggle, not a stat gain). */
-.cs-liv-ed-finish { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; }
-.cs-liv-ed-finish .cs-liv-ed-none { flex: 1 1 0; padding: 4px 4px; }
+   team's NONE toggles — a pressed toggle, not a stat gain).
+   The group WRAPS. It was one nowrap line with every pill at flex-basis 0, which
+   was fine for three finishes and wrong for the tail rows that reuse it: SPINE
+   TOP has eleven pills, and on a landscape phone each shrank to its --chip-h
+   minimum with "CHEVRON" and "WORDMARK" spilling over their neighbours and the
+   last pill sliced by the scroller's edge. A pill keeps its label's width and
+   grows to fill its line; rows that fit stay one line, the long ones take two.
+   flex-basis 0, not auto: the row itself wraps (for the palette strip), and at
+   basis auto an eleven-pill group measured as one long line, dropped under its
+   label and left the four-pill rows beside theirs — two layouts in one list. */
+.cs-liv-ed-finish { display: flex; flex-wrap: wrap; gap: 6px; flex: 1 1 0; min-width: 0; }
+.cs-liv-ed-finish .cs-liv-ed-none { flex: 1 1 auto; padding: 4px 8px; white-space: nowrap; }
 .cs-liv-ed-none.active {
   background: var(--surf-3); color: var(--text); border-color: rgba(255,255,255,0.42);
 }
+/* A row whose part the draft does not have (FIN SHAPE none greys the four fin
+   rows) — the editor sets aria-disabled on the row and `disabled` on every
+   control in it; this only paints that state. Dimmed, not hidden: the row's
+   value survives, and seeing it greyed says WHY a badge stopped showing. */
+.cs-liv-ed-row[aria-disabled="true"] { opacity: 0.38; }
+.cs-liv-ed-row[aria-disabled="true"] button,
+.cs-liv-ed-row[aria-disabled="true"] input { cursor: not-allowed; }
 /* MATCHING PALETTE: the colours already used elsewhere in this paint job, so a
    slot can take one EXACTLY instead of being eyeballed in the OS colour dialog.
    The chips reuse .cs-liv-ed-none (same pill, same tap target, same active
