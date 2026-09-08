@@ -311,6 +311,18 @@ jobs:
             // reason (docs/PERF-FINDINGS.md 2t).
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
                 `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face}`);
+            // ...and the bookkeeping the probe keeps on itself, because run 54
+            // showed tier=0 with envFace=3 and envFail=0 — the producer WAS
+            // called, nothing threw, and the cube still never latched. begins
+            // vs ends says whether faces are lost between envFaceBegin and
+            // envFaceEnd in game.js; mask says whether something clears a full
+            // one. (No apostrophes anywhere in this step: it is one inline
+            // node -e script in single quotes, so one would end it — ci-coverage
+            // pins that.)
+              if (env.begins != null) {
+                rows.push(`${" ".repeat(8)}env:   mask=${env.mask} begins=${env.begins} ends=${env.ends} ` +
+                  `ready=${env.ready} badProbes=${env.badProbes}`);
+              }
               if (gfx.govError) rows.push(`${" ".repeat(8)}gov:   read failed: ${gfx.govError}`);
             // Print the REASON. gpu-game-check records out.error on every caught
             // failure, and this row used to drop it — which is why a Windows

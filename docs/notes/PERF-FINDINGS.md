@@ -2478,6 +2478,11 @@ path, and the Verdict step already encodes the distinction.
 
 ### The open lead — a 30% luma gap between three's two backends
 
+> **Superseded in part, 2026-09-08.** The mechanism named below (PerfGov
+> rung 1 shedding the probe) was measured and REFUTED — run 54 reads
+> `tier=0` on the WebGPU leg. Read the re-measurement two sections down
+> before acting on anything here; the soft-blit half of the chain stands.
+
 TLX renders the identical scene at 46.9 on WebGPU and 66.2 on WebGL2: same
 commit, same machine, same track, same TSL materials. GLX (67.8) sits with the
 WebGL2 leg, so the odd one out is three's WebGPU backend alone.
@@ -2528,6 +2533,59 @@ add `__apex.renderScale()` (it returns `{tier, autoTier, userTier, fps, scale}`)
 and `envState().face`. A luma comparison between two legs on different present
 paths is not a comparison — that is the same vacuous-measurement class §2l and
 R14 were about, arriving one level up.
+
+### The lead, re-measured — and the recorded explanation is WRONG (2026-09-08)
+
+`gpu-census.yml` run 54, `macos-latest`, commit `9c44e83f`, montreal, job green:
+
+```
+webgpu  ok=true gpuErrors=0 envFail=0 envReady=false gaveUp=false softAdapter=false meanLuma=39.2
+        gov: tier=0 autoTier=0 userTier=0 scale=1    fps=4.9  floorMs=55.6 envFace=3
+webgl2  ok=true gpuErrors=0 envFail=0 envReady=true  gaveUp=false softAdapter=false meanLuma=64.4
+        gov: tier=0 autoTier=0 userTier=0 scale=0.9  fps=60.1 floorMs=15.1 envFace=3
+glx     ok=true gpuErrors=0                                                          meanLuma=66.2
+        gov: tier=0 autoTier=0 userTier=0 scale=0.96 fps=59.6 floorMs=15.6
+wgx     ok=true gpuErrors=0                                                          meanLuma=74.3
+        gov: tier=1 autoTier=1 userTier=0 scale=1    fps=55   floorMs=13.1
+```
+
+The gap is real and it reproduces: 39.2 against 64.4 on the same commit, machine
+and track, with GLX (66.2) sitting with the WebGL2 leg. `envReady=false` on the
+odd leg alone, so the *brightness* is settled — that leg renders with no
+image-based ambient, which is exactly the direction measured.
+
+**But the reason given above for `envReady=false` is refuted.** The tier-gate
+story needs `PerfGov.tier() >= 1`, and the governor reads **`tier=0
+autoTier=0 userTier=0`** on the WebGPU leg. Rung 1 never fired. The probe was
+ASKED — `envFace=3` says the producer ran and baked faces, `envFail=0` and
+`gaveUp=false` say none of them threw. That was the one field §2t said would
+separate the two hypotheses, and it rules out the one this document picked.
+
+What the run DID confirm is the first half of the chain: the soft-present blit
+is enormously expensive on this leg. **`fps=4.9` against 60.1**, `floorMs=55.6`
+against 15.1 — a 12× frame-rate gap between two legs of the same renderer on the
+same GPU, and the only difference between them is `tlxForceGL`. That cost is
+real and worth its own line; it simply does not reach the env probe through
+`PerfGov`, because the governor never left tier 0.
+
+So the open question is now sharper and smaller: **a probe that is called, whose
+faces do not throw, and which is not gated, still never completes its six-face
+cycle** — over roughly a dozen cycles' worth of frames even at 4.9 fps. Two
+mechanisms fit, and `envState()` could not tell them apart, so it now reports
+`mask`, `begins` and `ends` alongside `face`:
+
+- `begins > ends` → faces are lost between `game.js`'s `envFaceBegin` and
+  `envFaceEnd`, i.e. in the world draw between them.
+- `begins === ends`, mask never 63 → something clears a mask mid-cycle.
+
+The next census answers it from the Verdict line without a new hypothesis.
+
+**Method note, since this is the second wrong answer on this lead.** The first
+blamed soak lengths; the second blamed the tier gate. Both were derived by
+reading code, both were wrong, and both cost a run to find out. The instrument
+that has actually moved this lead each time is a field printed in the Verdict —
+`meanLuma` (§2l), then `gov.tier`, now `begins`/`ends`. Add the field, dispatch,
+read. Do not reason the mechanism out first.
 
 ### On WebGPU alternatives, since the question was asked
 
