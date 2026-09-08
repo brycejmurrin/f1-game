@@ -2458,13 +2458,16 @@ files are not ratcheted.
     under SPINE TOP = saddle painted the number board the colour of the panel
     behind it.
 
-  `js/car/car3d.js` lines 3826 -> **3951** (+125): a deliberate raise for four
+  `js/car/car3d.js` lines 3826 -> **4100** on the merged tree (+125 of it mine,
+  +149 the cockpit-aperture work that landed on the deploy branch the same day;
+  re-measured on the union and exactly at the sum of the two sides' own raises,
+  so the merge itself bought no headroom): a deliberate raise for four
   accessors that exist to stop exactly this class of drift — `wingBand`,
   `sharkFinRoot`, `COVER_STACK` and the `foilAt` hoist — plus the comments that
   say what each was wrong about. Every one of them is a placement that TWO files
   used to compute separately; the file is the right home for them (it owns the
   geometry) and the next decal on this car has a function to call rather than a
-  literal to guess. car3d is 3951 lines and an extraction is overdue; a fifth
+  literal to guess. car3d is 4100 lines and an extraction is overdue; a fifth
   accessor should buy one rather than more headroom. The new guard is
   `tests/unit/livery-decal-surfaces.test.mjs`, which measures vertex-to-
   SURFACE distance (`tests/helpers/mesh-distance.mjs`) rather than

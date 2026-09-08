@@ -125,7 +125,20 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // The car is drawn at most twenty times a frame; this is 664 triangles on
   // the one part of it that tells you WHO you are looking at, and the mesh is
   // cached per team, not rebuilt. Measured 4136.
-  assert.ok(body <= 4136, `default body ${body} > 4136`);
+  // 4136 -> 4232: THE COCKPIT APERTURE. The tub over the driver was one
+  // closed loft, so a ray down the centreline crossed the deck and the old
+  // surround slab and never found an opening — the helmet pierced a solid
+  // car. The span is now a tub capped at the seat floor, a rail either side
+  // with a dark liner and a coaming, a floor and a rear bulkhead; the slab it
+  // replaces gave 12 back. +96 net, on the one hole every photo of the car
+  // is taken through. Measured 4232.
+  // 4232 -> 4400: THE OCCUPANT, and the opening reaching the wheel. The
+  // aperture alone did not read as a cockpit — a hole with a floating
+  // helmet in it is a hole — so the well now carries a torso, two arms,
+  // gloves and a yoke (+84), and the opening runs forward from z 0.05 to
+  // z 0.28 so the wheel is not roofed by solid monocoque (+84). Measured
+  // 4400. This is the part of the car every photo is taken through.
+  assert.ok(body <= 4400, `default body ${body} > 4400`);
   // Cockpit ceiling UNCHANGED at 1500: the six-point harness (+60, measured
   // 1428) fits the existing budget. The straps sit between the eye and the dash
   // coaming, filling the lower frame that the coaming never reaches.

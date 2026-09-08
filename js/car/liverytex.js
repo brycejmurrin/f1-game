@@ -1283,10 +1283,11 @@ const LiveryTex = (function () {
   // from Car3D.coverProfile — fin-design.test.mjs re-measures it against the
   // real geometry so it cannot drift. The squash itself is derived, so changing
   // a region's pixel size cannot silently un-square the marks again.
-  // EVERY id in Car3D.SPINE_HEIGHT_IDS needs a row: a missing one falls through
-  // to `standard` below, which is the squash bug this table exists to prevent.
-  // `high` was absent and its marks came out 13.6 % narrow; fin-design.test.mjs
-  // now iterates the ID list, not this table, so a gap fails instead of hiding.
+  // EVERY Car3D.SPINE_HEIGHT_IDS entry needs a row: a missing one falls back to
+  // `standard` below and re-creates the exact squish this table exists to fix.
+  // The first version shipped without `high`, whose marks came out 13.6 %
+  // narrow — found twice, independently. fin-design.test.mjs iterates the ID
+  // LIST rather than this table now, so a gap fails instead of hiding.
   const FLANK_H = { standard: 0.4537, raised: 0.4964, high: 0.5249, dorsal: 0.5463 };
   const flankSquash = (spineHeight, R) => {
     const H = FLANK_H[spineHeight] || FLANK_H.standard;

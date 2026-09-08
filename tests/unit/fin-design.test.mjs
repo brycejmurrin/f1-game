@@ -153,12 +153,14 @@ test("spineLogo none drops the crest from the cover and keeps it on the fin", ()
 test("the flank squash table still matches the cover Car3D actually builds", () => {
   const FLANK = A.LT.FLANK, R = A.LT.REGIONS.spineSide;
   const z = FLANK.zF - 0.19 * FLANK.zLen;   // the mark's station, as buildAtlas uses it
-  // Iterate the ID LIST, not the table: a MISSING row falls through to
-  // `standard` in flankSquash and squashes that cover's marks (13.6 % narrow on
-  // "high", which had no row at all), and iterating the table can never see it.
+  // Driven by the CAR's id list, not by the table's own keys: iterating the
+  // table can only check the rows that are there, and the row that is MISSING
+  // is the bug — it falls back to `standard` and squishes that cover's marks by
+  // the very amount this table exists to correct. `high` shipped missing.
+  assert.deepEqual(Object.keys(A.LT.FLANK_H).sort(), Array.from(M.Car3D.SPINE_HEIGHT_IDS).sort(),
+                   "every spine height needs a measured flank height");
   for (const id of M.Car3D.SPINE_HEIGHT_IDS) {
     const claimed = A.LT.FLANK_H[id];
-    assert.ok(claimed != null, `FLANK_H has no row for spineHeight "${id}"`);
     const anchors = M.Car3D.bodyAnchors(parts, team.id, id === "standard" ? null : id);
     const p = M.Car3D.coverProfile(anchors.coverAt(z));
     const real = p.shoulder - p.bottom;
