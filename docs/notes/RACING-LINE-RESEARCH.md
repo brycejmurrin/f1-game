@@ -299,6 +299,31 @@ straight's lane target hands over to the corner's line (`lineW` easing in) —
 heading ±0.01 rad at 45 m/s trips the 0.25 m/s hysteresis. The acceleration
 RMS is the metric that moves; both are capped in the test.
 
+What the browser groups found (the `driving` group, run for this change).
+Three specs failed and none of them was a defect in the controller:
+
+- `collisions-deep` "push sticks" asserted the player's x at frame 30. Its VM
+  twin had already been corrected to "shoved, and the AI is clear within 12
+  frames" with a comment saying the frame-30 form measured the AI's INABILITY
+  to steer clear; the browser spec was never brought along. Measured on the
+  base commit and on this tree through the VM harness: identical numbers
+  (shove −0.228 m, clear at frame 1, +0.02 by frame 25), so it was already
+  red before the controller changed.
+- `aero-zones` "X-mode buys X_VMAX_GAIN" read `vmaxNow` with the field where
+  it happened to fall. An AI inside the slipstream window (`AiDrive.towGain`,
+  up to 4.5 %) turned the 1.0957 ratio into 1.1001. It takes the measurement
+  alone now.
+- `aero-zones` "stays disabled for the whole opening lap" compared the gate
+  against `max(lap)` over the field while the gate reads `G.ranked[0]` (by
+  prog). The test jumps the player to the line mid-race, and a jump desyncs
+  prog from the ranked order, so a jumped player can hold the highest lap
+  while an AI still leads on prog. The gate was right; the test's reference
+  was wrong.
+
+The lesson worth keeping: a controller change moves WHERE the field is, so
+every spec that measures the player while the field is nearby — a tow, a
+blocker, a rank — is measuring two things. Isolate the car under test.
+
 Not done: a full lap-time re-measure per difficulty level (the brake formula
 is unchanged and the controller reaches the same apexes, but the smoother
 lateral motion may be worth a tenth); the CI `driving` and `hooks` groups
