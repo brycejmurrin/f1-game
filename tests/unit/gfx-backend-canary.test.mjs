@@ -2531,8 +2531,10 @@ test("the flyby shows under race settings only; the picker pre-builds it hidden 
     "the boot builds no world for the title");
   assert.match(game, /\$\("race-settings"\)\.hidden = false;\s*scheduleFlybyTrack\(\);/,
     "opening race settings schedules the flyby of the chosen circuit (120 ms)");
-  assert.match(game, /raceTimeOfDay = id; buildRaceSettings\(\); scheduleFlybyTrack\(\);/,
-    "a time-of-day pick re-lights it (memoised build)");
+  // The TIME OF DAY row's write (js/ui/setting-row.js): every write repaints the
+  // screen through wireRaceSettings' `after`, so only the flyby call is pinned.
+  assert.match(game, /wire\("rs-time", \(\) => raceTimeOfDay, \(v\) => \{ raceTimeOfDay = v; scheduleFlybyTrack\(\); \}\)/,
+    "a time-of-day pick re-lights the race-settings flyby (memoised build, so GO pays nothing twice)");
   assert.match(menus, /scheduleFlybyTrack\(true\)/,
     "a circuit tile pre-builds after the settle delay, never on the tap itself");
   assert.match(game, /settle \? 1500 : 120/);

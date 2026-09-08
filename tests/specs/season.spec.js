@@ -28,7 +28,7 @@ async function startSeasonRace(page, laps) {
   await page.locator("#carsetup").waitFor({ state: "hidden" });
   await page.locator("#race-settings").waitFor({ state: "visible" });
   if (laps != null) {
-    await page.locator("#rs-laps .sel-chip").filter({ hasText: new RegExp(`^${laps}(?: \\(FULL\\))?$`) }).click();
+    await page.locator("#rs-laps-sel").selectOption(String(laps));   // a setting row: value, not label
   }
   // Accept race settings. A championship weekend now opens with QUALIFYING —
   // SIMULATE takes the modelled time, TO THE GRID starts the race from it.

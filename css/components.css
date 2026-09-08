@@ -1299,8 +1299,14 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
   margin-left: auto;
 }
 .set-row > div > button {
-  flex: 0 0 var(--chip-h);
+  /* A --chip-h square that may SHRINK to the tap floor: at UI SIZE 200% on a
+     393px phone the wrapped cluster is two 88px squares plus a select, and
+     the select shrank to its 4rem floor and clipped MANUAL / DEFAULT to
+     "MANUA" (measured, css-play 393x852 --scale 200). Two chevrons at the
+     floor give the value the room; only extreme zoom ever takes it. */
+  flex: 0 1 var(--chip-h);
   width: var(--chip-h);
+  min-width: var(--tap-min);
   height: var(--chip-h);
   min-height: var(--chip-h);
   padding: 0;
@@ -1350,8 +1356,9 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    .preset-btn)` and pinned the STEERING preset cards to one tap height
    (measured, css-play 393x852). */
 #pmsettings-inner .pm-groups .set-row > div > button {
-  flex: 0 0 var(--chip-h);
+  flex: 0 1 var(--chip-h);
   width: var(--chip-h);
+  min-width: var(--tap-min);
   height: var(--chip-h);
   min-height: var(--chip-h);
   padding: 0;
@@ -1399,6 +1406,10 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 #pmsettings-inner[data-shape="wide"] .pm-group {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* max-content: Chromium sizes an `auto` track from a wrapping setting row's
+     single-line height, so a row whose ‹ select › cluster dropped under its
+     label overflowed into the next (seen on #rs-body at UI SIZE 150%). */
+  grid-auto-rows: max-content;
   align-items: start;
 }
 /* Two rules, not one :is() — :is() takes its HIGHEST argument's specificity,

@@ -141,8 +141,12 @@ test.describe("Livery atlas — ink contrast", () => {
         pod:  [0.20, 0.30, 0.95], wing: [0.95, 0.85, 0.10],
         accent: [0.80, 0.20, 0.90], nose: [0.10, 0.85, 0.90],
       };
+      // spineSide ON: its band is only ever painted with a flank mark picked,
+      // and that pick is what clears the accent pinstripe and the service
+      // panels out from under the band — probe the geometry the mark sits on.
       const liv = { c1: SENTINEL.c1, c2: SENTINEL.c2, pod: SENTINEL.pod,
-                    wing: SENTINEL.wing, accent: SENTINEL.accent, nose: SENTINEL.nose };
+                    wing: SENTINEL.wing, accent: SENTINEL.accent, nose: SENTINEL.nose,
+                    spineSide: "number" };
       const mesh = Car3D.build(liv.c1, liv.c2, { livery: liv, teamId: "ferrari" });
       const board = Car3D.PANEL_COL;
       const near = (a, b) => Math.abs(a[0]-b[0]) < 0.02 && Math.abs(a[1]-b[1]) < 0.02
@@ -256,6 +260,9 @@ test.describe("Livery atlas — ink contrast", () => {
       titleA: ["board"], titleB: ["board"], strip: ["c2"],
       // the c2 crown stripe runs under the nose number
       num: ["c1", "c2"],
+      // the SPINE SIDE band hangs on the engine-cover flank, body paint only;
+      // buildAtlas inks it with inkCrest (the cover's ink) for exactly that.
+      spineSide: ["c1"],
     };
     for (const [region, slot] of Object.entries(result)) {
       expect(INKED_FOR[region], `region ${region} has no declared ink background`).toBeDefined();
