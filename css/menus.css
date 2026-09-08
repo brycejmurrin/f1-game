@@ -1170,145 +1170,42 @@ h3.sel-label {
 }
 
 /* ---------- race settings ---------- */
-.rs-row { margin-bottom: var(--gap); }
-#race-settings .sel-chip { font-size: clamp(var(--fs-micro), calc(1.6 * var(--vwz)), var(--fs-3)); padding: 8px 14px; }
-/* LAPS + WEATHER pair up once there is room; TIME OF DAY always spans. */
-@container sheet (min-width: 440px) {
-  #rs-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); align-content: start; }
-  /* LAPS and WEATHER pair up in the two columns; the wide-chip rows below span
-     the full width so they don't leave a dead half-row beside them. */
-  #rs-body #rs-time-section, #rs-body #rs-diff-section { grid-column: 1 / -1; }
-}
-/* Every option group packs from a legible CHIP width rather than a remembered
-   2/3/5-column count. Wide groups stay on one line; a locally narrow section
-   wraps and balances its own remaining controls. */
-#race-settings .balanced-row { --balance-basis: 4.25rem; --balance-min: 3.75rem; }
-/* OFF/LOW/REAL are three short words. Wrapping REAL onto a second line
-   parked it under BACK/RACE at UI SIZE 115% (852×393 champ: 192px column,
-   OFF+LOW 93px each, REAL 46px into the foot). Keep them on one track. */
-#rs-reliab,
-#rs-diff {
-  flex-wrap: nowrap;
-  --balance-basis: 0rem;
-  --balance-min: 0rem;
-}
-#rs-reliab > .sel-chip,
-#rs-diff > .sel-chip { flex: 1 1 0; min-width: 0; }
-#rs-reliab > .sel-chip { white-space: nowrap; }
-
-/* SHORT AND WIDE: fit the whole thing, because scrolling a settings screen is
-   how you miss a setting. A landscape phone gives ~285px of body between the
-   head and the action bar, and seven sections in two columns needs more than
-   that — RELIABILITY and half of QUALIFYING LAP sat below the fold, which is
-   exactly where a player will not find them.
-   The fix is to spend the axis there is plenty of. Three columns instead of
-   two, nothing spanning, and the chips dialled down: seven sections become
-   three rows of about 200px total. Taller screens keep the roomy two-column
-   layout, where there was never a problem. */
-/* WIDE-SHAPED SHEET (landscape-shaped) RACE SETTINGS: three-column compact grid.
-   Uses data-shape="wide" from sheetshape.js — measured in the sheet's own
-   zoom-corrected units — instead of @media (orientation: landscape) which reads
-   the viewport and fires incorrectly at non-100% zoom.
-   `:where()` keeps specificity identical to the rule it used to be. */
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: calc(var(--pad) * 0.7); }
-  /* TIME OF DAY and DIFFICULTY stop spanning — in three columns a full-width
-     row is the thing that pushes everything else down. */
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body #rs-time-section,
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body #rs-diff-section { grid-column: auto; }
-:where(.sheet[data-shape="wide"][data-density="compact"]) #race-settings .sel-chip { font-size: var(--fs-micro); padding: 7px 9px; letter-spacing: 0; }
-:where(.sheet[data-shape="wide"][data-density="compact"]) #race-settings .sel-label { font-size: var(--fs-micro); margin-bottom: 3px; }
-:where(.sheet[data-shape="wide"][data-density="compact"]) .rs-row { margin-bottom: calc(var(--gap) * 0.5); }
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body { overflow-y: auto; overscroll-behavior-y: contain; }
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > :is(.rs-row:nth-child(1), .rs-row:nth-child(2), #rs-time-section) {
-  grid-row: 2;
-}
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:has(#rs-quali[hidden]) > :is(#rs-diff-section, #rs-caution-section, #rs-reliab-section) {
-  grid-row: 3;
-}
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-quali-section:has(#rs-quali[hidden]) {
-  grid-column: 1 / -1;
-  grid-row: 1;
-  margin-bottom: 0;
-}
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) {
-  align-content: start;
-}
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) > :is(.rs-row:nth-child(1), .rs-row:nth-child(2), #rs-quali-section) {
-  grid-row: 1;
-}
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-time-section {
-  grid-column: 1 / -1;
-  grid-row: 2;
-}
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) > :is(#rs-diff-section, #rs-caution-section, #rs-reliab-section) {
-  grid-row: 3;
-}
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) :is(#rs-laps, #rs-weather) {
-  flex-wrap: nowrap;
-  --balance-basis: 0rem;
-  --balance-min: 0rem;
-}
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) :is(#rs-laps, #rs-weather) > .sel-chip {
-  flex: 1 1 0;
-  min-width: 0;
-}
-/* WEATHER on the wide + compact sheet (the sheet's width is capped, so this
-   is every landscape phone AND the desktop): five weather chips plus MIXED
-   in a ~164px column. Icons go (an aria-hidden span in game.js — no class)
-   and the labels wrap 3 + 3 at flex-basis 30%. */
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-weather {
-  flex-wrap: wrap;
-}
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-weather > .sel-chip {
-  gap: 0;
-  padding-inline: calc(var(--gap) * 0.25);
-  flex-basis: 30%;
-}
-:where(.sheet[data-shape="wide"][data-density="compact"]) #rs-body:not(:has(#rs-quali[hidden])) #rs-weather > .sel-chip > span[aria-hidden] {
-  display: none;
-}
-/* TALL-SHAPED SHEET (portrait): two-column race settings layout.
-   TIME spans; DIFF/QUALI then CAUTION/RELIAB share the last two rows.
-   Uses data-shape="tall" (zoom-correct) not @media (orientation: portrait). */
-.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) {
+/* Eight SETTING ROWS (css/components.css .set-row, js/ui/setting-row.js) —
+   the same control as pause > SETTINGS, so the two screens a player sees
+   before and during every race share one grammar. One column on a tall
+   sheet; two once the sheet is 440px wide, the width at which LAPS and
+   WEATHER used to pair up. The ~130 lines of data-shape / data-density
+   grid-row placement that used to fit seven CHIP groups on a landscape phone
+   went with the chips: eight rows at --tap pitch are ~210px in two columns,
+   inside the ~285px of body a landscape phone gives this sheet, so nothing
+   sits below the fold at any shape (measured 852x393 / 393x852, 2026-09-05).
+   The body keeps overflow-y for the one case that still scrolls: UI SIZE
+   200% on a landscape phone. */
+#rs-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  column-gap: var(--pad);
+  grid-template-columns: minmax(0, 1fr);
+  /* max-content, not auto: a row whose ‹ select › cluster has wrapped under
+     its label is 64px tall, but Chromium sizes an `auto` track from the
+     row's single-line height (44px) and the wrapped rows painted over each
+     other (measured 852x393 at UI SIZE 150%, 2026-09-05). */
+  grid-auto-rows: max-content;
+  row-gap: calc(var(--gap) * 0.5);
   align-content: start;
+  overflow-y: auto; overscroll-behavior-y: contain;
 }
-.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) > .rs-row:nth-child(1),
-.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) > .rs-row:nth-child(2) { grid-row: 1; }
-.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) #rs-time-section {
-  grid-column: 1 / -1;
-  grid-row: 2;
+@container sheet (min-width: 440px) {
+  #rs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--pad); }
 }
-.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) #rs-diff-section,
-.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) #rs-quali-section {
-  grid-column: auto;
-  grid-row: 3;
+/* The Settings pages' steel italic label (css/components.css) restated here:
+   that rule is scoped to #pmsettings-inner .pm-group. */
+#rs-body .tune-label {
+  color: var(--steel); font-weight: 700; font-style: italic;
+  letter-spacing: var(--ls-5); text-transform: uppercase;
 }
-.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) #rs-caution-section,
-.sheet[data-shape="tall"] #rs-body:not(:has(#rs-quali[hidden])) #rs-reliab-section { grid-row: 4; }
-#race-settings .sel-chip {
-  display: flex; align-items: center; justify-content: center; gap: 4px;
-  padding-inline: 6px; min-width: 0;
-  /* WRAP, DO NOT ELLIPSISE. These chips sit in `repeat(3, minmax(0, 1fr))`
-     (#rs-laps/#rs-weather/#rs-diff above), and a 1fr track with a 0 floor
-     shrinks below its own label — so `nowrap` + `text-overflow: ellipsis` cut
-     SIX of them on the primary play shape. Measured at 852x393, needed vs the
-     52px the column gave: "CLOUDY" 62, "57 (FULL)" 58, "DEFAULT" 57,
-     "NORMAL" 57, "WET" 54, "RAIN" 54.
-     A truncated settings chip is worse than a two-line one: this screen is seen
-     before every race and the label IS the setting — "CLOUD)" is not a weather
-     option. Wrapping cannot hide anything, and it cannot overflow the track
-     either, which is why it is preferred here over widening the columns to
-     min-content (that would push the three-across row past its section on a
-     narrow sheet, trading a clipped label for a clipped ROW).
-     `min-height: var(--chip-h)` on .sel-chip already floors the box, so a
-     one-line chip is unchanged; only the long labels grow. */
-  white-space: normal; overflow-wrap: break-word; text-wrap: balance;
-  line-height: 1.15;
-}
+/* The row's own 8rem value, NOT wider for the long GRID names: at 9rem every
+   row on a 393px portrait phone dropped its ‹ select › cluster to a second
+   line (measured 2026-09-05, sheet 369px). The names were shortened to fit
+   instead — see the rules list in game.js buildRaceSettings. */
 
 /* ---------- customize my team ---------- */
 #customize .cz-row {

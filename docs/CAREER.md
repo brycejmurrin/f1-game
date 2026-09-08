@@ -674,7 +674,7 @@ over places cars nobody is driving and leaves the real field at `prog: 0`, where
 careless check. `Quali.order(live)` returns `null` unless every car maps.
 
 A one-off Grand Prix defaults to its hardcoded P12 start, but the persisted
-`raceGrid` race-settings chips can qualify one (`gridFromQuali` accepts either a
+`raceGrid` race-settings GRID row can qualify one (`gridFromQuali` accepts either a
 championship with `SeasonCal.quali()` on, or a qualifying grid rule outside time
 trial; `raceQuali` is the boolean VIEW of that rule the lobby still ships).
 The rule is applied by `gridOrderFor()` to whatever order the session produced:

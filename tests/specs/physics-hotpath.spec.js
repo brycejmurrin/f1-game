@@ -21,8 +21,11 @@ test("AiDrive ctx scratches stay reused across physics steps", async ({ loadTrac
   // "Test timeout of 120000ms exceeded". Above the gate it is excluded by name
   // and runs in the `driving` group, which is where a race-fixture spec belongs.
   test.setTimeout(300_000);
-  await loadTrack("monza");
-  await page.evaluate(() => window.__apex.headless(true));
+  // ...and SPEND less of it: headless BEFORE the build, via the fixture. The
+  // render loop was already off for the 180 steps below, but the build wait
+  // and the countdown ran under a full-scale SwiftShader race, which is where
+  // the 126-177 s above went. Measured alone on this box: 86 s -> 23 s.
+  await loadTrack("monza", "day", "dry", { headless: true });
   await page.addScriptTag({
     content: "window.__AiDrive = AiDrive;",
   });

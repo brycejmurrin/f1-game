@@ -249,8 +249,8 @@ test.describe("Apex 26 — smoke", () => {
     await page.locator("#cs-done").click();
     await expect(page.locator("#race-settings")).toBeVisible();
     // DIFFICULTY is here, beside the other per-race choices.
-    await expect(page.locator("#rs-diff .sel-chip").first()).toBeVisible();
-    await expect(page.locator("#rs-diff .sel-chip.active")).toHaveCount(1);
+    await expect(page.locator("#rs-diff-sel")).toBeVisible();
+    expect(["easy", "normal", "hard"]).toContain(await page.locator("#rs-diff-sel").inputValue());
   });
 
   test("race starts and __apex hook is available", async ({ page }) => {

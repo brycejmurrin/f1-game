@@ -1292,7 +1292,59 @@ const Car3D = (function () {
       topTE:  [-1.65, 0.93],   baseTE: [-1.70, 0.6197],
       halfBase: 0.020, halfTop: 0.013,
     }),
+    // Ferrari's SF-26 fin: a tall front blade dropping a step to a lower rear
+    // section (Motorsport.com, 2026 early tech trends). The outline is the FRONT
+    // blade — the panel and badge sit on it — and `step` is the lower block
+    // build() adds behind it. baseTE is the standard base line at z -1.45.
+    stepped: Object.freeze({
+      baseLE: [-0.65, 0.7935], topLE: [-1.15, 0.97],
+      topTE:  [-1.43, 0.97],   baseTE: [-1.45, 0.6611],
+      halfBase: 0.022, halfTop: 0.014,
+      step: Object.freeze({ top: 0.885, baseTE: [-1.70, 0.6197] }),
+    }),
   });
+  // Detail picks a livery carries that are MESH, not paint, so their id lists
+  // live here beside FIN_SHAPE_IDS rather than in LiveryTex.
+  // T-cam: the real rule paints car 1's housing black and car 2's yellow — the
+  // one on-car cue that says which of a team's two drivers this is
+  // (autoevolution, onboard-camera colours). "team" is the accent housing the
+  // game shipped; "auto" reads the driver slot off Teams.
+  const TCAM_IDS = Object.freeze(["team", "auto", "black", "yellow"]);
+  const TCAM_BLACK = Object.freeze([0.05, 0.05, 0.06]);
+  const TCAM_YELLOW = Object.freeze([0.96, 0.78, 0.08]);
+  function tcamColour(pick, teamId, num, accent) {
+    if (pick === "black") return TCAM_BLACK;
+    if (pick === "yellow") return TCAM_YELLOW;
+    if (pick === "auto") {
+      const t = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST.find((x) => x.id === teamId);
+      const first = t && t.drivers && t.drivers[0] ? t.drivers[0].num : null;
+      return (first != null && num != null && num !== first) ? TCAM_YELLOW : TCAM_BLACK;
+    }
+    return accent;
+  }
+  // Engine-cover cooling: "gills" are the rows of slits on the flanks that real
+  // teams swap track to track (Autosport 2024 tech gallery); "spine" is one
+  // slot along the ridge (AMR24), ahead of the shark-fin root so the two never meet.
+  const COVER_VENT_IDS = Object.freeze(["none", "gills", "spine"]);
+  // SPINE HEIGHT (liv.spineHeight): how tall the engine-cover crown runs behind
+  // the roll hoop. "raised" and "high" lift the crown's TOP line only — the
+  // floor of the cover and the sidepods stay put — and taper the lift toward
+  // the tail (SPINE_TAIL), so the cover reads as a dorsal hump running back
+  // from the hoop (the no-fin 2026 look) rather than a taller box. The lift
+  // enters through bodyAnchors, so everything mounted off coverAt(z).top —
+  // service panels, vents, the spine slot, the fin root and the spine crest
+  // decal in car-mesh — rides up with the skin. The fin's TOP stays where the
+  // regulation ceiling puts it (finTop), so a raised spine shortens the blade
+  // rather than pushing it up: the real-car trade-off, and it keeps the fin
+  // decal exactly where sharkFinPanel/Badge place it. "high" (0.93) sits
+  // under the hoop's rear crown (0.938); "dorsal" (0.96) runs level with the
+  // hoop itself and is capped under its front crown (0.968), the regulation
+  // top of the car — the real 2026 cover, a tall spine with no fin, whose
+  // FLANK is where the number and the mark go (liv.spineSide, car-mesh).
+  const SPINE_HEIGHT_IDS = Object.freeze(["standard", "raised", "high", "dorsal"]);
+  const SPINE_RISE = Object.freeze({ standard: 0, raised: 0.06, high: 0.10, dorsal: 0.13 });
+  const SPINE_TAIL = 0.45;   // fraction of the lift that survives at the tail (z -2.0)
+  const spineRise = (id) => SPINE_RISE[id] || 0;
   const FIN_SHAPE_IDS = Object.freeze(Object.keys(FIN_SHAPES).concat(["none"]));
   const FIN = FIN_SHAPES.standard;
   const finOf = (shape) => FIN_SHAPES[shape] || FIN;
@@ -1371,6 +1423,26 @@ const Car3D = (function () {
     const yAt = (u, v) => { const yB = finMix(F.baseLE[1], F.baseTE[1], u); return yB + (tp - yB) * v; };
     const at = (u, v) => { const z = zAt(u), y = yAt(u, v); return { x: finXAt(z, y, p, fin, shape), y, z }; };
     return [at(u0, B.v0), at(u1, B.v0), at(u1, B.v1), at(u0, B.v1)];
+  }
+  // Where the 2026 amber "stopped / under 20 km/h" lamps sit (The Race, 2026
+  // rear-lights explainer): the outboard face of each mirror housing. The same
+  // numbers the mirror section of build() uses, so a team style or a wider
+  // stalk carries the lamp with it. Cached per (team, scale): game.js asks
+  // once per drawn car per frame, and a fresh pair of objects there is garbage
+  // in the hot loop.
+  const _mirrorAnchorCache = new Map();
+  function mirrorLightAnchors(teamId, mirrorScale) {
+    const mScale = Math.max(0.85, Math.min(1.35, mirrorScale || 1));
+    const k = teamId + "|" + mScale.toFixed(3);
+    let a = _mirrorAnchorCache.get(k);
+    if (a) return a;
+    const mSty = teamStyleOf(teamId).mirror;
+    const mx = (0.34 + (mSty === 1 ? 0.035 : 0)) * mScale;
+    const mW = mSty === 1 ? 0.235 : 0.215;
+    const y = 0.735 + (mSty === 2 ? -0.032 : 0);
+    a = Object.freeze([{ x: -(mx + mW / 2 + 0.004), y, z: 0.26 }, { x: mx + mW / 2 + 0.004, y, z: 0.26 }]);
+    _mirrorAnchorCache.set(k, a);
+    return a;
   }
   function mergeRecipe(defaults, recipe) {
     return Object.assign(defaults, recipe || {});
@@ -1641,19 +1713,24 @@ const Car3D = (function () {
 
   const _anchorCache = new WeakMap();
   const _anchorNullKey = {};   // stand-in for a null/undefined parts (legacy bodies)
-  function bodyAnchors(parts, teamId) {
+  function bodyAnchors(parts, teamId, spineHeight) {
     const outer = parts || _anchorNullKey;
     let byTeam = _anchorCache.get(outer);
     if (!byTeam) { byTeam = new Map(); _anchorCache.set(outer, byTeam); }
-    const tk = teamId || "";
+    // The livery's spine lift shares the per-parts map: a "standard" (or
+    // absent) spine keys exactly as before, so no caller that never heard of
+    // it sees a different object.
+    const rise = spineRise(spineHeight);
+    const tk = (teamId || "") + (rise ? "|" + spineHeight : "");
     const hit = byTeam.get(tk);
     if (hit) return hit;
-    const built = buildBodyAnchors(parts, teamId);
+    const built = buildBodyAnchors(parts, teamId, rise);
     byTeam.set(tk, built);
     return built;
   }
 
-  function buildBodyAnchors(parts, teamId) {
+  function buildBodyAnchors(parts, teamId, rise) {
+    rise = rise || 0;
     const T = parts || {};
     const tier = T.engine != null ? T.engine : 1;
     const eng = buildEngineParts(T._visual && T._visual.engine, tier);
@@ -1663,9 +1740,9 @@ const Car3D = (function () {
     const coverStations = [
       { z: -0.55, x: 0.28 * eng.tailWidth,
         bottom: 0.52 + 0.08 * (coverHeight - 1) - 0.31 * coverHeight,
-        top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight },
+        top: 0.52 + 0.08 * (coverHeight - 1) + 0.31 * coverHeight + rise },
       { z: -2.00, x: 0.13 * eng.tailWidth,
-        bottom: 0.42 - 0.17 * coverHeight, top: 0.42 + 0.17 * coverHeight },
+        bottom: 0.42 - 0.17 * coverHeight, top: 0.42 + 0.17 * coverHeight + rise * SPINE_TAIL },
     ];
     const noseStations = styledNoseStations(style).map((station) => ({
       z: station.z, side: station.w * 0.5, topSide: station.w * station.t * 0.5,
@@ -1673,7 +1750,7 @@ const Car3D = (function () {
     }));
     return {
       key: [eng.podWidth, eng.shoulderHeight, eng.undercut, eng.coke,
-            eng.tailWidth, eng.coverHeight,
+            eng.tailWidth, eng.coverHeight, rise,
             style === DEFAULT_STYLE ? "" : (teamId || "")].join(","),
       podAt(z) {
         const p = sampleStations(podStations, z);
@@ -1741,8 +1818,9 @@ const Car3D = (function () {
     };
   }
 
-  function buildEngineCoverBodywork(out, c1, accentC, eng, anchors) {
+  function buildEngineCoverBodywork(out, c1, accentC, eng, anchors, rise, sideMark) {
     const coverHeight = Math.max(0.78, Math.min(1.28, eng.coverHeight));
+    rise = rise || 0;
     // t was 0.0 — frame() puts BOTH top corners on the centreline, so the engine
     // cover was a triangular tent that came to a zero-width knife along its
     // whole length. Three things were wrong with that. A real cover is a
@@ -1755,12 +1833,18 @@ const Car3D = (function () {
     // ±x*0.72) was a flat plate hanging over a knife edge. 0.72 is that 0.72:
     // it makes the crown exactly as wide as the decal that is painted on it,
     // and pulls every cover-mounted detail back to within ~0.06 m of the skin.
-    const front = { z: -0.55, y: 0.52 + 0.08 * (coverHeight - 1),
-                    w: 0.56 * eng.tailWidth, h: 0.62 * coverHeight, t: 0.72 };
-    const rear = { z: -2.00, y: 0.42, w: 0.26 * eng.tailWidth,
-                   h: 0.34 * coverHeight, t: 0.70 };
+    // The spine lift is TOP-ONLY: centre up by half, height up by the whole,
+    // which is exactly the coverStations top line in bodyAnchors (the floor
+    // y - h/2 is unchanged). The two must agree or the crest decal floats.
+    const front = { z: -0.55, y: 0.52 + 0.08 * (coverHeight - 1) + rise / 2,
+                    w: 0.56 * eng.tailWidth, h: 0.62 * coverHeight + rise, t: 0.72 };
+    const rear = { z: -2.00, y: 0.42 + rise * SPINE_TAIL / 2, w: 0.26 * eng.tailWidth,
+                   h: 0.34 * coverHeight + rise * SPINE_TAIL, t: 0.70 };
     addSpan(out, front, rear, c1, c1);
-    const stripeFront = anchors.coverAt(-0.825), stripeRear = anchors.coverAt(-1.675);
+    // The accent pinstripe runs the flank at top-0.10, straight through the
+    // SPINE SIDE band (z -0.72..-1.22 in car-mesh); with a flank mark on it
+    // starts aft of the band instead — a real number interrupts the trim.
+    const stripeFront = anchors.coverAt(sideMark ? -1.26 : -0.825), stripeRear = anchors.coverAt(-1.675);
     for (const side of [-1, 1]) {
       addSpan(out,
         { z: stripeFront.z, x: side * (stripeFront.x * 0.78), y: stripeFront.top - 0.10,
@@ -1841,7 +1925,7 @@ const Car3D = (function () {
     const cockpitStyle = design.cockpit;
     const wheelStyle = design.wheels;
     const teamStyle = teamStyleOf(opts && opts.teamId);
-    const anchors = bodyAnchors(T, opts && opts.teamId);
+    const anchors = bodyAnchors(T, opts && opts.teamId, liv.spineHeight);
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
 
     part("chassis");
@@ -2057,7 +2141,10 @@ const Car3D = (function () {
                      h: Math.max(0.03, 0.968 - hoopF), t: 0.40 },
                    { z: -0.63, y: (hoopR + 0.938) / 2, w: 0.13 * inScale,
                      h: Math.max(0.03, 0.938 - hoopR), t: 0.38 }, c1);
-      coverGeom = buildEngineCoverBodywork(out, c1, accentC, engStyle, anchors);
+      // A SPINE SIDE mark (liv.spineSide) claims the flank band z -0.72..-1.22:
+      // the pinstripe and the service panels keep clear of it (see both sites).
+      const sideMark = (liv.spineSide || "none") !== "none";
+      coverGeom = buildEngineCoverBodywork(out, c1, accentC, engStyle, anchors, spineRise(liv.spineHeight), sideMark);
       // Optional scoop lip on the roll-hoop mouth (recipe-gated; default 0).
       const scoopLip = Math.max(0, Math.min(2, Math.round((engStyle && engStyle.scoopLip) || 0)));
       if (scoopLip >= 1) {
@@ -2099,9 +2186,11 @@ const Car3D = (function () {
       const podY = (engSnork ? 1.085 : 0.76 + 0.10 * inScale) + 0.052;
       const podZ = engSnork ? -0.34 : -0.26;
       addBox(out, 0, podY - 0.048, podZ - 0.015, 0.028, 0.055, 0.030, CARBON, SURFACES.carbon);
+      // Housing colour is the livery's T-CAM pick (tcamColour): the shipped
+      // accent by default, or the real black / yellow driver code.
       addSpan(out, { z: podZ + 0.055, y: podY, w: 0.118, h: 0.056, t: 0.88 },
                    { z: podZ - 0.062, y: podY - 0.003, w: 0.101, h: 0.050, t: 0.82 },
-              accentC, [0.05, 0.05, 0.06]);
+              tcamColour(liv.tcam, opts && opts.teamId, opts && opts.num, accentC), [0.05, 0.05, 0.06]);
       addBox(out, 0, podY + 0.002, podZ + 0.062, 0.052, 0.026, 0.012,
              [0.02, 0.02, 0.03], SURFACES.metal);   // lens boss on the front face
 
@@ -2132,8 +2221,12 @@ const Car3D = (function () {
         if (engOutlet >= 2) addBox(out, 0, coverGeom.tailVentY, -1.72, 0.13, 0.05, 0.18, INTAKE);
       }
       const servicePanels = Math.max(0, Math.min(4, Math.round(engStyle.servicePanel || 0)));
+      // With a SPINE SIDE mark on the flank the panels move aft of the band:
+      // a grey hatch through the race number is the one thing a real livery
+      // never shows.
+      const pz0 = sideMark ? -1.36 : -0.82, pdz = sideMark ? 0.15 : 0.19;
       for (const s of [-1, 1]) for (let i = 0; i < servicePanels; i++) {
-        const z = -0.82 - i * 0.19, p = anchors.coverAt(z);
+        const z = pz0 - i * pdz, p = anchors.coverAt(z);
         addBox(out, s*(p.x + 0.010), p.top - 0.18, z, 0.018, 0.10, 0.13,
           [0.24,0.24,0.27], SURFACES.metal);
       }
@@ -2956,6 +3049,44 @@ const Car3D = (function () {
         [-fb, bTE, F.baseTE[0]], [fb, bTE, F.baseTE[0]],
         [ft, tp, F.topTE[0]],    [-ft, tp, F.topTE[0]],
       ], finC);
+      if (F.step) {
+        // The lower rear section of a stepped fin, scaled about the base line
+        // by the same aero factor as the blade so the step stays proportional.
+        const S = F.step, f = Math.max(0.55, Math.min(1.45, (aeroStyle && aeroStyle.fin) || 1));
+        const tp2 = F.baseTE[1] + (S.top - F.baseTE[1]) * f;
+        const bTE2 = root(S.baseTE[0], S.baseTE[1]);
+        addBlock(out, [
+          [-fb, bTE, F.baseTE[0]],   [fb, bTE, F.baseTE[0]],
+          [ft, tp2, F.baseTE[0]],    [-ft, tp2, F.baseTE[0]],
+          [-fb, bTE2, S.baseTE[0]],  [fb, bTE2, S.baseTE[0]],
+          [ft, tp2, S.baseTE[0] + 0.03], [-ft, tp2, S.baseTE[0] + 0.03],
+        ], finC);
+      }
+    }
+    // COVER VENTS (liv.coverVents; ids in COVER_VENT_IDS). Dark carbon boxes just
+    // proud of the cover — a decal would need an atlas region the flanks lack.
+    const vents = liv.coverVents || "none";
+    if (!ckpt && vents === "gills") {
+      for (const s of [-1, 1]) for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) {
+        const z = -0.98 - i * 0.11, p = anchors.coverAt(z);
+        if (!p) continue;
+        addBox(out, s * (p.x + 0.006), p.top - 0.045 - r * 0.045, z, 0.012, 0.014, 0.075, CARBON, SURFACES.carbon);
+      }
+    } else if (!ckpt && vents === "spine") {
+      // Along the ridge where it is FREE — of the fin root AND of the crest decal
+      // (car-mesh maps REGIONS.crest onto z -0.62..-1.28): the first cut ran the
+      // slot straight through the horse, measured in the studio. A full-chord fin
+      // roots at z -0.65, so only the short gap behind the airbox is open; with a
+      // stub or no fin and no spine crest the bare ridge ahead of the root takes
+      // a long slot (the AMR24 look); with no fin but a crest it sits behind the
+      // crest. Nowhere else is honest, so nowhere else is offered.
+      const finRootZ = finShape === "none" ? -1.70 : finOf(finShape).baseLE[0];
+      const crestOn = (liv.spineLogo || "logo") !== "none";
+      let zc = -0.56, len = 0.14;
+      if (!crestOn && finRootZ < -1.0) { len = Math.min(0.5, (-0.66 - finRootZ) - 0.06); zc = -0.69 - len / 2; }
+      else if (crestOn && finShape === "none") { zc = -1.47; len = 0.30; }
+      const p = anchors.coverAt(zc);
+      if (p) addBox(out, 0, p.top + 0.004, zc, 0.05, 0.008, len, CARBON, SURFACES.carbon);
     }
 
     part("sponsorBoard");
@@ -3629,5 +3760,6 @@ const Car3D = (function () {
            endplate: endplateGeom, numberBoard,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
            sharkFin: FIN, sharkFinPanel, sharkFinBadge, FIN_SHAPES, FIN_SHAPE_IDS,
+           TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors, SPINE_HEIGHT_IDS, spineRise,
            aeroLevelOf, aeroStyleOf };
 })();

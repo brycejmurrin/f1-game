@@ -2146,6 +2146,20 @@ track-row washes use tokens; the unread `--manual` token is gone).
   not cover. The rules themselves are in `js/physics/ai-drive.js` with unit
   tests; game.js keeps the call sites.
 
+## 2026-09-05 — RACE SETTINGS on setting rows: shellNodes 1273 → 1307
+
+`shellNodes` RAISED by 34, deliberately, for the same reason as the entry above:
+RACE SETTINGS was the last screen on chips, and its seven `h3 + chip-row`
+sections (two static nodes each; the chips were built by JS) are eight setting
+rows of six static nodes — LAPS, WEATHER, CONDITIONS (MIXED weather, which was
+a toggle chip hiding among the weathers, is its own row now), TIME OF DAY,
+DIFFICULTY, GRID, CAUTIONS, RELIABILITY. What the raise buys: one selection
+grammar across the two screens a player sees around every race, and the ~130
+lines of shape- and density-keyed grid placement in `css/menus.css` that fitted
+the chip groups on a landscape phone are two rules. `js/game.js` shrank (the
+seven chip-building loops are eight `SettingRow.paint` calls and one wiring
+function); `cssClasses` fell (`.rs-row` retired).
+
 - `js/game.js` lines 10003 -> **10010**, codeLines 5479 -> **5480**;
   `js/track/tracks.js` lines 2399 -> **2400** (2026-09-08): the racing line.
   One code line in each: game.js reads `TrackLine.at()` for the AI's lateral

@@ -173,9 +173,18 @@ export const test = base.extend({
    *   test('...', async ({ loadTrack, page }) => { await loadTrack('monza'); ... });
    */
   loadTrack: async ({ page }, use) => {
-    await use(async (id = "monza", tod = "day", wx = "dry") => {
+    await use(async (id = "monza", tod = "day", wx = "dry", opts = {}) => {
       await page.goto("/");
       await page.waitForFunction(() => window.__apex && window.__apex.race, null, { polling: 100, timeout: BOOT_MS });
+      // `headless: true` stops render() BEFORE the build and the countdown. A
+      // SwiftShader frame holds the main thread for seconds, and every
+      // page.evaluate round trip below — awaitTrackBuild polls at 100 ms — waits
+      // on that thread (docs/TESTING.md, "A Playwright click costs 80-113 s while
+      // the game renders"). A spec that reads hooks and never a pixel has no use
+      // for those frames; on a 2-core CI runner they were the whole 120 s budget
+      // (physics-hotpath, run 2048, twice). Opt-in, because ~54 callers include
+      // the ones whose subject IS the frame.
+      if (opts.headless) await page.evaluate(() => window.__apex.headless(true));
       await page.evaluate(({ i, t, w }) => window.__apex.race(i, t, w), { i: id, t: tod, w: wx });
       await awaitTrackBuild(page);
       await page.evaluate(() => window.__apex.go());

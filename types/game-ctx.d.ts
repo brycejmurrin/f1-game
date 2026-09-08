@@ -446,7 +446,6 @@ interface GameCtx {
   difficulty: string;
   readonly store: StoreApi;
   readonly tickUi: () => void;
-  readonly scheduleFlybyTrack: () => void;
   readonly buildSetup: () => void;
   readonly setTeamPicker: (open: boolean, host?: HTMLElement) => void;
   readonly teamSwatch: (t: TeamDef) => HTMLElement;

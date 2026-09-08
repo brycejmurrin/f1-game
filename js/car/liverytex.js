@@ -24,6 +24,7 @@ const LiveryTex = (function () {
     strip:  { x: 40,  y: 720, w: 944, h: 130 },  // long thin sponsor strip (sidepod lower)
     fin:    { x: 40,  y: 856, w: 430, h: 160 },  // shark-fin tail: the painted graphic, stretched over the whole swept fin
     finBadge: { x: 500, y: 856, w: 160, h: 160 },
+    spineSide: { x: 680, y: 856, w: 304, h: 160 },   // engine-cover FLANK band, both sides (liv.spineSide)
   };
 
   // Primary driver number per team.
@@ -1141,11 +1142,23 @@ const LiveryTex = (function () {
   // What sits on the shark fin. "number" is the real-F1 layout (the race number
   // rides the fin, the crest stays on the spine); "none" leaves the plate to
   // the tail graphic alone.
-  const FIN_BADGE_IDS = ["logo", "number", "none"];
+  // "code" is the driver's three-letter abbreviation (LEC), which the FIA
+  // requires on external bodywork at 150 mm anyway (Autosport / FIA); the fin
+  // is where most teams put it.
+  const FIN_BADGE_IDS = ["logo", "number", "code", "none"];
+  function driverCode(teamId, num) {
+    const t = typeof Teams !== "undefined" && Teams.LIST && Teams.LIST.find((x) => x.id === teamId);
+    const d = t && t.drivers && t.drivers.find((x) => x.num === num);
+    return (d && d.code) || teamShort(teamId);
+  }
   // Whether the crest is also drawn on the engine-cover spine. With the badge
   // on the fin AND the spine the same mark reads twice from a chase camera,
   // which is the duplication the owner asked about.
   const SPINE_LOGO_IDS = ["logo", "none"];
+  // SPINE SIDE: the mark on the engine-cover FLANK — where the real 2026 cars,
+  // fin-less with a tall dorsal cover, carry the driver number. Absent ("none")
+  // leaves REGIONS.spineSide unpainted, so the shipped atlas is pixel-identical.
+  const SPINE_SIDE_IDS = ["none", "number", "logo", "code"];
   const TAIL_STYLE = {
     redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
     racingbulls: { kind: "diag",    a: 0.70 },   // youthful bold slash
@@ -1362,13 +1375,29 @@ const LiveryTex = (function () {
         drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
                       markHalo(LOGOS[teamId], finPaint, inkFin), emblemRim);
       } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true, palette: lockup });
-    } else if (finBadge === "number") {
-      // The race number on the fin, inked for the FIN paint (the badge box is
-      // wholly on the plate) with no board patch and no crest head — the plate
-      // is the board. `num` is resolved below for the nose; hoist its value.
+    } else if (finBadge === "number" || finBadge === "code") {
+      // The race number (or the driver's code) on the fin, inked for the FIN
+      // paint — the badge box is wholly on the plate — with no board patch and
+      // no crest head: the plate is the board. `num` is resolved below for the
+      // nose; hoist its value.
       const finNum = numberOverride != null ? numberOverride
                    : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
-      drawNumber(ctx, finNum, REGIONS.finBadge, inkFin, finWash, null, colors.numFont, 0);
+      const text = finBadge === "code" ? driverCode(teamId, finNum) : finNum;
+      drawNumber(ctx, text, REGIONS.finBadge, inkFin, finWash, null, colors.numFont, 0);
+    }
+    // SPINE SIDE (SPINE_SIDE_IDS): the same three marks on the cover FLANK, inked
+    // for the body paint (the flank is c1) with the cover's own crest lockup.
+    const spineSide = colors.spineSide || "none";
+    if (spineSide === "logo") {
+      if (LOGOS[teamId]) {
+        drawLogoImage(ctx, LOGOS[teamId], REGIONS.spineSide, logo,
+                      markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
+      } else drawCrest(ctx, teamId, REGIONS.spineSide, { liv: colors, field: [c1, c2], bare: true, palette: lockup });
+    } else if (spineSide === "number" || spineSide === "code") {
+      const sideNum = numberOverride != null ? numberOverride
+                    : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
+      drawNumber(ctx, spineSide === "code" ? driverCode(teamId, sideNum) : sideNum,
+                 REGIONS.spineSide, inkCrest, accent, null, colors.numFont, 0);
     }
 
     // Sponsor wordmarks.
@@ -1453,6 +1482,6 @@ const LiveryTex = (function () {
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
-           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS };
+           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;
