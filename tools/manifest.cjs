@@ -176,6 +176,7 @@ const FULL = [
   "js/perf/gfx-debug-overlay.js",
   "js/ui/scale.js",
   "js/camera/cockpit-opts.js",
+  "js/ui/driving-line-opts.js",
   "js/perf/metrics-overlay.js",
   "js/camera/vantage.js",
   "js/camera/mode-switch.js",
@@ -289,6 +290,10 @@ const HARD_EDGES = [
   // to be orderable by tag position.
   ["js/core/mat4.js", "js/render/glx/glx.js"],                       // glx uses M4 at init
   ["js/core/mat4.js", "js/render/shared/driving-line.js"],           // binds M4.clamp at eval
+  // Reads the stored palette / opacity into DrivingLine AT EVAL, so the first
+  // frame cannot draw a default the player did not choose.
+  ["js/render/shared/driving-line.js", "js/ui/driving-line-opts.js"],
+  ["js/core/store.js", "js/ui/driving-line-opts.js"],
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
   // the 2nd tag so the order is never in doubt, but these are real eval-time

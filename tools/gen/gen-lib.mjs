@@ -66,7 +66,11 @@ export function emit(rel, content, argv = process.argv.slice(2)) {
       process.stdout.write(`${rel}: up to date (${bytes} bytes)\n`);
       return 0;
     }
-    process.stdout.write(`${rel}: STALE — regenerate with \`node tools/${path.basename(process.argv[1] || "gen")}\`\n${firstDiff(current || "", content)}\n`);
+    // The generator's REAL path, relative to the repo — not `tools/` plus its
+    // basename, which every generator has printed since they moved into
+    // tools/gen/ and which sends the reader to a path that does not exist.
+    const gen = process.argv[1] ? path.relative(ROOT, process.argv[1]) : "the generator";
+    process.stdout.write(`${rel}: STALE — regenerate with \`node ${gen}\`\n${firstDiff(current || "", content)}\n`);
     return 1;
   }
   if (current === content) {

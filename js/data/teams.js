@@ -16,6 +16,12 @@ const Teams = (function () {
   // conflict and left a duplicate key in the same object literal — the later
   // silently won and the earlier team's whole design vanished (2026-09-08).
   // tests/unit/team-livery.test.mjs is the guard.
+  // Two of these were chosen on the atlas and failed on track: `carbon` is a
+  // dark weave and `bigmark` a mark sized to the crown's width, and on a
+  // near-black car (Haas graphite, Audi black) both disappear entirely from a
+  // race camera. They are fine designs on a light car and stay in the picker;
+  // the DEFAULTS here are the ones that survive the distance the game is
+  // actually watched from. Checked with tools/shot/shot.mjs --team.
   const LIST = [
     {
       id: "mercedes", name: "Mercedes-AMG Petronas", short: "MER",
@@ -90,7 +96,7 @@ const Teams = (function () {
     },
     {
       id: "haas", name: "Haas", short: "HAA",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "carbon", spineSide: "number" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "panel", spineSide: "number" },
       color: [0.075, 0.078, 0.086], color2: [0.855, 0.161, 0.11],  /* dark graphite #131416 / red #DA291C (2026 dark car, white+red accents) */
       engine: "Ferrari", tier: 3,
       stats: { speed: 80, accel: 79, cornering: 79, braking: 79 },
@@ -101,7 +107,8 @@ const Teams = (function () {
     },
     {
       id: "williams", name: "Williams", short: "WIL",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "code" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "code",
+                cover: [0.055, 0.058, 0.070] },
       color: [0.059, 0.235, 0.788], color2: [1.0, 1.0, 1.0],       /* blue #0F3CC9 / white */
       /* The FW48 is gloss blue with a BLACK section sweeping from the chassis
          side through to the rear, framed by a red-and-white keyline; the white
@@ -109,7 +116,6 @@ const Teams = (function () {
          claimed a white engine cover — the official release omits the cover
          from its white list, and a look at the launch photograph reads the
          cover as black. See docs/notes/LIVERY-2026-REFERENCE.md. */
-      livery: { cover: [0.055, 0.058, 0.070] },
       engine: "Mercedes", tier: 3,
       stats: { speed: 82, accel: 78, cornering: 80, braking: 79 },
       drivers: [
@@ -119,8 +125,9 @@ const Teams = (function () {
     },
     {
       id: "audi", name: "Audi", short: "AUD",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "bigmark", spineSide: "bars" },
-      /* titanium silver #B3B8BD / Audi red-orange #FA470D, with a CARBON BLACK
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "bars",
+                cover: [0.075, 0.078, 0.085] },
+/* titanium silver #B3B8BD / Audi red-orange #FA470D, with a CARBON BLACK
          engine cover. This was a black car here until 2026-09-08, described in
          this comment as "2026 black car, red-orange + titanium" with no source.
          The R26 is the other way round: silver body, black cover, red accents
@@ -130,7 +137,6 @@ const Teams = (function () {
          is observation, not the inference the old comment rightly refused to
          act on. docs/notes/LIVERY-2026-REFERENCE.md carries the sources. */
       color: [0.702, 0.722, 0.741], color2: [0.98, 0.28, 0.05],
-      livery: { cover: [0.075, 0.078, 0.085] },
       engine: "Audi", tier: 4,
       stats: { speed: 76, accel: 74, cornering: 75, braking: 73 },
       drivers: [
