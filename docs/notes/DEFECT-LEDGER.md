@@ -99,6 +99,42 @@ Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
 `lapMirror` portal remaps have landed in code. Remaining survey leftovers live
 on the 08-18 perf-hunt board, not this register.
 
+- **`Invalid CommandEncoder` on the owner's PHONE — the first `gpuErrors > 0`
+  ever seen on hardware. OPEN, with an on-device A/B shipped (2026-09-08).**
+  Reported from a real device, three/webgpu at Spa: `fps 51.4 / frame 19.5 ms`,
+  `gfx: three/webgpu err 1 strikes 0 scale 0.75`, `gpu: Invalid
+  CommandEncoder`, `tlx: blit —` (native present, no readback), `dc 559`. The
+  world renders — trees, grandstands, the car — so the encoder recovered.
+
+  **This is the only player-facing evidence in this file.** Every census leg
+  has reported `gpuErrors 0`; this is the first error from the path a player
+  actually takes, and it arrived by screenshot rather than by any instrument
+  the project owns. It also, incidentally, settles the entry below it: 51.4 fps
+  on the device against 4.9 in the census is the soft-blit gap, measured.
+
+  **The code already describes this failure and assumes hardware is immune.**
+  `tlx.js drawInstanced`: "Dawn bind[s] a 16-vertex vec3 as instance-rate …
+  One failed draw invalidates the whole encoder … Skip the instanced scenery on
+  that path; **real GPUs keep the batches**." `skipBatches()` gates on
+  `_softAdapter && isWebGPU()`. But Dawn is Dawn on a phone too, and the
+  assumption is now in doubt.
+
+  **NOT blind-fixed, deliberately.** Widening the gate to all WebGPU would shed
+  48 % of all prop geometry (79.6 % Vegas, 77.9 % Nurburgring) from every real
+  GPU to chase one recovered error. Instead `apex26.tlxSkipBatches=1` reverts
+  the single suspect on the single device that has it, in a reload — the same
+  idiom as `tlxForceHw` for the software side. `backendState()` now also
+  reports `skipBatches` (the live verdict, not the inputs) and `gpuErrFrames`
+  (DISTINCT presents an error landed in), which is what separates one bad frame
+  at boot from every frame — `err 1` alone cannot.
+
+  **Next, on the device:** set `apex26.tlxSkipBatches="1"`, reload, drive the
+  same corner. Error gone → the instanced batches are the cause and the fix is
+  a narrow one (the attribute layout, not the gate). Error stays → batches are
+  exonerated and the next suspect is free. Either way `gpuErrFrames` says
+  whether it is a boot one-off or per-frame, which decides whether it matters
+  at all.
+
 - **The deploy branch's three.js/WebGPU leg rendered a near-black frame on real
   Apple hardware — NOT REPRODUCING on the current head; handed over
   (2026-09-08).** Run 61 on `9b94175` reads `meanLuma` **44.6**, back in the
