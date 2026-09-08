@@ -23,10 +23,11 @@
  * This is Forza's shape with F1's three-colour dynamic grammar and F1's mode
  * names (which the STEERING assist already uses: OFF / CORNERS / FULL).
  *
- * THE LINE. The RACING LINE steering assist's lateral formula (game.js
- * `lineX`) — inside of the current corner, wide for the next and the last,
- * capped at 72% of the half width less a 0.6 m margin — read against the
- * CHANGE in curvature so a long arc keeps its apex (see lateral()).
+ * THE LINE. The circuit's baked racing line (js/track/core/line.js: turn-in
+ * on the outside, apex on the inside, exit released wide — the line the AI
+ * drives) when the track carries one; otherwise the steering assist's lateral
+ * formula (game.js `lineX`) read against the CHANGE in curvature so a long
+ * arc keeps its apex (see lateral()).
  *
  * THE SPEED. A cornering cap v = sqrt(LAT_MAX·grip/|k|) capped at vTop, swept
  * BACKWARDS under the brake budget (a car can only lose so much speed per
@@ -80,14 +81,23 @@ window.DrivingLine = (function () {
      entry and exit wide (a corner appearing ahead / disappearing behind) and
      the apex inside for however long the corner lasts. */
   function lateral(api, s, hw) {
+    // The baked RACING LINE (js/track/core/line.js, 2026-09-08) when the
+    // circuit has one: outside-inside-outside, the line the AI now drives, so
+    // the picture and the field are one truth. `w` eases to 0 on a straight
+    // ("no opinion"), which brings the ribbon back to the centre there.
+    if (api.lineAt) {
+      const ln = api.lineAt(s);
+      if (ln && ln.w > 0) return clamp(ln.x * ln.w, -(hw - 0.6), hw - 0.6);
+      return 0;
+    }
     const k = api.curvature(s);
     const kA = api.curvature(s + LOOK) - k, kB = api.curvature(s - LOOK * 0.7) - k;
     return clamp(-k * 170 + (kA + kB) * 85, -0.72, 0.72) * Math.max(0, hw - 0.6);
   }
 
   /* Build the strip for `api` — see game.js drivingLineApi() for the shape:
-     { id, total, track, sample(s, out), curvature(s), latMax, brake, accel,
-       vTop, grip }. Returns the cache; call once per circuit. */
+     { id, total, track, sample(s, out), curvature(s), lineAt?(s) → {x, w},
+       latMax, brake, accel, vTop, grip }. Returns the cache; call once per circuit. */
   function build(api) {
     const L = api.total, n = Math.max(8, Math.round(L / STEP));
     const ds = L / n;

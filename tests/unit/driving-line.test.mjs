@@ -146,3 +146,27 @@ test("draw() honours the mode and reports a backend without the pass", () => {
   assert.equal(DL.setMode("bogus"), "off", "an unknown mode is OFF");
   assert.equal(load().mode(), "full", "the shipped default is the whole lap, Forza's default");
 });
+
+test("with a baked racing line the ribbon follows IT, easing to the centre where the line has no opinion", () => {
+  const DL = load();
+  const api = stadium();
+  // outside-inside-outside through the first corner, no opinion elsewhere
+  api.lineAt = (s) => {
+    s = ((s % api.total) + api.total) % api.total;
+    const mid = api.straight + api.arc / 2;
+    if (Math.abs(s - mid) < api.arc * 0.25) return { x: -5.5, w: 1 };            // apex: inside edge (−x)
+    if (s > api.straight - 60 && s < api.straight) return { x: 5.5, w: 1 };     // turn-in: outside
+    return { x: 5.5, w: 0 };                                                     // straight: no opinion
+  };
+  DL.build(api);
+  const c = DL._cache();
+  const lat = (s) => {
+    const i = Math.round(s / c.step) % c.n, o = i * 12;
+    const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 }; api.sample(i * c.step, smp);
+    const x = (c.verts[o] + c.verts[o + 6]) / 2, z = (c.verts[o + 2] + c.verts[o + 8]) / 2;
+    return (x - smp.p[0]) * smp.r[0] + (z - smp.p[2]) * smp.r[2];
+  };
+  assert.ok(Math.abs(lat(api.straight + api.arc / 2) - -5.5) < 0.3, `apex follows the baked line: ${lat(api.straight + api.arc / 2).toFixed(2)}`);
+  assert.ok(Math.abs(lat(api.straight - 30) - 5.5) < 0.3, `turn-in follows the baked line: ${lat(api.straight - 30).toFixed(2)}`);
+  assert.ok(Math.abs(lat(api.straight / 2)) < 0.3, `no opinion = centre: ${lat(api.straight / 2).toFixed(2)}`);
+});

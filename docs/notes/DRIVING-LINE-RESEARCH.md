@@ -77,8 +77,10 @@ Second pass, 2026-09-08, from EA's own pages and player guides.
   line 60 m past each exit and fades over ~70 m so it never reads as cut off.
 - **Where** RACE SETTINGS, beside DIFFICULTY: a property of the race a player
   is about to run, offered in every flow including time trial.
-- **The line** is the same lateral formula as the RACING LINE steering assist
-  (`lineX` in game.js), so the picture and the pull agree.
+- **The line** is the circuit's baked racing line (`js/track/core/line.js`,
+  outside-inside-outside, the line the AI drives since 2026-09-08), so the
+  picture and the field are one truth; a track without one falls back to the
+  steering assist's lateral formula (`lineX` in game.js).
 - **The speed profile** is a cornering cap `sqrt(LAT_MAX·grip/|k|)` capped at
   `vTop()`, swept backwards under `BRAKE·0.85` and forwards under `ACCEL` — the
   AI's own brake-target model (`AiDrive.brakeTarget`), so the braking zones
