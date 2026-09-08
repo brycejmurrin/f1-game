@@ -710,12 +710,24 @@ function buildLiveryCreator(container, team) {
   // is `disabled` for real, so a tap does nothing rather than editing a field
   // the car cannot show. Registered by the row builders; synced on every edit,
   // after refreshPalettes has rebuilt the palette chips it also disables.
+  // A dep is a ROW (every control in it) or one PILL (a value that paints
+  // nothing under the current draft — SPINE TOP "wordmark" with SPONSORS at
+  // "clean" has no name to write). The audit behind the rules, from
+  // liverytex.js: TAIL GRAPHIC is the fin motif's wash AND the ink of a number
+  // or code badge, so it is dead only when the motif is off and the badge is
+  // not a number; NUMBER FONT and the mark colours are always live (the nose
+  // number and its crest head paint on every car), so they carry no dep.
   const deps = [];
   const needFin = () => (d.finShape || "standard") !== "none";
   const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
+  const finArtLive = () => needFin() && ((d.finStyle || "team") !== "none" || d.finBadge === "number" || d.finBadge === "code");
+  const NO_ART = "Nothing to colour — TAIL STYLE is NONE and FIN BADGE is not a number or code";
+  const haveNames = () => (d.sponsors || "default") !== "clean";
+  const NO_NAMES = "Needs sponsor names — SPONSORS is CLEAN";
   const syncDeps = () => {
     for (const dep of deps) {
       const off = !dep.when();
+      if (dep.pill) { dep.pill.disabled = off; dep.pill.title = off ? dep.why : ""; continue; }
       dep.row.setAttribute("aria-disabled", String(off));
       dep.row.title = off ? dep.why : "";
       const ctl = dep.row.querySelectorAll("button, input");
@@ -799,7 +811,7 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("WINGS", "wing", true));
   const finRow = colorRow("TAIL FIN", "fin", true), finArtRow = colorRow("TAIL GRAPHIC", "finArt", true);
   wrap.appendChild(finRow); wrap.appendChild(finArtRow);
-  deps.push({ row: finRow, when: needFin, why: NO_FIN }, { row: finArtRow, when: needFin, why: NO_FIN });
+  deps.push({ row: finRow, when: needFin, why: NO_FIN }, { row: finArtRow, when: finArtLive, why: NO_ART });
   // Per-team mark rows: LiveryTex.markSlots names the shape each picker paints
   // on THIS mark, so a player choosing Racing Bulls sees RB LETTERS, BULL and
   // OUTLINE rather than rows that could mean anything. The LENGTH is the mark's
@@ -861,6 +873,11 @@ function buildLiveryCreator(container, team) {
   pillRow("SPINE HEIGHT", "spineHeight", Car3D.SPINE_HEIGHT_IDS || ["standard"], "standard");
   // What the cover's FLANK carries — the number, the mark or the driver code.
   pillRow("SPINE SIDE", "spineSide", LT && LT.SPINE_SIDE_IDS || ["none"], "none");
+  // The pills that write a sponsor name: dead under the CLEAN pack.
+  for (const k of ["spineLogo:wordmark", "spineSide:wordmark", "spineSide:duo"]) {
+    const b = wrap.querySelector('[data-cs-pill="' + k + '"]');
+    if (b) deps.push({ pill: b, when: haveNames, why: NO_NAMES });
+  }
 
   const nameRow = document.createElement("label"); nameRow.className = "cs-liv-ed-row";
   const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
