@@ -49,7 +49,8 @@ means a better line buys the AI position realism, not pace.
 
 ## 2. What the bake actually produces (measured)
 
-`scratch/line-audit.mjs` (gitignored) builds circuits through
+`tools/track/line-audit.mjs` (promoted out of `scratch/` on 2026-09-08, with
+the corrected "tighter" metric of §6's correction) builds circuits through
 `tools/track/verify-track.cjs`'s `buildContext()` and reads the baked table.
 "steep" is the lateral slope `|Δx|/Δs` — 0.2 m/m is an 11° crossing angle,
 0.35 m/m is 19°. A real car crossing a 12 m road over 60 m runs ~0.2.
@@ -207,7 +208,7 @@ number of corners whose peak curvature exceeds the road's (Spa 2 → 9 at
 λ = 0.003). Not shipped; the prototype is `scratch/relax-proto.mjs`
 (gitignored, `--weighted=true`).
 
-**Measured, seed → relaxed** (`scratch/line-audit.mjs`; corner time is the
+**Measured, seed → relaxed** (`tools/track/line-audit.mjs`; corner time is the
 AI's model on the line's OWN curvature, which the arc formula in §2 hid):
 
 | circuit | worst slope | steep > 0.2 | on clamp | corner time vs centreline |
@@ -218,11 +219,44 @@ AI's model on the line's OWN curvature, which the arc formula in §2 hid):
 | monaco | 0.38 → 0.42 | 15.0 → 7.4 % | 22 → 27 % | −4.0 % → positive |
 
 Negative means the knot line was SLOWER than the centreline; every circuit
-was. Steep nodes above 0.35 m/m fell from 1.7–6.7 % to 0–1 %; no corner's
-peak line curvature exceeds the road's on any of the eight circuits audited
-(the "tighter" column of §2 is 0 everywhere). "On clamp" rose on Monza and
-Monaco because the apexes now sit ON the inside clamp for the whole plateau —
-the intent, not the overshoot §2 described.
+was. Steep nodes above 0.35 m/m fell from 1.7–6.7 % to 0–1 %. "On clamp" rose
+on Monza and Monaco because the apexes now sit ON the inside clamp for the
+whole plateau — the intent, not the overshoot §2 described.
+
+> **Correction (2026-09-08, promoting the audit into `tools/`).** This
+> paragraph originally read "no corner's peak line curvature exceeds the
+> road's on any of the eight circuits audited"; the relaxation commit message
+> says the same. Both overstate it, and the audit as first written could not
+> have supported either. It compared peaks over `lineCorners`' s0..s1
+> windows, which are PADDED and OVERLAP their neighbours, on an unsmoothed
+> line curvature — a single-node second difference. Run that way it reports 2
+> tighter corners on Silverstone and 4 on Suzuka; Suzuka's worst read 1.36×,
+> and the 1.36 was the NEXT corner's turn-in inside the tail of this corner's
+> window (that corner's own core is 0.73× the road). `tools/track/line-audit.mjs`
+> now measures each corner's CORE — ±len/2 about the apex, on a 5-node mean —
+> and what is true is narrower: **0 tighter corners on Monza, Spa,
+> Silverstone, Baku, Singapore, Imola and Hungaroring; exactly one each on
+> Monaco, Suzuka, Zandvoort, Catalunya and Interlagos, worst +9 %.** The
+> pass-count cut of §6a is exonerated — 300/400 gives the same counts as the
+> shipped 60/250 — so this is a property of λ and the margin clamp, not of
+> convergence.
+>
+> The general claim is wrong in a more interesting way than "the number is
+> 1, not 0". At the APEX a racing line is never tighter than the road. Through
+> the TRANSITION between two corners it always is — the line curves where the
+> road runs straight, which is what outside-in-outside means. On a lap as
+> tight as Monaco's, where every window overlaps its neighbours, no windowed
+> peak can tell the two cases apart, so a per-corner "tighter" count is a
+> smoke alarm and not a proof.
+
+The four circuits above are also not the whole picture: on the short and
+street layouts the relaxed line's corner time comes out marginally WORSE than
+the centreline's — Baku −0.25 %, Singapore −0.08 %, Zandvoort −0.48 %. The
+model is the AI's own √(LAT_MAX/|k|) capped at vTop, so a lap whose corners
+are all below the cap gains nothing from a wider radius and pays for the
+extra distance the outside-in-outside path costs. It is a real (small) loss,
+not an artefact; it is also the regime where the arc's radius is not what
+limits the car.
 
 **Tests.** `tests/unit/track-line.test.mjs` (synthetic, expectations
 unchanged, all pass) and the new `tests/unit/track-line-circuits.test.mjs`
