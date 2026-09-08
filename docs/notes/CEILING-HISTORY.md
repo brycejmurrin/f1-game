@@ -2145,3 +2145,16 @@ track-row washes use tokens; the unread `--manual` token is gone).
   sweeping into the corner, which the rule allows, and attackers, which it does
   not cover. The rules themselves are in `js/physics/ai-drive.js` with unit
   tests; game.js keeps the call sites.
+
+- `js/game.js` lines 10003 -> **10010**, codeLines 5479 -> **5480**;
+  `js/track/tracks.js` lines 2399 -> **2400** (2026-09-08): the racing line.
+  One code line in each: game.js reads `TrackLine.at()` for the AI's lateral
+  target instead of `-k * 130 * hw` (the comment block above it carries the
+  measurement: approach +1..+3.6 m INSIDE before, 3-6 m outside after; apex
+  +1.2 m inside before, within a metre of the edge after), and tracks.js calls
+  `TrackLine.bake(track)` beside the curvature LUT. The geometry itself is the
+  new `js/track/core/line.js` (its own file, unit-tested on synthetic tracks),
+  which is where a bake belongs. A solo AI lap is the same 125.10 s with the
+  line on, off or scaled — lateral position is free in the kinematic model —
+  so this is where the AI drives, not how fast; corner speed still comes from
+  the road's curvature.
