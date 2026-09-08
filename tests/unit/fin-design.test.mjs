@@ -306,7 +306,14 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
     }
     assert.ok(Math.abs(maxDy - M.Car3D.spineRise(id)) < 1e-9, `${id}: the crown rises by exactly its rise (got ${maxDy})`);
     assert.strictEqual(lowered, 0, `${id}: nothing moves DOWN — the floor and the fin stay put`);
-    assert.ok(Math.abs(finTop({ spineHeight: id }) - top0) < 1e-9, `${id}: the fin top stays on the regulation line`);
+    // The regulation top, asserted on the number the blade is CUT from —
+    // build()'s part measure rounds centre and size to 10 mm, so the derived
+    // top carries that much slack and a 1e-9 bound on it only ever passed by
+    // luck (it broke the moment the fin ROOT started following the crown).
+    const rootTop = (h) => M.Car3D.sharkFinRoot(
+      M.Car3D.bodyAnchors(parts, team.id, h), 1, "standard").top;
+    assert.strictEqual(rootTop(id), rootTop(null), `${id}: the fin top stays on the regulation line`);
+    assert.ok(Math.abs(finTop({ spineHeight: id }) - top0) <= 0.011, `${id}: and the mesh agrees`);
   }
 });
 
