@@ -83,7 +83,7 @@ cars at the start of three episodes, diff, and the leak names itself. Neither
 reasoned it out; three code-read hypotheses were tried and measured wrong on
 this side alone (the Red Bull livery commit, a lazily-built cache, the seeded
 stream's draw count). **The measurement is cheap and the reasoning is not: on a
-determinism break, dump and diff FIRST.** A VM twin of the browser guard landed
+determinism break, dump and diff FIRST** — `node tools/check/episode-diff.mjs` is that procedure, and it names the field in about five seconds. A VM twin of the browser guard landed
 with the other side's fix (`determinism-replay-vm.test.mjs`, in `test:game-vm`),
 so this is now caught without a browser group; a second twin written here was
 dropped on the merge rather than shipped beside it, which is the same
