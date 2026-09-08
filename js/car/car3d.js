@@ -2914,10 +2914,10 @@ const Car3D = (function () {
       // The driver's head: helmets.js owns the lid. cy is the TEMPLE line. At
       // 0.630 the crown sat at 0.749 under a cockpit surround topping out at
       // 0.765 — the head was BELOW the tub, and a design nobody can see is the
-      // defect this module exists to fix. 0.700 clears it by 54 mm, and still
-      // passes 71 mm under the halo.
+      // defect this module exists to fix. 0.715 clears it by 82 mm, and still
+      // passes 43 mm under the halo at 0.890.
       const des = Helmets.designFor(opts && opts.num, c1);
-      Helmets.build(out, 0, 0.700, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.glass });
+      Helmets.build(out, 0, 0.715, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.glass });
       // No brow box and no rear spoiler box: the traced shell carries its own
       // ridge over the aperture and its own aero lip at the back.
     }
