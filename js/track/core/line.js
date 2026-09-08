@@ -162,7 +162,63 @@ const TrackLine = (function () {
     for (let i = 0; i < n; i++) { const lim = Math.max(hw[i] - MARGIN, 0.5); x[i] = clamp(x[i], -lim, lim); }
     track.line = x; track.lineW = w;
     bakeAttack(track, ds);
+    bakePathK(track, ds);
     return track;
+  }
+
+  // THE PATH'S CURVATURE. The line is faster than the centreline because its
+  // radius is larger: the widest arc that touches the outside edge at the
+  // corner's ends and the inside edge at its apex. For a corner of centreline
+  // radius R turning θ on a road with usable half-width w (a = R + w the
+  // outside, b = R - w the inside), that arc's radius is
+  //   ρ = (a² + b² - 2ab cos(θ/2)) / (2 (b - a cos(θ/2)))
+  // — the classical result, and for a slow corner on a wide road it is two or
+  // three times R. The AI's corner-speed model is a calibrated abstraction
+  // (sqrt(LAT_MAX grip / k)), tuned on the ROAD's curvature against what the
+  // player can actually do, so the whole gain cannot be handed over without an
+  // AI on rails through every hairpin: the baked curvature is the road's eased
+  // toward the arc's, never below 85 % of it (an 8 % corner-speed edge for
+  // being on the line). The AI's brake target reads it when the car is ON the
+  // line (game.js) — off it, fighting, it gets the road's own curvature, so
+  // being off-line costs what it costs a real car.
+  const PATH_FLOOR = 0.85;
+  function bakePathK(track, ds) {
+    const n = track.n, curv = track.curv;
+    const pk = new Float32Array(n);
+    pk.set(curv);
+    const wrapI = (i) => ((i % n) + n) % n;
+    for (const c of track.lineCorners || []) {
+      const i0 = Math.floor(c.s0 / (track.total) * n), i1 = Math.floor(c.s1 / track.total * n);
+      const len = ((i1 - i0) % n + n) % n;
+      // the corner's angle: |k| integrated over its window
+      let theta = 0; for (let q = 0; q <= len; q++) theta += Math.abs(curv[wrapI(i0 + q)]) * ds;
+      const R = 1 / Math.max(Math.abs(c.k), 1e-4);
+      const iA = Math.floor(c.sApex / track.total * n) % n;
+      const w = Math.max(track.hw[iA] - MARGIN, 0.5);
+      const a = R + w, b = R - w, cs = Math.cos(Math.min(theta, Math.PI) / 2);
+      const den = 2 * (b - a * cs);
+      // den <= 0: the arc would need the straights beyond the corner's ends —
+      // an even larger radius than the formula can express, so the floor.
+      const rho = den > 1e-3 ? (a * a + b * b - 2 * a * b * cs) / den : Infinity;
+      const kArc = 1 / Math.max(rho, R);   // never tighter than the road
+      for (let q = 0; q <= len; q++) {
+        const i = wrapI(i0 + q), k = curv[i], ak = Math.abs(k);
+        if (ak < 1e-6) continue;
+        const eased = Math.max(Math.min(ak, kArc), PATH_FLOOR * ak);
+        pk[i] = k >= 0 ? eased : -eased;
+      }
+    }
+    track.lineK = pk;
+  }
+
+  function pathK(track, s) {
+    const pk = track.lineK;
+    if (!pk) return 0;
+    const n = track.n, L = track.total;
+    s %= L; if (s < 0) s += L;
+    const fi = s / L * n;
+    const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
+    return lerp(pk[i], pk[j], f);
   }
 
   // ATTACK ZONES. Overtaking that feels deliberate happens where it is ON: a
@@ -227,5 +283,5 @@ const TrackLine = (function () {
     return _out;
   }
 
-  return { bake, at, attackAt, K_ON, MARGIN, ZONE_M };
+  return { bake, at, attackAt, pathK, K_ON, MARGIN, ZONE_M, PATH_FLOOR };
 })();

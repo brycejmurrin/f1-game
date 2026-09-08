@@ -496,7 +496,7 @@ async function settle(pred, maxTurns) {
  * createGame({ track, tod, wx, verbose }) → Promise<handle>
  *   track   circuit id ("monza") — when given, race()+go() before returning
  *   storage { key: value } pre-seeded into localStorage (apex26. prefix optional)
- *   handle  { apex, G, ctx, sandbox, step(n, dt), race(id, tod, wx),
+ *   handle  { apex, G, ctx, sandbox, step(n, dt), race(id, tod, wx, opts),
  *             settle(pred), flushTimers(), record, bootMs, trackMs }
  */
 async function createGame(opts) {
@@ -558,7 +558,7 @@ async function createGame(opts) {
     apex, ctx, sandbox, record, bootMs, trackMs: 0,
     get G() { return G; },
     // Same shape the specs use: race(id, tod, wx) → wait info().track → go().
-    async race(id, tod, wx) {
+    async race(id, tod, wx, opts) {
       const t1 = performance.now();
       // startRace() is async (it awaits the circuit's scenery closure), and
       // apex.race() does not hand its promise back. The browser fixture polls
@@ -566,7 +566,7 @@ async function createGame(opts) {
       // before — here the field is the tell: makeCars() replaces G.cars, so a
       // new identity means startRace() ran to completion for THIS call.
       const carsBefore = G ? G.cars : null;
-      const r = apex.race(id || "monza", tod || "day", wx || "dry");
+      const r = apex.race(id || "monza", tod || "day", wx || "dry", opts);
       if (!r) throw new Error("game-vm: unknown circuit " + id);
       const ok = await settle(() => {
         const i = apex.info();

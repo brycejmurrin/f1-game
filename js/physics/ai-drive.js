@@ -556,6 +556,35 @@ const AiDrive = (function () {
   // runs wide, fronts locked for the render) then a GATHER phase (85 % pace
   // while the car is collected) — half a second to a second and a half lost,
   // and never while alongside another car.
+  // TYRES AS STRATEGY. There are no pit stops (docs/PHYSICS.md), so the
+  // compound IS the strategy, and the field used to run one. Each AI car now
+  // starts a race on a class drawn for the distance (sprints on softs, long
+  // races mixed): a soft is up on pace and fades, a hard is down and lasts,
+  // so soft-starters and hard-starters cross over mid-race — real F1 2026 deg
+  // is ~0.07 s a lap per lap of age (0.08 % of a 90 s lap) with the compounds
+  // ~0.4 s apart on a fresh set; de Groote's overtaking study found strategy
+  // diversity the largest lever a race controls. Zero-mean across a mixed field
+  // by construction, so the AI's pace against the player is unchanged on
+  // average; the player's own compound stays the static garage choice.
+  // Fresh: soft +0.4 %, hard -0.4 %; deg 0.12 / 0.07 / 0.04 % a lap, capped at
+  // 2.5 %. Soft and hard cross at lap 10 — inside the 10- and 25-lap races
+  // hards are drawn for.
+  const TYRE = {
+    soft:   { off: 0.004,  deg: 0.0012 },
+    medium: { off: 0,      deg: 0.0007 },
+    hard:   { off: -0.004, deg: 0.0004 },
+  };
+  function tyreClass(roll, laps) {
+    const r = roll || 0;
+    if (laps <= 5) return r < 0.7 ? "soft" : "medium";
+    if (laps <= 15) return r < 0.4 ? "soft" : r < 0.8 ? "medium" : "hard";
+    return r < 0.25 ? "soft" : r < 0.7 ? "medium" : "hard";
+  }
+  function tyrePace(cls, lapsDone) {
+    const t = TYRE[cls] || TYRE.medium;
+    return 1 + t.off - Math.min(t.deg * Math.max(lapsDone || 0, 0), 0.025);
+  }
+
   function mistakeChance(t, pressure) {
     const cons = t && t.consistency != null ? t.consistency : 0.75;
     return 0.004 * (1 + 2 * clamp(pressure || 0, 0, 1)) * (1.3 - cons);
@@ -694,5 +723,6 @@ const AiDrive = (function () {
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
     mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
+    tyreClass, tyrePace,
   };
 })();

@@ -938,7 +938,9 @@ const api = {
   // optionally forcing time of day ("day" | "night" | "default") and weather
   // ("dry" | "wet" | "rain" | "overcast" | "fog"). "wet" = damp road, no rain;
   // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
-  race(trackRef, timeOfDay, weather) {
+  // opts.laps: the race distance (default GAME_LAPS) — the tyre-class draw at
+  // grid-up reads it, so a long-race bench must set it HERE, not after.
+  race(trackRef, timeOfDay, weather, opts) {
     const i = typeof trackRef === "number"
       ? trackRef
       : Tracks.LIST.findIndex((t) => t.id === trackRef);
@@ -946,7 +948,7 @@ const api = {
     G.trackIdx = i;
     G.seasonMode = false;
     G.timeTrial = false;
-    G.raceLaps = GAME_LAPS;
+    G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
     startRace();
