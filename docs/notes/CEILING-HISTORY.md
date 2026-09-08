@@ -2198,6 +2198,19 @@ adapter that hands the builder the centreline sampler, the curvature LUT and
 the AI's own brake numbers so the braking zones shown are the ones the field
 brakes in — the builder itself lives outside game.js on purpose. `js/agent/apex.js`
 +10 for the `drivingLine(mode)` hook.
+
+- `js/game.js` lines 10019 -> **10036**, codeLines 5452 -> **5465**
+  (2026-09-08): pressure-forced mistakes. Eleven
+  code lines: the pressure accumulator (1), the error clock and its once-per-
+  braking-point roll from a hash (6), the late-phase brake multiplier feed (1),
+  the gather-phase pace (1), the wide line (1) and the render's locked fronts
+  (1). The rates, phases and magnitudes are `AiDrive.mistakeChance` /
+  `mistakePhase` / `mistakeBrakeMul` / `mistakeGatherMul`, unit-tested.
+  Measured (race-quality bench, six minutes, ~10 braking points a lap): two
+  errors in 48 monaco laps, none in 44 at monza — a field that has just left
+  the grid carries little pressure; the design point is one or two visible
+  errors per pressured car per twenty laps, well under the two or three
+  lock-ups a race that F1 22's players called too many.
 - `js/game.js` lines 9978 -> **9993**, codeLines 5435 -> **5446** (2026-09-08):
   the garage room reads the game beyond the car. `garageCtx()` hands
   `GarageScene.draw` the circuit the next race runs at (career calendar,

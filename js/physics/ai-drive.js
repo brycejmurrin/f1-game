@@ -322,6 +322,7 @@ const AiDrive = (function () {
     if (attacking && room > 1.6) {
       vLim *= lerp(1.0, 1.07, t.craft) * houseMulCtx(ctx, 0.99, 1.03, "attack");
     }
+    if (ctx.errMul) vLim *= ctx.errMul;   // a missed braking point (mistakeBrakeMul)
     return vLim;
   }
 
@@ -542,6 +543,29 @@ const AiDrive = (function () {
   }
   function sideLevel() { return SIDE_LEVEL; }
 
+  // MISTAKES. An error-free field is a procession; F1 22's "two or three big
+  // lock-ups a race" was what players called too many. rFactor 2 schedules
+  // "bad driving zones" by Composure, AMS2 separates general errors from
+  // pressure-forced ones, F1 Manager feeds pressure into a confidence state.
+  // Here: once per braking zone a chance of a missed braking point —
+  //   base 0.4 % x (1 + 2 x pressure) x (1.3 - consistency)
+  // pressure being the fraction of the last six seconds spent with a car
+  // within 0.6 s behind. A metronome (consistency 1) unpressured: 0.12 % a
+  // zone, one every ~80 laps; a rookie (0.5) under sustained pressure: ~1 % a
+  // zone, one every ~10 laps. The error is a LATE phase (brakes 5 % later,
+  // runs wide, fronts locked for the render) then a GATHER phase (85 % pace
+  // while the car is collected) — half a second to a second and a half lost,
+  // and never while alongside another car.
+  function mistakeChance(t, pressure) {
+    const cons = t && t.consistency != null ? t.consistency : 0.75;
+    return 0.004 * (1 + 2 * clamp(pressure || 0, 0, 1)) * (1.3 - cons);
+  }
+  const ERR_LATE = 1.2, ERR_GATHER = 1.8;
+  function mistakeTotal() { return ERR_LATE + ERR_GATHER; }
+  function mistakePhase(errT) { return !(errT > 0) ? 0 : errT > ERR_GATHER ? 1 : 2; }   // 1 late/wide, 2 gathering
+  function mistakeBrakeMul() { return 1.05; }
+  function mistakeGatherMul() { return 0.85; }
+
   const SIDE_LEVEL = 2.4;
   function sideYieldsA(dProg, xA, xB) {
     if (dProg < -SIDE_LEVEL) return true;        // A is behind B
@@ -669,5 +693,6 @@ const AiDrive = (function () {
     otWant, passTarget, passHold, passCooldown, sideYieldsA,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
     holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
+    mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
   };
 })();
