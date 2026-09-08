@@ -93,20 +93,20 @@ test("the painter answers for every point of the shell, and paints more than the
 
 test("the visor is an aperture over the eyes: front only, and neither the crown nor the chin", () => {
   assert.equal(Helmets.isVisor(0.05, 0), false, "the crown is paint");
-  assert.equal(Helmets.isVisor(0.37, 0), true, "straight ahead is visor");
-  assert.equal(Helmets.isVisor(0.37, 180), false, "the back of the head is paint");
-  assert.equal(Helmets.isVisor(0.37, 110), false, "the temples are paint");
+  assert.equal(Helmets.isVisor(0.41, 0), true, "straight ahead is visor");
+  assert.equal(Helmets.isVisor(0.41, 180), false, "the back of the head is paint");
+  assert.equal(Helmets.isVisor(0.41, 110), false, "the temples are paint");
   assert.equal(Helmets.isVisor(0.95, 0), false, "the chin bar is paint");
   // symmetric about the nose, and wrapping 0 rather than clipping at 359
-  for (const az of [10, 25, 40]) assert.equal(Helmets.isVisor(0.37, az), Helmets.isVisor(0.37, 360 - az), `asymmetric at ${az}`);
+  for (const az of [10, 25, 40]) assert.equal(Helmets.isVisor(0.41, az), Helmets.isVisor(0.41, 360 - az), `asymmetric at ${az}`);
   // a LENS: widest across the eyes, closing toward the brow and the nose
   const width = (t) => { let n = 0; for (let az = 0; az < 360; az++) if (Helmets.isVisor(t, az)) n++; return n; };
-  assert.ok(width(0.375) > width(0.28) && width(0.375) > width(0.47), "the aperture is widest in the middle, not a rectangle");
+  assert.ok(width(0.41) > width(0.315) && width(0.41) > width(0.51), "the aperture is widest in the middle, not a rectangle");
 });
 
 test("shell() marks the visor as glass and the paint as paint", () => {
   const shell = Helmets.shell(Helmets.designFor(44, null));
-  const eye = shell(0.37, 0), crown = shell(0.05, 0);
+  const eye = shell(0.41, 0), crown = shell(0.05, 0);
   assert.equal(eye.glass, true);
   assert.equal(crown.glass, false);
   assert.deepEqual([...eye.c], [...Helmets.DESIGNS[44].visor], "the aperture wears the design's visor tint");
@@ -130,10 +130,14 @@ test("the shell is a full-face helmet, not the half-ball it used to be", () => {
   assert.ok(h > w, "a helmet is taller than it is wide");
   assert.ok(d > w, "and a little deeper than it is wide");
   // the widest ring is at the ears, above the bottom of the shell
-  const widest = Helmets.SHAPE.S.indexOf(Math.max(...Helmets.SHAPE.S));
+  const widest = Helmets.SHAPE.W.indexOf(Math.max(...Helmets.SHAPE.W));
   assert.ok(Helmets.SHAPE.T[widest] > 0.3 && Helmets.SHAPE.T[widest] < 0.75, "widest at the ears, not at the rim");
-  // the chin bar reaches forward of the plain oval
-  assert.ok(Helmets.pointAt(0.72, 0)[2] > Helmets.pointAt(0.30, 0)[2] * 0.55, "no chin bar");
+  // the chin bar reaches further forward than the eyes do — a face, not a bus front
+  assert.ok(Helmets.pointAt(0.85, 0)[2] > Helmets.pointAt(0.40, 0)[2] + 0.02, "no chin bar");
+  // and the brow stands proud of the aperture recessed under it
+  assert.ok(Helmets.pointAt(0.26, 0)[2] > Helmets.pointAt(0.46, 0)[2] + 0.005, "no brow standing over the aperture");
+  // the neck rim is a flat cut, narrower than the widest ring
+  assert.ok(Helmets.SHAPE.W[Helmets.SHAPE.W.length - 1] < Math.max(...Helmets.SHAPE.W) * 0.8, "the shell does not taper in to the neck");
   // a closed, well-formed surface: every index in range, no degenerate normals
   const n = out.pos.length / 3;
   assert.ok(out.idx.every((i) => i >= 0 && i < n), "index out of range");
