@@ -105,6 +105,13 @@ const Teams = (function () {
     {
       id: "williams", name: "Williams", short: "WIL",
       color: [0.059, 0.235, 0.788], color2: [1.0, 1.0, 1.0],       /* blue #0F3CC9 / white */
+      /* The FW48 is gloss blue with a BLACK section sweeping from the chassis
+         side through to the rear, framed by a red-and-white keyline; the white
+         goes on the sidepod and the wings, NOT the cover. A secondary source
+         claimed a white engine cover — the official release omits the cover
+         from its white list, and a look at the launch photograph reads the
+         cover as black. See docs/notes/LIVERY-2026-REFERENCE.md. */
+      livery: { cover: [0.055, 0.058, 0.070] },
       engine: "Mercedes", tier: 3,
       stats: { speed: 82, accel: 78, cornering: 80, braking: 79 },
       drivers: [
