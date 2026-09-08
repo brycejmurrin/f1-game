@@ -322,6 +322,7 @@ const AiDrive = (function () {
     if (attacking && room > 1.6) {
       vLim *= lerp(1.0, 1.07, t.craft) * houseMulCtx(ctx, 0.99, 1.03, "attack");
     }
+    if (ctx.errMul) vLim *= ctx.errMul;   // a missed braking point (mistakeBrakeMul)
     return vLim;
   }
 
@@ -506,6 +507,94 @@ const AiDrive = (function () {
   // scrubbed to a crawl. Racing's own rule (the FIA driving standards' "a
   // significant portion alongside" — front axle past the other car's mirror) is
   // half a car: inside that, both must leave room, so the OUTER car concedes.
+  // IS THE MOVE ON? A pass is engaged only where it is deliberate: on a straight
+  // (base quality 0.6 — a straight with a tow is always a place to pass), or in
+  // an attack zone at the zone's baked quality (TrackLine.attackAt: straight
+  // length x width). The utility is that quality times how hard we are closing,
+  // scaled by craft (a good racer sees a move where a rookie does not) and a
+  // per-car roll — Game AI Pro's "not every opportunity should be taken, and
+  // randomness or a biorhythm trait should contribute". Below the threshold the
+  // car shadows the one ahead (otPull) and waits for a better place. Measured
+  // before: monza 3.7 sticking passes per field lap early in a race with a
+  // third of all passes flipping straight back; monaco 1.3 (the real Monaco
+  // sees a handful per race).
+  function attackOK(ctx) {
+    const inZone = (ctx.toTurnIn != null ? ctx.toTurnIn : 1e9) < 130;
+    // A straight is a place to pass (0.6); a bend fades it out by 0.02 rad/m.
+    const bend = clamp(1 - (Math.abs(ctx.kAhead || 0) - 0.004) / 0.016, 0, 1);
+    let q = inZone ? (ctx.attackQ || 0) : lerp(0.15, 0.6, bend);
+    // A car with genuinely LESS PACE is passed wherever: the quality floor rises
+    // with the pace deficit (12 % of the top speed is a floor of 0.6; a car
+    // crawling under 12 % is 1) — this is what keeps a slow player passable on
+    // a street circuit whose zones are all narrow (measured without it: 3 of
+    // 10 followers past a slow car at monaco in four minutes, 10 of 10 with).
+    // The floor starts at a 6 % deficit — the field's own tier spread — and is
+    // full at 12 %, so a slightly slower rival is still passed only where the
+    // move is on, while a genuinely slow car (the 14 % slow player in the
+    // bench) is attacked anywhere.
+    const ref = ctx.vTop > 0 ? ctx.vTop : 72;
+    const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
+    const deficit = clamp((((ctx.freeSpeed || 0) - bv) / ref - 0.06) / 0.06, 0, 1);
+    if ((ctx.blockerSpeed || 0) < 0.12 * ref) q = 1; else q = Math.max(q, 0.6 * deficit);
+    const closing = clamp(((ctx.speed || 0) - (ctx.blockerSpeed || 0)) / 6, 0.25, 1);
+    const craft = lerp(0.7, 1.25, ctx.traits ? ctx.traits.craft : 0.75);
+    const roll = 0.85 + 0.3 * (ctx.roll != null ? ctx.roll : 0.5);
+    return q * Math.max(closing, deficit) * craft * roll >= 0.32;
+  }
+  function sideLevel() { return SIDE_LEVEL; }
+
+  // MISTAKES. An error-free field is a procession; F1 22's "two or three big
+  // lock-ups a race" was what players called too many. rFactor 2 schedules
+  // "bad driving zones" by Composure, AMS2 separates general errors from
+  // pressure-forced ones, F1 Manager feeds pressure into a confidence state.
+  // Here: once per braking zone a chance of a missed braking point —
+  //   base 0.4 % x (1 + 2 x pressure) x (1.3 - consistency)
+  // pressure being the fraction of the last six seconds spent with a car
+  // within 0.6 s behind. A metronome (consistency 1) unpressured: 0.12 % a
+  // zone, one every ~80 laps; a rookie (0.5) under sustained pressure: ~1 % a
+  // zone, one every ~10 laps. The error is a LATE phase (brakes 5 % later,
+  // runs wide, fronts locked for the render) then a GATHER phase (85 % pace
+  // while the car is collected) — half a second to a second and a half lost,
+  // and never while alongside another car.
+  // TYRES AS STRATEGY. There are no pit stops (docs/PHYSICS.md), so the
+  // compound IS the strategy, and the field used to run one. Each AI car now
+  // starts a race on a class drawn for the distance (sprints on softs, long
+  // races mixed): a soft is up on pace and fades, a hard is down and lasts,
+  // so soft-starters and hard-starters cross over mid-race — real F1 2026 deg
+  // is ~0.07 s a lap per lap of age (0.08 % of a 90 s lap) with the compounds
+  // ~0.4 s apart on a fresh set; de Groote's overtaking study found strategy
+  // diversity the largest lever a race controls. Zero-mean across a mixed field
+  // by construction, so the AI's pace against the player is unchanged on
+  // average; the player's own compound stays the static garage choice.
+  // Fresh: soft +0.4 %, hard -0.4 %; deg 0.12 / 0.07 / 0.04 % a lap, capped at
+  // 2.5 %. Soft and hard cross at lap 10 — inside the 10- and 25-lap races
+  // hards are drawn for.
+  const TYRE = {
+    soft:   { off: 0.004,  deg: 0.0012 },
+    medium: { off: 0,      deg: 0.0007 },
+    hard:   { off: -0.004, deg: 0.0004 },
+  };
+  function tyreClass(roll, laps) {
+    const r = roll || 0;
+    if (laps <= 5) return r < 0.7 ? "soft" : "medium";
+    if (laps <= 15) return r < 0.4 ? "soft" : r < 0.8 ? "medium" : "hard";
+    return r < 0.25 ? "soft" : r < 0.7 ? "medium" : "hard";
+  }
+  function tyrePace(cls, lapsDone) {
+    const t = TYRE[cls] || TYRE.medium;
+    return 1 + t.off - Math.min(t.deg * Math.max(lapsDone || 0, 0), 0.025);
+  }
+
+  function mistakeChance(t, pressure) {
+    const cons = t && t.consistency != null ? t.consistency : 0.75;
+    return 0.004 * (1 + 2 * clamp(pressure || 0, 0, 1)) * (1.3 - cons);
+  }
+  const ERR_LATE = 1.2, ERR_GATHER = 1.8;
+  function mistakeTotal() { return ERR_LATE + ERR_GATHER; }
+  function mistakePhase(errT) { return !(errT > 0) ? 0 : errT > ERR_GATHER ? 1 : 2; }   // 1 late/wide, 2 gathering
+  function mistakeBrakeMul() { return 1.05; }
+  function mistakeGatherMul() { return 0.85; }
+
   const SIDE_LEVEL = 2.4;
   function sideYieldsA(dProg, xA, xB) {
     if (dProg < -SIDE_LEVEL) return true;        // A is behind B
@@ -608,6 +697,15 @@ const AiDrive = (function () {
     return clamp((hw || 5) * 0.44, 2.12, 2.45);
   }
 
+  // How much of the baked racing line (TrackLine) a driver takes in a corner
+  // window: nearly all of it — the line IS the fast way round — with a "hold"
+  // house style keeping a little of its own lane (a defensive habit). Streets
+  // slightly less: the line's margins are already the whole road there.
+  function lineFollow(street, hold) {
+    const base = street ? 0.86 : 0.92;
+    return hold ? clamp(base - hold * 0.06, 0.7, 0.95) : base;
+  }
+
   function racingLineMix(street, hold) {
     const base = street ? 0.32 : 0.55;
     return hold ? clamp(base - hold * 0.08, 0.22, 0.62) : base;
@@ -623,6 +721,8 @@ const AiDrive = (function () {
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
     otWant, passTarget, passHold, passCooldown, sideYieldsA,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
-    holdLineGap, defendOnce,
+    holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
+    mistakeChance, mistakeTotal, mistakePhase, mistakeBrakeMul, mistakeGatherMul,
+    tyreClass, tyrePace,
   };
 })();

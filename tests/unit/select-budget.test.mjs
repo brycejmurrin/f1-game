@@ -41,7 +41,7 @@ test("cutting the failure cost buys more than doubling the budget", () => {
 
 test("declaredTests counts by AST, and rejects nothing silently", () => {
   assert.equal(declaredTests("tests/specs/physics-characterization.spec.js"), 1);
-  assert.equal(declaredTests("tests/specs/smoke.spec.js"), 9);
+  assert.equal(declaredTests("tests/specs/smoke.spec.js"), 10);   // 10 since the DRIVING LINE test (2026-09-08)
   assert.equal(declaredTests("tests/specs/there-is-no-such.spec.js"), null,
     "a missing file must return null, not 0 — 0 would read as an empty spec");
 });

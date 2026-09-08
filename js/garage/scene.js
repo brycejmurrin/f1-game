@@ -7,7 +7,7 @@ function init(gfx) { Log.info("game", "GarageScene.init"); _gfx = gfx; }
 
 // The frame clear colour (gfx reads fogColor as the clear) — the "outside" the
 // bay is silhouetted against, and what the apron disc's rim fades into.
-const BACKDROP = [0.035, 0.038, 0.046];
+const BACKDROP = [0.035, 0.038, 0.046];   // MUTATED per ctx.night in rebuild() — game.js reads this array each frame
 
 // SKYLIGHT replaces the preview's old sunColor:[1,1,1]. It has to come down for
 // this room to work at all: a lamp's shading is att = win^2/(distC^2+1) with
@@ -126,6 +126,56 @@ function cyl(out, cx, cy, cz, rad, h, col, seg, mid) {
   }
   pushMat(out, seg, sideOnly(mid, 1));      // the cap is horizontal, same rule
   for (let i = 1; i < seg - 1; i++) out.idx.push(top, top + i, top + i + 1);
+}
+
+// An ORIENTED cylinder from a to b — cyl() is vertical only, and a garage is
+// mostly things that are not: hoses, cables, booms, an upright tyre on a
+// trolley, a jack handle. Basis: n along the axis, u perpendicular, and
+// v = u x n, which gives (u, v, n) the SAME handedness as cyl's (X, Z, Y) so
+// its index order (outward-wound) carries over unchanged; the b-end cap is
+// cyl's top cap and the a-end reverses it. Caps take sideOnly on their axis so
+// a horizontal cap of a wall-keyed material never streaks (see block()).
+function tube(out, a, b, rad, col, seg, mid) {
+  seg = seg || 8;
+  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const L = Math.hypot(d[0], d[1], d[2]) || 1e-6;
+  const n = [d[0] / L, d[1] / L, d[2] / L];
+  const h = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  let u = [h[1] * n[2] - h[2] * n[1], h[2] * n[0] - h[0] * n[2], h[0] * n[1] - h[1] * n[0]];
+  const ul = Math.hypot(u[0], u[1], u[2]) || 1;
+  u = [u[0] / ul, u[1] / ul, u[2] / ul];
+  const v = [u[1] * n[2] - u[2] * n[1], u[2] * n[0] - u[0] * n[2], u[0] * n[1] - u[1] * n[0]];
+  const ring = (i) => { const t = (i / seg) * Math.PI * 2, ca = Math.cos(t), sa = Math.sin(t);
+    return [u[0] * ca + v[0] * sa, u[1] * ca + v[1] * sa, u[2] * ca + v[2] * sa]; };
+  const base = out.pos.length / 3;
+  for (let i = 0; i < seg; i++) {
+    const r = ring(i);
+    for (let k = 0; k < 2; k++) {
+      const pt = k ? b : a;
+      out.pos.push(pt[0] + r[0] * rad, pt[1] + r[1] * rad, pt[2] + r[2] * rad);
+      out.nrm.push(r[0], r[1], r[2]); out.col.push(col[0], col[1], col[2]);
+    }
+  }
+  pushMat(out, seg * 2, mid);
+  for (let i = 0; i < seg; i++) {
+    const p = base + i * 2, q = base + ((i + 1) % seg) * 2;
+    out.idx.push(p, q, q + 1, p, q + 1, p + 1);
+  }
+  for (const end of [[b, 1], [a, -1]]) {
+    const pt = end[0], sg = end[1], top = out.pos.length / 3;
+    for (let i = 0; i < seg; i++) {
+      const r = ring(i);
+      out.pos.push(pt[0] + r[0] * rad, pt[1] + r[1] * rad, pt[2] + r[2] * rad);
+      out.nrm.push(n[0] * sg, n[1] * sg, n[2] * sg); out.col.push(col[0], col[1], col[2]);
+    }
+    pushMat(out, seg, sideOnly(mid, n[1] * sg));
+    for (let i = 1; i < seg - 1; i++)
+      if (sg > 0) out.idx.push(top, top + i, top + i + 1); else out.idx.push(top, top + i + 1, top + i);
+  }
+}
+// A hose or cable through a polyline of points: one tube per leg.
+function hose(out, pts, rad, col, seg, mid) {
+  for (let i = 1; i < pts.length; i++) tube(out, pts[i - 1], pts[i], rad, col, seg, mid);
 }
 
 // The shared material ids, so the bay names the same surfaces the track does
@@ -338,15 +388,19 @@ function buildProps(g, liv) {
   }
   // The upper side walls carry 2.2 m2 of wordmark over 29 m2 of wall, and that
   // band is 22% of the SIDE preset — the one view that looks straight at them.
-  // A service gantry per side: a shelf, its brackets, and a rail.
+  // A service gantry per side: a shelf, its brackets, and a rail. ABOVE the
+  // wordmark band (y 3.10-3.60): the shelf used to run at 3.42 with its clips
+  // at z 0, so the SIDE preset saw every wordmark with its top third behind
+  // the shelf and the middle one notched by a clip. Brackets from 3.62, shelf
+  // at 3.84, rail and clips to 4.24 — under the fill fixtures' 4.32 housings.
   for (const sd of [-1, 1]) {
     const w = sd < 0 ? g.nx : g.px, x = sd * 5.20;
-    block(w, x, 3.42, 0, 0.20, 0.04, 5.00, scale(STEEL, 0.7));
-    block(w, x - sd * 0.20, 3.70, 0, 0.03, 0.28, 5.00, scale(STEEL, 0.5));
+    block(w, x, 3.84, 0, 0.20, 0.04, 5.00, scale(STEEL, 0.7));
+    block(w, x - sd * 0.20, 4.02, 0, 0.03, 0.16, 5.00, scale(STEEL, 0.5));
     for (let i = -2; i <= 2; i++) {
-      block(w, x - sd * 0.09, 3.24, i * 2.30, 0.11, 0.20, 0.05, scale(STEEL, 0.45));
+      block(w, x - sd * 0.09, 3.71, i * 2.30, 0.11, 0.09, 0.05, scale(STEEL, 0.45));
       if (i % 2 === 0)
-        block(w, x - sd * 0.06, 3.56, i * 2.30, 0.14, 0.24, 0.34, scale(STEEL, 0.55));
+        block(w, x - sd * 0.06, 4.06, i * 2.30, 0.14, 0.18, 0.34, scale(STEEL, 0.55));
     }
   }
 
@@ -454,6 +508,159 @@ function buildProps(g, liv) {
   // which is the one view whose whole job is an unobstructed head-on car.
   block(g.mid, 1.55, 0.12, 4.35, 0.55, 0.05, 0.12, scale(STEEL, 0.8));
   cyl(g.mid, 1.55, 0.12, 4.55, 0.03, 0.85, STEEL, 6);
+}
+
+// ── pit equipment around the car ───────────────────────────────────────────
+// Everything in buildProps lives against a wall; the car's own footprint was
+// bare resin. A working bay has its kit AROUND the car — jacks, guns on their
+// hoses, the starter, the tyres it will go out on — and that is what reads in
+// every preset, because the camera always looks at the car. Kept OUTSIDE the
+// car's x +/-0.95 and off the FRONT / REAR sight lines (the front jack rule).
+// The car's wheels: x +/-0.79 front at z 1.7, x +/-0.76 rear at z -1.6, r 0.34
+// (js/car/car3d.js AXLES) — the floor boxes and the guns are placed off those.
+const RUBBER = [0.045, 0.045, 0.050], HOSE = [0.12, 0.14, 0.20];
+const FAN = [4.5, 3.32], SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
+const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90],
+                  [0.10, 0.60, 0.25], [0.15, 0.35, 0.85]];   // S M H, inter, wet
+function buildEquipment(g, liv, ctx) {
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const team = scale(c1, 0.85), dark = scale(STEEL, 0.55);
+  // REAR JACK: the T-bar quick-lift, parked beside the tail the way the front
+  // jack is parked beside the nose — dead astern it stands in the REAR preset.
+  block(g.mid, 1.45, 0.13, -3.35, 0.36, 0.05, 0.09, team);              // lifting head
+  for (const sx of [-1, 1]) cyl(g.mid, 1.45 + sx * 0.34, 0, -3.35, 0.06, 0.10, RUBBER, 8);
+  tube(g.mid, [1.45, 0.20, -3.42], [2.35, 0.62, -4.95], 0.03, STEEL, 6, MAT.METAL);   // handle
+  block(g.mid, 2.35, 0.62, -4.98, 0.24, 0.025, 0.025, team);           // T grip
+  // WHEEL GUNS on their hoses. A boom off each cable tray carries a reel over
+  // the box with its hose RETRACTED — the first pass ran a hose from each reel
+  // straight down to each gun, and four 5 m diagonals crossing the car read
+  // as guy-lines in every preset. Between stops the guns lie by their wheels
+  // on a coil of hose from a floor manifold at the box edge, which is what a
+  // real bay looks like and keeps everything below knee height.
+  // z -1.75, in the gap between the side walls' wordmark bays (z -1.1..1.1
+  // and -2.4..-4.6): at z 0.1 the reel and its drop hung straight in front of
+  // the middle wordmark, which the SIDE preset reads as a sign cut in two.
+  const BZ = -1.75;
+  for (const sd of [-1, 1]) {
+    const bx = sd * 2.3;
+    tube(g.mid, [sd * 4.6, 4.40, BZ], [bx, 4.40, BZ], 0.045, dark, 6, MAT.METAL);   // boom
+    for (let i = 0; i < 3; i++)
+      block(g.mid, sd * (2.9 + i * 0.6), 4.40, BZ, 0.02, 0.09, 0.02, STEEL);        // hangers
+    cyl(g.mid, bx, 4.05, BZ, 0.20, 0.16, scale(DARK, 1.5), 10);                      // reel drum
+    cyl(g.mid, bx, 4.21, BZ, 0.06, 0.20, STEEL, 6);                                  // spindle
+    hose(g.mid, [[bx, 4.05, BZ], [bx, 3.50, BZ]], 0.025, HOSE, 6);                   // retracted drop
+    block(g.mid, bx, 3.46, BZ, 0.04, 0.05, 0.04, STEEL);                             // coupling
+    block(g.mid, sd * 2.36, 0.08, BZ, 0.10, 0.08, 0.24, dark);                       // floor manifold
+    for (const wz of [1.7, -1.6]) {
+      const gx = sd * 1.55, gz = wz + (wz > 0 ? 0.55 : -0.55), cz = wz * 0.55;
+      // The coil: six short legs zig-zagging at floor level beside the manifold.
+      const pts = [[sd * 2.36, 0.08, BZ + (wz > 0 ? 0.14 : -0.14)]];
+      for (let k = 0; k < 6; k++)
+        pts.push([sd * (2.05 + (k % 2 ? 0.22 : -0.02)), 0.035 + (k % 3) * 0.02, cz + (k - 2.5) * 0.11]);
+      pts.push([gx + sd * 0.12, 0.05, gz]);
+      hose(g.mid, pts, 0.024, HOSE, 6);
+      block(g.mid, gx, 0.10, gz, 0.06, 0.06, 0.13, team);                            // gun body
+      tube(g.mid, [gx, 0.10, gz + (wz > 0 ? -0.13 : 0.13)], [gx, 0.10, gz + (wz > 0 ? -0.30 : 0.30)], 0.035, scale(STEEL, 0.7), 6, MAT.METAL);   // socket
+      block(g.mid, gx + sd * 0.09, 0.14, gz, 0.02, 0.09, 0.03, dark);                // trigger grip
+    }
+  }
+  // STARTER CART and its umbilical into the gearbox: the one prop that touches
+  // the car, and the reason a parked car in a real bay never looks abandoned.
+  {
+    const cx = -1.95, cz = -4.75;
+    block(g.mid, cx, 0.40, cz, 0.30, 0.24, 0.24, scale(c1, 0.55));               // cabinet
+    block(g.mid, cx, 0.66, cz, 0.31, 0.02, 0.25, STEEL);
+    block(g.mid, cx + 0.12, 0.72, cz - 0.05, 0.06, 0.04, 0.04, [0.75, 0.15, 0.10]); // start button
+    for (let w = 0; w < 4; w++)
+      cyl(g.mid, cx + (w % 2 ? 0.24 : -0.24), 0, cz + (w < 2 ? 0.18 : -0.18), 0.06, 0.12, RUBBER, 8);
+    tube(g.mid, [cx - 0.3, 0.16, cz], [cx - 0.55, 0.95, cz], 0.02, STEEL, 6, MAT.METAL);   // push handle
+    tube(g.mid, [cx - 0.55, 0.95, cz - 0.18], [cx - 0.55, 0.95, cz + 0.18], 0.02, STEEL, 6, MAT.METAL);
+    hose(g.mid, [[cx + 0.2, 0.62, cz], [cx + 0.9, 0.30, cz + 0.9], [-0.5, 0.22, -3.35], [-0.18, 0.40, -2.72]],
+         0.02, [0.48, 0.22, 0.06], 6);                                             // umbilical
+  }
+  // TYRE TROLLEYS at the deep end: four wheels upright under their blankets,
+  // a cable to the control box, and the compound sticker on each blanket. The
+  // wheel is an oriented tube along X: rubber, then a slightly fatter and
+  // shorter tube of team colour over the tread for the blanket.
+  const trolley = (out, x, z, comps) => {
+    for (const sx of [-1, 1]) tube(out, [x + sx * 0.42, 0.58, z - 1.3], [x + sx * 0.42, 0.58, z + 1.3], 0.025, STEEL, 6, MAT.METAL);
+    for (const ez of [-1.3, 1.3]) tube(out, [x - 0.42, 0.58, z + ez], [x + 0.42, 0.58, z + ez], 0.025, STEEL, 6, MAT.METAL);
+    for (let w = 0; w < 4; w++)
+      cyl(out, x + (w % 2 ? 0.38 : -0.38), 0, z + (w < 2 ? 1.2 : -1.2), 0.05, 0.10, RUBBER, 6);
+    for (let i = 0; i < 4; i++) {
+      const wz = z - 1.0 + i * 0.68;
+      tube(out, [x - 0.17, 0.44, wz], [x + 0.17, 0.44, wz], 0.34, RUBBER, 14);
+      tube(out, [x - 0.19, 0.44, wz], [x + 0.19, 0.44, wz], 0.36, scale(c1, 0.6), 14);   // blanket
+      tube(out, [x - 0.10, 0.44, wz], [x - 0.20, 0.44, wz], 0.20, scale(STEEL, 0.9), 10, MAT.METAL);   // rim face
+      block(out, x + 0.20, 0.62, wz, 0.012, 0.08, 0.12, COMPOUND[comps[i]]);          // sticker
+      hose(out, [[x + 0.19, 0.30, wz], [x + 0.30, 0.20, wz + 0.1], [x + 0.30, 0.20, z + 1.45]], 0.012, HOSE, 5);
+    }
+    block(out, x + 0.30, 0.42, z + 1.50, 0.10, 0.14, 0.06, dark);                     // blanket controller
+    for (let l = 0; l < 4; l++) block(out, x + 0.30 + (l % 2 ? 0.04 : -0.04), 0.50 + (l < 2 ? 0.04 : -0.02), z + 1.565, 0.012, 0.012, 0.005, l % 3 ? [0.2, 0.9, 0.3] : [0.9, 0.5, 0.1]);   // status LEDs
+  };
+  const wet = ctx && (ctx.weather === "wet" || ctx.weather === "rain");
+  trolley(g.back, 3.65, -4.85, wet ? [3, 3, 4, 4] : [0, 0, 1, 1]);
+  trolley(g.back, -3.65, -4.85, wet ? [3, 4, 1, 1] : [1, 2, 2, 0]);
+  // FLOOR: a painted box at each wheel and the hazard hatch at the threshold.
+  const PAINT = [0.66, 0.67, 0.70], HAZ = [0.80, 0.68, 0.10];
+  for (const w of [[0.79, 1.7], [-0.79, 1.7], [0.76, -1.6], [-0.76, -1.6]]) {
+    const x = w[0], z = w[1], hx = 0.30, hz = 0.46, t = 0.035;
+    tile(g.mid, x - hx, x + hx, z - hz, z - hz + t, PAINT, 0.003, MAT.ASPHALT);
+    tile(g.mid, x - hx, x + hx, z + hz - t, z + hz, PAINT, 0.003, MAT.ASPHALT);
+    tile(g.mid, x - hx, x - hx + t, z - hz, z + hz, PAINT, 0.003, MAT.ASPHALT);
+    tile(g.mid, x + hx - t, x + hx, z - hz, z + hz, PAINT, 0.003, MAT.ASPHALT);
+  }
+  for (let i = -7; i <= 7; i++)
+    tile(g.mid, i * 0.40 - 0.13, i * 0.40 + 0.13, 5.62, 5.98, i % 2 ? HAZ : DARK, 0.003, MAT.ASPHALT);
+  // CONDUIT drops off the cable trays to a junction box on each side wall.
+  for (const sd of [-1, 1]) {
+    const w = sd < 0 ? g.nx : g.px;
+    for (const z of [-2.3, 2.3]) {
+      hose(w, [[sd * 4.6, 3.60, z], [sd * 5.30, 3.40, z], [sd * 5.30, 2.05, z]], 0.03, scale(STEEL, 0.5), 6, MAT.METAL);
+      block(w, sd * 5.30, 1.92, z, 0.05, 0.11, 0.09, scale(STEEL, 0.45));
+    }
+  }
+  // EXTRACTOR FAN housing, high on the back wall; the blades are a separate
+  // mesh so they can turn (fanMesh, drawn in draw()).
+  // At y 3.32, r 0.36 (top at 3.68): the FRONT preset's frame tops out at
+  // y 3.76 on this wall and cut it at 3.75 and again at 3.45; the pit board
+  // below tops out at 2.92.
+  tube(g.back, [FAN[0], FAN[1], Z_BACK + 0.02], [FAN[0], FAN[1], Z_BACK + 0.22], 0.36, scale(STEEL, 0.7), 16, MAT.METAL);
+  tube(g.back, [FAN[0], FAN[1], Z_BACK + 0.10], [FAN[0], FAN[1], Z_BACK + 0.24], 0.32, [0.03, 0.032, 0.038], 16);   // the dark throat
+  for (let i = 0; i < 3; i++) {                                                  // guard bars
+    const a = i * Math.PI / 3, dx = Math.cos(a) * 0.33, dy = Math.sin(a) * 0.33;
+    tube(g.back, [FAN[0] - dx, FAN[1] - dy, Z_BACK + 0.27], [FAN[0] + dx, FAN[1] + dy, Z_BACK + 0.27], 0.012, STEEL, 5, MAT.METAL);
+  }
+  // TROPHY CABINET, counter height under the +X pit board: a glass case the
+  // career fills. Empty in free play it still holds the two helmets.
+  {
+    const cx = 4.55, cz = Z_BACK + 0.32, wins = Math.min(8, (ctx && ctx.wins) | 0);
+    block(g.back, cx, 0.55, cz, 0.62, 0.55, 0.30, scale(c1, 0.45));               // plinth
+    block(g.back, cx, 1.40, cz, 0.64, 0.30, 0.32, DARK);                           // case back
+    block(g.back, cx, 1.40, cz + 0.30, 0.64, 0.30, 0.008, [0.22, 0.26, 0.32]);     // glass (dark, reflective look)
+    block(g.back, cx, 1.24, cz, 0.60, 0.012, 0.28, scale(STEEL, 0.9));             // shelf
+    for (let i = 0; i < wins; i++) {                                               // trophies
+      const tx = cx - 0.50 + (i % 4) * 0.33, ty = i < 4 ? 1.25 : 1.55;
+      cyl(g.back, tx, ty, cz, 0.05, 0.03, [0.85, 0.70, 0.25], 8, MAT.METAL);
+      cyl(g.back, tx, ty + 0.03, cz, 0.018, 0.10, [0.92, 0.78, 0.30], 6, MAT.METAL);
+      cyl(g.back, tx, ty + 0.13, cz, 0.045, 0.08, [0.95, 0.82, 0.32], 8, MAT.METAL);
+    }
+    if (wins < 5) block(g.back, cx, 1.55, cz, 0.60, 0.012, 0.28, scale(STEEL, 0.9));   // upper shelf
+    for (const hx of [-0.42, 0.42]) {                                              // the drivers' helmets
+      cyl(g.back, cx + hx, wins < 5 ? 1.565 : 1.25, cz, 0.11, 0.16, scale(c1, 1.1), 10);
+      cyl(g.back, cx + hx, (wins < 5 ? 1.565 : 1.25) + 0.16, cz, 0.09, 0.05, scale(c1, 1.1), 10);
+      block(g.back, cx + hx, (wins < 5 ? 1.565 : 1.25) + 0.10, cz + 0.10, 0.07, 0.03, 0.02, [0.06, 0.06, 0.07]);   // visor
+    }
+  }
+  // TIMING SCREEN over the door end, hung from the truss and facing the car —
+  // the REAR and HERO presets look straight at it. The face is a dress quad
+  // from the live atlas (buildLive); this is only the housing and its hangers.
+  // Off-centre (x +2.9, top-left from the REAR preset) so the shutter's
+  // wordmark stays readable behind it, and at y 3.3 because that preset's
+  // frame tops out at y 3.62 on the door wall.
+  block(g.mid, SCREEN[0], SCREEN[1], SCREEN[2], 0.92, 0.72, 0.05, DARK);
+  block(g.mid, SCREEN[0], SCREEN[1], SCREEN[2] + 0.04, 0.96, 0.76, 0.02, scale(STEEL, 0.5));   // bezel
+  for (const hx of [-0.7, 0.7]) tube(g.mid, [SCREEN[0] + hx, SCREEN[1] + 0.72, SCREEN[2]], [SCREEN[0] + hx, 4.98, SCREEN[2]], 0.02, STEEL, 6, MAT.METAL);
 }
 
 // ── LED ceiling fixtures ───────────────────────────────────────────────────
@@ -584,8 +791,129 @@ function lights(liv) {
   for (let s = -1; s <= 1; s += 2)
     _rig.push(s * 5.05, 0.25, 0, c1[0] * ue, c1[1] * ue, c1[2] * ue, 6,
               -s * 0.26, 0.97, 0, 0.90, 0.55, 0.05, 0, 0.5);
+  // The pit-lane GANTRY outside: four masts along the far wall. Their energy
+  // and halo are set per frame from the hour (live() below) — at night they
+  // are what you see through the door, by day they are unlit steel.
+  for (const gx of [-9, -3, 3, 9])
+    _rig.push(gx, 3.6, 12.1, 0, 0, 0, 9, 0, -0.85, -0.53, 0.80, 0.45, 0.10, 0, 0);
+  // The inspection LAMP, aimed by spot(); off until a preset asks for it.
+  _rig.push(0, 1.7, 0, 0, 0, 0, 7, 0, -1, 0, 0.92, 0.70, 0.05, 0, 0);
   _rigKey = key;
   return _rig;
+}
+// ── the animated layer ─────────────────────────────────────────────────────
+// Everything here is per FRAME and costs no rebuild: the light records are
+// written in place, the moving props are static meshes under a matrix.
+const GANTRY_AT = FIXTURES.length + 2, LAMP_AT = GANTRY_AT + 4;   // record indices in _rig
+const GANTRY_TINT = [1.0, 0.93, 0.78];
+let pulseAt = -1e9, spotName = null, nightNow = false;
+function pulse() { pulseAt = typeof performance !== "undefined" ? performance.now() : Date.now(); }
+function spot(name) { spotName = name || null; }
+// Where the work lamp stands for each preset, and what it looks at. Each
+// stand is OUTSIDE that preset's frame (the fit is +/-3.1 m across the view
+// axis at the car) and never on the eye-to-car line — the first pass put the
+// SIDE lamp at x 2.9, z 0.4, which is a tripod planted in front of the car
+// in the one view that exists to show its flank.
+const SPOTS = {
+  hero: [-2.6, -3.6, 0, 0.7, -1.4], wingRear: [-2.2, -4.2, 0, 0.9, -2.7], rear: [-3.4, -4.6, 0, 0.6, -2.6],
+  side: [2.6, 4.3, 0.8, 0.4, 0.6], front: [-3.4, 4.6, 0, 0.5, 2.4], wingFront: [-2.6, 4.4, 0, 0.5, 2.9],
+};
+const PARK = [-4.0, 2.2];
+let lampAim = [PARK[0], 0, PARK[1], 0, 0, 0, 0];   // x, z, yaw, on, ax, ay, az
+// The live records: gantry by hour, the lamp by preset, one washer that
+// flickers, and the truss chase that runs the length of the bay for two
+// seconds after a part is fitted. Returns the rig, plus the chase while it runs.
+function live(liv, now, ctx) {
+  const rig = lights(liv);
+  nightNow = !!(ctx && ctx.night);
+  const ge = nightNow ? 6.5 * E : 0;
+  for (let i = 0; i < 4; i++) {
+    const o = (GANTRY_AT + i) * 15;
+    rig[o + 3] = GANTRY_TINT[0] * ge; rig[o + 4] = GANTRY_TINT[1] * ge; rig[o + 5] = GANTRY_TINT[2] * ge;
+    rig[o + 14] = nightNow ? 1.2 : 0;
+  }
+  // Lamp: parked and dark while the turntable runs, else beside the preset's subject.
+  const sp = (!ctx || !ctx.spin) && spotName && SPOTS[spotName];
+  const lx = sp ? sp[0] : PARK[0], lz = sp ? sp[1] : PARK[1];
+  const ax = sp ? sp[2] : lx, ay = sp ? sp[3] : 0, az = sp ? sp[4] : lz;
+  const yaw = Math.atan2(ax - lx, az - lz);
+  lampAim = [lx, lz, yaw, sp ? 1 : 0, ax, ay, az];
+  {
+    const o = LAMP_AT * 15, hx = lx + Math.sin(yaw) * 0.18, hz = lz + Math.cos(yaw) * 0.18, hy = 1.72;
+    const dx = ax - hx, dy = ay - hy, dz = az - hz, dl = Math.hypot(dx, dy, dz) || 1;
+    const le = sp ? 7.0 * E : 0;
+    rig[o] = hx; rig[o + 1] = hy; rig[o + 2] = hz;
+    rig[o + 3] = 1.10 * le; rig[o + 4] = 1.00 * le; rig[o + 5] = 0.82 * le;
+    rig[o + 7] = dx / dl; rig[o + 8] = dy / dl; rig[o + 9] = dz / dl;
+    rig[o + 14] = sp ? 0.6 : 0;
+  }
+  // One door-end washer with a tired ballast: three incommensurate sines, and
+  // a drop only when they line up, so it flickers rarely rather than strobes.
+  {
+    const t = now / 1000, f = (Math.sin(t * 23.1) + Math.sin(t * 7.3) + Math.sin(t * 41.7)) / 3;
+    const on = f > 0.62 ? 0.30 : f > 0.50 ? 0.72 : 1, F = FIXTURES[8], e = F[4] * E * on, o = 8 * 15;
+    rig[o + 3] = F[3][0] * e; rig[o + 4] = F[3][1] * e; rig[o + 5] = F[3][2] * e;
+  }
+  const u = (now - pulseAt) / 2200;
+  if (u < 0 || u >= 1) return rig;
+  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
+  const m = Math.max(c2[0], c2[1], c2[2]) || 1, ce = (2.6 / m) * E * Math.sin(u * Math.PI);
+  const z = Z_BACK + (Z_DOOR - Z_BACK) * u, chase = rig.slice();
+  for (const sx of [-4.6, 4.6])
+    chase.push(sx, 4.55, z, c2[0] * ce, c2[1] * ce, c2[2] * ce, 5, 0, -1, 0, 0.92, 0.55, 0.06, 0, 0.9);
+  return chase;
+}
+// Column-major T * Ry(ay) * Rz(az), written into `out`.
+function mk(out, tx, ty, tz, ay, az) {
+  const cy = Math.cos(ay), sy = Math.sin(ay), cz = Math.cos(az), sz = Math.sin(az);
+  out[0] = cy * cz;  out[1] = sz;       out[2] = -sy * cz; out[3] = 0;
+  out[4] = -cy * sz; out[5] = cz;       out[6] = sy * sz;  out[7] = 0;
+  out[8] = sy;       out[9] = 0;        out[10] = cy;      out[11] = 0;
+  out[12] = tx;      out[13] = ty;      out[14] = tz;      out[15] = 1;
+  return out;
+}
+let fanMesh = null, lampMesh = null, lampFace = null, passMesh = null;
+const _mFan = new Float32Array(16), _mLamp = new Float32Array(16), _mPass = new Float32Array(16);
+const MAT_MIRROR = new Float32Array([-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+const MIRROR_OPTS = { alpha: 0.26, roughness: 1, specular: 0, metalness: 0, clearcoat: 0, noDepthTest: true };
+function ensureDynamic() {
+  if (fanMesh) return;
+  // Fan blades in the XY plane about the origin, turned about Z per frame.
+  const f = acc();
+  tube(f, [0, 0, -0.04], [0, 0, 0.06], 0.07, scale(STEEL, 0.8), 8, MAT.METAL);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2, r0 = 0.07, r1 = 0.30, w = 0.055;
+    const P = (r, k) => [Math.cos(a) * r - Math.sin(a) * k, Math.sin(a) * r + Math.cos(a) * k, 0.01];
+    const o = P(r0, -w), pu = P(r1, -w), pv = P(r0, w);
+    panelGrid(f, o, [pu[0] - o[0], pu[1] - o[1], 0], [pv[0] - o[0], pv[1] - o[1], 0], 1, 1, [0, 0, 1], () => scale(STEEL, 0.62));
+    panelGrid(f, o, [pu[0] - o[0], pu[1] - o[1], 0], [pv[0] - o[0], pv[1] - o[1], 0], 1, 1, [0, 0, -1], () => scale(STEEL, 0.5));
+  }
+  fanMesh = _gfx.createMesh(f);
+  // The work lamp: tripod, column, head — facing +Z at the origin, yawed per preset.
+  const l = acc();
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + 0.5;
+    tube(l, [0, 0.95, 0], [Math.cos(a) * 0.42, 0.02, Math.sin(a) * 0.42], 0.018, STEEL, 6, MAT.METAL);
+    cyl(l, Math.cos(a) * 0.42, 0, Math.sin(a) * 0.42, 0.035, 0.03, RUBBER, 6);
+  }
+  cyl(l, 0, 0.3, 0, 0.025, 1.36, STEEL, 8, MAT.METAL);
+  block(l, 0, 1.72, 0.10, 0.15, 0.11, 0.07, scale(STEEL, 0.55));            // head
+  block(l, 0, 1.72, 0.03, 0.05, 0.05, 0.04, scale(STEEL, 0.7));             // yoke
+  for (let i = 0; i < 4; i++) block(l, -0.12 + i * 0.08, 1.72, 0.18, 0.012, 0.10, 0.012, scale(STEEL, 0.8));   // guard
+  lampMesh = _gfx.createMesh(l);
+  const lf = acc();
+  block(lf, 0, 1.72, 0.172, 0.13, 0.09, 0.006, [1.35, 1.28, 1.10]);          // the lit face (emissive draw)
+  lampFace = _gfx.createMesh(lf);
+  // A car passing in the pit lane: a dark silhouette with its light bar.
+  const c = acc(), INK = [0.05, 0.05, 0.06];
+  block(c, 0, 0.42, 0, 0.55, 0.16, 1.9, INK);                                  // body
+  block(c, 0, 0.68, -0.3, 0.32, 0.12, 0.6, INK);                               // airbox/halo
+  block(c, 0, 0.80, -2.2, 0.55, 0.05, 0.16, INK);                              // rear wing
+  block(c, 0, 0.30, 2.5, 0.85, 0.03, 0.14, INK);                               // front wing
+  for (const wx of [-0.7, 0.7]) for (const wz of [1.6, -1.55])
+    tube(c, [wx - 0.17, 0.34, wz], [wx + 0.17, 0.34, wz], 0.34, [0.03, 0.03, 0.035], 10);
+  block(c, 0, 0.55, -2.55, 0.04, 0.08, 0.02, [1.6, 0.2, 0.15]);                // rain light
+  passMesh = _gfx.createMesh(c);
 }
 // GLOW_FS peaks at (0.75 + 0.28) * uStr, and LT.glareStr ships at 0.12 for
 // distant track masts. A garage has its fixtures IN frame, so half a stop up.
@@ -607,8 +935,11 @@ const BOX_HW = 2.20, BOX_ZF = 4.25, BOX_ZB = -4.00;
 // bay floor (y 0): the 4 cm step between them is the resin bay over the pit
 // apron, and through the doorway it reads as the threshold it is.
 const PIT_HW = 10.5, PIT_Z0 = 6.45, PIT_Z1 = 11.9;
-function buildPitLane(out, liv) {
+function buildPitLane(out, liv, night) {
   const APRON_Y = -0.04;
+  // Outside at NIGHT: a darker lane under the gantry lights (lights() adds
+  // them), the hoardings lit. By day the asphalt is the bright side.
+  const NK = night ? 0.46 : 1;
   // LIGHTER than the bay floor, not darker. The first pass used 0.072, below
   // the apron's own 0.105, so the lane read as a black void through the
   // doorway — which is the exact failure the door risked in the first place.
@@ -627,7 +958,7 @@ function buildPitLane(out, liv) {
       // Deterministic per-vertex wear: darker in the working lane against the
       // garages, and a hash so the mottle is not a gradient.
       const h = ((u * 977 + v * 613) * 4093) % 1;
-      const k = 0.94 + h * 0.10 + (1 - v) * 0.05;
+      const k = (0.94 + h * 0.10 + (1 - v) * 0.05) * NK;
       return [ASPHALT[0] * k, ASPHALT[1] * k, ASPHALT[2] * k];
     }, MAT.ASPHALT);
   // Fast lane outside, working lane against the garages — the two boundary
@@ -667,7 +998,7 @@ function buildPitLane(out, liv) {
   // rather than a grey slab.
   for (let i = -2; i <= 2; i++)
     block(out, i * 3.6, APRON_Y + 0.62, PIT_Z1 + 0.02, 1.55, 0.26, 0.05,
-          scale(c1, i % 2 ? 0.55 : 0.9));
+          scale(c1, night ? 1.25 : (i % 2 ? 0.55 : 0.9)));
 }
 function buildApron(out) {
   const RINGS = 7, SEG = 40, R = 18, Y = -0.04;
@@ -1111,6 +1442,202 @@ function paintBoards(cv, team, liv, info) {
 }
 let lastSpec = null;
 
+// ── the LIVE atlas ─────────────────────────────────────────────────────────
+// A SECOND, smaller atlas for everything that follows the game rather than
+// the team: the timing screen's track map, the next-race sign, the sponsor
+// banners, and two soft gradients (the car's contact shadow, the lamp pools).
+// Separate from the 1024 dress on purpose — that one repaints on a team or
+// paint change and is full; this one is 512 and can be repainted per circuit
+// or per career round for a quarter of the upload.
+const LIVE = 512;
+const L_MAP    = { x: 0,   y: 0,   w: 256, h: 200 };
+const L_TRACE  = { x: 256, y: 0,   w: 256, h: 128 };
+const L_SHADOW = { x: 256, y: 128, w: 128, h: 128 };
+const L_POOL   = { x: 384, y: 128, w: 128, h: 128 };
+const L_BANNER = [{ x: 0, y: 256, w: 512, h: 64 }, { x: 0, y: 320, w: 512, h: 64 }];
+const L_FLAG   = { x: 0,   y: 384, w: 128, h: 64 };
+const L_RACE   = { x: 128, y: 384, w: 384, h: 64 };
+// Flags as stripes: [orientation, colours...]; "h" stacks top to bottom, "v"
+// runs left to right. Enough to read as the country at 0.4 m on a wall.
+const FLAGS = {
+  Argentina: ["h", "#74acdf", "#fff", "#74acdf"], Australia: ["h", "#00247d", "#00247d"],
+  Austria: ["h", "#ed2939", "#fff", "#ed2939"], Azerbaijan: ["h", "#00b5e2", "#ef3340", "#509e2f"],
+  Bahrain: ["v", "#fff", "#ce1126", "#ce1126", "#ce1126"], Belgium: ["v", "#000", "#fae042", "#ed2939"],
+  Brazil: ["h", "#009c3b", "#ffdf00", "#009c3b"], Canada: ["v", "#ff0000", "#fff", "#ff0000"],
+  China: ["h", "#de2910", "#de2910"], France: ["v", "#0055a4", "#fff", "#ef4135"],
+  Germany: ["h", "#000", "#dd0000", "#ffce00"], Hungary: ["h", "#ce2939", "#fff", "#477050"],
+  Italy: ["v", "#009246", "#fff", "#ce2b37"], Japan: ["h", "#fff", "#bc002d", "#fff"],
+  Malaysia: ["h", "#cc0001", "#fff", "#cc0001", "#fff"], Mexico: ["v", "#006847", "#fff", "#ce1126"],
+  Monaco: ["h", "#ce1126", "#fff"], Netherlands: ["h", "#ae1c28", "#fff", "#21468b"],
+  Portugal: ["v", "#006600", "#ff0000", "#ff0000"], Qatar: ["v", "#fff", "#8a1538", "#8a1538", "#8a1538"],
+  Russia: ["h", "#fff", "#0039a6", "#d52b1e"], "Saudi Arabia": ["h", "#006c35", "#006c35"],
+  Singapore: ["h", "#ef3340", "#fff"], "South Africa": ["h", "#de3831", "#fff", "#007a4d", "#fff", "#002395"],
+  Spain: ["h", "#aa151b", "#f1bf00", "#f1bf00", "#aa151b"], Turkey: ["h", "#e30a17", "#e30a17"],
+  UAE: ["h", "#00732f", "#fff", "#000"], UK: ["h", "#012169", "#fff", "#c8102e", "#fff", "#012169"],
+  USA: ["h", "#b22234", "#fff", "#b22234", "#fff", "#b22234", "#fff", "#b22234"],
+};
+function paintLive(cv, team, liv, ctx) {
+  const ctx2 = cv.getContext("2d");
+  ctx2.clearRect(0, 0, LIVE, LIVE);
+  const c1 = rgb(liv && liv.c1, [0.30, 0.32, 0.36]);
+  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
+  const track = ctx && ctx.track;
+  // TIMING SCREEN: the circuit the next race runs at, drawn from its own
+  // control points, with the round and the last result under it.
+  {
+    const R = L_MAP;
+    ctx2.fillStyle = "#070a0e"; ctx2.fillRect(R.x, R.y, R.w, R.h);
+    ctx2.fillStyle = css(scale(c1, 0.75)); ctx2.fillRect(R.x, R.y, R.w, 30);
+    ctx2.fillStyle = "#f2f3f5"; ctx2.font = "700 18px system-ui, sans-serif";
+    ctx2.textAlign = "left"; ctx2.textBaseline = "middle";
+    ctx2.fillText(track ? String(track.name || track.id).toUpperCase() : "NO CIRCUIT", R.x + 10, R.y + 15, R.w - 20);
+    if (track && track.points && track.points.length > 3) {
+      const P = track.points;
+      let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
+      for (let i = 0; i < P.length; i++) { x0 = Math.min(x0, P[i][0]); x1 = Math.max(x1, P[i][0]); z0 = Math.min(z0, P[i][2]); z1 = Math.max(z2z(P[i]), z1); }
+      const pad = 22, top = R.y + 40, bh = R.h - 40 - 46, bw = R.w - pad * 2;
+      const sc = Math.min(bw / Math.max(1e-3, x1 - x0), bh / Math.max(1e-3, z1 - z0));
+      const ox = R.x + pad + (bw - (x1 - x0) * sc) / 2, oz = top + (bh - (z1 - z0) * sc) / 2;
+      // North up: -z is away from the driver at s = 0, so z runs DOWN the screen.
+      ctx2.strokeStyle = "#232a33"; ctx2.lineWidth = 9; ctx2.lineJoin = "round";
+      ctx2.beginPath();
+      for (let i = 0; i <= P.length; i++) { const q = P[i % P.length], px = ox + (q[0] - x0) * sc, pz = oz + (z2z(q) - z0) * sc; if (i) ctx2.lineTo(px, pz); else ctx2.moveTo(px, pz); }
+      ctx2.stroke();
+      ctx2.strokeStyle = css(c2); ctx2.lineWidth = 3.5; ctx2.stroke();
+      ctx2.fillStyle = "#f2f3f5"; ctx2.beginPath();
+      ctx2.arc(ox + (P[0][0] - x0) * sc, oz + (z2z(P[0]) - z0) * sc, 4.5, 0, Math.PI * 2); ctx2.fill();
+    }
+    // Footer: the round and what happened last time out.
+    ctx2.fillStyle = "#11151b"; ctx2.fillRect(R.x, R.y + R.h - 40, R.w, 40);
+    ctx2.font = "700 15px system-ui, sans-serif"; ctx2.fillStyle = "#9aa4b2";
+    const last = ctx && ctx.last;
+    const foot = ctx && ctx.career
+      ? (last ? (last.dnf ? "LAST: DNF · " + String(last.dnf).toUpperCase() : "LAST: P" + last.p + " · " + (last.pts | 0) + " PTS") : "SEASON OPENER")
+      : (track ? String(track.country || "").toUpperCase() + (ctx && ctx.night ? " · NIGHT" : "") : "SELECT A CIRCUIT");
+    ctx2.fillText(foot, R.x + 10, R.y + R.h - 20, R.w - 20);
+    ctx2.textAlign = "right"; ctx2.fillStyle = css(c2);
+    ctx2.fillText(ctx && ctx.weather && ctx.weather !== "dry" ? String(ctx.weather).toUpperCase() : "", R.x + R.w - 10, R.y + R.h - 20);
+    ctx2.textAlign = "left";
+  }
+  // Soft gradients: the contact shadow under the car and the lamp pools.
+  for (const [R, inner, outer] of [[L_SHADOW, "rgba(0,0,0,0.78)", "rgba(0,0,0,0)"],
+                                   [L_POOL, "rgba(255,238,205,0.34)", "rgba(255,238,205,0)"]]) {
+    const gr = ctx2.createRadialGradient(R.x + R.w / 2, R.y + R.h / 2, 4, R.x + R.w / 2, R.y + R.h / 2, R.w / 2);
+    gr.addColorStop(0, inner); gr.addColorStop(1, outer);
+    ctx2.fillStyle = gr; ctx2.fillRect(R.x, R.y, R.w, R.h);
+  }
+  // SPONSOR BANNERS: the career's backer leads, the team's own partners fill.
+  const names = [];
+  if (ctx && ctx.sponsor && ctx.sponsor.label) names.push(String(ctx.sponsor.label).toUpperCase());
+  const pack = liv && liv.sponsors && LiveryTex.SPONSOR_PACKS && LiveryTex.SPONSOR_PACKS[liv.sponsors];
+  const teamNames = pack || (LiveryTex.SPONSORS && LiveryTex.SPONSORS[team.id]) || ["APEX 26", "PIT LANE", "PADDOCK", "GRID"];
+  for (let i = 0; i < teamNames.length && names.length < 4; i++) if (names.indexOf(teamNames[i]) < 0) names.push(teamNames[i]);
+  for (let b = 0; b < 2; b++) {
+    const R = L_BANNER[b];
+    ctx2.fillStyle = b ? "#eef0f3" : css(scale(c1, 0.55)); ctx2.fillRect(R.x, R.y, R.w, R.h);
+    ctx2.fillStyle = b ? css(scale(c1, 0.75)) : "#f2f3f5";
+    ctx2.font = "800 34px system-ui, sans-serif"; ctx2.textBaseline = "middle";
+    ctx2.textAlign = "center";
+    ctx2.fillText((names[b * 2] || "") + "      " + (names[b * 2 + 1] || ""), R.x + R.w / 2, R.y + R.h / 2, R.w - 24);
+    ctx2.fillStyle = css(c2); ctx2.fillRect(R.x, R.y + R.h - 5, R.w, 5);
+  }
+  // NEXT RACE sign: the flag and the name.
+  {
+    const R = L_FLAG, f = FLAGS[track && track.country] || ["h", "#555", "#888"];
+    const n = f.length - 1;
+    for (let i = 0; i < n; i++) {
+      ctx2.fillStyle = f[i + 1];
+      if (f[0] === "h") ctx2.fillRect(R.x, R.y + (R.h * i) / n, R.w, R.h / n + 1);
+      else ctx2.fillRect(R.x + (R.w * i) / n, R.y, R.w / n + 1, R.h);
+    }
+    if (track && track.country === "Japan") { ctx2.fillStyle = "#bc002d"; ctx2.beginPath(); ctx2.arc(R.x + R.w / 2, R.y + R.h / 2, 18, 0, Math.PI * 2); ctx2.fill(); }
+    if (track && track.country === "Canada") { ctx2.fillStyle = "#ff0000"; ctx2.fillRect(R.x + R.w / 2 - 12, R.y + 14, 24, 36); }
+    if (track && (track.country === "UK")) { ctx2.fillStyle = "#c8102e"; ctx2.fillRect(R.x + R.w / 2 - 8, R.y, 16, R.h); }
+    const T = L_RACE;
+    ctx2.fillStyle = "#0a0c10"; ctx2.fillRect(T.x, T.y, T.w, T.h);
+    ctx2.fillStyle = css(c2); ctx2.fillRect(T.x, T.y, 6, T.h);
+    ctx2.fillStyle = "#9aa4b2"; ctx2.font = "700 18px system-ui, sans-serif"; ctx2.textAlign = "left";
+    ctx2.fillText(ctx && ctx.career ? "NEXT · ROUND " + (((ctx.round | 0) + 1)) : "NEXT RACE", T.x + 18, T.y + 18);
+    ctx2.fillStyle = "#f2f3f5"; ctx2.font = "800 28px system-ui, sans-serif";
+    ctx2.fillText(track ? String(track.name || track.id).toUpperCase() + " GP" : "—", T.x + 18, T.y + 44, T.w - 30);
+  }
+  return cv;
+}
+const z2z = (q) => q[2];
+// Two of the six engineer screens carry LIVE traces: a scrolling pair of
+// channels that move with time, so the bank reads as monitors rather than a
+// poster of monitors. Painted into L_TRACE and laid over the dress quad.
+function paintTrace(cv, liv, now) {
+  const c = cv.getContext("2d"), R = L_TRACE, t = now / 1000;
+  const c2 = rgb(liv && (liv.accent || liv.stripe || liv.c2), [0.6, 0.62, 0.66]);
+  c.fillStyle = "#05070a"; c.fillRect(R.x, R.y, R.w, R.h);
+  for (let k = 0; k < 2; k++) {
+    const x0 = R.x + k * (R.w / 2) + 3, w = R.w / 2 - 6, y0 = R.y + 3, h = R.h - 6;
+    c.fillStyle = "#0b1016"; c.fillRect(x0, y0, w, h);
+    c.strokeStyle = "rgba(120,150,175,0.22)"; c.lineWidth = 1;
+    for (let g = 1; g < 4; g++) { c.beginPath(); c.moveTo(x0 + 4, y0 + h * g / 4); c.lineTo(x0 + w - 4, y0 + h * g / 4); c.stroke(); }
+    c.strokeStyle = k ? css(c2) : "#e2a33c"; c.lineWidth = 2; c.beginPath();
+    for (let i = 0; i <= 28; i++) {
+      const u = i / 28, px = x0 + 6 + (w - 12) * u;
+      const py = y0 + h * 0.55 - Math.sin(u * 9 + t * (k ? 1.7 : 2.3)) * h * 0.22
+        - Math.sin(u * 23 - t * 3.1) * h * 0.08 - (i % 4 === 0 ? 2 : 0);
+      if (i) c.lineTo(px, py); else c.moveTo(px, py);
+    }
+    c.stroke();
+    c.fillStyle = "#9aa4b2"; c.font = "700 11px system-ui, sans-serif"; c.textAlign = "left"; c.textBaseline = "top";
+    c.fillText(k ? "BRAKE TEMP" : "ERS SOC", x0 + 6, y0 + 4);
+    c.textAlign = "right"; c.fillStyle = k ? css(c2) : "#e2a33c";
+    c.fillText(k ? (410 + Math.round(Math.sin(t * 0.7) * 35)) + "°C" : Math.round(62 + Math.sin(t * 0.4) * 30) + "%", x0 + w - 6, y0 + 4);
+  }
+}
+// The quads the live atlas lands on. `floor` is its own group: the shadow and
+// pools draw with no glow (they are not signage), everything else at the
+// dress's 0.62.
+function buildLive() {
+  const g = {};
+  for (const k of ["mid", "floor", "nx", "px", "door"]) g[k] = { pos: [], nrm: [], uv: [], idx: [] };
+  const zd = Z_DOOR - 0.03, xw = HALF_W - 0.03;
+  // The screen face, on the housing's -Z side (see buildEquipment).
+  const sx = SCREEN[0], sy = SCREEN[1], sz = SCREEN[2] - 0.051;
+  dquadR(g.mid, [[sx + 0.88, sy - 0.68, sz], [sx - 0.88, sy - 0.68, sz], [sx - 0.88, sy + 0.68, sz], [sx + 0.88, sy + 0.68, sz]], [0, 0, -1], L_MAP);
+  // Contact shadow: the car's footprint, y 0.006 above the wheel boxes (0.003).
+  dquadR(g.floor, [[-1.7, 0.006, -3.4], [1.7, 0.006, -3.4], [1.7, 0.006, 3.8], [-1.7, 0.006, 3.8]], [0, 1, 0], L_SHADOW);
+  // Lamp pools under the two keys and four fills.
+  for (let i = 0; i < 6; i++) {
+    const F = FIXTURES[i], r = F[13] ? 2.2 : 1.6, x = F[0] + F[6] * 1.2, z = F[2] + F[8] * 1.2;
+    dquadR(g.floor, [[x - r, 0.005, z - r], [x + r, 0.005, z - r], [x + r, 0.005, z + r], [x - r, 0.005, z + r]], [0, 1, 0], L_POOL);
+  }
+  // Two live trace tiles over the dress screen bank (D_SCREEN spans z 2.15..
+  // -0.95, y 1.10..2.65 on -X; each tile is a third by a half of it), 5 mm
+  // proud so they win the depth test against the dress quad beneath.
+  dquadR(g.nx, [[-xw + 0.005, 1.10, 2.15], [-xw + 0.005, 1.10, 0.08], [-xw + 0.005, 1.875, 0.08], [-xw + 0.005, 1.875, 2.15]], [1, 0, 0], L_TRACE);
+  // Banners on the side walls, in the y 1.72-2.12 band both walls have free
+  // forward of the data boards.
+  dquadR(g.nx, [[-xw, 1.72, 4.6], [-xw, 1.72, 2.4], [-xw, 2.12, 2.4], [-xw, 2.12, 4.6]], [1, 0, 0], L_BANNER[0]);
+  dquadR(g.px, [[xw, 1.72, 2.4], [xw, 1.72, 4.6], [xw, 2.12, 4.6], [xw, 2.12, 2.4]], [-1, 0, 0], L_BANNER[1]);
+  // Next-race sign ON THE SHUTTER (z 6.24, where the door wordmark lives),
+  // under that wordmark's y 2.60 and above the shutter's 1.98 bottom rail.
+  // It was on the door wall at x 4.2..5.2, which the REAR preset frames only
+  // as its extreme top-left corner — measured, the flag was half off the edge.
+  dquadR(g.door, [[3.20, 2.26, 6.24], [2.72, 2.26, 6.24], [2.72, 2.50, 6.24], [3.20, 2.50, 6.24]], [0, 0, -1], L_FLAG);
+  dquadR(g.door, [[3.88, 2.04, 6.24], [2.72, 2.04, 6.24], [2.72, 2.23, 6.24], [3.88, 2.23, 6.24]], [0, 0, -1], L_RACE);
+  return g;
+}
+function dquadR(out, c, n, region) {
+  const u = { uL: region.x / LIVE, uR: (region.x + region.w) / LIVE, vT: 1 - region.y / LIVE, vB: 1 - (region.y + region.h) / LIVE };
+  const i = out.pos.length / 3;
+  const uvs = [[u.uL, u.vB], [u.uR, u.vB], [u.uR, u.vT], [u.uL, u.vT]];
+  for (let k = 0; k < 4; k++) {
+    out.pos.push(c[k][0], c[k][1], c[k][2]);
+    out.nrm.push(n[0], n[1], n[2]);
+    out.uv.push(uvs[k][0], uvs[k][1]);
+  }
+  out.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+}
+let liveTex = null, liveCanvas = null;
+const liveMesh = {};
+const LIVE_OPTS = { glow: 0.62 }, FLOOR_DECAL_OPTS = { glow: 0 };
+
 // UV rect for an atlas region. v is flipped because createTexture uploads with
 // FLIP_Y, exactly as carDecalData's uvOf does — but U is NOT pre-flipped here:
 // that flip exists to un-mirror the car, which draws through MAT_REFLECT_X
@@ -1294,7 +1821,7 @@ const pushMat = (out, n, mid) => {
   if (!out.mat) return;
   for (let i = 0; i < n; i++) out.mat.push(mid || 0);
 };
-function rebuild(team, liv, info) {
+function rebuild(team, liv, info, ctx) {
   const drv = (team && team.drivers) || [];
   // Same idiom as getCockpitWheel's _cockpitWheelKey (js/car/car-mesh.js): fold
   // every colour the build consumes, rounded, into one string.
@@ -1303,7 +1830,8 @@ function rebuild(team, liv, info) {
                  "/" + kc(liv && liv.c2) + "/" + kc(liv && liv.logo) +
                  "/" + kc(liv && liv.logo2) + "/" + kc(liv && liv.logo3);
   const gKey = (team && team.id) + "|" + livKey +
-               "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num));
+               "|" + logoGen + "|" + ((drv[0] && drv[0].num) + "-" + (drv[1] && drv[1].num)) +
+               "|" + ctxKey(ctx);
   const key = gKey + "|" + boardKey(info);
   if (key === cacheKey && shellMesh) return;
   if (gKey !== geomKey || !shellMesh) {
@@ -1322,11 +1850,15 @@ function rebuild(team, liv, info) {
     for (let i = 0; i < SIDES.length; i++)
       if (led[SIDES[i]].idx.length) ledMesh[SIDES[i]] = _gfx.createMesh(led[SIDES[i]]);
     const flr = acc();
-    buildApron(flr); buildPitLane(flr, liv); buildBayFloor(flr, liv);
+    buildApron(flr); buildPitLane(flr, liv, !!(ctx && ctx.night)); buildBayFloor(flr, liv);
+    // The clear colour beyond the apron rim follows the hour outside.
+    const bd = ctx && ctx.night ? [0.020, 0.022, 0.030] : [0.048, 0.052, 0.064];
+    BACKDROP[0] = bd[0]; BACKDROP[1] = bd[1]; BACKDROP[2] = bd[2];
     floorMesh = _gfx.createMesh(flr);
     const g = {};
     for (let i = 0; i < SIDES.length; i++) g[SIDES[i]] = acc();
     buildProps(g, liv);
+    buildEquipment(g, liv, ctx);
     for (let i = 0; i < SIDES.length; i++) propMesh[SIDES[i]] = _gfx.createMesh(g[SIDES[i]]);
     for (let i = 0; i < SIDES.length; i++)
       if (dressMesh[SIDES[i]]) { _gfx.freeMesh(dressMesh[SIDES[i]]); dressMesh[SIDES[i]] = null; }
@@ -1335,6 +1867,20 @@ function rebuild(team, liv, info) {
     // team's, and a board of twelve highlights marks nothing.
     dressCanvas = null; lastSpec = null;
     geomKey = gKey;
+    // The live atlas follows the geometry key (team, paint, ctx): repaint it
+    // here, and build its quads once.
+    if (_gfx.createTexture && _gfx.createTexMesh && typeof LiveryTex !== "undefined") {
+      try {
+        if (!liveCanvas) { liveCanvas = document.createElement("canvas"); liveCanvas.width = liveCanvas.height = LIVE; }
+        paintLive(liveCanvas, team, liv, ctx);
+        if (liveTex && _gfx.freeTexture) _gfx.freeTexture(liveTex);
+        liveTex = _gfx.createTexture(liveCanvas);
+        if (!liveMesh.mid) {
+          const lg = buildLive();
+          for (const k in lg) if (lg[k].idx.length) liveMesh[k] = _gfx.createTexMesh(lg[k]);
+        }
+      } catch (e) { liveTex = null; Log.warn("game", "GarageScene live atlas failed: " + (e && e.message)); }
+    }
   }
   // Team dress. Three strikes then stop trying: an unbranded bay is far better
   // than a canvas that throws once a frame forever.
@@ -1365,10 +1911,29 @@ const FLOOR_OPTS = { roughness: 0.34, metalness: 0, specular: 0.46, clearcoat: 0
 const SHELL_OPTS = { roughness: 0.86, metalness: 0.05, specular: 0.16, clearcoat: 0 };
 
 const MAT_I = new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
-function draw(team, liv, eye, getParts, driverIdx) {
+// What the ROOM shows of the game beyond the car: the selected circuit, the
+// weather and time of day the next race will run, and the career's tally.
+// game.js builds this once per frame; every field is optional, so the bay
+// draws without a career and without a track selection.
+function ctxKey(ctx) {
+  if (!ctx) return "-";
+  return (ctx.track ? ctx.track.id : "-") + "|" + (ctx.weather || "-") + "|" + (ctx.tod || "-") +
+         "|" + ((ctx.wins | 0)) + "|" + (ctx.night ? 1 : 0);
+}
+let lastTrace = -1e9;
+function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh) {
   if (!_gfx) return;
-  rebuild(team, liv, boardInfo(team, getParts, driverIdx));
+  rebuild(team, liv, boardInfo(team, getParts, driverIdx), ctx);
+  ensureDynamic();
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
   _gfx.draw(floorMesh, MAT_I, FLOOR_OPTS);
+  // THE FLOOR REFLECTION: the car again, mirrored in y = 0, drawn faint and
+  // without a depth test straight after the floor. It writes no depth, so the
+  // shell, the props and the real car all paint over it wherever they pass
+  // against the floor's depth — which is exactly the clip a planar reflection
+  // needs, with no stencil and no second floor pass. MAT_MIRROR reflects X as
+  // the preview does (MAT_REFLECT_X) and Y for the floor; det +1, no cull flip.
+  if (carMesh) _gfx.draw(carMesh, MAT_MIRROR, MIRROR_OPTS);
   _gfx.draw(shellMesh, MAT_I, SHELL_OPTS);
   // Each wall's furniture AND its lighting, only while the eye is inside that
   // wall — the same decision back-face culling makes for the wall itself. A
@@ -1387,6 +1952,34 @@ function draw(team, liv, eye, getParts, driverIdx) {
     for (let i = 0; i < SIDES.length; i++)
       if (inside[SIDES[i]] && dressMesh[SIDES[i]])
         _gfx.drawDecal(dressMesh[SIDES[i]], MAT_I, dressTex, DRESS_OPTS);
+  // The moving props. Fan on the back wall (its housing is in propMesh.back);
+  // the lamp wherever the preset put it; the pit-lane pass every half minute.
+  if (inside.back && fanMesh) _gfx.draw(fanMesh, mk(_mFan, FAN[0], FAN[1], Z_BACK + 0.17, 0, now * 0.0065), SHELL_OPTS);
+  if (lampMesh) {
+    mk(_mLamp, lampAim[0], 0, lampAim[1], lampAim[2], 0);
+    _gfx.draw(lampMesh, _mLamp, SHELL_OPTS);
+    if (lampAim[3]) _gfx.draw(lampFace, _mLamp, LED_OPTS);
+  }
+  {
+    const cyc = (now / 1000) % 34;
+    if (cyc < 6.5 && passMesh)
+      _gfx.draw(passMesh, mk(_mPass, -24 + 48 * (cyc / 6.5), -0.04, 10.3, Math.PI / 2, 0), SHELL_OPTS);
+  }
+  // The engineers' traces tick over every 1.5 s: repaint one region of the
+  // live atlas and re-upload it (1 MB, a quarter of the dress).
+  if (liveTex && liveCanvas && now - lastTrace > 1500) {
+    lastTrace = now;
+    try {
+      paintTrace(liveCanvas, liv, now);
+      if (_gfx.freeTexture) _gfx.freeTexture(liveTex);
+      liveTex = _gfx.createTexture(liveCanvas);
+    } catch (e) { lastTrace = 1e12; }
+  }
+  if (liveTex) {
+    if (liveMesh.floor) _gfx.drawDecal(liveMesh.floor, MAT_I, liveTex, FLOOR_DECAL_OPTS);
+    for (const k of ["mid", "nx", "px", "door"])
+      if (inside[k] && liveMesh[k]) _gfx.drawDecal(liveMesh[k], MAT_I, liveTex, LIVE_OPTS);
+  }
 }
 
 // ── preview framing ────────────────────────────────────────────────────────
@@ -1529,7 +2122,7 @@ function debug() {
            geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
 }
 
-  return { init, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, glareStr, draw, framingHull, recentre,
-           previewMesh, dropPreviewMeshes, debug };
+  return { init, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, draw, framingHull, recentre,
+           previewMesh, dropPreviewMeshes, pulse, spot, debug };
 })();
 if (typeof window !== "undefined") window.GarageScene = GarageScene;

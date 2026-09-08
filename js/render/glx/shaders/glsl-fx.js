@@ -148,5 +148,45 @@ void main() {
   float a = vAlpha * fall;
   outColor = mix(vec4(vColor, a), vec4(vColor * a, 1.0), uAdditive);
 }`;
-  window.GLXShaders = Object.assign(window.GLXShaders || {}, { SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS });
+  // DRIVING LINE ribbon (js/render/shared/driving-line.js builds the strip).
+  // The colour is F1's dynamic grammar against the PLAYER's speed: green where
+  // the car is at or under the line's speed here, amber a little over, red
+  // clearly over (brake). The ribbon is emissive above 1.0 so the HDR bloom
+  // gives it the glow every racing game's line has; a soft-edged core keeps it
+  // a line and not a slab. CORNERS mode fades the straights out through the
+  // per-vertex zone the builder smoothed.
+  const LINE_VS = `#version 300 es
+layout(location=0) in vec3 aPos;     // world position (metres)
+layout(location=1) in float aAcross; // -1 | +1 across the ribbon
+layout(location=2) in float aSpeed;  // the line's speed here (m/s)
+layout(location=3) in float aZone;   // 0 straight … 1 corner / braking
+uniform mat4 uViewProj;
+out float vAcross;
+out float vSpeed;
+out float vZone;
+void main() {
+  vAcross = aAcross; vSpeed = aSpeed; vZone = aZone;
+  gl_Position = uViewProj * vec4(aPos, 1.0);
+}`;
+  const LINE_FS = `#version 300 es
+precision mediump float;
+in float vAcross;
+in float vSpeed;
+in float vZone;
+uniform float uPlayerSpeed;   // m/s
+uniform float uCornersOnly;   // 1 = fade the straights out
+uniform float uStr;           // emissive strength (bloom feed)
+out vec4 outColor;
+void main() {
+  float over = uPlayerSpeed / max(vSpeed, 1.0);          // 1.0 = on the line's pace
+  vec3 green = vec3(0.10, 0.95, 0.35), amber = vec3(1.0, 0.72, 0.10), red = vec3(1.0, 0.12, 0.10);
+  vec3 col = mix(green, amber, smoothstep(0.98, 1.06, over));
+  col = mix(col, red, smoothstep(1.06, 1.16, over));
+  float edge = 1.0 - smoothstep(0.55, 1.0, abs(vAcross));   // soft rim, hot core
+  float zone = mix(1.0, smoothstep(0.05, 0.75, vZone), uCornersOnly);   // the whole smoothed ramp is the fade
+  float a = edge * zone;
+  if (a < 0.01) discard;
+  outColor = vec4(col * uStr * a, a * 0.85);
+}`;
+  window.GLXShaders = Object.assign(window.GLXShaders || {}, { SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS, LINE_VS, LINE_FS });
 })();

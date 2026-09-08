@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_144 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_147 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -112,6 +112,7 @@ _144 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `lamp-chunks.js` | `LampChunks` | tag | shared per-chunk lamp table bake (LampChunks). |
 | `gltf.js` | `GLTF` | tag | Binary glTF (.glb) loader. |
 | `assets.js` | `Assets` | tag | Assets: the baked asset pack loader. |
+| `driving-line.js` | `DrivingLine` | tag | DrivingLine: the suggested-line ribbon every racing game draws on the road, as DATA. |
 
 **`js/render/`**
 
@@ -142,6 +143,7 @@ _144 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `space.js` | `TrackSpace` | tag | explicit source-trace ↔ racing-lap coordinate transforms. |
 | `surface.js` | `TrackSurface` | tag | shared terrain ribbon and prop-grounding profile. |
 | `spline.js` | `TrackSpline` | tag | TrackSpline: pure centreline / spline math for the tracks engine. centerline() integrates an authored segment list into closed control points, cr() is… |
+| `line.js` | `TrackLine` | tag | TrackLine: the baked RACING LINE, a lateral offset per centreline node, computed once at track build beside track.curv. |
 | `mesh.js` | `TrackMesh` | tag | TrackMesh: the kerb/banking band + the road/terrain/floor mesh builders for the tracks engine. upOf() is the shared per-node up-basis, hash() the dete… |
 
 **`js/track/scenery/`**
@@ -187,6 +189,7 @@ _144 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `aria-state.js` | `AriaState` | tag | AriaState — mirror the visual "selected" class of every option group onto the aria-pressed state a screen reader can actually hear. |
 | `setting-row.js` | `SettingRow` | tag | SettingRow — the ONE control for an enumerated preference on a settings sheet: LABEL ‹ VALUE › One line at every UI SIZE and orientation. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
+| `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
@@ -1334,6 +1337,12 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
+- **DRIVING LINE ribbon (2026-09-08):** GLX only. `js/render/shared/driving-line.js`
+  builds the strip for every backend; only GLX has the pass (`drawDrivingLine`,
+  `LINE_VS`/`LINE_FS` in `glsl-fx.js`). WGX and TLX export the member returning
+  `false` ("no pass"), so the RACE SETTINGS row works and draws nothing there —
+  a recorded gap, not a silent one (`docs/research/WEBGPU-PARITY.md`
+  §Driving line). Porting is a stride-24 strip + one emissive fragment.
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost (env probe off on LITE since 2026-09-03 — a cube cycle is six world passes + 36 mip passes on the jetsam rung); honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
   history resolve is sub-pixel shimmer). The sky's cloud deck shades like GLX

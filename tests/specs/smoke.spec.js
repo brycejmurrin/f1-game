@@ -262,6 +262,32 @@ test.describe("Apex 26 — smoke", () => {
     expect(info.total).toBeGreaterThan(0);
   });
 
+  test("the DRIVING LINE is built for the circuit on the first frame it is on", async ({ page }) => {
+    // RACE SETTINGS › DRIVING LINE ships CORNERS; the ribbon is built lazily by
+    // the first frame that draws it (js/render/shared/driving-line.js), so a
+    // race that has rendered has a strip for THIS circuit, with a speed
+    // profile a player could be shown. GLX draws it; on a backend without the
+    // pass the strip is still built and reported — this pins the data, not
+    // the pixels.
+    await goToRace(page);
+    await park(page, 0.1);
+    // WAIT for the frame, on the wall clock: park() flushes ~100 ms, which was a
+    // frame on the dev box and none on a CI runner (Pages #2064: `built` null
+    // on the first evaluate, twice). The strip exists once a frame has drawn.
+    await page.waitForFunction(() => window.__apex.drivingLine().built === window.__apex.info().track, null,
+      { polling: 100, timeout: 60_000 });
+    const d = await page.evaluate(() => {
+      const r = window.__apex.drivingLine("full");
+      return { mode: r.mode, built: r.built, samples: r.samples, verts: r.verts,
+               v0: r.speedAt(0), vMax: Math.max(...Array.from({ length: 40 }, (_, i) => r.speedAt(i * 100))) };
+    });
+    expect(d.mode).toBe("full");
+    expect(d.built).toBe(await page.evaluate(() => window.__apex.info().track));
+    expect(d.verts).toBe((d.samples + 1) * 2);
+    expect(d.vMax).toBeGreaterThan(50);      // somewhere on the lap the line is at racing speed
+    expect(d.v0).toBeGreaterThan(10);
+  });
+
   test("park() skips countdown and positions player", async ({ page }) => {
     await goToRace(page);
     await park(page, 0);

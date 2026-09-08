@@ -415,6 +415,7 @@ function buildSetup() {
       if (G.soundOn) GameAudio.uiSelect();
       buildSetup();
       if (CAT_VIEW[activeCat.id]) framePreset(CAT_VIEW[activeCat.id]);   // show the part
+      if (window.GarageScene && GarageScene.pulse) GarageScene.pulse();    // and the bay acknowledges it
       // The rebuild destroyed the focused row; without this a pad/keyboard
       // player's next arrow landed on the category TAB (first .active).
       const again = $("cs-options") && $("cs-options").querySelector('[data-cs-opt="' + opt.id + '"]');

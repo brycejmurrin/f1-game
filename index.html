@@ -540,6 +540,24 @@
             </div>
           </div>
           <p class="adv-help">MANUAL: the AERO button is yours in every zone. AUTO: the wing opens itself, like the AI.</p>
+          <!-- KEYBOARD — one row per driving action, two key slots each, built
+               by js/ui/key-binds.js from the binding table in js/input/input.js.
+               Tap a slot, press a key. Hidden by css on a touch device
+               (body:not(.desktop)): nothing to rebind without a keyboard. -->
+          <div id="pm-keys-section">
+            <h3 class="pm-group-h">KEYBOARD</h3>
+            <div id="pm-keys"></div>
+            <p id="pm-keys-note" class="adv-help">Tap a key slot, then press the key you want. Esc cancels. A key already used by another action moves here.</p>
+            <button id="pm-keys-reset" type="button">RESET KEYS</button>
+          </div>
+          <!-- CONTROLLER — the pad twin (Input.padBindings), same module. Hidden
+               by js/ui/key-binds.js until a desktop or a seen gamepad. -->
+          <div id="pm-pad-section" hidden>
+            <h3 class="pm-group-h">CONTROLLER</h3>
+            <div id="pm-pad"></div>
+            <p id="pm-pad-note" class="adv-help">Tap a slot, then press a button on the controller. Esc cancels. The stick and D&#8209;pad steer; MENU / START pauses.</p>
+            <button id="pm-pad-reset" type="button">RESET CONTROLLER</button>
+          </div>
         </section>
         <section id="pm-panel-display" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -1466,7 +1484,7 @@
 <dialog id="race-settings" class="screen dim" data-esc-close="rs-cancel" aria-labelledby="dlg-racesettings" hidden>
   <div class="sheet">
     <div class="sheet-head"><h2 id="dlg-racesettings">RACE SETTINGS</h2></div>
-    <!-- Eight SETTING ROWS (js/ui/setting-row.js), the same control as pause >
+    <!-- Nine SETTING ROWS (js/ui/setting-row.js), the same control as pause >
          SETTINGS: LABEL ‹ VALUE ›. This screen was the last one on chips, and
          it needed ~130 lines of shape-and-density grid CSS to fit seven chip
          groups on a landscape phone; eight rows fit in two columns at every
@@ -1475,7 +1493,10 @@
          GRID follows the flow (a qualifying championship pins it and disables
          the row rather than hiding it), and the five race-only rows —
          CONDITIONS, DIFFICULTY, GRID, CAUTIONS, RELIABILITY — hide in a time
-         trial, where there is no field to apply them to. -->
+         trial, where there is no field to apply them to. DRIVING LINE (the
+         glowing suggested line on the road, js/render/shared/driving-line.js)
+         is offered in every flow: a time trial is where it teaches most.
+         Ships FULL; CORNERS is the reduced form. -->
     <div class="sheet-body pane" id="rs-body">
       <div id="rs-laps" class="set-row" role="group" aria-labelledby="rs-laps-label">
         <span class="tune-label" id="rs-laps-label">LAPS</span>
@@ -1531,6 +1552,14 @@
           <button id="rs-caution-prev" type="button" data-step="-1" aria-label="Previous cautions">&lsaquo;</button>
           <select id="rs-caution-sel" aria-labelledby="rs-caution-label"></select>
           <button id="rs-caution-next" type="button" data-step="1" aria-label="Next cautions">&rsaquo;</button>
+        </div>
+      </div>
+      <div id="rs-line" class="set-row" role="group" aria-labelledby="rs-line-label">
+        <span class="tune-label" id="rs-line-label">DRIVING LINE</span>
+        <div>
+          <button id="rs-line-prev" type="button" data-step="-1" aria-label="Previous driving line">&lsaquo;</button>
+          <select id="rs-line-sel" aria-labelledby="rs-line-label"></select>
+          <button id="rs-line-next" type="button" data-step="1" aria-label="Next driving line">&rsaquo;</button>
         </div>
       </div>
       <div id="rs-reliab" class="set-row" role="group" aria-labelledby="rs-reliab-label">
@@ -1805,21 +1834,23 @@
     <dl class="sheet-body pane">
       <dt id="htp-controls">PC / KEYBOARD</dt>
       <dd>
-        Steer <span class="key">A</span><span class="key">D</span> or <span class="key">&larr;</span><span class="key">&rarr;</span> &nbsp;
-        Gas <span class="key">W</span> / <span class="key">&uarr;</span> &nbsp;
-        Brake <span class="key">S</span> / <span class="key">&darr;</span> &nbsp;
-        Boost <span class="key">Space</span> tap to toggle &nbsp;
+        <!-- js/ui/key-binds.js rewrites this span from the live key bindings;
+             the static text is the default map for a page whose script never ran. -->
+        <span id="htp-keys">Steer <span class="key">&larr;</span><span class="key">&rarr;</span> / <span class="key">A</span><span class="key">D</span> &nbsp;
+        Gas <span class="key">&uarr;</span> / <span class="key">W</span> &nbsp;
+        Brake <span class="key">&darr;</span> / <span class="key">S</span> &nbsp;
+        Boost <span class="key">SPACE</span> tap to toggle &nbsp;
         Overtake <span class="key">X</span> &nbsp;
         Active aero <span class="key">Z</span> &nbsp;
-        Camera <span class="key">C</span> cycles<br>
-        Shift Up <span class="key">E</span> &nbsp; Shift Down <span class="key">Q</span> / <span class="key">Shift</span> when <span class="key">GEARS: MANUAL</span><br>
+        Camera <span class="key">C</span> cycles &nbsp;
+        Shift up <span class="key">E</span> &nbsp; Shift down <span class="key">Q</span> / <span class="key">SHIFT</span> when GEARS: MANUAL</span><br>
         Pause <span class="key">P</span> &nbsp; Back <span class="key">Esc</span> (pauses only if nothing is open)<br>
-        Menus: arrows move in every direction — Left/Right leave a list for the header or column beside it. <span class="key">Enter</span> confirms. Keys always steer on a desktop. <span class="key">ADAPTIVE BUTTONS</span> (default ON) slows the keys at speed. <span class="key">BRAKE CUE</span> ticks faster when a corner needs the anchors — it never brakes for you
+        Menus: arrows move in every direction — Left/Right leave a list for the header or column beside it. <span class="key">Enter</span> confirms. Keys always steer on a desktop, and every driving key can be changed under SETTINGS &rsaquo; CONTROLS &rsaquo; KEYBOARD. <span class="key">ADAPTIVE BUTTONS</span> (default ON) slows the keys at speed. <span class="key">BRAKE CUE</span> ticks faster when a corner needs the anchors — it never brakes for you
       </dd>
       <dt>CONTROLLER</dt>
       <dd>
-        Left stick / D-pad steer. <span class="key">RT</span> / <span class="key">A</span> gas. <span class="key">LT</span> / <span class="key">B</span> brake (triggers are analog). <span class="key">X</span> boost toggle. <span class="key">Y</span> overtake. D-pad up aero. <span class="key">LB</span> / <span class="key">RB</span> gears. View cycles camera. Start pauses.
-        <br>PlayStation: Cross / Circle / Square / Triangle and L2 / R2 are the same slots. Adaptive Buttons does not change the stick.
+        <span id="htp-pad">Steer left stick / D&#8209;pad &nbsp;&middot;&nbsp; Gas <span class="key">RT</span> / <span class="key">A</span> &nbsp;&middot;&nbsp; Brake <span class="key">LT</span> / <span class="key">B</span> (triggers are analog) &nbsp;&middot;&nbsp; Boost <span class="key">X</span> toggle &nbsp;&middot;&nbsp; Overtake <span class="key">Y</span> &nbsp;&middot;&nbsp; Active aero <span class="key">D&#8209;PAD &uarr;</span> &nbsp;&middot;&nbsp; Camera <span class="key">VIEW</span> cycles &nbsp;&middot;&nbsp; Shift up <span class="key">RB</span> &nbsp;&middot;&nbsp; Shift down <span class="key">LB</span> &nbsp;&middot;&nbsp; Pause MENU / START</span>
+        <br>PlayStation: Cross / Circle / Square / Triangle and L2 / R2 are the same slots. Every driving button can be changed under SETTINGS &rsaquo; CONTROLS &rsaquo; CONTROLLER. Adaptive Buttons does not change the stick.
         <br>Menus: either stick / D-pad move in every direction (hold to repeat) — Left/Right leave a list for the header or column beside it. <span class="key">A</span> confirms, <span class="key">B</span> backs, triggers page. Start still pauses
       </dd>
       <dt>TOUCH / MOBILE</dt>
@@ -2111,6 +2142,7 @@
 <script defer crossorigin="anonymous" src="js/render/gfx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/driving-line.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/teams.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/driver-ratings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>
@@ -2124,6 +2156,7 @@
 <script defer crossorigin="anonymous" src="js/track/scenery/landmark-kit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/circuit-kit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/spline.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/track/core/line.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/core/mesh.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/nature.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/scenery/structures.js?v=dev"></script>
@@ -2215,6 +2248,7 @@
 <script defer crossorigin="anonymous" src="js/ui/aria-state.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/setting-row.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-tabs.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/key-binds.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/aero-zones.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>

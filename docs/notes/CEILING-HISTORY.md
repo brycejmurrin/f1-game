@@ -2159,3 +2159,84 @@ lines of shape- and density-keyed grid placement in `css/menus.css` that fitted
 the chip groups on a landscape phone are two rules. `js/game.js` shrank (the
 seven chip-building loops are eight `SettingRow.paint` calls and one wiring
 function); `cssClasses` fell (`.rs-row` retired).
+
+- `js/game.js` lines 10003 -> **10010**, codeLines 5479 -> **5480**;
+  `js/track/tracks.js` lines 2399 -> **2400** (2026-09-08): the racing line.
+  One code line in each: game.js reads `TrackLine.at()` for the AI's lateral
+  target instead of `-k * 130 * hw` (the comment block above it carries the
+  measurement: approach +1..+3.6 m INSIDE before, 3-6 m outside after; apex
+  +1.2 m inside before, within a metre of the edge after), and tracks.js calls
+  `TrackLine.bake(track)` beside the curvature LUT. The geometry itself is the
+  new `js/track/core/line.js` (its own file, unit-tested on synthetic tracks),
+  which is where a bake belongs. A solo AI lap is the same 125.10 s with the
+  line on, off or scaled — lateral position is free in the kinematic model —
+  so this is where the AI drives, not how fast; corner speed still comes from
+  the road's curvature.
+
+- `js/game.js` lines 10002 -> **10018**, codeLines 5445 -> **5451**
+  (2026-09-08): deliberate overtaking. Six code lines: the baked attack zone
+  read (1), the move-on gate feeding the pass latch and the follow-instead-of-
+  hang-alongside (3), the turn-in give-up with its per-car memory (1), and the
+  memory's decay (1). The decisions — `attackOK`, the pace-deficit floor, the
+  lunge rule's half-car line — are in `js/physics/ai-drive.js`, the zones in
+  `js/track/core/line.js` (`attackAt`), both unit-tested. Measured (sticking
+  position swaps per field lap, six minutes after the first): monaco
+  1.29 -> 0.65 with flip-backs 25 -> 3; monza unchanged at ~3.8 because a long
+  straight into a wide braking zone IS where the move is on. The slow player is
+  still passed: 10/10 followers at monza, 8/10 at monaco in four minutes
+  (7/10 before the pace-deficit floor was added; 3/10 with the zone gate
+  alone, which is the measurement that put the floor in).
+
+## 2026-09-08 — DRIVING LINE: shellNodes +6, game.js +~30 lines
+
+`shellNodes` RAISED by six for one more setting row in RACE SETTINGS: DRIVING
+LINE ‹ OFF | CORNERS | FULL ›, the glowing suggested line every racing game
+draws on the road (`js/render/shared/driving-line.js` builds the strip, GLX
+draws it; research in `docs/notes/DRIVING-LINE-RESEARCH.md`). `js/game.js`
+grew by the row's paint/wire lines, the boot mode, and `drivingLineApi()`, the
+adapter that hands the builder the centreline sampler, the curvature LUT and
+the AI's own brake numbers so the braking zones shown are the ones the field
+brakes in — the builder itself lives outside game.js on purpose. `js/agent/apex.js`
++10 for the `drivingLine(mode)` hook.
+
+- `js/game.js` lines 10019 -> **10036**, codeLines 5452 -> **5465**
+  (2026-09-08): pressure-forced mistakes. Eleven
+  code lines: the pressure accumulator (1), the error clock and its once-per-
+  braking-point roll from a hash (6), the late-phase brake multiplier feed (1),
+  the gather-phase pace (1), the wide line (1) and the render's locked fronts
+  (1). The rates, phases and magnitudes are `AiDrive.mistakeChance` /
+  `mistakePhase` / `mistakeBrakeMul` / `mistakeGatherMul`, unit-tested.
+  Measured (race-quality bench, six minutes, ~10 braking points a lap): two
+  errors in 48 monaco laps, none in 44 at monza — a field that has just left
+  the grid carries little pressure; the design point is one or two visible
+  errors per pressured car per twenty laps, well under the two or three
+  lock-ups a race that F1 22's players called too many.
+- `js/game.js` lines 9978 -> **9993**, codeLines 5435 -> **5446** (2026-09-08):
+  the garage room reads the game beyond the car. `garageCtx()` hands
+  `GarageScene.draw` the circuit the next race runs at (career calendar,
+  free-play season, else the picker), its weather and hour, and the career's
+  wins, last result and sponsor — so the bay's trolleys, timing screen, door
+  sign, trophy case and banners can follow the game state. Ten lines at the
+  one call site, plus one in setSetupView so the work lamp follows the preset; the room itself lives in `js/garage/scene.js`, unratcheted.
+
+- `js/render/glx/glx.js` lines 2297 -> **2303** (2026-09-08): `draw()` gains
+  `opts.noDepthTest` for the garage's floor reflection — the car mirrored in
+  y = 0 sits BEHIND the floor's depth, so it draws untested and unwritten
+  straight after the floor, and every opaque draw after it clips it for free.
+  Six lines (three of comment) at the one draw path; no stencil, no second
+  floor pass.
+
+- `js/game.js` lines 10082 -> **10088**, codeLines 5494 -> **5497**
+  (2026-09-08): the line's corner speed and the compound as strategy. Three
+  code lines: the on-line test feeding `TrackLine.pathK` into the brake scan
+  (2) and the tyre-class draw at grid-up plus its pace multiplier (1 + 1, on
+  existing lines). The arc geometry and the tyre table are in
+  `js/track/core/line.js` and `js/physics/ai-drive.js`, unit-tested. Measured:
+  a solo AI lap on the line monza 124.97 -> 123.30 s, monaco 86.05 -> 85.03 s;
+  `DIFF.ai` in `js/physics/consts.js` came down 1 % (0.86/0.92/0.99 ->
+  0.851/0.911/0.980) so each difficulty's lap time holds. Soft- and
+  hard-starters cross at lap 10 by construction (`tyrePace`).
+- `js/agent/apex.js` lines 2660 -> **2662** (2026-09-08): `race()` takes
+  `opts.laps` so a harness can set the race distance (the tyre draw reads it
+  at grid-up); without it every VM race is the game default and a strategy
+  bench cannot see a crossover.

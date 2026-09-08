@@ -706,3 +706,49 @@ test("defendOnce: the first pull fixes the side, the other way is refused, no pu
   eq(st, 0, 1, "no pull leaves the side latched until the braking zone");
   eq(A.defendOnce(-0.7, 0), -0.7, -1, "a fresh straight may go either way once");
 });
+
+test("attackOK: a straight is always a place to pass; a corner entry only at its zone's quality", () => {
+  const t = { craft: 0.75 };
+  const base = { traits: t, speed: 46, blockerSpeed: 40, roll: 0.5, kAhead: 0, toTurnIn: 1e9, attackQ: 0 };
+  assert.equal(A.attackOK(base), true, "a straight with a 6 m/s closing rate");
+  assert.equal(A.attackOK({ ...base, speed: 41 }), false, "barely closing on a straight: shadow it");
+  assert.equal(A.attackOK({ ...base, kAhead: 0.02 }), false, "mid-corner, no zone: not on");
+  // A car with real pace deficit is passed wherever, and a crawling one anywhere.
+  assert.equal(A.attackOK({ ...base, kAhead: 0.02, vTop: 72, freeSpeed: 70, blockerVmax: 58 }), true, "17 % of pace in hand: on, even mid-corner");
+  assert.equal(A.attackOK({ ...base, kAhead: 0.02, vTop: 72, freeSpeed: 70, blockerVmax: 66.5 }), false, "5 % — the tier spread — is not a licence to pass mid-corner");
+  assert.equal(A.attackOK({ ...base, kAhead: 0.02, speed: 5, blockerSpeed: 3, vTop: 72, freeSpeed: 70, blockerVmax: 70 }), true, "a crawling car is passed anywhere");
+  // Inside a zone the baked quality decides.
+  assert.equal(A.attackOK({ ...base, toTurnIn: 80, attackQ: 0.9 }), true, "a prime braking zone");
+  assert.equal(A.attackOK({ ...base, toTurnIn: 80, attackQ: 0.15 }), false, "a poor one (short straight or narrow road)");
+  // Craft and the roll widen or narrow the window.
+  assert.equal(A.attackOK({ ...base, toTurnIn: 80, attackQ: 0.35, traits: { craft: 0.2 } }), false, "a rookie does not see the marginal move");
+  assert.equal(A.attackOK({ ...base, toTurnIn: 80, attackQ: 0.35, traits: { craft: 1.0 }, roll: 1 }), true, "a great one, on a good day, does");
+  assert.equal(A.sideLevel(), 2.4);
+});
+
+test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-not-F1-22 band", () => {
+  const top = { consistency: 1.0 }, rookie = { consistency: 0.5 };
+  assert.ok(Math.abs(A.mistakeChance(top, 0) - 0.0012) < 1e-6, "a metronome unpressured: 0.12 % a zone");
+  assert.ok(Math.abs(A.mistakeChance(rookie, 1) - 0.0096) < 1e-6, "a rookie under sustained pressure: ~1 % a zone");
+  assert.ok(A.mistakeChance(rookie, 0) > A.mistakeChance(top, 0));
+  assert.ok(A.mistakeChance(top, 1) > A.mistakeChance(top, 0));
+  assert.ok(A.mistakeChance(top, 1) === A.mistakeChance(top, 2), "pressure saturates at 1");
+  assert.ok(A.mistakeChance(undefined, 0) > 0, "no traits: the default driver still errs");
+  // Phases: late/wide first, then gathering, then nothing.
+  const T = A.mistakeTotal();
+  assert.equal(A.mistakePhase(T), 1); assert.equal(A.mistakePhase(1.0), 2); assert.equal(A.mistakePhase(0), 0); assert.equal(A.mistakePhase(undefined), 0);
+  assert.ok(A.mistakeBrakeMul() > 1 && A.mistakeBrakeMul() < 1.1, "late by a few per cent, not a crash");
+  assert.ok(A.mistakeGatherMul() < 1 && A.mistakeGatherMul() > 0.7);
+});
+
+test("tyres: sprints start on softs, long races mix; a soft is up and fades, a hard is down and lasts", () => {
+  assert.equal(A.tyreClass(0.5, 3), "soft"); assert.equal(A.tyreClass(0.9, 3), "medium");
+  assert.equal(A.tyreClass(0.9, 25), "hard"); assert.equal(A.tyreClass(0.1, 25), "soft");
+  assert.ok(A.tyrePace("soft", 0) > A.tyrePace("medium", 0) && A.tyrePace("medium", 0) > A.tyrePace("hard", 0));
+  assert.ok(A.tyrePace("soft", 12) < A.tyrePace("hard", 12), "by lap 12 the hard-starter is ahead on pace: a crossover");
+  assert.ok(A.tyrePace("soft", 8) > A.tyrePace("hard", 8), "and at lap 8 the soft still is");
+  assert.ok(A.tyrePace("soft", 60) >= 1.004 - 0.025 - 1e-9, "deg is capped");
+  assert.equal(A.tyrePace("nonsense", 0), 1, "an unknown class is a medium");
+  // The three fresh offsets are zero-mean over a mixed field.
+  assert.ok(Math.abs(A.tyrePace("soft", 0) + A.tyrePace("hard", 0) - 2 * A.tyrePace("medium", 0)) < 1e-9);
+});

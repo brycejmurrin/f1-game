@@ -158,3 +158,34 @@ test("a standing start is a launch, not a procession — the grid pitch breaks i
   assert.ok(spreadAt4 >= 6, `the field still accelerates as one: ${seen}`);
   assert.ok(changes >= 6, `a procession: ${seen}`);
 });
+
+test("the AI drives a racing line: outside on the approach, inside at the apex, on monza's big corners", async () => {
+  const A = g.apex;
+  await g.race("monza");
+  A.headless(true);
+  const cars = g.G.cars, pIdx = cars.findIndex((c) => c.isPlayer);
+  A.carRole(pIdx, { human: false });
+  A.rivals([]);                     // everyone else 800 m back: this car drives alone
+  A.go();
+  const c = cars[pIdx], trk = g.G.track, T = g.sandbox.Tracks;
+  const rows = []; const lap0 = c.lap;
+  for (let f = 0; f < 60 * 200; f++) { A.step(DT, 1); if (c.lap > lap0 + 1) break; if (c.lap === lap0 + 1) rows.push({ s: c.s, x: c.x, k: T.curvature(trk, c.s) }); }
+  A.headless(false);
+  assert.ok(rows.length > 1000, `no full lap recorded (${rows.length} samples)`);
+  const near = (s) => rows.reduce((b, r) => (Math.abs(r.s - s) < Math.abs(b.s - s) ? r : b), rows[0]);
+  // The baked corners are the reference: for each corner longer than 40 m
+  // check the approach (45 m before the turn-in) is on the OUTSIDE by 2 m and
+  // the apex on the INSIDE by 3.5 m of a ~7 m half-width. Measured before the
+  // line: approach +1..+3.6 m INSIDE, apex only +1.2 m inside.
+  // A chicane's second half has no approach of its own (its turn-in is the
+  // first half's exit, shared through the middle), so corners whose approach
+  // point sits inside another corner's window are skipped.
+  const all = trk.lineCorners;
+  const big = all.filter((k) => k.len > 40 && !all.some((o) => o !== k && Math.abs(o.sApex - k.sApex) < 120));
+  assert.ok(big.length >= 3, `monza should bake several long corners with a clear approach, got ${big.length}`);
+  for (const k of big) {
+    const ap = near(k.s0 - 45).x * k.inside, apex = near(k.sApex).x * k.inside;   // + = toward the inside
+    assert.ok(ap < -2, `corner at s=${k.s0.toFixed(0)}: approach not outside (${ap.toFixed(2)} m toward the inside)`);
+    assert.ok(apex > 3.5, `corner at s=${k.s0.toFixed(0)}: apex not inside (${apex.toFixed(2)} m)`);
+  }
+});

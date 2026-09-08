@@ -1348,6 +1348,28 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 .set-row > div > select:disabled,
 .set-row > div > button:disabled { opacity: 0.45; cursor: default; }
 .set-row + .adv-help { margin-top: 0; }
+/* KEYBOARD / CONTROLLER rows (#pm-keys, #pm-pad, js/ui/key-binds.js): the two
+   slots are chips that show a key or button name, not the chevron squares — a
+   name needs width. An armed slot (waiting for input) wears the selected
+   plate. KEYBOARD only exists where there is a keyboard (a touch device has
+   nothing to rebind); CONTROLLER is revealed by the module when a pad is seen.
+   Id-doubled so it outranks the (1,2,2) chevron restatement below. */
+#pmsettings-inner :is(#pm-keys, #pm-pad) .set-row > div > button {
+  width: auto; flex: 0 1 auto;
+  min-width: calc(var(--chip-h) * 1.7);
+  padding-inline: calc(var(--gap) * 0.6);
+  font-size: var(--fs-2);
+  letter-spacing: var(--ls-2);
+  white-space: nowrap;
+}
+#pmsettings-inner :is(#pm-keys, #pm-pad) .set-row > div > button[data-armed] {
+  border-color: var(--red);
+  background: var(--plate-on);
+  box-shadow: var(--plate-on-glow);
+}
+:is(#pm-keys-section, #pm-pad-section) { margin-top: var(--gap); }
+:is(#pm-keys-reset, #pm-pad-reset):disabled { opacity: 0.45; cursor: default; }
+body:not(.desktop) #pm-keys-section { display: none; }
 /* Inside Settings the broad `.pm-group button` rules (full width, --tap tall,
    left-aligned, viewport type) and the wide-sheet `.pm-groups > [role=region]
    button` retune both outrank the generic row parts above, so the chevrons
@@ -1417,6 +1439,7 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
    rules here to id weight. Classes with classes, ids with ids. */
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.tune-row, .pm-group-h) { grid-column: 1 / -1; }
 #pmsettings-inner[data-shape="wide"] .pm-group :is(.set-row, .adv-help, #pm-steer-item, #pm-gfx-status, #pm-display-adv) { grid-column: 1 / -1; }
+#pmsettings-inner[data-shape="wide"] .pm-group :is(#pm-keys-section, #pm-pad-section) { grid-column: 1 / -1; }
 /* DISPLAY: UI SIZE, then HUD / METRICS / RENDERER each on their own row.
    Named areas so an open fold cannot steal the hole. */
 #pmsettings-inner[data-shape="wide"] #pm-panel-display {

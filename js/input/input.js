@@ -380,6 +380,182 @@ const Input = (function () {
     return !!(window.UiLayers && window.UiLayers.anyOpen());
   }
 
+  // ---- key bindings ------------------------------------------------------
+  // Every driving key is a BINDING, not a literal: KEY_ACTIONS is the list the
+  // CONTROLS page (js/ui/key-binds.js) renders and HOW TO PLAY reads, keyMap is
+  // the live table (two physical-key slots per action, e.code values so WASD
+  // sits under the same fingers on an AZERTY board), and codeToAction is the
+  // reverse index onKey() consults. Defaults are what the game always had.
+  const KEY_ACTIONS = [
+    { id: "left",      label: "STEER LEFT",  def: ["ArrowLeft", "KeyA"] },
+    { id: "right",     label: "STEER RIGHT", def: ["ArrowRight", "KeyD"] },
+    { id: "throttle",  label: "GAS",         def: ["ArrowUp", "KeyW"] },
+    { id: "brake",     label: "BRAKE",       def: ["ArrowDown", "KeyS"] },
+    { id: "boost",     label: "BOOST",       def: ["Space", null] },
+    { id: "overtake",  label: "OVERTAKE",    def: ["KeyX", null] },
+    { id: "aero",      label: "ACTIVE AERO", def: ["KeyZ", null] },
+    { id: "shiftUp",   label: "SHIFT UP",    def: ["KeyE", null] },
+    { id: "shiftDown", label: "SHIFT DOWN",  def: ["KeyQ", "ShiftLeft"] },
+    { id: "camera",    label: "CAMERA",      def: ["KeyC", null] },
+  ];
+  // Keys the game already answers to elsewhere: pause/back, the menu walker's
+  // confirm, the perf overlay, the OS. Refused by setKeyBinding.
+  const KEY_RESERVED = { Escape: 1, Enter: 1, NumpadEnter: 1, Tab: 1, KeyP: 1, Backquote: 1, F9: 1, MetaLeft: 1, MetaRight: 1, ContextMenu: 1 };
+  const keyMap = {};
+  let codeToAction = {};
+  // Either Shift / Ctrl / Alt counts as the one key: the default SHIFT DOWN was
+  // "Q or either Shift" and a rebind should not have to choose a side.
+  const normCode = (c) => c === "ShiftRight" ? "ShiftLeft" : c === "ControlRight" ? "ControlLeft" : c === "AltRight" ? "AltLeft" : c;
+  function rebuildKeyIndex() {
+    codeToAction = {};
+    for (const a of KEY_ACTIONS) for (const c of keyMap[a.id]) if (c && !codeToAction[c]) codeToAction[c] = a.id;
+    keyLeft = keyRight = keyThrottle = keyBrake = false;   // never latch a key that just changed meaning
+  }
+  function resetKeys() { for (const a of KEY_ACTIONS) keyMap[a.id] = a.def.slice(); rebuildKeyIndex(); }
+  resetKeys();
+  // Adopt a saved map ({action: [code, code]}); anything malformed, reserved or
+  // duplicated falls back to the default for that action.
+  function setKeyMap(saved) {
+    resetKeys();
+    if (saved && typeof saved === "object") {
+      const seen = {};
+      for (const a of KEY_ACTIONS) {
+        const v = Array.isArray(saved[a.id]) ? saved[a.id] : null;
+        if (!v) continue;
+        const slots = [0, 1].map((i) => {
+          const c = v[i] == null ? null : normCode(String(v[i]));
+          if (!c || !/^[A-Za-z0-9]{1,24}$/.test(c) || KEY_RESERVED[c] || seen[c]) return null;
+          seen[c] = 1;
+          return c;
+        });
+        keyMap[a.id] = slots;
+      }
+      rebuildKeyIndex();
+    }
+    return getKeyMap();
+  }
+  function getKeyMap() { const o = {}; for (const a of KEY_ACTIONS) o[a.id] = keyMap[a.id].slice(); return o; }
+  function keyBindings() { return KEY_ACTIONS.map((a) => ({ id: a.id, label: a.label, codes: keyMap[a.id].slice(), def: a.def.slice() })); }
+  function keysAreDefault() { return KEY_ACTIONS.every((a) => a.def[0] === keyMap[a.id][0] && a.def[1] === keyMap[a.id][1]); }
+  // Bind `code` into slot 0/1 of an action. A key another action held is taken
+  // from it (the caller shows the move); a reserved key is refused.
+  function setKeyBinding(id, slot, code) {
+    if (!keyMap[id] || !(slot === 0 || slot === 1) || !code) return { ok: false, reason: "invalid" };
+    code = normCode(String(code));
+    if (KEY_RESERVED[code]) return { ok: false, reason: "reserved" };
+    let conflict = null;
+    for (const a of KEY_ACTIONS) for (let i = 0; i < 2; i++) {
+      if (keyMap[a.id][i] === code && !(a.id === id && i === slot)) { keyMap[a.id][i] = null; if (a.id !== id) conflict = a.id; }
+    }
+    keyMap[id][slot] = code;
+    rebuildKeyIndex();
+    return { ok: true, conflict };
+  }
+  function clearKeyBinding(id, slot) {
+    if (!keyMap[id] || !(slot === 0 || slot === 1)) return false;
+    keyMap[id][slot] = null; rebuildKeyIndex(); return true;
+  }
+  const KEY_NAMES = { ArrowUp: "\u2191", ArrowDown: "\u2193", ArrowLeft: "\u2190", ArrowRight: "\u2192", Space: "SPACE",
+    ShiftLeft: "SHIFT", ControlLeft: "CTRL", AltLeft: "ALT", Comma: ",", Period: ".", Slash: "/", Semicolon: ";",
+    Quote: "'", BracketLeft: "[", BracketRight: "]", Backslash: "\\", Minus: "-", Equal: "=", Backspace: "BKSP",
+    CapsLock: "CAPS", Insert: "INS", Delete: "DEL", Home: "HOME", End: "END", PageUp: "PGUP", PageDown: "PGDN", IntlBackslash: "\\" };
+  // The name on a key chip: "X", "3", "SHIFT", an arrow. Physical codes, so a
+  // French keyboard's A key still reads A where the game means the WASD slot.
+  function keyLabel(code) {
+    if (!code) return "";
+    code = normCode(String(code));
+    let m;
+    if ((m = /^Key([A-Z])$/.exec(code))) return m[1];
+    if ((m = /^Digit(\d)$/.exec(code))) return m[1];
+    if ((m = /^Numpad(.+)$/.exec(code))) return "NUM " + ({ Add: "+", Subtract: "-", Multiply: "*", Divide: "/", Decimal: "." }[m[1]] || m[1].toUpperCase());
+    return KEY_NAMES[code] || code.toUpperCase();
+  }
+
+  // ---- controller bindings -----------------------------------------------
+  // The same shape for the pad: PAD_ACTIONS is the list the CONTROLS page
+  // renders, padMap the live table (two button-index slots per action, W3C
+  // "standard" mapping), the defaults the layout the game always had. Steering
+  // (left stick, d-pad left/right) and pause (Menu/Start) are not bindings:
+  // the stick is an axis and the d-pad/Start pair is what the menus answer to.
+  const PAD_ACTIONS = [
+    { id: "throttle",  label: "GAS",         def: [7, 0] },
+    { id: "brake",     label: "BRAKE",       def: [6, 1] },
+    { id: "boost",     label: "BOOST",       def: [2, null] },
+    { id: "overtake",  label: "OVERTAKE",    def: [3, null] },
+    { id: "aero",      label: "ACTIVE AERO", def: [12, null] },
+    { id: "shiftUp",   label: "SHIFT UP",    def: [5, null] },
+    { id: "shiftDown", label: "SHIFT DOWN",  def: [4, null] },
+    { id: "camera",    label: "CAMERA",      def: [8, null] },
+  ];
+  const PAD_RESERVED = { 9: 1, 14: 1, 15: 1 };   // pause, d-pad steer
+  const padMap = {};
+  let padCaptureCb = null;   // set while a CONTROLS slot waits for a button
+  const padIndexOk = (v) => Number.isInteger(v) && v >= 0 && v < 32;
+  function resetPad() { for (const a of PAD_ACTIONS) padMap[a.id] = a.def.slice(); }
+  resetPad();
+  function setPadMap(saved) {
+    resetPad();
+    if (saved && typeof saved === "object") {
+      const seen = {};
+      for (const a of PAD_ACTIONS) {
+        const v = Array.isArray(saved[a.id]) ? saved[a.id] : null;
+        if (!v) continue;
+        padMap[a.id] = [0, 1].map((i) => {
+          const b = v[i] == null ? null : Number(v[i]);
+          if (b == null || !padIndexOk(b) || PAD_RESERVED[b] || seen[b]) return null;
+          seen[b] = 1;
+          return b;
+        });
+      }
+    }
+    return getPadMap();
+  }
+  function getPadMap() { const o = {}; for (const a of PAD_ACTIONS) o[a.id] = padMap[a.id].slice(); return o; }
+  function padBindings() { return PAD_ACTIONS.map((a) => ({ id: a.id, label: a.label, codes: padMap[a.id].slice(), def: a.def.slice() })); }
+  function padsAreDefault() { return PAD_ACTIONS.every((a) => a.def[0] === padMap[a.id][0] && a.def[1] === padMap[a.id][1]); }
+  function setPadBinding(id, slot, index) {
+    index = index == null ? NaN : Number(index);
+    if (!padMap[id] || !(slot === 0 || slot === 1) || !padIndexOk(index)) return { ok: false, reason: "invalid" };
+    if (PAD_RESERVED[index]) return { ok: false, reason: "reserved" };
+    let conflict = null;
+    for (const a of PAD_ACTIONS) for (let i = 0; i < 2; i++) {
+      if (padMap[a.id][i] === index && !(a.id === id && i === slot)) { padMap[a.id][i] = null; if (a.id !== id) conflict = a.id; }
+    }
+    padMap[id][slot] = index;
+    padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0;   // a held pedal whose button changed meaning
+    return { ok: true, conflict };
+  }
+  function clearPadBinding(id, slot) {
+    if (!padMap[id] || !(slot === 0 || slot === 1)) return false;
+    padMap[id][slot] = null; return true;
+  }
+  // While a callback is armed the next rising edge on ANY button goes to it
+  // and nothing else that frame — no menu walk, no pause, no driving — so the
+  // press that binds B cannot also back out of the sheet. `null` disarms.
+  function padCapture(cb) { padCaptureCb = typeof cb === "function" ? cb : null; }
+  function padPresent() { return padConnected || !!activePad(); }
+  const PAD_NAMES_XBOX = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "VIEW", "MENU", "LS", "RS", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "HOME"];
+  const PAD_NAMES_PS = ["CROSS", "CIRCLE", "SQUARE", "TRIANGLE", "L1", "R1", "L2", "R2", "SHARE", "OPTIONS", "L3", "R3", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "PS"];
+  // The name on a chip: Xbox names unless the connected pad says PlayStation.
+  function padLabel(index) {
+    if (index == null) return "";
+    const pad = activePad();
+    const ps = !!pad && /playstation|dualshock|dualsense|054c|sony/i.test(String(pad.id || ""));
+    const names = ps ? PAD_NAMES_PS : PAD_NAMES_XBOX;
+    return names[index] || ("BTN " + index);
+  }
+  // The largest value across an action's bound buttons (a trigger is analog,
+  // a face button reads 0/1) and any rising edge across them.
+  function padActVal(pad, id) {
+    let v = 0;
+    for (const b of padMap[id]) if (b != null) v = Math.max(v, clamp(btnVal(pad, b), 0, 1));
+    return v;
+  }
+  function padActEdge(pad, id) {
+    for (const b of padMap[id]) if (b != null && btnEdge(pad, b)) return true;
+    return false;
+  }
+
   function onKey(e, down) {
     const active = document.activeElement;
     const tag = (active && active.tagName) || (e.target && e.target.tagName) || "";
@@ -444,39 +620,29 @@ const Input = (function () {
       }
       return;
     }
+    const act = codeToAction[normCode(e.code)] || null;
     if (menuOverlayOpen() || typing) {
       if (down) return;
-      switch (e.code) {
-        case "ArrowLeft": case "KeyA": keyLeft = false; break;
-        case "ArrowRight": case "KeyD": keyRight = false; break;
-        case "ArrowUp": case "KeyW": keyThrottle = false; break;
-        case "ArrowDown": case "KeyS": keyBrake = false; break;
-      }
+      if (act === "left") keyLeft = false;
+      else if (act === "right") keyRight = false;
+      else if (act === "throttle") keyThrottle = false;
+      else if (act === "brake") keyBrake = false;
       return;
     }
-    switch (e.code) {
-      case "ArrowLeft": case "KeyA":
-        keyLeft = down; if (down) e.preventDefault(); break;
-      case "ArrowRight": case "KeyD":
-        keyRight = down; if (down) e.preventDefault(); break;
-      case "ArrowUp": case "KeyW":
-        keyThrottle = down; if (down) e.preventDefault(); break;
-      case "ArrowDown": case "KeyS":
-        keyBrake = down; if (down) e.preventDefault(); break;
-      case "Space":
-        if (down && !e.repeat) boostTogglePressed = true; e.preventDefault(); break;
-      case "KeyX":
-        if (down && !e.repeat) overtakePressed = true;
-        break;
-      case "KeyZ":
-        if (down && !e.repeat) aeroTogglePressed = true;
-        break;
-      case "KeyE":
-        if (down && !e.repeat) shiftUpPressed = true; break;
-      case "KeyQ": case "ShiftLeft": case "ShiftRight":
-        if (down && !e.repeat) shiftDownPressed = true; break;
-      case "KeyC":
-        if (down && !e.repeat) cameraCyclePressed = true; break;
+    const edge = down && !e.repeat;
+    switch (act) {
+      case "left": keyLeft = down; if (down) e.preventDefault(); break;
+      case "right": keyRight = down; if (down) e.preventDefault(); break;
+      case "throttle": keyThrottle = down; if (down) e.preventDefault(); break;
+      case "brake": keyBrake = down; if (down) e.preventDefault(); break;
+      // preventDefault on both edges: the default BOOST key is Space, which
+      // otherwise scrolls the page (and activates a focused button on keyup).
+      case "boost": if (edge) boostTogglePressed = true; e.preventDefault(); break;
+      case "overtake": if (edge) overtakePressed = true; break;
+      case "aero": if (edge) aeroTogglePressed = true; break;
+      case "shiftUp": if (edge) shiftUpPressed = true; break;
+      case "shiftDown": if (edge) shiftDownPressed = true; break;
+      case "camera": if (edge) cameraCyclePressed = true; break;
       // KeyP and Escape are handled ABOVE the driving gate — see the comment
       // there. They are commands, and a menu being open must not swallow them.
     }
@@ -763,7 +929,9 @@ const Input = (function () {
   // called at the top of the game loop, before the physics step, to keep input
   // latency to a single frame. Standard mapping WHILE DRIVING (UiLayers.navOpen()
   // false — note the TITLE overlay counts as a nav layer, so a freshly loaded
-  // page routes pad buttons to menu-nav, not these latches):
+  // page routes pad buttons to menu-nav, not these latches). The buttons are
+  // the DEFAULTS of PAD_ACTIONS above — SETTINGS › CONTROLS › CONTROLLER
+  // rebinds them; the stick, d-pad steer and Start are fixed:
   //   axis 0  left-stick X (steer)      btn 7 RT / btn 0 A  throttle
   //   btn 14/15 d-pad left/right        btn 6 LT / btn 1 B  brake
   //   btn 2 X  boost toggle             btn 3 Y  overtake
@@ -825,39 +993,49 @@ const Input = (function () {
     else if (btnDown(pad, 14)) ax = -1;
     padSteer = clamp(ax, -1, 1);
     // pedals: analog triggers or the A/B face buttons.
-    padThrottleVal = btnDown(pad, 0) ? 1 : clamp(btnVal(pad, 7), 0, 1);
-    padBrakeVal = btnDown(pad, 1) ? 1 : clamp(btnVal(pad, 6), 0, 1);
+    padThrottleVal = padActVal(pad, "throttle");
+    padBrakeVal = padActVal(pad, "brake");
     padThrottle = padThrottleVal > 0.12;
     padBrake = padBrakeVal > 0.12;
-    if (btnEdge(pad, 9) && onPauseCb) onPauseCb();
-    // A MENU OPEN MEANS THE PAD DRIVES THE MENU, NOT THE CAR — mirroring
-    // menuOverlayOpen() gating the keyboard's own driving keys elsewhere in
-    // this file. Only ONE of the two branches below ever fires per poll, so a
-    // held LB/RB/trigger can never also queue a gear shift or camera cycle
-    // that fires the instant the menu closes (see docs/research note above
-    // clearEdges() for the bug class this avoids).
-    if (window.UiLayers && window.UiLayers.navOpen()) {
-      // ...and the PEDALS go with it. They were latched above this branch, so a
-      // pad kept throttling/braking the car through the pause menu (the
-      // keyboard's driving keys are gated by menuOverlayOpen(); the pad's were
-      // not) — full throttle while picking RESUME in a friend race, where the
-      // sim keeps running under the menu. steer() still reads the stick: the
-      // menu's own, larger deadzone is what keeps it out of the menu
-      // (tests/unit/ui-improve-pass, "resting stick at 0.18").
-      padThrottle = padBrake = false;
-      padThrottleVal = padBrakeVal = 0;
-      padNavPoll(pad);
+    if (padCaptureCb) {
+      // A CONTROLS slot is waiting for a button: the first rising edge is its
+      // answer and the frame ends here — the press must not also walk the
+      // menu, pause, or drive. Pedals and steer were latched above; unlatch.
+      padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; padSteer = 0;
+      padNavDir = null;
+      const nb = pad.buttons ? pad.buttons.length : 0;
+      for (let i = 0; i < nb; i++) if (btnEdge(pad, i)) { padCaptureCb(i); break; }
     } else {
-      padNavDir = null;   // fresh hold-timer the next time a menu opens
-      padNavSeeded = false;
-      padNavSeedLayer = null;
-      // edge-triggered actions reuse the same latches the keyboard sets.
-      if (btnEdge(pad, 2)) boostTogglePressed = true;
-      if (btnEdge(pad, 3)) overtakePressed = true;
-      if (btnEdge(pad, 12)) aeroTogglePressed = true;
-      if (btnEdge(pad, 5)) shiftUpPressed = true;
-      if (btnEdge(pad, 4)) shiftDownPressed = true;
-      if (btnEdge(pad, 8)) cameraCyclePressed = true;
+      if (btnEdge(pad, 9) && onPauseCb) onPauseCb();
+      // A MENU OPEN MEANS THE PAD DRIVES THE MENU, NOT THE CAR — mirroring
+      // menuOverlayOpen() gating the keyboard's own driving keys elsewhere in
+      // this file. Only ONE of the two branches below ever fires per poll, so a
+      // held LB/RB/trigger can never also queue a gear shift or camera cycle
+      // that fires the instant the menu closes (see docs/research note above
+      // clearEdges() for the bug class this avoids).
+      if (window.UiLayers && window.UiLayers.navOpen()) {
+        // ...and the PEDALS go with it. They were latched above this branch, so a
+        // pad kept throttling/braking the car through the pause menu (the
+        // keyboard's driving keys are gated by menuOverlayOpen(); the pad's were
+        // not) — full throttle while picking RESUME in a friend race, where the
+        // sim keeps running under the menu. steer() still reads the stick: the
+        // menu's own, larger deadzone is what keeps it out of the menu
+        // (tests/unit/ui-improve-pass, "resting stick at 0.18").
+        padThrottle = padBrake = false;
+        padThrottleVal = padBrakeVal = 0;
+        padNavPoll(pad);
+      } else {
+        padNavDir = null;   // fresh hold-timer the next time a menu opens
+        padNavSeeded = false;
+        padNavSeedLayer = null;
+        // edge-triggered actions reuse the same latches the keyboard sets.
+        if (padActEdge(pad, "boost")) boostTogglePressed = true;
+        if (padActEdge(pad, "overtake")) overtakePressed = true;
+        if (padActEdge(pad, "aero")) aeroTogglePressed = true;
+        if (padActEdge(pad, "shiftUp")) shiftUpPressed = true;
+        if (padActEdge(pad, "shiftDown")) shiftDownPressed = true;
+        if (padActEdge(pad, "camera")) cameraCyclePressed = true;
+      }
     }
     const n = pad.buttons ? pad.buttons.length : 0;
     padPrevButtons.length = n;
@@ -1399,6 +1577,8 @@ const Input = (function () {
   return {
     init,
     reset,
+    keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel,
+    padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel, padCapture, padPresent,
     debugState,
     poll: pollGamepad,
     rumble,
