@@ -1251,3 +1251,42 @@ moving the number — the one-liner is `maxDeclaredTimeout(f)` over
 `tests/specs/*.spec.js`, filtered to `> old && <= new`.
 
 **The undeclared-budget defect came back on three more specs (2026-09-05, Pages #2048).** A deploy of another session's commit (f8d5629, docs and a track tweak) failed its selected gate on both attempts on `physics-hotpath` (132-177 s, killed by its OWN `test.setTimeout(120_000)` — under the 180 s gate, so admitted), `map-hooks` (185-190 s, undeclared: it boots the default track AND Monaco) and `projection` (116-125 s for the first test, then no browser context inside the gate). A local A/B of the failing tree against its parent passed all three with identical timings, so the commit was innocent; the specs had been living under the gate by luck. Fixed the way hud-layout was: each declares 300 s (excluded by name, runs in `driving`), map-hooks waits on `awaitTrackBuild` instead of a 3 s sleep, and `tests/unit/select-specs.test.mjs` pins all three above the gate as a RULE. The lesson is the same one, so it goes in one sentence: a race-fixture spec that declares no budget, or one at or under the gate, is a deploy failure waiting for a slow runner — declare it the day you write the spec.
+
+## 2026-09-08 — the `driving` group outlives the dispatch, and two of its tests had gone stale
+
+Three AI rounds (the baked racing line, deliberate overtaking, pressure
+mistakes, then the line's own corner speed and tyre compounds) shipped on the
+VM harness and the node suites alone, with their browser groups named as
+not-run. Dispatching `ci.yml` with `group: driving` to settle that debt found
+two red tests — and neither was a physics regression. Both were tests written
+before a feature they now collide with:
+
+- **`aero-zones.spec.js` › the opening-lap OVERTAKE gate.** The test drives the
+  opening lap at full throttle with no steering, which puts the car into the
+  first-chicane barriers at 60 m/s. The broken panels are settled hazards, and
+  RACE CONTROL — ON by default since 2026-09-03 — answers YELLOW at t=14 s,
+  SAFETY CAR at t=15, RED FLAG at t=30 (traced). Every flag also switches
+  OVERTAKE off and the red flag re-grids the field, so "on iff the leader is
+  past lap 1" cannot hold. The fix is `caution(false)` plus an assertion that
+  no flag flew; the caution rule stays `race-control.spec.js`'s.
+- **`aero-zones.spec.js` › the X_VMAX_GAIN trade.** The HUMAN car tows since
+  2026-09-03 (batch 3, same 34 m window and gain as the AI). A rival inside
+  that window in one sample and not the other moved `vmaxNow` by the
+  slipstream: 1.1000 measured against the 1.0957 the flap earns. The Node twin
+  already asserted `towing === 0`; the browser spec did not. `A.rivals([])`
+  after EACH reset (not once before both — `reset()` re-seeds the field), and
+  both samples assert no tow.
+
+**The general lesson: a spec that drives a REAL lap inherits every rule added
+to the game since it was written.** Neither test mentions cautions or
+slipstream; both were silently measuring them. A test that sets a car in motion
+and then asserts one number needs to name what it is holding still.
+
+**The group's wall time is the other finding.** On the 4-shard matrix the
+`driving` group ran 22, 37, 48 and 50+ minutes — the fourth shard was still at
+18/26 (0 failed) when the run was cancelled at 14:53, the fourth such cancel on
+this branch (three are recorded in the renderer plan). So a dispatch of this
+group returns three shards and loses one to the clock. Read the shards
+individually: `actions_list` with `list_workflow_jobs` gives a per-shard
+conclusion, and a cancelled shard's log tail still says how many passed. Do not
+read the RUN's `cancelled` conclusion as a failure.

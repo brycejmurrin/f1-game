@@ -1943,8 +1943,17 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "empty adapter.info must not be a software verdict on its own");
   assert.match(sniff, /maxTextureDimension2D <= 8192/,
     "the tie-break is measured LIMITS — SwiftShader/llvmpipe 8192, Apple 16384");
-  assert.match(fnBody(src, "softContent"), /^\s*return\s+\(\s*softwareGL\s*\|\|\s*_softAdapter\s*\)\s*&&\s*!_forceHw\.has\(\s*part\s*\)/,
-    "content skips must route through softContent(part) — software by default, forceable per gate");
+  // …on `softwareGL` ALONE. That constant is already backend-aware —
+  // `forceWebGL ? detectSoftwareGL() : _softAdapter` — so ORing `_softAdapter`
+  // back in only ever applied the WEBGPU verdict to a WEBGL2 bind, degrading
+  // content on hardware the backend was not asking about (fallback sky, cleared
+  // env probe, shrunk shadow maps). WebKit takes three's WebGL2 backend on AUTO,
+  // so that was every desktop Safari boot. On the WebGPU path the two terms are
+  // the same value, so this narrows nothing that was ever correct.
+  assert.match(fnBody(src, "softContent"), /^\s*return\s+softwareGL\s*&&\s*!_forceHw\.has\(\s*part\s*\)/,
+    "content skips ask softwareGL, which already answers for the BOUND backend");
+  assert.match(src, /softwareGL\s*=\s*forceWebGL\s*\?\s*detectSoftwareGL\(\s*\)\s*:\s*!!\s*_softAdapter\b/,
+    "…and softwareGL stays the backend-aware constant the line above relies on");
   assert.doesNotMatch(src, /softContent\(\)/,
     "softContent() must never be called without a part name");
   for (const part of ["sky", "env", "chunked", "shadow"]) {

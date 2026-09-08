@@ -126,7 +126,7 @@ window.TopModal = (function () {
      button — and `focus()` on a hidden element is a silent no-op, so the
      pull-back read as done while focus stayed outside the layer. */
   const FOCUSABLE_FALLBACK = "button:not([disabled]),a[href],input:not([disabled])," +
-    "select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
+    "select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex='-1'])";
   const focusableSel = () => (window.MenuNav && window.MenuNav.FOCUSABLE) || FOCUSABLE_FALLBACK;
   const shown = (el) => (window.UiLayers && window.UiLayers.shown) ? window.UiLayers.shown(el) : !el.hidden;
   const usable = (el) => !!el && !el.disabled &&

@@ -615,6 +615,8 @@ function mountRendererPicker(old) {
   label.className = "tune-label";
   label.textContent = "RENDERER";
   prev.id = "pm-renderer-prev";
+  prev.tabIndex = -1;   // pointer-only beside the select, like SettingRow's chevrons
+  if (typeof prev.setAttribute === "function") prev.setAttribute("aria-hidden", "true");
   prev.type = "button";
   prev.textContent = "‹";
   if (typeof prev.setAttribute === "function") { prev.setAttribute("data-step", "-1"); prev.setAttribute("aria-label", "Previous renderer"); }
@@ -628,6 +630,8 @@ function mountRendererPicker(old) {
     sel.appendChild(opt);
   }
   next.id = "pm-renderer-next";
+  next.tabIndex = -1;   // pointer-only beside the select, like SettingRow's chevrons
+  if (typeof next.setAttribute === "function") next.setAttribute("aria-hidden", "true");
   next.type = "button";
   next.textContent = "›";
   if (typeof next.setAttribute === "function") { next.setAttribute("data-step", "1"); next.setAttribute("aria-label", "Next renderer"); }

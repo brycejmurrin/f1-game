@@ -108,7 +108,10 @@ export function makeDom(opts = {}) {
         return false;
       },
       set isConnected(v) { el._connected = !!v; },
-      closest: (sel) => { for (let n = el; n; n = n.parentNode) if (n.nodeType === 1 && query({ children: [n] }, sel, false).length) return n; return null; },
+      // The node ITSELF must match — query() over a fake root also searched n's
+      // descendants, so closest("details") from a button answered its layer
+      // whenever a fold sat anywhere under that layer.
+      closest: (sel) => { for (let n = el; n; n = n.parentNode) if (n.nodeType === 1 && sel.split(",").some((part) => matchesSimple(n, part.trim()))) return n; return null; },
       matches: (sel) => query({ children: [el] }, sel, false).length > 0,
       querySelector: (sel) => query(el, sel, false)[0] || null,
       querySelectorAll: (sel) => query(el, sel, true),

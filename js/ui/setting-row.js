@@ -131,8 +131,25 @@ window.SettingRow = (function () {
     const stop = (e) => { if (e && e.stopPropagation) e.stopPropagation(); };
     if (p.prev) p.prev.onclick = (e) => { stop(e); step(p, -1, read, write); };
     if (p.next) p.next.onclick = (e) => { stop(e); step(p, 1, read, write); };
+    pointerOnly(p);
     paint(p.el, read());
     return p.el;
+  }
+
+  /* THE CHEVRONS ARE POINTER AFFORDANCES. The <select> between them already
+     answers Left/Right (natively on a keyboard, stepped by the pad in
+     js/input/input.js padNavKey), so a focusable ‹ › pair beside it is a
+     duplicate — and a trap: the select owns the arrows, so the walker could
+     never enter the › column (from every row above, Down preferred the ‹ or
+     the select; measured on the DISPLAY page 2026-09-08: no arrow reached
+     any -next). Out of the focus order and the accessibility tree; the click
+     still works for a finger or a mouse. */
+  function pointerOnly(p) {
+    for (const x of [p.prev, p.next]) {
+      if (!x) continue;
+      x.tabIndex = -1;
+      x.setAttribute("aria-hidden", "true");
+    }
   }
 
   /* Build the same row for a setting the JS creates at runtime. Returns
