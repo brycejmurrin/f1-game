@@ -562,8 +562,14 @@ test.describe("Parts module — visual recipes", () => {
         const anchors = Car3D.bodyAnchors(parts);
         const data = CarMesh.carDecalData(2, parts);
         const title = LiveryTex.REGIONS.titleA, size = LiveryTex.SIZE;
+        // v divides by SIZE_H, not SIZE: the atlas grew extra rows below the
+        // square for the two engine-cover flanks, and car-mesh's uvOf has
+        // always followed it. Reading v against SIZE here put the band 8 px
+        // high and 34 px short, so the quad's lower verts fell outside it and
+        // only half the crease verts survived the filter.
+        const sizeH = LiveryTex.SIZE_H || size;
         const titleU = [title.x / size, (title.x + title.w) / size];
-        const titleV = [1 - (title.y + title.h) / size, 1 - title.y / size];
+        const titleV = [1 - (title.y + title.h) / sizeH, 1 - title.y / sizeH];
         const titleVerts = [];
         for (let i = 0; i < data.pos.length / 3; i++) {
           const p = [data.pos[i*3], data.pos[i*3+1], data.pos[i*3+2]];
@@ -1261,15 +1267,26 @@ test.describe("Parts module — visual recipes", () => {
     // run this group. car-wing-foil.test.mjs is now the sole owner of those
     // three. The decal count stays here because CarMesh's sheet is not what that
     // file measures.
-    // 48, FROM A MEASUREMENT. This said 32 and the decal sheet has been 36
-    // triangles (18 quads over LiveryTex's 8 regions) at EVERY revision of
-    // js/car/car-mesh.js — bisected, not assumed. So the ceiling was never
-    // satisfiable and the test never passed; 32 was a number someone liked.
-    // 48 is the measured 36 plus a third, which is room for a few more decal
-    // regions and still far below anything that would cost a frame. The tier
-    // argument does not affect the count (identical for tiers 0-3), so the 2
-    // above is arbitrary and harmless.
-    expect(triangles.decals).toBeLessThanOrEqual(48);
+    // 93, FROM A MEASUREMENT, and the second time this number has been set
+    // that way. It said 32 first — a number someone liked, never satisfiable,
+    // since the sheet had been 36 triangles (18 quads over LiveryTex's 8
+    // regions) at EVERY revision of js/car/car-mesh.js — and was re-measured to
+    // 48, the 36 plus a third. The sheet is now 70 over 12 regions, and every
+    // triangle of the growth is a shipped decal change rather than drift:
+    //
+    //     10 crest   10 tail   10 wing    8 titleA   8 strip   6 num
+    //      4 fin      4 finBadge   4 fwEnd   2 spineSide   2 spineSideL   2 titleB
+    //
+    // crest and tail are 5-quad DRAPES since the engine-cover crown became
+    // rounded (Car3D.coverProfile) — a flat quad no longer lies on the skin;
+    // titleA is 4 quads because podDecal splits at every crossed loft station,
+    // which is what the sibling test above asserts; spineSide and spineSideL
+    // are the two cover flanks after each got its own frame (259d670b); fwEnd
+    // is the front-wing endplate partner mark. 93 is the measured 70 plus a
+    // third, the same headroom rule as last time. The tier argument does not
+    // affect the count (identical for tiers 0-3), so the 2 above is arbitrary
+    // and harmless.
+    expect(triangles.decals).toBeLessThanOrEqual(93);
   });
 
   test("every recipe has primary and secondary visual parameters", async ({ page }) => {
