@@ -140,13 +140,23 @@ on the 08-18 perf-hunt board, not this register.
   recovery is deliberately slow — "features come back only at full res under
   the same sustained headroom, one per ~4 s". A leg that sheds early may never
   get the six consecutive opportunities the cube needs inside a 35 s check.
-  ESTABLISHED: the producer completes every call it is given, and the gate is
-  what stops. INFERRED, not yet measured: that the tier excursion is what
-  closes it — `envState()` would need to record the tier at the moment the
-  probe stops, or `game.js` would need to say which term of that gate was
-  false. Both legs read `tier=0` at the END, which is consistent with a
-  governor that shed early and recovered once the shed made frames cheap, and
-  is also consistent with `LT.carEnvCube` — the one term nobody has read.
+  **The tier hypothesis is FALSIFIED — I tested my own inference and it is
+  wrong (2026-09-08, an hour after writing it).** `gpu-game-check --backend
+  three` in this container resolves to the SAME leg (`path: webgpu`, `engine:
+  three.js r185 webgpu`) and reports `begins=896 ends=896 ready=true mask=3`
+  with `tier=0 autoTier=0 scale=1` — on a box whose own governor recorded a
+  6.7-SECOND worst frame. Slowness does not starve the probe, the governor
+  never left rung 0 to shed it, and the cube latched. It also kills the
+  broader reading I was one step from adopting: this backend is not inherently
+  unable to drive the probe, because here it drives it 896 times. Whatever
+  closes the gate is specific to the macOS runner, not to three-on-WebGPU.
+
+  `tier=0` on both census legs was the reading that made the shed-and-recover
+  story attractive; the local run shows tier 0 is simply where this leg sits.
+
+  ESTABLISHED: the producer completes every call it is given; the `game.js`
+  gate is what stops; and it is NOT the tier. The unread terms of that gate
+  are `LT.carEnvCube`, `hideMeshes.cars` and `paused`.
 
   For whoever picks this up: the cheap next measurement is to record WHICH
   term of the gate was false on the frames the probe did not run, not to add
