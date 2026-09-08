@@ -15,7 +15,7 @@ const Menus = (function () {
 function create(G) {
 Log.info("ui", "Menus.create");
 // Stable helpers from the game.js closure.
-const { $, els, store, cssCol, fmtTime, ttBoard, tickUi } = G;
+const { $, els, store, cssCol, fmtTime, ttBoard, tickUi, scheduleFlybyTrack } = G;
 
 // localStorage can be unavailable even while the game remains fully playable.
 // Surface that distinction globally: the in-memory cache preserves this
@@ -476,8 +476,10 @@ function buildSelect() {
         });
         updateTrackPreview();
         tickUi();
-        // No background rebuild: the still IS the preview. The flyby of the
-        // chosen circuit belongs to race settings (js/game.js openRaceSettings).
+        // The still IS the preview — nothing is shown behind the sheet. But once
+        // the player settles on a tile the circuit is PRE-BUILT hidden, so NEXT
+        // opens race settings onto a ready world (js/game.js scheduleFlybyTrack).
+        scheduleFlybyTrack(true);
       };
       els.selTracks.appendChild(row);
     });

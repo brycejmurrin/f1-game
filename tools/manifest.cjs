@@ -103,6 +103,7 @@ const FULL = [
   "js/track/scenery/landmark-kit.js",
   "js/track/scenery/circuit-kit.js",
   "js/track/core/spline.js",
+  "js/track/core/line.js",
   "js/track/core/mesh.js",
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
@@ -154,6 +155,7 @@ const FULL = [
   "js/ui/aria-state.js",
   "js/ui/setting-row.js",
   "js/ui/settings-tabs.js",
+  "js/ui/key-binds.js",
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
   "js/race/race-control.js",
@@ -264,6 +266,7 @@ const TRACK_VM = [
   "js/track/scenery/landmark-kit.js",
   "js/track/scenery/circuit-kit.js",
   "js/track/core/spline.js",
+  "js/track/core/line.js",
   "js/track/core/mesh.js",
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
@@ -287,6 +290,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/game.js"],
   ["js/roster.js", "js/game.js"],                          // game.js reads ApexRoster's rosters at eval
   ["js/core/mat4.js", "js/track/core/spline.js"],
+  ["js/core/mat4.js", "js/track/core/line.js"],                    // TrackLine aliases M4.clamp/lerp at eval
   ["js/core/mat4.js", "js/track/scenery/structures.js"],
   // ["js/core/mat4.js", "js/data/telemetry.js"] was here. telemetry.js is LAZY_DATA
   // now, so the pair crosses rosters and HARD_EDGES cannot order it. The

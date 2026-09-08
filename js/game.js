@@ -1522,7 +1522,8 @@ function resolveLivery(team) {
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
              logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null,
              finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null,
-             tcam: l.tcam || null, coverVents: l.coverVents || null };
+             tcam: l.tcam || null, coverVents: l.coverVents || null, spineHeight: l.spineHeight || null,
+             spineSide: l.spineSide || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1534,7 +1535,8 @@ function resolveLivery(team) {
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
                       logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null,
                       finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null,
-                      tcam: liv.tcam || null, coverVents: liv.coverVents || null }
+                      tcam: liv.tcam || null, coverVents: liv.coverVents || null, spineHeight: liv.spineHeight || null,
+                      spineSide: liv.spineSide || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -2185,8 +2187,9 @@ function drawCarDecals(team, modelMat, night, num, cockpit, usePlayerSetup) {
   // A loaded GLB is a static body and does not consume procedural part recipes;
   // keep its overlay on stable default/legacy anchors as setup options change.
   const legacyBody = !!carModelBuf;
+  const rl = cockpit ? null : resolveLivery(team);
   const mesh = cockpit ? getCockpitDecalMesh(legacyBody ? null : state.parts, team.id) :
-    getCarDecalMesh(state.val, state.parts, legacyBody, team.id, resolveLivery(team).finShape);
+    getCarDecalMesh(state.val, state.parts, legacyBody, team.id, rl.finShape, rl.spineHeight);
   const tex = getCarDecalTexture(team, num, usePlayerSetup);
   if (mesh && tex) { _decalOpts.glow = night ? 0.35 : 0; gfx.drawDecal(mesh, modelMat, tex, _decalOpts); }
 }
@@ -2740,23 +2743,27 @@ function _loadTrackBody(idx, def) {
 // only needed for the background flyby, so don't run it synchronously — defer +
 // debounce it. startRace() builds the real track when the race actually starts,
 // so racing never depends on this.
-// RACE SETTINGS ONLY (2026-09). This used to run under EVERY menu (boot, every
-// tile, every door: 0.9–3.3 s a tap on a phone). The picker now shows the chosen
-// circuit itself and the title sits on the plain page; openRaceSettings + TIME chip only.
+// SHOWN UNDER RACE SETTINGS ONLY, BUILT A LITTLE EARLIER (2026-09). The title
+// sits on the plain page and the picker shows the chosen circuit itself, so
+// render() keeps the canvas hidden there — but once the player SETTLES on a tile
+// (1.5 s; browsing never triggers it) the circuit is pre-built and the renderer
+// warmed with hidden frames, so NEXT opens onto a ready world instead of freezing
+// the sheet for the build plus the first frame (0.9–3.3 s a tap on a phone).
+const _menuGate = { warm: 0 };   // hidden warm-up frames still owed after a menu build (render)
 let flybyBuildTimer = 0;
-function scheduleFlybyTrack() {
+function scheduleFlybyTrack(settle) {   // settle: the picker's 1.5 s "player has stopped browsing" debounce
   clearTimeout(flybyBuildTimer);
   // Never hand loadTrack a negative index (exhausted career/season calendar).
   if (!(trackIdx >= 0)) return;
   flybyBuildTimer = setTimeout(() => {
     if (!(state === "menu" && trackIdx >= 0)) return;
-    // Re-test after the fetch: 120 ms of debounce plus a network round trip is
-    // long enough for the player to have browsed on or pressed GO.
+    // Re-test after the fetch: the debounce plus a network round trip is long
+    // enough for the player to have browsed on or pressed GO.
     const want = trackIdx;
     ensureScenery(want).then(() => {
-      if (state === "menu" && trackIdx === want) loadTrack(want);
+      if (state === "menu" && trackIdx === want) { loadTrack(want); _menuGate.warm = 2; }
     });
-  }, 120);
+  }, settle ? 1500 : 120);
 }
 
 // Night ambient band: floor/cap the (up-facing-dominant) hemisphere ambient into
@@ -3426,7 +3433,7 @@ const G = {
   // Mutable state + helpers consumed by js/ui/select-screen.js.
   get driverIdx() { return driverIdx; }, set driverIdx(v) { driverIdx = v; },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
-  store, tickUi,
+  store, tickUi, scheduleFlybyTrack,
   // Same deferred-arrow trick for the garage <-> select plumbing: setup-ui.js is
   // created before menus.js, and openGarage/openCustomize are declared further
   // down this file, so none of these can be referenced directly at create time.
@@ -5015,12 +5022,19 @@ function updateCar(c, dt, ranked) {
     _aiLane.street = !!track.street; _aiLane.baseLane = c.lanePref != null ? c.lanePref : c.lane;
     c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt);
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
-    // partly follow the racing line, partly hold the car's own lane, so the
-    // field fans out across the track rather than collapsing onto one line.
-    // Apex is on the INSIDE = -sign(k) (k>0 curves toward screen-left, so the
-    // inside is -x); the racing line aims there.
-    const racingLine = clamp(-kA * 130, -0.62, 0.62) * hw;
-    const targetX = clamp(racingLine * AiDrive.racingLineMix(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold) + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
+    // THE LINE (TrackLine, baked at build): outside-inside-outside through every
+    // corner, read a short way ahead so the lateral step's lag does not turn in
+    // late. Its weight is 1 in a corner window and 0 on a straight, where the
+    // car's own lane preference spreads the field instead. The old target was
+    // `-kA * 130 * hw` mixed 55 % with the lane: an inside-hugging line that
+    // entered corners already inside (measured on monza: entry +1..+3.6 m
+    // inside, apex only +1.2 m inside), and a lane-biased car apexed on the
+    // OUTSIDE all lap. AiDrive.lineFollow says how much of the line a driver
+    // takes; the remainder is their lane, which is what makes the field two
+    // lines wide into a corner instead of one.
+    const ln = TrackLine.at(track, wrapS(c.s + clamp(c.speed * 0.3, 8, 25)));
+    const laneX = c.lane * (hw - 1.2);
+    const targetX = clamp(lerp(laneX, ln.x, ln.w * AiDrive.lineFollow(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold)), -(hw - 1.0), hw - 1.0);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
     // with more room to pass. Collision-aware — the move is scaled down if that
     // side is also tight (a car alongside or a wall), so we don't dive into a
@@ -6421,7 +6435,9 @@ let _spMesh = null, _spMeshKey = "", _spHull = null;
 // compares positions byte for byte): a hue change never moves anything, and only
 // the PRESENCE of these four does — they gate optional strip geometry. finShape
 // is the one non-colour entry: it picks the shark fin's outline (or no fin).
-const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents"];
+// coverVents and spineHeight are the other enums that move a vertex, and
+// spineSide moves the service panels aft of its flank band.
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
 function getSetupPreviewMesh() {
@@ -6818,7 +6834,11 @@ function render(dt) {
   const menuBlank = state === "menu" && !setupPreviewOn && (!track || _rsEl.hidden);
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
-  if (menuBlank) return;
+  // A freshly pre-built world draws its first frames HIDDEN (scheduleFlybyTrack
+  // owes them): shaders, textures and shadow maps warm up under the picker, not
+  // in front of the player the instant race settings opens.
+  if (menuBlank && !(track && _menuGate.warm > 0)) return;
+  if (menuBlank) _menuGate.warm--;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
@@ -8743,6 +8763,7 @@ $("mb-race").onclick = () => {
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
 };
 // Optional markup must not turn one missing screen into a whole-app boot failure.
 if ($("mb-vs")) $("mb-vs").onclick = () => {
@@ -8759,6 +8780,7 @@ $("mb-tt").onclick = () => {
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
 };
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
@@ -8776,6 +8798,7 @@ $("mb-season").onclick = () => {
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
 };
 // Career's calendar is fixed, so its hub replaces the circuit picker.
 function openCareer() {
@@ -8793,6 +8816,7 @@ function openCareer() {
   careerUi.openHub();
   els.overlay.hidden = true;
   if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack(true);   // the hub's next round, pre-built behind it
 }
 // The same entry, stopping at the slot picker. Deliberately does NOT engage the
 // career flow: nothing has been chosen yet, so a save's rules must not be live —
@@ -9648,6 +9672,7 @@ function setSteerMode(mode) {
 SettingRow.wire("pm-steer", { values: SettingRow.labels(STEER_MODES), read: () => steerMode,
   write: (v) => { if (STEER_MODES.indexOf(v) >= 0) setSteerMode(v); } });
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
+KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
 
 // Steering-tuning sliders, presets + macro levels live in
 // js/input/steer-tuning.js (SteerTuning.create(G) — wired after the G façade).

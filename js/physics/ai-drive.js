@@ -608,6 +608,15 @@ const AiDrive = (function () {
     return clamp((hw || 5) * 0.44, 2.12, 2.45);
   }
 
+  // How much of the baked racing line (TrackLine) a driver takes in a corner
+  // window: nearly all of it — the line IS the fast way round — with a "hold"
+  // house style keeping a little of its own lane (a defensive habit). Streets
+  // slightly less: the line's margins are already the whole road there.
+  function lineFollow(street, hold) {
+    const base = street ? 0.86 : 0.92;
+    return hold ? clamp(base - hold * 0.06, 0.7, 0.95) : base;
+  }
+
   function racingLineMix(street, hold) {
     const base = street ? 0.32 : 0.55;
     return hold ? clamp(base - hold * 0.08, 0.22, 0.62) : base;
@@ -623,6 +632,6 @@ const AiDrive = (function () {
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
     otWant, passTarget, passHold, passCooldown, sideYieldsA,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
-    holdLineGap, defendOnce,
+    holdLineGap, defendOnce, lineFollow,
   };
 })();

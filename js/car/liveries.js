@@ -35,6 +35,16 @@
    coverVents? optional COVER VENTS: "none" (absent), "gills" (rows of cooling
      slits on the engine-cover flanks) or "spine" (one slot along the ridge).
      Geometry — the second livery field besides finShape that moves a vertex.
+   spineHeight? optional SPINE HEIGHT: "standard" (absent), "raised", "high"
+     or "dorsal" lift the engine-cover crown behind the roll hoop, tapering to
+     the tail — the fin-less 2026 look; "dorsal" runs level with the hoop.
+     Geometry (Car3D.SPINE_HEIGHT_IDS); the fin's top stays at the regulation
+     line, so a taller spine shortens the blade.
+   spineSide? optional SPINE SIDE: "none" (absent), "number", "logo" or "code"
+     paints that mark on the engine-cover FLANK, both sides, where the real
+     cars carry the number (LiveryTex.SPINE_SIDE_IDS; the band is car-mesh's).
+     The grey service panels and the accent pinstripe keep clear of the band,
+     so it also moves a vertex.
    spineLogo? optional SPINE LOGO — "logo" (absent) draws the crest on the
      engine-cover spine as well; "none" leaves the spine to the tail wash, so
      the mark reads once from a chase camera instead of twice.
@@ -428,7 +438,7 @@ const Liveries = (function () {
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
     const ex = team.livery;
-    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape", "tcam", "coverVents"]) if (ex[k]) def[k] = ex[k];
+    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide"]) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 
