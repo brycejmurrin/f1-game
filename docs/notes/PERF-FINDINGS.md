@@ -2478,6 +2478,14 @@ path, and the Verdict step already encodes the distinction.
 
 ### The open lead — a 30% luma gap between three's two backends
 
+> **SUPERSEDED, 2026-09-08.** Everything below about WHY the WebGPU leg is
+> dark has been measured and refuted — twice. Run 54 killed the PerfGov
+> tier-gate mechanism (`tier=0`); run 56 killed the env probe itself (the
+> WebGPU leg is dark WITH `envReady=true`, the WebGL2 leg bright WITHOUT it).
+> Read "Run 56 settles it" below before acting on any of this. What still
+> stands is the measured cost of the soft blit, and that it does not explain
+> the luma.
+
 TLX renders the identical scene at 46.9 on WebGPU and 66.2 on WebGL2: same
 commit, same machine, same track, same TSL materials. GLX (67.8) sits with the
 WebGL2 leg, so the odd one out is three's WebGPU backend alone.
@@ -2528,6 +2536,117 @@ add `__apex.renderScale()` (it returns `{tier, autoTier, userTier, fps, scale}`)
 and `envState().face`. A luma comparison between two legs on different present
 paths is not a comparison — that is the same vacuous-measurement class §2l and
 R14 were about, arriving one level up.
+
+### The lead, re-measured — and the recorded explanation is WRONG (2026-09-08)
+
+`gpu-census.yml` run 54, `macos-latest`, commit `9c44e83f`, montreal, job green:
+
+```
+webgpu  ok=true gpuErrors=0 envFail=0 envReady=false gaveUp=false softAdapter=false meanLuma=39.2
+        gov: tier=0 autoTier=0 userTier=0 scale=1    fps=4.9  floorMs=55.6 envFace=3
+webgl2  ok=true gpuErrors=0 envFail=0 envReady=true  gaveUp=false softAdapter=false meanLuma=64.4
+        gov: tier=0 autoTier=0 userTier=0 scale=0.9  fps=60.1 floorMs=15.1 envFace=3
+glx     ok=true gpuErrors=0                                                          meanLuma=66.2
+        gov: tier=0 autoTier=0 userTier=0 scale=0.96 fps=59.6 floorMs=15.6
+wgx     ok=true gpuErrors=0                                                          meanLuma=74.3
+        gov: tier=1 autoTier=1 userTier=0 scale=1    fps=55   floorMs=13.1
+```
+
+The gap is real and it reproduces: 39.2 against 64.4 on the same commit, machine
+and track, with GLX (66.2) sitting with the WebGL2 leg. `envReady=false` on the
+odd leg alone, so the *brightness* is settled — that leg renders with no
+image-based ambient, which is exactly the direction measured.
+
+**But the reason given above for `envReady=false` is refuted.** The tier-gate
+story needs `PerfGov.tier() >= 1`, and the governor reads **`tier=0
+autoTier=0 userTier=0`** on the WebGPU leg. Rung 1 never fired. The probe was
+ASKED — `envFace=3` says the producer ran and baked faces, `envFail=0` and
+`gaveUp=false` say none of them threw. That was the one field §2t said would
+separate the two hypotheses, and it rules out the one this document picked.
+
+What the run DID confirm is the first half of the chain: the soft-present blit
+is enormously expensive on this leg. **`fps=4.9` against 60.1**, `floorMs=55.6`
+against 15.1 — a 12× frame-rate gap between two legs of the same renderer on the
+same GPU, and the only difference between them is `tlxForceGL`. That cost is
+real and worth its own line; it simply does not reach the env probe through
+`PerfGov`, because the governor never left tier 0.
+
+So the open question is now sharper and smaller: **a probe that is called, whose
+faces do not throw, and which is not gated, still never completes its six-face
+cycle** — over roughly a dozen cycles' worth of frames even at 4.9 fps. Two
+mechanisms fit, and `envState()` could not tell them apart, so it now reports
+`mask`, `begins` and `ends` alongside `face`:
+
+- `begins > ends` → faces are lost between `game.js`'s `envFaceBegin` and
+  `envFaceEnd`, i.e. in the world draw between them.
+- `begins === ends`, mask never 63 → something clears a mask mid-cycle.
+
+The next census answers it from the Verdict line without a new hypothesis.
+
+**Method note, since this is the second wrong answer on this lead.** The first
+blamed soak lengths; the second blamed the tier gate. Both were derived by
+reading code, both were wrong, and both cost a run to find out. The instrument
+that has actually moved this lead each time is a field printed in the Verdict —
+`meanLuma` (§2l), then `gov.tier`, now `begins`/`ends`. Add the field, dispatch,
+read. Do not reason the mechanism out first.
+
+### Run 56 settles it: the env probe is NOT the cause, in either direction
+
+`gpu-census.yml` run 56, `macos-latest`, commit `b48603bb`, montreal, job green
+— the first run carrying `envState().mask/begins/ends`:
+
+```
+webgpu  envReady=TRUE  gpuErrors=0 envFail=0 meanLuma=39.4  tier=0 fps=16.4
+        env: mask=7 begins=15 ends=15 badProbes=0
+webgl2  envReady=FALSE gpuErrors=0 envFail=0 meanLuma=66.5  tier=0 fps=8.4
+        env: mask=3 begins=2  ends=2  badProbes=0
+glx                                          meanLuma=66.1  tier=0 fps=46.8
+wgx                                          meanLuma=74.3  tier=0 fps=60
+        wgx: bound=true softPresent=true
+```
+
+**The correlation inverted.** The WebGPU leg LATCHED its cube — `envReady=true`,
+`begins === ends === 15`, no losses, no bad probes — and came out at 39.4
+anyway. The WebGL2 leg never latched and came out BRIGHT at 66.5. Run 54 had it
+the other way round. Both directions now have a counterexample, so the chain
+this document has carried since run 25 — `envReady=false` → no image-based
+ambient → darker frame — is dead. It was a coincidence of two runs, and every
+line reasoned from it, including the note above, is withdrawn.
+
+`begins === ends` on both legs also answers what those fields were added for:
+**no faces are lost between `envFaceBegin` and `envFaceEnd`, and nothing clears
+a full mask.** The probe machinery is healthy. Where `envReady=false` shows up
+it is simply frame starvation — `begins=2` means the producer was called twice
+in the whole settle window, on a leg running at 8.4 fps. `envReady` is a
+FRAME-BUDGET reading on this harness, not a health reading, and it should stop
+being read as one.
+
+### What is actually left
+
+Two facts survive every run so far, and they are the lead now:
+
+1. **TLX-on-WebGPU is dark and nothing else is.** 39.2 (run 54) and 39.4 (run
+   56), against 64-67 for GLX and TLX-on-WebGL2 and 74.3 for WGX, on the same
+   commit, machine and track — and now demonstrably independent of the env cube.
+2. **WGX soft-presents too, and is the BRIGHTEST leg.** `softPresent=true`,
+   luma 74.3. So the soft blit as such does not darken anything; whatever is
+   wrong is specific to TLX's copy of it.
+
+That pair points at TLX's `_softBlit` readback and the encode it does on the way
+to the visible canvas — a colour-space or tone-map step that WGX's equivalent
+path gets right and TLX's does not. **The next measurement is a DIFF, not a
+theory: read TLX's soft-present readback path against WGX's side by side, and
+if they disagree on transfer function or target format, that is it.** Do not
+dispatch anything else on this until that diff has been read — three
+hypotheses have now been reasoned out and measured wrong on this one lead.
+
+**The pattern is the finding.** Three explanations for this gap have been
+written down with confidence and refuted by the next run: soak lengths, then
+the PerfGov tier gate, then the env probe itself. Each was derived by reading
+code and each cost a macOS run. The instrument that has moved it every single
+time is a field printed in the Verdict — `meanLuma` (§2l), `gov.tier`, then
+`begins`/`ends`. Add the field, dispatch, read. The reasoning step in between
+has a perfect record of being wrong.
 
 ### On WebGPU alternatives, since the question was asked
 

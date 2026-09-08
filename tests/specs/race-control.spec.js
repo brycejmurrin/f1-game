@@ -41,21 +41,38 @@ test.describe("race control in a page", () => {
     // stored 0 as truthy and quietly switches cautions back on for every player
     // who had turned them off. Only a real round trip through a real
     // localStorage catches that.
+    //
+    // TWO BOOTS, NOT THREE. A boot costs 30-60 s here and this test spent all
+    // three: it passed at 170.4 s and TIMED OUT on the very next run, which is
+    // not a flake to re-run but a test living inside its own budget. The third
+    // boot only re-checked the `true` direction — which is the loader's
+    // DEFAULT (`!(saved === false || saved === 0 || saved === "0")`), so it
+    // tested the fallback, not the format. The write side of both directions is
+    // asserted at the store instead, where it costs nothing.
     await page.goto("/");
     // BOOT_MS, not a hand-rolled 10 s: a SwiftShader boot here measures 11-33 s (2026-09-01).
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => window.__apex.caution(false));
+    // The WRITE, through the real setter, then the raw bytes the loader will
+    // read: GameStore JSON-encodes, so the falsy triple has to be looking at
+    // the string "false" and not at "0" or "".
+    expect(await page.evaluate(() => {
+      window.__apex.caution(false);
+      return localStorage.getItem("apex26.caution");
+    })).toBe("false");
 
+    // …and THE ROUND TRIP, on the direction the defect was in: a real boot
+    // reading a real localStorage, which is why this test is here and not in
+    // the unit suite.
     await page.reload();
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
     expect(await page.evaluate(() => window.__apex.caution().enabled)).toBe(false);
 
     // …and back, so the spec leaves no state behind for whatever runs next in
-    // this worker's storage origin.
-    await page.evaluate(() => window.__apex.caution(true));
-    await page.reload();
-    await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    expect(await page.evaluate(() => window.__apex.caution().enabled)).toBe(true);
+    // this worker's storage origin. Asserted at the store, not through a boot.
+    expect(await page.evaluate(() => {
+      window.__apex.caution(true);
+      return localStorage.getItem("apex26.caution");
+    })).toBe("true");
   });
 
   test("hazards are reported alongside the state on request", async ({ loadTrack, page }) => {

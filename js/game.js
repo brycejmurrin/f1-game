@@ -239,6 +239,17 @@ let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
+  // NOTHING STORED ON A TOUCH DEVICE = THREE.JS since 2026-09-08 (the owner's
+  // own phone runs it, and measured faster than the WebGL2 fallback there).
+  // Held in memory only, never written: "unset" has to keep meaning "the
+  // default", or the RENDERER row could never return to it. Recoverable
+  // without touching a setting — the boot canary below reverts to WebGL2, and
+  // persists that, for any device that never presents a frame on it. Desktops
+  // are unchanged: GLX is still the default renderer there.
+  if (!pref) {
+    try { if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) pref = "three"; }
+    catch (_) { /* no matchMedia: stay on the WebGL2 default */ }
+  }
   // Last load claimed the canvas then died — skip opt-in THIS tab only
   // (sessionStorage). Do not wipe the user's THREE/WEBGPU pick: Safari's
   // navigator.gpu is on, WGX/TLX still refuse, and writing webgl2 made the
@@ -1879,8 +1890,8 @@ function makeCars() {
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
         ...driverSkill(team, d, di),   // skill + craft + awareness + experience
-        // lanePref is the grid home line; adaptLane biases around it and must
-        // not accumulate forever into ±0.85 under pack traffic.
+        // lanePref is the grid HOME LINE and never moves; adaptLane biases c.lane
+        // around it (never accumulating into ±0.85), and every re-grid restores it.
         lane, lanePref: lane,
       });
     });
@@ -1955,7 +1966,7 @@ function redFlagRestart() {
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
-    c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
+    c.speed = 0; c.accSm = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.lane = c.lanePref;   // as gridUp
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wheelLock = 0;
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
@@ -1996,12 +2007,12 @@ function gridUp(preOrder) {
       c.rPrevS = c.s; c.rPrevX = c.x;
     }
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
-    c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;
+    c.speed = 0; c.accSm = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
-    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.lane = c.lanePref;   // lane is damped state, not a constant
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
     // The launch plan and the pace phase (AiDrive): one hash per car per race,

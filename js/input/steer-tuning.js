@@ -156,10 +156,16 @@ const PRESET_STORE = {  // slider store-key  ->  preset field
   adaptiveButtons: "adaptiveButtons", brakeCue: "brakeCue",
 };
 
+// FEEL. NORMAL must be the shipped car for the same reason STANDARD must be:
+// matchSteerLevel() compares the live sliders against these, so a fresh install
+// whose values are in none of them reads CUSTOM out of the box. Re-centred
+// 2026-09-08 when the shipped profile changed. The ladder now differentiates on
+// LOCK and the speed taper over one calm rack, and SIM is the one step that also
+// quickens the rack — which is what separated it before.
 const STEER_LEVELS = {
-  easy:   { steerRate: 4, steerExpo: 4, steerLock: 5, steerSpeed: 4 },
-  assist: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 4 },
-  normal: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5 },
+  easy:   { steerRate: 2, steerExpo: 4, steerLock: 5, steerSpeed: 5 },
+  assist: { steerRate: 2, steerExpo: 5, steerLock: 6, steerSpeed: 6 },
+  normal: { steerRate: 2, steerExpo: 6, steerLock: 7, steerSpeed: 7 },
   sim:    { steerRate: 7, steerExpo: 6, steerLock: 7, steerSpeed: 7 },
 };
 const STEER_LEVEL_ORDER = ["easy", "assist", "normal", "sim"];
