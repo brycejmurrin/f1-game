@@ -459,12 +459,22 @@ const Helmets = (function () {
   /* A point on the shell. `a` is the azimuth in radians, 0 over the nose,
      growing toward the driver's right — the same frame the designs use. The
      superellipse is solved for the radius along that direction. */
+  /* SIZE, separate from shape. The table above is the traced lid at its own
+     measured proportions and stays that way; this is the one number that says
+     how big it is on THIS car, and it is a measurement too. Car3D's body is
+     5.41 m long and 1.019 m tall — proportionally taller than a real car, which
+     is 5.6 by 0.95 — so a helmet sized in absolute metres comes out small
+     against it. A real 0.26 m lid on a 0.95 m car is 0.274 of the car's height;
+     this shell at 0.252 was 0.247 of 1.019, a tenth short, and a tenth is
+     exactly what "still looks small" is. 1.107 puts it on the real ratio:
+     0.279 tall, 0.230 wide, 0.349 long. */
+  const SCALE = 1.107;
   function pointAt(t, a) {
-    const w = Math.max(1e-4, tab(SHAPE.W, t)), n = tab(SHAPE.N, t);
+    const w = Math.max(1e-4, tab(SHAPE.W, t) * SCALE), n = tab(SHAPE.N, t);
     const dx = Math.sin(a), dz = Math.cos(a);
-    const d = Math.max(1e-4, dz >= 0 ? tab(SHAPE.F, t) : tab(SHAPE.B, t));
+    const d = Math.max(1e-4, (dz >= 0 ? tab(SHAPE.F, t) : tab(SHAPE.B, t)) * SCALE);
     const r = 1 / Math.pow(Math.pow(Math.abs(dx / w), n) + Math.pow(Math.abs(dz / d), n), 1 / n);
-    return [r * dx, tab(SHAPE.Y, t), r * dz];
+    return [r * dx, tab(SHAPE.Y, t) * SCALE, r * dz];
   }
 
   /* THE MESH IS THE CEILING ON THE DESIGN, not the vocabulary. Per-vertex
