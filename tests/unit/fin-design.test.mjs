@@ -172,7 +172,7 @@ test("cover vents are geometry; the T-cam pick is colour only", () => {
 // fin root all ride up with the skin. The fin's top must NOT move: it is where
 // the regulation ceiling puts it and where the fin decal is placed.
 test("spineHeight lifts the cover crown top-only and leaves the fin top alone", () => {
-  assert.deepEqual(Array.from(M.Car3D.SPINE_HEIGHT_IDS), ["standard", "raised", "high"]);
+  assert.deepEqual(Array.from(M.Car3D.SPINE_HEIGHT_IDS), ["standard", "raised", "high", "dorsal"]);
   const base = build({}), std = build({ spineHeight: "standard" });
   assert.ok(samePos(base, std), "\"standard\" is the shipped car");
   const a0 = M.Car3D.bodyAnchors(parts, team.id), a1 = M.Car3D.bodyAnchors(parts, team.id, "raised"),
@@ -184,6 +184,9 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
   assert.ok(rise(a2, -2.0) > 0 && rise(a2, -2.0) < rise(a2, -0.55), "the lift tapers toward the tail but does not vanish");
   assert.strictEqual(a2.coverAt(-0.55).bottom, a0.coverAt(-0.55).bottom, "the cover floor does not move");
   assert.ok(a2.coverAt(-0.55).top < 0.938, "\"high\" stays under the roll hoop's rear crown");
+  const a3 = M.Car3D.bodyAnchors(parts, team.id, "dorsal");
+  assert.ok(a3.coverAt(-0.55).top > a2.coverAt(-0.55).top && a3.coverAt(-0.55).top < 0.968,
+    "\"dorsal\" is the tallest and stays under the hoop's front crown, the regulation top of the car");
   // The mesh: the same triangles, lifted by at most the rise, and the fin's
   // top (the tallest sharkFin vertex) exactly where it was.
   const finTop = (liv) => {
@@ -192,7 +195,7 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
     return f.centreM[1] + f.sizeM[1] / 2;
   };
   const top0 = finTop({});
-  for (const id of ["raised", "high"]) {
+  for (const id of ["raised", "high", "dorsal"]) {
     const m = build({ spineHeight: id });
     assert.strictEqual(m.pos.length, base.pos.length, `${id}: same triangle count — a lift, not new parts`);
     let maxDy = 0, lowered = 0;
@@ -205,6 +208,30 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
     assert.strictEqual(lowered, 0, `${id}: nothing moves DOWN — the floor and the fin stay put`);
     assert.ok(Math.abs(finTop({ spineHeight: id }) - top0) < 1e-9, `${id}: the fin top stays on the regulation line`);
   }
+});
+
+// SPINE SIDE: the mark on the engine-cover flank. Atlas: the region is bare by
+// default (pixel-identical shipped atlas) and carries the number, the driver
+// code or the crest on pick. Mesh: the service panels leave the band's z range
+// so a grey hatch never sits through the number — same vertex count, moved.
+test("spineSide paints the flank band on pick only, and clears the service panels from under it", () => {
+  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code"]);
+  assert.equal(opsIn(A.paint("ferrari", BASE), R.spineSide).length, 0, "the shipped atlas paints the flank band");
+  const texts = (liv) => opsIn(A.paint("ferrari", { ...BASE, ...liv }), R.spineSide)
+    .filter((op) => op.kind === "text").map((op) => op.text);
+  assert.ok(texts({ spineSide: "number" }).includes("16"), "number on the flank");
+  assert.ok(texts({ spineSide: "code" }).includes("LEC"), "driver code on the flank");
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "logo" }), R.spineSide).length > 0, "the crest on the flank");
+  const base = build({}), side = build({ spineSide: "number" });
+  assert.strictEqual(side.pos.length, base.pos.length, "the panels move, they are not removed");
+  assert.ok(!samePos(base, side), "a flank mark relocates the service panels");
+  // No metal-surface vertex (the panels) inside the band's z range on the upper flank.
+  const metal = M.Car3D.SURFACES.metal;
+  const inBand = (m) => { let n = 0; for (let i = 0; i < m.pos.length / 3; i++) {
+    const x = Math.abs(m.pos[i * 3]), y = m.pos[i * 3 + 1], z = m.pos[i * 3 + 2];
+    if (m.mat[i] === metal && z < -0.70 && z > -1.24 && x > 0.15 && y > 0.45) n++; } return n; };
+  assert.ok(inBand(base) > 0, "the shipped car has a panel in the band's z range");
+  assert.equal(inBand(side), 0, "no panel vertex sits under the flank band");
 });
 
 // The real rule, read off the driver slot: car 1 black, car 2 yellow. Compared

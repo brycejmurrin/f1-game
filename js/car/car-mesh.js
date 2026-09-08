@@ -78,6 +78,29 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   const cr = anchors ? anchors.coverAt(-1.28) : { x: 0.20, top: 0.69 };
   quad([[-cf.x*0.72, cf.top+0.008, -0.62], [cf.x*0.72, cf.top+0.008, -0.62],
         [cr.x*0.72, cr.top+0.008, -1.28], [-cr.x*0.72, cr.top+0.008, -1.28]], [0, 1, 0.06], R.crest);
+  // SPINE SIDE: a band on the engine-cover FLANK, both sides. The cover is a
+  // trapezoid loft (car3d frame(): bottom ±x, crown ±0.72x), so at each station
+  // the flank is the straight line from (x, bottom) to (0.72x, top). The band
+  // hangs from just under the crown and is a FIXED 0.263 m tall (the atlas
+  // region's 1.9:1 over the 0.50 m of z), so the number stays the same size and
+  // shape on a raised spine — it just rides higher up a taller flank. Corners
+  // follow the endplate-number order below so the text reads on both sides
+  // under the reflected model matrix. Always mapped: an unpicked spineSide is
+  // an unpainted region, the same rule as the fin panel.
+  if (R.spineSide) {
+    const sZ = [-0.72, -1.22], PROUD = 0.010, BAND_H = 0.263, V_TOP = 0.93;
+    const flank = (z) => {
+      const c = anchors ? anchors.coverAt(z) : (z > -1 ? { x: 0.27, bottom: 0.20, top: 0.81 } : { x: 0.20, bottom: 0.23, top: 0.69 });
+      const h = c.top - c.bottom, nl = Math.hypot(h, 0.28 * c.x), nx = h / nl, ny = 0.28 * c.x / nl;
+      const at = (v) => [c.x * (1 - 0.28 * v) + nx * PROUD, c.bottom + h * v + ny * PROUD];
+      return { b: at(Math.max(0.3, V_TOP - BAND_H / h)), t: at(V_TOP), nx, ny };
+    };
+    const a = flank(sZ[0]), b = flank(sZ[1]);
+    quad([[a.b[0], a.b[1], sZ[0]], [b.b[0], b.b[1], sZ[1]], [b.t[0], b.t[1], sZ[1]], [a.t[0], a.t[1], sZ[0]]],
+         [a.nx, a.ny, 0], R.spineSide);
+    quad([[-b.b[0], b.b[1], sZ[1]], [-a.b[0], a.b[1], sZ[0]], [-a.t[0], a.t[1], sZ[0]], [-b.t[0], b.t[1], sZ[1]]],
+         [-a.nx, a.ny, 0], R.spineSide);
+  }
   // The fin's blade height is a recipe knob, so the decal has to be placed on
   // the SAME outline the mesh used. sharkFinPanel/sharkFinBadge default to a
   // scale of 1 when this is absent, which is what every legacy caller gets.

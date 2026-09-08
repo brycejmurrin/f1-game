@@ -1522,7 +1522,8 @@ function resolveLivery(team) {
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
              logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null,
              finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null,
-             tcam: l.tcam || null, coverVents: l.coverVents || null, spineHeight: l.spineHeight || null };
+             tcam: l.tcam || null, coverVents: l.coverVents || null, spineHeight: l.spineHeight || null,
+             spineSide: l.spineSide || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1534,7 +1535,8 @@ function resolveLivery(team) {
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
                       logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null,
                       finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null,
-                      tcam: liv.tcam || null, coverVents: liv.coverVents || null, spineHeight: liv.spineHeight || null }
+                      tcam: liv.tcam || null, coverVents: liv.coverVents || null, spineHeight: liv.spineHeight || null,
+                      spineSide: liv.spineSide || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -6405,8 +6407,9 @@ let _spMesh = null, _spMeshKey = "", _spHull = null;
 // compares positions byte for byte): a hue change never moves anything, and only
 // the PRESENCE of these four does — they gate optional strip geometry. finShape
 // is the one non-colour entry: it picks the shark fin's outline (or no fin).
-// coverVents and spineHeight are the other two enums that move a vertex.
-const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight"];
+// coverVents and spineHeight are the other enums that move a vertex, and
+// spineSide moves the service panels aft of its flank band.
+const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
 function getSetupPreviewMesh() {

@@ -1336,10 +1336,13 @@ const Car3D = (function () {
   // decal in car-mesh — rides up with the skin. The fin's TOP stays where the
   // regulation ceiling puts it (finTop), so a raised spine shortens the blade
   // rather than pushing it up: the real-car trade-off, and it keeps the fin
-  // decal exactly where sharkFinPanel/Badge place it. "high" is capped so the
-  // crown at z -0.55 (0.93) still sits under the hoop's rear crown (0.938).
-  const SPINE_HEIGHT_IDS = Object.freeze(["standard", "raised", "high"]);
-  const SPINE_RISE = Object.freeze({ standard: 0, raised: 0.06, high: 0.10 });
+  // decal exactly where sharkFinPanel/Badge place it. "high" (0.93) sits
+  // under the hoop's rear crown (0.938); "dorsal" (0.96) runs level with the
+  // hoop itself and is capped under its front crown (0.968), the regulation
+  // top of the car — the real 2026 cover, a tall spine with no fin, whose
+  // FLANK is where the number and the mark go (liv.spineSide, car-mesh).
+  const SPINE_HEIGHT_IDS = Object.freeze(["standard", "raised", "high", "dorsal"]);
+  const SPINE_RISE = Object.freeze({ standard: 0, raised: 0.06, high: 0.10, dorsal: 0.13 });
   const SPINE_TAIL = 0.45;   // fraction of the lift that survives at the tail (z -2.0)
   const spineRise = (id) => SPINE_RISE[id] || 0;
   const FIN_SHAPE_IDS = Object.freeze(Object.keys(FIN_SHAPES).concat(["none"]));
@@ -1815,7 +1818,7 @@ const Car3D = (function () {
     };
   }
 
-  function buildEngineCoverBodywork(out, c1, accentC, eng, anchors, rise) {
+  function buildEngineCoverBodywork(out, c1, accentC, eng, anchors, rise, sideMark) {
     const coverHeight = Math.max(0.78, Math.min(1.28, eng.coverHeight));
     rise = rise || 0;
     // t was 0.0 — frame() puts BOTH top corners on the centreline, so the engine
@@ -1838,7 +1841,10 @@ const Car3D = (function () {
     const rear = { z: -2.00, y: 0.42 + rise * SPINE_TAIL / 2, w: 0.26 * eng.tailWidth,
                    h: 0.34 * coverHeight + rise * SPINE_TAIL, t: 0.70 };
     addSpan(out, front, rear, c1, c1);
-    const stripeFront = anchors.coverAt(-0.825), stripeRear = anchors.coverAt(-1.675);
+    // The accent pinstripe runs the flank at top-0.10, straight through the
+    // SPINE SIDE band (z -0.72..-1.22 in car-mesh); with a flank mark on it
+    // starts aft of the band instead — a real number interrupts the trim.
+    const stripeFront = anchors.coverAt(sideMark ? -1.26 : -0.825), stripeRear = anchors.coverAt(-1.675);
     for (const side of [-1, 1]) {
       addSpan(out,
         { z: stripeFront.z, x: side * (stripeFront.x * 0.78), y: stripeFront.top - 0.10,
@@ -2135,7 +2141,10 @@ const Car3D = (function () {
                      h: Math.max(0.03, 0.968 - hoopF), t: 0.40 },
                    { z: -0.63, y: (hoopR + 0.938) / 2, w: 0.13 * inScale,
                      h: Math.max(0.03, 0.938 - hoopR), t: 0.38 }, c1);
-      coverGeom = buildEngineCoverBodywork(out, c1, accentC, engStyle, anchors, spineRise(liv.spineHeight));
+      // A SPINE SIDE mark (liv.spineSide) claims the flank band z -0.72..-1.22:
+      // the pinstripe and the service panels keep clear of it (see both sites).
+      const sideMark = (liv.spineSide || "none") !== "none";
+      coverGeom = buildEngineCoverBodywork(out, c1, accentC, engStyle, anchors, spineRise(liv.spineHeight), sideMark);
       // Optional scoop lip on the roll-hoop mouth (recipe-gated; default 0).
       const scoopLip = Math.max(0, Math.min(2, Math.round((engStyle && engStyle.scoopLip) || 0)));
       if (scoopLip >= 1) {
@@ -2212,8 +2221,12 @@ const Car3D = (function () {
         if (engOutlet >= 2) addBox(out, 0, coverGeom.tailVentY, -1.72, 0.13, 0.05, 0.18, INTAKE);
       }
       const servicePanels = Math.max(0, Math.min(4, Math.round(engStyle.servicePanel || 0)));
+      // With a SPINE SIDE mark on the flank the panels move aft of the band:
+      // a grey hatch through the race number is the one thing a real livery
+      // never shows.
+      const pz0 = sideMark ? -1.36 : -0.82, pdz = sideMark ? 0.15 : 0.19;
       for (const s of [-1, 1]) for (let i = 0; i < servicePanels; i++) {
-        const z = -0.82 - i * 0.19, p = anchors.coverAt(z);
+        const z = pz0 - i * pdz, p = anchors.coverAt(z);
         addBox(out, s*(p.x + 0.010), p.top - 0.18, z, 0.018, 0.10, 0.13,
           [0.24,0.24,0.27], SURFACES.metal);
       }
