@@ -123,7 +123,13 @@ const TLX = (function () {
             const lim = ad.limits || null;
             const smallLimits = !!(lim && (lim.maxTextureDimension2D <= 8192
               || lim.maxBufferSize <= 1073741824));
-            const named = /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft/.test(infoBlob);
+            // `soft(ware|pipe)`, NOT bare `soft` — that substring matches any
+            // adapter whose info says "Microsoft", which is a real D3D12
+            // description on hardware. WGX's sniff (js/render/webgpu/wgx.js)
+            // was corrected for exactly this and TLX's copy kept the bug; here
+            // a false positive costs the whole instanced prop set, not just a
+            // presentation blit.
+            const named = /swiftshader|llvmpipe|lavapipe|microsoft basic render|soft(ware|pipe)/.test(infoBlob);
             // A PHONE HAS NO SOFTWARE ADAPTER. WebKit trims adapter.info and
             // reports conservative limits, which is exactly the (!infoBlob &&
             // smallLimits) tie-break — and a "software" verdict on a handset
@@ -528,7 +534,28 @@ const TLX = (function () {
         return { on: all || set.size > 0, has: (part) => all || set.has(part) };
       })();
       // Content skips ask these, not softGpu()/softwareGL, so the switches reach them.
-      function skipBatches() { return _softAdapter && !_forceBatches && !_forceHw.has("batches"); }
+      // Which backend three ACTUALLY bound. `_softAdapter` is a fact about
+      // navigator.gpu's adapter and is sniffed before the bind decision, so it
+      // says nothing about the WebGL2 path — see skipBatches().
+      function isWebGPU() { return !!(renderer.backend && renderer.backend.isWebGPUBackend); }
+      // THE BATCH SKIP IS A DAWN WORKAROUND, so it may only fire where Dawn
+      // runs. What it guards is a WebGPU-only defect — InstancedMesh plus
+      // per-vertex color/trk makes Dawn bind a 16-vertex vec3 as instance-rate
+      // and poison the frame ENCODER (see drawInstanced) — and there is no
+      // encoder on three's WebGL2 backend. Without the isWebGPU() term the
+      // adapter verdict reached a path the defect cannot touch, and every
+      // configuration that binds WebGL2 while navigator.gpu reports a
+      // software-looking adapter lost the whole TrackGraph prop set with it:
+      // WebKit takes three's WebGL2 backend on AUTO by construction
+      // (see forceWebGL), so on desktop Safari this fired every boot. It is
+      // never a small loss — graph.js skips the FUSE for a batched node, so
+      // there is no soup copy behind it: 48% of all prop geometry across the
+      // roster is instanced-only (79.6% Vegas, 77.9% Nurburgring, 72.2% Spa),
+      // and DebrisWorld's per-body fallback cannot see the skip either because
+      // it feature-detects on the NAME, which is present and no-ops.
+      function skipBatches() {
+        return _softAdapter && isWebGPU() && !_forceBatches && !_forceHw.has("batches");
+      }
       function softContent(part) { return (softwareGL || _softAdapter) && !_forceHw.has(part); }
       function softOutRT() { return softGpu() ? _ensureBlitRT(W, H) : null; }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
@@ -550,7 +577,40 @@ const TLX = (function () {
           const attrs = geo && geo.attributes
             ? Object.keys(geo.attributes).sort().join(",") : "";
           const idx = geo && geo.index ? "i" : "n";
-          const inst = ro.object && ro.object.isInstancedMesh ? "I" : "M";
+          // AN INSTANCED OBJECT KEEPS ITS OWN IDENTITY. Everything else this
+          // key drops is a UNIFORM at draw time — the model matrix, the
+          // material's scalars — so pooled meshes may share a program and that
+          // is the whole point of the replacement above. The instance matrix is
+          // NOT a uniform: three's instance node compiles the SOURCE BUFFER
+          // into the node graph (vendored r185 three.webgpu.min.js, the
+          // `16*count*4 <= getUniformBufferLimit()` branch — below the limit it
+          // builds a BufferNode over THAT attribute's array, above it an
+          // InstancedInterleavedBuffer wrapping it). So a shared program is a
+          // shared instance buffer.
+          //
+          // Every TrackGraph prop batch draws with the SAME lit-instanced
+          // material (one `materialFor(m, false, true)` for the whole props
+          // pass) over geometries with the same attribute NAMES, so all 28 of
+          // them hashed to one entry and all but the first rendered through the
+          // first batch's transforms: barriers, debris fencing, grandstand
+          // crowd and tyre stacks vanished on BOTH three backends while GLX —
+          // which has no node graph — drew them. Measured on real Apple
+          // hardware (gpu-census on macos-latest: `anyHardware: true`,
+          // `softAdapter: false`, `gpuErrors: 0`, GLX has the wall, both TLX
+          // legs do not) and reproduced on lavapipe. Nothing else could see it:
+          // the cull agrees with GLX instance for instance, and count/visible/
+          // parent/material and the resident instanceMatrix are all correct —
+          // the data was never wrong, the program it was bound to was.
+          //
+          // Object.id, not the geometry: tlx-shadow's caster pool REASSIGNS
+          // `m.geometry` per cast while keeping its own instanceMatrix, so the
+          // pool slot is the thing whose graph stays valid. Costs one program
+          // per instanced object (39 on montreal: 28 prop batches + the shadow
+          // pool + DebrisWorld's four), which is bounded by the scene and is
+          // not the 593-program storm the replacement exists to stop — that one
+          // came from EVERY pooled mesh, and pooled meshes are still "M".
+          const inst = ro.object && ro.object.isInstancedMesh
+            ? "I" + ro.object.id : "M";
           return fam + "|" + attrs + "|" + idx + "|" + inst + "|" + attachKey();
         };
       }

@@ -1833,12 +1833,37 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // runner — the project's only real GPU — run the software half of every
   // skip, so the machine that could finally test a player's path tested the
   // other one instead. softOutRT keeps asking softGpu(); these must not.
-  assert.match(fnBody(src, "skipBatches"), /^\s*return\s+_softAdapter\s*&&\s*!_forceBatches\s*&&\s*!_forceHw\.has\(\s*"batches"\s*\)/,
-    "the batch skip is _softAdapter-by-default — not the presentation blit");
+  // …AND it must ask which backend actually bound. The defect it works around
+  // is Dawn poisoning the frame ENCODER, and there is no encoder on three's
+  // WebGL2 backend — but `_softAdapter` is sniffed off navigator.gpu BEFORE the
+  // bind decision, so without isWebGPU() the skip fired on WebGL2 too. WebKit
+  // takes three's WebGL2 backend on AUTO by construction, so desktop Safari ran
+  // it every boot and lost the whole TrackGraph prop set (graph.js skips the
+  // FUSE for a batched node, so nothing is left behind it).
+  assert.match(fnBody(src, "skipBatches"), /^\s*return\s+_softAdapter\s*&&\s*isWebGPU\(\s*\)\s*&&\s*!_forceBatches\s*&&\s*!_forceHw\.has\(\s*"batches"\s*\)/,
+    "the batch skip is _softAdapter AND the WebGPU bind — a Dawn workaround must not gate the WebGL2 path");
+  assert.match(fnBody(src, "isWebGPU"), /renderer\.backend[\s\S]*isWebGPUBackend/,
+    "isWebGPU() must read the BOUND backend, not the adapter sniff");
   assert.match(fnBody(src, "softOutRT"), /^\s*return\s+softGpu\(\s*\)/,
     "presentation still follows softGpu() — the blit is needed whenever the swapchain is not composited");
   assert.match(src, /apex26\.tlxForceBatches/,
     "the real-GPU code path must stay reachable from a software run for debugging");
+  // THE NODE-PROGRAM CACHE KEY MUST KEEP AN INSTANCED OBJECT'S IDENTITY.
+  // tlx.js replaces three's getForRenderCacheKey with the program family plus
+  // the attribute layout, on the premise that everything dropped is a uniform
+  // at draw time. That premise fails for exactly one thing: three compiles the
+  // instance-matrix SOURCE BUFFER into the node graph (vendored r185, the
+  // `16*count*4 <= getUniformBufferLimit()` branch), so a shared program is a
+  // shared instance buffer. Every TrackGraph prop batch draws with one
+  // lit-instanced material over same-named attributes, so without this term all
+  // 28 hashed to one entry and all but the first rendered through the first
+  // batch's transforms — barriers, fencing, crowd and tyre stacks gone on both
+  // three backends with zero GPU errors and a cull that agreed with GLX
+  // instance for instance. Confirmed on real Apple hardware (gpu-census,
+  // macos-latest) and by a same-camera A/B on lavapipe.
+  const ck = fnBody(src, "getForRenderCacheKey = function");
+  assert.match(ck, /isInstancedMesh[\s\S]{0,80}ro\.object\.id/,
+    "the cache key must carry ro.object.id for an instanced mesh — three bakes the instance buffer into the node graph");
   // apex26.tlxForceHw is the same argument generalised: EVERY software skip in
   // this file hides a path only a player's GPU executes, so each one needs a
   // switch that puts it back. softContent() must always take a part name —
