@@ -57,6 +57,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **check/ai-pace.mjs** | How fast is the AI field, per circuit and per difficulty? Simulated laps in the VM, no browser, no renderer. | tune-physics |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
@@ -153,6 +154,7 @@ Circuit geometry and scenery: the build guard, the baseline-gated audits, the su
 | **track/float-audit.cjs** | Exhaustive FLOATING-scenery detector — wraps `TrackGeom` emitters and reports props above/under the ground; `--all`. | survey-track |
 | **track/graph-parity.cjs** | Scene-graph migration gate: builds every circuit twice (baseline ref vs tree) and diffs prop geometry vertex for vertex. | scenery-dress |
 | **track/import-circuit-path.mjs** | Projects a `bacinger/f1-circuits` GeoJSON feature into a circuit def's `path`; `--self-check` diffs committed traces. | new-track |
+| **track/line-audit.mjs** | Audits the baked racing line on real circuits: lateral slope, clamp time, corner-time gain, corners tighter than road. | agent-view |
 | **track/measure-props-over-road.mjs** | Prop geometry on/above the racing line for ONE track; JSON report, `--shots` writes PNGs to `artifacts/tmp/`. | scenery-dress |
 | **track/refresh-f1-circuit-reference.mjs** | Explicit maintenance tool that refreshes the offline F1 circuit reference data; tests never call it or the network. | new-track |
 | **track/rotate-markings.cjs** | Rotates each circuit's `turns` onto a corrected start line by the scenery's arc shift, then re-sorts them; `--check`. | new-track |

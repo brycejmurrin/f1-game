@@ -5561,7 +5561,7 @@ const WGX = (function () {
       _lineU[16] = (opts && opts.speed) || 0;
       _lineU[17] = opts && opts.cornersOnly ? 1 : 0;
       _lineU[18] = (opts && opts.str) || 1.6;
-      _lineU[19] = 0;
+      _lineU[19] = opts && opts.palette ? 1 : 0;   // colour-blind palette (params.w)
       device.queue.writeBuffer(lineUBO, 0, _lineU);
       _setPipe(litPass, pLine);
       _setBG0(litPass, lineFxBG);
