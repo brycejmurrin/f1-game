@@ -1393,3 +1393,37 @@ green in a minute, and that is exactly the move this file exists to warn
 against: a sub-pixel that appeared with a specific commit is a thread, and
 loosening the assertion cuts it. Whoever picks it up starts from "which
 element gained a fractional zoom between those two commits".
+
+## 2026-09-08 (later) — the tenth one, pulled: zoom quantisation, not a defect
+
+The thread above ends here, and the previous entry's guess was wrong in an
+instructive way: it looked for "which element gained a fractional zoom", when
+the element had been zoomed all along and it was the ZOOM VALUE that moved.
+
+`#minimap` rides `zoom: var(--hud-z)` (css/hud.css). Chromium lays a zoomed
+subtree out on the 1/64 px LayoutUnit grid and `getComputedStyle().width`
+divides back out, so an exact answer survives only a zoom that puts the
+product on that grid. Before the bake, `--hud-scale` followed `--ui-scale`,
+which this spec leaves at 2 by the time it reaches the HUD check — and
+96 × 2 = 192 is on the grid, so it came back exactly `"96px"`. The baked
+coarse default pins `--hud-scale: 1.24`, and 96 × 1.24 = 119.04 is NOT:
+Chromium stores 119.03125, and 119.03125 / 1.24 = 95.99294. That is the whole
+fraction, to the digit, arrived at by arithmetic rather than by bisect.
+
+**Why three isolation probes said 96px.** All three ran on a pointer-FINE
+page, where the coarse block never applies and the zoom stayed 1. The failing
+read is on a coarse page — which is also why `--hud-scale` was 1.24 there and
+`1.24` appears nowhere else in `css/`. An "cannot reproduce in isolation" is a
+statement about the harness, not about the code, and here the harness differed
+in the one media query that decides the number.
+
+**The fix is a rounded read, and it is not a widened tolerance.** The rule the
+test states is which of 96 / 112 / 140 the density picks; those are 16 px
+apart, so `Math.round(parseFloat(w)) === 96` discriminates exactly as well as
+equality did, while asking for a precision the platform cannot return under a
+non-binary zoom. The dump beside it now carries `zoom`, `--hud-z-top` and both
+scales, so the next failure of this shape names its own cause.
+
+**Transferable**: any equality on `getComputedStyle().width` inside a
+`zoom`-ed subtree is a latent failure waiting for the zoom to stop being a
+clean binary. Assert the rule, at the precision the rule is stated in.
