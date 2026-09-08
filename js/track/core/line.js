@@ -34,7 +34,9 @@
  * cosine swings and the 0.6–0.7 m/m lurch where two corner windows overlap
  * (Lesmos, Les Combes, Maggotts) cost 5–14 % of pure corner time against
  * driving the centreline. So the seed is relaxed node by node (Gauss-Seidel
- * with over-relaxation, coarse-to-fine so the long corners converge) toward
+ * with over-relaxation, coarse-to-fine so the long corners converge — 250
+ * coarse passes then 60 fine, measured to give the same line as 400 + 300)
+ * toward
  * the minimum of  Σ κ_line²  +  RELAX_LAM · Σ κ_road · x  over the lap, with
  * κ_line = κ/(1 + κ x) − x'' the offset curve's curvature to first order.
  * The first term is the minimum-curvature line (K1999, Coulom 2002; TUMFTM's
@@ -48,9 +50,10 @@
  * calibrated brake model, not the line's geometry.
  *
  * FAMILIES and HINTS (the same evening). Beside `track.line` the bake keeps
- * `lineIn` (λ ×4: inside on entry — the defensive line and the inside pass)
- * and `lineOut` (λ 0: wide through the long corners — the pass around the
- * outside); `at(track, s, fam)` blends toward one. `def.lineHints`
+ * `lineIn` and `lineOut` — the racing line shifted FAM_SHIFT_M toward and
+ * away from the inside of each corner, weighted by `lineW` so they ARE the
+ * racing line on a straight; `at(track, s, fam)` blends toward one.
+ * `def.lineHints`
  * ([{ turn, apexShift, apexInside }], see resolveHints) lets a circuit
  * author a late apex or an apex kept to one side, as bounds the relaxation
  * honours rather than a hand-drawn line it would have to copy.
@@ -70,12 +73,10 @@ const TrackLine = (function () {
   const BLEND_M = 45;       // m over which the line's weight eases in/out at a corner window
   const RELAX_LAM = 0.001;  // 1/m² — path-length weight against curvature² (see header; 0.003 turns in too early)
   const RELAX_OMEGA = 1.5;  // over-relaxation
-  const RELAX_PASSES = 300; // fine passes (n ≈ 800–1800 nodes: ~25 ms)
+  const RELAX_PASSES = 60;  // fine passes; 60 and 300 measure the same line (see the header)
   const RELAX_COARSE = 4;   // coarse stride (nodes) and its pass count — the long corners' wavelengths
-  const RELAX_CPASSES = 400;
-  const RELAX_LAM_IN = 0.004;    // the INNER family: path length weighted 4×, inside on entry (measured: x(s0) −1.1 m)
-  const RELAX_FAM_PASSES = 150;  // families converge from the same seed with fewer passes
-  const RELAX_FAM_CPASSES = 250;
+  const RELAX_CPASSES = 250;
+  const FAM_SHIFT_M = 1.5;       // m the INNER / OUTER families sit off the racing line inside a corner
   const HINT_SNAP_M = 80;        // a hint's turn must sit within this of a baked corner's apex
 
   function bake(track) {
@@ -189,6 +190,7 @@ const TrackLine = (function () {
     }
     // 5. weight: 1 from entry to exit of each corner window, easing over BLEND_M outside it
     const blendN = BLEND_M / ds;
+    const insideSgn = new Float32Array(n);   // which way is the INSIDE of the corner at this node
     for (const c of corners) {
       const e0 = c.entryStep - blendN, e1 = c.exitStep + blendN;
       for (let i = Math.floor(e0); i <= Math.ceil(e1); i++) {
@@ -196,7 +198,7 @@ const TrackLine = (function () {
         if (i < c.entryStep) v = clamp((i - e0) / blendN, 0, 1);
         else if (i > c.exitStep) v = clamp((e1 - i) / blendN, 0, 1);
         const idx = wrapI(start + i);
-        if (v > w[idx]) w[idx] = v;
+        if (v > w[idx]) { w[idx] = v; insideSgn[idx] = c.inside; }
       }
     }
     // 6. bounds (the road, MARGIN in, plus any authored apex bound), the seed
@@ -211,20 +213,28 @@ const TrackLine = (function () {
       }
     }
     for (let i = 0; i < n; i++) x[i] = clamp(x[i], lo[i], hi[i]);
-    const seed = Float32Array.from(x);
     relaxCoarse(x, curv, lo, hi, n, ds, RELAX_LAM, RELAX_CPASSES);
     relaxLine(x, curv, lo, hi, n, ds, RELAX_PASSES, RELAX_LAM);
-    // FAMILIES: the same seed with the path-length term turned UP (INNER —
-    // inside on entry, the line a defence or an inside pass takes) and OFF
-    // (OUTER — pure minimum curvature, wide through the long corners, the
-    // line a pass around the outside takes). The AI blends toward one while
-    // defending or passing (game.js, TrackLine.at's `fam`), so a move is one
-    // coherent line from entry to exit instead of a sideways push.
-    const xi = Float32Array.from(seed), xo = Float32Array.from(seed);
-    relaxCoarse(xi, curv, lo, hi, n, ds, RELAX_LAM_IN, RELAX_FAM_CPASSES);
-    relaxLine(xi, curv, lo, hi, n, ds, RELAX_FAM_PASSES, RELAX_LAM_IN);
-    relaxCoarse(xo, curv, lo, hi, n, ds, 0, RELAX_FAM_CPASSES);
-    relaxLine(xo, curv, lo, hi, n, ds, RELAX_FAM_PASSES, 0);
+    // FAMILIES — the racing line shifted FAM_SHIFT_M toward the inside of the
+    // corner (INNER: the defensive line and the inside pass) and toward the
+    // outside (OUTER: the pass around the outside), weighted by `lineW` so
+    // both families ARE the racing line on a straight and diverge only through
+    // a corner, and clamped to the same road bounds. The AI blends toward one
+    // while defending or passing (game.js, `TrackLine.at`'s `fam`), so a move
+    // is one coherent line from entry to exit instead of a sideways push.
+    //
+    // These were two more relaxations (λ ×4 and λ 0) until they were measured:
+    // they cost as much as the racing line itself — TrackLine.bake was 487 ms
+    // of an 1113 ms monza build, 44 % of building a circuit — for a target the
+    // AI damps into over ~0.7 s and never follows exactly. This construction
+    // is O(n), lands within 0.25 m of where the relaxed inner family sat at
+    // the turn-in, and cannot leave the road. 2026-09-08.
+    const xi = new Float32Array(n), xo = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const d = w[i] * FAM_SHIFT_M * insideSgn[i];
+      xi[i] = clamp(x[i] + d, lo[i], hi[i]);
+      xo[i] = clamp(x[i] - d, lo[i], hi[i]);
+    }
     track.line = x; track.lineW = w; track.lineIn = xi; track.lineOut = xo;
     bakeAttack(track, ds);
     bakePathK(track, ds);

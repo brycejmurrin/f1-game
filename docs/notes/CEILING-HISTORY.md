@@ -2272,3 +2272,10 @@ files are not ratcheted.
   lap (10.0 -> 5.9 m/s², `ai-racecraft-vm`). tracks.js copies `lineHints`
   through the def, one line. Evidence: `docs/notes/RACING-LINE-RESEARCH.md`
   §7.
+- `js/game.js` lines 10144 -> **10154**, codeLines 5525 -> **5529**
+  (2026-09-08): contact, the side-rub clamp and the dig-out keep the position
+  controller's full, immediate authority — the heading state rate-limited the
+  one move that must not be rate-limited, a yielding AI steering clear of the
+  car it is rubbing (collisions-deep-vm pins clear-within-12-frames). The
+  heading is re-synced from the steer that branch produces, so the hand-back
+  is seamless. Evidence: `docs/notes/RACING-LINE-RESEARCH.md` §7.

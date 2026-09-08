@@ -278,13 +278,17 @@ What changed, and why each one:
   a lane change at a car's lateral pace, not a step. The dig-out is not
   slewed. The hold-line-under-braking and side-rub constraints are unchanged
   and still win.
-- **Line families.** `TrackLine.bake` relaxes the same seed twice more:
-  `lineIn` with the path-length term ×4 (inside on entry, the defensive
-  line) and `lineOut` with it off (pure minimum curvature, wide through the
-  long corners). `TrackLine.at(track, s, fam)` blends; the AI damps `fam`
-  toward +1 while defending or passing on the inside of the next corner, −1
-  when passing around the outside, so a move is one coherent line from entry
-  to exit rather than a sideways push on the racing line.
+- **Line families.** `lineIn` and `lineOut` are the racing line shifted 1.5 m
+  toward and away from the inside of each corner, weighted by `lineW` so both
+  ARE the racing line on a straight and diverge only through a corner, and
+  clamped to the same road bounds. `TrackLine.at(track, s, fam)` blends; the
+  AI damps `fam` toward +1 while defending or passing on the inside of the
+  next corner, −1 when passing around the outside, so a move is one coherent
+  line from entry to exit rather than a sideways push on the racing line.
+
+  They were two more relaxations (λ ×4 and λ 0) until the cost was measured —
+  see below. The construction lands within 0.25 m of where the relaxed inner
+  family sat at the turn-in, is O(n), and cannot leave the road.
 - **Authored hints.** `def.lineHints: [{ turn, apexShift, apexInside }]`
   (copied through tracks.js; `turn` 1-based into `def.turns`, racing-space,
   the bankZones idiom). `apexShift` metres moves the corner's knots later —
@@ -345,6 +349,48 @@ blocker, a rank — is measuring two things; isolate the car under test.
 and not the other leaves a red that looks like whatever change happens to run
 the group next. Both stale twins here carried a comment explaining the
 correction; neither comment was in the file that was still failing.
+
+### What the bake actually cost (and the pass counts that survived)
+
+The prototype timed 300 relaxation passes at ~24 ms and that number went into
+the first commit's message. It was wrong for the shipped code by 20×: measured
+against the real build, `TrackLine.bake` was **487 ms of an 1113 ms Monza
+build — 44 % of building a circuit** — and six circuits went from 3587 ms to
+6381 ms, +80 %. It surfaced as an `aero-zones` spec timing out at 125 s
+against a 120 s cap while building circuits, which is the kind of signal that
+is easy to write off as "the box".
+
+Two measurements fixed it:
+
+| setting | monza slope | corner-time gain | bake, 3 circuits |
+|---|---|---|---|
+| fine 300, coarse 400, families relaxed | 0.435 | +1.58 % | 1480 ms |
+| fine 150, coarse 400 | 0.438 | +1.58 % | 959 ms |
+| fine 60, coarse 250, families constructed | 0.432 | +1.58 % | 228 ms |
+| fine 0, coarse 250 | 0.438 | **−4.56 %** | 124 ms |
+
+So the fine passes past ~60 buy nothing measurable, and the fine stage cannot
+be dropped: the coarse solve interpolated back to the fine grid leaves kinks
+that make the line SLOWER than the centreline again. Shipped at 250 coarse +
+60 fine with constructed families: bake 72 ms, six circuits 3940 ms (+10 % on
+the pre-relaxation tree, against +80 % before).
+
+The lesson: **time the shipped path, not the prototype.** The prototype ran as
+a plain ES module and the bake runs inside the track-build VM; same algorithm,
+20× the cost per node.
+
+### One more test that was measuring the wrong thing
+
+`ai-racecraft-vm`'s "the AI drives a racing line" asserted the approach at a
+single sample 45 m before the turn-in, and it sat at exactly −2.00 m against a
+`< -2` threshold: it flipped on changes that left the baked line identical to
+two decimal places (`track-line-circuits` pins that corner's LINE at −6.75 m).
+Two real defects behind it, both fixed rather than papered over: the file's
+earlier tests multiply the player car's `tierV` and never restore it, so by the
+fourth test the car had been detuned three times; and a lap of this simulation
+is chaotic through the shared RNG stream, so a single sample is not an
+estimator. The approach is now a 30 m average of the same quantity, with the
+same threshold.
 
 Not done: a full lap-time re-measure per difficulty level (the brake formula
 is unchanged and the controller reaches the same apexes, but the smoother
