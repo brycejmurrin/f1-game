@@ -180,24 +180,26 @@ uniform float uPlayerSpeed;   // m/s
 uniform float uCornersOnly;   // 1 = fade the straights out
 uniform float uStr;           // emissive strength (bloom feed)
 out vec4 outColor;
-// STRIPES: two rows of pill-shaped dashes (one per half of the ribbon), DASH m
-// long every PERIOD m, the right row half a period behind the left — a zipper
-// that bends with the road. Pattern space is (along, across), so no
-// derivatives are needed for the soft edge and it is identical on WGX / TLX.
-const float PERIOD = 6.0;
-const float DASH = 3.6;
+// ARROWS: a chevron every PERIOD m pointing the way the lap runs — the tip on
+// the ribbon's centre, the wings trailing SWEEP m behind it at the edges, the
+// stroke THICK m along. Pattern space is (along, across), so the chevrons bend
+// with the road, need no derivatives for their soft edge, and are identical on
+// WGX / TLX. The F1 games' line is drawn this way.
+const float PERIOD = 5.0;
+const float SWEEP = 1.6;
+const float THICK = 1.1;
 void main() {
   float over = uPlayerSpeed / max(vSpeed, 1.0);          // 1.0 = on the line's pace
   vec3 green = vec3(0.10, 0.95, 0.35), amber = vec3(1.0, 0.72, 0.10), red = vec3(1.0, 0.12, 0.10);
   vec3 col = mix(green, amber, smoothstep(0.98, 1.06, over));
   col = mix(col, red, smoothstep(1.06, 1.16, over));
-  float row = vAcross > 0.0 ? 0.5 : 0.0;
-  float f = fract(vAlong / PERIOD + row);                // 0..1 through this row's period
-  float v = (f * PERIOD - DASH * 0.5) / (DASH * 0.5);    // -1..1 along the dash
-  float u = abs(vAcross) * 2.0 - 1.0;                    // -1..1 across this row
-  float pill = 1.0 - smoothstep(0.7, 1.0, u * u + v * v); // rounded ends, soft rim
+  float tip = PERIOD * 0.6 - SWEEP * abs(vAcross);       // the stroke's centre line, per across
+  float d = mod(vAlong - tip, PERIOD);                   // metres past that centre line, wrapped
+  d = min(d, PERIOD - d);
+  float arrow = 1.0 - smoothstep(THICK * 0.5 - 0.18, THICK * 0.5, d);
+  float rim = 1.0 - smoothstep(0.85, 1.0, abs(vAcross));  // soft ribbon edge
   float zone = mix(1.0, smoothstep(0.05, 0.75, vZone), uCornersOnly);   // the whole smoothed ramp is the fade
-  float a = pill * zone;
+  float a = arrow * rim * zone;
   if (a < 0.01) discard;
   outColor = vec4(col * uStr * a, a * 0.85);
 }`;

@@ -85,6 +85,12 @@ Second pass, 2026-09-08, from EA's own pages and player guides.
   `vTop()`, swept backwards under `BRAKE·0.85` and forwards under `ACCEL` — the
   AI's own brake-target model (`AiDrive.brakeTarget`), so the braking zones
   shown are the ones the field brakes in.
+- **The look** a row of chevrons every 5 m pointing the way the lap runs
+  (tip on the centre, wings trailing 1.6 m at the edges, 1.1 m stroke), each
+  bending with the road because the pattern lives in the strip's (along,
+  across) space — F1's form; a first cut of staggered pill dashes was replaced
+  the same day at the owner's request. No derivatives, so WebKit-safe and the
+  same maths on GLX / WGX / TLX.
 - **Colour** F1's grammar against the player's speed: green at or under the
   line's speed, amber a little over, red clearly over. Forza's blue was not
   used: this HUD already uses blue for ERS and DRS.

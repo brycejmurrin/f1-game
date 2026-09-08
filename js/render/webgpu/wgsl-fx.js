@@ -346,8 +346,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   //        @location(2) aSpeed  : f32        off 16   the line's speed here (m/s)
   //        @location(3) aZone   : f32        off 20   0 straight … 1 corner / braking
   //        @location(4) aAlong  : f32        off 24   metres along the lap (the dash clock)
-  //    LOOK          : two rows of pill-shaped dashes, right row half a period
-  //                    behind the left (GLX LINE_FS PERIOD / DASH).
+  //    LOOK          : a chevron every PERIOD m pointing the way the lap runs,
+  //                    wings trailing the tip (GLX LINE_FS PERIOD / SWEEP / THICK).
   //    BIND GROUP    : @group(0) @binding(0) var<uniform> U : LineU
   //                    (viewProj + params = playerSpeed, cornersOnly, str, 0)
   //    BLEND         : alpha  (srcAlpha, oneMinusSrcAlpha)
@@ -393,17 +393,18 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let red   = vec3<f32>(1.0, 0.12, 0.10);
   var col = mix(green, amber, smoothstep(0.98, 1.06, over));
   col = mix(col, red, smoothstep(1.06, 1.16, over));
-  // Two staggered rows of pill-shaped dashes (GLX LINE_FS): pattern space is
-  // (along, across), so the soft edge needs no derivatives.
-  let PERIOD = 6.0;
-  let DASH = 3.6;
-  let row = select(0.0, 0.5, in.across > 0.0);
-  let f = fract(in.along / PERIOD + row);
-  let v = (f * PERIOD - DASH * 0.5) / (DASH * 0.5);
-  let u = abs(in.across) * 2.0 - 1.0;
-  let pill = 1.0 - smoothstep(0.7, 1.0, u * u + v * v);
+  // Chevrons every PERIOD m pointing the way the lap runs (GLX LINE_FS):
+  // pattern space is (along, across), so no derivatives for the soft edge.
+  let PERIOD = 5.0;
+  let SWEEP = 1.6;
+  let THICK = 1.1;
+  let tip = PERIOD * 0.6 - SWEEP * abs(in.across);
+  var d = (in.along - tip) - PERIOD * floor((in.along - tip) / PERIOD);   // mod, positive
+  d = min(d, PERIOD - d);
+  let arrow = 1.0 - smoothstep(THICK * 0.5 - 0.18, THICK * 0.5, d);
+  let rim = 1.0 - smoothstep(0.85, 1.0, abs(in.across));
   let zone = mix(1.0, smoothstep(0.05, 0.75, in.zone), U.params.y);
-  let a = pill * zone;
+  let a = arrow * rim * zone;
   if (a < 0.01) { discard; }
   return vec4<f32>(col * U.params.z * a, a * 0.85);
 }`;

@@ -35,11 +35,12 @@
  * the cap into braking ZONES that begin before the corner — the part a player
  * actually wants shown.
  *
- * THE LOOK. Not a solid ribbon: two staggered rows of pill-shaped dashes,
- * the right row half a period behind the left, each dash bending with the
- * road because it lives in the strip's own space (the owner asked for
- * "staggered, striped and curved", 2026-09-08). The shaders pattern it from
- * the per-vertex ALONG value (metres of lap), so all three backends agree.
+ * THE LOOK. Not a solid ribbon: a chevron every few metres pointing the way
+ * the lap runs, the tip on the centre and the wings trailing at the edges —
+ * the F1 games' form — each arrow bending with the road because it lives in
+ * the strip's own space (the owner asked for arrows on a properly curving
+ * line, 2026-09-08). The shaders pattern it from the per-vertex ALONG value
+ * (metres of lap), so all three backends agree.
  *
  * VERTEX LAYOUT (interleaved Float32, STRIDE floats per vertex, two vertices
  * per sample, a triangle strip): pos3, across (-1 | +1), vLine (m/s), zone
@@ -49,7 +50,7 @@ window.DrivingLine = (function () {
   const STRIDE = 7;
   const STEP = 2.5;          // m between samples (a 5 km lap ≈ 2000 samples)
   const LOOK = 60;           // m — the assist's look-ahead at ~70 m/s (25-90)
-  const HALF_W = 0.75;       // m — half the ribbon width (two 0.75 m rows of dashes)
+  const HALF_W = 0.75;       // m — half the ribbon width (one 1.5 m row of chevrons)
   const LIFT = 0.03;         // m above the road (the road mesh sits at +0.02)
   const MODES = ["off", "corner", "full"];
   const KMIN = 1 / 400;      // |k| above this is "a corner" (radius under 400 m)

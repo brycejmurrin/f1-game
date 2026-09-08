@@ -7,7 +7,7 @@
       Fn, uniform, attribute, texture, materialReference, mrt,
       float, vec2, vec3, vec4,
       positionGeometry, cameraPosition, normalWorld,
-      normalize, cross, dot, length, exp, max, mix, smoothstep, abs, fract, step,
+      normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
     } = TSL;
 
     /* ── shared FX render state ─────────────────────────────────────────────
@@ -96,20 +96,22 @@
     const lineCorners = uniform(0.0);   // 1 = fade the straights out
     const lineStr = uniform(1.6);       // emissive strength (bloom feed)
     const lineMat = trackFx(fxMaterial({ offset: true, doubleSided: true, key: "tlx-fx-line" }));
-    // Two staggered rows of pill-shaped dashes (GLX LINE_FS PERIOD / DASH):
-    // pattern space is (along, across), so no derivatives — WebKit-safe.
+    // Chevrons every PERIOD m pointing the way the lap runs (GLX LINE_FS
+    // PERIOD / SWEEP / THICK): pattern space is (along, across), so no
+    // derivatives — WebKit-safe.
     const lineAlpha = Fn(() => {
       const across = float(attribute("lineAcross", "float")).toVar();   // anchor
       const zone = float(attribute("lineZone", "float")).toVar();       // anchor
       const along = float(attribute("lineAlong", "float")).toVar();     // anchor
-      const PERIOD = float(6.0), DASH = float(3.6);
-      const row = step(float(0.0), across).mul(0.5);
-      const f = fract(along.div(PERIOD).add(row));
-      const v = f.mul(PERIOD).sub(DASH.mul(0.5)).div(DASH.mul(0.5));
-      const u = abs(across).mul(2.0).sub(1.0);
-      const pill = smoothstep(float(0.7), float(1.0), u.mul(u).add(v.mul(v))).oneMinus();
+      const PERIOD = float(5.0), SWEEP = float(1.6), THICK = float(1.1);
+      const tip = PERIOD.mul(0.6).sub(SWEEP.mul(abs(across)));
+      const rel = along.sub(tip);
+      const d0 = rel.sub(PERIOD.mul(floor(rel.div(PERIOD))));            // mod, positive
+      const d = min(d0, PERIOD.sub(d0));
+      const arrow = smoothstep(THICK.mul(0.5).sub(0.18), THICK.mul(0.5), d).oneMinus();
+      const rim = smoothstep(float(0.85), float(1.0), abs(across)).oneMinus();
       const z = mix(float(1.0), smoothstep(float(0.05), float(0.75), zone), lineCorners);
-      return pill.mul(z);
+      return arrow.mul(rim).mul(z);
     });
     lineMat.colorNode = Fn(() => {
       const spd = float(attribute("lineSpeed", "float")).toVar();       // anchor
