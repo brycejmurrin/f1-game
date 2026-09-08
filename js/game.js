@@ -9727,6 +9727,7 @@ SettingRow.wire("pm-steer", { values: SettingRow.labels(STEER_MODES), read: () =
   write: (v) => { if (STEER_MODES.indexOf(v) >= 0) setSteerMode(v); } });
 $("pm-calib").onclick = () => { Input.calibrate(); setPaused(false); };
 KeyBinds.create(G);   // the KEYBOARD rows: rebindable driving keys (js/ui/key-binds.js)
+SettingsExport.create(G);   // SETTINGS FILE: download preferences as JSON (js/ui/settings-export.js)
 
 // Steering-tuning sliders, presets + macro levels live in
 // js/input/steer-tuning.js (SteerTuning.create(G) — wired after the G façade).

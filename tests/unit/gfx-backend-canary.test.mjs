@@ -2458,6 +2458,17 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.doesNotMatch(glx, /setPolyOffset\(\[-4/, "no per-draw bias literal");
   // Four since 2026-09-08: shadow, mark, skid batch, and the DRIVING LINE ribbon.
   assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 4, "the four road decal draws share ROAD_BIAS");
+  // TLX: three honours the ROAD's own depthBias (game.js _wmRoad*, applied by
+  // tsl-lit.js) on both of its backends, GLX does not. An fx decal biased by
+  // GLX's -4/-8 therefore sits BEHIND the road on three — gpu-census 48 on an
+  // Apple GPU drew the driving line on GLX and WGX and nothing on TLX, with
+  // zero GPU errors (2026-09-08). The fx offset must be beyond the road's.
+  const tslFx = read("js/render/three/tsl-fx.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  const fxF = +tslFx.match(/polygonOffsetFactor = (-?[\d.]+)/)[1], fxU = +tslFx.match(/polygonOffsetUnits = (-?[\d.]+)/)[1];
+  const road = read("js/game.js").match(/_wmRoadDryD = \{[^}]*depthBias: \[(-?[\d.]+), (-?[\d.]+)\]/);
+  assert.ok(road, "the dry road material declares a depthBias");
+  assert.ok(fxF < +road[1] && fxU < +road[2],
+    `tsl-fx fx decal offset (${fxF},${fxU}) must be nearer the camera than the road's (${road[1]},${road[2]})`);
 });
 
 test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {

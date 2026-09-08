@@ -1369,7 +1369,6 @@ body:has(#howtoplay:not([hidden])) #pmsettings {
 }
 :is(#pm-keys-section, #pm-pad-section) { margin-top: var(--gap); }
 :is(#pm-keys-reset, #pm-pad-reset):disabled { opacity: 0.45; cursor: default; }
-body:not(.desktop) #pm-keys-section { display: none; }
 /* Inside Settings the broad `.pm-group button` rules (full width, --tap tall,
    left-aligned, viewport type) and the wide-sheet `.pm-groups > [role=region]
    button` retune both outrank the generic row parts above, so the chevrons
