@@ -38,6 +38,22 @@ const WCAR = 2.0;          // js/game.js — car width in the same plane
 const CLEAR = 2.8;         // AiDrive.minLatGap(hw, false) on a permanent circuit
 const DT = 1 / 60;
 
+// Steering reversals per km and lateral-acceleration RMS from a (s, x) trace
+// sampled every DT. Lateral velocity is Δx/Δt across consecutive frames; a
+// reversal is a sign flip of that velocity once it has exceeded ±0.25 m/s in
+// the new direction (hysteresis, so noise around zero does not count).
+function laneJitter(rows, dt, lapM) {
+  let prevV = 0, sign = 0, rev = 0, sumA2 = 0, nA = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const v = (rows[i].x - rows[i - 1].x) / dt;
+    if (i > 1) { const a = (v - prevV) / dt; sumA2 += a * a; nA++; }
+    if (v > 0.25 && sign <= 0) { if (sign < 0) rev++; sign = 1; }
+    else if (v < -0.25 && sign >= 0) { if (sign > 0) rev++; sign = -1; }
+    prevV = v;
+  }
+  return { revPerKm: rev / (lapM / 1000), jerkRms: nA ? Math.sqrt(sumA2 / nA) : 0 };
+}
+
 // The player car becomes an AI driver on a reduced pace ceiling (tierV is the
 // per-car top-speed scale the AI drives to) — a stand-in for a human mid-pack
 // that never parks, never leaves the road, and always keeps the racing line.
@@ -180,6 +196,19 @@ test("the AI drives a racing line: outside on the approach, inside at the apex, 
   // A chicane's second half has no approach of its own (its turn-in is the
   // first half's exit, shared through the middle), so corners whose approach
   // point sits inside another corner's window are skipped.
+  // JITTER (2026-09-08): the same lap trace scores how calm the driving is.
+  // Reversals: sign changes of the lateral velocity with a 0.25 m/s hysteresis
+  // (a wobble is a reversal, a sweep through a chicane is one). Jerk: RMS of
+  // the lateral acceleration per frame. Baseline before the heading-state
+  // controller is recorded in docs/notes/RACING-LINE-RESEARCH.md §7; the caps
+  // hold the improved values so a regression to twitching reads here.
+  const jit = laneJitter(rows, DT, trk.total);
+  console.log(`[racecraft] monza solo lap: reversals/km=${jit.revPerKm.toFixed(1)} latJerkRms=${jit.jerkRms.toFixed(2)} m/s² samples=${rows.length}`);
+  // Measured 2026-09-08: position P-loop 5.4 /km and 10.0 m/s²; heading-state
+  // controller 4.7 /km and 5.9 m/s² (the reversals left are the chicanes and
+  // sub-degree heading crossings at the lane/line hand-overs on the straights).
+  assert.ok(jit.revPerKm <= 6.0, `steering reversals ${jit.revPerKm.toFixed(1)}/km — the AI is twitching again`);
+  assert.ok(jit.jerkRms <= 7.5, `lateral acceleration RMS ${jit.jerkRms.toFixed(2)} m/s² — the AI is twitching again`);
   const all = trk.lineCorners;
   const big = all.filter((k) => k.len > 40 && !all.some((o) => o !== k && Math.abs(o.sApex - k.sApex) < 120));
   assert.ok(big.length >= 3, `monza should bake several long corners with a clear approach, got ${big.length}`);

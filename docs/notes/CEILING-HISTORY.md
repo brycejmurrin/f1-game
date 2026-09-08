@@ -2262,3 +2262,13 @@ files are not ratcheted.
   itself is a new module, `js/ui/settings-export.js`; its buttons inject into
   the RENDERER fold at DOMContentLoaded like RendererPicker's, so they cost no
   shell nodes.
+- `js/game.js` lines 10089 -> **10144**, codeLines 5498 -> **5525**;
+  `js/track/tracks.js` lines 2400 -> **2401** (2026-09-08): the AI's
+  HEADING-STATE lateral controller (a Stanley cross-track term on the target
+  path's tangent, yaw-rate capped by the grip budget, the biases slewed at
+  3 m/s, the crawl/dig-out fallback kept), the brake look sampled at every
+  node, the line-family blend, and six named tunables above `_aiBr`. Paid for
+  by a measured halving of the AI's lateral acceleration RMS on a solo Monza
+  lap (10.0 -> 5.9 m/s², `ai-racecraft-vm`). tracks.js copies `lineHints`
+  through the def, one line. Evidence: `docs/notes/RACING-LINE-RESEARCH.md`
+  §7.

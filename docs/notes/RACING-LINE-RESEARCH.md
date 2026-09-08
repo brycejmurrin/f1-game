@@ -230,3 +230,70 @@ unchanged, all pass) and the new `tests/unit/track-line-circuits.test.mjs`
 spa / silverstone, and monza's long corners outside-in-outside on the baked
 table). `ai-racecraft-vm` drives an AI car through monza's long corners on
 the new line: 4/4 pass.
+
+## 7. The AI on the line (2026-09-08, later the same evening)
+
+The owner's follow-up: make the AI less jittery and more calculated on and
+around the line. Measured first, on a solo Monza lap driven by an AI in
+`tests/unit/ai-racecraft-vm.test.mjs` (`laneJitter`: steering reversals per
+km with a 0.25 m/s hysteresis on the lateral velocity, and the RMS of the
+frame-to-frame lateral acceleration):
+
+| controller | reversals / km | lateral accel RMS |
+|---|---|---|
+| position P-loop (before) | 5.4 | 10.0 m/s² |
+| heading state + slewed biases (after) | 4.7 | 5.9 m/s² |
+
+What changed, and why each one:
+
+- **Brake look sampled at every node, node-aligned** (game.js, the brake
+  target). The old loop sampled every 14 m *from the car*, so the sample set
+  slid across the 4 m curvature nodes as the car moved and the min over it
+  stepped every frame — throttle/brake chatter at every entry. Anchored on
+  the nodes, the window gains one node ahead and drops one behind per node
+  travelled. Same formula (`AiDrive.brakeTarget`), so the pace calibration
+  is untouched; the option of a baked per-circuit speed profile was
+  considered and not taken: the per-car factors (aero load, tyre grip,
+  skill, late-brake craft) scale the cornering speed inside the sweep, so a
+  nominal profile would have re-tuned every driver's braking point.
+- **A heading state instead of a position P-loop** (game.js "--- lateral
+  ---"). `steer = 0.9·err` was 13.5 m/s of lateral speed per metre of error
+  in the same frame. The car now carries a heading off the road tangent,
+  steered toward the target path's tangent (read 4 m past the look-ahead
+  point) plus a Stanley cross-track term `atan(k·e/v)`, with the heading
+  rate capped by the lateral grip budget (`a_lat = v·yawRate ≤
+  0.6·LAT_MAX·grip`). The lateral speed is `v·sin(heading)`; every existing
+  multiplier on the lateral step (grip taper, kerb, contact give, off-track
+  fade) still applies because `steer` is that speed as a fraction of the
+  full-lock authority. Below 6 m/s (vStd) or while digging out, the old
+  position loop drives: a heading means nothing without speed.
+- **Slewed biases.** Overtake, defend, yield and separation are summed as
+  before but the sum moves toward its value at 3 m/s, so a pass decision is
+  a lane change at a car's lateral pace, not a step. The dig-out is not
+  slewed. The hold-line-under-braking and side-rub constraints are unchanged
+  and still win.
+- **Line families.** `TrackLine.bake` relaxes the same seed twice more:
+  `lineIn` with the path-length term ×4 (inside on entry, the defensive
+  line) and `lineOut` with it off (pure minimum curvature, wide through the
+  long corners). `TrackLine.at(track, s, fam)` blends; the AI damps `fam`
+  toward +1 while defending or passing on the inside of the next corner, −1
+  when passing around the outside, so a move is one coherent line from entry
+  to exit rather than a sideways push on the racing line.
+- **Authored hints.** `def.lineHints: [{ turn, apexShift, apexInside }]`
+  (copied through tracks.js; `turn` 1-based into `def.turns`, racing-space,
+  the bankZones idiom). `apexShift` metres moves the corner's knots later —
+  a late apex onto a straight; `apexInside` (−1..1, a fraction of the usable
+  half-width) bounds the apex plateau to the inside or the outside. The
+  relaxation honours them as bounds. A hint more than 80 m from any baked
+  corner is dropped with a warning. No circuit authors one yet.
+
+What the remaining reversals are: on the solo lap they sit at the chicanes
+(a real direction change each) and at sub-degree heading crossings where the
+straight's lane target hands over to the corner's line (`lineW` easing in) —
+heading ±0.01 rad at 45 m/s trips the 0.25 m/s hysteresis. The acceleration
+RMS is the metric that moves; both are capped in the test.
+
+Not done: a full lap-time re-measure per difficulty level (the brake formula
+is unchanged and the controller reaches the same apexes, but the smoother
+lateral motion may be worth a tenth); the CI `driving` and `hooks` groups
+were run for this change, the rest of the AI groups were not.

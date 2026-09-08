@@ -47,6 +47,14 @@
  * on the inside clamp. `pathK` (below) is unchanged: it is the AI's
  * calibrated brake model, not the line's geometry.
  *
+ * FAMILIES and HINTS (the same evening). Beside `track.line` the bake keeps
+ * `lineIn` (λ ×4: inside on entry — the defensive line and the inside pass)
+ * and `lineOut` (λ 0: wide through the long corners — the pass around the
+ * outside); `at(track, s, fam)` blends toward one. `def.lineHints`
+ * ([{ turn, apexShift, apexInside }], see resolveHints) lets a circuit
+ * author a late apex or an apex kept to one side, as bounds the relaxation
+ * honours rather than a hand-drawn line it would have to copy.
+ *
  * Coordinates: x is +right, +curv is a LEFT turn (mesh.js), so the inside of a
  * corner is -sign(curv) in x. Everything here is static per track, so the
  * agent hooks and every AI car read the same table: `TrackLine.at(track, s)`.
@@ -65,6 +73,10 @@ const TrackLine = (function () {
   const RELAX_PASSES = 300; // fine passes (n ≈ 800–1800 nodes: ~25 ms)
   const RELAX_COARSE = 4;   // coarse stride (nodes) and its pass count — the long corners' wavelengths
   const RELAX_CPASSES = 400;
+  const RELAX_LAM_IN = 0.004;    // the INNER family: path length weighted 4×, inside on entry (measured: x(s0) −1.1 m)
+  const RELAX_FAM_PASSES = 150;  // families converge from the same seed with fewer passes
+  const RELAX_FAM_CPASSES = 250;
+  const HINT_SNAP_M = 80;        // a hint's turn must sit within this of a baked corner's apex
 
   function bake(track) {
     const n = track.n, L = track.total, ds = L / n, curv = track.curv, hw = track.hw;
@@ -122,6 +134,18 @@ const TrackLine = (function () {
         entryStep: apexIn - turnIn / ds, exitStep: apexOut + exit / ds,
         i0: r.i0, i1: r.i1 });
     }
+    // AUTHORED HINTS (def.lineHints, copied through tracks.js): per turn,
+    // `apexShift` metres moves the whole corner's knots later (a late apex —
+    // the entry onto a long straight) and `apexInside` (−1..1, a fraction of
+    // the usable half-width) is a bound the apex plateau must keep on the
+    // inside (positive) or the outside (negative, a double-apex's first half
+    // or a corner taken wide on purpose). `turn` is 1-based into def.turns —
+    // racing-space, no shift (js/track/CLAUDE.md), the bankZones idiom.
+    const hints = resolveHints(track, corners, start, ds);
+    for (const h of hints) if (h.apexShift) {
+      const d = h.apexShift / ds, c = h.corner;
+      c.apexStep += d; c.apexIn += d; c.apexOut += d; c.entryStep += d; c.exitStep += d;
+    }
     track.lineCorners = corners.map((c) => ({
       s0: wrapS(L, (start + c.entryStep) * ds), sApex: wrapS(L, (start + c.apexStep) * ds), s1: wrapS(L, (start + c.exitStep) * ds),
       k: c.kMax * c.sgn, inside: c.inside, len: (c.i1 - c.i0 + 1) * ds,
@@ -175,22 +199,71 @@ const TrackLine = (function () {
         if (v > w[idx]) w[idx] = v;
       }
     }
-    // 6. clamp the seed to the road, then relax it (header): coarse first, then fine
-    const lim = new Float32Array(n);
-    for (let i = 0; i < n; i++) { lim[i] = Math.max(hw[i] - MARGIN, 0.5); x[i] = clamp(x[i], -lim[i], lim[i]); }
-    relaxCoarse(x, curv, lim, n, ds);
-    relaxLine(x, curv, lim, n, ds, RELAX_PASSES);
-    track.line = x; track.lineW = w;
+    // 6. bounds (the road, MARGIN in, plus any authored apex bound), the seed
+    //    clamped to them, then relaxed (header): coarse first, then fine.
+    const lo = new Float32Array(n), hi = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const l = Math.max(hw[i] - MARGIN, 0.5); lo[i] = -l; hi[i] = l; }
+    for (const h of hints) if (h.apexInside) {
+      const c = h.corner, f = clamp(h.apexInside, -1, 1), side = f > 0 ? c.inside : -c.inside, m = Math.abs(f);
+      for (let q = Math.floor(c.apexIn); q <= Math.ceil(c.apexOut); q++) {
+        const i = wrapI(start + q), l = Math.max(hw[i] - MARGIN, 0.5);
+        if (side < 0) hi[i] = Math.min(hi[i], -m * l); else lo[i] = Math.max(lo[i], m * l);
+      }
+    }
+    for (let i = 0; i < n; i++) x[i] = clamp(x[i], lo[i], hi[i]);
+    const seed = Float32Array.from(x);
+    relaxCoarse(x, curv, lo, hi, n, ds, RELAX_LAM, RELAX_CPASSES);
+    relaxLine(x, curv, lo, hi, n, ds, RELAX_PASSES, RELAX_LAM);
+    // FAMILIES: the same seed with the path-length term turned UP (INNER —
+    // inside on entry, the line a defence or an inside pass takes) and OFF
+    // (OUTER — pure minimum curvature, wide through the long corners, the
+    // line a pass around the outside takes). The AI blends toward one while
+    // defending or passing (game.js, TrackLine.at's `fam`), so a move is one
+    // coherent line from entry to exit instead of a sideways push.
+    const xi = Float32Array.from(seed), xo = Float32Array.from(seed);
+    relaxCoarse(xi, curv, lo, hi, n, ds, RELAX_LAM_IN, RELAX_FAM_CPASSES);
+    relaxLine(xi, curv, lo, hi, n, ds, RELAX_FAM_PASSES, RELAX_LAM_IN);
+    relaxCoarse(xo, curv, lo, hi, n, ds, 0, RELAX_FAM_CPASSES);
+    relaxLine(xo, curv, lo, hi, n, ds, RELAX_FAM_PASSES, 0);
+    track.line = x; track.lineW = w; track.lineIn = xi; track.lineOut = xo;
     bakeAttack(track, ds);
     bakePathK(track, ds);
     return track;
   }
 
+  // def.lineHints → [{ corner, apexShift, apexInside }]: each hint's turn (a
+  // racing-lap fraction in def.turns) is snapped to the nearest baked corner's
+  // apex; a hint that lands more than HINT_SNAP_M from any apex names a corner
+  // the bake did not find and is dropped with a warning, never guessed.
+  function resolveHints(track, corners, start, ds) {
+    const def = track.def, out = [];
+    const list = def && def.lineHints, turns = def && def.turns;
+    if (!list || !list.length || !turns || !turns.length || !corners.length) return out;
+    const L = track.total;
+    for (const h of list) {
+      if (!h || !Number.isFinite(h.turn)) continue;
+      const ti = ((Math.round(h.turn) - 1) % turns.length + turns.length) % turns.length;
+      const sT = wrapS(L, (((turns[ti] % 1) + 1) % 1) * L);
+      let best = null, bd = Infinity;
+      for (const c of corners) {
+        const sA = wrapS(L, (start + c.apexStep) * ds);
+        let d = Math.abs(sA - sT); if (d > L / 2) d = L - d;
+        if (d < bd) { bd = d; best = c; }
+      }
+      if (!best || bd > HINT_SNAP_M) {
+        try { Log.warn("track", "lineHints: turn " + h.turn + " of " + def.id + " is " + Math.round(bd) + " m from any baked corner — dropped"); } catch (_) { /* no Log in a bare VM */ }
+        continue;
+      }
+      out.push({ corner: best, apexShift: +h.apexShift || 0, apexInside: +h.apexInside || 0 });
+    }
+    return out;
+  }
+
   // One SOR sweep per pass over the 3-node stencil of  Σ κ_line² + λ Σ κ x
   // (header). κ at i−1, i, i+1 all depend on x[i]; the step is the 1-D Newton
   // step of that local quadratic, over-relaxed and clamped to the road.
-  function relaxLine(x, curv, lim, n, ds, passes) {
-    const inv2 = 1 / (ds * ds), lam = 0.5 * RELAX_LAM;
+  function relaxLine(x, curv, lo, hi, n, ds, passes, lamK) {
+    const inv2 = 1 / (ds * ds), lam = 0.5 * lamK;
     for (let p = 0; p < passes; p++) {
       for (let i = 0; i < n; i++) {
         const a = i ? i - 1 : n - 1, b = i + 1 < n ? i + 1 : 0;
@@ -204,18 +277,18 @@ const TrackLine = (function () {
         const num = ki * gi - (ka + kb) * inv2 + lam * ci;
         const den = gi * gi + 2 * inv2 * inv2;
         const xn = x[i] - RELAX_OMEGA * num / den;
-        x[i] = xn > lim[i] ? lim[i] : xn < -lim[i] ? -lim[i] : xn;
+        x[i] = xn > hi[i] ? hi[i] : xn < lo[i] ? lo[i] : xn;
       }
     }
   }
   // Coarse-to-fine: relax every RELAX_COARSE-th node as its own lap (long
   // wavelengths converge in a fraction of the passes), then interpolate back.
-  function relaxCoarse(x, curv, lim, n, ds) {
+  function relaxCoarse(x, curv, lo, hi, n, ds, lamK, passes) {
     const st = RELAX_COARSE, m = Math.floor(n / st);
     if (m < 8) return;
-    const xc = new Float32Array(m), kc = new Float32Array(m), lc = new Float32Array(m);
-    for (let j = 0; j < m; j++) { const i = j * st; xc[j] = x[i]; kc[j] = curv[i]; lc[j] = lim[i]; }
-    relaxLine(xc, kc, lc, m, ds * st, RELAX_CPASSES);
+    const xc = new Float32Array(m), kc = new Float32Array(m), loc = new Float32Array(m), hic = new Float32Array(m);
+    for (let j = 0; j < m; j++) { const i = j * st; xc[j] = x[i]; kc[j] = curv[i]; loc[j] = lo[i]; hic[j] = hi[i]; }
+    relaxLine(xc, kc, loc, hic, m, ds * st, passes, lamK);
     for (let j = 0; j < m; j++) {
       const x0 = xc[j], x1 = xc[j + 1 < m ? j + 1 : 0];
       const span = j + 1 < m ? st : n - j * st;                 // the last span wraps to node 0
@@ -328,14 +401,21 @@ const TrackLine = (function () {
 
   const _out = { x: 0, w: 0 };
   // O(1) index + lerp, same math as TrackSpline.curvature. Returns a shared object.
-  function at(track, s) {
+  // `fam` (optional, −1..1) blends toward a FAMILY: +1 the inner line, −1 the
+  // outer (bake step 6). 0 / absent is the racing line.
+  function at(track, s, fam) {
     const ln = track.line;
     if (!ln) { _out.x = 0; _out.w = 0; return _out; }
     const n = track.n, L = track.total;
     s %= L; if (s < 0) s += L;
     const fi = s / L * n;
     const i = Math.floor(fi) % n, j = (i + 1) % n, f = fi - Math.floor(fi);
-    _out.x = lerp(ln[i], ln[j], f);
+    let xv = lerp(ln[i], ln[j], f);
+    if (fam) {
+      const alt = fam > 0 ? track.lineIn : track.lineOut;
+      if (alt) xv = lerp(xv, lerp(alt[i], alt[j], f), Math.min(Math.abs(fam), 1));
+    }
+    _out.x = xv;
     _out.w = lerp(track.lineW[i], track.lineW[j], f);
     return _out;
   }
