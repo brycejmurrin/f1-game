@@ -265,8 +265,14 @@ What changed, and why each one:
   0.6·LAT_MAX·grip`). The lateral speed is `v·sin(heading)`; every existing
   multiplier on the lateral step (grip taper, kerb, contact give, off-track
   fade) still applies because `steer` is that speed as a fraction of the
-  full-lock authority. Below 6 m/s (vStd) or while digging out, the old
-  position loop drives: a heading means nothing without speed.
+  full-lock authority. Below 6 m/s (vStd), while digging out, in contact or
+  under the side-rub clamp, the old position loop drives with its full,
+  immediate authority (a heading means nothing without speed; a car being
+  rubbed must be clear in a few frames — the collision benches pin it) and
+  the heading is re-synced from the steer it produced. Side effect worth
+  knowing: two AI cars dropped beside a player now settle at the 2.8 m clean
+  gap and hold it — the P-loop's overshoot used to press them into contact
+  (`collision-contact-vm` starts its sandwich overlapped for that reason).
 - **Slewed biases.** Overtake, defend, yield and separation are summed as
   before but the sum moves toward its value at 3 m/s, so a pass decision is
   a lane change at a car's lateral pace, not a step. The dig-out is not

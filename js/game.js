@@ -5221,13 +5221,21 @@ function updateCar(c, dt, ranked) {
     // (AiDrive.sideYieldsA — behind on arc, or the outer car when level) is held
     // a full lane off the other on the side it is already on. A hard edge gives
     // the deadzone an error it cannot swallow.
+    let rubClamp = false;
     if (alongO && Math.abs(alongDx) < CLEAR && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x)) {
       desiredX = alongDx <= 0 ? Math.max(desiredX, alongO.x + CLEAR) : Math.min(desiredX, alongO.x - CLEAR);
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
+      rubClamp = true;
     }
     const err = desiredX - c.x;
     const vAbs = Math.abs(c.speed);
-    if (unstuckActive || vStd(vAbs) < AI_HEAD_VMIN) {
+    // A contact, a rub clamp or a dig-out is an EMERGENCY: the position loop
+    // keeps its full, immediate authority there (the collision bench pins that
+    // a yielding AI is clear of the car it touched within a few frames —
+    // collisions-deep-vm, collision-contact-vm); the heading state is re-synced
+    // from the steer it produced so the hand-back is seamless.
+    const emergency = unstuckActive || rubClamp || (c.contactT || 0) > 0;
+    if (emergency || vStd(vAbs) < AI_HEAD_VMIN) {
       // Crawling or digging out: a heading means nothing without speed to carry
       // it, so the position controller drives — soft deadzone (no micro-twitch
       // around the target) and the experience-rated low-pass, as before.
@@ -5237,7 +5245,9 @@ function updateCar(c, dt, ranked) {
       if (c.steerSm === undefined) c.steerSm = steer;
       c.steerSm = damp(c.steerSm, steer, AiDrive.steerDamp(aiT), dt);
       steer = c.steerSm;
-      c.aiHead = 0;
+      // The heading the lateral speed this steer produces would need at this speed.
+      const vl = steer * STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1);
+      c.aiHead = vAbs > 1 ? clamp(Math.asin(clamp(vl / vAbs, -1, 1)), -AI_HEAD_MAX, AI_HEAD_MAX) : 0;
     } else {
       // HEADING STATE (2026-09-08). The old loop was proportional on POSITION:
       // steer = 0.9·err — 13.5 m/s of lateral speed per metre of error, the
