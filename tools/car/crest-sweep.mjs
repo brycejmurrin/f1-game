@@ -234,6 +234,32 @@ function nearPolyline(sub, px, py, half) {
   }
   return false;
 }
+// The topmost paint at a point, as the css colour string the op carried, or
+// null where nothing lands there. `inked` answers "is anything here" and stops
+// at the FIRST hit, which is the wrong end for colour: a canvas is painter's
+// order, so the LAST op covering a point is the one you see. Clips are honoured
+// the same way — an op erased by its clip is not paint.
+// Used by tests/unit/cover-legibility.test.mjs to ask what colour a design
+// actually shows against the body it sits on.
+export function paintAt(ops, px, py) {
+  let style = null;
+  for (const op of ops) {
+    if (op.clip) {
+      let out = false;
+      for (const c of op.clip) {
+        const w = winding(c.pts, px, py);
+        if (!(c.rule === "evenodd" ? w.evenodd : w.nonzero)) { out = true; break; }
+      }
+      if (out) continue;
+    }
+    if (op.kind === "stroke") { if (nearPolyline(op.pts, px, py, op.lw / 2)) style = op.style; }
+    else {
+      const w = winding(op.pts, px, py);
+      if (op.rule === "evenodd" ? w.evenodd : w.nonzero) style = op.style;
+    }
+  }
+  return style;
+}
 function inked(ops, px, py) {
   for (const op of ops) {
     if (op.clip) {
