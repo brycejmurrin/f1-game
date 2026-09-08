@@ -2285,3 +2285,14 @@ files are not ratcheted.
   surface variable instead of the literal `SURFACES.paint`, which is what lets a
   livery put bare weave on the flaps the way the launch photos show — a CARBON
   colour alone rendered as dark paint there. No new sites, no geometry.
+- `js/agent/apex.js` lines 2668 -> **2688**, codeLines 2012 -> **2015**
+  (2026-09-08): reset()'s per-episode clearing block gains the heading-state
+  controller's own smoothing state and the four fields one car reads OFF
+  ANOTHER (`_vmaxNow`, `accSm`, `towing`, `rank`, plus the pass-latch
+  remnants). 17 of the 20 lines are the comment explaining WHY each belongs
+  there, which is the whole value: the block already existed for exactly this
+  class and the controller change slipped past it. Paid for by a determinism
+  break that reached the deploy branch — one seed replayed with a different
+  finishing order while the player's trace stayed byte-identical. Evidence:
+  `tests/unit/determinism-replay-vm.test.mjs`, which fails without the fix.
+

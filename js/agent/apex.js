@@ -2301,6 +2301,26 @@ const api = {
     for (const c of G.cars) {
       c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
       c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
+      // The heading-state controller's own per-episode state (game.js
+      // "--- lateral ---", 2026-09-08). Missed when that controller landed, and
+      // it broke replay determinism outright rather than by a metre: `aiBias`
+      // SNAPS to its target when null and slews when it is a number, so the
+      // first episode ended with a number and every later one started from it.
+      // agent-determinism caught it; the block above is the reason this file
+      // has such a block at all.
+      c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
+      // …and the fields one car reads OFF ANOTHER during its own update. These
+      // are written every frame, but they are read on the FIRST frame before
+      // their owner has been updated, so a fresh session sees undefined (and
+      // falls back) where a replayed one sees last episode's value: `_vmaxNow`
+      // is the blocker's pace that AiDrive.otWant decides passes on, `accSm`
+      // its acceleration, `towing` its slipstream, `rank` its position. The
+      // leak predates the heading-state controller and was harmless until that
+      // controller changed which cars are beside each other on lap 1; then it
+      // moved finishing order between replays of one seed while the player's
+      // own trace stayed byte-identical (agent-determinism, 2026-09-08).
+      c._vmaxNow = 0; c.accSm = 0; c.towing = 0; c.rank = 0; c.contactT = 0;
+      c.passSide = 0; c.passBest = 0;
       c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; c.otArmed = false;
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
