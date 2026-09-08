@@ -3645,14 +3645,6 @@ aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
 DrivingLine.setMode(store.get("drivingLine", "full"));
-DrivingLine.setPalette(store.get("drivingLinePalette", "f1"));
-DrivingLine.setOpacity(store.get("drivingLineOpacity", "normal"));
-// BRAKE CUE — the CUE rung of the assist ladder designed in
-// docs/research/DRIVING-CONTROLS-RESEARCH.md (OFF / CUE / LIGHT / FULL), and
-// the only one that takes nothing over. Its own preference rather than a mode
-// of DRIVING LINE, because the players who need it most are the ones running
-// the line OFF. Ships off.
-let brakeCueOn = store.get("brakeCue", "off") === "on";
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
 // reads), plus the same physics numbers the AI's brake targets use, so the
@@ -4128,7 +4120,7 @@ function update(dt) {
     // player who cannot read the ribbon is exactly who it is for. DrivingLine
     // supplies the urgency from the same over = speed/lineSpeed the shaders
     // colour with, so the beep and the red arrive together.
-    if (brakeCueOn) GameAudio.brakeCue(track ? DrivingLine.cue(Math.abs(player.speed), player.s) || 0 : 0);
+    if (DrivingLineOpts.brakeCue()) GameAudio.brakeCue(track ? DrivingLine.cue(Math.abs(player.speed), player.s) || 0 : 0);
     // The field around you: panned, distance-rolled and Doppler-shifted. Before
     // this there was no opponent audio at all, so a car alongside was silent.
     GameAudio.setRivals(rivalAudio.collect(player));
@@ -9797,29 +9789,10 @@ function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);
   paintHudDetailsSummary();   // repaints the HUD row too if (v) { const p = $("campicker"); if (p) p.hidden = true; }
 }
-// LINE COLOUR — an accessibility preference, so it lives in SETTINGS and
-// persists, unlike DRIVING LINE itself (a property of the race, in RACE
-// SETTINGS). The shader mixes between the two triples on one flag; see
-// js/render/shared/driving-line.js setPalette.
-SettingRow.wire("pm-linecolor", {
-  values: [["f1", "F1"], ["safe", "COLOUR-BLIND"]],
-  read: () => DrivingLine.palette(),
-  write: (v) => { DrivingLine.setPalette(v); store.set("drivingLinePalette", DrivingLine.palette()); },
-});
-
-// LINE OPACITY — the same shelf; the complaint runs both ways (intrusive in
-// cockpit view, invisible on a bright road). NORMAL is the line as it shipped.
-SettingRow.wire("pm-lineopacity", {
-  values: [["subtle", "SUBTLE"], ["normal", "NORMAL"], ["solid", "SOLID"]],
-  read: () => DrivingLine.opacity(),
-  write: (v) => { DrivingLine.setOpacity(v); store.set("drivingLineOpacity", DrivingLine.opacity()); },
-});
-
-SettingRow.wire("pm-brakecue", {
-  values: SettingRow.labels(["off", "on"]),
-  read: () => (brakeCueOn ? "on" : "off"),
-  write: (v) => { brakeCueOn = v === "on"; store.set("brakeCue", v); },
-});
+// LINE COLOUR / LINE OPACITY / BRAKE CUE are js/ui/driving-line-opts.js: player
+// PREFERENCES, self-contained, and three ratchet raises on this file in one day
+// (docs/notes/CEILING-HISTORY.md) said they did not belong in the entry file.
+// The MODE stays here — it is a property of the race, not of the player.
 
 SettingRow.wire("pm-hidehud", {
   values: SettingRow.labels(["on", "off"]),
