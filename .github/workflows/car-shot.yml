@@ -1,0 +1,118 @@
+name: Car shot
+
+# Look at the car on a machine that can actually draw it.
+#
+# The agent container renders through llvmpipe and tools/carview.html never
+# composites there: every car-model change this repo has shipped was verified by
+# ray-casts, triangle counts and a hand-written software rasteriser, and nobody
+# had SEEN one. gpu-census answers "is there a GPU behind navigator.gpu" and
+# parks the camera trackside with no car in frame, so it does not close this
+# gap either.
+#
+# This workflow does one thing: boot tools/carview.html (the isolated studio —
+# no track, no game.js) on a runner with a real GPU and upload the frames plus
+# render-car's contact sheet. It is DISPATCH ONLY and never scheduled: it is a
+# question someone asks, not a gate, and macOS bills at a multiplier.
+#
+# render-car.mjs exits 3 when a written PNG holds fewer than a handful of
+# shades, so a run that goes green is evidence the frames have a car in them —
+# the check that a tick beside a blank file does not give you.
+
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: "render-car preset (cockpit, livery, wing, engine, brakes, ...) or 'list'"
+        required: false
+        default: "cockpit"
+      views:
+        description: "Comma-separated views instead of a preset (hero, side, top, turntable, all)"
+        required: false
+        default: ""
+      team:
+        description: "Team id (js/data/teams.js)"
+        required: false
+        default: "mclaren"
+      livery:
+        description: "Livery id (js/car/liveries.js) — blank for the team default"
+        required: false
+        default: ""
+      tod:
+        description: "Lighting: day | dusk | dawn | night | void"
+        required: false
+        default: "day"
+      image:
+        description: "Runner image — macos-latest has the GPU; ubuntu-latest is the software control"
+        required: false
+        default: "macos-latest"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: car-shot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shot:
+    runs-on: ${{ inputs.image || 'macos-latest' }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: npm ci
+
+      # The full browser, not the headless shell: the shell is the binary the
+      # container already proves nothing with. Same reasoning as gpu-census.
+      - name: Install Chromium
+        run: npx playwright install chromium
+
+      - name: Install Chromium OS deps (Linux only)
+        if: runner.os == 'Linux'
+        run: npx playwright install-deps chromium
+
+      - name: What does the OS think it has
+        continue-on-error: true
+        shell: bash
+        run: |
+          uname -a || true
+          if [ "$RUNNER_OS" = "macOS" ]; then system_profiler SPDisplaysDataType 2>&1 | head -30 || true; fi
+          if [ "$RUNNER_OS" = "Linux" ]; then ls -la /dev/dri 2>&1 || echo "no /dev/dri"; fi
+
+      # render-car.mjs takes a URL, not a server: carview.html is a static page
+      # and the repo root is the document root it expects.
+      - name: Serve the repo root
+        shell: bash
+        run: |
+          python3 -m http.server 3456 --bind 127.0.0.1 >/tmp/serve.log 2>&1 &
+          for i in $(seq 1 40); do
+            curl -fsS -o /dev/null "http://127.0.0.1:3456/tools/carview.html" && exit 0
+            sleep 0.5
+          done
+          echo "server never answered"; cat /tmp/serve.log; exit 1
+
+      - name: Render
+        shell: bash
+        run: |
+          ARGS="--team=${{ inputs.team || 'mclaren' }} --tod=${{ inputs.tod || 'day' }}"
+          ARGS="$ARGS --out=scratch/renders/cars/ci --w=1100 --h=800"
+          if [ -n "${{ inputs.livery }}" ]; then ARGS="$ARGS --livery=${{ inputs.livery }}"; fi
+          if [ -n "${{ inputs.views }}" ]; then
+            ARGS="$ARGS --views=${{ inputs.views }}"
+          else
+            ARGS="$ARGS --preset=${{ inputs.preset || 'cockpit' }}"
+          fi
+          echo "render-car $ARGS"
+          node tools/car/render-car.mjs $ARGS
+
+      - name: Upload frames
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: car-shot-${{ inputs.image || 'macos-latest' }}
+          path: scratch/renders/cars/**
+          if-no-files-found: error
+          retention-days: 14

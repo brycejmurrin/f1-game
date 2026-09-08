@@ -310,7 +310,14 @@ jobs:
             // recorded, and the gap is still an open lead for exactly that
             // reason (docs/PERF-FINDINGS.md 2t).
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
-                `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`);
+                `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`
+                // ...and the OTHER way this column lies. floorMs 16.6 is 1/60 s,
+                // the value PerfGov is INITIALISED with, so a leg that never fed
+                // it reports a perfect fps=60 that is not a measurement at all.
+                // That one was read as real too (PERF-FINDINGS 2t, a 12x gap that
+                // was not a gap). The path row below says when a FED value is
+                // still incomparable; this says when there is no value.
+                + (Math.abs((gov.floorMs || 0) - 16.6) < 0.2 ? "   <- fps UNFED (floorMs is the init value); not a measurement" : ""));
             // THE PRESENT PATH, and it is the difference between a comparison
             // and a mistake. tlx.js soft-blits (GPU readback + putImageData
             // EVERY FRAME) whenever `!forceWebGL && (_softAdapter || _headless

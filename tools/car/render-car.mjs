@@ -27,6 +27,8 @@
 //   engine, suspension, brakes, tyres, ers, gearbox, fuel
 //                       each category's audited best angle + two ±36° offsets
 //   livery              side / front-3-quarter / rear-3-quarter — paint & sponsors
+//   cockpit             over / ahead / flank, aimed at the tub opening (z -0.15,
+//                       y 0.45) — the only set that shows whether the deck is open
 // List all: node tools/car/render-car.mjs --preset=list
 //
 // --lightset=day,dusk,night  render EVERY shot at each listed tod (fans out the
@@ -157,6 +159,22 @@ const PRESETS = {
     { label: 'side',         az: 90,  el: 8,  dist: 6.0 },
     { label: 'frontquarter', az: 145, el: 16, dist: 6.4 },
     { label: 'rearquarter',  az: 320, el: 16, dist: 6.4 },
+  ],
+  // The tub OPENING, which no stock view shows: `hero` and the quarters sit at
+  // el 16 and read the deck as a closed surface whatever is cut into it, and
+  // `top` (el 66, dist 6.8) is too far out for the rim to be more than a line.
+  // Aim at the aperture rather than the car centre — CHASSIS.cockpit spans
+  // z +0.05 (CK_A) to -0.55, and car3d.js opens it between CK_REAR_Z = -0.33
+  // and CK_A.z, so its middle is z -0.15 and the rim sits near y 0.55 (seat
+  // floor 0.47, helmet visor 0.612-0.700). Three angles because one never
+  // settles the question: `over` looks down INTO the opening, `ahead` is the
+  // broadcast angle where a filled deck reads as a helmet sitting on top, and
+  // `flank` gives the rim line and shoulder height in profile. Close (2.8 m)
+  // with the rig dialled down, same reasoning as the part-detail presets.
+  cockpit: [
+    { label: 'over',  az: 25,  el: 52, dist: 2.8, look: -0.15, lookY: 0.45, tod: 'day', intensity: 1.0 },
+    { label: 'ahead', az: 200, el: 34, dist: 3.0, look: -0.15, lookY: 0.45, tod: 'day', intensity: 1.0 },
+    { label: 'flank', az: 82,  el: 26, dist: 2.9, look: -0.15, lookY: 0.45, tod: 'day', intensity: 1.0 },
   ],
 };
 PRESETS.aero = PRESETS.wing;   // alias — both names read naturally depending on intent

@@ -2421,3 +2421,77 @@ files are not ratcheted.
   positions only, never curvature, so it stays outside the PHYSICS.md
   curvature table by the tow's own argument. Evidence and baselines:
   `docs/notes/AI-FIELD-RESEARCH.md`, `tools/check/ai-field.mjs`.
+
+- `js/game.js` lines 10247 -> **10253**, codeLines 5560 -> **5561** (2026-09-08):
+  `resolveLivery()` now falls back through the team's own livery list. A stored
+  livery id that no longer resolves used to land on a bare
+  `{ c1, c2, stripe: null, accent: null }` literal, which drops every structural
+  field the team sets — `finShape: "none"`, `spineHeight: "dorsal"`, `spineSide`,
+  `cover` — so the car grew a shark fin and a flat spine instead of racing the
+  shape it actually races. Deleting a fitted livery re-points to `"default"`
+  itself, so the branch was unreachable until the garage-file import shipped:
+  a file naming `livery.<team>` without the matching `livery.custom.<team>`
+  array leaves exactly that dangling id, with no validation on the way in.
+  One statement (`const list = getLiveries(team)`) plus the note above it.
+- `js/car/car3d.js`, `js/car/car-mesh.js`, `js/car/liverytex.js` (2026-09-08):
+  a livery-drawing audit, and eight decals that were painted onto the wrong
+  surface. Every one had an instrument that could not see it, which is the
+  lesson worth more than any single fix:
+  - **REGIONS.wing was never on the wing.** It was authored from the aero
+    recipe's DESIGN CHORD; `drawAeroFlaps` hangs each element at its pivot and
+    rotates it by `zAngle`, which solves to 0.34 rad at EVERY level — so the
+    band floated ~90 mm over a parked car and buried itself ~30 mm with the
+    wing open. The guard reported 0 because it measured the band against the
+    element's axis-aligned BOUNDING BOX, and a 19.5-degree rotation makes that
+    box tall enough to swallow the error. Now `Car3D.wingBand` places it on the
+    posed skin via `foilAt` — the surface function `addWingFoil` itself builds
+    from, hoisted out for the purpose — cut into the same five spanwise
+    segments, so it follows the sweep instead of bridging it. With a DRS
+    package it moves to the BAKED plane that roofs the stack, which is both the
+    surface the camera sees and the only one that stays attached at every wing
+    angle. Measured 4.9-5.6 mm off the skin, from ~90.
+  - **The fin decal was placed off a FROZEN base while the mesh rooted itself
+    into the engine cover.** The root only ever moved DOWN, for fear of walking
+    the blade out from under its graphic; the price was the other direction —
+    every shipped 2026 team ships `spineHeight: "dorsal"`, which put 113 mm of
+    a 176 mm panel inside the cover. `Car3D.sharkFinRoot` is now the one place
+    both read: the mesh roots 10 mm under the skin, the DECAL starts at the
+    skin, and `clear` lets car-mesh decline to paint a blade the cover has
+    swallowed (a `race` or `quali_engine` crown genuinely tops the regulation
+    fin line).
+  - **`COVER_STACK`** names what the engine-cover crown stacks, because three
+    features were each guessing: the heat shield's top face reached
+    `top+0.017` against a decal at `top+0.008` (300 mm of the tail strip inside
+    the plate on EVERY car — `heatShield` is 1 on the stock engine), and the
+    spine vent's landed on the decal plane bit-exactly. Same on the flank,
+    where the accent pinstripe was 0.9 mm from the band's plane and the
+    service hatch stood 9 mm proud of it: both were authored against a band
+    that ended at -1.22 before `spineSide` grew to the whole flank.
+  - **The cockpit nose decal was a MIRROR, not a copy** — same pre-flipped u,
+    reversed z order, and flipping v alone reflects.
+  - The atlas half: `titleB` was inked for the sidepod BOARD while car-mesh
+    maps it to the monocoque top (1.02:1 on Mercedes; `INKED_FOR` declared the
+    wrong backing, and the coverage list never demanded the probe find it), the
+    crest lockup was resolved against `[c1, c2]` while painted on the cover and
+    the fin (Ferrari's yellow-plated shield at 1.22:1 on its own white cover),
+    `drawLogoImage`'s five-pass halo never clipped and bled ~5 px across the
+    gutter, `FLANK_H` had no `high` row so that cover's marks came out 13.6 %
+    narrow (and `fin-design` iterated the TABLE, so a missing key was
+    unfindable — it iterates `SPINE_HEIGHT_IDS` now), and SPINE SIDE = plate
+    under SPINE TOP = saddle painted the number board the colour of the panel
+    behind it.
+
+  `js/car/car3d.js` lines 3826 -> **4100** on the merged tree (+125 of it mine,
+  +149 the cockpit-aperture work that landed on the deploy branch the same day;
+  re-measured on the union and exactly at the sum of the two sides' own raises,
+  so the merge itself bought no headroom): a deliberate raise for four
+  accessors that exist to stop exactly this class of drift — `wingBand`,
+  `sharkFinRoot`, `COVER_STACK` and the `foilAt` hoist — plus the comments that
+  say what each was wrong about. Every one of them is a placement that TWO files
+  used to compute separately; the file is the right home for them (it owns the
+  geometry) and the next decal on this car has a function to call rather than a
+  literal to guess. car3d is 4100 lines and an extraction is overdue; a fifth
+  accessor should buy one rather than more headroom. The new guard is
+  `tests/unit/livery-decal-surfaces.test.mjs`, which measures vertex-to-
+  SURFACE distance (`tests/helpers/mesh-distance.mjs`) rather than
+  vertex-to-box — the substitution that let all of this hide.
