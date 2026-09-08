@@ -2285,10 +2285,3 @@ files are not ratcheted.
   surface variable instead of the literal `SURFACES.paint`, which is what lets a
   livery put bare weave on the flaps the way the launch photos show — a CARBON
   colour alone rendered as dark paint there. No new sites, no geometry.
-- `js/game.js` lines 10154 -> **10156** (2026-09-08): two comment lines in `gridUp()`
-  naming the invariant behind `c.accSm = 0`. `accSm` is the one smoothed per-car
-  value ANOTHER car reads (`AiDrive.otWant`, off the blocker), so nothing clearing
-  it let a second race in one page start lap 1 from the last race's pull —
-  `agent-determinism` went red on the deploy branch for it. The clears themselves
-  ride existing lines; the two lines are the reason, and this is the third leak of
-  the class (`docs/notes/DEFECT-LEDGER.md` §7).

@@ -51,48 +51,43 @@ fix is `batches({instancedOnly:true})` at the one caller that uploads. Visually
 invisible — co-planar — so it was pure cost: a same-camera A/B on jeddah moves
 0.03% of pixels.
 
-**2026-09-08 — a second race in one page started on the last race's pull.
-FIXED.** `agent-determinism.spec.js` went red on the deploy branch (Pages 2095,
-`14a1789e`; two of its four tests). Three `run(42)` episodes in ONE page, and
-run 0 disagreed with runs 1 and 2 — which agreed with each other. That
-first-run-only shape is the whole tell: something is CREATED by the first
-episode and never restored, so every later episode starts warm. The branch went
-green again only because the selected-specs gate stopped picking the spec; the
-next push touching `js/game.js` selects it again.
+**2026-09-08 — a re-grid inherited the last race's per-car scratch. FIXED,
+TWICE, by two sessions in parallel — and the duplication is the lesson.**
+`agent-determinism.spec.js` went red on the deploy branch (Pages 2095,
+`14a1789e`). Three `run(42)` episodes in ONE page, and run 0 disagreed with runs
+1 and 2, which agreed with each other. That first-run-only shape is the tell:
+the first episode CREATES per-car scratch that no re-grid restores, so every
+later episode starts warm.
 
-**`c.accSm`.** `js/game.js` damps it per tick as "what this car is pulling",
-and `AiDrive.otWant` reads it **off the blocker** — the one smoothed per-car
-value another car reads. `gridUp()` puts every car stationary on a box but left
-`accSm` at the last race's ~6.7 m/s², so at lights-out the "is the car ahead
-pulling away?" test answered differently and lap 1 was dealt differently. The
-`?? 0` at the damp site shows the undefined case was foreseen; the STALE case
-was not. Fix: `c.accSm = 0` beside `c.speed = 0` in `gridUp()` and in
-`redFlagRestart()`.
+The fix that matters is in `apex.js` `reset()`, from the session that owned the
+lateral controller that broke it (`1ad520c5`, `9375f1ce`, `c5a9dd87`): the
+clearing block now also deletes the fields **one car reads off ANOTHER** —
+`_vmaxNow` (the blocker's pace `AiDrive.otWant` turns a pass on), `accSm`, and
+`towing` — plus the controller's own `aiHead`/`aiBias`/`aiFam`. Those are
+written every frame but READ on the first frame before their owner has been
+updated, so a cold session sees `undefined` and falls back where a replayed one
+sees the last episode's value. `lane` is the odd one out and re-seeds from
+`lanePref` rather than being deleted, because it is already adapted before the
+first episode rather than absent.
 
-Also found on the way and fixed: **`c.lane`**, the AI's preferred line.
-`makeCars` deals it staggered across the field and stores the same value as the
-immutable `lanePref`; `AiDrive.adaptLane` then walks `c.lane` toward the freer
-side under traffic, and no re-grid put it back. It did not move this digest, but
-it is the same class — `gridUp()` clears every neighbouring damped AI field
-(`aiHead`, `aiBias`, `aiFam`, `vLat`, `yawRateCur`, `steerVis`) and not that one.
+This side reached the same place independently and kept only the half that one
+does not cover: `gridUp()` and `redFlagRestart()` clear `accSm` and restore
+`lane` too, because a REAL PLAYER never calls `__apex.reset()`. Starting a
+second race from the results screen, and a red-flag standing restart, both
+re-grid through those paths, and a car sitting on a grid box is pulling nothing.
+Neither clear draws `simRnd`, so the grid's draw-count contract holds.
 
-*How it was isolated*, which is the reusable part. Snapshotting all 22 cars
-before the first tick showed the earliest difference is at **frame 0** — the
-lazily-created fields are `undefined` on run 0 and hold run-0 values on run 1,
-44 of them. Restoring the exact post-reset COLD car state before a warm episode
-made it byte-identical to the cold one (twice), which proved the leak is
-entirely per-car and not module state. Deleting one candidate key at a time
-before the warm episode then named it outright: **`accSm` alone is sufficient**.
-The other 22 lazily-created fields are written before they are read in a tick,
-or are cosmetic.
-
-This is the THIRD leak of the class, after the two the spec's own header records
-(the drivetrain, and `_prevS`). The pattern each time: a field that looks like a
-per-tick output is actually carried across ticks, sits outside the clear list
-next to fields that are in it, and is read by code that cannot tell a stale
-value from a fresh one. The sharpest version, and what `accSm` adds: **a field
-one car reads off ANOTHER car is one tick stale by design, so on tick 1 it must
-be the grid's value or the race starts from the last one.**
+*The duplication is worth recording.* Two sessions spent a working day each on
+one defect, and both arrived by the same route — dump every primitive on all 22
+cars at the start of three episodes, diff, and the leak names itself. Neither
+reasoned it out; three code-read hypotheses were tried and measured wrong on
+this side alone (the Red Bull livery commit, a lazily-built cache, the seeded
+stream's draw count). **The measurement is cheap and the reasoning is not: on a
+determinism break, dump and diff FIRST.** A VM twin of the browser guard landed
+with the other side's fix (`determinism-replay-vm.test.mjs`, in `test:game-vm`),
+so this is now caught without a browser group; a second twin written here was
+dropped on the merge rather than shipped beside it, which is the same
+drifted-twin trap `2987dee4` added a guard for.
 
 **2026-08-18 cleanup sweep** tagged removals, false-positive dead exports, and
 the next intended `game.js` extractions in
