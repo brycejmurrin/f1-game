@@ -102,7 +102,7 @@ test("the speed profile brakes BEFORE the corner: the cap is reached at entry, n
   for (let i = 0; i < c.n; i++) assert.ok(c.v[i] <= api.vTop + 1e-3);
 });
 
-test("CORNERS mode: the zone is 1 through the turn and 0 mid-straight, with a fade between", () => {
+test("CORNERS mode: lit through the turn and its exit, dark mid-straight, and never a cut", () => {
   const DL = load();
   const api = stadium();
   DL.build(api);
@@ -110,6 +110,16 @@ test("CORNERS mode: the zone is 1 through the turn and 0 mid-straight, with a fa
   assert.ok(DL.zoneAt(api.straight / 2 - 100) < 0.05, "mid-straight is not");
   // the braking zone before the corner counts as a corner too
   assert.ok(DL.zoneAt(api.straight - 40) > 0.6, "40 m before the corner is in the braking zone");
+  // the line stays lit past track-out (the cut a screenshot showed, 2026-09-08) …
+  const exit = api.straight + api.arc;
+  assert.ok(DL.zoneAt(exit + 30) > 0.9, `30 m past the exit is still lit (${DL.zoneAt(exit + 30).toFixed(2)})`);
+  // … and fades over tens of metres: no two samples 5 m apart differ by more than 0.15
+  const c = DL._cache();
+  const per5m = Math.max(1, Math.round(5 / c.step));
+  for (let i = 0; i < c.n; i++) {
+    const d = Math.abs(c.zone[(i + per5m) % c.n] - c.zone[i]);
+    assert.ok(d <= 0.15, `zone jumps ${d.toFixed(2)} over 5 m at sample ${i}`);
+  }
 });
 
 test("draw() honours the mode and reports a backend without the pass", () => {
@@ -134,4 +144,5 @@ test("draw() honours the mode and reports a backend without the pass", () => {
   assert.equal(DL.draw({ drawDrivingLine: () => false }, api, 50), false);
   assert.equal(DL.draw({}, api, 50), false, "no member at all is 'no pass' too");
   assert.equal(DL.setMode("bogus"), "off", "an unknown mode is OFF");
+  assert.equal(load().mode(), "full", "the shipped default is the whole lap, Forza's default");
 });

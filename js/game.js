@@ -3589,7 +3589,7 @@ const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
-DrivingLine.setMode(store.get("drivingLine", "corner"));
+DrivingLine.setMode(store.get("drivingLine", "full"));
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
 // reads), plus the same physics numbers the AI's brake targets use, so the
@@ -9013,8 +9013,9 @@ const RS_ONOFF = [["off", "OFF"], ["on", "ON"]];
 const RS_RELIAB = [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]];
 const RS_LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
 // Persisted like DIFFICULTY; the module holds the live mode so the render loop
-// never reads the store. CORNERS by default — every racing game ships its line
-// on for a new player, and the CORNERS form is the one F1 and Forza recommend.
+// never reads the store. FULL by default — every racing game ships its line on
+// for a new player, and Forza's default is the whole lap; CORNERS (F1's
+// "corners only") is the reduced form for a player who knows the circuit.
 function setDrivingLine(v) { store.set("drivingLine", DrivingLine.setMode(v)); }
 // Wire the eight rows ONCE (a listener per build would stack); every build
 // after that is a paint. Each write repaints the whole screen, because LAPS

@@ -183,7 +183,7 @@ void main() {
   vec3 col = mix(green, amber, smoothstep(0.98, 1.06, over));
   col = mix(col, red, smoothstep(1.06, 1.16, over));
   float edge = 1.0 - smoothstep(0.55, 1.0, abs(vAcross));   // soft rim, hot core
-  float zone = mix(1.0, smoothstep(0.15, 0.55, vZone), uCornersOnly);
+  float zone = mix(1.0, smoothstep(0.05, 0.75, vZone), uCornersOnly);   // the whole smoothed ramp is the fade
   float a = edge * zone;
   if (a < 0.01) discard;
   outColor = vec4(col * uStr * a, a * 0.85);

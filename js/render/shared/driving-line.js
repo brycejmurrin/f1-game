@@ -36,7 +36,8 @@
  *
  * VERTEX LAYOUT (interleaved Float32, STRIDE floats per vertex, two vertices
  * per sample, a triangle strip): pos3, across (-1 | +1), vLine (m/s), zone
- * (0 straight … 1 corner/braking, smoothed so CORNERS mode fades in and out). */
+ * (0 straight … 1 corner/braking, held past the exit and smoothed so CORNERS
+ * mode fades in and out over tens of metres, never a cut). */
 window.DrivingLine = (function () {
   const STRIDE = 6;
   const STEP = 2.5;          // m between samples (a 5 km lap ≈ 2000 samples)
@@ -45,8 +46,10 @@ window.DrivingLine = (function () {
   const LIFT = 0.03;         // m above the road (the road mesh sits at +0.02)
   const MODES = ["off", "corner", "full"];
   const KMIN = 1 / 400;      // |k| above this is "a corner" (radius under 400 m)
+  const LEAD_OUT = 60;       // m the CORNERS line stays lit past a corner's exit
+  const FADE = 35;           // m half-width of the zone smoothing (a ~70 m fade)
 
-  let mode = "off";
+  let mode = "full";
   const cache = { id: null, verts: null, count: 0, dirty: false, v: null, zone: null, n: 0, step: STEP };
 
   const clamp = M4.clamp;   // the shared scalar helper (js/core/mat4.js), never a private copy
@@ -113,17 +116,23 @@ window.DrivingLine = (function () {
         v[i] = Math.min(v[i], Math.sqrt(v[pv] * v[pv] + 2 * accel * ds));
       }
     }
-    // 4. zones: braking (speed still falling ahead) or a real corner; then a
-    //    30 m box smooth so CORNERS mode fades rather than pops.
-    const raw = new Float32Array(n);
+    // 4. zones: braking (speed still falling ahead) or a real corner. The
+    //    braking sweep already gives every corner a long lead-IN; the exit had
+    //    none — the zone ended the metre the curvature dropped, and with a
+    //    30 m blend the line looked cut off at track-out (Monza T1 shot,
+    //    2026-09-08). So: hold the zone LEAD_OUT metres past a corner, then a
+    //    ±FADE box smooth so CORNERS mode fades over ~2·FADE m rather than pops.
+    const raw = new Float32Array(n), held = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       const s = i * ds, nx = (i + 1) % n;
       raw[i] = (v[nx] < v[i] - 0.05 || Math.abs(api.curvature(s)) > KMIN) ? 1 : 0;
     }
-    const R = Math.max(1, Math.round(15 / ds));
+    const hold = Math.max(1, Math.round(LEAD_OUT / ds));
+    for (let i = 0; i < n; i++) if (raw[i]) for (let d = 0; d <= hold; d++) held[(i + d) % n] = 1;
+    const R = Math.max(1, Math.round(FADE / ds));
     for (let i = 0; i < n; i++) {
       let acc = 0;
-      for (let d = -R; d <= R; d++) acc += raw[(i + d + n) % n];
+      for (let d = -R; d <= R; d++) acc += held[(i + d + n) % n];
       zone[i] = acc / (2 * R + 1);
     }
     // 5. the strip: two vertices per sample plus the two that close the loop.
