@@ -658,3 +658,4 @@ declare const RivalAudio: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
+declare const KeyBinds: GameModuleFactory;
