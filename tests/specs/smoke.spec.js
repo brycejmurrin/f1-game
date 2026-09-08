@@ -271,6 +271,11 @@ test.describe("Apex 26 — smoke", () => {
     // the pixels.
     await goToRace(page);
     await park(page, 0.1);
+    // WAIT for the frame, on the wall clock: park() flushes ~100 ms, which was a
+    // frame on the dev box and none on a CI runner (Pages #2064: `built` null
+    // on the first evaluate, twice). The strip exists once a frame has drawn.
+    await page.waitForFunction(() => window.__apex.drivingLine().built === window.__apex.info().track, null,
+      { polling: 100, timeout: 60_000 });
     const d = await page.evaluate(() => {
       const r = window.__apex.drivingLine("full");
       return { mode: r.mode, built: r.built, samples: r.samples, verts: r.verts,
