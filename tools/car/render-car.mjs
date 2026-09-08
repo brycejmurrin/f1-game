@@ -66,6 +66,22 @@ import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import sharp from 'sharp';
+
+/* How many distinct colours are in the middle of a written shot. Cheap, and it
+   is the only thing that separates "rendered" from "wrote a file". */
+async function blankCheck(file) {
+  try {
+    const m = await sharp(file).metadata();
+    const w = Math.min(240, m.width), h = Math.min(240, m.height);
+    const { data, info } = await sharp(file).removeAlpha()
+      .extract({ left: Math.round((m.width - w) / 2), top: Math.round((m.height - h) / 2), width: w, height: h })
+      .raw().toBuffer({ resolveWithObject: true });
+    const seen = new Set();
+    for (let i = 0; i < data.length; i += info.channels) seen.add(`${data[i] >> 3},${data[i + 1] >> 3},${data[i + 2] >> 3}`);
+    return seen.size;
+  } catch (e) { return 99; }        // never fail a render over the checker itself
+}
 import {
   assertSafePathToken,
   resolveContainedChild,
@@ -259,7 +275,12 @@ for (const [k, v] of Object.entries(parts)) qs.set(k, v);
 const pageUrl = `${URL}/tools/carview?${qs.toString()}`;
 
 const shots = [];
-const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), args: ['--use-gl=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
+// --use-angle=swiftshader, NOT --use-gl. The old flag is gone from current
+// Chromium: it still yields a WebGL2 context and CARVIEW still reports ready,
+// so this tool printed a tick over a blank white PNG. Every other probe in the
+// repo (tools/lib/harness.mjs callers, profile-gameloop, shot) already uses
+// --use-angle; this was the one left behind.
+const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), args: ['--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
 try {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));
@@ -309,9 +330,19 @@ try {
     firstShot = false;
     renderedTod = s.tod;
     const file = lightTods ? `${s.group}-${s.tod}.png` : `${s.label}.png`;
-    await page.screenshot({ path: resolveContainedChild(OUT, file, 'render output path') });
+    const dest = resolveContainedChild(OUT, file, 'render output path');
+    await page.screenshot({ path: dest });
+    // A TICK OVER A BLANK PNG is how the wrong --use-gl flag went unnoticed:
+    // the page loaded, CARVIEW reported ready, every shot "succeeded", and each
+    // file was an empty canvas with the HUD caption on it. Read the middle of
+    // what was actually written; a rendered car is never two flat colours.
+    const shades = await blankCheck(dest);
+    if (shades < 6) {
+      console.error(`  ✗ ${file} — only ${shades} distinct colour${shades === 1 ? "" : "s"} in the centre: the canvas did not paint.`);
+      console.error(`    Chromium renders this through SwiftShader; check the launch flag is --use-angle=swiftshader.`);
+      process.exitCode = 3;
+    } else console.log(`  ✓ ${file}`);
     shots.push({ file, label: s.label, group: s.group, tod: s.tod });
-    console.log(`  ✓ ${file}`);
   }
 
   const metaLine = `${PRESET ? 'preset=' + PRESET + ' · ' : ''}${lightTods ? lightTods.join('/') : TOD}${STUDIO ? ' · studio' : ''}${Object.keys(parts).length ? ' · ' + Object.entries(parts).map(([k, v]) => k + '=' + v).join(' ') : ''}`;
