@@ -99,7 +99,11 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // 3120 -> 3148: the nose running lights, measured. Two flank markers and a
   // crown bar, twelve triangles each as addBox lofts them; they are !ckpt, so
   // the cockpit ceiling below is untouched.
-  assert.ok(body <= 3148, `default body ${body} > 3148`);
+  // 3148 -> 3172: the rounded engine-cover crown. The cover loft is three
+  // stacked blocks over Car3D.coverProfile (flank, lower facet, upper facet +
+  // crown) instead of one trapezoid — two more addBlock lofts, twelve triangles
+  // each. Measured 3172 exactly; !ckpt, so the cockpit ceiling is untouched.
+  assert.ok(body <= 3172, `default body ${body} > 3172`);
   // Cockpit ceiling UNCHANGED at 1500: the six-point harness (+60, measured
   // 1428) fits the existing budget. The straps sit between the eye and the dash
   // coaming, filling the lower frame that the coaming never reaches.

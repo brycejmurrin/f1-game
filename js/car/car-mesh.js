@@ -74,25 +74,66 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
     }
   };
   podDecal(R.titleA, 0.32, 0.80, 0.018);   // sits wholly on the PANEL board
-  const cf = anchors ? anchors.coverAt(-0.62) : { x: 0.27, top: 0.81 };
-  const cr = anchors ? anchors.coverAt(-1.28) : { x: 0.20, top: 0.69 };
-  quad([[-cf.x*0.72, cf.top+0.008, -0.62], [cf.x*0.72, cf.top+0.008, -0.62],
-        [cr.x*0.72, cr.top+0.008, -1.28], [-cr.x*0.72, cr.top+0.008, -1.28]], [0, 1, 0.06], R.crest);
-  // SPINE SIDE: a band on the engine-cover FLANK, both sides. The cover is a
-  // trapezoid loft (car3d frame(): bottom ±x, crown ±0.72x), so at each station
-  // the flank is the straight line from (x, bottom) to (0.72x, top). The band
-  // hangs from just under the crown and is a FIXED 0.263 m tall (the atlas
-  // region's 1.9:1 over the 0.50 m of z), so the number stays the same size and
-  // shape on a raised spine — it just rides higher up a taller flank. Corners
-  // follow the endplate-number order below so the text reads on both sides
-  // under the reflected model matrix. Always mapped: an unpicked spineSide is
-  // an unpainted region, the same rule as the fin panel.
+  const cf = anchors ? anchors.coverAt(-0.62) : { x: 0.27, bottom: 0.20, top: 0.81 };
+  const cr = anchors ? anchors.coverAt(-1.28) : { x: 0.20, bottom: 0.23, top: 0.69 };
+  if (Car3D.coverProfile) {
+    // The crown is ROUNDED (Car3D.coverProfile: a flat centre ±0.32x, two facets
+    // down to the shoulder at ±0.72x), so the crest is a strip of five quads
+    // draped over it, shoulder to shoulder — the same ±0.72x span the flat quad
+    // covered, so the mark keeps its size; only its edges now bend down with
+    // the skin instead of floating over it. u is by chord (x), which keeps the
+    // centre of the mark undistorted, and is pre-flipped exactly as quad() does.
+    const pf = Car3D.coverProfile(cf), pr = Car3D.coverProfile(cr);
+    const across = (p) => {   // left → right: -shoulder, -facet, -crown, crown, facet, shoulder
+      const r = p.pts.slice(1);   // shoulder, facet, crown (right side, outer → inner)
+      return r.map(([x, y]) => [-x, y]).concat(r.slice().reverse());
+    };
+    const PROUD = 0.008;
+    // Drape one region over the crown between two stations, shoulder to shoulder.
+    const drape = (region, zF, zR, pF, pR) => {
+      const uv = uvOf(region), L = across(pF), Rr = across(pR), W = pF.pts[1][0] * 2;
+      for (let i = 0; i < L.length - 1; i++) {
+        const [xa, ya] = L[i], [xb, yb] = L[i + 1], [xc, yc] = Rr[i], [xd, yd] = Rr[i + 1];
+        // outward normal of this facet (right-handed: +x when the surface drops to the right)
+        const dx = xb - xa, dy = yb - ya, nl = Math.hypot(dx, dy) || 1, nx = -dy / nl, ny = dx / nl;
+        const fa = (xa + W / 2) / W, fb = (xb + W / 2) / W;
+        const uu = (f) => uv.uR + (uv.uL - uv.uR) * f;
+        quadUv([[xa + nx * PROUD, ya + ny * PROUD, zF], [xb + nx * PROUD, yb + ny * PROUD, zF],
+                [xd + nx * PROUD, yd + ny * PROUD, zR], [xc + nx * PROUD, yc + ny * PROUD, zR]],
+               [nx, ny, 0.06], [[uu(fa), uv.vB], [uu(fb), uv.vB], [uu(fb), uv.vT], [uu(fa), uv.vT]]);
+      }
+    };
+    drape(R.crest, -0.62, -1.28, pf, pr);
+    // The TAIL strip: the same drape over the cover behind the crest, so the
+    // SPINE TOP band designs run on to the wing (REGIONS.tail; bare unless a
+    // band design is picked).
+    if (R.tail) {
+      // Starts on the crest strip's rear edge (-1.28): a shared edge, so a
+      // saddle or a stripe runs seamlessly from crown to tail.
+      const tf = anchors ? anchors.coverAt(-1.28) : { x: 0.20, bottom: 0.23, top: 0.69 };
+      const tr = anchors ? anchors.coverAt(-1.92) : { x: 0.14, bottom: 0.25, top: 0.60 };
+      drape(R.tail, -1.28, -1.92, Car3D.coverProfile(tf), Car3D.coverProfile(tr));
+    }
+  } else {
+    quad([[-cf.x*0.72, cf.top+0.008, -0.62], [cf.x*0.72, cf.top+0.008, -0.62],
+          [cr.x*0.72, cr.top+0.008, -1.28], [-cr.x*0.72, cr.top+0.008, -1.28]], [0, 1, 0.06], R.crest);
+  }
+  // SPINE SIDE: a band on the engine-cover FLANK, both sides. At each station
+  // the flank is the straight line from (x, bottom) up to the SHOULDER
+  // (Car3D.coverProfile: 0.72x, top - d; the rounded crown sits above it). The
+  // band hangs from just under the shoulder crease and is a FIXED 0.24 m tall
+  // (the atlas region's 1.9:1 over 0.46 m of z), so the number stays the same
+  // size and shape on a raised spine — it just rides higher up a taller flank.
+  // Corners follow the endplate-number order below so the text reads on both
+  // sides under the reflected model matrix. Always mapped: an unpicked
+  // spineSide is an unpainted region, the same rule as the fin panel.
   if (R.spineSide) {
-    const sZ = [-0.72, -1.22], PROUD = 0.010, BAND_H = 0.263, V_TOP = 0.93;
+    const sZ = [-0.74, -1.20], PROUD = 0.010, BAND_H = 0.24, V_TOP = 0.95;
     const flank = (z) => {
       const c = anchors ? anchors.coverAt(z) : (z > -1 ? { x: 0.27, bottom: 0.20, top: 0.81 } : { x: 0.20, bottom: 0.23, top: 0.69 });
-      const h = c.top - c.bottom, nl = Math.hypot(h, 0.28 * c.x), nx = h / nl, ny = 0.28 * c.x / nl;
-      const at = (v) => [c.x * (1 - 0.28 * v) + nx * PROUD, c.bottom + h * v + ny * PROUD];
+      const p = Car3D.coverProfile ? Car3D.coverProfile(c) : { x: c.x, bottom: c.bottom, shoulder: c.top };
+      const h = p.shoulder - p.bottom, nl = Math.hypot(h, 0.28 * p.x), nx = h / nl, ny = 0.28 * p.x / nl;
+      const at = (v) => [p.x * (1 - 0.28 * v) + nx * PROUD, p.bottom + h * v + ny * PROUD];
       return { b: at(Math.max(0.3, V_TOP - BAND_H / h)), t: at(V_TOP), nx, ny };
     };
     const a = flank(sZ[0]), b = flank(sZ[1]);
