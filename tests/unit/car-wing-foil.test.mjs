@@ -21,7 +21,7 @@ const SRC = readFileSync(join(ROOT, "js/car/car3d.js"), "utf8");
 function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
-  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/car3d.js"]) {
+  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/car/helmets.js", "js/car/car3d.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: f });
   }
   return vm.runInContext("({ Car3D, Parts, Teams })", ctx);
@@ -103,7 +103,16 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // stacked blocks over Car3D.coverProfile (flank, lower facet, upper facet +
   // crown) instead of one trapezoid — two more addBlock lofts, twelve triangles
   // each. Measured 3172 exactly; !ckpt, so the cockpit ceiling is untouched.
-  assert.ok(body <= 3172, `default body ${body} > 3172`);
+  // 3172 -> 3472: the driver's head. It was a five-stack hemisphere in the
+  // team's own paint — 120 triangles of beach ball, the same for both cars in
+  // a team and invisible against the bodywork it matched. It is a full-face
+  // helmet now (js/car/helmets.js): an ovoid swept from a real profile, with a
+  // chin bar, a lens-shaped visor aperture on the glass surface, and a painted
+  // design per race number. 432 triangles at 12 rings x 18 slices, the rings
+  // bunched into the top 60% where the cockpit rim lets you see them — evenly
+  // spread at the same resolution it came to 792. Measured 3472; the helmet is
+  // built in BOTH passes, so the cockpit ceiling below moves with it.
+  assert.ok(body <= 3472, `default body ${body} > 3472`);
   // Cockpit ceiling UNCHANGED at 1500: the six-point harness (+60, measured
   // 1428) fits the existing budget. The straps sit between the eye and the dash
   // coaming, filling the lower frame that the coaming never reaches.

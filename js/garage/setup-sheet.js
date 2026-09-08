@@ -618,6 +618,7 @@ function buildLiveryOptions(container, team) {
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
           rearWing: liv.rearWing ? arrToHex(liv.rearWing) : "", wingCarbon: liv.wingCarbon || "paint",
+          cover: liv.cover ? arrToHex(liv.cover) : "",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
@@ -668,6 +669,7 @@ function buildLiveryOptions(container, team) {
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
           rearWing: liv.rearWing ? arrToHex(liv.rearWing) : "", wingCarbon: liv.wingCarbon || "paint",
+          cover: liv.cover ? arrToHex(liv.cover) : "",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
@@ -752,7 +754,7 @@ function buildLiveryCreator(container, team) {
   // distinct value in the draft, then the team's own two stock colours. Click
   // one and the slot takes it EXACTLY.
   const PAL_KEYS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod",
-                    "wing", "rearWing", "fin", "finArt", "logo", "logo2", "logo3", "halo"];
+                    "wing", "rearWing", "cover", "fin", "finArt", "logo", "logo2", "logo3", "halo"];
   const paletteColours = () => {
     const seen = [];
     const add = (v) => {
@@ -810,6 +812,7 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("DETAIL", "accent", true));   // tertiary paint on flashes/trim/pinstripe
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
+  wrap.appendChild(colorRow("ENGINE COVER", "cover", true));   // the airbox, roll hoop and cover top
   // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
   // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
   const wingRow = colorRow("WINGS", "wing", true), rearWingRow = colorRow("REAR WING", "rearWing", true);
@@ -914,6 +917,7 @@ function buildLiveryCreator(container, team) {
     if (d.nose) liv.nose = hexToArr(d.nose);
     if (d.pod)  liv.pod  = hexToArr(d.pod);
     if (d.wing) liv.wing = hexToArr(d.wing);
+    if (d.cover) liv.cover = hexToArr(d.cover);
     if (d.rearWing) liv.rearWing = hexToArr(d.rearWing);
     if (d.wingCarbon && d.wingCarbon !== "paint") liv.wingCarbon = d.wingCarbon;
     if (d.fin)  liv.fin  = hexToArr(d.fin);
@@ -975,6 +979,7 @@ function livePreviewDraft(team, d) {
     coverVents: d.coverVents && d.coverVents !== "none" ? d.coverVents : null,
     spineHeight: d.spineHeight && d.spineHeight !== "standard" ? d.spineHeight : null,
     spineSide: d.spineSide && d.spineSide !== "none" ? d.spineSide : null,
+    cover: d.cover ? hexToArr(d.cover) : null,
     rearWing: d.rearWing ? hexToArr(d.rearWing) : null,
     wingCarbon: d.wingCarbon && d.wingCarbon !== "paint" ? d.wingCarbon : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
