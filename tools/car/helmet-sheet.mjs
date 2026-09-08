@@ -89,7 +89,7 @@ function inside(p) {
 function drawHelmet(design, size, camAz) {
   const px = Buffer.alloc(size * size * 3);
   const skin = Helmets.shell(design);
-  const R = 0.185;                                   // the box the helmet lives in
+  const R = 0.200;                                   // the box the helmet lives in
   const scale = R / (size * 0.46), cx = size / 2, cy = size * 0.50;
   const az0 = (camAz == null ? 0 : camAz) * Math.PI / 180;
   const el = (camAz == null ? 88 : EL) * Math.PI / 180;
@@ -105,8 +105,8 @@ function drawHelmet(design, size, camAz) {
       let p = add(add([0, 0, 0], right, u), up, v);
       p = add(p, fwd, -0.42);                        // start well outside
       let hit = null;
-      for (let st = 0; st < 150; st++) {
-        p = add(p, fwd, 0.0056);
+      for (let st = 0; st < 300; st++) {
+        p = add(p, fwd, 0.0028);
         if (inside(p) > 0) { hit = p; break; }
       }
       let col = BG, shade = 1;

@@ -174,7 +174,7 @@ const Helmets = (function () {
      A letterbox, as on a real lid: much wider than it is tall, sat between the
      brow and the nose, its top edge curving down as it runs to the temples. */
   const TRIM = [0.10, 0.10, 0.11];
-  const VISOR_T0 = 0.31, VISOR_T1 = 0.58, VISOR_AZ = 74;
+  const VISOR_T0 = 0.40, VISOR_T1 = 0.66, VISOR_AZ = 76;   // measured off the front mockup: 40% to 66% down
   function isVisor(t, az) {
     if (t < VISOR_T0 || t > VISOR_T1) return false;
     // A LENS, not a rectangle: widest across the eyes, closing toward the brow
@@ -203,57 +203,89 @@ const Helmets = (function () {
     };
   }
 
-  /* ── the shape ───────────────────────────────────────────────────────────
-     A full-face helmet, read off a photograph of a 2026 lid. NOT a surface of
-     revolution: an egg is the one thing a helmet is not. Three things give it
-     its character, and a radial profile can express none of them —
+  /* ── the shape ──────────────────────────────────────────────────
+     TRACED, not judged by eye. Four rounds of eyeballing a reference photo
+     produced four wrong shells, so the numbers below come out of the
+     photographs themselves: a grid of twenty side-on team portraits, flooded
+     from the white background to a mask, split into blobs, and each helmet's
+     front and back reach recorded at sixty-one heights. The eleven silhouettes
+     that survived intact (a white crown leaks into a white backdrop and
+     truncates the blob — that shows up as a height well under the field's) were
+     mirrored to a common facing, scaled by their own height, and reduced to a
+     median. W, F and B are that median. What the trace settled —
 
-       the CROSS-SECTION IS SQUARISH. The sides run nearly vertical from the
-       temples down past the ears, the crown is flat across rather than domed,
-       and the corners are rounded rather than curved. That is a superellipse,
-       |x/w|^n + |z/d|^n = 1, with n climbing from 2.4 at the crown to 3.1
-       through the middle of the shell — an ellipse at n = 2, a rounded box by
-       n = 3.
+       THE PROFILE IS SMOOTH. The old table stepped the silhouette: a brow
+       standing proud, the aperture recessed under it, a chin bar jutting out
+       below. None of that is in the photographs. The outline runs as one clean
+       curve from crown to rim, and the face reads entirely from the PAINT —
+       the visor aperture — not from bumps in the outline. Those steps are what
+       "shape weird" was looking at.
 
-       FRONT AND BACK ARE NOT THE SAME REACH. The chin bar juts a long way
-       forward as a blunt block, well ahead of the visor above it, while the
-       back of the shell is close to vertical. So the section takes a separate
-       depth ahead of centre (F) and behind it (B).
+       AND IT IS FATTEST LOW, NOT AT THE BROW. The furthest-forward and
+       furthest-back points both sit at about 60% of the height, level with the
+       jaw, not up at the eyes. The old table put the maximum reach at 80% and
+       92%, which pushed the mass into a chin block.
 
-       THE BOTTOM IS A FLAT CUT. A helmet ends at the neck opening, a clean
-       horizontal rim with a dark trim round it — it does not taper to a point,
-       which is what made the old shell read as an egg standing on its end.
+       NEAR-SYMMETRIC FRONT TO BACK. Measured, the two reaches differ by under
+       a centimetre over most of the height — the front leads slightly through
+       the brow, the back leads slightly through the temples. The old table had
+       the front out 5 cm ahead at the jaw.
+
+       PROPORTION. Median length:height across the eleven is 1.21 — a lid is a
+       fifth longer front-to-back than it is tall. The rim is still two thirds
+       of the maximum length: it ends at the neck, it does not taper to a point.
+
+     The cross-section between those reaches stays a mild superellipse,
+     |x/w|^n + |z/d|^n = 1: an oval from above, squared off just enough to keep
+     the sides from bulging. Above 2.4 it went slab-flat and read as a bucket.
+
+     W IS TRACED TOO, off a straight-on front shot, which is the one view that
+     shows it. Derived instead from the length it was 8% too wide and widest in
+     the wrong place: measured, the shell holds its maximum width over a long
+     flat band from 40% to 57% of the height and then falls away, and it is
+     0.81 as wide as it is tall. Guessed, it bulged.
+
+     The rim is cut at 97% of the photographed height. Below that the outline
+     rounds off to a point in every view — that is the bottom EDGE curving away
+     from the camera, not the shell narrowing — and taking it literally closed
+     the model to a slit.
+
+     The crown row is the one number NOT taken from the trace. Photographed,
+     the topmost row of a silhouette is a few pixels of a curve; sampled
+     straight it gives the shell a small flat cap, and the straight line the
+     table draws from there to the next row creased the dome into a corner.
+     The apex is closed to a point instead and the rows below it follow the
+     trace, which is the dome the photographs actually show.
 
        t   0 at the crown, 1 at the neck rim
        Y   height above the temple line, metres
        W   half width; F reach ahead of centre; B reach behind; N squareness */
   const SHAPE = {
-    T: [0.00,  0.08,   0.18,   0.30,   0.44,   0.56,   0.68,   0.80,   0.90,   1.00],
-    Y: [0.134, 0.126,  0.113,  0.095,  0.060,  0.020, -0.026, -0.074, -0.112, -0.140],
-    // Narrows through the jaw to the neck rim: held wide all the way down, the
-    // lower half read as a slab and the whole head as a bucket.
-    W: [0.002, 0.040,  0.076,  0.096,  0.104,  0.107,  0.101,  0.090,  0.078,  0.062],
-    // The apex sits BEHIND centre (B is the larger reach at the crown) and the
-    // face slopes forward as it drops. F is deliberately NOT monotonic: the
-    // brow stands proud at 0.114, the aperture is recessed under it at 0.104,
-    // and the chin bar steps back out to 0.152 — nearly 5 cm further forward
-    // than the eyes. Ramped smoothly instead, there is no brow and no chin,
-    // and the profile reads as one blank curve from crown to jaw.
-    F: [0.003, 0.042,  0.084,  0.114,  0.104,  0.126,  0.142,  0.152,  0.152,  0.138],
-    B: [0.004, 0.050,  0.088,  0.107,  0.114,  0.117,  0.113,  0.104,  0.092,  0.076],
-    // Squareness of the PLAN section, held near an ellipse: at 2.9 the sides
-    // went slab-flat and the head read as a bucket. A helmet is a rounded
-    // rectangle in FRONT view — which W against Y already draws — and an oval
-    // from above, which is this.
-    N: [2.10,  2.15,   2.20,   2.30,   2.34,   2.32,   2.24,   2.16,   2.10,   2.05],
+    T: [0.000, 0.012, 0.028, 0.050, 0.080, 0.120, 0.170, 0.230, 0.300, 0.380, 0.460, 0.540, 0.620, 0.700, 0.780, 0.850, 0.910, 0.960, 1.000],
+    Y: [0.119, 0.116, 0.112, 0.106, 0.099, 0.089, 0.076, 0.061, 0.043, 0.023, 0.003, -0.017, -0.037, -0.057, -0.078, -0.095, -0.110, -0.123, -0.133],
+    W: [0.000, 0.013, 0.031, 0.046, 0.058, 0.070, 0.080, 0.089, 0.097, 0.103, 0.104, 0.104, 0.103, 0.100, 0.096, 0.090, 0.081, 0.067, 0.056],
+    F: [0.000, 0.023, 0.037, 0.051, 0.072, 0.090, 0.109, 0.120, 0.126, 0.131, 0.144, 0.152, 0.158, 0.157, 0.151, 0.142, 0.133, 0.121, 0.114],
+    B: [0.000, 0.023, 0.038, 0.052, 0.070, 0.075, 0.092, 0.110, 0.127, 0.140, 0.146, 0.149, 0.157, 0.155, 0.148, 0.141, 0.132, 0.123, 0.116],
+    N: [2.05, 2.06, 2.08, 2.11, 2.14, 2.17, 2.20, 2.23, 2.25, 2.26, 2.26, 2.25, 2.23, 2.20, 2.16, 2.13, 2.10, 2.07, 2.05],
   };
+  /* Reads a profile column at any t. CATMULL-ROM, not linear: a helmet has no
+     straight edges, and joining nineteen sampled rows with nineteen straight
+     segments puts a visible crease at every one of them. The worst was at the
+     crown, where the shell goes from a point to nearly half its width in a
+     twentieth of its height — linear, that is a cone with a hard rim round it,
+     and it read as a flat cap sat on top of the lid. The spline runs the same
+     rows as one continuous curve. Ends are clamped by repeating the end row,
+     which holds the flat cut at the neck. */
   function tab(arr, t) {
-    const T = SHAPE.T;
+    const T = SHAPE.T, n = T.length;
     if (t <= T[0]) return arr[0];
-    for (let i = 1; i < T.length; i++) {
-      if (t <= T[i]) { const f = (t - T[i - 1]) / (T[i] - T[i - 1]); return arr[i - 1] + (arr[i] - arr[i - 1]) * f; }
-    }
-    return arr[arr.length - 1];
+    if (t >= T[n - 1]) return arr[n - 1];
+    let i = 1;
+    while (i < n - 1 && t > T[i]) i++;
+    const f = (t - T[i - 1]) / (T[i] - T[i - 1]);
+    const p0 = arr[Math.max(0, i - 2)], p1 = arr[i - 1], p2 = arr[i], p3 = arr[Math.min(n - 1, i + 1)];
+    const f2 = f * f, f3 = f2 * f;
+    return 0.5 * ((2 * p1) + (-p0 + p2) * f + (2 * p0 - 5 * p1 + 4 * p2 - p3) * f2 + (-p0 + 3 * p1 - 3 * p2 + p3) * f3);
   }
   /* A point on the shell. `a` is the azimuth in radians, 0 over the nose,
      growing toward the driver's right — the same frame the designs use. The
@@ -266,7 +298,11 @@ const Helmets = (function () {
     return [r * dx, tab(SHAPE.Y, t), r * dz];
   }
 
-  const RINGS = 12, SLICES = 18;
+  // Nineteen profile rows, and enough rings to spend some of them on the
+  // crown: a real lid is BLUNT on top — 45% of its width by a twentieth of the
+  // way down — and at twelve evenly-biased rings the first one landed below
+  // that, which drew the dome as a flat cap with a crease round it.
+  const RINGS = 14, SLICES = 18;
   const ringT = (i) => { const f = i / RINGS; return f * f * 0.45 + f * 0.55; };
   function build(out, cx, cy, cz, design, S) {
     const skin = shell(design);
