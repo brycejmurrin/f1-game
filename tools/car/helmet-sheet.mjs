@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // helmet-sheet — a contact sheet of every driver's helmet design.
-// @doc Rasterises each js/car/helmets.js design onto a shaded sphere and writes a labelled contact sheet PNG (`--only`, `--view`, `--cell`).
+// @doc Rasterises each js/car/helmets.js design onto the real shell and writes a labelled contact sheet PNG (`--only`, `--view`, `--cell`, `--plain`, `--mesh`).
 // @skill playwright-probe
 //
 //   node tools/car/helmet-sheet.mjs                  # all 22, front-3/4
@@ -86,10 +86,37 @@ function inside(p) {
   return rOn - rP;
 }
 
+/* WHAT THE MESH CARRIES, not what the design says. The ray-march below asks
+   the design for a colour at every PIXEL, which is a fidelity the game never
+   has: in a frame the colour exists only at the mesh's vertices and the GPU
+   blends between them. Sampling the design on that grid and blending the same
+   way is how a keyline thinner than the ring spacing shows up as missing here
+   instead of as a surprise in-game. --mesh=1. */
+function meshSkin(skin) {
+  const R = Helmets.RINGS, S = Helmets.SLICES, rt = Helmets.ringT;
+  const grid = [];
+  for (let r = 0; r <= R; r++) {
+    const row = [];
+    for (let sl = 0; sl < S; sl++) row.push(skin(Math.min(1, rt(r)), (sl / S) * 360));
+    grid.push(row);
+  }
+  const mix = (a, b, f) => [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+  return (t, az) => {
+    let r = 0;
+    while (r < R - 1 && rt(r + 1) < t) r++;
+    const t0 = rt(r), t1 = rt(r + 1);
+    const ft = Math.min(1, Math.max(0, (t - t0) / (t1 - t0 || 1)));
+    const a = (((az % 360) + 360) % 360) / (360 / S);
+    const s0 = Math.floor(a) % S, fa = a - Math.floor(a), s1 = (s0 + 1) % S;
+    const near = (ft < 0.5 ? grid[r] : grid[r + 1])[fa < 0.5 ? s0 : s1];
+    return { c: mix(mix(grid[r][s0].c, grid[r][s1].c, fa), mix(grid[r + 1][s0].c, grid[r + 1][s1].c, fa), ft), glass: near.glass };
+  };
+}
+
 function drawHelmet(design, size, camAz) {
   const px = Buffer.alloc(size * size * 3);
-  const skin = Helmets.shell(design);
-  const R = 0.185;                                   // the box the helmet lives in
+  const skin = flag("mesh", "") ? meshSkin(Helmets.shell(design)) : Helmets.shell(design);
+  const R = 0.200;                                   // the box the helmet lives in
   const scale = R / (size * 0.46), cx = size / 2, cy = size * 0.50;
   const az0 = (camAz == null ? 0 : camAz) * Math.PI / 180;
   const el = (camAz == null ? 88 : EL) * Math.PI / 180;
@@ -105,8 +132,8 @@ function drawHelmet(design, size, camAz) {
       let p = add(add([0, 0, 0], right, u), up, v);
       p = add(p, fwd, -0.42);                        // start well outside
       let hit = null;
-      for (let st = 0; st < 150; st++) {
-        p = add(p, fwd, 0.0056);
+      for (let st = 0; st < 300; st++) {
+        p = add(p, fwd, 0.0028);
         if (inside(p) > 0) { hit = p; break; }
       }
       let col = BG, shade = 1;
