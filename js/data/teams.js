@@ -37,6 +37,16 @@ const Teams = (function () {
     {
       id: "redbull", name: "Red Bull Racing", short: "RBR",
       color: [0.086, 0.137, 0.294], color2: [1.0, 0.843, 0.0],     /* navy #16234B / yellow #FFD700 */
+      /* The one team whose DEFAULT livery wears the 2026 engine cover, because
+         it is the cover the design was drawn from: no tail fin (no real car has
+         one), the spine raised to "dorsal", and the wrap — the sun over the
+         airbox, a bull charging forward on each flank — with the sponsor pair
+         aft of it. Liveries.forTeam folds these into the synthesized "default",
+         which is the livery every player starts on and every AI Red Bull runs;
+         the eleven picker entries below it keep the plain cover, so both looks
+         ship. Fields are LiveryTex.SPINE_LOGO_IDS / SPINE_SIDE_IDS and
+         Car3D.SPINE_HEIGHT_IDS / FIN_SHAPE_IDS. */
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "wrap", spineSide: "duo" },
       engine: "Red Bull Ford", tier: 2,
       stats: { speed: 90, accel: 88, cornering: 91, braking: 87 },
       drivers: [
