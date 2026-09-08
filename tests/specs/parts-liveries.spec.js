@@ -180,6 +180,37 @@ test.describe("Liveries — paint finish", () => {
 test.describe("Liveries — creator", () => {
   test.use({ viewport: LANDSCAPE });
 
+  test("FIN SHAPE none greys out the four fin rows, and a fin brings them back", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+
+    const badgeRow = page.locator('.cs-liv-ed-row:has([data-cs-pill^="finBadge:"])');
+    const styleRow = page.locator('.cs-liv-ed-row:has([data-cs-pill^="finStyle:"])');
+    const finRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL FIN"))');
+    const artRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL GRAPHIC"))');
+    const rows = [badgeRow, styleRow, finRow, artRow];
+    for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "false");
+    await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeEnabled();
+
+    await page.locator('[data-cs-pill="finShape:none"]').click();
+    for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "true");
+    await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeDisabled();
+    await expect(page.locator('[data-cs-pill="finStyle:team"]')).toBeDisabled();
+    await expect(finRow.locator('input[type="color"]')).toBeDisabled();
+    // The palette chips are rebuilt on every edit and must come back disabled too.
+    await expect(artRow.locator(".cs-liv-pal button").first()).toBeDisabled();
+    // Rows the fin does not own stay live.
+    await expect(page.locator('[data-cs-pill="spineLogo:logo"]')).toBeEnabled();
+    await expect(page.locator('.cs-liv-ed-row:has([data-cs-pill^="spineSide:"])')).toHaveAttribute("aria-disabled", "false");
+    await page.screenshot({ path: galleryPath("parts-liveries", "creator-no-fin-rows.png") });
+
+    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "false");
+    await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeEnabled();
+  });
+
   test("the creator offers a finish choice and saves it onto the custom livery", async ({ page }) => {
     await load(page);
     await forgetStored(page, [await page.evaluate(() => "livery.custom." + Teams.LIST[2].id)]);
