@@ -273,8 +273,34 @@ try {
   // skipClaim = this tab already claimed-and-died; the probe is leftover from
   // that load. Do not persist webgl2 over the pick — attach GLX this boot and
   // retry the alternate on the next cold start.
-  if (armed && !skipClaim) { pref = "webgl2"; Log.warn("gfx", "backend", armed, "never presented a frame — reverting to WebGL2");
-    try { localStorage.setItem("apex26.gfxBackend", "webgl2"); localStorage.removeItem(PROBE_KEY); } catch (_) { /* the in-memory revert above still holds for this load */ } }
+  // ONE STRIKE IS A MEMORY KILL, NOT A VERDICT. iOS jetsams a tab for reasons
+  // that have nothing to do with the renderer — another app, a background
+  // eviction, a bad moment — and this used to persist "webgl2" over the pick on
+  // the FIRST armed probe. That silently retires the player's choice forever:
+  // the phone stops using three, nothing ever turns it back on, and it reads as
+  // "three stopped working" (reported 2026-09-08). So the first strike reverts
+  // THIS BOOT ONLY and leaves the pick alone; the pick is written away only on
+  // the SECOND consecutive one, which still bounds a device that genuinely
+  // cannot run the backend to two attempts and no reload loop. The retired pick
+  // is remembered so RESET RENDERER and the picker can offer it back.
+  const STRIKE_KEY = "apex26.gfxProbeStrikes";
+  if (armed && !skipClaim) {
+    pref = "webgl2";
+    let strikes = 2;   // unreadable storage cannot count strikes: treat as final
+    try { strikes = (+localStorage.getItem(STRIKE_KEY) || 0) + 1; } catch (_) { /* blocked storage */ }
+    const retire = strikes >= 2;
+    Log.warn("gfx", "backend", armed, retire
+      ? "never presented a frame twice — WebGL2 is now the pick"
+      : "never presented a frame — WebGL2 for this boot; the pick survives one more try");
+    try {
+      localStorage.removeItem(PROBE_KEY);
+      if (retire) {
+        localStorage.setItem("apex26.gfxBackend", "webgl2");
+        localStorage.setItem("apex26.gfxBackendWas", armed);
+        localStorage.removeItem(STRIKE_KEY);
+      } else localStorage.setItem(STRIKE_KEY, String(strikes));
+    } catch (_) { /* the in-memory revert above still holds for this load */ }
+  }
   // "webgpu" -> WGX (frozen, needs navigator.gpu); "three" -> TLX (three.js/TSL,
   // self-falls-back to WebGL2 inside three so no capability gate here).
   // A pick can only be honoured while its DEFERRED group still exists. Both
@@ -8747,6 +8773,10 @@ function render(dt) {
   if (!_backendProved && ++_provedFrames >= PROVE_FRAMES) {
     _backendProved = true;
     if (_probeArmed) { _probeArmed = false; try { localStorage.removeItem("apex26.gfxBackendProbe"); } catch (_) { /* nothing was armed if storage is blocked */ } }
+    // A backend that PROVED itself owes nothing for an older strike — without
+    // this, one kill months ago plus one today retires the pick on what looks
+    // like a first failure.
+    try { localStorage.removeItem("apex26.gfxProbeStrikes"); } catch (_) { /* blocked storage */ }
   }
   if (isWetRoad() && Particles.rainActive()) {
     // Falling-streak precipitation, identical in every camera: full storm
