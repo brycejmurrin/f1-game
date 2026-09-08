@@ -311,16 +311,23 @@ already been corrected and whose browser copies were left behind:
   base commit and on this tree through the VM harness: identical numbers
   (shove −0.228 m, clear at frame 1, +0.02 by frame 25), so it was already
   red before the controller changed.
-- `aero-zones` "X-mode buys X_VMAX_GAIN" read `vmaxNow` with the field where
-  it happened to fall. An AI inside the slipstream window (`AiDrive.towGain`,
-  up to 4.5 %) turned the 1.0957 ratio into 1.1001. It takes the measurement
-  alone now.
-- `aero-zones` "stays disabled for the whole opening lap" compared the gate
-  against `max(lap)` over the field while the gate reads `G.ranked[0]` (by
-  prog). The test jumps the player to the line mid-race, and a jump desyncs
-  prog from the ranked order, so a jumped player can hold the highest lap
-  while an AI still leads on prog. The gate was right; the test's reference
-  was wrong.
+- `aero-zones` "X-mode buys X_VMAX_GAIN" — NOT this change, and not fixed
+  here. First guess was the slipstream contaminating `vmaxNow`; isolating the
+  car changed the number not at all (bit-identical), so that was wrong.
+  Measured properly, through the VM harness on three trees: the ratio is
+  1.1023 before the relaxation, 1.1023 after it, 1.0880 on the tip, against
+  an expected 1.0957 every time. The spec is red on all three. Recorded in
+  the defect ledger with a proposed patch; widening the tolerance to hide it
+  is forbidden.
+- `aero-zones` "stays disabled for the whole opening lap" — the gate is
+  `caution.level === 0 && leader.lap > 1` and this test names only the second
+  half. It holds the throttle with no steering for 220 s, so the player
+  leaves the road and the debris layer answered VSC → SAFETY CAR → RED FLAG
+  (apex-logs); the gate then reads closed on lap 3 and the invariant fails
+  for a reason it does not name. The test switches race control off now.
+  Second guess corrected here too: the leader read (`max(lap)` vs the gate's
+  `ranked[0]`) was not the cause — measured 0 mismatches either way over 220
+  samples — so that edit was reverted rather than kept on a hunch.
 
 - `collisions-deep` "a single AI rub only nudges the player apart" — the
   identical defect to "push sticks", in the same file, with the same
