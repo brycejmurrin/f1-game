@@ -1204,7 +1204,9 @@ const LiveryTex = (function () {
       ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(-Math.PI / 2);
       drawWordmark(ctx, name, { x: -H / 2, y: -W * 0.16, w: H, h: W * 0.32 }, ink, { align: "center" });
     } else if (id === "number") {
-      drawNumber(ctx, num, { x: X + W * 0.20, y: Y + H * 0.20, w: W * 0.60, h: H * 0.60 }, ink, acc, null, numFont, 0);
+      // Reads from the right side, like the wordmark and the crest.
+      ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(-Math.PI / 2);
+      drawNumber(ctx, num, { x: -H * 0.30, y: -W * 0.30, w: H * 0.60, h: W * 0.60 }, ink, acc, null, numFont, 0);
     }
     ctx.restore();
   }
@@ -1424,10 +1426,20 @@ const LiveryTex = (function () {
     const raceNum = numberOverride != null ? numberOverride
                   : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
     if (spineLogo === "logo") {
+      // ROTATED to read from the car's right side, like every mark on a real
+      // engine-cover crown (Ferrari's HP roundel, Red Bull's lettering; the
+      // 2026 launch galleries, top views): a crown mark drawn upright in the
+      // atlas reads from behind, which from the front or the side is upside
+      // down. Same transform as the wordmark and the crown number.
+      const Rc = REGIONS.crest, sq = Math.min(Rc.w, Rc.h) * 0.92;
+      ctx.save();
+      ctx.translate(Rc.x + Rc.w / 2, Rc.y + Rc.h / 2); ctx.rotate(-Math.PI / 2);
+      const Rr = { x: -sq / 2, y: -sq / 2, w: sq, h: sq };
       if (LOGOS[teamId]) {
-        drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
+        drawLogoImage(ctx, LOGOS[teamId], Rr, logo,
                       markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
-      } else drawCrest(ctx, teamId, REGIONS.crest, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+      } else drawCrest(ctx, teamId, Rr, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+      ctx.restore();
     } else if (spineLogo !== "none") {
       drawSpineTop(ctx, spineLogo, REGIONS.crest, c1, stripe || accent, inkCrest, names[0] || "", raceNum, colors.numFont);
     }
