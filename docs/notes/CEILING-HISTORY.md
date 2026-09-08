@@ -2252,6 +2252,15 @@ live outside the backends (`js/render/shared/driving-line.js`, the fragment
 shaders); each backend carries only its upload and draw. WGX and TLX gained
 the same pass the same day (`WGSLFx.LINE`, `tsl-fx.js` `lineMat`) — those
 files are not ratcheted.
+- `js/lighting/presets.js` lines 15508 -> **17318** (+1810), `js/game.js` lines
+  10154 -> **10157** (2026-09-08): THE OWNER'S SETTINGS FILE BAKED AS DEFAULTS.
+  The presets growth is 201 LIGHTING TUNER profiles merged through
+  `merge-proposals.mjs` — 2858 knobs across all 41 circuits at dawn, dusk and
+  night in dry and wet, a base copied to every track and then refined per
+  circuit (23 distinct variants at dawn dry, 25 at night dry, 26 at night wet).
+  It is data, not code: no new branches, and every lighting suite is green on
+  it. game.js's three lines are comments on the four defaults that moved there
+  (camera mode, metrics layout, steer mode).
 - `js/game.js` lines 10088 -> **10089**, codeLines 5497 -> **5498**;
   `js/agent/apex.js` lines 2662 -> **2668**, codeLines 2011 -> **2012**;
   (tree) shellNodes 1325 -> **1326** (2026-09-08): the SETTINGS FILE. One

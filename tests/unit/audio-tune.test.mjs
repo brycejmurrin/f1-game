@@ -144,10 +144,37 @@ function synthEngine() {
 
 const REVS = [0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 0.95, 1];
 
-test("defaults are identity — the shipped sound is untouched by the tune layer", async () => {
+// The tune layer is a MULTIPLIER over the sample core, and until 2026-09-08 its
+// shipped value was 1 on every knob, so "the default" and "neutral" were the
+// same number and the knob tests below could use either. They are not the same
+// any more: TUNE_DEF now carries the shipped ENGINE voice (pitch 0.85, rev
+// range 1.3, no detune, a hard limiter). The LAYER's contract is unchanged, so
+// these tests still measure it — from an explicit identity trim rather than
+// from whatever the shipped voice happens to be. `sampleEngine()` still gives
+// the shipped default; `neutralEngine()` is what a KNOB is measured against.
+const TUNE_IDENTITY = Object.freeze({
+  pitch: 1, idle: 1, revRange: 1, curve: 1, detune: 1, brightness: 1, gravel: 1, sub: 1,
+  limiter: 1, limRate: 1, limPitch: 1, boost: 1, boostPitch: 1,
+  whine: 1, harvest: 1, wind: 1, screech: 1, brakes: 1, shift: 1, rivals: 1, reverb: 1, overrun: 1,
+});
+async function neutralEngine() {
   const A = await sampleEngine();
-  assert.deepEqual(A.tune(), A.tuneDefaults(), "a fresh engine carries no trim");
+  A.setTune(TUNE_IDENTITY);
+  return A;
+}
+
+test("a fresh engine carries the shipped voice, and an identity trim reduces to the pre-tune formula", async () => {
+  const A = await sampleEngine();
+  assert.deepEqual(A.tune(), A.tuneDefaults(), "a fresh engine carries the shipped tune, whatever it is");
   assert.equal(A.profile(), "team", "and follows the team's engine, as it always did");
+  // The shipped voice itself — the owner's own ENGINE tune became the default
+  // on 2026-09-08. Pinned here so a change to it is a decision, not a drift.
+  // JSON round-trip: values come back from the vm realm with that realm's
+  // Object prototype, and strict deepEqual compares prototypes.
+  assert.deepEqual(JSON.parse(JSON.stringify(A.tuneDefaults())), Object.assign({}, TUNE_IDENTITY, {
+    pitch: 0.85, revRange: 1.3, detune: 0, sub: 0.25, limiter: 2.25, limRate: 0.8, limPitch: 0, whine: 0.5,
+  }), "the shipped ENGINE voice");
+  A.setTune(TUNE_IDENTITY);
   // The pre-tune formula, verbatim from the commit that introduced the trim.
   // IDLE and CURVE at 1 must reduce the four-knob curve to exactly this.
   const LOW = [0.6, 0.72, 0.84];   // LOW_GEAR_RATE, engine.js
@@ -245,7 +272,9 @@ test("a hand-edited trim stops the engine calling itself by the profile's name",
   const held = A.tune();
   A.setTune({ pitch: held.pitch, brightness: held.brightness });
   assert.equal(A.profile(), "cockpit", "re-applying the profile's own values leaves it on the profile");
-  // And returning every trim to the defaults by hand lands back on team.
+  // And returning every trim to the defaults by hand lands back on team. THE
+  // SHIPPED DEFAULT, not identity: "team" means TUNE_DEF, which since
+  // 2026-09-08 is the shipped ENGINE voice rather than a row of 1s.
   A.setTune(A.tuneDefaults());
   assert.equal(A.profile(), "team", "a tune that matches team's is team's");
 });
@@ -269,7 +298,7 @@ test("a muted layer goes silent and then costs nothing per frame", async () => {
 });
 
 test("the rev-limiter chop is switchable and its depth is a knob", async () => {
-  const A = await sampleEngine();
+  const A = await neutralEngine();
   // Above 98.5% revs at speed is the only place the limiter gate opens.
   const atLimiter = () => A.setEngine(0.99, 0, false, 0.9, 7, {});
   atLimiter();
@@ -383,8 +412,8 @@ test("DETUNE lands on the sample core's own detune param", async () => {
   // the only place this trim landed and that core never built the node, so the
   // slider moved and nothing happened. The granular core is gone; this pins the
   // remaining path so the trim cannot go quietly inert again.
-  const A = await sampleEngine();
-  A.setTune(A.tuneDefaults());
+  const A = await neutralEngine();
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   const neutral = A.detuneCents();
   A.setTune({ detune: 3 });          // +60 cents on the "default" voice
   assert.ok(Math.abs(A.detuneCents() - (neutral + 60)) < 1e-6,
@@ -404,7 +433,7 @@ test("SUB is audible on the shipped core, not just the oscillator fallback", asy
   // sits under the sample/granular core too, so the number means something.
   const A = await sampleEngine();
   const loud = () => A.setEngine(0.8, 0, false, 0.7, 5, {});
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   loud();
   const base = A.subLevel();
   assert.ok(base > 0, "the sub layer must be audible on the core that actually ships");
@@ -465,7 +494,7 @@ test("the circuit's acoustics come from the definition it already carries", asyn
 test("SPACE and its switch both reach the live reverb return", async () => {
   const A = await sampleEngine();
   A.setVenue({ street: true, theme: "street_day" });
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   const base = A.venue().level;
   assert.ok(base > 0, "a street circuit must actually be wet");
   A.setTune({ reverb: 2.5 });
@@ -564,10 +593,10 @@ test("BRIGHTNESS keeps moving the corner across its whole range, and stops below
 });
 
 test("the LIMITER is three knobs: depth that never inverts the gate, a rate, and a pitch sag", async () => {
-  const A = await sampleEngine();
+  const A = await neutralEngine();
   const atLimiter = () => A.setEngine(0.99, 0, false, 0.9, 7, {});
   const r = A.tuneRange();
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   for (const k of [0, 0.5, 1, 2, r.limiter[1]]) {
     A.setTune({ limiter: k });
     atLimiter();
@@ -607,10 +636,10 @@ test("the LIMITER is three knobs: depth that never inverts the gate, a rate, and
 });
 
 test("BOOST is the ERS layers' level and the rev lift under deploy", async () => {
-  const A = await sampleEngine();
+  const A = await neutralEngine();
   const deploying = () => A.setEngine(0.7, 1, false, 0.7, 6, { deploy: 1, energy: 1 });
   const coasting = () => A.setEngine(0.7, 0, false, 0.7, 6, {});
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   coasting();
   const flat = A.rate();
   deploying();
@@ -645,7 +674,7 @@ test("the layers that only had a switch now have a level", async () => {
   A.init();
   await release();
   A.startEngine();
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   // Wind at speed, harvest under a lift, tyres sliding, a rival alongside.
   const windy = () => A.setEngine(0.8, 0, false, 0.9, 6, {});
   const harvesting = () => {   // the harvest layer follows the smoothed decel of speed01 over TIME
@@ -857,25 +886,25 @@ test("IDLE and REV RANGE reach a low idle AND a high redline at once", async () 
   // the stock 0.70 — a fifth of an octave for a knob that read 2.5x. The four
   // knobs are independent now, and this pins that a low end and a high end
   // are reachable TOGETHER, not one at the other's expense.
-  const A = await sampleEngine();
+  const A = await neutralEngine();
   const r = A.tuneRange();
   const at = (rev) => { A.setEngine(rev, 0, false, 0.6, 6, {}); return A.rate(); };
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   const stockIdle = at(0), stockTop = at(1);
   // Idle an octave under stock, redline an octave over it, in the same tune.
   A.setTune({ idle: 0.5, revRange: 3.0 });
   assert.ok(at(0) <= stockIdle * 0.5 + 1e-9, `idle ${at(0)} is not an octave under stock ${stockIdle}`);
   assert.ok(at(1) >= stockTop * 2, `redline ${at(1)} is not an octave over stock ${stockTop}`);
   // IDLE moves only the idle end: the span (top - idle) is REV RANGE's alone.
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   const span = at(1) - at(0);
   A.setTune({ idle: r.idle[1] });
   assert.ok(Math.abs((at(1) - at(0)) - span) < 1e-9, "IDLE changed the span, which is REV RANGE's job");
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   A.setTune({ revRange: 2 });
   assert.ok(Math.abs(at(0) - stockIdle) < 1e-9, "REV RANGE moved the idle end, which is IDLE's job");
   // And PITCH is a transpose: it scales both ends by the same factor.
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   A.setTune({ pitch: 1.5 });
   assert.ok(Math.abs(at(0) / stockIdle - 1.5) < 1e-9 && Math.abs(at(1) / stockTop - 1.5) < 1e-9,
     "PITCH must scale idle and redline alike");
@@ -892,7 +921,7 @@ test("IDLE and REV RANGE reach a low idle AND a high redline at once", async () 
 test("CURVE bends the path between idle and redline without moving either end", async () => {
   const A = await sampleEngine();
   const at = (rev) => { A.setEngine(rev, 0, false, 0.6, 6, {}); return A.rate(); };
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   const idle = at(0), top = at(1), midLinear = at(0.5);
   for (const c of [A.tuneRange().curve[0], 0.7, 1.4, A.tuneRange().curve[1]]) {
     A.setTune({ curve: c });
@@ -906,7 +935,7 @@ test("CURVE bends the path between idle and redline without moving either end", 
 test("GRAVEL is roughness at idle that is gone by redline, and never inverts the engine", async () => {
   const A = await sampleEngine();
   const frame = (rev) => A.setEngine(rev, 0, false, 0.5, 5, {});
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   frame(0);
   const idle = A.gravelDepth();
   assert.ok(idle > 0, "the shipped tune must carry some roughness at idle");
@@ -941,7 +970,7 @@ test("GRAVEL is roughness at idle that is gone by redline, and never inverts the
 test("BRAKES roar under deceleration at speed and are silent on the throttle", async () => {
   const A = await sampleEngine();
   const frame = (ax, s) => A.setEngine(0.6, 0, false, s, 5, { ax });
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   frame(0, 0.8);
   assert.equal(A.brakeLevel(), 0, "coasting is silent");
   frame(10, 0.8);
@@ -1002,7 +1031,7 @@ test("the wastegate dumps once per lift, and only after a real pull", async () =
 
 test("the SHIFT trim scales the gear-change crack", async () => {
   const A = await sampleEngine();
-  A.setTune(A.tuneDefaults());
+  A.setTune(TUNE_IDENTITY);   // a KNOB is measured from neutral, not from the shipped voice
   A.shift(true);
   const stock = A.shiftState().peak;
   assert.ok(stock > 0 && A.shiftState().fired === 1, "a shift fires one crack at the stock level");

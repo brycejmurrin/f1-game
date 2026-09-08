@@ -76,10 +76,14 @@ function cockpitViewmodelAxes(sR, sF, yv, eye, outR, outU, outF, outP) {
 }
 
 const CHASE_SIDE_FRAC = 0.3;
+// Shipped CHASE eye-in, metres along the view direction (the owner's CAMERA
+// TUNER DISTANCE of -0.725, baked 2026-09-08). Applied after the rig solves so
+// it moves ONLY the eye, never the arc `back` samples the ride height over.
+const CHASE_EYE_IN = 0.725;
 // Shipped chase/far corner lead — blends toward road-frame aim so the rig swings
 // into bends. The tuner knob replaces this when cornerLead is stored for the mode
 // (including 0 = explicitly flat). Untuned installs get this without opening the panel.
-const CHASE_CORNER_LEAD_DEFAULT = 0.18;
+const CHASE_CORNER_LEAD_DEFAULT = 0.54;
 // CHASE g-response: the camera leans with longitudinal weight transfer even
 // though it is bolted to nothing. Driven by the SMOOTHED body pitch
 // (js/physics/body-attitude.js, spring ω=9, clamped ±0.024 rad ≈ 1.4°), NEVER raw
@@ -406,8 +410,18 @@ function vantage(track, mode, s, x, spd, now, extra) {
     fov = lerp(55, 70, spN) + dep * 3;
   } else {
     const far = mode === "far";
+    // CHASE's eye moved in and down on 2026-09-08: the owner's CAMERA TUNER
+    // profile (height -0.75, dist -0.725) became the shipped framing, so the
+    // tuner goes back to meaning "offset from shipped" with every def at 0.
+    // HEIGHT lands here, on eyeUp, which is what CamTune.apply does with it.
+    // DISTANCE does NOT land on `back`: `back` is also the arc the ride height
+    // and gradient are sampled over (rideEye) and the arm the three-quarter
+    // offset scales off (CHASE_SIDE_FRAC), so folding it in there would move
+    // two things the knob never touches. It is applied below exactly as the
+    // tuner applies it — along the view direction, horizontally, after the rig
+    // has solved. FAR is untouched.
     const back  = far ? 10.5 : 5.8;
-    const eyeUp = far ? 3.6 : 2.1;
+    const eyeUp = far ? 3.6 : 1.35;
     Tracks.sample(track, wrapS(s - back), cvB);
     const cx = x * 0.5;
     const lead = far ? 9 : 6;
@@ -438,6 +452,15 @@ function vantage(track, mode, s, x, spd, now, extra) {
         // overwritten, so eye/tgt being the pooled arrays themselves is safe.
         eye[0] = lerp(eye[0], eyeR0, lead2); eye[1] = lerp(eye[1], eyeR1, lead2); eye[2] = lerp(eye[2], eyeR2, lead2);
         tgt[0] = lerp(tgt[0], tgtR[0], lead2); tgt[1] = lerp(tgt[1], tgtR[1], lead2); tgt[2] = lerp(tgt[2], tgtR[2], lead2);
+      }
+      // The shipped half of the DISTANCE knob (see `back` above): the eye slides
+      // CHASE_EYE_IN metres along the eye->target direction, horizontally, which
+      // is CamTune.apply()'s own `dist` arithmetic with the sign already turned
+      // round. A player's DISTANCE still stacks on top of it, from zero.
+      if (!far && CHASE_EYE_IN) {
+        let fx2 = tgt[0] - eye[0], fz2 = tgt[2] - eye[2];
+        const fl2 = Math.hypot(fx2, fz2);
+        if (fl2 > 1e-4) { eye[0] += (fx2 / fl2) * CHASE_EYE_IN; eye[2] += (fz2 / fl2) * CHASE_EYE_IN; }
       }
       const gP = (extra.att && extra.att.baPitch) || 0;
       eye[0] += hx * gP * CHASE_G_DOLLY; eye[2] += hz * gP * CHASE_G_DOLLY;   // +heading = toward the car
