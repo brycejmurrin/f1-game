@@ -356,9 +356,12 @@ The prototype timed 300 relaxation passes at ~24 ms and that number went into
 the first commit's message. It was wrong for the shipped code by 20×: measured
 against the real build, `TrackLine.bake` was **487 ms of an 1113 ms Monza
 build — 44 % of building a circuit** — and six circuits went from 3587 ms to
-6381 ms, +80 %. It surfaced as an `aero-zones` spec timing out at 125 s
-against a 120 s cap while building circuits, which is the kind of signal that
-is easy to write off as "the box".
+6381 ms, +80 %. What prompted the measurement was an `aero-zones` spec timing
+out at 125 s against a 120 s cap while building circuits. That guess turned
+out to be WRONG — the timeout got worse (152 s) after the bake was cut 7×, and
+the test passes alone on both trees (72 s on the tip, 78 s on the base), so it
+is the container plus that test's position in its file, not the bake. The
+regression it led to was real all the same, and worth removing on its own.
 
 Two measurements fixed it:
 
@@ -375,9 +378,11 @@ that make the line SLOWER than the centreline again. Shipped at 250 coarse +
 60 fine with constructed families: bake 72 ms, six circuits 3940 ms (+10 % on
 the pre-relaxation tree, against +80 % before).
 
-The lesson: **time the shipped path, not the prototype.** The prototype ran as
-a plain ES module and the bake runs inside the track-build VM; same algorithm,
-20× the cost per node.
+Two lessons. **Time the shipped path, not the prototype** — the prototype ran
+as a plain ES module and the bake runs inside the track-build VM; same
+algorithm, 20× the cost per node. And **a hunch that finds a real bug is still
+a hunch**: the timeout that started this was never the bake, and only running
+the test alone on both trees settled it.
 
 ### One more test that was measuring the wrong thing
 
