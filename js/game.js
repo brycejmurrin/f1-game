@@ -239,6 +239,17 @@ let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
+  // NOTHING STORED ON A TOUCH DEVICE = THREE.JS since 2026-09-08 (the owner's
+  // own phone runs it, and measured faster than the WebGL2 fallback there).
+  // Held in memory only, never written: "unset" has to keep meaning "the
+  // default", or the RENDERER row could never return to it. Recoverable
+  // without touching a setting — the boot canary below reverts to WebGL2, and
+  // persists that, for any device that never presents a frame on it. Desktops
+  // are unchanged: GLX is still the default renderer there.
+  if (!pref) {
+    try { if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) pref = "three"; }
+    catch (_) { /* no matchMedia: stay on the WebGL2 default */ }
+  }
   // Last load claimed the canvas then died — skip opt-in THIS tab only
   // (sessionStorage). Do not wipe the user's THREE/WEBGPU pick: Safari's
   // navigator.gpu is on, WGX/TLX still refuse, and writing webgl2 made the
