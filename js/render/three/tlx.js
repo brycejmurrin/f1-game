@@ -1400,6 +1400,10 @@ const TLX = (function () {
       }
       const skidStream = { geo: null, ib: null, cap: 0, min: 120 * 6, stride: 5,
         attrs: [["position", 3, 0], ["uv", 2, 3]] };
+      // DRIVING LINE: the strip is indexed into a triangle list on upload
+      // (three draws Mesh triangles, not strips): (i, i+1, i+2) per strip step.
+      const lineStream = { geo: null, ib: null, cap: 0, min: 2048 * 2, stride: 7,
+        attrs: [["position", 3, 0], ["lineAcross", 1, 3], ["lineSpeed", 1, 4], ["lineZone", 1, 5], ["lineAlong", 1, 6]] };
       const glowStream = { geo: null, ib: null, cap: 0, min: 32 * 6, stride: 9,
         attrs: [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxRadius", 1, 8]] };
       const PART_ATTRS = [["fxCorner", 2, 0], ["position", 3, 2], ["fxColor", 3, 5], ["fxSize", 1, 8], ["fxAlpha", 1, 9]];
@@ -2667,9 +2671,28 @@ const TLX = (function () {
           _fxFrame.skidVerts = vertCount;
           return true;
         },
-        // PARITY GAP (2026-09-08): the DRIVING LINE ribbon is GLX-only for
-        // now; false = "no pass" so game.js can say so instead of drawing air.
-        drawDrivingLine() { return false; },
+        // The DRIVING LINE ribbon (mirror of GLX drawDrivingLine): uploaded
+        // once per circuit, indexed strip → triangles, the fx line material
+        // with the player's speed / mode / strength as uniforms.
+        drawDrivingLine(verts, vertCount, dirty, opts) {
+          if (!fx || !fx.lineMat || !verts || !(vertCount > 0)) return false;
+          const fresh = ensureStream(lineStream, vertCount);
+          if (dirty || fresh) {
+            lineStream.ib.array.set(verts.subarray(0, vertCount * 7));
+            uploadStream(lineStream, vertCount * 7);
+            const tris = Math.max(0, vertCount - 2);
+            const idx = new Uint32Array(tris * 3);
+            for (let i = 0; i < tris; i++) { idx[i * 3] = i; idx[i * 3 + 1] = i + 1; idx[i * 3 + 2] = i + 2; }
+            lineStream.geo.setIndex(new THREE.BufferAttribute(idx, 1));
+            lineStream.geo.setDrawRange(0, tris * 3);
+          }
+          fx.lineSpeed.value = (opts && opts.speed) || 0;
+          fx.lineCorners.value = opts && opts.cornersOnly ? 1 : 0;
+          fx.lineStr.value = (opts && opts.str) || 1.6;
+          drawList.push({ geo: lineStream.geo, m: null, mat: fx.lineMat });
+          _fxFrame.lineVerts = vertCount;
+          return true;
+        },
         drawGlow(lights, str) {
           if (!fx || !lights || !lights.length || !(str > 0)) return;
           const nL = (lights.length / 15) | 0;

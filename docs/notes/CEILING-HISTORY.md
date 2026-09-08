@@ -2240,3 +2240,15 @@ brakes in — the builder itself lives outside game.js on purpose. `js/agent/ape
   `opts.laps` so a harness can set the race distance (the tyre draw reads it
   at grid-up); without it every VM race is the game default and a strategy
   bench cannot see a crossover.
+
+
+## 2026-09-08 — DRIVING LINE on every backend: glx.js 2297 → 2349
+
+`js/render/glx/glx.js` grew by the ribbon pass — the `LINE_VS`/`LINE_FS`
+program, its VAO (stride 7: position, across, speed, zone, along) and
+`drawDrivingLine`, ~50 lines, one more for the ALONG attribute when the line
+became two rows of staggered pill dashes. The builder and the pattern maths
+live outside the backends (`js/render/shared/driving-line.js`, the fragment
+shaders); each backend carries only its upload and draw. WGX and TLX gained
+the same pass the same day (`WGSLFx.LINE`, `tsl-fx.js` `lineMat`) — those
+files are not ratcheted.

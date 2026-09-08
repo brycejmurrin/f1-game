@@ -1337,12 +1337,13 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
-- **DRIVING LINE ribbon (2026-09-08):** GLX only. `js/render/shared/driving-line.js`
-  builds the strip for every backend; only GLX has the pass (`drawDrivingLine`,
-  `LINE_VS`/`LINE_FS` in `glsl-fx.js`). WGX and TLX export the member returning
-  `false` ("no pass"), so the RACE SETTINGS row works and draws nothing there —
-  a recorded gap, not a silent one (`docs/research/WEBGPU-PARITY.md`
-  §Driving line). Porting is a stride-24 strip + one emissive fragment.
+- **DRIVING LINE ribbon (2026-09-08):** on all three. `js/render/shared/driving-line.js`
+  builds one stride-6 strip; GLX draws it with `LINE_VS`/`LINE_FS`
+  (`glsl-fx.js`), WGX with `WGSLFx.LINE` (a triangle-strip pipeline beside
+  SKID, Dawn-validated), TLX with `tsl-fx.js` `lineMat` (the strip indexed into
+  triangles, uniforms for speed / mode / strength). Same colour maths in all
+  three; the shipped sign-off is `gpu-census.yml` on macOS
+  (`docs/research/WEBGPU-PARITY.md` §Driving line).
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost (env probe off on LITE since 2026-09-03 — a cube cycle is six world passes + 36 mip passes on the jetsam rung); honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
   history resolve is sub-pixel shimmer). The sky's cloud deck shades like GLX

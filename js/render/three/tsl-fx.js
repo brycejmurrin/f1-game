@@ -7,7 +7,7 @@
       Fn, uniform, attribute, texture, materialReference, mrt,
       float, vec2, vec3, vec4,
       positionGeometry, cameraPosition, normalWorld,
-      normalize, cross, dot, length, exp, max, mix, smoothstep, abs,
+      normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
     } = TSL;
 
     /* ── shared FX render state ─────────────────────────────────────────────
@@ -86,6 +86,41 @@
       const uvv = vec2(attribute("uv", "vec2")).toVar();        // anchor
       return markFalloff(uvv);
     })();
+
+    /* ── DRIVING LINE ribbon (LINE_VS + LINE_FS) ────────────────────────────
+     * World-space strip from js/render/shared/driving-line.js (tlx.js indexes
+     * the strip into triangles); per-vertex across / speed / zone attributes.
+     * F1's dynamic grammar against the player's speed, emissive ×lineStr so
+     * bloom lifts it; CORNERS mode fades the straights through the zone. */
+    const lineSpeed = uniform(0.0);     // the player's speed (m/s), set per draw
+    const lineCorners = uniform(0.0);   // 1 = fade the straights out
+    const lineStr = uniform(1.6);       // emissive strength (bloom feed)
+    const lineMat = trackFx(fxMaterial({ offset: true, doubleSided: true, key: "tlx-fx-line" }));
+    // Chevrons every PERIOD m pointing the way the lap runs (GLX LINE_FS
+    // PERIOD / SWEEP / THICK): pattern space is (along, across), so no
+    // derivatives — WebKit-safe.
+    const lineAlpha = Fn(() => {
+      const across = float(attribute("lineAcross", "float")).toVar();   // anchor
+      const zone = float(attribute("lineZone", "float")).toVar();       // anchor
+      const along = float(attribute("lineAlong", "float")).toVar();     // anchor
+      const PERIOD = float(5.0), SWEEP = float(1.6), THICK = float(1.1);
+      const tip = PERIOD.mul(0.6).sub(SWEEP.mul(abs(across)));
+      const rel = along.sub(tip);
+      const d0 = rel.sub(PERIOD.mul(floor(rel.div(PERIOD))));            // mod, positive
+      const d = min(d0, PERIOD.sub(d0));
+      const arrow = smoothstep(THICK.mul(0.5).sub(0.18), THICK.mul(0.5), d).oneMinus();
+      const rim = smoothstep(float(0.85), float(1.0), abs(across)).oneMinus();
+      const z = mix(float(1.0), smoothstep(float(0.05), float(0.75), zone), lineCorners);
+      return arrow.mul(rim).mul(z);
+    });
+    lineMat.colorNode = Fn(() => {
+      const spd = float(attribute("lineSpeed", "float")).toVar();       // anchor
+      const over = lineSpeed.div(max(spd, float(1.0)));
+      const green = vec3(0.10, 0.95, 0.35), amber = vec3(1.0, 0.72, 0.10), red = vec3(1.0, 0.12, 0.10);
+      const col = mix(mix(green, amber, smoothstep(float(0.98), float(1.06), over)), red, smoothstep(float(1.06), float(1.16), over));
+      return col.mul(lineStr).mul(lineAlpha());
+    })();
+    lineMat.opacityNode = Fn(() => lineAlpha().mul(0.85))();
 
     /* ── billboard corner expansion (GLOW_VS / PARTICLE_VS, identical math) ──
      * The record's center rides in the "position" attribute (so three's draw
@@ -228,8 +263,8 @@
       U.ambGround.value.set(ag[0] * aM, ag[1] * aM, ag[2] * aM);
     }
 
-    return { shadowMat, markMat, skidMat, glowMat, glowStr, particleMats, setSsrMrt,
-             decalMaterialFor, updateFrame, flushEvicted };
+    return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr,
+             particleMats, setSsrMrt, decalMaterialFor, updateFrame, flushEvicted };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { fx });

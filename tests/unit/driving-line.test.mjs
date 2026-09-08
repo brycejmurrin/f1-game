@@ -49,17 +49,20 @@ function stadium({ straight = 600, R = 60, hw = 7 } = {}) {
            sample, curvature, latMax: 22, brake: 22, accel: 7, vTop: 72, grip: 1, straight, arc, R };
 }
 
-test("the strip is the GLX layout: stride 6, two vertices per sample, closed", () => {
+test("the strip is the backends' layout: stride 7, two vertices per sample, closed, along runs 0 → L", () => {
   const DL = load();
   const api = stadium();
   const c = DL.build(api);
-  assert.equal(DL.STRIDE, 6);
-  assert.equal(c.verts.length, c.count * 6);
+  assert.equal(DL.STRIDE, 7);
+  assert.equal(c.verts.length, c.count * 7);
   assert.equal(c.count % 2, 0);
-  // closed: the last pair repeats the first pair's position
-  for (let i = 0; i < 3; i++) assert.ok(Math.abs(c.verts[i] - c.verts[(c.count - 2) * 6 + i]) < 1e-3);
+  // closed: the last pair repeats the first pair's position …
+  for (let i = 0; i < 3; i++) assert.ok(Math.abs(c.verts[i] - c.verts[(c.count - 2) * 7 + i]) < 1e-3);
+  // … but its ALONG is the lap length, not 0, so the dash pattern does not jump at the line
+  assert.equal(c.verts[6], 0);
+  assert.ok(Math.abs(c.verts[(c.count - 2) * 7 + 6] - api.total) < 1e-3);
   // across alternates -1 / +1
-  assert.equal(c.verts[3], -1); assert.equal(c.verts[9], 1);
+  assert.equal(c.verts[3], -1); assert.equal(c.verts[10], 1);
 });
 
 test("through a left-hander the line sits INSIDE (−x of the centreline) and on a straight it is centred", () => {
@@ -67,7 +70,7 @@ test("through a left-hander the line sits INSIDE (−x of the centreline) and on
   const api = stadium();
   DL.build(api);
   const c = DL._cache();
-  const at = (s) => { const i = Math.round(s / c.step) % c.n; const o = i * 12; return [(c.verts[o] + c.verts[o + 6]) / 2, (c.verts[o + 2] + c.verts[o + 8]) / 2]; };
+  const at = (s) => { const i = Math.round(s / c.step) % c.n; const o = i * 14; return [(c.verts[o] + c.verts[o + 7]) / 2, (c.verts[o + 2] + c.verts[o + 9]) / 2]; };
   const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
   // mid-corner
   const sMid = api.straight + api.arc / 2;
@@ -161,9 +164,9 @@ test("with a baked racing line the ribbon follows IT, easing to the centre where
   DL.build(api);
   const c = DL._cache();
   const lat = (s) => {
-    const i = Math.round(s / c.step) % c.n, o = i * 12;
+    const i = Math.round(s / c.step) % c.n, o = i * 14;
     const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 }; api.sample(i * c.step, smp);
-    const x = (c.verts[o] + c.verts[o + 6]) / 2, z = (c.verts[o + 2] + c.verts[o + 8]) / 2;
+    const x = (c.verts[o] + c.verts[o + 7]) / 2, z = (c.verts[o + 2] + c.verts[o + 9]) / 2;
     return (x - smp.p[0]) * smp.r[0] + (z - smp.p[2]) * smp.r[2];
   };
   assert.ok(Math.abs(lat(api.straight + api.arc / 2) - -5.5) < 0.3, `apex follows the baked line: ${lat(api.straight + api.arc / 2).toFixed(2)}`);
