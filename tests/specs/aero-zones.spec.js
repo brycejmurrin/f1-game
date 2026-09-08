@@ -170,8 +170,17 @@ test.describe("overtake mode — the rules active aero does NOT share", () => {
       const trail = [];
       for (let i = 0; i < 220; i++) {
         window.__apex.step(1 / 60, 60);        // 1 s of sim per iteration
-        trail.push({ leaderLap: Math.max(...window.__apex.cars().map((c) => c.lap)),
-                     on: window.__apex.carAt().otEnabled });
+        // THE RACE LEADER, read the way the gate reads it (RaceControl.otEnabled
+        // → G.ranked[0], sorted by prog). NOT max(lap) over the field: this test
+        // jumps the player to the line mid-race, and a jump desyncs prog from
+        // the ranked order (apex.js: "lap 1, 5930 → 2889"), so a jumped player
+        // can hold the highest LAP while an AI is still the leader by PROG. The
+        // gate is then correctly closed and max(lap) says it should be open —
+        // a latent test bug that surfaced when the AI controller changed the
+        // field's pace (2026-09-08).
+        const cars = window.__apex.cars();
+        const leader = cars.reduce((b, c) => (c.prog > b.prog ? c : b), cars[0]);
+        trail.push({ leaderLap: leader.lap, on: window.__apex.carAt().otEnabled });
       }
       return trail;
     });
@@ -218,6 +227,11 @@ test.describe("active aero — downforce traded for top speed", () => {
     const r = await page.evaluate(() => {
       const A = window.__apex;
       A.headless(true); A.go();
+      // ALONE. vmaxNow carries the slipstream tow (AiDrive.towGain, up to 4.5 %
+      // with a car 0.5–34 m ahead within 4 m), so an AI car that happens to sit
+      // in that window turns a 1.0957 ratio into 1.1001 — measured 2026-09-08
+      // when the heading-state AI controller moved the field. Everyone 800 m back.
+      A.rivals([]);
       const zone = A.aeroZones().slice().sort((a, b) => b.len - a.len)[0];
       const read = (wantX) => {
         A.reset(zone.midFrac, 70, 0);
