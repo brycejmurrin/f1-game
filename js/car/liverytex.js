@@ -1169,7 +1169,7 @@ const LiveryTex = (function () {
   // the title sponsor running along the spine, an exposed-carbon panel, or the
   // race number. All paint into REGIONS.crest, so the strip in car-mesh drapes
   // them over the rounded crown like the crest.
-  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "wordmark", "carbon", "number"];
+  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "tricolour", "wordmark", "carbon", "number"];
   // WRAP: one shape in CAR space painted into every region it crosses, so the
   // paint job goes over the spine and down both flanks as a single graphic —
   // the RB22's sun and bull. The car-space → region maps are car-mesh's:
@@ -1253,10 +1253,21 @@ const LiveryTex = (function () {
   // along the car than across it — a square mark came out as a lozenge. Crown
   // marks are drawn through scale(1, CROWN_SQUASH) so they land round.
   const CROWN_SQUASH = 0.52;
-  // Likewise the flank: 304 px over 1.24 m along the car vs 160 px over ~0.47 m
-  // down the flank — a pixel is ~1.4× wider than it is tall, so flank marks are
-  // drawn through scale(FLANK_SQUASH, 1).
-  const FLANK_SQUASH = 0.72;
+  // Likewise the flank — except the flank is not a constant-height band. It
+  // TAPERS (0.59 m tall at the airbox down to 0.35 m at the wing) and the whole
+  // band rises with `spineHeight`, so one number could only ever be right for
+  // one spine setting at one station. It was 0.47 m, which is roughly the
+  // STANDARD spine: every mark on a raised cover came out 5 % too narrow and on
+  // a dorsal one 14 %, which is what "the side designs look squished" was.
+  // FLANK_H is the band's real height in metres AT THE MARK'S STATION, measured
+  // from Car3D.coverProfile — fin-design.test.mjs re-measures it against the
+  // real geometry so it cannot drift. The squash itself is derived, so changing
+  // a region's pixel size cannot silently un-square the marks again.
+  const FLANK_H = { standard: 0.4537, raised: 0.4964, dorsal: 0.5463 };
+  const flankSquash = (spineHeight, R) => {
+    const H = FLANK_H[spineHeight] || FLANK_H.standard;
+    return (R.w / FLANK.zLen) * (H / R.h);   // (px per m along) / (px per m down)
+  };
   // The flank's car-space maps (car-mesh's band): canvas x ↔ z, canvas y ↔ the
   // distance s down the skin from the ridge (the crease at s 0.21, the sidepod
   // line at ~0.68).
@@ -1393,6 +1404,28 @@ const LiveryTex = (function () {
       }
       ctx.fillStyle = cssA(acc, 0.9);
       ctx.fillRect(px - W * 0.014, Y, W * 0.014, H); ctx.fillRect(px + pw, Y, W * 0.014, H);
+    } else if (id === "chevron") {
+      // Three arrows pointing at the NOSE down the crown — Alpine's, and the
+      // shape a swept wing leaves on a cover. The crest canvas is drawn
+      // front-at-the-BOTTOM (car-mesh maps vB to the front station), so the tip
+      // of each arrow is at the HIGHER y: pointing them the intuitive way put
+      // three arrows aimed at the rear wing.
+      ctx.fillStyle = cssA(acc, 0.96);
+      for (let i = 0; i < 3; i++) {
+        const y0 = Y + H * (0.10 + i * 0.28), tip = y0 + H * 0.11, th = H * 0.075;
+        ctx.beginPath();
+        ctx.moveTo(X, y0); ctx.lineTo(X + W / 2, tip); ctx.lineTo(X + W, y0);
+        ctx.lineTo(X + W, y0 + th); ctx.lineTo(X + W / 2, tip + th); ctx.lineTo(X, y0 + th);
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (id === "tricolour") {
+      // Three bands ACROSS the crown at the airbox end — the national flash a
+      // works team paints there (Ferrari's tricolore, Alpine's bleu-blanc-rouge).
+      // Body paint is the middle band, so only the outer two are drawn: a
+      // three-colour livery cannot be assumed, and c1 in the middle always reads.
+      const bandH = H * 0.085, top = Y + H * 0.62;
+      ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, top, W, bandH);
+      ctx.fillStyle = cssA(ink, 0.97); ctx.fillRect(X, top + bandH * 2, W, bandH);
     } else if (id === "wordmark") {
       // The title sponsor along the spine, rotated to run nose → tail so it
       // reads from the SIDE of the car, the way a real engine cover carries it.
@@ -1449,7 +1482,7 @@ const LiveryTex = (function () {
   // "plate" the SF-26's number on a contrasting panel.
   // "duo" is the RB22's flank: the title sponsor large and aft, the partner
   // mark small and forward (Red Bull over Ford Racing).
-  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash"];
+  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash", "split", "bars"];
   const TAIL_STYLE = {
     redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
     racingbulls: { kind: "diag",    a: 0.70 },   // youthful bold slash
@@ -1662,6 +1695,9 @@ const LiveryTex = (function () {
     const tailStyle = colors.finStyle || "team";
     const finBadge = colors.finBadge || "logo";
     const spineLogo = colors.spineLogo || "logo";
+    // The cover's HEIGHT decides how tall the flank band is in metres, and so
+    // how wide a mark must be drawn to come out square on it (flankSquash).
+    const spineHeight = colors.spineHeight || "standard";
     // The crown carries NO gradient wash. The fin's tail motif used to run on
     // over the spine as an alpha gradient, and every crown design sat on that
     // soft fade — which the owner read as spray-painted. Every SPINE TOP now
@@ -1723,8 +1759,8 @@ const LiveryTex = (function () {
         const span = wrapMarkSpan(teamId);
         eachFlank((F) => {
           ctx.save();
-          ctx.translate(F.fx(span.u0 + span.uLen / 2), F.R.y + F.R.h * 0.50); ctx.scale(FLANK_SQUASH, 1);
-          const s = BULL.h * F.R.h;   // square through FLANK_SQUASH, so square in metres
+          ctx.translate(F.fx(span.u0 + span.uLen / 2), F.R.y + F.R.h * 0.50); ctx.scale(flankSquash(spineHeight, F.R), 1);
+          const s = BULL.h * F.R.h;   // square through the squash, so square in metres
           const Rw = { x: -s / 2, y: -s / 2, w: s, h: s };
           if (LOGOS[teamId]) {
             drawLogoImage(ctx, LOGOS[teamId], Rw, logo, markHalo(LOGOS[teamId], sunC, inkOn([sunC])), emblemRim);
@@ -1772,10 +1808,13 @@ const LiveryTex = (function () {
     // SPINE SIDE (SPINE_SIDE_IDS): the same three marks on the cover FLANK, inked
     // for the body paint (the flank is c1) with the cover's own crest lockup.
     const spineSide = colors.spineSide || "none";
-    // The flank canvas is the WHOLE cover side (front at canvas-left). The
-    // marks sit in the upper front third — the SF-26's 16 and the W17's 12
-    // just behind the airbox — through FLANK_SQUASH so they come out in
-    // proportion; a box for that spot, in squashed local coordinates.
+    // The flank canvas is the WHOLE cover side. The marks sit AT THE FRONT of
+    // it — the SF-26's 16 and the W17's 12 just behind the airbox — through
+    // flankSquash() so they come out in proportion. They used to sit at 0.24 of
+    // the band, a third of the way down the cover, which read as "really far
+    // back"; 0.19 is as far forward as they go without the mark's own leading
+    // edge leaving the band, and the band itself cannot start further forward
+    // because the airbox and roll hoop occupy the flank ahead of z -0.66.
     // Every side design is painted once per flank, in that flank's frame —
     // and inside the part of it the CROWN design has left free. The wrap hangs
     // a metre-long bull over the front two thirds of the flank, so a side pick
@@ -1793,7 +1832,7 @@ const LiveryTex = (function () {
       ctx.save();
       // Centred at 0.56 of the flank's height, not 0.42: hung higher the
       // crest's plate was clipped by the shoulder crease (owner's report).
-      ctx.translate(su(F, 0.24), F.R.y + F.R.h * 0.56); ctx.scale(FLANK_SQUASH, 1);
+      ctx.translate(su(F, 0.19), F.R.y + F.R.h * 0.56); ctx.scale(flankSquash(spineHeight, F.R), 1);
       paint({ x: -F.R.h * 0.40, y: -F.R.h * 0.36, w: F.R.h * 0.80, h: F.R.h * 0.72 });
       ctx.restore();
     });
@@ -1839,6 +1878,35 @@ const LiveryTex = (function () {
         }
         drawWordmark(ctx, names[0] || "", sbox(F, 0.40, 0.96, 0.52, 0.96), inkCrest, { align: "center", pad: 8 });
         drawWordmark(ctx, names[1] || "", sbox(F, 0.05, 0.35, 0.62, 0.90), inkCrest, { align: "center", pad: 6 });
+      });
+    } else if (spineSide === "split") {
+      // The flank cut corner to corner and the LOWER half filled — the hard
+      // diagonal two-tone a cover wears when the sidepod colour climbs onto it.
+      // Drawn in each flank's own frame so the cut rakes the same way on both.
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(stripe || accent, 0.96);
+        ctx.beginPath();
+        ctx.moveTo(F.fx(0), Sf.y + Sf.h * 0.30); ctx.lineTo(F.fx(1), Sf.y + Sf.h * 0.82);
+        ctx.lineTo(F.fx(1), Sf.y + Sf.h); ctx.lineTo(F.fx(0), Sf.y + Sf.h);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+      });
+    } else if (spineSide === "bars") {
+      // Four horizontal speed bars along the band, the longest at the front and
+      // each one shorter behind it — the flank equivalent of a motion streak,
+      // and the square-edged counterpart to `slash`'s rake.
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(stripe || accent, 0.96);
+        for (let i = 0; i < 4; i++) {
+          const y = Sf.y + Sf.h * (0.18 + i * 0.19), h = Sf.h * 0.085;
+          const x0 = F.fx(0.04), x1 = F.fx(0.04 + 0.62 - i * 0.13);
+          ctx.fillRect(Math.min(x0, x1), y, Math.abs(x1 - x0), h);
+        }
+        ctx.restore();
       });
     } else if (spineSide === "slash") {
       // Four raked bars across the band, hard-edged, in the accent — and
@@ -1945,7 +2013,7 @@ const LiveryTex = (function () {
   return { SIZE, SIZE_H, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, INK_FLOOR, numCrestBox, paintSwatch,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
-           markOnField, ALT_INSIDE, sunColour,
+           markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS };
 })();
