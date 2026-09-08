@@ -112,13 +112,15 @@ const inRect = (op, r) => {
 const opsIn = (ops, r) => ops.filter((op) => inRect(op, r));
 const BASE = { c1: [0.9, 0.1, 0.1], c2: [1, 1, 1] };
 
-test("finStyle none paints nothing on the fin panel or the cover wash", () => {
+test("finStyle none paints nothing on the fin panel, and the crown never carries the wash", () => {
   const def = A.paint("ferrari", BASE), none = A.paint("ferrari", { ...BASE, finStyle: "none" });
   assert.ok(opsIn(def, R.fin).length > 0, "the default fin is painted");
   assert.equal(opsIn(none, R.fin).length, 0, "a plain fin carries paint ops");
-  // The cover keeps its crest but loses the wash: fewer ops, not zero.
+  // The crown carries the crest and NO tail wash (hard edges only, by the
+  // owner's call), so the fin's motif pick cannot change the crown at all.
   const c0 = opsIn(def, R.crest).length, c1 = opsIn(none, R.crest).length;
-  assert.ok(c1 > 0 && c1 < c0, `cover ops ${c0} -> ${c1}`);
+  assert.ok(c0 > 0 && c1 === c0, `cover ops ${c0} -> ${c1}: the fin motif must stop at the fin`);
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineLogo: "none" }), R.crest).length, 0, "a bare crown is bare — no wash");
 });
 
 test("every named motif paints the fin, and a foreign one falls back to the team's", () => {
@@ -133,6 +135,22 @@ test("spineLogo none drops the crest from the cover and keeps it on the fin", ()
   const def = A.paint("ferrari", BASE), none = A.paint("ferrari", { ...BASE, spineLogo: "none" });
   assert.ok(opsIn(none, R.crest).length < opsIn(def, R.crest).length, "the spine kept its crest");
   assert.equal(opsIn(none, R.finBadge).length, opsIn(def, R.finBadge).length, "the fin badge changed");
+});
+
+test("every SPINE TOP design paints the crown; wordmark and number carry text", () => {
+  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "panel", "stripe", "twin", "wordmark", "carbon", "number"]);
+  const bare = opsIn(A.paint("ferrari", { ...BASE, spineLogo: "none" }), R.crest).length;
+  for (const id of ["panel", "stripe", "twin", "wordmark", "carbon", "number"]) {
+    const ops = opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.crest);
+    // The band designs REPLACE the wash (bare paint under them), so they are
+    // compared against an empty crown; the text designs sit on the wash.
+    assert.ok(ops.length > (id === "wordmark" || id === "number" ? bare : 0), `${id} paints the crown`);
+    const texts = ops.filter((op) => op.kind === "text").map((op) => op.text);
+    if (id === "number") assert.ok(texts.includes("16"), `number: ${texts}`);
+    // drawWordmark sets each letter on its own, so the name is the join.
+    if (id === "wordmark") assert.ok(texts.join("").length >= 3, `wordmark: ${texts}`);
+    if (id === "panel" || id === "stripe" || id === "twin" || id === "carbon") assert.equal(texts.length, 0, `${id} carries no text`);
+  }
 });
 
 test("finBadge number puts the race number on the fin; none leaves the plate bare", () => {

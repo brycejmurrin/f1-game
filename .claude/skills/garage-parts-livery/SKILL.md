@@ -21,7 +21,9 @@ the tail DESIGN is four enum fields with defaults that reproduce the shipped car
 `finShape` (`Car3D.FIN_SHAPES` + `none`; the ONE non-colour livery field that moves
 a vertex, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,
 drives the fin panel AND the engine-cover wash), `finBadge` (`logo|number|none`) and
-`spineLogo` (`logo|none`). `drawTailGraphic` clips to its region. Body details:
+`spineLogo` (SPINE TOP: `logo|none|panel|stripe|twin|wordmark|carbon|number`, painted by
+`drawSpineTop` into `REGIONS.crest` on BARE paint — the crown carries no tail wash;
+the fin motif stops at the fin). `drawTailGraphic` clips to its region. Body details:
 `tcam` (`Car3D.TCAM_IDS`, mesh colour only) and `coverVents` (`Car3D.COVER_VENT_IDS`,
 geometry, also in `SP_HULL_GEOM_FIELDS`); `spineHeight` (`Car3D.SPINE_HEIGHT_IDS`,
 lifts the cover crown top-only through `bodyAnchors(parts, teamId, spineHeight)` —

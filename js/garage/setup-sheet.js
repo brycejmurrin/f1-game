@@ -828,7 +828,7 @@ function buildLiveryCreator(container, team) {
   pillRow("FIN SHAPE", "finShape", Car3D.FIN_SHAPE_IDS || ["standard"], "standard");
   pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team");
   pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo");
-  pillRow("SPINE LOGO", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
+  pillRow("SPINE TOP", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
   // Body details: the T-cam housing colour (the real car-1 / car-2 code) and
   // the engine-cover cooling vents. Both are mesh, so their id lists are Car3D's.
   pillRow("T-CAM", "tcam", Car3D.TCAM_IDS || ["team"], "team");

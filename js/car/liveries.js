@@ -45,9 +45,14 @@
      cars carry the number (LiveryTex.SPINE_SIDE_IDS; the band is car-mesh's).
      The grey service panels and the accent pinstripe keep clear of the band,
      so it also moves a vertex.
-   spineLogo? optional SPINE LOGO — "logo" (absent) draws the crest on the
-     engine-cover spine as well; "none" leaves the spine to the tail wash, so
-     the mark reads once from a chase camera instead of twice.
+   spineLogo? optional SPINE TOP — what the engine-cover crown carries over
+     its tail wash. "logo" (absent) draws the crest there as well as on the
+     fin; "none" leaves the crown to the wash, so the mark reads once from a
+     chase camera instead of twice; "panel" (a solid accent block with a raked
+     front edge), "stripe", "twin", "wordmark" (the title
+     sponsor running along the spine), "carbon" (an exposed panel) and
+     "number" are the crown designs that carry no mark (LiveryTex.SPINE_LOGO_IDS).
+     The crown carries no gradient wash under any of them — hard edges only.
    finShape? optional FIN SHAPE — the blade's outline: "standard" (absent),
      "swept" (raked leading edge), "stub" (short rear blade) or "none" (no fin;
      the fin's graphic and badge go with it). Geometry, not paint — the one

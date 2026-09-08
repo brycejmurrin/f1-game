@@ -1154,7 +1154,60 @@ const LiveryTex = (function () {
   // Whether the crest is also drawn on the engine-cover spine. With the badge
   // on the fin AND the spine the same mark reads twice from a chase camera,
   // which is the duplication the owner asked about.
-  const SPINE_LOGO_IDS = ["logo", "none"];
+  // SPINE TOP: what the engine-cover crown carries over its tail wash. "logo"
+  // (absent) is the shipped crest; "none" leaves the wash alone; the rest are
+  // designs for a crown that carries NO mark: a centre band, twin pinstripes,
+  // the title sponsor running along the spine, an exposed-carbon panel, or the
+  // race number. All paint into REGIONS.crest, so the strip in car-mesh drapes
+  // them over the rounded crown like the crest.
+  const SPINE_LOGO_IDS = ["logo", "none", "panel", "stripe", "twin", "wordmark", "carbon", "number"];
+  function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont) {
+    const X = R.x, Y = R.y, W = R.w, H = R.h;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip();
+    if (id === "panel") {
+      // A solid accent block down the crown with a crisp raked leading edge
+      // and a square tail — the vinyl panel a real cover wears, hard-edged.
+      ctx.fillStyle = cssA(acc, 0.97);
+      ctx.beginPath();
+      ctx.moveTo(X + W * 0.28, Y);                 // tail (canvas top = rear)
+      ctx.lineTo(X + W * 0.72, Y);
+      ctx.lineTo(X + W * 0.72, Y + H * 0.80);
+      ctx.lineTo(X + W * 0.28, Y + H * 0.92);      // raked front edge
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = cssA(ink, 0.6);
+      ctx.fillRect(X + W * 0.28, Y, W * 0.010, H * 0.92); ctx.fillRect(X + W * 0.71, Y, W * 0.010, H * 0.80);
+    } else if (id === "stripe") {
+      // One band down the centreline, a hair of ink at each edge so it reads
+      // as trim rather than a smear at chase distance.
+      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.40, Y, W * 0.20, H);
+      ctx.fillStyle = cssA(ink, 0.55);
+      ctx.fillRect(X + W * 0.40, Y, W * 0.012, H); ctx.fillRect(X + W * 0.588, Y, W * 0.012, H);
+    } else if (id === "twin") {
+      ctx.fillStyle = cssA(acc, 0.96);
+      ctx.fillRect(X + W * 0.30, Y, W * 0.05, H); ctx.fillRect(X + W * 0.65, Y, W * 0.05, H);
+    } else if (id === "carbon") {
+      // An exposed-carbon crown panel: near-black with a faint diagonal weave
+      // and an accent keyline where the paint stops.
+      const px = X + W * 0.28, pw = W * 0.44;
+      ctx.fillStyle = "rgb(24,25,28)"; ctx.fillRect(px, Y, pw, H);
+      ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.lineWidth = 3;
+      for (let d = -H; d < pw + H; d += 14) {
+        ctx.beginPath(); ctx.moveTo(px + d, Y); ctx.lineTo(px + d + H, Y + H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px + d + H, Y); ctx.lineTo(px + d, Y + H); ctx.stroke();
+      }
+      ctx.fillStyle = cssA(acc, 0.9);
+      ctx.fillRect(px - W * 0.014, Y, W * 0.014, H); ctx.fillRect(px + pw, Y, W * 0.014, H);
+    } else if (id === "wordmark") {
+      // The title sponsor along the spine, rotated to run nose → tail so it
+      // reads from the side of the car, the way a real engine cover carries it.
+      ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(-Math.PI / 2);
+      drawWordmark(ctx, name, { x: -H / 2, y: -W * 0.16, w: H, h: W * 0.32 }, ink, { align: "center" });
+    } else if (id === "number") {
+      drawNumber(ctx, num, { x: X + W * 0.20, y: Y + H * 0.20, w: W * 0.60, h: H * 0.60 }, ink, acc, null, numFont, 0);
+    }
+    ctx.restore();
+  }
   // SPINE SIDE: the mark on the engine-cover FLANK — where the real 2026 cars,
   // fin-less with a tall dorsal cover, carry the driver number. Absent ("none")
   // leaves REGIONS.spineSide unpainted, so the shipped atlas is pixel-identical.
@@ -1353,7 +1406,11 @@ const LiveryTex = (function () {
     const tailStyle = colors.finStyle || "team";
     const finBadge = colors.finBadge || "logo";
     const spineLogo = colors.spineLogo || "logo";
-    drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe, tailStyle);
+    // The crown carries NO gradient wash. The fin's tail motif used to run on
+    // over the spine as an alpha gradient, and every crown design sat on that
+    // soft fade — which the owner read as spray-painted. Every SPINE TOP now
+    // stands on the bare body paint with hard edges: vinyl, not airbrush. The
+    // fin keeps its motif (drawTailGraphic on REGIONS.fin below).
     const markHalo = (img, bg, ink) =>
       (img && img._avg && contrast(img._avg, bg) < 2.6 ? ink : null);
     const emblemRim = colors.logo3 || colors.logo2 || null;
@@ -1361,11 +1418,18 @@ const LiveryTex = (function () {
     // against the fin wash used to drop Ferrari's shield (and recolour the
     // horse) so top-down / the garage wall disagreed with the tail.
     const lockup = markPalette(teamId, colors, [c1, c2], false);
-    if (spineLogo !== "none") {
+    // Sponsor names resolve here so the spine can carry the title sponsor.
+    const pack = colors.sponsors && SPONSOR_PACKS[colors.sponsors];
+    const names = pack || SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
+    const raceNum = numberOverride != null ? numberOverride
+                  : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
+    if (spineLogo === "logo") {
       if (LOGOS[teamId]) {
         drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
                       markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
       } else drawCrest(ctx, teamId, REGIONS.crest, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+    } else if (spineLogo !== "none") {
+      drawSpineTop(ctx, spineLogo, REGIONS.crest, c1, stripe || accent, inkCrest, names[0] || "", raceNum, colors.numFont);
     }
     const finWash = finArt || [stripe, c1, accent, inkFin].filter(Boolean)
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
@@ -1402,9 +1466,7 @@ const LiveryTex = (function () {
                  REGIONS.spineSide, inkCrest, accent, null, colors.numFont, 0);
     }
 
-    // Sponsor wordmarks.
-    const pack = colors.sponsors && SPONSOR_PACKS[colors.sponsors];
-    const names = pack || SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
+    // Sponsor wordmarks (names resolved above, by the spine).
     if (names.length) {   // `clean` leaves every wordmark region as paint
       drawWordmark(ctx, names[0], REGIONS.titleA, inkPod,
         { align: "center", halo: haloIf(inkPod) });
