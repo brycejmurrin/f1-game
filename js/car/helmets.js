@@ -71,12 +71,59 @@ const Helmets = (function () {
       const x = dAz(az, z.az) / 90 * lat, y = t - z.t;
       return x * x + y * y <= z.r * z.r;
     },
+    // a rectangle in (t, az) — a panel on the temple, a block on the jaw. cap,
+    // band and stripe are each this with one side let go; having it whole is
+    // what lets a design put a mark SOMEWHERE rather than round the whole head.
+    patch: (z, t, az) => t >= z.t0 && t <= z.t1 && dAz(az, z.az) <= z.w,
+    // A STRIPE THAT SWEEPS AND TAPERS as it runs down the shell. This is the
+    // shape modern helmet design is actually built from — a flash that starts
+    // narrow at the crown, widens, and rakes back toward the ear — and it is
+    // the one thing a band and a stripe together cannot make between them. A
+    // chevron is this with sweep 0 and a fixed ratio of widths.
+    flash: (z, t, az) => {
+      if (t < z.t0 || t > z.t1) return false;
+      const f = (t - z.t0) / Math.max(1e-3, z.t1 - z.t0);
+      return dAz(az, z.az + z.sweep * f) <= z.w0 + (z.w1 - z.w0) * f;
+    },
+    // Deterministic speckle: a doodle, a star field, a spatter. Hashed on the
+    // cell, so a driver's helmet is mottled the same way in every session and
+    // on every machine — a Math.random() here would shimmer between builds.
+    // GIVE IT THE MESH'S OWN GRID (n = RINGS, m = SLICES). One cell per vertex
+    // is the crispest a per-vertex speckle can be; any other cell size beats
+    // against the tessellation and comes out as mush.
+    fleck: (z, t, az) => {
+      if (t < z.t0 || t > z.t1) return false;
+      const r = Math.floor(t * z.n), c = Math.floor((((az % 360) + 360) % 360) / (360 / z.m));
+      const h = Math.sin(r * 127.1 + c * 311.7 + z.seed * 74.7) * 43758.5453;
+      return h - Math.floor(h) < z.d;
+    },
   };
 
   // ── the grid ─────────────────────────────────────────────────────────────
-  // National colour language, the way a real helmet reads at 200 km/h: one
-  // strong base, one or two marks. These are ORIGINAL designs in each driver's
-  // own colours, not copies of the helmets they wear.
+  // READ OFF THE REFERENCE PHOTOGRAPHS, driver by driver, rather than invented
+  // in each driver's colours as these were before. Six zones and a base cannot
+  // carry a sponsor board or Norris's doodle, so what each design keeps is what
+  // survives to the distance the game is played at: the base, where the shell
+  // changes colour, and the one or two marks that tell the pair apart. No
+  // lettering and no logos — none of the vocabulary can draw them.
+  //
+  // ONE DRIVER IN THREE WEARS HIS OWN CAR. Leclerc's lid is Ferrari red,
+  // Hulkenberg's is Audi black, Bottas's is Cadillac black, Verstappen's and
+  // Hadjar's are Red Bull navy — and a helmet the colour of the car it sits in
+  // is the defect this module exists to fix. Each of those takes the SECOND
+  // colour of the real design as its base instead of the first: Leclerc's white
+  // lower half under a red crown, Hulkenberg's graphite for black, Verstappen's
+  // royal for navy. The design still reads as itself; it just stops
+  // disappearing. `near()` below is the check, and every base clears it.
+  //
+  // t 0 is the crown, 1 the neck rim, and the VISOR OWNS 0.40 TO 0.66 across
+  // the front 76 degrees. Paint in that band shows at the temples and the back
+  // of the head and is hidden across the face, which is exactly how a real
+  // design wraps one — but it means A CHEVRON DOWN THE FACE IS A CHEVRON
+  // INSIDE THE APERTURE. Every one of them here ran to 0.66 on the first pass
+  // and showed as a sliver of colour at the brow. They stop at 0.44 now, on
+  // the band above the aperture where a real painter puts them, and the marks
+  // that belong below it are bands at 0.68 and down.
   const z = {
     cap: (t1, c) => ({ k: "cap", t1, c }),
     band: (t0, t1, c) => ({ k: "band", t0, t1, c }),
@@ -84,33 +131,138 @@ const Helmets = (function () {
     wedge: (az0, az1, c) => ({ k: "wedge", az0, az1, c }),
     chevron: (az, w, t0, t1, c) => ({ k: "chevron", az, w, t0, t1, c }),
     spot: (az, t, r, c) => ({ k: "spot", az, t, r, c }),
+    patch: (az, w, t0, t1, c) => ({ k: "patch", az, w, t0, t1, c }),
+    flash: (az, w0, w1, t0, t1, sweep, c) => ({ k: "flash", az, w0, w1, t0, t1, sweep, c }),
+    fleck: (t0, t1, n, m, d, seed, c) => ({ k: "fleck", t0, t1, n, m, d, seed, c }),
+    // A KEYLINE: the thin line of a second colour that runs alongside every
+    // real graphic and is most of why one reads as a design rather than as a
+    // dipped shell. Two flat blocks meeting is a toy; a keyline between them is
+    // a paint job. 0.055 wide, not as thin as one would be drawn — under the
+    // ring spacing of the mesh a keyline has no vertex to live on and vanishes
+    // from the game while still showing in the preview.
+    key: (t, c) => ({ k: "band", t0: t, t1: t + 0.055, c }),
+    // The pair on both temples — most side graphics are mirrored, and writing
+    // them out twice is how one of them ends up 4 degrees off.
+    sides: (f) => [f(90), f(270)],
   };
   // A centre stripe is the pair: over the nose and over the tail.
   const centre = (w, c) => [z.stripe(0, w, c), z.stripe(180, w, c)];
 
   const DESIGNS = {
-    63: { name: "RUS", base: C.white,  alt: C.royal,  visor: C.black,  zones: [z.cap(0.176, C.navy), ...centre(12, C.red), z.band(0.473, 0.55, C.navy)] },
-    12: { name: "ANT", base: C.white,  alt: C.sky,    visor: C.silver, zones: [z.cap(0.22, C.black), z.chevron(0, 48, 0.22, 0.58, C.green), z.chevron(0, 22, 0.22, 0.58, C.red), z.band(0.46, 0.55, C.black)] },
-    16: { name: "LEC", base: C.white,  alt: C.navy,   visor: C.black,  zones: [z.cap(0.165, C.red), z.band(0.165, 0.209, C.black), ...centre(10, C.red)] },
-    44: { name: "HAM", base: C.yellow, alt: C.violet, visor: C.black,  zones: [...centre(14, C.black), z.band(0.462, 0.55, C.black), z.spot(105, 0.198, 0.17, C.purple), z.spot(255, 0.198, 0.17, C.purple)] },
-     1: { name: "NOR", base: C.lime,   alt: C.cyan,   visor: C.black,  zones: [z.cap(0.121, C.black), z.chevron(0, 40, 0.121, 0.539, C.black), z.band(0.484, 0.55, C.papaya)] },
-    81: { name: "PIA", base: C.navy,   alt: C.teal,   visor: C.gold,   zones: [z.cap(0.11, C.papaya), z.band(0.187, 0.264, C.gold), ...centre(11, C.papaya)] },
-    33: { name: "VER", base: C.orange, alt: C.red,    visor: C.black,  zones: [z.cap(0.165, C.navy), z.band(0.165, 0.209, C.red), ...centre(12, C.navy)] },
-     6: { name: "HAD", base: C.white,  alt: C.amber,  visor: C.black,  zones: [z.wedge(190, 350, C.royal), z.wedge(10, 170, C.red), z.cap(0.099, C.navy)] },
-    10: { name: "GAS", base: C.royal,  alt: C.white,  visor: C.silver, zones: [z.cap(0.165, C.white), ...centre(11, C.red), z.band(0.473, 0.55, C.white)] },
-    43: { name: "COL", base: C.sky,    alt: C.white,  visor: C.black,  zones: [z.cap(0.132, C.white), z.band(0.176, 0.242, C.white), z.band(0.495, 0.55, C.navy), z.spot(0, 0.121, 0.14, C.amber)] },
-    40: { name: "LAW", base: C.black,  alt: C.crimson, visor: C.silver, zones: [z.chevron(0, 36, 0.132, 0.528, C.white), z.band(0.099, 0.132, C.silver), z.band(0.495, 0.55, C.silver)] },
-    41: { name: "LIN", base: C.royal,  alt: C.forest, visor: C.black,  zones: [z.cap(0.154, C.yellow), ...centre(10, C.white), z.band(0.473, 0.55, C.yellow)] },
-    31: { name: "OCO", base: C.white,  alt: C.coral,  visor: C.black,  zones: [z.cap(0.176, C.royal), z.band(0.176, 0.22, C.red), ...centre(11, C.royal), z.band(0.495, 0.55, C.royal)] },
-    87: { name: "BEA", base: C.red,    alt: C.white,  visor: C.black,  zones: [z.cap(0.121, C.navy), z.chevron(0, 38, 0.121, 0.528, C.white), z.band(0.495, 0.55, C.navy)] },
-    55: { name: "SAI", base: C.yellow, alt: C.white,  visor: C.black,  zones: [z.cap(0.088, C.red), z.band(0.154, 0.242, C.red), ...centre(9, C.black)] },
-    23: { name: "ALB", base: C.navy,   alt: C.mint,   visor: C.gold,   zones: [z.cap(0.121, C.white), z.band(0.176, 0.231, C.white), z.band(0.231, 0.275, C.red)] },
-    27: { name: "HUL", base: C.gold,   alt: C.white,  visor: C.black,  zones: [z.cap(0.143, C.black), z.band(0.187, 0.242, C.red), ...centre(10, C.black)] },
-     5: { name: "BOR", base: C.forest, alt: C.yellow, visor: C.black,  zones: [z.cap(0.154, C.yellow), ...centre(12, C.yellow), z.band(0.484, 0.55, C.blue)] },
-    14: { name: "ALO", base: C.royal,  alt: C.yellow, visor: C.gold,   zones: [z.cap(0.154, C.yellow), z.chevron(0, 24, 0.154, 0.528, C.yellow), z.band(0.484, 0.55, C.red)] },
-    18: { name: "STR", base: C.white,  alt: C.red,    visor: C.black,  zones: [z.cap(0.11, C.graphite), z.chevron(0, 44, 0.11, 0.517, C.red), z.band(0.495, 0.55, C.graphite)] },
-    11: { name: "PER", base: C.white,  alt: C.green,  visor: C.black,  zones: [z.cap(0.176, C.green), z.band(0.176, 0.22, C.red), ...centre(10, C.green)] },
-    77: { name: "BOT", base: C.white,  alt: C.royal,  visor: C.silver, zones: [z.cap(0.132, C.navy), ...centre(15, C.royal), z.band(0.187, 0.253, C.royal)] },
+    // Mercedes: a sky-blue crown over a navy lower two-thirds, white flashes
+    // raked back off the temples, the join picked out in white.
+    63: { name: "RUS", base: C.sky, alt: C.white, visor: C.black, zones: [
+      z.band(0.56, 0.955, C.navy), z.key(0.505, C.white), z.patch(180, 34, 0.16, 0.40, C.navy),
+      ...z.sides((a) => z.flash(a, 8, 20, 0.10, 0.55, 24, C.white)), ...centre(9, C.white), z.key(0.90, C.sky)] },
+    // Mercedes: navy under a white crown, the tricolore run down the brow, an
+    // orange skirt at the rim.
+    12: { name: "ANT", base: C.royal, alt: C.sky, visor: C.silver, zones: [
+      z.cap(0.20, C.white), z.key(0.20, C.navy), z.flash(0, 10, 46, 0.14, 0.44, 0, C.green),
+      z.flash(0, 5, 24, 0.14, 0.44, 0, C.red), ...z.sides((a) => z.patch(a, 22, 0.26, 0.40, C.white)),
+      z.band(0.70, 0.80, C.white), z.key(0.80, C.green), z.band(0.88, 0.955, C.orange)] },
+    // Ferrari: red to the brow, white below it, black under the aperture. The
+    // base is the WHITE half so the lid separates from the car (see near()).
+    16: { name: "LEC", base: C.white, alt: C.navy, visor: C.black, zones: [
+      z.cap(0.42, C.red), z.key(0.420, C.black), ...z.sides((a) => z.flash(a, 6, 16, 0.10, 0.39, 24, C.white)),
+      z.band(0.68, 0.76, C.black), z.key(0.76, C.red), ...centre(7, C.black), z.band(0.90, 0.955, C.red)] },
+    // Ferrari: the plain yellow lid. Almost all of the design is the absence of
+    // one — a black line under the aperture, a white centre, a red skirt.
+    44: { name: "HAM", base: C.yellow, alt: C.violet, visor: C.black, zones: [
+      ...centre(10, C.white), ...z.sides((a) => z.flash(a, 5, 14, 0.08, 0.42, 24, C.black)),
+      z.band(0.68, 0.74, C.black), z.key(0.74, C.white), z.band(0.90, 0.955, C.red)] },
+    // McLaren: fluoro lime under a black doodle. The doodle is a fleck — the
+    // pattern is too fine to draw and too coarse to leave out.
+     1: { name: "NOR", base: C.lime, alt: C.cyan, visor: C.black, zones: [
+      z.fleck(0.06, 0.95, 20, 28, 0.26, 3, C.black), z.cap(0.12, C.black),
+      ...z.sides((a) => z.patch(a, 24, 0.16, 0.62, C.black)),
+      z.key(0.74, C.papaya), z.band(0.86, 0.92, C.black), z.key(0.92, C.papaya)] },
+    // McLaren: black shell, papaya crown and face flash, a lime skirt.
+    81: { name: "PIA", base: C.carbon, alt: C.teal, visor: C.amber, zones: [
+      z.cap(0.18, C.papaya), z.key(0.18, C.lime), z.flash(0, 12, 42, 0.14, 0.44, 0, C.papaya),
+      ...z.sides((a) => z.flash(a, 8, 22, 0.16, 0.60, 24, C.papaya)),
+      z.band(0.72, 0.86, C.lime), z.key(0.665, C.papaya), z.band(0.90, 0.955, C.papaya)] },
+    // Red Bull: navy crown, red face flash, white band. Royal rather than navy
+    // as the base, or it vanishes into a Red Bull.
+    33: { name: "VER", base: C.royal, alt: C.orange, visor: C.black, zones: [
+      z.cap(0.20, C.navy), z.key(0.20, C.yellow), z.flash(0, 12, 46, 0.16, 0.44, 0, C.red),
+      ...z.sides((a) => z.flash(a, 9, 24, 0.18, 0.62, 24, C.red)),
+      z.band(0.68, 0.78, C.white), z.key(0.78, C.navy), z.band(0.88, 0.955, C.red)] },
+    // Red Bull: fluoro lime with a navy crown and an orange flash.
+     6: { name: "HAD", base: C.lime, alt: C.royal, visor: C.black, zones: [
+      z.cap(0.26, C.navy), z.key(0.26, C.orange), z.flash(0, 10, 34, 0.20, 0.46, 0, C.orange),
+      ...z.sides((a) => z.patch(a, 20, 0.30, 0.44, C.navy)),
+      z.band(0.72, 0.86, C.navy), z.key(0.665, C.orange), z.band(0.90, 0.955, C.white)] },
+    // Alpine: pale blue mottle over a navy lower half, pink at the rim.
+    10: { name: "GAS", base: C.sky, alt: C.white, visor: C.silver, zones: [
+      z.fleck(0.04, 0.58, 20, 28, 0.24, 7, C.white), z.band(0.60, 0.90, C.navy), z.key(0.545, C.white),
+      ...z.sides((a) => z.flash(a, 7, 18, 0.14, 0.57, 24, C.white)), ...centre(8, C.white),
+      z.band(0.90, 0.955, C.pink)] },
+    // Alpine: Argentine white and sky blue, pink down the centre.
+    43: { name: "COL", base: C.white, alt: C.crimson, visor: C.black, zones: [
+      z.band(0.24, 0.40, C.sky), z.key(0.185, C.navy), z.key(0.40, C.navy),
+      ...z.sides((a) => z.flash(a, 6, 16, 0.12, 0.39, 24, C.pink)), ...centre(10, C.pink),
+      z.band(0.68, 0.82, C.navy), z.key(0.82, C.sky), z.band(0.90, 0.955, C.navy)] },
+    // Racing Bulls: pink over white, navy skirt.
+    40: { name: "LAW", base: C.pink, alt: C.forest, visor: C.silver, zones: [
+      z.cap(0.16, C.white), z.key(0.16, C.navy), ...z.sides((a) => z.flash(a, 8, 22, 0.16, 0.60, 24, C.white)),
+      z.band(0.66, 0.88, C.white), z.key(0.605, C.navy), ...centre(7, C.navy), z.band(0.88, 0.955, C.navy)] },
+    // Racing Bulls: sky blue, navy crown, a red centre.
+    41: { name: "LIN", base: C.sky, alt: C.crimson, visor: C.black, zones: [
+      z.cap(0.24, C.navy), z.key(0.24, C.red), ...z.sides((a) => z.flash(a, 7, 20, 0.16, 0.58, 24, C.navy)),
+      ...centre(9, C.red), z.band(0.70, 0.84, C.white), z.key(0.84, C.navy), z.band(0.90, 0.955, C.navy)] },
+    // Haas: red with a carbon crown and skirt, white down the centre.
+    31: { name: "OCO", base: C.red, alt: C.white, visor: C.black, zones: [
+      z.cap(0.16, C.carbon), z.key(0.16, C.white), ...z.sides((a) => z.flash(a, 8, 22, 0.18, 0.62, 24, C.carbon)),
+      ...centre(10, C.white), z.band(0.72, 0.88, C.carbon), z.key(0.665, C.white), z.band(0.90, 0.955, C.white)] },
+    // Haas: navy-blue with fluoro lime through the face and the jaw.
+    87: { name: "BEA", base: C.royal, alt: C.coral, visor: C.black, zones: [
+      z.cap(0.14, C.navy), z.key(0.14, C.lime), z.flash(0, 12, 44, 0.12, 0.46, 0, C.lime),
+      ...z.sides((a) => z.flash(a, 8, 22, 0.16, 0.60, 24, C.lime)),
+      z.band(0.68, 0.80, C.lime), z.key(0.80, C.navy), z.band(0.88, 0.955, C.white)] },
+    // Williams: navy with the Spanish red-and-yellow doubled down the face and
+    // raked back over each temple.
+    55: { name: "SAI", base: C.navy, alt: C.mint, visor: C.black, zones: [
+      z.flash(0, 12, 40, 0.14, 0.44, 0, C.red), z.flash(0, 6, 20, 0.14, 0.44, 0, C.yellow),
+      ...z.sides((a) => z.flash(a, 9, 22, 0.16, 0.62, 24, C.red)),
+      ...z.sides((a) => z.flash(a, 4, 10, 0.16, 0.62, 24, C.yellow)),
+      z.band(0.72, 0.84, C.white), z.key(0.84, C.red), z.band(0.90, 0.955, C.yellow)] },
+    // Williams: pale pink under a white crown, royal-blue graphics, navy jaw.
+    23: { name: "ALB", base: C.pink, alt: C.forest, visor: C.gold, zones: [
+      z.cap(0.20, C.white), z.key(0.20, C.navy), z.flash(0, 10, 38, 0.14, 0.44, 0, C.royal),
+      ...z.sides((a) => z.flash(a, 8, 20, 0.16, 0.60, 24, C.royal)),
+      z.band(0.72, 0.86, C.navy), z.key(0.665, C.white), z.band(0.90, 0.955, C.white)] },
+    // Audi: black with green graphics and a scatter of white stars. Graphite
+    // rather than black, or it is an Audi-coloured lid in an Audi.
+    27: { name: "HUL", base: C.graphite, alt: C.white, visor: C.black, zones: [
+      z.cap(0.10, C.black), z.flash(0, 10, 34, 0.12, 0.44, 0, C.green),
+      ...z.sides((a) => z.flash(a, 7, 18, 0.16, 0.60, 24, C.green)),
+      z.fleck(0.10, 0.62, 20, 28, 0.07, 11, C.white), z.band(0.84, 0.955, C.green), z.key(0.785, C.white)] },
+    // Audi: white with a Brazilian green crown and yellow keyline, navy jaw.
+     5: { name: "BOR", base: C.white, alt: C.crimson, visor: C.black, zones: [
+      z.cap(0.22, C.green), z.key(0.22, C.yellow), z.band(0.26, 0.34, C.yellow),
+      ...z.sides((a) => z.flash(a, 8, 20, 0.16, 0.60, 24, C.green)),
+      z.band(0.70, 0.84, C.navy), z.key(0.645, C.yellow), z.band(0.90, 0.955, C.green)] },
+    // Aston Martin: cyan with a yellow brow band and an orange skirt.
+    14: { name: "ALO", base: C.cyan, alt: C.crimson, visor: C.gold, zones: [
+      z.cap(0.20, C.navy), z.band(0.24, 0.38, C.yellow), z.key(0.185, C.yellow), z.key(0.38, C.red),
+      ...z.sides((a) => z.flash(a, 8, 20, 0.16, 0.60, 24, C.orange)),
+      z.band(0.70, 0.86, C.orange), z.key(0.645, C.yellow), z.band(0.90, 0.955, C.navy)] },
+    // Aston Martin: near-black with the team's green through the centre.
+    18: { name: "STR", base: C.carbon, alt: C.coral, visor: C.black, zones: [
+      z.cap(0.14, C.forest), z.key(0.14, C.silver), ...centre(11, C.forest),
+      ...z.sides((a) => z.flash(a, 7, 18, 0.16, 0.60, 24, C.forest)),
+      z.band(0.68, 0.80, C.forest), z.key(0.80, C.silver), z.band(0.90, 0.955, C.silver)] },
+    // Cadillac: fluoro lime with a black crown and face, red at the rim.
+    11: { name: "PER", base: C.lime, alt: C.royal, visor: C.black, zones: [
+      z.cap(0.22, C.black), z.key(0.22, C.white), z.flash(0, 12, 40, 0.18, 0.46, 0, C.black),
+      ...z.sides((a) => z.flash(a, 9, 24, 0.18, 0.62, 24, C.black)),
+      z.band(0.70, 0.84, C.black), z.key(0.645, C.red), z.band(0.88, 0.955, C.red)] },
+    // Cadillac: black with blue through it. Royal as the base, or it is a black
+    // lid in a black car.
+    77: { name: "BOT", base: C.royal, alt: C.amber, visor: C.silver, zones: [
+      z.cap(0.20, C.black), z.key(0.20, C.sky), z.flash(0, 12, 44, 0.14, 0.44, 0, C.black),
+      ...z.sides((a) => z.flash(a, 10, 26, 0.16, 0.62, 24, C.black)),
+      z.band(0.68, 0.86, C.black), z.key(0.625, C.sky), z.band(0.88, 0.955, C.sky)] },
   };
 
   // A number nobody on the 2026 grid carries — a career driver, a custom grid,
@@ -122,10 +274,10 @@ const Helmets = (function () {
   function generated(num) {
     const n = Math.abs(num | 0);
     const base = pick(n, 0), mark = pick(n + 3, 1), trim = pick(n + 7, 2);
-    const zones = [[z.cap(0.165, mark), ...centre(10, trim)],
-                   [z.band(0.198, 0.308, mark), z.spot(0, 0.154, 0.15, trim)],
-                   [z.chevron(0, 40, 0.143, 0.517, mark), z.band(0.473, 0.55, trim)],
-                   [z.wedge(200, 340, mark), z.band(0, 0.099, trim)]][n % 4];
+    const zones = [[z.cap(0.24, mark), ...centre(10, trim)],
+                   [z.band(0.26, 0.40, mark), z.band(0.72, 0.84, trim)],
+                   [z.chevron(0, 40, 0.20, 0.66, mark), z.band(0.70, 0.82, trim)],
+                   [z.wedge(200, 340, mark), z.cap(0.18, trim)]][n % 4];
     return { name: "#" + n, base, visor: C.black, zones, generated: true };
   }
 
@@ -160,12 +312,6 @@ const Helmets = (function () {
 
   /* THE VISOR IS PART OF THE PAINTED SHELL, not a box bolted to it. It used to
      be a slab 0.41 m wide across a 0.29 m helmet — wider than the head, buried
-     in the dome at its middle and sticking out either side, which is most of
-     why the old helmet read as a lump. As a region of the shell it takes the
-     aperture's real shape, every design paints around it, and the vertices it
-     covers are handed the glass surface so it catches the sky like a visor. */
-  /* THE VISOR IS PART OF THE PAINTED SHELL, not a box bolted to it. It used to
-     be a slab 0.41 m wide across a 0.29 m helmet — wider than the head, buried
      in the shell at its middle and sticking out either side, which is most of
      why the old helmet read as a lump. As a region of the shell it takes the
      aperture's real shape, every design paints around it, and the vertices it
@@ -175,6 +321,17 @@ const Helmets = (function () {
      brow and the nose, its top edge curving down as it runs to the temples. */
   const TRIM = [0.10, 0.10, 0.11];
   const VISOR_T0 = 0.40, VISOR_T1 = 0.66, VISOR_AZ = 76;   // measured off the front mockup: 40% to 66% down
+  /* The aperture, optionally GROWN by a margin. Grown by a hair it gives the
+     gasket — the dark rubber surround every real eye port is sealed with, and
+     the line that makes the visor read as a hole in the shell instead of a
+     patch of paint on it. Free: no zone, no vertex, every design gets one. */
+  function visorAt(t, az, grow) {
+    const t0 = VISOR_T0 - grow, t1 = VISOR_T1 + grow;
+    if (t < t0 || t > t1) return false;
+    const f = (t - t0) / (t1 - t0);
+    return dAz(az, 0) <= (VISOR_AZ + grow * 110) * Math.min(1, 1.55 * Math.sin(Math.PI * f));
+  }
+  const isVisorEdge = (t, az) => !visorAt(t, az, 0) && visorAt(t, az, 0.020);
   function isVisor(t, az) {
     if (t < VISOR_T0 || t > VISOR_T1) return false;
     // A LENS, not a rectangle: widest across the eyes, closing toward the brow
@@ -198,6 +355,7 @@ const Helmets = (function () {
     const visor = design.visor || C.black;
     return function (t, az) {
       if (isVisor(t, az)) return { c: visor, glass: true };
+      if (isVisorEdge(t, az)) return { c: TRIM, glass: false };   // the gasket round the eye port
       if (t >= 0.955) return { c: TRIM, glass: false };   // the dark band round the neck opening
       return { c: paint(t, az), glass: false };
     };
@@ -298,14 +456,24 @@ const Helmets = (function () {
     return [r * dx, tab(SHAPE.Y, t), r * dz];
   }
 
-  // Twelve rings, but SPENT ON THE CROWN. A real lid is blunt on top — 45% of
-  // its width by a twentieth of the way down — so the first ring has to land
-  // inside that twentieth or the dome tessellates as a flat cap. The old
-  // quadratic bias put it at t 0.049, past the turn; f^1.5 puts it at 0.024
-  // and still leaves three rings inside the visor aperture. Adding rings
-  // instead would have worked too and cost 72 triangles the car cannot spare.
-  const RINGS = 12, SLICES = 18;
-  const ringT = (i) => Math.pow(i / RINGS, 1.5);
+  /* THE MESH IS THE CEILING ON THE DESIGN, not the vocabulary. Per-vertex
+     colour can only draw what a vertex lands on: at 12 rings the gaps in t
+     were 0.09, so a keyline 0.024 wide fell BETWEEN two rings and did not
+     exist in the game at all — it showed in the per-pixel preview and nowhere
+     else. At 18 slices a 12-degree flash spanned less than one 20-degree slice
+     and smeared into its neighbours instead of reading as a stripe.
+
+     20 x 28 puts the gaps at about 0.05 in t and 12.9 degrees in azimuth,
+     which is what the keylines and the raked temple flashes below need to
+     survive into a frame. 1120 triangles against 432; the ceiling in
+     tests/unit/car-wing-foil.test.mjs moves with it and says why.
+
+     Still biased to the crown — a real lid is blunt on top, 45% of its width
+     by a twentieth of the way down, so the first ring has to land inside that
+     twentieth or the dome tessellates as a flat cap. f^1.25 puts it at 0.024
+     and keeps the lower half near enough uniform for the bands. */
+  const RINGS = 20, SLICES = 28;
+  const ringT = (i) => Math.pow(i / RINGS, 1.25);
   function build(out, cx, cy, cz, design, S) {
     const skin = shell(design);
     const i0 = out.pos.length / 3;
@@ -345,5 +513,6 @@ const Helmets = (function () {
     return out;
   }
 
-  return { DESIGNS, COLORS: C, designFor, painter, shell, isVisor, generated, ZONES, SHAPE, pointAt, build };
+  return { DESIGNS, COLORS: C, designFor, painter, shell, isVisor, generated, ZONES, SHAPE, pointAt, build,
+           RINGS, SLICES, ringT };   // the tessellation, so a preview can show what the MESH carries
 })();
