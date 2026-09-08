@@ -2743,23 +2743,27 @@ function _loadTrackBody(idx, def) {
 // only needed for the background flyby, so don't run it synchronously — defer +
 // debounce it. startRace() builds the real track when the race actually starts,
 // so racing never depends on this.
-// RACE SETTINGS ONLY (2026-09). This used to run under EVERY menu (boot, every
-// tile, every door: 0.9–3.3 s a tap on a phone). The picker now shows the chosen
-// circuit itself and the title sits on the plain page; openRaceSettings + TIME chip only.
+// SHOWN UNDER RACE SETTINGS ONLY, BUILT A LITTLE EARLIER (2026-09). The title
+// sits on the plain page and the picker shows the chosen circuit itself, so
+// render() keeps the canvas hidden there — but once the player SETTLES on a tile
+// (1.5 s; browsing never triggers it) the circuit is pre-built and the renderer
+// warmed with hidden frames, so NEXT opens onto a ready world instead of freezing
+// the sheet for the build plus the first frame (0.9–3.3 s a tap on a phone).
+const _menuGate = { warm: 0 };   // hidden warm-up frames still owed after a menu build (render)
 let flybyBuildTimer = 0;
-function scheduleFlybyTrack() {
+function scheduleFlybyTrack(settle) {   // settle: the picker's 1.5 s "player has stopped browsing" debounce
   clearTimeout(flybyBuildTimer);
   // Never hand loadTrack a negative index (exhausted career/season calendar).
   if (!(trackIdx >= 0)) return;
   flybyBuildTimer = setTimeout(() => {
     if (!(state === "menu" && trackIdx >= 0)) return;
-    // Re-test after the fetch: 120 ms of debounce plus a network round trip is
-    // long enough for the player to have browsed on or pressed GO.
+    // Re-test after the fetch: the debounce plus a network round trip is long
+    // enough for the player to have browsed on or pressed GO.
     const want = trackIdx;
     ensureScenery(want).then(() => {
-      if (state === "menu" && trackIdx === want) loadTrack(want);
+      if (state === "menu" && trackIdx === want) { loadTrack(want); _menuGate.warm = 2; }
     });
-  }, 120);
+  }, settle ? 1500 : 120);
 }
 
 // Night ambient band: floor/cap the (up-facing-dominant) hemisphere ambient into
@@ -3429,7 +3433,7 @@ const G = {
   // Mutable state + helpers consumed by js/ui/select-screen.js.
   get driverIdx() { return driverIdx; }, set driverIdx(v) { driverIdx = v; },
   get difficulty() { return difficulty; }, set difficulty(v) { difficulty = v; },
-  store, tickUi,
+  store, tickUi, scheduleFlybyTrack,
   // Same deferred-arrow trick for the garage <-> select plumbing: setup-ui.js is
   // created before menus.js, and openGarage/openCustomize are declared further
   // down this file, so none of these can be referenced directly at create time.
@@ -6813,7 +6817,11 @@ function render(dt) {
   const menuBlank = state === "menu" && !setupPreviewOn && (!track || _rsEl.hidden);
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
-  if (menuBlank) return;
+  // A freshly pre-built world draws its first frames HIDDEN (scheduleFlybyTrack
+  // owes them): shaders, textures and shadow maps warm up under the picker, not
+  // in front of the player the instant race settings opens.
+  if (menuBlank && !(track && _menuGate.warm > 0)) return;
+  if (menuBlank) _menuGate.warm--;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
@@ -8735,6 +8743,7 @@ $("mb-race").onclick = () => {
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
 };
 // Optional markup must not turn one missing screen into a whole-app boot failure.
 if ($("mb-vs")) $("mb-vs").onclick = () => {
@@ -8751,6 +8760,7 @@ $("mb-tt").onclick = () => {
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
 };
 $("mb-season").onclick = () => {
   setFlow("season"); session = "race";
@@ -8768,6 +8778,7 @@ $("mb-season").onclick = () => {
   buildSelect();
   vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
   if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack(true);   // pre-build the saved pick while the picker is read
 };
 // Career's calendar is fixed, so its hub replaces the circuit picker.
 function openCareer() {
@@ -8785,6 +8796,7 @@ function openCareer() {
   careerUi.openHub();
   els.overlay.hidden = true;
   if (soundOn) GameAudio.uiSelect();
+  scheduleFlybyTrack(true);   // the hub's next round, pre-built behind it
 }
 // The same entry, stopping at the slot picker. Deliberately does NOT engage the
 // career flow: nothing has been chosen yet, so a save's rules must not be live —
