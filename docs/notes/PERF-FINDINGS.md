@@ -2676,11 +2676,11 @@ for lavapipe. Both legs' console output confirms it — the same scenery
 suppression on each. **So this is bisectable locally, and the next person on it
 should not dispatch anything.**
 
-Note `maxLuma` 247 → 163: the BRIGHTEST pixel is down a third, so this is not a
-missing sRGB encode (that would crush mid-tones and leave the top end close).
-It looks closer to a uniform scale, which points at exposure or a tone-map term
-in the post chain rather than a transfer function. That is a candidate, not a
-finding — see the method note below before spending a run on it.
+~~Note `maxLuma` 247 → 163 ... a uniform scale, pointing at exposure or a
+tone-map term.~~ **Withdrawn.** Those two maxima came from runs at DIFFERENT
+cameras. Measured at one camera the maxima are 168 and 162 — see "Split by
+stage" below, which reverses the reading: highlights are preserved and the
+mid-tones are crushed.
 
 **3. The forced-content control is NOT runnable on this box.** `--ls
 apex26.tlxForceHw=1` and then `=env,sky` both fail `awaitSoftPresent`, once at
@@ -2700,6 +2700,39 @@ on it; nobody checked what the cube was actually wired to.
 never latches loses REAL reflections on the lacquer and gets the analytic
 gradient instead. That is the designed fallback, not a degradation cliff, and
 `envReady=false` on a slow device is not a defect.
+
+### Split by stage, at a MATCHED camera — and the "uniform scale" reading was wrong
+
+`__tlx.lumaDbg()` (new, beside `envState`/`skyState`) reads post's input, post's
+output and what `capturePixels` returns. Both legs, montreal, `park(0.1)` +
+`orbit(0.1, 200, 6, 26)` + `snapCam()` so the framing is identical, 640x360:
+
+| target | TLX/WebGL2 | TLX/WebGPU |
+|---|---|---|
+| `sceneRT` — post IN (HDR) | 255 / 255 | 255 / 255 |
+| `ldrRT` — post OUT | **74.43** / 168 | **45.56** / 162.3 |
+| `captureRT` — what capturePixels reads | 74.43 / 168 | 45.56 / 162.3 |
+
+**`max` agrees to 3.4% while `mean` is 39% apart.** Highlights are preserved and
+the mid-tones are crushed — which is NOT a uniform scale, so the
+exposure/tone-map candidate written down above is withdrawn. That candidate came
+from a 247-vs-163 max pair measured on two runs at DIFFERENT cameras; at one
+camera the maxima are 168 and 162. An unmatched pair is not a comparison, which
+is the §2l lesson arriving for the third time on this lead.
+
+`captureRT === ldrRT` on both legs, so nothing after the post chain touches it —
+consistent with the blit already being exonerated.
+
+**What this does NOT settle, and the honest reason:** `_readLdr` reads BYTES, so
+the HDR `sceneRT` saturates to 255/255 on both legs — most of the frame is >= 1.0
+in HDR. The input column is therefore uninformative, and the lit pass is NOT
+excluded. **The next measurement is a scaled or float read of `sceneRT`** (scale
+by 1/8 in the read, or read it as float): if the two legs' HDR inputs match, the
+divergence is inside the post chain and `tsl-post.js` is the place to look; if
+they already differ, it is the lit pass and post is innocent. One local run, no
+dispatch — the hook is in place, it just needs a non-clipping read.
+
+Do not write down a sixth mechanism before that number exists.
 
 ### On WebGPU alternatives, since the question was asked
 

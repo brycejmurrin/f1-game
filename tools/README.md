@@ -62,6 +62,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
 | **check/check-physics.mjs** | Physics stability probes: `check-physics.mjs <bank\|grip\|roadfollow\|steer>` — no-NaN, forward motion, steering authority. | tune-physics |
+| **check/episode-diff.mjs** | Names the per-car field that broke seeded replay: replays a seed N times in the VM, diffs cold vs warm. | — |
 | **check/extract-module.mjs** | Reorg helper for `game.js` extractions: free-reference analysis of a line range, rewritten against `G.<name>` (`--out`). | slim-bloat |
 | **check/physics-tune-sweep.mjs** | How DRIVEABLE is each notch of each handling slider? Drives the real DOM slider, then a curvature-fed closed-loop lap. | tune-physics |
 | **check/quick-validate.mjs** | Fast refactor gate: boots the game once and probes the critical paths (globals, race, physics, lighting) in ~30-60 s. | check-changes |
