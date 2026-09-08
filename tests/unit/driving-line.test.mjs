@@ -167,6 +167,29 @@ test("LINE COLOUR is a palette flag the draw carries, not a colour the module kn
   assert.deepEqual(seen, [0, 1, 0], "draw() passes palette 0 for F1 and 1 for the safe triple");
 });
 
+test("LINE OPACITY is a multiplier the draw carries, and an unknown value is NORMAL", () => {
+  const DL = load();
+  const api = stadium();
+  DL.build(api);
+  const seen = [];
+  const gfx = { drawDrivingLine: (v, n, dirty, opts) => { seen.push(opts.opacity); return true; } };
+  DL.setMode("full");
+  // NORMAL is 1 exactly: the shipped line must not change because the option exists.
+  assert.equal(DL.opacity(), "normal");
+  assert.equal(DL.opacityMul(), 1);
+  DL.draw(gfx, api, 40);
+  assert.equal(DL.setOpacity("subtle"), "subtle");
+  DL.draw(gfx, api, 40);
+  assert.equal(DL.setOpacity("solid"), "solid");
+  DL.draw(gfx, api, 40);
+  assert.equal(DL.setOpacity("nonsense"), "normal", "an unknown value falls back to the shipped look");
+  DL.draw(gfx, api, 40);
+  assert.deepEqual(seen, [1, 0.65, 1.35, 1]);
+  // SUBTLE below and SOLID above, so the row reads as one axis in both directions.
+  const mul = Object.fromEntries(DL.OPACITIES);
+  assert.ok(mul.subtle < mul.normal && mul.normal < mul.solid);
+});
+
 test("with a baked racing line the ribbon follows IT, easing to the centre where the line has no opinion", () => {
   const DL = load();
   const api = stadium();

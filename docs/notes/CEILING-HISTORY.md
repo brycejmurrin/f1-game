@@ -2340,3 +2340,30 @@ files are not ratcheted.
   four recipes is identical before and after, and
   tests/unit/front-wing-decal.test.mjs measures the shipped quads against the
   shipped car.
+- `js/game.js` lines 10168 -> **10177**, codeLines 5535 -> **5541**;
+  `js/render/glx/glx.js` 2356 -> **2357**; (tree) shellNodes 1333 -> **1340**
+  (2026-09-08): SETTINGS › LINE OPACITY, the row beside LINE COLOUR. The same
+  shape and the same price as that row — seven shell nodes for the set-row
+  grammar, one GLX uniform, one wire block and the boot restore — because it
+  is the same mechanism applied to the other half of the complaint. F1 25
+  ships an *increased* opacity option; the players who ask for the opposite
+  are the ones who step down to CORNERS in cockpit view, so the row goes both
+  ways (SUBTLE 0.65 / NORMAL 1.0 / SOLID 1.35) and NORMAL is the line exactly
+  as it shipped. WGX paid nothing in lines but grew its uniform block: `LineU`
+  80 -> 96 bytes, `_lineU` 20 -> 24 floats, re-validated against real Dawn.
+  Evidence: `docs/notes/DRIVING-LINE-RESEARCH.md`,
+  `docs/research/WEBGPU-PARITY.md` §Driving line.
+- `js/game.js` lines 10216 -> **10226**, codeLines 5553 -> **5554**
+  (2026-09-08, re-measured on the merged tree — the driving-line and
+  front-wing work above landed on the deploy branch first and this is additive
+  to it): the car mesh
+  cache keyed PER DRIVER instead of per team. `teamMesh` / `teamBodyMesh` /
+  `playerBodyMesh` all built with `team.drivers[0].num`, so both of a team's
+  cars carried the first driver's helmet: 22 cars on track showed 11 helmets,
+  each pair identical — precisely the defect `js/car/helmets.js` was written to
+  fix, reintroduced one level above it. The number now joins the cache key and
+  reaches `Car3D.build`, using the `carDecalNum` the number atlas already
+  resolved, and the garage turntable takes `driverIdx` — the seat you picked —
+  instead of the first driver, in its cache key as well as its build. Ten lines
+  and one code line; the rest fold inline. The lines are the comments saying
+  why, which are worth more than the lines.

@@ -63,8 +63,20 @@ test("AI world pose is mirrored after this step's (s, x) writes", () => {
 
 test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   const game = read("js/game.js");
-  assert.match(game, /function teamBodyMesh\(team\)/);
-  assert.match(game, /buildCarData\(team, \{ noWheels: true \}\)/);
+  assert.match(game, /function teamBodyMesh\(team, car\)/);
+  assert.match(game, /buildCarData\(team, \{ noWheels: true, num: carDecalNum\(team, car\) \}\)/);
+  // THE CAR, NOT JUST THE TEAM. The helmet js/car/helmets.js paints into the
+  // body is the design for opts.num; keyed on the team alone, both of a team's
+  // cars got drivers[0] and 22 cars on track showed 11 helmets, each pair
+  // identical. The number belongs in the key as well as the build, or the
+  // second driver draws whichever mesh the first one cached.
+  for (const fn of ["teamMesh", "teamBodyMesh"]) {
+    const src = game.slice(game.indexOf(`function ${fn}(team, car)`), game.indexOf(`function ${fn}(team, car)`) + 400);
+    assert.match(src, /teamMeshKey\(team\) \+ ":" \+ carDecalNum\(team, car\)/, `${fn} must key on the driver number`);
+    assert.match(src, /num: carDecalNum\(team, car\)/, `${fn} must build with the driver number`);
+  }
+  assert.match(game, /function playerBodyMesh\(team, car\)/);
+  assert.match(game, /playerVisualKey \+ ":" \+ carDecalNum\(team, car\)/, "the player's own body is keyed on the seat too");
   assert.match(game, /function getFieldWheelMeshes\(team\)/);
   // Field wheels resolve from the FACTORY setup, via the permanently cached
   // teamDecalState(team, false) — whose builder still derives from
@@ -73,12 +85,12 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.match(game, /const parts = Parts\.getVisualTiers\(setup, team\);/);
   assert.match(game, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(\) : getFieldWheelMeshes\(c\.team\);/);
   const draw = game.match(
-    /const body = carModelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team\) : teamBodyMesh\(c\.team\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
+    /const body = carModelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
   );
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
   assert.match(game, /if \(_hasLivePlayerShadow\) gfx\.castShadow\(teamMesh\(player\.team\)/);
   assert.match(game, /gfx\.castShadow\(teamMesh\(_shadowTeams\[i\]\), _shadowMats\[i\]\)/);
-  assert.match(game, /gfx\.draw\(teamMesh\(player\.team\), tmpMat, _ghostOpts\)/);
+  assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
 });
 
 test("orbit / agent-view read the mirrored world pose for the field", () => {

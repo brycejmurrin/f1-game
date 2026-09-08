@@ -873,6 +873,14 @@ let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
+// THE LIGHTS-OUT INSTANT ON THE RACE CLOCK. AiDrive.launchMul/launchDone read
+// their time as SECONDS SINCE GREEN, and raceT is that only for a first start:
+// a red-flag restart resumes the clock the flag stopped (see lights-out below),
+// so at raceT 600 launchDone() was instantly true and every AI launched with a
+// flat multiplier of 1 — no reaction, full throttle, while the player reacts to
+// the lights. Re-arming launchOn alone could not have fixed that; the model
+// needed an origin. 0 for a first start, where raceT is zeroed at green anyway.
+let launchT0 = 0;
 // B1 — RACE CONTROL (local yellow / VSC / safety car) lives in
 // js/race/race-control.js. A READ-ONLY race-logic layer: it consumes
 // DebrisWorld.hazards() and drives the HUD flag, and NEVER writes speed, px,
@@ -1968,6 +1976,25 @@ function redFlagRestart() {
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
     c.speed = 0; c.accSm = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.lane = c.lanePref;   // as gridUp
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wheelLock = 0;
+    // A CAR ON A GRID BOX IS STATIONARY, ALONE AND ON CLEAN TARMAC. This path
+    // reuses the SAME car objects (gridUp builds a race, makeCars is not
+    // re-run), so anything the racing wrote survived onto the box: contactT
+    // decays rather than being recomputed, so the AI ran its contact branch
+    // from a standing start; wrongWay/rescue/off/wall said the car was in a
+    // gravel trap; otT/otCool held a move that ended when the flag flew.
+    // Energy, tyreClass and phaseRoll are NOT cleared — same race, and the
+    // strategy and the ERS state legitimately carry through a red flag.
+    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null;
+    c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.otT = 0; c.otCool = 0;
+    c.kerbGripSm = 1; c.kerbCueT = 0;
+    // AND IT IS A STANDING START: re-plan the launch. gridUp arms this once,
+    // launchDone disarms it when the first getaway ends, and nothing re-armed
+    // it — so the restart the countdown calls "a real second start" was the
+    // one start no AI ever launched for. hash32, never simRnd: the stream's
+    // draw count is a contract, and ":restart:" makes the plan its own.
+    const rh = DriverRatings.hash32(simSeed() + ":restart:" + i + ":" + c.skill);
+    c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (rh & 0xffff) / 65536);
+    c.launchOn = !c.human;
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
   restartPending = true;
@@ -2012,7 +2039,7 @@ function gridUp(preOrder) {
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
-    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.lane = c.lanePref;   // lane is damped state, not a constant
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
@@ -2063,7 +2090,7 @@ function buildCarData(team, extra) {
   return Car3D.build(liv.c1, liv.c2, {
     livery: liv,
     teamId: team.id,   // per-team chassis style (nose/airbox/fin/mirrors/inlet)
-    num: team.drivers && team.drivers[0] && team.drivers[0].num,
+    num: (extra && extra.num != null) ? extra.num : (team.drivers && team.drivers[0] && team.drivers[0].num),
     parts: Parts.getVisualTiers(factorySetup, team),
     noWheels: !!(extra && extra.noWheels),
     field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
@@ -2085,11 +2112,16 @@ function teamMeshKey(team) {
   _teamMeshKeyCache.set(team.id, { val, rev: store.rev });
   return val;
 }
-function teamMesh(team) {
-  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team), () => gfx.createMesh(buildCarData(team)), TEAM_MESH_CACHE_MAX);
+// KEYED PER DRIVER, not per team: the helmet is the design for opts.num, and
+// both of a team's cars were handed drivers[0] — 22 cars, 11 helmets, each pair
+// identical, which is the defect helmets.js exists to fix reintroduced one
+// level up. carDecalNum already resolves this for the number atlas. A caller
+// with no car (the shadow casts, silhouette only) still shares one per team.
+function teamMesh(team, car) {
+  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":" + carDecalNum(team, car), () => gfx.createMesh(buildCarData(team, { num: carDecalNum(team, car) })), TEAM_MESH_CACHE_MAX);
 }
-function teamBodyMesh(team) {
-  return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKey(team), () => gfx.createMesh(buildCarData(team, { noWheels: true })), TEAM_MESH_CACHE_MAX);
+function teamBodyMesh(team, car) {
+  return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKey(team) + ":" + carDecalNum(team, car), () => gfx.createMesh(buildCarData(team, { noWheels: true, num: carDecalNum(team, car) })), TEAM_MESH_CACHE_MAX);
 }
 
 // Car decal / effect-quad / cockpit-instrument geometry lives in
@@ -2192,7 +2224,7 @@ function warmCarAssets() {
   for (let i = 0; i < cars.length; i++) {
     const c = cars[i];
     try {
-      if (c.isPlayer) playerBodyMesh(c.team); else teamBodyMesh(c.team);
+      if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
       getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
     } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
   }
@@ -2445,14 +2477,15 @@ function drawCockpitRig(c, base, dt, paint) {
   _digT[12] = _digT[13] = _digT[14] = 0;
 }
 
-function playerBodyMesh(team) {
+function playerBodyMesh(team, car) {
   if (carModelBuf) return null;   // glb model: single piece, no wheel split
   // Player-only draw path, so the cached playerVisualKey is always this team's
-  // key — no per-frame partsVisualKey() rebuild.
-  const key = team.id + ":" + playerVisualKey;
+  // key — no per-frame partsVisualKey() rebuild. The number joins it: a player
+  // in the second seat wears the second driver's helmet.
+  const key = team.id + ":" + playerVisualKey + ":" + carDecalNum(team, car);
   const liv = resolveLivery(team);
   return putBoundedMesh(playerBodies, playerBodyOrder, key, () => gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-    { livery: liv, teamId: team.id, noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
+    { livery: liv, teamId: team.id, noWheels: true, num: carDecalNum(team, car),
       parts: Parts.getVisualTiers(getTeamParts(team.id), team) })), PLAYER_BODY_CACHE_MAX);
 }
 // Player wheel meshes, keyed by the resolved TYRES/BRAKES visual tier (band
@@ -3613,6 +3646,7 @@ aeroZ = AeroZones.create(G);
 skids = SkidMarks.create(G);
 DrivingLine.setMode(store.get("drivingLine", "full"));
 DrivingLine.setPalette(store.get("drivingLinePalette", "f1"));
+DrivingLine.setOpacity(store.get("drivingLineOpacity", "normal"));
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
 // reads), plus the same physics numbers the AI's brake targets use, so the
@@ -3979,6 +4013,7 @@ function update(dt) {
     if (lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold) {
       state = "race";
       if (!restartPending) raceT = 0;   // a red-flag restart resumes the clock the flag stopped
+      launchT0 = raceT;   // …so the launch model measures from THIS green, not the first one
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
       netStart = null;              // consumed; never carry it into the next race
@@ -4921,8 +4956,8 @@ function updateCar(c, dt, ranked) {
     // The AI's launch (AiDrive.launchPlan): no throttle before its reaction, then
     // its own getaway for three seconds. A grid that accelerated as one held its
     // 8 m pitch to T1 — see the start test in ai-racecraft-vm.
-    const launch = c.launchOn ? AiDrive.launchMul(raceT, c.launch) : 1;
-    if (c.launchOn && AiDrive.launchDone(raceT, c.launch)) c.launchOn = false;
+    const launch = c.launchOn ? AiDrive.launchMul(raceT - launchT0, c.launch) : 1;
+    if (c.launchOn && AiDrive.launchDone(raceT - launchT0, c.launch)) c.launchOn = false;
     const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     if (!c.human) c.accSm = damp(c.accSm ?? 0, a, 6, dt);   // what this car is pulling — AiDrive.otWant reads it on the blocker
     // speedCap is an ACCELERATION ceiling, not a teleport: a cap that drops under
@@ -6563,7 +6598,11 @@ const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", 
 function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
 function getSetupPreviewMesh() {
   const team = Teams.LIST[teamIdx];
-  const key = team.id + ":" + partsVisualKey(team.id);
+  // driverIdx, not drivers[0]: the turntable shows YOUR car, so it wears the
+  // helmet of the seat you picked. In the key too, or switching seats keeps
+  // the mesh you were already looking at.
+  const seat = (team.drivers && team.drivers[driverIdx]) || (team.drivers && team.drivers[0]);
+  const key = team.id + ":" + partsVisualKey(team.id) + ":" + (seat && seat.num);
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
     // The hull depends on POSITIONS ONLY: keyed on the geometry-gating fields, it
@@ -6572,7 +6611,7 @@ function getSetupPreviewMesh() {
     const ent = GarageScene.previewMesh(key, hullKey, () => Car3D.build(liv.c1, liv.c2, {
       livery: liv,
       teamId: team.id,   // per-team chassis style shows in the setup turntable too
-      num: team.drivers && team.drivers[0] && team.drivers[0].num,
+      num: seat && seat.num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team),
     }));
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
@@ -8221,7 +8260,7 @@ function render(dt) {
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
     // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
-    const body = carModelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team) : teamBodyMesh(c.team));
+    const body = carModelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
     if (body) {
       gfx.draw(body, tmpMat, paint);
       queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer);
@@ -8229,7 +8268,7 @@ function render(dt) {
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
-      gfx.draw(teamMesh(c.team), wholeCarMat, paint);
+      gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);
       queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
     }
     // ACTIVE AERO: the moveable upper wing elements, FRONT and REAR, swung
@@ -8486,7 +8525,7 @@ function render(dt) {
       // slab ("black on screen when accelerating or braking" in TT). At 35%
       // alpha the track stays readable straight through it at any distance,
       // and the raised emissive keeps it reading as a bright spectre.
-      gfx.draw(teamMesh(player.team), tmpMat, _ghostOpts);
+      gfx.draw(teamMesh(player.team, player), tmpMat, _ghostOpts);
       }
     }
   }
@@ -9754,6 +9793,14 @@ SettingRow.wire("pm-linecolor", {
   values: [["f1", "F1"], ["safe", "COLOUR-BLIND"]],
   read: () => DrivingLine.palette(),
   write: (v) => { DrivingLine.setPalette(v); store.set("drivingLinePalette", DrivingLine.palette()); },
+});
+
+// LINE OPACITY — the same shelf; the complaint runs both ways (intrusive in
+// cockpit view, invisible on a bright road). NORMAL is the line as it shipped.
+SettingRow.wire("pm-lineopacity", {
+  values: [["subtle", "SUBTLE"], ["normal", "NORMAL"], ["solid", "SOLID"]],
+  read: () => DrivingLine.opacity(),
+  write: (v) => { DrivingLine.setOpacity(v); store.set("drivingLineOpacity", DrivingLine.opacity()); },
 });
 
 SettingRow.wire("pm-hidehud", {
