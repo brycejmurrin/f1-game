@@ -542,8 +542,10 @@
           <p class="adv-help">MANUAL: the AERO button is yours in every zone. AUTO: the wing opens itself, like the AI.</p>
           <!-- KEYBOARD — one row per driving action, two key slots each, built
                by js/ui/key-binds.js from the binding table in js/input/input.js.
-               Tap a slot, press a key. Hidden by css on a touch device
-               (body:not(.desktop)): nothing to rebind without a keyboard. -->
+               Tap a slot, press a key. On a touch device the module hides it
+               until a physical key has been pressed (Input.keyboardSeen) or
+               the map is customised; #pm-ctl-hint says so until then. -->
+          <p id="pm-ctl-hint" class="adv-help" hidden>Using a keyboard or a controller with this device? Press any key, or any controller button, and its table appears here.</p>
           <div id="pm-keys-section">
             <h3 class="pm-group-h">KEYBOARD</h3>
             <div id="pm-keys"></div>
@@ -2249,6 +2251,7 @@
 <script defer crossorigin="anonymous" src="js/ui/setting-row.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/settings-tabs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/key-binds.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/settings-export.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/aero-zones.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>

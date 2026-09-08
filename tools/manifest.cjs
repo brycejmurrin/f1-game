@@ -156,6 +156,7 @@ const FULL = [
   "js/ui/setting-row.js",
   "js/ui/settings-tabs.js",
   "js/ui/key-binds.js",
+  "js/ui/settings-export.js",
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
   "js/race/race-control.js",

@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_147 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_148 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -190,6 +190,7 @@ _147 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `setting-row.js` | `SettingRow` | tag | SettingRow — the ONE control for an enumerated preference on a settings sheet: LABEL ‹ VALUE › One line at every UI SIZE and orientation. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
+| `settings-export.js` | `SettingsExport` | tag | SettingsExport: the SETTINGS FILE buttons in SETTINGS › DISPLAY › RENDERER. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
