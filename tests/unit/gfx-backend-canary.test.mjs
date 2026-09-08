@@ -448,6 +448,12 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBackend", "apex26.gfxBackendProbe",
     "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
     "apex26.gfxTlxFail",
+    // The boot canary's two latches. gfxProbeStrikes counts loads that died
+    // before presenting a frame — one is a memory kill, two retires the pick —
+    // and gfxBackendWas remembers the pick that was retired so it can be
+    // offered back. A RESET that left a strike behind would hand the next boot
+    // a strike it did not earn, and retire the pick on its first real failure.
+    "apex26.gfxProbeStrikes", "apex26.gfxBackendWas",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxViz",
     "apex26.wgxCapture",
