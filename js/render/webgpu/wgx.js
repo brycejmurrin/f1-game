@@ -1202,7 +1202,7 @@ const WGX = (function () {
     let pSkid = null, skidUBO = null, skidFxBG = null, skidVBO = null,
         _skidCap = 0, _skidScratch = null;
     let pLine = null, lineUBO = null, lineFxBG = null, lineVBO = null, _lineCap = 0;   // DRIVING LINE ribbon
-    const _lineU = new Float32Array(20);   // LineU: viewProj (16) + params (4)
+    const _lineU = new Float32Array(24);   // LineU: viewProj (16) + params (4) + params2 (4)
     let pGlow = null, glowUBO = null, glowFxBG = null, glowVBO = null,
         _glowCap = 0, _glowScratch = null;
     let pDecal = null, decalUBO = null, fxDecalLayout = null;
@@ -5561,7 +5561,8 @@ const WGX = (function () {
       _lineU[16] = (opts && opts.speed) || 0;
       _lineU[17] = opts && opts.cornersOnly ? 1 : 0;
       _lineU[18] = (opts && opts.str) || 1.6;
-      _lineU[19] = 0;
+      _lineU[19] = opts && opts.palette ? 1 : 0;   // colour-blind palette (params.w)
+      _lineU[20] = (opts && opts.opacity) || 1;    // LINE OPACITY (params2.x)
       device.queue.writeBuffer(lineUBO, 0, _lineU);
       _setPipe(litPass, pLine);
       _setBG0(litPass, lineFxBG);

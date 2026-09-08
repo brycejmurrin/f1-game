@@ -1973,7 +1973,10 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // is exactly why it needs a static pin.
   assert.match(envBody, /catch\s*\(\s*\w+\s*\)\s*\{[\s\S]{0,400}faceOk\s*=\s*false\b/,
     "envFaceEnd must record a failed probe face, not swallow it silently");
-  assert.match(envBody, /if\s*\(\s*faceOk\s*\)\s*envFacesMask\s*\|=\s*1\s*<<\s*\(\s*face\s*&\s*7\s*\)/,
+  // The `{` is optional because envFaceEnd also bumps the ENDS counter here
+  // (envState().begins/ends, added to settle PERF-FINDINGS 2t). What is pinned
+  // is the guard: the mask update stays inside `if (faceOk)`.
+  assert.match(envBody, /if\s*\(\s*faceOk\s*\)\s*\{?\s*envFacesMask\s*\|=\s*1\s*<<\s*\(\s*face\s*&\s*7\s*\)/,
     "a failed probe face must not be counted towards the six");
   assert.match(envBody, /if\s*\(\s*faceOk\s*&&\s*envFacesMask\s*===\s*63\s*&&\s*probeErrored\s*\)/,
     "envReady must not latch on a face that threw");
@@ -2552,6 +2555,24 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.ok(road, "the dry road material declares a depthBias");
   assert.ok(fxF < +road[1] && fxU < +road[2],
     `tsl-fx fx decal offset (${fxF},${fxU}) must be nearer the camera than the road's (${road[1]},${road[2]})`);
+});
+
+test("all three backends carry the driving line's colour-blind palette", () => {
+  // The speed cue is green/amber/red, whose two ends are the pair the common
+  // red-green deficiencies cannot separate, so SETTINGS offers the IBM
+  // colour-blind-safe triple instead. A backend that forgot it would signal a
+  // DIFFERENT thing to the same player depending on which renderer they got —
+  // the exact class of drift the parity snapshot exists for (2026-09-08).
+  // Pinned by the safe triple's blue, which no other fx colour uses.
+  for (const [what, file] of [["GLX", "js/render/glx/shaders/glsl-fx.js"],
+                              ["WGX", "js/render/webgpu/wgsl-fx.js"],
+                              ["TLX", "js/render/three/tsl-fx.js"]]) {
+    const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
+    assert.match(src, /0\.392,\s*0\.561,\s*1\.0/,
+      `${what} (${file}) must carry the colour-blind-safe ON-PACE blue`);
+    assert.match(src, /0\.863,\s*0\.149,\s*0\.498/,
+      `${what} (${file}) must carry the colour-blind-safe BRAKE magenta`);
+  }
 });
 
 test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {

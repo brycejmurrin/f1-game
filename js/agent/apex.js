@@ -924,6 +924,19 @@ const api = {
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     return G.state;
   },
+  // EVERY numeric/boolean field on every car, raw and unrounded — the whole
+  // per-car state, not the curated slice cars() returns. Its reason for
+  // existing is EPISODE_TRANSIENTS above: reset() must leave the cars in the
+  // state a fresh page load leaves them in, and the only honest way to check
+  // that is to diff the actual objects across two resets. Strings, objects and
+  // functions are skipped (team records, driver names, the launch plan) — they
+  // are identity, not episode state, and stringifying them would swamp the
+  // diff that matters.
+  carState: () => G.cars.map((c) => {
+    const o = {};
+    for (const k in c) { const v = c[k]; if (typeof v === "number" || typeof v === "boolean") o[k] = v; }
+    return o;
+  }),
   cars: () => G.cars.map((c, i) => ({
     id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
     yaw: +(c.yawVis || 0).toFixed(4),
@@ -2336,6 +2349,23 @@ const api = {
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
       delete c.vertLoad;
+      // MEASURED (2026-09-08): the block above was written for the drivetrain,
+      // and every field the AI has grown since leaks the same way — episode 1
+      // ran from a cold car, every later episode inherited the last one's, and
+      // the field finished 4 s in a different ORDER (two transposed pairs in
+      // field().positions, the player's own digest identical because it starts
+      // ahead of the grid). Dumping every primitive on all 22 cars at the start
+      // of three episodes named the leaks exactly; these are they. `lane` is the
+      // odd one out and the reason this bit: it is not absent before the first
+      // episode but ALREADY ADAPTED, so it re-seeds from lanePref (the grid home
+      // line makeCars stored) rather than being deleted. The rest are absent on
+      // a cold car, so DELETING is what makes every episode start as the first
+      // one did — the same reason vertLoad above is deleted, not zeroed.
+      for (const k of ["rank", "kCur", "wasArmed", "_vmaxNow", "onKerb", "exhaustPop",
+                       "_pushD", "_secIdx", "_secT0", "accSm", "passSide", "passBest",
+                       "_lapTimeAtLine", "incidentInvalidLap", "axFrac", "slipFactor",
+                       "flatSpot", "_aeroGrip", "skidIntensity"]) delete c[k];
+      c.lane = c.lanePref != null ? c.lanePref : 0;
       c._prevS = c.s;
       // …and every OTHER per-episode transient, deleted rather than zeroed so
       // episode N starts in the state a freshly loaded page is in — which is
@@ -2494,6 +2524,12 @@ const api = {
   // default, with the default it replaced and the source that owns it; "all"
   // = every preference's effective value. Never the garage, saves or accounts.
   settingsFile(mode) { return SettingsExport.collect(mode === "all" ? "all" : "changes", G); },
+
+  // garageFile() — the GARAGE file object (js/ui/settings-export.js): parts,
+  // liveries, setup sheets and an invented team, for every team, enumerated by
+  // prefix from localStorage. Never career or season saves, lap records or
+  // anything account-shaped.
+  garageFile() { return SettingsExport.collectGarage(); },
 
   // save(data, filename) — hand a file back out of the browser.
   //

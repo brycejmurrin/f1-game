@@ -11,6 +11,84 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-08 — three.js lost half the trackside scenery, and nothing could see
+it. FIXED**, but the shape is worth keeping. A player reported missing scenery
+on three.js; GLX was fine. Reproduced on real Apple hardware via `gpu-census`
+on macos-latest (`anyHardware: true`, `softAdapter: false`, `gpuErrors: 0`):
+GLX drew the barrier wall and debris fence, both three legs drew bare grass.
+Root cause in `ARCHITECTURE.md` §Parity snapshot — the node-program cache key
+dropped an instanced object's identity, and three compiles the instance-matrix
+source buffer into the node graph, so 28 prop batches shared one program bound
+to the first batch's transforms.
+
+*Why every instrument read clean*, which is the reusable part: `gpuErrors 0`;
+the cull agreed with GLX instance for instance (1060 / 35,672 verts at one
+camera); `imesh.count`, `visible`, `parent`, `material` and the resident
+`instanceMatrix` were all correct. The DATA was never wrong — the program it
+was bound to was. Ruled out along the way, each with a same-camera A/B: the
+ranged `instanceMatrix` upload (0 px change), the 1024-instance
+uniform-buffer threshold (a synthetic cap-3000 InstancedMesh renders fine),
+the geometry shared with tlx-shadow's caster pool, and the geometry itself (a
+plain `Mesh` of it draws). What isolated it was adding `|obj<id>` to the key
+before the track built: 24.8% of pixels move and the furniture returns.
+
+*Why it cost so much*: `graph.js` skips the FUSE for a batched node, so there
+is no soup copy behind a dropped batch — **48.2% of all prop geometry across
+the roster is instanced-only** (79.6% Vegas, 77.9% Nürburgring, 74.2%
+Hockenheim, 72.2% Spa). DebrisWorld's per-body fallback cannot see a skip
+either: it feature-detects on the NAME, which is present and no-ops.
+
+**2026-09-08 — every glass pane shipped twice. FIXED.** `scenery/city.js`
+routes unlit window panes to `glassBuf`, and `tracks.js` only sets
+`_preferInstance` on the default props buffer — so `replay()` wrote those panes
+into the GLASS MESH and the same placements came back from `graph.batches()` as
+an instanced unit-box batch that `tracks.js` uploaded on top, with the props
+material, at the same depth. 56,048 instances / 1,345,152 verts roster-wide
+(Vegas 22,127, Baku 12,613, Jeddah 11,617, Singapore 7,895); on ten circuits
+the duplicate is the glass mesh vertex for vertex. `batches()` plain stays a
+CAPABILITY report (six unit tests and `graph-parity.cjs` depend on that); the
+fix is `batches({instancedOnly:true})` at the one caller that uploads. Visually
+invisible — co-planar — so it was pure cost: a same-camera A/B on jeddah moves
+0.03% of pixels.
+
+**2026-09-08 — a re-grid inherited the last race's per-car scratch. FIXED,
+TWICE, by two sessions in parallel — and the duplication is the lesson.**
+`agent-determinism.spec.js` went red on the deploy branch (Pages 2095,
+`14a1789e`). Three `run(42)` episodes in ONE page, and run 0 disagreed with runs
+1 and 2, which agreed with each other. That first-run-only shape is the tell:
+the first episode CREATES per-car scratch that no re-grid restores, so every
+later episode starts warm.
+
+The fix that matters is in `apex.js` `reset()`, from the session that owned the
+lateral controller that broke it (`1ad520c5`, `9375f1ce`, `c5a9dd87`): the
+clearing block now also deletes the fields **one car reads off ANOTHER** —
+`_vmaxNow` (the blocker's pace `AiDrive.otWant` turns a pass on), `accSm`, and
+`towing` — plus the controller's own `aiHead`/`aiBias`/`aiFam`. Those are
+written every frame but READ on the first frame before their owner has been
+updated, so a cold session sees `undefined` and falls back where a replayed one
+sees the last episode's value. `lane` is the odd one out and re-seeds from
+`lanePref` rather than being deleted, because it is already adapted before the
+first episode rather than absent.
+
+This side reached the same place independently and kept only the half that one
+does not cover: `gridUp()` and `redFlagRestart()` clear `accSm` and restore
+`lane` too, because a REAL PLAYER never calls `__apex.reset()`. Starting a
+second race from the results screen, and a red-flag standing restart, both
+re-grid through those paths, and a car sitting on a grid box is pulling nothing.
+Neither clear draws `simRnd`, so the grid's draw-count contract holds.
+
+*The duplication is worth recording.* Two sessions spent a working day each on
+one defect, and both arrived by the same route — dump every primitive on all 22
+cars at the start of three episodes, diff, and the leak names itself. Neither
+reasoned it out; three code-read hypotheses were tried and measured wrong on
+this side alone (the Red Bull livery commit, a lazily-built cache, the seeded
+stream's draw count). **The measurement is cheap and the reasoning is not: on a
+determinism break, dump and diff FIRST.** A VM twin of the browser guard landed
+with the other side's fix (`determinism-replay-vm.test.mjs`, in `test:game-vm`),
+so this is now caught without a browser group; a second twin written here was
+dropped on the merge rather than shipped beside it, which is the same
+drifted-twin trap `2987dee4` added a guard for.
+
 **2026-08-18 cleanup sweep** tagged removals, false-positive dead exports, and
 the next intended `game.js` extractions in
 [`../archive/research/CLEANUP-SWEEP-2026-08-18.md`](../archive/research/CLEANUP-SWEEP-2026-08-18.md).
@@ -21,21 +99,62 @@ Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
 `lapMirror` portal remaps have landed in code. Remaining survey leftovers live
 on the 08-18 perf-hunt board, not this register.
 
-- **`aero-zones` "X-mode buys X_VMAX_GAIN of vmax" is RED on the deploy tip,
-  and was before any of 2026-09-08's work — OPEN.** The spec asserts
-  `x.vmaxNow / z.vmaxNow ≈ 1 + z.xVmaxGain`. Measured through the Node VM
-  harness on three trees (`scratch/xmode.mjs`): 722f617 (before the racing-line
-  relaxation) ratio **1.1023**, 6084d42 (after it, before the AI controller)
-  **1.1023**, tip **1.0880** — against an expected 1.0957 every time. So the
-  test fails on all three; the AI controller moved the number but did not
-  break it. Either `vmaxNow` gains something beyond the wing between the two
-  reads (the X sample is driven for 1 s under throttle, so a state that
-  settles — flap travel, aero load, tyre — is the suspect) or `xVmaxGain` is
-  not the whole trade any more, the way the same spec's own comment says a
-  hardcoded 1.075 stopped being. Proposed patch: report the applied gain in
-  `physState()` and assert against THAT, or take both samples at the same
-  settled state. NOT fixed here: it is unrelated to the driving line and the
-  AI controller, and widening a tolerance to hide it is forbidden.
+- **The deploy branch's three.js/WebGPU leg renders a near-black frame on real
+  Apple hardware — OPEN, not mine, handed over (2026-09-08).** `gpu-census` on
+  `claude/f1-game-project-26h3ng` at `d4cd570`, `macos-latest`, montreal:
+  `meanLuma` **2.6** on the TLX/WebGPU leg while the other three legs of the
+  SAME run are normal (webgl2 67, glx 73.8, wgx 79.3). Reproduced twice —
+  runs 59 and 60. My own branch at `37627cc`, same image and track, reads 46.7
+  on that leg, and the historical family is 43.9 / 46.7 / 48.4.
+
+  **The documented confound does not explain it.** `docs/notes/PERF-FINDINGS.md`
+  records a known non-defect where TLX/WebGPU renders darker because
+  `envReady=false` leaves it with no image-based ambient, and the census
+  workflow's own comments warn that a `meanLuma` comparison is only a
+  comparison when both legs ran the same content (`tier` decides whether the
+  env probe is live). Run 59 fit that shape (`envReady=false`, `tier=1`,
+  `envFace=0`) and I retracted the finding on it. **Run 60 does not**:
+  `envReady=true`, `envBlank=false`, `tier=0`, `envFace=2` — the same state as
+  the 43.9–48.4 family — and still 2.6. So the retraction was wrong and the
+  finding stands.
+
+  **Where it is NOT.** `js/render/` is byte-identical between `f342eca` (my
+  branch, 46.7) and the deploy tip (2.6), so no renderer change causes this.
+  The delta is `js/perf/renderer-picker.js` (a new touch-device default for
+  the stored backend), `js/car/car-mesh.js`, `js/car/car3d.js`,
+  `js/car/liverytex.js`, `js/game.js`, `js/input/steer-tuning.js` and
+  `js/ui/settings-export.js` — work from `claude/rendering-bugs-optimizations-3pstxj`
+  and two other sessions. NOT investigated further and NOT touched: it is
+  another session's in-flight work, and editing someone else's branch on a
+  hunch is how two sessions end up fighting over one file.
+
+  **The gate cannot see it, deliberately.** The census verdict fails on
+  `gpuErrors`, `softAdapter` and `envFail`, never on appearance; the workflow
+  argues a brightness floor "goes flaky and then gets widened to pass, which
+  AGENTS.md forbids outright". That reasoning is sound and this entry is not a
+  request to overturn it — but it does mean a black frame ships green, and the
+  only thing standing between that and a player is somebody reading the
+  summary. Worth a decision from the owner, not a unilateral threshold.
+
+- **`aero-zones` "X-mode buys X_VMAX_GAIN of vmax" — NOT A DEFECT. The entry
+  that stood here was mine and it was wrong (retracted 2026-09-08).** It
+  recorded the spec as RED on three trees at ratios 1.1023 / 1.1023 / 1.0880
+  against an expected 1.0957, measured through a scratch harness
+  (`scratch/xmode.mjs`, since deleted). The spec is GREEN: 1/1 alone, and
+  14/14 with the whole file in order, on the tip. Reproducing it in
+  `tools/lib/game-vm.cjs` with the spec's OWN preconditions gives 1.09574
+  against 1.09570 — inside the 3-decimal tolerance, no patch needed.
+
+  The lesson is the entry, not the physics. `7212e79` (another session, the
+  same morning) had already fixed the real cause: the human car tows since
+  2026-09-03, so a rival inside the 34 m window in one sample and not the
+  other moved `vmaxNow` by the slipstream rather than the flap. The spec now
+  sends the field 800 m back and asserts `towing === 0` in both samples. My
+  harness did not do either, so it measured the tow and I wrote the number
+  down as a defect in the code. **A harness that does not reproduce a spec's
+  preconditions is not evidence about that spec** — and inflation (1.1023 >
+  1.0957) was the tell, since a car gaining MORE than the flap earns is a
+  car getting something extra, not a broken multiplier.
 - **TLX: every road decal (driving line, blob shadow, tyre mark, skid) was
   buried under the road — FIXED (2026-09-08).** `tsl-fx.js` `fxMaterial`
   copied GLX's `polygonOffset(-4,-8)`, but three honours the road's own

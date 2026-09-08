@@ -32,6 +32,7 @@ const LiveryTex = (function () {
     finBadge: { x: 500, y: 856, w: 160, h: 160 },
     spineSide: { x: 680, y: 856, w: 304, h: 160 },   // the WHOLE engine-cover flank, the car's RIGHT side (liv.spineSide): z -0.66 → -1.90 across, crease → sidepod line down
     spineSideL: { x: 40, y: 1040, w: 304, h: 160 },  // the same for the LEFT flank, authored in its own outside-view frame
+    fwEnd: { x: 380, y: 1040, w: 340, h: 140 },  // front-wing endplate, outer face (both sides); in the extra rows beside spineSideL
     tail: { x: 500, y: 420, w: 180, h: 80 },   // the cover's TAIL top (z -1.28..-1.92); the SPINE TOP band designs run on down it
   };
 
@@ -1394,9 +1395,17 @@ const LiveryTex = (function () {
       ctx.fillRect(px - W * 0.014, Y, W * 0.014, H); ctx.fillRect(px + pw, Y, W * 0.014, H);
     } else if (id === "wordmark") {
       // The title sponsor along the spine, rotated to run nose → tail so it
-      // reads from the side of the car, the way a real engine cover carries it.
-      ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(-Math.PI / 2);
-      drawWordmark(ctx, name, { x: -H / 2, y: -W * 0.16, w: H, h: W * 0.32 }, ink, { align: "center" });
+      // reads from the SIDE of the car, the way a real engine cover carries it.
+      // TWICE, once per half of the crown, each turned the other way: one copy
+      // read upside down from whichever side it was not drawn for. The crown is
+      // narrow and the mark only ever used a third of its width, so two columns
+      // cost almost nothing in letter height (0.30 W each against 0.32 W).
+      for (const s2 of [-1, 1]) {
+        ctx.save();
+        ctx.translate(X + W / 2 + s2 * W * 0.25, Y + H / 2); ctx.rotate(s2 * Math.PI / 2);
+        drawWordmark(ctx, name, { x: -H / 2, y: -W * 0.15, w: H, h: W * 0.30 }, ink, { align: "center" });
+        ctx.restore();
+      }
     } else if (id === "number") {
       // TOP-DOWN: upright with the nose up — the chase camera's view and a
       // plan view of the car (the owner's call; the crest matches). Squashed
@@ -1859,6 +1868,11 @@ const LiveryTex = (function () {
         { align: "center", halo: haloIf(inkPod) });
       drawWordmark(ctx, names[1], REGIONS.titleB, inkPod,
         { align: "center", halo: haloIf(inkPod) });
+      // The FRONT-WING ENDPLATE carries a partner mark, as every 2026 car does.
+      // The plate is drawn in c2 (see car3d's front-plate span), so it inks for
+      // c2 — not for the flap colour, which is a different part.
+      drawWordmark(ctx, names[4] || names[0], REGIONS.fwEnd, inkOn([c2]),
+        { align: "center", spacing: 0.06, halo: haloIf(inkOn([c2])) });
       const inkWing = inkOn([colors.wing || c2]);
       drawWordmark(ctx, names[2], REGIONS.wing, inkWing,
         { align: "center", spacing: 0.1, halo: haloIf(inkWing) });
