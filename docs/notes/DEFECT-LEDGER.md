@@ -21,6 +21,43 @@ Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
 `lapMirror` portal remaps have landed in code. Remaining survey leftovers live
 on the 08-18 perf-hunt board, not this register.
 
+- **The deploy branch's three.js/WebGPU leg renders a near-black frame on real
+  Apple hardware — OPEN, not mine, handed over (2026-09-08).** `gpu-census` on
+  `claude/f1-game-project-26h3ng` at `d4cd570`, `macos-latest`, montreal:
+  `meanLuma` **2.6** on the TLX/WebGPU leg while the other three legs of the
+  SAME run are normal (webgl2 67, glx 73.8, wgx 79.3). Reproduced twice —
+  runs 59 and 60. My own branch at `37627cc`, same image and track, reads 46.7
+  on that leg, and the historical family is 43.9 / 46.7 / 48.4.
+
+  **The documented confound does not explain it.** `docs/notes/PERF-FINDINGS.md`
+  records a known non-defect where TLX/WebGPU renders darker because
+  `envReady=false` leaves it with no image-based ambient, and the census
+  workflow's own comments warn that a `meanLuma` comparison is only a
+  comparison when both legs ran the same content (`tier` decides whether the
+  env probe is live). Run 59 fit that shape (`envReady=false`, `tier=1`,
+  `envFace=0`) and I retracted the finding on it. **Run 60 does not**:
+  `envReady=true`, `envBlank=false`, `tier=0`, `envFace=2` — the same state as
+  the 43.9–48.4 family — and still 2.6. So the retraction was wrong and the
+  finding stands.
+
+  **Where it is NOT.** `js/render/` is byte-identical between `f342eca` (my
+  branch, 46.7) and the deploy tip (2.6), so no renderer change causes this.
+  The delta is `js/perf/renderer-picker.js` (a new touch-device default for
+  the stored backend), `js/car/car-mesh.js`, `js/car/car3d.js`,
+  `js/car/liverytex.js`, `js/game.js`, `js/input/steer-tuning.js` and
+  `js/ui/settings-export.js` — work from `claude/rendering-bugs-optimizations-3pstxj`
+  and two other sessions. NOT investigated further and NOT touched: it is
+  another session's in-flight work, and editing someone else's branch on a
+  hunch is how two sessions end up fighting over one file.
+
+  **The gate cannot see it, deliberately.** The census verdict fails on
+  `gpuErrors`, `softAdapter` and `envFail`, never on appearance; the workflow
+  argues a brightness floor "goes flaky and then gets widened to pass, which
+  AGENTS.md forbids outright". That reasoning is sound and this entry is not a
+  request to overturn it — but it does mean a black frame ships green, and the
+  only thing standing between that and a player is somebody reading the
+  summary. Worth a decision from the owner, not a unilateral threshold.
+
 - **`aero-zones` "X-mode buys X_VMAX_GAIN of vmax" — NOT A DEFECT. The entry
   that stood here was mine and it was wrong (retracted 2026-09-08).** It
   recorded the spec as RED on three trees at ratios 1.1023 / 1.1023 / 1.0880
