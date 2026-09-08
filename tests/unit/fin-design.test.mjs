@@ -138,7 +138,18 @@ test("spineLogo none drops the crest from the cover and keeps it on the fin", ()
 });
 
 test("every SPINE TOP design paints the crown; wordmark and number carry text", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "saddle", "panel", "stripe", "twin", "wordmark", "carbon", "number"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "wordmark", "carbon", "number"]);
+  // The wrap is ONE shape over crown and flanks: it paints the crest region
+  // AND the flank band with no spineSide picked, and leaves the tail bare.
+  const wrap = A.paint("redbull", { ...BASE, spineLogo: "wrap" });
+  assert.ok(opsIn(wrap, R.crest).length > 0 && opsIn(wrap, R.spineSide).length > 0, "wrap reaches both the crown and the flank band");
+  assert.equal(opsIn(wrap, R.tail).length, 0, "wrap leaves the tail bare");
+  // The big mark is the crest without its plate at crown scale: it paints the
+  // crown, with FEWER ops than the crest (the disc is gone) and none on the
+  // tail (it is a mark, not a band).
+  const big = opsIn(A.paint("redbull", { ...BASE, spineLogo: "bigmark" }), R.crest).length;
+  assert.ok(big > 0 && big < opsIn(A.paint("redbull", BASE), R.crest).length, `bigmark: ${big} ops, the disc dropped`);
+  assert.equal(opsIn(A.paint("redbull", { ...BASE, spineLogo: "bigmark" }), R.tail).length, 0, "bigmark leaves the tail bare");
   const bare = opsIn(A.paint("ferrari", { ...BASE, spineLogo: "none" }), R.crest).length;
   // The tail strip: bare for the marks and "none", painted by every band design.
   for (const id of ["none", "logo", "number"]) assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.tail).length, 0, `${id}: the tail stays bare`);
@@ -236,7 +247,7 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
 // code or the crest on pick. Mesh: the service panels leave the band's z range
 // so a grey hatch never sits through the number — same vertex count, moved.
 test("spineSide paints the flank band on pick only, and clears the service panels from under it", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "slash"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash"]);
   assert.equal(opsIn(A.paint("ferrari", BASE), R.spineSide).length, 0, "the shipped atlas paints the flank band");
   const texts = (liv) => opsIn(A.paint("ferrari", { ...BASE, ...liv }), R.spineSide)
     .filter((op) => op.kind === "text").map((op) => op.text);
@@ -246,6 +257,7 @@ test("spineSide paints the flank band on pick only, and clears the service panel
   // name, the slashes only bars.
   assert.ok(texts({ spineSide: "plate" }).includes("16"), "plate: number on the plate");
   assert.ok(texts({ spineSide: "wordmark" }).join("").length >= 3, "wordmark: a sponsor name on the flank");
+  assert.ok(texts({ spineSide: "duo" }).join("").length > texts({ spineSide: "wordmark" }).join("").length, "duo: two names on the flank");
   const slash = opsIn(A.paint("ferrari", { ...BASE, spineSide: "slash" }), R.spineSide);
   assert.ok(slash.length >= 4 && slash.every((op) => op.kind !== "text"), "slash: bars, no text");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "logo" }), R.spineSide).length > 0, "the crest on the flank");

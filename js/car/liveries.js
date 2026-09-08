@@ -42,14 +42,18 @@
      line, so a taller spine shortens the blade.
    spineSide? optional SPINE SIDE: "none" (absent), "number", "logo", "code",
      "plate" (the number on a contrasting panel, SF-26), "wordmark" (the title
-     sponsor, RB22 / W17) or "slash" (the W17's raked bars) paints that on the
+     sponsor, RB22 / W17), "duo" (title sponsor aft, partner forward — the
+     RB22's Red Bull over Ford Racing) or "slash" (the W17's raked bars) paints that on the
      engine-cover FLANK, both sides (LiveryTex.SPINE_SIDE_IDS; car-mesh's band).
      The grey service panels and the accent pinstripe keep clear of the band,
      so it also moves a vertex.
    spineLogo? optional SPINE TOP — what the engine-cover crown carries over
      its tail wash. "logo" (absent) draws the crest there as well as on the
      fin; "none" leaves the crown to the wash, so the mark reads once from a
-     chase camera instead of twice; "saddle" (the whole crown in the accent,
+     chase camera instead of twice; "wrap" (the mark's plate colour as a sun
+     over the crown AND down both flanks, the plate-less mark on top — the
+     RB22's sun and bull); "bigmark" (the mark without its plate at
+     full crown width — the RB22's bull with no sun disc); "saddle" (the whole crown in the accent,
      the SF-26's white top), "panel" (a solid accent block with a raked
      front edge), "stripe", "twin", "wordmark" (the title
      sponsor running along the spine), "carbon" (an exposed panel) and
