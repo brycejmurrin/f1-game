@@ -1668,11 +1668,13 @@ const Car3D = (function () {
     const ckAt = (z) => { const f = (CK_A.z - z) / (CK_A.z - CK_B.z), L = (a, b) => a + (b - a) * f;
       return { z, y: L(CK_A.y, CK_B.y), w: L(CK_A.w, CK_B.w), h: L(CK_A.h, CK_B.h), t: L(CK_A.t, CK_B.t) }; };
     const ckTop = (st) => st.y + st.h / 2, ckBot = (st) => st.y - st.h / 2;
-    const ckOpen = (z) => 0.105 + (0.150 - 0.105) * ((z - CK_REAR_Z) / (CK_A.z - CK_REAR_Z));
+    const ckOpen = (z) => 0.150 + (0.200 - 0.150) * ((z - CK_REAR_Z) / (CK_A.z - CK_REAR_Z));
     // tub half-width at any height (the flank leans in linearly from w/2 at the
     // bottom to t*w/2 at the deck)
+    const CK_TOP_T = 0.86;
+    const ckT = (st) => Math.max(st.t, CK_TOP_T);
     const ckFlank = (st, y) => (st.w / 2) +
-      (st.t * st.w / 2 - st.w / 2) * ((y - ckBot(st)) / (ckTop(st) - ckBot(st)));
+      (ckT(st) * st.w / 2 - st.w / 2) * ((y - ckBot(st)) / (ckTop(st) - ckBot(st)));
     const ckSide = (st) => ckFlank(st, CK_FLOOR_Y);
     // THE COCKPIT SIDE SWEEPS DOWN toward the front, as a real one does — it is
     // highest at the headrest and lowest at the driver's hands. Level at the
@@ -2075,8 +2077,15 @@ const Car3D = (function () {
     // stay BELOW THE WHEEL'S TOP (rig 0.63 + half-height x 0.80 = 0.756): it is
     // further away, so equal height puts it HIGHER on screen and it draws over
     // the wheel — measured, that is why the wheel once vanished. Top 0.54 here.
+    // THE SCUTTLE MUST FALL INTO THE COCKPIT, not wall it off. The exterior
+    // rear station used to top out at 0.660 (y 0.585 + h/2) and stop at z 0.08,
+    // which is 7.5 cm PROUD of the cockpit rail it meets at 0.585 and directly
+    // across the driver's face: the visor's own band is 0.612-0.700, so this
+    // slab took the bottom half of it and read as a wall with a helmet behind.
+    // Dropping it to a 0.605 top lands it on the rail line, so the deck now
+    // sweeps down into the opening the way a real scuttle does.
     const hR = ckpt ? { z: 0.58, y: 0.42, w: 0.66, h: 0.12, t: 0.58 }
-                    : { z: 0.08, y: 0.585, w: 0.44, h: 0.15, t: 0.58 };
+                    : { z: 0.08, y: 0.530, w: 0.44, h: 0.15, t: 0.58 };
     addSpan(out, hF, hR, c1, c1);
     addTopBevel(out, hF, hR, 0.026, c1);
     // Accent stripe down the vanity deck crown (team colour) — CHASE ONLY.
