@@ -1692,6 +1692,36 @@ const LiveryTex = (function () {
       }
       accent = best;
     }
+    // THE BAND COLOUR. Every crown and flank design paints in one colour, and
+    // it lands on the ENGINE COVER — which liv.cover can paint differently from
+    // the body. `accent` above is scored against c1 and the ink, never against
+    // the cover, so a pale accent on a pale cover passed every check and
+    // painted white on white: Ferrari's saddle measured 1.12 against its own
+    // cover and Mercedes' stripes 1.52, both invisible, both shipped. Re-picked
+    // here against what the band ACTUALLY sits on, and only when the natural
+    // choice fails — where the cover equals the body, which is nine teams, the
+    // atlas is byte-identical to before.
+    // The floor is 2.0, not INK_FLOOR: these are metre-long bands, not
+    // lettering, and Red Bull's bull measures 2.26 against its navy and reads
+    // clearly on track (tools/shot/shot.mjs --team, 2026-09-08).
+    const BAND_ON_COVER = 2.0;
+    const bandC = (() => {
+      const want = stripe || accent;
+      if (contrast(want, coverPaint) >= BAND_ON_COVER) return want;
+      // FIRST that clears, not the highest-scoring: taking the maximum handed
+      // Ferrari a near-black saddle over its pale cover, which is the highest
+      // contrast on the list and the wrong car. The team's own paints come
+      // first, so a white cover gets the RED saddle the SF-26 wears, and the
+      // inks are the last resort for a livery whose colours all vanish on it.
+      const order = [stripe, accent, c2, c1, INK_LIGHT, INK_DARK].filter(Boolean);
+      for (const cand of order) if (contrast(cand, coverPaint) >= BAND_ON_COVER) return cand;
+      let best = want, score = contrast(want, coverPaint);
+      for (const cand of order) {
+        const s = contrast(cand, coverPaint);
+        if (s > score) { score = s; best = cand; }
+      }
+      return best;
+    })();
 
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     // The three DESIGN picks. Absent = today's atlas, pixel for pixel.
@@ -1784,11 +1814,11 @@ const LiveryTex = (function () {
       } else drawCrest(ctx, teamId, Rb, { liv: colors, field: [c1, c2], bare: true, palette: Object.assign({}, lockup, { plate: null }) });
       ctx.restore();
     } else if (spineLogo !== "none") {
-      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, stripe || accent, inkCrest, names[0] || "", raceNum, colors.numFont);
-      if (spineLogo === "saddle") saddleFlanks(ctx, stripe || accent);
+      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont);
+      if (spineLogo === "saddle") saddleFlanks(ctx, bandC);
     }
     if (REGIONS.tail) {
-      drawTailTop(ctx, spineLogo, REGIONS.tail, stripe || accent, inkCrest, names[1] || "");
+      drawTailTop(ctx, spineLogo, REGIONS.tail, bandC, inkCrest, names[1] || "");
     }
     const finWash = finArt || [stripe, c1, accent, inkFin].filter(Boolean)
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
@@ -1889,7 +1919,7 @@ const LiveryTex = (function () {
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
-        ctx.fillStyle = cssA(stripe || accent, 0.96);
+        ctx.fillStyle = cssA(bandC, 0.96);
         ctx.beginPath();
         ctx.moveTo(F.fx(0), Sf.y + Sf.h * 0.30); ctx.lineTo(F.fx(1), Sf.y + Sf.h * 0.82);
         ctx.lineTo(F.fx(1), Sf.y + Sf.h); ctx.lineTo(F.fx(0), Sf.y + Sf.h);
@@ -1903,7 +1933,7 @@ const LiveryTex = (function () {
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
-        ctx.fillStyle = cssA(stripe || accent, 0.96);
+        ctx.fillStyle = cssA(bandC, 0.96);
         for (let i = 0; i < 4; i++) {
           const y = Sf.y + Sf.h * (0.18 + i * 0.19), h = Sf.h * 0.085;
           const x0 = F.fx(0.04), x1 = F.fx(0.04 + 0.62 - i * 0.13);
@@ -1921,7 +1951,7 @@ const LiveryTex = (function () {
       eachFlank((F) => {
         const Sf = F.R, skew = Sf.h * 0.40 * F.dir;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
-        ctx.fillStyle = cssA(stripe || accent, 0.96);
+        ctx.fillStyle = cssA(bandC, 0.96);
         for (let i = 0; i < 6; i++) {
           const x0 = su(F, 0.10 + i * 0.145), bw = Sf.w * (1 - sideFrom) * (0.055 - i * 0.005) * F.dir, hh = Sf.h * (0.85 - i * 0.10);
           ctx.beginPath();
