@@ -455,3 +455,38 @@ if (flag("fit", "")) {
     }
   }
 }
+
+
+/* ── one helmet's palette ─────────────────────────────────────────────────
+   Four of the grid — Perez, Lindblad, Colapinto, Bottas — are not on the
+   side-on line-up sheet at all; it carries Doohan and Tsunoda in their places,
+   so those four designs had never been measured against anything. They appear
+   on the other reference, but as three-quarter views, and the (t, az)
+   projection above assumes a flank.
+
+   It does not matter: the PALETTE is the half of this tool that was ever
+   sound, and a palette needs the helmet's pixels, not a mapping onto the
+   shell. Segment the crop, name every pixel by chromaticity, report the
+   shares. --palette=<file>. */
+if (flag("palette", "")) {
+  const file = flag("palette", "");
+  // the same flood-fill segmentation the sheet uses, and the LARGEST blob:
+  // a crop carries the backdrop and two lines of caption, and a plain colour
+  // cut counts both — which is how Lindblad first came back "68% white".
+  const img = await blobs(resolve(ROOT, file));
+  if (!img.list.length) { console.log(`${file}: nothing segmented`); }
+  else {
+    const b = img.list.reduce((a, c) => (c.n > a.n ? c : a));
+    const bins = new Map();
+    let n = 0;
+    for (let y = b.y0; y <= b.y1; y++) for (let x = b.x0; x <= b.x1; x++) {
+      if (img.lab[x + y * img.W] !== b.id) continue;
+      const i = (x + y * img.W) * img.ch;
+      const k = nearest([img.data[i] / 255, img.data[i + 1] / 255, img.data[i + 2] / 255]).k;
+      bins.set(k, (bins.get(k) || 0) + 1); n++;
+    }
+    const rows = [...bins.entries()].sort((a, b2) => b2[1] - a[1]).slice(0, 6);
+    console.log(`${file.replace(/.*cell-/, "").replace(".png", "").padEnd(4)} ${b.w}x${b.h}px  ` +
+      rows.map(([k, v]) => `${k} ${(100 * v / n).toFixed(0)}%`).join("  "));
+  }
+}
