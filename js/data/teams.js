@@ -7,6 +7,10 @@ const Teams = (function () {
     {
       id: "mercedes", name: "Mercedes-AMG Petronas", short: "MER",
       color: [0.045, 0.055, 0.065], color2: [0.0, 0.706, 0.671],   /* black #0B0E10 / Petronas teal #00B4AB (2026 black car) */
+      /* The W17 is a BLACK car with a SILVER engine cover: the launch photos show
+         the airbox, roll structure and cover crown in bare-metal silver over a
+         black chassis, with the star flake on the tail. */
+      livery: { cover: [0.76, 0.78, 0.82], finStyle: "stars" },
       engine: "Mercedes", tier: 0,
       stats: { speed: 96, accel: 91, cornering: 93, braking: 90 },
       drivers: [
@@ -17,6 +21,9 @@ const Teams = (function () {
     {
       id: "ferrari", name: "Scuderia Ferrari HP", short: "FER",
       color: [0.863, 0.0, 0.0], color2: [1.0, 1.0, 1.0],           /* red #DC0000 / white */
+      /* The SF-26 runs a WHITE engine cover over the red car — the strongest
+         zone split on the 2026 grid, and the reason the cover colour exists. */
+      livery: { cover: [0.95, 0.95, 0.96] },
       engine: "Ferrari", tier: 1,
       stats: { speed: 97, accel: 88, cornering: 91, braking: 92 },
       drivers: [
