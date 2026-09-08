@@ -883,6 +883,33 @@ const Car3D = (function () {
   function frontHalf(aLvl) {
     return FW_SPAN * (aLvl <= 0 ? 0.74 : (aLvl === 1 ? 0.88 : 1.0));
   }
+  // FRONT-WING ENDPLATE profiles, and the ONE function that places the plate.
+  // Hoisted out of the builder because the decal mesh has to land on the plate
+  // at every aero recipe: the plate's height, its outboard kick and even its
+  // thickness move with the level and the `plate` pick, so a decal drawn from
+  // literals floats in clear air on three of the four profiles — the same trap
+  // numberBoard() exists to close on the rear wing. Mesh and decal both read
+  // this.
+  const FRONT_PLATE = [
+    { hF: 0.16, hR: 0.30, kick: 0.020, footW: 0.09, footZ: 0.46, arch: 0 },
+    { hF: 0.22, hR: 0.40, kick: 0.060, footW: 0.13, footZ: 0.54, arch: 0 },
+    { hF: 0.30, hR: 0.54, kick: 0.100, footW: 0.19, footZ: 0.62, arch: 1 },
+    // 3: outwash spec — tall plate whose TOP EDGE ROLLS OUTBOARD (roll: 1
+    // adds the curled lip below), the 2026 field's signature endplate.
+    { hF: 0.28, hR: 0.50, kick: 0.120, footW: 0.16, footZ: 0.58, arch: 0, roll: 1 },
+  ];
+  function frontPlateGeom(aLvl, aero) {
+    const lvl = aLvl == null ? 2 : aLvl;
+    const pick = aero && aero.plate != null ? aero.plate : 1;
+    const P = FRONT_PLATE[Math.max(0, Math.min(3, Math.round(pick)))];
+    const half = frontHalf(lvl);
+    const w = lvl >= 4 ? 0.060 : (lvl <= 0 ? 0.028 : 0.044);
+    const x = half + 0.03;
+    const kick = Math.min(P.kick, Math.max(0, CAR_HALF - half - 0.03 - w * 0.5 - 0.006));
+    return { P, w, kick,
+             front: { z: 2.66, x, y: 0.135, h: P.hF, t: 0.62 },
+             rear:  { z: 1.98, x: x + kick, y: 0.245, h: P.hR, t: 0.78 } };
+  }
   // FIA overall-width envelope, half. The 2026 regulations cap car width at
   // 1900 mm, which is also exactly where this model already draws the front
   // tyres (x 0.79 + half of the 0.32 tread). NOTHING may sit outside it — and
@@ -3175,14 +3202,9 @@ const Car3D = (function () {
     }
     const aPlate = Math.max(0, Math.min(3, Math.round(
       aeroStyle.plate != null ? aeroStyle.plate : 1)));
-    const PLATE = [
-      { hF: 0.16, hR: 0.30, kick: 0.020, footW: 0.09, footZ: 0.46, arch: 0 },
-      { hF: 0.22, hR: 0.40, kick: 0.060, footW: 0.13, footZ: 0.54, arch: 0 },
-      { hF: 0.30, hR: 0.54, kick: 0.100, footW: 0.19, footZ: 0.62, arch: 1 },
-      // 3: outwash spec — tall plate whose TOP EDGE ROLLS OUTBOARD (roll: 1
-      // adds the curled lip below), the 2026 field's signature endplate.
-      { hF: 0.28, hR: 0.50, kick: 0.120, footW: 0.16, footZ: 0.58, arch: 0, roll: 1 },
-    ][aPlate];
+    // The plate table and its placement live at module scope (frontPlateGeom):
+    // the decal mesh reads the same numbers, or it floats.
+    const _fp = frontPlateGeom(aLvl, aeroStyle), PLATE = _fp.P;
     const aArch = aeroStyle.arch != null
       ? Math.max(0, Math.min(1, Math.round(aeroStyle.arch))) : (PLATE.arch || 0);
     const aGill = aeroStyle.gill != null
@@ -3190,18 +3212,18 @@ const Car3D = (function () {
     const aCasc = Math.max(0, Math.min(3, Math.round(aeroStyle.casc != null ? aeroStyle.casc
       : (aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0))))));
     for (const s of [-1, 1]) {
-      const epW = aLvl >= 4 ? 0.060 : (aLvl <= 0 ? 0.028 : 0.044);
+      const epW = _fp.w;
       // The plate's LEADING edge stays flush with the foil tip (attachHalf =
       // fwHalf + 0.03) — that is the one place the two actually meet. What was
       // wrong is the outboard `kick` on the trailing station: real endplates are
       // near-parallel to the centreline and win their outwash from the shape of
       // the tip, not by leaning 120 mm out of the car. Clamp it to whatever room
       // CAR_HALF leaves once the plate's own thickness is paid for.
-      const epX = s * (fwHalf + 0.03);
-      const epKick = Math.min(PLATE.kick, Math.max(0, CAR_HALF - fwHalf - 0.03 - epW * 0.5 - 0.006));
+      const epX = s * _fp.front.x;
+      const epKick = _fp.kick;
       addBeveledSpan(out,
-        { z: 2.66, x: epX,             y: 0.135, w: epW, h: PLATE.hF, t: 0.62 },
-        { z: 1.98, x: epX + s*epKick,  y: 0.245, w: epW, h: PLATE.hR, t: 0.78 },
+        { z: 2.66, x: epX,             y: 0.135, w: epW, h: PLATE.hF, t: _fp.front.t },
+        { z: 1.98, x: epX + s*epKick,  y: 0.245, w: epW, h: PLATE.hR, t: _fp.rear.t },
         Math.min(0.014, epW * 0.28), c2);
       // Footplate CENTRED on the plate rather than shoved 0.23 x footW outboard
       // of it: at the catalog's widest foot that push alone put its outer edge
@@ -3794,7 +3816,7 @@ const Car3D = (function () {
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, teamStyleOf,
-           endplate: endplateGeom, numberBoard,
+           endplate: endplateGeom, numberBoard, frontPlate: frontPlateGeom,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
            sharkFin: FIN, sharkFinPanel, sharkFinBadge, FIN_SHAPES, FIN_SHAPE_IDS,
            TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors, SPINE_HEIGHT_IDS, spineRise,

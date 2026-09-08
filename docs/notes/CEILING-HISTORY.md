@@ -2291,3 +2291,14 @@ files are not ratcheted.
   can put the SF-26's white top on a red car or the W17's silver on a black
   one. The atlas follows it (`coverPaint` inks the crest), because a light
   cover under a dark car would otherwise take the dark car's ink.
+- `js/car/car3d.js` lines 3805 -> **3826** (2026-09-08): the FRONT-WING ENDPLATE
+  placement comes out of the builder. The plate profile table and a
+  `frontPlateGeom(aLvl, aero)` accessor now sit at module scope and the builder
+  reads them, so the decal mesh can land on the plate at every recipe — its
+  height, outboard kick, thickness and taper all move with the aero level and
+  the `plate` pick, and a decal drawn from literals floats on most of them (the
+  first cut sat 641 mm inboard). Same reason `numberBoard()` was hoisted for the
+  rear wing. The car is unchanged: one build hash over four teams crossed with
+  four recipes is identical before and after, and
+  tests/unit/front-wing-decal.test.mjs measures the shipped quads against the
+  shipped car.

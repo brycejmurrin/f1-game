@@ -205,6 +205,40 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
     quad([[-wX, flapY(wzF), wzF], [wX, flapY(wzF), wzF],
           [wX, flapY(wzR), wzR], [-wX, flapY(wzR), wzR]], [0, 1, 0.28], R.wing);
   }
+  // FRONT-WING ENDPLATE → a partner mark on the outer face of each plate.
+  // Car3D.frontPlate is the SAME function that places the plate, because the
+  // plate's height, its outboard kick, its thickness and even its taper all
+  // move with the aero level and the `plate` pick: a decal drawn from literals
+  // lands in clear air on three of the four profiles. The corners follow the
+  // taper (the top of the plate is narrower than the bottom) and sit inside
+  // the plate's edges, so the mark never overhangs into space.
+  if (Car3D.frontPlate) {
+    const fp = Car3D.frontPlate(aLvl == null ? 2 : aLvl,
+                               parts && parts._visual && parts._visual.aero);
+    const at = (u) => ({
+      z: fp.front.z + (fp.rear.z - fp.front.z) * u,
+      x: fp.front.x + (fp.rear.x - fp.front.x) * u,
+      y: fp.front.y + (fp.rear.y - fp.front.y) * u,
+      h: fp.front.h + (fp.rear.h - fp.front.h) * u,
+      t: fp.front.t + (fp.rear.t - fp.front.t) * u,
+    });
+    // u along the chord (0 = front station), f up the plate (0 = bottom). The
+    // mark takes the middle band, not the whole plate: a real endplate carries
+    // a partner logo with plate showing around it, and the plate is only
+    // 0.16-0.30 m tall at its front station.
+    const corner = (u, f) => {
+      const st = at(u), frac = 0.30 + 0.44 * f;
+      // st.x is the plate's CENTRELINE; the outer face is half a thickness
+      // outboard of it, narrowing with the taper toward the top.
+      return { x: st.x + (fp.w / 2) * (1 + (st.t - 1) * frac) + 0.004,
+               y: st.y - st.h / 2 + st.h * frac, z: st.z };
+    };
+    const BL = corner(0.20, 0), BR = corner(0.80, 0), TR = corner(0.80, 1), TL = corner(0.20, 1);
+    // Same corner order as the rear endplate boards above: from OUTSIDE, the
+    // front of the car reads left, and the -x side takes the mirrored order.
+    quad([[BL.x, BL.y, BL.z], [BR.x, BR.y, BR.z], [TR.x, TR.y, TR.z], [TL.x, TL.y, TL.z]], [1, 0, 0], R.fwEnd);
+    quad([[-BR.x, BR.y, BR.z], [-BL.x, BL.y, BL.z], [-TL.x, TL.y, TL.z], [-TR.x, TR.y, TR.z]], [-1, 0, 0], R.fwEnd);
+  }
   const nb = (Car3D.numberBoard ? Car3D.numberBoard(aLvl == null ? 2 : aLvl) : { cy: 0.62, h: 0.20 });
   const ex = 0.539, eyB = nb.cy - nb.h * 0.5 + 0.01, eyT = nb.cy + nb.h * 0.5 - 0.01, ezF = -2.30, ezR = -2.52;
   quad([[ex, eyB, ezF], [ex, eyB, ezR], [ex, eyT, ezR], [ex, eyT, ezF]], [1, 0, 0], R.num);
