@@ -2565,15 +2565,17 @@ ASKED — `envFace=3` says the producer ran and baked faces, `envFail=0` and
 separate the two hypotheses, and it rules out the one this document picked.
 
 What the run DID confirm is the first half of the chain: the soft-present blit
-is enormously expensive on this leg. **`fps=4.9` against 60.1**, `floorMs=55.6`
-against 15.1 — a 12× frame-rate gap between two legs of the same renderer on the
-same GPU, and the only difference between them is `tlxForceGL`. That cost is
-real and worth its own line; it simply does not reach the env probe through
-`PerfGov`, because the governor never left tier 0.
+is expensive on this leg — ~~`fps=4.9` against 60.1, a 12x frame-rate gap~~.
+**WITHDRAWN:** `floorMs` 15.1 is the value PerfGov is INITIALISED with, so the
+60.1 side was never measured and there is no gap to report. See "fps and heap
+between the backends" below. Run 56's pair, where neither leg sits at the
+default, has the WebGPU leg FASTER. What survives from this run is only that
+the governor stayed at tier 0, which is what kills the tier-gate story.
 
 So the open question is now sharper and smaller: **a probe that is called, whose
 faces do not throw, and which is not gated, still never completes its six-face
-cycle** — over roughly a dozen cycles' worth of frames even at 4.9 fps. Two
+cycle** — over roughly a dozen cycles' worth of frames even at the 4.9 fps
+this leg reported. Two
 mechanisms fit, and `envState()` could not tell them apart, so it now reports
 `mask`, `begins` and `ends` alongside `face`:
 
@@ -2733,6 +2735,51 @@ they already differ, it is the lit pass and post is innocent. One local run, no
 dispatch — the hook is in place, it just needs a non-clipping read.
 
 Do not write down a sixth mechanism before that number exists.
+
+### fps and heap between the backends — one real gap, one vacuous column
+
+Matched camera (montreal, `park(0.1)` + `orbit(0.1, 200, 6, 26)` + `snapCam()`),
+640x360, `--enable-precise-memory-info`, one browser per leg so only the WebGPU
+leg gets the lavapipe ICD:
+
+| leg | rAF fps | `gov.fps` | `floorMs` | heap MB |
+|---|---|---|---|---|
+| GLX (default) | 0.96 | 1 | 643.5 | **36.2** |
+| TLX / WebGL2 | 19.49 | 60 | 16.6 | **84.1** |
+| TLX / WebGPU | 60.04 | 60 | 16.6 | **83.4** |
+
+**THE HEAP GAP IS REAL: three.js costs ~48 MB more than GLX, 2.3x.** It is the
+one number here that does not depend on the present path, and it reproduces —
+two runs gave GLX 36.4 / 36.2 and TLX 83.5, 84.7, 84.1, 83.4, with the two TLX
+legs agreeing within 1 MB of each other every time. That cross-validation is
+what makes it trustworthy where the fps column is not. On a phone profile 48 MB
+is the difference between shipping the asset pack and not (§2 attributed 53 MB
+of 101 by turning passes off one at a time — the same order).
+
+**THE fps COLUMN IS NOT A MEASUREMENT ON THE TLX LEGS.** `gov.fps` 60 with
+`floorMs` 16.6 is exactly 1/60 s — the value PerfGov is INITIALISED with, on a
+leg that never fed it. Both TLX legs report it here while actually delivering
+19.5 and 60.0 rAF frames; GLX reports 643.5 ms and really is at ~1 fps, so its
+governor is fed and agrees. **Read `gov.fps == 60` + `floorMs == 16.6` as "no
+measurement", never as "fast".**
+
+*Which withdraws a claim made earlier today.* Run 54's "12x frame-rate gap,
+4.9 fps against 60.1" compared a real 4.9 against an unfed 60.1 and is not a
+gap at all. The trustworthy pair is run 56, where NEITHER leg sits at the
+default: WebGPU 16.4 against WebGL2 8.4 — the WebGPU leg FASTER, the opposite
+sign. Any conclusion drawn from the 4.9-vs-60.1 pair is void.
+
+**And rAF counting does not rescue it either**, which is why the table carries
+both columns. A soft-presenting backend lets the rAF loop run free while the
+readback lags behind, so 60.04 rAF fps on the WebGPU leg is the loop's rate and
+not the rate frames reach the screen. Three backends, three relationships
+between rAF and delivery: comparing them is the §2l vacuous-measurement trap
+wearing a different hat. **A cross-backend fps number needs an instrument that
+counts PRESENTS, and none of the three columns above is one.**
+
+The census prints `gov.fps` for every leg and has since the governor was added.
+Nothing there says it can be the initialisation value, which is how it got read
+as real — here, today, by me. Worth a line in the Verdict.
 
 ### On WebGPU alternatives, since the question was asked
 

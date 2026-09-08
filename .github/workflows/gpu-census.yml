@@ -310,7 +310,12 @@ jobs:
             // recorded, and the gap is still an open lead for exactly that
             // reason (docs/PERF-FINDINGS.md 2t).
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
-                `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face}`);
+                `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face}`
+                // floorMs 16.6 is 1/60 s, the value PerfGov is INITIALISED with:
+                // a leg that never fed it reports a perfect fps=60 that is not a
+                // measurement. It was read as one (PERF-FINDINGS 2t, a 12x gap
+                // that was not a gap), so the row says so itself now.
+                + (Math.abs((gov.floorMs || 0) - 16.6) < 0.2 ? "   <- fps UNFED (floorMs is the init value); not a measurement" : ""));
             // ...and the bookkeeping the probe keeps on itself, because run 54
             // showed tier=0 with envFace=3 and envFail=0 — the producer WAS
             // called, nothing threw, and the cube still never latched. begins
