@@ -278,3 +278,50 @@ What NOT to do: widen any tolerance or timeout to make a spec pass (the
 `BOOT_MS` change is a budget for a measured boot, not a tolerance); run more
 than one browser worker on this box; keep both a committed and a derived
 build number.
+
+## The deploy branch's conflict tax, measured and removed (2026-09-08)
+
+Five deploy attempts in one afternoon, four of which lost a race: another
+session pushed between the ten gates finishing and the push landing. Each loss
+cost a hand resolution plus a full ~8-minute re-verification.
+
+**The re-verification is not the waste.** What arrived in those races:
+
+| merge | commits in | overlapped my change |
+|---|---|---|
+| `e1cb867` | 3 | none (setup-sheet, steer-tuning, settings-export, a physics baseline) |
+| `b3779e5` | 7 | `js/game.js`, `tests/data/ratchets.json` |
+| `7957436` | 6 | `js/game.js`, `tests/data/ratchets.json` — only those |
+| `2249116` | 18 | `js/game.js`, `index.html`, the GLX shaders, ratchets |
+
+Three of four brought real `js/game.js` edits and one brought a physics
+baseline with its VM test. A change to the entry file by another session can
+genuinely break the gates, so re-running them on the union is the protocol
+being right. Narrowing it with `pick-tests` would be trading the one thing
+this gate exists for against eight minutes.
+
+**The conflict resolution IS the waste, and it was the same two files every
+time.** Both are generated or append-only, so both were resolved identically
+each time — which is the definition of work a tool should do:
+
+- `docs/notes/CEILING-HISTORY.md` is append-only (`+14/-0`, `+17/-0`,
+  `+11/-0`, `+19/-0`; the only deletions in its history are the three hand
+  resolutions). Now `merge=union` in `.gitattributes` — git's built-in driver,
+  no configuration on a fresh clone. Verified on the real conflict shape: two
+  sides appending, merged clean, both entries kept in order.
+- `tests/data/ratchets.json` is DERIVED. `deploy.mjs` now takes theirs and
+  re-runs `ratchets.mjs --update`, which measures the merged tree — so the
+  answer is arithmetic, not intent.
+
+**The guard is the point of the second one.** A bare `--update` blesses
+whatever the tree measures, so a merge that duplicated code would ratchet the
+duplication in as the new floor and nothing would ever complain again. Each
+side's raise against the MERGE BASE is a decision a human made; their sum is
+the most the union can legitimately need. Today's real numbers: base 10188,
+theirs 10216 (+28), ours 10206 (+18), union measured 10234 = exactly
+10216 + 18. One line more than that stops the deploy and asks for eyes.
+`tests/unit/deploy-tool.test.mjs` pins both directions.
+
+What this does NOT fix: losing the race itself. That is inherent to several
+sessions sharing one deploy branch, and re-verifying on the union is the
+correct response to it.

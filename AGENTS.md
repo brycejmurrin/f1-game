@@ -250,7 +250,12 @@ real conflicts: re-measure baselines on the merged tree, never force-push.
 
 **`node tools/ci/deploy.mjs`** is the whole protocol (fetch → merge →
 `test:tooling-fast` → `verify-track` for touched circuits → push; `--pr` opens
-a reviewable PR instead, `--plan` prints the union first). `test:sweeps` is
+a reviewable PR instead, `--plan` prints the union first). It AUTO-CURES a
+conflict in a GENERATED file — `index.html` / `version.json` from the manifest,
+and `tests/data/ratchets.json` by re-measuring the union, bounded by the two
+sides' own raises so a duplicated merge cannot become the new floor; anything
+else still stops. `docs/notes/CEILING-HISTORY.md` is `merge=union` in
+`.gitattributes` because it is an append-only log. `test:sweeps` is
 CI's on the same diff — do not duplicate it locally. The live check is
 `pages.yml`'s `verify-live` job; this container cannot reach `github.io`, so
 read the run in the Actions tab or fetch `version.json` through the host's
