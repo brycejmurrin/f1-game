@@ -2252,6 +2252,15 @@ live outside the backends (`js/render/shared/driving-line.js`, the fragment
 shaders); each backend carries only its upload and draw. WGX and TLX gained
 the same pass the same day (`WGSLFx.LINE`, `tsl-fx.js` `lineMat`) — those
 files are not ratcheted.
+- `js/lighting/presets.js` lines 15508 -> **17318** (+1810), `js/game.js` lines
+  10154 -> **10157** (2026-09-08): THE OWNER'S SETTINGS FILE BAKED AS DEFAULTS.
+  The presets growth is 201 LIGHTING TUNER profiles merged through
+  `merge-proposals.mjs` — 2858 knobs across all 41 circuits at dawn, dusk and
+  night in dry and wet, a base copied to every track and then refined per
+  circuit (23 distinct variants at dawn dry, 25 at night dry, 26 at night wet).
+  It is data, not code: no new branches, and every lighting suite is green on
+  it. game.js's three lines are comments on the four defaults that moved there
+  (camera mode, metrics layout, steer mode).
 - `js/game.js` lines 10088 -> **10089**, codeLines 5497 -> **5498**;
   `js/agent/apex.js` lines 2662 -> **2668**, codeLines 2011 -> **2012**;
   (tree) shellNodes 1325 -> **1326** (2026-09-08): the SETTINGS FILE. One
@@ -2285,6 +2294,16 @@ files are not ratcheted.
   surface variable instead of the literal `SURFACES.paint`, which is what lets a
   livery put bare weave on the flaps the way the launch photos show — a CARBON
   colour alone rendered as dark paint there. No new sites, no geometry.
+- `js/agent/apex.js` lines 2668 -> **2688**, codeLines 2012 -> **2015**
+  (2026-09-08): reset()'s per-episode clearing block gains the heading-state
+  controller's own smoothing state and the four fields one car reads OFF
+  ANOTHER (`_vmaxNow`, `accSm`, `towing`, `rank`, plus the pass-latch
+  remnants). 17 of the 20 lines are the comment explaining WHY each belongs
+  there, which is the whole value: the block already existed for exactly this
+  class and the controller change slipped past it. Paid for by a determinism
+  break that reached the deploy branch — one seed replayed with a different
+  finishing order while the player's trace stayed byte-identical. Evidence:
+  `tests/unit/determinism-replay-vm.test.mjs`, which fails without the fix.
 - `js/car/car3d.js` lines 3829 -> **3834** (2026-09-08): the ENGINE COVER colour
   zone. One resolved colour (`coverC`) and its four-line comment; the airbox,
   roll structure, cover loft and snorkel take it instead of `c1`, so a livery

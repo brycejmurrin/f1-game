@@ -146,22 +146,53 @@ test("flat road: the chase rig frames exactly as its constants say", () => {
   const track = makeTrack(() => 7.5);
   const cams = loadGameCams(makeTracksStub(track));
   const v = chaseAt(cams, track, 1000);
-  // eyeUp 2.1 above the road, target 0.7 above it — no gradient, no correction.
-  assert.ok(Math.abs(v.eye[1] - (7.5 + 2.1)) < 1e-6, `eye ${v.eye[1]}`);
+  // eyeUp 1.35 above the road, target 0.7 above it — no gradient, no correction.
+  // (1.35 was 2.1 until 2026-09-08, when the owner's CAMERA TUNER HEIGHT became
+  // the shipped framing. Their DISTANCE is a horizontal nudge applied after the
+  // rig solves — CHASE_EYE_IN — so `back` is still 5.8 and this arithmetic,
+  // which is about the ride height, is untouched by it.)
+  assert.ok(Math.abs(v.eye[1] - (7.5 + 1.35)) < 1e-6, `eye ${v.eye[1]}`);
   assert.ok(Math.abs(v.tgt[1] - (7.5 + 0.7)) < 1e-6, `tgt ${v.tgt[1]}`);
+});
+
+// The other half of the split above. Recorded because it is a REAL consequence
+// of the lower eye, not an accident: on a steep climb the chase eye is inside
+// (and past 9.5 % below) the terrain floor the rig is clamped to, so the floor
+// — not eyeUp — is what sets its height there. The clamp is the SOFT one, so
+// this stays continuous; what it must not do is let the eye through the ground.
+test("on a steep climb the lowered chase eye rides the terrain floor, softly", () => {
+  const FLOOR_OVER_RIDE = 0.8;   // MIN_CLEAR, js/camera/vantage.js
+  for (const g of [0.08, 0.12]) {
+    const track = makeTrack((s) => 40 + s * g);
+    const cams = loadGameCams(makeTracksStub(track));
+    const v = chaseAt(cams, track, 2000);
+    const rideHere = 40 + 2000 * g;                 // straight line: rideY IS the line
+    const raw = 40 + (2000 - 5.8) * g + 1.35;       // what the rig alone would give
+    assert.ok(v.eye[1] > raw, `climb ${g}: the floor must LIFT the eye (${v.eye[1]} vs ${raw})`);
+    assert.ok(v.eye[1] >= rideHere + FLOOR_OVER_RIDE - 1e-6,
+      `climb ${g}: never below the floor (${v.eye[1]} vs ${rideHere + FLOOR_OVER_RIDE})`);
+    assert.ok(v.eye[1] < rideHere + FLOOR_OVER_RIDE + 0.35,
+      `climb ${g}: and never lifted past the blend band`);
+  }
 });
 
 test("constant slope: unchanged from a raw two-point rig, to the millimetre", () => {
   // The smoothing must be invisible wherever the road has no curvature — this is
   // what makes the fix safe to apply to every circuit at once. A Hann average of
   // a straight line is the line; the gradient of a straight line is its slope.
-  for (const g of [0.05, 0.12, -0.09]) {
+  // GENTLE grades only, and that is the point of the split below: eyeUp came
+  // down to 1.35 on 2026-09-08, and the eye's clearance over the terrain floor
+  // (rideY + MIN_CLEAR 0.8) is 1.35 - 5.8*grade - 0.8 = 0.55 - 5.8*grade. Past
+  // about 3.5 % of CLIMB that is inside the soft floor's CLAMP_BLEND (0.35) and
+  // the eye is being eased upward, so a raw two-point rig is no longer what it
+  // should equal. Every grade here clears the band; the climb is its own test.
+  for (const g of [0.02, -0.05, -0.09]) {
     const track = makeTrack((s) => 40 + s * g);
     const cams = loadGameCams(makeTracksStub(track));
     const v = chaseAt(cams, track, 2000);
     const roadBehind = 40 + (2000 - 5.8) * g;      // what the old rig sampled
-    assert.ok(Math.abs(v.eye[1] - (roadBehind + 2.1)) < 1e-3,
-      `slope ${g}: eye ${v.eye[1]} vs ${roadBehind + 2.1}`);
+    assert.ok(Math.abs(v.eye[1] - (roadBehind + 1.35)) < 1e-3,
+      `slope ${g}: eye ${v.eye[1]} vs ${roadBehind + 1.35}`);
     assert.ok(Math.abs(v.tgt[1] - (40 + 2000 * g + 0.7)) < 1e-3,
       `slope ${g}: tgt ${v.tgt[1]}`);
   }
@@ -177,7 +208,7 @@ test("a hill with the engine's own undulation does not bob the chase pitch", () 
     pitch.push(pitchOf(chaseAt(cams, track, s)));
     // The rig as it was built before this fix: eye from the road 5.8 m behind,
     // target from the road at the car. Same constants, raw samples.
-    rawPitch.push(Math.atan2((roadY(s) + 0.7) - (roadY(s - 5.8) + 2.1), 11.8) * 180 / Math.PI);
+    rawPitch.push(Math.atan2((roadY(s) + 0.7) - (roadY(s - 5.8) + 1.35), 11.8) * 180 / Math.PI);
   }
   const bob = rms(ripple(pitch, STEP)), rawBob = rms(ripple(rawPitch, STEP));
 
