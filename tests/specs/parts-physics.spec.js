@@ -561,9 +561,16 @@ test.describe("Parts module — visual recipes", () => {
         const parts = { engine: 1, _visual: { engine: { in: 1, inlet: 1, outlet: 1, ...engine } } };
         const anchors = Car3D.bodyAnchors(parts);
         const data = CarMesh.carDecalData(2, parts);
+        // SIZE_H for v, SIZE for u. The atlas is 1024 x 1280 and this divided the
+        // region's Y by SIZE, which puts the v window 4 % low: the quad's TOP edge
+        // (v 0.96875) fell outside a window ending at 0.9609, so half the vertices
+        // were filtered out before the checks below ever saw them and
+        // uvContinuousAtCrease — which needs 4 per side — could never be true.
+        // The geometry was right the whole time; the measurement was not.
         const title = LiveryTex.REGIONS.titleA, size = LiveryTex.SIZE;
+        const sizeH = LiveryTex.SIZE_H || size;
         const titleU = [title.x / size, (title.x + title.w) / size];
-        const titleV = [1 - (title.y + title.h) / size, 1 - title.y / size];
+        const titleV = [1 - (title.y + title.h) / sizeH, 1 - title.y / sizeH];
         const titleVerts = [];
         for (let i = 0; i < data.pos.length / 3; i++) {
           const p = [data.pos[i*3], data.pos[i*3+1], data.pos[i*3+2]];
@@ -1261,15 +1268,21 @@ test.describe("Parts module — visual recipes", () => {
     // run this group. car-wing-foil.test.mjs is now the sole owner of those
     // three. The decal count stays here because CarMesh's sheet is not what that
     // file measures.
-    // 48, FROM A MEASUREMENT. This said 32 and the decal sheet has been 36
-    // triangles (18 quads over LiveryTex's 8 regions) at EVERY revision of
-    // js/car/car-mesh.js — bisected, not assumed. So the ceiling was never
-    // satisfiable and the test never passed; 32 was a number someone liked.
-    // 48 is the measured 36 plus a third, which is room for a few more decal
-    // regions and still far below anything that would cost a frame. The tier
-    // argument does not affect the count (identical for tiers 0-3), so the 2
-    // above is arbitrary and harmless.
-    expect(triangles.decals).toBeLessThanOrEqual(48);
+    // 88, FROM A MEASUREMENT — the third one this number has had, and the
+    // reason it keeps moving is worth writing down. It said 32 when the sheet
+    // was 36 (so it never passed at all), then 48 when the sheet was 36 over
+    // LiveryTex's EIGHT regions. The atlas has twelve now — `tail`, `spineSide`,
+    // `spineSideL` and `fwEnd` all landed after that comment was written — which
+    // took it to 62, red and unnoticed for as long as it took to run this group.
+    // Measured 70 today: the rear-wing band went from ONE quad to five, because
+    // a wing is swept and a single quad bridges the sweep instead of following
+    // it (Car3D.wingBand; docs/notes/CEILING-HISTORY.md). 88 is 70 plus a
+    // quarter — room for another region or two, and still nothing a GPU would
+    // notice. This is a DRIFT guard, not a frame budget: the point is that a
+    // sheet doubling has to be a decision, which is what this comment is.
+    // The tier argument does not affect the count (identical for tiers 0-3), so
+    // the 2 above is arbitrary and harmless.
+    expect(triangles.decals).toBeLessThanOrEqual(88);
   });
 
   test("every recipe has primary and secondary visual parameters", async ({ page }) => {
