@@ -2587,7 +2587,7 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   const sr = game.slice(game.indexOf("async function startRace("), game.indexOf("function showTouchControls("));
   assert.match(sr, /warmCarAssets\(\);\s*[^\n]*\n\s*DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
   const wa = game.slice(game.indexOf("function warmCarAssets("), game.indexOf("function drawCarDecals("));
-  assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team\); else teamBodyMesh\(c\.team\);/, "same mesh cache keys the draw uses");
+  assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team, c\); else teamBodyMesh\(c\.team, c\);/, "same mesh cache keys the draw uses — the CAR, so the warm-up fills the per-driver key the draw asks for");
   assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
   // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
   assert.match(game, /const key = decalKeyPrefix\(team\) \+/, "getCarDecalTexture builds its key from the memoised prefix");

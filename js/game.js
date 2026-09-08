@@ -2052,7 +2052,7 @@ function buildCarData(team, extra) {
   return Car3D.build(liv.c1, liv.c2, {
     livery: liv,
     teamId: team.id,   // per-team chassis style (nose/airbox/fin/mirrors/inlet)
-    num: team.drivers && team.drivers[0] && team.drivers[0].num,
+    num: (extra && extra.num != null) ? extra.num : (team.drivers && team.drivers[0] && team.drivers[0].num),
     parts: Parts.getVisualTiers(factorySetup, team),
     noWheels: !!(extra && extra.noWheels),
     field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
@@ -2074,11 +2074,16 @@ function teamMeshKey(team) {
   _teamMeshKeyCache.set(team.id, { val, rev: store.rev });
   return val;
 }
-function teamMesh(team) {
-  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team), () => gfx.createMesh(buildCarData(team)), TEAM_MESH_CACHE_MAX);
+// KEYED PER DRIVER, not per team: the helmet is the design for opts.num, and
+// both of a team's cars were handed drivers[0] — 22 cars, 11 helmets, each pair
+// identical, which is the defect helmets.js exists to fix reintroduced one
+// level up. carDecalNum already resolves this for the number atlas. A caller
+// with no car (the shadow casts, silhouette only) still shares one per team.
+function teamMesh(team, car) {
+  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":" + carDecalNum(team, car), () => gfx.createMesh(buildCarData(team, { num: carDecalNum(team, car) })), TEAM_MESH_CACHE_MAX);
 }
-function teamBodyMesh(team) {
-  return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKey(team), () => gfx.createMesh(buildCarData(team, { noWheels: true })), TEAM_MESH_CACHE_MAX);
+function teamBodyMesh(team, car) {
+  return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKey(team) + ":" + carDecalNum(team, car), () => gfx.createMesh(buildCarData(team, { noWheels: true, num: carDecalNum(team, car) })), TEAM_MESH_CACHE_MAX);
 }
 
 // Car decal / effect-quad / cockpit-instrument geometry lives in
@@ -2181,7 +2186,7 @@ function warmCarAssets() {
   for (let i = 0; i < cars.length; i++) {
     const c = cars[i];
     try {
-      if (c.isPlayer) playerBodyMesh(c.team); else teamBodyMesh(c.team);
+      if (c.isPlayer) playerBodyMesh(c.team, c); else teamBodyMesh(c.team, c);
       getCarDecalTexture(c.team, carDecalNum(c.team, c), !!c.isPlayer);
     } catch (e) { Log.warn("gfx", "car asset warm-up failed for " + (c.team && c.team.id), e); }
   }
@@ -2434,14 +2439,15 @@ function drawCockpitRig(c, base, dt, paint) {
   _digT[12] = _digT[13] = _digT[14] = 0;
 }
 
-function playerBodyMesh(team) {
+function playerBodyMesh(team, car) {
   if (carModelBuf) return null;   // glb model: single piece, no wheel split
   // Player-only draw path, so the cached playerVisualKey is always this team's
-  // key — no per-frame partsVisualKey() rebuild.
-  const key = team.id + ":" + playerVisualKey;
+  // key — no per-frame partsVisualKey() rebuild. The number joins it: a player
+  // in the second seat wears the second driver's helmet.
+  const key = team.id + ":" + playerVisualKey + ":" + carDecalNum(team, car);
   const liv = resolveLivery(team);
   return putBoundedMesh(playerBodies, playerBodyOrder, key, () => gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-    { livery: liv, teamId: team.id, noWheels: true, num: team.drivers && team.drivers[0] && team.drivers[0].num,
+    { livery: liv, teamId: team.id, noWheels: true, num: carDecalNum(team, car),
       parts: Parts.getVisualTiers(getTeamParts(team.id), team) })), PLAYER_BODY_CACHE_MAX);
 }
 // Player wheel meshes, keyed by the resolved TYRES/BRAKES visual tier (band
@@ -6551,7 +6557,11 @@ const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", 
 function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
 function getSetupPreviewMesh() {
   const team = Teams.LIST[teamIdx];
-  const key = team.id + ":" + partsVisualKey(team.id);
+  // driverIdx, not drivers[0]: the turntable shows YOUR car, so it wears the
+  // helmet of the seat you picked. In the key too, or switching seats keeps
+  // the mesh you were already looking at.
+  const seat = (team.drivers && team.drivers[driverIdx]) || (team.drivers && team.drivers[0]);
+  const key = team.id + ":" + partsVisualKey(team.id) + ":" + (seat && seat.num);
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
     // The hull depends on POSITIONS ONLY: keyed on the geometry-gating fields, it
@@ -6560,7 +6570,7 @@ function getSetupPreviewMesh() {
     const ent = GarageScene.previewMesh(key, hullKey, () => Car3D.build(liv.c1, liv.c2, {
       livery: liv,
       teamId: team.id,   // per-team chassis style shows in the setup turntable too
-      num: team.drivers && team.drivers[0] && team.drivers[0].num,
+      num: seat && seat.num,
       parts: Parts.getVisualTiers(getTeamParts(team.id), team),
     }));
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
@@ -8209,7 +8219,7 @@ function render(dt) {
     }
     // Body-only mesh + planted wheels for every procedural car. Attitude
     // (tmpMat) is chassis-only; wheels stay on _groundMat. A glb is one piece.
-    const body = carModelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team) : teamBodyMesh(c.team));
+    const body = carModelBuf ? null : (c.isPlayer ? playerBodyMesh(c.team, c) : teamBodyMesh(c.team, c));
     if (body) {
       gfx.draw(body, tmpMat, paint);
       queueCarDecals(c.team, tmpMat, carDecalNum(c.team, c), false, c.isPlayer);
@@ -8217,7 +8227,7 @@ function render(dt) {
       drawPlayerWheels(c, _groundMat, dt, _wheelOpts);
     } else {
       const wholeCarMat = c.isPlayer ? _groundMat : tmpMat;
-      gfx.draw(teamMesh(c.team), wholeCarMat, paint);
+      gfx.draw(teamMesh(c.team, c), wholeCarMat, paint);
       queueCarDecals(c.team, wholeCarMat, carDecalNum(c.team, c), false, c.isPlayer);
     }
     // ACTIVE AERO: the moveable upper wing elements, FRONT and REAR, swung
@@ -8474,7 +8484,7 @@ function render(dt) {
       // slab ("black on screen when accelerating or braking" in TT). At 35%
       // alpha the track stays readable straight through it at any distance,
       // and the raised emissive keeps it reading as a bright spectre.
-      gfx.draw(teamMesh(player.team), tmpMat, _ghostOpts);
+      gfx.draw(teamMesh(player.team, player), tmpMat, _ghostOpts);
       }
     }
   }

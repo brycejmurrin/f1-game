@@ -69,6 +69,12 @@ async function blobs(file) {
     }
     const w = x1 - x0 + 1, h = y1 - y0 + 1;
     if (n > 4000 && w > 90 && h > 90 && w / h > 0.9 && w / h < 1.7) out.push({ id: s, n, x0, y0, x1, y1, w, h });
+    // THE SHADOW IS PART OF THE BLOB. A product shot puts a soft contact shadow
+    // under the lid, and it reaches the same flood fill the helmet does, so the
+    // raw box is taller than the helmet and every band lands high. Rows
+    // narrower than a quarter of the widest are the shadow's tail and the
+    // strap's; trimming to the real shell is what makes a measured band
+    // position mean anything.
   }
   // reading order: rows first, then left to right inside a row
   out.sort((a, b) => a.y0 - b.y0);
@@ -78,6 +84,19 @@ async function blobs(file) {
     if (r) r.push(b); else rows.push([b]);
   }
   for (const r of rows) r.sort((a, b) => a.x0 - b.x0);
+  for (const b of rows.flat()) {
+    const wid = [];
+    for (let y = b.y0; y <= b.y1; y++) {
+      let n = 0;
+      for (let x = b.x0; x <= b.x1; x++) if (lab[x + y * W] === b.id) n++;
+      wid.push(n);
+    }
+    const cut = Math.max(...wid) * 0.25;
+    let a = 0, z = wid.length - 1;
+    while (a < z && wid[a] < cut) a++;
+    while (z > a && wid[z] < cut) z--;
+    b.y0 += a; b.y1 = b.y0 + (z - a); b.h = b.y1 - b.y0 + 1;
+  }
   return { list: rows.flat(), data, W, H, ch, lab };
 }
 
@@ -167,6 +186,29 @@ function sample(img, box, flip) {
     }
     if (!row.some(Boolean)) for (let sl = 0; sl < SLICES; sl++) row[sl] = [0.5, 0.5, 0.5];
   }
+  /* DIVIDE THE SHOOT'S LIGHTING OUT. The same paint runs from bright on the key
+     side to near-black on the far side of one photograph, and no amount of
+     careful naming fixes a sample that is genuinely dark. The illumination
+     varies SLOWLY across the shell and the paint changes ABRUPTLY, so a heavily
+     blurred copy of the value channel is an estimate of the lighting alone;
+     dividing by it flattens the shading and leaves the edges standing. */
+  const V = grid.map((row) => row.map((c) => Math.max(c[0], c[1], c[2], 1e-3)));
+  const blur = V.map((row, r) => row.map((_, sl) => {
+    let sum = 0, n = 0;
+    for (let dr = -3; dr <= 3; dr++) for (let ds = -5; ds <= 5; ds++) {
+      const rr = r + dr;
+      if (rr < 0 || rr >= V.length) continue;
+      sum += V[rr][(sl + ds + SLICES * 2) % SLICES]; n++;
+    }
+    return sum / n;
+  }));
+  let mean = 0, mn = 0;
+  for (const row of blur) for (const v of row) { mean += v; mn++; }
+  mean /= mn;
+  for (let r = 0; r < grid.length; r++) for (let sl = 0; sl < SLICES; sl++) {
+    const k = mean / Math.max(0.04, blur[r][sl]);
+    grid[r][sl] = grid[r][sl].map((v) => Math.min(1, v * k));
+  }
   return grid;
 }
 
@@ -237,4 +279,34 @@ if (flag("report", "")) {
     }
     console.log("  down the shell: " + rows.join("  "));
   }
+}
+
+/* ── the score ────────────────────────────────────────────────────────────
+   The traced map and a DESIGNS entry live on the same (t, az) grid, so they can
+   be compared cell for cell without rendering anything. This is the honest
+   answer to "which of these is still wrong": not a band position, which this
+   source cannot resolve, but how far each design sits from the photograph
+   overall, and which ones are worth another pass. Compared in chromaticity plus
+   a light value term, the same way colours are named — the photo's own shading
+   is normalised out but never perfectly. */
+if (flag("score", "")) {
+  const rows = [];
+  for (const num of Object.keys(maps).map(Number)) {
+    const m = maps[num], skin = Helmets.shell(Helmets.designFor(num, null));
+    let sum = 0, n = 0;
+    for (let r = 0; r <= RINGS; r++) {
+      const t = Math.min(1, ringT(r));
+      for (let sl = 0; sl < SLICES; sl++) {
+        const az = (sl / SLICES) * 360;
+        if (Helmets.isVisor(t, az)) continue;          // the aperture is glass in both
+        const a = chroma(m.grid[r][sl]), b = chroma(skin(t, az).c);
+        sum += Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) + 0.5 * Math.abs(a[3] - b[3]);
+        n++;
+      }
+    }
+    rows.push({ code: m.code, num, d: sum / n });
+  }
+  rows.sort((a, b) => b.d - a.d);
+  console.log("\ndistance from the photograph, worst first:");
+  for (const r of rows) console.log(`  ${r.code.padEnd(4)} #${String(r.num).padEnd(3)} ${r.d.toFixed(3)} ${"#".repeat(Math.round(r.d * 40))}`);
 }

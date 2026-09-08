@@ -190,20 +190,20 @@ const Helmets = (function () {
       z.key(0.74, C.papaya), z.band(0.86, 0.92, C.black), z.key(0.92, C.papaya)] },
     // McLaren: black shell, papaya crown and face flash, a lime skirt.
     81: { name: "PIA", base: C.carbon, alt: C.teal, visor: C.amber, zones: [
-      z.cap(0.18, C.papaya), z.key(0.18, C.lime), z.flash(0, 12, 42, 0.14, 0.44, 0, C.papaya),
-      ...z.sides((a) => z.flash(a, 8, 22, 0.16, 0.60, 24, C.papaya)),
-      z.band(0.72, 0.86, C.lime), z.key(0.665, C.papaya), z.band(0.90, 0.955, C.papaya)] },
+      z.cap(0.13, C.papaya), z.key(0.13, C.lime), z.flash(0, 8, 30, 0.14, 0.42, 0, C.papaya),
+      ...z.sides((a) => z.flash(a, 6, 16, 0.16, 0.58, 24, C.papaya)),
+      z.band(0.78, 0.88, C.lime), z.key(0.745, C.papaya), z.band(0.90, 0.955, C.papaya)] },
     // Red Bull: navy crown, red face flash, white band. Royal rather than navy
     // as the base, or it vanishes into a Red Bull.
     33: { name: "VER", base: C.royal, alt: C.orange, visor: C.black, zones: [
       z.cap(0.22, C.red), z.key(0.22, C.white), z.flash(0, 12, 46, 0.16, 0.44, 0, C.navy),
       ...z.sides((a) => z.flash(a, 9, 24, 0.18, 0.62, 24, C.navy)),
-      z.band(0.68, 0.80, C.navy), z.key(0.625, C.white), z.band(0.88, 0.955, C.red)] },
+      z.band(0.68, 0.80, C.white), z.key(0.625, C.navy), z.band(0.88, 0.955, C.navy)] },
     // Red Bull: fluoro lime with a navy crown and an orange flash.
-     6: { name: "HAD", base: C.lime, alt: C.royal, visor: C.black, zones: [
-      z.cap(0.26, C.navy), z.key(0.26, C.orange), z.flash(0, 10, 34, 0.20, 0.46, 0, C.orange),
-      ...z.sides((a) => z.patch(a, 20, 0.30, 0.44, C.navy)),
-      z.band(0.72, 0.86, C.navy), z.key(0.665, C.orange), z.band(0.90, 0.955, C.white)] },
+     6: { name: "HAD", base: C.white, alt: C.royal, visor: C.black, zones: [
+      z.cap(0.42, C.carbon), z.key(0.42, C.lime), z.flash(0, 10, 34, 0.16, 0.40, 0, C.lime),
+      ...z.sides((a) => z.flash(a, 8, 20, 0.16, 0.40, 24, C.lime)),
+      z.band(0.66, 0.86, C.carbon), z.key(0.605, C.lime), z.band(0.88, 0.955, C.navy)] },
     // Alpine: pale blue mottle over a navy lower half, pink at the rim.
     10: { name: "GAS", base: C.sky, alt: C.white, visor: C.silver, zones: [
       z.fleck(0.04, 0.58, 20, 28, 0.24, 7, C.white), z.band(0.60, 0.90, C.navy), z.key(0.545, C.white),
@@ -228,16 +228,15 @@ const Helmets = (function () {
       ...centre(10, C.white), z.band(0.72, 0.88, C.carbon), z.key(0.665, C.white), z.band(0.90, 0.955, C.white)] },
     // Haas: navy-blue with fluoro lime through the face and the jaw.
     87: { name: "BEA", base: C.royal, alt: C.coral, visor: C.black, zones: [
-      z.cap(0.14, C.navy), z.key(0.14, C.lime), z.flash(0, 12, 44, 0.12, 0.46, 0, C.lime),
-      ...z.sides((a) => z.flash(a, 8, 22, 0.16, 0.60, 24, C.lime)),
-      z.band(0.68, 0.80, C.lime), z.key(0.80, C.navy), z.band(0.88, 0.955, C.white)] },
+      z.cap(0.16, C.carbon), z.key(0.16, C.lime), z.flash(0, 9, 32, 0.12, 0.42, 0, C.lime),
+      ...z.sides((a) => z.flash(a, 7, 16, 0.16, 0.58, 24, C.lime)),
+      z.band(0.66, 0.86, C.white), z.key(0.605, C.carbon), z.band(0.88, 0.955, C.carbon)] },
     // Williams: navy with the Spanish red-and-yellow doubled down the face and
     // raked back over each temple.
     55: { name: "SAI", base: C.navy, alt: C.mint, visor: C.black, zones: [
-      z.flash(0, 14, 44, 0.14, 0.44, 0, C.yellow), z.flash(0, 5, 18, 0.14, 0.44, 0, C.red),
-      ...z.sides((a) => z.flash(a, 10, 24, 0.16, 0.62, 24, C.yellow)),
-      ...z.sides((a) => z.flash(a, 4, 9, 0.16, 0.62, 24, C.red)),
-      z.band(0.72, 0.84, C.white), z.key(0.84, C.red), z.band(0.90, 0.955, C.navy)] },
+      z.flash(0, 9, 30, 0.14, 0.42, 0, C.yellow), z.flash(0, 4, 13, 0.14, 0.42, 0, C.red),
+      ...z.sides((a) => z.flash(a, 7, 16, 0.16, 0.60, 24, C.yellow)),
+      z.band(0.66, 0.86, C.white), z.key(0.605, C.royal), z.band(0.88, 0.955, C.navy)] },
     // Williams: pale pink under a white crown, royal-blue graphics, navy jaw.
     23: { name: "ALB", base: C.white, alt: C.forest, visor: C.gold, zones: [
       z.cap(0.22, C.pink), z.key(0.22, C.navy), z.flash(0, 10, 38, 0.14, 0.44, 0, C.royal),
@@ -251,14 +250,14 @@ const Helmets = (function () {
       z.fleck(0.10, 0.62, 20, 28, 0.07, 11, C.white), z.band(0.84, 0.955, C.green), z.key(0.785, C.white)] },
     // Audi: white with a Brazilian green crown and yellow keyline, navy jaw.
      5: { name: "BOR", base: C.white, alt: C.crimson, visor: C.black, zones: [
-      z.cap(0.22, C.green), z.key(0.22, C.yellow), z.band(0.26, 0.34, C.yellow),
+      z.cap(0.17, C.green), z.key(0.17, C.yellow),
       ...z.sides((a) => z.flash(a, 8, 20, 0.16, 0.60, 24, C.carbon)),
-      z.band(0.70, 0.84, C.carbon), z.key(0.645, C.yellow), z.band(0.90, 0.955, C.green)] },
+      z.band(0.68, 0.86, C.carbon), z.key(0.625, C.yellow), z.band(0.88, 0.955, C.green)] },
     // Aston Martin: cyan with a yellow brow band and an orange skirt.
     14: { name: "ALO", base: C.cyan, alt: C.crimson, visor: C.gold, zones: [
       z.cap(0.20, C.navy), z.band(0.24, 0.38, C.yellow), z.key(0.185, C.yellow), z.key(0.38, C.navy),
       ...z.sides((a) => z.flash(a, 8, 20, 0.16, 0.60, 24, C.gold)),
-      z.band(0.70, 0.86, C.navy), z.key(0.645, C.yellow), z.band(0.90, 0.955, C.gold)] },
+      z.band(0.66, 0.84, C.white), z.key(0.605, C.navy), z.band(0.88, 0.955, C.navy)] },
     // Aston Martin: near-black with the team's green through the centre.
     18: { name: "STR", base: C.carbon, alt: C.coral, visor: C.black, zones: [
       z.cap(0.14, C.forest), z.key(0.14, C.silver), ...centre(11, C.forest),

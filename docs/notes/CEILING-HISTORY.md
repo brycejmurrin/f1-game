@@ -2310,3 +2310,14 @@ files are not ratcheted.
   can put the SF-26's white top on a red car or the W17's silver on a black
   one. The atlas follows it (`coverPaint` inks the crest), because a light
   cover under a dark car would otherwise take the dark car's ink.
+- `js/game.js` lines 10157 -> **10167**, codeLines 5529 -> **5530** (2026-09-08): the car mesh cache keyed
+  PER DRIVER instead of per team. `teamMesh` / `teamBodyMesh` /
+  `playerBodyMesh` all built with `team.drivers[0].num`, so both of a team's
+  cars carried the first driver's helmet: 22 cars on track showed 11 helmets,
+  each pair identical — precisely the defect `js/car/helmets.js` was written to
+  fix, reintroduced one level above it. The number now joins the cache key and
+  reaches `Car3D.build`, using the `carDecalNum` the number atlas already
+  resolved, and the garage turntable takes `driverIdx` — the seat you picked —
+  instead of the first driver, in its cache key as well as its build. Ten lines
+  and one code line; the rest fold inline. The lines are the comments saying
+  why, which are worth more than the lines.
