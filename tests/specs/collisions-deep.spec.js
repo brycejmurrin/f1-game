@@ -265,18 +265,23 @@ test.describe("Apex 26 — collisions (deep)", () => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.3, 40, 0);
       window.__apex.rivals([{ dProg: 0, dx: 1.0 }]);   // overlapping to the right
-      let maxStep = 0, prev = window.__apex.probe().x;
+      let maxStep = 0, prev = window.__apex.probe().x, minX = Infinity;
       for (let i = 0; i < 40; i++) {
         window.__apex.setInput({ steer: 0, throttle: false });
         window.__apex.step(1 / 60, 1);
         const x = window.__apex.probe().x;
         maxStep = Math.max(maxStep, Math.abs(x - prev));   // per-frame displacement
-        prev = x;
+        prev = x; minX = Math.min(minX, x);
       }
       window.__apex.clearInput();
-      return { finalX: prev, maxStep };
+      return { minX, maxStep };
     });
-    expect(r.finalX).toBeLessThan(0);        // shoved away from the rival (to the left)
+    // Shoved away from the rival (to the left) AT THE CONTACT, not at frame 40:
+    // the AI steers clear within a few frames, and the player's x thereafter is
+    // road drift on a fixed heading. Same assertions as the VM twin, which was
+    // corrected when the AI stopped being contact-compliant in both directions
+    // and this browser copy was left behind (collisions-deep-vm.test.mjs).
+    expect(r.minX).toBeLessThan(-0.1);
     expect(r.maxStep).toBeLessThan(0.6);     // gentle rub, never a launch/teleport
   });
 
