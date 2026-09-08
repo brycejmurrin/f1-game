@@ -42,6 +42,7 @@
     "tests/unit/parts-ladder.test.mjs",
     "tests/unit/garage-mesh.test.mjs",
     "tests/unit/curvature-channels.test.mjs",
+    "tests/unit/track-line.test.mjs",
     "tests/unit/storage-key-prefix.test.mjs",
     "tests/unit/no-bare-console.test.mjs",
     "tests/unit/light-store-cond-layer.test.mjs",
@@ -339,6 +340,7 @@
       "files": [
         "tests/unit/brake-cue.test.mjs",
         "tests/unit/digital-steer.test.mjs",
+        "tests/unit/key-binds.test.mjs",
         "tests/unit/onboard.test.mjs"
       ]
     },
@@ -538,7 +540,8 @@
         "tests/unit/spline-project-height.test.mjs",
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/car-front-wing-width.test.mjs",
-        "tests/unit/grid-boxes.test.mjs"
+        "tests/unit/grid-boxes.test.mjs",
+        "tests/unit/driving-line.test.mjs"
       ]
     },
     "test:tiny": {

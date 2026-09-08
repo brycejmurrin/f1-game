@@ -446,6 +446,7 @@ interface GameCtx {
   difficulty: string;
   readonly store: StoreApi;
   readonly tickUi: () => void;
+  readonly scheduleFlybyTrack: (settle?: boolean) => void;
   readonly buildSetup: () => void;
   readonly setTeamPicker: (open: boolean, host?: HTMLElement) => void;
   readonly teamSwatch: (t: TeamDef) => HTMLElement;
@@ -657,3 +658,4 @@ declare const RivalAudio: GameModuleFactory;
 declare const SteerTuning: GameModuleFactory;
 declare const TunerPanel: GameModuleFactory;
 declare const UiScale: GameModuleFactory;
+declare const KeyBinds: GameModuleFactory;

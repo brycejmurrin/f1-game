@@ -963,3 +963,19 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    same Montreal frame), and soft-presenting, because WGX classifies a
    HeadlessChrome UA as software by design; the Verdict's swapchain clause
    is therefore headed-only, and a headless census proves bind + render.
+
+## Driving line (2026-09-08) — GLX-only pass, recorded gap
+
+The DRIVING LINE ribbon (RACE SETTINGS › DRIVING LINE, `js/render/shared/
+driving-line.js`) is built once per circuit as a stride-6 float triangle strip
+(pos3, across, lineSpeed, zone) and drawn by GLX `drawDrivingLine` with
+`LINE_VS` / `LINE_FS`: depth-tested, no depth write, `ROAD_BIAS` polygon
+offset, alpha-blended, emissive ×1.6 so bloom lifts it. WGX and TLX carry the
+member as `() => false` so `backend-surface-parity` stays green and
+`DrivingLine.draw()` reports "no pass" instead of drawing air. To port: WGX —
+a pipeline like the SKID one with the lit pass's depth state and the additive
+halo's blend, three float attributes past the position, the four uniforms
+(`uViewProj`, `uPlayerSpeed`, `uCornersOnly`, `uStr`) in a small uniform
+buffer; TLX — a `BufferGeometry` stream like `skidStream` with a TSL material
+that reproduces `LINE_FS` (the mix/smoothstep chain is expressible in TSL, no
+derivatives, so it is WebKit-safe).

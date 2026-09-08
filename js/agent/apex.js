@@ -1039,6 +1039,16 @@ const api = {
     if (level !== undefined) G.raceReliability = String(level).toLowerCase();
     return G.raceReliability;
   },
+  // The DRIVING LINE ribbon (RACE SETTINGS): get/set "off" | "corner" | "full"
+  // for this session (the RACE SETTINGS row is what persists, like every other
+  // hook here). The result reads the built strip so a test can assert the
+  // line exists and where it brakes without a GPU.
+  drivingLine(mode) {
+    if (mode !== undefined) DrivingLine.setMode(String(mode).toLowerCase());
+    const c = DrivingLine._cache();
+    return { mode: DrivingLine.mode(), built: c.id, samples: c.n, verts: c.count,
+             speedAt: (s) => DrivingLine.speedAt(s), zoneAt: (s) => DrivingLine.zoneAt(s) };
+  },
   retirements: () => Reliability.plan(G.cars),
   retire(idx, reason) {
     const c = idx == null ? G.player : G.cars[idx | 0];
@@ -2289,7 +2299,7 @@ const api = {
     for (const c of G.cars) {
       c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
       c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
-      c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
+      c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.deploying = false; c.boostOn = false; c.otArmed = false;
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
       delete c.vertLoad;

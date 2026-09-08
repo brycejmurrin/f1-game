@@ -617,7 +617,7 @@ test("variable control clusters use one content-driven balanced-row primitive", 
   }
   // RACE SETTINGS left the chip grammar on 2026-09-05: eight setting rows, the
   // pause > SETTINGS control, and none of them balances anything.
-  for (const id of ["rs-laps", "rs-weather", "rs-mixed", "rs-time", "rs-diff", "rs-quali", "rs-caution", "rs-reliab"]) {
+  for (const id of ["rs-laps", "rs-weather", "rs-mixed", "rs-time", "rs-diff", "rs-quali", "rs-caution", "rs-line", "rs-reliab"]) {
     assert.match(html, new RegExp(`id="${id}" class="set-row" role="group" aria-labelledby="${id}-label"`), `${id} is a setting row`);
   }
   assert.doesNotMatch(html, /id="rs-[a-z]+" class="chip-row/, "no race-settings chip row survives");

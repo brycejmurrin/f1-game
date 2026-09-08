@@ -85,6 +85,7 @@ const FULL = [
   "js/render/gfx.js",
   "js/render/shared/gltf.js",
   "js/render/shared/assets.js",
+  "js/render/shared/driving-line.js",
   "js/data/teams.js",
   "js/data/driver-ratings.js",
   // Persistence sits ahead of every js/game module: the settings panels, the
@@ -102,6 +103,7 @@ const FULL = [
   "js/track/scenery/landmark-kit.js",
   "js/track/scenery/circuit-kit.js",
   "js/track/core/spline.js",
+  "js/track/core/line.js",
   "js/track/core/mesh.js",
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
@@ -153,6 +155,7 @@ const FULL = [
   "js/ui/aria-state.js",
   "js/ui/setting-row.js",
   "js/ui/settings-tabs.js",
+  "js/ui/key-binds.js",
   "js/physics/aero-zones.js",
   "js/fx/skidmarks.js",
   "js/race/race-control.js",
@@ -263,6 +266,7 @@ const TRACK_VM = [
   "js/track/scenery/landmark-kit.js",
   "js/track/scenery/circuit-kit.js",
   "js/track/core/spline.js",
+  "js/track/core/line.js",
   "js/track/core/mesh.js",
   "js/track/scenery/nature.js",
   "js/track/scenery/structures.js",
@@ -278,6 +282,7 @@ const HARD_EDGES = [
   // multiplayer stack left FULL: a HARD_EDGES pair must have BOTH ends in FULL
   // to be orderable by tag position.
   ["js/core/mat4.js", "js/render/glx/glx.js"],                       // glx uses M4 at init
+  ["js/core/mat4.js", "js/render/shared/driving-line.js"],           // binds M4.clamp at eval
   // M4 is also the home of the shared scalar helpers (clamp/lerp/wrapDelta) and
   // every consumer ALIASES them at eval (`const clamp = M4.clamp;`). mat4.js is
   // the 2nd tag so the order is never in doubt, but these are real eval-time
@@ -285,6 +290,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/game.js"],
   ["js/roster.js", "js/game.js"],                          // game.js reads ApexRoster's rosters at eval
   ["js/core/mat4.js", "js/track/core/spline.js"],
+  ["js/core/mat4.js", "js/track/core/line.js"],                    // TrackLine aliases M4.clamp/lerp at eval
   ["js/core/mat4.js", "js/track/scenery/structures.js"],
   // ["js/core/mat4.js", "js/data/telemetry.js"] was here. telemetry.js is LAZY_DATA
   // now, so the pair crosses rosters and HARD_EDGES cannot order it. The

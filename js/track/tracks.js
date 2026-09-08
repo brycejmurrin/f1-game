@@ -132,6 +132,7 @@ const Tracks = (function () {
     // it — findCorners/bankingProfile call curvature(), which now indexes this.
     track.curv = new Float32Array(n);
     { const cds = total / n; for (let k = 0; k < n; k++) track.curv[k] = curvatureRaw(track, k * cds); }
+    TrackLine.bake(track);   // the racing line LUT (track.line / lineW / lineCorners), from curv + hw
     track.bankP = bankingProfile(track);
     return track;
   }

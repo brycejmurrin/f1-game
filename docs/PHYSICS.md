@@ -299,6 +299,28 @@ tyre call worth ~35% more grip than every other car on track and turned a whole
 weather condition into a walkover. As it stands a correct call roughly matches
 the field and a wrong one costs about a quarter of your cornering.
 
+### The racing line the AI drives
+
+`js/track/core/line.js` (`TrackLine`) bakes a lateral offset per centreline
+node at track build, beside `track.curv`: outside-inside-outside through every
+corner — the turn-in from the outside edge at `sqrt(2 · 1.5R · 2w)` before the
+apex, the apex a plateau on the inside edge wherever the road is still above
+55% of the corner's peak curvature, the exit released to the outside 1.25× the
+turn-in distance later. Corners are runs of |curv| above 0.006 rad/m (R < ~170
+m; gentler bends are flat-out kinks) that end only below 0.0036 (hysteresis, so
+a long opening bend like Parabolica keeps the inside to its real end); chicanes
+share a knot through the middle. `lineW` is 1 in a corner window and 0 on a
+straight, where the car's own lane preference spreads the field. The AI's
+target is `lerp(lane, line, w · AiDrive.lineFollow)` read 8–25 m ahead.
+
+Before it, the target was `-k · 130 · hw` mixed 55% with the lane: an
+inside-hugging line (measured on monza: approach +1..+3.6 m INSIDE, apex only
++1.2 m inside on a 7 m half-width) and a lane-biased car apexed on the outside
+all lap. After: approach 3–6 m outside, apex within a metre of the inside edge
+(`tests/unit/ai-racecraft-vm.test.mjs`, the line test; `track-line.test.mjs`
+for the geometry). The AI's corner SPEED still comes from the road's curvature
+(`brakeTarget`), not the path's — conservative by the difference in radius.
+
 ### Racecraft: who passes, who yields
 
 The AI's traffic decisions live in `js/physics/ai-drive.js` as pure rules; the
@@ -358,6 +380,24 @@ the numbers):
   clause reads the blocker's acceleration (`c.accSm` on an AI car, `axEstSm` on
   a human), so a launching grid is not 21 cars latching a pass on the car ahead.
 
+- **A pass is engaged only where the move is on** (`AiDrive.attackOK`,
+  `TrackLine.attackAt`). Each corner's braking zone (130 m before the turn-in)
+  carries a baked quality: the length of the straight feeding it (0 at 60 m,
+  1 at 450 m) times the road width (0 at a 4 m half-width, 1 at 6.5 m) — Game
+  AI Pro's per-corner overtaking flags. Outside a zone a straight is 0.6 and a
+  bend fades to 0.15. The utility is that quality times the closing rate, times
+  craft (0.7–1.25) and a per-car roll; below 0.32 the car FOLLOWS — it does not
+  hang half alongside (the bias without the commitment parked pairs side by
+  side at monaco). A car with real pace in hand is passed wherever: the quality
+  floor rises from a 6% deficit (the field's own tier spread) to 0.6 at 12%,
+  and a crawling car is 1. A pass still behind by more than half a car at the
+  turn-in is a lunge: abandoned, and that car is not re-attacked for twice the
+  cooldown (rFactor 2's "threshold endured") — unless the attacker has 12% of
+  pace in hand, in which case it will be alongside under braking anyway.
+  Measured (sticking position swaps per field lap, six minutes, after the first
+  minute): monaco 1.29 → 0.65 with flip-backs 25 → 3 — the real Monaco sees a
+  handful of passes per race; monza 3.7 → 3.8, unchanged, since a long straight
+  into a wide braking zone is where the move IS on.
 - **No moving under braking** (`AiDrive.holdLineGap`). Braking with a car
   within a second behind (eight metres at least), and not itself attacking,
   an AI freezes its offset from the racing line at what it was when the brakes
@@ -478,6 +518,7 @@ it lands.
 | `js/game.js` | `updateCar` k/`c.kCur` cache | **assist-gated** | every player-path use is multiplied by `ROAD_FOLLOW` (def 0) or sits inside `if (raceLineAssist !== 0)` (def 0); `c.kCur` feeds only BodyAttitude (render-only) |
 | `js/game.js` | `updateCar` ERS boost / OT fire / brake look / lane target / overtake side pick | **AI-only** | each inside the `!c.human` arm. The side pick passes the SAME `kA` the lane target already sampled into `AiDrive.otSide`, which breaks an equal-room tie toward the inside of the next corner — the arc chooses which way an AI goes around another AI, and touches no player force path |
 | `js/game.js` | `updateCar` RACING LINE assist | **assist-gated** | inside `if (raceLineAssist !== 0)`; slider def 0 |
+| `js/game.js` | `drivingLineApi` (feeds `js/render/shared/driving-line.js`) | **surface** | the DRIVING LINE ribbon: the adapter hands the builder the static curvature LUT, read once per circuit to place the line and shade its braking zones; a picture on the road, no car reads it. Same lateral formula as the assist-gated `lineX` so the two agree |
 | `js/game.js` | `coast` | **broadcast-only** | runs only on `c.finished` cars — driving control is already disconnected. Any future reuse of `coast()` on a live car is a BLOCKER |
 | `js/physics/aero-zones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |
 | `js/physics/debris-world.js` | `registerFurniture` | **broadcast-only** | apex-kerb cones in the one-way cosmetic Rapier side-world |
