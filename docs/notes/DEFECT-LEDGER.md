@@ -99,6 +99,42 @@ Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
 `lapMirror` portal remaps have landed in code. Remaining survey leftovers live
 on the 08-18 perf-hunt board, not this register.
 
+- **`Invalid CommandEncoder` on the owner's PHONE — the first `gpuErrors > 0`
+  ever seen on hardware. OPEN, with an on-device A/B shipped (2026-09-08).**
+  Reported from a real device, three/webgpu at Spa: `fps 51.4 / frame 19.5 ms`,
+  `gfx: three/webgpu err 1 strikes 0 scale 0.75`, `gpu: Invalid
+  CommandEncoder`, `tlx: blit —` (native present, no readback), `dc 559`. The
+  world renders — trees, grandstands, the car — so the encoder recovered.
+
+  **This is the only player-facing evidence in this file.** Every census leg
+  has reported `gpuErrors 0`; this is the first error from the path a player
+  actually takes, and it arrived by screenshot rather than by any instrument
+  the project owns. It also, incidentally, settles the entry below it: 51.4 fps
+  on the device against 4.9 in the census is the soft-blit gap, measured.
+
+  **The code already describes this failure and assumes hardware is immune.**
+  `tlx.js drawInstanced`: "Dawn bind[s] a 16-vertex vec3 as instance-rate …
+  One failed draw invalidates the whole encoder … Skip the instanced scenery on
+  that path; **real GPUs keep the batches**." `skipBatches()` gates on
+  `_softAdapter && isWebGPU()`. But Dawn is Dawn on a phone too, and the
+  assumption is now in doubt.
+
+  **NOT blind-fixed, deliberately.** Widening the gate to all WebGPU would shed
+  48 % of all prop geometry (79.6 % Vegas, 77.9 % Nurburgring) from every real
+  GPU to chase one recovered error. Instead `apex26.tlxSkipBatches=1` reverts
+  the single suspect on the single device that has it, in a reload — the same
+  idiom as `tlxForceHw` for the software side. `backendState()` now also
+  reports `skipBatches` (the live verdict, not the inputs) and `gpuErrFrames`
+  (DISTINCT presents an error landed in), which is what separates one bad frame
+  at boot from every frame — `err 1` alone cannot.
+
+  **Next, on the device:** set `apex26.tlxSkipBatches="1"`, reload, drive the
+  same corner. Error gone → the instanced batches are the cause and the fix is
+  a narrow one (the attribute layout, not the gate). Error stays → batches are
+  exonerated and the next suspect is free. Either way `gpuErrFrames` says
+  whether it is a boot one-off or per-frame, which decides whether it matters
+  at all.
+
 - **The deploy branch's three.js/WebGPU leg rendered a near-black frame on real
   Apple hardware — NOT REPRODUCING on the current head; handed over
   (2026-09-08).** Run 61 on `9b94175` reads `meanLuma` **44.6**, back in the
@@ -116,6 +152,98 @@ on the 08-18 perf-hunt board, not this register.
   which is neither of the two causes that commit's comment set out to
   separate ("faces lost in between" or "something clearing the mask"). The
   probe stops being driven. That is where to look.
+
+  **Traced further (2026-09-08, same day).** The producer is not the problem
+  and neither is `tlx.js`. `begins === ends` on both legs, so every
+  `envFaceBegin` was matched by an `envFaceEnd` and each call completed; the
+  WebGPU leg was simply ASKED three times in a ~35 s run that offers roughly
+  forty opportunities. So the gate that stopped calling it is in `game.js`:
+
+      player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam &&
+      (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin &&
+      LT.carEnvCube > 0.001 && !hideMeshes.cars
+
+  `_envProbeOff` is only ever set from localStorage, so it is not that. The
+  live term is **`PerfGov.tier() < 1`** — rung 1 of the governor's feature
+  ladder IS "env probe off" — and `js/perf/governor.js`'s own header records
+  the asymmetry that makes this bite one backend and not the other:
+
+  > 1284, 25 s per backend: WebGL2 sat at scale 0.80 / tier 0 / 23 fps, while
+  > WebGPU and three.js — where the scale lever did bite — reached tier 2
+
+  Three faces is twelve frames at the every-fourth-frame throttle, ~2.4 s at
+  the measured 4.9 fps: the probe runs briefly, the governor sheds it, and
+  recovery is deliberately slow — "features come back only at full res under
+  the same sustained headroom, one per ~4 s". A leg that sheds early may never
+  get the six consecutive opportunities the cube needs inside a 35 s check.
+  **The tier hypothesis is FALSIFIED — I tested my own inference and it is
+  wrong (2026-09-08, an hour after writing it).** `gpu-game-check --backend
+  three` in this container resolves to the SAME leg (`path: webgpu`, `engine:
+  three.js r185 webgpu`) and reports `begins=896 ends=896 ready=true mask=3`
+  with `tier=0 autoTier=0 scale=1` — on a box whose own governor recorded a
+  6.7-SECOND worst frame. Slowness does not starve the probe, the governor
+  never left rung 0 to shed it, and the cube latched. It also kills the
+  broader reading I was one step from adopting: this backend is not inherently
+  unable to drive the probe, because here it drives it 896 times. Whatever
+  closes the gate is specific to the macOS runner, not to three-on-WebGPU.
+
+  `tier=0` on both census legs was the reading that made the shed-and-recover
+  story attractive; the local run shows tier 0 is simply where this leg sits.
+
+  **ROOT CAUSE, from the census ARTIFACT rather than the summary (2026-09-08).**
+  The verdict step prints `fps` and `floorMs` but not the frame COUNT, which is
+  the number that settles this. Downloading run 61's artifact:
+
+  | leg | `open.frames` | worst frame | elapsed | `begins` | `ready` |
+  |---|---|---|---|---|---|
+  | three → WebGL2 | **600** | 16.7 s | 49.7 s | 674 | true |
+  | three → WebGPU | **5** | **11.4 s** | 39.1 s | 3 | false |
+
+  **The WebGPU leg rendered FIVE frames in thirty-nine seconds**, one of them
+  taking 11.4 s. There is no env-probe defect: six cube faces cannot be baked
+  by a renderer that produces five frames. `begins=3` is the correct and
+  expected behaviour of a healthy producer on a leg that barely runs, and every
+  reading downstream of it — `ready=false`, the missing image-based ambient,
+  the darker `meanLuma` — is a symptom of the frame count and nothing else.
+
+  It also retro-explains the 2.6 / 44.6 / 66.7 luma spread that opened this
+  entry: that is how many frames landed before the capture, not three different
+  rendering faults.
+
+  **The 600-vs-5 comparison is INVALID, and `docs/notes/PERF-FINDINGS.md`
+  already says so in capitals: THE HARNESS RUNS THE TWO LEGS ON DIFFERENT
+  PRESENT PATHS.** `tlx.js:235` — `_softBlit = !forceWebGL && _capPref !== "0"
+  && (_softAdapter || _headless || _capPref === "1")`, with `_headless` =
+  `/HeadlessChrome/i.test(ua)`. The census's WebGPU leg sets
+  `apex26.tlxForceGL = "0"`, so under Playwright it SOFT-BLITS: a GPU readback
+  plus `putImageData` every frame. The WebGL2 leg sets `"1"`, short-circuiting
+  `_softBlit` to false. So 600 vs 5 is a readback path against a direct one,
+  not one backend against another, and an 11.4-second frame is what a readback
+  of a large target on a busy shared runner costs.
+
+  **NOTHING IN THIS ENTRY IS EVIDENCE ABOUT A PLAYER.** On a Mac in a headed
+  browser `_headless` is false and `_softAdapter` is false, so `_softBlit` is
+  false and the native swapchain is used. Only a HEADED hardware run says
+  anything about that path — the same caveat the WGX leg's `softPresent=true /
+  headlessUa=true` line has carried all along, which I read past twice today.
+
+  So the open question is narrower and far less alarming: **is the soft-blit
+  readback so expensive on these runners that the census's WebGPU legs measure
+  the HARNESS rather than the game?** If so the fix belongs to the census, not
+  to `tlx.js`. A compile storm remains a candidate for part of it (`tlx.js`
+  carries that note, and 593 programs at ~60 s on Monza is recorded there), but
+  soft-blit is the larger and better-evidenced term and must be excluded first.
+  NO PLAYER-FACING DEFECT HAS BEEN DEMONSTRATED anywhere in this entry.
+
+  Superseded above: everything about the `game.js` gate. The gate is fine; it
+  was asked three times because there were five frames to ask on. I spent two
+  rounds on the callee and one on the caller before reading the frame count,
+  which was in the artifact the whole time.
+
+  For whoever picks this up: the cheap next measurement is to record WHICH
+  term of the gate was false on the frames the probe did not run, not to add
+  more counters inside `tlx.js`. The instrument there is already sufficient
+  and has done its job — it is `game.js` that is silent.
 
   The original measurement follows.
 

@@ -145,9 +145,28 @@ const Helmets = (function () {
   // and showed as a sliver of colour at the brow. They stop at 0.44 now, on
   // the band above the aperture where a real painter puts them, and the marks
   // that belong below it are bands at 0.68 and down.
+  /* SNAP A HORIZONTAL EDGE ONTO A RING. Now that each triangle carries one flat
+     colour, a band edge that falls in the MIDDLE of a row lands on some of that
+     row's triangles and not others — and because every quad is split on a
+     diagonal, the ones it catches alternate. The result is a sawtooth along
+     what should be a clean ring, which reads as a rendering fault rather than
+     as a design. Snapped to the nearest ring line the edge is exactly the
+     mesh's own edge and comes out clean.
+     The move is at most half a ring gap, about 0.025 of the shell — smaller
+     than the measurement that placed the band. A band is always widened to at
+     least one whole row, so a keyline can never snap itself out of existence. */
+  const RINGS = 20, SLICES = 28;
+  const ringT = (i) => Math.pow(i / RINGS, 1.25);
+  const RING_TS = Array.from({ length: RINGS + 1 }, (_, i) => ringT(i));
+  const snapT = (t) => RING_TS.reduce((a, v) => (Math.abs(v - t) < Math.abs(a - t) ? v : a), RING_TS[0]);
+  const snapBand = (t0, t1) => {
+    let a = snapT(t0), b = snapT(t1);
+    if (b <= a) { const i = RING_TS.indexOf(a); b = RING_TS[Math.min(RING_TS.length - 1, i + 1)]; }
+    return [a, b];
+  };
   const z = {
-    cap: (t1, c) => ({ k: "cap", t1, c }),
-    band: (t0, t1, c) => ({ k: "band", t0, t1, c }),
+    cap: (t1, c) => ({ k: "cap", t1: snapT(t1), c }),
+    band: (t0, t1, c) => { const b = snapBand(t0, t1); return { k: "band", t0: b[0], t1: b[1], c }; },
     stripe: (az, w, c) => ({ k: "stripe", az, w, c }),
     wedge: (az0, az1, c) => ({ k: "wedge", az0, az1, c }),
     chevron: (az, w, t0, t1, c) => ({ k: "chevron", az, w, t0, t1, c }),
@@ -161,7 +180,7 @@ const Helmets = (function () {
     // a paint job. 0.055 wide, not as thin as one would be drawn — under the
     // ring spacing of the mesh a keyline has no vertex to live on and vanishes
     // from the game while still showing in the preview.
-    key: (t, c) => ({ k: "band", t0: t, t1: t + 0.055, c }),
+    key: (t, c) => { const b = snapBand(t, t + 0.055); return { k: "band", t0: b[0], t1: b[1], c }; },
     // The pair on both temples — most side graphics are mirrored, and writing
     // them out twice is how one of them ends up 4 degrees off.
     sides: (f) => [f(90), f(270)],
@@ -502,42 +521,72 @@ const Helmets = (function () {
      by a twentieth of the way down, so the first ring has to land inside that
      twentieth or the dome tessellates as a flat cap. f^1.25 puts it at 0.024
      and keeps the lower half near enough uniform for the bands. */
-  const RINGS = 20, SLICES = 28;
-  const ringT = (i) => Math.pow(i / RINGS, 1.25);
+  /* FLAT PAINT, SMOOTH LIGHT. The shell used to share one vertex between the
+     triangles that meet at it, which is right for the normal and wrong for the
+     colour: a vertex sits on ONE side of a band edge but its colour is then
+     interpolated across every triangle it touches, so every edge on the helmet
+     was a 12.9-degree smear and a keyline thinner than that vanished into the
+     blend. Vertex count, not triangle count, was the ceiling on the design.
+
+     Each triangle gets its own three vertices now, all three carrying the
+     colour sampled at the triangle's CENTROID, so the paint is flat and its
+     edges are exactly the mesh's edges — crisp, at 1120 triangles, the same
+     1120 it drew before. The NORMALS stay the smooth per-corner ones, so the
+     lighting is unchanged and the shell still reads as a curved surface: this
+     buys sharp graphics, not a faceted lid.
+
+     It costs vertices (three per triangle instead of one shared between six),
+     which is memory on a mesh the cache already holds at most 24 of, and buys
+     back nothing in draw cost — the triangle budget in
+     tests/unit/car-wing-foil.test.mjs is unmoved. */
   function build(out, cx, cy, cz, design, S) {
     const skin = shell(design);
-    const i0 = out.pos.length / 3;
     const clamp1 = (c) => [Math.min(c[0], 1), Math.min(c[1], 1), Math.min(c[2], 1)];
-    for (let r = 0; r <= RINGS; r++) {
-      const t = ringT(r);
-      for (let sl = 0; sl < SLICES; sl++) {
-        const a = (sl / SLICES) * Math.PI * 2;
-        const p = pointAt(t, a);
-        const du = 0.5 / RINGS, da = Math.PI / SLICES;
-        const pu = pointAt(Math.min(1, t + du), a), pd = pointAt(Math.max(0, t - du), a);
-        const pr = pointAt(t, a + da), pl = pointAt(t, a - da);
-        const tu = [pu[0] - pd[0], pu[1] - pd[1], pu[2] - pd[2]];
-        const ta = [pr[0] - pl[0], pr[1] - pl[1], pr[2] - pl[2]];
-        let nx = ta[1] * tu[2] - ta[2] * tu[1];
-        let ny = ta[2] * tu[0] - ta[0] * tu[2];
-        let nz = ta[0] * tu[1] - ta[1] * tu[0];
-        const m = Math.hypot(nx, ny, nz) || 1;
-        nx /= m; ny /= m; nz /= m;
-        if (r === 0) { nx = 0; ny = 1; nz = 0; }          // the pole, where both tangents vanish
-        const v = skin(t, (a * 180 / Math.PI + 360) % 360);
-        const c = clamp1(v.c);
-        out.pos.push(cx + p[0], cy + p[1], cz + p[2]);
-        out.nrm.push(nx, ny, nz);
-        out.col.push(c[0], c[1], c[2]);
-        out.mat.push(v.glass ? S.glass : S.paint);
+    const corner = (r, sl) => {
+      const t = ringT(r), a = (sl / SLICES) * Math.PI * 2;
+      const p = pointAt(t, a);
+      const du = 0.5 / RINGS, da = Math.PI / SLICES;
+      const pu = pointAt(Math.min(1, t + du), a), pd = pointAt(Math.max(0, t - du), a);
+      const pr = pointAt(t, a + da), pl = pointAt(t, a - da);
+      const tu = [pu[0] - pd[0], pu[1] - pd[1], pu[2] - pd[2]];
+      const ta = [pr[0] - pl[0], pr[1] - pl[1], pr[2] - pl[2]];
+      let n = [ta[1] * tu[2] - ta[2] * tu[1], ta[2] * tu[0] - ta[0] * tu[2], ta[0] * tu[1] - ta[1] * tu[0]];
+      const m = Math.hypot(n[0], n[1], n[2]) || 1;
+      n = [n[0] / m, n[1] / m, n[2] / m];
+      if (r === 0) n = [0, 1, 0];                        // the pole, where both tangents vanish
+      return { p, n, t, sl };
+    };
+    // one sample per TRIANGLE, at its centroid, wrapped the short way round
+    const paintTri = (v0, v1, v2) => {
+      const t = (v0.t + v1.t + v2.t) / 3;
+      const base = v0.sl;
+      const off = [v0, v1, v2].reduce((a, v) => a + ((v.sl - base + SLICES + SLICES / 2) % SLICES - SLICES / 2), 0) / 3;
+      const az = (((base + off) / SLICES) * 360 + 360) % 360;
+      const v = skin(Math.min(1, t), az);
+      return { c: clamp1(v.c), mat: v.glass ? S.glass : S.paint };
+    };
+    const emit = (a, b, c) => {
+      const paint = paintTri(a, b, c);
+      const i = out.pos.length / 3;
+      for (const v of [a, b, c]) {
+        out.pos.push(cx + v.p[0], cy + v.p[1], cz + v.p[2]);
+        out.nrm.push(v.n[0], v.n[1], v.n[2]);
+        out.col.push(paint.c[0], paint.c[1], paint.c[2]);
+        out.mat.push(paint.mat);
       }
+      out.idx.push(i, i + 1, i + 2);
+    };
+    const grid = [];
+    for (let r = 0; r <= RINGS; r++) {
+      const row = [];
+      for (let sl = 0; sl < SLICES; sl++) row.push(corner(r, sl));
+      grid.push(row);
     }
     for (let r = 0; r < RINGS; r++) {
       for (let sl = 0; sl < SLICES; sl++) {
         const s2 = (sl + 1) % SLICES;
-        const a = i0 + r * SLICES + sl, b = i0 + r * SLICES + s2;
-        const c = i0 + (r + 1) * SLICES + s2, d = i0 + (r + 1) * SLICES + sl;
-        out.idx.push(a, b, c, a, c, d);
+        const a = grid[r][sl], b = grid[r][s2], c = grid[r + 1][s2], d = grid[r + 1][sl];
+        emit(a, b, c); emit(a, c, d);
       }
     }
     return out;
