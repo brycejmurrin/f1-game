@@ -21,7 +21,7 @@
 // check (survey-track.mjs has the same idiom).
 
 import { fileURLToPath } from "node:url";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import {
   launchChromium,
@@ -46,6 +46,13 @@ function has(argv, name) {
 }
 
 const argv = process.argv.slice(2);
+const TEAM = flag(argv, "--team", null);
+// Team ORDER is the roster order in js/data/teams.js, which is what the stored
+// index means. Read from the source rather than duplicated here.
+function teamIdsFromSource() {
+  const src = readFileSync(new URL("../../js/data/teams.js", import.meta.url), "utf8");
+  return Array.from(src.matchAll(/^ *id: "([a-z]+)",/gm)).map((m) => m[1]);
+}
 const positionals = [];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i].startsWith("--")) {
@@ -90,6 +97,21 @@ try {
   const page = await browser.newPage({
     viewport: { width: 1280, height: 720 },
   });
+  // --team <id>: whose car is on track. The CAR STUDIO renders any team, but
+  // this tool could only shoot whichever team the profile happened to hold, so
+  // "does this livery read from a race camera?" was unanswerable per team. The
+  // index has to be in storage BEFORE the page evaluates: game.js reads
+  // apex26.team once, at eval time, into teamIdx — setting the store after boot
+  // updates the store and not the player's car, which is how the first attempt
+  // shot four identical orange cars.
+  if (TEAM) {
+    const ids = teamIdsFromSource();
+    const idx = ids.indexOf(TEAM);
+    if (idx < 0) { console.error(`unknown team "${TEAM}" — one of: ${ids.join(", ")}`); process.exit(2); }
+    await page.addInitScript((i) => {
+      try { localStorage.setItem("apex26.team", String(i)); localStorage.setItem("apex26.driver", "0"); } catch (_) {}
+    }, idx);
+  }
   await page.goto(srv.url);
   // 10 s was the boot budget of a fast box. A cold navigation on a loaded
   // 4-core container costs ~45 s just to define the globals (measured

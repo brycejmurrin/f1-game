@@ -3,17 +3,27 @@
 const Teams = (function () {
   "use strict";
 
+  // EVERY team's DEFAULT livery names its 2026 engine cover. Liveries.forTeam
+  // folds `livery` into the synthesized "default" — the paint a new player
+  // starts on and every AI car of that team runs — while each team's picker
+  // entries in js/car/liveries.js keep the plain cover, so both looks ship.
+  // Fields: LiveryTex.SPINE_LOGO_IDS / SPINE_SIDE_IDS for the crown and flank
+  // graphics, Car3D.SPINE_HEIGHT_IDS / FIN_SHAPE_IDS for the shape. No real
+  // 2026 car carries a tail fin, so none of them do; the DESIGN is what tells
+  // the teams apart, not the height of the cover.
+  //
+  // ONE `livery:` key per team. Two sessions adding one each merged without a
+  // conflict and left a duplicate key in the same object literal — the later
+  // silently won and the earlier team's whole design vanished (2026-09-08).
+  // tests/unit/team-livery.test.mjs is the guard.
   const LIST = [
     {
       id: "mercedes", name: "Mercedes-AMG Petronas", short: "MER",
-      /* The W17: twin stripes down the crown near each shoulder and the raked
-         bars along the flank, tapering to the rear. No tail fin. */
-      livery: { finShape: "none", spineHeight: "raised", spineLogo: "twin", spineSide: "slash" },
       color: [0.045, 0.055, 0.065], color2: [0.0, 0.706, 0.671],   /* black #0B0E10 / Petronas teal #00B4AB (2026 black car) */
       /* The W17 is a BLACK car with a SILVER engine cover: the launch photos show
          the airbox, roll structure and cover crown in bare-metal silver over a
          black chassis, with the star flake on the tail. */
-      livery: { cover: [0.76, 0.78, 0.82], finStyle: "stars" },
+      livery: { cover: [0.76, 0.78, 0.82], finStyle: "stars", finShape: "none", spineHeight: "dorsal", spineLogo: "twin", spineSide: "slash" },
       engine: "Mercedes", tier: 0,
       stats: { speed: 96, accel: 91, cornering: 93, braking: 90 },
       drivers: [
@@ -23,15 +33,10 @@ const Teams = (function () {
     },
     {
       id: "ferrari", name: "Scuderia Ferrari HP", short: "FER",
-      /* The SF-26's engine cover: the pale saddle running the crown shoulder to
-         shoulder and down both flanks with a raked rear edge, the race number on
-         a plate inside it, no tail fin. See the redbull note below for why a
-         signature cover lives on the team record rather than in the picker. */
-      livery: { finShape: "none", spineHeight: "raised", spineLogo: "saddle", spineSide: "plate" },
       color: [0.863, 0.0, 0.0], color2: [1.0, 1.0, 1.0],           /* red #DC0000 / white */
       /* The SF-26 runs a WHITE engine cover over the red car — the strongest
          zone split on the 2026 grid, and the reason the cover colour exists. */
-      livery: { cover: [0.95, 0.95, 0.96] },
+      livery: { cover: [0.95, 0.95, 0.96], finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate" },
       engine: "Ferrari", tier: 1,
       stats: { speed: 97, accel: 88, cornering: 91, braking: 92 },
       drivers: [
@@ -41,9 +46,7 @@ const Teams = (function () {
     },
     {
       id: "mclaren", name: "McLaren", short: "MCL",
-      /* The MCL40: a hard-edged panel down the crown with a raked leading edge,
-         the title sponsor the length of the flank, no tail fin. */
-      livery: { finShape: "none", spineHeight: "raised", spineLogo: "panel", spineSide: "wordmark" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "panel", spineSide: "wordmark" },
       color: [1.0, 0.502, 0.0], color2: [0.122, 0.122, 0.122],     /* papaya #FF8000 / anthracite #1F1F1F */
       engine: "Mercedes", tier: 1,
       stats: { speed: 93, accel: 94, cornering: 96, braking: 91 },
@@ -54,17 +57,8 @@ const Teams = (function () {
     },
     {
       id: "redbull", name: "Red Bull Racing", short: "RBR",
-      color: [0.086, 0.137, 0.294], color2: [1.0, 0.843, 0.0],     /* navy #16234B / yellow #FFD700 */
-      /* The one team whose DEFAULT livery wears the 2026 engine cover, because
-         it is the cover the design was drawn from: no tail fin (no real car has
-         one), the spine raised to "dorsal", and the wrap — the sun over the
-         airbox, a bull charging forward on each flank — with the sponsor pair
-         aft of it. Liveries.forTeam folds these into the synthesized "default",
-         which is the livery every player starts on and every AI Red Bull runs;
-         the eleven picker entries below it keep the plain cover, so both looks
-         ship. Fields are LiveryTex.SPINE_LOGO_IDS / SPINE_SIDE_IDS and
-         Car3D.SPINE_HEIGHT_IDS / FIN_SHAPE_IDS. */
       livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "wrap", spineSide: "duo" },
+      color: [0.086, 0.137, 0.294], color2: [1.0, 0.843, 0.0],     /* navy #16234B / yellow #FFD700 */
       engine: "Red Bull Ford", tier: 2,
       stats: { speed: 90, accel: 88, cornering: 91, braking: 87 },
       drivers: [
@@ -74,6 +68,7 @@ const Teams = (function () {
     },
     {
       id: "alpine", name: "Alpine", short: "ALP",
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "tricolour", spineSide: "bars" },
       color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737],       /* blue #0093CC / pink #FF87BC */
       engine: "Mercedes", tier: 3,
       stats: { speed: 83, accel: 80, cornering: 82, braking: 80 },
@@ -84,6 +79,7 @@ const Teams = (function () {
     },
     {
       id: "racingbulls", name: "Racing Bulls", short: "RB",
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "chevron", spineSide: "split" },
       color: [0.957, 0.941, 0.925], color2: [0.086, 0.204, 0.796], /* white #F4F0EC / blue #1634CB */
       engine: "Red Bull Ford", tier: 3,
       stats: { speed: 82, accel: 82, cornering: 81, braking: 80 },
@@ -94,6 +90,7 @@ const Teams = (function () {
     },
     {
       id: "haas", name: "Haas", short: "HAA",
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "carbon", spineSide: "number" },
       color: [0.075, 0.078, 0.086], color2: [0.855, 0.161, 0.11],  /* dark graphite #131416 / red #DA291C (2026 dark car, white+red accents) */
       engine: "Ferrari", tier: 3,
       stats: { speed: 80, accel: 79, cornering: 79, braking: 79 },
@@ -104,6 +101,7 @@ const Teams = (function () {
     },
     {
       id: "williams", name: "Williams", short: "WIL",
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "code" },
       color: [0.059, 0.235, 0.788], color2: [1.0, 1.0, 1.0],       /* blue #0F3CC9 / white */
       /* The FW48 is gloss blue with a BLACK section sweeping from the chassis
          side through to the rear, framed by a red-and-white keyline; the white
@@ -121,6 +119,7 @@ const Teams = (function () {
     },
     {
       id: "audi", name: "Audi", short: "AUD",
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "bigmark", spineSide: "bars" },
       /* black #0E0F10 / Audi red-orange #FA470D (2026 black car, red-orange +
          titanium). The hex used to read #FA4700 and did not describe the value:
          0.98 and 0.28 round to FA and 47 exactly, but 0.05 is 0D, not 00. The
@@ -137,6 +136,7 @@ const Teams = (function () {
     },
     {
       id: "astonmartin", name: "Aston Martin", short: "AMR",
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "wordmark", spineSide: "logo" },
       color: [0.0, 0.349, 0.31], color2: [0.718, 0.882, 0.106],    /* green #00594F / lime accents */
       engine: "Honda", tier: 4,
       stats: { speed: 74, accel: 72, cornering: 76, braking: 74 },
@@ -147,6 +147,7 @@ const Teams = (function () {
     },
     {
       id: "cadillac", name: "Cadillac", short: "CAD",
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate" },
       color: [0.039, 0.039, 0.039], color2: [0.961, 0.961, 0.961], /* black #0A0A0A / white #F5F5F5 */
       engine: "Ferrari", tier: 4,
       stats: { speed: 73, accel: 73, cornering: 73, braking: 72 },
@@ -169,6 +170,7 @@ const Teams = (function () {
      apex26.customTeam save starts from (game.js loadCustomTeam). */
   const DEFAULT_CUSTOM = {
     id: "custom", name: "My Team", short: "YOU", engine: "Custom", tier: 2, custom: true,
+    livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "number", spineSide: "number" },
     color: [0.13, 0.79, 0.85], color2: [0.96, 0.86, 0.0],
     stats: { speed: 84, accel: 82, cornering: 83, braking: 81 },
     drivers: [{ name: "Your Name", code: "YOU", num: 99 }],
