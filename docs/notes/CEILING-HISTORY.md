@@ -2310,6 +2310,17 @@ files are not ratcheted.
   can put the SF-26's white top on a red car or the W17's silver on a black
   one. The atlas follows it (`coverPaint` inks the crest), because a light
   cover under a dark car would otherwise take the dark car's ink.
+- `js/game.js` lines 10157 -> **10168**, codeLines 5529 -> **5535**;
+  `js/render/glx/glx.js` 2355 -> **2356**; (tree) shellNodes 1326 -> **1333**
+  (2026-09-08): SETTINGS › LINE COLOUR, the driving line's colour-blind
+  palette. The row is seven shell nodes (the set-row grammar: label, prev,
+  select, next), one uniform on the GLX line program, and the wire block that
+  persists it. Paid for by the feature being unreadable as shipped: the speed
+  cue signalled with green / amber / red, whose two ends are the pair the
+  common red-green deficiencies cannot separate, on a cue that is only a cue
+  if it reads at a glance. Evidence and palette source:
+  `docs/notes/DRIVING-LINE-RESEARCH.md`.
+
 - `js/car/car3d.js` lines 3805 -> **3826** (2026-09-08): the FRONT-WING ENDPLATE
   placement comes out of the builder. The plate profile table and a
   `frontPlateGeom(aLvl, aero)` accessor now sit at module scope and the builder

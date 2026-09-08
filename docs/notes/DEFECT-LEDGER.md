@@ -21,21 +21,25 @@ Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
 `lapMirror` portal remaps have landed in code. Remaining survey leftovers live
 on the 08-18 perf-hunt board, not this register.
 
-- **`aero-zones` "X-mode buys X_VMAX_GAIN of vmax" is RED on the deploy tip,
-  and was before any of 2026-09-08's work — OPEN.** The spec asserts
-  `x.vmaxNow / z.vmaxNow ≈ 1 + z.xVmaxGain`. Measured through the Node VM
-  harness on three trees (`scratch/xmode.mjs`): 722f617 (before the racing-line
-  relaxation) ratio **1.1023**, 6084d42 (after it, before the AI controller)
-  **1.1023**, tip **1.0880** — against an expected 1.0957 every time. So the
-  test fails on all three; the AI controller moved the number but did not
-  break it. Either `vmaxNow` gains something beyond the wing between the two
-  reads (the X sample is driven for 1 s under throttle, so a state that
-  settles — flap travel, aero load, tyre — is the suspect) or `xVmaxGain` is
-  not the whole trade any more, the way the same spec's own comment says a
-  hardcoded 1.075 stopped being. Proposed patch: report the applied gain in
-  `physState()` and assert against THAT, or take both samples at the same
-  settled state. NOT fixed here: it is unrelated to the driving line and the
-  AI controller, and widening a tolerance to hide it is forbidden.
+- **`aero-zones` "X-mode buys X_VMAX_GAIN of vmax" — NOT A DEFECT. The entry
+  that stood here was mine and it was wrong (retracted 2026-09-08).** It
+  recorded the spec as RED on three trees at ratios 1.1023 / 1.1023 / 1.0880
+  against an expected 1.0957, measured through a scratch harness
+  (`scratch/xmode.mjs`, since deleted). The spec is GREEN: 1/1 alone, and
+  14/14 with the whole file in order, on the tip. Reproducing it in
+  `tools/lib/game-vm.cjs` with the spec's OWN preconditions gives 1.09574
+  against 1.09570 — inside the 3-decimal tolerance, no patch needed.
+
+  The lesson is the entry, not the physics. `7212e79` (another session, the
+  same morning) had already fixed the real cause: the human car tows since
+  2026-09-03, so a rival inside the 34 m window in one sample and not the
+  other moved `vmaxNow` by the slipstream rather than the flap. The spec now
+  sends the field 800 m back and asserts `towing === 0` in both samples. My
+  harness did not do either, so it measured the tow and I wrote the number
+  down as a defect in the code. **A harness that does not reproduce a spec's
+  preconditions is not evidence about that spec** — and inflation (1.1023 >
+  1.0957) was the tell, since a car gaining MORE than the flap earns is a
+  car getting something extra, not a broken multiplier.
 - **TLX: every road decal (driving line, blob shadow, tyre mark, skid) was
   buried under the road — FIXED (2026-09-08).** `tsl-fx.js` `fxMaterial`
   copied GLX's `polygonOffset(-4,-8)`, but three honours the road's own
