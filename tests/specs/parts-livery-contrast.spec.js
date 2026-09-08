@@ -170,11 +170,11 @@ test.describe("Livery atlas — ink contrast", () => {
                    [mesh.col[i0], mesh.col[i0 + 1], mesh.col[i0 + 2]]]);
       }
       const data = CarMesh.carDecalData(2, null, false, "ferrari");
-      const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
+      const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
       const regionOfUv = (u, v) => {
         for (const [name, r] of Object.entries(R)) {
           const uL = r.x / S, uR = (r.x + r.w) / S;
-          const vB = 1 - (r.y + r.h) / S, vT = 1 - r.y / S;
+          const vB = 1 - (r.y + r.h) / SH, vT = 1 - r.y / SH;
           if (u >= uL - 1e-6 && u <= uR + 1e-6 && v >= vB - 1e-6 && v <= vT + 1e-6) return name;
         }
         return null;
@@ -265,6 +265,7 @@ test.describe("Livery atlas — ink contrast", () => {
       // the WHOLE flank now, crease to sidepod line — the accent pinstripe
       // runs across it aft of the mark, like the fin's base pinstripe
       spineSide: ["c1", "accent"],
+      spineSideL: ["c1", "accent"],
       // the tail strip drapes the cover behind the crest, shoulder to shoulder,
       // and the accent pinstripe runs just under its shoulder edge — so, like
       // the fin, it genuinely sits on two paints. Its only mark (the second
@@ -301,9 +302,9 @@ test.describe("Livery atlas — ink contrast", () => {
     await load(page);
     const r = await page.evaluate(() => {
       const data = CarMesh.carDecalData(2, null, false, "ferrari");
-      const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
+      const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
       const uL = R.wing.x / S, uR = (R.wing.x + R.wing.w) / S;
-      const vB = 1 - (R.wing.y + R.wing.h) / S, vT = 1 - R.wing.y / S;
+      const vB = 1 - (R.wing.y + R.wing.h) / SH, vT = 1 - R.wing.y / SH;
       const band = [];
       for (let q = 0; q < data.pos.length / 3; q += 4) {
         const u = data.uv[q * 2], v = data.uv[q * 2 + 1];
@@ -378,10 +379,10 @@ test.describe("Livery atlas — ink contrast", () => {
   test("the wing sponsor band is mapped onto geometry, not drawn into nothing", async ({ page }) => {
     await load(page);
     const hit = await page.evaluate(() => {
-      const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
+      const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
       const data = CarMesh.carDecalData(2, null, false, "ferrari");
       const uL = R.wing.x / S, uR = (R.wing.x + R.wing.w) / S;
-      const vB = 1 - (R.wing.y + R.wing.h) / S, vT = 1 - R.wing.y / S;
+      const vB = 1 - (R.wing.y + R.wing.h) / SH, vT = 1 - R.wing.y / SH;
       let inRegion = 0;
       for (let i = 0; i < data.uv.length; i += 2) {
         const u = data.uv[i], v = data.uv[i + 1];

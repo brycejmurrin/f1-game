@@ -172,6 +172,14 @@ test.describe("overtake mode — the rules active aero does NOT share", () => {
       // rule is race-control.spec.js's; here it would only hide the gate.
       window.__apex.caution(false);
       window.__apex.go();
+      // NO RACE CONTROL. otEnabled() is `caution.level === 0 && leader.lap > 1`,
+      // and this test is about the second half only. It holds the throttle with
+      // no steering for 220 s, so the player leaves the road, and the debris
+      // layer answered with VSC -> SAFETY CAR -> RED FLAG (apex-logs, 2026-09-08):
+      // the gate then reads closed on lap 3 and the invariant below fails for a
+      // reason it does not name. The layer is ON by default in a page and OFF in
+      // the Node VM harness, which is why the VM twin never saw this.
+      window.__apex.caution(false);
       window.__apex.jump(0, 60, 0);
       window.__apex.setInput({ throttle: true });
       const trail = [];

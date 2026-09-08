@@ -62,9 +62,62 @@ export async function gotoGame(page, url, waitMs = 120000) {
   });
 }
 
-/** Title → garage: mb-garage when present, else race → select → YOUR CAR. */
-export async function openGarage(page, { team = "mercedes", waitMs = 60000 } = {}) {
-  await page.evaluate((teamId) => {
+/** One .screen visible? Resolves false on timeout instead of throwing. */
+async function screenShown(page, id, timeout) {
+  return page.waitForFunction((i) => {
+    const el = document.getElementById(i);
+    return !!el && !el.hidden;
+  }, id, { polling: 100, timeout }).then(() => true).catch(() => false);
+}
+
+/** What the page looks like right now — so a timeout names its own cause. */
+export async function uiState(page) {
+  return page.evaluate(() => {
+    const $ = (id) => document.getElementById(id);
+    const g = $("game");
+    const err = $("__err_overlay");
+    return {
+      state: window.__apex?.info?.().state ?? null,
+      screens: [...document.querySelectorAll(".screen")].filter((e) => !e.hidden).map((e) => e.id),
+      setupPreviewOn: window.__apex?.garageCam?.()?.on ?? null,
+      gameVisibility: g ? getComputedStyle(g).visibility : "absent",
+      overlay: err && err.style.display !== "none" ? (err.textContent || "").slice(0, 200) : null,
+    };
+  });
+}
+
+/**
+ * Title → garage: mb-garage when present, else race → select → YOUR CAR.
+ *
+ * The two routes end on DIFFERENT screens: #mb-garage opens #carsetup directly
+ * (game.js openGarage("menu")), while only #mb-race passes through #select
+ * (openGarage("select") behind #sel-car). Waiting for #select after a garage
+ * click can therefore never succeed — it burned the full waitMs and then failed
+ * claiming the garage never opened. So branch on the route actually taken, and
+ * when a click is swallowed (a menu still peeling, a transition mid-flight)
+ * RE-ENTER rather than wait longer: waiting cannot fix a click that never
+ * landed, and each attempt is bounded.
+ */
+export async function openGarage(page, { team = "mercedes", waitMs = 60000, tries = 3 } = {}) {
+  const step = Math.max(8000, Math.floor(waitMs / tries));
+  let route = null;
+  for (let attempt = 0; attempt < tries; attempt++) {
+    route = await enterGarage(page, team);
+    if (route === "garage") {
+      if (await screenShown(page, "carsetup", step)) return;
+    } else if (await screenShown(page, "select", step)) {
+      await page.evaluate(() => document.getElementById("sel-car").click());
+      if (await screenShown(page, "carsetup", step)) return;
+    }
+  }
+  throw new Error(
+    `probe: #carsetup never opened via the ${route} route after ${tries} attempts — ` +
+    JSON.stringify(await uiState(page)));
+}
+
+/** Peel back to the title, pin team/driver, click in. Returns the route taken. */
+function enterGarage(page, team) {
+  return page.evaluate((teamId) => {
     const $ = (id) => document.getElementById(id);
     const vis = (id) => { const el = $(id); return !!el && !el.hidden; };
     const peel = () => {
@@ -82,24 +135,10 @@ export async function openGarage(page, { team = "mercedes", waitMs = 60000 } = {
     const t = Teams.LIST.find((x) => x.id === teamId) || Teams.LIST[2];
     S.set("team", t.id);
     S.set("driver", 0);
-    if ($("mb-garage")) $("mb-garage").click();
-    else $("mb-race").click();
+    if ($("mb-garage")) { $("mb-garage").click(); return "garage"; }
+    $("mb-race").click();
+    return "race";
   }, team);
-  const direct = await page.waitForFunction(() => {
-    const el = document.getElementById("carsetup");
-    return el && !el.hidden;
-  }, null, { polling: 100, timeout: 8000 }).then(() => true).catch(() => false);
-  if (!direct) {
-    await page.waitForFunction(() => {
-      const el = document.getElementById("select");
-      return el && !el.hidden;
-    }, null, { polling: 100, timeout: waitMs });
-    await page.evaluate(() => document.getElementById("sel-car").click());
-    await page.waitForFunction(() => {
-      const el = document.getElementById("carsetup");
-      return el && !el.hidden;
-    }, null, { polling: 100, timeout: waitMs });
-  }
 }
 
 /** Step the preview loop; await WGX soft-present when present. */
@@ -116,50 +155,70 @@ export async function settleGarage(page, { frames = 90, sleepFn } = {}) {
   });
 }
 
-/** JSON diagnostics: backend binding, garageCam, gap-region pixel stats. */
+/** JSON diagnostics: backend binding, garageCam, and the gap-sample geometry. */
 export async function garageDiagnostics(page) {
   return page.evaluate(() => {
     const a = window.__apex;
     const el = document.getElementById("game");
     const env = a.diag ? (a.diag({ download: false }).env || {}) : {};
-    let gapSample = null;
-    if (el && el.width > 0 && el.height > 0) {
-      const c2 = document.createElement("canvas");
-      c2.width = el.width;
-      c2.height = el.height;
-      const ctx = c2.getContext("2d");
-      ctx.drawImage(el, 0, 0);
-      const panel = document.getElementById("cs-inner");
-      const pr = panel?.getBoundingClientRect();
-      const panelFrac = (el.clientWidth > 0 && pr) ? Math.min(pr.width / el.clientWidth, 0.85) : 0;
-      const x0 = Math.floor(el.width * 0.04);
-      const x1 = Math.floor(el.width * Math.max(0.58 - panelFrac * 0.5, 0.35));
-      const y0 = Math.floor(el.height * 0.18);
-      const y1 = Math.floor(el.height * 0.82);
-      const pixels = [];
-      const stepX = Math.max(6, Math.floor((x1 - x0) / 10));
-      const stepY = Math.max(6, Math.floor((y1 - y0) / 8));
-      const d = ctx.getImageData(0, 0, el.width, el.height).data;
-      for (let y = y0; y < y1; y += stepY) {
-        const ny = (y - y0) / Math.max(y1 - y0, 1);
-        for (let x = x0; x < x1; x += stepX) {
-          const i = (y * el.width + x) * 4;
-          pixels.push({ rgb: [d[i], d[i + 1], d[i + 2]], ny });
-        }
-      }
-      gapSample = { panelFrac, n: pixels.length, pixels };
-    }
+    // NO ctx.drawImage(#game) READBACK HERE. The WebGL2 context is created
+    // without preserveDrawingBuffer (grep js/ — it appears nowhere), so the
+    // drawing buffer is CLEARED after compositing and drawImage from any
+    // evaluate outside the frame yields solid black. The old gapSample did
+    // exactly that, and assertGarageInterior passes an all-black sample (its
+    // flat-wall rule needs darkFrac BELOW the floor, and black scores 1.0), so
+    // the gate that exists to reject bad frames was vacuous — it reported
+    // interior.ok on meanRgb [0,0,0]. backend-compare.mjs carries the same
+    // warning. The gate now samples the CAPTURED PNG; this returns only the
+    // geometry that sampling needs.
+    const panel = document.getElementById("cs-inner");
+    const pr = panel?.getBoundingClientRect();
+    const panelFrac = (el && el.clientWidth > 0 && pr) ? Math.min(pr.width / el.clientWidth, 0.85) : 0;
+
     const overlay = document.getElementById("__err_overlay");
     return {
       backend: env.backend || (typeof GLX !== "undefined" ? GLX.backend : null),
       gpuErrors: typeof GLX !== "undefined" && GLX.gpuErrors ? GLX.gpuErrors() : 0,
       cam: a.garageCam ? a.garageCam() : null,
       aspect: typeof GLX !== "undefined" ? GLX.aspect : null,
-      gapSample,
+      panelFrac,
+      canvas: el ? { w: el.width, h: el.height } : null,
       carsetupVisible: !!(document.getElementById("carsetup") && !document.getElementById("carsetup").hidden),
       overlay: overlay && overlay.style.display !== "none" ? overlay.textContent.slice(0, 200) : null,
     };
   });
+}
+
+/**
+ * Wait until #game is actually PAINTING.
+ *
+ * game.js render() (the `menuBlank` gate) sets the canvas to
+ * visibility:hidden whenever the menu has nothing to draw — an undrawn canvas
+ * keeps its LAST frame, so the garage car used to sit behind the title. It
+ * clears only once setupPreviewOn (or a race / the race-settings flyby) is up
+ * AND a render frame has run since. So #game can be attached, unhidden and a
+ * full 1440x900 rect while still being invisible, and a hidden element paints
+ * nothing into a screenshot.
+ *
+ * This is what made the webgl2 leg of garage-frame fail: locator.boundingBox()
+ * re-runs Playwright's own visibility actionability check, so it blocked the
+ * full 30 s and reported only "waiting for locator('#game')" — a message that
+ * points at the selector rather than at the render gate. Wait for the real
+ * condition, and say so when it never arrives.
+ */
+export async function waitGameVisible(page, timeout = 30000) {
+  const shown = await page.waitForFunction(() => {
+    const g = document.getElementById("game");
+    if (!g) return false;
+    const r = g.getBoundingClientRect();
+    return getComputedStyle(g).visibility !== "hidden" && r.width > 0 && r.height > 0;
+  }, null, { polling: 100, timeout }).then(() => true).catch(() => false);
+  if (!shown) {
+    throw new Error(
+      "probe: #game never became visible — game.js render() shows the canvas only " +
+      "while a race, the race-settings flyby or the garage preview is drawing; " +
+      JSON.stringify(await uiState(page)));
+  }
 }
 
 /** Fade the setup panel and clip #game for a clean shot. */
@@ -168,8 +227,27 @@ export async function screenshotGameCanvas(page, outPath) {
     const c = document.getElementById("carsetup");
     if (c) c.style.opacity = "0";
   });
-  const box = await page.locator("#game").boundingBox();
-  if (!box) throw new Error("probe: #game has no bounding box");
-  const buf = await page.screenshot({ path: outPath, clip: box, timeout: 60000 });
-  return { bytes: buf.length, clip: box };
+  await waitGameVisible(page);
+  // Rect straight from the DOM: locator.boundingBox() would repeat the
+  // visibility wait above and swallow its diagnosis on timeout.
+  const box = await page.evaluate(() => {
+    const r = document.getElementById("game").getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
+  if (!box || !(box.width > 0 && box.height > 0)) throw new Error("probe: #game has no bounding box");
+  // FREEZE THE LOOP ACROSS THE CAPTURE. page.screenshot needs the compositor,
+  // and a GLX garage frame on SwiftShader keeps the renderer's main thread hot
+  // enough that the capture starved and blew its 60 s timeout with only
+  // "waiting for fonts to load... / fonts loaded" in the call log. headless(true)
+  // makes render() return before it does any work — and before the visibility
+  // write, so the canvas keeps both its last composited frame and its
+  // visibility. Measured: the same capture that timed out completes in ~9 s.
+  // Restored in `finally`, or every later step would probe a frozen page.
+  await page.evaluate(() => { try { window.__apex.headless(true); } catch (_) {} });
+  try {
+    const buf = await page.screenshot({ path: outPath, clip: box, timeout: 60000 });
+    return { bytes: buf.length, clip: box };
+  } finally {
+    await page.evaluate(() => { try { window.__apex.headless(false); } catch (_) {} });
+  }
 }

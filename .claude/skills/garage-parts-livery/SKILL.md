@@ -27,7 +27,17 @@ drives the fin panel AND the engine-cover wash), `finBadge` (`logo|number|none`)
 painted by `drawSpineTop` into `REGIONS.crest` on BARE paint — the crown carries no
 tail wash; the fin motif stops at the fin — and continued down `REGIONS.tail` by
 `drawTailTop`; the crest and number read top-down, nose up). SPINE SIDE ids also
-offer `plate|wordmark|duo|slash` (from the 2026 launch photos; `bigmark` + `duo` is the RB22). `drawTailGraphic` clips to its region. Body details:
+offer `plate|wordmark|duo|slash` (from the 2026 launch photos; `wrap` + `duo` is the RB22).
+The two flanks are SEPARATE regions (`spineSide` RIGHT, `spineSideL` LEFT, in the atlas's
+extra rows: `SIZE` × `SIZE_H`); paint them through `eachFlank`/`flankFrame`, never one
+mirrored texture. The car is drawn through an x-reflection, so the mesh's +x quad RENDERS
+as the car's right flank: right canvas-left = REAR, left canvas-left = FRONT, text reading
+on both. Calibrate by painting a labelled grid into both regions and reading it in the REAL
+garage — never by deriving it from car space, which is where the first pass inverted both. UVs divide v by `SIZE_H`. `drawTailGraphic` clips to its region.
+`wingCarbon` (`paint|carbon`) puts every flap, front and rear, on `SURFACES.carbon` — the flap sites
+pass their surface explicitly, so a CARBON colour alone would be dark paint — and `rearWing` colours the
+rear mainplane block (absent = `c2`, today's look); the garage greys WINGS and REAR WING under carbon.
+`finStyle` also offers `stars` (the W17's star flake, a fixed nine-point table, no RNG). Body details:
 `tcam` (`Car3D.TCAM_IDS`, mesh colour only) and `coverVents` (`Car3D.COVER_VENT_IDS`,
 geometry, also in `SP_HULL_GEOM_FIELDS`); `spineHeight` (`Car3D.SPINE_HEIGHT_IDS`,
 lifts the cover crown top-only through `bodyAnchors(parts, teamId, spineHeight)` —

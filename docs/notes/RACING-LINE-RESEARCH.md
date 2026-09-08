@@ -230,3 +230,174 @@ unchanged, all pass) and the new `tests/unit/track-line-circuits.test.mjs`
 spa / silverstone, and monza's long corners outside-in-outside on the baked
 table). `ai-racecraft-vm` drives an AI car through monza's long corners on
 the new line: 4/4 pass.
+
+## 7. The AI on the line (2026-09-08, later the same evening)
+
+The owner's follow-up: make the AI less jittery and more calculated on and
+around the line. Measured first, on a solo Monza lap driven by an AI in
+`tests/unit/ai-racecraft-vm.test.mjs` (`laneJitter`: steering reversals per
+km with a 0.25 m/s hysteresis on the lateral velocity, and the RMS of the
+frame-to-frame lateral acceleration):
+
+| controller | reversals / km | lateral accel RMS |
+|---|---|---|
+| position P-loop (before) | 5.4 | 10.0 m/s² |
+| heading state + slewed biases (after) | 4.7 | 5.9 m/s² |
+
+What changed, and why each one:
+
+- **Brake look sampled at every node, node-aligned** (game.js, the brake
+  target). The old loop sampled every 14 m *from the car*, so the sample set
+  slid across the 4 m curvature nodes as the car moved and the min over it
+  stepped every frame — throttle/brake chatter at every entry. Anchored on
+  the nodes, the window gains one node ahead and drops one behind per node
+  travelled. Same formula (`AiDrive.brakeTarget`), so the pace calibration
+  is untouched; the option of a baked per-circuit speed profile was
+  considered and not taken: the per-car factors (aero load, tyre grip,
+  skill, late-brake craft) scale the cornering speed inside the sweep, so a
+  nominal profile would have re-tuned every driver's braking point.
+- **A heading state instead of a position P-loop** (game.js "--- lateral
+  ---"). `steer = 0.9·err` was 13.5 m/s of lateral speed per metre of error
+  in the same frame. The car now carries a heading off the road tangent,
+  steered toward the target path's tangent (read 4 m past the look-ahead
+  point) plus a Stanley cross-track term `atan(k·e/v)`, with the heading
+  rate capped by the lateral grip budget (`a_lat = v·yawRate ≤
+  0.6·LAT_MAX·grip`). The lateral speed is `v·sin(heading)`; every existing
+  multiplier on the lateral step (grip taper, kerb, contact give, off-track
+  fade) still applies because `steer` is that speed as a fraction of the
+  full-lock authority. Below 6 m/s (vStd), while digging out, in contact or
+  under the side-rub clamp, the old position loop drives with its full,
+  immediate authority (a heading means nothing without speed; a car being
+  rubbed must be clear in a few frames — the collision benches pin it) and
+  the heading is re-synced from the steer it produced. Side effect worth
+  knowing: two AI cars dropped beside a player now settle at the 2.8 m clean
+  gap and hold it — the P-loop's overshoot used to press them into contact
+  (`collision-contact-vm` starts its sandwich overlapped for that reason).
+- **Slewed biases.** Overtake, defend, yield and separation are summed as
+  before but the sum moves toward its value at 3 m/s, so a pass decision is
+  a lane change at a car's lateral pace, not a step. The dig-out is not
+  slewed. The hold-line-under-braking and side-rub constraints are unchanged
+  and still win.
+- **Line families.** `lineIn` and `lineOut` are the racing line shifted 1.5 m
+  toward and away from the inside of each corner, weighted by `lineW` so both
+  ARE the racing line on a straight and diverge only through a corner, and
+  clamped to the same road bounds. `TrackLine.at(track, s, fam)` blends; the
+  AI damps `fam` toward +1 while defending or passing on the inside of the
+  next corner, −1 when passing around the outside, so a move is one coherent
+  line from entry to exit rather than a sideways push on the racing line.
+
+  They were two more relaxations (λ ×4 and λ 0) until the cost was measured —
+  see below. The construction lands within 0.25 m of where the relaxed inner
+  family sat at the turn-in, is O(n), and cannot leave the road.
+- **Authored hints.** `def.lineHints: [{ turn, apexShift, apexInside }]`
+  (copied through tracks.js; `turn` 1-based into `def.turns`, racing-space,
+  the bankZones idiom). `apexShift` metres moves the corner's knots later —
+  a late apex onto a straight; `apexInside` (−1..1, a fraction of the usable
+  half-width) bounds the apex plateau to the inside or the outside. The
+  relaxation honours them as bounds. A hint more than 80 m from any baked
+  corner is dropped with a warning. No circuit authors one yet.
+
+What the remaining reversals are: on the solo lap they sit at the chicanes
+(a real direction change each) and at sub-degree heading crossings where the
+straight's lane target hands over to the corner's line (`lineW` easing in) —
+heading ±0.01 rad at 45 m/s trips the 0.25 m/s hysteresis. The acceleration
+RMS is the metric that moves; both are capped in the test.
+
+What the browser groups found (the `driving` group, 104 specs, run for this
+change). FIVE failed and none of them was a defect in the controller — three
+were measuring the wrong quantity, two of those in specs whose VM twins had
+already been corrected and whose browser copies were left behind:
+
+- `collisions-deep` "push sticks" asserted the player's x at frame 30. Its VM
+  twin had already been corrected to "shoved, and the AI is clear within 12
+  frames" with a comment saying the frame-30 form measured the AI's INABILITY
+  to steer clear; the browser spec was never brought along. Measured on the
+  base commit and on this tree through the VM harness: identical numbers
+  (shove −0.228 m, clear at frame 1, +0.02 by frame 25), so it was already
+  red before the controller changed.
+- `aero-zones` "X-mode buys X_VMAX_GAIN" — NOT this change, and not fixed
+  here. First guess was the slipstream contaminating `vmaxNow`; isolating the
+  car changed the number not at all (bit-identical), so that was wrong.
+  Measured properly, through the VM harness on three trees: the ratio is
+  1.1023 before the relaxation, 1.1023 after it, 1.0880 on the tip, against
+  an expected 1.0957 every time. The spec is red on all three. Recorded in
+  the defect ledger with a proposed patch; widening the tolerance to hide it
+  is forbidden.
+- `aero-zones` "stays disabled for the whole opening lap" — the gate is
+  `caution.level === 0 && leader.lap > 1` and this test names only the second
+  half. It holds the throttle with no steering for 220 s, so the player
+  leaves the road and the debris layer answered VSC → SAFETY CAR → RED FLAG
+  (apex-logs); the gate then reads closed on lap 3 and the invariant fails
+  for a reason it does not name. The test switches race control off now.
+  Second guess corrected here too: the leader read (`max(lap)` vs the gate's
+  `ranked[0]`) was not the cause — measured 0 mismatches either way over 220
+  samples — so that edit was reverted rather than kept on a hunch.
+
+- `collisions-deep` "a single AI rub only nudges the player apart" — the
+  identical defect to "push sticks", in the same file, with the same
+  already-corrected VM twin (`minX < -0.1`, the shove AT THE CONTACT) and the
+  same stale browser copy asserting the final x forty frames later.
+- `longitudinal` "slope gravity" called `race("spa")` and went straight into
+  a 300-sample loop reading `physState().slope`. It is the one test in that
+  file that skips `startRace()`'s wait for `info().track`, so a spa build
+  that runs long makes the first sample read `null.slope`.
+
+Two lessons worth keeping. **A controller change moves WHERE the field is**,
+so every spec that measures the player while the field is nearby — a tow, a
+blocker, a rank — is measuring two things; isolate the car under test.
+**A VM twin and its browser spec are one test in two places**: correcting one
+and not the other leaves a red that looks like whatever change happens to run
+the group next. Both stale twins here carried a comment explaining the
+correction; neither comment was in the file that was still failing.
+
+### What the bake actually cost (and the pass counts that survived)
+
+The prototype timed 300 relaxation passes at ~24 ms and that number went into
+the first commit's message. It was wrong for the shipped code by 20×: measured
+against the real build, `TrackLine.bake` was **487 ms of an 1113 ms Monza
+build — 44 % of building a circuit** — and six circuits went from 3587 ms to
+6381 ms, +80 %. What prompted the measurement was an `aero-zones` spec timing
+out at 125 s against a 120 s cap while building circuits. That guess turned
+out to be WRONG — the timeout got worse (152 s) after the bake was cut 7×, and
+the test passes alone on both trees (72 s on the tip, 78 s on the base), so it
+is the container plus that test's position in its file, not the bake. The
+regression it led to was real all the same, and worth removing on its own.
+
+Two measurements fixed it:
+
+| setting | monza slope | corner-time gain | bake, 3 circuits |
+|---|---|---|---|
+| fine 300, coarse 400, families relaxed | 0.435 | +1.58 % | 1480 ms |
+| fine 150, coarse 400 | 0.438 | +1.58 % | 959 ms |
+| fine 60, coarse 250, families constructed | 0.432 | +1.58 % | 228 ms |
+| fine 0, coarse 250 | 0.438 | **−4.56 %** | 124 ms |
+
+So the fine passes past ~60 buy nothing measurable, and the fine stage cannot
+be dropped: the coarse solve interpolated back to the fine grid leaves kinks
+that make the line SLOWER than the centreline again. Shipped at 250 coarse +
+60 fine with constructed families: bake 72 ms, six circuits 3940 ms (+10 % on
+the pre-relaxation tree, against +80 % before).
+
+Two lessons. **Time the shipped path, not the prototype** — the prototype ran
+as a plain ES module and the bake runs inside the track-build VM; same
+algorithm, 20× the cost per node. And **a hunch that finds a real bug is still
+a hunch**: the timeout that started this was never the bake, and only running
+the test alone on both trees settled it.
+
+### One more test that was measuring the wrong thing
+
+`ai-racecraft-vm`'s "the AI drives a racing line" asserted the approach at a
+single sample 45 m before the turn-in, and it sat at exactly −2.00 m against a
+`< -2` threshold: it flipped on changes that left the baked line identical to
+two decimal places (`track-line-circuits` pins that corner's LINE at −6.75 m).
+Two real defects behind it, both fixed rather than papered over: the file's
+earlier tests multiply the player car's `tierV` and never restore it, so by the
+fourth test the car had been detuned three times; and a lap of this simulation
+is chaotic through the shared RNG stream, so a single sample is not an
+estimator. The approach is now a 30 m average of the same quantity, with the
+same threshold.
+
+Not done: a full lap-time re-measure per difficulty level (the brake formula
+is unchanged and the controller reaches the same apexes, but the smoother
+lateral motion may be worth a tenth); the CI `driving` and `hooks` groups
+were run for this change, the rest of the AI groups were not.

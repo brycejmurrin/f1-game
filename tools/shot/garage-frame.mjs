@@ -11,7 +11,8 @@ import {
   chromiumArgsForBackend, installProbeInit, gotoGame, openGarage, settleGarage,
   garageDiagnostics, screenshotGameCanvas,
 } from "../capture/probe-page.mjs";
-import { assertGarageInterior } from "../capture/garage-interior.mjs";
+import { assertGarageInterior, sampleGarageGapPixels } from "../capture/garage-interior.mjs";
+import sharp from "sharp";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const argv = process.argv.slice(2);
@@ -25,7 +26,22 @@ const outDir = flag("--out", "/opt/cursor/artifacts/garage-frame");
 
 mkdirSync(outDir, { recursive: true });
 
-async function waitGarageInterior(page, backend) {
+/** Gap-region samples read back from a CAPTURED png (never from the live canvas). */
+async function samplePng(pngPath, panelFrac) {
+  const { data, info } = await sharp(pngPath).ensureAlpha().raw()
+    .toBuffer({ resolveWithObject: true });
+  return sampleGarageGapPixels({ width: info.width, data }, info.width, info.height, panelFrac);
+}
+
+/**
+ * Settle, capture, and gate the CAPTURE.
+ *
+ * The gate used to read window-side pixels from ctx.drawImage(#game), which on
+ * a context without preserveDrawingBuffer is the cleared buffer — solid black —
+ * so it passed every frame it was meant to judge. The screenshot is the only
+ * honest source of what the frame looks like, so shoot first and judge the PNG.
+ */
+async function captureGatedFrame(page, backend, pngPath) {
   await page.waitForFunction(() => {
     const c = window.__apex?.garageCam?.();
     return c && c.effDist > 4 && c.on;
@@ -37,19 +53,18 @@ async function waitGarageInterior(page, backend) {
       try { await GLX.awaitSoftPresent(20000); return true; } catch (_) { return false; }
     }, null, { polling: 200, timeout: 45000 });
   }
-  // Reject flat team-tint wall frames (the Mercedes teal defect).
+  // Reject flat team-tint wall frames (the Mercedes teal defect) and black ones.
+  let gate = null, diag = null, shot = null;
   for (let attempt = 0; attempt < 8; attempt++) {
-    const diag = await garageDiagnostics(page);
+    diag = await garageDiagnostics(page);
     if (diag.overlay) throw new Error(`error overlay: ${diag.overlay}`);
-    const sample = diag.gapSample?.pixels;
-    const gate = assertGarageInterior(sample);
-    if (gate.ok) return diag;
+    shot = await screenshotGameCanvas(page, pngPath);
+    gate = assertGarageInterior(await samplePng(pngPath, diag.panelFrac));
+    if (gate.ok) return { diag, gate, shot };
     await settleGarage(page, { frames: 30 });
     await sleep(400);
   }
-  const final = await garageDiagnostics(page);
-  const gate = assertGarageInterior(final.gapSample?.pixels);
-  throw new Error(`garage interior gate failed: ${gate.reason} ${JSON.stringify(gate)}`);
+  throw new Error(`garage interior gate failed: ${gate?.reason} ${JSON.stringify(gate)}`);
 }
 
 async function captureOne(srv, backend) {
@@ -65,11 +80,12 @@ async function captureOne(srv, backend) {
     document.querySelector('[data-cs-view="hero"]')?.click();
   });
   await sleep(800);
-  const diag = await waitGarageInterior(page, backend);
+  const png = join(outDir, `garage-${backend}-${vp[0]}x${vp[1]}.png`);
+  const { diag, gate } = await captureGatedFrame(page, backend, png);
   const meta = {
     garageCam: diag.cam,
     backend: diag.backend,
-    interior: assertGarageInterior(diag.gapSample?.pixels),
+    interior: gate,
     aspect: diag.aspect,
     gpuErrors: diag.gpuErrors,
     canvas: await page.evaluate(() => {
@@ -77,8 +93,6 @@ async function captureOne(srv, backend) {
       return c ? { w: c.clientWidth, h: c.clientHeight, bw: c.width, bh: c.height } : null;
     }),
   };
-  const png = join(outDir, `garage-${backend}-${vp[0]}x${vp[1]}.png`);
-  await screenshotGameCanvas(page, png);
   writeFileSync(join(outDir, `garage-${backend}-${vp[0]}x${vp[1]}.json`), JSON.stringify(meta, null, 2));
   await browser.close();
   return { png, meta };
