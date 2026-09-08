@@ -357,7 +357,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
 struct LineU {
   viewProj : mat4x4<f32>,   // off  0
   params   : vec4<f32>,     // off 64  x playerSpeed (m/s), y cornersOnly 0|1, z str, w palette 0|1
-};                          // size 80
+  params2  : vec4<f32>,     // off 80  x opacity, yzw spare
+};                          // size 96
 @group(0) @binding(0) var<uniform> U : LineU;
 
 struct VSOut {
@@ -413,7 +414,11 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let zone = mix(1.0, smoothstep(0.05, 0.75, in.zone), U.params.y);
   let a = arrow * rim * zone;
   if (a < 0.01) { discard; }
-  return vec4<f32>(col * U.params.z * a, a * 0.85);
+  // LINE OPACITY (GLX LINE_FS, TLX lineMat: the three carry the same maths).
+  // Scales emissive and coverage together; the alpha is clamped because SOLID
+  // takes the 0.85 base past 1 and a source alpha over 1 over-blends.
+  let op = U.params2.x;
+  return vec4<f32>(col * U.params.z * a * op, min(a * 0.85 * op, 1.0));
 }`;
 
   return {
@@ -429,7 +434,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     BLOB_SHADOW_UNIFORM_BYTES: 144,   // ShadowU: mat4 64 + mat4 64 + vec4 16
     MARK_UNIFORM_BYTES:        144,   // MarkU:   mat4 64 + mat4 64 + vec4 16
     SKID_UNIFORM_BYTES:         64,   // SkidU:   mat4 64
-    LINE_UNIFORM_BYTES:         80,   // LineU:   mat4 64 + vec4 16
+    LINE_UNIFORM_BYTES:         96,   // LineU:   mat4 64 + vec4 16 + vec4 16
     GLOW_UNIFORM_BYTES:         80,   // GlowU:   mat4 64 + vec4 16
     DECAL_UNIFORM_BYTES:       224,   // DecalU:  mat4 64 + mat4 64 + 6*vec4 96
     // vertex buffer strides (bytes) for the pipeline vertex-layout descriptors

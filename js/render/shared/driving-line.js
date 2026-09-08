@@ -73,6 +73,18 @@ window.DrivingLine = (function () {
   const PALETTES = ["f1", "safe"];
   function setPalette(p) { palette = PALETTES.includes(p) ? p : "f1"; return palette; }
   function getPalette() { return palette; }
+  // LINE OPACITY. F1 25 offers an "increased opacity" option; the complaint it
+  // answers runs both ways, so this goes both ways — SUBTLE for the players who
+  // find the ribbon intrusive in cockpit view (the same reason they step down
+  // to CORNERS), SOLID for the ones who cannot pick it out against a bright
+  // road. NORMAL is 1.0 and is exactly the line as shipped. The multiplier
+  // scales the emissive feed and the alpha together, so a subtle line does not
+  // keep its bloom.
+  let opacity = "normal";
+  const OPACITIES = [["subtle", 0.65], ["normal", 1], ["solid", 1.35]];
+  function setOpacity(o) { opacity = OPACITIES.some((r) => r[0] === o) ? o : "normal"; return opacity; }
+  function getOpacity() { return opacity; }
+  function opacityMul() { return (OPACITIES.find((r) => r[0] === opacity) || OPACITIES[1])[1]; }
 
   /* The banked surface's lift at lateral o, the road mesh's own formula
      (js/track/core/mesh.js bankOffsetAt, index-keyed there) at the nearest
@@ -208,6 +220,7 @@ window.DrivingLine = (function () {
     if (cache.id !== api.id || !cache.verts) build(api);
     const drew = gfx.drawDrivingLine(cache.verts, cache.count, cache.dirty, {
       speed: playerSpeed || 0, cornersOnly: mode === "corner", palette: palette === "safe" ? 1 : 0,
+      opacity: opacityMul(),
     });
     if (drew) cache.dirty = false;
     return !!drew;
@@ -215,7 +228,8 @@ window.DrivingLine = (function () {
 
   function reset() { cache.id = null; cache.verts = null; cache.count = 0; cache.v = null; cache.zone = null; }
 
-  return { MODES, PALETTES, STRIDE, STEP, HALF_W, setMode, mode: getMode,
-           setPalette, palette: getPalette, build, draw, speedAt, zoneAt, reset,
+  return { MODES, PALETTES, OPACITIES, STRIDE, STEP, HALF_W, setMode, mode: getMode,
+           setPalette, palette: getPalette, setOpacity, opacity: getOpacity, opacityMul,
+           build, draw, speedAt, zoneAt, reset,
            _cache: () => cache };
 })();

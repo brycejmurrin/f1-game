@@ -3602,6 +3602,7 @@ aeroZ = AeroZones.create(G);
 skids = SkidMarks.create(G);
 DrivingLine.setMode(store.get("drivingLine", "full"));
 DrivingLine.setPalette(store.get("drivingLinePalette", "f1"));
+DrivingLine.setOpacity(store.get("drivingLineOpacity", "normal"));
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
 // reads), plus the same physics numbers the AI's brake targets use, so the
@@ -9743,6 +9744,14 @@ SettingRow.wire("pm-linecolor", {
   values: [["f1", "F1"], ["safe", "COLOUR-BLIND"]],
   read: () => DrivingLine.palette(),
   write: (v) => { DrivingLine.setPalette(v); store.set("drivingLinePalette", DrivingLine.palette()); },
+});
+
+// LINE OPACITY — the same shelf; the complaint runs both ways (intrusive in
+// cockpit view, invisible on a bright road). NORMAL is the line as it shipped.
+SettingRow.wire("pm-lineopacity", {
+  values: [["subtle", "SUBTLE"], ["normal", "NORMAL"], ["solid", "SOLID"]],
+  read: () => DrivingLine.opacity(),
+  write: (v) => { DrivingLine.setOpacity(v); store.set("drivingLineOpacity", DrivingLine.opacity()); },
 });
 
 SettingRow.wire("pm-hidehud", {

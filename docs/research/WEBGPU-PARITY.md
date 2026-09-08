@@ -979,6 +979,14 @@ member stubbed `() => false` on the other two; the port landed the same day:
   `LineU` (viewProj + params = playerSpeed, cornersOnly, str). No
   derivatives, no textures, `discard` under uniform control flow — nothing on
   the WebKit list in §5a. Validated with real Dawn (`wgx-validate.mjs`).
+  **Grown twice since.** The colour-blind palette took `params.w`, which
+  filled the vec4; LINE OPACITY then needed a slot, so `LineU` carries a
+  second vec4 (`params2.x` = opacity, yzw spare) and is **96 bytes** — the
+  JS-side `_lineU` is 24 floats and `LINE_UNIFORM_BYTES` is the single source
+  the buffer is sized from, so the two cannot drift. Re-validated against real
+  Dawn after the growth: ok, 0 WGSL parse errors, 0 GPU errors. A uniform
+  block resized in the shader and not in the writer is exactly the silent
+  failure §5a is about, and the constant is why it is not possible here.
 - **TLX** — `tsl-fx.js` `lineMat`: the same colour maths as TSL nodes over
   `lineAcross` / `lineSpeed` / `lineZone` attributes with `lineSpeed` /
   `lineCorners` / `lineStr` uniforms; `tlx.js` streams the strip like
