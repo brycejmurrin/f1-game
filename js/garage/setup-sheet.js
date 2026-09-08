@@ -218,6 +218,16 @@ function buildTeamOptions(optsEl, team) {
   edit.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.openCustomize(); };
   editRow.appendChild(edit);
   optsEl.appendChild(editRow);
+
+  // THE GARAGE FILE — parts, liveries, setup sheets and an invented team, for
+  // every team, saved out and read back in. It lives HERE rather than beside
+  // the settings file in SETTINGS because this is where a player manages the
+  // things it carries. The row is built fresh on every rebuild of this tab
+  // (js/ui/settings-export.js garageRow), which is why nothing is cached.
+  if (typeof SettingsExport !== "undefined" && SettingsExport.garageRow) {
+    const row = SettingsExport.garageRow();
+    if (row) { optsEl.appendChild(csLabel("GARAGE FILE")); optsEl.appendChild(row); }
+  }
 }
 
 function buildSetup() {

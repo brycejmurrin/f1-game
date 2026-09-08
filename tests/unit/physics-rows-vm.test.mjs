@@ -241,15 +241,13 @@ test("shipped turn-in is snappier than the understeer-safe 0.89 / 0.7 pair", asy
   const a = g.apex;
   const t = a.tuning();
   assert.equal(t.frontGrip, 0.94);
-  // THE SOURCE DEFAULT AND THE SHIPPED SLIDER PARTED ON 2026-09-08. `let
-  // YAW_INERTIA = 0.58` above is still the snappy 2026-09-04 constant and the
-  // regex pins it; what a fresh install actually RUNS is now CAR WEIGHT 10 (the
-  // owner's own setting, baked with the rest of their steering profile), and
-  // that slider drives yaw inertia to 1.0 — a heavier car than either the 0.58
-  // default or the 0.7 the drive-feel work moved away from. Both numbers are
-  // pinned so neither can drift silently, and the behavioural probe below still
-  // compares the two TRIADS directly, with the slider held out of it.
-  assert.equal(t.yawInertia, 1, "CAR WEIGHT 10 (shipped) -> YAW_INERTIA 1.0");
+  // CAR WEIGHT is device-aware since 2026-09-08: a PHONE ships 10 (the owner's
+  // own setting, where the steering is two thumb buttons) and a POINTER device
+  // ships 5, which resolves to exactly the 0.58 this test's regex pins above.
+  // The harness has no coarse pointer, so it is the desktop car that is
+  // measured here — and the desktop car is still the snappy one the
+  // 2026-09-04 drive-feel work set.
+  assert.equal(t.yawInertia, 0.58, "a pointer device keeps CAR WEIGHT 5 -> YAW_INERTIA 0.58");
   const yawAt = (frontGrip, yawInertia) => {
     a.setPhysics({ frontGrip, yawInertia, pace: 1, roadFollow: 0 });
     a.jump(0.0, 40, 0);
