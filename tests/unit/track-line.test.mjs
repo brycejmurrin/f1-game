@@ -106,3 +106,18 @@ test("attack zones: a narrow road takes the quality away", () => {
   const c = wide.lineCorners[0];
   assert.ok(TL.attackAt(narrow, c.s0 - 60).q < 0.3 * TL.attackAt(wide, c.s0 - 60).q, "4.5 m half-width is street width: barely a zone");
 });
+
+test("the path's curvature is gentler than the road's through a corner, and the road's on a straight", () => {
+  const t = TL.bake(track(2000, 7, cornerAt(1000, 60, 0.02)));
+  const c = t.lineCorners[0];
+  const road = 0.02, path = TL.pathK(t, c.sApex);
+  assert.ok(path > 0 && path < road, `apex path curvature ${path} should be under the road's ${road}`);
+  assert.ok(path >= TL.PATH_FLOOR * road - 1e-6, "never below the floor — the AI is not on rails");
+  // A wide road buys the whole floor on a slow corner; a narrow one buys less.
+  const narrow = TL.bake(track(2000, 4.5, cornerAt(1000, 60, 0.02)));
+  assert.ok(TL.pathK(narrow, narrow.lineCorners[0].sApex) >= path, "less width, less line to gain from");
+  assert.equal(TL.pathK(t, 200), 0, "a straight is a straight");
+  // Sign follows the road's.
+  const tr = TL.bake(track(2000, 7, cornerAt(1000, 60, -0.02)));
+  assert.ok(TL.pathK(tr, tr.lineCorners[0].sApex) < 0);
+});

@@ -740,3 +740,15 @@ test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-
   assert.ok(A.mistakeBrakeMul() > 1 && A.mistakeBrakeMul() < 1.1, "late by a few per cent, not a crash");
   assert.ok(A.mistakeGatherMul() < 1 && A.mistakeGatherMul() > 0.7);
 });
+
+test("tyres: sprints start on softs, long races mix; a soft is up and fades, a hard is down and lasts", () => {
+  assert.equal(A.tyreClass(0.5, 3), "soft"); assert.equal(A.tyreClass(0.9, 3), "medium");
+  assert.equal(A.tyreClass(0.9, 25), "hard"); assert.equal(A.tyreClass(0.1, 25), "soft");
+  assert.ok(A.tyrePace("soft", 0) > A.tyrePace("medium", 0) && A.tyrePace("medium", 0) > A.tyrePace("hard", 0));
+  assert.ok(A.tyrePace("soft", 12) < A.tyrePace("hard", 12), "by lap 12 the hard-starter is ahead on pace: a crossover");
+  assert.ok(A.tyrePace("soft", 8) > A.tyrePace("hard", 8), "and at lap 8 the soft still is");
+  assert.ok(A.tyrePace("soft", 60) >= 1.004 - 0.025 - 1e-9, "deg is capped");
+  assert.equal(A.tyrePace("nonsense", 0), 1, "an unknown class is a medium");
+  // The three fresh offsets are zero-mean over a mixed field.
+  assert.ok(Math.abs(A.tyrePace("soft", 0) + A.tyrePace("hard", 0) - 2 * A.tyrePace("medium", 0)) < 1e-9);
+});

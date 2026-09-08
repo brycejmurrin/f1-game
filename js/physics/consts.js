@@ -124,9 +124,15 @@ window.PhysicsConsts = {
   // multiplier on TIER_V) and the rubber-band tolerance (`band`). Keyed by the
   // settings value; read by game.js (makeCars), js/race/quali-model.js (the modelled
   // field's lap) and js/career/career-ui.js (the guide lists the keys).
+  // 2026-09-08: the AI now reads the racing line's own curvature for its corner
+  // speed when it is ON the line (js/track/core/line.js pathK), which measured
+  // 1.2-1.3 % off a solo lap (monza 124.97 -> 123.30 s, monaco 86.05 -> 85.03).
+  // The three scales come down 1 % so each difficulty's lap time holds; what
+  // changed is WHERE the pace is — a car on the line gains in the corners and
+  // pays on the straights, a car fighting off-line the reverse.
   DIFF: {
-    easy:   { ai: 0.86, band: 0.18 },
-    normal: { ai: 0.92, band: 0.08 },
-    hard:   { ai: 0.99, band: 0.02 },  // was 0.03 — smarter OT/ERS/brake cuts rubber-band need
+    easy:   { ai: 0.851, band: 0.18 },
+    normal: { ai: 0.911, band: 0.08 },
+    hard:   { ai: 0.980, band: 0.02 },  // band was 0.03 — smarter OT/ERS/brake cuts rubber-band need
   },
 };

@@ -2225,3 +2225,18 @@ brakes in — the builder itself lives outside game.js on purpose. `js/agent/ape
   straight after the floor, and every opaque draw after it clips it for free.
   Six lines (three of comment) at the one draw path; no stencil, no second
   floor pass.
+
+- `js/game.js` lines 10082 -> **10088**, codeLines 5494 -> **5497**
+  (2026-09-08): the line's corner speed and the compound as strategy. Three
+  code lines: the on-line test feeding `TrackLine.pathK` into the brake scan
+  (2) and the tyre-class draw at grid-up plus its pace multiplier (1 + 1, on
+  existing lines). The arc geometry and the tyre table are in
+  `js/track/core/line.js` and `js/physics/ai-drive.js`, unit-tested. Measured:
+  a solo AI lap on the line monza 124.97 -> 123.30 s, monaco 86.05 -> 85.03 s;
+  `DIFF.ai` in `js/physics/consts.js` came down 1 % (0.86/0.92/0.99 ->
+  0.851/0.911/0.980) so each difficulty's lap time holds. Soft- and
+  hard-starters cross at lap 10 by construction (`tyrePace`).
+- `js/agent/apex.js` lines 2660 -> **2662** (2026-09-08): `race()` takes
+  `opts.laps` so a harness can set the race distance (the tyre draw reads it
+  at grid-up); without it every VM race is the game default and a strategy
+  bench cannot see a crossover.

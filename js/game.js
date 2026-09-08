@@ -2006,6 +2006,7 @@ function gridUp(preOrder) {
     const h = DriverRatings.hash32(simSeed() + ":" + i + ":" + c.skill);
     c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (h & 0xffff) / 65536);
     c.launchOn = !c.human; c.phaseRoll = (h >>> 16) / 65536;
+    c.tyreClass = c.human ? null : AiDrive.tyreClass(((h >>> 8) & 0xffff) / 65536, lapsTarget);   // the compound IS the strategy
   });
   // Seed the PLAYER's world pose HERE rather than leaving it to the first
   // physics tick (the `c.px == null` init in update()). The chase rig has two
@@ -4517,6 +4518,7 @@ function updateCar(c, dt, ranked) {
   const aiT = c.human ? null : AiDrive.traits(c);
   if (!c.human) vmax *= AiDrive.pacePhase(raceT, aiT.consistency, c.phaseRoll);   // a stint drifts; lockstep never passes
   if (!c.human && AiDrive.mistakePhase(c.errT) === 2) vmax *= AiDrive.mistakeGatherMul();   // gathering it up after a mistake
+  if (!c.human && c.tyreClass) vmax *= AiDrive.tyrePace(c.tyreClass, c.lap);                  // softs fade, hards last
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
@@ -4719,6 +4721,10 @@ function updateCar(c, dt, ranked) {
     const look = clamp(c.speed * 1.7, 30, 160);
     AiDrive.beginLook();
     let kMax = 0;
+    // ON THE LINE the brake target reads the PATH's curvature (TrackLine.pathK:
+    // the larger radius the line buys), off it the road's — so a car fighting
+    // off-line is slower through the corner, as a real one is.
+    const onLine = Math.abs(TrackLine.at(track, c.s).x - c.x) < 1.5;
     for (let d = 12; d < look; d += 14) {
       const ss = wrapS(c.s + d);
       const kk = Tracks.curvature(track, ss);
@@ -4726,7 +4732,7 @@ function updateCar(c, dt, ranked) {
       if (ak > kMax) kMax = ak;
       // |bank|: the player's bankRoll (below) takes the absolute value, so a
       // signed/adverse bank must not boost the player while it cuts the AI.
-      AiDrive.pushLook(d, kk, Math.abs(Tracks.bankAngle(track, ss)));
+      AiDrive.pushLook(d, onLine ? TrackLine.pathK(track, ss) : kk, Math.abs(Tracks.bankAngle(track, ss)));
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX;
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE; _aiBr.grip = gripMult(c);
