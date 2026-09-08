@@ -2780,6 +2780,7 @@ const TLX = (function () {
           fx.lineSpeed.value = (opts && opts.speed) || 0;
           fx.lineCorners.value = opts && opts.cornersOnly ? 1 : 0;
           fx.lineStr.value = (opts && opts.str) || 1.6;
+          fx.linePalette.value = opts && opts.palette ? 1 : 0;
           drawList.push({ geo: lineStream.geo, m: null, mat: fx.lineMat });
           _fxFrame.lineVerts = vertCount;
           return true;

@@ -3612,6 +3612,7 @@ aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
 DrivingLine.setMode(store.get("drivingLine", "full"));
+DrivingLine.setPalette(store.get("drivingLinePalette", "f1"));
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
 // reads), plus the same physics numbers the AI's brake targets use, so the
@@ -9745,6 +9746,16 @@ function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);
   paintHudDetailsSummary();   // repaints the HUD row too if (v) { const p = $("campicker"); if (p) p.hidden = true; }
 }
+// LINE COLOUR — an accessibility preference, so it lives in SETTINGS and
+// persists, unlike DRIVING LINE itself (a property of the race, in RACE
+// SETTINGS). The shader mixes between the two triples on one flag; see
+// js/render/shared/driving-line.js setPalette.
+SettingRow.wire("pm-linecolor", {
+  values: [["f1", "F1"], ["safe", "COLOUR-BLIND"]],
+  read: () => DrivingLine.palette(),
+  write: (v) => { DrivingLine.setPalette(v); store.set("drivingLinePalette", DrivingLine.palette()); },
+});
+
 SettingRow.wire("pm-hidehud", {
   values: SettingRow.labels(["on", "off"]),
   read: () => (document.body.classList.contains("hud-hidden") ? "off" : "on"),
