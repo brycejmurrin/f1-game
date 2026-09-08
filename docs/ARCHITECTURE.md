@@ -1348,6 +1348,19 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   triangles, uniforms for speed / mode / strength). Same colour maths in all
   three; the shipped sign-off is `gpu-census.yml` on macOS
   (`docs/research/WEBGPU-PARITY.md` §Driving line).
+- **GARAGE FLOOR REFLECTION (2026-09-08):** on all three. `js/garage/scene.js`
+  draws the car mesh a second time through `MAT_MIRROR` (X as the preview,
+  Y for the floor; det +1, no cull flip) at `alpha 0.26` with the `noDepthTest`
+  draw option, straight after the floor and before the shell — no stencil, no
+  second floor pass, and its clip is simply every opaque draw submitted after
+  it. It shipped GLX-only: `noDepthTest` reached `gl.disable(DEPTH_TEST)` and
+  nothing else, so on WGX and TLX the mirrored car sat behind the floor's depth
+  and never drew. WGX now maps it onto the existing always-pass pipeline bit
+  (`depthCompare: "always"`, depth write already off via the blend); TLX sets
+  `material.depthTest = false` AND clears `transparent`, because three renders
+  the transparent list after the whole opaque one regardless of renderOrder —
+  left transparent, the mirror paints last and ghosts over the props it should
+  be hidden behind.
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost (env probe off on LITE since 2026-09-03 — a cube cycle is six world passes + 36 mip passes on the jetsam rung); honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
   history resolve is sub-pixel shimmer). The sky's cloud deck shades like GLX

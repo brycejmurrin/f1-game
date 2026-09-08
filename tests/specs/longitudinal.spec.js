@@ -118,7 +118,15 @@ test.describe("Apex 26 — longitudinal & grip", () => {
   test("slope gravity: descents don't overspeed past top speed; climbs aren't a barrier", async ({ page }) => {
     await page.goto("/");
     await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: BOOT_MS });
-    await page.evaluate(() => { window.__apex.race("spa", "day", "dry"); window.__apex.go(); });
+    await page.evaluate(() => window.__apex.race("spa", "day", "dry"));
+    // WAIT FOR THE BUILD, exactly as startRace() above does. race() resolves the
+    // pick; the circuit build is asynchronous, and until the player has a
+    // position physState() returns null (docs/DEBUG-HOOKS.md §sharp edges). This
+    // test was the one place in the file that skipped the wait, so a spa build
+    // that ran long made the first loop below read `null.slope` — measured
+    // 2026-09-08, and nothing to do with what the loop is testing.
+    await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.go());
     await pinPace(page);   // climbGain is in m/s — see pinPace
     const r = await page.evaluate(() => {
       // locate the steepest descent and climb on the lap

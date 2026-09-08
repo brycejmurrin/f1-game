@@ -28,14 +28,26 @@ test.describe("Apex 26 — collisions (deep)", () => {
       window.__apex.jump(0.3, 40, 0);          // player centred
       window.__apex.rival(0, 1.0);             // AI 1 m to the right, overlapping (<2 m)
       window.__apex.setInput({ steer: 0, throttle: false });
-      for (let i = 0; i < 30; i++) window.__apex.step(1 / 60, 1);
-      const p = window.__apex.probe();
+      let minX = Infinity, clearAt = null;
+      for (let i = 0; i < 30; i++) {
+        window.__apex.step(1 / 60, 1);
+        const p = window.__apex.probe(); minX = Math.min(minX, p.x);
+        const ai = window.__apex.cars().find((c) => !c.p);
+        if (clearAt == null && Math.abs(ai.x - p.x) >= 2.0) clearAt = i;
+      }
       window.__apex.clearInput();
-      return { x: p.x };
+      return { minX, clearAt };
     });
-    // The AI is on the player's right (+x); contact must shove the player LEFT and
-    // it must persist (not be erased by the world-space integration next frame).
-    expect(r.x).toBeLessThan(-0.3);
+    // The AI is on the player's right (+x); contact must shove the player LEFT —
+    // the player's share of the separation (AiDrive.humanInvMass) lands in one
+    // frame. This used to be asserted on x at frame 30 as "and it must persist",
+    // which measured the AI's inability to get out of the way; since the AI
+    // steers clear at full authority the pair is apart within a few frames and
+    // the player's x thereafter is road drift on a fixed heading (measured
+    // 2026-09-08, base and tip alike: shove −0.23 m, clear at frame 1, back to
+    // +0.02 by frame 25). Same assertions as the VM twin (collisions-deep-vm).
+    expect(r.minX).toBeLessThan(-0.15);
+    expect(r.clearAt != null && r.clearAt < 12, `the AI never steered clear (${r.clearAt})`).toBe(true);
   });
 
   test("driver↔AI: player can't be driven through an overlapping rival", async ({ page }) => {
@@ -253,18 +265,23 @@ test.describe("Apex 26 — collisions (deep)", () => {
       window.__apex.setPhysics({ drift: 0 });
       window.__apex.jump(0.3, 40, 0);
       window.__apex.rivals([{ dProg: 0, dx: 1.0 }]);   // overlapping to the right
-      let maxStep = 0, prev = window.__apex.probe().x;
+      let maxStep = 0, prev = window.__apex.probe().x, minX = Infinity;
       for (let i = 0; i < 40; i++) {
         window.__apex.setInput({ steer: 0, throttle: false });
         window.__apex.step(1 / 60, 1);
         const x = window.__apex.probe().x;
         maxStep = Math.max(maxStep, Math.abs(x - prev));   // per-frame displacement
-        prev = x;
+        prev = x; minX = Math.min(minX, x);
       }
       window.__apex.clearInput();
-      return { finalX: prev, maxStep };
+      return { minX, maxStep };
     });
-    expect(r.finalX).toBeLessThan(0);        // shoved away from the rival (to the left)
+    // Shoved away from the rival (to the left) AT THE CONTACT, not at frame 40:
+    // the AI steers clear within a few frames, and the player's x thereafter is
+    // road drift on a fixed heading. Same assertions as the VM twin, which was
+    // corrected when the AI stopped being contact-compliant in both directions
+    // and this browser copy was left behind (collisions-deep-vm.test.mjs).
+    expect(r.minX).toBeLessThan(-0.1);
     expect(r.maxStep).toBeLessThan(0.6);     // gentle rub, never a launch/teleport
   });
 
