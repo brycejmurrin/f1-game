@@ -558,7 +558,8 @@
         "tests/unit/shared-track-foundation-characterization.test.cjs",
         "tests/unit/car-front-wing-width.test.mjs",
         "tests/unit/grid-boxes.test.mjs",
-        "tests/unit/driving-line.test.mjs"
+        "tests/unit/driving-line.test.mjs",
+        "tests/unit/driving-line-opts.test.mjs"
       ]
     },
     "test:tiny": {
