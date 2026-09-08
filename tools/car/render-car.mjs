@@ -208,8 +208,11 @@ const W      = parseInt(arg('w', '900'), 10);
 const H      = parseInt(arg('h', '680'), 10);
 const URL    = arg('url', 'http://127.0.0.1:3456');
 const OUTARG = arg('out', null);
+// Against the CWD, not the tool's own directory: `--out=scratch/renders/x` run
+// from the repo root used to write tools/car/scratch/renders/x, which is where
+// the car-shot workflow's upload step found nothing at all.
 const OUT    = OUTARG != null
-  ? resolve(HERE, OUTARG)
+  ? resolve(process.cwd(), OUTARG)
   : resolveRepoDefault(ROOT, 'scratch', 'renders', 'cars', TEAM);
 // Browser: PW_CHROMIUM wins, else Playwright's bundled build, else a Chromium
 // already installed under PLAYWRIGHT_BROWSERS_PATH. Sandboxes that preinstall
