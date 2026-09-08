@@ -1973,7 +1973,10 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // is exactly why it needs a static pin.
   assert.match(envBody, /catch\s*\(\s*\w+\s*\)\s*\{[\s\S]{0,400}faceOk\s*=\s*false\b/,
     "envFaceEnd must record a failed probe face, not swallow it silently");
-  assert.match(envBody, /if\s*\(\s*faceOk\s*\)\s*envFacesMask\s*\|=\s*1\s*<<\s*\(\s*face\s*&\s*7\s*\)/,
+  // The `{` is optional because envFaceEnd also bumps the ENDS counter here
+  // (envState().begins/ends, added to settle PERF-FINDINGS 2t). What is pinned
+  // is the guard: the mask update stays inside `if (faceOk)`.
+  assert.match(envBody, /if\s*\(\s*faceOk\s*\)\s*\{?\s*envFacesMask\s*\|=\s*1\s*<<\s*\(\s*face\s*&\s*7\s*\)/,
     "a failed probe face must not be counted towards the six");
   assert.match(envBody, /if\s*\(\s*faceOk\s*&&\s*envFacesMask\s*===\s*63\s*&&\s*probeErrored\s*\)/,
     "envReady must not latch on a face that threw");

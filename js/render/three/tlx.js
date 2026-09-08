@@ -1535,6 +1535,15 @@ const TLX = (function () {
       // surface then samples black. Count the failures instead, and keep the
       // last good cube bound.
       let _envFailN = 0, _envFailMsg = "", _envFailStack = "";
+      // BEGINS vs ENDS vs the live MASK. envState() reports `face` (consecutive
+      // baked faces from bit 0) and that is not enough to say why a probe never
+      // latches: run 54 on macos-latest read tier=0, envFail=0, gaveUp=false,
+      // face=3 — the producer WAS called, no face threw, and the cube still never
+      // completed in ~12 cycles' worth of frames. begins > ends means faces are
+      // lost between game.js's envFaceBegin and envFaceEnd (the world draw in
+      // between); begins === ends with a mask that never reaches 63 means
+      // something is clearing it. One census run separates those.
+      let _envBegins = 0, _envEnds = 0;
       // Dawn does not THROW when it rejects a pipeline: renderer.render()
       // returns normally and the command buffer is discarded, so a face can
       // come back unwritten with faceOk still true. That is exactly how a
@@ -2384,6 +2393,7 @@ const TLX = (function () {
           frame.viewProj = _envVPArr; frame.eye = eye;
           frame.cullDist = _envSvCull > 0 ? Math.min(_envSvCull, ENV_CULL_M) : ENV_CULL_M;
           if (lit.updateFrame) lit.updateFrame(frame);
+          _envBegins++;
           return _envInvArr;
         },
         envFaceEnd(face) {
@@ -2413,7 +2423,7 @@ const TLX = (function () {
             _dMatUsed = 0;
             poolUsed = 0; _poolBatch++;
             _envActive = false;
-            envFacesMask |= 1 << (face & 7);
+            envFacesMask |= 1 << (face & 7); _envEnds++;
             if (envFacesMask === 63) {
               envFacesMask = 0;
               envReady = true;
@@ -2491,7 +2501,7 @@ const TLX = (function () {
           poolUsed = 0; _poolBatch++;
           _envActive = false;
           if (_gpuErrors > _errAtFace) _envFaceErr = true;
-          if (faceOk) envFacesMask |= 1 << (face & 7);
+          if (faceOk) { envFacesMask |= 1 << (face & 7); _envEnds++; }
           const probeErrored = _envFaceErr;
           if (faceOk && envFacesMask === 63 && probeErrored) {
             // The GPU rejected something while the six faces were drawn, so at
@@ -3209,6 +3219,7 @@ const TLX = (function () {
             while (face < 6 && (envFacesMask & (1 << face))) face++;
             return {
               on: !!envRT, face, size: ENV_SIZE, ready: envReady, blank: _envBlank,
+              mask: envFacesMask, begins: _envBegins, ends: _envEnds,
               fail: _envFailN, failMsg: _envFailMsg,
               badProbes: _envBadProbes, gaveUp: _envGaveUp,
             };
