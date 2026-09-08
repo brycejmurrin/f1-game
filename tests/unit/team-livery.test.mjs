@@ -21,6 +21,7 @@ import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import { scanFile } from "../../tools/check/dup-keys.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8");
@@ -35,6 +36,26 @@ test("no team record declares `livery:` twice", () => {
     const n = (chunk.match(/^ *livery: \{/gm) || []).length;
     assert.ok(n <= 1, `team "${id}" declares livery: ${n} times — the LAST one wins and the others are silently dead`);
   }
+});
+
+test("no object literal in js/ declares the same key twice", () => {
+  // The GENERAL case of the test above. The hazard is not about liveries: it is
+  // that git merges two additions to one object literal without a conflict and
+  // JavaScript keeps the last key, so whichever session wrote first loses its
+  // work silently. It has happened twice — Ferrari and Mercedes, then Williams,
+  // hours apart — so the whole tree is scanned rather than the one file that
+  // caught it first.
+  const hits = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir)) {
+      if (e === "three") continue;   // the vendored island is not ours to police
+      const p = path.join(dir, e);
+      if (fs.statSync(p).isDirectory()) walk(p);
+      else if (e.endsWith(".js")) hits.push(...scanFile(fs.readFileSync(p, "utf8"), path.relative(ROOT, p)));
+    }
+  };
+  walk(path.join(ROOT, "js"));
+  assert.deepEqual(hits.map((h) => `${h.file}:${h.line} \`${h.key}\` (first at ${h.first})`), []);
 });
 
 test("every livery field a team names is one the renderer knows", () => {

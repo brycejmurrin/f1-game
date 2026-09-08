@@ -114,8 +114,7 @@ const Teams = (function () {
          claimed a white engine cover — the official release omits the cover
          from its white list, and a look at the launch photograph reads the
          cover as black. See docs/notes/LIVERY-2026-REFERENCE.md. */
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "code",
-                cover: [0.055, 0.058, 0.070] },
+      livery: { cover: [0.055, 0.058, 0.070], finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "code" },
       engine: "Mercedes", tier: 3,
       stats: { speed: 82, accel: 78, cornering: 80, braking: 79 },
       drivers: [

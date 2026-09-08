@@ -2476,6 +2476,16 @@ software and blits by design, so a headless hardware run proves bind + render
 and says nothing about the swapchain. Only a HEADED hardware run proves that
 path, and the Verdict step already encodes the distinction.
 
+> **Confirmed and quantified, 2026-09-08.** This section's diagnosis was right
+> and the numbers are now on the table: run 61 read 600 frames on the WebGL2
+> leg against **5** on the WebGPU leg (worst frame 11.4 s), which is the
+> readback path against a direct present, not a backend gap. `envReady=false`,
+> the missing ambient and the luma difference are all downstream of the frame
+> count. The census verdict now prints a `path:` row and `frames=` so the
+> asymmetry cannot be read past — it was collected in the artifact and never
+> shown, and an afternoon went into rediscovering what this section already
+> said. Full table: `docs/notes/CI-RENDERING-PERFORMANCE.md`.
+
 ### The open lead — a 30% luma gap between three's two backends
 
 > **SUPERSEDED, 2026-09-08.** Everything below about WHY the WebGPU leg is

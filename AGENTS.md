@@ -63,19 +63,34 @@ Session shape — this is what controls both wall time and waiting:
    `grep -E '= run (passed|failed|timedout|interrupted)'` (ERE alternation; a
    fixed-string or BRE grep never matches) — never a looser pattern, never the
    process table, never `| tail` on a live log.
-5. A timeout on a busy box measures the machine, not the code: check
+5. **REAP WHAT YOU LAUNCHED, AND CHECK BEFORE YOU BLAME THE BOX.** A finished
+   task does not take its browsers with it: a killed `test-bg` run leaves its
+   Playwright WORKERS alive, and a probe script that never exits keeps
+   respawning Chrome for as long as the session lasts. Measured here — one
+   backgrounded probe ran 113 minutes at ~350 % CPU beside two orphaned
+   headless shells and put the box at loadavg 8.15, which is where the deploy
+   REFUSES (>= 3) and where every browser verdict becomes a measurement of the
+   machine. So before a browser run, a deploy, or any timing judgement, and
+   again after anything backgrounded ends:
+   `ps -eo pid,pcpu,etimes,args --sort=-pcpu | head` — anything of yours burning
+   CPU with a long ELAPSED is an orphan; `kill -9` it by PID. Leave the MCP
+   servers alone (`playwright-mcp`, `chrome-devtools-mcp` sit at 0 % — they are
+   the harness's, not yours), and never `pkill` a pattern that also matches
+   your own shell. `node tools/ci/test-bg.mjs --status` reports the runs it
+   knows about; it does not know about anything you started by hand.
+6. A timeout on a busy box measures the machine, not the code: check
    `/proc/loadavg` (< 3) and for a live `playwright test` process before
    starting anything, look for a load inversion in the log first, and re-run
    the spec ALONE only when the verdict matters.
-6. **STOPPING IS ALLOWED** — a pushed change that names its unverified groups
+7. **STOPPING IS ALLOWED** — a pushed change that names its unverified groups
    beats an hour of serialized SwiftShader. **Never widen a tolerance to make a
    spec pass**; write against `__apex` hooks, relative assertions over absolute
    thresholds; any `waitForFunction` on a rendering page needs
    `{ polling: 100 }` or its declared timeout never fires.
-7. Never hand a subagent a browser run — give a flat prohibition ("report it
+8. Never hand a subagent a browser run — give a flat prohibition ("report it
    unverified"). Subagent worktrees default to a STALE base: first step in any
    worktree is `git checkout -B <branch> <the session branch or its SHA>`.
-8. Never hand-edit a `@gen-shell` block, `version.json` or the `apex-build`
+9. Never hand-edit a `@gen-shell` block, `version.json` or the `apex-build`
    meta — the shell is generated and the deploy stamps it.
 
 ## Seeing the game (cheapest first)
@@ -97,6 +112,18 @@ colours, and the Cursor Cloud bootstrap (`tools/env/cloud-agent-install.sh`, wha
 survives a cold boot): `docs/notes/CI-RENDERING-PERFORMANCE.md`. Keep
 `apex-tools` in root `.mcp.json`; never run Chrome MCP while Playwright runs;
 never attach `mcp-probe` for a `version.json` check.
+
+**NEVER COMPARE THE CENSUS'S TWO TLX LEGS ON FRAMES, FPS OR LUMA WITHOUT
+READING THE `path:` ROW.** They run DIFFERENT PRESENT PATHS: the WebGPU leg
+pins `tlxForceGL=0`, and `tlx.js` soft-blits (GPU readback + `putImageData`
+every frame) whenever `!forceWebGL && (_softAdapter || _headless || cap==="1")`
+— Playwright is always headless. The WebGL2 leg pins `"1"` and short-circuits
+that off. `headless=true` prints on BOTH and discriminates nothing. Run 61 read
+600 frames against 5 and it is a readback against a direct present, not a
+backend difference; four hours went into that gap on 2026-09-08 before the
+harness was re-read. A player in a HEADED browser has neither flag, so no
+headless leg says anything about their path — the same caveat WGX's
+`softPresent=true headlessUa=true (expected)` line has always carried.
 
 **A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS** — a mock
 device stayed green while four defects made the real backend refuse to boot.
