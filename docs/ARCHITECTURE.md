@@ -142,6 +142,7 @@ _145 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `space.js` | `TrackSpace` | tag | explicit source-trace ↔ racing-lap coordinate transforms. |
 | `surface.js` | `TrackSurface` | tag | shared terrain ribbon and prop-grounding profile. |
 | `spline.js` | `TrackSpline` | tag | TrackSpline: pure centreline / spline math for the tracks engine. centerline() integrates an authored segment list into closed control points, cr() is… |
+| `line.js` | `TrackLine` | tag | TrackLine: the baked RACING LINE, a lateral offset per centreline node, computed once at track build beside track.curv. |
 | `mesh.js` | `TrackMesh` | tag | TrackMesh: the kerb/banking band + the road/terrain/floor mesh builders for the tracks engine. upOf() is the shared per-node up-basis, hash() the dete… |
 
 **`js/track/scenery/`**

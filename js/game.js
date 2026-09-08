@@ -5005,12 +5005,19 @@ function updateCar(c, dt, ranked) {
     _aiLane.street = !!track.street; _aiLane.baseLane = c.lanePref != null ? c.lanePref : c.lane;
     c.lane = AiDrive.adaptLane(c.lane, _aiLane, dt);
     const kA = Tracks.curvature(track, wrapS(c.s + clamp(c.speed * 0.7, 18, 70)));
-    // partly follow the racing line, partly hold the car's own lane, so the
-    // field fans out across the track rather than collapsing onto one line.
-    // Apex is on the INSIDE = -sign(k) (k>0 curves toward screen-left, so the
-    // inside is -x); the racing line aims there.
-    const racingLine = clamp(-kA * 130, -0.62, 0.62) * hw;
-    const targetX = clamp(racingLine * AiDrive.racingLineMix(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold) + c.lane * (hw - 1.2), -(hw - 1.0), hw - 1.0);
+    // THE LINE (TrackLine, baked at build): outside-inside-outside through every
+    // corner, read a short way ahead so the lateral step's lag does not turn in
+    // late. Its weight is 1 in a corner window and 0 on a straight, where the
+    // car's own lane preference spreads the field instead. The old target was
+    // `-kA * 130 * hw` mixed 55 % with the lane: an inside-hugging line that
+    // entered corners already inside (measured on monza: entry +1..+3.6 m
+    // inside, apex only +1.2 m inside), and a lane-biased car apexed on the
+    // OUTSIDE all lap. AiDrive.lineFollow says how much of the line a driver
+    // takes; the remainder is their lane, which is what makes the field two
+    // lines wide into a corner instead of one.
+    const ln = TrackLine.at(track, wrapS(c.s + clamp(c.speed * 0.3, 8, 25)));
+    const laneX = c.lane * (hw - 1.2);
+    const targetX = clamp(lerp(laneX, ln.x, ln.w * AiDrive.lineFollow(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold)), -(hw - 1.0), hw - 1.0);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
     // with more room to pass. Collision-aware — the move is scaled down if that
     // side is also tight (a car alongside or a wall), so we don't dive into a

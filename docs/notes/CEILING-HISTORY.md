@@ -2159,3 +2159,16 @@ lines of shape- and density-keyed grid placement in `css/menus.css` that fitted
 the chip groups on a landscape phone are two rules. `js/game.js` shrank (the
 seven chip-building loops are eight `SettingRow.paint` calls and one wiring
 function); `cssClasses` fell (`.rs-row` retired).
+
+- `js/game.js` lines 10003 -> **10010**, codeLines 5479 -> **5480**;
+  `js/track/tracks.js` lines 2399 -> **2400** (2026-09-08): the racing line.
+  One code line in each: game.js reads `TrackLine.at()` for the AI's lateral
+  target instead of `-k * 130 * hw` (the comment block above it carries the
+  measurement: approach +1..+3.6 m INSIDE before, 3-6 m outside after; apex
+  +1.2 m inside before, within a metre of the edge after), and tracks.js calls
+  `TrackLine.bake(track)` beside the curvature LUT. The geometry itself is the
+  new `js/track/core/line.js` (its own file, unit-tested on synthetic tracks),
+  which is where a bake belongs. A solo AI lap is the same 125.10 s with the
+  line on, off or scaled — lateral position is free in the kinematic model —
+  so this is where the AI drives, not how fast; corner speed still comes from
+  the road's curvature.

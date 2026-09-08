@@ -299,6 +299,28 @@ tyre call worth ~35% more grip than every other car on track and turned a whole
 weather condition into a walkover. As it stands a correct call roughly matches
 the field and a wrong one costs about a quarter of your cornering.
 
+### The racing line the AI drives
+
+`js/track/core/line.js` (`TrackLine`) bakes a lateral offset per centreline
+node at track build, beside `track.curv`: outside-inside-outside through every
+corner — the turn-in from the outside edge at `sqrt(2 · 1.5R · 2w)` before the
+apex, the apex a plateau on the inside edge wherever the road is still above
+55% of the corner's peak curvature, the exit released to the outside 1.25× the
+turn-in distance later. Corners are runs of |curv| above 0.006 rad/m (R < ~170
+m; gentler bends are flat-out kinks) that end only below 0.0036 (hysteresis, so
+a long opening bend like Parabolica keeps the inside to its real end); chicanes
+share a knot through the middle. `lineW` is 1 in a corner window and 0 on a
+straight, where the car's own lane preference spreads the field. The AI's
+target is `lerp(lane, line, w · AiDrive.lineFollow)` read 8–25 m ahead.
+
+Before it, the target was `-k · 130 · hw` mixed 55% with the lane: an
+inside-hugging line (measured on monza: approach +1..+3.6 m INSIDE, apex only
++1.2 m inside on a 7 m half-width) and a lane-biased car apexed on the outside
+all lap. After: approach 3–6 m outside, apex within a metre of the inside edge
+(`tests/unit/ai-racecraft-vm.test.mjs`, the line test; `track-line.test.mjs`
+for the geometry). The AI's corner SPEED still comes from the road's curvature
+(`brakeTarget`), not the path's — conservative by the difference in radius.
+
 ### Racecraft: who passes, who yields
 
 The AI's traffic decisions live in `js/physics/ai-drive.js` as pure rules; the
