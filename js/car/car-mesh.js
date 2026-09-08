@@ -15,7 +15,7 @@ const CAR_DECAL_CACHE_MAX = 24;
 // (level, fin, drs, anchor) keys, far under the 24-entry cap, so eviction —
 // and the FIFO/LRU distinction — is never reached in practice.
 function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
-  const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
+  const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
   const out = { pos: [], nrm: [], uv: [], idx: [] };
   // Imported GLBs are static and do not consume the procedural parts recipe.
   // Resolve their overlays against the default body once, regardless of setup.
@@ -26,7 +26,7 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   // below read coverAt().top), so the decal takes the same anchors as the mesh.
   const anchors = Car3D.bodyAnchors ? Car3D.bodyAnchors(anchorParts, legacyBody ? null : teamId, spineHeight) : null;
   // Map a canvas-pixel region → UV rect (v flipped: createTexture uploads FLIP_Y).
-  const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / S, vB: 1 - (r.y + r.h) / S });
+  const uvOf = (r) => ({ uL: r.x / S, uR: (r.x + r.w) / S, vT: 1 - r.y / SH, vB: 1 - (r.y + r.h) / SH });
   // corners in [BL, BR, TR, TL] order (upright as seen from outside) → the region.
   // NOTE: the in-race car model matrix is a REFLECTION (det −1: tmpU = tmpR×tmpF,
   // so [r,u,f] is left-handed — the symmetric body hides it, asymmetric decal text
@@ -142,8 +142,12 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
     const a = flank(sZ[0]), b = flank(sZ[1]);
     quad([[a.b[0], a.b[1], sZ[0]], [b.b[0], b.b[1], sZ[1]], [b.t[0], b.t[1], sZ[1]], [a.t[0], a.t[1], sZ[0]]],
          [a.nx, a.ny, 0], R.spineSide);
+    // Under the det −1 model matrix the +x quad above renders as the car's
+    // RIGHT flank (canvas-left at the rear) and this −x quad as its LEFT
+    // (canvas-left at the front) — LiveryTex.FLANKS authors each in that
+    // side's outside view. A stale atlas without this region mirrors the first.
     quad([[-b.b[0], b.b[1], sZ[1]], [-a.b[0], a.b[1], sZ[0]], [-a.t[0], a.t[1], sZ[0]], [-b.t[0], b.t[1], sZ[1]]],
-         [-a.nx, a.ny, 0], R.spineSide);
+         [-a.nx, a.ny, 0], R.spineSideL || R.spineSide);
   }
   // The fin's blade height is a recipe knob, so the decal has to be placed on
   // the SAME outline the mesh used. sharkFinPanel/sharkFinBadge default to a
@@ -249,8 +253,8 @@ function getCockpitDecalMesh(parts, teamId) {
   }
   if (!_cockpitDecalMesh) {
     _cockpitDecalKey = wantKey;
-    const R = LiveryTex.REGIONS, S = LiveryTex.SIZE;
-    const u = { uL: R.num.x / S, uR: (R.num.x + R.num.w) / S, vT: 1 - R.num.y / S, vB: 1 - (R.num.y + R.num.h) / S };
+    const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
+    const u = { uL: R.num.x / S, uR: (R.num.x + R.num.w) / S, vT: 1 - R.num.y / SH, vB: 1 - (R.num.y + R.num.h) / SH };
     const anchors = anchorsForKey;
     const nr = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
     const nf = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
