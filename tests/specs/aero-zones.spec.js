@@ -59,8 +59,21 @@ test.describe("active aero — activation zones", () => {
   // four are the ones the old curvature scan got most wrong — baku produced
   // EIGHT zones against a real two, qatar four against one — and they are the
   // cases a future threshold tweak would silently regress.
-  test("authored circuits get the real number of zones, not a derived guess", async ({ page }) => {
-    for (const [id, want] of [["monza", 2], ["baku", 2], ["qatar", 1], ["albert_park", 5]]) {
+  // ONE TEST PER CIRCUIT, not one test walking four. Each circuit costs a page
+  // boot (11-33 s on SwiftShader) plus its build, so the walk spent ~66 s of a
+  // 120 s budget when run alone and blew through it — 125, 135, 152 s on three
+  // occasions — once earlier tests in this file had already loaded circuits
+  // into the same worker. Split, each circuit gets its own budget and its own
+  // ~16 s, nothing sits near the cap, and a failure names the circuit in the
+  // title instead of in an assertion message.
+  //
+  // Not fixed by loading them into ONE page either: switching circuits with
+  // race() in a live page measured SLOWER than booting a fresh page for each
+  // (89-95 s against 65 s for the four, both orders, 2026-09-08) — a live
+  // scene is torn down and rebuilt while the old one's resources are still
+  // around, and on a software rasteriser that costs more than a clean boot.
+  for (const [id, want] of [["monza", 2], ["baku", 2], ["qatar", 1], ["albert_park", 5]]) {
+    test(`${id} gets the real number of zones, not a derived guess`, async ({ page }) => {
       await loadTrack(page, id);
       const zones = await page.evaluate(() => window.__apex.aeroZones());
       expect(zones.length, `${id} zone count`).toBe(want);
@@ -68,8 +81,8 @@ test.describe("active aero — activation zones", () => {
       // the three-second bar — a zero-length span would mean the picker fell
       // over rather than that the circuit has a short connector.
       for (const z of zones) expect(z.len, `${id} zone at ${z.start}m`).toBeGreaterThan(100);
-    }
-  });
+    });
+  }
 
   test("with no zone, the mode can never arm however hard it is asked for", async ({ page }) => {
     await loadTrack(page, "monaco");
