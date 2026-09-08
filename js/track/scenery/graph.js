@@ -196,6 +196,10 @@ const TrackGraph = (function () {
           col: place.col || null,
           landed,
           full,
+          // Did this placement's TRIANGLES stay out of a buffer? Only then is
+          // an instanced draw of it a draw rather than a DUPLICATE — the
+          // `instancedOnly` half of batches() below is what reads it.
+          inst: skipFuse,
           meta: meta || null,
         });
         if (prefer && !skipFuse) {
@@ -222,12 +226,32 @@ const TrackGraph = (function () {
       return landed;
     }
 
-    function batches() {
+    // Plain, this answers "what COULD be instanced" — a capability report, which
+    // is what the unit tests and tools/track/graph-parity.cjs ask for, and it is
+    // deliberately independent of whether the fuse was actually skipped.
+    //
+    // `opts.instancedOnly` narrows it to the nodes whose triangles were WITHHELD
+    // from a buffer. A caller that UPLOADS the result must ask for that set, or
+    // it draws twice everything already fused. Not hypothetical: scenery/city.js
+    // routes unlit window panes to `glassBuf`, and tracks.js only ever sets
+    // `_preferInstance` on the default props buffer — so those panes' triangles
+    // land in the GLASS MESH and the same placements came back as an instanced
+    // unit-box batch. 56,048 instances / 1.35 M verts across the roster (Vegas
+    // 22,127, Baku 12,613, Jeddah 11,617, Singapore 7,895), and on ten circuits
+    // the duplicate is the whole glass mesh vertex for vertex. Instancing them
+    // instead is not the fix: a prop batch draws with the PROPS material, and the
+    // glass mesh exists precisely to draw them with the reflective one.
+    //
+    // A withheld-triangle node is neither a batch nor something to bake, so it
+    // leaves BOTH lists here — it is already in the soup.
+    function batches(opts) {
+      const instancedOnly = !!(opts && opts.instancedOnly);
       const byModel = new Map();
       const bakeOnly = [];
       for (const node of nodes) {
         const m = models.get(node.model);
         if (!m) continue;
+        if (instancedOnly && !node.inst) continue;
         const s = node.s;
         const nonUniformXZ = !!s && __M.abs(__M.abs(s[0]) - __M.abs(s[2])) > 1e-9;
         if (!node.full || (m.hasRadial && nonUniformXZ)) { bakeOnly.push(node); continue; }

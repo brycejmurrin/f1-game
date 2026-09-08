@@ -191,7 +191,7 @@ const Tracks = (function () {
       track.meshes.props = G.createChunkedMesh ? G.createChunkedMesh(propsGeo, 72) : G.createMesh(propsGeo);
       track.meshes.propBatches = null;
       if (track.graph && G.createInstancedBatch) {
-        const { batches } = track.graph.batches();
+        const { batches } = track.graph.batches({ instancedOnly: true });   // uploading the plain (capability) set ships glassBuf's panes twice — graph.js batches()
         if (batches.length) {
           track.meshes.propBatches = batches.map((b) =>
             G.createInstancedBatch(b.geo, b.matrices, b.colors, { cellSize: 72 }));
