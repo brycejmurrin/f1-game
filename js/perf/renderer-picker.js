@@ -21,9 +21,19 @@ const hasBackendFiles = (b) => b === "webgl2" ||
   !!(typeof ApexRoster !== "undefined" && ApexRoster.DEFERRED &&
      (ApexRoster.DEFERRED[b] || []).length);
 const available = (b) => hasBackendFiles(b) && (b !== "webgpu" || hasWebGPU());
+// The stored pick, or the DEFAULT for this device when nothing is stored: a
+// touch device defaults to three.js (js/game.js's boot read does the same, and
+// the two must agree or SETTINGS shows a backend that is not the one bound).
+function defaultBackend() {
+  try {
+    if (typeof window !== "undefined" && window.matchMedia &&
+        window.matchMedia("(pointer: coarse)").matches) return "three";
+  } catch (_) { /* no matchMedia */ }
+  return "webgl2";
+}
 function readBackend() {
   const v = GameStore.store.raw("apex26.gfxBackend");
-  return v === "webgpu" || v === "three" ? v : "webgl2";
+  return v === "webgpu" || v === "three" ? v : defaultBackend();
 }
 function backendLabel(v) { return v === "three" ? "THREE.JS" : String(v).toUpperCase(); }
 // What is actually DRAWING, as opposed to what is stored. readBackend() is the
