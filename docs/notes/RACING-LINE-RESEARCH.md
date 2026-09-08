@@ -2,7 +2,7 @@
 
 Assessment note, 2026-09-08. The question was "can we reconsider how we
 actually choose the racing line". This is the code audit, the measurements,
-the literature, and a recommendation. Nothing here is implemented yet; the
+the literature, and a recommendation. §6 records what was implemented the same evening; the
 rules that bind an implementation are in `AGENTS.md` (`PHYSICS.md` §curvature
 channels: the line is an AI-only / display-only channel and must never reach
 the player's physics).
@@ -176,3 +176,57 @@ What an implementation must keep: the arc-must-not-reach-the-driver rule
 (`PHYSICS.md` table row for `drivingLineApi` stays AI-only/display-only), the
 `_sceneryShift` idiom is not involved (the line is baked in racing space), and
 `lineFollow` stays as the knob that keeps the field two lines wide.
+
+## 6. Implemented (2026-09-08, same evening)
+
+**What shipped.** `TrackLine.bake` keeps the corner detection, the knots and
+`lineW`, uses the cosine-eased knot line as the SEED, and replaces the 8 m box
+smooth + clamp with a relaxation toward the minimum of
+`Σ κ_line² + λ Σ κ_road·x` over the lap, `κ_line = κ/(1+κx) − x''`, clamped
+to `hw − MARGIN` at every step: Gauss-Seidel with over-relaxation 1.5, 400
+passes on every 4th node first (the long corners' wavelengths), then 300 fine
+passes — ~25 ms per circuit at bake. `pathK` (the AI's calibrated brake
+model with its 85 % floor) is unchanged, deliberately: see §5's last
+paragraph and PHYSICS.md.
+
+**Why the path-length term (λ = 0.001 /m²).** Pure minimum curvature (option
+B as written above) converged to the OUTSIDE of long constant-radius corners
+— Parabolica's apex 3.8 m outside, Ascari's on the centre — the known
+artefact of the objective ignoring distance. A local lap-time objective
+(path length over cornering speed, minimised node by node with finite
+differences) zig-zagged (corner time 30 % worse). The standard blend, TUMFTM's
+minimum curvature plus a shortest-path term, fixes it with one quadratic:
+λ = 0.001 puts every Monza apex on the inside clamp with the turn-in still
+from the outside (x(s0) −3.7 to −5.0 m); λ = 0.003 pulls the entries inside
+too early (x(s0) −1.1 m).
+
+**What the speed-weighted pass (option D) measured.** Re-weighting the
+objective by the line's own speed profile (`w = 0.5 + 0.5 (v/vmax)²`, two
+Kapania-style iterations) changed corner time by under 0.2 % and raised the
+number of corners whose peak curvature exceeds the road's (Spa 2 → 9 at
+λ = 0.003). Not shipped; the prototype is `scratch/relax-proto.mjs`
+(gitignored, `--weighted=true`).
+
+**Measured, seed → relaxed** (`scratch/line-audit.mjs`; corner time is the
+AI's model on the line's OWN curvature, which the arc formula in §2 hid):
+
+| circuit | worst slope | steep > 0.2 | on clamp | corner time vs centreline |
+|---|---|---|---|---|
+| monza | 0.58 → 0.44 (Lesmo 1→2) | 8.3 → 6.9 % | 15 → 25 % | −5.1 % → +1.5 % |
+| spa | 0.66 → 0.37 | 15.6 → 4.8 % | 26 → 23 % | −10.6 % → +1.5 % |
+| silverstone | 0.68 → 0.38 | 19.3 → 4.2 % | 41 → 16 % | −13.6 % → +0.8 % |
+| monaco | 0.38 → 0.42 | 15.0 → 7.4 % | 22 → 27 % | −4.0 % → positive |
+
+Negative means the knot line was SLOWER than the centreline; every circuit
+was. Steep nodes above 0.35 m/m fell from 1.7–6.7 % to 0–1 %; no corner's
+peak line curvature exceeds the road's on any of the eight circuits audited
+(the "tighter" column of §2 is 0 everywhere). "On clamp" rose on Monza and
+Monaco because the apexes now sit ON the inside clamp for the whole plateau —
+the intent, not the overshoot §2 described.
+
+**Tests.** `tests/unit/track-line.test.mjs` (synthetic, expectations
+unchanged, all pass) and the new `tests/unit/track-line-circuits.test.mjs`
+(on the road, no node step over 0.5 m/m, corner time ≤ centreline on monza /
+spa / silverstone, and monza's long corners outside-in-outside on the baked
+table). `ai-racecraft-vm` drives an AI car through monza's long corners on
+the new line: 4/4 pass.
