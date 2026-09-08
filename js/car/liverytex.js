@@ -24,7 +24,7 @@ const LiveryTex = (function () {
     strip:  { x: 40,  y: 720, w: 944, h: 130 },  // long thin sponsor strip (sidepod lower)
     fin:    { x: 40,  y: 856, w: 430, h: 160 },  // shark-fin tail: the painted graphic, stretched over the whole swept fin
     finBadge: { x: 500, y: 856, w: 160, h: 160 },
-    spineSide: { x: 680, y: 856, w: 304, h: 160 },   // engine-cover FLANK band, both sides (liv.spineSide)
+    spineSide: { x: 680, y: 856, w: 304, h: 160 },   // the WHOLE engine-cover flank, both sides (liv.spineSide): z -0.66 → -1.90 across, crease → sidepod line down
     tail: { x: 500, y: 420, w: 180, h: 80 },   // the cover's TAIL top (z -1.28..-1.92); the SPINE TOP band designs run on down it
   };
 
@@ -1171,7 +1171,7 @@ const LiveryTex = (function () {
   // clipped to the region, the two arcs meet at the shoulder. The band is the
   // same texture on both flanks, so the wrap is symmetric by construction.
   function drawSunWrap(ctx, acc) {
-    const r = 0.34, zc = -0.86;
+    const r = 0.42, zc = -0.90;
     const C = REGIONS.crest, S = REGIONS.spineSide;
     ctx.save();
     ctx.beginPath(); ctx.rect(C.x, C.y, C.w, C.h); ctx.clip();
@@ -1184,7 +1184,8 @@ const LiveryTex = (function () {
     ctx.beginPath(); ctx.rect(S.x, S.y, S.w, S.h); ctx.clip();
     ctx.fillStyle = cssA(acc, 0.97);
     ctx.beginPath();
-    ctx.ellipse(S.x + (-0.74 - zc) / 0.46 * S.w, S.y - 0.21 / 0.24 * S.h, r / 0.46 * S.w, r / 0.24 * S.h, 0, 0, Math.PI * 2);
+    ctx.ellipse(S.x + (FLANK.zF - zc) / FLANK.zLen * S.w, S.y - FLANK.sTop / FLANK.sLen * S.h,
+                r / FLANK.zLen * S.w, r / FLANK.sLen * S.h, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -1193,6 +1194,14 @@ const LiveryTex = (function () {
   // along the car than across it — a square mark came out as a lozenge. Crown
   // marks are drawn through scale(1, CROWN_SQUASH) so they land round.
   const CROWN_SQUASH = 0.52;
+  // Likewise the flank: 304 px over 1.24 m along the car vs 160 px over ~0.47 m
+  // down the flank — a pixel is ~1.4× wider than it is tall, so flank marks are
+  // drawn through scale(FLANK_SQUASH, 1).
+  const FLANK_SQUASH = 0.72;
+  // The flank's car-space maps (car-mesh's band): canvas x ↔ z, canvas y ↔ the
+  // distance s down the skin from the ridge (the crease at s 0.21, the sidepod
+  // line at ~0.68).
+  const FLANK = { zF: -0.66, zLen: 1.24, sTop: 0.21, sLen: 0.47 };
   function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont) {
     const X = R.x, Y = R.y, W = R.w, H = R.h;
     ctx.save();
@@ -1211,9 +1220,11 @@ const LiveryTex = (function () {
       const S = REGIONS.spineSide;
       if (S) {
         ctx.beginPath(); ctx.rect(S.x, S.y, S.w, S.h); ctx.clip();
+        // From the airbox back along the crease to mid-cover, then a raked
+        // edge down to the sidepod line just behind the number (the SF-26).
         ctx.beginPath();
-        ctx.moveTo(S.x, S.y); ctx.lineTo(S.x + S.w * 0.70, S.y);          // along the crease
-        ctx.lineTo(S.x + S.w * 0.52, S.y + S.h); ctx.lineTo(S.x, S.y + S.h); // raked rear edge
+        ctx.moveTo(S.x, S.y); ctx.lineTo(S.x + S.w * 0.58, S.y);              // along the crease
+        ctx.lineTo(S.x + S.w * 0.40, S.y + S.h); ctx.lineTo(S.x, S.y + S.h);  // raked rear edge
         ctx.closePath(); ctx.fill();
       }
     } else if (id === "panel") {
@@ -1584,40 +1595,56 @@ const LiveryTex = (function () {
     // SPINE SIDE (SPINE_SIDE_IDS): the same three marks on the cover FLANK, inked
     // for the body paint (the flank is c1) with the cover's own crest lockup.
     const spineSide = colors.spineSide || "none";
+    // The flank canvas is the WHOLE cover side (front at canvas-left). The
+    // marks sit in the upper front third — the SF-26's 16 and the W17's 12
+    // just behind the airbox — through FLANK_SQUASH so they come out in
+    // proportion; a box for that spot, in squashed local coordinates.
+    const Sf = REGIONS.spineSide;
+    const flankMark = (paint) => {
+      ctx.save();
+      ctx.translate(Sf.x + Sf.w * 0.24, Sf.y + Sf.h * 0.42); ctx.scale(FLANK_SQUASH, 1);
+      paint({ x: -Sf.h * 0.42, y: -Sf.h * 0.40, w: Sf.h * 0.84, h: Sf.h * 0.80 });
+      ctx.restore();
+    };
     if (spineSide === "logo") {
-      if (LOGOS[teamId]) {
-        drawLogoImage(ctx, LOGOS[teamId], REGIONS.spineSide, logo,
-                      markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
-      // bare:false — the FULL lockup, plate and all, exactly as the garage wall
-      // and the cover crest paint it (the fin badge alone goes bare, for its plate).
-      } else drawCrest(ctx, teamId, REGIONS.spineSide, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+      flankMark((Rm) => {
+        if (LOGOS[teamId]) {
+          drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
+        // bare:false — the FULL lockup, plate and all, exactly as the garage wall
+        // and the cover crest paint it (the fin badge alone goes bare, for its plate).
+        } else drawCrest(ctx, teamId, Rm, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+      });
     } else if (spineSide === "number" || spineSide === "code") {
-      drawNumber(ctx, spineSide === "code" ? driverCode(teamId, raceNum) : raceNum,
-                 REGIONS.spineSide, inkCrest, accent, null, colors.numFont, 0);
+      flankMark((Rm) => drawNumber(ctx, spineSide === "code" ? driverCode(teamId, raceNum) : raceNum,
+                                   Rm, inkCrest, accent, null, colors.numFont, 0));
     } else if (spineSide === "plate") {
       // The number on a contrasting plate (drawNumber's own rounded board),
       // inked for the PLATE: the body colour when it reads on it, else an ink.
       const plateC = stripe || accent;
       const plateInk = contrast(c1, plateC) >= 3 ? c1 : inkOn([plateC]);
-      drawNumber(ctx, raceNum, REGIONS.spineSide, plateInk, inkCrest, plateC, colors.numFont, 0);
+      flankMark((Rm) => drawNumber(ctx, raceNum, Rm, plateInk, inkCrest, plateC, colors.numFont, 0));
     } else if (spineSide === "wordmark") {
-      drawWordmark(ctx, names[0] || "", REGIONS.spineSide, inkCrest, { align: "center" });
+      // The title sponsor the length of the flank's upper half — the RB22's
+      // Red Bull, the W17's PETRONAS.
+      drawWordmark(ctx, names[0] || "", { x: Sf.x + Sf.w * 0.06, y: Sf.y + Sf.h * 0.06, w: Sf.w * 0.88, h: Sf.h * 0.50 }, inkCrest, { align: "center" });
     } else if (spineSide === "duo") {
-      // The band's canvas x runs FRONT → REAR on the right flank (the endplate
-      // order in car-mesh), so the big name sits in the rear 58 % and the small
-      // one in the front 38 %, on the band's lower line.
-      const S = REGIONS.spineSide;
-      drawWordmark(ctx, names[0] || "", { x: S.x + S.w * 0.42, y: S.y + S.h * 0.10, w: S.w * 0.58, h: S.h * 0.80 }, inkCrest, { align: "center", pad: 8 });
-      drawWordmark(ctx, names[1] || "", { x: S.x, y: S.y + S.h * 0.48, w: S.w * 0.40, h: S.h * 0.42 }, inkCrest, { align: "center", pad: 8 });
+      // The flank's canvas x runs FRONT → REAR on the right flank (the endplate
+      // order in car-mesh): the title sponsor large across the rear 55 %, the
+      // partner mark small and forward, both on the upper half (Red Bull over
+      // Ford Racing on the RB22).
+      drawWordmark(ctx, names[0] || "", { x: Sf.x + Sf.w * 0.42, y: Sf.y + Sf.h * 0.06, w: Sf.w * 0.55, h: Sf.h * 0.52 }, inkCrest, { align: "center", pad: 8 });
+      drawWordmark(ctx, names[1] || "", { x: Sf.x + Sf.w * 0.04, y: Sf.y + Sf.h * 0.16, w: Sf.w * 0.34, h: Sf.h * 0.30 }, inkCrest, { align: "center", pad: 6 });
     } else if (spineSide === "slash") {
       // Four raked bars across the band, hard-edged, in the accent — and
       // TAPERING toward the rear like the W17's: each bar a little thinner and
       // shorter than the one ahead of it, hanging from the shoulder crease.
-      const S = REGIONS.spineSide, skew = S.h * 0.45;
+      const S = REGIONS.spineSide, skew = S.h * 0.40;
       ctx.save(); ctx.beginPath(); ctx.rect(S.x, S.y, S.w, S.h); ctx.clip();
       ctx.fillStyle = cssA(stripe || accent, 0.96);
-      for (let i = 0; i < 4; i++) {
-        const x0 = S.x + S.w * (0.12 + i * 0.20), bw = S.w * (0.085 - i * 0.012), hh = S.h * (1 - i * 0.16);
+      // Six bars the length of the cover, the first behind the airbox, each
+      // thinner and shorter than the one ahead (the W17's run to the wing).
+      for (let i = 0; i < 6; i++) {
+        const x0 = S.x + S.w * (0.10 + i * 0.145), bw = S.w * (0.055 - i * 0.005), hh = S.h * (0.85 - i * 0.10);
         ctx.beginPath();
         ctx.moveTo(x0 + skew, S.y); ctx.lineTo(x0 + skew + bw, S.y);
         ctx.lineTo(x0 + skew * (1 - hh / S.h) + bw, S.y + hh); ctx.lineTo(x0 + skew * (1 - hh / S.h), S.y + hh);

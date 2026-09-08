@@ -118,23 +118,26 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
     quad([[-cf.x*0.72, cf.top+0.008, -0.62], [cf.x*0.72, cf.top+0.008, -0.62],
           [cr.x*0.72, cr.top+0.008, -1.28], [-cr.x*0.72, cr.top+0.008, -1.28]], [0, 1, 0.06], R.crest);
   }
-  // SPINE SIDE: a band on the engine-cover FLANK, both sides. At each station
-  // the flank is the straight line from (x, bottom) up to the SHOULDER
-  // (Car3D.coverProfile: 0.72x, top - d; the rounded crown sits above it). The
-  // band hangs from just under the shoulder crease and is a FIXED 0.24 m tall
-  // (the atlas region's 1.9:1 over 0.46 m of z), so the number stays the same
-  // size and shape on a raised spine — it just rides higher up a taller flank.
-  // Corners follow the endplate-number order below so the text reads on both
-  // sides under the reflected model matrix. Always mapped: an unpicked
-  // spineSide is an unpainted region, the same rule as the fin panel.
+  // SPINE SIDE: the WHOLE engine-cover flank, both sides — from just behind
+  // the airbox (z -0.66) to the wing (-1.90), and from under the shoulder
+  // crease (v 0.96) down to the sidepod line (v 0.06). At each station the
+  // flank is the straight line from (x, bottom) up to the SHOULDER
+  // (Car3D.coverProfile: 0.72x, top - d; the rounded crown sits above it).
+  // The whole side is one canvas so a design can run the length of the cover
+  // (the RB22's Red Bull, the W17's bars, the SF-26's white) — the price is
+  // that a canvas pixel is ~1.4× longer along the car than down the flank
+  // (1.24 m over 304 px vs ~0.47 m over 160 px); LiveryTex.FLANK_SQUASH
+  // compensates for the marks. Corners follow the endplate-number order below
+  // so the text reads on both sides under the reflected model matrix. Always
+  // mapped: an unpicked spineSide is an unpainted region, like the fin panel.
   if (R.spineSide) {
-    const sZ = [-0.74, -1.20], PROUD = 0.010, BAND_H = 0.24, V_TOP = 0.95;
+    const sZ = [-0.66, -1.90], PROUD = 0.010, V_TOP = 0.96, V_BOT = 0.06;
     const flank = (z) => {
       const c = anchors ? anchors.coverAt(z) : (z > -1 ? { x: 0.27, bottom: 0.20, top: 0.81 } : { x: 0.20, bottom: 0.23, top: 0.69 });
       const p = Car3D.coverProfile ? Car3D.coverProfile(c) : { x: c.x, bottom: c.bottom, shoulder: c.top };
       const h = p.shoulder - p.bottom, nl = Math.hypot(h, 0.28 * p.x), nx = h / nl, ny = 0.28 * p.x / nl;
       const at = (v) => [p.x * (1 - 0.28 * v) + nx * PROUD, p.bottom + h * v + ny * PROUD];
-      return { b: at(Math.max(0.3, V_TOP - BAND_H / h)), t: at(V_TOP), nx, ny };
+      return { b: at(V_BOT), t: at(V_TOP), nx, ny };
     };
     const a = flank(sZ[0]), b = flank(sZ[1]);
     quad([[a.b[0], a.b[1], sZ[0]], [b.b[0], b.b[1], sZ[1]], [b.t[0], b.t[1], sZ[1]], [a.t[0], a.t[1], sZ[0]]],

@@ -262,7 +262,9 @@ test.describe("Livery atlas — ink contrast", () => {
       num: ["c1", "c2"],
       // the SPINE SIDE band hangs on the engine-cover flank, body paint only;
       // buildAtlas inks it with inkCrest (the cover's ink) for exactly that.
-      spineSide: ["c1"],
+      // the WHOLE flank now, crease to sidepod line — the accent pinstripe
+      // runs across it aft of the mark, like the fin's base pinstripe
+      spineSide: ["c1", "accent"],
       // the tail strip drapes the cover behind the crest, shoulder to shoulder,
       // and the accent pinstripe runs just under its shoulder edge — so, like
       // the fin, it genuinely sits on two paints. Its only mark (the second
