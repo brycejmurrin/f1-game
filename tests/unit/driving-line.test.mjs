@@ -1,0 +1,137 @@
+/* driving-line.test.mjs — the DRIVING LINE ribbon builder as BEHAVIOUR on a
+ * synthetic circuit: a stadium (two straights, two 180° turns). Pins the
+ * things a player would notice and a screenshot on SwiftShader cannot prove:
+ * the line moves to the inside of a corner, the speed profile brakes BEFORE
+ * the corner and not at it, CORNERS mode marks the turns and not the
+ * straights, and the strip is the layout the GLX pass expects. */
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import vm from "node:vm";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
+function load() {
+  const sandbox = { window: {}, Math, Float32Array, console };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/driving-line.js"), "utf8"), ctx,
+    { filename: "js/render/shared/driving-line.js" });
+  return vm.runInContext("DrivingLine", ctx);
+}
+
+/* A stadium: straights of `straight` m along ±z, semicircles of radius R.
+   +k is a LEFT-hand turn (measured convention); this circuit turns left. */
+function stadium({ straight = 600, R = 60, hw = 7 } = {}) {
+  const arc = Math.PI * R, total = 2 * straight + 2 * arc;
+  const sample = (s, out) => {
+    s = ((s % total) + total) % total;
+    let x, z, tx, tz;
+    if (s < straight) { x = -R; z = s; tx = 0; tz = 1; }
+    else if (s < straight + arc) { const a = (s - straight) / R; x = -R * Math.cos(a); z = straight + R * Math.sin(a); tx = Math.sin(a); tz = Math.cos(a); }
+    else if (s < 2 * straight + arc) { const d = s - straight - arc; x = R; z = straight - d; tx = 0; tz = -1; }
+    else { const a = (s - 2 * straight - arc) / R; x = R * Math.cos(a); z = -R * Math.sin(a); tx = -Math.sin(a); tz = -Math.cos(a); }
+    out.p[0] = x; out.p[1] = 0; out.p[2] = z;
+    out.t[0] = tx; out.t[1] = 0; out.t[2] = tz;
+    // right = t × up  (x-right of a car heading along t)
+    out.r[0] = -tz; out.r[1] = 0; out.r[2] = tx;
+    out.hw = hw;
+    return out;
+  };
+  const curvature = (s) => {
+    s = ((s % total) + total) % total;
+    const onArc = (s >= straight && s < straight + arc) || s >= 2 * straight + arc;
+    return onArc ? 1 / R : 0;
+  };
+  return { id: "stadium", total, track: { n: 100, total, hw: new Float32Array(100).fill(hw) },
+           sample, curvature, latMax: 22, brake: 22, accel: 7, vTop: 72, grip: 1, straight, arc, R };
+}
+
+test("the strip is the GLX layout: stride 6, two vertices per sample, closed", () => {
+  const DL = load();
+  const api = stadium();
+  const c = DL.build(api);
+  assert.equal(DL.STRIDE, 6);
+  assert.equal(c.verts.length, c.count * 6);
+  assert.equal(c.count % 2, 0);
+  // closed: the last pair repeats the first pair's position
+  for (let i = 0; i < 3; i++) assert.ok(Math.abs(c.verts[i] - c.verts[(c.count - 2) * 6 + i]) < 1e-3);
+  // across alternates -1 / +1
+  assert.equal(c.verts[3], -1); assert.equal(c.verts[9], 1);
+});
+
+test("through a left-hander the line sits INSIDE (−x of the centreline) and on a straight it is centred", () => {
+  const DL = load();
+  const api = stadium();
+  DL.build(api);
+  const c = DL._cache();
+  const at = (s) => { const i = Math.round(s / c.step) % c.n; const o = i * 12; return [(c.verts[o] + c.verts[o + 6]) / 2, (c.verts[o + 2] + c.verts[o + 8]) / 2]; };
+  const smp = { p: [0, 0, 0], t: [0, 0, 0], r: [0, 0, 0], hw: 0 };
+  // mid-corner
+  const sMid = api.straight + api.arc / 2;
+  api.sample(sMid, smp);
+  const [lx, lz] = at(sMid);
+  const lateral = (lx - smp.p[0]) * smp.r[0] + (lz - smp.p[2]) * smp.r[2];
+  assert.ok(lateral < -2, `mid-corner lateral ${lateral.toFixed(2)} m should be well inside (negative)`);
+  // mid-straight, far from either corner
+  const sStr = api.straight / 2;
+  api.sample(sStr, smp);
+  const [sx, sz] = at(sStr);
+  const lat2 = (sx - smp.p[0]) * smp.r[0] + (sz - smp.p[2]) * smp.r[2];
+  assert.ok(Math.abs(lat2) < 0.5, `mid-straight lateral ${lat2.toFixed(2)} m should be ~0`);
+});
+
+test("the speed profile brakes BEFORE the corner: the cap is reached at entry, not after", () => {
+  const DL = load();
+  const api = stadium();
+  DL.build(api);
+  const vCorner = Math.sqrt(api.latMax / (1 / api.R));   // ~36 m/s at R 60
+  const entry = DL.speedAt(api.straight);
+  assert.ok(Math.abs(entry - vCorner) < 1.5, `entry speed ${entry.toFixed(1)} should be the cornering cap ${vCorner.toFixed(1)}`);
+  // 100 m before the corner the line is already slowing (braking zone) …
+  const before = DL.speedAt(api.straight - 100);
+  assert.ok(before > entry + 5 && before < api.vTop, `100 m out: ${before.toFixed(1)} between the cap and vTop`);
+  // … and the braking distance is what BRAKE·0.85 buys: v² = vC² + 2·a·d
+  const dNeeded = (api.vTop ** 2 - vCorner ** 2) / (2 * api.brake * 0.85);
+  const farOut = DL.speedAt(api.straight - dNeeded - 20);
+  assert.ok(farOut > api.vTop - 0.5, `beyond the braking distance (${dNeeded.toFixed(0)} m) the line is at vTop, got ${farOut.toFixed(1)}`);
+  // and never above vTop anywhere
+  const c = DL._cache();
+  for (let i = 0; i < c.n; i++) assert.ok(c.v[i] <= api.vTop + 1e-3);
+});
+
+test("CORNERS mode: the zone is 1 through the turn and 0 mid-straight, with a fade between", () => {
+  const DL = load();
+  const api = stadium();
+  DL.build(api);
+  assert.ok(DL.zoneAt(api.straight + api.arc / 2) > 0.95, "mid-corner is a corner");
+  assert.ok(DL.zoneAt(api.straight / 2 - 100) < 0.05, "mid-straight is not");
+  // the braking zone before the corner counts as a corner too
+  assert.ok(DL.zoneAt(api.straight - 40) > 0.6, "40 m before the corner is in the braking zone");
+});
+
+test("draw() honours the mode and reports a backend without the pass", () => {
+  const DL = load();
+  const api = stadium();
+  const calls = [];
+  const gfx = { drawDrivingLine: (verts, n, dirty, opts) => { calls.push({ n, dirty, opts }); return true; } };
+  DL.setMode("off");
+  assert.equal(DL.draw(gfx, api, 50), false, "OFF draws nothing");
+  DL.setMode("corner");
+  assert.equal(DL.draw(gfx, api, 50), true);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].dirty, true, "first draw uploads");
+  assert.equal(calls[0].opts.cornersOnly, true);
+  assert.equal(calls[0].opts.speed, 50);
+  DL.draw(gfx, api, 51);
+  assert.equal(calls[1].dirty, false, "the strip is uploaded once per circuit");
+  DL.setMode("full");
+  DL.draw(gfx, api, 52);
+  assert.equal(calls[2].opts.cornersOnly, false);
+  // a backend with no pass (WGX / TLX today) returns false, and the strip stays dirty for the next backend
+  assert.equal(DL.draw({ drawDrivingLine: () => false }, api, 50), false);
+  assert.equal(DL.draw({}, api, 50), false, "no member at all is 'no pass' too");
+  assert.equal(DL.setMode("bogus"), "off", "an unknown mode is OFF");
+});

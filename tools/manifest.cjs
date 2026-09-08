@@ -85,6 +85,7 @@ const FULL = [
   "js/render/gfx.js",
   "js/render/shared/gltf.js",
   "js/render/shared/assets.js",
+  "js/render/shared/driving-line.js",
   "js/data/teams.js",
   "js/data/driver-ratings.js",
   // Persistence sits ahead of every js/game module: the settings panels, the

@@ -3589,6 +3589,23 @@ const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
+DrivingLine.setMode(store.get("drivingLine", "corner"));
+// What the ribbon builder needs from the engine: the centreline sampler and
+// the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
+// reads), plus the same physics numbers the AI's brake targets use, so the
+// braking zones it shows are the ones the field actually brakes in. Rebuilt
+// only when the circuit changes (DrivingLine caches by id).
+const _dlApi = { id: null, total: 0, track: null, sample: null, curvature: null, latMax: 0, brake: 0, accel: 0, vTop: 0, grip: 1 };
+function drivingLineApi(trk) {
+  if (_dlApi.track !== trk) {
+    _dlApi.id = trk.def.id; _dlApi.total = trk.total; _dlApi.track = trk;
+    _dlApi.sample = (s, out) => Tracks.sample(trk, s, out);
+    _dlApi.curvature = (s) => Tracks.curvature(trk, s);   // wraps s itself
+    _dlApi.latMax = PhysicsConsts.LAT_MAX; _dlApi.brake = PhysicsConsts.BRAKE; _dlApi.accel = PhysicsConsts.ACCEL;
+    _dlApi.vTop = vTop(); _dlApi.grip = 1;
+  }
+  return _dlApi;
+}
 const rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals
 // Photo mode (js/camera/photo-cam.js).
 const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
@@ -7868,6 +7885,9 @@ function render(dt) {
   // only from startRace, so the previous race's rubber was still being laid
   // under the title-screen flyby.
   if (state !== "menu") skids.draw(gfx, camEye);
+  // The DRIVING LINE ribbon rides the same state as the skids (on the road, no
+  // depth write). Drawn against the PLAYER's speed for the dynamic colour.
+  if (state !== "menu" && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
@@ -8977,6 +8997,10 @@ function buildRaceSettings() {
   SettingRow.paint("rs-caution", raceCtl.enabled ? "on" : "off", RS_ONOFF);
   $("rs-reliab").hidden = tt;
   SettingRow.paint("rs-reliab", raceReliability, RS_RELIAB);
+  // DRIVING LINE — the glowing suggested line on the road (js/render/shared/
+  // driving-line.js). Offered in every flow, a time trial included: it is a
+  // teaching aid, and alone on track is where one learns a circuit.
+  SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
 }
 // The option lists are data; the rows in index.html hold no options of their
 // own, so the list the store validates against and the list the player sees
@@ -8987,6 +9011,11 @@ const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dus
 const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
 const RS_ONOFF = [["off", "OFF"], ["on", "ON"]];
 const RS_RELIAB = [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]];
+const RS_LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
+// Persisted like DIFFICULTY; the module holds the live mode so the render loop
+// never reads the store. CORNERS by default — every racing game ships its line
+// on for a new player, and the CORNERS form is the one F1 and Forza recommend.
+function setDrivingLine(v) { store.set("drivingLine", DrivingLine.setMode(v)); }
 // Wire the eight rows ONCE (a listener per build would stack); every build
 // after that is a paint. Each write repaints the whole screen, because LAPS
 // and GRID depend on state a neighbour can change. The mark lives on the body
@@ -9009,6 +9038,7 @@ function wireRaceSettings() {
   wire("rs-quali", () => raceGrid, (v) => { raceGrid = v; store.set("raceGrid", v); });
   wire("rs-caution", () => (raceCtl.enabled ? "on" : "off"), (v) => { setCautionEnabled(v === "on"); });
   wire("rs-reliab", () => raceReliability, (v) => { raceReliability = v; store.set("reliability", v); });
+  wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
 }
 
 // RACE SETTINGS is reachable from #select and (in career) from #career, so it

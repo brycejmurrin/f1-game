@@ -1039,6 +1039,16 @@ const api = {
     if (level !== undefined) G.raceReliability = String(level).toLowerCase();
     return G.raceReliability;
   },
+  // The DRIVING LINE ribbon (RACE SETTINGS): get/set "off" | "corner" | "full"
+  // for this session (the RACE SETTINGS row is what persists, like every other
+  // hook here). The result reads the built strip so a test can assert the
+  // line exists and where it brakes without a GPU.
+  drivingLine(mode) {
+    if (mode !== undefined) DrivingLine.setMode(String(mode).toLowerCase());
+    const c = DrivingLine._cache();
+    return { mode: DrivingLine.mode(), built: c.id, samples: c.n, verts: c.count,
+             speedAt: (s) => DrivingLine.speedAt(s), zoneAt: (s) => DrivingLine.zoneAt(s) };
+  },
   retirements: () => Reliability.plan(G.cars),
   retire(idx, reason) {
     const c = idx == null ? G.player : G.cars[idx | 0];
