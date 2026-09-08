@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function load() {
-  const sandbox = { window: {}, Math, Float32Array, console };
+  const sandbox = { window: {}, Math, Float32Array, console, M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) } };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/shared/driving-line.js"), "utf8"), ctx,

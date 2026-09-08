@@ -49,7 +49,7 @@ window.DrivingLine = (function () {
   let mode = "off";
   const cache = { id: null, verts: null, count: 0, dirty: false, v: null, zone: null, n: 0, step: STEP };
 
-  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+  const clamp = M4.clamp;   // the shared scalar helper (js/core/mat4.js), never a private copy
 
   function setMode(m) { mode = MODES.includes(m) ? m : "off"; return mode; }
   function getMode() { return mode; }

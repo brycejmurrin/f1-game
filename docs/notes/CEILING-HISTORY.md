@@ -2169,4 +2169,5 @@ draws it; research in `docs/notes/DRIVING-LINE-RESEARCH.md`). `js/game.js`
 grew by the row's paint/wire lines, the boot mode, and `drivingLineApi()`, the
 adapter that hands the builder the centreline sampler, the curvature LUT and
 the AI's own brake numbers so the braking zones shown are the ones the field
-brakes in — the builder itself lives outside game.js on purpose.
+brakes in — the builder itself lives outside game.js on purpose. `js/agent/apex.js`
++10 for the `drivingLine(mode)` hook.
