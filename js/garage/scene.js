@@ -340,7 +340,11 @@ function buildProps(g, liv) {
   };
   // -X wall: the engineers' monitor bank and desk, plus a tyre stack.
   toolbox(g.nx, -4.92, 3.6);
-  stack(g.nx, -4.55, -5.4, 0); stack(g.nx, -4.55, -3.1, 2);
+  // The -X stacks stand in the DOOR corner, not the deep bay: at z -5.4 and
+  // -3.1 they were 0.46 m in front of the BUDGET board (y 0.69-1.44, z
+  // -5.4..-2.4) at exactly its height, and the SIDE preset read the board
+  // with a tyre stack over each end. tests/unit/garage-sign-occlusion holds it.
+  stack(g.nx, -4.55, 5.30, 0); stack(g.nx, -4.55, 6.02, 2);
   block(g.nx, -5.30, 1.90, 0.6, 0.05, 0.80, 1.60, DARK);
   for (let m = 0; m < 6; m++)
     block(g.nx, -5.22, 1.45 + (m < 3 ? 0 : 0.90), 0.6 + ((m % 3) - 1) * 0.98, 0.03, 0.36, 0.46, scale(STEEL, 0.55));
@@ -767,7 +771,8 @@ function buildLed(g, liv) {
         block(w, s * 5.36, 1.56, cz + e * 1.50, 0.045, 0.075, 0.035, scale(STEEL, 0.7));
     }
   }
-  // Lit fascia over the door, behind the D_SIGN wordmark.
+  // Lit fascia over the door, behind the D_SIGN wordmark (the quad sits 5 mm
+  // in front of this block's face — keep that order or the sign vanishes).
   block(g.door, 0, 4.89, Z_DOOR - 0.14, 3.05, 0.13, 0.05, scale(c1, 0.55));
 }
 const LED_OPTS = { emissive: 1.0, roughness: 1.0, specular: 0, noAlphaWrite: true };
@@ -1609,8 +1614,12 @@ function buildLive() {
   }
   // Two live trace tiles over the dress screen bank (D_SCREEN spans z 2.15..
   // -0.95, y 1.10..2.65 on -X; each tile is a third by a half of it), 5 mm
-  // proud so they win the depth test against the dress quad beneath.
-  dquadR(g.nx, [[-xw + 0.005, 1.10, 2.15], [-xw + 0.005, 1.10, 0.08], [-xw + 0.005, 1.875, 0.08], [-xw + 0.005, 1.875, 2.15]], [1, 0, 0], L_TRACE);
+  // proud of THAT quad — which stands 0.19 m off the wall on the monitor bank
+  // block. The first cut put these 5 mm off the WALL, inside the bank, where
+  // the depth test deleted them: the traces animated into a block for a week
+  // and the screens showed only the dress paint.
+  const xt = -xw + 0.195;
+  dquadR(g.nx, [[xt, 1.10, 2.15], [xt, 1.10, 0.08], [xt, 1.875, 0.08], [xt, 1.875, 2.15]], [1, 0, 0], L_TRACE);
   // Banners on the side walls, in the y 1.72-2.12 band both walls have free
   // forward of the data boards.
   dquadR(g.nx, [[-xw, 1.72, 4.6], [-xw, 1.72, 2.4], [-xw, 2.12, 2.4], [-xw, 2.12, 4.6]], [1, 0, 0], L_BANNER[0]);
@@ -1619,8 +1628,8 @@ function buildLive() {
   // under that wordmark's y 2.60 and above the shutter's 1.98 bottom rail.
   // It was on the door wall at x 4.2..5.2, which the REAR preset frames only
   // as its extreme top-left corner — measured, the flag was half off the edge.
-  dquadR(g.door, [[3.20, 2.26, 6.24], [2.72, 2.26, 6.24], [2.72, 2.50, 6.24], [3.20, 2.50, 6.24]], [0, 0, -1], L_FLAG);
-  dquadR(g.door, [[3.88, 2.04, 6.24], [2.72, 2.04, 6.24], [2.72, 2.23, 6.24], [3.88, 2.23, 6.24]], [0, 0, -1], L_RACE);
+  dquadR(g.door, [[3.42, 2.26, 6.24], [2.94, 2.26, 6.24], [2.94, 2.50, 6.24], [3.42, 2.50, 6.24]], [0, 0, -1], L_FLAG);
+  dquadR(g.door, [[3.98, 2.04, 6.24], [2.94, 2.04, 6.24], [2.94, 2.21, 6.24], [3.98, 2.21, 6.24]], [0, 0, -1], L_RACE);
   return g;
 }
 function dquadR(out, c, n, region) {
@@ -1756,7 +1765,10 @@ function buildDress() {
     [0, 1, 0], D_SIGN);
   // Lit team sign over the garage door, above the shutter travel (slats top at
   // y 4.77) — the first thing the REAR and door-side framings see.
-  dquad(g.door, [[2.9, 4.80, 6.30], [-2.9, 4.80, 6.30], [-2.9, 4.98, 6.30], [2.9, 4.98, 6.30]], [0, 0, -1], D_SIGN);
+  // 5 mm in front of the lit fascia's face (z 6.21; the block runs 6.21-6.31,
+  // and at z 6.30 this quad was INSIDE it, drawn to nothing), inside the guide
+  // rails (x 2.70-2.88) and above the lintel soffit (y 4.78-4.82).
+  dquad(g.door, [[2.66, 4.83, 6.205], [-2.66, 4.83, 6.205], [-2.66, 4.99, 6.205], [2.66, 4.99, 6.205]], [0, 0, -1], D_SIGN);
   // Engineer screens above the desk, and the notice board by the door.
   dquad(g.nx, [[-5.18, 1.10, 2.15], [-5.18, 1.10, -0.95], [-5.18, 2.65, -0.95], [-5.18, 2.65, 2.15]], [1, 0, 0], D_SCREEN);
   // Clear of the shelving (x -4.87..-2.51, up to y 2.06) and the shutter rail.
