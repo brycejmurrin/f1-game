@@ -174,16 +174,30 @@ on the 08-18 perf-hunt board, not this register.
   entry: that is how many frames landed before the capture, not three different
   rendering faults.
 
-  So the question is not "why does the probe stall" but **why does three's
-  WebGPU backend produce 5 frames on real Apple hardware when its own WebGL2
-  backend produces 600 on the same machine, and this container's SOFTWARE
-  WebGPU produces ~900 in 26 s**. An 11.4-second frame with `gpuErrors 0` and
-  `envFail 0` points at a stall, not at work: `tlx.js` already carries a
-  "compile storm" note (its program-cache key was narrowed once for exactly
-  this, missing a 60 s budget twice on 2026-08-28), and 593 programs at ~60 s
-  of compile on Monza is recorded in the same file. That is the hypothesis to
-  test next, and the test is a program/compile count in `backendState()` — NOT
-  another env-probe counter.
+  **The 600-vs-5 comparison is INVALID, and `docs/notes/PERF-FINDINGS.md`
+  already says so in capitals: THE HARNESS RUNS THE TWO LEGS ON DIFFERENT
+  PRESENT PATHS.** `tlx.js:235` — `_softBlit = !forceWebGL && _capPref !== "0"
+  && (_softAdapter || _headless || _capPref === "1")`, with `_headless` =
+  `/HeadlessChrome/i.test(ua)`. The census's WebGPU leg sets
+  `apex26.tlxForceGL = "0"`, so under Playwright it SOFT-BLITS: a GPU readback
+  plus `putImageData` every frame. The WebGL2 leg sets `"1"`, short-circuiting
+  `_softBlit` to false. So 600 vs 5 is a readback path against a direct one,
+  not one backend against another, and an 11.4-second frame is what a readback
+  of a large target on a busy shared runner costs.
+
+  **NOTHING IN THIS ENTRY IS EVIDENCE ABOUT A PLAYER.** On a Mac in a headed
+  browser `_headless` is false and `_softAdapter` is false, so `_softBlit` is
+  false and the native swapchain is used. Only a HEADED hardware run says
+  anything about that path — the same caveat the WGX leg's `softPresent=true /
+  headlessUa=true` line has carried all along, which I read past twice today.
+
+  So the open question is narrower and far less alarming: **is the soft-blit
+  readback so expensive on these runners that the census's WebGPU legs measure
+  the HARNESS rather than the game?** If so the fix belongs to the census, not
+  to `tlx.js`. A compile storm remains a candidate for part of it (`tlx.js`
+  carries that note, and 593 programs at ~60 s on Monza is recorded there), but
+  soft-blit is the larger and better-evidenced term and must be excluded first.
+  NO PLAYER-FACING DEFECT HAS BEEN DEMONSTRATED anywhere in this entry.
 
   Superseded above: everything about the `game.js` gate. The gate is fine; it
   was asked three times because there were five frames to ask on. I spent two
