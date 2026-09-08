@@ -234,6 +234,28 @@ test("spineSide paints the flank band on pick only, and clears the service panel
   assert.equal(inBand(side), 0, "no panel vertex sits under the flank band");
 });
 
+// The engine-cover cross-section is ROUNDED: one profile (Car3D.coverProfile)
+// serves the loft, the crest strip and the flank band, so it has to be sane at
+// every station and spine height — monotonic in x and y, a flat crown narrower
+// than the shoulder, and the skin samplers agreeing with it.
+test("the cover profile rounds the crown and its samplers sit on the skin", () => {
+  for (const spine of ["standard", "dorsal"]) {
+    const a = M.Car3D.bodyAnchors(parts, team.id, spine);
+    for (const z of [-0.55, -0.97, -1.42, -2.0]) {
+      const c = a.coverAt(z), p = M.Car3D.coverProfile(c);
+      for (let i = 1; i < p.pts.length; i++) {
+        assert.ok(p.pts[i][0] < p.pts[i - 1][0] && p.pts[i][1] > p.pts[i - 1][1], `${spine} z${z}: pts step inward and upward`);
+      }
+      assert.ok(p.pts.at(-1)[1] === c.top && p.pts[0][1] === c.bottom, "the profile spans bottom to crown");
+      assert.ok(p.shoulder < c.top && p.shoulder > c.bottom, "the shoulder sits below the crown");
+      assert.ok(Math.abs(M.Car3D.coverSurfaceY(c, 0) - c.top) < 1e-12, "the centre is the crown");
+      assert.ok(Math.abs(M.Car3D.coverSurfaceY(c, p.pts[1][0]) - p.shoulder) < 1e-12, "the shoulder x samples the shoulder y");
+      assert.ok(Math.abs(M.Car3D.coverFlankX(c, p.shoulder) - p.pts[1][0]) < 1e-12 &&
+                Math.abs(M.Car3D.coverFlankX(c, c.bottom) - c.x) < 1e-12, "the flank sampler ends on the profile's corners");
+    }
+  }
+});
+
 // The real rule, read off the driver slot: car 1 black, car 2 yellow. Compared
 // at the SAME number each time — the number already colours other parts of the
 // mesh, so a cross-number comparison says nothing about the T-cam.

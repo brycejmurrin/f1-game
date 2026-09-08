@@ -1392,7 +1392,9 @@ const LiveryTex = (function () {
       if (LOGOS[teamId]) {
         drawLogoImage(ctx, LOGOS[teamId], REGIONS.spineSide, logo,
                       markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
-      } else drawCrest(ctx, teamId, REGIONS.spineSide, { liv: colors, field: [c1, c2], bare: true, palette: lockup });
+      // bare:false — the FULL lockup, plate and all, exactly as the garage wall
+      // and the cover crest paint it (the fin badge alone goes bare, for its plate).
+      } else drawCrest(ctx, teamId, REGIONS.spineSide, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
     } else if (spineSide === "number" || spineSide === "code") {
       const sideNum = numberOverride != null ? numberOverride
                     : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);

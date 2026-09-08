@@ -31,7 +31,11 @@ geometry, in `SP_HULL_GEOM_FIELDS`; `dorsal` is the fin-less 2026 cover) and
 `REGIONS.spineSide` and mapped by car-mesh onto both cover flanks; the service
 panels and the accent pinstripe keep clear of the band, so it is in
 `SP_HULL_GEOM_FIELDS` too); `finBadge`
-also offers `code`. The 2026
+also offers `code`. The engine-cover cross-section is `Car3D.coverProfile(c)`
+(flank → shoulder at 0.72x → two facets → flat crown ±0.32x): the loft, the
+crest strip and the flank band in car-mesh, and every cover-mounted detail read
+it — place side details with `coverFlankX(c, y)` and crown details with
+`coverSurfaceY(c, x)`, never at `c.x` / `c.top` literally, or they float. The 2026
 lights are draw-time, not livery: `CarMesh.ersLightCode` (pure) and
 `drawMirrorLights` at `Car3D.mirrorLightAnchors` under 20 km/h.
 The mark takes up to THREE livery colours and the editor asks
