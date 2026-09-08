@@ -325,7 +325,7 @@ jobs:
             // or fps across these two legs ONLY when this line matches.
             // docs/notes/PERF-FINDINGS.md says the same at "DIFFERENT PRESENT
             // PATHS"; printing it here is what makes it unmissable.
-              if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.forceWebGL === false ? "YES (headless readback — NOT the player's path)" : "no (direct present)"}`);
+              if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.forceWebGL === false ? "YES (headless readback — NOT the path a player takes)" : "no (direct present)"}`);
             // ...and the bookkeeping the probe keeps on itself, because run 54
             // showed tier=0 with envFace=3 and envFail=0 — the producer WAS
             // called, nothing threw, and the cube still never latched. begins
