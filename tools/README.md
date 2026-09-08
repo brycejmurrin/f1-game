@@ -57,6 +57,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 
 | Tool | Does | Paired skill |
 |---|---|---|
+| **check/ai-field.mjs** | Field behaviour of the AI race: pace spread, how fast it strings out, settled passes vs oscillation, nose-to-tail dwell. | tune-physics |
 | **check/ai-pace.mjs** | How fast is the AI field, per circuit and per difficulty? Simulated laps in the VM, no browser, no renderer. | tune-physics |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
