@@ -388,15 +388,19 @@ function buildProps(g, liv) {
   }
   // The upper side walls carry 2.2 m2 of wordmark over 29 m2 of wall, and that
   // band is 22% of the SIDE preset — the one view that looks straight at them.
-  // A service gantry per side: a shelf, its brackets, and a rail.
+  // A service gantry per side: a shelf, its brackets, and a rail. ABOVE the
+  // wordmark band (y 3.10-3.60): the shelf used to run at 3.42 with its clips
+  // at z 0, so the SIDE preset saw every wordmark with its top third behind
+  // the shelf and the middle one notched by a clip. Brackets from 3.62, shelf
+  // at 3.84, rail and clips to 4.24 — under the fill fixtures' 4.32 housings.
   for (const sd of [-1, 1]) {
     const w = sd < 0 ? g.nx : g.px, x = sd * 5.20;
-    block(w, x, 3.42, 0, 0.20, 0.04, 5.00, scale(STEEL, 0.7));
-    block(w, x - sd * 0.20, 3.70, 0, 0.03, 0.28, 5.00, scale(STEEL, 0.5));
+    block(w, x, 3.84, 0, 0.20, 0.04, 5.00, scale(STEEL, 0.7));
+    block(w, x - sd * 0.20, 4.02, 0, 0.03, 0.16, 5.00, scale(STEEL, 0.5));
     for (let i = -2; i <= 2; i++) {
-      block(w, x - sd * 0.09, 3.24, i * 2.30, 0.11, 0.20, 0.05, scale(STEEL, 0.45));
+      block(w, x - sd * 0.09, 3.71, i * 2.30, 0.11, 0.09, 0.05, scale(STEEL, 0.45));
       if (i % 2 === 0)
-        block(w, x - sd * 0.06, 3.56, i * 2.30, 0.14, 0.24, 0.34, scale(STEEL, 0.55));
+        block(w, x - sd * 0.06, 4.06, i * 2.30, 0.14, 0.18, 0.34, scale(STEEL, 0.55));
     }
   }
 
