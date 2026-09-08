@@ -349,15 +349,16 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   //    LOOK          : a chevron every PERIOD m pointing the way the lap runs,
   //                    wings trailing the tip (GLX LINE_FS PERIOD / SWEEP / THICK).
   //    BIND GROUP    : @group(0) @binding(0) var<uniform> U : LineU
-  //                    (viewProj + params = playerSpeed, cornersOnly, str, 0)
+  //                    (viewProj + params = playerSpeed, cornersOnly, str, palette)
   //    BLEND         : alpha  (srcAlpha, oneMinusSrcAlpha)
   //    DEPTH         : test ENABLED, write DISABLED, depthBias toward camera.
   //    TOPOLOGY      : triangle-strip, cull none.
   const LINE = `
 struct LineU {
   viewProj : mat4x4<f32>,   // off  0
-  params   : vec4<f32>,     // off 64  x playerSpeed (m/s), y cornersOnly 0|1, z str, w unused
-};                          // size 80
+  params   : vec4<f32>,     // off 64  x playerSpeed (m/s), y cornersOnly 0|1, z str, w palette 0|1
+  params2  : vec4<f32>,     // off 80  x opacity, yzw spare
+};                          // size 96
 @group(0) @binding(0) var<uniform> U : LineU;
 
 struct VSOut {
@@ -388,11 +389,18 @@ fn vs_main(
 @fragment
 fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let over = U.params.x / max(in.speed, 1.0);          // 1.0 = on the line's pace
-  let green = vec3<f32>(0.10, 0.95, 0.35);
-  let amber = vec3<f32>(1.0, 0.72, 0.10);
-  let red   = vec3<f32>(1.0, 0.12, 0.10);
-  var col = mix(green, amber, smoothstep(0.98, 1.06, over));
-  col = mix(col, red, smoothstep(1.06, 1.16, over));
+  // Two palettes, mixed rather than branched (GLX LINE_FS, TLX lineMat: the
+  // three carry the same maths). F1's green/amber/red puts the two ends of the
+  // scale on the pair the common red-green deficiencies cannot separate; the
+  // alternative is the IBM colour-blind-safe triple (blue / orange / magenta),
+  // where blue-orange is the classic safe pair and orange-magenta separates on
+  // the BLUE channel, which both deficiencies keep. params.w picks.
+  let cb = U.params.w;
+  let onPace = mix(vec3<f32>(0.10, 0.95, 0.35), vec3<f32>(0.392, 0.561, 1.000), cb);
+  let lift   = mix(vec3<f32>(1.00, 0.72, 0.10), vec3<f32>(0.996, 0.380, 0.000), cb);
+  let brake  = mix(vec3<f32>(1.00, 0.12, 0.10), vec3<f32>(0.863, 0.149, 0.498), cb);
+  var col = mix(onPace, lift, smoothstep(0.98, 1.06, over));
+  col = mix(col, brake, smoothstep(1.06, 1.16, over));
   // Chevrons every PERIOD m pointing the way the lap runs (GLX LINE_FS):
   // pattern space is (along, across), so no derivatives for the soft edge.
   let PERIOD = 5.0;
@@ -406,7 +414,11 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   let zone = mix(1.0, smoothstep(0.05, 0.75, in.zone), U.params.y);
   let a = arrow * rim * zone;
   if (a < 0.01) { discard; }
-  return vec4<f32>(col * U.params.z * a, a * 0.85);
+  // LINE OPACITY (GLX LINE_FS, TLX lineMat: the three carry the same maths).
+  // Scales emissive and coverage together; the alpha is clamped because SOLID
+  // takes the 0.85 base past 1 and a source alpha over 1 over-blends.
+  let op = U.params2.x;
+  return vec4<f32>(col * U.params.z * a * op, min(a * 0.85 * op, 1.0));
 }`;
 
   return {
@@ -422,7 +434,7 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     BLOB_SHADOW_UNIFORM_BYTES: 144,   // ShadowU: mat4 64 + mat4 64 + vec4 16
     MARK_UNIFORM_BYTES:        144,   // MarkU:   mat4 64 + mat4 64 + vec4 16
     SKID_UNIFORM_BYTES:         64,   // SkidU:   mat4 64
-    LINE_UNIFORM_BYTES:         80,   // LineU:   mat4 64 + vec4 16
+    LINE_UNIFORM_BYTES:         96,   // LineU:   mat4 64 + vec4 16 + vec4 16
     GLOW_UNIFORM_BYTES:         80,   // GlowU:   mat4 64 + vec4 16
     DECAL_UNIFORM_BYTES:       224,   // DecalU:  mat4 64 + mat4 64 + 6*vec4 96
     // vertex buffer strides (bytes) for the pipeline vertex-layout descriptors

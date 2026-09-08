@@ -666,7 +666,7 @@ const GLX = (function () {
       gl.bindVertexArray(null);
     }
     if (lineProg) {
-      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uStr"]);
+      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uPalette", "uOpacity", "uStr"]);
       // Static interleaved strip: [x, y, z, across, speed, zone, along] per
       // vertex (DrivingLine.STRIDE = 7), uploaded once per circuit.
       lineVAO = gl.createVertexArray();
@@ -2093,6 +2093,8 @@ const GLX = (function () {
     gl.uniformMatrix4fv(lineU.uViewProj, false, frameViewProj);
     gl.uniform1f(lineU.uPlayerSpeed, (opts && opts.speed) || 0);
     gl.uniform1f(lineU.uCornersOnly, opts && opts.cornersOnly ? 1 : 0);
+    gl.uniform1f(lineU.uPalette, opts && opts.palette ? 1 : 0);
+    gl.uniform1f(lineU.uOpacity, (opts && opts.opacity) || 1);
     gl.uniform1f(lineU.uStr, (opts && opts.str) || 1.6);
     setBlend(true);
     setDepthMask(false);

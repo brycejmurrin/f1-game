@@ -257,6 +257,9 @@ test.describe("Livery atlas — ink contrast", () => {
       // exactly where the trim is), and the MOTIF — the mark that has to read —
       // lives on `finBadge`, an upright square wholly on the fin's own paint.
       crest: ["c1", "c2"], fin: ["c2", "accent"], finBadge: ["c2"], wing: ["wing"],
+      // the front-wing endplate is painted c2 (car3d's front-plate span), and
+      // buildAtlas inks the partner mark with inkOn([c2]) for exactly that.
+      fwEnd: ["c2"],
       titleA: ["board"], titleB: ["board"], strip: ["c2"],
       // the c2 crown stripe runs under the nose number
       num: ["c1", "c2"],

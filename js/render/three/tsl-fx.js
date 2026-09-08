@@ -103,6 +103,8 @@
     const lineSpeed = uniform(0.0);     // the player's speed (m/s), set per draw
     const lineCorners = uniform(0.0);   // 1 = fade the straights out
     const lineStr = uniform(1.6);       // emissive strength (bloom feed)
+    const linePalette = uniform(0.0);   // 0 = F1 green/amber/red, 1 = colour-blind safe
+    const lineOpacity = uniform(1.0);   // 0.65 subtle … 1 as shipped … 1.35 solid
     const lineMat = trackFx(fxMaterial({ offset: true, doubleSided: true, key: "tlx-fx-line" }));
     // Chevrons every PERIOD m pointing the way the lap runs (GLX LINE_FS
     // PERIOD / SWEEP / THICK): pattern space is (along, across), so no
@@ -124,11 +126,20 @@
     lineMat.colorNode = Fn(() => {
       const spd = float(attribute("lineSpeed", "float")).toVar();       // anchor
       const over = lineSpeed.div(max(spd, float(1.0)));
-      const green = vec3(0.10, 0.95, 0.35), amber = vec3(1.0, 0.72, 0.10), red = vec3(1.0, 0.12, 0.10);
-      const col = mix(mix(green, amber, smoothstep(float(0.98), float(1.06), over)), red, smoothstep(float(1.06), float(1.16), over));
-      return col.mul(lineStr).mul(lineAlpha());
+      // Two palettes, mixed not branched — the same maths as GLX LINE_FS and
+      // WGSL LINE. F1's green/amber/red is the worst pair for the common
+      // red-green deficiencies (the two ends of the scale are the two colours
+      // that cannot be told apart); the alternative is the IBM colour-blind-safe
+      // triple, blue / orange / magenta.
+      const onPace = mix(vec3(0.10, 0.95, 0.35), vec3(0.392, 0.561, 1.000), linePalette);
+      const lift = mix(vec3(1.00, 0.72, 0.10), vec3(0.996, 0.380, 0.000), linePalette);
+      const brake = mix(vec3(1.00, 0.12, 0.10), vec3(0.863, 0.149, 0.498), linePalette);
+      const col = mix(mix(onPace, lift, smoothstep(float(0.98), float(1.06), over)), brake, smoothstep(float(1.06), float(1.16), over));
+      return col.mul(lineStr).mul(lineAlpha()).mul(lineOpacity);
     })();
-    lineMat.opacityNode = Fn(() => lineAlpha().mul(0.85))();
+    // min(), not a bare multiply: SOLID takes the 0.85 base past 1 and a source
+    // alpha over 1 over-blends (GLX LINE_FS, WGX LINE carry the same clamp).
+    lineMat.opacityNode = Fn(() => min(lineAlpha().mul(0.85).mul(lineOpacity), float(1.0)))();
 
     /* ── billboard corner expansion (GLOW_VS / PARTICLE_VS, identical math) ──
      * The record's center rides in the "position" attribute (so three's draw
@@ -271,7 +282,7 @@
       U.ambGround.value.set(ag[0] * aM, ag[1] * aM, ag[2] * aM);
     }
 
-    return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr,
+    return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr, linePalette, lineOpacity,
              particleMats, setSsrMrt, decalMaterialFor, updateFrame, flushEvicted };
   }
 

@@ -2525,6 +2525,12 @@ const api = {
   // = every preference's effective value. Never the garage, saves or accounts.
   settingsFile(mode) { return SettingsExport.collect(mode === "all" ? "all" : "changes", G); },
 
+  // garageFile() — the GARAGE file object (js/ui/settings-export.js): parts,
+  // liveries, setup sheets and an invented team, for every team, enumerated by
+  // prefix from localStorage. Never career or season saves, lap records or
+  // anything account-shaped.
+  garageFile() { return SettingsExport.collectGarage(); },
+
   // save(data, filename) — hand a file back out of the browser.
   //
   // Exists because the reverse direction is the hard one: reading state OUT of

@@ -178,6 +178,8 @@ in float vZone;
 in float vAlong;
 uniform float uPlayerSpeed;   // m/s
 uniform float uCornersOnly;   // 1 = fade the straights out
+uniform float uPalette;       // 0 = F1 green/amber/red, 1 = colour-blind safe
+uniform float uOpacity;       // 0.65 subtle … 1 as shipped … 1.35 solid
 uniform float uStr;           // emissive strength (bloom feed)
 out vec4 outColor;
 // ARROWS: a chevron every PERIOD m pointing the way the lap runs — the tip on
@@ -190,9 +192,21 @@ const float SWEEP = 1.6;
 const float THICK = 1.1;
 void main() {
   float over = uPlayerSpeed / max(vSpeed, 1.0);          // 1.0 = on the line's pace
-  vec3 green = vec3(0.10, 0.95, 0.35), amber = vec3(1.0, 0.72, 0.10), red = vec3(1.0, 0.12, 0.10);
-  vec3 col = mix(green, amber, smoothstep(0.98, 1.06, over));
-  col = mix(col, red, smoothstep(1.06, 1.16, over));
+  // Two palettes, mixed rather than branched (uPalette is 0 or 1 and uniform,
+  // but a mix is free here and keeps every backend's version identical).
+  // F1's own grammar is green/amber/red, which is the WORST pair for the
+  // common red-green deficiencies — the two ends of the scale are the two
+  // colours a deuteranope or protanope cannot separate, on a cue that only
+  // means anything if you can read it at a glance. The alternative is the IBM
+  // design library's colour-blind-safe triple (blue #648FFF, orange #FE6100,
+  // magenta #DC267F): blue against orange is the classic safe pair, and orange
+  // against magenta separates on the BLUE channel, which both deficiencies
+  // keep. SETTINGS › LINE COLOUR picks; F1 25 ships the same choice.
+  vec3 onPace = mix(vec3(0.10, 0.95, 0.35), vec3(0.392, 0.561, 1.000), uPalette);
+  vec3 lift   = mix(vec3(1.00, 0.72, 0.10), vec3(0.996, 0.380, 0.000), uPalette);
+  vec3 brake  = mix(vec3(1.00, 0.12, 0.10), vec3(0.863, 0.149, 0.498), uPalette);
+  vec3 col = mix(onPace, lift, smoothstep(0.98, 1.06, over));
+  col = mix(col, brake, smoothstep(1.06, 1.16, over));
   float tip = PERIOD * 0.6 - SWEEP * abs(vAcross);       // the stroke's centre line, per across
   float d = mod(vAlong - tip, PERIOD);                   // metres past that centre line, wrapped
   d = min(d, PERIOD - d);
@@ -201,7 +215,10 @@ void main() {
   float zone = mix(1.0, smoothstep(0.05, 0.75, vZone), uCornersOnly);   // the whole smoothed ramp is the fade
   float a = arrow * rim * zone;
   if (a < 0.01) discard;
-  outColor = vec4(col * uStr * a, a * 0.85);
+  // SETTINGS › LINE OPACITY scales the emissive feed and the coverage together,
+  // so SUBTLE loses its bloom too. The alpha is clamped because SOLID takes the
+  // 0.85 base past 1 and a source alpha over 1 over-blends.
+  outColor = vec4(col * uStr * a * uOpacity, min(a * 0.85 * uOpacity, 1.0));
 }`;
   window.GLXShaders = Object.assign(window.GLXShaders || {}, { SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS, LINE_VS, LINE_FS });
 })();
