@@ -25,7 +25,9 @@ function loadCockpitOpts(disk) {
 
 test("shipped chase corner lead is baked into vantage.js", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
-  assert.match(src, /CHASE_CORNER_LEAD_DEFAULT\s*=\s*0\.18/);
+  // 0.54 since 2026-09-08 — the owner's CAMERA TUNER corner lead became the
+  // shipped amount. It was 0.18.
+  assert.match(src, /CHASE_CORNER_LEAD_DEFAULT\s*=\s*0\.54/);
   assert.match(src, /CamTune\.cornerLead\(mode\)/);
 });
 
@@ -38,10 +40,10 @@ test("cockpit interior uses the heading viewmodel, not a road-locked basis", () 
     "do not restore the road-tangent cockpit basis");
 });
 
-test("cockpit turn chasing is a 0–1 look-ahead blend, shipped at 0.35", () => {
+test("cockpit turn chasing is a 0–1 look-ahead blend, shipped at 0.4", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/cockpit-opts.js"), "utf8");
-  assert.match(src, /LEAD_DEFAULT\s*=\s*0\.35/,
-    "0.35 is the blend the old ON switch used — keep that as the shipped amount");
+  assert.match(src, /LEAD_DEFAULT\s*=\s*0\.4/,
+    "0.4 since 2026-09-08 (the owner's own setting; it was 0.35, what the old ON switch blended)");
   assert.match(src, /KEY_LEAD\s*=\s*"apex26\.cockpitTurnChaseLead"/,
     "the live value is a new key so a stored \"1\" is not read as 100%");
   assert.match(src, /inp\.type\s*=\s*"range"/,
@@ -65,8 +67,12 @@ test("cockpit turn chasing is a 0–1 look-ahead blend, shipped at 0.35", () => 
     "apex26.cockpitTurnChaseLead": "0.8",
     "apex26.cockpitTurnChase": "0",
   }).turnChaseLead(), 0.8, "the new key wins over the old flag");
-  assert.equal(loadCockpitOpts({}).turnChaseLead(), 0.35,
-    "untouched installs keep the old ON amount");
+  // The shipped amount and the LEGACY ON amount parted on 2026-09-08: an
+  // untouched install gets 0.4 (the owner's own setting, now the default), while
+  // a stored "1" from the old ON/OFF switch still resolves to the 0.35 it meant
+  // when it was written.
+  assert.equal(loadCockpitOpts({}).turnChaseLead(), 0.4,
+    "an untouched install gets the shipped amount");
 });
 
 test("broadcast cameras carry per-mode cut ease durations", () => {
