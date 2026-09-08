@@ -633,6 +633,15 @@
                 </div>
               </div>
               <p class="adv-help">The DRIVING LINE's speed cue. F1's green/amber/red is the pair red-green colour blindness cannot separate; COLOUR-BLIND uses blue, orange and magenta instead.</p>
+              <div id="pm-lineopacity" class="set-row" role="group" aria-labelledby="pm-lineopacity-label">
+                <span class="tune-label" id="pm-lineopacity-label">LINE OPACITY</span>
+                <div>
+                  <button id="pm-lineopacity-prev" type="button" data-step="-1" aria-label="Previous line opacity">&lsaquo;</button>
+                  <select id="pm-lineopacity-sel" aria-labelledby="pm-lineopacity-label"></select>
+                  <button id="pm-lineopacity-next" type="button" data-step="1" aria-label="Next line opacity">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
                 <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
               <!-- BUTTON SIZE is its own knob because the dock and the readouts

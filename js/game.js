@@ -873,6 +873,14 @@ let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
 let cars = [], player = null;
 let raceT = 0, countT = 0, lightsLit = 0, resultT = 0;
+// THE LIGHTS-OUT INSTANT ON THE RACE CLOCK. AiDrive.launchMul/launchDone read
+// their time as SECONDS SINCE GREEN, and raceT is that only for a first start:
+// a red-flag restart resumes the clock the flag stopped (see lights-out below),
+// so at raceT 600 launchDone() was instantly true and every AI launched with a
+// flat multiplier of 1 — no reaction, full throttle, while the player reacts to
+// the lights. Re-arming launchOn alone could not have fixed that; the model
+// needed an origin. 0 for a first start, where raceT is zeroed at green anyway.
+let launchT0 = 0;
 // B1 — RACE CONTROL (local yellow / VSC / safety car) lives in
 // js/race/race-control.js. A READ-ONLY race-logic layer: it consumes
 // DebrisWorld.hazards() and drives the HUD flag, and NEVER writes speed, px,
@@ -1890,8 +1898,8 @@ function makeCars() {
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
         ...driverSkill(team, d, di),   // skill + craft + awareness + experience
-        // lanePref is the grid home line; adaptLane biases around it and must
-        // not accumulate forever into ±0.85 under pack traffic.
+        // lanePref is the grid HOME LINE and never moves; adaptLane biases c.lane
+        // around it (never accumulating into ±0.85), and every re-grid restores it.
         lane, lanePref: lane,
       });
     });
@@ -1966,8 +1974,27 @@ function redFlagRestart() {
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
-    c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
+    c.speed = 0; c.accSm = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.lane = c.lanePref;   // as gridUp
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wheelLock = 0;
+    // A CAR ON A GRID BOX IS STATIONARY, ALONE AND ON CLEAN TARMAC. This path
+    // reuses the SAME car objects (gridUp builds a race, makeCars is not
+    // re-run), so anything the racing wrote survived onto the box: contactT
+    // decays rather than being recomputed, so the AI ran its contact branch
+    // from a standing start; wrongWay/rescue/off/wall said the car was in a
+    // gravel trap; otT/otCool held a move that ended when the flag flew.
+    // Energy, tyreClass and phaseRoll are NOT cleared — same race, and the
+    // strategy and the ERS state legitimately carry through a red flag.
+    c.contactT = 0; c.wrongWay = false; c.wrongT = 0; c.rescueT = 0; c.rescueLastT = null;
+    c.offT = 0; c.wallT = 0; c.wasOnWall = false; c.otT = 0; c.otCool = 0;
+    c.kerbGripSm = 1; c.kerbCueT = 0;
+    // AND IT IS A STANDING START: re-plan the launch. gridUp arms this once,
+    // launchDone disarms it when the first getaway ends, and nothing re-armed
+    // it — so the restart the countdown calls "a real second start" was the
+    // one start no AI ever launched for. hash32, never simRnd: the stream's
+    // draw count is a contract, and ":restart:" makes the plan its own.
+    const rh = DriverRatings.hash32(simSeed() + ":restart:" + i + ":" + c.skill);
+    c.launch = c.human ? null : AiDrive.launchPlan(AiDrive.traits(c), (rh & 0xffff) / 65536);
+    c.launchOn = !c.human;
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
   restartPending = true;
@@ -2007,12 +2034,12 @@ function gridUp(preOrder) {
       c.rPrevS = c.s; c.rPrevX = c.x;
     }
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
-    c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;
+    c.speed = 0; c.accSm = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;   // a car on the grid is pulling nothing — apex.js reset() has the full list and why
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
-    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.contactT = 0; c.lane = c.lanePref;   // BOTH sides of a real conflict: lane is damped state, not a constant, and contactT DECAYS — unlike the towing/wheelLock beside it, a re-grid is the only thing that clears it
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
@@ -3613,6 +3640,7 @@ aeroZ = AeroZones.create(G);
 skids = SkidMarks.create(G);
 DrivingLine.setMode(store.get("drivingLine", "full"));
 DrivingLine.setPalette(store.get("drivingLinePalette", "f1"));
+DrivingLine.setOpacity(store.get("drivingLineOpacity", "normal"));
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
 // reads), plus the same physics numbers the AI's brake targets use, so the
@@ -3979,6 +4007,7 @@ function update(dt) {
     if (lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold) {
       state = "race";
       if (!restartPending) raceT = 0;   // a red-flag restart resumes the clock the flag stopped
+      launchT0 = raceT;   // …so the launch model measures from THIS green, not the first one
       els.lights.hidden = true;
       for (const l of els.lights.children) l.classList.remove("on");
       netStart = null;              // consumed; never carry it into the next race
@@ -4921,8 +4950,8 @@ function updateCar(c, dt, ranked) {
     // The AI's launch (AiDrive.launchPlan): no throttle before its reaction, then
     // its own getaway for three seconds. A grid that accelerated as one held its
     // 8 m pitch to T1 — see the start test in ai-racecraft-vm.
-    const launch = c.launchOn ? AiDrive.launchMul(raceT, c.launch) : 1;
-    if (c.launchOn && AiDrive.launchDone(raceT, c.launch)) c.launchOn = false;
+    const launch = c.launchOn ? AiDrive.launchMul(raceT - launchT0, c.launch) : 1;
+    if (c.launchOn && AiDrive.launchDone(raceT - launchT0, c.launch)) c.launchOn = false;
     const a = (ACCEL * PACE * (c.human ? mods.accel * throttleLvl : launch) * clamp(1 - c.speed / Math.max(vmax, 1), 0, 1) * gearMult + deploy) * (state === "race" ? 1 : 0);
     if (!c.human) c.accSm = damp(c.accSm ?? 0, a, 6, dt);   // what this car is pulling — AiDrive.otWant reads it on the blocker
     // speedCap is an ACCELERATION ceiling, not a teleport: a cap that drops under
@@ -9754,6 +9783,14 @@ SettingRow.wire("pm-linecolor", {
   values: [["f1", "F1"], ["safe", "COLOUR-BLIND"]],
   read: () => DrivingLine.palette(),
   write: (v) => { DrivingLine.setPalette(v); store.set("drivingLinePalette", DrivingLine.palette()); },
+});
+
+// LINE OPACITY — the same shelf; the complaint runs both ways (intrusive in
+// cockpit view, invisible on a bright road). NORMAL is the line as it shipped.
+SettingRow.wire("pm-lineopacity", {
+  values: [["subtle", "SUBTLE"], ["normal", "NORMAL"], ["solid", "SOLID"]],
+  read: () => DrivingLine.opacity(),
+  write: (v) => { DrivingLine.setOpacity(v); store.set("drivingLineOpacity", DrivingLine.opacity()); },
 });
 
 SettingRow.wire("pm-hidehud", {

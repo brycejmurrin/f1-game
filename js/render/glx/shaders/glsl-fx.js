@@ -179,6 +179,7 @@ in float vAlong;
 uniform float uPlayerSpeed;   // m/s
 uniform float uCornersOnly;   // 1 = fade the straights out
 uniform float uPalette;       // 0 = F1 green/amber/red, 1 = colour-blind safe
+uniform float uOpacity;       // 0.65 subtle … 1 as shipped … 1.35 solid
 uniform float uStr;           // emissive strength (bloom feed)
 out vec4 outColor;
 // ARROWS: a chevron every PERIOD m pointing the way the lap runs — the tip on
@@ -214,7 +215,10 @@ void main() {
   float zone = mix(1.0, smoothstep(0.05, 0.75, vZone), uCornersOnly);   // the whole smoothed ramp is the fade
   float a = arrow * rim * zone;
   if (a < 0.01) discard;
-  outColor = vec4(col * uStr * a, a * 0.85);
+  // SETTINGS › LINE OPACITY scales the emissive feed and the coverage together,
+  // so SUBTLE loses its bloom too. The alpha is clamped because SOLID takes the
+  // 0.85 base past 1 and a source alpha over 1 over-blends.
+  outColor = vec4(col * uStr * a * uOpacity, min(a * 0.85 * uOpacity, 1.0));
 }`;
   window.GLXShaders = Object.assign(window.GLXShaders || {}, { SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS, LINE_VS, LINE_FS });
 })();
