@@ -53,7 +53,7 @@
      chase camera instead of twice; "wrap" (the mark's plate colour as a sun
      over the crown AND down both flanks, the plate-less mark on top — the
      RB22's sun and bull); "bigmark" (the mark without its plate at
-     full crown width — the RB22's bull with no sun disc); "saddle" (the whole crown in the accent,
+     full crown width — the RB22's bull with no sun disc); "saddle" (the whole crown in the accent and down the flanks with a raked rear edge,
      the SF-26's white top), "panel" (a solid accent block with a raked
      front edge), "stripe", "twin", "wordmark" (the title
      sponsor running along the spine), "carbon" (an exposed panel) and

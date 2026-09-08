@@ -144,6 +144,10 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   const wrap = A.paint("redbull", { ...BASE, spineLogo: "wrap" });
   assert.ok(opsIn(wrap, R.crest).length > 0 && opsIn(wrap, R.spineSide).length > 0, "wrap reaches both the crown and the flank band");
   assert.equal(opsIn(wrap, R.tail).length, 0, "wrap leaves the tail bare");
+  // The saddle too runs down the flanks (the SF-26's white), so it paints the
+  // band with no side pick; the panel stays on the crown alone.
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineLogo: "saddle" }), R.spineSide).length > 0, "saddle reaches the flank band");
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineLogo: "panel" }), R.spineSide).length, 0, "panel stays on the crown");
   // The big mark is the crest without its plate at crown scale: it paints the
   // crown, with FEWER ops than the crest (the disc is gone) and none on the
   // tail (it is a mark, not a band).

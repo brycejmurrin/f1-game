@@ -1202,9 +1202,20 @@ const LiveryTex = (function () {
       // the crown (Red Bull's bull and sun across the RB22's cover). Nothing
       // to paint here — the crest painters need the livery, not a colour.
     } else if (id === "saddle") {
-      // The whole crown, shoulder to shoulder, in the accent — Ferrari's white
-      // engine-cover top on the SF-26: the paint break runs along the flank.
+      // The whole crown, shoulder to shoulder, in the accent, AND down the
+      // flanks with a raked rear edge — Ferrari's white engine-cover top on
+      // the SF-26, where the white runs from the airbox over the shoulders
+      // and the number sits in it. The band is painted here first; a flank
+      // pick (plate, number) lands on top of it.
       ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, Y, W, H);
+      const S = REGIONS.spineSide;
+      if (S) {
+        ctx.beginPath(); ctx.rect(S.x, S.y, S.w, S.h); ctx.clip();
+        ctx.beginPath();
+        ctx.moveTo(S.x, S.y); ctx.lineTo(S.x + S.w * 0.70, S.y);          // along the crease
+        ctx.lineTo(S.x + S.w * 0.52, S.y + S.h); ctx.lineTo(S.x, S.y + S.h); // raked rear edge
+        ctx.closePath(); ctx.fill();
+      }
     } else if (id === "panel") {
       // A solid accent block down the crown with a crisp raked leading edge
       // and a square tail — the vinyl panel a real cover wears, hard-edged.
@@ -1224,8 +1235,10 @@ const LiveryTex = (function () {
       ctx.fillStyle = cssA(ink, 0.55);
       ctx.fillRect(X + W * 0.40, Y, W * 0.012, H); ctx.fillRect(X + W * 0.588, Y, W * 0.012, H);
     } else if (id === "twin") {
+      // Two pinstripes ON the shoulder creases — the W17's teal lines along
+      // the cover's edges — not down the middle of the crown.
       ctx.fillStyle = cssA(acc, 0.96);
-      ctx.fillRect(X + W * 0.30, Y, W * 0.05, H); ctx.fillRect(X + W * 0.65, Y, W * 0.05, H);
+      ctx.fillRect(X + W * 0.04, Y, W * 0.045, H); ctx.fillRect(X + W * 0.915, Y, W * 0.045, H);
     } else if (id === "carbon") {
       // An exposed-carbon crown panel: near-black with a faint diagonal weave
       // and an accent keyline where the paint stops.
@@ -1266,7 +1279,7 @@ const LiveryTex = (function () {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.40, Y, W * 0.20, H);
       ctx.fillStyle = cssA(ink, 0.55); ctx.fillRect(X + W * 0.40, Y, W * 0.012, H); ctx.fillRect(X + W * 0.588, Y, W * 0.012, H);
     } else if (id === "twin") {
-      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.30, Y, W * 0.05, H); ctx.fillRect(X + W * 0.65, Y, W * 0.05, H);
+      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.04, Y, W * 0.045, H); ctx.fillRect(X + W * 0.915, Y, W * 0.045, H);
     } else if (id === "carbon") {
       const px = X + W * 0.28, pw = W * 0.44;
       ctx.fillStyle = "rgb(24,25,28)"; ctx.fillRect(px, Y, pw, H);
@@ -1517,14 +1530,20 @@ const LiveryTex = (function () {
       // The sun in the PLATE colour (the mark's own backing, Red Bull's gold)
       // over crown and flanks, and the plate-less mark on the crown at its
       // centre, top-down and in proportion.
-      drawSunWrap(ctx, (lockup && lockup.plate) || stripe || accent);
-      const Rc = REGIONS.crest, sq = Rc.w * 0.88;
+      const sunC = (lockup && lockup.plate) || stripe || accent;
+      drawSunWrap(ctx, sunC);
+      // The mark is resolved against the SUN it sits on (not the body), so
+      // Red Bull's bulls come out in the brand red on the gold, as on the
+      // RB22, not bleached white for a navy they no longer touch — and at
+      // full crown width.
+      const sunLockup = Object.assign({}, markPalette(teamId, colors, [sunC], false), { plate: null });
+      const Rc = REGIONS.crest, sq = Rc.w;
       ctx.save();
       ctx.translate(Rc.x + Rc.w / 2, Rc.y + (-0.86 + 1.28) / 0.66 * Rc.h); ctx.rotate(Math.PI); ctx.scale(1, CROWN_SQUASH);
       const Rw = { x: -sq / 2, y: -sq / 2, w: sq, h: sq };
       if (LOGOS[teamId]) {
-        drawLogoImage(ctx, LOGOS[teamId], Rw, logo, markHalo(LOGOS[teamId], (lockup && lockup.plate) || c1, inkCrest), emblemRim);
-      } else drawCrest(ctx, teamId, Rw, { liv: colors, field: [c1, c2], bare: true, palette: Object.assign({}, lockup, { plate: null }) });
+        drawLogoImage(ctx, LOGOS[teamId], Rw, logo, markHalo(LOGOS[teamId], sunC, inkOn([sunC])), emblemRim);
+      } else drawCrest(ctx, teamId, Rw, { liv: colors, field: sunC, bare: true, palette: sunLockup });
       ctx.restore();
     } else if (spineLogo === "bigmark") {
       // BIG MARK: the mark WITHOUT its plate — Red Bull's bulls with no sun
@@ -1591,15 +1610,17 @@ const LiveryTex = (function () {
       drawWordmark(ctx, names[0] || "", { x: S.x + S.w * 0.42, y: S.y + S.h * 0.10, w: S.w * 0.58, h: S.h * 0.80 }, inkCrest, { align: "center", pad: 8 });
       drawWordmark(ctx, names[1] || "", { x: S.x, y: S.y + S.h * 0.48, w: S.w * 0.40, h: S.h * 0.42 }, inkCrest, { align: "center", pad: 8 });
     } else if (spineSide === "slash") {
-      // Four raked bars across the band, hard-edged, in the accent.
-      const S = REGIONS.spineSide, bw = S.w * 0.085, skew = S.h * 0.45;
+      // Four raked bars across the band, hard-edged, in the accent — and
+      // TAPERING toward the rear like the W17's: each bar a little thinner and
+      // shorter than the one ahead of it, hanging from the shoulder crease.
+      const S = REGIONS.spineSide, skew = S.h * 0.45;
       ctx.save(); ctx.beginPath(); ctx.rect(S.x, S.y, S.w, S.h); ctx.clip();
       ctx.fillStyle = cssA(stripe || accent, 0.96);
       for (let i = 0; i < 4; i++) {
-        const x0 = S.x + S.w * (0.14 + i * 0.20);
+        const x0 = S.x + S.w * (0.12 + i * 0.20), bw = S.w * (0.085 - i * 0.012), hh = S.h * (1 - i * 0.16);
         ctx.beginPath();
         ctx.moveTo(x0 + skew, S.y); ctx.lineTo(x0 + skew + bw, S.y);
-        ctx.lineTo(x0 + bw, S.y + S.h); ctx.lineTo(x0, S.y + S.h);
+        ctx.lineTo(x0 + skew * (1 - hh / S.h) + bw, S.y + hh); ctx.lineTo(x0 + skew * (1 - hh / S.h), S.y + hh);
         ctx.closePath(); ctx.fill();
       }
       ctx.restore();
