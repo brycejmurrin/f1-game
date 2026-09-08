@@ -1290,3 +1290,41 @@ group returns three shards and loses one to the clock. Read the shards
 individually: `actions_list` with `list_workflow_jobs` gives a per-shard
 conclusion, and a cancelled shard's log tail still says how many passed. Do not
 read the RUN's `cancelled` conclusion as a failure.
+
+## 2026-09-08 — a multi-circuit test, and why loading them into one page is worse
+
+`aero-zones` "authored circuits get the real number of zones" walked four
+circuits in ONE test. It timed out three times at 125, 135 and 152 s against a
+120 s cap while passing in 66 s run alone, which reads exactly like a code
+regression and is not one: each circuit costs a page boot (11-33 s here) plus
+its build, and once the earlier tests in the file had loaded circuits into the
+same worker the walk no longer fit. It cost two false alarms — including one
+where a 7x bake-cost cut, a real improvement, was credited with fixing it and
+then the timeout got WORSE.
+
+**The obvious optimisation is a trap.** Switching circuits with `race()` in a
+live page instead of reloading LOOKED like it would save three boots. Measured,
+both orders, on the same box:
+
+| four circuits | run 1 | run 2 |
+|---|---|---|
+| a fresh page boot each (what the test did) | 65.9 s | 65.1 s |
+| `race()` into the live page | 95.1 s | 89.1 s |
+
+Switching is **~40 % slower**. A live scene is torn down and rebuilt while the
+previous circuit's resources are still around, and on a software rasteriser
+that costs more than a clean boot. Reverted; do not re-derive it.
+
+**What worked: one test per circuit.** Same coverage, each with its own budget:
+monza 29.6 s, baku 39.0 s, qatar 26.5 s, albert_park 31.0 s — a 3x margin
+against the cap instead of half of one, and a failure names the circuit in the
+title rather than in an assertion message. Total wall time is unchanged.
+
+Related, and NOT fixable in a spec: `race-control` "the setting survives a
+reload" failed twice on CI with `Test timeout of 180000ms exceeded while
+setting up "context"` — the browser context never opened, before the test body
+ran at all, on two different branches and at commits that predate the change
+being blamed. A stall before the page exists is the runner, not the spec; the
+same test passes in 14 s elsewhere in the same run. Read the phrase "while
+setting up context" as infrastructure and look no further.
+
