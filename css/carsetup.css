@@ -674,6 +674,10 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 .cs-liv-ed-row[aria-disabled="true"] { opacity: 0.38; }
 .cs-liv-ed-row[aria-disabled="true"] button,
 .cs-liv-ed-row[aria-disabled="true"] input { cursor: not-allowed; }
+/* One dead pill inside a live row (SPINE TOP "wordmark" under the CLEAN
+   sponsor pack). Scoped to live rows so a pill in a greyed row is not dimmed
+   twice into invisibility. */
+.cs-liv-ed-row:not([aria-disabled="true"]) .cs-liv-ed-none:disabled { opacity: 0.38; cursor: not-allowed; }
 /* MATCHING PALETTE: the colours already used elsewhere in this paint job, so a
    slot can take one EXACTLY instead of being eyeballed in the OS colour dialog.
    The chips reuse .cs-liv-ed-none (same pill, same tap target, same active
@@ -1322,6 +1326,16 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
 }
 @container sheet (max-width: 420px) {
   #cs-inner:not([data-shape="tall"])[data-density="compact"] #cs-stats-inner { display: none; }
+  /* Livery editor pill rows in a NARROW sheet (portrait phone, and a landscape
+     phone's paired panel): the label goes ABOVE its pills instead of beside
+     them. Beside, the 68px label column took a quarter of the width and the
+     eleven SPINE TOP pills ran eight lines deep at two a line; stacked, they
+     get the full width and run five. Measured, not eyeballed. The group is
+     sized to its content here — a flex-basis 0 item in an auto-height column
+     is the one flexbox case worth not trusting. */
+  .cs-liv-ed-row:has(> .cs-liv-ed-finish) { flex-direction: column; align-items: stretch; gap: calc(var(--gap) * 0.3); }
+  .cs-liv-ed-row:has(> .cs-liv-ed-finish) > .cs-liv-ed-lbl { flex: 0 0 auto; }
+  .cs-liv-ed-row:has(> .cs-liv-ed-finish) > .cs-liv-ed-finish { flex: 0 0 auto; width: 100%; }
 }
 /* THE FOOT IS THE LAST THING THAT MAY PUSH CONTENT OFF. On a landscape phone at
    UI SIZE 150% the head and the foot together came to 2px more than the panel,

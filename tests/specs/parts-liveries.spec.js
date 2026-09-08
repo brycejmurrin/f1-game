@@ -214,6 +214,59 @@ test.describe("Liveries — creator", () => {
     await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeEnabled();
   });
 
+  test("a plain fin greys TAIL GRAPHIC, and the CLEAN sponsor pack greys the wordmark pills", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+
+    const artRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL GRAPHIC"))');
+    await expect(artRow).toHaveAttribute("aria-disabled", "false");
+    // Motif off + logo badge: nothing takes the colour.
+    await page.locator('[data-cs-pill="finStyle:none"]').click();
+    await expect(artRow).toHaveAttribute("aria-disabled", "true");
+    // A number badge inks with it again.
+    await page.locator('[data-cs-pill="finBadge:number"]').click();
+    await expect(artRow).toHaveAttribute("aria-disabled", "false");
+    await page.locator('[data-cs-pill="finBadge:logo"]').click();
+    await expect(artRow).toHaveAttribute("aria-disabled", "true");
+    await page.locator('[data-cs-pill="finStyle:team"]').click();
+    await expect(artRow).toHaveAttribute("aria-disabled", "false");
+
+    const wordPills = ['[data-cs-pill="spineLogo:wordmark"]', '[data-cs-pill="spineSide:wordmark"]', '[data-cs-pill="spineSide:duo"]'];
+    for (const p of wordPills) await expect(page.locator(p)).toBeEnabled();
+    await page.locator('[data-cs-pill="sponsors:clean"]').click();
+    for (const p of wordPills) await expect(page.locator(p)).toBeDisabled();
+    // Only the name-writing pills, never their rows.
+    await expect(page.locator('[data-cs-pill="spineSide:number"]')).toBeEnabled();
+    await expect(page.locator('.cs-liv-ed-row:has([data-cs-pill^="spineSide:"])')).not.toHaveAttribute("aria-disabled", "true");
+    await page.locator('[data-cs-pill="sponsors:default"]').click();
+    for (const p of wordPills) await expect(page.locator(p)).toBeEnabled();
+  });
+
+  test("WING FLAPS carbon greys the WINGS and REAR WING colours, and the stars motif is offered", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+
+    const wings = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("WINGS"))');
+    const rear = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("REAR WING"))');
+    await expect(wings).toHaveAttribute("aria-disabled", "false");
+    await expect(rear).toHaveAttribute("aria-disabled", "false");
+    await page.locator('[data-cs-pill="wingCarbon:carbon"]').click();
+    await expect(wings).toHaveAttribute("aria-disabled", "true");
+    await expect(rear).toHaveAttribute("aria-disabled", "true");
+    await expect(rear.locator('input[type="color"]')).toBeDisabled();
+    await page.locator('[data-cs-pill="wingCarbon:paint"]').click();
+    await expect(wings).toHaveAttribute("aria-disabled", "false");
+    await expect(rear).toHaveAttribute("aria-disabled", "false");
+    // The tail-style row offers LiveryTex's list, stars included.
+    const styles = await page.evaluate(() => LiveryTex.TAIL_STYLE_IDS.slice());
+    expect(styles).toContain("stars");
+    await expect(page.locator('[data-cs-pill="finStyle:stars"]')).toBeEnabled();
+  });
+
   test("the creator offers a finish choice and saves it onto the custom livery", async ({ page }) => {
     await load(page);
     await forgetStored(page, [await page.evaluate(() => "livery.custom." + Teams.LIST[2].id)]);
