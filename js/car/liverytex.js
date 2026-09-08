@@ -1394,9 +1394,17 @@ const LiveryTex = (function () {
       ctx.fillRect(px - W * 0.014, Y, W * 0.014, H); ctx.fillRect(px + pw, Y, W * 0.014, H);
     } else if (id === "wordmark") {
       // The title sponsor along the spine, rotated to run nose → tail so it
-      // reads from the side of the car, the way a real engine cover carries it.
-      ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(-Math.PI / 2);
-      drawWordmark(ctx, name, { x: -H / 2, y: -W * 0.16, w: H, h: W * 0.32 }, ink, { align: "center" });
+      // reads from the SIDE of the car, the way a real engine cover carries it.
+      // TWICE, once per half of the crown, each turned the other way: one copy
+      // read upside down from whichever side it was not drawn for. The crown is
+      // narrow and the mark only ever used a third of its width, so two columns
+      // cost almost nothing in letter height (0.30 W each against 0.32 W).
+      for (const s2 of [-1, 1]) {
+        ctx.save();
+        ctx.translate(X + W / 2 + s2 * W * 0.25, Y + H / 2); ctx.rotate(s2 * Math.PI / 2);
+        drawWordmark(ctx, name, { x: -H / 2, y: -W * 0.15, w: H, h: W * 0.30 }, ink, { align: "center" });
+        ctx.restore();
+      }
     } else if (id === "number") {
       // TOP-DOWN: upright with the nose up — the chase camera's view and a
       // plan view of the car (the owner's call; the crest matches). Squashed

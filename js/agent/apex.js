@@ -924,6 +924,19 @@ const api = {
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     return G.state;
   },
+  // EVERY numeric/boolean field on every car, raw and unrounded — the whole
+  // per-car state, not the curated slice cars() returns. Its reason for
+  // existing is EPISODE_TRANSIENTS above: reset() must leave the cars in the
+  // state a fresh page load leaves them in, and the only honest way to check
+  // that is to diff the actual objects across two resets. Strings, objects and
+  // functions are skipped (team records, driver names, the launch plan) — they
+  // are identity, not episode state, and stringifying them would swamp the
+  // diff that matters.
+  carState: () => G.cars.map((c) => {
+    const o = {};
+    for (const k in c) { const v = c[k]; if (typeof v === "number" || typeof v === "boolean") o[k] = v; }
+    return o;
+  }),
   cars: () => G.cars.map((c, i) => ({
     id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
     yaw: +(c.yawVis || 0).toFixed(4),
