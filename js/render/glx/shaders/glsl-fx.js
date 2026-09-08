@@ -160,12 +160,14 @@ layout(location=0) in vec3 aPos;     // world position (metres)
 layout(location=1) in float aAcross; // -1 | +1 across the ribbon
 layout(location=2) in float aSpeed;  // the line's speed here (m/s)
 layout(location=3) in float aZone;   // 0 straight … 1 corner / braking
+layout(location=4) in float aAlong;  // metres along the lap (the dash pattern's clock)
 uniform mat4 uViewProj;
 out float vAcross;
 out float vSpeed;
 out float vZone;
+out float vAlong;
 void main() {
-  vAcross = aAcross; vSpeed = aSpeed; vZone = aZone;
+  vAcross = aAcross; vSpeed = aSpeed; vZone = aZone; vAlong = aAlong;
   gl_Position = uViewProj * vec4(aPos, 1.0);
 }`;
   const LINE_FS = `#version 300 es
@@ -173,18 +175,29 @@ precision mediump float;
 in float vAcross;
 in float vSpeed;
 in float vZone;
+in float vAlong;
 uniform float uPlayerSpeed;   // m/s
 uniform float uCornersOnly;   // 1 = fade the straights out
 uniform float uStr;           // emissive strength (bloom feed)
 out vec4 outColor;
+// STRIPES: two rows of pill-shaped dashes (one per half of the ribbon), DASH m
+// long every PERIOD m, the right row half a period behind the left — a zipper
+// that bends with the road. Pattern space is (along, across), so no
+// derivatives are needed for the soft edge and it is identical on WGX / TLX.
+const float PERIOD = 6.0;
+const float DASH = 3.6;
 void main() {
   float over = uPlayerSpeed / max(vSpeed, 1.0);          // 1.0 = on the line's pace
   vec3 green = vec3(0.10, 0.95, 0.35), amber = vec3(1.0, 0.72, 0.10), red = vec3(1.0, 0.12, 0.10);
   vec3 col = mix(green, amber, smoothstep(0.98, 1.06, over));
   col = mix(col, red, smoothstep(1.06, 1.16, over));
-  float edge = 1.0 - smoothstep(0.55, 1.0, abs(vAcross));   // soft rim, hot core
+  float row = vAcross > 0.0 ? 0.5 : 0.0;
+  float f = fract(vAlong / PERIOD + row);                // 0..1 through this row's period
+  float v = (f * PERIOD - DASH * 0.5) / (DASH * 0.5);    // -1..1 along the dash
+  float u = abs(vAcross) * 2.0 - 1.0;                    // -1..1 across this row
+  float pill = 1.0 - smoothstep(0.7, 1.0, u * u + v * v); // rounded ends, soft rim
   float zone = mix(1.0, smoothstep(0.05, 0.75, vZone), uCornersOnly);   // the whole smoothed ramp is the fade
-  float a = edge * zone;
+  float a = pill * zone;
   if (a < 0.01) discard;
   outColor = vec4(col * uStr * a, a * 0.85);
 }`;

@@ -667,17 +667,18 @@ const GLX = (function () {
     }
     if (lineProg) {
       lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uStr"]);
-      // Static interleaved strip: [x, y, z, across, speed, zone] per vertex
-      // (DrivingLine.STRIDE), uploaded once per circuit.
+      // Static interleaved strip: [x, y, z, across, speed, zone, along] per
+      // vertex (DrivingLine.STRIDE = 7), uploaded once per circuit.
       lineVAO = gl.createVertexArray();
       gl.bindVertexArray(lineVAO);
       lineVBO = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, lineVBO);
-      const lst = 6 * 4;
+      const lst = 7 * 4;
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, lst, 0);
       gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, lst, 12);
       gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, lst, 16);
       gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, lst, 20);
+      gl.enableVertexAttribArray(4); gl.vertexAttribPointer(4, 1, gl.FLOAT, false, lst, 24);
       gl.bindVertexArray(null);
     }
     if (glowProg) {
@@ -2073,7 +2074,7 @@ const GLX = (function () {
   }
 
   // DRIVING LINE: the ribbon js/render/shared/driving-line.js built (one
-  // triangle strip, stride-6 floats), drawn like the skid batch — depth-tested,
+  // triangle strip, stride-7 floats), drawn like the skid batch — depth-tested,
   // no depth write, biased onto the road — but emissive, so bloom lifts it
   // into the glow every racing game's line has. `opts.speed` is the player's
   // speed for the dynamic colour; `opts.cornersOnly` fades the straights.
@@ -2093,7 +2094,7 @@ const GLX = (function () {
     bindVAO(lineVAO);
     if (dirty) {
       gl.bindBuffer(gl.ARRAY_BUFFER, lineVBO);
-      const nF = vertCount * 6;
+      const nF = vertCount * 7;
       if (nF > lineCap) {
         lineCap = nF;
         gl.bufferData(gl.ARRAY_BUFFER, lineCap * 4, gl.STATIC_DRAW);

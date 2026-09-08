@@ -35,15 +35,21 @@
  * the cap into braking ZONES that begin before the corner — the part a player
  * actually wants shown.
  *
+ * THE LOOK. Not a solid ribbon: two staggered rows of pill-shaped dashes,
+ * the right row half a period behind the left, each dash bending with the
+ * road because it lives in the strip's own space (the owner asked for
+ * "staggered, striped and curved", 2026-09-08). The shaders pattern it from
+ * the per-vertex ALONG value (metres of lap), so all three backends agree.
+ *
  * VERTEX LAYOUT (interleaved Float32, STRIDE floats per vertex, two vertices
  * per sample, a triangle strip): pos3, across (-1 | +1), vLine (m/s), zone
  * (0 straight … 1 corner/braking, held past the exit and smoothed so CORNERS
- * mode fades in and out over tens of metres, never a cut). */
+ * mode fades in and out over tens of metres, never a cut), along (m). */
 window.DrivingLine = (function () {
-  const STRIDE = 6;
+  const STRIDE = 7;
   const STEP = 2.5;          // m between samples (a 5 km lap ≈ 2000 samples)
   const LOOK = 60;           // m — the assist's look-ahead at ~70 m/s (25-90)
-  const HALF_W = 0.55;       // m — half the ribbon width
+  const HALF_W = 0.75;       // m — half the ribbon width (two 0.75 m rows of dashes)
   const LIFT = 0.03;         // m above the road (the road mesh sits at +0.02)
   const MODES = ["off", "corner", "full"];
   const KMIN = 1 / 400;      // |k| above this is "a corner" (radius under 400 m)
@@ -163,6 +169,7 @@ window.DrivingLine = (function () {
         verts[o++] = side;
         verts[o++] = v[i];
         verts[o++] = zone[i];
+        verts[o++] = q * ds;   // metres along the lap (q, not i: the closing pair reads L, not 0)
       }
     }
     cache.id = api.id; cache.verts = verts; cache.count = (n + 1) * 2; cache.dirty = true;

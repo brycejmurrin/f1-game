@@ -1768,7 +1768,7 @@ const WGX = (function () {
           entries: [{ binding: 0, resource: { buffer: skidUBO } }] });
 
         // Driving line: one triangle-strip over a per-circuit world-space
-        // buffer (stride 24, DrivingLine.STRIDE floats). Same depth/blend
+        // buffer (stride 28, DrivingLine.STRIDE = 7 floats). Same depth/blend
         // state as the skid trail — it sits on the road and never writes depth.
         const lineMod = device.createShaderModule({ code: _Fx.LINE });
         pLine = device.createRenderPipeline({
@@ -1779,6 +1779,7 @@ const WGX = (function () {
               { shaderLocation: 1, offset: 12, format: "float32" },
               { shaderLocation: 2, offset: 16, format: "float32" },
               { shaderLocation: 3, offset: 20, format: "float32" },
+              { shaderLocation: 4, offset: 24, format: "float32" },
             ] }] },
           fragment: { module: lineMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
           primitive: { topology: "triangle-strip", cullMode: "none" },
@@ -5540,7 +5541,7 @@ const WGX = (function () {
     function drawDrivingLine(verts, vertCount, dirty, opts) {
       if (!_fxReady || !litPass || !pLine) return false;
       if (!(vertCount > 0)) return true;
-      const floats = vertCount * 6;
+      const floats = vertCount * 7;
       const bytes = floats * 4;
       if (!lineVBO || _lineCap < bytes) {
         if (lineVBO) _retiredBufs.push(lineVBO);
