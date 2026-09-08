@@ -120,22 +120,94 @@ function manifestMoved() {
   try { return createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs")).MOVED || {}; } catch (_) { return {}; }
 }
 
+const RATCHETS = "tests/data/ratchets.json";
+
+/* Every number in ratchets.json, flattened to `scope/name` -> value, so the
+   three sides of a conflict can be compared metric by metric. */
+export function ratchetMetrics(json) {
+  const out = {};
+  for (const [file, m] of Object.entries((json && json.files) || {})) {
+    for (const [k, v] of Object.entries(m)) if (typeof v === "number") out[`${file}/${k}`] = v;
+  }
+  for (const [name, m] of Object.entries((json && json.tree) || {})) {
+    if (m && typeof m.ceiling === "number") out[`(tree)/${name}`] = m.ceiling;
+  }
+  return out;
+}
+function ratchetStage(n) {
+  const r = git(["show", `:${n}:${RATCHETS}`]);
+  if (r.code !== 0) return null;
+  try { return ratchetMetrics(JSON.parse(r.out)); } catch (_) { return null; }
+}
+
+/* ratchets.json is DERIVED — `ratchets.mjs --update` measures the tree and
+   writes what it finds — so a conflict in it is never a disagreement about
+   intent. It is two sessions who each deliberately raised a ceiling for their
+   own change, and the answer is arithmetic: the merged tree's real
+   measurement. Resolved by hand three times on 2026-09-08, identically each
+   time, at the cost of a full re-verification cycle apiece.
+
+   The guard is what makes automating it safe. Each side's raise against the
+   MERGE BASE is a decision a human made; their SUM is the most the union can
+   legitimately need. If the merged tree measures more than that, the merge
+   duplicated something, and blessing it would ratchet in a defect — so that
+   case still stops and asks. A pure --update with no ceiling on the result is
+   exactly how a bad merge becomes the new floor. */
+export function ratchetOverruns(base, ours, theirs, got) {
+  const over = [];
+  for (const [k, v] of Object.entries(got)) {
+    if (base[k] == null || ours[k] == null || theirs[k] == null) continue;
+    const mine = Math.max(0, ours[k] - base[k]);
+    const budget = theirs[k] + mine;   // their ceiling, plus the raise we made against the base
+    if (v > budget) over.push(`${k}: union ${v} > ${theirs[k]} + ${mine} = ${budget}`);
+  }
+  return over;
+}
+
+function cureRatchets() {
+  const base = ratchetStage(1), ours = ratchetStage(2), theirs = ratchetStage(3);
+  must(git(["checkout", "--theirs", "--", RATCHETS]), `checkout --theirs ${RATCHETS}`);
+  run("node", ["tools/check/ratchets.mjs", "--update"], "snap the ratchets to the merged tree");
+  if (!base || !ours || !theirs) return "ratchets re-measured (no three-way stages to bound it)";
+  let got;
+  try { got = ratchetMetrics(JSON.parse(fs.readFileSync(path.join(ROOT, RATCHETS), "utf8"))); }
+  catch (e) { throw new Error(`deploy: ${RATCHETS} is unreadable after --update: ${e.message}`); }
+  const over = ratchetOverruns(base, ours, theirs, got);
+  if (over.length) {
+    throw new Error(`deploy: the merged tree measures MORE than both sides' deliberate raises combined — ` +
+      `the merge looks duplicated, and --update would ratchet that in:\n  ${over.join("\n  ")}\n` +
+      `Resolve ${RATCHETS} by hand and look at the merge before pushing.`);
+  }
+  return "ratchets re-measured on the union";
+}
+
 function mergeDeployTip(tip) {
   const r = git(["merge", "--no-edit", `${REMOTE}/${DEPLOY_BRANCH}`]);
   if (r.code === 0) return "merged";
   const conflicted = git(["diff", "--name-only", "--diff-filter=U"]).out.split("\n").filter(Boolean);
-  const cureable = conflicted.every((f) => f === "index.html" || f === "version.json");
+  // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
+  // derived value rather than two intents to reconcile. Anything else is a
+  // real disagreement and stops.
+  const shellF = conflicted.filter((f) => f === "index.html" || f === "version.json");
+  const ratchetF = conflicted.filter((f) => f === RATCHETS);
+  const cureable = shellF.length + ratchetF.length === conflicted.length;
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
-    throw new Error(`real conflicts (not just the shell hashes): ${named.join(", ")} — resolve by hand; for tests/data/ratchets.json run \`node tools/check/ratchets.mjs --update\` on the union`);
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f))
+      .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
+    throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
-  for (const f of conflicted) must(git(["checkout", "--theirs", "--", f]), `checkout --theirs ${f}`);
-  run("node", ["tools/gen/gen-shell.mjs"], "regenerate the union shell from the manifest");
-  must(git(["add", "index.html", "version.json"]), "add");
+  const did = [];
+  if (shellF.length) {
+    for (const f of shellF) must(git(["checkout", "--theirs", "--", f]), `checkout --theirs ${f}`);
+    run("node", ["tools/gen/gen-shell.mjs"], "regenerate the union shell from the manifest");
+    must(git(["add", ...shellF]), "add");
+    did.push("shell hashes re-applied");
+  }
+  if (ratchetF.length) { did.push(cureRatchets()); must(git(["add", RATCHETS]), "add"); }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
-  return "merged (shell hashes re-applied)";
+  return `merged (${did.join("; ")})`;
 }
 
 function pushWithRetry() {
