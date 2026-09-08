@@ -83,21 +83,36 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
     // covered, so the mark keeps its size; only its edges now bend down with
     // the skin instead of floating over it. u is by chord (x), which keeps the
     // centre of the mark undistorted, and is pre-flipped exactly as quad() does.
-    const u = uvOf(R.crest), pf = Car3D.coverProfile(cf), pr = Car3D.coverProfile(cr);
+    const pf = Car3D.coverProfile(cf), pr = Car3D.coverProfile(cr);
     const across = (p) => {   // left → right: -shoulder, -facet, -crown, crown, facet, shoulder
       const r = p.pts.slice(1);   // shoulder, facet, crown (right side, outer → inner)
       return r.map(([x, y]) => [-x, y]).concat(r.slice().reverse());
     };
-    const L = across(pf), Rr = across(pr), W = pf.pts[1][0] * 2, PROUD = 0.008;
-    for (let i = 0; i < L.length - 1; i++) {
-      const [xa, ya] = L[i], [xb, yb] = L[i + 1], [xc, yc] = Rr[i], [xd, yd] = Rr[i + 1];
-      // outward normal of this facet (right-handed: +x when the surface drops to the right)
-      const dx = xb - xa, dy = yb - ya, nl = Math.hypot(dx, dy) || 1, nx = -dy / nl, ny = dx / nl;
-      const fa = (xa + W / 2) / W, fb = (xb + W / 2) / W;
-      const uu = (f) => u.uR + (u.uL - u.uR) * f;
-      quadUv([[xa + nx * PROUD, ya + ny * PROUD, -0.62], [xb + nx * PROUD, yb + ny * PROUD, -0.62],
-              [xd + nx * PROUD, yd + ny * PROUD, -1.28], [xc + nx * PROUD, yc + ny * PROUD, -1.28]],
-             [nx, ny, 0.06], [[uu(fa), u.vB], [uu(fb), u.vB], [uu(fb), u.vT], [uu(fa), u.vT]]);
+    const PROUD = 0.008;
+    // Drape one region over the crown between two stations, shoulder to shoulder.
+    const drape = (region, zF, zR, pF, pR) => {
+      const uv = uvOf(region), L = across(pF), Rr = across(pR), W = pF.pts[1][0] * 2;
+      for (let i = 0; i < L.length - 1; i++) {
+        const [xa, ya] = L[i], [xb, yb] = L[i + 1], [xc, yc] = Rr[i], [xd, yd] = Rr[i + 1];
+        // outward normal of this facet (right-handed: +x when the surface drops to the right)
+        const dx = xb - xa, dy = yb - ya, nl = Math.hypot(dx, dy) || 1, nx = -dy / nl, ny = dx / nl;
+        const fa = (xa + W / 2) / W, fb = (xb + W / 2) / W;
+        const uu = (f) => uv.uR + (uv.uL - uv.uR) * f;
+        quadUv([[xa + nx * PROUD, ya + ny * PROUD, zF], [xb + nx * PROUD, yb + ny * PROUD, zF],
+                [xd + nx * PROUD, yd + ny * PROUD, zR], [xc + nx * PROUD, yc + ny * PROUD, zR]],
+               [nx, ny, 0.06], [[uu(fa), uv.vB], [uu(fb), uv.vB], [uu(fb), uv.vT], [uu(fa), uv.vT]]);
+      }
+    };
+    drape(R.crest, -0.62, -1.28, pf, pr);
+    // The TAIL strip: the same drape over the cover behind the crest, so the
+    // SPINE TOP band designs run on to the wing (REGIONS.tail; bare unless a
+    // band design is picked).
+    if (R.tail) {
+      // Starts on the crest strip's rear edge (-1.28): a shared edge, so a
+      // saddle or a stripe runs seamlessly from crown to tail.
+      const tf = anchors ? anchors.coverAt(-1.28) : { x: 0.20, bottom: 0.23, top: 0.69 };
+      const tr = anchors ? anchors.coverAt(-1.92) : { x: 0.14, bottom: 0.25, top: 0.60 };
+      drape(R.tail, -1.28, -1.92, Car3D.coverProfile(tf), Car3D.coverProfile(tr));
     }
   } else {
     quad([[-cf.x*0.72, cf.top+0.008, -0.62], [cf.x*0.72, cf.top+0.008, -0.62],
