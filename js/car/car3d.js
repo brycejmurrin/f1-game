@@ -1669,10 +1669,24 @@ const Car3D = (function () {
       return { z, y: L(CK_A.y, CK_B.y), w: L(CK_A.w, CK_B.w), h: L(CK_A.h, CK_B.h), t: L(CK_A.t, CK_B.t) }; };
     const ckTop = (st) => st.y + st.h / 2, ckBot = (st) => st.y - st.h / 2;
     const ckOpen = (z) => 0.105 + (0.150 - 0.105) * ((z - CK_REAR_Z) / (CK_A.z - CK_REAR_Z));
-    // tub half-width where the seat floor meets the flank (the flank leans in
-    // linearly from w/2 at the bottom to t*w/2 at the deck)
-    const ckSide = (st) => (st.w / 2) +
-      (st.t * st.w / 2 - st.w / 2) * ((CK_FLOOR_Y - ckBot(st)) / (ckTop(st) - ckBot(st)));
+    // tub half-width at any height (the flank leans in linearly from w/2 at the
+    // bottom to t*w/2 at the deck)
+    const ckFlank = (st, y) => (st.w / 2) +
+      (st.t * st.w / 2 - st.w / 2) * ((y - ckBot(st)) / (ckTop(st) - ckBot(st)));
+    const ckSide = (st) => ckFlank(st, CK_FLOOR_Y);
+    // THE COCKPIT SIDE SWEEPS DOWN toward the front, as a real one does — it is
+    // highest at the headrest and lowest at the driver's hands. Level at the
+    // deck line it buried the VISOR: the aperture spans y 0.612-0.700 (helmets.js
+    // VISOR_T0/T1 0.40-0.66 through SHAPE.Y about the 0.630 temple) against a
+    // coaming at 0.660, so 55% of it sat behind the rail and the driver had no
+    // face. Dropping the front 50 mm puts the rail at ~0.605 abreast of the
+    // helmet, just under the visor's lower edge, and clears the whole aperture.
+    // Raising the HELMET instead was the obvious move and the wrong one: the
+    // rear spoiler and both headrest recipes are keyed to its y, and the pads
+    // are already flush under the airbox intake at 0.715.
+    const CK_NOSE_DROP = 0.050;
+    const ckRailTop = (st) => ckTop(st) -
+      CK_NOSE_DROP * ((st.z - CK_REAR_Z) / (CK_A.z - CK_REAR_Z));
     const ckMid = ckAt(CK_REAR_Z);
     // 1. THE TUB UNDER THE OPENING — same flanks, capped at the seat floor.
     const ckLower = (st) => ({ z: st.z, y: (ckBot(st) + CK_FLOOR_Y) / 2, w: st.w,
@@ -1684,21 +1698,23 @@ const Car3D = (function () {
     for (const sgn of [1, -1]) {
       const q = [];
       for (const st of [CK_A, ckMid]) {
-        const xi = sgn * ckOpen(st.z), xo = sgn * ckSide(st), xt = sgn * (st.t * st.w / 2);
-        q.push([xi, CK_FLOOR_Y, st.z], [xo, CK_FLOOR_Y, st.z], [xt, ckTop(st), st.z], [xi, ckTop(st), st.z]);
+        const rt = ckRailTop(st);
+        const xi = sgn * ckOpen(st.z), xo = sgn * ckSide(st), xt = sgn * ckFlank(st, rt);
+        q.push([xi, CK_FLOOR_Y, st.z], [xo, CK_FLOOR_Y, st.z], [xt, rt, st.z], [xi, rt, st.z]);
       }
       addBlock(out, q, c1);
       // Dark liner on the inner face: addBlock paints one colour, and a
       // body-paint cockpit wall reads as a painted trough, not a carbon tub.
       const li = [];
       for (const st of [CK_A, ckMid]) {
+        const rt = ckRailTop(st);
         const xi = sgn * ckOpen(st.z), xn = sgn * (ckOpen(st.z) - 0.006);
-        li.push([xn, CK_FLOOR_Y, st.z], [xi, CK_FLOOR_Y, st.z], [xi, ckTop(st), st.z], [xn, ckTop(st), st.z]);
+        li.push([xn, CK_FLOOR_Y, st.z], [xi, CK_FLOOR_Y, st.z], [xi, rt, st.z], [xn, rt, st.z]);
       }
       addBlock(out, li, DARK, null, SURFACES.carbon);
       // 3. COAMING: the padded lip the driver's shoulders sit inside.
-      addLoft(out, ckMid.z, sgn * (ckOpen(ckMid.z) + 0.022), ckTop(ckMid) + 0.007, 0.050, 0.016,
-                   CK_A.z, sgn * (ckOpen(CK_A.z) + 0.023), ckTop(CK_A) + 0.007, 0.052, 0.016,
+      addLoft(out, ckMid.z, sgn * (ckOpen(ckMid.z) + 0.022), ckRailTop(ckMid) + 0.007, 0.050, 0.016,
+                   CK_A.z, sgn * (ckOpen(CK_A.z) + 0.023), ckRailTop(CK_A) + 0.007, 0.052, 0.016,
               DARK, SURFACES.carbon);
     }
     // 4. THE FLOOR and the rear bulkhead — without them the opening is a hole
@@ -1709,7 +1725,9 @@ const Car3D = (function () {
            2 * ckOpen(ckMid.z), ckTop(ckMid) - CK_FLOOR_Y, 0.016, DARK, SURFACES.carbon);
     // 5. The tub AFT of the headrest stays a closed block, as it was.
     addSpan(out, ckMid, CK_B, c1);
-    addTopBevel(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], 0.028, c1);
+    // Bevel only the CLOSED section: over the aperture the rails stop short of
+    // the old deck corners, so the original full-span crease hung in mid-air.
+    addTopBevel(out, ckMid, CK_B, 0.028, c1);
   }
 
   function sidepodStation(side, z, inner, outer, innerBottom, outerBottom, innerTop, outerTop) {
