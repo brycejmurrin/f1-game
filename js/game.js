@@ -1952,7 +1952,7 @@ function redFlagRestart() {
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
-    c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0;
+    c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wheelLock = 0;
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
@@ -1998,7 +1998,7 @@ function gridUp(preOrder) {
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
-    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0;
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
     // The launch plan and the pace phase (AiDrive): one hash per car per race,
@@ -4110,6 +4110,14 @@ const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA:
 // read-before-next-call contract as _ct / AiDrive.traits.
 const _aiBoost = { traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0 };
 const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null };
+// AI lateral controller (updateCar, "--- lateral ---"): heading state, not a
+// position P-loop. Tunables, not model numbers — see the block for the why.
+const AI_HEAD_VMIN = 6;        // vStd m/s: below this the position controller drives (dig-out, pit crawl)
+const AI_XTRACK_GAIN = 2.5;    // 1/s: Stanley cross-track gain, ~0.4 s to close an error
+const AI_HEAD_MAX = 0.45;      // rad: the heading a car may hold off the road tangent
+const AI_YAW_LAT = 0.6;        // share of LAT_MAX·grip the heading change may spend (a_lat = v·yawRate)
+const AI_YAW_MAX = 1.2;        // rad/s: yaw-rate cap at crawl speeds
+const AI_BIAS_SLEW = 3.0;      // m/s: how fast a pass / defend / yield / separation bias may move the target
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
@@ -4725,8 +4733,16 @@ function updateCar(c, dt, ranked) {
     // the larger radius the line buys), off it the road's — so a car fighting
     // off-line is slower through the corner, as a real one is.
     const onLine = Math.abs(TrackLine.at(track, c.s).x - c.x) < 1.5;
-    for (let d = 12; d < look; d += 14) {
-      const ss = wrapS(c.s + d);
+    // EVERY NODE, NODE-ALIGNED — not every 14 m from the car. A 14 m stride
+    // anchored on c.s slid across the 4 m curvature nodes as the car moved, so
+    // the sample set (and the min over it) changed every frame and the brake
+    // target stepped: throttle/brake chatter at every corner entry (2026-09-08).
+    // Anchored on the nodes, the window gains one node ahead and drops one
+    // behind per node travelled, and the target moves as smoothly as the LUT.
+    const dsN = track.total / track.n;
+    const ss0 = Math.ceil((c.s + 12) / dsN) * dsN;
+    for (let ss = ss0, d = ss0 - c.s; d < look; ss += dsN, d += dsN) {
+      // Tracks.curvature / pathK / bankAngle all wrap s themselves.
       const kk = Tracks.curvature(track, ss);
       const ak = Math.abs(kk);
       if (ak > kMax) kMax = ak;
@@ -5041,9 +5057,23 @@ function updateCar(c, dt, ranked) {
     // OUTSIDE all lap. AiDrive.lineFollow says how much of the line a driver
     // takes; the remainder is their lane, which is what makes the field two
     // lines wide into a corner instead of one.
-    const ln = TrackLine.at(track, wrapS(c.s + clamp(c.speed * 0.3, 8, 25)));
+    // LINE FAMILY (TrackLine.at's third argument, 2026-09-08): defending, or
+    // passing on the inside of the next corner, reads the INNER line (inside
+    // on entry); passing around the outside reads the OUTER one (wide through
+    // the long corners). Damped, so a pass or a defence is one coherent line
+    // change from entry to exit rather than a sideways push on the racing line.
+    const famWant = c.passOf ? (c.passSide * -(kA >= 0 ? 1 : -1) > 0 ? 1 : -1) : (c.defendSide ? 1 : 0);
+    c.aiFam = damp(c.aiFam || 0, famWant, 1.5, dt);
+    const lead = clamp(c.speed * 0.3, 8, 25);
+    const follow = AiDrive.lineFollow(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold);
     const laneX = c.lane * (hw - 1.2);
-    let targetX = clamp(lerp(laneX, ln.x, ln.w * AiDrive.lineFollow(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold)), -(hw - 1.0), hw - 1.0);
+    const ln = TrackLine.at(track, wrapS(c.s + lead), c.aiFam);
+    let targetX = clamp(lerp(laneX, ln.x, ln.w * follow), -(hw - 1.0), hw - 1.0);
+    // The target path's TANGENT (m/m) 4 m further on: the feed-forward heading
+    // the controller below steers to, so the line is followed, not chased.
+    // (`ln` is TrackLine.at's shared object — targetX is read before this call.)
+    const ln2 = TrackLine.at(track, wrapS(c.s + lead + 4), c.aiFam);
+    const tanT = (clamp(lerp(laneX, ln2.x, ln2.w * follow), -(hw - 1.0), hw - 1.0) - targetX) / 4;
     // A missed braking point runs WIDE: the target goes most of the way to the outside edge.
     if (AiDrive.mistakePhase(c.errT) === 1 && Math.abs(kA) > 0.004) targetX = lerp(targetX, Math.sign(kA) * (hw - 0.9), 0.7);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
@@ -5165,7 +5195,12 @@ function updateCar(c, dt, ranked) {
     sep = clamp(sep, -sepMax, sepMax);
     // clamp the combined target to the drivable surface so overtake/unstuck/
     // separation biases can never steer the AI off the track or into a wall.
-    let desiredX = clamp(targetX + overtake + defend + yieldPull + sep + unstuck, -(hw - 0.5), hw - 0.5);
+    // The biases are SLEWED (AI_BIAS_SLEW): a pass decision, a defence, a
+    // yield or a separation becomes a lane change at a car's lateral pace, not
+    // a step in the target for the controller to chase. The dig-out is not.
+    const biasWant = overtake + defend + yieldPull + sep;
+    c.aiBias = c.aiBias == null ? biasWant : c.aiBias + clamp(biasWant - c.aiBias, -AI_BIAS_SLEW * dt, AI_BIAS_SLEW * dt);
+    let desiredX = clamp(targetX + c.aiBias + unstuck, -(hw - 0.5), hw - 0.5);
     // NO MOVING UNDER BRAKING (AiDrive.holdLineGap): braking with a car within a
     // second behind, and not ourselves attacking, the offset from the racing
     // line is frozen at what it was when the brakes went on — the line itself
@@ -5186,23 +5221,53 @@ function updateCar(c, dt, ranked) {
     // (AiDrive.sideYieldsA — behind on arc, or the outer car when level) is held
     // a full lane off the other on the side it is already on. A hard edge gives
     // the deadzone an error it cannot swallow.
+    let rubClamp = false;
     if (alongO && Math.abs(alongDx) < CLEAR && AiDrive.sideYieldsA(-alongDprog, c.x, alongO.x)) {
       desiredX = alongDx <= 0 ? Math.max(desiredX, alongO.x + CLEAR) : Math.min(desiredX, alongO.x - CLEAR);
       desiredX = clamp(desiredX, -(hw - 0.5), hw - 0.5);
+      rubClamp = true;
     }
-    let err = desiredX - c.x;
-    // Soft deadzone near the target: fade the correction out as the error gets
-    // small so the AI stops making tiny frame-to-frame steering corrections
-    // around its target — those micro-twitches are what made the nose wobble
-    // side to side. Larger errors still get full response.
-    if (Math.abs(err) < 0.3) err *= Math.abs(err) / 0.3;
-    steer = clamp(err * 0.9, -1, 1);
-    // Low-pass the AI steering command itself so it can't reverse frame to frame
-    // (the residual "switchiness"). A sustained turn-in passes through; a
-    // one-frame flip is filtered. Experience raises the damp rate (smoother).
-    if (c.steerSm === undefined) c.steerSm = steer;
-    c.steerSm = damp(c.steerSm, steer, AiDrive.steerDamp(aiT), dt);
-    steer = c.steerSm;
+    const err = desiredX - c.x;
+    const vAbs = Math.abs(c.speed);
+    // A contact, a rub clamp or a dig-out is an EMERGENCY: the position loop
+    // keeps its full, immediate authority there (the collision bench pins that
+    // a yielding AI is clear of the car it touched within a few frames —
+    // collisions-deep-vm, collision-contact-vm); the heading state is re-synced
+    // from the steer it produced so the hand-back is seamless.
+    const emergency = unstuckActive || rubClamp || (c.contactT || 0) > 0;
+    if (emergency || vStd(vAbs) < AI_HEAD_VMIN) {
+      // Crawling or digging out: a heading means nothing without speed to carry
+      // it, so the position controller drives — soft deadzone (no micro-twitch
+      // around the target) and the experience-rated low-pass, as before.
+      let e = err;
+      if (Math.abs(e) < 0.3) e *= Math.abs(e) / 0.3;
+      steer = clamp(e * 0.9, -1, 1);
+      if (c.steerSm === undefined) c.steerSm = steer;
+      c.steerSm = damp(c.steerSm, steer, AiDrive.steerDamp(aiT), dt);
+      steer = c.steerSm;
+      // The heading the lateral speed this steer produces would need at this speed.
+      const vl = steer * STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1);
+      c.aiHead = vAbs > 1 ? clamp(Math.asin(clamp(vl / vAbs, -1, 1)), -AI_HEAD_MAX, AI_HEAD_MAX) : 0;
+    } else {
+      // HEADING STATE (2026-09-08). The old loop was proportional on POSITION:
+      // steer = 0.9·err — 13.5 m/s of lateral speed per metre of error, the
+      // same frame — so every target change was a lateral-velocity step and
+      // the nose twitched (measured on a solo Monza lap: 5.4 steering
+      // reversals/km, lateral jerk RMS 10 m/s²; tests/unit/ai-racecraft-vm).
+      // Now the car carries a heading off the road tangent, steered toward the
+      // target path's tangent plus a cross-track term atan(k·e/v) (Stanley),
+      // and the heading may only change at the yaw rate the lateral grip
+      // budget allows: a_lat = v·yawRate ≤ AI_YAW_LAT·LAT_MAX·grip. The
+      // lateral speed is v·sin(heading); `steer` is that as a fraction of the
+      // full-lock authority, so every existing multiplier on the step below
+      // (grip taper, kerb, contact give, off-track fade) still applies.
+      const headWant = clamp(Math.atan(tanT) + Math.atan(AI_XTRACK_GAIN * err / Math.max(vAbs, 1)), -AI_HEAD_MAX, AI_HEAD_MAX);
+      const yawMax = Math.min(AI_YAW_MAX, AI_YAW_LAT * LAT_MAX * gripMult(c) / vAbs);
+      const head0 = c.aiHead || 0;
+      c.aiHead = head0 + clamp(headWant - head0, -yawMax * dt, yawMax * dt);
+      steer = clamp(vAbs * Math.sin(c.aiHead) / Math.max(STEER_VMAX * clamp(vStd(vAbs) / 18, 0, 1), 1), -1, 1);
+      c.steerSm = steer;
+    }
   }
   // Lateral authority scales with speed and is ZERO at a standstill: a car
   // that isn't moving can't be steered sideways, so tilting while stopped no

@@ -164,20 +164,36 @@ test.describe("overtake mode — the rules active aero does NOT share", () => {
     await loadTrack(page, "monza");
     const r = await page.evaluate(() => {
       window.__apex.headless(true);
+      // CAUTIONS off: this measures the LAP gate alone. Full throttle with no
+      // steering puts this car into the first-chicane barriers, the broken
+      // panels are settled hazards, and race control (ON by default) answers
+      // with YELLOW → SAFETY CAR → RED FLAG inside 30 s — every one of which
+      // also switches OVERTAKE off, and the red flag re-grids the field. That
+      // rule is race-control.spec.js's; here it would only hide the gate.
+      window.__apex.caution(false);
       window.__apex.go();
+      // NO RACE CONTROL. otEnabled() is `caution.level === 0 && leader.lap > 1`,
+      // and this test is about the second half only. It holds the throttle with
+      // no steering for 220 s, so the player leaves the road, and the debris
+      // layer answered with VSC -> SAFETY CAR -> RED FLAG (apex-logs, 2026-09-08):
+      // the gate then reads closed on lap 3 and the invariant below fails for a
+      // reason it does not name. The layer is ON by default in a page and OFF in
+      // the Node VM harness, which is why the VM twin never saw this.
+      window.__apex.caution(false);
       window.__apex.jump(0, 60, 0);
       window.__apex.setInput({ throttle: true });
       const trail = [];
       for (let i = 0; i < 220; i++) {
         window.__apex.step(1 / 60, 60);        // 1 s of sim per iteration
         trail.push({ leaderLap: Math.max(...window.__apex.cars().map((c) => c.lap)),
-                     on: window.__apex.carAt().otEnabled });
+                     on: window.__apex.carAt().otEnabled, level: window.__apex.caution().level });
       }
       return trail;
     });
     // The gate must never be open while the leader is still on the opening lap,
     // and must be open once it is not. Stated as an invariant over every sample
     // rather than as a moment, so it also catches a gate that flickers.
+    for (const s of r) expect(s.level, "no flag flew — the layer is off").toBe(0);
     for (const s of r) expect(s.on).toBe(s.leaderLap > 1);
     expect(r.some((s) => !s.on), "the opening lap is covered").toBe(true);
     expect(r.some((s) => s.on), "and the race gets past it").toBe(true);
@@ -221,6 +237,11 @@ test.describe("active aero — downforce traded for top speed", () => {
       const zone = A.aeroZones().slice().sort((a, b) => b.len - a.len)[0];
       const read = (wantX) => {
         A.reset(zone.midFrac, 70, 0);
+        // The field goes 800 m back from HERE: the human car tows since
+        // 2026-09-03 (the same window and gain as the AI), and a rival inside
+        // the 34 m window in one sample and not the other moved vmaxNow by the
+        // tow, not the flap — the measurement is the flap alone.
+        A.rivals([]);
         A.setInput({ throttle: true });
         // the flap TRAVELS (~0.45 s open): sample after it has arrived
         for (let i = 0; i < 60; i++) { A.aero(wantX); A.step(1 / 60, 1); }
@@ -228,7 +249,7 @@ test.describe("active aero — downforce traded for top speed", () => {
         A.clearInput();
         return { aeroX: ps.aeroX, vmaxNow: ps.vmaxNow, aeroGrip: ps.aeroGrip,
                  aeroDf: ps.aeroDf, xVmaxGain: ps.xVmaxGain, xDfLoss: ps.xDfLoss,
-                 onTrack: Math.abs(ps.x) < 8 };
+                 towing: ps.towing || 0, onTrack: Math.abs(ps.x) < 8 };
       };
       return { z: read(false), x: read(true) };
     });
@@ -237,6 +258,7 @@ test.describe("active aero — downforce traded for top speed", () => {
     expect(r.z.onTrack && r.x.onTrack, "both samples taken on track").toBe(true);
     expect(r.z.aeroX).toBe(0);
     expect(r.x.aeroX).toBe(1);
+    expect(r.z.towing + r.x.towing, "no slipstream in either sample").toBe(0);
 
     // TOP SPEED: exactly the gain this car's wing earns — a plain multiplier.
     // Asserted against the REPORTED gain rather than a literal, because the
