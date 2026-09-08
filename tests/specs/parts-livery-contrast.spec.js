@@ -156,19 +156,48 @@ test.describe("Livery atlas — ink contrast", () => {
         if (near(c, board)) return "board";
         return null;   // carbon / dark / metal furniture — not a paint slot
       };
-      // Body triangles as centroid + colour, so a decal can look for what is
-      // directly behind it.
+      // Body triangles, whole — not their centroids. A centroid is a fine stand-in
+      // for a small box and useless for a long loft span: the nose top is two
+      // spans half a metre each, so every centroid sat further from the titleB
+      // quad than the lateral cutoff below and the probe simply never found the
+      // region. It reported nothing rather than reporting the wrong thing, and
+      // the coverage list at the end of this test did not ask for it — which is
+      // how titleB shipped inked for a sponsor board it never touches.
       const tris = [];
       for (let t = 0; t < mesh.idx.length / 3; t++) {
-        let cx = 0, cy = 0, cz = 0;
         const i0 = mesh.idx[t * 3] * 3;
+        const P = [];
         for (let k = 0; k < 3; k++) {
           const i = mesh.idx[t * 3 + k] * 3;
-          cx += mesh.pos[i]; cy += mesh.pos[i + 1]; cz += mesh.pos[i + 2];
+          P.push([mesh.pos[i], mesh.pos[i + 1], mesh.pos[i + 2]]);
         }
-        tris.push([cx / 3, cy / 3, cz / 3,
-                   [mesh.col[i0], mesh.col[i0 + 1], mesh.col[i0 + 2]]]);
+        tris.push([P, [mesh.col[i0], mesh.col[i0 + 1], mesh.col[i0 + 2]]]);
       }
+      // Closest point on a triangle to p (Ericson, Real-Time Collision Detection
+      // §5.1.5) — what "directly behind this decal" actually means on a surface
+      // whose triangles are metres long.
+      const sub3 = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
+      const dot3 = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
+      const closestPt = (p, a, b, c) => {
+        const ab = sub3(b, a), ac = sub3(c, a), ap = sub3(p, a);
+        const d1 = dot3(ab, ap), d2 = dot3(ac, ap);
+        if (d1 <= 0 && d2 <= 0) return a;
+        const bp = sub3(p, b), d3 = dot3(ab, bp), d4 = dot3(ac, bp);
+        if (d3 >= 0 && d4 <= d3) return b;
+        const vc = d1 * d4 - d3 * d2;
+        if (vc <= 0 && d1 >= 0 && d3 <= 0) { const v = d1 / (d1 - d3); return [a[0]+ab[0]*v, a[1]+ab[1]*v, a[2]+ab[2]*v]; }
+        const cp = sub3(p, c), d5 = dot3(ab, cp), d6 = dot3(ac, cp);
+        if (d6 >= 0 && d5 <= d6) return c;
+        const vb = d5 * d2 - d1 * d6;
+        if (vb <= 0 && d2 >= 0 && d6 <= 0) { const w = d2 / (d2 - d6); return [a[0]+ac[0]*w, a[1]+ac[1]*w, a[2]+ac[2]*w]; }
+        const va = d3 * d6 - d5 * d4;
+        if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+          const w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+          return [b[0]+(c[0]-b[0])*w, b[1]+(c[1]-b[1])*w, b[2]+(c[2]-b[2])*w];
+        }
+        const den = 1 / (va + vb + vc), v = vb * den, w = vc * den;
+        return [a[0]+ab[0]*v+ac[0]*w, a[1]+ab[1]*v+ac[1]*w, a[2]+ab[2]*v+ac[2]*w];
+      };
       const data = CarMesh.carDecalData(2, null, false, "ferrari");
       const R = LiveryTex.REGIONS, S = LiveryTex.SIZE, SH = LiveryTex.SIZE_H || S;
       const regionOfUv = (u, v) => {
@@ -211,18 +240,22 @@ test.describe("Livery atlas — ink contrast", () => {
         let best = null, bestDepth = Infinity;
         for (const [sx, sy, sz] of samples) {
         let sBest = null, sDepth = Infinity;
-        for (const [tx, ty, tz, col] of tris) {
+        for (const [P, col] of tris) {
           const name = nameOf(col);
           if (!name) continue;
-          const dx = tx - sx, dy = ty - sy, dz = tz - sz;
+          const q = closestPt([sx, sy, sz], P[0], P[1], P[2]);
+          const dx = q[0] - sx, dy = q[1] - sy, dz = q[2] - sz;
           const depth = -(dx * n[0] + dy * n[1] + dz * n[2]);   // + = behind
           if (depth < -0.002 || depth > 0.06) continue;
           const lat = Math.sqrt(Math.max(0,
             dx*dx + dy*dy + dz*dz - depth * depth));
-          // Tight: only surfaces genuinely UNDER this quad. At 0.16 the probe
+          // Tight: only surfaces genuinely UNDER this sample. At 0.16 the probe
           // accepted the accent flash 10 cm up the flank simply because it sits
-          // prouder than the board directly behind the mark.
-          if (lat > 0.06) continue;
+          // prouder than the board directly behind the mark; at 0.06, now that
+          // the search is over whole triangles rather than their centroids, the
+          // sponsor board's lower EDGE reaches the strip two bands below it.
+          // A backing is what the mark lands on, not what it is next to.
+          if (lat > 0.02) continue;
           if (depth < sDepth) { sDepth = depth; sBest = name; }
         }
         if (sBest) {
@@ -260,7 +293,13 @@ test.describe("Livery atlas — ink contrast", () => {
       // the front-wing endplate is painted c2 (car3d's front-plate span), and
       // buildAtlas inks the partner mark with inkOn([c2]) for exactly that.
       fwEnd: ["c2"],
-      titleA: ["board"], titleB: ["board"], strip: ["c2"],
+      titleA: ["board"], strip: ["c2"],
+      // titleB is NOT on the sidepod board — car-mesh drapes it over the
+      // monocoque TOP (z 1.16..1.66), body paint, with the c2 nose accent
+      // reaching under its front edge. Inking it for the board resolved DARK
+      // against a pale panel it never touches: 1.02:1 on Mercedes and on every
+      // near-black c1, with no halo, because haloIf scored the board too.
+      titleB: ["c1", "c2"],
       // the c2 crown stripe runs under the nose number
       num: ["c1", "c2"],
       // the SPINE SIDE band hangs on the engine-cover flank, body paint only;
@@ -289,7 +328,9 @@ test.describe("Livery atlas — ink contrast", () => {
     // satisfiable by painting the band onto a surface that does not move with
     // it. The next test covers that region against the geometry it actually
     // sits on.
-    for (const r of ["fin", "titleA"]) {
+    // titleB joins the coverage list: it was mis-declared for four months and the
+    // probe never had to find it, so nothing failed.
+    for (const r of ["fin", "titleA", "titleB"]) {
       expect(Object.keys(result), `probe never located region ${r}`).toContain(r);
     }
   });
@@ -297,10 +338,14 @@ test.describe("Livery atlas — ink contrast", () => {
   // The counterpart to the probe above, for the one region the probe cannot see.
   // The old guarantee — "this mark sits on a real painted surface" — still has to
   // hold for the wing band; the surface just lives in the ACTIVE AERO element
-  // list now instead of the body mesh. Checked at the flap's REST angle, which is
-  // where the band is authored: carDecalData builds the quad from the aero
-  // recipe's own upperTrailY, so if either side's numbers move independently the
-  // wordmark floats off the wing and only this catches it.
+  // list now instead of the body mesh.
+  //
+  // This used to measure the band against each element's axis-aligned BOUNDING
+  // BOX and reported 0. It was wrong by ~90 mm the whole time: the flaps are
+  // hung at 0.34 rad, which makes that box tall enough to swallow a band
+  // floating clean off the skin. Measure the SURFACE — the same thing
+  // tests/unit/livery-decal-surfaces.test.mjs does against the shipped modules,
+  // repeated here against a real browser's copy of them.
   test("the wing sponsor band sits on the rear flap it is painted for", async ({ page }) => {
     await load(page);
     const r = await page.evaluate(() => {
@@ -309,40 +354,69 @@ test.describe("Livery atlas — ink contrast", () => {
       const uL = R.wing.x / S, uR = (R.wing.x + R.wing.w) / S;
       const vB = 1 - (R.wing.y + R.wing.h) / SH, vT = 1 - R.wing.y / SH;
       const band = [];
-      for (let q = 0; q < data.pos.length / 3; q += 4) {
+      for (let q = 0; q < data.pos.length / 3; q++) {
         const u = data.uv[q * 2], v = data.uv[q * 2 + 1];
         if (u < uL - 1e-6 || u > uR + 1e-6 || v < vB - 1e-6 || v > vT + 1e-6) continue;
-        for (let k = 0; k < 4; k++)
-          band.push([data.pos[(q + k) * 3], data.pos[(q + k) * 3 + 1], data.pos[(q + k) * 3 + 2]]);
+        band.push([data.pos[q * 3], data.pos[q * 3 + 1], data.pos[q * 3 + 2]]);
       }
-      // Rest-position bounds of each rear element, in the car frame: rotate the
-      // canonical geometry by zAngle about local X, then hang it at its pivot —
-      // exactly what drawAeroFlaps does at blend 0.
-      const rear = [];
+      // The rear elements at their REST pose — exactly what drawAeroFlaps hangs
+      // them at with blend 0.
+      const tris = [];
+      let top = null;
       for (const fg of Car3D.aeroFlaps(2, null)) {
         if (fg.wing !== "rear") continue;
+        top = fg;
         const g = Car3D.buildFlapGeom(fg, [1, 1, 1]);
         const ca = Math.cos(fg.zAngle), sa = Math.sin(fg.zAngle);
-        const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+        const P = [];
         for (let p = 0; p < g.pos.length; p += 3) {
-          const c = [g.pos[p],
-                     g.pos[p + 1] * ca - g.pos[p + 2] * sa + fg.y,
-                     g.pos[p + 1] * sa + g.pos[p + 2] * ca + fg.z];
-          for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], c[k]); hi[k] = Math.max(hi[k], c[k]); }
+          P.push([g.pos[p],
+                  g.pos[p + 1] * ca - g.pos[p + 2] * sa + fg.y,
+                  g.pos[p + 1] * sa + g.pos[p + 2] * ca + fg.z]);
         }
-        rear.push({ lo, hi });
+        for (let i = 0; i + 2 < g.idx.length; i += 3) tris.push([P[g.idx[i]], P[g.idx[i + 1]], P[g.idx[i + 2]]]);
       }
-      // How far outside the best-fitting element does the band stray? 0 = wholly on it.
-      const escape = (el) => Math.max(...band.map((p) =>
-        Math.max(...[0, 1, 2].map((k) => Math.max(el.lo[k] - p[k], p[k] - el.hi[k], 0)))));
-      return { corners: band.length, rear: rear.length, worst: Math.min(...rear.map(escape)) };
+      // Point → triangle distance (Ericson §5.1.5).
+      const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+      const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+      const len = (a) => Math.sqrt(dot(a, a));
+      const ptTri = (p, a, b, c) => {
+        const ab = sub(b, a), ac = sub(c, a), ap = sub(p, a);
+        const d1 = dot(ab, ap), d2 = dot(ac, ap);
+        if (d1 <= 0 && d2 <= 0) return len(ap);
+        const bp = sub(p, b), d3 = dot(ab, bp), d4 = dot(ac, bp);
+        if (d3 >= 0 && d4 <= d3) return len(bp);
+        const vc = d1 * d4 - d3 * d2;
+        if (vc <= 0 && d1 >= 0 && d3 <= 0) { const t = d1 / (d1 - d3); return len(sub(p, [a[0] + ab[0] * t, a[1] + ab[1] * t, a[2] + ab[2] * t])); }
+        const cp = sub(p, c), d5 = dot(ab, cp), d6 = dot(ac, cp);
+        if (d6 >= 0 && d5 <= d6) return len(cp);
+        const vb = d5 * d2 - d1 * d6;
+        if (vb <= 0 && d2 >= 0 && d6 <= 0) { const w = d2 / (d2 - d6); return len(sub(p, [a[0] + ac[0] * w, a[1] + ac[1] * w, a[2] + ac[2] * w])); }
+        const va = d3 * d6 - d5 * d4;
+        if (va <= 0 && (d4 - d3) >= 0 && (d5 - d6) >= 0) {
+          const w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+          return len(sub(p, [b[0] + (c[0] - b[0]) * w, b[1] + (c[1] - b[1]) * w, b[2] + (c[2] - b[2]) * w]));
+        }
+        const n = [ab[1] * ac[2] - ab[2] * ac[1], ab[2] * ac[0] - ab[0] * ac[2], ab[0] * ac[1] - ab[1] * ac[0]];
+        const nl = len(n);
+        return nl < 1e-12 ? len(ap) : Math.abs(dot(n, ap)) / nl;
+      };
+      let worst = 0;
+      for (const p of band) {
+        let best = Infinity;
+        for (const T of tris) { const d = ptTri(p, T[0], T[1], T[2]); if (d < best) best = d; }
+        if (best > worst) worst = best;
+      }
+      const B = Car3D.wingBand(2, null);
+      return { corners: band.length, tris: tris.length, worst, elem: B && B.elem, topId: top && top.id };
     });
     expect(r.corners, "no decal quad carries the wing region").toBeGreaterThanOrEqual(4);
-    expect(r.rear, "no ACTIVE AERO rear elements to sit on").toBeGreaterThan(0);
-    // Measured 0 — the band is wholly inside the top plane's rest envelope. The
+    expect(r.tris, "no ACTIVE AERO rear elements to sit on").toBeGreaterThan(0);
+    expect(r.elem, "the band is not on the topmost rear element").toBe(r.topId);
+    // Measured ~5.6 mm: the design PROUD plus sub-millimetre sweep error. The
     // slack is for a taper/sweep retune, not for the band drifting onto air.
     expect(r.worst, "the wing sponsor band hangs off the flap it is painted on")
-      .toBeLessThan(0.02);
+      .toBeLessThan(0.012);
   });
 
   // The cross-check between the two implementations. tests/unit/crest-marks

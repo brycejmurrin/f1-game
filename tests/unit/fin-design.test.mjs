@@ -153,7 +153,12 @@ test("spineLogo none drops the crest from the cover and keeps it on the fin", ()
 test("the flank squash table still matches the cover Car3D actually builds", () => {
   const FLANK = A.LT.FLANK, R = A.LT.REGIONS.spineSide;
   const z = FLANK.zF - 0.19 * FLANK.zLen;   // the mark's station, as buildAtlas uses it
-  for (const [id, claimed] of Object.entries(A.LT.FLANK_H)) {
+  // Iterate the ID LIST, not the table: a MISSING row falls through to
+  // `standard` in flankSquash and squashes that cover's marks (13.6 % narrow on
+  // "high", which had no row at all), and iterating the table can never see it.
+  for (const id of M.Car3D.SPINE_HEIGHT_IDS) {
+    const claimed = A.LT.FLANK_H[id];
+    assert.ok(claimed != null, `FLANK_H has no row for spineHeight "${id}"`);
     const anchors = M.Car3D.bodyAnchors(parts, team.id, id === "standard" ? null : id);
     const p = M.Car3D.coverProfile(anchors.coverAt(z));
     const real = p.shoulder - p.bottom;
@@ -299,7 +304,14 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
     }
     assert.ok(Math.abs(maxDy - M.Car3D.spineRise(id)) < 1e-9, `${id}: the crown rises by exactly its rise (got ${maxDy})`);
     assert.strictEqual(lowered, 0, `${id}: nothing moves DOWN — the floor and the fin stay put`);
-    assert.ok(Math.abs(finTop({ spineHeight: id }) - top0) < 1e-9, `${id}: the fin top stays on the regulation line`);
+    // The regulation top, asserted on the number the blade is CUT from —
+    // build()'s part measure rounds centre and size to 10 mm, so the derived
+    // top carries that much slack and a 1e-9 bound on it only ever passed by
+    // luck (it broke the moment the fin ROOT started following the crown).
+    const rootTop = (h) => M.Car3D.sharkFinRoot(
+      M.Car3D.bodyAnchors(parts, team.id, h), 1, "standard").top;
+    assert.strictEqual(rootTop(id), rootTop(null), `${id}: the fin top stays on the regulation line`);
+    assert.ok(Math.abs(finTop({ spineHeight: id }) - top0) <= 0.011, `${id}: and the mesh agrees`);
   }
 });
 
