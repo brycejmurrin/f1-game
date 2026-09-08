@@ -1345,6 +1345,39 @@ const Car3D = (function () {
   const SPINE_RISE = Object.freeze({ standard: 0, raised: 0.06, high: 0.10, dorsal: 0.13 });
   const SPINE_TAIL = 0.45;   // fraction of the lift that survives at the tail (z -2.0)
   const spineRise = (id) => SPINE_RISE[id] || 0;
+  // ENGINE-COVER CROSS-SECTION — one profile for the loft, the flank band and
+  // the crest strip in car-mesh, and every detail bolted to the cover. Per
+  // side, bottom to crown: the FLANK from (x, bottom) up to the SHOULDER at
+  // (0.72x, top - d), then two facets rounding over to a flat crown ±0.32x
+  // wide at `top`. d is 18 % of the height, so the shoulders round in
+  // proportion at every spine height and the crown reads as a hump rather
+  // than the box the old single trapezoid was ("less squared off"). The
+  // shoulder x is the old crown x, so the flank plane is unchanged and
+  // coverAt(z).top is still the crown centre.
+  const COVER_SHOULDER = 0.72, COVER_CROWN = 0.32, COVER_DROP = 0.18;
+  function coverProfile(c) {
+    const h = c.top - c.bottom, d = h * COVER_DROP;
+    return { x: c.x, bottom: c.bottom, top: c.top, shoulder: c.top - d, d,
+             pts: [[c.x, c.bottom], [c.x * COVER_SHOULDER, c.top - d],
+                   [c.x * 0.55, c.top - d * 0.32], [c.x * COVER_CROWN, c.top]] };
+  }
+  // x of the flank skin at height y (clamped to the flank) — where a side-
+  // mounted detail (panel, louvre, cable, pinstripe) actually touches the car.
+  function coverFlankX(c, y) {
+    const p = coverProfile(c);
+    const v = Math.max(0, Math.min(1, (y - p.bottom) / (p.shoulder - p.bottom)));
+    return p.x * (1 - (1 - COVER_SHOULDER) * v);
+  }
+  // y of the cover skin over |x| — the crown, a facet, or the flank top.
+  function coverSurfaceY(c, x) {
+    const p = coverProfile(c), ax = Math.abs(x);
+    for (let i = p.pts.length - 1; i > 0; i--) {
+      const [xi, yi] = p.pts[i], [xo, yo] = p.pts[i - 1];   // inner → outer
+      if (ax <= xi) return yi;
+      if (ax <= xo) return yi + (yo - yi) * (ax - xi) / (xo - xi);
+    }
+    return p.bottom;
+  }
   const FIN_SHAPE_IDS = Object.freeze(Object.keys(FIN_SHAPES).concat(["none"]));
   const FIN = FIN_SHAPES.standard;
   const finOf = (shape) => FIN_SHAPES[shape] || FIN;
@@ -1840,16 +1873,26 @@ const Car3D = (function () {
                     w: 0.56 * eng.tailWidth, h: 0.62 * coverHeight + rise, t: 0.72 };
     const rear = { z: -2.00, y: 0.42 + rise * SPINE_TAIL / 2, w: 0.26 * eng.tailWidth,
                    h: 0.34 * coverHeight + rise * SPINE_TAIL, t: 0.70 };
-    addSpan(out, front, rear, c1, c1);
+    // The loft is three stacked blocks over coverProfile — flank, lower facet,
+    // upper facet + crown — at the two anchor stations (the same numbers as
+    // `front`/`rear` above, which other parts still read for their datums).
+    const pf = coverProfile(anchors.coverAt(front.z)), pr = coverProfile(anchors.coverAt(rear.z));
+    for (let k = 0; k < 3; k++) {
+      const ring = (p, z) => [[-p.pts[k][0], p.pts[k][1], z], [p.pts[k][0], p.pts[k][1], z],
+                              [p.pts[k + 1][0], p.pts[k + 1][1], z], [-p.pts[k + 1][0], p.pts[k + 1][1], z]];
+      addBlock(out, ring(pf, front.z).concat(ring(pr, rear.z)), c1, c1);
+    }
     // The accent pinstripe runs the flank at top-0.10, straight through the
     // SPINE SIDE band (z -0.72..-1.22 in car-mesh); with a flank mark on it
     // starts aft of the band instead — a real number interrupts the trim.
     const stripeFront = anchors.coverAt(sideMark ? -1.26 : -0.825), stripeRear = anchors.coverAt(-1.675);
+    // The pinstripe runs the flank just under the shoulder crease, ON the skin.
+    const sfY = coverProfile(stripeFront).shoulder - 0.03, srY = coverProfile(stripeRear).shoulder - 0.025;
     for (const side of [-1, 1]) {
       addSpan(out,
-        { z: stripeFront.z, x: side * (stripeFront.x * 0.78), y: stripeFront.top - 0.10,
+        { z: stripeFront.z, x: side * (coverFlankX(stripeFront, sfY) + 0.004), y: sfY,
           w: 0.010, h: 0.012 },
-        { z: stripeRear.z, x: side * (stripeRear.x * 0.78), y: stripeRear.top - 0.07,
+        { z: stripeRear.z, x: side * (coverFlankX(stripeRear, srY) + 0.004), y: srY,
           w: 0.010, h: 0.012 }, accentC);
     }
     const mid = anchors.coverAt(-1.30);
@@ -2171,10 +2214,11 @@ const Car3D = (function () {
                  mouth.w * 0.88, 0.022, 0.028, CARBON);
         }
         const lf = anchors.coverAt(-0.80), lr = anchors.coverAt(-1.40);
+        const lfY = coverProfile(lf).shoulder - 0.06, lrY = coverProfile(lr).shoulder - 0.06;
         for (const s of [-1, 1])
           addSpan(out,
-            { z: lf.z, x: s*(lf.x*0.78), y: lf.top - 0.08, w: 0.015, h: 0.10 },
-            { z: lr.z, x: s*(lr.x*0.78), y: lr.top - 0.08, w: 0.015, h: 0.10 }, CARBON);
+            { z: lf.z, x: s*(coverFlankX(lf, lfY) + 0.004), y: lfY, w: 0.015, h: 0.10 },
+            { z: lr.z, x: s*(coverFlankX(lr, lrY) + 0.004), y: lrY, w: 0.015, h: 0.10 }, CARBON);
       }
       // T-CAMERA POD. Every car on the grid carries one and the roll hoop was
       // bare without it — it is the highest point of the silhouette, so it is in
@@ -2200,19 +2244,20 @@ const Car3D = (function () {
         for (const s of [-1, 1]) {
           if (engOutlet === 3) {
             const cp = anchors.coverAt(-1.42);
-            const cx = s * (cp.x * 0.78);
+            const cx = s * (cp.x * 0.72), cy = coverSurfaceY(cp, cx);   // rooted at the shoulder
             addSpan(out,
-              { z: -1.34, x: cx, y: cp.top - 0.02, w: 0.085, h: 0.040, t: 0.80 },
-              { z: -1.50, x: cx, y: cp.top + 0.04, w: 0.055, h: 0.095, t: 0.65 },
+              { z: -1.34, x: cx, y: cy - 0.02, w: 0.085, h: 0.040, t: 0.80 },
+              { z: -1.50, x: cx, y: cy + 0.04, w: 0.055, h: 0.095, t: 0.65 },
               CARBON);
-            addBox(out, cx, cp.top + 0.095, -1.44, 0.042, 0.016, 0.070, INTAKE);
+            addBox(out, cx, cy + 0.095, -1.44, 0.042, 0.016, 0.070, INTAKE);
           } else {
             const n = engOutlet === 2 ? 4 : 2;
             for (let i = 0; i < n; i++) {
               const gf = anchors.coverAt(-1.13), gr = anchors.coverAt(-1.47);
+              const gfY = coverProfile(gf).shoulder - 0.02 - i*0.040, grY = coverProfile(gr).shoulder - 0.02 - i*0.040;
               addSpan(out,
-                { z: gf.z, x: s*(gf.x*0.82), y: gf.top - 0.11 - i*0.040, w: 0.02, h: 0.018 },
-                { z: gr.z, x: s*(gr.x*0.82), y: gr.top - 0.09 - i*0.040, w: 0.02, h: 0.018 },
+                { z: gf.z, x: s*(coverFlankX(gf, gfY) + 0.008), y: gfY, w: 0.02, h: 0.018 },
+                { z: gr.z, x: s*(coverFlankX(gr, grY) + 0.008), y: grY, w: 0.02, h: 0.018 },
                 engOutlet === 2 ? DARK : CARBON);
             }
           }
@@ -2227,12 +2272,13 @@ const Car3D = (function () {
       const pz0 = sideMark ? -1.36 : -0.82, pdz = sideMark ? 0.15 : 0.19;
       for (const s of [-1, 1]) for (let i = 0; i < servicePanels; i++) {
         const z = pz0 - i * pdz, p = anchors.coverAt(z);
-        addBox(out, s*(p.x + 0.010), p.top - 0.18, z, 0.018, 0.10, 0.13,
+        addBox(out, s*(coverFlankX(p, p.top - 0.18) + 0.010), p.top - 0.18, z, 0.018, 0.10, 0.13,
           [0.24,0.24,0.27], SURFACES.metal);
       }
       if (engStyle.heatShield) {
         const p = anchors.coverAt(-1.58);
-        addBox(out, 0, p.top + 0.010, -1.58, 0.18 * engStyle.heatShield,
+        // No wider than the flat crown, or its edges hang over the shoulders.
+        addBox(out, 0, p.top + 0.010, -1.58, Math.min(0.18 * engStyle.heatShield, 1.9 * COVER_CROWN * p.x),
           0.014, 0.30, [0.30,0.28,0.26], SURFACES.metal);
       }
       // Team-style DORSAL FIN along the engine-cover ridge: 1 = low blade,
@@ -2318,15 +2364,15 @@ const Car3D = (function () {
       // 0 none / 1 sunk NACA duct / 2 duct + overflow standpipe.
       const fuelBreather = Math.max(0, Math.min(2, Math.round(fuelStyle.breather || 0)));
       if (fuelBreather > 0) {
-        const cb = anchors.coverAt(-0.56);
-        addBox(out, -0.185, cb.top + 0.004, -0.56, 0.052, 0.012, 0.085, INTAKE);
-        addBox(out, -0.185, cb.top + 0.012, -0.61, 0.058, 0.006, 0.020, CARBON, SURFACES.carbon);
+        const cb = anchors.coverAt(-0.56), cbY = coverSurfaceY(cb, 0.185);   // on the shoulder facet
+        addBox(out, -0.185, cbY + 0.004, -0.56, 0.052, 0.012, 0.085, INTAKE);
+        addBox(out, -0.185, cbY + 0.012, -0.61, 0.058, 0.006, 0.020, CARBON, SURFACES.carbon);
         if (fuelBreather >= 2) {
           addSpan(out,
-            { z: -0.62, x: -0.185, y: cb.top + 0.010, w: 0.014, h: 0.014 },
-            { z: -0.62, x: -0.185, y: cb.top + 0.078, w: 0.011, h: 0.011 },
+            { z: -0.62, x: -0.185, y: cbY + 0.010, w: 0.014, h: 0.014 },
+            { z: -0.62, x: -0.185, y: cbY + 0.078, w: 0.011, h: 0.011 },
             fuelDisplay, null, fuelSurface);
-          addBox(out, -0.185, cb.top + 0.088, -0.62, 0.016, 0.012, 0.016,
+          addBox(out, -0.185, cbY + 0.088, -0.62, 0.016, 0.012, 0.016,
                  [0.10, 0.10, 0.12], SURFACES.carbon);
         }
       }
@@ -2334,7 +2380,7 @@ const Car3D = (function () {
         const lineRear = anchors.coverAt(-1.30);
         addSpan(out,
           { z: -0.56, x: 0.12, y: 0.80, w: 0.018 * fuelStyle.line, h: 0.018 },
-          { z: -1.30, x: lineRear.x * 0.72, y: lineRear.top - 0.15,
+          { z: -1.30, x: coverFlankX(lineRear, lineRear.top - 0.15) + 0.006, y: lineRear.top - 0.15,
             w: 0.015 * fuelStyle.line, h: 0.015 },
           fuelDisplay, null, fuelSurface);
       }
@@ -2388,22 +2434,23 @@ const Car3D = (function () {
         const z0 = ersBlister >= 2 ? -0.78 : -0.84;
         const z1 = ersBlister >= 2 ? -1.28 : -1.12;
         const pf = anchors.coverAt(z0), pr = anchors.coverAt(z1);
+        // The blister rides the shoulder facet: its y is the skin's at 0.52x.
         addBeveledSpan(out,
-          { z: z0, x: side * (pf.x * 0.52), y: pf.top + 0.010 * bS,
+          { z: z0, x: side * (pf.x * 0.52), y: coverSurfaceY(pf, pf.x * 0.52) + 0.010 * bS,
             w: 0.090 * bS, h: 0.032 * bS, t: 0.78 },
-          { z: z1, x: side * (pr.x * 0.52), y: pr.top + 0.006 * bS,
+          { z: z1, x: side * (pr.x * 0.52), y: coverSurfaceY(pr, pr.x * 0.52) + 0.006 * bS,
             w: 0.068 * bS, h: 0.022 * bS, t: 0.70 },
           0.007, CARBON);
         const nSlot = ersBlister >= 2 ? 2 : 1;
         for (let i = 0; i < nSlot; i++) {
           const z = z0 - 0.06 - i * 0.14;
           const p = anchors.coverAt(z);
-          addBox(out, side * (p.x * 0.52), p.top + 0.026 * bS, z,
+          addBox(out, side * (p.x * 0.52), coverSurfaceY(p, p.x * 0.52) + 0.026 * bS, z,
             0.055 * bS, 0.010, 0.036, INTAKE);
         }
         if (ersBlister >= 2) {
           const p = anchors.coverAt(z1 + 0.04);
-          addBox(out, side * (p.x * 0.50), p.top + 0.018 * bS, z1 + 0.02,
+          addBox(out, side * (p.x * 0.50), coverSurfaceY(p, p.x * 0.50) + 0.018 * bS, z1 + 0.02,
             0.040 * bS, 0.016, 0.028, INTAKE);
         }
       }
@@ -2420,9 +2467,12 @@ const Car3D = (function () {
           const yo = k * -0.028;
           const xo = k * 0.010 * side;
           const pPack = [side * (pod.x + 0.022 + xo), pod.top + 0.018 + yo, -0.62];
-          const pEnter = [side * (c0.x + 0.016 + xo), c0.top - 0.055 + yo, c0.z];
-          const pMid = [side * (cMid.x + 0.016 + xo), cMid.top - 0.048 + yo, cMid.z];
-          const pK = [side * (c2e.x + 0.014 + xo), c2e.top - 0.040 + yo, c2e.z];
+          // Cables run the flank just under the shoulder crease, on the skin.
+          const eY = coverProfile(c0).shoulder - 0.02 + yo, mY = coverProfile(cMid).shoulder - 0.02 + yo,
+                kY = coverProfile(c2e).shoulder - 0.02 + yo;
+          const pEnter = [side * (coverFlankX(c0, eY) + 0.016 + xo), eY, c0.z];
+          const pMid = [side * (coverFlankX(cMid, mY) + 0.016 + xo), mY, cMid.z];
+          const pK = [side * (coverFlankX(c2e, kY) + 0.014 + xo), kY, c2e.z];
           addBeamBetween(out, pPack, pEnter, 0.022, ersGlow, SURFACES.metal);
           addBeamBetween(out, pEnter, pMid, 0.020, ersGlow, SURFACES.metal);
           addBeamBetween(out, pMid, pK, 0.018, ersGlow, SURFACES.metal);
@@ -3070,7 +3120,8 @@ const Car3D = (function () {
       for (const s of [-1, 1]) for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) {
         const z = -0.98 - i * 0.11, p = anchors.coverAt(z);
         if (!p) continue;
-        addBox(out, s * (p.x + 0.006), p.top - 0.045 - r * 0.045, z, 0.012, 0.014, 0.075, CARBON, SURFACES.carbon);
+        const gy = coverProfile(p).shoulder - 0.025 - r * 0.045;   // on the flank, under the crease
+        addBox(out, s * (coverFlankX(p, gy) + 0.006), gy, z, 0.012, 0.014, 0.075, CARBON, SURFACES.carbon);
       }
     } else if (!ckpt && vents === "spine") {
       // Along the ridge where it is FREE — of the fin root AND of the crest decal
@@ -3761,5 +3812,6 @@ const Car3D = (function () {
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
            sharkFin: FIN, sharkFinPanel, sharkFinBadge, FIN_SHAPES, FIN_SHAPE_IDS,
            TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors, SPINE_HEIGHT_IDS, spineRise,
+           coverProfile, coverFlankX, coverSurfaceY,
            aeroLevelOf, aeroStyleOf };
 })();

@@ -1201,6 +1201,8 @@ const WGX = (function () {
     let pBlob = null, pMark = null;
     let pSkid = null, skidUBO = null, skidFxBG = null, skidVBO = null,
         _skidCap = 0, _skidScratch = null;
+    let pLine = null, lineUBO = null, lineFxBG = null, lineVBO = null, _lineCap = 0;   // DRIVING LINE ribbon
+    const _lineU = new Float32Array(20);   // LineU: viewProj (16) + params (4)
     let pGlow = null, glowUBO = null, glowFxBG = null, glowVBO = null,
         _glowCap = 0, _glowScratch = null;
     let pDecal = null, decalUBO = null, fxDecalLayout = null;
@@ -1764,6 +1766,30 @@ const WGX = (function () {
         skidUBO = device.createBuffer({ size: _Fx.SKID_UNIFORM_BYTES, usage: _UCD });
         skidFxBG = device.createBindGroup({ layout: pSkid.getBindGroupLayout(0),
           entries: [{ binding: 0, resource: { buffer: skidUBO } }] });
+
+        // Driving line: one triangle-strip over a per-circuit world-space
+        // buffer (stride 28, DrivingLine.STRIDE = 7 floats). Same depth/blend
+        // state as the skid trail — it sits on the road and never writes depth.
+        const lineMod = device.createShaderModule({ code: _Fx.LINE });
+        pLine = device.createRenderPipeline({
+          layout: "auto",
+          vertex: { module: lineMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.LINE_VERTEX_BYTES,
+            attributes: [
+              { shaderLocation: 0, offset: 0,  format: "float32x3" },
+              { shaderLocation: 1, offset: 12, format: "float32" },
+              { shaderLocation: 2, offset: 16, format: "float32" },
+              { shaderLocation: 3, offset: 20, format: "float32" },
+              { shaderLocation: 4, offset: 24, format: "float32" },
+            ] }] },
+          fragment: { module: lineMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
+          primitive: { topology: "triangle-strip", cullMode: "none" },
+          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal",
+            depthBias: -2, depthBiasSlopeScale: -2, depthBiasClamp: 0 },
+          ..._fxMS,
+        });
+        lineUBO = device.createBuffer({ size: _Fx.LINE_UNIFORM_BYTES, usage: _UCD });
+        lineFxBG = device.createBindGroup({ layout: pLine.getBindGroupLayout(0),
+          entries: [{ binding: 0, resource: { buffer: lineUBO } }] });
 
         // Glow: additive camera-facing halos, rebuilt each frame (stride 36).
         const glowMod = device.createShaderModule({ code: _Fx.GLOW });
@@ -5507,6 +5533,36 @@ const WGX = (function () {
       return true;
     }
 
+    // DRIVING LINE ribbon (mirror of GLX drawDrivingLine): the strip
+    // js/render/shared/driving-line.js built, uploaded once per circuit
+    // (`dirty`), drawn in the lit pass with the skid trail's depth state.
+    // `opts.speed` is the player's speed for the dynamic colour, `cornersOnly`
+    // fades the straights, `str` the emissive strength. false = no pass.
+    function drawDrivingLine(verts, vertCount, dirty, opts) {
+      if (!_fxReady || !litPass || !pLine) return false;
+      if (!(vertCount > 0)) return true;
+      const floats = vertCount * 7;
+      const bytes = floats * 4;
+      if (!lineVBO || _lineCap < bytes) {
+        if (lineVBO) _retiredBufs.push(lineVBO);
+        _lineCap = Math.max(bytes, 4096);
+        lineVBO = device.createBuffer({ size: (_lineCap + 3) & ~3, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+        dirty = true;
+      }
+      if (dirty) device.queue.writeBuffer(lineVBO, 0, verts, 0, floats);
+      _lineU.set(frameVPGpu, 0);
+      _lineU[16] = (opts && opts.speed) || 0;
+      _lineU[17] = opts && opts.cornersOnly ? 1 : 0;
+      _lineU[18] = (opts && opts.str) || 1.6;
+      _lineU[19] = 0;
+      device.queue.writeBuffer(lineUBO, 0, _lineU);
+      _setPipe(litPass, pLine);
+      _setBG0(litPass, lineFxBG);
+      _setVB0(litPass, lineVBO);
+      litPass.draw(vertCount, 1, 0, 0);
+      return true;
+    }
+
     // Additive lamp-glare halos — CPU billboard build ported verbatim from GLX
     // Mirror GLX.drawGlow, emitting stride-36 (corner2, center3, color3,
     // radius1) verts, then one additive draw into the HDR scene target.
@@ -5955,7 +6011,7 @@ const WGX = (function () {
       drawShadow,                    // blob shadow quad, in lit pass
       drawMark,                      // single skid-mark stamp
       drawSkidBatch,                 // batched skid trail, one draw
-      drawDrivingLine: () => false,  // PARITY GAP (2026-09-08): the ribbon is GLX-only; false = "no pass", the caller reports it
+      drawDrivingLine,               // the DRIVING LINE ribbon, one strip draw
       drawGlow,                      // additive lamp-glare billboards, HDR
       drawDecal,                     // team/sponsor decal atlas
 

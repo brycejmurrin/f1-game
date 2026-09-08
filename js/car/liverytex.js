@@ -24,7 +24,8 @@ const LiveryTex = (function () {
     strip:  { x: 40,  y: 720, w: 944, h: 130 },  // long thin sponsor strip (sidepod lower)
     fin:    { x: 40,  y: 856, w: 430, h: 160 },  // shark-fin tail: the painted graphic, stretched over the whole swept fin
     finBadge: { x: 500, y: 856, w: 160, h: 160 },
-    spineSide: { x: 680, y: 856, w: 304, h: 160 },   // engine-cover FLANK band, both sides (liv.spineSide)
+    spineSide: { x: 680, y: 856, w: 304, h: 160 },   // the WHOLE engine-cover flank, both sides (liv.spineSide): z -0.66 → -1.90 across, crease → sidepod line down
+    tail: { x: 500, y: 420, w: 180, h: 80 },   // the cover's TAIL top (z -1.28..-1.92); the SPINE TOP band designs run on down it
   };
 
   // Primary driver number per team.
@@ -1154,11 +1155,192 @@ const LiveryTex = (function () {
   // Whether the crest is also drawn on the engine-cover spine. With the badge
   // on the fin AND the spine the same mark reads twice from a chase camera,
   // which is the duplication the owner asked about.
-  const SPINE_LOGO_IDS = ["logo", "none"];
+  // SPINE TOP: what the engine-cover crown carries over its tail wash. "logo"
+  // (absent) is the shipped crest; "none" leaves the wash alone; the rest are
+  // designs for a crown that carries NO mark: a centre band, twin pinstripes,
+  // the title sponsor running along the spine, an exposed-carbon panel, or the
+  // race number. All paint into REGIONS.crest, so the strip in car-mesh drapes
+  // them over the rounded crown like the crest.
+  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "wordmark", "carbon", "number"];
+  // WRAP: one shape in CAR space painted into every region it crosses, so the
+  // paint job goes over the spine and down both flanks as a single graphic —
+  // the RB22's sun and bull. The car-space → region maps are car-mesh's:
+  //   crest      canvas x ↔ across (shoulder to shoulder, ~±0.19 m), canvas y ↔ z (-1.28 at the top → -0.62)
+  //   spineSide  canvas x ↔ z (-0.74 at the left → -1.20), canvas y ↔ down the flank (0.21 → 0.45 m from the ridge)
+  // A disc of radius r at (zc, ridge) is an ellipse in each region's pixels;
+  // clipped to the region, the two arcs meet at the shoulder. The band is the
+  // same texture on both flanks, so the wrap is symmetric by construction.
+  // A ONE-PATH mark on the flank, facing forward: the RB22 wears a single
+  // bull on each side, nose to the airbox, under the sun. The team's traced
+  // crest holds the two bulls as two "mark" paths facing each other; the
+  // second one faces canvas-left, which is the FRONT of the flank canvas, so
+  // it is drawn as is — the band is mirrored onto the left flank by car-mesh,
+  // where it still faces forward. Sized in METRES (the flank canvas is ~1.4×
+  // wider than tall per pixel): 0.62 m long, 0.34 m tall, hung from the crease.
+  function flankBull(ctx, teamId, colour) {
+    const spec = typeof CrestPaths !== "undefined" && CrestPaths[teamId];
+    if (!spec || spec.d.length !== 2 || spec.roles.some((r) => r !== "mark")) return false;
+    const d = spec.d[1];
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const m of d.matchAll(/(-?[0-9.]+)[ ,](-?[0-9.]+)/g)) {
+      const x = +m[1], y = +m[2];
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    const S = REGIONS.spineSide, bw = S.w * 0.50, bh = S.h * 0.72;
+    const left = S.x + S.w * 0.14, top = S.y + S.h * 0.05;
+    const f = { X: (u) => left + (u - x0) / (x1 - x0) * bw, Y: (v) => top + (v - y0) / (y1 - y0) * bh, S: (s) => s / (x1 - x0) * bw };
+    ctx.save();
+    ctx.beginPath(); ctx.rect(S.x, S.y, S.w, S.h); ctx.clip();
+    ctx.fillStyle = css(colour);
+    tracePath(ctx, f, d);
+    ctx.fill("evenodd");
+    ctx.restore();
+    return true;
+  }
+  function drawSunWrap(ctx, acc) {
+    const r = 0.42, zc = -0.90;
+    const C = REGIONS.crest, S = REGIONS.spineSide;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(C.x, C.y, C.w, C.h); ctx.clip();
+    ctx.fillStyle = cssA(acc, 0.97);
+    ctx.beginPath();
+    // Across the crown the disc would be wider than the region; capped at
+    // 0.55 W so it reads as a disc with its sides just past the shoulders
+    // (and so its outline passes through the region for the atlas probes).
+    ctx.ellipse(C.x + C.w / 2, C.y + (zc + 1.28) / 0.66 * C.h, Math.min(r / 0.19 * (C.w / 2), C.w * 0.55), r / 0.66 * C.h, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath(); ctx.rect(S.x, S.y, S.w, S.h); ctx.clip();
+    ctx.fillStyle = cssA(acc, 0.97);
+    ctx.beginPath();
+    ctx.ellipse(S.x + (FLANK.zF - zc) / FLANK.zLen * S.w, S.y - FLANK.sTop / FLANK.sLen * S.h,
+                r / FLANK.zLen * S.w, r / FLANK.sLen * S.h, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+  // REGIONS.crest is square in pixels but car-mesh drapes it over a strip
+  // ~0.34 m across and 0.66 m along the spine, so a canvas pixel is 1.9× longer
+  // along the car than across it — a square mark came out as a lozenge. Crown
+  // marks are drawn through scale(1, CROWN_SQUASH) so they land round.
+  const CROWN_SQUASH = 0.52;
+  // Likewise the flank: 304 px over 1.24 m along the car vs 160 px over ~0.47 m
+  // down the flank — a pixel is ~1.4× wider than it is tall, so flank marks are
+  // drawn through scale(FLANK_SQUASH, 1).
+  const FLANK_SQUASH = 0.72;
+  // The flank's car-space maps (car-mesh's band): canvas x ↔ z, canvas y ↔ the
+  // distance s down the skin from the ridge (the crease at s 0.21, the sidepod
+  // line at ~0.68).
+  const FLANK = { zF: -0.66, zLen: 1.24, sTop: 0.21, sLen: 0.47 };
+  function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont) {
+    const X = R.x, Y = R.y, W = R.w, H = R.h;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip();
+    if (id === "bigmark") {
+      // Handled by the caller: the team mark blown up to run the LENGTH of
+      // the crown (Red Bull's bull and sun across the RB22's cover). Nothing
+      // to paint here — the crest painters need the livery, not a colour.
+    } else if (id === "saddle") {
+      // The whole crown, shoulder to shoulder, in the accent, AND down the
+      // flanks with a raked rear edge — Ferrari's white engine-cover top on
+      // the SF-26, where the white runs from the airbox over the shoulders
+      // and the number sits in it. The band is painted here first; a flank
+      // pick (plate, number) lands on top of it.
+      ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, Y, W, H);
+      const S = REGIONS.spineSide;
+      if (S) {
+        ctx.beginPath(); ctx.rect(S.x, S.y, S.w, S.h); ctx.clip();
+        // From the airbox back along the crease to mid-cover, then a raked
+        // edge down to the sidepod line just behind the number (the SF-26).
+        ctx.beginPath();
+        ctx.moveTo(S.x, S.y); ctx.lineTo(S.x + S.w * 0.58, S.y);              // along the crease
+        ctx.lineTo(S.x + S.w * 0.40, S.y + S.h); ctx.lineTo(S.x, S.y + S.h);  // raked rear edge
+        ctx.closePath(); ctx.fill();
+      }
+    } else if (id === "panel") {
+      // A solid accent block down the crown with a crisp raked leading edge
+      // and a square tail — the vinyl panel a real cover wears, hard-edged.
+      ctx.fillStyle = cssA(acc, 0.97);
+      ctx.beginPath();
+      ctx.moveTo(X + W * 0.28, Y);                 // tail (canvas top = rear)
+      ctx.lineTo(X + W * 0.72, Y);
+      ctx.lineTo(X + W * 0.72, Y + H * 0.80);
+      ctx.lineTo(X + W * 0.28, Y + H * 0.92);      // raked front edge
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = cssA(ink, 0.6);
+      ctx.fillRect(X + W * 0.28, Y, W * 0.010, H * 0.92); ctx.fillRect(X + W * 0.71, Y, W * 0.010, H * 0.80);
+    } else if (id === "stripe") {
+      // One band down the centreline, a hair of ink at each edge so it reads
+      // as trim rather than a smear at chase distance.
+      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.40, Y, W * 0.20, H);
+      ctx.fillStyle = cssA(ink, 0.55);
+      ctx.fillRect(X + W * 0.40, Y, W * 0.012, H); ctx.fillRect(X + W * 0.588, Y, W * 0.012, H);
+    } else if (id === "twin") {
+      // Two pinstripes ON the shoulder creases — the W17's teal lines along
+      // the cover's edges — not down the middle of the crown.
+      ctx.fillStyle = cssA(acc, 0.96);
+      ctx.fillRect(X + W * 0.04, Y, W * 0.045, H); ctx.fillRect(X + W * 0.915, Y, W * 0.045, H);
+    } else if (id === "carbon") {
+      // An exposed-carbon crown panel: near-black with a faint diagonal weave
+      // and an accent keyline where the paint stops.
+      const px = X + W * 0.28, pw = W * 0.44;
+      ctx.fillStyle = "rgb(24,25,28)"; ctx.fillRect(px, Y, pw, H);
+      ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.lineWidth = 3;
+      for (let d = -H; d < pw + H; d += 14) {
+        ctx.beginPath(); ctx.moveTo(px + d, Y); ctx.lineTo(px + d + H, Y + H); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(px + d + H, Y); ctx.lineTo(px + d, Y + H); ctx.stroke();
+      }
+      ctx.fillStyle = cssA(acc, 0.9);
+      ctx.fillRect(px - W * 0.014, Y, W * 0.014, H); ctx.fillRect(px + pw, Y, W * 0.014, H);
+    } else if (id === "wordmark") {
+      // The title sponsor along the spine, rotated to run nose → tail so it
+      // reads from the side of the car, the way a real engine cover carries it.
+      ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(-Math.PI / 2);
+      drawWordmark(ctx, name, { x: -H / 2, y: -W * 0.16, w: H, h: W * 0.32 }, ink, { align: "center" });
+    } else if (id === "number") {
+      // TOP-DOWN: upright with the nose up — the chase camera's view and a
+      // plan view of the car (the owner's call; the crest matches). Squashed
+      // along the spine so the digits come out in proportion.
+      ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(Math.PI); ctx.scale(1, CROWN_SQUASH);
+      drawNumber(ctx, num, { x: -W * 0.34, y: -W * 0.34, w: W * 0.68, h: W * 0.68 }, ink, acc, null, numFont, 0);
+    }
+    ctx.restore();
+  }
+  // The cover's TAIL top (REGIONS.tail, a narrow strip behind the crown): the
+  // band designs continue down it so a stripe or a saddle runs to the wing,
+  // and "wordmark" puts the SECOND sponsor there reading from behind. The
+  // marks (logo, number) and "none" leave it bare.
+  function drawTailTop(ctx, id, R, acc, ink, name2) {
+    const X = R.x, Y = R.y, W = R.w, H = R.h;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip();
+    if (id === "saddle") { ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, Y, W, H); }
+    else if (id === "panel") { ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X + W * 0.28, Y, W * 0.44, H); }
+    else if (id === "stripe") {
+      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.40, Y, W * 0.20, H);
+      ctx.fillStyle = cssA(ink, 0.55); ctx.fillRect(X + W * 0.40, Y, W * 0.012, H); ctx.fillRect(X + W * 0.588, Y, W * 0.012, H);
+    } else if (id === "twin") {
+      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.04, Y, W * 0.045, H); ctx.fillRect(X + W * 0.915, Y, W * 0.045, H);
+    } else if (id === "carbon") {
+      const px = X + W * 0.28, pw = W * 0.44;
+      ctx.fillStyle = "rgb(24,25,28)"; ctx.fillRect(px, Y, pw, H);
+      ctx.fillStyle = cssA(acc, 0.9); ctx.fillRect(px - W * 0.014, Y, W * 0.014, H); ctx.fillRect(px + pw, Y, W * 0.014, H);
+    } else if (id === "wordmark" && name2) {
+      // Reads from behind: the tail is what the car behind sees.
+      ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(Math.PI);
+      drawWordmark(ctx, name2, { x: -W / 2, y: -H / 2, w: W, h: H }, ink, { align: "center", pad: 6 });
+    }
+    ctx.restore();
+  }
   // SPINE SIDE: the mark on the engine-cover FLANK — where the real 2026 cars,
   // fin-less with a tall dorsal cover, carry the driver number. Absent ("none")
   // leaves REGIONS.spineSide unpainted, so the shipped atlas is pixel-identical.
-  const SPINE_SIDE_IDS = ["none", "number", "logo", "code"];
+  // From the 2026 launch photos: "wordmark" is the title sponsor on the flank
+  // (Red Bull's ORACLE, Mercedes' PETRONAS), "slash" the W17's raked bars, and
+  // "plate" the SF-26's number on a contrasting panel.
+  // "duo" is the RB22's flank: the title sponsor large and aft, the partner
+  // mark small and forward (Red Bull over Ford Racing).
+  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash"];
   const TAIL_STYLE = {
     redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
     racingbulls: { kind: "diag",    a: 0.70 },   // youthful bold slash
@@ -1353,7 +1535,11 @@ const LiveryTex = (function () {
     const tailStyle = colors.finStyle || "team";
     const finBadge = colors.finBadge || "logo";
     const spineLogo = colors.spineLogo || "logo";
-    drawTailGraphic(ctx, teamId, REGIONS.crest, c1, c2, stripe, tailStyle);
+    // The crown carries NO gradient wash. The fin's tail motif used to run on
+    // over the spine as an alpha gradient, and every crown design sat on that
+    // soft fade — which the owner read as spray-painted. Every SPINE TOP now
+    // stands on the bare body paint with hard edges: vinyl, not airbrush. The
+    // fin keeps its motif (drawTailGraphic on REGIONS.fin below).
     const markHalo = (img, bg, ink) =>
       (img && img._avg && contrast(img._avg, bg) < 2.6 ? ink : null);
     const emblemRim = colors.logo3 || colors.logo2 || null;
@@ -1361,11 +1547,70 @@ const LiveryTex = (function () {
     // against the fin wash used to drop Ferrari's shield (and recolour the
     // horse) so top-down / the garage wall disagreed with the tail.
     const lockup = markPalette(teamId, colors, [c1, c2], false);
-    if (spineLogo !== "none") {
+    // Sponsor names resolve here so the spine can carry the title sponsor.
+    const pack = colors.sponsors && SPONSOR_PACKS[colors.sponsors];
+    const names = pack || SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
+    const raceNum = numberOverride != null ? numberOverride
+                  : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
+    if (spineLogo === "logo") {
+      // TOP-DOWN: upright with the nose up, so it reads from the chase camera
+      // and in a plan view (the atlas is drawn front-at-the-bottom, so this is
+      // a half turn). The real covers read from the side (Ferrari's HP, Red
+      // Bull's lettering) but the owner wants the plan-view reading; the
+      // wordmark alone still runs along the spine, where it has the room.
+      const Rc = REGIONS.crest, sq = Rc.w * 0.92;
+      ctx.save();
+      ctx.translate(Rc.x + Rc.w / 2, Rc.y + Rc.h / 2); ctx.rotate(Math.PI); ctx.scale(1, CROWN_SQUASH);
+      const Rr = { x: -sq / 2, y: -sq / 2, w: sq, h: sq };
       if (LOGOS[teamId]) {
-        drawLogoImage(ctx, LOGOS[teamId], REGIONS.crest, logo,
+        drawLogoImage(ctx, LOGOS[teamId], Rr, logo,
                       markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
-      } else drawCrest(ctx, teamId, REGIONS.crest, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+      } else drawCrest(ctx, teamId, Rr, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+      ctx.restore();
+    } else if (spineLogo === "wrap") {
+      // The sun in the PLATE colour (the mark's own backing, Red Bull's gold)
+      // over crown and flanks, and the plate-less mark on the crown at its
+      // centre, top-down and in proportion.
+      const sunC = (lockup && lockup.plate) || stripe || accent;
+      drawSunWrap(ctx, sunC);
+      // The crown carries the sun alone; the MARK goes on the flanks, facing
+      // forward under it (the RB22: one bull a side, nose to the airbox). The
+      // mark colour is resolved against both the sun and the body it lies
+      // across. A crest without a single forward-facing path falls back to
+      // its plate-less lockup at the flank mark's spot.
+      const sunLockup = Object.assign({}, markPalette(teamId, colors, [sunC, c1], false), { plate: null });
+      // On the team's OWN livery the bull is the brand red, as on the RB22
+      // (red across gold and navy alike) — the contrast-picked ink is for
+      // custom paint, where the brand colour may not read.
+      const own = !colors.id || colors.id === "default";
+      const bullC = (own && MARK_BRAND[teamId] && MARK_BRAND[teamId].mark) || sunLockup.mark || inkOn([sunC, c1]);
+      if (!flankBull(ctx, teamId, bullC)) {
+        const Sw = REGIONS.spineSide;
+        ctx.save();
+        ctx.translate(Sw.x + Sw.w * 0.26, Sw.y + Sw.h * 0.40); ctx.scale(FLANK_SQUASH, 1);
+        const Rw = { x: -Sw.h * 0.36, y: -Sw.h * 0.34, w: Sw.h * 0.72, h: Sw.h * 0.68 };
+        if (LOGOS[teamId]) {
+          drawLogoImage(ctx, LOGOS[teamId], Rw, logo, markHalo(LOGOS[teamId], sunC, inkOn([sunC])), emblemRim);
+        } else drawCrest(ctx, teamId, Rw, { liv: colors, field: sunC, bare: true, palette: sunLockup });
+        ctx.restore();
+      }
+    } else if (spineLogo === "bigmark") {
+      // BIG MARK: the mark WITHOUT its plate — Red Bull's bulls with no sun
+      // disc, the way the RB22 wears the bull straight on the cover — at the
+      // full crown width, top-down and in proportion like the crest above.
+      const Rc = REGIONS.crest, sq = Rc.w;
+      ctx.save();
+      ctx.translate(Rc.x + Rc.w / 2, Rc.y + Rc.h / 2); ctx.rotate(Math.PI); ctx.scale(1, CROWN_SQUASH);
+      const Rb = { x: -sq / 2, y: -sq / 2, w: sq, h: sq };
+      if (LOGOS[teamId]) {
+        drawLogoImage(ctx, LOGOS[teamId], Rb, logo, markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
+      } else drawCrest(ctx, teamId, Rb, { liv: colors, field: [c1, c2], bare: true, palette: Object.assign({}, lockup, { plate: null }) });
+      ctx.restore();
+    } else if (spineLogo !== "none") {
+      drawSpineTop(ctx, spineLogo, REGIONS.crest, c1, stripe || accent, inkCrest, names[0] || "", raceNum, colors.numFont);
+    }
+    if (REGIONS.tail) {
+      drawTailTop(ctx, spineLogo, REGIONS.tail, stripe || accent, inkCrest, names[1] || "");
     }
     const finWash = finArt || [stripe, c1, accent, inkFin].filter(Boolean)
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
@@ -1388,21 +1633,70 @@ const LiveryTex = (function () {
     // SPINE SIDE (SPINE_SIDE_IDS): the same three marks on the cover FLANK, inked
     // for the body paint (the flank is c1) with the cover's own crest lockup.
     const spineSide = colors.spineSide || "none";
+    // The flank canvas is the WHOLE cover side (front at canvas-left). The
+    // marks sit in the upper front third — the SF-26's 16 and the W17's 12
+    // just behind the airbox — through FLANK_SQUASH so they come out in
+    // proportion; a box for that spot, in squashed local coordinates.
+    const Sf = REGIONS.spineSide;
+    const flankMark = (paint) => {
+      ctx.save();
+      // Centred at 0.56 of the flank's height, not 0.42: hung higher the
+      // crest's plate was clipped by the shoulder crease (owner's report).
+      ctx.translate(Sf.x + Sf.w * 0.24, Sf.y + Sf.h * 0.56); ctx.scale(FLANK_SQUASH, 1);
+      paint({ x: -Sf.h * 0.40, y: -Sf.h * 0.36, w: Sf.h * 0.80, h: Sf.h * 0.72 });
+      ctx.restore();
+    };
     if (spineSide === "logo") {
-      if (LOGOS[teamId]) {
-        drawLogoImage(ctx, LOGOS[teamId], REGIONS.spineSide, logo,
-                      markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
-      } else drawCrest(ctx, teamId, REGIONS.spineSide, { liv: colors, field: [c1, c2], bare: true, palette: lockup });
+      flankMark((Rm) => {
+        if (LOGOS[teamId]) {
+          drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
+        // bare:false — the FULL lockup, plate and all, exactly as the garage wall
+        // and the cover crest paint it (the fin badge alone goes bare, for its plate).
+        } else drawCrest(ctx, teamId, Rm, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+      });
     } else if (spineSide === "number" || spineSide === "code") {
-      const sideNum = numberOverride != null ? numberOverride
-                    : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
-      drawNumber(ctx, spineSide === "code" ? driverCode(teamId, sideNum) : sideNum,
-                 REGIONS.spineSide, inkCrest, accent, null, colors.numFont, 0);
+      flankMark((Rm) => drawNumber(ctx, spineSide === "code" ? driverCode(teamId, raceNum) : raceNum,
+                                   Rm, inkCrest, accent, null, colors.numFont, 0));
+    } else if (spineSide === "plate") {
+      // The number on a contrasting plate (drawNumber's own rounded board),
+      // inked for the PLATE: the body colour when it reads on it, else an ink.
+      const plateC = stripe || accent;
+      const plateInk = contrast(c1, plateC) >= 3 ? c1 : inkOn([plateC]);
+      flankMark((Rm) => drawNumber(ctx, raceNum, Rm, plateInk, inkCrest, plateC, colors.numFont, 0));
+    } else if (spineSide === "wordmark") {
+      // The title sponsor the length of the flank's upper half — the RB22's
+      // Red Bull, the W17's PETRONAS.
+      // On the LOWER half, under whatever the wrap or saddle put above it.
+      drawWordmark(ctx, names[0] || "", { x: Sf.x + Sf.w * 0.06, y: Sf.y + Sf.h * 0.50, w: Sf.w * 0.88, h: Sf.h * 0.46 }, inkCrest, { align: "center" });
+    } else if (spineSide === "duo") {
+      // The flank's canvas x runs FRONT → REAR on the right flank (the endplate
+      // order in car-mesh): the title sponsor large across the rear 55 %, the
+      // partner mark small and forward, both on the upper half (Red Bull over
+      // Ford Racing on the RB22).
+      // Both on the LOWER half, under the bull (the RB22's Red Bull sits
+      // beneath the bull's belly, Ford Racing forward and lower still).
+      drawWordmark(ctx, names[0] || "", { x: Sf.x + Sf.w * 0.40, y: Sf.y + Sf.h * 0.52, w: Sf.w * 0.56, h: Sf.h * 0.44 }, inkCrest, { align: "center", pad: 8 });
+      drawWordmark(ctx, names[1] || "", { x: Sf.x + Sf.w * 0.05, y: Sf.y + Sf.h * 0.62, w: Sf.w * 0.30, h: Sf.h * 0.28 }, inkCrest, { align: "center", pad: 6 });
+    } else if (spineSide === "slash") {
+      // Four raked bars across the band, hard-edged, in the accent — and
+      // TAPERING toward the rear like the W17's: each bar a little thinner and
+      // shorter than the one ahead of it, hanging from the shoulder crease.
+      const S = REGIONS.spineSide, skew = S.h * 0.40;
+      ctx.save(); ctx.beginPath(); ctx.rect(S.x, S.y, S.w, S.h); ctx.clip();
+      ctx.fillStyle = cssA(stripe || accent, 0.96);
+      // Six bars the length of the cover, the first behind the airbox, each
+      // thinner and shorter than the one ahead (the W17's run to the wing).
+      for (let i = 0; i < 6; i++) {
+        const x0 = S.x + S.w * (0.10 + i * 0.145), bw = S.w * (0.055 - i * 0.005), hh = S.h * (0.85 - i * 0.10);
+        ctx.beginPath();
+        ctx.moveTo(x0 + skew, S.y); ctx.lineTo(x0 + skew + bw, S.y);
+        ctx.lineTo(x0 + skew * (1 - hh / S.h) + bw, S.y + hh); ctx.lineTo(x0 + skew * (1 - hh / S.h), S.y + hh);
+        ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
     }
 
-    // Sponsor wordmarks.
-    const pack = colors.sponsors && SPONSOR_PACKS[colors.sponsors];
-    const names = pack || SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
+    // Sponsor wordmarks (names resolved above, by the spine).
     if (names.length) {   // `clean` leaves every wordmark region as paint
       drawWordmark(ctx, names[0], REGIONS.titleA, inkPod,
         { align: "center", halo: haloIf(inkPod) });

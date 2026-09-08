@@ -696,7 +696,7 @@ FLOODLIGHTS / LAMP BEHAVIOUR — both drove the same `lampPosts` pipeline.
 | `highlights` | HIGHLIGHTS | -1 … 1.5 | 0 | — | ✓ | post.js×3 |
 | `whites` | WHITES | -1.8 … 3 | 0 | — | ✓ | post.js×3 |
 | `toe` | TOE | -1 … 1 | 0 | — | ✓ | car3d.js, post.js×3 |
-| `shoulder` | SHOULDER | -1 … 1 | 0 | — | ✓ | car3d.js, post.js×3 |
+| `shoulder` | SHOULDER | -1 … 1 | 0 | — | ✓ | car-mesh.js, car3d.js×2, post.js×3 |
 | `liftG` | LIFT · GREEN | -0.3 … 0.3 | 0 | — | ✓ | post.js×3 |
 | `liftB` | LIFT · BLUE | -0.3 … 0.3 | 0 | — | ✓ | post.js×3 |
 | `gammaR` | GAMMA · RED | 0.4 … 2.5 | 1 | — | ✓ | post.js×4 |

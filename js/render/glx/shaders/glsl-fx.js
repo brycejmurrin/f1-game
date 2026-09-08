@@ -160,12 +160,14 @@ layout(location=0) in vec3 aPos;     // world position (metres)
 layout(location=1) in float aAcross; // -1 | +1 across the ribbon
 layout(location=2) in float aSpeed;  // the line's speed here (m/s)
 layout(location=3) in float aZone;   // 0 straight … 1 corner / braking
+layout(location=4) in float aAlong;  // metres along the lap (the dash pattern's clock)
 uniform mat4 uViewProj;
 out float vAcross;
 out float vSpeed;
 out float vZone;
+out float vAlong;
 void main() {
-  vAcross = aAcross; vSpeed = aSpeed; vZone = aZone;
+  vAcross = aAcross; vSpeed = aSpeed; vZone = aZone; vAlong = aAlong;
   gl_Position = uViewProj * vec4(aPos, 1.0);
 }`;
   const LINE_FS = `#version 300 es
@@ -173,18 +175,31 @@ precision mediump float;
 in float vAcross;
 in float vSpeed;
 in float vZone;
+in float vAlong;
 uniform float uPlayerSpeed;   // m/s
 uniform float uCornersOnly;   // 1 = fade the straights out
 uniform float uStr;           // emissive strength (bloom feed)
 out vec4 outColor;
+// ARROWS: a chevron every PERIOD m pointing the way the lap runs — the tip on
+// the ribbon's centre, the wings trailing SWEEP m behind it at the edges, the
+// stroke THICK m along. Pattern space is (along, across), so the chevrons bend
+// with the road, need no derivatives for their soft edge, and are identical on
+// WGX / TLX. The F1 games' line is drawn this way.
+const float PERIOD = 5.0;
+const float SWEEP = 1.6;
+const float THICK = 1.1;
 void main() {
   float over = uPlayerSpeed / max(vSpeed, 1.0);          // 1.0 = on the line's pace
   vec3 green = vec3(0.10, 0.95, 0.35), amber = vec3(1.0, 0.72, 0.10), red = vec3(1.0, 0.12, 0.10);
   vec3 col = mix(green, amber, smoothstep(0.98, 1.06, over));
   col = mix(col, red, smoothstep(1.06, 1.16, over));
-  float edge = 1.0 - smoothstep(0.55, 1.0, abs(vAcross));   // soft rim, hot core
+  float tip = PERIOD * 0.6 - SWEEP * abs(vAcross);       // the stroke's centre line, per across
+  float d = mod(vAlong - tip, PERIOD);                   // metres past that centre line, wrapped
+  d = min(d, PERIOD - d);
+  float arrow = 1.0 - smoothstep(THICK * 0.5 - 0.18, THICK * 0.5, d);
+  float rim = 1.0 - smoothstep(0.85, 1.0, abs(vAcross));  // soft ribbon edge
   float zone = mix(1.0, smoothstep(0.05, 0.75, vZone), uCornersOnly);   // the whole smoothed ramp is the fade
-  float a = edge * zone;
+  float a = arrow * rim * zone;
   if (a < 0.01) discard;
   outColor = vec4(col * uStr * a, a * 0.85);
 }`;

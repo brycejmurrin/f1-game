@@ -2,8 +2,8 @@
 /* Apex 26 — DrivingLine: the suggested-line ribbon every racing game draws on
  * the road, as DATA. Backend-agnostic: this file samples the circuit, decides
  * where the line runs and how fast a car can be on each metre of it, and
- * emits one interleaved vertex strip; a backend (GLX drawDrivingLine) uploads
- * and shades it. Nothing here touches a car — the arc reaches the PICTURE only
+ * emits one interleaved vertex strip; each backend's drawDrivingLine (GLX
+ * LINE_VS/FS, WGX WGSLFx.LINE, TLX tsl-fx lineMat) uploads and shades it. Nothing here touches a car — the arc reaches the PICTURE only
  * (docs/PHYSICS.md §curvature reads: render-only).
  *
  * WHAT THE OTHER GAMES DO (researched 2026-09-08, sources in
@@ -35,15 +35,22 @@
  * the cap into braking ZONES that begin before the corner — the part a player
  * actually wants shown.
  *
+ * THE LOOK. Not a solid ribbon: a chevron every few metres pointing the way
+ * the lap runs, the tip on the centre and the wings trailing at the edges —
+ * the F1 games' form — each arrow bending with the road because it lives in
+ * the strip's own space (the owner asked for arrows on a properly curving
+ * line, 2026-09-08). The shaders pattern it from the per-vertex ALONG value
+ * (metres of lap), so all three backends agree.
+ *
  * VERTEX LAYOUT (interleaved Float32, STRIDE floats per vertex, two vertices
  * per sample, a triangle strip): pos3, across (-1 | +1), vLine (m/s), zone
  * (0 straight … 1 corner/braking, held past the exit and smoothed so CORNERS
- * mode fades in and out over tens of metres, never a cut). */
+ * mode fades in and out over tens of metres, never a cut), along (m). */
 window.DrivingLine = (function () {
-  const STRIDE = 6;
+  const STRIDE = 7;
   const STEP = 2.5;          // m between samples (a 5 km lap ≈ 2000 samples)
   const LOOK = 60;           // m — the assist's look-ahead at ~70 m/s (25-90)
-  const HALF_W = 0.55;       // m — half the ribbon width
+  const HALF_W = 0.75;       // m — half the ribbon width (one 1.5 m row of chevrons)
   const LIFT = 0.03;         // m above the road (the road mesh sits at +0.02)
   const MODES = ["off", "corner", "full"];
   const KMIN = 1 / 400;      // |k| above this is "a corner" (radius under 400 m)
@@ -163,6 +170,7 @@ window.DrivingLine = (function () {
         verts[o++] = side;
         verts[o++] = v[i];
         verts[o++] = zone[i];
+        verts[o++] = q * ds;   // metres along the lap (q, not i: the closing pair reads L, not 0)
       }
     }
     cache.id = api.id; cache.verts = verts; cache.count = (n + 1) * 2; cache.dirty = true;
@@ -185,7 +193,7 @@ window.DrivingLine = (function () {
 
   /* Draw through a backend: `gfx.drawDrivingLine(verts, count, dirty, opts)`.
      Builds lazily when the circuit changed. Returns false when the line is off
-     or the backend has no pass (WGX / TLX today — a recorded parity gap). */
+     or the backend's pass is not ready. */
   function draw(gfx, api, playerSpeed) {
     if (mode === "off" || !gfx || typeof gfx.drawDrivingLine !== "function") return false;
     if (cache.id !== api.id || !cache.verts) build(api);

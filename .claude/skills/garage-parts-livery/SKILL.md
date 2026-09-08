@@ -21,7 +21,13 @@ the tail DESIGN is four enum fields with defaults that reproduce the shipped car
 `finShape` (`Car3D.FIN_SHAPES` + `none`; the ONE non-colour livery field that moves
 a vertex, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,
 drives the fin panel AND the engine-cover wash), `finBadge` (`logo|number|none`) and
-`spineLogo` (`logo|none`). `drawTailGraphic` clips to its region. Body details:
+`spineLogo` (SPINE TOP: `logo|none|wrap|bigmark|saddle|panel|stripe|twin|wordmark|carbon|number`;
+`wrap` paints one car-space shape into `REGIONS.crest` AND `REGIONS.spineSide` via
+`drawSunWrap`, so a graphic crosses the shoulder — the region↔car maps are documented there;
+painted by `drawSpineTop` into `REGIONS.crest` on BARE paint — the crown carries no
+tail wash; the fin motif stops at the fin — and continued down `REGIONS.tail` by
+`drawTailTop`; the crest and number read top-down, nose up). SPINE SIDE ids also
+offer `plate|wordmark|duo|slash` (from the 2026 launch photos; `bigmark` + `duo` is the RB22). `drawTailGraphic` clips to its region. Body details:
 `tcam` (`Car3D.TCAM_IDS`, mesh colour only) and `coverVents` (`Car3D.COVER_VENT_IDS`,
 geometry, also in `SP_HULL_GEOM_FIELDS`); `spineHeight` (`Car3D.SPINE_HEIGHT_IDS`,
 lifts the cover crown top-only through `bodyAnchors(parts, teamId, spineHeight)` —
@@ -31,7 +37,11 @@ geometry, in `SP_HULL_GEOM_FIELDS`; `dorsal` is the fin-less 2026 cover) and
 `REGIONS.spineSide` and mapped by car-mesh onto both cover flanks; the service
 panels and the accent pinstripe keep clear of the band, so it is in
 `SP_HULL_GEOM_FIELDS` too); `finBadge`
-also offers `code`. The 2026
+also offers `code`. The engine-cover cross-section is `Car3D.coverProfile(c)`
+(flank → shoulder at 0.72x → two facets → flat crown ±0.32x): the loft, the
+crest strip and the flank band in car-mesh, and every cover-mounted detail read
+it — place side details with `coverFlankX(c, y)` and crown details with
+`coverSurfaceY(c, x)`, never at `c.x` / `c.top` literally, or they float. The 2026
 lights are draw-time, not livery: `CarMesh.ersLightCode` (pure) and
 `drawMirrorLights` at `Car3D.mirrorLightAnchors` under 20 km/h.
 The mark takes up to THREE livery colours and the editor asks

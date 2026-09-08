@@ -106,8 +106,8 @@
  *     free choice.
  *   drawShadow(model, w, l) / drawMark(model, w, l) / drawSkidBatch(verts,n,dirty)
  *   drawDrivingLine(verts, n, dirty, {speed, cornersOnly, str}) → bool
- *     The suggested-line ribbon (js/render/shared/driving-line.js); false
- *     means the backend has no pass (WGX / TLX, a recorded parity gap).
+ *     The suggested-line ribbon (js/render/shared/driving-line.js) on all
+ *     three backends; false means the pass is unavailable (fx not ready).
  *   drawGlow(lights, str) / drawDecal(mesh, model, tex, opts)
  *     Glow is additive with depthMask off, so it must follow the sky.
  *   present(opts)            resolve MSAA + run post chain + blit to screen.

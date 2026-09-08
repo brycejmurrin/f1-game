@@ -69,11 +69,12 @@ class RecCtx {
   restore() { if (this.stack.length) this.st = this.stack.pop(); }
 
   beginPath() { this.sub = []; this.cur = null; }
-  moveTo(x, y) { this.cur = [[x, y]]; this.sub.push(this.cur); }
-  lineTo(x, y) { if (!this.cur) this.moveTo(x, y); else this.cur.push([x, y]); }
+  moveTo(x, y) { this.cur = [this._p(x, y)]; this.sub.push(this.cur); }
+  lineTo(x, y) { if (!this.cur) this.moveTo(x, y); else this.cur.push(this._p(x, y)); }
   closePath() { if (this.cur && this.cur.length) this.cur.push(this.cur[0].slice()); }
   quadraticCurveTo(cx, cy, x, y) {
     if (!this.cur) this.moveTo(cx, cy);
+    [cx, cy] = this._p(cx, cy); [x, y] = this._p(x, y);   // affine: transform the controls, curve after
     const [x0, y0] = this.cur[this.cur.length - 1];
     for (let i = 1; i <= SEG; i++) {
       const t = i / SEG, u = 1 - t;
@@ -83,6 +84,7 @@ class RecCtx {
   }
   bezierCurveTo(c1x, c1y, c2x, c2y, x, y) {
     if (!this.cur) this.moveTo(c1x, c1y);
+    [c1x, c1y] = this._p(c1x, c1y); [c2x, c2y] = this._p(c2x, c2y); [x, y] = this._p(x, y);
     const [x0, y0] = this.cur[this.cur.length - 1];
     for (let i = 1; i <= SEG; i++) {
       const t = i / SEG, u = 1 - t;
@@ -102,7 +104,7 @@ class RecCtx {
     const pts = [];
     for (let i = 0; i <= n; i++) {
       const a = a0 + span * (i / n);
-      pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+      pts.push(this._p(cx + Math.cos(a) * r, cy + Math.sin(a) * r));
     }
     // A bare arc after beginPath starts its own subpath, exactly as canvas does
     // when there is no current point.
@@ -114,12 +116,13 @@ class RecCtx {
     for (let i = 0; i <= n; i++) {
       const a = a0 + (a1 - a0) * (i / n);
       const x = Math.cos(a) * rx, y = Math.sin(a) * ry;
-      pts.push([cx + x * c - y * s, cy + x * s + y * c]);
+      pts.push(this._p(cx + x * c - y * s, cy + x * s + y * c));
     }
     this.cur = pts; this.sub.push(this.cur);
   }
+  _box(x, y, w, h) { return [this._p(x, y), this._p(x + w, y), this._p(x + w, y + h), this._p(x, y + h), this._p(x, y)]; }
   rect(x, y, w, h) {
-    this.cur = [[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]];
+    this.cur = this._box(x, y, w, h);
     this.sub.push(this.cur);
   }
   _snap() { return this.sub.map((p) => p.map((q) => q.slice())); }
@@ -133,11 +136,11 @@ class RecCtx {
   }
   clip(rule) { this.st.clip = { pts: this._snap(), rule: rule || "nonzero" }; }
   fillRect(x, y, w, h) {
-    this.ops.push({ kind: "fill", pts: [[[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]]],
+    this.ops.push({ kind: "fill", pts: [this._box(x, y, w, h)],
                     rule: "nonzero", style: this.st.fill, clip: this.st.clip, shadow: this.st.shadow });
   }
   strokeRect(x, y, w, h) {
-    this.ops.push({ kind: "stroke", pts: [[[x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]]],
+    this.ops.push({ kind: "stroke", pts: [this._box(x, y, w, h)],
                     lw: this.st.lw, style: this.st.stroke, clip: this.st.clip, shadow: this.st.shadow });
   }
   measureText(t) { return { width: this._size() * 0.6 * String(t).length }; }
@@ -153,7 +156,7 @@ class RecCtx {
     if (this.st.base === "middle") y0 = y - h / 2;
     else if (this.st.base === "top" || this.st.base === "hanging") y0 = y;
     this.ops.push({ kind: "text", text: String(t), size,
-                    pts: [[[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h], [x0, y0]]],
+                    pts: [this._box(x0, y0, w, h)],
                     rule: "nonzero", style: this.st.fill, clip: this.st.clip,
                     font: this.st.font, shadow: this.st.shadow });
   }
@@ -168,7 +171,23 @@ class RecCtx {
   // the atlas. Recorded as its two tangent points: the corner radius is under
   // a mip at every size this is read at, and nothing here measures a board.
   arcTo(x1, y1, x2, y2) { this.lineTo(x1, y1); this.lineTo(x2, y2); }
-  translate() {} scale() {} rotate() {} setTransform() {} transform() {}
+  // The current transform, so a painter that rotates (LiveryTex.drawSpineTop
+  // runs the title sponsor along the spine) records its points where they
+  // land on the atlas, not in its own rotated frame. Applied as canvas does:
+  // to each point the moment it joins the path or an op.
+  _p(x, y) { const m = this.st.m; return m ? [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]] : [x, y]; }
+  _mul(n) {   // this.st.m = m × n  (n applied first, in local space)
+    const m = this.st.m || [1, 0, 0, 1, 0, 0];
+    this.st.m = [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1],
+                 m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3],
+                 m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+  }
+  translate(tx, ty) { this._mul([1, 0, 0, 1, tx, ty]); }
+  scale(sx, sy) { this._mul([sx, 0, 0, sy == null ? sx : sy, 0, 0]); }
+  rotate(a) { const c = Math.cos(a), sn = Math.sin(a); this._mul([c, sn, -sn, c, 0, 0]); }
+  setTransform(a, b, c, d, e, f) { this.st.m = [a, b, c, d, e, f]; }
+  transform(a, b, c, d, e, f) { this._mul([a, b, c, d, e, f]); }
+  resetTransform() { this.st.m = null; }
 }
 
 // ── geometry ───────────────────────────────────────────────────────────────
