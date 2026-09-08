@@ -1920,6 +1920,11 @@ const Car3D = (function () {
     const wingSurf = wingCarbon ? SURFACES.carbon : SURFACES.paint, wingCol = wingCarbon ? CARBON : wingC;
     const rearC = wingCarbon ? CARBON : (_ckAcc(liv.rearWing) || c2);   // REAR WING block (IBM blue, Visa white) — c2 keeps today's look
     const finC  = _ckAcc(liv.fin) || c2;   // shark-fin plate — c2 keeps today's look
+    // ENGINE COVER (liv.cover): the airbox, roll structure and cover loft in their
+    // own colour — the SF-26's white top over a red chassis, the W17's silver over
+    // black. Absent = c1, today's look. The atlas inks the crest against this too
+    // (liverytex `coverPaint`), or a light cover would swallow a light crest.
+    const coverC = _ckAcc(liv.cover) || c1;
     const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
@@ -2142,7 +2147,7 @@ const Car3D = (function () {
       // whole roll structure wears the sun colour, as the RB22's does, and
       // the atlas paints the disc's rear half on the cover behind it.
       const sunC = (liv.spineLogo === "wrap" && typeof LiveryTex !== "undefined" && LiveryTex.sunColour)
-        ? (_ckAcc(LiveryTex.sunColour(teamId, liv)) || c1) : c1;
+        ? (_ckAcc(LiveryTex.sunColour(teamId, liv)) || coverC) : coverC;
       addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inScale, h: 0.20 * inScale, t: 0.55 },
                    { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, sunC, INTAKE);
       // PRINCIPAL ROLL STRUCTURE. C12.4.1 requires structure at [XC 55, 0, 968]
@@ -2164,7 +2169,7 @@ const Car3D = (function () {
       // A SPINE SIDE mark (liv.spineSide) claims the flank band z -0.72..-1.22:
       // the pinstripe and the service panels keep clear of it (see both sites).
       const sideMark = (liv.spineSide || "none") !== "none";
-      coverGeom = buildEngineCoverBodywork(out, c1, accentC, engStyle, anchors, spineRise(liv.spineHeight), sideMark);
+      coverGeom = buildEngineCoverBodywork(out, coverC, accentC, engStyle, anchors, spineRise(liv.spineHeight), sideMark);
       // Optional scoop lip on the roll-hoop mouth (recipe-gated; default 0).
       const scoopLip = Math.max(0, Math.min(2, Math.round((engStyle && engStyle.scoopLip) || 0)));
       if (scoopLip >= 1) {
@@ -2182,8 +2187,8 @@ const Car3D = (function () {
         const mouth = { z: -0.12, y: 0.96, w: 0.15 * sk, h: 0.10 * sk, t: 0.62 };
         const crest = { z: -0.38, y: 1.02, w: 0.12 * sk, h: 0.13 * sk, t: 0.55 };
         const merge = { z: -0.68, y: 0.88, w: 0.10 * sk, h: 0.09 * sk, t: 0.50 };
-        addSpan(out, mouth, crest, c1, INTAKE);
-        addBeveledSpan(out, crest, merge, 0.010, c1, null);
+        addSpan(out, mouth, crest, coverC, INTAKE);
+        addBeveledSpan(out, crest, merge, 0.010, coverC, null);
         addBox(out, 0, mouth.y + 0.01, mouth.z + 0.01,
                mouth.w * 0.72, mouth.h * 0.55, 0.04, INTAKE);
         if (scoopLip >= 1) {

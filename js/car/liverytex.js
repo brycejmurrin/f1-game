@@ -1622,7 +1622,11 @@ const LiveryTex = (function () {
     const podBg = [board];
     const stripBg = [c2];
     const ink = inkOn([c1, c2]);             // nose / endplate number
-    const inkCrest = inkOn([c1, finPaint]);
+    // The crest, the spine designs and the flank marks all sit on the ENGINE
+    // COVER, so they ink against ITS colour: a white cover (the SF-26) under a
+    // red car would otherwise take the red car's ink and read as nothing.
+    const coverPaint = colors.cover || c1;
+    const inkCrest = inkOn([coverPaint, finPaint]);
     const inkFin = inkOn([finPaint]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks
     const inkStrip = inkOn(stripBg);
@@ -1728,11 +1732,11 @@ const LiveryTex = (function () {
       ctx.translate(Rc.x + Rc.w / 2, Rc.y + Rc.h / 2); ctx.rotate(Math.PI); ctx.scale(1, CROWN_SQUASH);
       const Rb = { x: -sq / 2, y: -sq / 2, w: sq, h: sq };
       if (LOGOS[teamId]) {
-        drawLogoImage(ctx, LOGOS[teamId], Rb, logo, markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
+        drawLogoImage(ctx, LOGOS[teamId], Rb, logo, markHalo(LOGOS[teamId], coverPaint, inkCrest), emblemRim);
       } else drawCrest(ctx, teamId, Rb, { liv: colors, field: [c1, c2], bare: true, palette: Object.assign({}, lockup, { plate: null }) });
       ctx.restore();
     } else if (spineLogo !== "none") {
-      drawSpineTop(ctx, spineLogo, REGIONS.crest, c1, stripe || accent, inkCrest, names[0] || "", raceNum, colors.numFont);
+      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, stripe || accent, inkCrest, names[0] || "", raceNum, colors.numFont);
       if (spineLogo === "saddle") saddleFlanks(ctx, stripe || accent);
     }
     if (REGIONS.tail) {

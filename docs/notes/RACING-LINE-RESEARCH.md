@@ -443,3 +443,43 @@ Not done: nothing outstanding on the lap-time question (the brake formula
 is unchanged and the controller reaches the same apexes, but the smoother
 lateral motion may be worth a tenth); the CI `driving` and `hooks` groups
 were run for this change, the rest of the AI groups were not.
+
+## 9. Late apexes: the mechanism works, the payoff does not (2026-09-08)
+
+`def.lineHints` shipped in §7 and no circuit uses one. The obvious first
+customer is the late apex — every F1 guide says to sacrifice entry for exit at
+the corner feeding a long straight — so the question was which corners, and
+whether it is worth anything here.
+
+**Which corners can be DERIVED, not remembered.** For each baked corner, take
+the distance from its exit to the nearest following turn-in (over every corner,
+not the next one in the list — windows overlap at a chicane, so "the next
+entry" often starts before this one ends). Sort by that gap and the mechanism
+names the corners a person would:
+
+| circuit | corner it picks | feeds |
+|---|---|---|
+| monza | apex s=4845, R=55 m, 288 m long | 1376 m — Parabolica onto the main straight |
+| spa | apex s=1014, R=109 m | 1073 m — Raidillon onto the Kemmel |
+| silverstone | apex s=4002, R=61 m | 788 m |
+| monaco | apex s=1264, R=10 m | 739 m — the hairpin into the tunnel run |
+
+**The payoff did not survive measurement.** A +25 m `apexShift` on Monza's
+Parabolica (turn 11), solo AI flying laps:
+
+| level | before | with the late apex |
+|---|---|---|
+| easy | 128.20 | 128.23 |
+| normal | 124.18 | **123.65** |
+| hard | 119.83 | 119.82 |
+
+One level half a second faster, two flat. The line audit is unchanged
+(max slope 0.432, corner-time gain 1.58 %), so the hint costs nothing — it
+just does not reliably buy anything. That is consistent with the model: lap
+time here comes from the corner-speed model, and the AI blends the line with
+its own lane, so trading entry for exit is not rewarded the way it is in a car.
+
+NOT SHIPPED, and the experiment is reverted. The remaining reason to want it
+is how the DRAWN line looks at a corner players recognise, which is a taste
+question for the owner rather than a measurement — and the derivation above
+means it would not need 24 circuits authored by hand, only a decision.
