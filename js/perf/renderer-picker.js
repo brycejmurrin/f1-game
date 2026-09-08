@@ -195,6 +195,9 @@ const RENDERER_LS_KEYS = [
   "apex26.gfxBackend", "apex26.gfxBackendProbe",
   "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
   "apex26.gfxTlxFail",
+  // The canary's strike counter and the pick it retired: a RESET that left
+  // these behind would hand the next boot a strike it did not earn.
+  "apex26.gfxProbeStrikes", "apex26.gfxBackendWas",
   "apex26.envProbeOff", "apex26.perChunkOff",
   "apex26.tlxForceGL", "apex26.tlxViz",
   "apex26.wgxCapture",

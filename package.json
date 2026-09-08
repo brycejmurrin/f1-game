@@ -42,7 +42,7 @@
     "test:mcp": "node --test tests/unit/tinyfish-mcp.test.mjs tests/unit/probe-mcp.test.mjs tests/unit/environment-json.test.mjs",
     "test:node-slow": "node --test --test-concurrency=1 tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/crest-marks.test.mjs tests/unit/slider-effect.test.mjs",
     "test:sweeps-parts": "node --test tests/unit/parts-visual-distinctness.test.mjs",
-    "test:sweeps": "node --test --test-concurrency=1 tests/unit/prop-clipping.test.mjs tests/unit/lamp-fixture-anchor.test.mjs tests/unit/scenery-grounding.test.mjs tests/unit/road-under-floor.test.mjs tests/unit/coplanar-faces.test.mjs tests/unit/debris-hazard-hint.test.mjs tests/unit/spline-project-height.test.mjs tests/unit/shared-track-foundation-characterization.test.cjs tests/unit/car-front-wing-width.test.mjs tests/unit/grid-boxes.test.mjs tests/unit/driving-line.test.mjs",
+    "test:sweeps": "node --test --test-concurrency=1 tests/unit/prop-clipping.test.mjs tests/unit/lamp-fixture-anchor.test.mjs tests/unit/scenery-grounding.test.mjs tests/unit/road-under-floor.test.mjs tests/unit/coplanar-faces.test.mjs tests/unit/debris-hazard-hint.test.mjs tests/unit/spline-project-height.test.mjs tests/unit/shared-track-foundation-characterization.test.cjs tests/unit/car-front-wing-width.test.mjs tests/unit/grid-boxes.test.mjs tests/unit/driving-line.test.mjs tests/unit/driving-line-opts.test.mjs",
     "test:tiny": "node tools/ci/run-playwright.mjs tests/specs/boot-guard.spec.js tests/specs/smoke.spec.js tests/specs/dev-tools.spec.js tests/specs/logging.spec.js",
     "test:shimmer": "APEX_SHIMMER=1 node tools/ci/run-playwright.mjs tests/specs/material-shimmer.spec.js",
     "test:graph-parity": "node tools/track/graph-parity.cjs --all",

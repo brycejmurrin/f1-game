@@ -70,6 +70,19 @@ async function boot(page) {
  *  Playwright locators need the controls actually rendered, not just present
  *  in the DOM. */
 async function openAudioPanel(page) {
+  // OPEN THE SETTINGS DIALOG FIRST. #audioset is a page INSIDE <dialog
+  // id="pmsettings">, and a closed dialog display:none's its whole subtree — so
+  // clicking #pm-audio unhides the page and Playwright still reads it hidden,
+  // which is how every test in this file failed the moment the `ui` group was
+  // dispatched (2026-09-08; the group has no blocking coverage on a push, so it
+  // had been red unseen). Same route menu-survey.spec.js takes.
+  await page.evaluate(() => {
+    const rd = document.getElementById("rotate-device"); if (rd) rd.hidden = true;
+    document.getElementById("pausemenu").hidden = false;
+    document.getElementById("pm-settings").click();
+  });
+  await page.waitForFunction(() => !document.getElementById("pmsettings").hidden,
+    null, { polling: 100, timeout: 8000 });
   await page.locator("#pm-audio").evaluate((el) => el.click());
   await expect(page.locator("#audioset")).toBeVisible();
   await page.evaluate(() => {

@@ -115,6 +115,15 @@ const Helmets = (function () {
   // the navy under it rather than the reverse, Sainz runs far more yellow than
   // red, Albon's pale pink is an accent on a white lid rather than the shell,
   // and Norris's fluoro was buried under more black than he actually carries.
+  // FOUR OF THE GRID ARE NOT ON THAT SHEET. It carries Doohan and Tsunoda
+  // where Perez, Lindblad, Colapinto and Bottas should be, so those four were
+  // the last designs never measured against anything. They are on the other
+  // reference as three-quarter views, which the (t, az) projection cannot use —
+  // but a PALETTE only needs the pixels, and `--palette` reads one off a crop.
+  // It found that neither Perez nor Lindblad wears any red, which both of mine
+  // did, and that two thirds of Bottas's lid is dark where mine was mostly
+  // royal. Colapinto measured as written and was left alone.
+  //
   // What the trace CANNOT settle is exact band positions — at 250 pixels a
   // helmet, with the shoot's own shading and shadow, the vertical structure is
   // too noisy to paint from, so those stay hand-set against the photographs.
@@ -220,8 +229,8 @@ const Helmets = (function () {
       z.band(0.66, 0.88, C.white), z.key(0.605, C.navy), ...centre(7, C.navy), z.band(0.88, 0.955, C.navy)] },
     // Racing Bulls: sky blue, navy crown, a red centre.
     41: { name: "LIN", base: C.sky, alt: C.crimson, visor: C.black, zones: [
-      z.cap(0.24, C.navy), z.key(0.24, C.red), ...z.sides((a) => z.flash(a, 7, 20, 0.16, 0.58, 24, C.navy)),
-      ...centre(9, C.red), z.band(0.70, 0.84, C.white), z.key(0.84, C.navy), z.band(0.90, 0.955, C.navy)] },
+      z.cap(0.24, C.navy), z.key(0.24, C.gold), ...z.sides((a) => z.flash(a, 7, 20, 0.16, 0.58, 24, C.navy)),
+      ...centre(9, C.gold), z.band(0.70, 0.84, C.white), z.key(0.84, C.navy), z.band(0.90, 0.955, C.navy)] },
     // Haas: red with a carbon crown and skirt, white down the centre.
     31: { name: "OCO", base: C.red, alt: C.white, visor: C.black, zones: [
       z.cap(0.16, C.carbon), z.key(0.16, C.white), ...z.sides((a) => z.flash(a, 8, 22, 0.18, 0.62, 24, C.carbon)),
@@ -267,13 +276,13 @@ const Helmets = (function () {
     11: { name: "PER", base: C.lime, alt: C.royal, visor: C.black, zones: [
       z.cap(0.22, C.black), z.key(0.22, C.white), z.flash(0, 12, 40, 0.18, 0.46, 0, C.black),
       ...z.sides((a) => z.flash(a, 9, 24, 0.18, 0.62, 24, C.black)),
-      z.band(0.70, 0.84, C.black), z.key(0.645, C.red), z.band(0.88, 0.955, C.red)] },
+      z.band(0.70, 0.84, C.black), z.key(0.645, C.navy), z.band(0.88, 0.955, C.navy)] },
     // Cadillac: black with blue through it. Royal as the base, or it is a black
     // lid in a black car.
     77: { name: "BOT", base: C.royal, alt: C.amber, visor: C.silver, zones: [
-      z.cap(0.20, C.black), z.key(0.20, C.sky), z.flash(0, 12, 44, 0.14, 0.44, 0, C.black),
-      ...z.sides((a) => z.flash(a, 10, 26, 0.16, 0.62, 24, C.black)),
-      z.band(0.68, 0.86, C.black), z.key(0.625, C.sky), z.band(0.88, 0.955, C.sky)] },
+      z.cap(0.26, C.black), z.key(0.26, C.sky), z.flash(0, 14, 50, 0.14, 0.46, 0, C.black),
+      ...z.sides((a) => z.flash(a, 12, 30, 0.16, 0.64, 24, C.black)),
+      z.band(0.66, 0.88, C.black), z.key(0.605, C.sky), z.band(0.88, 0.955, C.sky)] },
   };
 
   // A number nobody on the 2026 grid carries — a career driver, a custom grid,

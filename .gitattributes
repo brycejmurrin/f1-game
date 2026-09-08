@@ -1,0 +1,14 @@
+# APPEND-ONLY LOGS merge by keeping BOTH sides.
+#
+# These files are journals: every entry is a dated record that some session
+# added at the end, and two sessions appending on the same day conflict every
+# single time even though neither has touched the other's text. Resolved by
+# hand three times on 2026-09-08 alone, identically each time (keep both), and
+# a hand resolution on a history file is where an entry gets dropped and the
+# reason a ceiling moved is lost. `union` is git's built-in driver and needs no
+# configuration on a fresh clone.
+#
+# This is only correct BECAUSE they are append-only. Anything that rewrites
+# earlier entries must not be listed here — union would keep both versions of
+# the rewritten text.
+docs/notes/CEILING-HISTORY.md   merge=union

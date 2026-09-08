@@ -2384,3 +2384,29 @@ files are not ratcheted.
   extraction of that block rather than more headroom. Each of the three was
   deliberate on its own and the run of them is a smell, which is exactly what
   this file exists to make visible.
+- `js/game.js` lines 10244 -> **10217**, codeLines 5561 -> **5543**, topLets
+  159 -> **158** (2026-09-08): LOWERED, by the extraction the entry above said
+  a fourth raise should buy. LINE COLOUR, LINE OPACITY and BRAKE CUE left
+  `game.js` for `js/ui/driving-line-opts.js` — the three rows are player
+  PREFERENCES, they need only `DrivingLine`, `SettingRow` and the store, and
+  nothing from the `G` façade, so they had no business in the entry file.
+  `CockpitOpts` is the same shape for the same reason. The MODE stays in
+  `game.js`: it is a property of the race, not of the player, and the UI
+  already draws that split (RACE SETTINGS vs SETTINGS).
+
+  Net for the day on `game.js`: three raises for three features, then one
+  extraction that gave back 27 lines, 18 codeLines and a `let` — more than the
+  BRAKE CUE raise cost. `shellNodes` is unchanged at 1347 and stays there; the
+  rows still live in the shell, which is where all static DOM lives.
+- `js/game.js` lines 10244 -> **10274**, codeLines 5561 -> **5578** (2026-09-08): the boot canary stops
+  retiring a renderer on ONE strike. It used to persist `webgl2` over the
+  player's pick the first time a load died before presenting a frame — but on
+  iOS that is a jetsam, which happens for reasons that have nothing to do with
+  the renderer, and the write is permanent: the phone quietly stops using
+  three and nothing ever turns it back on. Reported as "three is no longer
+  working on phone" and traced to this line. The first strike now reverts for
+  that boot only and leaves the pick alone; the second retires it, so a device
+  that genuinely cannot run the backend still settles after two attempts with
+  no reload loop. A backend that proves itself clears its strikes, the retired
+  pick is remembered in `apex26.gfxBackendWas`, and both latches join
+  RESET RENDERER's list (the frozen copy in gfx-backend-canary is updated).
