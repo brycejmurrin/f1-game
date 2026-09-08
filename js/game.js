@@ -4112,7 +4112,7 @@ const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0
 const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
-const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0 };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, roll: 0.5 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const LCAR = 4.8, WCAR = 2.0;
@@ -5043,6 +5043,8 @@ function updateCar(c, dt, ranked) {
     let overtake = 0;
     const CLEAR = AiDrive.minLatGap(hw, !!track.street);
     c.passCool = Math.max(0, (c.passCool || 0) - dt);
+    c.passFailT = Math.max(0, (c.passFailT || 0) - dt);
+    const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
     // THE PASS LATCH. Once a pass is chosen it is held as a POSITION beside the
     // car being passed (AiDrive.passTarget) with the side FROZEN, and it is
     // released only on a real outcome: we are past, we lost the car, the side
@@ -5058,6 +5060,12 @@ function updateCar(c, dt, ranked) {
       else if (dp < -(LCAR + 1.5)) { c.passOf = null; }                                              // PAST: done
       else if (sideRoom < WCAR) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed
       else if (squeezed) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }             // walked to the edge: abandon it
+      // NOT ON: at the turn-in and still not half alongside — that is a lunge
+      // (the FIA's inside-pass entitlement is the front axle past the mirror
+      // at the apex). Abandon it, and remember the car: the same car is not
+      // re-attacked for twice the cooldown (rFactor 2's "threshold endured").
+      // A car with 12 % of pace in hand keeps the move: it will be alongside under braking.
+      else if (_atk.toTurnIn < 6 && dp > AiDrive.sideLevel() && aiFreeSpeed < (po.human ? po.speed : (po._vmaxNow || 0)) + 0.12 * vTop()) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); c.passFailOf = po; c.passFailT = 2 * AiDrive.passCooldown(aiT); }
       else {
         // Patience refreshes while we GAIN on the car; it runs down while we do not.
         if (dp < c.passBest - 0.3) { c.passBest = dp; c.passT = AiDrive.passHold(aiT); }
@@ -5082,13 +5090,21 @@ function updateCar(c, dt, ranked) {
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage: a clear lane on the chosen side, and no cooldown from a pass we
       // just gave up on this same stretch.
-      if (!c.passOf && c.passCool <= 0 && AiDrive.otWant(_aiOtPull)) {
+      // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
+      // attack zone at its baked quality), and not on a car we just gave up on.
+      _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.roll = c.phaseRoll || 0.5;
+      const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
+      const moveOn = !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
+      if (!c.passOf && c.passCool <= 0 && moveOn) {
         const side = AiDrive.otSide(_aiOtPull);
         if ((side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
           c.passOf = blocker; c.passSide = side; c.passBest = blockerGap; c.passT = AiDrive.passHold(aiT);
         }
       }
-      if (!c.passOf) overtake = AiDrive.otPull(_aiOtPull);
+      // Not on: FOLLOW, do not hang half alongside — the bias without the
+      // commitment is what parked pairs side by side at monaco (standoffs
+      // 0 -> 6 in the bench with the zone gate alone).
+      if (!c.passOf) overtake = moveOn ? AiDrive.otPull(_aiOtPull) : 0;
     }
     if (c.passOf) overtake = AiDrive.passTarget(c.passOf.x, c.passSide, CLEAR, hw) - targetX;
     // LET PASS moves aside instead of defending; the `!letPass` below is what

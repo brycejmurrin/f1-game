@@ -506,6 +506,42 @@ const AiDrive = (function () {
   // scrubbed to a crawl. Racing's own rule (the FIA driving standards' "a
   // significant portion alongside" — front axle past the other car's mirror) is
   // half a car: inside that, both must leave room, so the OUTER car concedes.
+  // IS THE MOVE ON? A pass is engaged only where it is deliberate: on a straight
+  // (base quality 0.6 — a straight with a tow is always a place to pass), or in
+  // an attack zone at the zone's baked quality (TrackLine.attackAt: straight
+  // length x width). The utility is that quality times how hard we are closing,
+  // scaled by craft (a good racer sees a move where a rookie does not) and a
+  // per-car roll — Game AI Pro's "not every opportunity should be taken, and
+  // randomness or a biorhythm trait should contribute". Below the threshold the
+  // car shadows the one ahead (otPull) and waits for a better place. Measured
+  // before: monza 3.7 sticking passes per field lap early in a race with a
+  // third of all passes flipping straight back; monaco 1.3 (the real Monaco
+  // sees a handful per race).
+  function attackOK(ctx) {
+    const inZone = (ctx.toTurnIn != null ? ctx.toTurnIn : 1e9) < 130;
+    // A straight is a place to pass (0.6); a bend fades it out by 0.02 rad/m.
+    const bend = clamp(1 - (Math.abs(ctx.kAhead || 0) - 0.004) / 0.016, 0, 1);
+    let q = inZone ? (ctx.attackQ || 0) : lerp(0.15, 0.6, bend);
+    // A car with genuinely LESS PACE is passed wherever: the quality floor rises
+    // with the pace deficit (12 % of the top speed is a floor of 0.6; a car
+    // crawling under 12 % is 1) — this is what keeps a slow player passable on
+    // a street circuit whose zones are all narrow (measured without it: 3 of
+    // 10 followers past a slow car at monaco in four minutes, 10 of 10 with).
+    // The floor starts at a 6 % deficit — the field's own tier spread — and is
+    // full at 12 %, so a slightly slower rival is still passed only where the
+    // move is on, while a genuinely slow car (the 14 % slow player in the
+    // bench) is attacked anywhere.
+    const ref = ctx.vTop > 0 ? ctx.vTop : 72;
+    const bv = ctx.blockerVmax > 0 ? ctx.blockerVmax : (ctx.blockerSpeed || 0);
+    const deficit = clamp((((ctx.freeSpeed || 0) - bv) / ref - 0.06) / 0.06, 0, 1);
+    if ((ctx.blockerSpeed || 0) < 0.12 * ref) q = 1; else q = Math.max(q, 0.6 * deficit);
+    const closing = clamp(((ctx.speed || 0) - (ctx.blockerSpeed || 0)) / 6, 0.25, 1);
+    const craft = lerp(0.7, 1.25, ctx.traits ? ctx.traits.craft : 0.75);
+    const roll = 0.85 + 0.3 * (ctx.roll != null ? ctx.roll : 0.5);
+    return q * Math.max(closing, deficit) * craft * roll >= 0.32;
+  }
+  function sideLevel() { return SIDE_LEVEL; }
+
   const SIDE_LEVEL = 2.4;
   function sideYieldsA(dProg, xA, xB) {
     if (dProg < -SIDE_LEVEL) return true;        // A is behind B
@@ -632,6 +668,6 @@ const AiDrive = (function () {
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
     otWant, passTarget, passHold, passCooldown, sideYieldsA,
     launchPlan, launchMul, launchDone, pacePhase, rubDecel, bumpRestitution, humanPuntCap, squeezeEase, squeezeBrake,
-    holdLineGap, defendOnce, lineFollow,
+    holdLineGap, defendOnce, lineFollow, attackOK, sideLevel,
   };
 })();

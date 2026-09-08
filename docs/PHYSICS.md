@@ -380,6 +380,24 @@ the numbers):
   clause reads the blocker's acceleration (`c.accSm` on an AI car, `axEstSm` on
   a human), so a launching grid is not 21 cars latching a pass on the car ahead.
 
+- **A pass is engaged only where the move is on** (`AiDrive.attackOK`,
+  `TrackLine.attackAt`). Each corner's braking zone (130 m before the turn-in)
+  carries a baked quality: the length of the straight feeding it (0 at 60 m,
+  1 at 450 m) times the road width (0 at a 4 m half-width, 1 at 6.5 m) — Game
+  AI Pro's per-corner overtaking flags. Outside a zone a straight is 0.6 and a
+  bend fades to 0.15. The utility is that quality times the closing rate, times
+  craft (0.7–1.25) and a per-car roll; below 0.32 the car FOLLOWS — it does not
+  hang half alongside (the bias without the commitment parked pairs side by
+  side at monaco). A car with real pace in hand is passed wherever: the quality
+  floor rises from a 6% deficit (the field's own tier spread) to 0.6 at 12%,
+  and a crawling car is 1. A pass still behind by more than half a car at the
+  turn-in is a lunge: abandoned, and that car is not re-attacked for twice the
+  cooldown (rFactor 2's "threshold endured") — unless the attacker has 12% of
+  pace in hand, in which case it will be alongside under braking anyway.
+  Measured (sticking position swaps per field lap, six minutes, after the first
+  minute): monaco 1.29 → 0.65 with flip-backs 25 → 3 — the real Monaco sees a
+  handful of passes per race; monza 3.7 → 3.8, unchanged, since a long straight
+  into a wide braking zone is where the move IS on.
 - **No moving under braking** (`AiDrive.holdLineGap`). Braking with a car
   within a second behind (eight metres at least), and not itself attacking,
   an AI freezes its offset from the racing line at what it was when the brakes

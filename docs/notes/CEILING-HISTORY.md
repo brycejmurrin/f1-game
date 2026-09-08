@@ -2173,6 +2173,20 @@ function); `cssClasses` fell (`.rs-row` retired).
   so this is where the AI drives, not how fast; corner speed still comes from
   the road's curvature.
 
+- `js/game.js` lines 10002 -> **10018**, codeLines 5445 -> **5451**
+  (2026-09-08): deliberate overtaking. Six code lines: the baked attack zone
+  read (1), the move-on gate feeding the pass latch and the follow-instead-of-
+  hang-alongside (3), the turn-in give-up with its per-car memory (1), and the
+  memory's decay (1). The decisions — `attackOK`, the pace-deficit floor, the
+  lunge rule's half-car line — are in `js/physics/ai-drive.js`, the zones in
+  `js/track/core/line.js` (`attackAt`), both unit-tested. Measured (sticking
+  position swaps per field lap, six minutes after the first): monaco
+  1.29 -> 0.65 with flip-backs 25 -> 3; monza unchanged at ~3.8 because a long
+  straight into a wide braking zone IS where the move is on. The slow player is
+  still passed: 10/10 followers at monza, 8/10 at monaco in four minutes
+  (7/10 before the pace-deficit floor was added; 3/10 with the zone gate
+  alone, which is the measurement that put the floor in).
+
 ## 2026-09-08 — DRIVING LINE: shellNodes +6, game.js +~30 lines
 
 `shellNodes` RAISED by six for one more setting row in RACE SETTINGS: DRIVING
