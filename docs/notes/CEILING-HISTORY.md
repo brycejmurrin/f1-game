@@ -2367,3 +2367,20 @@ files are not ratcheted.
   instead of the first driver, in its cache key as well as its build. Ten lines
   and one code line; the rest fold inline. The lines are the comments saying
   why, which are worth more than the lines.
+- `js/game.js` lines 10188 -> **10206**, codeLines 5545 -> **5552**, topLets
+  157 -> **158**; (tree) shellNodes 1340 -> **1347** (2026-09-08): SETTINGS ›
+  BRAKE CUE, the CUE rung of the assist ladder in
+  `docs/research/DRIVING-CONTROLS-RESEARCH.md`. Seven shell nodes for the
+  set-row, one `let` for the preference, the wire block, the boot restore, and
+  one line in the sim tick that hands `DrivingLine.cue()` to
+  `GameAudio.brakeCue()`. `js/audio/engine.js` paid nothing: the seam was
+  already there — `brakeCue(_urgency)` with the argument deliberately unused
+  "so a future LIGHT/FULL level can share the voice" — so this filled it in
+  rather than adding a function.
+
+  **This is the THIRD raise on game.js today** (LINE COLOUR, LINE OPACITY,
+  BRAKE CUE) and the trend is the point of writing it down: the driving line
+  now owns four settings rows and their wires, and a fourth raise should buy an
+  extraction of that block rather than more headroom. Each of the three was
+  deliberate on its own and the run of them is a smell, which is exactly what
+  this file exists to make visible.
