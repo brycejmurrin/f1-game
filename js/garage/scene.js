@@ -515,7 +515,7 @@ function buildProps(g, liv) {
 // The car's wheels: x +/-0.79 front at z 1.7, x +/-0.76 rear at z -1.6, r 0.34
 // (js/car/car3d.js AXLES) — the floor boxes and the guns are placed off those.
 const RUBBER = [0.045, 0.045, 0.050], HOSE = [0.12, 0.14, 0.20];
-const FAN = [4.5, 3.75], SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
+const FAN = [4.5, 3.45], SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
 const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90],
                   [0.10, 0.60, 0.25], [0.15, 0.35, 0.85]];   // S M H, inter, wet
 function buildEquipment(g, liv, ctx) {
@@ -614,8 +614,9 @@ function buildEquipment(g, liv, ctx) {
   }
   // EXTRACTOR FAN housing, high on the back wall; the blades are a separate
   // mesh so they can turn (fanMesh, drawn in draw()).
-  // At y 3.75, r 0.36: the FRONT preset's frame tops out at y 3.76 on this
-  // wall, and the cable ladder runs at 4.22 — a fan any higher is never seen.
+  // At y 3.45, r 0.36: the FRONT preset's frame tops out at y 3.76 on this
+  // wall (at 3.75 the frame edge cut it in half), and the pit board below
+  // tops out at 2.92.
   tube(g.back, [FAN[0], FAN[1], Z_BACK + 0.02], [FAN[0], FAN[1], Z_BACK + 0.22], 0.36, scale(STEEL, 0.7), 16, MAT.METAL);
   tube(g.back, [FAN[0], FAN[1], Z_BACK + 0.10], [FAN[0], FAN[1], Z_BACK + 0.24], 0.32, [0.03, 0.032, 0.038], 16);   // the dark throat
   for (let i = 0; i < 3; i++) {                                                  // guard bars
@@ -800,10 +801,14 @@ const GANTRY_TINT = [1.0, 0.93, 0.78];
 let pulseAt = -1e9, spotName = null, nightNow = false;
 function pulse() { pulseAt = typeof performance !== "undefined" ? performance.now() : Date.now(); }
 function spot(name) { spotName = name || null; }
-// Where the work lamp stands for each preset, and what it looks at.
+// Where the work lamp stands for each preset, and what it looks at. Each
+// stand is OUTSIDE that preset's frame (the fit is +/-3.1 m across the view
+// axis at the car) and never on the eye-to-car line — the first pass put the
+// SIDE lamp at x 2.9, z 0.4, which is a tripod planted in front of the car
+// in the one view that exists to show its flank.
 const SPOTS = {
-  hero: [2.8, -2.9, 0, 0.7, -1.6], wingRear: [2.1, -3.9, 0, 0.9, -2.7], rear: [-2.4, -4.0, 0, 0.6, -2.6],
-  side: [2.9, 0.4, 0.8, 0.4, 0.6], front: [-2.5, 3.7, 0, 0.5, 2.4], wingFront: [-2.2, 3.5, 0, 0.5, 2.9],
+  hero: [-2.6, -3.6, 0, 0.7, -1.4], wingRear: [-2.2, -4.2, 0, 0.9, -2.7], rear: [-3.4, -4.6, 0, 0.6, -2.6],
+  side: [2.6, 4.3, 0.8, 0.4, 0.6], front: [-3.4, 4.6, 0, 0.5, 2.4], wingFront: [-2.6, 4.4, 0, 0.5, 2.9],
 };
 const PARK = [-4.0, 2.2];
 let lampAim = [PARK[0], 0, PARK[1], 0, 0, 0, 0];   // x, z, yaw, on, ax, ay, az
