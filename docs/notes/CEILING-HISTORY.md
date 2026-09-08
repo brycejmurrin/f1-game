@@ -2159,3 +2159,18 @@ lines of shape- and density-keyed grid placement in `css/menus.css` that fitted
 the chip groups on a landscape phone are two rules. `js/game.js` shrank (the
 seven chip-building loops are eight `SettingRow.paint` calls and one wiring
 function); `cssClasses` fell (`.rs-row` retired).
+
+- `js/game.js` lines 9978 -> **9993**, codeLines 5435 -> **5446** (2026-09-08):
+  the garage room reads the game beyond the car. `garageCtx()` hands
+  `GarageScene.draw` the circuit the next race runs at (career calendar,
+  free-play season, else the picker), its weather and hour, and the career's
+  wins, last result and sponsor — so the bay's trolleys, timing screen, door
+  sign, trophy case and banners can follow the game state. Ten lines at the
+  one call site, plus one in setSetupView so the work lamp follows the preset; the room itself lives in `js/garage/scene.js`, unratcheted.
+
+- `js/render/glx/glx.js` lines 2297 -> **2303** (2026-09-08): `draw()` gains
+  `opts.noDepthTest` for the garage's floor reflection — the car mirrored in
+  y = 0 sits BEHIND the floor's depth, so it draws untested and unwritten
+  straight after the floor, and every opaque draw after it clips it for free.
+  Six lines (three of comment) at the one draw path; no stencil, no second
+  floor pass.
