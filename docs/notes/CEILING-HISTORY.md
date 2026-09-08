@@ -2252,6 +2252,14 @@ live outside the backends (`js/render/shared/driving-line.js`, the fragment
 shaders); each backend carries only its upload and draw. WGX and TLX gained
 the same pass the same day (`WGSLFx.LINE`, `tsl-fx.js` `lineMat`) — those
 files are not ratcheted.
+- `js/game.js` lines 10157 -> **10168**, codeLines 5529 -> **5533**;
+  `js/agent/apex.js` lines 2732 -> **2738**, codeLines 2026 -> **2027**
+  (2026-09-08): the phone renderer default and the GARAGE file. game.js's four
+  code lines are the touch-device fall-through for `apex26.gfxBackend` (held in
+  memory, never written, so "unset" still means the default and the boot canary
+  can still revert it); apex.js's one is `garageFile()`, the read-only twin of
+  `settingsFile()`. Both carry the comment a reader needs to know why the
+  default is not simply written to storage.
 - `js/lighting/presets.js` lines 15508 -> **17318** (+1810), `js/game.js` lines
   10154 -> **10157** (2026-09-08): THE OWNER'S SETTINGS FILE BAKED AS DEFAULTS.
   The presets growth is 201 LIGHTING TUNER profiles merged through
@@ -2321,3 +2329,14 @@ files are not ratcheted.
   if it reads at a glance. Evidence and palette source:
   `docs/notes/DRIVING-LINE-RESEARCH.md`.
 
+- `js/car/car3d.js` lines 3805 -> **3826** (2026-09-08): the FRONT-WING ENDPLATE
+  placement comes out of the builder. The plate profile table and a
+  `frontPlateGeom(aLvl, aero)` accessor now sit at module scope and the builder
+  reads them, so the decal mesh can land on the plate at every recipe — its
+  height, outboard kick, thickness and taper all move with the aero level and
+  the `plate` pick, and a decal drawn from literals floats on most of them (the
+  first cut sat 641 mm inboard). Same reason `numberBoard()` was hoisted for the
+  rear wing. The car is unchanged: one build hash over four teams crossed with
+  four recipes is identical before and after, and
+  tests/unit/front-wing-decal.test.mjs measures the shipped quads against the
+  shipped car.
