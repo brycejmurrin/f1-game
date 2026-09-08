@@ -54,6 +54,20 @@ export function assertGarageInterior(samples, { minSpread = 28, minDarkFrac = 0.
   const topMean = topN ? topL / topN : 0;
   const botMean = floorN ? botL / floorN : 0;
 
+  // ALL DARK — the shape a CLEARED canvas readback has. Every rule below is
+  // written to catch a frame that is too FLAT or too BRIGHT, and black is
+  // neither by their arithmetic: spread 0 and rgbSpread 0 read as a flat wall,
+  // but the flat-wall rule also demands darkFrac BELOW its floor and black
+  // scores 1.0, so nothing fired and assertGarageInterior returned ok on
+  // meanRgb [0,0,0]. That is how garage-frame's gate passed every frame it was
+  // meant to judge while reading ctx.drawImage(#game) off a context with no
+  // preserveDrawingBuffer. The caller now samples the captured PNG instead;
+  // this is the second line of defence, because a gate that cannot fail on
+  // black is not a gate.
+  if (darkFrac > 0.98) {
+    return { ok: false, reason: "all_dark", spread, rgbSpread, darkFrac };
+  }
+
   // Uniform teal/grey bay wall — tight colour, almost no floor/car darks.
   if (spread < minSpread && rgbSpread < 14 && darkFrac < minDarkFrac) {
     return {
