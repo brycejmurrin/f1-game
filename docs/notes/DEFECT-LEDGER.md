@@ -21,6 +21,17 @@ Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
 `lapMirror` portal remaps have landed in code. Remaining survey leftovers live
 on the 08-18 perf-hunt board, not this register.
 
+- **TLX: every road decal (driving line, blob shadow, tyre mark, skid) was
+  buried under the road — FIXED (2026-09-08).** `tsl-fx.js` `fxMaterial`
+  copied GLX's `polygonOffset(-4,-8)`, but three honours the road's own
+  `depthBias [-8,-16]` (game.js `_wmRoad*`) on both of its backends while
+  GLX draws the road unbiased, so the decals failed the depth test on real
+  hardware (gpu-census 48: chevrons on GLX and WGX, none on TLX, `gpuErrors
+  0`) and on lavapipe. Now `-12/-24` — the road's bias plus GLX's margin;
+  `tests/unit/gfx-backend-canary.test.mjs` pins the fx offset beyond the
+  road's. Lesson: a submitted draw with zero GPU errors is not a drawn
+  pixel; `backendState.line` reports the pooled mesh, the census reads the
+  frame.
 - **Montreal: a bridge support floats 2.72 m off the ground — FIXED in
   engine + circuit.** `foundation()` now falls back to `Tracks.terrainY` when
   the build-time 30 m triangle grid misses a `flatTerrain` shelf, and the
