@@ -2410,3 +2410,15 @@ files are not ratcheted.
   no reload loop. A backend that proves itself clears its strikes, the retired
   pick is remembered in `apex26.gfxBackendWas`, and both latches join
   RESET RENDERER's list (the frozen copy in gfx-backend-canary is updated).
+
+- `js/game.js` lines 10247 -> **10253**, codeLines 5560 -> **5561** (2026-09-08):
+  `resolveLivery()` now falls back through the team's own livery list. A stored
+  livery id that no longer resolves used to land on a bare
+  `{ c1, c2, stripe: null, accent: null }` literal, which drops every structural
+  field the team sets — `finShape: "none"`, `spineHeight: "dorsal"`, `spineSide`,
+  `cover` — so the car grew a shark fin and a flat spine instead of racing the
+  shape it actually races. Deleting a fitted livery re-points to `"default"`
+  itself, so the branch was unreachable until the garage-file import shipped:
+  a file naming `livery.<team>` without the matching `livery.custom.<team>`
+  array leaves exactly that dangling id, with no validation on the way in.
+  One statement (`const list = getLiveries(team)`) plus the note above it.
