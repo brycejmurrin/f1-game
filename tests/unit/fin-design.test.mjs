@@ -143,6 +143,16 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   // AND the flank band with no spineSide picked, and leaves the tail bare.
   const wrap = A.paint("redbull", { ...BASE, spineLogo: "wrap" });
   assert.ok(opsIn(wrap, R.crest).length > 0 && opsIn(wrap, R.spineSide).length > 0, "wrap reaches both the crown and the flank band");
+  // Each flank is its own region, authored in its own outside-view frame:
+  // whatever paints the right flank paints the left one too, and the atlas
+  // is taller than it is wide to hold it.
+  assert.ok(A.LT.SIZE_H > A.LT.SIZE && R.spineSideL && R.spineSideL.y + R.spineSideL.h <= A.LT.SIZE_H, "the left flank lives in the atlas's extra rows");
+  assert.ok(opsIn(wrap, R.spineSideL).length > 0, "wrap paints the left flank too");
+  for (const id of ["number", "logo", "plate", "wordmark", "duo", "slash"]) {
+    const ops = A.paint("ferrari", { ...BASE, spineSide: id });
+    assert.ok(opsIn(ops, R.spineSide).length > 0 && opsIn(ops, R.spineSideL).length > 0, `${id} paints both flanks`);
+  }
+  assert.equal(opsIn(A.paint("ferrari", BASE), R.spineSideL).length, 0, "the left flank is bare by default too");
   assert.equal(opsIn(wrap, R.tail).length, 0, "wrap leaves the tail bare");
   // The saddle too runs down the flanks (the SF-26's white), so it paints the
   // band with no side pick; the panel stays on the crown alone.

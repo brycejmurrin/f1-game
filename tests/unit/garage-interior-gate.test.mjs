@@ -86,3 +86,56 @@ it("the garage tab grid has a slot for every tab it builds", () => {
   assert.ok(tabs > 14, `the roster is ${tabs} tabs — past the 14 the old literal allowed`);
   assert.ok(Math.ceil(tabs / 2) * 2 >= tabs, "ceil(tabs / 2) columns over two rows seats every tab");
 });
+
+/* A GATE THAT CANNOT FAIL ON BLACK IS NOT A GATE (2026-09-08).
+ *
+ * garage-frame.mjs sampled its pixels from ctx.drawImage(#game) inside the
+ * page. The WebGL2 context carries no preserveDrawingBuffer, so the drawing
+ * buffer is cleared after compositing and that readback is solid black from
+ * any evaluate outside the frame — measured meanRgb [0,0,0]. The gate then
+ * returned ok:true on it, because every rule was written to catch a frame that
+ * was too FLAT or too BRIGHT: black has spread 0 and rgbSpread 0 like a flat
+ * wall, but the flat-wall rule also requires darkFrac BELOW its floor and
+ * black scores 1.0, so nothing fired. The tool reported `interior.ok` on every
+ * frame it was meant to judge.
+ *
+ * Two things hold that shut, and this pins both: the gate rejects an all-dark
+ * sample, and the tool no longer reads the live canvas at all. */
+describe("the interior gate on a cleared-buffer frame", () => {
+  it("rejects an all-black sample instead of calling it an interior", () => {
+    const black = Array.from({ length: 60 }, (_, i) => ({ rgb: [0, 0, 0], ny: i / 60 }));
+    const gate = assertGarageInterior(black);
+    assert.equal(gate.ok, false, "an all-black frame must never pass the interior gate");
+    assert.equal(gate.reason, "all_dark");
+  });
+
+  it("rejects a near-black sample too — the clear is not always exactly 0", () => {
+    const nearly = Array.from({ length: 60 }, (_, i) => ({ rgb: [3, 2, 4], ny: i / 60 }));
+    assert.equal(assertGarageInterior(nearly).ok, false);
+  });
+
+  it("still passes a frame with real interior structure", () => {
+    // Dark floor low, lit wall high, a bright car band — spread and colour
+    // variance both real. Guards against the all_dark rule swallowing good frames.
+    const good = [];
+    for (let i = 0; i < 60; i++) {
+      const ny = i / 60;
+      good.push({ rgb: ny > 0.72 ? [18, 20, 24] : (i % 3 ? [past(i), 96, 70] : [140, 150, 165]), ny });
+    }
+    function past(n) { return 60 + (n * 7) % 180; }
+    const gate = assertGarageInterior(good);
+    assert.equal(gate.ok, true, `expected a pass, got ${JSON.stringify(gate)}`);
+  });
+
+  it("garage-frame samples the CAPTURED png, never the live canvas", () => {
+    const rd = (f) => fs.readFileSync(path.join(REPO, f), "utf8");
+    const frame = rd("tools/shot/garage-frame.mjs");
+    const probe = rd("tools/capture/probe-page.mjs");
+    assert.match(frame, /sampleGarageGapPixels/, "the gate's input comes from the sampler");
+    assert.match(frame, /sharp\(pngPath\)/, "…fed from the captured PNG");
+    assert.doesNotMatch(probe, /drawImage\(el/,
+      "probe-page must not read the live WebGL canvas back — that is the cleared buffer");
+    assert.doesNotMatch(frame, /gapSample/,
+      "the drawImage-fed gapSample field is gone; nothing may depend on it again");
+  });
+});
