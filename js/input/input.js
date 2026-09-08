@@ -534,6 +534,13 @@ const Input = (function () {
   // press that binds B cannot also back out of the sheet. `null` disarms.
   function padCapture(cb) { padCaptureCb = typeof cb === "function" ? cb : null; }
   function padPresent() { return padConnected || !!activePad(); }
+  // A physical keyboard has been seen: any trusted key press outside a text
+  // field. A phone's on-screen keyboard only fires while a field is focused, so
+  // this never latches on one; a Bluetooth keyboard on a tablet does. The
+  // CONTROLS page uses it to reveal the KEYBOARD table where pointer: coarse
+  // hid it (Input.keyboardSeen), the twin of padPresent for the pad table.
+  let kbSeen = false;
+  function keyboardSeen() { return kbSeen; }
   const PAD_NAMES_XBOX = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "VIEW", "MENU", "LS", "RS", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "HOME"];
   const PAD_NAMES_PS = ["CROSS", "CIRCLE", "SQUARE", "TRIANGLE", "L1", "R1", "L2", "R2", "SHARE", "OPTIONS", "L3", "R3", "D‑PAD ↑", "D‑PAD ↓", "D‑PAD ←", "D‑PAD →", "PS"];
   // The name on a chip: Xbox names unless the connected pad says PlayStation.
@@ -582,6 +589,11 @@ const Input = (function () {
     // through to the switch below is exactly how an arrow key ended up steering a
     // paused car.
     const typing = interactive && !hudControl;
+    // The keyboard latch: any trusted press that is not text entry. A focused
+    // BUTTON still counts (the menus keep one focused, and a key on it is a
+    // keyboard); a field does not, because a phone's on-screen keyboard fires
+    // there too.
+    if (down && e.isTrusted !== false && !(tag === "INPUT" || tag === "TEXTAREA" || (active && active.isContentEditable))) kbSeen = true;
     /* PAUSE AND BACK ARE COMMANDS, NOT DRIVING CONTROLS, so they sit ABOVE the
        driving gate — but still below the typing check, because P in a text
        field is a letter.
@@ -1577,7 +1589,7 @@ const Input = (function () {
   return {
     init,
     reset,
-    keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel,
+    keyBindings, setKeyBinding, clearKeyBinding, setKeyMap, getKeyMap, resetKeys, keysAreDefault, keyLabel, keyboardSeen,
     padBindings, setPadBinding, clearPadBinding, setPadMap, getPadMap, resetPad, padsAreDefault, padLabel, padCapture, padPresent,
     debugState,
     poll: pollGamepad,

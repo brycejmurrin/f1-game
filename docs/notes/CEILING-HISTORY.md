@@ -2240,3 +2240,13 @@ brakes in — the builder itself lives outside game.js on purpose. `js/agent/ape
   `opts.laps` so a harness can set the race distance (the tyre draw reads it
   at grid-up); without it every VM race is the game default and a strategy
   bench cannot see a crossover.
+- `js/game.js` lines 10088 -> **10089**, codeLines 5497 -> **5498**;
+  `js/agent/apex.js` lines 2662 -> **2668**, codeLines 2011 -> **2012**;
+  (tree) shellNodes 1325 -> **1326** (2026-09-08): the SETTINGS FILE. One
+  wiring line in game.js (`SettingsExport.create(G)`), one hook in apex.js
+  (`settingsFile(mode)`, the pure half the buttons download) and one shell
+  node, `#pm-ctl-hint` — the line a touch device reads under CONTROLS while
+  the KEYBOARD and CONTROLLER tables wait for a key or a pad. The export
+  itself is a new module, `js/ui/settings-export.js`; its buttons inject into
+  the RENDERER fold at DOMContentLoaded like RendererPicker's, so they cost no
+  shell nodes.

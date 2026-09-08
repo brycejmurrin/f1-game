@@ -341,7 +341,8 @@
         "tests/unit/brake-cue.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/key-binds.test.mjs",
-        "tests/unit/onboard.test.mjs"
+        "tests/unit/onboard.test.mjs",
+        "tests/unit/settings-export.test.mjs"
       ]
     },
     "test:ui": {

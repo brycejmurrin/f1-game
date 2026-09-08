@@ -244,3 +244,74 @@ test("button names follow the connected pad's family", () => {
   assert.equal(Input.padLabel(6), "L2");
   assert.equal(Input.padLabel(9), "OPTIONS");
 });
+
+// ---- the tables on a touch device ------------------------------------------
+// pointer: coarse says nothing about whether a keyboard exists. The KEYBOARD
+// table used to be hidden by CSS on every touch device; now the module shows it
+// once a physical key is seen (Input.keyboardSeen), the way the CONTROLLER
+// table already waited for a pad — and one hint line says what to press.
+
+test("Input.keyboardSeen latches on a key outside a field, never on typing", () => {
+  const { Input, key, sb } = boot();
+  assert.equal(Input.keyboardSeen(), false);
+  sb.document.activeElement = { tagName: "INPUT" };
+  key("KeyA", true); key("KeyA", false);
+  assert.equal(Input.keyboardSeen(), false, "an on-screen keyboard only fires into a focused field");
+  sb.document.activeElement = { tagName: "BUTTON" };
+  key("KeyA", true); key("KeyA", false);
+  assert.equal(Input.keyboardSeen(), true, "a key on a focused menu button is a keyboard");
+});
+
+// A DOM just deep enough for KeyBinds.create: elements by id with hidden,
+// textContent and children; createElement for the rows.
+function bootUi(desktop) {
+  const { Input, key, sb, fire } = boot();
+  const nodes = {};
+  const mk = () => {
+    const n = { hidden: false, textContent: "", dataset: {}, disabled: false, style: {}, kids: [],
+      setAttribute() {}, append(...a) { this.kids.push(...a); }, appendChild(a) { this.kids.push(a); },
+      addEventListener() {}, removeEventListener() {} };
+    return n;
+  };
+  sb.document.getElementById = (id) => (nodes[id] ||= mk());
+  sb.document.createElement = () => mk();
+  sb.document.body.classList.contains = (c) => c === "desktop" && desktop;
+  sb.document.readyState = "complete";
+  const winListeners = {};
+  sb.addEventListener = (t, f) => { (winListeners[t] ||= []).push(f); };
+  sb.removeEventListener = (t, f) => { const l = winListeners[t] || []; const i = l.indexOf(f); if (i >= 0) l.splice(i, 1); };
+  sb.GameAudio = null;
+  sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
+  vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
+  const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
+  const store = { get: () => null, set() {} };
+  const G = { $: sb.document.getElementById, store, soundOn: false };
+  const kb = KeyBinds.create(G);
+  // A physical key: Input's window listener sets the latch, then the module's.
+  const press = (code) => { key(code, true); (winListeners.keydown || []).forEach((f) => f({ code, isTrusted: true })); key(code, false); };
+  // Input's listeners were registered before the swap above, the module's after.
+  const fireAll = (t, e) => { fire(t, e); (winListeners[t] || []).forEach((f) => f(e || {})); };
+  return { Input, kb, press, fire: fireAll, sb, $: sb.document.getElementById };
+}
+// The UI module reads Input from the same realm; boot() runs input.js in a
+// context whose globals are `sb`, so createContext(sb) is that same realm.
+
+test("a phone hides both tables behind one hint until a key or a pad is seen", () => {
+  const { $, press, fire, sb } = bootUi(false);
+  assert.equal($("pm-keys-section").hidden, true, "no keyboard seen yet");
+  assert.equal($("pm-pad-section").hidden, true, "no pad seen yet");
+  assert.equal($("pm-ctl-hint").hidden, false, "the hint says what to press");
+  press("KeyW");
+  assert.equal($("pm-keys-section").hidden, false, "the first physical key reveals the KEYBOARD table");
+  assert.equal($("pm-ctl-hint").hidden, true, "and the hint goes");
+  assert.equal($("pm-pad-section").hidden, true, "the pad table still waits for a pad");
+  fakePad(sb, fire);
+  assert.equal($("pm-pad-section").hidden, false, "gamepadconnected reveals CONTROLLER");
+});
+
+test("a desktop shows both tables and never the hint", () => {
+  const { $ } = bootUi(true);
+  assert.equal($("pm-keys-section").hidden, false);
+  assert.equal($("pm-pad-section").hidden, false);
+  assert.equal($("pm-ctl-hint").hidden, true);
+});
