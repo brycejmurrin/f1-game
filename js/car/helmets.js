@@ -174,15 +174,21 @@ const Helmets = (function () {
      A letterbox, as on a real lid: much wider than it is tall, sat between the
      brow and the nose, its top edge curving down as it runs to the temples. */
   const TRIM = [0.10, 0.10, 0.11];
-  const VISOR_T0 = 0.30, VISOR_T1 = 0.52, VISOR_AZ = 62;
+  const VISOR_T0 = 0.31, VISOR_T1 = 0.58, VISOR_AZ = 74;
   function isVisor(t, az) {
     if (t < VISOR_T0 || t > VISOR_T1) return false;
     // A LENS, not a rectangle: widest across the eyes, closing toward the brow
     // above and the nose below, which is the shape of the aperture in the
     // reference lid. A rectangular port reads as a stripe painted round the
     // head; this one reads as a hole you can see out of.
+    // Full width across the eyes, closing at the brow above and the nose
+    // below: a big aperture, but one that stops before the temples. Pushed
+    // wider it becomes a band wrapping right round the head (measured at
+    // AZ 80 with a 3.2 ramp — the shell read as a helmet wearing a blindfold);
+    // pulled narrower it is a letterbox slot, which is what "dorky" looked
+    // like. The 1.55 ramp holds full width across the middle half.
     const f = (t - VISOR_T0) / (VISOR_T1 - VISOR_T0);
-    return dAz(az, 0) <= VISOR_AZ * (0.42 + 0.58 * Math.sin(Math.PI * f));
+    return dAz(az, 0) <= VISOR_AZ * Math.min(1, 1.55 * Math.sin(Math.PI * f));
   }
 
   /* (t, az) -> { c, glass } for one vertex of the shell: the design's paint,
@@ -222,17 +228,24 @@ const Helmets = (function () {
        Y   height above the temple line, metres
        W   half width; F reach ahead of centre; B reach behind; N squareness */
   const SHAPE = {
-    T: [0.00,  0.07,   0.16,   0.26,   0.36,   0.46,   0.58,   0.70,   0.82,   0.92,   1.00],
-    Y: [0.130, 0.126,  0.114,  0.094,  0.068,  0.038,  0.000, -0.042, -0.086, -0.120, -0.142],
-    W: [0.006, 0.040,  0.070,  0.089,  0.099,  0.105,  0.107,  0.104,  0.095,  0.083,  0.070],
-    // F is NOT monotonic, and that is the whole front of the helmet: the brow
-    // stands proud over the aperture, the visor sits recessed under it, and the
-    // chin bar comes back out below — out, in, out. Running it straight from
-    // crown to chin, as the first pass did, gave a face like the front of a
-    // bus and no brow at all.
-    F: [0.007, 0.046,  0.088,  0.114,  0.109,  0.106,  0.117,  0.132,  0.144,  0.147,  0.135],
-    B: [0.006, 0.042,  0.075,  0.094,  0.104,  0.111,  0.116,  0.114,  0.105,  0.093,  0.080],
-    N: [2.20,  2.30,   2.45,   2.65,   2.80,   2.90,   2.90,   2.85,   2.70,   2.50,   2.35],
+    T: [0.00,  0.08,   0.18,   0.30,   0.44,   0.56,   0.68,   0.80,   0.90,   1.00],
+    Y: [0.134, 0.126,  0.113,  0.095,  0.060,  0.020, -0.026, -0.074, -0.112, -0.140],
+    // Narrows through the jaw to the neck rim: held wide all the way down, the
+    // lower half read as a slab and the whole head as a bucket.
+    W: [0.002, 0.040,  0.076,  0.096,  0.104,  0.107,  0.101,  0.090,  0.078,  0.062],
+    // The apex sits BEHIND centre (B is the larger reach at the crown) and the
+    // face slopes forward as it drops. F is deliberately NOT monotonic: the
+    // brow stands proud at 0.114, the aperture is recessed under it at 0.104,
+    // and the chin bar steps back out to 0.152 — nearly 5 cm further forward
+    // than the eyes. Ramped smoothly instead, there is no brow and no chin,
+    // and the profile reads as one blank curve from crown to jaw.
+    F: [0.003, 0.042,  0.084,  0.114,  0.104,  0.126,  0.142,  0.152,  0.152,  0.138],
+    B: [0.004, 0.050,  0.088,  0.107,  0.114,  0.117,  0.113,  0.104,  0.092,  0.076],
+    // Squareness of the PLAN section, held near an ellipse: at 2.9 the sides
+    // went slab-flat and the head read as a bucket. A helmet is a rounded
+    // rectangle in FRONT view — which W against Y already draws — and an oval
+    // from above, which is this.
+    N: [2.10,  2.15,   2.20,   2.30,   2.34,   2.32,   2.24,   2.16,   2.10,   2.05],
   };
   function tab(arr, t) {
     const T = SHAPE.T;
