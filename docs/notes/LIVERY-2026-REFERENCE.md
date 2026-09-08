@@ -19,11 +19,11 @@ standard worth committing as the shipped look of a car.
 
 | team | cover | why we did nothing |
 |---|---|---|
-| Audi | sourced DISTINCT: carbon black over titanium silver | **Our Audi is a BLACK car** (`#0E0F10`, deliberate, commented in js/data/teams.js). A black cover on a black car is invisible; matching the source would mean flipping the BODY to silver, which contradicts a decision another session made and documented. Left alone: one search summary is not enough to overturn that. **Worth resolving with a photograph.** |
+| Audi | **RESOLVED: silver body, carbon-black cover** — applied | The photograph settled it; see below. |
 | McLaren | sourced DISTINCT: black sweeps across the cover | **Already modelled.** McLaren's team livery carries `spineLogo: "panel"` — "a hard-edged panel down the crown with a raked leading edge" — over an anthracite `c2`. That IS the black cover sweep. |
 | Williams | **RESOLVED: black** — applied | See "What the photograph settled" below. The white-cover claim was wrong. |
-| Aston Martin | "darker airbox" over satin green | Real but unnamed. Could be near-black or a deep green; no source picks one. |
-| Alpine | — | No source addresses the cover at all. |
+| Aston Martin | **RESOLVED but NOT APPLICABLE**: dark spine stripe on a green cover | The colour question is answered and the model cannot express the answer. See "The Aston Martin gap" below. |
+| Alpine | still UNKNOWN | Re-checked 2026-09-08 with a browser: f1technical.net is behind a Cloudflare bot check that no automated read gets past, so the page is not a route to this answer — do not retry it. Needs a different gallery or an owner photograph. |
 | Racing Bulls | same as body (white) | Blue *streaks* on the cover, not a cover colour. |
 | Haas | same as body (white) | The cover is named only as a branding location. |
 | Red Bull | same as body (gloss blue) | Already carries its own treatment (`spineLogo: "wrap"`, `spineHeight: "dorsal"`, `finShape: "none"`). |
@@ -58,6 +58,35 @@ could describe black running along the FLANK rather than over the crown, and
 this model has separate fields for those (`cover` vs `spineSide`). The
 photograph reads the crown as black, so the cover is where it went; a top-down
 shot would settle it beyond doubt.
+
+## What the photographs settled (Audi, Aston Martin)
+
+The same remote browser that settled Williams was pointed at the Audi and
+Aston Martin launch galleries.
+
+**Audi was wrong here, not merely missing a cover.** Roughly 24 gallery
+photographs show a titanium-SILVER car with a carbon-BLACK engine cover and red
+accents toward the rear; the launch report says the same in words. This tree had
+a BLACK Audi, and the comment justifying it cited no source while itself
+mentioning titanium. The earlier refusal to change it was right at the time — it
+declined to restyle a shipped livery on an inference — but direct observation is
+not inference, so the body is now silver with a black cover.
+
+**Aston Martin: the colour is known and the model cannot say it.** The cover is
+the same metallic green as the body, with a DARK STRIPE down its spine starting
+at the airbox. There is no field for that:
+
+- `cover` paints the WHOLE cover, which the photographs contradict.
+- `stripe` runs the full body spine — nose tip through monocoque to the cover
+  ridge — so it would darken the nose, which the photographs also contradict.
+- `spineLogo: "stripe"` draws a band on the crown ALONE, which is the right
+  extent, but `drawSpineTop` colours that band `stripe || accent`: with no
+  `stripe` it takes the accent, and Aston's accent is lime. Setting `stripe`
+  dark to fix the band re-introduces the nose problem.
+
+So the honest answer is a FEATURE GAP: a crown band whose colour is independent
+of the body stripe. Recorded rather than forced, because every way of forcing it
+today paints something the launch car does not have.
 
 ## If someone picks this up
 

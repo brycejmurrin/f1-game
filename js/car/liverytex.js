@@ -107,7 +107,10 @@ const LiveryTex = (function () {
   const INK_TARGET = 6.5, INK_FLOOR = 3.0;
   function inkOn(bgs) {
     const list = bgs.filter(Boolean);
-    if (!list.length) return INK_LIGHT;
+    // A COPY here too, and tagged: the shared constant would collect whatever
+    // `worst` the next caller wrote onto it. Nothing to score against means
+    // nothing to halo for, so Infinity, not a missing field.
+    if (!list.length) { const any = INK_LIGHT.slice(); any.worst = Infinity; return any; }
     const worst = (ink) => Math.min.apply(null, list.map((b) => contrast(ink, b)));
     const d = worst(INK_DARK), l = worst(INK_LIGHT);
     // COPY, never the shared constant: the caller tags the result with its
@@ -282,7 +285,14 @@ const LiveryTex = (function () {
       // Stencil bridges: two horizontal cuts through the glyphs, back to the
       // base paint. Cut widths scale with the size so they survive the mips.
       const cut = Math.max(3, size * 0.045);
-      ctx.fillStyle = css(bg || accent);
+      // The cuts are only a stencil if they READ. `accent` is chosen to clear
+      // the ink where it can, but its fallback is a best-effort pick that can
+      // still land on the ink itself — and then the glyph is solid, not
+      // stencilled. Take whichever backing actually separates; the ink's own
+      // opposite is the guaranteed last resort.
+      const cutC = bg && contrast(bg, ink) >= 2.0 ? bg
+                 : contrast(accent, ink) >= 2.0 ? accent : inkOn([ink]);
+      ctx.fillStyle = css(cutC);
       ctx.fillRect(box.x, cy - size * 0.18 - cut / 2, box.w, cut);
       ctx.fillRect(box.x, cy + size * 0.2 - cut / 2, box.w, cut);
     }
@@ -1061,6 +1071,12 @@ const LiveryTex = (function () {
   // argument was silently ignored for exactly the uploads most likely to need
   // it. One source, one set of passes, both cases.
   function drawLogoImage(ctx, img, R, tint, halo, outline) {
+    // CLIP FIRST. The halo below is five passes of up to 14 px blur, which
+    // reaches ~5 px outside R — across the atlas gutter and into whatever
+    // region is next door (finBadge bled onto the sidepod strip). Every other
+    // region painter clips to its own rect; this one never did.
+    ctx.save();
+    ctx.beginPath(); ctx.rect(R.x, R.y, R.w, R.h); ctx.clip();
     const pad = 0.015, bw = R.w * (1 - pad * 2), bh = R.h * (1 - pad * 2);
     const sc = Math.min(bw / img.naturalWidth, bh / img.naturalHeight);
     const w = img.naturalWidth * sc, h = img.naturalHeight * sc;
@@ -1090,6 +1106,7 @@ const LiveryTex = (function () {
     if (halo) pass(halo, Math.max(4, Math.min(w * 0.085, 14)), 5);
     if (outline) pass(outline, Math.max(2, Math.min(w * 0.030, 8)), 3);
     ctx.drawImage(src, x, y, w, h);
+    ctx.restore();
   }
 
   // drawCrest(ctx, teamId, R, { liv, field, bare, palette })
@@ -1245,7 +1262,10 @@ const LiveryTex = (function () {
   // gold), else the stripe, accent or c2. ONE function so the atlas (crown and
   // flanks) and Car3D (the airbox and roll hoop) paint the same sun.
   function sunColour(teamId, liv) {
-    const P = markPalette(teamId, liv, [liv.c1, liv.c2], false);
+    // The field is the COVER, not the body: this sun is painted on the crown,
+    // the cover flanks and (Car3D) the airbox. Scoring it against c1 gave a
+    // sun that reads on the chassis and disappears on a contrasting cover.
+    const P = markPalette(teamId, liv, [liv.cover || liv.c1, liv.c2], false);
     return ((P && P.plate) || liv.stripe || liv.accent || liv.c2 || INK_LIGHT).slice();
   }
   // REGIONS.crest is square in pixels but car-mesh drapes it over a strip
@@ -1264,8 +1284,10 @@ const LiveryTex = (function () {
   // real geometry so it cannot drift. The squash itself is derived, so changing
   // a region's pixel size cannot silently un-square the marks again.
   // EVERY Car3D.SPINE_HEIGHT_IDS entry needs a row: a missing one falls back to
-  // `standard` and re-creates the exact squish this table exists to fix. The
-  // first version of it shipped without `high` for that reason.
+  // `standard` below and re-creates the exact squish this table exists to fix.
+  // The first version shipped without `high`, whose marks came out 13.6 %
+  // narrow — found twice, independently. fin-design.test.mjs iterates the ID
+  // LIST rather than this table now, so a gap fails instead of hiding.
   const FLANK_H = { standard: 0.4537, raised: 0.4964, high: 0.5249, dorsal: 0.5463 };
   const flankSquash = (spineHeight, R) => {
     const H = FLANK_H[spineHeight] || FLANK_H.standard;
@@ -1332,8 +1354,7 @@ const LiveryTex = (function () {
     const R = REGIONS[side.region];
     if (!R) return null;
     const fx = (u) => R.x + (side.frontLeft ? u : 1 - u) * R.w;
-    const box = (u0, u1, v0, v1) => ({ x: Math.min(fx(u0), fx(u1)), y: R.y + v0 * R.h, w: Math.abs(fx(u1) - fx(u0)), h: (v1 - v0) * R.h });
-    return { R, fx, box, dir: side.frontLeft ? 1 : -1 };
+    return { R, fx, dir: side.frontLeft ? 1 : -1 };
   }
   const eachFlank = (fn) => { for (const side of FLANKS) { const F = flankFrame(side); if (F) fn(F); } };
   // The saddle's other half: from the airbox back along the crease to
@@ -1657,7 +1678,6 @@ const LiveryTex = (function () {
     const finArt = colors.finArt || null;
     const logo = colors.logo || null;
 
-    const pod = colors.pod || null;
     // The sidepod carries a physical sponsor BOARD — a fixed pale panel the car
     // mesh paints under the wordmark — and the ink logic never knew about it.
     // On any dark livery the ink resolves LIGHT for the paint and then lands on
@@ -1673,7 +1693,8 @@ const LiveryTex = (function () {
     const coverPaint = colors.cover || c1;
     const inkCrest = inkOn([coverPaint, finPaint]);
     const inkFin = inkOn([finPaint]);
-    const inkPod = inkOn(podBg);              // sidepod wordmarks
+    const inkPod = inkOn(podBg);              // sidepod wordmarks (titleA only)
+    const inkNose = inkOn([c1, c2]);          // titleB — the monocoque top
     const inkStrip = inkOn(stripBg);
     const haloIf = (i) => (i.worst < INK_TARGET ? haloFor(i) : null);
 
@@ -1742,7 +1763,11 @@ const LiveryTex = (function () {
     // ONE lockup for the engine cover and the fin badge. Resolving the badge
     // against the fin wash used to drop Ferrari's shield (and recolour the
     // horse) so top-down / the garage wall disagreed with the tail.
-    const lockup = markPalette(teamId, colors, [c1, c2], false);
+    // …and it is resolved against the paints it actually LANDS on. Scoring it
+    // against [c1, c2] while painting it on the cover put Ferrari's yellow-
+    // plated shield on its white cover at 1.22:1 — every surface this lockup
+    // reaches is either coverPaint (crown, tail, flank) or finPaint (badge).
+    const lockup = markPalette(teamId, colors, [coverPaint, finPaint], false);
     // Sponsor names resolve here so the spine can carry the title sponsor.
     const pack = colors.sponsors && SPONSOR_PACKS[colors.sponsors];
     const names = pack || SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
@@ -1760,8 +1785,8 @@ const LiveryTex = (function () {
       const Rr = { x: -sq / 2, y: -sq / 2, w: sq, h: sq };
       if (LOGOS[teamId]) {
         drawLogoImage(ctx, LOGOS[teamId], Rr, logo,
-                      markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
-      } else drawCrest(ctx, teamId, Rr, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+                      markHalo(LOGOS[teamId], coverPaint, inkCrest), emblemRim);
+      } else drawCrest(ctx, teamId, Rr, { liv: colors, field: [coverPaint], bare: false, palette: lockup });
       ctx.restore();
     } else if (spineLogo === "wrap") {
       // The sun in the PLATE colour (the mark's own backing, Red Bull's gold)
@@ -1811,7 +1836,7 @@ const LiveryTex = (function () {
       const Rb = { x: -sq / 2, y: -sq / 2, w: sq, h: sq };
       if (LOGOS[teamId]) {
         drawLogoImage(ctx, LOGOS[teamId], Rb, logo, markHalo(LOGOS[teamId], coverPaint, inkCrest), emblemRim);
-      } else drawCrest(ctx, teamId, Rb, { liv: colors, field: [c1, c2], bare: true, palette: Object.assign({}, lockup, { plate: null }) });
+      } else drawCrest(ctx, teamId, Rb, { liv: colors, field: [coverPaint], bare: true, palette: Object.assign({}, lockup, { plate: null }) });
       ctx.restore();
     } else if (spineLogo !== "none") {
       drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont);
@@ -1839,8 +1864,14 @@ const LiveryTex = (function () {
       drawNumber(ctx, text, REGIONS.finBadge, inkFin, finWash, null, colors.numFont, 0);
     }
     // SPINE SIDE (SPINE_SIDE_IDS): the same three marks on the cover FLANK, inked
-    // for the body paint (the flank is c1) with the cover's own crest lockup.
+    // for the paint the flank actually wears — buildEngineCoverBodywork paints
+    // the WHOLE cover, flank included, in `cover` — with the cover's own lockup.
+    // Two SPINE TOP designs repaint that flank before the mark lands on it, and
+    // then THEY are the backing: the wrap's sun and the saddle's panel both
+    // cover the mark's station (f 0.19).
     const spineSide = colors.spineSide || "none";
+    const flankBg = spineLogo === "wrap" ? sunColour(teamId, colors)
+                  : spineLogo === "saddle" ? (stripe || accent) : coverPaint;
     // The flank canvas is the WHOLE cover side. The marks sit AT THE FRONT of
     // it — the SF-26's 16 and the W17's 12 just behind the airbox — through
     // flankSquash() so they come out in proportion. They used to sit at 0.24 of
@@ -1872,10 +1903,10 @@ const LiveryTex = (function () {
     if (spineSide === "logo") {
       flankMark((Rm) => {
         if (LOGOS[teamId]) {
-          drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
+          drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], flankBg, inkCrest), emblemRim);
         // bare:false — the FULL lockup, plate and all, exactly as the garage wall
         // and the cover crest paint it (the fin badge alone goes bare, for its plate).
-        } else drawCrest(ctx, teamId, Rm, { liv: colors, field: [c1, c2], bare: false, palette: lockup });
+        } else drawCrest(ctx, teamId, Rm, { liv: colors, field: [flankBg], bare: false, palette: lockup });
       });
     } else if (spineSide === "number" || spineSide === "code") {
       flankMark((Rm) => drawNumber(ctx, spineSide === "code" ? driverCode(teamId, raceNum) : raceNum,
@@ -1883,7 +1914,15 @@ const LiveryTex = (function () {
     } else if (spineSide === "plate") {
       // The number on a contrasting plate (drawNumber's own rounded board),
       // inked for the PLATE: the body colour when it reads on it, else an ink.
-      const plateC = stripe || accent;
+      // The plate has to separate from the FLANK, and the saddle paints that
+      // flank in stripe||accent — the plate's own first choice. Ferrari shipped
+      // a number board the exact colour of the panel it sits on.
+      let plateC = stripe || accent;
+      if (contrast(plateC, flankBg) < 1.6) {
+        for (const cand of [c2, c1, stripe, INK_DARK, INK_LIGHT].filter(Boolean)) {
+          if (contrast(cand, flankBg) > contrast(plateC, flankBg)) plateC = cand;
+        }
+      }
       const plateInk = contrast(c1, plateC) >= 3 ? c1 : inkOn([plateC]);
       flankMark((Rm) => drawNumber(ctx, raceNum, Rm, plateInk, inkCrest, plateC, colors.numFont, 0));
     } else if (spineSide === "wordmark") {
@@ -1967,8 +2006,13 @@ const LiveryTex = (function () {
     if (names.length) {   // `clean` leaves every wordmark region as paint
       drawWordmark(ctx, names[0], REGIONS.titleA, inkPod,
         { align: "center", halo: haloIf(inkPod) });
-      drawWordmark(ctx, names[1], REGIONS.titleB, inkPod,
-        { align: "center", halo: haloIf(inkPod) });
+      // titleB rides the NOSE, not the sidepod board: car-mesh drapes it over
+      // the monocoque top at z 1.16..1.66, body paint with the c2 nose accent
+      // reaching under its front edge. Inking it for the board resolved DARK
+      // against a pale panel it never touches — 1.02:1 on a near-black c1, and
+      // no halo, because the halo test scored the board too.
+      drawWordmark(ctx, names[1], REGIONS.titleB, inkNose,
+        { align: "center", halo: haloIf(inkNose) });
       // The FRONT-WING ENDPLATE carries a partner mark, as every 2026 car does.
       // The plate is drawn in c2 (see car3d's front-plate span), so it inks for
       // c2 — not for the flap colour, which is a different part.

@@ -1575,7 +1575,13 @@ function resolveLivery(team) {
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
-  const liv = getLiveries(team).find((l) => l.id === getLiveryId(team.id));
+  // A STORED ID THAT NO LONGER RESOLVES FALLS BACK TO THE TEAM'S OWN PAINT JOB.
+  // list[0] is Liveries.forTeam's "default", carrying the team's whole livery
+  // block; the bare `{ c1, c2 }` else-branch below dropped finShape/spineHeight/
+  // spineSide, so a dangling id grew a shark fin instead of the car the team
+  // races. Reachable via an imported garage file (js/ui/settings-export.js).
+  const list = getLiveries(team);
+  const liv = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
   // Optional livery detail colours (nose cap, sidepod panel, wing flaps, halo tint)
   // — additive, so an unmodified livery still resolves to today's exact object shape.
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
