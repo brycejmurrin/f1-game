@@ -310,7 +310,22 @@ jobs:
             // recorded, and the gap is still an open lead for exactly that
             // reason (docs/PERF-FINDINGS.md 2t).
               rows.push(`${" ".repeat(8)}gov:   tier=${gov.tier} autoTier=${gov.autoTier} userTier=${gov.userTier} ` +
-                `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face}`);
+                `scale=${gov.scale} fps=${gov.fps} floorMs=${gov.floorMs} envFace=${env.face} frames=${(gov.open && gov.open.frames) != null ? gov.open.frames : "?"}`);
+            // THE PRESENT PATH, and it is the difference between a comparison
+            // and a mistake. tlx.js soft-blits (GPU readback + putImageData
+            // EVERY FRAME) whenever `!forceWebGL && (_softAdapter || _headless
+            // || cap==="1")`, and Playwright is always headless — so the
+            // WebGPU leg (tlxForceGL="0") takes the readback path while the
+            // WebGL2 leg ("1") short-circuits it off. `headless=true` prints
+            // on BOTH legs and therefore discriminates nothing; forceWebGL is
+            // the field that does, and it was collected in the artifact and
+            // never shown. Run 61 read 600 frames on WebGL2 against 5 on
+            // WebGPU and the gap was read as a backend difference on this very
+            // page; it is a readback against a direct present. Compare frames
+            // or fps across these two legs ONLY when this line matches.
+            // docs/notes/PERF-FINDINGS.md says the same at "DIFFERENT PRESENT
+            // PATHS"; printing it here is what makes it unmissable.
+              if (tlxLeg) rows.push(`${" ".repeat(8)}path:  api=${be.api} forceWebGL=${be.forceWebGL} softBlit=${be.softBlit === true ? "YES (headless readback — NOT the path a player takes)" : be.softBlit === false ? "no (direct present)" : "?"} skipBatches=${be.skipBatches} gpuErrFrames=${be.gpuErrFrames}`);
             // ...and the bookkeeping the probe keeps on itself, because run 54
             // showed tier=0 with envFace=3 and envFail=0 — the producer WAS
             // called, nothing threw, and the cube still never latched. begins
