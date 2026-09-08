@@ -150,7 +150,10 @@ const composites = [];
 for (let i = 0; i < nums.length; i++) {
   const num = nums[i];
   const who = ROSTER.get(num);
-  const design = Helmets.designFor(num, who && who.teamC);
+  let design = Helmets.designFor(num, who && who.teamC);
+  // --plain strips the paint: judging the SHELL through a design's own stripes
+  // is how a black centre stripe gets mistaken for the visor aperture.
+  if (flag("plain", "")) design = { name: design.name, base: [0.80, 0.80, 0.83], visor: [0.07, 0.07, 0.09], zones: [] };
   const gx = (i % cols) * tileW, gy = Math.floor(i / cols) * tileH;
   for (let v = 0; v < views.length; v++) {
     const img = await drawHelmet(design, cell, VIEWS[views[v]]).png().toBuffer();

@@ -179,10 +179,16 @@ const GameAudio = (function () {
   // the ERS whine and the deploy whoosh, `boostPitch` the rev lift under
   // deploy (4% stock). `harvest`, `wind`, `screech` and `rivals` are levels
   // for layers that only had a switch.
+  // The SHIPPED voice. These were all 1 (a pure identity trim over the sample
+  // core) until 2026-09-08, when the owner's own ENGINE tune became the
+  // default: pitch down and the rev range widened so the climb to the limiter
+  // is longer, detune off (the chorus that blurred the top end), the sub layer
+  // well back, a hard fast limiter, and the hybrid whine halved. Every value is
+  // inside TUNE_RANGE below; the panel's step table still lands on each one.
   const TUNE_DEF = Object.freeze({
-    pitch: 1, idle: 1, revRange: 1, curve: 1, detune: 1, brightness: 1, gravel: 1, sub: 1,
-    limiter: 1, limRate: 1, limPitch: 1, boost: 1, boostPitch: 1,
-    whine: 1, harvest: 1, wind: 1, screech: 1, brakes: 1, shift: 1, rivals: 1, reverb: 1, overrun: 1,
+    pitch: 0.85, idle: 1, revRange: 1.3, curve: 1, detune: 0, brightness: 1, gravel: 1, sub: 0.25,
+    limiter: 2.25, limRate: 0.8, limPitch: 0, boost: 1, boostPitch: 1,
+    whine: 0.5, harvest: 1, wind: 1, screech: 1, brakes: 1, shift: 1, rivals: 1, reverb: 1, overrun: 1,
   });
   // WIDER THAN IS SENSIBLE, on purpose. The first cut of these ranges was
   // conservative enough that several trims could not be pushed far enough to
