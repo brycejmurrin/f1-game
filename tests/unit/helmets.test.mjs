@@ -1,0 +1,168 @@
+// helmets.test.mjs — one readable helmet per driver, and none of them the
+// colour of the car it sits in.
+//
+// The helmet used to be the team's own paint: a papaya dome in a papaya
+// McLaren, invisible at every distance the game is played at, and identical
+// for both drivers in the team. js/car/helmets.js gives each race number a
+// design — a base plus zones in (latitude, azimuth) — which js/car/car3d.js
+// paints per vertex into the car mesh. This pins the properties that make that
+// worth doing: every driver has one, every one separates from its own car, and
+// the pieces the geometry depends on stay where car3d expects them.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
+const load = (p, name) => new Function(read(p) + "; return " + name + ";")();
+const Helmets = load("js/car/helmets.js", "Helmets");
+const Teams = load("js/data/teams.js", "Teams");
+
+const grid = () => {
+  const out = [];
+  for (const t of Teams.LIST) for (const d of t.drivers) out.push({ ...d, team: t.short, teamC: t.color });
+  return out;
+};
+// The same "too close to the car" test the module uses to decide on the alt.
+const dist = (a, b) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
+
+test("every driver on the grid has a hand-made design, not a generated one", () => {
+  const missing = grid().filter((d) => !Helmets.DESIGNS[d.num]).map((d) => `${d.code} #${d.num}`);
+  assert.deepEqual(missing, [], "add the number to DESIGNS in js/car/helmets.js");
+  assert.equal(Object.keys(Helmets.DESIGNS).length, grid().length, "one design per seat, no orphans");
+});
+
+test("no helmet is the colour of the car it sits in", () => {
+  // The whole point of the module: a helmet that matches its own car is
+  // invisible in the only views that show it.
+  const blend = [];
+  for (const d of grid()) {
+    const des = Helmets.designFor(d.num, d.teamC);
+    if (dist(des.base, d.teamC) < 0.30) blend.push(`${d.code} (${d.team}) base ${des.base.map((x) => x.toFixed(2))}`);
+  }
+  assert.deepEqual(blend, [], "pick a base that separates from the team colour, or give the design an `alt`");
+});
+
+test("a design that WOULD blend falls back to its alt, and the alt is a real escape", () => {
+  // A custom or career team can be painted anything, so the fallback has to
+  // work — this drives each design with its OWN base as the car colour.
+  for (const num of Object.keys(Helmets.DESIGNS).map(Number)) {
+    const d = Helmets.DESIGNS[num];
+    assert.ok(d.alt, `#${num} has no alt`);
+    const shifted = Helmets.designFor(num, d.base);
+    assert.equal(shifted.shifted, true, `#${num} did not fall back when the car matched its base`);
+    assert.ok(dist(shifted.base, d.base) >= 0.30, `#${num}'s alt is too close to its own base`);
+  }
+});
+
+test("every colour is a real rgb triple in range, and every zone kind exists", () => {
+  const ok = (c, where) => {
+    assert.ok(Array.isArray(c) && c.length === 3, `${where}: not an rgb triple`);
+    for (const v of c) assert.ok(typeof v === "number" && v >= 0 && v <= 1, `${where}: ${v} out of 0..1`);
+  };
+  for (const num of Object.keys(Helmets.DESIGNS)) {
+    const d = Helmets.DESIGNS[num];
+    ok(d.base, `#${num} base`);
+    ok(d.alt, `#${num} alt`);
+    ok(d.visor, `#${num} visor`);
+    for (const z of d.zones) {
+      assert.ok(Helmets.ZONES[z.k], `#${num}: no zone kind "${z.k}"`);
+      ok(z.c, `#${num} zone ${z.k}`);
+    }
+  }
+});
+
+test("the painter answers for every point of the shell, and paints more than the base", () => {
+  for (const num of Object.keys(Helmets.DESIGNS).map(Number)) {
+    const des = Helmets.designFor(num, null);
+    const paint = Helmets.painter(des);
+    const seen = new Set();
+    for (let t = 0; t <= 1.0001; t += 0.05) {
+      for (let az = 0; az < 360; az += 5) {
+        const c = paint(Math.min(1, t), az);
+        assert.ok(Array.isArray(c) && c.length === 3, `#${num}: no colour at t=${t.toFixed(2)} az=${az}`);
+        seen.add(c.join(","));
+      }
+    }
+    // a design nobody can tell from a plain ball is not a design
+    assert.ok(seen.size >= 3, `#${num} paints only ${seen.size} colour(s) — its zones do not land on the shell`);
+  }
+});
+
+test("the visor is an aperture over the eyes: front only, and neither the crown nor the chin", () => {
+  assert.equal(Helmets.isVisor(0.05, 0), false, "the crown is paint");
+  assert.equal(Helmets.isVisor(0.41, 0), true, "straight ahead is visor");
+  assert.equal(Helmets.isVisor(0.41, 180), false, "the back of the head is paint");
+  assert.equal(Helmets.isVisor(0.41, 110), false, "the temples are paint");
+  assert.equal(Helmets.isVisor(0.95, 0), false, "the chin bar is paint");
+  // symmetric about the nose, and wrapping 0 rather than clipping at 359
+  for (const az of [10, 25, 40]) assert.equal(Helmets.isVisor(0.41, az), Helmets.isVisor(0.41, 360 - az), `asymmetric at ${az}`);
+  // a LENS: widest across the eyes, closing toward the brow and the nose
+  const width = (t) => { let n = 0; for (let az = 0; az < 360; az++) if (Helmets.isVisor(t, az)) n++; return n; };
+  assert.ok(width(0.41) > width(0.315) && width(0.41) > width(0.51), "the aperture is widest in the middle, not a rectangle");
+});
+
+test("shell() marks the visor as glass and the paint as paint", () => {
+  const shell = Helmets.shell(Helmets.designFor(44, null));
+  const eye = shell(0.41, 0), crown = shell(0.05, 0);
+  assert.equal(eye.glass, true);
+  assert.equal(crown.glass, false);
+  assert.deepEqual([...eye.c], [...Helmets.DESIGNS[44].visor], "the aperture wears the design's visor tint");
+});
+
+test("the shell is a full-face helmet, not the half-ball it used to be", () => {
+  // Measured off a 2026 lid: about 0.27 m tall, 0.22 wide and a little deeper
+  // than it is wide, widest at the ears rather than at its bottom edge. The
+  // hemisphere this replaced was 0.30 across and 0.15 tall — a beach ball.
+  const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+  Helmets.build(out, 0, 0.63, -0.075, Helmets.designFor(44, null), { paint: 1, glass: 2 });
+  let minY = Infinity, maxY = -Infinity, maxX = 0, minZ = Infinity, maxZ = -Infinity;
+  for (let i = 0; i < out.pos.length; i += 3) {
+    minY = Math.min(minY, out.pos[i + 1]); maxY = Math.max(maxY, out.pos[i + 1]);
+    maxX = Math.max(maxX, Math.abs(out.pos[i]));
+    minZ = Math.min(minZ, out.pos[i + 2]); maxZ = Math.max(maxZ, out.pos[i + 2]);
+  }
+  const h = maxY - minY, w = 2 * maxX, d = maxZ - minZ;
+  assert.ok(h > 0.24 && h < 0.31, `height ${h.toFixed(3)} is not head-sized`);
+  assert.ok(w > 0.18 && w < 0.24, `width ${w.toFixed(3)} is not head-sized`);
+  assert.ok(h > w, "a helmet is taller than it is wide");
+  assert.ok(d > w, "and a little deeper than it is wide");
+  // the widest ring is at the ears, above the bottom of the shell
+  const widest = Helmets.SHAPE.W.indexOf(Math.max(...Helmets.SHAPE.W));
+  assert.ok(Helmets.SHAPE.T[widest] > 0.3 && Helmets.SHAPE.T[widest] < 0.75, "widest at the ears, not at the rim");
+  // the chin bar reaches further forward than the eyes do — a face, not a bus front
+  assert.ok(Helmets.pointAt(0.85, 0)[2] > Helmets.pointAt(0.40, 0)[2] + 0.02, "no chin bar");
+  // and the brow stands proud of the aperture recessed under it
+  assert.ok(Helmets.pointAt(0.26, 0)[2] > Helmets.pointAt(0.46, 0)[2] + 0.005, "no brow standing over the aperture");
+  // the neck rim is a flat cut, narrower than the widest ring
+  assert.ok(Helmets.SHAPE.W[Helmets.SHAPE.W.length - 1] < Math.max(...Helmets.SHAPE.W) * 0.8, "the shell does not taper in to the neck");
+  // a closed, well-formed surface: every index in range, no degenerate normals
+  const n = out.pos.length / 3;
+  assert.ok(out.idx.every((i) => i >= 0 && i < n), "index out of range");
+  for (let i = 0; i < out.nrm.length; i += 3) {
+    const m = Math.hypot(out.nrm[i], out.nrm[i + 1], out.nrm[i + 2]);
+    assert.ok(Math.abs(m - 1) < 1e-6, `normal ${i / 3} is not unit (${m})`);
+  }
+  assert.ok(out.mat.includes(2), "the visor vertices carry the glass surface");
+});
+
+test("a number off the grid gets a design of its own, stable and distinct", () => {
+  const a = Helmets.generated(101), b = Helmets.generated(101), c = Helmets.generated(102);
+  assert.deepEqual(a.base, b.base, "the same driver keeps the same head between sessions");
+  assert.deepEqual(a.zones.map((z) => z.k), b.zones.map((z) => z.k));
+  assert.equal(a.generated, true);
+  assert.ok(a.zones.length > 0, "a generated design still has marks");
+  assert.notDeepEqual([a.base, a.zones.length], [c.base, c.zones.length], "two career drivers do not share a helmet");
+  const paint = Helmets.painter(Helmets.designFor(101, [0.5, 0.5, 0.5]));
+  assert.ok(Array.isArray(paint(0.4, 40)));
+});
+
+test("car3d builds the helmet through Helmets, and keeps no head geometry of its own", () => {
+  const car3d = read("js/car/car3d.js");
+  assert.match(car3d, /Helmets\.designFor\(/, "the helmet build asks Helmets for the design");
+  assert.match(car3d, /Helmets\.build\(out,/, "and hands the mesh to Helmets to fill");
+  assert.doesNotMatch(car3d, /HELMET_ACCENT/, "the old eight-colour accent table is gone, not orphaned");
+  assert.doesNotMatch(car3d, /function addDome\(/, "the hemisphere builder went with it — Helmets owns the shell");
+});

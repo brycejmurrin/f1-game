@@ -2285,3 +2285,9 @@ files are not ratcheted.
   surface variable instead of the literal `SURFACES.paint`, which is what lets a
   livery put bare weave on the flaps the way the launch photos show — a CARBON
   colour alone rendered as dark paint there. No new sites, no geometry.
+- `js/car/car3d.js` lines 3829 -> **3834** (2026-09-08): the ENGINE COVER colour
+  zone. One resolved colour (`coverC`) and its four-line comment; the airbox,
+  roll structure, cover loft and snorkel take it instead of `c1`, so a livery
+  can put the SF-26's white top on a red car or the W17's silver on a black
+  one. The atlas follows it (`coverPaint` inks the crest), because a light
+  cover under a dark car would otherwise take the dark car's ink.

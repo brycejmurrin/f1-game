@@ -6,6 +6,17 @@ function create(G) {
 // The four audio hooks share one precondition. `null` when GameAudio is there,
 // so each hook reads `return noAudio() || <the real answer>` rather than
 // repeating a three-line guard four times.
+// Per-car fields a running episode CREATES, which therefore outlive reset()
+// unless it removes them. Module scope, not an __apex member: it is an
+// implementation detail of reset(), not a hook anyone calls. Not a hand-written
+// wish list either — it is every key that differed between consecutive
+// post-reset snapshots at the same seed, and tests/specs/agent-determinism.spec.js
+// is the guard that keeps it honest.
+const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
+  "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0",
+  "_lapTimeAtLine", "incidentInvalidLap", "passSide", "passBest", "offroad",
+  "towing", "axFrac", "slipFactor", "flatSpot", "_aeroGrip", "skidIntensity",
+  "kerbSndT", "kerbHapT"];
 const noAudio = () => (typeof GameAudio === "undefined"
   ? { ok: false, error: "no_audio", message: "GameAudio is not loaded", fix: "reload the page" }
   : null);
@@ -2323,6 +2334,22 @@ const api = {
                        "flatSpot", "_aeroGrip", "skidIntensity"]) delete c[k];
       c.lane = c.lanePref != null ? c.lanePref : 0;
       c._prevS = c.s;
+      // …and every OTHER per-episode transient, deleted rather than zeroed so
+      // episode N starts in the state a freshly loaded page is in — which is
+      // what "the same seed replays an episode exactly" actually asks for.
+      // The block above fixed the drivetrain leak and stopped there; these
+      // survived, and they are not cosmetic: kCur, _vmaxNow, accSm, _aeroGrip,
+      // slipFactor, towing, offroad, onKerb, contactT and _pushD all feed the
+      // next tick's physics, and rank/passSide/passBest feed AI racecraft. So
+      // the first replay ran with them undefined and every later one inherited
+      // the previous episode's values — the field order at the back of the
+      // grid came out different, which is what agent-determinism catches.
+      // Five of them (accSm, kCur, _vmaxNow, passBest, kerbHapT) drifted on
+      // EVERY episode, not just the first, so no amount of warm-up settled it.
+      // Derived by diffing every numeric/boolean car field across consecutive
+      // post-reset snapshots; keep this list in step with that method rather
+      // than by guesswork.
+      for (const k of EPISODE_TRANSIENTS) delete c[k];
     }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
     G._testInput = null;
