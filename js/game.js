@@ -1523,7 +1523,7 @@ function resolveLivery(team) {
              logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null,
              finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null,
              tcam: l.tcam || null, coverVents: l.coverVents || null, spineHeight: l.spineHeight || null,
-             spineSide: l.spineSide || null };
+             spineSide: l.spineSide || null, rearWing: l.rearWing || null, wingCarbon: l.wingCarbon || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1536,7 +1536,7 @@ function resolveLivery(team) {
                       logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null,
                       finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null,
                       tcam: liv.tcam || null, coverVents: liv.coverVents || null, spineHeight: liv.spineHeight || null,
-                      spineSide: liv.spineSide || null }
+                      spineSide: liv.spineSide || null, rearWing: liv.rearWing || null, wingCarbon: liv.wingCarbon || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;

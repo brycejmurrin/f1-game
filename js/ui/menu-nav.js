@@ -34,8 +34,12 @@ window.MenuNav = (function () {
   // because that is the design system's own name for "a scroll region".
   const SCROLLERS = ".pane,.panel-scroll,.scroll-y,.dh-content,#track-detail-panel,#track-detail";
 
+  // `summary` is a real control: the fold headers on the DISPLAY / STEERING /
+  // MUSIC settings pages open with Enter (native) or the pad's A (padActivate
+  // clicks whatever matches this list). Without it a pad could see a page of
+  // folds and open none of them.
   const FOCUSABLE = "button:not([disabled]),a[href],input:not([disabled])," +
-    "select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex='-1'])";
+    "select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex='-1'])";
 
   // What the browser would have scrolled for one notch of a line/page-mode wheel.
   // Firefox and some Windows mice report lines, not pixels.
@@ -187,11 +191,26 @@ window.MenuNav = (function () {
 
   /* ---------------- arrow-key navigation ---------------- */
 
+  // A control the browser would refuse to focus must not be offered as a
+  // target: step() picks the NEAREST candidate, focusItem() fails silently on
+  // it, and focus never moves. The contents of a closed <details> are the
+  // case that shipped — Chromium keeps their layout boxes (content-visibility
+  // on the closed slot), so shown()'s box test passes while focus() is a no-op;
+  // from BACK on the DISPLAY page every arrow chose a folded row and the pad
+  // could reach nothing. checkVisibility sees the skipped subtree (and
+  // display:none / visibility:hidden ancestors); the closest() walk is the
+  // same answer where the API is missing.
   function items(layer) {
     const out = [];
     for (const el of layer.querySelectorAll(FOCUSABLE)) {
       if (el.disabled || el.getAttribute("aria-hidden") === "true") continue;
       if (!shown(el)) continue;
+      if (el.checkVisibility) {
+        if (!el.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true })) continue;
+      } else {
+        const fold = el.closest("details:not([open])");
+        if (fold && !(el.tagName === "SUMMARY" && el.parentElement === fold)) continue;
+      }
       out.push(el);
     }
     return out;
@@ -272,8 +291,21 @@ window.MenuNav = (function () {
     }
     const a = centre(from);
     const sign = dx + dy;
-    let best = null, bestCost = Infinity;
+    let best = null, bestAlong = Infinity, bestAcross = Infinity;
     let edge = null, edgeDist = 0;
+    // The NEAREST ROW wins, then the straightest candidate in it. "Directly
+    // below" means the candidate's box SPANS your centre, not that its centre
+    // is near yours: across is the gap from your centre to the candidate's
+    // cross-axis interval, 0 when you are inside it. With centre distance a
+    // wide control (the hero's map button under the flag strip) lost
+    // ArrowDown to a narrow foot button that happened to sit closer to
+    // straight-down (measured: NEXT beat a 568px-wide hero). And across must
+    // only ever break ties INSIDE a row: scored as along + across * 2, a
+    // full-width slider two rows down beat the chevron cluster in the very
+    // next row (the DISPLAY page's METRICS rows: from the fold header, Down
+    // skipped every one of them and no arrow could enter them — measured
+    // 2026-09-08). Candidates within `tol` of the nearest along are one row.
+    const tol = Math.max(8, (dx ? a.r - a.l : a.b - a.t) * 0.6);
     for (const el of list) {
       if (el === from) continue;
       const b = centre(el);
@@ -281,15 +313,12 @@ window.MenuNav = (function () {
       const inBand = dx ? overlaps(a.t, a.b, b.t, b.b) : overlaps(a.l, a.r, b.l, b.r);
       if (!inBand) continue;
       if (along > 1) {
-        // "Directly below" means the candidate's box SPANS your centre, not
-        // that its centre is near yours: across is the gap from your centre to
-        // the candidate's cross-axis interval, 0 when you are inside it. With
-        // centre distance a wide control (the hero's map button under the
-        // flag strip) lost ArrowDown to a narrow foot button that happened to
-        // sit closer to straight-down (measured: NEXT beat a 568px-wide hero).
         const across = dx ? gap(a.y, b.t, b.b) : gap(a.x, b.l, b.r);
-        const cost = along + across * 2;
-        if (cost < bestCost) { bestCost = cost; best = el; }
+        const nearerRow = along < bestAlong - tol;
+        const sameRow = !nearerRow && along <= bestAlong + tol;
+        if (nearerRow || (sameRow && (across < bestAcross || (across === bestAcross && along < bestAlong)))) {
+          best = el; bestAlong = along; bestAcross = across;
+        }
       } else if (-along > edgeDist) {
         edgeDist = -along; edge = el;
       }
@@ -396,7 +425,15 @@ window.MenuNav = (function () {
   function ownsArrows(el, key) {
     if (!el) return false;
     const t = el.tagName;
-    if (t === "TEXTAREA" || t === "SELECT") return true;
+    if (t === "TEXTAREA") return true;
+    // A <select> is a ‹ value › row: Left/Right (and Home/End) change it, the
+    // way the range slider below already works; Up/Down are the way to the
+    // next row. Owning every arrow made each select row an island — from
+    // ACTIVE AERO or any HUD row the keyboard could reach nothing above or
+    // below it without Tab (measured on the DISPLAY page 2026-09-08), and a
+    // pad has no Tab. navKey's preventDefault keeps the native value change
+    // off the vertical keys.
+    if (t === "SELECT") return key === "ArrowLeft" || key === "ArrowRight" || key === "Home" || key === "End";
     if (t === "INPUT") {
       const ty = (el.type || "text").toLowerCase();
       if (ty === "checkbox" || ty === "radio" || ty === "button" ||

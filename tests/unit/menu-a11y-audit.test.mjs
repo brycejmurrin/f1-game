@@ -173,6 +173,30 @@ test("MenuNav: a range slider keeps Left/Right AND Home/End (ARIA slider ends); 
 
 /* ── 4. MenuNav: a tab rail owns its own axis, the other axis is the exit ── */
 
+test("MenuNav: a <select> keeps Left/Right and Home/End; Up/Down leave it for the next row", () => {
+  // Every ‹ value › row on the settings pages is a <select>. Owning all four
+  // arrows made each one an island: from ACTIVE AERO or any HUD row the
+  // keyboard reached nothing above or below without Tab, and a pad has no
+  // Tab (measured on the DISPLAY page 2026-09-08). Same rule as the slider.
+  const h = bootMenuNav();
+  const above = h.add("above", { y: 10 });
+  const sel = h.add("sel", { tag: "select", y: 60 });
+  const below = h.add("below", { y: 110 });
+  sel.focus();
+  for (const k of ["ArrowLeft", "ArrowRight", "Home", "End"]) {
+    const e = h.key(k);
+    assert.equal(h.focused(), "sel", `${k} stays with the select (it changes the value natively)`);
+    assert.equal(e.defaultPrevented, false, `${k} keeps its native default`);
+  }
+  const down = h.key("ArrowDown");
+  assert.equal(h.focused(), "below", "Down leaves for the next row");
+  assert.equal(down.defaultPrevented, true, "…and the key is consumed, so the select's value does not also change");
+  sel.focus();
+  h.key("ArrowUp");
+  assert.equal(h.focused(), "above", "Up leaves for the row above");
+  void above;
+});
+
 test("MenuNav: Down leaves a horizontal tab rail and the key stops before the rail's own handler", () => {
   const h = bootMenuNav();
   const list = h.dom.makeElement("div"); list.setAttribute("role", "tablist"); h.layer.appendChild(list);
@@ -221,6 +245,34 @@ test("MenuNav: a declared aria-orientation beats the measured layout; a lone tab
   const only = control(g.dom, solo, "only", { x: 10, y: 200, w: 90, attrs: { role: "tab" } });
   assert.equal(g.MenuNav.ownsArrows(only, "ArrowRight"), true, "a lone tab: nothing to cycle, horizontal default");
   assert.equal(g.MenuNav.ownsArrows(only, "ArrowDown"), false);
+});
+
+test("MenuNav: a closed <details> offers its summary and none of its contents; open, the contents join", () => {
+  // The DISPLAY / STEERING / MUSIC settings pages fold their rows into
+  // <details>. Chromium keeps the closed contents' layout boxes, so the box
+  // test passed, step() chose a folded row as the nearest target, focus() on
+  // it was a silent no-op, and from BACK no arrow could move at all (measured
+  // 2026-09-08: 40 of 46 DISPLAY items unfocusable, every arrow from BACK a
+  // no-op). The summary is the way in, so it is a control.
+  const h = bootMenuNav();
+  const back = h.add("back", { y: 300 });
+  const fold = h.dom.makeElement("details");
+  fold.id = "fold"; h.layer.appendChild(fold);
+  const sum = control(h.dom, fold, "fold-sum", { tag: "summary", y: 10 });
+  const inner = control(h.dom, fold, "inner", { y: 60 });
+  // Spread: the VM realm's array would fail strict deepEqual. Sorted: mini-dom's
+  // querySelectorAll answers per selector part, not in document order.
+  const ids = () => [...h.MenuNav.items(h.layer)].map((el) => el.id).sort();
+  assert.deepEqual(ids(), ["back", "fold-sum"], "closed: the summary, not the row inside");
+  back.focus();
+  h.key("ArrowUp");
+  assert.equal(h.focused(), "fold-sum", "Up from BACK lands on the fold header, not on a row focus() would refuse");
+  fold.setAttribute("open", "");
+  assert.deepEqual(ids(), ["back", "fold-sum", "inner"], "open: the contents are targets");
+  sum.focus();
+  h.key("ArrowDown");
+  assert.equal(h.focused(), "inner", "Down from the header enters the open fold");
+  assert.ok(/\bsummary\b/.test(h.MenuNav.FOCUSABLE), "summary is in FOCUSABLE (the pad's A clicks it)");
 });
 
 test("MenuNav exports items/currentItem/ownsArrows for the focus-landing seam", () => {
