@@ -161,7 +161,54 @@ const TrackLine = (function () {
     }
     for (let i = 0; i < n; i++) { const lim = Math.max(hw[i] - MARGIN, 0.5); x[i] = clamp(x[i], -lim, lim); }
     track.line = x; track.lineW = w;
+    bakeAttack(track, ds);
     return track;
+  }
+
+  // ATTACK ZONES. Overtaking that feels deliberate happens where it is ON: a
+  // braking zone at the end of a straight, on a road wide enough for two. Each
+  // corner's zone is the ZONE_M before its turn-in; its quality q is the length
+  // of the straight feeding it (0 at 60 m, 1 at 450 m) times the road width
+  // there (0 at 4 m half-width, 1 at 6.5 m). Game AI Pro ch. 39 keeps this as
+  // per-corner "overtaking entry" flags on the track data; Assetto Corsa's
+  // ai_hints DANGER zones are the same idea inverted. `toTurnIn` is the metres
+  // to the next turn-in, for the give-up rule (a pass not half alongside by
+  // the turn-in is a lunge, and is abandoned).
+  const ZONE_M = 130;
+  function bakeAttack(track, ds) {
+    const n = track.n, L = track.total, cs = track.lineCorners || [], hw = track.hw;
+    const q = new Float32Array(n), toIn = new Float32Array(n);
+    toIn.fill(L);
+    track.attackQ = q; track.toTurnIn = toIn;
+    if (!cs.length) return;
+    const sorted = cs.slice().sort((a, b) => a.s0 - b.s0);
+    for (let ci = 0; ci < sorted.length; ci++) {
+      const c = sorted[ci], prev = sorted[(ci - 1 + sorted.length) % sorted.length];
+      let straight = c.s0 - prev.s1; if (straight < 0) straight += L;
+      if (sorted.length === 1) straight = L - (c.s1 - c.s0);
+      const iMid = Math.floor(wrapS(L, c.s0 - ZONE_M / 2) / L * n) % n;
+      const width = clamp((hw[iMid] - 4) / 2.5, 0, 1);
+      const qc = clamp((straight - 60) / 390, 0, 1) * width;
+      const i0 = Math.floor(wrapS(L, c.s0 - ZONE_M) / L * n), i1 = Math.floor(c.s0 / L * n);
+      for (let i = i0; i <= i0 + ((i1 - i0 + n) % n); i++) { const idx = ((i % n) + n) % n; if (qc > q[idx]) q[idx] = qc; }
+    }
+    // metres to the next turn-in, walking backwards from each corner's s0
+    const s0s = sorted.map((c) => c.s0);
+    for (let i = 0; i < n; i++) {
+      const s = i * ds; let best = L;
+      for (const s0 of s0s) { let d = s0 - s; if (d < 0) d += L; if (d < best) best = d; }
+      toIn[i] = best;
+    }
+  }
+
+  const _atk = { q: 0, toTurnIn: 0 };
+  function attackAt(track, s) {
+    if (!track.attackQ) { _atk.q = 0.5; _atk.toTurnIn = 1e9; return _atk; }
+    const n = track.n, L = track.total;
+    s %= L; if (s < 0) s += L;
+    const i = Math.floor(s / L * n) % n;
+    _atk.q = track.attackQ[i]; _atk.toTurnIn = track.toTurnIn[i] - (s - i * (L / n));
+    return _atk;
   }
 
   function wrapS(L, s) { s %= L; if (s < 0) s += L; return s; }
@@ -180,5 +227,5 @@ const TrackLine = (function () {
     return _out;
   }
 
-  return { bake, at, K_ON, MARGIN };
+  return { bake, at, attackAt, K_ON, MARGIN, ZONE_M };
 })();

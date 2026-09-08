@@ -706,3 +706,22 @@ test("defendOnce: the first pull fixes the side, the other way is refused, no pu
   eq(st, 0, 1, "no pull leaves the side latched until the braking zone");
   eq(A.defendOnce(-0.7, 0), -0.7, -1, "a fresh straight may go either way once");
 });
+
+test("attackOK: a straight is always a place to pass; a corner entry only at its zone's quality", () => {
+  const t = { craft: 0.75 };
+  const base = { traits: t, speed: 46, blockerSpeed: 40, roll: 0.5, kAhead: 0, toTurnIn: 1e9, attackQ: 0 };
+  assert.equal(A.attackOK(base), true, "a straight with a 6 m/s closing rate");
+  assert.equal(A.attackOK({ ...base, speed: 41 }), false, "barely closing on a straight: shadow it");
+  assert.equal(A.attackOK({ ...base, kAhead: 0.02 }), false, "mid-corner, no zone: not on");
+  // A car with real pace deficit is passed wherever, and a crawling one anywhere.
+  assert.equal(A.attackOK({ ...base, kAhead: 0.02, vTop: 72, freeSpeed: 70, blockerVmax: 58 }), true, "17 % of pace in hand: on, even mid-corner");
+  assert.equal(A.attackOK({ ...base, kAhead: 0.02, vTop: 72, freeSpeed: 70, blockerVmax: 66.5 }), false, "5 % — the tier spread — is not a licence to pass mid-corner");
+  assert.equal(A.attackOK({ ...base, kAhead: 0.02, speed: 5, blockerSpeed: 3, vTop: 72, freeSpeed: 70, blockerVmax: 70 }), true, "a crawling car is passed anywhere");
+  // Inside a zone the baked quality decides.
+  assert.equal(A.attackOK({ ...base, toTurnIn: 80, attackQ: 0.9 }), true, "a prime braking zone");
+  assert.equal(A.attackOK({ ...base, toTurnIn: 80, attackQ: 0.15 }), false, "a poor one (short straight or narrow road)");
+  // Craft and the roll widen or narrow the window.
+  assert.equal(A.attackOK({ ...base, toTurnIn: 80, attackQ: 0.35, traits: { craft: 0.2 } }), false, "a rookie does not see the marginal move");
+  assert.equal(A.attackOK({ ...base, toTurnIn: 80, attackQ: 0.35, traits: { craft: 1.0 }, roll: 1 }), true, "a great one, on a good day, does");
+  assert.equal(A.sideLevel(), 2.4);
+});

@@ -84,3 +84,25 @@ test("a corner across the lap seam is one corner and the line closes", () => {
   assert.equal(t.lineCorners.length, 1);
   assert.ok(Math.abs(t.line[0] - t.line[t.n - 1]) < 0.6, "the line must be continuous across s = 0");
 });
+
+test("attack zones: a corner after a long straight on a wide road is where the move is on", () => {
+  // Two corners: one fed by ~900 m of straight, one 100 m after the first's exit.
+  const t = TL.bake(track(2000, 7, (s) => (s >= 1000 && s < 1060 ? 0.02 : s >= 1200 && s < 1260 ? -0.02 : 0)));
+  assert.equal(t.lineCorners.length, 2);
+  const [a, b] = t.lineCorners.slice().sort((p, q) => p.s0 - q.s0);
+  const qa = TL.attackAt(t, a.s0 - 60).q, qb = TL.attackAt(t, b.s0 - 60).q;
+  assert.ok(qa > 0.9, `long straight into a wide corner should be a prime zone: ${qa}`);
+  assert.ok(qb < 0.15, `a corner 100 m after the last is not: ${qb}`);
+  assert.equal(TL.attackAt(t, a.s0 - 200).q, 0, "outside the zone the baked quality is 0 (the straight rule is the AI's)");
+  // toTurnIn counts down to the next turn-in and wraps the lap.
+  const d = TL.attackAt(t, a.s0 - 50).toTurnIn;
+  assert.ok(Math.abs(d - 50) < 5, `50 m before the turn-in reads ${d}`);
+  assert.ok(TL.attackAt(t, b.s1 + 10).toTurnIn > 1500, "past the last corner the next turn-in is round the lap");
+});
+
+test("attack zones: a narrow road takes the quality away", () => {
+  const wide = TL.bake(track(2000, 7, cornerAt(1000, 60, 0.02)));
+  const narrow = TL.bake(track(2000, 4.5, cornerAt(1000, 60, 0.02)));
+  const c = wide.lineCorners[0];
+  assert.ok(TL.attackAt(narrow, c.s0 - 60).q < 0.3 * TL.attackAt(wide, c.s0 - 60).q, "4.5 m half-width is street width: barely a zone");
+});
