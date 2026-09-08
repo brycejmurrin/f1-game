@@ -1358,3 +1358,38 @@ this bisect did not capture. **The lesson: record the SHA beside every bench
 line.** These logs carry a time and a track and nothing else, so a number from
 four hours ago cannot be re-run against its own tree, and that is the whole
 reason the attribution failed.
+
+
+## 2026-09-08 — the `ui` group had been red for days, unseen
+
+Dispatching `group: ui` over the settings-defaults change returned TEN
+failures, and nine of them had nothing to do with that change.
+
+**The nine.** Every test in `music-library.spec.js` failed on
+`expect(#audioset).toBeVisible()`. `#audioset` is a PAGE inside `<dialog
+id="pmsettings">`, and a closed dialog `display:none`s its whole subtree, so
+clicking `#pm-audio` unhid the page and Playwright still read it hidden. The
+helper now opens the settings dialog first, the way `menu-survey.spec.js`
+does; 13 of 13 pass. Confirmed pre-existing by running the same test in a
+worktree at a commit from before this session, where it failed identically.
+
+**Why nobody knew**: `test:ui` has no blocking coverage on a push (recorded
+above, 2026-09-04). A group that only runs when someone dispatches it is a
+group that rots, and the rot is invisible until the dispatch. Nine tests had
+been dead for days.
+
+**The tenth is real, mine, and still open.** `ui-redesign.spec.js` asserts the
+compact-density minimap is exactly `"96px"` and it computes `95.9929px`. A
+worktree bisect puts it precisely at the settings-defaults bake: the parent
+commit passes, the bake fails. But the minimap measures EXACTLY 96px in
+isolation under every default that bake moved — shipped, `hudMetricsLayout`
+back to auto, `camMode` back to chase, both together — so the fraction only
+appears after the test's own catalogue → garage → settings → data-table walk.
+The CSS is a literal `width: 96px`, so something in that sequence is scaling
+it by 0.0074 %, which means a `zoom` ancestor rather than a layout change.
+
+**Left failing on purpose.** The assertion could be given a tolerance and go
+green in a minute, and that is exactly the move this file exists to warn
+against: a sub-pixel that appeared with a specific commit is a thread, and
+loosening the assertion cuts it. Whoever picks it up starts from "which
+element gained a fractional zoom between those two commits".
