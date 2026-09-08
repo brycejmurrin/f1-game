@@ -1919,7 +1919,12 @@ const WGX = (function () {
       // stamping ribbon depth clips walls/tyres drawn later. Floor/terrain
       // punch a LUT hole; the road uses less-equal (no GL-sized bias)
       // and still writes depth so skyLate cannot erase it.
-      const decal = !!(opts && (opts.decal || opts.depthCompare === "always"));
+      // noDepthTest lands on the SAME state: GLX spells it gl.disable(DEPTH_TEST)
+      // around one draw (the garage floor reflection, mirrored UNDER the floor);
+      // here depthCompare "always" is that, and the blend above already keeps
+      // depthWriteEnabled false, so the opaque draws recorded after it in this
+      // pass overwrite it exactly as they do on GLX.
+      const decal = !!(opts && (opts.decal || opts.noDepthTest || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
       // GLX polygonOffset(factor, units) → WebGPU depthBias / depthBiasSlopeScale.
       // Start-line decals pass [-1, -2]; without this they shimmer at range.
@@ -3753,6 +3758,7 @@ const WGX = (function () {
       detail: 0, clearcoat: 0, carPaint: 0, sparkle: 1, _instanced: false,
       surfaceId: 0, buryRibbon: false, depthBias: null, doubleSided: false,
       noAlphaWrite: false, decal: false, depthCompare: undefined,
+      noDepthTest: false,
     };
     const _BIAS_BURY = [5, 10], _BIAS_DETAIL = [3, 6];
     function _litOpts(opts) {
@@ -3778,6 +3784,7 @@ const WGX = (function () {
       b._instanced = o._instanced; b.surfaceId = o.surfaceId;
       b.buryRibbon = o.buryRibbon; b.noAlphaWrite = o.noAlphaWrite;
       b.decal = o.decal; b.depthCompare = o.depthCompare;
+      b.noDepthTest = o.noDepthTest;
       b.depthBias = bias; b.doubleSided = dbl;
       return b;
     }
@@ -5965,6 +5972,7 @@ const WGX = (function () {
           { alpha: 0.5 }, { alpha: 0.5, noAlphaWrite: true },
           { doubleSided: true }, { depthBias: [3, 6] }, { depthBias: [5, 10] },
           { depthBias: [-1, -2] }, { decal: true },
+          { alpha: 0.26, noDepthTest: true },
         ];
         const save = _passSamples;
         const counts = MSAA_COUNT > 1 ? [1, MSAA_COUNT] : [1];

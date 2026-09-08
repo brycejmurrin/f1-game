@@ -94,6 +94,12 @@ Second pass, 2026-09-08, from EA's own pages and player guides.
 - **Colour** F1's grammar against the player's speed: green at or under the
   line's speed, amber a little over, red clearly over. Forza's blue was not
   used: this HUD already uses blue for ERS and DRS.
+- **On three.js it was invisible until the evening.** The real-GPU census that
+  signed the port off drew the chevrons on GLX and WGX and none on TLX: three
+  honours the road's own depth bias, GLX does not, so the fx decal offset
+  copied from GLX put the ribbon (and every blob shadow and skid) behind the
+  road. Fixed in `tsl-fx.js` (`-12/-24`); the story is in
+  `docs/research/WEBGPU-PARITY.md` §Driving line and the defect ledger.
 - **Not done** F1's raised 3D type (the shipped line is F1's 2D form), its
   colour-blind palettes and opacity option, and its audio braking cue; GT7's
   dotted style and corner-side indicators; Forza's off-track white. (WGX and

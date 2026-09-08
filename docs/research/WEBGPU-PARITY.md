@@ -984,6 +984,19 @@ member stubbed `() => false` on the other two; the port landed the same day:
   `lineCorners` / `lineStr` uniforms; `tlx.js` streams the strip like
   `skidStream` and indexes it into triangles (three draws Mesh triangles).
   Runs on both of three's backends (WebGL2 and WebGPU).
+  **Depth bias (fixed 2026-09-08 evening):** the census that signed the port
+  off (run 48, Apple GPU) shows the chevrons on GLX and WGX and NONE on the
+  TLX/WebGL2 leg with `gpuErrors 0` — the strip was submitted every frame
+  (`backendState.fx.lineVerts`) and lost the depth test. three honours the
+  road's own `depthBias [-8,-16]` (game.js `_wmRoad*` → tsl-lit.js) on both
+  backends, while GLX draws the road unbiased; so `fxMaterial`'s
+  `polygonOffset(-4,-8)`, copied from GLX's `ROAD_BIAS`, put every fx decal
+  BEHIND the road. Reproduced on lavapipe (`gfx-probe --backend three
+  --tlx-webgpu --lavapipe montreal`: no ribbon; depthTest off → a solid band;
+  offset off → nothing; `-12/-24` → chevrons on the road). The blob shadows,
+  tyre marks and skids share `fxMaterial` and were buried the same way.
+  `backendState.line` now reports the pooled line mesh (visible / in scene /
+  index count) as the positive signal a software probe can read.
 
 Sign-off is the real-GPU census (`gpu-census.yml`, macOS/Metal), not a
 screenshot here: the software adapters validate and run the frame graph but
