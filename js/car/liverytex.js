@@ -1191,18 +1191,13 @@ const LiveryTex = (function () {
   // 160 px down), so a length picked in metres and a height picked in pixels
   // gave a bull 113% of the region tall, clipped to a white blob.
   function flankBull(ctx, teamId, colour) {
-    const spec = typeof CrestPaths !== "undefined" && CrestPaths[teamId];
-    if (!spec || spec.d.length !== 2 || spec.roles.some((r) => r !== "mark")) return false;
-    const d = spec.d[1];
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const m of d.matchAll(/(-?[0-9.]+)[ ,](-?[0-9.]+)/g)) {
-      const x = +m[1], y = +m[2];
-      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
-    }
-    // The path's nose is at its low-x end, set just aft of the sun (BULL.u0).
+    const b = bullPath(teamId);
+    if (!b) return false;
+    const { d, x0, y0, x1, y1 } = b, span = wrapMarkSpan(teamId);
+    // The path's nose is at its low-x end, set just aft of the sun (span.u0).
     eachFlank((F) => {
       const bh = BULL.h * F.R.h, top = F.R.y + F.R.h * 0.04;
-      const xA = F.fx(BULL.u0), xB = F.fx(BULL.u0 + BULL.uLen);
+      const xA = F.fx(span.u0), xB = F.fx(span.u0 + span.uLen);
       const f = { X: (u) => xA + (u - x0) / (x1 - x0) * (xB - xA), Y: (v) => top + (v - y0) / (y1 - y0) * bh, S: (s) => s / (x1 - x0) * Math.abs(xB - xA) };
       ctx.save();
       ctx.beginPath(); ctx.rect(F.R.x, F.R.y, F.R.w, F.R.h); ctx.clip();
@@ -1271,10 +1266,35 @@ const LiveryTex = (function () {
   // car against 0.47 m over 160 px down it, so a length picked in metres and a
   // height picked in pixels gave a bull 113 % of the region tall, clipped to a
   // white blob. Published because the SIDE designs have to clear it.
-  const BULL = (() => {
-    const h = 0.80, u0 = 0.06, aspect = 0.253 / 0.454;   // the RB path's own bbox ratio
-    return { h, u0, uLen: (h * FLANK.sLen / aspect) / FLANK.zLen };
-  })();
+  const BULL = { h: 0.80, u0: 0.06 };
+  // The team's ONE forward-facing traced path, with its bbox — Red Bull's crest
+  // is two bulls charging at each other and the second faces canvas-left, which
+  // every flank frame maps to the nose. Null for a crest that is not a single
+  // pair of marks.
+  function bullPath(teamId) {
+    const spec = typeof CrestPaths !== "undefined" && CrestPaths[teamId];
+    if (!spec || spec.d.length !== 2 || spec.roles.some((r) => r !== "mark")) return null;
+    const d = spec.d[1];
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const m of d.matchAll(/(-?[0-9.]+)[ ,](-?[0-9.]+)/g)) {
+      const x = +m[1], y = +m[2];
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    return { d, x0, y0, x1, y1 };
+  }
+  // How much of the flank the wrap's mark claims, front-first. Its HEIGHT is
+  // chosen (BULL.h of the skin from the crease down) and its LENGTH DERIVED
+  // from the mark's own aspect through the flank's anisotropy — 1.24 m over
+  // 304 px along the car against 0.47 m over 160 px down it, so a length
+  // picked in metres beside a height picked in pixels gave a bull 113 % of the
+  // region tall, clipped to an unreadable blob. Measured from the path, never
+  // a copied constant; a team with no traced bull wears its lockup at the same
+  // height, which is square. Published because the SIDE designs clear it.
+  function wrapMarkSpan(teamId) {
+    const b = bullPath(teamId);
+    const aspect = b ? (b.y1 - b.y0) / (b.x1 - b.x0) : 1;
+    return { u0: BULL.u0, uLen: (BULL.h * FLANK.sLen / aspect) / FLANK.zLen };
+  }
   // FLANK FRAMES. Each flank is authored in its own OUTSIDE-VIEW frame: local
   // x runs 0 → 1 from the viewer's left to right standing beside that side,
   // local y 0 → 1 from the crease down. Beside the RIGHT flank the nose is on
@@ -1301,6 +1321,23 @@ const LiveryTex = (function () {
     return { R, fx, box, dir: side.frontLeft ? 1 : -1 };
   }
   const eachFlank = (fn) => { for (const side of FLANKS) { const F = flankFrame(side); if (F) fn(F); } };
+  // The saddle's other half: from the airbox back along the crease to
+  // mid-cover, then a raked edge down to the sidepod line just behind the
+  // number (the SF-26's white cover top), on each flank in its own frame.
+  // Called OUTSIDE the crown clip — see the saddle branch below.
+  function saddleFlanks(ctx, acc) {
+    eachFlank((F) => {
+      const Sf = F.R;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+      ctx.fillStyle = cssA(acc, 0.97);
+      ctx.beginPath();
+      ctx.moveTo(F.fx(0), Sf.y); ctx.lineTo(F.fx(0.58), Sf.y);                 // along the crease
+      ctx.lineTo(F.fx(0.40), Sf.y + Sf.h); ctx.lineTo(F.fx(0), Sf.y + Sf.h);  // raked rear edge
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
+  }
   function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont) {
     const X = R.x, Y = R.y, W = R.w, H = R.h;
     ctx.save();
@@ -1315,20 +1352,11 @@ const LiveryTex = (function () {
       // the SF-26, where the white runs from the airbox over the shoulders
       // and the number sits in it. The band is painted here first; a flank
       // pick (plate, number) lands on top of it.
+      // Only the CROWN here: drawSpineTop runs inside a clip to R, and a
+      // canvas clip only ever narrows, so the flank half is drawn by
+      // saddleFlanks() at the call site instead — inside this clip it was
+      // silently erased, and the atlas shipped a saddle with bare sides.
       ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, Y, W, H);
-      // From the airbox back along the crease to mid-cover, then a raked
-      // edge down to the sidepod line just behind the number (the SF-26),
-      // on each flank in its own frame.
-      eachFlank((F) => {
-        const Sf = F.R;
-        ctx.save();
-        ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
-        ctx.beginPath();
-        ctx.moveTo(F.fx(0), Sf.y); ctx.lineTo(F.fx(0.58), Sf.y);                 // along the crease
-        ctx.lineTo(F.fx(0.40), Sf.y + Sf.h); ctx.lineTo(F.fx(0), Sf.y + Sf.h);  // raked rear edge
-        ctx.closePath(); ctx.fill();
-        ctx.restore();
-      });
     } else if (id === "panel") {
       // A solid accent block down the crown with a crisp raked leading edge
       // and a square tail — the vinyl panel a real cover wears, hard-edged.
@@ -1594,7 +1622,11 @@ const LiveryTex = (function () {
     const podBg = [board];
     const stripBg = [c2];
     const ink = inkOn([c1, c2]);             // nose / endplate number
-    const inkCrest = inkOn([c1, finPaint]);
+    // The crest, the spine designs and the flank marks all sit on the ENGINE
+    // COVER, so they ink against ITS colour: a white cover (the SF-26) under a
+    // red car would otherwise take the red car's ink and read as nothing.
+    const coverPaint = colors.cover || c1;
+    const inkCrest = inkOn([coverPaint, finPaint]);
     const inkFin = inkOn([finPaint]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks
     const inkStrip = inkOn(stripBg);
@@ -1676,10 +1708,15 @@ const LiveryTex = (function () {
       const brand = MARK_BRAND[teamId] && MARK_BRAND[teamId].mark;
       const bullC = (brand && contrast(brand, c1) >= MARK_ON_BODY) ? brand : (sunLockup.mark || inkOn([sunC, c1]));
       if (!flankBull(ctx, teamId, bullC)) {
+        // No traced bull: the team's lockup at the SAME height the bull would
+        // have had, on the same band. Hung at 0.72 of the flank it read as a
+        // badge floating on an empty side while Red Bull's filled the cover.
+        const span = wrapMarkSpan(teamId);
         eachFlank((F) => {
           ctx.save();
-          ctx.translate(F.fx(0.26), F.R.y + F.R.h * 0.40); ctx.scale(FLANK_SQUASH, 1);
-          const Rw = { x: -F.R.h * 0.36, y: -F.R.h * 0.34, w: F.R.h * 0.72, h: F.R.h * 0.68 };
+          ctx.translate(F.fx(span.u0 + span.uLen / 2), F.R.y + F.R.h * 0.50); ctx.scale(FLANK_SQUASH, 1);
+          const s = BULL.h * F.R.h;   // square through FLANK_SQUASH, so square in metres
+          const Rw = { x: -s / 2, y: -s / 2, w: s, h: s };
           if (LOGOS[teamId]) {
             drawLogoImage(ctx, LOGOS[teamId], Rw, logo, markHalo(LOGOS[teamId], sunC, inkOn([sunC])), emblemRim);
           } else drawCrest(ctx, teamId, Rw, { liv: colors, field: sunC, bare: true, palette: sunLockup });
@@ -1695,11 +1732,12 @@ const LiveryTex = (function () {
       ctx.translate(Rc.x + Rc.w / 2, Rc.y + Rc.h / 2); ctx.rotate(Math.PI); ctx.scale(1, CROWN_SQUASH);
       const Rb = { x: -sq / 2, y: -sq / 2, w: sq, h: sq };
       if (LOGOS[teamId]) {
-        drawLogoImage(ctx, LOGOS[teamId], Rb, logo, markHalo(LOGOS[teamId], c1, inkCrest), emblemRim);
+        drawLogoImage(ctx, LOGOS[teamId], Rb, logo, markHalo(LOGOS[teamId], coverPaint, inkCrest), emblemRim);
       } else drawCrest(ctx, teamId, Rb, { liv: colors, field: [c1, c2], bare: true, palette: Object.assign({}, lockup, { plate: null }) });
       ctx.restore();
     } else if (spineLogo !== "none") {
-      drawSpineTop(ctx, spineLogo, REGIONS.crest, c1, stripe || accent, inkCrest, names[0] || "", raceNum, colors.numFont);
+      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, stripe || accent, inkCrest, names[0] || "", raceNum, colors.numFont);
+      if (spineLogo === "saddle") saddleFlanks(ctx, stripe || accent);
     }
     if (REGIONS.tail) {
       drawTailTop(ctx, spineLogo, REGIONS.tail, stripe || accent, inkCrest, names[1] || "");
@@ -1735,7 +1773,8 @@ const LiveryTex = (function () {
     // authored front-to-rear landed its wordmarks across the bull's legs. `su`
     // is the side band's own 0→1 along the flank; under the wrap it starts
     // aft of the bull, everywhere else it is the whole flank.
-    const sideFrom = spineLogo === "wrap" ? BULL.u0 + BULL.uLen : 0;
+    const sideFrom = spineLogo === "wrap"
+      ? (() => { const s = wrapMarkSpan(teamId); return s.u0 + s.uLen; })() : 0;
     const su = (F, u) => F.fx(sideFrom + u * (1 - sideFrom));
     const sbox = (F, u0, u1, v0, v1) => {
       const xa = su(F, u0), xb = su(F, u1);

@@ -134,7 +134,16 @@ class RecCtx {
     this.ops.push({ kind: "stroke", pts: this._snap(), lw: this.st.lw,
                     style: this.st.stroke, clip: this.st.clip, shadow: this.st.shadow });
   }
-  clip(rule) { this.st.clip = { pts: this._snap(), rule: rule || "nonzero" }; }
+  // canvas clip() INTERSECTS with the clip already in force; it can never
+  // widen one. Recording it as a REPLACEMENT made a paint inside two disjoint
+  // region clips — a crown painter reaching for a flank — record as though it
+  // had landed, and tests/unit/fin-design.test.mjs called that a pass while
+  // the real atlas drew nothing (the saddle's flank band, 2026-09-08). The
+  // clip is a LIST and a point must satisfy every entry.
+  clip(rule) {
+    const c = { pts: this._snap(), rule: rule || "nonzero" };
+    this.st.clip = this.st.clip ? this.st.clip.concat([c]) : [c];
+  }
   fillRect(x, y, w, h) {
     this.ops.push({ kind: "fill", pts: [this._box(x, y, w, h)],
                     rule: "nonzero", style: this.st.fill, clip: this.st.clip, shadow: this.st.shadow });
@@ -228,8 +237,12 @@ function nearPolyline(sub, px, py, half) {
 function inked(ops, px, py) {
   for (const op of ops) {
     if (op.clip) {
-      const w = winding(op.clip.pts, px, py);
-      if (!(op.clip.rule === "evenodd" ? w.evenodd : w.nonzero)) continue;
+      let out = false;
+      for (const c of op.clip) {
+        const w = winding(c.pts, px, py);
+        if (!(c.rule === "evenodd" ? w.evenodd : w.nonzero)) { out = true; break; }
+      }
+      if (out) continue;
     }
     if (op.kind === "stroke") { if (nearPolyline(op.pts, px, py, op.lw / 2)) return true; }
     else {
