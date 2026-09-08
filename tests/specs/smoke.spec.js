@@ -271,6 +271,12 @@ test.describe("Apex 26 — smoke", () => {
     // the pixels.
     await goToRace(page);
     await park(page, 0.1);
+    // The strip is built by the first frame that DRAWS it. Under SwiftShader
+    // that frame can land after park() returns (CI: `built: null` twice on a
+    // green tree, a local run passes) — wait for it, polled, as every
+    // waitForFunction on a rendering page must be.
+    await page.waitForFunction(() => window.__apex.drivingLine("full").built === window.__apex.info().track,
+      null, { polling: 100, timeout: 60000 });
     const d = await page.evaluate(() => {
       const r = window.__apex.drivingLine("full");
       return { mode: r.mode, built: r.built, samples: r.samples, verts: r.verts,
