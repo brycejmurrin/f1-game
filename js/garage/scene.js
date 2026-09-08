@@ -533,20 +533,24 @@ function buildEquipment(g, liv, ctx) {
   // as guy-lines in every preset. Between stops the guns lie by their wheels
   // on a coil of hose from a floor manifold at the box edge, which is what a
   // real bay looks like and keeps everything below knee height.
+  // z -1.75, in the gap between the side walls' wordmark bays (z -1.1..1.1
+  // and -2.4..-4.6): at z 0.1 the reel and its drop hung straight in front of
+  // the middle wordmark, which the SIDE preset reads as a sign cut in two.
+  const BZ = -1.75;
   for (const sd of [-1, 1]) {
     const bx = sd * 2.3;
-    tube(g.mid, [sd * 4.6, 4.40, 0.1], [bx, 4.40, 0.1], 0.045, dark, 6, MAT.METAL);   // boom
+    tube(g.mid, [sd * 4.6, 4.40, BZ], [bx, 4.40, BZ], 0.045, dark, 6, MAT.METAL);   // boom
     for (let i = 0; i < 3; i++)
-      block(g.mid, sd * (2.9 + i * 0.6), 4.40, 0.1, 0.02, 0.09, 0.02, STEEL);       // hangers
-    cyl(g.mid, bx, 4.05, 0.1, 0.20, 0.16, scale(DARK, 1.5), 10);                     // reel drum
-    cyl(g.mid, bx, 4.21, 0.1, 0.06, 0.20, STEEL, 6);                                 // spindle
-    hose(g.mid, [[bx, 4.05, 0.1], [bx, 3.50, 0.1]], 0.025, HOSE, 6);                 // retracted drop
-    block(g.mid, bx, 3.46, 0.1, 0.04, 0.05, 0.04, STEEL);                            // coupling
-    block(g.mid, sd * 2.36, 0.08, 0.1, 0.10, 0.08, 0.24, dark);                      // floor manifold
+      block(g.mid, sd * (2.9 + i * 0.6), 4.40, BZ, 0.02, 0.09, 0.02, STEEL);        // hangers
+    cyl(g.mid, bx, 4.05, BZ, 0.20, 0.16, scale(DARK, 1.5), 10);                      // reel drum
+    cyl(g.mid, bx, 4.21, BZ, 0.06, 0.20, STEEL, 6);                                  // spindle
+    hose(g.mid, [[bx, 4.05, BZ], [bx, 3.50, BZ]], 0.025, HOSE, 6);                   // retracted drop
+    block(g.mid, bx, 3.46, BZ, 0.04, 0.05, 0.04, STEEL);                             // coupling
+    block(g.mid, sd * 2.36, 0.08, BZ, 0.10, 0.08, 0.24, dark);                       // floor manifold
     for (const wz of [1.7, -1.6]) {
       const gx = sd * 1.55, gz = wz + (wz > 0 ? 0.55 : -0.55), cz = wz * 0.55;
       // The coil: six short legs zig-zagging at floor level beside the manifold.
-      const pts = [[sd * 2.36, 0.08, 0.1 + (wz > 0 ? 0.14 : -0.14)]];
+      const pts = [[sd * 2.36, 0.08, BZ + (wz > 0 ? 0.14 : -0.14)]];
       for (let k = 0; k < 6; k++)
         pts.push([sd * (2.05 + (k % 2 ? 0.22 : -0.02)), 0.035 + (k % 3) * 0.02, cz + (k - 2.5) * 0.11]);
       pts.push([gx + sd * 0.12, 0.05, gz]);
