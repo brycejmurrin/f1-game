@@ -517,3 +517,41 @@ NOT SHIPPED, and the experiment is reverted. The remaining reason to want it
 is how the DRAWN line looks at a corner players recognise, which is a taste
 question for the owner rather than a measurement — and the derivation above
 means it would not need 24 circuits authored by hand, only a decision.
+
+## 10. The AI's lap time now has an instrument (2026-09-08)
+
+Every number in §8 and §9 came out of a throwaway script. `tools/check/ai-pace.mjs`
+is that script made repeatable: it boots the real game in `tools/lib/game-vm.cjs`,
+races the AI field, and times each car's laps off its own lap counter at a fixed
+step — sim time, so the answer does not move with how loaded the box is.
+
+It measures a DIFFERENT thing from §9's table, and the two must not be compared
+directly. §9 timed a SOLO flying lap; this times the FIELD MEDIAN with 21 cars
+on track, which is the number a player experiences.
+
+**Baseline on the shipped tree** (best of 2 timed laps per car, median of 21):
+
+| circuit | easy | normal | hard | easy vs normal | hard vs normal |
+|---|---|---|---|---|---|
+| monza | 2:06.250 | 1:59.233 | 1:57.333 | +5.88 % | −1.59 % |
+| monaco | 1:23.400 | 1:21.775 | 1:21.200 | +1.99 % | −0.70 % |
+
+Two things fall out of it, neither of which the solo lap could show.
+
+**The difficulty spread is much narrower than DIFF implies.** The table scales
+the field's ground speed by 0.851 / 0.911 / 0.980 (`js/physics/consts.js`), so
+easy should be ~7 % slower than normal and hard ~7 % faster. Monza gets 5.9 %
+on the easy side and 1.6 % on the hard side; Monaco gets 2.0 % and 0.7 %. PACE
+is a ground-speed scale and the AI's corner speed is √(LAT_MAX/|k|), which no
+difficulty touches — so the scale can only buy time where the car is
+straight-limited, and a lap is only partly that.
+
+**The compression is asymmetric, and traffic is why.** Twenty-one cars whose
+pace differs by 7.6 % (easy→normal) spread out; twenty-one whose pace differs
+by 7.6 % upward from normal do not, because the fast ones catch the ones ahead.
+The median car on hard is limited by the car in front, not by its own pace
+scale. That is the correct behaviour for a race and the wrong behaviour for a
+difficulty setting, and it is the strongest argument yet for a per-circuit or
+per-notch pace factor rather than one global triple — the thing §8 stopped
+short of recommending. Not shipped: the decision is the owner's, and the
+instrument now exists to check it either way.
