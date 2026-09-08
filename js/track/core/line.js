@@ -140,7 +140,7 @@ const TrackLine = (function () {
     // the usable half-width) is a bound the apex plateau must keep on the
     // inside (positive) or the outside (negative, a double-apex's first half
     // or a corner taken wide on purpose). `turn` is 1-based into def.turns —
-    // racing-space, no shift (js/track/CLAUDE.md), the bankZones idiom.
+    // racing-space, no shift — the bankZones idiom (js/track/core/mesh.js).
     const hints = resolveHints(track, corners, start, ds);
     for (const h of hints) if (h.apexShift) {
       const d = h.apexShift / ds, c = h.corner;
