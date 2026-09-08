@@ -11,7 +11,7 @@ const GLX = (function () {
   // GLSL sources live in js/render/shaders/{lit,sky,fx,post}.js (loaded before this
   // file). The post/shadow sources are destructured by the split subsystem modules
   // (js/render/glx/post.js, js/render/glx/shadow.js) instead of here.
-  const { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS } = GLXShaders;
+  const { LIT_VS, LIT_FS, SKY_VS, SKY_FS, SHADOW_VS, SHADOW_FS, MARK_FS, MARK_BATCH_VS, DECAL_VS, DECAL_FS, GLOW_VS, GLOW_FS, PARTICLE_VS, PARTICLE_FS, LINE_VS, LINE_FS } = GLXShaders;
 
   let gl = null;
   let canvas = null;
@@ -113,6 +113,7 @@ const GLX = (function () {
   let markProg = null, markU = null;
   let markBatchProg = null, markBatchU = null, markBatchVAO = null, markBatchVBO = null, markBatchCap = 0;
   let glowProg = null, glowU = null, glowVAO = null, glowVBO = null, glowCap = 0;
+  let lineProg = null, lineU = null, lineVAO = null, lineVBO = null, lineCap = 0;   // DRIVING LINE ribbon
   let glowData = null;   // CPU-side dynamic vertex buffer for light-glow billboards
   let particleProg = null, particleU = null, particleVAO = null, particleVBO = null, particleCap = 0;
   let skyVAO = null;     // empty VAO (WebGL2 still needs one bound)
@@ -533,11 +534,12 @@ const GLX = (function () {
     markProg = link(SHADOW_VS, MARK_FS);
     markBatchProg = link(MARK_BATCH_VS, MARK_FS);
     glowProg = link(GLOW_VS, GLOW_FS);
+    lineProg = LINE_VS && LINE_FS ? link(LINE_VS, LINE_FS) : null;
     particleProg = link(PARTICLE_VS, PARTICLE_FS);
     decalProg = link(DECAL_VS, DECAL_FS);
     const _bad = resolveLinks(), _ok = (p) => (p && !_bad.has(p) ? p : null);
     litProg = _ok(litProg); skyProg = _ok(skyProg); shadowProg = _ok(shadowProg); markProg = _ok(markProg);
-    markBatchProg = _ok(markBatchProg); glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg);
+    markBatchProg = _ok(markBatchProg); glowProg = _ok(glowProg); particleProg = _ok(particleProg); decalProg = _ok(decalProg); lineProg = _ok(lineProg);
     decalU = decalProg && locs(decalProg, ["uModel", "uViewProj", "uSunDir", "uSunColor", "uAmbSky", "uAmbGround", "uGlow", "uTex"]);
     if (!litProg || !skyProg || !shadowProg || !markProg) return false;
     _clearUf(_litUf); _clearUf(_skyUf);
@@ -661,6 +663,21 @@ const GLX = (function () {
       const mst = 5 * 4;   // 5 floats per vertex
       gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, mst, 0);
       gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, mst, 12);
+      gl.bindVertexArray(null);
+    }
+    if (lineProg) {
+      lineU = locs(lineProg, ["uViewProj", "uPlayerSpeed", "uCornersOnly", "uStr"]);
+      // Static interleaved strip: [x, y, z, across, speed, zone] per vertex
+      // (DrivingLine.STRIDE), uploaded once per circuit.
+      lineVAO = gl.createVertexArray();
+      gl.bindVertexArray(lineVAO);
+      lineVBO = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, lineVBO);
+      const lst = 6 * 4;
+      gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, lst, 0);
+      gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, lst, 12);
+      gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 1, gl.FLOAT, false, lst, 16);
+      gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 1, gl.FLOAT, false, lst, 20);
       gl.bindVertexArray(null);
     }
     if (glowProg) {
@@ -2055,6 +2072,39 @@ const GLX = (function () {
     return true;
   }
 
+  // DRIVING LINE: the ribbon js/render/shared/driving-line.js built (one
+  // triangle strip, stride-6 floats), drawn like the skid batch — depth-tested,
+  // no depth write, biased onto the road — but emissive, so bloom lifts it
+  // into the glow every racing game's line has. `opts.speed` is the player's
+  // speed for the dynamic colour; `opts.cornersOnly` fades the straights.
+  // Returns false when the pass is unavailable so the caller can say so.
+  function drawDrivingLine(verts, vertCount, dirty, opts) {
+    if (ctxGone()) return true;
+    if (!lineProg) return false;
+    if (!(vertCount > 0)) return true;
+    useProg(lineProg);
+    gl.uniformMatrix4fv(lineU.uViewProj, false, frameViewProj);
+    gl.uniform1f(lineU.uPlayerSpeed, (opts && opts.speed) || 0);
+    gl.uniform1f(lineU.uCornersOnly, opts && opts.cornersOnly ? 1 : 0);
+    gl.uniform1f(lineU.uStr, (opts && opts.str) || 1.6);
+    setBlend(true);
+    setDepthMask(false);
+    setPolyOffset(ROAD_BIAS);
+    bindVAO(lineVAO);
+    if (dirty) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, lineVBO);
+      const nF = vertCount * 6;
+      if (nF > lineCap) {
+        lineCap = nF;
+        gl.bufferData(gl.ARRAY_BUFFER, lineCap * 4, gl.STATIC_DRAW);
+      }
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, verts, 0, nF);
+    }
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, vertCount);
+    setPolyOffset(null);
+    return true;
+  }
+
   // Additive lens-glare halos: one round billboard per lamp. `lights` is the
   // stride-15 frame.lights array; fields 0-6 (position, colour, radius) and 14
   // (glareW: per-lamp halo weight, 0 = no visible fixture = no halo) are
@@ -2218,6 +2268,7 @@ const GLX = (function () {
     drawShadow,
     drawMark,
     drawSkidBatch,
+    drawDrivingLine,
     drawGlow,
     drawParticles,
     present: (opts) => {

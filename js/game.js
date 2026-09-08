@@ -3596,6 +3596,24 @@ const quali = Quali.create(G), qualiSheet = QualiSheet.create(G);
 aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
+DrivingLine.setMode(store.get("drivingLine", "full"));
+// What the ribbon builder needs from the engine: the centreline sampler and
+// the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
+// reads), plus the same physics numbers the AI's brake targets use, so the
+// braking zones it shows are the ones the field actually brakes in. Rebuilt
+// only when the circuit changes (DrivingLine caches by id).
+const _dlApi = { id: null, total: 0, track: null, sample: null, curvature: null, latMax: 0, brake: 0, accel: 0, vTop: 0, grip: 1 };
+function drivingLineApi(trk) {
+  if (_dlApi.track !== trk) {
+    _dlApi.id = trk.def.id; _dlApi.total = trk.total; _dlApi.track = trk;
+    _dlApi.sample = (s, out) => Tracks.sample(trk, s, out);
+    _dlApi.curvature = (s) => Tracks.curvature(trk, s);   // wraps s itself
+    _dlApi.lineAt = trk.line ? (s) => TrackLine.at(trk, s) : null;   // the baked racing line the AI drives
+    _dlApi.latMax = PhysicsConsts.LAT_MAX; _dlApi.brake = PhysicsConsts.BRAKE; _dlApi.accel = PhysicsConsts.ACCEL;
+    _dlApi.vTop = vTop(); _dlApi.grip = 1;
+  }
+  return _dlApi;
+}
 const rivalAudio = RivalAudio.create(G);   // the field around you, for GameAudio.setRivals
 // Photo mode (js/camera/photo-cam.js).
 const { updatePhotoCam, enterPhotoMode, exitPhotoMode } = Photomode.create(G);
@@ -4091,10 +4109,10 @@ const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA:
 // read-before-next-call contract as _ct / AiDrive.traits.
 const _aiBoost = { traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0 };
 const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null };
-const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null };
+const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
-const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0 };
+const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, roll: 0.5 };
 const _aiDefend = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null };
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
 const LCAR = 4.8, WCAR = 2.0;
@@ -4498,6 +4516,7 @@ function updateCar(c, dt, ranked) {
   let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
   const aiT = c.human ? null : AiDrive.traits(c);
   if (!c.human) vmax *= AiDrive.pacePhase(raceT, aiT.consistency, c.phaseRoll);   // a stint drifts; lockstep never passes
+  if (!c.human && AiDrive.mistakePhase(c.errT) === 2) vmax *= AiDrive.mistakeGatherMul();   // gathering it up after a mistake
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
@@ -4714,6 +4733,7 @@ function updateCar(c, dt, ranked) {
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
     _aiBr.blockerSpeed = blocker ? blocker.speed : 0;
     _aiBr.roomL = roomL; _aiBr.roomR = roomR; _aiBr.team = c.team; _aiBr.seat = c.seat; _aiBr.stats = c.houseStats;
+    _aiBr.errMul = AiDrive.mistakePhase(c.errT) === 1 ? AiDrive.mistakeBrakeMul() : 1;   // a missed braking point
     const br = AiDrive.brakeDecision(_aiBr);
     braking = br.braking;
     brakeLvl = br.brakeLvl;
@@ -5017,7 +5037,9 @@ function updateCar(c, dt, ranked) {
     // lines wide into a corner instead of one.
     const ln = TrackLine.at(track, wrapS(c.s + clamp(c.speed * 0.3, 8, 25)));
     const laneX = c.lane * (hw - 1.2);
-    const targetX = clamp(lerp(laneX, ln.x, ln.w * AiDrive.lineFollow(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold)), -(hw - 1.0), hw - 1.0);
+    let targetX = clamp(lerp(laneX, ln.x, ln.w * AiDrive.lineFollow(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold)), -(hw - 1.0), hw - 1.0);
+    // A missed braking point runs WIDE: the target goes most of the way to the outside edge.
+    if (AiDrive.mistakePhase(c.errT) === 1 && Math.abs(kA) > 0.004) targetX = lerp(targetX, Math.sign(kA) * (hw - 0.9), 0.7);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
     // with more room to pass. Collision-aware — the move is scaled down if that
     // side is also tight (a car alongside or a wall), so we don't dive into a
@@ -5025,6 +5047,21 @@ function updateCar(c, dt, ranked) {
     let overtake = 0;
     const CLEAR = AiDrive.minLatGap(hw, !!track.street);
     c.passCool = Math.max(0, (c.passCool || 0) - dt);
+    c.passFailT = Math.max(0, (c.passFailT || 0) - dt);
+    const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
+    // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
+    // seconds with a car within 0.6 s behind; the roll is once per braking
+    // point, from a hash (never simRnd), and never while alongside a car.
+    c.pressT = clamp((c.pressT || 0) + (chaser && chaserGap < 0.6 * Math.max(c.speed, 10) ? dt : -dt * 0.5), 0, 6);
+    c.errT = Math.max(0, (c.errT || 0) - dt);
+    if (_atk.toTurnIn < Math.max(c.speed, 10) * 1.2) {
+      const zk = Math.round(c.s + _atk.toTurnIn);
+      if (zk !== c.zoneKey) {
+        c.zoneKey = zk;
+        if (!c.errT && !alongO && DriverRatings.hash32(simSeed() + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
+      }
+    } else c.zoneKey = -1;
+    c.wheelLock = AiDrive.mistakePhase(c.errT) === 1 && braking ? 1 : 0;   // the render freezes the fronts
     // THE PASS LATCH. Once a pass is chosen it is held as a POSITION beside the
     // car being passed (AiDrive.passTarget) with the side FROZEN, and it is
     // released only on a real outcome: we are past, we lost the car, the side
@@ -5040,6 +5077,12 @@ function updateCar(c, dt, ranked) {
       else if (dp < -(LCAR + 1.5)) { c.passOf = null; }                                              // PAST: done
       else if (sideRoom < WCAR) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed
       else if (squeezed) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }             // walked to the edge: abandon it
+      // NOT ON: at the turn-in and still not half alongside — that is a lunge
+      // (the FIA's inside-pass entitlement is the front axle past the mirror
+      // at the apex). Abandon it, and remember the car: the same car is not
+      // re-attacked for twice the cooldown (rFactor 2's "threshold endured").
+      // A car with 12 % of pace in hand keeps the move: it will be alongside under braking.
+      else if (_atk.toTurnIn < 6 && dp > AiDrive.sideLevel() && aiFreeSpeed < (po.human ? po.speed : (po._vmaxNow || 0)) + 0.12 * vTop()) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); c.passFailOf = po; c.passFailT = 2 * AiDrive.passCooldown(aiT); }
       else {
         // Patience refreshes while we GAIN on the car; it runs down while we do not.
         if (dp < c.passBest - 0.3) { c.passBest = dp; c.passT = AiDrive.passHold(aiT); }
@@ -5064,13 +5107,21 @@ function updateCar(c, dt, ranked) {
       _aiOtPull.blockerAccel = blocker.human ? (blocker.axEstSm || 0) : (blocker.accSm || 0);
       // Engage: a clear lane on the chosen side, and no cooldown from a pass we
       // just gave up on this same stretch.
-      if (!c.passOf && c.passCool <= 0 && AiDrive.otWant(_aiOtPull)) {
+      // ...and only where the move is ON (AiDrive.attackOK: a straight, or an
+      // attack zone at its baked quality), and not on a car we just gave up on.
+      _aiOtPull.attackQ = _atk.q; _aiOtPull.toTurnIn = _atk.toTurnIn; _aiOtPull.roll = c.phaseRoll || 0.5;
+      const sameCar = blocker === c.passFailOf && (c.passFailT || 0) > 0;
+      const moveOn = !sameCar && AiDrive.otWant(_aiOtPull) && AiDrive.attackOK(_aiOtPull);
+      if (!c.passOf && c.passCool <= 0 && moveOn) {
         const side = AiDrive.otSide(_aiOtPull);
         if ((side > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL)) >= CLEAR) {
           c.passOf = blocker; c.passSide = side; c.passBest = blockerGap; c.passT = AiDrive.passHold(aiT);
         }
       }
-      if (!c.passOf) overtake = AiDrive.otPull(_aiOtPull);
+      // Not on: FOLLOW, do not hang half alongside — the bias without the
+      // commitment is what parked pairs side by side at monaco (standoffs
+      // 0 -> 6 in the bench with the zone gate alone).
+      if (!c.passOf) overtake = moveOn ? AiDrive.otPull(_aiOtPull) : 0;
     }
     if (c.passOf) overtake = AiDrive.passTarget(c.passOf.x, c.passSide, CLEAR, hw) - targetX;
     // LET PASS moves aside instead of defending; the `!letPass` below is what
@@ -7888,6 +7939,9 @@ function render(dt) {
   // only from startRace, so the previous race's rubber was still being laid
   // under the title-screen flyby.
   if (state !== "menu") skids.draw(gfx, camEye);
+  // The DRIVING LINE ribbon rides the same state as the skids (on the road, no
+  // depth write). Drawn against the PLAYER's speed for the dynamic colour.
+  if (state !== "menu" && track && player) DrivingLine.draw(gfx, drivingLineApi(track), Math.abs(player.speed));
 
   // cars — skip AI cars more than 550 m of track arc from the player (past fog)
   // Cockpit view doesn't draw the car you're sitting in: a first-person RIG
@@ -9001,6 +9055,10 @@ function buildRaceSettings() {
   SettingRow.paint("rs-caution", raceCtl.enabled ? "on" : "off", RS_ONOFF);
   $("rs-reliab").hidden = tt;
   SettingRow.paint("rs-reliab", raceReliability, RS_RELIAB);
+  // DRIVING LINE — the glowing suggested line on the road (js/render/shared/
+  // driving-line.js). Offered in every flow, a time trial included: it is a
+  // teaching aid, and alone on track is where one learns a circuit.
+  SettingRow.paint("rs-line", DrivingLine.mode(), RS_LINE);
 }
 // The option lists are data; the rows in index.html hold no options of their
 // own, so the list the store validates against and the list the player sees
@@ -9011,6 +9069,12 @@ const RS_TIME = [["default", "DEFAULT"], ["dawn", "DAWN"], ["day", "DAY"], ["dus
 const RS_DIFF = [["easy", "EASY"], ["normal", "NORMAL"], ["hard", "HARD"]];
 const RS_ONOFF = [["off", "OFF"], ["on", "ON"]];
 const RS_RELIAB = [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]];
+const RS_LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
+// Persisted like DIFFICULTY; the module holds the live mode so the render loop
+// never reads the store. FULL by default — every racing game ships its line on
+// for a new player, and Forza's default is the whole lap; CORNERS (F1's
+// "corners only") is the reduced form for a player who knows the circuit.
+function setDrivingLine(v) { store.set("drivingLine", DrivingLine.setMode(v)); }
 // Wire the eight rows ONCE (a listener per build would stack); every build
 // after that is a paint. Each write repaints the whole screen, because LAPS
 // and GRID depend on state a neighbour can change. The mark lives on the body
@@ -9033,6 +9097,7 @@ function wireRaceSettings() {
   wire("rs-quali", () => raceGrid, (v) => { raceGrid = v; store.set("raceGrid", v); });
   wire("rs-caution", () => (raceCtl.enabled ? "on" : "off"), (v) => { setCautionEnabled(v === "on"); });
   wire("rs-reliab", () => raceReliability, (v) => { raceReliability = v; store.set("reliability", v); });
+  wire("rs-line", () => DrivingLine.mode(), setDrivingLine);
 }
 
 // RACE SETTINGS is reachable from #select and (in career) from #career, so it
