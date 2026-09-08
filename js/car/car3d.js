@@ -1947,6 +1947,12 @@ const Car3D = (function () {
     const noseC = _ckAcc(liv.nose) || null;
     const podC  = _ckAcc(liv.pod)  || null;
     const wingC = _ckAcc(liv.wing) || c2;   // flap colour (front + rear) — c2 keeps today's look
+    // WING FLAPS "carbon" (liv.wingCarbon): every flap, front and rear, in bare weave — the
+    // launch-photo look on the MCL40 and the SF-26. Colour AND surface: the flap sites pass
+    // SURFACES.paint explicitly, so a CARBON colour alone would render as dark paint.
+    const wingCarbon = liv.wingCarbon === "carbon";
+    const wingSurf = wingCarbon ? SURFACES.carbon : SURFACES.paint, wingCol = wingCarbon ? CARBON : wingC;
+    const rearC = wingCarbon ? CARBON : (_ckAcc(liv.rearWing) || c2);   // REAR WING block (IBM blue, Visa white) — c2 keeps today's look
     const finC  = _ckAcc(liv.fin) || c2;   // shark-fin plate — c2 keeps today's look
     const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
@@ -3149,7 +3155,7 @@ const Car3D = (function () {
     const aeroT = tier("aero");
     const aLvl = aeroStyle && aeroStyle.lvl != null
       ? aeroStyle.lvl : (aeroT === 0 ? 0 : aeroT === 2 ? 4 : 2);
-    out.flapInfo = { aLvl, style: aeroStyle, col: wingC, finish: liv.finish };
+    out.flapInfo = { aLvl, style: aeroStyle, col: wingCol, finish: liv.finish };
 
     const nb = numberBoard(aLvl);
     for (const s of [-1, 1]) {
@@ -3171,7 +3177,7 @@ const Car3D = (function () {
     if (ckpt) {
       addBox(out, 0, 0.47, 2.30, 1.62, 0.040, 0.44, c1, SURFACES.paint);
       for (const s of [-1, 1])
-        addBox(out, s*0.84, 0.55, 2.30, 0.035, 0.20, 0.48, wingC, SURFACES.paint);
+        addBox(out, s*0.84, 0.55, 2.30, 0.035, 0.20, 0.48, wingCol, wingSurf);
     }
     const aBeam = aeroStyle ? (aeroStyle.beam || 0) : (aeroT === 2 ? 1 : 0);
     const aDrs  = aeroStyle ? (aeroStyle.drs  || 0) : 0;
@@ -3190,7 +3196,7 @@ const Car3D = (function () {
         sweep: frontSweep * (0.75 + i * 0.10),
         rise: frontRise * (0.65 + i * 0.12),
         attachHalf: fwHalf + 0.03,
-      }, i === 0 ? c1 : wingC, SURFACES.paint);
+      }, i === 0 ? c1 : wingCol, i === 0 ? SURFACES.paint : wingSurf);
     }
     const aPlate = Math.max(0, Math.min(3, Math.round(
       aeroStyle.plate != null ? aeroStyle.plate : 1)));
@@ -3356,7 +3362,7 @@ const Car3D = (function () {
         addBeveledSpan(out,
           { z: _ep.front.z, x: s*0.50, y: _ep.front.top, w: 0.046, h: 0.018, t: 0.70 },
           { z: _ep.rear.z, x: s*0.50, y: _ep.rear.top, w: 0.046, h: 0.018, t: 0.85 },
-          0.006, c2, null, SURFACES.paint);
+          0.006, rearC, null, wingSurf);
       }
       const rearSweep = Math.max(-0.06, Math.min(0.20, aeroStyle.rearSweep));
       const rearTaper = Math.max(0.72, Math.min(1.08, aeroStyle.rearTaper));
@@ -3367,7 +3373,7 @@ const Car3D = (function () {
           zLead, yLead, zTrail, yTrail, half, thick,
           taper: rearTaper, sweep: rearSweep * (scale == null ? 1 : scale), rise: 0,
           attachHalf: 0.50,
-        }, col, SURFACES.paint);
+        }, col, wingSurf);
       rearWing(-2.30, upperTrailY - 0.270, -2.52, upperTrailY - 0.225,
         0.51, 0.024, c1, 0.8);
       const aSwan = aeroStyle && aeroStyle.swan ? 1 : 0;
@@ -3393,7 +3399,7 @@ const Car3D = (function () {
         addWingFoil(out, {
           zLead: -1.935, yLead: epCY + 0.188, zTrail: -2.025, yTrail: epCY + 0.212,
           half: 0.17, thick: 0.014, taper: 0.90, sweep: 0.018, rise: 0.006,
-        }, c2, SURFACES.paint);
+        }, rearC, wingSurf);
         addBox(out, 0, (0.56 + epCY + 0.19) / 2, -1.98, 0.03, epCY + 0.19 - 0.56, 0.025, DARK);
       }
       if (aBeam) {
@@ -3403,7 +3409,7 @@ const Car3D = (function () {
       }
       if (aDrs) {
         // Active-aero DRS: an extra open slot flap proud of the top flap.
-        rearWing(-2.44, crownY - 0.050, -2.60, crownY, 0.49, 0.016, c2, 1.15);
+        rearWing(-2.44, crownY - 0.050, -2.60, crownY, 0.49, 0.016, rearC, 1.15);
       }
       const drsSX = aLvl >= 3 ? 0.13 : 0.10;
       // DRS actuator pod. A plain box sat on the wing crown at the top of the
@@ -3465,7 +3471,7 @@ const Car3D = (function () {
       }
       addLoft(out, -2.58, 0, 0.195, 2 * dKeel * 0.82, 0.15,
                    -1.95, 0, 0.170, 2 * dKeel * 1.10, 0.13, DARK, SURFACES.carbon);
-      addBox(out, 0, yCE + 0.030, -2.525, 2 * dHalf, 0.030, 0.020, c2, SURFACES.paint);
+      addBox(out, 0, yCE + 0.030, -2.525, 2 * dHalf, 0.030, 0.020, rearC, wingSurf);
 
       const gbStrakes = gbStyle ? gbStyle.strakes : (tier("gearbox") === 2 ? 5 : 0);
       const gbFin = gbStyle ? gbStyle.fin : (tier("gearbox") === 2 ? 1 : 0);

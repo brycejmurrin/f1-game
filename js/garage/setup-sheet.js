@@ -617,6 +617,7 @@ function buildLiveryOptions(container, team) {
           stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+          rearWing: liv.rearWing ? arrToHex(liv.rearWing) : "", wingCarbon: liv.wingCarbon || "paint",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
@@ -666,6 +667,7 @@ function buildLiveryOptions(container, team) {
           stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+          rearWing: liv.rearWing ? arrToHex(liv.rearWing) : "", wingCarbon: liv.wingCarbon || "paint",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
@@ -710,12 +712,24 @@ function buildLiveryCreator(container, team) {
   // is `disabled` for real, so a tap does nothing rather than editing a field
   // the car cannot show. Registered by the row builders; synced on every edit,
   // after refreshPalettes has rebuilt the palette chips it also disables.
+  // A dep is a ROW (every control in it) or one PILL (a value that paints
+  // nothing under the current draft — SPINE TOP "wordmark" with SPONSORS at
+  // "clean" has no name to write). The audit behind the rules, from
+  // liverytex.js: TAIL GRAPHIC is the fin motif's wash AND the ink of a number
+  // or code badge, so it is dead only when the motif is off and the badge is
+  // not a number; NUMBER FONT and the mark colours are always live (the nose
+  // number and its crest head paint on every car), so they carry no dep.
   const deps = [];
   const needFin = () => (d.finShape || "standard") !== "none";
   const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
+  const finArtLive = () => needFin() && ((d.finStyle || "team") !== "none" || d.finBadge === "number" || d.finBadge === "code");
+  const NO_ART = "Nothing to colour — TAIL STYLE is NONE and FIN BADGE is not a number or code";
+  const haveNames = () => (d.sponsors || "default") !== "clean";
+  const NO_NAMES = "Needs sponsor names — SPONSORS is CLEAN";
   const syncDeps = () => {
     for (const dep of deps) {
       const off = !dep.when();
+      if (dep.pill) { dep.pill.disabled = off; dep.pill.title = off ? dep.why : ""; continue; }
       dep.row.setAttribute("aria-disabled", String(off));
       dep.row.title = off ? dep.why : "";
       const ctl = dep.row.querySelectorAll("button, input");
@@ -738,7 +752,7 @@ function buildLiveryCreator(container, team) {
   // distinct value in the draft, then the team's own two stock colours. Click
   // one and the slot takes it EXACTLY.
   const PAL_KEYS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod",
-                    "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo"];
+                    "wing", "rearWing", "fin", "finArt", "logo", "logo2", "logo3", "halo"];
   const paletteColours = () => {
     const seen = [];
     const add = (v) => {
@@ -796,10 +810,16 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("DETAIL", "accent", true));   // tertiary paint on flashes/trim/pinstripe
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
-  wrap.appendChild(colorRow("WINGS", "wing", true));
+  // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
+  // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
+  const wingRow = colorRow("WINGS", "wing", true), rearWingRow = colorRow("REAR WING", "rearWing", true);
+  wrap.appendChild(wingRow); wrap.appendChild(rearWingRow);
+  const flapsPainted = () => (d.wingCarbon || "paint") !== "carbon";
+  const NO_PAINT = "Nothing to colour — WING FLAPS is CARBON";
+  deps.push({ row: wingRow, when: flapsPainted, why: NO_PAINT }, { row: rearWingRow, when: flapsPainted, why: NO_PAINT });
   const finRow = colorRow("TAIL FIN", "fin", true), finArtRow = colorRow("TAIL GRAPHIC", "finArt", true);
   wrap.appendChild(finRow); wrap.appendChild(finArtRow);
-  deps.push({ row: finRow, when: needFin, why: NO_FIN }, { row: finArtRow, when: needFin, why: NO_FIN });
+  deps.push({ row: finRow, when: needFin, why: NO_FIN }, { row: finArtRow, when: finArtLive, why: NO_ART });
   // Per-team mark rows: LiveryTex.markSlots names the shape each picker paints
   // on THIS mark, so a player choosing Racing Bulls sees RB LETTERS, BULL and
   // OUTLINE rather than rows that could mean anything. The LENGTH is the mark's
@@ -843,6 +863,7 @@ function buildLiveryCreator(container, team) {
     return r;
   };
   pillRow("FINISH", "finish", ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "gloss");
+  pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
   pillRow("SPONSORS", "sponsors", LT && LT.SPONSOR_PACK_IDS || ["default"], "default");
@@ -861,6 +882,11 @@ function buildLiveryCreator(container, team) {
   pillRow("SPINE HEIGHT", "spineHeight", Car3D.SPINE_HEIGHT_IDS || ["standard"], "standard");
   // What the cover's FLANK carries — the number, the mark or the driver code.
   pillRow("SPINE SIDE", "spineSide", LT && LT.SPINE_SIDE_IDS || ["none"], "none");
+  // The pills that write a sponsor name: dead under the CLEAN pack.
+  for (const k of ["spineLogo:wordmark", "spineSide:wordmark", "spineSide:duo"]) {
+    const b = wrap.querySelector('[data-cs-pill="' + k + '"]');
+    if (b) deps.push({ pill: b, when: haveNames, why: NO_NAMES });
+  }
 
   const nameRow = document.createElement("label"); nameRow.className = "cs-liv-ed-row";
   const nlb = document.createElement("span"); nlb.className = "cs-liv-ed-lbl"; nlb.textContent = "NAME"; nameRow.appendChild(nlb);
@@ -888,6 +914,8 @@ function buildLiveryCreator(container, team) {
     if (d.nose) liv.nose = hexToArr(d.nose);
     if (d.pod)  liv.pod  = hexToArr(d.pod);
     if (d.wing) liv.wing = hexToArr(d.wing);
+    if (d.rearWing) liv.rearWing = hexToArr(d.rearWing);
+    if (d.wingCarbon && d.wingCarbon !== "paint") liv.wingCarbon = d.wingCarbon;
     if (d.fin)  liv.fin  = hexToArr(d.fin);
     if (d.finArt) liv.finArt = hexToArr(d.finArt);
     if (d.logo) liv.logo = hexToArr(d.logo);
@@ -946,7 +974,9 @@ function livePreviewDraft(team, d) {
     tcam: d.tcam && d.tcam !== "team" ? d.tcam : null,
     coverVents: d.coverVents && d.coverVents !== "none" ? d.coverVents : null,
     spineHeight: d.spineHeight && d.spineHeight !== "standard" ? d.spineHeight : null,
-    spineSide: d.spineSide && d.spineSide !== "none" ? d.spineSide : null } };
+    spineSide: d.spineSide && d.spineSide !== "none" ? d.spineSide : null,
+    rearWing: d.rearWing ? hexToArr(d.rearWing) : null,
+    wingCarbon: d.wingCarbon && d.wingCarbon !== "paint" ? d.wingCarbon : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 

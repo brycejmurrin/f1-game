@@ -130,6 +130,18 @@ window.PhysicsConsts = {
   // The three scales come down 1 % so each difficulty's lap time holds; what
   // changed is WHERE the pace is — a car on the line gains in the corners and
   // pays on the straights, a car fighting off-line the reverse.
+  // 2026-09-08 (later): re-measured after the relaxed racing line and the
+  // heading-state lateral controller, solo flying laps per level, deterministic
+  // (a repeat run reproduced to 0.01 s). NOT re-scaled, and the reason is that
+  // the drift is CIRCUIT-DEPENDENT and a global multiplier cannot express it:
+  //   monza  normal 123.67 -> 124.18 s (+0.4 %)   spa normal 149.70 -> 149.55 (-0.1 %)
+  //   monaco normal  85.25 ->  84.10 s (-1.35 %)  — the controller, not the line
+  // Monaco gained because a car that no longer overshoots its target carries
+  // more speed through 22 corners; monza and spa are flat. Pulling `ai` down
+  // 1.2 % to hold monaco would put monza and spa 1.2 % off the pace they are
+  // calibrated to — one circuit fixed, two broken. The spread is also well
+  // inside the separation between levels (1.8-3.5 % per step), so each level
+  // still means what it meant. Evidence: docs/notes/RACING-LINE-RESEARCH.md §8.
   DIFF: {
     easy:   { ai: 0.851, band: 0.18 },
     normal: { ai: 0.911, band: 0.08 },
