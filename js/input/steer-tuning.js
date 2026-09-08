@@ -407,7 +407,23 @@ function applySteerTuning() {
   const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
   const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
   const adapt   = clamp(store.get("adaptiveButtons", 5), SLIDER_MIN, SLIDER_MAX);
-  const weight  = clamp(store.get("carWeight", 10), SLIDER_MIN, SLIDER_MAX);   // 5 = as shipped
+  // CAR WEIGHT is the ONE slider of the owner's profile that is device-aware,
+  // and it is device-aware because it collides with a measurement rather than
+  // with a taste. 10 (YAW_INERTIA 1.0) is what they drive on a PHONE, where the
+  // steering is two thumb buttons and a heavy car is easier to place. On a
+  // pointer device it costs 22 % of turn-in response against the 0.58 the
+  // 2026-09-04 drive-feel work set deliberately, and 12 % against the 0.7 that
+  // displaced (measured: heading change over 0.5 s of full lock from 40 m/s is
+  // 0.4728 / 0.4185 / 0.3684 at 0.58 / 0.7 / 1.0). So a phone keeps the owner's
+  // weight and a desktop keeps the snappier car. Safe to split: carWeight is in
+  // neither PRESET_STORE nor STEER_DEFAULTS, so no preset or FEEL row reads
+  // CUSTOM because of it.
+  const heavyDefault = (function () {
+    try { return (typeof window !== "undefined" && window.matchMedia &&
+                  window.matchMedia("(pointer: coarse)").matches) ? 10 : 5; }
+    catch (_) { return 5; }
+  })();
+  const weight  = clamp(store.get("carWeight", heavyDefault), SLIDER_MIN, SLIDER_MAX);   // 5 = as shipped
   G.PACE           = paceFromSlider(pace);
   G.WHEELBASE      = wheelbaseFromSlider(rate);
   G.STEER_EXPO     = expoFromSlider(expo);
