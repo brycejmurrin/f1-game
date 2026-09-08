@@ -398,6 +398,18 @@ the numbers):
   minute): monaco 1.29 → 0.65 with flip-backs 25 → 3 — the real Monaco sees a
   handful of passes per race; monza 3.7 → 3.8, unchanged, since a long straight
   into a wide braking zone is where the move IS on.
+- **Mistakes, under pressure most of all** (`AiDrive.mistakeChance`). Once per
+  braking point a car may miss it: base 0.4% × (1 + 2 × pressure) × (1.3 −
+  consistency), pressure being the share of the last six seconds spent with a
+  car within 0.6 s behind. A metronome unpressured errs once in ~80 laps, a
+  rookie under sustained pressure once in ~10. The error is a LATE phase
+  (1.2 s: brakes 5% later, runs most of the way to the outside edge, fronts
+  locked for the render) then a GATHER phase (1.8 s at 85% pace) — half a
+  second to a second and a half lost, never while alongside another car, and
+  rolled from a hash of the seed, grid slot, lap and braking point, never from
+  the seeded stream. This is rFactor 2's Composure-scheduled "bad driving
+  zones" and AMS2's forced-mistake channel; F1 22's two or three lock-ups a
+  race was what players called too many, so the rates sit well under it.
 - **No moving under braking** (`AiDrive.holdLineGap`). Braking with a car
   within a second behind (eight metres at least), and not itself attacking,
   an AI freezes its offset from the racing line at what it was when the brakes

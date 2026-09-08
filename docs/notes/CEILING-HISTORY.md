@@ -2186,3 +2186,16 @@ function); `cssClasses` fell (`.rs-row` retired).
   still passed: 10/10 followers at monza, 8/10 at monaco in four minutes
   (7/10 before the pace-deficit floor was added; 3/10 with the zone gate
   alone, which is the measurement that put the floor in).
+
+- `js/game.js` lines 10019 -> **10036**, codeLines 5452 -> **5465**
+  (2026-09-08): pressure-forced mistakes. Eleven
+  code lines: the pressure accumulator (1), the error clock and its once-per-
+  braking-point roll from a hash (6), the late-phase brake multiplier feed (1),
+  the gather-phase pace (1), the wide line (1) and the render's locked fronts
+  (1). The rates, phases and magnitudes are `AiDrive.mistakeChance` /
+  `mistakePhase` / `mistakeBrakeMul` / `mistakeGatherMul`, unit-tested.
+  Measured (race-quality bench, six minutes, ~10 braking points a lap): two
+  errors in 48 monaco laps, none in 44 at monza — a field that has just left
+  the grid carries little pressure; the design point is one or two visible
+  errors per pressured car per twenty laps, well under the two or three
+  lock-ups a race that F1 22's players called too many.

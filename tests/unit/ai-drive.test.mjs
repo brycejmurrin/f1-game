@@ -725,3 +725,18 @@ test("attackOK: a straight is always a place to pass; a corner entry only at its
   assert.equal(A.attackOK({ ...base, toTurnIn: 80, attackQ: 0.35, traits: { craft: 1.0 }, roll: 1 }), true, "a great one, on a good day, does");
   assert.equal(A.sideLevel(), 2.4);
 });
+
+test("mistakeChance: rarer with consistency, commoner under pressure, in the F1-not-F1-22 band", () => {
+  const top = { consistency: 1.0 }, rookie = { consistency: 0.5 };
+  assert.ok(Math.abs(A.mistakeChance(top, 0) - 0.0012) < 1e-6, "a metronome unpressured: 0.12 % a zone");
+  assert.ok(Math.abs(A.mistakeChance(rookie, 1) - 0.0096) < 1e-6, "a rookie under sustained pressure: ~1 % a zone");
+  assert.ok(A.mistakeChance(rookie, 0) > A.mistakeChance(top, 0));
+  assert.ok(A.mistakeChance(top, 1) > A.mistakeChance(top, 0));
+  assert.ok(A.mistakeChance(top, 1) === A.mistakeChance(top, 2), "pressure saturates at 1");
+  assert.ok(A.mistakeChance(undefined, 0) > 0, "no traits: the default driver still errs");
+  // Phases: late/wide first, then gathering, then nothing.
+  const T = A.mistakeTotal();
+  assert.equal(A.mistakePhase(T), 1); assert.equal(A.mistakePhase(1.0), 2); assert.equal(A.mistakePhase(0), 0); assert.equal(A.mistakePhase(undefined), 0);
+  assert.ok(A.mistakeBrakeMul() > 1 && A.mistakeBrakeMul() < 1.1, "late by a few per cent, not a crash");
+  assert.ok(A.mistakeGatherMul() < 1 && A.mistakeGatherMul() > 0.7);
+});
