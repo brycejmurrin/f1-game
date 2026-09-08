@@ -2911,15 +2911,15 @@ const Car3D = (function () {
 
     part("helmet");
     if (!(opts && opts.noDriver)) {
-      // The driver's head: js/car/helmets.js owns the shell (a full-face lid
-      // with a chin bar, not the half-ball this was), its visor aperture and
-      // the design painted on it, keyed by race number. cy is the TEMPLE line.
+      // The driver's head: helmets.js owns the lid. cy is the TEMPLE line. At
+      // 0.630 the crown sat at 0.749 under a cockpit surround topping out at
+      // 0.765 — the head was BELOW the tub, and a design nobody can see is the
+      // defect this module exists to fix. 0.700 clears it by 54 mm, and still
+      // passes 71 mm under the halo.
       const des = Helmets.designFor(opts && opts.num, c1);
-      Helmets.build(out, 0, 0.630, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.glass });
-      // No brow box: the shell carries its own ridge over the aperture now.
-      // The spoiler sits ON the back of the head, whose shell reaches z -0.191
-      // there — set it clear of that and it floats behind the helmet.
-      addBox(out, 0, 0.664, -0.176, 0.050, 0.034, 0.046, des.visor);      // rear aero spoiler
+      Helmets.build(out, 0, 0.700, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.glass });
+      // No brow box and no rear spoiler box: the traced shell carries its own
+      // ridge over the aperture and its own aero lip at the back.
     }
 
     // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..

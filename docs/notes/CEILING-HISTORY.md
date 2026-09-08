@@ -2353,6 +2353,20 @@ files are not ratcheted.
   80 -> 96 bytes, `_lineU` 20 -> 24 floats, re-validated against real Dawn.
   Evidence: `docs/notes/DRIVING-LINE-RESEARCH.md`,
   `docs/research/WEBGPU-PARITY.md` §Driving line.
+- `js/game.js` lines 10216 -> **10226**, codeLines 5553 -> **5554**
+  (2026-09-08, re-measured on the merged tree — the driving-line and
+  front-wing work above landed on the deploy branch first and this is additive
+  to it): the car mesh
+  cache keyed PER DRIVER instead of per team. `teamMesh` / `teamBodyMesh` /
+  `playerBodyMesh` all built with `team.drivers[0].num`, so both of a team's
+  cars carried the first driver's helmet: 22 cars on track showed 11 helmets,
+  each pair identical — precisely the defect `js/car/helmets.js` was written to
+  fix, reintroduced one level above it. The number now joins the cache key and
+  reaches `Car3D.build`, using the `carDecalNum` the number atlas already
+  resolved, and the garage turntable takes `driverIdx` — the seat you picked —
+  instead of the first driver, in its cache key as well as its build. Ten lines
+  and one code line; the rest fold inline. The lines are the comments saying
+  why, which are worth more than the lines.
 - `js/game.js` lines 10188 -> **10206**, codeLines 5545 -> **5552**, topLets
   157 -> **158**; (tree) shellNodes 1340 -> **1347** (2026-09-08): SETTINGS ›
   BRAKE CUE, the CUE rung of the assist ladder in
