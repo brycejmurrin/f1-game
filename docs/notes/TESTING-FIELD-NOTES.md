@@ -1328,3 +1328,33 @@ being blamed. A stall before the page exists is the runner, not the spec; the
 same test passes in 14 s elsewhere in the same run. Read the phrase "while
 setting up context" as infrastructure and look no further.
 
+
+
+## 2026-09-08 (evening) — AI off-tracks jumped fivefold and I could not pin it
+
+`scratch/race-quality-bench.mjs monza 6` reported 0.16 off-tracks per lap in
+the morning and 0.74–0.85 in the evening, with best and mean lap both a second
+slower. Monaco moved the same way (0.02 -> 0.34). That is a big regression in
+how well the field stays on the road, and it is worth someone's attention.
+
+What it is NOT, measured rather than assumed:
+
+- **Not the settings bake.** The owner's steering profile became the shipped
+  default that afternoon. Reverting all eight slider defaults to their previous
+  values and re-running gave a BIT-IDENTICAL bench — same laps, same best, same
+  offs. `applySteerTuning` writes WHEELBASE / STEER_EXPO / STEER_MAX_SLIP /
+  STEER_SPEED_REF / YAW_INERTIA, and every consumer of those sits inside
+  `if (c.human)` in updateCar. The sliders do not reach an AI car.
+- **Not that evening's racecraft work.** A blocked-blocker attack bar and a
+  switch-sides rule measured 0.74 WITH against 0.85 WITHOUT at Monza and 0.40
+  against 0.34 at Monaco — neutral, so neither shipped.
+
+What it might still be, and the trap that stopped the bisect: a worktree at
+`8040157d` (before the other sessions' racing-line relaxation and their
+heading-state lateral controller landed) reproduced the EVENING numbers
+exactly. Three separate runs across two trees agreed to the digit, so the bench
+is deterministic — which means the morning tree differed from both in something
+this bisect did not capture. **The lesson: record the SHA beside every bench
+line.** These logs carry a time and a track and nothing else, so a number from
+four hours ago cannot be re-run against its own tree, and that is the whole
+reason the attribution failed.

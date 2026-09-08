@@ -642,6 +642,15 @@
                 </div>
               </div>
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
+              <div id="pm-brakecue" class="set-row" role="group" aria-labelledby="pm-brakecue-label">
+                <span class="tune-label" id="pm-brakecue-label">BRAKE CUE</span>
+                <div>
+                  <button id="pm-brakecue-prev" type="button" data-step="-1" aria-label="Previous brake cue setting">&lsaquo;</button>
+                  <select id="pm-brakecue-sel" aria-labelledby="pm-brakecue-label"></select>
+                  <button id="pm-brakecue-next" type="button" data-step="1" aria-label="Next brake cue setting">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">A click that repeats faster the further over the line's speed you are, and becomes continuous when it turns red. The rate is the signal, not the pitch. Works with the DRIVING LINE off.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
                 <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
               <!-- BUTTON SIZE is its own knob because the dock and the readouts

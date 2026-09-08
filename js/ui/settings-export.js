@@ -93,7 +93,7 @@ const SPEC = [
   { k: "tiltDeg", lane: "json", group: "steering", def: 8, src: "js/input/steer-tuning.js" },
   { k: "steerLock", lane: "json", group: "steering", def: 7, src: "js/input/steer-tuning.js" },
   { k: "steerSpeed", lane: "json", group: "steering", def: 7, src: "js/input/steer-tuning.js" },
-  { k: "carWeight", lane: "json", group: "steering", def: 10, src: "js/input/steer-tuning.js" },
+  { k: "carWeight", lane: "json", group: "steering", def: (G) => (G && G.gfx && G.gfx.isMobile) ? 10 : 5, src: "js/input/steer-tuning.js (10 on a touch device, 5 on a pointer — see the comment there)" },
   { k: "adaptiveButtons", lane: "json", group: "steering", def: 5, src: "js/input/steer-tuning.js" },
   { k: "brakeCue", lane: "json", group: "steering", def: 4, src: "js/input/steer-tuning.js" },
   { k: "drivingHelp", lane: "json", group: "steering", def: 1, src: "js/input/steer-tuning.js (1 = OFF)" },
@@ -297,6 +297,10 @@ function stamp() {
 // The arm clears itself after ARM_MS, and arming either loader disarms the
 // other.
 const ARM_MS = 4000;
+// The live UI half, set by create(). js/garage/setup-sheet.js reaches the
+// garage row through the module rather than through the G façade: the row is
+// UI this module owns, and G's contract is for state game.js hands out.
+let _ui = null;
 function create(G) {
   const tick = () => { if (G.soundOn && typeof GameAudio !== "undefined" && GameAudio.uiTick) GameAudio.uiTick(); };
   let picker = null, armed = null, armT = 0;
@@ -327,68 +331,68 @@ function create(G) {
     picker.click();
   }
 
+  const flash = (b, label, msg, ms) => { b.textContent = label + " — " + msg; setTimeout(() => { b.textContent = label; }, ms || 1800); };
+  const disarm = () => { if (armed) { armed.el.textContent = armed.label; armed = null; } clearTimeout(armT); };
+
+  const saveBtn = (id, label, title, make, name) => {
+    const b = document.createElement("button");
+    b.id = id; b.type = "button"; b.textContent = label; b.title = title;
+    b.onclick = () => {
+      disarm();
+      try {
+        const file = make();
+        download(file, name(file));
+        const n = file.changed ? file.changed.length + " changed" : file.count + " keys";
+        flash(b, label, "SAVED (" + n + ")");
+        Log.info("ui", "file saved", { id, n });
+      } catch (e) {
+        flash(b, label, "FAILED");
+        Log.warn("ui", "file save failed", e && e.message);
+      }
+      tick();
+    };
+    return b;
+  };
+  const loadBtn = (id, label, title, apply, what) => {
+    const b = document.createElement("button");
+    b.id = id; b.type = "button"; b.textContent = label; b.title = title;
+    b.onclick = () => {
+      if (!armed || armed.el !== b) {
+        disarm();
+        armed = { el: b, label };
+        b.textContent = label + " — OVERWRITE " + what + "?";
+        armT = setTimeout(disarm, ARM_MS);
+        tick();
+        return;
+      }
+      disarm();
+      pick((obj) => {
+        if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
+        const r = apply(obj);
+        if (!r.ok) { flash(b, label, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
+        Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped });
+        // A reload is the honest way to apply this: half these values are read
+        // once at boot (the backend pick, the grid, every tuner's first
+        // paint), so re-reading them without one would leave the page showing
+        // a mix of old and new.
+        b.textContent = label + " — " + r.applied + " APPLIED, RELOADING…";
+        setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
+      });
+      tick();
+    };
+    return b;
+  };
+
   function mount() {
     const host = document.getElementById("pm-display-adv-body");
     if (!host || document.getElementById("pm-settings-file")) return;
     const h = document.createElement("h3");
     h.className = "pm-group-h";
     h.id = "pm-settings-file";
-    h.textContent = "FILES";
+    h.textContent = "SETTINGS FILE";
     const note = document.createElement("p");
     note.className = "adv-help";
-    note.textContent = "SETTINGS carries your preferences, tuners and control bindings; GARAGE carries parts, liveries, setups and your own team. Neither carries career, lap records or accounts. CHANGED lists only what differs from the shipped defaults, with the default each one replaced. LOAD asks twice, then reloads.";
-
-    const flash = (b, label, msg, ms) => { b.textContent = label + " — " + msg; setTimeout(() => { b.textContent = label; }, ms || 1800); };
-    const disarm = () => { if (armed) { armed.el.textContent = armed.label; armed = null; } clearTimeout(armT); };
-
-    const saveBtn = (id, label, title, make, name) => {
-      const b = document.createElement("button");
-      b.id = id; b.type = "button"; b.textContent = label; b.title = title;
-      b.onclick = () => {
-        disarm();
-        try {
-          const file = make();
-          download(file, name(file));
-          const n = file.changed ? file.changed.length + " changed" : file.count + " keys";
-          flash(b, label, "SAVED (" + n + ")");
-          Log.info("ui", "file saved", { id, n });
-        } catch (e) {
-          flash(b, label, "FAILED");
-          Log.warn("ui", "file save failed", e && e.message);
-        }
-        tick();
-      };
-      return b;
-    };
-    const loadBtn = (id, label, title, apply, what) => {
-      const b = document.createElement("button");
-      b.id = id; b.type = "button"; b.textContent = label; b.title = title;
-      b.onclick = () => {
-        if (!armed || armed.el !== b) {
-          disarm();
-          armed = { el: b, label };
-          b.textContent = label + " — OVERWRITE " + what + "?";
-          armT = setTimeout(disarm, ARM_MS);
-          tick();
-          return;
-        }
-        disarm();
-        pick((obj) => {
-          if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
-          const r = apply(obj);
-          if (!r.ok) { flash(b, label, String(r.reason || "REFUSED").toUpperCase(), 2600); return; }
-          Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped });
-          // A reload is the honest way to apply this: half these values are read
-          // once at boot (the backend pick, the grid, every tuner's first
-          // paint), so re-reading them without one would leave the page showing
-          // a mix of old and new.
-          b.textContent = label + " — " + r.applied + " APPLIED, RELOADING…";
-          setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
-        });
-        tick();
-      };
-      return b;
-    };
+    note.textContent = "Your preferences, tuners and control bindings — nothing from the garage, career or accounts. CHANGED lists only what differs from the shipped defaults, with the default each one replaced. LOAD asks twice, then reloads. The GARAGE has its own file, in the garage's TEAM tab.";
 
     host.append(h,
       saveBtn("pm-settings-changed", "SAVE CHANGED SETTINGS",
@@ -400,20 +404,37 @@ function create(G) {
       loadBtn("pm-settings-load", "LOAD SETTINGS FILE",
         "Read an apex26-settings file back in. Only allowlisted keys are written; the garage, career and accounts are never touched.",
         (obj) => applySettings(obj, G), "SETTINGS"),
-      saveBtn("pm-garage-save", "SAVE GARAGE FILE",
-        "Parts, liveries, setup sheets and your own team, for every team.",
-        collectGarage, () => "apex26-garage-" + stamp() + ".json"),
-      loadBtn("pm-garage-load", "LOAD GARAGE FILE",
-        "Read an apex26-garage file back in. Career money, results and lap records are never touched.",
-        applyGarage, "THE GARAGE"),
       note);
+  }
+
+  // THE GARAGE PAIR LIVES IN THE GARAGE, not here: a player looking to back up
+  // a livery looks where liveries are. js/garage/setup-sheet.js calls this at
+  // the end of its TEAM tab and appends what comes back. It rebuilds that tab
+  // on every change, so this returns FRESH nodes each call and holds no
+  // singleton — the id-guard mount() uses would leave an empty section behind
+  // the first time the tab was rebuilt.
+  function garageRow() {
+    if (typeof document === "undefined") return null;
+    const wrap = document.createElement("div");
+    wrap.id = "cs-garage-file";
+    wrap.className = "sel-edit-row";
+    wrap.append(
+      saveBtn("cs-garage-save", "SAVE GARAGE FILE",
+        "Parts, liveries, setup sheets and your own team, for every team. Career money, results and lap records are never in it.",
+        collectGarage, () => "apex26-garage-" + stamp() + ".json"),
+      loadBtn("cs-garage-load", "LOAD GARAGE FILE",
+        "Read an apex26-garage file back in. Career money, results and lap records are never touched.",
+        applyGarage, "THE GARAGE"));
+    return wrap;
   }
   if (typeof document === "undefined") return { collect: (mode) => collect(mode, G) };
   if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", mount, { once: true });
   else mount();
   Log.info("ui", "SettingsExport.create");
-  return { collect: (mode) => collect(mode, G), collectGarage, applySettings: (o) => applySettings(o, G), applyGarage, mount };
+  _ui = { collect: (mode) => collect(mode, G), collectGarage, applySettings: (o) => applySettings(o, G), applyGarage, garageRow, mount };
+  return _ui;
 }
 
-return { FORMAT, GARAGE_FORMAT, SPEC, collect, collectGarage, applySettings, applyGarage, isGarageKey, create };
+return { FORMAT, GARAGE_FORMAT, SPEC, collect, collectGarage, applySettings, applyGarage, isGarageKey, create,
+         garageRow: () => (_ui && _ui.garageRow ? _ui.garageRow() : null) };
 })();

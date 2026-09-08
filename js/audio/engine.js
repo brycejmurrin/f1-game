@@ -282,6 +282,7 @@ const GameAudio = (function () {
   let shiftFired = 0, shiftPeak = 0;   // gear-shift cracks emitted, and the last one's level (test hook)
   let boostFired = 0, boostPeak = 0;   // deploy whooshes emitted, and the last one's level (test hook)
   let idleGainRamped = false;          // the sample voice's one-time fade-in (see setEngine)
+  let cueT = 0, cueFired = 0, cueU = 0; // braking-cue: next blip due, blips emitted, live urgency
 
   let engBuf = null, samplesReady = false;
   let lastRate = 0;               // the ratio setEngine last asked for (see rate())
@@ -1959,10 +1960,34 @@ const GameAudio = (function () {
   }
 
   // BRAKE CUE: same click every time — the SIGNAL is the pulse rate, not pitch
-  // (docs/research/DRIVING-CONTROLS-RESEARCH.md, Forza BDA). `urgency` is unused
-  // on purpose so a future LIGHT/FULL level can share the voice.
-  function brakeCue(_urgency) {
+  // (docs/research/DRIVING-CONTROLS-RESEARCH.md, Forza BDA). `urgency` was
+  // unused on purpose so a future LIGHT/FULL level could share the voice; as of
+  // 2026-09-08 it drives the RATE, which is the half of that design the cue was
+  // always for. The voice is untouched: one 520 Hz click, whatever the urgency.
+  //
+  // Forza's wording is the spec — "at its fastest speed, players may need to
+  // fully engage the brakes, while a slower rate may mean you only need to let
+  // up on the throttle a little" — so the interval closes from 0.4 s at the
+  // foot of the ramp to 0.07 s at the top, where it stops reading as separate
+  // clicks. A pitch ramp is what that research explicitly warns against,
+  // because it conflates "a corner is coming" with "how much car you need".
+  //
+  // Built as a blip train and not a held tone: a sustained node has to be torn
+  // down on pause, on rebuildCtx() and on every mode change, and all three
+  // failures are silent. A train that simply stops being scheduled cannot leak
+  // a stuck tone into a paused game.
+  //
+  // u <= 0 stands the layer down AND resets the clock, so no backlog is banked
+  // while the player is on the pace — the overrun crackle above learned that
+  // the hard way (`if (t > overrunT) overrunT = t`).
+  function brakeCue(urgency) {
+    cueU = urgency > 0 ? Math.min(urgency, 1) : 0;
+    if (!cueU || !sfxOk()) { cueT = now(); return; }
+    const t = now();
+    if (t < cueT) return;
     blip(520, "square", 0.07, 0.003, 0.045);
+    cueFired++;
+    cueT = t + (0.4 + (0.07 - 0.4) * cueU);
   }
 
   function uiSelect() {
@@ -2383,6 +2408,10 @@ const GameAudio = (function () {
     // Crackles emitted since boot, and when the next one is due. One-shots have
     // no persistent node to read, so this is the only way to observe the layer.
     overrunState() { return { fired: overrunFired, nextAt: +overrunT.toFixed(3), now: +now().toFixed(3) }; },
+    // The braking cue has no persistent node to read (see brakeCue), so this is
+    // the only way to assert the layer: blips emitted, the live urgency, and
+    // when the next one is due against the clock it is scheduled on.
+    brakeCueState() { return { fired: cueFired, urgency: +cueU.toFixed(3), nextAt: +cueT.toFixed(3), now: +now().toFixed(3) }; },
     // Same shape for the other one-shots the tune reaches: wastegate dumps
     // (and how long the engine has been under load, which arms them) and the
     // gear-shift crack with the level the SHIFT trim gave the last one.
