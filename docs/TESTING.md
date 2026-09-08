@@ -1,6 +1,6 @@
 # Testing reference
 
-116 root Playwright spec files (`tests/specs/*.spec.js`) + 214 `node --test` unit suites
+116 root Playwright spec files (`tests/specs/*.spec.js`) + 215 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
