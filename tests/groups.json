@@ -143,6 +143,13 @@
     "// driving-model gate runs here in seconds rather than in a browser job.",
     "tests/unit/game-vm.test.mjs",
     "tests/unit/physics-characterization-vm.test.mjs",
+    "// ~5 s, and here for the reason the car-mesh note above gives: the browser",
+    "// spec holding this invariant (agent-determinism) is not gated at all, so its",
+    "// last break reached the deploy tip and went red on somebody elses push. Four",
+    "// leaks of one class so far (drivetrain, _prevS, accSm, lane), every one a",
+    "// per-car field a re-grid did not restore. This catches the fifth in the edit",
+    "// loop, where it costs seconds instead of a browser group.",
+    "tests/unit/replay-determinism-vm.test.mjs",
     "tests/unit/shared-math.test.mjs",
     "tests/unit/store-cross-tab.test.mjs",
     "tests/unit/comment-citations.test.mjs",
@@ -506,7 +513,8 @@
         "tests/unit/ai-stuck-vm.test.mjs",
         "tests/unit/ai-racecraft-vm.test.mjs",
         "tests/unit/new-hooks-vm.test.mjs",
-        "tests/unit/race-settings-vm.test.mjs"
+        "tests/unit/race-settings-vm.test.mjs",
+        "tests/unit/replay-determinism-vm.test.mjs"
       ]
     },
     "test:mcp": {

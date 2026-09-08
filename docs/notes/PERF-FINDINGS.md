@@ -2478,10 +2478,13 @@ path, and the Verdict step already encodes the distinction.
 
 ### The open lead — a 30% luma gap between three's two backends
 
-> **Superseded in part, 2026-09-08.** The mechanism named below (PerfGov
-> rung 1 shedding the probe) was measured and REFUTED — run 54 reads
-> `tier=0` on the WebGPU leg. Read the re-measurement two sections down
-> before acting on anything here; the soft-blit half of the chain stands.
+> **SUPERSEDED, 2026-09-08.** Everything below about WHY the WebGPU leg is
+> dark has been measured and refuted — twice. Run 54 killed the PerfGov
+> tier-gate mechanism (`tier=0`); run 56 killed the env probe itself (the
+> WebGPU leg is dark WITH `envReady=true`, the WebGL2 leg bright WITHOUT it).
+> Read "Run 56 settles it" below before acting on any of this. What still
+> stands is the measured cost of the soft blit, and that it does not explain
+> the luma.
 
 TLX renders the identical scene at 46.9 on WebGPU and 66.2 on WebGL2: same
 commit, same machine, same track, same TSL materials. GLX (67.8) sits with the
@@ -2586,6 +2589,64 @@ reading code, both were wrong, and both cost a run to find out. The instrument
 that has actually moved this lead each time is a field printed in the Verdict —
 `meanLuma` (§2l), then `gov.tier`, now `begins`/`ends`. Add the field, dispatch,
 read. Do not reason the mechanism out first.
+
+### Run 56 settles it: the env probe is NOT the cause, in either direction
+
+`gpu-census.yml` run 56, `macos-latest`, commit `b48603bb`, montreal, job green
+— the first run carrying `envState().mask/begins/ends`:
+
+```
+webgpu  envReady=TRUE  gpuErrors=0 envFail=0 meanLuma=39.4  tier=0 fps=16.4
+        env: mask=7 begins=15 ends=15 badProbes=0
+webgl2  envReady=FALSE gpuErrors=0 envFail=0 meanLuma=66.5  tier=0 fps=8.4
+        env: mask=3 begins=2  ends=2  badProbes=0
+glx                                          meanLuma=66.1  tier=0 fps=46.8
+wgx                                          meanLuma=74.3  tier=0 fps=60
+        wgx: bound=true softPresent=true
+```
+
+**The correlation inverted.** The WebGPU leg LATCHED its cube — `envReady=true`,
+`begins === ends === 15`, no losses, no bad probes — and came out at 39.4
+anyway. The WebGL2 leg never latched and came out BRIGHT at 66.5. Run 54 had it
+the other way round. Both directions now have a counterexample, so the chain
+this document has carried since run 25 — `envReady=false` → no image-based
+ambient → darker frame — is dead. It was a coincidence of two runs, and every
+line reasoned from it, including the note above, is withdrawn.
+
+`begins === ends` on both legs also answers what those fields were added for:
+**no faces are lost between `envFaceBegin` and `envFaceEnd`, and nothing clears
+a full mask.** The probe machinery is healthy. Where `envReady=false` shows up
+it is simply frame starvation — `begins=2` means the producer was called twice
+in the whole settle window, on a leg running at 8.4 fps. `envReady` is a
+FRAME-BUDGET reading on this harness, not a health reading, and it should stop
+being read as one.
+
+### What is actually left
+
+Two facts survive every run so far, and they are the lead now:
+
+1. **TLX-on-WebGPU is dark and nothing else is.** 39.2 (run 54) and 39.4 (run
+   56), against 64-67 for GLX and TLX-on-WebGL2 and 74.3 for WGX, on the same
+   commit, machine and track — and now demonstrably independent of the env cube.
+2. **WGX soft-presents too, and is the BRIGHTEST leg.** `softPresent=true`,
+   luma 74.3. So the soft blit as such does not darken anything; whatever is
+   wrong is specific to TLX's copy of it.
+
+That pair points at TLX's `_softBlit` readback and the encode it does on the way
+to the visible canvas — a colour-space or tone-map step that WGX's equivalent
+path gets right and TLX's does not. **The next measurement is a DIFF, not a
+theory: read TLX's soft-present readback path against WGX's side by side, and
+if they disagree on transfer function or target format, that is it.** Do not
+dispatch anything else on this until that diff has been read — three
+hypotheses have now been reasoned out and measured wrong on this one lead.
+
+**The pattern is the finding.** Three explanations for this gap have been
+written down with confidence and refuted by the next run: soak lengths, then
+the PerfGov tier gate, then the env probe itself. Each was derived by reading
+code and each cost a macOS run. The instrument that has moved it every single
+time is a field printed in the Verdict — `meanLuma` (§2l), `gov.tier`, then
+`begins`/`ends`. Add the field, dispatch, read. The reasoning step in between
+has a perfect record of being wrong.
 
 ### On WebGPU alternatives, since the question was asked
 
