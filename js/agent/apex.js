@@ -2305,6 +2305,23 @@ const api = {
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
       delete c.vertLoad;
+      // MEASURED (2026-09-08): the block above was written for the drivetrain,
+      // and every field the AI has grown since leaks the same way — episode 1
+      // ran from a cold car, every later episode inherited the last one's, and
+      // the field finished 4 s in a different ORDER (two transposed pairs in
+      // field().positions, the player's own digest identical because it starts
+      // ahead of the grid). Dumping every primitive on all 22 cars at the start
+      // of three episodes named the leaks exactly; these are they. `lane` is the
+      // odd one out and the reason this bit: it is not absent before the first
+      // episode but ALREADY ADAPTED, so it re-seeds from lanePref (the grid home
+      // line makeCars stored) rather than being deleted. The rest are absent on
+      // a cold car, so DELETING is what makes every episode start as the first
+      // one did — the same reason vertLoad above is deleted, not zeroed.
+      for (const k of ["rank", "kCur", "wasArmed", "_vmaxNow", "onKerb", "exhaustPop",
+                       "_pushD", "_secIdx", "_secT0", "accSm", "passSide", "passBest",
+                       "_lapTimeAtLine", "incidentInvalidLap", "axFrac", "slipFactor",
+                       "flatSpot", "_aeroGrip", "skidIntensity"]) delete c[k];
+      c.lane = c.lanePref != null ? c.lanePref : 0;
       c._prevS = c.s;
     }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
