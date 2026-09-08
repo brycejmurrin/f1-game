@@ -16,6 +16,8 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
 function boot() {
   const listeners = {};
+  const dispatched = [];
+  const navOpen = { on: false };
   const el = () => ({
     addEventListener() {}, removeEventListener() {}, style: {}, dataset: {},
     classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
@@ -35,8 +37,14 @@ function boot() {
       getElementById: el, querySelector: el, querySelectorAll: () => [], hidden: false,
       activeElement: null,
       body: { classList: { add() {}, remove() {}, toggle() {} } },
+      dispatchEvent: (e) => { dispatched.push(e); return true; },
     },
+    // The pad's menu walker (padNavPoll) runs while a nav layer is open and
+    // dispatches synthetic keydowns at the document; captured in `dispatched`.
+    UiLayers: { navOpen: () => navOpen.on, anyOpen: () => navOpen.on, top: () => (navOpen.on ? { id: "pmsettings", contains: () => true } : null) },
   };
+  sb.Event = class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } };
+  sb.KeyboardEvent = class extends sb.Event {};
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: "js/core/mat4.js" });
@@ -46,7 +54,7 @@ function boot() {
   const key = (code, down) => (listeners[down ? "keydown" : "keyup"] || [])
     .forEach((f) => f({ key: code, code, repeat: false, preventDefault() {}, target: { tagName: "BODY" } }));
   const fire = (t, e) => (listeners[t] || []).forEach((f) => f(e || {}));
-  return { Input, key, sb, fire };
+  return { Input, key, sb, fire, dispatched, navOpen };
 }
 // A standard-mapping pad the sandbox's navigator reports as the only one.
 // press(i, v) sets button i (a trigger takes a value); gamepadconnected must be
@@ -217,6 +225,30 @@ test("an armed capture takes the first press and the frame does nothing else", (
   assert.equal(Input.consumeOvertake(), true, "disarmed, Y overtakes again");
 });
 
+test("a D-pad direction is dispatched at the FOCUSED control, so an element's own key handler runs", () => {
+  // Both tab rails (the garage categories, the circuit filter chips) own
+  // their axis — MenuNav steps aside and the rail's own `onkeydown` cycles
+  // it. That handler is on the ELEMENT, and an event dispatched at
+  // `document` never descends to it: the pad sat on the garage's TEAM tab
+  // forever while a real ArrowDown walked all fifteen (2026-09-08).
+  const { Input, sb, fire, dispatched, navOpen } = boot();
+  const { press, release } = fakePad(sb, fire);
+  navOpen.on = true;
+  const tab = { tagName: "BUTTON", id: "cs-tab-team", dispatchEvent: (e) => { dispatched.push(e); e.target = "tab"; return true; } };
+  sb.document.activeElement = tab;
+  press(13); Input.poll(); release(13); Input.poll();   // the neutral poll releases the direction (no auto-repeat)
+  assert.equal(dispatched.length, 1, "one key for one press");
+  assert.equal(dispatched[0].key, "ArrowDown");
+  assert.equal(dispatched[0].target, "tab", "the focused control received it, not the document");
+  assert.equal(dispatched[0].bubbles, true, "…and it still bubbles to document and window (TopModal, MenuNav)");
+  // Nothing focused: the document is the fallback, so a first press can still seed focus.
+  dispatched.length = 0;
+  sb.document.activeElement = null;
+  press(13); Input.poll(); release(13); Input.poll();
+  assert.equal(dispatched.length, 1);
+  assert.equal(dispatched[0].target, undefined, "dispatched at the document");
+});
+
 test("a saved controller map round-trips; garbage in it falls back per action", () => {
   const { Input } = boot();
   Input.setPadBinding("camera", 0, 10);
@@ -243,4 +275,50 @@ test("button names follow the connected pad's family", () => {
   assert.equal(Input.padLabel(0), "CROSS");
   assert.equal(Input.padLabel(6), "L2");
   assert.equal(Input.padLabel(9), "OPTIONS");
+});
+
+// ---- the pad in a menu: value controls --------------------------------------
+
+test("D-pad Left/Right on a focused <select> steps its value and fires change; Up/Down are the ordinary row move", () => {
+  const { Input, sb, fire, dispatched, navOpen } = boot();
+  const { press, release } = fakePad(sb, fire);
+  navOpen.on = true;
+  const events = [], keys = [];
+  const sel = { tagName: "SELECT", disabled: false, options: { length: 3 }, selectedIndex: 0, dispatchEvent: (e) => { events.push(e.type); if (e.type === "keydown") keys.push(e); return true; } };
+  sb.document.activeElement = sel;
+  press(15); Input.poll(); release(15); Input.poll();         // D-pad right
+  assert.equal(sel.selectedIndex, 1, "the pad stepped the select itself — a synthetic ArrowRight has no UA default");
+  assert.deepEqual(events, ["input", "change"], "the row's change listener hears it");
+  press(15); Input.poll(); release(15); Input.poll();
+  press(15); Input.poll(); release(15); Input.poll();
+  assert.equal(sel.selectedIndex, 2, "clamped at the last option, no wrap");
+  press(14); Input.poll(); release(14); Input.poll();         // D-pad left
+  assert.equal(sel.selectedIndex, 1);
+  assert.equal(events.filter((t) => t === "keydown").length, 0, "no keydown was dispatched for the owned axis");
+  press(13); Input.poll(); release(13); Input.poll();         // D-pad down
+  assert.equal(events.filter((t) => t === "keydown").length, 1, "the cross axis is a key, dispatched at the focused select");
+  assert.equal(dispatched.length, 0, "…at the CONTROL, not at the document (an element's own handler must see it)");
+  assert.equal(keys.pop().key, "ArrowDown", "the cross-axis arrow is the plain synthetic keydown MenuNav walks on");
+});
+
+test("D-pad Left/Right on a focused slider steps by its step within min/max; a button gets the plain arrow", () => {
+  const { Input, sb, fire, dispatched, navOpen } = boot();
+  const { press, release } = fakePad(sb, fire);
+  navOpen.on = true;
+  const events = [];
+  const rng = { tagName: "INPUT", type: "range", disabled: false, min: "40", max: "200", step: "0.25", value: "199.9", dispatchEvent: (e) => { events.push(e.type); return true; } };
+  sb.document.activeElement = rng;
+  press(15); Input.poll(); release(15); Input.poll();
+  assert.equal(rng.value, "200", "stepped and clamped to max");
+  press(15); Input.poll(); release(15); Input.poll();
+  assert.equal(rng.value, "200", "at the end nothing changes");
+  assert.deepEqual(events, ["input", "change"], "…and no event fires for a no-op");
+  press(14); Input.poll(); release(14); Input.poll();
+  assert.equal(rng.value, "199.75");
+  assert.equal(dispatched.length, 0);
+  sb.document.activeElement = { tagName: "BUTTON", disabled: false };
+  press(15); Input.poll(); release(15); Input.poll();
+  assert.equal(dispatched.length, 1);
+  assert.equal(dispatched[0].key, "ArrowRight");
+  assert.equal(dispatched[0].type, "keydown", "a button's arrow is an ordinary move");
 });

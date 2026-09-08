@@ -355,6 +355,8 @@
         "tests/specs/hud-audit.spec.js",
         "tests/specs/menu-survey.spec.js",
         "tests/specs/menu-keyboard.spec.js",
+        "tests/specs/menu-traversal.spec.js",
+        "tests/specs/menu-traversal.spec.js",
         "tests/specs/rotation-recovery.spec.js",
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/music-library.spec.js"

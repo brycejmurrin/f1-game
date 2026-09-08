@@ -210,6 +210,17 @@ Consequences worth keeping in mind here:
   implementation.
 - **B is Escape.** Which means a pad's back button should press the same
   `data-esc-close` control the Escape key does, not a parallel path.
+- **A synthetic key has no default action.** The pad's arrows reach MenuNav
+  as untrusted `KeyboardEvent`s, and an untrusted ArrowRight does nothing to a
+  focused `<select>` or range slider — so the pad steps those VALUES itself
+  (`padNavKey` in `js/input/input.js`: clamped selectedIndex / step, then
+  `input` + `change`), and MenuNav treats Up/Down on a select as the row move
+  they are on a keyboard too (`ownsArrows`: a select keeps Left/Right and
+  Home/End only). The ‹ › chevrons beside a select are pointer-only
+  (`tabindex=-1`, `aria-hidden`). Measured 2026-09-08 before the change: a
+  pad that landed on ACTIVE AERO could neither change it nor leave it, and
+  on a keyboard every select row was an island crossed only by Tab.
+  `tests/specs/menu-traversal.spec.js` walks every layer with both.
 - **A held direction needs a repeat, and XY navigation only moves up/down/left/
   right** — a control reachable by neither axis from the current focus is
   unreachable, so the guidance's "inaccessible UI" warning applies to any layout

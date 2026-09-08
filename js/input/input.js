@@ -1050,7 +1050,61 @@ const Input = (function () {
   // in the same order a real keypress would (window-capture, document-capture,
   // …, document-bubble, window-bubble).
   function padDispatchKey(key) {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    // TARGET THE FOCUSED ELEMENT, the way a real key press does. An element's
+    // OWN onkeydown is not in the path of an event dispatched at `document` —
+    // the event's target IS document, so it never descends to the control —
+    // and both tab rails are written that way (the garage's category rail,
+    // js/garage/setup-sheet.js csTabKey, and the circuit filter chips). Those
+    // rails own their axis, so MenuNav steps aside for them by design; with
+    // the key dispatched at document their handlers never ran either, and a
+    // pad could not move along either rail at all: measured 2026-09-08, the
+    // D-pad sat on the garage's TEAM tab forever while a real ArrowDown
+    // walked all fifteen. Bubbling from the control still reaches document
+    // (TopModal's Escape) and window (MenuNav's capture listener), which is
+    // what the dispatch-at-document note below the fallback was protecting.
+    const el = document.activeElement;
+    const target = el && el !== document.body && el.dispatchEvent ? el : document;
+    target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  }
+
+  // A D-PAD DIRECTION ON A VALUE CONTROL. A synthetic ArrowRight does nothing
+  // to a focused <select> or range slider — there is no UA default action for
+  // an untrusted key — and MenuNav steps aside for the keys those controls
+  // own, so a pad that landed on ACTIVE AERO's select or the UI SIZE slider
+  // was stuck: Left/Right changed nothing, A did nothing (measured
+  // 2026-09-08). Along the control's axis the pad steps the VALUE itself and
+  // fires input/change the way a real key would; Up/Down go to MenuNav as
+  // the ordinary row move they are for the keyboard too.
+  function padNavKey(dir) {
+    const el = document.activeElement;
+    const key = PAD_NAV_KEYS[dir];
+    const horizontal = dir === "left" || dir === "right";
+    if (el && !el.disabled) {
+      const t = el.tagName;
+      const ty = t === "INPUT" ? String(el.type || "text").toLowerCase() : "";
+      if (t === "SELECT" && horizontal) {
+        const n = el.options ? el.options.length : 0;
+        const j = Math.max(0, Math.min(n - 1, el.selectedIndex + (dir === "right" ? 1 : -1)));
+        if (n && j !== el.selectedIndex) {
+          el.selectedIndex = j;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        return;
+      }
+      if (t === "INPUT" && (ty === "range" || ty === "number") && horizontal) {
+        const step = parseFloat(el.step) || 1;
+        const min = el.min === "" ? -Infinity : parseFloat(el.min), max = el.max === "" ? Infinity : parseFloat(el.max);
+        const v = Math.max(min, Math.min(max, (parseFloat(el.value) || 0) + (dir === "right" ? step : -step)));
+        if (String(v) !== String(el.value)) {
+          el.value = String(v);
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          el.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        return;
+      }
+    }
+    padDispatchKey(key);
   }
 
   function padNavDirOf(pad) {
@@ -1153,10 +1207,10 @@ const Input = (function () {
       const now = nowMs();
       if (dir !== padNavDir) {
         padNavDir = dir;
-        padDispatchKey(PAD_NAV_KEYS[dir]);
+        padNavKey(dir);
         padNavNextT = now + PAD_NAV_DELAY_MS;
       } else if (now >= padNavNextT) {
-        padDispatchKey(PAD_NAV_KEYS[dir]);
+        padNavKey(dir);
         padNavNextT = now + PAD_NAV_REPEAT_MS;
       }
     } else {
