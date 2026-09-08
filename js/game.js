@@ -4109,7 +4109,7 @@ const _ct = { dProg: 0, dX: 0, penLong: 0, penLat: 0, iA: 1, iB: 1, iSum: 2, sA:
 // read-before-next-call contract as _ct / AiDrive.traits.
 const _aiBoost = { traits: null, energy: 0, otActive: false, kAhead60: 0, towCar: false, towGap: 0, towSpeed: 0, speed: 0, chaser: false, chaserGap: 0, chaserSpeed: 0, team: null, seat: 0, stats: null, ersDeploy: 0, ersRegen: 0 };
 const _aiOtFire = { traits: null, blockerGap: 0, gapAhead: 0, roomL: 0, roomR: 0, speed: 0, aheadSpeed: 0, kAhead: 0, street: false, team: null, seat: 0, stats: null, other: null };
-const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null };
+const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
 const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, roll: 0.5 };
@@ -4516,6 +4516,7 @@ function updateCar(c, dt, ranked) {
   let nearbyN = 0, sep = 0;                // sep-window density + lateral-separation pull (traffic scan)
   const aiT = c.human ? null : AiDrive.traits(c);
   if (!c.human) vmax *= AiDrive.pacePhase(raceT, aiT.consistency, c.phaseRoll);   // a stint drifts; lockstep never passes
+  if (!c.human && AiDrive.mistakePhase(c.errT) === 2) vmax *= AiDrive.mistakeGatherMul();   // gathering it up after a mistake
   if (!c.human) {
     // AI keeps a tuned racing margin to the edge (not the hard barrier, so it
     // flows through barrier-lined corners instead of treating them as boxed-in).
@@ -4732,6 +4733,7 @@ function updateCar(c, dt, ranked) {
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
     _aiBr.blockerSpeed = blocker ? blocker.speed : 0;
     _aiBr.roomL = roomL; _aiBr.roomR = roomR; _aiBr.team = c.team; _aiBr.seat = c.seat; _aiBr.stats = c.houseStats;
+    _aiBr.errMul = AiDrive.mistakePhase(c.errT) === 1 ? AiDrive.mistakeBrakeMul() : 1;   // a missed braking point
     const br = AiDrive.brakeDecision(_aiBr);
     braking = br.braking;
     brakeLvl = br.brakeLvl;
@@ -5035,7 +5037,9 @@ function updateCar(c, dt, ranked) {
     // lines wide into a corner instead of one.
     const ln = TrackLine.at(track, wrapS(c.s + clamp(c.speed * 0.3, 8, 25)));
     const laneX = c.lane * (hw - 1.2);
-    const targetX = clamp(lerp(laneX, ln.x, ln.w * AiDrive.lineFollow(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold)), -(hw - 1.0), hw - 1.0);
+    let targetX = clamp(lerp(laneX, ln.x, ln.w * AiDrive.lineFollow(!!track.street, AiDrive.houseStyle(c.team, c.seat, c.houseStats).hold)), -(hw - 1.0), hw - 1.0);
+    // A missed braking point runs WIDE: the target goes most of the way to the outside edge.
+    if (AiDrive.mistakePhase(c.errT) === 1 && Math.abs(kA) > 0.004) targetX = lerp(targetX, Math.sign(kA) * (hw - 0.9), 0.7);
     // Overtake: if a slower car is blocking our lane ahead, ease toward the side
     // with more room to pass. Collision-aware — the move is scaled down if that
     // side is also tight (a car alongside or a wall), so we don't dive into a
@@ -5045,6 +5049,19 @@ function updateCar(c, dt, ranked) {
     c.passCool = Math.max(0, (c.passCool || 0) - dt);
     c.passFailT = Math.max(0, (c.passFailT || 0) - dt);
     const _atk = TrackLine.attackAt(track, c.s);   // where the move is on (baked attack zones)
+    // MISTAKES (AiDrive.mistakeChance): pressure is the share of the last six
+    // seconds with a car within 0.6 s behind; the roll is once per braking
+    // point, from a hash (never simRnd), and never while alongside a car.
+    c.pressT = clamp((c.pressT || 0) + (chaser && chaserGap < 0.6 * Math.max(c.speed, 10) ? dt : -dt * 0.5), 0, 6);
+    c.errT = Math.max(0, (c.errT || 0) - dt);
+    if (_atk.toTurnIn < Math.max(c.speed, 10) * 1.2) {
+      const zk = Math.round(c.s + _atk.toTurnIn);
+      if (zk !== c.zoneKey) {
+        c.zoneKey = zk;
+        if (!c.errT && !alongO && DriverRatings.hash32(simSeed() + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
+      }
+    } else c.zoneKey = -1;
+    c.wheelLock = AiDrive.mistakePhase(c.errT) === 1 && braking ? 1 : 0;   // the render freezes the fronts
     // THE PASS LATCH. Once a pass is chosen it is held as a POSITION beside the
     // car being passed (AiDrive.passTarget) with the side FROZEN, and it is
     // released only on a real outcome: we are past, we lost the car, the side
