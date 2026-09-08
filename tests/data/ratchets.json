@@ -8,14 +8,14 @@
       "topLets": 157
     },
     "js/agent/apex.js": {
-      "lines": 2668,
-      "codeLines": 2012
+      "lines": 2695,
+      "codeLines": 2018
     },
     "js/agent/agentview.js": {
       "lines": 2452
     },
     "js/car/car3d.js": {
-      "lines": 3834
+      "lines": 3805
     },
     "js/track/tracks.js": {
       "lines": 2401
