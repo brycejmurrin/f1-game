@@ -1433,6 +1433,37 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   without writing `gfxClaimFail`. Phones and Safari AUTO try the same
   WebGPU path with a lite swapchain (`UnsignedByteType`, no MSAA 4,
   low-power).
+  **AN INSTANCED OBJECT KEEPS ITS IDENTITY IN THE NODE-PROGRAM CACHE KEY**
+  (2026-09-08). tlx.js replaces three's `getForRenderCacheKey` with the program
+  family plus the attribute layout, on the premise that everything it drops is
+  a uniform at draw time. True of every pooled mesh — and the reason the
+  replacement exists (593 programs / ~60 s of compile on Monza). False for
+  exactly one thing: three compiles the instance-matrix SOURCE BUFFER into the
+  node graph (vendored r185, the `16*count*4 <= getUniformBufferLimit()`
+  branch — a BufferNode over that attribute's array below the limit, an
+  `InstancedInterleavedBuffer` wrapping it above), so a shared program is a
+  shared instance buffer. Every TrackGraph prop batch draws with one
+  lit-instanced material over same-named attributes, so all 28 hashed to one
+  entry and all but the first rendered through the FIRST batch's transforms:
+  barriers, debris fencing, grandstand crowd and tyre stacks gone on BOTH three
+  backends while GLX drew them. The key now carries `ro.object.id` for an
+  instanced mesh (39 programs instead of 1 on montreal, bounded by the scene;
+  pooled meshes stay `"M"`) — the OBJECT and not the geometry, because
+  tlx-shadow's caster pool reassigns `m.geometry` per cast while keeping its
+  own `instanceMatrix`.
+  **An adapter fact must not reach a backend it does not describe** — the same
+  mistake in two gates, both fixed 2026-09-08. `_softAdapter` is sniffed off
+  `navigator.gpu` BEFORE the bind decision, so it says nothing about three's
+  WebGL2 path: `skipBatches()` (a DAWN encoder workaround, and there is no
+  encoder on WebGL2) now also asks `isWebGPU()`, and `softContent(part)` asks
+  `softwareGL` alone, which is already `forceWebGL ? detectSoftwareGL() :
+  _softAdapter`. WebKit takes three's WebGL2 backend on AUTO by construction,
+  so before this desktop Safari lost the whole instanced prop set AND took the
+  fallback sky, a cleared env probe and shrunk shadow maps on hardware that
+  renders them fine. The sniff's `named` test is `soft(ware|pipe)`, never bare
+  `soft` — that substring matches any adapter whose info says "Microsoft"
+  (WGX's copy was corrected first; TLX's kept the bug). All three are
+  canary-pinned in `gfx-backend-canary`.
 
 ### Cross-backend parity — mirroring a knob across GLX / WGX / TLX
 

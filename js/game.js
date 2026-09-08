@@ -1876,8 +1876,8 @@ function makeCars() {
         offroad: false, offT: 0, cuts: 0, penalty: 0,
         yawVis: 0, steerVis: 0, collideT: 0,
         ...driverSkill(team, d, di),   // skill + craft + awareness + experience
-        // lanePref is the grid home line; adaptLane biases around it and must
-        // not accumulate forever into ±0.85 under pack traffic.
+        // lanePref is the grid HOME LINE and never moves; adaptLane biases c.lane
+        // around it (never accumulating into ±0.85), and every re-grid restores it.
         lane, lanePref: lane,
       });
     });
@@ -1952,7 +1952,7 @@ function redFlagRestart() {
     c.prog = c.lap * L - (L - c.s);
     c._progGift = (c._progGift || 0) + (c.prog - progWas);
     c.head = 0; c.yawVis = 0; c.rPrevHead = 0; c.rPrevYawVis = 0;
-    c.speed = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
+    c.speed = 0; c.accSm = 0; c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.lane = c.lanePref;   // as gridUp
     c.xOn = false; c.aeroX = 0; c.xArmed = false; c.towing = 0; c.wheelLock = 0;
     c.incidentInvalidLap = true;   // a lap with a red flag in it is not a timed lap
   });
@@ -1993,12 +1993,14 @@ function gridUp(preOrder) {
       c.rPrevS = c.s; c.rPrevX = c.x;
     }
     c.head = 0; c.yawVis = 0;   // straight ahead on the grid (heading model)
-    c.speed = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;
+    // A CAR ON THE GRID IS PULLING NOTHING. accSm is the one smoothed per-car value
+    // ANOTHER car reads (AiDrive.otWant, off the blocker), so a stale one re-deals lap 1.
+    c.speed = 0; c.accSm = 0; c.prog = -(14 + i * 8); c.lap = 0; c.energy = 1; c._progGift = 0;
     c.otT = 0; c.otCool = 0; c.lapTime = 0; c.best = Infinity; c.totalT = 0;
     c.xOn = false; c.aeroX = 0; c.xArmed = false;   // flaps shut on the grid
     c.finished = false; c.finishT = 0; c.cuts = 0; c.cutWarn = 0; c.penalty = 0; c.offT = 0;
     c.wrongT = 0; c.wrongWay = false; c.rescueT = 0; c.rescueLastT = null; c.wallT = 0; c.wasOnWall = false;
-    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
+    c.vLat = 0; c.yawRateCur = 0; c.steerVis = 0; c.yawVis = 0; c.rPrevYawVis = 0; c.aiHead = 0; c.aiBias = null; c.aiFam = 0; c.lane = c.lanePref;   // lane is damped state, not a constant
     c.rPrevHead = 0;
     c.kerbGripSm = 1; c.kerbCueT = 0;
     // The launch plan and the pace phase (AiDrive): one hash per car per race,

@@ -11,6 +11,89 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-08 — three.js lost half the trackside scenery, and nothing could see
+it. FIXED**, but the shape is worth keeping. A player reported missing scenery
+on three.js; GLX was fine. Reproduced on real Apple hardware via `gpu-census`
+on macos-latest (`anyHardware: true`, `softAdapter: false`, `gpuErrors: 0`):
+GLX drew the barrier wall and debris fence, both three legs drew bare grass.
+Root cause in `ARCHITECTURE.md` §Parity snapshot — the node-program cache key
+dropped an instanced object's identity, and three compiles the instance-matrix
+source buffer into the node graph, so 28 prop batches shared one program bound
+to the first batch's transforms.
+
+*Why every instrument read clean*, which is the reusable part: `gpuErrors 0`;
+the cull agreed with GLX instance for instance (1060 / 35,672 verts at one
+camera); `imesh.count`, `visible`, `parent`, `material` and the resident
+`instanceMatrix` were all correct. The DATA was never wrong — the program it
+was bound to was. Ruled out along the way, each with a same-camera A/B: the
+ranged `instanceMatrix` upload (0 px change), the 1024-instance
+uniform-buffer threshold (a synthetic cap-3000 InstancedMesh renders fine),
+the geometry shared with tlx-shadow's caster pool, and the geometry itself (a
+plain `Mesh` of it draws). What isolated it was adding `|obj<id>` to the key
+before the track built: 24.8% of pixels move and the furniture returns.
+
+*Why it cost so much*: `graph.js` skips the FUSE for a batched node, so there
+is no soup copy behind a dropped batch — **48.2% of all prop geometry across
+the roster is instanced-only** (79.6% Vegas, 77.9% Nürburgring, 74.2%
+Hockenheim, 72.2% Spa). DebrisWorld's per-body fallback cannot see a skip
+either: it feature-detects on the NAME, which is present and no-ops.
+
+**2026-09-08 — every glass pane shipped twice. FIXED.** `scenery/city.js`
+routes unlit window panes to `glassBuf`, and `tracks.js` only sets
+`_preferInstance` on the default props buffer — so `replay()` wrote those panes
+into the GLASS MESH and the same placements came back from `graph.batches()` as
+an instanced unit-box batch that `tracks.js` uploaded on top, with the props
+material, at the same depth. 56,048 instances / 1,345,152 verts roster-wide
+(Vegas 22,127, Baku 12,613, Jeddah 11,617, Singapore 7,895); on ten circuits
+the duplicate is the glass mesh vertex for vertex. `batches()` plain stays a
+CAPABILITY report (six unit tests and `graph-parity.cjs` depend on that); the
+fix is `batches({instancedOnly:true})` at the one caller that uploads. Visually
+invisible — co-planar — so it was pure cost: a same-camera A/B on jeddah moves
+0.03% of pixels.
+
+**2026-09-08 — a second race in one page started on the last race's pull.
+FIXED.** `agent-determinism.spec.js` went red on the deploy branch (Pages 2095,
+`14a1789e`; two of its four tests). Three `run(42)` episodes in ONE page, and
+run 0 disagreed with runs 1 and 2 — which agreed with each other. That
+first-run-only shape is the whole tell: something is CREATED by the first
+episode and never restored, so every later episode starts warm. The branch went
+green again only because the selected-specs gate stopped picking the spec; the
+next push touching `js/game.js` selects it again.
+
+**`c.accSm`.** `js/game.js` damps it per tick as "what this car is pulling",
+and `AiDrive.otWant` reads it **off the blocker** — the one smoothed per-car
+value another car reads. `gridUp()` puts every car stationary on a box but left
+`accSm` at the last race's ~6.7 m/s², so at lights-out the "is the car ahead
+pulling away?" test answered differently and lap 1 was dealt differently. The
+`?? 0` at the damp site shows the undefined case was foreseen; the STALE case
+was not. Fix: `c.accSm = 0` beside `c.speed = 0` in `gridUp()` and in
+`redFlagRestart()`.
+
+Also found on the way and fixed: **`c.lane`**, the AI's preferred line.
+`makeCars` deals it staggered across the field and stores the same value as the
+immutable `lanePref`; `AiDrive.adaptLane` then walks `c.lane` toward the freer
+side under traffic, and no re-grid put it back. It did not move this digest, but
+it is the same class — `gridUp()` clears every neighbouring damped AI field
+(`aiHead`, `aiBias`, `aiFam`, `vLat`, `yawRateCur`, `steerVis`) and not that one.
+
+*How it was isolated*, which is the reusable part. Snapshotting all 22 cars
+before the first tick showed the earliest difference is at **frame 0** — the
+lazily-created fields are `undefined` on run 0 and hold run-0 values on run 1,
+44 of them. Restoring the exact post-reset COLD car state before a warm episode
+made it byte-identical to the cold one (twice), which proved the leak is
+entirely per-car and not module state. Deleting one candidate key at a time
+before the warm episode then named it outright: **`accSm` alone is sufficient**.
+The other 22 lazily-created fields are written before they are read in a tick,
+or are cosmetic.
+
+This is the THIRD leak of the class, after the two the spec's own header records
+(the drivetrain, and `_prevS`). The pattern each time: a field that looks like a
+per-tick output is actually carried across ticks, sits outside the clear list
+next to fields that are in it, and is read by code that cannot tell a stale
+value from a fresh one. The sharpest version, and what `accSm` adds: **a field
+one car reads off ANOTHER car is one tick stale by design, so on tick 1 it must
+be the grid's value or the race starts from the last one.**
+
 **2026-08-18 cleanup sweep** tagged removals, false-positive dead exports, and
 the next intended `game.js` extractions in
 [`../archive/research/CLEANUP-SWEEP-2026-08-18.md`](../archive/research/CLEANUP-SWEEP-2026-08-18.md).
