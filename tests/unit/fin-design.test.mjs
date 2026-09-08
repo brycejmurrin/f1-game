@@ -103,11 +103,16 @@ const bbox = (rings) => {
   for (const ring of rings) for (const [x, y] of ring) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
   return { x0, y0, x1, y1 };
 };
+// An op counts for a region only where it would actually LAND: inside the
+// region AND inside every clip in force when it was recorded. RecCtx keeps
+// those as a list because a canvas clip intersects and never widens — before
+// it did, a crown painter reaching into a flank recorded as a hit and this
+// helper called the saddle's (entirely clipped) flank band a pass.
 const inRect = (op, r) => {
-  const c = op.clip ? bbox(op.clip.pts) : null;
+  const cs = (op.clip || []).map((c) => bbox(c.pts));
   return op.pts.some((ring) => ring.some(([x, y]) =>
     x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h &&
-    (!c || (x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1))));
+    cs.every((c) => x >= c.x0 && x <= c.x1 && y >= c.y0 && y <= c.y1)));
 };
 const opsIn = (ops, r) => ops.filter((op) => inRect(op, r));
 const BASE = { c1: [0.9, 0.1, 0.1], c2: [1, 1, 1] };
@@ -154,6 +159,23 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   }
   assert.equal(opsIn(A.paint("ferrari", BASE), R.spineSideL).length, 0, "the left flank is bare by default too");
   assert.equal(opsIn(wrap, R.tail).length, 0, "wrap leaves the tail bare");
+  // A SIDE pick under the wrap yields the front of the flank to the mark, and
+  // that band is derived from the mark's own path — a stale constant left it
+  // NaN, and NaN coordinates land in no region at all, so the side design
+  // silently vanished. Counted AGAINST the same wrap with no side pick: the
+  // wrap paints these regions itself, so "the flank has ops" proves nothing.
+  // This is the one combination (a crown design AND a side design) that no
+  // other case here covers.
+  for (const team of ["redbull", "ferrari"]) {
+    const bare = A.paint(team, { ...BASE, spineLogo: "wrap", spineSide: "none" });
+    for (const side of ["duo", "wordmark", "slash", "number"]) {
+      const ops = A.paint(team, { ...BASE, spineLogo: "wrap", spineSide: side });
+      for (const reg of [R.spineSide, R.spineSideL]) {
+        assert.ok(opsIn(ops, reg).length > opsIn(bare, reg).length,
+                  `${team} wrap+${side} adds paint to the flank`);
+      }
+    }
+  }
   // The saddle too runs down the flanks (the SF-26's white), so it paints the
   // band with no side pick; the panel stays on the crown alone.
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineLogo: "saddle" }), R.spineSide).length > 0, "saddle reaches the flank band");
