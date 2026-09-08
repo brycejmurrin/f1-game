@@ -150,6 +150,23 @@ test("draw() honours the mode and reports a backend without the pass", () => {
   assert.equal(load().mode(), "full", "the shipped default is the whole lap, Forza's default");
 });
 
+test("LINE COLOUR is a palette flag the draw carries, not a colour the module knows", () => {
+  const DL = load();
+  const api = stadium();
+  DL.build(api);
+  const seen = [];
+  const gfx = { drawDrivingLine: (v, n, dirty, opts) => { seen.push(opts.palette); return true; } };
+  DL.setMode("full");
+  assert.equal(DL.setPalette("f1"), "f1");
+  DL.draw(gfx, api, 40);
+  assert.equal(DL.setPalette("safe"), "safe");
+  DL.draw(gfx, api, 40);
+  // An unknown value must not silently become the colour-blind palette.
+  assert.equal(DL.setPalette("nonsense"), "f1");
+  DL.draw(gfx, api, 40);
+  assert.deepEqual(seen, [0, 1, 0], "draw() passes palette 0 for F1 and 1 for the safe triple");
+});
+
 test("with a baked racing line the ribbon follows IT, easing to the centre where the line has no opinion", () => {
   const DL = load();
   const api = stadium();

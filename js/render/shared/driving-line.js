@@ -64,6 +64,15 @@ window.DrivingLine = (function () {
 
   function setMode(m) { mode = MODES.includes(m) ? m : "off"; return mode; }
   function getMode() { return mode; }
+  // LINE COLOUR. The speed cue is only a cue if it can be read: F1's own
+  // green/amber/red puts the two ends of the scale on the pair the common
+  // red-green deficiencies cannot separate. `safe` swaps in the IBM
+  // colour-blind-safe triple; every backend's shader mixes between the two on
+  // this one flag (SETTINGS › LINE COLOUR, and F1 25 offers the same choice).
+  let palette = "f1";
+  const PALETTES = ["f1", "safe"];
+  function setPalette(p) { palette = PALETTES.includes(p) ? p : "f1"; return palette; }
+  function getPalette() { return palette; }
 
   /* The banked surface's lift at lateral o, the road mesh's own formula
      (js/track/core/mesh.js bankOffsetAt, index-keyed there) at the nearest
@@ -198,7 +207,7 @@ window.DrivingLine = (function () {
     if (mode === "off" || !gfx || typeof gfx.drawDrivingLine !== "function") return false;
     if (cache.id !== api.id || !cache.verts) build(api);
     const drew = gfx.drawDrivingLine(cache.verts, cache.count, cache.dirty, {
-      speed: playerSpeed || 0, cornersOnly: mode === "corner",
+      speed: playerSpeed || 0, cornersOnly: mode === "corner", palette: palette === "safe" ? 1 : 0,
     });
     if (drew) cache.dirty = false;
     return !!drew;
@@ -206,6 +215,7 @@ window.DrivingLine = (function () {
 
   function reset() { cache.id = null; cache.verts = null; cache.count = 0; cache.v = null; cache.zone = null; }
 
-  return { MODES, STRIDE, STEP, HALF_W, setMode, mode: getMode, build, draw, speedAt, zoneAt, reset,
+  return { MODES, PALETTES, STRIDE, STEP, HALF_W, setMode, mode: getMode,
+           setPalette, palette: getPalette, build, draw, speedAt, zoneAt, reset,
            _cache: () => cache };
 })();

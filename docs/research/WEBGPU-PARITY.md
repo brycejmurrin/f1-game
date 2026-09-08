@@ -998,6 +998,13 @@ member stubbed `() => false` on the other two; the port landed the same day:
   `backendState.line` now reports the pooled line mesh (visible / in scene /
   index count) as the positive signal a software probe can read.
 
+  **Colour-blind palette (2026-09-08).** One more parameter on the same path:
+  `opts.palette` → GLX `uPalette`, WGX `LineU.params.w` (the slot that was
+  spare), TLX `linePalette`. Each shader MIXES between F1's green/amber/red and
+  the IBM colour-blind-safe triple rather than branching, so the three remain
+  the same maths and no backend gains a control-flow dependency. Dawn static
+  validation clean.
+
 Sign-off is the real-GPU census (`gpu-census.yml`, macOS/Metal), not a
 screenshot here: the software adapters validate and run the frame graph but
 composite nothing.
