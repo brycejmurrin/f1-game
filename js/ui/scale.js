@@ -40,7 +40,13 @@ const UiScale = (() => {
     // in the stylesheet stands and a phone is correct on its FIRST paint rather
     // than from whenever this module runs.
     const SCALE_MIN = 40, SCALE_MAX = 200, SCALE_STEP = 0.25;
-    const scaleDefault = () => 100;
+    // Touch defaults live in the `(pointer: coarse)` block of css/tokens.css and
+    // are mirrored here — CSS owns FIRST paint, this owns every write after it,
+    // and the two must not disagree. BUTTON SIZE stays a ratio of HUD SIZE so it
+    // keeps following that slider while unset.
+    const BTN_OVER_HUD = 1.4536;   // 180.25 / 124
+    const coarseUi = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
+    const scaleDefault = (k) => (coarseUi() ? (k === "hudScale" ? 124 : 109) : 100);
     const scaleSnap = (v) => {
       const n = Math.max(SCALE_MIN, Math.min(SCALE_MAX, +v));
       return Math.round(n / SCALE_STEP) * SCALE_STEP;
@@ -51,7 +57,9 @@ const UiScale = (() => {
     // keeps one answer — the range input, its % readout and __apex.btnScale()
     // all report the axis actually in force, instead of the widget saying 130
     // while the hook said 100. `stored` still separates "following" from "set".
-    const scaleDefaultFor = (k) => (k === "hudBtnScale" ? scalePct("hudScale") : scaleDefault());
+    const scaleDefaultFor = (k) => (k === "hudBtnScale"
+      ? scalePct("hudScale") * (coarseUi() ? BTN_OVER_HUD : 1)
+      : scaleDefault(k));
     const scalePct = (k) => {
       const v = store.get(k, null);
       return typeof v === "number" ? scaleSnap(v) : scaleDefaultFor(k);
@@ -94,15 +102,15 @@ const UiScale = (() => {
     // player moves this slider, and only then do they part.
     function applyBtnScale() { applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale"); }
     $("pm-uiscale").oninput = (e) => {
-      store.set("uiScale", scaleSnap(+e.target.value || scaleDefault()));
+      store.set("uiScale", scaleSnap(+e.target.value || scaleDefaultFor("uiScale")));
       applyUiScale();
     };
     $("pm-hudscale").oninput = (e) => {
-      store.set("hudScale", scaleSnap(+e.target.value || scaleDefault()));
+      store.set("hudScale", scaleSnap(+e.target.value || scaleDefaultFor("hudScale")));
       applyHudScale();
     };
     $("pm-btnscale").oninput = (e) => {
-      store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefault()));
+      store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefaultFor("hudBtnScale")));
       applyBtnScale();
     };
     applyUiScale();
@@ -110,7 +118,7 @@ const UiScale = (() => {
     function setScale(key, prop, v) {
       if (v !== undefined) {
         if (v === null) store.set(key, null);
-        else store.set(key, scaleSnap(+v || scaleDefault()));
+        else store.set(key, scaleSnap(+v || scaleDefaultFor(key)));
         if (key === "uiScale") applyUiScale();
         else if (key === "hudBtnScale") applyBtnScale();
         else applyHudScale();
@@ -124,7 +132,12 @@ const UiScale = (() => {
       { id: "med",  label: "MED",  v: 0.75 },
       { id: "high", label: "HIGH", v: 1.0  },
     ];
-    let resMode = store.get("resMode", "auto");
+    // A phone ships at LOW (half-res buffer) and a pointer device at AUTO — the
+    // other half of the HIGH graphics preset above. Same question
+    // Input.touchControlsNeeded() asks, asked directly so this module keeps no
+    // dependency on the input stack.
+    const coarse = () => { try { return !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches); } catch (_) { return false; } };
+    let resMode = store.get("resMode", coarse() ? "low" : "auto");
     function applyResMode() {
       const m = RES_MODES.find((r) => r.id === resMode) || RES_MODES[0];
       SettingRow.paint($("pm-res"), m.id);

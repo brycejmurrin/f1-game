@@ -11,7 +11,12 @@ const CockpitOpts = (function () {
 const KEY = "apex26.cockpitHalo";
 const KEY_TC = "apex26.cockpitTurnChase";         // legacy "1" / "0"
 const KEY_LEAD = "apex26.cockpitTurnChaseLead";   // 0..1, the live value
-const LEAD_DEFAULT = 0.35;   // what the old ON switch blended (js/camera/vantage.js)
+// The SHIPPED amount (the owner's own setting, 2026-09-08). It was 0.35, which
+// was also what the old ON switch blended — the two were one number until they
+// parted here, so the legacy meaning gets its own constant below rather than
+// following this one and quietly rewriting history for a saved "1".
+const LEAD_DEFAULT = 0.4;
+const LEGACY_ON_LEAD = 0.35;   // what the old ON switch blended (js/camera/vantage.js)
 const LEAD_MAX = 1;
 
 let _halo = null, _lead = null;
@@ -25,10 +30,10 @@ function clampLead(n) {
 
 function parseLead(raw, urlVal) {
   if (urlVal != null && urlVal !== "") {
-    if (/^(on|true)$/i.test(urlVal)) return LEAD_DEFAULT;
+    if (/^(on|true)$/i.test(urlVal)) return LEGACY_ON_LEAD;
     if (/^(off|false)$/i.test(urlVal)) return 0;
     // Bare "1" on the URL is the old ON flag, not 100 %. Use 100 or 0.8 for an amount.
-    if (urlVal === "1") return LEAD_DEFAULT;
+    if (urlVal === "1") return LEGACY_ON_LEAD;
     if (urlVal === "0") return 0;
     return clampLead(urlVal);
   }
@@ -50,7 +55,7 @@ function readLead() {
   if (stored != null) return stored;
   const legacy = GameStore.store.raw(KEY_TC);
   if (legacy === "0") return 0;
-  if (legacy === "1") return LEAD_DEFAULT;
+  if (legacy === "1") return LEGACY_ON_LEAD;   // a stored ON keeps the amount it meant
   return LEAD_DEFAULT;
 }
 
@@ -64,7 +69,7 @@ function read(key, urlName, defaultOn) {
   return v === "1";
 }
 
-function halo() { if (_halo === null) _halo = read(KEY, "halo", false); return _halo; }
+function halo() { if (_halo === null) _halo = read(KEY, "halo", true); return _halo; }
 
 function setHalo(on) {
   _halo = !!on;

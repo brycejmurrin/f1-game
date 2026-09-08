@@ -241,7 +241,15 @@ test("shipped turn-in is snappier than the understeer-safe 0.89 / 0.7 pair", asy
   const a = g.apex;
   const t = a.tuning();
   assert.equal(t.frontGrip, 0.94);
-  assert.equal(t.yawInertia, 0.58);
+  // THE SOURCE DEFAULT AND THE SHIPPED SLIDER PARTED ON 2026-09-08. `let
+  // YAW_INERTIA = 0.58` above is still the snappy 2026-09-04 constant and the
+  // regex pins it; what a fresh install actually RUNS is now CAR WEIGHT 10 (the
+  // owner's own setting, baked with the rest of their steering profile), and
+  // that slider drives yaw inertia to 1.0 — a heavier car than either the 0.58
+  // default or the 0.7 the drive-feel work moved away from. Both numbers are
+  // pinned so neither can drift silently, and the behavioural probe below still
+  // compares the two TRIADS directly, with the slider held out of it.
+  assert.equal(t.yawInertia, 1, "CAR WEIGHT 10 (shipped) -> YAW_INERTIA 1.0");
   const yawAt = (frontGrip, yawInertia) => {
     a.setPhysics({ frontGrip, yawInertia, pace: 1, roadFollow: 0 });
     a.jump(0.0, 40, 0);

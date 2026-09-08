@@ -2889,11 +2889,10 @@ const Car3D = (function () {
       // the design painted on it, keyed by race number. cy is the TEMPLE line.
       const des = Helmets.designFor(opts && opts.num, c1);
       Helmets.build(out, 0, 0.630, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.glass });
-      // Both sit ON the shell, so their faces are measured off it: the brow at
-      // the top of the aperture (t 0.24, z 0.096 out) and the spoiler off the
-      // back of the head (t 0.38, z -0.112) — set clear of those and they float.
-      addBox(out, 0, 0.722, 0.058, 0.086, 0.010, 0.040, des.visor);       // brow lip over the aperture
-      addBox(out, 0, 0.676, -0.155, 0.052, 0.038, 0.050, des.visor);      // rear aero spoiler
+      // No brow box: the shell carries its own ridge over the aperture now.
+      // The spoiler sits ON the back of the head, whose shell reaches z -0.191
+      // there — set it clear of that and it floats behind the helmet.
+      addBox(out, 0, 0.664, -0.176, 0.050, 0.034, 0.046, des.visor);      // rear aero spoiler
     }
 
     // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..

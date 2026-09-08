@@ -471,12 +471,15 @@ let musicEnabled = store.get("music", true);    // music on/off, independent of 
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
 let unlimitedBudget = store.get("unlimitedBudget", false); // removes credit cap in car setup
 // how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
-let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
+// BUTTONS, not tilt, since 2026-09-08 — tilt is still one row away, but it is
+// not what a first-time phone player should be handed. The legacy `buttonSteer`
+// migration that used to pick between them is subsumed: both arms said BUTTONS.
+let steerMode = store.get("steerMode", "buttons");
 const HUD_PROFILES = ["minimal", "standard", "broadcast"];
 let hudProfile = store.get("hudProfile", "standard");
 if (HUD_PROFILES.indexOf(hudProfile) < 0) hudProfile = "standard";
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
-let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
+let hudMetricsLayout = store.get("hudMetricsLayout", "full");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
 // AUTO IS ALWAYS THE FULL SET: fitHud scales / stacks / drops gaps instead of
 // hiding a cluster, and the label names what AUTO resolved to. A FORCED name
@@ -922,7 +925,7 @@ function buildStudioRig() {
 }
 let headlessMode = false;  // skip render() when true (headless control loop)
 const { CAM_MODES } = CamModes;  // player camera modes (js/camera/mode-switch.js; eval-time — a HARD_EDGES pair)
-let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.length - 1);
+let camMode = Math.min(Math.max(store.get("camMode", 3) | 0, 0), CAM_MODES.length - 1);
 // The game mode, on TWO axes. `flow` is what the run is FOR and survives a whole
 // championship; `session` is what this one visit to the track IS. They are genuinely
 // independent — a career weekend qualifies and then races, so a single flat enum
