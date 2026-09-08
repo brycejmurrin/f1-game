@@ -298,12 +298,14 @@ const Helmets = (function () {
     return [r * dx, tab(SHAPE.Y, t), r * dz];
   }
 
-  // Nineteen profile rows, and enough rings to spend some of them on the
-  // crown: a real lid is BLUNT on top — 45% of its width by a twentieth of the
-  // way down — and at twelve evenly-biased rings the first one landed below
-  // that, which drew the dome as a flat cap with a crease round it.
-  const RINGS = 14, SLICES = 18;
-  const ringT = (i) => { const f = i / RINGS; return f * f * 0.45 + f * 0.55; };
+  // Twelve rings, but SPENT ON THE CROWN. A real lid is blunt on top — 45% of
+  // its width by a twentieth of the way down — so the first ring has to land
+  // inside that twentieth or the dome tessellates as a flat cap. The old
+  // quadratic bias put it at t 0.049, past the turn; f^1.5 puts it at 0.024
+  // and still leaves three rings inside the visor aperture. Adding rings
+  // instead would have worked too and cost 72 triangles the car cannot spare.
+  const RINGS = 12, SLICES = 18;
+  const ringT = (i) => Math.pow(i / RINGS, 1.5);
   function build(out, cx, cy, cz, design, S) {
     const skin = shell(design);
     const i0 = out.pos.length / 3;
