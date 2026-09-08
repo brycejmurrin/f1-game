@@ -201,9 +201,12 @@ test.describe("Liveries — creator", () => {
     await expect(finRow.locator('input[type="color"]')).toBeDisabled();
     // The palette chips are rebuilt on every edit and must come back disabled too.
     await expect(artRow.locator(".cs-liv-pal button").first()).toBeDisabled();
-    // Rows the fin does not own stay live.
+    // Rows the fin does not own stay live. A row with no dependency never
+    // carries aria-disabled at all, so the assertion is "not disabled", not
+    // "disabled=false".
     await expect(page.locator('[data-cs-pill="spineLogo:logo"]')).toBeEnabled();
-    await expect(page.locator('.cs-liv-ed-row:has([data-cs-pill^="spineSide:"])')).toHaveAttribute("aria-disabled", "false");
+    await expect(page.locator('[data-cs-pill="spineSide:none"]')).toBeEnabled();
+    await expect(page.locator('.cs-liv-ed-row:has([data-cs-pill^="spineSide:"])')).not.toHaveAttribute("aria-disabled", "true");
     await page.screenshot({ path: galleryPath("parts-liveries", "creator-no-fin-rows.png") });
 
     await page.locator('[data-cs-pill="finShape:standard"]').click();
