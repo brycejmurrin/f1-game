@@ -562,8 +562,14 @@ test.describe("Parts module — visual recipes", () => {
         const anchors = Car3D.bodyAnchors(parts);
         const data = CarMesh.carDecalData(2, parts);
         const title = LiveryTex.REGIONS.titleA, size = LiveryTex.SIZE;
+        // v divides by SIZE_H, not SIZE: the atlas grew extra rows below the
+        // square for the two engine-cover flanks, and car-mesh's uvOf has
+        // always followed it. Reading v against SIZE here put the band 8 px
+        // high and 34 px short, so the quad's lower verts fell outside it and
+        // only half the crease verts survived the filter.
+        const sizeH = LiveryTex.SIZE_H || size;
         const titleU = [title.x / size, (title.x + title.w) / size];
-        const titleV = [1 - (title.y + title.h) / size, 1 - title.y / size];
+        const titleV = [1 - (title.y + title.h) / sizeH, 1 - title.y / sizeH];
         const titleVerts = [];
         for (let i = 0; i < data.pos.length / 3; i++) {
           const p = [data.pos[i*3], data.pos[i*3+1], data.pos[i*3+2]];
