@@ -4,9 +4,11 @@
    Both edit a binding table in js/input/input.js (Input.keyBindings /
    setKeyBinding and the pad twins), persist it under `apex26.keys` /
    `apex26.pad`, and rewrite the HOW TO PLAY line for that device so the help
-   never contradicts the bindings. KEYBOARD is desktop-only by CSS; CONTROLLER
-   shows on a desktop or wherever a pad has been seen. KeyBinds.create(G) is
-   wired from js/game.js; consumes the globals Input, GameAudio. */
+   never contradicts the bindings. A desktop shows both; a touch device shows
+   each table once its device has been seen (a trusted key press, a pad
+   button) or when its map is already customised, with one hint line saying
+   so until then. KeyBinds.create(G) is wired from js/game.js; consumes the
+   globals Input, GameAudio. */
 const KeyBinds = (function () {
   "use strict";
 
@@ -110,6 +112,7 @@ function create(G) {
       }
       if (resetBtn) resetBtn.disabled = dev.isDefault();
       if (wrap && dev.show) wrap.hidden = !dev.show();
+      renderHint();
       renderHelp();
     }
     // HOW TO PLAY's line for this device, from the live table: "Steer ← → /
@@ -138,17 +141,31 @@ function create(G) {
       });
     }
     if (resetBtn) resetBtn.onclick = () => { disarm(true); dev.resetAll(); save(); tick(); render(); setNote(dev.resetNote); };
-    const api = { render, arm, disarm };
+    const api = { render, arm, disarm, hidden: () => !!(wrap && wrap.hidden) };
     sections.push(api);
     render();
     return api;
   }
 
-  const keys = section({
+  const desktop = () => document.body.classList.contains("desktop");
+  // The one line a phone sees while both tables are hidden: what to press to
+  // make them appear. Gone the moment either table shows, and on a desktop.
+  const hint = $("pm-ctl-hint");
+  let keys = null, pad = null;   // assigned below; section() renders (and hints) before both exist
+  function renderHint() {
+    if (!hint) return;
+    const keysOff = keys ? keys.hidden() : true, padOff = pad ? pad.hidden() : true;
+    hint.hidden = desktop() || !(keysOff && padOff);
+  }
+  keys = section({
     keys: true, noun: "key", key: "keys",
     section: $("pm-keys-section"), host: $("pm-keys"), note: $("pm-keys-note"), reset: $("pm-keys-reset"), help: $("htp-keys"),
     load: Input.setKeyMap, get: Input.getKeyMap, list: Input.keyBindings, set: Input.setKeyBinding,
     resetAll: Input.resetKeys, isDefault: Input.keysAreDefault, label: Input.keyLabel,
+    // A desktop always shows it; a touch device once a physical key has been
+    // pressed (a tablet with a Bluetooth keyboard), or when the map is already
+    // customised — pointer: coarse says nothing about whether a keyboard exists.
+    show: () => desktop() || Input.keyboardSeen() || !Input.keysAreDefault(),
     idle: "Tap a key slot, then press the key you want. Esc cancels. A key already used by another action moves here.",
     armedNote: "Press a key… (Esc cancels)", resetNote: "Keys reset to the defaults.",
     groups: [
@@ -157,14 +174,14 @@ function create(G) {
       ["Camera", ["camera"], "cycles"], ["Shift up", ["shiftUp"]], ["Shift down", ["shiftDown"], "when GEARS: MANUAL"],
     ],
   });
-  const pad = section({
+  pad = section({
     keys: false, noun: "button", key: "pad",
     section: $("pm-pad-section"), host: $("pm-pad"), note: $("pm-pad-note"), reset: $("pm-pad-reset"), help: $("htp-pad"),
     load: Input.setPadMap, get: Input.getPadMap, list: Input.padBindings, set: Input.setPadBinding,
     resetAll: Input.resetPad, isDefault: Input.padsAreDefault, label: Input.padLabel,
     // A desktop always shows it (a pad may be plugged in later); a phone only
     // once a pad has been seen, or when the map is already customised.
-    show: () => Input.padPresent() || document.body.classList.contains("desktop") || !Input.padsAreDefault(),
+    show: () => Input.padPresent() || desktop() || !Input.padsAreDefault(),
     idle: "Tap a slot, then press a button on the controller. Esc cancels. The stick and D‑pad steer; MENU / START pauses.",
     armedNote: "Press a controller button… (Esc cancels)", resetNote: "Controller reset to the defaults.",
     groups: [
@@ -176,6 +193,23 @@ function create(G) {
   // A pad that appears mid-session (gamepadconnected fires on its first press)
   // reveals the section and may rename the chips (a PlayStation pad).
   if (pad) for (const ev of ["gamepadconnected", "gamepaddisconnected"]) window.addEventListener(ev, () => pad.render());
+  // The first physical key on a touch device reveals the KEYBOARD table.
+  // Input.init (which sets the latch) is wired AFTER this create, so its
+  // listener runs after this one for the same keydown: the check is deferred
+  // past the dispatch. Once the table is showing there is nothing left to
+  // reveal and the listener unhooks.
+  if (keys) {
+    const reveal = () => setTimeout(() => { if (keys.hidden() && Input.keyboardSeen()) keys.render(); if (!keys.hidden()) window.removeEventListener("keydown", reveal); }, 0);
+    window.addEventListener("keydown", reveal);
+  }
+  // body.desktop is written by game.js's syncPointerKind() AFTER this create
+  // (and again whenever the pointer kind flips at runtime), so the tables'
+  // first render above ran with no verdict: re-render once the shell has
+  // settled and on every later flip.
+  const rerender = () => { for (const s of sections) s.render(); };
+  if (Input.onPointerKindChange) Input.onPointerKindChange(rerender);
+  if (document.readyState !== "complete") document.addEventListener("DOMContentLoaded", rerender, { once: true });
+  else rerender();
   if (keys || pad) Log.info("ui", "KeyBinds.create");
   return { render() { for (const s of sections) s.render(); } };
 }

@@ -2252,3 +2252,13 @@ live outside the backends (`js/render/shared/driving-line.js`, the fragment
 shaders); each backend carries only its upload and draw. WGX and TLX gained
 the same pass the same day (`WGSLFx.LINE`, `tsl-fx.js` `lineMat`) — those
 files are not ratcheted.
+- `js/game.js` lines 10088 -> **10089**, codeLines 5497 -> **5498**;
+  `js/agent/apex.js` lines 2662 -> **2668**, codeLines 2011 -> **2012**;
+  (tree) shellNodes 1325 -> **1326** (2026-09-08): the SETTINGS FILE. One
+  wiring line in game.js (`SettingsExport.create(G)`), one hook in apex.js
+  (`settingsFile(mode)`, the pure half the buttons download) and one shell
+  node, `#pm-ctl-hint` — the line a touch device reads under CONTROLS while
+  the KEYBOARD and CONTROLLER tables wait for a key or a pad. The export
+  itself is a new module, `js/ui/settings-export.js`; its buttons inject into
+  the RENDERER fold at DOMContentLoaded like RendererPicker's, so they cost no
+  shell nodes.
