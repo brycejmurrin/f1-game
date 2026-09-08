@@ -167,6 +167,66 @@ test("LINE COLOUR is a palette flag the draw carries, not a colour the module kn
   assert.deepEqual(seen, [0, 1, 0], "draw() passes palette 0 for F1 and 1 for the safe triple");
 });
 
+test("LINE OPACITY is a multiplier the draw carries, and an unknown value is NORMAL", () => {
+  const DL = load();
+  const api = stadium();
+  DL.build(api);
+  const seen = [];
+  const gfx = { drawDrivingLine: (v, n, dirty, opts) => { seen.push(opts.opacity); return true; } };
+  DL.setMode("full");
+  // NORMAL is 1 exactly: the shipped line must not change because the option exists.
+  assert.equal(DL.opacity(), "normal");
+  assert.equal(DL.opacityMul(), 1);
+  DL.draw(gfx, api, 40);
+  assert.equal(DL.setOpacity("subtle"), "subtle");
+  DL.draw(gfx, api, 40);
+  assert.equal(DL.setOpacity("solid"), "solid");
+  DL.draw(gfx, api, 40);
+  assert.equal(DL.setOpacity("nonsense"), "normal", "an unknown value falls back to the shipped look");
+  DL.draw(gfx, api, 40);
+  assert.deepEqual(seen, [1, 0.65, 1.35, 1]);
+  // SUBTLE below and SOLID above, so the row reads as one axis in both directions.
+  const mul = Object.fromEntries(DL.OPACITIES);
+  assert.ok(mul.subtle < mul.normal && mul.normal < mul.solid);
+});
+
+test("the BRAKING CUE is the ribbon's own colour ramp as a number, and silent on the line's pace", () => {
+  const DL = load();
+  const api = stadium();
+  // No profile baked yet: null, not 0 — "no opinion" and "on the pace" differ.
+  assert.equal(DL.cue(50, 0), null);
+  DL.build(api);
+  const sMid = api.straight + api.arc / 2;
+  // The reference is the LINE's speed here, read back, not the cornering cap
+  // derived from R: the baked profile eases a little under the cap mid-corner,
+  // so a car at the cap is genuinely a shade over the line and the cue is
+  // right to say so. Anchoring on the derived number instead is how this test
+  // first claimed a defect that was its own arithmetic.
+  const vCorner = DL.speedAt(sMid);
+  // On the line's pace, and under it, the layer says nothing at all.
+  assert.equal(DL.cue(vCorner, sMid), 0);
+  assert.equal(DL.cue(vCorner * 0.5, sMid), 0);
+  // The ramp saturates with the shaders' red (1.16) but opens at 1.0, NOT at
+  // their 0.98: a tone that sounds while the player is exactly on the pace is
+  // one they switch off. This assertion is the reason the code says 1.0.
+  assert.equal(DL.cue(vCorner * 0.99, sMid), 0, "just under the line is still silent");
+  assert.equal(DL.cue(vCorner * 1.2, sMid), 1, "past 1.16 it is pinned at full");
+  const mid = DL.cue(vCorner * 1.07, sMid);
+  assert.ok(mid > 0.2 && mid < 0.8, `mid-ramp urgency ${mid.toFixed(3)} sits between the ends`);
+  // Monotone, so the tone can only tighten as the player goes further over.
+  let prev = -1;
+  for (let k = 0.95; k <= 1.25; k += 0.02) {
+    const u = DL.cue(vCorner * k, sMid);
+    assert.ok(u >= prev, `urgency must never fall as speed rises (at ${k.toFixed(2)})`);
+    prev = u;
+  }
+  // It is the SAME quantity on a straight, where the line's speed is vTop: a
+  // car at vTop on the straight is on the pace, so the cue must be silent there
+  // even though it would be screaming at that speed in the corner.
+  assert.equal(DL.cue(api.vTop, api.straight / 2), 0);
+  assert.ok(DL.cue(api.vTop, sMid) > 0.9, "the same speed mid-corner is a full cue");
+});
+
 test("with a baked racing line the ribbon follows IT, easing to the centre where the line has no opinion", () => {
   const DL = load();
   const api = stadium();

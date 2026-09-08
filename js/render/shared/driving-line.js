@@ -73,6 +73,18 @@ window.DrivingLine = (function () {
   const PALETTES = ["f1", "safe"];
   function setPalette(p) { palette = PALETTES.includes(p) ? p : "f1"; return palette; }
   function getPalette() { return palette; }
+  // LINE OPACITY. F1 25 offers an "increased opacity" option; the complaint it
+  // answers runs both ways, so this goes both ways — SUBTLE for the players who
+  // find the ribbon intrusive in cockpit view (the same reason they step down
+  // to CORNERS), SOLID for the ones who cannot pick it out against a bright
+  // road. NORMAL is 1.0 and is exactly the line as shipped. The multiplier
+  // scales the emissive feed and the alpha together, so a subtle line does not
+  // keep its bloom.
+  let opacity = "normal";
+  const OPACITIES = [["subtle", 0.65], ["normal", 1], ["solid", 1.35]];
+  function setOpacity(o) { opacity = OPACITIES.some((r) => r[0] === o) ? o : "normal"; return opacity; }
+  function getOpacity() { return opacity; }
+  function opacityMul() { return (OPACITIES.find((r) => r[0] === opacity) || OPACITIES[1])[1]; }
 
   /* The banked surface's lift at lateral o, the road mesh's own formula
      (js/track/core/mesh.js bankOffsetAt, index-keyed there) at the nearest
@@ -208,14 +220,45 @@ window.DrivingLine = (function () {
     if (cache.id !== api.id || !cache.verts) build(api);
     const drew = gfx.drawDrivingLine(cache.verts, cache.count, cache.dirty, {
       speed: playerSpeed || 0, cornersOnly: mode === "corner", palette: palette === "safe" ? 1 : 0,
+      opacity: opacityMul(),
     });
     if (drew) cache.dirty = false;
     return !!drew;
   }
 
+  /* THE BRAKING CUE, as a number rather than a sound. F1 25 pairs the visual
+     line with an audio braking assist; the reason to want one here is not
+     parity, it is that the ribbon's speed cue is the one piece of this assist
+     a player who cannot see the road cannot use. So the cue is derived from
+     EXACTLY the quantity the shaders colour with — over = playerSpeed /
+     lineSpeed, amber from 0.98, red by 1.16 (glsl-fx LINE_FS, wgsl-fx LINE,
+     tsl-fx lineMat) — and not from a second opinion about braking. Ear and eye
+     then say the same thing at the same moment, which is what makes it usable
+     alongside the line rather than instead of it.
+
+     It saturates WITH the red (1.16) but opens at 1.0, not at the shaders'
+     0.98. That 0.02 is deliberate and it is the one place ear and eye are
+     allowed to differ: 0.98 is fractionally UNDER the line's own speed, so the
+     ribbon carries a faint tint while the player is exactly on the pace, which
+     is unobjectionable in a colour and intolerable in a tone. A cue that beeps
+     at a driver who is doing it right is a cue they switch off. Caught by the
+     test below, which held the code to the sentence above rather than to what
+     the code did.
+
+     0 = on the line's pace or under it. 1 = the ribbon is fully red.
+     Null when there is no baked profile to be over. */
+  function cue(playerSpeed, s) {
+    const v = speedAt(s);
+    if (v == null) return null;
+    const over = (playerSpeed || 0) / Math.max(v, 1);
+    const t = clamp((over - 1) / (1.16 - 1), 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
   function reset() { cache.id = null; cache.verts = null; cache.count = 0; cache.v = null; cache.zone = null; }
 
-  return { MODES, PALETTES, STRIDE, STEP, HALF_W, setMode, mode: getMode,
-           setPalette, palette: getPalette, build, draw, speedAt, zoneAt, reset,
+  return { MODES, PALETTES, OPACITIES, STRIDE, STEP, HALF_W, setMode, mode: getMode,
+           setPalette, palette: getPalette, setOpacity, opacity: getOpacity, opacityMul,
+           build, draw, speedAt, zoneAt, cue, reset,
            _cache: () => cache };
 })();

@@ -198,31 +198,36 @@ const Car3D = (function () {
   const FOIL_PEAK = Math.pow(0.5 / 1.6, 0.5) * Math.pow(1 - 0.5 / 1.6, 1.1);
   const foilThick = (t) => Math.pow(t, 0.5) * Math.pow(1 - t, 1.1) / FOIL_PEAK;
   const FOIL_CAMBER = 0.05;
-  function addWingFoil(out, spec, col, surface) {
-    const half = spec.half, inner = half * 0.34, mid = half * 0.67;
+  // The foil SURFACE at spanwise x and chordwise t. Hoisted out of addWingFoil so
+  // the sponsor band lands on the surface the mesh is built from; `edge` is why
+  // it must: the tip's leading edge is `sweep` metres aft of the centre's, ~17 mm
+  // of height across the span at the posed attitude.
+  function foilAt(spec, x, t) {
+    const half = spec.half, inner = half * 0.34;
     const sweep = spec.sweep || 0, taper = spec.taper == null ? 1 : spec.taper;
     const rise = spec.rise || 0, thick = spec.thick;
     const dz = spec.zLead - spec.zTrail, dy = spec.yTrail - spec.yLead;
     const chord = Math.hypot(dz, dy);
     const camber = (spec.camber == null ? FOIL_CAMBER : spec.camber) * chord;
-    // Position + half-thickness at spanwise x, chordwise fraction t.
-    const at = (x, t) => {
-      const edge = Math.max(0, (Math.abs(x) - inner) / Math.max(half - inner, 1e-6));
-      const atTip = Math.abs(Math.abs(x) - half) < 1e-6;
-      const attachedX = atTip && spec.attachHalf != null
-        ? Math.sign(x || 1) * spec.attachHalf
-        : null;
-      const xF = attachedX != null ? attachedX : x;
-      const xR = attachedX != null ? attachedX : x * taper;
-      const yF = spec.yLead + rise * edge, yR = spec.yTrail + rise * edge;
-      const zF = spec.zLead - sweep * edge, zR = spec.zTrail - sweep * edge;
-      return {
-        x: xF + (xR - xF) * t,
-        y: yF + (yR - yF) * t - camber * 4 * t * (1 - t),
-        z: zF + (zR - zF) * t,
-        h: thick * 0.5 * foilThick(t),
-      };
+    const edge = Math.max(0, (Math.abs(x) - inner) / Math.max(half - inner, 1e-6));
+    const atTip = Math.abs(Math.abs(x) - half) < 1e-6;
+    const attachedX = atTip && spec.attachHalf != null
+      ? Math.sign(x || 1) * spec.attachHalf
+      : null;
+    const xF = attachedX != null ? attachedX : x;
+    const xR = attachedX != null ? attachedX : x * taper;
+    const yF = spec.yLead + rise * edge, yR = spec.yTrail + rise * edge;
+    const zF = spec.zLead - sweep * edge, zR = spec.zTrail - sweep * edge;
+    return {
+      x: xF + (xR - xF) * t,
+      y: yF + (yR - yF) * t - camber * 4 * t * (1 - t),
+      z: zF + (zR - zF) * t,
+      h: thick * 0.5 * foilThick(t),
     };
+  }
+  function addWingFoil(out, spec, col, surface) {
+    const half = spec.half, mid = half * 0.67, inner = half * 0.34;
+    const at = (x, t) => foilAt(spec, x, t);
     const segments = [[-half, -mid], [-mid, -inner], [-inner, inner], [inner, mid], [mid, half]];
     for (const [x0, x1] of segments) {
       for (let i = 0; i < FOIL_T.length - 1; i++) {
@@ -1033,6 +1038,21 @@ const Car3D = (function () {
     }
     return null;
   }
+  // What the engine cover stacks, in ONE place, because every layer used to
+  // carry its own literal and three had drifted into each other: the heat
+  // shield's top face reached top+0.017 against a tail decal at top+0.008 (300
+  // of its 640 mm inside the plate, on every car — heatShield is 1 on the stock
+  // engine), the spine vent's landed on that plane bit-exactly, and on the
+  // flank the accent pinstripe was 0.9 mm off the band's plane while the
+  // service hatch stood 9 mm PROUD of it. Bodywork sits UNDER the livery, the
+  // way a real vinyl runs over the tail panels — and the way to get it there is
+  // to SINK the bodywork, not to float the decal: the shield lost 9 mm of stand
+  // rather than the crest gaining it, because a logo hovering off the crown
+  // reads worse from the side than a flatter heat plate does from anywhere.
+  const COVER_STACK = Object.freeze({
+    vent: 0.005, shield: 0.008, decal: 0.013,        // crown, from cover.top
+    flankTrim: 0.009, flankDecal: 0.014,             // flank, from coverFlankX
+  });
   const SLOT_MIN = 0.003;   // m of daylight to keep in a cascade slot
   function hinged(id, wing, zLead, yLead, zTrail, yTrail, planform, prev) {
     const dz = zLead - zTrail, dy = yTrail - yLead;
@@ -1257,6 +1277,74 @@ const Car3D = (function () {
     }
     return [0, y / els.length, z / els.length];
   }
+  // REGIONS.wing — the rear-wing sponsor band, on the flap's TOP SKIN at its
+  // REST attitude. It used to be authored off the recipe's DESIGN CHORD, where
+  // no flap is ever drawn: drawAeroFlaps hangs each one at its pivot and rotates
+  // it by zAngle (0.34 rad at EVERY level), so the band floated ~90 mm over a
+  // parked car and buried itself ~30 mm with the wing open. The old guard tested
+  // it against the element's axis-aligned BOUNDING BOX, which that rotation
+  // makes tall enough to swallow the error.
+  //
+  // It cannot FOLLOW the flap — baked into the static decal mesh, flap drawn
+  // separately with no atlas UVs of its own — so rest is the pose it is authored
+  // for and it lifts off as the wing opens, as the sponsor does on the real
+  // element; making it follow means giving buildFlapGeom a UV channel. The
+  // TOPMOST rear surface carries it (`rearTop` at max downforce, the baked DRS
+  // plane with that package); both used to be drawn straight over it. Chord
+  // fractions clear the leading curl and the trailing edge, HALF is inside the
+  // element's own 0.51, the span is cut into addWingFoil's own five segments so
+  // the band follows the sweep, `proud` is along the local normal, not +Y.
+  const WING_BAND = Object.freeze({ tF: 0.17, tR: 0.83, half: 0.44, proud: 0.005, seg: 5 });
+  function wingBandGeom(aLvl, style) {
+    const a = aLvl == null ? 2 : aLvl;
+    const st = (style && typeof style === "object") ? style : AERO_STYLE_DEF;
+    const W = WING_BAND;
+    let spec = null, pivot = null, ang = 0, elem = "";
+    if (st.drs) {
+      // A DRS package BAKES an extra plane over the whole moveable stack (see
+      // part("rearWing")). It never rotates, so it is both the surface the camera
+      // sees and the one that keeps the band attached at every wing angle.
+      const crownY = endplateGeom(a).rear.top - 0.018;
+      const rearSweep = Math.max(-0.06, Math.min(0.20, st.rearSweep));
+      const rearTaper = Math.max(0.72, Math.min(1.08, st.rearTaper));
+      spec = { zLead: -2.44, yLead: crownY - 0.050, zTrail: -2.60, yTrail: crownY,
+               half: 0.49, thick: 0.016, taper: rearTaper, sweep: rearSweep * 1.15,
+               rise: 0, attachHalf: 0.50 };
+      elem = "drs";
+    } else {
+      const flaps = aeroFlapsGeom(a, st);
+      let fg = null;
+      for (const f of flaps) if (f.wing === "rear") fg = f;   // the TOPMOST one
+      if (!fg) return null;
+      // Exactly what buildFlapGeom hands addWingFoil, and exactly the pose
+      // drawAeroFlaps hangs it at with the wing closed.
+      spec = { zLead: fg.le[0], yLead: fg.le[1], zTrail: fg.te[0], yTrail: fg.te[1],
+               half: fg.half, thick: fg.thick, taper: fg.taper, sweep: fg.sweep,
+               rise: fg.rise, attachHalf: fg.attachHalf };
+      pivot = { y: fg.y, z: fg.z };
+      ang = fg.zAngle;
+      elem = fg.id;
+    }
+    const ca = Math.cos(ang), sa = Math.sin(ang);
+    const pose = (p) => {
+      const top = p.y + p.h;
+      if (!pivot) return { y: top, z: p.z };
+      const dy = top - pivot.y, dz = p.z - pivot.z;
+      return { y: dy * ca - dz * sa + pivot.y, z: dy * sa + dz * ca + pivot.z };
+    };
+    const st8 = [];
+    for (let i = 0; i <= W.seg; i++) {
+      const x = -W.half + (2 * W.half) * (i / W.seg);
+      const f = pose(foilAt(spec, x, W.tF)), r = pose(foilAt(spec, x, W.tR));
+      const dz = r.z - f.z, dy = r.y - f.y, len = Math.hypot(dz, dy) || 1e-9;
+      const n = [0, -dz / len, dy / len];
+      st8.push({ x,
+                 front: { y: f.y + n[1] * W.proud, z: f.z + n[2] * W.proud },
+                 rear:  { y: r.y + n[1] * W.proud, z: r.z + n[2] * W.proud },
+                 nrm: n });
+    }
+    return { half: W.half, stations: st8, elem };
+  }
   // The driver-number board on the endplate: a fixed-height board anchored LOW,
   // its bottom a small gap above the plate base. The plate base barely moves with
   // DF (~0.46 → 0.51) while the top shoots up, so a low anchor reads grounded on
@@ -1400,14 +1488,47 @@ const Car3D = (function () {
     const f = Math.max(0.55, Math.min(1.45, fin || 1));
     return F.baseLE[1] + (F.topLE[1] - F.baseLE[1]) * f;
   };
-  function finXAt(z, y, proud, fin, shape) {
+  // THE BLADE'S ROOT — one function for the mesh AND the decal. build() used to
+  // solve it privately and only ever DOWNWARD, because sharkFinPanel/Badge had
+  // no way to be told the base had moved; the cost was the other direction, and
+  // every shipped 2026 team sets spineHeight "dorsal" (crown 0.939 against a
+  // frozen base of 0.7935 — 113 mm of a 176 mm panel inside the cover).
+  // FIN_MIN_BLADE keeps the maths from inverting when a cover tops the
+  // regulation fin line (quali_engine + dorsal reaches 1.021 against 0.97).
+  const FIN_MIN_BLADE = 0.005;
+  function sharkFinRoot(anchors, fin, shape) {
+    const F = finOf(shape), tp = finTop(fin, shape);
+    const coverTop = (z, y0) => {
+      const c = anchors && anchors.coverAt ? anchors.coverAt(z) : null;
+      return c && c.top != null ? c.top : y0;
+    };
+    const cLE = coverTop(F.baseLE[0], F.baseLE[1]), cTE = coverTop(F.baseTE[0], F.baseTE[1]);
+    const cap = (y) => Math.min(y, tp - FIN_MIN_BLADE);
+    return {
+      // The MESH root, buried 10 mm so no daylight shows under the blade…
+      bLE: cap(cLE - 0.010), bTE: cap(cTE - 0.010),
+      // …and the DECAL base, which is where the blade EMERGES. A fixed fraction
+      // of the buried blade put the bottom of the panel back inside the cover on
+      // a tall crown; the graphic starts at the skin instead.
+      dLE: cap(cLE + 0.001), dTE: cap(cTE + 0.001),
+      top: tp,
+      // How much blade stands above the crown at the leading edge. car-mesh
+      // declines to paint a graphic when there is not enough of it to read.
+      clear: tp - cLE,
+    };
+  }
+  // `root` is a sharkFinRoot() result, or absent for the frozen base line —
+  // which is what every legacy caller and the garage lightbox still get.
+  const finBaseLE = (F, root) => (root ? root.dLE : F.baseLE[1]);
+  const finBaseTE = (F, root) => (root ? root.dTE : F.baseTE[1]);
+  function finXAt(z, y, proud, fin, shape, root) {
     const F = finOf(shape), tp = finTop(fin, shape);
     const u = (z - F.baseLE[0]) / (F.baseTE[0] - F.baseLE[0]);   // along the base edge
-    const yBase = finMix(F.baseLE[1], F.baseTE[1], Math.max(0, Math.min(1, u)));
+    const yBase = finMix(finBaseLE(F, root), finBaseTE(F, root), Math.max(0, Math.min(1, u)));
     const v = Math.max(0, Math.min(1, (y - yBase) / (tp - yBase)));
     return finMix(F.halfBase, F.halfTop, v) + proud;
   }
-  function sharkFinPanel(inset, proud, fin, shape) {
+  function sharkFinPanel(inset, proud, fin, shape, root) {
     const F = finOf(shape);
     const i = inset != null ? inset : 0.05;
     const p = proud != null ? proud : 0.002;
@@ -1415,7 +1536,7 @@ const Car3D = (function () {
     const vBase = Math.max(i, 0.18);
     const at = (u, v) => {
       // bilinear over the outline: u = 0 leading → 1 trailing, v = 0 base → 1 top.
-      const bz = finMix(F.baseLE[0], F.baseTE[0], u), by = finMix(F.baseLE[1], F.baseTE[1], u);
+      const bz = finMix(F.baseLE[0], F.baseTE[0], u), by = finMix(finBaseLE(F, root), finBaseTE(F, root), u);
       const tz = finMix(F.topLE[0],  F.topTE[0],  u), ty = tp;
       return { x: finMix(F.halfBase, F.halfTop, v) + p,
                y: finMix(by, ty, v), z: finMix(bz, tz, v) };
@@ -1442,7 +1563,7 @@ const Car3D = (function () {
     return (F.topLE[1] - yB) * (FIN_BADGE.v1 - FIN_BADGE.v0);
   };
   const BADGE_ASPECT = FIN_BADGE.wStd / badgeHeight1(FIN);
-  function sharkFinBadge(proud, fin, shape) {
+  function sharkFinBadge(proud, fin, shape, root) {
     const F = finOf(shape);
     const p = proud != null ? proud : 0.0022;   // just outside the graphic panel
     const B = FIN_BADGE, tp = finTop(fin, shape);
@@ -1450,8 +1571,8 @@ const Car3D = (function () {
     const half = Math.min(0.45, BADGE_ASPECT * badgeHeight1(F) / chord / 2);
     const u0 = B.uMid - half, u1 = B.uMid + half;
     const zAt = (u) => finMix(F.baseLE[0], F.baseTE[0], u);
-    const yAt = (u, v) => { const yB = finMix(F.baseLE[1], F.baseTE[1], u); return yB + (tp - yB) * v; };
-    const at = (u, v) => { const z = zAt(u), y = yAt(u, v); return { x: finXAt(z, y, p, fin, shape), y, z }; };
+    const yAt = (u, v) => { const yB = finMix(finBaseLE(F, root), finBaseTE(F, root), u); return yB + (tp - yB) * v; };
+    const at = (u, v) => { const z = zAt(u), y = yAt(u, v); return { x: finXAt(z, y, p, fin, shape, root), y, z }; };
     return [at(u0, B.v0), at(u1, B.v0), at(u1, B.v1), at(u0, B.v1)];
   }
   // Where the 2026 amber "stopped / under 20 km/h" lamps sit (The Race, 2026
@@ -1636,8 +1757,20 @@ const Car3D = (function () {
     // lower-field rays landing on body paint under the wheel (|yaw| < 25 deg)
     // 1073 -> 658 of 13430; the flanks the driver SHOULD see keep their paint.
     const monoC = ckpt ? CARBON : c1;
-    addSpan(out, CHASSIS.monocoque[0], monoR, monoC);
-    addTopBevel(out, CHASSIS.monocoque[0], monoR, 0.032, monoC);
+    // THE OPENING HAS TO CLEAR THE WHEEL. The aperture used to start at the
+    // cockpit span's own front, z 0.05 — but the driver's hands and the wheel
+    // sit at z 0.17-0.21, so they were roofed by solid monocoque and no camera
+    // could see them. A cockpit you cannot see the wheel through is a slot with
+    // a head in it. The exterior monocoque therefore stops CLOSED at z 0.28 and
+    // the aperture carries on from there; the first-person build keeps the one
+    // closed span it has always had (its own dash geometry lives inside it).
+    const MONO_APEX_Z = 0.28;
+    const monoAt = (z) => { const A = CHASSIS.monocoque[0], B = CHASSIS.monocoque[1];
+      const f = (A.z - z) / (A.z - B.z), L = (a, b) => a + (b - a) * f;
+      return { z, y: L(A.y, B.y), w: L(A.w, B.w), h: L(A.h, B.h), t: L(A.t, B.t) }; };
+    const monoApex = monoAt(MONO_APEX_Z);
+    addSpan(out, CHASSIS.monocoque[0], ckpt ? monoR : monoApex, monoC);
+    addTopBevel(out, CHASSIS.monocoque[0], ckpt ? monoR : monoApex, 0.032, monoC);
     if (ckpt) return;
     // SPLITTER / TEA-TRAY. The floor's leading edge is z 1.30 and there was
     // nothing at all ahead of it, so from any low front-three-quarter camera the
@@ -1648,8 +1781,94 @@ const Car3D = (function () {
     addSpan(out, { z: 1.58, y: 0.058 + rideDY, w: 0.36, h: 0.028, t: 0.92 },
                  { z: 1.30, y: 0.062 + rideDY, w: 0.64, h: 0.030, t: 0.96 }, CARBON);
     addBox(out, 0, 0.132 + rideDY, 1.44, 0.10, 0.125, 0.26, CARBON);
-    addSpan(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], c1);
-    addTopBevel(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], 0.028, c1);
+    // THE COCKPIT APERTURE. This span used to be ONE closed loft, so the deck
+    // over the driver was a filled surface and the helmet merely pierced it:
+    // a downward ray on the centreline crossed THREE lids (the tub top, and
+    // the old 0.045 surround slab's 0.622 face and 0.578 underside) with no
+    // opening anywhere — which is why the head read as sitting on the car
+    // rather than in it. addLoft emits all six faces and there is no CSG here,
+    // so the hole has to come from HOW the span is built: a tub capped at the
+    // seat floor, a rail either side, and the well closed behind.
+    //
+    // Every number below is measured off the span's own stations, not styled:
+    // the tub bottom is 0.195 the whole way, the deck top runs 0.635 -> 0.660
+    // and the top half-width 0.197 -> 0.150. Rails come out ~4.5 cm across at
+    // the coaming at BOTH ends because the opening narrows toward the headrest
+    // as the tub does — held straight, the rear rail was 1 cm and vanished.
+    const CK_A = CHASSIS.cockpit[0], CK_B = CHASSIS.cockpit[1];
+    const CK_REAR_Z = -0.33;    // behind the headrest; the tub aft of it stays closed
+    const CK_FLOOR_Y = 0.47;    // seat floor — the helmet's neck rim sits at 0.490
+    const ckAt = (z) => { const f = (CK_A.z - z) / (CK_A.z - CK_B.z), L = (a, b) => a + (b - a) * f;
+      return { z, y: L(CK_A.y, CK_B.y), w: L(CK_A.w, CK_B.w), h: L(CK_A.h, CK_B.h), t: L(CK_A.t, CK_B.t) }; };
+    const ckTop = (st) => st.y + st.h / 2, ckBot = (st) => st.y - st.h / 2;
+    const ckOpen = (z) => 0.150 + (0.200 - 0.150) *
+      Math.max(0, Math.min(1, (z - CK_REAR_Z) / (CK_A.z - CK_REAR_Z)));   // clamped: unbounded, the
+      // forward extension widened it past the tub and left a 16 mm rail
+    // tub half-width at any height (the flank leans in linearly from w/2 at the
+    // bottom to t*w/2 at the deck)
+    const CK_TOP_T = 0.86;
+    const ckT = (st) => Math.max(st.t, CK_TOP_T);
+    const ckFlank = (st, y) => (st.w / 2) +
+      (ckT(st) * st.w / 2 - st.w / 2) * ((y - ckBot(st)) / (ckTop(st) - ckBot(st)));
+    const ckSide = (st) => ckFlank(st, CK_FLOOR_Y);
+    // THE COCKPIT SIDE SWEEPS DOWN toward the front, as a real one does — it is
+    // highest at the headrest and lowest at the driver's hands. Level at the
+    // deck line it buried the VISOR: the aperture spans y 0.612-0.700 (helmets.js
+    // VISOR_T0/T1 0.40-0.66 through SHAPE.Y about the 0.630 temple) against a
+    // coaming at 0.660, so 55% of it sat behind the rail and the driver had no
+    // face. Dropping the front 50 mm puts the rail at ~0.605 abreast of the
+    // helmet, just under the visor's lower edge, and clears the whole aperture.
+    // Raising the HELMET instead was the obvious move and the wrong one: the
+    // rear spoiler and both headrest recipes are keyed to its y, and the pads
+    // are already flush under the airbox intake at 0.715.
+    const CK_NOSE_DROP = 0.050;
+    const ckRailTop = (st) => ckTop(st) -
+      CK_NOSE_DROP * ((st.z - CK_REAR_Z) / (CK_A.z - CK_REAR_Z));
+    const ckMid = ckAt(CK_REAR_Z);
+    // The aperture runs across TWO loft tables — the monocoque ahead of z 0.05
+    // and the cockpit span behind it — so it is built as two segments rather
+    // than one, each a straight loft between its own pair of stations.
+    const CK_SEGS = [[monoApex, monoAt(CK_A.z)], [CK_A, ckMid]];
+    // 1. THE TUB UNDER THE OPENING — same flanks, capped at the seat floor.
+    const ckLower = (st) => ({ z: st.z, y: (ckBot(st) + CK_FLOOR_Y) / 2, w: st.w,
+                               h: CK_FLOOR_Y - ckBot(st), t: ckSide(st) / (st.w / 2) });
+    for (const [f0, r0] of CK_SEGS) addSpan(out, ckLower(f0), ckLower(r0), c1);
+    // 2. A RAIL EACH SIDE, floor to deck. Explicit corners, because frame()
+    //    centres the top on the bottom and a rail's inner face is vertical
+    //    while its outer follows the flank inboard.
+    for (const sgn of [1, -1]) for (const seg of CK_SEGS) {
+      const q = [];
+      for (const st of seg) {
+        const rt = ckRailTop(st);
+        const xi = sgn * ckOpen(st.z), xo = sgn * ckSide(st), xt = sgn * ckFlank(st, rt);
+        q.push([xi, CK_FLOOR_Y, st.z], [xo, CK_FLOOR_Y, st.z], [xt, rt, st.z], [xi, rt, st.z]);
+      }
+      addBlock(out, q, c1);
+      // Dark liner on the inner face: addBlock paints one colour, and a
+      // body-paint cockpit wall reads as a painted trough, not a carbon tub.
+      const li = [];
+      for (const st of seg) {
+        const rt = ckRailTop(st);
+        const xi = sgn * ckOpen(st.z), xn = sgn * (ckOpen(st.z) - 0.006);
+        li.push([xn, CK_FLOOR_Y, st.z], [xi, CK_FLOOR_Y, st.z], [xi, rt, st.z], [xn, rt, st.z]);
+      }
+      addBlock(out, li, DARK, null, SURFACES.carbon);
+      // 3. COAMING: the padded lip the driver's shoulders sit inside.
+      addLoft(out, seg[1].z, sgn * (ckOpen(seg[1].z) + 0.022), ckRailTop(seg[1]) + 0.007, 0.050, 0.016,
+                   seg[0].z, sgn * (ckOpen(seg[0].z) + 0.023), ckRailTop(seg[0]) + 0.007, 0.052, 0.016,
+              DARK, SURFACES.carbon);
+    }
+    // 4. THE FLOOR and the rear bulkhead — without them the opening is a hole
+    //    straight through the car and you see the track through the driver.
+    addLoft(out, ckMid.z, 0, CK_FLOOR_Y - 0.006, 2 * ckOpen(ckMid.z), 0.012,
+                 monoApex.z, 0, CK_FLOOR_Y - 0.006, 2 * ckOpen(monoApex.z), 0.012, DARK, SURFACES.carbon);
+    addBox(out, 0, (CK_FLOOR_Y + ckTop(ckMid)) / 2, ckMid.z + 0.008,
+           2 * ckOpen(ckMid.z), ckTop(ckMid) - CK_FLOOR_Y, 0.016, DARK, SURFACES.carbon);
+    // 5. The tub AFT of the headrest stays a closed block, as it was.
+    addSpan(out, ckMid, CK_B, c1);
+    // Bevel only the CLOSED section: over the aperture the rails stop short of
+    // the old deck corners, so the original full-span crease hung in mid-air.
+    addTopBevel(out, ckMid, CK_B, 0.028, c1);
   }
 
   function sidepodStation(side, z, inner, outer, innerBottom, outerBottom, innerTop, outerTop) {
@@ -1878,14 +2097,17 @@ const Car3D = (function () {
     // The accent pinstripe runs the flank at top-0.10, straight through the
     // SPINE SIDE band (z -0.72..-1.22 in car-mesh); with a flank mark on it
     // starts aft of the band instead — a real number interrupts the trim.
+    // (The band is z -0.66..-1.90 — the whole flank — so there is no "aft of the
+    // band" any more. The aft shift still keeps the trim off the MARK, which sits
+    // at f 0.19; COVER_STACK.flankTrim is what keeps it out of the decal PLANE.)
     const stripeFront = anchors.coverAt(sideMark ? -1.26 : -0.825), stripeRear = anchors.coverAt(-1.675);
     // The pinstripe runs the flank just under the shoulder crease, ON the skin.
     const sfY = coverProfile(stripeFront).shoulder - 0.03, srY = coverProfile(stripeRear).shoulder - 0.025;
     for (const side of [-1, 1]) {
       addSpan(out,
-        { z: stripeFront.z, x: side * (coverFlankX(stripeFront, sfY) + 0.004), y: sfY,
+        { z: stripeFront.z, x: side * (coverFlankX(stripeFront, sfY) + COVER_STACK.flankTrim - 0.005), y: sfY,
           w: 0.010, h: 0.012 },
-        { z: stripeRear.z, x: side * (coverFlankX(stripeRear, srY) + 0.004), y: srY,
+        { z: stripeRear.z, x: side * (coverFlankX(stripeRear, srY) + COVER_STACK.flankTrim - 0.005), y: srY,
           w: 0.010, h: 0.012 }, accentC);
     }
     const mid = anchors.coverAt(-1.30);
@@ -1997,8 +2219,15 @@ const Car3D = (function () {
     // stay BELOW THE WHEEL'S TOP (rig 0.63 + half-height x 0.80 = 0.756): it is
     // further away, so equal height puts it HIGHER on screen and it draws over
     // the wheel — measured, that is why the wheel once vanished. Top 0.54 here.
+    // THE SCUTTLE MUST FALL INTO THE COCKPIT, not wall it off. The exterior
+    // rear station used to top out at 0.660 (y 0.585 + h/2) and stop at z 0.08,
+    // which is 7.5 cm PROUD of the cockpit rail it meets at 0.585 and directly
+    // across the driver's face: the visor's own band is 0.612-0.700, so this
+    // slab took the bottom half of it and read as a wall with a helmet behind.
+    // Dropping it to a 0.605 top lands it on the rail line, so the deck now
+    // sweeps down into the opening the way a real scuttle does.
     const hR = ckpt ? { z: 0.58, y: 0.42, w: 0.66, h: 0.12, t: 0.58 }
-                    : { z: 0.08, y: 0.585, w: 0.44, h: 0.15, t: 0.58 };
+                    : { z: 0.30, y: 0.545, w: 0.42, h: 0.13, t: 0.58 };   // stops at the aperture (0.28), top 0.610 onto the tub line
     addSpan(out, hF, hR, c1, c1);
     addTopBevel(out, hF, hR, 0.026, c1);
     // Accent stripe down the vanity deck crown (team colour) — CHASE ONLY.
@@ -2281,14 +2510,20 @@ const Car3D = (function () {
       const pz0 = sideMark ? -1.36 : -0.82, pdz = sideMark ? 0.15 : 0.19;
       for (const s of [-1, 1]) for (let i = 0; i < servicePanels; i++) {
         const z = pz0 - i * pdz, p = anchors.coverAt(z);
-        addBox(out, s*(coverFlankX(p, p.top - 0.18) + 0.010), p.top - 0.18, z, 0.018, 0.10, 0.13,
-          [0.24,0.24,0.27], SURFACES.metal);
+        // Sunk to COVER_STACK.flankTrim: a hatch is a panel line, not a blister,
+        // and the drape has to run over it. At the old 19 mm it stood PROUD of
+        // the flank decal, a grey rectangle through any full-flank design.
+        addBox(out, s*(coverFlankX(p, p.top - 0.18) + COVER_STACK.flankTrim - 0.009), p.top - 0.18, z,
+          0.018, 0.10, 0.13, [0.24,0.24,0.27], SURFACES.metal);
       }
       if (engStyle.heatShield) {
         const p = anchors.coverAt(-1.58);
-        // No wider than the flat crown, or its edges hang over the shoulders.
-        addBox(out, 0, p.top + 0.010, -1.58, Math.min(0.18 * engStyle.heatShield, 1.9 * COVER_CROWN * p.x),
-          0.014, 0.30, [0.30,0.28,0.26], SURFACES.metal);
+        // No wider than the flat crown, or its edges hang over the shoulders,
+        // and no taller than COVER_STACK.shield — the livery drape goes over it.
+        const sh = 0.014;
+        addBox(out, 0, p.top + COVER_STACK.shield - sh / 2, -1.58,
+          Math.min(0.18 * engStyle.heatShield, 1.9 * COVER_CROWN * p.x),
+          sh, 0.30, [0.30,0.28,0.26], SURFACES.metal);
       }
       // Team-style DORSAL FIN along the engine-cover ridge: 1 = low blade,
       // 2 = tall blade. A SECONDARY ridge blade distinct from the sharkFin
@@ -2758,7 +2993,10 @@ const Car3D = (function () {
     // Measured on Monza: the halo group projected 47.7 deg above the eye line —
     // a dark bar across the middle of the frame. The chase car keeps all of it.
     if (!ckpt) {
-      addBox(out, 0, 0.60, 0.12, 0.40, 0.045, 0.78, [0.04, 0.04, 0.05], SURFACES.carbon);
+      // (The 0.40 x 0.045 x 0.78 slab that stood here was the FAKE opening: a
+      // flat plate at 0.622 under a closed deck, which is what a ray on the
+      // centreline hit second. The tub now carries a real aperture, rails and
+      // a floor, so the plate would float inside the well.)
       // The dark converging beams + front post that used to sit here were the
       // pre-tube inner halo frame. With the real titanium hoop and centre
       // pillar in part("halo"), they were duplicate structure reading as a
@@ -2909,17 +3147,58 @@ const Car3D = (function () {
       }
     }
 
+    part("driver");
+    // A DRIVER, not a floating head. The aperture was the right size and still
+    // did not read as a cockpit, because a cockpit reads as an OCCUPIED SPACE:
+    // a hole with one helmet hovering in it is a hole. Shoulders rising out of
+    // the seat, arms reaching forward and a wheel under the hands are what say
+    // "someone is sitting in there" — three shapes, 0 textures, and they do
+    // more for the look than every millimetre of rim geometry did.
+    //
+    // Sized off the opening rather than styled: the coaming abreast of the
+    // driver sits at ~0.626 and the seat floor at 0.47, so the shoulders top
+    // out at 0.585 — 4 cm proud of the floor's far side and 4 cm UNDER the
+    // rail, which is what leaves a visible gap of tub either side instead of
+    // a shoulder line jammed against the coaming. Half-width 0.145 against an
+    // opening half-width of 0.184 keeps the suit clear of the rails.
+    //
+    // EXTERIOR ONLY. The first-person build draws the driver's own wheel
+    // (getCockpitWheel) and must not also carry a torso, which would sit in
+    // the camera; noDriver drops the lot for the studio's empty-car shots.
+    if (!ckpt && !(opts && opts.noDriver)) {
+      // The suit takes the TEAM ACCENT, as a real one does. A neutral dark suit
+      // was invisible: it sat in a dark liner inside a shadowed well and the
+      // whole occupant read as more black smudge, which is the failure this
+      // geometry exists to fix. Dimmed so a white accent (ferrari c2 is
+      // [1,1,1]) does not read as a pale slab in the cockpit sweep.
+      const SUIT = [c2[0] * 0.62 + 0.05, c2[1] * 0.62 + 0.05, c2[2] * 0.62 + 0.05];
+      const GLOVE = [0.07, 0.07, 0.08];
+      // torso: seat floor to shoulder, tapering forward into the chest
+      addLoft(out, -0.22, 0, 0.5275, 0.290, 0.115,
+                    0.00, 0, 0.5225, 0.250, 0.105, SUIT, SURFACES.carbon);
+      // arms out to the wheel, and the wheel under them
+      for (const sgn of [-1, 1]) {
+        addBeamBetween(out, [sgn * 0.112, 0.556, -0.045], [sgn * 0.086, 0.508, 0.170],
+                       0.046, SUIT, SURFACES.carbon);
+        addBox(out, sgn * 0.086, 0.505, 0.178, 0.052, 0.055, 0.050, GLOVE, SURFACES.carbon);
+      }
+      // The wheel is a 2026 YOKE, not a rim: a flat squared-off crossbar with a
+      // boss, which is what the hands above are holding.
+      addBox(out, 0, 0.508, 0.192, 0.230, 0.052, 0.028, DARK, SURFACES.carbon);
+      addBox(out, 0, 0.512, 0.206, 0.086, 0.062, 0.022, [0.14, 0.15, 0.17], SURFACES.carbon);
+    }
+
     part("helmet");
     if (!(opts && opts.noDriver)) {
-      // The driver's head: js/car/helmets.js owns the shell (a full-face lid
-      // with a chin bar, not the half-ball this was), its visor aperture and
-      // the design painted on it, keyed by race number. cy is the TEMPLE line.
+      // The driver's head: helmets.js owns the lid. cy is the TEMPLE line. At
+      // 0.630 the crown sat at 0.749 under a cockpit surround topping out at
+      // 0.765 — the head was BELOW the tub, and a design nobody can see is the
+      // defect this module exists to fix. 0.715 clears it by 82 mm, and still
+      // passes 43 mm under the halo at 0.890.
       const des = Helmets.designFor(opts && opts.num, c1);
-      Helmets.build(out, 0, 0.630, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.glass });
-      // No brow box: the shell carries its own ridge over the aperture now.
-      // The spoiler sits ON the back of the head, whose shell reaches z -0.191
-      // there — set it clear of that and it floats behind the helmet.
-      addBox(out, 0, 0.664, -0.176, 0.050, 0.034, 0.046, des.visor);      // rear aero spoiler
+      Helmets.build(out, 0, 0.715, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.glass });
+      // No brow box and no rear spoiler box: the traced shell carries its own
+      // ridge over the aperture and its own aero lip at the back.
     }
 
     // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..
@@ -3083,25 +3362,17 @@ const Car3D = (function () {
     if (!ckpt && finShape !== "none") {
       const F = finOf(finShape);
       const fb = F.halfBase, ft = F.halfTop;
-      // The fin's base was FROZEN at y 0.7935 while the engine cover it stands
-      // on moves with engine.coverHeight, which the catalog ships from 0.90 to
-      // 1.272. Measured against anchors.coverAt(-0.65).top: at 0.90 the cover
-      // top is 0.776, so the fin floated 17 mm with a strip of DAYLIGHT under
-      // its leading edge (three pixels at the review camera); at 1.272 the
-      // cover is 121 mm above the base and swallows a third of the blade.
-      //
-      // Root the base into the cover, and only ever DOWNWARD. Raising it would
-      // walk the fin out from under its livery decal: sharkFinPanel() and
-      // sharkFinBadge() below place that decal off the frozen FIN with no
-      // arguments, and js/car/car-mesh.js calls Car3D.sharkFinPanel() and
-      // Car3D.sharkFinBadge() exactly that way. Lowering only grows the blade under the decal, which keeps
-      // every graphic exactly where it was.
+      // The base follows the engine cover in BOTH directions — sharkFinRoot(),
+      // the same function car-mesh places the decal from, so the graphic can no
+      // longer be left behind by a crown that moved. (It used to lower only, for
+      // exactly that fear; the price was 113 mm of the panel inside the cover on
+      // every shipped dorsal car.)
+      const fRoot = sharkFinRoot(anchors, aeroStyle && aeroStyle.fin, finShape);
+      const bLE = fRoot.bLE, bTE = fRoot.bTE;
       const root = (z, y0) => {
         const c = anchors.coverAt(z);
-        return c && c.top != null ? Math.min(y0, c.top - 0.010) : y0;
+        return c && c.top != null ? c.top - 0.010 : y0;
       };
-      const bLE = root(F.baseLE[0], F.baseLE[1]);
-      const bTE = root(F.baseTE[0], F.baseTE[1]);
       // Blade height. The fin is 12 triangles carrying the largest flat plate at
       // the highest point on the car, so this is the cheapest silhouette on the
       // whole body — and it had no recipe at all.
@@ -3150,7 +3421,9 @@ const Car3D = (function () {
       if (!crestOn && finRootZ < -1.0) { len = Math.min(0.5, (-0.66 - finRootZ) - 0.06); zc = -0.69 - len / 2; }
       else if (crestOn && finShape === "none") { zc = -1.47; len = 0.30; }
       const p = anchors.coverAt(zc);
-      if (p) addBox(out, 0, p.top + 0.004, zc, 0.05, 0.008, len, CARBON, SURFACES.carbon);
+      // Sunk to COVER_STACK.vent: a slot is a hole, so it sits UNDER the drape.
+      const vh = 0.008;
+      if (p) addBox(out, 0, p.top + COVER_STACK.vent - vh / 2, zc, 0.05, vh, len, CARBON, SURFACES.carbon);
     }
 
     part("sponsorBoard");
@@ -3817,9 +4090,10 @@ const Car3D = (function () {
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, teamStyleOf,
            endplate: endplateGeom, numberBoard, frontPlate: frontPlateGeom,
+           wingBand: wingBandGeom,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
-           sharkFin: FIN, sharkFinPanel, sharkFinBadge, FIN_SHAPES, FIN_SHAPE_IDS,
+           sharkFin: FIN, sharkFinPanel, sharkFinBadge, sharkFinRoot, FIN_SHAPES, FIN_SHAPE_IDS,
            TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors, SPINE_HEIGHT_IDS, spineRise,
-           coverProfile, coverFlankX, coverSurfaceY,
+           coverProfile, coverFlankX, coverSurfaceY, COVER_STACK,
            aeroLevelOf, aeroStyleOf };
 })();

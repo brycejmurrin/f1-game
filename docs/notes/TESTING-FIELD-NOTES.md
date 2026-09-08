@@ -1328,3 +1328,125 @@ being blamed. A stall before the page exists is the runner, not the spec; the
 same test passes in 14 s elsewhere in the same run. Read the phrase "while
 setting up context" as infrastructure and look no further.
 
+
+
+## 2026-09-08 (evening) — AI off-tracks jumped fivefold and I could not pin it
+
+`scratch/race-quality-bench.mjs monza 6` reported 0.16 off-tracks per lap in
+the morning and 0.74–0.85 in the evening, with best and mean lap both a second
+slower. Monaco moved the same way (0.02 -> 0.34). That is a big regression in
+how well the field stays on the road, and it is worth someone's attention.
+
+What it is NOT, measured rather than assumed:
+
+- **Not the settings bake.** The owner's steering profile became the shipped
+  default that afternoon. Reverting all eight slider defaults to their previous
+  values and re-running gave a BIT-IDENTICAL bench — same laps, same best, same
+  offs. `applySteerTuning` writes WHEELBASE / STEER_EXPO / STEER_MAX_SLIP /
+  STEER_SPEED_REF / YAW_INERTIA, and every consumer of those sits inside
+  `if (c.human)` in updateCar. The sliders do not reach an AI car.
+- **Not that evening's racecraft work.** A blocked-blocker attack bar and a
+  switch-sides rule measured 0.74 WITH against 0.85 WITHOUT at Monza and 0.40
+  against 0.34 at Monaco — neutral, so neither shipped.
+
+What it might still be, and the trap that stopped the bisect: a worktree at
+`8040157d` (before the other sessions' racing-line relaxation and their
+heading-state lateral controller landed) reproduced the EVENING numbers
+exactly. Three separate runs across two trees agreed to the digit, so the bench
+is deterministic — which means the morning tree differed from both in something
+this bisect did not capture. **The lesson: record the SHA beside every bench
+line.** These logs carry a time and a track and nothing else, so a number from
+four hours ago cannot be re-run against its own tree, and that is the whole
+reason the attribution failed.
+
+
+## 2026-09-08 — the `ui` group had been red for days, unseen
+
+Dispatching `group: ui` over the settings-defaults change returned TEN
+failures, and nine of them had nothing to do with that change.
+
+**The nine.** Every test in `music-library.spec.js` failed on
+`expect(#audioset).toBeVisible()`. `#audioset` is a PAGE inside `<dialog
+id="pmsettings">`, and a closed dialog `display:none`s its whole subtree, so
+clicking `#pm-audio` unhid the page and Playwright still read it hidden. The
+helper now opens the settings dialog first, the way `menu-survey.spec.js`
+does; 13 of 13 pass. Confirmed pre-existing by running the same test in a
+worktree at a commit from before this session, where it failed identically.
+
+**Why nobody knew**: `test:ui` has no blocking coverage on a push (recorded
+above, 2026-09-04). A group that only runs when someone dispatches it is a
+group that rots, and the rot is invisible until the dispatch. Nine tests had
+been dead for days.
+
+**The tenth is real, mine, and still open.** `ui-redesign.spec.js` asserts the
+compact-density minimap is exactly `"96px"` and it computes `95.9929px`. A
+worktree bisect puts it precisely at the settings-defaults bake: the parent
+commit passes, the bake fails. But the minimap measures EXACTLY 96px in
+isolation under every default that bake moved — shipped, `hudMetricsLayout`
+back to auto, `camMode` back to chase, both together — so the fraction only
+appears after the test's own catalogue → garage → settings → data-table walk.
+The CSS is a literal `width: 96px`, so something in that sequence is scaling
+it by 0.0074 %, which means a `zoom` ancestor rather than a layout change.
+
+**Left failing on purpose.** The assertion could be given a tolerance and go
+green in a minute, and that is exactly the move this file exists to warn
+against: a sub-pixel that appeared with a specific commit is a thread, and
+loosening the assertion cuts it. Whoever picks it up starts from "which
+element gained a fractional zoom between those two commits".
+
+## 2026-09-08 (later) — the tenth one, pulled: zoom quantisation, not a defect
+
+The thread above ends here, and the previous entry's guess was wrong in an
+instructive way: it looked for "which element gained a fractional zoom", when
+the element had been zoomed all along and it was the ZOOM VALUE that moved.
+
+`#minimap` rides `zoom: var(--hud-z)` (css/hud.css). Chromium lays a zoomed
+subtree out on the 1/64 px LayoutUnit grid and `getComputedStyle().width`
+divides back out, so an exact answer survives only a zoom that puts the
+product on that grid. Before the bake, `--hud-scale` followed `--ui-scale`,
+which this spec leaves at 2 by the time it reaches the HUD check — and
+96 × 2 = 192 is on the grid, so it came back exactly `"96px"`. The baked
+coarse default pins `--hud-scale: 1.24`, and 96 × 1.24 = 119.04 is NOT:
+Chromium stores 119.03125, and 119.03125 / 1.24 = 95.99294. That is the whole
+fraction, to the digit, arrived at by arithmetic rather than by bisect.
+
+**Why three isolation probes said 96px.** All three ran on a pointer-FINE
+page, where the coarse block never applies and the zoom stayed 1. The failing
+read is on a coarse page — which is also why `--hud-scale` was 1.24 there and
+`1.24` appears nowhere else in `css/`. An "cannot reproduce in isolation" is a
+statement about the harness, not about the code, and here the harness differed
+in the one media query that decides the number.
+
+**The fix is a rounded read, and it is not a widened tolerance.** The rule the
+test states is which of 96 / 112 / 140 the density picks; those are 16 px
+apart, so `Math.round(parseFloat(w)) === 96` discriminates exactly as well as
+equality did, while asking for a precision the platform cannot return under a
+non-binary zoom. The dump beside it now carries `zoom`, `--hud-z-top` and both
+scales, so the next failure of this shape names its own cause.
+
+**Transferable**: any equality on `getComputedStyle().width` inside a
+`zoom`-ed subtree is a latent failure waiting for the zoom to stop being a
+clean binary. Assert the rule, at the precision the rule is stated in.
+
+## 2026-09-08 (later still) — `parts-liveries.spec.js` needs `--workers=1` here
+
+Measured, both directions, same commit, load under 2 at the start of each:
+
+| run | result |
+|---|---|
+| default workers (6) | 4 of 12 FAIL, every one `Test timeout of 120000ms exceeded` |
+| `--workers=1` | 12 of 12 pass |
+
+Not a flake and not a verdict about the code: the four that fell over are the
+creator tests, each of which opens the garage on a fully built circuit, and six
+workers were building Bahrain at once on llvmpipe. The logs say so plainly —
+`maps compute bahrain` at 7.7 s, `SetupUI.openSetup` at 20 s, then three
+`build mclaren` rounds, the last landing at 118 s against a 120 s budget. The
+page was working the whole time; it was simply sharing one software rasteriser
+six ways.
+
+This is the rule in AGENTS.md §Verification 5 with a number attached, and it is
+also a live example for the undeclared-budget question: the spec has no
+declared timeout, so it inherits 120 s, which is enough for one worker and not
+for six. Re-run this spec ALONE before believing a red run of it, and do not
+read a timeout here as a regression until it has been serialized.

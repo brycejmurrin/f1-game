@@ -112,7 +112,33 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // bunched into the top 60% where the cockpit rim lets you see them — evenly
   // spread at the same resolution it came to 792. Measured 3472; the helmet is
   // built in BOTH passes, so the cockpit ceiling below moves with it.
-  assert.ok(body <= 3472, `default body ${body} > 3472`);
+  // 3472 -> 4136: the helmet at 20 rings x 28 slices, 1120 triangles against
+  // 432. NOT a nicer curve — the shape was already right, traced off
+  // photographs, and 12 x 18 draws it perfectly well. It is the DESIGNS. Per-
+  // vertex colour can only paint what a vertex lands on, and at 12 rings the
+  // gaps in t were 0.09: a keyline 0.024 wide fell between two rings and did
+  // not exist in a frame, while an 18-slice shell puts 20 degrees between
+  // vertices, so a 12-degree flash smeared across its neighbours instead of
+  // reading as a stripe. Every driver's livery was therefore as coarse as a
+  // dipped shell in the only place it matters, and looked correct only in the
+  // per-pixel contact sheet. 20 x 28 puts the gaps at 0.05 and 12.9 degrees.
+  // The car is drawn at most twenty times a frame; this is 664 triangles on
+  // the one part of it that tells you WHO you are looking at, and the mesh is
+  // cached per team, not rebuilt. Measured 4136.
+  // 4136 -> 4232: THE COCKPIT APERTURE. The tub over the driver was one
+  // closed loft, so a ray down the centreline crossed the deck and the old
+  // surround slab and never found an opening — the helmet pierced a solid
+  // car. The span is now a tub capped at the seat floor, a rail either side
+  // with a dark liner and a coaming, a floor and a rear bulkhead; the slab it
+  // replaces gave 12 back. +96 net, on the one hole every photo of the car
+  // is taken through. Measured 4232.
+  // 4232 -> 4400: THE OCCUPANT, and the opening reaching the wheel. The
+  // aperture alone did not read as a cockpit — a hole with a floating
+  // helmet in it is a hole — so the well now carries a torso, two arms,
+  // gloves and a yoke (+84), and the opening runs forward from z 0.05 to
+  // z 0.28 so the wheel is not roofed by solid monocoque (+84). Measured
+  // 4400. This is the part of the car every photo is taken through.
+  assert.ok(body <= 4400, `default body ${body} > 4400`);
   // Cockpit ceiling UNCHANGED at 1500: the six-point harness (+60, measured
   // 1428) fits the existing budget. The straps sit between the eye and the dash
   // coaming, filling the lower frame that the coaming never reaches.

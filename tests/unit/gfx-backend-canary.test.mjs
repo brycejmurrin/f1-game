@@ -448,6 +448,12 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.gfxBackend", "apex26.gfxBackendProbe",
     "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
     "apex26.gfxTlxFail",
+    // The boot canary's two latches. gfxProbeStrikes counts loads that died
+    // before presenting a frame — one is a memory kill, two retires the pick —
+    // and gfxBackendWas remembers the pick that was retired so it can be
+    // offered back. A RESET that left a strike behind would hand the next boot
+    // a strike it did not earn, and retire the pick on its first real failure.
+    "apex26.gfxProbeStrikes", "apex26.gfxBackendWas",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxViz",
     "apex26.wgxCapture",
@@ -1889,8 +1895,21 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
   // takes three's WebGL2 backend on AUTO by construction, so desktop Safari ran
   // it every boot and lost the whole TrackGraph prop set (graph.js skips the
   // FUSE for a batched node, so nothing is left behind it).
-  assert.match(fnBody(src, "skipBatches"), /^\s*return\s+_softAdapter\s*&&\s*isWebGPU\(\s*\)\s*&&\s*!_forceBatches\s*&&\s*!_forceHw\.has\(\s*"batches"\s*\)/,
+  // The AUTOMATIC term is unchanged and still pinned character for character.
+  // `apex26.tlxSkipBatches` (2026-09-08) may short-circuit ahead of it — an
+  // explicit, default-off, localStorage opt-in so the owner can A/B the
+  // instanced batches on the phone that reported `Invalid CommandEncoder` on
+  // HARDWARE, which this gate assumes cannot happen. An opt-in cannot make the
+  // automatic path fire on WebGL2, which is what this assertion exists to stop;
+  // widening the automatic term still fails here.
+  assert.match(fnBody(src, "skipBatches"),
+    /^(?:\s*if\s*\(\s*_skipBatchesPin\s*\)\s*return\s+true\s*;[^\n]*\n)?\s*return\s+_softAdapter\s*&&\s*isWebGPU\(\s*\)\s*&&\s*!_forceBatches\s*&&\s*!_forceHw\.has\(\s*"batches"\s*\)/,
     "the batch skip is _softAdapter AND the WebGPU bind — a Dawn workaround must not gate the WebGL2 path");
+  // …and the escape hatch is OPT-IN. A pin that defaulted true would strip the
+  // instanced scenery from every real GPU (48 % of all prop geometry) while
+  // reading as a diagnostic switch.
+  assert.match(src, /_skipBatchesPin\s*=\s*\(function \(\) \{[\s\S]{0,200}?localStorage\.getItem\("apex26\.tlxSkipBatches"\)\s*===\s*"1"[\s\S]{0,120}?catch \(_\) \{ return false; \}/,
+    "apex26.tlxSkipBatches must be an explicit opt-in that defaults FALSE, including when storage throws");
   assert.match(fnBody(src, "isWebGPU"), /renderer\.backend[\s\S]*isWebGPUBackend/,
     "isWebGPU() must read the BOUND backend, not the adapter sniff");
   assert.match(fnBody(src, "softOutRT"), /^\s*return\s+softGpu\(\s*\)/,
@@ -2608,7 +2627,7 @@ test("boot audit: scenery loads are memoised, car assets warm in startRace, deca
   const sr = game.slice(game.indexOf("async function startRace("), game.indexOf("function showTouchControls("));
   assert.match(sr, /warmCarAssets\(\);\s*[^\n]*\n\s*DebrisWorld\.prime\(\)/, "startRace warms car assets right before DebrisWorld.prime()");
   const wa = game.slice(game.indexOf("function warmCarAssets("), game.indexOf("function drawCarDecals("));
-  assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team\); else teamBodyMesh\(c\.team\);/, "same mesh cache keys the draw uses");
+  assert.match(wa, /if \(c\.isPlayer\) playerBodyMesh\(c\.team, c\); else teamBodyMesh\(c\.team, c\);/, "same mesh cache keys the draw uses — the CAR, so the warm-up fills the per-driver key the draw asks for");
   assert.match(wa, /getCarDecalTexture\(c\.team, carDecalNum\(c\.team, c\), !!c\.isPlayer\)/, "same atlas key the draw queues");
   // decal key: the livery half is memoised on store.rev, the teamMeshKey pattern.
   assert.match(game, /const key = decalKeyPrefix\(team\) \+/, "getCarDecalTexture builds its key from the memoised prefix");

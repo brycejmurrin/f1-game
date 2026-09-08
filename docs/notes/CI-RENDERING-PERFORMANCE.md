@@ -582,3 +582,49 @@ shell has no `navigator.gpu`). System packages (`mesa-vulkan-drivers`,
 `vulkan-tools`, `xvfb`) survive a cold boot only via snapshot + Save on the
 environment dashboard; `test -f /usr/share/vulkan/icd.d/lvp_icd.json` proves
 Lavapipe. The npm ECONNRESET note is in §Part 3.
+
+
+## The census's two TLX legs are not comparable (2026-09-08)
+
+`gpu-census` runs three.js twice — `--path webgpu` and `--path webgl2` — and it
+is tempting to read the pair as a backend A/B. It is not one, and the reason is
+in `tlx.js:235`:
+
+```js
+_softBlit = !forceWebGL && _capPref !== "0" && (_softAdapter || _headless || _capPref === "1")
+_headless = /HeadlessChrome/i.test(ua)
+```
+
+`gpu-game-check` sets `apex26.tlxForceGL = "0"` for the WebGPU leg and `"1"`
+for WebGL2. Playwright is always headless, so the WebGPU leg SOFT-BLITS — a GPU
+readback plus `putImageData` on every frame — while the WebGL2 leg's
+`forceWebGL` short-circuits `_softBlit` to false and presents directly.
+
+**What that costs, measured (run 61, macos-latest, montreal, one run):**
+
+| leg | present | frames | worst frame | envReady | meanLuma |
+|---|---|---|---|---|---|
+| three → WebGL2 | direct | 600 | 16.7 s | true | 66.7 |
+| three → WebGPU | readback | **5** | **11.4 s** | false | 44.6 |
+
+Five frames in thirty-nine seconds. Everything downstream follows from that
+number and NOT from the backend: six env-cube faces cannot bake in five frames,
+so `envReady` stays false, so there is no image-based ambient, so the frame is
+darker. One cause, four symptoms, and each of them looks like its own defect if
+read alone — an afternoon on 2026-09-08 went that way.
+
+**None of it is evidence about a player.** A headed browser on real hardware
+has `_headless` false and `_softAdapter` false, so `_softBlit` is false and the
+native swapchain is used. Only a HEADED hardware run probes that path.
+
+The verdict step now prints a `path:` row per TLX leg (`api`, `forceWebGL`,
+`softBlit`) and `frames=` beside `fps`, because `forceWebGL` was already
+collected in the artifact and simply never shown, while `headless=true` — which
+prints on both legs — discriminates nothing. **Compare the two legs only when
+the `path:` rows match.**
+
+Open, and a question for the census rather than for `tlx.js`: whether the
+soft-blit is so expensive on these runners that the WebGPU legs measure the
+harness rather than the game. If so the fix is `--headed`, or capturing through
+the readback deliberately with the cost subtracted, not a change to the
+renderer.

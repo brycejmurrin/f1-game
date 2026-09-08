@@ -142,8 +142,40 @@ test("spineLogo none drops the crest from the cover and keeps it on the fin", ()
   assert.equal(opsIn(none, R.finBadge).length, opsIn(def, R.finBadge).length, "the fin badge changed");
 });
 
+// The flank band is not a constant-height strip: it tapers along the car and the
+// whole thing rises with spineHeight. LiveryTex squashes flank marks by that
+// height so they come out square in METRES, and it holds the height as a small
+// measured table because the atlas is built without Car3D in scope. A table of
+// measurements goes stale the first time the cover geometry moves — and when it
+// did, every mark on a dorsal cover came out 14 % too narrow and the owner saw
+// it as "the side designs look squished". So re-measure it here, against the
+// real Car3D, rather than trusting the number.
+test("the flank squash table still matches the cover Car3D actually builds", () => {
+  const FLANK = A.LT.FLANK, R = A.LT.REGIONS.spineSide;
+  const z = FLANK.zF - 0.19 * FLANK.zLen;   // the mark's station, as buildAtlas uses it
+  // Driven by the CAR's id list, not by the table's own keys: iterating the
+  // table can only check the rows that are there, and the row that is MISSING
+  // is the bug — it falls back to `standard` and squishes that cover's marks by
+  // the very amount this table exists to correct. `high` shipped missing.
+  assert.deepEqual(Object.keys(A.LT.FLANK_H).sort(), Array.from(M.Car3D.SPINE_HEIGHT_IDS).sort(),
+                   "every spine height needs a measured flank height");
+  for (const id of M.Car3D.SPINE_HEIGHT_IDS) {
+    const claimed = A.LT.FLANK_H[id];
+    const anchors = M.Car3D.bodyAnchors(parts, team.id, id === "standard" ? null : id);
+    const p = M.Car3D.coverProfile(anchors.coverAt(z));
+    const real = p.shoulder - p.bottom;
+    assert.ok(Math.abs(real - claimed) < 0.005,
+      `FLANK_H.${id} says ${claimed} m but the cover is ${real.toFixed(4)} m at z ${z.toFixed(3)}`);
+  }
+  // …and the squash it yields is the ratio that makes a metre square a pixel
+  // square, so a region resize cannot quietly un-square the marks either.
+  const sq = (h) => (R.w / FLANK.zLen) * (A.LT.FLANK_H[h] / R.h);
+  assert.ok(sq("dorsal") > sq("raised") && sq("raised") > sq("standard"),
+            "a taller cover is a taller band, so its marks are drawn wider");
+});
+
 test("every SPINE TOP design paints the crown; wordmark and number carry text", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "wordmark", "carbon", "number"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "tricolour", "wordmark", "carbon", "number"]);
   // The wrap is ONE shape over crown and flanks: it paints the crest region
   // AND the flank band with no spineSide picked, and leaves the tail bare.
   const wrap = A.paint("redbull", { ...BASE, spineLogo: "wrap" });
@@ -153,7 +185,7 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   // is taller than it is wide to hold it.
   assert.ok(A.LT.SIZE_H > A.LT.SIZE && R.spineSideL && R.spineSideL.y + R.spineSideL.h <= A.LT.SIZE_H, "the left flank lives in the atlas's extra rows");
   assert.ok(opsIn(wrap, R.spineSideL).length > 0, "wrap paints the left flank too");
-  for (const id of ["number", "logo", "plate", "wordmark", "duo", "slash"]) {
+  for (const id of ["number", "logo", "plate", "wordmark", "duo", "slash", "split", "bars"]) {
     const ops = A.paint("ferrari", { ...BASE, spineSide: id });
     assert.ok(opsIn(ops, R.spineSide).length > 0 && opsIn(ops, R.spineSideL).length > 0, `${id} paints both flanks`);
   }
@@ -274,7 +306,14 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
     }
     assert.ok(Math.abs(maxDy - M.Car3D.spineRise(id)) < 1e-9, `${id}: the crown rises by exactly its rise (got ${maxDy})`);
     assert.strictEqual(lowered, 0, `${id}: nothing moves DOWN — the floor and the fin stay put`);
-    assert.ok(Math.abs(finTop({ spineHeight: id }) - top0) < 1e-9, `${id}: the fin top stays on the regulation line`);
+    // The regulation top, asserted on the number the blade is CUT from —
+    // build()'s part measure rounds centre and size to 10 mm, so the derived
+    // top carries that much slack and a 1e-9 bound on it only ever passed by
+    // luck (it broke the moment the fin ROOT started following the crown).
+    const rootTop = (h) => M.Car3D.sharkFinRoot(
+      M.Car3D.bodyAnchors(parts, team.id, h), 1, "standard").top;
+    assert.strictEqual(rootTop(id), rootTop(null), `${id}: the fin top stays on the regulation line`);
+    assert.ok(Math.abs(finTop({ spineHeight: id }) - top0) <= 0.011, `${id}: and the mesh agrees`);
   }
 });
 
@@ -283,7 +322,7 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
 // code or the crest on pick. Mesh: the service panels leave the band's z range
 // so a grey hatch never sits through the number — same vertex count, moved.
 test("spineSide paints the flank band on pick only, and clears the service panels from under it", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash", "split", "bars"]);
   assert.equal(opsIn(A.paint("ferrari", BASE), R.spineSide).length, 0, "the shipped atlas paints the flank band");
   const texts = (liv) => opsIn(A.paint("ferrari", { ...BASE, ...liv }), R.spineSide)
     .filter((op) => op.kind === "text").map((op) => op.text);

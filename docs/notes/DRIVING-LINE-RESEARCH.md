@@ -50,9 +50,9 @@ Second pass, 2026-09-08, from EA's own pages and player guides.
   pans engine audio toward the racing line.
 - **What this game takes from it.** The three modes and their default
   (FULL), the green → amber → red grammar against the player's speed, and the
-  conservative braking cue (the sweep uses `BRAKE·0.85`, the AI's own margin).
-  Not yet: the 3D raised type, colour-blind palettes, an opacity slider, and
-  the audio cues — each a natural follow-up, listed in "Not done" below.
+  conservative braking cue (the sweep uses `BRAKE·0.85`, the AI's own margin),
+  the colour-blind palette, the opacity option and the audio braking cue. Not
+  yet: the 3D raised type, listed in "Not done" below.
 
 ## How engines draw it
 
@@ -113,8 +113,31 @@ Second pass, 2026-09-08, from EA's own pages and player guides.
   between the two triples rather than branching, so the three stay identical
   and nothing depends on control flow. F1 25 ships the same choice, which is
   what prompted looking.
-- **Not done** F1's raised 3D type (the shipped line is F1's 2D form), its
-  colour-blind palettes and opacity option, and its audio braking cue; GT7's
-  dotted style and corner-side indicators; Forza's off-track white. (WGX and
+- **LINE OPACITY** (2026-09-08) F1 25 offers an *increased* opacity option;
+  the complaint it answers runs both ways, so this row does too — SUBTLE
+  (0.65), NORMAL (1.0, the line exactly as it shipped) and SOLID (1.35). The
+  multiplier scales the emissive feed and the coverage TOGETHER, because a
+  subtle line that keeps its bloom is not subtle. The alpha is clamped in all
+  three shaders: SOLID takes the 0.85 base past 1, and a source alpha over 1
+  over-blends. WGX's `params` vec4 was full (speed, cornersOnly, str,
+  palette), so `LineU` gained a `params2` — 80 → 96 bytes, `_lineU` 20 → 24
+  floats, validated against real Dawn (`wgx-validate`: ok, 0 WGSL parse
+  errors, 0 GPU errors) rather than read-verified.
+- **BRAKE CUE** (2026-09-08) F1 25's audio braking assist, built on the CUE
+  rung of the ladder already designed in
+  `docs/research/DRIVING-CONTROLS-RESEARCH.md` (OFF / CUE / LIGHT / FULL).
+  `DrivingLine.cue()` returns the urgency from the SAME `over =
+  playerSpeed / lineSpeed` the three shaders colour with, so ear and eye agree;
+  `GameAudio.brakeCue()` turns it into a 520 Hz click whose interval closes
+  from 0.4 s to 0.07 s. Two things it does NOT do, both on purpose: no pitch
+  ramp (Forza's published BDA mechanics say the rate is the signal, and that
+  doc flags the pitch ramp as the easy mistake — the first cut here made it),
+  and no tone below `over` 1.0, where the ribbon's amber already opens at 0.98,
+  because a faint tint at on-pace is fine and a beep is not. Still open from
+  that research: the LOOKAHEAD should be a player setting rather than "read the
+  line at the car's own position", which is what this ships with.
+- **Not done** F1's raised 3D type (the shipped line is F1's 2D form); GT7's
+  dotted style and corner-side indicators; Forza's off-track white; the LIGHT
+  and FULL rungs of the braking ladder. (WGX and
   TLX gained their passes the same day — `docs/research/WEBGPU-PARITY.md`
   §Driving line.)

@@ -72,6 +72,34 @@ let csLivEditId = null;    // id of the custom livery being edited in-place (nul
 
 const PSEUDO_CATS = ["team", "tune", "livery"];
 
+// ONE DRAFT SHAPE, THREE DOORS INTO THE EDITOR. New, edit-in-place and
+// "customize a copy" each used to spell the whole field list out by hand, and
+// the copies had drifted: the DUPLICATE list was missing all eight structural
+// fields (finStyle, finBadge, spineLogo, finShape, tcam, coverVents,
+// spineHeight, spineSide). Nothing failed — pillRow falls back to `dflt` when a
+// key is absent, so the editor showed STANDARD/NONE, and the save writes a
+// field only when it differs from that default. Copying a team's own paint job
+// therefore handed back a car with a shark fin and a flat spine (every team
+// sets finShape "none" + spineHeight "dorsal" in js/data/teams.js), with the
+// editor agreeing. A copy is now a copy because there is only one list.
+// The save's own `if (d.x && d.x !== <default>)` chain and Liveries.forTeam's
+// copy list are the other two spellings of these keys; team-livery.test.mjs
+// holds all three together.
+const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo",
+                          "rearWing", "cover", "fin", "finArt", "logo", "logo2", "logo3"];
+const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
+                          sponsors: "default", finStyle: "team", finBadge: "logo",
+                          spineLogo: "logo", finShape: "standard", tcam: "team",
+                          coverVents: "none", spineHeight: "standard", spineSide: "none" };
+// `liv` is a saved livery for edit/copy, or a bare {c1,c2} for a new one: an
+// absent colour becomes "" (no paint) and an absent pill its own default.
+function livDraftFrom(liv, name) {
+  const d = { name, c1: arrToHex(liv.c1), c2: arrToHex(liv.c2) };
+  for (const k of LIV_DRAFT_COLORS) d[k] = liv[k] ? arrToHex(liv[k]) : "";
+  for (const k in LIV_DRAFT_PILLS) d[k] = liv[k] || LIV_DRAFT_PILLS[k];
+  return d;
+}
+
 function csTabId(id) { return "cs-tab-" + String(id).replace(/[^a-z0-9_-]/gi, "-"); }
 
 // SHOW THE PART YOU JUST FITTED. Every catalog category changes the mesh
@@ -218,6 +246,16 @@ function buildTeamOptions(optsEl, team) {
   edit.onclick = () => { if (G.soundOn) GameAudio.uiSelect(); G.openCustomize(); };
   editRow.appendChild(edit);
   optsEl.appendChild(editRow);
+
+  // THE GARAGE FILE — parts, liveries, setup sheets and an invented team, for
+  // every team, saved out and read back in. It lives HERE rather than beside
+  // the settings file in SETTINGS because this is where a player manages the
+  // things it carries. The row is built fresh on every rebuild of this tab
+  // (js/ui/settings-export.js garageRow), which is why nothing is cached.
+  if (typeof SettingsExport !== "undefined" && SettingsExport.garageRow) {
+    const row = SettingsExport.garageRow();
+    if (row) { optsEl.appendChild(csLabel("GARAGE FILE")); optsEl.appendChild(row); }
+  }
 }
 
 function buildSetup() {
@@ -567,11 +605,11 @@ function buildLiveryOptions(container, team) {
     row.appendChild(main);
     const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
-      csLivDraft = { name: "", c1: arrToHex(team.color), c2: arrToHex(team.color2), stripe: "", accent: "",
-                     noseStripe: "", nose: "", pod: "", wing: "", fin: "", finArt: "", logo: "", logo2: "",
-                     logo3: "", halo: "", finish: "gloss", numFont: "default", sponsors: "default",
-                     finStyle: "team", finBadge: "logo", spineLogo: "logo", finShape: "standard",
-                     tcam: "team", coverVents: "none", spineHeight: "standard", spineSide: "none" };
+      // A blank canvas: the team's two colours, no detail paint, every pill at
+      // its own default. (That means a STANDARD fin, which is not the shape any
+      // 2026 team car carries — see teams.js. Deliberate: a new paint job starts
+      // from the plain car, not from the team's. Change it here if that reads wrong.)
+      csLivDraft = livDraftFrom({ c1: team.color, c2: team.color2 }, "");
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -612,23 +650,7 @@ function buildLiveryOptions(container, team) {
       edit.title = "Edit this livery";
       edit.setAttribute("aria-label", "Edit " + liv.name + " livery");
       edit.onclick = () => {
-        csLivDraft = {
-          name: liv.name || "", c1: arrToHex(liv.c1), c2: arrToHex(liv.c2),
-          stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
-          accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
-          pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
-          rearWing: liv.rearWing ? arrToHex(liv.rearWing) : "", wingCarbon: liv.wingCarbon || "paint",
-          cover: liv.cover ? arrToHex(liv.cover) : "",
-          fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
-          logo: liv.logo ? arrToHex(liv.logo) : "",
-          logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
-          logo3: liv.logo3 ? arrToHex(liv.logo3) : "",
-          finish: liv.finish || "gloss", numFont: liv.numFont || "default", sponsors: liv.sponsors || "default",
-          finStyle: liv.finStyle || "team", finBadge: liv.finBadge || "logo",
-          spineLogo: liv.spineLogo || "logo", finShape: liv.finShape || "standard",
-          tcam: liv.tcam || "team", coverVents: liv.coverVents || "none",
-          spineHeight: liv.spineHeight || "standard", spineSide: liv.spineSide || "none",
-        };
+        csLivDraft = livDraftFrom(liv, liv.name || "");
         csLivEditId = liv.id;
         csLivCreating = true;
         if (G.soundOn) GameAudio.uiSelect();
@@ -662,20 +684,7 @@ function buildLiveryOptions(container, team) {
       dup.title = "Customize a copy of this livery";
       dup.setAttribute("aria-label", "Customize a copy of " + liv.name);
       dup.onclick = () => {
-        csLivDraft = {
-          name: (liv.name || "Custom").slice(0, 14) + " MK2",
-          c1: arrToHex(liv.c1), c2: arrToHex(liv.c2),
-          stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
-          accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
-          pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
-          rearWing: liv.rearWing ? arrToHex(liv.rearWing) : "", wingCarbon: liv.wingCarbon || "paint",
-          cover: liv.cover ? arrToHex(liv.cover) : "",
-          fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
-          logo: liv.logo ? arrToHex(liv.logo) : "",
-          logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
-          logo3: liv.logo3 ? arrToHex(liv.logo3) : "",
-          finish: liv.finish || "gloss", numFont: liv.numFont || "default", sponsors: liv.sponsors || "default",
-        };
+        csLivDraft = livDraftFrom(liv, (liv.name || "Custom").slice(0, 14) + " MK2");
         csLivEditId = null;   // create-new: never overwrites the stock scheme
         csLivCreating = true;
         if (G.soundOn) GameAudio.uiSelect();

@@ -93,29 +93,32 @@ test("the painter answers for every point of the shell, and paints more than the
 
 test("the visor is an aperture over the eyes: front only, and neither the crown nor the chin", () => {
   assert.equal(Helmets.isVisor(0.05, 0), false, "the crown is paint");
-  assert.equal(Helmets.isVisor(0.44, 0), true, "straight ahead is visor");
-  assert.equal(Helmets.isVisor(0.44, 180), false, "the back of the head is paint");
-  assert.equal(Helmets.isVisor(0.44, 110), false, "the temples are paint");
+  assert.equal(Helmets.isVisor(0.30, 0), false, "the brow is paint — the aperture is not up on the forehead");
+  assert.equal(Helmets.isVisor(0.53, 0), true, "straight ahead is visor");
+  assert.equal(Helmets.isVisor(0.53, 180), false, "the back of the head is paint");
+  assert.equal(Helmets.isVisor(0.53, 110), false, "the temples are paint");
   assert.equal(Helmets.isVisor(0.95, 0), false, "the chin bar is paint");
   // symmetric about the nose, and wrapping 0 rather than clipping at 359
-  for (const az of [10, 25, 40]) assert.equal(Helmets.isVisor(0.44, az), Helmets.isVisor(0.44, 360 - az), `asymmetric at ${az}`);
+  for (const az of [10, 25, 40]) assert.equal(Helmets.isVisor(0.53, az), Helmets.isVisor(0.53, 360 - az), `asymmetric at ${az}`);
   // a LENS: widest across the eyes, closing toward the brow and the nose
   const width = (t) => { let n = 0; for (let az = 0; az < 360; az++) if (Helmets.isVisor(t, az)) n++; return n; };
-  assert.ok(width(0.44) > width(0.335) && width(0.44) > width(0.55), "the aperture is widest in the middle, not a rectangle");
+  assert.ok(width(0.53) > width(0.43) && width(0.53) > width(0.64), "the aperture is widest in the middle, not a rectangle");
 });
 
 test("shell() marks the visor as glass and the paint as paint", () => {
   const shell = Helmets.shell(Helmets.designFor(44, null));
-  const eye = shell(0.44, 0), crown = shell(0.05, 0);
+  const eye = shell(0.53, 0), crown = shell(0.05, 0);
   assert.equal(eye.glass, true);
   assert.equal(crown.glass, false);
   assert.deepEqual([...eye.c], [...Helmets.DESIGNS[44].visor], "the aperture wears the design's visor tint");
 });
 
-test("the shell is a full-face helmet, not the half-ball it used to be", () => {
-  // Measured off a 2026 lid: about 0.27 m tall, 0.22 wide and a little deeper
-  // than it is wide, widest at the ears rather than at its bottom edge. The
-  // hemisphere this replaced was 0.30 across and 0.15 tall — a beach ball.
+test("the shell holds the proportions traced off the reference photographs", () => {
+  // Not a judgement call any more. SHAPE's W comes off a straight-on front
+  // shot and its F/B off the median of eleven side-on portraits, so what this
+  // pins is what those photographs measured: 0.25 m tall, four fifths as wide
+  // as it is tall, a quarter longer than it is tall, fattest just below the
+  // middle, and ending at a neck rim rather than tapering to a point.
   const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
   Helmets.build(out, 0, 0.63, -0.075, Helmets.designFor(44, null), { paint: 1, glass: 2 });
   let minY = Infinity, maxY = -Infinity, maxX = 0, minZ = Infinity, maxZ = -Infinity;
@@ -132,12 +135,36 @@ test("the shell is a full-face helmet, not the half-ball it used to be", () => {
   // the widest ring is at the ears, above the bottom of the shell
   const widest = Helmets.SHAPE.W.indexOf(Math.max(...Helmets.SHAPE.W));
   assert.ok(Helmets.SHAPE.T[widest] > 0.3 && Helmets.SHAPE.T[widest] < 0.75, "widest at the ears, not at the rim");
-  // the chin bar reaches further forward than the eyes do — a face, not a bus front
-  assert.ok(Helmets.pointAt(0.84, 0)[2] > Helmets.pointAt(0.44, 0)[2] + 0.035, "no chin bar stepping out below the aperture");
-  // and the brow stands proud of the aperture recessed under it
-  assert.ok(Helmets.pointAt(0.30, 0)[2] > Helmets.pointAt(0.44, 0)[2] + 0.005, "no brow standing over the aperture");
-  // the neck rim is a flat cut, narrower than the widest ring
-  assert.ok(Helmets.SHAPE.W[Helmets.SHAPE.W.length - 1] < Math.max(...Helmets.SHAPE.W) * 0.8, "the shell does not taper in to the neck");
+  assert.ok(d / h > 1.18 && d / h < 1.32, `length:height ${(d / h).toFixed(2)} — the photographs measured 1.21`);
+  // FATTEST LOW. Both extremes sit level with the jaw, not up at the brow.
+  // Four earlier hand-drawn tables put the maximum reach at the chin instead
+  // and the profile read as a bus front.
+  for (const col of ["F", "B"]) {
+    const a = Helmets.SHAPE[col], t = Helmets.SHAPE.T[a.indexOf(Math.max(...a))];
+    assert.ok(t > 0.5 && t < 0.75, `${col} reaches furthest at t=${t}, not at 55-70% of the height`);
+  }
+  // ONE HUMP, NO STEPS. The old table stepped the outline — a proud brow, a
+  // recessed aperture, a chin bar jutting out under it. The photographs show
+  // none of that: the silhouette rises once and falls once.
+  for (const col of ["W", "F", "B"]) {
+    const a = Helmets.SHAPE[col];
+    // a 2 mm deadband: the traced width holds a genuine flat band across the
+    // widest part of the shell, and reading each equal row as a turn would
+    // count that plateau as a step
+    let turns = 0, dir = 0;
+    for (let i = 1; i < a.length; i++) {
+      const d = a[i] - a[i - 1];
+      if (Math.abs(d) <= 0.002) continue;
+      if (dir && Math.sign(d) !== dir) turns++;
+      dir = Math.sign(d);
+    }
+    assert.ok(turns <= 1, `${col} changes direction ${turns} times — the outline is stepped, not a single curve`);
+  }
+  // the neck rim is a flat cut: narrower than the widest ring, but still a
+  // real opening rather than the point every view rounds off to in a photo
+  const wMax = Math.max(...Helmets.SHAPE.W), wRim = Helmets.SHAPE.W[Helmets.SHAPE.W.length - 1];
+  assert.ok(wRim < wMax * 0.8, "the shell does not taper in to the neck");
+  assert.ok(wRim > wMax * 0.35, "the rim closes to a slit — the photo rounds off below it, the shell should not follow");
   // a closed, well-formed surface: every index in range, no degenerate normals
   const n = out.pos.length / 3;
   assert.ok(out.idx.every((i) => i >= 0 && i < n), "index out of range");
@@ -165,4 +192,20 @@ test("car3d builds the helmet through Helmets, and keeps no head geometry of its
   assert.match(car3d, /Helmets\.build\(out,/, "and hands the mesh to Helmets to fill");
   assert.doesNotMatch(car3d, /HELMET_ACCENT/, "the old eight-colour accent table is gone, not orphaned");
   assert.doesNotMatch(car3d, /function addDome\(/, "the hemisphere builder went with it — Helmets owns the shell");
+});
+
+test("the profile is a spline through the traced rows, not nineteen straight segments", () => {
+  // Joining the rows with straight lines creased the shell at every one of
+  // them, worst at the crown, where it drew a flat cap with a hard rim. The
+  // check is that the slope does not jump as t crosses a row.
+  const T = Helmets.SHAPE.T;
+  const fwd = (t) => Helmets.pointAt(t, 0)[2];
+  const worst = { jump: 0, t: null };
+  for (let i = 1; i < T.length - 1; i++) {
+    const t = T[i], e = 0.004;
+    const before = (fwd(t) - fwd(t - e)) / e, after = (fwd(t + e) - fwd(t)) / e;
+    const jump = Math.abs(after - before) / Math.max(0.02, Math.abs(before), Math.abs(after));
+    if (jump > worst.jump) { worst.jump = jump; worst.t = t; }
+  }
+  assert.ok(worst.jump < 0.5, `slope jumps ${worst.jump.toFixed(2)}x across the row at t=${worst.t} — tab() is interpolating linearly`);
 });

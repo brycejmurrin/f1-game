@@ -499,6 +499,26 @@ const TLX = (function () {
       const _forceBatches = (function () {
         try { return localStorage.getItem("apex26.tlxForceBatches") === "1"; } catch (_) { return false; }
       })();
+      // apex26.tlxSkipBatches=1 — the OTHER direction, and the one a real
+      // device needed. `skipBatches()` sheds the instanced scenery on a
+      // SOFTWARE adapter because Dawn mis-binds a per-vertex vec3 as
+      // instance-rate there and "one failed draw invalidates the whole
+      // encoder" (see drawInstanced). The gate assumes real GPUs are immune.
+      // On 2026-09-08 the owner's phone reported `err 1 / Invalid
+      // CommandEncoder` on three/webgpu at 51 fps — the first gpuErrors > 0
+      // ever seen on hardware, and the same failure that comment describes.
+      // The assumption may simply be wrong: Dawn is Dawn on a phone too.
+      //
+      // Blind-widening the gate is NOT the fix — 48 % of all prop geometry is
+      // instanced-only (79.6 % Vegas), so it would strip the scenery from
+      // every real GPU to chase one error. This pin reverts the one suspect on
+      // the one device that has it, in a reload, exactly as tlxForceHw does
+      // for the software side. If the error goes with the batches, the cause
+      // is named; if it stays, this is exonerated and the next suspect is
+      // free. Reported by backendState() so a screenshot says which way it ran.
+      const _skipBatchesPin = (function () {
+        try { return localStorage.getItem("apex26.tlxSkipBatches") === "1"; } catch (_) { return false; }
+      })();
       // apex26.tlxForceHw — run the CONTENT paths a real GPU takes, on a
       // software adapter. The skips below are BUDGET guards for
       // SwiftShader/Lavapipe, not correctness fixes, so a software session
@@ -554,6 +574,7 @@ const TLX = (function () {
       // and DebrisWorld's per-body fallback cannot see the skip either because
       // it feature-detects on the NAME, which is present and no-ops.
       function skipBatches() {
+        if (_skipBatchesPin) return true;   // the on-device A/B, any adapter
         return _softAdapter && isWebGPU() && !_forceBatches && !_forceHw.has("batches");
       }
       // `softwareGL` ALREADY answers this for whichever backend bound — it is
@@ -2791,6 +2812,7 @@ const TLX = (function () {
           fx.lineCorners.value = opts && opts.cornersOnly ? 1 : 0;
           fx.lineStr.value = (opts && opts.str) || 1.6;
           fx.linePalette.value = opts && opts.palette ? 1 : 0;
+          fx.lineOpacity.value = (opts && opts.opacity) || 1;
           drawList.push({ geo: lineStream.geo, m: null, mat: fx.lineMat });
           _fxFrame.lineVerts = vertCount;
           return true;
@@ -3280,6 +3302,12 @@ const TLX = (function () {
               isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
               softwareGL, softAdapter: _softAdapter, headless: _headless,
               forceHw: _forceHw.on, forceBatches: _forceBatches,
+              // The live verdict, not just the inputs: which way skipBatches()
+              // actually went. And gpuErrFrames — DISTINCT presents an error
+              // landed in, which is what separates "one bad frame at boot"
+              // from "every frame", and the count alone cannot.
+              skipBatches: skipBatches(), skipBatchesPin: _skipBatchesPin,
+              gpuErrFrames: _gpuErrFrames,
               envFail: _envFailN, envFailMsg: _envFailMsg,
               softBlit: _softBlit, capPref: _capPref,
               // Last frame's FX submissions — the positive signal a software
