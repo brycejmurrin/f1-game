@@ -2575,15 +2575,17 @@ ASKED — `envFace=3` says the producer ran and baked faces, `envFail=0` and
 separate the two hypotheses, and it rules out the one this document picked.
 
 What the run DID confirm is the first half of the chain: the soft-present blit
-is enormously expensive on this leg. **`fps=4.9` against 60.1**, `floorMs=55.6`
-against 15.1 — a 12× frame-rate gap between two legs of the same renderer on the
-same GPU, and the only difference between them is `tlxForceGL`. That cost is
-real and worth its own line; it simply does not reach the env probe through
-`PerfGov`, because the governor never left tier 0.
+is expensive on this leg — ~~`fps=4.9` against 60.1, a 12x frame-rate gap~~.
+**WITHDRAWN:** `floorMs` 15.1 is the value PerfGov is INITIALISED with, so the
+60.1 side was never measured and there is no gap to report. See "fps and heap
+between the backends" below. Run 56's pair, where neither leg sits at the
+default, has the WebGPU leg FASTER. What survives from this run is only that
+the governor stayed at tier 0, which is what kills the tier-gate story.
 
 So the open question is now sharper and smaller: **a probe that is called, whose
 faces do not throw, and which is not gated, still never completes its six-face
-cycle** — over roughly a dozen cycles' worth of frames even at 4.9 fps. Two
+cycle** — over roughly a dozen cycles' worth of frames even at the 4.9 fps
+this leg reported. Two
 mechanisms fit, and `envState()` could not tell them apart, so it now reports
 `mask`, `begins` and `ends` alongside `face`:
 
@@ -2642,13 +2644,12 @@ Two facts survive every run so far, and they are the lead now:
    luma 74.3. So the soft blit as such does not darken anything; whatever is
    wrong is specific to TLX's copy of it.
 
-That pair points at TLX's `_softBlit` readback and the encode it does on the way
-to the visible canvas — a colour-space or tone-map step that WGX's equivalent
-path gets right and TLX's does not. **The next measurement is a DIFF, not a
-theory: read TLX's soft-present readback path against WGX's side by side, and
-if they disagree on transfer function or target format, that is it.** Do not
-dispatch anything else on this until that diff has been read — three
-hypotheses have now been reasoned out and measured wrong on this one lead.
+That pair pointed at TLX's `_softBlit` readback and the encode it does on the
+way to the visible canvas. **That was hypothesis four, and it is also wrong** —
+the render target and the post-blit canvas both read 38.3, so the blit is
+faithful and the frame is dark before it. See "The blit is exonerated" below,
+which supersedes this paragraph and gives the local repro that replaces the
+dispatch this one asked for.
 
 **The pattern is the finding.** Three explanations for this gap have been
 written down with confidence and refuted by the next run: soak lengths, then
@@ -2657,6 +2658,138 @@ code and each cost a macOS run. The instrument that has moved it every single
 time is a field printed in the Verdict — `meanLuma` (§2l), `gov.tier`, then
 `begins`/`ends`. Add the field, dispatch, read. The reasoning step in between
 has a perfect record of being wrong.
+
+### The blit is exonerated, and the gap reproduces IN-CONTAINER (2026-09-08)
+
+Three results, all measured on this box, no macOS minutes spent.
+
+**1. It is not the soft-present blit.** That was the hypothesis the section above
+nominates, and it is wrong. On the WebGPU leg `capturePixels()` takes the
+`_captureRT()` → `_readLdr()` path — it reads the RENDER TARGET directly and
+never touches the blit — while `canvas.png` is a screenshot of the visible
+canvas the blit painted. Both read **38.3**. The blit reproduces its source
+faithfully; the frame is already dark before it. That also disposes of the
+"WGX soft-presents too and is brightest" asymmetry: there was nothing to
+explain.
+
+**2. The gap reproduces here at MATCHED content**, which is the useful part:
+
+```
+gfx-probe --backend three montreal                     (TLX/WebGL2)  meanLuma 70.3  maxLuma 247
+gfx-probe --backend three --tlx-webgpu --lavapipe ...  (TLX/WebGPU)  meanLuma 38.3  maxLuma 163
+```
+
+against macOS's 64-66 vs 39. Same ratio, same direction. The obvious worry is
+that `softContent()` skips content on the WebGPU leg here and not on macOS — it
+does not skew this, because it gates BOTH legs identically in this container:
+`softwareGL = forceWebGL ? detectSoftwareGL() : !!_softAdapter`, and on llvmpipe
+`detectSoftwareGL()` matches for the WebGL2 leg exactly as `_softAdapter` does
+for lavapipe. Both legs' console output confirms it — the same scenery
+suppression on each. **So this is bisectable locally, and the next person on it
+should not dispatch anything.**
+
+~~Note `maxLuma` 247 → 163 ... a uniform scale, pointing at exposure or a
+tone-map term.~~ **Withdrawn.** Those two maxima came from runs at DIFFERENT
+cameras. Measured at one camera the maxima are 168 and 162 — see "Split by
+stage" below, which reverses the reading: highlights are preserved and the
+mid-tones are crushed.
+
+**3. The forced-content control is NOT runnable on this box.** `--ls
+apex26.tlxForceHw=1` and then `=env,sky` both fail `awaitSoftPresent`, once at
+60 s and twice at 300 s: six full presents into the cube plus a full-frame
+readback per present exceeds any budget llvmpipe can meet. Worth knowing before
+someone else spends an hour on it. It is also unnecessary, per (2).
+
+**And the env probe could never have been the cause anyway** — the code says so,
+independently of run 56's counterexample. `uEnvCube` feeds `envCC`, the
+CLEARCOAT environment term for car paint (`glsl-lit.js`, and `tsl-lit.js` at
+parity), and when the probe is not live it falls back to an analytic sky
+gradient. A car-lacquer reflection term cannot move whole-frame mean luma by
+40%. The magnitude alone should have killed that theory before a run was spent
+on it; nobody checked what the cube was actually wired to.
+
+*Which also answers the question that prompted the check:* a player whose probe
+never latches loses REAL reflections on the lacquer and gets the analytic
+gradient instead. That is the designed fallback, not a degradation cliff, and
+`envReady=false` on a slow device is not a defect.
+
+### Split by stage, at a MATCHED camera — and the "uniform scale" reading was wrong
+
+`__tlx.lumaDbg()` (new, beside `envState`/`skyState`) reads post's input, post's
+output and what `capturePixels` returns. Both legs, montreal, `park(0.1)` +
+`orbit(0.1, 200, 6, 26)` + `snapCam()` so the framing is identical, 640x360:
+
+| target | TLX/WebGL2 | TLX/WebGPU |
+|---|---|---|
+| `sceneRT` — post IN (HDR) | 255 / 255 | 255 / 255 |
+| `ldrRT` — post OUT | **74.43** / 168 | **45.56** / 162.3 |
+| `captureRT` — what capturePixels reads | 74.43 / 168 | 45.56 / 162.3 |
+
+**`max` agrees to 3.4% while `mean` is 39% apart.** Highlights are preserved and
+the mid-tones are crushed — which is NOT a uniform scale, so the
+exposure/tone-map candidate written down above is withdrawn. That candidate came
+from a 247-vs-163 max pair measured on two runs at DIFFERENT cameras; at one
+camera the maxima are 168 and 162. An unmatched pair is not a comparison, which
+is the §2l lesson arriving for the third time on this lead.
+
+`captureRT === ldrRT` on both legs, so nothing after the post chain touches it —
+consistent with the blit already being exonerated.
+
+**What this does NOT settle, and the honest reason:** `_readLdr` reads BYTES, so
+the HDR `sceneRT` saturates to 255/255 on both legs — most of the frame is >= 1.0
+in HDR. The input column is therefore uninformative, and the lit pass is NOT
+excluded. **The next measurement is a scaled or float read of `sceneRT`** (scale
+by 1/8 in the read, or read it as float): if the two legs' HDR inputs match, the
+divergence is inside the post chain and `tsl-post.js` is the place to look; if
+they already differ, it is the lit pass and post is innocent. One local run, no
+dispatch — the hook is in place, it just needs a non-clipping read.
+
+Do not write down a sixth mechanism before that number exists.
+
+### fps and heap between the backends — one real gap, one vacuous column
+
+Matched camera (montreal, `park(0.1)` + `orbit(0.1, 200, 6, 26)` + `snapCam()`),
+640x360, `--enable-precise-memory-info`, one browser per leg so only the WebGPU
+leg gets the lavapipe ICD:
+
+| leg | rAF fps | `gov.fps` | `floorMs` | heap MB |
+|---|---|---|---|---|
+| GLX (default) | 0.96 | 1 | 643.5 | **36.2** |
+| TLX / WebGL2 | 19.49 | 60 | 16.6 | **84.1** |
+| TLX / WebGPU | 60.04 | 60 | 16.6 | **83.4** |
+
+**THE HEAP GAP IS REAL: three.js costs ~48 MB more than GLX, 2.3x.** It is the
+one number here that does not depend on the present path, and it reproduces —
+two runs gave GLX 36.4 / 36.2 and TLX 83.5, 84.7, 84.1, 83.4, with the two TLX
+legs agreeing within 1 MB of each other every time. That cross-validation is
+what makes it trustworthy where the fps column is not. On a phone profile 48 MB
+is the difference between shipping the asset pack and not (§2 attributed 53 MB
+of 101 by turning passes off one at a time — the same order).
+
+**THE fps COLUMN IS NOT A MEASUREMENT ON THE TLX LEGS.** `gov.fps` 60 with
+`floorMs` 16.6 is exactly 1/60 s — the value PerfGov is INITIALISED with, on a
+leg that never fed it. Both TLX legs report it here while actually delivering
+19.5 and 60.0 rAF frames; GLX reports 643.5 ms and really is at ~1 fps, so its
+governor is fed and agrees. **Read `gov.fps == 60` + `floorMs == 16.6` as "no
+measurement", never as "fast".**
+
+*Which withdraws a claim made earlier today.* Run 54's "12x frame-rate gap,
+4.9 fps against 60.1" compared a real 4.9 against an unfed 60.1 and is not a
+gap at all. The trustworthy pair is run 56, where NEITHER leg sits at the
+default: WebGPU 16.4 against WebGL2 8.4 — the WebGPU leg FASTER, the opposite
+sign. Any conclusion drawn from the 4.9-vs-60.1 pair is void.
+
+**And rAF counting does not rescue it either**, which is why the table carries
+both columns. A soft-presenting backend lets the rAF loop run free while the
+readback lags behind, so 60.04 rAF fps on the WebGPU leg is the loop's rate and
+not the rate frames reach the screen. Three backends, three relationships
+between rAF and delivery: comparing them is the §2l vacuous-measurement trap
+wearing a different hat. **A cross-backend fps number needs an instrument that
+counts PRESENTS, and none of the three columns above is one.**
+
+The census prints `gov.fps` for every leg and has since the governor was added.
+Nothing there says it can be the initialisation value, which is how it got read
+as real — here, today, by me. Worth a line in the Verdict.
 
 ### On WebGPU alternatives, since the question was asked
 
