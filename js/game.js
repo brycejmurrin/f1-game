@@ -3614,6 +3614,12 @@ skids = SkidMarks.create(G);
 DrivingLine.setMode(store.get("drivingLine", "full"));
 DrivingLine.setPalette(store.get("drivingLinePalette", "f1"));
 DrivingLine.setOpacity(store.get("drivingLineOpacity", "normal"));
+// BRAKE CUE — the CUE rung of the assist ladder designed in
+// docs/research/DRIVING-CONTROLS-RESEARCH.md (OFF / CUE / LIGHT / FULL), and
+// the only one that takes nothing over. Its own preference rather than a mode
+// of DRIVING LINE, because the players who need it most are the ones running
+// the line OFF. Ships off.
+let brakeCueOn = store.get("brakeCue", "off") === "on";
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
 // reads), plus the same physics numbers the AI's brake targets use, so the
@@ -4083,6 +4089,12 @@ function update(dt) {
     // genuine slide down a straight was silent. Fixing the visual copy alone left
     // the most audible arc-coupling in the game untouched.
     GameAudio.setSkid(player.skidIntensity || 0, isWetRoad());
+    // THE BRAKING CUE. Driven from the sim tick and not the draw, because it is
+    // the one part of the driving line that has to work with the line OFF — a
+    // player who cannot read the ribbon is exactly who it is for. DrivingLine
+    // supplies the urgency from the same over = speed/lineSpeed the shaders
+    // colour with, so the beep and the red arrive together.
+    if (brakeCueOn) GameAudio.brakeCue(track ? DrivingLine.cue(Math.abs(player.speed), player.s) || 0 : 0);
     // The field around you: panned, distance-rolled and Doppler-shifted. Before
     // this there was no opponent audio at all, so a car alongside was silent.
     GameAudio.setRivals(rivalAudio.collect(player));
@@ -9763,6 +9775,12 @@ SettingRow.wire("pm-lineopacity", {
   values: [["subtle", "SUBTLE"], ["normal", "NORMAL"], ["solid", "SOLID"]],
   read: () => DrivingLine.opacity(),
   write: (v) => { DrivingLine.setOpacity(v); store.set("drivingLineOpacity", DrivingLine.opacity()); },
+});
+
+SettingRow.wire("pm-brakecue", {
+  values: SettingRow.labels(["off", "on"]),
+  read: () => (brakeCueOn ? "on" : "off"),
+  write: (v) => { brakeCueOn = v === "on"; store.set("brakeCue", v); },
 });
 
 SettingRow.wire("pm-hidehud", {
