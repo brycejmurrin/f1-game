@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_148 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_151 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -255,6 +255,9 @@ _148 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
+| `scene-prims.js` | `GaragePrims` | tag | GaragePrims: the garage bay's mesh primitives and shared constants. |
+| `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
+| `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
 | `scene.js` | `GarageScene` | tag | GarageScene: the room the setup preview happens in. |
 | `setup-tune.js` | `SetupTune` | tag | the SETUP SHEET: the car's mechanical set-up — anti-roll bars, ride height / rake, brake bias — per team, persisted, folded into the parts contract… |
 | `setup-sheet.js` | `SetupUI` | tag | the GARAGE screen UI for js/game.js (#carsetup): everything about WHO you are and WHAT you drive. |
