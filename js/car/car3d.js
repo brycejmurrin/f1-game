@@ -2172,8 +2172,13 @@ const Car3D = (function () {
       const engT = tier("engine");
       const inScale = (engStyle ? engStyle.in : (engT === 0 ? 0.52 : engT === 2 ? 1.65 : 1.0)) * teamStyle.airbox;
       const engSnork = engStyle ? !!engStyle.snork : engT === 2;
+      // The SPINE TOP "wrap" (LiveryTex) is a sun centred on the airbox: the
+      // whole roll structure wears the sun colour, as the RB22's does, and
+      // the atlas paints the disc's rear half on the cover behind it.
+      const sunC = (liv.spineLogo === "wrap" && typeof LiveryTex !== "undefined" && LiveryTex.sunColour)
+        ? (_ckAcc(LiveryTex.sunColour(teamId, liv)) || c1) : c1;
       addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inScale, h: 0.20 * inScale, t: 0.55 },
-                   { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, c1, INTAKE);
+                   { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, sunC, INTAKE);
       // PRINCIPAL ROLL STRUCTURE. C12.4.1 requires structure at [XC 55, 0, 968]
       // — y 0.968 here, the tallest mandated point on the car
       // (docs/COCKPIT-DATUMS.md). Nothing occupied it: the airbox crowned at
@@ -2189,7 +2194,7 @@ const Car3D = (function () {
       addSpan(out, { z: -0.33, y: (hoopF + 0.968) / 2, w: 0.15 * inScale,
                      h: Math.max(0.03, 0.968 - hoopF), t: 0.40 },
                    { z: -0.63, y: (hoopR + 0.938) / 2, w: 0.13 * inScale,
-                     h: Math.max(0.03, 0.938 - hoopR), t: 0.38 }, c1);
+                     h: Math.max(0.03, 0.938 - hoopR), t: 0.38 }, sunC);
       // A SPINE SIDE mark (liv.spineSide) claims the flank band z -0.72..-1.22:
       // the pinstripe and the service panels keep clear of it (see both sites).
       const sideMark = (liv.spineSide || "none") !== "none";
