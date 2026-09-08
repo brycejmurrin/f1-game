@@ -99,8 +99,27 @@ Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
 `lapMirror` portal remaps have landed in code. Remaining survey leftovers live
 on the 08-18 perf-hunt board, not this register.
 
-- **The deploy branch's three.js/WebGPU leg renders a near-black frame on real
-  Apple hardware — OPEN, not mine, handed over (2026-09-08).** `gpu-census` on
+- **The deploy branch's three.js/WebGPU leg rendered a near-black frame on real
+  Apple hardware — NOT REPRODUCING on the current head; handed over
+  (2026-09-08).** Run 61 on `9b94175` reads `meanLuma` **44.6**, back in the
+  43.9-48.4 family, so whatever `b53b022`/`9b94175` carried fixed it or it is
+  intermittent. Two runs on `d4cd570` read 2.6 and that measurement stands;
+  what does not stand is calling it live. Anyone reading this for a repro
+  should start from `d4cd570`, not from the tip.
+
+  **What run 61 did give is the diagnosis, out of that session's own new
+  instrumentation** (`b48603b`, which added `begins`/`ends`/`mask` to
+  `envState()`): the WebGPU leg reports `begins=3 ends=3 mask=7 ready=false`
+  against the WebGL2 leg's `begins=674 ends=674 mask=3 ready=true`.
+  `begins === ends` on both, so no face is lost between `envFaceBegin` and
+  `envFaceEnd` — the producer is simply never CALLED again after three faces,
+  which is neither of the two causes that commit's comment set out to
+  separate ("faces lost in between" or "something clearing the mask"). The
+  probe stops being driven. That is where to look.
+
+  The original measurement follows.
+
+- **(the d4cd570 measurement)** `gpu-census` on
   `claude/f1-game-project-26h3ng` at `d4cd570`, `macos-latest`, montreal:
   `meanLuma` **2.6** on the TLX/WebGPU leg while the other three legs of the
   SAME run are normal (webgl2 67, glx 73.8, wgx 79.3). Reproduced twice —
