@@ -154,9 +154,41 @@ on the 08-18 perf-hunt board, not this register.
   `tier=0` on both census legs was the reading that made the shed-and-recover
   story attractive; the local run shows tier 0 is simply where this leg sits.
 
-  ESTABLISHED: the producer completes every call it is given; the `game.js`
-  gate is what stops; and it is NOT the tier. The unread terms of that gate
-  are `LT.carEnvCube`, `hideMeshes.cars` and `paused`.
+  **ROOT CAUSE, from the census ARTIFACT rather than the summary (2026-09-08).**
+  The verdict step prints `fps` and `floorMs` but not the frame COUNT, which is
+  the number that settles this. Downloading run 61's artifact:
+
+  | leg | `open.frames` | worst frame | elapsed | `begins` | `ready` |
+  |---|---|---|---|---|---|
+  | three → WebGL2 | **600** | 16.7 s | 49.7 s | 674 | true |
+  | three → WebGPU | **5** | **11.4 s** | 39.1 s | 3 | false |
+
+  **The WebGPU leg rendered FIVE frames in thirty-nine seconds**, one of them
+  taking 11.4 s. There is no env-probe defect: six cube faces cannot be baked
+  by a renderer that produces five frames. `begins=3` is the correct and
+  expected behaviour of a healthy producer on a leg that barely runs, and every
+  reading downstream of it — `ready=false`, the missing image-based ambient,
+  the darker `meanLuma` — is a symptom of the frame count and nothing else.
+
+  It also retro-explains the 2.6 / 44.6 / 66.7 luma spread that opened this
+  entry: that is how many frames landed before the capture, not three different
+  rendering faults.
+
+  So the question is not "why does the probe stall" but **why does three's
+  WebGPU backend produce 5 frames on real Apple hardware when its own WebGL2
+  backend produces 600 on the same machine, and this container's SOFTWARE
+  WebGPU produces ~900 in 26 s**. An 11.4-second frame with `gpuErrors 0` and
+  `envFail 0` points at a stall, not at work: `tlx.js` already carries a
+  "compile storm" note (its program-cache key was narrowed once for exactly
+  this, missing a 60 s budget twice on 2026-08-28), and 593 programs at ~60 s
+  of compile on Monza is recorded in the same file. That is the hypothesis to
+  test next, and the test is a program/compile count in `backendState()` — NOT
+  another env-probe counter.
+
+  Superseded above: everything about the `game.js` gate. The gate is fine; it
+  was asked three times because there were five frames to ask on. I spent two
+  rounds on the callee and one on the caller before reading the frame count,
+  which was in the artifact the whole time.
 
   For whoever picks this up: the cheap next measurement is to record WHICH
   term of the gate was false on the frames the probe did not run, not to add
