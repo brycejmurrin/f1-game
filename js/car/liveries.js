@@ -45,6 +45,9 @@
      sponsor, RB22 / W17), "duo" (title sponsor aft, partner forward — the
      RB22's Red Bull over Ford Racing) or "slash" (the W17's raked bars) paints that on the
      engine-cover FLANK, both sides (LiveryTex.SPINE_SIDE_IDS; car-mesh's band).
+     Each flank is its own atlas region (spineSide right, spineSideL left),
+     authored in that side's outside-view frame, so text reads and a graphic
+     faces forward on BOTH sides.
      The grey service panels and the accent pinstripe keep clear of the band,
      so it also moves a vertex.
    spineLogo? optional SPINE TOP — what the engine-cover crown carries over
