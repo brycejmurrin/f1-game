@@ -299,8 +299,10 @@ straight's lane target hands over to the corner's line (`lineW` easing in) —
 heading ±0.01 rad at 45 m/s trips the 0.25 m/s hysteresis. The acceleration
 RMS is the metric that moves; both are capped in the test.
 
-What the browser groups found (the `driving` group, run for this change).
-Three specs failed and none of them was a defect in the controller:
+What the browser groups found (the `driving` group, 104 specs, run for this
+change). FIVE failed and none of them was a defect in the controller — three
+were measuring the wrong quantity, two of those in specs whose VM twins had
+already been corrected and whose browser copies were left behind:
 
 - `collisions-deep` "push sticks" asserted the player's x at frame 30. Its VM
   twin had already been corrected to "shoved, and the AI is clear within 12
@@ -320,9 +322,22 @@ Three specs failed and none of them was a defect in the controller:
   while an AI still leads on prog. The gate was right; the test's reference
   was wrong.
 
-The lesson worth keeping: a controller change moves WHERE the field is, so
-every spec that measures the player while the field is nearby — a tow, a
-blocker, a rank — is measuring two things. Isolate the car under test.
+- `collisions-deep` "a single AI rub only nudges the player apart" — the
+  identical defect to "push sticks", in the same file, with the same
+  already-corrected VM twin (`minX < -0.1`, the shove AT THE CONTACT) and the
+  same stale browser copy asserting the final x forty frames later.
+- `longitudinal` "slope gravity" called `race("spa")` and went straight into
+  a 300-sample loop reading `physState().slope`. It is the one test in that
+  file that skips `startRace()`'s wait for `info().track`, so a spa build
+  that runs long makes the first sample read `null.slope`.
+
+Two lessons worth keeping. **A controller change moves WHERE the field is**,
+so every spec that measures the player while the field is nearby — a tow, a
+blocker, a rank — is measuring two things; isolate the car under test.
+**A VM twin and its browser spec are one test in two places**: correcting one
+and not the other leaves a red that looks like whatever change happens to run
+the group next. Both stale twins here carried a comment explaining the
+correction; neither comment was in the file that was still failing.
 
 Not done: a full lap-time re-measure per difficulty level (the brake formula
 is unchanged and the controller reaches the same apexes, but the smoother
