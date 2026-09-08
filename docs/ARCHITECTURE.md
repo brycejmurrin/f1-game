@@ -69,7 +69,7 @@ the contract — this index is the map, and it is what a directory move
 regenerates rather than a table anyone re-types.
 
 <!-- @gen-arch:modules -->
-_147 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
+_148 rows over 28 directories, in load order. `tag` = a `<script>` in index.html (FULL); every other roster is injected by js/game.js when needed._
 
 **`js/core/`**
 
@@ -190,6 +190,7 @@ _147 rows over 28 directories, in load order. `tag` = a `<script>` in index.html
 | `setting-row.js` | `SettingRow` | tag | SettingRow — the ONE control for an enumerated preference on a settings sheet: LABEL ‹ VALUE › One line at every UI SIZE and orientation. |
 | `settings-tabs.js` | `SettingsNav` | tag | SettingsNav — page stack for the pause/title Settings sheet. |
 | `key-binds.js` | `KeyBinds` | tag | the KEYBOARD and CONTROLLER sections of the CONTROLS settings page: one row per driving action with two slots, tap a slot then press a key (or a controller… |
+| `settings-export.js` | `SettingsExport` | tag | SettingsExport: the SETTINGS FILE buttons in SETTINGS › DISPLAY › RENDERER. |
 | `scale.js` | `UiScale` | tag | UI SIZE / HUD SIZE / BUTTON SIZE sliders + RESOLUTION pin. |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
@@ -1337,12 +1338,26 @@ Probes: `node tools/gfx/gfx-probe.mjs --backend webgpu|three <track>`.
   0 if the HDR format cannot; phones always 0, PCSS, car/lamp shadows, TrackGraph instancing, MAT arrays.
   SAA snapshots N after peel and before wall/MAT bump so brick/concrete
   match WGX (a post-bump `dFdx(N)` dulled every seam).
-- **DRIVING LINE ribbon (2026-09-08):** GLX only. `js/render/shared/driving-line.js`
-  builds the strip for every backend; only GLX has the pass (`drawDrivingLine`,
-  `LINE_VS`/`LINE_FS` in `glsl-fx.js`). WGX and TLX export the member returning
-  `false` ("no pass"), so the RACE SETTINGS row works and draws nothing there —
-  a recorded gap, not a silent one (`docs/research/WEBGPU-PARITY.md`
-  §Driving line). Porting is a stride-24 strip + one emissive fragment.
+- **DRIVING LINE ribbon (2026-09-08):** on all three. `js/render/shared/driving-line.js`
+  builds one stride-6 strip; GLX draws it with `LINE_VS`/`LINE_FS`
+  (`glsl-fx.js`), WGX with `WGSLFx.LINE` (a triangle-strip pipeline beside
+  SKID, Dawn-validated), TLX with `tsl-fx.js` `lineMat` (the strip indexed into
+  triangles, uniforms for speed / mode / strength). Same colour maths in all
+  three; the shipped sign-off is `gpu-census.yml` on macOS
+  (`docs/research/WEBGPU-PARITY.md` §Driving line).
+- **GARAGE FLOOR REFLECTION (2026-09-08):** on all three. `js/garage/scene.js`
+  draws the car mesh a second time through `MAT_MIRROR` (X as the preview,
+  Y for the floor; det +1, no cull flip) at `alpha 0.26` with the `noDepthTest`
+  draw option, straight after the floor and before the shell — no stencil, no
+  second floor pass, and its clip is simply every opaque draw submitted after
+  it. It shipped GLX-only: `noDepthTest` reached `gl.disable(DEPTH_TEST)` and
+  nothing else, so on WGX and TLX the mirrored car sat behind the floor's depth
+  and never drew. WGX now maps it onto the existing always-pass pipeline bit
+  (`depthCompare: "always"`, depth write already off via the blend); TLX sets
+  `material.depthTest = false` AND clears `transparent`, because three renders
+  the transparent list after the whole opaque one regardless of renderOrder —
+  left transparent, the mirror paints last and ghosts over the props it should
+  be hidden behind.
 - **WGX:** near-GLX on desktop; lite/WebKit matches GLX phone cost (env probe off on LITE since 2026-09-03 — a cube cycle is six world passes + 36 mip passes on the jetsam rung); honest
   remaining gap = TAA scaffold off (`_TAA_ENABLED = false` — jitter without a
   history resolve is sub-pixel shimmer). The sky's cloud deck shades like GLX

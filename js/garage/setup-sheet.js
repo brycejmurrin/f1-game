@@ -702,11 +702,32 @@ function buildLiveryCreator(container, team) {
   const prev = document.createElement("span"); prev.className = "cs-liv-swatch cs-liv-ed-prev";
   wrap.appendChild(prev);
 
+  // CONDITIONAL ROWS. A field that paints onto a part the draft does not have
+  // is greyed out, not hidden: FIN SHAPE "none" builds no blade and no fin
+  // decal quads (car3d, car-mesh), so TAIL FIN, TAIL GRAPHIC, TAIL STYLE and
+  // FIN BADGE all paint nothing until a fin is back. The row keeps its value —
+  // choose a fin again and the earlier badge returns — and every control in it
+  // is `disabled` for real, so a tap does nothing rather than editing a field
+  // the car cannot show. Registered by the row builders; synced on every edit,
+  // after refreshPalettes has rebuilt the palette chips it also disables.
+  const deps = [];
+  const needFin = () => (d.finShape || "standard") !== "none";
+  const NO_FIN = "Needs a tail fin — pick a FIN SHAPE other than NONE";
+  const syncDeps = () => {
+    for (const dep of deps) {
+      const off = !dep.when();
+      dep.row.setAttribute("aria-disabled", String(off));
+      dep.row.title = off ? dep.why : "";
+      const ctl = dep.row.querySelectorAll("button, input");
+      for (let i = 0; i < ctl.length; i++) ctl[i].disabled = off;
+    }
+  };
   const applyPreview = () => {
     prev.style.background = "linear-gradient(120deg, " + d.c1 + " 0 56%, " + d.c2 + " 56% 100%)";
     prev.textContent = "";
     if (d.stripe) { const st = document.createElement("span"); st.className = "cs-liv-stripe"; st.style.background = d.stripe; prev.appendChild(st); }
     refreshPalettes();   // a slot's new colour becomes matchable from every other slot
+    syncDeps();
     livePreviewDraft(team, d);
   };
 
@@ -776,8 +797,9 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
   wrap.appendChild(colorRow("WINGS", "wing", true));
-  wrap.appendChild(colorRow("TAIL FIN", "fin", true));
-  wrap.appendChild(colorRow("TAIL GRAPHIC", "finArt", true));
+  const finRow = colorRow("TAIL FIN", "fin", true), finArtRow = colorRow("TAIL GRAPHIC", "finArt", true);
+  wrap.appendChild(finRow); wrap.appendChild(finArtRow);
+  deps.push({ row: finRow, when: needFin, why: NO_FIN }, { row: finArtRow, when: needFin, why: NO_FIN });
   // Per-team mark rows: LiveryTex.markSlots names the shape each picker paints
   // on THIS mark, so a player choosing Racing Bulls sees RB LETTERS, BULL and
   // OUTLINE rather than rows that could mean anything. The LENGTH is the mark's
@@ -818,6 +840,7 @@ function buildLiveryCreator(container, team) {
     }
     r.appendChild(group);
     wrap.appendChild(r);
+    return r;
   };
   pillRow("FINISH", "finish", ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "gloss");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
@@ -827,9 +850,9 @@ function buildLiveryCreator(container, team) {
   // carries, and whether the crest also repeats on the spine. Four single-choice
   // fields, so four pill rows — the same node shape as FINISH above.
   pillRow("FIN SHAPE", "finShape", Car3D.FIN_SHAPE_IDS || ["standard"], "standard");
-  pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team");
-  pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo");
-  pillRow("SPINE LOGO", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
+  deps.push({ row: pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team"), when: needFin, why: NO_FIN });
+  deps.push({ row: pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo"), when: needFin, why: NO_FIN });
+  pillRow("SPINE TOP", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
   // Body details: the T-cam housing colour (the real car-1 / car-2 code) and
   // the engine-cover cooling vents. Both are mesh, so their id lists are Car3D's.
   pillRow("T-CAM", "tcam", Car3D.TCAM_IDS || ["team"], "team");

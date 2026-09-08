@@ -1201,6 +1201,8 @@ const WGX = (function () {
     let pBlob = null, pMark = null;
     let pSkid = null, skidUBO = null, skidFxBG = null, skidVBO = null,
         _skidCap = 0, _skidScratch = null;
+    let pLine = null, lineUBO = null, lineFxBG = null, lineVBO = null, _lineCap = 0;   // DRIVING LINE ribbon
+    const _lineU = new Float32Array(20);   // LineU: viewProj (16) + params (4)
     let pGlow = null, glowUBO = null, glowFxBG = null, glowVBO = null,
         _glowCap = 0, _glowScratch = null;
     let pDecal = null, decalUBO = null, fxDecalLayout = null;
@@ -1765,6 +1767,30 @@ const WGX = (function () {
         skidFxBG = device.createBindGroup({ layout: pSkid.getBindGroupLayout(0),
           entries: [{ binding: 0, resource: { buffer: skidUBO } }] });
 
+        // Driving line: one triangle-strip over a per-circuit world-space
+        // buffer (stride 28, DrivingLine.STRIDE = 7 floats). Same depth/blend
+        // state as the skid trail — it sits on the road and never writes depth.
+        const lineMod = device.createShaderModule({ code: _Fx.LINE });
+        pLine = device.createRenderPipeline({
+          layout: "auto",
+          vertex: { module: lineMod, entryPoint: "vs_main", buffers: [{ arrayStride: _Fx.LINE_VERTEX_BYTES,
+            attributes: [
+              { shaderLocation: 0, offset: 0,  format: "float32x3" },
+              { shaderLocation: 1, offset: 12, format: "float32" },
+              { shaderLocation: 2, offset: 16, format: "float32" },
+              { shaderLocation: 3, offset: 20, format: "float32" },
+              { shaderLocation: 4, offset: 24, format: "float32" },
+            ] }] },
+          fragment: { module: lineMod, entryPoint: "fs_main", targets: [{ format: SCENE_FORMAT, blend: ALPHA_BLEND }] },
+          primitive: { topology: "triangle-strip", cullMode: "none" },
+          depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: false, depthCompare: "less-equal",
+            depthBias: -2, depthBiasSlopeScale: -2, depthBiasClamp: 0 },
+          ..._fxMS,
+        });
+        lineUBO = device.createBuffer({ size: _Fx.LINE_UNIFORM_BYTES, usage: _UCD });
+        lineFxBG = device.createBindGroup({ layout: pLine.getBindGroupLayout(0),
+          entries: [{ binding: 0, resource: { buffer: lineUBO } }] });
+
         // Glow: additive camera-facing halos, rebuilt each frame (stride 36).
         const glowMod = device.createShaderModule({ code: _Fx.GLOW });
         pGlow = device.createRenderPipeline({
@@ -1893,7 +1919,12 @@ const WGX = (function () {
       // stamping ribbon depth clips walls/tyres drawn later. Floor/terrain
       // punch a LUT hole; the road uses less-equal (no GL-sized bias)
       // and still writes depth so skyLate cannot erase it.
-      const decal = !!(opts && (opts.decal || opts.depthCompare === "always"));
+      // noDepthTest lands on the SAME state: GLX spells it gl.disable(DEPTH_TEST)
+      // around one draw (the garage floor reflection, mirrored UNDER the floor);
+      // here depthCompare "always" is that, and the blend above already keeps
+      // depthWriteEnabled false, so the opaque draws recorded after it in this
+      // pass overwrite it exactly as they do on GLX.
+      const decal = !!(opts && (opts.decal || opts.noDepthTest || opts.depthCompare === "always"));
       const samples = _passSamples | 0 || 1;
       // GLX polygonOffset(factor, units) → WebGPU depthBias / depthBiasSlopeScale.
       // Start-line decals pass [-1, -2]; without this they shimmer at range.
@@ -3727,6 +3758,7 @@ const WGX = (function () {
       detail: 0, clearcoat: 0, carPaint: 0, sparkle: 1, _instanced: false,
       surfaceId: 0, buryRibbon: false, depthBias: null, doubleSided: false,
       noAlphaWrite: false, decal: false, depthCompare: undefined,
+      noDepthTest: false,
     };
     const _BIAS_BURY = [5, 10], _BIAS_DETAIL = [3, 6];
     function _litOpts(opts) {
@@ -3752,6 +3784,7 @@ const WGX = (function () {
       b._instanced = o._instanced; b.surfaceId = o.surfaceId;
       b.buryRibbon = o.buryRibbon; b.noAlphaWrite = o.noAlphaWrite;
       b.decal = o.decal; b.depthCompare = o.depthCompare;
+      b.noDepthTest = o.noDepthTest;
       b.depthBias = bias; b.doubleSided = dbl;
       return b;
     }
@@ -5507,6 +5540,36 @@ const WGX = (function () {
       return true;
     }
 
+    // DRIVING LINE ribbon (mirror of GLX drawDrivingLine): the strip
+    // js/render/shared/driving-line.js built, uploaded once per circuit
+    // (`dirty`), drawn in the lit pass with the skid trail's depth state.
+    // `opts.speed` is the player's speed for the dynamic colour, `cornersOnly`
+    // fades the straights, `str` the emissive strength. false = no pass.
+    function drawDrivingLine(verts, vertCount, dirty, opts) {
+      if (!_fxReady || !litPass || !pLine) return false;
+      if (!(vertCount > 0)) return true;
+      const floats = vertCount * 7;
+      const bytes = floats * 4;
+      if (!lineVBO || _lineCap < bytes) {
+        if (lineVBO) _retiredBufs.push(lineVBO);
+        _lineCap = Math.max(bytes, 4096);
+        lineVBO = device.createBuffer({ size: (_lineCap + 3) & ~3, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+        dirty = true;
+      }
+      if (dirty) device.queue.writeBuffer(lineVBO, 0, verts, 0, floats);
+      _lineU.set(frameVPGpu, 0);
+      _lineU[16] = (opts && opts.speed) || 0;
+      _lineU[17] = opts && opts.cornersOnly ? 1 : 0;
+      _lineU[18] = (opts && opts.str) || 1.6;
+      _lineU[19] = 0;
+      device.queue.writeBuffer(lineUBO, 0, _lineU);
+      _setPipe(litPass, pLine);
+      _setBG0(litPass, lineFxBG);
+      _setVB0(litPass, lineVBO);
+      litPass.draw(vertCount, 1, 0, 0);
+      return true;
+    }
+
     // Additive lamp-glare halos — CPU billboard build ported verbatim from GLX
     // Mirror GLX.drawGlow, emitting stride-36 (corner2, center3, color3,
     // radius1) verts, then one additive draw into the HDR scene target.
@@ -5909,6 +5972,7 @@ const WGX = (function () {
           { alpha: 0.5 }, { alpha: 0.5, noAlphaWrite: true },
           { doubleSided: true }, { depthBias: [3, 6] }, { depthBias: [5, 10] },
           { depthBias: [-1, -2] }, { decal: true },
+          { alpha: 0.26, noDepthTest: true },
         ];
         const save = _passSamples;
         const counts = MSAA_COUNT > 1 ? [1, MSAA_COUNT] : [1];
@@ -5955,7 +6019,7 @@ const WGX = (function () {
       drawShadow,                    // blob shadow quad, in lit pass
       drawMark,                      // single skid-mark stamp
       drawSkidBatch,                 // batched skid trail, one draw
-      drawDrivingLine: () => false,  // PARITY GAP (2026-09-08): the ribbon is GLX-only; false = "no pass", the caller reports it
+      drawDrivingLine,               // the DRIVING LINE ribbon, one strip draw
       drawGlow,                      // additive lamp-glare billboards, HDR
       drawDecal,                     // team/sponsor decal atlas
 

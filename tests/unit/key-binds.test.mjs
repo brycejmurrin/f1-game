@@ -16,6 +16,9 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
 function boot() {
   const listeners = {};
+  // Keydowns the pad synthesises land here when they go to the document (the
+  // fallback target); one that reaches a focused control is recorded by that
+  // control's own fake dispatchEvent instead — which is the point of the test.
   const dispatched = [];
   const navOpen = { on: false };
   const el = () => ({
@@ -36,11 +39,9 @@ function boot() {
       addEventListener: (t, f) => { (listeners[t] ||= []).push(f); }, removeEventListener() {},
       getElementById: el, querySelector: el, querySelectorAll: () => [], hidden: false,
       activeElement: null,
-      body: { classList: { add() {}, remove() {}, toggle() {} } },
       dispatchEvent: (e) => { dispatched.push(e); return true; },
+      body: { classList: { add() {}, remove() {}, toggle() {} } },
     },
-    // The pad's menu walker (padNavPoll) runs while a nav layer is open and
-    // dispatches synthetic keydowns at the document; captured in `dispatched`.
     UiLayers: { navOpen: () => navOpen.on, anyOpen: () => navOpen.on, top: () => (navOpen.on ? { id: "pmsettings", contains: () => true } : null) },
   };
   sb.Event = class { constructor(type, init) { this.type = type; Object.assign(this, init || {}); } };
@@ -225,30 +226,6 @@ test("an armed capture takes the first press and the frame does nothing else", (
   assert.equal(Input.consumeOvertake(), true, "disarmed, Y overtakes again");
 });
 
-test("a D-pad direction is dispatched at the FOCUSED control, so an element's own key handler runs", () => {
-  // Both tab rails (the garage categories, the circuit filter chips) own
-  // their axis — MenuNav steps aside and the rail's own `onkeydown` cycles
-  // it. That handler is on the ELEMENT, and an event dispatched at
-  // `document` never descends to it: the pad sat on the garage's TEAM tab
-  // forever while a real ArrowDown walked all fifteen (2026-09-08).
-  const { Input, sb, fire, dispatched, navOpen } = boot();
-  const { press, release } = fakePad(sb, fire);
-  navOpen.on = true;
-  const tab = { tagName: "BUTTON", id: "cs-tab-team", dispatchEvent: (e) => { dispatched.push(e); e.target = "tab"; return true; } };
-  sb.document.activeElement = tab;
-  press(13); Input.poll(); release(13); Input.poll();   // the neutral poll releases the direction (no auto-repeat)
-  assert.equal(dispatched.length, 1, "one key for one press");
-  assert.equal(dispatched[0].key, "ArrowDown");
-  assert.equal(dispatched[0].target, "tab", "the focused control received it, not the document");
-  assert.equal(dispatched[0].bubbles, true, "…and it still bubbles to document and window (TopModal, MenuNav)");
-  // Nothing focused: the document is the fallback, so a first press can still seed focus.
-  dispatched.length = 0;
-  sb.document.activeElement = null;
-  press(13); Input.poll(); release(13); Input.poll();
-  assert.equal(dispatched.length, 1);
-  assert.equal(dispatched[0].target, undefined, "dispatched at the document");
-});
-
 test("a saved controller map round-trips; garbage in it falls back per action", () => {
   const { Input } = boot();
   Input.setPadBinding("camera", 0, 10);
@@ -277,7 +254,102 @@ test("button names follow the connected pad's family", () => {
   assert.equal(Input.padLabel(9), "OPTIONS");
 });
 
+// ---- the tables on a touch device ------------------------------------------
+// pointer: coarse says nothing about whether a keyboard exists. The KEYBOARD
+// table used to be hidden by CSS on every touch device; now the module shows it
+// once a physical key is seen (Input.keyboardSeen), the way the CONTROLLER
+// table already waited for a pad — and one hint line says what to press.
+
+test("Input.keyboardSeen latches on a key outside a field, never on typing", () => {
+  const { Input, key, sb } = boot();
+  assert.equal(Input.keyboardSeen(), false);
+  sb.document.activeElement = { tagName: "INPUT" };
+  key("KeyA", true); key("KeyA", false);
+  assert.equal(Input.keyboardSeen(), false, "an on-screen keyboard only fires into a focused field");
+  sb.document.activeElement = { tagName: "BUTTON" };
+  key("KeyA", true); key("KeyA", false);
+  assert.equal(Input.keyboardSeen(), true, "a key on a focused menu button is a keyboard");
+});
+
+// A DOM just deep enough for KeyBinds.create: elements by id with hidden,
+// textContent and children; createElement for the rows.
+function bootUi(desktop) {
+  const { Input, key, sb, fire } = boot();
+  const nodes = {};
+  const mk = () => {
+    const n = { hidden: false, textContent: "", dataset: {}, disabled: false, style: {}, kids: [],
+      setAttribute() {}, append(...a) { this.kids.push(...a); }, appendChild(a) { this.kids.push(a); },
+      addEventListener() {}, removeEventListener() {} };
+    return n;
+  };
+  sb.document.getElementById = (id) => (nodes[id] ||= mk());
+  sb.document.createElement = () => mk();
+  sb.document.body.classList.contains = (c) => c === "desktop" && desktop;
+  sb.document.readyState = "complete";
+  const winListeners = {};
+  sb.addEventListener = (t, f) => { (winListeners[t] ||= []).push(f); };
+  sb.removeEventListener = (t, f) => { const l = winListeners[t] || []; const i = l.indexOf(f); if (i >= 0) l.splice(i, 1); };
+  sb.GameAudio = null;
+  sb.setTimeout = (f) => { f(); return 0; };   // the reveal defers past the dispatch; here it just runs
+  vm.runInContext(read("js/ui/key-binds.js"), sb.__ctx || (sb.__ctx = vm.createContext(sb)), { filename: "js/ui/key-binds.js" });
+  const KeyBinds = vm.runInContext("KeyBinds", sb.__ctx);
+  const store = { get: () => null, set() {} };
+  const G = { $: sb.document.getElementById, store, soundOn: false };
+  const kb = KeyBinds.create(G);
+  // A physical key: Input's window listener sets the latch, then the module's.
+  const press = (code) => { key(code, true); (winListeners.keydown || []).forEach((f) => f({ code, isTrusted: true })); key(code, false); };
+  // Input's listeners were registered before the swap above, the module's after.
+  const fireAll = (t, e) => { fire(t, e); (winListeners[t] || []).forEach((f) => f(e || {})); };
+  return { Input, kb, press, fire: fireAll, sb, $: sb.document.getElementById };
+}
+// The UI module reads Input from the same realm; boot() runs input.js in a
+// context whose globals are `sb`, so createContext(sb) is that same realm.
+
+test("a phone hides both tables behind one hint until a key or a pad is seen", () => {
+  const { $, press, fire, sb } = bootUi(false);
+  assert.equal($("pm-keys-section").hidden, true, "no keyboard seen yet");
+  assert.equal($("pm-pad-section").hidden, true, "no pad seen yet");
+  assert.equal($("pm-ctl-hint").hidden, false, "the hint says what to press");
+  press("KeyW");
+  assert.equal($("pm-keys-section").hidden, false, "the first physical key reveals the KEYBOARD table");
+  assert.equal($("pm-ctl-hint").hidden, true, "and the hint goes");
+  assert.equal($("pm-pad-section").hidden, true, "the pad table still waits for a pad");
+  fakePad(sb, fire);
+  assert.equal($("pm-pad-section").hidden, false, "gamepadconnected reveals CONTROLLER");
+});
+
+test("a desktop shows both tables and never the hint", () => {
+  const { $ } = bootUi(true);
+  assert.equal($("pm-keys-section").hidden, false);
+  assert.equal($("pm-pad-section").hidden, false);
+  assert.equal($("pm-ctl-hint").hidden, true);
+});
+
 // ---- the pad in a menu: value controls --------------------------------------
+
+test("a D-pad direction is dispatched at the FOCUSED control, so an element's own key handler runs", () => {
+  // Both tab rails (the garage categories, the circuit filter chips) own
+  // their axis — MenuNav steps aside and the rail's own `onkeydown` cycles
+  // it. That handler is on the ELEMENT, and an event dispatched at
+  // `document` never descends to it: the pad sat on the garage's TEAM tab
+  // forever while a real ArrowDown walked all fifteen (2026-09-08).
+  const { Input, sb, fire, dispatched, navOpen } = boot();
+  const { press, release } = fakePad(sb, fire);
+  navOpen.on = true;
+  const tab = { tagName: "BUTTON", id: "cs-tab-team", dispatchEvent: (e) => { dispatched.push(e); e.target = "tab"; return true; } };
+  sb.document.activeElement = tab;
+  press(13); Input.poll(); release(13); Input.poll();   // the neutral poll releases the direction (no auto-repeat)
+  assert.equal(dispatched.length, 1, "one key for one press");
+  assert.equal(dispatched[0].key, "ArrowDown");
+  assert.equal(dispatched[0].target, "tab", "the focused control received it, not the document");
+  assert.equal(dispatched[0].bubbles, true, "…and it still bubbles to document and window (TopModal, MenuNav)");
+  // Nothing focused: the document is the fallback, so a first press can still seed focus.
+  dispatched.length = 0;
+  sb.document.activeElement = null;
+  press(13); Input.poll(); release(13); Input.poll();
+  assert.equal(dispatched.length, 1);
+  assert.equal(dispatched[0].target, undefined, "dispatched at the document");
+});
 
 test("D-pad Left/Right on a focused <select> steps its value and fires change; Up/Down are the ordinary row move", () => {
   const { Input, sb, fire, dispatched, navOpen } = boot();

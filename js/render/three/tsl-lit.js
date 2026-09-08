@@ -1685,6 +1685,25 @@
         // which writes colour AND the alpha tag verbatim. Match that.
         m.blending = THREE.NoBlending;
       }
+      // noDepthTest — GLX draw() brackets the call in gl.disable(DEPTH_TEST).
+      // Its one caller is the garage floor reflection: the car again, mirrored
+      // in y = 0 and drawn UNDER the floor, where a depth test could never let
+      // it through. Two halves here, and the second is the one three hides.
+      // GLX gets the reflection's CLIP for free from submission order — the
+      // mirror paints straight after the floor, writes no depth, and every
+      // opaque draw after it (shell, props, the real car) overwrites wherever
+      // it shows through. three renders the whole transparent list AFTER the
+      // opaque one whatever the renderOrder (see present() in tlx.js), so an
+      // alpha<1 mirror comes out LAST and smears the ghost car over the props
+      // it should be hidden behind. `transparent` only picks the LIST —
+      // blending is applied from `blending`, set above — so clearing it puts
+      // the mirror back in renderOrder among the opaque run with its alpha
+      // blend intact, which is GLX's order exactly.
+      if (o.noDepthTest) {
+        m.depthTest = false;
+        m.depthWrite = false;
+        m.transparent = false;
+      }
       return m;
     }
 

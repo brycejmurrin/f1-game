@@ -938,7 +938,9 @@ const api = {
   // optionally forcing time of day ("day" | "night" | "default") and weather
   // ("dry" | "wet" | "rain" | "overcast" | "fog"). "wet" = damp road, no rain;
   // "rain" = wet road + falling rain. Skips menus so a harness can render any track.
-  race(trackRef, timeOfDay, weather) {
+  // opts.laps: the race distance (default GAME_LAPS) — the tyre-class draw at
+  // grid-up reads it, so a long-race bench must set it HERE, not after.
+  race(trackRef, timeOfDay, weather, opts) {
     const i = typeof trackRef === "number"
       ? trackRef
       : Tracks.LIST.findIndex((t) => t.id === trackRef);
@@ -946,7 +948,7 @@ const api = {
     G.trackIdx = i;
     G.seasonMode = false;
     G.timeTrial = false;
-    G.raceLaps = GAME_LAPS;
+    G.raceLaps = (opts && opts.laps > 0) ? (opts.laps | 0) : GAME_LAPS;
     G.raceWeather = (weather === "wet" || weather === "rain" || weather === "overcast" || weather === "fog") ? weather : "dry";
     G.raceTimeOfDay = timeOfDay || "default";
     startRace();
@@ -2439,6 +2441,12 @@ const api = {
     // `foreign` = cross-tab invalidations applied (store.js onForeignWrite): non-zero means a second tab is in play.
     return { ok: !s.broken, broken: s.broken || null, keys: s._cache.size, rev: s.rev, foreign: s.foreign | 0 };
   },
+
+  // settingsFile(mode) — the SETTINGS FILE object (js/ui/settings-export.js):
+  // "changes" (default) = every preference that differs from its shipped
+  // default, with the default it replaced and the source that owns it; "all"
+  // = every preference's effective value. Never the garage, saves or accounts.
+  settingsFile(mode) { return SettingsExport.collect(mode === "all" ? "all" : "changes", G); },
 
   // save(data, filename) — hand a file back out of the browser.
   //

@@ -388,15 +388,19 @@ function buildProps(g, liv) {
   }
   // The upper side walls carry 2.2 m2 of wordmark over 29 m2 of wall, and that
   // band is 22% of the SIDE preset — the one view that looks straight at them.
-  // A service gantry per side: a shelf, its brackets, and a rail.
+  // A service gantry per side: a shelf, its brackets, and a rail. ABOVE the
+  // wordmark band (y 3.10-3.60): the shelf used to run at 3.42 with its clips
+  // at z 0, so the SIDE preset saw every wordmark with its top third behind
+  // the shelf and the middle one notched by a clip. Brackets from 3.62, shelf
+  // at 3.84, rail and clips to 4.24 — under the fill fixtures' 4.32 housings.
   for (const sd of [-1, 1]) {
     const w = sd < 0 ? g.nx : g.px, x = sd * 5.20;
-    block(w, x, 3.42, 0, 0.20, 0.04, 5.00, scale(STEEL, 0.7));
-    block(w, x - sd * 0.20, 3.70, 0, 0.03, 0.28, 5.00, scale(STEEL, 0.5));
+    block(w, x, 3.84, 0, 0.20, 0.04, 5.00, scale(STEEL, 0.7));
+    block(w, x - sd * 0.20, 4.02, 0, 0.03, 0.16, 5.00, scale(STEEL, 0.5));
     for (let i = -2; i <= 2; i++) {
-      block(w, x - sd * 0.09, 3.24, i * 2.30, 0.11, 0.20, 0.05, scale(STEEL, 0.45));
+      block(w, x - sd * 0.09, 3.71, i * 2.30, 0.11, 0.09, 0.05, scale(STEEL, 0.45));
       if (i % 2 === 0)
-        block(w, x - sd * 0.06, 3.56, i * 2.30, 0.14, 0.24, 0.34, scale(STEEL, 0.55));
+        block(w, x - sd * 0.06, 4.06, i * 2.30, 0.14, 0.18, 0.34, scale(STEEL, 0.55));
     }
   }
 
@@ -515,7 +519,7 @@ function buildProps(g, liv) {
 // The car's wheels: x +/-0.79 front at z 1.7, x +/-0.76 rear at z -1.6, r 0.34
 // (js/car/car3d.js AXLES) — the floor boxes and the guns are placed off those.
 const RUBBER = [0.045, 0.045, 0.050], HOSE = [0.12, 0.14, 0.20];
-const FAN = [4.5, 3.45], SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
+const FAN = [4.5, 3.32], SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
 const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90],
                   [0.10, 0.60, 0.25], [0.15, 0.35, 0.85]];   // S M H, inter, wet
 function buildEquipment(g, liv, ctx) {
@@ -533,20 +537,24 @@ function buildEquipment(g, liv, ctx) {
   // as guy-lines in every preset. Between stops the guns lie by their wheels
   // on a coil of hose from a floor manifold at the box edge, which is what a
   // real bay looks like and keeps everything below knee height.
+  // z -1.75, in the gap between the side walls' wordmark bays (z -1.1..1.1
+  // and -2.4..-4.6): at z 0.1 the reel and its drop hung straight in front of
+  // the middle wordmark, which the SIDE preset reads as a sign cut in two.
+  const BZ = -1.75;
   for (const sd of [-1, 1]) {
     const bx = sd * 2.3;
-    tube(g.mid, [sd * 4.6, 4.40, 0.1], [bx, 4.40, 0.1], 0.045, dark, 6, MAT.METAL);   // boom
+    tube(g.mid, [sd * 4.6, 4.40, BZ], [bx, 4.40, BZ], 0.045, dark, 6, MAT.METAL);   // boom
     for (let i = 0; i < 3; i++)
-      block(g.mid, sd * (2.9 + i * 0.6), 4.40, 0.1, 0.02, 0.09, 0.02, STEEL);       // hangers
-    cyl(g.mid, bx, 4.05, 0.1, 0.20, 0.16, scale(DARK, 1.5), 10);                     // reel drum
-    cyl(g.mid, bx, 4.21, 0.1, 0.06, 0.20, STEEL, 6);                                 // spindle
-    hose(g.mid, [[bx, 4.05, 0.1], [bx, 3.50, 0.1]], 0.025, HOSE, 6);                 // retracted drop
-    block(g.mid, bx, 3.46, 0.1, 0.04, 0.05, 0.04, STEEL);                            // coupling
-    block(g.mid, sd * 2.36, 0.08, 0.1, 0.10, 0.08, 0.24, dark);                      // floor manifold
+      block(g.mid, sd * (2.9 + i * 0.6), 4.40, BZ, 0.02, 0.09, 0.02, STEEL);        // hangers
+    cyl(g.mid, bx, 4.05, BZ, 0.20, 0.16, scale(DARK, 1.5), 10);                      // reel drum
+    cyl(g.mid, bx, 4.21, BZ, 0.06, 0.20, STEEL, 6);                                  // spindle
+    hose(g.mid, [[bx, 4.05, BZ], [bx, 3.50, BZ]], 0.025, HOSE, 6);                   // retracted drop
+    block(g.mid, bx, 3.46, BZ, 0.04, 0.05, 0.04, STEEL);                             // coupling
+    block(g.mid, sd * 2.36, 0.08, BZ, 0.10, 0.08, 0.24, dark);                       // floor manifold
     for (const wz of [1.7, -1.6]) {
       const gx = sd * 1.55, gz = wz + (wz > 0 ? 0.55 : -0.55), cz = wz * 0.55;
       // The coil: six short legs zig-zagging at floor level beside the manifold.
-      const pts = [[sd * 2.36, 0.08, 0.1 + (wz > 0 ? 0.14 : -0.14)]];
+      const pts = [[sd * 2.36, 0.08, BZ + (wz > 0 ? 0.14 : -0.14)]];
       for (let k = 0; k < 6; k++)
         pts.push([sd * (2.05 + (k % 2 ? 0.22 : -0.02)), 0.035 + (k % 3) * 0.02, cz + (k - 2.5) * 0.11]);
       pts.push([gx + sd * 0.12, 0.05, gz]);
@@ -614,9 +622,9 @@ function buildEquipment(g, liv, ctx) {
   }
   // EXTRACTOR FAN housing, high on the back wall; the blades are a separate
   // mesh so they can turn (fanMesh, drawn in draw()).
-  // At y 3.45, r 0.36: the FRONT preset's frame tops out at y 3.76 on this
-  // wall (at 3.75 the frame edge cut it in half), and the pit board below
-  // tops out at 2.92.
+  // At y 3.32, r 0.36 (top at 3.68): the FRONT preset's frame tops out at
+  // y 3.76 on this wall and cut it at 3.75 and again at 3.45; the pit board
+  // below tops out at 2.92.
   tube(g.back, [FAN[0], FAN[1], Z_BACK + 0.02], [FAN[0], FAN[1], Z_BACK + 0.22], 0.36, scale(STEEL, 0.7), 16, MAT.METAL);
   tube(g.back, [FAN[0], FAN[1], Z_BACK + 0.10], [FAN[0], FAN[1], Z_BACK + 0.24], 0.32, [0.03, 0.032, 0.038], 16);   // the dark throat
   for (let i = 0; i < 3; i++) {                                                  // guard bars
@@ -1607,10 +1615,12 @@ function buildLive() {
   // forward of the data boards.
   dquadR(g.nx, [[-xw, 1.72, 4.6], [-xw, 1.72, 2.4], [-xw, 2.12, 2.4], [-xw, 2.12, 4.6]], [1, 0, 0], L_BANNER[0]);
   dquadR(g.px, [[xw, 1.72, 2.4], [xw, 1.72, 4.6], [xw, 2.12, 4.6], [xw, 2.12, 2.4]], [-1, 0, 0], L_BANNER[1]);
-  dquadR(g.nx, [[-xw, 1.72, -1.1], [-xw, 1.72, -2.2], [-xw, 2.12, -2.2], [-xw, 2.12, -1.1]], [1, 0, 0], L_BANNER[1]);
-  // Next-race sign on the door wall above the notice board: flag over name.
-  dquadR(g.door, [[4.62, 3.06, zd], [4.20, 3.06, zd], [4.20, 3.27, zd], [4.62, 3.27, zd]], [0, 0, -1], L_FLAG);
-  dquadR(g.door, [[5.22, 2.84, zd], [4.20, 2.84, zd], [4.20, 3.01, zd], [5.22, 3.01, zd]], [0, 0, -1], L_RACE);
+  // Next-race sign ON THE SHUTTER (z 6.24, where the door wordmark lives),
+  // under that wordmark's y 2.60 and above the shutter's 1.98 bottom rail.
+  // It was on the door wall at x 4.2..5.2, which the REAR preset frames only
+  // as its extreme top-left corner — measured, the flag was half off the edge.
+  dquadR(g.door, [[3.20, 2.26, 6.24], [2.72, 2.26, 6.24], [2.72, 2.50, 6.24], [3.20, 2.50, 6.24]], [0, 0, -1], L_FLAG);
+  dquadR(g.door, [[3.88, 2.04, 6.24], [2.72, 2.04, 6.24], [2.72, 2.23, 6.24], [3.88, 2.23, 6.24]], [0, 0, -1], L_RACE);
   return g;
 }
 function dquadR(out, c, n, region) {

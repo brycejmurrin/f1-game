@@ -398,6 +398,41 @@ the numbers):
   minute): monaco 1.29 → 0.65 with flip-backs 25 → 3 — the real Monaco sees a
   handful of passes per race; monza 3.7 → 3.8, unchanged, since a long straight
   into a wide braking zone is where the move IS on.
+- **On the line, the line's own corner speed** (`TrackLine.pathK`). The AI's
+  brake target reads the road's curvature eased toward the line's arc — the
+  widest arc touching the outside edge at the corner's ends and the inside at
+  the apex, `ρ = (a² + b² − 2ab cos(θ/2)) / (2(b − a cos(θ/2)))` — never below
+  85% of the road's, and only while the car is within 1.5 m of the line. Off
+  the line, fighting, it gets the road's curvature: being off-line costs what it
+  costs a real car. The whole geometric gain is not handed over because the
+  AI's corner-speed model is an abstraction calibrated on the road's curvature
+  against what the player can do; 85% is an 8% corner-speed edge for the line.
+  Measured on a solo lap: monza 124.97 → 123.30 s, monaco 86.05 → 85.03 s, and
+  the difficulty scales in `js/physics/consts.js` came down 1% so each level's
+  lap time holds — the pace moved from the straights into the corners.
+  **The AI's lateral controller is a heading state** (2026-09-08, game.js
+  "--- lateral ---"): steered toward the target path's tangent plus a
+  Stanley cross-track term, yaw-rate capped by the lateral grip budget, with
+  the pass / defend / yield / separation biases slewed at 3 m/s; measured on
+  a solo Monza lap the lateral acceleration RMS fell 10.0 → 5.9 m/s²
+  (`docs/notes/RACING-LINE-RESEARCH.md` §7). Defending or passing blends
+  toward a baked line FAMILY (`TrackLine.at(track, s, fam)`: inner / outer)
+  rather than pushing the racing line sideways. The brake look samples every
+  curvature node, node-aligned, so the target no longer steps as the 14 m
+  stride slid across the nodes.
+  The line's GEOMETRY was relaxed on 2026-09-08 (`TrackLine.bake`: minimum
+  curvature plus a path-length term, `docs/notes/RACING-LINE-RESEARCH.md`);
+  `pathK` and its 85% floor did not change, so the AI's brake model and the
+  difficulty scales stay calibrated — the relaxation moves where the cars
+  are, not how fast the model lets them corner.
+- **The compound is the strategy** (`AiDrive.tyreClass` / `tyrePace`). There
+  are no pit stops, so each AI car draws a class for the race distance
+  (sprints on softs, long races mixed): a soft starts +0.4% and degrades
+  0.12%/lap, a medium 0 and 0.07%, a hard −0.4% and 0.04%, capped at −2.5%.
+  Soft- and hard-starters cross at lap 10, inside the 10- and 25-lap races
+  hards are drawn for. Zero-mean over a mixed field, so the AI's pace against
+  the player is unchanged on average; the player's own compound stays the
+  static garage choice.
 - **Mistakes, under pressure most of all** (`AiDrive.mistakeChance`). Once per
   braking point a car may miss it: base 0.4% × (1 + 2 × pressure) × (1.3 −
   consistency), pressure being the share of the last six seconds spent with a

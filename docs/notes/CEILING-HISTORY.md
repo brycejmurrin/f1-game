@@ -2225,3 +2225,57 @@ brakes in — the builder itself lives outside game.js on purpose. `js/agent/ape
   straight after the floor, and every opaque draw after it clips it for free.
   Six lines (three of comment) at the one draw path; no stencil, no second
   floor pass.
+
+- `js/game.js` lines 10082 -> **10088**, codeLines 5494 -> **5497**
+  (2026-09-08): the line's corner speed and the compound as strategy. Three
+  code lines: the on-line test feeding `TrackLine.pathK` into the brake scan
+  (2) and the tyre-class draw at grid-up plus its pace multiplier (1 + 1, on
+  existing lines). The arc geometry and the tyre table are in
+  `js/track/core/line.js` and `js/physics/ai-drive.js`, unit-tested. Measured:
+  a solo AI lap on the line monza 124.97 -> 123.30 s, monaco 86.05 -> 85.03 s;
+  `DIFF.ai` in `js/physics/consts.js` came down 1 % (0.86/0.92/0.99 ->
+  0.851/0.911/0.980) so each difficulty's lap time holds. Soft- and
+  hard-starters cross at lap 10 by construction (`tyrePace`).
+- `js/agent/apex.js` lines 2660 -> **2662** (2026-09-08): `race()` takes
+  `opts.laps` so a harness can set the race distance (the tyre draw reads it
+  at grid-up); without it every VM race is the game default and a strategy
+  bench cannot see a crossover.
+
+
+## 2026-09-08 — DRIVING LINE on every backend: glx.js 2297 → 2349
+
+`js/render/glx/glx.js` grew by the ribbon pass — the `LINE_VS`/`LINE_FS`
+program, its VAO (stride 7: position, across, speed, zone, along) and
+`drawDrivingLine`, ~50 lines, one more for the ALONG attribute when the line
+became two rows of staggered pill dashes. The builder and the pattern maths
+live outside the backends (`js/render/shared/driving-line.js`, the fragment
+shaders); each backend carries only its upload and draw. WGX and TLX gained
+the same pass the same day (`WGSLFx.LINE`, `tsl-fx.js` `lineMat`) — those
+files are not ratcheted.
+- `js/game.js` lines 10088 -> **10089**, codeLines 5497 -> **5498**;
+  `js/agent/apex.js` lines 2662 -> **2668**, codeLines 2011 -> **2012**;
+  (tree) shellNodes 1325 -> **1326** (2026-09-08): the SETTINGS FILE. One
+  wiring line in game.js (`SettingsExport.create(G)`), one hook in apex.js
+  (`settingsFile(mode)`, the pure half the buttons download) and one shell
+  node, `#pm-ctl-hint` — the line a touch device reads under CONTROLS while
+  the KEYBOARD and CONTROLLER tables wait for a key or a pad. The export
+  itself is a new module, `js/ui/settings-export.js`; its buttons inject into
+  the RENDERER fold at DOMContentLoaded like RendererPicker's, so they cost no
+  shell nodes.
+- `js/game.js` lines 10089 -> **10144**, codeLines 5498 -> **5525**;
+  `js/track/tracks.js` lines 2400 -> **2401** (2026-09-08): the AI's
+  HEADING-STATE lateral controller (a Stanley cross-track term on the target
+  path's tangent, yaw-rate capped by the grip budget, the biases slewed at
+  3 m/s, the crawl/dig-out fallback kept), the brake look sampled at every
+  node, the line-family blend, and six named tunables above `_aiBr`. Paid for
+  by a measured halving of the AI's lateral acceleration RMS on a solo Monza
+  lap (10.0 -> 5.9 m/s², `ai-racecraft-vm`). tracks.js copies `lineHints`
+  through the def, one line. Evidence: `docs/notes/RACING-LINE-RESEARCH.md`
+  §7.
+- `js/game.js` lines 10144 -> **10154**, codeLines 5525 -> **5529**
+  (2026-09-08): contact, the side-rub clamp and the dig-out keep the position
+  controller's full, immediate authority — the heading state rate-limited the
+  one move that must not be rate-limited, a yielding AI steering clear of the
+  car it is rubbing (collisions-deep-vm pins clear-within-12-frames). The
+  heading is re-synced from the steer that branch produces, so the hand-back
+  is seamless. Evidence: `docs/notes/RACING-LINE-RESEARCH.md` §7.

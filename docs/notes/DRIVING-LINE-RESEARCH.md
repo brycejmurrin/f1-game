@@ -85,11 +85,23 @@ Second pass, 2026-09-08, from EA's own pages and player guides.
   `vTop()`, swept backwards under `BRAKE·0.85` and forwards under `ACCEL` — the
   AI's own brake-target model (`AiDrive.brakeTarget`), so the braking zones
   shown are the ones the field brakes in.
+- **The look** a row of chevrons every 5 m pointing the way the lap runs
+  (tip on the centre, wings trailing 1.6 m at the edges, 1.1 m stroke), each
+  bending with the road because the pattern lives in the strip's (along,
+  across) space — F1's form; a first cut of staggered pill dashes was replaced
+  the same day at the owner's request. No derivatives, so WebKit-safe and the
+  same maths on GLX / WGX / TLX.
 - **Colour** F1's grammar against the player's speed: green at or under the
   line's speed, amber a little over, red clearly over. Forza's blue was not
   used: this HUD already uses blue for ERS and DRS.
+- **On three.js it was invisible until the evening.** The real-GPU census that
+  signed the port off drew the chevrons on GLX and WGX and none on TLX: three
+  honours the road's own depth bias, GLX does not, so the fx decal offset
+  copied from GLX put the ribbon (and every blob shadow and skid) behind the
+  road. Fixed in `tsl-fx.js` (`-12/-24`); the story is in
+  `docs/research/WEBGPU-PARITY.md` §Driving line and the defect ledger.
 - **Not done** F1's raised 3D type (the shipped line is F1's 2D form), its
   colour-blind palettes and opacity option, and its audio braking cue; GT7's
-  dotted style and corner-side indicators; Forza's off-track white. WGX and
-  TLX have no pass yet (parity gap recorded in
-  `docs/research/WEBGPU-PARITY.md`).
+  dotted style and corner-side indicators; Forza's off-track white. (WGX and
+  TLX gained their passes the same day — `docs/research/WEBGPU-PARITY.md`
+  §Driving line.)

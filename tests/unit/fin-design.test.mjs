@@ -112,13 +112,15 @@ const inRect = (op, r) => {
 const opsIn = (ops, r) => ops.filter((op) => inRect(op, r));
 const BASE = { c1: [0.9, 0.1, 0.1], c2: [1, 1, 1] };
 
-test("finStyle none paints nothing on the fin panel or the cover wash", () => {
+test("finStyle none paints nothing on the fin panel, and the crown never carries the wash", () => {
   const def = A.paint("ferrari", BASE), none = A.paint("ferrari", { ...BASE, finStyle: "none" });
   assert.ok(opsIn(def, R.fin).length > 0, "the default fin is painted");
   assert.equal(opsIn(none, R.fin).length, 0, "a plain fin carries paint ops");
-  // The cover keeps its crest but loses the wash: fewer ops, not zero.
+  // The crown carries the crest and NO tail wash (hard edges only, by the
+  // owner's call), so the fin's motif pick cannot change the crown at all.
   const c0 = opsIn(def, R.crest).length, c1 = opsIn(none, R.crest).length;
-  assert.ok(c1 > 0 && c1 < c0, `cover ops ${c0} -> ${c1}`);
+  assert.ok(c0 > 0 && c1 === c0, `cover ops ${c0} -> ${c1}: the fin motif must stop at the fin`);
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineLogo: "none" }), R.crest).length, 0, "a bare crown is bare — no wash");
 });
 
 test("every named motif paints the fin, and a foreign one falls back to the team's", () => {
@@ -133,6 +135,50 @@ test("spineLogo none drops the crest from the cover and keeps it on the fin", ()
   const def = A.paint("ferrari", BASE), none = A.paint("ferrari", { ...BASE, spineLogo: "none" });
   assert.ok(opsIn(none, R.crest).length < opsIn(def, R.crest).length, "the spine kept its crest");
   assert.equal(opsIn(none, R.finBadge).length, opsIn(def, R.finBadge).length, "the fin badge changed");
+});
+
+test("every SPINE TOP design paints the crown; wordmark and number carry text", () => {
+  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "wordmark", "carbon", "number"]);
+  // The wrap is ONE shape over crown and flanks: it paints the crest region
+  // AND the flank band with no spineSide picked, and leaves the tail bare.
+  const wrap = A.paint("redbull", { ...BASE, spineLogo: "wrap" });
+  assert.ok(opsIn(wrap, R.crest).length > 0 && opsIn(wrap, R.spineSide).length > 0, "wrap reaches both the crown and the flank band");
+  // Each flank is its own region, authored in its own outside-view frame:
+  // whatever paints the right flank paints the left one too, and the atlas
+  // is taller than it is wide to hold it.
+  assert.ok(A.LT.SIZE_H > A.LT.SIZE && R.spineSideL && R.spineSideL.y + R.spineSideL.h <= A.LT.SIZE_H, "the left flank lives in the atlas's extra rows");
+  assert.ok(opsIn(wrap, R.spineSideL).length > 0, "wrap paints the left flank too");
+  for (const id of ["number", "logo", "plate", "wordmark", "duo", "slash"]) {
+    const ops = A.paint("ferrari", { ...BASE, spineSide: id });
+    assert.ok(opsIn(ops, R.spineSide).length > 0 && opsIn(ops, R.spineSideL).length > 0, `${id} paints both flanks`);
+  }
+  assert.equal(opsIn(A.paint("ferrari", BASE), R.spineSideL).length, 0, "the left flank is bare by default too");
+  assert.equal(opsIn(wrap, R.tail).length, 0, "wrap leaves the tail bare");
+  // The saddle too runs down the flanks (the SF-26's white), so it paints the
+  // band with no side pick; the panel stays on the crown alone.
+  assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineLogo: "saddle" }), R.spineSide).length > 0, "saddle reaches the flank band");
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineLogo: "panel" }), R.spineSide).length, 0, "panel stays on the crown");
+  // The big mark is the crest without its plate at crown scale: it paints the
+  // crown, with FEWER ops than the crest (the disc is gone) and none on the
+  // tail (it is a mark, not a band).
+  const big = opsIn(A.paint("redbull", { ...BASE, spineLogo: "bigmark" }), R.crest).length;
+  assert.ok(big > 0 && big < opsIn(A.paint("redbull", BASE), R.crest).length, `bigmark: ${big} ops, the disc dropped`);
+  assert.equal(opsIn(A.paint("redbull", { ...BASE, spineLogo: "bigmark" }), R.tail).length, 0, "bigmark leaves the tail bare");
+  const bare = opsIn(A.paint("ferrari", { ...BASE, spineLogo: "none" }), R.crest).length;
+  // The tail strip: bare for the marks and "none", painted by every band design.
+  for (const id of ["none", "logo", "number"]) assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.tail).length, 0, `${id}: the tail stays bare`);
+  for (const id of ["saddle", "panel", "stripe", "twin", "carbon", "wordmark"]) assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.tail).length > 0, `${id} runs down the tail`);
+  for (const id of ["saddle", "panel", "stripe", "twin", "wordmark", "carbon", "number"]) {
+    const ops = opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.crest);
+    // The band designs REPLACE the wash (bare paint under them), so they are
+    // compared against an empty crown; the text designs sit on the wash.
+    assert.ok(ops.length > (id === "wordmark" || id === "number" ? bare : 0), `${id} paints the crown`);
+    const texts = ops.filter((op) => op.kind === "text").map((op) => op.text);
+    if (id === "number") assert.ok(texts.includes("16"), `number: ${texts}`);
+    // drawWordmark sets each letter on its own, so the name is the join.
+    if (id === "wordmark") assert.ok(texts.join("").length >= 3, `wordmark: ${texts}`);
+    if (id === "saddle" || id === "panel" || id === "stripe" || id === "twin" || id === "carbon") assert.equal(texts.length, 0, `${id} carries no text`);
+  }
 });
 
 test("finBadge number puts the race number on the fin; none leaves the plate bare", () => {
@@ -215,12 +261,19 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
 // code or the crest on pick. Mesh: the service panels leave the band's z range
 // so a grey hatch never sits through the number — same vertex count, moved.
 test("spineSide paints the flank band on pick only, and clears the service panels from under it", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash"]);
   assert.equal(opsIn(A.paint("ferrari", BASE), R.spineSide).length, 0, "the shipped atlas paints the flank band");
   const texts = (liv) => opsIn(A.paint("ferrari", { ...BASE, ...liv }), R.spineSide)
     .filter((op) => op.kind === "text").map((op) => op.text);
   assert.ok(texts({ spineSide: "number" }).includes("16"), "number on the flank");
   assert.ok(texts({ spineSide: "code" }).includes("LEC"), "driver code on the flank");
+  // The photo-derived side designs: a plate carries the number, the wordmark a
+  // name, the slashes only bars.
+  assert.ok(texts({ spineSide: "plate" }).includes("16"), "plate: number on the plate");
+  assert.ok(texts({ spineSide: "wordmark" }).join("").length >= 3, "wordmark: a sponsor name on the flank");
+  assert.ok(texts({ spineSide: "duo" }).join("").length > texts({ spineSide: "wordmark" }).join("").length, "duo: two names on the flank");
+  const slash = opsIn(A.paint("ferrari", { ...BASE, spineSide: "slash" }), R.spineSide);
+  assert.ok(slash.length >= 4 && slash.every((op) => op.kind !== "text"), "slash: bars, no text");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "logo" }), R.spineSide).length > 0, "the crest on the flank");
   const base = build({}), side = build({ spineSide: "number" });
   assert.strictEqual(side.pos.length, base.pos.length, "the panels move, they are not removed");
@@ -232,6 +285,28 @@ test("spineSide paints the flank band on pick only, and clears the service panel
     if (m.mat[i] === metal && z < -0.70 && z > -1.24 && x > 0.15 && y > 0.45) n++; } return n; };
   assert.ok(inBand(base) > 0, "the shipped car has a panel in the band's z range");
   assert.equal(inBand(side), 0, "no panel vertex sits under the flank band");
+});
+
+// The engine-cover cross-section is ROUNDED: one profile (Car3D.coverProfile)
+// serves the loft, the crest strip and the flank band, so it has to be sane at
+// every station and spine height — monotonic in x and y, a flat crown narrower
+// than the shoulder, and the skin samplers agreeing with it.
+test("the cover profile rounds the crown and its samplers sit on the skin", () => {
+  for (const spine of ["standard", "dorsal"]) {
+    const a = M.Car3D.bodyAnchors(parts, team.id, spine);
+    for (const z of [-0.55, -0.97, -1.42, -2.0]) {
+      const c = a.coverAt(z), p = M.Car3D.coverProfile(c);
+      for (let i = 1; i < p.pts.length; i++) {
+        assert.ok(p.pts[i][0] < p.pts[i - 1][0] && p.pts[i][1] > p.pts[i - 1][1], `${spine} z${z}: pts step inward and upward`);
+      }
+      assert.ok(p.pts.at(-1)[1] === c.top && p.pts[0][1] === c.bottom, "the profile spans bottom to crown");
+      assert.ok(p.shoulder < c.top && p.shoulder > c.bottom, "the shoulder sits below the crown");
+      assert.ok(Math.abs(M.Car3D.coverSurfaceY(c, 0) - c.top) < 1e-12, "the centre is the crown");
+      assert.ok(Math.abs(M.Car3D.coverSurfaceY(c, p.pts[1][0]) - p.shoulder) < 1e-12, "the shoulder x samples the shoulder y");
+      assert.ok(Math.abs(M.Car3D.coverFlankX(c, p.shoulder) - p.pts[1][0]) < 1e-12 &&
+                Math.abs(M.Car3D.coverFlankX(c, c.bottom) - c.x) < 1e-12, "the flank sampler ends on the profile's corners");
+    }
+  }
 });
 
 // The real rule, read off the driver slot: car 1 black, car 2 yellow. Compared

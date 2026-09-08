@@ -106,3 +106,63 @@ test("attack zones: a narrow road takes the quality away", () => {
   const c = wide.lineCorners[0];
   assert.ok(TL.attackAt(narrow, c.s0 - 60).q < 0.3 * TL.attackAt(wide, c.s0 - 60).q, "4.5 m half-width is street width: barely a zone");
 });
+
+test("the path's curvature is gentler than the road's through a corner, and the road's on a straight", () => {
+  const t = TL.bake(track(2000, 7, cornerAt(1000, 60, 0.02)));
+  const c = t.lineCorners[0];
+  const road = 0.02, path = TL.pathK(t, c.sApex);
+  assert.ok(path > 0 && path < road, `apex path curvature ${path} should be under the road's ${road}`);
+  assert.ok(path >= TL.PATH_FLOOR * road - 1e-6, "never below the floor — the AI is not on rails");
+  // A wide road buys the whole floor on a slow corner; a narrow one buys less.
+  const narrow = TL.bake(track(2000, 4.5, cornerAt(1000, 60, 0.02)));
+  assert.ok(TL.pathK(narrow, narrow.lineCorners[0].sApex) >= path, "less width, less line to gain from");
+  assert.equal(TL.pathK(t, 200), 0, "a straight is a straight");
+  // Sign follows the road's.
+  const tr = TL.bake(track(2000, 7, cornerAt(1000, 60, -0.02)));
+  assert.ok(TL.pathK(tr, tr.lineCorners[0].sApex) < 0);
+});
+
+test("families: the inner line is inside earlier at the turn-in, the outer line runs wider through a long corner", () => {
+  // A long R = 60 m left-hander (180 m of arc) on a 7 m half-width.
+  const t = TL.bake(track(2400, 7, cornerAt(1000, 180, 1 / 60)));
+  assert.ok(t.lineIn && t.lineOut && t.lineIn.length === t.n && t.lineOut.length === t.n, "both families baked");
+  const c = t.lineCorners[0];
+  const main = (s) => TL.at(t, s).x, inner = (s) => TL.at(t, s, 1).x, outer = (s) => TL.at(t, s, -1).x;
+  // + x is the outside of a left turn; the inner family is further INSIDE (more negative) at the turn-in.
+  assert.ok(inner(c.s0) < main(c.s0) - 0.5, `inner line at the turn-in ${inner(c.s0).toFixed(2)} vs main ${main(c.s0).toFixed(2)}`);
+  // The outer family (no path-length term) sits further OUTSIDE somewhere through the corner.
+  let maxGap = -Infinity;
+  for (let s = c.s0; s < c.s1; s += 4) maxGap = Math.max(maxGap, outer(s) - main(s));
+  assert.ok(maxGap > 0.5, `outer line never wider than main (max gap ${maxGap.toFixed(2)} m)`);
+  // The blend is linear in fam and 0 / absent is the racing line.
+  assert.ok(Math.abs(TL.at(t, c.sApex, 0.5).x - (main(c.sApex) + inner(c.sApex)) / 2) < 1e-4);
+  assert.equal(TL.at(t, c.sApex, 0).x, main(c.sApex));
+  // Every family stays on the road.
+  for (let i = 0; i < t.n; i++) {
+    assert.ok(Math.abs(t.lineIn[i]) <= 7 - TL.MARGIN + 1e-4 && Math.abs(t.lineOut[i]) <= 7 - TL.MARGIN + 1e-4, `family off the road at node ${i}`);
+  }
+});
+
+test("lineHints: apexShift moves the corner's apex later, apexInside bounds the apex to one side", () => {
+  const plain = TL.bake(track(2000, 7, cornerAt(1000, 60, 0.02)));
+  const s0 = plain.lineCorners[0];
+  // def.turns is a racing-lap fraction; turn 1 sits at the corner's middle.
+  const withShift = track(2000, 7, cornerAt(1000, 60, 0.02));
+  withShift.def = { id: "syn", turns: [1030 / 2000], lineHints: [{ turn: 1, apexShift: 16 }] };
+  TL.bake(withShift);
+  const s1 = withShift.lineCorners[0];
+  assert.ok(Math.abs((s1.sApex - s0.sApex) - 16) < 2.5, `apex moved ${(s1.sApex - s0.sApex).toFixed(1)} m, expected ~16`);
+  assert.ok(Math.abs((s1.s0 - s0.s0) - 16) < 2.5, "the turn-in moves with it (a late apex is a late turn-in)");
+  // apexInside −0.6: the apex plateau is held on the OUTSIDE (+x for a left turn) by 60 % of the usable width.
+  const wide = track(2000, 7, cornerAt(1000, 60, 0.02));
+  wide.def = { id: "syn", turns: [1030 / 2000], lineHints: [{ turn: 1, apexInside: -0.6 }] };
+  TL.bake(wide);
+  const c = wide.lineCorners[0];
+  assert.ok(TL.at(wide, c.sApex).x >= 0.6 * (7 - TL.MARGIN) - 1e-3, `apex not held outside: ${TL.at(wide, c.sApex).x}`);
+  assert.ok(TL.at(plain, s0.sApex).x < -4, "without the hint the apex is inside");
+  // A hint that names no baked corner is dropped, not applied to the wrong one.
+  const far = track(2000, 7, cornerAt(1000, 60, 0.02));
+  far.def = { id: "syn", turns: [0.05], lineHints: [{ turn: 1, apexShift: 40 }] };
+  TL.bake(far);
+  assert.ok(Math.abs(far.lineCorners[0].sApex - s0.sApex) < 1e-6, "a hint 900 m from any corner must not move it");
+});

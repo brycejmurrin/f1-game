@@ -40,14 +40,30 @@
      the tail — the fin-less 2026 look; "dorsal" runs level with the hoop.
      Geometry (Car3D.SPINE_HEIGHT_IDS); the fin's top stays at the regulation
      line, so a taller spine shortens the blade.
-   spineSide? optional SPINE SIDE: "none" (absent), "number", "logo" or "code"
-     paints that mark on the engine-cover FLANK, both sides, where the real
-     cars carry the number (LiveryTex.SPINE_SIDE_IDS; the band is car-mesh's).
+   spineSide? optional SPINE SIDE: "none" (absent), "number", "logo", "code",
+     "plate" (the number on a contrasting panel, SF-26), "wordmark" (the title
+     sponsor, RB22 / W17), "duo" (title sponsor aft, partner forward — the
+     RB22's Red Bull over Ford Racing) or "slash" (the W17's raked bars) paints that on the
+     engine-cover FLANK, both sides (LiveryTex.SPINE_SIDE_IDS; car-mesh's band).
+     Each flank is its own atlas region (spineSide right, spineSideL left),
+     authored in that side's outside-view frame, so text reads and a graphic
+     faces forward on BOTH sides.
      The grey service panels and the accent pinstripe keep clear of the band,
      so it also moves a vertex.
-   spineLogo? optional SPINE LOGO — "logo" (absent) draws the crest on the
-     engine-cover spine as well; "none" leaves the spine to the tail wash, so
-     the mark reads once from a chase camera instead of twice.
+   spineLogo? optional SPINE TOP — what the engine-cover crown carries over
+     its tail wash. "logo" (absent) draws the crest there as well as on the
+     fin; "none" leaves the crown to the wash, so the mark reads once from a
+     chase camera instead of twice; "wrap" (the mark's plate colour as a sun
+     over the crown AND down both flanks, the plate-less mark on top — the
+     RB22's sun and bull); "bigmark" (the mark without its plate at
+     full crown width — the RB22's bull with no sun disc); "saddle" (the whole crown in the accent and down the flanks with a raked rear edge,
+     the SF-26's white top), "panel" (a solid accent block with a raked
+     front edge), "stripe", "twin", "wordmark" (the title
+     sponsor running along the spine), "carbon" (an exposed panel) and
+     "number" are the crown designs that carry no mark (LiveryTex.SPINE_LOGO_IDS).
+     The crown carries no gradient wash under any of them — hard edges only.
+     The band designs run on down the tail top (REGIONS.tail); the crest and
+     the number read top-down, nose up (the chase camera's view).
    finShape? optional FIN SHAPE — the blade's outline: "standard" (absent),
      "swept" (raked leading edge), "stub" (short rear blade) or "none" (no fin;
      the fin's graphic and badge go with it). Geometry, not paint — the one

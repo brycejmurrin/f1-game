@@ -2237,6 +2237,7 @@ const Tracks = (function () {
       // sectors → thirds), real centreline and dressing rows (ex scenery-data.js
       // id tables) — all READ OFF THE BUILT DEF: the same trap as the seven above.
       sectors: d.sectors || null, turns: d.turns || null, path: d.path || null,
+      lineHints: d.lineHints || null,   // authored racing-line hints per turn (TrackLine.bake)
       barrier: d.barrier || null, furniture: d.furniture || null, kit: d.kit || null,
       standSet: d.standSet || null, cityStyle: d.cityStyle || null,
     };

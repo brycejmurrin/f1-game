@@ -964,18 +964,40 @@ Deferred (audited, sketched, NOT landed — each needs its own verified round):
    HeadlessChrome UA as software by design; the Verdict's swapchain clause
    is therefore headed-only, and a headless census proves bind + render.
 
-## Driving line (2026-09-08) — GLX-only pass, recorded gap
+## Driving line (2026-09-08) — ported to WGX and TLX the same day
 
 The DRIVING LINE ribbon (RACE SETTINGS › DRIVING LINE, `js/render/shared/
 driving-line.js`) is built once per circuit as a stride-6 float triangle strip
-(pos3, across, lineSpeed, zone) and drawn by GLX `drawDrivingLine` with
-`LINE_VS` / `LINE_FS`: depth-tested, no depth write, `ROAD_BIAS` polygon
-offset, alpha-blended, emissive ×1.6 so bloom lifts it. WGX and TLX carry the
-member as `() => false` so `backend-surface-parity` stays green and
-`DrivingLine.draw()` reports "no pass" instead of drawing air. To port: WGX —
-a pipeline like the SKID one with the lit pass's depth state and the additive
-halo's blend, three float attributes past the position, the four uniforms
-(`uViewProj`, `uPlayerSpeed`, `uCornersOnly`, `uStr`) in a small uniform
-buffer; TLX — a `BufferGeometry` stream like `skidStream` with a TSL material
-that reproduces `LINE_FS` (the mix/smoothstep chain is expressible in TSL, no
-derivatives, so it is WebKit-safe).
+(pos3, across, lineSpeed, zone). GLX draws it with `LINE_VS` / `LINE_FS`:
+depth-tested, no depth write, `ROAD_BIAS` polygon offset, alpha-blended,
+emissive ×1.6 so bloom lifts it. The first cut shipped GLX-only with the
+member stubbed `() => false` on the other two; the port landed the same day:
+
+- **WGX** — `WGSLFx.LINE` (`wgsl-fx.js` §2c): a `triangle-strip` pipeline
+  beside SKID with the lit pass's depth state (`depthBias -2/-2`, no write)
+  and `ALPHA_BLEND`, vertex layout stride 24 (pos3 + three f32), one 80-byte
+  `LineU` (viewProj + params = playerSpeed, cornersOnly, str). No
+  derivatives, no textures, `discard` under uniform control flow — nothing on
+  the WebKit list in §5a. Validated with real Dawn (`wgx-validate.mjs`).
+- **TLX** — `tsl-fx.js` `lineMat`: the same colour maths as TSL nodes over
+  `lineAcross` / `lineSpeed` / `lineZone` attributes with `lineSpeed` /
+  `lineCorners` / `lineStr` uniforms; `tlx.js` streams the strip like
+  `skidStream` and indexes it into triangles (three draws Mesh triangles).
+  Runs on both of three's backends (WebGL2 and WebGPU).
+  **Depth bias (fixed 2026-09-08 evening):** the census that signed the port
+  off (run 48, Apple GPU) shows the chevrons on GLX and WGX and NONE on the
+  TLX/WebGL2 leg with `gpuErrors 0` — the strip was submitted every frame
+  (`backendState.fx.lineVerts`) and lost the depth test. three honours the
+  road's own `depthBias [-8,-16]` (game.js `_wmRoad*` → tsl-lit.js) on both
+  backends, while GLX draws the road unbiased; so `fxMaterial`'s
+  `polygonOffset(-4,-8)`, copied from GLX's `ROAD_BIAS`, put every fx decal
+  BEHIND the road. Reproduced on lavapipe (`gfx-probe --backend three
+  --tlx-webgpu --lavapipe montreal`: no ribbon; depthTest off → a solid band;
+  offset off → nothing; `-12/-24` → chevrons on the road). The blob shadows,
+  tyre marks and skids share `fxMaterial` and were buried the same way.
+  `backendState.line` now reports the pooled line mesh (visible / in scene /
+  index count) as the positive signal a software probe can read.
+
+Sign-off is the real-GPU census (`gpu-census.yml`, macOS/Metal), not a
+screenshot here: the software adapters validate and run the frame graph but
+composite nothing.
