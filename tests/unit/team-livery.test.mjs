@@ -17,6 +17,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
@@ -77,4 +78,87 @@ test("every livery field a team names is one the renderer knows", () => {
                 `team "${t.id}" finShape "${t.livery.finShape}" is not a Car3D id`);
     }
   }
+});
+
+/* ── The paint editor's field list, in the three places it is spelled ──────────
+ *
+ * WHY. "Customize a copy" (⧉ on a stock scheme) built its draft from a
+ * hand-written key list, and that list had drifted from the edit-in-place one
+ * by eight fields: finStyle, finBadge, spineLogo, finShape, tcam, coverVents,
+ * spineHeight, spineSide. Nothing failed loudly. `pillRow` falls back to its
+ * own `dflt` when a key is missing, so the editor cheerfully showed STANDARD
+ * and NONE, and the save writes a field only when it differs from that default
+ * — so the copy was saved WITHOUT them. Every team sets finShape "none" and
+ * spineHeight "dorsal", so copying a team's own paint job handed back a car
+ * with a shark fin and a flat spine, with the editor agreeing it was right.
+ *
+ * The same key list is spelled three times — the editor's draft tables, the
+ * save's `if (d.x ...)` chain, and Liveries.forTeam's copy list — so the guard
+ * is that the three agree, and that the editor has exactly ONE draft builder.
+ */
+const SHEET = fs.readFileSync(path.join(ROOT, "js/garage/setup-sheet.js"), "utf8");
+const LIVERIES_SRC = fs.readFileSync(path.join(ROOT, "js/car/liveries.js"), "utf8");
+
+const listFrom = (src, re) => {
+  const m = src.match(re);
+  assert.ok(m, "field list not found — did the file shape change? " + re);
+  return new Set(m[1].match(/"([A-Za-z0-9]+)"/g).map((q) => q.slice(1, -1)));
+};
+
+test("the paint editor builds every draft through one constructor", () => {
+  // Three doors — new, edit, copy — and none of them may hand-roll a literal.
+  const literals = SHEET.match(/csLivDraft = \{/g) || [];
+  assert.equal(literals.length, 0,
+    "a csLivDraft object literal is back; build it with livDraftFrom() so the " +
+    "three doors cannot drift apart again");
+  assert.equal((SHEET.match(/csLivDraft = livDraftFrom\(/g) || []).length, 3,
+    "expected exactly three livDraftFrom() calls (new, edit, copy)");
+});
+
+test("the editor's draft, the save chain and forTeam name the same fields", () => {
+  const colors = listFrom(SHEET, /const LIV_DRAFT_COLORS = \[([\s\S]*?)\];/);
+  const pills = new Set((SHEET.match(/const LIV_DRAFT_PILLS = \{([\s\S]*?)\};/)[1]
+    .match(/([A-Za-z0-9]+):/g) || []).map((k) => k.replace(":", "")));
+  const draft = new Set([...colors, ...pills]);
+
+  // The save writes `liv.<key> = ...` for each field it persists.
+  const saved = new Set((SHEET.match(/\bliv\.([A-Za-z0-9]+)\s*=\s/g) || [])
+    .map((m) => m.trim().slice(4).replace(/\s*=$/, "")).filter((k) => k !== "id" && k !== "name"));
+  saved.delete("c1"); saved.delete("c2");
+
+  const copied = listFrom(LIVERIES_SRC, /if \(ex\) for \(const k of \[([\s\S]*?)\]\)/);
+
+  const diff = (a, b) => [...a].filter((k) => !b.has(k)).sort();
+  assert.deepEqual(diff(draft, saved), [], "the editor drafts fields the save never persists");
+  assert.deepEqual(diff(saved, draft), [], "the save persists fields no draft door sets");
+  assert.deepEqual(diff(copied, draft), [], "forTeam copies fields the editor cannot show");
+  assert.deepEqual(diff(draft, copied), [], "the editor drafts fields forTeam drops from a team default");
+});
+
+/* ── A dangling livery id must land on the team's car, not a bare pair of colours ── */
+
+test("forTeam's default entry carries the team's whole livery block", () => {
+  // resolveLivery() now falls back to list[0] when a stored id no longer
+  // resolves (a garage file naming a custom livery whose array did not come
+  // with it). That is only correct while list[0] IS the team's own scheme.
+  const ctx = { window: {} };
+  vm.createContext(ctx);
+  vm.runInContext(LIVERIES_SRC + "\n;globalThis.__L = Liveries;", ctx);
+  const L = ctx.__L;
+  for (const t of M.Teams.LIST) {
+    if (!t.livery) continue;
+    const first = L.forTeam(t)[0];
+    assert.equal(first.id, "default", `team "${t.id}": list[0] is not the team default`);
+    for (const k of Object.keys(t.livery)) {
+      assert.deepEqual(first[k], t.livery[k],
+        `team "${t.id}": forTeam's default drops "${k}", so a dangling id would repaint the car`);
+    }
+  }
+});
+
+test("resolveLivery falls back through the team's own list", () => {
+  const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
+  assert.match(GAME, /const list = getLiveries\(team\);\s*\n\s*const liv = list\.find\(\(l\) => l\.id === getLiveryId\(team\.id\)\) \|\| list\[0\];/,
+    "resolveLivery must fall back to the team's default entry — a bare " +
+    "{ c1, c2 } literal drops finShape/spineHeight/spineSide and regrows the fin");
 });

@@ -88,7 +88,11 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
       const r = p.pts.slice(1);   // shoulder, facet, crown (right side, outer → inner)
       return r.map(([x, y]) => [-x, y]).concat(r.slice().reverse());
     };
-    const PROUD = 0.008;
+    // Car3D.COVER_STACK.decal, not a literal: the crown carries the heat shield
+    // and the spine vent under this wrap, and at the old 0.008 the shield's top
+    // face (top+0.017) swallowed 300 mm of the tail strip while the vent's tied
+    // the plane exactly. car3d owns the order; this reads it.
+    const PROUD = (Car3D.COVER_STACK && Car3D.COVER_STACK.decal) || 0.022;
     // Drape one region over the crown between two stations, shoulder to shoulder.
     const drape = (region, zF, zR, pF, pR) => {
       const uv = uvOf(region), L = across(pF), Rr = across(pR), W = pF.pts[1][0] * 2;
@@ -131,7 +135,11 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   // so the text reads on both sides under the reflected model matrix. Always
   // mapped: an unpicked spineSide is an unpainted region, like the fin panel.
   if (R.spineSide) {
-    const sZ = [-0.66, -1.90], PROUD = 0.010, V_TOP = 0.96, V_BOT = 0.06;
+    // Car3D.COVER_STACK.flankDecal — the pinstripe and the service hatches are
+    // bodywork UNDER this wrap, and at the old 0.010 the pinstripe was coplanar
+    // with it (0.9 mm) and the hatches stood 9 mm proud of it.
+    const sZ = [-0.66, -1.90], V_TOP = 0.96, V_BOT = 0.06;
+    const PROUD = (Car3D.COVER_STACK && Car3D.COVER_STACK.flankDecal) || 0.014;
     const flank = (z) => {
       const c = anchors ? anchors.coverAt(z) : (z > -1 ? { x: 0.27, bottom: 0.20, top: 0.81 } : { x: 0.20, bottom: 0.23, top: 0.69 });
       const p = Car3D.coverProfile ? Car3D.coverProfile(c) : { x: c.x, bottom: c.bottom, shoulder: c.top };
@@ -158,8 +166,17 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   // so no panel and no badge either: a graphic hanging in the air behind the
   // airbox is exactly what this branch exists to prevent.
   const fShape = finShape || "standard";
-  if (fShape !== "none") {
-    const fp = Car3D.sharkFinPanel ? Car3D.sharkFinPanel(null, null, finS, fShape)
+  // The blade's ROOT, from the same Car3D function build() cuts it with — the
+  // decal used to be placed off the FROZEN base while the mesh rooted itself
+  // into the engine cover, so a raised crown (every shipped team ships
+  // spineHeight "dorsal") swallowed most of the panel and all of the badge.
+  // A cover taller than the regulation fin top leaves no blade at all; painting
+  // a graphic onto one is worse than leaving the region unmapped, so `clear`
+  // gates it the same way finShape "none" does.
+  const fRoot = Car3D.sharkFinRoot ? Car3D.sharkFinRoot(anchors, finS, fShape) : null;
+  const finVisible = fShape !== "none" && (!fRoot || fRoot.clear > 0.03);
+  if (finVisible) {
+    const fp = Car3D.sharkFinPanel ? Car3D.sharkFinPanel(null, null, finS, fShape, fRoot)
       : [{ x: 0.023, y: 0.655, z: -0.82 }, { x: 0.023, y: 0.655, z: -1.56 },
          { x: 0.023, y: 0.945, z: -1.56 }, { x: 0.023, y: 0.945, z: -0.82 }];
     const FIN_N = 0.78, FIN_NY = 0.62;      // normalised: 0.78² + 0.62² ≈ 1
@@ -169,7 +186,7 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
       quad([v(1, -1), v(0, -1), v(3, -1), v(2, -1)], [-FIN_N, FIN_NY, 0], region);
     };
     face(fp, R.fin);
-    if (Car3D.sharkFinBadge && R.finBadge) face(Car3D.sharkFinBadge(null, finS, fShape), R.finBadge);
+    if (Car3D.sharkFinBadge && R.finBadge) face(Car3D.sharkFinBadge(null, finS, fShape, fRoot), R.finBadge);
   }
   const nR = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
   const nF = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
@@ -188,22 +205,28 @@ function carDecalData(aLvl, parts, legacyBody, teamId, finShape, spineHeight) {
   // level (mesh is cached per aLvl — see getCarDecalMesh).
   // Defensive: fall back to the old fixed board if a stale car3d.js bundle lacks
   // numberBoard (never white-screen the race over a decal position).
-  // Rear-wing UPPER FLAP → the sponsor band. REGIONS.wing was drawn into every
-  // atlas and mapped onto nothing at all, so a whole sponsor wordmark was dead
-  // pixels. The flap is a sloped surface, so the quad slopes with it: Car3D
-  // builds it from (z -2.38, upperTrailY - 0.075) to (z -2.64, upperTrailY),
-  // where upperTrailY drops by 0.075 for max-DF and DRS packages alike — read the
-  // aero recipe rather than assuming, or the band floats above the wing.
-  if (Car3D.endplate) {
+  // Rear-wing UPPER FLAP → the sponsor band. Car3D.wingBand is the SAME solver
+  // that POSES the flap, not the recipe that designs it: the design chord the
+  // band used to be drawn from is 19.5 degrees off where drawAeroFlaps actually
+  // hangs the element, so the band floated ~90 mm over a parked car's wing. The
+  // whole placement — rest attitude, skin, proud offset, surface normal — lives
+  // in car3d beside the pose solve, for the reason frontPlate does.
+  if (Car3D.wingBand) {
     const lvl = aLvl == null ? 2 : aLvl;
-    const aeroV = parts && parts._visual && parts._visual.aero;
-    const drs = aeroV && aeroV.drs ? 1 : 0;
-    const crownY = Car3D.endplate(lvl).rear.top - 0.018;
-    const upperTrailY = crownY - (lvl >= 4 || drs ? 0.075 : 0);
-    const flapY = (z) => upperTrailY - 0.075 * (z + 2.64) / 0.26 + 0.0235;
-    const wzF = -2.42, wzR = -2.60, wX = 0.44;
-    quad([[-wX, flapY(wzF), wzF], [wX, flapY(wzF), wzF],
-          [wX, flapY(wzR), wzR], [-wX, flapY(wzR), wzR]], [0, 1, 0.28], R.wing);
+    const B = Car3D.wingBand(lvl, Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null);
+    if (B) {
+      // One quad per spanwise segment, u by x — the same treatment podDecal and
+      // the cover drape give a curved surface, and for the same reason: a single
+      // quad across a swept wing bridges the sweep instead of following it.
+      const u = uvOf(R.wing), S = B.stations;
+      for (let i = 0; i < S.length - 1; i++) {
+        const a = S[i], b = S[i + 1];
+        const uu = (x) => u.uR + (u.uL - u.uR) * ((x + B.half) / (B.half * 2));
+        quadUv([[a.x, a.front.y, a.front.z], [b.x, b.front.y, b.front.z],
+                [b.x, b.rear.y, b.rear.z], [a.x, a.rear.y, a.rear.z]],
+               a.nrm, [[uu(a.x), u.vB], [uu(b.x), u.vB], [uu(b.x), u.vT], [uu(a.x), u.vT]]);
+      }
+    }
   }
   // FRONT-WING ENDPLATE → a partner mark on the outer face of each plate.
   // Car3D.frontPlate is the SAME function that places the plate, because the
@@ -261,7 +284,12 @@ function getCarDecalMesh(aLvl, parts, legacyBody, teamId, finShape, spineHeight)
   // shares a (level, fin) and differs in drs — `fin` disambiguates the two DRS
   // options by accident today — so this is latent, and a one-field aero edit is
   // all it takes to start painting the band 75 mm off the flap.
-  const drsK = (parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0;
+  // …and `drs` alone is not enough now that the band is placed on the flap's
+  // SOLVED pose: rearSweep and rearTaper move that pose too, so they join the
+  // key or a style change paints the band for the previous wing.
+  const aSt = Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null;
+  const drsK = aSt ? [aSt.drs ? 1 : 0, aSt.rearSweep, aSt.rearTaper].map((v) => +v || 0).join(",")
+                   : ((parts && parts._visual && parts._visual.aero && parts._visual.aero.drs) ? 1 : 0);
   // finShape is livery, not parts, so anchors.key cannot carry it: it joins here.
   const shapeK = finShape || "standard";
   const k = level + "|" + (legacyBody ? "imported|" : "") + finK + "|" + drsK + "|" + shapeK + "|" + anchors.key;
@@ -292,8 +320,14 @@ function getCockpitDecalMesh(parts, teamId) {
     const anchors = anchorsForKey;
     const nr = anchors ? anchors.noseAt(1.72) : { top: 0.45, topSide: 0.16 };
     const nf = anchors ? anchors.noseAt(2.10) : { top: 0.43, topSide: 0.14 };
-    const c = [[-nr.topSide*0.84, nr.top+0.020, 1.72], [nr.topSide*0.84, nr.top+0.020, 1.72],
-               [nf.topSide*0.84, nf.top+0.020, 2.10], [-nf.topSide*0.84, nf.top+0.020, 2.10]];
+    // FRONT FIRST — the same corner order the race quad uses (carDecalData's
+    // R.num block), because the uvs below are the same too. Reversing the z
+    // order while leaving u alone flips v ALONE, and a v-only flip is a
+    // REFLECTION, not a half turn: the number and the crest lockup rendered
+    // mirror-imaged from the cockpit. The atlas is authored front-at-the-bottom
+    // (LiveryTex, drawSpineTop) and both quads have to honour that.
+    const c = [[-nf.topSide*0.84, nf.top+0.020, 2.10], [nf.topSide*0.84, nf.top+0.020, 2.10],
+               [nr.topSide*0.84, nr.top+0.020, 1.72], [-nr.topSide*0.84, nr.top+0.020, 1.72]];
     // U pre-flipped to compensate the det −1 car model matrix (see quad() above).
     const uvs = [[u.uR, u.vB], [u.uL, u.vB], [u.uL, u.vT], [u.uR, u.vT]];
     const d = { pos: [], nrm: [], uv: [], idx: [] };

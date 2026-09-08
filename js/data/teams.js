@@ -124,14 +124,18 @@ const Teams = (function () {
     },
     {
       id: "audi", name: "Audi", short: "AUD",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "bars" },
-      /* black #0E0F10 / Audi red-orange #FA470D (2026 black car, red-orange +
-         titanium). The hex used to read #FA4700 and did not describe the value:
-         0.98 and 0.28 round to FA and 47 exactly, but 0.05 is 0D, not 00. The
-         HEX is corrected rather than the float, because changing the float
-         restyles a shipped livery on an inference about which of the two the
-         author fat-fingered. */
-      color: [0.055, 0.058, 0.065], color2: [0.98, 0.28, 0.05],
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "bars",
+                cover: [0.075, 0.078, 0.085] },
+/* titanium silver #B3B8BD / Audi red-orange #FA470D, with a CARBON BLACK
+         engine cover. This was a black car here until 2026-09-08, described in
+         this comment as "2026 black car, red-orange + titanium" with no source.
+         The R26 is the other way round: silver body, black cover, red accents
+         toward the rear. Checked against ~24 launch-gallery photographs and
+         agreeing with the launch report ("titanium silver and bright Audi red
+         body, with the four-ring logo on a carbon black engine cover"), so this
+         is observation, not the inference the old comment rightly refused to
+         act on. docs/notes/LIVERY-2026-REFERENCE.md carries the sources. */
+      color: [0.702, 0.722, 0.741], color2: [0.98, 0.28, 0.05],
       engine: "Audi", tier: 4,
       stats: { speed: 76, accel: 74, cornering: 75, braking: 73 },
       drivers: [

@@ -15,6 +15,7 @@
     "// cost under a second and belong where the rule they guard is edited.",
     "tests/unit/daily-challenge.test.mjs",
     "tests/unit/setup-tune.test.mjs",
+    "tests/unit/team-livery.test.mjs",
     "tests/unit/onboard.test.mjs",
     "tests/unit/test-coverage-audit.test.mjs",
     "tests/unit/test-groups-generated.test.mjs",
@@ -344,6 +345,7 @@
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/fin-design.test.mjs",
         "tests/unit/front-wing-decal.test.mjs",
+        "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/team-livery.test.mjs",
         "tests/unit/helmets.test.mjs"
       ]
