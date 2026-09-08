@@ -2632,13 +2632,12 @@ Two facts survive every run so far, and they are the lead now:
    luma 74.3. So the soft blit as such does not darken anything; whatever is
    wrong is specific to TLX's copy of it.
 
-That pair points at TLX's `_softBlit` readback and the encode it does on the way
-to the visible canvas — a colour-space or tone-map step that WGX's equivalent
-path gets right and TLX's does not. **The next measurement is a DIFF, not a
-theory: read TLX's soft-present readback path against WGX's side by side, and
-if they disagree on transfer function or target format, that is it.** Do not
-dispatch anything else on this until that diff has been read — three
-hypotheses have now been reasoned out and measured wrong on this one lead.
+That pair pointed at TLX's `_softBlit` readback and the encode it does on the
+way to the visible canvas. **That was hypothesis four, and it is also wrong** —
+the render target and the post-blit canvas both read 38.3, so the blit is
+faithful and the frame is dark before it. See "The blit is exonerated" below,
+which supersedes this paragraph and gives the local repro that replaces the
+dispatch this one asked for.
 
 **The pattern is the finding.** Three explanations for this gap have been
 written down with confidence and refuted by the next run: soak lengths, then
@@ -2647,6 +2646,60 @@ code and each cost a macOS run. The instrument that has moved it every single
 time is a field printed in the Verdict — `meanLuma` (§2l), `gov.tier`, then
 `begins`/`ends`. Add the field, dispatch, read. The reasoning step in between
 has a perfect record of being wrong.
+
+### The blit is exonerated, and the gap reproduces IN-CONTAINER (2026-09-08)
+
+Three results, all measured on this box, no macOS minutes spent.
+
+**1. It is not the soft-present blit.** That was the hypothesis the section above
+nominates, and it is wrong. On the WebGPU leg `capturePixels()` takes the
+`_captureRT()` → `_readLdr()` path — it reads the RENDER TARGET directly and
+never touches the blit — while `canvas.png` is a screenshot of the visible
+canvas the blit painted. Both read **38.3**. The blit reproduces its source
+faithfully; the frame is already dark before it. That also disposes of the
+"WGX soft-presents too and is brightest" asymmetry: there was nothing to
+explain.
+
+**2. The gap reproduces here at MATCHED content**, which is the useful part:
+
+```
+gfx-probe --backend three montreal                     (TLX/WebGL2)  meanLuma 70.3  maxLuma 247
+gfx-probe --backend three --tlx-webgpu --lavapipe ...  (TLX/WebGPU)  meanLuma 38.3  maxLuma 163
+```
+
+against macOS's 64-66 vs 39. Same ratio, same direction. The obvious worry is
+that `softContent()` skips content on the WebGPU leg here and not on macOS — it
+does not skew this, because it gates BOTH legs identically in this container:
+`softwareGL = forceWebGL ? detectSoftwareGL() : !!_softAdapter`, and on llvmpipe
+`detectSoftwareGL()` matches for the WebGL2 leg exactly as `_softAdapter` does
+for lavapipe. Both legs' console output confirms it — the same scenery
+suppression on each. **So this is bisectable locally, and the next person on it
+should not dispatch anything.**
+
+Note `maxLuma` 247 → 163: the BRIGHTEST pixel is down a third, so this is not a
+missing sRGB encode (that would crush mid-tones and leave the top end close).
+It looks closer to a uniform scale, which points at exposure or a tone-map term
+in the post chain rather than a transfer function. That is a candidate, not a
+finding — see the method note below before spending a run on it.
+
+**3. The forced-content control is NOT runnable on this box.** `--ls
+apex26.tlxForceHw=1` and then `=env,sky` both fail `awaitSoftPresent`, once at
+60 s and twice at 300 s: six full presents into the cube plus a full-frame
+readback per present exceeds any budget llvmpipe can meet. Worth knowing before
+someone else spends an hour on it. It is also unnecessary, per (2).
+
+**And the env probe could never have been the cause anyway** — the code says so,
+independently of run 56's counterexample. `uEnvCube` feeds `envCC`, the
+CLEARCOAT environment term for car paint (`glsl-lit.js`, and `tsl-lit.js` at
+parity), and when the probe is not live it falls back to an analytic sky
+gradient. A car-lacquer reflection term cannot move whole-frame mean luma by
+40%. The magnitude alone should have killed that theory before a run was spent
+on it; nobody checked what the cube was actually wired to.
+
+*Which also answers the question that prompted the check:* a player whose probe
+never latches loses REAL reflections on the lacquer and gets the analytic
+gradient instead. That is the designed fallback, not a degradation cliff, and
+`envReady=false` on a slow device is not a defect.
 
 ### On WebGPU alternatives, since the question was asked
 
