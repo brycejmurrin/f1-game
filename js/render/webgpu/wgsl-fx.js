@@ -332,11 +332,74 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   return mix(vec4<f32>(in.color, a), vec4<f32>(in.color * a, 1.0), U.eyeAdd.w);
 }`;
 
+  // 2c. LINE — the DRIVING LINE ribbon (js/render/shared/driving-line.js
+  //     builds it; GLX LINE_VS/LINE_FS is the reference). ONE triangle-strip
+  //     draw over a per-circuit world-space vertex buffer. Colour is F1's
+  //     dynamic grammar against the PLAYER's speed (green on pace, amber a
+  //     little over, red clearly over), emissive ×str so bloom lifts it; a soft
+  //     rim keeps it a line; CORNERS mode fades the straights through the
+  //     per-vertex zone. No derivatives, no textures — WebKit-safe.
+  //
+  //    VERTEX INPUT  (single interleaved buffer, stride 24 B = DrivingLine.STRIDE floats):
+  //        @location(0) aPos    : vec3<f32>  off  0   world position (m)
+  //        @location(1) aAcross : f32        off 12   -1 | +1 across the ribbon
+  //        @location(2) aSpeed  : f32        off 16   the line's speed here (m/s)
+  //        @location(3) aZone   : f32        off 20   0 straight … 1 corner / braking
+  //    BIND GROUP    : @group(0) @binding(0) var<uniform> U : LineU
+  //                    (viewProj + params = playerSpeed, cornersOnly, str, 0)
+  //    BLEND         : alpha  (srcAlpha, oneMinusSrcAlpha)
+  //    DEPTH         : test ENABLED, write DISABLED, depthBias toward camera.
+  //    TOPOLOGY      : triangle-strip, cull none.
+  const LINE = `
+struct LineU {
+  viewProj : mat4x4<f32>,   // off  0
+  params   : vec4<f32>,     // off 64  x playerSpeed (m/s), y cornersOnly 0|1, z str, w unused
+};                          // size 80
+@group(0) @binding(0) var<uniform> U : LineU;
+
+struct VSOut {
+  @builtin(position) clip   : vec4<f32>,
+  @location(0)       across : f32,
+  @location(1)       speed  : f32,
+  @location(2)       zone   : f32,
+};
+
+@vertex
+fn vs_main(
+  @location(0) aPos    : vec3<f32>,
+  @location(1) aAcross : f32,
+  @location(2) aSpeed  : f32,
+  @location(3) aZone   : f32,
+) -> VSOut {
+  var o : VSOut;
+  o.across = aAcross;
+  o.speed  = aSpeed;
+  o.zone   = aZone;
+  o.clip = U.viewProj * vec4<f32>(aPos, 1.0);
+  return o;
+}
+
+@fragment
+fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
+  let over = U.params.x / max(in.speed, 1.0);          // 1.0 = on the line's pace
+  let green = vec3<f32>(0.10, 0.95, 0.35);
+  let amber = vec3<f32>(1.0, 0.72, 0.10);
+  let red   = vec3<f32>(1.0, 0.12, 0.10);
+  var col = mix(green, amber, smoothstep(0.98, 1.06, over));
+  col = mix(col, red, smoothstep(1.06, 1.16, over));
+  let edge = 1.0 - smoothstep(0.55, 1.0, abs(in.across));   // soft rim, hot core
+  let zone = mix(1.0, smoothstep(0.05, 0.75, in.zone), U.params.y);
+  let a = edge * zone;
+  if (a < 0.01) { discard; }
+  return vec4<f32>(col * U.params.z * a, a * 0.85);
+}`;
+
   return {
     // shader strings
     BLOB_SHADOW,
     MARK,
     SKID,
+    LINE,
     GLOW,
     DECAL,
     PARTICLE,
@@ -344,11 +407,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     BLOB_SHADOW_UNIFORM_BYTES: 144,   // ShadowU: mat4 64 + mat4 64 + vec4 16
     MARK_UNIFORM_BYTES:        144,   // MarkU:   mat4 64 + mat4 64 + vec4 16
     SKID_UNIFORM_BYTES:         64,   // SkidU:   mat4 64
+    LINE_UNIFORM_BYTES:         80,   // LineU:   mat4 64 + vec4 16
     GLOW_UNIFORM_BYTES:         80,   // GlowU:   mat4 64 + vec4 16
     DECAL_UNIFORM_BYTES:       224,   // DecalU:  mat4 64 + mat4 64 + 6*vec4 96
     // vertex buffer strides (bytes) for the pipeline vertex-layout descriptors
     QUAD_VERTEX_BYTES:           8,   // BLOB_SHADOW / MARK: vec2 unit quad
     SKID_VERTEX_BYTES:          36,   // pos3(12) + uv2(8) + rgba4(16)
+    LINE_VERTEX_BYTES:          24,   // pos3(12) + across(4) + speed(4) + zone(4)
     GLOW_VERTEX_BYTES:          36,   // corner2(8) + center3(12) + color3(12) + radius(4)
     DECAL_VERTEX_BYTES:         32,   // pos3(12) + nrm3(12) + uv2(8)
     PARTICLE_UNIFORM_BYTES:     80,

@@ -90,6 +90,6 @@ Second pass, 2026-09-08, from EA's own pages and player guides.
   used: this HUD already uses blue for ERS and DRS.
 - **Not done** F1's raised 3D type (the shipped line is F1's 2D form), its
   colour-blind palettes and opacity option, and its audio braking cue; GT7's
-  dotted style and corner-side indicators; Forza's off-track white. WGX and
-  TLX have no pass yet (parity gap recorded in
-  `docs/research/WEBGPU-PARITY.md`).
+  dotted style and corner-side indicators; Forza's off-track white. (WGX and
+  TLX gained their passes the same day — `docs/research/WEBGPU-PARITY.md`
+  §Driving line.)

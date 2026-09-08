@@ -2,8 +2,8 @@
 /* Apex 26 — DrivingLine: the suggested-line ribbon every racing game draws on
  * the road, as DATA. Backend-agnostic: this file samples the circuit, decides
  * where the line runs and how fast a car can be on each metre of it, and
- * emits one interleaved vertex strip; a backend (GLX drawDrivingLine) uploads
- * and shades it. Nothing here touches a car — the arc reaches the PICTURE only
+ * emits one interleaved vertex strip; each backend's drawDrivingLine (GLX
+ * LINE_VS/FS, WGX WGSLFx.LINE, TLX tsl-fx lineMat) uploads and shades it. Nothing here touches a car — the arc reaches the PICTURE only
  * (docs/PHYSICS.md §curvature reads: render-only).
  *
  * WHAT THE OTHER GAMES DO (researched 2026-09-08, sources in
@@ -185,7 +185,7 @@ window.DrivingLine = (function () {
 
   /* Draw through a backend: `gfx.drawDrivingLine(verts, count, dirty, opts)`.
      Builds lazily when the circuit changed. Returns false when the line is off
-     or the backend has no pass (WGX / TLX today — a recorded parity gap). */
+     or the backend's pass is not ready. */
   function draw(gfx, api, playerSpeed) {
     if (mode === "off" || !gfx || typeof gfx.drawDrivingLine !== "function") return false;
     if (cache.id !== api.id || !cache.verts) build(api);

@@ -3219,7 +3219,7 @@ built for (null until the first frame drew it), `samples` the 2.5 m samples
 along the lap, `verts` the strip's vertex count; `speedAt(s)` is the line's
 speed (m/s) at arc position `s` and `zoneAt(s)` 0…1 whether CORNERS mode shows
 it there (held 60 m past a corner's exit, faded over ~70 m). The shipped default
-is `"full"`. The ribbon is GLX-only today (WGX / TLX report "no pass").
+is `"full"`. GLX, WGX and TLX all draw it.
 
 ```js
 __apex.race("monza"); __apex.drivingLine("full");
