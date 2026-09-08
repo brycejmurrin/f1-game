@@ -98,6 +98,18 @@ survives a cold boot): `docs/notes/CI-RENDERING-PERFORMANCE.md`. Keep
 `apex-tools` in root `.mcp.json`; never run Chrome MCP while Playwright runs;
 never attach `mcp-probe` for a `version.json` check.
 
+**NEVER COMPARE THE CENSUS'S TWO TLX LEGS ON FRAMES, FPS OR LUMA WITHOUT
+READING THE `path:` ROW.** They run DIFFERENT PRESENT PATHS: the WebGPU leg
+pins `tlxForceGL=0`, and `tlx.js` soft-blits (GPU readback + `putImageData`
+every frame) whenever `!forceWebGL && (_softAdapter || _headless || cap==="1")`
+— Playwright is always headless. The WebGL2 leg pins `"1"` and short-circuits
+that off. `headless=true` prints on BOTH and discriminates nothing. Run 61 read
+600 frames against 5 and it is a readback against a direct present, not a
+backend difference; four hours went into that gap on 2026-09-08 before the
+harness was re-read. A player in a HEADED browser has neither flag, so no
+headless leg says anything about their path — the same caveat WGX's
+`softPresent=true headlessUa=true (expected)` line has always carried.
+
 **A UNIT TEST OF A RENDERER BACKEND IS NOT EVIDENCE THAT IT RUNS** — a mock
 device stayed green while four defects made the real backend refuse to boot.
 (The WGX recipe below is for work on the SPIKE. The shipped tree boots GLX, so
