@@ -1049,3 +1049,56 @@ test("the SHIFT trim scales the gear-change crack", async () => {
   for (let i = 0; i < 40; i++) A.setEngine(0.7, 0, false, 0.6, 5, {});
   assert.ok(ducked <= A.engineLevel() + 1e-9, "the shift duck stays with the engine, not the trim");
 });
+
+/* THE BRAKE CUE (GameAudio.brakeCue, driven by DrivingLine.cue).
+ * A blip train has no persistent node, so brakeCueState() is the only surface
+ * that can say the layer did anything — and the three things worth pinning are
+ * exactly the three a listening test could not: that silence is silent, that
+ * the RATE tightens with urgency, and that a stood-down cue does not bank a
+ * backlog it then machine-guns out (the overrun crackle above shipped that bug
+ * once, which is why its own clock is reset the same way).
+ *
+ * The rate is the assertion and the pitch is not, deliberately:
+ * docs/research/DRIVING-CONTROLS-RESEARCH.md quotes Forza's Blind Driving
+ * Assists on this ("the playback of these cues will vary in SPEED to indicate
+ * the rate of deceleration required") and warns that a pitch ramp conflates
+ * "a corner is coming" with "how much car you need". A test that pinned pitch
+ * would be pinning the mistake. */
+test("the braking cue is silent on the pace, tightens with urgency, and banks no backlog", async () => {
+  // The SHIPPED path, and one clock: sfxOk() gates the whole layer on
+  // isEnabled, which only init()+release()+startEngine() sets, so a bare
+  // init() would have measured a permanently muted cue and called it silence.
+  const { GameAudio, release, ctxTime } = boot();
+  GameAudio.init();
+  await release();
+  GameAudio.startEngine();
+  const fired = () => GameAudio.brakeCueState().fired;
+
+  // Silence is silent, however long it is left running.
+  const before = fired();
+  for (let i = 0; i < 200; i++) { GameAudio.brakeCue(0); ctxTime(0.016); }
+  assert.equal(fired(), before, "u=0 emits nothing at all");
+  assert.equal(GameAudio.brakeCueState().urgency, 0);
+
+  // A LOW urgency beeps; a HIGH urgency beeps more often over the same window.
+  const count = (u, seconds) => {
+    const t0 = fired();
+    for (let i = 0; i < Math.round(seconds / 0.016); i++) { GameAudio.brakeCue(u); ctxTime(0.016); }
+    return fired() - t0;
+  };
+  const slow = count(0.1, 4), fast = count(1, 4);
+  assert.ok(slow > 0, `a light cue still beeps (${slow} in 4 s)`);
+  assert.ok(fast > slow * 2, `full urgency is far denser: ${fast} vs ${slow} in 4 s`);
+  // The shipped ends of the ramp, so a change to them is a decision: ~0.4 s
+  // apart at the foot and ~0.07 s at full red.
+  assert.ok(slow >= 8 && slow <= 12, `~10 blips in 4 s at u=0.1, got ${slow}`);
+  assert.ok(fast >= 50 && fast <= 60, `~57 blips in 4 s at u=1, got ${fast}`);
+
+  // NO BACKLOG: stand the cue down, let a long time pass, bring it back — the
+  // next blip is one gap away, not a burst of everything that was "due".
+  GameAudio.brakeCue(0);
+  ctxTime(30);
+  const t0 = fired();
+  GameAudio.brakeCue(1);
+  assert.equal(fired() - t0, 1, "exactly one blip on resume, not a banked burst");
+});
