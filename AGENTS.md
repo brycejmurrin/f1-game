@@ -63,19 +63,34 @@ Session shape — this is what controls both wall time and waiting:
    `grep -E '= run (passed|failed|timedout|interrupted)'` (ERE alternation; a
    fixed-string or BRE grep never matches) — never a looser pattern, never the
    process table, never `| tail` on a live log.
-5. A timeout on a busy box measures the machine, not the code: check
+5. **REAP WHAT YOU LAUNCHED, AND CHECK BEFORE YOU BLAME THE BOX.** A finished
+   task does not take its browsers with it: a killed `test-bg` run leaves its
+   Playwright WORKERS alive, and a probe script that never exits keeps
+   respawning Chrome for as long as the session lasts. Measured here — one
+   backgrounded probe ran 113 minutes at ~350 % CPU beside two orphaned
+   headless shells and put the box at loadavg 8.15, which is where the deploy
+   REFUSES (>= 3) and where every browser verdict becomes a measurement of the
+   machine. So before a browser run, a deploy, or any timing judgement, and
+   again after anything backgrounded ends:
+   `ps -eo pid,pcpu,etimes,args --sort=-pcpu | head` — anything of yours burning
+   CPU with a long ELAPSED is an orphan; `kill -9` it by PID. Leave the MCP
+   servers alone (`playwright-mcp`, `chrome-devtools-mcp` sit at 0 % — they are
+   the harness's, not yours), and never `pkill` a pattern that also matches
+   your own shell. `node tools/ci/test-bg.mjs --status` reports the runs it
+   knows about; it does not know about anything you started by hand.
+6. A timeout on a busy box measures the machine, not the code: check
    `/proc/loadavg` (< 3) and for a live `playwright test` process before
    starting anything, look for a load inversion in the log first, and re-run
    the spec ALONE only when the verdict matters.
-6. **STOPPING IS ALLOWED** — a pushed change that names its unverified groups
+7. **STOPPING IS ALLOWED** — a pushed change that names its unverified groups
    beats an hour of serialized SwiftShader. **Never widen a tolerance to make a
    spec pass**; write against `__apex` hooks, relative assertions over absolute
    thresholds; any `waitForFunction` on a rendering page needs
    `{ polling: 100 }` or its declared timeout never fires.
-7. Never hand a subagent a browser run — give a flat prohibition ("report it
+8. Never hand a subagent a browser run — give a flat prohibition ("report it
    unverified"). Subagent worktrees default to a STALE base: first step in any
    worktree is `git checkout -B <branch> <the session branch or its SHA>`.
-8. Never hand-edit a `@gen-shell` block, `version.json` or the `apex-build`
+9. Never hand-edit a `@gen-shell` block, `version.json` or the `apex-build`
    meta — the shell is generated and the deploy stamps it.
 
 ## Seeing the game (cheapest first)
