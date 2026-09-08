@@ -72,8 +72,13 @@ function tAtY(y) {
   for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (tab(SH.Y, m) > y) lo = m; else hi = m; }
   return (lo + hi) / 2;
 }
-// >0 inside the shell, in the same units the profile uses
+// >0 inside the shell, in the same units the profile uses. The shell is a
+// FLAT CUT at both ends — a helmet stops at the neck — so anything above the
+// crown or below the rim is outside, not an extension of the end ring (which
+// drew a stalk out of the top of every preview).
 function inside(p) {
+  const Y = SH.Y;
+  if (p[1] > Y[0] || p[1] < Y[Y.length - 1]) return -1;
   const t = tAtY(p[1]);
   const a = Math.atan2(p[0], p[2]);
   const on = Helmets.pointAt(t, a);
@@ -84,7 +89,7 @@ function inside(p) {
 function drawHelmet(design, size, camAz) {
   const px = Buffer.alloc(size * size * 3);
   const skin = Helmets.shell(design);
-  const R = 0.165;                                   // the box the helmet lives in
+  const R = 0.185;                                   // the box the helmet lives in
   const scale = R / (size * 0.46), cx = size / 2, cy = size * 0.50;
   const az0 = (camAz == null ? 0 : camAz) * Math.PI / 180;
   const el = (camAz == null ? 88 : EL) * Math.PI / 180;

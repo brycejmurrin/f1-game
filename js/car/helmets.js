@@ -173,7 +173,8 @@ const Helmets = (function () {
 
      A letterbox, as on a real lid: much wider than it is tall, sat between the
      brow and the nose, its top edge curving down as it runs to the temples. */
-  const VISOR_T0 = 0.26, VISOR_T1 = 0.49, VISOR_AZ = 68;
+  const TRIM = [0.10, 0.10, 0.11];
+  const VISOR_T0 = 0.30, VISOR_T1 = 0.52, VISOR_AZ = 62;
   function isVisor(t, az) {
     if (t < VISOR_T0 || t > VISOR_T1) return false;
     // A LENS, not a rectangle: widest across the eyes, closing toward the brow
@@ -191,31 +192,47 @@ const Helmets = (function () {
     const visor = design.visor || C.black;
     return function (t, az) {
       if (isVisor(t, az)) return { c: visor, glass: true };
+      if (t >= 0.955) return { c: TRIM, glass: false };   // the dark band round the neck opening
       return { c: paint(t, az), glass: false };
     };
   }
 
   /* ── the shape ───────────────────────────────────────────────────────────
-     A full-face helmet, not the half-ball this used to be. The shell is a
-     surface of revolution swept from a PROFILE — crown, temple, jaw, chin —
-     squashed to an oval in plan (a head is deeper than it is wide) and pushed
-     forward at the bottom front into a chin bar. Reference: a 2026 lid,
-     photographed side-on.
+     A full-face helmet, read off a photograph of a 2026 lid. NOT a surface of
+     revolution: an egg is the one thing a helmet is not. Three things give it
+     its character, and a radial profile can express none of them —
 
-       t   0 at the crown, 1 at the bottom of the chin bar
-       Y   height above the temple line, in metres
-       S   radial scale, 1 at the widest ring (the ears)
+       the CROSS-SECTION IS SQUARISH. The sides run nearly vertical from the
+       temples down past the ears, the crown is flat across rather than domed,
+       and the corners are rounded rather than curved. That is a superellipse,
+       |x/w|^n + |z/d|^n = 1, with n climbing from 2.4 at the crown to 3.1
+       through the middle of the shell — an ellipse at n = 2, a rounded box by
+       n = 3.
 
-     The old hemisphere was 0.30 m across and 0.15 m tall, which is a beach
-     ball; a real helmet is about 0.22 across, 0.27 tall and a little longer
-     than it is wide, with its widest point at the ears rather than at its
-     bottom edge. */
+       FRONT AND BACK ARE NOT THE SAME REACH. The chin bar juts a long way
+       forward as a blunt block, well ahead of the visor above it, while the
+       back of the shell is close to vertical. So the section takes a separate
+       depth ahead of centre (F) and behind it (B).
+
+       THE BOTTOM IS A FLAT CUT. A helmet ends at the neck opening, a clean
+       horizontal rim with a dark trim round it — it does not taper to a point,
+       which is what made the old shell read as an egg standing on its end.
+
+       t   0 at the crown, 1 at the neck rim
+       Y   height above the temple line, metres
+       W   half width; F reach ahead of centre; B reach behind; N squareness */
   const SHAPE = {
-    hx: 0.104, hz: 0.122,          // half width, half depth at the widest ring
-    T: [0.00,  0.10,  0.22,  0.34,  0.46,  0.58,  0.70,  0.82,  0.92,  1.00],
-    Y: [0.122, 0.115, 0.096, 0.062, 0.018, -0.030, -0.074, -0.112, -0.138, -0.152],
-    S: [0.00,  0.40,  0.68,  0.88,  0.99,  1.00,  0.97,  0.90,  0.74,  0.26],
-    chin: 0.030,                   // how far the chin bar juts past the oval
+    T: [0.00,  0.07,   0.16,   0.26,   0.36,   0.46,   0.58,   0.70,   0.82,   0.92,   1.00],
+    Y: [0.130, 0.126,  0.114,  0.094,  0.068,  0.038,  0.000, -0.042, -0.086, -0.120, -0.142],
+    W: [0.006, 0.040,  0.070,  0.089,  0.099,  0.105,  0.107,  0.104,  0.095,  0.083,  0.070],
+    // F is NOT monotonic, and that is the whole front of the helmet: the brow
+    // stands proud over the aperture, the visor sits recessed under it, and the
+    // chin bar comes back out below — out, in, out. Running it straight from
+    // crown to chin, as the first pass did, gave a face like the front of a
+    // bus and no brow at all.
+    F: [0.007, 0.046,  0.088,  0.114,  0.109,  0.106,  0.117,  0.132,  0.144,  0.147,  0.135],
+    B: [0.006, 0.042,  0.075,  0.094,  0.104,  0.111,  0.116,  0.114,  0.105,  0.093,  0.080],
+    N: [2.20,  2.30,   2.45,   2.65,   2.80,   2.90,   2.90,   2.85,   2.70,   2.50,   2.35],
   };
   function tab(arr, t) {
     const T = SHAPE.T;
@@ -225,38 +242,17 @@ const Helmets = (function () {
     }
     return arr[arr.length - 1];
   }
-  // 0..1 over the chin bar's reach, so the bulge grows in and fades out rather
-  // than stepping — a step here reads as a crease across the jaw.
-  const ease = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
-  function chinPush(t, azRad) {
-    const front = Math.cos(azRad);                       // 1 over the nose, 0 at the ears
-    if (front <= 0) return 0;
-    const band = ease((t - 0.50) / 0.22) * (1 - ease((t - 0.86) / 0.14));
-    return SHAPE.chin * band * front * front;
-  }
   /* A point on the shell. `a` is the azimuth in radians, 0 over the nose,
-     growing toward the driver's right — the same frame the designs use. */
+     growing toward the driver's right — the same frame the designs use. The
+     superellipse is solved for the radius along that direction. */
   function pointAt(t, a) {
-    const s = tab(SHAPE.S, t), y = tab(SHAPE.Y, t);
-    const z = Math.cos(a) * s * SHAPE.hz + chinPush(t, a);
-    return [Math.sin(a) * s * SHAPE.hx, y, z];
+    const w = Math.max(1e-4, tab(SHAPE.W, t)), n = tab(SHAPE.N, t);
+    const dx = Math.sin(a), dz = Math.cos(a);
+    const d = Math.max(1e-4, dz >= 0 ? tab(SHAPE.F, t) : tab(SHAPE.B, t));
+    const r = 1 / Math.pow(Math.pow(Math.abs(dx / w), n) + Math.pow(Math.abs(dz / d), n), 1 / n);
+    return [r * dx, tab(SHAPE.Y, t), r * dz];
   }
 
-  /* Build the helmet into a car-mesh accumulator ({pos,nrm,col,mat,idx}) at
-     (cx, cy, cz), cy being the TEMPLE line. `S` carries the renderer's surface
-     ids so this module never has to know their values.
-
-     Normals come from the parametric surface itself — the cross product of the
-     two tangents, by central difference — because the chin bar deforms the
-     revolution and an analytic sphere normal would light it as though the bulge
-     were not there. */
-  /* Rings are NOT spread evenly down the shell. Everything a player ever sees
-     is above the cockpit rim — the crown, the brow, the visor, the temples —
-     and the jaw and chin bar are down inside the tub. So the rings bunch into
-     the top 60%, where the bands and stripes have to land cleanly, and thin
-     out below it. Evenly spread at the tessellation the design needs, the head
-     came to 792 triangles on a 3172-triangle car; this is 432 for the same
-     silhouette and sharper bands where they show. */
   const RINGS = 12, SLICES = 18;
   const ringT = (i) => { const f = i / RINGS; return f * f * 0.45 + f * 0.55; };
   function build(out, cx, cy, cz, design, S) {
