@@ -2398,3 +2398,15 @@ files are not ratcheted.
   extraction that gave back 27 lines, 18 codeLines and a `let` — more than the
   BRAKE CUE raise cost. `shellNodes` is unchanged at 1347 and stays there; the
   rows still live in the shell, which is where all static DOM lives.
+- `js/game.js` lines 10244 -> **10274**, codeLines 5561 -> **5578** (2026-09-08): the boot canary stops
+  retiring a renderer on ONE strike. It used to persist `webgl2` over the
+  player's pick the first time a load died before presenting a frame — but on
+  iOS that is a jetsam, which happens for reasons that have nothing to do with
+  the renderer, and the write is permanent: the phone quietly stops using
+  three and nothing ever turns it back on. Reported as "three is no longer
+  working on phone" and traced to this line. The first strike now reverts for
+  that boot only and leaves the pick alone; the second retires it, so a device
+  that genuinely cannot run the backend still settles after two attempts with
+  no reload loop. A backend that proves itself clears its strikes, the retired
+  pick is remembered in `apex26.gfxBackendWas`, and both latches join
+  RESET RENDERER's list (the frozen copy in gfx-backend-canary is updated).
