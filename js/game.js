@@ -6339,6 +6339,7 @@ function flapAimPoint(which) {
 function setSetupView(name) {
   const v = SP_VIEWS[name];
   if (!v) return;
+  GarageScene.spot(name);   // the work lamp wheels over to what the preset frames
   setupPreviewAz = v.az; setupPreviewEl = v.el; setupPreviewDist = v.dist;
   // A preset is an absolute framing, so it also drops any pan the player had
   // walked in — otherwise "show me the rear wing" shows them the rear wing plus
@@ -6493,6 +6494,19 @@ function getSetupPreviewMesh() {
   }
   return _spMesh;
 }
+// The ROOM's view of the game beyond the car (GarageScene.draw's ctx): the
+// circuit the next race runs at — the career's calendar, the free-play season's,
+// else the picker's — its weather and hour, and the career's tally for the wall.
+function garageCtx() {
+  const c = Career.inCareer() ? Career.data() : null;
+  const t = c ? Tracks.SEASON[c.season.round % Tracks.SEASON.length]
+          : (isChampionship() && season) ? SeasonCal.track(season.round) : Tracks.LIST[trackIdx];
+  return { track: t, weather: raceWeather, tod: raceTimeOfDay,
+           night: raceTimeOfDay === "night" || (raceTimeOfDay === "default" && !!(t && t.night)),
+           wins: c ? c.results.filter((r) => r.p === 1).length : 0,
+           last: c && c.results.length ? c.results[c.results.length - 1] : null,
+           sponsor: c ? Career.sponsor() : null, career: !!c, round: c ? c.season.round : 0, spin: setupPreviewSpin };
+}
 const _spProj = new Float32Array(16), _spView = new Float32Array(16), _spVP = new Float32Array(16);
 const _spInvProj = new Float32Array(16);
 const _spLiv = () => resolveLivery(Teams.LIST[teamIdx]);   // memoised on store.rev
@@ -6603,7 +6617,7 @@ function renderSetupPreview(dt) {
     // present(), and an interior lives or dies on its corner darkening.
     viewProj: _spVP, view: _spView, eye, sunDir: [0, 0.86, 0.51], sunColor: GarageScene.SKYLIGHT,
     ambientSky: GarageScene.AMB_SKY, ambientGround: GarageScene.AMB_GROUND,
-    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.lights(_spLiv()),
+    fogColor: GarageScene.BACKDROP, fogDensity: 0, lights: GarageScene.live(_spLiv(), performance.now(), garageCtx()),
     proj: _spProj, invProj: _spInvProj,
     noEnv: true,   // probe-less preview: matte paint, never mirror a stale race cube
   }) === false) return;
@@ -6618,7 +6632,7 @@ function renderSetupPreview(dt) {
   spMat.specular = 0.22;
   spMat.roughness = clamp(spMat.roughness * 2.4, 0.02, 1);   // spread + dim the speculars
   spMat.metalness = Math.min(spMat.metalness, 0.05);
-  GarageScene.draw(Teams.LIST[teamIdx], _spLiv(), eye, getTeamParts, driverIdx);
+  GarageScene.draw(Teams.LIST[teamIdx], _spLiv(), eye, getTeamParts, driverIdx, garageCtx(), getSetupPreviewMesh());
   gfx.draw(getSetupPreviewMesh(), MAT_REFLECT_X, spMat);
   // The moveable wings, so a player can watch active aero work before ever
   // driving — and see what their own AERO parts choice did to the flap size.
@@ -6635,7 +6649,7 @@ function renderSetupPreview(dt) {
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
-  gfx.drawGlow(GarageScene.lights(_spLiv()), GarageScene.glareStr());
+  gfx.drawGlow(GarageScene.live(_spLiv(), performance.now(), garageCtx()), GarageScene.glareStr());
   gfx.present(SP_PRESENT);
 }
 

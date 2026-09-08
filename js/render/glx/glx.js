@@ -1966,7 +1966,13 @@ const GLX = (function () {
     // decal wins at every distance and grazing angle without moving it.
     const _db = opts && opts.depthBias;
     if (_db) { setPolyOffset([_db[0], _db[1]]); }
+    // noDepthTest: a planar reflection drawn UNDER the floor (GarageScene) is
+    // behind the floor's depth and would never pass; it draws untested, writes
+    // no depth (alpha < 1), and everything opaque after it overwrites it.
+    const _ndt = opts && opts.noDepthTest;
+    if (_ndt) gl.disable(gl.DEPTH_TEST);
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
+    if (_ndt) gl.enable(gl.DEPTH_TEST);
     if (_db) { setPolyOffset(null); }
     if (dbl) setCull(true);
     if (noAW) setAlphaWrite(true);
