@@ -1021,6 +1021,7 @@ const TLX = (function () {
           (o.doubleSided ? "|ds" : "") +
           (o.noAlphaWrite ? "|na" : "") +
           (o.depthBias ? "|db" + o.depthBias[0] + "," + o.depthBias[1] : "") +
+          (o.noDepthTest ? "|nd" : "") +
           (chunked ? "|ch" : "") +
           (instanced ? "|in" : "");
         let m = matCache.get(key);
