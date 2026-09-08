@@ -261,6 +261,10 @@ test.describe("Liveries — creator", () => {
     await page.locator('[data-cs-pill="wingCarbon:paint"]').click();
     await expect(wings).toHaveAttribute("aria-disabled", "false");
     await expect(rear).toHaveAttribute("aria-disabled", "false");
+    // ENGINE COVER is its own colour zone and is never gated by the wings.
+    const cover = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("ENGINE COVER"))');
+    await expect(cover.locator('input[type="color"]')).toBeEnabled();
+    await expect(cover).not.toHaveAttribute("aria-disabled", "true");
     // The tail-style row offers LiveryTex's list, stars included.
     const styles = await page.evaluate(() => LiveryTex.TAIL_STYLE_IDS.slice());
     expect(styles).toContain("stars");

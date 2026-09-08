@@ -37,7 +37,10 @@ garage — never by deriving it from car space, which is where the first pass in
 `wingCarbon` (`paint|carbon`) puts every flap, front and rear, on `SURFACES.carbon` — the flap sites
 pass their surface explicitly, so a CARBON colour alone would be dark paint — and `rearWing` colours the
 rear mainplane block (absent = `c2`, today's look); the garage greys WINGS and REAR WING under carbon.
-`finStyle` also offers `stars` (the W17's star flake, a fixed nine-point table, no RNG). Body details:
+`finStyle` also offers `stars` (the W17's star flake, a fixed nine-point table, no RNG).
+`cover` is the ENGINE COVER colour zone — the airbox, roll structure, cover loft and snorkel
+take it instead of `c1` (the SF-26's white top on a red car); the atlas inks the crest and the
+spine designs against it through `coverPaint`, or a light cover swallows a light crest. Body details:
 `tcam` (`Car3D.TCAM_IDS`, mesh colour only) and `coverVents` (`Car3D.COVER_VENT_IDS`,
 geometry, also in `SP_HULL_GEOM_FIELDS`); `spineHeight` (`Car3D.SPINE_HEIGHT_IDS`,
 lifts the cover crown top-only through `bodyAnchors(parts, teamId, spineHeight)` —
