@@ -1648,7 +1648,67 @@ const Car3D = (function () {
     addSpan(out, { z: 1.58, y: 0.058 + rideDY, w: 0.36, h: 0.028, t: 0.92 },
                  { z: 1.30, y: 0.062 + rideDY, w: 0.64, h: 0.030, t: 0.96 }, CARBON);
     addBox(out, 0, 0.132 + rideDY, 1.44, 0.10, 0.125, 0.26, CARBON);
-    addSpan(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], c1);
+    // THE COCKPIT APERTURE. This span used to be ONE closed loft, so the deck
+    // over the driver was a filled surface and the helmet merely pierced it:
+    // a downward ray on the centreline crossed THREE lids (the tub top, and
+    // the old 0.045 surround slab's 0.622 face and 0.578 underside) with no
+    // opening anywhere — which is why the head read as sitting on the car
+    // rather than in it. addLoft emits all six faces and there is no CSG here,
+    // so the hole has to come from HOW the span is built: a tub capped at the
+    // seat floor, a rail either side, and the well closed behind.
+    //
+    // Every number below is measured off the span's own stations, not styled:
+    // the tub bottom is 0.195 the whole way, the deck top runs 0.635 -> 0.660
+    // and the top half-width 0.197 -> 0.150. Rails come out ~4.5 cm across at
+    // the coaming at BOTH ends because the opening narrows toward the headrest
+    // as the tub does — held straight, the rear rail was 1 cm and vanished.
+    const CK_A = CHASSIS.cockpit[0], CK_B = CHASSIS.cockpit[1];
+    const CK_REAR_Z = -0.33;    // behind the headrest; the tub aft of it stays closed
+    const CK_FLOOR_Y = 0.47;    // seat floor — the helmet's neck rim sits at 0.490
+    const ckAt = (z) => { const f = (CK_A.z - z) / (CK_A.z - CK_B.z), L = (a, b) => a + (b - a) * f;
+      return { z, y: L(CK_A.y, CK_B.y), w: L(CK_A.w, CK_B.w), h: L(CK_A.h, CK_B.h), t: L(CK_A.t, CK_B.t) }; };
+    const ckTop = (st) => st.y + st.h / 2, ckBot = (st) => st.y - st.h / 2;
+    const ckOpen = (z) => 0.105 + (0.150 - 0.105) * ((z - CK_REAR_Z) / (CK_A.z - CK_REAR_Z));
+    // tub half-width where the seat floor meets the flank (the flank leans in
+    // linearly from w/2 at the bottom to t*w/2 at the deck)
+    const ckSide = (st) => (st.w / 2) +
+      (st.t * st.w / 2 - st.w / 2) * ((CK_FLOOR_Y - ckBot(st)) / (ckTop(st) - ckBot(st)));
+    const ckMid = ckAt(CK_REAR_Z);
+    // 1. THE TUB UNDER THE OPENING — same flanks, capped at the seat floor.
+    const ckLower = (st) => ({ z: st.z, y: (ckBot(st) + CK_FLOOR_Y) / 2, w: st.w,
+                               h: CK_FLOOR_Y - ckBot(st), t: ckSide(st) / (st.w / 2) });
+    addSpan(out, ckLower(CK_A), ckLower(ckMid), c1);
+    // 2. A RAIL EACH SIDE, floor to deck. Explicit corners, because frame()
+    //    centres the top on the bottom and a rail's inner face is vertical
+    //    while its outer follows the flank inboard.
+    for (const sgn of [1, -1]) {
+      const q = [];
+      for (const st of [CK_A, ckMid]) {
+        const xi = sgn * ckOpen(st.z), xo = sgn * ckSide(st), xt = sgn * (st.t * st.w / 2);
+        q.push([xi, CK_FLOOR_Y, st.z], [xo, CK_FLOOR_Y, st.z], [xt, ckTop(st), st.z], [xi, ckTop(st), st.z]);
+      }
+      addBlock(out, q, c1);
+      // Dark liner on the inner face: addBlock paints one colour, and a
+      // body-paint cockpit wall reads as a painted trough, not a carbon tub.
+      const li = [];
+      for (const st of [CK_A, ckMid]) {
+        const xi = sgn * ckOpen(st.z), xn = sgn * (ckOpen(st.z) - 0.006);
+        li.push([xn, CK_FLOOR_Y, st.z], [xi, CK_FLOOR_Y, st.z], [xi, ckTop(st), st.z], [xn, ckTop(st), st.z]);
+      }
+      addBlock(out, li, DARK, null, SURFACES.carbon);
+      // 3. COAMING: the padded lip the driver's shoulders sit inside.
+      addLoft(out, ckMid.z, sgn * (ckOpen(ckMid.z) + 0.022), ckTop(ckMid) + 0.007, 0.050, 0.016,
+                   CK_A.z, sgn * (ckOpen(CK_A.z) + 0.023), ckTop(CK_A) + 0.007, 0.052, 0.016,
+              DARK, SURFACES.carbon);
+    }
+    // 4. THE FLOOR and the rear bulkhead — without them the opening is a hole
+    //    straight through the car and you see the track through the driver.
+    addLoft(out, ckMid.z, 0, CK_FLOOR_Y - 0.006, 2 * ckOpen(ckMid.z), 0.012,
+                 CK_A.z, 0, CK_FLOOR_Y - 0.006, 2 * ckOpen(CK_A.z), 0.012, DARK, SURFACES.carbon);
+    addBox(out, 0, (CK_FLOOR_Y + ckTop(ckMid)) / 2, ckMid.z + 0.008,
+           2 * ckOpen(ckMid.z), ckTop(ckMid) - CK_FLOOR_Y, 0.016, DARK, SURFACES.carbon);
+    // 5. The tub AFT of the headrest stays a closed block, as it was.
+    addSpan(out, ckMid, CK_B, c1);
     addTopBevel(out, CHASSIS.cockpit[0], CHASSIS.cockpit[1], 0.028, c1);
   }
 
@@ -2758,7 +2818,10 @@ const Car3D = (function () {
     // Measured on Monza: the halo group projected 47.7 deg above the eye line —
     // a dark bar across the middle of the frame. The chase car keeps all of it.
     if (!ckpt) {
-      addBox(out, 0, 0.60, 0.12, 0.40, 0.045, 0.78, [0.04, 0.04, 0.05], SURFACES.carbon);
+      // (The 0.40 x 0.045 x 0.78 slab that stood here was the FAKE opening: a
+      // flat plate at 0.622 under a closed deck, which is what a ray on the
+      // centreline hit second. The tub now carries a real aperture, rails and
+      // a floor, so the plate would float inside the well.)
       // The dark converging beams + front post that used to sit here were the
       // pre-tube inner halo frame. With the real titanium hoop and centre
       // pillar in part("halo"), they were duplicate structure reading as a
