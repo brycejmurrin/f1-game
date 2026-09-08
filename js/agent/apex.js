@@ -6,6 +6,17 @@ function create(G) {
 // The four audio hooks share one precondition. `null` when GameAudio is there,
 // so each hook reads `return noAudio() || <the real answer>` rather than
 // repeating a three-line guard four times.
+// Per-car fields a running episode CREATES, which therefore outlive reset()
+// unless it removes them. Module scope, not an __apex member: it is an
+// implementation detail of reset(), not a hook anyone calls. Not a hand-written
+// wish list either — it is every key that differed between consecutive
+// post-reset snapshots at the same seed, and tests/specs/agent-determinism.spec.js
+// is the guard that keeps it honest.
+const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "onKerb",
+  "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0",
+  "_lapTimeAtLine", "incidentInvalidLap", "passSide", "passBest", "offroad",
+  "towing", "axFrac", "slipFactor", "flatSpot", "_aeroGrip", "skidIntensity",
+  "kerbSndT", "kerbHapT"];
 const noAudio = () => (typeof GameAudio === "undefined"
   ? { ok: false, error: "no_audio", message: "GameAudio is not loaded", fix: "reload the page" }
   : null);
@@ -913,6 +924,19 @@ const api = {
     G.lightsLit = 0;   // the DOM alone leaves the counter at 5 — see the façade
     return G.state;
   },
+  // EVERY numeric/boolean field on every car, raw and unrounded — the whole
+  // per-car state, not the curated slice cars() returns. Its reason for
+  // existing is EPISODE_TRANSIENTS above: reset() must leave the cars in the
+  // state a fresh page load leaves them in, and the only honest way to check
+  // that is to diff the actual objects across two resets. Strings, objects and
+  // functions are skipped (team records, driver names, the launch plan) — they
+  // are identity, not episode state, and stringifying them would swamp the
+  // diff that matters.
+  carState: () => G.cars.map((c) => {
+    const o = {};
+    for (const k in c) { const v = c[k]; if (typeof v === "number" || typeof v === "boolean") o[k] = v; }
+    return o;
+  }),
   cars: () => G.cars.map((c, i) => ({
     id: i, x: +c.x.toFixed(3), xv: +((c.xVis !== undefined ? c.xVis : c.x)).toFixed(3),
     yaw: +(c.yawVis || 0).toFixed(4),
@@ -2301,11 +2325,64 @@ const api = {
     for (const c of G.cars) {
       c.gear = 1; c.rpm = PhysicsConsts.IDLE_RPM; c.shiftT = 0;
       c.steerSm = 0; c.brakeHeat = 0; c.axEstSm = 0; c.slipDeg = 0;
+      // The heading-state controller's own per-episode state (game.js
+      // "--- lateral ---", 2026-09-08). Missed when that controller landed, and
+      // it broke replay determinism outright rather than by a metre: `aiBias`
+      // SNAPS to its target when null and slews when it is a number, so the
+      // first episode ended with a number and every later one started from it.
+      // agent-determinism caught it; the block above is the reason this file
+      // has such a block at all.
+      c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
+      // …and the fields one car reads OFF ANOTHER during its own update. These
+      // are written every frame, but they are read on the FIRST frame before
+      // their owner has been updated, so a fresh session sees undefined (and
+      // falls back) where a replayed one sees last episode's value: `_vmaxNow`
+      // is the blocker's pace that AiDrive.otWant decides passes on, `accSm`
+      // its acceleration, `towing` its slipstream, `rank` its position. The
+      // leak predates the heading-state controller and was harmless until that
+      // controller changed which cars are beside each other on lap 1; then it
+      // moved finishing order between replays of one seed while the player's
+      // own trace stayed byte-identical (agent-determinism, 2026-09-08).
+      c._vmaxNow = 0; c.accSm = 0; c.towing = 0; c.rank = 0; c.contactT = 0;
+      c.passSide = 0; c.passBest = 0;
       c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; c.otArmed = false;
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
       delete c.vertLoad;
+      // MEASURED (2026-09-08): the block above was written for the drivetrain,
+      // and every field the AI has grown since leaks the same way — episode 1
+      // ran from a cold car, every later episode inherited the last one's, and
+      // the field finished 4 s in a different ORDER (two transposed pairs in
+      // field().positions, the player's own digest identical because it starts
+      // ahead of the grid). Dumping every primitive on all 22 cars at the start
+      // of three episodes named the leaks exactly; these are they. `lane` is the
+      // odd one out and the reason this bit: it is not absent before the first
+      // episode but ALREADY ADAPTED, so it re-seeds from lanePref (the grid home
+      // line makeCars stored) rather than being deleted. The rest are absent on
+      // a cold car, so DELETING is what makes every episode start as the first
+      // one did — the same reason vertLoad above is deleted, not zeroed.
+      for (const k of ["rank", "kCur", "wasArmed", "_vmaxNow", "onKerb", "exhaustPop",
+                       "_pushD", "_secIdx", "_secT0", "accSm", "passSide", "passBest",
+                       "_lapTimeAtLine", "incidentInvalidLap", "axFrac", "slipFactor",
+                       "flatSpot", "_aeroGrip", "skidIntensity"]) delete c[k];
+      c.lane = c.lanePref != null ? c.lanePref : 0;
       c._prevS = c.s;
+      // …and every OTHER per-episode transient, deleted rather than zeroed so
+      // episode N starts in the state a freshly loaded page is in — which is
+      // what "the same seed replays an episode exactly" actually asks for.
+      // The block above fixed the drivetrain leak and stopped there; these
+      // survived, and they are not cosmetic: kCur, _vmaxNow, accSm, _aeroGrip,
+      // slipFactor, towing, offroad, onKerb, contactT and _pushD all feed the
+      // next tick's physics, and rank/passSide/passBest feed AI racecraft. So
+      // the first replay ran with them undefined and every later one inherited
+      // the previous episode's values — the field order at the back of the
+      // grid came out different, which is what agent-determinism catches.
+      // Five of them (accSm, kCur, _vmaxNow, passBest, kerbHapT) drifted on
+      // EVERY episode, not just the first, so no amount of warm-up settled it.
+      // Derived by diffing every numeric/boolean car field across consecutive
+      // post-reset snapshots; keep this list in step with that method rather
+      // than by guesswork.
+      for (const k of EPISODE_TRANSIENTS) delete c[k];
     }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)
     G._testInput = null;
@@ -2447,6 +2524,12 @@ const api = {
   // default, with the default it replaced and the source that owns it; "all"
   // = every preference's effective value. Never the garage, saves or accounts.
   settingsFile(mode) { return SettingsExport.collect(mode === "all" ? "all" : "changes", G); },
+
+  // garageFile() — the GARAGE file object (js/ui/settings-export.js): parts,
+  // liveries, setup sheets and an invented team, for every team, enumerated by
+  // prefix from localStorage. Never career or season saves, lap records or
+  // anything account-shaped.
+  garageFile() { return SettingsExport.collectGarage(); },
 
   // save(data, filename) — hand a file back out of the browser.
   //

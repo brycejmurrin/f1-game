@@ -137,9 +137,14 @@ const PRESETS = {
   relax:    { tiltDeg: 4, steerSmooth: 8, steerRate: 4,
               steerExpo: 4, steerLock: 5, steerSpeed: 4, drivingHelp: 8, raceLine: 2,
               adaptiveButtons: 8, brakeCue: 8 },
-  standard: { tiltDeg: 6, steerSmooth: 6, steerRate: 5,
-              steerExpo: 5, steerLock: 5, steerSpeed: 5, drivingHelp: 1, raceLine: 0,
-              adaptiveButtons: 6, brakeCue: 6 },
+  // STANDARD is the SHIPPED car, so it must equal the store fallbacks in
+  // applySteerTuning() exactly — activePreset() compares the two and a fresh
+  // install reads CUSTOM the moment they disagree. Both became the owner's own
+  // profile on 2026-09-08: a long, lazy rack (RATE 2) with little smoothing,
+  // more lock and a later speed taper.
+  standard: { tiltDeg: 8, steerSmooth: 3, steerRate: 2,
+              steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
+              adaptiveButtons: 5, brakeCue: 4 },
   pro:      { tiltDeg: 7, steerSmooth: 3, steerRate: 7,
               steerExpo: 6, steerLock: 7, steerSpeed: 7, drivingHelp: 1, raceLine: 0,
               adaptiveButtons: 4, brakeCue: 4 },
@@ -151,15 +156,22 @@ const PRESET_STORE = {  // slider store-key  ->  preset field
   adaptiveButtons: "adaptiveButtons", brakeCue: "brakeCue",
 };
 
+// FEEL. NORMAL must be the shipped car for the same reason STANDARD must be:
+// matchSteerLevel() compares the live sliders against these, so a fresh install
+// whose values are in none of them reads CUSTOM out of the box. Re-centred
+// 2026-09-08 when the shipped profile changed. The ladder now differentiates on
+// LOCK and the speed taper over one calm rack, and SIM is the one step that also
+// quickens the rack — which is what separated it before.
 const STEER_LEVELS = {
-  easy:   { steerRate: 4, steerExpo: 4, steerLock: 5, steerSpeed: 4 },
-  assist: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 4 },
-  normal: { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5 },
+  easy:   { steerRate: 2, steerExpo: 4, steerLock: 5, steerSpeed: 5 },
+  assist: { steerRate: 2, steerExpo: 5, steerLock: 6, steerSpeed: 6 },
+  normal: { steerRate: 2, steerExpo: 6, steerLock: 7, steerSpeed: 7 },
   sim:    { steerRate: 7, steerExpo: 6, steerLock: 7, steerSpeed: 7 },
 };
 const STEER_LEVEL_ORDER = ["easy", "assist", "normal", "sim"];
 const STEER_LEVEL_LABEL = { easy: "SUPER EASY", assist: "ASSISTED", normal: "NORMAL", sim: "SIM" };
-const STEER_DEFAULTS = { steerRate: 5, steerExpo: 5, steerLock: 5, steerSpeed: 5 };
+// Same four as the store fallbacks above — this is the detection half.
+const STEER_DEFAULTS = { steerRate: 2, steerExpo: 6, steerLock: 7, steerSpeed: 7 };
 const HELP_LEVELS = { low: 1, med: 5, high: 9 };   // low = OFF (see helpFromSlider)
 const HELP_LABEL = { low: "LOW", med: "MEDIUM", high: "HIGH" };
 const LINE_LEVELS = { off: 0, corner: 3, full: 5 };
@@ -385,17 +397,17 @@ function applySteerTuning() {
   // computes a negative wheelbase, not an error. The ten oninput handlers below
   // are DOM-clamped by the range input's own min/max and never take this path;
   // this is the one that runs on every boot, reading whatever localStorage holds.
-  const rate    = clamp(store.get("steerRate",  5), SLIDER_MIN, SLIDER_MAX);
-  const expo    = clamp(store.get("steerExpo",  5), SLIDER_MIN, SLIDER_MAX);
-  const smooth  = clamp(store.get("steerSmooth", 6), SLIDER_MIN, SLIDER_MAX);
-  const tiltdeg = clamp(store.get("tiltDeg",    6), SLIDER_MIN, SLIDER_MAX);   // 6→32° for full lock (tuner optimum)
-  const lock    = clamp(store.get("steerLock",  5), SLIDER_MIN, SLIDER_MAX);
-  const spdsteer = clamp(store.get("steerSpeed", 5), SLIDER_MIN, SLIDER_MAX);
+  const rate    = clamp(store.get("steerRate",  2), SLIDER_MIN, SLIDER_MAX);
+  const expo    = clamp(store.get("steerExpo",  6), SLIDER_MIN, SLIDER_MAX);
+  const smooth  = clamp(store.get("steerSmooth", 3), SLIDER_MIN, SLIDER_MAX);
+  const tiltdeg = clamp(store.get("tiltDeg",    8), SLIDER_MIN, SLIDER_MAX);   // 6→32° for full lock (tuner optimum)
+  const lock    = clamp(store.get("steerLock",  7), SLIDER_MIN, SLIDER_MAX);
+  const spdsteer = clamp(store.get("steerSpeed", 7), SLIDER_MIN, SLIDER_MAX);
   const help    = clamp(store.get("drivingHelp", 1), SLIDER_MIN, SLIDER_MAX);   // default: assist OFF
   const pace    = clamp(store.get("pace", PACE_DEF), PACE_MIN, PACE_MAX);   // 11 -> 0.840 (14 is the 1.0 reference)
   const line    = clamp(store.get("raceLine",   0), LINE_MIN, LINE_MAX);
-  const adapt   = clamp(store.get("adaptiveButtons", 6), SLIDER_MIN, SLIDER_MAX);
-  const weight  = clamp(store.get("carWeight", 5), SLIDER_MIN, SLIDER_MAX);   // 5 = as shipped
+  const adapt   = clamp(store.get("adaptiveButtons", 5), SLIDER_MIN, SLIDER_MAX);
+  const weight  = clamp(store.get("carWeight", 10), SLIDER_MIN, SLIDER_MAX);   // 5 = as shipped
   G.PACE           = paceFromSlider(pace);
   G.WHEELBASE      = wheelbaseFromSlider(rate);
   G.STEER_EXPO     = expoFromSlider(expo);
@@ -412,7 +424,7 @@ function applySteerTuning() {
   // button builds road-wheel angle linearly instead of as t^expo.
   if (Input.setSteerExpo) Input.setSteerExpo(G.STEER_EXPO);
   G.raceLineAssist = line / 5;
-  const cue = clamp(store.get("brakeCue", 6), SLIDER_MIN, SLIDER_MAX);
+  const cue = clamp(store.get("brakeCue", 4), SLIDER_MIN, SLIDER_MAX);
   if (window.BrakeCue) BrakeCue.setLevel(cue);
   $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
   $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;

@@ -642,11 +642,15 @@ body:not(.desktop) {
   --ui-compact-brand-text: calc(var(--ui-scale) / var(--ui-compact-brand-scale));
   --ui-compact-text: calc(var(--ui-scale) / var(--ui-compact-scale));
 }
-/* Coarse-pointer used to force 1.15 here; left at 1 so first paint matches
-   scaleDefault() (100). The media query stays as the place a future touch-only
-   default would live, so the CSS/JS agreement note above still holds. */
+/* THE TOUCH-ONLY DEFAULT this block was reserved for, filled in 2026-09-08 from
+   the owner's own phone: menus a touch larger, the HUD larger still, and the
+   driving buttons about 45 % over the HUD — kept as a RATIO of --hud-scale, not
+   an absolute, so moving HUD SIZE still carries the buttons with it the way an
+   unset BUTTON SIZE always has. scaleDefault()/scaleDefaultFor() in
+   js/ui/scale.js return the same three numbers under the same query, so first
+   paint and the first JS write still agree (the note above). */
 @media (pointer: coarse) {
-  :root { --ui-scale: 1; --hud-scale: 1; --hud-btn-scale: var(--hud-scale); }
+  :root { --ui-scale: 1.09; --hud-scale: 1.24; --hud-btn-scale: calc(var(--hud-scale) * 1.4536); }
 }
 
 /* VIEWPORT UNITS ARE THE ONE UNIT FAMILY `zoom` GETS WRONG, so inside a zoomed

@@ -100,7 +100,7 @@ export function loadParts() {
   // carDecalData) — but that is the boundary: anything that RASTERISES a livery
   // texture still needs a browser and stays in tests/specs/.
   for (const f of ["js/core/log.js", "js/core/mat4.js", "js/data/teams.js", "js/car/parts.js",
-                   "js/car/liverytex.js", "js/car/car3d.js", "js/car/car-mesh.js"])
+                   "js/car/liverytex.js", "js/car/helmets.js", "js/car/car3d.js", "js/car/car-mesh.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   // Every one of these is `const X = (function(){})()` at script level — a
   // LEXICAL binding, which never becomes a property of the vm's global object,

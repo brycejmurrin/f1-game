@@ -68,9 +68,13 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // a wall quad. Two shipped cut-off wordmarks and one never-visible live
   // trace were each found by a screenshot; this puts them in the edit loop.
   "tests/unit/garage-sign-occlusion.test.mjs",
+  // ...and the front-wing endplate decal, whose plate moves with every aero
+  // recipe: measured against the real built car, not against literals.
+  "tests/unit/front-wing-decal.test.mjs",
   "tests/unit/curvature-channels.test.mjs",
   "tests/unit/track-line.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",
+  "tests/unit/twin-drift.test.mjs",
   "tests/unit/storage-key-prefix.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",

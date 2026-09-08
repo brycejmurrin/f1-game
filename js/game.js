@@ -239,6 +239,17 @@ let _claimSkipped = false;   // this boot consumed a claim-fail latch
 try {
   let pref = null;
   try { pref = localStorage.getItem("apex26.gfxBackend"); } catch (_) {}
+  // NOTHING STORED ON A TOUCH DEVICE = THREE.JS since 2026-09-08 (the owner's
+  // own phone runs it, and measured faster than the WebGL2 fallback there).
+  // Held in memory only, never written: "unset" has to keep meaning "the
+  // default", or the RENDERER row could never return to it. Recoverable
+  // without touching a setting — the boot canary below reverts to WebGL2, and
+  // persists that, for any device that never presents a frame on it. Desktops
+  // are unchanged: GLX is still the default renderer there.
+  if (!pref) {
+    try { if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) pref = "three"; }
+    catch (_) { /* no matchMedia: stay on the WebGL2 default */ }
+  }
   // Last load claimed the canvas then died — skip opt-in THIS tab only
   // (sessionStorage). Do not wipe the user's THREE/WEBGPU pick: Safari's
   // navigator.gpu is on, WGX/TLX still refuse, and writing webgl2 made the
@@ -471,12 +482,15 @@ let musicEnabled = store.get("music", true);    // music on/off, independent of 
 let manualMode = store.get("manual", false);   // manual gearbox preference (player shifts)
 let unlimitedBudget = store.get("unlimitedBudget", false); // removes credit cap in car setup
 // how the player steers: "tilt" | "buttons" | "touch" (migrates the old buttonSteer flag)
-let steerMode = store.get("steerMode", store.get("buttonSteer", false) ? "buttons" : "tilt");
+// BUTTONS, not tilt, since 2026-09-08 — tilt is still one row away, but it is
+// not what a first-time phone player should be handed. The legacy `buttonSteer`
+// migration that used to pick between them is subsumed: both arms said BUTTONS.
+let steerMode = store.get("steerMode", "buttons");
 const HUD_PROFILES = ["minimal", "standard", "broadcast"];
 let hudProfile = store.get("hudProfile", "standard");
 if (HUD_PROFILES.indexOf(hudProfile) < 0) hudProfile = "standard";
 const HUD_MET_LAYOUTS = ["auto", "full", "timing", "driver", "compact"];
-let hudMetricsLayout = store.get("hudMetricsLayout", "auto");
+let hudMetricsLayout = store.get("hudMetricsLayout", "full");
 if (HUD_MET_LAYOUTS.indexOf(hudMetricsLayout) < 0) hudMetricsLayout = "auto";
 // AUTO IS ALWAYS THE FULL SET: fitHud scales / stacks / drops gaps instead of
 // hiding a cluster, and the label names what AUTO resolved to. A FORCED name
@@ -922,7 +936,7 @@ function buildStudioRig() {
 }
 let headlessMode = false;  // skip render() when true (headless control loop)
 const { CAM_MODES } = CamModes;  // player camera modes (js/camera/mode-switch.js; eval-time — a HARD_EDGES pair)
-let camMode = Math.min(Math.max(store.get("camMode", 0) | 0, 0), CAM_MODES.length - 1);
+let camMode = Math.min(Math.max(store.get("camMode", 3) | 0, 0), CAM_MODES.length - 1);
 // The game mode, on TWO axes. `flow` is what the run is FOR and survives a whole
 // championship; `session` is what this one visit to the track IS. They are genuinely
 // independent — a career weekend qualifies and then races, so a single flat enum
@@ -1523,7 +1537,7 @@ function resolveLivery(team) {
              logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null,
              finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null,
              tcam: l.tcam || null, coverVents: l.coverVents || null, spineHeight: l.spineHeight || null,
-             spineSide: l.spineSide || null, rearWing: l.rearWing || null, wingCarbon: l.wingCarbon || null };
+             spineSide: l.spineSide || null, rearWing: l.rearWing || null, wingCarbon: l.wingCarbon || null, cover: l.cover || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1536,7 +1550,7 @@ function resolveLivery(team) {
                       logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null,
                       finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null,
                       tcam: liv.tcam || null, coverVents: liv.coverVents || null, spineHeight: liv.spineHeight || null,
-                      spineSide: liv.spineSide || null, rearWing: liv.rearWing || null, wingCarbon: liv.wingCarbon || null }
+                      spineSide: liv.spineSide || null, rearWing: liv.rearWing || null, wingCarbon: liv.wingCarbon || null, cover: liv.cover || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -3598,6 +3612,7 @@ aeroZ = AeroZones.create(G);
 // Tyre marks (js/fx/skidmarks.js) — self-contained ring buffer + batched draw.
 skids = SkidMarks.create(G);
 DrivingLine.setMode(store.get("drivingLine", "full"));
+DrivingLine.setPalette(store.get("drivingLinePalette", "f1"));
 // What the ribbon builder needs from the engine: the centreline sampler and
 // the STATIC curvature LUT (a render-only read — docs/PHYSICS.md §curvature
 // reads), plus the same physics numbers the AI's brake targets use, so the
@@ -9731,6 +9746,16 @@ function setHudUserHidden(v) {
   document.body.classList.toggle("hud-hidden", !!v);
   paintHudDetailsSummary();   // repaints the HUD row too if (v) { const p = $("campicker"); if (p) p.hidden = true; }
 }
+// LINE COLOUR — an accessibility preference, so it lives in SETTINGS and
+// persists, unlike DRIVING LINE itself (a property of the race, in RACE
+// SETTINGS). The shader mixes between the two triples on one flag; see
+// js/render/shared/driving-line.js setPalette.
+SettingRow.wire("pm-linecolor", {
+  values: [["f1", "F1"], ["safe", "COLOUR-BLIND"]],
+  read: () => DrivingLine.palette(),
+  write: (v) => { DrivingLine.setPalette(v); store.set("drivingLinePalette", DrivingLine.palette()); },
+});
+
 SettingRow.wire("pm-hidehud", {
   values: SettingRow.labels(["on", "off"]),
   read: () => (document.body.classList.contains("hud-hidden") ? "off" : "on"),

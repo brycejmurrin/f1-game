@@ -624,6 +624,15 @@
                 </div>
               </div>
               <p class="adv-help">AUTO hides the map and the gaps only where the HUD style or the screen leaves no room.</p>
+              <div id="pm-linecolor" class="set-row" role="group" aria-labelledby="pm-linecolor-label">
+                <span class="tune-label" id="pm-linecolor-label">LINE COLOUR</span>
+                <div>
+                  <button id="pm-linecolor-prev" type="button" data-step="-1" aria-label="Previous line colour">&lsaquo;</button>
+                  <select id="pm-linecolor-sel" aria-labelledby="pm-linecolor-label"></select>
+                  <button id="pm-linecolor-next" type="button" data-step="1" aria-label="Next line colour">&rsaquo;</button>
+                </div>
+              </div>
+              <p class="adv-help">The DRIVING LINE's speed cue. F1's green/amber/red is the pair red-green colour blindness cannot separate; COLOUR-BLIND uses blue, orange and magenta instead.</p>
               <label class="tune-row"><span class="tune-label">HUD SIZE <b id="pm-hudscale-v">100%</b></span>
                 <input id="pm-hudscale" type="range" min="40" max="200" step="0.25" value="100" aria-label="HUD size"></label>
               <!-- BUTTON SIZE is its own knob because the dock and the readouts
@@ -2207,6 +2216,7 @@
 <script defer crossorigin="anonymous" src="js/circuits/jacarepagua.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/track-maps.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/helmets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car3d.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/audio/engine.js?v=dev"></script>

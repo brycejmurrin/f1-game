@@ -2252,6 +2252,23 @@ live outside the backends (`js/render/shared/driving-line.js`, the fragment
 shaders); each backend carries only its upload and draw. WGX and TLX gained
 the same pass the same day (`WGSLFx.LINE`, `tsl-fx.js` `lineMat`) — those
 files are not ratcheted.
+- `js/game.js` lines 10157 -> **10168**, codeLines 5529 -> **5533**;
+  `js/agent/apex.js` lines 2732 -> **2738**, codeLines 2026 -> **2027**
+  (2026-09-08): the phone renderer default and the GARAGE file. game.js's four
+  code lines are the touch-device fall-through for `apex26.gfxBackend` (held in
+  memory, never written, so "unset" still means the default and the boot canary
+  can still revert it); apex.js's one is `garageFile()`, the read-only twin of
+  `settingsFile()`. Both carry the comment a reader needs to know why the
+  default is not simply written to storage.
+- `js/lighting/presets.js` lines 15508 -> **17318** (+1810), `js/game.js` lines
+  10154 -> **10157** (2026-09-08): THE OWNER'S SETTINGS FILE BAKED AS DEFAULTS.
+  The presets growth is 201 LIGHTING TUNER profiles merged through
+  `merge-proposals.mjs` — 2858 knobs across all 41 circuits at dawn, dusk and
+  night in dry and wet, a base copied to every track and then refined per
+  circuit (23 distinct variants at dawn dry, 25 at night dry, 26 at night wet).
+  It is data, not code: no new branches, and every lighting suite is green on
+  it. game.js's three lines are comments on the four defaults that moved there
+  (camera mode, metrics layout, steer mode).
 - `js/game.js` lines 10088 -> **10089**, codeLines 5497 -> **5498**;
   `js/agent/apex.js` lines 2662 -> **2668**, codeLines 2011 -> **2012**;
   (tree) shellNodes 1325 -> **1326** (2026-09-08): the SETTINGS FILE. One
@@ -2285,3 +2302,41 @@ files are not ratcheted.
   surface variable instead of the literal `SURFACES.paint`, which is what lets a
   livery put bare weave on the flaps the way the launch photos show — a CARBON
   colour alone rendered as dark paint there. No new sites, no geometry.
+- `js/agent/apex.js` lines 2668 -> **2688**, codeLines 2012 -> **2015**
+  (2026-09-08): reset()'s per-episode clearing block gains the heading-state
+  controller's own smoothing state and the four fields one car reads OFF
+  ANOTHER (`_vmaxNow`, `accSm`, `towing`, `rank`, plus the pass-latch
+  remnants). 17 of the 20 lines are the comment explaining WHY each belongs
+  there, which is the whole value: the block already existed for exactly this
+  class and the controller change slipped past it. Paid for by a determinism
+  break that reached the deploy branch — one seed replayed with a different
+  finishing order while the player's trace stayed byte-identical. Evidence:
+  `tests/unit/determinism-replay-vm.test.mjs`, which fails without the fix.
+- `js/car/car3d.js` lines 3829 -> **3834** (2026-09-08): the ENGINE COVER colour
+  zone. One resolved colour (`coverC`) and its four-line comment; the airbox,
+  roll structure, cover loft and snorkel take it instead of `c1`, so a livery
+  can put the SF-26's white top on a red car or the W17's silver on a black
+  one. The atlas follows it (`coverPaint` inks the crest), because a light
+  cover under a dark car would otherwise take the dark car's ink.
+- `js/game.js` lines 10157 -> **10168**, codeLines 5529 -> **5535**;
+  `js/render/glx/glx.js` 2355 -> **2356**; (tree) shellNodes 1326 -> **1333**
+  (2026-09-08): SETTINGS › LINE COLOUR, the driving line's colour-blind
+  palette. The row is seven shell nodes (the set-row grammar: label, prev,
+  select, next), one uniform on the GLX line program, and the wire block that
+  persists it. Paid for by the feature being unreadable as shipped: the speed
+  cue signalled with green / amber / red, whose two ends are the pair the
+  common red-green deficiencies cannot separate, on a cue that is only a cue
+  if it reads at a glance. Evidence and palette source:
+  `docs/notes/DRIVING-LINE-RESEARCH.md`.
+
+- `js/car/car3d.js` lines 3805 -> **3826** (2026-09-08): the FRONT-WING ENDPLATE
+  placement comes out of the builder. The plate profile table and a
+  `frontPlateGeom(aLvl, aero)` accessor now sit at module scope and the builder
+  reads them, so the decal mesh can land on the plate at every recipe — its
+  height, outboard kick, thickness and taper all move with the aero level and
+  the `plate` pick, and a decal drawn from literals floats on most of them (the
+  first cut sat 641 mm inboard). Same reason `numberBoard()` was hoisted for the
+  rear wing. The car is unchanged: one build hash over four teams crossed with
+  four recipes is identical before and after, and
+  tests/unit/front-wing-decal.test.mjs measures the shipped quads against the
+  shipped car.

@@ -324,38 +324,8 @@ const Car3D = (function () {
     addQuad(out, a, d, c, b, col, surface);
   }
 
-  // Smooth dome (helmet): partial lat-long sphere, analytic normals.
-  function addDome(out, cx, cy, cz, r, col, surface) {
-    const STACKS = 5, SLICES = 12;
-    const i0 = out.pos.length / 3;
-    const material = surfaceOf(col, surface);
-    const rgb = material === SURFACES.paint
-      ? [Math.min(col[0], 1), Math.min(col[1], 1), Math.min(col[2], 1)]
-      : col;
-    for (let st = 0; st <= STACKS; st++) {
-      const phi = (st / STACKS) * (Math.PI / 2);   // 0 = top, π/2 = equator
-      const y = Math.cos(phi), rr = Math.sin(phi);
-      for (let sl = 0; sl < SLICES; sl++) {
-        const a = (sl / SLICES) * Math.PI * 2;
-        const nx = rr * Math.cos(a), nz = rr * Math.sin(a);
-        out.pos.push(cx + nx * r, cy + y * r, cz + nz * r);
-        out.nrm.push(nx, y, nz);
-        out.col.push(rgb[0], rgb[1], rgb[2]);
-        out.mat.push(material);
-      }
-    }
-    for (let st = 0; st < STACKS; st++) {
-      for (let sl = 0; sl < SLICES; sl++) {
-        const sl2 = (sl + 1) % SLICES;
-        const a = i0 + st * SLICES + sl,       b = i0 + st * SLICES + sl2;
-        const c = i0 + (st + 1) * SLICES + sl2, d = i0 + (st + 1) * SLICES + sl;
-        out.idx.push(a, b, c, a, c, d);
-      }
-    }
-  }
-
   // Smooth swept tube (the halo hoop): shared ring verts + radial normals — the
-  // addDome pattern along an arbitrary polyline. The ring "up" vector carries
+  // shared-ring pattern along an arbitrary polyline. The ring "up" vector carries
   // forward from ring to ring (parallel transport) so frames never flip where
   // the tangent crosses the hoop apex. No end caps: both halo ends bury in the
   // pillar / collar. Cost: path.length*sides verts, (path.length-1)*sides*2 tris.
@@ -912,6 +882,33 @@ const Car3D = (function () {
   const FW_SPAN = 0.715;
   function frontHalf(aLvl) {
     return FW_SPAN * (aLvl <= 0 ? 0.74 : (aLvl === 1 ? 0.88 : 1.0));
+  }
+  // FRONT-WING ENDPLATE profiles, and the ONE function that places the plate.
+  // Hoisted out of the builder because the decal mesh has to land on the plate
+  // at every aero recipe: the plate's height, its outboard kick and even its
+  // thickness move with the level and the `plate` pick, so a decal drawn from
+  // literals floats in clear air on three of the four profiles — the same trap
+  // numberBoard() exists to close on the rear wing. Mesh and decal both read
+  // this.
+  const FRONT_PLATE = [
+    { hF: 0.16, hR: 0.30, kick: 0.020, footW: 0.09, footZ: 0.46, arch: 0 },
+    { hF: 0.22, hR: 0.40, kick: 0.060, footW: 0.13, footZ: 0.54, arch: 0 },
+    { hF: 0.30, hR: 0.54, kick: 0.100, footW: 0.19, footZ: 0.62, arch: 1 },
+    // 3: outwash spec — tall plate whose TOP EDGE ROLLS OUTBOARD (roll: 1
+    // adds the curled lip below), the 2026 field's signature endplate.
+    { hF: 0.28, hR: 0.50, kick: 0.120, footW: 0.16, footZ: 0.58, arch: 0, roll: 1 },
+  ];
+  function frontPlateGeom(aLvl, aero) {
+    const lvl = aLvl == null ? 2 : aLvl;
+    const pick = aero && aero.plate != null ? aero.plate : 1;
+    const P = FRONT_PLATE[Math.max(0, Math.min(3, Math.round(pick)))];
+    const half = frontHalf(lvl);
+    const w = lvl >= 4 ? 0.060 : (lvl <= 0 ? 0.028 : 0.044);
+    const x = half + 0.03;
+    const kick = Math.min(P.kick, Math.max(0, CAR_HALF - half - 0.03 - w * 0.5 - 0.006));
+    return { P, w, kick,
+             front: { z: 2.66, x, y: 0.135, h: P.hF, t: 0.62 },
+             rear:  { z: 1.98, x: x + kick, y: 0.245, h: P.hR, t: 0.78 } };
   }
   // FIA overall-width envelope, half. The 2026 regulations cap car width at
   // 1900 mm, which is also exactly where this model already draws the front
@@ -1608,10 +1605,6 @@ const Car3D = (function () {
     T = T || {};
     return buildAeroParts(T._visual && T._visual.aero, T.aero != null ? T.aero : 1);
   }
-  const HELMET_ACCENT = [
-    [0.95, 0.20, 0.15], [0.15, 0.45, 0.95], [0.97, 0.82, 0.10], [0.90, 0.90, 0.95],
-    [0.15, 0.75, 0.35], [0.85, 0.40, 0.90], [0.98, 0.50, 0.10], [0.10, 0.80, 0.80],
-  ];
 
   // The monocoque span is a CLOSED block, so its rear face is a solid wall the
   // driver's eye (car-local z -0.18) looks straight into. BOTH its z and its
@@ -1954,6 +1947,11 @@ const Car3D = (function () {
     const wingSurf = wingCarbon ? SURFACES.carbon : SURFACES.paint, wingCol = wingCarbon ? CARBON : wingC;
     const rearC = wingCarbon ? CARBON : (_ckAcc(liv.rearWing) || c2);   // REAR WING block (IBM blue, Visa white) — c2 keeps today's look
     const finC  = _ckAcc(liv.fin) || c2;   // shark-fin plate — c2 keeps today's look
+    // ENGINE COVER (liv.cover): the airbox, roll structure and cover loft in their
+    // own colour — the SF-26's white top over a red chassis, the W17's silver over
+    // black. Absent = c1, today's look. The atlas inks the crest against this too
+    // (liverytex `coverPaint`), or a light cover would swallow a light crest.
+    const coverC = _ckAcc(liv.cover) || c1;
     const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
@@ -2176,7 +2174,7 @@ const Car3D = (function () {
       // whole roll structure wears the sun colour, as the RB22's does, and
       // the atlas paints the disc's rear half on the cover behind it.
       const sunC = (liv.spineLogo === "wrap" && typeof LiveryTex !== "undefined" && LiveryTex.sunColour)
-        ? (_ckAcc(LiveryTex.sunColour(teamId, liv)) || c1) : c1;
+        ? (_ckAcc(LiveryTex.sunColour(teamId, liv)) || coverC) : coverC;
       addSpan(out, { z: -0.28, y: 0.76, w: 0.30 * inScale, h: 0.20 * inScale, t: 0.55 },
                    { z: -0.75, y: 0.74, w: 0.26 * inScale, h: 0.18 * inScale, t: 0.55 }, sunC, INTAKE);
       // PRINCIPAL ROLL STRUCTURE. C12.4.1 requires structure at [XC 55, 0, 968]
@@ -2198,7 +2196,7 @@ const Car3D = (function () {
       // A SPINE SIDE mark (liv.spineSide) claims the flank band z -0.72..-1.22:
       // the pinstripe and the service panels keep clear of it (see both sites).
       const sideMark = (liv.spineSide || "none") !== "none";
-      coverGeom = buildEngineCoverBodywork(out, c1, accentC, engStyle, anchors, spineRise(liv.spineHeight), sideMark);
+      coverGeom = buildEngineCoverBodywork(out, coverC, accentC, engStyle, anchors, spineRise(liv.spineHeight), sideMark);
       // Optional scoop lip on the roll-hoop mouth (recipe-gated; default 0).
       const scoopLip = Math.max(0, Math.min(2, Math.round((engStyle && engStyle.scoopLip) || 0)));
       if (scoopLip >= 1) {
@@ -2216,8 +2214,8 @@ const Car3D = (function () {
         const mouth = { z: -0.12, y: 0.96, w: 0.15 * sk, h: 0.10 * sk, t: 0.62 };
         const crest = { z: -0.38, y: 1.02, w: 0.12 * sk, h: 0.13 * sk, t: 0.55 };
         const merge = { z: -0.68, y: 0.88, w: 0.10 * sk, h: 0.09 * sk, t: 0.50 };
-        addSpan(out, mouth, crest, c1, INTAKE);
-        addBeveledSpan(out, crest, merge, 0.010, c1, null);
+        addSpan(out, mouth, crest, coverC, INTAKE);
+        addBeveledSpan(out, crest, merge, 0.010, coverC, null);
         addBox(out, 0, mouth.y + 0.01, mouth.z + 0.01,
                mouth.w * 0.72, mouth.h * 0.55, 0.04, INTAKE);
         if (scoopLip >= 1) {
@@ -2913,11 +2911,15 @@ const Car3D = (function () {
 
     part("helmet");
     if (!(opts && opts.noDriver)) {
-      const helmC = (opts && opts.num != null) ? HELMET_ACCENT[((opts.num % HELMET_ACCENT.length) + HELMET_ACCENT.length) % HELMET_ACCENT.length] : c2;
-      addDome(out, 0, 0.585, -0.08, 0.145, c1);
-      addBox(out, 0, 0.64, 0.05, 0.20, 0.075, 0.045, VISOR);  // visor band
-      addBox(out, 0, 0.715, -0.09, 0.10, 0.026, 0.17, helmC); // crown stripe (driver accent)
-      addBox(out, 0, 0.60, 0.11, 0.11, 0.05, 0.02, helmC);    // nose flash
+      // The driver's head: js/car/helmets.js owns the shell (a full-face lid
+      // with a chin bar, not the half-ball this was), its visor aperture and
+      // the design painted on it, keyed by race number. cy is the TEMPLE line.
+      const des = Helmets.designFor(opts && opts.num, c1);
+      Helmets.build(out, 0, 0.630, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.glass });
+      // No brow box: the shell carries its own ridge over the aperture now.
+      // The spoiler sits ON the back of the head, whose shell reaches z -0.191
+      // there — set it clear of that and it floats behind the helmet.
+      addBox(out, 0, 0.664, -0.176, 0.050, 0.034, 0.046, des.visor);      // rear aero spoiler
     }
 
     // NOT in the first-person build: it spans z -0.305..-0.175 and y 0.715..
@@ -3200,14 +3202,9 @@ const Car3D = (function () {
     }
     const aPlate = Math.max(0, Math.min(3, Math.round(
       aeroStyle.plate != null ? aeroStyle.plate : 1)));
-    const PLATE = [
-      { hF: 0.16, hR: 0.30, kick: 0.020, footW: 0.09, footZ: 0.46, arch: 0 },
-      { hF: 0.22, hR: 0.40, kick: 0.060, footW: 0.13, footZ: 0.54, arch: 0 },
-      { hF: 0.30, hR: 0.54, kick: 0.100, footW: 0.19, footZ: 0.62, arch: 1 },
-      // 3: outwash spec — tall plate whose TOP EDGE ROLLS OUTBOARD (roll: 1
-      // adds the curled lip below), the 2026 field's signature endplate.
-      { hF: 0.28, hR: 0.50, kick: 0.120, footW: 0.16, footZ: 0.58, arch: 0, roll: 1 },
-    ][aPlate];
+    // The plate table and its placement live at module scope (frontPlateGeom):
+    // the decal mesh reads the same numbers, or it floats.
+    const _fp = frontPlateGeom(aLvl, aeroStyle), PLATE = _fp.P;
     const aArch = aeroStyle.arch != null
       ? Math.max(0, Math.min(1, Math.round(aeroStyle.arch))) : (PLATE.arch || 0);
     const aGill = aeroStyle.gill != null
@@ -3215,18 +3212,18 @@ const Car3D = (function () {
     const aCasc = Math.max(0, Math.min(3, Math.round(aeroStyle.casc != null ? aeroStyle.casc
       : (aLvl >= 4 ? 3 : (aLvl >= 3 ? 2 : (aLvl >= 1 ? 1 : 0))))));
     for (const s of [-1, 1]) {
-      const epW = aLvl >= 4 ? 0.060 : (aLvl <= 0 ? 0.028 : 0.044);
+      const epW = _fp.w;
       // The plate's LEADING edge stays flush with the foil tip (attachHalf =
       // fwHalf + 0.03) — that is the one place the two actually meet. What was
       // wrong is the outboard `kick` on the trailing station: real endplates are
       // near-parallel to the centreline and win their outwash from the shape of
       // the tip, not by leaning 120 mm out of the car. Clamp it to whatever room
       // CAR_HALF leaves once the plate's own thickness is paid for.
-      const epX = s * (fwHalf + 0.03);
-      const epKick = Math.min(PLATE.kick, Math.max(0, CAR_HALF - fwHalf - 0.03 - epW * 0.5 - 0.006));
+      const epX = s * _fp.front.x;
+      const epKick = _fp.kick;
       addBeveledSpan(out,
-        { z: 2.66, x: epX,             y: 0.135, w: epW, h: PLATE.hF, t: 0.62 },
-        { z: 1.98, x: epX + s*epKick,  y: 0.245, w: epW, h: PLATE.hR, t: 0.78 },
+        { z: 2.66, x: epX,             y: 0.135, w: epW, h: PLATE.hF, t: _fp.front.t },
+        { z: 1.98, x: epX + s*epKick,  y: 0.245, w: epW, h: PLATE.hR, t: _fp.rear.t },
         Math.min(0.014, epW * 0.28), c2);
       // Footplate CENTRED on the plate rather than shoved 0.23 x footW outboard
       // of it: at the catalog's widest foot that push alone put its outer edge
@@ -3819,7 +3816,7 @@ const Car3D = (function () {
            PANEL_COL: PANEL,
            TYRE_BAND, BRAKE_CALIPER, AXLES, CHASSIS,
            TEAM_STYLE, teamStyleOf,
-           endplate: endplateGeom, numberBoard,
+           endplate: endplateGeom, numberBoard, frontPlate: frontPlateGeom,
            aeroFlaps: aeroFlapsGeom, aeroFlapAim, buildFlapGeom,
            sharkFin: FIN, sharkFinPanel, sharkFinBadge, FIN_SHAPES, FIN_SHAPE_IDS,
            TCAM_IDS, COVER_VENT_IDS, mirrorLightAnchors, SPINE_HEIGHT_IDS, spineRise,

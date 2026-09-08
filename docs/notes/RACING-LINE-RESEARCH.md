@@ -49,7 +49,8 @@ means a better line buys the AI position realism, not pace.
 
 ## 2. What the bake actually produces (measured)
 
-`scratch/line-audit.mjs` (gitignored) builds circuits through
+`tools/track/line-audit.mjs` (promoted out of `scratch/` on 2026-09-08, with
+the corrected "tighter" metric of §6's correction) builds circuits through
 `tools/track/verify-track.cjs`'s `buildContext()` and reads the baked table.
 "steep" is the lateral slope `|Δx|/Δs` — 0.2 m/m is an 11° crossing angle,
 0.35 m/m is 19°. A real car crossing a 12 m road over 60 m runs ~0.2.
@@ -207,7 +208,7 @@ number of corners whose peak curvature exceeds the road's (Spa 2 → 9 at
 λ = 0.003). Not shipped; the prototype is `scratch/relax-proto.mjs`
 (gitignored, `--weighted=true`).
 
-**Measured, seed → relaxed** (`scratch/line-audit.mjs`; corner time is the
+**Measured, seed → relaxed** (`tools/track/line-audit.mjs`; corner time is the
 AI's model on the line's OWN curvature, which the arc formula in §2 hid):
 
 | circuit | worst slope | steep > 0.2 | on clamp | corner time vs centreline |
@@ -218,11 +219,44 @@ AI's model on the line's OWN curvature, which the arc formula in §2 hid):
 | monaco | 0.38 → 0.42 | 15.0 → 7.4 % | 22 → 27 % | −4.0 % → positive |
 
 Negative means the knot line was SLOWER than the centreline; every circuit
-was. Steep nodes above 0.35 m/m fell from 1.7–6.7 % to 0–1 %; no corner's
-peak line curvature exceeds the road's on any of the eight circuits audited
-(the "tighter" column of §2 is 0 everywhere). "On clamp" rose on Monza and
-Monaco because the apexes now sit ON the inside clamp for the whole plateau —
-the intent, not the overshoot §2 described.
+was. Steep nodes above 0.35 m/m fell from 1.7–6.7 % to 0–1 %. "On clamp" rose
+on Monza and Monaco because the apexes now sit ON the inside clamp for the
+whole plateau — the intent, not the overshoot §2 described.
+
+> **Correction (2026-09-08, promoting the audit into `tools/`).** This
+> paragraph originally read "no corner's peak line curvature exceeds the
+> road's on any of the eight circuits audited"; the relaxation commit message
+> says the same. Both overstate it, and the audit as first written could not
+> have supported either. It compared peaks over `lineCorners`' s0..s1
+> windows, which are PADDED and OVERLAP their neighbours, on an unsmoothed
+> line curvature — a single-node second difference. Run that way it reports 2
+> tighter corners on Silverstone and 4 on Suzuka; Suzuka's worst read 1.36×,
+> and the 1.36 was the NEXT corner's turn-in inside the tail of this corner's
+> window (that corner's own core is 0.73× the road). `tools/track/line-audit.mjs`
+> now measures each corner's CORE — ±len/2 about the apex, on a 5-node mean —
+> and what is true is narrower: **0 tighter corners on Monza, Spa,
+> Silverstone, Baku, Singapore, Imola and Hungaroring; exactly one each on
+> Monaco, Suzuka, Zandvoort, Catalunya and Interlagos, worst +9 %.** The
+> pass-count cut of §6a is exonerated — 300/400 gives the same counts as the
+> shipped 60/250 — so this is a property of λ and the margin clamp, not of
+> convergence.
+>
+> The general claim is wrong in a more interesting way than "the number is
+> 1, not 0". At the APEX a racing line is never tighter than the road. Through
+> the TRANSITION between two corners it always is — the line curves where the
+> road runs straight, which is what outside-in-outside means. On a lap as
+> tight as Monaco's, where every window overlaps its neighbours, no windowed
+> peak can tell the two cases apart, so a per-corner "tighter" count is a
+> smoke alarm and not a proof.
+
+The four circuits above are also not the whole picture: on the short and
+street layouts the relaxed line's corner time comes out marginally WORSE than
+the centreline's — Baku −0.25 %, Singapore −0.08 %, Zandvoort −0.48 %. The
+model is the AI's own √(LAT_MAX/|k|) capped at vTop, so a lap whose corners
+are all below the cap gains nothing from a wider radius and pays for the
+extra distance the outside-in-outside path costs. It is a real (small) loss,
+not an artefact; it is also the regime where the arc's radius is not what
+limits the car.
 
 **Tests.** `tests/unit/track-line.test.mjs` (synthetic, expectations
 unchanged, all pass) and the new `tests/unit/track-line-circuits.test.mjs`
@@ -443,3 +477,81 @@ Not done: nothing outstanding on the lap-time question (the brake formula
 is unchanged and the controller reaches the same apexes, but the smoother
 lateral motion may be worth a tenth); the CI `driving` and `hooks` groups
 were run for this change, the rest of the AI groups were not.
+
+## 9. Late apexes: the mechanism works, the payoff does not (2026-09-08)
+
+`def.lineHints` shipped in §7 and no circuit uses one. The obvious first
+customer is the late apex — every F1 guide says to sacrifice entry for exit at
+the corner feeding a long straight — so the question was which corners, and
+whether it is worth anything here.
+
+**Which corners can be DERIVED, not remembered.** For each baked corner, take
+the distance from its exit to the nearest following turn-in (over every corner,
+not the next one in the list — windows overlap at a chicane, so "the next
+entry" often starts before this one ends). Sort by that gap and the mechanism
+names the corners a person would:
+
+| circuit | corner it picks | feeds |
+|---|---|---|
+| monza | apex s=4845, R=55 m, 288 m long | 1376 m — Parabolica onto the main straight |
+| spa | apex s=1014, R=109 m | 1073 m — Raidillon onto the Kemmel |
+| silverstone | apex s=4002, R=61 m | 788 m |
+| monaco | apex s=1264, R=10 m | 739 m — the hairpin into the tunnel run |
+
+**The payoff did not survive measurement.** A +25 m `apexShift` on Monza's
+Parabolica (turn 11), solo AI flying laps:
+
+| level | before | with the late apex |
+|---|---|---|
+| easy | 128.20 | 128.23 |
+| normal | 124.18 | **123.65** |
+| hard | 119.83 | 119.82 |
+
+One level half a second faster, two flat. The line audit is unchanged
+(max slope 0.432, corner-time gain 1.58 %), so the hint costs nothing — it
+just does not reliably buy anything. That is consistent with the model: lap
+time here comes from the corner-speed model, and the AI blends the line with
+its own lane, so trading entry for exit is not rewarded the way it is in a car.
+
+NOT SHIPPED, and the experiment is reverted. The remaining reason to want it
+is how the DRAWN line looks at a corner players recognise, which is a taste
+question for the owner rather than a measurement — and the derivation above
+means it would not need 24 circuits authored by hand, only a decision.
+
+## 10. The AI's lap time now has an instrument (2026-09-08)
+
+Every number in §8 and §9 came out of a throwaway script. `tools/check/ai-pace.mjs`
+is that script made repeatable: it boots the real game in `tools/lib/game-vm.cjs`,
+races the AI field, and times each car's laps off its own lap counter at a fixed
+step — sim time, so the answer does not move with how loaded the box is.
+
+It measures a DIFFERENT thing from §9's table, and the two must not be compared
+directly. §9 timed a SOLO flying lap; this times the FIELD MEDIAN with 21 cars
+on track, which is the number a player experiences.
+
+**Baseline on the shipped tree** (best of 2 timed laps per car, median of 21):
+
+| circuit | easy | normal | hard | easy vs normal | hard vs normal |
+|---|---|---|---|---|---|
+| monza | 2:06.250 | 1:59.233 | 1:57.333 | +5.88 % | −1.59 % |
+| monaco | 1:23.400 | 1:21.775 | 1:21.200 | +1.99 % | −0.70 % |
+
+Two things fall out of it, neither of which the solo lap could show.
+
+**The difficulty spread is much narrower than DIFF implies.** The table scales
+the field's ground speed by 0.851 / 0.911 / 0.980 (`js/physics/consts.js`), so
+easy should be ~7 % slower than normal and hard ~7 % faster. Monza gets 5.9 %
+on the easy side and 1.6 % on the hard side; Monaco gets 2.0 % and 0.7 %. PACE
+is a ground-speed scale and the AI's corner speed is √(LAT_MAX/|k|), which no
+difficulty touches — so the scale can only buy time where the car is
+straight-limited, and a lap is only partly that.
+
+**The compression is asymmetric, and traffic is why.** Twenty-one cars whose
+pace differs by 7.6 % (easy→normal) spread out; twenty-one whose pace differs
+by 7.6 % upward from normal do not, because the fast ones catch the ones ahead.
+The median car on hard is limited by the car in front, not by its own pace
+scale. That is the correct behaviour for a race and the wrong behaviour for a
+difficulty setting, and it is the strongest argument yet for a per-circuit or
+per-notch pace factor rather than one global triple — the thing §8 stopped
+short of recommending. Not shipped: the decision is the owner's, and the
+instrument now exists to check it either way.
