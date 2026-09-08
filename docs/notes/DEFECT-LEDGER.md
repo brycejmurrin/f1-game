@@ -117,6 +117,42 @@ on the 08-18 perf-hunt board, not this register.
   separate ("faces lost in between" or "something clearing the mask"). The
   probe stops being driven. That is where to look.
 
+  **Traced further (2026-09-08, same day).** The producer is not the problem
+  and neither is `tlx.js`. `begins === ends` on both legs, so every
+  `envFaceBegin` was matched by an `envFaceEnd` and each call completed; the
+  WebGPU leg was simply ASKED three times in a ~35 s run that offers roughly
+  forty opportunities. So the gate that stopped calling it is in `game.js`:
+
+      player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam &&
+      (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin &&
+      LT.carEnvCube > 0.001 && !hideMeshes.cars
+
+  `_envProbeOff` is only ever set from localStorage, so it is not that. The
+  live term is **`PerfGov.tier() < 1`** — rung 1 of the governor's feature
+  ladder IS "env probe off" — and `js/perf/governor.js`'s own header records
+  the asymmetry that makes this bite one backend and not the other:
+
+  > 1284, 25 s per backend: WebGL2 sat at scale 0.80 / tier 0 / 23 fps, while
+  > WebGPU and three.js — where the scale lever did bite — reached tier 2
+
+  Three faces is twelve frames at the every-fourth-frame throttle, ~2.4 s at
+  the measured 4.9 fps: the probe runs briefly, the governor sheds it, and
+  recovery is deliberately slow — "features come back only at full res under
+  the same sustained headroom, one per ~4 s". A leg that sheds early may never
+  get the six consecutive opportunities the cube needs inside a 35 s check.
+  ESTABLISHED: the producer completes every call it is given, and the gate is
+  what stops. INFERRED, not yet measured: that the tier excursion is what
+  closes it — `envState()` would need to record the tier at the moment the
+  probe stops, or `game.js` would need to say which term of that gate was
+  false. Both legs read `tier=0` at the END, which is consistent with a
+  governor that shed early and recovered once the shed made frames cheap, and
+  is also consistent with `LT.carEnvCube` — the one term nobody has read.
+
+  For whoever picks this up: the cheap next measurement is to record WHICH
+  term of the gate was false on the frames the probe did not run, not to add
+  more counters inside `tlx.js`. The instrument there is already sufficient
+  and has done its job — it is `game.js` that is silent.
+
   The original measurement follows.
 
 - **(the d4cd570 measurement)** `gpu-census` on
