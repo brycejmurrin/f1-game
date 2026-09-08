@@ -942,7 +942,7 @@ what it covers.
 | `offtrack.spec.js` | off-track, reversing, wrong-way, auto-rescue, and the prog↔s seam |
 | `audit.spec.js` | edge cases from the codebase audit the other suites missed |
 | `active-aero.spec.js` | X-mode / Z-mode: flap travel, the downforce/drag trade, the 400 ms transition cap |
-| `aero-zones.spec.js` | fixed ACTIVATION ZONES per circuit, Monaco having none, and the overtake gate on lap 1 / under caution driven through a REAL opening lap |
+| `aero-zones.spec.js` | fixed ACTIVATION ZONES per circuit, Monaco having none, the overtake lap gate driven through a REAL opening lap with the caution layer held OFF (the unsteered car hits the first-chicane barriers and race control would otherwise red-flag it — that rule is race-control.spec.js's), and the X-mode top-speed / downforce trade measured with the field sent 800 m back so the human slipstream cannot move `vmaxNow` |
 | `aero-zones-turns.test.mjs` | `AERO_ZONE_TURNS` (`js/physics/aero-zones.js`) reproduces exactly the length-only `ZONE_COUNT` selection in turn-keyed form for every named circuit; bahrain/jeddah never get a turn-pair entry |
 | `debris.spec.js` | the Rapier debris side-world — and that it never moves a game car |
 | `race-control.spec.js` | the CAUTION layer in a real page: defaults ON, and the setting survives a reload (which is the guard on its storage format). The machine itself is `race-control.test.mjs` |

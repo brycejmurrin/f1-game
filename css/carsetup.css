@@ -667,6 +667,13 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 .cs-liv-ed-none.active {
   background: var(--surf-3); color: var(--text); border-color: rgba(255,255,255,0.42);
 }
+/* A row whose part the draft does not have (FIN SHAPE none greys the four fin
+   rows) — the editor sets aria-disabled on the row and `disabled` on every
+   control in it; this only paints that state. Dimmed, not hidden: the row's
+   value survives, and seeing it greyed says WHY a badge stopped showing. */
+.cs-liv-ed-row[aria-disabled="true"] { opacity: 0.38; }
+.cs-liv-ed-row[aria-disabled="true"] button,
+.cs-liv-ed-row[aria-disabled="true"] input { cursor: not-allowed; }
 /* MATCHING PALETTE: the colours already used elsewhere in this paint job, so a
    slot can take one EXACTLY instead of being eyeballed in the OS colour dialog.
    The chips reuse .cs-liv-ed-none (same pill, same tap target, same active
