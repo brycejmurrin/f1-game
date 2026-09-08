@@ -550,6 +550,14 @@
             <p id="pm-keys-note" class="adv-help">Tap a key slot, then press the key you want. Esc cancels. A key already used by another action moves here.</p>
             <button id="pm-keys-reset" type="button">RESET KEYS</button>
           </div>
+          <!-- CONTROLLER — the pad twin (Input.padBindings), same module. Hidden
+               by js/ui/key-binds.js until a desktop or a seen gamepad. -->
+          <div id="pm-pad-section" hidden>
+            <h3 class="pm-group-h">CONTROLLER</h3>
+            <div id="pm-pad"></div>
+            <p id="pm-pad-note" class="adv-help">Tap a slot, then press a button on the controller. Esc cancels. The stick and D&#8209;pad steer; MENU / START pauses.</p>
+            <button id="pm-pad-reset" type="button">RESET CONTROLLER</button>
+          </div>
         </section>
         <section id="pm-panel-display" class="pm-group" role="region"
           aria-labelledby="dlg-settings" hidden>
@@ -1841,8 +1849,8 @@
       </dd>
       <dt>CONTROLLER</dt>
       <dd>
-        Left stick / D-pad steer. <span class="key">RT</span> / <span class="key">A</span> gas. <span class="key">LT</span> / <span class="key">B</span> brake (triggers are analog). <span class="key">X</span> boost toggle. <span class="key">Y</span> overtake. D-pad up aero. <span class="key">LB</span> / <span class="key">RB</span> gears. View cycles camera. Start pauses.
-        <br>PlayStation: Cross / Circle / Square / Triangle and L2 / R2 are the same slots. Adaptive Buttons does not change the stick.
+        <span id="htp-pad">Steer left stick / D&#8209;pad &nbsp;&middot;&nbsp; Gas <span class="key">RT</span> / <span class="key">A</span> &nbsp;&middot;&nbsp; Brake <span class="key">LT</span> / <span class="key">B</span> (triggers are analog) &nbsp;&middot;&nbsp; Boost <span class="key">X</span> toggle &nbsp;&middot;&nbsp; Overtake <span class="key">Y</span> &nbsp;&middot;&nbsp; Active aero <span class="key">D&#8209;PAD &uarr;</span> &nbsp;&middot;&nbsp; Camera <span class="key">VIEW</span> cycles &nbsp;&middot;&nbsp; Shift up <span class="key">RB</span> &nbsp;&middot;&nbsp; Shift down <span class="key">LB</span> &nbsp;&middot;&nbsp; Pause MENU / START</span>
+        <br>PlayStation: Cross / Circle / Square / Triangle and L2 / R2 are the same slots. Every driving button can be changed under SETTINGS &rsaquo; CONTROLS &rsaquo; CONTROLLER. Adaptive Buttons does not change the stick.
         <br>Menus: either stick / D-pad move in every direction (hold to repeat) — Left/Right leave a list for the header or column beside it. <span class="key">A</span> confirms, <span class="key">B</span> backs, triggers page. Start still pauses
       </dd>
       <dt>TOUCH / MOBILE</dt>
