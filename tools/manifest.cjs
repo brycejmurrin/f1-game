@@ -131,6 +131,9 @@ const FULL = [
   "js/lighting/lighting.js",
   "js/lighting/profiles.js",
   "js/car/car-mesh.js",
+  "js/garage/scene-prims.js",
+  "js/garage/scene-equipment.js",
+  "js/garage/scene-live.js",
   "js/garage/scene.js",
   "js/physics/body-attitude.js",
   "js/fx/particles.js",
@@ -334,7 +337,13 @@ const HARD_EDGES = [
   ["js/render/shared/lamp-chunks.js", "js/render/glx/chunked.js"], // drawChunked resolves LampChunks tables (call-time; keep explicit)
   ["js/render/glx/chunked.js", "js/render/glx/glx.js"],
   ["js/render/glx/glx.js", "js/render/shared/assets.js"],         // Assets feature-detects the backend's createTextureArray
-  ["js/track/core/geom.js", "js/garage/scene.js"],          // the bay reads TrackGeom.MAT at eval for its per-vertex material ids
+  ["js/track/core/geom.js", "js/garage/scene-prims.js"],    // the bay's primitives read TrackGeom.MAT at eval for their per-vertex material ids
+  ["js/garage/scene-prims.js", "js/garage/scene-equipment.js"],   // the pit equipment destructures GaragePrims at eval
+  ["js/garage/scene-prims.js", "js/garage/scene-live.js"],        // the live atlas destructures GaragePrims at eval
+  ["js/garage/scene-equipment.js", "js/garage/scene-live.js"],    // ...and GarageEquipment (the timing-screen housing's anchor)
+  ["js/garage/scene-prims.js", "js/garage/scene.js"],             // the bay destructures GaragePrims at eval
+  ["js/garage/scene-equipment.js", "js/garage/scene.js"],         // ...GarageEquipment (the fan and screen anchors)
+  ["js/garage/scene-live.js", "js/garage/scene.js"],              // ...and GarageLive (the atlas size and painters)
   ["js/track/core/geom.js", "js/track/tracks.js"],               // tracks destructures TrackGeom at eval
   ["js/track/core/spline.js", "js/track/tracks.js"],             // tracks destructures TrackSpline at eval
   ["js/track/core/geom.js", "js/track/core/mesh.js"],                 // mesh destructures TrackGeom at eval

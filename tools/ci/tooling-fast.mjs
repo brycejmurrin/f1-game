@@ -64,6 +64,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   // looks exactly like the bug it guards against.
   "tests/unit/parts-ladder.test.mjs",
   "tests/unit/garage-mesh.test.mjs",
+  // ...and the garage's SIGNS: no prop mounted within half a metre in front of
+  // a wall quad. Two shipped cut-off wordmarks and one never-visible live
+  // trace were each found by a screenshot; this puts them in the edit loop.
+  "tests/unit/garage-sign-occlusion.test.mjs",
   "tests/unit/curvature-channels.test.mjs",
   "tests/unit/track-line.test.mjs",
   "tests/unit/track-line-circuits.test.mjs",
