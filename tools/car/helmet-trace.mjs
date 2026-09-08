@@ -310,3 +310,183 @@ if (flag("score", "")) {
   console.log("\ndistance from the photograph, worst first:");
   for (const r of rows) console.log(`  ${r.code.padEnd(4)} #${String(r.num).padEnd(3)} ${r.d.toFixed(3)} ${"#".repeat(Math.round(r.d * 40))}`);
 }
+
+/* ── fitting the band positions ──────────────────────────────────────────
+   Detecting band EDGES off this source does not work, and three estimators
+   agreed on that: the mode of a ring flips because a helmet has vertical
+   structure and the mode is a vote between the band and whatever crosses it;
+   a change-point histogram fires everywhere, including a phantom at the crown
+   where the columns converge; demanding a coherent from-colour and to-colour
+   kills all but two drivers and gets both of those wrong. At 250 pixels a
+   helmet, with the shoot's shading and a registration that can be a ring or
+   two out, the edge is simply not resolvable.
+
+   Fitting the positions instead does converge — coordinate descent over each
+   zone's t values, bounded so a band cannot walk to the other end of the
+   shell, took the mean distance from 0.968 to 0.810 and every one of the 18
+   improved. AND THE RESULT LOOKED WORSE. Alonso, Hulkenberg, Lawson and Albon
+   all came back washed out into pale bands, because the fit found a bias in
+   the metric rather than the truth: dividing the shoot's lighting out (above)
+   normalises the max channel, which pulls every bright sample toward white, so
+   the score quietly pays for pale paint. The fit is an honest optimiser of a
+   dishonest objective, and the fitted table was reverted rather than shipped.
+
+   So --fit stays, because the ranking underneath it is sound and it is how
+   Hadjar's base was caught, but treat its output as a HYPOTHESIS to check
+   against tools/car/helmet-sheet.mjs --mesh, never as a table to paste. Fixing
+   it properly means a photometric normalisation that separates a specular
+   highlight from white paint, which a single flat-lit frame per helmet cannot
+   give you. Band positions therefore remain hand-set, and this comment is the
+   reason rather than an omission. */
+if (flag("fit", "")) {
+  const STEPS = [0.06, 0.03, 0.015], BOUND = 0.13;
+  const T_KEYS = ["t", "t0", "t1"];
+  const score = (design, m) => {
+    const skin = Helmets.shell(design);
+    let sum = 0, n = 0;
+    for (let r = 0; r <= RINGS; r++) {
+      const t = Math.min(1, ringT(r));
+      for (let sl = 0; sl < SLICES; sl++) {
+        const az = (sl / SLICES) * 360;
+        if (Helmets.isVisor(t, az)) continue;
+        const a = chroma(m.grid[r][sl]), b = chroma(skin(t, az).c);
+        sum += Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) + 0.5 * Math.abs(a[3] - b[3]);
+        n++;
+      }
+    }
+    return sum / n;
+  };
+  let gain = 0, count = 0;
+  const fitted = {};
+  for (const num of Object.keys(maps).map(Number).sort((a, b) => a - b)) {
+    const m = maps[num];
+    const base = Helmets.designFor(num, null);
+    const design = JSON.parse(JSON.stringify(base));
+    /* A HELMET IS SYMMETRIC, so the fit must be too. Left the parameters free,
+       coordinate descent walks the temple flash on one side to a different
+       height from its mirror, because each is judged on its own half of a
+       noisy photograph — and the result is a lid that is subtly wrong in a way
+       no reference ever is. Mirrored zones (90 with 270, the nose with the
+       tail) are tied into one slot and step together. */
+    const mirror = (a, b) => a.k === b.k && ((a.az === 90 && b.az === 270) || (a.az === 0 && b.az === 180)) &&
+      JSON.stringify({ ...a, az: 0 }) === JSON.stringify({ ...b, az: 0 });
+    const twinOf = design.zones.map((z, i) => design.zones.findIndex((o, j) => j > i && mirror(z, o)));
+    const slots = [];
+    design.zones.forEach((z, zi) => {
+      if (twinOf.some((t, i) => t === zi && i < zi)) return;        // the mirror moves with its partner
+      T_KEYS.forEach((k) => {
+        if (typeof z[k] !== "number") return;
+        const zis = twinOf[zi] >= 0 ? [zi, twinOf[zi]] : [zi];
+        slots.push({ zi, zis, k, from: z[k] });
+      });
+    });
+    const before = score(design, m);
+    let best = before;
+    for (const step of STEPS) {
+      for (let pass = 0; pass < 3; pass++) {
+        let moved = false;
+        for (const sl of slots) {
+          const z = design.zones[sl.zi], was = z[sl.k];
+          for (const d of [-step, step]) {
+            const v = Math.max(0, Math.min(1, was + d));
+            if (Math.abs(v - sl.from) > BOUND) continue;             // no walking off to the other end
+            if (sl.k === "t0" && typeof z.t1 === "number" && v >= z.t1 - 0.02) continue;
+            if (sl.k === "t1" && typeof z.t0 === "number" && v <= z.t0 + 0.02) continue;
+            for (const i of sl.zis) design.zones[i][sl.k] = v;
+            const sc = score(design, m);
+            if (sc < best - 1e-5) { best = sc; moved = true; break; }
+            for (const i of sl.zis) design.zones[i][sl.k] = was;
+          }
+        }
+        if (!moved) break;
+      }
+    }
+    gain += before - best; count++;
+    fitted[num] = { name: base.name, before, best, zones: design.zones };
+    const moves = slots.filter((sl) => Math.abs(design.zones[sl.zi][sl.k] - sl.from) > 0.004);
+    console.log(`${base.name} #${String(num).padEnd(3)} ${before.toFixed(3)} -> ${best.toFixed(3)}  ${moves.length} of ${slots.length} positions moved`);
+  }
+  console.log(`\nmean improvement ${(gain / count).toFixed(4)} over ${count} designs`);
+
+  /* Re-emit the table with the fitted numbers, so the measurement lands in the
+     source verbatim instead of being transcribed by hand eighteen times. The
+     helpers are reconstructed where the shape still fits one — a band 0.055
+     wide is a keyline, a pair of stripes over the nose and the tail is
+     centre(), a pair of anything at 90 and 270 is sides() — because a table
+     nobody can read is a table nobody can correct. */
+  if (flag("emit", "")) {
+    const NAME = new Map(Object.keys(NAMED).map((k) => [NAMED[k].join(","), "C." + k]));
+    const col = (c) => NAME.get(c.join(",")) || `[${c.map((v) => v.toFixed(2)).join(", ")}]`;
+    const n = (v) => v.toFixed(3).replace(/0+$/, "").replace(/\.$/, ".0");
+    const one = (z) => {
+      const c = col(z.c);
+      switch (z.k) {
+        case "cap": return `z.cap(${n(z.t1)}, ${c})`;
+        case "band": return Math.abs(z.t1 - z.t0 - 0.055) < 0.006 ? `z.key(${n(z.t0)}, ${c})` : `z.band(${n(z.t0)}, ${n(z.t1)}, ${c})`;
+        case "stripe": return `z.stripe(${z.az}, ${z.w}, ${c})`;
+        case "wedge": return `z.wedge(${z.az0}, ${z.az1}, ${c})`;
+        case "chevron": return `z.chevron(${z.az}, ${z.w}, ${n(z.t0)}, ${n(z.t1)}, ${c})`;
+        case "spot": return `z.spot(${z.az}, ${n(z.t)}, ${z.r}, ${c})`;
+        case "patch": return `z.patch(${z.az}, ${z.w}, ${n(z.t0)}, ${n(z.t1)}, ${c})`;
+        case "flash": return `z.flash(${z.az}, ${z.w0}, ${z.w1}, ${n(z.t0)}, ${n(z.t1)}, ${z.sweep}, ${c})`;
+        case "fleck": return `z.fleck(${n(z.t0)}, ${n(z.t1)}, ${z.n}, ${z.m}, ${z.d}, ${z.seed}, ${c})`;
+        default: return `/* ${z.k} */`;
+      }
+    };
+    const body = (z) => one(z).replace(/^z\.(\w+)\((\d+)/, "z.$1(a");
+    console.log("\n── fitted zones ──");
+    for (const num of Object.keys(fitted).map(Number).sort((a, b) => a - b)) {
+      const zs = fitted[num].zones.slice(), out = [];
+      while (zs.length) {
+        const z = zs.shift();
+        const twin = (az) => zs.findIndex((o) => o.k === z.k && o.az === az &&
+          JSON.stringify({ ...o, az: 0 }) === JSON.stringify({ ...z, az: 0 }));
+        if (z.k === "stripe" && z.az === 0) {
+          const j = twin(180);
+          if (j >= 0) { zs.splice(j, 1); out.push(`...centre(${z.w}, ${col(z.c)})`); continue; }
+        }
+        if (z.az === 90) {
+          const j = twin(270);
+          if (j >= 0) { zs.splice(j, 1); out.push(`...z.sides((a) => ${body(z)})`); continue; }
+        }
+        out.push(one(z));
+      }
+      console.log(`    ${num}: zones: [\n      ${out.join(", ")}] },`);
+    }
+  }
+}
+
+
+/* ── one helmet's palette ─────────────────────────────────────────────────
+   Four of the grid — Perez, Lindblad, Colapinto, Bottas — are not on the
+   side-on line-up sheet at all; it carries Doohan and Tsunoda in their places,
+   so those four designs had never been measured against anything. They appear
+   on the other reference, but as three-quarter views, and the (t, az)
+   projection above assumes a flank.
+
+   It does not matter: the PALETTE is the half of this tool that was ever
+   sound, and a palette needs the helmet's pixels, not a mapping onto the
+   shell. Segment the crop, name every pixel by chromaticity, report the
+   shares. --palette=<file>. */
+if (flag("palette", "")) {
+  const file = flag("palette", "");
+  // the same flood-fill segmentation the sheet uses, and the LARGEST blob:
+  // a crop carries the backdrop and two lines of caption, and a plain colour
+  // cut counts both — which is how Lindblad first came back "68% white".
+  const img = await blobs(resolve(ROOT, file));
+  if (!img.list.length) { console.log(`${file}: nothing segmented`); }
+  else {
+    const b = img.list.reduce((a, c) => (c.n > a.n ? c : a));
+    const bins = new Map();
+    let n = 0;
+    for (let y = b.y0; y <= b.y1; y++) for (let x = b.x0; x <= b.x1; x++) {
+      if (img.lab[x + y * img.W] !== b.id) continue;
+      const i = (x + y * img.W) * img.ch;
+      const k = nearest([img.data[i] / 255, img.data[i + 1] / 255, img.data[i + 2] / 255]).k;
+      bins.set(k, (bins.get(k) || 0) + 1); n++;
+    }
+    const rows = [...bins.entries()].sort((a, b2) => b2[1] - a[1]).slice(0, 6);
+    console.log(`${file.replace(/.*cell-/, "").replace(".png", "").padEnd(4)} ${b.w}x${b.h}px  ` +
+      rows.map(([k, v]) => `${k} ${(100 * v / n).toFixed(0)}%`).join("  "));
+  }
+}

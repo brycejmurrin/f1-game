@@ -427,15 +427,36 @@ test("catalogue, garage, settings, data table, and compact multiplayer fit", asy
   // it from pause → settings → MORE at 200% on the short landscape sheet.
   await page.waitForSelector("#pausebtn:not([hidden])", { timeout: 10_000 });
   await page.setViewportSize({ width: 852, height: 393 });
+  // #minimap rides `zoom: var(--hud-z)`, so its COMPUTED width is a zoomed
+  // round-trip and 96px can come back as 95.99xx. Dump the zoom, both scales
+  // and the fit pass's cap alongside it, so the next failure names its own
+  // cause instead of leaving a bare number to bisect (this one cost a day).
   const compactHud = await page.evaluate(() => {
-    const mm = document.getElementById("minimap");
+    const mm = document.getElementById("minimap"), root = document.documentElement;
+    const cs = getComputedStyle(root);
     return {
       density: document.body.dataset.density,
       mmCss: mm ? getComputedStyle(mm).width : "",
+      zoom: mm ? mm.currentCSSZoom : null,
+      zTop: root.style.getPropertyValue("--hud-z-top"),
+      hudScale: cs.getPropertyValue("--hud-scale").trim(),
+      uiScale: cs.getPropertyValue("--ui-scale").trim(),
+      gapShort: "gapShort" in root.dataset,
+      gapDrop: "gapDrop" in root.dataset,
     };
   });
-  expect(compactHud.density, "short landscape body density").toBe("compact");
-  expect(compactHud.mmCss).toBe("96px");
+  const compactDump = JSON.stringify(compactHud);
+  expect(compactHud.density, "short landscape body density " + compactDump).toBe("compact");
+  // ROUNDED, and the rounding is the platform's, not a slackened bound. Chromium
+  // lays a zoomed subtree out on the 1/64 px LayoutUnit grid and getComputedStyle
+  // divides back out, so an exact answer only survives a zoom that divides 96
+  // evenly. It used to: --hud-scale followed --ui-scale, which this spec leaves at
+  // 2, and 96 x 2 = 192 is on the grid. The owner's baked coarse default pins it to
+  // 1.24 instead — 96 x 1.24 = 119.04, snapped DOWN to 119.03125, back over 1.24 =
+  // 95.99294. The rule under test is which of 96 / 112 / 140 applies, and those are
+  // 16px apart, so a nearest-px read discriminates exactly as well as equality did.
+  expect(Math.round(parseFloat(compactHud.mmCss)),
+    "compact minimap width " + compactDump).toBe(96);
   await page.evaluate(() => {
     window.__apex.uiScale(200);
     document.getElementById("pausebtn").click();
