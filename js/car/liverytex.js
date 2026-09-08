@@ -1263,7 +1263,10 @@ const LiveryTex = (function () {
   // from Car3D.coverProfile — fin-design.test.mjs re-measures it against the
   // real geometry so it cannot drift. The squash itself is derived, so changing
   // a region's pixel size cannot silently un-square the marks again.
-  const FLANK_H = { standard: 0.4537, raised: 0.4964, dorsal: 0.5463 };
+  // EVERY Car3D.SPINE_HEIGHT_IDS entry needs a row: a missing one falls back to
+  // `standard` and re-creates the exact squish this table exists to fix. The
+  // first version of it shipped without `high` for that reason.
+  const FLANK_H = { standard: 0.4537, raised: 0.4964, high: 0.5249, dorsal: 0.5463 };
   const flankSquash = (spineHeight, R) => {
     const H = FLANK_H[spineHeight] || FLANK_H.standard;
     return (R.w / FLANK.zLen) * (H / R.h);   // (px per m along) / (px per m down)
