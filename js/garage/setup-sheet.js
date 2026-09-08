@@ -617,6 +617,7 @@ function buildLiveryOptions(container, team) {
           stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+          rearWing: liv.rearWing ? arrToHex(liv.rearWing) : "", wingCarbon: liv.wingCarbon || "paint",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
@@ -666,6 +667,7 @@ function buildLiveryOptions(container, team) {
           stripe: liv.stripe ? arrToHex(liv.stripe) : "", noseStripe: liv.noseStripe ? arrToHex(liv.noseStripe) : "",
           accent: liv.accent ? arrToHex(liv.accent) : "", nose: liv.nose ? arrToHex(liv.nose) : "",
           pod: liv.pod ? arrToHex(liv.pod) : "", wing: liv.wing ? arrToHex(liv.wing) : "", halo: liv.halo ? arrToHex(liv.halo) : "",
+          rearWing: liv.rearWing ? arrToHex(liv.rearWing) : "", wingCarbon: liv.wingCarbon || "paint",
           fin: liv.fin ? arrToHex(liv.fin) : "", finArt: liv.finArt ? arrToHex(liv.finArt) : "",
           logo: liv.logo ? arrToHex(liv.logo) : "",
           logo2: liv.logo2 ? arrToHex(liv.logo2) : "",
@@ -750,7 +752,7 @@ function buildLiveryCreator(container, team) {
   // distinct value in the draft, then the team's own two stock colours. Click
   // one and the slot takes it EXACTLY.
   const PAL_KEYS = ["c1", "c2", "stripe", "noseStripe", "accent", "nose", "pod",
-                    "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo"];
+                    "wing", "rearWing", "fin", "finArt", "logo", "logo2", "logo3", "halo"];
   const paletteColours = () => {
     const seen = [];
     const add = (v) => {
@@ -808,7 +810,13 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("DETAIL", "accent", true));   // tertiary paint on flashes/trim/pinstripe
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
-  wrap.appendChild(colorRow("WINGS", "wing", true));
+  // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
+  // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
+  const wingRow = colorRow("WINGS", "wing", true), rearWingRow = colorRow("REAR WING", "rearWing", true);
+  wrap.appendChild(wingRow); wrap.appendChild(rearWingRow);
+  const flapsPainted = () => (d.wingCarbon || "paint") !== "carbon";
+  const NO_PAINT = "Nothing to colour — WING FLAPS is CARBON";
+  deps.push({ row: wingRow, when: flapsPainted, why: NO_PAINT }, { row: rearWingRow, when: flapsPainted, why: NO_PAINT });
   const finRow = colorRow("TAIL FIN", "fin", true), finArtRow = colorRow("TAIL GRAPHIC", "finArt", true);
   wrap.appendChild(finRow); wrap.appendChild(finArtRow);
   deps.push({ row: finRow, when: needFin, why: NO_FIN }, { row: finArtRow, when: finArtLive, why: NO_ART });
@@ -855,6 +863,7 @@ function buildLiveryCreator(container, team) {
     return r;
   };
   pillRow("FINISH", "finish", ["gloss", ...Object.keys(Car3D.FINISH_SURFACE)], "gloss");
+  pillRow("WING FLAPS", "wingCarbon", ["paint", "carbon"], "paint");
   const LT = typeof LiveryTex !== "undefined" ? LiveryTex : null;
   pillRow("NUMBER FONT", "numFont", LT && LT.NUM_FONT_IDS || ["default"], "default");
   pillRow("SPONSORS", "sponsors", LT && LT.SPONSOR_PACK_IDS || ["default"], "default");
@@ -905,6 +914,8 @@ function buildLiveryCreator(container, team) {
     if (d.nose) liv.nose = hexToArr(d.nose);
     if (d.pod)  liv.pod  = hexToArr(d.pod);
     if (d.wing) liv.wing = hexToArr(d.wing);
+    if (d.rearWing) liv.rearWing = hexToArr(d.rearWing);
+    if (d.wingCarbon && d.wingCarbon !== "paint") liv.wingCarbon = d.wingCarbon;
     if (d.fin)  liv.fin  = hexToArr(d.fin);
     if (d.finArt) liv.finArt = hexToArr(d.finArt);
     if (d.logo) liv.logo = hexToArr(d.logo);
@@ -963,7 +974,9 @@ function livePreviewDraft(team, d) {
     tcam: d.tcam && d.tcam !== "team" ? d.tcam : null,
     coverVents: d.coverVents && d.coverVents !== "none" ? d.coverVents : null,
     spineHeight: d.spineHeight && d.spineHeight !== "standard" ? d.spineHeight : null,
-    spineSide: d.spineSide && d.spineSide !== "none" ? d.spineSide : null } };
+    spineSide: d.spineSide && d.spineSide !== "none" ? d.spineSide : null,
+    rearWing: d.rearWing ? hexToArr(d.rearWing) : null,
+    wingCarbon: d.wingCarbon && d.wingCarbon !== "paint" ? d.wingCarbon : null } };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 

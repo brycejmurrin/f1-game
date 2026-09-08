@@ -1139,7 +1139,7 @@ const LiveryTex = (function () {
   // The four motif kinds below plus `check`. "team" is the row's default: the
   // per-team TAIL_STYLE. "none" paints nothing — no wash, no strokes — so the
   // fin and the cover read as plain paint.
-  const TAIL_STYLE_IDS = ["team", "diag", "sweep", "chevron", "streak", "check", "none"];
+  const TAIL_STYLE_IDS = ["team", "diag", "sweep", "chevron", "streak", "check", "stars", "none"];
   // What sits on the shark fin. "number" is the real-F1 layout (the race number
   // rides the fin, the crest stays on the spine); "none" leaves the plate to
   // the tail graphic alone.
@@ -1415,6 +1415,20 @@ const LiveryTex = (function () {
         ctx.moveTo(o, Y + H);
         ctx.lineTo(o + W * 0.42, Y);
         ctx.stroke();
+      }
+    } else if (st.kind === "stars") {
+      // Scattered four-point stars, big at the front and thinning rearward —
+      // the W17's star flake over its sidepods and cover. Deterministic
+      // positions (a fixed table, no RNG) so the atlas is the same every paint.
+      const pts = [[0.08, 0.30, 1.0], [0.22, 0.72, 0.75], [0.30, 0.22, 0.55], [0.44, 0.58, 0.85],
+                   [0.55, 0.18, 0.45], [0.62, 0.80, 0.60], [0.74, 0.40, 0.70], [0.86, 0.66, 0.40], [0.93, 0.20, 0.50]];
+      for (let i = 0; i < pts.length; i++) {
+        const cx = X + W * pts[i][0], cy = Y + H * pts[i][1], r = H * 0.26 * pts[i][2], q = r * 0.22;
+        ctx.fillStyle = cssA(acc, st.a * (1.05 - 0.6 * pts[i][0]));
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - r); ctx.lineTo(cx + q, cy - q); ctx.lineTo(cx + r, cy); ctx.lineTo(cx + q, cy + q);
+        ctx.lineTo(cx, cy + r); ctx.lineTo(cx - q, cy + q); ctx.lineTo(cx - r, cy); ctx.lineTo(cx - q, cy - q);
+        ctx.closePath(); ctx.fill();
       }
     } else if (st.kind === "check") {
       // Chequered flag: two rows of squares that fade rearward, skewed to the

@@ -244,6 +244,29 @@ test.describe("Liveries — creator", () => {
     for (const p of wordPills) await expect(page.locator(p)).toBeEnabled();
   });
 
+  test("WING FLAPS carbon greys the WINGS and REAR WING colours, and the stars motif is offered", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+
+    const wings = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("WINGS"))');
+    const rear = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("REAR WING"))');
+    await expect(wings).toHaveAttribute("aria-disabled", "false");
+    await expect(rear).toHaveAttribute("aria-disabled", "false");
+    await page.locator('[data-cs-pill="wingCarbon:carbon"]').click();
+    await expect(wings).toHaveAttribute("aria-disabled", "true");
+    await expect(rear).toHaveAttribute("aria-disabled", "true");
+    await expect(rear.locator('input[type="color"]')).toBeDisabled();
+    await page.locator('[data-cs-pill="wingCarbon:paint"]').click();
+    await expect(wings).toHaveAttribute("aria-disabled", "false");
+    await expect(rear).toHaveAttribute("aria-disabled", "false");
+    // The tail-style row offers LiveryTex's list, stars included.
+    const styles = await page.evaluate(() => LiveryTex.TAIL_STYLE_IDS.slice());
+    expect(styles).toContain("stars");
+    await expect(page.locator('[data-cs-pill="finStyle:stars"]')).toBeEnabled();
+  });
+
   test("the creator offers a finish choice and saves it onto the custom livery", async ({ page }) => {
     await load(page);
     await forgetStored(page, [await page.evaluate(() => "livery.custom." + Teams.LIST[2].id)]);

@@ -2262,3 +2262,9 @@ files are not ratcheted.
   itself is a new module, `js/ui/settings-export.js`; its buttons inject into
   the RENDERER fold at DOMContentLoaded like RendererPicker's, so they cost no
   shell nodes.
+- `js/car/car3d.js` lines 3818 -> **3824** (2026-09-08): WING FLAPS carbon and the
+  REAR WING colour slot. Three resolved lines (`wingCarbon`, `wingSurf`/`wingCol`,
+  `rearC`) and their comment; every flap site and the rear-wing helper now take a
+  surface variable instead of the literal `SURFACES.paint`, which is what lets a
+  livery put bare weave on the flaps the way the launch photos show — a CARBON
+  colour alone rendered as dark paint there. No new sites, no geometry.
