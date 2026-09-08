@@ -67,9 +67,9 @@ every option side by side IS the task. RACE SETTINGS was the last screen on
 chips (2026-09-05, later the same day): its seven chip groups needed ~130 lines
 of shape- and density-keyed grid placement to fit a landscape phone, CAUTIONS
 had drifted into the coloured-word grammar, and DIFFICULTY squeezed to three
-cramped chips in portrait. Eight rows fit two columns at every shape with two
-CSS rules, and MIXED weather became its own CONDITIONS row instead of a toggle
-hiding among the weathers. Two things the row learned there, both measured with
+cramped chips in portrait. Eight rows (nine with DRIVING LINE, 2026-09-08) fit
+two columns at every shape with two CSS rules, and MIXED weather became its own
+CONDITIONS row instead of a toggle hiding among the weathers. Two things the row learned there, both measured with
 `scratch`-style Playwright probes rather than eyeballed: a grid that holds rows
 needs `grid-auto-rows: max-content`, because Chromium sizes an `auto` track from
 a wrapping row's single-line height and wrapped rows painted over each other at

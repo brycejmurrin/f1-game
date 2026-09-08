@@ -5955,6 +5955,7 @@ const WGX = (function () {
       drawShadow,                    // blob shadow quad, in lit pass
       drawMark,                      // single skid-mark stamp
       drawSkidBatch,                 // batched skid trail, one draw
+      drawDrivingLine: () => false,  // PARITY GAP (2026-09-08): the ribbon is GLX-only; false = "no pass", the caller reports it
       drawGlow,                      // additive lamp-glare billboards, HDR
       drawDecal,                     // team/sponsor decal atlas
 

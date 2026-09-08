@@ -1476,7 +1476,7 @@
 <dialog id="race-settings" class="screen dim" data-esc-close="rs-cancel" aria-labelledby="dlg-racesettings" hidden>
   <div class="sheet">
     <div class="sheet-head"><h2 id="dlg-racesettings">RACE SETTINGS</h2></div>
-    <!-- Eight SETTING ROWS (js/ui/setting-row.js), the same control as pause >
+    <!-- Nine SETTING ROWS (js/ui/setting-row.js), the same control as pause >
          SETTINGS: LABEL ‹ VALUE ›. This screen was the last one on chips, and
          it needed ~130 lines of shape-and-density grid CSS to fit seven chip
          groups on a landscape phone; eight rows fit in two columns at every
@@ -1485,7 +1485,10 @@
          GRID follows the flow (a qualifying championship pins it and disables
          the row rather than hiding it), and the five race-only rows —
          CONDITIONS, DIFFICULTY, GRID, CAUTIONS, RELIABILITY — hide in a time
-         trial, where there is no field to apply them to. -->
+         trial, where there is no field to apply them to. DRIVING LINE (the
+         glowing suggested line on the road, js/render/shared/driving-line.js)
+         is offered in every flow: a time trial is where it teaches most.
+         Ships FULL; CORNERS is the reduced form. -->
     <div class="sheet-body pane" id="rs-body">
       <div id="rs-laps" class="set-row" role="group" aria-labelledby="rs-laps-label">
         <span class="tune-label" id="rs-laps-label">LAPS</span>
@@ -1541,6 +1544,14 @@
           <button id="rs-caution-prev" type="button" data-step="-1" aria-label="Previous cautions">&lsaquo;</button>
           <select id="rs-caution-sel" aria-labelledby="rs-caution-label"></select>
           <button id="rs-caution-next" type="button" data-step="1" aria-label="Next cautions">&rsaquo;</button>
+        </div>
+      </div>
+      <div id="rs-line" class="set-row" role="group" aria-labelledby="rs-line-label">
+        <span class="tune-label" id="rs-line-label">DRIVING LINE</span>
+        <div>
+          <button id="rs-line-prev" type="button" data-step="-1" aria-label="Previous driving line">&lsaquo;</button>
+          <select id="rs-line-sel" aria-labelledby="rs-line-label"></select>
+          <button id="rs-line-next" type="button" data-step="1" aria-label="Next driving line">&rsaquo;</button>
         </div>
       </div>
       <div id="rs-reliab" class="set-row" role="group" aria-labelledby="rs-reliab-label">
@@ -2123,6 +2134,7 @@
 <script defer crossorigin="anonymous" src="js/render/gfx.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/gltf.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/render/shared/assets.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/render/shared/driving-line.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/teams.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/data/driver-ratings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/core/store.js?v=dev"></script>

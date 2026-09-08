@@ -2456,7 +2456,8 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // one array per skid mark per frame.
   const glx = read("js/render/glx/glx.js").replace(/^[ \t]*\/\/.*$/gm, "");
   assert.doesNotMatch(glx, /setPolyOffset\(\[-4/, "no per-draw bias literal");
-  assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 3, "the three road decal draws share ROAD_BIAS");
+  // Four since 2026-09-08: shadow, mark, skid batch, and the DRIVING LINE ribbon.
+  assert.equal((glx.match(/setPolyOffset\(ROAD_BIAS\)/g) || []).length, 4, "the four road decal draws share ROAD_BIAS");
 });
 
 test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {

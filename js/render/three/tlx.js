@@ -2667,6 +2667,9 @@ const TLX = (function () {
           _fxFrame.skidVerts = vertCount;
           return true;
         },
+        // PARITY GAP (2026-09-08): the DRIVING LINE ribbon is GLX-only for
+        // now; false = "no pass" so game.js can say so instead of drawing air.
+        drawDrivingLine() { return false; },
         drawGlow(lights, str) {
           if (!fx || !lights || !lights.length || !(str > 0)) return;
           const nL = (lights.length / 15) | 0;

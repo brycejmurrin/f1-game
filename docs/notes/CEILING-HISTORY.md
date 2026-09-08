@@ -2187,6 +2187,18 @@ function); `cssClasses` fell (`.rs-row` retired).
   (7/10 before the pace-deficit floor was added; 3/10 with the zone gate
   alone, which is the measurement that put the floor in).
 
+## 2026-09-08 — DRIVING LINE: shellNodes +6, game.js +~30 lines
+
+`shellNodes` RAISED by six for one more setting row in RACE SETTINGS: DRIVING
+LINE ‹ OFF | CORNERS | FULL ›, the glowing suggested line every racing game
+draws on the road (`js/render/shared/driving-line.js` builds the strip, GLX
+draws it; research in `docs/notes/DRIVING-LINE-RESEARCH.md`). `js/game.js`
+grew by the row's paint/wire lines, the boot mode, and `drivingLineApi()`, the
+adapter that hands the builder the centreline sampler, the curvature LUT and
+the AI's own brake numbers so the braking zones shown are the ones the field
+brakes in — the builder itself lives outside game.js on purpose. `js/agent/apex.js`
++10 for the `drivingLine(mode)` hook.
+
 - `js/game.js` lines 10019 -> **10036**, codeLines 5452 -> **5465**
   (2026-09-08): pressure-forced mistakes. Eleven
   code lines: the pressure accumulator (1), the error clock and its once-per-
