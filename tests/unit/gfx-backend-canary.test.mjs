@@ -1740,6 +1740,55 @@ test("three still treats NoBlending as non-opaque (why the tag cannot live in op
     "whether NoBlending + opacityNode=tag still ghosts cars");
 });
 
+test("the garage floor reflection's noDepthTest reaches all three backends", () => {
+  // js/garage/scene.js draws the car a second time through MAT_MIRROR, under
+  // the floor, with { alpha: 0.26, noDepthTest: true }. It shipped GLX-only:
+  // gl.disable(DEPTH_TEST) was the whole implementation, so on WGX and TLX the
+  // mirrored car sat behind the floor's depth and never drew at all — the bug
+  // reads as "the garage has no reflection on three".
+  const scene = code("js/garage/scene.js");
+  assert.match(scene, /noDepthTest:\s*true/,
+    "the garage mirror no longer asks for noDepthTest — retire this pin with it");
+
+  const glx = code("js/render/glx/glx.js");
+  assert.match(glx, /opts\.noDepthTest/, "GLX draw() must read opts.noDepthTest");
+  assert.match(glx, /disable\(gl\.DEPTH_TEST\)/, "GLX must disable the depth test for it");
+
+  // WGX: the same state as its always-pass (decal) pipeline. Anchor on the
+  // depthCompare that bit selects, so folding it into some other flag name
+  // still has to keep "always" reachable from noDepthTest.
+  const wgx = code("js/render/webgpu/wgx.js");
+  assert.match(wgx, /opts\.noDepthTest/, "WGX _litPipeline must read opts.noDepthTest");
+  assert.match(wgx, /depthCompare:\s*\w+\s*\?\s*"always"/,
+    "WGX's always-pass pipeline is what noDepthTest has to select");
+  assert.match(wgx, /b\.noDepthTest\s*=\s*o\.noDepthTest/,
+    "the normalized _litOpts bag must carry noDepthTest, or the pooled path drops it");
+
+  // TLX has TWO halves, and the second is the one three hides: present() gives
+  // every draw renderOrder = submission index, but three renders the whole
+  // TRANSPARENT list after the whole opaque one whatever the renderOrder. Left
+  // transparent, an alpha<1 mirror paints LAST and ghosts over the props it
+  // should be hidden behind — so the material must stay in the opaque list.
+  const lit = TSL_LIT.replace(/^[ \t]*\/\/.*$/gm, "").replace(/^\s*\*.*$/gm, "");
+  const at = lit.indexOf("o.noDepthTest");
+  assert.ok(at > 0, "tsl-lit makeMaterial must read o.noDepthTest");
+  const body = lit.slice(at, at + 240);
+  assert.match(body, /depthTest\s*=\s*false/, "TLX must clear material.depthTest");
+  assert.match(body, /depthWrite\s*=\s*false/, "a mirror that writes depth clips the shell drawn after it");
+  assert.match(body, /transparent\s*=\s*false/,
+    "TLX must keep the mirror in the OPAQUE list — three defers the transparent " +
+    "list past every opaque draw, which is the clip this reflection relies on");
+  // The material cache is keyed by opts; without the flag a plain alpha-0.26
+  // material and the mirror share one entry and whichever minted first wins.
+  assert.match(TLX, /o\.noDepthTest\s*\?\s*"\|nd"/,
+    "tlx materialFor key must distinguish noDepthTest variants");
+  // three's own pipeline cache must also see it, or the state never reaches
+  // the GPU (the same class of miss as the polygonOffset backport above).
+  assert.match(THREE_BUNDLE, /r\.depthWrite,r\.depthTest,/,
+    "bundled three's pipeline cache key dropped depthTest — depthTest:false " +
+    "would silently share a pipeline with a depth-tested material");
+});
+
 test("TLX asks for an opaque canvas on the WebGPU backend", () => {
   assert.match(rendererParams(), /(^|[{,\s])alpha:\s*false/,
     "TLX must pass alpha:false — three's WebGPU backend turns it into " +
