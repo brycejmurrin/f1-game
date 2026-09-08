@@ -53,6 +53,8 @@
 //   --az=210 --el=20 --dist=4  render ONE custom angle (overrides --views/--preset)
 //   --out=DIR             output dir. Default: scratch/renders/cars/<team>
 //   --w=900 --h=680       viewport size
+//   --gpu=1               draw on the HOST's GPU instead of pinning swiftshader
+//                         (for a runner with real silicon; useless in the container)
 //   --url=...             base URL. Default http://127.0.0.1:3456
 //
 // Examples:
@@ -201,6 +203,7 @@ const LIGHTSET = arg('lightset', null);   // e.g. "day,dusk,night" — fan out e
 const PLIGHTS = process.argv.filter(a => a.startsWith('--plight=')).map(a => a.slice('--plight='.length));
 // A custom --az/--el/--dist renders a single ad-hoc view instead of the presets.
 const CUSTOM = (arg('az', null) != null || arg('el', null) != null || arg('dist', null) != null);
+const HOST_GPU = arg('gpu', '0') !== '0';
 const W      = parseInt(arg('w', '900'), 10);
 const H      = parseInt(arg('h', '680'), 10);
 const URL    = arg('url', 'http://127.0.0.1:3456');
@@ -298,11 +301,32 @@ const shots = [];
 // so this tool printed a tick over a blank white PNG. Every other probe in the
 // repo (tools/lib/harness.mjs callers, profile-gameloop, shot) already uses
 // --use-angle; this was the one left behind.
-const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), args: ['--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
+// --gpu=1 drops the swiftshader pin and lets the HOST's GPU draw. Off by
+// default because the agent container has none (llvmpipe), and there a missing
+// pin is how this tool used to write blank PNGs. On a macOS runner it is the
+// whole point: gpu-game-check reaches the real Apple adapter with no ANGLE flag
+// at all, so this passes none either. The line below says which path ran, so a
+// log never leaves it ambiguous — a software frame is not evidence about a
+// player's machine.
+const GPU_ARGS = ['--enable-webgl', '--ignore-gpu-blocklist'];
+const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}),
+  args: HOST_GPU ? GPU_ARGS : ['--use-angle=swiftshader', ...GPU_ARGS] });
+console.log(`renderer: ${HOST_GPU ? "the host's GPU (--gpu)" : 'swiftshader'}`);
 try {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));
-  await page.goto(pageUrl, { waitUntil: 'load' });
+  // The extensionless path is the one that KEEPS the query string on a host
+  // that rewrites (`npx serve` 301s /tools/carview.html?x to /tools/carview and
+  // drops the search, which used to boot every shot as the default McLaren).
+  // python3 -m http.server does not rewrite at all, and AGENTS.md offers both
+  // as equivalents — so try the tidy path and fall back to the file on a 404,
+  // instead of spending the whole readiness wait staring at an error page.
+  let resp = await page.goto(pageUrl, { waitUntil: 'load' });
+  if (resp && resp.status() === 404) {
+    const alt = `${URL}/tools/carview.html?${qs.toString()}`;
+    console.log(`  (${pageUrl} is 404 — this server does not rewrite; using ${alt})`);
+    resp = await page.goto(alt, { waitUntil: 'load' });
+  }
   const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: WAIT_MS }).then(() => true).catch(() => false);
   if (!ok) { console.error(`carview did not become ready in ${WAIT_MS / 1000}s — is the server running and the car building? (--wait=SECONDS to allow longer)`); process.exit(2); }
 

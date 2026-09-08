@@ -83,14 +83,18 @@ jobs:
           if [ "$RUNNER_OS" = "Linux" ]; then ls -la /dev/dri 2>&1 || echo "no /dev/dri"; fi
 
       # render-car.mjs takes a URL, not a server: carview.html is a static page
-      # and the repo root is the document root it expects.
+      # and the repo root is the document root it expects. Run 1 spent its whole
+      # 90 s readiness wait on a 404 — the tool asks for the EXTENSIONLESS
+      # /tools/carview and http.server does not rewrite; render-car now falls
+      # back to the .html file, so either documented server works and this stays
+      # on the one already installed.
       - name: Serve the repo root
         shell: bash
         run: |
           python3 -m http.server 3456 --bind 127.0.0.1 >/tmp/serve.log 2>&1 &
-          for i in $(seq 1 40); do
+          for i in $(seq 1 60); do
             curl -fsS -o /dev/null "http://127.0.0.1:3456/tools/carview.html" && exit 0
-            sleep 0.5
+            sleep 1
           done
           echo "server never answered"; cat /tmp/serve.log; exit 1
 
@@ -99,6 +103,9 @@ jobs:
         run: |
           ARGS="--team=${{ inputs.team || 'mclaren' }} --tod=${{ inputs.tod || 'day' }}"
           ARGS="$ARGS --out=scratch/renders/cars/ci --w=1100 --h=800"
+          # The GPU is the whole reason this job exists — but keep the Linux
+          # control on swiftshader, which is what it is a control FOR.
+          if [ "$RUNNER_OS" != "Linux" ]; then ARGS="$ARGS --gpu=1"; fi
           if [ -n "${{ inputs.livery }}" ]; then ARGS="$ARGS --livery=${{ inputs.livery }}"; fi
           if [ -n "${{ inputs.views }}" ]; then
             ARGS="$ARGS --views=${{ inputs.views }}"
