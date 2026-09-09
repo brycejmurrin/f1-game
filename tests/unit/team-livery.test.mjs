@@ -147,22 +147,18 @@ test("the paint editor builds every draft through one constructor", () => {
     "expected exactly three livDraftFrom() calls (new, edit, copy)");
 });
 
-test("the editor's draft, the save chain and forTeam name the same fields", () => {
+test("the editor's draft table and forTeam name the same fields", () => {
+  // TWO independent spellings are left. The save and the live preview used to
+  // be the third and fourth; both now derive from these tables through
+  // livDraftTo (guarded below), so the only list that can still drift on its
+  // own is Liveries.forTeam's — the one that copies a team's `livery:` block
+  // onto its default scheme.
   const colors = listFrom(SHEET, /const LIV_DRAFT_COLORS = \[([\s\S]*?)\];/);
   const pills = new Set((SHEET.match(/const LIV_DRAFT_PILLS = \{([\s\S]*?)\};/)[1]
     .match(/([A-Za-z0-9]+):/g) || []).map((k) => k.replace(":", "")));
   const draft = new Set([...colors, ...pills]);
-
-  // The save writes `liv.<key> = ...` for each field it persists.
-  const saved = new Set((SHEET.match(/\bliv\.([A-Za-z0-9]+)\s*=\s/g) || [])
-    .map((m) => m.trim().slice(4).replace(/\s*=$/, "")).filter((k) => k !== "id" && k !== "name"));
-  saved.delete("c1"); saved.delete("c2");
-
   const copied = listFrom(LIVERIES_SRC, /if \(ex\) for \(const k of \[([\s\S]*?)\]\)/);
-
   const diff = (a, b) => [...a].filter((k) => !b.has(k)).sort();
-  assert.deepEqual(diff(draft, saved), [], "the editor drafts fields the save never persists");
-  assert.deepEqual(diff(saved, draft), [], "the save persists fields no draft door sets");
   assert.deepEqual(diff(copied, draft), [], "forTeam copies fields the editor cannot show");
   assert.deepEqual(diff(draft, copied), [], "the editor drafts fields forTeam drops from a team default");
 });
@@ -193,4 +189,38 @@ test("resolveLivery falls back through the team's own list", () => {
   assert.match(GAME, /const list = getLiveries\(team\);\s*\n\s*const liv = list\.find\(\(l\) => l\.id === getLiveryId\(team\.id\)\) \|\| list\[0\];/,
     "resolveLivery must fall back to the team's default entry — a bare " +
     "{ c1, c2 } literal drops finShape/spineHeight/spineSide and regrows the fin");
+});
+
+/* ── The reverse conversion, and the sheet that has to explain itself ────────
+ *
+ * livDraftTo() replaced the last two hand-written copies of the field list —
+ * the save's `if (d.x && d.x !== <default>)` chain and livePreviewDraft's
+ * object literal. Those two mattered more than the three above them: one built
+ * the car you LOOK at while dragging a colour and the other built the livery
+ * you GET when you press SAVE & FIT, so a drift between them is a garage that
+ * lies to you rather than one that merely forgets a field.
+ */
+test("the save and the live preview both convert through livDraftTo", () => {
+  assert.equal((SHEET.match(/livDraftTo\(d, false\)/g) || []).length, 1, "the save must convert through livDraftTo");
+  assert.equal((SHEET.match(/livDraftTo\(d, true\)/g) || []).length, 1, "the live preview must convert through livDraftTo");
+  // The shapes those two used to be spelled as. Either coming back means the
+  // list has been forked again.
+  assert.equal(/if \(d\.[A-Za-z0-9]+\) liv\.[A-Za-z0-9]+ = hexToArr/.test(SHEET), false,
+    "a hand-written save chain is back — extend livDraftTo instead");
+  assert.equal(/liv: \{ c1: hexToArr\(d\.c1\)/.test(SHEET), false,
+    "a hand-written preview literal is back — extend livDraftTo instead");
+});
+
+test("every row in the paint editor says what it paints", () => {
+  // The sheet's labels name colours, not surfaces, and two of them invert the
+  // field names they carry (ACCENT is `c2`, DETAIL is `accent`). The hint is
+  // the only thing in the UI that answers "what does this change?", so a row
+  // added without one is a row nobody can use.
+  const hinted = new Set((SHEET.match(/const LIV_ROW_HINT = \{([\s\S]*?)\n\};/)[1]
+    .match(/^\s{2}([A-Za-z0-9]+):/gm) || []).map((k) => k.trim().replace(":", "")));
+  const rows = new Set([...SHEET.matchAll(/(?:color|pill)Row\("[^"]*",\s*"([A-Za-z0-9]+)"/g)].map((m) => m[1]));
+  // The mark rows are named by LiveryTex.markSlots, not literally here.
+  for (const k of ["logo", "logo2", "logo3"]) rows.add(k);
+  const missing = [...rows].filter((k) => !hinted.has(k)).sort();
+  assert.deepEqual(missing, [], "editor rows with no LIV_ROW_HINT entry");
 });
