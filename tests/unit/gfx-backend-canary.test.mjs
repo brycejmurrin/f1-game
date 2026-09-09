@@ -1378,14 +1378,14 @@ test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () =>
   assert.ok(a.byId["pm-gfx-status"], "status line");
   assert.match(a.byId["pm-three-path"].textContent, /THREE PATH: AUTO/);
   assert.match(a.byId["pm-screenshots"].textContent, /SCREENSHOTS: AUTO/);
-  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
+  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints/);
 
   a.byId["pm-three-path"].onclick();
   assert.equal(a.G.readThreePath(), "webgl2");
   assert.equal(a.ls.getItem("apex26.tlxForceGL"), "1");
   assert.equal(a.ss.getItem("apex26.tlxAutoGL"), null, "THREE PATH cycle drops the AUTO stay-GL latch");
   assert.equal(a.reloaded(), 0, "THREE PATH must not reload on WEBGL2");
-  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
+  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints/);
 
   a.byId["pm-screenshots"].onclick();
   assert.equal(a.G.readShotMode(), "blit");
@@ -1738,6 +1738,8 @@ test("SAVE SCREENSHOT reads #game-soft when the overlay exists", () => {
   const fn = src.slice(src.indexOf("function saveScreenshot()"), src.indexOf("function ensureAdvHost()"));
   assert.match(fn, /getElementById\("game-soft"\)/,
     "HeadlessChrome GLX hides #game; the PNG must come from the 2D overlay");
+  assert.match(fn, /hrefFromPixels/,
+    "the two capturePixels sites share hrefFromPixels; do not merge the awaits");
 });
 
 test("the alpha tag that makes canvas opacity load-bearing still exists", () => {

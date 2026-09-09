@@ -147,8 +147,10 @@ Session shape — this is what controls both wall time and waiting:
    poking is the `mcp-probe` skill; the suite itself always runs script-driven.
 
 This container has **no real GPU** (llvmpipe) and the native WebGPU swapchain
-never composites on software, so WGX blits the visible `#game` and a probe
-waits on `awaitSoftPresent()`. Which command probes which backend, the measured
+never composites on software, so WGX blits the visible `#game` and HeadlessChrome
+GLX (and TLX-WebGPU) blit onto `#game-soft`; a probe waits on
+`awaitSoftPresent()` then captures that presented canvas. Which command probes
+which backend, the measured
 colours, and the Cursor Cloud bootstrap (`tools/env/cloud-agent-install.sh`, what
 survives a cold boot): `docs/notes/CI-RENDERING-PERFORMANCE.md`. Keep
 `apex-tools` in root `.mcp.json`; never run Chrome MCP while Playwright runs;

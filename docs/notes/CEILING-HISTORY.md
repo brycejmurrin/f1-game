@@ -2618,3 +2618,21 @@ SAVE SCREENSHOT after a camera move identical to the previous still. Matching
 TLX (wait for `gen > start`, push the same function the timeout splices)
 costs five split-newline lines, mostly comments naming the two defects.
 
+## 2026-09-09 — hunt-fix remainder (seat, waiters, capture, apex)
+
+`js/game.js` lines 10342 -> **10355** (+13) / codeLines 5589 -> **5600** (+11).
+Shadow casters pass `teamMesh(team, car, true)` so P2 wears its own helmet in
+the depth map without rebuilding painted lids; cockpit/garage decals follow
+`carDecalNum` / `garageSeat()`; field wheels use `putBoundedMesh` hit
+promotion; beached additive floor scales with `PACE`; `driverIdx` clamps
+against `Career.gridDrivers()`.
+
+`js/render/glx/glx.js` lines 2582 -> **2589** (+7). Waiters return true/false
+so `keep[]` can re-queue when a dim skip never notifies; `awaitSoftPresent`
+rejects `"no display ctx"` instead of resolving as success.
+
+`js/agent/apex.js` lines 2764 -> **2772** (+8) / codeLines 2040 -> **2046** (+6).
+`save` returns `{ ok, bytes }`; `repro` invalid input is `{ ok: false }`;
+`netPeerSend` refuses a `cars[]` index as a wire id; `carInput` distinguishes
+a missing car (`false`) from a clear (`{ ok: true, cleared: true }`).
+

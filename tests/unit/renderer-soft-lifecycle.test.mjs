@@ -149,6 +149,23 @@ test("TLX, WGX, and GLX remove timed-out software-present waiters", () => {
   }
 });
 
+test("GLX/TLX re-queue waiters whose predicate has not fired", () => {
+  for (const file of ["js/render/glx/glx.js", "js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
+    const src = read(file);
+    assert.match(src, /const keep = \[\]/, file + " must keep waiters whose callback returns false");
+    assert.match(src, /keep\.push\(ws\[i\]\)/);
+  }
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /invalidateSoftPresent\(\) \{ _cancelSoftBlits\(\); \}/);
+  const glx = read("js/render/glx/glx.js");
+  const glxAwait = glx.slice(glx.indexOf("function awaitSoftPresent"), glx.indexOf("function init(canvasEl)"));
+  assert.match(glxAwait, /no display ctx/);
+  assert.match(glxAwait, /return true;/);
+  assert.match(glxAwait, /return false;/);
+  const tlxAwait = tlx.slice(tlx.indexOf("awaitSoftPresent(timeoutMs)"), tlx.indexOf("invalidateSoftPresent()"));
+  assert.match(tlxAwait, /no display ctx/);
+});
+
 test("WGX soft present permits one staging read and drops pre-resize pixels", () => {
   const src = read("js/render/webgpu/wgx.js");
   assert.match(src, /let _softBlitSeq = 0/);

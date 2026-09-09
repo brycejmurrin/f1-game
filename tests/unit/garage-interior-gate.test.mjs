@@ -137,9 +137,12 @@ describe("the interior gate on a cleared-buffer frame", () => {
       "probe-page must not read the live WebGL canvas back — that is the cleared buffer");
     assert.doesNotMatch(frame, /gapSample/,
       "the drawImage-fed gapSample field is gone; nothing may depend on it again");
+    assert.match(probe, /export async function awaitPresentedFrame/);
+    assert.match(probe, /getElementById\("game-soft"\)/,
+      "presentedCanvasClip must prefer the HeadlessChrome overlay");
     const shot = probe.slice(probe.indexOf("export async function screenshotGameCanvas"),
-      probe.indexOf("export async function screenshotGameCanvas") + 1800);
-    const awaitAt = shot.indexOf("GLX.awaitSoftPresent");
+      probe.indexOf("export async function screenshotGameCanvas") + 2200);
+    const awaitAt = shot.indexOf("awaitPresentedFrame");
     const freezeAt = shot.indexOf("__apex.headless(true)");
     assert.ok(awaitAt >= 0 && freezeAt > awaitAt,
       "awaitSoftPresent must run while the loop still presents; freeze-then-wait hangs on GLX");

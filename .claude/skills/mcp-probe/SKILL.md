@@ -55,7 +55,9 @@ vs playwright-official).
 3. **`snapCam()` after `jump()`/`park()` only** — never after `orbit()`/`view()`.
 4. SwiftShader WebGPU **executes** — visible WGX pixels come from the soft-present
    2D blit on `#game` (`gfx-probe.mjs` / `GLX.awaitSoftPresent()`), not from the
-   hidden swapchain canvas. Readback oracle: `node tools/gfx/wgx-capture.mjs <track>`
+   hidden swapchain canvas. HeadlessChrome GLX (and TLX-WebGPU) hide `#game` and
+   blit onto `#game-soft` — `awaitSoftPresent()` then capture that overlay, never
+   `locator("#game").screenshot()`. Readback oracle: `node tools/gfx/wgx-capture.mjs <track>`
    → `frame.png` (optional; never call `getCurrentTexture()` on software
    adapters — it breaks `mapAsync` device-wide). Lavapipe A/B:
    `wgx-lavapipe-probe.mjs` (needs `mesa-vulkan-drivers`). TLX:

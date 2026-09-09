@@ -64,6 +64,10 @@ const err = await page.evaluate(() => {
 expect(err).toBe(0);   // GL_NO_ERROR
 ```
 
+HeadlessChrome: `#game` is opacity 0 and the blit is `#game-soft`. `getError()`
+on `#game`'s WebGL context can be 0 while a locator screenshot of `#game` is
+black. Await `GLX.awaitSoftPresent()` and read the overlay (or `readPixels`).
+
 ## 7. Quick one-liners via apex-eval
 
 ```sh
