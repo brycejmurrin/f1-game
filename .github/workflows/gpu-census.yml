@@ -38,6 +38,12 @@ name: GPU census
 # exactly what a default dispatch gates on. The schedule runs on the default
 # branch only (GitHub's rule), like ci.yml's nightly.
 
+# Dispatch, nightly, and agent push-request (2026-09-09). Agents' GH App
+# tokens cannot workflow_dispatch (403); they CAN push a request file on a
+# cursor/* branch, which runs THIS branch's tree on the matrix images.
+# Cancel-in-progress stays for schedule/dispatch; push uses run_id so two
+# legs (baseline / upscale) can queue without killing each other.
+
 on:
   schedule:
     - cron: "17 3 * * *"
@@ -64,35 +70,61 @@ on:
         description: "Extra localStorage for ALL game checks, space-separated apex26.k=v — how a flagged renderer path gets tested on real hardware (e.g. apex26.instCellCache=1)"
         required: false
         default: ""
+  push:
+    branches: ["cursor/**"]
+    paths: [".github/gpu-census-request.json"]
 
 permissions:
   contents: read
 
 concurrency:
-  group: gpu-census-${{ github.ref }}
-  cancel-in-progress: true
+  group: gpu-census-${{ github.event_name == 'push' && format('{0}-{1}', github.ref, github.run_id) || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   # The input is a string; turn it into the matrix the next job fans out over,
   # so a dispatcher can drop macOS (the expensive one) without editing the file.
+  # Push requests read .github/gpu-census-request.json from THIS commit.
   plan:
     runs-on: ubuntu-latest
     outputs:
       images: ${{ steps.split.outputs.images }}
+      track: ${{ steps.split.outputs.track }}
+      ls: ${{ steps.split.outputs.ls }}
+      force: ${{ steps.split.outputs.force }}
+      census_only: ${{ steps.split.outputs.census_only }}
     steps:
+      - uses: actions/checkout@v4
+        if: ${{ github.event_name == 'push' }}
       - id: split
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json, os
-          raw = os.environ["IMAGES"]
+          req = {}
+          if os.environ.get("EVENT") == "push":
+            with open(".github/gpu-census-request.json", encoding="utf-8") as f:
+              req = json.load(f)
           allow = {"ubuntu-latest", "ubuntu-24.04", "macos-latest", "macos-15", "macos-14",
                    "macos-13", "windows-latest", "windows-2022"}
+          raw = str(req.get("images") or os.environ.get("INPUT_IMAGES") or "ubuntu-latest,macos-latest,windows-latest")
           picked = [i.strip() for i in raw.split(",") if i.strip() in allow]
           print("images=" + json.dumps(picked or ["ubuntu-latest"]))
+          print("track=" + str(req.get("track") or os.environ.get("INPUT_TRACK") or "montreal"))
+          print("ls=" + str(req.get("ls") or os.environ.get("INPUT_LS") or ""))
+          print("force=" + str(req.get("force") or os.environ.get("INPUT_FORCE") or ""))
+          co = req.get("census_only")
+          if co is None:
+            co = (os.environ.get("INPUT_CENSUS_ONLY") or "").lower() in ("true", "1")
+          print("census_only=" + ("true" if co else "false"))
           PY
         env:
-          # Dispatch default restated for the schedule (inputs are empty there).
-          IMAGES: ${{ inputs.images || 'ubuntu-latest,macos-latest,windows-latest' }}
+          EVENT: ${{ github.event_name }}
+          # Dispatch/schedule defaults — schedule leaves inputs empty.
+          INPUT_IMAGES: ${{ inputs.images || 'ubuntu-latest,macos-latest,windows-latest' }}
+          INPUT_TRACK: ${{ inputs.track || 'montreal' }}
+          INPUT_LS: ${{ inputs.ls || '' }}
+          INPUT_FORCE: ${{ inputs.force || '' }}
+          INPUT_CENSUS_ONLY: ${{ inputs.census_only || false }}
 
   census:
     needs: plan
@@ -102,6 +134,11 @@ jobs:
       fail-fast: false
       matrix:
         image: ${{ fromJSON(needs.plan.outputs.images) }}
+    env:
+      CENSUS_TRACK: ${{ needs.plan.outputs.track }}
+      CENSUS_LS: ${{ needs.plan.outputs.ls }}
+      CENSUS_FORCE: ${{ needs.plan.outputs.force }}
+      CENSUS_ONLY: ${{ needs.plan.outputs.census_only }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -169,28 +206,28 @@ jobs:
       # cross-check that the portable path works, and if an image DOES have
       # hardware this is the first real-GPU run this project has ever had.
       - name: Game check — three.js / WebGPU
-        if: ${{ !inputs.census_only }}
+        if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
         timeout-minutes: 20
         shell: bash
         run: |
-          FORCE="${{ inputs.force }}"
-          LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
+          FORCE="${CENSUS_FORCE}"
+          LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" \
             --backend three --path webgpu \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgpu-${{ matrix.image }}.json" \
             --shot "game-webgpu-${{ matrix.image }}.png"
 
       - name: Game check — three.js / WebGL2 (control)
-        if: ${{ !inputs.census_only }}
+        if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
         timeout-minutes: 20
         shell: bash
         run: |
-          FORCE="${{ inputs.force }}"
-          LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
+          FORCE="${CENSUS_FORCE}"
+          LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" \
             --backend three --path webgl2 \
             ${FORCE:+--ls apex26.tlxForceHw=$FORCE} $LS \
             --json "game-webgl2-${{ matrix.image }}.json" \
@@ -202,13 +239,13 @@ jobs:
       # would still go green. That is how a flagged GLX path came to be
       # described as "gated on a real GPU" when nothing here could test it.
       - name: Game check — GLX / WebGL2 (the default backend)
-        if: ${{ !inputs.census_only }}
+        if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
         timeout-minutes: 20
         shell: bash
         run: |
-          LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
+          LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" \
             --backend webgl2 $LS \
             --json "game-glx-${{ matrix.image }}.json" \
             --shot "game-glx-${{ matrix.image }}.png"
@@ -222,13 +259,13 @@ jobs:
       # false — the CPU blit is the SwiftShader path and the "WebGPU is laggy"
       # class), and gpuErrors 0.
       - name: Game check — WGX / WebGPU (native, opt-in)
-        if: ${{ !inputs.census_only }}
+        if: ${{ needs.plan.outputs.census_only != 'true' }}
         continue-on-error: true
         timeout-minutes: 20
         shell: bash
         run: |
-          LS=""; for kv in ${{ inputs.ls }}; do LS="$LS --ls $kv"; done
-          node tools/gfx/gpu-game-check.mjs "${{ inputs.track || 'montreal' }}" \
+          LS=""; for kv in ${CENSUS_LS}; do LS="$LS --ls $kv"; done
+          node tools/gfx/gpu-game-check.mjs "${CENSUS_TRACK}" \
             --backend webgpu $LS \
             --json "game-wgx-${{ matrix.image }}.json" \
             --shot "game-wgx-${{ matrix.image }}.png"
@@ -245,7 +282,7 @@ jobs:
       # of threshold that goes flaky and then gets widened to pass, which
       # AGENTS.md forbids outright — meanLuma goes in the summary for a human.
       - name: Verdict — fail the job on what the game reported
-        if: ${{ always() && !inputs.census_only }}
+        if: ${{ always() && needs.plan.outputs.census_only != 'true' }}
         shell: bash
         env:
           IMAGE: ${{ matrix.image }}

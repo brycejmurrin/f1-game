@@ -405,13 +405,17 @@ test("gpu-census runs nightly beside the boot group, with the full check and its
   // …and a scheduled run, where every input is empty, still gets the FULL
   // check on the default images and track — not census_only, not a fallback
   // to ubuntu-only via the plan job's empty-string branch.
-  assert.match(gpuWorkflow, /if: \$\{\{ !inputs\.census_only \}\}/);
-  assert.match(gpuWorkflow, /if: \$\{\{ always\(\) && !inputs\.census_only \}\}/, "the Verdict must still gate a scheduled run");
-  assert.match(gpuWorkflow, /IMAGES: \$\{\{ inputs\.images \|\| 'ubuntu-latest,macos-latest,windows-latest' \}\}/);
+  // Plan job resolves inputs → outputs; census gates on those (agents also
+  // trigger via push of .github/gpu-census-request.json — same outputs).
+  assert.match(gpuWorkflow, /if: \$\{\{ needs\.plan\.outputs\.census_only != 'true' \}\}/);
+  assert.match(gpuWorkflow, /if: \$\{\{ always\(\) && needs\.plan\.outputs\.census_only != 'true' \}\}/,
+    "the Verdict must still gate a scheduled run");
+  assert.match(gpuWorkflow, /INPUT_IMAGES: \$\{\{ inputs\.images \|\| 'ubuntu-latest,macos-latest,windows-latest' \}\}/);
   assert.match(gpuWorkflow, /inputs\.images \|\| '[^']*macos-latest[^']*'/, "the nightly must include the one image with a real GPU");
-  const trackUses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{\{ inputs\.track \|\| 'montreal' \}\}"/g) || [];
-  assert.equal(trackUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must default the track for the schedule");
-  assert.doesNotMatch(gpuWorkflow, /gpu-game-check\.mjs "\$\{\{ inputs\.track \}\}"/);
+  const trackUses = gpuWorkflow.match(/gpu-game-check\.mjs "\$\{CENSUS_TRACK\}"/g) || [];
+  assert.equal(trackUses.length, 4, "every game check (three/webgpu, three/webgl2, glx, wgx) must use the plan-resolved track");
+  assert.match(gpuWorkflow, /paths: \["\.github\/gpu-census-request\.json"\]/,
+    "agents without workflow_dispatch may push a request file on cursor/*");
 });
 
 test("gpu-census has a NATIVE WGX leg with hardware gates (bound, swapchain, gpuErrors)", () => {
