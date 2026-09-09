@@ -71,6 +71,7 @@ function fakeSession() {
     synced: () => true,
     peerToLocal: (t) => t,
     localToPeer: (t) => t,
+    stats: () => ({}),
     close() { this.closed++; handlers.clear(); return true; },
     handlerCount() {
       let n = 0;

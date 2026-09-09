@@ -70,7 +70,7 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   // cars got drivers[0] and 22 cars on track showed 11 helmets, each pair
   // identical. The number belongs in the key as well as the build, or the
   // second driver draws whichever mesh the first one cached.
-  const teamMeshSrc = game.slice(game.indexOf("function teamMesh(team, car)"), game.indexOf("function teamBodyMesh"));
+  const teamMeshSrc = game.slice(game.indexOf("function teamMesh(team, car, silhouette)"), game.indexOf("function teamBodyMesh(team, car)"));
   const teamBodySrc = game.slice(game.indexOf("function teamBodyMesh(team, car)"), game.indexOf("function teamBodyMesh(team, car)") + 400);
   assert.match(teamMeshSrc, /carDecalNum\(team, car\)/, "teamMesh must resolve the driver number");
   assert.match(teamMeshSrc, /teamMeshKey\(team\) \+ ":" \+ num/, "teamMesh must key on the driver number");
