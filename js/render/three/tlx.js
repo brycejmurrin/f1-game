@@ -589,7 +589,12 @@ const TLX = (function () {
       // so that was every desktop Safari boot. On the WebGPU path the two terms
       // are the same value, so nothing there changes.
       function softContent(part) { return softwareGL && !_forceHw.has(part); }
-      function softOutRT() { return softGpu() ? _ensureBlitRT(W, H) : null; }
+      function softOutRT() {
+        if (!softGpu()) return null;
+        const up = wantSpatialUpscale();
+        const tw = up ? presentW : W, th = up ? presentH : H;
+        return _ensureBlitRT(tw, th);
+      }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.
       // Both change across the many renderer.render() calls of a track load
@@ -805,6 +810,28 @@ const TLX = (function () {
       // ── lifecycle state ───────────────────────────────────────────────────
       let renderScale = 1;
       let W = 1, H = 1;
+      // Present size (css×dpr) vs render size (×renderScale). With
+      // apex26.spatialUpscale=1 and scale < ~1, canvas/soft display is present
+      // and scene/post RTs stay at W×H — SGSR reconstructs (UPSCALING-2026-09 §7).
+      let presentW = 1, presentH = 1;
+      let spatialUpscale = false;
+      try {
+        const q = typeof location !== "undefined" && location.search &&
+          /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
+        const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
+        spatialUpscale = !!(q || ls);
+      } catch (_) { spatialUpscale = false; }
+      function setSpatialUpscale(on) {
+        spatialUpscale = !!on;
+        try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
+        resize();
+        return spatialUpscale;
+      }
+      function getSpatialUpscale() { return spatialUpscale; }
+      function wantSpatialUpscale() {
+        return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
+      }
+      function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
       const DPR_CAP = isMobile ? 1.5 : 2;
 
       // ── M9 GPU frame timer state ─────────────────────────────────────────
@@ -912,7 +939,8 @@ const TLX = (function () {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
-              softDest: function () { return softOutRT(); } });
+              softDest: function () { return softOutRT(); },
+              wantSpatialUpscale, getPresentSize });
           if (post && !post.enabled()) {
             try { if (post.dispose) post.dispose(); } catch (_) { /* disabled factory cleanup */ }
             post = null;
@@ -1990,20 +2018,30 @@ const TLX = (function () {
         const cw = cssW || 1;
         const ch = cssH || 1;
         const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
-        const w = Math.max(1, Math.round(cw * dpr * renderScale));
-        const h = Math.max(1, Math.round(ch * dpr * renderScale));
-        if (w !== W || h !== H) {
+        presentW = Math.max(1, Math.round(cw * dpr));
+        presentH = Math.max(1, Math.round(ch * dpr));
+        const rw = Math.max(1, Math.round(presentW * renderScale));
+        const rh = Math.max(1, Math.round(presentH * renderScale));
+        const up = wantSpatialUpscale();
+        const cwBuf = up ? presentW : rw;
+        const chBuf = up ? presentH : rh;
+        const sizeChanged = rw !== W || rh !== H ||
+          (_displayCanvas && (_displayCanvas.width !== cwBuf || _displayCanvas.height !== chBuf)) ||
+          (renderer.domElement && (renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf));
+        if (sizeChanged) {
           // An old-size async read may finish after the visible canvas changes.
           // It is allowed to drain, but must never repaint the resized canvas.
           _softReadEpoch++;
           _softReadQueued = null;
-          W = w; H = h;
-          renderer.setSize(w, h, false);    // false: CSS keeps sizing the canvas
-          if (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h)) {
-            _displayCanvas.width = w;
-            _displayCanvas.height = h;
+          W = rw; H = rh;
+          // setSize drives the WebGPU/WebGL drawing buffer; when upscaling the
+          // canvas is present-sized while post RTs stay at W×H (render).
+          renderer.setSize(cwBuf, chBuf, false);    // false: CSS keeps sizing the canvas
+          if (_displayCanvas && (_displayCanvas.width !== cwBuf || _displayCanvas.height !== chBuf)) {
+            _displayCanvas.width = cwBuf;
+            _displayCanvas.height = chBuf;
           }
-          if (post) post.resize(w, h);
+          if (post) post.resize(rw, rh);
         }
       }
 
@@ -2172,6 +2210,8 @@ const TLX = (function () {
           renderScale = v; resize(); return true;
         },
         getRenderScale() { return renderScale; },
+        setSpatialUpscale, getSpatialUpscale,
+        getPresentSize,
         get width() { return W; },
         get height() { return H; },
         get aspect() { return H ? W / H : 1; },

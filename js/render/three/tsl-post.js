@@ -889,6 +889,92 @@
       })(), "tlx-post-fxaa"),
     };
 
+    /* ── SGSR1 spatial upscale (SGSR_FS in glsl-post.js) — present-size
+     *    reconstruct from render-size LDR/FXAA. 4-tap gatherComp (no
+     *    textureGather) for GLX/WGX parity. Flag-gated in tlx-post.js. ── */
+    const sgsrTex = texture(ctx.blackTex);
+    const sgsrU = { viewport: uniform(new THREE.Vector4(1, 1, 1, 1)) }; // (1/w,1/h,w,h)
+    const sgsr = {
+      tex: sgsrTex, U: sgsrU,
+      mat: passMaterial(Fn(() => {
+        const EdgeThreshold = float(8.0 / 255.0);
+        const EdgeSharpness = float(2.0);
+        const suv = vec2(screenUV).toVar();
+        const vUV = vec2(suv.x, suv.y.oneMinus()).toVar();
+        const vp = vec4(sgsrU.viewport).toVar();
+        const t = vec2(vp.x, vp.y).toVar();
+        const rgb = vec3(sgsrTex.sample(TL(vUV)).rgb).toVar();
+        const color = vec4(rgb, rgb.g).toVar();
+        const outC = vec3(rgb).toVar();
+        const imgCoord = vUV.mul(vec2(vp.z, vp.w)).add(vec2(-0.5, 0.5)).toVar();
+        const imgCoordPixel = floor(imgCoord).toVar();
+        const coord0 = imgCoordPixel.mul(t).toVar();
+        const pl = imgCoord.sub(imgCoordPixel).toVar();
+        // gatherComp: ES 3.1 order (x0,y1),(x1,y1),(x1,y0),(x0,y0) on green
+        const gatherG = (p) => {
+          const a = sgsrTex.sample(TL(p.add(vec2(0.0, t.y)))).g;
+          const b = sgsrTex.sample(TL(p.add(t))).g;
+          const c = sgsrTex.sample(TL(p.add(vec2(t.x, 0.0)))).g;
+          const d = sgsrTex.sample(TL(p)).g;
+          return vec4(a, b, c, d);
+        };
+        const left0 = gatherG(coord0).toVar();
+        const edgeVote = abs(left0.z.sub(left0.y))
+          .add(abs(color.w.sub(left0.y)))
+          .add(abs(color.w.sub(left0.z))).toVar();
+        If(edgeVote.greaterThan(EdgeThreshold), () => {
+          const coord = vec2(coord0.x.add(t.x), coord0.y).toVar();
+          const right0 = gatherG(coord.add(vec2(t.x, 0.0))).toVar();
+          const ud0 = gatherG(coord.add(vec2(0.0, t.y.negate()))).toVar();
+          const ud1 = gatherG(coord.add(vec2(0.0, t.y))).toVar();
+          const upDown = vec4(ud0.w, ud0.z, ud1.y, ud1.x).toVar();
+          const mean = left0.y.add(left0.z).add(right0.x).add(right0.w).mul(0.25).toVar();
+          const left = left0.sub(vec4(mean)).toVar();
+          const right = right0.sub(vec4(mean)).toVar();
+          const ud = upDown.sub(vec4(mean)).toVar();
+          const colorW = color.w.sub(mean).toVar();
+          const sum = abs(left.x).add(abs(left.y)).add(abs(left.z)).add(abs(left.w))
+            .add(abs(right.x)).add(abs(right.y)).add(abs(right.z)).add(abs(right.w))
+            .add(abs(ud.x)).add(abs(ud.y)).add(abs(ud.z)).add(abs(ud.w)).toVar();
+          const std = float(2.181818).div(max(sum, float(1e-4))).toVar();
+          const fastLanczos2 = (x) => {
+            const wA0 = x.sub(4.0).toVar();
+            const wB = x.mul(wA0).sub(wA0).toVar();
+            const wA = wA0.mul(wA0);
+            return wB.mul(wA);
+          };
+          const weightY = (dx, dy, c) => {
+            const x = dx.mul(dx).add(dy.mul(dy)).mul(0.55)
+              .add(clamp(abs(c).mul(std), float(0.0), float(1.0)));
+            const w = fastLanczos2(x);
+            return vec2(w, w.mul(c));
+          };
+          let aWY = weightY(pl.x, pl.y.add(1.0), ud.x).toVar();
+          aWY.assign(aWY.add(weightY(pl.x.sub(1.0), pl.y.add(1.0), ud.y)));
+          aWY.assign(aWY.add(weightY(pl.x.sub(1.0), pl.y.sub(2.0), ud.z)));
+          aWY.assign(aWY.add(weightY(pl.x, pl.y.sub(2.0), ud.w)));
+          aWY.assign(aWY.add(weightY(pl.x.add(1.0), pl.y.sub(1.0), left.x)));
+          aWY.assign(aWY.add(weightY(pl.x, pl.y.sub(1.0), left.y)));
+          aWY.assign(aWY.add(weightY(pl.x, pl.y, left.z)));
+          aWY.assign(aWY.add(weightY(pl.x.add(1.0), pl.y, left.w)));
+          aWY.assign(aWY.add(weightY(pl.x.sub(1.0), pl.y.sub(1.0), right.x)));
+          aWY.assign(aWY.add(weightY(pl.x.sub(2.0), pl.y.sub(1.0), right.y)));
+          aWY.assign(aWY.add(weightY(pl.x.sub(2.0), pl.y, right.z)));
+          aWY.assign(aWY.add(weightY(pl.x.sub(1.0), pl.y, right.w)));
+          let finalY = aWY.y.div(max(aWY.x, float(1e-4))).toVar();
+          const maxY = max(max(left.y, left.z), max(right.x, right.w));
+          const minY = min(min(left.y, left.z), min(right.x, right.w));
+          finalY.assign(clamp(EdgeSharpness.mul(finalY), minY, maxY));
+          const deltaY = clamp(finalY.sub(colorW), float(-23.0 / 255.0), float(23.0 / 255.0));
+          outC.assign(vec3(
+            clamp(color.x.add(deltaY), float(0.0), float(1.0)),
+            clamp(color.y.add(deltaY), float(0.0), float(1.0)),
+            clamp(color.z.add(deltaY), float(0.0), float(1.0))));
+        });
+        return vec4(outC, 1.0);
+      })(), "tlx-post-sgsr"),
+    };
+
     /* ── BLIT (debug ?viz= bisect): paint any chain texture to the canvas.
      *    mono=1 spreads .r to rgb (SSAO); gain rescales HDR sources. ───────── */
     const blitTex = texture(ctx.blackTex);
@@ -905,7 +991,7 @@
     };
 
     return { bright, blurAO, blurGR, down, upAdd, upFinal, spread, ssao, godray,
-             composite, fxaa, blit };
+             composite, fxaa, sgsr, blit };
   }
 
   window.TLXShaders = Object.assign(window.TLXShaders || {}, { post });
