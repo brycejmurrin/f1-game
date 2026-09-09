@@ -1450,3 +1450,49 @@ also a live example for the undeclared-budget question: the spec has no
 declared timeout, so it inherits 120 s, which is enough for one worker and not
 for six. Re-run this spec ALONE before believing a red run of it, and do not
 read a timeout here as a regression until it has been serialized.
+
+## 2026-09-09 — the `ui` dispatch was never "cancelled by someone". It timed out.
+
+Four `ui` dispatches have ended `cancelled`. The renderer plan recorded three of
+them as "not concurrency (dispatch runs get their own group); looks like manual
+cancels", and I repeated that guess for the fourth. It was wrong every time, and
+`.github/workflows/ci.yml` says so in its own header: **a timed-out job reports
+`cancelled` rather than `failed`.** The evidence was in the timestamps —
+shards 1, 3 and 4 of run 34279958405 started 21:21 and ended 22:11, which is
+`timeout-minutes: 50` to the minute.
+
+**Why the cap could not be met**, measured rather than assumed:
+
+| | |
+|---|---|
+| `ui` group size | 150 tests |
+| `--shard` split | 38 / 38 / 37 / 37 — even by COUNT |
+| workers | `APEX_WORKERS: 1` |
+| shard 2 | finished its group in 11.5 min |
+| shards 1, 3, 4 | still running at 50:00 |
+
+The split is even by test count and wildly uneven by COST: shard 2 drew the
+cheap specs, the others drew the race-building ones. At the ~94 s race boot this
+workflow already documents for a starved runner, 37 race-shaped tests is ~58 min
+of boot before a single assertion.
+
+**The cap belonged to a different job.** `timeout-minutes: 50` was measured for
+what a PUSH runs in that job — `smoke.spec.js` sharded four ways. The same job
+also carries the wide step (the boot group nightly, or a dispatched group), and
+that step wears the same number. The dispatch and the nightly now get their own,
+with the per-test cap (900 s) still the hang detector, so a genuinely stuck spec
+still goes red early instead of burning the larger budget.
+
+**Transferable**: `cancelled` with zero failures is a TIMEOUT until proven
+otherwise. Read the job's start and end timestamps against its cap before
+reaching for any explanation involving a person. Three sessions did not, and the
+group went unverified for six days.
+
+**Found alongside**: `test:ui` listed `menu-traversal.spec.js` twice in
+tests/groups.json, on consecutive lines, and the repeat was generated into
+package.json. Two sessions adding the identical line, merged without conflict —
+the same hazard as the duplicated `livery:` key on Williams a day earlier. It
+costs nothing at runtime (Playwright dedupes the path: 150 tests either way),
+which is why nothing caught it. The existing disjoint-partition guard says
+`owner.get(f) !== g`, so it asks only whether two DIFFERENT groups claim a spec.
+A within-group guard now sits beside it.
