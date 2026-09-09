@@ -58,6 +58,10 @@
     "tests/unit/track-line-circuits.test.mjs",
     "tests/unit/twin-drift.test.mjs",
     "tests/unit/storage-key-prefix.test.mjs",
+    "// ...and its sibling: the PREFIX is not the whole contract. Two features",
+    "// owned apex26.brakeCue with incompatible types and each silently broke",
+    "// the other; this asks that one key means one type.",
+    "tests/unit/store-key-types.test.mjs",
     "tests/unit/no-bare-console.test.mjs",
     "tests/unit/light-store-cond-layer.test.mjs",
     "tests/unit/scenery-kits.test.mjs",
@@ -293,19 +297,29 @@
         "tests/specs/scenery-kits.spec.js"
       ]
     },
-    "test:driving": {
+    "test:collisions": {
+      "kind": "browser",
+      "files": [
+        "tests/specs/collision*.spec.js"
+      ]
+    },
+    "test:aero": {
+      "kind": "browser",
+      "files": [
+        "tests/specs/aero-zones.spec.js",
+        "tests/specs/active-aero.spec.js",
+        "tests/specs/drift.spec.js",
+        "tests/specs/understeer-cue.spec.js"
+      ]
+    },
+    "test:physics-core": {
       "kind": "browser",
       "files": [
         "tests/specs/physics-*.spec.js",
         "tests/specs/longitudinal.spec.js",
         "tests/specs/projection.spec.js",
-        "tests/specs/understeer-cue.spec.js",
-        "tests/specs/collision*.spec.js",
-        "tests/specs/drift.spec.js",
-        "tests/specs/offtrack.spec.js",
         "tests/specs/world-physics.spec.js",
-        "tests/specs/active-aero.spec.js",
-        "tests/specs/aero-zones.spec.js",
+        "tests/specs/offtrack.spec.js",
         "tests/specs/debris.spec.js",
         "tests/specs/race-control.spec.js"
       ]
