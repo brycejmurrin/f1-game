@@ -1690,6 +1690,8 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "soft-present must blit readPixels into the 2D overlay");
   assert.match(src, /awaitSoftPresent/,
     "garage settle / SAVE SCREENSHOT wait on awaitSoftPresent");
+  assert.match(src, /SOFT_BLIT_EVERY/,
+    "soft-present must throttle full-frame readPixels (car-group SwiftShader tax)");
   assert.match(src, /softPresent:\s*\(\)\s*=>\s*!!_softPresent/,
     "softPresent() capability bit for renderer-picker / probes");
 });
