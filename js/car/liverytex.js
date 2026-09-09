@@ -1489,6 +1489,28 @@ const LiveryTex = (function () {
     return { R, fx, dir: side.frontLeft ? 1 : -1 };
   }
   const eachFlank = (fn) => { for (const side of FLANKS) { const F = flankFrame(side); if (F) fn(F); } };
+  const COVER_BIND_IDS = ["independent", "saddleWrap", "spineOnly"];
+  const FIN_HANDOFF_IDS = ["match", "contrast", "hardCut"];
+  function coverBindOf(liv) {
+    const v = liv && liv.coverBind;
+    return COVER_BIND_IDS.includes(v) ? v : "independent";
+  }
+  function finHandoffOf(liv) {
+    const v = liv && liv.finHandoff;
+    return FIN_HANDOFF_IDS.includes(v) ? v : "match";
+  }
+  // SADDLE zone fill: saddleTint when set; else bandC under saddle / saddleWrap.
+  function saddleFill(liv, bandC, coverPaint) {
+    if (liv && liv.saddleTint) return liv.saddleTint;
+    const bind = coverBindOf(liv);
+    const logo = (liv && liv.spineLogo) || "logo";
+    if (logo === "saddle" || bind === "saddleWrap") return bandC;
+    return null;
+  }
+  // RIDGE zone fill: ridgeTint when set; else the crown band colour.
+  function ridgeFill(liv, bandC) {
+    return (liv && liv.ridgeTint) || bandC;
+  }
   // The saddle's other half: from the airbox back along the crease to
   // mid-cover, then a raked edge down to the sidepod line just behind the
   // number (the SF-26's white cover top), on each flank in its own frame.
@@ -1989,6 +2011,7 @@ const LiveryTex = (function () {
     const tailStyle = colors.finStyle || "team";
     const finBadge = colors.finBadge || "logo";
     const spineLogo = colors.spineLogo || "logo";
+    const coverBind = coverBindOf(colors);
     // SPINE TINT (liv.spineTint) — the crown band's OWN colour. An EXPLICIT
     // pick wins and skips the contrast re-pick. The derived default is the
     // BASE colours only (secondary, then primary, then inks) — never BODY
@@ -2175,7 +2198,9 @@ const LiveryTex = (function () {
       // "tricolour" of one colour repeated (1.01:1 on Mercedes).
       const bandC2 = colors.bandTint2 || pickOn([inkCrest].concat(BAND_ORDER), [coverPaint, bandC], BAND_ON_COVER);
       drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont, bandC2);
-      if (spineLogo === "saddle") saddleFlanks(ctx, bandC);
+      if (spineLogo === "saddle" || coverBind === "saddleWrap") {
+        saddleFlanks(ctx, saddleFill(colors, bandC, coverPaint) || bandC);
+      }
     }
     if (REGIONS.tail) {
       drawTailTop(ctx, spineLogo, REGIONS.tail, bandC, inkCrest, names[1] || "");
@@ -2215,8 +2240,10 @@ const LiveryTex = (function () {
     // painted 1.00:1 after the flank band was first pointed here. The wrap's
     // sun covers only the front of the band, so under it a flank-wide graphic
     // crosses BOTH the sun and the bare cover and has to clear each.
+    const saddleFlankC = saddleFill(colors, bandC, coverPaint);
     const flankBg = spineLogo === "wrap" ? sunColour(teamId, colors)
-                  : spineLogo === "saddle" ? bandC : coverPaint;
+                  : saddleFlankC != null && (spineLogo === "saddle" || coverBind === "saddleWrap")
+                    ? saddleFlankC : coverPaint;
     const flankBgs = spineLogo === "wrap" ? [sunColour(teamId, colors), coverPaint] : [flankBg];
     // …and a MARK on that flank answers to the same surfaces the band does.
     // Every flank pick — the crest, the number, the code, the wordmarks, duo —
@@ -2680,6 +2707,7 @@ const LiveryTex = (function () {
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
+           coverBindOf, finHandoffOf, saddleFill, ridgeFill,
            hasFlankBull: (teamId) => !!bullPath(teamId) };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

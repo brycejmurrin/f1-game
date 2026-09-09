@@ -208,6 +208,35 @@ test("saddle / crown band ignore BODY STRIPE; SPINE TINT is the override", () =>
             `SPINE TINT must paint the saddle; got ${[...stylesOf(tinted)].join(", ")}`);
 });
 
+test("saddleTint owns the saddle flank fill, not spineTint / bandC", () => {
+  const SPINE = [0.718, 0.882, 0.106], SADDLE = [0.98, 0.28, 0.05], COVER = [0.075, 0.078, 0.085];
+  const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+  const carries = (styles, c) => {
+    const want = to255(c).join(",");
+    return [...styles].some((v) => v && v.replace(/^rgba?\(/, "").replace(/[)\s]/g, "").startsWith(want));
+  };
+  const stylesOf = (ops) => new Set(opsIn(ops, R.spineSide).map((op) => op.style).filter(Boolean));
+  const base = {
+    c1: [0.05, 0.06, 0.07], c2: SADDLE, cover: COVER,
+    spineLogo: "saddle", finShape: "none", spineTint: SPINE, saddleTint: SADDLE,
+  };
+  const ops = A.paint("audi", base);
+  assert.ok(carries(stylesOf(ops), SADDLE),
+            `saddle flank must carry saddleTint ${to255(SADDLE)}; got ${[...stylesOf(ops)].join(", ")}`);
+  assert.equal(carries(stylesOf(ops), SPINE), false,
+               "saddle flank must not inherit spineTint / bandC");
+  // Crown still follows spineTint — the two zones are independent.
+  assert.ok(carries(new Set(opsIn(ops, R.crest).map((op) => op.style).filter(Boolean)), SPINE),
+            "spineTint still paints the crown band");
+});
+
+test("coverBind saddleWrap paints saddle flanks without a saddle crown", () => {
+  const ops = A.paint("ferrari", { ...BASE, spineLogo: "stripe", coverBind: "saddleWrap" });
+  assert.ok(opsIn(ops, R.spineSide).length > 0, "saddleWrap reaches the flank band");
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineLogo: "stripe", coverBind: "spineOnly" }), R.spineSide).length, 0,
+               "spineOnly keeps non-saddle crowns off the flanks");
+});
+
 test("spineTint colours the crown band alone, and is absent-identical", () => {
   const LIME = [0.718, 0.882, 0.106], DARK = [0.008, 0.086, 0.078];
   const AM = { c1: [0.0, 0.349, 0.31], c2: LIME, spineLogo: "stripe" };
