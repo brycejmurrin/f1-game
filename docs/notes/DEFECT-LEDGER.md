@@ -11,6 +11,29 @@
 Verified against the current tree. Everything fixed has moved to the archived
 journal; this is what remains.
 
+**2026-09-09 — a mark painted in the colour it stands on, on 59 of 69
+liveries. FIXED** — and the fourth case of two sessions on one defect.
+`markPalette()` resolved a mark against the plate it would sit on, but two call
+sites draw the mark WITHOUT its backing and deleted the plate afterwards, so the
+colour was chosen to read on a shield that was then thrown away. Measured:
+Ferrari's `bigmark` horse came out `rgb(242,245,250)` on a `#f2f5fa` cover —
+**1.00:1, the cover's own colour**. The fix is `opts.noPlate`, resolving
+plate-less at the call site instead of deleting the field after the fact;
+`bare` is NOT this flag and cannot stand in for it, because `crestKeepsPlate`
+keeps the shield through `bare: true` on exactly the marks that have one.
+
+*The misreading is the reusable part.* This side measured the same defect from
+the other end — an offline sweep scoring painted area per design — and got
+`bigmark` at 20,960 px on McLaren and **0 px** on Ferrari and Red Bull, then
+logged it as "nothing-drawn vs drawn-invisibly, undetermined" and moved on. The
+metric scored contrast against the field, so a mark painted in the field's own
+colour is indistinguishable from one never drawn: the zero meant INVISIBLE, not
+ABSENT, and that sweep could not tell the two apart at all. The measurement was
+sound; the interpretation attached to a zero was not — a metric that collapses
+two states cannot arbitrate between them, and the honest next step was a second
+instrument, not a note. `livery-contrast.mjs --team=ferrari` reports 0
+large-area failures below 2:1 on the merged tree.
+
 **2026-09-08 — three.js lost half the trackside scenery, and nothing could see
 it. FIXED**, but the shape is worth keeping. A player reported missing scenery
 on three.js; GLX was fine. Reproduced on real Apple hardware via `gpu-census`
@@ -88,6 +111,18 @@ with the other side's fix (`determinism-replay-vm.test.mjs`, in `test:game-vm`),
 so this is now caught without a browser group; a second twin written here was
 dropped on the merge rather than shipped beside it, which is the same
 drifted-twin trap `2987dee4` added a guard for.
+
+*Consolidated 2026-09-09.* Both fixes shipped and layered, leaving `reset()`
+with THREE mechanisms for one defect: seven fields zeroed, an inline 19-field
+delete list, and `EPISODE_TRANSIENTS` (25 fields) deleted last. The first two
+were dead. Set-difference proves it — the inline list is a strict subset of
+`EPISODE_TRANSIENTS`, all seven zeroed fields are in it too, and nothing between
+them reads a car field, so the final loop already did their work and six fields
+more (`contactT`, `kerbHapT`, `kerbSndT`, `offroad`, `towing`, `wheelLock`).
+Worse than redundant: `c.accSm = 0` reads as "0 after reset" when the effective
+value is `undefined`, which is the exact zero-versus-absent distinction this
+entry turns on. Now one list, −16 lines, with `episode-diff.mjs` reporting the
+same clean digest before and after.
 
 **2026-08-18 cleanup sweep** tagged removals, false-positive dead exports, and
 the next intended `game.js` extractions in

@@ -1,5 +1,5 @@
 // render-car.mjs — headless batch renderer for the ISOLATED car viewer.
-// @doc Headless batch renderer for `carview.html` — preset orbit angles, `--team=all` walks the grid, HTML contact sheet; needs a server on :3456.
+// @doc Headless batch renderer for `carview.html` — orbit presets, `--team=all` walks the grid, contact sheet; needs :3456.
 // @skill playwright-probe
 //
 // Loads tools/carview.html (the standalone, track-free car "photo studio") once
