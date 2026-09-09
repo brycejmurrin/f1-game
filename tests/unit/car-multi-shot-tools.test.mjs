@@ -110,8 +110,10 @@ test("garage-angles walks every axis as a list, cheapest innermost", () => {
   // switch is UI navigation plus a rebuild. Assert the nesting, not the prose.
   const walk = src.slice(src.indexOf("const PLAN = []"), src.indexOf("const dupes"));
   const order = [...walk.matchAll(/for \(const (\w+) of (\w+)\)/g)].map((m) => m[2]);
-  assert.deepEqual(order, ["teams", "paints", "parts", "views", "framings"],
-    "team → paint → parts → view → framing: outermost is the most expensive step");
+  assert.deepEqual(order, ["teams", "paints", "parts", "aeroStates", "views", "framings"],
+    "team → paint → parts → aero → view → framing: outermost is the most expensive step. "
+    + "Aero sits ABOVE view because the flap ease measured 50s a change against a preset's "
+    + "one click — nested inside view it paid 4 changes where this pays 2.");
   assert.doesNotMatch(src, /page\.reload\(/, "a second team must not cost a second boot");
 });
 
@@ -175,7 +177,7 @@ test("garage-angles records panel geometry on every shot, cropped or not", () =>
   assert.match(frame, /const panel = await panelGeometry\(page\)/, "read once per shot");
   assert.ok(frame.indexOf("const panel = await panelGeometry") < frame.indexOf("for (let attempt"),
     "panel geometry must be read before the gate loop, not per attempt");
-  assert.match(frame, /^\s*panel,$/m, "the manifest carries it whether or not --visible-only cropped");
+  assert.match(frame, /panel, label: shot\.label,/, "the manifest carries it whether or not --visible-only cropped");
 });
 
 /* ONE flag reader for the garage/car CLIs. Four tools hand-rolled their own and
@@ -219,4 +221,48 @@ test("garage-frame writes inside the repo, through the containment helper", () =
   assert.doesNotMatch(src, /\/opt\/cursor/, "no machine-specific absolute output path");
   assert.match(src, /resolveRepoDefault\(ROOT, "artifacts", "garage-frame"\)/, "default under artifacts/");
   assert.match(src, /resolveContainedChild\(ROOT, flag\("--out"\)/, "a caller's --out cannot escape the repo");
+});
+
+/* A shot is only useful if you can tell which one it is. The first real use of
+ * this tool ended with a contact sheet assembled by hand to read 14 unlabelled
+ * PNGs, so captions and the montage belong in the tool. */
+test("garage-angles captions its shots and can build its own contact sheet", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /function shotLabel\(c\)/, "one caption builder, every axis in walk order");
+  assert.match(src, /async function contactSheet\(shots, out\)/, "--sheet writes the montage");
+  // The caption goes BELOW the frame via extend(), never composited over it —
+  // burning text into the bay corrupts the pixels the shot exists to show.
+  const fin = src.slice(src.indexOf("async function finishImage"), src.indexOf("async function panelGeometry"));
+  assert.match(fin, /\.extend\(\{ bottom: LABEL_H/, "caption is added below, not drawn over the render");
+  // --label + --sheet must not print every coordinate twice.
+  assert.match(src, /const CW = 420, PAD = 8, LBL = wantLabel \? 0 : 22;/,
+    "a labelled tile suppresses the sheet's own caption strip");
+});
+
+test("garage-angles reports where its wall time went, every run", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /const spent = \{ boot:/, "per-phase timing");
+  for (const k of ["team", "paint", "parts", "aero", "frame"]) {
+    assert.match(src, new RegExp(`timed\\("${k}"`), `${k} must be timed`);
+  }
+  assert.match(src, /per frame/, "and print the per-frame cost, which is the dominant one");
+});
+
+test("garage-angles can resume, re-encode and pick a backend", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /const skipExisting = has\("--skip-existing"\)/, "resume a part-finished run");
+  assert.match(src, /existsSync\(join\(outDir, `\$\{shot\.name\}\.png`\)\)/, "skip what is already on disk");
+  assert.match(src, /chromiumArgsForBackend\(backend\)/, "--backend was hardcoded to webgl2");
+  assert.match(src, /installProbeInit\(page, \{ backend,/, "and the probe must agree with it");
+});
+
+/* Two page round-trips per shot that could not change their answer. */
+test("garage-angles does not re-ask questions whose answer is fixed", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /if \(_panelCache\) return _panelCache;/,
+    "the sheet cannot move mid-run — read it once");
+  const nudge = src.slice(src.indexOf("async function nudgeAll"), src.indexOf("async function frame"));
+  assert.match(nudge, /page\.evaluate\(\(jobs\) =>/, "one round-trip for the whole framing, not three");
+  const gate = src.slice(src.indexOf("async function bayRendered"), src.indexOf("const LABEL_H"));
+  assert.equal((gate.match(/sharp\(png\)/g) || []).length, 1, "ONE decode per gate, not one per question");
 });

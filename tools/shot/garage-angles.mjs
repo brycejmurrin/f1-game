@@ -31,10 +31,14 @@
 // list rather than silently resolving to the default (the trap that made an
 // early parts audit report 100+ dead options).
 //
-// COST ORDER. The walk nests team → paint → parts → view → framing, cheapest
-// axis innermost, because each outer step costs more: a team switch is UI
-// navigation plus a full rebuild, paint and parts are a store write plus a
-// settle, a preset is one click, and a framing nudge is a few more. Adding a
+// COST ORDER. The walk nests team → paint → parts → aero → view → framing,
+// cheapest axis innermost, because each outer step costs more. MEASURED on an
+// 8-shot run (2 team x 2 view x 2 aero), which is why the tool now reports its
+// own phase timings: team 45.7s over 2 switches, paint 71.1s over 2, aero
+// 198.2s over 4, frame 375.1s over 8 (46.9s each). Aero was nested INSIDE view
+// on the first cut, which cost 4 changes where the order above costs 2 — an
+// axis is placed by what it costs, and the flap ease is dearer than a preset
+// click even though it looks like a smaller thing. Adding a
 // second framing to a 12-shot run is nearly free; adding a second team is not.
 // `--dry-run` prints the matrix and the nesting without booting Chromium —
 // worth doing first, because the product multiplies out fast.
@@ -46,7 +50,7 @@
 //
 // Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
 // under SwiftShader (document.fonts.ready after freeze).
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -59,7 +63,8 @@ import {
 
 const argv = process.argv.slice(2);
 const KNOWN = ["--team", "--livery", "--spine-side", "--spine-logo", "--parts", "--views",
-               "--zoom", "--pan", "--viewport", "--out", "--dry-run", "--visible-only"];
+               "--zoom", "--pan", "--aero", "--viewport", "--out", "--backend", "--jpeg",
+               "--dry-run", "--visible-only", "--skip-existing", "--label", "--sheet"];
 // Shared with the other garage/car CLIs: both `--name=v` and `--name v`, and an
 // unknown flag stops the run rather than silently using the default.
 const { flag, list, has } = parseFlags(argv, KNOWN);
@@ -75,6 +80,11 @@ const dryRun = has("--dry-run");
 // --visible-only crops every shot to the region the sheet leaves and the
 // manifest always records the panel geometry, whether or not it is cropped.
 const visibleOnly = has("--visible-only");
+const skipExisting = has("--skip-existing");   // resume a run that died part-way
+const wantLabel = has("--label");              // burn the coordinates into each PNG
+const wantSheet = has("--sheet");              // + one labelled contact sheet of the run
+const backend = flag("--backend", "webgl2");
+const jpeg = has("--jpeg") ? Math.max(1, Math.min(100, +flag("--jpeg", "82") || 82)) : 0;
 
 const teams = list("--team", "mclaren");
 const liveries = list("--livery", "default");
@@ -91,6 +101,14 @@ const pans = (flag("--pan", "0,0") || "0,0").split(";").map((p) => {
   return { strafe, dolly };
 });
 const framings = zooms.flatMap((zoom) => pans.map((pan) => ({ zoom, ...pan })));
+// ACTIVE AERO — the wing presets exist to watch the flaps travel, and both
+// states of that travel are a thing you want side by side. "z" is closed, "x"
+// open; __apex.garageAero(bool) drives the same switch the button does.
+const aeros = list("--aero", "").map((a) => a.toLowerCase());
+for (const a of aeros) {
+  if (a !== "z" && a !== "x") { console.error(`--aero takes z (closed) or x (open), not "${a}"`); process.exit(1); }
+}
+const aeroStates = aeros.length ? aeros : [null];
 if (framings.some((f) => !Number.isFinite(f.zoom) || !Number.isFinite(f.strafe) || !Number.isFinite(f.dolly))) {
   console.error("--zoom and --pan take numbers: --zoom=0,8 --pan=0,0;2,-3");
   process.exit(1);
@@ -181,19 +199,33 @@ function shotName(c) {
   if (paints.length > 1 || c.paint.tag !== "default") seg.push(c.paint.tag);
   if (parts.length > 1 || parts[0].kind !== "current") seg.push(c.parts.tag);
   seg.push(c.view);
+  if (c.aero) seg.push(c.aero);
   const f = framingTag(c.framing);
   if (framings.length > 1 && f) seg.push(f);
   return seg.join("-");
+}
+
+/** The human caption for a shot: every axis, in the order the walk nests. */
+function shotLabel(c) {
+  const bits = [c.team, c.paint.tag];
+  if (parts.length > 1 || parts[0].kind !== "current") bits.push(c.parts.tag);
+  bits.push(c.view);
+  if (c.aero) bits.push(c.aero === "x" ? "X-MODE" : "closed");
+  const f = framingTag(c.framing);
+  if (f) bits.push(f);
+  return bits.join("  \u00b7  ");
 }
 
 const PLAN = [];
 for (const team of teams) {
   for (const paint of paints) {
     for (const part of parts) {
-      for (const view of views) {
-        for (const framing of framings) {
-          const c = { team, paint, parts: part, view, framing };
-          PLAN.push({ ...c, name: shotName(c) });
+      for (const aero of aeroStates) {
+        for (const view of views) {
+          for (const framing of framings) {
+            const c = { team, paint, parts: part, view, aero, framing };
+            PLAN.push({ ...c, name: shotName(c), label: shotLabel(c) });
+          }
         }
       }
     }
@@ -207,8 +239,8 @@ if (dupes.length) {
 
 if (dryRun) {
   console.log(`${PLAN.length} shot(s): ${teams.length} team x ${paints.length} paint x ${parts.length} parts`
-    + ` x ${views.length} view x ${framings.length} framing`);
-  for (const p of PLAN) console.log(`  ${p.name}`);
+    + ` x ${views.length} view x ${aeroStates.length} aero x ${framings.length} framing`);
+  for (const p of PLAN) console.log(`  ${p.name.padEnd(38)}  ${p.label}`);
   process.exit(0);
 }
 
@@ -217,31 +249,87 @@ if (dryRun) {
  *  the sheet sits; panelGeometry knows it exactly, so prefer that. */
 async function bayRendered(png, vpW, visible) {
   const cut = visible ? visible.w : Math.max(80, Math.round(vpW * 0.55));
-  const st = await sharp(png).extract({
-    left: visible ? visible.x : 0, top: 0, width: cut,
-    height: (await sharp(png).metadata()).height,
-  }).stats();
+  // ONE decode. This read the file through sharp TWICE — once for .metadata()
+  // to learn the height and once for the crop — so every gate attempt decoded
+  // a 1280x720 PNG twice, and a retry did it four times. The buffer is reused
+  // by the --visible-only crop and the label, so a shot now decodes once.
+  const img = sharp(png);
+  const meta = await img.metadata();
+  const st = await img.extract({ left: visible ? visible.x : 0, top: 0,
+                                 width: cut, height: meta.height }).stats();
   const spread = Math.max(...st.channels.map((c) => c.stdev));
-  return { ok: spread > 8, spread: +spread.toFixed(2) };
+  return { ok: spread > 8, spread: +spread.toFixed(2), meta };
 }
 
 /** Discrete clicks — detail 0 is the keyboard path in holdSetupCtl (not hold-ramp). */
-async function nudge(page, id, n) {
-  if (!n) return;
-  const ok = await page.evaluate(({ ctl, times }) => {
-    const b = document.getElementById(ctl);
-    if (!b) return false;
-    for (let i = 0; i < times; i++) b.click();
-    return true;
-  }, { ctl: id, times: Math.abs(n) });
-  if (!ok) throw new Error(`no camera control #${id}`);
+/** Discrete clicks for a whole framing in ONE round-trip. This was three
+ *  separate page.evaluate calls (zoom, strafe, dolly) per shot even though
+ *  they are independent button presses on the same document. */
+async function nudgeAll(page, framing) {
+  const want = [
+    [framing.zoom > 0 ? "cs-view-in" : "cs-view-out", Math.abs(framing.zoom)],
+    [framing.strafe > 0 ? "cs-pan-right" : "cs-pan-left", Math.abs(framing.strafe)],
+    [framing.dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", Math.abs(framing.dolly)],
+  ].filter(([, n]) => n > 0);
+  if (!want.length) return;
+  const missing = await page.evaluate((jobs) => {
+    const gone = [];
+    for (const [ctl, times] of jobs) {
+      const b = document.getElementById(ctl);
+      if (!b) { gone.push(ctl); continue; }
+      for (let i = 0; i < times; i++) b.click();
+    }
+    return gone;
+  }, want);
+  if (missing.length) throw new Error(`no camera control #${missing.join(", #")}`);
+}
+
+const LABEL_H = 26;
+/** A shot with no caption is a filename you have to decode by eye, and a
+ *  contact sheet of them is worse — I built one by hand to read the last run.
+ *  The caption is BELOW the frame, never over it: burning text into the bay
+ *  would corrupt the very pixels the shot exists to show. */
+function labelSvg(text, w) {
+  const esc = String(text).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+  return Buffer.from(`<svg width="${w}" height="${LABEL_H}">`
+    + `<rect width="${w}" height="${LABEL_H}" fill="#12141a"/>`
+    + `<text x="8" y="18" font-family="monospace" font-size="14" fill="#cfd6e4">${esc}</text></svg>`);
+}
+
+/** Crop, caption and encode in ONE pass off the already-decoded frame. */
+async function finishImage(png, shot, panel, meta) {
+  const crop = visibleOnly && panel.visible ? panel.visible : null;
+  if (!crop && !wantLabel && !jpeg) return png;
+  let img = sharp(png);
+  if (crop) img = img.extract({ left: crop.x, top: crop.y, width: crop.w, height: crop.h });
+  let buf = await img.toBuffer();
+  if (wantLabel) {
+    const w = crop ? crop.w : meta.width;
+    buf = await sharp(buf)
+      .extend({ bottom: LABEL_H, background: "#12141a" })
+      .composite([{ input: labelSvg(shot.label, w), top: (crop ? crop.h : meta.height), left: 0 }])
+      .toBuffer();
+  }
+  if (jpeg) {
+    const out = png.replace(/\.png$/, ".jpg");
+    await sharp(buf).jpeg({ quality: jpeg }).toFile(out);
+    unlinkSync(png);
+    return out;
+  }
+  writeFileSync(png, buf);
+  return png;
 }
 
 /** Where the docked sheet sits over #game, and what the preview's off-axis
  *  frustum was compensating by. Both go in the manifest: a framing judgement
  *  made without them is a judgement about the wrong rectangle. */
+let _panelCache = null;
 async function panelGeometry(page) {
-  return page.evaluate(() => {
+  // The sheet is docked at a fixed edge and the viewport never changes inside a
+  // run, so this was one page round-trip per shot for an answer that cannot
+  // move. Measured once, reused for the rest of the walk.
+  if (_panelCache) return _panelCache;
+  _panelCache = await page.evaluate(() => {
     const cam = window.__apex.garageCam();
     const cv = document.getElementById("game").getBoundingClientRect();
     const sheet = document.getElementById("cs-inner") || document.getElementById("carsetup");
@@ -257,6 +345,7 @@ async function panelGeometry(page) {
       sheet: { x: Math.round(left), w: Math.round(r.width), h: Math.round(r.height) },
       visible: box.w > 32 ? box : null };
   });
+  return _panelCache;
 }
 
 async function frame(page, shot) {
@@ -270,9 +359,7 @@ async function frame(page, shot) {
   if (!clicked) throw new Error(`no camera preset "${view}" in #cs-stack`);
   // AFTER the preset: setSetupView is absolute and drops stored distance/pan,
   // so the framing nudges are re-applied per shot rather than once per run.
-  await nudge(page, framing.zoom > 0 ? "cs-view-in" : "cs-view-out", framing.zoom);
-  await nudge(page, framing.strafe > 0 ? "cs-pan-right" : "cs-pan-left", framing.strafe);
-  await nudge(page, framing.dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", framing.dolly);
+  await nudgeAll(page, framing);
   await settleGarage(page, { frames: 6 });
   const png = join(outDir, `${shot.name}.png`);
   const panel = await panelGeometry(page);
@@ -283,15 +370,10 @@ async function frame(page, shot) {
     gate = await bayRendered(png, vp[0], panel.visible);
     if (gate.ok) {
       const cam = await page.evaluate(() => window.__apex.garageCam());
-      if (visibleOnly && panel.visible) {
-        const v = panel.visible;
-        // extract() cannot write its own input; round-trip through a buffer.
-        const cropped = await sharp(png).extract({ left: v.x, top: v.y, width: v.w, height: v.h }).toBuffer();
-        writeFileSync(png, cropped);
-      }
+      const finalPng = await finishImage(png, shot, panel, gate.meta);
       return {
-        panel,
-        name: shot.name, png, view, team: shot.team,
+        panel, label: shot.label,
+        name: shot.name, png: finalPng, view, team: shot.team, aero: shot.aero,
         livery: shot.paint.livery, design: shot.paint.design, parts: shot.parts.tag,
         framing, spread: gate.spread, via: got.via || "page-clip",
         az: +cam.az.toFixed(3), el: +cam.el.toFixed(3), dist: +cam.effDist.toFixed(3),
@@ -401,6 +483,22 @@ async function applyParts(page, team, spec) {
   return got.ids;
 }
 
+/** ACTIVE AERO. The flaps EASE toward the switch inside the rAF render, and a
+ *  headless page composites no frames, so garageStep is what actually moves
+ *  them — flipping the switch and shooting immediately catches the old pose. */
+async function applyAero(page, want) {
+  const got = await page.evaluate((on) => {
+    if (!window.__apex.garageAero) return { ok: false, error: "no garageAero hook" };
+    window.__apex.garageAero(on === "x");
+    for (let i = 0; i < 90; i++) window.__apex.garageStep(1 / 60);
+    const a = window.__apex.garageAero();
+    return { ok: true, mode: a.mode, aeroX: a.aeroX };
+  }, want);
+  if (!got.ok) throw new Error(`--aero: ${got.error}`);
+  await settleGarage(page, { frames: 6 });
+  return `${got.mode} (aeroX ${(+got.aeroX).toFixed(2)})`;
+}
+
 /** Switch the open sheet to another team through the TEAM tab's tiles — the
  *  reliable in-place path (#mb-garage never re-reads the store, and a reload
  *  would cost a second boot, which is the whole point of this tool). */
@@ -430,17 +528,45 @@ async function switchTeam(page, team) {
   return { switched, label };
 }
 
+/** One labelled montage of the run. Built by hand the first time this tool was
+ *  used in anger, which is the argument for it living here.
+ *  With --label the tiles already carry their caption, so the sheet drops its
+ *  own strip rather than printing every coordinate twice. */
+async function contactSheet(shots, out) {
+  const CW = 420, PAD = 8, LBL = wantLabel ? 0 : 22;
+  const cols = Math.min(shots.length, Math.max(1, Math.round(Math.sqrt(shots.length * 1.6))));
+  const rows = Math.ceil(shots.length / cols);
+  const first = await sharp(shots[0].png).metadata();
+  const CH = Math.round(CW * (first.height / first.width));
+  const tiles = [];
+  for (let i = 0; i < shots.length; i++) {
+    tiles.push({
+      input: await sharp(shots[i].png).resize(CW, CH, { fit: "cover" }).toBuffer(),
+      left: PAD + (i % cols) * (CW + PAD),
+      top: LBL + PAD + Math.floor(i / cols) * (CH + PAD + LBL),
+    });
+  }
+  const W = PAD + cols * (CW + PAD), H = (CH + PAD + LBL) * rows + PAD;
+  const caption = (t, x, y) => `<text x="${x}" y="${y}" font-family="monospace" font-size="13"`
+    + ` fill="#cfd6e4">${String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c])}</text>`;
+  const svg = `<svg width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#12141a"/>`
+    + (LBL ? shots.map((s, i) => caption(s.label, PAD + (i % cols) * (CW + PAD),
+        LBL + Math.floor(i / cols) * (CH + PAD + LBL) - 6)).join("") : "") + "</svg>";
+  await sharp(Buffer.from(svg)).composite(tiles).png().toFile(out);
+  console.log(`sheet ${shots.length} tile(s) ${W}x${H} -> ${out}`);
+}
+
 async function main() {
   mkdirSync(outDir, { recursive: true });
   const srv = await startStaticServer(process.cwd());
   const t0 = Date.now();
-  const browser = await launchChromium({ headless: true, args: chromiumArgsForBackend("webgl2") });
+  const browser = await launchChromium({ headless: true, args: chromiumArgsForBackend(backend) });
   try {
     const page = await browser.newPage();
     await page.setViewportSize({ width: vp[0], height: vp[1] });
     // Pin the FIRST team's INDEX before first paint — #mb-garage never
     // re-reads the store. Every later team goes through switchTeam's tiles.
-    await installProbeInit(page, { backend: "webgl2", team: teamIndex(teams[0]) });
+    await installProbeInit(page, { backend, team: teamIndex(teams[0]) });
     await gotoGame(page, srv.url, 120000);
     // First paint already on the first paint job.
     await page.evaluate(({ t, liv }) => {
@@ -450,16 +576,28 @@ async function main() {
 
     // One state cursor per axis: a step is only paid when its coordinate
     // actually moves, so the plan's cost ordering turns into real savings.
-    const at = { team: null, paint: null, parts: null };
+    const at = { team: null, paint: null, parts: null, aero: null };
     const shots = [];
     let sheetHead = null;
+    // Per-phase wall time, so "make it faster" is answerable from a run rather
+    // than from a guess about which step costs what.
+    const spent = { boot: +((Date.now() - t0) / 1000).toFixed(1), team: 0, paint: 0, parts: 0, aero: 0, frame: 0 };
+    const timed = async (key, fn) => {
+      const t = Date.now();
+      try { return await fn(); } finally { spent[key] += +((Date.now() - t) / 1000).toFixed(2); }
+    };
     for (const shot of PLAN) {
+      if (skipExisting && (existsSync(join(outDir, `${shot.name}.png`))
+                        || existsSync(join(outDir, `${shot.name}.jpg`)))) {
+        console.log(`skip ${shot.name} (already on disk)`);
+        continue;
+      }
       if (at.team !== shot.team) {
-        const { switched, label } = await switchTeam(page, shot.team);
+        const { switched, label } = await timed("team", () => switchTeam(page, shot.team));
         console.log(`team sheet: ${label}  [switched=${switched}]`);
         at.team = shot.team;
         // A team switch resets the sheet: re-apply paint and parts below.
-        at.paint = at.parts = null;
+        at.paint = at.parts = at.aero = null;
         sheetHead = await page.evaluate(() => {
           const h = document.querySelector("#carsetup .sheet-head, #cs-inner .sheet-head");
           return h ? h.textContent.trim().slice(0, 80) : null;
@@ -467,33 +605,45 @@ async function main() {
       }
       const paintKey = shot.paint.tag;
       if (at.paint !== paintKey) {
-        const name = shot.paint.design
-          ? await applyDesign(page, shot.team, shot.paint.livery, shot.paint.design)
-          : await applyLivery(page, shot.team, shot.paint.livery);
+        const name = await timed("paint", () => (shot.paint.design
+          ? applyDesign(page, shot.team, shot.paint.livery, shot.paint.design)
+          : applyLivery(page, shot.team, shot.paint.livery)));
         console.log(`  paint ${paintKey} -> ${name}`);
         at.paint = paintKey;
       }
       if (at.parts !== shot.parts.tag) {
-        const ids = await applyParts(page, shot.team, shot.parts);
+        const ids = await timed("parts", () => applyParts(page, shot.team, shot.parts));
         console.log(`  parts ${shot.parts.tag} -> ${ids}`);
         at.parts = shot.parts.tag;
         // A parts write can move vertices the paint cache still holds a hull
         // for; the paint cursor stands, but the mesh key already changed.
       }
-      const s = await frame(page, shot);
+      if (shot.aero && at.aero !== shot.aero) {
+        const got = await timed("aero", () => applyAero(page, shot.aero));
+        console.log(`  aero ${shot.aero} -> ${got}`);
+        at.aero = shot.aero;
+      }
+      const s = await timed("frame", () => frame(page, shot));
       shots.push(s);
       console.log(`shot ${s.name} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}`);
     }
 
     const stem = teams.length === 1 ? teams[0] : "matrix";
+    if (wantSheet && shots.length) await contactSheet(shots, join(outDir, `${stem}-sheet.png`));
     const meta = join(outDir, `${stem}-angles.json`);
+    const total = +((Date.now() - t0) / 1000).toFixed(1);
     writeFileSync(meta, JSON.stringify({
-      teams, liveries, spineSides, spineLogos,
+      teams, liveries, spineSides, spineLogos, aero: aeros,
       parts: parts.map((p) => ({ tag: p.tag, kind: p.kind, overrides: p.overrides })),
-      views, framings, viewport: vp, sheetHead, shots,
-      seconds: +((Date.now() - t0) / 1000).toFixed(1),
+      views, framings, viewport: vp, backend, sheetHead, shots,
+      seconds: total, spent,
     }, null, 2));
-    console.log(`wrote ${shots.length} shot(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s + ${meta}`);
+    console.log(`wrote ${shots.length} shot(s) in ${total}s + ${meta}`);
+    // Where the time actually went, every run — the answer to "why is this slow"
+    // should never need a bespoke instrumented build.
+    console.log(`  boot ${spent.boot}s  team ${spent.team}s  paint ${spent.paint}s`
+      + `  parts ${spent.parts}s  aero ${spent.aero}s  frame ${spent.frame}s`
+      + (shots.length ? `  (${(spent.frame / shots.length).toFixed(1)}s per frame)` : ""));
   } finally {
     await browser.close();
   }
