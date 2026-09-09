@@ -170,12 +170,21 @@ try {
 
   await sleep(400);
 
+  // Soft-present blit while the loop still runs (GLX/TLX under HeadlessChrome).
+  await page.evaluate(async () => {
+    if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
+      try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try the canvas */ }
+    }
+  });
+
   // boundingBox() THROWS on timeout, it does not return null — so the full-frame
   // fallback below could never fire, and a loaded box (where the animating canvas
   // starves Playwright's stability check) failed the whole shot instead of just
   // losing the clip. Catch it and fall through: an unclipped frame still shows
   // the scene, which is the point of the tool.
-  const box = await page.locator("canvas#game").boundingBox({ timeout: 15000 })
+  const target = await page.evaluate(() =>
+    document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
+  const box = await page.locator(target).boundingBox({ timeout: 15000 })
     .catch(() => null);
   const buf = box
     ? await page.screenshot({ path: out, clip: box, timeout: 60000 })

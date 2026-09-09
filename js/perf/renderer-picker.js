@@ -334,7 +334,7 @@ function presentStatus() {
   let live = "";
   try {
     if (typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent()) {
-      live = " Live: 2D blit is painting #game.";
+      live = " Live: 2D blit is painting #game-soft.";
     }
   } catch (_) { /* no live backend yet */ }
   if (be === "webgpu") {
@@ -366,6 +366,11 @@ function presentStatus() {
     }
     return "THREE.JS AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, and stays on three WebGL2 if GPU is missing, this tab already lost WebGPU, or the browser is Safari/iOS (WebKit WebGPU drew nothing on a phone — THREE PATH: WEBGPU opts back in).";
   }
+  try {
+    if (typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent()) {
+      return "WEBGL2 soft-presents onto #game-soft under HeadlessChrome — screenshots read the 2D blit, not the WebGL swapchain." + live;
+    }
+  } catch (_) { /* no live backend yet */ }
   return "WEBGL2 paints the canvas directly. Screenshots just work.";
 }
 function paintPresent() {
@@ -388,12 +393,16 @@ function saveScreenshot() {
         try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try the canvas */ }
       }
       const g = typeof document !== "undefined" ? document.getElementById("game") : null;
+      const softEl = typeof document !== "undefined" ? document.getElementById("game-soft") : null;
       let href = null;
       const soft = typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent();
-      // Soft-present #game is the native WebGPU swapchain (often black). Prefer
-      // capturePixels (LDR copyTextureToBuffer) when the 2D blit is armed.
+      // Soft-present paints #game-soft (GLX/TLX). Prefer that toDataURL; #game is
+      // often the GPU swapchain (black under software). capturePixels is fallback.
       let capFailed = false;
-      if (soft && typeof GLX.capturePixels === "function") {
+      if (soft && softEl && typeof softEl.toDataURL === "function") {
+        try { href = softEl.toDataURL("image/png"); } catch (_) { href = null; }
+      }
+      if (!href && soft && typeof GLX.capturePixels === "function") {
         try {
           const cap = await GLX.capturePixels();
           const c = document.createElement("canvas");
@@ -404,6 +413,9 @@ function saveScreenshot() {
             href = c.toDataURL("image/png");
           }
         } catch (_) { href = null; capFailed = true; /* fall through to #game */ }
+      }
+      if (!href && softEl && typeof softEl.toDataURL === "function") {
+        try { href = softEl.toDataURL("image/png"); } catch (_) { href = null; }
       }
       if (!href && g && typeof g.toDataURL === "function") {
         try { href = g.toDataURL("image/png"); } catch (_) { href = null; }

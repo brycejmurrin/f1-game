@@ -140,15 +140,36 @@ async function captureBackend(backend) {
       await page.evaluate(() => window.__apex.snapCam());
       await sleep(250);
     }
+    // Await soft-present WHILE the loop still presents; freeze-then-wait hangs on GLX.
+    await page.evaluate(async () => {
+      if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
+        try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try the canvas */ }
+      }
+    });
     if (!live) {
       await page.evaluate(() => window.__apex.headless(true)); // stop the loop; canvas keeps the last frame
       await sleep(100);
     }
     const path = resolve(outDir, `${label}-${backend}.png`);
-    const buf = await page.locator("canvas#game").screenshot({ path, timeout: 60_000 });
+    const target = await page.evaluate(() =>
+      document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
+    const buf = await page.locator(target).screenshot({ path, timeout: 60_000 });
+    const blank = await page.evaluate((sel) => {
+      const g = document.querySelector(sel);
+      const ctx = g && g.getContext && g.getContext("2d");
+      if (!ctx || !(g.width > 0)) return false;
+      const w = Math.min(g.width | 0, 96), h = Math.min(g.height | 0, 96);
+      const id = ctx.getImageData(0, 0, w, h);
+      let max = 0;
+      for (let i = 0; i < id.data.length; i += 4) {
+        const c = id.data[i] + id.data[i + 1] + id.data[i + 2];
+        if (c > max) max = c;
+      }
+      return max < 8;
+    }, target).catch(() => false);
     shots.push({ backend, path, bytes: buf.length, state, consoleLines });
     console.log(`  ${backend}: ${path} (${(buf.length / 1024).toFixed(1)} KB) bound=${state.backend}`
-      + (buf.length < 5000 ? "  ⚠ looks blank" : ""));
+      + (blank ? "  ⚠ looks blank" : ""));
   } finally {
     await browser.close();
   }

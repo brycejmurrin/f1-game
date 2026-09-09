@@ -132,8 +132,17 @@ async function captureAttempt(page, condition, profile, outDir) {
     }, frac);
     await waitForTwoFrames(page);
 
+    // Soft-present blit while the loop still runs (GLX HeadlessChrome / TLX).
+    await page.evaluate(async () => {
+      if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
+        try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try the canvas */ }
+      }
+    });
+
     const image = join(viewDir, `${index + 1}-f${frac.toFixed(2)}.png`);
-    await page.locator("canvas#game").screenshot({ path: image, type: "png" });
+    const sel = await page.evaluate(() =>
+      document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
+    await page.locator(sel).screenshot({ path: image, type: "png" });
     const pixels = await readPngPixels(page, image);
     const metrics = measurePixels(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height, REGIONS);
     const frameState = await sampleFrameState(page);
