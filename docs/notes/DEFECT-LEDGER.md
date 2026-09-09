@@ -847,3 +847,54 @@ Deferred with reasoning, none lost:
   on the TLX backend — deciding which needs a TLX render trace, not a
   tolerance change. The other 14 TLX probes pass, including every shadow
   spec.
+
+---
+
+- **`understeer-cue` "repeats at a bounded rate" is red, and the group split is
+  what surfaced it.** `maxGap` 16 against `MAX_GAP_TICKS + 2`, with the run
+  reporting `gaps [16, 8, 7, 7]` — the STEADY STATE is 7-8 ticks, comfortably
+  inside the bound, and only the FIRST interval is late. A/B on a QUIET box
+  (loadavg 0.01): red on the session tip AND **byte-identical** red at
+  `44d07bc`, before this session's AI work — same gaps, same `speed 46.07`,
+  same `x 7.83`. Deterministic, real, and nobody's from tonight.
+
+  Worth recording WHY it appeared now: it lived in the old `test:driving`
+  group, which at 16 spec files and ~149 tests was too expensive to run, so it
+  had no recent verdict to regress from. Splitting that group into
+  `physics-core` / `collisions` / `aero` (2026-09-09) is what made it visible.
+  A group nobody can afford to run is a group that hides its own reds.
+
+  NOT fixed by moving the bound. With the steady state that healthy, widening
+  would hide the single interval that is actually odd. The open question is
+  whether the cue's FIRST repeat is genuinely slow to arm (a code defect in the
+  `uslipHapT` cooldown's initial set) or whether the test counts arm-up time as
+  repeat rate (a measurement defect) — deciding that needs the cue's own trace,
+  not a threshold.
+
+- **`garage-aero`'s two Selected-specs timeouts are a RACE with the menu flyby
+  build, and they do not reproduce off CI.** "MOVES the wing" and "WHOLE-CAR
+  preset" time out in `openGarage` waiting 20 s for `#carsetup`; the same two
+  tests, in the same gate, are the documented `1e94cdf0` incident (146 s / 125 s
+  then, 106 s / 79 s on 2026-09-09), and that fix's own header still reads
+  "UNVERIFIED IN A BROWSER".
+
+  Mechanism, from the CI page log rather than inference: `toMenu()` returns the
+  shared page to the menu, `scheduleFlybyTrack()` fires 120 ms later and calls
+  `loadTrack()` — circuit build, `maps compute bahrain`, asset pack — which
+  holds the main thread. The helper clicks `#mb-garage` into that. The log
+  stamps `maps compute bahrain` at 29.7 s and `pack loaded layers=14` at 55.6 s,
+  both AFTER their waits had already expired. It only bites on a RETURN to the
+  menu, which is why the first test on every fresh worker passes in ~1.5 s and
+  later ones on the same worker time out.
+
+  Ruled out on evidence, not assumption: view transitions (`vt()` goes direct
+  under `prefers-reduced-motion`, and `playwright.config.js` pins
+  `reducedMotion: "reduce"` in the top-level `use`, which projects merge with).
+
+  **Does not reproduce here**: 10/10 at `APEX_WORKERS=1` matching CI's own
+  config, on an idle box, twice. So a fix cannot be validated locally by
+  reproducing the failure — it has to remove the race by construction (settle
+  the flyby before the click) rather than be tuned against a red this hardware
+  can produce. Widening the 20 s wait is the wrong shape: 20 s is right for
+  what it claims to measure, and the defect is that it measures a circuit build
+  it never asked for.
