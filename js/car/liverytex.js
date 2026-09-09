@@ -1880,7 +1880,19 @@ const LiveryTex = (function () {
     // against [c1, c2] while painting it on the cover put Ferrari's yellow-
     // plated shield on its white cover at 1.22:1 — every surface this lockup
     // reaches is either coverPaint (crown, tail, flank) or finPaint (badge).
-    const lockup = markPalette(teamId, colors, [coverPaint, finPaint], false);
+    // …and a surface the car does not HAVE is not one of them. car3d builds no
+    // blade at all when finShape is "none" (`if (!ckpt && finShape !== "none")`),
+    // so REGIONS.fin and REGIONS.finBadge are texels nothing samples — and all
+    // twelve shipped cars set it. Scoring the lockup against that phantom is the
+    // same defect the crown ink had one variable down: markPalette floors
+    // against the WORST of the list, so on Cadillac — a near-black cover with a
+    // near-white fin — no mark colour clears both, the mark falls through to a
+    // substitute and `alt` collapses onto the cover. Measured: the crest paints
+    // 5 % of the crown and 0.9 % of it can be seen, against 5 %+ on every other
+    // team. A livery that actually wears a fin still resolves ONE lockup across
+    // both surfaces, which is why that list exists.
+    const finReal = (colors.finShape || "standard") !== "none";
+    const lockup = markPalette(teamId, colors, finReal ? [coverPaint, finPaint] : [coverPaint], false);
     // Sponsor names resolve here so the spine can carry the title sponsor.
     const pack = colors.sponsors && SPONSOR_PACKS[colors.sponsors];
     const names = pack || SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
