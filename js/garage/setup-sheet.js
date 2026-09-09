@@ -829,13 +829,13 @@ function buildLiveryCreator(container, team) {
       for (let i = 0; i < ctl.length; i++) ctl[i].disabled = off;
     }
   };
-  const applyPreview = () => {
+  const applyPreview = (defer3d) => {
     prev.style.background = "linear-gradient(120deg, " + d.c1 + " 0 56%, " + d.c2 + " 56% 100%)";
     prev.textContent = "";
     if (d.stripe) { const st = document.createElement("span"); st.className = "cs-liv-stripe"; st.style.background = d.stripe; prev.appendChild(st); }
     refreshPalettes();   // a slot's new colour becomes matchable from every other slot
     syncDeps();
-    livePreviewDraft(team, d);
+    defer3d ? scheduleLivPreview(team, d) : livePreviewDraft(team, d);
   };
 
   // MATCHING PALETTE. Twelve slots paint one car, and most paint jobs reuse the
@@ -884,7 +884,8 @@ function buildLiveryCreator(container, team) {
     const inp = document.createElement("input"); inp.type = "color";
     inp.value = /^#[0-9a-fA-F]{6}$/.test(d[key]) ? d[key] : "#000000";
     if (allowNone && !d[key]) inp.classList.add("cs-liv-off");
-    inp.oninput = () => { d[key] = inp.value; inp.classList.remove("cs-liv-off"); applyPreview(); };
+    inp.oninput = () => { d[key] = inp.value; inp.classList.remove("cs-liv-off"); applyPreview(true); };
+    inp.onchange = flushLivPreview;
     r.appendChild(inp);
     if (allowNone) {
       const off = document.createElement("button"); off.type = "button"; off.className = "cs-liv-ed-none"; off.textContent = "NONE";
@@ -1056,6 +1057,27 @@ let _livSeq = 0;
 function livIdCounter() { _livSeq = (_livSeq + 1) % 1000; return String(Date.now()) + _livSeq; }
 
 let _livPreviewKey = "";
+let _livPreviewTimer = null, _livPreviewPending = null;
+function cancelLivPreview() {
+  if (_livPreviewTimer != null) clearTimeout(_livPreviewTimer);
+  _livPreviewTimer = null;
+  _livPreviewPending = null;
+}
+function scheduleLivPreview(team, d) {
+  if (_livPreviewTimer != null) clearTimeout(_livPreviewTimer);
+  _livPreviewPending = { team, d };
+  _livPreviewTimer = setTimeout(() => {
+    const p = _livPreviewPending;
+    _livPreviewTimer = null;
+    _livPreviewPending = null;
+    if (p) livePreviewDraft(p.team, p.d);
+  }, 75);
+}
+function flushLivPreview() {
+  const p = _livPreviewPending;
+  cancelLivPreview();
+  if (p) livePreviewDraft(p.team, p.d);
+}
 function livePreviewDraft(team, d) {
   const key = team.id + "|" + JSON.stringify(d);
   if (key === _livPreviewKey) return;
@@ -1069,6 +1091,7 @@ function livePreviewDraft(team, d) {
 }
 
 function endLivPreview(team) {
+  cancelLivPreview();
   _livPreviewKey = "";
   G.livDraftOverride = null;
   if (invalidateDecalTextures) invalidateDecalTextures(team.id);
