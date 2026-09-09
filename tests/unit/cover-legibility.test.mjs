@@ -44,6 +44,17 @@
  * clear with room to spare while still being 3x what the failures measure.
  * A region NOTHING paints is skipped: `none` is a legitimate design.
  *
+ * NOT the same question as livery-contrast.test.mjs, which arrived alongside
+ * this and looks close enough to delete one of them. That one asks whether an
+ * op owning a LARGE SHARE of a panel separates from what is directly UNDER it,
+ * and catches paint landing on paint — a saddle colour drawn onto itself, which
+ * this file scores as perfectly readable because both of them separate from the
+ * car. This one asks whether enough of the region can be seen AT ALL against
+ * the body, which is the only way to catch what its 15 % share floor excludes
+ * by design: the thin keyline, the wordmark, the number. Each of the two
+ * defects fixed here is invisible to that sweep — carbon is not in its fast
+ * slice, and lettering never reaches its share floor. Keep both.
+ *
  * Run: node --test tests/unit/cover-legibility.test.mjs
  */
 import { test } from "node:test";
