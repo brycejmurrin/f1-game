@@ -2550,3 +2550,20 @@ headroom.
   A GPU-mesh leak guard is worth a line here: the field cache was the one
   cache in the tree with no cap, no LRU and no free path until recently, and
   this owner has had iOS memory kills.
+
+## 2026-09-09 — cssClasses 545 -> 546
+
+One class, `.cs-liv-ed-sec`: the zone headings that group the paint editor's
+colour rows (BODY / ENGINE COVER / WINGS & TAIL / TEAM MARK / COCKPIT). The
+sheet reached twenty-three colour rows when the five formerly-derived surfaces
+became picks, and a flat run that long stops being a list — "which of these is
+the one on the cover crown?" should be answered by the order, not by hovering
+every row for its tooltip.
+
+Reusing `.cs-liv-ed-row` was tried first and does not work: a heading needs the
+full grid width, and `.cs-liv-ed-lbl` is `flex: 0 0 68px`, so "ENGINE COVER"
+clips. The heading also carries a rule and spans `1 / -1` so it can never share
+a line with a row — neither is expressible with the row classes.
+
+The element is inert by construction: `role="presentation"`, no focus, no
+pointer target. It changes the reading of the sheet and nothing else.
