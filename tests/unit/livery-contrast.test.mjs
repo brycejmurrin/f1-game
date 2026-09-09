@@ -322,8 +322,9 @@ test("the wrap's flank badge is inked against the cover it lands on", () => {
   // The bug it pins: the fallback lockup (every team whose crest has no single
   // forward-facing traced path, i.e. all but Red Bull) was scored against the
   // pair [sun, cover] that the traced BULL gets, because the bull straddles the
-  // sun disc. This badge does not: it is centred at v 0.50 and the sun's flank
-  // ellipse bottoms out at v 0.28. Asking one ink to clear a light sun AND a
+  // sun disc. This badge does not: it spans v BULL.top .. BULL.top + BULL.h and
+  // the sun's flank ellipse bottoms out at v 0.277, so it never reaches the
+  // disc at any u. Asking one ink to clear a light sun AND a
   // dark cover is unsatisfiable, so the mark FAILED MARK_FLOOR on every one of
   // those teams and markPalette fell back on the thing it falls back on: a
   // HALO. Cadillac's crest went out near-black (1.04:1 on its own black cover)

@@ -2082,19 +2082,27 @@ const LiveryTex = (function () {
         // …and this badge is NOT the bull, so it does not get the bull's field.
         // `sunLockup` pairs the sun with the cover because a traced bull is a
         // metre-long silhouette that genuinely straddles the disc. This one is
-        // a badge centred at v 0.50 while the sun's flank ellipse bottoms out
-        // at v = SUN.r / FLANK.sLen − sTop/sLen = 0.28 on the flank's own
-        // centreline and less either side of it — so at the badge's own u it
-        // clears the sun by a third of the flank and lands on BARE COVER.
+        // a badge spanning v BULL.top .. BULL.top + BULL.h = 0.30 .. 0.82, and
+        // the sun's flank ellipse bottoms out at v = SUN.r / FLANK.sLen −
+        // sTop/sLen = 0.277 on the flank's own centreline and less either side
+        // of it — so the badge never reaches the sun at ANY u and lands
+        // entirely on BARE COVER. (It was v 0.10 .. 0.90 when this was first
+        // measured, where the box's top-front corner could still graze the
+        // disc; pulling the mark down to clear the sidepod removed even that.
+        // RE-DERIVE THIS LINE IF BULL MOVES AGAIN — it is the whole argument
+        // for the field below.)
         // Scoring it against both anyway asks one ink to clear a light sun AND
         // a dark cover, which is unsatisfiable, and markPalette answers an
-        // unsatisfiable floor with a mid-tone compromise that reads on neither:
-        // Cadillac's crest came out at 1.25 against its own black cover and
-        // Mercedes' star at 1.59 against its silver, both under the 2.0 this
-        // very branch declares as MARK_ON_BODY (measured on the atlas with
-        // tools/car/spine-station.mjs, 2026-09-09 — nine teams were fine and
-        // those two were the pair whose sun and cover sit at opposite ends of
-        // the luminance range, which is exactly when the constraint splits).
+        // unsatisfiable floor by falling back on a HALO: the mark went out
+        // near-black on Cadillac's black cover (1.04) inside a white glow, and
+        // white on Mercedes' silver (1.59) inside a dark one. Legible, and the
+        // wrong car — what is lost is the brand colour, not the visibility.
+        // Scored on the cover alone the floor is satisfiable, Cadillac wears
+        // its gold at 8.43 and Mercedes its dark star at 11.39, and no halo is
+        // drawn at all. (Atlas + the real garage, 2026-09-09; re-measured on
+        // the merged tree after the mark moved. Nine teams were unaffected —
+        // the split only opens when a team's sun and cover sit at opposite ends
+        // of the luminance range.)
         const badgeLockup = markPalette(teamId, colors, [coverPaint], false, { noPlate: true });
         eachFlank((F) => {
           ctx.save();
