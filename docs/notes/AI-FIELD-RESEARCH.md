@@ -190,6 +190,43 @@ this is the trap the pace instrument alone walks into — `ai-pace.mjs` and
 geometry. That gap is why this reached a deploy gate instead of being caught at
 my desk.
 
+## Which AI instrument can actually resolve a change (2026-09-09)
+
+Measured with `--runs 5`, and the two tools are not in the same league.
+
+**`ai-line.mjs` — apex depth is TIGHT.** Five seeds at monza, field rebuilt each
+run:
+
+| corner | apex median | range |
+|---|---|---|
+| s=2068, len 128 m | 6.03 m | **0.042 m** |
+| s=2451, len 52 m | 3.69 m | **0.185 m** |
+| s=4685, len 288 m | 5.97 m | **0.022 m** |
+
+**`ai-field.mjs` — pass counts are WIDE.** Three seeds, 60 s at monza: settled
+passes 8 **[7–29]**, flips 25 [15–52].
+
+So the aero term's 0.60 m at s=2451 was **over 3× the widest re-race range**
+there, and 15–30× the range at the other two corners: unambiguous, and the
+paired A/B that caught it now has an error bar under it rather than an
+assertion. The pass-hysteresis "27 → 19", by contrast, sits inside a four-fold
+spread and remains unproven.
+
+The practical rule, and it inverts the order things were reached in today:
+**for a change to the AI's DRIVING MODEL, measure the line first.** It resolves
+sub-100 mm moves on a handful of runs. Field behaviour needs many runs to say
+anything about a small effect, and lap time (`ai-pace.mjs`) can move the right
+way while the driving gets worse — which is exactly what happened.
+
+One thing the range exposes that is NOT a defect to fix: `ai-racecraft-vm`'s
+apex threshold is 3.5 m, and s=2451 measures 3.69 m median in isolation with a
+0.185 m range — roughly one range-width of headroom, the tightest of the three
+corners by an order of magnitude. (In-suite it reads higher, ~4.07 m, because
+the spec runs after three other tests with the RNG stream advanced.) A future
+change could trip that corner without being wrong. The answer is to measure with
+`ai-line --runs 5` before concluding, NOT to widen the threshold — it is
+measuring a real property and it caught a real defect today.
+
 ## A completed pass locks out the counter-attack (2026-09-09, SHIPPED)
 
 Independent of the reverted change above, and kept. Nothing in the pass
