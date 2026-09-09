@@ -137,5 +137,11 @@ describe("the interior gate on a cleared-buffer frame", () => {
       "probe-page must not read the live WebGL canvas back — that is the cleared buffer");
     assert.doesNotMatch(frame, /gapSample/,
       "the drawImage-fed gapSample field is gone; nothing may depend on it again");
+    const shot = probe.slice(probe.indexOf("export async function screenshotGameCanvas"),
+      probe.indexOf("export async function screenshotGameCanvas") + 1800);
+    const awaitAt = shot.indexOf("GLX.awaitSoftPresent");
+    const freezeAt = shot.indexOf("headless(true)");
+    assert.ok(awaitAt >= 0 && freezeAt > awaitAt,
+      "awaitSoftPresent must run while the loop still presents; freeze-then-wait hangs on GLX");
   });
 });

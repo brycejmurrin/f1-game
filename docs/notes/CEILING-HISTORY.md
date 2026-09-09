@@ -2592,3 +2592,12 @@ that owns "what the garage capture sees". TLX already had the blit; this
 raise is GLX catching up so garage shots on the default renderer are not
 black.
 
+## 2026-09-09 — GLX awaitSoftPresent waiter/timeout
+
+`js/render/glx/glx.js` lines 2482 -> **2486** (+4). The first HeadlessChrome
+blit shipped `push(wrap)` with timeout `indexOf(waiter)`, so a timeout left
+the waiter on the list forever, and an early return on `gen>0` made
+SAVE SCREENSHOT after a camera move identical to the previous still. Matching
+TLX (wait for `gen > start`, push the same function the timeout splices)
+costs four lines of comments naming the two defects.
+
