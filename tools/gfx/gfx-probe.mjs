@@ -455,22 +455,16 @@ async function runProbeAttempt(attemptNum) {
           await GLX.awaitSoftPresent(15000);
         }
       }));
-      // Same #game-soft || #game selection as the WebGPU branch — GLX soft-present
-      // inserts the sibling overlay under HeadlessChrome; locator(#game) alone
-      // can miss the blit / hit stability timeouts on a mutating 2D canvas.
-      await retryStep("screenshot-canvas", async () => {
-        const soft = await page.evaluate(() => !!document.getElementById("game-soft"));
-        if (soft) {
-          const b64 = await page.evaluate(() => {
-            const g = document.getElementById("game-soft");
-            if (!g || typeof g.toDataURL !== "function") throw new Error("game-soft has no toDataURL");
-            return g.toDataURL("image/png").split(",")[1];
-          });
-          writeFileSync(canvasPath, Buffer.from(b64, "base64"));
-          return;
-        }
-        await page.locator("#game").screenshot({ path: canvasPath, type: "png", timeout: 60000 });
-      });
+      // Same overlay the WGX/TLX path reads. HeadlessChrome GLX blits onto
+      // #game-soft; locator("#game").screenshot() is the uncomposited GPU
+      // canvas (black gap this tool exists to catch).
+      const canvasB64Glx = await retryStep("screenshot-canvas", () => page.evaluate(() => {
+        const g = document.getElementById("game-soft") || document.getElementById("game");
+        if (!g || typeof g.toDataURL !== "function") throw new Error("presented canvas has no toDataURL");
+        return g.toDataURL("image/png").split(",")[1];
+      }));
+      writeFileSync(canvasPath, Buffer.from(canvasB64Glx, "base64"));
+      log("canvas", "visible presented canvas.png saved");
       try {
         const frameCap = await retryStep("capture-pixels", () => page.evaluate(async () => {
           if (typeof GLX === "undefined" || !GLX.capturePixels) {

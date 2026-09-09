@@ -647,6 +647,18 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   width: 100%; height: 44px; border-radius: var(--r-md); align-self: stretch;
 }
 .cs-liv-ed-row { display: flex; align-items: center; gap: calc(var(--gap) * 0.8); min-width: 0; }
+/* Zone heading in the paint editor. The sheet carries twenty-three colour rows
+   and a flat run that long reads as one undifferentiated list, so the rows are
+   grouped by the surface they paint (BODY / ENGINE COVER / WINGS & TAIL / TEAM
+   MARK / COCKPIT). Inert by construction: role="presentation", no focus, no
+   pointer target — it changes the reading order and nothing else. Spans the
+   grid so a heading never shares a line with a row. */
+.cs-liv-ed-sec {
+  grid-column: 1 / -1; font-size: var(--fs-micro); font-weight: 800;
+  letter-spacing: var(--ls-4); color: var(--dim); opacity: 0.75;
+  padding-top: calc(var(--gap) * 0.6); border-bottom: 1px solid var(--plate-line);
+}
+.cs-liv-ed-sec:first-child { padding-top: 0; }
 .cs-liv-ed-lbl {
   flex: 0 0 68px; font-size: var(--fs-micro); font-weight: 800; letter-spacing: var(--ls-4); color: var(--dim);
 }

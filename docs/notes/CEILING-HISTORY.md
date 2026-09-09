@@ -2550,3 +2550,54 @@ headroom.
   A GPU-mesh leak guard is worth a line here: the field cache was the one
   cache in the tree with no cap, no LRU and no free path until recently, and
   this owner has had iOS memory kills.
+
+## 2026-09-09 — cssClasses 545 -> 546
+
+One class, `.cs-liv-ed-sec`: the zone headings that group the paint editor's
+colour rows (BODY / ENGINE COVER / WINGS & TAIL / TEAM MARK / COCKPIT). The
+sheet reached twenty-three colour rows when the five formerly-derived surfaces
+became picks, and a flat run that long stops being a list — "which of these is
+the one on the cover crown?" should be answered by the order, not by hovering
+every row for its tooltip.
+
+Reusing `.cs-liv-ed-row` was tried first and does not work: a heading needs the
+full grid width, and `.cs-liv-ed-lbl` is `flex: 0 0 68px`, so "ENGINE COVER"
+clips. The heading also carries a rule and spans `1 / -1` so it can never share
+a line with a row — neither is expressible with the row classes.
+
+The element is inert by construction: `role="presentation"`, no focus, no
+pointer target. It changes the reading of the sheet and nothing else.
+## 2026-09-09 — shadow casters drop helmet paint-splits
+
+`js/game.js` 10322 -> **10328** lines / 5581 -> **5585** code; `js/car/car3d.js`
+4100 -> **4107**. The 24h helmet work fused a paint-edge-split lid into the
+body VAO (default 5360 tris, McLaren #1 6398). Colour draws need that. The
+sun/lamp **shadow** path binds `teamMesh(team)` with no car — a depth map —
+and was rasterising the same split geometry (~25k verts/caster, comment still
+said 11k). `Helmets.build({ maxSplit: 0 })` plus skipping the in-tub torso
+on `opts.silhouette` brings the default caster to 7948 tris / 21974 verts
+(measured). The colour body is unchanged. The raise is the wiring
+(`silhouette: !car`, a distinct `:sh` cache key so a ghost cannot inherit the
+cheap lid) and the `sil` branch in car3d; helmets.js grew comments only.
+
+## 2026-09-09 — GLX HeadlessChrome soft-present
+
+`js/render/glx/glx.js` lines 2357 -> **2482** (+125). HeadlessChrome / SwiftShader
+leaves the WebGL canvas uncomposited for CDP screenshots even with
+`preserveDrawingBuffer`: `readPixels` has the car, `chrome_take_screenshot`
+is a black gap. GLX now 2D-blits onto `#game-soft` under the same UA sniff
+WGX already used (`softPresent` / `softPresentState` / `awaitSoftPresent`).
+The overlay and the blit live in the presenter — there is no second file
+that owns "what the garage capture sees". TLX already had the blit; this
+raise is GLX catching up so garage shots on the default renderer are not
+black.
+
+## 2026-09-09 — GLX awaitSoftPresent waiter/timeout
+
+`js/render/glx/glx.js` lines 2482 -> **2487** (+5). The first HeadlessChrome
+blit shipped `push(wrap)` with timeout `indexOf(waiter)`, so a timeout left
+the waiter on the list forever, and an early return on `gen>0` made
+SAVE SCREENSHOT after a camera move identical to the previous still. Matching
+TLX (wait for `gen > start`, push the same function the timeout splices)
+costs five split-newline lines, mostly comments naming the two defects.
+

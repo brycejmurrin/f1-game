@@ -395,13 +395,13 @@ function saveScreenshot() {
       const g = typeof document !== "undefined" ? document.getElementById("game") : null;
       const softEl = typeof document !== "undefined" ? document.getElementById("game-soft") : null;
       let href = null;
-      const soft = typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent();
       // Soft-present paints #game-soft (GLX/TLX). Prefer that toDataURL; #game is
       // often the GPU swapchain (black under software). capturePixels is fallback.
-      let capFailed = false;
-      if (soft && softEl && typeof softEl.toDataURL === "function") {
+      if (softEl && softEl.width > 0 && typeof softEl.toDataURL === "function") {
         try { href = softEl.toDataURL("image/png"); } catch (_) { href = null; }
       }
+      const soft = typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent();
+      let capFailed = false;
       if (!href && soft && typeof GLX.capturePixels === "function") {
         try {
           const cap = await GLX.capturePixels();
@@ -509,9 +509,10 @@ function initPresentControls() {
   // injected at all rather than shipped inert. Derived from the roster, like the
   // stops above, so they return with the backends and need no edit here.
   //
-  // SAVE SCREENSHOT and COPY DIAG deliberately STAY: saveScreenshot() feature-
-  // tests GLX.awaitSoftPresent / GLX.softPresent, which real GLX does not carry,
-  // and falls through to a plain canvas capture — and the diag copy is the phone
+  // SAVE SCREENSHOT and COPY DIAG deliberately STAY: saveScreenshot() waits on
+  // GLX.awaitSoftPresent when the bound backend has it (GLX HeadlessChrome,
+  // WGX, TLX), prefers #game-soft when that overlay exists, then falls through
+  // to #game.toDataURL / capturePixels — and the diag copy is the phone
   // bug-report path, which is backend-agnostic.
   const backendTools = hasBackendFiles("three") || hasBackendFiles("webgpu");
   const pathBtn = backendTools ? addBtn("pm-three-path",
@@ -519,7 +520,7 @@ function initPresentControls() {
   const shotBtn = backendTools ? addBtn("pm-screenshots",
     "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.") : null;
   const saveBtn = addBtn("pm-save-shot",
-    "Download the visible #game canvas as a PNG. Waits for the 2D blit first (WGX or TLX-WebGPU).");
+    "Download the visible frame as a PNG. Waits for the 2D blit first, then reads #game-soft when that overlay exists (GLX HeadlessChrome / WGX / TLX).");
   // The label was only ever written by saveScreenshot()'s done() — the button
   // painted as an EMPTY plate until its first click (screenshot, 2026-09-02).
   saveBtn.textContent = "SAVE SCREENSHOT";

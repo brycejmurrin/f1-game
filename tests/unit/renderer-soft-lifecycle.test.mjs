@@ -136,8 +136,8 @@ test("TLX post fallback invalidates reads and disposes the retained chain", () =
   assert.match(read("js/render/three/tsl-post.js"), /ctx\.trackMaterial\(m\)/);
 });
 
-test("TLX and WGX remove timed-out software-present waiters", () => {
-  for (const file of ["js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
+test("TLX, WGX, and GLX remove timed-out software-present waiters", () => {
+  for (const file of ["js/render/three/tlx.js", "js/render/webgpu/wgx.js", "js/render/glx/glx.js"]) {
     const src = read(file);
     const at = src.indexOf("awaitSoftPresent(timeoutMs)");
     assert.ok(at >= 0, file + " exposes awaitSoftPresent");

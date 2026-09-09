@@ -80,7 +80,15 @@ export function scan(root = ROOT) {
   const shell = fs.readFileSync(path.join(root, "index.html"), "utf8");
   // Declared: the shell, plus every id JS creates at runtime — an `.id = "x"`
   // assignment or an id="" inside an HTML string it injects.
-  const declared = new Set([...shell.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  // Count shell id= occurrences so a duplicate id (two elements, one name) is
+  // visible — document.getElementById only ever returns the first, which is
+  // how pm-brakecue once hid a dead steering slider behind a set-row div.
+  const shellIds = [...shell.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+  const shellCounts = new Map();
+  for (const id of shellIds) shellCounts.set(id, (shellCounts.get(id) || 0) + 1);
+  const duplicates = [...shellCounts.entries()].filter(([, n]) => n > 1)
+    .map(([id, n]) => ({ id, count: n })).sort((a, b) => a.id.localeCompare(b.id));
+  const declared = new Set(shellIds);
   const files = jsFiles(path.join(root, "js"));
   for (const f of files) {
     const src = fs.readFileSync(f, "utf8");
@@ -106,8 +114,8 @@ export function scan(root = ROOT) {
 
   const missing = [...read.keys()].filter((id) => !declared.has(id) && !(id in RUNTIME_IDS)).sort()
     .map((id) => ({ id, site: read.get(id) }));
-  return { declared, read, missing, dynamic,
-    counts: { declared: declared.size, read: read.size, missing: missing.length, dynamic: dynamic.length } };
+  return { declared, read, missing, dynamic, duplicates,
+    counts: { declared: declared.size, read: read.size, missing: missing.length, dynamic: dynamic.length, duplicates: duplicates.length } };
 }
 
 /** The ratcheted number: lookups whose id cannot be known without running the code. */
@@ -116,17 +124,25 @@ export const dynamicIdReads = (root = ROOT) => scan(root).dynamic.length;
 function main() {
   const r = scan();
   if (process.argv.includes("--json")) {
-    console.log(JSON.stringify({ ok: !r.missing.length, missing: r.missing, dynamic: r.dynamic, counts: r.counts }, null, 2));
-    process.exitCode = r.missing.length ? 1 : 0;
+    console.log(JSON.stringify({
+      ok: !r.missing.length && !r.duplicates.length,
+      missing: r.missing, duplicates: r.duplicates, dynamic: r.dynamic, counts: r.counts,
+    }, null, 2));
+    process.exitCode = (r.missing.length || r.duplicates.length) ? 1 : 0;
     return;
   }
   for (const { id, site } of r.missing) {
     console.log(`MISSING  "${id}" is looked up at ${site} but no element declares it`);
   }
+  for (const { id, count } of r.duplicates) {
+    console.log(`DUP  id="${id}" appears ${count} times in index.html — getElementById returns only the first`);
+  }
   console.log(`shell-ids: ${r.counts.read} ids looked up by literal, ${r.counts.declared} declared, ` +
-    `${r.counts.dynamic} built from variables (reported, not checked)`);
+    `${r.counts.dynamic} built from variables (reported, not checked)` +
+    (r.counts.duplicates ? `, ${r.counts.duplicates} duplicated` : ""));
   if (r.missing.length) console.log(`\n${r.missing.length} MISSING — a lookup that returns null, and most call sites dereference immediately.`);
-  process.exitCode = r.missing.length ? 1 : 0;
+  if (r.duplicates.length) console.log(`\n${r.duplicates.length} DUPLICATE — two elements, one name; the later one is unreachable by id.`);
+  process.exitCode = (r.missing.length || r.duplicates.length) ? 1 : 0;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

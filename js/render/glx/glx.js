@@ -511,9 +511,11 @@ const GLX = (function () {
   function awaitSoftPresent(timeoutMs) {
     if (!_softPresent || !_displayCtx) return Promise.resolve(_softBlitGen);
     // Wait for a NEWER blit, not the last one already on the overlay.
-    // Early return on gen>0 made SAVE SCREENSHOT after a camera move
-    // byte-identical to the previous still (same class as TLX/WGX 2026-09-03).
-    // Timeout must splice the same function push() stored.
+    // The wrap/indexOf(waiter) mismatch used to leave timed-out waiters on
+    // the list forever, and an early return on gen>0 made SAVE SCREENSHOT
+    // after a camera move byte-identical to the previous still (same class
+    // as TLX/WGX 2026-09-03). Timeout must splice the same function push()
+    // stored — see renderer-soft-lifecycle.
     const start = _softBlitGen;
     const ms = timeoutMs == null ? 8000 : timeoutMs;
     return new Promise(function (resolve, reject) {

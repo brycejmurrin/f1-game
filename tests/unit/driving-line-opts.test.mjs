@@ -52,22 +52,37 @@ function load({ stored = {}, readyState = "complete" } = {}) {
 
 test("every row it claims is a real set-row in the shell, and it claims all three", () => {
   const { rows } = load();
-  assert.deepEqual([...rows.keys()].sort(), ["pm-brakecue", "pm-linecolor", "pm-lineopacity"]);
+  assert.deepEqual([...rows.keys()].sort(), ["pm-linebrakecue", "pm-linecolor", "pm-lineopacity"]);
   for (const id of rows.keys()) {
     assert.ok(SHELL.includes(`id="${id}"`), `${id} must exist in index.html`);
     assert.ok(SHELL.includes(`id="${id}-sel"`), `${id}-sel must exist — SettingRow needs the select`);
   }
+  // The steering slider keeps id="pm-brakecue" (a range input). Sharing that
+  // name with this set-row made getElementById return the wrong node.
+  assert.ok(SHELL.includes('id="pm-brakecue"'), "steer BRAKE CUE range keeps pm-brakecue");
+  assert.ok(!SHELL.includes('id="pm-brakecue" class="set-row"'),
+    "the set-row must not reuse the slider id");
 });
 
 test("the stored values reach DrivingLine AT EVAL, before any DOM event", () => {
   // readyState "loading" means initUI has NOT run — the restore must have
   // happened anyway, because the first frame can precede DOMContentLoaded work.
+  // Primary key is lineBrakeCue (NOT brakeCue — that is the steering slider).
   const { M, line, rows } = load({ readyState: "loading",
-    stored: { drivingLinePalette: "safe", drivingLineOpacity: "solid", brakeCue: "on" } });
+    stored: { drivingLinePalette: "safe", drivingLineOpacity: "solid", lineBrakeCue: "on" } });
   assert.equal(rows.size, 0, "precondition: the UI has not been wired yet");
   assert.equal(line._palette, "safe", "palette restored at eval");
   assert.equal(line._opacity, "solid", "opacity restored at eval");
   assert.equal(M.brakeCue(), true, "the cue flag is read at eval too");
+});
+
+test("a pre-rename string under brakeCue still restores the cue at eval", () => {
+  // Legacy carry-over: only a STRING "on" counts. A number there is the
+  // steering panel's notch and must not flip this assist on.
+  const { M } = load({ readyState: "loading", stored: { brakeCue: "on" } });
+  assert.equal(M.brakeCue(), true, "legacy string on → cue on");
+  const { M: Mnum } = load({ readyState: "loading", stored: { brakeCue: 4 } });
+  assert.equal(Mnum.brakeCue(), false, "legacy number is the slider, not this flag");
 });
 
 test("an absent store gives the shipped defaults, and BRAKE CUE ships OFF", () => {
@@ -88,14 +103,45 @@ test("each row round-trips through the store under its own key", () => {
   assert.equal(line._opacity, "subtle");
   assert.equal(written.drivingLineOpacity, "subtle");
 
-  assert.equal(rows.get("pm-brakecue").read(), "off");
-  rows.get("pm-brakecue").write("on");
+  assert.equal(rows.get("pm-linebrakecue").read(), "off");
+  rows.get("pm-linebrakecue").write("on");
   assert.equal(M.brakeCue(), true);
-  assert.equal(written.brakeCue, "on", "stored as the string the loader reads back");
-  assert.equal(rows.get("pm-brakecue").read(), "on");
-  rows.get("pm-brakecue").write("off");
+  // `lineBrakeCue`, NOT `brakeCue`: that key belongs to the steering panel's
+  // 1-10 slider (js/input/steer-tuning.js) and both modules owned it with
+  // incompatible types until 2026-09-09. The store JSON-parses, so each read
+  // the other's write back at full type and both settings broke. This assertion
+  // is what stops the collision coming back — writing the shared key again
+  // fails here. The set-row id is pm-linebrakecue (not pm-brakecue) for the
+  // same reason: the slider keeps that id.
+  assert.equal(written.lineBrakeCue, "on", "stored as the string the loader reads back");
+  assert.equal(written.brakeCue, undefined, "must NOT write the steering slider's key");
+  assert.equal(rows.get("pm-linebrakecue").read(), "on");
+  rows.get("pm-linebrakecue").write("off");
   assert.equal(M.brakeCue(), false);
-  assert.equal(written.brakeCue, "off");
+  assert.equal(written.lineBrakeCue, "off");
+});
+
+test("the legacy shared key is honoured as a flag, never as the slider's notch", () => {
+  // A player who set this before the rename has it under `brakeCue`, so a
+  // STRING there still carries over.
+  const carried = load({ stored: { brakeCue: "on" } });
+  assert.equal(carried.M.brakeCue(), true, "a legacy string flag still restores");
+
+  // ...but a NUMBER there is the steering slider's notch and never said
+  // anything about this switch. This is the half of the defect that silently
+  // switched an assist ON from another panel's setting.
+  for (const notch of [1, 5, 10]) {
+    const n = load({ stored: { brakeCue: notch } });
+    assert.equal(n.M.brakeCue(), false, `slider notch ${notch} must not arm the cue`);
+  }
+
+  // The new key wins over a stale legacy value, in both directions.
+  const fresh = load({ stored: { brakeCue: "on", lineBrakeCue: "off" } });
+  assert.equal(fresh.M.brakeCue(), false, "the new key is the truth once written");
+  // ...and the other way too: a stale legacy "off" must not veto a new "on".
+  // One direction alone passes for a loader that simply ignores the new key.
+  const on = load({ stored: { brakeCue: "off", lineBrakeCue: "on" } });
+  assert.equal(on.M.brakeCue(), true, "the new key wins in both directions");
 });
 
 test("it wires on DOMContentLoaded when the document is still loading", () => {

@@ -86,7 +86,9 @@ const PSEUDO_CATS = ["team", "tune", "livery"];
 // copy list are the other two spellings of these keys; team-livery.test.mjs
 // holds all three together.
 const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo",
-                          "rearWing", "cover", "spineTint", "sideTint", "fin", "finArt", "logo", "logo2", "logo3"];
+                          "rearWing", "cover", "spineTint", "sideTint", "sunTint",
+                          "crestInk", "bandTint2", "plateTint", "plateInk",
+                          "fin", "finArt", "logo", "logo2", "logo3"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
@@ -113,6 +115,11 @@ const LIV_ROW_HINT = {
   cover: "ENGINE COVER — airbox, roll structure, cover loft and snorkel. Unset = the bodywork colour.",
   spineTint: "SPINE TINT — the SPINE TOP band on the cover crown, and the saddle's flank half, ALONE. BODY STRIPE above runs the whole spine including the nose, so it cannot paint a dark band on a light nose. Unset = BODY STRIPE, else DETAIL.",
   sideTint: "SIDE TINT — the SPINE SIDE band designs (SPLIT, BARS, SLASH) on the cover flank, ALONE. A separate zone from SPINE TINT: with SPINE TOP on SADDLE the tint paints the flank these sit on, so one colour cannot serve both. Unset = derived from the livery and checked against the flank.",
+  sunTint: "SUN — the WRAP design's sun disc, over the crown, both cover flanks and the airbox. Its own row because SPINE TINT used to paint this too: one field meant a band on most SPINE TOP designs and the sun on WRAP, so choosing WRAP repurposed a colour picked for a band. Unset = SPINE TINT, else the mark's plate colour.",
+  crestInk: "CREST INK — the crown's LETTERING: the wordmark, the number, CARBON's keylines, the trim on PANEL and STRIPE, and the flank marks that share it. Unset = picked automatically to contrast with ENGINE COVER.",
+  bandTint2: "2ND BAND — the TRICOLOUR design's second band. Only one of its two bands was ever choosable and the other was derived, which is how a tricolour could come out one colour repeated. Unset = derived against both the cover and the first band.",
+  plateTint: "PLATE PANEL — the board SPINE SIDE's PLATE design paints the number on. Unset = BODY STRIPE or DETAIL, re-picked to separate from the flank.",
+  plateInk: "PLATE NUMBER — the number ON that board. Unset = PRIMARY where it reads there, else the automatic ink.",
   wing: "WINGS — the front and rear FLAPS. Unset = ACCENT.",
   rearWing: "REAR WING — the rear mainplane block. Unset = ACCENT.",
   fin: "TAIL FIN — the shark-fin plate. Unset = ACCENT. Needs a FIN SHAPE other than NONE.",
@@ -890,6 +897,17 @@ function buildLiveryCreator(container, team) {
     r.appendChild(pal);
     return r;
   };
+  // GROUPED BY THE ZONE EACH ROW PAINTS. The sheet is twenty-three colour rows
+  // now, and a flat list that long stops being a list — "which of these is the
+  // one on the cover crown?" is a question the order should answer, not the
+  // hover text. The headings are inert labels, so nothing about focus order,
+  // the draft or the save changes; only the reading does.
+  const section = (label) => {
+    const r = document.createElement("div"); r.className = "cs-liv-ed-sec";
+    r.textContent = label; r.setAttribute("role", "presentation");
+    return r;
+  };
+  wrap.appendChild(section("BODY"));
   wrap.appendChild(colorRow("PRIMARY", "c1", false));
   wrap.appendChild(colorRow("ACCENT", "c2", false));
   wrap.appendChild(colorRow("BODY STRIPE", "stripe", true));      // full spine: nose → engine cover
@@ -897,13 +915,23 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("DETAIL", "accent", true));   // tertiary paint on flashes/trim/pinstripe
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
+  wrap.appendChild(section("ENGINE COVER"));
   wrap.appendChild(colorRow("ENGINE COVER", "cover", true));   // the airbox, roll hoop and cover top
   // SPINE TINT colours the SPINE TOP band alone. BODY STRIPE above runs the
   // whole spine including the nose, so it cannot say "dark band, light nose".
   wrap.appendChild(colorRow("SPINE TINT", "spineTint", true));
   wrap.appendChild(colorRow("SIDE TINT", "sideTint", true));
+  // The four surfaces the crown and flank used to DERIVE. Each is a pick now,
+  // and each falls back to exactly what it computed before when left unset, so
+  // a livery that never touches these renders identically.
+  wrap.appendChild(colorRow("SUN", "sunTint", true));          // the WRAP design's disc
+  wrap.appendChild(colorRow("CREST INK", "crestInk", true));   // wordmark / number / keylines
+  wrap.appendChild(colorRow("2ND BAND", "bandTint2", true));   // the TRICOLOUR's other band
+  wrap.appendChild(colorRow("PLATE PANEL", "plateTint", true));
+  wrap.appendChild(colorRow("PLATE NUMBER", "plateInk", true));
   // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
   // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
+  wrap.appendChild(section("WINGS & TAIL"));
   const wingRow = colorRow("WINGS", "wing", true), rearWingRow = colorRow("REAR WING", "rearWing", true);
   wrap.appendChild(wingRow); wrap.appendChild(rearWingRow);
   const flapsPainted = () => (d.wingCarbon || "paint") !== "carbon";
@@ -921,7 +949,9 @@ function buildLiveryCreator(container, team) {
     ? LiveryTex.markSlots(team.id)
     : [{ key: "logo", label: "TEAM LOGO" }, { key: "logo2", label: "LOGO DETAIL" },
        { key: "logo3", label: "OUTLINE" }];
+  wrap.appendChild(section("TEAM MARK"));
   for (const slot of mSlots) wrap.appendChild(colorRow(slot.label, slot.key, true));
+  wrap.appendChild(section("COCKPIT"));
   wrap.appendChild(colorRow("HALO", "halo", true));
   // One pill row per single-choice field: FINISH (Car3D's surface set — this
   // array and FINISH_SURFACE were two copies and the specs held a third),

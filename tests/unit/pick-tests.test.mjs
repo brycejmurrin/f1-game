@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { DEPLOY_BRANCH, RULES, blanketOnly } from "../../tools/ci/pick-tests.mjs";
+import { DEPLOY_BRANCH, RULES, blanketOnly, pick } from "../../tools/ci/pick-tests.mjs";
 
 const require = createRequire(import.meta.url);
 const MANIFEST = require("../../tools/manifest.cjs");
@@ -137,4 +137,48 @@ test("no more manifest files are routed by the blanket rules alone than the ratc
   assert.equal(live.length, ceiling,
     `only ${live.length} files are blanket-only now (ceiling ${ceiling}) — a file gained a rule, so LOWER the ` +
     "ratchet in the same commit: node tools/check/ratchets.mjs --update");
+});
+
+// A file's OWN unit test has to be in a group that changing the file selects.
+// Nothing enforced that, and it is not a hypothetical: `js/ui/driving-line-opts.js`
+// matches the blanket "js/ui/ -> ui" rule while its suite lives in `sweeps`, so a
+// rename of the store key that file owns passed every group the selector named
+// and failed in CI on the one suite written to guard it. Eight files were in
+// that state when this was written; the rules now name each, and this keeps a
+// ninth from arriving in silence.
+//
+// SAME-NAMED only. A source file with no `<basename>.test.mjs` makes no claim
+// about which suite guards it, and inventing a mapping for those would assert
+// something nobody wrote down.
+test("a source file's own unit test is in a group that editing it selects", () => {
+  const groups = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8"));
+  const g = groups.groups || groups;
+  const home = new Map();                       // test basename -> [group, ...]
+  for (const [name, v] of Object.entries(g)) {
+    const files = Array.isArray(v) ? v : v && v.files;
+    if (!Array.isArray(files)) continue;
+    for (const f of files) {
+      if (typeof f !== "string" || !f.includes("tests/")) continue;
+      const b = path.basename(f).replace(/\.test\.(mjs|cjs)$/, "").replace(/\.spec\.js$/, "");
+      if (!home.has(b)) home.set(b, []);
+      home.get(b).push(name.replace(/^test:/, ""));
+    }
+  }
+  const walk = (d, out = []) => {
+    for (const e of fs.readdirSync(path.join(ROOT, d), { withFileTypes: true })) {
+      const p2 = `${d}/${e.name}`;
+      if (e.isDirectory()) walk(p2, out); else if (e.name.endsWith(".js")) out.push(p2);
+    }
+    return out;
+  };
+  const bad = [];
+  for (const src of walk("js")) {
+    if (src.includes("/vendor/")) continue;
+    const homes = home.get(path.basename(src, ".js"));
+    if (!homes || !homes.length) continue;
+    const sel = [...pick([src]).keys()];
+    if (!homes.some((h) => sel.includes(h)))
+      bad.push(`${src}: its suite is in [${homes.join(", ")}] but editing it selects [${sel.join(", ")}]`);
+  }
+  assert.deepEqual(bad, [], "give the file a RULE naming the group its own test lives in");
 });

@@ -160,6 +160,23 @@ export const RULES = [
   [/^js\/ui\//, ["ui"], "DOM screens"],
   [/^js\/fx\//, ["ui"], "visual-only layers"],
 
+  // ── A FILE'S OWN UNIT TEST, where the generic rule above does not reach it ──
+  // Each of these has a same-named suite that lives in a group the broader rule
+  // never selects, so editing the source ran everything EXCEPT the test written
+  // to guard it. `js/ui/driving-line-opts.js` is the one that proved it: it
+  // matches "js/ui/ -> ui", its suite is in `sweeps`, and a rename of the store
+  // key it owns went green locally and red in CI on that very suite.
+  // tests/unit/pick-tests.test.mjs holds the invariant, so a ninth cannot appear
+  // in silence — these eight are what it measured.
+  [/^js\/car\/helmets\.js/, ["garage-unit"], "helmets.test.mjs"],
+  [/^js\/garage\/setup-tune\.js/, ["parts-unit"], "setup-tune.test.mjs"],
+  [/^js\/lighting\/presets\.js/, ["input"], "presets.test.mjs"],
+  [/^js\/render\/shared\/driving-line\.js/, ["sweeps"], "driving-line.test.mjs"],
+  [/^js\/ui\/driving-line-opts\.js/, ["sweeps"], "driving-line-opts.test.mjs"],
+  [/^js\/ui\/key-binds\.js/, ["steering-unit"], "key-binds.test.mjs"],
+  [/^js\/ui\/onboard\.js/, ["steering-unit"], "onboard.test.mjs"],
+  [/^js\/ui\/settings-export\.js/, ["steering-unit"], "settings-export.test.mjs"],
+
   // ── core and the agent surface ──────────────────────────────────────────
   [/^js\/agent\//, ["hooks", "agent-contract"], "the __apex contract and the agent view"],
   [/^js\/core\/store\.js/, ["hooks", "modes", "state-unit"], ""],

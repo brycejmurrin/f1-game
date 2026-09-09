@@ -115,8 +115,14 @@ test("Pages workflow calls leave the selected gate disabled", () => {
 });
 
 test("Pages workflow calls use a unique CI concurrency key", () => {
-  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(github\.event_name == 'workflow_dispatch' && github\.run_id\) \|\| github\.ref \}\}/,
-    "a dispatched run keeps its own concurrency group so a push to the same ref cannot cancel it");
+  // BOTH manual events, not just dispatch. `schedule` used to fall through to
+  // github.ref, which put the nightly in the same group as every push to the
+  // deploy branch — and GitHub keeps only ONE pending run per group, so the
+  // next push silently discarded the queued nightly (run 2758, 2026-09-08:
+  // cancelled at 20 min with nothing failing and no job near its cap).
+  // cancel-in-progress being false does not save a run from that rule.
+  assert.match(ciWorkflow, /group: ci-\$\{\{ inputs\.concurrency_key \|\| \(\(github\.event_name == 'workflow_dispatch' \|\| github\.event_name == 'schedule'\) && github\.run_id\) \|\| github\.ref \}\}/,
+    "a dispatched OR scheduled run keeps its own concurrency group so a push to the same ref cannot cancel it");
   assert.match(pagesWorkflow, /concurrency_key: pages-\$\{\{ github\.run_id \}\}/);
   assert.match(ciWorkflow, /cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}/);
 });

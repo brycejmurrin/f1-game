@@ -1217,9 +1217,9 @@ test("WGX/TLX-only DISPLAY controls are not injected when their files are gone",
   // THREE PATH and SCREENSHOTS steer the three.js GPU path and the soft-present
   // blit — nothing GLX can use. Shipping them inert is worse than not shipping
   // them: they read as controls that do nothing. SAVE SCREENSHOT and COPY DIAG
-  // must survive, though: the first feature-tests the soft-present API and
-  // falls through to a plain canvas capture, and the second is the phone
-  // bug-report path.
+  // must survive, though: SAVE SCREENSHOT waits on awaitSoftPresent, prefers
+  // #game-soft when the overlay exists, then falls through to #game.toDataURL,
+  // and COPY DIAG is the phone bug-report path.
   const gone = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" }, deferred: {} });
   assert.equal(gone.byId["pm-three-path"], undefined, "THREE PATH is WGX/TLX-only");
   assert.equal(gone.byId["pm-screenshots"], undefined, "SCREENSHOTS is WGX/TLX-only");
@@ -1443,6 +1443,8 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /\bcapturePixels\s*\(\s*\)\s*\{/);
   assert.match(tlx, /\breadRenderTargetPixelsAsync\b/, "the blit goes through three's readback (copyTextureToBuffer + mapAsync), not the swapchain");
   assert.match(fnBody(tlx, "softPresent"), /return\s+!!\s*_softBlit\b/);
+  assert.match(fnBody(tlx, "softPresentState"), /\bon:\s*!!\s*_softBlit\b/,
+    "softPresentState must be OWN so descriptor-copy does not keep GLX's");
   assert.match(tlx, /_softBlit\s*=\s*!forceWebGL\s*&&\s*_capPref\s*!==\s*"0"/);
   assert.doesNotMatch(tlx, /[.]\s*getCurrentTexture\s*\(/, "never getCurrentTexture on software — the swapchain never composites and it breaks mapAsync");
   assert.match(tlx, /await\s+renderer\.init\(\s*\)/);
@@ -1698,12 +1700,28 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "snapCam calls gfx.invalidateSoftPresent — GLX must define it (WGX already does)");
   assert.match(src, /invalidateSoftPresent,/,
     "invalidateSoftPresent must be on the GLX export surface");
+  const awaitFn = src.slice(src.indexOf("function awaitSoftPresent"), src.indexOf("function init(canvasEl)"));
+  assert.match(awaitFn, /const start = _softBlitGen/,
+    "GLX must wait for a newer blit, not return the last gen already on the overlay");
+  assert.doesNotMatch(awaitFn, /_softLastMaxPx\s*>=\s*8\s*&&\s*_softBlitGen\s*>\s*0/,
+    "a stale early-return makes SAVE SCREENSHOT byte-identical across a camera move");
+  assert.match(awaitFn, /_softPresentWaiters\.push\(waiter\)/,
+    "timeout splice must find the same function push() stored");
+  assert.doesNotMatch(awaitFn, /_softPresentWaiters\.push\(wrap\)/,
+    "do not push a wrapper the timeout cannot indexOf");
 });
 
 test("menuBlank hides #game-soft with #game", () => {
   const src = code("js/game.js");
   assert.match(src, /getElementById\("game-soft"\)/,
     "soft-present overlay must follow menuBlank visibility with #game");
+});
+
+test("SAVE SCREENSHOT reads #game-soft when the overlay exists", () => {
+  const src = read("js/perf/renderer-picker.js");
+  const fn = src.slice(src.indexOf("function saveScreenshot()"), src.indexOf("function ensureAdvHost()"));
+  assert.match(fn, /getElementById\("game-soft"\)/,
+    "HeadlessChrome GLX hides #game; the PNG must come from the 2D overlay");
 });
 
 test("the alpha tag that makes canvas opacity load-bearing still exists", () => {
