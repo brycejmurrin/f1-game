@@ -167,7 +167,7 @@ exactly how Ferrari and Mercedes got theirs, and why those two are the only
 covers in the tree. The container's egress denies those hosts; use a remote
 browser. Do not invent colours.
 
-**Still open (photo-grounded, no invented design):**
+**Still open (photo-grounded, no invented design):** none.
 
 **Applied this pass:**
 - Alpine pink crown stripe — second source: Sports Illustrated / Grand Prix On SI (Ewan Gale, 23 Jan 2026) names “a strip of the engine cover” in BWT pink; applied as `spineLogo: "stripe"` + `spineTint` (BWT pink). Cover itself stays body blue.
