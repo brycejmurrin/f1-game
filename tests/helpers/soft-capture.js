@@ -18,9 +18,17 @@ export async function awaitSoftCapture(page, timeoutMs = 20_000) {
 }
 
 export async function pageScreenshot(page, opts = {}) {
-  const { softTimeout = 20_000, ...shotOpts } = opts;
+  const { softTimeout = 20_000, type = "png", quality, ...shotOpts } = opts;
   await awaitSoftCapture(page, softTimeout);
-  const soft = page.locator("#game-soft");
-  if (await soft.count()) return soft.screenshot(shotOpts);
-  return page.screenshot(shotOpts);
+  const softBuf = await page.evaluate(({ mime, q }) => {
+    const c = document.getElementById("game-soft");
+    if (!c) return null;
+    const url = c.toDataURL(mime, q);
+    return url.slice(url.indexOf(",") + 1);
+  }, {
+    mime: type === "jpeg" ? "image/jpeg" : "image/png",
+    q: quality,
+  });
+  if (softBuf) return Buffer.from(softBuf, "base64");
+  return page.screenshot({ type, quality, ...shotOpts });
 }
