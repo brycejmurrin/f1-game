@@ -1,7 +1,9 @@
 /** Headless GLX soft-presents into #game-soft; page.screenshot must wait for it. */
 export async function awaitSoftCapture(page, timeoutMs = 20_000) {
   const startGen = await page.evaluate(() => {
-    const g = window.GLX;
+    // GLX is a top-level const (js/render/glx/glx.js), not window.GLX — see
+    // tests/unit/gfx-debug-overlay.test.mjs and webgl-probes.spec.js.
+    const g = typeof GLX !== "undefined" ? GLX : null;
     if (!g?.softPresent?.()) return -1;
     try { window.__apex?.snapCam?.(); } catch (_) { /* harness */ }
     return g.softPresentState?.()?.gen ?? 0;
@@ -9,16 +11,12 @@ export async function awaitSoftCapture(page, timeoutMs = 20_000) {
   if (startGen < 0) return;
   // Poll from Node — do not awaitSoftPresent inside evaluate or the page main
   // thread stalls long enough to starve the render loop on a slow SwiftShader box.
-  // Two generations: the first blit after snapCam can still belong to a frame
-  // that started before invalidateSoftPresent / lightTune landed (measured as
-  // byte-identical grade captures on SwiftShader, 2026-09-09).
-  const needGen = startGen + 2;
-  await page.waitForFunction((target) => {
-    const g = window.GLX;
+  await page.waitForFunction((gen) => {
+    const g = typeof GLX !== "undefined" ? GLX : null;
     if (!g?.softPresent?.()) return true;
     const st = g.softPresentState?.();
-    return !!(st && st.gen >= target);
-  }, needGen, { polling: 100, timeout: timeoutMs });
+    return !!(st && st.gen > gen);
+  }, startGen, { polling: 100, timeout: timeoutMs });
 }
 
 export async function pageScreenshot(page, opts = {}) {
