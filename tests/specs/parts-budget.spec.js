@@ -57,6 +57,25 @@ async function openSetup(page) {
   // has whatever the last test chose.
   await garageTeam(page, "mclaren");
   await freeBuildOff(page);
+  // STOP THE RENDER LOOP. This file is about budget LABELS, bars and classes —
+  // it never looks at the car. But the garage draws a live turntable, and
+  // getSetupPreviewMesh() re-keys on partsVisualKey, so every option click
+  // rebuilt the car mesh and repainted the livery atlas at SwiftShader speed.
+  // That is the whole cost of this spec, and it was pushing tests past the
+  // 120 s per-test budget this file's header already recorded five tests
+  // crossing.
+  //
+  // MEASURED on an idle box: the three most expensive tests took 5.8 min
+  // between them WITH the loop running, and two of the three FAILED. With it
+  // stopped, all fourteen pass in 60 s — against 693 s for this spec inside the
+  // `car` group. render() returns early on headlessMode (js/game.js), which is
+  // what takes the preview build out of the click path; the DOM this file
+  // asserts on is untouched by it.
+  //
+  // Do NOT copy this into a spec that screenshots the garage (parts-catalog,
+  // parts-persistence) — an undrawn canvas keeps its last frame, so the gallery
+  // captures would go stale silently, which is worse than slow.
+  await page.evaluate(() => window.__apex.headless(true));
 }
 
 test.describe("Budget system — display", () => {
