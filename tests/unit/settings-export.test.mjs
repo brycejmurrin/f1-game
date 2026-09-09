@@ -185,7 +185,12 @@ test("SPEC's defaults agree with the store.get reads in their source files", () 
 const GARAGE = {
   "apex26.parts.mercedes": JSON.stringify({ wing: 3 }),
   "apex26.livery.ferrari": JSON.stringify("custom"),
-  "apex26.livery.custom.ferrari": JSON.stringify([1, 2, 3]),
+  // REAL livery shapes, not placeholders: applyGarage now filters this array to
+  // entries the garage can actually paint, so a fixture of bare numbers would
+  // round-trip to [] and prove nothing about the round trip.
+  "apex26.livery.custom.ferrari": JSON.stringify([
+    { id: "custom_1", name: "Mine", c1: [0.8, 0, 0], c2: [1, 1, 1], stripe: [0, 0, 0] },
+  ]),
   "apex26.setup.redbull": JSON.stringify({ arb: 2 }),
   "apex26.customTeam": JSON.stringify({ name: "X" }),
   "apex26.team": "4",
@@ -200,7 +205,9 @@ test("the garage file carries what the player BUILT, and nothing else in the nam
     ["customTeam", "driver", "livery.custom.ferrari", "livery.ferrari", "parts.mercedes", "setup.redbull", "team"]);
   assert.equal(f.count, 7);
   assert.deepEqual(f.garage["parts.mercedes"], { wing: 3 });
-  assert.deepEqual(f.garage["livery.custom.ferrari"], [1, 2, 3]);
+  assert.deepEqual(f.garage["livery.custom.ferrari"],
+    [{ id: "custom_1", name: "Mine", c1: [0.8, 0, 0], c2: [1, 1, 1], stripe: [0, 0, 0] }],
+    "the export carries the paint job verbatim — the SAVE side filters nothing");
   // POISON put career, season, ghosts, tokens and TURN credentials in the same
   // namespace; the prefix allowlist is what keeps them out.
   const text = JSON.stringify(f).replace(/"excluded":"[^"]*"/, "");
@@ -288,4 +295,75 @@ test("a file round-trips: save it, load it into a fresh store, get the same valu
   const b3 = boot();
   assert.equal(b3.loadGarage(g1).applied, 7);
   assert.deepEqual(b3.garage().garage, g1.garage, "the garage file is its own fixed point");
+});
+
+/* A garage FILE is player input, and until now only its KEYS were checked. */
+
+test("a malformed custom livery cannot reach the garage screen", () => {
+  // buildLiveryOptions paints every row's swatch with cssCol(liv.c1), and
+  // cssCol reads c[0] on whatever it is handed — so ONE entry without c1 threw
+  // there and the LIVERY tab rendered nothing. A hand-edited, truncated or
+  // half-merged file is the realistic way in, and this loader is the only door.
+  const b = boot();
+  const good = { id: "custom_1", name: "Keep", c1: [1, 0, 0], c2: [0, 0, 1], stripe: [1, 1, 1], finShape: "none" };
+  const r = b.loadGarage({
+    format: "apex26-garage-v1",
+    garage: {
+      "livery.custom.mclaren": [
+        good,
+        "oops",                                   // a bare string
+        null,
+        { id: "no_colours" },                     // the exact crash: no c1/c2
+        { id: "bad_c1", c1: "red", c2: [0, 0, 1] },
+        { c1: [1, 1, 1], c2: [0, 0, 0] },         // no id to key a cache on
+        { id: "short", c1: [1, 0], c2: [0, 0, 1] },
+        { id: "nan", c1: [1, 0, NaN], c2: [0, 0, 1] },
+      ],
+    },
+  });
+  assert.equal(r.ok, true);
+  const kept = JSON.parse(b.disk.get("apex26.livery.custom.mclaren"));
+  assert.equal(kept.length, 1, "only the sound paint job survives");
+  assert.equal(kept[0].id, "custom_1");
+  assert.deepEqual(kept[0].c1, [1, 0, 0], "and it survives intact, not sanitised into something else");
+  assert.deepEqual(kept[0].stripe, [1, 1, 1], "optional colours are kept");
+  assert.equal(kept[0].finShape, "none", "so are pills");
+  // The property the crash needed: every stored entry answers cssCol.
+  for (const l of kept) for (const c of [l.c1, l.c2]) {
+    assert.ok(Array.isArray(c) && c.length >= 3 && c.every((n) => typeof n === "number" && isFinite(n)));
+  }
+});
+
+test("a garage value of the wrong shape is skipped, not written", () => {
+  const b = boot();
+  const r = b.loadGarage({
+    format: "apex26-garage-v1",
+    garage: {
+      "livery.custom.ferrari": "not-an-array",
+      "livery.mclaren": { id: "obj" },   // the fitted id is a string
+      "parts.alpine": [1, 2, 3],         // a build is an object, not a list
+      "setup.haas": null,
+    },
+  });
+  assert.equal(r.ok, true);
+  assert.equal(r.applied, 0, "none of those four are writable shapes");
+  assert.equal(r.skipped, 4);
+  for (const k of ["livery.custom.ferrari", "livery.mclaren", "parts.alpine", "setup.haas"]) {
+    assert.equal(b.disk.has("apex26." + k), false, k + " must not be written");
+  }
+});
+
+test("a sound garage file still loads whole", () => {
+  // The filter must not start rejecting liveries the game would happily paint.
+  const b = boot();
+  const liv = { id: "custom_9", name: "Mine", c1: [0.1, 0.2, 0.3], c2: [1, 1, 0],
+                noseStripe: [0, 0, 0], spineHeight: "dorsal", wingCarbon: "carbon" };
+  const r = b.loadGarage({
+    format: "apex26-garage-v1",
+    garage: { "livery.custom.mclaren": [liv], "livery.mclaren": "custom_9",
+              "parts.mclaren": { wing: 3 }, customTeam: { name: "X" } },
+  });
+  assert.equal(r.skipped, 0, "nothing sound is skipped");
+  assert.equal(r.applied, 4);
+  assert.deepEqual(JSON.parse(b.disk.get("apex26.livery.custom.mclaren")), [liv], "kept verbatim");
 });

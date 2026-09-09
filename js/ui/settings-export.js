@@ -259,13 +259,68 @@ function applySettings(file, G) {
   }
   return { ok: true, applied, skipped, reason: null };
 }
+// A FILE IS PLAYER INPUT AND THE GARAGE DOES NOT DEFEND ITSELF. isGarageKey
+// checks the KEY; nothing checked the VALUE, so any JSON at a garage-shaped key
+// went straight into the store. One malformed entry in livery.custom.<team> is
+// enough to take the screen down: buildLiveryOptions paints each row's swatch
+// with cssCol(liv.c1), cssCol reads c[0] on whatever it is given, and an entry
+// with no c1 throws there — the LIVERY tab renders nothing. A hand-edited file,
+// a truncated download or a half-merged one all reach it, and this loader is
+// the only way in, so the check belongs here.
+//
+// Shape only, per key family — this is not schema validation and must not
+// start rejecting liveries the game itself would happily paint.
+const rgb3 = (a) => Array.isArray(a) && a.length >= 3 &&
+  a.slice(0, 3).every((n) => typeof n === "number" && isFinite(n));
+// A livery must carry the two things every consumer reads unconditionally: an
+// id to key caches on and the two base colours. Those are what the crash was
+// about, so they are required; every other field is optional and additive, so
+// a value of neither shape is dropped rather than failing the whole row.
+//
+// THE BOUNDARY, stated because it is a judgement and not an oversight: a field
+// is kept when it is an rgb triple (a colour) or a string (a pill), which is
+// decided by the value's shape and not by a list of names. Putting a STRING in
+// a colour slot therefore survives — `_ckAcc` passes non-arrays straight
+// through, so it paints a wrong colour rather than throwing. Catching that
+// would need a fourth copy of the colour/pill field table, which is exactly
+// what the last two commits removed from this codebase; a wrong colour from a
+// hand-corrupted file is the cheaper failure.
+function cleanLivery(l) {
+  if (!l || typeof l !== "object" || Array.isArray(l)) return null;
+  if (typeof l.id !== "string" || !rgb3(l.c1) || !rgb3(l.c2)) return null;
+  const out = { id: l.id, c1: l.c1.slice(0, 3), c2: l.c2.slice(0, 3) };
+  if (typeof l.name === "string") out.name = l.name;
+  for (const k of Object.keys(l)) {
+    if (k === "id" || k === "c1" || k === "c2" || k === "name") continue;
+    if (rgb3(l[k])) out[k] = l[k].slice(0, 3);
+    else if (typeof l[k] === "string") out[k] = l[k];
+  }
+  return out;
+}
+// Returns the value to WRITE, or undefined to skip the key. A partly-corrupt
+// custom-livery array keeps the paint jobs that are sound instead of losing
+// the lot: the player's other work is not the file's fault.
+function garageValue(k, v) {
+  if (v === undefined || v === null) return undefined;
+  if (k.indexOf("livery.custom.") === 0) {
+    if (!Array.isArray(v)) return undefined;
+    return v.map(cleanLivery).filter(Boolean);
+  }
+  if (k.indexOf("livery.") === 0) return typeof v === "string" ? v : undefined;
+  if (k.indexOf("parts.") === 0 || k.indexOf("setup.") === 0) {
+    return v && typeof v === "object" && !Array.isArray(v) ? v : undefined;
+  }
+  return v;   // the four singles keep whatever shape they already had
+}
 function applyGarage(file) {
   if (!file || file.format !== GARAGE_FORMAT) return { ok: false, reason: "not an " + GARAGE_FORMAT + " file", applied: 0, skipped: 0 };
   const g = file.garage || {};
   let applied = 0, skipped = 0;
   for (const k of Object.keys(g)) {
     if (!isGarageKey(k)) { skipped++; continue; }
-    try { GameStore.store.set(k, g[k]); applied++; } catch (_) { skipped++; }
+    const v = garageValue(k, g[k]);
+    if (v === undefined) { skipped++; continue; }
+    try { GameStore.store.set(k, v); applied++; } catch (_) { skipped++; }
   }
   return { ok: true, applied, skipped, reason: null };
 }
