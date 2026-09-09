@@ -248,3 +248,37 @@ test("no test:* group pins a --project that excludes one of the specs it names",
   assert.deepEqual(offenders, [],
     "a test:* group names a spec its pinned --project cannot match, so that spec never runs");
 });
+
+/* A GROUP MUST NOT NAME THE SAME SPEC TWICE.
+ *
+ * The disjoint-partition test above says `owner.get(f) !== g`, which means it
+ * asks whether two DIFFERENT groups claim a spec and says nothing about a group
+ * claiming one twice. tests/groups.json listed menu-traversal.spec.js on two
+ * consecutive lines in test:ui for long enough to be generated into
+ * package.json — the same merge hazard as a duplicated object key: two sessions
+ * add the identical line, git takes both sides without a conflict, and the
+ * result is valid JSON that reads as deliberate.
+ *
+ * It costs nothing at runtime (Playwright dedupes the path — measured: 150
+ * tests either way), which is precisely why nothing noticed. What it costs is
+ * the reader, who has to decide whether the repeat means something.
+ */
+test("no test group names the same spec file twice", () => {
+  const groups = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "groups.json"), "utf8"));
+  const offenders = [];
+  for (const [name, spec] of Object.entries(groups.groups || {})) {
+    const seen = new Set();
+    for (const f of spec.files || []) {
+      if (seen.has(f)) offenders.push(`${name}: ${f}`);
+      seen.add(f);
+    }
+  }
+  // toolingFast is a flat list with `//` comment entries; the same rule applies.
+  const tfSeen = new Set();
+  for (const f of groups.toolingFast || []) {
+    if (f.startsWith("//")) continue;
+    if (tfSeen.has(f)) offenders.push(`toolingFast: ${f}`);
+    tfSeen.add(f);
+  }
+  assert.deepEqual(offenders, [], "a group lists a spec twice — the generated npm script carries the repeat");
+});
