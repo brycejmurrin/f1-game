@@ -2584,6 +2584,14 @@ function getFieldWheelMeshes(team) {
   const rim = brake && brake.rim;
   const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel);
   const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel);
+  // A MARKER, not behaviour — nothing in Car3D or the renderer reads it. This
+  // cache and getPlayerWheelMeshes() call buildWheelLayers with
+  // argument-for-argument identical calls, so a mesh probe cannot otherwise tell
+  // a FIELD pair from a PLAYER pair; parts-mesh-cache.spec.js asserts the two
+  // bounds separately (8 pairs here vs 12) and was silently measuring the sum of
+  // both. Car3D.build's `field` opt is the same marker for the same reason.
+  front.rotating._field = front.fixed._field = true;
+  rear.rotating._field = rear.fixed._field = true;
   mesh = {
     F: gfx.createMesh(front.rotating),
     R: gfx.createMesh(rear.rotating),
