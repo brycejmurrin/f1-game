@@ -153,4 +153,14 @@ describe("the interior gate on a cleared-buffer frame", () => {
     assert.ok(awaitAt >= 0 && freezeAt > awaitAt,
       "awaitSoftPresent must run while the loop still presents; freeze-then-wait hangs on GLX");
   });
+
+  it("garage-angles captures via screenshotGameCanvas, not page.screenshot", () => {
+    const angles = fs.readFileSync(path.join(REPO, "tools/shot/garage-angles.mjs"), "utf8");
+    assert.match(angles, /await screenshotGameCanvas\(page, png\)/,
+      "HeadlessChrome GLX presents on #game-soft; a full-page screenshot is the UI sheet");
+    assert.doesNotMatch(angles, /await page\.screenshot\(/,
+      "page.screenshot waits for fonts.ready and was the smoke hang after freeze");
+    assert.match(angles, /--livery/,
+      "paint jobs share the camera stack; a store write is enough (LIVERY tab slams FRONT)");
+  });
 });

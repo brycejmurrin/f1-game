@@ -1,20 +1,26 @@
 #!/usr/bin/env node
-// @doc Garage camera-preset screenshots for one team — hero/front/side/rear/top/wingFront/wingRear in one run.
-//   node tools/shot/garage-angles.mjs [--team mclaren] [--views hero,side] [--viewport 1280x720] [--out dir]
+// @doc Garage camera-preset shots for one team and optional --livery list — hero/front/side/rear/top/wings.
+// @skill garage-parts-livery
+//   node tools/shot/garage-angles.mjs [--team redbull] [--livery default,rb_white] [--views hero,side] [--out dir]
 //
 // The counterpart to garage-frame.mjs, which shoots ONE preset for a backend
 // A/B. This one walks the CAMERA STACK for a single backend, which is what a
 // "does the bay still read from every angle" pass needs: two shipped defects
 // (wordmarks cut by a service gantry, a sign hidden inside its own fascia)
-// were only ever visible from one preset each. It reuses the same harness and
-// the same page helpers rather than driving Playwright by hand — openGarage
-// already retries the title flyby, and screenshotGameCanvas already hides the
-// setup sheet so the shot is the bay, not the UI.
+// were only ever visible from one preset each. `--livery` is the same walk
+// across paint jobs — the mesh key includes getLiveryId, so a store write is
+// enough; opening the LIVERY tab would also slam the camera to FRONT.
+//
+// Capture is screenshotGameCanvas (CDP clip of #game-soft, setup sheet faded).
+// page.screenshot used to (a) include the sheet, which fooled the blank-bay
+// gate, and (b) hang on document.fonts.ready after headless(true).
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 import { launchChromium, shutdown, startStaticServer, sleep } from "../lib/harness.mjs";
-import { chromiumArgsForBackend, awaitPresentedFrame } from "../capture/probe-page.mjs";
+import {
+  chromiumArgsForBackend, screenshotGameCanvas, settleGarage,
+} from "../capture/probe-page.mjs";
 
 const argv = process.argv.slice(2);
 const flag = (name, dflt) => {
@@ -22,23 +28,21 @@ const flag = (name, dflt) => {
   return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
 };
 const team = flag("--team", "mclaren");
+const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).filter(Boolean);
 const views = flag("--views", "hero,front,side,rear,top,wingFront,wingRear").split(",").map((s) => s.trim()).filter(Boolean);
 const vp = flag("--viewport", "1280x720").split("x").map(Number);
 const outDir = flag("--out", "artifacts/garage-angles");
 
-// "Did the BAY actually render?" — gate the CANVAS half of the frame only.
-// The setup sheet is full of text and always has plenty of pixel spread, so a
-// whole-frame check passes while the 3D canvas beside it is a blank white
-// rectangle. That is not hypothetical: the first cut of this tool shipped a
-// directory of blanks, and the second cut's gate was fooled by the sheet.
-async function bayRendered(png, vpW) {
-  const cut = Math.max(80, Math.round(vpW * 0.55));
-  const st = await sharp(png).extract({ left: 0, top: 0, width: cut, height: (await sharp(png).metadata()).height }).stats();
+// "Did the BAY actually render?" — the PNG is the presented canvas (sheet
+// faded), so a whole-frame spread is the canvas, not the UI. The first cut of
+// this tool shipped a directory of blanks; do not drop the gate.
+async function bayRendered(png) {
+  const st = await sharp(png).stats();
   const spread = Math.max(...st.channels.map((c) => c.stdev));
   return { ok: spread > 8, spread: +spread.toFixed(2) };
 }
 
-async function frame(page, view) {
+async function frame(page, liv, view) {
   const clicked = await page.evaluate((v) => {
     const b = document.querySelector('#cs-stack [data-cs-view="' + v + '"]');
     if (!b) return false;
@@ -46,19 +50,41 @@ async function frame(page, view) {
     return true;
   }, view);
   if (!clicked) throw new Error(`no camera preset "${view}" in #cs-stack`);
-  const png = join(outDir, `${team}-${view}.png`);
+  const png = join(outDir, `${team}-${liv}-${view}.png`);
   let gate = null;
   for (let attempt = 0; attempt < 5; attempt++) {
-    await sleep(attempt === 0 ? 900 : 700);
-    await awaitPresentedFrame(page);
-    await page.screenshot({ path: png, timeout: 60000 });
-    gate = await bayRendered(png, vp[0]);
+    await settleGarage(page, { frames: attempt === 0 ? 45 : 20 });
+    await screenshotGameCanvas(page, png);
+    gate = await bayRendered(png);
     if (gate.ok) {
       const cam = await page.evaluate(() => window.__apex.garageCam());
-      return { view, png, spread: gate.spread, az: +cam.az.toFixed(3), el: +cam.el.toFixed(3), dist: +cam.effDist.toFixed(3) };
+      return {
+        view, livery: liv, png, spread: gate.spread,
+        az: +cam.az.toFixed(3), el: +cam.el.toFixed(3), dist: +cam.effDist.toFixed(3),
+      };
     }
   }
-  throw new Error(`${view}: the bay never rendered (canvas pixel spread ${gate.spread})`);
+  throw new Error(`${liv}/${view}: the bay never rendered (canvas pixel spread ${gate.spread})`);
+}
+
+async function applyLivery(page, livId) {
+  const got = await page.evaluate(({ teamId, id }) => {
+    const t = Teams.LIST.find((x) => x.id === teamId);
+    if (!t) return { ok: false, error: `no team "${teamId}"` };
+    const list = Liveries.forTeam(t);
+    if (!list.some((l) => l.id === id)) {
+      return { ok: false, error: `no livery "${id}"`, have: list.map((l) => l.id) };
+    }
+    // saveLiveryId is a store write; G is not a global (module façade only).
+    GameStore.store.set("livery." + teamId, id);
+    return { ok: true, name: list.find((l) => l.id === id).name };
+  }, { teamId: team, id: livId });
+  if (!got.ok) {
+    const extra = got.have ? ` (have ${got.have.join(",")})` : "";
+    throw new Error(`${got.error}${extra}`);
+  }
+  await settleGarage(page, { frames: 60 });
+  return got.name;
 }
 
 async function main() {
@@ -74,12 +100,16 @@ async function main() {
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 120000 });
   // Team selection is STORED and read when the garage opens, so it is set and
   // the page reloaded — clicking through the team picker would be a second
-  // source of truth for which car this is.
-  const idx = await page.evaluate((t) => {
+  // source of truth for which car this is. Livery is the same store; pin the
+  // first scheme before reload so the first mesh is already the right paint.
+  const idx = await page.evaluate(({ t, liv }) => {
     const i = Teams.LIST.findIndex((x) => x.id === t);
-    if (i >= 0) localStorage.setItem("apex26.team", String(i));
+    if (i >= 0) {
+      GameStore.store.set("team", i);
+      GameStore.store.set("livery." + t, liv);
+    }
     return i;
-  }, team);
+  }, { t: team, liv: liveries[0] });
   if (idx < 0) throw new Error(`no team "${team}" in Teams.LIST`);
   await page.reload({ waitUntil: "commit", timeout: 120000 });
   await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 120000 });
@@ -94,15 +124,20 @@ async function main() {
     return h ? h.textContent.trim().slice(0, 60) : null;
   });
   const shots = [];
-  for (const v of views) {
-    const s = await frame(page, v);
-    shots.push(s);
-    console.log(`shot ${s.view} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}`);
+  for (const liv of liveries) {
+    const name = await applyLivery(page, liv);
+    for (const v of views) {
+      const s = await frame(page, liv, v);
+      s.liveryName = name;
+      shots.push(s);
+      console.log(`shot ${liv}/${s.view} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}`);
+    }
   }
   const meta = join(outDir, `${team}-angles.json`);
-  writeFileSync(meta, JSON.stringify({ team, teamIdx: idx, sheetHead: shown, viewport: vp, shots }, null, 2));
+  writeFileSync(meta, JSON.stringify({ team, teamIdx: idx, liveries, sheetHead: shown, viewport: vp, shots }, null, 2));
   console.log(`wrote ${shots.length} angle(s) + ${meta}  [sheet: ${shown}]`);
   await browser.close();
+  await srv.close();
 }
 
 main().then(() => shutdown()).catch((e) => { console.error(e); shutdown(); process.exit(1); });
