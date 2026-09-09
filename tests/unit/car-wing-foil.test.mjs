@@ -138,7 +138,21 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // gloves and a yoke (+84), and the opening runs forward from z 0.05 to
   // z 0.28 so the wheel is not roofed by solid monocoque (+84). Measured
   // 4400. This is the part of the car every photo is taken through.
-  assert.ok(body <= 4400, `default body ${body} > 4400`);
+  // 4400 -> 6800: the helmet PAINT. Flat paint made every colour edge a mesh
+  // edge, so at 20x28 (12.9 degrees of azimuth per cell) every diagonal
+  // boundary came out as a staircase — on the macos-latest GPU render of
+  // 2026-09-09 (car-shot.yml run 34293766619) the busy designs read as static
+  // rather than as designs. helmets.js now splits a quad only while its own
+  // corners disagree about the paint, so triangles land on the boundary LINES
+  // and nowhere else; the base grid is untouched, so the NORMALS and the shape
+  // are bit-identical and this is a paint change only. MAX_SPLIT 1 is measured
+  // at the size the helmet is actually seen (~110 px, the cockpit view): it is
+  // a clear gain on no split, and depth 2 is barely separable from it while
+  // costing 9,292 triangles against 3,292. Default body measured 5360; the
+  // busiest of the 22 designs measured 6572, and the ceiling has to clear the
+  // WHOLE FIELD, not the default livery. The cockpit ceiling below does NOT
+  // move: the helmet is not built in that pass (measured 1428, unchanged).
+  assert.ok(body <= 6800, `default body ${body} > 6800`);
   // Cockpit ceiling UNCHANGED at 1500: the six-point harness (+60, measured
   // 1428) fits the existing budget. The straps sit between the eye and the dash
   // coaming, filling the lower frame that the coaming never reaches.
