@@ -1,5 +1,6 @@
 // Shared Playwright probe helpers for menu/garage capture tools.
 // @doc Probe helpers: reduced-motion init, backend pick, garage open/settle, #game canvas shot.
+import { writeFileSync } from "node:fs";
 import { WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
 
 /** Chromium flags per renderer backend (must match backend-compare / gfx-probe). */
@@ -252,19 +253,35 @@ export async function presentedCanvasClip(page) {
  * Compositor PNG of the presented canvas. Awaits a fresh blit first unless
  * `skipAwait` — pass that when the caller already froze after awaitPresentedFrame
  * (a second wait after headless(true) hangs on GLX).
+ *
+ * Uses CDP Page.captureScreenshot, not Playwright page.screenshot(). The
+ * Playwright path waits on document.fonts.ready ("waiting for fonts to load…")
+ * and that wait never finished on GHA smoke shards 2/3 after freeze: 60 s
+ * timeout, retry still hung. Fonts are irrelevant to a 3D canvas clip; CDP
+ * is the same compositor grab without the font barrier. locator("#game")
+ * was the green pre-helper path (element screenshot + preserveDrawingBuffer).
  */
 export async function screenshotPresentedCanvas(page, opts = {}) {
   if (!opts.skipAwait) await awaitPresentedFrame(page, opts.awaitMs);
   const box = await presentedCanvasClip(page);
   if (!box) throw new Error("probe: presented canvas has no bounding box");
-  const shotOpts = {
-    clip: { x: box.x, y: box.y, width: box.width, height: box.height },
-    timeout: opts.timeout || 60000,
+  const format = opts.type === "jpeg" ? "jpeg" : "png";
+  const clip = {
+    x: box.x, y: box.y,
+    width: Math.max(1, box.width), height: Math.max(1, box.height),
+    scale: 1,
   };
-  if (opts.path) shotOpts.path = opts.path;
-  if (opts.type) shotOpts.type = opts.type;
-  if (opts.quality != null) shotOpts.quality = opts.quality;
-  const buf = await page.screenshot(shotOpts);
+  const session = await page.context().newCDPSession(page);
+  let buf;
+  try {
+    const params = { format, clip, captureBeyondViewport: false };
+    if (format === "jpeg" && opts.quality != null) params.quality = opts.quality;
+    const { data } = await session.send("Page.captureScreenshot", params);
+    buf = Buffer.from(data, "base64");
+  } finally {
+    try { await session.detach(); } catch (_) { /* already closed */ }
+  }
+  if (opts.path) writeFileSync(opts.path, buf);
   return { buf, bytes: buf.length, clip: box, id: box.id };
 }
 
@@ -280,14 +297,12 @@ export async function screenshotGameCanvas(page, outPath) {
   // freeze-then-wait can never observe gen > start and times out. WGX can
   // still complete an in-flight mapAsync after freeze; GLX cannot.
   await awaitPresentedFrame(page);
-  // FREEZE THE LOOP ACROSS THE CAPTURE. page.screenshot needs the compositor,
-  // and a GLX garage frame on SwiftShader keeps the renderer's main thread hot
-  // enough that the capture starved and blew its 60 s timeout with only
-  // "waiting for fonts to load... / fonts loaded" in the call log. headless(true)
-  // makes render() return before it does any work — and before the visibility
-  // write, so the canvas keeps both its last composited frame and its
-  // visibility. Measured: the same capture that timed out completes in ~9 s.
-  // Restored in `finally`, or every later step would probe a frozen page.
+  // FREEZE THE LOOP ACROSS THE CAPTURE. CDP still needs a quiet compositor:
+  // a GLX garage frame on SwiftShader keeps the renderer's main thread hot
+  // enough that Playwright page.screenshot starved on document.fonts.ready
+  // ("waiting for fonts to load"). screenshotPresentedCanvas now uses CDP,
+  // and headless(true) still keeps the last blit on #game-soft. Restored in
+  // `finally`, or every later step would probe a frozen page.
   await page.evaluate(() => { try { window.__apex.headless(true); } catch (_) {} });
   try {
     const shot = await screenshotPresentedCanvas(page, { path: outPath, skipAwait: true });

@@ -140,6 +140,12 @@ describe("the interior gate on a cleared-buffer frame", () => {
     assert.match(probe, /export async function awaitPresentedFrame/);
     assert.match(probe, /getElementById\("game-soft"\)/,
       "presentedCanvasClip must prefer the HeadlessChrome overlay");
+    const presented = probe.slice(probe.indexOf("export async function screenshotPresentedCanvas"),
+      probe.indexOf("export async function screenshotGameCanvas"));
+    assert.match(presented, /Page\.captureScreenshot/,
+      "CDP clip skips Playwright's document.fonts.ready wait that hung smoke shards 2/3");
+    assert.doesNotMatch(presented, /page\.screenshot/,
+      "page.screenshot waits for fonts and timed out on GHA after freeze");
     const shot = probe.slice(probe.indexOf("export async function screenshotGameCanvas"),
       probe.indexOf("export async function screenshotGameCanvas") + 2200);
     const awaitAt = shot.indexOf("awaitPresentedFrame");
