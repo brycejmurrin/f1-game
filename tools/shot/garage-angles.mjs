@@ -15,10 +15,12 @@
 //   all    = every preset
 //
 // `--combo` bundles spine-logo / spine-side / views / zoom / pan for common
-// surveys (explicit flags override). `--team=all` walks every roster team in
-// ONE Chromium and writes a rollup sheet of the combo's hero view per team.
+// surveys (explicit flags override). `--team=all` + combo defaults to
+// rollup-only (one shot per team → labeled rollup grid). `--full-views` keeps
+// every spine preset per team; `--fast` tightens settle/wait (on by default
+// for multi-team combo runs).
 //
-// `--live` loads github.io, defaults `--views=all`, labeled PNGs + sheets.
+// `--live` loads github.io; labeled rollup + optional per-team sheets.
 //
 // Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
 // under SwiftShader (document.fonts.ready after freeze).
@@ -81,23 +83,6 @@ if (comboKey && !combo) {
   process.exit(1);
 }
 
-const teamArg = flag("--team", "mclaren");
-const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).filter(Boolean);
-const spineSides = (hasFlag("--spine-side") ? flag("--spine-side", "") : (combo?.spineSide ?? ""))
-  .split(",").map((s) => s.trim()).filter(Boolean);
-const spineLogos = (hasFlag("--spine-logo") ? flag("--spine-logo", "") : (combo?.spineLogo ?? ""))
-  .split(",").map((s) => s.trim()).filter(Boolean);
-const vp = flag("--viewport", "1280x720").split("x").map(Number);
-const outDir = flag("--out", isLive ? "artifacts/garage-angles-live" : "artifacts/garage-angles");
-const viewsDefault = combo?.views ?? (isLive ? "all" : "spine");
-const rawViews = flag("--views", viewsDefault).split(",").map((s) => s.trim()).filter(Boolean);
-const zoomDefault = combo?.zoom ?? (isLive ? 6 : 0);
-const panDefault = combo?.pan ?? (isLive ? "3,0" : "0,0");
-const zoom = Number(hasFlag("--zoom") ? flag("--zoom", "0") : String(zoomDefault)) || 0;
-const [strafe = 0, dolly = 0] = (hasFlag("--pan") ? flag("--pan", "0,0") : panDefault).split(",").map(Number);
-const withLabels = isLive ? !argv.includes("--no-labels") : argv.includes("--labels");
-const rollupView = flag("--rollup-view", combo?.rollupView || "side");
-
 /** Roster order == Teams.LIST == store.team index. Excludes DEFAULT_CUSTOM. */
 function rosterIds() {
   const src = readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8");
@@ -107,16 +92,6 @@ function rosterIds() {
     process.exit(1);
   }
   return Array.from(block[1].matchAll(/^      id: "([a-z]+)",/gm)).map((m) => m[1]);
-}
-
-function teamIndex(id) {
-  const ids = rosterIds();
-  const i = ids.indexOf(id);
-  if (i < 0) {
-    console.error(`no team "${id}" — available: ${ids.join(", ")}`);
-    process.exit(1);
-  }
-  return i;
 }
 
 function parseTeams(arg) {
@@ -132,8 +107,44 @@ function parseTeams(arg) {
   return picked;
 }
 
+const teamArg = flag("--team", "mclaren");
+const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).filter(Boolean);
+const spineSides = (hasFlag("--spine-side") ? flag("--spine-side", "") : (combo?.spineSide ?? ""))
+  .split(",").map((s) => s.trim()).filter(Boolean);
+const spineLogos = (hasFlag("--spine-logo") ? flag("--spine-logo", "") : (combo?.spineLogo ?? ""))
+  .split(",").map((s) => s.trim()).filter(Boolean);
+const vp = flag("--viewport", "1280x720").split("x").map(Number);
+const outDir = flag("--out", isLive ? "artifacts/garage-angles-live" : "artifacts/garage-angles");
 const teams = parseTeams(teamArg);
 const multiTeam = teams.length > 1;
+const rollupView = flag("--rollup-view", combo?.rollupView || "side");
+const rollupOnly = argv.includes("--rollup-only")
+  || (multiTeam && combo && !hasFlag("--views") && !argv.includes("--full-views"));
+const isFastMode = argv.includes("--fast") || (multiTeam && combo && !argv.includes("--slow"));
+const viewsDefault = rollupOnly ? rollupView : (combo?.views ?? (isLive ? "all" : "spine"));
+const rawViews = flag("--views", viewsDefault).split(",").map((s) => s.trim()).filter(Boolean);
+const zoomDefault = combo?.zoom ?? (isLive ? 6 : 0);
+const panDefault = combo?.pan ?? (isLive ? "3,0" : "0,0");
+const zoom = Number(hasFlag("--zoom") ? flag("--zoom", "0") : String(zoomDefault)) || 0;
+const [strafe = 0, dolly = 0] = (hasFlag("--pan") ? flag("--pan", "0,0") : panDefault).split(",").map(Number);
+const withLabels = isLive ? !argv.includes("--no-labels") : argv.includes("--labels");
+const labelEachShot = withLabels && (!multiTeam || argv.includes("--label-shots") || argv.includes("--full-views"));
+const teamSheets = withLabels && (!multiTeam || argv.includes("--team-sheets") || argv.includes("--full-views"));
+const presentMs = isFastMode ? 4000 : 12000;
+const settleShot = isFastMode ? 2 : 6;
+const settleApply = isFastMode ? 4 : 12;
+const settleSwitch = isFastMode ? 4 : 12;
+const gateTries = isFastMode ? 1 : 3;
+
+function teamIndex(id) {
+  const ids = rosterIds();
+  const i = ids.indexOf(id);
+  if (i < 0) {
+    console.error(`no team "${id}" — available: ${ids.join(", ")}`);
+    process.exit(1);
+  }
+  return i;
+}
 
 const ALL = ["hero", "front", "side", "rear", "top", "wingFront", "wingRear"];
 const GROUPS = {
@@ -282,12 +293,12 @@ async function frame(page, teamId, tag, view) {
   await nudge(page, zoom > 0 ? "cs-view-in" : "cs-view-out", zoom);
   await nudge(page, strafe > 0 ? "cs-pan-right" : "cs-pan-left", strafe);
   await nudge(page, dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", dolly);
-  await settleGarage(page, { frames: 6 });
+  await settleGarage(page, { frames: settleShot, presentMs });
   const png = join(outDir, `${teamId}-${tag}-${view}.png`);
   let gate = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt) await settleGarage(page, { frames: 4 });
-    const shot = await screenshotGameCanvas(page, png);
+  for (let attempt = 0; attempt < gateTries; attempt++) {
+    if (attempt) await settleGarage(page, { frames: settleShot, presentMs });
+    const shot = await screenshotGameCanvas(page, png, { skipAwait: true });
     gate = await bayRendered(png, vp[0]);
     if (gate.ok) {
       const cam = await page.evaluate(() => window.__apex.garageCam());
@@ -316,7 +327,7 @@ async function applyLivery(page, teamId, livId) {
     const extra = got.have ? ` (have ${got.have.join(",")})` : "";
     throw new Error(`${got.error}${extra}`);
   }
-  await settleGarage(page, { frames: 12 });
+  await settleGarage(page, { frames: settleApply, presentMs });
   return got.name;
 }
 
@@ -350,7 +361,7 @@ async function applyDesign(page, teamId, { spineSide, spineLogo }) {
     const extra = got.have ? ` (have ${got.have.join(",")})` : "";
     throw new Error(`${got.error}${extra}`);
   }
-  await settleGarage(page, { frames: 12 });
+  await settleGarage(page, { frames: settleApply, presentMs });
   return got.name;
 }
 
@@ -372,8 +383,8 @@ async function switchTeam(page, teamId) {
     await page.waitForFunction(() => {
       const tp = document.getElementById("teampicker");
       return !tp || tp.hidden || getComputedStyle(tp).display === "none";
-    }, null, { polling: 100, timeout: 15000 }).catch(() => {});
-    await settleGarage(page, { frames: 12 });
+    }, null, { polling: 100, timeout: isFastMode ? 8000 : 15000 }).catch(() => {});
+    await settleGarage(page, { frames: settleSwitch, presentMs });
   }
   const teamLabel = await page.evaluate(() => document.getElementById("cs-team")?.textContent || "");
   if (!teamLabel) throw new Error(`garage opened but #cs-team empty after switch to ${teamId}`);
@@ -399,7 +410,7 @@ async function captureDesigns(page, teamId, teamLabel, { liveBuild, rollupEntrie
         s.liveryName = name;
         s.spineLogo = d.spineLogo || null;
         s.spineSide = d.spineSide;
-        if (withLabels) {
+        if (labelEachShot) {
           const sub = [name, buildNote, `dist ${s.dist}`].join(" · ");
           s.labeled = await labelShot(s.png, v.toUpperCase(), sub);
         }
@@ -415,7 +426,7 @@ async function captureDesigns(page, teamId, teamLabel, { liveBuild, rollupEntrie
           });
         }
       }
-      if (withLabels) {
+      if (teamSheets) {
         const sheet = await buildContactSheet(tagShots, { teamId, tag, liveBuild, teamLabel });
         if (sheet) {
           sheets.push(sheet);
@@ -431,7 +442,7 @@ async function captureDesigns(page, teamId, teamLabel, { liveBuild, rollupEntrie
         const s = await frame(page, teamId, liv, v);
         s.livery = liv;
         s.liveryName = name;
-        if (withLabels) {
+        if (labelEachShot) {
           const sub = [name, buildNote, `dist ${s.dist}`].join(" · ");
           s.labeled = await labelShot(s.png, v.toUpperCase(), sub);
         }
@@ -439,7 +450,7 @@ async function captureDesigns(page, teamId, teamLabel, { liveBuild, rollupEntrie
         shots.push(s);
         console.log(`shot ${teamId}/${liv}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} -> ${s.png}${s.labeled ? " +" + s.labeled : ""}`);
       }
-      if (withLabels) {
+      if (teamSheets) {
         const sheet = await buildContactSheet(tagShots, { teamId, tag: liv, liveBuild, teamLabel });
         if (sheet) sheets.push(sheet);
       }
@@ -464,7 +475,11 @@ async function main() {
     gameUrl = srv.url;
   }
   if (combo) console.log(`combo ${comboKey}: logo=${combo.spineLogo} side=${combo.spineSide} views=${views.join(",")} zoom=${zoom} pan=${strafe},${dolly}`);
-  if (multiTeam) console.log(`teams (${teams.length}): ${teams.join(", ")}`);
+  if (multiTeam) {
+    console.log(`teams (${teams.length}): ${teams.join(", ")}`);
+    if (rollupOnly) console.log(`rollup-only (${rollupView}) — --full-views for every preset per team`);
+    if (isFastMode) console.log(`fast: settle ${settleShot}/${settleApply}f present ${presentMs}ms`);
+  }
 
   const t0 = Date.now();
   const browser = await launchChromium({ headless: true, args: chromiumArgsForBackend("webgl2") });
@@ -503,7 +518,8 @@ async function main() {
     const meta = join(outDir, multiTeam ? "all-teams-angles.json" : `${teams[0]}-angles.json`);
     writeFileSync(meta, JSON.stringify({
       teams, combo: comboKey || null, liveries, spineSides, spineLogos,
-      live: isLive, liveBuild, zoom, pan: [strafe, dolly], viewport: vp, views,
+      live: isLive, liveBuild, rollupOnly, fast: isFastMode,
+      zoom, pan: [strafe, dolly], viewport: vp, views,
       rollupView, shots: allShots, sheets: allSheets, teamRollup,
       seconds: +((Date.now() - t0) / 1000).toFixed(1),
     }, null, 2));

@@ -32,8 +32,8 @@ test("render-car has a spine preset and repeatable --shot customs", () => {
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
-  assert.match(src, /viewsDefault = combo\?\.views \?\? \(isLive \? "all" : "spine"\)/,
-    "default views=spine locally, all on --live, combo overrides");
+  assert.match(src, /viewsDefault = rollupOnly \? rollupView/,
+    "rollup-only trims views; combo/--views/--full-views override");
   assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
   assert.match(src, /screenshotGameCanvas/, "must reuse soft-present capture helper");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
@@ -44,6 +44,8 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src, /COMBOS|"wrap-spine"/, "combo presets bundle logo/side/views/zoom");
   assert.match(src, /parseTeams|teamArg === "all"|arg === "all"/, "supports --team=all roster walk");
   assert.match(src, /buildTeamRollup/, "multi-team rollup contact sheet");
+  assert.match(src, /rollupOnly/, "multi-team combo defaults to rollup-only survey");
+  assert.match(src, /skipAwait:\s*true/, "skips duplicate present wait after settle");
   assert.match(src, /Excludes DEFAULT_CUSTOM|block\[1\]\.matchAll/,
     "rosterIds parses LIST only, not DEFAULT_CUSTOM");
   assert.doesNotMatch(src, /page\.reload\(/, "no second boot — openGarage pins the team live");
@@ -102,6 +104,7 @@ test("screenshotGameCanvas prefers #game-soft before freezing for CDP", () => {
   assert.ok(soft >= 0, "soft overlay path present");
   assert.ok(freeze < 0 || freeze > soft, "page-clip freeze is fallback after soft path");
   assert.match(fn, /forceCdp:\s*true/, "CDP leg skips soft retry after freeze");
+  assert.match(fn, /opts\.skipAwait/, "caller can skip second present wait");
 });
 
 test("carshot uses soft→CDP clip, not page.screenshot", () => {
