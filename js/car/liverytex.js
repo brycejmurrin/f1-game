@@ -1768,11 +1768,25 @@ const LiveryTex = (function () {
     // lettering, and Red Bull's bull measures 2.26 against its navy and reads
     // clearly on track (tools/shot/shot.mjs --team, 2026-09-08).
     const BAND_ON_COVER = 2.0;
-    // The team's own paints come first, so a white cover gets the RED saddle the
-    // SF-26 wears, and the inks are the last resort for a livery whose colours
-    // all vanish on it. pickOn holds the rule; see it for why FIRST, not best.
+    // SPINE TINT (liv.spineTint) — the crown band's OWN colour. Every design
+    // here took `stripe || accent`, which ties the crown to two paints that live
+    // elsewhere on the car: `stripe` runs the whole spine (nose tip through the
+    // monocoque to the cover ridge) and `accent` is tertiary trim. Aston
+    // Martin's launch car is a DARK band on a green cover and its accent is
+    // LIME, so the band came out lime — and setting `stripe` dark to fix the
+    // band darkens the nose, which the photographs contradict. Absent, the
+    // default is exactly what it was, so every shipped livery is byte-identical.
+    //
+    // An EXPLICIT spineTint is honoured as picked and skips the contrast re-pick:
+    // it is a deliberate author choice about one surface, the way `cover` is, and
+    // a guard that overrides it would defeat the field. The re-pick still owns
+    // the DERIVED default, which is where the invisible bands came from — and it
+    // is pickOn now, the one place that answers "will this be seen where it
+    // lands" for the band, the sun and the flank alike. The team's own paints
+    // come first, so a white cover gets the RED saddle the SF-26 wears; see
+    // pickOn for why FIRST that clears, not the highest-scoring.
     const BAND_ORDER = [stripe, accent, c2, c1, INK_LIGHT, INK_DARK];
-    const bandC = pickOn(BAND_ORDER, coverPaint, BAND_ON_COVER);
+    const bandC = colors.spineTint || pickOn(BAND_ORDER, coverPaint, BAND_ON_COVER);
 
     // Engine-cover panel: tail graphic + full crest (badge is fine on the flat top).
     // The three DESIGN picks. Absent = today's atlas, pixel for pixel.
