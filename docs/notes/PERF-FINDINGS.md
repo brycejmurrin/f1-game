@@ -2735,9 +2735,9 @@ is the §2l lesson arriving for the third time on this lead.
 `captureRT === ldrRT` on both legs, so nothing after the post chain touches it —
 consistent with the blit already being exonerated.
 
-**What this does NOT settle, and the honest reason:** `_readLdr` reads BYTES, so
-the HDR `sceneRT` saturates to 255/255 on both legs — most of the frame is >= 1.0
-in HDR. The input column is therefore uninformative, and the lit pass is NOT
+**What this did NOT settle, and the reason** (now resolved one section down —
+the byte read was punning half-float data, not saturating): `_readLdr` reads
+BYTES, so the HDR `sceneRT` came back 255/255 on both legs. The input column is therefore uninformative, and the lit pass is NOT
 excluded. **The next measurement is a scaled or float read of `sceneRT`** (scale
 by 1/8 in the read, or read it as float): if the two legs' HDR inputs match, the
 divergence is inside the post chain and `tsl-post.js` is the place to look; if
@@ -2790,6 +2790,31 @@ counts PRESENTS, and none of the three columns above is one.**
 The census prints `gov.fps` for every leg and has since the governor was added.
 Nothing there says it can be the initialisation value, which is how it got read
 as real — here, today, by me. Worth a line in the Verdict.
+
+### LOCALISED: the divergence starts in the LIT PASS, not the post chain
+
+`__tlx.lumaDbg()` now decodes the HDR target as half-float instead of forcing it
+through `_readLdr`'s `Uint8ClampedArray`. Same pinned camera, 640x360:
+
+| target | TLX/WebGL2 | TLX/WebGPU | ratio |
+|---|---|---|---|
+| `sceneRT` — post IN (HDR, half) | mean **0.257**, max 0.975 | mean **0.194**, max 0.834 | **0.755** |
+| `ldrRT` — post OUT (byte) | 76.70, max 167.7 | 45.56, max 162.3 | 0.594 |
+
+**The HDR world is already ~24% darker on the WebGPU leg BEFORE the post chain
+runs.** That is the first positive localisation this lead has produced after
+five refutations: the lit pass diverges, and post is not the origin. Post is not
+innocent of the SIZE of the final gap — 0.755 in becomes 0.594 out — but that is
+what a filmic curve does to a darker input in its toe, so it may be behaving
+correctly on bad input. **Look at the lit pass (`tsl-lit.js` and what feeds it)
+before looking at `tsl-post.js`.**
+
+*And the earlier "HDR saturates" explanation was wrong.* The byte read reported
+255/255 on both legs and this note explained that as "most of the frame is >= 1.0
+in HDR". It is not: the actual HDR max is 0.975 and 0.834, both BELOW 1.0.
+`_readLdr` was punning a half-float `Uint16Array` through a `Uint8ClampedArray`,
+so those 255s were decoded garbage, not saturation. A byte read of a half-float
+target is not a dim reading — it is not a reading at all.
 
 ### On WebGPU alternatives, since the question was asked
 

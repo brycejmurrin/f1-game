@@ -191,6 +191,11 @@ test.describe("Liveries — creator", () => {
     const finRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL FIN"))');
     const artRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL GRAPHIC"))');
     const rows = [badgeRow, styleRow, finRow, artRow];
+    // A NEW paint job starts on the TEAM'S OWN silhouette, and every 2026 team
+    // runs finShape "none" (js/data/teams.js), so the fin rows open correctly
+    // GREYED. This test is about the dependency RULE, not about the shipped
+    // default — so it puts a fin on the car itself rather than inheriting one.
+    await page.locator('[data-cs-pill="finShape:standard"]').click();
     for (const r of rows) await expect(r).toHaveAttribute("aria-disabled", "false");
     await expect(page.locator('[data-cs-pill="finBadge:logo"]')).toBeEnabled();
 
@@ -221,6 +226,11 @@ test.describe("Liveries — creator", () => {
     await page.locator(".cs-liv-create").click();
 
     const artRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL GRAPHIC"))');
+    // A NEW paint job starts on the TEAM'S OWN silhouette, and every 2026 team
+    // runs finShape "none" (js/data/teams.js), so the fin rows open correctly
+    // GREYED. This test is about the dependency RULE, not about the shipped
+    // default — so it puts a fin on the car itself rather than inheriting one.
+    await page.locator('[data-cs-pill="finShape:standard"]').click();
     await expect(artRow).toHaveAttribute("aria-disabled", "false");
     // Motif off + logo badge: nothing takes the colour.
     await page.locator('[data-cs-pill="finStyle:none"]').click();
@@ -268,7 +278,43 @@ test.describe("Liveries — creator", () => {
     // The tail-style row offers LiveryTex's list, stars included.
     const styles = await page.evaluate(() => LiveryTex.TAIL_STYLE_IDS.slice());
     expect(styles).toContain("stars");
+    // TAIL STYLE only paints on a fin, and a new draft inherits the team's
+    // fin-less 2026 shape, so give the car a blade before asking for the pill.
+    await page.locator('[data-cs-pill="finShape:standard"]').click();
     await expect(page.locator('[data-cs-pill="finStyle:stars"]')).toBeEnabled();
+  });
+
+  test("a new paint job opens on the team's own silhouette, not the plain car", async ({ page }) => {
+    await load(page);
+    await openSetup(page);
+    await page.locator('#cs-tabs [data-cs-cat="livery"]').click();
+    await page.locator(".cs-liv-create").click();
+    // NEW used to default every pill to the plain 2020s shape — a standard
+    // shark fin on a standard spine — which no 2026 team runs, so a fresh
+    // paint job silently changed the car's outline before a colour was picked.
+    // It now inherits the team's own livery pills.
+    const want = await page.evaluate(() => {
+      const t = Teams.LIST.find((x) => x.livery && x.livery.finShape);
+      return { id: t.id, finShape: t.livery.finShape, spineHeight: t.livery.spineHeight };
+    });
+    expect(want.finShape).toBe("none");           // the 2026 grid, as data
+    const active = await page.evaluate(() => {
+      const on = (k) => {
+        const b = document.querySelector('[data-cs-pill="' + k + '"].active');
+        return !!b;
+      };
+      return { finNone: on("finShape:none"), finStd: on("finShape:standard"),
+               dorsal: on("spineHeight:dorsal") };
+    });
+    expect(active.finNone, "a new draft starts fin-less like the team's car").toBe(true);
+    expect(active.finStd, "the plain shark fin must not be the starting shape").toBe(false);
+    expect(active.dorsal, "and on the team's dorsal spine").toBe(true);
+    // The fin rows are therefore greyed on open — correct information, not a
+    // dead control: FIN SHAPE itself stays live and brings them back.
+    const finRow = page.locator('.cs-liv-ed-row:has(.cs-liv-ed-lbl:text-is("TAIL FIN"))');
+    await expect(finRow).toHaveAttribute("aria-disabled", "true");
+    await page.locator('[data-cs-pill="finShape:standard"]').click();
+    await expect(finRow).toHaveAttribute("aria-disabled", "false");
   });
 
   test("the creator offers a finish choice and saves it onto the custom livery", async ({ page }) => {

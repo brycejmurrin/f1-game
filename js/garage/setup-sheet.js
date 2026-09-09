@@ -86,11 +86,53 @@ const PSEUDO_CATS = ["team", "tune", "livery"];
 // copy list are the other two spellings of these keys; team-livery.test.mjs
 // holds all three together.
 const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo",
-                          "rearWing", "cover", "fin", "finArt", "logo", "logo2", "logo3"];
+                          "rearWing", "cover", "spineTint", "fin", "finArt", "logo", "logo2", "logo3"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
                           coverVents: "none", spineHeight: "standard", spineSide: "none" };
+// WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
+// named a SURFACE, so the sheet could not answer its own first question: what
+// does this change? Worse, two rows read as a pair and are not one — ACCENT is
+// the second BASE colour (`c2`) that a dozen other rows fall back to, while
+// DETAIL is a THIRD colour (`accent`) that overrides c2 on six small trim
+// pieces. The labels invert the field names, so even the source misleads.
+//
+// A row that only INHERITS says so, because "already coloured" and "set" look
+// identical on the car: leave WINGS alone and it is c2, and the player has no
+// way to tell that from having chosen it. Surfaces are read from car3d.js —
+// keep them true to the code, not to the label.
+const LIV_ROW_HINT = {
+  c1: "PRIMARY — the bodywork itself: monocoque, nose, sidepods, engine cover.",
+  c2: "ACCENT — the second BASE colour. WINGS, REAR WING, TAIL FIN, T-CAM and DETAIL all fall back to this, so changing it moves all of them at once.",
+  accent: "DETAIL — a THIRD colour for trim only: the cover-flank pinstripe, the sidepod flash, the nose flank spans, the floor-edge lip and the fin strip. Unset = ACCENT.",
+  stripe: "BODY STRIPE — the full spine, nose tip to engine cover, broken only by the cockpit.",
+  noseStripe: "NOSE STRIPE — the nose crown only, tip to bulkhead. Layers on top of BODY STRIPE.",
+  nose: "NOSE CAP — a painted nose cone. Unset = the bodywork colour.",
+  pod: "SIDEPOD — the sidepod panel, both sides. Unset = the bodywork colour.",
+  cover: "ENGINE COVER — airbox, roll structure, cover loft and snorkel. Unset = the bodywork colour.",
+  spineTint: "SPINE TINT — the SPINE TOP band on the cover crown, and the saddle's flank half, ALONE. BODY STRIPE above runs the whole spine including the nose, so it cannot paint a dark band on a light nose. Unset = BODY STRIPE, else DETAIL.",
+  wing: "WINGS — the front and rear FLAPS. Unset = ACCENT.",
+  rearWing: "REAR WING — the rear mainplane block. Unset = ACCENT.",
+  fin: "TAIL FIN — the shark-fin plate. Unset = ACCENT. Needs a FIN SHAPE other than NONE.",
+  finArt: "TAIL GRAPHIC — the fin motif and the ink of a number or code badge. Unset = picked automatically to contrast with the fin, since art the fin's own colour is invisible.",
+  halo: "HALO — the cockpit halo loop.",
+  logo: "The dominant shape of the team mark, wherever it is drawn: fin badge, cover crown, garage wall.",
+  logo2: "The mark's SECOND shape — a backing plate, a traced layer or an inner island, named per team. Marks built from one loop have no such row.",
+  logo3: "OUTLINE — a rim around the mark. Offered on every mark, off by default.",
+  finish: "FINISH — the paint surface: gloss, satin or chrome.",
+  wingCarbon: "WING FLAPS — paint, or exposed carbon on every flap front and rear. Carbon overrides the WINGS and REAR WING colours.",
+  numFont: "NUMBER FONT — the race number's typeface, on the nose and wherever a badge carries it.",
+  sponsors: "SPONSORS — which set of names the car carries. CLEAN paints none, which also empties the wordmark spine designs.",
+  finShape: "FIN SHAPE — the shark-fin blade. NONE removes it, and with it the fin's paint, graphic, style and badge. Every 2026 team car runs NONE.",
+  finStyle: "TAIL STYLE — the motif painted on the fin.",
+  finBadge: "FIN BADGE — what the fin carries: the mark, the race number, the driver code, or nothing.",
+  spineLogo: "SPINE TOP — what the engine-cover CROWN carries, painted on bare body colour.",
+  tcam: "T-CAM — the camera housing colour. AUTO is the real rule: car 1 black, car 2 yellow.",
+  coverVents: "COVER VENTS — cooling slits cut into the engine cover. Geometry, not paint.",
+  spineHeight: "SPINE HEIGHT — how tall the cover crown runs behind the roll hoop. DORSAL is the fin-less 2026 look every team uses.",
+  spineSide: "SPINE SIDE — what the cover FLANK carries, both sides: number, mark, code or a graphic.",
+};
 // `liv` is a saved livery for edit/copy, or a bare {c1,c2} for a new one: an
 // absent colour becomes "" (no paint) and an absent pill its own default.
 function livDraftFrom(liv, name) {
@@ -98,6 +140,30 @@ function livDraftFrom(liv, name) {
   for (const k of LIV_DRAFT_COLORS) d[k] = liv[k] ? arrToHex(liv[k]) : "";
   for (const k in LIV_DRAFT_PILLS) d[k] = liv[k] || LIV_DRAFT_PILLS[k];
   return d;
+}
+
+// THE REVERSE, and the ONLY one. Two more hand-written copies of the same field
+// list used to live downstream — the SAVE's `if (d.x && d.x !== <default>)`
+// chain and livePreviewDraft's object literal — so the car you were LOOKING at
+// while dragging a colour and the livery you got when you pressed SAVE & FIT
+// were assembled by different code. They agreed only by hand.
+//
+// One rule, two callers. A colour is written when it is set; a pill when it
+// differs from its own default — which is what keeps a saved livery sparse
+// (and the garage file small). `keepNull` is the only difference: the live
+// preview needs every key PRESENT so resolveLivery's draft branch can read a
+// null and paint the fallback, while the stored livery omits them.
+function livDraftTo(d, keepNull) {
+  const out = {};
+  for (const k of LIV_DRAFT_COLORS) {
+    const v = d[k] ? hexToArr(d[k]) : null;
+    if (v || keepNull) out[k] = v;
+  }
+  for (const k in LIV_DRAFT_PILLS) {
+    const v = d[k] && d[k] !== LIV_DRAFT_PILLS[k] ? d[k] : null;
+    if (v || keepNull) out[k] = v;
+  }
+  return out;
 }
 
 function csTabId(id) { return "cs-tab-" + String(id).replace(/[^a-z0-9_-]/gi, "-"); }
@@ -605,11 +671,17 @@ function buildLiveryOptions(container, team) {
     row.appendChild(main);
     const tag = document.createElement("span"); tag.className = "cs-opt-cost free"; tag.textContent = "NEW"; row.appendChild(tag);
     row.onclick = () => {
-      // A blank canvas: the team's two colours, no detail paint, every pill at
-      // its own default. (That means a STANDARD fin, which is not the shape any
-      // 2026 team car carries — see teams.js. Deliberate: a new paint job starts
-      // from the plain car, not from the team's. Change it here if that reads wrong.)
-      csLivDraft = livDraftFrom({ c1: team.color, c2: team.color2 }, "");
+      // A blank canvas is blank PAINT, not a different car. Every pill defaults
+      // to the plain 2020s shape — a standard shark fin on a standard spine —
+      // and no 2026 team runs that: teams.js puts every one of them on
+      // finShape "none" + spineHeight "dorsal". So NEW used to hand back a
+      // car whose silhouette the player never chose and could only discover by
+      // comparing it with the grid. It now starts on the TEAM'S OWN shape (its
+      // livery pills) with none of its detail paint, so the only thing a new
+      // paint job changes is the paint.
+      const shape = {};
+      if (team.livery) for (const k in LIV_DRAFT_PILLS) if (team.livery[k]) shape[k] = team.livery[k];
+      csLivDraft = livDraftFrom(Object.assign({ c1: team.color, c2: team.color2 }, shape), "");
       csLivEditId = null;
       csLivCreating = true;
       if (G.soundOn) GameAudio.uiSelect();
@@ -797,6 +869,7 @@ function buildLiveryCreator(container, team) {
 
   const colorRow = (label, key, allowNone) => {
     const r = document.createElement("label"); r.className = "cs-liv-ed-row";
+    if (LIV_ROW_HINT[key]) { r.title = LIV_ROW_HINT[key]; r.setAttribute("aria-description", LIV_ROW_HINT[key]); }
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = label; r.appendChild(lb);
     const inp = document.createElement("input"); inp.type = "color";
     inp.value = /^#[0-9a-fA-F]{6}$/.test(d[key]) ? d[key] : "#000000";
@@ -822,6 +895,9 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
   wrap.appendChild(colorRow("ENGINE COVER", "cover", true));   // the airbox, roll hoop and cover top
+  // SPINE TINT colours the SPINE TOP band alone. BODY STRIPE above runs the
+  // whole spine including the nose, so it cannot say "dark band, light nose".
+  wrap.appendChild(colorRow("SPINE TINT", "spineTint", true));
   // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
   // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
   const wingRow = colorRow("WINGS", "wing", true), rearWingRow = colorRow("REAR WING", "rearWing", true);
@@ -848,6 +924,7 @@ function buildLiveryCreator(container, team) {
   // NUMBER FONT and SPONSORS (LiveryTex's id lists). Same nodes and classes.
   const pillRow = (label, key, values, dflt) => {
     const r = document.createElement("div"); r.className = "cs-liv-ed-row";
+    if (LIV_ROW_HINT[key]) { r.title = LIV_ROW_HINT[key]; r.setAttribute("aria-description", LIV_ROW_HINT[key]); }
     const lb = document.createElement("span"); lb.className = "cs-liv-ed-lbl"; lb.textContent = label; r.appendChild(lb);
     const group = document.createElement("span"); group.className = "cs-liv-ed-finish";
     const btns = [];
@@ -920,32 +997,7 @@ function buildLiveryCreator(container, team) {
     // orphans, and saveLiveryId below re-points the selection.
     const id = "custom_" + livIdCounter();
     const liv = { id, name: (d.name || "").trim() || "Custom", c1: hexToArr(d.c1), c2: hexToArr(d.c2) };
-    if (d.stripe) liv.stripe = hexToArr(d.stripe);
-    if (d.noseStripe) liv.noseStripe = hexToArr(d.noseStripe);
-    if (d.accent) liv.accent = hexToArr(d.accent);
-    if (d.nose) liv.nose = hexToArr(d.nose);
-    if (d.pod)  liv.pod  = hexToArr(d.pod);
-    if (d.wing) liv.wing = hexToArr(d.wing);
-    if (d.cover) liv.cover = hexToArr(d.cover);
-    if (d.rearWing) liv.rearWing = hexToArr(d.rearWing);
-    if (d.wingCarbon && d.wingCarbon !== "paint") liv.wingCarbon = d.wingCarbon;
-    if (d.fin)  liv.fin  = hexToArr(d.fin);
-    if (d.finArt) liv.finArt = hexToArr(d.finArt);
-    if (d.logo) liv.logo = hexToArr(d.logo);
-    if (d.logo2) liv.logo2 = hexToArr(d.logo2);
-    if (d.logo3) liv.logo3 = hexToArr(d.logo3);
-    if (d.halo) liv.halo = hexToArr(d.halo);
-    if (d.finish && d.finish !== "gloss") liv.finish = d.finish;
-    if (d.numFont && d.numFont !== "default") liv.numFont = d.numFont;
-    if (d.sponsors && d.sponsors !== "default") liv.sponsors = d.sponsors;
-    if (d.finStyle && d.finStyle !== "team") liv.finStyle = d.finStyle;
-    if (d.finBadge && d.finBadge !== "logo") liv.finBadge = d.finBadge;
-    if (d.spineLogo && d.spineLogo !== "logo") liv.spineLogo = d.spineLogo;
-    if (d.finShape && d.finShape !== "standard") liv.finShape = d.finShape;
-    if (d.tcam && d.tcam !== "team") liv.tcam = d.tcam;
-    if (d.coverVents && d.coverVents !== "none") liv.coverVents = d.coverVents;
-    if (d.spineHeight && d.spineHeight !== "standard") liv.spineHeight = d.spineHeight;
-    if (d.spineSide && d.spineSide !== "none") liv.spineSide = d.spineSide;
+    Object.assign(liv, livDraftTo(d, false));
     const existing = getCustomLiveries(team.id);
     // Edit-in-place replaces the entry that carried the OLD id; create appends.
     setCustomLiveries(team.id, csLivEditId ? existing.map((l) => (l.id === csLivEditId ? liv : l)) : existing.concat([liv]));
@@ -970,27 +1022,8 @@ function livePreviewDraft(team, d) {
   if (key === _livPreviewKey) return;
   _livPreviewKey = key;
   if (invalidateDecalTextures) invalidateDecalTextures(team.id);
-  G.livDraftOverride = { teamId: team.id, liv: { c1: hexToArr(d.c1), c2: hexToArr(d.c2), stripe: d.stripe ? hexToArr(d.stripe) : null, accent: d.accent ? hexToArr(d.accent) : null,
-    nose: d.nose ? hexToArr(d.nose) : null, pod: d.pod ? hexToArr(d.pod) : null, wing: d.wing ? hexToArr(d.wing) : null, halo: d.halo ? hexToArr(d.halo) : null,
-    fin: d.fin ? hexToArr(d.fin) : null, finArt: d.finArt ? hexToArr(d.finArt) : null,
-    logo: d.logo ? hexToArr(d.logo) : null,
-    logo2: d.logo2 ? hexToArr(d.logo2) : null,
-    logo3: d.logo3 ? hexToArr(d.logo3) : null,
-    noseStripe: d.noseStripe ? hexToArr(d.noseStripe) : null,
-    finish: d.finish && d.finish !== "gloss" ? d.finish : null,
-    numFont: d.numFont && d.numFont !== "default" ? d.numFont : null,
-    sponsors: d.sponsors && d.sponsors !== "default" ? d.sponsors : null,
-    finStyle: d.finStyle && d.finStyle !== "team" ? d.finStyle : null,
-    finBadge: d.finBadge && d.finBadge !== "logo" ? d.finBadge : null,
-    spineLogo: d.spineLogo && d.spineLogo !== "logo" ? d.spineLogo : null,
-    finShape: d.finShape && d.finShape !== "standard" ? d.finShape : null,
-    tcam: d.tcam && d.tcam !== "team" ? d.tcam : null,
-    coverVents: d.coverVents && d.coverVents !== "none" ? d.coverVents : null,
-    spineHeight: d.spineHeight && d.spineHeight !== "standard" ? d.spineHeight : null,
-    spineSide: d.spineSide && d.spineSide !== "none" ? d.spineSide : null,
-    cover: d.cover ? hexToArr(d.cover) : null,
-    rearWing: d.rearWing ? hexToArr(d.rearWing) : null,
-    wingCarbon: d.wingCarbon && d.wingCarbon !== "paint" ? d.wingCarbon : null } };
+  G.livDraftOverride = { teamId: team.id,
+    liv: Object.assign({ c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, true)) };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
