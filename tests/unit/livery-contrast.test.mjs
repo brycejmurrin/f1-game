@@ -225,7 +225,8 @@ const markOnItsGround = (teamId, liv, region, key, ground, N = 32) => {
   const withM = A.paint(teamId, liv);
   const without = A.paint(teamId, Object.assign({}, liv, { [key]: "none" }));
   const R = A.LT.REGIONS[region];
-  let worst = null, at = null, n = 0;
+  const pairs = new Map();
+  let n = 0;
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
     const x = R.x + R.w * (i + 0.5) / N, y = R.y + R.h * (j + 0.5) / N;
     const a = paintAt(withM, x, y), b = paintAt(without, x, y);
@@ -240,7 +241,20 @@ const markOnItsGround = (teamId, liv, region, key, ground, N = 32) => {
     // paint", not "black". Reading it as black compared the mark to a surface
     // that does not exist and reported every dark mark on a dark car as broken.
     const v = contrastCss(a, b || ground);
-    if (v != null && (worst == null || v < worst)) { worst = v; at = `${a} on ${b}`; }
+    if (v == null) continue;
+    const k = `${a} on ${b || ground}`;
+    if (!pairs.has(k)) pairs.set(k, { v, n: 0 });
+    pairs.get(k).n++;
+  }
+  // THE WORST PAIR THAT COVERS REAL AREA, not the worst single sample. Every
+  // glyph edge anti-aliases against whatever it abuts, so one boundary pixel
+  // of white-on-lime made this report Aston Martin's driver code as invisible
+  // while 286 of its 288 sampled points read 7.73:1. A pair has to hold at
+  // least 5 % of the mark's own ink before it describes what a viewer sees.
+  let worst = null, at = null;
+  for (const [k, p] of pairs) {
+    if (p.n < Math.max(3, n * 0.05)) continue;
+    if (worst == null || p.v < worst) { worst = p.v; at = k; }
   }
   return { worst, at, n: n / (N * N) };
 };
@@ -297,6 +311,59 @@ test("a flank mark clears the flank the crown design actually left it", () => {
     "williams saddle/wordmark", "williams saddle/duo",
   ]);
   assert.deepEqual(bad.filter((k) => !KNOWN.has(k)), [], "a flank mark went invisible");
+  assert.deepEqual([...KNOWN].filter((k) => !bad.includes(k)), [],
+    "these KNOWN gaps now pass — delete them from KNOWN");
+});
+
+// A flank pick has to land where the flank can be SEEN — measured, and NOT
+// currently satisfied. tools/car/flank-occlusion.mjs projects the real body and
+// both rear wheels through the garage side camera: the tyre sits 0.5 m outboard
+// of the cover and covers its aft half (12 % hidden at u 0.5, 48 % at 0.6, 86 %
+// at 0.7, 100 % past 0.8). Pure car geometry, identical for every team.
+//
+// Red Bull is the only team whose bull is TRACED, so wrapMarkSpan gives it a
+// span of u 0.06 -> 0.61 while the visible flank ends at 0.62 — the bull fills
+// the whole visible band. `sideFrom` then starts every flank pick aft of it, at
+// u 0.57-0.79, which is behind the tyre.
+//
+// THERE ARE ONLY TWO POSITIONS, and this is why the entry below is recorded
+// rather than fixed. Clamping sideFrom to 0.41 puts the mark at u 0.49-0.62:
+// 0 % hidden, and INSIDE the bull's own span, so it lands on the bull's haunch
+// and reads as a smudge (shot 2026-09-09, garage side view, artifacts/
+// CLAMP-FLANK-CROP.png). Hidden or colliding — no third placement exists while
+// the bull is that wide. The real choices are to shrink the bull under `wrap`
+// or to stop putting a second mark on a flank that already wears one, and both
+// change a shipped car's look, so both are the owner's call and not a guard's.
+//
+// The clamp was written, measured, SHOT, and reverted on the strength of the
+// shot: the metric improved and the render got worse.
+test("a flank MARK lands where the flank is visible, under every crown", async () => {
+  const { loadParts } = await import("../../tools/car/parts-sweep.mjs");
+  const { occlusionMap } = await import("../../tools/car/flank-occlusion.mjs");
+  const { sweep } = await import("../../tools/car/spine-station.mjs");
+  const MARKS = ["number", "logo", "code", "plate"];
+  // Measured on this tree. Fails if the list GROWS and fails if an entry starts
+  // passing, so neither a regression nor the fix can land unremarked.
+  // EMPTY, and it earned that: the four redbull `wrap` entries recorded here
+  // were fixed on the deploy branch by c4d585b63 and 89c8261db — the flank
+  // designs moved off the rear wheel and the bull was shortened and pushed
+  // forward. This guard reported them the moment that merge landed, which is
+  // the whole point of failing when an entry starts PASSING.
+  const KNOWN = new Set([]);
+  const bad = [];
+  for (const teamId of ["redbull", "ferrari", "mercedes"]) {
+    const om = occlusionMap(loadParts(), { team: teamId, grid: 96 });
+    const hiddenAt = (u, v) => om.cell[Math.min(om.rows - 1, (v * om.rows) | 0) * om.cols
+                                       + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1;
+    for (const logo of ["wrap", "panel"]) {
+      const r = sweep(A, { team: teamId, logo, sides: MARKS, hiddenAt });
+      for (const row of r.rows) {
+        if (!row.px || row.hidden == null) continue;
+        if (row.hidden > 0.25) bad.push(`${teamId} ${logo}/${row.spineSide}`);
+      }
+    }
+  }
+  assert.deepEqual(bad.filter((k) => !KNOWN.has(k)), [], "a flank mark went behind the car");
   assert.deepEqual([...KNOWN].filter((k) => !bad.includes(k)), [],
     "these KNOWN gaps now pass — delete them from KNOWN");
 });
