@@ -324,11 +324,24 @@ test("the wrap's flank badge is inked against the cover it lands on", () => {
   // pair [sun, cover] that the traced BULL gets, because the bull straddles the
   // sun disc. This badge does not: it is centred at v 0.50 and the sun's flank
   // ellipse bottoms out at v 0.28. Asking one ink to clear a light sun AND a
-  // dark cover is unsatisfiable, and an unsatisfiable floor comes back as a
-  // mid-tone that reads on NEITHER — Cadillac 1.25:1 on its own black cover,
-  // Mercedes 1.59:1 on its silver. Nine teams were unaffected, which is the
-  // trap: the split only appears when a team's sun and cover sit at opposite
-  // ends of the luminance range.
+  // dark cover is unsatisfiable, so the mark FAILED MARK_FLOOR on every one of
+  // those teams and markPalette fell back on the thing it falls back on: a
+  // HALO. Cadillac's crest went out near-black (1.04:1 on its own black cover)
+  // inside a white glow, Mercedes' star white (1.59:1) inside a dark one.
+  //
+  // WHICH IS WHY THE GARAGE HAD TO BE SHOT AND THE ATLAS WAS NOT ENOUGH. Scored
+  // as ink-against-cover this reads as "invisible", and it is not: the halo is
+  // load-bearing and the badge is legible, as a soft glow around a mark whose
+  // own colour has been thrown away. What is actually lost is identity —
+  // Cadillac's gold (#c9a45a) became #0f0f14, Racing Bulls' blue and Haas's red
+  // ring the same — plus the crispness, a halo being a blurred shadow pass.
+  // Scored on the cover alone the floor is satisfiable, the brand colour
+  // survives (Cadillac 8.43:1) and NO halo is drawn. Nine teams kept a readable
+  // badge throughout; the split only opens when a team's sun and cover sit at
+  // opposite ends of the luminance range.
+  //
+  // So this test asks for the mark to clear the cover ON ITS OWN, which is the
+  // stronger property: a halo is the rescue, not the goal.
   //
   // DOMINANT ink, not every colour: a lockup is layered (Cadillac's gold crest
   // carries a near-black INNER DETAIL, Haas's red ring a white H) and the inner

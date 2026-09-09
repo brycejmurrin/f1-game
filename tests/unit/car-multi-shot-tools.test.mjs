@@ -93,3 +93,19 @@ test("carshot uses soft→CDP clip, not page.screenshot", () => {
   assert.match(src, /clip:\s*\{\s*x:\s*96/, "keeps the tiny centre crop");
   assert.doesNotMatch(src, /page\.screenshot\(/, "no raw page.screenshot");
 });
+
+test("garage-angles walks a design when EITHER spine axis is given", () => {
+  // `--spine-logo=wrap` alone used to be a silent no-op: the walk was gated on
+  // spineSides.length, so with only a crown named the run fell through to the
+  // LIVERY branch, shot the team default, tagged the frames `default` and
+  // exited 0. A crown design could be signed off "checked in the garage"
+  // without ever having been applied — and the JSON sidecar still recorded
+  // `spineLogos: ["wrap"]`, because that is the CONFIG, not what was painted.
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /spineSides\.length \|\| spineLogos\.length/,
+    "either axis must start the design walk");
+  assert.doesNotMatch(src, /const designs = spineSides\.length\s*\n?\s*\?/,
+    "the spineSide-only gate must not return");
+  assert.match(src, /spineSides\.length \? spineSides : \[""\]/,
+    "a missing --spine-side must contribute one empty entry, not zero");
+});

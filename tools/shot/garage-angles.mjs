@@ -227,14 +227,21 @@ async function main() {
     console.log(`team sheet: ${teamLabel}  [switched=${switched}]`);
 
     const shots = [];
-    const designs = spineSides.length
+    // EITHER axis starts the design walk. Gating it on --spine-side alone made
+    // `--spine-logo=wrap` a silent no-op: the run fell through to the LIVERY
+    // branch, shot the team default, tagged the frames `default` and reported
+    // success, so a crown design could be "checked in the garage" without ever
+    // being applied (measured 2026-09-09 on cadillac/mercedes wrap). applyDesign
+    // has always tolerated the missing half — `side || def.spineSide || "none"`
+    // — so only this condition was ever wrong.
+    const designs = (spineSides.length || spineLogos.length)
       ? (spineLogos.length ? spineLogos : [""]).flatMap((logo) =>
-        spineSides.map((side) => ({ spineLogo: logo, spineSide: side })))
+        (spineSides.length ? spineSides : [""]).map((side) => ({ spineLogo: logo, spineSide: side })))
       : null;
     if (designs) {
       for (const d of designs) {
         const name = await applyDesign(page, d);
-        const tag = (d.spineLogo || "def") + "-" + d.spineSide;
+        const tag = (d.spineLogo || "def") + "-" + (d.spineSide || "def");
         for (const v of views) {
           const s = await frame(page, tag, v);
           s.liveryName = name;
