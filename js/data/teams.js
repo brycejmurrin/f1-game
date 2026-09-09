@@ -178,9 +178,26 @@ const Teams = (function () {
   const POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 
   /* The pace ladder the `tier` field above indexes: ground-speed scale per
-     tier, 0 fastest .. 4 slowest (~1.5% a step). game.js folds it with the
-     career development multiplier into each AI car's tierV. */
-  const TIER_V = [1.0, 0.988, 0.973, 0.958, 0.942];
+     tier, 0 fastest .. 4 slowest. game.js folds it with the career development
+     multiplier into each AI car's tierV.
+
+     COMPRESSED 2026-09-09 from [1.0, 0.988, 0.973, 0.958, 0.942] (~1.5% a step,
+     6.16% measured across the 21-car field) to ~0.52% a step, 2.10% across the
+     field. The old ladder plus the driver-skill span put the field 8.64% apart
+     on pace, and the 2025 F1 field was covered by 1.52 s/lap of race pace —
+     about 1.7% of a 90 s lap, with the widest recent seasons near 4%. Five
+     times the real spread cannot help but string the field out: it measured
+     344 m -> 1548 m at monza and 4.5 km at monaco over 240 s, which is a
+     procession, not a grand prix.
+
+     Compressed about the MEASURED FIELD MEAN (0.9631), not the table mean, so
+     the field's average pace is unchanged to the digit and the DIFF ladder in
+     js/physics/consts.js still means what it is calibrated to — the trap the
+     driver-ratings header names ("a rating would quietly make the whole field
+     faster at every difficulty"). The car:driver ratio is preserved (the tier
+     ladder is still ~2x the driver span), because that is the sport.
+     Evidence: docs/notes/AI-FIELD-RESEARCH.md. */
+  const TIER_V = [0.9759, 0.9717, 0.9665, 0.9613, 0.9558];
 
   /* The MY TEAM custom entry — same record shape as LIST, the seed a fresh
      apex26.customTeam save starts from (game.js loadCustomTeam). */

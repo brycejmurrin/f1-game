@@ -92,9 +92,15 @@ function overall(r) {
 // The span is deliberately ~2.7% across the grid, against TIER_V's ~5.8% across
 // the tiers: the car still dominates, as it does in the sport, but a great driver
 // in a midfield car can take the fight to a poor one in a better car.
-const SKILL_BASE = 0.856;
-const SKILL_SPAN = 0.13333;   // × (pace/100)
-const SKILL_JITTER = 0.03;
+// COMPRESSED 2026-09-09 alongside TIER_V (js/data/teams.js), by the same factor
+// and about the measured field mean (0.9679), so the mean skill is unchanged and
+// only the SPREAD moves: 3.19 % across the field -> ~1.1 %. Pre-compression
+// values were 0.856 / 0.13333 / 0.03. Together with the tier ladder this takes
+// the field from 8.64 % apart on pace to ~3 %, inside the widest recent F1
+// season (~4 %) and above the 2025 field's 1.7 % — see the note on TIER_V.
+const SKILL_BASE = 0.92907;
+const SKILL_SPAN = 0.04627;   // × (pace/100)
+const SKILL_JITTER = 0.01041;
 
 function skill(r, roll) {
   const jitter = (roll - 0.5) * SKILL_JITTER * (1 - r.consistency / 100);
