@@ -240,7 +240,19 @@
   function liveryList(team) { return Liveries.forTeam(team); }
   function resolveLiv(team) {
     const list = liveryList(team);
-    const l = (S.livery && list.find(x => x.id === S.livery)) || list[0];
+    // S.livery is an ID, and a caller who hands over a livery OBJECT gets the
+    // team default rendered back with no complaint — a script that varies one
+    // field then screenshots the result photographs the same car every time.
+    // Cost a whole afternoon on 2026-09-09. An object is now used AS the
+    // livery, and an id nothing matches says so instead of falling back
+    // silently.
+    let l;
+    if (S.livery && typeof S.livery === "object") l = S.livery;
+    else {
+      l = (S.livery && list.find(x => x.id === S.livery)) || list[0];
+      if (S.livery && typeof S.livery === "string" && !list.some(x => x.id === S.livery))
+        Log.warn("carview", `livery "${S.livery}" is not one of ${team.id}'s — rendering ${l.id || "the default"}`);
+    }
     return { c1: S.colors ? S.colors[0] : l.c1, c2: S.colors ? S.colors[1] : l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null,
