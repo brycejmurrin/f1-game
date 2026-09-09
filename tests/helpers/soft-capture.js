@@ -9,12 +9,16 @@ export async function awaitSoftCapture(page, timeoutMs = 20_000) {
   if (startGen < 0) return;
   // Poll from Node — do not awaitSoftPresent inside evaluate or the page main
   // thread stalls long enough to starve the render loop on a slow SwiftShader box.
-  await page.waitForFunction((gen) => {
+  // Two generations: the first blit after snapCam can still belong to a frame
+  // that started before invalidateSoftPresent / lightTune landed (measured as
+  // byte-identical grade captures on SwiftShader, 2026-09-09).
+  const needGen = startGen + 2;
+  await page.waitForFunction((target) => {
     const g = window.GLX;
     if (!g?.softPresent?.()) return true;
     const st = g.softPresentState?.();
-    return !!(st && st.gen > gen);
-  }, startGen, { polling: 100, timeout: timeoutMs });
+    return !!(st && st.gen >= target);
+  }, needGen, { polling: 100, timeout: timeoutMs });
 }
 
 export async function pageScreenshot(page, opts = {}) {
