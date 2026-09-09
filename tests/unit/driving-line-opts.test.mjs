@@ -91,11 +91,31 @@ test("each row round-trips through the store under its own key", () => {
   assert.equal(rows.get("pm-brakecue").read(), "off");
   rows.get("pm-brakecue").write("on");
   assert.equal(M.brakeCue(), true);
-  assert.equal(written.brakeCue, "on", "stored as the string the loader reads back");
+  // `lineBrakeCue`, not `brakeCue`: that key belongs to the steering panel's
+  // 1-10 slider (js/input/steer-tuning.js), which owned it at the same time as
+  // this flag did. The store JSON-parses, so each read the other's write back at
+  // full type and both silently broke — see tests/unit/store-key-types.test.mjs.
+  assert.equal(written.lineBrakeCue, "on", "stored as the string the loader reads back");
   assert.equal(rows.get("pm-brakecue").read(), "on");
   rows.get("pm-brakecue").write("off");
   assert.equal(M.brakeCue(), false);
-  assert.equal(written.brakeCue, "off");
+  assert.equal(written.lineBrakeCue, "off");
+});
+
+test("the pre-rename key is carried over, but only when it is a STRING", () => {
+  // A player who set this before the rename has "on"/"off" under the shared key,
+  // and that is their choice — it is carried. A NUMBER there is the steering
+  // slider's notch, which never said anything about this switch, so reading it
+  // as one is how the collision looked from this side: the ribbon's cue flipped
+  // according to a slider in a different panel.
+  assert.equal(load({ stored: { brakeCue: "on" } }).M.brakeCue(), true,
+    "a legacy string is the author's pick and survives the rename");
+  assert.equal(load({ stored: { brakeCue: 4 } }).M.brakeCue(), false,
+    "the steering slider's notch is not this flag");
+  assert.equal(load({ stored: { brakeCue: 10 } }).M.brakeCue(), false);
+  // The new key wins outright when both are present.
+  assert.equal(load({ stored: { brakeCue: "on", lineBrakeCue: "off" } }).M.brakeCue(), false);
+  assert.equal(load({ stored: { brakeCue: "off", lineBrakeCue: "on" } }).M.brakeCue(), true);
 });
 
 test("it wires on DOMContentLoaded when the document is still loading", () => {
