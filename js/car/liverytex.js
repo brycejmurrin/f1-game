@@ -1658,10 +1658,10 @@ const LiveryTex = (function () {
   // "plate" the SF-26's number on a contrasting panel.
   // "duo" is the RB22's flank: the title sponsor large and aft, the partner
   // SPINE SIDE: flank graphics. Compact marks (number/logo/code/plate) hang at
-  // FLANK_MARK. Band graphics: wordmark/duo (type), bars (thick crease stripe),
-  // slash (one rake), split (forward colour panel), chevron (one arrow), ribbon
-  // (number-in-strip), lockup (number + bare mark).
-  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash", "split", "bars", "chevron", "ribbon", "lockup"];
+  // FLANK_MARK. Type: wordmark/duo/title. Graphics: bars/slash/split/chevron/
+  // band/sash. Combos: ribbon (number-in-strip), lockup (number+mark), emblem
+  // (large bare crest).
+  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash", "split", "bars", "chevron", "ribbon", "lockup", "title", "emblem", "band", "sash"];
   // Where a MARK (logo / number / code / plate) sits on the flank canvas.
   // v is the centre, 0 at the shoulder crease and 1 at the sidepod line.
   // Hung at 0.56 the plate sat in the sidepod (owner: "a little low"); hung
@@ -2176,10 +2176,10 @@ const LiveryTex = (function () {
       });
       ctx.restore();
     });
-    if (spineSide === "logo") {
-      // On the saddle the flank IS the panel — a crest the size of the fin badge
-      // vanishes at SIDE+zoom (measured share 0.02 on Red Bull). Hang it a touch
-      // further forward and bare so the bulls fill the box, not the plate disc.
+    if (spineSide === "logo" || spineSide === "emblem") {
+      // logo: team mark at FLANK_MARK (full lockup when an image exists).
+      // emblem: LARGE bare crest — the garage-readable hero mark (share ~0.03
+      // for logo was still tiny at SIDE+zoom on saddle).
       const paintFlankLogo = (Rm, bare) => {
         if (LOGOS[teamId]) {
           drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], flankBg, inkFlank), emblemRim);
@@ -2188,14 +2188,15 @@ const LiveryTex = (function () {
           palette: markPalette(teamId, colors, spineLogo === "wrap" ? [coverPaint] : flankBgs, false),
         });
       };
-      if (spineLogo === "saddle") {
+      if (spineSide === "emblem" || spineLogo === "saddle") {
         eachFlank((F) => {
           ctx.save();
-          ctx.translate(su(F, 0.17), F.R.y + F.R.h * FLANK_MARK.v);
+          ctx.translate(su(F, spineSide === "emblem" ? 0.20 : 0.17), F.R.y + F.R.h * FLANK_MARK.v);
           ctx.scale(flankSquash(spineHeight, F.R), 1);
+          const sc = spineSide === "emblem" ? 1.15 : 1;
           paintFlankLogo({
-            x: -F.R.h * 0.48, y: -F.R.h * 0.34,
-            w: F.R.h * 0.96, h: F.R.h * 0.68,
+            x: -F.R.h * 0.48 * sc, y: -F.R.h * 0.34 * sc,
+            w: F.R.h * 0.96 * sc, h: F.R.h * 0.68 * sc,
           }, true);
           ctx.restore();
         });
@@ -2227,16 +2228,42 @@ const LiveryTex = (function () {
       // Title sponsor fills the crease band — big enough to read at SIDE+zoom
       // (garage 2026-09-09: the short centred strip vanished in yellow dead space).
       eachFlank((F) => drawWordmark(ctx, names[0] || "",
-        sideFrom ? sbox(F, 0.04, 0.55, 0.18, 0.52)
-                 : sbox(F, 0.06, 0.62, 0.14, 0.44),
-        inkFlank, { align: "left", pad: 4 }));
+        sideFrom ? sbox(F, 0.04, 0.55, 0.16, 0.50)
+                 : sbox(F, 0.05, 0.64, 0.12, 0.46),
+        inkFlank, { align: "left", pad: 3 }));
     } else if (spineSide === "duo") {
       // Title + partner as one typographic stack under the crease — title owns
       // the row, partner is a second baseline (not floating crumbs on the panel).
       eachFlank((F) => {
-        const uEnd = sideFrom ? 0.55 : 0.60;
-        drawWordmark(ctx, names[0] || "", sbox(F, 0.06, uEnd, 0.12, 0.34), inkFlank, { align: "left", pad: 3 });
-        drawWordmark(ctx, names[1] || "", sbox(F, 0.06, uEnd * 0.92, 0.36, 0.50), inkFlank, { align: "left", pad: 3 });
+        const uEnd = sideFrom ? 0.55 : 0.62;
+        drawWordmark(ctx, names[0] || "", sbox(F, 0.05, uEnd, 0.10, 0.34), inkFlank, { align: "left", pad: 2 });
+        drawWordmark(ctx, names[1] || "", sbox(F, 0.05, uEnd * 0.90, 0.36, 0.52), inkFlank, { align: "left", pad: 2 });
+      });
+    } else if (spineSide === "title") {
+      // Title sponsor ON a contrasting board — the garage-wall sticker language
+      // (distinct from bare wordmark and from PLATE's number board).
+      let boardC = colors.plateTint || stripe || accent;
+      if (!colors.plateTint && contrast(boardC, flankBg) < 1.6) {
+        for (const cand of [c2, c1, stripe, INK_DARK, INK_LIGHT].filter(Boolean)) {
+          if (contrast(cand, flankBg) > contrast(boardC, flankBg)) boardC = cand;
+        }
+      }
+      const boardInk = colors.plateInk || (contrast(c1, boardC) >= 3 ? c1 : inkOn([boardC]));
+      eachFlank((F) => {
+        const box = sideFrom ? sbox(F, 0.06, 0.52, 0.16, 0.52) : sbox(F, 0.08, 0.58, 0.14, 0.50);
+        const r = Math.min(box.h * 0.18, box.w * 0.06);
+        ctx.save();
+        ctx.fillStyle = cssA(boardC, 0.98);
+        ctx.beginPath();
+        // Rounded board (manual — no roundRect assumption on every ctx).
+        const x = box.x, y = box.y, w = box.w, h = box.h;
+        ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+        drawWordmark(ctx, names[0] || "", box, boardInk, { align: "center", pad: 6 });
       });
     } else if (spineSide === "chevron") {
       // ONE bold forward arrow on the crease — a cover graphic, not three UI
@@ -2351,6 +2378,34 @@ const LiveryTex = (function () {
             palette: markPalette(teamId, colors, spineLogo === "wrap" ? [coverPaint] : flankBgs, false),
           });
         }
+        ctx.restore();
+      });
+    } else if (spineSide === "band") {
+      // Solid colour crease BAND — fills the upper third like a real PETRONAS /
+      // title strip, without a number (ribbon owns that).
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(flankBandC, 0.97);
+        const uEnd = sideFrom ? 0.55 : 0.60;
+        const x0 = su(F, 0.02), x1 = su(F, uEnd);
+        ctx.fillRect(Math.min(x0, x1), Sf.y + Sf.h * 0.08, Math.abs(x1 - x0), Sf.h * 0.34);
+        ctx.restore();
+      });
+    } else if (spineSide === "sash") {
+      // Wide diagonal sash — a racing-flag cut across the flank (broader and
+      // shallower than slash's single rake).
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(flankBandC, 0.97);
+        const uEnd = sideFrom ? 0.70 : 0.58;
+        ctx.beginPath();
+        ctx.moveTo(su(F, 0.04), Sf.y + Sf.h * 0.06);
+        ctx.lineTo(su(F, uEnd), Sf.y + Sf.h * 0.06);
+        ctx.lineTo(su(F, uEnd * 0.72), Sf.y + Sf.h * 0.58);
+        ctx.lineTo(su(F, 0.04), Sf.y + Sf.h * 0.42);
+        ctx.closePath(); ctx.fill();
         ctx.restore();
       });
     }
