@@ -3252,15 +3252,41 @@ const TLX = (function () {
           // WebGPU backend an unrendered target has no texture and every read
           // throws on `format`.
           lumaDbg() {
+            // HALF-FLOAT, NOT BYTES, on the HDR targets. _readLdr clamps into a
+            // Uint8ClampedArray, which reported sceneRT as 255/255 on BOTH legs —
+            // most of an HDR frame is >= 1.0, so the byte read said nothing and the
+            // lit pass could not be told apart from the post chain. Read the raw
+            // array instead and decode by the target's own type.
+            const half = function (h) {          // IEEE 754 binary16 -> Number
+              const s = (h & 0x8000) ? -1 : 1, e = (h >> 10) & 0x1f, f = h & 0x3ff;
+              if (e === 0) return s * Math.pow(2, -14) * (f / 1024);
+              if (e === 31) return f ? NaN : s * Infinity;
+              return s * Math.pow(2, e - 15) * (1 + f / 1024);
+            };
             const read = function (rt, label) {
               if (!rt) return Promise.resolve({ label, err: "no rt" });
-              return _readLdr(rt).then(function (pk) {
+              const w = rt.width, h = rt.height;
+              const isHalf = rt.texture && rt.texture.type === THREE.HalfFloatType;
+              return renderer.readRenderTargetPixelsAsync(rt, 0, 0, w, h).then(function (src) {
+                // three pads copyTextureToBuffer rows to 256 BYTES (WebGPU rule).
+                const bpp = isHalf ? 8 : 4;
+                const bpr = 256 * Math.ceil((w * bpp) / 256), stride = bpr / (isHalf ? 2 : 1);
+                const tight = src.length < (h - 1) * stride + w * 4;
                 let sum = 0, mx = 0, n = 0;
-                for (let i = 0; i < pk.data.length; i += 4) {
-                  const v = (pk.data[i] + pk.data[i + 1] + pk.data[i + 2]) / 3;
-                  sum += v; if (v > mx) mx = v; n++;
+                for (let y = 0; y < h; y++) {
+                  const row = tight ? y * w * 4 : y * stride;
+                  for (let x = 0; x < w; x++) {
+                    const i = row + x * 4;
+                    const r = isHalf ? half(src[i]) : src[i];
+                    const g = isHalf ? half(src[i + 1]) : src[i + 1];
+                    const b = isHalf ? half(src[i + 2]) : src[i + 2];
+                    const v = (r + g + b) / 3;
+                    if (!isFinite(v)) continue;
+                    sum += v; if (v > mx) mx = v; n++;
+                  }
                 }
-                return { label, w: pk.w, h: pk.h, mean: +(sum / n).toFixed(2), max: mx };
+                return { label, w, h, type: isHalf ? "half" : "byte",
+                         mean: +(sum / (n || 1)).toFixed(3), max: +mx.toFixed(3), arr: src.constructor.name };
               }).catch(function (e) { return { label, err: String(e && e.message).slice(0, 80) }; });
             };
             return Promise.all([
