@@ -500,6 +500,14 @@ const GLX = (function () {
     };
   }
 
+  // snapCam() / park() call gfx.invalidateSoftPresent — WGX bumps sceneGen;
+  // GLX forces the next present past the SOFT_BLIT_EVERY throttle so waiters
+  // see a post-camera blit instead of hanging on a stale overlay.
+  function invalidateSoftPresent() {
+    if (!_softPresent) return;
+    _softBlitPace = SOFT_BLIT_EVERY - 1;
+  }
+
   function awaitSoftPresent(timeoutMs) {
     if (!_softPresent || !_displayCtx) return Promise.resolve(_softBlitGen);
     // Wait for a NEWER blit, not the last one already on the overlay.
@@ -2421,6 +2429,7 @@ const GLX = (function () {
     softPresent: () => !!_softPresent,
     softPresentState,
     awaitSoftPresent,
+    invalidateSoftPresent,
     gpuErrors: () => _glErrors,
     gpuFirstError: () => _glFirstError || null,
     // The bound backend's account of itself, one shape on all three (TLX

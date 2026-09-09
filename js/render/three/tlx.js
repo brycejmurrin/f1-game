@@ -2651,6 +2651,10 @@ const TLX = (function () {
             display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
           };
         },
+        // snapCam() calls gfx.invalidateSoftPresent — WGX bumps sceneGen, GLX
+        // forces the throttle. TLX soft-reads every present when armed; expose
+        // the name so the façade call is defined on every backend.
+        invalidateSoftPresent() { /* soft path already re-reads each present */ },
         // Dawn's own verdict on this backend. Mirrors WGX.gpuErrors(); reachable
         // as GLX.gpuErrors() after game.js copies the backend onto GLX.
         gpuErrors() { return _gpuErrors; },
