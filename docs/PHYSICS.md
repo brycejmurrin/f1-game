@@ -318,8 +318,25 @@ inside-hugging line (measured on monza: approach +1..+3.6 m INSIDE, apex only
 +1.2 m inside on a 7 m half-width) and a lane-biased car apexed on the outside
 all lap. After: approach 3–6 m outside, apex within a metre of the inside edge
 (`tests/unit/ai-racecraft-vm.test.mjs`, the line test; `track-line.test.mjs`
-for the geometry). The AI's corner SPEED still comes from the road's curvature
-(`brakeTarget`), not the path's — conservative by the difference in radius.
+for the geometry). The AI's corner SPEED comes from the path's curvature when
+the car is ON the line and the road's when it is not (`TrackLine.pathK`, an
+AI-only read — see the curvature table above).
+
+`brakeTarget` sizes that corner off a flat `latMax`, and that is a DELIBERATE
+choice as of 2026-09-09, not an oversight. Giving it the player's aerodynamic
+term (`aeroGrip` = `1 + DOWNFORCE·aeroDfMult·(v/vTop)²`, 65 % more grip at the
+top speed) was tried and reverted the same day, because the AI does not
+simulate lateral grip the way the player does. The player integrates a slip
+model whose `muBase` carries `aeroGrip`; the AI takes a kinematic lateral step
+whose grip term is `gripScale = 1 - clamp((vStd(speed) - 20)/(VMAX - 20), 0, 1)
+* 0.28` — it FALLS with speed — and a yaw cap with no aero term either. Adding
+aero to the planner alone put planned grip (rising 65 %) and available grip
+(falling 28 %) on opposite slopes: the AI planned entry speeds it could not
+turn at and washed 0.60 m out of a short corner's apex at Monza while the long
+ones were unmoved. **The planner and the actuator disagreeing about how grip
+varies with speed is a real open defect**; until one of the two directions in
+`docs/notes/AI-FIELD-RESEARCH.md` is taken, flat `latMax` is the consistent
+choice because it does not contradict the actuator.
 
 ### Racecraft: who passes, who yields
 
@@ -352,6 +369,15 @@ the numbers):
   2.4–4.2 s by `craft`; a failed pass costs a 1.8–3.5 s cooldown by
   `experience`. `queueBrake` adds a real brake command behind a blocker only
   when the closing speed cannot be shed by lift alone within the gap.
+- **A COMPLETED pass locks out the counter-attack** (the `passFailOf` /
+  `passFailT` pair, written onto the PASSED car). Every cooldown above is on the
+  attacker after a FAILURE; nothing distinguished a completed pass from a
+  re-pass, so the car that had just been passed attacked straight back. It now
+  takes the same `2 × passCooldown` lockout against that car specifically that a
+  lunge-abandon already gives, scaled by its own `experience`, and never written
+  onto a human — a player may re-pass whenever they like. Without it, 74 % of
+  monza's order changes were the same PAIRS trading places rather than the field
+  racing (`tools/check/ai-field.mjs` splits settled passes from oscillation).
 - **Exactly one car yields in an alongside pair** (`AiDrive.sideYieldsA`): the
   car behind on arc, or the outer car when level. The same rule drives the
   collision resolver's side branch (only the yielder is scrubbed and flagged;
