@@ -29,6 +29,23 @@ test("render-car has a spine preset and repeatable --shot customs", () => {
     "frame settle must pass `need` into waitForFunction (free `need` is PAGEERR)");
 });
 
+test("render-car walks a team LIST in one browser, and grids the sheet by team", () => {
+  const src = code("tools/car/render-car.mjs");
+  // The livery FIELD overrides exist to sweep one design across cars ("does
+  // spineLogo=wrap read on every team?"), but --team was singular, so that
+  // sweep was still one Chromium boot and one contact sheet PER TEAM.
+  assert.match(src, /raw === 'all'/, "--team=all must expand to the whole roster");
+  assert.match(src, /ROSTER_IDS/, "the roster comes from js/data/teams.js, never a hard-coded list");
+  assert.doesNotMatch(src, /\[\s*'mercedes',\s*'ferrari'/, "no copy of the grid inside the tool");
+  assert.match(src, /MULTI_TEAM/, "the walk has to be distinguishable from a single-team run");
+  // Team is the OUTER loop and only re-set when it CHANGES: CARVIEW.set({team})
+  // rebuilds the car, so re-sending it every shot pays that per camera move.
+  assert.match(src, /s\.team !== renderedTeam \? \{ team: s\.team \}/,
+    "team must be sent only on change, not on every shot");
+  assert.match(src, /s\.team !== renderedTeam/, "a team swap needs the long frame settle, like a tod change");
+  assert.match(src, /assertSafePathToken\(t, 'team'\)/, "every id in the list is still a path token");
+});
+
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");

@@ -50,19 +50,14 @@
      The grey service panels and the accent pinstripe keep clear of the band,
      so it also moves a vertex.
    spineTint? optional SPINE TINT — the colour of whatever SPINE TOP paints on
-     the crown (and the saddle's flank half). Absent = stripe || accent, which
-     is what every band used to take: `stripe` runs the WHOLE spine including
-     the nose, and `accent` is tertiary trim, so neither can be set for the
-     crown alone. Aston Martin needs a dark band on a green cover whose accent
-     is lime. An explicit pick is honoured as-is — it is a deliberate choice
-     about one surface, like `cover` — while the derived default still goes
-     through the contrast re-pick against the cover.
+     the crown (and the saddle's flank half). Absent = secondary then primary
+     against the ENGINE COVER (never BODY STRIPE / DETAIL). An explicit pick is
+     honoured as-is — it is a deliberate choice about one surface, like `cover`.
    sunTint? optional SUN — the wrap's sun disc over the crown, the cover flanks
      and (Car3D) the airbox and roll hoop. Its own row because SPINE TINT used
      to paint it: one field meant a BAND on most SPINE TOP designs and the SUN
-     on `wrap`, so picking `wrap` repurposed a colour chosen for a band. Unset
-     falls back to spineTint (so a livery saved before this row keeps its
-     author's colour), then to the plate/brand derivation.
+     on `wrap`. Unset = mark plate / secondary / primary against the cover —
+     never inherits spineTint.
    crestInk? optional CREST INK — what the crown's LETTERING wears: the
      wordmark, the number, `carbon`'s keylines, the trim on `panel` and
      `stripe`, and the flank marks that share this ink. Absent = the automatic
@@ -73,7 +68,7 @@
      teams wore a "tricolour" of one colour repeated). Absent = derived, and
      re-picked against both the cover and the first band.
    plateTint? optional PLATE PANEL — the contrasting board SPINE SIDE "plate"
-     paints the number on. Absent = stripe||accent, re-picked against the flank.
+     paints the number on. Absent = secondary / primary against the flank.
    plateInk? optional PLATE NUMBER — the number ON that board. Absent = the
      body colour when it reads there, else the automatic ink.
    spineLogo? optional SPINE TOP — what the engine-cover crown carries over

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @doc Garage preset shots, ONE Chromium: walks teams/liveries/any livery field, labels frames, sheets, `--against` A/Bs a ref.
-//   node tools/shot/garage-angles.mjs [--team=redbull,mclaren] [--views=spine] [--livery=default,rb_white]
+//   node tools/shot/garage-angles.mjs [--team=redbull,mclaren|all] [--views=spine] [--livery=default,rb_white]
 //     [--spineLogo=wrap,saddle] [--finShape=blade] [--cover=#101014] [--against=HEAD~1]
 //     [--zoom=8] [--pan=2,0] [--out=dir] [--label=0] [--sheet=0] [--cell=420]
 // @skill playwright-probe
@@ -50,6 +50,7 @@
 // busy box, and on this container the same two-shot walk measured 240.9 s and
 // 286.4 s on consecutive teams. The loadavg is read once and warned about for
 // the same reason — see AGENTS.md §Verification.
+import vm from "node:vm";
 import { mkdirSync, writeFileSync, readFileSync, renameSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join, extname, basename } from "node:path";
@@ -70,7 +71,11 @@ const flag = (name, dflt) => {
   if (i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("-")) return argv[i + 1];
   return dflt;
 };
-const teams = flag("--team", "mclaren").split(",").map((s) => s.trim()).filter(Boolean);
+// --team takes a LIST, or `all`. Every other axis has always been a list because
+// the point of this tool is a WALK; team was the one that still cost a whole
+// browser per value.
+const teamArg = flag("--team", "mclaren").trim();
+const teamsArg = teamArg === "all" ? null : teamArg.split(",").map((s) => s.trim()).filter(Boolean);
 const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).filter(Boolean);
 const vp = flag("--viewport", "1280x720").split("x").map(Number);
 const outDir = flag("--out", "artifacts/garage-angles");
@@ -105,10 +110,20 @@ const designs = axes.length
   ? axes.reduce((acc, ax) => acc.flatMap((d) => ax.values.map((v) => ({ ...d, [ax.field]: v }))), [{}])
   : null;
 
-/** Roster order == store.team index (game.js boot). */
+// Roster order == store.team index (game.js boot). EVALUATED, not regexed: a
+// regex over teams.js also matched `id: "custom"` on DEFAULT_CUSTOM, the MY TEAM
+// seed that is NOT a roster member, so this tool's idea of "every team" was
+// twelve cars where render-car's was eleven. The index matters as much as the
+// list — the in-page switch uses Teams.LIST.indexOf, so anything but that order
+// pins the wrong car. `const Teams` in an IIFE is a lexical binding that never
+// lands on the sandbox, hence evaluating the identifier back out.
 const ROSTER = (() => {
-  const src = readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8");
-  return Array.from(src.matchAll(/^ *id: "([a-z]+)",/gm)).map((m) => m[1]);
+  const sb = { console, Math, Object, Array, String, Number, JSON };
+  sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8"),
+                  sb, { filename: "teams.js" });
+  return vm.runInContext("Teams", sb).LIST.map((t) => t.id);
 })();
 function teamIndex(id) {
   const i = ROSTER.indexOf(id);
@@ -118,7 +133,13 @@ function teamIndex(id) {
   }
   return i;
 }
-for (const t of teams) teamIndex(t);
+const teams = teamsArg || ROSTER.slice();
+for (const t of teams) {
+  if (!ROSTER.includes(t)) {
+    console.error(`no team "${t}" — available: ${ROSTER.join(", ")}, or "all"`);
+    process.exit(1);
+  }
+}
 
 const ALL = ["hero", "front", "side", "rear", "top", "wingFront", "wingRear"];
 const GROUPS = {
