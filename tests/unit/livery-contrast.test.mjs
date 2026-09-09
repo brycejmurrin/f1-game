@@ -288,19 +288,13 @@ test("a flank mark clears the flank the crown design actually left it", () => {
   // Fails if the list GROWS and fails if an entry starts PASSING, so the fix
   // cannot leave a stale allowance behind and a regression cannot hide in one.
   //
-  // `audi wrap/code` is a SECOND class and it is not a regression, though it
-  // arrived with one: the code lettering's glyph edges graze the wrap badge's
-  // rim over 3 of 1024 sample points (~0.3 % of the region, 78 of the mark's 81
-  // changed points are on bare cover at 17.24:1). Both are near-white, so those
-  // 3 points were never legible — until 2026-09-09 they were painted in the
-  // SAME white the badge was, `a === b` skipped them as untouched, and the pair
-  // was invisible to this test rather than absent from the car. Re-inking the
-  // badge against the cover it lands on (Cadillac 1.25 -> 6.94, Mercedes 1.59 ->
-  // 11.41) moved Audi's from #f7f7fa to #ededf2 and made the existing overlap
-  // MEASURABLE. The fix is the same one this block already defers: a halo on
-  // the flank painting path, or a `code` box that clears the badge's span.
+  // The `wrap/code` family that used to sit here is GONE, not waived: the mark
+  // was landing on the wrap's fallback badge (u 0.169..0.591 against a badge at
+  // 0.050..0.247), and markU now derives its position from what the badge
+  // actually occupies instead of a constant that only knew about the sun.
+  // audi, astonmartin and mercedes all cleared on that one change.
   const KNOWN = new Set([
-    "audi saddle/wordmark", "audi saddle/duo", "audi wrap/code",
+    "audi saddle/wordmark", "audi saddle/duo",
     "cadillac saddle/wordmark", "cadillac saddle/duo",
     "ferrari saddle/wordmark", "ferrari saddle/duo", "ferrari wrap/logo",
     "mercedes saddle/wordmark", "mercedes saddle/duo",

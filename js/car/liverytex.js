@@ -2282,7 +2282,30 @@ const LiveryTex = (function () {
     // A MARK is one small object and it carries its own keyline, halo or plate,
     // so it stands ON the crown's graphic rather than aft of it — centred in
     // the strip a side camera can see, its leading edge clear of the sun.
-    const markU = sideFrom ? FLANK_MARK.uOnCrown : FLANK_MARK.u;
+    // uOnCrown exists to clear the SUN. Under a wrap that leaves no traced bull
+    // there is a second obstruction it was never told about — the fallback
+    // BADGE — and the mark was landing on it: u 0.169..0.591 against a badge at
+    // u 0.050..0.247, v 0.12..0.68 against v 0.30..0.82. Not a graze; `code`
+    // measured 1.09:1 over the overlap, and `astonmartin wrap/code` and
+    // `mercedes wrap/code` were both red on it.
+    //
+    // DERIVED, not a second constant. The badge's aft edge moves with BULL and
+    // with each team's traced aspect (wrapMarkSpan), and the last time a
+    // hard-coded number described this geometry it went stale the moment BULL
+    // moved. So: push the mark just past whatever the badge actually occupies,
+    // and only for the teams that HAVE one — Red Bull traces a bull instead and
+    // keeps 0.38 exactly.
+    //
+    // The cost is measured, not assumed: flank-occlusion puts 0 % of the mark
+    // behind the body at u 0.38 and 5 % at 0.48, so the ~0.46 this lands on
+    // spends about 3 % to stop sharing a box with the badge. Aft of ~0.56 the
+    // rear wheel starts taking real bites (22 %, then 32 %) — which is the
+    // constraint c4d585b6 moved these designs FORWARD to respect, so this walks
+    // toward it by the minimum and stops.
+    const markHalfU = FLANK_MARK.halfW * REGIONS.spineSide.h / REGIONS.spineSide.w;
+    const markU = !sideFrom ? FLANK_MARK.u
+      : bullPath(teamId) ? FLANK_MARK.uOnCrown
+      : Math.max(FLANK_MARK.uOnCrown, BULL.u0 + wrapMarkSpan(teamId).uLen + markHalfU);
     const flankMark = (paint) => eachFlank((F) => {
       ctx.save();
       ctx.translate(F.fx(markU), F.R.y + F.R.h * FLANK_MARK.v);
