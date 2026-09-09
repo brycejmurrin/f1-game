@@ -355,6 +355,18 @@ jobs:
                 // was not a gap). The path row below says when a FED value is
                 // still incomparable; this says when there is no value.
                 + (Math.abs((gov.floorMs || 0) - 16.6) < 0.2 ? "   <- fps UNFED (floorMs is the init value); not a measurement" : ""));
+            // A LEG THAT RENDERED ALMOST NOTHING MEASURED NOTHING. Run 72s
+            // webgpu leg drew SIX frames at 4.9 fps, never completed a probe
+            // cycle, and reported meanLuma 43.2 where run 71 read 2.9 — which
+            // looks exactly like the black-world fix landing, and is not: it is
+            // the ordinary probe-never-latched number that runs 25, 54 and 70
+            // also read. Runs 54 and 72 both fell into this mode. Say so on the
+            // row instead of leaving the next reader to divide frames by fps
+            // and hope they notice. NOT a gate: a slow runner is not a defect
+            // in the build, it is a run that answered no question.
+              if (tlxLeg && (gov.open && gov.open.frames) != null && gov.open.frames < 60) {
+                rows.push(`${" ".repeat(8)}run:   ONLY ${gov.open.frames} frames rendered — INCONCLUSIVE: this leg measured the runner, not the build, and its appearance and env numbers are not comparable with any other run`);
+              }
             // THE PRESENT PATH, and it is the difference between a comparison
             // and a mistake. tlx.js soft-blits (GPU readback + putImageData
             // EVERY FRAME) whenever `!forceWebGL && (_softAdapter || _headless
