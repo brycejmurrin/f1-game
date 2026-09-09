@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns } from "../../tools/ci/deploy.mjs";
+import { DEPLOY_BRANCH, touchedCircuits, preflight, ratchetMetrics, ratchetOverruns, cureableConflicts } from "../../tools/ci/deploy.mjs";
 import { DEPLOY_BRANCH as PICK_BRANCH } from "../../tools/ci/pick-tests.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -75,4 +75,33 @@ test("the ratchet budget passes a real two-sided raise and refuses a duplicated 
   // A metric absent from any stage is skipped rather than guessed at: a NEW
   // ratchet added by one side has no base to measure a raise against.
   assert.deepEqual(ratchetOverruns({}, { b: 1 }, { b: 1 }, { b: 999 }), []);
+});
+
+test("only GENERATED files cure themselves, and only when their source merged clean", () => {
+  // A deploy may re-derive a file whose content is a function of something
+  // else; it may never pick a side in a disagreement. These three are derived:
+  // index.html/version.json from the manifest, ratchets.json from measuring the
+  // tree, package.json's scripts from tests/groups.json.
+  const cure = (list) => cureableConflicts(list).cureable;
+  assert.equal(cure(["package.json"]), true, "generated from tests/groups.json");
+  assert.equal(cure(["index.html", "version.json"]), true);
+  assert.equal(cure(["tests/data/ratchets.json", "package.json"]), true, "two derived files together");
+
+  // The SOURCE being contested is what makes the derived file underivable —
+  // this is the condition that keeps auto-curing from papering over a real
+  // disagreement about which suites exist.
+  assert.equal(cure(["package.json", "tests/groups.json"]), false,
+    "groups.json conflicted: package.json cannot be derived from it");
+  assert.equal(cure(["tests/groups.json"]), false);
+
+  // Anything authored stops the deploy, alone or alongside a derived file.
+  assert.equal(cure(["js/game.js"]), false);
+  assert.equal(cure(["package.json", "js/car/liverytex.js"]), false,
+    "one real conflict is still a real conflict");
+  assert.equal(cure([]), false, "nothing conflicted is not a cure");
+
+  const parts = cureableConflicts(["package.json", "index.html", "tests/data/ratchets.json"]);
+  assert.deepEqual(parts.pkgF, ["package.json"]);
+  assert.deepEqual(parts.shellF, ["index.html"]);
+  assert.deepEqual(parts.ratchetF, ["tests/data/ratchets.json"]);
 });

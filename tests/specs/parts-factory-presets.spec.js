@@ -39,7 +39,15 @@ test("AI full-body meshes use deterministic factory presets instead of saved set
     const captures = {};
     const build = Car3D.build;
     Car3D.build = function (c1, c2, opts) {
-      if (opts && opts.parts && !opts.noWheels) {
+      // `field`, not `!noWheels`. AI bodies moved to the wheels-split draw path
+      // (teamBodyMesh builds them with noWheels: true and hangs the wheels
+      // separately), so this filter stopped matching ANY of them and the wait
+      // below simply timed out at 30 s — never reaching 11 captures, and never
+      // saying that was why. buildCarData sets `field` for exactly the factory
+      // bodies this test is about, and clears it for the player's saved-setup
+      // build, which is the distinction the filter was reaching for. The mesh
+      // probe in parts-mesh-cache.spec.js already keys off the same flag.
+      if (opts && opts.parts && opts.field) {
         const ids = Object.assign({}, opts.parts._ids);
         const key = Parts.CATALOG.map((cat) => ids[cat.id]).join("|");
         captures[key] = ids;

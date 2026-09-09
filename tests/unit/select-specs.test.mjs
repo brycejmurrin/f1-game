@@ -9,6 +9,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { specsOf, fit, maxDeclaredTimeout, specsImporting, prioritise, TRACKED,
+  DOCS_ONLY, isDocsOnly,
   SELECTED_GATE, FIXED_GATE_SPECS, dropBootFallback, BOOT_FALLBACK_REASONS,
   scopeCarryForward } from "../../tools/ci/select-specs.mjs";
 import { pick } from "../../tools/ci/pick-tests.mjs";
@@ -337,4 +338,39 @@ test("raising the gate must not enrol specs that opted out of the lower one", ()
       `${SELECTED_GATE.perTestTimeoutSec}s gate but was SELECTED — ` +
       "it would be killed at its own declared budget, which reads as a code failure");
   }
+});
+
+/* A DOCS-ONLY DEPLOY MUST NOT FAIL THE SELECTED GATE (2026-09-08).
+ *
+ * ci.yml's push trigger ignores docs/**, **&#47;*.md, .claude/** and .cursor/**, so a
+ * docs commit never reaches the selected gate by push. pages.yml CALLS the
+ * workflow, and workflow_call does not honour paths-ignore — so on the DEPLOY
+ * path the gate saw a docs diff, matched no rule, and failed closed. An
+ * AGENTS.md-only deploy took a Pages run red for a change that ships no code.
+ * "unmatched" means the selection is untrustworthy; "no code changed" is a
+ * different fact and now has its own reason. */
+test("a docs-only change is 'nothing to select', never 'unmatched'", () => {
+  assert.equal(isDocsOnly(["AGENTS.md"]), true, "the file that actually broke it");
+  assert.equal(isDocsOnly(["docs/TESTING.md", "README.md"]), true);
+  assert.equal(isDocsOnly([".claude/skills/x/SKILL.md"]), true);
+  // .mdc is not .md, so this one rides on the .cursor/ PREFIX rule, not the
+  // extension rule — which is exactly why the list needs both shapes.
+  assert.equal(isDocsOnly([".cursor/rules/apex-shared.mdc"]), true);
+  // A docs change RIDING ALONG with code is not docs-only: the code must select.
+  assert.equal(isDocsOnly(["AGENTS.md", "js/game.js"]), false);
+  assert.equal(isDocsOnly(["js/game.js"]), false);
+  // No files changed at all is "none", handled before this predicate.
+  assert.equal(isDocsOnly([]), false);
+});
+
+test("DOCS_ONLY still mirrors ci.yml's paths-ignore", () => {
+  // The comment on DOCS_ONLY says these two lists move together. If someone
+  // adds a path to the workflow's ignore list and not here, a deploy touching
+  // only that path fails closed again — which is the whole defect.
+  const ci = fs.readFileSync(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
+  const ignored = [...ci.matchAll(/^\s*-\s+"([^"]+)"\s*$/gm)].map((m) => m[1]);
+  for (const pat of ["docs/**", "**/*.md", ".claude/**", ".cursor/**"]) {
+    assert.ok(ignored.includes(pat), `ci.yml no longer ignores ${pat} — re-derive DOCS_ONLY`);
+  }
+  assert.equal(DOCS_ONLY.length, 4, "a pattern was added or removed without updating this pin");
 });

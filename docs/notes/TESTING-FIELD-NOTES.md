@@ -1427,3 +1427,26 @@ scales, so the next failure of this shape names its own cause.
 **Transferable**: any equality on `getComputedStyle().width` inside a
 `zoom`-ed subtree is a latent failure waiting for the zoom to stop being a
 clean binary. Assert the rule, at the precision the rule is stated in.
+
+## 2026-09-08 (later still) — `parts-liveries.spec.js` needs `--workers=1` here
+
+Measured, both directions, same commit, load under 2 at the start of each:
+
+| run | result |
+|---|---|
+| default workers (6) | 4 of 12 FAIL, every one `Test timeout of 120000ms exceeded` |
+| `--workers=1` | 12 of 12 pass |
+
+Not a flake and not a verdict about the code: the four that fell over are the
+creator tests, each of which opens the garage on a fully built circuit, and six
+workers were building Bahrain at once on llvmpipe. The logs say so plainly —
+`maps compute bahrain` at 7.7 s, `SetupUI.openSetup` at 20 s, then three
+`build mclaren` rounds, the last landing at 118 s against a 120 s budget. The
+page was working the whole time; it was simply sharing one software rasteriser
+six ways.
+
+This is the rule in AGENTS.md §Verification 5 with a number attached, and it is
+also a live example for the undeclared-budget question: the spec has no
+declared timeout, so it inherits 120 s, which is enough for one worker and not
+for six. Re-run this spec ALONE before believing a red run of it, and do not
+read a timeout here as a regression until it has been serialized.
