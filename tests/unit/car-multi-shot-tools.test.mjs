@@ -2,9 +2,10 @@
  *
  * render-car used to only allow a single --az custom, and page.screenshot hung
  * under SwiftShader. garage-angles walked presets but ignored soft-present.
- * Pin the multi-shot CLI surface and the soft-capture path.
+ * Pin the multi-shot CLI surface and the soft-capture path (one Chromium).
  *
  * Run: node --test tests/unit/car-multi-shot-tools.test.mjs
+ * (also listed in tests/groups.json → tooling-fast / docs/TESTING.md coverage)
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -67,3 +68,4 @@ test("screenshotGameCanvas prefers #game-soft before freezing for page-clip", ()
   assert.ok(soft >= 0, "soft overlay path present");
   assert.ok(freeze < 0 || freeze > soft, "page-clip freeze is fallback after soft path");
 });
+
