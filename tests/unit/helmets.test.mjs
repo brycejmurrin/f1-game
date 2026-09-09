@@ -209,3 +209,89 @@ test("the profile is a spline through the traced rows, not nineteen straight seg
   }
   assert.ok(worst.jump < 0.5, `slope jumps ${worst.jump.toFixed(2)}x across the row at t=${worst.t} — tab() is interpolating linearly`);
 });
+
+// ── the paint is a picture, not a grid ───────────────────────────────────────
+// The mottled designs used to be a hash per (ring, slice) cell. That matched
+// the DENSITY of a mottled helmet and none of its STRUCTURE, so it rendered as
+// a scatter of axis-aligned rectangles — and RAISING the mesh resolution made
+// it worse, because the speckle itself was the subject. These pin the two
+// properties that fixed it, so neither can quietly regress to grid noise.
+
+test("the mottle draws connected strokes, not one-cell speckle", () => {
+  // Run LENGTH does not discriminate: a 30%-density cell hash has a mean ink
+  // run of 1/(1-0.3) = 1.4 cells, and the doodle measures 1.3 — a test on that
+  // would have passed either way. What actually separates them is COHERENCE
+  // BETWEEN RINGS: a level set's strokes carry from one ring to the next, and
+  // an independent per-cell hash agrees only at chance, d^2 + (1-d)^2.
+  // Measured on the DOODLE ALONE: a whole design also carries a cap, bands, a
+  // keyline and the visor, whose edges are ring-to-ring disagreements too, and
+  // they drag the figure to 67% whatever the doodle does.
+  for (const num of [1, 10, 27]) {
+    const zone = (Helmets.designFor(num, [0.9, 0.35, 0.05]).zones || []).find((z) => z.k === "mottle");
+    assert.ok(zone, `#${num} has no mottle zone — this test is checking nothing`);
+    const skin = Helmets.shell({ name: "M", base: [1, 1, 1], alt: [0, 0, 0], visor: [0, 0, 0], zones: [zone] });
+    const dt = 1 / Helmets.RINGS, cell = 360 / Helmets.SLICES;
+    const ink = (t, az) => skin(t, ((az % 360) + 360) % 360).c[0] < 0.5;
+    let same = 0, n = 0, on = 0;
+    for (let t = 0.12; t < 0.55; t += dt)
+      for (let az = 0; az < 360; az += cell) { if (ink(t, az) === ink(t + dt, az)) same++; if (ink(t, az)) on++; n++; }
+    const d = on / n, chance = d * d + (1 - d) * (1 - d);
+    assert.ok(same / n > chance + 0.12,
+      `#${num}: ring-to-ring agreement ${(100 * same / n).toFixed(0)}% against ${(100 * chance).toFixed(0)}% at chance — the pattern is independent per cell, not a stroke`);
+  }
+});
+
+test("the mottle is resolution-free — the same doodle at any tessellation", () => {
+  // Scoped to the MOTTLE. Bands and keylines snap to ring lines ON PURPOSE, so
+  // their edges land exactly on mesh edges and come out crisp; they are
+  // supposed to move with the grid. The doodle is not.
+  const src = read("js/car/helmets.js");
+  const mk = (text) => new Function(text + "; return Helmets;")();
+  const alt = mk(src.replace(/const RINGS = \d+, SLICES = \d+;/, "const RINGS = 26, SLICES = 40;"));
+  assert.equal(alt.SLICES, 40, "the rebuild did not take — the test is checking nothing");
+  // Take the zone from a real design: ZONES holds the PREDICATES, not the
+  // constructors, so ZONES.mottle(...) returns false and a shell built from it
+  // has no doodle at all — a version of this test built that way compared two
+  // blank shells and passed without checking anything.
+  const only = (H) => {
+    const z = (H.designFor(1, [0.9, 0.35, 0.05]).zones || []).find((x) => x.k === "mottle");
+    assert.ok(z, "#1 has no mottle zone — this test is checking nothing");
+    return H.shell({ name: "M", base: [1, 1, 1], alt: [0, 0, 0], visor: [1, 1, 1], zones: [z] });
+  };
+  const a = only(Helmets), b = only(alt);
+  for (let t = 0.10; t < 0.90; t += 0.017)
+    for (let az = 0; az < 360; az += 7)
+      assert.deepEqual(b(t, az).c, a(t, az).c, `the doodle moved with the grid at t=${t.toFixed(3)} az=${az}`);
+});
+
+test("a quad splits only where the paint changes, and never moves the shell", () => {
+  const S = { paint: 7, glass: 9 };
+  const build = (design) => {
+    const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+    Helmets.build(out, 0, 0, 0, design, S);
+    return out;
+  };
+  const base = Helmets.RINGS * Helmets.SLICES * 2;
+  // A shell with no zones still has the visor and the neck trim, so it splits a
+  // little; what it must not do is split everywhere.
+  const flat = build({ name: "FLAT", base: [1, 1, 1], alt: [1, 1, 1], visor: [0, 0, 0], zones: [] });
+  assert.ok(flat.idx.length / 3 < base * 1.5,
+    `an unpainted shell emitted ${flat.idx.length / 3} against ${base} — the split is firing on quads whose corners agree`);
+  // ...and a real design must split, or the whole mechanism is dead code.
+  const nor = build(Helmets.designFor(1, [0.9, 0.35, 0.05]));
+  assert.ok(nor.idx.length / 3 > base * 1.5, `#1 emitted ${nor.idx.length / 3} triangles — the split is not firing`);
+
+  // Every vertex the split adds must lie ON the shell: this is a PAINT change,
+  // and geometry that moved would be a silhouette change nothing else guards.
+  // Y is monotone in t, so bisect t from the height, then check the radius.
+  let worst = 0;
+  for (let i = 0; i < nor.pos.length; i += 3) {
+    const p = [nor.pos[i], nor.pos[i + 1], nor.pos[i + 2]];
+    const az = Math.atan2(p[0], p[2]);
+    let lo = 0, hi = 1;
+    for (let k = 0; k < 40; k++) { const m = (lo + hi) / 2; if (Helmets.pointAt(m, az)[1] > p[1]) lo = m; else hi = m; }
+    const q = Helmets.pointAt((lo + hi) / 2, az);
+    worst = Math.max(worst, Math.hypot(q[0] - p[0], q[2] - p[2]));
+  }
+  assert.ok(worst < 1e-6, `a vertex sits ${worst.toExponential(2)} m off the shell — subdivision moved the geometry`);
+});

@@ -94,22 +94,33 @@ function inside(p) {
    instead of as a surprise in-game. --mesh=1. */
 function meshSkin(skin) {
   const R = Helmets.RINGS, S = Helmets.SLICES, rt = Helmets.ringT;
+  const MAX = Helmets.MAX_SPLIT || 0;
+  // The shell paints one colour per TRIANGLE at its centroid, and splits a quad
+  // while its corners disagree — so the honest preview walks the SAME recursion
+  // and samples the SAME centroid. Emulating only the base grid (what this did
+  // before) makes the tool blind to subdivision: three depths rendered
+  // identically and the preview looked like proof the split did nothing.
+  const key = (t, az) => { const v = skin(Math.min(1, t), ((az % 360) + 360) % 360);
+    return (v.glass ? "g" : "") + v.c.map((x) => Math.round(x * 255)).join(","); };
   return (t, az) => {
-    // WHICH TRIANGLE is this point in? The quad (r,sl)-(r,sl+1)-(r+1,sl+1)-(r+1,sl)
-    // is split on the a->c diagonal, so in the quad's own (u, v) the first
-    // triangle is u >= v. The shell paints one colour per triangle sampled at
-    // its CENTROID, so the honest preview samples the same place — bilinear
-    // here would show a blend the mesh no longer has.
     let r = 0;
     while (r < R - 1 && rt(r + 1) < t) r++;
-    const t0 = rt(r), t1 = rt(r + 1);
-    const v = Math.min(1, Math.max(0, (t - t0) / (t1 - t0 || 1)));
     const a = (((az % 360) + 360) % 360) / (360 / S);
-    const sl = Math.floor(a) % S, u = a - Math.floor(a);
-    const first = u >= v;
+    const sl = Math.floor(a) % S;
+    let t0 = rt(r), t1 = rt(r + 1);
+    let a0 = (sl / S) * 360, a1 = ((sl + 1) / S) * 360;
+    for (let d = 0; d < MAX; d++) {
+      const tm = (t0 + t1) / 2, am = (a0 + a1) / 2, k = key(t0, a0);
+      if (key(t0, a1) === k && key(t1, a1) === k && key(t1, a0) === k && key(tm, am) === k) break;
+      if (t < tm) t1 = tm; else t0 = tm;
+      if (((((az % 360) + 360) % 360) - a0 + 360) % 360 < am - a0) a1 = am; else a0 = am;
+    }
+    const v = Math.min(1, Math.max(0, (t - t0) / (t1 - t0 || 1)));
+    const u = Math.min(1, Math.max(0, ((((az % 360) + 360) % 360) - a0) / (a1 - a0 || 1)));
+    const first = u >= v;                       // the quad splits on the a->c diagonal
     const ct = first ? (2 * t0 + t1) / 3 : (t0 + 2 * t1) / 3;
-    const caz = ((sl + (first ? 2 / 3 : 1 / 3)) / S) * 360;
-    return skin(Math.min(1, ct), caz);
+    const caz = first ? (a0 + 2 * a1) / 3 : (2 * a0 + a1) / 3;
+    return skin(Math.min(1, ct), ((caz % 360) + 360) % 360);
   };
 }
 
