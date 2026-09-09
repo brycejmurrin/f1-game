@@ -244,6 +244,22 @@ test("the save and the live preview both convert through livDraftTo", () => {
     "a hand-written preview literal is back — extend livDraftTo instead");
 });
 
+test("continuous colour input coalesces expensive 3D preview rebuilds", () => {
+  assert.match(SHEET, /let _livPreviewTimer\s*=\s*null/);
+  assert.match(SHEET, /function scheduleLivPreview\(team,\s*d\)/);
+  assert.match(SHEET, /clearTimeout\(_livPreviewTimer\)/,
+    "a newer colour input must replace the pending rebuild");
+  assert.match(SHEET, /_livPreviewTimer\s*=\s*setTimeout\([^]*?livePreviewDraft\(team,\s*d\)/,
+    "the expensive mesh invalidation must be trailing, not one rebuild per input event");
+  assert.match(SHEET, /function flushLivPreview\([^]*?livePreviewDraft\(/,
+    "the colour input's final change needs a synchronous flush");
+  const apply = SHEET.slice(SHEET.indexOf("const applyPreview"), SHEET.indexOf("// MATCHING PALETTE"));
+  assert.match(apply, /defer3d\s*\?\s*scheduleLivPreview\(team,\s*d\)\s*:\s*livePreviewDraft\(team,\s*d\)/);
+  assert.match(SHEET, /inp\.oninput\s*=\s*\(\)\s*=>[^]*?applyPreview\(true\)/);
+  assert.match(SHEET, /inp\.onchange\s*=\s*flushLivPreview/);
+  assert.match(SHEET, /function endLivPreview\(team\)\s*\{[^]*?cancelLivPreview\(\)/);
+});
+
 test("every row in the paint editor says what it paints", () => {
   // The sheet's labels name colours, not surfaces, and two of them invert the
   // field names they carry (ACCENT is `c2`, DETAIL is `accent`). The hint is

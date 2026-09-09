@@ -301,6 +301,19 @@ test("the crash-sentinel floor still cannot be defeated by pinning the resolutio
 // interaction rule — a manual choice sets the FLOOR of degradation, never the
 // ceiling — so these tests pin the rule, not the plumbing.
 
+test("a fresh phone defaults to GRAPHICS MEDIUM while legacy HIGH remains ULTRA", () => {
+  const qsrc = fs.readFileSync(path.join(ROOT, "js/perf/quality-preset.js"), "utf8");
+  const GfxQuality = eval(qsrc + ";GfxQuality");
+  GameStore.store.rawSet("apex26.gfxHigh", null);
+  assert.equal(GfxQuality.defaultId(true), "medium",
+    "a fresh phone must shed env probe + lamp shadow/SSR until the player opts up");
+  GameStore.store.rawSet("apex26.gfxHigh", "1");
+  assert.equal(GfxQuality.defaultId(true), "ultra",
+    "the legacy explicit high-memory opt-in still maps to ULTRA");
+  GameStore.store.rawSet("apex26.gfxHigh", null);
+  assert.equal(GfxQuality.defaultId(false), "high", "desktop default stays HIGH");
+});
+
 test("a user tier sheds at least that much, live, without touching the render path", () => {
   const { PerfGov } = makeGov();
   assert.equal(PerfGov.tier(), 0, "precondition: nothing shed on a fresh healthy device");

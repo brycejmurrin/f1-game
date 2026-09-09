@@ -302,3 +302,26 @@ test("maxSplit 0 is the unsplit grid, even on a busy design", () => {
   Helmets.build(out, 0, 0, 0, Helmets.designFor(1, [0.9, 0.35, 0.05]), { paint: 7, glass: 9, maxSplit: 0 });
   assert.equal(out.idx.length / 3, base, `maxSplit 0 emitted ${out.idx.length / 3}, not the ${base}-tri grid`);
 });
+
+test("simplePaint keeps the shell and visor without evaluating detailed zones per triangle", () => {
+  let zoneCalls = 0;
+  Helmets.ZONES.__testCount = () => { zoneCalls++; return false; };
+  try {
+    const design = {
+      name: "FIELD", base: [0.8, 0.2, 0.1], alt: [0.1, 0.2, 0.8],
+      visor: [0.02, 0.03, 0.04], zones: [{ k: "__testCount", c: [1, 1, 1] }],
+    };
+    const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+    Helmets.build(out, 0, 0, 0, design,
+      { paint: 7, glass: 9, maxSplit: 0, simplePaint: true });
+    assert.equal(out.idx.length / 3, Helmets.FIELD_RINGS * Helmets.FIELD_SLICES * 2,
+      "simple field paint must use the lower-detail shell intended for tens of pixels");
+    assert.ok(out.idx.length / 3 < Helmets.RINGS * Helmets.SLICES,
+      "field detail must stay below half the player helmet's base triangles");
+    assert.ok(out.mat.includes(9), "the analytic visor still uses glass");
+    assert.equal(zoneCalls, 0,
+      "field helmets are tens of pixels wide; detailed artwork must not execute per triangle");
+  } finally {
+    delete Helmets.ZONES.__testCount;
+  }
+});

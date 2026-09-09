@@ -50,18 +50,11 @@ function serve() {
   });
 }
 
-async function leg(page, { upscale, gatherPin }) {
-  await page.goto(page.url().split("?")[0] + `?gfx=webgpu&upscale=${upscale ? 1 : 0}`, {
+async function leg(page, { baseUrl, upscale, gatherPin }) {
+  const gather = gatherPin == null ? "" : gatherPin;
+  await page.goto(`${baseUrl}?gfx=webgpu&upscale=${upscale ? 1 : 0}&gather=${gather}`, {
     waitUntil: "domcontentloaded", timeout: 60000,
   });
-  await page.evaluate(({ gatherPin }) => {
-    try {
-      if (gatherPin === "0") localStorage.setItem("apex26.spatialUpscaleGather", "0");
-      else localStorage.removeItem("apex26.spatialUpscaleGather");
-      localStorage.setItem("apex26.spatialUpscale", "0"); // boot clean; set via API
-    } catch (_) { /* */ }
-  }, { gatherPin });
-  await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForFunction(() => window.__apex && typeof window.__apex.race === "function", null, { timeout: 90000, polling: 100 });
   await page.evaluate(async (tr) => { await window.__apex.race(tr); }, track);
   await page.waitForFunction(() => window.__apex.info().track, null, { timeout: 60000, polling: 100 });
@@ -104,25 +97,33 @@ async function leg(page, { upscale, gatherPin }) {
 }
 
 const { srv, port } = await serve();
-const browser = await chromium.launch({
-  headless: true,
-  args: ["--enable-unsafe-webgpu", "--use-angle=swiftshader", "--enable-features=Vulkan",
-    "--use-gl=angle", "--enable-unsafe-swiftshader"],
-});
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "domcontentloaded", timeout: 60000 });
-
 const results = {
   track, frames, scale,
   note: "Software soft-present readback grows with present size when upscale is ON; not player headed FPS. Compare path: rows only.",
   legs: {},
 };
+let browser = null;
 try {
-  results.legs.off = await leg(page, { upscale: false, gatherPin: null });
-  results.legs.on_gather = await leg(page, { upscale: true, gatherPin: null });
-  results.legs.on_tap = await leg(page, { upscale: true, gatherPin: "0" });
+  browser = await chromium.launch({
+    headless: true,
+    args: ["--enable-unsafe-webgpu", "--use-angle=swiftshader", "--enable-features=Vulkan",
+      "--use-gl=angle", "--enable-unsafe-swiftshader"],
+  });
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await page.addInitScript(() => {
+    try {
+      const q = new URLSearchParams(location.search);
+      if (q.get("gather") === "0") localStorage.setItem("apex26.spatialUpscaleGather", "0");
+      else localStorage.removeItem("apex26.spatialUpscaleGather");
+      localStorage.setItem("apex26.spatialUpscale", q.get("upscale") === "1" ? "1" : "0");
+    } catch (_) { /* blocked storage */ }
+  });
+  const baseUrl = `http://127.0.0.1:${port}/`;
+  results.legs.off = await leg(page, { baseUrl, upscale: false, gatherPin: null });
+  results.legs.on_gather = await leg(page, { baseUrl, upscale: true, gatherPin: null });
+  results.legs.on_tap = await leg(page, { baseUrl, upscale: true, gatherPin: "0" });
 } finally {
-  await browser.close();
+  if (browser) await browser.close();
   srv.close();
 }
 
