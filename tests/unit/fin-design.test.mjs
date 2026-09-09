@@ -621,6 +621,38 @@ test("nothing that has to be READ is put where the car covers it", async () => {
   }
 });
 
+// The same question asked of the CROWN's own graphic, which the guard above
+// cannot reach: a side design is measured as what it CHANGED against spineSide
+// "none", and the crown's bull is in both, so it cancels out of every row. It
+// is the biggest thing on the flank and it was the one sinking — freeing the
+// crease strip for the sponsor names dropped the animal onto the sidepod line,
+// where the body eats the band's bottom corner: 19 % of the bull's ink and 36 %
+// of its HEAD, the low forward part of a charging silhouette, so the head went
+// and the rump stayed. Every team, because the same station carries the badge a
+// bull-less crest yields — Mercedes' was the worst at 32 %.
+test("the crown's own mark on the flank is on camera, on every team", async () => {
+  const { loadAtlas } = await import("../../tools/car/livery-contrast.mjs");
+  const { sweep } = await import("../../tools/car/spine-station.mjs");
+  const { occlusionMap } = await import("../../tools/car/flank-occlusion.mjs");
+  const At = loadAtlas();
+  for (const t of At.Teams.LIST) {
+    // Per TEAM: the parts a team runs move the bodywork that does the hiding.
+    const om = occlusionMap(M, { team: t.id, grid: 96 });
+    const out = sweep(At, {
+      team: t.id, logo: "wrap", sides: [], grid: 64,
+      hiddenAt: (u, v) => om.cell[Math.min(om.rows - 1, (v * om.rows) | 0) * om.cols
+                                  + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1,
+    });
+    // A crest that is a LOADED IMAGE paints through drawImage, which records no
+    // geometry — Haas and Audi measure nothing here and that is the recording
+    // context's limit, not a clean flank.
+    if (!out.crown) continue;
+    assert.ok(out.crown.hidden <= 0.10,
+      `${t.id}: ${(out.crown.hidden * 100).toFixed(0)}% of the wrap's flank mark is behind the car `
+      + `from the garage SIDE camera (it hangs to v ${out.crown.v1})`);
+  }
+});
+
 // …and the CAR can spoil a design without HIDING it, which is the hole the
 // occlusion oracle cannot see. The engine cover carries its own trim on the
 // same skin — an accent pinstripe and up to four grey service hatches — and
