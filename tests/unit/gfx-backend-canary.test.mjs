@@ -476,6 +476,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.forceMobileTier", "apex26.tlxForceHw", "apex26.tlxForceBatches",
     "apex26.tlxArrayNearest", "apex26.tlxMirrorSweep", "apex26.tlxChunkRelease",
     "apex26.tlxMobile", "apex26.gfxHigh", "apex26.matTexMix",
+    // GLX SGSR1 spike (UPSCALING-2026-09 §6) — opt-in debug pin, not crash state
+    "apex26.spatialUpscale",
   ]);
   // LANE-AWARE: clearRendererStorage removes each list from ITS OWN store, so a
   // key written to localStorage but listed only in RENDERER_SS_KEYS would pass
@@ -976,6 +978,32 @@ test("updateInstances clears the cull snapshots it did not produce", () => {
   assert.equal(h.GLX.cullInstances(batch, planes(1e6)), 2);
   assert.equal(h.count("bufferSubData"), 1, "the frustum re-packs over the caller's bytes instead of hitting a stale cache");
   assert.equal(typeof h.GLX.updateInstances, "function", "updateInstances is exported");
+});
+
+test("GLX shadow cull upload:false leaves the camera pack and cache alone", () => {
+  // Same class WGX pinned in 2026-09-02: a light-frustum cull that wrote ibo
+  // forced the camera cull to miss every shadow recentre. upload:false packs
+  // into shadowIbo and must not touch _cullPlanes / _cellKeyN / ibo.
+  const h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = h.GLX.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const planes = (d) => Array.from({ length: 6 }, () => [0, 0, 0, d]);
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6)), 2);
+  const camPlanes = batch._cullPlanes;
+  const camN = batch._cullN;
+  const camKeyN = batch._cellKeyN;
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6), { upload: false }), 2);
+  assert.ok(batch.shadowIbo, "shadow path allocates its own instance buffer");
+  assert.equal(batch._shadowN, 2);
+  assert.equal(batch._cullPlanes, camPlanes, "camera frustum snapshot untouched");
+  assert.equal(batch._cullN, camN);
+  assert.equal(batch._cellKeyN, camKeyN, "camera cell-set cache untouched");
+  assert.equal(h.count("bufferSubData"), 1, "one upload — to shadowIbo, not a second stomping of ibo");
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6)), 2);
+  assert.equal(h.count("bufferSubData"), 0, "camera cull still hits after a shadow cull");
 });
 
 test("the debris pools instance behind a capability read, with the loop as fallback", () => {
@@ -2240,6 +2268,15 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     "cullInstances must recognise the shadow cull (upload:false)");
   assert.match(wgxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?writeBuffer\(batch\.shadowInstBuf/,
     "the shadow cull uploads to shadowInstBuf and leaves the camera pack/cache alone");
+  // GLX caught up (2026-09-09): same upload:false contract, WebGL2 buffer names.
+  const glx = read("js/render/glx/glx.js");
+  const glxCull = glx.slice(glx.indexOf("function cullInstances(batch, planes, opts)"), glx.indexOf("function cullInstances(batch, planes, opts)") + 4200);
+  assert.match(glxCull, /const shadow = !!\(opts && opts\.upload === false\);/,
+    "GLX cullInstances must recognise upload:false");
+  assert.match(glxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?batch\.shadowIbo/,
+    "GLX shadow cull uploads to shadowIbo and leaves the camera pack/cache alone");
+  assert.match(glShadow, /batch\.shadowIbo && batch\._shadowN === n/,
+    "GLX castShadowInstanced draws from shadowIbo when the light cull packed it");
 
   // AND THE SEPARATION IS ONLY HALF OF IT. shadowInstBuf is per BATCH, not per
   // LIGHT, and the sun, car and lamp passes all reach it through one caller
@@ -2739,9 +2776,15 @@ test("the flyby shows under race settings only; the picker pre-builds it hidden 
   // return, and a freshly built world still gets its warm-up frames hidden.
   assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| _rsEl\.hidden\);/);
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
-  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1200);
+  assert.match(game, /if \(state === "results"\) return;/,
+    "results keeps the last race present — physics already stopped, re-drawing is unpaid");
+  assert.match(game, /Particles\.rainShow\(false\);[\s\S]*?if \(soundOn\) GameAudio\.finish\(\);/,
+    "endRace clears the 2D rain overlay the way quitToMenu already did");
+  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1600);
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn) { renderSetupPreview(dt); return; }"),
     "the visibility gate precedes the garage-preview return");
+  assert.ok(renderBody.indexOf('if (state === "results") return;') < renderBody.indexOf("if (setupPreviewOn)"),
+    "results freeze precedes the garage-preview return");
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
     "the visibility gate precedes the no-track return");
   assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
@@ -3596,4 +3639,33 @@ test("TLX placeholder material arrays carry the pack's sampling state (WGSL acce
     assert.ok(pack.includes(line), "createTextureArray lost `" + line + "` — the pack sampling state changed; mirror it in the placeholder");
     assert.ok(placeholder.includes(line), "placeholder array lacks `" + line + "` — three compiles the lit program against the placeholder, and a Nearest/Nearest ClampToEdge placeholder bakes textureLoad+clamp into the WGSL for the life of the program");
   }
+});
+
+// ── GLX spatial upscale spike (SGSR1) ───────────────────────────────────────
+// Flag OFF by default; WebGL2 must not ship raw textureGather (ES 3.1). Size
+// split + present pass are gated on wantSpatialUpscale (flag ∧ scale<~1 ∧
+// linked program). See docs/research/UPSCALING-2026-09.md §6.
+test("GLX spatial upscale spike: SGSR1, no textureGather, flag-gated size split", () => {
+  const sh = read("js/render/glx/shaders/glsl-post.js");
+  assert.match(sh, /const SGSR_FS =/, "SGSR_FS must ship in glsl-post.js");
+  assert.match(sh, /SPDX-License-Identifier: BSD-3-Clause/,
+    "Qualcomm SGSR1 attribution must stay on the adapted shader");
+  const shCode = sh.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(shCode, /textureGather\s*\(/,
+    "WebGL2 has no textureGather — emulate with textureLod taps");
+  assert.match(shCode, /gatherComp\s*\(/, "gather emulation helper must remain");
+  const post = read("js/render/glx/post.js");
+  assert.match(post, /sgsrProg/, "post chain must link the SGSR program");
+  assert.match(post, /spatialOk:\s*\(\)\s*=>\s*!!sgsrProg/,
+    "post must expose spatialOk so resize fail-closes without a linked program");
+  assert.match(post, /uViewport/, "SGSR present pass must upload source viewport");
+  const glx = read("js/render/glx/glx.js");
+  assert.match(glx, /apex26\.spatialUpscale/, "flag key must stay namespaced");
+  assert.match(glx, /wantSpatialUpscale/, "size split must go through wantSpatialUpscale");
+  assert.match(glx, /PST\.spatialOk/,
+    "wantSpatialUpscale must require the linked SGSR program (no letterbox)");
+  assert.match(glx, /renderScale < 0\.98/,
+    "upscale must not run at scale≈1 (pure waste)");
+  const apex = read("js/agent/apex.js");
+  assert.match(apex, /spatialUpscale\s*\(/, "__apex.spatialUpscale must exist");
 });

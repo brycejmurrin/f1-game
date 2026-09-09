@@ -1523,8 +1523,9 @@ const _smpRoad = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // its o
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 const _upX = [1, 0, 0], _upY = [0, 1, 0];   // shadow-basis up choices (read-only)
 // lookAtTo() eye/target scratches — it reads all three vectors synchronously
-// and retains none. CULL_NO_UPLOAD: constant opts TLX/WGX read, GLX ignores.
-const _shEye = [0, 0, 0], _flEye = [0, 0, 0], _flTgt = [0, 0, 0];
+// and retains none. CULL_NO_UPLOAD: shadow cull packs to a second buffer
+// (GLX shadowIbo / WGX shadowInstBuf / TLX CPU pack) — camera ibo untouched.
+const _shEye = [0, 0, 0], _shCtr = [0, 0, 0], _flEye = [0, 0, 0], _flTgt = [0, 0, 0];
 const CULL_NO_UPLOAD = { upload: false };
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
@@ -3320,6 +3321,10 @@ function endRace(forcedOrder) {
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
+  // quitToMenu clears the 2D rain overlay; endRace must too — otherwise
+  // rainDraw keeps stroking every present on the results sheet (audio alone
+  // stopped). Particles.rainActive() is the overlay gate, not the audio flag.
+  Particles.rainShow(false);
   if (soundOn) GameAudio.finish();
   // Qualifying ends in its own sheet: the player's flying lap is measured
   // against the simulated field and becomes the grid. Mirrors the TT return
@@ -6968,10 +6973,38 @@ function _castPropBatchesShadow() {
     ? gfx.makeFrustumPlanes(gfx.shadowCullVP, _pbPlanes) : null;
   for (let i = 0; i < _pb.length; i++) {
     if (planes && gfx.cullInstances) {
-      // TLX: CPU-pack only (own shadow mesh). GLX/WGX ignore the 3rd arg.
+      // upload:false → shadow pack only. WGX/GLX use a second instance buffer;
+      // TLX packs CPU-side into a second InstancedMesh. Camera ibo/cache stay.
       gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes, CULL_NO_UPLOAD));
     } else gfx.castShadowInstanced(_pb[i]);
   }
+}
+// Shadow-ribbon cast — hoisted so a sun recentre does not allocate a closure
+// (PERF-FINDINGS §2y). Same body the rebuild used to close over each snap.
+function _castRibbonSh(geo, key, plain, allow = true) {
+  if (track.meshes[key] === undefined) {
+    track.meshes[key] = null;
+    // TIER GATE. Tracks.build() only chunks the ribbons when
+    // PerfGov.tier() < 3; above that it writes the FUSED mesh and leaves
+    // roadChunked/terrainChunked undefined. This lazy build then made a
+    // SECOND GPU copy of road and terrain anyway — measured +2.78 MiB
+    // median, +3.81 on spa — on precisely the devices that had already
+    // been told to spend less: tier() is max(crash-strike floor, the
+    // player's GRAPHICS preset, the governor's own shed), so a phone that
+    // has been killed twice and a player who picked LOW both silently paid
+    // for a duplicate.
+    //
+    // Falling through leaves the key null and the branch below casts the
+    // fused mesh instead, which is what the tier asked for.
+    const tierOk = typeof PerfGov === "undefined" || PerfGov.tier() < 3;
+    if (allow && tierOk && geo && gfx.createChunkedMesh) {
+      geo._keepPositions = true;
+      track.meshes[key] = gfx.createChunkedMesh(geo, 72);
+    }
+  }
+  const ch = track.meshes[key];
+  if (ch && ch.chunks) gfx.castShadowChunked(ch, MAT_IDENT);
+  else gfx.castShadow(plain, MAT_IDENT);
 }
 function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // Base floor first (under everything) — fills the void on street circuits (no
@@ -7126,6 +7159,11 @@ function render(dt) {
   // in front of the player the instant race settings opens.
   if (menuBlank && !(track && _menuGate.warm > 0)) return;
   if (menuBlank) _menuGate.warm--;
+  // RESULTS: physics and PerfGov already stop; the sheet is translucent over
+  // #game by design (tokens.css). Re-drawing an identical frozen world every
+  // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
+  // last race present and return. Race-settings flyby and live race still draw.
+  if (state === "results") return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
@@ -7545,7 +7583,9 @@ function render(dt) {
       const wx = xx * lu + yx * lv + zx * lw;
       const wy = xy * lu + yy * lv + zy * lw;
       const wz = xz * lu + yz * lv + zz * lw;
-      M4.lookAtTo(_mLView, [wx + sd[0] * 150, wy + sd[1] * 150, wz + sd[2] * 150], [wx, wy, wz], up);
+      _shEye[0] = wx + sd[0] * 150; _shEye[1] = wy + sd[1] * 150; _shEye[2] = wz + sd[2] * 150;
+      _shCtr[0] = wx; _shCtr[1] = wy; _shCtr[2] = wz;
+      M4.lookAtTo(_mLView, _shEye, _shCtr, up);
       // Half-size box (default ±80 m / 160 m) snapped around the anchor;
       // sampleShadow fades shadows out by ANCHOR distance (uShadowCtr) well
       // inside its border. Bigger = more reach, smaller = crisper contacts
@@ -7557,31 +7597,6 @@ function render(dt) {
       // (castShadowChunked). PERF-FINDINGS: ~89% of tris sit outside the box;
       // depth half is bit-identical. Independent of LT.roadChunkLamps (lit pass).
       // Lazy-build shares roadChunked with the lamp draw path.
-      const _castRibbonSh = (geo, key, plain, allow = true) => {
-        if (track.meshes[key] === undefined) {
-          track.meshes[key] = null;
-          // TIER GATE. Tracks.build() only chunks the ribbons when
-          // PerfGov.tier() < 3; above that it writes the FUSED mesh and leaves
-          // roadChunked/terrainChunked undefined. This lazy build then made a
-          // SECOND GPU copy of road and terrain anyway — measured +2.78 MiB
-          // median, +3.81 on spa — on precisely the devices that had already
-          // been told to spend less: tier() is max(crash-strike floor, the
-          // player's GRAPHICS preset, the governor's own shed), so a phone that
-          // has been killed twice and a player who picked LOW both silently paid
-          // for a duplicate.
-          //
-          // Falling through leaves the key null and the branch below casts the
-          // fused mesh instead, which is what the tier asked for.
-          const tierOk = typeof PerfGov === "undefined" || PerfGov.tier() < 3;
-          if (allow && tierOk && geo && gfx.createChunkedMesh) {
-            geo._keepPositions = true;
-            track.meshes[key] = gfx.createChunkedMesh(geo, 72);
-          }
-        }
-        const ch = track.meshes[key];
-        if (ch && ch.chunks) gfx.castShadowChunked(ch, MAT_IDENT);
-        else gfx.castShadow(plain, MAT_IDENT);
-      };
       _castRibbonSh(track.terrainGeo, "terrainChunked", track.meshes.terrain);
       _castRibbonSh(track.roadGeo, "roadChunked", track.meshes.road, gfx.chunkedTrackCoords !== false);
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
@@ -8143,7 +8158,9 @@ function render(dt) {
   // park() freezes physics for shots/tests — then one face per frame so a
   // parked M9 cube goes ready in 6 presents, not 24 (SwiftShader is
   // seconds-per-frame).
-  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  // Live race/count only — results freezes above; menu flyby has no player car
+  // paint that needs a probe, and a mid-results probe was a whole-world redraw.
+  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,

@@ -2551,6 +2551,23 @@ headroom.
   cache in the tree with no cap, no LRU and no free path until recently, and
   this owner has had iOS memory kills.
 
+- `js/game.js` lines 10319 -> **10336** (+17), codeLines 5581 -> **5585** (+4);
+  `js/render/glx/glx.js` lines 2357 -> **2421** (+64) (2026-09-09): FPS carve —
+  results freeze + rain/`endRace` cleanup + env-probe race|count gate + GLX
+  `upload:false` dual buffer (match WGX). The game.js bump is the results
+  early-return, `Particles.rainShow(false)` in `endRace`, the env-probe state
+  gate, and hoisting `_castRibbonSh` / `_shCtr` so a sun recentre stops
+  allocating a closure and two lookAt literals. The GLX bump is the real cost:
+  `cullInstances` now takes `opts`, packs light-culled instances to
+  `shadowIbo`/`_shadowPacked`, and leaves the camera ibo + cell-set cache
+  alone — the same class WGX fixed on 2026-09-02. `shadow.js` rebinds the VAO
+  to `shadowIbo` for the light-culled draw and restores the camera buffers
+  after. Without the second buffer, `upload:false` cannot save a camera
+  re-upload on GLX (one `ibo` only). Canaries pin both halves.
+
+## 2026-09-09 — GLX SGSR1 spatial-upscale spike
+
+- `js/render/glx/glx.js` lines 2421 -> **2452** (+31); `js/agent/apex.js` lines 2751 -> **2764** (+13), codeLines 2032 -> **2040** (+8); `js/agent/agentview.js` lines 2452 -> **2455** (+3): render/present size split behind `apex26.spatialUpscale` (OFF by default), `__apex.spatialUpscale`, agentHelp know entry. Scene FBOs stay at `×renderScale`; canvas is present size when the flag is on, scale < ~1, and SGSR linked (`PST.spatialOk`). Post chain + SGSR_FS live in `post.js` / `glsl-post.js` (not ratchet-capped). See `docs/research/UPSCALING-2026-09.md` §6.
 ## 2026-09-09 — cssClasses 545 -> 546
 
 One class, `.cs-liv-ed-sec`: the zone headings that group the paint editor's

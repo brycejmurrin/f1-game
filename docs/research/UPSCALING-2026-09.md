@@ -152,16 +152,31 @@ Two consequences worth naming before anyone starts:
    notices, versus the frame budget. We have no such A/B on record, and the
    DOM-HUD point above means the loss is smaller than the usual intuition.
 2. **If it is worth fixing: SGSR 1 in GLX first**, one pass, `mediump`,
-   bilinear taps, behind a settings stop that defaults OFF until it is measured
-   on a real GPU. Software probes in this container cannot answer whether it
-   pays — the same rule that governs every other renderer change here.
+   behind a flag that defaults OFF until it is measured on a real GPU.
+   Software probes in this container cannot answer whether it pays — the same
+   rule that governs every other renderer change here.
 3. **Never ship it as an unconditional cost.** It should be gated on
    `renderScale < 1`: at 1.0 there is nothing to upscale and the pass is pure
    waste.
 4. **Temporal reconstruction stays closed** unless someone first builds a
    motion-vector buffer for another reason.
 
+## 6. Spike landed (2026-09-09) — GLX only, flag OFF by default
+
+Implements recommendation §5.2–5.3 in the default renderer:
+
+| Piece | Where |
+|---|---|
+| Flag | `localStorage apex26.spatialUpscale=1` or `?upscale=1`; `__apex.spatialUpscale(1\|0)` |
+| Size split | `js/render/glx/glx.js` `resize()`: canvas = present (`css×dpr`); scene/post FBOs stay at `×renderScale` when the flag is on and scale &lt; ~1 |
+| Pass | After FXAA (or composite→LDR), one fullscreen SGSR1 mobile shader writes the default framebuffer at present size (`js/render/glx/post.js`) |
+| Shader | Adapted from Qualcomm SGSR1 mobile (`sgsr1_shader_mobile.frag`, BSD-3). Stock uses `textureGather` (ES 3.1) — **WebGL2 emulates it with four `textureLod` taps**. `mediump`, OperationMode RGBA, EdgeThreshold 8/255 |
+| Gate | Pass runs only when flag on **and** `renderScale < 0.98` **and** the program linked; otherwise behaviour is byte-identical to pre-spike |
+
+**Not in this spike:** WGX/TLX, settings UI stop, PerfGov auto-enable, temporal path, neural SR, frame gen. Real-GPU A/B still required before defaulting ON — SwiftShader cannot judge sharpness or cost.
+
 ## Sources
+
 
 - [AMD FidelityFX Super Resolution 1](https://gpuopen.com/fidelityfx-superresolution/) and the [integration deck](https://raw.githubusercontent.com/GPUOpen-Effects/FidelityFX-FSR/master/docs/FidelityFX-FSR-Overview-Integration.pdf) (MIT; "do not use RCAS without EASU")
 - [FSR 1.0 demystified](https://jntesteves.pages.dev/posts/amd-fsr-demystified/) — the RetroArch fragment-shader port, spatial-only confirmation

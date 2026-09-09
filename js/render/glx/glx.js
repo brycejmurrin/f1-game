@@ -738,6 +738,8 @@ const GLX = (function () {
       // already bound on every chunked draw path.
       setLampShadowSlot: (i) => { gl.uniform1i(litU.uLampShadowIdx, i | 0); },
       getSize: () => ({ width, height }),
+      getPresentSize: () => ({ width: presentW || width, height: presentH || height }),
+      wantSpatialUpscale,
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
       invalidateVAO() { _activeVAO = null; },
@@ -882,11 +884,32 @@ const GLX = (function () {
   }
 
   // Adaptive render scale: the whole 3D pipeline (scene + every post FBO) sizes
-  // off width/height, and the canvas CSS size is fixed — so scaling the backing
-  // store down and letting the browser upscale is a single knob that trades
-  // sharpness for fill-rate. The HUD is a DOM overlay, so only the 3D view
-  // softens. setRenderScale() drives it from the frame-time governor in game.js.
+  // off width/height. Without spatial upscale the canvas backing store matches
+  // that size and the browser compositor bilinear-stretches to the CSS box.
+  // With apex26.spatialUpscale=1 and scale < 1, the canvas is FULL present size
+  // (css×dpr) and SGSR1 reconstructs the missing pixels (UPSCALING-2026-09 §6).
   let renderScale = 1;
+  let presentW = 0, presentH = 0;
+  let spatialUpscale = false;
+  try {
+    const q = typeof location !== "undefined" && location.search &&
+      /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
+    const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
+    spatialUpscale = !!(q || ls);
+  } catch (_) { spatialUpscale = false; }
+  function setSpatialUpscale(on) {
+    spatialUpscale = !!on;
+    try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
+    resize();
+    return spatialUpscale;
+  }
+  function getSpatialUpscale() { return spatialUpscale; }
+  function wantSpatialUpscale() {
+    // Fail closed: without a linked SGSR program the canvas must stay at
+    // render size (legacy bilinear stretch) — a present-size canvas with a
+    // render-size viewport letterboxes the 3D view into the corner.
+    return spatialUpscale && renderScale < 0.98 && !!(PST && PST.spatialOk && PST.spatialOk());
+  }
   // CACHED CSS SIZE. resize() is the first statement of every render() — and
   // clientWidth/clientHeight are LAYOUT reads, so asking for them there forces a
   // synchronous reflow of anything dirtied since the last frame. The HUD dirties
@@ -977,18 +1000,25 @@ const GLX = (function () {
     // a ~6" screen, and it multiplies with every other saving.
     const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
     cssSize();
-    const w = Math.max(1, Math.round(cssW * dpr * renderScale));
-    const h = Math.max(1, Math.round(cssH * dpr * renderScale));
-    const changed = canvas.width !== w || canvas.height !== h;
-    if (changed) {
-      canvas.width = w;
-      canvas.height = h;
-      gl.viewport(0, 0, w, h);
+    presentW = Math.max(1, Math.round(cssW * dpr));
+    presentH = Math.max(1, Math.round(cssH * dpr));
+    const rw = Math.max(1, Math.round(presentW * renderScale));
+    const rh = Math.max(1, Math.round(presentH * renderScale));
+    // Upscale path: canvas = present (full), scene FBOs = render (scaled).
+    // Off or scale≈1: canvas = render (legacy browser bilinear stretch).
+    const up = wantSpatialUpscale();
+    const cw = up ? presentW : rw;
+    const ch = up ? presentH : rh;
+    const changed = canvas.width !== cw || canvas.height !== ch || width !== rw || height !== rh;
+    if (canvas.width !== cw || canvas.height !== ch) {
+      canvas.width = cw;
+      canvas.height = ch;
     }
+    gl.viewport(0, 0, rw, rh);
     const first = width === 0;
-    width = w;
-    height = h;
-    aspect = w / h;
+    width = rw;
+    height = rh;
+    aspect = rw / rh;
     if ((changed || first) && PST) PST.createTargets();   // (re)allocate HDR + bloom targets
   }
   function setRenderScale(s) {
@@ -1939,11 +1969,36 @@ const GLX = (function () {
   // without cellSize has no cells and is left whole (always drawn in full).
   // Skips bufferSubData when the visible cell set (count + cell-index hash) is
   // unchanged from the previous cull — static prop batches often match.
-  function cullInstances(batch, planes) {
+  //
+  // opts.upload === false is the SHADOW cull (game.js drawPropShadows): the pack
+  // goes to the batch's OWN shadow instance buffer, never ibo. Sharing ibo made
+  // every shadow recentre stomp the camera pack and its cell-set cache, so the
+  // camera cull always re-uploaded on the same frame (bug hunt 2026-09-09;
+  // WGX already separated the buffers on 2026-09-02).
+  function _shadowPackFor(batch) {
+    if (!batch.packMatrices || !batch.ibo) return null;
+    if (!batch._shadowPacked) batch._shadowPacked = new Float32Array(batch.packMatrices.length);
+    if (!batch.shadowIbo) {
+      batch.shadowIbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
+      gl.bufferData(gl.ARRAY_BUFFER, batch._shadowPacked.byteLength, gl.DYNAMIC_DRAW);
+    }
+    if (batch.packColors) {
+      if (!batch._shadowColors) batch._shadowColors = new Float32Array(batch.packColors.length);
+      if (!batch.shadowCbo) {
+        batch.shadowCbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowCbo);
+        gl.bufferData(gl.ARRAY_BUFFER, batch._shadowColors.byteLength, gl.DYNAMIC_DRAW);
+      }
+    }
+    return batch._shadowPacked;
+  }
+  function cullInstances(batch, planes, opts) {
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
-    // There is one GPU instance buffer, so only its resident pack can be a hit.
-    // A two-frustum count cache returned the right N with the wrong transforms.
-    let samePack = !!batch._cullPlanes;
+    const shadow = !!(opts && opts.upload === false);
+    // There is one camera GPU instance buffer, so only its resident pack can be
+    // a hit. The shadow path never consults or writes that cache.
+    let samePack = !shadow && !!batch._cullPlanes;
     if (samePack) {
       let po = 0;
       for (let pi = 0; pi < 6 && samePack; pi++) {
@@ -1959,38 +2014,73 @@ const GLX = (function () {
     // is a strictly stronger key than the frustum. Skips the copy loop and the
     // upload, not the AABB sweep.
     let cellKeyN = -1;
-    if (_instCellCache) {
-      const cs = batch.cells, cn = cs.length;
-      let ks = batch._cellKeyScratch;
+    const cs = batch.cells, cn = cs.length;
+    let ks = batch._cellKeyScratch;
+    if (_instCellCache || shadow) {
       if (!ks || ks.length < cn) ks = batch._cellKeyScratch = new Int32Array(cn);
       let k = 0;
       for (let ci = 0; ci < cn; ci++) if (CHK.aabbInFrustum(planes, cs[ci].mn, cs[ci].mx)) ks[k++] = ci;
       cellKeyN = k;
-      const res = batch._cellKey;
-      if (res && batch._cellKeyN === k) {
-        let same = true;
-        for (let i = 0; i < k; i++) if (res[i] !== ks[i]) { same = false; break; }
-        // NOT writing _cullPlanes here is load-bearing: it must keep describing
-        // whichever frustum physically wrote the buffer (canary-pinned).
-        if (same) { batch.visible = batch._cullN; return batch._cullN; }
+      if (!shadow && _instCellCache) {
+        const res = batch._cellKey;
+        if (res && batch._cellKeyN === k) {
+          let same = true;
+          for (let i = 0; i < k; i++) if (res[i] !== ks[i]) { same = false; break; }
+          // NOT writing _cullPlanes here is load-bearing: it must keep describing
+          // whichever frustum physically wrote the buffer (canary-pinned).
+          if (same) { batch.visible = batch._cullN; return batch._cullN; }
+        }
       }
     }
-    const src = batch.srcMatrices, dst = batch.packMatrices;
-    const sc = batch.srcColors, dc = batch.packColors;
+    const src = batch.srcMatrices;
+    const dst = shadow ? (_shadowPackFor(batch) || batch.packMatrices) : batch.packMatrices;
+    const sc = batch.srcColors;
+    const dc = shadow ? (batch._shadowColors || null) : batch.packColors;
     let n = 0;
-    for (const c of batch.cells) {
-      if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
-      for (const i of c.idx) {
-        // Copy without Float32Array.subarray — that view was a per-instance alloc
-        // on Vegas-scale batches (tens of thousands/frame).
-        const so = i * 16, dOff = n * 16;
-        for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
-        if (dc) {
-          const sco = i * 3, dco = n * 3;
-          dc[dco] = sc[sco]; dc[dco + 1] = sc[sco + 1]; dc[dco + 2] = sc[sco + 2];
+    if (cellKeyN >= 0 && ks) {
+      for (let ci = 0; ci < cellKeyN; ci++) {
+        const idx = cs[ks[ci]].idx;
+        for (let j = 0, jn = idx.length; j < jn; j++) {
+          const i = idx[j];
+          const so = i * 16, dOff = n * 16;
+          for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
+          if (dc) {
+            const sco = i * 3, dco = n * 3;
+            dc[dco] = sc[sco]; dc[dco + 1] = sc[sco + 1]; dc[dco + 2] = sc[sco + 2];
+          }
+          n++;
         }
-        n++;
       }
+    } else {
+      for (let ci = 0; ci < cn; ci++) {
+        const c = cs[ci];
+        if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
+        const idx = c.idx;
+        for (let j = 0, jn = idx.length; j < jn; j++) {
+          const i = idx[j];
+          const so = i * 16, dOff = n * 16;
+          for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
+          if (dc) {
+            const sco = i * 3, dco = n * 3;
+            dc[dco] = sc[sco]; dc[dco + 1] = sc[sco + 1]; dc[dco + 2] = sc[sco + 2];
+          }
+          n++;
+        }
+      }
+    }
+    if (shadow) {
+      // Shadow pack: its own buffer, its own count; the camera-side cache,
+      // count and buffer are untouched.
+      batch._shadowN = n;
+      if (n && batch.shadowIbo && dst === batch._shadowPacked) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, dst, 0, n * 16);
+        if (dc && batch.shadowCbo) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowCbo);
+          gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc, 0, n * 3);
+        }
+      }
+      return n;
     }
     batch.visible = n;
     if (n) {
@@ -2012,7 +2102,7 @@ const GLX = (function () {
       // Record the cell set that produced the bytes now resident.
       let res = batch._cellKey;
       if (!res || res.length < cellKeyN) res = batch._cellKey = new Int32Array(batch.cells.length);
-      res.set(batch._cellKeyScratch.subarray(0, cellKeyN));
+      for (let i = 0; i < cellKeyN; i++) res[i] = ks[i];
       batch._cellKeyN = cellKeyN;
     }
     return n;
@@ -2073,6 +2163,10 @@ const GLX = (function () {
     if (!batch) return;
     if (batch.ibo) gl.deleteBuffer(batch.ibo);
     if (batch.cbo) gl.deleteBuffer(batch.cbo);
+    if (batch.shadowIbo) { gl.deleteBuffer(batch.shadowIbo); batch.shadowIbo = null; }
+    if (batch.shadowCbo) { gl.deleteBuffer(batch.shadowCbo); batch.shadowCbo = null; }
+    batch._shadowPacked = null;
+    batch._shadowColors = null;
     if (freeMesh) freeMesh(batch);
   }
 
@@ -2482,6 +2576,7 @@ const GLX = (function () {
     msaa: () => PST.msaa(),
     pcss: () => SHD.pcssEnabled,
     setRenderScale, getRenderScale,
+    setSpatialUpscale, getSpatialUpscale,
     // GPU frame timer. gpuTimer(true|false) toggles timing (returns whether it's
     // supported + on); gpuTimer() reads state. gpuMs() returns the most recent
     // GPU frame time in ms, or -1 if unsupported / no result yet.

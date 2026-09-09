@@ -36,6 +36,8 @@
  *                              * renderScale; (re)allocate targets on change.
  *   setRenderScale(s)->bool    clamp 0.5..1; re-resize; true if it changed.
  *   getRenderScale()->number
+ *   setSpatialUpscale(on)/getSpatialUpscale()  GLX-only SGSR1 spike (opt-in;
+ *     feature-detect — WGX/TLX omit). See docs/research/UPSCALING-2026-09.md.
  *   width / height / aspect    getters (backing-store pixels).
  *   hdrMode()->bool            scene buffer is float (HDR) vs 8-bit.
  *   msaa()->int                active MSAA sample count (1 = off).
