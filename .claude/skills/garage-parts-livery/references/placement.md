@@ -147,28 +147,34 @@ azimuth off PI/2 and `--pan` in z. Do not "fix" it by nudging `el`.
 
 ## garage-angles shots are not reproducible across runs
 
-Measured 2026-09-09: two runs of the SAME code and the SAME config
-(`--team=redbull --views=hero,side,rear`) produced **hero and side images
-differing in ~43% of bytes**, rear in 0.3%. Nothing in the tree changed between
-them, and the framing, camera and car are identical — it is the lighting.
+Run pairs of identical code and config (`--team=redbull --views=hero,side,rear`),
+% of bytes differing between the two runs:
 
-**Consequences, in order of how much time they save you.**
+| | hero | side | rear |
+|---|---|---|---|
+| render clock held | 43.2 | 0.15 | 0.31 |
+| + a discarded warm-up frame | 43.2 | 0.18 | 0.31 |
+| + render scale pinned | 0.24 | 42.9 | 43.2 |
 
-1. **Never A/B one run's PNG against another run's.** A 43% pixel diff there
-   means nothing. Compare shots taken INSIDE one run — which is what every
-   axis being a comma list is for.
-2. **A "this looks different / better / worse" read across runs is not
-   evidence.** This cost a full optimisation cycle: a change was measured as a
-   43% regression, reverted, and only then did the reverted (i.e. original)
-   code reproduce the same 43% against its own baseline.
-3. Rear is stable and hero/side are not, so a stable view proves nothing about
-   the others.
+**One source is fixed.** The bay's door-end washer flickers on three
+incommensurate sines of the clock `game.js` hands `GarageScene.live()`, and that
+clock was `performance.now()` — so two captures at different WALL instants lit
+the room differently (`on` lands on 0.30, 0.72 or 1 for that fixture, a 3.3x
+swing). `garageNow()` now hands it the FRAME clock whenever
+`__apex.renderClock(t, true)` holds it, and garage-angles holds it by default.
+That took side and rear to 0.15%/0.31%.
 
-**Two clocks, neither pinned by the tool.** `_skyT` (game.js) accumulates dt
-and IS freezable — `__apex.renderClock(t, true)`, the hook the image-grade spec
-already uses. `GarageScene.pulse()` records `performance.now()`, a WALL clock,
-so its contribution depends on how long the box took between the preset click
-and the blit; on a loaded machine that is tens of seconds and varies per run.
+**One is open, and it dominates.** A global lighting state FLIPS ONCE PER RUN at
+a nondeterministic point: shots on the same side of the flip in both runs agree,
+the rest differ ~43% with a uniform whole-frame brightness offset (mean +2.3,
+every column and row band, floor-weighted). Pinning the render scale MOVED which
+shots fell either side; it did not remove the flip, and a discarded warm-up
+frame did not either. Not yet separated: the env probe completing, the perf
+governor's first shed, the baked asset pack arriving (`albedo * tex * 2.0`
+touches every lit surface).
 
-Pinning both is open work. `--settle=N` exposes the step count for whoever
-picks it up.
+**What this means for you.** Compare shots taken INSIDE one run — every axis is
+a comma list for exactly this reason. A cross-run PNG diff is not evidence of
+anything. That mistake already cost one optimisation cycle: a change measured as
+a 43% regression, reverted, and the reverted code then reproduced the same 43%
+against its own baseline.

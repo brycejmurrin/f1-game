@@ -2674,3 +2674,24 @@ already set from `noWheels` factory bodies) pass `Helmets.build({ maxSplit: 0 })
 `js/game.js` lines 10368 -> **10385** (+17) / codeLines 5609 -> **5618** (+9). `loadCarModel` clears `fieldWheelOrder` with the cache; `cz-save` merges structural `DEFAULT_CUSTOM.livery`; foreign-tab `customTeam` re-runs `syncCustomTeam`.
 
 `js/render/glx/glx.js` lines 2610 -> **2615** (+5). Soft-blit sizes from `drawingBufferWidth/Height` so spatial-upscale presents fill `#game-soft`.
+
+## 2026-09-09 — js/game.js +5 lines / +1 code line: garageNow()
+
+`GarageScene.live()` was handed `performance.now()` at both call sites (the lit
+pass and drawGlow). The bay's door-end washer flickers on three incommensurate
+sines of that clock — `on` lands on 0.30, 0.72 or 1 for that fixture, a 3.3x
+swing on one wall — so a HELD render clock did not hold the garage, which is the
+one thing `__apex.renderClock(t, true)` exists to promise. Two captures taken at
+different wall instants lit the room differently, and that is half of why
+`tools/shot/garage-angles.mjs` could not reproduce a shot across runs.
+
+`garageNow()` returns the frame clock while held and `performance.now()`
+otherwise, so a live UI still flickers and a pinned capture does not. Verified
+as a run pair on identical config: side 42.9% -> 0.15% and rear -> 0.31% of
+bytes differing.
+
+Paid rather than extracted: it is one ternary that both call sites must agree
+on, and a duplicated expression at two sites is what the named function exists
+to prevent. The remaining nondeterminism (a global lighting state that flips
+once per run) is NOT fixed by this and is written up in the tool's header and
+`.claude/skills/garage-parts-livery/references/placement.md`.

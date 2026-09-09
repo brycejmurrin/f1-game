@@ -285,10 +285,23 @@ test("garage-angles times the inside of a frame, not just the phases", () => {
  * the tool must say so where someone will read it before trying. */
 test("garage-angles documents that shots are not reproducible across runs", () => {
   const src = read("tools/shot/garage-angles.mjs");   // comments intentionally kept
-  assert.match(src, /NOT REPRODUCIBLE ACROSS RUNS/, "the limit is stated in the header");
+  assert.match(src, /STILL NOT REPRODUCIBLE ACROSS RUNS/, "the limit is stated in the header");
+  assert.match(src, /FLIPS ONCE PER RUN/, "and names the source that is still open");
   assert.match(src, /performance\.now\(\)/, "and names the wall clock as a candidate");
   assert.match(src, /renderClock/, "and the freeze hook that pins the other one");
   const s = code("tools/shot/garage-angles.mjs");
   assert.match(s, /const settleN = Math\.max\(1, \+flag\("--settle", "6"\) \|\| 6\)/,
     "--settle defaults to the long-standing 6: the flag is for chasing this, not a behaviour change");
+});
+
+/* The bay's flicker ran on performance.now(), so a frozen render clock did not
+ * freeze the garage — which is the one thing renderClock(t, true) promises. */
+test("the garage bay reads the frame clock when the render clock is held", () => {
+  const src = read("js/game.js");
+  assert.match(src, /function garageNow\(\) \{ return _skyHold \? _skyT \* 1000 : performance\.now\(\); \}/,
+    "held: frame clock, so a pinned capture is lit the same way twice; unheld: wall clock, as a live UI should be");
+  assert.doesNotMatch(src, /GarageScene\.live\(_spLiv\(\), performance\.now\(\)/,
+    "neither call site may hand the bay the wall clock directly");
+  assert.equal((src.match(/GarageScene\.live\(_spLiv\(\), garageNow\(\)/g) || []).length, 2,
+    "both call sites — the lit pass and drawGlow — must agree, or the glow flickers against a held bay");
 });

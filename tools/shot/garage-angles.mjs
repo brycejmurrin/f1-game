@@ -48,21 +48,34 @@
 // write misses the cache by itself. Paint needs the explicit drop (a custom id
 // for designs, dropPreviewMeshes for the hull).
 //
-// SHOTS ARE NOT REPRODUCIBLE ACROSS RUNS, AND THAT IS A REAL LIMIT ON WHAT
-// THIS TOOL CAN PROVE. Measured 2026-09-09: two runs of the SAME code and the
-// SAME config (redbull, hero/side/rear) produced hero and side images differing
-// in ~43% of bytes; rear differed in 0.3%. Nothing in the tree changed between
-// them. So a diff of one run's PNG against another run's is not evidence of
-// anything, and a before/after visual A/B has to compare shots taken INSIDE one
-// run — which is what every axis being a list is for.
+// SHOTS ARE STILL NOT REPRODUCIBLE ACROSS RUNS. Two sources found, one fixed,
+// one open, and the open one dominates. Measured 2026-09-09 as run pairs of
+// identical code and config (redbull, hero/side/rear), % of bytes differing:
 //
-// Two clocks are candidates and neither is pinned here. `_skyT` (game.js)
-// accumulates dt and is freezable via __apex.renderClock(t, true), the hook the
-// image-grade spec already uses. `GarageScene.pulse()` records
-// performance.now() — WALL clock, so what it contributes depends on how long
-// the box took between the preset click and the blit, which on a loaded machine
-// is tens of seconds. Pinning them is unfinished work, not a thing this tool
-// does today; --settle exists so the step count can be varied while chasing it.
+//   clock held (this tool + game.js garageNow)   hero 43.2   side 0.15  rear 0.31
+//   + a discarded warm-up frame                  hero 43.2   side 0.18  rear 0.31
+//   + render scale pinned                        hero  0.24  side 42.9  rear 43.2
+//
+// FIXED: the bay's door-end washer flickered on performance.now(), so any two
+// captures at different wall instants lit the room differently. game.js now
+// hands GarageScene.live() the FRAME clock whenever __apex.renderClock(t,true)
+// holds it, and this tool holds it by default (--live opts out). That is what
+// took side and rear to 0.15%/0.31% in the first pair.
+//
+// OPEN: a global lighting state FLIPS ONCE PER RUN at a nondeterministic point.
+// Whichever shots fall on the same side of that flip in both runs agree, and
+// the rest differ by ~43% with a uniform whole-frame brightness offset (mean
+// +2.3, spread over every column and row band, floor-weighted). Pinning the
+// render scale MOVED which shots landed either side — it did not remove the
+// flip, and a discarded warm-up frame did not either. Candidates not yet
+// separated: the env probe completing, the perf governor's first shed, the
+// baked asset pack arriving (albedo * tex * 2.0 changes every lit surface).
+//
+// SO: compare shots taken INSIDE one run — which is what every axis being a
+// list is for — and do not read a cross-run PNG diff as evidence of anything.
+// Chasing this cost an optimisation cycle already: a change was measured as a
+// 43% regression, reverted, and the reverted code then reproduced the same 43%
+// against its own baseline.
 //
 // Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
 // under SwiftShader (document.fonts.ready after freeze).
@@ -80,7 +93,7 @@ import {
 const argv = process.argv.slice(2);
 const KNOWN = ["--team", "--livery", "--spine-side", "--spine-logo", "--parts", "--views",
                "--zoom", "--pan", "--aero", "--viewport", "--out", "--backend", "--jpeg",
-               "--dry-run", "--visible-only", "--skip-existing", "--label", "--sheet", "--settle"];
+               "--dry-run", "--visible-only", "--skip-existing", "--label", "--sheet", "--settle", "--live"];
 // Shared with the other garage/car CLIs: both `--name=v` and `--name v`, and an
 // unknown flag stops the run rather than silently using the default.
 const { flag, list, has } = parseFlags(argv, KNOWN);
@@ -105,6 +118,14 @@ const backend = flag("--backend", "webgl2");
 // a settled frame or a mid-ease one — see the note above frame() for the A/B
 // that established it, and raise it if a run shows lighting drift between shots.
 const settleN = Math.max(1, +flag("--settle", "6") || 6);
+// PIN THE RENDER CLOCK unless asked not to. The bay's door-end washer flickers
+// on the clock game.js hands GarageScene.live(); unheld that is
+// performance.now(), so two captures at different wall instants light the room
+// differently and a run-to-run diff measures nothing (hero/side came back 43%
+// apart on identical code before this). __apex.renderClock(t, true) is the same
+// hold the image-grade spec uses. --live opts out for anyone who wants to watch
+// the flicker rather than hold it still.
+const holdClock = !has("--live");
 const jpeg = has("--jpeg") ? Math.max(1, Math.min(100, +flag("--jpeg", "82") || 82)) : 0;
 
 const teams = list("--team", "mclaren");
@@ -630,6 +651,20 @@ async function main() {
       GameStore.store.set("livery." + t, liv);
     }, { t: teams[0], liv: paints[0].livery });
     await openGarage(page, { team: teams[0] });
+    if (holdClock) {
+      const t = await page.evaluate(() => window.__apex.renderClock(12, true));
+      console.log(`render clock held at ${t} (pass --live to let it run)`);
+    }
+    // PIN THE RENDER SCALE. The clock hold below fixes the bay's flicker, but
+    // the perf governor sheds RESOLUTION on its own schedule off measured frame
+    // times — wall-clock again — and an upscaled frame differs from a native
+    // one in every pixel. renderScale(1) also turns the governor off, so the
+    // capture is at a fixed internal resolution rather than whatever the box
+    // was managing that second.
+    if (holdClock) {
+      const rs = await page.evaluate(() => window.__apex.renderScale(1));
+      console.log(`render scale pinned at ${rs.scale} (auto ${rs.auto}, tier ${rs.tier})`);
+    }
 
     // One state cursor per axis: a step is only paid when its coordinate
     // actually moves, so the plan's cost ordering turns into real savings.
@@ -692,7 +727,7 @@ async function main() {
     writeFileSync(meta, JSON.stringify({
       teams, liveries, spineSides, spineLogos, aero: aeros,
       parts: parts.map((p) => ({ tag: p.tag, kind: p.kind, overrides: p.overrides })),
-      views, framings, viewport: vp, backend, sheetHead, shots,
+      views, framings, viewport: vp, backend, holdClock, sheetHead, shots,
       seconds: total, spent, inFrame,
     }, null, 2));
     console.log(`wrote ${shots.length} shot(s) in ${total}s + ${meta}`);
