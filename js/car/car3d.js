@@ -4,11 +4,11 @@
 const Car3D = (function () {
   const SURFACES = Object.freeze({
     custom: 0, paint: 20, carbon: 21, rubber: 22,
-    metal: 23, glass: 24,
+    metal: 23, glass: 24, visor: 32,   // 32 is glass-like but DIELECTRIC, not chrome: glsl-lit.js baseRefl
     emissive: 25, functionalEmissive: 25, panel: 26, mirror: 27,
   });
   // A livery FINISH is a surface-id remap on painted vertices, not a material
-  // uniform: the shaders classify car surfaces 20-30 and branch per id, so a new
+  // uniform: the shaders classify car surfaces 20-32 and branch per id, so a new
   // finish costs an id in that chain (js/render/glx/shaders/glsl-lit.js and its WGSL/TSL
   // mirrors) and one row here. `carbon` gets id 31 rather than reusing
   // SURFACES.carbon (21): 21 keeps the vertex colour, so pointing the finish at
@@ -3196,7 +3196,7 @@ const Car3D = (function () {
       // defect this module exists to fix. 0.715 clears it by 82 mm, and still
       // passes 43 mm under the halo at 0.890.
       const des = Helmets.designFor(opts && opts.num, c1);
-      Helmets.build(out, 0, 0.715, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.glass });
+      Helmets.build(out, 0, 0.715, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.visor });
       // No brow box and no rear spoiler box: the traced shell carries its own
       // ridge over the aperture and its own aero lip at the back.
     }
