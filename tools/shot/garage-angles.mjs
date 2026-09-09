@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // @doc Garage camera-preset screenshots for one team — many views, ONE Chromium.
 //   node tools/shot/garage-angles.mjs [--team=redbull] [--views=spine] [--viewport=1280x720] [--out=dir]
+// @skill playwright-probe
 //
 // Counterpart to garage-frame.mjs (one preset × backend A/B). This walks the
 // CAMERA STACK on a single backend: open once, click each preset, soft-present

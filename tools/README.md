@@ -107,7 +107,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |
 | **shot/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **shot/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
-| **shot/garage-angles.mjs** | Garage camera-preset screenshots for one team — many views, ONE Chromium. | — |
+| **shot/garage-angles.mjs** | Garage camera-preset screenshots for one team — many views, ONE Chromium. | playwright-probe |
 | **shot/garage-frame.mjs** | Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
 | **shot/profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | playwright-probe |
@@ -120,7 +120,7 @@ Shared Playwright probe helpers and garage/menu capture gates reused by shot too
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **capture/garage-interior.mjs** | Used by garage-frame.mjs and garage-shot.mjs after canvas readback. | — |
+| **capture/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |
 | **capture/probe-page.mjs** | Probe helpers: reduced-motion init, backend pick, garage open/settle, soft/#game CDP shot. | — |
 
 ### `tools/gfx/`
@@ -325,13 +325,14 @@ No header comment in JSON, so the "read by" column is derived from which tools a
   directory headings above are the contract — `gen-tools-readme.mjs` fails on
   a tool in a group it does not know, so a new tool picks a group or the group
   gets documented. Only what every consumer hardcodes stays at `tools/` root.
-- **Capture tools are a family:** `shot/apex-capture.mjs` is the parallel
-  sweep, `car/carshot.mjs` the ~5 KB studio probe, `car/render-car.mjs` the
-  contact sheet, `shot/shot.mjs` one framed shot, `track/survey-track.mjs
-  <id>` the one-stop circuit pass (`--oblique` adds topdown + N/E/S/W).
-  Redundant one-offs were deleted; recover from git history if a need returns.
-  `ui/menu-fit.mjs` survives `ui/layout-audit.mjs` only for `--safe=`
-  (arbitrary notch insets — headless Chromium reports every
+- **Capture tools are a family:** `shot/garage-angles.mjs` and
+  `car/render-car.mjs` are the ONE-Chromium multi-angle paths (garage presets /
+  carview presets); `shot/apex-capture.mjs` is the parallel sweep,
+  `car/carshot.mjs` the ~5 KB studio probe, `shot/shot.mjs` one framed track
+  shot, `track/survey-track.mjs <id>` the one-stop circuit pass (`--oblique`
+  adds topdown + N/E/S/W). Redundant one-offs were deleted; recover from git
+  history if a need returns. `ui/menu-fit.mjs` survives `ui/layout-audit.mjs`
+  only for `--safe=` (arbitrary notch insets — headless Chromium reports every
   `env(safe-area-inset-*)` as 0).
 - **Chromium:** `CHROME` / `PW_CHROMIUM`, then `/opt/pw-browsers/...`, else
   Playwright's bundled browser. Servers bind a free port (or `:3456`).
