@@ -144,7 +144,9 @@ looking is a different question, and you answer it on the cheapest surface that
 can: `node tools/car/spine-station.mjs --team=redbull` measures where every
 flank design's ink actually falls (`v` 0 = shoulder crease, 1 = sidepod line;
 `u` front → rear) in 0.2 s with no browser, `--occlude` adds what the car's own
-tyres and bodywork cover from a garage camera, `--png` rasterises the flat art,
+tyres and bodywork cover from a garage camera, the `(crown)` row measures the
+crown's OWN flank graphic (the wrap's bull) which no side row can see,
+`--team=all` runs one crown across the grid, `--png` rasterises the flat art,
 and only foreshortening / lighting / racing distance need `garage-angles.mjs`
 (pass `--zoom`/`--pan` or a flank mark arrives forty pixels wide) or
 `shot.mjs --team`. Both halves are in CI via `fin-design.test.mjs`.
