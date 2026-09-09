@@ -2495,3 +2495,25 @@ files are not ratcheted.
   `tests/unit/livery-decal-surfaces.test.mjs`, which measures vertex-to-
   SURFACE distance (`tests/helpers/mesh-distance.mjs`) rather than
   vertex-to-box — the substitution that let all of this hide.
+- `js/game.js` lines 10292 -> **10297** (+5), codeLines 5572 -> **5573** (+1)
+  (2026-09-09): one line of MARKER, and it is worth saying why it is in
+  product code rather than in the test that wants it.
+  `parts-mesh-cache.spec.js` asserts the player wheel cache's bound (8 pairs)
+  and the FIELD cache's (12) as if they were separable, and they were not:
+  the probe tags a mesh as "wheel" by wrapping `Car3D.buildWheelLayers`, and
+  `getPlayerWheelMeshes` and `getFieldWheelMeshes` call it with
+  argument-for-argument identical calls. So every assertion in that test was
+  measuring the SUM of the two caches — `live` came out 64 against a bound of
+  32, and `oldestPairEvicted` asked whether the first four meshes ever built
+  had been freed when those are field meshes a 12-slot cache never evicts.
+  Raising the bound to cover both, which is what I tried first, only moved the
+  failure one line down: it makes the guard say less while still not saying
+  anything true.
+  `getFieldWheelMeshes` now marks its four mesh datas `_field`. Nothing in
+  Car3D or the renderer reads it — `Car3D.build`'s `field` opt is the same
+  marker for the same reason, and its own comment says so ("factory body —
+  probe vs playerBodies"). With it the two lists separate and both bounds are
+  asserted at their real values (32 and 48) instead of one weakened number.
+  A GPU-mesh leak guard is worth a line here: the field cache was the one
+  cache in the tree with no cap, no LRU and no free path until recently, and
+  this owner has had iOS memory kills.
