@@ -1013,6 +1013,11 @@ function buildLiveryCreator(container, team) {
 
   container.appendChild(wrap);
   applyPreview();
+  // Spine / logo edits need the crown in the car gap the sheet leaves — the
+  // default front az puts the nose toward camera and the cover under the
+  // panel. Hero is the rear three-quarter the CAMERA presets already use.
+  const hero = document.querySelector('[data-cs-view="hero"]');
+  if (hero) hero.click();
 }
 
 let _livSeq = 0;

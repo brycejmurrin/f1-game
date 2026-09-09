@@ -1664,6 +1664,36 @@ test("GLX asks for an opaque canvas — the behaviour TLX has to match", () => {
   assert.equal(ctx.attrs.antialias, false, "no browser MSAA — the post path resolves its own");
 });
 
+test("GLX keeps the drawing buffer under HeadlessChrome so captures see the car", () => {
+  // Without this, CDP / chrome-devtools screenshots race the cleared
+  // backbuffer and paint solid black while the garage is actually drawing
+  // (garage-frame.mjs freezes the loop for the same reason). Source-pin the
+  // UA sniff + the attr — bootGlx's mock navigator is not HeadlessChrome, so
+  // the recorded attrs stay false there; the wiring is what this holds.
+  const src = read("js/render/glx/glx.js");
+  assert.match(src, /HeadlessChrome/,
+    "GLX must sniff HeadlessChrome for the preserveDrawingBuffer gate");
+  assert.match(src, /preserveDrawingBuffer:\s*headlessUa/,
+    "preserveDrawingBuffer must follow the headless UA sniff, not a bare true");
+});
+
+test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
+  // preserveDrawingBuffer alone is not enough on SwiftShader: in-frame
+  // readPixels has picture, chrome_take_screenshot of the garage gap is
+  // still solid black. WGX already 2D-blits; GLX must too under the same UA.
+  const src = code("js/render/glx/glx.js");
+  assert.match(src, /_softPresent\s*=\s*headlessUa/,
+    "soft-present must arm from the HeadlessChrome sniff");
+  assert.match(src, /game-soft/,
+    "soft-present needs a 2D overlay canvas id for CDP/page shots");
+  assert.match(src, /putImageData/,
+    "soft-present must blit readPixels into the 2D overlay");
+  assert.match(src, /awaitSoftPresent/,
+    "garage settle / SAVE SCREENSHOT wait on awaitSoftPresent");
+  assert.match(src, /softPresent:\s*\(\)\s*=>\s*!!_softPresent/,
+    "softPresent() capability bit for renderer-picker / probes");
+});
+
 test("the alpha tag that makes canvas opacity load-bearing still exists", () => {
   // If this ever stops being true the coupling is gone and the two assertions
   // below are merely tidy rather than load-bearing. Worth knowing which.
