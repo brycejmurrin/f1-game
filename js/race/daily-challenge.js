@@ -9,20 +9,8 @@ const DailyChallenge = (function () {
   const WEATHER = ["dry", "dry", "overcast", "wet", "rain", "fog"];
   const TOD = ["default", "dawn", "day", "dusk", "night"];
 
-  // FNV-1a + a murmur-style finaliser: the same shape as Career.hash (which
-  // this module does not call — a career seed must not move the daily plan).
-  function hash32(str) {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
-    return h >>> 0;
-  }
-  function mix32(h) {
-    h ^= h >>> 16; h = Math.imul(h, 0x7feb352d);
-    h ^= h >>> 15; h = Math.imul(h, 0x846ca68b);
-    h ^= h >>> 16;
-    return h >>> 0;
-  }
-  function pick(day, field, n) { return mix32(hash32("daily:" + day + ":" + field)) % n; }
+  // Hash32 primitives only — never Career.hash: a career seed must not move the daily plan.
+  function pick(day, field, n) { return Hash32.mix(Hash32.fnv1a("daily:" + day + ":" + field)) % n; }
 
   // UTC day, YYYY-MM-DD — the one calendar every player shares.
   function dayKey(d) { return (d || new Date()).toISOString().slice(0, 10); }
@@ -42,7 +30,7 @@ const DailyChallenge = (function () {
       day, trackId: track.id, trackName: track.name || track.id,
       weather: WEATHER[pick(day, "wx", WEATHER.length)],
       tod: TOD[pick(day, "tod", TOD.length)],
-      seed: mix32(hash32("daily:" + day)) || 1,
+      seed: Hash32.mix(Hash32.fnv1a("daily:" + day)) || 1,
     };
   }
 
@@ -112,5 +100,5 @@ const DailyChallenge = (function () {
     return { plan, dayKey, open, record, shareText, stop, isActive, current, data, today };
   }
 
-  return { create, plan, dayKey, prevDay, hash32, mix32 };
+  return { create, plan, dayKey, prevDay };
 })();
