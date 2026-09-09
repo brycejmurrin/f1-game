@@ -706,17 +706,12 @@ const AiDrive = (function () {
     return hold ? clamp(base - hold * 0.06, 0.7, 0.95) : base;
   }
 
-  function racingLineMix(street, hold) {
-    const base = street ? 0.32 : 0.55;
-    return hold ? clamp(base - hold * 0.08, 0.22, 0.62) : base;
-  }
-
   try { Log.info("game", "AiDrive ready"); } catch (_) { /* Log absent in isolated VM */ }
   return {
     traits, houseStyle, isMate, ordersMul, stuckThreshold, followPad, followBase, towGain, queueBrake, sepClamp,
     humanInvMass, contactGive, steerDamp, unstuckPull, streetOtScale, otFireRate,
     otShouldFire, wantBoost, wantX, brakeTarget, brakeDecision, adaptLane, otPull,
-    defendPull, isBoxed, minLatGap, racingLineMix, wallHitLoss, wallSteerScrub,
+    defendPull, isBoxed, minLatGap, wallHitLoss, wallSteerScrub,
     wallAiScrub, beginLook, pushLook, endLook, aiRescueDelay, otSide,
     letPassDelay, letPassPull, letPassEase, queueFloor, unstuckLatFloor,
     otWant, passTarget, passHold, passCooldown, sideYieldsA,
