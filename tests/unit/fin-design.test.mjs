@@ -237,6 +237,37 @@ test("coverBind saddleWrap paints saddle flanks without a saddle crown", () => {
                "spineOnly keeps non-saddle crowns off the flanks");
 });
 
+test("airboxMeshColour: wrap sun wins over airboxTint", () => {
+  const cover = [0.9, 0.9, 0.92], sun = [0.95, 0.75, 0.1], airbox = [0.2, 0.8, 0.3];
+  const liv = { spineLogo: "wrap", sunTint: sun, airboxTint: airbox, cover };
+  assert.deepEqual(A.LT.airboxMeshColour("redbull", liv, cover), sun);
+});
+
+test("airboxMeshColour: non-wrap uses airboxTint, else cover", () => {
+  const cover = [0.9, 0.9, 0.92], airbox = [0.2, 0.8, 0.3];
+  assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", airboxTint: airbox, cover }, cover), airbox);
+  assert.deepEqual(A.LT.airboxMeshColour("ferrari", { spineLogo: "saddle", cover }, cover), cover);
+});
+
+test("finHandoff contrast resolves fin against the saddle block, not white-on-white", () => {
+  const WHITE = [0.95, 0.95, 0.96], RED = [0.863, 0, 0], DARK = [0.05, 0.06, 0.07];
+  const liv = {
+    cover: WHITE, c1: DARK, c2: RED, fin: WHITE,
+    spineLogo: "cap", coverBind: "saddleWrap", saddleTint: WHITE, finHandoff: "contrast",
+  };
+  const fin = A.LT.resolveFinPaint("ferrari", liv, WHITE, RED, DARK, RED);
+  assert.ok(A.LT.contrast(fin, WHITE) >= 2.0, `fin ${fin} must clear white block`);
+  assert.ok(fin[0] > 0.5, "contrast must pick red body, not white fin/cover");
+});
+
+test("finHandoff hardCut stops crown continuation on the tail, fin motif stays", () => {
+  const match = A.paint("ferrari", { ...BASE, spineLogo: "stripe", finHandoff: "match" });
+  const cut = A.paint("ferrari", { ...BASE, spineLogo: "stripe", finHandoff: "hardCut" });
+  assert.ok(opsIn(match, R.tail).length > 0, "match continues stripe onto REGIONS.tail");
+  assert.equal(opsIn(cut, R.tail).length, 0, "hardCut breaks crown onto tail");
+  assert.ok(opsIn(cut, R.fin).length > 0, "hardCut keeps fin motif on REGIONS.fin");
+});
+
 test("spineTint colours the crown band alone, and is absent-identical", () => {
   const LIME = [0.718, 0.882, 0.106], DARK = [0.008, 0.086, 0.078];
   const AM = { c1: [0.0, 0.349, 0.31], c2: LIME, spineLogo: "stripe" };

@@ -1511,6 +1511,31 @@ const LiveryTex = (function () {
   function ridgeFill(liv, bandC) {
     return (liv && liv.ridgeTint) || bandC;
   }
+  const FIN_ON_BLOCK = 2.0;
+  // AIRBOX mesh paint (Car3D roll hoop / snorkel / intake lips). Under WRAP the
+  // resolved sun wins over airboxTint; otherwise airboxTint or ENGINE COVER.
+  function airboxMeshColour(teamId, liv, coverC) {
+    const logo = (liv && liv.spineLogo) || "logo";
+    if (logo === "wrap") return sunColour(teamId, liv).slice();
+    if (liv && liv.airboxTint) return liv.airboxTint.slice();
+    return coverC ? coverC.slice() : [0.1, 0.1, 0.12];
+  }
+  // Crown/saddle block the fin root meets — contrast handoff scores against this.
+  function finContrastBlock(liv, coverPaint, bandC) {
+    const saddle = saddleFill(liv, bandC, coverPaint);
+    return saddle || coverPaint;
+  }
+  // Fin PLATE colour for mesh + atlas; finHandoff selects match / contrast.
+  function resolveFinPaint(teamId, liv, coverPaint, bandC, c1, c2) {
+    const base = (liv && liv.fin) || c2;
+    if (finHandoffOf(liv) === "contrast") {
+      const block = finContrastBlock(liv, coverPaint, bandC);
+      const order = [c2, c1, INK_DARK, INK_LIGHT];
+      if (liv && liv.fin && contrast(liv.fin, block) >= FIN_ON_BLOCK) order.unshift(liv.fin);
+      return pickOn(order, block, FIN_ON_BLOCK).slice();
+    }
+    return base.slice();
+  }
   // The saddle's other half: from the airbox back along the crease to
   // mid-cover, then a raked edge down to the sidepod line just behind the
   // number (the SF-26's white cover top), on each flank in its own frame.
@@ -1940,7 +1965,6 @@ const LiveryTex = (function () {
     const c1 = colors.c1 || [0.1, 0.1, 0.12];
     const c2 = colors.c2 || [0.9, 0.9, 0.92];
     const stripe = colors.stripe || null;
-    const finPaint = colors.fin || c2;
     const finArt = colors.finArt || null;
     const logo = colors.logo || null;
 
@@ -1971,7 +1995,6 @@ const LiveryTex = (function () {
     // tint row: an explicit pick is a decision about one surface, and the
     // contrast derivation below owns only the DEFAULT.
     const inkCrest = colors.crestInk || inkOn([coverPaint]);
-    const inkFin = inkOn([finPaint]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks (titleA only)
     const inkNose = inkOn([c1, c2]);          // titleB — the monocoque top
     const inkStrip = inkOn(stripBg);
@@ -2021,6 +2044,8 @@ const LiveryTex = (function () {
     // SPINE TINT. See pickOn for why FIRST that clears, not highest-scoring.
     const BAND_ORDER = [c2, c1, INK_LIGHT, INK_DARK];
     const bandC = colors.spineTint || pickOn(BAND_ORDER, coverPaint, BAND_ON_COVER);
+    const finPaint = resolveFinPaint(teamId, colors, coverPaint, bandC, c1, c2);
+    const inkFin = inkOn([finPaint]);
     // The cover's HEIGHT decides how tall the flank band is in metres, and so
     // how wide a mark must be drawn to come out square on it (flankSquash).
     const spineHeight = colors.spineHeight || "standard";
@@ -2202,7 +2227,7 @@ const LiveryTex = (function () {
         saddleFlanks(ctx, saddleFill(colors, bandC, coverPaint) || bandC);
       }
     }
-    if (REGIONS.tail) {
+    if (REGIONS.tail && finHandoffOf(colors) !== "hardCut") {
       drawTailTop(ctx, spineLogo, REGIONS.tail, bandC, inkCrest, names[1] || "");
     }
     // TAIL GRAPHIC wash: finArt if set, else the first BASE that clears the
@@ -2708,6 +2733,7 @@ const LiveryTex = (function () {
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
            coverBindOf, finHandoffOf, saddleFill, ridgeFill,
+           airboxMeshColour, finContrastBlock, resolveFinPaint,
            hasFlankBull: (teamId) => !!bullPath(teamId) };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;
