@@ -258,10 +258,12 @@ export async function presentedCanvasClip(page) {
 }
 
 /**
- * Fast path: PNG/JPEG bytes from the soft-present overlay (or carview #view).
- * Returns `{ b64, id }` or null when no usable 2D canvas is armed — callers
- * then use CDP. Prefer this over CDP for multi-angle loops (no session setup
- * per shot). Optional `clip` is CSS-viewport pixels (same space as CDP clips).
+ * Fast path: PNG/JPEG bytes from the presented canvas without CDP.
+ * Prefer `#game-soft` / carview `#view` (2D blit). Fall back to `#game` —
+ * Playwright's Desktop Chrome project spoofs a headed UA, so GLX never arms
+ * soft-present; after `__apex.headless(true)` the WebGL backbuffer keeps the
+ * last frame and toDataURL works even without preserveDrawingBuffer.
+ * Returns `{ b64, id }` or null. Optional `clip` is CSS-viewport pixels.
  */
 export async function readSoftCanvasBytes(page, {
   type = "png", quality = 92, preferView = false, clip = null,
@@ -269,9 +271,11 @@ export async function readSoftCanvasBytes(page, {
   return page.evaluate(({ fmt, q, preferView: pv, clip: cl }) => {
     const soft = document.getElementById("game-soft");
     const view = document.getElementById("view");
+    const game = document.getElementById("game");
     const g = (pv && view && view.width > 0) ? view
       : (soft && soft.width > 0 && soft.height > 0) ? soft
       : (view && view.width > 0) ? view
+      : (game && game.width > 0) ? game
       : null;
     if (!g || typeof g.toDataURL !== "function") return null;
     try {
@@ -281,6 +285,8 @@ export async function readSoftCanvasBytes(page, {
       if (cl && cl.width > 0 && cl.height > 0) {
         const r = g.getBoundingClientRect();
         if (!(r.width > 0 && r.height > 0)) return null;
+        // WebGL #game cannot be drawImage'd into a 2D crop — crop via CDP instead.
+        if (g === game && g.getContext && g.getContext("webgl2")) return null;
         const sx = (cl.x - r.x) * (g.width / r.width);
         const sy = (cl.y - r.y) * (g.height / r.height);
         const sw = cl.width * (g.width / r.width);
@@ -305,11 +311,14 @@ export async function readSoftCanvasBytes(page, {
  * `skipAwait` — pass that when the caller already froze after awaitPresentedFrame
  * (a second wait after headless(true) hangs on GLX).
  *
- * Order: soft overlay toDataURL (fast, multi-shot) → CDP Page.captureScreenshot.
+ * Order: soft/#view/#game toDataURL (fast) → CDP Page.captureScreenshot.
  * Never Playwright's screenshot API — it waits on document.fonts.ready and that
  * hung GHA smoke shards 2/3 after freeze.
  *
- * `opts.timeout` (ms) bounds the CDP leg (and soft await when `awaitMs` omitted).
+ * `opts.timeout` (ms) is OPTIONAL. When set, it bounds the CDP leg (and soft
+ * await when `awaitMs` omitted). Default CDP is unbounded — smoke under GHA
+ * Desktop Chrome often needs >60s for CDP when soft is unarmed; a hard 60s
+ * race turned a 339s green into a false red.
  * `opts.clip` overrides the presented-canvas box (CSS viewport pixels).
  * `opts.preferView` prefers carview `#view` for soft capture.
  * `opts.forceCdp` skips the soft path (tests / known-bad soft).
@@ -328,10 +337,10 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
     if (soft) {
       const buf = Buffer.from(soft.b64, "base64");
       if (opts.path) writeFileSync(opts.path, buf);
-      return {
-        buf, bytes: buf.length, clip: opts.clip || null,
-        id: soft.id, via: soft.id === "view" ? "view" : "game-soft",
-      };
+      const via = soft.id === "view" ? "view"
+        : soft.id === "game" ? "game"
+        : "game-soft";
+      return { buf, bytes: buf.length, clip: opts.clip || null, id: soft.id, via };
     }
   }
 
@@ -345,7 +354,6 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
     width: Math.max(1, box.width), height: Math.max(1, box.height),
     scale: 1,
   };
-  const budget = opts.timeout != null ? opts.timeout : 60000;
   const session = await page.context().newCDPSession(page);
   let buf;
   try {
@@ -353,11 +361,17 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
     if (format === "jpeg" && opts.quality != null) params.quality = opts.quality;
     const capture = session.send("Page.captureScreenshot", params)
       .then(({ data }) => Buffer.from(data, "base64"));
-    buf = await Promise.race([
-      capture,
-      new Promise((_, rej) => setTimeout(() => rej(new Error(
-        `probe: CDP captureScreenshot timed out after ${budget}ms`)), budget)),
-    ]);
+    // Bound CDP only when the caller asked — smoke omits timeout on purpose.
+    if (opts.timeout != null) {
+      const budget = opts.timeout;
+      buf = await Promise.race([
+        capture,
+        new Promise((_, rej) => setTimeout(() => rej(new Error(
+          `probe: CDP captureScreenshot timed out after ${budget}ms`)), budget)),
+      ]);
+    } else {
+      buf = await capture;
+    }
   } finally {
     try { await session.detach(); } catch (_) { /* already closed */ }
   }

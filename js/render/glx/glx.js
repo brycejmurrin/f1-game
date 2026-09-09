@@ -551,8 +551,12 @@ const GLX = (function () {
     // car; chrome_take_screenshot is a black gap). WGX soft-presents under the
     // same UA sniff; GLX does both: keep the buffer AND blit to a 2D overlay.
     // Headed players stay on the fast default (no overlay, no PDB).
+    // Playwright's Desktop Chrome *project* spoofs a headed UA (no
+    // HeadlessChrome) but sets navigator.webdriver — arm soft there too so
+    // smoke/capture do not fall through to a minutes-long CDP grab.
     const headlessUa = typeof navigator !== "undefined"
-      && /HeadlessChrome/i.test(navigator.userAgent || "");
+      && (/HeadlessChrome/i.test(navigator.userAgent || "")
+        || !!navigator.webdriver);
     _softPresent = headlessUa;
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer

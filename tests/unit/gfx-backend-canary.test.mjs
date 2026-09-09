@@ -1703,6 +1703,8 @@ test("GLX keeps the drawing buffer under HeadlessChrome so captures see the car"
   const src = read("js/render/glx/glx.js");
   assert.match(src, /HeadlessChrome/,
     "GLX must sniff HeadlessChrome for the preserveDrawingBuffer gate");
+  assert.match(src, /navigator\.webdriver/,
+    "Playwright Desktop Chrome spoofs headed UA — webdriver still arms capture");
   assert.match(src, /preserveDrawingBuffer:\s*headlessUa/,
     "preserveDrawingBuffer must follow the headless UA sniff, not a bare true");
 });
@@ -1714,6 +1716,8 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
   const src = code("js/render/glx/glx.js");
   assert.match(src, /_softPresent\s*=\s*headlessUa/,
     "soft-present must arm from the HeadlessChrome sniff");
+  assert.match(src, /navigator\.webdriver/,
+    "webdriver arms soft when the project UA hides HeadlessChrome");
   assert.match(src, /game-soft/,
     "soft-present needs a 2D overlay canvas id for CDP/page shots");
   assert.match(src, /putImageData/,
