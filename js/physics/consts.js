@@ -142,9 +142,28 @@ window.PhysicsConsts = {
   // calibrated to — one circuit fixed, two broken. The spread is also well
   // inside the separation between levels (1.8-3.5 % per step), so each level
   // still means what it meant. Evidence: docs/notes/RACING-LINE-RESEARCH.md §8.
+  // 2026-09-09: the AI's corner model gained the DOWNFORCE term the player has
+  // always cornered on (ai-drive.js brakeTarget solves vC as a fixed point now).
+  // Field-median lap time moved -0.1 % at monza, +0.2 % at monaco and -2.3 % at
+  // spa on `normal` — the gain tracks how FAST the circuit's corners are, which
+  // is the whole prediction. NOT re-scaled, by the same argument as above: the
+  // drift is circuit-dependent and one multiplier cannot express it. What it
+  // bought is consistency BETWEEN circuits — monza and spa now agree to 0.2
+  // points on the easy step (+4.09 / +3.92 %) where they were 3.8 apart
+  // (+4.32 / +8.12 %). Evidence: docs/notes/AI-FIELD-RESEARCH.md.
+  // game.js's BAND_CEIL also caps a rubber-banded AI at this table's top scale:
+  // easy's 0.851 x 1.18 = 1.004 used to beat hard's own 0.980.
   DIFF: {
     easy:   { ai: 0.851, band: 0.18 },
     normal: { ai: 0.911, band: 0.08 },
     hard:   { ai: 0.980, band: 0.02 },  // band was 0.03 — smarter OT/ERS/brake cuts rubber-band need
   },
 };
+// The top of that ladder: the fastest pace scale ANY level reaches with its
+// rubber band fully wound on. Derived rather than written down so it tracks the
+// table above; game.js's band block caps a banded AI here so the difficulty dial
+// stays monotonic. Lives with DIFF because it is a property of DIFF.
+window.PhysicsConsts.BAND_CEIL = (() => {
+  const top = Object.values(window.PhysicsConsts.DIFF).reduce((a, d) => (d.ai > a.ai ? d : a));
+  return top.ai * (1 + top.band);
+})();

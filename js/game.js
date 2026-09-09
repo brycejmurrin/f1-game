@@ -586,7 +586,7 @@ const { VMAX, ACCEL, BRAKE, REVERSE_MAX, REVERSE_ACCEL, COAST_DRAG,
         LONG_GRIP, THR_ELLIPSE, WHEEL_R, WHEEL_STEER_VIS, GRASS_V, KERB_SHAKE, KERB_CUE_HOLD,
         DEPLOY_A, TAPER_LO, TAPER_HI, TAPER_FLOOR, DRAIN_LO, DRAIN_HI,
         REGEN_LO, REGEN_HI, OT_TIME_LO, OT_TIME_HI, OT_COOL_LO, OT_COOL_HI,
-        OT_GAP, WET_GRIP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF } = PhysicsConsts;
+        OT_GAP, WET_GRIP, GEARS, GEAR_TOP, IDLE_RPM, MAX_RPM, DIFF, BAND_CEIL } = PhysicsConsts;
 // Global pace multiplier on top speed AND acceleration, applied to EVERY car
 // (player + AI) so the whole field speeds up/slows down together and the racing
 // stays competitive. 1.0 = stock. Driven by the OVERALL SPEED slider.
@@ -4235,7 +4235,7 @@ const AI_HEAD_MAX = 0.45;      // rad: the heading a car may hold off the road t
 const AI_YAW_LAT = 0.6;        // share of LAT_MAX·grip the heading change may spend (a_lat = v·yawRate)
 const AI_YAW_MAX = 1.2;        // rad/s: yaw-rate cap at crawl speeds
 const AI_BIAS_SLEW = 3.0;      // m/s: how fast a pass / defend / yield / separation bias may move the target
-const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
+const _aiBr = { traits: null, samples: null, latMax: 0, aeroLoad: 0, df: 0, vTop: 0, brake: 0, grip: 0, speed: 0, blocker: false, blockerGap: 0, blockerSpeed: 0, roomL: 0, roomR: 0, team: null, seat: 0, stats: null, errMul: 1 };
 const _aiLane = { traits: null, nearby: 0, roomL: 0, roomR: 0, street: false, baseLane: 0 };
 const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, catching: false, otActive: false };
 const _aiOtPull = { street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, roll: 0.5 };
@@ -4612,10 +4612,17 @@ function updateCar(c, dt, ranked) {
   // Rubber-band against the LEADING human, not "the" player: with a second
   // driver on track, banding off whoever happens to be the local car would let
   // the slower human drag the whole field back. One human => identical.
+  // ...and the band never lifts a level past the TOP OF THE LADDER. Without the
+  // cap easy's 0.851 x 1.18 = 1.004 beats hard's own 0.980: a lapped car on the
+  // easiest setting outran the fastest car on the hardest one, which makes the
+  // difficulty dial non-monotonic in the only place a player would notice it
+  // (a rival closing from a lap down). The ceiling is DIFF's own top scale, so
+  // it moves with the table rather than pinning a literal here.
   if (!c.human && _leadHuman) {
     const gap = _leadHuman.prog - c.prog;
     const bandFactor = gap > 0 ? Math.min(gap / 700, 1) * dd.band : 0;
-    vmax *= 1 + bandFactor;
+    const bandCap = Math.max(1, BAND_CEIL / (c.tierV * c.skill * dd.ai));
+    vmax *= Math.min(1 + bandFactor, bandCap);
   }
   // Caution: under VSC / safety car the whole field runs to a delta pace, not
   // racing speed — humans used to keep race pace while the AI was capped.
@@ -4869,6 +4876,9 @@ function updateCar(c, dt, ranked) {
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX;
     _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE;
+    // The same downforce the player corners on (aeroGrip), and the ceiling it is
+    // measured against — brakeTarget solves for the corner speed with it.
+    _aiBr.df = DOWNFORCE * aeroDfMult(c); _aiBr.vTop = vTop();
     _aiBr.grip = gripMult(c) * dirtyAirMul(c.towing || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
     _aiBr.blockerSpeed = blocker ? blocker.speed : 0;
@@ -5232,7 +5242,25 @@ function updateCar(c, dt, ranked) {
       dp = ((dp + track.total / 2) % track.total + track.total) % track.total - track.total / 2;
       const sideRoom = c.passSide > 0 ? Math.min(roomR, roadR) : Math.min(roomL, roadL);   // the ROAD's room, not the run-off's
       if (po.finished || po.retired || dp > 16 || !Number.isFinite(dp)) { c.passOf = null; }           // lost it: no penalty
-      else if (dp < -(LCAR + 1.5)) { c.passOf = null; }                                              // PAST: done
+      // PAST: done. The pass is complete, and the car we just cleared does not
+      // get to counter-attack us on the same stretch — it takes the SAME
+      // "threshold endured" lockout an abandoned pass gives its own attacker,
+      // against us specifically (rFactor 2's term; Game AI Pro ch.38 calls it
+      // hysteresis on the overtake state machine). Without it nothing at all
+      // separated a completed pass from a re-pass, and 74 % of the field's
+      // order changes at monza were the same PAIRS trading places over and
+      // over rather than the field racing (tools/check/ai-field.mjs splits
+      // settled passes from oscillation; docs/notes/AI-FIELD-RESEARCH.md).
+      // Scaled by the PASSED car's own experience, not ours, and never written
+      // onto a human — a player may re-pass whenever they like.
+      else if (dp < -(LCAR + 1.5)) {
+        c.passOf = null;
+        if (!po.human && !po.retired) {
+          po.passFailOf = c;
+          po.passFailT = Math.max(po.passFailT || 0, 2 * AiDrive.passCooldown(AiDrive.traits(po)));
+          if (po.passOf === c) { po.passOf = null; po.passCool = po.passFailT; }
+        }
+      }
       else if (sideRoom < WCAR) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }       // side closed
       else if (squeezed) { c.passOf = null; c.passCool = AiDrive.passCooldown(aiT); }             // walked to the edge: abandon it
       // NOT ON: at the turn-in and still not half alongside — that is a lunge

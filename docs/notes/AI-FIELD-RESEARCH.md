@@ -96,11 +96,94 @@ project does not have.
   Monza and 12.3 % at Monaco** — several times the entire easy→hard range — and
   it flattens skill and difficulty in slow corners, which is why hard is only
   1.6 % faster than normal.
-- The AI's corner model has **no downforce term** (`js/physics/ai-drive.js:301`)
-  while the player's grip rises 65 % with speed: superhuman in hairpins (2.2×
-  a player's available grip at Monaco), conservative in fast corners.
+- ~~The AI's corner model has **no downforce term**~~ — FIXED 2026-09-09, see
+  "Downforce in the AI's corner model" below. (The first cut of this row also
+  claimed the AI was "superhuman in hairpins, 2.2× a player's grip": wrong, and
+  withdrawn. The player's `aeroGrip` is `1 + DOWNFORCE·(v/vTop)²`, which tends
+  to **1.0** as the speed goes to zero — at a Monaco hairpin the two models were
+  within ~3 %. The asymmetry was one-sided and lived entirely in the FAST
+  corners, where the player had up to 65 % more grip than the AI credited
+  itself with.)
 - `js/physics/ai-drive.js:609` returns 0 whenever there is no curvature 18–70 m
   ahead, so **the AI cannot defend on a straight** — the most recognisable
   defensive move in the sport is structurally impossible.
-- On easy, `0.851 × 1.18 = 1.004` beats `DIFF.hard.ai = 0.980`: a lapped AI on
-  easy has a higher top speed than any car on hard.
+- ~~On easy, `0.851 × 1.18 = 1.004` beats `DIFF.hard.ai = 0.980`~~ — FIXED
+  2026-09-09 (`BAND_CEIL` in js/game.js caps a banded AI at the top of the
+  ladder, `DIFF.hard.ai · (1 + DIFF.hard.band)` = 0.9996). It only ever bit on
+  easy, at gaps past ~640 m, and it is a monotonicity fix rather than a
+  measurable pace change.
+
+## Downforce in the AI's corner model, and pass hysteresis (2026-09-09)
+
+Two changes, measured together because the second exists to pay for the first.
+
+**1. `brakeTarget` gained the aero term the player has always cornered on.**
+`js/game.js`'s `aeroGrip` is `1 + DOWNFORCE·aeroDfMult·(v/vTop)²`; the AI sized
+every corner off a flat `latMax`, i.e. its STANDING-START grip, and was
+correspondingly timid wherever the corner is fast. The corner speed is now a
+fixed point rather than a plain sqrt, because the grip that sets `vC` depends on
+`vC`: with `A = latMax·bankMu·grip·skill²/k`, `vC² = A/(1 − A·df/vTop²)`, and a
+non-positive denominator means the corner is not the limit — `vTop` is. `df: 0`
+restores the old model exactly, which is why `tests/unit/ai-drive.test.mjs`
+(which builds its ctx by hand) still passes unchanged.
+
+Field-median lap time, `tools/check/ai-pace.mjs`, HEAD vs the change:
+
+| circuit | easy | normal | hard |
+|---|---|---|---|
+| monza  | 125.90 → 125.50 (−0.32 %) | 120.68 → 120.57 (−0.09 %) | 116.85 → 116.72 (−0.11 %) |
+| monaco | 83.60 → 82.27 (−1.59 %)\* | 82.20 → 82.38 (+0.22 %) | 81.93 → 81.07 (−1.05 %) |
+| spa    | 163.42 → 153.43 (−6.11 %) | 151.15 → 147.65 (−2.32 %) | 146.98 → 142.48 (−3.06 %) |
+
+\* the monaco/easy run timed only 19 of 21 cars, so its median is over a
+different sample than the base's 21 — do not read that cell as a pace change.
+
+The size of the gain tracks how fast the circuit's corners are, which is the
+prediction: Spa (Pouhon, Blanchimont, Eau Rouge) moves several per cent, Monza
+(three chicanes and straights) barely moves at all. **The difficulty ladder got
+more consistent circuit to circuit**, which was the point:
+
+| easy vs normal | HEAD | now |   | hard vs normal | HEAD | now |
+|---|---|---|---|---|---|---|
+| monza | +4.32 % | +4.09 % | | monza | −3.18 % | −3.19 % |
+| spa   | +8.12 % | +3.92 % | | spa   | −2.76 % | −3.50 % |
+
+Monza and Spa now agree to within 0.2 points on the easy step and 0.3 on the
+hard step, against 3.8 and 0.4 before. Monaco stays the outlier at ≈0 %
+separation between easy and normal — a corner-limited circuit barely reads a
+GROUND-SPEED scale, which is a property of `DIFF` being a speed multiplier and
+not something this change caused.
+
+`DIFF` was NOT re-scaled, for the reason the 2026-09-08 note in
+`js/physics/consts.js` already gives: the drift is circuit-dependent (−0.09 %
+monza, +0.22 % monaco, −2.32 % spa at normal) and a global multiplier cannot
+express it — holding Spa would put Monza 2.3 % off the pace it is calibrated to.
+
+**2. A completed pass now locks out the counter-attack.** Change 1 alone made
+the racing WORSE by the measure that matters, because more cars ran nose to
+tail: `tools/check/ai-field.mjs` at monza went 109 order flips / 27 settled /
+59 % oscillation to 151 / 22 / 74 %. Nothing in the pass machinery distinguished
+a completed pass from a re-pass — the cooldowns were all on the ATTACKER after a
+FAILURE — so the passed car simply attacked straight back. It now takes the same
+`2 × passCooldown` "threshold endured" lockout the lunge-abandon branch already
+uses, scaled by its OWN experience, and never written onto a human.
+
+| `ai-field.mjs`, normal, 240 s | HEAD | aero only | aero + hysteresis |
+|---|---|---|---|
+| monza flips / settled / oscillation | 109 / 27 / 59 % | 151 / 22 / 74 % | 144 / 27 / 63 % |
+| monza strings out to | 1548 m | 1375 m | 1376 m |
+| monza nose-to-tail | 20.3 % | 24.6 % | 22.5 % |
+| monaco flips / settled / oscillation | 28 / 15 / 18 % | 34 / 18 / 29 % | 73 / 40 / 26 % |
+| monaco strings out to | 4461 m | 3865 m | 3785 m |
+
+Read honestly: settled passes are up (monza level, monaco 15 → 40) and the
+oscillation SHARE is back near baseline, but the absolute oscillation count is
+still above HEAD at both circuits, because there is simply more close running
+than there was. The 8.6 % pace spread — five times the real 2025 field's
+1.7 % — remains the untouched root cause of both the stringing and the flip
+count, and needs a design decision rather than a defect fix.
+
+Monza's numbers were byte-identical at `1 ×` and `2 ×` the cooldown: after a
+pass on that layout the pair separates for longer than either timer anyway, so
+the constant only bites at Monaco. `2 ×` was kept to match the existing
+lunge-abandon branch rather than introduce a second constant.
