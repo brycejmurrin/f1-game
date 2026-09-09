@@ -18,7 +18,7 @@ import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shar
 const LANDSCAPE = { width: 844, height: 390 };
 
 // `team` is a Teams.LIST id or index; the default is the game's own (McLaren).
-async function openSetup(page, team = "mclaren") {
+async function openSetup(page, team = "mclaren", opts) {
   await toMenu(page);
   await forgetStored(page, ["unlimitedBudget"]);
   // The store write; #mb-race below re-reads it (restoreFreePlaySelection) and
@@ -29,6 +29,18 @@ async function openSetup(page, team = "mclaren") {
   await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await freeBuildOff(page);              // the in-memory flag, not just the key
+  // `draw` opts BACK IN to the render loop. The garage draws a live turntable
+  // and getSetupPreviewMesh() re-keys on partsVisualKey, so every option click
+  // rebuilds the car mesh and repaints the livery atlas at SwiftShader speed —
+  // most of this file's cost, and none of what its DOM assertions read.
+  // Stopped by default (render() returns early on headlessMode, js/game.js).
+  //
+  // THE GALLERY TESTS MUST OPT BACK IN. An undrawn canvas keeps its LAST frame,
+  // so a screenshot taken with the loop stopped is a stale car — a silently
+  // wrong capture, which is worse than a slow one. Every test below that calls
+  // page.screenshot passes { draw: true }, and that is the whole rule.
+  const draw = !!(opts && opts.draw);
+  await page.evaluate((on) => window.__apex.headless(!on), draw);
 }
 
 async function openCat(page, catId) {
@@ -43,7 +55,7 @@ test.describe("Car setup catalog — all categories render", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("all 12 category labels are visible", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, "mclaren", { draw: true });
 
     for (const id of ["engine", "aero", "suspension", "brakes", "tyres", "ers",
                       "gearbox", "fuel", "exhaust", "floor", "cockpit", "wheels"]) {
@@ -88,14 +100,14 @@ test.describe("Car setup catalog — option interaction", () => {
   });
 
   test("FUEL Standard option is active by default", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, "mclaren", { draw: true });
 
     await openCat(page, "fuel");
     await expect(opt(page, "standard")).toHaveClass(/active/);
   });
 
   test("clicking Close Ratio gearbox makes it active", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, "mclaren", { draw: true });
 
     await openCat(page, "gearbox");
     await opt(page, "close_ratio").click();
@@ -104,7 +116,7 @@ test.describe("Car setup catalog — option interaction", () => {
   });
 
   test("clicking High Octane fuel makes it active", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, "mclaren", { draw: true });
 
     await openCat(page, "fuel");
     await opt(page, "high_octane").click();
@@ -136,7 +148,7 @@ test.describe("Car setup catalog — factory/supplier parts", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("AMG HPP option visible when team is Mercedes", async ({ page }) => {
-    await openSetup(page, "mercedes");
+    await openSetup(page, "mercedes", { draw: true });
     await openCat(page, "engine");
     await expect(opt(page, "manu_mercedes")).toBeVisible();
     await page.screenshot({ path: galleryPath("parts-catalog", "catalog-mercedes-factory.png") });
@@ -145,7 +157,7 @@ test.describe("Car setup catalog — factory/supplier parts", () => {
   test("AMG HPP option NOT visible when team is not Mercedes", async ({ page }) => {
     // The first team on the Red Bull Ford unit, as the old seed picked it.
     const idx = await page.evaluate(() => Teams.LIST.findIndex((t) => t.engine === "Red Bull Ford"));
-    await openSetup(page, idx);
+    await openSetup(page, idx, { draw: true });
     await openCat(page, "engine");
     await expect(opt(page, "manu_mercedes")).toHaveCount(0);
     await page.screenshot({ path: galleryPath("parts-catalog", "catalog-non-mercedes.png") });
@@ -172,7 +184,7 @@ test.describe("Car setup catalog — factory/supplier parts", () => {
     // re-enters as Mercedes (the reload this replaced only existed to make the
     // stored team the live one).
     await page.locator("#cs-done").click();
-    await openSetup(page, "mercedes");
+    await openSetup(page, "mercedes", { draw: true });
     await openCat(page, "aero");
     await expect(opt(page, "sig_mclaren_flex")).toHaveCount(0);
   });
@@ -182,7 +194,7 @@ test.describe("Car setup catalog — screenshots", () => {
   test.use({ viewport: { width: 390, height: 844 } }); // portrait
 
   test("portrait setup screenshot", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, "mclaren", { draw: true });
     await page.screenshot({ path: galleryPath("parts-catalog", "catalog-portrait.png") });
   });
 });
