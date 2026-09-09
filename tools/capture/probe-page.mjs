@@ -24,9 +24,6 @@ export function installProbeInit(page, { backend = "webgl2", team = null, tlxFor
         try { sessionStorage.setItem("apex26.wgxCapture", "1"); } catch (_) {}
       }
       if (teamIdx != null) localStorage.setItem("apex26.team", JSON.stringify(+teamIdx));
-      if (be === "webgpu") {
-        try { sessionStorage.setItem("apex26.wgxCapture", "1"); } catch (_) {}
-      }
     } catch (_) {}
 
     try {
@@ -220,29 +217,69 @@ export async function waitGameVisible(page, timeout = 30000) {
   }
 }
 
-/** Fade the setup panel and clip #game for a clean shot. */
+/**
+ * Wait for a NEW software present WHILE THE LOOP STILL RUNS.
+ * GLX/TLX present() drives the overlay; headless(true) skips render/present,
+ * so a freeze-then-wait can never observe gen > start and times out.
+ */
+export async function awaitPresentedFrame(page, timeoutMs = 8000) {
+  await page.evaluate(async (ms) => {
+    if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
+      try { await GLX.awaitSoftPresent(ms); } catch (_) {}
+    }
+  }, timeoutMs);
+}
+
+/**
+ * Clip of the canvas the compositor actually shows.
+ * HeadlessChrome GLX (and TLX-WebGPU) hide #game and blit onto #game-soft;
+ * WGX blits onto #game. locator("#game").screenshot() is the uncomposited
+ * GPU buffer — often black even with preserveDrawingBuffer.
+ */
+export async function presentedCanvasClip(page) {
+  return page.evaluate(() => {
+    const soft = document.getElementById("game-soft");
+    const game = document.getElementById("game");
+    const el = (soft && soft.width > 0) ? soft : game;
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    if (!(r.width > 0 && r.height > 0)) return null;
+    return { x: r.x, y: r.y, width: r.width, height: r.height, id: el.id };
+  });
+}
+
+/**
+ * Compositor PNG of the presented canvas. Awaits a fresh blit first unless
+ * `skipAwait` — pass that when the caller already froze after awaitPresentedFrame
+ * (a second wait after headless(true) hangs on GLX).
+ */
+export async function screenshotPresentedCanvas(page, opts = {}) {
+  if (!opts.skipAwait) await awaitPresentedFrame(page, opts.awaitMs);
+  const box = await presentedCanvasClip(page);
+  if (!box) throw new Error("probe: presented canvas has no bounding box");
+  const shotOpts = {
+    clip: { x: box.x, y: box.y, width: box.width, height: box.height },
+    timeout: opts.timeout || 60000,
+  };
+  if (opts.path) shotOpts.path = opts.path;
+  if (opts.type) shotOpts.type = opts.type;
+  if (opts.quality != null) shotOpts.quality = opts.quality;
+  const buf = await page.screenshot(shotOpts);
+  return { buf, bytes: buf.length, clip: box, id: box.id };
+}
+
+/** Fade the setup panel and clip the presented canvas for a clean garage shot. */
 export async function screenshotGameCanvas(page, outPath) {
   await page.evaluate(() => {
     const c = document.getElementById("carsetup");
     if (c) c.style.opacity = "0";
   });
   await waitGameVisible(page);
-  // Rect straight from the DOM: locator.boundingBox() would repeat the
-  // visibility wait above and swallow its diagnosis on timeout.
-  const box = await page.evaluate(() => {
-    const r = document.getElementById("game").getBoundingClientRect();
-    return { x: r.x, y: r.y, width: r.width, height: r.height };
-  });
-  if (!box || !(box.width > 0 && box.height > 0)) throw new Error("probe: #game has no bounding box");
   // Wait for a NEW blit WHILE THE LOOP STILL RUNS. GLX (and TLX) present()
   // is what drives the overlay; headless(true) skips render/present, so a
   // freeze-then-wait can never observe gen > start and times out. WGX can
   // still complete an in-flight mapAsync after freeze; GLX cannot.
-  await page.evaluate(async () => {
-    if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
-      try { await GLX.awaitSoftPresent(8000); } catch (_) {}
-    }
-  });
+  await awaitPresentedFrame(page);
   // FREEZE THE LOOP ACROSS THE CAPTURE. page.screenshot needs the compositor,
   // and a GLX garage frame on SwiftShader keeps the renderer's main thread hot
   // enough that the capture starved and blew its 60 s timeout with only
@@ -253,8 +290,8 @@ export async function screenshotGameCanvas(page, outPath) {
   // Restored in `finally`, or every later step would probe a frozen page.
   await page.evaluate(() => { try { window.__apex.headless(true); } catch (_) {} });
   try {
-    const buf = await page.screenshot({ path: outPath, clip: box, timeout: 60000 });
-    return { bytes: buf.length, clip: box };
+    const shot = await screenshotPresentedCanvas(page, { path: outPath, skipAwait: true });
+    return { bytes: shot.bytes, clip: shot.clip };
   } finally {
     await page.evaluate(() => { try { window.__apex.headless(false); } catch (_) {} });
   }

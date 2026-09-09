@@ -42,6 +42,7 @@ import {
 } from "../lib/harness.mjs";
 import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs";
 import { fileURLToPath } from "node:url";
+import { awaitPresentedFrame, screenshotPresentedCanvas } from "../capture/probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -140,12 +141,14 @@ async function captureBackend(backend) {
       await page.evaluate(() => window.__apex.snapCam());
       await sleep(250);
     }
+    await awaitPresentedFrame(page);
     if (!live) {
       await page.evaluate(() => window.__apex.headless(true)); // stop the loop; canvas keeps the last frame
       await sleep(100);
     }
     const path = resolve(outDir, `${label}-${backend}.png`);
-    const buf = await page.locator("canvas#game").screenshot({ path, timeout: 60_000 });
+    const shot = await screenshotPresentedCanvas(page, { path, skipAwait: true, timeout: 60_000 });
+    const buf = shot.buf;
     shots.push({ backend, path, bytes: buf.length, state, consoleLines });
     console.log(`  ${backend}: ${path} (${(buf.length / 1024).toFixed(1)} KB) bound=${state.backend}`
       + (buf.length < 5000 ? "  ⚠ looks blank" : ""));

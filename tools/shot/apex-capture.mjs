@@ -35,6 +35,7 @@ import { createServer as createHttpServer } from "node:http";
 import { join, normalize, extname, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchChromium } from "../lib/harness.mjs";
+import { screenshotPresentedCanvas } from "../capture/probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const [cmd = "modes", ...rest] = process.argv.slice(2);
@@ -133,30 +134,29 @@ async function waitFrames(page, n = 2) {
 }
 
 async function shotPng(page, dir, name, sel = "canvas#game") {
-  // Match survey-track.mjs: locator.screenshot reads the composited canvas.
+  // Match survey-track.mjs: compositor clip of the presented canvas.
   // Do NOT use canvas.toDataURL — WebGL clears the backbuffer (black frame).
+  // Do NOT use locator("canvas#game").screenshot() — HeadlessChrome GLX hides
+  // #game and blits onto #game-soft (black GPU buffer).
   // Do NOT use page.screenshot({animations:'disabled'}) — hangs under SwiftShader.
   if (sel !== "canvas#game") {
     const buf = await page.locator(sel).screenshot({ path: `${dir}/${name}.png`, timeout: 60000 });
     return { name: `${name}.png`, bytes: buf.length, blank: buf.length < 5000 };
   }
   await waitFrames(page, 2);
-  const buf = await page.locator("canvas#game").screenshot({
-    path: `${dir}/${name}.png`,
-    timeout: 60000,
-  });
-  return { name: `${name}.png`, bytes: buf.length, blank: buf.length < 5000 };
+  const shot = await screenshotPresentedCanvas(page, { path: `${dir}/${name}.png`, timeout: 60000 });
+  return { name: `${name}.png`, bytes: shot.bytes, blank: shot.bytes < 5000 };
 }
 
 async function shotJpg(page, dir, name) {
   await waitFrames(page, 2);
-  const buf = await page.locator("canvas#game").screenshot({
+  const shot = await screenshotPresentedCanvas(page, {
     path: `${dir}/${name}.jpg`,
     type: "jpeg",
     quality: 72,
     timeout: 60000,
   });
-  return { name: `${name}.jpg`, bytes: buf.length, blank: buf.length < 5000 };
+  return { name: `${name}.jpg`, bytes: shot.bytes, blank: shot.bytes < 5000 };
 }
 
 /**
