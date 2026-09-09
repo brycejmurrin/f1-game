@@ -15,11 +15,11 @@
  * Two settings, silently breaking each other, for as long as both have existed.
  *
  * WHY A GREP WOULD NOT HAVE FOUND IT. steer-tuning writes the literal
- * `store.set("brakeCue", v)`; driving-line-opts writes `store.set(K_CUE, ...)`
- * through a `const K_CUE = "brakeCue"` alias. Scanning for the literal shows ONE
- * writer and a clean bill of health. So this walks the AST and resolves
- * module-level string constants to their value, which is the only way the two
- * writers appear as writers of the same key.
+ * `store.set("brakeCue", v)`; driving-line-opts wrote `store.set(K_CUE, ...)`
+ * through a `const K_CUE = "brakeCue"` alias (since renamed to `lineBrakeCue`).
+ * Scanning for the literal showed ONE writer and a clean bill of health. So this
+ * walks the AST and resolves module-level string constants to their value, which
+ * is the only way two aliased writers of the same key appear.
  *
  * WHAT IS ASSERTED is type agreement, not sole ownership. Keys legitimately have
  * several writers — `season`, `driver` and `track` each do — and that is fine as

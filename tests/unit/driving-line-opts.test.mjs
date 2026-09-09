@@ -62,12 +62,22 @@ test("every row it claims is a real set-row in the shell, and it claims all thre
 test("the stored values reach DrivingLine AT EVAL, before any DOM event", () => {
   // readyState "loading" means initUI has NOT run — the restore must have
   // happened anyway, because the first frame can precede DOMContentLoaded work.
+  // Primary key is lineBrakeCue (NOT brakeCue — that is the steering slider).
   const { M, line, rows } = load({ readyState: "loading",
-    stored: { drivingLinePalette: "safe", drivingLineOpacity: "solid", brakeCue: "on" } });
+    stored: { drivingLinePalette: "safe", drivingLineOpacity: "solid", lineBrakeCue: "on" } });
   assert.equal(rows.size, 0, "precondition: the UI has not been wired yet");
   assert.equal(line._palette, "safe", "palette restored at eval");
   assert.equal(line._opacity, "solid", "opacity restored at eval");
   assert.equal(M.brakeCue(), true, "the cue flag is read at eval too");
+});
+
+test("a pre-rename string under brakeCue still restores the cue at eval", () => {
+  // Legacy carry-over: only a STRING "on" counts. A number there is the
+  // steering panel's notch and must not flip this assist on.
+  const { M } = load({ readyState: "loading", stored: { brakeCue: "on" } });
+  assert.equal(M.brakeCue(), true, "legacy string on → cue on");
+  const { M: Mnum } = load({ readyState: "loading", stored: { brakeCue: 4 } });
+  assert.equal(Mnum.brakeCue(), false, "legacy number is the slider, not this flag");
 });
 
 test("an absent store gives the shipped defaults, and BRAKE CUE ships OFF", () => {
@@ -91,11 +101,12 @@ test("each row round-trips through the store under its own key", () => {
   assert.equal(rows.get("pm-brakecue").read(), "off");
   rows.get("pm-brakecue").write("on");
   assert.equal(M.brakeCue(), true);
-  assert.equal(written.brakeCue, "on", "stored as the string the loader reads back");
+  assert.equal(written.lineBrakeCue, "on", "stored under lineBrakeCue, not the slider's brakeCue");
+  assert.equal(written.brakeCue, undefined, "must not re-collide with steer-tuning's key");
   assert.equal(rows.get("pm-brakecue").read(), "on");
   rows.get("pm-brakecue").write("off");
   assert.equal(M.brakeCue(), false);
-  assert.equal(written.brakeCue, "off");
+  assert.equal(written.lineBrakeCue, "off");
 });
 
 test("it wires on DOMContentLoaded when the document is still loading", () => {
