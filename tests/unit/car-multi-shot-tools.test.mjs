@@ -32,8 +32,8 @@ test("render-car has a spine preset and repeatable --shot customs", () => {
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
-  assert.match(src, /flag\("--views",\s*isLive \? "all" : "spine"\)/,
-    "default views=spine locally, all presets on --live");
+  assert.match(src, /viewsDefault = combo\?\.views \?\? \(isLive \? "all" : "spine"\)/,
+    "default views=spine locally, all on --live, combo overrides");
   assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
   assert.match(src, /screenshotGameCanvas/, "must reuse soft-present capture helper");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
@@ -41,6 +41,9 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src, /isLive|argv\.includes\("--live"\)/, "supports --live github.io capture");
   assert.match(src, /labelShot|buildContactSheet/, "writes labeled PNGs and a contact sheet");
   assert.match(src, /withLabels = isLive/, "labels default on for --live only");
+  assert.match(src, /COMBOS|"wrap-spine"/, "combo presets bundle logo/side/views/zoom");
+  assert.match(src, /parseTeams|teamArg === "all"|arg === "all"/, "supports --team=all roster walk");
+  assert.match(src, /buildTeamRollup/, "multi-team rollup contact sheet");
   assert.doesNotMatch(src, /page\.reload\(/, "no second boot — openGarage pins the team live");
   assert.doesNotMatch(src, /page\.screenshot\(\s*\{\s*path:\s*png/,
     "no raw page.screenshot — that hung under SwiftShader");
