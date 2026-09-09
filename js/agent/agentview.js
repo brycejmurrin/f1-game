@@ -2037,6 +2037,9 @@ const AgentView = (function () {
           "perf()":
             "GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes "
             + "(alias of renderScale report)",
+          "spatialUpscale(0|1)":
+            "GLX SGSR1 spatial upscale spike (flag OFF by default). active only "
+            + "when on AND renderScale<~1; see UPSCALING-2026-09 §6",
         },
         act: {
           "rollout({seconds,dt,input,policy,policyHz,samples})":

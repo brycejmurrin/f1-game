@@ -597,6 +597,8 @@ const GLX = (function () {
       // already bound on every chunked draw path.
       setLampShadowSlot: (i) => { gl.uniform1i(litU.uLampShadowIdx, i | 0); },
       getSize: () => ({ width, height }),
+      getPresentSize: () => ({ width: presentW || width, height: presentH || height }),
+      wantSpatialUpscale,
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
       invalidateVAO() { _activeVAO = null; },
@@ -741,11 +743,32 @@ const GLX = (function () {
   }
 
   // Adaptive render scale: the whole 3D pipeline (scene + every post FBO) sizes
-  // off width/height, and the canvas CSS size is fixed — so scaling the backing
-  // store down and letting the browser upscale is a single knob that trades
-  // sharpness for fill-rate. The HUD is a DOM overlay, so only the 3D view
-  // softens. setRenderScale() drives it from the frame-time governor in game.js.
+  // off width/height. Without spatial upscale the canvas backing store matches
+  // that size and the browser compositor bilinear-stretches to the CSS box.
+  // With apex26.spatialUpscale=1 and scale < 1, the canvas is FULL present size
+  // (css×dpr) and SGSR1 reconstructs the missing pixels (UPSCALING-2026-09 §6).
   let renderScale = 1;
+  let presentW = 0, presentH = 0;
+  let spatialUpscale = false;
+  try {
+    const q = typeof location !== "undefined" && location.search &&
+      /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
+    const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
+    spatialUpscale = !!(q || ls);
+  } catch (_) { spatialUpscale = false; }
+  function setSpatialUpscale(on) {
+    spatialUpscale = !!on;
+    try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
+    resize();
+    return spatialUpscale;
+  }
+  function getSpatialUpscale() { return spatialUpscale; }
+  function wantSpatialUpscale() {
+    // Fail closed: without a linked SGSR program the canvas must stay at
+    // render size (legacy bilinear stretch) — a present-size canvas with a
+    // render-size viewport letterboxes the 3D view into the corner.
+    return spatialUpscale && renderScale < 0.98 && !!(PST && PST.spatialOk && PST.spatialOk());
+  }
   // CACHED CSS SIZE. resize() is the first statement of every render() — and
   // clientWidth/clientHeight are LAYOUT reads, so asking for them there forces a
   // synchronous reflow of anything dirtied since the last frame. The HUD dirties
@@ -836,18 +859,25 @@ const GLX = (function () {
     // a ~6" screen, and it multiplies with every other saving.
     const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
     cssSize();
-    const w = Math.max(1, Math.round(cssW * dpr * renderScale));
-    const h = Math.max(1, Math.round(cssH * dpr * renderScale));
-    const changed = canvas.width !== w || canvas.height !== h;
-    if (changed) {
-      canvas.width = w;
-      canvas.height = h;
-      gl.viewport(0, 0, w, h);
+    presentW = Math.max(1, Math.round(cssW * dpr));
+    presentH = Math.max(1, Math.round(cssH * dpr));
+    const rw = Math.max(1, Math.round(presentW * renderScale));
+    const rh = Math.max(1, Math.round(presentH * renderScale));
+    // Upscale path: canvas = present (full), scene FBOs = render (scaled).
+    // Off or scale≈1: canvas = render (legacy browser bilinear stretch).
+    const up = wantSpatialUpscale();
+    const cw = up ? presentW : rw;
+    const ch = up ? presentH : rh;
+    const changed = canvas.width !== cw || canvas.height !== ch || width !== rw || height !== rh;
+    if (canvas.width !== cw || canvas.height !== ch) {
+      canvas.width = cw;
+      canvas.height = ch;
     }
+    gl.viewport(0, 0, rw, rh);
     const first = width === 0;
-    width = w;
-    height = h;
-    aspect = w / h;
+    width = rw;
+    height = rh;
+    aspect = rw / rh;
     if ((changed || first) && PST) PST.createTargets();   // (re)allocate HDR + bloom targets
   }
   function setRenderScale(s) {
@@ -2399,6 +2429,7 @@ const GLX = (function () {
     msaa: () => PST.msaa(),
     pcss: () => SHD.pcssEnabled,
     setRenderScale, getRenderScale,
+    setSpatialUpscale, getSpatialUpscale,
     // GPU frame timer. gpuTimer(true|false) toggles timing (returns whether it's
     // supported + on); gpuTimer() reads state. gpuMs() returns the most recent
     // GPU frame time in ms, or -1 if unsupported / no result yet.

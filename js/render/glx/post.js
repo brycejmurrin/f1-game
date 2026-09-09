@@ -2,8 +2,9 @@
  * Apex 26 — GLX post-processing subsystem (split out of js/render/glx/glx.js).
  * Owns the whole post chain: the HDR scene + MSAA targets, bright pass,
  * mip-chain bloom, SSAO, volumetric god rays, the composite (tone-map +
- * grade + SSR + flare + vignette), FXAA resolve, and the procedural lens-dirt
- * texture. Wired through the GLXCore ctx: glx.js calls GLXPost.init(core)
+ * grade + SSR + flare + vignette), FXAA resolve, optional SGSR1 spatial
+ * upscale (flag OFF by default — UPSCALING-2026-09 §6), and the procedural
+ * lens-dirt texture. Wired through the GLXCore ctx: glx.js calls GLXPost.init(core)
  * inside GLX.init() and delegates present() here.
  * Must load before js/render/glx/glx.js (glx.js calls GLXPost.init at init time).
  */
@@ -17,7 +18,7 @@ const GLXPost = (function () {
     const MOBILE_TIER = core.MOBILE_TIER;
     const IS_MOBILE = core.IS_MOBILE;
     const { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS,
-            COMPOSITE_FS, FXAA_FS } = GLXShaders;
+            COMPOSITE_FS, FXAA_FS, SGSR_FS } = GLXShaders;
     const F = core.frame;
 
     let ssaoProg = null, ssaoU = null, ssaoFBO = null, ssaoTex = null;
@@ -27,6 +28,9 @@ const GLXPost = (function () {
     let godrayW = 0, godrayH = 0;
     let ssaoW = 0, ssaoH = 0;   // SSAO runs at half res (upscaled in composite)
     let fxaaProg = null, fxaaU = null, ldrFBO = null, ldrTex = null;   // FXAA pass + its LDR input
+    // Spatial upscale (SGSR1): FXAA writes here at render size when upscaling
+    // to present size; otherwise FXAA writes the default framebuffer.
+    let sgsrProg = null, sgsrU = null, aaFBO = null, aaTex = null;
 
     // Post-processing state. postEnabled stays false (and rendering goes straight
     // to the default framebuffer, exactly as before) if any target/program setup
@@ -130,6 +134,10 @@ const GLXPost = (function () {
       godrayProg = link(POST_VS, GODRAY_FS);
       fxaaProg = link(POST_VS, FXAA_FS);
       if (fxaaProg) fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
+      // SGSR1 spatial upscale — best-effort. A failed link leaves the chain
+      // byte-identical to pre-spike (no aa target, no present-size pass).
+      sgsrProg = link(POST_VS, SGSR_FS);
+      if (sgsrProg) sgsrU = locs(sgsrProg, ["uTex", "uViewport"]);
       if (!brightProg || !blurProg || !compProg || !downProg || !upProg) return false;
       for (const k in _compUf) delete _compUf[k];
       brightU = locs(brightProg, ["uScene", "uThreshold"]);
@@ -290,6 +298,7 @@ const GLXPost = (function () {
       drop(godrayFBO, godrayTex); godrayTex = null;
       drop(godrayBlurFBO, godrayBlurTex); godrayBlurTex = null;
       drop(ldrFBO, ldrTex); ldrTex = null;
+      drop(aaFBO, aaTex); aaTex = null;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
@@ -433,9 +442,10 @@ const GLXPost = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, godrayBlurFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, godrayBlurTex, 0);
       }
-      // LDR target (full res, RGBA8): the composite renders here so the FXAA pass
-      // can edge-detect on the final tonemapped image, then resolve to the screen.
-      if (fxaaProg) {
+      // LDR target (render res, RGBA8): composite lands here when FXAA and/or
+      // SGSR need the tonemapped image. SGSR alone (FXAA link failed) still
+      // needs LDR — otherwise there is nowhere to sample before present size.
+      if (fxaaProg || sgsrProg) {
         if (!ldrFBO) ldrFBO = gl.createFramebuffer();
         gl.bindFramebuffer(gl.FRAMEBUFFER, ldrFBO);
         if (ldrTex) gl.deleteTexture(ldrTex);
@@ -449,9 +459,32 @@ const GLXPost = (function () {
         gl.bindFramebuffer(gl.FRAMEBUFFER, ldrFBO);
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, ldrTex, 0);
       }
-      // Checks whichever optional FBO was configured LAST (ldr if FXAA linked,
-      // else godray blur, else ssao blur) — a completeness canary for the r8/
-      // hdr3 combos mk() itself never verifies, not a check of one named target.
+      // SGSR intermediate (render res): FXAA writes here when upscaling so the
+      // present-size pass samples the AA'd LDR. Without FXAA, SGSR samples
+      // ldrTex directly — no aa target. Freed when the flag is off / scale≈1.
+      const wantUp = !!(sgsrProg && fxaaProg && core.wantSpatialUpscale && core.wantSpatialUpscale());
+      if (wantUp) {
+        if (!aaFBO) aaFBO = gl.createFramebuffer();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
+        if (aaTex) gl.deleteTexture(aaTex);
+        aaTex = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, aaTex);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, aaTex, 0);
+      } else if (aaFBO || aaTex) {
+        if (aaFBO) gl.bindFramebuffer(gl.FRAMEBUFFER, aaFBO);
+        if (aaTex) gl.deleteTexture(aaTex);
+        aaTex = null;
+        if (aaFBO) { gl.deleteFramebuffer(aaFBO); aaFBO = null; }
+      }
+      // Checks whichever optional FBO was configured LAST (aa/ldr if upscale/
+      // FXAA, else godray blur, else ssao blur) — a completeness canary for the
+      // r8/hdr3 combos mk() itself never verifies, not a check of one named target.
       if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
         abandonTargets();
         postEnabled = false;     // unsupported combo: fall back to direct rendering
@@ -751,10 +784,17 @@ const GLXPost = (function () {
         setBlend(false);
       }
 
-      // 3) composite — to the LDR target when FXAA is on (it resolves to screen),
-      //    else straight to the screen.
-      const useFxaa = fxaaProg && ldrFBO && ldrTex;
-      bindOverwrite(useFxaa ? ldrFBO : null);
+      // 3) composite — to LDR when FXAA and/or SGSR need the tonemapped image,
+      //    else straight to the screen. SGSR (flag + scale<~1) then stretches
+      //    that LDR (or FXAA's aaTex) to present size — UPSCALING-2026-09 §6.
+      const useFxaa = !!(fxaaProg && ldrFBO && ldrTex);
+      const useUpscale = !!(sgsrProg && sgsrU && ldrFBO && ldrTex
+        && core.wantSpatialUpscale && core.wantSpatialUpscale()
+        && (!useFxaa || (aaFBO && aaTex)));
+      // When the flag asks for a present-size canvas but SGSR did not link,
+      // wantSpatialUpscale() is false (spatialOk gate) and this stays legacy.
+      const toLdr = (useFxaa || useUpscale) && ldrFBO && ldrTex;
+      bindOverwrite(toLdr ? ldrFBO : null);
       gl.viewport(0, 0, width, height);
       useProg(compProg);
       gl.activeTexture(gl.TEXTURE0);
@@ -958,15 +998,32 @@ const GLXPost = (function () {
       gl.uniform1f(compU.uReflect, haveRefl ? reflStr : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-      // 4) FXAA resolve: edge-AA the tonemapped LDR image straight to the screen.
+      // 4) FXAA resolve: edge-AA the tonemapped LDR. Writes aaFBO at render
+      //    size when SGSR will stretch to present; otherwise the default FB.
       if (useFxaa) {
-        bindOverwrite(null);
+        bindOverwrite(useUpscale ? aaFBO : null);
         gl.viewport(0, 0, width, height);
         useProg(fxaaProg);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, ldrTex);
         gl.uniform1i(fxaaU.uTex, 0);
         gl.uniform2f(fxaaU.uTexel, 1 / width, 1 / height);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+
+      // 5) SGSR1 spatial upscale — present-size reconstruct from render-size
+      //    LDR (or FXAA output). uViewport is SOURCE (render) size; fail-closed
+      //    when the program/targets are missing (useUpscale already gated).
+      if (useUpscale) {
+        const src = useFxaa ? aaTex : ldrTex;
+        const ps = core.getPresentSize();
+        bindOverwrite(null);
+        gl.viewport(0, 0, ps.width, ps.height);
+        useProg(sgsrProg);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, src);
+        gl.uniform1i(sgsrU.uTex, 0);
+        gl.uniform4f(sgsrU.uViewport, 1 / width, 1 / height, width, height);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
 
@@ -1000,6 +1057,9 @@ const GLXPost = (function () {
       // to the 8-bit default framebuffer, whatever the extension said.
       hdrOk: () => postEnabled && colorType === gl.HALF_FLOAT,
       msaa: () => msaaSamples,
+      // SGSR1 linked — glx wantSpatialUpscale() also requires this so a failed
+      // shader never leaves a present-size canvas with a render-size viewport.
+      spatialOk: () => !!sgsrProg,
       createTargets,
       bindSceneTarget,
       present,

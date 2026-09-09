@@ -2,8 +2,8 @@
  * Apex 26 — GLSL sources for the WebGL2 renderer (js/render/glx/glx.js):
  * the post chain — POST_VS fullscreen triangle, bloom
  * (BRIGHT/BLUR/DOWN/UP), SSAO, volumetric sun shafts (GODRAY), the COMPOSITE
- * (tone-map + grade + SSR + flare + vignette), FXAA, and the shadow-map
- * depth passes (DEPTH_*, BLOCKER_FS).
+ * (tone-map + grade + SSR + flare + vignette), FXAA, SGSR1 spatial upscale,
+ * and the shadow-map depth passes (DEPTH_*, BLOCKER_FS).
  * Split from the old monolithic glx-shaders.js. Template strings may
  * interpolate GLXChunks (js/render/glx/shaders/glsl-chunks.js — loads first); each file
  * registers its programs on the shared GLXShaders global. All shader files
@@ -1328,6 +1328,91 @@ void main() {
   outColor = vec4((lB < lMin || lB > lMax) ? rA : rB, 1.0);
 }`;
 
+  // Snapdragon GSR 1 (spatial upscale + sharpen, one pass) — adapted for WebGL2.
+  // Source: Qualcomm sgsr1_shader_mobile.frag (BSD-3-Clause). Stock uses
+  // textureGather (ES 3.1); WebGL2 emulates the 2×2 component gather with four
+  // textureLod taps. See docs/research/UPSCALING-2026-09.md §6.
+  const SGSR_FS = `#version 300 es
+// Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
+// SPDX-License-Identifier: BSD-3-Clause
+// Adapted for Apex 26 WebGL2 (vUV in, textureGather emulated).
+precision mediump float;
+precision highp int;
+in vec2 vUV;
+uniform highp vec4 uViewport; // (1/srcW, 1/srcH, srcW, srcH)
+uniform mediump sampler2D uTex;
+out vec4 outColor;
+#define EdgeThreshold (8.0/255.0)
+#define EdgeSharpness 2.0
+float fastLanczos2(float x) {
+  float wA = x - 4.0;
+  float wB = x * wA - wA;
+  wA *= wA;
+  return wB * wA;
+}
+vec2 weightY(float dx, float dy, float c, float std) {
+  float x = ((dx * dx) + (dy * dy)) * 0.55 + clamp(abs(c) * std, 0.0, 1.0);
+  float w = fastLanczos2(x);
+  return vec2(w, w * c);
+}
+// ES 3.1 textureGather(comp) order: (x0,y1), (x1,y1), (x1,y0), (x0,y0).
+vec4 gatherComp(vec2 p, int comp) {
+  vec2 t = uViewport.xy;
+  float a = textureLod(uTex, p + vec2(0.0, t.y), 0.0)[comp];
+  float b = textureLod(uTex, p + vec2(t.x, t.y), 0.0)[comp];
+  float c = textureLod(uTex, p + vec2(t.x, 0.0), 0.0)[comp];
+  float d = textureLod(uTex, p, 0.0)[comp];
+  return vec4(a, b, c, d);
+}
+void main() {
+  const int mode = 1; // RGBA path — edge vote on green
+  vec3 rgb = textureLod(uTex, vUV, 0.0).xyz;
+  vec4 color = vec4(rgb, rgb.g);
+  highp vec2 imgCoord = (vUV * uViewport.zw) + vec2(-0.5, 0.5);
+  highp vec2 imgCoordPixel = floor(imgCoord);
+  highp vec2 coord = imgCoordPixel * uViewport.xy;
+  vec2 pl = imgCoord - imgCoordPixel;
+  vec4 left = gatherComp(coord, mode);
+  float edgeVote = abs(left.z - left.y) + abs(color[mode] - left.y) + abs(color[mode] - left.z);
+  if (edgeVote > EdgeThreshold) {
+    coord.x += uViewport.x;
+    vec4 right = gatherComp(coord + vec2(uViewport.x, 0.0), mode);
+    vec4 upDown;
+    upDown.xy = gatherComp(coord + vec2(0.0, -uViewport.y), mode).wz;
+    upDown.zw = gatherComp(coord + vec2(0.0, uViewport.y), mode).yx;
+    float mean = (left.y + left.z + right.x + right.w) * 0.25;
+    left -= vec4(mean);
+    right -= vec4(mean);
+    upDown -= vec4(mean);
+    color.w = color[mode] - mean;
+    float sum = abs(left.x) + abs(left.y) + abs(left.z) + abs(left.w)
+              + abs(right.x) + abs(right.y) + abs(right.z) + abs(right.w)
+              + abs(upDown.x) + abs(upDown.y) + abs(upDown.z) + abs(upDown.w);
+    float std = 2.181818 / max(sum, 1e-4);
+    vec2 aWY = weightY(pl.x, pl.y + 1.0, upDown.x, std);
+    aWY += weightY(pl.x - 1.0, pl.y + 1.0, upDown.y, std);
+    aWY += weightY(pl.x - 1.0, pl.y - 2.0, upDown.z, std);
+    aWY += weightY(pl.x, pl.y - 2.0, upDown.w, std);
+    aWY += weightY(pl.x + 1.0, pl.y - 1.0, left.x, std);
+    aWY += weightY(pl.x, pl.y - 1.0, left.y, std);
+    aWY += weightY(pl.x, pl.y, left.z, std);
+    aWY += weightY(pl.x + 1.0, pl.y, left.w, std);
+    aWY += weightY(pl.x - 1.0, pl.y - 1.0, right.x, std);
+    aWY += weightY(pl.x - 2.0, pl.y - 1.0, right.y, std);
+    aWY += weightY(pl.x - 2.0, pl.y, right.z, std);
+    aWY += weightY(pl.x - 1.0, pl.y, right.w, std);
+    float finalY = aWY.y / max(aWY.x, 1e-4);
+    float maxY = max(max(left.y, left.z), max(right.x, right.w));
+    float minY = min(min(left.y, left.z), min(right.x, right.w));
+    finalY = clamp(EdgeSharpness * finalY, minY, maxY);
+    float deltaY = clamp(finalY - color.w, -23.0 / 255.0, 23.0 / 255.0);
+    color.x = clamp(color.x + deltaY, 0.0, 1.0);
+    color.y = clamp(color.y + deltaY, 0.0, 1.0);
+    color.z = clamp(color.z + deltaY, 0.0, 1.0);
+  }
+  outColor = vec4(color.xyz, 1.0);
+}`;
+
   // Depth-only pass for shadow map — renders world position into depth buffer.
   // Sun/lamp shadow depth pass. Mirrors LIT_VS's instancing gate so instanced
   // scenery CASTS shadows: without it an instanced prop would light correctly and
@@ -1371,5 +1456,5 @@ void main() {
   float d3 = texture(uDepthTex, vUV + t * vec2( 1.0,  1.0)).r;
   o = vec4(min(min(d0, d1), min(d2, d3)), 0.0, 0.0, 1.0);
 }`;
-  window.GLXShaders = Object.assign(window.GLXShaders || {}, { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS });
+  window.GLXShaders = Object.assign(window.GLXShaders || {}, { POST_VS, BRIGHT_FS, BLUR_FS, DOWN_FS, UP_FS, SSAO_FS, GODRAY_FS, COMPOSITE_FS, FXAA_FS, SGSR_FS, DEPTH_VS, DEPTH_FS, BLOCKER_FS });
 })();

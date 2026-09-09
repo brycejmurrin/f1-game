@@ -2192,6 +2192,21 @@ __apex.renderScale(0.6);   // pin 60% 3D scale
 __apex.renderScale(true);  // hand back to the auto governor
 ```
 
+### `spatialUpscale(v?) → {on, active, scale, available}`
+GLX SGSR1 spatial-upscale spike (`docs/research/UPSCALING-2026-09.md` §6). Flag
+**OFF by default**. No arg: report. `0`/`1`/`true`/`false` writes
+`localStorage apex26.spatialUpscale` (or use `?upscale=1` at boot). `active` is
+true only when the flag is on **and** `renderScale < ~1` **and** the SGSR
+program linked — at scale 1.0 the pass is pure waste. `available:false` on
+WGX/TLX (not in this spike). Does not change the DOM HUD; only the 3D canvas
+present path.
+```js
+__apex.spatialUpscale();     // { on, active, scale, available }
+__apex.spatialUpscale(1);    // enable + resize
+__apex.renderScale(0.75);    // give it something to reconstruct
+__apex.spatialUpscale(0);    // back to browser bilinear stretch
+```
+
 ### `perf() → same as renderScale()`
 Thin alias of the `renderScale()` report — scale / fps / tier / autoTier /
 autoShed / userTier / strikes — for agents that want a perf-named hook.

@@ -3578,3 +3578,32 @@ test("TLX placeholder material arrays carry the pack's sampling state (WGSL acce
     assert.ok(placeholder.includes(line), "placeholder array lacks `" + line + "` — three compiles the lit program against the placeholder, and a Nearest/Nearest ClampToEdge placeholder bakes textureLoad+clamp into the WGSL for the life of the program");
   }
 });
+
+// ── GLX spatial upscale spike (SGSR1) ───────────────────────────────────────
+// Flag OFF by default; WebGL2 must not ship raw textureGather (ES 3.1). Size
+// split + present pass are gated on wantSpatialUpscale (flag ∧ scale<~1 ∧
+// linked program). See docs/research/UPSCALING-2026-09.md §6.
+test("GLX spatial upscale spike: SGSR1, no textureGather, flag-gated size split", () => {
+  const sh = read("js/render/glx/shaders/glsl-post.js");
+  assert.match(sh, /const SGSR_FS =/, "SGSR_FS must ship in glsl-post.js");
+  assert.match(sh, /SPDX-License-Identifier: BSD-3-Clause/,
+    "Qualcomm SGSR1 attribution must stay on the adapted shader");
+  const shCode = sh.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(shCode, /textureGather\s*\(/,
+    "WebGL2 has no textureGather — emulate with textureLod taps");
+  assert.match(shCode, /gatherComp\s*\(/, "gather emulation helper must remain");
+  const post = read("js/render/glx/post.js");
+  assert.match(post, /sgsrProg/, "post chain must link the SGSR program");
+  assert.match(post, /spatialOk:\s*\(\)\s*=>\s*!!sgsrProg/,
+    "post must expose spatialOk so resize fail-closes without a linked program");
+  assert.match(post, /uViewport/, "SGSR present pass must upload source viewport");
+  const glx = read("js/render/glx/glx.js");
+  assert.match(glx, /apex26\.spatialUpscale/, "flag key must stay namespaced");
+  assert.match(glx, /wantSpatialUpscale/, "size split must go through wantSpatialUpscale");
+  assert.match(glx, /PST\.spatialOk/,
+    "wantSpatialUpscale must require the linked SGSR program (no letterbox)");
+  assert.match(glx, /renderScale < 0\.98/,
+    "upscale must not run at scale≈1 (pure waste)");
+  const apex = read("js/agent/apex.js");
+  assert.match(apex, /spatialUpscale\s*\(/, "__apex.spatialUpscale must exist");
+});
