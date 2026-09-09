@@ -136,6 +136,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/glx-call-census.mjs** | What does ONE GLX frame cost in GL calls? Wraps the live WebGL2 context mid-race; per-frame draw/bind/upload averages. | webgl-debug |
 | **gfx/gpu-census.mjs** | Does this machine have a real GPU? Launches full Chromium per flag set and reports the adapter (`census_only` in CI). | — |
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
+| **gfx/heap-stages.mjs** | Stages the TLX/GLX JS-heap gap boot / track-built / settled, asserting which backend actually bound. | — |
 | **gfx/loop-fault-repro.mjs** | Does the frame loop survive a transient fault and stop on a deterministic one? Injects throws into `Input.poll` live. | webgl-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | webgpu-debug |
 | **gfx/soft-present-bench.mjs** | Soft-present upscale ON/OFF timing (software blit ≠ player FPS). | — |

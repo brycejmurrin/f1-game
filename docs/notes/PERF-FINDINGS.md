@@ -2596,6 +2596,115 @@ PlayCanvas are full engines with build steps — adopting either means discardin
 GLX and the no-build constraint. The right phone WebGPU path is WGX, which
 already exists.
 
+### 2026-09-09 — the env probe is what makes the WebGPU leg black (runs 69/70)
+
+Runs 69 and 70, `macos-latest`, montreal, one variable: `apex26.envProbeOff`.
+
+| leg | run 69 (probe on) | run 70 (`envProbeOff=1`) |
+|---|---|---|
+| webgpu | **2.9** (envReady=true) | **39.2** (envReady=false) |
+| webgl2 | 63.9 | 63.9 |
+| glx | 72.4 | 72.4 |
+| wgx | 78.5 | 79.2 |
+
+The webgpu leg moves 13.5x; two controls are bit-identical and the third moves
+0.7. 39.2 is also exactly what run 54 read with `envReady=false`. **Applying the
+env cube on the three/WebGPU path is what drives the world near-black on real
+Apple hardware** — and it is a SECOND defect stacked on the older one, not the
+same finding restated: with the probe off, webgpu 39.2 against webgl2 63.9 is
+the original lit-pass gap, intact and still unexplained.
+
+*It is not the capture.* `maxLuma` is 247 on all four legs in both runs, the
+same value a healthy leg reads. A failed readback or a genuinely black render
+reads ~0, so bright pixels exist and it is the MEAN that collapsed. That retires
+"the soft-blit readback regressed", which the legs' different present paths
+(`softBlit=YES` on webgpu, `no` on webgl2) otherwise leave wide open.
+
+*No software test can see this, by construction.* `envFaceEnd` takes an entirely
+different branch under `softContent("env")`: it CLEARS each face to black and
+counts it, because six world presents into the cube missed the 360 s budget
+(2026-08-17). Real GPUs keep the full world capture. So the in-container A/B —
+49.3 probe-on against 38.2 probe-off, the probe ADDING light — measured a path
+the defect does not live on. This is the sharpest instance yet of "a software
+probe is NOT evidence about a player's machine": not merely less sensitive, but
+running different code.
+
+*Where the mechanism probably is — NOT measured, do not act on it alone.* Three
+lines from the latch: "WebGPU does not gl.generateMipmap a CubeRenderTarget the
+way WebGL2 does (three.js #31143 / #31639). Without an explicit pass,
+`cubeTexture(..., rough*2.5)` samples empty mips and chrome goes black/flat."
+That pass is guarded `if (renderer.generateMipmaps && envRT.texture)`, and in
+the vendored r185 bundle every `generateMipmaps` definition sits on a Backend or
+TextureUtils class — the abstract base reads
+`createTexture(){}updateTexture(){}generateMipmaps(){}` — with none found on the
+Renderer. If `renderer.generateMipmaps` is undefined the guard is a SILENT
+no-op and that comment describes the observed symptom exactly. `envRT` already
+carries `generateMipmaps: true` and `LinearMipmapLinearFilter`, so the texture
+flag is not the missing half. This is a code read of a MINIFIED bundle. The next
+step is one instrumented census reporting `typeof renderer.generateMipmaps` and
+whether the pass ran — five earlier explanations of this gap died of being
+shipped on reasoning this strong.
+
+### 2026-09-09 — the cube-mip pass was dead code; the black world is still open (runs 71/72)
+
+Run 71 answered the question run 70 raised: `mip: fn=undefined ran=0` on BOTH
+three legs. `renderer.generateMipmaps` does not exist — three r185 defines
+generateMipmaps on Backend and TextureUtils, never on Renderer — so the explicit
+cube-mip pass had never executed once in its life. Fixed by calling it where it
+lives (renderer, else renderer.backend), and run 72 shows the repair working:
+webgl2 reads `mip: fn=undefined via=backend ran=131`, luma 64.6 against 63.9,
+gpuErrors 0. A pass the code intended and never ran now runs, and costs the
+healthy leg nothing.
+
+**It did NOT confirm the black-world fix, and the number that looks like it did
+is a trap.** Run 72 webgpu reads meanLuma 43.2 — up from 2.9 — with
+`envReady=false`, `env: begins=4 ends=4`, `gov: fps=4.9 floorMs=58.5 frames=6`
+and `mip: fn=? via=? ran=0`. That leg rendered SIX FRAMES. The probe never
+completed a cycle, so the mip branch never executed (`fn=?` is the initial
+value, untouched), so 43.2 is the ordinary probe-never-latched reading — the
+same state as run 25 (46.9), run 54 (39.2) and run 70 (39.2), and run 54 hit
+this same 4.9 fps / scale 1 / envReady false mode exactly. A luma that recovers
+because the probe never ran proves nothing about a fix to what happens when it
+does.
+
+So the standing question is unchanged: does the world still go near-black on a
+webgpu leg that DOES latch the cube, now that the mip pass runs? That needs a
+run where the webgpu leg gets past ~600 frames. Whatever answers it, note that
+this 4.9 fps mode is itself recurring and undiagnosed, and a census that lands
+in it cannot answer any question about env-probe content.
+
+### 2026-09-09 — the TLX heap gap is opened by the TRACK BUILD, not boot
+
+`scratch/heap-stages.mjs`, montreal, CDP `Runtime.getHeapUsage` after three
+`HeapProfiler.collectGarbage` passes, 20 s settle per leg, each leg asserted via
+`diag().env.backend` (what BOUND, not the pick):
+
+| stage | GLX | TLX | gap | x |
+|---|---|---|---|---|
+| boot (no track) | 5.6 MB | 8.3 MB | 2.7 | 1.49 |
+| track built | 19.8 MB | 30.1 MB | **10.3** | 1.52 |
+| settled | 20.4 MB | 32.9 MB | 12.5 | 1.61 |
+
+7.6 of the 12.5 MB appears between boot and track-built, so the gap is SCENE
+CONSTRUCTION — consistent with the CPU geometry copies three retains — and not
+module/vendor load, which costs 2.7.
+
+Two cautions, because the row that looks most quotable is the weakest. `settled`
+is NOT a clean comparison: GLX ran 8 frames in the 20 s where TLX ran 1105 (GLX
+throttles its soft-present blit under HeadlessChrome), so TLX had 138x the
+allocation opportunities — equal wall time is not equal work, and only boot and
+built are frame-count independent. And 12.5 MB is far short of the ~48 MB this
+gap has been carried as; that figure was never staged, and this is JS heap on
+one track in a headless container, so it bounds the JS half alone.
+
+The first two attempts measured nothing, both times because the HARNESS was
+wrong rather than the game, which is worth keeping beside the numbers: a bare
+`await new Promise(r => requestAnimationFrame(r))` with no deadline hung for
+eight minutes on SwiftShader, and `info().gfx` — a field that does not exist —
+read null on both legs, which the tool's own backend assert correctly refused to
+report as a gap rather than printing a 12 MB number nobody could trust.
+
+
 ## 2u. The renderer cached the canvas size and never noticed the viewport move (2026-09-02)
 
 Reported as "the WebGPU path shows the garage from outside, so too far". It is
