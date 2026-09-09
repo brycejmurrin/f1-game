@@ -281,14 +281,14 @@ test("a flank mark clears the flank the crown design actually left it", () => {
   // and is WORSE — Red Bull's number, code and wordmark all fell to 1.31:1 on
   // its gold saddle, surfaces that had been fine. The answer is the HALO
   // markPalette already builds for marks, which is a change to the flank
-  // painting path, not a better choice of ink. The three wrap/logo rows are the
+  // painting path, not a better choice of ink. wrap/logo leftovers are the
   // brand PLATE, which wins outright by an explicit identity-over-legibility
   // decision documented in markPalette — a different argument, not this one.
   //
   // Fails if the list GROWS and fails if an entry starts PASSING, so the fix
   // cannot leave a stale allowance behind and a regression cannot hide in one.
   const KNOWN = new Set([
-    "audi saddle/wordmark", "audi saddle/duo", "audi wrap/logo",
+    "audi saddle/wordmark", "audi saddle/duo",
     "cadillac saddle/wordmark", "cadillac saddle/duo",
     "ferrari saddle/wordmark", "ferrari saddle/duo", "ferrari wrap/logo",
     "mercedes saddle/wordmark", "mercedes saddle/duo",

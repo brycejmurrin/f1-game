@@ -139,7 +139,7 @@ const LIV_ROW_HINT = {
   tcam: "T-CAM — the camera housing colour. AUTO is the real rule: car 1 black, car 2 yellow.",
   coverVents: "COVER VENTS — cooling slits cut into the engine cover. Geometry, not paint.",
   spineHeight: "SPINE HEIGHT — how tall the cover crown runs behind the roll hoop. DORSAL is the fin-less 2026 look every team uses.",
-  spineSide: "SPINE SIDE — what the cover FLANK carries, both sides: number, mark, code or a graphic.",
+  spineSide: "SPINE SIDE — what the cover FLANK carries, both sides: number, mark, code, a graphic, a crease ribbon, or a number+mark lockup.",
 };
 // `liv` is a saved livery for edit/copy, or a bare {c1,c2} for a new one: an
 // absent colour becomes "" (no paint) and an absent pill its own default.

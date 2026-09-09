@@ -31,7 +31,8 @@ SHAPE `none`), `finBadge` (`logo|number|code|none`) and
 painted by `drawSpineTop` into `REGIONS.crest` on BARE paint — the crown carries no
 tail wash; the fin motif stops at the fin — and continued down `REGIONS.tail` by
 `drawTailTop`; the crest and number read top-down, nose up). SPINE SIDE ids also
-offer `plate|wordmark|duo|slash` (from the 2026 launch photos; `wrap` + `duo` is the RB22).
+offer `plate|wordmark|duo|slash|ribbon|lockup` (from the 2026 launch photos; `wrap` + `duo` is the RB22;
+`ribbon` is a crease band with the number in it, `lockup` the number + mark on the upper third).
 The two flanks are SEPARATE regions (`spineSide` RIGHT, `spineSideL` LEFT, in the atlas's
 extra rows: `SIZE` × `SIZE_H`); paint them through `eachFlank`/`flankFrame`, never one
 mirrored texture. The car is drawn through an x-reflection, so the mesh's +x quad RENDERS
@@ -130,37 +131,22 @@ second colour is drawn inside the mark and so answers to the mark alone.
 node tools/ci/test-bg.mjs car
 node tools/ci/test-bg.mjs modes              # research locks / ownership UI — no test:career
 node tools/car/audit-parts.mjs [--cats=engine,aero]
+node tools/car/spine-station.mjs --team=redbull [--logo=wrap] [--png=artifacts/spine]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
 node tools/shot/shot.mjs bahrain 0.06 orbit out.png --team audi --dist 5.5 --el 26 --az 205
 ```
 
 ### A COVER DESIGN IS ONLY HALF-GUARDED
 
-`tests/unit/cover-legibility.test.mjs` measures the atlas: for every shipped
-default it takes the colour covering most of the crown and flank and scores it
-against the cover it lands on. That is the half that VARIES per team — team
-paint against a `liv.cover` override — and it earned its place by catching a
-white saddle on Ferrari's pale cover and teal stripes on Mercedes' silver one,
-both already merged, in about a second.
-
-It is blind to PLACEMENT, by construction. Audi's `twin` stripes score 17
-against black and are invisible anyway, because they sit on the shoulders where
-the cover curves away from a rear three-quarter camera. No colour metric can
-see that.
-
-Placement is a property of the DESIGN, not the team — the geometry is identical
-on all twelve cars — so it is answered once per design rather than per livery,
-and it does not belong in CI. **When you add a crown or flank design, or move
-an existing one's geometry, shoot it on track** with `shot.mjs --team` and look.
-A 430 px atlas crop flatters a graphic that a race camera renders as forty
-pixels of mud: `carbon` and `bigmark` both passed every test and every atlas
-review, and neither existed at racing distance.
-
-Scripting the studio instead? `CARVIEW.set({livery})` takes an id OR a livery
-object; an id that matches nothing warns and renders the default rather than
-pretending. It silently ignored objects until 2026-09-09, which is worth
-knowing if you find an old script that varies a field and photographs the same
-car every time.
+`cover-legibility.test.mjs` scores whether a design SEPARATES from the cover it
+lands on — the half that varies per team. Whether it lands anywhere worth
+looking is a different question, and you answer it on the cheapest surface that
+can: `node tools/car/spine-station.mjs --team=redbull` measures where every
+flank design's ink actually falls (`v` 0 = shoulder crease, 1 = sidepod line;
+`u` front → rear) in 0.2 s with no browser, `--png` rasterises the flat art, and
+only occlusion / foreshortening / lighting need `garage-angles.mjs` (pass
+`--zoom`/`--pan` or a flank mark arrives forty pixels wide) or `shot.mjs --team`
+at racing distance. The vertical half is in CI via `fin-design.test.mjs`.
 
 Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **career-mode**,
 **tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.
@@ -168,3 +154,4 @@ Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **
 ## Load on demand
 
 - ERS ids, ownership gate, edit loop, mistakes → [references/workflow.md](references/workflow.md).
+- Which surface answers a PLACEMENT question, and what each is blind to → [references/placement.md](references/placement.md).

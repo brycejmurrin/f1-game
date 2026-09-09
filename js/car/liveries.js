@@ -40,11 +40,10 @@
      the tail — the fin-less 2026 look; "dorsal" runs level with the hoop.
      Geometry (Car3D.SPINE_HEIGHT_IDS); the fin's top stays at the regulation
      line, so a taller spine shortens the blade.
-   spineSide? optional SPINE SIDE: "none" (absent), "number", "logo", "code",
-     "plate" (the number on a contrasting panel, SF-26), "wordmark" (the title
-     sponsor, RB22 / W17), "duo" (title sponsor aft, partner forward — the
-     RB22's Red Bull over Ford Racing) or "slash" (the W17's raked bars) paints that on the
-     engine-cover FLANK, both sides (LiveryTex.SPINE_SIDE_IDS; car-mesh's band).
+   spineSide? optional SPINE SIDE: "none" (absent) or an id in
+     LiveryTex.SPINE_SIDE_IDS — number, logo, code, plate, wordmark, duo, slash,
+     split, bars, chevron, ribbon (crease band + number), lockup (number + mark).
+     Paints the engine-cover FLANK, both sides (car-mesh's band).
      Each flank is its own atlas region (spineSide right, spineSideL left),
      authored in that side's outside-view frame, so text reads and a graphic
      faces forward on BOTH sides.
