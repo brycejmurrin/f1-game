@@ -300,3 +300,44 @@ test("a flank mark clears the flank the crown design actually left it", () => {
   assert.deepEqual([...KNOWN].filter((k) => !bad.includes(k)), [],
     "these KNOWN gaps now pass — delete them from KNOWN");
 });
+
+// A flank pick has to land where the flank can be SEEN. This is not a contrast
+// question and no other guard here asks it: tools/car/flank-occlusion.mjs
+// projects the real body and rear wheels through the garage side camera, and
+// the tyre covers the flank's aft half — 12 % hidden at u 0.5, 48 % at 0.6,
+// 86 % at 0.7, 100 % past 0.8.
+//
+// `sideFrom` used to chain off the wrap mark's own width with no knowledge of
+// that. Red Bull is the only team whose bull is TRACED, so its span is half the
+// flank wide, and every flank pick was pushed behind the tyre: number 52 %
+// hidden, logo 54 %, plate 50 % — while the same picks under any other crown,
+// and under `wrap` on every other team, measured 0 %. Same camera, same mesh,
+// one design.
+//
+// MARKS only. The full-flank BANDS (wordmark, duo, slash, split, chevron) are a
+// different and still-open problem: su() maps their whole 0..1 into
+// [sideFrom, 1], so under a wrap they are compressed into the back half of the
+// panel, which is the half the tyre owns. The clamp improves them (95 % -> 56 %
+// on the wordmark) without fixing them, and pretending otherwise here would
+// bank a number this guard cannot hold.
+test("a flank MARK lands where the flank is visible, under every crown", async () => {
+  const { loadParts } = await import("../../tools/car/parts-sweep.mjs");
+  const { occlusionMap } = await import("../../tools/car/flank-occlusion.mjs");
+  const { sweep } = await import("../../tools/car/spine-station.mjs");
+  const MARKS = ["number", "logo", "code", "plate"];
+  const bad = [];
+  for (const teamId of ["redbull", "ferrari", "mercedes"]) {
+    const om = occlusionMap(loadParts(), { team: teamId, grid: 96 });
+    const hiddenAt = (u, v) => om.cell[Math.min(om.rows - 1, (v * om.rows) | 0) * om.cols
+                                       + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1;
+    for (const logo of ["wrap", "panel"]) {
+      const r = sweep(A, { team: teamId, logo, sides: MARKS, hiddenAt });
+      for (const row of r.rows) {
+        if (!row.px || row.hidden == null) continue;
+        if (row.hidden > 0.25)
+          bad.push(`${teamId} ${logo}/${row.spineSide}: ${(row.hidden * 100).toFixed(0)}% of its ink is behind the car`);
+      }
+    }
+  }
+  assert.deepEqual(bad, []);
+});
