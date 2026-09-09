@@ -142,6 +142,8 @@ describe("the interior gate on a cleared-buffer frame", () => {
       "presentedCanvasClip must prefer the HeadlessChrome overlay");
     const presented = probe.slice(probe.indexOf("export async function screenshotPresentedCanvas"),
       probe.indexOf("export async function screenshotGameCanvas"));
+    assert.match(presented, /readSoftCanvasBytes/,
+      "soft toDataURL is the multi-shot fast path before CDP");
     assert.match(presented, /Page\.captureScreenshot/,
       "CDP clip skips Playwright's document.fonts.ready wait that hung smoke shards 2/3");
     assert.doesNotMatch(presented, /page\.screenshot/,
@@ -149,10 +151,10 @@ describe("the interior gate on a cleared-buffer frame", () => {
     const shot = probe.slice(probe.indexOf("export async function screenshotGameCanvas"),
       probe.indexOf("export async function screenshotGameCanvas") + 2800);
     const awaitAt = shot.indexOf("awaitPresentedFrame");
-    const softAt = shot.indexOf("game-soft");
+    const softAt = shot.indexOf("readSoftCanvasBytes");
     const freezeAt = shot.indexOf("__apex.headless(true)");
     assert.ok(awaitAt >= 0 && softAt > awaitAt,
-      "awaitPresentedFrame then #game-soft toDataURL — multi-shot fast path");
+      "awaitPresentedFrame then soft toDataURL — multi-shot fast path");
     assert.ok(freezeAt < 0 || freezeAt > softAt,
       "freeze+CDP is fallback only after the soft overlay path");
   });

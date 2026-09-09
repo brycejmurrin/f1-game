@@ -78,6 +78,7 @@ import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import { screenshotPresentedCanvas } from '../capture/probe-page.mjs';
 
 /* How many distinct colours are in the middle of a written shot. Cheap, and it
    is the only thing that separates "rendered" from "wrote a file". */
@@ -392,26 +393,12 @@ try {
 
   let renderedTod = TOD, firstShot = true;
   const t0 = Date.now();
-  /** Soft-present / WebGL canvas → PNG. Avoids page.screenshot compositor hangs. */
+  /** Soft #view / #game-soft → CDP. Never page.screenshot (fonts hang under SwiftShader). */
   async function captureCanvas(dest) {
-    await page.evaluate(async () => {
-      if (typeof GLX !== 'undefined' && GLX.awaitSoftPresent) {
-        try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try */ }
-      }
+    const shot = await screenshotPresentedCanvas(page, {
+      path: dest, preferView: true, timeout: 60_000,
     });
-    const b64 = await page.evaluate(() => {
-      const g = document.getElementById('game-soft')
-        || document.getElementById('view')
-        || document.querySelector('canvas');
-      if (!g || typeof g.toDataURL !== 'function' || !(g.width > 0)) return null;
-      try { return g.toDataURL('image/png').split(',')[1]; } catch (_) { return null; }
-    });
-    if (b64) {
-      writeFileSync(dest, Buffer.from(b64, 'base64'));
-      return 'canvas';
-    }
-    await page.screenshot({ path: dest, timeout: 60_000 });
-    return 'page';
+    return shot.via || shot.id || 'cdp';
   }
   for (const s of shotDefs) {
     const frame = await page.evaluate((p) => {
