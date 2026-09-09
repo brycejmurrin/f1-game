@@ -70,6 +70,9 @@ const GLXPost = (function () {
     // not change mid-frame; skip equal re-uploads. Per-frame values (sunUV,
     // flare, exposure, grainTime, haze) still go up every present().
     const _compUf = Object.create(null);
+    // Which FBO soft-present readPixels uses after the last present() — must
+    // match where the composite/FXAA chain actually landed this frame.
+    let _softReadFB = null;   // null = default framebuffer
     function uf1(loc, key, v) {
       if (!loc) return;
       if (_compUf[key] !== v) { gl.uniform1f(loc, v); _compUf[key] = v; }
@@ -1038,6 +1041,19 @@ const GLXPost = (function () {
       gl.activeTexture(gl.TEXTURE0);
       gl.enable(gl.DEPTH_TEST);
 
+      // Headless soft-blit must read the buffer this frame's post chain wrote,
+      // not a stale attachment. FXAA/SGSR resolve away from ldrFBO; reading
+      // ldrFBO after FXAA on SwiftShader returned byte-identical grade captures.
+      if (useUpscale) {
+        _softReadFB = (useFxaa && aaFBO) ? aaFBO : ldrFBO;
+      } else if (useFxaa) {
+        _softReadFB = null;   // FXAA wrote render-size LDR to the default FB
+      } else if (toLdr) {
+        _softReadFB = ldrFBO;
+      } else {
+        _softReadFB = null;
+      }
+
       // Discard depth buffers we never read across frames (regenerated every frame
       // by the geometry pass). On tiled mobile GPUs this frees the tiler from
       // storing depth back to memory each frame — pure bandwidth/tile-memory saving
@@ -1051,6 +1067,27 @@ const GLXPost = (function () {
       }
 
       core.gpuTimerEnd();
+    }
+
+    // Headless soft-present readback: composite often lands in ldrFBO while FXAA
+    // resolves to the default framebuffer asynchronously on SwiftShader — a
+    // readPixels(null) then repeats the previous frame and grade captures go stale.
+    function readbackLdrPixels(buf, w, h) {
+      if (!gl || !buf || w < 1 || h < 1) return false;
+      try {
+        gl.finish();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, _softReadFB);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+        return true;
+      } catch (_) {
+        return false;
+      } finally {
+        try { gl.bindFramebuffer(gl.FRAMEBUFFER, null); } catch (_) { /* ctx lost */ }
+      }
+    }
+
+    function invalidateUniformCache() {
+      for (const k in _compUf) delete _compUf[k];
     }
 
     postEnabled = setup();   // best-effort; false -> render straight to screen
@@ -1071,6 +1108,8 @@ const GLXPost = (function () {
       createTargets,
       bindSceneTarget,
       present,
+      readbackLdrPixels,
+      invalidateUniformCache,
     };
   }
 

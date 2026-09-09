@@ -6437,7 +6437,9 @@ function setLightTune(id, v) {
     _envProbeOff = false;
     try { localStorage.removeItem("apex26.envProbeOff"); } catch (_) { /* same: the in-memory clear stands */ }
   }
-  return ltStore.set(id, v);
+  const r = ltStore.set(id, v);
+  try { if (gfx && gfx.invalidateSoftPresent) gfx.invalidateSoftPresent(); } catch (_) { /* pre-boot */ }
+  return r;
 }
 function persistLightTune() { ltStore.persist(); }
 // Spread the on-screen condition to every other track at the same time+weather

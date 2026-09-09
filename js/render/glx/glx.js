@@ -458,8 +458,7 @@ const GLX = (function () {
     const n = w * h * 4;
     if (!_softBuf || _softBuf.length !== n) _softBuf = new Uint8Array(n);
     try {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, _softBuf);
+      if (!(PST && PST.readbackLdrPixels && PST.readbackLdrPixels(_softBuf, w, h))) return;
     } catch (_) { return; }
     if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
       _softImg = _displayCtx.createImageData(w, h);
@@ -500,6 +499,7 @@ const GLX = (function () {
   // demand, and awaitSoftPresent() already requires a newer generation.
   function invalidateSoftPresent() {
     _softCaptureDue = true;
+    try { if (PST && PST.invalidateUniformCache) PST.invalidateUniformCache(); } catch (_) { /* harness */ }
   }
 
   function awaitSoftPresent(timeoutMs) {
