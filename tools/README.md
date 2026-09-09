@@ -294,7 +294,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **ci/test-observed.mjs** | Which tests have I never seen run? Declared spec titles (espree) vs every title any `artifacts/logs/` run reported. |
 | **ci/test-shards.sh** | Runs npm test groups concurrently, one port + log per group; `SPLIT=N` fans a group across N `--shard=k/N` runs. |
 | **ci/test-solo.mjs** | Re-runs ONE spec (or `-g` grep) alone at `APEX_WORKERS=1`, refusing to start until the box is quiet (`--max-load`). |
-| **ci/tooling-fast.mjs** | Sequential runner behind `npm run test:tooling-fast`: one unit file at a time, per-file timing; exports the list. |
+| **ci/tooling-fast.mjs** | Runner behind `npm run test:tooling-fast`: per-file timing, buffered output, `--jobs=N`; exports the list. |
 | **ci/verify-change.mjs** | ONE command: fast gate (verify-track, graph-parity, tooling-fast, shell check) + `test-bg` batches → one verdict. |
 
 ## Data files
