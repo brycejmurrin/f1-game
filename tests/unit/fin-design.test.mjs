@@ -155,6 +155,27 @@ test("spineLogo none drops the crest from the cover and keeps it on the fin", ()
 // SPINE TINT: the crown band's OWN colour. Optional paints (BODY STRIPE,
 // DETAIL) must not steal it — each row owns one surface. Absent, the band
 // derives from the BASE colours (secondary, then primary) against the cover.
+test("optional paints do not cross-feed other surfaces", () => {
+  // BODY STRIPE / DETAIL / SPINE TINT must not appear in another surface's
+  // unset derivation. Each optional row owns one surface; unset falls back to
+  // bases (c1/c2) and inks only.
+  const src = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
+  assert.doesNotMatch(src, /if\s*\(\s*stripe\s*\)\s*accent\s*=\s*stripe/,
+    "BODY STRIPE must not remap the working accent");
+  assert.match(src, /const BAND_ORDER = \[c2, c1, INK_LIGHT, INK_DARK\]/,
+    "SPINE TOP band derives from bases only");
+  assert.doesNotMatch(src, /if\s*\(\s*liv\.spineTint\s*\)\s*return\s*liv\.spineTint/,
+    "SUN must not inherit SPINE TINT when sunTint is unset");
+  assert.match(src, /finArt \|\| \[c2, c1, inkFin\]/,
+    "TAIL GRAPHIC wash must not prefer BODY STRIPE / DETAIL");
+  assert.match(src, /flankBandC = colors\.sideTint \|\| pickOn\(BAND_ORDER/,
+    "SIDE TINT must not inherit bandC / spineTint when unset");
+  assert.doesNotMatch(src, /plateTint \|\| accent|plateTint \|\| stripe/,
+    "PLATE PANEL must not inherit DETAIL / BODY STRIPE");
+  assert.doesNotMatch(src, /liv\.stripe \|\| liv\.accent \|\| liv\.c2/,
+    "markBase must not prefer stripe / detail over secondary");
+});
+
 test("saddle / crown band ignore BODY STRIPE; SPINE TINT is the override", () => {
   // Audi-shaped custom: dark cover, red secondary, titanium stripe. SPINE TOP
   // saddle is the secondary PANEL — stripe used to win BAND_ORDER (and remap

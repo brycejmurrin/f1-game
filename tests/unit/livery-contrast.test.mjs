@@ -111,8 +111,8 @@ test("a colour you PICK is the colour that gets painted, contrast or not", () =>
   // colour only suggested it. So this deliberately picks one that FAILS the
   // floor (1.81:1 on McLaren's papaya) and asserts it survives to the paint on
   // every surface its field owns. Two of these used to be re-derived silently:
-  // the wrap's sun ignored spineTint entirely, and the flank band had no
-  // explicit field at all.
+  // the wrap's sun ignored sunTint (and used to steal spineTint), and the flank
+  // band had no explicit field at all.
   const PICK = [0.62, 0.42, 0.20];
   const css = "rgba(158,107,51,";                 // PICK at 0-255
   const team = A.Teams.LIST.find((t) => t.id === "mclaren");
@@ -132,7 +132,7 @@ test("a colour you PICK is the colour that gets painted, contrast or not", () =>
     ["the crown band",       { spineLogo: "saddle", spineTint: PICK }, "crest"],
     ["the tail strip",       { spineLogo: "saddle", spineTint: PICK }, "tail"],
     ["the saddle's flank",   { spineLogo: "saddle", spineTint: PICK }, "spineSide"],
-    ["the wrap's sun",       { spineLogo: "wrap",   spineTint: PICK }, "crest"],
+    ["the wrap's sun",       { spineLogo: "wrap",   sunTint: PICK }, "crest"],
     ["the flank band",       { spineLogo: "saddle", spineSide: "split", sideTint: PICK }, "spineSide"],
     ["the flank band, wrap", { spineLogo: "wrap",   spineSide: "bars",  sideTint: PICK }, "spineSide"],
   ];
