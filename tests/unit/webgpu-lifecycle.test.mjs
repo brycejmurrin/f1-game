@@ -1246,6 +1246,15 @@ test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
     "navigator.webdriver must arm soft-present like GLX without classifying content soft");
   assert.match(WGX_SOURCE, /_softAdapter \|\| _blitForced \|\| _webdriverSoft/,
     "_softGpu must OR the webdriver presentation latch");
+  // Soft-present: configure the offscreen webgpu canvas BEFORE claiming #game
+  // as 2D — otherwise a configure fail locks #game and same-page GLX dies.
+  const claim = WGX_SOURCE.slice(
+    WGX_SOURCE.indexOf("ctx = canvas.getContext(\"webgpu\")"),
+    WGX_SOURCE.indexOf("const PRESENT_TEST_MS"));
+  assert.match(claim, /_configureCanvas\(\)[\s\S]{0,200}?_displayCanvas\.getContext\("2d"/,
+    "2D on #game must follow a successful offscreen configure");
+  assert.doesNotMatch(claim, /_displayCanvas\.getContext\("2d"[\s\S]{0,200}?_configureCanvas\(\)/,
+    "claiming #game 2D before configure re-locks same-page GLX fallback");
 });
 
 test("Safari UA downgrades rgba16float swapchain to bgra8unorm", async () => {

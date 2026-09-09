@@ -121,6 +121,8 @@ test("TLX AUTO may land on three WebGL2 and uses a lite swapchain on WebGPU", ()
     "AUTO stays on WebGL2 when no WebGPU context is obtainable, after an init failure, or on WebKit; a pin of 1/0 overrides");
   assert.match(src, /async\s+function\s+bootRenderer\b/);
   assert.match(src, /AUTO WebGPU init failed/);
+  assert.match(src, /await renderer\.init\(\)[\s\S]{0,200}?renderer\.dispose/,
+    "failed renderer.init must dispose before AUTO WebGPU→WebGL2 retry");
   assert.match(src, /AUTO stayed on three WebGL2/);
   assert.match(src, /outputType:\s*THREE\.UnsignedByteType/);
   assert.match(src, /powerPreference:\s*"low-power"/);
@@ -541,6 +543,16 @@ test("applyBackend clears session renderer latches before reload", () => {
     "applyBackend must clear every RENDERER_SS_KEYS latch, not only gfxBound");
   assert.doesNotMatch(fn, /clearRendererStorage\(\)/,
     "must not wipe LS backend prefs — that would delete the pick just written");
+});
+
+test("THREE PATH and SCREENSHOTS clear session renderer latches on reload", () => {
+  const src = read("js/perf/renderer-picker.js");
+  const three = src.slice(src.indexOf("function applyThreePath("), src.indexOf("function readShotMode("));
+  assert.match(three, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
+    "THREE PATH reload must wipe the same session latches as applyBackend");
+  const shot = src.slice(src.indexOf("function applyShotMode("), src.indexOf("function presentStatus("));
+  assert.match(shot, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
+    "SCREENSHOTS reload must drop inherited hold/claim latches before writeShotMode");
 });
 
 test("blocked sessionStorage skips the opt-in so this tab never claims the canvas", () => {

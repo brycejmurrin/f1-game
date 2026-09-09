@@ -2674,3 +2674,7 @@ already set from `noWheels` factory bodies) pass `Helmets.build({ maxSplit: 0 })
 `js/game.js` lines 10368 -> **10385** (+17) / codeLines 5609 -> **5618** (+9). `loadCarModel` clears `fieldWheelOrder` with the cache; `cz-save` merges structural `DEFAULT_CUSTOM.livery`; foreign-tab `customTeam` re-runs `syncCustomTeam`.
 
 `js/render/glx/glx.js` lines 2610 -> **2615** (+5). Soft-blit sizes from `drawingBufferWidth/Height` so spatial-upscale presents fill `#game-soft`.
+
+## 2026-09-09 — czPreview / WGX claim order / foreign logo
+
+`js/game.js` lines 10385 -> **10422** (+37) / codeLines 5618 -> **5644** (+26). `czLivFromDialog` shared by save+preview; foreign `customLogo` subscribe; stripe/finish refresh the live draft.
