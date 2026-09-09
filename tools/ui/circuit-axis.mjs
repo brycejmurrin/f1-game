@@ -28,9 +28,6 @@ export const CIRCUITS = [
   ["singapore", 1.55],
 ];
 
-export const CIRCUIT_HELP =
-  "--circuits[=jeddah,baku]  also audit the map screens per circuit aspect (default: the selected circuit alone)";
-
 // OFF BY DEFAULT, like --scale. An unflagged run stays byte-identical to what it
 // was before this axis existed — a harness change that renamed every existing
 // cell would make its own arrival look like a regression. Bare `--circuits`

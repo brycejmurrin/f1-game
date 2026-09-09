@@ -1891,6 +1891,16 @@ const LiveryTex = (function () {
     // 5 % of the crown and 0.9 % of it can be seen, against 5 %+ on every other
     // team. A livery that actually wears a fin still resolves ONE lockup across
     // both surfaces, which is why that list exists.
+    // PARTIAL, knowingly. car-mesh.js:177 gates the fin on BOTH halves of
+    // `fShape !== "none" && (!fRoot || fRoot.clear > 0.03)` — a crown taller
+    // than the regulation fin top swallows the blade, and car-mesh then maps
+    // neither R.fin nor R.finBadge. This models the first half only, because
+    // `clear` needs Car3D.sharkFinRoot(bodyAnchors(PARTS, ...), aeroFin, shape)
+    // and buildAtlas is handed no parts. Measured on spineHeight "dorsal" —
+    // which all twelve shipped teams set — a blade exists only above aero fin
+    // 0.995 (standard/swept/stepped) or 0.660 (stub), and most of the shipped
+    // aero column sits below that, so the phantom is still reachable this way.
+    // Closing it means threading the predicate in, not widening the guess here.
     const finReal = (colors.finShape || "standard") !== "none";
     const lockup = markPalette(teamId, colors, finReal ? [coverPaint, finPaint] : [coverPaint], false);
     // Sponsor names resolve here so the spine can carry the title sponsor.
