@@ -148,3 +148,141 @@ test("SPINE TOP wrap survives a partial livery (no c1/c2)", () => {
     assert.ok(P.alt && P.alt.length === 3, `${t.id}: alt is an rgb (was null → crash)`);
   }
 });
+
+// The five surfaces that used to have NO field of their own — they were derived
+// from other parts of the livery, so a player could not choose them at all and
+// changing an unrelated colour moved them. `dominant` is the wrong instrument
+// for these: lettering and a keyline never own the most sampled points, so this
+// asks whether the picked colour REACHES the region, and — the half that makes
+// it a real test — that it is absent when the field is unset. Without the
+// negative, a colour that happened to be in the livery already would pass.
+test("the five formerly-derived surfaces are picks, and only when picked", () => {
+  const PICK = [1, 0, 1];                       // magenta: in no shipped livery
+  const hit = /^rgba?\(255,0,255[,)]/;          // css()/cssA() emit no spaces
+  const reaches = (teamId, liv, region) => {
+    const ops = A.paint(teamId, liv);
+    const R = A.LT.REGIONS[region], N = 60;
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const c = paintAt(ops, R.x + R.w * (i + 0.5) / N, R.y + R.h * (j + 0.5) / N);
+      if (c && hit.test(c)) return true;
+    }
+    return false;
+  };
+  const cases = [
+    ["crestInk  the crown's lettering", "mercedes", { spineLogo: "wordmark" }, "crest"],
+    ["bandTint2 the tricolour's 2nd band", "alpine", { spineLogo: "tricolour" }, "crest"],
+    ["sunTint   the wrap's sun", "redbull", { spineLogo: "wrap" }, "crest"],
+    ["plateTint the flank number board", "ferrari", { spineSide: "plate" }, "spineSide"],
+    ["plateInk  the number on that board", "ferrari", { spineSide: "plate" }, "spineSide"],
+  ];
+  const bad = [];
+  for (const [what, teamId, design, region] of cases) {
+    const key = what.split(/\s+/)[0];
+    const team = A.Teams.LIST.find((t) => t.id === teamId);
+    const off = Object.assign({}, A.Liveries.forTeam(team)[0], design);
+    if (reaches(teamId, off, region)) bad.push(`${what}: the probe colour is already there unpicked`);
+    if (!reaches(teamId, Object.assign({}, off, { [key]: PICK }), region))
+      bad.push(`${what}: picked, and it never reaches the ${region}`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+// THE TWO MARKS THAT LANDED ON A SURFACE NOBODY SCORED.
+//
+// The instrument took three tries and each failure is worth keeping, because
+// each one PASSED while the defect was live:
+//   - asking markPalette directly proved the option worked and never touched
+//     the call site that had the bug;
+//   - sweepAtlas filters anything under 15 % of a panel, and a crest or number
+//     never owns that much, so every mark was excluded before being scored;
+//   - taking the region's two most-covering colours assumes the second sits ON
+//     the first, which is false under a wrap: the sun owns the front of the
+//     flank and the mark sits aft of it, so it compared two colours that never
+//     touch and reported a car that is fine.
+//
+// What is measured now: render the SAME livery with the mark and without it,
+// and compare — at the pixels the mark actually changed — the colour it paints
+// against the colour that was there before. That is the question, with no
+// assumption about layout, share, or which colour is the surface.
+const cssOf = (c) => `rgb(${c.map((v) => Math.round(v * 255)).join(",")})`;
+// The tool keeps its own copy private; same expression, same reason.
+const alphaOf = (st) => { const m = /rgba\([^)]*,\s*(0?\.\d+|0|1)\)/.exec(st || ""); return m ? +m[1] : 1; };
+const markOnItsGround = (teamId, liv, region, key, ground, N = 32) => {
+  const withM = A.paint(teamId, liv);
+  const without = A.paint(teamId, Object.assign({}, liv, { [key]: "none" }));
+  const R = A.LT.REGIONS[region];
+  let worst = null, at = null, n = 0;
+  for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+    const x = R.x + R.w * (i + 0.5) / N, y = R.y + R.h * (j + 0.5) / N;
+    const a = paintAt(withM, x, y), b = paintAt(without, x, y);
+    if (!a || a === b) continue;                 // the mark did not change this pixel
+    // A translucent pass is a shade or a halo, not the mark: comparing a 28 %
+    // black against the ground it barely tints measures the shading and reports
+    // every car. Same rule sweepAtlas applies, for the same reason.
+    if (alphaOf(a) < 0.5) continue;
+    n++;
+    // Where nothing is painted beneath, the ground is the COVER — that colour
+    // comes from the mesh, not from an op, so `null` here means "the car's own
+    // paint", not "black". Reading it as black compared the mark to a surface
+    // that does not exist and reported every dark mark on a dark car as broken.
+    const v = contrastCss(a, b || ground);
+    if (v != null && (worst == null || v < worst)) { worst = v; at = `${a} on ${b}`; }
+  }
+  return { worst, at, n: n / (N * N) };
+};
+
+test("the plate-less crown mark clears the cover it is actually drawn on", () => {
+  const bad = [];
+  for (const t of A.Teams.LIST) {
+    // The default plus the two pale showcases that measured 1.00:1 before the
+    // fix — sweeping all ~69 liveries doubles the atlas builds for no new class.
+    const pick3 = A.Liveries.forTeam(t).filter((l) => ["default", "tricolora", "chrome"].includes(l.id));
+    for (const liv of pick3) {
+      const l = Object.assign({}, liv, { spineLogo: "bigmark" });
+      const r = markOnItsGround(t.id, l, "crest", "spineLogo", cssOf(liv.cover || liv.c1 || t.color));
+      if (r.worst == null || r.n < 0.004) continue;
+      if (r.worst < AREA_FLOOR) bad.push(`${t.id}/${liv.id}: bigmark ${r.at} at ${r.worst}:1`);
+    }
+  }
+  assert.deepEqual(bad, [], `plate-less marks below ${AREA_FLOOR}:1 —\n  ${bad.join("\n  ")}`);
+});
+
+test("a flank mark clears the flank the crown design actually left it", () => {
+  const bad = [];
+  for (const t of A.Teams.LIST) {
+    const base = A.Liveries.forTeam(t)[0];
+    for (const spineLogo of ["saddle", "wrap"]) {
+      for (const spineSide of ["number", "code", "logo", "wordmark", "duo"]) {
+        const liv = Object.assign({}, base, { spineLogo, spineSide });
+        const r = markOnItsGround(t.id, liv, "spineSide", "spineSide", cssOf(base.cover || base.c1 || t.color));
+        if (r.worst == null || r.n < 0.004) continue;
+        if (r.worst < AREA_FLOOR) bad.push(`${t.id} ${spineLogo}/${spineSide}`);
+      }
+    }
+  }
+  // KNOWN — measured, not waived. One class: a mark that SPANS the saddle's
+  // raked edge. saddleFlanks fills to u 0.58 tapering to 0.40 while the wordmark
+  // and duo boxes run out to u 0.96, so they start on the saddle and finish on
+  // bare cover, and no single ink clears both. Inking against the pair was tried
+  // and is WORSE — Red Bull's number, code and wordmark all fell to 1.31:1 on
+  // its gold saddle, surfaces that had been fine. The answer is the HALO
+  // markPalette already builds for marks, which is a change to the flank
+  // painting path, not a better choice of ink. The three wrap/logo rows are the
+  // brand PLATE, which wins outright by an explicit identity-over-legibility
+  // decision documented in markPalette — a different argument, not this one.
+  //
+  // Fails if the list GROWS and fails if an entry starts PASSING, so the fix
+  // cannot leave a stale allowance behind and a regression cannot hide in one.
+  const KNOWN = new Set([
+    "audi saddle/wordmark", "audi saddle/duo", "audi wrap/logo",
+    "cadillac saddle/wordmark", "cadillac saddle/duo",
+    "ferrari saddle/wordmark", "ferrari saddle/duo", "ferrari wrap/logo",
+    "mercedes saddle/wordmark", "mercedes saddle/duo",
+    "racingbulls saddle/wordmark", "racingbulls saddle/duo",
+    "redbull saddle/wordmark", "redbull saddle/duo", "redbull saddle/logo",
+    "williams saddle/wordmark", "williams saddle/duo",
+  ]);
+  assert.deepEqual(bad.filter((k) => !KNOWN.has(k)), [], "a flank mark went invisible");
+  assert.deepEqual([...KNOWN].filter((k) => !bad.includes(k)), [],
+    "these KNOWN gaps now pass — delete them from KNOWN");
+});

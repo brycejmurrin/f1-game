@@ -58,6 +58,25 @@
      is lime. An explicit pick is honoured as-is — it is a deliberate choice
      about one surface, like `cover` — while the derived default still goes
      through the contrast re-pick against the cover.
+   sunTint? optional SUN — the wrap's sun disc over the crown, the cover flanks
+     and (Car3D) the airbox and roll hoop. Its own row because SPINE TINT used
+     to paint it: one field meant a BAND on most SPINE TOP designs and the SUN
+     on `wrap`, so picking `wrap` repurposed a colour chosen for a band. Unset
+     falls back to spineTint (so a livery saved before this row keeps its
+     author's colour), then to the plate/brand derivation.
+   crestInk? optional CREST INK — what the crown's LETTERING wears: the
+     wordmark, the number, `carbon`'s keylines, the trim on `panel` and
+     `stripe`, and the flank marks that share this ink. Absent = the automatic
+     contrast ink against the ENGINE COVER.
+   bandTint2? optional 2ND BAND — the tricolour's second band. The design draws
+     two bands with body paint between them, and only one of them was ever
+     choosable; the other was derived and could land on its neighbour (four
+     teams wore a "tricolour" of one colour repeated). Absent = derived, and
+     re-picked against both the cover and the first band.
+   plateTint? optional PLATE PANEL — the contrasting board SPINE SIDE "plate"
+     paints the number on. Absent = stripe||accent, re-picked against the flank.
+   plateInk? optional PLATE NUMBER — the number ON that board. Absent = the
+     body colour when it reads there, else the automatic ink.
    spineLogo? optional SPINE TOP — what the engine-cover crown carries over
      its tail wash. "logo" (absent) draws the crest there as well as on the
      fin; "none" leaves the crown to the wash, so the mark reads once from a
@@ -462,7 +481,7 @@ const Liveries = (function () {
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
     const ex = team.livery;
-    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover", "spineTint", "sideTint", "rearWing", "wingCarbon"]) if (ex[k]) def[k] = ex[k];
+    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover", "spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk", "rearWing", "wingCarbon"]) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 

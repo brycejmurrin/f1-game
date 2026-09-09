@@ -138,6 +138,10 @@ test("the legacy shared key is honoured as a flag, never as the slider's notch",
   // The new key wins over a stale legacy value, in both directions.
   const fresh = load({ stored: { brakeCue: "on", lineBrakeCue: "off" } });
   assert.equal(fresh.M.brakeCue(), false, "the new key is the truth once written");
+  // ...and the other way too: a stale legacy "off" must not veto a new "on".
+  // One direction alone passes for a loader that simply ignores the new key.
+  const on = load({ stored: { brakeCue: "off", lineBrakeCue: "on" } });
+  assert.equal(on.M.brakeCue(), true, "the new key wins in both directions");
 });
 
 test("it wires on DOMContentLoaded when the document is still loading", () => {
