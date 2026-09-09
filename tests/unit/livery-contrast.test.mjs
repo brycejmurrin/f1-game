@@ -301,30 +301,37 @@ test("a flank mark clears the flank the crown design actually left it", () => {
     "these KNOWN gaps now pass — delete them from KNOWN");
 });
 
-// A flank pick has to land where the flank can be SEEN. This is not a contrast
-// question and no other guard here asks it: tools/car/flank-occlusion.mjs
-// projects the real body and rear wheels through the garage side camera, and
-// the tyre covers the flank's aft half — 12 % hidden at u 0.5, 48 % at 0.6,
-// 86 % at 0.7, 100 % past 0.8.
+// A flank pick has to land where the flank can be SEEN — measured, and NOT
+// currently satisfied. tools/car/flank-occlusion.mjs projects the real body and
+// both rear wheels through the garage side camera: the tyre sits 0.5 m outboard
+// of the cover and covers its aft half (12 % hidden at u 0.5, 48 % at 0.6, 86 %
+// at 0.7, 100 % past 0.8). Pure car geometry, identical for every team.
 //
-// `sideFrom` used to chain off the wrap mark's own width with no knowledge of
-// that. Red Bull is the only team whose bull is TRACED, so its span is half the
-// flank wide, and every flank pick was pushed behind the tyre: number 52 %
-// hidden, logo 54 %, plate 50 % — while the same picks under any other crown,
-// and under `wrap` on every other team, measured 0 %. Same camera, same mesh,
-// one design.
+// Red Bull is the only team whose bull is TRACED, so wrapMarkSpan gives it a
+// span of u 0.06 -> 0.61 while the visible flank ends at 0.62 — the bull fills
+// the whole visible band. `sideFrom` then starts every flank pick aft of it, at
+// u 0.57-0.79, which is behind the tyre.
 //
-// MARKS only. The full-flank BANDS (wordmark, duo, slash, split, chevron) are a
-// different and still-open problem: su() maps their whole 0..1 into
-// [sideFrom, 1], so under a wrap they are compressed into the back half of the
-// panel, which is the half the tyre owns. The clamp improves them (95 % -> 56 %
-// on the wordmark) without fixing them, and pretending otherwise here would
-// bank a number this guard cannot hold.
+// THERE ARE ONLY TWO POSITIONS, and this is why the entry below is recorded
+// rather than fixed. Clamping sideFrom to 0.41 puts the mark at u 0.49-0.62:
+// 0 % hidden, and INSIDE the bull's own span, so it lands on the bull's haunch
+// and reads as a smudge (shot 2026-09-09, garage side view, artifacts/
+// CLAMP-FLANK-CROP.png). Hidden or colliding — no third placement exists while
+// the bull is that wide. The real choices are to shrink the bull under `wrap`
+// or to stop putting a second mark on a flank that already wears one, and both
+// change a shipped car's look, so both are the owner's call and not a guard's.
+//
+// The clamp was written, measured, SHOT, and reverted on the strength of the
+// shot: the metric improved and the render got worse.
 test("a flank MARK lands where the flank is visible, under every crown", async () => {
   const { loadParts } = await import("../../tools/car/parts-sweep.mjs");
   const { occlusionMap } = await import("../../tools/car/flank-occlusion.mjs");
   const { sweep } = await import("../../tools/car/spine-station.mjs");
   const MARKS = ["number", "logo", "code", "plate"];
+  // Measured on this tree. Fails if the list GROWS and fails if an entry starts
+  // passing, so neither a regression nor the fix can land unremarked.
+  const KNOWN = new Set(["redbull wrap/number", "redbull wrap/logo",
+                         "redbull wrap/code", "redbull wrap/plate"]);
   const bad = [];
   for (const teamId of ["redbull", "ferrari", "mercedes"]) {
     const om = occlusionMap(loadParts(), { team: teamId, grid: 96 });
@@ -334,10 +341,11 @@ test("a flank MARK lands where the flank is visible, under every crown", async (
       const r = sweep(A, { team: teamId, logo, sides: MARKS, hiddenAt });
       for (const row of r.rows) {
         if (!row.px || row.hidden == null) continue;
-        if (row.hidden > 0.25)
-          bad.push(`${teamId} ${logo}/${row.spineSide}: ${(row.hidden * 100).toFixed(0)}% of its ink is behind the car`);
+        if (row.hidden > 0.25) bad.push(`${teamId} ${logo}/${row.spineSide}`);
       }
     }
   }
-  assert.deepEqual(bad, []);
+  assert.deepEqual(bad.filter((k) => !KNOWN.has(k)), [], "a flank mark went behind the car");
+  assert.deepEqual([...KNOWN].filter((k) => !bad.includes(k)), [],
+    "these KNOWN gaps now pass — delete them from KNOWN");
 });

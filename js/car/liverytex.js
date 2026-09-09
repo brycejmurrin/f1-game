@@ -2151,30 +2151,8 @@ const LiveryTex = (function () {
     // authored front-to-rear landed its wordmarks across the bull's legs. `su`
     // is the side band's own 0→1 along the flank; under the wrap it starts
     // aft of the bull, everywhere else it is the whole flank.
-    // WHERE THE FLANK STOPS BEING VISIBLE, measured — not a guess and not a
-    // taste call. tools/car/flank-occlusion.mjs projects the real body and both
-    // rear wheels through the garage SIDE camera: the hidden share of the flank
-    // runs 12 % at u 0.5, 48 % at 0.6, 86 % at 0.7 and 100 % past 0.8, because
-    // the rear tyre sits 0.5 m outboard of the cover and projects straight over
-    // its aft half. It is pure car geometry, so it is the same for every team
-    // and every crown design (verified across four teams).
-    const FLANK_SEEN_U1 = 0.62;
-    // …and a design must be PLACED inside that, not merely offset past whatever
-    // precedes it. `sideFrom` means "start aft of the wrap's mark", which is a
-    // chain with no knowledge of where the panel ends: the bull is the only
-    // TRACED mark on the roster, so wrapMarkSpan returns a span half the flank
-    // wide for Red Bull alone, and every flank pick walked off the edge behind
-    // the tyre. Measured before this clamp, Red Bull `wrap`: number 52 % hidden,
-    // logo 54 %, plate 50 %, wordmark 95 %, slash 100 % — against 0 % for the
-    // same picks under any other crown, and 0 % for Ferrari under `wrap`.
-    // The cap is what leaves a standard mark inside the seen band: the mark
-    // centres at su(F, 0.19) and runs about ±0.10, so the aft edge is
-    // S + 0.19(1−S) + 0.10, and holding that at FLANK_SEEN_U1 gives S ≈ 0.41.
-    // A wide mark now COSTS the design behind it some separation rather than
-    // costing it visibility — the trade this had backwards.
-    const SIDE_FROM_MAX = 0.41;
     const sideFrom = spineLogo === "wrap"
-      ? Math.min(SIDE_FROM_MAX, (() => { const s = wrapMarkSpan(teamId); return s.u0 + s.uLen; })()) : 0;
+      ? (() => { const s = wrapMarkSpan(teamId); return s.u0 + s.uLen; })() : 0;
     const su = (F, u) => F.fx(sideFrom + u * (1 - sideFrom));
     const sbox = (F, u0, u1, v0, v1) => {
       const xa = su(F, u0), xb = su(F, u1);
