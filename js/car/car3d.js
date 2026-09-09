@@ -2119,6 +2119,15 @@ const Car3D = (function () {
     };
   }
 
+
+  function applyBodySplit(out, i0, i1, leftC, rightC) {
+    for (let i = i0; i < i1; i++) {
+      if (out.mat[i] !== SURFACES.paint) continue;
+      const c = out.pos[i * 3] < 0 ? leftC : rightC;
+      out.col[i * 3] = c[0]; out.col[i * 3 + 1] = c[1]; out.col[i * 3 + 2] = c[2];
+    }
+  }
+
   function build(color, color2, opts) {
     const noWheels = opts && opts.noWheels;
     const teamId = opts && opts.teamId;
@@ -2174,6 +2183,10 @@ const Car3D = (function () {
     // black. Absent = c1, today's look. The atlas inks the crest against this too
     // (liverytex `coverPaint`), or a light cover would swallow a light crest.
     const coverC = _ckAcc(liv.cover) || c1;
+    // BODY SPLIT (liv.bodySplit === "lr"): Cadillac-style L/R body. Left (x<0)
+    // keeps c1, right (x>=0) takes c2. Applied as a paint-only recolour over the
+    // chassis→livery sections so carbon / wings / glass stay untouched.
+    const bodySplitLR = liv.bodySplit === "lr";
     const haloTint = _ckAcc(liv.halo) || null;
     const T = (opts && opts.parts) || {};
     const tier = (id) => T[id] != null ? T[id] : 1;
@@ -2198,6 +2211,7 @@ const Car3D = (function () {
     const ckpt = opts && opts.cockpit;   // hoisted: buildSharedChassis needs it
 
     part("chassis");
+    const bodySplitFrom = out.pos.length / 3;
     const rideDY = suspStyle ? suspStyle.ride : (suspT === 0 ? 0.060 : suspT === 2 ? -0.048 : 0);
     buildSharedChassis(out, c1, rideDY, styledNoseStations(teamStyle), ckpt);
 
@@ -2991,6 +3005,8 @@ const Car3D = (function () {
            deckF.z, 0, deckF.top + 0.010, Math.min(0.28, deckF.topSide*1.75), 0.018, c1);
     const camPod = anchors.noseAt(1.55);
     addBox(out, 0, camPod.top + 0.045, 1.55, 0.06, 0.08, 0.15, DARK);
+
+    if (bodySplitLR) applyBodySplit(out, bodySplitFrom, out.pos.length / 3, c1, c2);
 
     part("cockpit");
     // NONE OF THIS BELONGS IN THE FIRST-PERSON BUILD. The cockpit body is its

@@ -164,7 +164,8 @@ const Teams = (function () {
     },
     {
       id: "cadillac", name: "Cadillac", short: "CAD",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "saddle", spineSide: "plate",
+                bodySplit: "lr" },
       color: [0.039, 0.039, 0.039], color2: [0.961, 0.961, 0.961], /* black #0A0A0A / white #F5F5F5 */
       engine: "Ferrari", tier: 4,
       stats: { speed: 73, accel: 73, cornering: 73, braking: 72 },

@@ -50,7 +50,7 @@ out of using it, and both are load-bearing:
 | Racing Bulls | same as body (white) | **APPLIED**: `spineLogo: "streaks"` + `spineTint` blue on the white cover. |
 | Haas | same as body (white) | The cover is named only as a branding location. |
 | Red Bull | same as body (gloss blue) | Already carries its own treatment (`spineLogo: "wrap"`, `spineHeight: "dorsal"`, `finShape: "none"`). |
-| Cadillac | body is split LEFT/RIGHT | The cover follows a black/white split down the centreline. **We cannot express this**: the livery model has no per-side body colour. A real feature request, not a colour. |
+| Cadillac | body is split LEFT/RIGHT | **APPLIED**: `bodySplit: "lr"` — left (x<0) primary, right (x≥0) secondary. Mesh paint recolour in Car3D. |
 
 ## What the photograph settled (Williams)
 
@@ -173,9 +173,9 @@ covers in the tree. The container's egress denies those hosts; use a remote
 browser. Do not invent colours.
 
 **Still open (photo-grounded, no invented design):**
-- Cadillac L/R body split — model has no per-side body colour (Task 4: `bodySplit: "lr"`).
 - Alpine pink crown stripe — single-source; waits a second source (`spineTint` exists).
 
 **Applied this pass:**
+- Cadillac L/R body — `bodySplit: "lr"` (Car3D paint recolour by sign(x)).
 - Racing Bulls blue *streaks* — `spineLogo: "streaks"` + `spineTint` (blue on white cover).
 - W17-style SIDE `slash` — restored as ONE raked stroke in `SPINE_SIDE_IDS`. Mercedes stays on `sash`.
