@@ -40,14 +40,18 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src, /settleGarage/, "settle soft-present between presets");
   assert.match(src, /isLive|argv\.includes\("--live"\)/, "supports --live github.io capture");
   assert.match(src, /labelShot|buildContactSheet/, "writes labeled PNGs and a contact sheet");
-  assert.match(src, /withLabels = isLive/, "labels default on for --live only");
+  assert.match(src, /withLabels = \(isLive \|\| \(multiTeam && rollupOnly\)\)/,
+    "labels default on for --live and multi-team rollup surveys");
   assert.match(src, /--design=/, "repeatable --design=logo:side pairs");
   assert.match(src, /--list-ids|printHelp/, "documents ids via --list-ids/--help");
   assert.doesNotMatch(src, /const COMBOS/, "no hardcoded named combo presets");
   assert.match(src, /garageParts|--part=/, "supports parts overrides");
   assert.match(src, /wings:\s*\[/, "wings view group for aero surveys");
   assert.match(src, /expandTokenList|readLiverytexIds/, "spine-side=all expands SPINE_SIDE_IDS");
-  assert.match(src, /parseTeams|teamArg === "all"|arg === "all"/, "supports --team=all roster walk");
+  assert.match(src, /parseTeams|arg === "all"/, "supports --team=all roster walk");
+  assert.match(src, /all\+custom|fullRoster/, "supports --team=all+custom (12 cars)");
+  assert.match(src, /--reset/, "supports --reset to wipe output dir");
+  assert.match(src, /rollupEntries\.push/, "rollup entries for catalog livery too");
   assert.match(src, /buildTeamRollup/, "multi-team rollup contact sheet");
   assert.match(src, /rollupOnly/, "multi-team defaults to rollup-only survey");
   assert.match(src, /skipAwait:\s*true/, "skips duplicate present wait after settle");

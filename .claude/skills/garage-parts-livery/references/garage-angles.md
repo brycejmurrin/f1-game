@@ -19,6 +19,7 @@ node tools/shot/garage-angles.mjs --help
 | flag | meaning |
 |---|---|
 | `--team=redbull\|all` | one team, comma list, or full 2026 grid (11 teams) |
+| `--team=all+custom\|*` | grid + My Team (12 cars) |
 | `--views=side` | preset or group: `spine`, `wings`, `front`, `rear`, `livery`, `aero`, `all` |
 | `--zoom=N` | `#cs-view-in` clicks after preset (8 ≈ 4.6 m floor on side) |
 | `--pan=strafe,dolly` | `#cs-pan-*` clicks after preset (`5,0` walks aft on flank) |
@@ -76,6 +77,7 @@ Pick **one** style:
 --live                            # github.io
 --oracle                          # offline flank-occlusion % on rollup labels
 --resume                          # skip teams already captured
+--reset                           # wipe --out and reshoot everything
 --no-labels | --labels
 --team-sheets | --label-shots
 ```
@@ -112,6 +114,17 @@ node tools/shot/garage-angles.mjs --team=all \
   --spine-logo=wrap,bigmark,wedge,saddle --spine-side=none \
   --views=spine --rollup-view=top
 ```
+
+**Default rear wings — all 12 teams (grid + My Team):**
+
+```sh
+node tools/shot/garage-angles.mjs --team=all+custom \
+  --views=wingRear --livery=default --reset \
+  --out=artifacts/rear-wing-all
+```
+
+Rollup view auto-matches `--views=wingRear`. Add `--zoom=2` for tighter crop,
+`--aero-x` for open flaps, or `--live` for github.io.
 
 **Active aero + extreme rear wing:**
 

@@ -26,7 +26,7 @@
 //
 // Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
 // under SwiftShader (document.fonts.ready after freeze).
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -74,8 +74,10 @@ Usage:
   node tools/shot/garage-angles.mjs [--team=ID|all] [--views=…] [--out=dir] [flags…]
 
 Teams / resume:
-  --team=redbull,mclaren|all     roster walk (all = 11 grid teams, not custom)
+  --team=redbull,mclaren|all     roster walk (all = 11 grid teams)
+  --team=all+custom|*            grid + My Team (12 cars)
   --resume                       skip teams already in meta/PNG
+  --reset                        wipe --out before shooting (ignore --resume)
   --picker-team                  use #teampicker UI instead of __apex.garageTeam
 
 Spine designs (custom shot livery — pick one style or combine):
@@ -109,6 +111,8 @@ Examples:
   node tools/shot/garage-angles.mjs --team=redbull --spine-logo=wrap \\
     --spine-side=duo,slash,logo --views=side --zoom=8 --pan=5,0 --full-views
   node tools/shot/garage-angles.mjs --team=mclaren --views=wings --part=aero:extreme --aero-x
+  node tools/shot/garage-angles.mjs --team=all+custom --views=wingRear \\
+    --livery=default --labels --reset --out=artifacts/rear-wing-all
 `);
 }
 
@@ -156,17 +160,25 @@ function rosterIds() {
   return Array.from(block[1].matchAll(/^      id: "([a-z]+)",/gm)).map((m) => m[1]);
 }
 
+function fullRoster() {
+  return [...rosterIds(), "custom"];
+}
+
 function parseTeams(arg) {
-  const ids = rosterIds();
-  if (arg === "all") return ids;
-  const picked = arg.split(",").map((s) => s.trim()).filter(Boolean);
-  for (const id of picked) {
-    if (!ids.includes(id)) {
-      console.error(`no team "${id}" — available: ${ids.join(", ")}`);
+  const grid = rosterIds();
+  if (arg === "all") return grid;
+  if (arg === "*" || arg === "all+custom" || arg === "all,*") return fullRoster();
+  const picked = [];
+  for (const raw of arg.split(",").map((s) => s.trim()).filter(Boolean)) {
+    if (raw === "all") picked.push(...grid);
+    else if (raw === "all+custom" || raw === "*") picked.push(...fullRoster());
+    else if (raw === "custom" || grid.includes(raw)) picked.push(raw);
+    else {
+      console.error(`no team "${raw}" — grid: ${grid.join(", ")}, or custom, or all/all+custom`);
       process.exit(1);
     }
   }
-  return picked;
+  return [...new Set(picked)];
 }
 
 const teamArg = flag("--team", "mclaren");
@@ -207,19 +219,21 @@ const teams = parseTeams(teamArg);
 const multiTeam = teams.length > 1;
 const hasDesignFlags = argv.some((a) => a.startsWith("--design="))
   || hasFlag("--spine-side") || hasFlag("--spine-logo");
-const rollupView = flag("--rollup-view", "side");
 const rollupOnly = argv.includes("--rollup-only")
   || (multiTeam && !hasFlag("--views") && !argv.includes("--full-views"));
 const isFastMode = argv.includes("--fast") || (multiTeam && !argv.includes("--slow"));
+const rollupViewFlag = hasFlag("--rollup-view") ? flag("--rollup-view", "side") : null;
 const viewsDefault = rollupOnly
-  ? rollupView
+  ? (rollupViewFlag || "side")
   : (hasDesignFlags && !hasFlag("--views") ? "spine" : (isLive ? "all" : "spine"));
 const rawViews = flag("--views", viewsDefault).split(",").map((s) => s.trim()).filter(Boolean);
 const zoomDefault = isLive && !hasFlag("--zoom") ? 6 : 0;
 const panDefault = isLive && !hasFlag("--pan") ? "3,0" : "0,0";
 const zoom = Number(hasFlag("--zoom") ? flag("--zoom", "0") : String(zoomDefault)) || 0;
 const [strafe = 0, dolly = 0] = (hasFlag("--pan") ? flag("--pan", "0,0") : panDefault).split(",").map(Number);
-const withLabels = isLive ? !argv.includes("--no-labels") : argv.includes("--labels");
+const withLabels = (isLive || (multiTeam && rollupOnly))
+  ? !argv.includes("--no-labels")
+  : argv.includes("--labels");
 const labelEachShot = withLabels && (!multiTeam || argv.includes("--label-shots") || argv.includes("--full-views"));
 const teamSheets = withLabels && (!multiTeam || argv.includes("--team-sheets") || argv.includes("--full-views"));
 const useStoreTeam = !argv.includes("--picker-team") && (isFastMode || multiTeam);
@@ -230,9 +244,10 @@ const settleSwitch = isFastMode ? 3 : 12;
 
 function teamIndex(id) {
   const ids = rosterIds();
+  if (id === "custom") return ids.length;
   const i = ids.indexOf(id);
   if (i < 0) {
-    console.error(`no team "${id}" — available: ${ids.join(", ")}`);
+    console.error(`no team "${id}" — available: ${ids.join(", ")}, custom`);
     process.exit(1);
   }
   return i;
@@ -253,6 +268,10 @@ if (rollupOnly && multiTeam && spineLogos.length > 1) {
   spineLogos = [pick];
 }
 const views = [...new Set(rawViews.flatMap((v) => GROUPS[v] || [v]))];
+const rollupView = rollupViewFlag
+  || (views.length === 1 ? views[0]
+    : (views.includes("wingRear") ? "wingRear"
+      : (views.includes("side") ? "side" : views[0])));
 const bad = views.filter((v) => !ALL.includes(v));
 if (bad.length) {
   console.error(`Unknown view(s): ${bad.join(", ")}\nAvailable: ${ALL.join(", ")} + groups ${Object.keys(GROUPS).join(", ")}`);
@@ -633,6 +652,14 @@ async function captureDesigns(page, teamId, teamLabel, { liveBuild, rollupEntrie
         shots.push(s);
         console.log(`shot ${teamId}/${liv}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} -> ${s.png}${s.labeled ? " +" + s.labeled : ""}`);
       }
+      if (rollupEntries && views.includes(rollupView)) {
+        const pick = tagShots.find((s) => s.view === rollupView);
+        if (pick) {
+          rollupEntries.push({
+            teamId, teamLabel, design: name, png: pick.png, view: rollupView,
+          });
+        }
+      }
       if (teamSheets) {
         const sheet = await buildContactSheet(tagShots, { teamId, tag: liv, liveBuild, teamLabel });
         if (sheet) sheets.push(sheet);
@@ -643,6 +670,10 @@ async function captureDesigns(page, teamId, teamLabel, { liveBuild, rollupEntrie
 }
 
 async function main() {
+  if (argv.includes("--reset") && existsSync(outDir)) {
+    rmSync(outDir, { recursive: true, force: true });
+    console.log(`reset: cleared ${outDir}`);
+  }
   mkdirSync(outDir, { recursive: true });
   let gameUrl;
   let liveBuild = null;
@@ -664,7 +695,7 @@ async function main() {
   if (Object.keys(partsOverrides).length) console.log(`parts: ${JSON.stringify(partsOverrides)}`);
   if (Object.keys(livOverrides).length) console.log(`liv overrides: ${JSON.stringify(livOverrides)}`);
   if (aeroX) console.log("aero-x: flaps open (X-mode)");
-  const resumeSet = resumeTeamSet();
+  const resumeSet = argv.includes("--reset") ? new Set() : resumeTeamSet();
   const workTeams = resumeSet.size
     ? teams.filter((t) => !resumeSet.has(t))
     : teams;
