@@ -402,6 +402,18 @@ jobs:
             // which is the state its own code comment predicts reads black.
             // REPORTED, NOT GATED: the structural gate goes in once a run says
             // which, and a brightness floor never does (see the header).
+            // WHAT THE CUBE HOLDS, read back from envRT rather than asserted.
+            // envBlank above is a BRANCH MARKER (set only on the software clear
+            // path), so on hardware it says false after every latch and proves
+            // nothing. Run 75 cleared the mip chain and left the world at 2.9,
+            // so this row is the next question: a world, or a void.
+              if (env.cube && env.cube.faces) {
+                const f = env.cube.faces.map((c) => c.m).join("/");
+                rows.push(`${" ".repeat(8)}cube:  mean=${env.cube.mean} max=${env.cube.max} hdr=${env.cube.hdr} faces=${f}`
+                  + (env.cube.max <= 0.002 ? "   <- the cube is BLACK: the probe captured nothing" : ""));
+              } else if (env.cube && env.cube.error) {
+                rows.push(`${" ".repeat(8)}cube:  readback FAILED: ${String(env.cube.error).slice(0, 90)}`);
+              }
               if (env.mipFn != null) {
                 rows.push(`${" ".repeat(8)}mip:   fn=${env.mipFn} via=${env.mipWhere} ran=${env.mipRan}`
                   + (env.mipErr ? ` err=${String(env.mipErr).slice(0, 120)}` : "")

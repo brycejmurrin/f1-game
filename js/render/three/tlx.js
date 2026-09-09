@@ -1635,6 +1635,14 @@ const TLX = (function () {
       // answers whether the guard fires, instead of a code read of a minified
       // bundle guessing where generateMipmaps is defined.
       let _envMipFn = "?", _envMipRan = 0, _envMipErr = "", _envMipWhere = "?";
+      // WHAT IS ACTUALLY IN THE CUBE. envState().blank is NOT this: _envBlank is a
+      // BRANCH MARKER set only on the software clear path, so on real hardware it
+      // reads false after every latch by construction and has never been evidence
+      // about content. Run 75 cleared the mip chain (mipRan 90, cube latched,
+      // world still 2.9), so the open question is whether the faces hold a world
+      // or a void, and only a readback answers it. ONCE per session: six 64px
+      // faces is ~200 KB and the answer does not change frame to frame.
+      let _envCube = null, _envCubeRead = false;
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -2480,6 +2488,37 @@ const TLX = (function () {
           _envBegins++;
           return _envInvArr;
         },
+        readEnvCube() {
+          if (_envCubeRead || !envRT || typeof renderer.readRenderTargetPixelsAsync !== "function") return;
+          _envCubeRead = true;
+          const half = (h) => {            // IEEE 754 binary16 -> Number
+            const sg = (h & 0x8000) ? -1 : 1, ex = (h >> 10) & 0x1f, fr = h & 0x3ff;
+            if (ex === 0) return sg * Math.pow(2, -14) * (fr / 1024);
+            if (ex === 31) return fr ? NaN : sg * Infinity;
+            return sg * Math.pow(2, ex - 15) * (1 + fr / 1024);
+          };
+          (async () => {
+            const faces = [];
+            for (let f = 0; f < 6; f++) {
+              const px = await renderer.readRenderTargetPixelsAsync(envRT, 0, 0, ENV_SIZE, ENV_SIZE, f);
+              const isHalf = !!px && px.BYTES_PER_ELEMENT === 2;
+              let sum = 0, mx = 0, n = 0;
+              for (let i = 0; i + 3 < px.length; i += 4) {
+                const r = isHalf ? half(px[i]) : px[i] / 255;
+                const g = isHalf ? half(px[i + 1]) : px[i + 1] / 255;
+                const b = isHalf ? half(px[i + 2]) : px[i + 2] / 255;
+                const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                sum += y; if (y > mx) mx = y; n++;
+              }
+              faces.push({ m: +(sum / Math.max(1, n)).toFixed(4), x: +mx.toFixed(4) });
+            }
+            _envCube = {
+              faces, hdr: !!(post && post.hdrOk()),
+              mean: +(faces.reduce((a, v) => a + v.m, 0) / 6).toFixed(4),
+              max: +Math.max.apply(null, faces.map((v) => v.x)).toFixed(4),
+            };
+          })().catch((e) => { _envCube = { error: String((e && e.message) || e).slice(0, 80) }; });
+        },
         envFaceEnd(face) {
           if (!envRT || !envCubeCam || !_envActive) {
             _envActive = false;
@@ -2632,6 +2671,9 @@ const TLX = (function () {
               try { _mipVia.generateMipmaps(envRT.texture); _envMipRan++; }
               catch (e) { _envMipErr = (e && e.message) || String(e); }   // lod 0 still works
             }
+            // Measure the cube ONCE, right after it is complete and mipped —
+            // this is the state the lit pass will actually sample.
+            try { this.readEnvCube(); } catch (_) { /* diagnostics never cost a frame */ }
           }
           _restoreEnvFrame();
         },
@@ -3400,6 +3442,7 @@ const TLX = (function () {
               mask: envFacesMask, begins: _envBegins, ends: _envEnds,
               fail: _envFailN, failMsg: _envFailMsg,
               mipFn: _envMipFn, mipRan: _envMipRan, mipErr: _envMipErr, mipWhere: _envMipWhere,
+              cube: _envCube,
               badProbes: _envBadProbes, gaveUp: _envGaveUp,
             };
           },
