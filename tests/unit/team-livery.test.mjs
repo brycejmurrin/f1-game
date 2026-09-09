@@ -38,6 +38,38 @@ test("no team record declares `livery:` twice", () => {
   }
 });
 
+test("the duplicate-key scanner knows what is and is not a duplicate", () => {
+  // It found a real bug twice, and it was WRONG four times in one afternoon —
+  // template literals read as objects, `//` in a URL truncating its line, a
+  // blanked string turning `case "x":` into a key, and 132 getter/setter pairs
+  // reported as duplicates. It is a parser now, and these are the cases each
+  // of those bugs produced. A checker nobody trusts gets switched off.
+  const keys = (src) => scanFile(src, "t.js").map((h) => h.key);
+
+  assert.deepEqual(keys('const a = { x: 1, y: 2, x: 3 };'), ["x"], "the real thing");
+  assert.deepEqual(keys('const a = { "p/q": 1, "p/q": 2 };'), ["p/q"], "string keys count too");
+  assert.deepEqual(keys('const a = { x: 1 }; const b = { x: 2 };'), [], "two objects are not one");
+  assert.deepEqual(keys('const a = { o: { x: 1 }, x: 2 };'), [], "nested is a different object");
+
+  // Accessors: a get/set PAIR is legal and is how the G facade is written.
+  assert.deepEqual(keys('const a = { get v() { return 1; }, set v(n) {} };'), [],
+    "a getter and its setter share a key legally");
+  assert.deepEqual(keys('const a = { get v() { return 1; }, get v() { return 2; } };'), ["v"],
+    "two getters do collide");
+  assert.deepEqual(keys('const a = { v: 1, get v() { return 2; } };'), ["v"],
+    "a value beside an accessor collides");
+
+  // The three scanner bugs, as source that used to trip them.
+  assert.deepEqual(keys('const css = `tr:hover td { color: red; }\ntr:hover th { color: blue; }`;'), [],
+    "a template literal is text, not an object");
+  assert.deepEqual(keys('const a = { api: "https://x.example/a", list: (q) => `https://x.example/${q}` };'), [],
+    "the // in a URL is not a comment");
+  assert.deepEqual(keys('function f(k) { switch (k) { case "a": return 1; case "b": return 2; } }'), [],
+    "switch labels are not keys");
+  assert.deepEqual(keys('const re = /["\'`]/; const a = { x: 1, x: 2 };'), ["x"],
+    "a regex literal full of quotes does not desync the parse");
+});
+
 test("no object literal in js/ declares the same key twice", () => {
   // The GENERAL case of the test above. The hazard is not about liveries: it is
   // that git merges two additions to one object literal without a conflict and

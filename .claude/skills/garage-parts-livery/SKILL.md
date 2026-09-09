@@ -107,7 +107,36 @@ node tools/ci/test-bg.mjs car
 node tools/ci/test-bg.mjs modes              # research locks / ownership UI — no test:career
 node tools/car/audit-parts.mjs [--cats=engine,aero]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
+node tools/shot/shot.mjs bahrain 0.06 orbit out.png --team audi --dist 5.5 --el 26 --az 205
 ```
+
+### A COVER DESIGN IS ONLY HALF-GUARDED
+
+`tests/unit/cover-legibility.test.mjs` measures the atlas: for every shipped
+default it takes the colour covering most of the crown and flank and scores it
+against the cover it lands on. That is the half that VARIES per team — team
+paint against a `liv.cover` override — and it earned its place by catching a
+white saddle on Ferrari's pale cover and teal stripes on Mercedes' silver one,
+both already merged, in about a second.
+
+It is blind to PLACEMENT, by construction. Audi's `twin` stripes score 17
+against black and are invisible anyway, because they sit on the shoulders where
+the cover curves away from a rear three-quarter camera. No colour metric can
+see that.
+
+Placement is a property of the DESIGN, not the team — the geometry is identical
+on all twelve cars — so it is answered once per design rather than per livery,
+and it does not belong in CI. **When you add a crown or flank design, or move
+an existing one's geometry, shoot it on track** with `shot.mjs --team` and look.
+A 430 px atlas crop flatters a graphic that a race camera renders as forty
+pixels of mud: `carbon` and `bigmark` both passed every test and every atlas
+review, and neither existed at racing distance.
+
+Scripting the studio instead? `CARVIEW.set({livery})` takes an id OR a livery
+object; an id that matches nothing warns and renders the default rather than
+pretending. It silently ignored objects until 2026-09-09, which is worth
+knowing if you find an old script that varies a field and photographs the same
+car every time.
 
 Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **career-mode**,
 **tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.
