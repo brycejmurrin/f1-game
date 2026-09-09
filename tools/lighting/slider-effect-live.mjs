@@ -209,12 +209,6 @@ export function recipeForKnob(knob) {
   return r;
 }
 
-/** Back-compat: track/tod/weather/frac only. */
-export function defaultRecipe(knob) {
-  const r = recipeForKnob(knob);
-  return { track: r.track, tod: r.tod, weather: r.weather, frac: r.frac };
-}
-
 export function pickPush(def, fromVal) {
   if (fromVal != null && Number.isFinite(fromVal)) return fromVal;
   const lo = Number(def.min), hi = Number(def.max), mid = Number(def.def);

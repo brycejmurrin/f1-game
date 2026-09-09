@@ -241,23 +241,24 @@ function nearPolyline(sub, px, py, half) {
 // the same way — an op erased by its clip is not paint.
 // Used by tests/unit/cover-legibility.test.mjs to ask what colour a design
 // actually shows against the body it sits on.
-export function paintAt(ops, px, py) {
-  let style = null;
-  for (const op of ops) {
-    if (op.clip) {
-      let out = false;
-      for (const c of op.clip) {
-        const w = winding(c.pts, px, py);
-        if (!(c.rule === "evenodd" ? w.evenodd : w.nonzero)) { out = true; break; }
-      }
-      if (out) continue;
-    }
-    if (op.kind === "stroke") { if (nearPolyline(op.pts, px, py, op.lw / 2)) style = op.style; }
-    else {
-      const w = winding(op.pts, px, py);
-      if (op.rule === "evenodd" ? w.evenodd : w.nonzero) style = op.style;
+// Does this ONE op cover the point — clip honoured, stroke width honoured? The
+// same test was written out three times (paintAt, paintStackAt, inked) and only
+// the accumulator differed, so the three could drift apart silently while all
+// three looked right. One copy, three callers.
+function hitAt(op, px, py) {
+  if (op.clip) {
+    for (const c of op.clip) {
+      const w = winding(c.pts, px, py);
+      if (!(c.rule === "evenodd" ? w.evenodd : w.nonzero)) return false;
     }
   }
+  if (op.kind === "stroke") return !!nearPolyline(op.pts, px, py, op.lw / 2);
+  const w = winding(op.pts, px, py);
+  return !!(op.rule === "evenodd" ? w.evenodd : w.nonzero);
+}
+export function paintAt(ops, px, py) {
+  let style = null;
+  for (const op of ops) if (hitAt(op, px, py)) style = op.style;
   return style;
 }
 // The colour a point ACTUALLY ends up, composited over `bg` in paint order.
@@ -266,32 +267,25 @@ export function paintAt(ops, px, py) {
 // weave over its own near-black panel, and reading either the top op alone or
 // the top op blended with the COVER both give an answer the screen disagrees
 // with. Every covering op is blended in order instead, which is what a canvas
-// does. `bg` and the result are 0..1 rgb triples.
+// does. `bg` and `rgb` are 0..1 rgb triples.
+//
+// Returns `top` as well, which is exactly what paintAt would have said, because
+// the caller wants both and one walk produces both. The legibility sweep asks
+// "did anything paint here" and "what colour is here" at every sample point, and
+// calling paintAt beside this walked the whole op stack TWICE per pixel — about
+// 440k redundant walks and half the suite's 28 s, for a fact already in hand.
 export function paintStackAt(ops, px, py, bg) {
-  let out = bg.slice();
+  let out = bg.slice(), top = null;
   for (const op of ops) {
-    if (op.clip) {
-      let outside = false;
-      for (const c of op.clip) {
-        const w = winding(c.pts, px, py);
-        if (!(c.rule === "evenodd" ? w.evenodd : w.nonzero)) { outside = true; break; }
-      }
-      if (outside) continue;
-    }
-    let hit;
-    if (op.kind === "stroke") hit = nearPolyline(op.pts, px, py, op.lw / 2);
-    else {
-      const w = winding(op.pts, px, py);
-      hit = op.rule === "evenodd" ? w.evenodd : w.nonzero;
-    }
-    if (!hit) continue;
+    if (!hitAt(op, px, py)) continue;
+    top = op.style;
     const m = /rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:[, ]+([\d.]+))?/.exec(op.style || "");
     if (!m) continue;                       // an image draw carries no flat colour
     const a = m[4] === undefined ? 1 : +m[4];
     const c = [+m[1] / 255, +m[2] / 255, +m[3] / 255];
     out = out.map((v, i) => c[i] * a + v * (1 - a));
   }
-  return out;
+  return { rgb: out, top };
 }
 function inked(ops, px, py) {
   for (const op of ops) {

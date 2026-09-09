@@ -18,6 +18,7 @@
  *   node tools/ci/test-bg.mjs --wait                # block until all groups finish
  *   node tools/ci/test-bg.mjs --wait smoke api      # start each, wait, then next
  *   node tools/ci/test-bg.mjs --stop                # kill everything still running
+ *   node tools/ci/test-bg.mjs --stop --sweep        # ...and hunt orphans whose supervisor is already dead
  *
  * Default is SEQUENTIAL (one group at a time). `--parallel` restores the old
  * core-capped concurrent start. AGENTS.md: ONE Playwright process, ONE browser
@@ -33,7 +34,7 @@
  * is groups × workers. WORKERS defaults to 1 on ≤4 cores (2 above); keep concurrent
  * groups at 1 unless you know the box is quiet.
  */
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -183,13 +184,41 @@ async function waitForRunning() {
 // spawn() uses `detached: true`, which makes each child a process-group leader
 // with pgid === pid, so a negative pid signals the whole tree. SIGTERM first so
 // Playwright can close its browsers, then SIGKILL anything still up.
-function stop({ graceMs = 4000 } = {}) {
+// THE REGISTRY IS NOT THE WHOLE TRUTH once someone has killed a supervisor by
+// hand. `--stop` can only signal pids it has recorded, and a `kill <pid>` on
+// the run leaves the registry entry pointing at a corpse while the children —
+// run-playwright, the Playwright runner, its workers, every Chromium — go on
+// burning CPU. Measured 2026-09-09: 8 Chromiums at ~290 % held the box above
+// the deploy's load gate and `--stop` would have reported "0 run group(s)".
+// --sweep is the recovery: hunt the SHAPES this tool launches, skipping the
+// harness's own MCP browsers (they idle at 0 % and are not ours to kill) and
+// this process itself.
+const SWEEP_RE = /(run-playwright\.mjs|playwright\/lib\/worker\/workerProcessEntry|node_modules\/\.bin\/playwright test|pw-browsers\/.*chrome-linux\/chrome)/;
+function sweep() {
+  let out = "";
+  try { out = execSync("ps -eo pid,args", { encoding: "utf8", maxBuffer: 1 << 24 }); } catch (_) { return 0; }
+  const mine = [];
+  for (const line of out.split("\n").slice(1)) {
+    const m = /^\s*(\d+)\s+(.*)$/.exec(line);
+    if (!m) continue;
+    const pid = +m[1], args = m[2];
+    if (pid === process.pid || pid === process.ppid) continue;
+    if (/playwright-mcp|chrome-devtools-mcp/.test(args)) continue;   // the harness's, not ours
+    if (SWEEP_RE.test(args)) mine.push(pid);
+  }
+  for (const pid of mine) { try { process.kill(pid, "SIGKILL"); } catch (_) {} }
+  say(mine.length ? `swept ${mine.length} orphaned process(es): ${mine.join(" ")}` : "sweep found no orphans");
+  return mine.length;
+}
+
+function stop({ graceMs = 4000, doSweep = false } = {}) {
   const s = readState();
   const live = s.runs.filter((r) => alive(r.pid));
   let n = 0;
   for (const r of live) if (signal(r.pid, "SIGTERM")) n++;
   say(`sent SIGTERM to ${n} run group(s)`);
-  if (!n) return;
+  if (!n) { if (doSweep) sweep(); else say("nothing registered is alive — if the box is still busy, run --stop --sweep"); return; }
+  if (doSweep) setTimeout(sweep, graceMs + 500);
   const deadline = Date.now() + graceMs;
   const spin = () => {
     const still = live.filter((r) => alive(r.pid));
@@ -394,7 +423,7 @@ const parallel = argv.includes("--parallel");
 const groups = argv.filter((a) => !a.startsWith("--"));
 
 if (argv.includes("--status")) status();
-else if (argv.includes("--stop")) stop();
+else if (argv.includes("--stop")) stop({ doSweep: argv.includes("--sweep") });
 else if (argv.includes("--tail")) {
   const g = argv[argv.indexOf("--tail") + 1];
   const r = readState().runs.find((x) => x.group === g);

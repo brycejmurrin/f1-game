@@ -20,14 +20,31 @@ const DrivingLineOpts = (function () {
 
   const K_PALETTE = "drivingLinePalette";
   const K_OPACITY = "drivingLineOpacity";
-  const K_CUE = "brakeCue";
+  // NOT "brakeCue" — that key belongs to the steering panel's 1-10 slider
+  // (js/input/steer-tuning.js, registered in js/ui/settings-export.js). Both
+  // modules owned it, with incompatible types, and the store JSON-parses so each
+  // one read the other's write back at full type: clamp("on", 1, 10) returns
+  // "on" (both comparisons are false for a string), which BrakeCue.setLevel
+  // then drops on its `typeof v === "number"` guard, so the slider silently
+  // failed to restore; and `store.get(K_CUE, "off") === "on"` is false against
+  // a number, so this flag read OFF the moment the slider was touched. Two
+  // settings, one key, both broken — one of them the other panel's.
+  const K_CUE = "lineBrakeCue";
+  const K_CUE_LEGACY = "brakeCue";
 
   const store = GameStore.store;
 
   // BRAKE CUE is a plain flag here rather than a DrivingLine member: the shared
   // module builds the ribbon and knows nothing about audio, and the urgency it
   // supplies (DrivingLine.cue) is useful whether or not this switch is on.
-  let cueOn = store.get(K_CUE, "off") === "on";
+  // A player who set this before the rename has it under the old shared key —
+  // carried over only when it is still a STRING, because a number there is the
+  // slider's notch and never said anything about this switch.
+  let cueOn = (() => {
+    const v = store.get(K_CUE, null);
+    if (v !== null) return v === "on";
+    return store.get(K_CUE_LEGACY, null) === "on";
+  })();
 
   DrivingLine.setPalette(store.get(K_PALETTE, "f1"));
   DrivingLine.setOpacity(store.get(K_OPACITY, "normal"));

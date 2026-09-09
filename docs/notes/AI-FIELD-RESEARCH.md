@@ -190,6 +190,168 @@ this is the trap the pace instrument alone walks into — `ai-pace.mjs` and
 geometry. That gap is why this reached a deploy gate instead of being caught at
 my desk.
 
+## The F1-like pace spread, and what n=5 says about this file (2026-09-09)
+
+The owner's design call: the field should look like F1 — closer, fewer passes.
+`TIER_V` and the driver-skill constants were compressed by the same factor
+(0.347) about the MEASURED FIELD MEAN, so the mean is invariant by construction
+and only the spread moves:
+
+| | before | after |
+|---|---|---|
+| tierV span | 6.16 % | 2.10 % |
+| skill span | 3.19 % | 1.10 % |
+| **product span** | **8.64 %** | **2.92 %** |
+| field mean | 0.9323 | 0.9322 |
+
+Lap time held in the SIM, not just in the arithmetic — monza normal 120.68 ->
+121.60 s (+0.76 %), spa 151.15 -> 150.15 s (-0.66 %), opposite directions, so no
+systematic shift. The difficulty steps also got more consistent between
+circuits (spa easy-vs-normal +8.12 % -> +5.47 %).
+
+### What it did to the racing — measured at n=5 on BOTH trees
+
+| monza, 240 s | baseline | compressed |
+|---|---|---|
+| strings out to | 1505 [1087–1524] m | 1122 [1053–1298] m |
+| order flips | 146 [109–165] | **200 [148–211]** |
+| settled passes | 25 [19–35] | 23 [20–38] |
+| oscillation | 88 (61 %) | 131 (68 %) |
+| nose-to-tail | 23.5 [14.8–24.4] % | 26.3 [23.8–30] % |
+
+| monaco, 240 s | baseline | compressed |
+|---|---|---|
+| strings out to | 4130 **[1337–7807]** m | 1502 **[925–4237]** m |
+| order flips | 39 [27–55] | 46 [32–78] |
+| settled passes | 22 [15–31] | 18 [16–29] |
+| oscillation | 7 (19 %) | 14 (30 %) |
+
+**Read this table for what it does NOT say.** At monaco NOTHING is established:
+every range overlaps almost completely, and the baseline stringing range alone
+spans 1337–7807 m — nearly six-fold. At monza only two effects survive the
+ranges: order flips ROSE (146 -> 200, ranges barely touching) and nose-to-tail
+time rose. Stringing did not improve provably at either circuit.
+
+### Compressed again to the FASTEST era's gap (1.46 %), and a wrong prediction
+
+The owner's follow-up: calibrate to whichever era is fastest. The ground-effect
+cars (2022-24) near-matched Monza's 2003/04 average-speed record and ran the
+tightest field F1 has had — all twenty inside ONE SECOND in 2023 Brazilian
+qualifying, ~1.4 %. (The outright fastest single laps are 2019-21, but that
+field was WIDER, Mercedes being dominant, so "fastest era" does not name one
+number by itself.) Same method, factor 0.174 from the originals, about the
+field mean: product span 8.64 % -> **1.46 %**, mean 0.9323 -> 0.9322.
+
+| monza, n=5 | baseline 8.47 % | 2.92 % | 1.43 % |
+|---|---|---|---|
+| strings out to | 1505 [1087–1524] m | 1122 [1053–1298] | 1071 [964–1157] |
+| order flips | 146 [109–165] | 200 [148–211] | 185 [155–222] |
+| settled passes | 25 [19–35] | 23 [20–38] | 32 [24–57] |
+| oscillation | 88 (61 %) | 131 (68 %) | 113 (62 %) |
+| nose-to-tail | 23.5 [14.8–24.4] % | 26.3 [23.8–30] % | **28.0 [24.8–30.5] %** |
+
+| monaco, n=5 | baseline 8.47 % | 1.43 % |
+|---|---|---|
+| strings out to | 4130 [1337–7807] m | 3872 [991–5883] |
+| order flips | 39 [27–55] | 51 [43–55] |
+| settled passes | 22 [15–31] | 21 [13–30] |
+| oscillation | 7 (19 %) | 18 (35 %) |
+| nose-to-tail | 12.3 [11.6–12.9] % | **14.7 [13.4–15.5] %** |
+
+**I predicted the flip count would rise again at 1.46 %, and it did not** — 200
+-> 185 median, ranges overlapping, so no change established between the two
+compressions. The reasoning behind the prediction ("tighter pace means more
+shuffling") was wrong and should not be built on. The likelier mechanism: at
+near-identical pace a car cannot COMPLETE a pass on raw speed, so the passes
+that happen come from ERS, the pace biorhythm and the slipstream rather than
+from one car simply out-driving another all lap.
+
+What the ranges actually establish, against the 8.47 % baseline:
+
+- **Nose-to-tail time is up at BOTH circuits with no overlap at all** — 23.5 ->
+  28.0 % at monza, 12.3 -> 14.7 % at monaco. Cars spend more of the race in
+  each other's gearbox, which is the F1 look and the point of the change.
+- Oscillation count up at monaco (7 [4–12] -> 18 [10–26]).
+- PROBABLE: flips up at monza (146 [109–165] -> 185 [155–222]); stringing down
+  at monza (overlap only 1087–1157, medians well apart).
+- NOT ESTABLISHED anywhere: settled passes, and monaco stringing — that metric
+  still ranges 991–5883 m on one tree and proves nothing.
+
+Lap time held again: monza normal 120.68 -> 121.30 s (+0.51 %), and the
+difficulty steps are intact (easy +4.31 % against +4.32 % before, hard -3.81 %
+against -3.18 %).
+
+So the SPREAD half of "like F1" is done and measured. The remaining half is
+that overtaking is not hard enough, and that is AI-side work.
+
+### The correction this forces on the rest of this file
+
+**Field stringing is too noisy to carry a claim, and this file has been
+carrying claims on it all day.** "Monaco stringing halved" in the dirty-air
+work, "strings out 4461 -> 3785 m" for the pass hysteresis, and the first
+version of THIS section's "1548 -> 1122 m" were all single runs against single
+runs. A metric whose own baseline ranges 1337–7807 m cannot resolve a 2x
+difference at n=5, let alone at n=1. Every stringing number in this file that
+is not written with a range should be read as an anecdote.
+
+The instrument was built to stop exactly this, and the error was still made
+once more after building it — comparing a single old run to a new median — which
+is why the rule now has its own line: **compare like with like, n=5 to n=5, or
+say nothing.**
+
+### Where "like F1" actually stands
+
+The spread is F1-like and that part is certain, because it is definitional.
+What is missing is the OTHER half of what makes F1 look like F1: overtaking is
+genuinely hard there. Twenty-one cars on near-identical pace with easy passing
+produce a train that trades places constantly — the monza flip count rising is
+that, and it is the honest cost of this change.
+
+`DIRTY_AIR` was tried as the lever (0.35 -> 0.60 measured flips 200 -> 165,
+settled 23 -> 29, oscillation 68 % -> 62 %) and REVERTED. It is anchored to the
+FIA's own CFD (~20 % of downforce lost at 20 m, ~35 % at 10 m) and it is
+symmetric with the player by design, so raising it past the physical reference
+to fix AI churn would make a player's car handle unphysically in traffic. The
+next lever is on the AI side — `AiDrive.otWant`'s attack thresholds, or a
+longer post-pass lockout — not the aero model.
+
+## Which AI instrument can actually resolve a change (2026-09-09)
+
+Measured with `--runs 5`, and the two tools are not in the same league.
+
+**`ai-line.mjs` — apex depth is TIGHT.** Five seeds at monza, field rebuilt each
+run:
+
+| corner | apex median | range |
+|---|---|---|
+| s=2068, len 128 m | 6.03 m | **0.042 m** |
+| s=2451, len 52 m | 3.69 m | **0.185 m** |
+| s=4685, len 288 m | 5.97 m | **0.022 m** |
+
+**`ai-field.mjs` — pass counts are WIDE.** Three seeds, 60 s at monza: settled
+passes 8 **[7–29]**, flips 25 [15–52].
+
+So the aero term's 0.60 m at s=2451 was **over 3× the widest re-race range**
+there, and 15–30× the range at the other two corners: unambiguous, and the
+paired A/B that caught it now has an error bar under it rather than an
+assertion. The pass-hysteresis "27 → 19", by contrast, sits inside a four-fold
+spread and remains unproven.
+
+The practical rule, and it inverts the order things were reached in today:
+**for a change to the AI's DRIVING MODEL, measure the line first.** It resolves
+sub-100 mm moves on a handful of runs. Field behaviour needs many runs to say
+anything about a small effect, and lap time (`ai-pace.mjs`) can move the right
+way while the driving gets worse — which is exactly what happened.
+
+One thing the range exposes that is NOT a defect to fix: `ai-racecraft-vm`'s
+apex threshold is 3.5 m, and s=2451 measures 3.69 m median in isolation with a
+0.185 m range — roughly one range-width of headroom, the tightest of the three
+corners by an order of magnitude. (In-suite it reads higher, ~4.07 m, because
+the spec runs after three other tests with the RNG stream advanced.) A future
+change could trip that corner without being wrong. The answer is to measure with
+`ai-line --runs 5` before concluding, NOT to widen the threshold — it is
+measuring a real property and it caught a real defect today.
+
 ## A completed pass locks out the counter-attack (2026-09-09, SHIPPED)
 
 Independent of the reverted change above, and kept. Nothing in the pass
@@ -219,7 +381,33 @@ which was the ask. Monza goes the other way on the metric that matters most:
 settled passes fall 27 → 19 while total flips rise, i.e. more churn resolving
 into fewer clean passes, which is the opposite of what the mechanism predicts.
 
-The honest caveat on all of it: **every number in this file is a single run.**
+**UPDATE, later the same day — the caveat below was too kind, and the
+instrument now says so.** `ai-field.mjs --runs N` (added 2026-09-09) seeds and
+REBUILDS the field per run. Three runs of 60 s at monza:
+
+    settled passes   8 [7–29]        order flips   25 [15–52]
+    field strings    344 [209–374] m -> 561 [308–564] m
+    nose-to-tail     24.4 [18.2–33.9] % of car-time
+
+A **four-fold** spread in settled passes across three seeds. The monza
+"27 → 19" above is comfortably inside that, so it is **not evidence of
+anything** and should not be read as the hysteresis making monza worse; nor is
+monaco's 15 → 22 established, though its other metrics all moved the same way.
+The right reading of the shipped change is: the mechanism is sound, and its
+effect size is below what a single run can resolve.
+
+Building the flag also found that the obvious implementation is a lie. Setting
+`__apex.seed()` after boot changes NOTHING — the AI's in-race decisions are
+deterministic given the field, and the randomness enters at CAR CREATION — so
+the first cut reported a range of ZERO across seeds 1/2/3. A zero range reads
+as "this metric is rock solid" when it actually meant "the knob is not
+connected", which is worse than having no instrument at all. The seed has to be
+set and the field REBUILT (`apex.seed(n)` then `race()`), which apex.js's own
+comment describes. Seed 1 + rebuild reproduces the boot field exactly, so
+`--runs 1` is unchanged and the older single-run numbers stay comparable.
+
+The original caveat, kept because it is the general rule: **every number in
+this file that is not marked with a range is a single run.**
 The sim is deterministic, so a repeat reproduces exactly — but that is
 REPRODUCIBILITY, not low variance across conditions, and a 240 s race is
 chaotic enough that one behavioural change reshuffles the whole field. Nothing

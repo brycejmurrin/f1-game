@@ -18,9 +18,6 @@
 // in order to measure pairs that never share a frame. Setting both to the same
 // percentage covers every cell at half the cost.
 
-export const SCALE_HELP =
-  "--scale=40,50,100,130,150,200   also audit at each interface size (%, default: the device default alone)";
-
 // No --scale= means "whatever this device defaults to", represented as `null`
 // (not a hard-coded 100): leave nothing stored so first paint uses the CSS
 // `:root` / `(pointer: coarse)` defaults — currently 100% on every pointer,
