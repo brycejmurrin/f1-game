@@ -21,6 +21,7 @@
 //
 // Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
 // under SwiftShader (document.fonts.ready after freeze).
+import vm from "node:vm";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -61,20 +62,30 @@ const zoom = Number(flag("--zoom", "0")) || 0;
 const [strafe = 0, dolly = 0] = (flag("--pan", "0,0")).split(",").map(Number);
 
 /** Roster order == store.team index (game.js boot). */
+// Teams.LIST, EVALUATED — not scraped. Two regexes over teams.js used to answer
+// this, and both also matched `id: "custom"` on DEFAULT_CUSTOM, the MY TEAM seed
+// that is NOT a roster member: `--team=all` shot twelve cars while render-car's
+// `all` shot eleven, so the two tools disagreed about what "every team" means.
+// The index matters as much as the list — the in-page switch uses
+// Teams.LIST.indexOf, so anything but that order pins the wrong car.
+// `const Teams` in an IIFE is a lexical binding that never lands on the sandbox,
+// hence evaluating the identifier back out (as the car tools do).
+const ROSTER = (() => {
+  const sb = { console, Math, Object, Array, String, Number, JSON };
+  sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8"),
+                  sb, { filename: "teams.js" });
+  return vm.runInContext("Teams", sb).LIST.map((t) => t.id);
+})();
 function teamIndex(id) {
-  const src = readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8");
-  const ids = Array.from(src.matchAll(/^ *id: "([a-z]+)",/gm)).map((m) => m[1]);
-  const i = ids.indexOf(id);
+  const i = ROSTER.indexOf(id);
   if (i < 0) {
-    console.error(`no team "${id}" — available: ${ids.join(", ")}`);
+    console.error(`no team "${id}" — available: ${ROSTER.join(", ")}`);
     process.exit(1);
   }
   return i;
 }
-const ROSTER = (() => {
-  const src = readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8");
-  return [...src.matchAll(/^\s*id:\s*"([a-z0-9_]+)"/gim)].map((m) => m[1]);
-})();
 const WALK = teamIds || ROSTER.slice();
 for (const t of WALK) {
   if (!ROSTER.includes(t)) { console.error(`no team "${t}" — available: ${ROSTER.join(", ")}, or "all"`); process.exit(1); }
