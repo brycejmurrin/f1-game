@@ -1,5 +1,5 @@
 // Garage turntable frame quality gate — rejects uniform team-tint "wall" frames.
-// @doc Used by garage-frame.mjs and garage-shot.mjs after canvas readback.
+// @doc PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture.
 
 /** Sample the visible car gap (left of the docked #cs-inner panel). Returns [{rgb, ny}]. */
 export function sampleGarageGapPixels(imageData, canvasW, canvasH, panelFrac = 0) {

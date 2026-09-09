@@ -258,22 +258,97 @@ export async function presentedCanvasClip(page) {
 }
 
 /**
- * Compositor PNG of the presented canvas. Awaits a fresh blit first unless
+ * Fast path: PNG/JPEG bytes from the presented canvas without CDP.
+ * Prefer `#game-soft` / carview `#view` (2D blit). Fall back to `#game` —
+ * Playwright's Desktop Chrome project spoofs a headed UA, so GLX never arms
+ * soft-present; after `__apex.headless(true)` the WebGL backbuffer keeps the
+ * last frame and toDataURL works even without preserveDrawingBuffer.
+ * Returns `{ b64, id }` or null. Optional `clip` is CSS-viewport pixels.
+ */
+export async function readSoftCanvasBytes(page, {
+  type = "png", quality = 92, preferView = false, clip = null,
+} = {}) {
+  return page.evaluate(({ fmt, q, preferView: pv, clip: cl }) => {
+    const soft = document.getElementById("game-soft");
+    const view = document.getElementById("view");
+    const game = document.getElementById("game");
+    const g = (pv && view && view.width > 0) ? view
+      : (soft && soft.width > 0 && soft.height > 0) ? soft
+      : (view && view.width > 0) ? view
+      : (game && game.width > 0) ? game
+      : null;
+    if (!g || typeof g.toDataURL !== "function") return null;
+    try {
+      const mime = fmt === "jpeg" ? "image/jpeg" : "image/png";
+      const q01 = Math.min(1, Math.max(0.05, q / 100));
+      let target = g;
+      if (cl && cl.width > 0 && cl.height > 0) {
+        const r = g.getBoundingClientRect();
+        if (!(r.width > 0 && r.height > 0)) return null;
+        // WebGL #game cannot be drawImage'd into a 2D crop — crop via CDP instead.
+        if (g === game && g.getContext && g.getContext("webgl2")) return null;
+        const sx = (cl.x - r.x) * (g.width / r.width);
+        const sy = (cl.y - r.y) * (g.height / r.height);
+        const sw = cl.width * (g.width / r.width);
+        const sh = cl.height * (g.height / r.height);
+        const c = document.createElement("canvas");
+        c.width = Math.max(1, Math.round(sw));
+        c.height = Math.max(1, Math.round(sh));
+        const ctx = c.getContext("2d");
+        if (!ctx) return null;
+        ctx.drawImage(g, sx, sy, sw, sh, 0, 0, c.width, c.height);
+        target = c;
+      }
+      const url = fmt === "jpeg" ? target.toDataURL(mime, q01) : target.toDataURL(mime);
+      const b64 = url.split(",")[1] || null;
+      return b64 ? { b64, id: g.id || "canvas" } : null;
+    } catch (_) { return null; }
+  }, { fmt: type, q: quality, preferView, clip });
+}
+
+/**
+ * Compositor bytes of the presented canvas. Awaits a fresh blit first unless
  * `skipAwait` — pass that when the caller already froze after awaitPresentedFrame
  * (a second wait after headless(true) hangs on GLX).
  *
- * Uses CDP Page.captureScreenshot, not Playwright page.screenshot(). The
- * Playwright path waits on document.fonts.ready ("waiting for fonts to load…")
- * and that wait never finished on GHA smoke shards 2/3 after freeze: 60 s
- * timeout, retry still hung. Fonts are irrelevant to a 3D canvas clip; CDP
- * is the same compositor grab without the font barrier. locator("#game")
- * was the green pre-helper path (element screenshot + preserveDrawingBuffer).
+ * Order: soft/#view/#game toDataURL (fast) → CDP Page.captureScreenshot.
+ * Never Playwright's screenshot API — it waits on document.fonts.ready and that
+ * hung GHA smoke shards 2/3 after freeze.
+ *
+ * `opts.timeout` (ms) is OPTIONAL. When set, it bounds the CDP leg (and soft
+ * await when `awaitMs` omitted). Default CDP is unbounded — smoke under GHA
+ * Desktop Chrome often needs >60s for CDP when soft is unarmed; a hard 60s
+ * race turned a 339s green into a false red.
+ * `opts.clip` overrides the presented-canvas box (CSS viewport pixels).
+ * `opts.preferView` prefers carview `#view` for soft capture.
+ * `opts.forceCdp` skips the soft path (tests / known-bad soft).
  */
 export async function screenshotPresentedCanvas(page, opts = {}) {
-  if (!opts.skipAwait) await awaitPresentedFrame(page, opts.awaitMs);
-  const box = await presentedCanvasClip(page);
+  const awaitMs = opts.awaitMs != null ? opts.awaitMs
+    : (opts.timeout != null ? Math.min(opts.timeout, 12000) : 8000);
+  if (!opts.skipAwait) await awaitPresentedFrame(page, awaitMs);
+
+  const type = opts.type === "jpeg" ? "jpeg" : "png";
+  const quality = opts.quality != null ? opts.quality : 92;
+  if (!opts.forceCdp) {
+    const soft = await readSoftCanvasBytes(page, {
+      type, quality, preferView: !!opts.preferView, clip: opts.clip || null,
+    });
+    if (soft) {
+      const buf = Buffer.from(soft.b64, "base64");
+      if (opts.path) writeFileSync(opts.path, buf);
+      const via = soft.id === "view" ? "view"
+        : soft.id === "game" ? "game"
+        : "game-soft";
+      return { buf, bytes: buf.length, clip: opts.clip || null, id: soft.id, via };
+    }
+  }
+
+  const box = opts.clip
+    ? { x: opts.clip.x, y: opts.clip.y, width: opts.clip.width, height: opts.clip.height, id: "clip" }
+    : await presentedCanvasClip(page);
   if (!box) throw new Error("probe: presented canvas has no bounding box");
-  const format = opts.type === "jpeg" ? "jpeg" : "png";
+  const format = type;
   const clip = {
     x: box.x, y: box.y,
     width: Math.max(1, box.width), height: Math.max(1, box.height),
@@ -284,13 +359,24 @@ export async function screenshotPresentedCanvas(page, opts = {}) {
   try {
     const params = { format, clip, captureBeyondViewport: false };
     if (format === "jpeg" && opts.quality != null) params.quality = opts.quality;
-    const { data } = await session.send("Page.captureScreenshot", params);
-    buf = Buffer.from(data, "base64");
+    const capture = session.send("Page.captureScreenshot", params)
+      .then(({ data }) => Buffer.from(data, "base64"));
+    // Bound CDP only when the caller asked — smoke omits timeout on purpose.
+    if (opts.timeout != null) {
+      const budget = opts.timeout;
+      buf = await Promise.race([
+        capture,
+        new Promise((_, rej) => setTimeout(() => rej(new Error(
+          `probe: CDP captureScreenshot timed out after ${budget}ms`)), budget)),
+      ]);
+    } else {
+      buf = await capture;
+    }
   } finally {
     try { await session.detach(); } catch (_) { /* already closed */ }
   }
   if (opts.path) writeFileSync(opts.path, buf);
-  return { buf, bytes: buf.length, clip: box, id: box.id };
+  return { buf, bytes: buf.length, clip: box, id: box.id, via: "cdp" };
 }
 
 /** Fade the setup panel and capture the presented canvas for a clean garage shot.
@@ -304,13 +390,9 @@ export async function screenshotGameCanvas(page, outPath) {
   });
   await waitGameVisible(page);
   await awaitPresentedFrame(page);
-  const softB64 = await page.evaluate(() => {
-    const g = document.getElementById("game-soft");
-    if (!g || typeof g.toDataURL !== "function" || !(g.width > 0) || !(g.height > 0)) return null;
-    try { return g.toDataURL("image/png").split(",")[1]; } catch (_) { return null; }
-  });
-  if (softB64) {
-    const buf = Buffer.from(softB64, "base64");
+  const soft = await readSoftCanvasBytes(page, { type: "png" });
+  if (soft) {
+    const buf = Buffer.from(soft.b64, "base64");
     writeFileSync(outPath, buf);
     return { bytes: buf.length, clip: null, via: "game-soft" };
   }
@@ -318,8 +400,10 @@ export async function screenshotGameCanvas(page, outPath) {
   // Playwright's screenshot path starved on fonts. Restored in finally.
   await page.evaluate(() => { try { window.__apex.headless(true); } catch (_) {} });
   try {
-    const shot = await screenshotPresentedCanvas(page, { path: outPath, skipAwait: true });
-    return { bytes: shot.bytes, clip: shot.clip, via: shot.id || "cdp" };
+    const shot = await screenshotPresentedCanvas(page, {
+      path: outPath, skipAwait: true, forceCdp: true, timeout: 60000,
+    });
+    return { bytes: shot.bytes, clip: shot.clip, via: shot.via || shot.id || "cdp" };
   } finally {
     await page.evaluate(() => { try { window.__apex.headless(false); } catch (_) {} });
   }

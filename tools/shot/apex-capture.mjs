@@ -134,17 +134,6 @@ async function waitFrames(page, n = 2) {
   }), n);
 }
 
-/** Await soft-present blit while the loop still runs; prefer #game-soft when armed. */
-async function resolveGameShot(page) {
-  await page.evaluate(async () => {
-    if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
-      try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try the canvas */ }
-    }
-  });
-  return page.evaluate(() =>
-    document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
-}
-
 /** Blank = near-black max channel on a 2D soft canvas; never byte-size. */
 async function blankFromTarget(page, sel) {
   return page.evaluate((s) => {

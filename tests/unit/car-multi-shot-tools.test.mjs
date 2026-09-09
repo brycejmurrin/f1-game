@@ -21,8 +21,9 @@ test("render-car has a spine preset and repeatable --shot customs", () => {
   const src = code("tools/car/render-car.mjs");
   assert.match(src, /spine:\s*\[/, "preset=spine must exist for crown/flank multi-shot");
   assert.match(src, /SHOT_ARGS/, "repeatable --shot=label,az,el,dist in one Chromium");
-  assert.match(src, /getElementById\('game-soft'\)/, "capture prefers soft-present overlay");
-  assert.match(src, /awaitSoftPresent/, "settle via soft-present waiters, not page.screenshot alone");
+  assert.match(src, /screenshotPresentedCanvas/, "capture uses shared soft→CDP helper");
+  assert.match(src, /preferView:\s*true/, "carview prefers #view soft canvas");
+  assert.doesNotMatch(src, /page\.screenshot\(/, "no raw page.screenshot — fonts hang under SwiftShader");
   assert.match(src, /chromium_headless_shell-/, "findChromium must see Cloud's headless_shell install");
   assert.match(src, /before:\s*frame,\s*n:\s*need/,
     "frame settle must pass `need` into waitForFunction (free `need` is PAGEERR)");
@@ -59,13 +60,36 @@ test("openGarage pins store.team as a numeric index", () => {
   assert.match(src, /installProbeInit/, "team pin for #mb-garage is installProbeInit before goto");
 });
 
-test("screenshotGameCanvas prefers #game-soft before freezing for page-clip", () => {
+test("screenshotPresentedCanvas is soft-first then optional timed CDP", () => {
+  const src = code("tools/capture/probe-page.mjs");
+  assert.match(src, /export async function readSoftCanvasBytes/, "shared soft helper");
+  const softFn = src.slice(src.indexOf("export async function readSoftCanvasBytes"),
+    src.indexOf("export async function screenshotPresentedCanvas"));
+  assert.match(softFn, /getElementById\("game"\)/,
+    "Desktop Chrome fallback reads #game after freeze when soft is unarmed");
+  const presented = src.slice(src.indexOf("export async function screenshotPresentedCanvas"),
+    src.indexOf("export async function screenshotGameCanvas"));
+  assert.match(presented, /readSoftCanvasBytes/, "soft path before CDP");
+  assert.match(presented, /Page\.captureScreenshot/, "CDP fallback");
+  assert.match(presented, /opts\.timeout != null/, "CDP race only when caller sets timeout");
+  assert.match(presented, /via:\s*"cdp"/, "via reports capture path");
+  assert.doesNotMatch(presented, /page\.screenshot/, "never Playwright screenshot API");
+});
+
+test("screenshotGameCanvas prefers #game-soft before freezing for CDP", () => {
   const src = code("tools/capture/probe-page.mjs");
   const fn = src.slice(src.indexOf("export async function screenshotGameCanvas"),
     src.indexOf("export async function screenshotGameCanvas") + 2200);
-  const soft = fn.indexOf("game-soft");
+  const soft = fn.indexOf("readSoftCanvasBytes");
   const freeze = fn.indexOf("headless(true)");
   assert.ok(soft >= 0, "soft overlay path present");
   assert.ok(freeze < 0 || freeze > soft, "page-clip freeze is fallback after soft path");
+  assert.match(fn, /forceCdp:\s*true/, "CDP leg skips soft retry after freeze");
 });
 
+test("carshot uses soft→CDP clip, not page.screenshot", () => {
+  const src = code("tools/car/carshot.mjs");
+  assert.match(src, /screenshotPresentedCanvas/, "shared capture helper");
+  assert.match(src, /clip:\s*\{\s*x:\s*96/, "keeps the tiny centre crop");
+  assert.doesNotMatch(src, /page\.screenshot\(/, "no raw page.screenshot");
+});

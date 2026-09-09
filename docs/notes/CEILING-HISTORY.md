@@ -2650,3 +2650,10 @@ pair-at floor, and landscape `#cs-cam-panel`.
 with their `invalidateSoftPresent` (force `SOFT_BLIT_EVERY` so `snapCam`
 sees a post-camera blit) and HeadlessChrome blit throttle.
 
+## 2026-09-09 — soft-present under Playwright webdriver
+
+`js/render/glx/glx.js` lines 2606 -> **2610** (+4). `navigator.webdriver` also
+arms soft-present / preserveDrawingBuffer — Playwright's Desktop Chrome
+project spoofs a headed UA (no `HeadlessChrome`), which left smoke on a
+minutes-long CDP capture after the soft-first helper change.
+
