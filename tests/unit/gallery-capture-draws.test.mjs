@@ -38,17 +38,30 @@ const SPECS = path.join(ROOT, "tests", "specs");
 // describe off its own page.goto — flagging it was this guard's first false
 // positive, and the fix is to key on the opt-in parameter, which is the whole
 // mechanism the hazard depends on.
-const STOPS_BY_DEFAULT = /const\s+draw\s*=\s*!!\(\s*opts\s*&&\s*opts\.draw\s*\)/;
+// TWO idioms, because two shapes of file need it:
+//   opts  — the opener takes { draw: true } and the screenshotting tests pass it
+//           (parts-catalog, parts-persistence, parts-setup-ids).
+//   shot  — the file has a shot() helper that turns drawing on, waits for real
+//           frames, captures, and turns it off again (parts-budget, where the
+//           captures are the expensive tests, so opting them out saved nothing).
+// A file using EITHER is in scope, and the violation differs per idiom.
+const OPTS_IDIOM = /const\s+draw\s*=\s*!!\(\s*opts\s*&&\s*opts\.draw\s*\)/;
+// Matched on the MECHANISM, not the helper's name: three other specs
+// (hud-audit, menu-survey, ui-audit) have a shot() of their own that never
+// touches the render loop, and they are not in scope. What puts a file in scope
+// is a shot() that turns drawing back ON.
+const SHOT_IDIOM = /async\s+function\s+shot\s*\(\s*page[\s\S]{0,1200}?headless\(false\)/;
+const STOPS_BY_DEFAULT = (src) => OPTS_IDIOM.test(src) || SHOT_IDIOM.test(src);
 function specsThatStopTheLoop() {
   return fs.readdirSync(SPECS)
     .filter((f) => f.endsWith(".spec.js"))
     .map((f) => ({ file: f, src: fs.readFileSync(path.join(SPECS, f), "utf8") }))
-    .filter((s) => STOPS_BY_DEFAULT.test(s.src) && s.src.includes("page.screenshot"));
+    .filter((s) => STOPS_BY_DEFAULT(s.src) && s.src.includes("page.screenshot"));
 }
 
 // Split a spec into its individual test blocks.
 const blocksOf = (src) => src.split(/\n(?=\s*(?:test|freshTest)\s*\()/);
-const nameOf = (b) => (b.match(/(?:test|freshTest)\s*\(\s*"([^"]+)"/) || [])[1] || "(unnamed)";
+const nameOf = (b) => (b.match(/(?:test|freshTest)\s*\(\s*"([^"]+)"/) || [])[1] || null;
 
 test("every gallery screenshot is taken with the render loop running", () => {
   const specs = specsThatStopTheLoop();
@@ -59,13 +72,23 @@ test("every gallery screenshot is taken with the render loop running", () => {
 
   const bad = [];
   for (const { file, src } of specs) {
+    // With a shot() helper the rule is absolute: a test must not reach for
+    // page.screenshot itself, because the helper is the only thing that turns
+    // drawing back on and waits for a frame. With the opts idiom the test keeps
+    // its own screenshot line and opts the OPENER in.
+    const viaShot = SHOT_IDIOM.test(src);
     for (const b of blocksOf(src)) {
+      // Only real TEST bodies. The first chunk is the file preamble, which is
+      // where shot() itself lives — its screenshot is the sanctioned one.
+      const name = nameOf(b);
+      if (!name) continue;
       if (!b.includes("page.screenshot")) continue;
-      if (b.includes("draw: true")) continue;
-      bad.push(`${file} › ${nameOf(b)}`);
+      if (!viaShot && b.includes("draw: true")) continue;
+      bad.push(`${file} › ${name}` + (viaShot ? "  (call shot(page, name), not page.screenshot)" : ""));
     }
   }
   assert.deepEqual(bad, [],
     "these tests screenshot the garage with the render loop stopped, so they capture a STALE canvas.\n" +
-    "Pass { draw: true } to openSetup in each:\n  " + bad.join("\n  "));
+    "Either pass { draw: true } to openSetup, or capture through shot() — whichever\n" +
+    "idiom the file uses:\n  " + bad.join("\n  "));
 });
