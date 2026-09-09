@@ -1218,7 +1218,7 @@ let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
 let _cloudBase = 0.4;
 const teamMeshes = {}, teamMeshOrder = [];   // factory full mesh (shadows / ghost / glb)
 const teamBodies = {}, teamBodyOrder = [];   // factory body-only (visible AI — wheels drawn planted)
-const TEAM_MESH_CACHE_MAX = 24, DECAL_TEX_CACHE_MAX = 48;   // > the concurrently drawn set, or eviction thrashes rebuilds
+const TEAM_MESH_CACHE_MAX = 48, DECAL_TEX_CACHE_MAX = 48;   // 12 teams × (2 painted + 1 :sh silhouette) = 36; 24 overflowed the LRU after :sh keys and freed live casters
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)

@@ -78,6 +78,10 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   // depth-only lid cannot replace a colour mesh the ghost/whole-car path draws.
   assert.match(teamMeshSrc, /silhouette: sil/);
   assert.match(teamMeshSrc, /sil \? ":sh"/);
+  const cap = game.match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/);
+  assert.ok(cap, "TEAM_MESH_CACHE_MAX is a named ceiling");
+  assert.ok(Number(cap[1]) >= 36,
+    "cache must hold 12 teams × (2 painted + 1 :sh) = 36 or LRU frees a live caster (was 24)");
   assert.match(teamBodySrc, /carDecalNum\(team, car\)/, "teamBodyMesh must resolve the driver number");
   assert.match(teamBodySrc, /teamMeshKey\(team\) \+ ":" \+ carDecalNum\(team, car\)/, "teamBodyMesh must key on the driver number");
   assert.match(teamBodySrc, /num: carDecalNum\(team, car\)/, "teamBodyMesh must build with the driver number");
