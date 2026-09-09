@@ -2,6 +2,7 @@
 // @doc Garage preset shots, ONE Chromium: walks teams/liveries/any livery field, labels frames, sheets, `--against` A/Bs a ref.
 //   node tools/shot/garage-angles.mjs [--team=redbull,mclaren|all] [--views=spine] [--livery=default,rb_white]
 //     [--spineLogo=wrap,saddle] [--finShape=blade] [--cover=#101014] [--against=HEAD~1]
+//     [--preset=wall|fin|flank|mark|quick] [--plan] [--fast] [--settle=8] [--view-settle=4]
 //     [--zoom=8] [--pan=2,0] [--out=dir] [--label=0] [--sheet=0] [--cell=420]
 // @skill playwright-probe
 // @skill garage-parts-livery
@@ -74,23 +75,62 @@ const flag = (name, dflt) => {
 // --team takes a LIST, or `all`. Every other axis has always been a list because
 // the point of this tool is a WALK; team was the one that still cost a whole
 // browser per value.
+const argvHas = (name) => argv.some((a) => a === name || a.startsWith(name + "="));
+
+/** Purpose-built bundles — same idea as render-car --preset. CLI flags override. */
+const PRESETS = {
+  wall:  { views: "front", zoom: 4 },
+  fin:   { views: "rear", zoom: 4 },
+  flank: { views: "side", zoom: 8, pan: "5,0" },
+  // Wall crest + flank mark + fin badge in one pass (mark colour reviews).
+  mark:  { views: "front,side,rear", zoom: 6, pan: "4,0", finBadge: "logo" },
+  quick: { views: "side", zoom: 6, pan: "4,0", fast: true },
+};
+const presetRaw = flag("--preset", "").trim();
+if (presetRaw === "list") {
+  console.log("Presets (CLI flags override preset defaults):");
+  for (const [id, p] of Object.entries(PRESETS)) {
+    const bits = [`views=${p.views}`];
+    if (p.finBadge) bits.push(`finBadge=${p.finBadge}`);
+    if (p.zoom) bits.push(`zoom=${p.zoom}`);
+    if (p.pan) bits.push(`pan=${p.pan}`);
+    if (p.fast) bits.push("fast");
+    console.log(`  ${id}: ${bits.join(" ")}`);
+  }
+  process.exit(0);
+}
+const preset = presetRaw && PRESETS[presetRaw];
+if (presetRaw && !preset) {
+  console.error(`Unknown --preset=${presetRaw} — try --preset=list`);
+  process.exit(1);
+}
+
 const teamArg = flag("--team", "mclaren").trim();
 const teamsArg = teamArg === "all" ? null : teamArg.split(",").map((s) => s.trim()).filter(Boolean);
 const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).filter(Boolean);
 const vp = flag("--viewport", "1280x720").split("x").map(Number);
 const outDir = flag("--out", "artifacts/garage-angles");
-const zoom = Number(flag("--zoom", "0")) || 0;
-const [strafe = 0, dolly = 0] = (flag("--pan", "0,0")).split(",").map(Number);
+const fast = argvHas("--fast") || !!(preset && preset.fast);
+let zoom = Number(flag("--zoom", preset && !argvHas("--zoom") ? String(preset.zoom || 0) : "0")) || 0;
+const panRaw = flag("--pan", preset && !argvHas("--pan") ? (preset.pan || "0,0") : "0,0");
+let [strafe = 0, dolly = 0] = panRaw.split(",").map(Number);
 const againstRef = flag("--against", null);
-const doLabel = flag("--label", "1") !== "0";
-const doSheet = flag("--sheet", "1") !== "0";
+const doLabel = flag("--label", fast ? "0" : "1") !== "0";
+const doSheet = flag("--sheet", fast ? "0" : "1") !== "0";
 const cell = Math.max(120, Number(flag("--cell", "420")) || 420);
+const liverySettle = Math.max(0, Number(flag("--settle", fast ? "6" : "8")) || 0);
+const viewSettle = Math.max(0, Number(flag("--view-settle", fast ? "2" : "4")) || 0);
+const liveryAwait = fast ? 8000 : 12000;
+const viewAwait = fast ? 5000 : 8000;
+const gateRetries = fast ? 1 : 3;
+const doPlan = argvHas("--plan");
 
 // Everything the tool owns. Anything ELSE of the form --name=value is taken as
 // a livery field and validated in-page — so the flag surface grows with
 // Liveries.FIELDS instead of with this file.
 const OWN_FLAGS = new Set(["--team", "--livery", "--viewport", "--out", "--zoom", "--pan",
-  "--views", "--against", "--label", "--sheet", "--cell", "--spine-side", "--spine-logo"]);
+  "--views", "--against", "--label", "--sheet", "--cell", "--spine-side", "--spine-logo",
+  "--preset", "--plan", "--fast", "--settle", "--view-settle"]);
 const axes = [];
 const addAxis = (field, raw) => {
   const values = String(raw).split(",").map((s) => s.trim()).filter(Boolean);
@@ -99,6 +139,8 @@ const addAxis = (field, raw) => {
 // The two legacy names first, so their order in the product is unchanged.
 if (flag("--spine-logo", "")) addAxis("spineLogo", flag("--spine-logo", ""));
 if (flag("--spine-side", "")) addAxis("spineSide", flag("--spine-side", ""));
+if (preset && preset.finBadge && !argv.some((a) => a.startsWith("--finBadge=")))
+  addAxis("finBadge", preset.finBadge);
 for (const a of argv) {
   if (!a.startsWith("--") || !a.includes("=")) continue;
   const name = a.slice(0, a.indexOf("="));
@@ -146,7 +188,8 @@ const GROUPS = {
   spine: ["hero", "top", "rear", "side"],
   all: ALL,
 };
-const rawViews = flag("--views", "spine").split(",").map((s) => s.trim()).filter(Boolean);
+const viewsDefault = preset && !argvHas("--views") ? preset.views : "spine";
+const rawViews = flag("--views", viewsDefault).split(",").map((s) => s.trim()).filter(Boolean);
 const views = [...new Set(rawViews.flatMap((v) => GROUPS[v] || [v]))];
 const bad = views.filter((v) => !ALL.includes(v));
 if (bad.length) {
@@ -247,9 +290,10 @@ function blobRoute(blobs) {
 
 /** Gate the CANVAS half only — the setup sheet always has text spread. */
 async function bayRendered(png, vpW) {
+  const meta = await sharp(png).metadata();
   const cut = Math.max(80, Math.round(vpW * 0.55));
   const st = await sharp(png).extract({
-    left: 0, top: 0, width: cut, height: (await sharp(png).metadata()).height,
+    left: 0, top: 0, width: cut, height: meta.height,
   }).stats();
   const spread = Math.max(...st.channels.map((c) => c.stdev));
   return { ok: spread > 8, spread: +spread.toFixed(2) };
@@ -267,7 +311,7 @@ async function nudge(page, id, n) {
   if (!ok) throw new Error(`no camera control #${id}`);
 }
 
-async function frame(page, teamId, tag, view, dir) {
+async function frame(page, teamId, tag, view, dir, capOpts = {}) {
   const clicked = await page.evaluate((v) => {
     const b = document.querySelector('#cs-stack [data-cs-view="' + v + '"]');
     if (!b) return false;
@@ -280,15 +324,18 @@ async function frame(page, teamId, tag, view, dir) {
   await nudge(page, strafe > 0 ? "cs-pan-right" : "cs-pan-left", strafe);
   await nudge(page, dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", dolly);
   const tSettle = Date.now();
-  await settleGarage(page, { frames: 6 });
+  await settleGarage(page, { frames: viewSettle, awaitMs: viewAwait });
   const settleMs = ms(tSettle);
   const png = join(dir, `${teamId}-${tag}-${view}.png`);
   let gate = null, capMs = 0, gateMs = 0, tries = 0;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < gateRetries; attempt++) {
     tries++;
-    if (attempt) await settleGarage(page, { frames: 4 });
+    if (attempt) await settleGarage(page, { frames: Math.max(2, viewSettle - 2), awaitMs: viewAwait });
     const tCap = Date.now();
-    const shot = await screenshotGameCanvas(page, png);
+    const shot = await screenshotGameCanvas(page, png, {
+      skipAwait: true,
+      skipVisible: !!capOpts.gameVisible,
+    });
     capMs += ms(tCap);
     const tGate = Date.now();
     gate = await bayRendered(png, vp[0]);
@@ -321,7 +368,7 @@ async function applyLivery(page, teamId, livId) {
     const extra = got.have ? ` (have ${got.have.join(",")})` : "";
     throw new Error(`${got.error}${extra}`);
   }
-  await settleGarage(page, { frames: 12 });
+  await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
   return got.name;
 }
 
@@ -389,7 +436,7 @@ async function applyDesign(page, teamId, fields) {
     const extra = got.have ? ` (have ${got.have.join(",")})` : "";
     throw new Error(`${got.error}${extra}`);
   }
-  await settleGarage(page, { frames: 12 });
+  await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
   return got;
 }
 
@@ -419,19 +466,22 @@ async function switchTeam(page, teamId) {
   // and 32.3 s on the two `switched=false` teams of the runs that added this
   // timing — 12 frames at ~2.6 s each under SwiftShader, spent re-settling a car
   // that had not moved. The design/livery apply below settles again anyway.
-  if (switched) await settleGarage(page, { frames: 12 });
+  if (switched) await settleGarage(page, { frames: liverySettle, awaitMs: liveryAwait });
   return switched;
 }
 
 /** One full matrix — every team × (design | livery) × view — into `dir`. */
-async function walk(browser, srvUrl, dir, side) {
+async function walk(browser, srvUrl, dir, side, opts = {}) {
   mkdirSync(dir, { recursive: true });
-  const page = await browser.newPage();
+  const ownPage = !opts.page;
+  const page = opts.page || await browser.newPage();
   const phase = {};
   try {
     await page.setViewportSize({ width: vp[0], height: vp[1] });
-    // Pin the INDEX before first paint — #mb-garage never re-reads the store.
-    await installProbeInit(page, { backend: "webgl2", team: teamIndex(teams[0]) });
+    if (ownPage) {
+      // Pin the INDEX before first paint — #mb-garage never re-reads the store.
+      await installProbeInit(page, { backend: "webgl2", team: teamIndex(teams[0]) });
+    }
     const tBoot = Date.now();
     await gotoGame(page, srvUrl, 120000);
     phase.boot = ms(tBoot);
@@ -445,6 +495,7 @@ async function walk(browser, srvUrl, dir, side) {
 
     const shots = [];
     let heads = null;
+    let gameVisible = false;
     for (const teamId of teams) {
       const tSwitch = Date.now();
       const switched = await switchTeam(page, teamId);
@@ -472,7 +523,8 @@ async function walk(browser, srvUrl, dir, side) {
           tag = it.livery;
         }
         for (const v of views) {
-          const s = await frame(page, teamId, tag, v, dir);
+          const s = await frame(page, teamId, tag, v, dir, { gameVisible });
+          gameVisible = true;
           s.team = teamId;
           s.name = name;
           if (it.design) s.design = it.design; else s.livery = it.livery;
@@ -484,9 +536,9 @@ async function walk(browser, srvUrl, dir, side) {
         }
       }
     }
-    return { shots, phase, sheetHead: heads };
+    return { shots, phase, sheetHead: heads, page };
   } finally {
-    await page.close().catch(() => {});
+    if (ownPage && !opts.keepPage) await page.close().catch(() => {});
   }
 }
 
@@ -496,6 +548,19 @@ const subOf = (s) => `az ${s.az} el ${s.el} dist ${s.dist} · spread ${s.spread}
 
 async function main() {
   mkdirSync(outDir, { recursive: true });
+  const items = designs
+    ? designs.map((d) => ({ design: d }))
+    : liveries.map((l) => ({ livery: l }));
+  const shotCount = teams.length * items.length * views.length;
+  if (doPlan) {
+    console.log(JSON.stringify({
+      teams, liveries, axes, designs, views, preset: presetRaw || null,
+      fast, liverySettle, viewSettle, gateRetries, zoom, pan: [strafe, dolly],
+      shotCount, against: againstRef,
+      estSeconds: Math.round(shotCount * (fast ? 12 : 18) + 25),
+    }, null, 2));
+    return;
+  }
   const load = loadavg1();
   if (load != null && load >= 3) {
     console.warn(`WARNING loadavg ${load} >= 3 — every duration below measures the BOX, `
@@ -513,27 +578,29 @@ async function main() {
     const srvA = await startStaticServer(process.cwd());
     servers.push(srvA);
     const afterDir = againstRef ? join(outDir, "after") : outDir;
-    const A = await walk(browser, srvA.url, afterDir, againstRef ? "after" : null);
+    const A = await walk(browser, srvA.url, afterDir, againstRef ? "after" : null,
+      { keepPage: !!againstRef });
     let B = null;
     if (againstRef) {
       const blobs = refBlobs(againstRef);
       if (!blobs.size) {
         console.warn(`--against=${againstRef}: no js/css/shell file differs from the working tree `
           + `— the pair would be the same car twice, so the B pass is skipped.`);
+        await A.page?.close().catch(() => {});
       } else {
         console.log(`--against=${againstRef}: serving ${blobs.size} file(s) from that ref `
           + `(${[...blobs.keys()].map((k) => k.slice(1)).join(", ")})`);
         const srvB = await startStaticServer(process.cwd(), { route: blobRoute(blobs) });
         servers.push(srvB);
-        B = await walk(browser, srvB.url, join(outDir, "before"), "before");
+        B = await walk(browser, srvB.url, join(outDir, "before"), "before", { page: A.page });
+        await A.page?.close().catch(() => {});
       }
     }
 
     const shots = A.shots.concat(B ? B.shots : []);
     if (doLabel) {
-      for (const s of shots) {
-        await labelPng(s.png, `${titleOf(s)}${s.side ? `  [${s.side === "before" ? againstRef : "working tree"}]` : ""}`, subOf(s));
-      }
+      await Promise.all(shots.map((s) =>
+        labelPng(s.png, `${titleOf(s)}${s.side ? `  [${s.side === "before" ? againstRef : "working tree"}]` : ""}`, subOf(s))));
     }
     const sheets = [];
     if (doSheet) {
@@ -562,7 +629,8 @@ async function main() {
     const seconds = +((Date.now() - t0) / 1000).toFixed(1);
     const meta = join(outDir, `${teams.join("-")}-angles.json`);
     writeFileSync(meta, JSON.stringify({
-      teams, liveries, axes, designs, against: againstRef,
+      teams, liveries, axes, designs, against: againstRef, preset: presetRaw || null,
+      fast, liverySettle, viewSettle, gateRetries,
       zoom, pan: [strafe, dolly], sheetHead: A.sheetHead, viewport: vp, views,
       loadavg1: load, phase: { after: A.phase, before: B ? B.phase : null },
       sheets, shots, seconds,

@@ -49,9 +49,11 @@ test("render-car walks a team LIST in one browser, and grids the sheet by team",
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
-  assert.match(src, /flag\("--views",\s*"spine"\)/, "default views=spine for cover checks");
+  assert.match(src, /viewsDefault = preset && !argvHas\("--views"\) \? preset\.views : "spine"/,
+    "default views=spine unless a preset overrides");
   assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
-  assert.match(src, /screenshotGameCanvas/, "must reuse soft-present capture helper");
+  assert.match(src, /screenshotGameCanvas\(page, png, \{[\s\S]*skipAwait: true/,
+    "capture must not await soft-present twice after settleGarage");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
   assert.match(src, /settleGarage/, "settle soft-present between presets");
   assert.doesNotMatch(src, /page\.reload\(/, "no second boot — openGarage pins the team live");
@@ -177,4 +179,14 @@ test("garage-angles reports per-phase timing and reads the loadavg", () => {
   assert.match(src, /loadavg/, "the run must read and report the loadavg");
   assert.match(src, /for \(const teamId of teams\)/,
     "teams walk inside ONE browser — boot was being paid per team");
+});
+
+test("garage-angles has presets, --plan, --fast, and tunable settle", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /const PRESETS = \{/, "purpose presets like render-car");
+  assert.match(src, /presetRaw === "list"/, "--preset=list prints and exits");
+  assert.match(src, /argvHas\("--plan"\)/, "--plan prints the matrix without booting");
+  assert.match(src, /liverySettle/, "livery/design apply uses --settle");
+  assert.match(src, /viewSettle/, "camera-only moves use --view-settle");
+  assert.match(src, /keepPage: !!againstRef/, "--against reuses the page for pass B");
 });
