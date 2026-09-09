@@ -260,6 +260,39 @@ export function paintAt(ops, px, py) {
   }
   return style;
 }
+// The colour a point ACTUALLY ends up, composited over `bg` in paint order.
+// paintAt returns the topmost op's declared style, which is not what the eye
+// sees wherever paint is stacked or translucent: `carbon` lays a 7 % white
+// weave over its own near-black panel, and reading either the top op alone or
+// the top op blended with the COVER both give an answer the screen disagrees
+// with. Every covering op is blended in order instead, which is what a canvas
+// does. `bg` and the result are 0..1 rgb triples.
+export function paintStackAt(ops, px, py, bg) {
+  let out = bg.slice();
+  for (const op of ops) {
+    if (op.clip) {
+      let outside = false;
+      for (const c of op.clip) {
+        const w = winding(c.pts, px, py);
+        if (!(c.rule === "evenodd" ? w.evenodd : w.nonzero)) { outside = true; break; }
+      }
+      if (outside) continue;
+    }
+    let hit;
+    if (op.kind === "stroke") hit = nearPolyline(op.pts, px, py, op.lw / 2);
+    else {
+      const w = winding(op.pts, px, py);
+      hit = op.rule === "evenodd" ? w.evenodd : w.nonzero;
+    }
+    if (!hit) continue;
+    const m = /rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:[, ]+([\d.]+))?/.exec(op.style || "");
+    if (!m) continue;                       // an image draw carries no flat colour
+    const a = m[4] === undefined ? 1 : +m[4];
+    const c = [+m[1] / 255, +m[2] / 255, +m[3] / 255];
+    out = out.map((v, i) => c[i] * a + v * (1 - a));
+  }
+  return out;
+}
 function inked(ops, px, py) {
   for (const op of ops) {
     if (op.clip) {
