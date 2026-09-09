@@ -1742,15 +1742,30 @@ const LiveryTex = (function () {
   // v is the centre, 0 at the shoulder crease and 1 at the sidepod line.
   // Hung at 0.56 the plate sat in the sidepod (owner: "a little low"); hung
   // at 0.42 with the OLD 0.72-tall box the plate clipped the crease. The
-  // box is now 0.56 tall so 0.40 clears the crease (~0.12) and stays out of
+  // box is now 0.48 tall so 0.45 clears the crease (~0.12) and stays out of
   // the sidepod (~0.68). Calibrated on the garage side preset, not the atlas.
   // `uOnCrown` is the same mark when the crown design has painted the flank.
   // It cannot go forward to 0.19 (the sun) and it must not go aft past
-  // FLANK_SEEN (the rear tyre), so it is centred between them: the box is 0.21
-  // of the flank each side, which puts its leading edge at 0.17 — clear of the
-  // sun below the first fifth — and its trailing edge at 0.59, inside the last
+  // FLANK_SEEN (the rear tyre), so it is centred between them: the box is 0.18
+  // of the flank each side, which puts its leading edge at 0.20 — clear of the
+  // sun below the first fifth — and its trailing edge at 0.56, inside the last
   // of the flank a side camera can see.
-  const FLANK_MARK = { u: 0.19, uOnCrown: 0.38, v: 0.40, halfW: 0.40, halfH: 0.28 };
+  // `uOnSaddle` / `vOnSaddle` centre a crest on the saddle's white shoulder
+  // (saddle paints flanks along the crease). v 0.28 rode the crease too high;
+  // v 0.40 read as bare sidepod — 0.36 splits the band. Plate keeps `v` — the
+  // number board is calibrated there.
+  const FLANK_MARK = {
+    u: 0.19, uOnCrown: 0.38, uOnSaddle: 0.26,
+    v: 0.45, vOnSaddle: 0.36,
+    halfW: 0.36, halfH: 0.24,
+  };
+  function flankMarkStation(spineLogo, sideFrom, spineSide) {
+    if (sideFrom) return { u: FLANK_MARK.uOnCrown, v: FLANK_MARK.v };
+    if (spineLogo === "saddle" && spineSide === "logo") {
+      return { u: FLANK_MARK.uOnSaddle, v: FLANK_MARK.vOnSaddle };
+    }
+    return { u: FLANK_MARK.u, v: FLANK_MARK.v };
+  }
   const TAIL_STYLE = {
     redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
     racingbulls: { kind: "diag",    a: 0.70 },   // youthful bold slash
@@ -2324,10 +2339,10 @@ const LiveryTex = (function () {
     // the body (flank-occlusion: 0 % at u 0.38, 5 % at 0.48) and walked toward
     // the rear wheel that c4d585b6 moved these designs forward to escape.
     // A glyph edge abutting what is beside it is not a legibility defect.
-    const markU = sideFrom ? FLANK_MARK.uOnCrown : FLANK_MARK.u;
     const flankMark = (paint) => eachFlank((F) => {
+      const st = flankMarkStation(spineLogo, sideFrom, spineSide);
       ctx.save();
-      ctx.translate(F.fx(markU), F.R.y + F.R.h * FLANK_MARK.v);
+      ctx.translate(F.fx(st.u), F.R.y + F.R.h * st.v);
       ctx.scale(flankSquash(spineHeight, F.R), 1);
       paint({
         x: -F.R.h * FLANK_MARK.halfW, y: -F.R.h * FLANK_MARK.halfH,
@@ -2677,7 +2692,7 @@ const LiveryTex = (function () {
   return { SIZE, SIZE_H, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, INK_FLOOR, numCrestBox, paintSwatch,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
-           markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, FLANK_SEEN,
+           markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
            hasFlankBull: (teamId) => !!bullPath(teamId) };

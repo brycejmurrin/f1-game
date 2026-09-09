@@ -451,6 +451,20 @@ test("spineSide paints the flank band on pick only, and clears the service panel
             "the mark box stays above the sidepod line");
   assert.ok(A.LT.FLANK_MARK.halfW > A.LT.FLANK_MARK.halfH,
             "the box is wider than tall — flankSquash corrects the along/down anisotropy, it does not reshape the box");
+  assert.equal(typeof A.LT.flankMarkStation, "function", "flankMarkStation is exported");
+  {
+    const saddle = A.LT.flankMarkStation("saddle", false, "logo");
+    assert.equal(saddle.u, A.LT.FLANK_MARK.uOnSaddle, "saddle+logo u centres on the white shoulder");
+    assert.equal(saddle.v, A.LT.FLANK_MARK.vOnSaddle, "saddle+logo v centres on the white shoulder");
+    const wrap = A.LT.flankMarkStation("wrap", true, "none");
+    assert.equal(wrap.u, A.LT.FLANK_MARK.uOnCrown, "wrap flank fill uses the crown u");
+    assert.equal(wrap.v, A.LT.FLANK_MARK.v, "wrap flank fill uses the default v");
+    const plain = A.LT.flankMarkStation("logo", false, "none");
+    assert.equal(plain.u, A.LT.FLANK_MARK.u, "default station u is mid-band");
+    assert.equal(plain.v, A.LT.FLANK_MARK.v, "default station v is mid-band");
+  }
+  assert.ok(A.LT.FLANK_MARK.vOnSaddle < A.LT.FLANK_MARK.v,
+            "saddle station sits higher (closer to crease) than the default");
   // …and the station a crown design pushes it to has to fit BETWEEN the sun and
   // the rear tyre. The box is measured in region HEIGHTS, so its half-width
   // along the flank is halfW scaled by the region's own aspect.
