@@ -114,7 +114,15 @@ Session shape — this is what controls both wall time and waiting:
 8. A timeout on a busy box measures the machine, not the code: check
    `/proc/loadavg` (< 3) and for a live `playwright test` process before
    starting anything, look for a load inversion in the log first, and re-run
-   the spec ALONE only when the verdict matters.
+   the spec ALONE only when the verdict matters. On CI the same mistake wears
+   a different word: **a job that ends `cancelled` with zero failures is a
+   TIMEOUT until proven otherwise** — GitHub reports a `timeout-minutes` kill
+   as cancelled, never as failed. Subtract the job's start from its end and
+   compare with its cap BEFORE reaching for any explanation involving a person.
+   Four `ui` dispatches were logged as "looks like manual cancels" across three
+   sessions and six days; the shards had run 50:13 against a 50-minute cap.
+   Simultaneous end times at DIFFERENT elapsed times is the other shape, and
+   that one is a real run-level cancel (docs/notes/TESTING-FIELD-NOTES.md).
 9. **STOPPING IS ALLOWED** — a pushed change that names its unverified groups
    beats an hour of serialized SwiftShader. **Never widen a tolerance to make a
    spec pass**; write against `__apex` hooks, relative assertions over absolute
