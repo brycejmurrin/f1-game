@@ -86,7 +86,7 @@ const PSEUDO_CATS = ["team", "tune", "livery"];
 // copy list are the other two spellings of these keys; team-livery.test.mjs
 // holds all three together.
 const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo",
-                          "rearWing", "cover", "fin", "finArt", "logo", "logo2", "logo3"];
+                          "rearWing", "cover", "spineTint", "fin", "finArt", "logo", "logo2", "logo3"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
@@ -111,6 +111,7 @@ const LIV_ROW_HINT = {
   nose: "NOSE CAP — a painted nose cone. Unset = the bodywork colour.",
   pod: "SIDEPOD — the sidepod panel, both sides. Unset = the bodywork colour.",
   cover: "ENGINE COVER — airbox, roll structure, cover loft and snorkel. Unset = the bodywork colour.",
+  spineTint: "SPINE TINT — the SPINE TOP band on the cover crown, and the saddle's flank half, ALONE. BODY STRIPE above runs the whole spine including the nose, so it cannot paint a dark band on a light nose. Unset = BODY STRIPE, else DETAIL.",
   wing: "WINGS — the front and rear FLAPS. Unset = ACCENT.",
   rearWing: "REAR WING — the rear mainplane block. Unset = ACCENT.",
   fin: "TAIL FIN — the shark-fin plate. Unset = ACCENT. Needs a FIN SHAPE other than NONE.",
@@ -894,6 +895,9 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
   wrap.appendChild(colorRow("ENGINE COVER", "cover", true));   // the airbox, roll hoop and cover top
+  // SPINE TINT colours the SPINE TOP band alone. BODY STRIPE above runs the
+  // whole spine including the nose, so it cannot say "dark band, light nose".
+  wrap.appendChild(colorRow("SPINE TINT", "spineTint", true));
   // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
   // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
   const wingRow = colorRow("WINGS", "wing", true), rearWingRow = colorRow("REAR WING", "rearWing", true);
