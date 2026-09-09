@@ -935,7 +935,7 @@ test("title settings, pause standings, and career modes stay reachable", () => {
     "SELECT YOUR CAR is the garage door");
   assert.match(game, /pmStandings\.hidden\s*=\s*!\(\s*isChampionship\(\s*\)\s*&&\s*SeasonCal\.hasProgress\(\s*season\s*\)\s*&&\s*season\.round\s*<\s*SeasonCal\.rounds\(\s*\)\s*\)/,
     "pause STANDINGS matches the title: hide once the season is finished");
-  assert.match(game, /\$\(\s*"pm-restart"\s*\)\.disabled\s*=\s*!!\s*\(\s*netPlay\.active\(\s*\)\s*\|\|\s*qualiNetDone\s*\)/,
+  assert.match(game, /\$\(\s*"pm-restart"\s*\)\.disabled\s*=\s*!!\s*\(\s*netPlay\.active\(\s*\)\s*\|\|\s*qualiNet\.hasArmed\(\s*\)\s*\)/,
     "RESTART looks dead in net / quali-net, same gate as its click handler");
   assert.equal(decl(css("css/career.css"), '#cr-inner:not([data-pair="on"]):not([data-shape="tall"]):has(#cr-left .cr-slot):has(#cr-right .cr-slot) > #cr-body', "grid-template-columns"),
     "minmax(0, 1fr) minmax(0, 1fr)", "wide stacked modes picker is two-up; tall stacks");

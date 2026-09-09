@@ -44,9 +44,9 @@ Eighteen parallel read-only bloat-auditor runs (see agent IDs in scratch matrix)
 |---|--------|------|--------|
 | ✅ | `js/core/hash32.js` | career, daily-challenge, driver-ratings | **Done** (`03f8dd62`) |
 | ✅ | Remove `AiDrive.racingLineMix` | ai-drive.js | **Done** (`91d23591`) |
-| 1 | **quali-net** (new file under js/race/) | game.js (~130 ln) | **NEXT** — highest ratchet payoff |
-| 2 | shared frustum helper | 4 render copies | Planned |
-| 3 | save-migrate | store.js | Planned |
+| ✅ | **quali-net** (js/race/quali-net.js) | game.js (~130 ln) | **Done** (stacked on PR #102) |
+| 1 | **shared frustum helper** | 4 render copies | **NEXT** |
+| 2 | save-migrate | store.js | Planned |
 | 4 | race-settings + custom-team | game.js | Planned |
 | 5 | res-row UI helper | duplicated row builders | Planned |
 | 6 | lobby-codes | lobby.js (~230 ln) | Planned |

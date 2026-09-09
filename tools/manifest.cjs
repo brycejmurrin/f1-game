@@ -185,6 +185,7 @@ const FULL = [
   "js/ui/results-sheet.js",
   "js/race/quali-model.js",
   "js/race/daily-challenge.js",
+  "js/race/quali-net.js",
   "js/ui/quali-sheet.js",
   "js/ui/onboard.js",
   "js/physics/debris-world.js",
@@ -396,6 +397,7 @@ const HARD_EDGES = [
   ["js/fx/skidmarks.js", "js/game.js"],      // game.js calls SkidMarks.create(G) at eval time
   ["js/race/race-control.js", "js/game.js"],   // game.js calls RaceControl.create(G) at eval time
   ["js/race/daily-challenge.js", "js/game.js"],   // game.js calls DailyChallenge.create(G) at eval time
+  ["js/race/quali-net.js", "js/game.js"],         // game.js calls QualiNet.create(hooks) after quali wiring
   ["js/lighting/knobs.js", "js/lighting/track-lights.js"],  // track-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/frame-lights.js"],  // frame-lights destructures LightKnobs.LT at eval
   ["js/lighting/knobs.js", "js/lighting/lighting.js"],      // the LightTune façade re-exports TUNE_DEFS/LT at eval
