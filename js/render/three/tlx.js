@@ -14,6 +14,9 @@ const TLX = (function () {
 
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas /*, opts */) {
+    // Hoisted so the outer catch can tear down a half-booted soft overlay /
+    // three renderer before same-page GLX fallback claims #game.
+    let _abortDisplay = null, _abortRenderer = null;
     try {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
@@ -90,7 +93,10 @@ const TLX = (function () {
       // here. This clause is what made the one machine that can test a
       // player's path — macos-latest, Apple/Metal, measured anyHardware:true —
       // take the software half of every content skip instead.
-      const _headless = /HeadlessChrome/i.test(ua);
+      // Playwright Desktop Chrome spoofs a headed UA but sets navigator.webdriver
+      // — GLX arms soft there; match so CDP/page shots still see the blit.
+      const _headless = /HeadlessChrome/i.test(ua)
+        || (typeof navigator !== "undefined" && !!navigator.webdriver);
       // Did an adapter actually RESOLVE? `navigator.gpu` existing is a
       // PRESENCE check and `_hasGpu` below is only that — but a browser can
       // expose navigator.gpu and still hand back no adapter, and then three's
@@ -313,7 +319,14 @@ const TLX = (function () {
         renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
-        await renderer.init();
+        try {
+          await renderer.init();
+        } catch (e) {
+          // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
+          // a half-booted three renderer / GPUDevice alive across the fallback.
+          try { if (typeof renderer.dispose === "function") renderer.dispose(); } catch (_) { /* best-effort */ }
+          throw e;
+        }
         // three r185.1 WebGPUAttributeUtils creates every GPUBuffer with
         // mappedAtCreation:true, then getMappedRange()+unmap(). Dawn's
         // client-visible mapping pool is tiny on SwiftShader — a 35 MB scenery
@@ -456,6 +469,7 @@ const TLX = (function () {
           throw e;
         }
       }
+      _abortRenderer = renderer;
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -472,6 +486,7 @@ const TLX = (function () {
           _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1";
         }
         canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
+        _abortDisplay = _displayCanvas;
         // Opaque overlay — the lit fragment writes the SSR car-paint TAG
         // (0.35) into ALPHA. That is a post-chain mask, not opacity. A
         // default 2D context is alpha-composited, so bodywork ghosts at 35%
@@ -3461,6 +3476,12 @@ const TLX = (function () {
       try { Log.info("gfx", "TLX bind ok"); } catch (_) { /* harness */ }
       return backend;
     } catch (e) {
+      try {
+        if (_abortDisplay && _abortDisplay.parentNode) _abortDisplay.parentNode.removeChild(_abortDisplay);
+      } catch (_) { /* already detached */ }
+      try {
+        if (_abortRenderer && typeof _abortRenderer.dispose === "function") _abortRenderer.dispose();
+      } catch (_) { /* three dispose best-effort */ }
       return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)
     }
   }

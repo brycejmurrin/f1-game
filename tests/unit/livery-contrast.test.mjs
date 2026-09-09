@@ -288,8 +288,8 @@ test("a flank mark clears the flank the crown design actually left it", () => {
   // Fails if the list GROWS and fails if an entry starts PASSING, so the fix
   // cannot leave a stale allowance behind and a regression cannot hide in one.
   const KNOWN = new Set([
-    "audi saddle/wordmark", "audi saddle/duo", "audi wrap/logo",
-    "astonmartin wrap/number", "astonmartin wrap/code",
+    "audi saddle/wordmark", "audi saddle/duo",
+    "astonmartin wrap/code",
     "cadillac saddle/wordmark", "cadillac saddle/duo",
     "ferrari saddle/wordmark", "ferrari saddle/duo", "ferrari wrap/logo",
     "mercedes saddle/wordmark", "mercedes saddle/duo",

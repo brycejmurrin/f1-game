@@ -1228,20 +1228,15 @@ const LiveryTex = (function () {
   // second one faces canvas-left, which is the FRONT of the right flank's
   // frame, and the left frame's x runs the other way, so it faces the nose
   // on both sides by construction. Sized in METRES (the flank canvas is ~1.4×
-  // wider than tall per pixel) and BIG, as on the real cover: the bull's back
-  // rides the crease and it is sized to FILL the flank: 0.80 of the skin from
-  // the crease down, and as long as the traced path's own aspect then makes it
-  // (~0.67 m, a little over half the cover). Length is DERIVED, never chosen —
-  // the flank canvas is anisotropic (1.24 m over 304 px along vs 0.47 m over
-  // 160 px down), so a length picked in metres and a height picked in pixels
-  // gave a bull 113% of the region tall, clipped to a white blob.
+  // wider than tall per pixel) and as big as the CAMERA keeps — see BULL, which
+  // owns the station and the arithmetic behind it.
   function flankBull(ctx, teamId, colour) {
     const b = bullPath(teamId);
     if (!b) return false;
     const { d, x0, y0, x1, y1 } = b, span = wrapMarkSpan(teamId);
     // The path's nose is at its low-x end, set just aft of the sun (span.u0).
     eachFlank((F) => {
-      const bh = BULL.h * F.R.h, top = F.R.y + F.R.h * 0.04;
+      const bh = BULL.h * F.R.h, top = F.R.y + F.R.h * BULL.top;
       const xA = F.fx(span.u0), xB = F.fx(span.u0 + span.uLen);
       const f = { X: (u) => xA + (u - x0) / (x1 - x0) * (xB - xA), Y: (v) => top + (v - y0) / (y1 - y0) * bh, S: (s) => s / (x1 - x0) * Math.abs(xB - xA) };
       ctx.save();
@@ -1331,6 +1326,21 @@ const LiveryTex = (function () {
   // on. These are shapes, not lettering, and Red Bull's bull reads clearly on
   // track at 2.26 against its navy.
   const SUN_FLOOR = 2.0;
+  // The colour the wrap's flank bull is painted, as ONE answer. The flank MARK
+  // now stands on the bull, so it has to be inked against it — and a second
+  // derivation of the same colour beside the painter is the phantom-surface
+  // mistake the flank comments are a register of, one edit away from scoring a
+  // mark against a colour the bull is not wearing.
+  const MARK_ON_BODY = 2.0;   // a metre-long silhouette, not lettering
+  function flankBullColour(teamId, liv, sunC, cover, c1, lockup) {
+    // The BRAND colour whenever it reads at all on the body — the RB22's red
+    // across gold and navy alike. Picking this design in the editor already
+    // makes a custom livery, so it cannot key on "own".
+    const brand = MARK_BRAND[teamId] && MARK_BRAND[teamId].mark;
+    if (brand && contrast(brand, c1) >= MARK_ON_BODY) return brand.slice();
+    const L = lockup || markPalette(teamId, liv, [sunC, cover], false, { noPlate: true });
+    return (L.mark || inkOn([sunC, c1])).slice();
+  }
   // ONE answer to "will this colour be seen where it lands". It was written out
   // by hand at each site, and the sites that forgot shipped invisible paint
   // twice: the crown band on a pale cover, and the sun (Ferrari 1.09 on its own
@@ -1387,13 +1397,45 @@ const LiveryTex = (function () {
   // distance s down the skin from the ridge (the crease at s 0.21, the sidepod
   // line at ~0.68).
   const FLANK = { zF: -0.66, zLen: 1.24, sTop: 0.21, sLen: 0.47 };
-  // How much of the flank the bull claims. Its HEIGHT is chosen (0.80 of the
-  // skin from the crease down) and its LENGTH derived from the traced path's
-  // own aspect through the flank's anisotropy — 1.24 m over 304 px along the
-  // car against 0.47 m over 160 px down it, so a length picked in metres and a
-  // height picked in pixels gave a bull 113 % of the region tall, clipped to a
-  // white blob. Published because the SIDE designs have to clear it.
-  const BULL = { h: 0.80, u0: 0.06 };
+  // WHERE THE CAR ITSELF STOPS THE FLANK. The rear tyre stands 0.5 m outboard
+  // of the cover at z -1.6 with a 0.38 m radius, so from a side camera — the
+  // one view a livery is judged in — it projects straight over the flank from
+  // here aft. Measured against the real mesh by tools/car/flank-occlusion.mjs,
+  // not guessed. Nothing that has to be READ may be pushed past it to dodge
+  // something else: that trade is how the shipped Red Bull ended up with 92 %
+  // of its sponsor names and half of every flank mark behind its own wheel.
+  const FLANK_SEEN = 0.62;
+  // How far aft the wrap's sun reaches at a depth v down the flank. drawSunWrap
+  // centres its ellipse ABOVE the crease (the disc's middle is on the airbox),
+  // so the reach shrinks fast with depth: 0.215 of the flank at the crease,
+  // 0.12 a fifth of the way down. Derived from the SUN and FLANK the painter
+  // uses so a side design placed against it cannot drift off it.
+  function sunReach(v) {
+    const cv = -FLANK.sTop / FLANK.sLen, rv = SUN.r / FLANK.sLen;
+    const t = 1 - ((v - cv) / rv) ** 2;
+    return t <= 0 ? 0 : (SUN.r / FLANK.zLen) * Math.sqrt(t);
+  }
+  // How much of the flank the bull claims. Its HEIGHT is chosen and its LENGTH
+  // derived from the traced path's own aspect through the flank's anisotropy —
+  // 1.24 m over 304 px along the car against 0.47 m over 160 px down it, so a
+  // length picked in metres and a height picked in pixels gave a bull 113 % of
+  // the region tall, clipped to a white blob. Published because the SIDE
+  // designs have to clear it.
+  // It hangs from `top`, not from the crease, and the two numbers answer to
+  // opposite ends of the band. Hung at 0.04 it filled to 0.84 and buried the
+  // crease strip — the one a cover design can always use, where the real RB22
+  // carries its sponsor names — under a metre of bull, which pushed every side
+  // design aft of the whole animal and so behind the rear wheel. Standing it on
+  // the sidepod line instead (top 0.26, h 0.74) freed that strip and cost the
+  // ANIMAL: the flank's bottom corner is not on camera. From the garage side
+  // view the sidepod eats the band below v ~0.81 forward of u 0.2, so a bull
+  // reaching v 0.99 lost 19 % of its ink and 36 % of its HEAD, which is the low
+  // forward part of a charging silhouette — the head went and the rump stayed.
+  // Both ends are now inside what the camera keeps: shorter (h), hung just
+  // below the lettering strip (top), and its lowest hoof — at 0.96 of the bbox
+  // — lands at v 0.81. Measured, not eyeballed: the `(crown)` row of
+  // tools/car/spine-station.mjs --occlude reports 2 % of the ink hidden.
+  const BULL = { h: 0.52, u0: 0.05, top: 0.30 };
   // The team's ONE forward-facing traced path, with its bbox — Red Bull's crest
   // is two bulls charging at each other and the second faces canvas-left, which
   // every flank frame maps to the nose. Null for a crest that is not a single
@@ -1409,14 +1451,13 @@ const LiveryTex = (function () {
     }
     return { d, x0, y0, x1, y1 };
   }
-  // How much of the flank the wrap's mark claims, front-first. Its HEIGHT is
-  // chosen (BULL.h of the skin from the crease down) and its LENGTH DERIVED
-  // from the mark's own aspect through the flank's anisotropy — 1.24 m over
-  // 304 px along the car against 0.47 m over 160 px down it, so a length
-  // picked in metres beside a height picked in pixels gave a bull 113 % of the
-  // region tall, clipped to an unreadable blob. Measured from the path, never
-  // a copied constant; a team with no traced bull wears its lockup at the same
-  // height, which is square. Published because the SIDE designs clear it.
+  // How much of the flank the wrap's mark claims, front-first: BULL.h of the
+  // skin from the crease down, and a LENGTH derived from this path's own aspect
+  // through the flank's anisotropy. Measured from the path, never a copied
+  // constant; a team with no traced bull wears its lockup at the same height,
+  // which is square. The SIDE designs no longer start behind this — behind the
+  // whole animal is behind the rear wheel — they clear the SUN and share the
+  // bull; see sideFrom.
   function wrapMarkSpan(teamId) {
     const b = bullPath(teamId);
     const aspect = b ? (b.y1 - b.y0) / (b.x1 - b.x0) : 1;
@@ -1657,18 +1698,26 @@ const LiveryTex = (function () {
   // (Red Bull's ORACLE, Mercedes' PETRONAS), "slash" the W17's raked bars, and
   // "plate" the SF-26's number on a contrasting panel.
   // "duo" is the RB22's flank: the title sponsor large and aft, the partner
-  // SPINE SIDE: flank graphics. Compact marks (number/logo/code/plate), type
-  // (wordmark/duo/title), combos (ribbon/lockup), crest (emblem), and two
-  // colour graphics (band crease strip, sash diagonal). Culled 2026-09-09:
-  // bars/slash/split/chevron read as UI stickers at SIDE+zoom.
+  // mark small and forward (Red Bull over Ford Racing).
+  // SPINE SIDE: compact marks, type, combos, crest, two colour graphics.
+  // Culled 2026-09-09: bars/slash/split/chevron read as UI stickers at SIDE+zoom.
   const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash"];
+  // FILLS sit under the wrap's bull; lettering/numbers/badges sit over it.
+  // `ribbon` is content (strip + number). `band`/`sash` are colour panels.
+  const SIDE_FILL = { band: 1, sash: 1 };
   // Where a MARK (logo / number / code / plate) sits on the flank canvas.
   // v is the centre, 0 at the shoulder crease and 1 at the sidepod line.
   // Hung at 0.56 the plate sat in the sidepod (owner: "a little low"); hung
   // at 0.42 with the OLD 0.72-tall box the plate clipped the crease. The
   // box is now 0.56 tall so 0.40 clears the crease (~0.12) and stays out of
   // the sidepod (~0.68). Calibrated on the garage side preset, not the atlas.
-  const FLANK_MARK = { u: 0.19, v: 0.40, halfW: 0.40, halfH: 0.28 };
+  // `uOnCrown` is the same mark when the crown design has painted the flank.
+  // It cannot go forward to 0.19 (the sun) and it must not go aft past
+  // FLANK_SEEN (the rear tyre), so it is centred between them: the box is 0.21
+  // of the flank each side, which puts its leading edge at 0.17 — clear of the
+  // sun below the first fifth — and its trailing edge at 0.59, inside the last
+  // of the flank a side camera can see.
+  const FLANK_MARK = { u: 0.19, uOnCrown: 0.38, v: 0.40, halfW: 0.40, halfH: 0.28 };
   const TAIL_STYLE = {
     redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
     racingbulls: { kind: "diag",    a: 0.70 },   // youthful bold slash
@@ -1972,6 +2021,15 @@ const LiveryTex = (function () {
     const names = pack || SPONSORS[teamId] || ["APEXFIN", "NEXUS", "VOLTARC", "MERIDIAN", "HYPERGRID", "QUANTA"];
     const raceNum = numberOverride != null ? numberOverride
                   : (NUMBERS[teamId] != null ? NUMBERS[teamId] : 0);
+    // LAYER ORDER ON THE FLANK. A crown design that puts a graphic on the cover
+    // side shares that side with the SIDE design, and which goes on top is not
+    // a detail: a solid `split` over the wrap's bull erases its legs, and the
+    // bull over a wordmark erases the sponsor. A real livery layers base bands
+    // first, the brand mark over them, lettering and numbers over everything —
+    // so the crown's flank graphic is deferred to sit between the two classes.
+    let paintFlankBull = null;
+    const spineSideRaw = colors.spineSide || "none";
+    const spineSide = SPINE_SIDE_IDS.includes(spineSideRaw) ? spineSideRaw : "none";
     if (spineLogo === "logo") {
       // TOP-DOWN: upright with the nose up, so it reads from the chase camera
       // and in a plan view (the atlas is drawn front-at-the-bottom, so this is
@@ -2001,24 +2059,30 @@ const LiveryTex = (function () {
       // …and the FIELD is the sun plus the COVER beside it, not c1: this mark is
       // painted on the cover flank, and the monocoque is not a surface it touches.
       const sunLockup = markPalette(teamId, colors, [sunC, coverPaint], false, { noPlate: true });
-      // The bull is the BRAND colour whenever it reads at all on the body —
-      // the RB22's red across gold and navy alike, and picking this design in
-      // the editor already makes a custom livery, so it cannot key on "own".
-      // The floor is DELIBERATELY below INK_FLOOR: this is a metre-long brand
-      // silhouette that crosses the sun, not lettering, and Red Bull's own red
-      // on their own navy scores 2.3. A body the mark would truly vanish on (a
-      // red car) still falls through to the contrast-picked ink.
-      const MARK_ON_BODY = 2.0;
-      const brand = MARK_BRAND[teamId] && MARK_BRAND[teamId].mark;
-      const bullC = (brand && contrast(brand, c1) >= MARK_ON_BODY) ? brand : (sunLockup.mark || inkOn([sunC, c1]));
-      if (!flankBull(ctx, teamId, bullC)) {
+      // The bull's colour comes from flankBullColour, which the SIDE designs
+      // also read — MARK_ON_BODY's floor is DELIBERATELY below INK_FLOOR: this
+      // is a metre-long brand silhouette that crosses the sun, not lettering,
+      // and Red Bull's own red on their own navy scores 2.3. A body the mark
+      // would truly vanish on (a red car) still falls through to the ink.
+      const bullC = flankBullColour(teamId, colors, sunC, coverPaint, c1, sunLockup);
+      paintFlankBull = () => {
+      if (!flankBull(ctx, teamId, bullC) && spineSide === "none") {
         // No traced bull: the team's lockup at the SAME height the bull would
         // have had, on the same band. Hung at 0.72 of the flank it read as a
         // badge floating on an empty side while Red Bull's filled the cover.
+        // …and ONLY when the flank is otherwise empty, which is the whole
+        // reason it exists. A side design fills the flank by itself, and a
+        // mark standing on a full LOCKUP is a collision a bull never is: one
+        // silhouette in one colour can be inked against, five crest roles
+        // cannot. Measured with the lockup left in — Haas, Williams, Audi,
+        // Ferrari and Cadillac all painted a near-black number keyline onto a
+        // near-black crest at 1.0:1. A team WITH a traced bull keeps it under
+        // every side design: it is the livery's signature, not a filler.
         const span = wrapMarkSpan(teamId);
         eachFlank((F) => {
           ctx.save();
-          ctx.translate(F.fx(span.u0 + span.uLen / 2), F.R.y + F.R.h * 0.50); ctx.scale(flankSquash(spineHeight, F.R), 1);
+          ctx.translate(F.fx(span.u0 + span.uLen / 2), F.R.y + F.R.h * (BULL.top + BULL.h / 2));
+          ctx.scale(flankSquash(spineHeight, F.R), 1);
           const s = BULL.h * F.R.h;   // square through the squash, so square in metres
           const Rw = { x: -s / 2, y: -s / 2, w: s, h: s };
           if (LOGOS[teamId]) {
@@ -2027,6 +2091,7 @@ const LiveryTex = (function () {
           ctx.restore();
         });
       }
+      };
     } else if (spineLogo === "bigmark") {
       // BIG MARK: the mark WITHOUT its plate — Red Bull's bulls with no sun
       // disc, the way the RB22 wears the bull straight on the cover — at the
@@ -2087,9 +2152,9 @@ const LiveryTex = (function () {
     // the WHOLE cover, flank included, in `cover` — with the cover's own lockup.
     // Two SPINE TOP designs repaint that flank before the mark lands on it, and
     // then THEY are the backing: the wrap's sun and the saddle's panel both
-    // cover the mark's station (f 0.19).
-    const spineSideRaw = colors.spineSide || "none";
-    const spineSide = SPINE_SIDE_IDS.includes(spineSideRaw) ? spineSideRaw : "none";
+    // cover the mark's station (f 0.19). Read BEFORE the crown chain, because
+    // what the crown paints on the FLANK now depends on whether the flank has
+    // a side design of its own.
     // What the flank ACTUALLY wears. The saddle's is bandC, because bandC is
     // what saddleFlanks is handed — `stripe || accent` was a guess at it, and
     // on Mercedes and Ferrari the two differ, which is why their split still
@@ -2109,14 +2174,18 @@ const LiveryTex = (function () {
     // 1.02:1 on its own saddle, McLaren's crest 1.01, Cadillac's number 1.09.
     // An authored CREST INK still wins — it is documented as covering the flank
     // marks too, and a pick is a pick.
-    // …and under a WRAP that surface is the bare cover, NOT the sun. flankMark
-    // centres at su(F, 0.19) — sideFrom + 0.19 of what is left — which is 0.48
-    // of the flank at the sun's own aspect, while drawSunWrap's ellipse reaches
-    // only u 0.216. The mark is aft of the sun and never touches it, so naming
-    // the sun in its list is the same phantom-surface mistake as the fin: with
-    // a near-white sun over a near-black cover NO ink clears both, and the
-    // compromise landed on Williams' sun at 1.07:1. The full-width BANDS do
-    // cross the sun, so flankBgs keeps both for them.
+    // …and under a WRAP that surface is not the sun: the mark never touches
+    // it, and naming it would be the same phantom-surface mistake as the fin
+    // (with a near-white sun over a near-black cover NO ink clears both, and
+    // the compromise landed on Williams' sun at 1.07:1). It is the BULL, since
+    // uOnCrown stands the mark on the animal rather than aft of it — one
+    // silhouette and the cover showing round it, both real, both scored.
+    // flankBullColour is the painter's own answer, not a second guess at it.
+    // The full-width BANDS cross the sun as well, so flankBgs keeps both.
+    const markBgs = spineLogo !== "wrap" ? flankBgs
+      : bullPath(teamId) ? [flankBullColour(teamId, colors, flankBg, coverPaint, c1), coverPaint]
+      : [coverPaint];   // no traced bull, and then the wrap leaves the flank bare
+    const markBg = markBgs[0];
     // NOT YET RIGHT for a mark that SPANS the saddle's edge: saddleFlanks fills
     // to u 0.58 tapering to 0.40 and the wordmark box runs u 0.40..0.96, so it
     // crosses onto bare cover. Inking against both was tried and is worse, not
@@ -2126,6 +2195,9 @@ const LiveryTex = (function () {
     // markPalette already builds for marks, which is a change to the flank
     // painting path rather than a better choice of ink. Recorded in the guard.
     const inkFlank = colors.crestInk || inkOn(spineLogo === "wrap" ? [coverPaint] : flankBgs);
+    // The MARK's own ink, against the MARK's own surfaces. Identical to
+    // inkFlank everywhere the two lists are (every crown but the wrap).
+    const inkMark = colors.crestInk || inkOn(markBgs);
     // ...and a band painted ON that flank has to clear IT, not the cover. bandC
     // is scored against coverPaint, so wherever the crown design has repainted
     // the flank — the saddle in stripe||accent, the wrap in the sun's colour —
@@ -2150,63 +2222,81 @@ const LiveryTex = (function () {
     // edge leaving the band, and the band itself cannot start further forward
     // because the airbox and roll hoop occupy the flank ahead of z -0.66.
     // Every side design is painted once per flank, in that flank's frame —
-    // and inside the part of it the CROWN design has left free. The wrap hangs
-    // a metre-long bull over the front two thirds of the flank, so a side pick
-    // authored front-to-rear landed its wordmarks across the bull's legs. `su`
-    // is the side band's own 0→1 along the flank; under the wrap it starts
-    // aft of the bull, everywhere else it is the whole flank.
-    const sideFrom = spineLogo === "wrap"
-      ? (() => { const s = wrapMarkSpan(teamId); return s.u0 + s.uLen; })() : 0;
+    // and inside the part of it the CROWN design has left free. `su` is the
+    // side band's own 0→1 along the flank; under the wrap it starts aft of the
+    // crown's graphic, everywhere else it is the whole flank.
+    // …AFT OF THE SUN, NOT AFT OF THE BULL, and that is the whole of this fix.
+    // The bull then ended at u 0.58 against a FLANK_SEEN of 0.62, so "start
+    // behind the animal" and "start behind the wheel" were the same
+    // instruction — and it is only the SUN's reach that binds either way. Even
+    // now that the bull ends at 0.40 this stays derived from the sun. Measured
+    // on the SHIPPED Red Bull (crown wrap, side duo) from the garage side
+    // camera by tools/car/flank-occlusion.mjs: 92 % of duo's ink behind the
+    // car, 95 % of a wordmark's, 100 % of slash's, 50-54 % of every flank mark.
+    // The two graphics are not the same kind of obstacle. The sun is a hard
+    // gold disc that swallows whatever crosses it, so the band still clears it
+    // — sunReach, derived, not a copied 0.216. The bull is a silhouette, it is
+    // painted BETWEEN the fills and the lettering now (paintFlankBull), and
+    // the crease strip above its back is free because BULL.top dropped it onto
+    // the sidepod line. Sharing the flank with the mark is what the real cover
+    // does; hiding behind the rear tyre to avoid it is not.
+    const sideFrom = spineLogo === "wrap" ? Math.round((sunReach(0) + 0.02) * 1000) / 1000 : 0;
+    // …and a band may run to the tail of the flank, but CONTENT may not: a
+    // stripe's aft end disappearing behind the wheel is a stripe, a sponsor
+    // name's aft end disappearing behind the wheel is half a word. `su` is the
+    // band axis, `sc` the content axis, and they differ only where a crown has
+    // taken the front — every other team's lettering is where it always was.
+    const sideTo = sideFrom ? FLANK_SEEN : 1;
     const su = (F, u) => F.fx(sideFrom + u * (1 - sideFrom));
+    const sc = (F, u) => F.fx(sideFrom + u * (sideTo - sideFrom));
     const sbox = (F, u0, u1, v0, v1) => {
-      const xa = su(F, u0), xb = su(F, u1);
+      const xa = sc(F, u0), xb = sc(F, u1);
       return { x: Math.min(xa, xb), y: F.R.y + v0 * F.R.h, w: Math.abs(xb - xa), h: (v1 - v0) * F.R.h };
     };
-    // Under wrap the free band is the aft third beside the tyre; hang compact
-    // marks as far forward IN that band as the box allows (measured 2026-09-09:
-    // u 0.19 landed u0 0.57 on Red Bull and ~52 % hidden from SIDE).
-    const flankMarkU = spineLogo === "wrap" ? 0.08 : FLANK_MARK.u;
-    const flankMark = (paint, scale) => eachFlank((F) => {
-      const hw = FLANK_MARK.halfW * (scale?.w || 1), hh = FLANK_MARK.halfH * (scale?.h || 1);
+    // A MARK is one small object and it carries its own keyline, halo or plate,
+    // so it stands ON the crown's graphic rather than aft of it — centred in
+    // the strip a side camera can see, its leading edge clear of the sun.
+    const markU = sideFrom ? FLANK_MARK.uOnCrown : FLANK_MARK.u;
+    const flankMark = (paint) => eachFlank((F) => {
       ctx.save();
-      ctx.translate(su(F, flankMarkU), F.R.y + F.R.h * FLANK_MARK.v);
+      ctx.translate(F.fx(markU), F.R.y + F.R.h * FLANK_MARK.v);
       ctx.scale(flankSquash(spineHeight, F.R), 1);
       paint({
-        x: -F.R.h * hw, y: -F.R.h * hh,
-        w: F.R.h * hw * 2, h: F.R.h * hh * 2,
+        x: -F.R.h * FLANK_MARK.halfW, y: -F.R.h * FLANK_MARK.halfH,
+        w: F.R.h * FLANK_MARK.halfW * 2, h: F.R.h * FLANK_MARK.halfH * 2,
       });
       ctx.restore();
     });
+    // The crown's flank graphic takes its place in the stack (see the layer
+    // note where paintFlankBull is declared).
+    if (paintFlankBull && !SIDE_FILL[spineSide]) { paintFlankBull(); paintFlankBull = null; }
     if (spineSide === "logo" || spineSide === "emblem") {
-      // logo: team mark at FLANK_MARK (full lockup when an image exists).
-      // emblem: LARGE bare crest — the garage-readable hero mark (share ~0.03
-      // for logo was still tiny at SIDE+zoom on saddle).
+      // logo: full lockup at FLANK_MARK. emblem: LARGE bare crest (garage hero).
       const paintFlankLogo = (Rm, bare) => {
         if (LOGOS[teamId]) {
-          drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], flankBg, inkFlank), emblemRim);
+          drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], markBg, inkMark), emblemRim);
         } else drawCrest(ctx, teamId, Rm, {
-          liv: colors, field: flankBgs, bare,
-          palette: markPalette(teamId, colors, spineLogo === "wrap" ? [coverPaint] : flankBgs, false),
+          liv: colors, field: markBgs, bare,
+          palette: markPalette(teamId, colors, markBgs, false),
         });
       };
-      if (spineSide === "emblem" || spineLogo === "saddle") {
+      if (spineSide === "emblem") {
         eachFlank((F) => {
           ctx.save();
-          ctx.translate(su(F, spineSide === "emblem" ? 0.20 : 0.17), F.R.y + F.R.h * FLANK_MARK.v);
+          ctx.translate(sc(F, sideFrom ? 0.45 : 0.22), F.R.y + F.R.h * FLANK_MARK.v);
           ctx.scale(flankSquash(spineHeight, F.R), 1);
-          const sc = spineSide === "emblem" ? 1.15 : 1;
           paintFlankLogo({
-            x: -F.R.h * 0.48 * sc, y: -F.R.h * 0.34 * sc,
-            w: F.R.h * 0.96 * sc, h: F.R.h * 0.68 * sc,
+            x: -F.R.h * 0.48, y: -F.R.h * 0.34,
+            w: F.R.h * 0.96, h: F.R.h * 0.68,
           }, true);
           ctx.restore();
         });
       } else {
-        flankMark((Rm) => paintFlankLogo(Rm, false), { w: 1.12, h: 1.10 });
+        flankMark((Rm) => paintFlankLogo(Rm, false));
       }
     } else if (spineSide === "number" || spineSide === "code") {
       flankMark((Rm) => drawNumber(ctx, spineSide === "code" ? driverCode(teamId, raceNum) : raceNum,
-                                   Rm, inkFlank, accent, null, colors.numFont, 0));
+                                   Rm, inkMark, accent, null, colors.numFont, 0));
     } else if (spineSide === "plate") {
       // The number on a contrasting plate (drawNumber's own rounded board),
       // inked for the PLATE: the body colour when it reads on it, else an ink.
@@ -2218,45 +2308,59 @@ const LiveryTex = (function () {
       // choice about one surface, and re-deriving it is exactly the "my colour
       // was thrown away" the tint rows exist to stop.
       let plateC = colors.plateTint || stripe || accent;
-      if (!colors.plateTint && contrast(plateC, flankBg) < 1.6) {
+      if (!colors.plateTint && contrast(plateC, markBg) < 1.6) {
         for (const cand of [c2, c1, stripe, INK_DARK, INK_LIGHT].filter(Boolean)) {
-          if (contrast(cand, flankBg) > contrast(plateC, flankBg)) plateC = cand;
+          if (contrast(cand, markBg) > contrast(plateC, markBg)) plateC = cand;
         }
       }
       const plateInk = colors.plateInk || (contrast(c1, plateC) >= 3 ? c1 : inkOn([plateC]));
-      flankMark((Rm) => drawNumber(ctx, raceNum, Rm, plateInk, inkFlank, plateC, colors.numFont, 0));
+      flankMark((Rm) => drawNumber(ctx, raceNum, Rm, plateInk, inkMark, plateC, colors.numFont, 0));
     } else if (spineSide === "wordmark") {
-      // Title sponsor fills the crease band — big enough to read at SIDE+zoom
-      // (garage 2026-09-09: the short centred strip vanished in yellow dead space).
+      // The title sponsor along the UPPER half — the W17's PETRONAS, McLaren's
+      // title on the papaya cover. Under a wrap it rides the CREASE STRIP that
+      // BULL.top freed above the animal's back, which is where the real RB22
+      // carries its title sponsor, and where a side camera can still read it.
       eachFlank((F) => drawWordmark(ctx, names[0] || "",
-        sideFrom ? sbox(F, 0.04, 0.55, 0.16, 0.50)
-                 : sbox(F, 0.05, 0.64, 0.12, 0.46),
-        inkFlank, { align: "left", pad: 3 }));
+        sideFrom ? sbox(F, 0.02, 0.98, 0.03, 0.30) : sbox(F, 0.06, 0.94, 0.12, 0.48),
+        sideFrom ? inkMark : inkFlank, { align: "center", pad: sideFrom ? 6 : 14,
+                                         halo: haloIf(sideFrom ? inkMark : inkFlank) }));
     } else if (spineSide === "duo") {
-      // Title + partner as one typographic stack under the crease — title owns
-      // the row, partner is a second baseline (not floating crumbs on the panel).
+      // Title sponsor large across the rear, partner small and forward — the
+      // RB22's Red Bull over Ford Racing. Both on the UPPER half so they read
+      // as cover graphics, not sidepod stickers.
+      // Side by side down the whole flank, but STACKED when a crown design
+      // has taken the front: two names abreast in a third of the flank clipped
+      // the partner to "(DRENY)". Under a wrap that stack is the crease strip,
+      // in the part of it the rear tyre does not cover.
       eachFlank((F) => {
-        const uEnd = sideFrom ? 0.55 : 0.62;
-        drawWordmark(ctx, names[0] || "", sbox(F, 0.05, uEnd, 0.10, 0.34), inkFlank, { align: "left", pad: 2 });
-        drawWordmark(ctx, names[1] || "", sbox(F, 0.05, uEnd * 0.90, 0.36, 0.52), inkFlank, { align: "left", pad: 2 });
+        if (sideFrom) {
+          // The lower name overhangs the bull's back by a whisker, which is why
+          // it takes the MARK's ink and the mark's surfaces: it is lettering on
+          // a graphic, not lettering on bare cover. Rows any shorter than this
+          // and the fit walk lands on 12 px against the 18 px the same two names
+          // get on every other crown.
+          drawWordmark(ctx, names[0] || "", sbox(F, 0.02, 0.98, 0.02, 0.17), inkMark, { align: "center", pad: 4, halo: haloIf(inkMark) });
+          drawWordmark(ctx, names[1] || "", sbox(F, 0.12, 0.88, 0.18, 0.33), inkMark, { align: "center", pad: 4, halo: haloIf(inkMark) });
+          return;
+        }
+        drawWordmark(ctx, names[0] || "", sbox(F, 0.40, 0.96, 0.14, 0.50), inkFlank, { align: "center", pad: 8 });
+        drawWordmark(ctx, names[1] || "", sbox(F, 0.05, 0.35, 0.16, 0.46), inkFlank, { align: "center", pad: 6 });
       });
     } else if (spineSide === "title") {
-      // Title sponsor ON a contrasting board — the garage-wall sticker language
-      // (distinct from bare wordmark and from PLATE's number board).
+      // Title sponsor ON a contrasting board — distinct from bare wordmark / PLATE.
       let boardC = colors.plateTint || stripe || accent;
-      if (!colors.plateTint && contrast(boardC, flankBg) < 1.6) {
+      if (!colors.plateTint && contrast(boardC, markBg) < 1.6) {
         for (const cand of [c2, c1, stripe, INK_DARK, INK_LIGHT].filter(Boolean)) {
-          if (contrast(cand, flankBg) > contrast(boardC, flankBg)) boardC = cand;
+          if (contrast(cand, markBg) > contrast(boardC, markBg)) boardC = cand;
         }
       }
       const boardInk = colors.plateInk || (contrast(c1, boardC) >= 3 ? c1 : inkOn([boardC]));
       eachFlank((F) => {
-        const box = sideFrom ? sbox(F, 0.06, 0.52, 0.16, 0.52) : sbox(F, 0.08, 0.58, 0.14, 0.50);
+        const box = sideFrom ? sbox(F, 0.06, 0.94, 0.04, 0.34) : sbox(F, 0.08, 0.58, 0.14, 0.50);
         const r = Math.min(box.h * 0.18, box.w * 0.06);
         ctx.save();
         ctx.fillStyle = cssA(boardC, 0.98);
         ctx.beginPath();
-        // Rounded board (manual — no roundRect assumption on every ctx).
         const x = box.x, y = box.y, w = box.w, h = box.h;
         ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
         ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
@@ -2267,72 +2371,77 @@ const LiveryTex = (function () {
         drawWordmark(ctx, names[0] || "", box, boardInk, { align: "center", pad: 6 });
       });
     } else if (spineSide === "ribbon") {
-      // Number-in-strip: a real crease band with a large race number (SF-26 /
-      // PETRONAS station). Stops before the aft tyre.
+      // A crease band the length of the flank with the number sitting in it —
+      // the high station a 2026 cover actually wears (W17 PETRONAS strip, the
+      // SF-26's 16 in the white saddle). The band hangs from the crease so it
+      // cannot read as a sidepod sticker; the number is inked for the band.
       eachFlank((F) => {
         const Sf = F.R;
-        const uEnd = sideFrom ? 0.55 : 0.58;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.97);
-        const x0 = su(F, 0.04), x1 = su(F, uEnd);
-        const bandTop = Sf.y + Sf.h * 0.10, bandH = Sf.h * 0.36;
-        ctx.fillRect(Math.min(x0, x1), bandTop, Math.abs(x1 - x0), bandH);
+        const x0 = su(F, 0.02), x1 = su(F, 0.98);
+        ctx.fillRect(Math.min(x0, x1), Sf.y + Sf.h * 0.04, Math.abs(x1 - x0), Sf.h * 0.30);
         ctx.restore();
         ctx.save();
-        ctx.translate(su(F, 0.18), Sf.y + Sf.h * 0.28);
+        // The band runs to the tail of the flank; the NUMBER in it may not.
+        // Under a wrap sc's window is 0.385 of the flank and the digits are
+        // 0.16 of it wide, so the only station that keeps the whole number in
+        // both the band and the seen strip is the middle of the window.
+        ctx.translate(sc(F, sideFrom ? 0.45 : 0.16), Sf.y + Sf.h * 0.19);
         ctx.scale(flankSquash(spineHeight, Sf), 1);
         const plateInk = contrast(c1, flankBandC) >= 3 ? c1 : inkOn([flankBandC]);
-        drawNumber(ctx, raceNum, { x: -Sf.h * 0.42, y: -Sf.h * 0.18, w: Sf.h * 0.84, h: Sf.h * 0.36 },
+        drawNumber(ctx, raceNum, { x: -Sf.h * 0.30, y: -Sf.h * 0.13, w: Sf.h * 0.60, h: Sf.h * 0.26 },
                    plateInk, inkFlank, null, colors.numFont, 0);
         ctx.restore();
       });
     } else if (spineSide === "lockup") {
-      // Number + bare mark as ONE unit on the crease — large, tight gap.
+      // Number forward and the team mark aft, both on the UPPER third — the
+      // pairing a 2026 cover carries (the SF-26's 16 with HP, the W17's 12
+      // with the star). The mark is BARE so its plate cannot clip the crease
+      // the way the full lockup did at this station.
+      // Two objects abreast need room, and under a wrap the window sc leaves is
+      // 0.385 of the flank: they ride the crease strip at 0.7 scale rather than
+      // one of them sliding aft into the wheel.
+      const k = sideFrom ? 0.70 : 1, vMid = sideFrom ? 0.15 : 0.30;
       eachFlank((F) => {
-        const v = F.R.y + F.R.h * 0.34;
-        const sq = flankSquash(spineHeight, F.R);
         ctx.save();
-        ctx.translate(su(F, 0.14), v);
-        ctx.scale(sq, 1);
-        drawNumber(ctx, raceNum, { x: -F.R.h * 0.34, y: -F.R.h * 0.24, w: F.R.h * 0.68, h: F.R.h * 0.48 },
-                   inkFlank, accent, null, colors.numFont, 0);
+        ctx.translate(sc(F, sideFrom ? 0.22 : 0.12), F.R.y + F.R.h * vMid);
+        ctx.scale(flankSquash(spineHeight, F.R), 1);
+        drawNumber(ctx, raceNum, { x: -F.R.h * 0.26 * k, y: -F.R.h * 0.20 * k, w: F.R.h * 0.52 * k, h: F.R.h * 0.40 * k },
+                   inkMark, accent, null, colors.numFont, 0);
         ctx.restore();
         ctx.save();
-        ctx.translate(su(F, 0.42), v);
-        ctx.scale(sq, 1);
-        const Rm = { x: -F.R.h * 0.26, y: -F.R.h * 0.20, w: F.R.h * 0.52, h: F.R.h * 0.40 };
+        ctx.translate(sc(F, sideFrom ? 0.74 : 0.40), F.R.y + F.R.h * vMid);
+        ctx.scale(flankSquash(spineHeight, F.R), 1);
+        const Rm = { x: -F.R.h * 0.20 * k, y: -F.R.h * 0.16 * k, w: F.R.h * 0.40 * k, h: F.R.h * 0.32 * k };
         if (LOGOS[teamId]) {
-          drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], flankBg, inkFlank), emblemRim);
+          drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], markBg, inkMark), emblemRim);
         } else {
           drawCrest(ctx, teamId, Rm, {
-            liv: colors, field: flankBgs, bare: true,
-            palette: markPalette(teamId, colors, spineLogo === "wrap" ? [coverPaint] : flankBgs, false),
+            liv: colors, field: markBgs, bare: true,
+            palette: markPalette(teamId, colors, markBgs, false),
           });
         }
         ctx.restore();
       });
     } else if (spineSide === "band") {
-      // Solid colour crease BAND — a real title-strip panel on the upper flank
-      // (not a thin rule). Tall enough that sideTint owns the flank sample on a
-      // saddle, where the crown already painted the whole band dark.
+      // Solid crease colour panel — SIDE_FILL so the wrap bull sits on top.
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.97);
-        const uEnd = sideFrom ? 0.58 : 0.68;
+        const uEnd = sideFrom ? 0.98 : 0.68;
         const x0 = su(F, 0.02), x1 = su(F, uEnd);
         ctx.fillRect(Math.min(x0, x1), Sf.y + Sf.h * 0.06, Math.abs(x1 - x0), Sf.h * 0.52);
         ctx.restore();
       });
     } else if (spineSide === "sash") {
-      // Wide diagonal sash — a racing-flag cut across the flank (broader and
-      // shallower than slash's single rake). Fills most of the free band so the
-      // pick reads as the flank colour, not a thin sticker on the panel.
+      // Wide diagonal racing sash — SIDE_FILL under the wrap bull.
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.97);
-        const uEnd = sideFrom ? 0.72 : 0.66;
+        const uEnd = sideFrom ? 0.98 : 0.66;
         ctx.beginPath();
         ctx.moveTo(su(F, 0.02), Sf.y + Sf.h * 0.05);
         ctx.lineTo(su(F, uEnd), Sf.y + Sf.h * 0.05);
@@ -2342,6 +2451,7 @@ const LiveryTex = (function () {
         ctx.restore();
       });
     }
+    if (paintFlankBull) { paintFlankBull(); paintFlankBull = null; }
 
     // Sponsor wordmarks (names resolved above, by the spine).
     if (names.length) {   // `clean` leaves every wordmark region as paint
@@ -2431,7 +2541,7 @@ const LiveryTex = (function () {
   return { SIZE, SIZE_H, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, INK_FLOOR, numCrestBox, paintSwatch,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
-           markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK,
+           markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS };
 })();
