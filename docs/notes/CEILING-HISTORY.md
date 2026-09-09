@@ -2410,6 +2410,17 @@ files are not ratcheted.
   no reload loop. A backend that proves itself clears its strikes, the retired
   pick is remembered in `apex26.gfxBackendWas`, and both latches join
   RESET RENDERER's list (the frozen copy in gfx-backend-canary is updated).
+- `js/game.js` lines 10247 -> **10286**, codeLines 5560 -> **5571**
+  (2026-09-08): DIRTY AIR. Eleven lines of code and twenty-eight of comment,
+  and the comment is the larger half on purpose: the term is a NEW physical
+  rule applied to the player as well as the AI, its magnitude is taken from the
+  FIA's published CFD (~35 % of downforce lost at 10 m), and the reason it
+  exists — following was strictly and only beneficial, so a slipstream was
+  worth nine grid positions of pace unopposed — is not recoverable from the
+  arithmetic. Symmetric by construction: one helper, both sides. Reads car
+  positions only, never curvature, so it stays outside the PHYSICS.md
+  curvature table by the tow's own argument. Evidence and baselines:
+  `docs/notes/AI-FIELD-RESEARCH.md`, `tools/check/ai-field.mjs`.
 
 - `js/game.js` lines 10247 -> **10253**, codeLines 5560 -> **5561** (2026-09-08):
   `resolveLivery()` now falls back through the team's own livery list. A stored

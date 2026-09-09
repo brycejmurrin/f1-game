@@ -894,6 +894,37 @@ function isRaining() { return raceWeather === "rain"; }
 // "Weather and tyres". No car => the slick column: the old value, untouched.
 function gripMult(c) { const r = WET_GRIP[raceWeather]; return !r ? 1 : r[c ? (c.tread == null ? 2 : c.tread) : 0]; }
 
+// DIRTY AIR. Until 2026-09-08 following was strictly and only BENEFICIAL in
+// this model: the tow gave +4.5 % of top speed and cost nothing at all. With a
+// median adjacent-car pace gap of 0.484 % that made a slipstream worth about
+// nine grid positions of pace, unopposed — which is why pairs of AI cars traded
+// places over and over (57 % of order changes at Monza were the same pairs
+// oscillating, measured by tools/check/ai-field.mjs). A car that drops behind
+// is handed a free surge and comes straight back past.
+//
+// Real cars pay for the wake. The FIA's own CFD, reported for the 2025 field,
+// is roughly 20 % of downforce lost at 20 m and 35 % at 10 m (the 2022 rules
+// targeted 4 % / 18 %; docs/notes/AI-FIELD-RESEARCH.md). So the SAME proximity
+// that grants the tow now costs downforce, and only the AERO part of grip —
+// mechanical grip is unaffected, which is why the penalty fades to nothing at
+// low speed exactly as the downforce it removes does.
+//
+// SYMMETRIC by construction: one helper, used for the player at aeroGrip and
+// for the AI at _aiBr.grip. An asymmetric version would be the unfair kind of
+// difficulty. It reads CAR POSITIONS ONLY — never curvature — so it stays
+// outside docs/PHYSICS.md's curvature table by the same argument the tow's own
+// comment makes: the wake is behind a car, not around a corner.
+const DIRTY_AIR = 0.35;          // share of downforce lost in the closest wake
+function wakeOf(gap, dx) {       // 0 clear air … 1 directly behind, close
+  return clamp((34 - gap) / 28, 0, 1) * clamp(1 - Math.abs(dx) / 4, 0, 1);
+}
+function dirtyAirMul(wake, speed) {
+  if (!wake) return 1;
+  const aeroShare = DOWNFORCE / (1 + DOWNFORCE);       // how much of peak grip is aero
+  const q = Math.min(1, Math.abs(speed) / vTop()) ** 2;  // ...and how much of it is made, at this speed
+  return 1 - DIRTY_AIR * wake * aeroShare * q;
+}
+
 // ---------- state ----------
 let state = "menu";
 let track = null, builtTrackId = null, builtTrackNight = null;
@@ -4837,7 +4868,8 @@ function updateCar(c, dt, ranked) {
       AiDrive.pushLook(d, onLine ? TrackLine.pathK(track, ss) : kk, Math.abs(Tracks.bankAngle(track, ss)));
     }
     _aiBr.traits = aiT; _aiBr.samples = AiDrive.endLook(); _aiBr.latMax = LAT_MAX;
-    _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE; _aiBr.grip = gripMult(c);
+    _aiBr.aeroLoad = c.aeroLoad; _aiBr.brake = BRAKE;
+    _aiBr.grip = gripMult(c) * dirtyAirMul(c.towing || 0, c.speed);   // the wake costs the AI its corner too
     _aiBr.speed = c.speed; _aiBr.blocker = !!blocker; _aiBr.blockerGap = blockerGap;
     _aiBr.blockerSpeed = blocker ? blocker.speed : 0;
     _aiBr.roomL = roomL; _aiBr.roomR = roomR; _aiBr.team = c.team; _aiBr.seat = c.seat; _aiBr.stats = c.houseStats;
@@ -4850,9 +4882,13 @@ function updateCar(c, dt, ranked) {
     // Applied BEFORE the queue cap, so it never rams the car directly ahead (the
     // cap bounds it) but surges the instant we draw out of that car's box. Fades
     // with gap + lateral offset; straight only (the wake is behind the car).
+    // The WAKE is recorded whatever the corner does — dirty air is a property
+    // of sitting behind a car, and it is in the CORNERS that it decides
+    // anything. The tow keeps its own straight-only gate below: a slipstream
+    // needs a straight, a wake does not.
+    if (towCar) c.towing = wakeOf(towGap, towCar.x - c.x);
     if (towCar && !braking && kMax < 0.006) {
-      const tow = clamp((34 - towGap) / 28, 0, 1) * clamp(1 - Math.abs(towCar.x - c.x) / 4, 0, 1);
-      vmax *= 1 + AiDrive.towGain(!!track.street) * tow;
+      vmax *= 1 + AiDrive.towGain(!!track.street) * c.towing;
     }
     // queue behind the car blocking our lane (prog-based, immune to rank swaps):
     // cap our pace to it, braking if closing fast, so we tuck behind not ram.
@@ -5555,7 +5591,10 @@ function updateCar(c, dt, ranked) {
     // aero-load term is scaled by aeroDfMult (1 in Z-mode, 0.45 with the flaps
     // fully open). Carrying X-mode into a fast corner is therefore a genuine
     // loss of grip at exactly the speed where aero load is doing the most work.
-    const aeroGrip = 1 + DOWNFORCE * aeroDfMult(c) * Math.min(1, (Math.abs(c.speed) / vTop())) ** 2;
+    // ...and the same wake penalty the AI pays (dirtyAirMul): following costs
+    // downforce for everyone, or the assist is a cheat in one direction.
+    const aeroGrip = (1 + DOWNFORCE * aeroDfMult(c) * Math.min(1, (Math.abs(c.speed) / vTop())) ** 2)
+      * dirtyAirMul(c.towing || 0, c.speed);
     c._aeroGrip = aeroGrip;          // see c._vmaxNow — the other half of the trade
     const offDepth = clamp((Math.abs(c.x) - hw) / 1.5, 0, 1);
     const surfMu = c.onKerb ? 1 : lerp(1, OFF_GRIP, offDepth);
