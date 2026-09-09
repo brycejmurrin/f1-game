@@ -40,7 +40,7 @@ function getStoredParts(page, teamId) {
 
 // The default car with nothing fitted, and FREE BUILD off — what a fresh page
 // gave, re-established on the live one. `team` is an id or a Teams.LIST index.
-async function openSetup(page, team = "mclaren") {
+async function openSetup(page, team = "mclaren", opts) {
   await toMenu(page);
   await forgetStored(page, ["unlimitedBudget"]);
   await pinFreePlay(page, { team, click: false });   // #mb-race re-reads the store
@@ -49,6 +49,18 @@ async function openSetup(page, team = "mclaren") {
   await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await freeBuildOff(page);
+  // `draw` opts BACK IN to the render loop. The garage draws a live turntable
+  // and getSetupPreviewMesh() re-keys on partsVisualKey, so every option click
+  // rebuilds the car mesh and repaints the livery atlas at SwiftShader speed —
+  // most of this file's cost, none of what its assertions read. Stopped by
+  // default (render() returns early on headlessMode, js/game.js).
+  //
+  // THE GALLERY TESTS MUST OPT BACK IN: an undrawn canvas keeps its LAST frame,
+  // so a screenshot with the loop stopped is a stale car — silently wrong, which
+  // is worse than slow. Every test below that calls page.screenshot passes
+  // { draw: true }.
+  const draw = !!(opts && opts.draw);
+  await page.evaluate((on) => window.__apex.headless(!on), draw);
 }
 
 async function pickOpt(page, catId, optId) {
@@ -103,7 +115,7 @@ test.describe("Parts persistence — survives page reload", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("selected gearbox part active after reload", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, "mclaren", { draw: true });
 
     await pickOpt(page, "gearbox", "carbon_case");
 
@@ -117,7 +129,7 @@ test.describe("Parts persistence — survives page reload", () => {
   });
 
   test("selected fuel part active after reload", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, "mclaren", { draw: true });
 
     await pickOpt(page, "fuel", "quali_mix");
 
@@ -182,7 +194,7 @@ test.describe("Parts persistence — navigation", () => {
   test.use({ viewport: LANDSCAPE });
 
   test("DONE button closes setup and returns to select screen", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, "mclaren", { draw: true });
 
     await page.locator("#cs-done").click();
     // DONE carries on to the race settings — the garage is a step on the way
