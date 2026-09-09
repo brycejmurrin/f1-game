@@ -1696,12 +1696,10 @@ const LiveryTex = (function () {
   // fin-less with a tall dorsal cover, carry the driver number. Absent ("none")
   // leaves REGIONS.spineSide unpainted, so the shipped atlas is pixel-identical.
   // From the 2026 launch photos: "wordmark" is the title sponsor on the flank
-  // (Red Bull's ORACLE, Mercedes' PETRONAS), "slash" the W17's raked bars, and
-  // "plate" the SF-26's number on a contrasting panel.
-  // "duo" is the RB22's flank: the title sponsor large and aft, the partner
-  // mark small and forward (Red Bull over Ford Racing).
-  // SPINE SIDE: compact marks, type, combos, crest, two colour graphics.
-  // Culled 2026-09-09: bars/slash/split/chevron read as UI stickers at SIDE+zoom.
+  // (Red Bull's ORACLE, Mercedes' PETRONAS), "plate" the SF-26's number on a
+  // contrasting panel, "duo" the RB22 (title aft, partner forward). The W17's
+  // raked bars were `"slash"` — culled 2026-09-09 with bars/split/chevron as
+  // SIDE+zoom sticker graphics; Mercedes ships `"sash"` instead.
   const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash"];
   // FILLS sit under the wrap's bull; lettering/numbers/badges sit over it.
   // `ribbon` is content (strip + number). `band`/`sash` are colour panels.
@@ -2057,7 +2055,7 @@ const LiveryTex = (function () {
       // would truly vanish on (a red car) still falls through to the ink.
       const bullC = flankBullColour(teamId, colors, sunC, coverPaint, c1, sunLockup);
       paintFlankBull = () => {
-      if (!flankBull(ctx, teamId, bullC) && spineSide === "none") {
+      if (!flankBull(ctx, teamId, bullC) && spineSide === "none" && !colors._bareWrapFlank) {
         // No traced bull: the team's lockup at the SAME height the bull would
         // have had, on the same band. Hung at 0.72 of the flank it read as a
         // badge floating on an empty side while Red Bull's filled the cover.
@@ -2069,6 +2067,8 @@ const LiveryTex = (function () {
         // Ferrari and Cadillac all painted a near-black number keyline onto a
         // near-black crest at 1.0:1. A team WITH a traced bull keeps it under
         // every side design: it is the livery's signature, not a filler.
+        // `_bareWrapFlank` is a probe-only skip so contrast differencing can
+        // ground against the sun instead of this filler (Aston wrap/code).
         const span = wrapMarkSpan(teamId);
         // …and this badge is NOT the bull, so it does not get the bull's field.
         // `sunLockup` pairs the sun with the cover because a traced bull is a
@@ -2354,8 +2354,12 @@ const LiveryTex = (function () {
           if (contrast(cand, markBg) > contrast(plateC, markBg)) plateC = cand;
         }
       }
-      const plateInk = colors.plateInk || (contrast(c1, plateC) >= 3 ? c1 : inkOn([plateC]));
-      flankMark((Rm) => drawNumber(ctx, raceNum, Rm, plateInk, inkMark, plateC, colors.numFont, 0));
+      // Ink for the BOARD. Glyph overhang onto the flank is a halo/clip problem;
+      // scoring ink against plate+flank together forced a light ink on Red Bull's
+      // gold saddle (no colour clears navy board AND gold flank).
+      const plateInk = colors.plateInk || inkOn([plateC]);
+      flankMark((Rm) => drawNumber(ctx, raceNum, Rm, plateInk, inkMark, plateC, colors.numFont, 0,
+                                   contrast(plateInk, markBg) < 2.0 ? haloFor(plateInk) : null));
     } else if (spineSide === "wordmark") {
       // The title sponsor along the UPPER half — the W17's PETRONAS, McLaren's
       // title on the papaya cover. Under a wrap it rides the CREASE STRIP that
@@ -2404,14 +2408,19 @@ const LiveryTex = (function () {
     } else if (spineSide === "title") {
       // Title sponsor ON a contrasting board — distinct from bare wordmark / PLATE.
       let boardC = colors.plateTint || c2 || accent;
-      if (!colors.plateTint && contrast(boardC, markBg) < 1.6) {
+      if (!colors.plateTint && contrast(boardC, markBg) < 2.0) {
         for (const cand of [c2, c1, INK_DARK, INK_LIGHT].filter(Boolean)) {
           if (contrast(cand, markBg) > contrast(boardC, markBg)) boardC = cand;
         }
       }
-      const boardInk = colors.plateInk || (contrast(c1, boardC) >= 3 ? c1 : inkOn([boardC]));
+      // Same board-first ink as PLATE; halo when the flank would swallow a spill.
+      const boardInk = colors.plateInk || inkOn([boardC]);
       eachFlank((F) => {
-        const box = sideFrom ? sbox(F, 0.06, 0.94, 0.04, 0.34) : sbox(F, 0.08, 0.58, 0.14, 0.50);
+        // Under a saddle stay on the panel — past u 0.50 is bare cover, and a
+        // teal TITLE board on Mercedes' pale cover measured 1.53:1.
+        const box = sideFrom ? sbox(F, 0.06, 0.94, 0.04, 0.34)
+                  : spineLogo === "saddle" ? sbox(F, 0.04, 0.50, 0.14, 0.50)
+                  : sbox(F, 0.08, 0.58, 0.14, 0.50);
         const r = Math.min(box.h * 0.18, box.w * 0.06);
         ctx.save();
         ctx.fillStyle = cssA(boardC, 0.98);
@@ -2423,7 +2432,10 @@ const LiveryTex = (function () {
         ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
         ctx.closePath(); ctx.fill();
         ctx.restore();
-        drawWordmark(ctx, names[0] || "", box, boardInk, { align: "center", pad: 6 });
+        drawWordmark(ctx, names[0] || "", box, boardInk, {
+          align: "center", pad: 6,
+          halo: contrast(boardInk, markBg) < 2.0 ? haloFor(boardInk) : null,
+        });
       });
     } else if (spineSide === "ribbon") {
       // A crease band the length of the flank with the number sitting in it —
@@ -2434,7 +2446,10 @@ const LiveryTex = (function () {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.97);
-        const x0 = su(F, 0.02), x1 = su(F, 0.98);
+        // Under a saddle clamp to the panel — a full-length ribbon in c2 on
+        // Mercedes ran onto pale cover at 1.53:1.
+        const uEnd = spineLogo === "saddle" ? 0.50 : 0.98;
+        const x0 = su(F, 0.02), x1 = su(F, uEnd);
         ctx.fillRect(Math.min(x0, x1), Sf.y + Sf.h * 0.04, Math.abs(x1 - x0), Sf.h * 0.30);
         ctx.restore();
         ctx.save();
@@ -2442,11 +2457,12 @@ const LiveryTex = (function () {
         // Under a wrap sc's window is 0.385 of the flank and the digits are
         // 0.16 of it wide, so the only station that keeps the whole number in
         // both the band and the seen strip is the middle of the window.
-        ctx.translate(sc(F, sideFrom ? 0.45 : 0.16), Sf.y + Sf.h * 0.19);
+        ctx.translate(sc(F, sideFrom ? 0.45 : (spineLogo === "saddle" ? 0.22 : 0.16)), Sf.y + Sf.h * 0.19);
         ctx.scale(flankSquash(spineHeight, Sf), 1);
-        const plateInk = contrast(c1, flankBandC) >= 3 ? c1 : inkOn([flankBandC]);
+        const ribbonInk = inkOn([flankBandC]);
         drawNumber(ctx, raceNum, { x: -Sf.h * 0.30, y: -Sf.h * 0.13, w: Sf.h * 0.60, h: Sf.h * 0.26 },
-                   plateInk, inkFlank, null, colors.numFont, 0);
+                   ribbonInk, inkFlank, null, colors.numFont, 0,
+                   contrast(ribbonInk, markBg) < 2.0 ? haloFor(ribbonInk) : null);
         ctx.restore();
       });
     } else if (spineSide === "lockup") {
@@ -2463,18 +2479,19 @@ const LiveryTex = (function () {
         ctx.translate(sc(F, sideFrom ? 0.22 : 0.12), F.R.y + F.R.h * vMid);
         ctx.scale(flankSquash(spineHeight, F.R), 1);
         drawNumber(ctx, raceNum, { x: -F.R.h * 0.26 * k, y: -F.R.h * 0.20 * k, w: F.R.h * 0.52 * k, h: F.R.h * 0.40 * k },
-                   inkMark, accent, null, colors.numFont, 0);
+                   inkMark, accent, null, colors.numFont, 0, flankHalo(inkMark));
         ctx.restore();
         ctx.save();
         ctx.translate(sc(F, sideFrom ? 0.74 : 0.40), F.R.y + F.R.h * vMid);
         ctx.scale(flankSquash(spineHeight, F.R), 1);
         const Rm = { x: -F.R.h * 0.20 * k, y: -F.R.h * 0.16 * k, w: F.R.h * 0.40 * k, h: F.R.h * 0.32 * k };
+        const lockupBare = spineLogo === "saddle" || spineLogo === "wrap";
         if (LOGOS[teamId]) {
           drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], markBg, inkMark), emblemRim);
         } else {
           drawCrest(ctx, teamId, Rm, {
             liv: colors, field: markBgs, bare: true,
-            palette: markPalette(teamId, colors, markBgs, false),
+            palette: markPalette(teamId, colors, markBgs, false, lockupBare ? { noPlate: true } : undefined),
           });
         }
         ctx.restore();
@@ -2598,6 +2615,7 @@ const LiveryTex = (function () {
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, FLANK_SEEN,
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, GAP_MIN, TEXT_MIN,
-           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS };
+           NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
+           hasFlankBull: (teamId) => !!bullPath(teamId) };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

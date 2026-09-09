@@ -59,31 +59,33 @@
      to paint it: one field meant a BAND on most SPINE TOP designs and the SUN
      on `wrap`. Unset = mark plate / secondary / primary against the cover —
      never inherits spineTint.
-   crestInk? optional CREST INK — what the crown's LETTERING wears: the
-     wordmark, the number, `carbon`'s keylines, the trim on `panel` and
-     `stripe`, and the flank marks that share this ink. Absent = the automatic
-     contrast ink against the ENGINE COVER.
+   crestInk? optional CREST INK — lettering for the crown AND the cover-flank
+     marks (number, code, logo, wordmark, duo). Under SADDLE that includes the
+     saddle panel; under WRAP the cover (the sun is a separate disc). Absent =
+     the automatic contrast ink against ENGINE COVER / the flank left behind.
    bandTint2? optional 2ND BAND — the tricolour's second band. The design draws
      two bands with body paint between them, and only one of them was ever
      choosable; the other was derived and could land on its neighbour (four
      teams wore a "tricolour" of one colour repeated). Absent = derived, and
      re-picked against both the cover and the first band.
    plateTint? optional PLATE PANEL — the contrasting board SPINE SIDE "plate"
-     paints the number on. Absent = secondary / primary against the flank.
-   plateInk? optional PLATE NUMBER — the number ON that board. Absent = the
-     body colour when it reads there, else the automatic ink.
-   spineLogo? optional SPINE TOP — what the engine-cover crown carries over
-     its tail wash. "logo" (absent) draws the crest there as well as on the
-     fin; "none" leaves the crown to the wash, so the mark reads once from a
-     chase camera instead of twice; "wrap" (the mark's plate colour as a sun
-     over the crown AND down both flanks, the plate-less mark on top — the
-     RB22's sun and bull); "bigmark" (the mark without its plate at
-     full crown width — the RB22's bull with no sun disc); "saddle" (the whole crown in the accent and down the flanks with a raked rear edge,
-     the SF-26's white top), "panel" (a solid accent block with a raked
-     front edge), "stripe", "twin", "wordmark" (the title
+     and "title" paint on. Absent = SECONDARY or DETAIL, re-picked against the
+     flank — never BODY STRIPE.
+   plateInk? optional PLATE INK — the number ON that board, and the sponsor text
+     on TITLE. Absent = the body colour when it reads there, else the automatic
+     ink.
+   spineLogo? optional SPINE TOP — what the engine-cover crown carries on bare
+     body colour (no gradient wash under any design — hard edges only).
+     "logo" (absent) draws the crest there as well as on the fin; "none" leaves
+     the crown bare so the mark reads once from a chase camera instead of twice;
+     "wrap" (the mark's plate colour as a sun over the crown AND down both
+     flanks, the plate-less mark on top — the RB22's sun and bull); "bigmark"
+     (the mark without its plate at full crown width — the RB22's bull with no
+     sun disc); "saddle" (the whole crown in the band colour and down the flanks
+     with a raked rear edge, the SF-26's white top), "panel" (a solid accent
+     block with a raked front edge), "stripe", "twin", "wordmark" (the title
      sponsor running along the spine), "carbon" (an exposed panel) and
      "number" are the crown designs that carry no mark (LiveryTex.SPINE_LOGO_IDS).
-     The crown carries no gradient wash under any of them — hard edges only.
      The band designs run on down the tail top (REGIONS.tail); the crest and
      the number read top-down, nose up (the chase camera's view).
    finShape? optional FIN SHAPE — the blade's outline: "standard" (absent),

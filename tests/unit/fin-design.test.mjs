@@ -654,10 +654,9 @@ test("nothing that has to be READ is put where the car covers it", async () => {
                                      + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1;
   // CONTENT, not fills. A stripe whose tail runs behind the wheel is still a
   // stripe; a sponsor name whose tail runs behind the wheel is half a word, and
-  // a number behind the wheel is nothing at all. `split`, `slash`, `bars` and
-  // `chevron` are flat geometry that runs the length of the flank on purpose
-  // and are excluded by class, not by exception — they measure 4-73 % and that
-  // is what a full-length band on this car means.
+  // a number behind the wheel is nothing at all. Culled full-length sticker
+  // fills (split/slash/bars/chevron) are gone; band/sash remain colour panels
+  // and are excluded by class — they may run aft on purpose.
   //
   // This is the guard the SHIPPED defect would have failed: Red Bull's default
   // is crown `wrap` + side `duo`, and pushing the side band aft of the bull put
@@ -666,7 +665,9 @@ test("nothing that has to be READ is put where the car covers it", async () => {
   // because duo on a bare crown legitimately reaches 34 %: it hangs two names
   // side by side down the WHOLE flank, so its aft one runs into the tyre's
   // shadow by design. Everything else measures 0-13 %.
-  const READ = ["number", "logo", "code", "plate", "wordmark", "duo", "lockup"];
+  // title (sponsor on a board) and ribbon (number in a crease band) are READ
+  // the same as plate/lockup — lettering that must stay on camera.
+  const READ = ["number", "logo", "code", "plate", "wordmark", "duo", "lockup", "title", "ribbon"];
   for (const spineLogo of At.LT.SPINE_LOGO_IDS) {
     const out = sweep(At, { team: "redbull", logo: spineLogo, sides: READ, grid: 64, hiddenAt });
     for (const r of out.rows)

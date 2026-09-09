@@ -10,10 +10,10 @@
  * thresholds, so a new design is only as safe as whoever wrote it remembering to
  * ask. This asks once, knowing nothing about which code path painted what.
  *
- * The full sweep is tools/car/livery-contrast.mjs (every team x 13 x 10, ~80 s).
- * This runs the slice that has actually caught something — the crown designs
- * that repaint the flank, against the flank designs that stand on it — over
- * every team, in a few seconds.
+ * The full sweep is tools/car/livery-contrast.mjs (every team × SPINE_LOGO_IDS ×
+ * SPINE_SIDE_IDS, ~80 s). This runs the slice that has actually caught something
+ * — the crown designs that repaint the flank, against the flank designs that
+ * stand on it — over every team, in a few seconds.
  *
  * Run: node --test tests/unit/livery-contrast.test.mjs
  */
@@ -45,9 +45,9 @@ const A = loadAtlas();
 // wrap and saddle are the two SPINE TOPs that repaint the cover flank, so they
 // are the ones a flank design can collide with; logo is the untouched control.
 const CROWN = ["logo", "wrap", "saddle", "bigmark"];
-// The three that paint a band on the flank, plus the mark and plate that have to
-// survive one, plus the control.
-const SIDE = ["none", "band", "sash", "plate", "logo"];
+// Colour fills, boards, marks and lettering that own a large flank share — the
+// live SIDE heroes after the 2026-09-09 cull (not the sticker geometry).
+const SIDE = ["none", "band", "sash", "plate", "logo", "ribbon", "lockup", "title", "emblem"];
 
 test("no design paints a large area that cannot be seen on what it covers", () => {
   const bad = [];
@@ -277,25 +277,45 @@ test("the plate-less crown mark clears the cover it is actually drawn on", () =>
 
 test("a flank mark clears the flank the crown design actually left it", () => {
   const bad = [];
+  // Marks and lettering. plate/ribbon/title boards are in the area SIDE sweep;
+  // this probe is glyph-vs-flank (lockup/emblem included). Wrap empty-flank
+  // lockup filler is skipped via `_bareWrapFlank` so Aston wrap/code is real.
+  const MARK_SIDES = ["number", "code", "logo", "wordmark", "duo", "emblem"];
   for (const t of A.Teams.LIST) {
     const base = A.Liveries.forTeam(t)[0];
     for (const spineLogo of ["saddle", "wrap"]) {
-      for (const spineSide of ["number", "code", "logo", "wordmark", "duo"]) {
+      for (const spineSide of MARK_SIDES) {
         const liv = Object.assign({}, base, { spineLogo, spineSide });
-        const r = markOnItsGround(t.id, liv, "spineSide", "spineSide", cssOf(base.cover || base.c1 || t.color));
-        if (r.worst == null || r.n < 0.004) continue;
-        if (r.worst < AREA_FLOOR) bad.push(`${t.id} ${spineLogo}/${spineSide}`);
+        // Under WRAP with no traced bull, spineSide "none" paints a lockup
+        // filler — differencing against that crest is a false invisible.
+        // Probe with `_bareWrapFlank` so the ground is the sun/cover only.
+        const withoutLiv = Object.assign({}, liv, {
+          spineSide: "none",
+          ...(spineLogo === "wrap" && !A.LT.hasFlankBull(t.id) ? { _bareWrapFlank: true } : {}),
+        });
+        const withM = A.paint(t.id, liv);
+        const without = A.paint(t.id, withoutLiv);
+        const R = A.LT.REGIONS.spineSide;
+        const ground = cssOf(base.cover || base.c1 || t.color);
+        let worst = null, n = 0;
+        const N = 32;
+        for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+          const x = R.x + R.w * (i + 0.5) / N, y = R.y + R.h * (j + 0.5) / N;
+          const a = paintAt(withM, x, y), b = paintAt(without, x, y);
+          if (!a || a === b) continue;
+          if (alphaOf(a) < 0.5) continue;
+          n++;
+          const v = contrastCss(a, b || ground);
+          if (v != null && (worst == null || v < worst)) worst = v;
+        }
+        if (worst == null || n / (N * N) < 0.004) continue;
+        if (worst < AREA_FLOOR) bad.push(`${t.id} ${spineLogo}/${spineSide}`);
       }
     }
   }
-  // Fixed on this branch: saddle wordmark/duo clamp + forced halo + wrap/saddle
-  // noPlate cleared the rake-span class. Deploy tip's markU-from-badge cleared
-  // the wrap/code-on-badge class (astonmartin/audi/mercedes). Keep KNOWN empty;
-  // re-add only a measured on-car invisible mark.
-  const KNOWN = new Set([]);
-  assert.deepEqual(bad.filter((k) => !KNOWN.has(k)), [], "a flank mark went invisible");
-  assert.deepEqual([...KNOWN].filter((k) => !bad.includes(k)), [],
-    "these KNOWN gaps now pass — delete them from KNOWN");
+  // `_bareWrapFlank` grounds wrap/no-bull differencing on the sun/cover, so
+  // Aston wrap/code is a real mark-vs-ground read (no lockup-filler false fail).
+  assert.deepEqual(bad, [], `flank mark below ${AREA_FLOOR}:1 —\n  ${bad.join("\n  ")}`);
 });
 
 test("the wrap's flank badge is inked against the cover it lands on", () => {
