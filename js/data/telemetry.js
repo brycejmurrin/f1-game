@@ -152,8 +152,11 @@ const DataTelemetry = (function () {
       info.appendChild(title);
       const place = [meta.circuit, meta.country].filter(Boolean).join(" · ");
       if (place) info.appendChild(el("div", "dh-live-sub", place));
+      // Two short lines — a single long ·-joined string was clipped mid-word
+      // in the narrow split pane ("drag chart to .").
       info.appendChild(el("div", "dh-live-sub",
-        "Tap up to " + MAX_LANES + " lanes · switch SESSION above to add a race-vs-quali lane · drag chart to scrub"));
+        "Tap up to " + MAX_LANES + " lanes · switch SESSION to compare race vs quali"));
+      info.appendChild(el("div", "dh-live-sub", "Drag the chart to scrub"));
       leftPane.appendChild(info);
 
       clear(rightPane);

@@ -1140,6 +1140,7 @@ what it covers.
 | `data-lifecycle.spec.js` | data hub session plumbing — meeting/year/session/driver responses own their option lists |
 | `telemetry-compare.spec.js` | TELEMETRY multi-lane compare and cross-session (one driver's race vs quali) |
 | `telemetry-trace.test.mjs` | GPS-trace sanity and the playback dot's motion |
+| `meeting-picker-labels.test.mjs` | OpenF1 meeting picker labels stay unique when `meeting_name` collides — circuit suffix, then YYYY-MM-DD |
 | `data-api-status.test.mjs` | a `"null"` error body still throws with `.status` attached, so a 401/403 lockout can never serve stale cache |
 | `audio-smoke.spec.js` | the WebAudio engine/sfx initialise and respond, objectively |
 | `music-library.spec.js` | the bring-your-own-music library and the Spotify backend |

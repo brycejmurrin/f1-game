@@ -3958,12 +3958,13 @@ function weather(w) {
 
 // ── Dynamic weather progression (weather arc) ────────────────────────────────
 // Optional scripted per-race weather transition — OFF by default (no arc unless
-// started via __apex.weatherArc(from, to, secs); a race-settings surface can
-// hook in later). The arc walks the dry↔wet↔rain ladder stage by stage over its
-// duration (lateral conditions like fog/overcast jump direct), flipping each
-// stage through setWeatherLive() so the rain overlay/audio/lighting/AI grip all
-// follow, and frame.wetness ramps via the existing per-frame ramp. Ticked from
-// update() on the fixed physics clock, so it also runs under __apex.headless.
+// started via __apex.weatherArc(from, to, secs) or the MIXED chip /
+// startChangeable / wxArcPlan path below). The arc walks the dry↔wet↔rain
+// ladder stage by stage over its duration (lateral conditions like fog/overcast
+// jump direct), flipping each stage through setWeatherLive() so the rain
+// overlay/audio/lighting/AI grip all follow, and frame.wetness ramps via the
+// existing per-frame ramp. Ticked from update() on the fixed physics clock, so
+// it also runs under __apex.headless.
 let weatherArc = null;   // { from, to, t, dur, seq }
 // CHANGEABLE conditions (the MIXED chip). The target and the transition
 // length come from the sim seed and the race counter — the reliability idiom
@@ -6919,10 +6920,6 @@ const _wmRoadWetN = { emissive: 0.06, roughness: 0.14, specular: 0.85, detail: 0
 const _wmRoadWetD = { roughness: 0.14, specular: 0.85, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
 const _wmRoadDryN = { emissive: 0.09, roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
 const _wmRoadDryD = { roughness: 0, specular: 0.20, detail: 0, surfaceId: 16, depthBias: [-8, -16], doubleSided: true };
-// depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
-// bias its depth toward the camera rather than relying on the small geometric
-// lift alone — that lift is fixed in metres and loses to depth quantisation at
-// range, which is what makes a decal shimmer and drop out as you approach.
 // depthBias [factor, units]: the start line is a DECAL laid on the asphalt, so
 // bias its depth toward the camera rather than relying on the small geometric
 // lift alone — that lift is fixed in metres and loses to depth quantisation at

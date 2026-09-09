@@ -642,12 +642,12 @@
                 </div>
               </div>
               <p class="adv-help">How strongly the DRIVING LINE reads against the road. SUBTLE for cockpit view, SOLID when it disappears into a bright surface.</p>
-              <div id="pm-brakecue" class="set-row" role="group" aria-labelledby="pm-brakecue-label">
-                <span class="tune-label" id="pm-brakecue-label">BRAKE CUE</span>
+              <div id="pm-linebrakecue" class="set-row" role="group" aria-labelledby="pm-linebrakecue-label">
+                <span class="tune-label" id="pm-linebrakecue-label">BRAKE CUE</span>
                 <div>
-                  <button id="pm-brakecue-prev" type="button" data-step="-1" aria-label="Previous brake cue setting">&lsaquo;</button>
-                  <select id="pm-brakecue-sel" aria-labelledby="pm-brakecue-label"></select>
-                  <button id="pm-brakecue-next" type="button" data-step="1" aria-label="Next brake cue setting">&rsaquo;</button>
+                  <button id="pm-linebrakecue-prev" type="button" data-step="-1" aria-label="Previous brake cue setting">&lsaquo;</button>
+                  <select id="pm-linebrakecue-sel" aria-labelledby="pm-linebrakecue-label"></select>
+                  <button id="pm-linebrakecue-next" type="button" data-step="1" aria-label="Next brake cue setting">&rsaquo;</button>
                 </div>
               </div>
               <p class="adv-help">A click that repeats faster the further over the line's speed you are, and becomes continuous when it turns red. The rate is the signal, not the pitch. Works with the DRIVING LINE off.</p>
@@ -785,39 +785,39 @@
     <h3 class="adv-sec">CAR HANDLING <span>how steering becomes motion (all inputs)</span></h3>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">DRIVING HELP <b id="pm-help-v">6</b></span>
-        <input id="pm-help" type="range" min="1" max="10" step="1" value="6"></label>
+        <input id="pm-help" type="range" min="1" max="10" step="1" value="6" aria-label="Driving help"></label>
       <p class="adv-help">How much of each corner the car steers for you. Higher = the car tracks the bend automatically and you just trim the line; lower = you do the work. The single biggest &ldquo;easier to drive&rdquo; knob.</p>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">RESPONSE <b id="pm-rate-v">5</b></span>
-        <input id="pm-rate" type="range" min="1" max="10" step="1" value="5"></label>
+        <input id="pm-rate" type="range" min="1" max="10" step="1" value="5" aria-label="Response"></label>
       <p class="adv-help">Turn-in snappiness (shorter wheelbase). Higher = sharper, faster turn-in; lower = lazier and more stable.</p>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">LINEARITY <b id="pm-expo-v">5</b></span>
-        <input id="pm-expo" type="range" min="1" max="10" step="1" value="5"></label>
+        <input id="pm-expo" type="range" min="1" max="10" step="1" value="5" aria-label="Linearity"></label>
       <p class="adv-help">Input curve. Low = gentle near centre for fine corrections; high = direct, 1:1 response. Raise it if steering feels mushy near centre.</p>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">STEER LOCK <b id="pm-lock-v">5</b></span>
-        <input id="pm-lock" type="range" min="1" max="10" step="1" value="5"></label>
+        <input id="pm-lock" type="range" min="1" max="10" step="1" value="5" aria-label="Steer lock"></label>
       <p class="adv-help">Maximum turn angle at full lock. Higher = tighter cornering, but easier to over-rotate. (Auto-tapers at high speed.)</p>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">SPEED STEER <b id="pm-speedsteer-v">5</b></span>
-        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5"></label>
+        <input id="pm-speedsteer" type="range" min="1" max="10" step="1" value="5" aria-label="Speed steer"></label>
       <p class="adv-help">How much steering you keep at high speed. Higher = sharper and more responsive flat-out; lower = calmer and more stable.</p>
     </div>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">WEIGHT <b id="pm-weight-v">5</b></span>
-        <input id="pm-weight" type="range" min="1" max="10" step="1" value="5"></label>
+        <input id="pm-weight" type="range" min="1" max="10" step="1" value="5" aria-label="Weight"></label>
       <p class="adv-help">How heavy the car feels as it rotates. Higher = more planted and settled, and it takes longer to swing into a corner; lower = lighter and snappier. 5 is the standard car.</p>
     </div>
 
     <h3 class="adv-sec">DRIVER AID</h3>
     <div class="adv-item">
       <label class="tune-row"><span class="tune-label">RACING LINE <b id="pm-line-v">OFF</b></span>
-        <input id="pm-line" type="range" min="-5" max="5" step="1" value="0"></label>
+        <input id="pm-line" type="range" min="-5" max="5" step="1" value="0" aria-label="Racing line"></label>
       <p class="adv-help">Optional bias toward the line. PULL (+) eases toward the apex; PUSH (&minus;) runs wider; OFF = pure manual. Never overrides your steering.</p>
     </div>
     </div><!-- /#adv-extra -->
@@ -1227,7 +1227,9 @@
                  ring — so a keyboard or gamepad player could never reach the
                  corner list or DRS metres. The chip in the caption below is
                  the same door where the canvas is too small to read. -->
-            <button id="sel-map-btn" type="button" class="sel-map-btn" aria-label="Circuit detail"><canvas id="sel-preview-map" width="520" height="300" role="img" aria-label="Circuit layout preview"></canvas></button>
+            <!-- tabindex=-1: mouse/touch still opens detail; Tab only hits the
+                 CIRCUIT DETAIL chip so the two affordances are not duplicate stops. -->
+            <button id="sel-map-btn" type="button" class="sel-map-btn" tabindex="-1" aria-label="Circuit layout — open detail"><canvas id="sel-preview-map" width="520" height="300" role="img" aria-label="Circuit layout preview"></canvas></button>
             <div id="sel-hero-cap">
               <span id="sel-preview-flag"></span>
               <div id="sel-preview-title">
