@@ -2657,3 +2657,14 @@ arms soft-present / preserveDrawingBuffer — Playwright's Desktop Chrome
 project spoofs a headed UA (no `HeadlessChrome`), which left smoke on a
 minutes-long CDP capture after the soft-first helper change.
 
+## 2026-09-09 — the cover's own trim yields to a crown that moved the design
+
+`js/car/car3d.js` lines 4107 -> **4121** (+14). The pinstripe (-1.26) and the
+service hatches (-1.36) were stationed to clear a flank mark at f 0.19. The
+wrap fix moves the whole side design into the mid-flank out to `FLANK_SEEN`, so
+both landed inside it — measured from the garage side camera, the pinstripe
+crossed the first sponsor row and a hatch took the last two letters of the
+second in white ink on lit metal. `trimAft` derives the station from
+`LiveryTex.FLANK_SEEN` rather than a third hand-picked literal, and three of
+the four comment blocks it touches were consolidated (two were layered
+corrections about a band that is now the whole flank) to pay part of the cost.
