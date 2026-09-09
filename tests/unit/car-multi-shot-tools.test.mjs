@@ -42,6 +42,10 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src, /labelShot|buildContactSheet/, "writes labeled PNGs and a contact sheet");
   assert.match(src, /withLabels = isLive/, "labels default on for --live only");
   assert.match(src, /COMBOS|"wrap-spine"/, "combo presets bundle logo/side/views/zoom");
+  assert.match(src, /--list-combos|printHelp/, "documents combos via --list-combos/--help");
+  assert.match(src, /garageParts|--part=/, "supports parts overrides");
+  assert.match(src, /wings:\s*\[/, "wings view group for aero surveys");
+  assert.match(src, /expandTokenList|readLiverytexIds/, "spine-side=all expands SPINE_SIDE_IDS");
   assert.match(src, /parseTeams|teamArg === "all"|arg === "all"/, "supports --team=all roster walk");
   assert.match(src, /buildTeamRollup/, "multi-team rollup contact sheet");
   assert.match(src, /rollupOnly/, "multi-team combo defaults to rollup-only survey");
@@ -58,6 +62,7 @@ test("__apex exposes garageTeam and garageFrame for multi-shot surveys", () => {
   const apex = read("js/agent/apex.js");
   assert.match(apex, /garageTeam\(id\)/, "direct store team switch without teampicker");
   assert.match(apex, /garageFrame\(view/, "one-shot preset + zoom/pan clicks");
+  assert.match(apex, /garageParts\(parts\)/, "parts override for mesh surveys");
   const game = read("js/game.js");
   assert.match(game, /setSetupView:\s*\(\.\.\.a\)\s*=>\s*setSetupView/, "G facade for garageFrame");
   assert.match(game, /setupPan:\s*\(\.\.\.a\)\s*=>\s*setupPan/, "G facade for pan nudges");

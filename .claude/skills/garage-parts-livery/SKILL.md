@@ -133,6 +133,8 @@ node tools/ci/test-bg.mjs modes              # research locks / ownership UI —
 node tools/car/audit-parts.mjs [--cats=engine,aero]
 node tools/car/spine-station.mjs --team=redbull [--logo=wrap] [--png=artifacts/spine]
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
+node tools/shot/garage-angles.mjs --list-combos   # bundled livery/camera surveys
+node tools/shot/garage-angles.mjs --live --combo=wrap-spine --team=all --oracle
 node tools/shot/shot.mjs bahrain 0.06 orbit out.png --team audi --dist 5.5 --el 26 --az 205
 ```
 
@@ -158,3 +160,4 @@ Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **
 
 - ERS ids, ownership gate, edit loop, mistakes → [references/workflow.md](references/workflow.md).
 - Which surface answers a PLACEMENT question, and what each is blind to → [references/placement.md](references/placement.md).
+- Garage camera combos, views, parts/livery flags, live rollup → [references/garage-angles.md](references/garage-angles.md).

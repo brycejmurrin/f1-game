@@ -164,13 +164,23 @@ mud** — `carbon` and `bigmark` both passed every test and every atlas review,
 and neither existed at racing distance.
 
 Racing distance is `shot.mjs --team`. The garage's own read is
-`garage-angles.mjs`, whose presets frame the WHOLE car (SIDE sits at 11.2 m), so
-a flank mark arrives forty pixels wide unless you pass `--zoom`/`--pan`. Those
-are counted clicks on the shipped `#cs-view-in` / `#cs-pan-*` controls, applied
-AFTER the preset because `setSetupView` is absolute and drops both the stored
-distance and the pan — so a framing that reads well there is one a player can
-reach. `--zoom 8` bottoms out at the 4.6 m zoom floor; `--pan 5,0` walks aft
-along the flank.
+`garage-angles.mjs` (full reference:
+[garage-angles.md](garage-angles.md)). Combos bundle the common surveys:
+
+```sh
+node tools/shot/garage-angles.mjs --list-combos
+node tools/shot/garage-angles.mjs --live --combo=wrap-spine --team=all --oracle
+node tools/shot/garage-angles.mjs --combo=flank-pack --team=redbull --full-views
+```
+
+Presets frame the WHOLE car (SIDE sits at 11.2 m), so a flank mark arrives forty
+pixels wide unless you pass `--zoom`/`--pan` or use combo `wrap-spine` (zoom 8,
+pan 5,0). Those are counted clicks on the shipped `#cs-view-in` / `#cs-pan-*`
+controls, applied AFTER the preset because `setSetupView` is absolute and drops
+both the stored distance and the pan — so a framing that reads well there is one
+a player can reach. `--zoom 8` bottoms out at the 4.6 m zoom floor; `--pan 5,0`
+walks aft along the flank. `--oracle` adds offline `flank-occlusion.mjs` % on live
+rollup labels without another browser pass.
 
 Scripting the studio instead? `CARVIEW.set({livery})` takes an id OR a livery
 object; an id that matches nothing warns and renders the default rather than

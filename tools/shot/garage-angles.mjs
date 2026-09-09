@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// @doc Garage camera shots — livery/spine walks, --combo presets, --team=all, --live github.io.
-//   node tools/shot/garage-angles.mjs [--team=redbull|all] [--combo=wrap-spine] [--live]
-//     [--spine-logo=wrap] [--spine-side=duo] [--views=spine] [--zoom=8] [--pan=5,0] [--out=dir]
+// @doc Garage camera shots — combos, parts/liv flags, --team=all, --live, --oracle.
+//   node tools/shot/garage-angles.mjs [--combo=wrap-spine] [--team=all] [--live] [--list-combos]
+//     [--spine-logo=wrap] [--spine-side=duo|all] [--part=aero:extreme] [--liv=finStyle:stars]
+//     [--views=spine|wings] [--zoom=8] [--pan=5,0] [--aero-x] [--resume] [--out=dir]
 // @skill playwright-probe
 // @skill garage-parts-livery
 //
@@ -47,6 +48,7 @@ const isLive = argv.includes("--live");
 /** Bundled surveys — explicit CLI flags override any field. */
 const COMBOS = {
   "wrap-spine": {
+    desc: "Wrap crown, zoomed side — the shipped flank occlusion check (build 8421+).",
     spineLogo: "wrap",
     spineSide: "none",
     views: "spine",
@@ -55,6 +57,7 @@ const COMBOS = {
     rollupView: "side",
   },
   "wrap-duo": {
+    desc: "Red Bull default pair (wrap + duo) — spine group, moderate zoom.",
     spineLogo: "wrap",
     spineSide: "duo",
     views: "spine",
@@ -63,6 +66,7 @@ const COMBOS = {
     rollupView: "side",
   },
   "wrap-side": {
+    desc: "Wrap crown + logo flank mark — tight side only.",
     spineLogo: "wrap",
     spineSide: "logo",
     views: "side",
@@ -70,7 +74,156 @@ const COMBOS = {
     pan: "5,0",
     rollupView: "side",
   },
+  "duo-grid": {
+    desc: "Shipped wrap/duo on every team — one side rollup cell per car.",
+    spineLogo: "wrap",
+    spineSide: "duo",
+    views: "side",
+    zoom: 8,
+    pan: "5,0",
+    rollupView: "side",
+  },
+  "flank-pack": {
+    desc: "Five common flank marks (duo/slash/logo/wordmark/lockup) — single-team diagnostic.",
+    spineLogo: "wrap",
+    spineSide: "duo,slash,logo,wordmark,lockup",
+    views: "side",
+    zoom: 8,
+    pan: "5,0",
+    rollupView: "side",
+    rollupSide: "duo",
+  },
+  "side-survey": {
+    desc: "Every SPINE_SIDE id under wrap crown — single team, side view.",
+    spineLogo: "wrap",
+    spineSide: "all",
+    views: "side",
+    zoom: 8,
+    pan: "5,0",
+    rollupView: "side",
+    rollupSide: "duo",
+  },
+  "crown-grid": {
+    desc: "Four crown styles (wrap/bigmark/wedge/saddle) — spine group, top rollup.",
+    spineLogo: "wrap,bigmark,wedge,saddle",
+    spineSide: "none",
+    views: "spine",
+    zoom: 0,
+    pan: "0,0",
+    rollupView: "top",
+    rollupLogo: "wrap",
+  },
+  "aero-wings": {
+    desc: "Active-aero wing presets with X-mode + extreme aero parts.",
+    views: "wings",
+    zoom: 2,
+    pan: "0,0",
+    rollupView: "wingRear",
+    aeroX: true,
+    parts: { aero: "extreme" },
+  },
+  "livery-wall": {
+    desc: "Front preset for crest / garage-wall readability.",
+    views: "front",
+    zoom: 0,
+    pan: "0,0",
+    rollupView: "front",
+  },
+  "wrap-rear": {
+    desc: "Wrap crown aft visibility — rear + zoomed side.",
+    spineLogo: "wrap",
+    spineSide: "none",
+    views: "rear,side",
+    zoom: 4,
+    pan: "3,0",
+    rollupView: "side",
+  },
+  "fin-stars": {
+    desc: "W17 star tail + wrap side — finStyle override.",
+    spineLogo: "wrap",
+    spineSide: "none",
+    views: "rear,top",
+    zoom: 2,
+    pan: "0,0",
+    rollupView: "rear",
+    liv: { finStyle: "stars" },
+  },
 };
+
+const PART_CATS = ["engine", "aero", "brakes", "gearbox", "ers", "tyres", "suspension", "fuel", "floor", "cockpit", "wheels"];
+const LIV_KEYS = ["finStyle", "finShape", "finBadge", "spineHeight", "coverVents", "wingCarbon", "rearWing", "finish", "tcam", "dorsal"];
+
+function readLiverytexIds(name) {
+  const src = readFileSync(fileURLToPath(new URL("../../js/car/liverytex.js", import.meta.url)), "utf8");
+  const m = src.match(new RegExp(`const ${name} = \\[([^\\]]+)\\]`));
+  if (!m) return [];
+  return m[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean);
+}
+
+function expandTokenList(list, allIds) {
+  if (!list.length || !list.includes("all")) return list.filter((x) => x !== "all");
+  return allIds.slice();
+}
+
+function printHelp() {
+  console.log(`garage-angles — garage camera walks (one Chromium, soft-present capture)
+
+Usage:
+  node tools/shot/garage-angles.mjs [--live] [--combo=NAME] [--team=ID|all] [--out=dir]
+
+Combos (--list-combos for table):
+  ${Object.keys(COMBOS).join(", ")}
+
+Teams / resume:
+  --team=redbull,mclaren|all     roster walk (all = 11 grid teams, not custom)
+  --resume                       skip teams already in meta/PNG
+  --picker-team                  use #teampicker UI instead of __apex.garageTeam
+
+Design (explicit flags override combo defaults):
+  --spine-logo=wrap[,bigmark]     crown style(s); 'all' expands SPINE_LOGO_IDS
+  --spine-side=duo[,slash]        flank mark(s); 'all' expands SPINE_SIDE_IDS
+  --livery=default[,alt]          catalog livery ids when no spine-* flags
+  --liv=finStyle:stars            livery field override (repeatable)
+  --liv-fin-style=stars           same, kebab form
+
+Parts / aero (applied after team switch):
+  --part=aero:extreme             category:option (repeatable)
+  --aero=extreme                  shorthand for --part=aero:…
+  --aero-x                        enable garage X-mode (flaps open) before shots
+
+Views / camera:
+  --views=spine|side|wings|all    preset or group (spine, wings, front, rear, livery, all)
+  --rollup-view=side              cell view for --team=all rollup
+  --rollup-only | --full-views    one shot vs every preset per team
+  --zoom=N --pan=strafe,dolly     discrete #cs-view-in / #cs-pan-* clicks after preset
+
+Output / speed:
+  --live                          github.io + labeled rollup
+  --oracle                        offline flank-occlusion % on rollup labels
+  --fast | --slow                 settle/wait tuning (fast default for multi-team combo)
+  --labels | --no-labels          per-shot labels (live defaults on)
+  --team-sheets | --label-shots     contact sheets on multi-team runs
+`);
+}
+
+if (argv.includes("--help") || argv.includes("-h")) {
+  printHelp();
+  process.exit(0);
+}
+if (argv.includes("--list-combos")) {
+  for (const [k, c] of Object.entries(COMBOS)) {
+    const bits = [
+      c.desc,
+      c.spineLogo ? `logo=${c.spineLogo}` : null,
+      c.spineSide ? `side=${c.spineSide}` : null,
+      `views=${c.views || "spine"}`,
+      `zoom=${c.zoom ?? 0} pan=${c.pan ?? "0,0"}`,
+      c.rollupView ? `rollup=${c.rollupView}` : null,
+    ].filter(Boolean).join(" · ");
+    console.log(`${k.padEnd(14)} ${bits}`);
+  }
+  process.exit(0);
+}
 
 /** Accept `--name=value` and `--name value` (render-car style). */
 const flag = (name, dflt) => {
@@ -115,10 +268,36 @@ function parseTeams(arg) {
 
 const teamArg = flag("--team", "mclaren");
 const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).filter(Boolean);
-const spineSides = (hasFlag("--spine-side") ? flag("--spine-side", "") : (combo?.spineSide ?? ""))
-  .split(",").map((s) => s.trim()).filter(Boolean);
-const spineLogos = (hasFlag("--spine-logo") ? flag("--spine-logo", "") : (combo?.spineLogo ?? ""))
-  .split(",").map((s) => s.trim()).filter(Boolean);
+const spineSideAll = readLiverytexIds("SPINE_SIDE_IDS");
+const spineLogoAll = readLiverytexIds("SPINE_LOGO_IDS");
+let spineSides = expandTokenList(
+  (hasFlag("--spine-side") ? flag("--spine-side", "") : (combo?.spineSide ?? ""))
+    .split(",").map((s) => s.trim()).filter(Boolean),
+  spineSideAll,
+);
+let spineLogos = expandTokenList(
+  (hasFlag("--spine-logo") ? flag("--spine-logo", "") : (combo?.spineLogo ?? ""))
+    .split(",").map((s) => s.trim()).filter(Boolean),
+  spineLogoAll,
+);
+const livOverrides = Object.assign({}, combo?.liv || {});
+for (const raw of argv.filter((a) => a.startsWith("--liv="))) {
+  const [k, v] = raw.slice(5).split(":");
+  if (k && v != null) livOverrides[k] = v;
+}
+for (const k of LIV_KEYS) {
+  const kebab = k.replace(/([A-Z])/g, "-$1").toLowerCase();
+  if (hasFlag(`--liv-${kebab}`)) livOverrides[k] = flag(`--liv-${kebab}`, "");
+}
+const partsOverrides = Object.assign({}, combo?.parts || {});
+for (const c of PART_CATS) {
+  if (hasFlag(`--${c}`)) partsOverrides[c] = flag(`--${c}`, "");
+}
+for (const raw of argv.filter((a) => a.startsWith("--part="))) {
+  const [cat, id] = raw.slice(7).split(":");
+  if (cat && id) partsOverrides[cat] = id;
+}
+const aeroX = argv.includes("--aero-x") || !!combo?.aeroX;
 const vp = flag("--viewport", "1280x720").split("x").map(Number);
 const outDir = flag("--out", isLive ? "artifacts/garage-angles-live" : "artifacts/garage-angles");
 const teams = parseTeams(teamArg);
@@ -156,8 +335,25 @@ function teamIndex(id) {
 const ALL = ["hero", "front", "side", "rear", "top", "wingFront", "wingRear"];
 const GROUPS = {
   spine: ["hero", "top", "rear", "side"],
+  wings: ["wingFront", "wingRear"],
+  front: ["front"],
+  rear: ["rear"],
+  livery: ["front"],
+  aero: ["wingFront", "wingRear", "rear"],
   all: ALL,
 };
+const rollupSidePick = flag("--rollup-side", combo?.rollupSide || "");
+const rollupLogoPick = flag("--rollup-logo", combo?.rollupLogo || "");
+if (rollupOnly && multiTeam && spineSides.length > 1) {
+  const pick = rollupSidePick || spineSides[0];
+  if (!rollupSidePick) console.log(`multi-team rollup: one flank (${pick}) — --rollup-side or --full-views for more`);
+  spineSides = [pick];
+}
+if (rollupOnly && multiTeam && spineLogos.length > 1) {
+  const pick = rollupLogoPick || spineLogos[0];
+  if (!rollupLogoPick) console.log(`multi-team rollup: one crown (${pick}) — --rollup-logo or --full-views for more`);
+  spineLogos = [pick];
+}
 const views = [...new Set(rawViews.flatMap((v) => GROUPS[v] || [v]))];
 const bad = views.filter((v) => !ALL.includes(v));
 if (bad.length) {
@@ -368,8 +564,8 @@ async function applyLivery(page, teamId, livId) {
   return got.name;
 }
 
-async function applyDesign(page, teamId, { spineSide, spineLogo }) {
-  const got = await page.evaluate(({ tid, side, logo }) => {
+async function applyDesign(page, teamId, { spineSide, spineLogo, livExtra }) {
+  const got = await page.evaluate(({ tid, side, logo, extra }) => {
     const t = Teams.LIST.find((x) => x.id === tid);
     if (!t) return { ok: false, error: `no team "${tid}"` };
     const def = Liveries.forTeam(t)[0];
@@ -382,7 +578,7 @@ async function applyDesign(page, teamId, { spineSide, spineLogo }) {
       return { ok: false, error: `no spineLogo "${logo}"`, have: logos };
     }
     const id = "_shot_" + (logo || def.spineLogo || "x") + "_" + (side || def.spineSide || "none");
-    const liv = Object.assign({}, def, {
+    const liv = Object.assign({}, def, extra || {}, {
       id, name: id,
       spineSide: side || def.spineSide || "none",
     });
@@ -393,13 +589,26 @@ async function applyDesign(page, teamId, { spineSide, spineLogo }) {
     GameStore.store.set("livery." + tid, id);
     if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes();
     return { ok: true, name: liv.spineLogo + "/" + liv.spineSide, id };
-  }, { tid: teamId, side: spineSide || "", logo: spineLogo || "" });
+  }, { tid: teamId, side: spineSide || "", logo: spineLogo || "", extra: livExtra || {} });
   if (!got.ok) {
     const extra = got.have ? ` (have ${got.have.join(",")})` : "";
     throw new Error(`${got.error}${extra}`);
   }
   await settleGarage(page, { frames: settleApply, presentMs });
   return got.name;
+}
+
+async function applyParts(page, partsMap) {
+  if (!partsMap || !Object.keys(partsMap).length) return null;
+  const got = await page.evaluate((parts) => window.__apex.garageParts(parts), partsMap);
+  if (!got.ok) throw new Error(`garageParts: ${got.error || "failed"}`);
+  await settleGarage(page, { frames: settleApply, presentMs });
+  return got.parts;
+}
+
+async function applyAeroX(page) {
+  await page.evaluate(() => window.__apex.garageAero(true));
+  await settleGarage(page, { frames: settleApply, presentMs });
 }
 
 async function switchTeam(page, teamId) {
@@ -446,7 +655,7 @@ async function captureDesigns(page, teamId, teamLabel, { liveBuild, rollupEntrie
 
   if (designs) {
     for (const d of designs) {
-      const name = await applyDesign(page, teamId, d);
+      const name = await applyDesign(page, teamId, { ...d, livExtra: livOverrides });
       const tag = (d.spineLogo || "def") + "-" + d.spineSide;
       const tagShots = [];
       for (const v of views) {
@@ -522,7 +731,13 @@ async function main() {
     const srv = await startStaticServer(process.cwd());
     gameUrl = srv.url;
   }
-  if (combo) console.log(`combo ${comboKey}: logo=${combo.spineLogo} side=${combo.spineSide} views=${views.join(",")} zoom=${zoom} pan=${strafe},${dolly}`);
+  if (combo) {
+    console.log(`combo ${comboKey}: ${combo.desc || ""}`);
+    console.log(`  logo=${spineLogos.join(",") || "(def)"} side=${spineSides.join(",") || "(def)"} views=${views.join(",")} zoom=${zoom} pan=${strafe},${dolly}`);
+  }
+  if (Object.keys(partsOverrides).length) console.log(`parts: ${JSON.stringify(partsOverrides)}`);
+  if (Object.keys(livOverrides).length) console.log(`liv overrides: ${JSON.stringify(livOverrides)}`);
+  if (aeroX) console.log("aero-x: flaps open (X-mode)");
   const resumeSet = resumeTeamSet();
   const workTeams = resumeSet.size
     ? teams.filter((t) => !resumeSet.has(t))
@@ -574,6 +789,8 @@ async function main() {
     for (const tid of workTeams) {
       const teamLabel = await switchTeam(page, tid);
       console.log(`team sheet: ${teamLabel}`);
+      if (Object.keys(partsOverrides).length) await applyParts(page, partsOverrides);
+      if (aeroX) await applyAeroX(page);
       const { shots, sheets } = await captureDesigns(page, tid, teamLabel, { liveBuild, rollupEntries });
       allShots.push(...shots);
       allSheets.push(...sheets);
@@ -602,7 +819,8 @@ async function main() {
 
     const meta = metaPath;
     writeFileSync(meta, JSON.stringify({
-      teams, combo: comboKey || null, liveries, spineSides, spineLogos,
+      teams, combo: comboKey || null, liveries, spineSides, spineLogos, livOverrides,
+      parts: partsOverrides, aeroX,
       live: isLive, liveBuild, rollupOnly, fast: isFastMode, oracle: withOracle,
       storeTeam: useStoreTeam, resumed: resumeSet.size ? [...resumeSet] : null,
       zoom, pan: [strafe, dolly], viewport: vp, views,
