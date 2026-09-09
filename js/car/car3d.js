@@ -2422,12 +2422,8 @@ const Car3D = (function () {
                      h: Math.max(0.03, 0.968 - hoopF), t: 0.40 },
                    { z: -0.63, y: (hoopR + 0.938) / 2, w: 0.13 * inScale,
                      h: Math.max(0.03, 0.938 - hoopR), t: 0.38 }, sunC);
-      // A SPINE SIDE mark (liv.spineSide) claims the flank band z -0.72..-1.22:
-      // the pinstripe and the service panels keep clear of it (see both sites).
-      // Culled ids (bars/slash/…) coerce to none so a saved pick leaves panels alone.
-      const sideId = liv.spineSide || "none";
-      const sideMark = sideId !== "none" &&
-        (!globalThis.LiveryTex || !LiveryTex.SPINE_SIDE_IDS || LiveryTex.SPINE_SIDE_IDS.includes(sideId));
+      // A SPINE SIDE mark claims the flank band; culled ids leave panels alone.
+      const sideMark = (liv.spineSide || "none") !== "none" && (!globalThis.LiveryTex || !LiveryTex.SPINE_SIDE_IDS || LiveryTex.SPINE_SIDE_IDS.includes(liv.spineSide));
       coverGeom = buildEngineCoverBodywork(out, coverC, accentC, engStyle, anchors, spineRise(liv.spineHeight), sideMark);
       // Optional scoop lip on the roll-hoop mouth (recipe-gated; default 0).
       const scoopLip = Math.max(0, Math.min(2, Math.round((engStyle && engStyle.scoopLip) || 0)));
