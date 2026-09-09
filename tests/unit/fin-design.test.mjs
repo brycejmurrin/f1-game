@@ -90,7 +90,9 @@ function loadAtlas() {
   for (const f of ["js/core/log.js", "js/data/teams.js", "js/car/liveries.js", "js/car/crest-paths.js", "js/car/liverytex.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), sb, { filename: f });
   const LT = vm.runInContext("LiveryTex", sb);
-  return { LT, paint: (teamId, colors) => { LT.buildAtlas(teamId, colors, 16, true); return last.ops; } };
+  const Teams = vm.runInContext("Teams", sb), Liveries = vm.runInContext("Liveries", sb);
+  return { LT, Teams, Liveries,
+           paint: (teamId, colors) => { LT.buildAtlas(teamId, colors, 16, true); return last.ops; } };
 }
 const A = loadAtlas();
 const R = A.LT.REGIONS;
@@ -416,4 +418,48 @@ test("the ERS light code flashes once at full deploy, rapidly when clipping, and
   assert.ok(sample({ deploying: false, energy: 0.6, axEstSm: 0 }).every((v) => v === -1), "cruising: gate decides");
   assert.ok(sample({ deploying: false, energy: 1, axEstSm: 0 }).every((v) => v === -1), "full but not braking: no clip");
   assert.equal(code(null, 0), -1);
+});
+
+// ── the two the spine sweep found (2026-09-09) ──────────────────────────────
+
+test("the wrap sun clears the cover it is painted on, for every team", () => {
+  // The sun is the largest single area any livery colour ever covers — a disc
+  // across the whole crown AND both cover flanks — and it was the one place the
+  // cover check never reached. Measured before the fix: Ferrari painted #ffec00
+  // on its #f2f2f5 cover at 1.09, Mercedes #00b4ab on #c2c7d1 at 1.52, Alpine
+  // #ff87bc on #0093cc at 1.56. The crown BAND has cleared 2.0 against the cover
+  // since the "white on white" saddle; this holds the sun to the same floor.
+  for (const t of A.Teams.LIST) {
+    const liv = A.Liveries.forTeam(t)[0];
+    const cover = liv.cover || liv.c1;
+    const c = A.LT.contrast(A.LT.sunColour(t.id, liv), cover);
+    assert.ok(c >= 2.0, `${t.id}: the wrap sun reads ${c.toFixed(2)}:1 on its own cover`);
+  }
+});
+
+test("bigmark is BIG — not logo at 1.087x", () => {
+  // Both branches draw the mark in a square box under CROWN_SQUASH; they used to
+  // differ only in `sq = Rc.w` vs `Rc.w * 0.92`, which is 8.7 % linear and
+  // measured +18 % area on ten of eleven teams — invisible at chase distance,
+  // and SMALLER than logo on Red Bull, the car the design is named for. bigmark
+  // now cancels CREST_MARGIN so the mark's own bbox reaches the crown's width.
+  // The floor is 1.25x linear: the real gain is 1.30x, and pinning the exact
+  // number would fail on any future change to a team's mark rather than on a
+  // regression of this one.
+  const span = (spineLogo, team) => {
+    const liv = Object.assign({}, A.Liveries.forTeam(team)[0], { spineLogo });
+    const ops = A.paint(team.id, liv);
+    let x0 = Infinity, x1 = -Infinity;
+    for (const op of ops) for (const ring of op.pts || []) for (const [x, y] of ring)
+      if (x >= R.crest.x && x <= R.crest.x + R.crest.w && y >= R.crest.y && y <= R.crest.y + R.crest.h) {
+        x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+      }
+    return x1 > x0 ? (x1 - x0) / R.crest.w : 0;
+  };
+  for (const t of A.Teams.LIST) {
+    const lo = span("logo", t), big = span("bigmark", t);
+    assert.ok(lo > 0 && big > 0, `${t.id}: no crown mark measured`);
+    assert.ok(big >= lo * 1.25, `${t.id}: bigmark spans ${(big * 100).toFixed(1)}% of the crown, logo ${(lo * 100).toFixed(1)}% — only ${(big / lo).toFixed(3)}x`);
+    assert.ok(big <= 1.001, `${t.id}: bigmark spans ${(big * 100).toFixed(1)}% — past the crown, into the atlas's neighbours`);
+  }
 });

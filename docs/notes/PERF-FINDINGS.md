@@ -4199,3 +4199,52 @@ phone the sheet's 340 px content floor wins and the open panel covers most of
 the band; shut it and the car is back. Landscape has the older version of the
 same problem — at 844×390 the open panel (343×249) covers the whole car region —
 and was left alone here; it wants a compact panel, not a taller band.
+
+## 2z. Every game-loop profile taken in this container was 93 % a mirage (2026-09-09)
+
+`node tools/shot/profile-gameloop.mjs monza physics` reported:
+
+```
+   93.0%  getError
+    1.9%  update      game.js
+    1.2%  updateCar   game.js
+```
+
+Read literally that says the loop spends nine tenths of its time draining GL
+errors, which is exactly the pathology glx.js's `DRAIN_PRESENTS` comment says
+was fixed. Two plausible readings of it are WRONG, and both were tested:
+
+- **"The 30-present cap is broken and the drain runs every frame."** It is not.
+  Counting calls directly — `WebGL2RenderingContext.prototype.getError` wrapped
+  from an init script — a running rAF game makes **3 calls in 6 seconds**, and
+  a `__apex.step()` loop makes **5 calls across 180 steps**. The cap works.
+- **"The boot drain's 30 presents land inside the profile window, so warm up
+  first."** Stepping 40 frames before `Profiler.start` moved the number from
+  93.0 % to 93.7 %.
+
+What is actually happening: `gl.getError()` blocks until the rasteriser has
+drained the command buffer, and SwiftShader rasterises on the CPU. FIVE calls
+absorb ~5 s of profile because each one is the sync point where a step loop's
+whole backlog of queued GL work finally gets done. The sampler charges every
+sample taken during the stall to the frame on top of the stack, so the flush
+wears the cost of all the drawing the loop queued.
+
+The number is real and it is not a JS hot spot, so `profile-gameloop.mjs` now
+reports sync points (`getError`, `finish`, `readPixels`, `getBufferSubData`,
+`clientWaitSync`) as one labelled line and normalises the JS table over what is
+left. The same monza profile, readable:
+
+```
+  GPU sync 96.2% of samples (getError) — NOT a JS cost
+   25.5%  update            game.js
+   17.9%  updateCar         game.js
+    3.6%  wasm-function[37]           (rapier)
+    2.3%  (garbage collector)
+    1.9%  curvature         spline.js
+    1.4%  brakeTarget       ai-drive.js
+```
+
+No smoking gun in there — the loop is dominated by its own physics update and
+the cost is spread — but that is a conclusion the old output could not support
+either way. Anything hunting a hot spot from a profile taken before this fix
+was reading the rasteriser, not the code.

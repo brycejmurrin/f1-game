@@ -215,6 +215,27 @@
     };
   }
 
+  // LIVERY FIELD OVERRIDES. The spine/fin/cover designs are FIELDS on a livery,
+  // not livery ids, so `?livery=` cannot reach them and the studio could only
+  // ever show whatever each team happens to author. Any of these as a query
+  // param overrides the resolved livery — ?spineLogo=saddle&cover=ffffff — which
+  // is what sweeping a design across teams needs. Colours take hex; the rest are
+  // the enum ids in js/car/liveries.js.
+  const LIV_FIELDS = ["finShape", "finStyle", "finBadge", "spineLogo", "spineSide",
+                      "spineHeight", "tcam", "coverVents", "wingCarbon", "numFont",
+                      "cover", "rearWing", "stripe", "accent", "nose", "pod", "wing",
+                      "halo", "fin", "finArt", "noseStripe", "logo", "logo2", "logo3"];
+  const HEX_FIELDS = new Set(["cover", "rearWing", "stripe", "accent", "nose", "pod",
+                              "wing", "halo", "fin", "finArt", "noseStripe"]);
+  const hexRgb = (h) => { const v = parseInt(String(h).replace(/^#/, ""), 16);
+    return Number.isFinite(v) ? [(v >> 16 & 255) / 255, (v >> 8 & 255) / 255, (v & 255) / 255] : null; };
+  const LIV_OVER = (() => {
+    const o = {};
+    for (const f of LIV_FIELDS) { const v = qp(f, null); if (v == null) continue;
+      o[f] = HEX_FIELDS.has(f) ? hexRgb(v) : v; }
+    return o;
+  })();
+
   function teamObj() { return Teams.LIST.find(t => t.id === S.team) || Teams.LIST[0]; }
   function liveryList(team) { return Liveries.forTeam(team); }
   function resolveLiv(team) {
@@ -246,6 +267,11 @@
              // without authoring a livery for it (Car3D.FINISH_SURFACE).
              finish: S.finish || l.finish || null };
   }
+  function resolveLivOver(team) {
+    const liv = resolveLiv(team);
+    for (const k in LIV_OVER) if (LIV_OVER[k] != null) liv[k] = LIV_OVER[k];
+    return liv;
+  }
   function driverNum(team) {
     if (S.num != null) return parseInt(S.num, 10) || 0;
     return (team.drivers && team.drivers[0] && team.drivers[0].num) || 0;
@@ -253,7 +279,7 @@
 
   function rebuild() {
     const team = teamObj();
-    const liv = resolveLiv(team);
+    const liv = resolveLivOver(team);
     const tiers = Parts.getVisualTiers(S.parts, team);
     const num = driverNum(team);
     if (carMesh) GLX.freeMesh(carMesh);

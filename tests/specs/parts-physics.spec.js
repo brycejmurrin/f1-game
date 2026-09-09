@@ -561,12 +561,15 @@ test.describe("Parts module — visual recipes", () => {
         const parts = { engine: 1, _visual: { engine: { in: 1, inlet: 1, outlet: 1, ...engine } } };
         const anchors = Car3D.bodyAnchors(parts);
         const data = CarMesh.carDecalData(2, parts);
+        // SIZE_H for v, SIZE for u. The atlas grew extra rows BELOW the square for
+        // the engine-cover flanks (1024 x 1280) and car-mesh's uvOf has always
+        // followed it; this divided the region's Y by SIZE, which puts the v
+        // window 4 % low. The quad's TOP edge (v 0.96875) fell outside a window
+        // ending at 0.9609, so half the vertices were filtered out before the
+        // checks below ever saw them, and uvContinuousAtCrease — which needs 4
+        // per side — could never be true. The geometry was right the whole time;
+        // the measurement was not. (Found twice, independently, same day.)
         const title = LiveryTex.REGIONS.titleA, size = LiveryTex.SIZE;
-        // v divides by SIZE_H, not SIZE: the atlas grew extra rows below the
-        // square for the two engine-cover flanks, and car-mesh's uvOf has
-        // always followed it. Reading v against SIZE here put the band 8 px
-        // high and 34 px short, so the quad's lower verts fell outside it and
-        // only half the crease verts survived the filter.
         const sizeH = LiveryTex.SIZE_H || size;
         const titleU = [title.x / size, (title.x + title.w) / size];
         const titleV = [1 - (title.y + title.h) / sizeH, 1 - title.y / sizeH];
@@ -1280,7 +1283,9 @@ test.describe("Parts module — visual recipes", () => {
     // crest and tail are 5-quad DRAPES since the engine-cover crown became
     // rounded (Car3D.coverProfile) — a flat quad no longer lies on the skin;
     // titleA is 4 quads because podDecal splits at every crossed loft station,
-    // which is what the sibling test above asserts; spineSide and spineSideL
+    // which is what the sibling test above asserts; the wing band is 5 because a
+    // rear wing is SWEPT and one quad bridges the sweep instead of following it
+    // (Car3D.wingBand — it was 1 quad, 90 mm off the skin, until this week); spineSide and spineSideL
     // are the two cover flanks after each got its own frame (259d670b); fwEnd
     // is the front-wing endplate partner mark. 93 is the measured 70 plus a
     // third, the same headroom rule as last time. The tier argument does not

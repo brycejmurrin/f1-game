@@ -1265,9 +1265,31 @@ const LiveryTex = (function () {
     // The field is the COVER, not the body: this sun is painted on the crown,
     // the cover flanks and (Car3D) the airbox. Scoring it against c1 gave a
     // sun that reads on the chassis and disappears on a contrasting cover.
-    const P = markPalette(teamId, liv, [liv.cover || liv.c1, liv.c2], false);
-    return ((P && P.plate) || liv.stripe || liv.accent || liv.c2 || INK_LIGHT).slice();
+    const cover = liv.cover || liv.c1;
+    const P = markPalette(teamId, liv, [cover, liv.c2], false);
+    // ...and then it has to CLEAR that cover, which nothing here checked. The
+    // crown BAND is re-picked against the cover at SUN_FLOOR for exactly this
+    // reason ("a pale accent on a pale cover painted white on white"), and the
+    // sun is the biggest area on the car that any of these colours ever covers
+    // — a disc across the whole crown and both flanks. Measured before this:
+    // Ferrari painted #ffec00 on its #f2f2f5 cover at 1.09, Mercedes #00b4ab on
+    // #c2c7d1 at 1.52 and Alpine #ff87bc on #0093cc at 1.56. Same rule as bandC,
+    // deliberately: FIRST that clears, so a team keeps its own paints and only a
+    // livery whose every colour vanishes falls through to the inks.
+    // c1 is in the list for the reason bandC's is: on Ferrari's white cover the
+    // candidates ahead of it all fail and the RIGHT answer is the team's own red
+    // — the SF-26's sun — not the near-black the inks would have given.
+    const order = [(P && P.plate), liv.stripe, liv.accent, liv.c2, liv.c1, INK_LIGHT, INK_DARK].filter(Boolean);
+    for (const c of order) if (contrast(c, cover) >= SUN_FLOOR) return c.slice();
+    let best = order[0] || INK_LIGHT, score = contrast(best, cover);
+    for (const c of order) { const v = contrast(c, cover); if (v > score) { score = v; best = c; } }
+    return best.slice();
   }
+  // The floor a metre-wide band or disc must clear against the engine cover.
+  // Same number as the crown band's (see BAND_ON_COVER at its call site): these
+  // are shapes, not lettering, and Red Bull's bull reads clearly on track at
+  // 2.26 against its navy.
+  const SUN_FLOOR = 2.0;
   // REGIONS.crest is square in pixels but car-mesh drapes it over a strip
   // ~0.34 m across and 0.66 m along the spine, so a canvas pixel is 1.9× longer
   // along the car than across it — a square mark came out as a lozenge. Crown
@@ -1379,9 +1401,14 @@ const LiveryTex = (function () {
     ctx.save();
     ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip();
     if (id === "bigmark") {
-      // Handled by the caller: the team mark blown up to run the LENGTH of
-      // the crown (Red Bull's bull and sun across the RB22's cover). Nothing
-      // to paint here — the crest painters need the livery, not a colour.
+      // Handled by the caller: the team mark at the full crown WIDTH, without
+      // its plate (Red Bull's bull straight on the RB22's cover). Not "the
+      // length of the crown", as this said until it was measured: the mark is
+      // drawn in a SQUARE box and squashed by CROWN_SQUASH so it lands round,
+      // which caps its along-crown extent at 52 % of the region however large
+      // the box gets (measured maximum on any team: 44 %). A round mark cannot
+      // run the length of a strip 1.9x longer than it is wide. Nothing to paint
+      // here — the crest painters need the livery, not a colour.
     } else if (id === "saddle") {
       // The whole crown, shoulder to shoulder, in the accent, AND down the
       // flanks with a raked rear edge — Ferrari's white engine-cover top on
@@ -1830,8 +1857,17 @@ const LiveryTex = (function () {
       // BIG MARK: the mark WITHOUT its plate — Red Bull's bulls with no sun
       // disc, the way the RB22 wears the bull straight on the cover — at the
       // full crown width, top-down and in proportion like the crest above.
-      const Rc = REGIONS.crest, sq = Rc.w;
+      // sq CANCELS the crest margin instead of being the region width. drawCrest
+      // insets CREST_MARGIN (0.08) each side, so `sq = Rc.w` drew the mark at
+      // 84 % of the crown and `bigmark` came out 1.087x `logo` — 8.7 % linear,
+      // which measured +18 % area on ten of eleven teams and is invisible at
+      // chase distance. Dividing it out puts the mark's own bbox on the crown's
+      // full width (McLaren 83.7 % -> 100 %, 1.30x logo). It cannot overflow —
+      // the bbox now EQUALS the width — but the clip below is the guard that the
+      // atlas's neighbouring regions never pay for a mark that does.
+      const Rc = REGIONS.crest, sq = Rc.w / (1 - CREST_MARGIN * 2);
       ctx.save();
+      ctx.beginPath(); ctx.rect(Rc.x, Rc.y, Rc.w, Rc.h); ctx.clip();
       ctx.translate(Rc.x + Rc.w / 2, Rc.y + Rc.h / 2); ctx.rotate(Math.PI); ctx.scale(1, CROWN_SQUASH);
       const Rb = { x: -sq / 2, y: -sq / 2, w: sq, h: sq };
       if (LOGOS[teamId]) {

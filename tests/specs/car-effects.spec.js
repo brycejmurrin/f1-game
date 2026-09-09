@@ -8,14 +8,23 @@
 // fitted) before racing — the ERS and exhaust contracts below are about THAT
 // car, and the shared page carries whatever the previous test fitted.
 // UNVERIFIED IN A BROWSER at conversion time.
-import { sharedTest as test, expect } from "../helpers/fixtures.js";
+import { sharedTest as test, expect, BOOT_MS } from "../helpers/fixtures.js";
 import { toMenu, pinFreePlay } from "../helpers/shared-page.js";
 
 async function startCar(page, speed = 30) {
   await toMenu(page);
   await pinFreePlay(page);
-  await page.evaluate((initialSpeed) => {
-    window.__apex.race("monza");
+  await page.evaluate(() => window.__apex.race("monza"));
+  // race() BUILDS THE WORLD ASYNCHRONOUSLY, and every call below needs
+  // G.player. The whole setup used to sit in one evaluate with race(), so on
+  // any boot where the build had not finished it ran against no car at all —
+  // and __apex returns false/null there rather than throwing, so nothing said
+  // so. carEffects() then reported null and five of the nine tests in this file
+  // were red. The one that passed used expect.poll, which simply retried until
+  // the world existed. Same wait every other race-level spec uses.
+  await page.waitForFunction(() => window.__apex.info().track != null,
+    null, { polling: 100, timeout: BOOT_MS });
+  const ready = await page.evaluate((initialSpeed) => {
     // go() skips the countdown: in "count" state update() runs only the light
     // sequence and RETURNS — no car physics. Without it a short step() run
     // never computes deploy state (docs/DEBUG-HOOKS.md: race()+go() first);
@@ -23,10 +32,14 @@ async function startCar(page, speed = 30) {
     window.__apex.go();
     window.__apex.jump(0.1, initialSpeed, 0);
     window.__apex.freeze(true);
-    window.__apex.setEnergy(1);
+    const energy = window.__apex.setEnergy(1);
     window.__apex.setBoost(false);
     window.__apex.clearInput();
+    // setEnergy returns FALSE with no player. Report it rather than leave every
+    // assertion below measuring a car that is not there.
+    return !!energy;
   }, speed);
+  expect(ready, "race() never produced a player car — the setup below ran on nothing").toBe(true);
 }
 
 async function effects(page) {
