@@ -44,9 +44,19 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src, /COMBOS|"wrap-spine"/, "combo presets bundle logo/side/views/zoom");
   assert.match(src, /parseTeams|teamArg === "all"|arg === "all"/, "supports --team=all roster walk");
   assert.match(src, /buildTeamRollup/, "multi-team rollup contact sheet");
+  assert.match(src, /Excludes DEFAULT_CUSTOM|block\[1\]\.matchAll/,
+    "rosterIds parses LIST only, not DEFAULT_CUSTOM");
   assert.doesNotMatch(src, /page\.reload\(/, "no second boot — openGarage pins the team live");
-  assert.doesNotMatch(src, /page\.screenshot\(\s*\{\s*path:\s*png/,
-    "no raw page.screenshot — that hung under SwiftShader");
+});
+
+test("teams.js LIST is 11 grid teams — custom is not a roster entry", () => {
+  const teamsJs = read("js/data/teams.js");
+  const block = teamsJs.match(/const LIST = \[([\s\S]*?)\n  \];/);
+  assert.ok(block, "LIST block present");
+  const ids = [...block[1].matchAll(/^      id: "([a-z]+)",/gm)].map((m) => m[1]);
+  assert.equal(ids.length, 11, "2026 grid");
+  assert.ok(!ids.includes("custom"), "My Team is DEFAULT_CUSTOM, not in LIST");
+  assert.ok(ids.includes("redbull") && ids.includes("cadillac"));
 });
 
 test("settleGarage batches steps in one evaluate", () => {

@@ -98,10 +98,15 @@ const [strafe = 0, dolly = 0] = (hasFlag("--pan") ? flag("--pan", "0,0") : panDe
 const withLabels = isLive ? !argv.includes("--no-labels") : argv.includes("--labels");
 const rollupView = flag("--rollup-view", combo?.rollupView || "side");
 
-/** Roster order == store.team index (game.js boot). */
+/** Roster order == Teams.LIST == store.team index. Excludes DEFAULT_CUSTOM. */
 function rosterIds() {
   const src = readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8");
-  return Array.from(src.matchAll(/^ *id: "([a-z]+)",/gm)).map((m) => m[1]);
+  const block = src.match(/const LIST = \[([\s\S]*?)\n  \];/);
+  if (!block) {
+    console.error("teams.js: could not parse const LIST");
+    process.exit(1);
+  }
+  return Array.from(block[1].matchAll(/^      id: "([a-z]+)",/gm)).map((m) => m[1]);
 }
 
 function teamIndex(id) {
