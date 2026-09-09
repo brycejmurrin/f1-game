@@ -232,6 +232,58 @@ spans 1337–7807 m — nearly six-fold. At monza only two effects survive the
 ranges: order flips ROSE (146 -> 200, ranges barely touching) and nose-to-tail
 time rose. Stringing did not improve provably at either circuit.
 
+### Compressed again to the FASTEST era's gap (1.46 %), and a wrong prediction
+
+The owner's follow-up: calibrate to whichever era is fastest. The ground-effect
+cars (2022-24) near-matched Monza's 2003/04 average-speed record and ran the
+tightest field F1 has had — all twenty inside ONE SECOND in 2023 Brazilian
+qualifying, ~1.4 %. (The outright fastest single laps are 2019-21, but that
+field was WIDER, Mercedes being dominant, so "fastest era" does not name one
+number by itself.) Same method, factor 0.174 from the originals, about the
+field mean: product span 8.64 % -> **1.46 %**, mean 0.9323 -> 0.9322.
+
+| monza, n=5 | baseline 8.47 % | 2.92 % | 1.43 % |
+|---|---|---|---|
+| strings out to | 1505 [1087–1524] m | 1122 [1053–1298] | 1071 [964–1157] |
+| order flips | 146 [109–165] | 200 [148–211] | 185 [155–222] |
+| settled passes | 25 [19–35] | 23 [20–38] | 32 [24–57] |
+| oscillation | 88 (61 %) | 131 (68 %) | 113 (62 %) |
+| nose-to-tail | 23.5 [14.8–24.4] % | 26.3 [23.8–30] % | **28.0 [24.8–30.5] %** |
+
+| monaco, n=5 | baseline 8.47 % | 1.43 % |
+|---|---|---|
+| strings out to | 4130 [1337–7807] m | 3872 [991–5883] |
+| order flips | 39 [27–55] | 51 [43–55] |
+| settled passes | 22 [15–31] | 21 [13–30] |
+| oscillation | 7 (19 %) | 18 (35 %) |
+| nose-to-tail | 12.3 [11.6–12.9] % | **14.7 [13.4–15.5] %** |
+
+**I predicted the flip count would rise again at 1.46 %, and it did not** — 200
+-> 185 median, ranges overlapping, so no change established between the two
+compressions. The reasoning behind the prediction ("tighter pace means more
+shuffling") was wrong and should not be built on. The likelier mechanism: at
+near-identical pace a car cannot COMPLETE a pass on raw speed, so the passes
+that happen come from ERS, the pace biorhythm and the slipstream rather than
+from one car simply out-driving another all lap.
+
+What the ranges actually establish, against the 8.47 % baseline:
+
+- **Nose-to-tail time is up at BOTH circuits with no overlap at all** — 23.5 ->
+  28.0 % at monza, 12.3 -> 14.7 % at monaco. Cars spend more of the race in
+  each other's gearbox, which is the F1 look and the point of the change.
+- Oscillation count up at monaco (7 [4–12] -> 18 [10–26]).
+- PROBABLE: flips up at monza (146 [109–165] -> 185 [155–222]); stringing down
+  at monza (overlap only 1087–1157, medians well apart).
+- NOT ESTABLISHED anywhere: settled passes, and monaco stringing — that metric
+  still ranges 991–5883 m on one tree and proves nothing.
+
+Lap time held again: monza normal 120.68 -> 121.30 s (+0.51 %), and the
+difficulty steps are intact (easy +4.31 % against +4.32 % before, hard -3.81 %
+against -3.18 %).
+
+So the SPREAD half of "like F1" is done and measured. The remaining half is
+that overtaking is not hard enough, and that is AI-side work.
+
 ### The correction this forces on the rest of this file
 
 **Field stringing is too noisy to carry a claim, and this file has been
