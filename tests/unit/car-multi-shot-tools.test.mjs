@@ -93,3 +93,56 @@ test("carshot uses soft→CDP clip, not page.screenshot", () => {
   assert.match(src, /clip:\s*\{\s*x:\s*96/, "keeps the tiny centre crop");
   assert.doesNotMatch(src, /page\.screenshot\(/, "no raw page.screenshot");
 });
+
+/* The garage matrix: every axis is a LIST and the walk is cost-ordered.
+ * Before 2026-09-09 team/zoom/pan were single-valued, the livery and design
+ * walks were mutually exclusive (`if (designs) … else …`, so a design could
+ * only ever be seen on the team default paint), and there was no parts axis at
+ * all — a build comparison meant one boot per build. */
+test("garage-angles walks every axis as a list, cheapest innermost", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /const list = \(name, dflt\)/, "one comma-list parser for every axis");
+  for (const axis of ["--team", "--livery", "--parts", "--spine-side", "--zoom"]) {
+    assert.match(src, new RegExp(`list\\("${axis}"`), `${axis} must be a list axis`);
+  }
+  // Cost order is the whole point: a framing nudge is a few clicks, a team
+  // switch is UI navigation plus a rebuild. Assert the nesting, not the prose.
+  const walk = src.slice(src.indexOf("const PLAN = []"), src.indexOf("const dupes"));
+  const order = [...walk.matchAll(/for \(const (\w+) of (\w+)\)/g)].map((m) => m[2]);
+  assert.deepEqual(order, ["teams", "paints", "parts", "views", "framings"],
+    "team → paint → parts → view → framing: outermost is the most expensive step");
+  assert.doesNotMatch(src, /page\.reload\(/, "a second team must not cost a second boot");
+});
+
+test("garage-angles crosses design with livery rather than replacing it", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /async function applyDesign\(page, team, baseLivery,/,
+    "a design is applied on top of the livery it is crossed with");
+  assert.match(src, /list\.find\(\(l\) => l\.id === base\) \|\| list\[0\]/,
+    "the base is the selected paint job, falling back to the team default");
+});
+
+test("garage-angles validates part ids against availability for THAT team", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  const fn = src.slice(src.indexOf("async function applyParts"), src.indexOf("async function switchTeam"));
+  assert.match(fn, /Parts\.isOptionAvailable\(opt, t\)/,
+    "a part locked to another team resolves to the default silently — check first");
+  assert.match(fn, /Parts\.FACTORY_PRESETS\[teamId\]/, "factory build per team");
+  assert.match(fn, /Parts\.DEFAULTS/, "stock build");
+  assert.match(fn, /have:/, "a rejection must name what IS available");
+  // The mesh key is team:partsVisualKey:num and partsVisualKey reads the store
+  // live, so the write busts the cache on its own — no dropPreviewMeshes here.
+  // Verified on pixels: factory vs stock on one McLaren side shot differ in
+  // 6.63% of bytes (max delta 241), so the second build is not a cached mesh.
+  assert.doesNotMatch(fn, /dropPreviewMeshes/,
+    "a parts write already moves the preview key; an extra bust would hide a key regression");
+});
+
+test("garage-angles can print the matrix without booting Chromium", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /const dryRun = argv\.includes\("--dry-run"\)/, "--dry-run flag");
+  const gate = src.slice(src.indexOf("if (dryRun)"), src.indexOf("async function bayRendered"));
+  assert.match(gate, /process\.exit\(0\)/, "--dry-run exits before launchChromium");
+  assert.ok(src.indexOf("if (dryRun)") < src.indexOf("launchChromium("),
+    "the dry-run gate must sit above the browser launch");
+});
