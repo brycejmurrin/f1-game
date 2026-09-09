@@ -20,7 +20,10 @@ car with no parts (every AI) sits at the midpoint. Livery finish is
 the tail DESIGN is four enum fields with defaults that reproduce the shipped car —
 `finShape` (`Car3D.FIN_SHAPES` + `none`; the ONE non-colour livery field that moves
 a vertex, declared in `SP_HULL_GEOM_FIELDS`), `finStyle` (`LiveryTex.TAIL_STYLE_IDS`,
-drives the fin panel AND the engine-cover wash), `finBadge` (`logo|number|none`) and
+drives the fin panel ONLY — the crown's gradient wash was removed, so every
+SPINE TOP now stands on bare paint with hard edges; `drawTailGraphic` is called
+on `REGIONS.fin` alone, which is why the garage greys TAIL STYLE under FIN
+SHAPE `none`), `finBadge` (`logo|number|code|none`) and
 `spineLogo` (SPINE TOP: `logo|none|wrap|bigmark|saddle|panel|stripe|twin|wordmark|carbon|number`;
 `wrap` paints one car-space shape into `REGIONS.crest` AND `REGIONS.spineSide` via
 `drawSunWrap`, so a graphic crosses the shoulder — the region↔car maps are documented there;
