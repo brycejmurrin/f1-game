@@ -1003,6 +1003,17 @@ const WGX = (function () {
     } catch (_) { /* onuncapturederror is optional; _bootError/_gpuErrors stay 0 if we cannot hook it */ }
 
     let width = 0, height = 0, aspect = 1, renderScale = 1;
+    // Present size (css×dpr) vs render size (×renderScale). With
+    // apex26.spatialUpscale=1 and scale < 1, the canvas / soft present target
+    // is FULL present size and SGSR1 reconstructs (UPSCALING-2026-09 §6–7).
+    let presentW = 0, presentH = 0;
+    let spatialUpscale = false;
+    try {
+      const q = typeof location !== "undefined" && location.search &&
+        /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
+      const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
+      spatialUpscale = !!(q || ls);
+    } catch (_) { spatialUpscale = false; }
     let lastFrame = null;
 
     // Per-frame scratch (reused; writeBuffer snapshots on call so reuse is safe).
@@ -1185,13 +1196,15 @@ const WGX = (function () {
     let _postReady = false, _fxReady = false, _cfgWarned = false;
     let ssaoTex = null, ssaoView = null, godrayTex = null, godrayView = null,
         ssaoBlurTex = null, ssaoBlurView = null, godrayBlurTex = null, godrayBlurView = null,
-        ldrTex = null, ldrView = null, ssrTex = null;
+        ldrTex = null, ldrView = null, ssrTex = null,
+        aaTex = null, aaView = null;   // SGSR intermediate (render-size LDR)
+    let _aaW = 0, _aaH = 0;
     let bloomLv = [];                 // [{tex, view, w, h}]
     let bloomDownUBO = [], bloomUpUBO = [], bloomDownBG = [], bloomUpBG = [];
-    let ssaoUBO, godrayUBO, compositeUBO, fxaaUBO, ssrUBO, blurUBO;
-    let ssaoBG = null, godrayBG = null, compositeBG = null, fxaaBG = null, ssrBG = null;
+    let ssaoUBO, godrayUBO, compositeUBO, fxaaUBO, ssrUBO, blurUBO, sgsrUBO;
+    let ssaoBG = null, godrayBG = null, compositeBG = null, fxaaBG = null, ssrBG = null, sgsrBG = null;
     let ssaoBlurSrcBG = null, ssaoBlurDstBG = null, godrayBlurSrcBG = null, godrayBlurDstBG = null;
-    let pBloomDown, pBloomUp, pSSAO, pBlur, pBlurHDR, pGodray, pComposite, pFXAA, pointSampler, pSSR;
+    let pBloomDown, pBloomUp, pSSAO, pBlur, pBlurHDR, pGodray, pComposite, pFXAA, pFXAALdr, pSGSR, pointSampler, pSSR;
     // Blur dynamic-offset ring (see _buildPost BLUR block). Reset each present().
     let _blurBGL = null, _blurStride = 256, _blurSlots = 16, _blurWriteSlot = 0;
     // Per-pass CPU scratch for uniform writes (largest block is SSAO, 176 B/44 f).
@@ -1704,12 +1717,24 @@ const WGX = (function () {
         }
         pComposite = fsPipe(_Post.COMPOSITE, LDR_FORMAT,    null);
         pFXAA      = fsPipe(_Post.FXAA,       _presentFormat, null);
+        // Hardware swapchain is often bgra8unorm; aaTex is always rgba8 LDR.
+        // FXAA writing the SGSR intermediate needs a matching LDR pipeline.
+        pFXAALdr   = (_presentFormat !== LDR_FORMAT)
+          ? fsPipe(_Post.FXAA, LDR_FORMAT, null) : pFXAA;
         ssaoUBO      = device.createBuffer({ size: _Post.SSAO_UNIFORM_BYTES,      usage: _UCD });
         blurUBO      = device.createBuffer({ size: BLUR_STRIDE * BLUR_SLOTS,       usage: _UCD });
         godrayUBO    = device.createBuffer({ size: _Post.GODRAY_UNIFORM_BYTES,    usage: _UCD });
         compositeUBO = device.createBuffer({ size: _Post.COMPOSITE_UNIFORM_BYTES, usage: _UCD });
         fxaaUBO      = device.createBuffer({ size: _Post.FXAA_UNIFORM_BYTES,      usage: _UCD });
         ssrUBO       = device.createBuffer({ size: _Post.SSR_UNIFORM_BYTES,       usage: _UCD });
+        // SGSR1 best-effort: a failed module must NOT kill the post chain —
+        // wantSpatialUpscale() fail-closes so the canvas stays at render size.
+        try {
+          if (_Post.SGSR) {
+            pSGSR = fsPipe(_Post.SGSR, _presentFormat, null);
+            sgsrUBO = device.createBuffer({ size: _Post.SGSR_UNIFORM_BYTES, usage: _UCD });
+          }
+        } catch (_) { pSGSR = null; sgsrUBO = null; }
       } catch (_) { pComposite = null; }   // disable post; ensureTargets stays inert
     }
 
@@ -2006,16 +2031,21 @@ const WGX = (function () {
     }
     function _ensureSoftPresent() {
       if (!_softGpu || width < 1 || height < 1) return;
-      if (softPresentTex && _softW === width && _softH === height) return;
+      // Soft blit readback matches the canvas: present size when SGSR is live,
+      // else render size (legacy bilinear stretch via the 2D putImageData path).
+      const sw = wantSpatialUpscale() ? presentW : width;
+      const sh = wantSpatialUpscale() ? presentH : height;
+      if (sw < 1 || sh < 1) return;
+      if (softPresentTex && _softW === sw && _softH === sh) return;
       try {
         if (softPresentTex) softPresentTex.destroy();
         softPresentTex = device.createTexture({
-          size: [width, height], format: LDR_FORMAT,
+          size: [sw, sh], format: LDR_FORMAT,
           usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC |
                  GPUTextureUsage.TEXTURE_BINDING,
         });
         softPresentView = softPresentTex.createView();
-        _softW = width; _softH = height;
+        _softW = sw; _softH = sh;
       } catch (e) {
         try { Log.warn("gfx", "WGX soft present target failed —", e); } catch (_) { /* harness */ }
         softPresentTex = null; softPresentView = null;
@@ -2185,6 +2215,19 @@ const WGX = (function () {
         _softPresentWaiters.push(waiter);
       });
     }
+    function wantSpatialUpscale() {
+      // Fail closed: without a compiled SGSR pipeline the canvas must stay at
+      // render size — a present-size canvas with a render-size scene letterboxes.
+      return spatialUpscale && renderScale < 0.98 && !!pSGSR;
+    }
+    function setSpatialUpscale(on) {
+      spatialUpscale = !!on;
+      try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
+      resize();
+      _syncSpatialAa();
+      return spatialUpscale;
+    }
+    function getSpatialUpscale() { return spatialUpscale; }
     function resize() {
       const dpr = Math.min(window.devicePixelRatio || 1, WGX_MINIMAL ? 1 : (WGX_LITE ? 1.5 : 2));
       // Clamp to the device's texture ceiling: a 5K/6K display at DPR 2 walks
@@ -2192,8 +2235,8 @@ const WGX = (function () {
       // swapchain itself) then fails into a silent per-frame retry loop.
       const maxDim = (device.limits && device.limits.maxTextureDimension2D) || 8192;
       _cssSize();
-      let w = Math.max(1, Math.round(_cssW * dpr * renderScale));
-      let h = Math.max(1, Math.round(_cssH * dpr * renderScale));
+      let pw = Math.max(1, Math.round(_cssW * dpr));
+      let ph = Math.max(1, Math.round(_cssH * dpr));
       // CLAMP UNIFORMLY. Clamping each axis on its own changed the RATIO, not
       // just the resolution, and `aspect = w / h` below feeds every projection
       // matrix and the frustum cull distance. The ceiling is lower than it
@@ -2204,23 +2247,34 @@ const WGX = (function () {
       // CSS px: a 6K panel in a scaled HiDPI mode, or a window spanned across
       // several 4K monitors. GLX and TLX do not clamp at all, so this was
       // WGX-only. One scale factor keeps the picture correct, just smaller.
-      if (w > maxDim || h > maxDim) {
-        const k = Math.min(maxDim / w, maxDim / h);
-        w = Math.max(1, Math.floor(w * k));
-        h = Math.max(1, Math.floor(h * k));
+      if (pw > maxDim || ph > maxDim) {
+        const k = Math.min(maxDim / pw, maxDim / ph);
+        pw = Math.max(1, Math.floor(pw * k));
+        ph = Math.max(1, Math.floor(ph * k));
       }
+      if (presentW > 1 && presentH > 1 && Math.abs(pw - presentW) <= 1 && Math.abs(ph - presentH) <= 1) {
+        pw = presentW; ph = presentH;
+      }
+      let rw = Math.max(1, Math.round(pw * renderScale));
+      let rh = Math.max(1, Math.round(ph * renderScale));
       // 1px CSS/DPR jitter must not rebuild the swapchain. Reconfigure wipes
       // to black and the 2D #game to transparent (white shell flashing through).
-      if (width > 1 && height > 1 && Math.abs(w - width) <= 1 && Math.abs(h - height) <= 1) {
-        w = width; h = height;
+      if (width > 1 && height > 1 && Math.abs(rw - width) <= 1 && Math.abs(rh - height) <= 1) {
+        rw = width; rh = height;
       }
-      const sizeChanged = canvas.width !== w || canvas.height !== h ||
-        (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h));
+      presentW = pw; presentH = ph;
+      // Upscale path: canvas = present (full), scene targets = render (scaled).
+      // Off or scale≈1: canvas = render (legacy browser / soft bilinear stretch).
+      const up = wantSpatialUpscale();
+      const cw = up ? pw : rw;
+      const ch = up ? ph : rh;
+      const sizeChanged = canvas.width !== cw || canvas.height !== ch ||
+        (_displayCanvas && (_displayCanvas.width !== cw || _displayCanvas.height !== ch));
       if (sizeChanged) {
         _cssApplying = true;
         try {
           _softDisplayEpoch++;
-          canvas.width = w; canvas.height = h;
+          canvas.width = cw; canvas.height = ch;
           // WebGPU: changing the canvas drawing-buffer size INVALIDATES the
           // configured swapchain. Reconfigure on every buffer-size change.
           if (ctx) {
@@ -2229,14 +2283,14 @@ const WGX = (function () {
             else _cfgWarned = false;
           }
           if (_softGpu && _displayCanvas) {
-            _displayCanvas.width = w;
-            _displayCanvas.height = h;
+            _displayCanvas.width = cw;
+            _displayCanvas.height = ch;
           }
         } finally {
           _cssApplying = false;
         }
       }
-      width = w; height = h; aspect = w / h;
+      width = rw; height = rh; aspect = rw / rh;
       if (_softGpu) _ensureSoftPresent();
     }
     function setRenderScale(s) {
@@ -2244,6 +2298,7 @@ const WGX = (function () {
       if (Math.abs(s - renderScale) < 0.02) return false;
       renderScale = s;
       resize();
+      _syncSpatialAa();
       return true;
     }
 
@@ -2312,7 +2367,7 @@ const WGX = (function () {
     function _destroyTargetSet(t) {
       if (!t) return;
       const textures = [t.sceneTex, t.depthTex, t.ssaoTex, t.godrayTex, t.ldrTex, t.ssrTex,
-        t.ssaoBlurTex, t.godrayBlurTex, t.sceneMSTex, t.depthMSTex];
+        t.ssaoBlurTex, t.godrayBlurTex, t.sceneMSTex, t.depthMSTex, t.aaTex];
       for (let i = 0; i < textures.length; i++) if (textures[i]) textures[i].destroy();
       const levels = t.bloomLv || [];
       for (let i = 0; i < levels.length; i++) levels[i].tex.destroy();
@@ -2320,9 +2375,46 @@ const WGX = (function () {
       for (let i = 0; i < buffers.length; i++) buffers[i].destroy();
     }
 
+    // SGSR intermediate at render size + bind group. Separate from the
+    // transactional scene set so toggling the flag (same render size) does
+    // not rebuild HDR/bloom — only allocate/destroy aaTex.
+    function _syncSpatialAa() {
+      if (!device || width < 1 || height < 1) return;
+      const wantUp = !!(pSGSR && sgsrUBO && wantSpatialUpscale());
+      if (wantUp) {
+        if (aaTex && aaView && sgsrBG && _aaW === width && _aaH === height) return;
+        try {
+          if (aaTex) { try { aaTex.destroy(); } catch (_) { /* prior */ } aaTex = null; aaView = null; }
+          aaTex = device.createTexture({
+            size: [width, height], format: LDR_FORMAT,
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+          });
+          aaView = aaTex.createView();
+          _aaW = width; _aaH = height;
+          sgsrBG = device.createBindGroup({
+            layout: pSGSR.getBindGroupLayout(0),
+            entries: [
+              { binding: 0, resource: aaView },
+              { binding: 1, resource: linearSampler },
+              { binding: 2, resource: { buffer: sgsrUBO } },
+            ],
+          });
+        } catch (_) {
+          try { if (aaTex) aaTex.destroy(); } catch (_) { /* partial */ }
+          aaTex = null; aaView = null; sgsrBG = null; _aaW = 0; _aaH = 0;
+        }
+      } else if (aaTex || sgsrBG) {
+        try { if (aaTex) aaTex.destroy(); } catch (_) { /* prior */ }
+        aaTex = null; aaView = null; sgsrBG = null; _aaW = 0; _aaH = 0;
+      }
+    }
+
     function ensureTargets() {
       if (width < 1 || height < 1) return;
-      if (sceneTex && _texW === width && _texH === height) return;
+      if (sceneTex && _texW === width && _texH === height) {
+        _syncSpatialAa();
+        return;
+      }
       // Keep rendering through the old transactional target set after a failed
       // resize, but avoid rebuilding and discarding a scene pair every frame.
       // A new size retries immediately; the same size retries after a short
@@ -2577,6 +2669,7 @@ const WGX = (function () {
       _texW = width; _texH = height;
       _targetRetryAt = 0;
       _destroyTargetSet(old);
+      _syncSpatialAa();
     }
 
     // Geometry is uploaded with queue.writeBuffer, NOT createBuffer({
@@ -4777,12 +4870,27 @@ const WGX = (function () {
       }
 
       {
+        // FXAA → aaView (render-size LDR) when SGSR will stretch to present;
+        // otherwise straight to the swapchain / soft present view.
+        const useUpscale = !!(pSGSR && sgsrUBO && aaView && sgsrBG && wantSpatialUpscale());
         const s = postScratch;
         s[0] = 1 / tw; s[1] = 1 / th; s[2] = 0; s[3] = 0;
         device.queue.writeBuffer(fxaaUBO, 0, s, 0, _Post.FXAA_UNIFORM_BYTES / 4);
-        const p = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "clear",
+        const fxaaView = useUpscale ? aaView : currentView;
+        const fxaaPipe = useUpscale ? (pFXAALdr || pFXAA) : pFXAA;
+        const p = encoder.beginRenderPass({ colorAttachments: [{ view: fxaaView, loadOp: "clear",
           clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
-        p.setPipeline(pFXAA); p.setBindGroup(0, fxaaBG); p.draw(3, 1, 0, 0); p.end();
+        p.setPipeline(fxaaPipe); p.setBindGroup(0, fxaaBG); p.draw(3, 1, 0, 0); p.end();
+
+        // SGSR1 spatial upscale — present-size reconstruct from render-size
+        // FXAA output. uViewport is SOURCE (render) size.
+        if (useUpscale) {
+          s[0] = 1 / tw; s[1] = 1 / th; s[2] = tw; s[3] = th;
+          device.queue.writeBuffer(sgsrUBO, 0, s, 0, _Post.SGSR_UNIFORM_BYTES / 4);
+          const p2 = encoder.beginRenderPass({ colorAttachments: [{ view: currentView, loadOp: "clear",
+            clearValue: { r: 0, g: 0, b: 0, a: 1 }, storeOp: "store" }] });
+          p2.setPipeline(pSGSR); p2.setBindGroup(0, sgsrBG); p2.draw(3, 1, 0, 0); p2.end();
+        }
       }
 
       } catch (postE) {
@@ -5993,6 +6101,9 @@ const WGX = (function () {
       resize,
       setRenderScale,
       getRenderScale() { return renderScale; },
+      setSpatialUpscale,
+      getSpatialUpscale,
+      getPresentSize: () => ({ width: presentW || width, height: presentH || height }),
       get width() { return width; },
       get height() { return height; },
       get aspect() { return aspect; },

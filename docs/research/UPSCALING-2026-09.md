@@ -161,24 +161,31 @@ Two consequences worth naming before anyone starts:
 4. **Temporal reconstruction stays closed** unless someone first builds a
    motion-vector buffer for another reason.
 
-## 6. Spike landed (2026-09-09) — GLX only, flag OFF by default
+## 6. Spike landed (2026-09-09) — GLX + WGX, flag OFF by default
 
-Implements recommendation §5.2–5.3 in the default renderer:
+Implements recommendation §5.2–5.3 in the default renderer (GLX), with the
+shared SGSR1 kernel also on WGX (same flag / fail-closed size split):
 
 | Piece | Where |
 |---|---|
 | Flag | `localStorage apex26.spatialUpscale=1` or `?upscale=1`; `__apex.spatialUpscale(1\|0)` |
-| Size split | `js/render/glx/glx.js` `resize()`: canvas = present (`css×dpr`); scene/post FBOs stay at `×renderScale` when the flag is on and scale &lt; ~1 |
-| Pass | After FXAA (or composite→LDR), one fullscreen SGSR1 mobile shader writes the default framebuffer at present size (`js/render/glx/post.js`) |
-| Shader | Adapted from Qualcomm SGSR1 mobile (`sgsr1_shader_mobile.frag`, BSD-3). Stock uses `textureGather` (ES 3.1) — **WebGL2 emulates it with four `textureLod` taps**. `mediump`, OperationMode RGBA, EdgeThreshold 8/255 |
-| Gate | Pass runs only when flag on **and** `renderScale < 0.98` **and** the program linked; otherwise behaviour is byte-identical to pre-spike |
+| Size split | GLX `js/render/glx/glx.js` and WGX `js/render/webgpu/wgx.js` `resize()`: canvas = present (`css×dpr`); scene/post targets stay at `×renderScale` when the flag is on and scale &lt; ~1 |
+| Pass | After FXAA (or composite→LDR), one fullscreen SGSR1 mobile shader writes the present target (`js/render/glx/post.js`; WGX `present()` + `wgsl-post.js` `SGSR`) |
+| Shader | Adapted from Qualcomm SGSR1 mobile (`sgsr1_shader_mobile.frag`, BSD-3). Stock uses `textureGather` (ES 3.1) — **WebGL2 and the WGX port both emulate with four lod taps** (parity). `mediump`/WGSL, OperationMode RGBA, EdgeThreshold 8/255 |
+| Gate | Pass runs only when flag on **and** `renderScale < 0.98` **and** the program/pipeline linked; otherwise behaviour is byte-identical to pre-spike |
 
-**Not in this spike:** WGX/TLX, settings UI stop, PerfGov auto-enable, temporal path, neural SR, frame gen. Real-GPU A/B still required before defaulting ON — SwiftShader cannot judge sharpness or cost.
+**Not in this spike:** TLX, PerfGov auto-enable, temporal path, neural SR, frame gen. Settings UI ON/OFF row shipped separately. Real-GPU A/B still required before defaulting ON — SwiftShader cannot judge sharpness or cost.
 
 ## 7. Settings UI + WGX/TLX port (research, 2026-09-09)
 
 Ask: put a menu control next to RESOLUTION, and make the same flag do something
 on WGX and TLX. Surveyed against tip `111356f6` (GLX spike already on deploy).
+
+**Update (2026-09-09):** WGX shared-SGSR1 port landed on strategy A (§7.2) —
+`setSpatialUpscale` / `wantSpatialUpscale` / present-size soft blit when active;
+FXAA→`aaTex` (LDR `rgba8`) then SGSR→swapchain; hardware `bgra8unorm` uses a
+separate `pFXAALdr` pipeline. TLX port and Settings ON/OFF row are on the same
+branch (separate commits).
 
 ### 7.1 What each backend looks like today
 
