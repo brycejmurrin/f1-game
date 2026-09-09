@@ -465,15 +465,15 @@ test("aerial-survey.mjs is folded into survey-track --oblique", async () => {
   assert.deepEqual(labeled.fracs, [0.1, 0.5]);
 });
 
-test("capture/shot.mjs clips the canvas instead of locator.screenshot", () => {
-  // locator.screenshot waits for element stability; a continuously-animating
-  // WebGL canvas never settles, so orbit/eye shots timed out (~30 s). survey-track
-  // already uses page.screenshot({ clip: canvas box }) for the same reason.
+test("capture/shot.mjs clips the presented canvas instead of locator.screenshot", () => {
+  // locator.screenshot waits for element stability AND reads opacity-0 #game
+  // on HeadlessChrome GLX. survey-track / shot.mjs share screenshotPresentedCanvas.
   const src = fs.readFileSync(tool("shot.mjs"), "utf8");
-  assert.match(src, /boundingBox\(\)/);
+  assert.match(src, /screenshotPresentedCanvas/);
   assert.match(src, /timeout:\s*60000/);
+  assert.doesNotMatch(src, /locator\("canvas#game"\)\.screenshot/);
   const callers = [...src.matchAll(/(\w+)\.screenshot\(/g)].map((m) => m[1]);
-  assert.ok(callers.length && callers.every((n) => n === "page"),
+  assert.ok(callers.every((n) => n === "page"),
     `screenshot callers must be page, got: ${callers.join(",")}`);
   assert.match(src, /from ["']\.{1,2}\/(?:lib\/)?harness\.mjs["']/);
 });

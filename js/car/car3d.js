@@ -3200,9 +3200,13 @@ const Car3D = (function () {
       // defect this module exists to fix. 0.715 clears it by 82 mm, and still
       // passes 43 mm under the halo at 0.890.
       const des = Helmets.designFor(opts && opts.num, c1);
+      // Paint-edge splits (~+2k tris on busy lids) matter when the helmet is
+      // large on screen (player body, garage, cockpit). Field AI bodies are
+      // tens of pixels; depth silhouettes never see paint. Both drop to 0.
+      const field = !!(opts && opts.field);
       Helmets.build(out, 0, 0.715, -0.075, des, {
         paint: SURFACES.paint, glass: SURFACES.visor,
-        maxSplit: sil ? 0 : undefined,   // depth pass: keep the lid shape, drop paint-edge splits
+        maxSplit: (sil || field) ? 0 : undefined,   // depth pass and field cars: keep the lid shape, drop paint-edge splits
       });
       // No brow box and no rear spoiler box: the traced shell carries its own
       // ridge over the aperture and its own aero lip at the back.

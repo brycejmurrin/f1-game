@@ -476,6 +476,10 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.forceMobileTier", "apex26.tlxForceHw", "apex26.tlxForceBatches",
     "apex26.tlxArrayNearest", "apex26.tlxMirrorSweep", "apex26.tlxChunkRelease",
     "apex26.tlxMobile", "apex26.gfxHigh", "apex26.matTexMix",
+    // UPSCALE is a SETTINGS display preference (scale.js / __apex.spatialUpscale),
+    // not crash state — RESET RENDERER must not wipe the player's SGSR choice.
+    // spatialUpscaleGather is an A/B escape pin (tools/bench only writes "0").
+    "apex26.spatialUpscale", "apex26.spatialUpscaleGather",
   ]);
   // LANE-AWARE: clearRendererStorage removes each list from ITS OWN store, so a
   // key written to localStorage but listed only in RENDERER_SS_KEYS would pass
@@ -526,6 +530,17 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.equal(ss.getItem("apex26.ctxLostReloads"), null);
   assert.equal(ss.getItem("apex26.tlxAutoGL"), null);
   assert.equal(G.readBackend(), "webgl2");
+});
+
+test("applyBackend clears session renderer latches before reload", () => {
+  // Switching WEBGL2 ↔ THREE ↔ WEBGPU must not inherit wgxHoldPresent /
+  // tlxAutoGL from the previous path; RESET already wiped them, a pick did not.
+  const src = read("js/perf/renderer-picker.js");
+  const fn = src.slice(src.indexOf("function applyBackend("), src.indexOf("function rendererSlot("));
+  assert.match(fn, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
+    "applyBackend must clear every RENDERER_SS_KEYS latch, not only gfxBound");
+  assert.doesNotMatch(fn, /clearRendererStorage\(\)/,
+    "must not wipe LS backend prefs — that would delete the pick just written");
 });
 
 test("blocked sessionStorage skips the opt-in so this tab never claims the canvas", () => {
@@ -978,6 +993,32 @@ test("updateInstances clears the cull snapshots it did not produce", () => {
   assert.equal(typeof h.GLX.updateInstances, "function", "updateInstances is exported");
 });
 
+test("GLX shadow cull upload:false leaves the camera pack and cache alone", () => {
+  // Same class WGX pinned in 2026-09-02: a light-frustum cull that wrote ibo
+  // forced the camera cull to miss every shadow recentre. upload:false packs
+  // into shadowIbo and must not touch _cullPlanes / _cellKeyN / ibo.
+  const h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = h.GLX.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const planes = (d) => Array.from({ length: 6 }, () => [0, 0, 0, d]);
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6)), 2);
+  const camPlanes = batch._cullPlanes;
+  const camN = batch._cullN;
+  const camKeyN = batch._cellKeyN;
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6), { upload: false }), 2);
+  assert.ok(batch.shadowIbo, "shadow path allocates its own instance buffer");
+  assert.equal(batch._shadowN, 2);
+  assert.equal(batch._cullPlanes, camPlanes, "camera frustum snapshot untouched");
+  assert.equal(batch._cullN, camN);
+  assert.equal(batch._cellKeyN, camKeyN, "camera cell-set cache untouched");
+  assert.equal(h.count("bufferSubData"), 1, "one upload — to shadowIbo, not a second stomping of ibo");
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6)), 2);
+  assert.equal(h.count("bufferSubData"), 0, "camera cull still hits after a shadow cull");
+});
+
 test("the debris pools instance behind a capability read, with the loop as fallback", () => {
   // Four per-body loops reaching 98 draws at desktop caps — and 17 every frame
   // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
@@ -1217,9 +1258,9 @@ test("WGX/TLX-only DISPLAY controls are not injected when their files are gone",
   // THREE PATH and SCREENSHOTS steer the three.js GPU path and the soft-present
   // blit — nothing GLX can use. Shipping them inert is worse than not shipping
   // them: they read as controls that do nothing. SAVE SCREENSHOT and COPY DIAG
-  // must survive, though: the first feature-tests the soft-present API and
-  // falls through to a plain canvas capture, and the second is the phone
-  // bug-report path.
+  // must survive, though: SAVE SCREENSHOT waits on awaitSoftPresent, prefers
+  // #game-soft when the overlay exists, then falls through to #game.toDataURL,
+  // and COPY DIAG is the phone bug-report path.
   const gone = bootPicker({ ls: { "apex26.gfxBackend": "webgl2" }, deferred: {} });
   assert.equal(gone.byId["pm-three-path"], undefined, "THREE PATH is WGX/TLX-only");
   assert.equal(gone.byId["pm-screenshots"], undefined, "SCREENSHOTS is WGX/TLX-only");
@@ -1350,14 +1391,14 @@ test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () =>
   assert.ok(a.byId["pm-gfx-status"], "status line");
   assert.match(a.byId["pm-three-path"].textContent, /THREE PATH: AUTO/);
   assert.match(a.byId["pm-screenshots"].textContent, /SCREENSHOTS: AUTO/);
-  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
+  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints/);
 
   a.byId["pm-three-path"].onclick();
   assert.equal(a.G.readThreePath(), "webgl2");
   assert.equal(a.ls.getItem("apex26.tlxForceGL"), "1");
   assert.equal(a.ss.getItem("apex26.tlxAutoGL"), null, "THREE PATH cycle drops the AUTO stay-GL latch");
   assert.equal(a.reloaded(), 0, "THREE PATH must not reload on WEBGL2");
-  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
+  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints/);
 
   a.byId["pm-screenshots"].onclick();
   assert.equal(a.G.readShotMode(), "blit");
@@ -1443,6 +1484,8 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /\bcapturePixels\s*\(\s*\)\s*\{/);
   assert.match(tlx, /\breadRenderTargetPixelsAsync\b/, "the blit goes through three's readback (copyTextureToBuffer + mapAsync), not the swapchain");
   assert.match(fnBody(tlx, "softPresent"), /return\s+!!\s*_softBlit\b/);
+  assert.match(fnBody(tlx, "softPresentState"), /\bon:\s*!!\s*_softBlit\b/,
+    "softPresentState must be OWN so descriptor-copy does not keep GLX's");
   assert.match(tlx, /_softBlit\s*=\s*!forceWebGL\s*&&\s*_capPref\s*!==\s*"0"/);
   assert.doesNotMatch(tlx, /[.]\s*getCurrentTexture\s*\(/, "never getCurrentTexture on software — the swapchain never composites and it breaks mapAsync");
   assert.match(tlx, /await\s+renderer\.init\(\s*\)/);
@@ -1662,6 +1705,72 @@ test("GLX asks for an opaque canvas — the behaviour TLX has to match", () => {
     "GLX dropped `alpha: false` — then the tag can ghost cars on BOTH backends " +
     "and this whole guard needs rethinking, not updating");
   assert.equal(ctx.attrs.antialias, false, "no browser MSAA — the post path resolves its own");
+});
+
+test("GLX keeps the drawing buffer under HeadlessChrome so captures see the car", () => {
+  // Without this, CDP / chrome-devtools screenshots race the cleared
+  // backbuffer and paint solid black while the garage is actually drawing
+  // (garage-frame.mjs freezes the loop for the same reason). Source-pin the
+  // UA sniff + the attr — bootGlx's mock navigator is not HeadlessChrome, so
+  // the recorded attrs stay false there; the wiring is what this holds.
+  const src = read("js/render/glx/glx.js");
+  assert.match(src, /HeadlessChrome/,
+    "GLX must sniff HeadlessChrome for the preserveDrawingBuffer gate");
+  assert.match(src, /navigator\.webdriver/,
+    "Playwright Desktop Chrome spoofs headed UA — webdriver still arms capture");
+  assert.match(src, /preserveDrawingBuffer:\s*headlessUa/,
+    "preserveDrawingBuffer must follow the headless UA sniff, not a bare true");
+});
+
+test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
+  // preserveDrawingBuffer alone is not enough on SwiftShader: in-frame
+  // readPixels has picture, chrome_take_screenshot of the garage gap is
+  // still solid black. WGX already 2D-blits; GLX must too under the same UA.
+  const src = code("js/render/glx/glx.js");
+  assert.match(src, /_softPresent\s*=\s*headlessUa/,
+    "soft-present must arm from the HeadlessChrome sniff");
+  assert.match(src, /navigator\.webdriver/,
+    "webdriver arms soft when the project UA hides HeadlessChrome");
+  assert.match(src, /drawingBufferWidth/,
+    "softBlit must size from the drawing buffer (present size under spatial upscale)");
+  assert.match(src, /game-soft/,
+    "soft-present needs a 2D overlay canvas id for CDP/page shots");
+  assert.match(src, /putImageData/,
+    "soft-present must blit readPixels into the 2D overlay");
+  assert.match(src, /awaitSoftPresent/,
+    "garage settle / SAVE SCREENSHOT wait on awaitSoftPresent");
+  assert.match(src, /SOFT_BLIT_EVERY/,
+    "soft-present must throttle full-frame readPixels (car-group SwiftShader tax)");
+  assert.match(src, /softPresent:\s*\(\)\s*=>\s*!!_softPresent/,
+    "softPresent() capability bit for renderer-picker / probes");
+  assert.match(src, /function invalidateSoftPresent\(/,
+    "snapCam calls gfx.invalidateSoftPresent — GLX must define it (WGX already does)");
+  assert.match(src, /invalidateSoftPresent,/,
+    "invalidateSoftPresent must be on the GLX export surface");
+  const awaitFn = src.slice(src.indexOf("function awaitSoftPresent"), src.indexOf("function init(canvasEl)"));
+  assert.match(awaitFn, /const start = _softBlitGen/,
+    "GLX must wait for a newer blit, not return the last gen already on the overlay");
+  assert.doesNotMatch(awaitFn, /_softLastMaxPx\s*>=\s*8\s*&&\s*_softBlitGen\s*>\s*0/,
+    "a stale early-return makes SAVE SCREENSHOT byte-identical across a camera move");
+  assert.match(awaitFn, /_softPresentWaiters\.push\(waiter\)/,
+    "timeout splice must find the same function push() stored");
+  assert.doesNotMatch(awaitFn, /_softPresentWaiters\.push\(wrap\)/,
+    "do not push a wrapper the timeout cannot indexOf");
+});
+
+test("menuBlank hides #game-soft with #game", () => {
+  const src = code("js/game.js");
+  assert.match(src, /getElementById\("game-soft"\)/,
+    "soft-present overlay must follow menuBlank visibility with #game");
+});
+
+test("SAVE SCREENSHOT reads #game-soft when the overlay exists", () => {
+  const src = read("js/perf/renderer-picker.js");
+  const fn = src.slice(src.indexOf("function saveScreenshot()"), src.indexOf("function ensureAdvHost()"));
+  assert.match(fn, /getElementById\("game-soft"\)/,
+    "HeadlessChrome GLX hides #game; the PNG must come from the 2D overlay");
+  assert.match(fn, /hrefFromPixels/,
+    "the two capturePixels sites share hrefFromPixels; do not merge the awaits");
 });
 
 test("the alpha tag that makes canvas opacity load-bearing still exists", () => {
@@ -1912,7 +2021,10 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "apex26.tlxSkipBatches must be an explicit opt-in that defaults FALSE, including when storage throws");
   assert.match(fnBody(src, "isWebGPU"), /renderer\.backend[\s\S]*isWebGPUBackend/,
     "isWebGPU() must read the BOUND backend, not the adapter sniff");
-  assert.match(fnBody(src, "softOutRT"), /^\s*return\s+softGpu\(\s*\)/,
+  // softOutRT may early-return or ternary, but the gate must still be softGpu()
+  // (presentation), not _softAdapter alone — headless needs the blit even on
+  // real hardware. Size args may be presentW/H when spatial upscale is active.
+  assert.match(fnBody(src, "softOutRT"), /(?:^|\n)\s*(?:return|if\s*\()\s*!?\s*softGpu\(\s*\)/,
     "presentation still follows softGpu() — the blit is needed whenever the swapchain is not composited");
   assert.match(src, /apex26\.tlxForceBatches/,
     "the real-GPU code path must stay reachable from a software run for debugging");
@@ -1955,6 +2067,12 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "the adapter verdict must not treat headless as software — that is a presentation fact");
   assert.match(src, /_softBlit\s*=\s*!forceWebGL\s*&&\s*_capPref\s*!==\s*"0"\s*&&\s*!!\s*\(\s*_softAdapter\s*\|\|\s*_headless\s*\|\|\s*_capPref\s*===\s*"1"\s*\)/,
     "the blit must follow headless: a headless swapchain does not composite even on real silicon");
+  assert.match(src, /_headless\s*=\s*\/HeadlessChrome\/i\.test\(ua\)\s*\|\|\s*\([\s\S]{0,80}?navigator\.webdriver/,
+    "webdriver must arm soft blit like GLX (headed Playwright project UA)");
+  assert.match(src, /_abortDisplay|_abortRenderer/,
+    "TLX create catch must be able to tear down a half-booted soft overlay / renderer");
+  assert.match(src, /_abortDisplay\.parentNode\.removeChild\(_abortDisplay\)/,
+    "failed TLX boot must remove #game-soft before GLX fallback");
   // An empty adapter.info is UNKNOWN, not software. Browsers trim those fields
   // for fingerprinting reasons, so a player with no vendor string must not be
   // handed the degraded path on real hardware.
@@ -2180,6 +2298,15 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     "cullInstances must recognise the shadow cull (upload:false)");
   assert.match(wgxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?writeBuffer\(batch\.shadowInstBuf/,
     "the shadow cull uploads to shadowInstBuf and leaves the camera pack/cache alone");
+  // GLX caught up (2026-09-09): same upload:false contract, WebGL2 buffer names.
+  const glx = read("js/render/glx/glx.js");
+  const glxCull = glx.slice(glx.indexOf("function cullInstances(batch, planes, opts)"), glx.indexOf("function cullInstances(batch, planes, opts)") + 4200);
+  assert.match(glxCull, /const shadow = !!\(opts && opts\.upload === false\);/,
+    "GLX cullInstances must recognise upload:false");
+  assert.match(glxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?batch\.shadowIbo/,
+    "GLX shadow cull uploads to shadowIbo and leaves the camera pack/cache alone");
+  assert.match(glShadow, /batch\.shadowIbo && batch\._shadowN === n/,
+    "GLX castShadowInstanced draws from shadowIbo when the light cull packed it");
 
   // AND THE SEPARATION IS ONLY HALF OF IT. shadowInstBuf is per BATCH, not per
   // LIGHT, and the sun, car and lamp passes all reach it through one caller
@@ -2679,9 +2806,15 @@ test("the flyby shows under race settings only; the picker pre-builds it hidden 
   // return, and a freshly built world still gets its warm-up frames hidden.
   assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| _rsEl\.hidden\);/);
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
-  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1200);
+  assert.match(game, /if \(state === "results"\) return;/,
+    "results keeps the last race present — physics already stopped, re-drawing is unpaid");
+  assert.match(game, /Particles\.rainShow\(false\);[\s\S]*?if \(soundOn\) GameAudio\.finish\(\);/,
+    "endRace clears the 2D rain overlay the way quitToMenu already did");
+  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1600);
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn) { renderSetupPreview(dt); return; }"),
     "the visibility gate precedes the garage-preview return");
+  assert.ok(renderBody.indexOf('if (state === "results") return;') < renderBody.indexOf("if (setupPreviewOn)"),
+    "results freeze precedes the garage-preview return");
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
     "the visibility gate precedes the no-track return");
   assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
@@ -3536,4 +3669,69 @@ test("TLX placeholder material arrays carry the pack's sampling state (WGSL acce
     assert.ok(pack.includes(line), "createTextureArray lost `" + line + "` — the pack sampling state changed; mirror it in the placeholder");
     assert.ok(placeholder.includes(line), "placeholder array lacks `" + line + "` — three compiles the lit program against the placeholder, and a Nearest/Nearest ClampToEdge placeholder bakes textureLoad+clamp into the WGSL for the life of the program");
   }
+});
+
+// ── GLX spatial upscale spike (SGSR1) ───────────────────────────────────────
+// Flag OFF by default; WebGL2 must not ship raw textureGather (ES 3.1). Size
+// split + present pass are gated on wantSpatialUpscale (flag ∧ scale<~1 ∧
+// linked program). See docs/research/UPSCALING-2026-09.md §6.
+test("GLX spatial upscale spike: SGSR1, no textureGather, flag-gated size split", () => {
+  const sh = read("js/render/glx/shaders/glsl-post.js");
+  assert.match(sh, /const SGSR_FS =/, "SGSR_FS must ship in glsl-post.js");
+  assert.match(sh, /SPDX-License-Identifier: BSD-3-Clause/,
+    "Qualcomm SGSR1 attribution must stay on the adapted shader");
+  const shCode = sh.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.doesNotMatch(shCode, /textureGather\s*\(/,
+    "WebGL2 has no textureGather — emulate with textureLod taps");
+  assert.match(shCode, /gatherComp\s*\(/, "gather emulation helper must remain");
+  const post = read("js/render/glx/post.js");
+  assert.match(post, /sgsrProg/, "post chain must link the SGSR program");
+  assert.match(post, /spatialOk:\s*\(\)\s*=>\s*!!sgsrProg/,
+    "post must expose spatialOk so resize fail-closes without a linked program");
+  assert.match(post, /uViewport/, "SGSR present pass must upload source viewport");
+  const glx = read("js/render/glx/glx.js");
+  assert.match(glx, /apex26\.spatialUpscale/, "flag key must stay namespaced");
+  assert.match(glx, /wantSpatialUpscale/, "size split must go through wantSpatialUpscale");
+  assert.match(glx, /PST\.spatialOk/,
+    "wantSpatialUpscale must require the linked SGSR program (no letterbox)");
+  assert.match(glx, /renderScale < 0\.98/,
+    "upscale must not run at scale≈1 (pure waste)");
+  const apex = read("js/agent/apex.js");
+  assert.match(apex, /spatialUpscale\s*\(/, "__apex.spatialUpscale must exist");
+});
+
+test("UPSCALE SettingRow + TLX spatial API markers", () => {
+  const html = read("index.html");
+  assert.match(html, /id="pm-upscale"/, "shell must ship the UPSCALE set-row");
+  assert.match(html, /id="pm-upscale-label">UPSCALE</, "label must be UPSCALE");
+  const scale = read("js/ui/scale.js");
+  assert.match(scale, /SettingRow\.wire\("pm-upscale"/, "scale.js must wire the row");
+  assert.match(scale, /setSpatialUpscale/, "row must call the backend API");
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /setSpatialUpscale/, "TLX must export setSpatialUpscale");
+  assert.match(tlx, /wantSpatialUpscale/, "TLX must gate size split");
+  const post = read("js/render/three/tlx-post.js");
+  assert.match(post, /spatialOk:\s*\(\)\s*=>/, "TLX post must expose spatialOk");
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(tsl, /tlx-post-sgsr/, "TSL SGSR pass must exist");
+  const wgsl = read("js/render/webgpu/wgsl-post.js");
+  assert.match(wgsl, /const SGSR =/, "WGX WGSL SGSR shader must ship");
+  assert.match(wgsl, /const SGSR_GATHER = SGSR/, "WGX must ship the textureGather SGSR variant");
+  // Strip comments then isolate the 4-tap SGSR string (ends before SGSR_GATHER).
+  const wgslCode = wgsl.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  const sgsrTap = wgslCode.match(/const SGSR = `([\s\S]*?)`;\s*const SGSR_GATHER/);
+  assert.ok(sgsrTap, "SGSR 4-tap string must precede SGSR_GATHER");
+  assert.doesNotMatch(sgsrTap[1], /textureGather\s*\(/,
+    "4-tap SGSR must not use textureGather (parity with GLX/TLX)");
+  assert.match(wgslCode, /textureGather\s*\(\s*1i\s*,\s*srcTex\s*,\s*srcSamp\s*,\s*p\s*\)/,
+    "SGSR_GATHER must call textureGather(component, tex, samp, uv) — WGSL arg order");
+  // Dawn/Naga reserves `std` — the shared SGSR port must use edgeStd (validate caught this).
+  assert.match(wgsl, /fn weightY\([^)]*edgeStd/, "SGSR WGSL weightY must not use reserved std");
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(wgx, /setSpatialUpscale/, "WGX must export setSpatialUpscale");
+  assert.match(wgx, /wantSpatialUpscale/, "WGX must gate size split");
+  assert.match(wgx, /!!pSGSR/, "WGX wantSpatialUpscale must require linked SGSR pipeline");
+  assert.match(wgx, /SGSR_GATHER/, "WGX must try the gather pipeline first");
+  assert.match(wgx, /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0");
+  assert.match(wgx, /getSpatialUpscaleGather/, "WGX must export gather active state");
 });

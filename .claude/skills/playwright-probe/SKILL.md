@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-capture.mjs, apex-eval.mjs), before/after frames, Playwright headless probes, flicker/shimmer/z-fighting while driving (a recorded driven clip via motion-capture.mjs), or a game-loop CPU profile / flame chart / GC spikes (profile-gameloop.mjs). Also the CAR STUDIO — show/render/check the car, a team livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated front/side/rear shots (carview.html, render-car.mjs) — and CAMERA SEMANTICS: switch or check camera modes, cockpit/chase/orbit/cinematic/roadside, frame a corner, camState/viewState, camera lag. For hook catalogs use agent-view; for a live canvas use mcp-probe. WGX on SwiftShader: use gfx-probe.mjs for visible #game (soft-present blit), not raw canvas screenshots. Live version.json is deploy-research.
+description: Use when the user asks for batch headless screenshots or evals of a track or car (shot.mjs, apex-capture.mjs, apex-eval.mjs), before/after frames, Playwright headless probes, flicker/shimmer/z-fighting while driving (a recorded driven clip via motion-capture.mjs), or a game-loop CPU profile / flame chart / GC spikes (profile-gameloop.mjs). Also the CAR STUDIO — show/render/check the car, a team livery, sponsors, number, wing/gearbox/brake geometry, reflections, isolated front/side/rear shots (carview.html, render-car.mjs) — and CAMERA SEMANTICS: switch or check camera modes, cockpit/chase/orbit/cinematic/roadside, frame a corner, camState/viewState, camera lag. For hook catalogs use agent-view; for a live canvas use mcp-probe. WGX on SwiftShader: use gfx-probe.mjs for visible #game (soft-present blit), not raw canvas screenshots. HeadlessChrome GLX: awaitSoftPresent then #game-soft (opacity-0 #game is black). Live version.json is deploy-research.
 ---
 
 # Headless Playwright probing (parallel)
@@ -44,6 +44,11 @@ node tools/shot/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
 node tools/shot/apex-capture.mjs cameras [track] [outdir]
 node tools/shot/apex-capture.mjs modes   [outdir]
 node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
+
+# ONE Chromium, many angles (soft #game-soft/#view → CDP — never page.screenshot):
+node tools/car/render-car.mjs --team=redbull --preset=spine   # needs :3456
+node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=scratch/renders/garage-spine
+node tools/car/carshot.mjs 40 day 2 artifacts/tmp/carshot.jpg  # tiny cropped JPEG
 ```
 
 ## Single framed screenshot (`shot.mjs`)

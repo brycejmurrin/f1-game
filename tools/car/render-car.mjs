@@ -55,6 +55,8 @@
 //                         for cover/stripe/fin/...) — the designs are fields, not
 //                         livery ids, so --livery cannot reach them
 //   --az=210 --el=20 --dist=4  render ONE custom angle (overrides --views/--preset)
+//   --shot=label,az,el,dist    REPEATABLE customs in ONE Chromium (preferred for spine)
+//   --preset=spine            crown / crown-rear / flank-high / tail-high
 //   --out=DIR             output dir. Default: scratch/renders/cars/<team>
 //   --w=900 --h=680       viewport size
 //   --gpu=1               draw on the HOST's GPU instead of pinning swiftshader
@@ -63,7 +65,8 @@
 //
 // Examples:
 //   node tools/car/render-car.mjs                                  # mclaren hero shot
-//   node tools/car/render-car.mjs --team=redbull --views=all --tod=night --exp=1.2
+//   node tools/car/render-car.mjs --team=redbull --preset=spine
+//   node tools/car/render-car.mjs --team=redbull --shot=crown,0,72,4.2 --shot=flank,90,40,4.4
 //   node tools/car/render-car.mjs --team=haas --gearbox=f1_spec --brakes=ceramic --views=tail,side
 //   node tools/car/render-car.mjs --team=ferrari --az=205 --el=18 --dist=3.8 --intensity=2
 //   node tools/car/render-car.mjs --team=mclaren --preset=brakes --brakes=ceramic     # 3 shots, one part
@@ -75,6 +78,7 @@ import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
+import { screenshotPresentedCanvas } from '../capture/probe-page.mjs';
 
 /* How many distinct colours are in the middle of a written shot. Cheap, and it
    is the only thing that separates "rendered" from "wrote a file". */
@@ -182,6 +186,14 @@ const PRESETS = {
     { label: 'ahead', az: 200, el: 34, dist: 3.0, look: -0.15, lookY: 0.45, tod: 'day', intensity: 1.0 },
     { label: 'flank', az: 82,  el: 26, dist: 2.9, look: -0.15, lookY: 0.45, tod: 'day', intensity: 1.0 },
   ],
+  // Engine-cover CROWN / SPINE TOP — high elevation, short dist so the crest
+  // and flank designs fill the frame. One browser, four angles.
+  spine: [
+    { label: 'crown',      az: 0,   el: 72, dist: 4.2 },
+    { label: 'crown-rear', az: 25,  el: 55, dist: 4.0 },
+    { label: 'flank-high', az: 90,  el: 42, dist: 4.4 },
+    { label: 'tail-high',  az: 35,  el: 48, dist: 4.0 },
+  ],
 };
 PRESETS.aero = PRESETS.wing;   // alias — both names read naturally depending on intent
 
@@ -225,11 +237,22 @@ const OUT    = OUTARG != null
 // that is deliberately disabled there.
 function findChromium() {
   if (process.env.PW_CHROMIUM) return process.env.PW_CHROMIUM;
-  const root = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  const root = process.env.PLAYWRIGHT_BROWSERS_PATH || resolve(process.env.HOME || '', '.cache', 'ms-playwright');
   if (!root || !existsSync(root)) return undefined;
-  const dirs = readdirSync(root).filter((d) => d.startsWith('chromium-')).sort().reverse();
+  // Prefer headless_shell (Cloud / PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD installs)
+  // then full chromium-*. Old code only looked for chromium- and fell through
+  // to Playwright's default, which then spent minutes on a missing download.
+  const dirs = readdirSync(root)
+    .filter((d) => d.startsWith('chromium_headless_shell-') || d.startsWith('chromium-'))
+    .sort()
+    .reverse();
+  const rels = [
+    'chrome-headless-shell-linux64/chrome-headless-shell',
+    'chrome-linux/chrome',
+    'chrome-mac/Chromium.app/Contents/MacOS/Chromium',
+  ];
   for (const d of dirs) {
-    for (const rel of ['chrome-linux/chrome', 'chrome-mac/Chromium.app/Contents/MacOS/Chromium']) {
+    for (const rel of rels) {
       const exe = resolve(root, d, rel);
       if (existsSync(exe)) return exe;
     }
@@ -250,15 +273,24 @@ if (PRESET === 'list') {
   process.exit(0);
 }
 
-// Unify every source (--preset / --views / --az&co) into one shotDefs list of
-// {label, az, el, dist, tod}. tod is null unless the preset pins one (e.g. `ers`
-// defaults to dusk to show its glow) — null means "use the global --tod".
+// Unify every source (--preset / --views / --shot / --az&co) into one shotDefs
+// list of {label, az, el, dist, tod}. tod is null unless the preset pins one.
+// --shot=label,az,el,dist is REPEATABLE so one Chromium takes many custom angles
+// without re-booting carview (the old --az path only allowed a single custom).
+const SHOT_ARGS = process.argv.filter((a) => a.startsWith('--shot=')).map((a) => a.slice('--shot='.length));
 let shotDefs;
-if (CUSTOM) {
+if (SHOT_ARGS.length) {
+  shotDefs = SHOT_ARGS.map((raw) => {
+    const parts = raw.split(',').map((s) => s.trim());
+    if (parts.length < 4) {
+      console.error(`--shot needs label,az,el,dist (got --shot=${raw})`);
+      process.exit(1);
+    }
+    const [label, az, el, dist] = parts;
+    return { label, az: parseFloat(az), el: parseFloat(el), dist: parseFloat(dist), tod: null };
+  });
+} else if (CUSTOM) {
   shotDefs = [{ label: 'custom', az: parseFloat(arg('az', '35')), el: parseFloat(arg('el', '14')), dist: parseFloat(arg('dist', '4.6')), tod: null }];
-  // (--look/--lookx used to be dropped on this path: the shot object carried no
-  //  look, and the per-shot CARVIEW.set below then wrote look:0 over whatever the
-  //  query string had set, so an ad-hoc angle could never be aimed off-centre.)
 } else if (PRESET) {
   const p = PRESETS[PRESET];
   if (!p) { console.error(`Unknown preset "${PRESET}". Available: ${Object.keys(PRESETS).join(', ')}`); process.exit(1); }
@@ -360,6 +392,14 @@ try {
     .catch(async () => { await page.waitForTimeout(2_000); });
 
   let renderedTod = TOD, firstShot = true;
+  const t0 = Date.now();
+  /** Soft #view / #game-soft → CDP. Never page.screenshot (fonts hang under SwiftShader). */
+  async function captureCanvas(dest) {
+    const shot = await screenshotPresentedCanvas(page, {
+      path: dest, preferView: true, timeout: 60_000,
+    });
+    return shot.via || shot.id || 'cdp';
+  }
   for (const s of shotDefs) {
     const frame = await page.evaluate((p) => {
       const before = window.CARVIEW.frame;
@@ -370,39 +410,34 @@ try {
          lookX: s.lookX != null ? s.lookX : LOOKX,
          lookY: s.lookY != null ? s.lookY : (LOOKY != null ? parseFloat(LOOKY) : 0),
          tod: s.tod, intensity: s.intensity != null ? s.intensity : INTEN });
-    // SwiftShader can spend far longer than a fixed delay compiling or rebuilding
-    // the dusk/night reflection probe. Eight completed post-change frames covers
-    // that slow path and gives the browser compositor a presented canvas.
-    // A slow renderer must not abort the sheet: if eight frames do not land in
-    // time, fall back to a wall-clock settle and carry on rather than throwing
-    // away every shot after this one.
-    await page.waitForFunction((before) => window.CARVIEW.frame >= before + 8, frame, { polling: 100, timeout: WAIT_MS })
-      .catch(async () => {
-        console.log(`  (slow frame settle — falling back to a timed wait)`);
-        await page.waitForTimeout(3_000);
-      });
-    // Chromium's screenshot compositor can still expose the discarded/blank
-    // WebGL back buffer during the first capture or while an env probe changes.
-    // A one-time/tod-change settle covers that compositor boundary; subsequent
-    // same-lighting orbit shots remain frame-synchronised and fast.
-    if (firstShot || s.tod !== renderedTod) await page.waitForTimeout(2_000);
+    // Soft-present waiters force a blit; 3 frames + awaitSoftPresent is enough
+    // for same-tod orbit moves. Keep the longer settle only on first/tod change.
+    // `need` MUST be in the arg bag — a free `need` in the page fn is ReferenceError
+    // ("need is not defined"), the waiter fails, and every shot falls back to sleep.
+    const need = (firstShot || s.tod !== renderedTod) ? 8 : 3;
+    await page.waitForFunction(
+      ({ before, n }) => window.CARVIEW.frame >= before + n,
+      { before: frame, n: need },
+      { polling: 50, timeout: WAIT_MS },
+    ).catch(async () => {
+      console.log(`  (slow frame settle — falling back to a timed wait)`);
+      await page.waitForTimeout(1_500);
+    });
+    if (firstShot || s.tod !== renderedTod) await page.waitForTimeout(400);
     firstShot = false;
     renderedTod = s.tod;
     const file = lightTods ? `${s.group}-${s.tod}.png` : `${s.label}.png`;
     const dest = resolveContainedChild(OUT, file, 'render output path');
-    await page.screenshot({ path: dest });
-    // A TICK OVER A BLANK PNG is how the wrong --use-gl flag went unnoticed:
-    // the page loaded, CARVIEW reported ready, every shot "succeeded", and each
-    // file was an empty canvas with the HUD caption on it. Read the middle of
-    // what was actually written; a rendered car is never two flat colours.
+    const via = await captureCanvas(dest);
     const shades = await blankCheck(dest);
     if (shades < 6) {
       console.error(`  ✗ ${file} — only ${shades} distinct colour${shades === 1 ? "" : "s"} in the centre: the canvas did not paint.`);
       console.error(`    Chromium renders this through SwiftShader; check the launch flag is --use-angle=swiftshader.`);
       process.exitCode = 3;
-    } else console.log(`  ✓ ${file}`);
-    shots.push({ file, label: s.label, group: s.group, tod: s.tod });
+    } else console.log(`  ✓ ${file} (via=${via})`);
+    shots.push({ file, label: s.label, group: s.group, tod: s.tod, via });
   }
+  console.log(`Rendered ${shots.length} shot(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s -> ${OUT}`);
 
   const metaLine = `${PRESET ? 'preset=' + PRESET + ' · ' : ''}${lightTods ? lightTods.join('/') : TOD}${STUDIO ? ' · studio' : ''}${Object.keys(parts).length ? ' · ' + Object.entries(parts).map(([k, v]) => k + '=' + v).join(' ') : ''}`;
   const style = `body{margin:0;background:#111;color:#ccc;font:14px system-ui,sans-serif;padding:16px}
@@ -443,7 +478,6 @@ try {
 <div class="meta">${metaLine}</div>
 ${body}`);
 
-  console.log(`Rendered ${shots.length} shot(s) -> ${OUT}`);
   console.log(`Contact sheet: ${resolveContainedChild(OUT, 'index.html', 'render contact sheet path')}`);
 } finally {
   await browser.close();

@@ -33,6 +33,7 @@ import {
   assertSafePathToken,
   resolveRepoDefault,
 } from "../lib/output-paths.mjs";
+import { awaitPresentedFrame, screenshotPresentedCanvas } from "../capture/probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -170,16 +171,12 @@ try {
 
   await sleep(400);
 
-  // boundingBox() THROWS on timeout, it does not return null — so the full-frame
-  // fallback below could never fire, and a loaded box (where the animating canvas
-  // starves Playwright's stability check) failed the whole shot instead of just
-  // losing the clip. Catch it and fall through: an unclipped frame still shows
-  // the scene, which is the point of the tool.
-  const box = await page.locator("canvas#game").boundingBox({ timeout: 15000 })
-    .catch(() => null);
-  const buf = box
-    ? await page.screenshot({ path: out, clip: box, timeout: 60000 })
-    : await page.screenshot({ path: out, timeout: 60000 });
+  await awaitPresentedFrame(page);
+  const shot = await screenshotPresentedCanvas(page, { path: out, skipAwait: true, timeout: 60000 }).catch(async () => {
+    const buf = await page.screenshot({ path: out, timeout: 60000 });
+    return { buf, bytes: buf.length };
+  });
+  const buf = shot.buf;
   const kb = (buf.length / 1024).toFixed(1);
   const warn = buf.length < 5000 ? "  ⚠ looks blank (<5KB)" : "";
   const camWarn = safeCam !== "park" && !frame.dbgCamActive

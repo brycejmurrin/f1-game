@@ -69,7 +69,9 @@ apex-tools HTTP `3713` (`127.0.0.1` only). Design / refuses:
 | One circuit build | `node tools/track/verify-track.cjs <id>` / skill **agent-view** | a browser group |
 | Live working-tree canvas | skill **mcp-probe** (`chrome_*`) | apex-tools (no `--url`) |
 | Live `version.json` / Pages | **deploy-research** (host fetch / WebFetch / hosted TinyFish) | `mcp-probe`, curl github.io, `tinyfish-mcp.sh` in-container |
-| Batch screenshots | skill **playwright-probe** (`apex_shot` / `shot.mjs`) | Chrome MCP while Playwright runs |
+| Batch screenshots | skill **playwright-probe** (`shot.mjs` / `apex-capture`) | Chrome MCP while Playwright runs |
+| Multi-angle car / garage (ONE Chromium) | `render-car.mjs --preset=spine` / `--shot=` · `garage-angles.mjs` | N× `carshot` relaunches; `page.screenshot` under SwiftShader |
+| Tiny car inspect JPEG | `tools/car/carshot.mjs` (soft→CDP clip) | full `apex-capture` sweep |
 | Interactive host browser | **playwright-official** (`browser_*`) | `test-bg.mjs`; chrome-devtools at the same time |
 | One-screen CSS try-on | skill **css-play** → `css-play.mjs` / `playwright-mcp.sh play\|dom` | `layout-audit` matrix / `--gallery` |
 | Start Playwright **groups** | `tools/ci/test-bg.mjs` (CLI only) | any `apex_*` wrap; host `browser_*` |

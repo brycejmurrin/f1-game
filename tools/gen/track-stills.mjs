@@ -30,6 +30,7 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sharp from "sharp";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
+import { awaitPresentedFrame, screenshotPresentedCanvas } from "../capture/probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 const OUT_DIR = resolve(ROOT, "assets", "stills");
@@ -145,7 +146,7 @@ try {
       a.step && a.step(1 / 60, 4);
       // Every DOM overlay off the frame — the screenshot clips the page, not the
       // canvas, so the CAM badge and any HUD chip would bake into the still.
-      for (const el of document.body.children) if (el.id !== "game" && el.tagName !== "CANVAS") el.style.visibility = "hidden";
+      for (const el of document.body.children) if (el.id !== "game" && el.id !== "game-soft" && el.tagName !== "CANVAS") el.style.visibility = "hidden";
     }, { frac });
     await sleep(500);
     // 240 s, not Playwright's 30 s or shot.mjs's 60 s: a night street circuit
@@ -153,10 +154,12 @@ try {
     // several seconds a frame, and the screenshot waits for a frame. Under
     // load those two timed out three passes running while every other
     // circuit shot in under 90 s.
-    const box = await page.locator("canvas#game").boundingBox({ timeout: 30000 }).catch(() => null);
-    const png = box
-      ? await page.screenshot({ clip: box, timeout: 240000, animations: "disabled" })
-      : await page.screenshot({ timeout: 240000, animations: "disabled" });
+    await awaitPresentedFrame(page);
+    const shot = await screenshotPresentedCanvas(page, { skipAwait: true, timeout: 240000 }).catch(async () => {
+      const png = await page.screenshot({ timeout: 240000, animations: "disabled" });
+      return { buf: png };
+    });
+    const png = shot.buf;
     const webp = await sharp(png).resize(STILL_W, STILL_H, { fit: "cover" }).webp({ quality: 78 }).toBuffer();
     writeFileSync(resolve(OUT_DIR, id + ".webp"), webp);
     console.log(`${id} @${frac} ${tod}: ${(webp.length / 1024).toFixed(1)} KB in ${((Date.now() - t0) / 1000).toFixed(0)} s`);

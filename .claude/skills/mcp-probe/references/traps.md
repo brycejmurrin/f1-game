@@ -57,7 +57,10 @@ read a stale-frame transform, delta 694 vs `< 5`). Both passed clean solo. So:
   MCP browser is indistinguishable from a healthy box by load average alone,
   which is why the check has to be per-process.
 - A screenshot returned with the left ~400 px solid black = the WebGL canvas, not
-  the MCP. For UI (not 3D) work, `headless(true)` + hide `#game` first — that's
+  the MCP. HeadlessChrome GLX hides `#game` (opacity 0) and blits onto
+  `#game-soft` — a `#game` locator shot is that black gap. Await
+  `GLX.awaitSoftPresent()` then capture `#game-soft` (or a compositor clip of
+  its box). For UI (not 3D) work, `headless(true)` + hide `#game` first — that's
   survey-ui-matrix's department.
 
 ---

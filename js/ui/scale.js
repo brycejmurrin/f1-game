@@ -101,15 +101,18 @@ const UiScale = (() => {
     // this safe: the :root declaration keeps the two locked together until the
     // player moves this slider, and only then do they part.
     function applyBtnScale() { applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale"); }
-    $("pm-uiscale").oninput = (e) => {
+    const uiEl = $("pm-uiscale");
+    if (uiEl) uiEl.oninput = (e) => {
       store.set("uiScale", scaleSnap(+e.target.value || scaleDefaultFor("uiScale")));
       applyUiScale();
     };
-    $("pm-hudscale").oninput = (e) => {
+    const hudEl = $("pm-hudscale");
+    if (hudEl) hudEl.oninput = (e) => {
       store.set("hudScale", scaleSnap(+e.target.value || scaleDefaultFor("hudScale")));
       applyHudScale();
     };
-    $("pm-btnscale").oninput = (e) => {
+    const btnEl = $("pm-btnscale");
+    if (btnEl) btnEl.oninput = (e) => {
       store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefaultFor("hudBtnScale")));
       applyBtnScale();
     };
@@ -153,7 +156,32 @@ const UiScale = (() => {
     } });
     applyResMode();
 
-    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale };
+    // UPSCALE — SGSR1 spatial reconstruct when RESOLUTION is below full
+    // (docs/research/UPSCALING-2026-09.md §6–7). Same raw key GLX already
+    // reads (apex26.spatialUpscale "1"/"0"); OFF by default. No effect at
+    // scale≈1; HUD stays DOM-crisp either way.
+    function upscaleOn() {
+      const gfx = G.gfx;
+      if (gfx && typeof gfx.getSpatialUpscale === "function") return !!gfx.getSpatialUpscale();
+      try { return store.raw("spatialUpscale") === "1"; } catch (_) { return false; }
+    }
+    function applyUpscale(on) {
+      const gfx = G.gfx;
+      if (gfx && typeof gfx.setSpatialUpscale === "function") gfx.setSpatialUpscale(!!on);
+      else {
+        try { store.rawSet("spatialUpscale", on ? "1" : "0"); } catch (_) { /* blocked */ }
+      }
+    }
+    SettingRow.wire("pm-upscale", {
+      values: SettingRow.labels(["off", "on"]),
+      read: () => (upscaleOn() ? "on" : "off"),
+      write: (v) => {
+        applyUpscale(v === "on");
+        if (G.soundOn) GameAudio.uiSelect();
+      },
+    });
+
+    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale, applyUpscale, upscaleOn };
   }
   return { create };
 })();

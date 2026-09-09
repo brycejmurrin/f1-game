@@ -159,6 +159,37 @@ function raceGuard(btn, armedText, repaint) {
   } catch (_) { /* dataset unavailable: proceed as before */ }
   return true;
 }
+
+const RENDERER_LS_KEYS = [
+  "apex26.gfxBackend", "apex26.gfxBackendProbe",
+  "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
+  "apex26.gfxTlxFail",
+  // The canary's strike counter and the pick it retired: a RESET that left
+  // these behind would hand the next boot a strike it did not earn.
+  "apex26.gfxProbeStrikes", "apex26.gfxBackendWas",
+  "apex26.envProbeOff", "apex26.perChunkOff",
+  "apex26.tlxForceGL", "apex26.tlxViz",
+  "apex26.wgxCapture",
+];
+// wgxHoldPresent is written by WGX itself (holdSoftPresent), so a tab that
+// took the hold and never released it keeps skipping the soft-present
+// copy+map on the next boot with no way back — RESET RENDERER is that way
+// back, and it has to know the key exists. Every latch a backend WRITES
+// belongs in one of these two lists. applyBackend clears the session lane
+// too: switching backends must not inherit the previous path's hold/auto-GL
+// latches across the reload (RESET already wiped them; a pick did not).
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent"];
+
+function clearRendererStorage() {
+  const removed = [];
+  // Blocked storage reads as null and removes nothing: the in-memory boot still uses the empty pref.
+  for (const k of RENDERER_LS_KEYS) {
+    if (GameStore.store.raw(k) != null) { GameStore.store.rawDel(k); removed.push(k); }
+  }
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode / blocked storage */ }
+  return removed;
+}
+
 function applyBackend(next, rb) {
   if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?", () => paintRenderer(rb))) return false;
   Log.info("game", "RendererPicker.applyBackend " + next);
@@ -177,46 +208,17 @@ function applyBackend(next, rb) {
     return false;
   }
   GameStore.store.rawSet("apex26.gfxBackend", next); GameStore.store.rawDel("apex26.gfxBackendProbe");
-  try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* next boot paints the new pick */ }
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
   // Landing on WEBGPU by hand is the retry signal (browser update, new
   // device state): reset the WGX loss ladder so the boot re-attempts from
   // the sniffed baseline instead of a rung a long-dead session earned.
   if (next === "webgpu") {
     for (const k of ["apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail"]) GameStore.store.rawDel(k);
-    try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* boot consumes it anyway */ }
   }
   markReloading(rb, next);
   try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
   setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
   return true;
-}
-
-const RENDERER_LS_KEYS = [
-  "apex26.gfxBackend", "apex26.gfxBackendProbe",
-  "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
-  "apex26.gfxTlxFail",
-  // The canary's strike counter and the pick it retired: a RESET that left
-  // these behind would hand the next boot a strike it did not earn.
-  "apex26.gfxProbeStrikes", "apex26.gfxBackendWas",
-  "apex26.envProbeOff", "apex26.perChunkOff",
-  "apex26.tlxForceGL", "apex26.tlxViz",
-  "apex26.wgxCapture",
-];
-// wgxHoldPresent is written by WGX itself (holdSoftPresent), so a tab that
-// took the hold and never released it keeps skipping the soft-present
-// copy+map on the next boot with no way back — RESET RENDERER is that way
-// back, and it has to know the key exists. Every latch a backend WRITES
-// belongs in one of these two lists.
-const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent"];
-
-function clearRendererStorage() {
-  const removed = [];
-  // Blocked storage reads as null and removes nothing: the in-memory boot still uses the empty pref.
-  for (const k of RENDERER_LS_KEYS) {
-    if (GameStore.store.raw(k) != null) { GameStore.store.rawDel(k); removed.push(k); }
-  }
-  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode / blocked storage */ }
-  return removed;
 }
 
 // The row that holds the select. A setting row nests the select one level
@@ -334,7 +336,7 @@ function presentStatus() {
   let live = "";
   try {
     if (typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent()) {
-      live = " Live: 2D blit is painting #game.";
+      live = " Live: 2D blit is painting #game-soft.";
     }
   } catch (_) { /* no live backend yet */ }
   if (be === "webgpu") {
@@ -366,7 +368,12 @@ function presentStatus() {
     }
     return "THREE.JS AUTO can be WebGPU or three WebGL2. It tries WebGPU when navigator.gpu exists, and stays on three WebGL2 if GPU is missing, this tab already lost WebGPU, or the browser is Safari/iOS (WebKit WebGPU drew nothing on a phone — THREE PATH: WEBGPU opts back in).";
   }
-  return "WEBGL2 paints the canvas directly. Screenshots just work.";
+  try {
+    if (typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent()) {
+      return "WEBGL2 paints via #game-soft under HeadlessChrome — screenshots read the 2D blit, not the WebGL swapchain. Headed players see #game." + live;
+    }
+  } catch (_) { /* no live backend yet */ }
+  return "WEBGL2 paints the GPU canvas. HeadlessChrome presents via #game-soft; headed players see #game. Screenshots just work.";
 }
 function paintPresent() {
   const pathBtn = typeof document !== "undefined" ? document.getElementById("pm-three-path") : null;
@@ -375,6 +382,15 @@ function paintPresent() {
   if (shotBtn) shotBtn.textContent = "SCREENSHOTS: " + shotModeLabel(readShotMode());
   const st = typeof document !== "undefined" ? document.getElementById("pm-gfx-status") : null;
   if (st) st.textContent = presentStatus();
+}
+function hrefFromPixels(cap) {
+  if (!cap || typeof document === "undefined" || typeof document.createElement !== "function") return null;
+  const c = document.createElement("canvas");
+  c.width = cap.width; c.height = cap.height;
+  const ctx2 = c.getContext && c.getContext("2d");
+  if (!ctx2 || typeof ctx2.putImageData !== "function") return null;
+  ctx2.putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
+  return c.toDataURL("image/png");
 }
 function saveScreenshot() {
   const btn = typeof document !== "undefined" ? document.getElementById("pm-save-shot") : null;
@@ -388,22 +404,23 @@ function saveScreenshot() {
         try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try the canvas */ }
       }
       const g = typeof document !== "undefined" ? document.getElementById("game") : null;
+      const softEl = typeof document !== "undefined" ? document.getElementById("game-soft") : null;
       let href = null;
+      // Soft-present paints #game-soft (GLX/TLX). Prefer that toDataURL; #game is
+      // often the GPU swapchain (black under software). capturePixels is fallback.
+      if (softEl && softEl.width > 0 && typeof softEl.toDataURL === "function") {
+        try { href = softEl.toDataURL("image/png"); } catch (_) { href = null; }
+      }
       const soft = typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent();
-      // Soft-present #game is the native WebGPU swapchain (often black). Prefer
-      // capturePixels (LDR copyTextureToBuffer) when the 2D blit is armed.
       let capFailed = false;
-      if (soft && typeof GLX.capturePixels === "function") {
+      if (!href && soft && typeof GLX.capturePixels === "function") {
         try {
           const cap = await GLX.capturePixels();
-          const c = document.createElement("canvas");
-          c.width = cap.width; c.height = cap.height;
-          const ctx2 = c.getContext && c.getContext("2d");
-          if (ctx2 && typeof ctx2.putImageData === "function") {
-            ctx2.putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
-            href = c.toDataURL("image/png");
-          }
+          href = hrefFromPixels(cap);
         } catch (_) { href = null; capFailed = true; /* fall through to #game */ }
+      }
+      if (!href && softEl && typeof softEl.toDataURL === "function") {
+        try { href = softEl.toDataURL("image/png"); } catch (_) { href = null; }
       }
       if (!href && g && typeof g.toDataURL === "function") {
         try { href = g.toDataURL("image/png"); } catch (_) { href = null; }
@@ -413,15 +430,8 @@ function saveScreenshot() {
       // would sit through two full GPU round-trips to reach the same FAILED.
       if (!href && !capFailed && typeof GLX !== "undefined" && typeof GLX.capturePixels === "function") {
         const cap = await GLX.capturePixels();
-        if (typeof document === "undefined" || typeof document.createElement !== "function") {
-          done(false, "NO DOM"); return;
-        }
-        const c = document.createElement("canvas");
-        c.width = cap.width; c.height = cap.height;
-        const ctx2 = c.getContext && c.getContext("2d");
-        if (!ctx2 || typeof ctx2.putImageData !== "function") { done(false, "NO 2D"); return; }
-        ctx2.putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
-        href = c.toDataURL("image/png");
+        href = hrefFromPixels(cap);
+        if (!href) { done(false, "NO 2D"); return; }
       }
       if (!href) { done(false, "BLANK"); return; }
       const a = document.createElement("a");
@@ -497,9 +507,10 @@ function initPresentControls() {
   // injected at all rather than shipped inert. Derived from the roster, like the
   // stops above, so they return with the backends and need no edit here.
   //
-  // SAVE SCREENSHOT and COPY DIAG deliberately STAY: saveScreenshot() feature-
-  // tests GLX.awaitSoftPresent / GLX.softPresent, which real GLX does not carry,
-  // and falls through to a plain canvas capture — and the diag copy is the phone
+  // SAVE SCREENSHOT and COPY DIAG deliberately STAY: saveScreenshot() waits on
+  // GLX.awaitSoftPresent when the bound backend has it (GLX HeadlessChrome,
+  // WGX, TLX), prefers #game-soft when that overlay exists, then falls through
+  // to #game.toDataURL / capturePixels — and the diag copy is the phone
   // bug-report path, which is backend-agnostic.
   const backendTools = hasBackendFiles("three") || hasBackendFiles("webgpu");
   const pathBtn = backendTools ? addBtn("pm-three-path",
@@ -507,7 +518,7 @@ function initPresentControls() {
   const shotBtn = backendTools ? addBtn("pm-screenshots",
     "WebGPU / three-WebGPU screenshot path. AUTO = 2D blit on software GPUs. 2D BLIT = copy the frame onto #game (WGX soft-present / TLX readRenderTargetPixelsAsync). NATIVE = swapchain only — black on software GPUs.") : null;
   const saveBtn = addBtn("pm-save-shot",
-    "Download the visible #game canvas as a PNG. Waits for the 2D blit first (WGX or TLX-WebGPU).");
+    "Download the visible frame as a PNG. Waits for the 2D blit first, then reads #game-soft when that overlay exists (GLX HeadlessChrome / WGX / TLX).");
   // The label was only ever written by saveScreenshot()'s done() — the button
   // painted as an EMPTY plate until its first click (screenshot, 2026-09-02).
   saveBtn.textContent = "SAVE SCREENSHOT";
@@ -634,7 +645,7 @@ function mountRendererPicker(old) {
   prev.textContent = "‹";
   if (typeof prev.setAttribute === "function") { prev.setAttribute("data-step", "-1"); prev.setAttribute("aria-label", "Previous renderer"); }
   sel.id = "pm-renderer";
-  sel.title = "WEBGL2 paints the canvas (screenshots work). THREE.JS is the three.js backend — use THREE PATH for WebGL2 vs WebGPU. WEBGPU is hand-written WebGPU — use SCREENSHOTS for 2D blit vs native swapchain.";
+  sel.title = "WEBGL2 paints the GPU canvas (HeadlessChrome via #game-soft). THREE.JS is the three.js backend — use THREE PATH for WebGL2 vs WebGPU. WEBGPU is hand-written WebGPU — use SCREENSHOTS for 2D blit vs native swapchain.";
   if (typeof sel.setAttribute === "function") sel.setAttribute("aria-labelledby", "pm-renderer-label");
   for (let i = 0; i < BACKENDS.length; i++) {
     const opt = document.createElement("option");

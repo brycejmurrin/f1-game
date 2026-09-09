@@ -137,5 +137,41 @@ describe("the interior gate on a cleared-buffer frame", () => {
       "probe-page must not read the live WebGL canvas back — that is the cleared buffer");
     assert.doesNotMatch(frame, /gapSample/,
       "the drawImage-fed gapSample field is gone; nothing may depend on it again");
+    assert.match(probe, /export async function awaitPresentedFrame/);
+    assert.match(probe, /getElementById\("game-soft"\)/,
+      "presentedCanvasClip must prefer the HeadlessChrome overlay");
+    const presented = probe.slice(probe.indexOf("export async function screenshotPresentedCanvas"),
+      probe.indexOf("export async function screenshotGameCanvas"));
+    assert.match(presented, /readSoftCanvasBytes/,
+      "soft toDataURL is the multi-shot fast path before CDP");
+    assert.match(presented, /Page\.captureScreenshot/,
+      "CDP clip skips Playwright's document.fonts.ready wait that hung smoke shards 2/3");
+    assert.doesNotMatch(presented, /page\.screenshot/,
+      "page.screenshot waits for fonts and timed out on GHA after freeze");
+    const shot = probe.slice(probe.indexOf("export async function screenshotGameCanvas"),
+      probe.indexOf("export async function screenshotGameCanvas") + 2800);
+    const awaitAt = shot.indexOf("awaitPresentedFrame");
+    const softAt = shot.indexOf("readSoftCanvasBytes");
+    const freezeAt = shot.indexOf("__apex.headless(true)");
+    assert.ok(awaitAt >= 0 && softAt > awaitAt,
+      "awaitPresentedFrame then soft toDataURL — multi-shot fast path");
+    assert.ok(freezeAt < 0 || freezeAt > softAt,
+      "freeze+CDP is fallback only after the soft overlay path");
+  });
+
+  it("garage-angles captures via soft helper and walks livery/spine designs", () => {
+    const angles = fs.readFileSync(path.join(REPO, "tools/shot/garage-angles.mjs"), "utf8");
+    assert.match(angles, /screenshotGameCanvas/,
+      "HeadlessChrome GLX presents on #game-soft; a full-page screenshot is the UI sheet");
+    assert.doesNotMatch(angles, /await page\.screenshot\(/,
+      "page.screenshot waits for fonts.ready and was the smoke hang after freeze");
+    assert.match(angles, /--livery/,
+      "paint jobs share the camera stack; a store write is enough (LIVERY tab slams FRONT)");
+    assert.match(angles, /--spine-side/,
+      "crown/flank pills are walked as custom ids so a design pass does not reload per shot");
+    assert.match(angles, /--zoom/,
+      "counted #cs-view-in clicks so a flank mark can be judged, not just seen");
+    assert.doesNotMatch(angles, /page\.reload\(/,
+      "no second boot — openGarage + store writes keep ONE Chromium");
   });
 });

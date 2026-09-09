@@ -1238,6 +1238,14 @@ test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
     /if \(_softGpu && _softBusy\) return false/,
     "begin() must not drop frames while soft-present readback is in flight",
   );
+  assert.match(WGX_SOURCE, /function _bootFail\(reason\)/,
+    "post-soft boot refusals must tear down the soft GPU canvas + device");
+  assert.match(WGX_SOURCE, /_gpuCanvas\.parentNode\.removeChild\(_gpuCanvas\)/,
+    "failed soft WGX boot must detach the offscreen canvas before GLX fallback");
+  assert.match(WGX_SOURCE, /_webdriverSoft/,
+    "navigator.webdriver must arm soft-present like GLX without classifying content soft");
+  assert.match(WGX_SOURCE, /_softAdapter \|\| _blitForced \|\| _webdriverSoft/,
+    "_softGpu must OR the webdriver presentation latch");
 });
 
 test("Safari UA downgrades rgba16float swapchain to bgra8unorm", async () => {

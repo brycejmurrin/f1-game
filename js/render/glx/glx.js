@@ -15,6 +15,22 @@ const GLX = (function () {
 
   let gl = null;
   let canvas = null;
+  // HeadlessChrome (SwiftShader) often leaves the WebGL canvas uncomposited for
+  // CDP / Playwright screenshots even with preserveDrawingBuffer — readPixels
+  // sees the car, the capture is a black gap. Mirror WGX: 2D soft-blit overlay.
+  let _softPresent = false;
+  let _displayCanvas = null, _displayCtx = null;
+  let _softBuf = null, _softImg = null;
+  let _softBlitGen = 0;
+  let _softPresentWaiters = [];
+  let _softLastMaxPx = 0;
+  let _softBlitPace = 0;
+  // Full-frame readPixels every present() on SwiftShader starved the car
+  // group (measured: five Test timeouts under loadavg ~3 with the garage
+  // still drawing). Cap the overlay at ~7.5 Hz; awaitSoftPresent waiters
+  // force the next present through so settle/screenshot still get a fresh
+  // blit.
+  const SOFT_BLIT_EVERY = 8;
   // Mobile tier: iOS home-screen web apps (WKWebView) get a tight jetsam memory
   // budget that GPU/IOSurface allocations count against — a hard kill, no JS
   // error, no contextlost event. Shrink every discretionary GPU allocation on
@@ -404,10 +420,149 @@ const GLX = (function () {
     return u;
   }
 
+  function ensureSoftDisplay() {
+    if (_displayCanvas || !canvas || typeof document === "undefined") return;
+    _displayCanvas = document.createElement("canvas");
+    _displayCanvas.id = "game-soft";
+    _displayCanvas.setAttribute("aria-hidden", "true");
+    // Same box as #game (tokens.css: fixed inset 0). Sit above the WebGL
+    // canvas and below menu sheets (carsetup z-index 35) so CDP/page shots
+    // see the blit while the garage UI still covers the right edge.
+    _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;"
+      + "display:block;pointer-events:none;z-index:1;touch-action:none";
+    if (canvas.parentNode) canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
+    else if (document.body) document.body.appendChild(_displayCanvas);
+    _displayCtx = _displayCanvas.getContext("2d", { alpha: false });
+    // Keep #game opacity at 1 — hiding it broke element screenshots and
+    // visibility waits. The overlay sits on top with opaque putImageData.
+    try { Log.info("gfx", "GLX soft-present on"); } catch (_) { /* harness */ }
+  }
+
+  function softBlitNotify() {
+    _softBlitGen++;
+    const keep = [];
+    const ws = _softPresentWaiters.splice(0);
+    for (let i = 0; i < ws.length; i++) {
+      try { if (!ws[i](_softBlitGen)) keep.push(ws[i]); } catch (_) { /* harness waiter */ }
+    }
+    for (let j = 0; j < keep.length; j++) _softPresentWaiters.push(keep[j]);
+  }
+
+  function softBlit() {
+    if (!_softPresent || !_displayCtx || !gl || ctxGone()) return;
+    const force = _softPresentWaiters.length > 0;
+    if (!force) {
+      _softBlitPace++;
+      if ((_softBlitPace % SOFT_BLIT_EVERY) !== 0) return;
+    }
+    // Drawing-buffer size, not render width/height: with spatial upscale the
+    // canvas (and default FB) is presentW×presentH while width/height stay at
+    // the internal render scale — readPixels of the small box only captured a
+    // corner of the SGSR present and left #game-soft letterboxed/black.
+    const w = (gl.drawingBufferWidth | 0) || (width | 0);
+    const h = (gl.drawingBufferHeight | 0) || (height | 0);
+    if (w < 1 || h < 1) return;
+    if (_displayCanvas.width !== w || _displayCanvas.height !== h) {
+      _displayCanvas.width = w;
+      _displayCanvas.height = h;
+    }
+    const n = w * h * 4;
+    if (!_softBuf || _softBuf.length !== n) _softBuf = new Uint8Array(n);
+    try {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, _softBuf);
+    } catch (_) { return; }
+    if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
+      _softImg = _displayCtx.createImageData(w, h);
+    }
+    const dst = _softImg.data;
+    const row = w * 4;
+    // Flip Y (GL origin is bottom-left) via row copies, then force opaque alpha.
+    for (let y = 0; y < h; y++) {
+      dst.set(_softBuf.subarray((h - 1 - y) * row, (h - y) * row), y * row);
+    }
+    let maxPx = 0;
+    for (let i = 0; i < dst.length; i += 4) {
+      dst[i + 3] = 255;
+      const s = dst[i] + dst[i + 1] + dst[i + 2];
+      if (s > maxPx) maxPx = s;
+    }
+    _softLastMaxPx = maxPx;
+    // Skip near-black frames so a clear does not wipe a good garage still
+    // (same floor as TLX soft-blit).
+    if (maxPx < 8) return;
+    try {
+      _displayCtx.putImageData(_softImg, 0, 0);
+      softBlitNotify();
+    } catch (_) { /* 2D blit failed */ }
+  }
+
+  function softPresentState() {
+    return {
+      on: !!_softPresent,
+      gen: _softBlitGen,
+      maxPx: _softLastMaxPx,
+      every: SOFT_BLIT_EVERY,
+      display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
+    };
+  }
+
+  // snapCam() / park() call gfx.invalidateSoftPresent — WGX bumps sceneGen;
+  // GLX forces the next present past the SOFT_BLIT_EVERY throttle so waiters
+  // see a post-camera blit instead of hanging on a stale overlay.
+  function invalidateSoftPresent() {
+    if (!_softPresent) return;
+    _softBlitPace = SOFT_BLIT_EVERY - 1;
+  }
+
+  function awaitSoftPresent(timeoutMs) {
+    if (!_softPresent) return Promise.resolve(_softBlitGen);
+    if (!_displayCtx) return Promise.reject(new Error("no display ctx"));
+    // Wait for a NEWER blit, not the last one already on the overlay.
+    // The wrap/indexOf(waiter) mismatch used to leave timed-out waiters on
+    // the list forever, and an early return on gen>0 made SAVE SCREENSHOT
+    // after a camera move byte-identical to the previous still (same class
+    // as TLX/WGX 2026-09-03). Timeout must splice the same function push()
+    // stored — see renderer-soft-lifecycle. Return true/false so notify's
+    // keep[] can re-queue waiters whose predicate has not fired (a dim
+    // skip never notifies; the next good blit must still wake them).
+    const start = _softBlitGen;
+    const ms = timeoutMs == null ? 8000 : timeoutMs;
+    return new Promise(function (resolve, reject) {
+      let waiter = null;
+      const t = setTimeout(function () {
+        const i = _softPresentWaiters.indexOf(waiter);
+        if (i >= 0) _softPresentWaiters.splice(i, 1);
+        reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
+      }, ms);
+      waiter = function (gen) {
+        if (gen > start) {
+          try { clearTimeout(t); } catch (_) { /* harness */ }
+          resolve(gen);
+          return true;
+        }
+        return false;
+      };
+      _softPresentWaiters.push(waiter);
+    });
+  }
 
   function init(canvasEl) {
     canvas = canvasEl;
     watchCanvasSize();
+    // HeadlessChrome's CDP / Playwright page screenshots race the cleared
+    // backbuffer when preserveDrawingBuffer is false — and even with it true,
+    // SwiftShader often never composites the WebGL layer (readPixels has the
+    // car; chrome_take_screenshot is a black gap). WGX soft-presents under the
+    // same UA sniff; GLX does both: keep the buffer AND blit to a 2D overlay.
+    // Headed players stay on the fast default (no overlay, no PDB).
+    // Playwright's Desktop Chrome *project* spoofs a headed UA (no
+    // HeadlessChrome) but sets navigator.webdriver — arm soft there too so
+    // smoke/capture do not fall through to a minutes-long CDP grab.
+    const headlessUa = typeof navigator !== "undefined"
+      && (/HeadlessChrome/i.test(navigator.userAgent || "")
+        || !!navigator.webdriver);
+    _softPresent = headlessUa;
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer
       // (Apple GPUs round the request up to 4×) — pure waste: the post path
@@ -416,8 +571,10 @@ const GLX = (function () {
       antialias: false,
       alpha: false,
       powerPreference: "high-performance",
+      preserveDrawingBuffer: headlessUa,
     });
     if (!gl) return false;
+    if (_softPresent) ensureSoftDisplay();
 
     // Parallel shader compile (Chrome, Firefox, Safari 17+): see link().
     try { _parallelExt = gl.getExtension("KHR_parallel_shader_compile"); } catch (_) { _parallelExt = null; }
@@ -597,6 +754,8 @@ const GLX = (function () {
       // already bound on every chunked draw path.
       setLampShadowSlot: (i) => { gl.uniform1i(litU.uLampShadowIdx, i | 0); },
       getSize: () => ({ width, height }),
+      getPresentSize: () => ({ width: presentW || width, height: presentH || height }),
+      wantSpatialUpscale,
       gpuTimerEnd: _gpuTimerEnd,
       get skyVAO() { return skyVAO; },
       invalidateVAO() { _activeVAO = null; },
@@ -741,11 +900,32 @@ const GLX = (function () {
   }
 
   // Adaptive render scale: the whole 3D pipeline (scene + every post FBO) sizes
-  // off width/height, and the canvas CSS size is fixed — so scaling the backing
-  // store down and letting the browser upscale is a single knob that trades
-  // sharpness for fill-rate. The HUD is a DOM overlay, so only the 3D view
-  // softens. setRenderScale() drives it from the frame-time governor in game.js.
+  // off width/height. Without spatial upscale the canvas backing store matches
+  // that size and the browser compositor bilinear-stretches to the CSS box.
+  // With apex26.spatialUpscale=1 and scale < 1, the canvas is FULL present size
+  // (css×dpr) and SGSR1 reconstructs the missing pixels (UPSCALING-2026-09 §6).
   let renderScale = 1;
+  let presentW = 0, presentH = 0;
+  let spatialUpscale = false;
+  try {
+    const q = typeof location !== "undefined" && location.search &&
+      /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
+    const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
+    spatialUpscale = !!(q || ls);
+  } catch (_) { spatialUpscale = false; }
+  function setSpatialUpscale(on) {
+    spatialUpscale = !!on;
+    try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
+    resize();
+    return spatialUpscale;
+  }
+  function getSpatialUpscale() { return spatialUpscale; }
+  function wantSpatialUpscale() {
+    // Fail closed: without a linked SGSR program the canvas must stay at
+    // render size (legacy bilinear stretch) — a present-size canvas with a
+    // render-size viewport letterboxes the 3D view into the corner.
+    return spatialUpscale && renderScale < 0.98 && !!(PST && PST.spatialOk && PST.spatialOk());
+  }
   // CACHED CSS SIZE. resize() is the first statement of every render() — and
   // clientWidth/clientHeight are LAYOUT reads, so asking for them there forces a
   // synchronous reflow of anything dirtied since the last frame. The HUD dirties
@@ -836,18 +1016,25 @@ const GLX = (function () {
     // a ~6" screen, and it multiplies with every other saving.
     const dpr = Math.min(window.devicePixelRatio || 1, MOBILE_TIER ? 1.5 : 2);
     cssSize();
-    const w = Math.max(1, Math.round(cssW * dpr * renderScale));
-    const h = Math.max(1, Math.round(cssH * dpr * renderScale));
-    const changed = canvas.width !== w || canvas.height !== h;
-    if (changed) {
-      canvas.width = w;
-      canvas.height = h;
-      gl.viewport(0, 0, w, h);
+    presentW = Math.max(1, Math.round(cssW * dpr));
+    presentH = Math.max(1, Math.round(cssH * dpr));
+    const rw = Math.max(1, Math.round(presentW * renderScale));
+    const rh = Math.max(1, Math.round(presentH * renderScale));
+    // Upscale path: canvas = present (full), scene FBOs = render (scaled).
+    // Off or scale≈1: canvas = render (legacy browser bilinear stretch).
+    const up = wantSpatialUpscale();
+    const cw = up ? presentW : rw;
+    const ch = up ? presentH : rh;
+    const changed = canvas.width !== cw || canvas.height !== ch || width !== rw || height !== rh;
+    if (canvas.width !== cw || canvas.height !== ch) {
+      canvas.width = cw;
+      canvas.height = ch;
     }
+    gl.viewport(0, 0, rw, rh);
     const first = width === 0;
-    width = w;
-    height = h;
-    aspect = w / h;
+    width = rw;
+    height = rh;
+    aspect = rw / rh;
     if ((changed || first) && PST) PST.createTargets();   // (re)allocate HDR + bloom targets
   }
   function setRenderScale(s) {
@@ -1798,11 +1985,36 @@ const GLX = (function () {
   // without cellSize has no cells and is left whole (always drawn in full).
   // Skips bufferSubData when the visible cell set (count + cell-index hash) is
   // unchanged from the previous cull — static prop batches often match.
-  function cullInstances(batch, planes) {
+  //
+  // opts.upload === false is the SHADOW cull (game.js drawPropShadows): the pack
+  // goes to the batch's OWN shadow instance buffer, never ibo. Sharing ibo made
+  // every shadow recentre stomp the camera pack and its cell-set cache, so the
+  // camera cull always re-uploaded on the same frame (bug hunt 2026-09-09;
+  // WGX already separated the buffers on 2026-09-02).
+  function _shadowPackFor(batch) {
+    if (!batch.packMatrices || !batch.ibo) return null;
+    if (!batch._shadowPacked) batch._shadowPacked = new Float32Array(batch.packMatrices.length);
+    if (!batch.shadowIbo) {
+      batch.shadowIbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
+      gl.bufferData(gl.ARRAY_BUFFER, batch._shadowPacked.byteLength, gl.DYNAMIC_DRAW);
+    }
+    if (batch.packColors) {
+      if (!batch._shadowColors) batch._shadowColors = new Float32Array(batch.packColors.length);
+      if (!batch.shadowCbo) {
+        batch.shadowCbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowCbo);
+        gl.bufferData(gl.ARRAY_BUFFER, batch._shadowColors.byteLength, gl.DYNAMIC_DRAW);
+      }
+    }
+    return batch._shadowPacked;
+  }
+  function cullInstances(batch, planes, opts) {
     if (!batch || !batch.cells) return batch ? batch.instances : 0;
-    // There is one GPU instance buffer, so only its resident pack can be a hit.
-    // A two-frustum count cache returned the right N with the wrong transforms.
-    let samePack = !!batch._cullPlanes;
+    const shadow = !!(opts && opts.upload === false);
+    // There is one camera GPU instance buffer, so only its resident pack can be
+    // a hit. The shadow path never consults or writes that cache.
+    let samePack = !shadow && !!batch._cullPlanes;
     if (samePack) {
       let po = 0;
       for (let pi = 0; pi < 6 && samePack; pi++) {
@@ -1818,38 +2030,73 @@ const GLX = (function () {
     // is a strictly stronger key than the frustum. Skips the copy loop and the
     // upload, not the AABB sweep.
     let cellKeyN = -1;
-    if (_instCellCache) {
-      const cs = batch.cells, cn = cs.length;
-      let ks = batch._cellKeyScratch;
+    const cs = batch.cells, cn = cs.length;
+    let ks = batch._cellKeyScratch;
+    if (_instCellCache || shadow) {
       if (!ks || ks.length < cn) ks = batch._cellKeyScratch = new Int32Array(cn);
       let k = 0;
       for (let ci = 0; ci < cn; ci++) if (CHK.aabbInFrustum(planes, cs[ci].mn, cs[ci].mx)) ks[k++] = ci;
       cellKeyN = k;
-      const res = batch._cellKey;
-      if (res && batch._cellKeyN === k) {
-        let same = true;
-        for (let i = 0; i < k; i++) if (res[i] !== ks[i]) { same = false; break; }
-        // NOT writing _cullPlanes here is load-bearing: it must keep describing
-        // whichever frustum physically wrote the buffer (canary-pinned).
-        if (same) { batch.visible = batch._cullN; return batch._cullN; }
+      if (!shadow && _instCellCache) {
+        const res = batch._cellKey;
+        if (res && batch._cellKeyN === k) {
+          let same = true;
+          for (let i = 0; i < k; i++) if (res[i] !== ks[i]) { same = false; break; }
+          // NOT writing _cullPlanes here is load-bearing: it must keep describing
+          // whichever frustum physically wrote the buffer (canary-pinned).
+          if (same) { batch.visible = batch._cullN; return batch._cullN; }
+        }
       }
     }
-    const src = batch.srcMatrices, dst = batch.packMatrices;
-    const sc = batch.srcColors, dc = batch.packColors;
+    const src = batch.srcMatrices;
+    const dst = shadow ? (_shadowPackFor(batch) || batch.packMatrices) : batch.packMatrices;
+    const sc = batch.srcColors;
+    const dc = shadow ? (batch._shadowColors || null) : batch.packColors;
     let n = 0;
-    for (const c of batch.cells) {
-      if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
-      for (const i of c.idx) {
-        // Copy without Float32Array.subarray — that view was a per-instance alloc
-        // on Vegas-scale batches (tens of thousands/frame).
-        const so = i * 16, dOff = n * 16;
-        for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
-        if (dc) {
-          const sco = i * 3, dco = n * 3;
-          dc[dco] = sc[sco]; dc[dco + 1] = sc[sco + 1]; dc[dco + 2] = sc[sco + 2];
+    if (cellKeyN >= 0 && ks) {
+      for (let ci = 0; ci < cellKeyN; ci++) {
+        const idx = cs[ks[ci]].idx;
+        for (let j = 0, jn = idx.length; j < jn; j++) {
+          const i = idx[j];
+          const so = i * 16, dOff = n * 16;
+          for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
+          if (dc) {
+            const sco = i * 3, dco = n * 3;
+            dc[dco] = sc[sco]; dc[dco + 1] = sc[sco + 1]; dc[dco + 2] = sc[sco + 2];
+          }
+          n++;
         }
-        n++;
       }
+    } else {
+      for (let ci = 0; ci < cn; ci++) {
+        const c = cs[ci];
+        if (!CHK.aabbInFrustum(planes, c.mn, c.mx)) continue;
+        const idx = c.idx;
+        for (let j = 0, jn = idx.length; j < jn; j++) {
+          const i = idx[j];
+          const so = i * 16, dOff = n * 16;
+          for (let k = 0; k < 16; k++) dst[dOff + k] = src[so + k];
+          if (dc) {
+            const sco = i * 3, dco = n * 3;
+            dc[dco] = sc[sco]; dc[dco + 1] = sc[sco + 1]; dc[dco + 2] = sc[sco + 2];
+          }
+          n++;
+        }
+      }
+    }
+    if (shadow) {
+      // Shadow pack: its own buffer, its own count; the camera-side cache,
+      // count and buffer are untouched.
+      batch._shadowN = n;
+      if (n && batch.shadowIbo && dst === batch._shadowPacked) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, dst, 0, n * 16);
+        if (dc && batch.shadowCbo) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowCbo);
+          gl.bufferSubData(gl.ARRAY_BUFFER, 0, dc, 0, n * 3);
+        }
+      }
+      return n;
     }
     batch.visible = n;
     if (n) {
@@ -1871,7 +2118,7 @@ const GLX = (function () {
       // Record the cell set that produced the bytes now resident.
       let res = batch._cellKey;
       if (!res || res.length < cellKeyN) res = batch._cellKey = new Int32Array(batch.cells.length);
-      res.set(batch._cellKeyScratch.subarray(0, cellKeyN));
+      for (let i = 0; i < cellKeyN; i++) res[i] = ks[i];
       batch._cellKeyN = cellKeyN;
     }
     return n;
@@ -1932,6 +2179,10 @@ const GLX = (function () {
     if (!batch) return;
     if (batch.ibo) gl.deleteBuffer(batch.ibo);
     if (batch.cbo) gl.deleteBuffer(batch.cbo);
+    if (batch.shadowIbo) { gl.deleteBuffer(batch.shadowIbo); batch.shadowIbo = null; }
+    if (batch.shadowCbo) { gl.deleteBuffer(batch.shadowCbo); batch.shadowCbo = null; }
+    batch._shadowPacked = null;
+    batch._shadowColors = null;
     if (freeMesh) freeMesh(batch);
   }
 
@@ -2283,9 +2534,14 @@ const GLX = (function () {
     present: (opts) => {
       if (ctxGone()) return;
       const r = PST.present(opts);
+      if (_softPresent) softBlit();
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
       return r;
     },
+    softPresent: () => !!_softPresent,
+    softPresentState,
+    awaitSoftPresent,
+    invalidateSoftPresent,
     gpuErrors: () => _glErrors,
     gpuFirstError: () => _glFirstError || null,
     // The bound backend's account of itself, one shape on all three (TLX
@@ -2296,6 +2552,7 @@ const GLX = (function () {
       api: "webgl2", isMobile: IS_MOBILE, mobileTier: MOBILE_TIER,
       gpuErrors: _glErrors, gpuFirstError: _glFirstError || null,
       ctxLost: _ctxLost, packLive: !!matAlbedoTex,
+      softPresent: !!_softPresent, softBlitGen: _softBlitGen,
     }),
     envFaceBegin,
     envFaceEnd,
@@ -2335,6 +2592,7 @@ const GLX = (function () {
     msaa: () => PST.msaa(),
     pcss: () => SHD.pcssEnabled,
     setRenderScale, getRenderScale,
+    setSpatialUpscale, getSpatialUpscale,
     // GPU frame timer. gpuTimer(true|false) toggles timing (returns whether it's
     // supported + on); gpuTimer() reads state. gpuMs() returns the most recent
     // GPU frame time in ms, or -1 if unsupported / no result yet.

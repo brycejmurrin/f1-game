@@ -16,6 +16,7 @@
 import { mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { launchChromium, shutdown, sleep, startStaticServer } from "../lib/harness.mjs";
+import { screenshotPresentedCanvas } from "../capture/probe-page.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
@@ -49,14 +50,17 @@ try {
   await page.evaluate((a) => __apex.carOrbit(0, a, 9, 4.2), az);
   await sleep(400);
   // Crop to the car (it fills the frame centre at 4.2 m) and keep the file tiny.
-  await page.screenshot({ path: out, type: "jpeg", quality: 62,
-    clip: { x: 96, y: 40, width: 288, height: 190 } });
+  // Soft overlay → CDP; never page.screenshot (document.fonts.ready hangs SwiftShader).
+  const shot = await screenshotPresentedCanvas(page, {
+    path: out, type: "jpeg", quality: 62, timeout: 60_000,
+    clip: { x: 96, y: 40, width: 288, height: 190 },
+  });
 
   const rep = await page.evaluate(() => {
     const cv = document.querySelector("canvas");
     return { w: cv.width, h: cv.height };
   });
-  console.log(`carshot → ${out} (${(statSync(out).size / 1024).toFixed(1)} KB)  az=${az} tod=${tod} team=${teamIdx} canvas=${rep.w}x${rep.h}`);
+  console.log(`carshot → ${out} (${(statSync(out).size / 1024).toFixed(1)} KB)  az=${az} tod=${tod} team=${teamIdx} canvas=${rep.w}x${rep.h} via=${shot.via}`);
 } finally {
   await shutdown();
 }

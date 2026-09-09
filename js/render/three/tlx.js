@@ -14,6 +14,9 @@ const TLX = (function () {
 
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas /*, opts */) {
+    // Hoisted so the outer catch can tear down a half-booted soft overlay /
+    // three renderer before same-page GLX fallback claims #game.
+    let _abortDisplay = null, _abortRenderer = null;
     try {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
@@ -90,7 +93,10 @@ const TLX = (function () {
       // here. This clause is what made the one machine that can test a
       // player's path — macos-latest, Apple/Metal, measured anyHardware:true —
       // take the software half of every content skip instead.
-      const _headless = /HeadlessChrome/i.test(ua);
+      // Playwright Desktop Chrome spoofs a headed UA but sets navigator.webdriver
+      // — GLX arms soft there; match so CDP/page shots still see the blit.
+      const _headless = /HeadlessChrome/i.test(ua)
+        || (typeof navigator !== "undefined" && !!navigator.webdriver);
       // Did an adapter actually RESOLVE? `navigator.gpu` existing is a
       // PRESENCE check and `_hasGpu` below is only that — but a browser can
       // expose navigator.gpu and still hand back no adapter, and then three's
@@ -456,6 +462,7 @@ const TLX = (function () {
           throw e;
         }
       }
+      _abortRenderer = renderer;
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -472,6 +479,7 @@ const TLX = (function () {
           _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1";
         }
         canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
+        _abortDisplay = _displayCanvas;
         // Opaque overlay — the lit fragment writes the SSR car-paint TAG
         // (0.35) into ALPHA. That is a post-chain mask, not opacity. A
         // default 2D context is alpha-composited, so bodywork ghosts at 35%
@@ -589,7 +597,12 @@ const TLX = (function () {
       // so that was every desktop Safari boot. On the WebGPU path the two terms
       // are the same value, so nothing there changes.
       function softContent(part) { return softwareGL && !_forceHw.has(part); }
-      function softOutRT() { return softGpu() ? _ensureBlitRT(W, H) : null; }
+      function softOutRT() {
+        if (!softGpu()) return null;
+        const up = wantSpatialUpscale();
+        const tw = up ? presentW : W, th = up ? presentH : H;
+        return _ensureBlitRT(tw, th);
+      }
       // r185.1 keys the TSL node-builder cache on RenderObject.initialCacheKey,
       // which folds in renderer.contextNode.version + the scene lights hash.
       // Both change across the many renderer.render() calls of a track load
@@ -805,6 +818,28 @@ const TLX = (function () {
       // ── lifecycle state ───────────────────────────────────────────────────
       let renderScale = 1;
       let W = 1, H = 1;
+      // Present size (css×dpr) vs render size (×renderScale). With
+      // apex26.spatialUpscale=1 and scale < ~1, canvas/soft display is present
+      // and scene/post RTs stay at W×H — SGSR reconstructs (UPSCALING-2026-09 §7).
+      let presentW = 1, presentH = 1;
+      let spatialUpscale = false;
+      try {
+        const q = typeof location !== "undefined" && location.search &&
+          /(?:^|[?&])upscale=1(?:&|$)/.test(location.search);
+        const ls = typeof localStorage !== "undefined" && localStorage.getItem("apex26.spatialUpscale") === "1";
+        spatialUpscale = !!(q || ls);
+      } catch (_) { spatialUpscale = false; }
+      function setSpatialUpscale(on) {
+        spatialUpscale = !!on;
+        try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
+        resize();
+        return spatialUpscale;
+      }
+      function getSpatialUpscale() { return spatialUpscale; }
+      function wantSpatialUpscale() {
+        return spatialUpscale && renderScale < 0.98 && !!(post && post.spatialOk && post.spatialOk());
+      }
+      function getPresentSize() { return { width: presentW || W, height: presentH || H }; }
       const DPR_CAP = isMobile ? 1.5 : 2;
 
       // ── M9 GPU frame timer state ─────────────────────────────────────────
@@ -912,7 +947,8 @@ const TLX = (function () {
         if (window.TLXShaders && TLXShaders.postChain && TLXShaders.post && chunks) {
           post = TLXShaders.postChain(THREE, TSL,
             { renderer, isMobile, chunks, shadow: shadowSys, viz: vizMode,
-              softDest: function () { return softOutRT(); } });
+              softDest: function () { return softOutRT(); },
+              wantSpatialUpscale, getPresentSize });
           if (post && !post.enabled()) {
             try { if (post.dispose) post.dispose(); } catch (_) { /* disabled factory cleanup */ }
             post = null;
@@ -1990,20 +2026,30 @@ const TLX = (function () {
         const cw = cssW || 1;
         const ch = cssH || 1;
         const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
-        const w = Math.max(1, Math.round(cw * dpr * renderScale));
-        const h = Math.max(1, Math.round(ch * dpr * renderScale));
-        if (w !== W || h !== H) {
+        presentW = Math.max(1, Math.round(cw * dpr));
+        presentH = Math.max(1, Math.round(ch * dpr));
+        const rw = Math.max(1, Math.round(presentW * renderScale));
+        const rh = Math.max(1, Math.round(presentH * renderScale));
+        const up = wantSpatialUpscale();
+        const cwBuf = up ? presentW : rw;
+        const chBuf = up ? presentH : rh;
+        const sizeChanged = rw !== W || rh !== H ||
+          (_displayCanvas && (_displayCanvas.width !== cwBuf || _displayCanvas.height !== chBuf)) ||
+          (renderer.domElement && (renderer.domElement.width !== cwBuf || renderer.domElement.height !== chBuf));
+        if (sizeChanged) {
           // An old-size async read may finish after the visible canvas changes.
           // It is allowed to drain, but must never repaint the resized canvas.
           _softReadEpoch++;
           _softReadQueued = null;
-          W = w; H = h;
-          renderer.setSize(w, h, false);    // false: CSS keeps sizing the canvas
-          if (_displayCanvas && (_displayCanvas.width !== w || _displayCanvas.height !== h)) {
-            _displayCanvas.width = w;
-            _displayCanvas.height = h;
+          W = rw; H = rh;
+          // setSize drives the WebGPU/WebGL drawing buffer; when upscaling the
+          // canvas is present-sized while post RTs stay at W×H (render).
+          renderer.setSize(cwBuf, chBuf, false);    // false: CSS keeps sizing the canvas
+          if (_displayCanvas && (_displayCanvas.width !== cwBuf || _displayCanvas.height !== chBuf)) {
+            _displayCanvas.width = cwBuf;
+            _displayCanvas.height = chBuf;
           }
-          if (post) post.resize(w, h);
+          if (post) post.resize(rw, rh);
         }
       }
 
@@ -2056,10 +2102,12 @@ const TLX = (function () {
       }
       function _softBlitNotify() {
         _softBlitGen++;
+        const keep = [];
         const ws = _softPresentWaiters.splice(0);
         for (let i = 0; i < ws.length; i++) {
-          try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+          try { if (!ws[i](_softBlitGen)) keep.push(ws[i]); } catch (_) { /* harness waiter */ }
         }
+        for (let j = 0; j < keep.length; j++) _softPresentWaiters.push(keep[j]);
       }
       function _finishSoftBlitRead() {
         _softReadPending = false;
@@ -2172,6 +2220,8 @@ const TLX = (function () {
           renderScale = v; resize(); return true;
         },
         getRenderScale() { return renderScale; },
+        setSpatialUpscale, getSpatialUpscale,
+        getPresentSize,
         get width() { return W; },
         get height() { return H; },
         get aspect() { return H ? W / H : 1; },
@@ -2619,7 +2669,8 @@ const TLX = (function () {
           });
         },
         awaitSoftPresent(timeoutMs) {
-          if (!_softBlit || !_displayCtx) return Promise.resolve(_softBlitGen);
+          if (!_softBlit) return Promise.resolve(_softBlitGen);
+          if (!_displayCtx) return Promise.reject(new Error("no display ctx"));
           const start = _softBlitGen;
           const ms = timeoutMs != null ? timeoutMs : 15000;
           return new Promise(function (resolve, reject) {
@@ -2633,12 +2684,27 @@ const TLX = (function () {
               if (gen > start) {
                 try { clearTimeout(timer); } catch (_) { /* harness */ }
                 resolve(gen);
+                return true;
               }
+              return false;
             };
             _softPresentWaiters.push(waiter);
           });
         },
+        invalidateSoftPresent() { _cancelSoftBlits(); },
         softPresent() { return !!_softBlit; },
+        // Same name as WGX/GLX so descriptor-copy onto GLX does not keep a
+        // dead GLX softPresentState closure (backend-surface-parity).
+        softPresentState() {
+          return {
+            on: !!_softBlit,
+            gen: _softBlitGen,
+            pending: !!_softReadPending,
+            lastMs: _softReadLastMs,
+            lastErr: _softReadLastErr || null,
+            display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
+          };
+        },
         // Dawn's own verdict on this backend. Mirrors WGX.gpuErrors(); reachable
         // as GLX.gpuErrors() after game.js copies the backend onto GLX.
         gpuErrors() { return _gpuErrors; },
@@ -3403,6 +3469,12 @@ const TLX = (function () {
       try { Log.info("gfx", "TLX bind ok"); } catch (_) { /* harness */ }
       return backend;
     } catch (e) {
+      try {
+        if (_abortDisplay && _abortDisplay.parentNode) _abortDisplay.parentNode.removeChild(_abortDisplay);
+      } catch (_) { /* already detached */ }
+      try {
+        if (_abortRenderer && typeof _abortRenderer.dispose === "function") _abortRenderer.dispose();
+      } catch (_) { /* three dispose best-effort */ }
       return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)
     }
   }

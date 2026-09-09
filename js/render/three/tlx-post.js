@@ -220,6 +220,8 @@
     // the unconditional resolve, like GLX's ldrFBO).
     const ldrRT = makeRT(1, 1, THREE.UnsignedByteType);
     ldrRT.texture.name = "TLXPostLDR";
+    // SGSR intermediate (render res): FXAA writes here when upscaling.
+    let aaRT = null;
 
     // Lazily-created blocks (per-block bail: nothing until the gate opens).
     let ssaoRT = null, ssaoBlurRT = null, aoW = 1, aoH = 1;
@@ -337,15 +339,33 @@
     }
 
     // Last-presented-frame block states (__tlx.postState()).
-    const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false };
+    const _last = { ssao: false, bloom: false, shafts: false, ssr: false, fxaa: false, sgsr: false };
+    let _lastPresentRT = null;
 
     function resize(w, h) {
-      if (w === W && h === H) return;
+      if (w === W && h === H) {
+        // Still may need aaRT when flag toggles at same render size.
+        syncAaRT();
+        return;
+      }
       W = Math.max(1, w | 0); H = Math.max(1, h | 0);
       rtSetSize(sceneRT, W, H);
       rtSetSize(ldrRT, W, H);
       layoutHalf();
       layoutBloom();
+      syncAaRT();
+    }
+    function syncAaRT() {
+      const want = !!(P.sgsr && ctx.wantSpatialUpscale && ctx.wantSpatialUpscale());
+      if (want) {
+        if (!aaRT) {
+          aaRT = makeRT(W, H, THREE.UnsignedByteType);
+          aaRT.texture.name = "TLXPostAA";
+        } else rtSetSize(aaRT, W, H);
+      } else if (aaRT) {
+        try { ownedRTs.delete(aaRT); aaRT.dispose(); } catch (_) { /* dying */ }
+        aaRT = null;
+      }
     }
 
     /** Resolve the HDR scene to the canvas — the glx/post.js present() port.
@@ -630,7 +650,19 @@
         runPass(P.composite.mat, ldrRT);
         P.fxaa.tex.value = ldrRT.texture;
         P.fxaa.U.texel.value.set(1 / W, 1 / H);
-        runPass(P.fxaa.mat, dest);
+        const useUpscale = !!(P.sgsr && aaRT && ctx.wantSpatialUpscale && ctx.wantSpatialUpscale());
+        if (useUpscale) {
+          runPass(P.fxaa.mat, aaRT);
+          P.sgsr.tex.value = aaRT.texture;
+          P.sgsr.U.viewport.value.set(1 / W, 1 / H, W, H);
+          runPass(P.sgsr.mat, dest);
+          _lastPresentRT = dest || aaRT;
+          _last.sgsr = true;
+        } else {
+          runPass(P.fxaa.mat, dest);
+          _lastPresentRT = dest || ldrRT;
+          _last.sgsr = false;
+        }
       }
       _last.ssao = !!haveAO;
       _last.bloom = !!haveBloom;
@@ -654,13 +686,11 @@
       // source. three's readRenderTargetPixelsAsync → backend.copyTextureToBuffer
       // + mapAsync (WebGPU Fundamentals / Explainer). Never getCurrentTexture.
       ldrTarget: () => ldrRT,
-      // WHAT THE LAST FRAME ACTUALLY WROTE. The soft-present blit and
-      // capturePixels used to read ldrTarget() unconditionally — but the ?viz=
-      // branch below writes the bisect image to `dest` and never touches ldrRT,
-      // so on the software-WebGPU path every viz mode showed a stale frame no
-      // matter what the stage contained. That made the repo's own bisect tool
-      // blind on the one backend that needs bisecting. Ask this instead.
-      presentedTarget: () => (viz ? _vizDest : ldrRT),
+      // WHAT THE LAST FRAME ACTUALLY WROTE. Soft-present / capture must read
+      // the FXAA (or SGSR) destination when upscaling — not pre-FXAA ldrRT.
+      presentedTarget: () => (viz ? _vizDest : (_lastPresentRT || ldrRT)),
+      // SGSR linked — tlx.js wantSpatialUpscale() requires this (fail-closed).
+      spatialOk: () => !!(P && P.sgsr && P.sgsr.mat),
       resize,
       present,
       dispose,
@@ -669,7 +699,7 @@
         on: true,
         hdr,
         blocks: { ssao: _last.ssao, bloom: _last.bloom, shafts: _last.shafts,
-                  ssr: _last.ssr, fxaa: _last.fxaa },
+                  ssr: _last.ssr, fxaa: _last.fxaa, sgsr: _last.sgsr },
         targets: [W, H],
       }),
     };

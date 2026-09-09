@@ -1,44 +1,103 @@
 #!/usr/bin/env node
-// @doc Garage camera-preset screenshots for one team — hero/front/side/rear/top/wingFront/wingRear in one run.
-//   node tools/shot/garage-angles.mjs [--team mclaren] [--views hero,side] [--viewport 1280x720] [--out dir]
+// @doc Garage camera-preset shots — ONE Chromium; optional --livery / --spine-side walks.
+//   node tools/shot/garage-angles.mjs [--team=redbull] [--views=spine] [--livery=default,rb_white]
+//     [--spine-side=logo,duo] [--spine-logo=…] [--zoom=8] [--pan=2,0] [--out=dir]
+// @skill playwright-probe
+// @skill garage-parts-livery
 //
-// The counterpart to garage-frame.mjs, which shoots ONE preset for a backend
-// A/B. This one walks the CAMERA STACK for a single backend, which is what a
-// "does the bay still read from every angle" pass needs: two shipped defects
-// (wordmarks cut by a service gantry, a sign hidden inside its own fascia)
-// were only ever visible from one preset each. It reuses the same harness and
-// the same page helpers rather than driving Playwright by hand — openGarage
-// already retries the title flyby, and screenshotGameCanvas already hides the
-// setup sheet so the shot is the bay, not the UI.
-import { mkdirSync, writeFileSync } from "node:fs";
+// Counterpart to garage-frame.mjs (one preset × backend A/B). This walks the
+// CAMERA STACK on a single backend: open once, click each preset, soft-present
+// capture each frame. Two shipped defects (wordmarks vs gantry, sunk signs)
+// were only visible from one angle each.
+//
+// Views: hero,front,side,rear,top,wingFront,wingRear — or groups:
+//   spine  = hero,top,rear,side   (engine-cover crown / SPINE TOP)
+//   all    = every preset
+//
+// `--livery` walks paint jobs via a store write (opening the LIVERY tab slams
+// FRONT). `--spine-side` / `--spine-logo` walk DESIGN as custom ids on the
+// team default paint. `--zoom` / `--pan` are counted clicks on #cs-view-in /
+// #cs-pan-* so a framing that reads here is one a player can reach.
+//
+// Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
+// under SwiftShader (document.fonts.ready after freeze).
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
-import { launchChromium, shutdown, startStaticServer, sleep } from "../lib/harness.mjs";
-import { chromiumArgsForBackend } from "../capture/probe-page.mjs";
+import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
+import {
+  chromiumArgsForBackend, installProbeInit, gotoGame, openGarage, settleGarage,
+  screenshotGameCanvas,
+} from "../capture/probe-page.mjs";
 
 const argv = process.argv.slice(2);
+/** Accept `--name=value` and `--name value` (render-car style). */
 const flag = (name, dflt) => {
+  const eq = argv.find((a) => a.startsWith(name + "="));
+  if (eq) return eq.slice(name.length + 1) || dflt;
   const i = argv.indexOf(name);
-  return i >= 0 && argv[i + 1] ? argv[i + 1] : dflt;
+  if (i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("-")) return argv[i + 1];
+  return dflt;
 };
 const team = flag("--team", "mclaren");
-const views = flag("--views", "hero,front,side,rear,top,wingFront,wingRear").split(",").map((s) => s.trim()).filter(Boolean);
+const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).filter(Boolean);
+const spineSides = (flag("--spine-side", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
+const spineLogos = (flag("--spine-logo", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
 const vp = flag("--viewport", "1280x720").split("x").map(Number);
 const outDir = flag("--out", "artifacts/garage-angles");
+const zoom = Number(flag("--zoom", "0")) || 0;
+const [strafe = 0, dolly = 0] = (flag("--pan", "0,0")).split(",").map(Number);
 
-// "Did the BAY actually render?" — gate the CANVAS half of the frame only.
-// The setup sheet is full of text and always has plenty of pixel spread, so a
-// whole-frame check passes while the 3D canvas beside it is a blank white
-// rectangle. That is not hypothetical: the first cut of this tool shipped a
-// directory of blanks, and the second cut's gate was fooled by the sheet.
+/** Roster order == store.team index (game.js boot). */
+function teamIndex(id) {
+  const src = readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8");
+  const ids = Array.from(src.matchAll(/^ *id: "([a-z]+)",/gm)).map((m) => m[1]);
+  const i = ids.indexOf(id);
+  if (i < 0) {
+    console.error(`no team "${id}" — available: ${ids.join(", ")}`);
+    process.exit(1);
+  }
+  return i;
+}
+const teamIdx = teamIndex(team);
+
+const ALL = ["hero", "front", "side", "rear", "top", "wingFront", "wingRear"];
+const GROUPS = {
+  spine: ["hero", "top", "rear", "side"],
+  all: ALL,
+};
+const rawViews = flag("--views", "spine").split(",").map((s) => s.trim()).filter(Boolean);
+const views = [...new Set(rawViews.flatMap((v) => GROUPS[v] || [v]))];
+const bad = views.filter((v) => !ALL.includes(v));
+if (bad.length) {
+  console.error(`Unknown view(s): ${bad.join(", ")}\nAvailable: ${ALL.join(", ")} + groups ${Object.keys(GROUPS).join(", ")}`);
+  process.exit(1);
+}
+
+/** Gate the CANVAS half only — the setup sheet always has text spread. */
 async function bayRendered(png, vpW) {
   const cut = Math.max(80, Math.round(vpW * 0.55));
-  const st = await sharp(png).extract({ left: 0, top: 0, width: cut, height: (await sharp(png).metadata()).height }).stats();
+  const st = await sharp(png).extract({
+    left: 0, top: 0, width: cut, height: (await sharp(png).metadata()).height,
+  }).stats();
   const spread = Math.max(...st.channels.map((c) => c.stdev));
   return { ok: spread > 8, spread: +spread.toFixed(2) };
 }
 
-async function frame(page, view) {
+/** Discrete clicks — detail 0 is the keyboard path in holdSetupCtl (not hold-ramp). */
+async function nudge(page, id, n) {
+  if (!n) return;
+  const ok = await page.evaluate(({ ctl, times }) => {
+    const b = document.getElementById(ctl);
+    if (!b) return false;
+    for (let i = 0; i < times; i++) b.click();
+    return true;
+  }, { ctl: id, times: Math.abs(n) });
+  if (!ok) throw new Error(`no camera control #${id}`);
+}
+
+async function frame(page, tag, view) {
   const clicked = await page.evaluate((v) => {
     const b = document.querySelector('#cs-stack [data-cs-view="' + v + '"]');
     if (!b) return false;
@@ -46,62 +105,167 @@ async function frame(page, view) {
     return true;
   }, view);
   if (!clicked) throw new Error(`no camera preset "${view}" in #cs-stack`);
-  const png = join(outDir, `${team}-${view}.png`);
+  // AFTER the preset: setSetupView is absolute and drops stored distance/pan.
+  await nudge(page, zoom > 0 ? "cs-view-in" : "cs-view-out", zoom);
+  await nudge(page, strafe > 0 ? "cs-pan-right" : "cs-pan-left", strafe);
+  await nudge(page, dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", dolly);
+  await settleGarage(page, { frames: 6 });
+  const png = join(outDir, `${team}-${tag}-${view}.png`);
   let gate = null;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    await sleep(attempt === 0 ? 900 : 700);
-    await page.screenshot({ path: png, timeout: 60000 });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await settleGarage(page, { frames: 4 });
+    const shot = await screenshotGameCanvas(page, png);
     gate = await bayRendered(png, vp[0]);
     if (gate.ok) {
       const cam = await page.evaluate(() => window.__apex.garageCam());
-      return { view, png, spread: gate.spread, az: +cam.az.toFixed(3), el: +cam.el.toFixed(3), dist: +cam.effDist.toFixed(3) };
+      return {
+        view, tag, png, spread: gate.spread, via: shot.via || "page-clip",
+        az: +cam.az.toFixed(3), el: +cam.el.toFixed(3), dist: +cam.effDist.toFixed(3),
+        pan: cam.pan ? cam.pan.map((n) => +n.toFixed(3)) : null,
+      };
     }
   }
-  throw new Error(`${view}: the bay never rendered (canvas pixel spread ${gate.spread})`);
+  throw new Error(`${tag}/${view}: the bay never rendered (canvas pixel spread ${gate.spread})`);
+}
+
+async function applyLivery(page, livId) {
+  const got = await page.evaluate(({ teamId, id }) => {
+    const t = Teams.LIST.find((x) => x.id === teamId);
+    if (!t) return { ok: false, error: `no team "${teamId}"` };
+    const list = Liveries.forTeam(t);
+    if (!list.some((l) => l.id === id)) {
+      return { ok: false, error: `no livery "${id}"`, have: list.map((l) => l.id) };
+    }
+    GameStore.store.set("livery." + teamId, id);
+    return { ok: true, name: list.find((l) => l.id === id).name };
+  }, { teamId: team, id: livId });
+  if (!got.ok) {
+    const extra = got.have ? ` (have ${got.have.join(",")})` : "";
+    throw new Error(`${got.error}${extra}`);
+  }
+  await settleGarage(page, { frames: 12 });
+  return got.name;
+}
+
+/** Custom id so mesh/atlas caches (keyed on getLiveryId) miss — design walk, not catalog. */
+async function applyDesign(page, { spineSide, spineLogo }) {
+  const got = await page.evaluate(({ teamId, side, logo }) => {
+    const t = Teams.LIST.find((x) => x.id === teamId);
+    if (!t) return { ok: false, error: `no team "${teamId}"` };
+    const def = Liveries.forTeam(t)[0];
+    const sides = (typeof LiveryTex !== "undefined" && LiveryTex.SPINE_SIDE_IDS) || [];
+    const logos = (typeof LiveryTex !== "undefined" && LiveryTex.SPINE_LOGO_IDS) || [];
+    if (side && sides.length && !sides.includes(side)) {
+      return { ok: false, error: `no spineSide "${side}"`, have: sides };
+    }
+    if (logo && logos.length && !logos.includes(logo)) {
+      return { ok: false, error: `no spineLogo "${logo}"`, have: logos };
+    }
+    const id = "_shot_" + (logo || def.spineLogo || "x") + "_" + (side || def.spineSide || "none");
+    const liv = Object.assign({}, def, {
+      id, name: id,
+      spineSide: side || def.spineSide || "none",
+    });
+    if (logo) liv.spineLogo = logo;
+    const customs = (GameStore.store.get("livery.custom." + teamId, []) || []).filter((l) => l.id !== id);
+    customs.push(liv);
+    GameStore.store.set("livery.custom." + teamId, customs);
+    GameStore.store.set("livery." + teamId, id);
+    if (typeof GarageScene !== "undefined" && GarageScene.dropPreviewMeshes) GarageScene.dropPreviewMeshes();
+    return { ok: true, name: liv.spineLogo + "/" + liv.spineSide, id };
+  }, { teamId: team, side: spineSide || "", logo: spineLogo || "" });
+  if (!got.ok) {
+    const extra = got.have ? ` (have ${got.have.join(",")})` : "";
+    throw new Error(`${got.error}${extra}`);
+  }
+  await settleGarage(page, { frames: 12 });
+  return got.name;
 }
 
 async function main() {
   mkdirSync(outDir, { recursive: true });
   const srv = await startStaticServer(process.cwd());
-  // WITHOUT the backend args the canvas never initialises WebGL and every
-  // shot comes back a blank white rectangle — this box has no real GPU, so
-  // the software-GL flags are not optional here.
+  const t0 = Date.now();
   const browser = await launchChromium({ headless: true, args: chromiumArgsForBackend("webgl2") });
-  const page = await browser.newPage();
-  await page.setViewportSize({ width: vp[0], height: vp[1] });
-  await page.goto(srv.url, { waitUntil: "commit", timeout: 120000 });
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 120000 });
-  // Team selection is STORED and read when the garage opens, so it is set and
-  // the page reloaded — clicking through the team picker would be a second
-  // source of truth for which car this is.
-  const idx = await page.evaluate((t) => {
-    const i = Teams.LIST.findIndex((x) => x.id === t);
-    if (i >= 0) localStorage.setItem("apex26.team", String(i));
-    return i;
-  }, team);
-  if (idx < 0) throw new Error(`no team "${team}" in Teams.LIST`);
-  await page.reload({ waitUntil: "commit", timeout: 120000 });
-  await page.waitForFunction(() => window.__apex != null, null, { polling: 100, timeout: 120000 });
-  await page.evaluate(() => document.getElementById("mb-garage").click());
-  await page.waitForFunction(() => {
-    const el = document.getElementById("carsetup");
-    return el && !el.hidden;
-  }, null, { polling: 100, timeout: 60000 });
-  await sleep(1800);
-  const shown = await page.evaluate(() => {
-    const h = document.querySelector("#carsetup .sheet-head, #cs-inner .sheet-head");
-    return h ? h.textContent.trim().slice(0, 60) : null;
-  });
-  const shots = [];
-  for (const v of views) {
-    const s = await frame(page, v);
-    shots.push(s);
-    console.log(`shot ${s.view} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}`);
+  try {
+    const page = await browser.newPage();
+    await page.setViewportSize({ width: vp[0], height: vp[1] });
+    // Pin the INDEX before first paint — #mb-garage never re-reads the store.
+    await installProbeInit(page, { backend: "webgl2", team: teamIdx });
+    await gotoGame(page, srv.url, 120000);
+    // First paint already on the first --livery (or default).
+    await page.evaluate(({ t, liv }) => {
+      GameStore.store.set("livery." + t, liv);
+    }, { t: team, liv: liveries[0] });
+    await openGarage(page, { team });
+    const switched = await page.evaluate((id) => {
+      const t = Teams.LIST.find((x) => x.id === id);
+      if (!t) throw new Error("unknown team " + id);
+      const head = document.getElementById("cs-team");
+      if (head && head.textContent === t.name.toUpperCase()) return false;
+      document.querySelector('#cs-tabs [data-cs-cat="team"]')?.click();
+      document.getElementById("cs-team-card")?.click();
+      const tiles = document.querySelectorAll("#sel-teams .team-tile");
+      const i = Teams.LIST.indexOf(t);
+      if (!tiles[i]) throw new Error("no team tile for " + id);
+      tiles[i].click();
+      return true;
+    }, team);
+    if (switched) {
+      await page.waitForFunction(() => {
+        const tp = document.getElementById("teampicker");
+        return !tp || tp.hidden || getComputedStyle(tp).display === "none";
+      }, null, { polling: 100, timeout: 15000 }).catch(() => {});
+    }
+    await settleGarage(page, { frames: 12 });
+    const shown = await page.evaluate(() => {
+      const h = document.querySelector("#carsetup .sheet-head, #cs-inner .sheet-head");
+      return h ? h.textContent.trim().slice(0, 80) : null;
+    });
+    const teamLabel = await page.evaluate(() => document.getElementById("cs-team")?.textContent || "");
+    if (!teamLabel) throw new Error(`garage opened but #cs-team empty (sheet: ${shown})`);
+    console.log(`team sheet: ${teamLabel}  [switched=${switched}]`);
+
+    const shots = [];
+    const designs = spineSides.length
+      ? (spineLogos.length ? spineLogos : [""]).flatMap((logo) =>
+        spineSides.map((side) => ({ spineLogo: logo, spineSide: side })))
+      : null;
+    if (designs) {
+      for (const d of designs) {
+        const name = await applyDesign(page, d);
+        const tag = (d.spineLogo || "def") + "-" + d.spineSide;
+        for (const v of views) {
+          const s = await frame(page, tag, v);
+          s.liveryName = name;
+          s.spineLogo = d.spineLogo || null;
+          s.spineSide = d.spineSide;
+          shots.push(s);
+          console.log(`shot ${tag}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}`);
+        }
+      }
+    } else {
+      for (const liv of liveries) {
+        const name = await applyLivery(page, liv);
+        for (const v of views) {
+          const s = await frame(page, liv, v);
+          s.livery = liv;
+          s.liveryName = name;
+          shots.push(s);
+          console.log(`shot ${liv}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}`);
+        }
+      }
+    }
+    const meta = join(outDir, `${team}-angles.json`);
+    writeFileSync(meta, JSON.stringify({
+      team, teamIdx, liveries, spineSides, spineLogos,
+      zoom, pan: [strafe, dolly], sheetHead: shown, viewport: vp, views, shots,
+      seconds: +((Date.now() - t0) / 1000).toFixed(1),
+    }, null, 2));
+    console.log(`wrote ${shots.length} angle(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s + ${meta}  [sheet: ${shown}]`);
+  } finally {
+    await browser.close();
   }
-  const meta = join(outDir, `${team}-angles.json`);
-  writeFileSync(meta, JSON.stringify({ team, teamIdx: idx, sheetHead: shown, viewport: vp, shots }, null, 2));
-  console.log(`wrote ${shots.length} angle(s) + ${meta}  [sheet: ${shown}]`);
-  await browser.close();
 }
 
 main().then(() => shutdown()).catch((e) => { console.error(e); shutdown(); process.exit(1); });

@@ -71,6 +71,7 @@ function fakeSession() {
     synced: () => true,
     peerToLocal: (t) => t,
     localToPeer: (t) => t,
+    stats: () => ({}),
     close() { this.closed++; handlers.clear(); return true; },
     handlerCount() {
       let n = 0;
@@ -549,4 +550,37 @@ test("a peer WITHOUT a grid slot cannot arm the start", () => {
   seated.deliver("armed", {});
   assert.ok(G.netStart, "the SEATED peer's ARMED names the moment");
   assert.equal(seated.sent.filter((m) => m.t === "start").length, 1);
+});
+
+test("pickRemoteSlot keeps any-fallback only when profile is null", () => {
+  const src = fs.readFileSync(path.join(ROOT, "js/net/netplay.js"), "utf8");
+  assert.match(src, /lastSlotFallback = "profile-miss"/);
+  assert.match(src, /pickRemoteSlot\(null\) has always had the any-free-car/);
+
+  const tagged = (n) => {
+    const G = stubG(n);
+    const ids = ["mclaren", "ferrari", "redbull"];
+    for (let i = 1; i < G.cars.length; i++) {
+      G.cars[i].team = { id: ids[(i - 1) % ids.length] };
+      G.cars[i].seat = 0;
+    }
+    return G;
+  };
+
+  const Gany = tagged(4);
+  const netAny = NetPlay.create(Gany);
+  const ok = netAny.start({ role: "host", session: fakeSession() });
+  assert.equal(ok.ok, true, `null profile must still seat any free car: ${ok.error || ""}`);
+  assert.equal(netAny.status().slotFallback, "any");
+
+  const Gmiss = tagged(4);
+  const netMiss = NetPlay.create(Gmiss);
+  const miss = netMiss.start({
+    role: "host",
+    session: fakeSession(),
+    peerProfile: { team: "haas", driver: 0 },
+  });
+  assert.equal(miss.ok, false);
+  assert.equal(miss.error, "no_slot");
+  assert.equal(netMiss.status().slotFallback, "profile-miss");
 });

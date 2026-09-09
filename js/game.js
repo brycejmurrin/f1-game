@@ -471,6 +471,15 @@ function syncCustomTeam() {
   invalidateCustomMeshCache(playerBodies, playerBodyOrder);
   invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
 }
+// Another tab's customTeam write bumps store.rev (store.onForeignWrite) but
+// would leave Teams.LIST + mesh caches on the previous paint until the next
+// local cz-save. Re-inject whenever the foreign key (or a full clear) lands.
+if (store.subscribe) {
+  store.subscribe((change) => {
+    if (!change || !change.foreign) return;
+    if (change.clear || change.key === "customTeam") syncCustomTeam();
+  });
+}
 let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
 function storedTrackIndex() {
@@ -479,11 +488,22 @@ function storedTrackIndex() {
   return stable >= 0 ? stable : store.get("track", 0); // legacy positional save
 }
 let trackIdx = storedTrackIndex();
+function driverSeatCount(ti) {
+  const team = Teams.LIST[ti];
+  if (!team) return 1;
+  // MY TEAM career can seat two drivers while team.drivers is still length 1.
+  const seats = (typeof Career !== "undefined" && Career.gridDrivers)
+    ? Career.gridDrivers(team) : team.drivers;
+  return (seats && seats.length) || 1;
+}
+function clampDriverIdx() {
+  if (!(driverIdx >= 0 && driverIdx < driverSeatCount(teamIdx))) driverIdx = 0;
+}
 function restoreFreePlaySelection() {
   trackIdx = storedTrackIndex(); teamIdx = store.get("team", 2); driverIdx = store.get("driver", 0);
   if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
   if (!(teamIdx >= 0 && teamIdx < Teams.LIST.length)) teamIdx = 2;
-  if (!(driverIdx >= 0 && driverIdx < Teams.LIST[teamIdx].drivers.length)) driverIdx = 0;
+  clampDriverIdx();
 }
 let difficulty = store.get("difficulty", "normal");
 // RELIABILITY — "off" | "low" | "real" (js/race/reliability.js). A standing
@@ -1218,7 +1238,7 @@ let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
 let _cloudBase = 0.4;
 const teamMeshes = {}, teamMeshOrder = [];   // factory full mesh (shadows / ghost / glb)
 const teamBodies = {}, teamBodyOrder = [];   // factory body-only (visible AI — wheels drawn planted)
-const TEAM_MESH_CACHE_MAX = 24, DECAL_TEX_CACHE_MAX = 48;   // > the concurrently drawn set, or eviction thrashes rebuilds
+const TEAM_MESH_CACHE_MAX = 40, DECAL_TEX_CACHE_MAX = 48;   // 12 teams × (2 painted + 1 :sh) = 36; headroom for ghost/custom. Was 48 while seat-keyed :sh briefly doubled casters.
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
@@ -1523,8 +1543,9 @@ const _smpRoad = { p: [0, 0, 0], t: [0, 0, 1], r: [1, 0, 0], hw: 7 };   // its o
 const _camUp = [0, 0, 0];   // scratch camera up-vector (rebuilt each render frame)
 const _upX = [1, 0, 0], _upY = [0, 1, 0];   // shadow-basis up choices (read-only)
 // lookAtTo() eye/target scratches — it reads all three vectors synchronously
-// and retains none. CULL_NO_UPLOAD: constant opts TLX/WGX read, GLX ignores.
-const _shEye = [0, 0, 0], _flEye = [0, 0, 0], _flTgt = [0, 0, 0];
+// and retains none. CULL_NO_UPLOAD: shadow cull packs to a second buffer
+// (GLX shadowIbo / WGX shadowInstBuf / TLX CPU pack) — camera ibo untouched.
+const _shEye = [0, 0, 0], _shCtr = [0, 0, 0], _flEye = [0, 0, 0], _flTgt = [0, 0, 0];
 const CULL_NO_UPLOAD = { upload: false };
 let _shadowSnapX = null, _shadowSnapZ = null, _shadowBox = null;
 let _shadowSunX = null, _shadowSunY = null, _shadowSunZ = null;
@@ -1602,7 +1623,8 @@ function resolveLivery(team) {
              logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null,
              finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null,
              tcam: l.tcam || null, coverVents: l.coverVents || null, spineHeight: l.spineHeight || null,
-             spineSide: l.spineSide || null, rearWing: l.rearWing || null, wingCarbon: l.wingCarbon || null, cover: l.cover || null };
+             spineSide: l.spineSide || null, rearWing: l.rearWing || null, wingCarbon: l.wingCarbon || null, cover: l.cover || null,
+             spineTint: l.spineTint || null, sideTint: l.sideTint || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1615,13 +1637,16 @@ function resolveLivery(team) {
   const liv = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
   // Optional livery detail colours (nose cap, sidepod panel, wing flaps, halo tint)
   // — additive, so an unmodified livery still resolves to today's exact object shape.
+  // spineTint / sideTint: Aston's dark crown band (and any SPINE SIDE band) —
+  // omitting them made resolveLivery drop authored tints and fall back to stripe.
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
                       logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null,
                       finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null,
                       tcam: liv.tcam || null, coverVents: liv.coverVents || null, spineHeight: liv.spineHeight || null,
-                      spineSide: liv.spineSide || null, rearWing: liv.rearWing || null, wingCarbon: liv.wingCarbon || null, cover: liv.cover || null }
+                      spineSide: liv.spineSide || null, rearWing: liv.rearWing || null, wingCarbon: liv.wingCarbon || null, cover: liv.cover || null,
+                      spineTint: liv.spineTint || null, sideTint: liv.sideTint || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -2176,16 +2201,22 @@ function teamMeshKey(team) {
   _teamMeshKeyCache.set(team.id, { val, rev: store.rev });
   return val;
 }
-// KEYED PER DRIVER, not per team: the helmet is the design for opts.num, and
-// both of a team's cars were handed drivers[0] — 22 cars, 11 helmets, each pair
-// identical, which is the defect helmets.js exists to fix reintroduced one
-// level up. carDecalNum already resolves this for the number atlas. A caller
-// with no car (the shadow casts, silhouette only) still shares one per team.
-function teamMesh(team, car) {
+// Painted full meshes are KEYED PER DRIVER (helmet design is opts.num). Shadow
+// casters pass silhouette:true — depth cannot see paint, and Car3D already
+// drops paint-edge splits + in-tub torso on that path, so both seats of a team
+// build bit-identical casters. Sharing one ":sh" per team(+parts) halves
+// shadow-mesh residency (22 → 11) with no depth change; seat stays on the
+// painted key only.
+function teamMesh(team, car, silhouette) {
+  const sil = silhouette === true || (car == null && silhouette !== false);
+  if (sil) {
+    return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":sh",
+      () => gfx.createMesh(buildCarData(team, { num: carDecalNum(team, car), silhouette: true })),
+      TEAM_MESH_CACHE_MAX);
+  }
   const num = carDecalNum(team, car);
-  const sil = !car;   // no car = shadow caster; paint-edge splits are wasted in a depth map
-  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":" + num + (sil ? ":sh" : ""),
-    () => gfx.createMesh(buildCarData(team, { num, silhouette: sil })), TEAM_MESH_CACHE_MAX);
+  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":" + num,
+    () => gfx.createMesh(buildCarData(team, { num })), TEAM_MESH_CACHE_MAX);
 }
 function teamBodyMesh(team, car) {
   return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKey(team) + ":" + carDecalNum(team, car), () => gfx.createMesh(buildCarData(team, { noWheels: true, num: carDecalNum(team, car) })), TEAM_MESH_CACHE_MAX);
@@ -2447,14 +2478,15 @@ function currentCarGroundMat(c, out, dt) {
 // the driver helmet the camera sits inside. Cached per team like playerBodies.
 const cockpitBodies = {};
 const cockpitBodyOrder = [];
-function cockpitBodyMesh(team) {
+function cockpitBodyMesh(team, car) {
   // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
   // is always this team's key — no per-frame partsVisualKey() rebuild.
-  const key = team.id + ":" + playerVisualKey + (CockpitOpts.halo() ? ":H" : "");   // halo keys the cache: toggling rebuilds, no reload
+  const num = carDecalNum(team, car);
+  const key = team.id + ":" + playerVisualKey + (CockpitOpts.halo() ? ":H" : "") + ":" + num;   // halo keys the cache: toggling rebuilds, no reload
   return putBoundedMesh(cockpitBodies, cockpitBodyOrder, key, () => {
     const liv = resolveLivery(team);
     return gfx.createMesh(Car3D.build(liv.c1, liv.c2,
-      { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, halo: CockpitOpts.halo(), num: team.drivers && team.drivers[0] && team.drivers[0].num,
+      { livery: liv, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, halo: CockpitOpts.halo(), num,
         parts: Parts.getVisualTiers(getTeamParts(team.id), team) }));
   }, COCKPIT_BODY_CACHE_MAX);
 }
@@ -2480,7 +2512,7 @@ function drawCockpitRig(c, base, dt, paint) {
   // forward of their real physics position so they read further out ahead of
   // the driver instead of hugging the cockpit edge (cosmetic-only offset —
   // the actual wheel/contact-patch physics is untouched).
-  gfx.draw(cockpitBodyMesh(c.team), base, paint);
+  gfx.draw(cockpitBodyMesh(c.team, c), base, paint);
   // The cockpit body includes the FRONT wing, whose top elements are active
   // aero and therefore not baked into it — draw them, or the driver looks out
   // over a wing that is missing its flaps. The rear assembly is not part of
@@ -2596,10 +2628,9 @@ function getPlayerWheelMeshes() {
 // planted spinning pair, not glued to the chassis. Own cache so garage swaps
 // cannot evict the field (WHEEL_MESH_CACHE_MAX is a player-parts bound).
 const fieldWheelCache = {};
-// UNBOUNDED AND NEVER FREED until this order array existed — the one GPU cache
-// in the tree with no cap, no LRU and no free path, while its sibling two
-// functions up is putBoundedMesh'd with freeWheelPair. Each entry is FOUR
-// meshes (F/R rotating + F/R fixed) = 12 GL objects and ~205 KB of buffers.
+// putBoundedMesh + freeWheelPair: hit promotion so a still-drawn combo is not
+// FIFO-evicted while a new career R&D key walks in. Each entry is FOUR meshes
+// (F/R rotating + F/R fixed) = 12 GL objects and ~205 KB of buffers.
 //
 // The key is the team's FITTED tyre:brake:wheel ids, so in career/MyTeam the AI
 // teams' parts change as the season's R&D lands and fresh keys keep appearing
@@ -2615,35 +2646,27 @@ const FIELD_WHEEL_CACHE_MAX = 12;
 function getFieldWheelMeshes(team) {
   const vt = teamDecalState(team, false).parts;   // permanently cached factory resolve — was ~1260 resolveSetup/s across the drawn field
   const key = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1");
-  let mesh = fieldWheelCache[key];
-  if (mesh) return mesh;
-  const tyre = vt._visual && vt._visual.tyres;
-  const brake = vt._visual && vt._visual.brakes;
-  const wheel = vt._visual && vt._visual.wheels;
-  const band = (tyre && tyre.band) || Car3D.TYRE_BAND[vt.tyres] || Car3D.TYRE_BAND[1];
-  const caliper = brake ? brake.cal : Car3D.BRAKE_CALIPER[vt.brakes];
-  const rim = brake && brake.rim;
-  const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel);
-  const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel);
-  // A MARKER, not behaviour (Car3D.build's `field` opt is the same idea): this
-  // cache and getPlayerWheelMeshes() call buildWheelLayers identically, so a
-  // mesh probe cannot otherwise tell a FIELD pair from a PLAYER one, and
-  // parts-mesh-cache.spec.js was measuring the sum of two separate bounds.
-  front.rotating._field = front.fixed._field = rear.rotating._field = rear.fixed._field = true;
-  mesh = {
-    F: gfx.createMesh(front.rotating),
-    R: gfx.createMesh(rear.rotating),
-    FFixed: gfx.createMesh(front.fixed),
-    RFixed: gfx.createMesh(rear.fixed),
-  };
-  fieldWheelCache[key] = mesh;
-  fieldWheelOrder.push(key);
-  while (fieldWheelOrder.length > FIELD_WHEEL_CACHE_MAX) {
-    const old = fieldWheelOrder.shift(), victim = fieldWheelCache[old];
-    delete fieldWheelCache[old];
-    freeWheelPair(victim);   // the same freer the player-parts cache uses
-  }
-  return mesh;
+  return putBoundedMesh(fieldWheelCache, fieldWheelOrder, key, () => {
+    const tyre = vt._visual && vt._visual.tyres;
+    const brake = vt._visual && vt._visual.brakes;
+    const wheel = vt._visual && vt._visual.wheels;
+    const band = (tyre && tyre.band) || Car3D.TYRE_BAND[vt.tyres] || Car3D.TYRE_BAND[1];
+    const caliper = brake ? brake.cal : Car3D.BRAKE_CALIPER[vt.brakes];
+    const rim = brake && brake.rim;
+    const front = Car3D.buildWheelLayers(0.32, band, caliper, rim, false, tyre, brake, wheel);
+    const rear = Car3D.buildWheelLayers(0.38, band, caliper, rim, false, tyre, brake, wheel);
+    // A MARKER, not behaviour (Car3D.build's `field` opt is the same idea): this
+    // cache and getPlayerWheelMeshes() call buildWheelLayers identically, so a
+    // mesh probe cannot otherwise tell a FIELD pair from a PLAYER one, and
+    // parts-mesh-cache.spec.js was measuring the sum of two separate bounds.
+    front.rotating._field = front.fixed._field = rear.rotating._field = rear.fixed._field = true;
+    return {
+      F: gfx.createMesh(front.rotating),
+      R: gfx.createMesh(rear.rotating),
+      FFixed: gfx.createMesh(front.fixed),
+      RFixed: gfx.createMesh(rear.fixed),
+    };
+  }, FIELD_WHEEL_CACHE_MAX, freeWheelPair);
 }
 function drawPlayerWheels(c, base, dt, opt, frontsOnly, fwdOffset, wScale) {
   const wm = c.isPlayer ? getPlayerWheelMeshes() : getFieldWheelMeshes(c.team);
@@ -2748,6 +2771,10 @@ async function loadCarModel(url) {
     for (const k in wheelMeshCache) { freeWheelPair(wheelMeshCache[k]); delete wheelMeshCache[k]; }
     wheelMeshOrder.length = 0;
     for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
+    // Same putBoundedMesh contract as wheelMeshOrder: clearing the cache without
+    // the order array leaves stale keys queued, so the next eviction can free a
+    // live field-wheel mesh while a dead key still occupies a slot.
+    fieldWheelOrder.length = 0;
     return true;
   } catch (e) { return false; }
 }
@@ -3316,6 +3343,10 @@ function endRace(forcedOrder) {
   if (els.btnCam) els.btnCam.hidden = true;
   showTouchControls(false);
   GameAudio.stopEngine(); GameAudio.setSkid(0); GameAudio.stopRain();
+  // quitToMenu clears the 2D rain overlay; endRace must too — otherwise
+  // rainDraw keeps stroking every present on the results sheet (audio alone
+  // stopped). Particles.rainActive() is the overlay gate, not the audio flag.
+  Particles.rainShow(false);
   if (soundOn) GameAudio.finish();
   // Qualifying ends in its own sheet: the player's flying lap is measured
   // against the simulated field and becomes the grid. Mirrors the TT return
@@ -6208,7 +6239,7 @@ function updateCar(c, dt, ranked) {
     // ordinary run-off speeds and a driver in full control is teleported to
     // x = 0 after 3 s. Both are precisely the bugs this comment says were
     // fixed, reintroduced through the OVERALL SPEED slider.
-    const beached = c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5;
+    const beached = c.offroad && c.speed < GRASS_V * 0.6 * Math.max(PACE, 0.05) + 1.5 * Math.max(PACE, 0.05);
     const stuck = beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack;
     // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
     // stuck conditions. Only applies once a rescue has actually happened —
@@ -6706,12 +6737,19 @@ let _spMesh = null, _spMeshKey = "", _spHull = null;
 const SP_HULL_GEOM_FIELDS = ["stripe", "noseStripe", "nose", "pod", "finShape", "coverVents", "spineHeight", "spineSide"];
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 function spMeshBust() { _spMeshKey = ""; GarageScene.dropPreviewMeshes(); }
+function garageSeat() {
+  const team = Teams.LIST[teamIdx];
+  const seats = (typeof Career !== "undefined" && Career.gridDrivers)
+    ? (Career.gridDrivers(team) || team.drivers) : team.drivers;
+  return (seats && seats[driverIdx]) || (seats && seats[0]) || null;
+}
 function getSetupPreviewMesh() {
   const team = Teams.LIST[teamIdx];
   // driverIdx, not drivers[0]: the turntable shows YOUR car, so it wears the
   // helmet of the seat you picked. In the key too, or switching seats keeps
-  // the mesh you were already looking at.
-  const seat = (team.drivers && team.drivers[driverIdx]) || (team.drivers && team.drivers[0]);
+  // the mesh you were already looking at. Career.gridDrivers() is the MY TEAM
+  // pair when a second driver is hired.
+  const seat = garageSeat();
   const key = team.id + ":" + partsVisualKey(team.id) + ":" + (seat && seat.num);
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
@@ -6879,8 +6917,9 @@ function renderSetupPreview(dt) {
   // `night` here means "the sun is not the key" — which in a garage it is not.
   // The decal shader is sun + ambient + glow only, so without this the liveries'
   // logos and numbers would darken with the skylight and nothing would lift them.
+  const gSeat = garageSeat();
   drawCarDecals(Teams.LIST[teamIdx], MAT_REFLECT_X, true,
-    carDecalNum(Teams.LIST[teamIdx], null), false, true);
+    (gSeat && gSeat.num) || carDecalNum(Teams.LIST[teamIdx], null), false, true);
   // AFTER the car: glare billboards are additive with depth-write off, so drawn
   // any earlier the opaque car would paint straight over them — and at high
   // elevation the ceiling fixtures sit between the eye and the car.
@@ -6964,10 +7003,38 @@ function _castPropBatchesShadow() {
     ? gfx.makeFrustumPlanes(gfx.shadowCullVP, _pbPlanes) : null;
   for (let i = 0; i < _pb.length; i++) {
     if (planes && gfx.cullInstances) {
-      // TLX: CPU-pack only (own shadow mesh). GLX/WGX ignore the 3rd arg.
+      // upload:false → shadow pack only. WGX/GLX use a second instance buffer;
+      // TLX packs CPU-side into a second InstancedMesh. Camera ibo/cache stay.
       gfx.castShadowInstanced(_pb[i], gfx.cullInstances(_pb[i], planes, CULL_NO_UPLOAD));
     } else gfx.castShadowInstanced(_pb[i]);
   }
+}
+// Shadow-ribbon cast — hoisted so a sun recentre does not allocate a closure
+// (PERF-FINDINGS §2y). Same body the rebuild used to close over each snap.
+function _castRibbonSh(geo, key, plain, allow = true) {
+  if (track.meshes[key] === undefined) {
+    track.meshes[key] = null;
+    // TIER GATE. Tracks.build() only chunks the ribbons when
+    // PerfGov.tier() < 3; above that it writes the FUSED mesh and leaves
+    // roadChunked/terrainChunked undefined. This lazy build then made a
+    // SECOND GPU copy of road and terrain anyway — measured +2.78 MiB
+    // median, +3.81 on spa — on precisely the devices that had already
+    // been told to spend less: tier() is max(crash-strike floor, the
+    // player's GRAPHICS preset, the governor's own shed), so a phone that
+    // has been killed twice and a player who picked LOW both silently paid
+    // for a duplicate.
+    //
+    // Falling through leaves the key null and the branch below casts the
+    // fused mesh instead, which is what the tier asked for.
+    const tierOk = typeof PerfGov === "undefined" || PerfGov.tier() < 3;
+    if (allow && tierOk && geo && gfx.createChunkedMesh) {
+      geo._keepPositions = true;
+      track.meshes[key] = gfx.createChunkedMesh(geo, 72);
+    }
+  }
+  const ch = track.meshes[key];
+  if (ch && ch.chunks) gfx.castShadowChunked(ch, MAT_IDENT);
+  else gfx.castShadow(plain, MAT_IDENT);
 }
 function drawWorldMeshes(frame, night, wet, floodEmit, withGlow) {
   // Base floor first (under everything) — fills the void on street circuits (no
@@ -7113,11 +7180,20 @@ function render(dt) {
   const menuBlank = state === "menu" && !setupPreviewOn && (!track || _rsEl.hidden);
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
+  // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
+  // its visibility in lockstep with #game or a blank menu still shows the last blit.
+  const softEl = document.getElementById("game-soft");
+  if (softEl && softEl.style.visibility !== vis) softEl.style.visibility = vis;
   // A freshly pre-built world draws its first frames HIDDEN (scheduleFlybyTrack
   // owes them): shaders, textures and shadow maps warm up under the picker, not
   // in front of the player the instant race settings opens.
   if (menuBlank && !(track && _menuGate.warm > 0)) return;
   if (menuBlank) _menuGate.warm--;
+  // RESULTS: physics and PerfGov already stop; the sheet is translucent over
+  // #game by design (tokens.css). Re-drawing an identical frozen world every
+  // frame (env probe, shadows, rain, debris upload) was unpaid work — keep the
+  // last race present and return. Race-settings flyby and live race still draw.
+  if (state === "results") return;
   if (setupPreviewOn) { renderSetupPreview(dt); return; }
   gfx.resize();
   // No track yet (the menus build none — the flyby belongs to RACE SETTINGS, see
@@ -7537,7 +7613,9 @@ function render(dt) {
       const wx = xx * lu + yx * lv + zx * lw;
       const wy = xy * lu + yy * lv + zy * lw;
       const wz = xz * lu + yz * lv + zz * lw;
-      M4.lookAtTo(_mLView, [wx + sd[0] * 150, wy + sd[1] * 150, wz + sd[2] * 150], [wx, wy, wz], up);
+      _shEye[0] = wx + sd[0] * 150; _shEye[1] = wy + sd[1] * 150; _shEye[2] = wz + sd[2] * 150;
+      _shCtr[0] = wx; _shCtr[1] = wy; _shCtr[2] = wz;
+      M4.lookAtTo(_mLView, _shEye, _shCtr, up);
       // Half-size box (default ±80 m / 160 m) snapped around the anchor;
       // sampleShadow fades shadows out by ANCHOR distance (uShadowCtr) well
       // inside its border. Bigger = more reach, smaller = crisper contacts
@@ -7549,31 +7627,6 @@ function render(dt) {
       // (castShadowChunked). PERF-FINDINGS: ~89% of tris sit outside the box;
       // depth half is bit-identical. Independent of LT.roadChunkLamps (lit pass).
       // Lazy-build shares roadChunked with the lamp draw path.
-      const _castRibbonSh = (geo, key, plain, allow = true) => {
-        if (track.meshes[key] === undefined) {
-          track.meshes[key] = null;
-          // TIER GATE. Tracks.build() only chunks the ribbons when
-          // PerfGov.tier() < 3; above that it writes the FUSED mesh and leaves
-          // roadChunked/terrainChunked undefined. This lazy build then made a
-          // SECOND GPU copy of road and terrain anyway — measured +2.78 MiB
-          // median, +3.81 on spa — on precisely the devices that had already
-          // been told to spend less: tier() is max(crash-strike floor, the
-          // player's GRAPHICS preset, the governor's own shed), so a phone that
-          // has been killed twice and a player who picked LOW both silently paid
-          // for a duplicate.
-          //
-          // Falling through leaves the key null and the branch below casts the
-          // fused mesh instead, which is what the tier asked for.
-          const tierOk = typeof PerfGov === "undefined" || PerfGov.tier() < 3;
-          if (allow && tierOk && geo && gfx.createChunkedMesh) {
-            geo._keepPositions = true;
-            track.meshes[key] = gfx.createChunkedMesh(geo, 72);
-          }
-        }
-        const ch = track.meshes[key];
-        if (ch && ch.chunks) gfx.castShadowChunked(ch, MAT_IDENT);
-        else gfx.castShadow(plain, MAT_IDENT);
-      };
       _castRibbonSh(track.terrainGeo, "terrainChunked", track.meshes.terrain);
       _castRibbonSh(track.roadGeo, "roadChunked", track.meshes.road, gfx.chunkedTrackCoords !== false);
       // Perf: skip casting the (heavy, up to ~5 M-vert) props/city into the shadow
@@ -7650,7 +7703,7 @@ function render(dt) {
         // (uCarBiasScale, applied in lit.js). cBox/42 == 1 at the default, matching the
         // originally-tuned bias exactly.
         gfx.carShadowBegin(_mCVP, cBox / 42);
-        if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
+        if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team, player, true), _livePlayerShadowMat);
         // Skip casters that CANNOT reach the shadow volume. gfx.castShadow does
         // no culling of its own (js/render/glx/shadow.js): it binds the VAO,
         // uploads uModel and draws, ~22k verts per silhouette car (wheels +
@@ -7673,7 +7726,7 @@ function render(dt) {
           const _sm2 = _shadowMats[i];
           const _sdx = _sm2[12] - _shadowCtr[0], _sdz = _sm2[14] - _shadowCtr[2];
           if (_sdx * _sdx + _sdz * _sdz > _csR2) continue;
-          if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+          if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
         }
         gfx.carShadowEnd();
       }
@@ -8052,7 +8105,7 @@ function render(dt) {
         M4.perspectiveTo(_mFlProj, fov, 1, 2.5, Math.max(rad, 10));
         M4.mulTo(_mFlVP, _mFlProj, _mFlView);
         gfx.lampShadowBegin(_mFlVP, flBest);
-        if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
+        if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team, player, true), _livePlayerShadowMat);
         // Distance-cull the casters, the twin of the sun pass's _csR above — the
         // comment there notes the field pays the caster cost TWICE at night, and
         // this is the second half. Only 1-3 cars are ever under a lamp, so this
@@ -8073,7 +8126,7 @@ function render(dt) {
           const _lm = _shadowMats[i];
           const _ldx = _lm[12] - L[o], _ldy = _lm[13] - L[o + 1], _ldz = _lm[14] - L[o + 2];
           if (_ldx * _ldx + _ldy * _ldy + _ldz * _ldz > _lsR2) continue;
-          if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i]), _shadowMats[i]);
+          if (_shadowCars[i] !== player) gfx.castShadow(teamMesh(_shadowTeams[i], _shadowCars[i], true), _shadowMats[i]);
         }
         gfx.castShadowChunked(track.meshes.props, MAT_IDENT);
         // Lamp pass: cull against the lamp perspective frustum (castCullVP).
@@ -8135,7 +8188,9 @@ function render(dt) {
   // park() freezes physics for shots/tests — then one face per frame so a
   // parked M9 cube goes ready in 6 presents, not 24 (SwiftShader is
   // seconds-per-frame).
-  if (player && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
+  // Live race/count only — results freezes above; menu flyby has no player car
+  // paint that needs a probe, and a mid-results probe was a whole-world redraw.
+  if (player && (state === "race" || state === "count") && !_envProbeOff && PerfGov.tier() < 1 && !paused && !dbgCam && (frozen || (_frameNo & 3) === 0) && gfx.envFaceBegin && LT.carEnvCube > 0.001 && !hideMeshes.cars) {
     _envFace = (_envFace + 1) % 6;
     Tracks.sample(track, player.s, smp2);
     const _pex = smp2.p[0] + smp2.r[0] * player.x,
@@ -9817,11 +9872,15 @@ $("cz-save").onclick = () => {
       num: clamp(parseInt($("cz-num").value, 10) || 99, 0, 99),
     }],
   };
-  // Optional extra paint -> ct.livery (only the fields that aren't NONE).
-  const liv = {};
+  // Keep structural MY TEAM livery (finShape / spine*) from the previous save
+  // (or DEFAULT_CUSTOM) — this dialog only edits colour slots + finish. A bare
+  // colour-only object used to wipe finShape "none" and regrow the shark fin.
+  const liv = Object.assign({}, DEFAULT_CUSTOM.livery || {}, (prev && prev.livery) || {});
+  for (const [, key] of CZ_LIV_FIELDS) delete liv[key];
+  delete liv.finish;
   CZ_LIV_FIELDS.forEach(([domId, key]) => { if (!$(domId).classList.contains("cz-off")) liv[key] = hexToRgb($(domId).value); });
   if (czFinish && czFinish !== "gloss") liv.finish = czFinish;
-  if (Object.keys(liv).length) ct.livery = liv;
+  ct.livery = liv;
   store.set("customTeam", ct);
   syncCustomTeam();
   teamIdx = Teams.LIST.findIndex((t) => t.id === "custom");
@@ -10166,7 +10225,7 @@ if (typeof LiveryTex !== "undefined" && LiveryTex.onMarkChange) {
 syncCustomTeam();   // inject "MY TEAM" so saved selections and chips resolve
 migrateSeasonPoints();
 if (teamIdx < 0 || teamIdx >= Teams.LIST.length) teamIdx = 2;
-if (driverIdx < 0 || driverIdx >= Teams.LIST[teamIdx].drivers.length) driverIdx = 0;
+clampDriverIdx();
 // Clamp a legacy positional selection before migrating it to stable identity.
 if (!(trackIdx >= 0 && trackIdx < Tracks.LIST.length)) trackIdx = 0;
 // Stable ID is authoritative; keep the legacy index for an older cached build.
@@ -10176,6 +10235,7 @@ if (Tracks.LIST[trackIdx]) {
 { const hasSeason = SeasonCal.hasProgress(season) && season.round < SeasonCal.rounds();
   $("mb-standings").hidden = !hasSeason; }
 Career.load();            // resolve + migrate the career save once at boot
+clampDriverIdx();         // MY TEAM gridDrivers() is 2 after load; team.drivers may still be 1
 refreshCareerButton();
 // `state` is closure-local, and js/ui/layers.js is what decides whether
 // Escape means PAUSE or BACK — hand it the answer rather than have it guess one

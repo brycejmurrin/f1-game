@@ -136,8 +136,8 @@ test("TLX post fallback invalidates reads and disposes the retained chain", () =
   assert.match(read("js/render/three/tsl-post.js"), /ctx\.trackMaterial\(m\)/);
 });
 
-test("TLX and WGX remove timed-out software-present waiters", () => {
-  for (const file of ["js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
+test("TLX, WGX, and GLX remove timed-out software-present waiters", () => {
+  for (const file of ["js/render/three/tlx.js", "js/render/webgpu/wgx.js", "js/render/glx/glx.js"]) {
     const src = read(file);
     const at = src.indexOf("awaitSoftPresent(timeoutMs)");
     assert.ok(at >= 0, file + " exposes awaitSoftPresent");
@@ -147,6 +147,23 @@ test("TLX and WGX remove timed-out software-present waiters", () => {
     assert.match(body, /_softPresentWaiters\.splice\(i, 1\)/);
     assert.match(body, /_softPresentWaiters\.push\(waiter\)/);
   }
+});
+
+test("GLX/TLX re-queue waiters whose predicate has not fired", () => {
+  for (const file of ["js/render/glx/glx.js", "js/render/three/tlx.js", "js/render/webgpu/wgx.js"]) {
+    const src = read(file);
+    assert.match(src, /const keep = \[\]/, file + " must keep waiters whose callback returns false");
+    assert.match(src, /keep\.push\(ws\[i\]\)/);
+  }
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /invalidateSoftPresent\(\) \{ _cancelSoftBlits\(\); \}/);
+  const glx = read("js/render/glx/glx.js");
+  const glxAwait = glx.slice(glx.indexOf("function awaitSoftPresent"), glx.indexOf("function init(canvasEl)"));
+  assert.match(glxAwait, /no display ctx/);
+  assert.match(glxAwait, /return true;/);
+  assert.match(glxAwait, /return false;/);
+  const tlxAwait = tlx.slice(tlx.indexOf("awaitSoftPresent(timeoutMs)"), tlx.indexOf("invalidateSoftPresent()"));
+  assert.match(tlxAwait, /no display ctx/);
 });
 
 test("WGX soft present permits one staging read and drops pre-resize pixels", () => {
@@ -161,7 +178,8 @@ test("WGX soft present permits one staging read and drops pre-resize pixels", ()
   assert.match(resize, /if \(sizeChanged\) \{\s*_cssApplying = true;/);
   assert.match(resize, /_softDisplayEpoch\+\+/);
   assert.match(src, /if \(!_cssApplying\) _cssDirty = true/);
-  assert.match(resize, /Math\.abs\(w - width\) <= 1 && Math\.abs\(h - height\) <= 1/);
+  // Size split: present jitter uses pw/ph vs presentW/H; render jitter uses rw/rh vs width/height.
+  assert.match(resize, /Math\.abs\(r?w - width\) <= 1 && Math\.abs\(r?h - height\) <= 1/);
 });
 
 test("WGX and TLX distrust the CSS-size cache after a viewport change", () => {

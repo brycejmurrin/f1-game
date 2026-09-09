@@ -59,16 +59,20 @@ const SettingsNav = (function () {
       return true;
     }
 
-    document.getElementById("pm-open-controls").onclick = () => {
+    const openControls = document.getElementById("pm-open-controls");
+    if (openControls) openControls.onclick = () => {
       show("controls", false); if (onSelect) onSelect("controls");
     };
-    document.getElementById("pm-open-display").onclick = () => {
+    const openDisplay = document.getElementById("pm-open-display");
+    if (openDisplay) openDisplay.onclick = () => {
       show("display", false); if (onSelect) onSelect("display");
     };
-    document.getElementById("pm-advanced").onclick = () => {
+    const openAdvanced = document.getElementById("pm-advanced");
+    if (openAdvanced) openAdvanced.onclick = () => {
       show("advanced", false); if (onSelect) onSelect("advanced");
     };
-    document.getElementById("pm-audio").onclick = () => {
+    const openAudio = document.getElementById("pm-audio");
+    if (openAudio) openAudio.onclick = () => {
       show("audio", false); if (onSelect) onSelect("audio");
     };
     show("home", false);

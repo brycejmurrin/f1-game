@@ -93,6 +93,14 @@ test("gfx-probe --tlx-webgpu unpins TLX ForceGL and --lavapipe uses the Lavapipe
     "--tlx-webgpu must wait on GLX.awaitSoftPresent like the WGX path");
   assert.doesNotMatch(src, /no TLX soft-present/,
     "do not excuse a black TLX WebGPU #game — soft-present is the gate");
+  assert.doesNotMatch(src, /page\.locator\("#game"\)\.screenshot/,
+    "GLX HeadlessChrome canvas.png must not screenshot opacity-0 #game");
+  assert.match(src, /getElementById\("game-soft"\) \|\| document\.getElementById\("game"\)/,
+    "both present paths dump the overlay when it exists");
+  const probe = fs.readFileSync(path.join(ROOT, "tools/capture/probe-page.mjs"), "utf8");
+  assert.match(probe, /export async function presentedCanvasClip/);
+  assert.match(probe, /getElementById\("game-soft"\)/,
+    "probe-page clip prefers the overlay the compositor shows");
 });
 
 test("mcp-cli exits non-zero when an MCP tool returns isError", () => {

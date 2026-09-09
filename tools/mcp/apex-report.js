@@ -14,8 +14,9 @@
  *
  * 1. A canvas readback from a console command measures the CLEAR, not the
  *    frame. The drawing buffer is cleared after compositing unless
- *    preserveDrawingBuffer, which this game does not set, so by the time a
- *    typed command runs the frame is gone. Useful for a canvas-CONFIG question
+ *    preserveDrawingBuffer (HeadlessChrome soft-present sets it; headed play
+ *    usually does not), so by the time a typed command runs the frame is often
+ *    gone. Useful for a canvas-CONFIG question
  *    (an alpha canvas clears to 0, an opaque one to 255) and useless for "what
  *    did the game actually paint". So we do both, labelled: clearAlpha for the
  *    config, frameAlpha for the content.

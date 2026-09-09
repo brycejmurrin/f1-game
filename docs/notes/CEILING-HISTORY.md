@@ -2551,6 +2551,39 @@ headroom.
   cache in the tree with no cap, no LRU and no free path until recently, and
   this owner has had iOS memory kills.
 
+- `js/game.js` lines 10319 -> **10336** (+17), codeLines 5581 -> **5585** (+4);
+  `js/render/glx/glx.js` lines 2357 -> **2421** (+64) (2026-09-09): FPS carve —
+  results freeze + rain/`endRace` cleanup + env-probe race|count gate + GLX
+  `upload:false` dual buffer (match WGX). The game.js bump is the results
+  early-return, `Particles.rainShow(false)` in `endRace`, the env-probe state
+  gate, and hoisting `_castRibbonSh` / `_shCtr` so a sun recentre stops
+  allocating a closure and two lookAt literals. The GLX bump is the real cost:
+  `cullInstances` now takes `opts`, packs light-culled instances to
+  `shadowIbo`/`_shadowPacked`, and leaves the camera ibo + cell-set cache
+  alone — the same class WGX fixed on 2026-09-02. `shadow.js` rebinds the VAO
+  to `shadowIbo` for the light-culled draw and restores the camera buffers
+  after. Without the second buffer, `upload:false` cannot save a camera
+  re-upload on GLX (one `ibo` only). Canaries pin both halves.
+
+## 2026-09-09 — GLX SGSR1 spatial-upscale spike
+
+- `js/render/glx/glx.js` lines 2421 -> **2452** (+31); `js/agent/apex.js` lines 2751 -> **2764** (+13), codeLines 2032 -> **2040** (+8); `js/agent/agentview.js` lines 2452 -> **2455** (+3): render/present size split behind `apex26.spatialUpscale` (OFF by default), `__apex.spatialUpscale`, agentHelp know entry. Scene FBOs stay at `×renderScale`; canvas is present size when the flag is on, scale < ~1, and SGSR linked (`PST.spatialOk`). Post chain + SGSR_FS live in `post.js` / `glsl-post.js` (not ratchet-capped). See `docs/research/UPSCALING-2026-09.md` §6.
+## 2026-09-09 — cssClasses 545 -> 546
+
+One class, `.cs-liv-ed-sec`: the zone headings that group the paint editor's
+colour rows (BODY / ENGINE COVER / WINGS & TAIL / TEAM MARK / COCKPIT). The
+sheet reached twenty-three colour rows when the five formerly-derived surfaces
+became picks, and a flat run that long stops being a list — "which of these is
+the one on the cover crown?" should be answered by the order, not by hovering
+every row for its tooltip.
+
+Reusing `.cs-liv-ed-row` was tried first and does not work: a heading needs the
+full grid width, and `.cs-liv-ed-lbl` is `flex: 0 0 68px`, so "ENGINE COVER"
+clips. The heading also carries a rule and spans `1 / -1` so it can never share
+a line with a row — neither is expressible with the row classes.
+
+The element is inert by construction: `role="presentation"`, no focus, no
+pointer target. It changes the reading of the sheet and nothing else.
 ## 2026-09-09 — shadow casters drop helmet paint-splits
 
 `js/game.js` 10322 -> **10328** lines / 5581 -> **5585** code; `js/car/car3d.js`
@@ -2564,3 +2597,80 @@ on `opts.silhouette` brings the default caster to 7948 tris / 21974 verts
 (`silhouette: !car`, a distinct `:sh` cache key so a ghost cannot inherit the
 cheap lid) and the `sil` branch in car3d; helmets.js grew comments only.
 
+## 2026-09-09 — GLX HeadlessChrome soft-present
+
+`js/render/glx/glx.js` lines 2357 -> **2482** (+125). HeadlessChrome / SwiftShader
+leaves the WebGL canvas uncomposited for CDP screenshots even with
+`preserveDrawingBuffer`: `readPixels` has the car, `chrome_take_screenshot`
+is a black gap. GLX now 2D-blits onto `#game-soft` under the same UA sniff
+WGX already used (`softPresent` / `softPresentState` / `awaitSoftPresent`).
+The overlay and the blit live in the presenter — there is no second file
+that owns "what the garage capture sees". TLX already had the blit; this
+raise is GLX catching up so garage shots on the default renderer are not
+black.
+
+## 2026-09-09 — GLX awaitSoftPresent waiter/timeout
+
+`js/render/glx/glx.js` lines 2482 -> **2487** (+5). The first HeadlessChrome
+blit shipped `push(wrap)` with timeout `indexOf(waiter)`, so a timeout left
+the waiter on the list forever, and an early return on `gen>0` made
+SAVE SCREENSHOT after a camera move identical to the previous still. Matching
+TLX (wait for `gen > start`, push the same function the timeout splices)
+costs five split-newline lines, mostly comments naming the two defects.
+
+
+## 2026-09-09 — UPSCALE SettingRow (+6 shell nodes)
+
+- (tree) shellNodes 1347 -> **1353** (+6): SETTINGS > DISPLAY > RENDERER gains `#pm-upscale` ON/OFF (`SettingRow`) beside RESOLUTION for SGSR spatial upscale (UPSCALING-2026-09 §7).
+## 2026-09-09 — hunt-fix remainder (seat, waiters, capture, apex)
+
+`js/game.js` lines 10342 -> **10355** (+13) / codeLines 5589 -> **5600** (+11).
+Shadow casters pass `teamMesh(team, car, true)` so P2 wears its own helmet in
+the depth map without rebuilding painted lids; cockpit/garage decals follow
+`carDecalNum` / `garageSeat()`; field wheels use `putBoundedMesh` hit
+promotion; beached additive floor scales with `PACE`; `driverIdx` clamps
+against `Career.gridDrivers()`.
+
+`js/render/glx/glx.js` lines 2582 -> **2589** (+7). Waiters return true/false
+so `keep[]` can re-queue when a dim skip never notifies; `awaitSoftPresent`
+rejects `"no display ctx"` instead of resolving as success.
+
+`js/agent/apex.js` lines 2764 -> **2772** (+8) / codeLines 2040 -> **2046** (+6).
+`save` returns `{ ok, bytes }`; `repro` invalid input is `{ ok: false }`;
+`netPeerSend` refuses a `cars[]` index as a wire id; `carInput` distinguishes
+a missing car (`false`) from a clear (`{ ok: true, cleared: true }`).
+
+## 2026-09-09 — union hunt-fix remainder + garage/soft-present deploy
+
+`js/game.js` lines 10355 -> **10363** (+8) / codeLines 5600 -> **5604** (+4).
+Union of dual-car seat / `garageSeat()` with their garage SETUP class,
+pair-at floor, and landscape `#cs-cam-panel`.
+
+`js/render/glx/glx.js` lines 2589 -> **2606** (+17). Union of waiter `keep[]`
+with their `invalidateSoftPresent` (force `SOFT_BLIT_EVERY` so `snapCam`
+sees a post-camera blit) and HeadlessChrome blit throttle.
+
+## 2026-09-09 — soft-present under Playwright webdriver
+
+`js/render/glx/glx.js` lines 2606 -> **2610** (+4). `navigator.webdriver` also
+arms soft-present / preserveDrawingBuffer — Playwright's Desktop Chrome
+project spoofs a headed UA (no `HeadlessChrome`), which left smoke on a
+minutes-long CDP capture after the soft-first helper change.
+
+## 2026-09-09 — share :sh casters + field helmet maxSplit 0
+
+`js/game.js` lines 10363 -> **10368** (+5) / codeLines 5604 -> **5609** (+5).
+Seat-keyed `:sh` casters were bit-identical between teammates (depth cannot
+see paint); one `:sh` per team(+parts) again. `TEAM_MESH_CACHE_MAX` 48→40
+(still ≥ 12×(2 painted + 1 `:sh`) = 36).
+
+`js/car/car3d.js` lines 4107 -> **4111** (+4). Field AI bodies (`opts.field`,
+already set from `noWheels` factory bodies) pass `Helmets.build({ maxSplit: 0 })`
+— paint-edge splits stay on player/garage/cockpit lids only.
+
+
+## 2026-09-09 — cache / renderer hygiene
+
+`js/game.js` lines 10368 -> **10385** (+17) / codeLines 5609 -> **5618** (+9). `loadCarModel` clears `fieldWheelOrder` with the cache; `cz-save` merges structural `DEFAULT_CUSTOM.livery`; foreign-tab `customTeam` re-runs `syncCustomTeam`.
+
+`js/render/glx/glx.js` lines 2610 -> **2615** (+5). Soft-blit sizes from `drawingBufferWidth/Height` so spatial-upscale presents fill `#game-soft`.

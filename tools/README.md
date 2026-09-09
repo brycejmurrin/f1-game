@@ -107,7 +107,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |
 | **shot/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **shot/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
-| **shot/garage-angles.mjs** | Garage camera-preset screenshots for one team — hero/front/side/rear/top/wingFront/wingRear in one run. | — |
+| **shot/garage-angles.mjs** | Garage camera-preset shots — ONE Chromium; optional --livery / --spine-side walks. | playwright-probe |
 | **shot/garage-frame.mjs** | Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
 | **shot/profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | playwright-probe |
@@ -120,8 +120,8 @@ Shared Playwright probe helpers and garage/menu capture gates reused by shot too
 
 | Tool | Does | Paired skill |
 |---|---|---|
-| **capture/garage-interior.mjs** | Used by garage-frame.mjs and garage-shot.mjs after canvas readback. | — |
-| **capture/probe-page.mjs** | Probe helpers: reduced-motion init, backend pick, garage open/settle, #game canvas shot. | — |
+| **capture/garage-interior.mjs** | PNG gap-pixel gate for garage-frame.mjs (flat wall / paddock bleed); used after soft/CDP capture. | — |
+| **capture/probe-page.mjs** | Probe helpers: reduced-motion init, backend pick, garage open/settle, soft/#game CDP shot. | — |
 
 ### `tools/gfx/`
 
@@ -138,6 +138,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/gpu-game-check.mjs** | Portable sibling of gfx-probe (no Lavapipe, no Linux paths): boots the game on the runner's real GPU and dumps errors. | — |
 | **gfx/loop-fault-repro.mjs** | Does the frame loop survive a transient fault and stop on a deterministic one? Injects throws into `Input.poll` live. | webgl-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | webgpu-debug |
+| **gfx/soft-present-bench.mjs** | Soft-present upscale ON/OFF timing (software blit ≠ player FPS). | — |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | webgl-debug |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
 | **gfx/wgpu-flag-test.mjs** | Flag-matrix probe for WebGPU canvas pixels (SwiftShader / Lavapipe / headed) → `artifacts/tmp/wgpu-flag-test.json`. | webgpu-debug |
@@ -182,6 +183,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/carshot.mjs** | Cropped studio-orbit car JPEG, self-booting: `carshot.mjs [az] [tod] [teamIdx] [out]` → `artifacts/tmp/carshot.jpg`. | playwright-probe |
 | **car/cockpit-pale-sweep.mjs** | Does anything in the COCKPIT read as a blank pale slab? Ray-casts the real Car3D cockpit from the driver's eye. | playwright-probe |
 | **car/crest-sweep.mjs** | Measures every team crest offline by replaying `LiveryTex.drawCrest` into a recording 2D context + scanline raster. | playwright-probe |
+| **car/flank-occlusion.mjs** | Ray-tests cover-flank stations against the real car mesh + wheels from a garage camera; reports what is hidden. | garage-parts-livery |
 | **car/helmet-sheet.mjs** | Rasterises each js/car/helmets.js design onto the real shell and writes a labelled contact sheet PNG (`--only`,… | playwright-probe |
 | **car/helmet-trace.mjs** | Projects the js/car/helmets.js shell into a side-on reference photo and samples the real colour at every (t, az) of… | playwright-probe |
 | **car/livery-contrast.mjs** | Sweeps every team x spine design offline and reports any large area that fails to separate from what it covers. | garage-parts-livery |
@@ -189,6 +191,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/parts-ladder.mjs** | Would anyone ever PICK this catalog option? Proves no paid option is dominated by a cheaper one (offline, no browser). | garage-parts-livery |
 | **car/parts-sweep.mjs** | How much does each catalog option change the car? Builds all options offline via `node:vm` against the right baseline. | garage-parts-livery |
 | **car/render-car.mjs** | Headless batch renderer for `carview.html` — preset orbit angles + HTML contact sheet; needs a server on :3456. | playwright-probe |
+| **car/spine-station.mjs** | Measures + rasterises where every spine design lands on the cover flank, offline — no browser, no game boot. | garage-parts-livery |
 | **car/trace-logo.mjs** | Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk). | playwright-probe |
 
 ### `tools/ui/`
@@ -325,13 +328,14 @@ No header comment in JSON, so the "read by" column is derived from which tools a
   directory headings above are the contract — `gen-tools-readme.mjs` fails on
   a tool in a group it does not know, so a new tool picks a group or the group
   gets documented. Only what every consumer hardcodes stays at `tools/` root.
-- **Capture tools are a family:** `shot/apex-capture.mjs` is the parallel
-  sweep, `car/carshot.mjs` the ~5 KB studio probe, `car/render-car.mjs` the
-  contact sheet, `shot/shot.mjs` one framed shot, `track/survey-track.mjs
-  <id>` the one-stop circuit pass (`--oblique` adds topdown + N/E/S/W).
-  Redundant one-offs were deleted; recover from git history if a need returns.
-  `ui/menu-fit.mjs` survives `ui/layout-audit.mjs` only for `--safe=`
-  (arbitrary notch insets — headless Chromium reports every
+- **Capture tools are a family:** `shot/garage-angles.mjs` and
+  `car/render-car.mjs` are the ONE-Chromium multi-angle paths (garage presets /
+  carview presets); `shot/apex-capture.mjs` is the parallel sweep,
+  `car/carshot.mjs` the ~5 KB studio probe, `shot/shot.mjs` one framed track
+  shot, `track/survey-track.mjs <id>` the one-stop circuit pass (`--oblique`
+  adds topdown + N/E/S/W). Redundant one-offs were deleted; recover from git
+  history if a need returns. `ui/menu-fit.mjs` survives `ui/layout-audit.mjs`
+  only for `--safe=` (arbitrary notch insets — headless Chromium reports every
   `env(safe-area-inset-*)` as 0).
 - **Chromium:** `CHROME` / `PW_CHROMIUM`, then `/opt/pw-browsers/...`, else
   Playwright's bundled browser. Servers bind a free port (or `:3456`).

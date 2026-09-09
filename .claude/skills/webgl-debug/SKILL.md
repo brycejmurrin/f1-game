@@ -63,6 +63,11 @@ If those casts do not no-op, they spam `GL_INVALID_OPERATION` every frame
 (guarded by `tests/specs/webgl-probes.spec.js` — "mobile standard tier renders without
 GL errors"). Symptom: "STANDARD is buggy and laggy while HIGH runs great".
 
+HeadlessChrome GLX hides `#game` (opacity 0) and blits onto `#game-soft`.
+A locator/`chrome_take_screenshot` of `#game` is that black gap; `readPixels`
+and `GLX.awaitSoftPresent()` then `#game-soft` have the car. Do not treat a
+black `#game` shot as a shader miss until you have checked the overlay.
+
 ## 4. Point-light upload — uniform arrays, 15 floats per light
 
 There is **no UBO**. `frame.lights` is a flat JS array of 15-float records:
