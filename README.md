@@ -156,7 +156,9 @@ tail -f artifacts/logs/smoke.log             # watch one live
 node tools/ci/test-bg.mjs --status              # running / how each ended
 
 npm run test:tiny                            # start here: page loads, __apex responds
-npm run test:driving                         # the driving model, collisions, debris (browser; ~30 min on SwiftShader)
+npm run test:physics-core                    # the driving model (browser; ~35 tests, mostly fast)
+npm run test:collisions                      # car-to-car + wall contact (browser; ~32 tests, the slowest set)
+npm run test:aero                            # aero-zones, active-aero, drift, understeer (browser; ~37 tests)
 npm test -- tests/specs/autopilot.spec.js          # single file
 node tools/track/verify-track.cjs --all            # headless build check, all 40 circuits (no browser)
 ```

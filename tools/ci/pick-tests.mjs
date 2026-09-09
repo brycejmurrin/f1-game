@@ -89,9 +89,9 @@ export const RULES = [
   // props-over-road/terrain-over-road, which lived only in `test:scenery` (now `test:circuits`).
   // Routing it to circuit+physics+sweeps+foundation ran everything except the
   // two specs that actually report the class of bug the file produces.
-  [/^js\/track\/core\/space\.js/, ["driving"], "world<->track projection"],
+  [/^js\/track\/core\/space\.js/, ["physics-core"], "world<->track projection (projection.spec.js)"],
   [/^js\/track\/(core\/|tracks\.js)/,
-   ["circuits", "driving", "sweeps"],
+   ["circuits", "physics-core", "sweeps"],
    "road geometry reaches walls, elevation, physics, every circuit's foundation — and buildProps lives here"],
   [/^js\/track\/maps\.js/, ["hooks", "circuits"], "layout metadata"],
   [/^js\/circuits\/.*\.js$/, ["circuits"], "a circuit def: walls, its scenery callback, and its own foundation spec (not the dir's CLAUDE.md)"],
@@ -116,19 +116,27 @@ export const RULES = [
   // ── the loop and the driving model ──────────────────────────────────────
   // js/game.js IS the physics — the bicycle model, the friction ellipse, the
   // aero trade and the longitudinal integrator all live in it. Since the
-  // 2026-09 regroup the blast radius is three browser groups (driving, hooks,
-  // circuits): each is the union of the old physics/collision/behaviour/debris,
-  // api/hooks/agent/map, and circuit/foundation/scenery sets.
-  [/^js\/game\.js/, ["driving", "hooks", "circuits"], "the loop: physics, AI, race logic"],
-  [/^js\/physics\/consts\.js/, ["driving", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
+  // 2026-09 regroup the blast radius is four browser groups (physics-core,
+  // collisions, hooks, circuits). It was THREE until 2026-09-09, when the
+  // `driving` union was split: at 16 spec files it held 57 % of its tests in
+  // its four SLOWEST files, so Playwright's by-file --shard could hand one
+  // runner collision-ai-fixes + aero-zones (46 slow tests) and another the
+  // physics files (7 fast ones). Adding shards cannot fix an imbalance;
+  // splitting the group can. See docs/TESTING.md.
+  // AGENTS.md still caps a change at TWO browser groups — run the two most
+  // specific and name the rest as not-run.
+  [/^js\/game\.js/, ["physics-core", "collisions", "hooks", "circuits"], "the loop: physics, AI, race logic"],
+  [/^js\/physics\/consts\.js/, ["physics-core", "collisions", "hooks", "circuits"], "the driving model's immutable numbers — same blast radius as game.js"],
   [/^js\/physics\/brake-cue\.js/, ["input", "steering-unit"], "pulse-rate CUE math + the steering sheet that hosts it"],
   [/^js\/physics\/body-attitude\.js/, ["ui"], "a visual-only layer"],
   // `sweeps` because debris-world's hazard query projects bodies back onto the
   // centreline, and debris-hazard-hint.test.mjs is the circuit-rebuilding sweep
   // that checks that projection.
-  [/^js\/physics\/(debris-world|incident-sim)\.js/, ["driving", "sweeps"], ""],
-  [/^js\/physics\//, ["driving"], "the driving model and what feeds it"],
-  [/^js\/race\/race-control\.js/, ["driving"], "race-control.spec.js rides in test:driving"],
+  [/^js\/physics\/incident-sim\.js/, ["collisions", "sweeps"], "the Rapier takeover is a CONTACT model"],
+  [/^js\/physics\/debris-world\.js/, ["physics-core", "sweeps"], "debris.spec.js rides in test:physics-core"],
+  [/^js\/physics\/(active-aero|aero)/, ["aero"], "the aero model — active-aero + aero-zones specs"],
+  [/^js\/physics\//, ["physics-core"], "the driving model and what feeds it"],
+  [/^js\/race\/race-control\.js/, ["physics-core"], "race-control.spec.js rides in test:physics-core"],
   [/^js\/race\//, ["modes", "state-unit"], "session model: quali, reliability, race control"],
 
   // ── modes and their screens ─────────────────────────────────────────────

@@ -72,7 +72,8 @@ Load from the SKILL.md index when the task needs this detail.
 7. **Verify narrowly, then with browser coverage.**
    - Run the pure unit guard `node --test tests/unit/race-control.test.mjs` after
      race-control logic changes.
-   - Run `node tools/ci/test-bg.mjs driving` for debris and caution browser coverage.
+   - Run `node tools/ci/test-bg.mjs physics-core` for debris and caution browser coverage
+     (`debris.spec.js` and `race-control.spec.js` both ride there).
    - Use `test:tooling-fast` for docs/hooks/unit inventory checks.
    - If JS changed, run `node tools/gen/gen-shell.mjs --check` (no cache bump: tags read `?v=dev` and the deploy stamps the hashes; after a `tools/manifest.cjs` change run `node tools/gen/gen-shell.mjs`).
 

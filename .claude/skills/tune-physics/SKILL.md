@@ -37,7 +37,9 @@ Fixed in `js/game.js` (not `setPhysics`): `LONG_GRIP`, `CS_FRONT/CS_REAR`,
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
-node tools/ci/test-bg.mjs driving      # physics + collision + behaviour + debris (one group, ~30 min)
+node tools/ci/test-bg.mjs physics-core # the driving model (~35 tests, mostly fast)
+node tools/ci/test-bg.mjs collisions   # car-to-car + wall contact (~32 tests, the slowest set)
+node tools/ci/test-bg.mjs aero         # aero-zones, active-aero, drift, understeer (~37 tests)
 node tools/ci/test-bg.mjs input        # steering + camera
 node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>
 ```
