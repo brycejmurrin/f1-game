@@ -86,13 +86,15 @@ const PSEUDO_CATS = ["team", "tune", "livery"];
 // copy list are the other two spellings of these keys; team-livery.test.mjs
 // holds all three together.
 const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo",
-                          "rearWing", "cover", "spineTint", "sideTint", "sunTint",
+                          "rearWing", "cover", "spineTint", "saddleTint", "ridgeTint", "airboxTint",
+                          "sideTint", "sunTint",
                           "crestInk", "bandTint2", "plateTint", "plateInk",
                           "fin", "finArt", "logo", "logo2", "logo3"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
-                          coverVents: "none", spineHeight: "standard", spineSide: "none" };
+                          coverVents: "none", spineHeight: "standard", spineSide: "none",
+                          coverBind: "independent", finHandoff: "match" };
 // WHAT EACH ROW ACTUALLY PAINTS. Every label named a colour and none of them
 // named a SURFACE, so the sheet could not answer its own first question: what
 // does this change? Worse, two rows read as a pair and are not one — ACCENT is
@@ -114,6 +116,9 @@ const LIV_ROW_HINT = {
   pod: "SIDEPOD — the sidepod panel, both sides. Unset = the bodywork colour.",
   cover: "ENGINE COVER — airbox, roll structure, cover loft and snorkel. Unset = the bodywork colour.",
   spineTint: "SPINE TINT — the SPINE TOP band on the cover crown, and the saddle's flank half, ALONE. BODY STRIPE above runs the whole spine including the nose, so it cannot paint a dark band on a light nose. Unset = SECONDARY, else PRIMARY, checked against ENGINE COVER — never BODY STRIPE or DETAIL.",
+  saddleTint: "SADDLE — the shoulder shelf and upper-flank saddle block on the atlas crown and flanks. Unset = today's band colour under SADDLE or SADDLE WRAP; else derived flank fill.",
+  ridgeTint: "RIDGE — the thin centreline ridge only on the crown (and tail if the design continues). Unset = SPINE TINT if set, else the derived band colour.",
+  airboxTint: "AIRBOX — roll hoop, snorkel and intake lips on the mesh only (not the atlas). Unset = ENGINE COVER. Under WRAP, SUN wins over this row.",
   sideTint: "SIDE TINT — the SPINE SIDE colour graphics (BAND, SASH) on the cover flank, ALONE. A separate zone from SPINE TINT: with SPINE TOP on SADDLE the tint paints the flank these sit on, so one colour cannot serve both. Unset = derived from the livery and checked against the flank.",
   sunTint: "SUN — the WRAP design's sun disc, over the crown, both cover flanks and the airbox. Its own row because SPINE TINT used to paint this too: one field meant a band on most SPINE TOP designs and the sun on WRAP, so choosing WRAP repurposed a colour picked for a band. Unset = the mark's plate / SECONDARY against ENGINE COVER (never BODY STRIPE, never SPINE TINT).",
   crestInk: "CREST INK — lettering ink for the crown AND the cover-flank marks (number, code, logo, wordmark, duo). It is one ink for every surface those marks stand on: under SADDLE that includes the saddle panel; under WRAP the cover (the sun is a separate disc). Unset = picked to contrast with ENGINE COVER (or the flank the crown left).",
@@ -136,6 +141,8 @@ const LIV_ROW_HINT = {
   finStyle: "TAIL STYLE — the motif painted on the fin.",
   finBadge: "FIN BADGE — what the fin carries: the mark, the race number, the driver code, or nothing.",
   spineLogo: "SPINE TOP — what the engine-cover CROWN carries, painted on bare body colour.",
+  coverBind: "COVER BIND — how crown and flank zones couple. INDEPENDENT = each zone free; SADDLE WRAP = saddle block spans crown shoulders and upper flanks; SPINE ONLY = crown/ridge accent only, shoulders stay cover.",
+  finHandoff: "FIN HANDOFF — how the fin meets the cover block. MATCH = current fin resolution; CONTRAST = fin colour resolves against the crown/saddle block; HARD CUT = fin ignores crown graphic continuation at the fin root.",
   tcam: "T-CAM — the camera housing colour. AUTO is the real rule: car 1 black, car 2 yellow.",
   coverVents: "COVER VENTS — cooling slits cut into the engine cover. Geometry, not paint.",
   spineHeight: "SPINE HEIGHT — how tall the cover crown runs behind the roll hoop. DORSAL is the fin-less 2026 look every team uses.",
@@ -921,6 +928,9 @@ function buildLiveryCreator(container, team) {
   // SPINE TINT colours the SPINE TOP band alone. BODY STRIPE above runs the
   // whole spine including the nose, so it cannot say "dark band, light nose".
   wrap.appendChild(colorRow("SPINE TINT", "spineTint", true));
+  wrap.appendChild(colorRow("SADDLE", "saddleTint", true));
+  wrap.appendChild(colorRow("RIDGE", "ridgeTint", true));
+  wrap.appendChild(colorRow("AIRBOX", "airboxTint", true));
   wrap.appendChild(colorRow("SIDE TINT", "sideTint", true));
   // The four surfaces the crown and flank used to DERIVE. Each is a pick now,
   // and each falls back to exactly what it computed before when left unset, so
@@ -998,6 +1008,8 @@ function buildLiveryCreator(container, team) {
   deps.push({ row: pillRow("TAIL STYLE", "finStyle", LT && LT.TAIL_STYLE_IDS || ["team"], "team"), when: needFin, why: NO_FIN });
   deps.push({ row: pillRow("FIN BADGE", "finBadge", LT && LT.FIN_BADGE_IDS || ["logo"], "logo"), when: needFin, why: NO_FIN });
   pillRow("SPINE TOP", "spineLogo", LT && LT.SPINE_LOGO_IDS || ["logo"], "logo");
+  pillRow("COVER BIND", "coverBind", ["independent", "saddleWrap", "spineOnly"], "independent");
+  pillRow("FIN HANDOFF", "finHandoff", ["match", "contrast", "hardCut"], "match");
   // Body details: the T-cam housing colour (the real car-1 / car-2 code) and
   // the engine-cover cooling vents. Both are mesh, so their id lists are Car3D's.
   pillRow("T-CAM", "tcam", Car3D.TCAM_IDS || ["team"], "team");
