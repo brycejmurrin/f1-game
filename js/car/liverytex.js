@@ -1335,12 +1335,15 @@ const LiveryTex = (function () {
   // mark against a colour the bull is not wearing.
   const MARK_ON_BODY = 2.0;   // a metre-long silhouette, not lettering
   function flankBullColour(teamId, liv, sunC, cover, c1, lockup) {
+    const L = lockup || markPalette(teamId, liv, [sunC, cover], false, { noPlate: true });
+    // TEAM LOGO owns the bull whenever the player set one — the same markBase
+    // row every other surface reads (parts tile, flank, fin, garage wall).
+    if (liv && liv.logo) return L.mark.slice();
     // The BRAND colour whenever it reads at all on the body — the RB22's red
     // across gold and navy alike. Picking this design in the editor already
     // makes a custom livery, so it cannot key on "own".
     const brand = MARK_BRAND[teamId] && MARK_BRAND[teamId].mark;
     if (brand && contrast(brand, c1) >= MARK_ON_BODY) return brand.slice();
-    const L = lockup || markPalette(teamId, liv, [sunC, cover], false, { noPlate: true });
     return (L.mark || inkOn([sunC, c1])).slice();
   }
   // ONE answer to "will this colour be seen where it lands". It was written out
@@ -2207,10 +2210,10 @@ const LiveryTex = (function () {
       .find((c) => contrast(c, finPaint) >= 1.8) || inkFin;
     drawTailGraphic(ctx, teamId, REGIONS.fin, c1, finPaint, finWash, tailStyle);
     if (finBadge === "logo") {
-      if (LOGOS[teamId]) {
-        drawLogoImage(ctx, LOGOS[teamId], REGIONS.finBadge, logo,
-                      markHalo(LOGOS[teamId], finPaint, inkFin), emblemRim);
-      } else drawCrest(ctx, teamId, REGIONS.finBadge, { liv: colors, field: finPaint, bare: true, palette: lockup });
+      paintTeamMark(ctx, teamId, colors, REGIONS.finBadge,
+        finReal ? [coverPaint, finPaint] : [coverPaint], {
+          halo: LOGOS[teamId] ? markHalo(LOGOS[teamId], finPaint, inkFin) : null,
+        });
     } else if (finBadge === "number" || finBadge === "code") {
       // The race number (or the driver's code) on the fin, inked for the FIN
       // paint — the badge box is wholly on the plate — with no board patch and
@@ -2668,7 +2671,7 @@ const LiveryTex = (function () {
     }
     const crestR = o.crestScale ? flankEmblemBox(R) : R;
     drawCrest(ctx, teamId, crestR, {
-      liv, field, bare: true, palette: markPalette(teamId, liv, field, false),
+      liv, field, bare: !o.fullLockup, palette: markPalette(teamId, liv, field, false),
     });
   }
 
