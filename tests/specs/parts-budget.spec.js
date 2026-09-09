@@ -57,6 +57,46 @@ async function openSetup(page) {
   // has whatever the last test chose.
   await garageTeam(page, "mclaren");
   await freeBuildOff(page);
+  // STOP THE RENDER LOOP for the click-heavy part. The garage draws a live
+  // turntable and getSetupPreviewMesh() re-keys on partsVisualKey, so every
+  // option click rebuilt the car mesh and repainted the livery atlas at
+  // SwiftShader speed. That is this file's whole cost — the tests that PICK
+  // parts measured 88-122 s against 1-18 s for the ones that only read the DOM,
+  // and this file's header already recorded five crossing a 120 s budget.
+  //
+  // The gallery captures still need a drawn car, so shot() below turns it back
+  // on for the frame it takes. Do not screenshot without it.
+  await page.evaluate(() => window.__apex.headless(true));
+}
+
+// A gallery capture, with a car in it.
+//
+// TWO problems, one helper. The loop is stopped above, and an undrawn canvas
+// keeps its LAST frame — so a bare screenshot here is a black or stale car.
+// And even with the loop running, this file was ALREADY capturing the wrong
+// screen: budget-default.png and budget-unlimited-persisted.png were the TITLE
+// MENU on every run, while the page underneath was demonstrably on the garage
+// (probed at capture time: carsetup visible, overlay hidden, the budget text
+// correct). The PNG disagreed with the DOM because Chromium had not committed
+// the change — the same rAF starvation wait-polling.test.mjs documents for
+// timeouts, and the five captures that came out right are the ones whose extra
+// clicks happened to give the compositor time. Luck, not design.
+//
+// So: draw, WAIT FOR REAL FRAMES, capture, stop again. The rAF wait is what
+// fixes the stale-compositor half, and it is bounded — a starved rAF must not
+// hang the test, so the timer resolves it either way and a capture that was
+// going to be wrong is no worse than the one this replaced.
+async function shot(page, name) {
+  await page.evaluate(() => window.__apex.headless(false));
+  await page.evaluate(() => new Promise((resolve) => {
+    let n = 0;
+    const done = () => resolve();
+    setTimeout(done, 4000);            // hard bound: never hang on a starved rAF
+    const tick = () => (++n >= 3 ? done() : requestAnimationFrame(tick));
+    requestAnimationFrame(tick);
+  }));
+  await page.screenshot({ path: galleryPath("parts-budget", name) });
+  await page.evaluate(() => window.__apex.headless(true));
 }
 
 test.describe("Budget system — display", () => {
@@ -69,7 +109,7 @@ test.describe("Budget system — display", () => {
     // Nothing is spent at defaults, so remaining equals the cap (setup-ui.js
     // renders "BUDGET: <remaining> / <cap> cr remaining").
     expect(text).toContain(cap + " / " + cap + " cr remaining");
-    await page.screenshot({ path: galleryPath("parts-budget", "budget-default.png") });
+    await shot(page, "budget-default.png");
   });
 
   test("budget label has no 'over' class at defaults", async ({ page }) => {
@@ -98,7 +138,7 @@ test.describe("Budget system — part selection", () => {
       Parts.CATALOG.find((c) => c.id === "engine").options.find((o) => o.id === "race").cost);
     const text = await page.locator("#cs-budget").textContent();
     expect(text).toContain(String(left));
-    await page.screenshot({ path: galleryPath("parts-budget", "budget-race-engine.png") });
+    await shot(page, "budget-race-engine.png");
   });
 
   test("budget fill bar increases after selecting a paid part", async ({ page }) => {
@@ -123,7 +163,7 @@ test.describe("Budget system — part selection", () => {
     await page.locator('#cs-tabs [data-cs-cat="engine"]').click();
     const overBudgetCount = await page.locator("#cs-options .cs-opt.over-budget").count();
     expect(overBudgetCount).toBeGreaterThan(0);
-    await page.screenshot({ path: galleryPath("parts-budget", "budget-over-budget.png") });
+    await shot(page, "budget-over-budget.png");
   });
 
   test("budget label gets 'over' class when spending exceeds the cap", async ({ page }) => {
@@ -148,7 +188,7 @@ test.describe("Budget system — part selection", () => {
     await page.locator("#cs-unlimited").click();
     const cls = await page.locator("#cs-budget").getAttribute("class");
     expect(cls).toContain("over");
-    await page.screenshot({ path: galleryPath("parts-budget", "budget-exceeded.png") });
+    await shot(page, "budget-exceeded.png");
   });
 });
 
@@ -165,7 +205,7 @@ test.describe("Budget system — unlimited toggle", () => {
     await page.locator("#cs-unlimited").click();
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain("no budget limit");
-    await page.screenshot({ path: galleryPath("parts-budget", "budget-unlimited-on.png") });
+    await shot(page, "budget-unlimited-on.png");
   });
 
   test("unlimited mode hides budget fill bar", async ({ page }) => {
@@ -195,7 +235,7 @@ test.describe("Budget system — unlimited toggle", () => {
     await page.locator('#cs-tabs [data-cs-cat="engine"]').click();
     const overBudgetCount = await page.locator("#cs-options .cs-opt.over-budget").count();
     expect(overBudgetCount).toBe(0);
-    await page.screenshot({ path: galleryPath("parts-budget", "budget-unlimited-no-over.png") });
+    await shot(page, "budget-unlimited-no-over.png");
   });
 
   test("unlimited state persists after page reload", async ({ page }) => {
@@ -210,7 +250,7 @@ test.describe("Budget system — unlimited toggle", () => {
     await page.locator("#carsetup").waitFor({ state: "visible" });
     const budgetText = await page.locator("#cs-budget").textContent();
     expect(budgetText).toContain("no budget limit");
-    await page.screenshot({ path: galleryPath("parts-budget", "budget-unlimited-persisted.png") });
+    await shot(page, "budget-unlimited-persisted.png");
   });
 
   test("toggling unlimited OFF restores normal budget display", async ({ page }) => {
