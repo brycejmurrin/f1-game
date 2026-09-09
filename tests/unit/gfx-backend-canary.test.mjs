@@ -1988,7 +1988,10 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "apex26.tlxSkipBatches must be an explicit opt-in that defaults FALSE, including when storage throws");
   assert.match(fnBody(src, "isWebGPU"), /renderer\.backend[\s\S]*isWebGPUBackend/,
     "isWebGPU() must read the BOUND backend, not the adapter sniff");
-  assert.match(fnBody(src, "softOutRT"), /^\s*return\s+softGpu\(\s*\)/,
+  // softOutRT may early-return or ternary, but the gate must still be softGpu()
+  // (presentation), not _softAdapter alone — headless needs the blit even on
+  // real hardware. Size args may be presentW/H when spatial upscale is active.
+  assert.match(fnBody(src, "softOutRT"), /(?:^|\n)\s*(?:return|if\s*\()\s*!?\s*softGpu\(\s*\)/,
     "presentation still follows softGpu() — the blit is needed whenever the swapchain is not composited");
   assert.match(src, /apex26\.tlxForceBatches/,
     "the real-GPU code path must stay reachable from a software run for debugging");
@@ -3676,4 +3679,8 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   assert.match(wgsl, /const SGSR =/, "WGX WGSL SGSR shader must ship");
   assert.doesNotMatch(wgsl.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
     /textureGather\s*\(/, "shared kernel uses 4-tap sampleLevel, not textureGather");
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(wgx, /setSpatialUpscale/, "WGX must export setSpatialUpscale");
+  assert.match(wgx, /wantSpatialUpscale/, "WGX must gate size split");
+  assert.match(wgx, /!!pSGSR/, "WGX wantSpatialUpscale must require linked SGSR pipeline");
 });
