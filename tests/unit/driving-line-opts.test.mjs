@@ -91,11 +91,37 @@ test("each row round-trips through the store under its own key", () => {
   assert.equal(rows.get("pm-brakecue").read(), "off");
   rows.get("pm-brakecue").write("on");
   assert.equal(M.brakeCue(), true);
-  assert.equal(written.brakeCue, "on", "stored as the string the loader reads back");
+  // `lineBrakeCue`, NOT `brakeCue`: that key belongs to the steering panel's
+  // 1-10 slider (js/input/steer-tuning.js) and both modules owned it with
+  // incompatible types until 2026-09-09. The store JSON-parses, so each read
+  // the other's write back at full type and both settings broke. This assertion
+  // is what stops the collision coming back — writing the shared key again
+  // fails here.
+  assert.equal(written.lineBrakeCue, "on", "stored as the string the loader reads back");
+  assert.equal(written.brakeCue, undefined, "must NOT write the steering slider's key");
   assert.equal(rows.get("pm-brakecue").read(), "on");
   rows.get("pm-brakecue").write("off");
   assert.equal(M.brakeCue(), false);
-  assert.equal(written.brakeCue, "off");
+  assert.equal(written.lineBrakeCue, "off");
+});
+
+test("the legacy shared key is honoured as a flag, never as the slider's notch", () => {
+  // A player who set this before the rename has it under `brakeCue`, so a
+  // STRING there still carries over.
+  const carried = load({ stored: { brakeCue: "on" } });
+  assert.equal(carried.M.brakeCue(), true, "a legacy string flag still restores");
+
+  // ...but a NUMBER there is the steering slider's notch and never said
+  // anything about this switch. This is the half of the defect that silently
+  // switched an assist ON from another panel's setting.
+  for (const notch of [1, 5, 10]) {
+    const n = load({ stored: { brakeCue: notch } });
+    assert.equal(n.M.brakeCue(), false, `slider notch ${notch} must not arm the cue`);
+  }
+
+  // The new key wins over a stale legacy value, in both directions.
+  const fresh = load({ stored: { brakeCue: "on", lineBrakeCue: "off" } });
+  assert.equal(fresh.M.brakeCue(), false, "the new key is the truth once written");
 });
 
 test("it wires on DOMContentLoaded when the document is still loading", () => {
