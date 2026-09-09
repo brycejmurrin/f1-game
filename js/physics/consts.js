@@ -142,9 +142,24 @@ window.PhysicsConsts = {
   // calibrated to — one circuit fixed, two broken. The spread is also well
   // inside the separation between levels (1.8-3.5 % per step), so each level
   // still means what it meant. Evidence: docs/notes/RACING-LINE-RESEARCH.md §8.
+  // 2026-09-09: adding the player's DOWNFORCE term to the AI's corner model was
+  // tried and REVERTED — the AI's lateral actuator has no aero and its grip
+  // FALLS with speed (game.js gripScale), so an aero planner outran it and cost
+  // 0.60 m of apex depth at a short monza corner. Details and the lap-time
+  // table it produced: docs/notes/AI-FIELD-RESEARCH.md. DIFF is unchanged.
+  // game.js's BAND_CEIL caps a rubber-banded AI at this table's top scale:
+  // easy's 0.851 x 1.18 = 1.004 used to beat hard's own 0.980.
   DIFF: {
     easy:   { ai: 0.851, band: 0.18 },
     normal: { ai: 0.911, band: 0.08 },
     hard:   { ai: 0.980, band: 0.02 },  // band was 0.03 — smarter OT/ERS/brake cuts rubber-band need
   },
 };
+// The top of that ladder: the fastest pace scale ANY level reaches with its
+// rubber band fully wound on. Derived rather than written down so it tracks the
+// table above; game.js's band block caps a banded AI here so the difficulty dial
+// stays monotonic. Lives with DIFF because it is a property of DIFF.
+window.PhysicsConsts.BAND_CEIL = (() => {
+  const top = Object.values(window.PhysicsConsts.DIFF).reduce((a, d) => (d.ai > a.ai ? d : a));
+  return top.ai * (1 + top.band);
+})();
