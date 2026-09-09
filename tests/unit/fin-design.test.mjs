@@ -295,20 +295,24 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   }
   assert.equal(opsIn(A.paint("ferrari", BASE), R.spineSideL).length, 0, "the left flank is bare by default too");
   assert.equal(opsIn(wrap, R.tail).length, 0, "wrap leaves the tail bare");
-  // A SIDE pick under the wrap yields the front of the flank to the mark, and
-  // that band is derived from the mark's own path — a stale constant left it
-  // NaN, and NaN coordinates land in no region at all, so the side design
-  // silently vanished. Counted AGAINST the same wrap with no side pick: the
-  // wrap paints these regions itself, so "the flank has ops" proves nothing.
-  // This is the one combination (a crown design AND a side design) that no
-  // other case here covers.
+  // A SIDE pick under the wrap places itself against the crown's graphic, and
+  // that placement is derived from the mark's own path — a stale constant left
+  // it NaN, and NaN coordinates land in no region at all, so the side design
+  // silently vanished. This is the one combination (a crown design AND a side
+  // design) that no other case here covers.
+  // Counted against the SAME SIDE DESIGN WITH NO CROWN, not against the crown
+  // with no side design: the wrap paints these regions itself, so "the flank
+  // has ops" proves nothing — and for a team with no traced bull the wrap now
+  // YIELDS its filler badge to the side design, so it can legitimately paint
+  // fewer ops with a side pick than without one. What must never shrink is the
+  // side design's own contribution.
   for (const team of ["redbull", "ferrari"]) {
-    const bare = A.paint(team, { ...BASE, spineLogo: "wrap", spineSide: "none" });
     for (const side of ["duo", "wordmark", "slash", "number"]) {
+      const alone = A.paint(team, { ...BASE, spineSide: side });
       const ops = A.paint(team, { ...BASE, spineLogo: "wrap", spineSide: side });
       for (const reg of [R.spineSide, R.spineSideL]) {
-        assert.ok(opsIn(ops, reg).length > opsIn(bare, reg).length,
-                  `${team} wrap+${side} adds paint to the flank`);
+        assert.ok(opsIn(ops, reg).length >= opsIn(alone, reg).length,
+                  `${team} wrap+${side} keeps every op the side design paints on its own`);
       }
     }
   }
@@ -447,6 +451,14 @@ test("spineSide paints the flank band on pick only, and clears the service panel
             "the mark box stays above the sidepod line");
   assert.ok(A.LT.FLANK_MARK.halfW > A.LT.FLANK_MARK.halfH,
             "the box is wider than tall — flankSquash corrects the along/down anisotropy, it does not reshape the box");
+  // …and the station a crown design pushes it to has to fit BETWEEN the sun and
+  // the rear tyre. The box is measured in region HEIGHTS, so its half-width
+  // along the flank is halfW scaled by the region's own aspect.
+  const halfU = A.LT.FLANK_MARK.halfW * R.spineSide.h / R.spineSide.w;
+  assert.ok(A.LT.FLANK_MARK.uOnCrown - halfU > 0.15,
+            "the mark's leading edge clears the wrap's sun (it reaches u 0.216 at the crease)");
+  assert.ok(A.LT.FLANK_MARK.uOnCrown + halfU <= A.LT.FLANK_SEEN,
+            "…and its trailing edge stays in front of the rear tyre");
   assert.equal(opsIn(A.paint("ferrari", BASE), R.spineSide).length, 0, "the shipped atlas paints the flank band");
   const texts = (liv) => opsIn(A.paint("ferrari", { ...BASE, ...liv }), R.spineSide)
     .filter((op) => op.kind === "text").map((op) => op.text);
@@ -593,8 +605,8 @@ test("bigmark is BIG — not logo at 1.087x", () => {
 
 // The constant above is where a mark is HUNG; this is where the ink actually
 // LANDS, on every crown, measured off the real atlas. The two are not the same
-// question: the crown decides how much flank is free (`wrap` hands the marks
-// the rear third), and each design places itself inside that. The reported
+// question: the crown decides what the flank already carries (`wrap` hangs a
+// bull across it), and each design places itself against that. The reported
 // defect was a station, not a constant, and a constant-only guard would have
 // stayed green through it.
 test("every flank MARK lands clear of the crease and above the sidepod, on every crown", async () => {
@@ -602,8 +614,14 @@ test("every flank MARK lands clear of the crease and above the sidepod, on every
   const { sweep } = await import("../../tools/car/spine-station.mjs");
   const At = loadAtlas();
   const MARKS = ["number", "logo", "code", "plate"];
+  // On the car the defect was found on, and the one with a REAL crown graphic
+  // on its flank. It has to be a team with a traced bull: spine-station reads a
+  // design's footprint as the pixels it CHANGED against spineSide "none", and
+  // under a wrap a team without one yields its filler badge to the side design
+  // — so the diff would carry the badge's removal as if it were the mark's own
+  // ink, and report the mark's centre 0.11 lower than where it is drawn.
   for (const spineLogo of At.LT.SPINE_LOGO_IDS) {
-    const out = sweep(At, { team: "mclaren", logo: spineLogo, sides: MARKS, grid: 64 });
+    const out = sweep(At, { team: "redbull", logo: spineLogo, sides: MARKS, grid: 64 });
     for (const r of out.rows) {
       const at = `${spineLogo}/${r.spineSide}`;
       assert.ok(r.px > 0, `${at}: the design painted nothing on the flank`);
@@ -621,7 +639,7 @@ test("every flank MARK lands clear of the crease and above the sidepod, on every
 // and wheels through the garage SIDE camera and answers that in 0.3 s. The
 // occluders are the CAR, so the map is computed once and every crown is tested
 // against it.
-test("a flank mark is not put where the car covers it", async () => {
+test("nothing that has to be READ is put where the car covers it", async () => {
   const { loadAtlas } = await import("../../tools/car/livery-contrast.mjs");
   const { sweep } = await import("../../tools/car/spine-station.mjs");
   const { occlusionMap } = await import("../../tools/car/flank-occlusion.mjs");
@@ -629,17 +647,93 @@ test("a flank mark is not put where the car covers it", async () => {
   const om = occlusionMap(M, { team: "redbull", grid: 96 });
   const hiddenAt = (u, v) => om.cell[Math.min(om.rows - 1, (v * om.rows) | 0) * om.cols
                                      + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1;
-  // `wrap` hangs a metre-long bull over the front two thirds, so its marks have
-  // nowhere to go but the aft third — which is the tyre's. 51 % of their ink is
-  // behind the car from this camera (7 % from the hero preset, which is the one
-  // the garage opens on). That is a DESIGN debt, recorded at its measured value
-  // so it cannot quietly get worse; every other crown puts the mark forward
-  // where nothing covers it, and that is the property under test.
-  const CEIL = { wrap: 0.60 };
+  // CONTENT, not fills. A stripe whose tail runs behind the wheel is still a
+  // stripe; a sponsor name whose tail runs behind the wheel is half a word, and
+  // a number behind the wheel is nothing at all. `split`, `slash`, `bars` and
+  // `chevron` are flat geometry that runs the length of the flank on purpose
+  // and are excluded by class, not by exception — they measure 4-73 % and that
+  // is what a full-length band on this car means.
+  //
+  // This is the guard the SHIPPED defect would have failed: Red Bull's default
+  // is crown `wrap` + side `duo`, and pushing the side band aft of the bull put
+  // it aft of the tyre line — 92 % of duo's ink, 95 % of a wordmark's and 50-54 %
+  // of every mark's was behind the car from this camera. The ceiling is 0.40
+  // because duo on a bare crown legitimately reaches 34 %: it hangs two names
+  // side by side down the WHOLE flank, so its aft one runs into the tyre's
+  // shadow by design. Everything else measures 0-13 %.
+  const READ = ["number", "logo", "code", "plate", "wordmark", "duo", "lockup"];
   for (const spineLogo of At.LT.SPINE_LOGO_IDS) {
-    const out = sweep(At, { team: "redbull", logo: spineLogo, sides: ["number", "logo", "code", "plate"], grid: 64, hiddenAt });
+    const out = sweep(At, { team: "redbull", logo: spineLogo, sides: READ, grid: 64, hiddenAt });
     for (const r of out.rows)
-      assert.ok(r.hidden <= (CEIL[spineLogo] ?? 0.20),
-        `${spineLogo}/${r.spineSide}: ${(r.hidden * 100).toFixed(0)}% of the mark is behind the car from the garage SIDE camera`);
+      assert.ok(r.hidden <= 0.40,
+        `${spineLogo}/${r.spineSide}: ${(r.hidden * 100).toFixed(0)}% of it is behind the car from the garage SIDE camera`);
   }
+});
+
+// The same question asked of the CROWN's own graphic, which the guard above
+// cannot reach: a side design is measured as what it CHANGED against spineSide
+// "none", and the crown's bull is in both, so it cancels out of every row. It
+// is the biggest thing on the flank and it was the one sinking — freeing the
+// crease strip for the sponsor names dropped the animal onto the sidepod line,
+// where the body eats the band's bottom corner: 19 % of the bull's ink and 36 %
+// of its HEAD, the low forward part of a charging silhouette, so the head went
+// and the rump stayed. Every team, because the same station carries the badge a
+// bull-less crest yields — Mercedes' was the worst at 23 %, Haas 21 %.
+test("the crown's own mark on the flank is on camera, on every team", async () => {
+  const { loadAtlas } = await import("../../tools/car/livery-contrast.mjs");
+  const { sweep } = await import("../../tools/car/spine-station.mjs");
+  const { occlusionMap } = await import("../../tools/car/flank-occlusion.mjs");
+  const At = loadAtlas();
+  for (const t of At.Teams.LIST) {
+    // Per TEAM: the parts a team runs move the bodywork that does the hiding.
+    const om = occlusionMap(M, { team: t.id, grid: 96 });
+    const out = sweep(At, {
+      team: t.id, logo: "wrap", sides: [], grid: 64,
+      hiddenAt: (u, v) => om.cell[Math.min(om.rows - 1, (v * om.rows) | 0) * om.cols
+                                  + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1,
+    });
+    // A crest the shipped game draws as a LOADED IMAGE paints through drawImage,
+    // which records no geometry; offline it falls back to the traced crest, so
+    // what is measured is the badge's BOX with different art inside it. That is
+    // the right answer for a station question and the wrong one for anything
+    // about the art. A crown that paints no mark at all is not this test's.
+    if (!out.crown) continue;
+    assert.ok(out.crown.hidden <= 0.10,
+      `${t.id}: ${(out.crown.hidden * 100).toFixed(0)}% of the wrap's flank mark is behind the car `
+      + `from the garage SIDE camera (it hangs to v ${out.crown.v1})`);
+  }
+});
+
+// …and the CAR can spoil a design without HIDING it, which is the hole the
+// occlusion oracle cannot see. The engine cover carries its own trim on the
+// same skin — an accent pinstripe and up to four grey service hatches — and
+// they were stationed to sit aft of a flank mark at f 0.19, where every crown
+// but `wrap` leaves it. `wrap` moves the design into the mid-flank instead, so
+// the trim ended up INSIDE it: measured in the garage, the pinstripe crossed
+// the first sponsor row and a hatch took the last two letters of the second in
+// white ink on a lit metal plate. No ray-cast reports that, because the hatch
+// is ON the flank rather than in front of it.
+test("under a crown that moves the side design, the cover's trim moves with it", () => {
+  const LT = M.LiveryTex, FL = LT.FLANK;
+  // The aft end of the strip a side camera can read, which is what the wrap
+  // clamps its content to — so the trim has to start at or behind it.
+  const zSeen = FL.zF - LT.FLANK_SEEN * FL.zLen;
+  const bare = build({ spineLogo: "wrap" });
+  const marked = build({ spineLogo: "wrap", spineSide: "duo" });
+  // liv.spineSide changes NOTHING else in the body, so the vertices `marked`
+  // has and `bare` does not are the pinstripe and the hatches at their moved
+  // stations. Matched on position, not index, so a differing hatch count reads
+  // as a moved station rather than as a crash.
+  const key = (a, i) => `${a.pos[i].toFixed(4)},${a.pos[i + 1].toFixed(4)},${a.pos[i + 2].toFixed(4)}`;
+  const had = new Set();
+  for (let i = 0; i < bare.pos.length; i += 3) had.add(key(bare, i));
+  let n = 0, front = -9;
+  for (let i = 0; i < marked.pos.length; i += 3) {
+    if (had.has(key(marked, i))) continue;
+    n++; front = Math.max(front, marked.pos[i + 2]);
+  }
+  assert.ok(n > 0, "a side design moved no cover trim at all — sideMark is not reaching the cover");
+  assert.ok(front <= zSeen + 1e-6,
+    `the cover's trim reaches z ${front.toFixed(3)}, forward of the read strip's aft end at `
+    + `${zSeen.toFixed(3)} — it is standing in the band the wrap's design is read in`);
 });
