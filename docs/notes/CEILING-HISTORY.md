@@ -2657,3 +2657,14 @@ arms soft-present / preserveDrawingBuffer — Playwright's Desktop Chrome
 project spoofs a headed UA (no `HeadlessChrome`), which left smoke on a
 minutes-long CDP capture after the soft-first helper change.
 
+## 2026-09-09 — share :sh casters + field helmet maxSplit 0
+
+`js/game.js` lines 10363 -> **10368** (+5) / codeLines 5604 -> **5609** (+5).
+Seat-keyed `:sh` casters were bit-identical between teammates (depth cannot
+see paint); one `:sh` per team(+parts) again. `TEAM_MESH_CACHE_MAX` 48→40
+(still ≥ 12×(2 painted + 1 `:sh`) = 36).
+
+`js/car/car3d.js` lines 4107 -> **4111** (+4). Field AI bodies (`opts.field`,
+already set from `noWheels` factory bodies) pass `Helmets.build({ maxSplit: 0 })`
+— paint-edge splits stay on player/garage/cockpit lids only.
+

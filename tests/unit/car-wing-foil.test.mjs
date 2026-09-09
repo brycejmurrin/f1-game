@@ -211,9 +211,16 @@ test("a shadow silhouette keeps the helmet shape without paint-split cost", () =
   const caster = tris(Car3D.build(C1, C2, { silhouette: true }));
   const painted = tris(Car3D.build(C1, C2, {}));
   assert.ok(caster < painted, `shadow caster ${caster} still carries paint-split helmet (${painted})`);
+  // Field AI bodies (opts.field) drop paint-edge splits; torso stays (unlike :sh).
+  // Norris (#1) is a busy lid — flat designs can match at either split depth.
+  const field = tris(Car3D.build(C1, C2, { noWheels: true, field: true, num: 1 }));
+  const splitBody = tris(Car3D.build(C1, C2, { noWheels: true, num: 1 }));
+  assert.ok(field < splitBody, `field ${field} should drop paint-split vs ${splitBody}`);
+  assert.ok(field > sil, `field ${field} still carries the in-tub torso :sh drops (${sil})`);
+  assert.match(SRC, /sil \|\| field/);
   const GAME = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(GAME, /silhouette: sil/);
-  assert.match(GAME, /sil \? ":sh"/);
+  assert.match(GAME, /teamMeshKey\(team\) \+ ":sh"/);
+  assert.match(GAME, /silhouette: true/);
 });
 
 test("2026 duct/board/slot knobs are inert at 0 and each deforms the mesh", () => {

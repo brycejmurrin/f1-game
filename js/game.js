@@ -1229,7 +1229,7 @@ let _thunderT = -1;          // seconds until queued thunder fires (<0 = none)
 let _cloudBase = 0.4;
 const teamMeshes = {}, teamMeshOrder = [];   // factory full mesh (shadows / ghost / glb)
 const teamBodies = {}, teamBodyOrder = [];   // factory body-only (visible AI — wheels drawn planted)
-const TEAM_MESH_CACHE_MAX = 48, DECAL_TEX_CACHE_MAX = 48;   // 12 teams × (2 painted + 1 :sh silhouette) = 36; 24 overflowed the LRU after :sh keys and freed live casters
+const TEAM_MESH_CACHE_MAX = 40, DECAL_TEX_CACHE_MAX = 48;   // 12 teams × (2 painted + 1 :sh) = 36; headroom for ghost/custom. Was 48 while seat-keyed :sh briefly doubled casters.
 let shake = 0;          // 0..1 trauma; camera offset scales with shake²
 let camRoll = 0;        // radians; lean into corners (decays back to 0)
 let camSlipSm = 0;      // smoothed slip input for camRoll (raw vLat/speed is 60 Hz-stepped)
@@ -2192,17 +2192,22 @@ function teamMeshKey(team) {
   _teamMeshKeyCache.set(team.id, { val, rev: store.rev });
   return val;
 }
-// KEYED PER DRIVER, not per team: the helmet is the design for opts.num, and
-// both of a team's cars were handed drivers[0] — 22 cars, 11 helmets, each pair
-// identical, which is the defect helmets.js exists to fix reintroduced one
-// level up. carDecalNum already resolves this for the number atlas. Shadow
-// casts pass the car AND silhouette:true so the depth map wears that seat's
-// helmet without rebuilding the painted lid into the caster (the FPS carve).
+// Painted full meshes are KEYED PER DRIVER (helmet design is opts.num). Shadow
+// casters pass silhouette:true — depth cannot see paint, and Car3D already
+// drops paint-edge splits + in-tub torso on that path, so both seats of a team
+// build bit-identical casters. Sharing one ":sh" per team(+parts) halves
+// shadow-mesh residency (22 → 11) with no depth change; seat stays on the
+// painted key only.
 function teamMesh(team, car, silhouette) {
-  const num = carDecalNum(team, car);
   const sil = silhouette === true || (car == null && silhouette !== false);
-  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":" + num + (sil ? ":sh" : ""),
-    () => gfx.createMesh(buildCarData(team, { num, silhouette: sil })), TEAM_MESH_CACHE_MAX);
+  if (sil) {
+    return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":sh",
+      () => gfx.createMesh(buildCarData(team, { num: carDecalNum(team, car), silhouette: true })),
+      TEAM_MESH_CACHE_MAX);
+  }
+  const num = carDecalNum(team, car);
+  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":" + num,
+    () => gfx.createMesh(buildCarData(team, { num })), TEAM_MESH_CACHE_MAX);
 }
 function teamBodyMesh(team, car) {
   return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKey(team) + ":" + carDecalNum(team, car), () => gfx.createMesh(buildCarData(team, { noWheels: true, num: carDecalNum(team, car) })), TEAM_MESH_CACHE_MAX);
