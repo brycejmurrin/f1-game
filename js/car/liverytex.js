@@ -2174,17 +2174,31 @@ const LiveryTex = (function () {
       ctx.restore();
     });
     if (spineSide === "logo") {
-      flankMark((Rm) => {
+      // On the saddle the flank IS the panel — a crest the size of the fin badge
+      // vanishes at SIDE+zoom (measured share 0.02 on Red Bull). Hang it a touch
+      // further forward and bare so the bulls fill the box, not the plate disc.
+      const paintFlankLogo = (Rm, bare) => {
         if (LOGOS[teamId]) {
           drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], flankBg, inkFlank), emblemRim);
-        // bare:false — the FULL lockup, plate and all, exactly as the garage wall
-        // and the cover crest paint it (the fin badge alone goes bare, for its plate).
-        // …and its PALETTE against the flank, not the crown's. `field` is dead
-        // when a palette is passed (drawCrest prefers it), so handing the flank
-        // field beside a cover-resolved lockup asserted a surface nobody scored.
-        } else drawCrest(ctx, teamId, Rm, { liv: colors, field: flankBgs, bare: false,
-                                            palette: markPalette(teamId, colors, spineLogo === "wrap" ? [coverPaint] : flankBgs, false) });
-      }, { w: 1.12, h: 1.10 });
+        } else drawCrest(ctx, teamId, Rm, {
+          liv: colors, field: flankBgs, bare,
+          palette: markPalette(teamId, colors, spineLogo === "wrap" ? [coverPaint] : flankBgs, false),
+        });
+      };
+      if (spineLogo === "saddle") {
+        eachFlank((F) => {
+          ctx.save();
+          ctx.translate(su(F, 0.17), F.R.y + F.R.h * FLANK_MARK.v);
+          ctx.scale(flankSquash(spineHeight, F.R), 1);
+          paintFlankLogo({
+            x: -F.R.h * 0.48, y: -F.R.h * 0.34,
+            w: F.R.h * 0.96, h: F.R.h * 0.68,
+          }, true);
+          ctx.restore();
+        });
+      } else {
+        flankMark((Rm) => paintFlankLogo(Rm, false), { w: 1.12, h: 1.10 });
+      }
     } else if (spineSide === "number" || spineSide === "code") {
       flankMark((Rm) => drawNumber(ctx, spineSide === "code" ? driverCode(teamId, raceNum) : raceNum,
                                    Rm, inkFlank, accent, null, colors.numFont, 0));
@@ -2211,8 +2225,10 @@ const LiveryTex = (function () {
       // title on the papaya cover. Under a wrap the bull owns the crease, so
       // the name sits in the free band beneath it, still above the sidepod.
       eachFlank((F) => drawWordmark(ctx, names[0] || "",
-        sideFrom ? sbox(F, 0.04, 0.58, 0.22, 0.58) : sbox(F, 0.06, 0.72, 0.12, 0.48),
-        inkFlank, { align: "center" }));
+        sideFrom ? sbox(F, 0.04, 0.58, 0.22, 0.58)
+        : spineLogo === "saddle" ? sbox(F, 0.06, 0.62, 0.14, 0.42)
+        : sbox(F, 0.06, 0.72, 0.12, 0.48),
+        inkFlank, { align: "center", pad: spineLogo === "saddle" ? 4 : 8 }));
     } else if (spineSide === "duo") {
       // Title sponsor large across the rear, partner small and forward — the
       // RB22's Red Bull over Ford Racing. Both on the UPPER half so they read
@@ -2222,9 +2238,9 @@ const LiveryTex = (function () {
       // has taken the front: two names abreast in a third of the flank clipped
       // the partner to "(DRENY)".
       eachFlank((F) => {
-        if (sideFrom) {
-          drawWordmark(ctx, names[0] || "", sbox(F, 0.04, 0.58, 0.18, 0.48), inkFlank, { align: "center", pad: 6 });
-          drawWordmark(ctx, names[1] || "", sbox(F, 0.14, 0.52, 0.52, 0.78), inkFlank, { align: "center", pad: 6 });
+        if (sideFrom || spineLogo === "saddle") {
+          drawWordmark(ctx, names[0] || "", sbox(F, 0.06, 0.62, 0.16, 0.40), inkFlank, { align: "center", pad: 5 });
+          drawWordmark(ctx, names[1] || "", sbox(F, 0.10, 0.58, 0.44, 0.64), inkFlank, { align: "center", pad: 4 });
           return;
         }
         drawWordmark(ctx, names[0] || "", sbox(F, 0.40, 0.72, 0.14, 0.50), inkFlank, { align: "center", pad: 8 });
@@ -2239,8 +2255,10 @@ const LiveryTex = (function () {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.96);
-        for (let i = 0; i < 3; i++) {
-          const back = su(F, 0.16 + i * 0.24), tip = su(F, 0.30 + i * 0.24);
+        const chevN = sideFrom ? 3 : 2;
+        const chevStep = sideFrom ? 0.24 : 0.18;
+        for (let i = 0; i < chevN; i++) {
+          const back = su(F, 0.14 + i * chevStep), tip = su(F, 0.26 + i * chevStep);
           const th = Sf.h * 0.16, midY = Sf.y + Sf.h * 0.36;
           ctx.beginPath();
           ctx.moveTo(back, midY - Sf.h * 0.26);
@@ -2265,8 +2283,11 @@ const LiveryTex = (function () {
         // it). Spanning the raw flank, this diagonal ran straight over the
         // wrap's mark and filled the lower half of it — and when pickOn chose
         // the same colour the mark was painted in, erased it outright.
-        ctx.moveTo(su(F, 0), Sf.y + Sf.h * 0.30); ctx.lineTo(su(F, 1), Sf.y + Sf.h * 0.72);
-        ctx.lineTo(su(F, 1), Sf.y + Sf.h * 0.78); ctx.lineTo(su(F, 0), Sf.y + Sf.h * 0.78);
+        const rearU = spineLogo === "saddle" ? 0.82 : 1;
+        const rearV = spineLogo === "saddle" ? 0.68 : 0.72;
+        const footV = spineLogo === "saddle" ? 0.74 : 0.78;
+        ctx.moveTo(su(F, 0), Sf.y + Sf.h * 0.30); ctx.lineTo(su(F, rearU), Sf.y + Sf.h * rearV);
+        ctx.lineTo(su(F, rearU), Sf.y + Sf.h * footV); ctx.lineTo(su(F, 0), Sf.y + Sf.h * footV);
         ctx.closePath(); ctx.fill();
         ctx.restore();
       });
@@ -2278,11 +2299,14 @@ const LiveryTex = (function () {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.96);
-        for (let i = 0; i < 4; i++) {
-          const y = Sf.y + Sf.h * (0.18 + i * 0.19), h = Sf.h * 0.085;
+        const barN = sideFrom ? 4 : 3;
+        const barReach = sideFrom ? 0.62 : 0.32;
+        for (let i = 0; i < barN; i++) {
+          const y = Sf.y + Sf.h * (0.16 + i * 0.20), h = Sf.h * 0.085;
           // su, not F.fx — same reason as split: these start aft of the wrap's
-          // mark instead of striping across it.
-          const x0 = su(F, 0.04), x1 = su(F, 0.04 + 0.62 - i * 0.13);
+          // mark instead of striping across it. On a full flank, stop before the
+          // aft tyre station (bars at u 0.54 hid 14 % from SIDE on saddle).
+          const x0 = su(F, 0.04), x1 = su(F, 0.04 + barReach - i * 0.09);
           ctx.fillRect(Math.min(x0, x1), y, Math.abs(x1 - x0), h);
         }
         ctx.restore();
@@ -2295,12 +2319,15 @@ const LiveryTex = (function () {
       // thinner and shorter than the one ahead (the W17's run to the wing),
       // raked so their tops lean to the REAR — F.dir picks which way that is.
       eachFlank((F) => {
-        const Sf = F.R, skew = Sf.h * 0.40 * F.dir;
+        const Sf = F.R, skew = Sf.h * (sideFrom ? 0.40 : 0.26) * F.dir;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.96);
         const crease = Sf.y + Sf.h * 0.06;
-        for (let i = 0; i < 6; i++) {
-          const x0 = su(F, 0.10 + i * 0.145), bw = Sf.w * (1 - sideFrom) * (0.055 - i * 0.005) * F.dir, hh = Sf.h * (0.79 - i * 0.10);
+        const nSlash = sideFrom ? 6 : 4;
+        const uSlash = sideFrom ? 0.145 : 0.095;
+        const hh0 = sideFrom ? 0.79 : 0.68;
+        for (let i = 0; i < nSlash; i++) {
+          const x0 = su(F, 0.10 + i * uSlash), bw = Sf.w * (1 - sideFrom) * (0.055 - i * 0.005) * F.dir, hh = Sf.h * (hh0 - i * 0.10);
           ctx.beginPath();
           ctx.moveTo(x0 + skew, crease); ctx.lineTo(x0 + skew + bw, crease);
           ctx.lineTo(x0 + skew * (1 - hh / Sf.h) + bw, crease + hh); ctx.lineTo(x0 + skew * (1 - hh / Sf.h), crease + hh);
@@ -2317,15 +2344,25 @@ const LiveryTex = (function () {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.97);
-        const x0 = su(F, 0.02), x1 = su(F, 0.98);
-        ctx.fillRect(Math.min(x0, x1), Sf.y + Sf.h * 0.04, Math.abs(x1 - x0), Sf.h * 0.38);
+        const ribEnd = spineLogo === "saddle" ? 0.66 : 0.98;
+        const x0 = su(F, 0.02), x1 = su(F, ribEnd);
+        const bandTop = Sf.y + Sf.h * 0.04, bandH = Sf.h * (spineLogo === "saddle" ? 0.44 : 0.38);
+        ctx.fillRect(Math.min(x0, x1), bandTop, Math.abs(x1 - x0), bandH);
+        if (spineLogo === "saddle") {
+          ctx.strokeStyle = cssA(inkFlank, 0.55);
+          ctx.lineWidth = Math.max(1, Sf.h * 0.012);
+          ctx.strokeRect(Math.min(x0, x1), bandTop, Math.abs(x1 - x0), bandH);
+        }
         ctx.restore();
         ctx.save();
-        ctx.translate(su(F, 0.16), Sf.y + Sf.h * 0.21);
+        ctx.translate(su(F, spineLogo === "saddle" ? 0.18 : 0.16), Sf.y + Sf.h * 0.22);
         ctx.scale(flankSquash(spineHeight, Sf), 1);
         const plateInk = contrast(c1, flankBandC) >= 3 ? c1 : inkOn([flankBandC]);
-        drawNumber(ctx, raceNum, { x: -Sf.h * 0.32, y: -Sf.h * 0.14, w: Sf.h * 0.64, h: Sf.h * 0.28 },
-                   plateInk, inkFlank, null, colors.numFont, 0);
+        const numBox = spineLogo === "saddle"
+          ? { x: -Sf.h * 0.36, y: -Sf.h * 0.16, w: Sf.h * 0.72, h: Sf.h * 0.32 }
+          : { x: -Sf.h * 0.32, y: -Sf.h * 0.14, w: Sf.h * 0.64, h: Sf.h * 0.28 };
+        const numPlate = spineLogo === "saddle" ? (contrast(c1, flankBandC) >= 2.2 ? c1 : INK_LIGHT) : null;
+        drawNumber(ctx, raceNum, numBox, plateInk, inkFlank, numPlate, colors.numFont, 0);
         ctx.restore();
       });
     } else if (spineSide === "lockup") {
@@ -2333,17 +2370,25 @@ const LiveryTex = (function () {
       // pairing a 2026 cover carries (the SF-26's 16 with HP, the W17's 12
       // with the star). The mark is BARE so its plate cannot clip the crease
       // the way the full lockup did at this station.
+      const lkU = spineLogo === "saddle" ? 0.10 : 0.12;
+      const mkU = spineLogo === "saddle" ? 0.36 : 0.40;
+      const lkScale = spineLogo === "saddle" ? 1.12 : 1;
       eachFlank((F) => {
         ctx.save();
-        ctx.translate(su(F, 0.12), F.R.y + F.R.h * 0.30);
+        ctx.translate(su(F, lkU), F.R.y + F.R.h * 0.30);
         ctx.scale(flankSquash(spineHeight, F.R), 1);
-        drawNumber(ctx, raceNum, { x: -F.R.h * 0.26, y: -F.R.h * 0.20, w: F.R.h * 0.52, h: F.R.h * 0.40 },
-                   inkFlank, accent, null, colors.numFont, 0);
+        drawNumber(ctx, raceNum, {
+          x: -F.R.h * 0.26 * lkScale, y: -F.R.h * 0.20 * lkScale,
+          w: F.R.h * 0.52 * lkScale, h: F.R.h * 0.40 * lkScale,
+        }, inkFlank, accent, null, colors.numFont, 0);
         ctx.restore();
         ctx.save();
-        ctx.translate(su(F, 0.40), F.R.y + F.R.h * 0.30);
+        ctx.translate(su(F, mkU), F.R.y + F.R.h * 0.30);
         ctx.scale(flankSquash(spineHeight, F.R), 1);
-        const Rm = { x: -F.R.h * 0.20, y: -F.R.h * 0.16, w: F.R.h * 0.40, h: F.R.h * 0.32 };
+        const Rm = {
+          x: -F.R.h * 0.20 * lkScale, y: -F.R.h * 0.16 * lkScale,
+          w: F.R.h * 0.40 * lkScale, h: F.R.h * 0.32 * lkScale,
+        };
         if (LOGOS[teamId]) {
           drawLogoImage(ctx, LOGOS[teamId], Rm, logo, markHalo(LOGOS[teamId], flankBg, inkFlank), emblemRim);
         } else {
