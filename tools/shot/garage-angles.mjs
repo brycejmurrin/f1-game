@@ -51,23 +51,19 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
+import { parseFlags, runCli } from "../lib/cli-args.mjs";
 import {
   chromiumArgsForBackend, installProbeInit, gotoGame, openGarage, settleGarage,
   screenshotGameCanvas,
 } from "../capture/probe-page.mjs";
 
 const argv = process.argv.slice(2);
-/** Accept `--name=value` and `--name value` (render-car style). */
-const flag = (name, dflt) => {
-  const eq = argv.find((a) => a.startsWith(name + "="));
-  if (eq) return eq.slice(name.length + 1) || dflt;
-  const i = argv.indexOf(name);
-  if (i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("-")) return argv[i + 1];
-  return dflt;
-};
-/** Every axis is a comma list; empty entries drop out so `--livery=a,,b` is 2. */
-const list = (name, dflt) => (flag(name, dflt) || "").split(",").map((x) => x.trim()).filter(Boolean);
-const dryRun = argv.includes("--dry-run");
+const KNOWN = ["--team", "--livery", "--spine-side", "--spine-logo", "--parts", "--views",
+               "--zoom", "--pan", "--viewport", "--out", "--dry-run", "--visible-only"];
+// Shared with the other garage/car CLIs: both `--name=v` and `--name v`, and an
+// unknown flag stops the run rather than silently using the default.
+const { flag, list, has } = parseFlags(argv, KNOWN);
+const dryRun = has("--dry-run");
 // THE CANVAS IS NOT WHAT THE PLAYER SEES. The setup sheet is DOM docked over
 // part of #game, and the preview compensates with an off-axis frustum
 // (_spProj[8] = panelFrac, [9] = panelFracY) that shifts the car into the gap
@@ -78,7 +74,7 @@ const dryRun = argv.includes("--dry-run");
 // left 848 px exactly as intended. That misread cost a false defect report, so
 // --visible-only crops every shot to the region the sheet leaves and the
 // manifest always records the panel geometry, whether or not it is cropped.
-const visibleOnly = argv.includes("--visible-only");
+const visibleOnly = has("--visible-only");
 
 const teams = list("--team", "mclaren");
 const liveries = list("--livery", "default");
@@ -503,4 +499,4 @@ async function main() {
   }
 }
 
-main().then(() => shutdown()).catch((e) => { console.error(e); shutdown(); process.exit(1); });
+runCli(() => main().then(() => shutdown()).catch((e) => { shutdown(); throw e; }));

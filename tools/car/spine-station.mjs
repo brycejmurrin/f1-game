@@ -44,6 +44,7 @@ import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { paintStackAt } from "./crest-sweep.mjs";
 import { loadAtlas } from "./livery-contrast.mjs";
+import { makeFlags, runCli } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GRID = 128;          // samples across the region's LONG axis
@@ -161,8 +162,14 @@ export function sweep(A, { team, logo, sides, grid = GRID, hiddenAt = null }) {
   };
 }
 
+const KNOWN = ["--team", "--side", "--logo", "--grid", "--png", "--scale", "--occlude", "--json"];
+
 async function main() {
-  const arg = (k, d) => { const h = process.argv.find((a) => a.startsWith(`--${k}=`)); return h ? h.slice(k.length + 3) : d; };
+  // Was `--k=v` ONLY, so `--team redbull` printed McLaren's whole table under a
+  // heading the caller read as Red Bull. makeFlags takes both spellings and
+  // throws on anything it does not know.
+  const F = makeFlags(process.argv.slice(2), KNOWN);
+  const arg = (k, d) => F.flag("--" + k, d);
   const A = loadAtlas();
   const team = arg("team", "mclaren");
   const sides = (arg("side", "") || A.LT.SPINE_SIDE_IDS.filter((s) => s !== "none").join(",")).split(",");
@@ -170,7 +177,7 @@ async function main() {
   // the real body and wheels through the garage SIDE camera, so a design that
   // lands well and is covered anyway reports as covered instead of clean.
   let hiddenAt = null, om = null;
-  if (process.argv.includes("--occlude")) {
+  if (F.has("--occlude")) {
     const [{ loadParts }, occl] = await Promise.all([import("./parts-sweep.mjs"), import("./flank-occlusion.mjs")]);
     om = occl.occlusionMap(loadParts(), { team, grid: 96 });
     hiddenAt = (u, v) => om.cell[Math.min(om.rows - 1, (v * om.rows) | 0) * om.cols
@@ -187,7 +194,7 @@ async function main() {
   }
   for (const r of out.rows) delete r.sample;
   delete out.base;
-  if (process.argv.includes("--json")) { console.log(JSON.stringify(out, null, 1)); return; }
+  if (F.has("--json")) { console.log(JSON.stringify(out, null, 1)); return; }
   console.log(`${out.team} crown=${out.spineLogo}  flank region ${out.region.w}x${out.region.h} px`);
   console.log(`  v 0 = shoulder crease (s ${out.crease} m), 1 = sidepod line (s ${out.sidepod} m)`);
   console.log("  u 0 = front of the flank, 1 = rear. crease/sidepod = the ink crosses that");
@@ -205,4 +212,4 @@ async function main() {
   if (dir) console.log(`  PNGs -> ${dir}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) await main();
+if (import.meta.url === `file://${process.argv[1]}`) await runCli(main);

@@ -13,6 +13,7 @@ import {
 } from "../capture/probe-page.mjs";
 import { assertGarageInterior, sampleGarageGapPixels } from "../capture/garage-interior.mjs";
 import sharp from "sharp";
+import { resolveRepoDefault, resolveContainedChild } from "../lib/output-paths.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const argv = process.argv.slice(2);
@@ -22,7 +23,13 @@ const flag = (n, d) => {
 };
 const backends = flag("--backend", "webgpu,webgl2").split(",").map((s) => s.trim());
 const vp = flag("--viewport", "1440x900").split("x").map(Number);
-const outDir = flag("--out", "/opt/cursor/artifacts/garage-frame");
+// Was hardcoded to /opt/cursor/artifacts/garage-frame — a Cursor-Cloud path
+// that does not exist on other boxes, and outside the repo either way.
+// AGENTS.md: regenerable output goes in artifacts/ or scratch/, nowhere else,
+// and tools/lib/output-paths.mjs already enforces exactly that.
+const outDir = flag("--out", null)
+  ? resolveContainedChild(ROOT, flag("--out"), "--out")
+  : resolveRepoDefault(ROOT, "artifacts", "garage-frame");
 
 mkdirSync(outDir, { recursive: true });
 

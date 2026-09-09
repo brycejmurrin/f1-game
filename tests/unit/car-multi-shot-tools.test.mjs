@@ -33,7 +33,8 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
   assert.match(src, /flag\("--views",\s*"spine"\)/, "default views=spine for cover checks");
-  assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
+  assert.match(src, /parseFlags\(argv, KNOWN\)/,
+    "flags come from the shared reader, which takes --team=value AND --team value");
   assert.match(src, /screenshotGameCanvas/, "must reuse soft-present capture helper");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
   assert.match(src, /settleGarage/, "settle soft-present between presets");
@@ -101,7 +102,7 @@ test("carshot uses soft→CDP clip, not page.screenshot", () => {
  * all — a build comparison meant one boot per build. */
 test("garage-angles walks every axis as a list, cheapest innermost", () => {
   const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /const list = \(name, dflt\)/, "one comma-list parser for every axis");
+  assert.match(src, /const \{ flag, list, has \} = parseFlags/, "one comma-list parser for every axis");
   for (const axis of ["--team", "--livery", "--parts", "--spine-side", "--zoom"]) {
     assert.match(src, new RegExp(`list\\("${axis}"`), `${axis} must be a list axis`);
   }
@@ -140,7 +141,7 @@ test("garage-angles validates part ids against availability for THAT team", () =
 
 test("garage-angles can print the matrix without booting Chromium", () => {
   const src = code("tools/shot/garage-angles.mjs");
-  assert.match(src, /const dryRun = argv\.includes\("--dry-run"\)/, "--dry-run flag");
+  assert.match(src, /const dryRun = has\("--dry-run"\)/, "--dry-run flag");
   const gate = src.slice(src.indexOf("if (dryRun)"), src.indexOf("async function bayRendered"));
   assert.match(gate, /process\.exit\(0\)/, "--dry-run exits before launchChromium");
   assert.ok(src.indexOf("if (dryRun)") < src.indexOf("launchChromium("),
@@ -163,7 +164,7 @@ test("garage-angles measures the docked sheet rather than assuming where it is",
   // The 55% cut stays as the fallback for a page that reports no sheet, but it
   // must not be the primary — that hardcoded guess is what hid the real number.
   assert.match(gate, /0\.55/, "keep the old cut as a fallback only");
-  assert.match(src, /const visibleOnly = argv\.includes\("--visible-only"\)/,
+  assert.match(src, /const visibleOnly = has\("--visible-only"\)/,
     "--visible-only crops shots to what the player actually sees");
 });
 
@@ -175,4 +176,47 @@ test("garage-angles records panel geometry on every shot, cropped or not", () =>
   assert.ok(frame.indexOf("const panel = await panelGeometry") < frame.indexOf("for (let attempt"),
     "panel geometry must be read before the gate loop, not per attempt");
   assert.match(frame, /^\s*panel,$/m, "the manifest carries it whether or not --visible-only cropped");
+});
+
+/* ONE flag reader for the garage/car CLIs. Four tools hand-rolled their own and
+ * they disagreed: measured 2026-09-09, `--team redbull` gave spine-station and
+ * flank-occlusion MCLAREN's numbers under a heading the caller read as Red
+ * Bull, with nothing said anywhere. Those two are the OFFLINE MEASUREMENT
+ * tools — the ones whose entire output is figures you then act on — and
+ * spine-station's own header cross-references garage-angles in the space form,
+ * so the docs taught the spelling that broke it. */
+test("every garage/car CLI reads flags through the shared reader", () => {
+  for (const f of ["tools/car/spine-station.mjs", "tools/car/flank-occlusion.mjs",
+                   "tools/shot/garage-angles.mjs"]) {
+    const src = code(f);
+    assert.match(src, /from "\.\.\/lib\/cli-args\.mjs"/, `${f} must use the shared reader`);
+    assert.match(src, /const KNOWN = \[/, `${f} must declare the flags it accepts`);
+    assert.doesNotMatch(src, /process\.argv\.find\(\(a\) => a\.startsWith\(`--\$\{k\}=`\)\)/,
+      `${f} still hand-rolls an =-only parser — that is the bug`);
+  }
+});
+
+test("the shared reader takes both spellings and refuses what it does not know", async () => {
+  const { makeFlags, CliArgError } = await import("../../tools/lib/cli-args.mjs");
+  const known = ["--team", "--grid", "--json"];
+  assert.equal(makeFlags(["--team=redbull"], known).flag("--team", "mclaren"), "redbull");
+  assert.equal(makeFlags(["--team", "redbull"], known).flag("--team", "mclaren"), "redbull",
+    "the SPACE form is the one that silently fell through to the default");
+  assert.equal(makeFlags(["--json", "--team", "redbull"], known).flag("--json", null), null,
+    "a bare flag must not swallow the next flag as its value");
+  assert.equal(makeFlags(["--json"], known).has("--json"), true);
+  assert.throws(() => makeFlags(["--tema=redbull"], known), CliArgError,
+    "a typo must stop the run, not quietly measure the default team");
+  assert.throws(() => makeFlags(["--tema=redbull"], known), /did you mean --team/);
+});
+
+/* AGENTS.md: regenerable output lives in artifacts/ or scratch/, nowhere else.
+ * garage-frame defaulted --out to /opt/cursor/artifacts/garage-frame — a
+ * Cursor-Cloud path that exists on no other box and is outside the repo on
+ * every box — while tools/lib/output-paths.mjs already enforced the rule. */
+test("garage-frame writes inside the repo, through the containment helper", () => {
+  const src = code("tools/shot/garage-frame.mjs");
+  assert.doesNotMatch(src, /\/opt\/cursor/, "no machine-specific absolute output path");
+  assert.match(src, /resolveRepoDefault\(ROOT, "artifacts", "garage-frame"\)/, "default under artifacts/");
+  assert.match(src, /resolveContainedChild\(ROOT, flag\("--out"\)/, "a caller's --out cannot escape the repo");
 });

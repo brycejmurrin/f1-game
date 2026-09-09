@@ -30,6 +30,7 @@
 // A DIFFERENT camera is a different answer — this reports one viewpoint, not a
 // claim about every angle.
 import { loadParts } from "./parts-sweep.mjs";
+import { makeFlags, runCli } from "../lib/cli-args.mjs";
 
 // game.js WHEELS. Rear tyres are the wide ones and the ones that matter here.
 const WHEELS = [
@@ -201,8 +202,13 @@ export function hiddenIn(om, u0, u1, v0 = 0, v1 = 1) {
   return n ? +(h / n).toFixed(3) : 0;
 }
 
+const KNOWN = ["--team", "--az", "--el", "--dist", "--grid", "--json"];
+
 async function main() {
-  const arg = (k, d) => { const h = process.argv.find((a) => a.startsWith(`--${k}=`)); return h ? h.slice(k.length + 3) : d; };
+  // `--k=v` only, previously: `--team redbull` measured McLaren and said so
+  // nowhere. Both spellings now, and an unknown flag stops the run.
+  const F = makeFlags(process.argv.slice(2), KNOWN);
+  const arg = (k, d) => F.flag("--" + k, d);
   const M = loadParts();
   const cam = Object.assign({}, SIDE_CAM, {
     az: +arg("az", SIDE_CAM.az), el: +arg("el", SIDE_CAM.el), dist: +arg("dist", SIDE_CAM.dist),
@@ -211,7 +217,7 @@ async function main() {
   const om = occlusionMap(M, { team, cam, grid: +arg("grid", 48) });
   const bands = [];
   for (let k = 0; k < 10; k++) bands.push({ u0: k / 10, u1: (k + 1) / 10, hidden: hiddenIn(om, k / 10, (k + 1) / 10) });
-  if (process.argv.includes("--json")) {
+  if (F.has("--json")) {
     console.log(JSON.stringify({ team, cam, eye: om.eye, whole: hiddenIn(om, 0, 1), bands }, null, 1));
     return;
   }
@@ -228,4 +234,4 @@ async function main() {
   console.log("  (# = hidden. rows run crease -> sidepod, columns FRONT -> REAR)");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) await main();
+if (import.meta.url === `file://${process.argv[1]}`) await runCli(main);
