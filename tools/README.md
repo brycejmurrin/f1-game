@@ -107,7 +107,7 @@ Headless observation of the running game: framed screenshots, one-expression eva
 | **shot/apex-eval.mjs** | Boot the game headless, evaluate one `__apex` expression, print JSON: `apex-eval.mjs monza '__apex.corners()'`. | playwright-probe |
 | **shot/backend-compare.mjs** | Same deterministic scene on GLX/TLX/WGX + numeric pixel diff (MAD, %px changed) and per-backend console errors. | playwright-probe |
 | **shot/baked-scenery.mjs** | Curated free-cam gallery of `bakedModel` sites (Monza/Spa/Silverstone/Monaco/Vegas); PNGs + `manifest.json`. | playwright-probe / scenery-dress |
-| **shot/garage-angles.mjs** | Garage camera-preset screenshots for one team — many views, ONE Chromium. | playwright-probe |
+| **shot/garage-angles.mjs** | Garage camera-preset shots — ONE Chromium; optional --livery / --spine-side walks. | playwright-probe |
 | **shot/garage-frame.mjs** | Garage turntable screenshot + garageCam() JSON for WebGPU/WebGL2 A/B. | — |
 | **shot/motion-capture.mjs** | Records a driven clip via `recordVideo` (headless rAF is frozen), extracts frames, scores per-frame flicker. | playwright-probe |
 | **shot/profile-gameloop.mjs** | Headless V8 CPU profile of the game loop → a `.cpuprofile` for Chrome DevTools. | playwright-probe |
@@ -189,6 +189,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/parts-ladder.mjs** | Would anyone ever PICK this catalog option? Proves no paid option is dominated by a cheaper one (offline, no browser). | garage-parts-livery |
 | **car/parts-sweep.mjs** | How much does each catalog option change the car? Builds all options offline via `node:vm` against the right baseline. | garage-parts-livery |
 | **car/render-car.mjs** | Headless batch renderer for `carview.html` — preset orbit angles + HTML contact sheet; needs a server on :3456. | playwright-probe |
+| **car/spine-station.mjs** | Measures + rasterises where every spine design lands on the cover flank, offline — no browser, no game boot. | garage-parts-livery |
 | **car/trace-logo.mjs** | Author-time: regenerates `js/car/crest-paths.js` from a team logo bitmap in git history (k-means inks, contour walk). | playwright-probe |
 
 ### `tools/ui/`

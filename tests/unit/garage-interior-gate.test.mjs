@@ -158,4 +158,20 @@ describe("the interior gate on a cleared-buffer frame", () => {
     assert.ok(freezeAt < 0 || freezeAt > softAt,
       "freeze+CDP is fallback only after the soft overlay path");
   });
+
+  it("garage-angles captures via soft helper and walks livery/spine designs", () => {
+    const angles = fs.readFileSync(path.join(REPO, "tools/shot/garage-angles.mjs"), "utf8");
+    assert.match(angles, /screenshotGameCanvas/,
+      "HeadlessChrome GLX presents on #game-soft; a full-page screenshot is the UI sheet");
+    assert.doesNotMatch(angles, /await page\.screenshot\(/,
+      "page.screenshot waits for fonts.ready and was the smoke hang after freeze");
+    assert.match(angles, /--livery/,
+      "paint jobs share the camera stack; a store write is enough (LIVERY tab slams FRONT)");
+    assert.match(angles, /--spine-side/,
+      "crown/flank pills are walked as custom ids so a design pass does not reload per shot");
+    assert.match(angles, /--zoom/,
+      "counted #cs-view-in clicks so a flank mark can be judged, not just seen");
+    assert.doesNotMatch(angles, /page\.reload\(/,
+      "no second boot — openGarage + store writes keep ONE Chromium");
+  });
 });
