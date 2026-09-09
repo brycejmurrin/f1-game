@@ -24,6 +24,7 @@ const GLX = (function () {
   let _softBlitGen = 0;
   let _softPresentWaiters = [];
   let _softLastMaxPx = 0;
+  let _softCaptureDue = false;
   // Mobile tier: iOS home-screen web apps (WKWebView) get a tight jetsam memory
   // budget that GPU/IOSurface allocations count against — a hard kill, no JS
   // error, no contextlost event. Shrink every discretionary GPU allocation on
@@ -444,9 +445,10 @@ const GLX = (function () {
   function softBlit() {
     if (!_softPresent || !_displayCtx || !gl || ctxGone()) return;
     // A synchronous GPU readback plus two full-frame CPU copies is capture
-    // work, not presentation work. Capture tools call awaitSoftPresent();
-    // ordinary WebDriver frames must stay on the render path.
-    if (!_softPresentWaiters.length) return;
+    // work, not presentation work. Capture tools call awaitSoftPresent(), and
+    // snapCam()/invalidateSoftPresent() arms one explicit blit on the next
+    // present — not a periodic background readback every N frames.
+    if (!_softPresentWaiters.length && !_softCaptureDue) return;
     const w = width | 0, h = height | 0;
     if (w < 1 || h < 1) return;
     if (_displayCanvas.width !== w || _displayCanvas.height !== h) {
@@ -480,6 +482,7 @@ const GLX = (function () {
     if (maxPx < 8) return;
     try {
       _displayCtx.putImageData(_softImg, 0, 0);
+      _softCaptureDue = false;
       softBlitNotify();
     } catch (_) { /* 2D blit failed */ }
   }
@@ -496,8 +499,7 @@ const GLX = (function () {
   // snapCam() / park() call gfx.invalidateSoftPresent. GLX captures only on
   // demand, and awaitSoftPresent() already requires a newer generation.
   function invalidateSoftPresent() {
-    // awaitSoftPresent() supplies the demand signal; camera invalidation only
-    // documents that the next capture must wait for a newer generation.
+    _softCaptureDue = true;
   }
 
   function awaitSoftPresent(timeoutMs) {
@@ -2521,7 +2523,7 @@ const GLX = (function () {
     present: (opts) => {
       if (ctxGone()) return;
       const r = PST.present(opts);
-      if (_softPresentWaiters.length) softBlit();
+      if (_softPresentWaiters.length || _softCaptureDue) softBlit();
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
       return r;
     },

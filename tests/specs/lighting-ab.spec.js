@@ -68,7 +68,7 @@ async function regionMean(page, fx, fy, fw, fh) {
   // renders these scenes at under 1 FPS, and the capture waits on a frame. It
   // timed out at 60 s inside the group ("night fog GLOWS", 144.9 s) while
   // PASSING solo at 179.8 s — the budget, not the renderer.
-  const buf = await pageScreenshot(page, { type: "jpeg", quality: 70, timeout: 150_000, softTimeout: 150_000 });
+  const buf = await pageScreenshot(page, { type: "jpeg", quality: 70, timeout: 150_000, softTimeout: 60_000 });
   return page.evaluate(async ({ b64, fx, fy, fw, fh }) => {
     const img = new Image(); img.src = "data:image/jpeg;base64," + b64; await img.decode();
     const c = document.createElement("canvas"); c.width = img.width; c.height = img.height;

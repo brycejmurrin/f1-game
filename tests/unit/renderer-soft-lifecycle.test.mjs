@@ -169,12 +169,14 @@ test("GLX/TLX re-queue waiters whose predicate has not fired", () => {
 test("GLX soft-present reads back only for an explicit capture waiter", () => {
   const src = read("js/render/glx/glx.js");
   const blit = src.slice(src.indexOf("function softBlit()"), src.indexOf("function softPresentState()"));
-  assert.match(blit, /if\s*\(\s*!_softPresentWaiters\.length\s*\)\s*return/,
+  assert.match(blit, /if\s*\(\s*!_softPresentWaiters\.length\s*&&\s*!_softCaptureDue\s*\)\s*return/,
     "ordinary WebDriver presents must not synchronously read back the framebuffer");
+  assert.match(blit, /_softCaptureDue = false/,
+    "a successful capture blit must disarm the one-shot snapCam flag");
   assert.doesNotMatch(src, /SOFT_BLIT_EVERY|_softBlitPace/,
     "periodic background readbacks must be removed");
   const present = src.slice(src.indexOf("present: (opts) =>"), src.indexOf("softPresent: () =>"));
-  assert.match(present, /if\s*\(\s*_softPresentWaiters\.length\s*\)\s*softBlit\(\)/);
+  assert.match(present, /if\s*\(\s*_softPresentWaiters\.length\s*\|\|\s*_softCaptureDue\s*\)\s*softBlit\(\)/);
 });
 
 test("GLX links SGSR only after spatial upscaling is requested", () => {
