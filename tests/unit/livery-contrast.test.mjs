@@ -135,3 +135,16 @@ test("a colour you PICK is the colour that gets painted, contrast or not", () =>
     assert.ok(dominant(liv, region).startsWith(css),
       `${what}: picked ${css}..) and got ${dominant(liv, region)}`);
 });
+
+test("SPINE TOP wrap survives a partial livery (no c1/c2)", () => {
+  // CARVIEW.set({livery:{spineLogo:"wrap"}}) and any caller that patches only
+  // the design field used to throw in markPalette (alt.slice on null) once
+  // sunColour asked for a palette against [undefined, undefined].
+  for (const t of A.Teams.LIST) {
+    assert.doesNotThrow(() => A.LT.sunColour(t.id, { spineLogo: "wrap" }),
+      `${t.id}: sunColour({spineLogo:"wrap"}) must not throw`);
+    const P = A.LT.markPalette(t.id, { spineLogo: "wrap" }, [undefined, undefined], false);
+    assert.ok(P.mark && P.mark.length === 3, `${t.id}: mark is an rgb`);
+    assert.ok(P.alt && P.alt.length === 3, `${t.id}: alt is an rgb (was null → crash)`);
+  }
+});

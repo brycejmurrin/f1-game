@@ -509,8 +509,21 @@ const LiveryTex = (function () {
     // stripe||c2, so what the mark actually lands on runs from c1 to a c2 tint
     // across the panel. This is the same pair INKED_FOR declares in
     // parts-livery-contrast.spec.js. Score against the WORST of them.
-    const flds = (Array.isArray(field) && Array.isArray(field[0])) ? field.filter(Boolean)
-      : [field || INK_DARK];
+    // An rgb triple is itself an Array, so "is the first element an Array" is
+    // NOT "is this a list of paints" — it is also true of one colour. A partial
+    // livery (no c1/c2) used to arrive as `[undefined, undefined]`, fail that
+    // test, wrap the whole list as one "colour", leave `alt` null, and crash
+    // `alt.slice()` the moment SPINE TOP `wrap` asked sunColour → markPalette
+    // (CARVIEW.set({livery:{spineLogo:"wrap"}}) measured 2026-09-09).
+    const isRgb = (c) => Array.isArray(c) && c.length >= 3 && typeof c[0] === "number";
+    const flds = (() => {
+      if (isRgb(field)) return [field];
+      if (Array.isArray(field)) {
+        const paints = field.filter(isRgb);
+        return paints.length ? paints : [INK_DARK];
+      }
+      return [INK_DARK];
+    })();
     const cMin = (c, list) => {
       let m = Infinity;
       for (const f of list) m = Math.min(m, contrast(c, f));
@@ -641,6 +654,11 @@ const LiveryTex = (function () {
       const c = [g, g, g], v = score(c);
       if (v > best) { best = v; alt = c; }
     }
+    // score() is NaN when `under`/`mark` were empty or non-rgb (partial
+    // livery); every candidate then loses to `best = -1` and alt stays null.
+    // A second colour that cannot be chosen is still a colour the crest path
+    // slices — never hand null out of markPalette.
+    if (!alt) alt = haloFor(mark || INK_DARK);
     // An authored LOGO DETAIL colour, landed in whichever slot this mark's
     // second colour actually occupies. `alt` is taken as given for the same
     // reason `plate` is — it is a colour the player chose, and the shapes it
@@ -1272,8 +1290,10 @@ const LiveryTex = (function () {
     // The field is the COVER, not the body: this sun is painted on the crown,
     // the cover flanks and (Car3D) the airbox. Scoring it against c1 gave a
     // sun that reads on the chassis and disappears on a contrasting cover.
-    const cover = liv.cover || liv.c1;
-    const P = markPalette(teamId, liv, [cover, liv.c2], false);
+    // Fall back to a near-black when a partial liv has no cover/c1 — markPalette
+    // tolerates empty fields now, but pickOn still needs a real paint to score.
+    const cover = liv.cover || liv.c1 || INK_DARK;
+    const P = markPalette(teamId, liv, [cover, liv.c2].filter(Boolean), false);
     // ...and then it has to CLEAR that cover, which nothing here checked. The
     // crown BAND is re-picked against the cover at SUN_FLOOR for exactly this
     // reason ("a pale accent on a pale cover painted white on white"), and the

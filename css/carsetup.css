@@ -64,6 +64,15 @@
      did. */
   --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 320px / var(--ui-scale)), 420px));
 }
+/* Livery editor: the player is judging spine / logo paint on the car. Give the
+   crown more of the left gap (420 visual px reserved instead of 320) and thin
+   the panel so the cover shows through while the pills stay readable. */
+#carsetup:has(.cs-liv-editor) {
+  --cs-sheet-w: min(100%, clamp(360px, calc(100 * var(--vwz) - 420px / var(--ui-scale)), 380px));
+}
+#carsetup:has(.cs-liv-editor) #cs-inner {
+  background: color-mix(in oklab, var(--panel) 78%, transparent);
+}
 #cs-inner {
   pointer-events: auto;
   /* Never wider than the safe box; the formula above decides the rest. */
