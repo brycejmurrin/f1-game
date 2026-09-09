@@ -2070,6 +2070,31 @@ const LiveryTex = (function () {
         // near-black crest at 1.0:1. A team WITH a traced bull keeps it under
         // every side design: it is the livery's signature, not a filler.
         const span = wrapMarkSpan(teamId);
+        // …and this badge is NOT the bull, so it does not get the bull's field.
+        // `sunLockup` pairs the sun with the cover because a traced bull is a
+        // metre-long silhouette that genuinely straddles the disc. This one is
+        // a badge spanning v BULL.top .. BULL.top + BULL.h = 0.30 .. 0.82, and
+        // the sun's flank ellipse bottoms out at v = SUN.r / FLANK.sLen −
+        // sTop/sLen = 0.277 on the flank's own centreline and less either side
+        // of it — so the badge never reaches the sun at ANY u and lands
+        // entirely on BARE COVER. (It was v 0.10 .. 0.90 when this was first
+        // measured, where the box's top-front corner could still graze the
+        // disc; pulling the mark down to clear the sidepod removed even that.
+        // RE-DERIVE THIS LINE IF BULL MOVES AGAIN — it is the whole argument
+        // for the field below.)
+        // Scoring it against both anyway asks one ink to clear a light sun AND
+        // a dark cover, which is unsatisfiable, and markPalette answers an
+        // unsatisfiable floor by falling back on a HALO: the mark went out
+        // near-black on Cadillac's black cover (1.04) inside a white glow, and
+        // white on Mercedes' silver (1.59) inside a dark one. Legible, and the
+        // wrong car — what is lost is the brand colour, not the visibility.
+        // Scored on the cover alone the floor is satisfiable, Cadillac wears
+        // its gold at 8.43 and Mercedes its dark star at 11.39, and no halo is
+        // drawn at all. (Atlas + the real garage, 2026-09-09; re-measured on
+        // the merged tree after the mark moved. Nine teams were unaffected —
+        // the split only opens when a team's sun and cover sit at opposite ends
+        // of the luminance range.)
+        const badgeLockup = markPalette(teamId, colors, [coverPaint], false, { noPlate: true });
         eachFlank((F) => {
           ctx.save();
           ctx.translate(F.fx(span.u0 + span.uLen / 2), F.R.y + F.R.h * (BULL.top + BULL.h / 2));
@@ -2077,8 +2102,9 @@ const LiveryTex = (function () {
           const s = BULL.h * F.R.h;   // square through the squash, so square in metres
           const Rw = { x: -s / 2, y: -s / 2, w: s, h: s };
           if (LOGOS[teamId]) {
-            drawLogoImage(ctx, LOGOS[teamId], Rw, logo, markHalo(LOGOS[teamId], sunC, inkOn([sunC])), emblemRim);
-          } else drawCrest(ctx, teamId, Rw, { liv: colors, field: sunC, bare: true, palette: sunLockup });
+            drawLogoImage(ctx, LOGOS[teamId], Rw, logo,
+                          markHalo(LOGOS[teamId], coverPaint, inkOn([coverPaint])), emblemRim);
+          } else drawCrest(ctx, teamId, Rw, { liv: colors, field: [coverPaint], bare: true, palette: badgeLockup });
           ctx.restore();
         });
       }
@@ -2252,6 +2278,18 @@ const LiveryTex = (function () {
     // A MARK is one small object and it carries its own keyline, halo or plate,
     // so it stands ON the crown's graphic rather than aft of it — centred in
     // the strip a side camera can see, its leading edge clear of the sun.
+    // The mark is NOT pushed clear of the wrap's fallback badge, and that is a
+    // decision, not an oversight. Their boxes do overlap on paper (mark u
+    // 0.169..0.591 against a badge at 0.050..0.247), and a version of this file
+    // derived markU from the badge's aft edge to separate them. It was reverted
+    // on measurement: the only failures it removed were an artifact of the
+    // guard taking its single WORST pixel, so one anti-aliased glyph edge
+    // condemned a mark reading 7.73:1 over 286 of its 288 sampled points. With
+    // the guard asking for 5 % of the mark's own ink before it calls a pair a
+    // defect, nothing here is red — and the move cost about 3 % of the mark to
+    // the body (flank-occlusion: 0 % at u 0.38, 5 % at 0.48) and walked toward
+    // the rear wheel that c4d585b6 moved these designs forward to escape.
+    // A glyph edge abutting what is beside it is not a legibility defect.
     const markU = sideFrom ? FLANK_MARK.uOnCrown : FLANK_MARK.u;
     const flankMark = (paint) => eachFlank((F) => {
       ctx.save();

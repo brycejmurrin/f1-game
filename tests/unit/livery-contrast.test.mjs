@@ -288,14 +288,77 @@ test("a flank mark clears the flank the crown design actually left it", () => {
       }
     }
   }
-  // Fixed 2026-09-09: saddle wordmark/duo clamp + forced halo + wrap/saddle
-  // noPlate cleared the rake-span class (~16 entries). The previous
-  // astonmartin wrap/code differencing artifact also clears now — keep KNOWN
-  // empty; re-add only a measured on-car invisible mark.
+  // Fixed on this branch: saddle wordmark/duo clamp + forced halo + wrap/saddle
+  // noPlate cleared the rake-span class. Deploy tip's markU-from-badge cleared
+  // the wrap/code-on-badge class (astonmartin/audi/mercedes). Keep KNOWN empty;
+  // re-add only a measured on-car invisible mark.
   const KNOWN = new Set([]);
   assert.deepEqual(bad.filter((k) => !KNOWN.has(k)), [], "a flank mark went invisible");
   assert.deepEqual([...KNOWN].filter((k) => !bad.includes(k)), [],
     "these KNOWN gaps now pass — delete them from KNOWN");
+});
+
+test("the wrap's flank badge is inked against the cover it lands on", () => {
+  // A CLASS the area sweep above cannot see. That sweep needs AREA_SHARE (15 %)
+  // of a panel before it will call a colour a problem, and this badge is a mark
+  // — a few per cent of the flank — so it was invisible to every guard here
+  // while being one of the two things `wrap` paints.
+  //
+  // The bug it pins: the fallback lockup (every team whose crest has no single
+  // forward-facing traced path, i.e. all but Red Bull) was scored against the
+  // pair [sun, cover] that the traced BULL gets, because the bull straddles the
+  // sun disc. This badge does not: it spans v BULL.top .. BULL.top + BULL.h and
+  // the sun's flank ellipse bottoms out at v 0.277, so it never reaches the
+  // disc at any u. Asking one ink to clear a light sun AND a
+  // dark cover is unsatisfiable, so the mark FAILED MARK_FLOOR on every one of
+  // those teams and markPalette fell back on the thing it falls back on: a
+  // HALO. Cadillac's crest went out near-black (1.04:1 on its own black cover)
+  // inside a white glow, Mercedes' star white (1.59:1) inside a dark one.
+  //
+  // WHICH IS WHY THE GARAGE HAD TO BE SHOT AND THE ATLAS WAS NOT ENOUGH. Scored
+  // as ink-against-cover this reads as "invisible", and it is not: the halo is
+  // load-bearing and the badge is legible, as a soft glow around a mark whose
+  // own colour has been thrown away. What is actually lost is identity —
+  // Cadillac's gold (#c9a45a) became #0f0f14, Racing Bulls' blue and Haas's red
+  // ring the same — plus the crispness, a halo being a blurred shadow pass.
+  // Scored on the cover alone the floor is satisfiable, the brand colour
+  // survives (Cadillac 8.43:1) and NO halo is drawn. Nine teams kept a readable
+  // badge throughout; the split only opens when a team's sun and cover sit at
+  // opposite ends of the luminance range.
+  //
+  // So this test asks for the mark to clear the cover ON ITS OWN, which is the
+  // stronger property: a halo is the rescue, not the goal.
+  //
+  // DOMINANT ink, not every colour: a lockup is layered (Cadillac's gold crest
+  // carries a near-black INNER DETAIL, Haas's red ring a white H) and the inner
+  // layers sit ON the mark, not on the cover. What has to clear the cover is
+  // the mark the badge reads as.
+  const R = A.LT.REGIONS.spineSide, N = 40;
+  // Below the sun with room to spare — its flank ellipse reaches v 0.28 on the
+  // centreline and less either side, so 0.35 is bare cover on every team.
+  const V0 = 0.35;
+  const MARK_ON_BODY = 2.0;                    // the floor this branch declares
+  for (const t of A.Teams.LIST) {
+    const base = A.Liveries.forTeam(t)[0];
+    const bare = A.paint(t.id, Object.assign({}, base, { spineLogo: "none", spineSide: "none" }));
+    const wrap = A.paint(t.id, Object.assign({}, base, { spineLogo: "wrap", spineSide: "none" }));
+    const seen = new Map();
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const x = R.x + R.w * (i + 0.5) / N, y = R.y + R.h * (V0 + (1 - V0) * (j + 0.5) / N);
+      const b = paintAt(bare, x, y), w = paintAt(wrap, x, y);
+      if (!w || w === b) continue;             // untouched cover
+      seen.set(w, (seen.get(w) || 0) + 1);
+    }
+    const top = [...seen.entries()].sort((a, b) => b[1] - a[1])[0];
+    assert.ok(top, `${t.id}: wrap painted no badge on the flank below v ${V0}`);
+    // buildAtlas leaves the cover BARE — the mesh supplies its colour — so a
+    // sample there is null, not a paint. The livery's own field is the ground.
+    const cov = base.cover || base.c1;
+    const coverCss = `rgb(${cov.map((v) => Math.round(v * 255)).join(",")})`;
+    const c = contrastCss(top[0], coverCss);
+    assert.ok(c >= MARK_ON_BODY,
+      `${t.id}: the wrap badge reads ${c}:1 on its cover (${top[0]} over ${coverCss})`);
+  }
 });
 
 // A flank pick has to land where the flank can be SEEN — measured, and NOT
