@@ -885,7 +885,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   // Car3D surface ids are isolated above TrackGeom's 0..15 range. Keep id 0 on
   // the legacy whole-draw path for imported/custom meshes.
   let surfaceId = i32(vMatId + 0.5);
-  let classifiedCar = surfaceId >= 20 && surfaceId <= 31;
+  let classifiedCar = surfaceId >= 20 && surfaceId <= 32;
   let paintSurface = surfaceId == 20;
   let carbonSurface = surfaceId == 21;
   let rubberSurface = surfaceId == 22;
@@ -903,6 +903,9 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   let satinMetalSurface = surfaceId == 29;
   let iriSurface = surfaceId == 30;
   let carbonFinish = surfaceId == 31;   // bare weave OVER the livery colour
+  // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
+  // clearcoat, but a DIELECTRIC env response, not chrome — see baseRefl below.
+  let visorSurface = surfaceId == 32;
   let paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface;
   if (classifiedCar) {
     if (paintLike) {
@@ -913,11 +916,11 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
       if (satinMetalSurface) { clearcoat = min(D.mat1.z, 0.25); }
     } else {
       carPaint = 0.0;
-      clearcoat = select(0.0, D.mat1.z * 0.45, glassSurface);
+      clearcoat = select(0.0, D.mat1.z * 0.45, glassSurface || visorSurface);
       if (matteSurface) { clearcoat = 0.0; }
     }
   }
-  let envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;
+  let envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;
 
   // [Block 1a] Ground/terrain detail MICRO-NORMAL (mirrors GLX LIT_FS js/render/glx/shaders/glsl-lit.js).
   // Two-scale value-noise gradient perturbs N so procedurally-textured ground gets
@@ -992,7 +995,7 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     if (carbonSurface || carbonFinish) { rough = max(rough, 0.56); }
     if (rubberSurface) { rough = max(rough, 0.90); }
     if (metalSurface) { rough = min(rough, 0.16); }
-    if (glassSurface) { rough = min(rough, 0.13); }
+    if (glassSurface || visorSurface) { rough = min(rough, 0.13); }
     if (emissiveSurface) { rough = max(rough, 0.32); }
     if (panelSurface) { rough = max(rough, 0.72); }
     if (mirrorSurface) { rough = min(rough, 0.09); }
@@ -1285,7 +1288,13 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     let ccFb = 1.0 - NoVc;
     let ccF = ccFb * ccFb;
     let probeLive = clamp(envProbeStr, 0.0, 1.0);
-    let baseRefl = mix(0.14, 0.72, probeLive);
+    // A TINTED VISOR IS A DIELECTRIC, NOT CHROME — mirrors the GLX split in
+    // js/render/glx/shaders/glsl-lit.js. baseRefl is the ANGLE-INDEPENDENT
+    // mirror term; cutting it for the visor leaves the 0.28*ccF grazing rim, so
+    // the visor keeps an edge sheen and stays dark head-on instead of reading
+    // as the pale sky-blue band the macos-latest GPU photographed on 2026-09-09.
+    var baseRefl = mix(0.14, 0.72, probeLive);
+    if (visorSurface) { baseRefl = mix(0.05, 0.16, probeLive); }
     let envW = clamp(clearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
     var envCC : vec3<f32>;
     if (envProbeStr >= 0.999) {

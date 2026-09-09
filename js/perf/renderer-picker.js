@@ -275,7 +275,9 @@ function applyThreePath(next, opts) {
   if (next === "webgl2") GameStore.store.rawSet("apex26.tlxForceGL", "1");
   else if (next === "webgpu") GameStore.store.rawSet("apex26.tlxForceGL", "0");
   else GameStore.store.rawDel("apex26.tlxForceGL");
-  try { sessionStorage.removeItem("apex26.tlxAutoGL"); } catch (_) { /* AUTO stay-GL latch is session-only */ }
+  // Same session-latch wipe as applyBackend — THREE PATH reload must not keep
+  // wgxHoldPresent / gfxClaimFail / gfxBound from the previous path.
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
   paintPresent();
   if (readBackend() === "three" && !(opts && opts.noReload)) {
     const btn = typeof document !== "undefined" ? document.getElementById("pm-three-path") : null;
@@ -318,6 +320,9 @@ function shotReloadLive() {
 function applyShotMode(next, opts) {
   if (shotReloadLive() && !(opts && opts.noReload) &&
       !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null, "SCREENSHOTS: END THIS RACE & RELOAD?", paintPresent)) return false;
+  // Drop inherited session latches, then write the new shot mode (which may
+  // put apex26.wgxCapture back into sessionStorage for this tab).
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
   writeShotMode(next);
   paintPresent();
   if (shotReloadLive() && !(opts && opts.noReload)) {
