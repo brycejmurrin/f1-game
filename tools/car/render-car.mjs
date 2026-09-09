@@ -27,6 +27,8 @@
 //   engine, suspension, brakes, tyres, ers, gearbox, fuel
 //                       each category's audited best angle + two ±36° offsets
 //   livery              side / front-3-quarter / rear-3-quarter — paint & sponsors
+//   cockpit             over / ahead / flank, aimed at the tub opening (z -0.15,
+//                       y 0.45) — the only set that shows whether the deck is open
 // List all: node tools/car/render-car.mjs --preset=list
 //
 // --lightset=day,dusk,night  render EVERY shot at each listed tod (fans out the
@@ -51,6 +53,8 @@
 //   --az=210 --el=20 --dist=4  render ONE custom angle (overrides --views/--preset)
 //   --out=DIR             output dir. Default: scratch/renders/cars/<team>
 //   --w=900 --h=680       viewport size
+//   --gpu=1               draw on the HOST's GPU instead of pinning swiftshader
+//                         (for a runner with real silicon; useless in the container)
 //   --url=...             base URL. Default http://127.0.0.1:3456
 //
 // Examples:
@@ -158,6 +162,22 @@ const PRESETS = {
     { label: 'frontquarter', az: 145, el: 16, dist: 6.4 },
     { label: 'rearquarter',  az: 320, el: 16, dist: 6.4 },
   ],
+  // The tub OPENING, which no stock view shows: `hero` and the quarters sit at
+  // el 16 and read the deck as a closed surface whatever is cut into it, and
+  // `top` (el 66, dist 6.8) is too far out for the rim to be more than a line.
+  // Aim at the aperture rather than the car centre — CHASSIS.cockpit spans
+  // z +0.05 (CK_A) to -0.55, and car3d.js opens it between CK_REAR_Z = -0.33
+  // and CK_A.z, so its middle is z -0.15 and the rim sits near y 0.55 (seat
+  // floor 0.47, helmet visor 0.612-0.700). Three angles because one never
+  // settles the question: `over` looks down INTO the opening, `ahead` is the
+  // broadcast angle where a filled deck reads as a helmet sitting on top, and
+  // `flank` gives the rim line and shoulder height in profile. Close (2.8 m)
+  // with the rig dialled down, same reasoning as the part-detail presets.
+  cockpit: [
+    { label: 'over',  az: 25,  el: 52, dist: 2.8, look: -0.15, lookY: 0.45, tod: 'day', intensity: 1.0 },
+    { label: 'ahead', az: 200, el: 34, dist: 3.0, look: -0.15, lookY: 0.45, tod: 'day', intensity: 1.0 },
+    { label: 'flank', az: 82,  el: 26, dist: 2.9, look: -0.15, lookY: 0.45, tod: 'day', intensity: 1.0 },
+  ],
 };
 PRESETS.aero = PRESETS.wing;   // alias — both names read naturally depending on intent
 
@@ -183,12 +203,16 @@ const LIGHTSET = arg('lightset', null);   // e.g. "day,dusk,night" — fan out e
 const PLIGHTS = process.argv.filter(a => a.startsWith('--plight=')).map(a => a.slice('--plight='.length));
 // A custom --az/--el/--dist renders a single ad-hoc view instead of the presets.
 const CUSTOM = (arg('az', null) != null || arg('el', null) != null || arg('dist', null) != null);
+const HOST_GPU = arg('gpu', '0') !== '0';
 const W      = parseInt(arg('w', '900'), 10);
 const H      = parseInt(arg('h', '680'), 10);
 const URL    = arg('url', 'http://127.0.0.1:3456');
 const OUTARG = arg('out', null);
+// Against the CWD, not the tool's own directory: `--out=scratch/renders/x` run
+// from the repo root used to write tools/car/scratch/renders/x, which is where
+// the car-shot workflow's upload step found nothing at all.
 const OUT    = OUTARG != null
-  ? resolve(HERE, OUTARG)
+  ? resolve(process.cwd(), OUTARG)
   : resolveRepoDefault(ROOT, 'scratch', 'renders', 'cars', TEAM);
 // Browser: PW_CHROMIUM wins, else Playwright's bundled build, else a Chromium
 // already installed under PLAYWRIGHT_BROWSERS_PATH. Sandboxes that preinstall
@@ -280,11 +304,32 @@ const shots = [];
 // so this tool printed a tick over a blank white PNG. Every other probe in the
 // repo (tools/lib/harness.mjs callers, profile-gameloop, shot) already uses
 // --use-angle; this was the one left behind.
-const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}), args: ['--use-angle=swiftshader', '--enable-webgl', '--ignore-gpu-blocklist'] });
+// --gpu=1 drops the swiftshader pin and lets the HOST's GPU draw. Off by
+// default because the agent container has none (llvmpipe), and there a missing
+// pin is how this tool used to write blank PNGs. On a macOS runner it is the
+// whole point: gpu-game-check reaches the real Apple adapter with no ANGLE flag
+// at all, so this passes none either. The line below says which path ran, so a
+// log never leaves it ambiguous — a software frame is not evidence about a
+// player's machine.
+const GPU_ARGS = ['--enable-webgl', '--ignore-gpu-blocklist'];
+const browser = await chromium.launch({ ...(EXE ? { executablePath: EXE } : {}),
+  args: HOST_GPU ? GPU_ARGS : ['--use-angle=swiftshader', ...GPU_ARGS] });
+console.log(`renderer: ${HOST_GPU ? "the host's GPU (--gpu)" : 'swiftshader'}`);
 try {
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   page.on('pageerror', e => console.log('PAGEERR', e.message));
-  await page.goto(pageUrl, { waitUntil: 'load' });
+  // The extensionless path is the one that KEEPS the query string on a host
+  // that rewrites (`npx serve` 301s /tools/carview.html?x to /tools/carview and
+  // drops the search, which used to boot every shot as the default McLaren).
+  // python3 -m http.server does not rewrite at all, and AGENTS.md offers both
+  // as equivalents — so try the tidy path and fall back to the file on a 404,
+  // instead of spending the whole readiness wait staring at an error page.
+  let resp = await page.goto(pageUrl, { waitUntil: 'load' });
+  if (resp && resp.status() === 404) {
+    const alt = `${URL}/tools/carview.html?${qs.toString()}`;
+    console.log(`  (${pageUrl} is 404 — this server does not rewrite; using ${alt})`);
+    resp = await page.goto(alt, { waitUntil: 'load' });
+  }
   const ok = await page.waitForFunction(() => window.CARVIEW && window.CARVIEW.ready, null, { polling: 100, timeout: WAIT_MS }).then(() => true).catch(() => false);
   if (!ok) { console.error(`carview did not become ready in ${WAIT_MS / 1000}s — is the server running and the car building? (--wait=SECONDS to allow longer)`); process.exit(2); }
 

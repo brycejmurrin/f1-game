@@ -3236,6 +3236,39 @@ const TLX = (function () {
           meshState() {
             return { mesh: _meshMade.mesh, chunked: _meshMade.chunked, tex: _meshMade.tex };
           },
+          // WHERE DOES THE FRAME GET DARK? The three-WebGPU luma gap has survived
+          // five hypotheses (docs/notes/PERF-FINDINGS.md 2t), and every one of
+          // them died to a measurement rather than to an argument. This is the
+          // measurement: post's INPUT, post's OUTPUT, and what capturePixels
+          // actually reads, so a leg can be split by stage instead of guessed at.
+          //
+          // CAVEAT, and it matters: _readLdr reads bytes, so an HDR target
+          // saturates — sceneRT comes back 255/255 on BOTH legs because most of
+          // the frame is >= 1.0 in HDR, which means this cannot yet exonerate the
+          // lit pass. Splitting lit-pass from post needs a scaled or float read of
+          // sceneRT. ldrRT and captureRT are LDR and read truthfully.
+          //
+          // Call it after a completed present (GLX.awaitSoftPresent) — on the
+          // WebGPU backend an unrendered target has no texture and every read
+          // throws on `format`.
+          lumaDbg() {
+            const read = function (rt, label) {
+              if (!rt) return Promise.resolve({ label, err: "no rt" });
+              return _readLdr(rt).then(function (pk) {
+                let sum = 0, mx = 0, n = 0;
+                for (let i = 0; i < pk.data.length; i += 4) {
+                  const v = (pk.data[i] + pk.data[i + 1] + pk.data[i + 2]) / 3;
+                  sum += v; if (v > mx) mx = v; n++;
+                }
+                return { label, w: pk.w, h: pk.h, mean: +(sum / n).toFixed(2), max: mx };
+              }).catch(function (e) { return { label, err: String(e && e.message).slice(0, 80) }; });
+            };
+            return Promise.all([
+              read(post && post.sceneTarget && post.sceneTarget(), "sceneRT (post IN, HDR world)"),
+              read(post && post.ldrTarget && post.ldrTarget(), "ldrRT (post OUT)"),
+              read(_captureRT(), "captureRT (what capturePixels reads)"),
+            ]);
+          },
           envState() {
             let face = 0;
             while (face < 6 && (envFacesMask & (1 << face))) face++;

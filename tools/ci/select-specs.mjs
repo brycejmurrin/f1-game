@@ -207,6 +207,17 @@ export const TRACKED = [
   /^tests\/data\//,                   // data-driven inputs: no import graph sees these
 ];
 
+// DOCS-ONLY IS "NOTHING TO SELECT", NOT "UNMATCHED". ci.yml's own push trigger
+// already ignores these paths, so a docs commit never reaches the selected gate
+// by push — but pages.yml CALLS the workflow, and workflow_call does not honour
+// paths-ignore. So the DEPLOY path saw a docs diff, matched no rule, and failed
+// closed: a red Pages run for a change that ships no code. Measured on an
+// AGENTS.md-only deploy. This list mirrors ci.yml's paths-ignore deliberately —
+// if one grows, so must the other, and select-specs.test.mjs pins that.
+export const DOCS_ONLY = [/^docs\//, /\.md$/, /^\.claude\//, /^\.cursor\//];
+export const isDocsOnly = (changed) =>
+  changed.length > 0 && changed.every((f) => DOCS_ONLY.some((re) => re.test(f)));
+
 // ─── import graph (Playwright's --only-changed, computed here) ────────────────
 //
 // Playwright ships `--only-changed=<ref>`, which walks the suite's IMPORT graph
@@ -303,6 +314,7 @@ export function select(changedRef, budgetMin = 15, opts = {}) {
   // changed but no rule claimed them — the selection is NOT trustworthy and
   // the caller must fall back to a full run, not to running nothing.
   const tracked = changed.filter((f) => TRACKED.some((re) => re.test(f)));
+  const docsOnly = isDocsOnly(changed);
   // The three always-run inputs, unioned into the candidate set BEFORE the cut
   // so they compete for the budget on merit rather than being bolted on after.
   const changedSpecs = changed.filter((f) => /^tests\/specs\/.+\.spec\.js$/.test(f)
@@ -313,6 +325,7 @@ export function select(changedRef, budgetMin = 15, opts = {}) {
   const { inScope: failedInScope, dropped: failedDropped } = scopeCarryForward(failed, routed);
   const candidates = routed;
   const reason = !changed.length ? "none"
+    : docsOnly ? "docs"
     : tracked.length ? "infra"
     : (g.size || candidates.length ? "matched" : "unmatched");
   const cut = fit(candidates, budgetMin);
