@@ -32,6 +32,26 @@ test("every id the source looks up by name exists", () => {
     "restore the id, or add it to RUNTIME_IDS in tools/check/shell-ids.mjs with the reason");
 });
 
+test("no shell id is declared twice", () => {
+  // getElementById returns the FIRST match. A second element with the same id
+  // is unreachable — measured when pm-brakecue was both a set-row and a range.
+  const { duplicates } = scan();
+  assert.deepEqual(duplicates, [],
+    "duplicate ids: " + duplicates.map((d) => `${d.id}×${d.count}`).join(", "));
+});
+
+test("a duplicated shell id is caught", () => {
+  const tmp = fs.mkdtempSync(path.join(process.env.TMPDIR || "/tmp", "apex-shell-dup-"));
+  try {
+    fs.mkdirSync(path.join(tmp, "js"));
+    fs.writeFileSync(path.join(tmp, "index.html"),
+      '<div id="twice"></div>\n<input id="twice" type="range">\n<div id="once"></div>\n');
+    fs.writeFileSync(path.join(tmp, "js", "a.js"), 'document.getElementById("once");\n');
+    const { duplicates } = scan(tmp);
+    assert.deepEqual(duplicates, [{ id: "twice", count: 2 }]);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 test("the check actually resolves the shell, not an empty set", () => {
   // Anti-vacuity: an empty declared/read set would make the test above pass
   // while checking nothing, which is exactly how a guard rots.

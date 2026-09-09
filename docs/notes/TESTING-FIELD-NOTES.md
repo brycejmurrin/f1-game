@@ -1496,3 +1496,124 @@ costs nothing at runtime (Playwright dedupes the path: 150 tests either way),
 which is why nothing caught it. The existing disjoint-partition guard says
 `owner.get(f) !== g`, so it asks only whether two DIFFERENT groups claim a spec.
 A within-group guard now sits beside it.
+
+## 2026-09-09 — `hud-layout` is 16 red, and only 5 of them are recent
+
+Measured on a quiet box, serialized, both directions:
+
+| tree | failures of 32 |
+|---|---|
+| as shipped (coarse `--hud-scale: 1.24`) | 16 |
+| same tree, coarse scales forced to 1 | 11 |
+
+So the settings-defaults bake accounts for FIVE — small-landscape tilt/touch
+(4) and minimal+cockpit — and ELEVEN fail without it: every notched-landscape
+cell, small-landscape buttons, broadcast+cockpit, broadcast+heli, and the
+minimal profile. Those eleven are not new work; they have been red for as long
+as the `ui` group has been unable to complete a run.
+
+**What actually collides**, which took three browser probes because the
+assertion asserts an empty array and the reporter truncates the contents:
+
+```
+.hud-top x .hud-gaps = 1937 px²      (gaps 200→309, top 221→631: 88 px wide)
+```
+
+Nothing else. No control overlaps another, nothing leaves the safe area.
+
+**Why the fit pass did not stop it** — the interesting half. At 852×393 with
+59 px insets, compact density:
+
+```
+top 331.4  gaps 87.9  map 96  right 47.1  half 426  sal/sar 59
+leftFor(gaps) 209.9   capLong 0.977   scale 1.24
+gapShort false   gapDrop false   --hud-z-top unset   limitsLeft TRUE
+```
+
+`capLong` (0.977) is well under the scale, so the long gaps strip does not fit
+and `_gapTight` should be true — yet neither `gapShort` nor `gapDrop` is set
+and the band is not capped either. `limitsLeft` IS set, and the same function
+writes it, so fitHud ran and simply did not take the tighten branch. That is
+the defect: the mechanism that exists to keep these two apart does not fire in
+this shape.
+
+**Deliberately not fixed here.** The fix lives in fitHud's cap arithmetic, and
+that code carries a documented oscillation history ("a strip that alternates
+between beside the band and below it… every 10 Hz tick"). Each verification is
+a ~10-minute browser run, which is not a loop in which to guess at a feedback
+system. Named, measured, and left for someone with the room to iterate.
+
+**Fixed instead**: the three empty-list assertions now carry the offending
+pairs and the fit state in their message, so the next failure says
+`.hud-top x .hud-gaps` instead of `Received + 4`.
+
+### 2026-09-09 (later) — three hypotheses eliminated, overlap still there
+
+Continuing the entry above. The fit pass's own numbers, read by a temporary
+`window.__fitDbg` at the end of fitHud:
+
+```
+gaps 16.6   gapChars 0   wLong 16.6   capLong 1.308   capNo 1.434
+capTop 1.308   scale 1.24   tight false   memo [0,0]   n 2
+```
+
+`n: 2` is the finding. **fitHud COMPLETES twice in a session.** It is called
+every ~10 Hz tick from updateHud, but returns early on an unchanged key, and
+the key stops changing. Both completions happen before anyone is close enough
+to show a gap (`gapChars 0`), so the strip is measured at 16.6 px — its own
+padding — and that becomes `wLong`, the width of the LONGEST spelling. It
+renders at 87.9. The left cluster is therefore budgeted ~71 px narrower than it
+draws, `capLong` comes out 1.308 where the true widths give 0.972, and the cap
+never fires.
+
+**Three fixes tried, all reverted, none moved the overlap:**
+
+1. `scale` is read from `root.style` — the INLINE style — so a `--hud-scale`
+   arriving from a stylesheet is invisible to the fit pass. The coarse block in
+   css/tokens.css sets 1.24, so the HUD renders at 1.24 while the pass budgets
+   1.0. Reading the computed value instead is CORRECT and changes nothing here,
+   because capLong (1.308) clears 1.24 as easily as it clears 1.
+2. The width memo records whenever the width is non-zero, and an empty strip is
+   not zero. Gating it on the strip having text is CORRECT and changes nothing
+   here, because `wLong` then falls back to the same live measurement.
+3. Rajdhani is an async `@font-face`, and the key is deliberately layout-free
+   (it keys on text LENGTH), so a font swap widens every cluster invisibly.
+   Re-fitting on `document.fonts.ready` changed nothing — in a headless run the
+   local faces are ready before the first fit.
+
+All three reverted rather than landed: three unverifiable edits to a 10 Hz
+layout function with a documented oscillation history is how that history got
+written. What is left for whoever picks this up is the question none of the
+three answered: **why does the key stop changing once the strip fills?** The
+answer is upstream of every cap in this file.
+
+## 2026-09-09 — a `cancelled` Pages badge can be sitting on top of a real failure
+
+Two consecutive deploys of the deploy branch did not publish, and only ONE of
+them looked red:
+
+| run | badge | what the JOBS said |
+|---|---|---|
+| 2163 (`ca100dc0`) | failure | `Per-circuit geometry sweeps` failed 04:17 |
+| 2164 (`d36cdf00`) | cancelled | `Per-circuit geometry sweeps` failed **04:27:29** — five minutes before anything was cancelled |
+
+Both were the same assertion, and it was neither flaky nor infrastructural:
+`tests/unit/driving-line-opts.test.mjs:94` still asserted `written.brakeCue`
+after `6ee62f21` renamed that store key to `lineBrakeCue`. The READ side of the
+test kept passing, because the module migrates the legacy key — so only the
+round-trip test went red, and the failure looked far more exotic than it was.
+
+The rule this adds to the one already in AGENTS.md §Verification 8 ("a timed-out
+job reports `cancelled`"): **a run's conclusion is the LEAST informative thing
+about it.** `cancelled` on a Pages run can mean the job hit `timeout-minutes`,
+that a newer push superseded a pending run, OR — as here — that a job had
+already failed outright and the cancel merely landed on top of the stragglers.
+Run 2164 shows all three shapes at once: a genuinely failed `sweeps` job, a
+`Smoke (2)` job whose every step reports `success` and whose conclusion is
+`cancelled`, and three downstream jobs cancelled at creation. Read
+`list_workflow_jobs` and look for the first job whose CONCLUSION is `failure`
+before forming any theory about the run.
+
+Cost of not doing that here: two deploys silently not published, and a session
+spent hypothesising about concurrency groups and billing for a one-line stale
+key in a unit test.

@@ -100,8 +100,8 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/twin-drift.test.mjs",
   "tests/unit/storage-key-prefix.test.mjs",
   // ...and its sibling: the PREFIX is not the whole contract. Two features
-  // owned apex26.brakeCue with incompatible types and each silently broke
-  // the other; this asks that one key means one type.
+  // once owned apex26.brakeCue with incompatible types (fixed by renaming the
+  // ribbon flag to lineBrakeCue); this still asks that one key means one type.
   "tests/unit/store-key-types.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
@@ -119,6 +119,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/deploy-staging.test.mjs",
   "tests/unit/perf-sentinel.test.mjs",
   "tests/unit/telemetry-trace.test.mjs",
+  "tests/unit/meeting-picker-labels.test.mjs",
   "tests/unit/data-api-status.test.mjs",
   "tests/unit/scenery-api-contract.test.mjs",
   "tests/unit/scenery-guards.test.mjs",

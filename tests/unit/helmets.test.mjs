@@ -295,3 +295,10 @@ test("a quad splits only where the paint changes, and never moves the shell", ()
   }
   assert.ok(worst < 1e-6, `a vertex sits ${worst.toExponential(2)} m off the shell — subdivision moved the geometry`);
 });
+
+test("maxSplit 0 is the unsplit grid, even on a busy design", () => {
+  const base = Helmets.RINGS * Helmets.SLICES * 2;
+  const out = { pos: [], nrm: [], col: [], mat: [], idx: [] };
+  Helmets.build(out, 0, 0, 0, Helmets.designFor(1, [0.9, 0.35, 0.05]), { paint: 7, glass: 9, maxSplit: 0 });
+  assert.equal(out.idx.length / 3, base, `maxSplit 0 emitted ${out.idx.length / 3}, not the ${base}-tri grid`);
+});

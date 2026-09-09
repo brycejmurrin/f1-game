@@ -301,6 +301,33 @@ test("TopModal.onFocusIn pulls focus to the first SHOWN control, not the first i
   assert.equal(h.focused(), "visible-row", "hidden, zero-box and aria-hidden controls are skipped");
 });
 
+test("TopModal.onFocusIn pulls focus back when Tab parks on <body> outside an open dialog", () => {
+  const dom = makeDom({
+    readyState: "loading",
+    tagFor: (id) => (id === "pmsettings" ? "dialog" : "div"),
+  });
+  const { els, UiLayers } = layerStack(dom, ["overlay", "pmsettings"]);
+  const mo = moShim();
+  const sb = sandbox(dom, { UiLayers, MutationObserver: mo.MutationObserver });
+  vm.runInNewContext(src("js/ui/menu-nav.js"), sb, { filename: "js/ui/menu-nav.js" });
+  vm.runInNewContext(src("js/ui/modal.js"), sb, { filename: "js/ui/modal.js" });
+  const dlg = els[1];
+  assert.equal(dlg.tagName, "DIALOG");
+  dlg.hidden = false;
+  dlg.showModal = () => { dlg.open = true; };
+  dlg.close = () => { dlg.open = false; };
+  const close = control(dom, dlg, "pm-settings-close", { y: 10 });
+  sb.TopModal.wire(dlg);
+  assert.equal(dlg.tabIndex, -1, "dialog is focusable as the wrap-around landing");
+  dom.document.activeElement = null;
+  sb.TopModal.onFocusIn({ target: dom.document.body });
+  assert.equal(dom.document.activeElement && dom.document.activeElement.id, "pm-settings-close",
+    "body focus is pulled back into the open dialog");
+  close.focus();
+  sb.TopModal.onFocusIn({ target: close });
+  assert.equal(dom.document.activeElement.id, "pm-settings-close", "in-dialog focus is left alone");
+});
+
 /* ── 1. TopModal: focus memory for the hidden-toggled screens ────────────── */
 
 test("TopModal: opening a non-dialog screen lands focus (autofocus > default > selected > first, never a text field)", () => {

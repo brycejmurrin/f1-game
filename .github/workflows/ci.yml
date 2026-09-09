@@ -232,7 +232,17 @@ concurrency:
   # A dispatched run gets its own group: it shares the ref with every push,
   # and the cancel-in-progress below killed the first dispatched `ui` group
   # 30 s in when the next docs commit landed (run 2211, 2026-09-02).
-  group: ci-${{ inputs.concurrency_key || (github.event_name == 'workflow_dispatch' && github.run_id) || github.ref }}
+  #
+  # THE NIGHTLY NEEDED THE SAME AND DID NOT HAVE IT. `schedule` fell through to
+  # `github.ref`, so it shared a group with every push to the deploy branch —
+  # and cancel-in-progress being false does not save it: GitHub keeps only ONE
+  # pending run per group and silently cancels the older one when the next
+  # arrives, which is the hazard the pages.yml `concurrency_key` comment
+  # already describes for deploys. On a branch that takes a push every few
+  # minutes the 08:00 nightly is queued behind exactly that. Run 2758
+  # (2026-09-08) ended `cancelled` at 20 min with no job over its cap and
+  # nothing failing, which is the shape this produces.
+  group: ci-${{ inputs.concurrency_key || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
