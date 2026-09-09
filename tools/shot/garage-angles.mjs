@@ -16,7 +16,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
-import { launchChromium, shutdown, startStaticServer, sleep } from "../lib/harness.mjs";
+import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import {
   chromiumArgsForBackend, installProbeInit, gotoGame, openGarage, settleGarage,
   screenshotGameCanvas,
