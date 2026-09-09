@@ -187,13 +187,14 @@ const CONVENTIONS = `## Conventions
   directory headings above are the contract — \`gen-tools-readme.mjs\` fails on
   a tool in a group it does not know, so a new tool picks a group or the group
   gets documented. Only what every consumer hardcodes stays at \`tools/\` root.
-- **Capture tools are a family:** \`shot/apex-capture.mjs\` is the parallel
-  sweep, \`car/carshot.mjs\` the ~5 KB studio probe, \`car/render-car.mjs\` the
-  contact sheet, \`shot/shot.mjs\` one framed shot, \`track/survey-track.mjs
-  <id>\` the one-stop circuit pass (\`--oblique\` adds topdown + N/E/S/W).
-  Redundant one-offs were deleted; recover from git history if a need returns.
-  \`ui/menu-fit.mjs\` survives \`ui/layout-audit.mjs\` only for \`--safe=\`
-  (arbitrary notch insets — headless Chromium reports every
+- **Capture tools are a family:** \`shot/garage-angles.mjs\` and
+  \`car/render-car.mjs\` are the ONE-Chromium multi-angle paths (garage presets /
+  carview presets); \`shot/apex-capture.mjs\` is the parallel sweep,
+  \`car/carshot.mjs\` the ~5 KB studio probe, \`shot/shot.mjs\` one framed track
+  shot, \`track/survey-track.mjs <id>\` the one-stop circuit pass (\`--oblique\`
+  adds topdown + N/E/S/W). Redundant one-offs were deleted; recover from git
+  history if a need returns. \`ui/menu-fit.mjs\` survives \`ui/layout-audit.mjs\`
+  only for \`--safe=\` (arbitrary notch insets — headless Chromium reports every
   \`env(safe-area-inset-*)\` as 0).
 - **Chromium:** \`CHROME\` / \`PW_CHROMIUM\`, then \`/opt/pw-browsers/...\`, else
   Playwright's bundled browser. Servers bind a free port (or \`:3456\`).
