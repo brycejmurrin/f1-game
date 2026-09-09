@@ -70,11 +70,21 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   // cars got drivers[0] and 22 cars on track showed 11 helmets, each pair
   // identical. The number belongs in the key as well as the build, or the
   // second driver draws whichever mesh the first one cached.
-  for (const fn of ["teamMesh", "teamBodyMesh"]) {
-    const src = game.slice(game.indexOf(`function ${fn}(team, car)`), game.indexOf(`function ${fn}(team, car)`) + 400);
-    assert.match(src, /teamMeshKey\(team\) \+ ":" \+ carDecalNum\(team, car\)/, `${fn} must key on the driver number`);
-    assert.match(src, /num: carDecalNum\(team, car\)/, `${fn} must build with the driver number`);
-  }
+  const teamMeshSrc = game.slice(game.indexOf("function teamMesh(team, car)"), game.indexOf("function teamBodyMesh"));
+  const teamBodySrc = game.slice(game.indexOf("function teamBodyMesh(team, car)"), game.indexOf("function teamBodyMesh(team, car)") + 400);
+  assert.match(teamMeshSrc, /carDecalNum\(team, car\)/, "teamMesh must resolve the driver number");
+  assert.match(teamMeshSrc, /teamMeshKey\(team\) \+ ":" \+ num/, "teamMesh must key on the driver number");
+  // Shadow casters call teamMesh(team) with no car: a distinct :sh key so the
+  // depth-only lid cannot replace a colour mesh the ghost/whole-car path draws.
+  assert.match(teamMeshSrc, /silhouette: sil/);
+  assert.match(teamMeshSrc, /sil \? ":sh"/);
+  const cap = game.match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/);
+  assert.ok(cap, "TEAM_MESH_CACHE_MAX is a named ceiling");
+  assert.ok(Number(cap[1]) >= 36,
+    "cache must hold 12 teams × (2 painted + 1 :sh) = 36 or LRU frees a live caster (was 24)");
+  assert.match(teamBodySrc, /carDecalNum\(team, car\)/, "teamBodyMesh must resolve the driver number");
+  assert.match(teamBodySrc, /teamMeshKey\(team\) \+ ":" \+ carDecalNum\(team, car\)/, "teamBodyMesh must key on the driver number");
+  assert.match(teamBodySrc, /num: carDecalNum\(team, car\)/, "teamBodyMesh must build with the driver number");
   assert.match(game, /function playerBodyMesh\(team, car\)/);
   assert.match(game, /playerVisualKey \+ ":" \+ carDecalNum\(team, car\)/, "the player's own body is keyed on the seat too");
   assert.match(game, /function getFieldWheelMeshes\(team\)/);

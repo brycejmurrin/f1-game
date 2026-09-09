@@ -161,15 +161,14 @@ export async function garageDiagnostics(page) {
     const a = window.__apex;
     const el = document.getElementById("game");
     const env = a.diag ? (a.diag({ download: false }).env || {}) : {};
-    // NO ctx.drawImage(#game) READBACK HERE. The WebGL2 context is created
-    // without preserveDrawingBuffer (grep js/ — it appears nowhere), so the
-    // drawing buffer is CLEARED after compositing and drawImage from any
-    // evaluate outside the frame yields solid black. The old gapSample did
-    // exactly that, and assertGarageInterior passes an all-black sample (its
-    // flat-wall rule needs darkFrac BELOW the floor, and black scores 1.0), so
-    // the gate that exists to reject bad frames was vacuous — it reported
-    // interior.ok on meanRgb [0,0,0]. backend-compare.mjs carries the same
-    // warning. The gate now samples the CAPTURED PNG; this returns only the
+    // NO ctx.drawImage(#game) READBACK HERE. Under HeadlessChrome GLX now sets
+    // preserveDrawingBuffer and soft-blits onto #game-soft, but drawImage from
+    // the WebGL canvas outside the frame is still the wrong oracle (and older
+    // builds clear the buffer). The old gapSample did exactly that, and
+    // assertGarageInterior passes an all-black sample (its flat-wall rule needs
+    // darkFrac BELOW the floor, and black scores 1.0), so the gate that exists
+    // to reject bad frames was vacuous — it reported interior.ok on meanRgb
+    // [0,0,0]. The gate now samples the CAPTURED PNG; this returns only the
     // geometry that sampling needs.
     const panel = document.getElementById("cs-inner");
     const pr = panel?.getBoundingClientRect();
@@ -235,6 +234,15 @@ export async function screenshotGameCanvas(page, outPath) {
     return { x: r.x, y: r.y, width: r.width, height: r.height };
   });
   if (!box || !(box.width > 0 && box.height > 0)) throw new Error("probe: #game has no bounding box");
+  // Wait for a NEW blit WHILE THE LOOP STILL RUNS. GLX (and TLX) present()
+  // is what drives the overlay; headless(true) skips render/present, so a
+  // freeze-then-wait can never observe gen > start and times out. WGX can
+  // still complete an in-flight mapAsync after freeze; GLX cannot.
+  await page.evaluate(async () => {
+    if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
+      try { await GLX.awaitSoftPresent(8000); } catch (_) {}
+    }
+  });
   // FREEZE THE LOOP ACROSS THE CAPTURE. page.screenshot needs the compositor,
   // and a GLX garage frame on SwiftShader keeps the renderer's main thread hot
   // enough that the capture starved and blew its 60 s timeout with only

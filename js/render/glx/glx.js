@@ -15,6 +15,15 @@ const GLX = (function () {
 
   let gl = null;
   let canvas = null;
+  // HeadlessChrome (SwiftShader) often leaves the WebGL canvas uncomposited for
+  // CDP / Playwright screenshots even with preserveDrawingBuffer — readPixels
+  // sees the car, the capture is a black gap. Mirror WGX: 2D soft-blit overlay.
+  let _softPresent = false;
+  let _displayCanvas = null, _displayCtx = null;
+  let _softBuf = null, _softImg = null;
+  let _softBlitGen = 0;
+  let _softPresentWaiters = [];
+  let _softLastMaxPx = 0;
   // Mobile tier: iOS home-screen web apps (WKWebView) get a tight jetsam memory
   // budget that GPU/IOSurface allocations count against — a hard kill, no JS
   // error, no contextlost event. Shrink every discretionary GPU allocation on
@@ -404,10 +413,124 @@ const GLX = (function () {
     return u;
   }
 
+  function ensureSoftDisplay() {
+    if (_displayCanvas || !canvas || typeof document === "undefined") return;
+    _displayCanvas = document.createElement("canvas");
+    _displayCanvas.id = "game-soft";
+    _displayCanvas.setAttribute("aria-hidden", "true");
+    // Same box as #game (tokens.css: fixed inset 0). Sit above the WebGL
+    // canvas and below menu sheets (carsetup z-index 35) so CDP/page shots
+    // see the blit while the garage UI still covers the right edge.
+    _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;"
+      + "display:block;pointer-events:none;z-index:1;touch-action:none";
+    if (canvas.parentNode) canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
+    else if (document.body) document.body.appendChild(_displayCanvas);
+    _displayCtx = _displayCanvas.getContext("2d", { alpha: false });
+    // WebGL layer stays for the GPU path but must not paint over the blit —
+    // under SwiftShader it is the black void the soft path exists to hide.
+    if (canvas.style) canvas.style.opacity = "0";
+    try { Log.info("gfx", "GLX soft-present on"); } catch (_) { /* harness */ }
+  }
+
+  function softBlitNotify() {
+    _softBlitGen++;
+    const ws = _softPresentWaiters.splice(0);
+    for (let i = 0; i < ws.length; i++) {
+      try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+    }
+  }
+
+  function softBlit() {
+    if (!_softPresent || !_displayCtx || !gl || ctxGone()) return;
+    const w = width | 0, h = height | 0;
+    if (w < 1 || h < 1) return;
+    if (_displayCanvas.width !== w || _displayCanvas.height !== h) {
+      _displayCanvas.width = w;
+      _displayCanvas.height = h;
+    }
+    const n = w * h * 4;
+    if (!_softBuf || _softBuf.length !== n) _softBuf = new Uint8Array(n);
+    try {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, _softBuf);
+    } catch (_) { return; }
+    if (!_softImg || _softImg.width !== w || _softImg.height !== h) {
+      _softImg = _displayCtx.createImageData(w, h);
+    }
+    const dst = _softImg.data;
+    const row = w * 4;
+    let maxPx = 0;
+    for (let y = 0; y < h; y++) {
+      const srcOff = (h - 1 - y) * row;
+      const dstOff = y * row;
+      for (let i = 0; i < row; i += 4) {
+        const r = _softBuf[srcOff + i], g = _softBuf[srcOff + i + 1], b = _softBuf[srcOff + i + 2];
+        dst[dstOff + i] = r;
+        dst[dstOff + i + 1] = g;
+        dst[dstOff + i + 2] = b;
+        dst[dstOff + i + 3] = 255;
+        const s = r + g + b;
+        if (s > maxPx) maxPx = s;
+      }
+    }
+    _softLastMaxPx = maxPx;
+    // Skip near-black frames so a clear does not wipe a good garage still
+    // (same floor as TLX soft-blit).
+    if (maxPx < 8) return;
+    try {
+      _displayCtx.putImageData(_softImg, 0, 0);
+      softBlitNotify();
+    } catch (_) { /* 2D blit failed */ }
+  }
+
+  function softPresentState() {
+    return {
+      on: !!_softPresent,
+      gen: _softBlitGen,
+      maxPx: _softLastMaxPx,
+      display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
+    };
+  }
+
+  function awaitSoftPresent(timeoutMs) {
+    if (!_softPresent || !_displayCtx) return Promise.resolve(_softBlitGen);
+    // Wait for a NEWER blit, not the last one already on the overlay.
+    // The wrap/indexOf(waiter) mismatch used to leave timed-out waiters on
+    // the list forever, and an early return on gen>0 made SAVE SCREENSHOT
+    // after a camera move byte-identical to the previous still (same class
+    // as TLX/WGX 2026-09-03). Timeout must splice the same function push()
+    // stored — see renderer-soft-lifecycle.
+    const start = _softBlitGen;
+    const ms = timeoutMs == null ? 8000 : timeoutMs;
+    return new Promise(function (resolve, reject) {
+      let waiter = null;
+      const t = setTimeout(function () {
+        const i = _softPresentWaiters.indexOf(waiter);
+        if (i >= 0) _softPresentWaiters.splice(i, 1);
+        reject(new Error("awaitSoftPresent timeout after " + ms + " ms"));
+      }, ms);
+      waiter = function (gen) {
+        if (gen > start) {
+          try { clearTimeout(t); } catch (_) { /* harness */ }
+          resolve(gen);
+        }
+      };
+      _softPresentWaiters.push(waiter);
+    });
+  }
 
   function init(canvasEl) {
     canvas = canvasEl;
     watchCanvasSize();
+    // HeadlessChrome's CDP / Playwright page screenshots race the cleared
+    // backbuffer when preserveDrawingBuffer is false — and even with it true,
+    // SwiftShader often never composites the WebGL layer (readPixels has the
+    // car; chrome_take_screenshot is a black gap). WGX soft-presents under the
+    // same UA sniff; GLX does both: keep the buffer AND blit to a 2D overlay.
+    // Headed players stay on the fast default (no overlay, no PDB).
+    const headlessUa = typeof navigator !== "undefined"
+      && /HeadlessChrome/i.test(navigator.userAgent || "");
+    _softPresent = headlessUa;
     gl = canvas.getContext("webgl2", {
       // antialias:true makes the BROWSER allocate its own multisampled backbuffer
       // (Apple GPUs round the request up to 4×) — pure waste: the post path
@@ -416,8 +539,10 @@ const GLX = (function () {
       antialias: false,
       alpha: false,
       powerPreference: "high-performance",
+      preserveDrawingBuffer: headlessUa,
     });
     if (!gl) return false;
+    if (_softPresent) ensureSoftDisplay();
 
     // Parallel shader compile (Chrome, Firefox, Safari 17+): see link().
     try { _parallelExt = gl.getExtension("KHR_parallel_shader_compile"); } catch (_) { _parallelExt = null; }
@@ -2377,9 +2502,13 @@ const GLX = (function () {
     present: (opts) => {
       if (ctxGone()) return;
       const r = PST.present(opts);
+      if (_softPresent) softBlit();
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
       return r;
     },
+    softPresent: () => !!_softPresent,
+    softPresentState,
+    awaitSoftPresent,
     gpuErrors: () => _glErrors,
     gpuFirstError: () => _glFirstError || null,
     // The bound backend's account of itself, one shape on all three (TLX
@@ -2390,6 +2519,7 @@ const GLX = (function () {
       api: "webgl2", isMobile: IS_MOBILE, mobileTier: MOBILE_TIER,
       gpuErrors: _glErrors, gpuFirstError: _glFirstError || null,
       ctxLost: _ctxLost, packLive: !!matAlbedoTex,
+      softPresent: !!_softPresent, softBlitGen: _softBlitGen,
     }),
     envFaceBegin,
     envFaceEnd,
