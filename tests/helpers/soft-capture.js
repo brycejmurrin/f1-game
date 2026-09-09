@@ -20,5 +20,7 @@ export async function awaitSoftCapture(page, timeoutMs = 20_000) {
 export async function pageScreenshot(page, opts = {}) {
   const { softTimeout = 20_000, ...shotOpts } = opts;
   await awaitSoftCapture(page, softTimeout);
+  const soft = page.locator("#game-soft");
+  if (await soft.count()) return soft.screenshot(shotOpts);
   return page.screenshot(shotOpts);
 }
