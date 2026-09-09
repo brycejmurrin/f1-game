@@ -119,19 +119,14 @@ function survey(ops, R, bg) {
   return { read: read / n, painted: painted / n };
 }
 
-// KNOWN GAPS — measured, not waived. Each entry is a design a player can pick
-// that does not reach the floor today, recorded with what it actually scores so
-// the number is in the diff when it moves. The test fails if this list GROWS
-// and fails if an entry stops failing, so a fix cannot leave a stale allowance
-// behind and a regression cannot hide behind one.
-//
-// Cadillac is the near-black car (c1 0.039), and both of its mark designs come
-// out at a tenth of what every other team gets. It is not the crown ink (that
-// was the wordmark/number bug, fixed 2026-09-09) and it is not ALT_INSIDE
-// (measured: turning the flag off changes markPalette's `alt` and leaves the
-// rendered crown at 0.9 %). It is in the crest LOCKUP path, which eleven other
-// marks share, so it wants its own change rather than a rider on this one.
-const KNOWN = new Set(["cadillac/logo/crown", "cadillac/bigmark/crown"]);
+// KNOWN GAPS — measured, not waived. An entry is a design a player can pick
+// that does not reach the floor today. The test fails if this list GROWS and
+// fails if an entry stops failing, so a fix cannot leave a stale allowance
+// behind and a regression cannot hide behind one. It is EMPTY, and it earned
+// that: it carried cadillac/logo and cadillac/bigmark for one commit, and the
+// second assertion is what reported them fixed rather than letting the
+// allowance rot into a permanent exemption.
+const KNOWN = new Set([]);
 
 // Each editor ROW is measured in the region it CONTROLS. Sweeping the crown row
 // while sampling the flank re-measures one unchanged flank thirteen times and
