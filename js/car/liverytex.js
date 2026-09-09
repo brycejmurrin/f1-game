@@ -1494,15 +1494,23 @@ const LiveryTex = (function () {
   // number (the SF-26's white cover top), on each flank in its own frame.
   // Called OUTSIDE the crown clip — see the saddle branch below.
   function saddleFlanks(ctx, acc) {
+    // Crease runs farther aft (0.64) then drops on a sharper rake so the white
+    // panel reads as a cut vinyl, not a soft blob into the sidepod. A thin ink
+    // keyline on the rake is what sells the edge at garage distance.
     eachFlank((F) => {
       const Sf = F.R;
       ctx.save();
       ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
       ctx.fillStyle = cssA(acc, 0.97);
       ctx.beginPath();
-      ctx.moveTo(F.fx(0), Sf.y); ctx.lineTo(F.fx(0.58), Sf.y);                 // along the crease
-      ctx.lineTo(F.fx(0.40), Sf.y + Sf.h); ctx.lineTo(F.fx(0), Sf.y + Sf.h);  // raked rear edge
+      ctx.moveTo(F.fx(0), Sf.y); ctx.lineTo(F.fx(0.64), Sf.y);                 // along the crease
+      ctx.lineTo(F.fx(0.38), Sf.y + Sf.h); ctx.lineTo(F.fx(0), Sf.y + Sf.h);  // raked rear edge
       ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = cssA(INK_DARK, 0.35);
+      ctx.lineWidth = Math.max(2, Sf.h * 0.018);
+      ctx.beginPath();
+      ctx.moveTo(F.fx(0.64), Sf.y); ctx.lineTo(F.fx(0.38), Sf.y + Sf.h);
+      ctx.stroke();
       ctx.restore();
     });
   }
@@ -1529,43 +1537,53 @@ const LiveryTex = (function () {
       // canvas clip only ever narrows, so the flank half is drawn by
       // saddleFlanks() at the call site instead — inside this clip it was
       // silently erased, and the atlas shipped a saddle with bare sides.
+      // Shoulder hairlines keep the saddle reading as a panel on pale covers
+      // (Ferrari / Cadillac) where a pure fill vanishes into the cover paint.
       ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, Y, W, H);
+      ctx.fillStyle = cssA(ink, 0.28);
+      ctx.fillRect(X, Y, W * 0.012, H); ctx.fillRect(X + W * 0.988, Y, W * 0.012, H);
     } else if (id === "panel") {
-      // A solid accent block down the crown with a crisp raked leading edge
-      // and a square tail — the vinyl panel a real cover wears, hard-edged.
+      // Vinyl block: parallel sides, hard rake at the airbox, square at the
+      // tail. Slightly narrower than before so papaya / Haas panels leave a
+      // cover margin; dual keylines (ink outer + light inner) sell the edge.
       ctx.fillStyle = cssA(acc, 0.97);
       ctx.beginPath();
-      ctx.moveTo(X + W * 0.28, Y);                 // tail (canvas top = rear)
-      ctx.lineTo(X + W * 0.72, Y);
-      ctx.lineTo(X + W * 0.72, Y + H * 0.80);
-      ctx.lineTo(X + W * 0.28, Y + H * 0.92);      // raked front edge
+      ctx.moveTo(X + W * 0.30, Y);                 // tail (canvas top = rear)
+      ctx.lineTo(X + W * 0.70, Y);
+      ctx.lineTo(X + W * 0.70, Y + H * 0.78);
+      ctx.lineTo(X + W * 0.30, Y + H * 0.94);      // raked front edge
       ctx.closePath(); ctx.fill();
-      ctx.fillStyle = cssA(ink, 0.6);
-      ctx.fillRect(X + W * 0.28, Y, W * 0.010, H * 0.92); ctx.fillRect(X + W * 0.71, Y, W * 0.010, H * 0.80);
+      ctx.fillStyle = cssA(ink, 0.65);
+      ctx.fillRect(X + W * 0.30, Y, W * 0.012, H * 0.94); ctx.fillRect(X + W * 0.688, Y, W * 0.012, H * 0.78);
+      ctx.fillStyle = cssA(ink, 0.22);
+      ctx.fillRect(X + W * 0.312, Y, W * 0.008, H * 0.92); ctx.fillRect(X + W * 0.680, Y, W * 0.008, H * 0.76);
     } else if (id === "stripe") {
-      // One band down the centreline, a hair of ink at each edge so it reads
-      // as trim rather than a smear at chase distance.
-      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.40, Y, W * 0.20, H);
-      ctx.fillStyle = cssA(ink, 0.55);
-      ctx.fillRect(X + W * 0.40, Y, W * 0.012, H); ctx.fillRect(X + W * 0.588, Y, W * 0.012, H);
+      // One centreline band with firm ink edges — trim, not a smear. A hair
+      // narrower (18 %) so Williams / Aston leave crown paint either side.
+      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.41, Y, W * 0.18, H);
+      ctx.fillStyle = cssA(ink, 0.62);
+      ctx.fillRect(X + W * 0.41, Y, W * 0.014, H); ctx.fillRect(X + W * 0.576, Y, W * 0.014, H);
     } else if (id === "twin") {
       // Two pinstripes ON the shoulder creases — the W17's teal lines along
-      // the cover's edges — not down the middle of the crown.
+      // the cover's edges — not down the middle of the crown. Inner ink
+      // keylines keep them readable on silver when the stripe colour is close.
       ctx.fillStyle = cssA(acc, 0.96);
-      ctx.fillRect(X + W * 0.04, Y, W * 0.045, H); ctx.fillRect(X + W * 0.915, Y, W * 0.045, H);
+      ctx.fillRect(X + W * 0.035, Y, W * 0.052, H); ctx.fillRect(X + W * 0.913, Y, W * 0.052, H);
+      ctx.fillStyle = cssA(ink, 0.55);
+      ctx.fillRect(X + W * 0.078, Y, W * 0.010, H); ctx.fillRect(X + W * 0.912, Y, W * 0.010, H);
     } else if (id === "carbon") {
       // An exposed-carbon crown panel: near-black with a faint diagonal weave
       // and an accent keyline where the paint stops.
       const px = X + W * 0.28, pw = W * 0.44;
-      ctx.fillStyle = "rgb(24,25,28)"; ctx.fillRect(px, Y, pw, H);
-      ctx.strokeStyle = "rgba(255,255,255,0.07)"; ctx.lineWidth = 3;
-      for (let d = -H; d < pw + H; d += 14) {
+      ctx.fillStyle = "rgb(22,23,26)"; ctx.fillRect(px, Y, pw, H);
+      ctx.strokeStyle = "rgba(255,255,255,0.11)"; ctx.lineWidth = 3;
+      for (let d = -H; d < pw + H; d += 12) {
         ctx.beginPath(); ctx.moveTo(px + d, Y); ctx.lineTo(px + d + H, Y + H); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(px + d + H, Y); ctx.lineTo(px + d, Y + H); ctx.stroke();
       }
       // The keylines are what a viewer actually SEES of this design: the panel
       // is exposed carbon, so on a dark car it is near-black on near-black and
-      // the weave is a 7 % wash over it — measured at 0 % of the crown readable
+      // the weave is a wash over it — measured at 0 % of the crown readable
       // on five of twelve cars, which is a design that does not exist. At 1.4 %
       // of the crown each they were too thin to register at chase distance;
       // 3.5 % keeps them keylines and puts carbon level with the thinnest
@@ -1579,14 +1597,17 @@ const LiveryTex = (function () {
       // shape a swept wing leaves on a cover. The crest canvas is drawn
       // front-at-the-BOTTOM (car-mesh maps vB to the front station), so the tip
       // of each arrow is at the HIGHER y: pointing them the intuitive way put
-      // three arrows aimed at the rear wing.
+      // three arrows aimed at the rear wing. Slightly thicker shafts + ink
+      // outline so Racing Bulls' chevrons read from the side garage camera.
       ctx.fillStyle = cssA(acc, 0.96);
       for (let i = 0; i < 3; i++) {
-        const y0 = Y + H * (0.10 + i * 0.28), tip = y0 + H * 0.11, th = H * 0.075;
+        const y0 = Y + H * (0.08 + i * 0.29), tip = y0 + H * 0.12, th = H * 0.088;
         ctx.beginPath();
         ctx.moveTo(X, y0); ctx.lineTo(X + W / 2, tip); ctx.lineTo(X + W, y0);
         ctx.lineTo(X + W, y0 + th); ctx.lineTo(X + W / 2, tip + th); ctx.lineTo(X, y0 + th);
         ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = cssA(ink, 0.45); ctx.lineWidth = Math.max(1.5, H * 0.012);
+        ctx.stroke();
       }
     } else if (id === "tricolour") {
       // Three bands ACROSS the crown at the airbox end — the national flash a
@@ -1601,23 +1622,27 @@ const LiveryTex = (function () {
       // "tricolour", which is the one thing the design is named for. acc2 is
       // the second band re-picked against the cover AND the first band; where
       // the two already separate it IS the ink and nothing changes.
-      const bandH = H * 0.085, top = Y + H * 0.62;
+      const bandH = H * 0.095, top = Y + H * 0.60, gap = H * 0.018;
       ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, top, W, bandH);
-      ctx.fillStyle = cssA(acc2 || ink, 0.97); ctx.fillRect(X, top + bandH * 2, W, bandH);
+      ctx.fillStyle = cssA(acc2 || ink, 0.97); ctx.fillRect(X, top + bandH + gap * 2, W, bandH);
+      ctx.fillStyle = cssA(ink, 0.35);
+      ctx.fillRect(X, top + bandH, W, gap); ctx.fillRect(X, top + bandH + gap, W, gap);
     } else if (id === "wedge") {
       // A band WIDE at the airbox tapering to a point at the tail — the shape a
       // cover wears when the spine colour is swept back off the roll hoop.
       // Nothing else in this set tapers: `panel` is a parallel block with a
       // raked front edge, `stripe` is parallel end to end, `saddle` takes the
       // whole crown. Canvas top is the REAR (see `panel`), so the wide end is
-      // the HIGHER y and the point is at Y.
+      // the HIGHER y and the point is at Y. Ink edge on both sides so the taper
+      // does not dissolve into cover paint at chase distance.
       ctx.fillStyle = cssA(acc, 0.97);
       ctx.beginPath();
-      ctx.moveTo(X + W * 0.5 - W * 0.055, Y);        // tail: a stub, not a spike
-      ctx.lineTo(X + W * 0.5 + W * 0.055, Y);
-      ctx.lineTo(X + W * 0.86, Y + H);               // airbox: nearly the full crown
-      ctx.lineTo(X + W * 0.14, Y + H);
+      ctx.moveTo(X + W * 0.5 - W * 0.06, Y);        // tail: a stub, not a spike
+      ctx.lineTo(X + W * 0.5 + W * 0.06, Y);
+      ctx.lineTo(X + W * 0.88, Y + H);               // airbox: nearly the full crown
+      ctx.lineTo(X + W * 0.12, Y + H);
       ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = cssA(ink, 0.5); ctx.lineWidth = Math.max(2, W * 0.012); ctx.stroke();
     } else if (id === "rungs") {
       // Bars ACROSS the crown, repeated down it — the one direction nothing
       // else in this set runs. `twin` and `stripe` run along the car, `chevron`
@@ -1626,8 +1651,12 @@ const LiveryTex = (function () {
       // behind, which is the camera the player actually has.
       ctx.fillStyle = cssA(acc, 0.96);
       for (let i = 0; i < 5; i++) {
-        const inset = W * (0.06 + i * 0.035);        // narrowing toward the tail
-        ctx.fillRect(X + inset, Y + H * (0.08 + i * 0.185), W - inset * 2, H * 0.062);
+        const inset = W * (0.05 + i * 0.038);        // narrowing toward the tail
+        const y = Y + H * (0.07 + i * 0.185), h = H * 0.072;
+        ctx.fillRect(X + inset, y, W - inset * 2, h);
+        ctx.fillStyle = cssA(ink, 0.4);
+        ctx.fillRect(X + inset, y, W - inset * 2, Math.max(1.5, h * 0.14));
+        ctx.fillStyle = cssA(acc, 0.96);
       }
     } else if (id === "wordmark") {
       // The title sponsor along the spine, rotated to run nose → tail so it
@@ -1660,30 +1689,35 @@ const LiveryTex = (function () {
     ctx.save();
     ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip();
     if (id === "saddle") { ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, Y, W, H); }
-    else if (id === "panel") { ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X + W * 0.28, Y, W * 0.44, H); }
+    else if (id === "panel") {
+      ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X + W * 0.30, Y, W * 0.40, H);
+      ctx.fillStyle = cssA(ink, 0.55);
+      ctx.fillRect(X + W * 0.30, Y, W * 0.012, H); ctx.fillRect(X + W * 0.688, Y, W * 0.012, H);
+    }
     else if (id === "stripe") {
-      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.40, Y, W * 0.20, H);
-      ctx.fillStyle = cssA(ink, 0.55); ctx.fillRect(X + W * 0.40, Y, W * 0.012, H); ctx.fillRect(X + W * 0.588, Y, W * 0.012, H);
+      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.41, Y, W * 0.18, H);
+      ctx.fillStyle = cssA(ink, 0.62); ctx.fillRect(X + W * 0.41, Y, W * 0.014, H); ctx.fillRect(X + W * 0.576, Y, W * 0.014, H);
     } else if (id === "twin") {
-      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.04, Y, W * 0.045, H); ctx.fillRect(X + W * 0.915, Y, W * 0.045, H);
+      ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.035, Y, W * 0.052, H); ctx.fillRect(X + W * 0.913, Y, W * 0.052, H);
+      ctx.fillStyle = cssA(ink, 0.55); ctx.fillRect(X + W * 0.078, Y, W * 0.010, H); ctx.fillRect(X + W * 0.912, Y, W * 0.010, H);
     } else if (id === "wedge") {
       // The point runs OUT along the tail rather than stopping at the crown's
-      // edge: the crown hands over a stub 11 % wide, and it closes to nothing.
+      // edge: the crown hands over a stub ~12 % wide, and it closes to nothing.
       ctx.fillStyle = cssA(acc, 0.97);
       ctx.beginPath();
-      ctx.moveTo(X + W * 0.5 - W * 0.012, Y); ctx.lineTo(X + W * 0.5 + W * 0.012, Y);
-      ctx.lineTo(X + W * 0.5 + W * 0.055, Y + H); ctx.lineTo(X + W * 0.5 - W * 0.055, Y + H);
+      ctx.moveTo(X + W * 0.5 - W * 0.014, Y); ctx.lineTo(X + W * 0.5 + W * 0.014, Y);
+      ctx.lineTo(X + W * 0.5 + W * 0.06, Y + H); ctx.lineTo(X + W * 0.5 - W * 0.06, Y + H);
       ctx.closePath(); ctx.fill();
     } else if (id === "rungs") {
       // One more bar, narrowest of the ladder.
       ctx.fillStyle = cssA(acc, 0.96);
-      ctx.fillRect(X + W * 0.27, Y + H * 0.30, W * 0.46, H * 0.30);
+      ctx.fillRect(X + W * 0.24, Y + H * 0.28, W * 0.52, H * 0.34);
     } else if (id === "carbon") {
       // Same 3.5 % keylines as the crown carbon panel — 1.4 % vanished at chase
       // distance on the tail continuation (see drawSpineTop "carbon").
       const px = X + W * 0.28, pw = W * 0.44;
       const kw = W * 0.035;
-      ctx.fillStyle = "rgb(24,25,28)"; ctx.fillRect(px, Y, pw, H);
+      ctx.fillStyle = "rgb(22,23,26)"; ctx.fillRect(px, Y, pw, H);
       ctx.fillStyle = cssA(acc, 0.9); ctx.fillRect(px - kw, Y, kw, H); ctx.fillRect(px + pw, Y, kw, H);
     } else if (id === "wordmark" && name2) {
       // Reads from behind: the tail is what the car behind sees.
@@ -2319,13 +2353,16 @@ const LiveryTex = (function () {
         });
       };
       if (spineSide === "emblem") {
+        // Garage-hero crest: a touch larger than the first pass so it reads as
+        // a mark, not a badge, without crossing the sidepod line (vMid stays
+        // under the fin-design ceiling — measured clear at 0.40).
         eachFlank((F) => {
           ctx.save();
           ctx.translate(sc(F, sideFrom ? 0.45 : 0.22), F.R.y + F.R.h * FLANK_MARK.v);
           ctx.scale(flankSquash(spineHeight, F.R), 1);
           paintFlankLogo({
-            x: -F.R.h * 0.48, y: -F.R.h * 0.34,
-            w: F.R.h * 0.96, h: F.R.h * 0.68,
+            x: -F.R.h * 0.52, y: -F.R.h * 0.36,
+            w: F.R.h * 1.04, h: F.R.h * 0.72,
           }, true);
           ctx.restore();
         });
@@ -2431,6 +2468,12 @@ const LiveryTex = (function () {
         ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
         ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
         ctx.closePath(); ctx.fill();
+        // Thin ink rim so a pale TITLE board still separates from a pale cover
+        // (same class as the plate keyline — without it Alpine's white board on
+        // pink flash read as one slab).
+        ctx.strokeStyle = cssA(INK_DARK, 0.35);
+        ctx.lineWidth = Math.max(1.5, box.h * 0.04);
+        ctx.stroke();
         ctx.restore();
         drawWordmark(ctx, names[0] || "", box, boardInk, {
           align: "center", pad: 6,
@@ -2442,6 +2485,7 @@ const LiveryTex = (function () {
       // the high station a 2026 cover actually wears (W17 PETRONAS strip, the
       // SF-26's 16 in the white saddle). The band hangs from the crease so it
       // cannot read as a sidepod sticker; the number is inked for the band.
+      // Bottom ink keyline separates ribbon from bare band/sash fills.
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
@@ -2450,14 +2494,17 @@ const LiveryTex = (function () {
         // Mercedes ran onto pale cover at 1.53:1.
         const uEnd = spineLogo === "saddle" ? 0.50 : 0.98;
         const x0 = su(F, 0.02), x1 = su(F, uEnd);
-        ctx.fillRect(Math.min(x0, x1), Sf.y + Sf.h * 0.04, Math.abs(x1 - x0), Sf.h * 0.30);
+        const y0 = Sf.y + Sf.h * 0.04, rh = Sf.h * 0.32;
+        ctx.fillRect(Math.min(x0, x1), y0, Math.abs(x1 - x0), rh);
+        ctx.fillStyle = cssA(INK_DARK, 0.4);
+        ctx.fillRect(Math.min(x0, x1), y0 + rh - Math.max(2, Sf.h * 0.02), Math.abs(x1 - x0), Math.max(2, Sf.h * 0.02));
         ctx.restore();
         ctx.save();
         // The band runs to the tail of the flank; the NUMBER in it may not.
         // Under a wrap sc's window is 0.385 of the flank and the digits are
         // 0.16 of it wide, so the only station that keeps the whole number in
         // both the band and the seen strip is the middle of the window.
-        ctx.translate(sc(F, sideFrom ? 0.45 : (spineLogo === "saddle" ? 0.22 : 0.16)), Sf.y + Sf.h * 0.19);
+        ctx.translate(sc(F, sideFrom ? 0.45 : (spineLogo === "saddle" ? 0.22 : 0.16)), Sf.y + Sf.h * 0.20);
         ctx.scale(flankSquash(spineHeight, Sf), 1);
         const ribbonInk = inkOn([flankBandC]);
         drawNumber(ctx, raceNum, { x: -Sf.h * 0.30, y: -Sf.h * 0.13, w: Sf.h * 0.60, h: Sf.h * 0.26 },
@@ -2473,7 +2520,7 @@ const LiveryTex = (function () {
       // Two objects abreast need room, and under a wrap the window sc leaves is
       // 0.385 of the flank: they ride the crease strip at 0.7 scale rather than
       // one of them sliding aft into the wheel.
-      const k = sideFrom ? 0.70 : 1, vMid = sideFrom ? 0.15 : 0.30;
+      const k = sideFrom ? 0.70 : 1, vMid = sideFrom ? 0.15 : 0.28;
       eachFlank((F) => {
         ctx.save();
         ctx.translate(sc(F, sideFrom ? 0.22 : 0.12), F.R.y + F.R.h * vMid);
@@ -2497,29 +2544,46 @@ const LiveryTex = (function () {
         ctx.restore();
       });
     } else if (spineSide === "band") {
-      // Solid crease colour panel — SIDE_FILL so the wrap bull sits on top.
+      // Crease colour PANEL with a raked aft edge — not a flat UI rectangle.
+      // Distinct from sash (diagonal racing stripe). SIDE_FILL under wrap bull.
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(flankBandC, 0.97);
+        const uEnd = sideFrom ? 0.98 : 0.70;
+        const y0 = Sf.y + Sf.h * 0.05, y1 = Sf.y + Sf.h * 0.56;
+        ctx.beginPath();
+        ctx.moveTo(su(F, 0.02), y0);
+        ctx.lineTo(su(F, uEnd), y0);
+        ctx.lineTo(su(F, uEnd * 0.88), y1);
+        ctx.lineTo(su(F, 0.02), y1);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = cssA(INK_DARK, 0.38); ctx.lineWidth = Math.max(2, Sf.h * 0.016);
+        ctx.beginPath();
+        ctx.moveTo(su(F, 0.02), y1); ctx.lineTo(su(F, uEnd * 0.88), y1);
+        ctx.stroke();
+        ctx.restore();
+      });
+    } else if (spineSide === "sash") {
+      // Constant-width diagonal racing sash — parallel edges, not a free
+      // trapezoid. Reads as a sash; band stays the rectangular crease panel.
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.97);
         const uEnd = sideFrom ? 0.98 : 0.68;
-        const x0 = su(F, 0.02), x1 = su(F, uEnd);
-        ctx.fillRect(Math.min(x0, x1), Sf.y + Sf.h * 0.06, Math.abs(x1 - x0), Sf.h * 0.52);
-        ctx.restore();
-      });
-    } else if (spineSide === "sash") {
-      // Wide diagonal racing sash — SIDE_FILL under the wrap bull.
-      eachFlank((F) => {
-        const Sf = F.R;
-        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
-        ctx.fillStyle = cssA(flankBandC, 0.97);
-        const uEnd = sideFrom ? 0.98 : 0.66;
+        const top = Sf.y + Sf.h * 0.04, bot = Sf.y + Sf.h * 0.62;
+        // Forward edge deeper than aft so the stripe sweeps nose → tail.
         ctx.beginPath();
-        ctx.moveTo(su(F, 0.02), Sf.y + Sf.h * 0.05);
-        ctx.lineTo(su(F, uEnd), Sf.y + Sf.h * 0.05);
-        ctx.lineTo(su(F, uEnd * 0.78), Sf.y + Sf.h * 0.70);
-        ctx.lineTo(su(F, 0.02), Sf.y + Sf.h * 0.58);
+        ctx.moveTo(su(F, 0.02), top);
+        ctx.lineTo(su(F, uEnd * 0.92), top);
+        ctx.lineTo(su(F, uEnd), bot);
+        ctx.lineTo(su(F, 0.14), bot);
         ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = cssA(INK_DARK, 0.4); ctx.lineWidth = Math.max(2, Sf.h * 0.016);
+        ctx.beginPath();
+        ctx.moveTo(su(F, 0.14), bot); ctx.lineTo(su(F, uEnd), bot);
+        ctx.stroke();
         ctx.restore();
       });
     }

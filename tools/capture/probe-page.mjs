@@ -17,7 +17,10 @@ export function chromiumArgsForBackend(backend) {
 export function installProbeInit(page, { backend = "webgl2", team = null, tlxForceGL = true } = {}) {
   return page.addInitScript(({ be, teamIdx, forceGl }) => {
     try {
-      if (be === "webgl2") localStorage.removeItem("apex26.gfxBackend");
+      // Pin webgl2 explicitly. Clearing the key used to mean "GLX default", but
+      // game.js now picks THREE on (pointer: coarse) when unset — Playwright's
+      // blink pointer settings can trip that and hang boot on a deferred fetch.
+      if (be === "webgl2") localStorage.setItem("apex26.gfxBackend", "webgl2");
       else localStorage.setItem("apex26.gfxBackend", be);
       if (be === "three" && forceGl) localStorage.setItem("apex26.tlxForceGL", "1");
       if (be === "webgpu") {

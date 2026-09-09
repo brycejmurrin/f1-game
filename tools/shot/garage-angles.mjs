@@ -502,7 +502,12 @@ async function main() {
       + `not the tool. Reap orphans first (AGENTS.md §Verification, rule 7).`);
   }
   const t0 = Date.now();
-  const browser = await launchChromium({ headless: true, args: chromiumArgsForBackend("webgl2") });
+  // APEX_HEADED=1: headed Chromium (use under xvfb-run when headless WebGL2 is
+  // null — measured on this box after X/VNC loss: GLX.init fails, #nogl stays).
+  const browser = await launchChromium({
+    headless: process.env.APEX_HEADED !== "1",
+    args: chromiumArgsForBackend("webgl2"),
+  });
   const servers = [];
   try {
     const srvA = await startStaticServer(process.cwd());
