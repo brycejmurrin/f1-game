@@ -620,3 +620,37 @@ test("nothing that has to be READ is put where the car covers it", async () => {
         `${spineLogo}/${r.spineSide}: ${(r.hidden * 100).toFixed(0)}% of it is behind the car from the garage SIDE camera`);
   }
 });
+
+// …and the CAR can spoil a design without HIDING it, which is the hole the
+// occlusion oracle cannot see. The engine cover carries its own trim on the
+// same skin — an accent pinstripe and up to four grey service hatches — and
+// they were stationed to sit aft of a flank mark at f 0.19, where every crown
+// but `wrap` leaves it. `wrap` moves the design into the mid-flank instead, so
+// the trim ended up INSIDE it: measured in the garage, the pinstripe crossed
+// the first sponsor row and a hatch took the last two letters of the second in
+// white ink on a lit metal plate. No ray-cast reports that, because the hatch
+// is ON the flank rather than in front of it.
+test("under a crown that moves the side design, the cover's trim moves with it", () => {
+  const LT = M.LiveryTex, FL = LT.FLANK;
+  // The aft end of the strip a side camera can read, which is what the wrap
+  // clamps its content to — so the trim has to start at or behind it.
+  const zSeen = FL.zF - LT.FLANK_SEEN * FL.zLen;
+  const bare = build({ spineLogo: "wrap" });
+  const marked = build({ spineLogo: "wrap", spineSide: "duo" });
+  // liv.spineSide changes NOTHING else in the body, so the vertices `marked`
+  // has and `bare` does not are the pinstripe and the hatches at their moved
+  // stations. Matched on position, not index, so a differing hatch count reads
+  // as a moved station rather than as a crash.
+  const key = (a, i) => `${a.pos[i].toFixed(4)},${a.pos[i + 1].toFixed(4)},${a.pos[i + 2].toFixed(4)}`;
+  const had = new Set();
+  for (let i = 0; i < bare.pos.length; i += 3) had.add(key(bare, i));
+  let n = 0, front = -9;
+  for (let i = 0; i < marked.pos.length; i += 3) {
+    if (had.has(key(marked, i))) continue;
+    n++; front = Math.max(front, marked.pos[i + 2]);
+  }
+  assert.ok(n > 0, "a side design moved no cover trim at all — sideMark is not reaching the cover");
+  assert.ok(front <= zSeen + 1e-6,
+    `the cover's trim reaches z ${front.toFixed(3)}, forward of the read strip's aft end at `
+    + `${zSeen.toFixed(3)} — it is standing in the band the wrap's design is read in`);
+});

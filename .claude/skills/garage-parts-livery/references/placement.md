@@ -105,6 +105,30 @@ The oracle was validated against a controlled render pair before any of that,
 same plate, same camera, crown the only variable: forward it is whole, aft it is
 a sliver at the tyre's leading edge (`artifacts/occl-check/`, 2026-09-09).
 
+### The crease strip was not empty
+
+Freeing it was only half the move, because **the CAR can spoil a design without
+hiding it, and no ray-cast will tell you** — the occluders it tests are things
+in FRONT of the flank, and the cover's own trim is ON it. `car3d.js` puts an
+accent pinstripe and up to four grey service hatches on that skin, and both
+were stationed to sit aft of a flank mark at f 0.19, which is where every crown
+except `wrap` leaves one. Move the design into the mid-flank and the trim is
+inside it: the pinstripe crossed the first sponsor row and a hatch took the last
+two letters of the second, white ink on a lit metal plate (garage, u 0.51–0.62 /
+v 0.25–0.50). The cooling-outlet louvres cross it too and are FINE — white on
+near-black carbon reads; a lit metal plate is what kills a name.
+
+So `trimAft` derives both stations from `LiveryTex.FLANK_SEEN` instead of a
+third hand-picked literal, and where the design and a hatch want the same
+station **the hatch is what moves**: it is detail, and aft of `FLANK_SEEN` it
+still reads from hero/top/rear while a sponsor name only ever reads from the
+side. Guarded in `fin-design.test.mjs` by diffing the body with and without a
+`spineSide` — that diff IS the trim, so the guard needs no per-feature
+knowledge — and mutation-checked by pinning `trimAft` back to 0.
+
+When you move content on the flank, shoot it and LOOK, or enumerate the
+bodywork at that station first; the atlas raster shows none of this.
+
 ## What still needs a browser
 
 Foreshortening on a curved band, lighting, and whether a graphic survives
