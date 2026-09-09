@@ -91,11 +91,31 @@ test("each row round-trips through the store under its own key", () => {
   assert.equal(rows.get("pm-brakecue").read(), "off");
   rows.get("pm-brakecue").write("on");
   assert.equal(M.brakeCue(), true);
-  assert.equal(written.brakeCue, "on", "stored as the string the loader reads back");
+  // `lineBrakeCue`, NOT `brakeCue`: 6ee62f21 moved this off the shared key
+  // because the steering panel's 1-10 slider owns `brakeCue` and the two were
+  // reading each other's writes back. That commit did not update this
+  // assertion, so the branch went red in test:sweeps — which the deploy gate
+  // does not run, CI does.
+  assert.equal(written.lineBrakeCue, "on", "stored as the string the loader reads back");
   assert.equal(rows.get("pm-brakecue").read(), "on");
   rows.get("pm-brakecue").write("off");
   assert.equal(M.brakeCue(), false);
-  assert.equal(written.brakeCue, "off");
+  assert.equal(written.lineBrakeCue, "off");
+});
+
+test("a setting saved under the OLD key still restores, and is not written back to it", () => {
+  // The half of the rename with something to lose. A player who turned the cue
+  // on before 6ee62f21 has "on" under `brakeCue`, and the loader falls back to
+  // it when `lineBrakeCue` is absent — otherwise the rename silently resets
+  // everyone's saved preference. Neither the new key nor this fallback had any
+  // test: the rename shipped with a suite that covers the KEY COLLISION and
+  // nothing that covers the migration out of it.
+  const { M, rows, written } = load({ stored: { brakeCue: "on" } });
+  assert.equal(M.brakeCue(), true, "the legacy value restores");
+  assert.equal(rows.get("pm-brakecue").read(), "on");
+  rows.get("pm-brakecue").write("off");
+  assert.equal(written.lineBrakeCue, "off", "and writes land on the NEW key");
+  assert.equal(written.brakeCue, undefined, "never back onto the slider's key");
 });
 
 test("it wires on DOMContentLoaded when the document is still loading", () => {
