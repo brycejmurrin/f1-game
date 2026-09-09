@@ -169,4 +169,11 @@ did it exist
 (formula1.com "GALLERY: every angle of…", media.alpinecars.com) and need a
 session whose fetch reaches them, or an owner-supplied photograph — which is
 exactly how Ferrari and Mercedes got theirs, and why those two are the only
-covers in the tree.
+covers in the tree. The container's egress denies those hosts; use a remote
+browser. Do not invent colours.
+
+**Still open (photo-grounded, no invented design):**
+- Cadillac L/R body split — model has no per-side body colour.
+- Racing Bulls blue *streaks* on the cover — not a cover colour; no TOP/SIDE analog.
+- Alpine pink crown stripe — single-source; waits a second source (`spineTint` exists).
+- W17 raked-bars SIDE (`slash`) — culled 2026-09-09 as a sticker; Mercedes ships `sash`.

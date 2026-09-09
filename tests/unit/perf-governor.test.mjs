@@ -530,9 +530,9 @@ test("TLX wet analytic mirror and chrome MIRROR id 27 match GLX", () => {
   // backends, or a finish silently does nothing on two of the three renderers
   // and no other test would notice. Range grew to 31 with matte/brushed/pearl
   // and the carbon finish; mirror stays 27.
-  assert.match(lit, /surfaceId <= 31/);
+  assert.match(lit, /surfaceId <= 32/);
   assert.match(lit, /mirrorSurface = surfaceId == 27/);
-  assert.match(tsl, /lessThanEqual\(31\.0\)/);
+  assert.match(tsl, /lessThanEqual\(32\.0\)/);
   assert.match(tsl, /surfaceId\.equal\(27\.0\)/);
   for (const id of [28, 29, 30, 31]) {
     assert.match(lit, new RegExp("surfaceId == " + id), "GLX is missing surface " + id);

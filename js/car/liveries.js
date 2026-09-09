@@ -41,8 +41,9 @@
      Geometry (Car3D.SPINE_HEIGHT_IDS); the fin's top stays at the regulation
      line, so a taller spine shortens the blade.
    spineSide? optional SPINE SIDE: "none" (absent) or an id in
-     LiveryTex.SPINE_SIDE_IDS — number, logo, code, plate, wordmark, duo, slash,
-     split, bars, chevron, ribbon (crease band + number), lockup (number + mark).
+     LiveryTex.SPINE_SIDE_IDS — number, logo, code, plate, wordmark, duo,
+     ribbon, lockup, title (sponsor on a board), emblem (large bare crest),
+     band (crease colour strip), sash (wide diagonal).
      Paints the engine-cover FLANK, both sides (car-mesh's band).
      Each flank is its own atlas region (spineSide right, spineSideL left),
      authored in that side's outside-view frame, so text reads and a graphic
@@ -50,44 +51,41 @@
      The grey service panels and the accent pinstripe keep clear of the band,
      so it also moves a vertex.
    spineTint? optional SPINE TINT — the colour of whatever SPINE TOP paints on
-     the crown (and the saddle's flank half). Absent = stripe || accent, which
-     is what every band used to take: `stripe` runs the WHOLE spine including
-     the nose, and `accent` is tertiary trim, so neither can be set for the
-     crown alone. Aston Martin needs a dark band on a green cover whose accent
-     is lime. An explicit pick is honoured as-is — it is a deliberate choice
-     about one surface, like `cover` — while the derived default still goes
-     through the contrast re-pick against the cover.
+     the crown (and the saddle's flank half). Absent = secondary then primary
+     against the ENGINE COVER (never BODY STRIPE / DETAIL). An explicit pick is
+     honoured as-is — it is a deliberate choice about one surface, like `cover`.
    sunTint? optional SUN — the wrap's sun disc over the crown, the cover flanks
      and (Car3D) the airbox and roll hoop. Its own row because SPINE TINT used
      to paint it: one field meant a BAND on most SPINE TOP designs and the SUN
-     on `wrap`, so picking `wrap` repurposed a colour chosen for a band. Unset
-     falls back to spineTint (so a livery saved before this row keeps its
-     author's colour), then to the plate/brand derivation.
-   crestInk? optional CREST INK — what the crown's LETTERING wears: the
-     wordmark, the number, `carbon`'s keylines, the trim on `panel` and
-     `stripe`, and the flank marks that share this ink. Absent = the automatic
-     contrast ink against the ENGINE COVER.
+     on `wrap`. Unset = mark plate / secondary / primary against the cover —
+     never inherits spineTint.
+   crestInk? optional CREST INK — lettering for the crown AND the cover-flank
+     marks (number, code, logo, wordmark, duo). Under SADDLE that includes the
+     saddle panel; under WRAP the cover (the sun is a separate disc). Absent =
+     the automatic contrast ink against ENGINE COVER / the flank left behind.
    bandTint2? optional 2ND BAND — the tricolour's second band. The design draws
      two bands with body paint between them, and only one of them was ever
      choosable; the other was derived and could land on its neighbour (four
      teams wore a "tricolour" of one colour repeated). Absent = derived, and
      re-picked against both the cover and the first band.
    plateTint? optional PLATE PANEL — the contrasting board SPINE SIDE "plate"
-     paints the number on. Absent = stripe||accent, re-picked against the flank.
-   plateInk? optional PLATE NUMBER — the number ON that board. Absent = the
-     body colour when it reads there, else the automatic ink.
-   spineLogo? optional SPINE TOP — what the engine-cover crown carries over
-     its tail wash. "logo" (absent) draws the crest there as well as on the
-     fin; "none" leaves the crown to the wash, so the mark reads once from a
-     chase camera instead of twice; "wrap" (the mark's plate colour as a sun
-     over the crown AND down both flanks, the plate-less mark on top — the
-     RB22's sun and bull); "bigmark" (the mark without its plate at
-     full crown width — the RB22's bull with no sun disc); "saddle" (the whole crown in the accent and down the flanks with a raked rear edge,
-     the SF-26's white top), "panel" (a solid accent block with a raked
-     front edge), "stripe", "twin", "wordmark" (the title
+     and "title" paint on. Absent = SECONDARY or DETAIL, re-picked against the
+     flank — never BODY STRIPE.
+   plateInk? optional PLATE INK — the number ON that board, and the sponsor text
+     on TITLE. Absent = the body colour when it reads there, else the automatic
+     ink.
+   spineLogo? optional SPINE TOP — what the engine-cover crown carries on bare
+     body colour (no gradient wash under any design — hard edges only).
+     "logo" (absent) draws the crest there as well as on the fin; "none" leaves
+     the crown bare so the mark reads once from a chase camera instead of twice;
+     "wrap" (the mark's plate colour as a sun over the crown AND down both
+     flanks, the plate-less mark on top — the RB22's sun and bull); "bigmark"
+     (the mark without its plate at full crown width — the RB22's bull with no
+     sun disc); "saddle" (the whole crown in the band colour and down the flanks
+     with a raked rear edge, the SF-26's white top), "panel" (a solid accent
+     block with a raked front edge), "stripe", "twin", "wordmark" (the title
      sponsor running along the spine), "carbon" (an exposed panel) and
      "number" are the crown designs that carry no mark (LiveryTex.SPINE_LOGO_IDS).
-     The crown carries no gradient wash under any of them — hard edges only.
      The band designs run on down the tail top (REGIONS.tail); the crest and
      the number read top-down, nose up (the chase camera's view).
    finShape? optional FIN SHAPE — the blade's outline: "standard" (absent),
@@ -477,12 +475,24 @@ const Liveries = (function () {
     ],
   };
 
+  // Every field a team's `livery` block may carry onto the derived default —
+  // i.e. every livery row that is NOT c1/c2/id/name. PUBLISHED as Liveries.FIELDS
+  // because it was being copied by hand and the copies drifted: render-car's
+  // own list had 23 of these 33, so nine fields (crestInk, bandTint2, plateTint,
+  // plateInk and the tint rows) could not be reached from any shot tool at all.
+  // One list, consumed by forTeam below and by the tools through the global.
+  const FIELDS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt",
+    "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge",
+    "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover",
+    "spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk",
+    "rearWing", "wingCarbon"];
+
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
     const ex = team.livery;
-    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover", "spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk", "rearWing", "wingCarbon"]) if (ex[k]) def[k] = ex[k];
+    if (ex) for (const k of FIELDS) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 
-  return { UNIVERSAL, BY_TEAM, forTeam };
+  return { UNIVERSAL, BY_TEAM, FIELDS, forTeam };
 })();

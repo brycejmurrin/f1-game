@@ -449,7 +449,12 @@ const GLX = (function () {
     // snapCam()/invalidateSoftPresent() arms one explicit blit on the next
     // present — not a periodic background readback every N frames.
     if (!_softPresentWaiters.length && !_softCaptureDue) return;
-    const w = width | 0, h = height | 0;
+    // Drawing-buffer size, not render width/height: with spatial upscale the
+    // canvas (and default FB) is presentW×presentH while width/height stay at
+    // the internal render scale — readPixels of the small box only captured a
+    // corner of the SGSR present and left #game-soft letterboxed/black.
+    const w = (gl.drawingBufferWidth | 0) || (width | 0);
+    const h = (gl.drawingBufferHeight | 0) || (height | 0);
     if (w < 1 || h < 1) return;
     if (_displayCanvas.width !== w || _displayCanvas.height !== h) {
       _displayCanvas.width = w;

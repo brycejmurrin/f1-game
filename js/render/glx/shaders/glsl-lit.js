@@ -800,7 +800,7 @@ void main() {
   // Car3D surface ids occupy 20..26, above TrackGeom's 0..15 material range.
   // Material 0 retains the legacy whole-draw behavior for imported/custom meshes.
   int surfaceId = int(vMat + 0.5);
-  bool classifiedCar = surfaceId >= 20 && surfaceId <= 31;
+  bool classifiedCar = surfaceId >= 20 && surfaceId <= 32;
   bool paintSurface = surfaceId == 20;
   bool carbonSurface = surfaceId == 21;
   bool rubberSurface = surfaceId == 22;
@@ -820,6 +820,9 @@ void main() {
   bool satinMetalSurface = surfaceId == 29;  // brushed-alloy sheen, half-metal
   bool iriSurface = surfaceId == 30;         // pearlescent: hue swings with view angle
   bool carbonFinish = surfaceId == 31;       // bare weave OVER the livery colour
+  // THE HELMET VISOR is glass-like in roughness and clearcoat but NOT a chrome
+  // mirror: see the baseRefl split in the env block below.
+  bool visorSurface = surfaceId == 32;
   bool paintLike = paintSurface || mirrorSurface || iriSurface || satinMetalSurface;
   float carPaint = classifiedCar ? (paintLike ? uCarPaint : 0.0) : uCarPaint;
   float clearcoat = classifiedCar
@@ -828,7 +831,7 @@ void main() {
       : (iriSurface ? max(uClearcoat, 0.70)
       : (satinMetalSurface ? min(uClearcoat, 0.25)
       : (matteSurface ? 0.0
-      : (glassSurface ? uClearcoat * 0.45 : 0.0))))))
+      : ((glassSurface || visorSurface) ? uClearcoat * 0.45 : 0.0))))))
     : uClearcoat;
   // PAINT gets uMetalness. It used to fall through to a literal 0.0, which made
   // CAR METALLIC a 100% dead slider: every car pixel is classified (car3d.js
@@ -859,7 +862,7 @@ void main() {
   float emissive = classifiedCar
     ? (emissiveSurface ? max(uEmissive, 1.0) : (paintLike ? uEmissive : 0.0))
     : uEmissive;
-  bool envSurface = (carPaint > 0.001 || glassSurface) && clearcoat > 0.001;
+  bool envSurface = (carPaint > 0.001 || glassSurface || visorSurface) && clearcoat > 0.001;
   if (carPaint > 0.001) {
     // Two scales: coarse orange-peel waviness + fine metallic-flake sparkle.
     // Keyed to OBJECT space so the pattern is glued to the panels instead of
@@ -978,7 +981,7 @@ void main() {
   if (carbonSurface || carbonFinish) rough = max(rough, 0.56);
   if (rubberSurface) rough = max(rough, 0.90);
   if (metalSurface) rough = min(rough, 0.16);
-  if (glassSurface) rough = min(rough, 0.13);
+  if (glassSurface || visorSurface) rough = min(rough, 0.13);
   if (emissiveSurface) rough = max(rough, 0.32);
   if (panelSurface) rough = max(rough, 0.72);
   if (mirrorSurface) rough = min(rough, 0.09);
@@ -1330,6 +1333,15 @@ void main() {
     // The grazing Fresnel rim (0.28·ccF) stays in both — a subtle edge, not a wash.
     float probeLive = clamp(uEnvStr, 0.0, 1.0);
     float baseRefl = mix(0.14, 0.72, probeLive);
+    // A TINTED VISOR IS A DIELECTRIC, NOT CHROME. baseRefl is the ANGLE-
+    // INDEPENDENT mirror term — right for the rear-view mirror and a lacquered
+    // body, wrong for a visor, which is dark head-on and bright only where it
+    // rakes away. At 0.72 a near-black visor lost ~30% of its base to the
+    // absorb below and got flat sky in exchange, which is why it photographed
+    // as a pale blue band on the macos-latest GPU. Cutting the uniform term
+    // leaves the 0.28·ccF grazing rim untouched, so the visor keeps its sheen
+    // at the edges and its darkness in the middle.
+    if (visorSurface) baseRefl = mix(0.05, 0.16, probeLive);
     float envW = clamp(clearcoat * (baseRefl + 0.28 * ccF) * (1.0 - rough * 0.25), 0.0, 0.96);
     // Soft horizon: bright sky above, dark ground tone below. Was a hard step
     // (-0.03..0.06) — on the faceted engine cover / sidepod shoulders adjacent

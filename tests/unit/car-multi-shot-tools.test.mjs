@@ -29,6 +29,23 @@ test("render-car has a spine preset and repeatable --shot customs", () => {
     "frame settle must pass `need` into waitForFunction (free `need` is PAGEERR)");
 });
 
+test("render-car walks a team LIST in one browser, and grids the sheet by team", () => {
+  const src = code("tools/car/render-car.mjs");
+  // The livery FIELD overrides exist to sweep one design across cars ("does
+  // spineLogo=wrap read on every team?"), but --team was singular, so that
+  // sweep was still one Chromium boot and one contact sheet PER TEAM.
+  assert.match(src, /raw === 'all'/, "--team=all must expand to the whole roster");
+  assert.match(src, /ROSTER_IDS/, "the roster comes from js/data/teams.js, never a hard-coded list");
+  assert.doesNotMatch(src, /\[\s*'mercedes',\s*'ferrari'/, "no copy of the grid inside the tool");
+  assert.match(src, /MULTI_TEAM/, "the walk has to be distinguishable from a single-team run");
+  // Team is the OUTER loop and only re-set when it CHANGES: CARVIEW.set({team})
+  // rebuilds the car, so re-sending it every shot pays that per camera move.
+  assert.match(src, /s\.team !== renderedTeam \? \{ team: s\.team \}/,
+    "team must be sent only on change, not on every shot");
+  assert.match(src, /s\.team !== renderedTeam/, "a team swap needs the long frame settle, like a tod change");
+  assert.match(src, /assertSafePathToken\(t, 'team'\)/, "every id in the list is still a path token");
+});
+
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
@@ -92,4 +109,72 @@ test("carshot uses soft→CDP clip, not page.screenshot", () => {
   assert.match(src, /screenshotPresentedCanvas/, "shared capture helper");
   assert.match(src, /clip:\s*\{\s*x:\s*96/, "keeps the tiny centre crop");
   assert.doesNotMatch(src, /page\.screenshot\(/, "no raw page.screenshot");
+});
+
+test("garage-angles walks any Liveries.FIELDS axis, not two hard-coded ones", () => {
+  // `--spine-logo=wrap` alone used to be a silent no-op: the walk was gated on
+  // spineSides.length, so with only a crown named it fell through to the LIVERY
+  // branch, shot the team default, tagged the frames `default` and exited 0. A
+  // crown design could be signed off "checked in the garage" without ever
+  // reaching the car — and the JSON sidecar still recorded the crown, because
+  // that is the CONFIG, not what was painted.
+  //
+  // The fix generalised it rather than adding a second special case: any
+  // --name=value that is not one of the tool's OWN flags is a livery field, the
+  // axes given are walked as a CARTESIAN PRODUCT, and the field name is checked
+  // in-page against Liveries.FIELDS. Two hard-coded axes against a livery system
+  // with 33 fields is what left the garage unable to answer a fin, a cover or a
+  // tint question at all.
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /OWN_FLAGS/, "the tool's own flags must be an explicit set");
+  assert.match(src, /axes\.reduce/, "multiple axes walk their cartesian product");
+  assert.doesNotMatch(src, /const designs = spineSides\.length\s*\n?\s*\?/,
+    "the spineSide-only gate must not return");
+  assert.match(src, /Liveries\.FIELDS/,
+    "field names validate against Liveries' own list, not a copy that drifts");
+  for (const legacy of ["--spine-side", "--spine-logo"]) {
+    assert.ok(src.includes(`flag("${legacy}"`), `${legacy} must keep working as an alias`);
+  }
+});
+
+test("liveries.js publishes ONE field list and forTeam consumes it", () => {
+  // render-car carried a hand-copied 23 of these 33, so crestInk, bandTint2,
+  // plateTint, plateInk and the tint rows were unreachable from every shot tool.
+  const src = read("js/car/liveries.js");
+  assert.match(src, /const FIELDS = \[/, "the whitelist must be a named const");
+  assert.match(src, /for \(const k of FIELDS\)/, "forTeam must consume that const");
+  assert.match(src, /return \{[^}]*\bFIELDS\b/, "and it must be exported on the global");
+  const list = /const FIELDS = \[([\s\S]*?)\];/.exec(src)[1];
+  for (const k of ["spineLogo", "spineSide", "finShape", "cover", "sunTint", "plateInk"]) {
+    assert.ok(list.includes(`"${k}"`), `FIELDS must still carry ${k}`);
+  }
+});
+
+test("garage-angles labels frames and can A/B a ref without touching the tree", () => {
+  // A directory of bare frames is unreadable an hour later: three separate
+  // compositors got hand-rolled in one session just to tell which car was which.
+  // And that session's A/B was done by checking the old file OUT into the
+  // working tree, which races anything else running and loses the diff if the
+  // run dies — startStaticServer's `route` hook serves the ref's blobs from
+  // memory instead, which is the reason that hook exists.
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /function labelPng/, "every frame gets a caption bar burned under it");
+  assert.match(src, /function writeSheet/, "a run writes a labelled contact sheet");
+  assert.match(src, /startStaticServer\(process\.cwd\(\), \{ route: blobRoute/,
+    "--against must serve the ref through the harness route hook");
+  assert.doesNotMatch(src, /"checkout"/,
+    "--against must never check the ref out into the working tree");
+  assert.match(src, /"absent at ref"/,
+    "a file missing at the ref must 404, not fall through to the working tree");
+});
+
+test("garage-angles reports per-phase timing and reads the loadavg", () => {
+  // One total number cannot separate a slow tool from a busy box: the same
+  // two-shot walk measured 240.9s and 286.4s on consecutive teams here.
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /ms: \{ settle: settleMs, capture: capMs, gate: gateMs, tries \}/,
+    "each shot records settle/capture/gate separately");
+  assert.match(src, /loadavg/, "the run must read and report the loadavg");
+  assert.match(src, /for \(const teamId of teams\)/,
+    "teams walk inside ONE browser — boot was being paid per team");
 });

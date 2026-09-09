@@ -463,6 +463,27 @@ function syncCustomTeam() {
   invalidateCustomMeshCache(playerBodies, playerBodyOrder);
   invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
 }
+// Another tab's customTeam write bumps store.rev (store.onForeignWrite) but
+// would leave Teams.LIST + mesh caches on the previous paint until the next
+// local cz-save. Re-inject whenever the foreign key (or a full clear) lands.
+// customLogo is a separate key — without this, LiveryTex keeps the previous
+// emblem and decal atlases stay wrong until a local picker/clear runs.
+if (store.subscribe) {
+  store.subscribe((change) => {
+    if (!change || !change.foreign) return;
+    if (change.clear || change.key === "customTeam") {
+      syncCustomTeam();
+      try { spMeshBust(); } catch (_) { /* garage scene may not be up yet */ }
+    }
+    if (change.clear || change.key === "customLogo") {
+      const url = change.clear ? null : loadCustomLogo();
+      applyCustomLogo(url);
+      try { invalidateDecalTextures("custom"); } catch (_) { /* decal cache later */ }
+      try { spMeshBust(); } catch (_) { /* garage scene may not be up yet */ }
+      try { refreshCustomLogoUi(url); } catch (_) { /* customize DOM later */ }
+    }
+  });
+}
 let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
 function storedTrackIndex() {
@@ -1600,6 +1621,9 @@ const _livResolveCache = new Map();
 function resolveLivery(team) {
   if (livDraftOverride && livDraftOverride.teamId === team.id) {
     const l = livDraftOverride.liv;
+    // Every LIV_DRAFT_COLORS tint must pass through here — sunTint / crestInk /
+    // bandTint2 / plateTint / plateInk used to stop at the editor: saved and
+    // live-preview values never reached the atlas or the mesh.
     return { id: l.id || null, c1: l.c1, c2: l.c2, stripe: l.stripe || null, accent: l.accent || null,
              nose: l.nose || null, pod: l.pod || null, wing: l.wing || null, halo: l.halo || null,
              fin: l.fin || null, finArt: l.finArt || null, logo: l.logo || null, logo2: l.logo2 || null,
@@ -1607,7 +1631,9 @@ function resolveLivery(team) {
              finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null,
              tcam: l.tcam || null, coverVents: l.coverVents || null, spineHeight: l.spineHeight || null,
              spineSide: l.spineSide || null, rearWing: l.rearWing || null, wingCarbon: l.wingCarbon || null, cover: l.cover || null,
-             spineTint: l.spineTint || null, sideTint: l.sideTint || null };
+             spineTint: l.spineTint || null, sideTint: l.sideTint || null,
+             sunTint: l.sunTint || null, crestInk: l.crestInk || null, bandTint2: l.bandTint2 || null,
+             plateTint: l.plateTint || null, plateInk: l.plateInk || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1618,10 +1644,9 @@ function resolveLivery(team) {
   // races. Reachable via an imported garage file (js/ui/settings-export.js).
   const list = getLiveries(team);
   const liv = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
-  // Optional livery detail colours (nose cap, sidepod panel, wing flaps, halo tint)
-  // — additive, so an unmodified livery still resolves to today's exact object shape.
-  // spineTint / sideTint: Aston's dark crown band (and any SPINE SIDE band) —
-  // omitting them made resolveLivery drop authored tints and fall back to stripe.
+  // Optional livery detail colours — additive. Every LIV_DRAFT_COLORS tint must
+  // be listed: dropping sunTint / crestInk / bandTint2 / plateTint / plateInk
+  // made those editor rows inert on track and in the live preview.
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
@@ -1629,7 +1654,9 @@ function resolveLivery(team) {
                       finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null,
                       tcam: liv.tcam || null, coverVents: liv.coverVents || null, spineHeight: liv.spineHeight || null,
                       spineSide: liv.spineSide || null, rearWing: liv.rearWing || null, wingCarbon: liv.wingCarbon || null, cover: liv.cover || null,
-                      spineTint: liv.spineTint || null, sideTint: liv.sideTint || null }
+                      spineTint: liv.spineTint || null, sideTint: liv.sideTint || null,
+                      sunTint: liv.sunTint || null, crestInk: liv.crestInk || null, bandTint2: liv.bandTint2 || null,
+                      plateTint: liv.plateTint || null, plateInk: liv.plateInk || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -2754,6 +2781,10 @@ async function loadCarModel(url) {
     for (const k in wheelMeshCache) { freeWheelPair(wheelMeshCache[k]); delete wheelMeshCache[k]; }
     wheelMeshOrder.length = 0;
     for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
+    // Same putBoundedMesh contract as wheelMeshOrder: clearing the cache without
+    // the order array leaves stale keys queued, so the next eviction can free a
+    // live field-wheel mesh while a dead key still occupies a slot.
+    fieldWheelOrder.length = 0;
     return true;
   } catch (e) { return false; }
 }
@@ -9571,6 +9602,21 @@ function czSetLivField(domId, arr) {
   if (arr) { inp.value = rgbToHex(arr); inp.classList.remove("cz-off"); none.classList.remove("active"); }
   else { inp.value = inp.value && /^#[0-9a-fA-F]{6}$/.test(inp.value) ? inp.value : "#ffffff"; inp.classList.add("cz-off"); none.classList.add("active"); }
 }
+// Shared by cz-save and czPreview: structural MY TEAM livery (finShape / spine*)
+// from the previous save (or DEFAULT_CUSTOM), plus the dialog's colour slots +
+// finish. A bare colour-only object wiped finShape "none" and regrew the shark
+// fin — both on persist and on the live turntable override.
+function czLivFromDialog() {
+  const prev = loadCustomTeam();
+  const liv = Object.assign({}, DEFAULT_CUSTOM.livery || {}, (prev && prev.livery) || {});
+  for (const [, key] of CZ_LIV_FIELDS) delete liv[key];
+  delete liv.finish;
+  CZ_LIV_FIELDS.forEach(([domId, key]) => {
+    if (!$(domId).classList.contains("cz-off")) liv[key] = hexToRgb($(domId).value);
+  });
+  if (czFinish && czFinish !== "gloss") liv.finish = czFinish;
+  return liv;
+}
 function czPreview() {
   $("cz-swatch1").style.background = $("cz-color").value;
   $("cz-swatch2").style.background = $("cz-color2").value;
@@ -9582,7 +9628,13 @@ function czPreview() {
   // this one committed blind against two 22px swatches. Same override, keyed
   // "custom" — it shows on the turntable behind the dialog whenever MY TEAM
   // is the selected team, exactly like the sibling editor.
-  livDraftOverride = { teamId: "custom", liv: { c1: hexToArr($("cz-color").value), c2: hexToArr($("cz-color2").value) } };
+  // MUST carry structural finShape/spine* (czLivFromDialog) — a bare {c1,c2}
+  // left finShape null and Car3D fell back to "standard" (shark fin) for the
+  // whole time the dialog was open, undoing the cz-save structural fix.
+  const liv = Object.assign(
+    { id: "default", c1: hexToArr($("cz-color").value), c2: hexToArr($("cz-color2").value) },
+    czLivFromDialog());
+  livDraftOverride = { teamId: "custom", liv };
   spMeshBust();
 }
 function czClearPreview() { livDraftOverride = null; spMeshBust(); }
@@ -9606,12 +9658,21 @@ function openCustomize() {
   $(id).addEventListener("input", czPreview);
 });
 // Extra-paint rows: editing the swatch re-enables the field; NONE clears it.
+// Both must refresh the live draft — colour slots used to leave finShape/spine
+// on the override but never re-ran czPreview after stripe/finish edits.
 CZ_LIV_FIELDS.forEach(([domId]) => {
-  $(domId).addEventListener("input", () => { $(domId).classList.remove("cz-off"); $(domId + "-none").classList.remove("active"); });
-  $(domId + "-none").onclick = () => { $(domId).classList.add("cz-off"); $(domId + "-none").classList.add("active"); if (soundOn) GameAudio.uiTick(); };
+  $(domId).addEventListener("input", () => {
+    $(domId).classList.remove("cz-off"); $(domId + "-none").classList.remove("active");
+    czPreview();
+  });
+  $(domId + "-none").onclick = () => {
+    $(domId).classList.add("cz-off"); $(domId + "-none").classList.add("active");
+    czPreview();
+    if (soundOn) GameAudio.uiTick();
+  };
 });
 for (const btn of document.querySelectorAll("#cz-finish [data-cz-finish]")) {
-  btn.onclick = () => { czSetFinish(btn.dataset.czFinish); if (soundOn) GameAudio.uiTick(); };
+  btn.onclick = () => { czSetFinish(btn.dataset.czFinish); czPreview(); if (soundOn) GameAudio.uiTick(); };
 }
 
 // ---- garage preview camera ----
@@ -9853,11 +9914,10 @@ $("cz-save").onclick = () => {
       num: clamp(parseInt($("cz-num").value, 10) || 99, 0, 99),
     }],
   };
-  // Optional extra paint -> ct.livery (only the fields that aren't NONE).
-  const liv = {};
-  CZ_LIV_FIELDS.forEach(([domId, key]) => { if (!$(domId).classList.contains("cz-off")) liv[key] = hexToRgb($(domId).value); });
-  if (czFinish && czFinish !== "gloss") liv.finish = czFinish;
-  if (Object.keys(liv).length) ct.livery = liv;
+  // Keep structural MY TEAM livery (finShape / spine*) from the previous save
+  // (or DEFAULT_CUSTOM) — this dialog only edits colour slots + finish. A bare
+  // colour-only object used to wipe finShape "none" and regrow the shark fin.
+  ct.livery = czLivFromDialog();
   store.set("customTeam", ct);
   syncCustomTeam();
   teamIdx = Teams.LIST.findIndex((t) => t.id === "custom");

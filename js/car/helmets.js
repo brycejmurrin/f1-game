@@ -583,11 +583,33 @@ const Helmets = (function () {
      twice the whole rest of the car for something ~100 px across, so it buys
      pixels no player is looking at. Past depth 1 the honest fix is not more
      geometry at all — it is per-fragment paint. The lit shader carries
-     vObjPos already (glsl-lit.js uses it for the orange-peel flake), so the
-     shell's (t, az) IS recoverable in the fragment shader without a new
-     vertex attribute; what is missing is the DESIGN there, which means either
-     a sampled texture or 22 designs in GLSL, across GLX, TLX and WGX. That is
-     a renderer change and not this one.
+     vObjPos already (glsl-lit.js:59 sets it for the orange-peel flake), so
+     the shell's (t, az) IS recoverable in the fragment shader without a new
+     vertex attribute.
+
+     What is missing there is the DESIGN, and an earlier version of this
+     comment put that at "a sampled texture or 22 designs in GLSL". Both are
+     wrong. Only SIX zone kinds are used across all 22 drivers (band, cap,
+     flash, mottle, patch, stripe) and no design carries more than ten zones,
+     so the shader needs six smoothstep primitives, not 22 designs. And the
+     design IDENTITY needs no uniform at all: glsl-lit.js:46-53 already reads
+     fract(aMat) as data inside a reserved integer window for track flags, so
+     a helmet id of 32 + designIndex/64 survives int(vMat + 0.5) for all 22
+     and recovers as fract(vMat) * 64. The zone PARAMETERS are static — one
+     small LUT texture bound once a frame, on one of GLX's free texture units,
+     which matters because the lit program's default uniform block is already
+     over the 224-row GLES3 floor (uLight[192] + uMatTexScale[17] + three
+     mat4) and cannot take ~20 more vec4 safely.
+
+     Two traps for whoever does it. The visor is a SURFACE CLASS, not a
+     colour — shell() returns {c, glass} and build() writes S.glass, which
+     gates roughness, clearcoat and env reflection from a flat varying, so
+     per-fragment paint has to override surfaceId ABOVE those chains rather
+     than drop in at the albedo site. And t is the inverse of a Catmull-Rom
+     over 19 non-uniform knots (SHAPE.Y), so the shader needs the table and a
+     search step, not a closed form; how closely that inverse must match this
+     one before band edges visibly shift is a rendered comparison nobody has
+     made yet. It is still a renderer change, and not this one.
 
      The base grid still sets the NORMALS' finite-difference step, so
      subdivision changes the paint and never the lighting — the shell reads

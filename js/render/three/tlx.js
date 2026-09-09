@@ -14,6 +14,9 @@ const TLX = (function () {
 
   /** create(canvas, opts) -> Promise<backend|null>. Never throws. */
   async function create(canvas /*, opts */) {
+    // Hoisted so the outer catch can tear down a half-booted soft overlay /
+    // three renderer before same-page GLX fallback claims #game.
+    let _abortDisplay = null, _abortRenderer = null;
     try {
       const isMobile = (typeof GLX !== "undefined" && !!GLX.isMobile);
       const mobileTier = (typeof GLX !== "undefined" && !!GLX.mobileTier);
@@ -90,7 +93,10 @@ const TLX = (function () {
       // here. This clause is what made the one machine that can test a
       // player's path — macos-latest, Apple/Metal, measured anyHardware:true —
       // take the software half of every content skip instead.
-      const _headless = /HeadlessChrome/i.test(ua);
+      // Playwright Desktop Chrome spoofs a headed UA but sets navigator.webdriver
+      // — GLX arms soft there; match so CDP/page shots still see the blit.
+      const _headless = /HeadlessChrome/i.test(ua)
+        || (typeof navigator !== "undefined" && !!navigator.webdriver);
       // Did an adapter actually RESOLVE? `navigator.gpu` existing is a
       // PRESENCE check and `_hasGpu` below is only that — but a browser can
       // expose navigator.gpu and still hand back no adapter, and then three's
@@ -313,7 +319,14 @@ const TLX = (function () {
         renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
-        await renderer.init();
+        try {
+          await renderer.init();
+        } catch (e) {
+          // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
+          // a half-booted three renderer / GPUDevice alive across the fallback.
+          try { if (typeof renderer.dispose === "function") renderer.dispose(); } catch (_) { /* best-effort */ }
+          throw e;
+        }
         // three r185.1 WebGPUAttributeUtils creates every GPUBuffer with
         // mappedAtCreation:true, then getMappedRange()+unmap(). Dawn's
         // client-visible mapping pool is tiny on SwiftShader — a 35 MB scenery
@@ -456,6 +469,7 @@ const TLX = (function () {
           throw e;
         }
       }
+      _abortRenderer = renderer;
       // Retry / stay-GL must not keep a WebGPU-only 2D overlay.
       _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       // Soft-present overlay: a NEW 2D canvas sibling. Do not steal id="game"
@@ -472,6 +486,7 @@ const TLX = (function () {
           _displayCanvas.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:1";
         }
         canvas.parentNode.insertBefore(_displayCanvas, canvas.nextSibling);
+        _abortDisplay = _displayCanvas;
         // Opaque overlay — the lit fragment writes the SSR car-paint TAG
         // (0.35) into ALPHA. That is a post-chain mask, not opacity. A
         // default 2D context is alpha-composited, so bodywork ghosts at 35%
@@ -1614,6 +1629,12 @@ const TLX = (function () {
       // tests/unit/gfx-backend-canary.test.mjs; do not re-add it without that
       // history. The gate below is what shipped.
       let _envFaceErr = false;   // an uncaptured error DURING one of this cycle's six face renders
+      // The cube-mip pass below is the prime suspect for the WebGPU leg
+      // rendering the world near-black (PERF-FINDINGS 2t, census 69/70: env
+      // probe on 2.9, off 39.2, controls unmoved). Reported so ONE census
+      // answers whether the guard fires, instead of a code read of a minified
+      // bundle guessing where generateMipmaps is defined.
+      let _envMipFn = "?", _envMipRan = 0, _envMipErr = "", _envMipWhere = "?";
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -2589,9 +2610,27 @@ const TLX = (function () {
             // pass, cubeTexture(..., rough*2.5) samples empty mips and chrome
             // goes black/flat. WebGL2 already auto-mips; this is a no-op there
             // when the chain already exists.
-            if (renderer.generateMipmaps && envRT.texture) {
-              try { renderer.generateMipmaps(envRT.texture); }
-              catch (_) { /* backend without cube-mip helper: lod 0 still works */ }
+            // If renderer.generateMipmaps is not a function this guard is a
+            // SILENT no-op and the comment above describes the result exactly:
+            // empty mips, and cubeTexture(..., rough*2.5) reads black. mipFn
+            // says which, mipRan says whether the pass actually ran, and mipErr
+            // keeps a throw that the catch would otherwise swallow whole.
+            // MEASURED (census 71, macos-latest): renderer.generateMipmaps is
+            // UNDEFINED, so this pass had never once run — ran=0 on both legs.
+            // It is defined on the BACKEND (three r185 puts generateMipmaps on
+            // Backend/TextureUtils, not on Renderer), so reach it there when the
+            // renderer does not carry it. WebGL2 auto-mips and never needed this;
+            // WebGPU does not for a cube target (three.js #31143 / #31639), which
+            // is why only that leg goes black.
+            _envMipFn = typeof renderer.generateMipmaps;
+            const _mipVia = typeof renderer.generateMipmaps === "function"
+              ? renderer
+              : (renderer.backend && typeof renderer.backend.generateMipmaps === "function"
+                 ? renderer.backend : null);
+            _envMipWhere = _mipVia === renderer ? "renderer" : _mipVia ? "backend" : "none";
+            if (_mipVia && envRT.texture) {
+              try { _mipVia.generateMipmaps(envRT.texture); _envMipRan++; }
+              catch (e) { _envMipErr = (e && e.message) || String(e); }   // lod 0 still works
             }
           }
           _restoreEnvFrame();
@@ -3360,6 +3399,7 @@ const TLX = (function () {
               on: !!envRT, face, size: ENV_SIZE, ready: envReady, blank: _envBlank,
               mask: envFacesMask, begins: _envBegins, ends: _envEnds,
               fail: _envFailN, failMsg: _envFailMsg,
+              mipFn: _envMipFn, mipRan: _envMipRan, mipErr: _envMipErr, mipWhere: _envMipWhere,
               badProbes: _envBadProbes, gaveUp: _envGaveUp,
             };
           },
@@ -3461,6 +3501,12 @@ const TLX = (function () {
       try { Log.info("gfx", "TLX bind ok"); } catch (_) { /* harness */ }
       return backend;
     } catch (e) {
+      try {
+        if (_abortDisplay && _abortDisplay.parentNode) _abortDisplay.parentNode.removeChild(_abortDisplay);
+      } catch (_) { /* already detached */ }
+      try {
+        if (_abortRenderer && typeof _abortRenderer.dispose === "function") _abortRenderer.dispose();
+      } catch (_) { /* three dispose best-effort */ }
       return _fail((e && e.message) || e);   // any failure -> GLX fallback (Gfx.create contract)
     }
   }

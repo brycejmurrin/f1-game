@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// @doc Scans js/ for a DUPLICATE key in one object literal — the silent merge hazard where two sessions each add a field and the later one wins.
+// @doc Scans js/ for a DUPLICATE key in one object literal — the merge hazard where two sessions add a field and later wins.
 // @skill check-changes
 //
 // WHY. Two sessions each added a `livery:` block to the same team records. Git

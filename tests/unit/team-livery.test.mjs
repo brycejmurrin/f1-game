@@ -169,7 +169,12 @@ test("the editor's draft table and forTeam name the same fields", () => {
   const pills = new Set((SHEET.match(/const LIV_DRAFT_PILLS = \{([\s\S]*?)\};/)[1]
     .match(/([A-Za-z0-9]+):/g) || []).map((k) => k.replace(":", "")));
   const draft = new Set([...colors, ...pills]);
-  const copied = listFrom(LIVERIES_SRC, /if \(ex\) for \(const k of \[([\s\S]*?)\]\)/);
+  // The list is `Liveries.FIELDS` now, not an inline array in forTeam: it was
+  // being hand-copied into the shot tools and the copies drifted (render-car
+  // carried 23 of 33), so it got a name and got published. forTeam consuming it
+  // is asserted separately in car-multi-shot-tools; here we only need its
+  // members.
+  const copied = listFrom(LIVERIES_SRC, /const FIELDS = \[([\s\S]*?)\];/);
   const diff = (a, b) => [...a].filter((k) => !b.has(k)).sort();
   assert.deepEqual(diff(copied, draft), [], "forTeam copies fields the editor cannot show");
   assert.deepEqual(diff(draft, copied), [], "the editor drafts fields forTeam drops from a team default");
@@ -203,19 +208,18 @@ test("resolveLivery falls back through the team's own list", () => {
     "{ c1, c2 } literal drops finShape/spineHeight/spineSide and regrows the fin");
 });
 
-test("resolveLivery and the live preview keep spineTint / sideTint / id", () => {
+test("resolveLivery and the live preview keep every editor tint", () => {
   // Aston's launch car authors spineTint; dropping it in resolveLivery painted
-  // stripe||accent (lime) on the crown band. The draft path needs the same
-  // keys, and livePreviewDraft needs id:"default" so mark plates stay on.
+  // stripe||accent (lime) on the crown band. The five formerly-derived tints
+  // (sun / crest ink / 2nd band / plate) had the same bug later: editor rows
+  // that never reached the atlas. Draft + cached paths must copy every one.
   const GAME = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
-  assert.match(GAME, /spineTint:\s*l\.spineTint\s*\|\|\s*null/,
-    "draft resolveLivery must copy spineTint");
-  assert.match(GAME, /sideTint:\s*l\.sideTint\s*\|\|\s*null/,
-    "draft resolveLivery must copy sideTint");
-  assert.match(GAME, /spineTint:\s*liv\.spineTint\s*\|\|\s*null/,
-    "cached resolveLivery must copy spineTint");
-  assert.match(GAME, /sideTint:\s*liv\.sideTint\s*\|\|\s*null/,
-    "cached resolveLivery must copy sideTint");
+  for (const k of ["spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk"]) {
+    assert.match(GAME, new RegExp(k + ":\\s*l\\." + k + "\\s*\\|\\|\\s*null"),
+      `draft resolveLivery must copy ${k}`);
+    assert.match(GAME, new RegExp(k + ":\\s*liv\\." + k + "\\s*\\|\\|\\s*null"),
+      `cached resolveLivery must copy ${k}`);
+  }
   assert.match(SHEET, /id:\s*"default"/,
     "livePreviewDraft must set id:\"default\" so brand plates stay on while editing");
 });
