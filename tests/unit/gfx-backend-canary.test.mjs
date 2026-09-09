@@ -476,6 +476,8 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.forceMobileTier", "apex26.tlxForceHw", "apex26.tlxForceBatches",
     "apex26.tlxArrayNearest", "apex26.tlxMirrorSweep", "apex26.tlxChunkRelease",
     "apex26.tlxMobile", "apex26.gfxHigh", "apex26.matTexMix",
+    // GLX SGSR1 spike (UPSCALING-2026-09 §6) — opt-in debug pin, not crash state
+    "apex26.spatialUpscale",
   ]);
   // LANE-AWARE: clearRendererStorage removes each list from ITS OWN store, so a
   // key written to localStorage but listed only in RENDERER_SS_KEYS would pass
