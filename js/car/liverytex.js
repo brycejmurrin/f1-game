@@ -2353,13 +2353,16 @@ const LiveryTex = (function () {
         });
       };
       if (spineSide === "emblem") {
+        // Garage-hero crest: a touch larger than the first pass so it reads as
+        // a mark, not a badge, without crossing the sidepod line (vMid stays
+        // under the fin-design ceiling — measured clear at 0.40).
         eachFlank((F) => {
           ctx.save();
           ctx.translate(sc(F, sideFrom ? 0.45 : 0.22), F.R.y + F.R.h * FLANK_MARK.v);
           ctx.scale(flankSquash(spineHeight, F.R), 1);
           paintFlankLogo({
-            x: -F.R.h * 0.48, y: -F.R.h * 0.34,
-            w: F.R.h * 0.96, h: F.R.h * 0.68,
+            x: -F.R.h * 0.52, y: -F.R.h * 0.36,
+            w: F.R.h * 1.04, h: F.R.h * 0.72,
           }, true);
           ctx.restore();
         });
@@ -2465,6 +2468,12 @@ const LiveryTex = (function () {
         ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
         ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
         ctx.closePath(); ctx.fill();
+        // Thin ink rim so a pale TITLE board still separates from a pale cover
+        // (same class as the plate keyline — without it Alpine's white board on
+        // pink flash read as one slab).
+        ctx.strokeStyle = cssA(INK_DARK, 0.35);
+        ctx.lineWidth = Math.max(1.5, box.h * 0.04);
+        ctx.stroke();
         ctx.restore();
         drawWordmark(ctx, names[0] || "", box, boardInk, {
           align: "center", pad: 6,
