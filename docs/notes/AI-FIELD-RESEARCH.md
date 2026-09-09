@@ -219,7 +219,33 @@ which was the ask. Monza goes the other way on the metric that matters most:
 settled passes fall 27 → 19 while total flips rise, i.e. more churn resolving
 into fewer clean passes, which is the opposite of what the mechanism predicts.
 
-The honest caveat on all of it: **every number in this file is a single run.**
+**UPDATE, later the same day — the caveat below was too kind, and the
+instrument now says so.** `ai-field.mjs --runs N` (added 2026-09-09) seeds and
+REBUILDS the field per run. Three runs of 60 s at monza:
+
+    settled passes   8 [7–29]        order flips   25 [15–52]
+    field strings    344 [209–374] m -> 561 [308–564] m
+    nose-to-tail     24.4 [18.2–33.9] % of car-time
+
+A **four-fold** spread in settled passes across three seeds. The monza
+"27 → 19" above is comfortably inside that, so it is **not evidence of
+anything** and should not be read as the hysteresis making monza worse; nor is
+monaco's 15 → 22 established, though its other metrics all moved the same way.
+The right reading of the shipped change is: the mechanism is sound, and its
+effect size is below what a single run can resolve.
+
+Building the flag also found that the obvious implementation is a lie. Setting
+`__apex.seed()` after boot changes NOTHING — the AI's in-race decisions are
+deterministic given the field, and the randomness enters at CAR CREATION — so
+the first cut reported a range of ZERO across seeds 1/2/3. A zero range reads
+as "this metric is rock solid" when it actually meant "the knob is not
+connected", which is worse than having no instrument at all. The seed has to be
+set and the field REBUILT (`apex.seed(n)` then `race()`), which apex.js's own
+comment describes. Seed 1 + rebuild reproduces the boot field exactly, so
+`--runs 1` is unchanged and the older single-run numbers stay comparable.
+
+The original caveat, kept because it is the general rule: **every number in
+this file that is not marked with a range is a single run.**
 The sim is deterministic, so a repeat reproduces exactly — but that is
 REPRODUCIBILITY, not low variance across conditions, and a 240 s race is
 chaotic enough that one behavioural change reshuffles the whole field. Nothing
