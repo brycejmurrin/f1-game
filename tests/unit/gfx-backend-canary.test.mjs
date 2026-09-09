@@ -2002,7 +2002,10 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "apex26.tlxSkipBatches must be an explicit opt-in that defaults FALSE, including when storage throws");
   assert.match(fnBody(src, "isWebGPU"), /renderer\.backend[\s\S]*isWebGPUBackend/,
     "isWebGPU() must read the BOUND backend, not the adapter sniff");
-  assert.match(fnBody(src, "softOutRT"), /^\s*return\s+softGpu\(\s*\)/,
+  // softOutRT may early-return or ternary, but the gate must still be softGpu()
+  // (presentation), not _softAdapter alone — headless needs the blit even on
+  // real hardware. Size args may be presentW/H when spatial upscale is active.
+  assert.match(fnBody(src, "softOutRT"), /(?:^|\n)\s*(?:return|if\s*\()\s*!?\s*softGpu\(\s*\)/,
     "presentation still follows softGpu() — the blit is needed whenever the swapchain is not composited");
   assert.match(src, /apex26\.tlxForceBatches/,
     "the real-GPU code path must stay reachable from a software run for debugging");
@@ -3670,4 +3673,30 @@ test("GLX spatial upscale spike: SGSR1, no textureGather, flag-gated size split"
     "upscale must not run at scale≈1 (pure waste)");
   const apex = read("js/agent/apex.js");
   assert.match(apex, /spatialUpscale\s*\(/, "__apex.spatialUpscale must exist");
+});
+
+test("UPSCALE SettingRow + TLX spatial API markers", () => {
+  const html = read("index.html");
+  assert.match(html, /id="pm-upscale"/, "shell must ship the UPSCALE set-row");
+  assert.match(html, /id="pm-upscale-label">UPSCALE</, "label must be UPSCALE");
+  const scale = read("js/ui/scale.js");
+  assert.match(scale, /SettingRow\.wire\("pm-upscale"/, "scale.js must wire the row");
+  assert.match(scale, /setSpatialUpscale/, "row must call the backend API");
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /setSpatialUpscale/, "TLX must export setSpatialUpscale");
+  assert.match(tlx, /wantSpatialUpscale/, "TLX must gate size split");
+  const post = read("js/render/three/tlx-post.js");
+  assert.match(post, /spatialOk:\s*\(\)\s*=>/, "TLX post must expose spatialOk");
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(tsl, /tlx-post-sgsr/, "TSL SGSR pass must exist");
+  const wgsl = read("js/render/webgpu/wgsl-post.js");
+  assert.match(wgsl, /const SGSR =/, "WGX WGSL SGSR shader must ship");
+  assert.doesNotMatch(wgsl.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
+    /textureGather\s*\(/, "shared kernel uses 4-tap sampleLevel, not textureGather");
+  // Dawn/Naga reserves `std` — the shared SGSR port must use edgeStd (validate caught this).
+  assert.match(wgsl, /fn weightY\([^)]*edgeStd/, "SGSR WGSL weightY must not use reserved std");
+  const wgx = read("js/render/webgpu/wgx.js");
+  assert.match(wgx, /setSpatialUpscale/, "WGX must export setSpatialUpscale");
+  assert.match(wgx, /wantSpatialUpscale/, "WGX must gate size split");
+  assert.match(wgx, /!!pSGSR/, "WGX wantSpatialUpscale must require linked SGSR pipeline");
 });

@@ -156,7 +156,32 @@ const UiScale = (() => {
     } });
     applyResMode();
 
-    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale };
+    // UPSCALE — SGSR1 spatial reconstruct when RESOLUTION is below full
+    // (docs/research/UPSCALING-2026-09.md §6–7). Same raw key GLX already
+    // reads (apex26.spatialUpscale "1"/"0"); OFF by default. No effect at
+    // scale≈1; HUD stays DOM-crisp either way.
+    function upscaleOn() {
+      const gfx = G.gfx;
+      if (gfx && typeof gfx.getSpatialUpscale === "function") return !!gfx.getSpatialUpscale();
+      try { return store.raw("spatialUpscale") === "1"; } catch (_) { return false; }
+    }
+    function applyUpscale(on) {
+      const gfx = G.gfx;
+      if (gfx && typeof gfx.setSpatialUpscale === "function") gfx.setSpatialUpscale(!!on);
+      else {
+        try { store.rawSet("spatialUpscale", on ? "1" : "0"); } catch (_) { /* blocked */ }
+      }
+    }
+    SettingRow.wire("pm-upscale", {
+      values: SettingRow.labels(["off", "on"]),
+      read: () => (upscaleOn() ? "on" : "off"),
+      write: (v) => {
+        applyUpscale(v === "on");
+        if (G.soundOn) GameAudio.uiSelect();
+      },
+    });
+
+    return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale, applyUpscale, upscaleOn };
   }
   return { create };
 })();

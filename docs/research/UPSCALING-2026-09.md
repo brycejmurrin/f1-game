@@ -161,19 +161,88 @@ Two consequences worth naming before anyone starts:
 4. **Temporal reconstruction stays closed** unless someone first builds a
    motion-vector buffer for another reason.
 
-## 6. Spike landed (2026-09-09) — GLX only, flag OFF by default
+## 6. Spike landed (2026-09-09) — GLX / WGX / TLX, flag OFF by default
 
-Implements recommendation §5.2–5.3 in the default renderer:
+Implements recommendation §5.2–5.3 across backends with one shared SGSR1 kernel
+and the same fail-closed size split:
 
 | Piece | Where |
 |---|---|
 | Flag | `localStorage apex26.spatialUpscale=1` or `?upscale=1`; `__apex.spatialUpscale(1\|0)` |
-| Size split | `js/render/glx/glx.js` `resize()`: canvas = present (`css×dpr`); scene/post FBOs stay at `×renderScale` when the flag is on and scale &lt; ~1 |
-| Pass | After FXAA (or composite→LDR), one fullscreen SGSR1 mobile shader writes the default framebuffer at present size (`js/render/glx/post.js`) |
-| Shader | Adapted from Qualcomm SGSR1 mobile (`sgsr1_shader_mobile.frag`, BSD-3). Stock uses `textureGather` (ES 3.1) — **WebGL2 emulates it with four `textureLod` taps**. `mediump`, OperationMode RGBA, EdgeThreshold 8/255 |
-| Gate | Pass runs only when flag on **and** `renderScale < 0.98` **and** the program linked; otherwise behaviour is byte-identical to pre-spike |
+| Size split | GLX / WGX / TLX `resize()`: canvas = present (`css×dpr`); scene/post targets stay at `×renderScale` when the flag is on and scale &lt; ~1 |
+| Pass | After FXAA (or composite→LDR), one fullscreen SGSR1 writes the present target (`glx/post.js`; WGX `present()` + `wgsl-post.js` `SGSR`; TLX `tlx-post` + `tsl-post`) |
+| Shader | Adapted from Qualcomm SGSR1 mobile (`sgsr1_shader_mobile.frag`, BSD-3). Stock uses `textureGather` (ES 3.1) — **all ports emulate with four lod taps** (parity). WGSL renames GLSL `std` → `edgeStd` (reserved keyword). OperationMode RGBA, EdgeThreshold 8/255 |
+| Gate | Pass runs only when flag on **and** `renderScale < 0.98` **and** the program/pipeline linked; otherwise behaviour is byte-identical to pre-spike |
 
-**Not in this spike:** WGX/TLX, settings UI stop, PerfGov auto-enable, temporal path, neural SR, frame gen. Real-GPU A/B still required before defaulting ON — SwiftShader cannot judge sharpness or cost.
+**Not in this spike:** PerfGov auto-enable, temporal path, neural SR, frame gen. Settings UI ON/OFF row ships with the same flag. Real-GPU A/B still required before defaulting ON — SwiftShader cannot judge sharpness or cost.
+
+## 7. Settings UI + WGX/TLX port (research, 2026-09-09)
+
+Ask: put a menu control next to RESOLUTION, and make the same flag do something
+on WGX and TLX. Surveyed against tip `111356f6` (GLX spike already on deploy).
+
+**Update (2026-09-09):** Strategy A (§7.2) landed for WGX and TLX — shared SGSR1,
+`setSpatialUpscale` / `wantSpatialUpscale` / present-size soft blit when active;
+FXAA→`aaTex` (LDR) then SGSR→present. WGX hardware `bgra8unorm` uses a separate
+`pFXAALdr` pipeline. Settings ON/OFF `UPSCALE` row is wired in `js/ui/scale.js`.
+
+### 7.1 Backend surface (post-port)
+
+| | GLX | WGX | TLX |
+|---|---|---|---|
+| Size model | **Split** when flag on: canvas = present (`css×dpr`), FBOs = `×renderScale` | same split | same split |
+| Last fullscreen pass | FXAA → (optional SGSR) → default FB | FXAA → aaTex then SGSR → swapchain / soft present | FXAA → aaRT then SGSR → `#game` / soft blit |
+| Soft present | optional HeadlessChrome blit | required on software; readback = present size when upscaling | `#game-soft` at present size when upscaling |
+| `textureGather` | **no** (WebGL2) — 4× `textureLod` | WGSL has gather; **unused** (4× `textureSampleLevel`) | TSL / WebGL2 polyfill; **unused** (shared taps) |
+| Spatial API | `setSpatialUpscale` / `wantSpatialUpscale` / `getPresentSize` | same | same |
+
+Historical touch points (landed):
+
+- **WGX:** `js/render/webgpu/wgx.js` `resize` / `_ensureSoftPresent` / `present` FXAA+SGSR; `js/render/webgpu/wgsl-post.js` `SGSR` after FXAA in `PASS_ORDER`.
+- **TLX:** `js/render/three/tlx.js` size split; `tlx-post.js` + `tsl-post.js` SGSR pass; soft blit reads the final present tex.
+
+### 7.2 Three backend strategies
+
+**A. Shared SGSR1 everywhere (same look, emulated gathers on GLX/TLX-GL)**
+
+- Port the existing `SGSR_FS` maths to WGSL and TSL.
+- One flag, one visual contract, one canary family.
+- WGX *could* later swap the four taps for native `textureGather` without changing the flag.
+- Cost: three size-splits + three post insertions; soft-present legs get more expensive at full present size (not a player path).
+
+**B. Native per backend (WGX `textureGather` SGSR/FSR; TLX `texture().gather()`; GLX stays emulated)**
+
+- Matches what Babylon did for FSR (WebGPU-only gather).
+- Sharper / cheaper on real WebGPU; **parity risk** — three looks to A/B, and TLX AUTO on WebKit is often WebGL2 (polyfill gather, not the WGX path).
+- FSR1 still wants two full-res passes (EASU+RCAS) — worse than SGSR on the phone that needs this (§3). Prefer SGSR kernel even if gathers are native.
+
+**C. GLX + WGX now; TLX later**
+
+- Cuts TLX soft-blit / `presentedTarget` hazards from the first PR.
+- Leaves THREE.JS players on bilinear stretch while RESOLUTION is LOW/MED — the SETTINGS row would need an "unavailable on this renderer" state or a silent no-op (`active:false`).
+
+### 7.3 Settings UI (independent of A/B/C)
+
+RESOLUTION already owns the scale (`js/ui/scale.js`, `#pm-res` under `#pm-display-adv`). Upscale is a sibling preference:
+
+| Choice | Shape | Store |
+|---|---|---|
+| **ON/OFF row** (fits `SettingRow`) | `‹ OFF ›` / `‹ ON ›` under RESOLUTION | keep `apex26.spatialUpscale` (`"1"`/`"0"`) — already written by GLX + `__apex` |
+| Fold into RESOLUTION | e.g. `MED+SHARP` modes | conflates two axes; governor AUTO cannot mean "scale + upscale" without new semantics |
+| GRAPHICS preset side-effect | ULTRA implies on | invisible; fights the "never unconditional cost" rule (§5.3) |
+
+Recommended UI: **one `SettingRow` labelled `UPSCALE`**, values ON/OFF, default **OFF**, next to `#pm-res`. Leave the control enabled at HIGH — `active` stays false until scale drops (same gate as today). Wire in `js/ui/scale.js`, static DOM in `index.html` (shell-ids / a11y guards). Help text: sharpens the **3D** view only; HUD stays DOM-crisp; no effect at full resolution.
+
+### 7.4 Recommendation
+
+1. **Settings first (small, shippable alone):** ON/OFF `SettingRow` next to RESOLUTION, same `apex26.spatialUpscale` key, default OFF. Works for GLX immediately; WGX/TLX keep `available` until ported.
+2. **Backend port: strategy A (shared SGSR1)** for WGX then TLX — one kernel, fail closed without letterboxing, soft-present at present size only when the flag is active. Do **not** introduce FSR1's second pass.
+3. **Optional follow-up:** WGX-only `textureGather` fast path behind the same flag after A is green on a real GPU.
+4. **Still required before default ON:** device A/B at RESOLUTION MED/LOW — SwiftShader cannot judge (§6).
+
+### 7.5 Out of scope (unchanged)
+
+Temporal / frame-gen; PerfGov auto-enabling upscale; changing RESOLUTION mode labels; comparing census FPS across the size-split without reading the present `path:`.
 
 ## Sources
 
@@ -185,3 +254,4 @@ Implements recommendation §5.2–5.3 in the default renderer:
 - [Babylon.js FSR thread](https://forum.babylonjs.com/t/using-amd-fsr-with-babylon-js/39326) — WebGPU-only because of `textureGather`
 - [Khronos `textureGather`](https://registry.khronos.org/OpenGL-Refpages/es3.1/html/textureGather.xhtml) — ES 3.1, i.e. not WebGL2
 - [Hajime-san/web-fsr](https://github.com/Hajime-san/web-fsr) — an existing WebGL port to read before writing one
+- In-tree: `js/render/glx/{glx,post}.js` + `glsl-post.js` `SGSR_FS`; `js/render/webgpu/wgx.js` `_acquirePresentView` / FXAA; `js/render/three/{tlx,tlx-post,tsl-post}.js`; `js/ui/scale.js` `#pm-res`

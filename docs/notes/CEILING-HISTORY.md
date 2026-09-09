@@ -2618,6 +2618,10 @@ SAVE SCREENSHOT after a camera move identical to the previous still. Matching
 TLX (wait for `gen > start`, push the same function the timeout splices)
 costs five split-newline lines, mostly comments naming the two defects.
 
+
+## 2026-09-09 — UPSCALE SettingRow (+6 shell nodes)
+
+- (tree) shellNodes 1347 -> **1353** (+6): SETTINGS > DISPLAY > RENDERER gains `#pm-upscale` ON/OFF (`SettingRow`) beside RESOLUTION for SGSR spatial upscale (UPSCALING-2026-09 §7).
 ## 2026-09-09 — hunt-fix remainder (seat, waiters, capture, apex)
 
 `js/game.js` lines 10342 -> **10355** (+13) / codeLines 5589 -> **5600** (+11).

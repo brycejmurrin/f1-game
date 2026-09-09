@@ -178,7 +178,8 @@ test("WGX soft present permits one staging read and drops pre-resize pixels", ()
   assert.match(resize, /if \(sizeChanged\) \{\s*_cssApplying = true;/);
   assert.match(resize, /_softDisplayEpoch\+\+/);
   assert.match(src, /if \(!_cssApplying\) _cssDirty = true/);
-  assert.match(resize, /Math\.abs\(w - width\) <= 1 && Math\.abs\(h - height\) <= 1/);
+  // Size split: present jitter uses pw/ph vs presentW/H; render jitter uses rw/rh vs width/height.
+  assert.match(resize, /Math\.abs\(r?w - width\) <= 1 && Math\.abs\(r?h - height\) <= 1/);
 });
 
 test("WGX and TLX distrust the CSS-size cache after a viewport change", () => {

@@ -1510,10 +1510,9 @@ const api = {
     PerfGov.setAutoRes(false); gfx.setRenderScale(+v); return this.renderScale();
   },
 
-  // spatialUpscale(v?) — GLX SGSR1 spike (docs/research/UPSCALING-2026-09.md §6).
+  // spatialUpscale(v?) — GLX + WGX + TLX SGSR1 (docs/research/UPSCALING-2026-09.md §6–7).
   // Flag OFF by default. Number/bool sets localStorage apex26.spatialUpscale;
   // active only when flag on AND renderScale < ~1 AND the SGSR program linked.
-  // WGX/TLX: available:false (not in this spike).
   spatialUpscale(v) {
     const has = !!(gfx && typeof gfx.setSpatialUpscale === "function" && typeof gfx.getSpatialUpscale === "function");
     if (!has) return { on: false, active: false, scale: gfx && gfx.getRenderScale ? gfx.getRenderScale() : null, available: false };
