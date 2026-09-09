@@ -2639,6 +2639,18 @@ const TLX = (function () {
           });
         },
         softPresent() { return !!_softBlit; },
+        // Same name as WGX/GLX so descriptor-copy onto GLX does not keep a
+        // dead GLX softPresentState closure (backend-surface-parity).
+        softPresentState() {
+          return {
+            on: !!_softBlit,
+            gen: _softBlitGen,
+            pending: !!_softReadPending,
+            lastMs: _softReadLastMs,
+            lastErr: _softReadLastErr || null,
+            display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
+          };
+        },
         // Dawn's own verdict on this backend. Mirrors WGX.gpuErrors(); reachable
         // as GLX.gpuErrors() after game.js copies the backend onto GLX.
         gpuErrors() { return _gpuErrors; },
