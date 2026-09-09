@@ -2354,55 +2354,39 @@ const api = {
       // agent-determinism caught it; the block above is the reason this file
       // has such a block at all.
       c.aiHead = 0; c.aiBias = null; c.aiFam = 0;
-      // …and the fields one car reads OFF ANOTHER during its own update. These
-      // are written every frame, but they are read on the FIRST frame before
-      // their owner has been updated, so a fresh session sees undefined (and
-      // falls back) where a replayed one sees last episode's value: `_vmaxNow`
-      // is the blocker's pace that AiDrive.otWant decides passes on, `accSm`
-      // its acceleration, `towing` its slipstream, `rank` its position. The
-      // leak predates the heading-state controller and was harmless until that
-      // controller changed which cars are beside each other on lap 1; then it
-      // moved finishing order between replays of one seed while the player's
-      // own trace stayed byte-identical (agent-determinism, 2026-09-08).
-      c._vmaxNow = 0; c.accSm = 0; c.towing = 0; c.rank = 0; c.contactT = 0;
-      c.passSide = 0; c.passBest = 0;
       c.stuckT = 0; c.letPassT = 0; c.passOf = null; c.passT = 0; c.passCool = 0; c.holdOff = null; c.defendSide = 0; c.passFailOf = null; c.passFailT = 0; c.errT = 0; c.pressT = 0; c.zoneKey = -1; c.deploying = false; c.boostOn = false; c.otArmed = false;
       c.xOn = false; c.aeroX = 0; c.xArmed = false;
       c.wasOnThrottle = false;
       delete c.vertLoad;
-      // MEASURED (2026-09-08): the block above was written for the drivetrain,
-      // and every field the AI has grown since leaks the same way — episode 1
-      // ran from a cold car, every later episode inherited the last one's, and
-      // the field finished 4 s in a different ORDER (two transposed pairs in
-      // field().positions, the player's own digest identical because it starts
-      // ahead of the grid). Dumping every primitive on all 22 cars at the start
-      // of three episodes named the leaks exactly; these are they. `lane` is the
-      // odd one out and the reason this bit: it is not absent before the first
-      // episode but ALREADY ADAPTED, so it re-seeds from lanePref (the grid home
-      // line makeCars stored) rather than being deleted. The rest are absent on
-      // a cold car, so DELETING is what makes every episode start as the first
-      // one did — the same reason vertLoad above is deleted, not zeroed.
-      for (const k of ["rank", "kCur", "wasArmed", "_vmaxNow", "onKerb", "exhaustPop",
-                       "_pushD", "_secIdx", "_secT0", "accSm", "passSide", "passBest",
-                       "_lapTimeAtLine", "incidentInvalidLap", "axFrac", "slipFactor",
-                       "flatSpot", "_aeroGrip", "skidIntensity"]) delete c[k];
+      // EVERY per-episode transient is DELETED, not zeroed, from ONE list —
+      // EPISODE_TRANSIENTS at the top of this file. Deleting is the point:
+      // these fields are absent on a cold car, so removing them is what makes
+      // episode N start in the state a freshly loaded page is in, which is what
+      // "the same seed replays an episode exactly" actually asks for. Zeroing
+      // leaves 0 where a first run had undefined, and those are different
+      // inputs — the same reason vertLoad above is deleted rather than set.
+      // It matters because several are read CROSS-CAR one tick stale: `_vmaxNow`
+      // is the blocker's pace AiDrive.otWant decides passes on, `accSm` its
+      // acceleration, `towing` its slipstream, `rank` its position. On the first
+      // frame a fresh session sees undefined and falls back where a replayed one
+      // sees last episode's value; that moved finishing order between replays of
+      // one seed while the player's own trace stayed byte-identical, which is
+      // what agent-determinism catches. kCur, _aeroGrip, slipFactor, offroad,
+      // onKerb, contactT and _pushD feed the next tick's physics the same way,
+      // and five (accSm, kCur, _vmaxNow, passBest, kerbHapT) drifted on EVERY
+      // episode, not just the first, so no amount of warm-up settled it.
+      // `lane` is the odd one out: not absent before the first episode but
+      // ALREADY ADAPTED, so it re-seeds from lanePref (the grid home line
+      // makeCars stored) rather than being deleted.
+      // KEEP THE LIST IN STEP BY MEASURING, NOT BY GUESSWORK —
+      // `node tools/check/episode-diff.mjs` dumps every primitive on all 22 cars
+      // across consecutive post-reset snapshots and names what leaked. Two
+      // sessions fixed this defect in parallel on 2026-09-08 and left THREE
+      // mechanisms here: an inline copy of this list, and a block that zeroed
+      // seven of its fields. Both were dead — this loop runs last, and a delete
+      // beats the 0 they wrote. Add to EPISODE_TRANSIENTS; never a second list.
       c.lane = c.lanePref != null ? c.lanePref : 0;
       c._prevS = c.s;
-      // …and every OTHER per-episode transient, deleted rather than zeroed so
-      // episode N starts in the state a freshly loaded page is in — which is
-      // what "the same seed replays an episode exactly" actually asks for.
-      // The block above fixed the drivetrain leak and stopped there; these
-      // survived, and they are not cosmetic: kCur, _vmaxNow, accSm, _aeroGrip,
-      // slipFactor, towing, offroad, onKerb, contactT and _pushD all feed the
-      // next tick's physics, and rank/passSide/passBest feed AI racecraft. So
-      // the first replay ran with them undefined and every later one inherited
-      // the previous episode's values — the field order at the back of the
-      // grid came out different, which is what agent-determinism catches.
-      // Five of them (accSm, kCur, _vmaxNow, passBest, kerbHapT) drifted on
-      // EVERY episode, not just the first, so no amount of warm-up settled it.
-      // Derived by diffing every numeric/boolean car field across consecutive
-      // post-reset snapshots; keep this list in step with that method rather
-      // than by guesswork.
       for (const k of EPISODE_TRANSIENTS) delete c[k];
     }
     BodyAttitude.reset();   // settle the C2 visual-suspension springs (render-only, no transient)

@@ -997,7 +997,7 @@
 
         // ── car surface ids 20-27 (car3d.js SURFACES; js/render/glx/shaders/glsl-lit.js) ───────
         const surfaceId = floor(matA.add(0.5)).toVar();
-        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(31.0)).toVar();
+        const classifiedCar = surfaceId.greaterThanEqual(20.0).and(surfaceId.lessThanEqual(32.0)).toVar();
         const paintSurface = surfaceId.equal(20.0).toVar();
         const carbonSurface = surfaceId.equal(21.0).toVar();
         const rubberSurface = surfaceId.equal(22.0).toVar();
@@ -1015,6 +1015,9 @@
         const satinMetalSurface = surfaceId.equal(29.0).toVar();
         const iriSurface = surfaceId.equal(30.0).toVar();
         const carbonFinish = surfaceId.equal(31.0).toVar();   // bare weave OVER the livery colour
+        // HELMET VISOR (car3d.js SURFACES.visor = 32): glass-like roughness and
+        // clearcoat, dielectric env response — mirrors the GLX/WGSL split.
+        const visorSurface = surfaceId.equal(32.0).toVar();
         const paintLike = paintSurface.or(mirrorSurface).or(iriSurface).or(satinMetalSurface).toVar();
         const carPaint = select(classifiedCar,
           select(paintLike, matU.carPaint, float(0.0)), matU.carPaint).toVar();
@@ -1024,7 +1027,7 @@
               select(iriSurface, max(matU.clearcoat, 0.70),
                 select(satinMetalSurface, min(matU.clearcoat, 0.25),
                   select(matteSurface, float(0.0),
-                    select(glassSurface, matU.clearcoat.mul(0.45), float(0.0))))))),
+                    select(glassSurface.or(visorSurface), matU.clearcoat.mul(0.45), float(0.0))))))),
           matU.clearcoat).toVar();
         const metalness = select(classifiedCar,
           select(metalSurface, max(matU.metalness, 0.78),
@@ -1058,7 +1061,7 @@
           select(emissiveSurface, max(matU.emissive, 1.0),
             select(paintLike, matU.emissive, float(0.0))),
           matU.emissive).toVar();
-        const envSurface = carPaint.greaterThan(0.001).or(glassSurface)
+        const envSurface = carPaint.greaterThan(0.001).or(glassSurface).or(visorSurface)
           .and(clearcoat.greaterThan(0.001)).toVar();
 
         // ── car-paint orange-peel micro normal (js/render/glx/shaders/glsl-lit.js) ─────────────
@@ -1126,7 +1129,7 @@
         If(carbonSurface.or(carbonFinish), () => { rough.assign(max(rough, 0.56)); });
         If(rubberSurface, () => { rough.assign(max(rough, 0.90)); });
         If(metalSurface, () => { rough.assign(min(rough, 0.16)); });
-        If(glassSurface, () => { rough.assign(min(rough, 0.13)); });
+        If(glassSurface.or(visorSurface), () => { rough.assign(min(rough, 0.13)); });
         If(emissiveSurface, () => { rough.assign(max(rough, 0.32)); });
         If(panelSurface, () => { rough.assign(max(rough, 0.72)); });
         If(mirrorSurface, () => { rough.assign(min(rough, 0.09)); });
@@ -1381,7 +1384,13 @@
           const ccFb = NoVc.oneMinus();
           const ccF = ccFb.mul(ccFb);                          // fresnel² (mul not pow: pow(0,2) NaNs on mobile)
           const probeLive = clamp(U.envStr, 0.0, 1.0);
-          const baseRefl = mix(float(0.14), float(0.72), probeLive);
+          // A TINTED VISOR IS A DIELECTRIC, NOT CHROME — mirrors the GLX split.
+          // baseRefl is the ANGLE-INDEPENDENT mirror term; cutting it for the
+          // visor keeps the 0.28*ccF grazing rim, so the visor holds an edge
+          // sheen and stays dark head-on rather than reading as the pale blue
+          // band the macos-latest GPU photographed on 2026-09-09.
+          const baseRefl = select(visorSurface, mix(float(0.05), float(0.16), probeLive),
+                                                mix(float(0.14), float(0.72), probeLive));
           const envW = clamp(clearcoat.mul(baseRefl.add(ccF.mul(0.28))).mul(rough.mul(0.25).oneMinus()), 0.0, 0.96);
           const horiz = smoothstep(-0.12, 0.30, Rg.y);
           const skyR = mix(vec3(U.skyHorizon).mul(1.2), vec3(U.skyZenith), sqrt(max(Rg.y, 0.0)));

@@ -594,6 +594,7 @@ const WGX = (function () {
     try {
       format = navigator.gpu.getPreferredCanvasFormat();
     } catch (e) {
+      try { if (device && typeof device.destroy === "function") device.destroy(); } catch (_) { /* already lost */ }
       return _fail("preferred canvas format threw: " + ((e && e.message) || e));
     }
     // WebKit (Safari Mac + every iOS browser) and phones: never configure the
@@ -6056,21 +6057,22 @@ const WGX = (function () {
     _lastFailure = null;
     _clearGlxBound();
 
-    // PROVEN — only now claim the canvas. Every refusal above returns with the
-    // element untouched, so GLX attaches webgl2 to it on the same load and the
-    // player never sees a reload. This is the last thing that can fail, and if
-    // it does the canvas may be half-claimed, so it still reports through _fail
-    // and game.js's reload path remains the backstop for that one case.
+    // PROVEN — only now claim the GPU canvas. Soft-present keeps #game as the
+    // 2D display target and renders on an offscreen node: configure the
+    // offscreen FIRST, then take #game's 2D context LAST. Claiming 2D before
+    // configure used to lock #game as typed-2D when resize/_configureCanvas
+    // failed — same-page GLX getContext("webgl2") then died and forced a reload.
+    // Every refusal above still returns with #game untouched.
     try {
       ctx = canvas.getContext("webgpu");
       if (!ctx) return _bootFail("canvas has no webgpu context");
+      resize();
+      const _bootCfgErr = _configureCanvas();
+      if (_bootCfgErr) return _bootFail(_bootCfgErr);
       if (_softGpu && _displayCanvas) {
         _displayCtx = _displayCanvas.getContext("2d", { alpha: false });
         if (!_displayCtx) return _bootFail("software WebGPU needs a 2D display canvas");
       }
-      resize();
-      const _bootCfgErr = _configureCanvas();
-      if (_bootCfgErr) return _bootFail(_bootCfgErr);
     } catch (e) {
       return _bootFail("context configure threw: " + ((e && e.message) || e));
     }
