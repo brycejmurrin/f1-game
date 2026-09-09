@@ -84,7 +84,7 @@ export function plan() {
   return { branch, head, tip, fastForward: ancestor, theirCommits: theirs, ourCommits: ours, theirDiffstat: stat, conflicts,
     touchedCircuits: touchedCircuits(tip),
     steps: [
-      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (index.html/version.json conflicts resolve to theirs + gen-shell)",
+      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json)",
       "npm run test:tooling-fast",
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
       "verify-track for touched circuits",
@@ -181,6 +181,31 @@ function cureRatchets() {
   return "ratchets re-measured on the union";
 }
 
+/* Which conflicts a deploy may resolve ON ITS OWN. A file this repo GENERATES
+   carries no intent to reconcile: its content is a function of a source that
+   merged cleanly, so the answer is to re-derive it, not to choose a side.
+   index.html/version.json come from the manifest, ratchets.json from measuring
+   the tree, and package.json's script block from tests/groups.json.
+
+   package.json earns its place the hard way: two sessions adding a test suite
+   each conflict there EVERY time, and it was hand-resolved twice on
+   2026-09-08 — identically, by regenerating — at the cost of a stopped deploy
+   and a full re-verification cycle apiece.
+
+   The condition that keeps it honest is that the SOURCE came through clean. If
+   tests/groups.json is itself conflicted, package.json cannot be derived from
+   it and both are a real disagreement. Pure and exported so the rule can be
+   tested without a merge to run it against. */
+export function cureableConflicts(conflicted) {
+  const shellF = conflicted.filter((f) => f === "index.html" || f === "version.json");
+  const ratchetF = conflicted.filter((f) => f === RATCHETS);
+  const pkgF = conflicted.filter((f) => f === "package.json");
+  const sourceContested = conflicted.includes("tests/groups.json");
+  const cureable = conflicted.length > 0 && !sourceContested
+    && shellF.length + ratchetF.length + pkgF.length === conflicted.length;
+  return { cureable, shellF, ratchetF, pkgF };
+}
+
 function mergeDeployTip(tip) {
   const r = git(["merge", "--no-edit", `${REMOTE}/${DEPLOY_BRANCH}`]);
   if (r.code === 0) return "merged";
@@ -188,13 +213,11 @@ function mergeDeployTip(tip) {
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.
-  const shellF = conflicted.filter((f) => f === "index.html" || f === "version.json");
-  const ratchetF = conflicted.filter((f) => f === RATCHETS);
-  const cureable = shellF.length + ratchetF.length === conflicted.length;
+  const { cureable, shellF, ratchetF, pkgF } = cureableConflicts(conflicted);
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f))
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f))
       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
@@ -206,6 +229,14 @@ function mergeDeployTip(tip) {
     did.push("shell hashes re-applied");
   }
   if (ratchetF.length) { did.push(cureRatchets()); must(git(["add", RATCHETS]), "add"); }
+  if (pkgF.length) {
+    // --ours only to give the generator a parseable file to overwrite; every
+    // script line it cares about is rewritten from the merged groups.json.
+    must(git(["checkout", "--ours", "--", "package.json"]), "checkout --ours package.json");
+    run("node", ["tools/gen/gen-test-groups.mjs"], "regenerate the test scripts from the merged groups.json");
+    must(git(["add", "package.json"]), "add");
+    did.push("test scripts regenerated from groups.json");
+  }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
   return `merged (${did.join("; ")})`;
 }

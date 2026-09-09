@@ -99,8 +99,25 @@ Career `trackIdx = -1`, VSC/SC player pace, net `predict()`, and Singapore
 `lapMirror` portal remaps have landed in code. Remaining survey leftovers live
 on the 08-18 perf-hunt board, not this register.
 
-- **`Invalid CommandEncoder` on the owner's PHONE — the first `gpuErrors > 0`
-  ever seen on hardware. OPEN, with an on-device A/B shipped (2026-09-08).**
+- **`Invalid CommandEncoder` on the owner's PHONE — almost certainly the
+  documented BENIGN TRANSIENT, not a defect (2026-09-08).** The same screenshot
+  that raised it answers it, and the answer was in `tlx.js` all along.
+  `err 1` with `heal —` means ONE error in ONE present, and the heal's own
+  threshold is `HEAL_MIN_FRAMES = 2` distinct presents *because*: "a healthy tab
+  can raise exactly one transient (resize race, texture freed on a track
+  switch, the capture path). Healing on `> 0` reloaded the second case." The
+  heal is designed not to fire here, and it did not. The HUD also reads
+  `LAP 1/3 TIME 0:03.60` — three and a half seconds in, which is when a
+  warm-up transient (first pipeline creation, a texture upload) lands.
+
+  **What would make it real, and neither is shown:** `err` climbing while
+  driving, or `heal yes`. A single boot-time error on an otherwise healthy
+  51 fps frame is the case this machinery exists to ignore. NO ACTION TAKEN on
+  the renderer, and none appears warranted.
+
+  The A/B below stays because it is opt-in and costs nothing, and because the
+  reading above is a strong inference rather than a proof — if `err` is ever
+  seen climbing, the suspect is already switchable in a reload.
   Reported from a real device, three/webgpu at Spa: `fps 51.4 / frame 19.5 ms`,
   `gfx: three/webgpu err 1 strikes 0 scale 0.75`, `gpu: Invalid
   CommandEncoder`, `tlx: blit —` (native present, no readback), `dc 559`. The
@@ -119,7 +136,7 @@ on the 08-18 perf-hunt board, not this register.
   `_softAdapter && isWebGPU()`. But Dawn is Dawn on a phone too, and the
   assumption is now in doubt.
 
-  **NOT blind-fixed, deliberately.** Widening the gate to all WebGPU would shed
+  **NOT fixed, and on the reading above probably nothing to fix.** Widening the gate to all WebGPU would shed
   48 % of all prop geometry (79.6 % Vegas, 77.9 % Nurburgring) from every real
   GPU to chase one recovered error. Instead `apex26.tlxSkipBatches=1` reverts
   the single suspect on the single device that has it, in a reload — the same
