@@ -50,6 +50,10 @@
 //   --exp=1.1             tonemap exposure / overall brightness (default 1.0)
 //   --refl=0.2            env-mirror strength 0..1 (0 = matte paint, 0.85 = default chrome)
 //   --bg=101014           background hex (overrides tod bg)
+//   --spineLogo=saddle --finStyle=stars --spineSide=duo --cover=ffffff ...
+//                         override any LIVERY FIELD (design enums, or a hex colour
+//                         for cover/stripe/fin/...) — the designs are fields, not
+//                         livery ids, so --livery cannot reach them
 //   --az=210 --el=20 --dist=4  render ONE custom angle (overrides --views/--preset)
 //   --out=DIR             output dir. Default: scratch/renders/cars/<team>
 //   --w=900 --h=680       viewport size
@@ -292,6 +296,16 @@ if (FLAP != null) qs.set('flap', FLAP);
 if (LOOKY != null) qs.set('looky', LOOKY);
 for (const pl of PLIGHTS) qs.append('plight', pl);
 for (const [k, v] of Object.entries(parts)) qs.set(k, v);
+// LIVERY FIELD OVERRIDES, forwarded verbatim to carview (which owns the list and
+// the hex parsing). The spine/fin/cover designs are FIELDS on a livery, not
+// livery ids, so --livery cannot reach them: sweeping one design across teams —
+// the thing "does spineLogo=saddle read on every car?" needs — had no way to ask
+// for it at all before this.
+const LIV_FIELDS = ['finShape', 'finStyle', 'finBadge', 'spineLogo', 'spineSide',
+                    'spineHeight', 'tcam', 'coverVents', 'wingCarbon', 'numFont',
+                    'cover', 'rearWing', 'stripe', 'accent', 'nose', 'pod', 'wing',
+                    'halo', 'fin', 'finArt', 'logo', 'logo2', 'logo3'];
+for (const f of LIV_FIELDS) { const v = arg(f, null); if (v != null) qs.set(f, v); }
 // `npx serve` 301s `carview.html?…` to `/tools/carview` and DROPS the query,
 // so every team/aero flag used to boot the default McLaren. The extensionless
 // path keeps the search string (200). CARVIEW.set after ready is the backup
