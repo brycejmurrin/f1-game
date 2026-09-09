@@ -85,7 +85,8 @@ const Teams = (function () {
     },
     {
       id: "racingbulls", name: "Racing Bulls", short: "RB",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "chevron", spineSide: "sash" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "streaks", spineSide: "sash",
+                spineTint: [0.086, 0.204, 0.796] },
       color: [0.957, 0.941, 0.925], color2: [0.086, 0.204, 0.796], /* white #F4F0EC / blue #1634CB */
       engine: "Red Bull Ford", tier: 3,
       stats: { speed: 82, accel: 82, cornering: 81, braking: 80 },

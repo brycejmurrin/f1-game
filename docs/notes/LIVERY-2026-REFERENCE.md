@@ -47,7 +47,7 @@ out of using it, and both are load-bearing:
 | Williams | **RESOLVED: black** — applied | See "What the photograph settled" below. The white-cover claim was wrong. |
 | Aston Martin | **RESOLVED and APPLIED**: dark spine stripe on a green cover | The gap this needed — a crown band coloured independently of the body stripe — is closed: `liv.spineTint`, 2026-09-09. See "What the photographs settled (Audi, Aston Martin)" below. |
 | Alpine | **RESOLVED: same blue as the body — no cover colour** | Settled 2026-09-09 off the official launch photograph. See "What the photograph settled (Alpine)" below. (f1technical.net is behind a Cloudflare bot check no automated read gets past — do not retry that page; formula1.com's own article is the route that worked.) |
-| Racing Bulls | same as body (white) | Blue *streaks* on the cover, not a cover colour. |
+| Racing Bulls | same as body (white) | **APPLIED**: `spineLogo: "streaks"` + `spineTint` blue on the white cover. |
 | Haas | same as body (white) | The cover is named only as a branding location. |
 | Red Bull | same as body (gloss blue) | Already carries its own treatment (`spineLogo: "wrap"`, `spineHeight: "dorsal"`, `finShape: "none"`). |
 | Cadillac | body is split LEFT/RIGHT | The cover follows a black/white split down the centreline. **We cannot express this**: the livery model has no per-side body colour. A real feature request, not a colour. |
@@ -173,7 +173,9 @@ covers in the tree. The container's egress denies those hosts; use a remote
 browser. Do not invent colours.
 
 **Still open (photo-grounded, no invented design):**
-- Cadillac L/R body split — model has no per-side body colour.
-- Racing Bulls blue *streaks* on the cover — not a cover colour; no TOP/SIDE analog.
+- Cadillac L/R body split — model has no per-side body colour (Task 4: `bodySplit: "lr"`).
 - Alpine pink crown stripe — single-source; waits a second source (`spineTint` exists).
-- W17 raked-bars SIDE (`slash`) — culled 2026-09-09 as a sticker; Mercedes ships `sash`.
+
+**Applied this pass:**
+- Racing Bulls blue *streaks* — `spineLogo: "streaks"` + `spineTint` (blue on white cover).
+- W17-style SIDE `slash` — restored as ONE raked stroke in `SPINE_SIDE_IDS`. Mercedes stays on `sash`.
