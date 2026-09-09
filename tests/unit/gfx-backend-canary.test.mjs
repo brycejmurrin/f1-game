@@ -1734,7 +1734,7 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "soft-present must blit readPixels into the 2D overlay");
   assert.match(src, /awaitSoftPresent/,
     "garage settle / SAVE SCREENSHOT wait on awaitSoftPresent");
-  assert.match(src, /if\s*\(\s*!_softPresentWaiters\.length\s*\)\s*return/,
+  assert.match(src, /if\s*\(\s*!_softPresentWaiters\.length\s*&&\s*!_softCaptureDue\s*\)\s*return/,
     "soft-present must read back only when a capture explicitly waits for it");
   assert.match(src, /softPresent:\s*\(\)\s*=>\s*!!_softPresent/,
     "softPresent() capability bit for renderer-picker / probes");

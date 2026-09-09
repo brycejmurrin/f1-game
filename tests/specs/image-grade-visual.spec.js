@@ -229,8 +229,10 @@ test.describe("rendered image grade", () => {
     expect(b.max, "BLACKS has no positive travel — this test would be vacuous").toBeGreaterThan(0);
     expect(b.min, "BLACKS has no negative travel — this test would be vacuous").toBeLessThan(0);
     await setTune(page, { blacks: b.max });
+    await pixels(page); // discard first composited frame after the grade write
     const raised = rangeChanges(baseline, await pixels(page), 2, 30);
     await setTune(page, { blacks: b.min });
+    await pixels(page);
     const crushed = rangeChanges(baseline, await pixels(page), 2, 30);
     expect(raised.count).toBeGreaterThan(1000);
     expect(raised.signed).toBeGreaterThan(1);
