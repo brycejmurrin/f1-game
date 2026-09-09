@@ -102,10 +102,18 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
     "field wheels must promote hits like every other mesh LRU");
   assert.match(game, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
     "loadCarModel must clear fieldWheelOrder with the cache (putBoundedMesh desync frees a live mesh)");
-  assert.match(game, /change\.key === "customTeam"\)\s*syncCustomTeam\(\)/,
+  assert.match(game, /change\.key === "customTeam"\)[\s\S]{0,80}?syncCustomTeam\(\)/,
     "foreign-tab customTeam writes must re-inject MY TEAM via syncCustomTeam");
+  assert.match(game, /change\.key === "customLogo"/,
+    "foreign-tab customLogo writes must re-apply the emblem");
   assert.match(game, /Object\.assign\(\{\}, DEFAULT_CUSTOM\.livery/,
     "cz-save must keep structural DEFAULT_CUSTOM.livery (finShape/spine*) under colour edits");
+  assert.match(game, /function czLivFromDialog\(\)/,
+    "cz-save and czPreview share one structural+colour livery builder");
+  assert.match(game, /livDraftOverride = \{ teamId: "custom", liv \}/,
+    "czPreview must push the full structural draft, not bare {c1,c2}");
+  assert.doesNotMatch(game, /livDraftOverride = \{ teamId: "custom", liv: \{ c1:/,
+    "bare {c1,c2} override regrows the shark fin while customize is open");
   assert.match(game, /function cockpitBodyMesh\(team, car\)/);
   assert.match(game, /function garageSeat\(\)/);
   const draw = game.match(
