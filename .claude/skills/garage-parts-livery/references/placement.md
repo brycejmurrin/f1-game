@@ -104,3 +104,43 @@ object; an id that matches nothing warns and renders the default rather than
 pretending. It silently ignored objects until 2026-09-09, which is worth
 knowing if you find an old script that varies a field and photographs the same
 car every time.
+
+## Judging garage framing from a capture — read this before calling it a defect
+
+Two measurements, both taken 2026-09-09 at 1280x720 after a framing report that
+was wrong on both counts. Neither is obvious from looking at a PNG, and both
+make a correctly-framed bay look broken.
+
+**1. The capture is the bare canvas; the player also sees the sheet.**
+The setup sheet is DOM docked over `#game` — at 1280x720 it holds x 848..1268,
+the right 33%. The preview compensates with an OFF-AXIS frustum
+(`_spProj[8] = panelFrac`, `[9] = panelFracY`, game.js) that shifts the car into
+the gap the sheet does not cover; measured `panelFrac` is 0.328, matching the
+sheet exactly. `screenshotGameCanvas` captures the canvas alone, so the car
+reads as shoved off-centre with dead space on the sheet side. That is correct
+framing photographed wrongly. Shoot `--visible-only` and the car is centred.
+
+**2. A side-on car in a near-square frame leaves big vertical margins.**
+The car is ~5.4 m long and ~1.0 m tall. Framed to fill the visible WIDTH, it
+covers about a fifth of the height, so most of the frame is bay floor and back
+wall. That is the aspect ratio, not a framing error — SP_VIEWS fits the
+horizontal axis deliberately ("panelFracY is NOT a term here", game.js).
+
+**The roof truss in TOP is deliberate, and elevation cannot move it.**
+`GarageScene`: two rails along z at `x = +/-2.6` and five cross members at
+`z = -6.4..6.4 step 3.2`, all at `y = CEIL_Y - 0.42 = 4.58`. The comment at the
+build site says looking down THROUGH the truss is the intended view. Computed
+against the `top` preset (az PI/2, dist 11.5, orbit [0,0.45,0.245]):
+
+| el | cross members land on the car at z | rails |
+|---|---|---|
+| 1.20 (shipped) | -0.13 | clear |
+| 1.30 | -0.13 | clear |
+| 1.40 | -0.12 | clear |
+| 1.50 | -0.12 | clear |
+
+The rails NEVER cross the car — they land at x -6.28..3.47 against a car of
++/-0.97. Exactly one cross member (the one at z 0) falls across the car's
+centre, and raising the elevation does not move it, because the camera shares
+the orbit's z so there is no z-parallax to spend. The levers that DO move it are
+azimuth off PI/2 and `--pan` in z. Do not "fix" it by nudging `el`.

@@ -146,3 +146,33 @@ test("garage-angles can print the matrix without booting Chromium", () => {
   assert.ok(src.indexOf("if (dryRun)") < src.indexOf("launchChromium("),
     "the dry-run gate must sit above the browser launch");
 });
+
+/* The capture is the bare canvas, but the player also sees the DOM setup sheet
+ * docked over it, and the preview shifts the car out from under that sheet with
+ * an off-axis frustum. Judging framing from the uncropped canvas produced a
+ * false defect report on 2026-09-09 ("the car is off-centre with 40% dead
+ * space") for a bay that was framed correctly. The tool now measures the panel
+ * instead of guessing at it. */
+test("garage-angles measures the docked sheet rather than assuming where it is", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /async function panelGeometry\(page\)/, "read the sheet rect from the page");
+  assert.match(src, /panelFrac: cam\.panelFrac/, "record what the off-axis frustum compensated by");
+  const gate = src.slice(src.indexOf("async function bayRendered"), src.indexOf("async function nudge"));
+  assert.match(gate, /visible \? visible\.w :/, "gate the region the sheet leaves");
+  assert.match(gate, /left: visible \? visible\.x : 0/, "and gate it at the right offset");
+  // The 55% cut stays as the fallback for a page that reports no sheet, but it
+  // must not be the primary — that hardcoded guess is what hid the real number.
+  assert.match(gate, /0\.55/, "keep the old cut as a fallback only");
+  assert.match(src, /const visibleOnly = argv\.includes\("--visible-only"\)/,
+    "--visible-only crops shots to what the player actually sees");
+});
+
+test("garage-angles records panel geometry on every shot, cropped or not", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  const frame = src.slice(src.indexOf("async function frame(page, shot)"),
+    src.indexOf("async function applyLivery"));
+  assert.match(frame, /const panel = await panelGeometry\(page\)/, "read once per shot");
+  assert.ok(frame.indexOf("const panel = await panelGeometry") < frame.indexOf("for (let attempt"),
+    "panel geometry must be read before the gate loop, not per attempt");
+  assert.match(frame, /^\s*panel,$/m, "the manifest carries it whether or not --visible-only cropped");
+});

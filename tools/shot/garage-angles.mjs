@@ -68,6 +68,17 @@ const flag = (name, dflt) => {
 /** Every axis is a comma list; empty entries drop out so `--livery=a,,b` is 2. */
 const list = (name, dflt) => (flag(name, dflt) || "").split(",").map((x) => x.trim()).filter(Boolean);
 const dryRun = argv.includes("--dry-run");
+// THE CANVAS IS NOT WHAT THE PLAYER SEES. The setup sheet is DOM docked over
+// part of #game, and the preview compensates with an off-axis frustum
+// (_spProj[8] = panelFrac, [9] = panelFracY) that shifts the car into the gap
+// the sheet does not cover. screenshotGameCanvas captures the bare canvas, so
+// the car reads as pushed off-centre with dead space on the panel side — which
+// is CORRECT framing photographed wrongly. Measured 2026-09-09 at 1280x720:
+// the sheet holds x 848..1268, panelFrac 0.328, and the car sits centred in the
+// left 848 px exactly as intended. That misread cost a false defect report, so
+// --visible-only crops every shot to the region the sheet leaves and the
+// manifest always records the panel geometry, whether or not it is cropped.
+const visibleOnly = argv.includes("--visible-only");
 
 const teams = list("--team", "mclaren");
 const liveries = list("--livery", "default");
@@ -205,10 +216,14 @@ if (dryRun) {
   process.exit(0);
 }
 
-async function bayRendered(png, vpW) {
-  const cut = Math.max(80, Math.round(vpW * 0.55));
+/** Gate the region the SHEET LEAVES — the bay, never the sheet's own text
+ *  spread. The cut used to be a hardcoded 55% of the canvas, a guess at where
+ *  the sheet sits; panelGeometry knows it exactly, so prefer that. */
+async function bayRendered(png, vpW, visible) {
+  const cut = visible ? visible.w : Math.max(80, Math.round(vpW * 0.55));
   const st = await sharp(png).extract({
-    left: 0, top: 0, width: cut, height: (await sharp(png).metadata()).height,
+    left: visible ? visible.x : 0, top: 0, width: cut,
+    height: (await sharp(png).metadata()).height,
   }).stats();
   const spread = Math.max(...st.channels.map((c) => c.stdev));
   return { ok: spread > 8, spread: +spread.toFixed(2) };
@@ -224,6 +239,28 @@ async function nudge(page, id, n) {
     return true;
   }, { ctl: id, times: Math.abs(n) });
   if (!ok) throw new Error(`no camera control #${id}`);
+}
+
+/** Where the docked sheet sits over #game, and what the preview's off-axis
+ *  frustum was compensating by. Both go in the manifest: a framing judgement
+ *  made without them is a judgement about the wrong rectangle. */
+async function panelGeometry(page) {
+  return page.evaluate(() => {
+    const cam = window.__apex.garageCam();
+    const cv = document.getElementById("game").getBoundingClientRect();
+    const sheet = document.getElementById("cs-inner") || document.getElementById("carsetup");
+    const r = sheet ? sheet.getBoundingClientRect() : null;
+    const g = { panelFrac: cam.panelFrac, canvas: [Math.round(cv.width), Math.round(cv.height)] };
+    if (!r || !r.width || !r.height) return { ...g, sheet: null, visible: null };
+    // The sheet docks to one edge; the visible region is the canvas minus it.
+    const left = Math.max(0, r.left - cv.left), right = Math.min(cv.width, r.right - cv.left);
+    const box = left > cv.width - right
+      ? { x: 0, y: 0, w: Math.round(left), h: Math.round(cv.height) }            // docked right
+      : { x: Math.round(right), y: 0, w: Math.round(cv.width - right), h: Math.round(cv.height) };
+    return { ...g,
+      sheet: { x: Math.round(left), w: Math.round(r.width), h: Math.round(r.height) },
+      visible: box.w > 32 ? box : null };
+  });
 }
 
 async function frame(page, shot) {
@@ -242,14 +279,22 @@ async function frame(page, shot) {
   await nudge(page, framing.dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", framing.dolly);
   await settleGarage(page, { frames: 6 });
   const png = join(outDir, `${shot.name}.png`);
+  const panel = await panelGeometry(page);
   let gate = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt) await settleGarage(page, { frames: 4 });
     const got = await screenshotGameCanvas(page, png);
-    gate = await bayRendered(png, vp[0]);
+    gate = await bayRendered(png, vp[0], panel.visible);
     if (gate.ok) {
       const cam = await page.evaluate(() => window.__apex.garageCam());
+      if (visibleOnly && panel.visible) {
+        const v = panel.visible;
+        // extract() cannot write its own input; round-trip through a buffer.
+        const cropped = await sharp(png).extract({ left: v.x, top: v.y, width: v.w, height: v.h }).toBuffer();
+        writeFileSync(png, cropped);
+      }
       return {
+        panel,
         name: shot.name, png, view, team: shot.team,
         livery: shot.paint.livery, design: shot.paint.design, parts: shot.parts.tag,
         framing, spread: gate.spread, via: got.via || "page-clip",
