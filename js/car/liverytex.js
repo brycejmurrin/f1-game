@@ -1891,8 +1891,8 @@ const LiveryTex = (function () {
     // 5 % of the crown and 0.9 % of it can be seen, against 5 %+ on every other
     // team. A livery that actually wears a fin still resolves ONE lockup across
     // both surfaces, which is why that list exists.
-    // PARTIAL, knowingly. car-mesh.js:177 gates the fin on BOTH halves of
-    // `fShape !== "none" && (!fRoot || fRoot.clear > 0.03)` — a crown taller
+    // PARTIAL, knowingly. `finVisible` in js/car/car-mesh.js gates the fin on
+    // BOTH of `fShape !== "none" && (!fRoot || clear > 0.03)` — a crown taller
     // than the regulation fin top swallows the blade, and car-mesh then maps
     // neither R.fin nor R.finBadge. This models the first half only, because
     // `clear` needs Car3D.sharkFinRoot(bodyAnchors(PARTS, ...), aeroFin, shape)

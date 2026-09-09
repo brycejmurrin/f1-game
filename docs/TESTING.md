@@ -1,6 +1,6 @@
 # Testing reference
 
-116 root Playwright spec files (`tests/specs/*.spec.js`) + 222 `node --test` unit suites
+116 root Playwright spec files (`tests/specs/*.spec.js`) + 223 `node --test` unit suites
 (`tests/unit/*.test.mjs`, plus one `.test.cjs`). Everything under `tests/manual/` is
 **excluded from default discovery** (`testIgnore: ["**/manual/**"]` in
 `playwright.config.js`) and is run by explicit path — see
@@ -997,6 +997,7 @@ what it covers.
 | `light-store-cond-layer.test.mjs` | the conditional shipped lighting layer ("*|tod" in LightPresets): resolves only on ULTRA + a per-chunk-capable backend off mobile; player edits (incl. explicit 0) always win; dedup against base() includes the layer |
 | `curvature-channels.test.mjs` | the arc-must-not-reach-the-driver table: every Tracks.curvature consumer file appears in docs/PHYSICS.md §Curvature channels (and no ghost rows) — a new consumer must be classified before it lands |
 | `storage-key-prefix.test.mjs` | every literal localStorage/sessionStorage key is apex26.-prefixed (GameStore-routed keys exempt by construction; allowlist entries need a written reason) |
+| `store-key-types.test.mjs` | one storage key, one value type — resolves `const K = "literal"` aliases and reads get-DEFAULTS as well as writes, which is how `apex26.brakeCue` hid two owners (a 1-10 slider notch and an "on"/"off" flag) from a literal grep |
 | `no-bare-console.test.mjs` | logging goes through Log — no bare console.* in js/ outside log.js (the nostr interception seam allowlisted with its reason) |
 | `lamp-chunks.test.mjs` | the shared per-chunk lamp bake (LampChunks): nearest-first reach-filtered selection, the knob→cap formula (floor 8, CAP 24), concat/offsets/counts ≡ the per-chunk lists, and the bake-once invalidation contract (lights array identity + knob value) |
 | `all-lights-fill.test.mjs` | `_fillAllLights` writes the same bytes a full rewrite would: only rgb can move per frame, so the twelve static lanes are copied once per source array — asserted across a flicker sequence AND a source swap, plus the `_allLightsGen` contract LampChunks and WGX both cache on (including a new set whose colours match but whose positions moved, the case that hides) |
