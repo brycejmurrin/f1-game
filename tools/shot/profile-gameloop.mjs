@@ -60,9 +60,28 @@ try {
   const rows = [...self.entries()].map(([id, c]) => {
     const n = byId.get(id); const f = n && n.callFrame;
     return { name: (f && (f.functionName || "(anon)")) || "?", url: f && f.url ? f.url.split("/").pop().split("?")[0] : "", pct: (c / total) * 100 };
-  }).sort((a, b) => b.pct - a.pct).slice(0, 22);
+  }).sort((a, b) => b.pct - a.pct);
+  // A SYNC POINT IS NOT A HOT SPOT. gl.getError/finish/readPixels block until
+  // the rasteriser has drained the command buffer, so every sample taken while
+  // one is in flight is charged to it — all the GL work the loop QUEUED, under
+  // one name. Measured on this box: a monza physics profile is 93 % getError
+  // from FIVE calls (~1 s each), while `update` — the actual JS hot spot — reads
+  // 1.8 %. So the flush is reported separately and the JS table is normalised
+  // over what is left, or the top row sends every reader chasing a stall that
+  // exists only because SwiftShader rasterises on the CPU.
+  const SYNC = new Set(["getError", "finish", "readPixels", "getBufferSubData", "clientWaitSync"]);
+  const flush = rows.filter((r) => SYNC.has(r.name));
+  const js = rows.filter((r) => !SYNC.has(r.name));
+  const jsTotal = js.reduce((a, r) => a + r.pct, 0) || 1;
   console.log(`profile: ${track} ${mode} — ${total} samples`);
-  for (const r of rows) console.log(`  ${r.pct.toFixed(1).padStart(5)}%  ${r.name}  ${r.url}`);
+  if (flush.length) {
+    const fp = flush.reduce((a, r) => a + r.pct, 0);
+    console.log(`  GPU sync ${fp.toFixed(1)}% of samples (${flush.map((r) => r.name).join(", ")}) — the`);
+    console.log(`  rasteriser draining what the loop queued, NOT a JS cost. Percentages below are`);
+    console.log(`  of the remaining ${(100 - fp).toFixed(1)}%.`);
+  }
+  for (const r of js.slice(0, 22))
+    console.log(`  ${((r.pct / jsTotal) * 100).toFixed(1).padStart(5)}%  ${r.name}  ${r.url}`);
 } catch (err) {
   console.error("profile failed:", err.message);
   process.exitCode = 1;
