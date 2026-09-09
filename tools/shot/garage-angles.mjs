@@ -13,8 +13,9 @@
 //
 // Capture prefers #game-soft toDataURL (HeadlessChrome soft-present) via
 // screenshotGameCanvas — full-page screenshots hang under SwiftShader.
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { launchChromium, shutdown, startStaticServer } from "../lib/harness.mjs";
 import {
@@ -34,6 +35,19 @@ const flag = (name, dflt) => {
 const team = flag("--team", "mclaren");
 const vp = flag("--viewport", "1280x720").split("x").map(Number);
 const outDir = flag("--out", "artifacts/garage-angles");
+
+/** Roster order == store.team index (game.js boot). */
+function teamIndex(id) {
+  const src = readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8");
+  const ids = Array.from(src.matchAll(/^ *id: "([a-z]+)",/gm)).map((m) => m[1]);
+  const i = ids.indexOf(id);
+  if (i < 0) {
+    console.error(`no team "${id}" — available: ${ids.join(", ")}`);
+    process.exit(1);
+  }
+  return i;
+}
+const teamIdx = teamIndex(team);
 
 const ALL = ["hero", "front", "side", "rear", "top", "wingFront", "wingRear"];
 const GROUPS = {
@@ -94,25 +108,38 @@ async function main() {
   try {
     const page = await browser.newPage();
     await page.setViewportSize({ width: vp[0], height: vp[1] });
-    await installProbeInit(page, { backend: "webgl2", team: null });
+    // Pin the INDEX before first paint — #mb-garage never re-reads the store.
+    await installProbeInit(page, { backend: "webgl2", team: teamIdx });
     await gotoGame(page, srv.url, 120000);
-    const idx = await page.evaluate((t) => {
-      const i = Teams.LIST.findIndex((x) => x.id === t);
-      if (i >= 0) localStorage.setItem("apex26.team", String(i));
-      return i;
-    }, team);
-    if (idx < 0) throw new Error(`no team "${team}" in Teams.LIST`);
-    // Reload so boot reads the stored team (same as prior tool).
-    await page.reload({ waitUntil: "domcontentloaded", timeout: 120000 });
-    await page.waitForFunction(() => window.__apex && window.__apex.race, null, {
-      polling: 100, timeout: 120000,
-    });
     await openGarage(page, { team });
+    // TEAM-tab path updates live teamIdx if boot somehow missed the pin.
+    const switched = await page.evaluate((id) => {
+      const t = Teams.LIST.find((x) => x.id === id);
+      if (!t) throw new Error("unknown team " + id);
+      const head = document.getElementById("cs-team");
+      if (head && head.textContent === t.name.toUpperCase()) return false;
+      document.querySelector('#cs-tabs [data-cs-cat="team"]')?.click();
+      document.getElementById("cs-team-card")?.click();
+      const tiles = document.querySelectorAll("#sel-teams .team-tile");
+      const i = Teams.LIST.indexOf(t);
+      if (!tiles[i]) throw new Error("no team tile for " + id);
+      tiles[i].click();
+      return true;
+    }, team);
+    if (switched) {
+      await page.waitForFunction(() => {
+        const tp = document.getElementById("teampicker");
+        return !tp || tp.hidden || getComputedStyle(tp).display === "none";
+      }, null, { polling: 100, timeout: 15000 }).catch(() => {});
+    }
     await settleGarage(page, { frames: 12 });
     const shown = await page.evaluate(() => {
       const h = document.querySelector("#carsetup .sheet-head, #cs-inner .sheet-head");
-      return h ? h.textContent.trim().slice(0, 60) : null;
+      return h ? h.textContent.trim().slice(0, 80) : null;
     });
+    const teamLabel = await page.evaluate(() => document.getElementById("cs-team")?.textContent || "");
+    if (!teamLabel) throw new Error(`garage opened but #cs-team empty (sheet: ${shown})`);
+    console.log(`team sheet: ${teamLabel}  [switched=${switched}]`);
     const shots = [];
     for (const v of views) {
       const s = await frame(page, v);
@@ -121,7 +148,7 @@ async function main() {
     }
     const meta = join(outDir, `${team}-angles.json`);
     writeFileSync(meta, JSON.stringify({
-      team, teamIdx: idx, sheetHead: shown, viewport: vp, views, shots,
+      team, teamIdx, sheetHead: shown, viewport: vp, views, shots,
       seconds: +((Date.now() - t0) / 1000).toFixed(1),
     }, null, 2));
     console.log(`wrote ${shots.length} angle(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s + ${meta}  [sheet: ${shown}]`);

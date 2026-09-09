@@ -116,7 +116,12 @@ export async function openGarage(page, { team = "mercedes", waitMs = 60000, trie
     JSON.stringify(await uiState(page)));
 }
 
-/** Peel back to the title, pin team/driver, click in. Returns the route taken. */
+/** Peel back to the title, pin team/driver, click in. Returns the route taken.
+ * store.team is the NUMERIC INDEX (game.js `let teamIdx = store.get("team", 2)`).
+ * Writing a team id string used to leave the boot default (McLaren) in place.
+ * `G` is NOT a window global — `#mb-garage` does not re-read the store, so the
+ * reliable pin is installProbeInit({ team: idx }) before first goto (or the
+ * TEAM-tab garageTeam() path after the bay is open). */
 function enterGarage(page, team) {
   return page.evaluate((teamId) => {
     const $ = (id) => document.getElementById(id);
@@ -133,8 +138,9 @@ function enterGarage(page, team) {
     };
     for (let i = 0; i < 12 && peel(); i++) {}
     const S = GameStore.store;
-    const t = Teams.LIST.find((x) => x.id === teamId) || Teams.LIST[2];
-    S.set("team", t.id);
+    const ti = Teams.LIST.findIndex((x) => x.id === teamId);
+    const idx = ti >= 0 ? ti : 2;
+    S.set("team", idx);
     S.set("driver", 0);
     if ($("mb-garage")) { $("mb-garage").click(); return "garage"; }
     $("mb-race").click();
@@ -142,13 +148,19 @@ function enterGarage(page, team) {
   }, team);
 }
 
-/** Step the preview loop; await WGX soft-present when present. */
+/** Step the preview loop; await soft-present when present.
+ * One page.evaluate for N steps — per-frame round-trips used to dominate
+ * multi-angle garage shoots (24× evaluate × 4 views ≈ a minute of IPC). */
 export async function settleGarage(page, { frames = 90, sleepFn } = {}) {
   const pause = sleepFn || ((ms) => new Promise((r) => setTimeout(r, ms)));
-  for (let i = 0; i < frames; i++) {
-    await page.evaluate(() => window.__apex.step(1 / 60));
-    if (i % 15 === 14) await pause(50);
+  const n = Math.max(0, frames | 0);
+  if (n > 0) {
+    await page.evaluate((count) => {
+      for (let i = 0; i < count; i++) window.__apex.step(1 / 60);
+    }, n);
   }
+  // Yield so the compositor can finish the last blit before we await it.
+  if (n >= 8) await pause(30);
   await page.evaluate(async () => {
     if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
       try { await GLX.awaitSoftPresent(12000); } catch (_) {}

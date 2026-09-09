@@ -35,8 +35,27 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src, /screenshotGameCanvas/, "must reuse soft-present capture helper");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
   assert.match(src, /settleGarage/, "settle soft-present between presets");
+  assert.doesNotMatch(src, /page\.reload\(/, "no second boot — openGarage pins the team live");
   assert.doesNotMatch(src, /page\.screenshot\(\s*\{\s*path:\s*png/,
     "no raw page.screenshot — that hung under SwiftShader");
+});
+
+test("settleGarage batches steps in one evaluate", () => {
+  const src = code("tools/capture/probe-page.mjs");
+  const fn = src.slice(src.indexOf("export async function settleGarage"),
+    src.indexOf("export async function settleGarage") + 900);
+  assert.match(fn, /for \(let i = 0; i < count; i\+\+\)/, "N steps in one page.evaluate");
+  assert.doesNotMatch(fn, /for \(let i = 0; i < frames; i\+\+\)[\s\S]*page\.evaluate\(\(\) => window\.__apex\.step/,
+    "must not round-trip once per frame");
+});
+
+test("openGarage pins store.team as a numeric index", () => {
+  const src = code("tools/capture/probe-page.mjs");
+  const fn = src.slice(src.indexOf("function enterGarage"),
+    src.indexOf("function enterGarage") + 1800);
+  assert.match(fn, /S\.set\("team",\s*idx\)/, "store.team is the roster INDEX");
+  assert.doesNotMatch(fn, /S\.set\("team",\s*t\.id\)/, "never write a team id string into store.team");
+  assert.match(src, /installProbeInit/, "team pin for #mb-garage is installProbeInit before goto");
 });
 
 test("screenshotGameCanvas prefers #game-soft before freezing for page-clip", () => {
