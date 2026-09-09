@@ -382,6 +382,20 @@ jobs:
                 rows.push(`${" ".repeat(8)}env:   mask=${env.mask} begins=${env.begins} ends=${env.ends} ` +
                   `ready=${env.ready} badProbes=${env.badProbes}`);
               }
+            // The cube-mip pass. PERF-FINDINGS 2t names it the prime suspect for
+            // the WebGPU leg rendering the world near-black (runs 69/70: env
+            // probe on 2.9, off 39.2, three controls unmoved). mipFn is typeof
+            // renderer.generateMipmaps, so "undefined" means the guard around
+            // that pass is a SILENT no-op and the cube latched with empty mips,
+            // which is the state its own code comment predicts reads black.
+            // REPORTED, NOT GATED: the structural gate goes in once a run says
+            // which, and a brightness floor never does (see the header).
+              if (env.mipFn != null) {
+                rows.push(`${" ".repeat(8)}mip:   fn=${env.mipFn} ran=${env.mipRan}`
+                  + (env.mipErr ? ` err=${String(env.mipErr).slice(0, 120)}` : "")
+                  + (env.ready === true && env.mipFn !== "function"
+                     ? "   <- cube LATCHED with no mip pass; empty mips read black" : ""));
+              }
               if (gfx.govError) rows.push(`${" ".repeat(8)}gov:   read failed: ${gfx.govError}`);
             // Print the REASON. gpu-game-check records out.error on every caught
             // failure, and this row used to drop it — which is why a Windows
