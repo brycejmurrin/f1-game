@@ -169,7 +169,12 @@ test("the editor's draft table and forTeam name the same fields", () => {
   const pills = new Set((SHEET.match(/const LIV_DRAFT_PILLS = \{([\s\S]*?)\};/)[1]
     .match(/([A-Za-z0-9]+):/g) || []).map((k) => k.replace(":", "")));
   const draft = new Set([...colors, ...pills]);
-  const copied = listFrom(LIVERIES_SRC, /if \(ex\) for \(const k of \[([\s\S]*?)\]\)/);
+  // The list is `Liveries.FIELDS` now, not an inline array in forTeam: it was
+  // being hand-copied into the shot tools and the copies drifted (render-car
+  // carried 23 of 33), so it got a name and got published. forTeam consuming it
+  // is asserted separately in car-multi-shot-tools; here we only need its
+  // members.
+  const copied = listFrom(LIVERIES_SRC, /const FIELDS = \[([\s\S]*?)\];/);
   const diff = (a, b) => [...a].filter((k) => !b.has(k)).sort();
   assert.deepEqual(diff(copied, draft), [], "forTeam copies fields the editor cannot show");
   assert.deepEqual(diff(draft, copied), [], "the editor drafts fields forTeam drops from a team default");

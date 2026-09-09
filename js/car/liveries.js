@@ -477,12 +477,24 @@ const Liveries = (function () {
     ],
   };
 
+  // Every field a team's `livery` block may carry onto the derived default —
+  // i.e. every livery row that is NOT c1/c2/id/name. PUBLISHED as Liveries.FIELDS
+  // because it was being copied by hand and the copies drifted: render-car's
+  // own list had 23 of these 33, so nine fields (crestInk, bandTint2, plateTint,
+  // plateInk and the tint rows) could not be reached from any shot tool at all.
+  // One list, consumed by forTeam below and by the tools through the global.
+  const FIELDS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt",
+    "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge",
+    "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover",
+    "spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk",
+    "rearWing", "wingCarbon"];
+
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
     const ex = team.livery;
-    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover", "spineTint", "sideTint", "sunTint", "crestInk", "bandTint2", "plateTint", "plateInk", "rearWing", "wingCarbon"]) if (ex[k]) def[k] = ex[k];
+    if (ex) for (const k of FIELDS) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 
-  return { UNIVERSAL, BY_TEAM, forTeam };
+  return { UNIVERSAL, BY_TEAM, FIELDS, forTeam };
 })();
