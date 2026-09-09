@@ -99,3 +99,39 @@ test("the tricolour is two colours, not one repeated", () => {
     assert.ok(c >= 2.0, `${t.id}: the tricolour's two bands read ${c}:1 against each other (${a} / ${b})`);
   }
 });
+
+test("a colour you PICK is the colour that gets painted, contrast or not", () => {
+  // The guards above exist for DERIVED defaults. A pick is a decision about the
+  // car and is never re-derived — the field would be pointless if choosing a
+  // colour only suggested it. So this deliberately picks one that FAILS the
+  // floor (1.81:1 on McLaren's papaya) and asserts it survives to the paint on
+  // every surface its field owns. Two of these used to be re-derived silently:
+  // the wrap's sun ignored spineTint entirely, and the flank band had no
+  // explicit field at all.
+  const PICK = [0.62, 0.42, 0.20];
+  const css = "rgba(158,107,51,";                 // PICK at 0-255
+  const team = A.Teams.LIST.find((t) => t.id === "mclaren");
+  const base = A.Liveries.forTeam(team)[0];
+  assert.ok(A.LT.contrast(PICK, base.cover || base.c1) < AREA_FLOOR,
+    "the pick has to be BELOW the floor or this test proves nothing");
+  const dominant = (liv, region) => {
+    const ops = A.paint("mclaren", Object.assign({}, base, liv));
+    const R = A.LT.REGIONS[region], N = 24, seen = new Map();
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const c = paintAt(ops, R.x + R.w * (i + 0.5) / N, R.y + R.h * (j + 0.5) / N);
+      if (c) seen.set(c, (seen.get(c) || 0) + 1);
+    }
+    return ([...seen.entries()].sort((a, b) => b[1] - a[1])[0] || [""])[0];
+  };
+  const cases = [
+    ["the crown band",       { spineLogo: "saddle", spineTint: PICK }, "crest"],
+    ["the tail strip",       { spineLogo: "saddle", spineTint: PICK }, "tail"],
+    ["the saddle's flank",   { spineLogo: "saddle", spineTint: PICK }, "spineSide"],
+    ["the wrap's sun",       { spineLogo: "wrap",   spineTint: PICK }, "crest"],
+    ["the flank band",       { spineLogo: "saddle", spineSide: "split", sideTint: PICK }, "spineSide"],
+    ["the flank band, wrap", { spineLogo: "wrap",   spineSide: "bars",  sideTint: PICK }, "spineSide"],
+  ];
+  for (const [what, liv, region] of cases)
+    assert.ok(dominant(liv, region).startsWith(css),
+      `${what}: picked ${css}..) and got ${dominant(liv, region)}`);
+});
