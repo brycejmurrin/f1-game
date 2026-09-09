@@ -244,6 +244,20 @@ Recommended UI: **one `SettingRow` labelled `UPSCALE`**, values ON/OFF, default 
 
 Temporal / frame-gen; PerfGov auto-enabling upscale; changing RESOLUTION mode labels; comparing census FPS across the size-split without reading the present `path:`.
 
+
+### 7.6 Real-GPU A/B (2026-09-09)
+
+Dispatched via push of `.github/gpu-census-request.json` (agent tokens lack `workflow_dispatch`).
+macos-latest Metal, `resMode="med"` (scale 0.75) ± `spatialUpscale=1`:
+
+| leg | WGX meanLuma | WGX fps | gpuErrors | bound |
+|---|---|---|---|---|
+| baseline | 79.3 | ~60 | 0 | yes |
+| upscale | 79.3 | ~60 | 0 | yes |
+
+Windows `anyHardware=false` (no player-GPU signal). Headless soft-present path — not headed sharpness.
+**Default stays OFF.** Headed visual A/B still required before ON.
+
 ## Sources
 
 
