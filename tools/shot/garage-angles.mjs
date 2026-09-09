@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 import { launchChromium, shutdown, startStaticServer, sleep } from "../lib/harness.mjs";
-import { chromiumArgsForBackend } from "../capture/probe-page.mjs";
+import { chromiumArgsForBackend, awaitPresentedFrame } from "../capture/probe-page.mjs";
 
 const argv = process.argv.slice(2);
 const flag = (name, dflt) => {
@@ -50,6 +50,7 @@ async function frame(page, view) {
   let gate = null;
   for (let attempt = 0; attempt < 5; attempt++) {
     await sleep(attempt === 0 ? 900 : 700);
+    await awaitPresentedFrame(page);
     await page.screenshot({ path: png, timeout: 60000 });
     gate = await bayRendered(png, vp[0]);
     if (gate.ok) {

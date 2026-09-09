@@ -1378,14 +1378,14 @@ test("THREE PATH and SCREENSHOTS are injected, and only reload when live", () =>
   assert.ok(a.byId["pm-gfx-status"], "status line");
   assert.match(a.byId["pm-three-path"].textContent, /THREE PATH: AUTO/);
   assert.match(a.byId["pm-screenshots"].textContent, /SCREENSHOTS: AUTO/);
-  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
+  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints/);
 
   a.byId["pm-three-path"].onclick();
   assert.equal(a.G.readThreePath(), "webgl2");
   assert.equal(a.ls.getItem("apex26.tlxForceGL"), "1");
   assert.equal(a.ss.getItem("apex26.tlxAutoGL"), null, "THREE PATH cycle drops the AUTO stay-GL latch");
   assert.equal(a.reloaded(), 0, "THREE PATH must not reload on WEBGL2");
-  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints the canvas/);
+  assert.match(a.byId["pm-gfx-status"].textContent, /WEBGL2 paints/);
 
   a.byId["pm-screenshots"].onclick();
   assert.equal(a.G.readShotMode(), "blit");
@@ -1720,8 +1720,14 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "soft-present must blit readPixels into the 2D overlay");
   assert.match(src, /awaitSoftPresent/,
     "garage settle / SAVE SCREENSHOT wait on awaitSoftPresent");
+  assert.match(src, /SOFT_BLIT_EVERY/,
+    "soft-present must throttle full-frame readPixels (car-group SwiftShader tax)");
   assert.match(src, /softPresent:\s*\(\)\s*=>\s*!!_softPresent/,
     "softPresent() capability bit for renderer-picker / probes");
+  assert.match(src, /function invalidateSoftPresent\(/,
+    "snapCam calls gfx.invalidateSoftPresent — GLX must define it (WGX already does)");
+  assert.match(src, /invalidateSoftPresent,/,
+    "invalidateSoftPresent must be on the GLX export surface");
   const awaitFn = src.slice(src.indexOf("function awaitSoftPresent"), src.indexOf("function init(canvasEl)"));
   assert.match(awaitFn, /const start = _softBlitGen/,
     "GLX must wait for a newer blit, not return the last gen already on the overlay");
@@ -1733,11 +1739,19 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "do not push a wrapper the timeout cannot indexOf");
 });
 
+test("menuBlank hides #game-soft with #game", () => {
+  const src = code("js/game.js");
+  assert.match(src, /getElementById\("game-soft"\)/,
+    "soft-present overlay must follow menuBlank visibility with #game");
+});
+
 test("SAVE SCREENSHOT reads #game-soft when the overlay exists", () => {
   const src = read("js/perf/renderer-picker.js");
   const fn = src.slice(src.indexOf("function saveScreenshot()"), src.indexOf("function ensureAdvHost()"));
   assert.match(fn, /getElementById\("game-soft"\)/,
     "HeadlessChrome GLX hides #game; the PNG must come from the 2D overlay");
+  assert.match(fn, /hrefFromPixels/,
+    "the two capturePixels sites share hrefFromPixels; do not merge the awaits");
 });
 
 test("the alpha tag that makes canvas opacity load-bearing still exists", () => {

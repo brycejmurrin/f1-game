@@ -455,9 +455,9 @@ async function runProbeAttempt(attemptNum) {
           await GLX.awaitSoftPresent(15000);
         }
       }));
-      // Same overlay the WGX/TLX path reads. HeadlessChrome GLX sets #game
-      // opacity 0 and blits onto #game-soft; locator("#game").screenshot()
-      // is the uncomposited GPU canvas (black gap this tool exists to catch).
+      // Same overlay the WGX/TLX path reads. HeadlessChrome GLX blits onto
+      // #game-soft; locator("#game").screenshot() is the uncomposited GPU
+      // canvas (black gap this tool exists to catch).
       const canvasB64Glx = await retryStep("screenshot-canvas", () => page.evaluate(() => {
         const g = document.getElementById("game-soft") || document.getElementById("game");
         if (!g || typeof g.toDataURL !== "function") throw new Error("presented canvas has no toDataURL");
@@ -546,7 +546,7 @@ async function runProbeAttempt(attemptNum) {
         softPresent: (typeof GLX !== "undefined" && GLX.softPresentState)
           ? GLX.softPresentState() : null,
         sky: (function () {
-          const g = document.getElementById("game");
+          const g = document.getElementById("game-soft") || document.getElementById("game");
           const ctx = g && g.getContext("2d");
           if (!ctx) return null;
           const p = ctx.getImageData(g.width >> 1, 8, 1, 1).data;

@@ -2094,10 +2094,12 @@ const TLX = (function () {
       }
       function _softBlitNotify() {
         _softBlitGen++;
+        const keep = [];
         const ws = _softPresentWaiters.splice(0);
         for (let i = 0; i < ws.length; i++) {
-          try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+          try { if (!ws[i](_softBlitGen)) keep.push(ws[i]); } catch (_) { /* harness waiter */ }
         }
+        for (let j = 0; j < keep.length; j++) _softPresentWaiters.push(keep[j]);
       }
       function _finishSoftBlitRead() {
         _softReadPending = false;
@@ -2659,7 +2661,8 @@ const TLX = (function () {
           });
         },
         awaitSoftPresent(timeoutMs) {
-          if (!_softBlit || !_displayCtx) return Promise.resolve(_softBlitGen);
+          if (!_softBlit) return Promise.resolve(_softBlitGen);
+          if (!_displayCtx) return Promise.reject(new Error("no display ctx"));
           const start = _softBlitGen;
           const ms = timeoutMs != null ? timeoutMs : 15000;
           return new Promise(function (resolve, reject) {
@@ -2673,11 +2676,14 @@ const TLX = (function () {
               if (gen > start) {
                 try { clearTimeout(timer); } catch (_) { /* harness */ }
                 resolve(gen);
+                return true;
               }
+              return false;
             };
             _softPresentWaiters.push(waiter);
           });
         },
+        invalidateSoftPresent() { _cancelSoftBlits(); },
         softPresent() { return !!_softBlit; },
         // Same name as WGX/GLX so descriptor-copy onto GLX does not keep a
         // dead GLX softPresentState closure (backend-surface-parity).

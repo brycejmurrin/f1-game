@@ -167,10 +167,10 @@ test("diag() returns a stable, complete snapshot and can save files", async ({ p
   // It must survive being called before a race, when most state is null.
   expect(Array.isArray(d.errors)).toBe(true);
 
-  // save() returns a byte count and must not throw for objects or strings.
-  const bytes = await page.evaluate(() => window.__apex.save({ a: 1 }, "t.json"));
-  expect(typeof bytes).toBe("number");
-  expect(bytes).toBeGreaterThan(0);
+  // save() returns { ok, bytes } and must not throw for objects or strings.
+  const saved = await page.evaluate(() => window.__apex.save({ a: 1 }, "t.json"));
+  expect(saved.ok).toBe(true);
+  expect(saved.bytes).toBeGreaterThan(0);
 });
 
 test("stats() overlay mounts, updates and tears down", async ({ page }) => {

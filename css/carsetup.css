@@ -66,12 +66,19 @@
 }
 /* Livery editor: the player is judging spine / logo paint on the car. Give the
    crown more of the left gap (420 visual px reserved instead of 320) and thin
-   the panel so the cover shows through while the pills stay readable. */
+   the panel so the cover shows through while the pills stay readable.
+   Floor stays at 410 so `--pair-at` (400 + 2px border) still holds — a 360–380
+   clamp collapsed the rail into the stacked grid on mid-width landscape. */
 #carsetup:has(.cs-liv-editor) {
-  --cs-sheet-w: min(100%, clamp(360px, calc(100 * var(--vwz) - 420px / var(--ui-scale)), 380px));
+  --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 420px / var(--ui-scale)), 420px));
 }
 #carsetup:has(.cs-liv-editor) #cs-inner {
   background: color-mix(in oklab, var(--panel) 78%, transparent);
+}
+@media (prefers-reduced-transparency: reduce) {
+  #carsetup:has(.cs-liv-editor) #cs-inner {
+    background: var(--panel);
+  }
 }
 #cs-inner {
   pointer-events: auto;
@@ -1015,6 +1022,16 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   max-width: 100%;
 }
 #cs-cam-panel[hidden] { display: none; }
+/* Landscape: the cam stack sits IN the car gap (not on the sheet). An open
+   panel grew tall enough to cover the turntable car you opened it to frame —
+   portrait already shrinks the sheet; landscape caps the panel itself. */
+@media (orientation: landscape) {
+  #cs-cam-panel {
+    max-height: min(36vh, 220px);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+}
 /* Label column + controls. The labels are a fixed column so the three rows of
    chips line up on one left edge instead of stepping in and out with the label
    width. */
@@ -1326,8 +1343,10 @@ body:not(.desktop) #cs-cam { font-size: var(--fs-micro); }
 #cs-inner[data-density="compact"] .cs-opt-deltas { margin-top: 2px; gap: 3px; }
 #cs-inner[data-density="compact"] .cs-opt-desc { display: none; }
 #cs-inner[data-density="compact"] #cs-options { gap: calc(var(--gap) * 0.45); }
-#cs-inner[data-density="compact"] #cs-options .cs-liv-editor { gap: calc(var(--gap) * 0.35); }
-#cs-inner[data-density="compact"] #cs-options .cs-liv-editor > .adv-help:not(#cs-rake-readout) { display: none; }
+#cs-inner[data-density="compact"] #cs-options .cs-liv-editor,
+#cs-inner[data-density="compact"] #cs-options .cs-tune-editor { gap: calc(var(--gap) * 0.35); }
+#cs-inner[data-density="compact"] #cs-options .cs-liv-editor > .adv-help:not(#cs-rake-readout),
+#cs-inner[data-density="compact"] #cs-options .cs-tune-editor > .adv-help:not(#cs-rake-readout) { display: none; }
 #cs-inner[data-density="compact"] #cs-budget { flex: 1 1 200px; }
 #cs-inner[data-density="compact"] #cs-stats-inner { padding: 1px calc(var(--gap) * 1.1); }
 #cs-inner[data-density="compact"] .cs-stat-row { min-height: 15px; }

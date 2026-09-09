@@ -447,7 +447,9 @@ Capture a player's EXACT frame, and put it back. With no argument it returns a
 JSON blob: build, circuit, time of day, weather, team (index + id), halo, the
 camera MODE with its CAMERA TUNER offsets, and every car's `s`/`x`/`prog`/
 `speed`. Hand that blob back and it restores the same frame — including the
-traffic, which no amount of re-racing reproduces.
+traffic, which no amount of re-racing reproduces. Invalid input (not an
+object, or no track loaded) returns `{ ok: false, error: "invalid_repro" }`
+instead of a bare `false`.
 
 A player can hand one over with `copy(JSON.stringify(__apex.repro()))`;
 `tools/shot/repro-shot.mjs` replays it headlessly and screenshots it.
@@ -781,9 +783,10 @@ of the answer:
 | `glCaps` | `colorFloat`/`colorHalf` (absent sheds the HDR post chain), `maxFragUnif`, and `lost` — a lost context explains a black screen that reads like a shader bug |
 | `stored` | the `apex26.*` overrides on that device: `lightTune`, `camTune`, `gfxBackend`, `debris`, `gfxHigh`, `resMode`, `forceMobileTier`, `envProbeOff`. Any of these beats every shipped default and lives only there, which is the exact shape of a bug that reproduces for one person and nobody else |
 
-### `save(data, filename) → bytes`
+### `save(data, filename) → { ok: true, bytes } | { ok: false, error }`
 Hand a file out of the browser. Objects are JSON-stringified; strings and Blobs
-pass through. This is the reliable way to get state out of a real device —
+pass through. Success is `{ ok: true, bytes }` (the blob size); failure is
+`{ ok: false, error }`. This is the reliable way to get state out of a real device —
 `copy()` only resolves at top-level console scope and the clipboard API needs
 document focus.
 
@@ -1810,11 +1813,13 @@ pass `null` to clear. Demoting to AI also clears any fed input.
 __apex.carRole(4, { human: true, local: false, mods: { cornering: 1.2 } });
 ```
 
-### `carInput(idx, {steer, throttle, brake, shiftUp?, shiftDown?, overtake?} | null) → input | false`
+### `carInput(idx, {steer, throttle, brake, shiftUp?, shiftDown?, overtake?} | null) → { ok, … } | false`
 The controls a **non-local** human car drives on — same shape as `setInput()`.
 Pass `null` to clear, after which the car coasts rather than inheriting the
-local controls. Ignored by the local car (which reads the real `Input`) and by
-AI cars (which drive themselves).
+local controls. Missing `idx` returns `false`. A successful clear returns
+`{ ok: true, cleared: true }` so callers can tell "no such car" from "cleared".
+A set returns `{ ok: true, …input }`. Ignored by the local car (which reads
+the real `Input`) and by AI cars (which drive themselves).
 
 ```js
 __apex.carInput(4, { steer: 0.3, throttle: true });
@@ -1850,7 +1855,7 @@ car outright. The rival is **posed from replicated state and not simulated
 locally** — `updateCar()` early-outs on it — so with a session live and nothing
 arriving, the rival does not move at all.
 
-### `netPeerSend(state, atMs?, wireId?) → {sent, at} | false`
+### `netPeerSend(state, atMs?, wireId?) → {sent, at} | { ok: false, error: "no_wire" } | false`
 Publish one car state **as the remote peer**. Omitted fields default to the
 rival's current values, so you can move one axis at a time. Pass `atMs` to
 stamp it on your virtual clock.
@@ -1858,7 +1863,9 @@ stamp it on your virtual clock.
 `wireId` overrides the id stamped on the packet, so a test can post a car this
 peer holds no slot for and assert it is **dropped** rather than posed over
 whichever car that number happens to name locally. Without it the id is the
-first rival's real `wire`, which is what a genuine peer would send.
+first rival's real `wire`. There is no fallback to `status.remoteId` (a
+`cars[]` index, not a wire id); if no remote has a wire, the hook returns
+`{ ok: false, error: "no_wire" }`.
 
 ### `lobbyInviteAnother() → Promise<{ok, code} | {ok:false, error}>`
 Mint a FURTHER invite without disturbing the room — host only, and refused

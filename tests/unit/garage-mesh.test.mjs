@@ -128,3 +128,9 @@ test("the big surfaces are not left on MAT.FLAT", () => {
   for (const want of ["CONCRETE", "ASPHALT", "METAL"])
     assert.ok(ids.has(MAT[want]), `no garage surface is MAT.${want}`);
 });
+
+test("preview hulls are dropped when their mesh LRU slot is evicted", () => {
+  const scene = read("js/garage/scene.js");
+  assert.match(scene, /hullKey/);
+  assert.match(scene, /previewHulls\.delete\(victim\.hullKey\)/);
+});

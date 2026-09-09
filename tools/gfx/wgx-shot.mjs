@@ -19,6 +19,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { startStaticServer, launchChromium, shutdown, WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
+import { awaitPresentedFrame, presentedCanvasClip } from "../capture/probe-page.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -179,8 +180,9 @@ export async function runWgxShot({
     const pagePath = join(dest, "page-hud.png");
     const rasterPath = join(dest, "view-raster.png");
 
-    const box = await page.locator("#game").boundingBox();
-    if (box) await page.screenshot({ path: canvasPath, clip: box, type: "png", timeout: 60000 });
+    await awaitPresentedFrame(page, 15000);
+    const box = await presentedCanvasClip(page);
+    if (box) await page.screenshot({ path: canvasPath, clip: { x: box.x, y: box.y, width: box.width, height: box.height }, type: "png", timeout: 60000 });
     else await page.screenshot({ path: canvasPath, type: "png", timeout: 60000 });
     await page.screenshot({ path: pagePath, type: "png" });
 

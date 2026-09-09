@@ -228,7 +228,9 @@ const api = {
         })),
       };
     }
-    if (!o || typeof o !== "object" || !G.track) return false;
+    if (!o || typeof o !== "object" || !G.track) {
+      return { ok: false, error: "invalid_repro", message: "repro(obj) needs a captured blob and a loaded track.", fix: "Call repro() with no args to capture, then repro(that) after race()." };
+    }
     if (o.cam && o.cam.mode) { this.camera(o.cam.mode); if (o.cam.tune) this.camTune(o.cam.mode, o.cam.tune); }
     if (o.tod) G.setTimeOfDay(o.tod);
     if (o.wx) G.weather(o.wx);
@@ -1765,13 +1767,16 @@ const api = {
 
   // carInput(idx, {steer, throttle, brake, shiftUp?, shiftDown?, overtake?})
   // — the controls a NON-LOCAL human car drives on, same shape as setInput().
-  // Pass null to clear (the car then coasts). Ignored by the local car, which
+  // Pass null to clear (the car then coasts). Missing idx returns false;
+  // a successful clear returns { ok: true, cleared: true } so callers can
+  // tell "no such car" from "cleared". Ignored by the local car, which
   // reads the real Input, and by AI cars, which drive themselves.
   carInput(idx, input) {
     const c = G.cars[idx];
     if (!c) return false;
     c.netInput = input || null;
-    return c.netInput ? Object.assign({}, c.netInput) : null;
+    if (input == null) return { ok: true, cleared: true };
+    return Object.assign({ ok: true }, c.netInput);
   },
 
   net() {
@@ -1836,7 +1841,9 @@ const api = {
     // G.wireId — the same number on every screen, which an index is not — so
     // the fake peer must too, or onState has no slot to route it to.
     const wire = wireId != null ? wireId
-      : (status.remotes && status.remotes.length ? status.remotes[0].wire : status.remoteId);
+      : (status.remotes && status.remotes.length && status.remotes[0].wire != null
+        ? status.remotes[0].wire : null);
+    if (wire == null) return { ok: false, error: "no_wire" };
     const ok = _netPeer.send("state", NetSnapshot.encodeSnapshot(Math.round(now), [
       { id: wire, car },
     ]));
@@ -2550,7 +2557,7 @@ const api = {
   // suite cannot reach (a real GPU rather than SwiftShader, Safari/iOS, a phone).
   // The Blob-and-click dance had been hand-written from scratch every time it
   // was needed, slightly differently each time. Objects are JSON-stringified;
-  // strings and Blobs pass through. Returns the byte count.
+  // strings and Blobs pass through. Returns `{ ok: true, bytes }` on success.
   save(data, filename) {
     try {
       const blob = data instanceof Blob ? data
@@ -2561,7 +2568,7 @@ const api = {
       a.download = filename || "apex-" + Date.now() + ".json";
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 10000);
-      return blob.size;
+      return { ok: true, bytes: blob.size };
     } catch (e) { return { ok: false, error: String((e && e.message) || e) }; }
   },
 
@@ -2722,7 +2729,8 @@ const api = {
     };
     try { Log.info("apex", d); } catch (_) {}
     if (o.download !== false) {
-      const bytes = this.save(d, o.filename || "apex-diag.json");
+      const saved = this.save(d, o.filename || "apex-diag.json");
+      const bytes = saved && saved.bytes;
       try { Log.info("apex", "downloaded apex-diag.json (" + bytes + " bytes)"); } catch (_) {}
     }
     return d;

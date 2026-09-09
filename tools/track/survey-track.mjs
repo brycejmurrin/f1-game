@@ -30,6 +30,7 @@ import {
   resolveContainedChild,
   resolveRepoDefault,
 } from "../lib/output-paths.mjs";
+import { awaitPresentedFrame, screenshotPresentedCanvas } from "../capture/probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 export const SURVEY_USAGE = "usage: survey-track.mjs <id> [label] [fracs] [--oblique]";
@@ -122,10 +123,12 @@ try {
       `${label}-${name}.png`,
       "survey screenshot path"
     );
-    const box = await page.locator("canvas#game").boundingBox();
-    const buf = box
-      ? await page.screenshot({ path, clip: box, timeout: 60000 })
-      : await page.screenshot({ path, timeout: 60000 });
+    await awaitPresentedFrame(page);
+    const shot = await screenshotPresentedCanvas(page, { path, skipAwait: true, timeout: 60000 }).catch(async () => {
+      const buf = await page.screenshot({ path, timeout: 60000 });
+      return { buf, bytes: buf.length };
+    });
+    const buf = shot.buf;
     shots.push({ name: `${label}-${name}.png`, kb: +(buf.length / 1024).toFixed(0), blank: buf.length < 30000 });
   }
 

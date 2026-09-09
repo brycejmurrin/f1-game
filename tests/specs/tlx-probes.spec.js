@@ -6,6 +6,7 @@
 // pinned via apex26.tlxForceGL so local repros match CI exactly.
 // Grows per milestone: M2 pixel-nonblank, M3+ __tlx shader-dump/?viz= hooks.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { awaitPresentedFrame, screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
@@ -20,6 +21,7 @@ test.beforeEach(async ({ page }) => {
    rendering. smoke.spec.js measured 88–96 s vs 29–32 s once the loop stops.
    Present a frame first (wait on readiness), then headless(true). */
 async function stopRendering(page) {
+  await awaitPresentedFrame(page);
   await page.evaluate(() => window.__apex.headless(true));
   await page.waitForTimeout(50);
 }
@@ -98,8 +100,8 @@ test.describe("TLX — boot", () => {
     await stopRendering(page);
     // Same heuristic as smoke.spec.js: a rendered scene PNG is tens of KB,
     // a blank/solid canvas < ~2 KB.
-    const buf = await page.locator("canvas#game").screenshot();
-    expect(buf.length).toBeGreaterThan(5000);
+    const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
+    expect(shot.bytes).toBeGreaterThan(5000);
     expect(errors).toEqual([]);
   });
 
@@ -164,8 +166,8 @@ test.describe("TLX — boot", () => {
     expect(st.targets[1]).toBeGreaterThan(0);
     // The chain must still produce a real image on the canvas.
     await stopRendering(page);
-    const buf = await page.locator("canvas#game").screenshot();
-    expect(buf.length).toBeGreaterThan(5000);
+    const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
+    expect(shot.bytes).toBeGreaterThan(5000);
     expect(errors).toEqual([]);
   });
 
@@ -378,8 +380,8 @@ test.describe("TLX — boot", () => {
     // Safe to stop the loop here: the probe's own `ready` flag was awaited
     // above, so the six cube faces are already captured.
     await stopRendering(page);
-    const buf = await page.locator("canvas#game").screenshot();
-    expect(buf.length).toBeGreaterThan(5000);
+    const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
+    expect(shot.bytes).toBeGreaterThan(5000);
     expect(errors).toEqual([]);
   });
 
