@@ -48,6 +48,22 @@
 // write misses the cache by itself. Paint needs the explicit drop (a custom id
 // for designs, dropPreviewMeshes for the hull).
 //
+// SHOTS ARE NOT REPRODUCIBLE ACROSS RUNS, AND THAT IS A REAL LIMIT ON WHAT
+// THIS TOOL CAN PROVE. Measured 2026-09-09: two runs of the SAME code and the
+// SAME config (redbull, hero/side/rear) produced hero and side images differing
+// in ~43% of bytes; rear differed in 0.3%. Nothing in the tree changed between
+// them. So a diff of one run's PNG against another run's is not evidence of
+// anything, and a before/after visual A/B has to compare shots taken INSIDE one
+// run — which is what every axis being a list is for.
+//
+// Two clocks are candidates and neither is pinned here. `_skyT` (game.js)
+// accumulates dt and is freezable via __apex.renderClock(t, true), the hook the
+// image-grade spec already uses. `GarageScene.pulse()` records
+// performance.now() — WALL clock, so what it contributes depends on how long
+// the box took between the preset click and the blit, which on a loaded machine
+// is tens of seconds. Pinning them is unfinished work, not a thing this tool
+// does today; --settle exists so the step count can be varied while chasing it.
+//
 // Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
 // under SwiftShader (document.fonts.ready after freeze).
 import { mkdirSync, writeFileSync, readFileSync, existsSync, unlinkSync } from "node:fs";
@@ -64,7 +80,7 @@ import {
 const argv = process.argv.slice(2);
 const KNOWN = ["--team", "--livery", "--spine-side", "--spine-logo", "--parts", "--views",
                "--zoom", "--pan", "--aero", "--viewport", "--out", "--backend", "--jpeg",
-               "--dry-run", "--visible-only", "--skip-existing", "--label", "--sheet"];
+               "--dry-run", "--visible-only", "--skip-existing", "--label", "--sheet", "--settle"];
 // Shared with the other garage/car CLIs: both `--name=v` and `--name v`, and an
 // unknown flag stops the run rather than silently using the default.
 const { flag, list, has } = parseFlags(argv, KNOWN);
@@ -84,6 +100,11 @@ const skipExisting = has("--skip-existing");   // resume a run that died part-wa
 const wantLabel = has("--label");              // burn the coordinates into each PNG
 const wantSheet = has("--sheet");              // + one labelled contact sheet of the run
 const backend = flag("--backend", "webgl2");
+// Frames settled before a capture. The default is the long-standing 6; the flag
+// exists because the light rig EASES, so this number decides whether a shot is
+// a settled frame or a mid-ease one — see the note above frame() for the A/B
+// that established it, and raise it if a run shows lighting drift between shots.
+const settleN = Math.max(1, +flag("--settle", "6") || 6);
 const jpeg = has("--jpeg") ? Math.max(1, Math.min(100, +flag("--jpeg", "82") || 82)) : 0;
 
 const teams = list("--team", "mclaren");
@@ -348,29 +369,65 @@ async function panelGeometry(page) {
   return _panelCache;
 }
 
+/* WHY THERE IS NO stepFrames() HERE, AND WHY THE PRESENT STAYS.
+ *
+ * The in-frame timings below say a 49.5 s shot is screenshot 22.8 s plus
+ * settleGarage 21.1 s, with every other step under 4 s, and settleGarage's
+ * second half is GLX.awaitSoftPresent — a FORCED blit (GPU readback plus
+ * putImageData) that screenshotGameCanvas then awaits again. Dropping the
+ * first one looked like free money: 223.7 s -> 127.7 s on the same 3-shot
+ * config, a 43% cut.
+ *
+ * It was wrong. The forced present is not only blitting, it advances the
+ * light-rig ease, so plain stepping captured a MID-EASE frame — 43% of bytes
+ * different from the settled one, and no less plausible-looking, which is
+ * exactly why this needed a pixel A/B rather than an eye. Raising the step
+ * count to 24 recovered convergence on a single shot (0.28% from the old
+ * path) but not across a 3-shot walk (11.9% on hero), and by then the box's
+ * own variance had swallowed the result: three runs of the identical config
+ * booted in 17.9 s, 4.3 s and 14.8 s. That is measuring the machine, not the
+ * code (AGENTS.md session-shape 8).
+ *
+ * So the present stays and the saving is not taken. What survives is the
+ * measurement: the cost is localised to the double soft-present, it is
+ * ~40 s of a ~45 s shot, and llvmpipe is what makes it that. On a box with a
+ * real GPU, or with a quieter one to A/B on, the lever is known and the
+ * numbers to beat are in this comment. --settle exposes the step count so the
+ * next attempt does not have to patch the source to try it. */
+
+// Sub-phase wall time INSIDE a frame. The per-phase totals said `frame` was
+// 46.9 s of a 47 s shot; this says which part of a frame that is, because the
+// two candidates (a soft-present that waits, an encode that decodes) are not
+// distinguishable from the outside.
+const inFrame = { preset: 0, nudge: 0, settle: 0, panel: 0, shot: 0, gate: 0, cam: 0, encode: 0 };
+async function sub(key, fn) {
+  const t = Date.now();
+  try { return await fn(); } finally { inFrame[key] += +((Date.now() - t) / 1000).toFixed(2); }
+}
+
 async function frame(page, shot) {
   const { view, framing } = shot;
-  const clicked = await page.evaluate((v) => {
+  const clicked = await sub("preset", () => page.evaluate((v) => {
     const b = document.querySelector('#cs-stack [data-cs-view="' + v + '"]');
     if (!b) return false;
     b.click();
     return true;
-  }, view);
+  }, view));
   if (!clicked) throw new Error(`no camera preset "${view}" in #cs-stack`);
   // AFTER the preset: setSetupView is absolute and drops stored distance/pan,
   // so the framing nudges are re-applied per shot rather than once per run.
-  await nudgeAll(page, framing);
-  await settleGarage(page, { frames: 6 });
+  await sub("nudge", () => nudgeAll(page, framing));
+  await sub("settle", () => settleGarage(page, { frames: settleN }));
   const png = join(outDir, `${shot.name}.png`);
-  const panel = await panelGeometry(page);
+  const panel = await sub("panel", () => panelGeometry(page));
   let gate = null;
   for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt) await settleGarage(page, { frames: 4 });
-    const got = await screenshotGameCanvas(page, png);
-    gate = await bayRendered(png, vp[0], panel.visible);
+    if (attempt) await sub("settle", () => settleGarage(page, { frames: 4 }));
+    const got = await sub("shot", () => screenshotGameCanvas(page, png));
+    gate = await sub("gate", () => bayRendered(png, vp[0], panel.visible));
     if (gate.ok) {
-      const cam = await page.evaluate(() => window.__apex.garageCam());
-      const finalPng = await finishImage(png, shot, panel, gate.meta);
+      const cam = await sub("cam", () => page.evaluate(() => window.__apex.garageCam()));
+      const finalPng = await sub("encode", () => finishImage(png, shot, panel, gate.meta));
       return {
         panel, label: shot.label,
         name: shot.name, png: finalPng, view, team: shot.team, aero: shot.aero,
@@ -636,7 +693,7 @@ async function main() {
       teams, liveries, spineSides, spineLogos, aero: aeros,
       parts: parts.map((p) => ({ tag: p.tag, kind: p.kind, overrides: p.overrides })),
       views, framings, viewport: vp, backend, sheetHead, shots,
-      seconds: total, spent,
+      seconds: total, spent, inFrame,
     }, null, 2));
     console.log(`wrote ${shots.length} shot(s) in ${total}s + ${meta}`);
     // Where the time actually went, every run — the answer to "why is this slow"
@@ -644,6 +701,8 @@ async function main() {
     console.log(`  boot ${spent.boot}s  team ${spent.team}s  paint ${spent.paint}s`
       + `  parts ${spent.parts}s  aero ${spent.aero}s  frame ${spent.frame}s`
       + (shots.length ? `  (${(spent.frame / shots.length).toFixed(1)}s per frame)` : ""));
+    console.log("  in-frame: " + Object.entries(inFrame)
+      .sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v.toFixed(1)}s`).join("  "));
   } finally {
     await browser.close();
   }

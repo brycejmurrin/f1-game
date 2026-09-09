@@ -144,3 +144,31 @@ The rails NEVER cross the car — they land at x -6.28..3.47 against a car of
 centre, and raising the elevation does not move it, because the camera shares
 the orbit's z so there is no z-parallax to spend. The levers that DO move it are
 azimuth off PI/2 and `--pan` in z. Do not "fix" it by nudging `el`.
+
+## garage-angles shots are not reproducible across runs
+
+Measured 2026-09-09: two runs of the SAME code and the SAME config
+(`--team=redbull --views=hero,side,rear`) produced **hero and side images
+differing in ~43% of bytes**, rear in 0.3%. Nothing in the tree changed between
+them, and the framing, camera and car are identical — it is the lighting.
+
+**Consequences, in order of how much time they save you.**
+
+1. **Never A/B one run's PNG against another run's.** A 43% pixel diff there
+   means nothing. Compare shots taken INSIDE one run — which is what every
+   axis being a comma list is for.
+2. **A "this looks different / better / worse" read across runs is not
+   evidence.** This cost a full optimisation cycle: a change was measured as a
+   43% regression, reverted, and only then did the reverted (i.e. original)
+   code reproduce the same 43% against its own baseline.
+3. Rear is stable and hero/side are not, so a stable view proves nothing about
+   the others.
+
+**Two clocks, neither pinned by the tool.** `_skyT` (game.js) accumulates dt
+and IS freezable — `__apex.renderClock(t, true)`, the hook the image-grade spec
+already uses. `GarageScene.pulse()` records `performance.now()`, a WALL clock,
+so its contribution depends on how long the box took between the preset click
+and the blit; on a loaded machine that is tens of seconds and varies per run.
+
+Pinning both is open work. `--settle=N` exposes the step count for whoever
+picks it up.

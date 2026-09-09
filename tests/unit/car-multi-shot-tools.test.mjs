@@ -174,8 +174,9 @@ test("garage-angles records panel geometry on every shot, cropped or not", () =>
   const src = code("tools/shot/garage-angles.mjs");
   const frame = src.slice(src.indexOf("async function frame(page, shot)"),
     src.indexOf("async function applyLivery"));
-  assert.match(frame, /const panel = await panelGeometry\(page\)/, "read once per shot");
-  assert.ok(frame.indexOf("const panel = await panelGeometry") < frame.indexOf("for (let attempt"),
+  assert.match(frame, /const panel = await sub\("panel", \(\) => panelGeometry\(page\)\)/,
+    "read once per shot, and timed like everything else in a frame");
+  assert.ok(frame.indexOf("panelGeometry(page)") < frame.indexOf("for (let attempt"),
     "panel geometry must be read before the gate loop, not per attempt");
   assert.match(frame, /panel, label: shot\.label,/, "the manifest carries it whether or not --visible-only cropped");
 });
@@ -265,4 +266,29 @@ test("garage-angles does not re-ask questions whose answer is fixed", () => {
   assert.match(nudge, /page\.evaluate\(\(jobs\) =>/, "one round-trip for the whole framing, not three");
   const gate = src.slice(src.indexOf("async function bayRendered"), src.indexOf("const LABEL_H"));
   assert.equal((gate.match(/sharp\(png\)/g) || []).length, 1, "ONE decode per gate, not one per question");
+});
+
+/* The per-phase totals said `frame` was 46.9s of a 47s shot but not which part
+ * of a frame that was, and the two candidates (a soft-present that waits, an
+ * encode that decodes) are not distinguishable from outside. */
+test("garage-angles times the inside of a frame, not just the phases", () => {
+  const src = code("tools/shot/garage-angles.mjs");
+  assert.match(src, /const inFrame = \{ preset: 0,/, "sub-phase accumulator");
+  for (const k of ["preset", "settle", "shot", "gate", "cam", "encode"]) {
+    assert.match(src, new RegExp(`sub\\("${k}"`), `${k} must be timed inside frame()`);
+  }
+  assert.match(src, /in-frame: /, "and printed, sorted by cost");
+});
+
+/* Two runs of the same code and config gave hero/side images 43% apart. Any
+ * future "this made it faster/better" claim measured ACROSS runs is invalid;
+ * the tool must say so where someone will read it before trying. */
+test("garage-angles documents that shots are not reproducible across runs", () => {
+  const src = read("tools/shot/garage-angles.mjs");   // comments intentionally kept
+  assert.match(src, /NOT REPRODUCIBLE ACROSS RUNS/, "the limit is stated in the header");
+  assert.match(src, /performance\.now\(\)/, "and names the wall clock as a candidate");
+  assert.match(src, /renderClock/, "and the freeze hook that pins the other one");
+  const s = code("tools/shot/garage-angles.mjs");
+  assert.match(s, /const settleN = Math\.max\(1, \+flag\("--settle", "6"\) \|\| 6\)/,
+    "--settle defaults to the long-standing 6: the flag is for chasing this, not a behaviour change");
 });
