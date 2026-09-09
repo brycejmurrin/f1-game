@@ -2673,6 +2673,40 @@ run where the webgpu leg gets past ~600 frames. Whatever answers it, note that
 this 4.9 fps mode is itself recurring and undiagnosed, and a census that lands
 in it cannot answer any question about env-probe content.
 
+### 2026-09-09 — the slow-leg mode is NOT resolution, and pinning it made things worse (run 74)
+
+Runs 54, 72 and 73 all showed the webgpu leg crawling (4.9-9 fps, 6-7 frames,
+probe never latching) and all three sat at `scale=1`, while the one good run (71,
+600 frames at 53.1 fps) sat at `scale=0.8`. That correlation is WRONG. Run 74
+pinned `apex26.resMode="low"` (scale 0.5) to buy the frames, and:
+
+| leg | scale | fps | frames |
+|---|---|---|---|
+| webgpu | 0.5 | 5 | 6 |
+| webgl2 | 0.5 | 9.4 | **5** (600 in runs 72/73) |
+| glx | 0.5 | 51.9 | 600 |
+| wgx | 0.5 | 58.3 | 600 |
+
+The webgpu leg was not rescued, and the HEALTHY CONTROL was destroyed: webgl2
+had rendered 600 frames at 59.9 fps in the two runs before this one. GLX and WGX
+at the same pinned scale were untouched, so the harm is specific to the two
+three.js legs — which is what a TSL graph rebuild on a knob change costs, paid
+at boot on both of them. **Do not pin resMode on a TLX census leg.** It removes
+the control and answers nothing.
+
+So the slow mode is still undiagnosed, and it is not about resolution: three
+points sharing a value is not a mechanism, which is the same error the fps
+column and the two-TLX-leg comparison each produced earlier in this file. What
+it is NOT: the governor shedding (tier=0 autoTier=0 on every slow leg), GPU
+errors (0 throughout), or pixel count (run 74). A diagnosis needs the boot
+timeline of a three.js leg that crawls against one that does not — where the
+first six frames go — not another dispatch with a knob moved.
+
+What DID work is the INCONCLUSIVE row added the same day: it fired correctly on
+every affected leg in runs 73 and 74, including both TLX legs here, so none of
+these numbers can be mined as a result. That is the whole of the win from this
+stretch, and it is worth more than the four dispatches it took to get it.
+
 ### 2026-09-09 — the TLX heap gap is opened by the TRACK BUILD, not boot
 
 `scratch/heap-stages.mjs`, montreal, CDP `Runtime.getHeapUsage` after three
