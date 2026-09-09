@@ -240,7 +240,7 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   // is taller than it is wide to hold it.
   assert.ok(A.LT.SIZE_H > A.LT.SIZE && R.spineSideL && R.spineSideL.y + R.spineSideL.h <= A.LT.SIZE_H, "the left flank lives in the atlas's extra rows");
   assert.ok(opsIn(wrap, R.spineSideL).length > 0, "wrap paints the left flank too");
-  for (const id of ["number", "logo", "plate", "wordmark", "duo", "slash", "split", "bars", "ribbon", "lockup", "title", "emblem", "band", "sash"]) {
+  for (const id of ["number", "logo", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash"]) {
     const ops = A.paint("ferrari", { ...BASE, spineSide: id });
     assert.ok(opsIn(ops, R.spineSide).length > 0 && opsIn(ops, R.spineSideL).length > 0, `${id} paints both flanks`);
   }
@@ -255,7 +255,7 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   // other case here covers.
   for (const team of ["redbull", "ferrari"]) {
     const bare = A.paint(team, { ...BASE, spineLogo: "wrap", spineSide: "none" });
-    for (const side of ["duo", "wordmark", "slash", "number"]) {
+    for (const side of ["duo", "wordmark", "band", "number"]) {
       const ops = A.paint(team, { ...BASE, spineLogo: "wrap", spineSide: side });
       for (const reg of [R.spineSide, R.spineSideL]) {
         assert.ok(opsIn(ops, reg).length > opsIn(bare, reg).length,
@@ -389,7 +389,7 @@ test("spineHeight lifts the cover crown top-only and leaves the fin top alone", 
 // code or the crest on pick. Mesh: the service panels leave the band's z range
 // so a grey hatch never sits through the number — same vertex count, moved.
 test("spineSide paints the flank band on pick only, and clears the service panels from under it", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash", "split", "bars", "chevron", "ribbon", "lockup", "title", "emblem", "band", "sash"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_SIDE_IDS), ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash"]);
   assert.ok(A.LT.FLANK_MARK.v < 0.48 && A.LT.FLANK_MARK.v > 0.30,
             "flank marks sit in the upper half (0.56 sat in the sidepod; 0.42 with the old tall box clipped the crease)");
   assert.ok(A.LT.FLANK_MARK.v - A.LT.FLANK_MARK.halfH > 0.08,
@@ -403,13 +403,9 @@ test("spineSide paints the flank band on pick only, and clears the service panel
     .filter((op) => op.kind === "text").map((op) => op.text);
   assert.ok(texts({ spineSide: "number" }).includes("16"), "number on the flank");
   assert.ok(texts({ spineSide: "code" }).includes("LEC"), "driver code on the flank");
-  // The photo-derived side designs: a plate carries the number, the wordmark a
-  // name, the slashes only bars.
   assert.ok(texts({ spineSide: "plate" }).includes("16"), "plate: number on the plate");
   assert.ok(texts({ spineSide: "wordmark" }).join("").length >= 3, "wordmark: a sponsor name on the flank");
   assert.ok(texts({ spineSide: "duo" }).join("").length > texts({ spineSide: "wordmark" }).join("").length, "duo: two names on the flank");
-  const slash = opsIn(A.paint("ferrari", { ...BASE, spineSide: "slash" }), R.spineSide);
-  assert.ok(slash.length >= 1 && slash.every((op) => op.kind !== "text"), "slash: one bold rake, no text");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "logo" }), R.spineSide).length > 0, "the crest on the flank");
   assert.ok(texts({ spineSide: "ribbon" }).includes("16"), "ribbon: number in the crease band");
   assert.ok(texts({ spineSide: "lockup" }).includes("16"), "lockup: number beside the mark");
@@ -420,6 +416,11 @@ test("spineSide paints the flank band on pick only, and clears the service panel
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "emblem" }), R.spineSide).length > 0, "emblem paints a large crest");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "band" }), R.spineSide).length > 0, "band paints the crease strip");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "sash" }), R.spineSide).length > 0, "sash paints a diagonal");
+  // Culled band graphics must not paint (unknown id → bare flank).
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "slash" }), R.spineSide).length, 0, "slash was culled");
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "bars" }), R.spineSide).length, 0, "bars was culled");
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "split" }), R.spineSide).length, 0, "split was culled");
+  assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineSide: "chevron" }), R.spineSide).length, 0, "chevron was culled");
   const base = build({}), side = build({ spineSide: "number" });
   assert.strictEqual(side.pos.length, base.pos.length, "the panels move, they are not removed");
   assert.ok(!samePos(base, side), "a flank mark relocates the service panels");

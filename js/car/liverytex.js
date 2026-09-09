@@ -1657,11 +1657,11 @@ const LiveryTex = (function () {
   // (Red Bull's ORACLE, Mercedes' PETRONAS), "slash" the W17's raked bars, and
   // "plate" the SF-26's number on a contrasting panel.
   // "duo" is the RB22's flank: the title sponsor large and aft, the partner
-  // SPINE SIDE: flank graphics. Compact marks (number/logo/code/plate) hang at
-  // FLANK_MARK. Type: wordmark/duo/title. Graphics: bars/slash/split/chevron/
-  // band/sash. Combos: ribbon (number-in-strip), lockup (number+mark), emblem
-  // (large bare crest).
-  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash", "split", "bars", "chevron", "ribbon", "lockup", "title", "emblem", "band", "sash"];
+  // SPINE SIDE: flank graphics. Compact marks (number/logo/code/plate), type
+  // (wordmark/duo/title), combos (ribbon/lockup), crest (emblem), and two
+  // colour graphics (band crease strip, sash diagonal). Culled 2026-09-09:
+  // bars/slash/split/chevron read as UI stickers at SIDE+zoom.
+  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash"];
   // Where a MARK (logo / number / code / plate) sits on the flank canvas.
   // v is the centre, 0 at the shoulder crease and 1 at the sidepod line.
   // Hung at 0.56 the plate sat in the sidepod (owner: "a little low"); hung
@@ -2088,7 +2088,8 @@ const LiveryTex = (function () {
     // Two SPINE TOP designs repaint that flank before the mark lands on it, and
     // then THEY are the backing: the wrap's sun and the saddle's panel both
     // cover the mark's station (f 0.19).
-    const spineSide = colors.spineSide || "none";
+    const spineSideRaw = colors.spineSide || "none";
+    const spineSide = SPINE_SIDE_IDS.includes(spineSideRaw) ? spineSideRaw : "none";
     // What the flank ACTUALLY wears. The saddle's is bandC, because bandC is
     // what saddleFlanks is handed — `stripe || accent` was a guess at it, and
     // on Mercedes and Ferrari the two differ, which is why their split still
@@ -2133,8 +2134,8 @@ const LiveryTex = (function () {
     // carries a keyline that would survive it. Identity check, not a colour
     // compare: where the flank IS the cover this is bandC and the atlas is
     // byte-identical to before.
-    // SIDE TINT (liv.sideTint) — what the SPINE SIDE band designs (split, bars,
-    // slash) paint, picked as picked. One field cannot serve two zones: spineTint
+    // SIDE TINT (liv.sideTint) — what the SPINE SIDE band designs (band, sash,
+    // ribbon) paint, picked as picked. One field cannot serve two zones: spineTint
     // paints the flank UNDER these when the crown design is a saddle, so a band
     // taking the same value would be a no-op. This is the second zone's own
     // colour, and like spineTint it skips the re-pick entirely — the derived
@@ -2265,76 +2266,6 @@ const LiveryTex = (function () {
         ctx.restore();
         drawWordmark(ctx, names[0] || "", box, boardInk, { align: "center", pad: 6 });
       });
-    } else if (spineSide === "chevron") {
-      // ONE bold forward arrow on the crease — a cover graphic, not three UI
-      // chevrons. Tip points noseward through su()/F.dir.
-      eachFlank((F) => {
-        const Sf = F.R;
-        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
-        ctx.fillStyle = cssA(flankBandC, 0.97);
-        const midY = Sf.y + Sf.h * 0.34;
-        const tip = su(F, 0.10), back = su(F, 0.42);
-        const h = Sf.h * 0.22;
-        ctx.beginPath();
-        ctx.moveTo(tip, midY);
-        ctx.lineTo(back, midY - h);
-        ctx.lineTo(back - (back - tip) * 0.28 * F.dir, midY);
-        ctx.lineTo(back, midY + h);
-        ctx.closePath(); ctx.fill();
-        ctx.restore();
-      });
-    } else if (spineSide === "split") {
-      // Solid colour PANEL on the forward flank — the hard two-tone a cover
-      // wears when the side colour climbs onto it (not a lower wedge sticker).
-      eachFlank((F) => {
-        const Sf = F.R;
-        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
-        ctx.fillStyle = cssA(flankBandC, 0.97);
-        const rearU = sideFrom ? 0.55 : 0.48;
-        ctx.beginPath();
-        ctx.moveTo(su(F, 0), Sf.y + Sf.h * 0.08);
-        ctx.lineTo(su(F, rearU), Sf.y + Sf.h * 0.08);
-        ctx.lineTo(su(F, rearU + 0.12), Sf.y + Sf.h * 0.62);
-        ctx.lineTo(su(F, 0), Sf.y + Sf.h * 0.62);
-        ctx.closePath(); ctx.fill();
-        ctx.restore();
-      });
-    } else if (spineSide === "bars") {
-      // ONE thick crease stripe — Mercedes streak language as a single band,
-      // not three thin UI rules.
-      eachFlank((F) => {
-        const Sf = F.R;
-        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
-        ctx.fillStyle = cssA(flankBandC, 0.97);
-        const uEnd = sideFrom ? 0.55 : 0.58;
-        const y = Sf.y + Sf.h * 0.18, h = Sf.h * 0.22;
-        const x0 = su(F, 0.04), x1 = su(F, uEnd);
-        ctx.fillRect(Math.min(x0, x1), y, Math.abs(x1 - x0), h);
-        // Thin companion rule under it, same length — a pair, not a ladder.
-        const y2 = Sf.y + Sf.h * 0.46, h2 = Sf.h * 0.055;
-        ctx.fillRect(Math.min(x0, x1), y2, Math.abs(x1 - x0), h2);
-        ctx.restore();
-      });
-    } else if (spineSide === "slash") {
-      // ONE bold diagonal band from the crease — W17 rake as a single stroke,
-      // not three pasted pinstripes.
-      eachFlank((F) => {
-        const Sf = F.R;
-        const crease = Sf.y + Sf.h * 0.08;
-        const skew = Sf.h * 0.28 * F.dir;
-        const hh = Sf.h * 0.58;
-        const bw = Sf.w * (1 - sideFrom) * 0.14 * F.dir;
-        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
-        ctx.fillStyle = cssA(flankBandC, 0.97);
-        const x0 = su(F, 0.12);
-        ctx.beginPath();
-        ctx.moveTo(x0 + skew, crease);
-        ctx.lineTo(x0 + skew + bw, crease);
-        ctx.lineTo(x0 + skew * (1 - hh / Sf.h) + bw, crease + hh);
-        ctx.lineTo(x0 + skew * (1 - hh / Sf.h), crease + hh);
-        ctx.closePath(); ctx.fill();
-        ctx.restore();
-      });
     } else if (spineSide === "ribbon") {
       // Number-in-strip: a real crease band with a large race number (SF-26 /
       // PETRONAS station). Stops before the aft tyre.
@@ -2381,30 +2312,32 @@ const LiveryTex = (function () {
         ctx.restore();
       });
     } else if (spineSide === "band") {
-      // Solid colour crease BAND — fills the upper third like a real PETRONAS /
-      // title strip, without a number (ribbon owns that).
+      // Solid colour crease BAND — a real title-strip panel on the upper flank
+      // (not a thin rule). Tall enough that sideTint owns the flank sample on a
+      // saddle, where the crown already painted the whole band dark.
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.97);
-        const uEnd = sideFrom ? 0.55 : 0.60;
+        const uEnd = sideFrom ? 0.58 : 0.68;
         const x0 = su(F, 0.02), x1 = su(F, uEnd);
-        ctx.fillRect(Math.min(x0, x1), Sf.y + Sf.h * 0.08, Math.abs(x1 - x0), Sf.h * 0.34);
+        ctx.fillRect(Math.min(x0, x1), Sf.y + Sf.h * 0.06, Math.abs(x1 - x0), Sf.h * 0.52);
         ctx.restore();
       });
     } else if (spineSide === "sash") {
       // Wide diagonal sash — a racing-flag cut across the flank (broader and
-      // shallower than slash's single rake).
+      // shallower than slash's single rake). Fills most of the free band so the
+      // pick reads as the flank colour, not a thin sticker on the panel.
       eachFlank((F) => {
         const Sf = F.R;
         ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
         ctx.fillStyle = cssA(flankBandC, 0.97);
-        const uEnd = sideFrom ? 0.70 : 0.58;
+        const uEnd = sideFrom ? 0.72 : 0.66;
         ctx.beginPath();
-        ctx.moveTo(su(F, 0.04), Sf.y + Sf.h * 0.06);
-        ctx.lineTo(su(F, uEnd), Sf.y + Sf.h * 0.06);
-        ctx.lineTo(su(F, uEnd * 0.72), Sf.y + Sf.h * 0.58);
-        ctx.lineTo(su(F, 0.04), Sf.y + Sf.h * 0.42);
+        ctx.moveTo(su(F, 0.02), Sf.y + Sf.h * 0.05);
+        ctx.lineTo(su(F, uEnd), Sf.y + Sf.h * 0.05);
+        ctx.lineTo(su(F, uEnd * 0.78), Sf.y + Sf.h * 0.70);
+        ctx.lineTo(su(F, 0.02), Sf.y + Sf.h * 0.58);
         ctx.closePath(); ctx.fill();
         ctx.restore();
       });

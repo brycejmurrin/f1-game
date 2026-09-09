@@ -114,7 +114,7 @@ const LIV_ROW_HINT = {
   pod: "SIDEPOD — the sidepod panel, both sides. Unset = the bodywork colour.",
   cover: "ENGINE COVER — airbox, roll structure, cover loft and snorkel. Unset = the bodywork colour.",
   spineTint: "SPINE TINT — the SPINE TOP band on the cover crown, and the saddle's flank half, ALONE. BODY STRIPE above runs the whole spine including the nose, so it cannot paint a dark band on a light nose. Unset = BODY STRIPE, else DETAIL.",
-  sideTint: "SIDE TINT — the SPINE SIDE band designs (SPLIT, BARS, SLASH) on the cover flank, ALONE. A separate zone from SPINE TINT: with SPINE TOP on SADDLE the tint paints the flank these sit on, so one colour cannot serve both. Unset = derived from the livery and checked against the flank.",
+  sideTint: "SIDE TINT — the SPINE SIDE colour graphics (BAND, SASH) on the cover flank, ALONE. A separate zone from SPINE TINT: with SPINE TOP on SADDLE the tint paints the flank these sit on, so one colour cannot serve both. Unset = derived from the livery and checked against the flank.",
   sunTint: "SUN — the WRAP design's sun disc, over the crown, both cover flanks and the airbox. Its own row because SPINE TINT used to paint this too: one field meant a band on most SPINE TOP designs and the sun on WRAP, so choosing WRAP repurposed a colour picked for a band. Unset = SPINE TINT, else the mark's plate colour.",
   crestInk: "CREST INK — the crown's LETTERING: the wordmark, the number, CARBON's keylines, the trim on PANEL and STRIPE, and the flank marks that share it. Unset = picked automatically to contrast with ENGINE COVER.",
   bandTint2: "2ND BAND — the TRICOLOUR design's second band. Only one of its two bands was ever choosable and the other was derived, which is how a tricolour could come out one colour repeated. Unset = derived against both the cover and the first band.",
@@ -139,7 +139,7 @@ const LIV_ROW_HINT = {
   tcam: "T-CAM — the camera housing colour. AUTO is the real rule: car 1 black, car 2 yellow.",
   coverVents: "COVER VENTS — cooling slits cut into the engine cover. Geometry, not paint.",
   spineHeight: "SPINE HEIGHT — how tall the cover crown runs behind the roll hoop. DORSAL is the fin-less 2026 look every team uses.",
-  spineSide: "SPINE SIDE — what the cover FLANK carries, both sides: number, mark, code, wordmark, title board, emblem, ribbon, lockup, or a graphic (bars/slash/split/chevron/band/sash).",
+  spineSide: "SPINE SIDE — what the cover FLANK carries, both sides: number, mark, code, wordmark, title board, emblem, ribbon, lockup, band, or sash.",
 };
 // `liv` is a saved livery for edit/copy, or a bare {c1,c2} for a new one: an
 // absent colour becomes "" (no paint) and an absent pill its own default.

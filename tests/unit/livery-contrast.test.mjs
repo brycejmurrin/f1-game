@@ -47,7 +47,7 @@ const A = loadAtlas();
 const CROWN = ["logo", "wrap", "saddle", "bigmark"];
 // The three that paint a band on the flank, plus the mark and plate that have to
 // survive one, plus the control.
-const SIDE = ["none", "split", "bars", "slash", "plate", "logo"];
+const SIDE = ["none", "band", "sash", "plate", "logo"];
 
 test("no design paints a large area that cannot be seen on what it covers", () => {
   const bad = [];
@@ -133,8 +133,8 @@ test("a colour you PICK is the colour that gets painted, contrast or not", () =>
     ["the tail strip",       { spineLogo: "saddle", spineTint: PICK }, "tail"],
     ["the saddle's flank",   { spineLogo: "saddle", spineTint: PICK }, "spineSide"],
     ["the wrap's sun",       { spineLogo: "wrap",   spineTint: PICK }, "crest"],
-    ["the flank band",       { spineLogo: "saddle", spineSide: "split", sideTint: PICK }, "spineSide"],
-    ["the flank band, wrap", { spineLogo: "wrap",   spineSide: "bars",  sideTint: PICK }, "spineSide"],
+    ["the flank band",       { spineLogo: "saddle", spineSide: "band", sideTint: PICK }, "spineSide"],
+    ["the flank band, wrap", { spineLogo: "wrap",   spineSide: "band", sideTint: PICK }, "spineSide"],
   ];
   for (const [what, liv, region] of cases)
     assert.ok(dominant(liv, region).startsWith(css),

@@ -41,9 +41,9 @@
      Geometry (Car3D.SPINE_HEIGHT_IDS); the fin's top stays at the regulation
      line, so a taller spine shortens the blade.
    spineSide? optional SPINE SIDE: "none" (absent) or an id in
-     LiveryTex.SPINE_SIDE_IDS — number, logo, code, plate, wordmark, duo, slash,
-     split, bars, chevron, ribbon, lockup, title (sponsor on a board), emblem
-     (large bare crest), band (crease colour strip), sash (wide diagonal).
+     LiveryTex.SPINE_SIDE_IDS — number, logo, code, plate, wordmark, duo,
+     ribbon, lockup, title (sponsor on a board), emblem (large bare crest),
+     band (crease colour strip), sash (wide diagonal).
      Paints the engine-cover FLANK, both sides (car-mesh's band).
      Each flank is its own atlas region (spineSide right, spineSideL left),
      authored in that side's outside-view frame, so text reads and a graphic
