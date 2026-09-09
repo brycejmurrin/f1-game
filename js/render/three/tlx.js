@@ -1627,7 +1627,7 @@ const TLX = (function () {
       // probe on 2.9, off 39.2, controls unmoved). Reported so ONE census
       // answers whether the guard fires, instead of a code read of a minified
       // bundle guessing where generateMipmaps is defined.
-      let _envMipFn = "?", _envMipRan = 0, _envMipErr = "";
+      let _envMipFn = "?", _envMipRan = 0, _envMipErr = "", _envMipWhere = "?";
       const ENV_PROBE_TRIES = 3;
       const ENV_FAIL_CAP = 24;   // 4 probes x 6 faces
       let _envFrame = null, _envSvVP = null, _envSvEye = null, _envSvCull = 0;
@@ -2608,9 +2608,21 @@ const TLX = (function () {
             // empty mips, and cubeTexture(..., rough*2.5) reads black. mipFn
             // says which, mipRan says whether the pass actually ran, and mipErr
             // keeps a throw that the catch would otherwise swallow whole.
+            // MEASURED (census 71, macos-latest): renderer.generateMipmaps is
+            // UNDEFINED, so this pass had never once run — ran=0 on both legs.
+            // It is defined on the BACKEND (three r185 puts generateMipmaps on
+            // Backend/TextureUtils, not on Renderer), so reach it there when the
+            // renderer does not carry it. WebGL2 auto-mips and never needed this;
+            // WebGPU does not for a cube target (three.js #31143 / #31639), which
+            // is why only that leg goes black.
             _envMipFn = typeof renderer.generateMipmaps;
-            if (renderer.generateMipmaps && envRT.texture) {
-              try { renderer.generateMipmaps(envRT.texture); _envMipRan++; }
+            const _mipVia = typeof renderer.generateMipmaps === "function"
+              ? renderer
+              : (renderer.backend && typeof renderer.backend.generateMipmaps === "function"
+                 ? renderer.backend : null);
+            _envMipWhere = _mipVia === renderer ? "renderer" : _mipVia ? "backend" : "none";
+            if (_mipVia && envRT.texture) {
+              try { _mipVia.generateMipmaps(envRT.texture); _envMipRan++; }
               catch (e) { _envMipErr = (e && e.message) || String(e); }   // lod 0 still works
             }
           }
@@ -3380,7 +3392,7 @@ const TLX = (function () {
               on: !!envRT, face, size: ENV_SIZE, ready: envReady, blank: _envBlank,
               mask: envFacesMask, begins: _envBegins, ends: _envEnds,
               fail: _envFailN, failMsg: _envFailMsg,
-              mipFn: _envMipFn, mipRan: _envMipRan, mipErr: _envMipErr,
+              mipFn: _envMipFn, mipRan: _envMipRan, mipErr: _envMipErr, mipWhere: _envMipWhere,
               badProbes: _envBadProbes, gaveUp: _envGaveUp,
             };
           },

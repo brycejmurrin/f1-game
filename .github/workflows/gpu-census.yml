@@ -391,9 +391,9 @@ jobs:
             // REPORTED, NOT GATED: the structural gate goes in once a run says
             // which, and a brightness floor never does (see the header).
               if (env.mipFn != null) {
-                rows.push(`${" ".repeat(8)}mip:   fn=${env.mipFn} ran=${env.mipRan}`
+                rows.push(`${" ".repeat(8)}mip:   fn=${env.mipFn} via=${env.mipWhere} ran=${env.mipRan}`
                   + (env.mipErr ? ` err=${String(env.mipErr).slice(0, 120)}` : "")
-                  + (env.ready === true && env.mipFn !== "function"
+                  + (env.ready === true && env.mipRan === 0
                      ? "   <- cube LATCHED with no mip pass; empty mips read black" : ""));
               }
               if (gfx.govError) rows.push(`${" ".repeat(8)}gov:   read failed: ${gfx.govError}`);
