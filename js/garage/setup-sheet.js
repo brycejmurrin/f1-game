@@ -86,7 +86,7 @@ const PSEUDO_CATS = ["team", "tune", "livery"];
 // copy list are the other two spellings of these keys; team-livery.test.mjs
 // holds all three together.
 const LIV_DRAFT_COLORS = ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "halo",
-                          "rearWing", "cover", "fin", "finArt", "logo", "logo2", "logo3"];
+                          "rearWing", "cover", "spineTint", "fin", "finArt", "logo", "logo2", "logo3"];
 const LIV_DRAFT_PILLS = { wingCarbon: "paint", finish: "gloss", numFont: "default",
                           sponsors: "default", finStyle: "team", finBadge: "logo",
                           spineLogo: "logo", finShape: "standard", tcam: "team",
@@ -822,6 +822,9 @@ function buildLiveryCreator(container, team) {
   wrap.appendChild(colorRow("NOSE CAP", "nose", true));
   wrap.appendChild(colorRow("SIDEPOD", "pod", true));
   wrap.appendChild(colorRow("ENGINE COVER", "cover", true));   // the airbox, roll hoop and cover top
+  // SPINE TINT colours the SPINE TOP band alone. BODY STRIPE above runs the
+  // whole spine including the nose, so it cannot say "dark band, light nose".
+  wrap.appendChild(colorRow("SPINE TINT", "spineTint", true));
   // WINGS is the flap colour, front and rear; REAR WING is the rear mainplane
   // block (the SF-26's IBM blue). Both paint nothing when the flaps are carbon.
   const wingRow = colorRow("WINGS", "wing", true), rearWingRow = colorRow("REAR WING", "rearWing", true);
@@ -927,6 +930,7 @@ function buildLiveryCreator(container, team) {
     if (d.pod)  liv.pod  = hexToArr(d.pod);
     if (d.wing) liv.wing = hexToArr(d.wing);
     if (d.cover) liv.cover = hexToArr(d.cover);
+    if (d.spineTint) liv.spineTint = hexToArr(d.spineTint);
     if (d.rearWing) liv.rearWing = hexToArr(d.rearWing);
     if (d.wingCarbon && d.wingCarbon !== "paint") liv.wingCarbon = d.wingCarbon;
     if (d.fin)  liv.fin  = hexToArr(d.fin);

@@ -45,7 +45,7 @@ out of using it, and both are load-bearing:
 | Audi | **RESOLVED: silver body, carbon-black cover** — applied | The photograph settled it; see below. |
 | McLaren | sourced DISTINCT: black sweeps across the cover | **Already modelled.** McLaren's team livery carries `spineLogo: "panel"` — "a hard-edged panel down the crown with a raked leading edge" — over an anthracite `c2`. That IS the black cover sweep. |
 | Williams | **RESOLVED: black** — applied | See "What the photograph settled" below. The white-cover claim was wrong. |
-| Aston Martin | **RESOLVED but NOT APPLICABLE**: dark spine stripe on a green cover | The colour question is answered and the model cannot express the answer. See "The Aston Martin gap" below. |
+| Aston Martin | **RESOLVED and APPLIED**: dark spine stripe on a green cover | The gap this needed — a crown band coloured independently of the body stripe — is closed: `liv.spineTint`, 2026-09-09. See "What the photographs settled (Audi, Aston Martin)" below. |
 | Alpine | **RESOLVED: same blue as the body — no cover colour** | Settled 2026-09-09 off the official launch photograph. See "What the photograph settled (Alpine)" below. (f1technical.net is behind a Cloudflare bot check no automated read gets past — do not retry that page; formula1.com's own article is the route that worked.) |
 | Racing Bulls | same as body (white) | Blue *streaks* on the cover, not a cover colour. |
 | Haas | same as body (white) | The cover is named only as a branding location. |
@@ -95,9 +95,9 @@ mentioning titanium. The earlier refusal to change it was right at the time — 
 declined to restyle a shipped livery on an inference — but direct observation is
 not inference, so the body is now silver with a black cover.
 
-**Aston Martin: the colour is known and the model cannot say it.** The cover is
-the same metallic green as the body, with a DARK STRIPE down its spine starting
-at the airbox. There is no field for that:
+**Aston Martin: the colour was known before the model could say it.** The cover
+is the same metallic green as the body, with a DARK STRIPE down its spine
+starting at the airbox. When this was written there was no field for it:
 
 - `cover` paints the WHOLE cover, which the photographs contradict.
 - `stripe` runs the full body spine — nose tip through monocoque to the cover
@@ -107,9 +107,23 @@ at the airbox. There is no field for that:
   `stripe` it takes the accent, and Aston's accent is lime. Setting `stripe`
   dark to fix the band re-introduces the nose problem.
 
-So the honest answer is a FEATURE GAP: a crown band whose colour is independent
-of the body stripe. Recorded rather than forced, because every way of forcing it
-today paints something the launch car does not have.
+That was recorded as a FEATURE GAP rather than forced, because every way of
+forcing it painted something the launch car does not have.
+
+**Closed 2026-09-09: `liv.spineTint`.** The crown band now has its own colour
+key; absent, it is `stripe || accent` exactly as before, so every other livery
+is byte-identical (asserted). Aston Martin ships `spineLogo: "stripe"` with
+`spineTint` a near-black green, which is the launch car: dark band, green cover,
+green nose. An EXPLICIT pick is honoured as-is and skips the cover-contrast
+re-pick that guards the derived default — an author choosing one surface's
+colour is the same kind of decision as `cover`, and a legibility guard that
+overrode it would defeat the field. SPINE TINT is a row in the garage's livery
+editor, so it is not team-data-only.
+
+The lesson worth keeping is about the ORDER: the colour was known for a day
+before the model could express it, and writing that down as a gap — rather than
+forcing `stripe` and shipping a dark nose — is what made the fix a small,
+deliberate change instead of a wrong car nobody had a record of.
 
 ## What the photograph settled (Alpine)
 
@@ -136,9 +150,10 @@ no textual confirmation in either article — and the standard this file already
 sets (Audi changed on ~24 photographs plus a launch report agreeing in words) is
 higher than that. So Alpine keeps its shipped `spineLogo: "tricolour"` and this
 is recorded, not acted on. If it is ever confirmed, note that the fix needs the
-SAME crown-band colour field Aston Martin needs (see "The Aston Martin gap"):
-Alpine's accent is already pink, so `spineLogo: "stripe"` alone would come close
-without it, but the two teams want the same feature.
+SAME crown-band field Aston Martin needed, which now exists (`liv.spineTint`,
+under "What the photographs settled (Audi, Aston Martin)") —
+though Alpine's accent is already pink, so `spineLogo: "stripe"` alone would
+come close even without it. Either way it waits for a second source.
 
 **Beware the shakedown car.** A technical article describing the A526 at
 Silverstone mentions "the use of black paint in this region" around the engine

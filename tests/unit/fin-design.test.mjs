@@ -150,6 +150,59 @@ test("spineLogo none drops the crest from the cover and keeps it on the fin", ()
 // did, every mark on a dorsal cover came out 14 % too narrow and the owner saw
 // it as "the side designs look squished". So re-measure it here, against the
 // real Car3D, rather than trusting the number.
+// SPINE TINT: the crown band's OWN colour. Every SPINE TOP design took
+// `stripe || accent`, and neither can be set for the crown alone — `stripe`
+// runs the whole spine INCLUDING THE NOSE, and `accent` is tertiary trim used
+// all over the car. Aston Martin's launch car is a dark band on a body-green
+// cover whose accent is LIME, so it came out lime, and the only way to fix it
+// without this field also darkened the nose. Absent, the default must be
+// exactly what it was, or every shipped livery moves.
+test("spineTint colours the crown band alone, and is absent-identical", () => {
+  const LIME = [0.718, 0.882, 0.106], DARK = [0.008, 0.086, 0.078];
+  const AM = { c1: [0.0, 0.349, 0.31], c2: LIME, spineLogo: "stripe" };
+  // Build the rgb() string the way liverytex does rather than reaching for a
+  // helper it does not export — an `if (helper)` guard round an assertion is
+  // how a check goes quietly inert, which is the whole subject of this file.
+  const to255 = (c) => c.map((v) => Math.round(Math.max(0, Math.min(1, v)) * 255));
+  const cssOf = (c) => "rgb(" + to255(c).join(",") + ")";
+  const carries = (styles, c) => {
+    const want = to255(c).join(",");
+    return [...styles].some((v) => v && v.replace(/^rgba?\(/, "").replace(/[)\s]/g, "").startsWith(want));
+  };
+
+  // ABSENT is byte-identical: the whole atlas, not just the crown, because the
+  // band colour also reaches the saddle's flank half and the tail strip.
+  const plain = A.paint("astonmartin", AM);
+  const same = A.paint("astonmartin", { ...AM, spineTint: null });
+  assert.equal(JSON.stringify(same), JSON.stringify(plain),
+               "an absent spineTint changed the atlas");
+
+  // …and a pick actually reaches the crown. The band is the LARGEST fill in
+  // REGIONS.crest, so compare the styles present with and without.
+  const tinted = A.paint("astonmartin", { ...AM, spineTint: DARK });
+  const stylesOf = (ops) => new Set(opsIn(ops, R.crest).map((op) => op.style).filter(Boolean));
+  const before = stylesOf(plain), after = stylesOf(tinted);
+  assert.notDeepEqual([...after].sort(), [...before].sort(),
+                      "spineTint did not change what the crown is painted with");
+  assert.ok(carries(after, DARK),
+            `the crown does not carry the picked colour ${cssOf(DARK)}; got ${[...after].join(", ")}`);
+
+  // The NOSE is the reason this field exists: a body stripe would have hit it,
+  // and spineTint must not. REGIONS.titleB rides the monocoque top.
+  const noseBefore = stylesOf2(plain), noseAfter = stylesOf2(tinted);
+  assert.deepEqual([...noseAfter].sort(), [...noseBefore].sort(),
+                   "spineTint reached the nose — that is what BODY STRIPE does, and why this field exists");
+  function stylesOf2(ops) {
+    return new Set(opsIn(ops, R.titleB).map((op) => op.style).filter(Boolean));
+  }
+
+  // An EXPLICIT pick is honoured as-is rather than re-picked for contrast: the
+  // derived default goes through that guard, an author's choice does not.
+  const onDark = A.paint("astonmartin", { ...AM, cover: [0.02, 0.02, 0.02], spineTint: DARK });
+  assert.ok(carries(stylesOf(onDark), DARK),
+            "an explicit spineTint was overridden by the cover-contrast re-pick");
+});
+
 test("the flank squash table still matches the cover Car3D actually builds", () => {
   const FLANK = A.LT.FLANK, R = A.LT.REGIONS.spineSide;
   const z = FLANK.zF - 0.19 * FLANK.zLen;   // the mark's station, as buildAtlas uses it

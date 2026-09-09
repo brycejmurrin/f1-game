@@ -1726,7 +1726,22 @@ const LiveryTex = (function () {
     // lettering, and Red Bull's bull measures 2.26 against its navy and reads
     // clearly on track (tools/shot/shot.mjs --team, 2026-09-08).
     const BAND_ON_COVER = 2.0;
+    // SPINE TINT (liv.spineTint) — the crown band's OWN colour. Every design
+    // here took `stripe || accent`, which ties the crown to two paints that live
+    // elsewhere on the car: `stripe` runs the whole spine (nose tip through the
+    // monocoque to the cover ridge) and `accent` is tertiary trim. Aston
+    // Martin's launch car is a DARK band on a green cover and its accent is
+    // LIME, so the band came out lime — and setting `stripe` dark to fix the
+    // band darkens the nose, which the photographs contradict. Absent, the
+    // default is exactly what it was, so every shipped livery is byte-identical.
+    //
+    // An EXPLICIT spineTint is honoured as picked and skips the contrast re-pick
+    // below: it is a deliberate author choice about one surface, the way
+    // `cover` is, and a guard that overrides it would defeat the field. The
+    // re-pick still owns the DERIVED default, which is where the invisible
+    // bands came from.
     const bandC = (() => {
+      if (colors.spineTint) return colors.spineTint;
       const want = stripe || accent;
       if (contrast(want, coverPaint) >= BAND_ON_COVER) return want;
       // FIRST that clears, not the highest-scoring: taking the maximum handed
