@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // track-stills — the in-game hero stills behind the circuit picker.
-// @doc One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only`, `--frac`, `--force`).
+// @doc One car-free in-game still per circuit into `assets/stills/<id>.webp` for the picker hero (`--only/--frac/--force`).
 // @skill playwright-probe
 //
 //   node tools/gen/track-stills.mjs                  # every circuit missing a still

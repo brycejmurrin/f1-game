@@ -21,6 +21,7 @@
 //
 // Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
 // under SwiftShader (document.fonts.ready after freeze).
+import vm from "node:vm";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -40,7 +41,18 @@ const flag = (name, dflt) => {
   if (i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("-")) return argv[i + 1];
   return dflt;
 };
-const team = flag("--team", "mclaren");
+// --team takes a LIST, or `all`. --livery / --spine-side / --spine-logo have
+// always been lists because the point of this tool is a WALK; team was the one
+// axis that still cost a whole browser per value. The garage already knows how
+// to switch team in-page (the picker click below), so walking it is the same
+// boot, one team-card click per car — and "does this design read on every car"
+// is a question about the grid, never about one of them.
+const teamArg = flag("--team", "mclaren").trim();
+const teamIds = teamArg === "all" ? null : teamArg.split(",").map((s) => s.trim()).filter(Boolean);
+// `team` is the team being shot RIGHT NOW: applyDesign / applyLivery / frame all
+// read it, so the walk rebinds it per car rather than threading it through four
+// signatures. It is a `let` for that reason and for no other.
+let team = null;
 const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).filter(Boolean);
 const spineSides = (flag("--spine-side", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
 const spineLogos = (flag("--spine-logo", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
@@ -50,16 +62,35 @@ const zoom = Number(flag("--zoom", "0")) || 0;
 const [strafe = 0, dolly = 0] = (flag("--pan", "0,0")).split(",").map(Number);
 
 /** Roster order == store.team index (game.js boot). */
+// Teams.LIST, EVALUATED — not scraped. Two regexes over teams.js used to answer
+// this, and both also matched `id: "custom"` on DEFAULT_CUSTOM, the MY TEAM seed
+// that is NOT a roster member: `--team=all` shot twelve cars while render-car's
+// `all` shot eleven, so the two tools disagreed about what "every team" means.
+// The index matters as much as the list — the in-page switch uses
+// Teams.LIST.indexOf, so anything but that order pins the wrong car.
+// `const Teams` in an IIFE is a lexical binding that never lands on the sandbox,
+// hence evaluating the identifier back out (as the car tools do).
+const ROSTER = (() => {
+  const sb = { console, Math, Object, Array, String, Number, JSON };
+  sb.globalThis = sb;
+  vm.createContext(sb);
+  vm.runInContext(readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8"),
+                  sb, { filename: "teams.js" });
+  return vm.runInContext("Teams", sb).LIST.map((t) => t.id);
+})();
 function teamIndex(id) {
-  const src = readFileSync(fileURLToPath(new URL("../../js/data/teams.js", import.meta.url)), "utf8");
-  const ids = Array.from(src.matchAll(/^ *id: "([a-z]+)",/gm)).map((m) => m[1]);
-  const i = ids.indexOf(id);
+  const i = ROSTER.indexOf(id);
   if (i < 0) {
-    console.error(`no team "${id}" — available: ${ids.join(", ")}`);
+    console.error(`no team "${id}" — available: ${ROSTER.join(", ")}`);
     process.exit(1);
   }
   return i;
 }
+const WALK = teamIds || ROSTER.slice();
+for (const t of WALK) {
+  if (!ROSTER.includes(t)) { console.error(`no team "${t}" — available: ${ROSTER.join(", ")}, or "all"`); process.exit(1); }
+}
+team = WALK[0];
 const teamIdx = teamIndex(team);
 
 const ALL = ["hero", "front", "side", "rear", "top", "wingFront", "wingRear"];
@@ -198,67 +229,81 @@ async function main() {
       GameStore.store.set("livery." + t, liv);
     }, { t: team, liv: liveries[0] });
     await openGarage(page, { team });
-    const switched = await page.evaluate((id) => {
-      const t = Teams.LIST.find((x) => x.id === id);
-      if (!t) throw new Error("unknown team " + id);
-      const head = document.getElementById("cs-team");
-      if (head && head.textContent === t.name.toUpperCase()) return false;
-      document.querySelector('#cs-tabs [data-cs-cat="team"]')?.click();
-      document.getElementById("cs-team-card")?.click();
-      const tiles = document.querySelectorAll("#sel-teams .team-tile");
-      const i = Teams.LIST.indexOf(t);
-      if (!tiles[i]) throw new Error("no team tile for " + id);
-      tiles[i].click();
-      return true;
-    }, team);
-    if (switched) {
-      await page.waitForFunction(() => {
-        const tp = document.getElementById("teampicker");
-        return !tp || tp.hidden || getComputedStyle(tp).display === "none";
-      }, null, { polling: 100, timeout: 15000 }).catch(() => {});
+    // The picker click, per car. Returns the sheet head so the caller can prove
+    // the garage is actually showing the team it asked for — a shot of the wrong
+    // car is the one failure this tool must never report as success.
+    async function selectTeam(id) {
+      const switched = await page.evaluate((tid) => {
+        const t = Teams.LIST.find((x) => x.id === tid);
+        if (!t) throw new Error("unknown team " + tid);
+        const head = document.getElementById("cs-team");
+        if (head && head.textContent === t.name.toUpperCase()) return false;
+        document.querySelector('#cs-tabs [data-cs-cat="team"]')?.click();
+        document.getElementById("cs-team-card")?.click();
+        const tiles = document.querySelectorAll("#sel-teams .team-tile");
+        const i = Teams.LIST.indexOf(t);
+        if (!tiles[i]) throw new Error("no team tile for " + tid);
+        tiles[i].click();
+        return true;
+      }, id);
+      if (switched) {
+        await page.waitForFunction(() => {
+          const tp = document.getElementById("teampicker");
+          return !tp || tp.hidden || getComputedStyle(tp).display === "none";
+        }, null, { polling: 100, timeout: 15000 }).catch(() => {});
+      }
+      await settleGarage(page, { frames: 12 });
+      const head = await page.evaluate(() => ({
+        sheet: (document.querySelector("#carsetup .sheet-head, #cs-inner .sheet-head") || {}).textContent || null,
+        team: (document.getElementById("cs-team") || {}).textContent || "",
+      }));
+      if (!head.team) throw new Error(`garage opened but #cs-team empty (sheet: ${head.sheet})`);
+      console.log(`team sheet: ${head.team}  [switched=${switched}]`);
+      return head;
     }
-    await settleGarage(page, { frames: 12 });
-    const shown = await page.evaluate(() => {
-      const h = document.querySelector("#carsetup .sheet-head, #cs-inner .sheet-head");
-      return h ? h.textContent.trim().slice(0, 80) : null;
-    });
-    const teamLabel = await page.evaluate(() => document.getElementById("cs-team")?.textContent || "");
-    if (!teamLabel) throw new Error(`garage opened but #cs-team empty (sheet: ${shown})`);
-    console.log(`team sheet: ${teamLabel}  [switched=${switched}]`);
+    let shown = (await selectTeam(team)).sheet;
 
     const shots = [];
     const designs = spineSides.length
       ? (spineLogos.length ? spineLogos : [""]).flatMap((logo) =>
         spineSides.map((side) => ({ spineLogo: logo, spineSide: side })))
       : null;
-    if (designs) {
+    for (const id of WALK) {
+     // Rebind before any shot: applyDesign writes the custom livery under THIS
+     // team's store key, and frame() names the PNG with it.
+     team = id;
+     if (id !== WALK[0]) shown = (await selectTeam(id)).sheet;
+     if (designs) {
       for (const d of designs) {
         const name = await applyDesign(page, d);
         const tag = (d.spineLogo || "def") + "-" + d.spineSide;
         for (const v of views) {
           const s = await frame(page, tag, v);
           s.liveryName = name;
+          s.team = id;
           s.spineLogo = d.spineLogo || null;
           s.spineSide = d.spineSide;
           shots.push(s);
           console.log(`shot ${tag}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}`);
         }
       }
-    } else {
+     } else {
       for (const liv of liveries) {
         const name = await applyLivery(page, liv);
         for (const v of views) {
           const s = await frame(page, liv, v);
           s.livery = liv;
+          s.team = id;
           s.liveryName = name;
           shots.push(s);
           console.log(`shot ${liv}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}`);
         }
       }
+     }
     }
-    const meta = join(outDir, `${team}-angles.json`);
+    const meta = join(outDir, `${WALK.length > 1 ? "teams" : team}-angles.json`);
     writeFileSync(meta, JSON.stringify({
-      team, teamIdx, liveries, spineSides, spineLogos,
+      teams: WALK, team, teamIdx, liveries, spineSides, spineLogos,
       zoom, pan: [strafe, dolly], sheetHead: shown, viewport: vp, views, shots,
       seconds: +((Date.now() - t0) / 1000).toFixed(1),
     }, null, 2));
