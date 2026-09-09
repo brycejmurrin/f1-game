@@ -339,7 +339,7 @@ test("the flank squash table still matches the cover Car3D actually builds", () 
 });
 
 test("every SPINE TOP design paints the crown; wordmark and number carry text", () => {
-  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number"]);
+  assert.deepEqual(Array.from(A.LT.SPINE_LOGO_IDS), ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number", "cap", "ridge", "fade"]);
   // The wrap is ONE shape over crown and flanks: it paints the crest region
   // AND the flank band with no spineSide picked, and leaves the tail bare.
   const wrap = A.paint("redbull", { ...BASE, spineLogo: "wrap" });
@@ -389,8 +389,8 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   const bare = opsIn(A.paint("ferrari", { ...BASE, spineLogo: "none" }), R.crest).length;
   // The tail strip: bare for the marks and "none", painted by every band design.
   for (const id of ["none", "logo", "number"]) assert.equal(opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.tail).length, 0, `${id}: the tail stays bare`);
-  for (const id of ["saddle", "panel", "stripe", "twin", "carbon", "wordmark"]) assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.tail).length > 0, `${id} runs down the tail`);
-  for (const id of ["saddle", "panel", "stripe", "twin", "wordmark", "carbon", "number"]) {
+  for (const id of ["saddle", "panel", "stripe", "twin", "ridge", "carbon", "wordmark"]) assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.tail).length > 0, `${id} runs down the tail`);
+  for (const id of ["saddle", "panel", "stripe", "twin", "ridge", "wordmark", "carbon", "number", "cap", "fade"]) {
     const ops = opsIn(A.paint("ferrari", { ...BASE, spineLogo: id }), R.crest);
     // The band designs REPLACE the wash (bare paint under them), so they are
     // compared against an empty crown; the text designs sit on the wash.
@@ -399,7 +399,7 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
     if (id === "number") assert.ok(texts.includes("16"), `number: ${texts}`);
     // drawWordmark sets each letter on its own, so the name is the join.
     if (id === "wordmark") assert.ok(texts.join("").length >= 3, `wordmark: ${texts}`);
-    if (id === "saddle" || id === "panel" || id === "stripe" || id === "twin" || id === "carbon") assert.equal(texts.length, 0, `${id} carries no text`);
+    if (id === "saddle" || id === "panel" || id === "stripe" || id === "twin" || id === "ridge" || id === "carbon" || id === "cap" || id === "fade") assert.equal(texts.length, 0, `${id} carries no text`);
   }
 });
 

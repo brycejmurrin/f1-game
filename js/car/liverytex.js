@@ -1221,7 +1221,7 @@ const LiveryTex = (function () {
   // the title sponsor running along the spine, an exposed-carbon panel, or the
   // race number. All paint into REGIONS.crest, so the strip in car-mesh drapes
   // them over the rounded crown like the crest.
-  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number"];
+  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number", "cap", "ridge", "fade"];
   // WRAP: one shape in CAR space painted into every region it crosses, so the
   // paint job goes over the spine and down both flanks as a single graphic —
   // the RB22's sun and bull. The car-space → region maps are car-mesh's:
@@ -1561,7 +1561,7 @@ const LiveryTex = (function () {
       ctx.restore();
     });
   }
-  function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont, acc2) {
+  function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont, acc2, colors) {
     const X = R.x, Y = R.y, W = R.w, H = R.h;
     ctx.save();
     ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip();
@@ -1724,6 +1724,59 @@ const LiveryTex = (function () {
       // along the spine so the digits come out in proportion.
       ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(Math.PI); ctx.scale(1, CROWN_SQUASH);
       drawNumber(ctx, num, { x: -W * 0.34, y: -W * 0.34, w: W * 0.68, h: W * 0.68 }, ink, acc, null, numFont, 0);
+    } else if (id === "cap") {
+      // Solid block airbox → mid-cover with a hard rear cut. Shoulders follow
+      // coverBind: saddleWrap fills the whole crown in the saddle zone, spineOnly
+      // keeps shoulders on the cover paint, independent paints the block in the
+      // band colour alone. Flank spill is saddleFlanks at the call site.
+      const liv = colors || {};
+      const bind = coverBindOf(liv);
+      const fill = bind === "saddleWrap" ? (saddleFill(liv, acc, c1) || acc) : acc;
+      const cutY = Y + H * 0.38;
+      const bh = Y + H - cutY;
+      if (bind === "spineOnly") {
+        const px = X + W * 0.28, pw = W * 0.44;
+        ctx.fillStyle = cssA(fill, 0.97); ctx.fillRect(px, cutY, pw, bh);
+        ctx.fillStyle = cssA(ink, 0.45); ctx.fillRect(px, cutY, pw, Math.max(2, H * 0.012));
+      } else {
+        ctx.fillStyle = cssA(fill, 0.97); ctx.fillRect(X, cutY, W, bh);
+        ctx.fillStyle = cssA(ink, 0.35); ctx.fillRect(X, cutY, W, Math.max(2, H * 0.012));
+        if (bind === "independent") {
+          ctx.fillRect(X, cutY, W * 0.012, bh); ctx.fillRect(X + W * 0.988, cutY, W * 0.012, bh);
+        }
+      }
+      if (liv.ridgeTint) {
+        const ridgeC = ridgeFill(liv, acc), rw = W * 0.018;
+        ctx.fillStyle = cssA(ridgeC, 0.9);
+        ctx.fillRect(X + W * 0.5 - rw / 2, cutY, rw, bh);
+      }
+    } else if (id === "ridge") {
+      // Thin centreline only — thinner than `stripe` — in the ridge zone colour.
+      const ridgeC = ridgeFill(colors || {}, acc);
+      const rw = W * 0.07;
+      ctx.fillStyle = cssA(ridgeC, 0.96);
+      ctx.fillRect(X + W * 0.5 - rw / 2, Y, rw, H);
+      ctx.fillStyle = cssA(ink, 0.55);
+      ctx.fillRect(X + W * 0.5 - rw / 2, Y, W * 0.008, H);
+      ctx.fillRect(X + W * 0.5 + rw / 2 - W * 0.008, Y, W * 0.008, H);
+    } else if (id === "fade") {
+      // Micro-field density dying aft (canvas top = rear). Ground is the cover;
+      // ink from the band / crest ink, re-picked to clear the cover.
+      const dotInk = pickOn([acc, ink, INK_LIGHT, INK_DARK].filter(Boolean), c1, SUN_FLOOR);
+      const step = Math.max(3, W * 0.032);
+      for (let py = Y; py < Y + H - step * 0.5; py += step) {
+        for (let px = X; px < X + W - step * 0.5; px += step) {
+          const t = (py - Y) / H;
+          const density = 0.18 + 0.82 * t;
+          const h = (((px * 73856093) ^ (py * 19349663)) >>> 0) % 1000;
+          if (h / 1000 > density) continue;
+          const r = step * 0.34;
+          ctx.fillStyle = cssA(dotInk, 0.97);
+          ctx.beginPath();
+          ctx.arc(px + step * 0.5, py + step * 0.5, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
     ctx.restore();
   }
@@ -1731,7 +1784,7 @@ const LiveryTex = (function () {
   // band designs continue down it so a stripe or a saddle runs to the wing,
   // and "wordmark" puts the SECOND sponsor there reading from behind. The
   // marks (logo, number) and "none" leave it bare.
-  function drawTailTop(ctx, id, R, acc, ink, name2) {
+  function drawTailTop(ctx, id, R, acc, ink, name2, colors) {
     const X = R.x, Y = R.y, W = R.w, H = R.h;
     ctx.save();
     ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip();
@@ -1744,6 +1797,14 @@ const LiveryTex = (function () {
     else if (id === "stripe") {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.41, Y, W * 0.18, H);
       ctx.fillStyle = cssA(ink, 0.62); ctx.fillRect(X + W * 0.41, Y, W * 0.014, H); ctx.fillRect(X + W * 0.576, Y, W * 0.014, H);
+    } else if (id === "ridge") {
+      const ridgeC = ridgeFill(colors || {}, acc);
+      const rw = W * 0.07;
+      ctx.fillStyle = cssA(ridgeC, 0.96);
+      ctx.fillRect(X + W * 0.5 - rw / 2, Y, rw, H);
+      ctx.fillStyle = cssA(ink, 0.55);
+      ctx.fillRect(X + W * 0.5 - rw / 2, Y, W * 0.008, H);
+      ctx.fillRect(X + W * 0.5 + rw / 2 - W * 0.008, Y, W * 0.008, H);
     } else if (id === "twin") {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.035, Y, W * 0.052, H); ctx.fillRect(X + W * 0.913, Y, W * 0.052, H);
       ctx.fillStyle = cssA(ink, 0.55); ctx.fillRect(X + W * 0.078, Y, W * 0.010, H); ctx.fillRect(X + W * 0.912, Y, W * 0.010, H);
@@ -2222,13 +2283,13 @@ const LiveryTex = (function () {
       // and the other was derived, which is how four teams ended up wearing a
       // "tricolour" of one colour repeated (1.01:1 on Mercedes).
       const bandC2 = colors.bandTint2 || pickOn([inkCrest].concat(BAND_ORDER), [coverPaint, bandC], BAND_ON_COVER);
-      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont, bandC2);
+      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont, bandC2, colors);
       if (spineLogo === "saddle" || coverBind === "saddleWrap") {
         saddleFlanks(ctx, saddleFill(colors, bandC, coverPaint) || bandC);
       }
     }
     if (REGIONS.tail && finHandoffOf(colors) !== "hardCut") {
-      drawTailTop(ctx, spineLogo, REGIONS.tail, bandC, inkCrest, names[1] || "");
+      drawTailTop(ctx, spineLogo, REGIONS.tail, bandC, inkCrest, names[1] || "", colors);
     }
     // TAIL GRAPHIC wash: finArt if set, else the first BASE that clears the
     // fin plate. BODY STRIPE / DETAIL used to sit ahead of c1 here and steal
