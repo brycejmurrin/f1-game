@@ -407,6 +407,10 @@ function getErsLight() {
 
 const _flapMeshes = {};
 const _flapOrder = [];
+// colour array identity -> (finish -> "|r,g,b|finish"). WeakMap so a livery
+// that goes away takes its entry with it; see getAeroFlap's key build below.
+const _flapTail = new WeakMap();
+const _SIDES = [-1, 1];   // hoisted: a literal here allocated an array AND an iterator per call
 const FLAP_CACHE_MAX = 128;
 // FIFO-with-cap, not LRU (same tradeoff as _carDecalMeshes above): a hit on
 // `key` below does not reorder _flapOrder, and this key build runs per flap
@@ -423,11 +427,27 @@ function getAeroFlap(aLvl, col, idx, style, el, finish) {
   const sig = g.cacheKey || (g.id + aLvl + "|" + (style ? [
     style.frontSweep, style.frontTaper, style.frontRise,
     style.rearSweep, style.rearTaper, style.drs || 0].map((v) => +v || 0).join(",") : "d"));
-  // Colour, spelled out rather than mapped+joined — same 0.01 resolution, no
-  // array and no closure. The whole key build runs per flap per car per frame.
+  // Colour+finish, MEMOISED ON THE COLOUR ARRAY'S IDENTITY. This tail was
+  // spelled out rather than mapped+joined to kill an array and a closure, but
+  // the three toFixed calls and the concat survived — and the comment above
+  // says why that mattered: the whole key build runs per flap per car per
+  // frame. Four flaps x 22 cars is ~88 rebuilds a frame, ~264 toFixed and ~700
+  // transient strings, for a value that CANNOT change during a race: `col` is
+  // wingColorOf(team) -> resolveLivery(team).wing, the livery's own array, so
+  // its identity is stable per team and a WeakMap keyed on it is exact rather
+  // than merely probable. Same move already made three times elsewhere
+  // (teamMeshKey, decalKeyPrefix, _livResolveCache); this site was missed.
   // Finish is part of the key: the same element/level/colour renders a different
   // MATERIAL under a satin/chrome livery, so two finishes must not share a mesh.
-  const key = sig + "|" + c[0].toFixed(2) + "," + c[1].toFixed(2) + "," + c[2].toFixed(2) + "|" + (finish || "");
+  let tails = _flapTail.get(c);
+  if (!tails) { tails = new Map(); _flapTail.set(c, tails); }
+  const fk = finish || "";
+  let tail = tails.get(fk);
+  if (tail === undefined) {
+    tail = "|" + c[0].toFixed(2) + "," + c[1].toFixed(2) + "," + c[2].toFixed(2) + "|" + fk;
+    tails.set(fk, tail);
+  }
+  const key = sig + tail;
   if (_flapMeshes[key]) return _flapMeshes[key];
   const mesh = _gfx.createMesh(Car3D.buildFlapGeom(g, c, finish));
   _flapMeshes[key] = mesh;
@@ -690,7 +710,7 @@ function drawRearLights(mat, emissive) {
   W[13] += W[5] * 0.50 - W[9] * 2.615;
   W[14] += W[6] * 0.50 - W[10] * 2.615;
   _gfx.draw(getRainLight(), W, _RL_FX);
-  for (const s of [-1, 1]) {
+  for (const s of _SIDES) {
     W.set(mat);
     W[12] += W[0] * (s * 0.50) + W[4] * 0.62 - W[8] * 2.705;
     W[13] += W[1] * (s * 0.50) + W[5] * 0.62 - W[9] * 2.705;

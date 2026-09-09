@@ -194,6 +194,7 @@ function _shadowAllIdx(AL, lx, ly, lz) {
     // translucent work through draw() instead.
     function drawChunked(mesh, modelMat, opts) {
       if ((core.ctxGone && core.ctxGone()) || !mesh) return;
+      core.setCull(true); core.setAlphaWrite(true);   // declared — glx.js setCull
       const alpha = litMaterial(modelMat, opts);
       setDepthMask(true);
       setBlend(alpha < 1);
@@ -315,6 +316,7 @@ function _shadowAllIdx(AL, lx, ly, lz) {
     function castShadowChunked(mesh, model) {
       const SH = core.shadow;
       if ((core.ctxGone && core.ctxGone()) || !SH.depthPassOn || !mesh) return;
+      core.setCull(true); core.setAlphaWrite(true);   // declared — glx.js setCull
       bindVAO(mesh.vao);
       gl.uniformMatrix4fv(SH.depthU.uModel, false, model);
       if (!mesh.chunks) { gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ib); gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0); return; }

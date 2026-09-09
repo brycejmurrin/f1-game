@@ -219,8 +219,12 @@ function gapForm() {
   const root = document.documentElement;
   const s = +root.style.getPropertyValue("--hud-z-top") ||
             +root.style.getPropertyValue("--hud-scale") || 1;
-  const ratio = window.innerWidth / s;
-  const k = window.innerWidth >= 1200 ? "wide" : "narrow";
+  // ONE read of innerWidth, not two: it is on the forced-layout list, and this
+  // runs after updateHud's write batch (two style.width writes among them), so
+  // each read flushes layout again.
+  const vw = window.innerWidth;
+  const ratio = vw / s;
+  const k = vw >= 1200 ? "wide" : "narrow";
   // SHORTEN FIRST, DROP SECOND — they were wired to different signals, so the
   // widget fell to its own line while still painting the WIDEST spelling
   // ("▲ STR +6.3s" below the map, reported from a phone). `drop` read the
@@ -743,7 +747,15 @@ function updateHud(force) {
 function drawMinimap() {
   const player = G.player, cars = G.cars, track = G.track, timeTrial = G.timeTrial;
   if (!player || !track || !track.map) return;
-  if (document.body.classList.contains("hud-hidden")) return;
+  // BAIL ON THE CLASS THAT ACTUALLY HIDES IT, not just the one that hides the
+  // whole HUD. css/hud.css:248 is `body.hud-hide-map #minimap { display: none }`,
+  // so with MAP: OFF — or the MINIMAL profile, or any onboard camera under
+  // MAP: AUTO — this function still cleared a 140x140 bitmap, blitted the track
+  // image over it, and stamped a fillRect per rival, ~10 times a second for the
+  // whole race, into an element the compositor never draws. The player who
+  // turned the map off to buy frames back was paying for all of it.
+  const cl = document.body.classList;
+  if (cl.contains("hud-hidden") || cl.contains("hud-hide-map")) return;
   // Logical space = the element's LOCAL CSS box (clientWidth is pre-zoom px,
   // the same convention sheetshape.js relies on). Bitmap = local x effective
   // zoom x DPR so one drawn pixel is one physical pixel — mirroring the menu

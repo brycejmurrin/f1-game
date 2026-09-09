@@ -140,7 +140,15 @@ test("a hidden HUD does not keep measuring or painting the map", () => {
   const hud = fs.readFileSync(path.join(root, "js/ui/hud.js"), "utf8");
   const fit = hud.slice(hud.indexOf("function fitHud"), hud.indexOf("function updateHud"));
   assert.match(fit, /classList.contains\("hud-hidden"\)/);
-  const mm = hud.slice(hud.indexOf("function drawMinimap"), hud.indexOf("function drawMinimap") + 800);
+  const mm = hud.slice(hud.indexOf("function drawMinimap"), hud.indexOf("function drawMinimap") + 1400);
   assert.match(mm, /if \(!player \|\| !track \|\| !track\.map\) return;/);
-  assert.match(mm, /classList.contains\("hud-hidden"\)/);
+  assert.match(mm, /contains\("hud-hidden"\)/);
+  // ...AND ON THE CLASS THAT ACTUALLY HIDES THE MAP. css/hud.css hides #minimap
+  // on `body.hud-hide-map`, which `hud-hidden` does not imply: MAP: OFF, the
+  // MINIMAL profile, and every onboard camera under MAP: AUTO all set it alone.
+  // Bailing only on hud-hidden meant a display:none canvas was still cleared,
+  // blitted and stamped with a fillRect per rival ~10x a second for a whole
+  // race — the player who turned the map off to buy frames paid for all of it.
+  assert.match(mm, /contains\("hud-hide-map"\)/,
+    "drawMinimap must bail on hud-hide-map too, or MAP: OFF turns nothing off");
 });

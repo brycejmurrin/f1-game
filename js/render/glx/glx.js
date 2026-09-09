@@ -335,12 +335,32 @@ const GLX = (function () {
   // polygon offset disabled. resetDrawState() re-syncs to those from begin()
   // ONLY — present() does not call it, so a draw issued between present() and
   // the next begin() inherits whatever cull/mask/offset the frame left behind.
+  // DECLARE, DON'T BRACKET. The note above is right that a cache alone collapses
+  // zero: every caller SET what it wanted then RESTORED the default, so the
+  // sequence was 1,0,1,0 and no two consecutive values matched. The PATTERN was
+  // the cost, not the missing cache. Each draw path now declares the state it
+  // needs on entry and does not restore, so a RUN of like draws declares once.
+  // Measured (glx-call-census, vegas night, ONE car near the player, so this is
+  // the floor): CULL_FACE toggles 19.3 -> 5.3/frame, colorMask 15.3 -> 5.3,
+  // with every draw count byte-identical. Same move as PERF-FINDINGS §2e.
+  //
+  // THE INVARIANT MOVED: nothing restores now, so EVERY draw entry point must
+  // declare cull and alpha — an unbracketed path used to inherit the default
+  // from whoever restored last, and would now inherit the last draw's state.
+  // drawSky/drawShadow/drawMark/drawSkidBatch/drawDrivingLine/drawInstanced and
+  // GLXChunked's two entries all declare for that reason. resetDrawState()
+  // re-syncs the sentinels from begin().
+  let _cullOn = true, _alphaW = true;
   function setCull(on) {
+    if (on === _cullOn) return;
     if (on) gl.enable(gl.CULL_FACE);
     else gl.disable(gl.CULL_FACE);
+    _cullOn = on;
   }
   function setAlphaWrite(on) {
+    if (on === _alphaW) return;
     gl.colorMask(true, true, true, on);
+    _alphaW = on;
   }
   const ROAD_BIAS = [-4.0, -8.0];   // decals sit on the road: shared, not a literal per draw
   function setPolyOffset(bias) {
@@ -355,6 +375,7 @@ const GLX = (function () {
   function resetDrawState() {
     gl.enable(gl.CULL_FACE);
     gl.colorMask(true, true, true, true);
+    _cullOn = true; _alphaW = true;   // the sentinels track these two calls
     gl.polygonOffset(0, 0);
     gl.disable(gl.POLYGON_OFFSET_FILL);
   }
@@ -753,6 +774,10 @@ const GLX = (function () {
       // (or -1) per draw, then restore the global slot. The lit program is
       // already bound on every chunked draw path.
       setLampShadowSlot: (i) => { gl.uniform1i(litU.uLampShadowIdx, i | 0); },
+      // GLXChunked declares its cull/alpha state now that glx.js no longer
+      // restores the default after a draw (see setCull).
+      setCull: (on) => setCull(on),
+      setAlphaWrite: (on) => setAlphaWrite(on),
       getSize: () => ({ width, height }),
       getPresentSize: () => ({ width: presentW || width, height: presentH || height }),
       wantSpatialUpscale,
@@ -1321,9 +1346,8 @@ const GLX = (function () {
     setAlphaWrite(false);    // keep the SSR alpha tag underneath
     bindVAO(mesh.vao);
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
-    setAlphaWrite(true);
-    setCull(true);
-    setDepthMask(true);
+    // No restore: game.js flushes every car's decal in ONE block, so the run
+    // declares cull/alpha once between them. The next lit draw declares its own.
   }
 
   // 1px black dummy cube — a COMPLETE samplerCube target for the env unit
@@ -2166,7 +2190,8 @@ const GLX = (function () {
     setBlend(alpha < 1);
     bindVAO(batch.vao);
     const dbl = opts && opts.doubleSided;
-    if (dbl) setCull(false);
+    setAlphaWrite(true);   // declared, not inherited — see setCull
+    setCull(!dbl);              // declared, not bracketed
     const n = batch.visible === undefined ? batch.instances : batch.visible;
     // The gate is declared by litMaterial above, NOT bracketed here: 1,0,1,0
     // alternates and a cache collapses none of it. Why, and why a zero-instance
@@ -2204,7 +2229,7 @@ const GLX = (function () {
     // tag across the composite's 0.42-0.55 threshold). noAlphaWrite remains as
     // an explicit opt-out for opaque FX quads.
     const noAW = (opts && opts.noAlphaWrite) || alpha < 1;
-    if (noAW) setAlphaWrite(false);
+    setAlphaWrite(!noAW);       // declared, not bracketed — see setCull above
     // doubleSided: render back faces too (cull off) — for the wheels + car body,
     // whose single-winding tyre walls must show from every angle without any
     // coincident duplicate to z-fight.
@@ -2226,12 +2251,11 @@ const GLX = (function () {
     gl.drawElements(gl.TRIANGLES, mesh.count, mesh.indexType, 0);
     if (_ndt) gl.enable(gl.DEPTH_TEST);
     if (_db) { setPolyOffset(null); }
-    if (dbl) setCull(true);
-    if (noAW) setAlphaWrite(true);
   }
 
   function drawSky(sky) {
     if (ctxGone() || !sky) return;
+    setCull(true); setAlphaWrite(true);   // declared, not inherited — see setCull
     useProg(skyProg);
     gl.uniformMatrix4fv(skyU.uInvViewProj, false, sky.invViewProj);
     uf3(skyU.uZenith, _skyUf, "zenith", sky.zenith);
@@ -2269,6 +2293,7 @@ const GLX = (function () {
 
   function drawShadow(modelMat, w, l) {
     if (ctxGone()) return;
+    setCull(true); setAlphaWrite(true);   // declared, not inherited — see setCull
     useProg(shadowProg);
     if (_shadowVPToken !== _frameToken) {
       gl.uniformMatrix4fv(shadowU.uViewProj, false, frameViewProj);
@@ -2287,6 +2312,7 @@ const GLX = (function () {
 
   function drawMark(modelMat, w, l) {
     if (ctxGone()) return;
+    setCull(true); setAlphaWrite(true);   // declared, not inherited — see setCull
     useProg(markProg);
     if (_markVPToken !== _frameToken) {
       gl.uniformMatrix4fv(markU.uViewProj, false, frameViewProj);
@@ -2308,6 +2334,7 @@ const GLX = (function () {
   // trail — replaces up to 120 per-mark drawMark calls. Returns false if the
   // batch path is unavailable (caller falls back to per-mark drawMark).
   function drawSkidBatch(verts, vertCount, dirty) {
+    setCull(true); setAlphaWrite(true);   // declared, not inherited — see setCull
     if (ctxGone()) return true; // no-op; per-mark fallback would also fail
     if (!markBatchProg || vertCount <= 0) return !markBatchProg ? false : true;
     useProg(markBatchProg);
@@ -2337,6 +2364,7 @@ const GLX = (function () {
   // speed for the dynamic colour; `opts.cornersOnly` fades the straights.
   // Returns false when the pass is unavailable so the caller can say so.
   function drawDrivingLine(verts, vertCount, dirty, opts) {
+    setCull(true); setAlphaWrite(true);   // declared, not inherited — see setCull
     if (ctxGone()) return true;
     if (!lineProg) return false;
     if (!(vertCount > 0)) return true;

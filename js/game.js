@@ -2639,10 +2639,15 @@ const fieldWheelCache = {};
 // long as the tab does. Slow, monotonic, and it never comes back.
 //
 // 12 rather than 8: this is the whole FIELD, and evicting a set another car is
-// still drawing costs a rebuild every frame. The grid is 22 cars but they share
-// factory parts, so distinct fitted combos in one race are far fewer.
+// still drawing costs a rebuild every frame.
+//
+// 12 -> 16, AND THE OLD REASON WAS WRONG. It said the grid "share factory
+// parts, so distinct fitted combos are far fewer". They do not: each of the 11
+// FACTORY_PRESETS carries its own sig_<team>_tyre and sig_<team>_rim (counted
+// 2026-09-09), so live keys = TEAM COUNT — 11, or 12 with MY TEAM. The cap was
+// 12: it fit with zero margin, on false reasoning, at ~205 KB per entry.
 const fieldWheelOrder = [];
-const FIELD_WHEEL_CACHE_MAX = 12;
+const FIELD_WHEEL_CACHE_MAX = 16;
 function getFieldWheelMeshes(team) {
   const vt = teamDecalState(team, false).parts;   // permanently cached factory resolve — was ~1260 resolveSetup/s across the drawn field
   const key = "field:" + (vt._ids ? vt._ids.tyres + ":" + vt._ids.brakes + ":" + vt._ids.wheels : "1:1:1");
