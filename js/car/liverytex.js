@@ -1324,8 +1324,16 @@ const LiveryTex = (function () {
   // scoring it against one of them is how the wrap's flank band cleared the sun
   // and vanished on the cover beside it (Haas 1.04).
   function pickOn(cands, bg, floor) {
-    const bgs = Array.isArray(bg[0]) ? bg.filter(Boolean) : [bg];
-    const worst = (c) => bgs.reduce((m, b) => Math.min(m, contrast(c, b)), Infinity);
+    // A list of paints is Array.isArray(bg[0]); a single RGB is numbers. Asking
+    // only Array.isArray(bg[0]) threw when bg was null/undefined (Haas wrap
+    // flank path) — require Array.isArray(bg) first, then treat a lone RGB as
+    // one background.
+    const bgs = (Array.isArray(bg) && bg.length && Array.isArray(bg[0]))
+      ? bg.filter(Boolean)
+      : (bg ? [bg] : []);
+    const worst = (c) => bgs.length
+      ? bgs.reduce((m, b) => Math.min(m, contrast(c, b)), Infinity)
+      : 0;
     const list = cands.filter(Boolean);
     for (const c of list) if (worst(c) >= floor) return c;
     let best = list[0] || INK_LIGHT, score = worst(best);
@@ -1611,9 +1619,12 @@ const LiveryTex = (function () {
       ctx.fillStyle = cssA(acc, 0.96);
       ctx.fillRect(X + W * 0.27, Y + H * 0.30, W * 0.46, H * 0.30);
     } else if (id === "carbon") {
+      // Same 3.5 % keylines as the crown carbon panel — 1.4 % vanished at chase
+      // distance on the tail continuation (see drawSpineTop "carbon").
       const px = X + W * 0.28, pw = W * 0.44;
+      const kw = W * 0.035;
       ctx.fillStyle = "rgb(24,25,28)"; ctx.fillRect(px, Y, pw, H);
-      ctx.fillStyle = cssA(acc, 0.9); ctx.fillRect(px - W * 0.014, Y, W * 0.014, H); ctx.fillRect(px + pw, Y, W * 0.014, H);
+      ctx.fillStyle = cssA(acc, 0.9); ctx.fillRect(px - kw, Y, kw, H); ctx.fillRect(px + pw, Y, kw, H);
     } else if (id === "wordmark" && name2) {
       // Reads from behind: the tail is what the car behind sees.
       ctx.translate(X + W / 2, Y + H / 2); ctx.rotate(Math.PI);

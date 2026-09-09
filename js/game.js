@@ -1602,7 +1602,8 @@ function resolveLivery(team) {
              logo3: l.logo3 || null, noseStripe: l.noseStripe || null, finish: l.finish || null, numFont: l.numFont || null, sponsors: l.sponsors || null,
              finStyle: l.finStyle || null, finBadge: l.finBadge || null, spineLogo: l.spineLogo || null, finShape: l.finShape || null,
              tcam: l.tcam || null, coverVents: l.coverVents || null, spineHeight: l.spineHeight || null,
-             spineSide: l.spineSide || null, rearWing: l.rearWing || null, wingCarbon: l.wingCarbon || null, cover: l.cover || null };
+             spineSide: l.spineSide || null, rearWing: l.rearWing || null, wingCarbon: l.wingCarbon || null, cover: l.cover || null,
+             spineTint: l.spineTint || null, sideTint: l.sideTint || null };
   }
   const c = _livResolveCache.get(team.id);
   if (c && c.rev === store.rev) return c.val;
@@ -1615,13 +1616,16 @@ function resolveLivery(team) {
   const liv = list.find((l) => l.id === getLiveryId(team.id)) || list[0];
   // Optional livery detail colours (nose cap, sidepod panel, wing flaps, halo tint)
   // — additive, so an unmodified livery still resolves to today's exact object shape.
+  // spineTint / sideTint: Aston's dark crown band (and any SPINE SIDE band) —
+  // omitting them made resolveLivery drop authored tints and fall back to stripe.
   const val = liv ? { id: liv.id, c1: liv.c1, c2: liv.c2, stripe: liv.stripe || null, accent: liv.accent || null,
                       nose: liv.nose || null, pod: liv.pod || null, wing: liv.wing || null, halo: liv.halo || null,
                       fin: liv.fin || null, finArt: liv.finArt || null, logo: liv.logo || null, logo2: liv.logo2 || null,
                       logo3: liv.logo3 || null, noseStripe: liv.noseStripe || null, finish: liv.finish || null, numFont: liv.numFont || null, sponsors: liv.sponsors || null,
                       finStyle: liv.finStyle || null, finBadge: liv.finBadge || null, spineLogo: liv.spineLogo || null, finShape: liv.finShape || null,
                       tcam: liv.tcam || null, coverVents: liv.coverVents || null, spineHeight: liv.spineHeight || null,
-                      spineSide: liv.spineSide || null, rearWing: liv.rearWing || null, wingCarbon: liv.wingCarbon || null, cover: liv.cover || null }
+                      spineSide: liv.spineSide || null, rearWing: liv.rearWing || null, wingCarbon: liv.wingCarbon || null, cover: liv.cover || null,
+                      spineTint: liv.spineTint || null, sideTint: liv.sideTint || null }
                   : { id: "default", c1: team.color, c2: team.color2, stripe: null, accent: null };
   _livResolveCache.set(team.id, { val, rev: store.rev });
   return val;
@@ -7112,6 +7116,10 @@ function render(dt) {
   const menuBlank = state === "menu" && !setupPreviewOn && (!track || _rsEl.hidden);
   const vis = menuBlank ? "hidden" : "";
   if (canvas.style.visibility !== vis) canvas.style.visibility = vis;
+  // Soft-present #game-soft is a sibling overlay (GLX HeadlessChrome / TLX). Keep
+  // its visibility in lockstep with #game or a blank menu still shows the last blit.
+  const softEl = document.getElementById("game-soft");
+  if (softEl && softEl.style.visibility !== vis) softEl.style.visibility = vis;
   // A freshly pre-built world draws its first frames HIDDEN (scheduleFlybyTrack
   // owes them): shaders, textures and shadow maps warm up under the picker, not
   // in front of the player the instant race settings opens.

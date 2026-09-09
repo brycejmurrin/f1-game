@@ -605,7 +605,9 @@ function livSwatch(team, liv, tags) {
 // the player's mods follow through recomputePlayerMods on the next race.
 function buildTuneOptions(container, team) {
   const wrap = document.createElement("div");
-  wrap.className = "cs-liv-editor";
+  // Not cs-liv-editor: that class widens the car reserve and translucents the
+  // sheet for the PAINT editor. SETUP only needs the compact-density help hide.
+  wrap.className = "cs-tune-editor";
   wrap.appendChild(csLabel("SETUP SHEET — " + team.short));
   const cur = SetupTune.get(team.id);
   const rows = {};
@@ -1029,8 +1031,10 @@ function livePreviewDraft(team, d) {
   if (key === _livPreviewKey) return;
   _livPreviewKey = key;
   if (invalidateDecalTextures) invalidateDecalTextures(team.id);
+  // id:"default" keeps brand plates / markOnField on while editing — a draft
+  // without an id skipped the plated-mark path and looked like a bare car.
   G.livDraftOverride = { teamId: team.id,
-    liv: Object.assign({ c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, true)) };
+    liv: Object.assign({ id: "default", c1: hexToArr(d.c1), c2: hexToArr(d.c2) }, livDraftTo(d, true)) };
   G._spMeshKey = "";   // bust the setup-preview mesh cache so it repaints
 }
 
