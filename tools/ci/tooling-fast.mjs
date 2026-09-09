@@ -1,22 +1,40 @@
 #!/usr/bin/env node
-// @doc Sequential runner behind `npm run test:tooling-fast`: one unit file at a time, per-file timing; exports the list.
+// @doc Runner behind `npm run test:tooling-fast`: per-file timing, buffered output, `--jobs=N`; exports the list.
 // @section runner
 /**
- * tooling-fast.mjs — run the structural unit suites SEQUENTIALLY with progress.
+ * tooling-fast.mjs — run the structural unit suites with per-file progress.
  *
  * `npm run test:tooling-fast` used to dump ~80 files into one `node --test`
  * invocation, which parallelises by default and floods the terminal. This
- * runner executes one file at a time (`node --test --test-concurrency=1`) and
- * logs start/end/pass/fail/duration for each to stdout and
- * `artifacts/logs/tooling-fast-suite.log`.
+ * runner owns the scheduling instead, and BUFFERS each file's output to emit it
+ * whole on completion. The buffering is what made the log readable; running one
+ * file at a time was never the part that fixed it.
  *
- *   node tools/ci/tooling-fast.mjs                  # full suite
+ * So `--jobs=N` runs N files at once and the log reads exactly as before: one
+ * START and one PASS/FAIL per file, each with its own index and duration.
+ * DEFAULT 1, so every existing caller is byte-identical.
+ *
+ * WHY, measured here: the serial suite is ~230 s and the deploy pays it once per
+ * push ATTEMPT. With five or six agent sessions landing on the deploy branch at
+ * a median gap of 165 s, a 230 s window loses the race often — two of one
+ * session's deploys were rejected once each and paid a full re-verify. Shrinking
+ * the window shrinks the race for EVERY attempt, and it is the only lever left:
+ * deploy.mjs cannot narrow a shipped-code retry, because pick-tests maps any
+ * js/ or css/ edit to the whole tooling-fast group (see its RULES).
+ *
+ *   node tools/ci/tooling-fast.mjs                  # full suite, serial
+ *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
+ *
+ * `--jobs=N`, never `--jobs N`: a flag whose value is a bare positional gets
+ * swallowed into the file list by the `!a.startsWith("--")` filter below. This
+ * repo has shipped that bug once already — tools/ci/pick-tests.mjs documents
+ * `--since HEAD~3` being read as a changed FILE. The `=` form cannot do it.
  *
  * The file list is the source of truth for coverage (test-coverage-audit
  * imports TOOLING_FAST_FILES). Keep package.json as `node tools/ci/tooling-fast.mjs`.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -81,6 +99,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/track-line-circuits.test.mjs",
   "tests/unit/twin-drift.test.mjs",
   "tests/unit/storage-key-prefix.test.mjs",
+  // ...and its sibling: the PREFIX is not the whole contract. Two features
+  // owned apex26.brakeCue with incompatible types and each silently broke
+  // the other; this asks that one key means one type.
+  "tests/unit/store-key-types.test.mjs",
   "tests/unit/no-bare-console.test.mjs",
   "tests/unit/light-store-cond-layer.test.mjs",
   "tests/unit/scenery-kits.test.mjs",
@@ -254,7 +276,8 @@ const fmtDur = (ms) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
  * @param {{ logPath?: string }} [opts]
  * @returns {{ ok: boolean, passed: number, failed: number, results: object[] }}
  */
-export function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
+export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
+  const jobs = Math.max(1, Number(opts.jobs) || 1);
   const logPath = opts.logPath || LOGFILE;
   fs.mkdirSync(path.dirname(logPath), { recursive: true });
   const lines = [];
@@ -266,15 +289,16 @@ export function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
 
   const suiteStart = Date.now();
   const startedAt = new Date(suiteStart).toISOString();
-  emit(`suite start at=${startedAt} files=${files.length} concurrency=1 ${loadavgLine()}`);
+  emit(`suite start at=${startedAt} files=${files.length} concurrency=${jobs} ${loadavgLine()}`);
 
   const results = [];
   let passed = 0;
   let failed = 0;
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    const n = i + 1;
+  // One file, start to verdict. spawnSync CANNOT be pooled — it blocks the only
+  // thread, so N of them still run strictly one after another; the first draft of
+  // this did exactly that and was serial with extra ceremony. Async spawn, awaited.
+  const runOne = (file, n) => new Promise((resolve) => {
     const abs = path.isAbsolute(file) ? file : path.join(ROOT, file);
     const rel = path.relative(ROOT, abs);
     const t0 = Date.now();
@@ -285,15 +309,17 @@ export function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
       const dur = Date.now() - t0;
       emit(`FAIL  ${n}/${files.length} ${rel} duration=${fmtDur(dur)} reason=missing-file`);
       results.push({ file: rel, ok: false, durationMs: dur, exit: null, missing: true });
-      continue;
+      return resolve();
     }
 
-    const r = spawnSync(process.execPath, ["--test", "--test-concurrency=1", abs], {
-      cwd: ROOT,
-      encoding: "utf8",
-      env: process.env,
-      maxBuffer: 16 * 1024 * 1024,
-    });
+    const child = spawn(process.execPath, ["--test", "--test-concurrency=1", abs],
+                        { cwd: ROOT, env: process.env });
+    let out = "", err = "";
+    child.stdout.on("data", (d) => { out += d; });
+    child.stderr.on("data", (d) => { err += d; });
+    child.on("error", (e) => { err += String(e && e.message || e); });
+    child.on("close", (status) => {
+    const r = { status, stdout: out, stderr: err };
     const dur = Date.now() - t0;
     const ok = r.status === 0;
     if (ok) passed++; else failed++;
@@ -319,7 +345,24 @@ export function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {}) {
       }
     }
     results.push({ file: rel, ok, durationMs: dur, exit: r.status });
-  }
+      resolve();
+    });
+  });
+
+  // N in flight, each worker pulling the next index off a shared cursor. Node's
+  // own --test-concurrency stays 1 INSIDE each child: the parallel unit is one
+  // FILE per process, which is what these suites are isolated at. Two files
+  // sharing a fixed path or port would surface here, which is why this was
+  // measured against a serial run rather than assumed equivalent.
+  let next = 0;
+  const worker = async () => {
+    while (true) {
+      const i = next++;
+      if (i >= files.length) return;
+      await runOne(files[i], i + 1);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(jobs, files.length) }, worker));
 
   const suiteDur = Date.now() - suiteStart;
   const ok = failed === 0;
@@ -335,6 +378,8 @@ const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPat
 if (isMain) {
   const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
   const files = args.length ? args : [...TOOLING_FAST_FILES];
-  const { ok } = runToolingFast(files);
+  const jobsArg = process.argv.slice(2).find((a) => a.startsWith("--jobs="));
+  const jobs = jobsArg ? Number(jobsArg.slice(7)) : 1;
+  const { ok } = await runToolingFast(files, { jobs });
   process.exit(ok ? 0 : 1);
 }

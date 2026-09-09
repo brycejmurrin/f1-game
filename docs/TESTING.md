@@ -270,6 +270,24 @@ eat them.
 
 ### Boot (run first, and first to fix)
 
+**Why `driving` was split (2026-09-09).** It was 16 spec files and ~149 tests,
+and the imbalance was the problem, not the size: its four SLOWEST files held
+57 % of the tests. Playwright's `--shard` divides by FILE IN DECLARED ORDER,
+not by cost, so one runner could draw `collision-ai-fixes` (28 tests at ~30 s)
+plus `aero-zones` (18 at ~48 s) — 46 slow tests — while another drew the
+physics files (7 fast ones). Adding shards cannot fix that; it only idles the
+lucky runners sooner. Measured on the dev box: 42 of the group's tests took
+15.6 minutes, i.e. ~40 minutes for the whole group on one worker.
+
+Compounding it, the dispatched-group step passes `--timeout=900000`, so ONE
+hung test burns 15 of a shard's 50 minutes. Three of those kill the shard
+whatever the split. Splitting does not fix a hang — it LOCALISES one, which is
+the point.
+
+The three groups below are cost-balanced and subject-coherent, so each fits a
+runner comfortably and `pick-tests` can name the narrow one: an AI change needs
+`collisions`, not `aero`.
+
 | Group | What it runs |
 |---|---|
 | `tiny` | boot-guard, smoke, dev-tools, logging — page loads, `__apex` present, dev hooks respond. The CI push gate runs `smoke` alone; `tiny` is the nightly 4-shard boot group |
@@ -282,7 +300,9 @@ eat them.
 
 | Group | What it runs |
 |---|---|
-| `driving` | the driving model and everything it hits: physics-characterization, physics-fixes, physics-hotpath, longitudinal, projection, understeer-cue; car-to-car + wall collision, drift, off-track; world-physics, active-aero, aero-zones; the Rapier debris side-world and race control. Union of the old `physics` + `collision` + `behaviour` + `debris`. `physics-characterization` also runs in Node as `game-vm` in seconds — run that first |
+| `physics-core` | the driving model proper: physics-characterization, physics-fixes, physics-hotpath, longitudinal, projection, world-physics, off-track, the Rapier debris side-world and race control. ~35 tests, nearly all FAST. `physics-characterization` also runs in Node as `game-vm` in seconds — run that first |
+| `collisions` | car-to-car and wall contact: `collision*.spec.js` (collisions, collisions-deep, collision-ai-fixes). ~32 tests and the SLOWEST set in the suite (26–34 s each) — the multi-car pack separation runs a whole race |
+| `aero` | the aero and handling model: aero-zones (the slowest single spec at ~48 s/test), active-aero, drift, understeer-cue. ~37 tests |
 | `hooks` | the `__apex` contract end to end: dev-tools, headless, obs/act, data lifecycle, telemetry compare, assets, logging, persistence, the race wake lock, output paths, the map + new hook contracts, and the agent world view (world, trackInfo, scene, rollout, determinism, the drive bench). Union of the old `api` + `hooks` + `agent` + `map` + `paths` |
 | `circuits` | walls + autopilot + elevation + the codebase-audit edge cases; the 16 per-circuit foundation specs (`tests/specs/*-foundation.spec.js` — required models present, props clear of the racing surface, terrain grounded, water safe, walls sane); props/terrain over road, F1 track accuracy, scenery kits. Union of the old `circuit` + `foundation` + `scenery`. Routed from `js/circuits/` and the track engine; a one-circuit edit runs `verify-track.cjs <id>` then THAT circuit's foundation spec alone, not this group |
 | `car` | catalog, budget, persistence, recipes (inside `parts-physics`), factory presets, mesh caches, liveries, ERS, car effects, the custom team, the car viewer, garage aero (the old `parts`) |
@@ -333,7 +353,7 @@ eat them.
 
 ### Where the old names went (2026-09-01)
 
-`physics`/`collision`/`behaviour`/`debris` → `driving`; `api`/`hooks`/`agent`/`map`/`paths`
+`physics`/`collision`/`behaviour`/`debris` → `driving`, split again on 2026-09-09 into `physics-core`/`collisions`/`aero` (below); `api`/`hooks`/`agent`/`map`/`paths`
 → `hooks`; `circuit`/`foundation`/`scenery` → `circuits`; `parts` → `car`;
 `steering`/`camera` → `input`; `audio` → `ui`; `webgl`/`ab`/`tlx` → `gfx`;
 `fast` (a curated cross-group subset that double-ran nine specs) is gone —
@@ -998,6 +1018,7 @@ what it covers.
 | `light-store-cond-layer.test.mjs` | the conditional shipped lighting layer ("*|tod" in LightPresets): resolves only on ULTRA + a per-chunk-capable backend off mobile; player edits (incl. explicit 0) always win; dedup against base() includes the layer |
 | `curvature-channels.test.mjs` | the arc-must-not-reach-the-driver table: every Tracks.curvature consumer file appears in docs/PHYSICS.md §Curvature channels (and no ghost rows) — a new consumer must be classified before it lands |
 | `storage-key-prefix.test.mjs` | every literal localStorage/sessionStorage key is apex26.-prefixed (GameStore-routed keys exempt by construction; allowlist entries need a written reason) |
+| `store-key-types.test.mjs` | one storage key, one value type — resolves `const K = "literal"` aliases and reads get-DEFAULTS as well as writes, which is how `apex26.brakeCue` hid two owners (a 1-10 slider notch and an "on"/"off" flag) from a literal grep |
 | `no-bare-console.test.mjs` | logging goes through Log — no bare console.* in js/ outside log.js (the nostr interception seam allowlisted with its reason) |
 | `lamp-chunks.test.mjs` | the shared per-chunk lamp bake (LampChunks): nearest-first reach-filtered selection, the knob→cap formula (floor 8, CAP 24), concat/offsets/counts ≡ the per-chunk lists, and the bake-once invalidation contract (lights array identity + knob value) |
 | `all-lights-fill.test.mjs` | `_fillAllLights` writes the same bytes a full rewrite would: only rgb can move per frame, so the twelve static lanes are copied once per source array — asserted across a flicker sequence AND a source swap, plus the `_allLightsGen` contract LampChunks and WGX both cache on (including a new set whose colours match but whose positions moved, the case that hides) |

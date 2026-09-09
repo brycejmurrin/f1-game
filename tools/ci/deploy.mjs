@@ -85,7 +85,7 @@ export function plan() {
     touchedCircuits: touchedCircuits(tip),
     steps: [
       ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers)",
-      "npm run test:tooling-fast",
+      `tools/ci/tooling-fast.mjs ${GATE_JOBS} (the full node gate, two files at a time)`,
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
       "verify-track for touched circuits",
       flag("--pr") ? "push the session branch and open/update a PR into the deploy branch"
@@ -266,6 +266,21 @@ function mergeDeployTip(tip) {
 const MERGE_GUARDS = Object.freeze(
   JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups["test:guards"].files);
 
+/* HOW WIDE THE GATE RUNS ITSELF.
+   The node suites are independent processes and the runner buffers each file's
+   output, so running two at once costs nothing in legibility and takes the full
+   gate from 330 s to 176 s (measured, 159 suites, this box, 4 cores). That is
+   the window a push race is decided in, so halving it is worth more here than
+   anywhere else: at the measured 165 s median gap between landings, a 330 s gate
+   invites two more pushes than a 176 s one.
+   TWO, not three. Three is faster still (125 s) but peaks at loadavg 3.65, over
+   the >= 3 line this repo refuses to deploy above — and a gate that drives the
+   box past its own "the machine is too busy to be measured" threshold is buying
+   speed with the credibility of its verdicts. Two peaks at 2.57.
+   The DEFAULT stays 1 for everyone else: this opts the deploy in rather than
+   changing what `npm run test:tooling-fast` does under other sessions and CI. */
+const GATE_JOBS = "--jobs=2";
+
 /* WHAT A REJECTED PUSH ACTUALLY NEEDS RE-VERIFIED.
    The full gate ran before attempt 1 and it passed; the commits that beat us
    were verified by the session that pushed them, which ran this same gate. So
@@ -283,7 +298,7 @@ function reverifyUnion(before) {
   const changed = git(["diff", "--name-only", `${before}..HEAD`]).out.split("\n").filter(Boolean);
   const ships = changed.filter((f) => /^(js|css)\//.test(f) || f === "index.html");
   if (ships.length) {
-    run("npm", ["run", "test:tooling-fast"],
+    run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS],
         `re-verify the new union in full — it brings shipped code (${ships.slice(0, 3).join(", ")}${ships.length > 3 ? ` +${ships.length - 3}` : ""})`);
     return "full gate";
   }
@@ -340,7 +355,7 @@ export function main() {
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
   const verdict = { branch: p.branch, merge: "none", verified: [], pushed: false, pr: null };
   if (!p.fastForward) verdict.merge = mergeDeployTip(p.tip);
-  run("npm", ["run", "test:tooling-fast"], "guard suite on the union"); verdict.verified.push("tooling-fast");
+  run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite on the union"); verdict.verified.push("tooling-fast");
   // The Pages gate runs MORE node suites than tooling-fast (quali-persist,
   // node-slow, the VM twins, …) and two deploys went red on pins tooling-fast
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
