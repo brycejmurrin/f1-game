@@ -1002,8 +1002,7 @@ fn fastLanczos2(x : f32) -> f32 {
   wA = wA * wA;
   return wB * wA;
 }
-// `std` is a WGSL reserved keyword (Dawn/Naga) — use edgeStd for the
-  // edge-strength reciprocal that GLSL SGSR_FS still names `std`.
+// edgeStd — GLSL SGSR_FS names this std; that identifier is WGSL-reserved.
 fn weightY(dx : f32, dy : f32, c : f32, edgeStd : f32) -> vec2<f32> {
   let x = ((dx * dx) + (dy * dy)) * 0.55 + clamp(abs(c) * edgeStd, 0.0, 1.0);
   let w = fastLanczos2(x);
