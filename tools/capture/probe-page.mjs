@@ -234,6 +234,15 @@ export async function screenshotGameCanvas(page, outPath) {
     return { x: r.x, y: r.y, width: r.width, height: r.height };
   });
   if (!box || !(box.width > 0 && box.height > 0)) throw new Error("probe: #game has no bounding box");
+  // Wait for a NEW blit WHILE THE LOOP STILL RUNS. GLX (and TLX) present()
+  // is what drives the overlay; headless(true) skips render/present, so a
+  // freeze-then-wait can never observe gen > start and times out. WGX can
+  // still complete an in-flight mapAsync after freeze; GLX cannot.
+  await page.evaluate(async () => {
+    if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
+      try { await GLX.awaitSoftPresent(8000); } catch (_) {}
+    }
+  });
   // FREEZE THE LOOP ACROSS THE CAPTURE. page.screenshot needs the compositor,
   // and a GLX garage frame on SwiftShader keeps the renderer's main thread hot
   // enough that the capture starved and blew its 60 s timeout with only
@@ -244,12 +253,6 @@ export async function screenshotGameCanvas(page, outPath) {
   // Restored in `finally`, or every later step would probe a frozen page.
   await page.evaluate(() => { try { window.__apex.headless(true); } catch (_) {} });
   try {
-    // Soft-present overlay (#game-soft) may still be catching up a frame.
-    await page.evaluate(async () => {
-      if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
-        try { await GLX.awaitSoftPresent(8000); } catch (_) {}
-      }
-    });
     const buf = await page.screenshot({ path: outPath, clip: box, timeout: 60000 });
     return { bytes: buf.length, clip: box };
   } finally {
