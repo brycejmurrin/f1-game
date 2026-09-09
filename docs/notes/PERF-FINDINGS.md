@@ -2645,6 +2645,34 @@ step is one instrumented census reporting `typeof renderer.generateMipmaps` and
 whether the pass ran — five earlier explanations of this gap died of being
 shipped on reasoning this strong.
 
+### 2026-09-09 — the cube-mip pass was dead code; the black world is still open (runs 71/72)
+
+Run 71 answered the question run 70 raised: `mip: fn=undefined ran=0` on BOTH
+three legs. `renderer.generateMipmaps` does not exist — three r185 defines
+generateMipmaps on Backend and TextureUtils, never on Renderer — so the explicit
+cube-mip pass had never executed once in its life. Fixed by calling it where it
+lives (renderer, else renderer.backend), and run 72 shows the repair working:
+webgl2 reads `mip: fn=undefined via=backend ran=131`, luma 64.6 against 63.9,
+gpuErrors 0. A pass the code intended and never ran now runs, and costs the
+healthy leg nothing.
+
+**It did NOT confirm the black-world fix, and the number that looks like it did
+is a trap.** Run 72 webgpu reads meanLuma 43.2 — up from 2.9 — with
+`envReady=false`, `env: begins=4 ends=4`, `gov: fps=4.9 floorMs=58.5 frames=6`
+and `mip: fn=? via=? ran=0`. That leg rendered SIX FRAMES. The probe never
+completed a cycle, so the mip branch never executed (`fn=?` is the initial
+value, untouched), so 43.2 is the ordinary probe-never-latched reading — the
+same state as run 25 (46.9), run 54 (39.2) and run 70 (39.2), and run 54 hit
+this same 4.9 fps / scale 1 / envReady false mode exactly. A luma that recovers
+because the probe never ran proves nothing about a fix to what happens when it
+does.
+
+So the standing question is unchanged: does the world still go near-black on a
+webgpu leg that DOES latch the cube, now that the mip pass runs? That needs a
+run where the webgpu leg gets past ~600 frames. Whatever answers it, note that
+this 4.9 fps mode is itself recurring and undiagnosed, and a census that lands
+in it cannot answer any question about env-probe content.
+
 ### 2026-09-09 — the TLX heap gap is opened by the TRACK BUILD, not boot
 
 `scratch/heap-stages.mjs`, montreal, CDP `Runtime.getHeapUsage` after three
