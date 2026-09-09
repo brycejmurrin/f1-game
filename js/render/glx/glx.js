@@ -24,13 +24,6 @@ const GLX = (function () {
   let _softBlitGen = 0;
   let _softPresentWaiters = [];
   let _softLastMaxPx = 0;
-  let _softBlitPace = 0;
-  // Full-frame readPixels every present() on SwiftShader starved the car
-  // group (measured: five Test timeouts under loadavg ~3 with the garage
-  // still drawing). Cap the overlay at ~7.5 Hz; awaitSoftPresent waiters
-  // force the next present through so settle/screenshot still get a fresh
-  // blit.
-  const SOFT_BLIT_EVERY = 8;
   // Mobile tier: iOS home-screen web apps (WKWebView) get a tight jetsam memory
   // budget that GPU/IOSurface allocations count against — a hard kill, no JS
   // error, no contextlost event. Shrink every discretionary GPU allocation on
@@ -450,11 +443,10 @@ const GLX = (function () {
 
   function softBlit() {
     if (!_softPresent || !_displayCtx || !gl || ctxGone()) return;
-    const force = _softPresentWaiters.length > 0;
-    if (!force) {
-      _softBlitPace++;
-      if ((_softBlitPace % SOFT_BLIT_EVERY) !== 0) return;
-    }
+    // A synchronous GPU readback plus two full-frame CPU copies is capture
+    // work, not presentation work. Capture tools call awaitSoftPresent();
+    // ordinary WebDriver frames must stay on the render path.
+    if (!_softPresentWaiters.length) return;
     const w = width | 0, h = height | 0;
     if (w < 1 || h < 1) return;
     if (_displayCanvas.width !== w || _displayCanvas.height !== h) {
@@ -497,17 +489,15 @@ const GLX = (function () {
       on: !!_softPresent,
       gen: _softBlitGen,
       maxPx: _softLastMaxPx,
-      every: SOFT_BLIT_EVERY,
       display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
     };
   }
 
-  // snapCam() / park() call gfx.invalidateSoftPresent — WGX bumps sceneGen;
-  // GLX forces the next present past the SOFT_BLIT_EVERY throttle so waiters
-  // see a post-camera blit instead of hanging on a stale overlay.
+  // snapCam() / park() call gfx.invalidateSoftPresent. GLX captures only on
+  // demand, and awaitSoftPresent() already requires a newer generation.
   function invalidateSoftPresent() {
-    if (!_softPresent) return;
-    _softBlitPace = SOFT_BLIT_EVERY - 1;
+    // awaitSoftPresent() supplies the demand signal; camera invalidation only
+    // documents that the next capture must wait for a newer generation.
   }
 
   function awaitSoftPresent(timeoutMs) {
@@ -780,6 +770,7 @@ const GLX = (function () {
       post: null, shadow: null,
     };
     PST = GLXPost.init(core);   core.post = PST;    // post chain (best-effort; disabled -> render straight to screen)
+    if (spatialUpscale && PST.ensureSpatial) PST.ensureSpatial();
     SHD = GLXShadow.init(core); core.shadow = SHD;  // sun/car/lamp shadow maps + PCSS blocker
     CHK = GLXChunked.init(core);                    // frustum-culled chunked city/props meshes
 
@@ -911,6 +902,7 @@ const GLX = (function () {
   function setSpatialUpscale(on) {
     spatialUpscale = !!on;
     try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
+    if (on && PST && PST.ensureSpatial) PST.ensureSpatial();
     resize();
     return spatialUpscale;
   }
@@ -2529,7 +2521,7 @@ const GLX = (function () {
     present: (opts) => {
       if (ctxGone()) return;
       const r = PST.present(opts);
-      if (_softPresent) softBlit();
+      if (_softPresentWaiters.length) softBlit();
       if (_glDrainAlways || _drainLeft > 0) { _drainLeft--; drainGlErrors("present"); }
       return r;
     },

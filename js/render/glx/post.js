@@ -31,6 +31,7 @@ const GLXPost = (function () {
     // Spatial upscale (SGSR1): FXAA writes here at render size when upscaling
     // to present size; otherwise FXAA writes the default framebuffer.
     let sgsrProg = null, sgsrU = null, aaFBO = null, aaTex = null;
+    let sgsrTried = false;
 
     // Post-processing state. postEnabled stays false (and rendering goes straight
     // to the default framebuffer, exactly as before) if any target/program setup
@@ -117,6 +118,16 @@ const GLXPost = (function () {
       return n;
     }
 
+    function ensureSpatial() {
+      if (sgsrProg || sgsrTried) return !!sgsrProg;
+      sgsrTried = true;
+      try {
+        sgsrProg = link(POST_VS, SGSR_FS);
+        if (sgsrProg) sgsrU = locs(sgsrProg, ["uTex", "uViewport"]);
+      } catch (_) { sgsrProg = null; sgsrU = null; }
+      return !!sgsrProg;
+    }
+
     // Build the post-processing programs + pick a colour format. Returns true if
     // the whole chain is usable; on any failure the caller leaves post disabled.
     function setup() {
@@ -134,10 +145,6 @@ const GLXPost = (function () {
       godrayProg = link(POST_VS, GODRAY_FS);
       fxaaProg = link(POST_VS, FXAA_FS);
       if (fxaaProg) fxaaU = locs(fxaaProg, ["uTex", "uTexel"]);
-      // SGSR1 spatial upscale — best-effort. A failed link leaves the chain
-      // byte-identical to pre-spike (no aa target, no present-size pass).
-      sgsrProg = link(POST_VS, SGSR_FS);
-      if (sgsrProg) sgsrU = locs(sgsrProg, ["uTex", "uViewport"]);
       if (!brightProg || !blurProg || !compProg || !downProg || !upProg) return false;
       for (const k in _compUf) delete _compUf[k];
       brightU = locs(brightProg, ["uScene", "uThreshold"]);
@@ -1059,6 +1066,7 @@ const GLXPost = (function () {
       msaa: () => msaaSamples,
       // SGSR1 linked — glx wantSpatialUpscale() also requires this so a failed
       // shader never leaves a present-size canvas with a render-size viewport.
+      ensureSpatial,
       spatialOk: () => !!sgsrProg,
       createTargets,
       bindSceneTarget,

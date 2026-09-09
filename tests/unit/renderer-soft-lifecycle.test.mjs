@@ -166,6 +166,31 @@ test("GLX/TLX re-queue waiters whose predicate has not fired", () => {
   assert.match(tlxAwait, /no display ctx/);
 });
 
+test("GLX soft-present reads back only for an explicit capture waiter", () => {
+  const src = read("js/render/glx/glx.js");
+  const blit = src.slice(src.indexOf("function softBlit()"), src.indexOf("function softPresentState()"));
+  assert.match(blit, /if\s*\(\s*!_softPresentWaiters\.length\s*\)\s*return/,
+    "ordinary WebDriver presents must not synchronously read back the framebuffer");
+  assert.doesNotMatch(src, /SOFT_BLIT_EVERY|_softBlitPace/,
+    "periodic background readbacks must be removed");
+  const present = src.slice(src.indexOf("present: (opts) =>"), src.indexOf("softPresent: () =>"));
+  assert.match(present, /if\s*\(\s*_softPresentWaiters\.length\s*\)\s*softBlit\(\)/);
+});
+
+test("GLX links SGSR only after spatial upscaling is requested", () => {
+  const post = read("js/render/glx/post.js");
+  assert.match(post, /function ensureSpatial\(\)/);
+  const setup = post.slice(post.indexOf("function setup()"), post.indexOf("function createTargets"));
+  assert.doesNotMatch(setup, /sgsrProg\s*=\s*link\(/,
+    "the disabled-by-default path must not compile SGSR during post setup");
+  const ensure = post.slice(post.indexOf("function ensureSpatial()"), post.indexOf("function setup()"));
+  assert.match(ensure, /sgsrProg\s*=\s*link\(POST_VS,\s*SGSR_FS\)/);
+  assert.match(post, /ensureSpatial,\s*spatialOk/);
+  const glx = read("js/render/glx/glx.js");
+  const setter = glx.slice(glx.indexOf("function setSpatialUpscale"), glx.indexOf("function resize"));
+  assert.match(setter, /if\s*\(\s*on\s*&&\s*PST\s*&&\s*PST\.ensureSpatial\s*\)\s*PST\.ensureSpatial\(\)/);
+});
+
 test("WGX soft present permits one staging read and drops pre-resize pixels", () => {
   const src = read("js/render/webgpu/wgx.js");
   assert.match(src, /let _softBlitSeq = 0/);
