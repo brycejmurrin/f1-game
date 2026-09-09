@@ -2689,3 +2689,7 @@ already set from `noWheels` factory bodies) pass `Helmets.build({ maxSplit: 0 })
 ## 2026-09-09 — czPreview / WGX claim order / foreign logo
 
 `js/game.js` lines 10385 -> **10422** (+37) / codeLines 5618 -> **5644** (+26). `czLivFromDialog` shared by save+preview; foreign `customLogo` subscribe; stripe/finish refresh the live draft.
+
+## 2026-09-09 — resolveLivery copies every editor tint
+
+`js/game.js` lines 10422 -> **10428** (+6) / codeLines 5644 -> **5648** (+4). `sunTint` / `crestInk` / `bandTint2` / `plateTint` / `plateInk` pass through both resolveLivery branches so those garage rows reach the atlas.
