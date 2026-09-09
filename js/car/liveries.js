@@ -50,6 +50,14 @@
      faces forward on BOTH sides.
      The grey service panels and the accent pinstripe keep clear of the band,
      so it also moves a vertex.
+   spineTint? optional SPINE TINT — the colour of whatever SPINE TOP paints on
+     the crown (and the saddle's flank half). Absent = stripe || accent, which
+     is what every band used to take: `stripe` runs the WHOLE spine including
+     the nose, and `accent` is tertiary trim, so neither can be set for the
+     crown alone. Aston Martin needs a dark band on a green cover whose accent
+     is lime. An explicit pick is honoured as-is — it is a deliberate choice
+     about one surface, like `cover` — while the derived default still goes
+     through the contrast re-pick against the cover.
    spineLogo? optional SPINE TOP — what the engine-cover crown carries over
      its tail wash. "logo" (absent) draws the crest there as well as on the
      fin; "none" leaves the crown to the wash, so the mark reads once from a
@@ -454,7 +462,7 @@ const Liveries = (function () {
   function forTeam(team) {
     const def = { id: "default", name: "Team Livery", c1: team.color, c2: team.color2 };
     const ex = team.livery;
-    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover", "rearWing", "wingCarbon"]) if (ex[k]) def[k] = ex[k];
+    if (ex) for (const k of ["stripe", "noseStripe", "accent", "nose", "pod", "wing", "fin", "finArt", "logo", "logo2", "logo3", "halo", "finish", "numFont", "sponsors", "finStyle", "finBadge", "spineLogo", "finShape", "tcam", "coverVents", "spineHeight", "spineSide", "cover", "spineTint", "rearWing", "wingCarbon"]) if (ex[k]) def[k] = ex[k];
     return [def].concat(BY_TEAM[team.id] || [], UNIVERSAL);
   }
 

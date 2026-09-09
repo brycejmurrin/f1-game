@@ -145,7 +145,14 @@ const Teams = (function () {
     },
     {
       id: "astonmartin", name: "Aston Martin", short: "AMR",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "wordmark", spineSide: "logo" },
+      /* The AMR26 wears a DARK STRIPE down the spine of an otherwise
+         body-green engine cover, starting at the airbox (launch gallery; see
+         docs/notes/LIVERY-2026-REFERENCE.md). It needs `spineTint`, because
+         the band's old colour was stripe||accent and this team's accent is
+         LIME — and setting `stripe` dark instead would darken the NOSE, which
+         the photographs contradict. */
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "logo",
+                spineTint: [0.008, 0.086, 0.078] },
       color: [0.0, 0.349, 0.31], color2: [0.718, 0.882, 0.106],    /* green #00594F / lime accents */
       engine: "Honda", tier: 4,
       stats: { speed: 74, accel: 72, cornering: 76, braking: 74 },
