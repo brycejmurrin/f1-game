@@ -225,7 +225,8 @@ const markOnItsGround = (teamId, liv, region, key, ground, N = 32) => {
   const withM = A.paint(teamId, liv);
   const without = A.paint(teamId, Object.assign({}, liv, { [key]: "none" }));
   const R = A.LT.REGIONS[region];
-  let worst = null, at = null, n = 0;
+  const pairs = new Map();
+  let n = 0;
   for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
     const x = R.x + R.w * (i + 0.5) / N, y = R.y + R.h * (j + 0.5) / N;
     const a = paintAt(withM, x, y), b = paintAt(without, x, y);
@@ -240,7 +241,20 @@ const markOnItsGround = (teamId, liv, region, key, ground, N = 32) => {
     // paint", not "black". Reading it as black compared the mark to a surface
     // that does not exist and reported every dark mark on a dark car as broken.
     const v = contrastCss(a, b || ground);
-    if (v != null && (worst == null || v < worst)) { worst = v; at = `${a} on ${b}`; }
+    if (v == null) continue;
+    const k = `${a} on ${b || ground}`;
+    if (!pairs.has(k)) pairs.set(k, { v, n: 0 });
+    pairs.get(k).n++;
+  }
+  // THE WORST PAIR THAT COVERS REAL AREA, not the worst single sample. Every
+  // glyph edge anti-aliases against whatever it abuts, so one boundary pixel
+  // of white-on-lime made this report Aston Martin's driver code as invisible
+  // while 286 of its 288 sampled points read 7.73:1. A pair has to hold at
+  // least 5 % of the mark's own ink before it describes what a viewer sees.
+  let worst = null, at = null;
+  for (const [k, p] of pairs) {
+    if (p.n < Math.max(3, n * 0.05)) continue;
+    if (worst == null || p.v < worst) { worst = p.v; at = k; }
   }
   return { worst, at, n: n / (N * N) };
 };
@@ -330,8 +344,12 @@ test("a flank MARK lands where the flank is visible, under every crown", async (
   const MARKS = ["number", "logo", "code", "plate"];
   // Measured on this tree. Fails if the list GROWS and fails if an entry starts
   // passing, so neither a regression nor the fix can land unremarked.
-  const KNOWN = new Set(["redbull wrap/number", "redbull wrap/logo",
-                         "redbull wrap/code", "redbull wrap/plate"]);
+  // EMPTY, and it earned that: the four redbull `wrap` entries recorded here
+  // were fixed on the deploy branch by c4d585b63 and 89c8261db — the flank
+  // designs moved off the rear wheel and the bull was shortened and pushed
+  // forward. This guard reported them the moment that merge landed, which is
+  // the whole point of failing when an entry starts PASSING.
+  const KNOWN = new Set([]);
   const bad = [];
   for (const teamId of ["redbull", "ferrari", "mercedes"]) {
     const om = occlusionMap(loadParts(), { team: teamId, grid: 96 });
