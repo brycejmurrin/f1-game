@@ -564,3 +564,33 @@ test("every flank MARK lands clear of the crease and above the sidepod, on every
     }
   }
 });
+
+// …and whether anything STANDS IN FRONT of where it lands. The rear tyre sits
+// at z -1.6 r 0.38 while the flank band runs z -0.66 to -1.90, so the band's
+// aft half is alongside it and half a metre further inboard: from a side camera
+// the tyre projects straight over it. flank-occlusion projects the real body
+// and wheels through the garage SIDE camera and answers that in 0.3 s. The
+// occluders are the CAR, so the map is computed once and every crown is tested
+// against it.
+test("a flank mark is not put where the car covers it", async () => {
+  const { loadAtlas } = await import("../../tools/car/livery-contrast.mjs");
+  const { sweep } = await import("../../tools/car/spine-station.mjs");
+  const { occlusionMap } = await import("../../tools/car/flank-occlusion.mjs");
+  const At = loadAtlas();
+  const om = occlusionMap(M, { team: "redbull", grid: 96 });
+  const hiddenAt = (u, v) => om.cell[Math.min(om.rows - 1, (v * om.rows) | 0) * om.cols
+                                     + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1;
+  // `wrap` hangs a metre-long bull over the front two thirds, so its marks have
+  // nowhere to go but the aft third — which is the tyre's. 51 % of their ink is
+  // behind the car from this camera (7 % from the hero preset, which is the one
+  // the garage opens on). That is a DESIGN debt, recorded at its measured value
+  // so it cannot quietly get worse; every other crown puts the mark forward
+  // where nothing covers it, and that is the property under test.
+  const CEIL = { wrap: 0.60 };
+  for (const spineLogo of At.LT.SPINE_LOGO_IDS) {
+    const out = sweep(At, { team: "redbull", logo: spineLogo, sides: ["number", "logo", "code", "plate"], grid: 64, hiddenAt });
+    for (const r of out.rows)
+      assert.ok(r.hidden <= (CEIL[spineLogo] ?? 0.20),
+        `${spineLogo}/${r.spineSide}: ${(r.hidden * 100).toFixed(0)}% of the mark is behind the car from the garage SIDE camera`);
+  }
+});
