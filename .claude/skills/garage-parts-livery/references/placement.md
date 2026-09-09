@@ -29,8 +29,9 @@ Three surfaces can answer it and the first is ~2000x cheaper than the last:
 | question | tool | cost |
 |---|---|---|
 | where on the flank does this land? | `node tools/car/spine-station.mjs --team=redbull` | 0.2 s |
+| does the CAR hide it? | the same, `--occlude` (or `flank-occlusion.mjs` for the map) | 1 s |
 | what does the flat art look like? | the same, `--png=artifacts/spine` | 0.3 s |
-| does the CAR hide it? | `node tools/shot/garage-angles.mjs --team redbull --spine-side logo --views side --zoom 8 --pan 5,0` | ~50 s boot + ~35 s a shot |
+| does it read at racing distance, lit? | `node tools/shot/garage-angles.mjs --team redbull --spine-side logo --views side --zoom 8 --pan 5,0` | ~50 s boot + ~35 s a shot |
 
 `spine-station.mjs` replays the real `buildAtlas` into crest-sweep's recording
 context and diffs the flank against the same livery wearing `spineSide: "none"`,
@@ -52,13 +53,42 @@ every crown x mark and fails at `vMid >= 0.5`, in 123 ms. It reproduces the
 2026-09-09 report — `logo/number` centred at v 0.574 — against the pre-fix tree,
 which is the only reason to believe it would catch the next one.
 
+## Occlusion is geometry, so it is also offline
+
+`flank-occlusion.mjs` projects the REAL body mesh and the four wheels at their
+game.js anchors through one garage camera and asks, per station, whether
+anything nearer covers it. The station's 3D point comes off the real decal mesh
+(`CarMesh.carDecalData` emits the spineSide quad with its UVs, so a region
+coordinate interpolates straight onto the skin) — nothing about the cover
+profile is reimplemented here, so it cannot drift from the car.
+
+The number it produces is not intuitive and that is the point. The rear tyre
+sits at z -1.6 with a 0.38 m radius; the flank band runs z -0.66 to -1.90. The
+band's aft HALF is alongside the tyre and half a metre inboard of it, so from a
+side camera the tyre projects straight over the cover. Measured on the marks:
+
+| crown | station | side (4.6 m) | side (11.2 m) | hero 3/4 | rear | top |
+|---|---|---|---|---|---|---|
+| every crown but `wrap` | u 0.03–0.35 | 0 % | 0 % | 1 % | 0 % | 0 % |
+| `wrap` | u 0.52–0.84 | 51 % | 76 % | 7 % | 81 % | 1 % |
+
+`wrap` hangs a metre-long bull over the front two thirds, so `sideFrom` pushes
+every flank design into the aft third — which is the tyre's. **Read the camera
+column before calling that a defect**: it is 7 % from the hero preset the garage
+opens on. `fin-design.test.mjs` ratchets `wrap` at its measured 0.60 and holds
+every other crown under 0.20, so the class cannot spread silently.
+
+Validated against a controlled render pair, same plate, same camera, crown the
+only variable: forward it is whole, aft it is a sliver at the tyre's leading
+edge (`artifacts/occl-check/`, 2026-09-09).
+
 ## What still needs a browser
 
-Occlusion by the tyre and the sidepod, foreshortening on a curved band, and
-lighting: none of it exists in a flat atlas. **A 430 px atlas crop flatters a
-graphic that a race camera renders as forty pixels of mud** — `carbon` and
-`bigmark` both passed every test and every atlas review, and neither existed at
-racing distance.
+Foreshortening on a curved band, lighting, and whether a graphic survives
+downscaling: none of it exists in a flat atlas or a silhouette test. **A 430 px
+atlas crop flatters a graphic that a race camera renders as forty pixels of
+mud** — `carbon` and `bigmark` both passed every test and every atlas review,
+and neither existed at racing distance.
 
 Racing distance is `shot.mjs --team`. The garage's own read is
 `garage-angles.mjs`, whose presets frame the WHOLE car (SIDE sits at 11.2 m), so
