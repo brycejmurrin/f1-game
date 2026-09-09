@@ -38,9 +38,16 @@ context and diffs the flank against the same livery wearing `spineSide: "none"`,
 so the box it reports is the design's own ink whatever painted it — no
 per-design knowledge in the tool, and a new design is measured the day it is
 written. `v` is the axis the complaints are about (0 the shoulder crease, 1 the
-sidepod line); `u` runs front to rear, which is how you see a CROWN squeezing a
-mark aft without booting anything: `wrap` hands the marks u 0.52–0.95, and that
-is the station the rear tyre eats from a side camera.
+sidepod line); `u` runs front to rear, which is how you saw a CROWN squeezing a
+mark aft without booting anything: `wrap` used to hand the marks u 0.52–0.95,
+which is the station the rear tyre eats from a side camera.
+
+One thing the diff CANNOT see, because it is the diff's own premise: a crown
+whose flank content depends on `spineSide`. Under `wrap` a team with no traced
+bull yields its filler badge to the side design, so the base ("none") carries a
+badge the design's frame does not, and the diff reports the badge's REMOVAL as
+part of the design's ink — measured 0.11 of v low on McLaren. Sweep a team with
+a traced bull (`redbull`, `racingbulls`) whenever the crown is `wrap`.
 
 Two caveats it prints but you should know before reading a PNG. Lettering
 renders as its METRIC BOX, not as glyphs, because that is what the recording
@@ -70,17 +77,33 @@ side camera the tyre projects straight over the cover. Measured on the marks:
 | crown | station | side (4.6 m) | side (11.2 m) | hero 3/4 | rear | top |
 |---|---|---|---|---|---|---|
 | every crown but `wrap` | u 0.03–0.35 | 0 % | 0 % | 1 % | 0 % | 0 % |
-| `wrap` | u 0.52–0.84 | 51 % | 76 % | 7 % | 81 % | 1 % |
+| `wrap`, BEFORE the fix | u 0.52–0.84 | 51 % | 76 % | 7 % | 81 % | 1 % |
+| `wrap`, after | u 0.22–0.54 | 0 % | — | — | — | — |
 
-`wrap` hangs a metre-long bull over the front two thirds, so `sideFrom` pushes
-every flank design into the aft third — which is the tyre's. **Read the camera
-column before calling that a defect**: it is 7 % from the hero preset the garage
-opens on. `fin-design.test.mjs` ratchets `wrap` at its measured 0.60 and holds
-every other crown under 0.20, so the class cannot spread silently.
+**Read the camera column before calling a number a defect** — the row above was
+7 % from the hero preset the garage opens on. It was still a defect, and a
+shipped one: Red Bull's default is crown `wrap` + side `duo`, and the same push
+put 92 % of its sponsor names, 95 % of a wordmark and 100 % of `slash` behind
+the wheel. `sideFrom` started the band aft of the BULL, the bull ends at u 0.58
+and `FLANK_SEEN` is 0.62, so "behind the animal" and "behind the wheel" were one
+instruction.
 
-Validated against a controlled render pair, same plate, same camera, crown the
-only variable: forward it is whole, aft it is a sliver at the tyre's leading
-edge (`artifacts/occl-check/`, 2026-09-09).
+The fix is the rule this file is really about. A band may run to the tail of the
+flank; CONTENT may not — a stripe's aft end behind the wheel is a stripe, a
+sponsor name's is half a word. So `liverytex.js` carries two axes, `su` for
+bands and `sc` clamped to `FLANK_SEEN` for content; the band clears the SUN
+(a hard disc, `sunReach`) and SHARES the bull (a silhouette, and every mark
+carries a keyline, halo or plate); `SIDE_FILL` puts flat fills UNDER the crown's
+flank graphic and lettering over it, so a solid `split` cannot erase the bull's
+legs and the bull cannot erase a sponsor; and `BULL.top` stands the animal on
+the sidepod line, spending the sixth of the flank that was dead under its hooves
+on the crease strip the lettering rides. Everything that has to be read now
+measures 0 % from the side, and `fin-design.test.mjs` holds content — marks AND
+lettering — under 0.40 on every crown.
+
+The oracle was validated against a controlled render pair before any of that,
+same plate, same camera, crown the only variable: forward it is whole, aft it is
+a sliver at the tyre's leading edge (`artifacts/occl-check/`, 2026-09-09).
 
 ## What still needs a browser
 
