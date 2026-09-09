@@ -2564,3 +2564,15 @@ on `opts.silhouette` brings the default caster to 7948 tris / 21974 verts
 (`silhouette: !car`, a distinct `:sh` cache key so a ghost cannot inherit the
 cheap lid) and the `sil` branch in car3d; helmets.js grew comments only.
 
+## 2026-09-09 — GLX HeadlessChrome soft-present
+
+`js/render/glx/glx.js` lines 2357 -> **2482** (+125). HeadlessChrome / SwiftShader
+leaves the WebGL canvas uncomposited for CDP screenshots even with
+`preserveDrawingBuffer`: `readPixels` has the car, `chrome_take_screenshot`
+is a black gap. GLX now 2D-blits onto `#game-soft` under the same UA sniff
+WGX already used (`softPresent` / `softPresentState` / `awaitSoftPresent`).
+The overlay and the blit live in the presenter — there is no second file
+that owns "what the garage capture sees". TLX already had the blit; this
+raise is GLX catching up so garage shots on the default renderer are not
+black.
+
