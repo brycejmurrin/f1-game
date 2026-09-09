@@ -3657,3 +3657,23 @@ test("GLX spatial upscale spike: SGSR1, no textureGather, flag-gated size split"
   const apex = read("js/agent/apex.js");
   assert.match(apex, /spatialUpscale\s*\(/, "__apex.spatialUpscale must exist");
 });
+
+test("UPSCALE SettingRow + TLX spatial API markers", () => {
+  const html = read("index.html");
+  assert.match(html, /id="pm-upscale"/, "shell must ship the UPSCALE set-row");
+  assert.match(html, /id="pm-upscale-label">UPSCALE</, "label must be UPSCALE");
+  const scale = read("js/ui/scale.js");
+  assert.match(scale, /SettingRow\.wire\("pm-upscale"/, "scale.js must wire the row");
+  assert.match(scale, /setSpatialUpscale/, "row must call the backend API");
+  const tlx = read("js/render/three/tlx.js");
+  assert.match(tlx, /setSpatialUpscale/, "TLX must export setSpatialUpscale");
+  assert.match(tlx, /wantSpatialUpscale/, "TLX must gate size split");
+  const post = read("js/render/three/tlx-post.js");
+  assert.match(post, /spatialOk:\s*\(\)\s*=>/, "TLX post must expose spatialOk");
+  const tsl = read("js/render/three/tsl-post.js");
+  assert.match(tsl, /tlx-post-sgsr/, "TSL SGSR pass must exist");
+  const wgsl = read("js/render/webgpu/wgsl-post.js");
+  assert.match(wgsl, /const SGSR =/, "WGX WGSL SGSR shader must ship");
+  assert.doesNotMatch(wgsl.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
+    /textureGather\s*\(/, "shared kernel uses 4-tap sampleLevel, not textureGather");
+});
