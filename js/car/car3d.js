@@ -3214,7 +3214,7 @@ const Car3D = (function () {
       const field = !!(opts && opts.field);
       Helmets.build(out, 0, 0.715, -0.075, des, {
         paint: SURFACES.paint, glass: SURFACES.visor,
-        maxSplit: (sil || field) ? 0 : undefined,   // depth pass and field cars: keep the lid shape, drop paint-edge splits
+        maxSplit: (sil || field) ? 0 : undefined, simplePaint: sil || field,
       });
       // No brow box and no rear spoiler box: the traced shell carries its own
       // ridge over the aperture and its own aero lip at the back.

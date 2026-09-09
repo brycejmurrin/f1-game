@@ -1,6 +1,7 @@
 // @ts-check
 import { test, expect } from "@playwright/test";
 import { BOOT_MS, TRACK_MS } from "../helpers/fixtures.js";
+import { pageScreenshot } from "../helpers/soft-capture.js";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
@@ -111,7 +112,7 @@ async function pixels(page) {
   // 144.5 s with a perfectly healthy page behind it (the attached apex-state
   // shows the car parked on track). Same budget as lighting-ab's capture, for
   // the same reason.
-  const buf = await page.screenshot({ type: "jpeg", quality: 90, timeout: 150_000 });
+  const buf = await pageScreenshot(page, { type: "jpeg", quality: 90, timeout: 150_000, softTimeout: 60_000 });
   return page.evaluate(async (b64) => {
     const img = new Image();
     img.src = "data:image/jpeg;base64," + b64;
@@ -297,9 +298,10 @@ for (const condition of REPRESENTATIVE_CONDITIONS) {
     // 131.7-164.5 s in the same group run, i.e. inside 180 s only by margin.
     await boot(page, { ...condition, neutralGrade: false });
     if (CAPTURE_DIR) {
-      await page.screenshot({
+      await pageScreenshot(page, {
         path: join(CAPTURE_DIR, `${condition.track}-${condition.tod}-${condition.weather}.png`),
         timeout: 60_000,
+        softTimeout: 45_000,
       });
     }
     const stats = histogramStats(await pixels(page));
