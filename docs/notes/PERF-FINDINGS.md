@@ -2673,6 +2673,45 @@ run where the webgpu leg gets past ~600 frames. Whatever answers it, note that
 this 4.9 fps mode is itself recurring and undiagnosed, and a census that lands
 in it cannot answer any question about env-probe content.
 
+### 2026-09-09 — the cube readback does not work as called, and envBlank never answered the question (run 76)
+
+Two things, one useful and one a dead end.
+
+**envState().blank is a BRANCH MARKER, not a content check.** `_envBlank` is set
+true only on the software clear path and false on every hardware latch, so on a
+real GPU it reads false BY CONSTRUCTION. Five Verdicts have now printed
+`envBlank=false` next to a black world and not one of them was evidence about
+what the cube holds. Do not read that column as content.
+
+**The readback added to answer it FAILS.**
+`renderer.readRenderTargetPixelsAsync(envRT, 0, 0, 64, 64, face)` on a
+`CubeRenderTarget` throws `Invalid value used as weak map key` inside three r185
+— identically on BOTH legs, so it is the call that is wrong, not anything about
+WebGPU. A different route is needed: copy a face into a plain RenderTarget and
+read that, or render one probe face into a 2D target alongside the cube. Not
+attempted, because the path runs only on hardware, so every iteration is a
+4-minute dispatch against library internals — the same shape as the resolution
+theory that cost four runs, and not worth repeating blind.
+
+The instrument does fail safe: it reports `cube.error` rather than throwing into
+a probe face, latches `_envCubeRead` so it never retries, and costs one call per
+session. It stays in place so whoever has a local hardware repro can fix the
+call rather than rebuild the scaffolding.
+
+Run 76 also confirms the black world a THIRD time on a leg that fully worked:
+`envReady=true`, `mipRan=87`, 528 frames, `meanLuma 2.9`, against webgl2 at
+`mipRan=89` and 64.6.
+
+**STATE OF THIS DEFECT.** Cause confirmed (the env cube, by within-leg A/B across
+runs 69/70). Two mechanisms excluded by measurement: the mip chain (75, 76) and
+the readback path (the 2.9 is not a capture artefact — maxLuma 247). Not yet
+distinguished: whether the cube CONTENTS are void, or the lit pass APPLIES a
+valid cube destructively. The lit-pass side is the cheaper of the two to test
+next and needs no readback: `envCC` absorbs via
+`color.mulAssign(envW.mul(0.94).oneMinus())`, so a knob that zeroes env strength
+WHILE the cube stays latched separates "nothing in it" from "applied wrong" —
+`carEnvCube` is that knob, and gfx-probe already takes `--tune`.
+
 ### 2026-09-09 — the mip pass was NOT the black world (run 75, the first leg that actually tested it)
 
 The beat fix bought the measurement: the webgpu leg went from 6 frames to **547**
