@@ -370,6 +370,7 @@
         "tests/unit/livery-decal-surfaces.test.mjs",
         "tests/unit/livery-contrast.test.mjs",
         "tests/unit/team-livery.test.mjs",
+        "tests/unit/body-split.test.mjs",
         "tests/unit/cover-legibility.test.mjs",
         "tests/unit/parts-distinct-mesh.test.mjs",
         "tests/unit/helmets.test.mjs"
