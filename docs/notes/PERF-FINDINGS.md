@@ -2673,6 +2673,44 @@ run where the webgpu leg gets past ~600 frames. Whatever answers it, note that
 this 4.9 fps mode is itself recurring and undiagnosed, and a census that lands
 in it cannot answer any question about env-probe content.
 
+### 2026-09-09 — the slow leg was never slow: TLX stalls the main thread and the census calls it dead
+
+The evidence was already in the job logs, in checkpoints the tool has printed
+all along. Run 74, the four legs side by side:
+
+| leg | racing | next checkpoint | live beats |
+|---|---|---|---|
+| webgpu | +15.7s | **page-stopped-answering +25.6s** | 1, then `beat timeout` |
+| webgl2 | +29.3s | **page-stopped-answering +37.3s** | **0** — the FIRST beat missed |
+| glx | +8.6s | settled +24.1s | 15, one per second |
+| wgx | +8.9s | settled +25.7s | 15, one per second |
+
+The settle phase is a 15-beat heartbeat, each `page.evaluate` raced against an
+8 s timeout, and ONE miss broke the loop. So a TLX leg that blocks its main
+thread past a single beat ends the settle immediately — and the run then reports
+5-7 frames at 4.9-9 fps with `envReady=false`, which reads as a slow renderer
+and is nothing of the kind. The frame counter stopped because the harness gave
+up, not because the GPU was struggling. GLX and WGX answered every beat on the
+same runs, on the same machine, at the same pinned resolution.
+
+That also explains run 74 exactly: pinning `resMode` forced a TSL graph rebuild,
+so BOTH three legs stalled where only webgpu had before — the control was not
+destroyed by resolution, it was destroyed by a recompile.
+
+`gpu-game-check.mjs` now requires TWO CONSECUTIVE misses before declaring the
+page stopped. The 8 s per-beat timeout is unchanged: this is not a widened
+tolerance, it is refusing to call one slow beat a corpse — the same reasoning
+`tlx.js` already uses for `HEAL_MIN_FRAMES = 2`, where healing on a single
+transient reloaded a healthy tab.
+
+The lesson is where the evidence was. Four dispatches went into a resolution
+theory while the checkpoint timeline that refutes it was printed in every one of
+those job logs, unread — and the code comment beside the beat loop already said
+"on Apple Metal both three paths went silent here and the run learned nothing
+for twenty minutes". READ THE PHASE TIMELINE FIRST on any census leg that
+reports few frames; the `run:` INCONCLUSIVE row says the leg measured nothing,
+and the checkpoints say why.
+
 ### 2026-09-09 — the slow-leg mode is NOT resolution, and pinning it made things worse (run 74)
 
 Runs 54, 72 and 73 all showed the webgpu leg crawling (4.9-9 fps, 6-7 frames,
