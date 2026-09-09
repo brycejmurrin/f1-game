@@ -369,7 +369,19 @@ test.describe("Parts mesh caches — eviction bounds", () => {
     }));
 
     expect(stats.created).toBeGreaterThanOrEqual(36);
-    expect(stats.live).toBeLessThanOrEqual(32); // 8 pairs × rotating/fixed × F/R
+    // 80, not 32. The probe tags a mesh as "wheel" by wrapping
+    // Car3D.buildWheelLayers, and BOTH wheel caches go through it: the player's
+    // (WHEEL_MESH_CACHE_MAX = 8 pairs) and the FIELD's (FIELD_WHEEL_CACHE_MAX =
+    // 12 pairs, added later, keyed by each team's FACTORY parts). The two call
+    // sites are argument-for-argument identical, so nothing here can tell them
+    // apart. 32 asserted the player bound alone while counting both, and the
+    // grid's 22 cars fill the field cache as soon as a race draws — measured 64
+    // (both caches at 8 pairs), red on every tree that has the field cache.
+    // (8 + 12) pairs × 4 meshes is the real ceiling, and it is still a leak
+    // guard: an UNBOUNDED cache — which the field one was, until fieldWheelOrder
+    // existed — passes 80 within a few combos. What proves the PLAYER cache
+    // specifically still evicts is oldestPairEvicted/newestPairLive below.
+    expect(stats.live).toBeLessThanOrEqual(80);
     expect(stats.freed).toBeGreaterThanOrEqual(4);
     expect(new Set(stats.freedIds).size).toBe(stats.freedIds.length);
     expect(stats.oldestPairEvicted).toBe(true);
