@@ -190,6 +190,79 @@ this is the trap the pace instrument alone walks into — `ai-pace.mjs` and
 geometry. That gap is why this reached a deploy gate instead of being caught at
 my desk.
 
+## The F1-like pace spread, and what n=5 says about this file (2026-09-09)
+
+The owner's design call: the field should look like F1 — closer, fewer passes.
+`TIER_V` and the driver-skill constants were compressed by the same factor
+(0.347) about the MEASURED FIELD MEAN, so the mean is invariant by construction
+and only the spread moves:
+
+| | before | after |
+|---|---|---|
+| tierV span | 6.16 % | 2.10 % |
+| skill span | 3.19 % | 1.10 % |
+| **product span** | **8.64 %** | **2.92 %** |
+| field mean | 0.9323 | 0.9322 |
+
+Lap time held in the SIM, not just in the arithmetic — monza normal 120.68 ->
+121.60 s (+0.76 %), spa 151.15 -> 150.15 s (-0.66 %), opposite directions, so no
+systematic shift. The difficulty steps also got more consistent between
+circuits (spa easy-vs-normal +8.12 % -> +5.47 %).
+
+### What it did to the racing — measured at n=5 on BOTH trees
+
+| monza, 240 s | baseline | compressed |
+|---|---|---|
+| strings out to | 1505 [1087–1524] m | 1122 [1053–1298] m |
+| order flips | 146 [109–165] | **200 [148–211]** |
+| settled passes | 25 [19–35] | 23 [20–38] |
+| oscillation | 88 (61 %) | 131 (68 %) |
+| nose-to-tail | 23.5 [14.8–24.4] % | 26.3 [23.8–30] % |
+
+| monaco, 240 s | baseline | compressed |
+|---|---|---|
+| strings out to | 4130 **[1337–7807]** m | 1502 **[925–4237]** m |
+| order flips | 39 [27–55] | 46 [32–78] |
+| settled passes | 22 [15–31] | 18 [16–29] |
+| oscillation | 7 (19 %) | 14 (30 %) |
+
+**Read this table for what it does NOT say.** At monaco NOTHING is established:
+every range overlaps almost completely, and the baseline stringing range alone
+spans 1337–7807 m — nearly six-fold. At monza only two effects survive the
+ranges: order flips ROSE (146 -> 200, ranges barely touching) and nose-to-tail
+time rose. Stringing did not improve provably at either circuit.
+
+### The correction this forces on the rest of this file
+
+**Field stringing is too noisy to carry a claim, and this file has been
+carrying claims on it all day.** "Monaco stringing halved" in the dirty-air
+work, "strings out 4461 -> 3785 m" for the pass hysteresis, and the first
+version of THIS section's "1548 -> 1122 m" were all single runs against single
+runs. A metric whose own baseline ranges 1337–7807 m cannot resolve a 2x
+difference at n=5, let alone at n=1. Every stringing number in this file that
+is not written with a range should be read as an anecdote.
+
+The instrument was built to stop exactly this, and the error was still made
+once more after building it — comparing a single old run to a new median — which
+is why the rule now has its own line: **compare like with like, n=5 to n=5, or
+say nothing.**
+
+### Where "like F1" actually stands
+
+The spread is F1-like and that part is certain, because it is definitional.
+What is missing is the OTHER half of what makes F1 look like F1: overtaking is
+genuinely hard there. Twenty-one cars on near-identical pace with easy passing
+produce a train that trades places constantly — the monza flip count rising is
+that, and it is the honest cost of this change.
+
+`DIRTY_AIR` was tried as the lever (0.35 -> 0.60 measured flips 200 -> 165,
+settled 23 -> 29, oscillation 68 % -> 62 %) and REVERTED. It is anchored to the
+FIA's own CFD (~20 % of downforce lost at 20 m, ~35 % at 10 m) and it is
+symmetric with the player by design, so raising it past the physical reference
+to fix AI churn would make a player's car handle unphysically in traffic. The
+next lever is on the AI side — `AiDrive.otWant`'s attack thresholds, or a
+longer post-pass lockout — not the aero model.
+
 ## Which AI instrument can actually resolve a change (2026-09-09)
 
 Measured with `--runs 5`, and the two tools are not in the same league.
