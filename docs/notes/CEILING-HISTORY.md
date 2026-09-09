@@ -2550,3 +2550,17 @@ headroom.
   A GPU-mesh leak guard is worth a line here: the field cache was the one
   cache in the tree with no cap, no LRU and no free path until recently, and
   this owner has had iOS memory kills.
+
+## 2026-09-09 — shadow casters drop helmet paint-splits
+
+`js/game.js` 10322 -> **10328** lines / 5581 -> **5585** code; `js/car/car3d.js`
+4100 -> **4107**. The 24h helmet work fused a paint-edge-split lid into the
+body VAO (default 5360 tris, McLaren #1 6398). Colour draws need that. The
+sun/lamp **shadow** path binds `teamMesh(team)` with no car — a depth map —
+and was rasterising the same split geometry (~25k verts/caster, comment still
+said 11k). `Helmets.build({ maxSplit: 0 })` plus skipping the in-tub torso
+on `opts.silhouette` brings the default caster to 7948 tris / 21974 verts
+(measured). The colour body is unchanged. The raise is the wiring
+(`silhouette: !car`, a distinct `:sh` cache key so a ghost cannot inherit the
+cheap lid) and the `sil` branch in car3d; helmets.js grew comments only.
+

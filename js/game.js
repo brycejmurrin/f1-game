@@ -2157,6 +2157,7 @@ function buildCarData(team, extra) {
     parts: Parts.getVisualTiers(factorySetup, team),
     noWheels: !!(extra && extra.noWheels),
     field: !!(extra && extra.noWheels),   // factory body — probe vs playerBodies
+    silhouette: !!(extra && extra.silhouette),
   });
 }
 
@@ -2181,7 +2182,10 @@ function teamMeshKey(team) {
 // level up. carDecalNum already resolves this for the number atlas. A caller
 // with no car (the shadow casts, silhouette only) still shares one per team.
 function teamMesh(team, car) {
-  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":" + carDecalNum(team, car), () => gfx.createMesh(buildCarData(team, { num: carDecalNum(team, car) })), TEAM_MESH_CACHE_MAX);
+  const num = carDecalNum(team, car);
+  const sil = !car;   // no car = shadow caster; paint-edge splits are wasted in a depth map
+  return putBoundedMesh(teamMeshes, teamMeshOrder, teamMeshKey(team) + ":" + num + (sil ? ":sh" : ""),
+    () => gfx.createMesh(buildCarData(team, { num, silhouette: sil })), TEAM_MESH_CACHE_MAX);
 }
 function teamBodyMesh(team, car) {
   return putBoundedMesh(teamBodies, teamBodyOrder, teamMeshKey(team) + ":" + carDecalNum(team, car), () => gfx.createMesh(buildCarData(team, { noWheels: true, num: carDecalNum(team, car) })), TEAM_MESH_CACHE_MAX);
@@ -7652,7 +7656,9 @@ function render(dt) {
         if (_hasLivePlayerShadow) gfx.castShadow(teamMesh(player.team), _livePlayerShadowMat);
         // Skip casters that CANNOT reach the shadow volume. gfx.castShadow does
         // no culling of its own (js/render/glx/shadow.js): it binds the VAO,
-        // uploads uModel and draws, ~11k verts per car, so a caster outside the
+        // uploads uModel and draws, ~22k verts per silhouette car (wheels +
+        // unsplit helmet; paint-edge splits stay on the colour body), so a
+        // caster outside the
         // volume costs a full mesh for zero texels — and at night the field pays
         // it twice, once here and once in the lamp pass.
         //
