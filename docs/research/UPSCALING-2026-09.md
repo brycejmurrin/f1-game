@@ -161,46 +161,45 @@ Two consequences worth naming before anyone starts:
 4. **Temporal reconstruction stays closed** unless someone first builds a
    motion-vector buffer for another reason.
 
-## 6. Spike landed (2026-09-09) — GLX + WGX, flag OFF by default
+## 6. Spike landed (2026-09-09) — GLX / WGX / TLX, flag OFF by default
 
-Implements recommendation §5.2–5.3 in the default renderer (GLX), with the
-shared SGSR1 kernel also on WGX (same flag / fail-closed size split):
+Implements recommendation §5.2–5.3 across backends with one shared SGSR1 kernel
+and the same fail-closed size split:
 
 | Piece | Where |
 |---|---|
 | Flag | `localStorage apex26.spatialUpscale=1` or `?upscale=1`; `__apex.spatialUpscale(1\|0)` |
-| Size split | GLX `js/render/glx/glx.js` and WGX `js/render/webgpu/wgx.js` `resize()`: canvas = present (`css×dpr`); scene/post targets stay at `×renderScale` when the flag is on and scale &lt; ~1 |
-| Pass | After FXAA (or composite→LDR), one fullscreen SGSR1 mobile shader writes the present target (`js/render/glx/post.js`; WGX `present()` + `wgsl-post.js` `SGSR`) |
-| Shader | Adapted from Qualcomm SGSR1 mobile (`sgsr1_shader_mobile.frag`, BSD-3). Stock uses `textureGather` (ES 3.1) — **WebGL2 and the WGX port both emulate with four lod taps** (parity). `mediump`/WGSL, OperationMode RGBA, EdgeThreshold 8/255 |
+| Size split | GLX / WGX / TLX `resize()`: canvas = present (`css×dpr`); scene/post targets stay at `×renderScale` when the flag is on and scale &lt; ~1 |
+| Pass | After FXAA (or composite→LDR), one fullscreen SGSR1 writes the present target (`glx/post.js`; WGX `present()` + `wgsl-post.js` `SGSR`; TLX `tlx-post` + `tsl-post`) |
+| Shader | Adapted from Qualcomm SGSR1 mobile (`sgsr1_shader_mobile.frag`, BSD-3). Stock uses `textureGather` (ES 3.1) — **all ports emulate with four lod taps** (parity). WGSL renames GLSL `std` → `edgeStd` (reserved keyword). OperationMode RGBA, EdgeThreshold 8/255 |
 | Gate | Pass runs only when flag on **and** `renderScale < 0.98` **and** the program/pipeline linked; otherwise behaviour is byte-identical to pre-spike |
 
-**Not in this spike:** TLX, PerfGov auto-enable, temporal path, neural SR, frame gen. Settings UI ON/OFF row shipped separately. Real-GPU A/B still required before defaulting ON — SwiftShader cannot judge sharpness or cost.
+**Not in this spike:** PerfGov auto-enable, temporal path, neural SR, frame gen. Settings UI ON/OFF row ships with the same flag. Real-GPU A/B still required before defaulting ON — SwiftShader cannot judge sharpness or cost.
 
 ## 7. Settings UI + WGX/TLX port (research, 2026-09-09)
 
 Ask: put a menu control next to RESOLUTION, and make the same flag do something
 on WGX and TLX. Surveyed against tip `111356f6` (GLX spike already on deploy).
 
-**Update (2026-09-09):** WGX shared-SGSR1 port landed on strategy A (§7.2) —
+**Update (2026-09-09):** Strategy A (§7.2) landed for WGX and TLX — shared SGSR1,
 `setSpatialUpscale` / `wantSpatialUpscale` / present-size soft blit when active;
-FXAA→`aaTex` (LDR `rgba8`) then SGSR→swapchain; hardware `bgra8unorm` uses a
-separate `pFXAALdr` pipeline. TLX port and Settings ON/OFF row are on the same
-branch (separate commits).
+FXAA→`aaTex` (LDR) then SGSR→present. WGX hardware `bgra8unorm` uses a separate
+`pFXAALdr` pipeline. Settings ON/OFF `UPSCALE` row is wired in `js/ui/scale.js`.
 
-### 7.1 What each backend looks like today
+### 7.1 Backend surface (post-port)
 
 | | GLX | WGX | TLX |
 |---|---|---|---|
-| Size model | **Split** when flag on: canvas = present (`css×dpr`), FBOs = `×renderScale` | **Coupled**: canvas + all targets = `css×dpr×renderScale` | **Coupled**: same |
-| Last fullscreen pass | FXAA → (optional SGSR) → default FB | FXAA → swapchain view **or** `softPresentTex` | FXAA → `#game` **or** soft blit RT |
-| Soft present | optional HeadlessChrome blit | required on software (no native composite); readback = canvas size | `#game-soft` readback; `presentedTarget()` is **pre-FXAA** `ldrRT` on the normal path |
-| `textureGather` | **no** (WebGL2) — SGSR emulates 4× `textureLod` | **yes** in WGSL; **unused** in our shaders | three r185: `TextureNode.gather()` → WGSL native / WebGL2 polyfill; **not** a top-level `TSL.textureGather` export |
-| Spatial API | `setSpatialUpscale` / `wantSpatialUpscale` / `getPresentSize` | absent → `__apex.spatialUpscale` reports `available:false` | absent |
+| Size model | **Split** when flag on: canvas = present (`css×dpr`), FBOs = `×renderScale` | same split | same split |
+| Last fullscreen pass | FXAA → (optional SGSR) → default FB | FXAA → aaTex then SGSR → swapchain / soft present | FXAA → aaRT then SGSR → `#game` / soft blit |
+| Soft present | optional HeadlessChrome blit | required on software; readback = present size when upscaling | `#game-soft` at present size when upscaling |
+| `textureGather` | **no** (WebGL2) — 4× `textureLod` | WGSL has gather; **unused** (4× `textureSampleLevel`) | TSL / WebGL2 polyfill; **unused** (shared taps) |
+| Spatial API | `setSpatialUpscale` / `wantSpatialUpscale` / `getPresentSize` | same | same |
 
-Touch points if we port the GLX recipe:
+Historical touch points (landed):
 
-- **WGX:** `js/render/webgpu/wgx.js` `resize` / `_ensureSoftPresent` / `present` FXAA block; `js/render/webgpu/wgsl-post.js` new `SGSR` entry after FXAA in `PASS_ORDER`; soft blit must grow to **present** size when active (readback cost — §4).
-- **TLX:** `js/render/three/tlx.js` `resize` + soft `#game-soft` dims; `js/render/three/tlx-post.js` FXAA `dest` then new pass; `js/render/three/tsl-post.js` port of `SGSR_FS`. Soft path already mismatches FXAA dest vs `presentedTarget()` — upscale makes that worse unless blit reads the **final** present tex.
+- **WGX:** `js/render/webgpu/wgx.js` `resize` / `_ensureSoftPresent` / `present` FXAA+SGSR; `js/render/webgpu/wgsl-post.js` `SGSR` after FXAA in `PASS_ORDER`.
+- **TLX:** `js/render/three/tlx.js` size split; `tlx-post.js` + `tsl-post.js` SGSR pass; soft blit reads the final present tex.
 
 ### 7.2 Three backend strategies
 

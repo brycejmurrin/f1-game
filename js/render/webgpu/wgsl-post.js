@@ -1002,8 +1002,10 @@ fn fastLanczos2(x : f32) -> f32 {
   wA = wA * wA;
   return wB * wA;
 }
-fn weightY(dx : f32, dy : f32, c : f32, std : f32) -> vec2<f32> {
-  let x = ((dx * dx) + (dy * dy)) * 0.55 + clamp(abs(c) * std, 0.0, 1.0);
+// `std` is a WGSL reserved keyword (Dawn/Naga) — use edgeStd for the
+  // edge-strength reciprocal that GLSL SGSR_FS still names `std`.
+fn weightY(dx : f32, dy : f32, c : f32, edgeStd : f32) -> vec2<f32> {
+  let x = ((dx * dx) + (dy * dy)) * 0.55 + clamp(abs(c) * edgeStd, 0.0, 1.0);
   let w = fastLanczos2(x);
   return vec2<f32>(w, w * c);
 }
@@ -1043,19 +1045,19 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     let sum = abs(left.x) + abs(left.y) + abs(left.z) + abs(left.w)
             + abs(right.x) + abs(right.y) + abs(right.z) + abs(right.w)
             + abs(upDown.x) + abs(upDown.y) + abs(upDown.z) + abs(upDown.w);
-    let std = 2.181818 / max(sum, 1e-4);
-    var aWY = weightY(pl.x, pl.y + 1.0, upDown.x, std);
-    aWY = aWY + weightY(pl.x - 1.0, pl.y + 1.0, upDown.y, std);
-    aWY = aWY + weightY(pl.x - 1.0, pl.y - 2.0, upDown.z, std);
-    aWY = aWY + weightY(pl.x, pl.y - 2.0, upDown.w, std);
-    aWY = aWY + weightY(pl.x + 1.0, pl.y - 1.0, left.x, std);
-    aWY = aWY + weightY(pl.x, pl.y - 1.0, left.y, std);
-    aWY = aWY + weightY(pl.x, pl.y, left.z, std);
-    aWY = aWY + weightY(pl.x + 1.0, pl.y, left.w, std);
-    aWY = aWY + weightY(pl.x - 1.0, pl.y - 1.0, right.x, std);
-    aWY = aWY + weightY(pl.x - 2.0, pl.y - 1.0, right.y, std);
-    aWY = aWY + weightY(pl.x - 2.0, pl.y, right.z, std);
-    aWY = aWY + weightY(pl.x - 1.0, pl.y, right.w, std);
+    let edgeStd = 2.181818 / max(sum, 1e-4);
+    var aWY = weightY(pl.x, pl.y + 1.0, upDown.x, edgeStd);
+    aWY = aWY + weightY(pl.x - 1.0, pl.y + 1.0, upDown.y, edgeStd);
+    aWY = aWY + weightY(pl.x - 1.0, pl.y - 2.0, upDown.z, edgeStd);
+    aWY = aWY + weightY(pl.x, pl.y - 2.0, upDown.w, edgeStd);
+    aWY = aWY + weightY(pl.x + 1.0, pl.y - 1.0, left.x, edgeStd);
+    aWY = aWY + weightY(pl.x, pl.y - 1.0, left.y, edgeStd);
+    aWY = aWY + weightY(pl.x, pl.y, left.z, edgeStd);
+    aWY = aWY + weightY(pl.x + 1.0, pl.y, left.w, edgeStd);
+    aWY = aWY + weightY(pl.x - 1.0, pl.y - 1.0, right.x, edgeStd);
+    aWY = aWY + weightY(pl.x - 2.0, pl.y - 1.0, right.y, edgeStd);
+    aWY = aWY + weightY(pl.x - 2.0, pl.y, right.z, edgeStd);
+    aWY = aWY + weightY(pl.x - 1.0, pl.y, right.w, edgeStd);
     var finalY = aWY.y / max(aWY.x, 1e-4);
     let maxY = max(max(left.y, left.z), max(right.x, right.w));
     let minY = min(min(left.y, left.z), min(right.x, right.w));
