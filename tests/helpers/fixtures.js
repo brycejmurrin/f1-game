@@ -267,8 +267,10 @@ test.afterEach(async ({ page }, testInfo) => {
    ───────────────────────────────────────────────────────────────────────── */
 export const sharedTest = test.extend({
   // Worker-scoped: created once, reused until the worker exits.
-  _bootedPage: [async ({ browser }, use) => {
-    const context = await browser.newContext();
+  _bootedPage: [async ({ browser }, use, workerInfo) => {
+    const context = await browser.newContext({
+      reducedMotion: workerInfo.project.use.reducedMotion,
+    });
     await installMocks(context);
     context.on("page", captureConsole);
     const page = await context.newPage();
