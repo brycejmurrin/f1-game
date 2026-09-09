@@ -2673,6 +2673,41 @@ run where the webgpu leg gets past ~600 frames. Whatever answers it, note that
 this 4.9 fps mode is itself recurring and undiagnosed, and a census that lands
 in it cannot answer any question about env-probe content.
 
+### 2026-09-09 — the mip pass was NOT the black world (run 75, the first leg that actually tested it)
+
+The beat fix bought the measurement: the webgpu leg went from 6 frames to **547**
+at 51.1 fps, latched the probe (`envReady=true`, `begins=545 ends=545`,
+`badProbes=0`) and ran the repaired cube-mip pass **90 times** via the backend.
+
+`meanLuma 2.9`. Black, exactly as before.
+
+So the missing mip pass is REFUTED as the mechanism. It was a genuine defect —
+`renderer.generateMipmaps` does not exist in r185, so that pass had never once
+executed — and fixing it costs nothing and is worth keeping, but it does not
+explain the near-black world. The suspicion recorded above was wrong, and it was
+wrong in the way the code read predicted it might be: a minified-bundle argument
+that survived until something measured it.
+
+What run 75 settles that nothing before it could. BOTH TLX legs now hold
+`envReady=true` with `mipRan >= 90`, and they read 2.9 and 64.6. Together with
+the 69/70 A/B — the SAME webgpu leg, same present path, 39.2 probe-off against
+2.9 probe-on — the env cube as applied on the WebGPU path is the cause, and the
+mip chain is not the reason it hurts.
+
+Note the present-path caveat still forbids reading 2.9 against 64.6 as the
+measurement. It is not needed: the load-bearing comparison is within one leg,
+across the probe, and it has held across four runs.
+
+Where to look next, in order of what the evidence supports:
+1. **What is IN the cube on the WebGPU path.** `envBlank=false` is the code
+   checking itself, and that check has never been independently confirmed. A
+   readback of `envRT` (the `__tlx.lumaDbg()` half-float decoder already does
+   this for the post targets) says whether the faces hold a world or a void.
+2. **How the lit pass applies it.** `envStr` and the clearcoat `envCC` path —
+   `color.mulAssign(envW.mul(0.94).oneMinus())` ABSORBS under the mirror, so a
+   cube that reads near-zero darkens rather than merely failing to brighten.
+3. Colour space or format on the cube (`NoColorSpace` is set on the target).
+
 ### 2026-09-09 — the slow leg was never slow: TLX stalls the main thread and the census calls it dead
 
 The evidence was already in the job logs, in checkpoints the tool has printed
