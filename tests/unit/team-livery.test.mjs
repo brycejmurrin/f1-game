@@ -94,12 +94,16 @@ test("every livery field a team names is one the renderer knows", () => {
   // A DELIBERATE SECOND COPY of the list Liveries.forTeam copies, so adding a
   // key there does not silently make a team's field live — it has to be
   // acknowledged here too, with the reason.
+  //   sideTint (2026-09-09): the SPINE SIDE band designs' own colour. The
+  //   flank is a SECOND zone — under a saddle, spineTint paints the surface
+  //   these bands sit ON — so one field could not serve both, and a player
+  //   who picked a colour for the band was getting a derived one instead.
   //   spineTint (2026-09-09): the SPINE TOP band's own colour. Aston Martin's
   //   launch car is a dark band on a body-green cover, and the band's old
   //   colour was stripe||accent — that team's accent is lime, and `stripe`
   //   would have darkened the nose as well.
   const KNOWN = new Set(["cover", "finStyle", "finBadge", "finShape", "finArt", "fin",
-    "spineHeight", "spineLogo", "spineSide", "spineTint", "tcam", "coverVents", "stripe",
+    "sideTint", "spineHeight", "spineLogo", "spineSide", "spineTint", "tcam", "coverVents", "stripe",
     "noseStripe", "accent", "nose", "pod", "wing", "halo", "logo", "logo2", "logo3",
     "finish", "numFont", "sponsors"]);
   for (const t of M.Teams.LIST) {
