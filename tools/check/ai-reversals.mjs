@@ -66,12 +66,30 @@ async function measure(seed) {
   const pace = new Map(cars.map((c) => [c.code, c.tierV * c.skill]));
   for (let f = 0; f < Math.round(SETTLE / DT); f++) g.step(1, DT);
 
+  // THE BASELINE IS NOT 50 %. The grid is seeded in PACE ORDER (measured: only
+  // ~10 % of pairs start with the slower car ahead), so for ~90 % of pairs the
+  // only possible FIRST flip is a slower car going by — by construction, not by
+  // any fault of the AI. Comparing withPaceFirst against 50 % says nothing; it
+  // has to be read against the share of pairs currently INVERTED, which is what
+  // these track. A field that races and then re-sorts shows inversions rising
+  // and falling back; one that scrambles shows them rising and staying.
+  const inv = (t) => {
+    const s = cars.slice().sort((x, y) => y.prog - x.prog);
+    let bad = 0, all = 0;
+    for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) {
+      all++; if (pace.get(s[i].code) < pace.get(s[j].code)) bad++;
+    }
+    return all ? +(100 * bad / all).toFixed(1) : 0;
+  };
+  const invTrace = [];
   const ahead = new Map(), lastFlipT = new Map(), nFlips = new Map(), prevGap = new Map();
   for (const a of cars) for (const b of cars) if (a !== b) ahead.set(a.code + ">" + b.code, a.prog > b.prog);
   const ev = [];
 
+  invTrace.push(inv());
   for (let f = 0, t = 0; f < Math.round(SECONDS / DT); f++, t += DT) {
     g.step(1, DT);
+    if (f % Math.round(30 / DT) === 0) invTrace.push(inv());
     if (f % 15) continue;
     for (let i = 0; i < cars.length; i++) {
       for (let j = i + 1; j < cars.length; j++) {
@@ -98,6 +116,7 @@ async function measure(seed) {
       }
     }
   }
+  invTrace.push(inv());
   g.close();
   const first = ev.filter((e) => e.n === 1), rev = ev.filter((e) => e.n > 1);
   const pct = (a, f) => (a.length ? +(100 * a.filter(f).length / a.length).toFixed(1) : 0);
@@ -108,6 +127,8 @@ async function measure(seed) {
     withPaceFirst: pct(first, (e) => e.withPace),
     withPaceRev: pct(rev, (e) => e.withPace),
     inWakeAll: pct(ev, (e) => e.inWake),
+    invStartPct: invTrace[0], invEndPct: invTrace[invTrace.length - 1],
+    invPeakPct: Math.max(...invTrace),
     holdMedianS: holds.length ? +holds[Math.floor(holds.length / 2)].toFixed(1) : 0,
     holdP90S: holds.length ? +holds[Math.floor(holds.length * 0.9)].toFixed(1) : 0,
   };
@@ -119,7 +140,7 @@ for (let i = 0; i < RUNS; i++) runs.push(await measure(SEED0 + i));
 const bad = runs.find((r) => r.error);
 if (bad) { console.error(`ai-reversals: ${bad.error}`); process.exit(1); }
 
-const KEYS = ["flips", "firstPasses", "reversals", "withPaceAll", "withPaceFirst", "withPaceRev", "inWakeAll", "holdMedianS", "holdP90S"];
+const KEYS = ["flips", "firstPasses", "reversals", "withPaceAll", "withPaceFirst", "withPaceRev", "inWakeAll", "invStartPct", "invPeakPct", "invEndPct", "holdMedianS", "holdP90S"];
 const stat = {};
 for (const k of KEYS) { const v = runs.map((r) => r[k]); stat[k] = { median: +med(v).toFixed(1), min: Math.min(...v), max: Math.max(...v) }; }
 const one = RUNS === 1;
@@ -132,7 +153,11 @@ else {
   console.log(`  WITH pace        all ${show("withPaceAll")}%   first ${show("withPaceFirst")}%   reversals ${show("withPaceRev")}%`);
   console.log(`  passer in wake   ${show("inWakeAll")}% of flips   (< ${WAKE} m on the tick before)`);
   console.log(`  a pass stands    median ${show("holdMedianS")} s, p90 ${show("holdP90S")} s before that pair flips back`);
-  console.log(`  READ: ~50 % with-pace means the order is being decided by noise, not pace —`);
-  console.log(`        no AiDrive.otWant threshold fixes that. High with-pace + short holds`);
-  console.log(`        means real passes that will not stick, which IS a racecraft lever.`);
+  console.log(`  order vs pace    inverted ${show("invStartPct")}% at the start -> peak ${show("invPeakPct")}% -> ${show("invEndPct")}% at the end`);
+  console.log(`  READ: the grid starts in PACE ORDER (~10 % inverted), so a low withPaceFirst is`);
+  console.log(`        EXPECTED — for most pairs the only available first pass is a slower car`);
+  console.log(`        going by. Read withPaceFirst against the inverted share, never against`);
+  console.log(`        50 %. The health signal is the inversion trace: rising then FALLING BACK`);
+  console.log(`        is a field that races and re-sorts; rising and STAYING high is one that`);
+  console.log(`        scrambles, and that is when a racecraft lever is worth reaching for.`);
 }
