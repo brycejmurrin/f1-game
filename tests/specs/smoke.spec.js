@@ -1,5 +1,6 @@
 // @ts-check
 import { test, sharedTest, expect } from "../helpers/fixtures.js";
+import { awaitPresentedFrame, screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
 
 // Helper: wait for the game's __apex hook to report a non-null track,
 // meaning loadTrack() has finished and the renderer is up.
@@ -181,6 +182,7 @@ async function bootRace(page, trackId = "bahrain") {
 async function parkForScreenshot(page, frac = 0) {
   await park(page, frac);
   await page.waitForTimeout(300);
+  await awaitPresentedFrame(page);
   await page.evaluate(() => window.__apex.headless(true));
   await page.waitForTimeout(50);
 }
@@ -313,8 +315,8 @@ test.describe("Apex 26 — rendering", () => {
     await bootRace(page);
     await parkForScreenshot(page, 0);
 
-    const buf = await page.locator("canvas#game").screenshot();
-    expect(buf.length).toBeGreaterThan(5000);
+    const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
+    expect(shot.bytes).toBeGreaterThan(5000);
     expect(errors.filter((e) => !e.includes("favicon"))).toHaveLength(0);
   });
 
@@ -326,8 +328,8 @@ test.describe("Apex 26 — rendering", () => {
     const frac = corners.length > 0 ? corners[0] : 0.15;
     await parkForScreenshot(page, frac);
 
-    const buf = await page.locator("canvas#game").screenshot();
-    expect(buf.length).toBeGreaterThan(5000);
+    const shot = await screenshotPresentedCanvas(page, { skipAwait: true });
+    expect(shot.bytes).toBeGreaterThan(5000);
   });
 
   test("jump() sets player speed and lateral offset", async ({ page }) => {

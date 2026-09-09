@@ -4,6 +4,7 @@
 // Modes: chase, far, drift, cockpit, hood, overhead, heli, reverse, side,
 //        cinematic, low, tcam, rear.
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { screenshotPresentedCanvas } from "../helpers/presented-canvas.js";
 
 
 test.describe("Apex 26 — player camera modes", () => {
@@ -88,7 +89,7 @@ test.describe("Apex 26 — player camera modes", () => {
       await page.evaluate((m) => window.__apex.camera(m), mode);
       await page.evaluate(() => { for (let i = 0; i < 30; i++) window.__apex.step(1 / 60, 1); });
       await page.waitForTimeout(250);
-      shots[mode] = (await page.locator("canvas#game").screenshot()).toString("base64");
+      shots[mode] = (await screenshotPresentedCanvas(page)).buf.toString("base64");
     }
     expect(errors).toEqual([]);
     // No two modes collapse to the same vantage...

@@ -1588,12 +1588,20 @@ function previewMesh(key, hullKey, build) {
   const data = build();
   let hull = previewHulls.get(hullKey);
   if (!hull) { hull = framingHull(data); previewHulls.set(hullKey, hull); }
-  ent = { mesh: _gfx.createMesh(data), hull };
+  ent = { mesh: _gfx.createMesh(data), hull, hullKey };
   previewMeshes.set(key, ent);
   while (previewMeshes.size > PREVIEW_SLOTS) {
     const old = previewMeshes.keys().next().value;
-    _gfx.freeMesh(previewMeshes.get(old).mesh);
+    const victim = previewMeshes.get(old);
+    _gfx.freeMesh(victim.mesh);
     previewMeshes.delete(old);
+    if (victim.hullKey) {
+      let used = false;
+      for (const e of previewMeshes.values()) {
+        if (e.hullKey === victim.hullKey) { used = true; break; }
+      }
+      if (!used) previewHulls.delete(victim.hullKey);
+    }
   }
   return ent;
 }

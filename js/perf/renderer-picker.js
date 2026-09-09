@@ -368,10 +368,10 @@ function presentStatus() {
   }
   try {
     if (typeof GLX !== "undefined" && typeof GLX.softPresent === "function" && GLX.softPresent()) {
-      return "WEBGL2 soft-presents onto #game-soft under HeadlessChrome — screenshots read the 2D blit, not the WebGL swapchain." + live;
+      return "WEBGL2 paints via #game-soft under HeadlessChrome — screenshots read the 2D blit, not the WebGL swapchain. Headed players see #game." + live;
     }
   } catch (_) { /* no live backend yet */ }
-  return "WEBGL2 paints the canvas directly. Screenshots just work.";
+  return "WEBGL2 paints the GPU canvas. HeadlessChrome presents via #game-soft; headed players see #game. Screenshots just work.";
 }
 function paintPresent() {
   const pathBtn = typeof document !== "undefined" ? document.getElementById("pm-three-path") : null;
@@ -380,6 +380,15 @@ function paintPresent() {
   if (shotBtn) shotBtn.textContent = "SCREENSHOTS: " + shotModeLabel(readShotMode());
   const st = typeof document !== "undefined" ? document.getElementById("pm-gfx-status") : null;
   if (st) st.textContent = presentStatus();
+}
+function hrefFromPixels(cap) {
+  if (!cap || typeof document === "undefined" || typeof document.createElement !== "function") return null;
+  const c = document.createElement("canvas");
+  c.width = cap.width; c.height = cap.height;
+  const ctx2 = c.getContext && c.getContext("2d");
+  if (!ctx2 || typeof ctx2.putImageData !== "function") return null;
+  ctx2.putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
+  return c.toDataURL("image/png");
 }
 function saveScreenshot() {
   const btn = typeof document !== "undefined" ? document.getElementById("pm-save-shot") : null;
@@ -405,13 +414,7 @@ function saveScreenshot() {
       if (!href && soft && typeof GLX.capturePixels === "function") {
         try {
           const cap = await GLX.capturePixels();
-          const c = document.createElement("canvas");
-          c.width = cap.width; c.height = cap.height;
-          const ctx2 = c.getContext && c.getContext("2d");
-          if (ctx2 && typeof ctx2.putImageData === "function") {
-            ctx2.putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
-            href = c.toDataURL("image/png");
-          }
+          href = hrefFromPixels(cap);
         } catch (_) { href = null; capFailed = true; /* fall through to #game */ }
       }
       if (!href && softEl && typeof softEl.toDataURL === "function") {
@@ -425,15 +428,8 @@ function saveScreenshot() {
       // would sit through two full GPU round-trips to reach the same FAILED.
       if (!href && !capFailed && typeof GLX !== "undefined" && typeof GLX.capturePixels === "function") {
         const cap = await GLX.capturePixels();
-        if (typeof document === "undefined" || typeof document.createElement !== "function") {
-          done(false, "NO DOM"); return;
-        }
-        const c = document.createElement("canvas");
-        c.width = cap.width; c.height = cap.height;
-        const ctx2 = c.getContext && c.getContext("2d");
-        if (!ctx2 || typeof ctx2.putImageData !== "function") { done(false, "NO 2D"); return; }
-        ctx2.putImageData(new ImageData(cap.data, cap.width, cap.height), 0, 0);
-        href = c.toDataURL("image/png");
+        href = hrefFromPixels(cap);
+        if (!href) { done(false, "NO 2D"); return; }
       }
       if (!href) { done(false, "BLANK"); return; }
       const a = document.createElement("a");
@@ -647,7 +643,7 @@ function mountRendererPicker(old) {
   prev.textContent = "‹";
   if (typeof prev.setAttribute === "function") { prev.setAttribute("data-step", "-1"); prev.setAttribute("aria-label", "Previous renderer"); }
   sel.id = "pm-renderer";
-  sel.title = "WEBGL2 paints the canvas (screenshots work). THREE.JS is the three.js backend — use THREE PATH for WebGL2 vs WebGPU. WEBGPU is hand-written WebGPU — use SCREENSHOTS for 2D blit vs native swapchain.";
+  sel.title = "WEBGL2 paints the GPU canvas (HeadlessChrome via #game-soft). THREE.JS is the three.js backend — use THREE PATH for WebGL2 vs WebGPU. WEBGPU is hand-written WebGPU — use SCREENSHOTS for 2D blit vs native swapchain.";
   if (typeof sel.setAttribute === "function") sel.setAttribute("aria-labelledby", "pm-renderer-label");
   for (let i = 0; i < BACKENDS.length; i++) {
     const opt = document.createElement("option");

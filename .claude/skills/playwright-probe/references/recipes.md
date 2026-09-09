@@ -119,9 +119,11 @@ const results = await Promise.all(TRACKS.map(async (id) => {
 Use this to validate work from the camera / track / state debug skills
 (`cameras.md`, and **agent-view**'s track-geometry and state hooks) at scale. For single
 deterministic screenshots, `tools/shot/shot.mjs` is simpler. It clips
-`canvas#game` with `page.screenshot({ clip })` — do not use
-`locator("canvas#game").screenshot()`, which waits for element stability a live
-WebGL canvas never reaches.
+the presented canvas (`#game-soft` when the HeadlessChrome overlay exists,
+else `#game`) with `page.screenshot({ clip })` after `awaitSoftPresent` — do
+not use `locator("canvas#game").screenshot()`, which waits for element
+stability a live WebGL canvas never reaches and reads the opacity-0 GPU
+buffer on HeadlessChrome GLX.
 
 ## Shared Playwright fixtures (`tests/helpers/fixtures.js`)
 

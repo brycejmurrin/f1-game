@@ -6,6 +6,7 @@ import { extname, join, resolve, sep } from "node:path";
 import { CAMERA_FRACTIONS, REGIONS } from "./config.mjs";
 import { evaluateGates, measurePixels } from "./metrics.mjs";
 import { launchChromium } from "../../lib/harness.mjs";
+import { screenshotPresentedCanvas } from "../../capture/probe-page.mjs";
 
 const MIME = Object.freeze({
   ".css": "text/css; charset=utf-8",
@@ -140,9 +141,7 @@ async function captureAttempt(page, condition, profile, outDir) {
     });
 
     const image = join(viewDir, `${index + 1}-f${frac.toFixed(2)}.png`);
-    const sel = await page.evaluate(() =>
-      document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
-    await page.locator(sel).screenshot({ path: image, type: "png" });
+    await screenshotPresentedCanvas(page, { path: image, type: "png" });
     const pixels = await readPngPixels(page, image);
     const metrics = measurePixels(new Uint8ClampedArray(pixels.data), pixels.width, pixels.height, REGIONS);
     const frameState = await sampleFrameState(page);

@@ -70,14 +70,15 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   // cars got drivers[0] and 22 cars on track showed 11 helmets, each pair
   // identical. The number belongs in the key as well as the build, or the
   // second driver draws whichever mesh the first one cached.
-  const teamMeshSrc = game.slice(game.indexOf("function teamMesh(team, car)"), game.indexOf("function teamBodyMesh"));
+  const teamMeshSrc = game.slice(game.indexOf("function teamMesh(team, car, silhouette)"), game.indexOf("function teamBodyMesh(team, car)"));
   const teamBodySrc = game.slice(game.indexOf("function teamBodyMesh(team, car)"), game.indexOf("function teamBodyMesh(team, car)") + 400);
   assert.match(teamMeshSrc, /carDecalNum\(team, car\)/, "teamMesh must resolve the driver number");
   assert.match(teamMeshSrc, /teamMeshKey\(team\) \+ ":" \+ num/, "teamMesh must key on the driver number");
-  // Shadow casters call teamMesh(team) with no car: a distinct :sh key so the
-  // depth-only lid cannot replace a colour mesh the ghost/whole-car path draws.
+  // Shadow casters pass the car AND silhouette:true so the depth map wears
+  // that seat's helmet without rebuilding the painted lid into the caster.
   assert.match(teamMeshSrc, /silhouette: sil/);
   assert.match(teamMeshSrc, /sil \? ":sh"/);
+  assert.match(teamMeshSrc, /silhouette === true \|\| \(car == null && silhouette !== false\)/);
   const cap = game.match(/TEAM_MESH_CACHE_MAX\s*=\s*(\d+)/);
   assert.ok(cap, "TEAM_MESH_CACHE_MAX is a named ceiling");
   assert.ok(Number(cap[1]) >= 36,
@@ -94,13 +95,19 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.match(game, /const vt = teamDecalState\(team, false\)\.parts/);
   assert.match(game, /const parts = Parts\.getVisualTiers\(setup, team\);/);
   assert.match(game, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(\) : getFieldWheelMeshes\(c\.team\);/);
+  assert.match(game, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
+    "field wheels must promote hits like every other mesh LRU");
+  assert.match(game, /function cockpitBodyMesh\(team, car\)/);
+  assert.match(game, /function garageSeat\(\)/);
   const draw = game.match(
     /const body = carModelBuf \? null : \(c\.isPlayer \? playerBodyMesh\(c\.team, c\) : teamBodyMesh\(c\.team, c\)\);[\s\S]{0,400}drawPlayerWheels\(c, _groundMat/
   );
   assert.ok(draw, "body + wheels on _groundMat for every procedural car");
-  assert.match(game, /if \(_hasLivePlayerShadow\) gfx\.castShadow\(teamMesh\(player\.team\)/);
-  assert.match(game, /gfx\.castShadow\(teamMesh\(_shadowTeams\[i\]\), _shadowMats\[i\]\)/);
+  assert.match(game, /if \(_hasLivePlayerShadow\) gfx\.castShadow\(teamMesh\(player\.team, player, true\)/);
+  assert.match(game, /gfx\.castShadow\(teamMesh\(_shadowTeams\[i\], _shadowCars\[i\], true\), _shadowMats\[i\]\)/);
   assert.match(game, /gfx\.draw\(teamMesh\(player\.team, player\), tmpMat, _ghostOpts\)/);
+  assert.match(game, /1\.5 \* Math\.max\(PACE, 0\.05\)/,
+    "beached gate additive floor must scale with PACE like the grass speed floor");
 });
 
 test("orbit / agent-view read the mirrored world pose for the field", () => {
@@ -109,6 +116,10 @@ test("orbit / agent-view read the mirrored world pose for the field", () => {
   assert.match(apex, /const cx = \(c\.px != null\) \? c\.px/);
   assert.match(apex, /const cz = \(c\.pz != null\) \? c\.pz/);
   assert.doesNotMatch(apex, /c\.human && c\.px != null/);
+  assert.match(apex, /error: "no_wire"/);
+  assert.match(apex, /error: "invalid_repro"/);
+  assert.match(apex, /ok: true, cleared: true/);
+  assert.match(apex, /return \{ ok: true, bytes: blob\.size \}/);
   assert.match(view, /if \(c\.px != null\) return \[c\.px, c\.pz\];/);
   assert.doesNotMatch(view, /c\.human && c\.px != null/);
 });

@@ -35,6 +35,7 @@
 // pixel suites. Collapsed to ONE data-driven spec looping TRACKS at 6 fractions.
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "./fixtures.js";   // measured boot budget — see its note there
+import { awaitPresentedFrame, presentedCanvasClip } from "./presented-canvas.js";
 
 // Every circuit, in Tracks.LIST order — DERIVED, not written down. This used to
 // be a hand-maintained array whose comment still said "the 24 circuits" long
@@ -123,6 +124,7 @@ async function snapForward(page, frac) {
   // drift and cloth land at a fixed phase too.
   await page.evaluate(() => { window.__apex.snapCam(); window.__apex.renderClock(0); });
   await page.waitForTimeout(1800);   // let that pose actually present
+  await awaitPresentedFrame(page);
   await page.evaluate(() => window.__apex.headless(true));
   await page.waitForTimeout(120);
 }
@@ -151,13 +153,14 @@ export function describeTrack(circuit) {
         const info = await page.evaluate(() => window.__apex.info());
         expect.soft(info.state, `${circuit} @${label}% remains in race`).toBe("race");
 
-        await expect.soft(page.locator("canvas#game")).toHaveScreenshot(
+        const clip = await presentedCanvasClip(page);
+        await expect.soft(page).toHaveScreenshot(
           `${circuit}-${label}.png`,
           // 15 s was not enough under SwiftShader: toHaveScreenshot needs at least
           // TWO captures to agree, and the first grab after a track build pays
           // shader compile + texture upload. The scene is pixel-stable by then
           // (see snapForward), so this waits on throughput, not on convergence.
-          { maxDiffPixelRatio: 0.10, timeout: 60000 }
+          { clip, maxDiffPixelRatio: 0.10, timeout: 60000 }
         );
 
         await resetScene(page);

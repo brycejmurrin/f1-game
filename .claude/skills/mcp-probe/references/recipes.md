@@ -111,6 +111,11 @@ async () => {
 mcp__chrome-devtools__take_screenshot   filePath: scratch/<name>.png
 ```
 
+HeadlessChrome GLX paints `#game-soft`, not `#game` (opacity 0). Await
+`GLX.awaitSoftPresent()` while the loop still runs, then screenshot the overlay
+or a compositor clip of its box. `locator("canvas#game").screenshot()` is the
+uncomposited GPU buffer — often black even with `preserveDrawingBuffer`.
+
 Shell one-liner (auto-starts `:3456` if needed, parks to `about:blank` after):
 
 ```sh
@@ -179,11 +184,12 @@ Two things make this readable rather than lucky:
 - **Report the identity of what you measured, not just the number.** The probe
   returns the `game.js?v=` it found alongside the pixels, so the row cannot be
   silently the same tree twice — the failure mode of every two-port A/B.
-- **A WebGL drawing buffer is cleared after compositing** (no
-  `preserveDrawingBuffer`), so by read time you are usually measuring the CLEAR,
-  not the frame: an alpha canvas clears to 0, an opaque one to 255. Perfect for a
-  canvas-CONFIG question and useless for a "what colour is the car" one. Know
-  which of the two you are asking before you trust the histogram.
+- **A WebGL drawing buffer is cleared after compositing.** GLX now sets
+  `preserveDrawingBuffer: headlessUa` AND 2D-blits onto `#game-soft` under
+  HeadlessChrome. A headed player has neither. `drawImage(#game)` on a
+  headed tab is usually the CLEAR, not the frame; in HeadlessChrome, `#game`
+  is opacity 0 and the visible still is `#game-soft`. Know which of the two
+  you are asking before you trust the histogram.
 
 ### Reproducing the post-death path on purpose (WebGPU + SwiftShader)
 

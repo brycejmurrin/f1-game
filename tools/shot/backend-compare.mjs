@@ -42,6 +42,7 @@ import {
 } from "../lib/harness.mjs";
 import { assertSafePathToken, resolveRepoDefault } from "../lib/output-paths.mjs";
 import { fileURLToPath } from "node:url";
+import { awaitPresentedFrame, screenshotPresentedCanvas } from "../capture/probe-page.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -140,33 +141,15 @@ async function captureBackend(backend) {
       await page.evaluate(() => window.__apex.snapCam());
       await sleep(250);
     }
-    // Await soft-present WHILE the loop still presents; freeze-then-wait hangs on GLX.
-    await page.evaluate(async () => {
-      if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
-        try { await GLX.awaitSoftPresent(8000); } catch (_) { /* still try the canvas */ }
-      }
-    });
+    await awaitPresentedFrame(page);
     if (!live) {
       await page.evaluate(() => window.__apex.headless(true)); // stop the loop; canvas keeps the last frame
       await sleep(100);
     }
     const path = resolve(outDir, `${label}-${backend}.png`);
-    const target = await page.evaluate(() =>
-      document.getElementById("game-soft") ? "#game-soft" : "canvas#game");
-    const buf = await page.locator(target).screenshot({ path, timeout: 60_000 });
-    const blank = await page.evaluate((sel) => {
-      const g = document.querySelector(sel);
-      const ctx = g && g.getContext && g.getContext("2d");
-      if (!ctx || !(g.width > 0)) return false;
-      const w = Math.min(g.width | 0, 96), h = Math.min(g.height | 0, 96);
-      const id = ctx.getImageData(0, 0, w, h);
-      let max = 0;
-      for (let i = 0; i < id.data.length; i += 4) {
-        const c = id.data[i] + id.data[i + 1] + id.data[i + 2];
-        if (c > max) max = c;
-      }
-      return max < 8;
-    }, target).catch(() => false);
+    const shot = await screenshotPresentedCanvas(page, { path, skipAwait: true, timeout: 60_000 });
+    const buf = shot.buf;
+    const blank = shot.bytes < 5000;
     shots.push({ backend, path, bytes: buf.length, state, consoleLines });
     console.log(`  ${backend}: ${path} (${(buf.length / 1024).toFixed(1)} KB) bound=${state.backend}`
       + (blank ? "  ⚠ looks blank" : ""));

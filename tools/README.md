@@ -121,7 +121,7 @@ Shared Playwright probe helpers and garage/menu capture gates reused by shot too
 | Tool | Does | Paired skill |
 |---|---|---|
 | **capture/garage-interior.mjs** | Used by garage-frame.mjs and garage-shot.mjs after canvas readback. | — |
-| **capture/probe-page.mjs** | Probe helpers: reduced-motion init, backend pick, garage open/settle, #game / #game-soft shot. | — |
+| **capture/probe-page.mjs** | Probe helpers: reduced-motion init, backend pick, garage open/settle, soft/#game CDP shot. | — |
 
 ### `tools/gfx/`
 
