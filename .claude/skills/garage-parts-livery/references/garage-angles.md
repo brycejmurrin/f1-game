@@ -1,143 +1,146 @@
-# garage-angles.mjs — garage camera surveys
+# garage-angles.mjs — parameterized garage camera surveys
 
 One Chromium session walks the **garage camera stack** (`#cs-stack` presets +
 zoom/pan clicks), soft-presents each frame, and writes PNGs + optional labeled
-rollup grids. Counterpart to `render-car.mjs` (carview studio) and offline
+rollup grids. **No named presets** — every survey is built from flags.
+
+Counterpart to `render-car.mjs` (carview studio) and offline
 `spine-station.mjs` / `flank-occlusion.mjs`.
 
-## When to use
-
-| question | start here | then |
-|---|---|---|
-| whole-car preset walk (local) | `garage-angles.mjs` | — |
-| compare 11 teams one angle | `--live --combo=… --team=all` | `--oracle` for occl % |
-| flank mark reads at side camera | `--combo=wrap-spine` or `--spine-side=duo --views=side --zoom=8 --pan=5,0` | offline station first |
-| crown / tail / fin | `--combo=crown-grid`, `fin-stars`, `wrap-rear` | |
-| active aero flap travel | `--combo=aero-wings` | |
-| catalog livery scheme | `--livery=alt` (no spine flags) | |
-| part mesh visible in garage | `--part=aero:extreme` or combo `aero-wings` | `audit-parts.mjs` offline |
-
-## Combos (`--list-combos`)
-
-Explicit flags **override** combo defaults.
-
-| combo | purpose |
-|---|---|
-| `wrap-spine` | Wrap crown, zoomed side — occlusion regression (build 8421+) |
-| `wrap-duo` | Shipped RB default; spine group, moderate zoom |
-| `wrap-side` | Wrap + logo flank; side only |
-| `duo-grid` | wrap/duo on every team; side rollup |
-| `flank-pack` | Five flank marks — **single team** diagnostic |
-| `side-survey` | All `SPINE_SIDE` ids — **single team** |
-| `crown-grid` | Four crown styles; top rollup |
-| `aero-wings` | Wing presets + X-mode + extreme aero parts |
-| `livery-wall` | Front / crest readability |
-| `wrap-rear` | Rear + side for aft crown visibility |
-| `fin-stars` | W17 star tail + wrap; rear/top |
-
-## View groups
-
-Presets: `hero`, `front`, `side`, `rear`, `top`, `wingFront`, `wingRear`.
-
-Groups (via `--views=`):
-
-| group | presets |
-|---|---|
-| `spine` | hero, top, rear, side |
-| `wings` | wingFront, wingRear |
-| `front` | front |
-| `rear` | rear |
-| `livery` | front (crest / wall) |
-| `aero` | wingFront, wingRear, rear |
-| `all` | every preset |
-
-## Camera zoom / pan
-
-Applied **after** the preset via discrete clicks (same as `#cs-view-in`,
-`#cs-pan-right`, `#cs-pan-fwd`). Implemented through `__apex.garageFrame`.
-`--zoom 8` bottoms at the ~4.6 m floor; `--pan 5,0` walks aft along the flank.
-
-## Teams and speed
-
-- `--team=all` — 11 grid teams (not `custom` / My Team).
-- Default for multi-team + combo: **rollup-only** (one shot per team).
-- `--full-views` — every preset in the combo per team.
-- `--fast` / `--slow` — settle and present waits.
-- `--resume` — skip completed teams; merge rollup from prior meta.
-- Store-fast switch: `__apex.garageTeam` (default); `--picker-team` for UI path.
-
-## Designs, parts, livery fields
-
-**Spine survey** (custom shot livery in store):
+## Discover ids
 
 ```sh
---spine-logo=wrap[,bigmark]   # 'all' → every SPINE_LOGO id
---spine-side=duo[,slash]       # 'all' → every SPINE_SIDE id
+node tools/shot/garage-angles.mjs --list-ids   # views, spine-logo, spine-side, part cats
+node tools/shot/garage-angles.mjs --help
 ```
 
-**Catalog livery** (no spine flags):
+## Core parameters
+
+| flag | meaning |
+|---|---|
+| `--team=redbull\|all` | one team, comma list, or full 2026 grid (11 teams) |
+| `--views=side` | preset or group: `spine`, `wings`, `front`, `rear`, `livery`, `aero`, `all` |
+| `--zoom=N` | `#cs-view-in` clicks after preset (8 ≈ 4.6 m floor on side) |
+| `--pan=strafe,dolly` | `#cs-pan-*` clicks after preset (`5,0` walks aft on flank) |
+| `--rollup-view=side` | which preset fills each cell when `--team=all` |
+| `--rollup-only` / `--full-views` | one shot vs every preset per team |
+
+Multi-team runs default to **rollup-only** and **fast** unless `--full-views` /
+`--slow`.
+
+## Spine designs
+
+Pick **one** style:
+
+**Explicit pairs** (repeatable — best for grids):
+
+```sh
+--design=wrap:none
+--design=wrap:duo
+--design=bigmark:none
+```
+
+**Cartesian product**:
+
+```sh
+--spine-logo=wrap,bigmark
+--spine-side=duo,slash,logo
+# → wrap×duo, wrap×slash, wrap×logo, bigmark×duo, …
+```
+
+**Expand everything**:
+
+```sh
+--spine-logo=wrap --spine-side=all    # every SPINE_SIDE id
+```
+
+**Catalog livery** (no custom spine shot):
 
 ```sh
 --livery=default,alt
 ```
 
-**Field overrides** on shot liveries:
+## Livery fields, parts, aero
 
 ```sh
---liv=finStyle:stars          # repeatable
---liv-fin-style=stars         # kebab form
-```
-
-**Parts** (garage setup mesh):
-
-```sh
---part=aero:extreme           # repeatable category:option
---aero=extreme                # shorthand
---aero-x                      # X-mode flaps open before capture
+--liv=finStyle:stars              # repeatable field:value
+--liv-fin-style=stars             # kebab alias
+--part=aero:extreme               # repeatable category:option
+--aero=extreme                    # shorthand
+--aero-x                          # X-mode flaps open before capture
 ```
 
 ## Live / labels / oracle
 
 ```sh
---live                        # https://brycejmurrin.github.io/f1-game/
---oracle                      # offline flank-occlusion % on rollup labels
---no-labels | --labels        # live defaults labels on
---team-sheets | --label-shots # per-team contact sheets (multi-team off by default)
+--live                            # github.io
+--oracle                          # offline flank-occlusion % on rollup labels
+--resume                          # skip teams already captured
+--no-labels | --labels
+--team-sheets | --label-shots
 ```
 
-## Examples
+## Common surveys (copy-paste recipes)
+
+**Occlusion regression — all teams, zoomed side (build 8421+):**
 
 ```sh
-# Live grid survey (primary)
-node tools/shot/garage-angles.mjs --live --combo=wrap-spine --team=all \
+node tools/shot/garage-angles.mjs --live --team=all \
+  --design=wrap:none --views=side --zoom=8 --pan=5,0 \
   --oracle --out=artifacts/wrap-spine-all
+```
 
-# Resume interrupted all-team run
-node tools/shot/garage-angles.mjs --live --combo=duo-grid --team=all \
-  --resume --out=artifacts/wrap-spine-all
+**Red Bull default (wrap + duo) across grid:**
 
-# Single-team flank diagnostic
-node tools/shot/garage-angles.mjs --combo=flank-pack --team=redbull \
-  --full-views --out=artifacts/flank-pack
+```sh
+node tools/shot/garage-angles.mjs --live --team=all \
+  --design=wrap:duo --views=side --zoom=8 --pan=5,0
+```
 
-# Active aero + extreme rear wing
-node tools/shot/garage-angles.mjs --combo=aero-wings --team=mclaren --labels
+**Single-team flank walk:**
 
-# Custom: slash flank, hero+side, fin stars
-node tools/shot/garage-angles.mjs --team=ferrari \
-  --spine-logo=wrap --spine-side=slash --views=hero,side \
-  --zoom=6 --pan=3,0 --liv-fin-style=stars --part=aero:extreme --aero-x
+```sh
+node tools/shot/garage-angles.mjs --team=redbull \
+  --spine-logo=wrap --spine-side=duo,slash,logo,wordmark,lockup \
+  --views=side --zoom=8 --pan=5,0 --full-views
+```
+
+**Crown styles, top rollup:**
+
+```sh
+node tools/shot/garage-angles.mjs --team=all \
+  --spine-logo=wrap,bigmark,wedge,saddle --spine-side=none \
+  --views=spine --rollup-view=top
+```
+
+**Active aero + extreme rear wing:**
+
+```sh
+node tools/shot/garage-angles.mjs --team=mclaren \
+  --views=wings --part=aero:extreme --aero-x --zoom=2
+```
+
+**Crest / garage wall:**
+
+```sh
+node tools/shot/garage-angles.mjs --team=ferrari --views=front
+```
+
+**W17 star tail:**
+
+```sh
+node tools/shot/garage-angles.mjs --team=mercedes \
+  --design=wrap:none --views=rear,top --liv-fin-style=stars --zoom=2
 ```
 
 ## Output
 
-- Per shot: `{team}-{tag}-{view}.png` (+ `-labeled.png` when enabled)
-- Multi-team rollup: `all-teams-{combo}-{rollupView}-rollup.png`
-- Meta: `all-teams-angles.json` or `{team}-angles.json`
+- Shots: `{team}-{tag}-{view}.png`
+- Multi-team rollup: `all-teams-{survey-tag}-{rollupView}-rollup.png`
+- Meta: `all-teams-angles.json`
 
 ## Related
 
-- Offline placement: `tools/car/spine-station.mjs`, `flank-occlusion.mjs`
-- Placement ladder: [placement.md](placement.md)
-- Studio turntable: `tools/car/render-car.mjs`
-- One backend A/B: `tools/shot/garage-frame.mjs`
+- Offline placement: `spine-station.mjs`, `flank-occlusion.mjs` — [placement.md](placement.md)
+- Studio turntable: `render-car.mjs`
+- One backend A/B: `garage-frame.mjs`

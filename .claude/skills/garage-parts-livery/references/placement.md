@@ -165,12 +165,13 @@ and neither existed at racing distance.
 
 Racing distance is `shot.mjs --team`. The garage's own read is
 `garage-angles.mjs` (full reference:
-[garage-angles.md](garage-angles.md)). Combos bundle the common surveys:
+[garage-angles.md](garage-angles.md)). Surveys are **parameterized** — no named
+presets:
 
 ```sh
-node tools/shot/garage-angles.mjs --list-combos
-node tools/shot/garage-angles.mjs --live --combo=wrap-spine --team=all --oracle
-node tools/shot/garage-angles.mjs --combo=flank-pack --team=redbull --full-views
+node tools/shot/garage-angles.mjs --list-ids
+node tools/shot/garage-angles.mjs --live --team=all --design=wrap:none --views=side --zoom=8 --pan=5,0 --oracle
+node tools/shot/garage-angles.mjs --team=redbull --spine-logo=wrap --spine-side=duo,slash,logo --views=side --zoom=8 --pan=5,0 --full-views
 ```
 
 Presets frame the WHOLE car (SIDE sits at 11.2 m), so a flank mark arrives forty

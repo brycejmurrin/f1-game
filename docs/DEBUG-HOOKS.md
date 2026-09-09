@@ -1310,7 +1310,7 @@ DOM clicks. Pair with `settleGarage()` + `screenshotGameCanvas()` for captures.
 ### `garageParts(parts) → {ok, team?, parts?, error?}`
 Merge `{category: optionId}` into the current team's garage setup (`getTeamParts` /
 `saveTeamParts`, `buildSetup`, drop preview meshes). Used by `garage-angles.mjs`
-`--part=aero:extreme` and combo `aero-wings`. Requires `#carsetup` open.
+`--part=aero:extreme` from `garage-angles.mjs`. Requires `#carsetup` open.
 
 ### `corners() → [number, …]`
 Lap-fractions of **curvature-peak** apexes (local maxima of `|curvature|`). Handy

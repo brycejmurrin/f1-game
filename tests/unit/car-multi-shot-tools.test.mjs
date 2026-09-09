@@ -32,8 +32,8 @@ test("render-car has a spine preset and repeatable --shot customs", () => {
 test("garage-angles defaults to spine group and soft-captures via probe helpers", () => {
   const src = code("tools/shot/garage-angles.mjs");
   assert.match(src, /spine:\s*\[\s*"hero"/, "spine group covers crown-friendly presets");
-  assert.match(src, /viewsDefault = rollupOnly \? rollupView/,
-    "rollup-only trims views; combo/--views/--full-views override");
+  assert.match(src, /viewsDefault = rollupOnly[\s\S]*?\? rollupView/,
+    "rollup-only trims views; --views/--full-views override");
   assert.match(src, /startsWith\(name \+ "="\)/, "must accept --team=value as well as --team value");
   assert.match(src, /screenshotGameCanvas/, "must reuse soft-present capture helper");
   assert.match(src, /openGarage/, "must reuse openGarage retries, not a one-shot mb-garage click");
@@ -41,14 +41,15 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src, /isLive|argv\.includes\("--live"\)/, "supports --live github.io capture");
   assert.match(src, /labelShot|buildContactSheet/, "writes labeled PNGs and a contact sheet");
   assert.match(src, /withLabels = isLive/, "labels default on for --live only");
-  assert.match(src, /COMBOS|"wrap-spine"/, "combo presets bundle logo/side/views/zoom");
-  assert.match(src, /--list-combos|printHelp/, "documents combos via --list-combos/--help");
+  assert.match(src, /--design=/, "repeatable --design=logo:side pairs");
+  assert.match(src, /--list-ids|printHelp/, "documents ids via --list-ids/--help");
+  assert.doesNotMatch(src, /const COMBOS/, "no hardcoded named combo presets");
   assert.match(src, /garageParts|--part=/, "supports parts overrides");
   assert.match(src, /wings:\s*\[/, "wings view group for aero surveys");
   assert.match(src, /expandTokenList|readLiverytexIds/, "spine-side=all expands SPINE_SIDE_IDS");
   assert.match(src, /parseTeams|teamArg === "all"|arg === "all"/, "supports --team=all roster walk");
   assert.match(src, /buildTeamRollup/, "multi-team rollup contact sheet");
-  assert.match(src, /rollupOnly/, "multi-team combo defaults to rollup-only survey");
+  assert.match(src, /rollupOnly/, "multi-team defaults to rollup-only survey");
   assert.match(src, /skipAwait:\s*true/, "skips duplicate present wait after settle");
   assert.match(src, /garageFrame|__apex\.garageFrame/, "uses __apex.garageFrame for preset+zoom+pan");
   assert.match(src, /garageTeam|__apex\.garageTeam/, "store-fast team switch via __apex.garageTeam");
