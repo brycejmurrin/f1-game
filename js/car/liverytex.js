@@ -1453,8 +1453,17 @@ const LiveryTex = (function () {
         ctx.beginPath(); ctx.moveTo(px + d, Y); ctx.lineTo(px + d + H, Y + H); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(px + d + H, Y); ctx.lineTo(px + d, Y + H); ctx.stroke();
       }
+      // The keylines are what a viewer actually SEES of this design: the panel
+      // is exposed carbon, so on a dark car it is near-black on near-black and
+      // the weave is a 7 % wash over it — measured at 0 % of the crown readable
+      // on five of twelve cars, which is a design that does not exist. At 1.4 %
+      // of the crown each they were too thin to register at chase distance;
+      // 3.5 % keeps them keylines and puts carbon level with the thinnest
+      // design that does read (Mercedes' twin stripes). The colour is already
+      // the cover-aware band, so they contrast whatever they land on.
+      const kw = W * 0.035;
       ctx.fillStyle = cssA(acc, 0.9);
-      ctx.fillRect(px - W * 0.014, Y, W * 0.014, H); ctx.fillRect(px + pw, Y, W * 0.014, H);
+      ctx.fillRect(px - kw, Y, kw, H); ctx.fillRect(px + pw, Y, kw, H);
     } else if (id === "chevron") {
       // Three arrows pointing at the NOSE down the crown — Alpine's, and the
       // shape a swept wing leaves on a cover. The crest canvas is drawn
@@ -1718,7 +1727,15 @@ const LiveryTex = (function () {
     // COVER, so they ink against ITS colour: a white cover (the SF-26) under a
     // red car would otherwise take the red car's ink and read as nothing.
     const coverPaint = colors.cover || c1;
-    const inkCrest = inkOn([coverPaint, finPaint]);
+    // …against the cover ALONE. Scoring it against the fin as well made the
+    // crown's ink a compromise with a surface the crown never touches, and on
+    // Cadillac — a near-black car with a near-white fin — no ink satisfies
+    // both, so it picked dark and the wordmark and number vanished into the
+    // black cover: 0 % of the crown readable, measured. The fin has inkFin,
+    // which is what the fin badge already uses; every shipped car now sets
+    // finShape "none", so a fin that is not there was choosing the ink for a
+    // mark that is.
+    const inkCrest = inkOn([coverPaint]);
     const inkFin = inkOn([finPaint]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks (titleA only)
     const inkNose = inkOn([c1, c2]);          // titleB — the monocoque top
