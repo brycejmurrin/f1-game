@@ -1,5 +1,6 @@
 // Shared Playwright probe helpers for menu/garage capture tools.
-// @doc Probe helpers: reduced-motion init, backend pick, garage open/settle, #game canvas shot.
+// @doc Probe helpers: reduced-motion init, backend pick, garage open/settle, #game / #game-soft shot.
+import { writeFileSync } from "node:fs";
 import { WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
 
 /** Chromium flags per renderer backend (must match backend-compare / gfx-probe). */
@@ -220,41 +221,44 @@ export async function waitGameVisible(page, timeout = 30000) {
   }
 }
 
-/** Fade the setup panel and clip #game for a clean shot. */
+/** Fade the setup panel and clip #game for a clean shot.
+ * Prefer #game-soft toDataURL under HeadlessChrome soft-present — page.screenshot
+ * of the WebGL compositor routinely hangs ("waiting for fonts…") on SwiftShader
+ * while the 2D overlay already has the frame. */
 export async function screenshotGameCanvas(page, outPath) {
   await page.evaluate(() => {
     const c = document.getElementById("carsetup");
     if (c) c.style.opacity = "0";
   });
   await waitGameVisible(page);
-  // Rect straight from the DOM: locator.boundingBox() would repeat the
-  // visibility wait above and swallow its diagnosis on timeout.
-  const box = await page.evaluate(() => {
-    const r = document.getElementById("game").getBoundingClientRect();
-    return { x: r.x, y: r.y, width: r.width, height: r.height };
-  });
-  if (!box || !(box.width > 0 && box.height > 0)) throw new Error("probe: #game has no bounding box");
-  // Wait for a NEW blit WHILE THE LOOP STILL RUNS. GLX (and TLX) present()
-  // is what drives the overlay; headless(true) skips render/present, so a
-  // freeze-then-wait can never observe gen > start and times out. WGX can
-  // still complete an in-flight mapAsync after freeze; GLX cannot.
+  // Wait for a NEW blit WHILE THE LOOP STILL RUNS. GLX present() drives the
+  // overlay; freeze-then-wait hangs (gen never advances).
   await page.evaluate(async () => {
     if (typeof GLX !== "undefined" && GLX.awaitSoftPresent) {
       try { await GLX.awaitSoftPresent(8000); } catch (_) {}
     }
   });
-  // FREEZE THE LOOP ACROSS THE CAPTURE. page.screenshot needs the compositor,
-  // and a GLX garage frame on SwiftShader keeps the renderer's main thread hot
-  // enough that the capture starved and blew its 60 s timeout with only
-  // "waiting for fonts to load... / fonts loaded" in the call log. headless(true)
-  // makes render() return before it does any work — and before the visibility
-  // write, so the canvas keeps both its last composited frame and its
-  // visibility. Measured: the same capture that timed out completes in ~9 s.
-  // Restored in `finally`, or every later step would probe a frozen page.
+  const softB64 = await page.evaluate(() => {
+    const g = document.getElementById("game-soft");
+    if (!g || typeof g.toDataURL !== "function" || !(g.width > 0) || !(g.height > 0)) return null;
+    try { return g.toDataURL("image/png").split(",")[1]; } catch (_) { return null; }
+  });
+  if (softB64) {
+    const buf = Buffer.from(softB64, "base64");
+    writeFileSync(outPath, buf);
+    return { bytes: buf.length, clip: null, via: "game-soft" };
+  }
+  const box = await page.evaluate(() => {
+    const r = document.getElementById("game").getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  });
+  if (!box || !(box.width > 0 && box.height > 0)) throw new Error("probe: #game has no bounding box");
+  // FREEZE across compositor capture — a live GLX garage frame starves
+  // page.screenshot under SwiftShader (measured 60 s timeout on fonts-loaded).
   await page.evaluate(() => { try { window.__apex.headless(true); } catch (_) {} });
   try {
     const buf = await page.screenshot({ path: outPath, clip: box, timeout: 60000 });
-    return { bytes: buf.length, clip: box };
+    return { bytes: buf.length, clip: box, via: "page-clip" };
   } finally {
     await page.evaluate(() => { try { window.__apex.headless(false); } catch (_) {} });
   }

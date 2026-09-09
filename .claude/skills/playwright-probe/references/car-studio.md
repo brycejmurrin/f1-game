@@ -16,10 +16,13 @@ node tools/car/carshot.mjs 40 day 2 artifacts/tmp/apex-carshot.jpg   # az tod te
 python3 -m http.server 3456        # or: npx serve -l 3456 .
 node tools/car/render-car.mjs                                   # mclaren hero
 node tools/car/render-car.mjs --team=ferrari --views=all
-node tools/car/render-car.mjs --team=redbull --views=tail,side --tod=night
+node tools/car/render-car.mjs --team=redbull --preset=spine
+node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=/opt/cursor/artifacts/redbull-garage
 ```
 
-Read the PNGs it prints. Batch audits: `tools/car/audit-parts.mjs` →
+`--preset=spine` / `--shot=label,az,el,dist` (repeatable) keep ONE Chromium for
+many angles. Garage multi-angle: `tools/shot/garage-angles.mjs` (soft-present
+`#game-soft` capture). Batch audits: `tools/car/audit-parts.mjs` →
 `scratch/renders/parts/<category>/`; `tools/car/audit-aero.mjs` →
 `scratch/renders/aero/`.
 

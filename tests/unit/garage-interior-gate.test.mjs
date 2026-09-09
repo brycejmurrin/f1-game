@@ -138,10 +138,13 @@ describe("the interior gate on a cleared-buffer frame", () => {
     assert.doesNotMatch(frame, /gapSample/,
       "the drawImage-fed gapSample field is gone; nothing may depend on it again");
     const shot = probe.slice(probe.indexOf("export async function screenshotGameCanvas"),
-      probe.indexOf("export async function screenshotGameCanvas") + 1800);
+      probe.indexOf("export async function screenshotGameCanvas") + 2800);
     const awaitAt = shot.indexOf("GLX.awaitSoftPresent");
+    const softAt = shot.indexOf("game-soft");
     const freezeAt = shot.indexOf("__apex.headless(true)");
-    assert.ok(awaitAt >= 0 && freezeAt > awaitAt,
-      "awaitSoftPresent must run while the loop still presents; freeze-then-wait hangs on GLX");
+    assert.ok(awaitAt >= 0 && softAt > awaitAt,
+      "awaitSoftPresent then #game-soft toDataURL — page.screenshot hangs under SwiftShader");
+    assert.ok(freezeAt < 0 || freezeAt > softAt,
+      "freeze/page-clip is fallback only after the soft overlay path");
   });
 });
