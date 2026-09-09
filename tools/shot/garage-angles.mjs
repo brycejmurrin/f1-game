@@ -53,7 +53,7 @@ const vp = flag("--viewport", "1280x720").split("x").map(Number);
 const outDir = flag("--out", isLive ? "artifacts/garage-angles-live" : "artifacts/garage-angles");
 const zoom = Number(flag("--zoom", isLive ? "6" : "0")) || 0;
 const [strafe = 0, dolly = 0] = (flag("--pan", isLive ? "3,0" : "0,0")).split(",").map(Number);
-const withLabels = !argv.includes("--no-labels");
+const withLabels = isLive ? !argv.includes("--no-labels") : argv.includes("--labels");
 
 /** Roster order == store.team index (game.js boot). */
 function teamIndex(id) {

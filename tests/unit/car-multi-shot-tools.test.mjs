@@ -40,6 +40,7 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src, /settleGarage/, "settle soft-present between presets");
   assert.match(src, /isLive|argv\.includes\("--live"\)/, "supports --live github.io capture");
   assert.match(src, /labelShot|buildContactSheet/, "writes labeled PNGs and a contact sheet");
+  assert.match(src, /withLabels = isLive/, "labels default on for --live only");
   assert.doesNotMatch(src, /page\.reload\(/, "no second boot — openGarage pins the team live");
   assert.doesNotMatch(src, /page\.screenshot\(\s*\{\s*path:\s*png/,
     "no raw page.screenshot — that hung under SwiftShader");
