@@ -54,43 +54,76 @@ Session shape — this is what controls both wall time and waiting:
    from the working tree, so a run in flight FORBIDS source edits.
    `test:tooling-fast` is the edit-loop check; track or scenery edits run
    `verify-track.cjs <id>` (2 s), not a browser group.
-3. **NEVER BLOCK THE FOREGROUND ON A TEST RUN** — flat, and it covers node
+3. **`npm run test:guards` BEFORE EVERY COMMIT — 11 s, and it is not optional.**
+   The 14 cross-file guards: registries against the tree, generated files
+   against their sources, ceilings against what they measure, and
+   `global-registry` parses every manifest file so a syntax error cannot reach
+   a commit. Judging which tests a change "needs" is how four failures shipped
+   past review in one session — a suite registered in none of its four
+   registries (two deploys lost to it), `tools/README.md` and `package.json`
+   hand-edited when both are GENERATED, and a missing comma in a garage file
+   that would have broken the whole game's boot. Every one of them was inside
+   these 14 guards, and each cost a ~10-minute deploy cycle to discover.
+   NEVER hand-edit a generated file: `index.html`'s `@gen-shell` blocks,
+   `version.json`, the `apex-build` meta, `package.json`'s scripts (source:
+   `tests/groups.json`), `tools/README.md` (source: the tools' own `@doc`
+   headers), `js/roster.js`, `tools/carview.html`. Edit the SOURCE and run its
+   generator. Adding a test group needs the key in `package.json` first — the
+   generator owns the body, not the key.
+4. **NEVER BLOCK THE FOREGROUND ON A TEST RUN** — flat, and it covers node
    suites, sweeps and audits, not just browser groups. Anything over ~30 s goes
    to the background with its output in an `artifacts/` log while the session
    does other work or ends the turn; poll with a bounded read, never idle-watch.
-4. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`.
+5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs`.
    Anchor on the reporter's terminal line with
    `grep -E '= run (passed|failed|timedout|interrupted)'` (ERE alternation; a
    fixed-string or BRE grep never matches) — never a looser pattern, never the
    process table, never `| tail` on a live log.
-5. **REAP WHAT YOU LAUNCHED, AND CHECK BEFORE YOU BLAME THE BOX.** A finished
-   task does not take its browsers with it: a killed `test-bg` run leaves its
-   Playwright WORKERS alive, and a probe script that never exits keeps
-   respawning Chrome for as long as the session lasts. Measured here — one
-   backgrounded probe ran 113 minutes at ~350 % CPU beside two orphaned
+6. **TO STOP A TEST-BG RUN, USE `--stop`. NEVER KILL IT BY PID.**
+   `node tools/ci/test-bg.mjs --stop` — that is the whole instruction, and it
+   already does the right thing (it signals the process GROUP, SIGTERM then
+   SIGKILL, so Playwright closes its browsers). `kill <pid>` on the run reaches
+   only the `npm run test:<group>` shim, npm does not forward the signal, and
+   run-playwright, the Playwright runner and every Chromium it opened are
+   ORPHANED — still on the CPU, still writing to the log the next run
+   truncates, and invisible to `--status` because the pid it holds is now dead.
+   Measured 2026-09-09: `kill -9` on the supervisor left 8 Chromium processes
+   at ~290 % CPU and held the box above the deploy's own load gate, costing six
+   commands to recover. This rule previously said "`kill -9` it by PID" without
+   mentioning `--stop` at all, and that is what taught the wrong move.
+   `--stop --sweep` is the recovery path once a supervisor has already been
+   killed and its registry entry is dead.
+7. **REAP WHAT YOU LAUNCHED, AND CHECK BEFORE YOU BLAME THE BOX.** A finished
+   task does not take its browsers with it: a probe script that never exits
+   keeps respawning Chrome for as long as the session lasts. Measured here —
+   one backgrounded probe ran 113 minutes at ~350 % CPU beside two orphaned
    headless shells and put the box at loadavg 8.15, which is where the deploy
    REFUSES (>= 3) and where every browser verdict becomes a measurement of the
    machine. So before a browser run, a deploy, or any timing judgement, and
    again after anything backgrounded ends:
    `ps -eo pid,pcpu,etimes,args --sort=-pcpu | head` — anything of yours burning
-   CPU with a long ELAPSED is an orphan; `kill -9` it by PID. Leave the MCP
-   servers alone (`playwright-mcp`, `chrome-devtools-mcp` sit at 0 % — they are
-   the harness's, not yours), and never `pkill` a pattern that also matches
-   your own shell. `node tools/ci/test-bg.mjs --status` reports the runs it
-   knows about; it does not know about anything you started by hand.
-6. A timeout on a busy box measures the machine, not the code: check
+   CPU with a long ELAPSED is an orphan. Kill it **by PID**, listing the PIDs
+   first (`ps -eo pid,comm | awk '$2=="chrome"{print $1}'`) and killing those:
+   a `pkill -f <pattern>` also matches YOUR OWN SHELL, whose command line
+   contains the pattern you just typed — that kills the shell mid-command and
+   leaves the job half done (measured the same day, on the line that was
+   supposed to be doing the cleanup). Leave the MCP servers alone
+   (`playwright-mcp`, `chrome-devtools-mcp` sit at 0 % — they are the harness's,
+   not yours). `node tools/ci/test-bg.mjs --status` reports the runs it knows
+   about; it does not know about anything you started by hand.
+8. A timeout on a busy box measures the machine, not the code: check
    `/proc/loadavg` (< 3) and for a live `playwright test` process before
    starting anything, look for a load inversion in the log first, and re-run
    the spec ALONE only when the verdict matters.
-7. **STOPPING IS ALLOWED** — a pushed change that names its unverified groups
+9. **STOPPING IS ALLOWED** — a pushed change that names its unverified groups
    beats an hour of serialized SwiftShader. **Never widen a tolerance to make a
    spec pass**; write against `__apex` hooks, relative assertions over absolute
    thresholds; any `waitForFunction` on a rendering page needs
    `{ polling: 100 }` or its declared timeout never fires.
-8. Never hand a subagent a browser run — give a flat prohibition ("report it
+10. Never hand a subagent a browser run — give a flat prohibition ("report it
    unverified"). Subagent worktrees default to a STALE base: first step in any
    worktree is `git checkout -B <branch> <the session branch or its SHA>`.
-9. Never hand-edit a `@gen-shell` block, `version.json` or the `apex-build`
+11. Never hand-edit a `@gen-shell` block, `version.json` or the `apex-build`
    meta — the shell is generated and the deploy stamps it.
 
 ## Seeing the game (cheapest first)

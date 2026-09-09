@@ -242,7 +242,3 @@ export async function launchChromium(opts = {}) {
   return browser;
 }
 
-/** Register any other cleanup (e.g. a browser this module didn't launch). */
-export function onShutdown(close, force = () => {}) {
-  return track({ close, force });
-}

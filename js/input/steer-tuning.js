@@ -440,7 +440,14 @@ function applySteerTuning() {
   // button builds road-wheel angle linearly instead of as t^expo.
   if (Input.setSteerExpo) Input.setSteerExpo(G.STEER_EXPO);
   G.raceLineAssist = line / 5;
-  const cue = clamp(store.get("brakeCue", 4), SLIDER_MIN, SLIDER_MAX);
+  // The stored value is only trusted when it is a NUMBER. clamp compares, and
+  // both `v < lo` and `v > hi` are false for a string, so a non-number walks
+  // straight through it — which is how a "on"/"off" left by the driving-line
+  // panel (it shared this key until the rename to lineBrakeCue) reached
+  // setLevel, failed its `typeof v === "number"` guard, and left the slider
+  // unrestored with nothing logged. A number is the only thing this ever meant.
+  const cueRaw = store.get("brakeCue", 4);
+  const cue = clamp(typeof cueRaw === "number" && isFinite(cueRaw) ? cueRaw : 4, SLIDER_MIN, SLIDER_MAX);
   if (window.BrakeCue) BrakeCue.setLevel(cue);
   $("pm-rate").value    = rate;    $("pm-rate-v").textContent    = rate;
   $("pm-expo").value    = expo;    $("pm-expo-v").textContent    = expo;

@@ -63,7 +63,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { loadCrests, paintAt, paintStackAt } from "../../tools/car/crest-sweep.mjs";
+import { loadCrests, paintStackAt } from "../../tools/car/crest-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { RecCtx } = loadCrests();
@@ -106,32 +106,35 @@ const GRID = 40;
 // at all. The second is what separates "this design is subtle" from "this
 // design is not there": `none` paints nothing and is fine, while `carbon` on a
 // dark car painted 74 % of the crown and only 5 % of it could be seen.
+//
+// ONE walk of the op stack per sample point. It was two — paintAt for "did
+// anything paint here" beside paintStackAt for "what colour is here" — and the
+// second was pure waste: paintStackAt already visits every op covering the
+// point, so the topmost style is in its hand. Across the design matrix that was
+// ~440k redundant walks; folding them took this suite 28 s -> 11 s on a fast
+// gate of 158.
 function survey(ops, R, bg) {
   let read = 0, painted = 0, n = 0;
   for (let j = 0; j < GRID; j++) {
     for (let i = 0; i < GRID; i++) {
       const x = R.x + (i + 0.5) / GRID * R.w, y = R.y + (j + 0.5) / GRID * R.h;
       n++;
-      if (paintAt(ops, x, y)) painted++;
-      if (contrast(paintStackAt(ops, x, y, bg), bg) >= FLOOR) read++;
+      const at = paintStackAt(ops, x, y, bg);
+      if (at.top) painted++;
+      if (contrast(at.rgb, bg) >= FLOOR) read++;
     }
   }
   return { read: read / n, painted: painted / n };
 }
 
-// KNOWN GAPS — measured, not waived. Each entry is a design a player can pick
-// that does not reach the floor today, recorded with what it actually scores so
-// the number is in the diff when it moves. The test fails if this list GROWS
-// and fails if an entry stops failing, so a fix cannot leave a stale allowance
-// behind and a regression cannot hide behind one.
-//
-// Cadillac is the near-black car (c1 0.039), and both of its mark designs come
-// out at a tenth of what every other team gets. It is not the crown ink (that
-// was the wordmark/number bug, fixed 2026-09-09) and it is not ALT_INSIDE
-// (measured: turning the flag off changes markPalette's `alt` and leaves the
-// rendered crown at 0.9 %). It is in the crest LOCKUP path, which eleven other
-// marks share, so it wants its own change rather than a rider on this one.
-const KNOWN = new Set(["cadillac/logo/crown", "cadillac/bigmark/crown"]);
+// KNOWN GAPS — measured, not waived. An entry is a design a player can pick
+// that does not reach the floor today. The test fails if this list GROWS and
+// fails if an entry stops failing, so a fix cannot leave a stale allowance
+// behind and a regression cannot hide behind one. It is EMPTY, and it earned
+// that: it carried cadillac/logo and cadillac/bigmark for one commit, and the
+// second assertion is what reported them fixed rather than letting the
+// allowance rot into a permanent exemption.
+const KNOWN = new Set([]);
 
 // Each editor ROW is measured in the region it CONTROLS. Sweeping the crown row
 // while sampling the flank re-measures one unchanged flank thirteen times and

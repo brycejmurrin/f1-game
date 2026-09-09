@@ -84,8 +84,8 @@ export function plan() {
   return { branch, head, tip, fastForward: ancestor, theirCommits: theirs, ourCommits: ours, theirDiffstat: stat, conflicts,
     touchedCircuits: touchedCircuits(tip),
     steps: [
-      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json)",
-      "npm run test:tooling-fast",
+      ancestor ? "merge: nothing to merge (deploy tip is an ancestor)" : "merge origin/" + DEPLOY_BRANCH + " (conflicts in GENERATED files cure themselves: index.html/version.json via gen-shell, ratchets.json re-measured, package.json from groups.json, tools/README.md from the tools' @doc headers)",
+      `tools/ci/tooling-fast.mjs ${GATE_JOBS} (the full node gate, two files at a time)`,
       "the Pages gate's node suites (ci.yml \"Pure-node unit suites\", read from the file)",
       "verify-track for touched circuits",
       flag("--pr") ? "push the session branch and open/update a PR into the deploy branch"
@@ -121,6 +121,7 @@ function manifestMoved() {
 }
 
 const RATCHETS = "tests/data/ratchets.json";
+const TOOLS_README = "tools/README.md";
 
 /* Every number in ratchets.json, flattened to `scope/name` -> value, so the
    three sides of a conflict can be compared metric by metric. */
@@ -200,10 +201,17 @@ export function cureableConflicts(conflicted) {
   const shellF = conflicted.filter((f) => f === "index.html" || f === "version.json");
   const ratchetF = conflicted.filter((f) => f === RATCHETS);
   const pkgF = conflicted.filter((f) => f === "package.json");
+  // tools/README.md is GENERATED from the tools' own @doc headers
+  // (gen-tools-readme.mjs) and six sessions touched it in 12 h — every tool
+  // added anywhere in the tree rewrites a row of it. A conflict here is two
+  // stale renderings of a file neither side authored, so it cures the same way
+  // package.json does: take either side to give the generator something
+  // parseable, then regenerate from the merged sources.
+  const toolsF = conflicted.filter((f) => f === TOOLS_README);
   const sourceContested = conflicted.includes("tests/groups.json");
   const cureable = conflicted.length > 0 && !sourceContested
-    && shellF.length + ratchetF.length + pkgF.length === conflicted.length;
-  return { cureable, shellF, ratchetF, pkgF };
+    && shellF.length + ratchetF.length + pkgF.length + toolsF.length === conflicted.length;
+  return { cureable, shellF, ratchetF, pkgF, toolsF };
 }
 
 function mergeDeployTip(tip) {
@@ -213,11 +221,11 @@ function mergeDeployTip(tip) {
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.
-  const { cureable, shellF, ratchetF, pkgF } = cureableConflicts(conflicted);
+  const { cureable, shellF, ratchetF, pkgF, toolsF } = cureableConflicts(conflicted);
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f))
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f))
       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
@@ -237,8 +245,66 @@ function mergeDeployTip(tip) {
     must(git(["add", "package.json"]), "add");
     did.push("test scripts regenerated from groups.json");
   }
+  if (toolsF.length) {
+    must(git(["checkout", "--ours", "--", TOOLS_README]), "checkout --ours tools/README.md");
+    run("node", ["tools/gen/gen-tools-readme.mjs"], "regenerate the tools index from the merged tree");
+    must(git(["add", TOOLS_README]), "add");
+    did.push("tools index regenerated");
+  }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
   return `merged (${did.join("; ")})`;
+}
+
+// The cross-file guards — the ones a MERGE breaks. Everything in this group
+// asserts a relationship BETWEEN files (a registry against the tree, a
+// generated file against its source, a ceiling against what it measures),
+// which is exactly what goes wrong when two independently verified trees are
+// joined. A physics suite cannot newly fail because someone else's docs commit
+// landed. Read from tests/groups.json rather than listed here: a second copy of
+// a registry is the class of problem this whole change is about, and
+// `npm run test:guards` is the same 14 files for a human before a commit.
+const MERGE_GUARDS = Object.freeze(
+  JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups["test:guards"].files);
+
+/* HOW WIDE THE GATE RUNS ITSELF.
+   The node suites are independent processes and the runner buffers each file's
+   output, so running two at once costs nothing in legibility and takes the full
+   gate from 330 s to 176 s (measured, 159 suites, this box, 4 cores). That is
+   the window a push race is decided in, so halving it is worth more here than
+   anywhere else: at the measured 165 s median gap between landings, a 330 s gate
+   invites two more pushes than a 176 s one.
+   TWO, not three. Three is faster still (125 s) but peaks at loadavg 3.65, over
+   the >= 3 line this repo refuses to deploy above — and a gate that drives the
+   box past its own "the machine is too busy to be measured" threshold is buying
+   speed with the credibility of its verdicts. Two peaks at 2.57.
+   The DEFAULT stays 1 for everyone else: this opts the deploy in rather than
+   changing what `npm run test:tooling-fast` does under other sessions and CI. */
+const GATE_JOBS = "--jobs=2";
+
+/* WHAT A REJECTED PUSH ACTUALLY NEEDS RE-VERIFIED.
+   The full gate ran before attempt 1 and it passed; the commits that beat us
+   were verified by the session that pushed them, which ran this same gate. So
+   the only thing the union has that neither side verified is the INTERACTION —
+   and if what landed touches no shipped code, there is no interaction to have.
+   Measured on this repo over 12 h: 146 merges reached the deploy branch and
+   109 of them (75 %) touched no js/, css/ or index.html at all.
+   So: shipped code in the incoming delta -> the whole gate, exactly as before.
+   Otherwise -> the cross-file guards, which is what a merge can actually break.
+   This matters because the RETRY is the race. Every 10-minute re-verify invites
+   ~3.6 more pushes at the measured median gap of 165 s, so a full-gate retry
+   makes losing the next attempt MORE likely, not less. One deploy this session
+   ran the full 157-suite gate three times and won on the last attempt. */
+function reverifyUnion(before) {
+  const changed = git(["diff", "--name-only", `${before}..HEAD`]).out.split("\n").filter(Boolean);
+  const ships = changed.filter((f) => /^(js|css)\//.test(f) || f === "index.html");
+  if (ships.length) {
+    run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS],
+        `re-verify the new union in full — it brings shipped code (${ships.slice(0, 3).join(", ")}${ships.length > 3 ? ` +${ships.length - 3}` : ""})`);
+    return "full gate";
+  }
+  run("node", ["tools/ci/tooling-fast.mjs", ...MERGE_GUARDS],
+      `re-verify the new union: ${changed.length} file(s), no shipped code, so the cross-file guards`);
+  return `${MERGE_GUARDS.length} merge guards`;
 }
 
 function pushWithRetry() {
@@ -246,9 +312,10 @@ function pushWithRetry() {
     const r = git(["push", REMOTE, `HEAD:${DEPLOY_BRANCH}`]);
     if (r.code === 0) return attempt;
     log(`push rejected (attempt ${attempt}): ${r.err.split("\n").pop()}`);
+    const before = git(["rev-parse", "HEAD"]).out.trim();
     must(git(["fetch", "--no-tags", REMOTE, DEPLOY_BRANCH]), "fetch");
     mergeDeployTip();
-    run("npm", ["run", "test:tooling-fast"], "re-verify the new union");
+    log(`re-verified: ${reverifyUnion(before)}`);
   }
   throw new Error("push rejected three times — another session keeps landing; stop and look");
 }
@@ -288,7 +355,7 @@ export function main() {
   if (problems.length) { for (const x of problems) log("REFUSED: " + x); return 3; }
   const verdict = { branch: p.branch, merge: "none", verified: [], pushed: false, pr: null };
   if (!p.fastForward) verdict.merge = mergeDeployTip(p.tip);
-  run("npm", ["run", "test:tooling-fast"], "guard suite on the union"); verdict.verified.push("tooling-fast");
+  run("node", ["tools/ci/tooling-fast.mjs", GATE_JOBS], "guard suite on the union"); verdict.verified.push("tooling-fast");
   // The Pages gate runs MORE node suites than tooling-fast (quali-persist,
   // node-slow, the VM twins, …) and two deploys went red on pins tooling-fast
   // never runs (run 1889, 2026-09-02). Run exactly what the gate runs, read
