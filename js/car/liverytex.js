@@ -1186,7 +1186,7 @@ const LiveryTex = (function () {
   // the title sponsor running along the spine, an exposed-carbon panel, or the
   // race number. All paint into REGIONS.crest, so the strip in car-mesh drapes
   // them over the rounded crown like the crest.
-  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "tricolour", "wordmark", "carbon", "number"];
+  const SPINE_LOGO_IDS = ["logo", "none", "wrap", "bigmark", "saddle", "panel", "stripe", "twin", "chevron", "wedge", "rungs", "tricolour", "wordmark", "carbon", "number"];
   // WRAP: one shape in CAR space painted into every region it crosses, so the
   // paint job goes over the spine and down both flanks as a single graphic —
   // the RB22's sun and bull. The car-space → region maps are car-mesh's:
@@ -1507,6 +1507,31 @@ const LiveryTex = (function () {
       const bandH = H * 0.085, top = Y + H * 0.62;
       ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, top, W, bandH);
       ctx.fillStyle = cssA(acc2 || ink, 0.97); ctx.fillRect(X, top + bandH * 2, W, bandH);
+    } else if (id === "wedge") {
+      // A band WIDE at the airbox tapering to a point at the tail — the shape a
+      // cover wears when the spine colour is swept back off the roll hoop.
+      // Nothing else in this set tapers: `panel` is a parallel block with a
+      // raked front edge, `stripe` is parallel end to end, `saddle` takes the
+      // whole crown. Canvas top is the REAR (see `panel`), so the wide end is
+      // the HIGHER y and the point is at Y.
+      ctx.fillStyle = cssA(acc, 0.97);
+      ctx.beginPath();
+      ctx.moveTo(X + W * 0.5 - W * 0.055, Y);        // tail: a stub, not a spike
+      ctx.lineTo(X + W * 0.5 + W * 0.055, Y);
+      ctx.lineTo(X + W * 0.86, Y + H);               // airbox: nearly the full crown
+      ctx.lineTo(X + W * 0.14, Y + H);
+      ctx.closePath(); ctx.fill();
+    } else if (id === "rungs") {
+      // Bars ACROSS the crown, repeated down it — the one direction nothing
+      // else in this set runs. `twin` and `stripe` run along the car, `chevron`
+      // points along it, `tricolour` is a single flash at the airbox; this is a
+      // ladder the length of the cover, and it reads as motion from directly
+      // behind, which is the camera the player actually has.
+      ctx.fillStyle = cssA(acc, 0.96);
+      for (let i = 0; i < 5; i++) {
+        const inset = W * (0.06 + i * 0.035);        // narrowing toward the tail
+        ctx.fillRect(X + inset, Y + H * (0.08 + i * 0.185), W - inset * 2, H * 0.062);
+      }
     } else if (id === "wordmark") {
       // The title sponsor along the spine, rotated to run nose → tail so it
       // reads from the SIDE of the car, the way a real engine cover carries it.
@@ -1544,6 +1569,18 @@ const LiveryTex = (function () {
       ctx.fillStyle = cssA(ink, 0.55); ctx.fillRect(X + W * 0.40, Y, W * 0.012, H); ctx.fillRect(X + W * 0.588, Y, W * 0.012, H);
     } else if (id === "twin") {
       ctx.fillStyle = cssA(acc, 0.96); ctx.fillRect(X + W * 0.04, Y, W * 0.045, H); ctx.fillRect(X + W * 0.915, Y, W * 0.045, H);
+    } else if (id === "wedge") {
+      // The point runs OUT along the tail rather than stopping at the crown's
+      // edge: the crown hands over a stub 11 % wide, and it closes to nothing.
+      ctx.fillStyle = cssA(acc, 0.97);
+      ctx.beginPath();
+      ctx.moveTo(X + W * 0.5 - W * 0.012, Y); ctx.lineTo(X + W * 0.5 + W * 0.012, Y);
+      ctx.lineTo(X + W * 0.5 + W * 0.055, Y + H); ctx.lineTo(X + W * 0.5 - W * 0.055, Y + H);
+      ctx.closePath(); ctx.fill();
+    } else if (id === "rungs") {
+      // One more bar, narrowest of the ladder.
+      ctx.fillStyle = cssA(acc, 0.96);
+      ctx.fillRect(X + W * 0.27, Y + H * 0.30, W * 0.46, H * 0.30);
     } else if (id === "carbon") {
       const px = X + W * 0.28, pw = W * 0.44;
       ctx.fillStyle = "rgb(24,25,28)"; ctx.fillRect(px, Y, pw, H);
@@ -1563,7 +1600,7 @@ const LiveryTex = (function () {
   // "plate" the SF-26's number on a contrasting panel.
   // "duo" is the RB22's flank: the title sponsor large and aft, the partner
   // mark small and forward (Red Bull over Ford Racing).
-  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash", "split", "bars"];
+  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "slash", "split", "bars", "chevron"];
   const TAIL_STYLE = {
     redbull:     { kind: "diag",    a: 0.80 },   // charging diagonal slash
     racingbulls: { kind: "diag",    a: 0.70 },   // youthful bold slash
@@ -2045,6 +2082,27 @@ const LiveryTex = (function () {
         }
         drawWordmark(ctx, names[0] || "", sbox(F, 0.40, 0.96, 0.52, 0.96), inkCrest, { align: "center", pad: 8 });
         drawWordmark(ctx, names[1] || "", sbox(F, 0.05, 0.35, 0.62, 0.90), inkCrest, { align: "center", pad: 6 });
+      });
+    } else if (spineSide === "chevron") {
+      // Arrows on the FLANK pointing forward — the crown has them, the flank
+      // had raked bars (`slash`), level bars (`bars`) and a diagonal fill
+      // (`split`) but nothing that points. Through su(), so under the wrap they
+      // start aft of the mark like every other side design.
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(flankBandC, 0.96);
+        for (let i = 0; i < 3; i++) {
+          const back = su(F, 0.16 + i * 0.24), tip = su(F, 0.30 + i * 0.24);
+          const th = Sf.h * 0.16, midY = Sf.y + Sf.h * 0.52;
+          ctx.beginPath();
+          ctx.moveTo(back, midY - Sf.h * 0.26);
+          ctx.lineTo(tip, midY);
+          ctx.lineTo(back, midY + Sf.h * 0.26);
+          ctx.lineTo(back + (tip - back) * 0.42, midY);
+          ctx.closePath(); ctx.fill();
+        }
+        ctx.restore();
       });
     } else if (spineSide === "split") {
       // The flank cut corner to corner and the LOWER half filled — the hard
