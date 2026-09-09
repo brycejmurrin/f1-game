@@ -74,7 +74,8 @@ const Teams = (function () {
     },
     {
       id: "alpine", name: "Alpine", short: "ALP",
-      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "tricolour", spineSide: "band" },
+      livery: { finShape: "none", spineHeight: "dorsal", spineLogo: "stripe", spineSide: "band",
+                spineTint: [1.0, 0.529, 0.737] },
       color: [0.0, 0.576, 0.8], color2: [1.0, 0.529, 0.737],       /* blue #0093CC / pink #FF87BC */
       engine: "Mercedes", tier: 3,
       stats: { speed: 83, accel: 80, cornering: 82, braking: 80 },
