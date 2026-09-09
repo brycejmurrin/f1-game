@@ -1228,13 +1228,8 @@ const LiveryTex = (function () {
   // second one faces canvas-left, which is the FRONT of the right flank's
   // frame, and the left frame's x runs the other way, so it faces the nose
   // on both sides by construction. Sized in METRES (the flank canvas is ~1.4×
-  // wider than tall per pixel) and BIG, as on the real cover: the bull's back
-  // rides the crease and it is sized to FILL the flank: 0.80 of the skin from
-  // the crease down, and as long as the traced path's own aspect then makes it
-  // (~0.67 m, a little over half the cover). Length is DERIVED, never chosen —
-  // the flank canvas is anisotropic (1.24 m over 304 px along vs 0.47 m over
-  // 160 px down), so a length picked in metres and a height picked in pixels
-  // gave a bull 113% of the region tall, clipped to a white blob.
+  // wider than tall per pixel) and as big as the CAMERA keeps — see BULL, which
+  // owns the station and the arithmetic behind it.
   function flankBull(ctx, teamId, colour) {
     const b = bullPath(teamId);
     if (!b) return false;
@@ -1420,21 +1415,27 @@ const LiveryTex = (function () {
     const t = 1 - ((v - cv) / rv) ** 2;
     return t <= 0 ? 0 : (SUN.r / FLANK.zLen) * Math.sqrt(t);
   }
-  // How much of the flank the bull claims. Its HEIGHT is chosen (0.80 of the
-  // skin from the crease down) and its LENGTH derived from the traced path's
-  // own aspect through the flank's anisotropy — 1.24 m over 304 px along the
-  // car against 0.47 m over 160 px down it, so a length picked in metres and a
-  // height picked in pixels gave a bull 113 % of the region tall, clipped to a
-  // white blob. Published because the SIDE designs have to clear it.
-  // It hangs from `top`, not from the crease. Hung at 0.04 it ended at 0.84
-  // with a sixth of the flank dead under its hooves, and that put the one strip
-  // a cover design can always use — the crease band the real RB22 wears its
-  // sponsor names in — under a metre of bull. Every side design was then pushed
-  // aft of the WHOLE animal, which is aft of FLANK_SEEN, which is behind the
-  // rear wheel. Standing it on the sidepod line instead costs 0.06 of a bbox
-  // that was drawing nothing (its lowest hoof is at 0.96 of the box) and frees
-  // `top` of the flank for the designs that have to be read.
-  const BULL = { h: 0.74, u0: 0.06, top: 0.26 };
+  // How much of the flank the bull claims. Its HEIGHT is chosen and its LENGTH
+  // derived from the traced path's own aspect through the flank's anisotropy —
+  // 1.24 m over 304 px along the car against 0.47 m over 160 px down it, so a
+  // length picked in metres and a height picked in pixels gave a bull 113 % of
+  // the region tall, clipped to a white blob. Published because the SIDE
+  // designs have to clear it.
+  // It hangs from `top`, not from the crease, and the two numbers answer to
+  // opposite ends of the band. Hung at 0.04 it filled to 0.84 and buried the
+  // crease strip — the one a cover design can always use, where the real RB22
+  // carries its sponsor names — under a metre of bull, which pushed every side
+  // design aft of the whole animal and so behind the rear wheel. Standing it on
+  // the sidepod line instead (top 0.26, h 0.74) freed that strip and cost the
+  // ANIMAL: the flank's bottom corner is not on camera. From the garage side
+  // view the sidepod eats the band below v ~0.81 forward of u 0.2, so a bull
+  // reaching v 0.99 lost 19 % of its ink and 36 % of its HEAD, which is the low
+  // forward part of a charging silhouette — the head went and the rump stayed.
+  // Both ends are now inside what the camera keeps: shorter (h), hung just
+  // below the lettering strip (top), and its lowest hoof — at 0.96 of the bbox
+  // — lands at v 0.81. Measured, not eyeballed: the `(crown)` row of
+  // tools/car/spine-station.mjs --occlude reports 2 % of the ink hidden.
+  const BULL = { h: 0.52, u0: 0.05, top: 0.30 };
   // The team's ONE forward-facing traced path, with its bbox — Red Bull's crest
   // is two bulls charging at each other and the second faces canvas-left, which
   // every flank frame maps to the nose. Null for a crest that is not a single
@@ -1450,16 +1451,13 @@ const LiveryTex = (function () {
     }
     return { d, x0, y0, x1, y1 };
   }
-  // How much of the flank the wrap's mark claims, front-first. Its HEIGHT is
-  // chosen (BULL.h of the skin from the crease down) and its LENGTH DERIVED
-  // from the mark's own aspect through the flank's anisotropy — 1.24 m over
-  // 304 px along the car against 0.47 m over 160 px down it, so a length
-  // picked in metres beside a height picked in pixels gave a bull 113 % of the
-  // region tall, clipped to an unreadable blob. Measured from the path, never
-  // a copied constant; a team with no traced bull wears its lockup at the same
-  // height, which is square. The SIDE designs no longer start behind this —
-  // behind the whole animal is behind the rear wheel — they clear the SUN and
-  // share the bull; see sideFrom.
+  // How much of the flank the wrap's mark claims, front-first: BULL.h of the
+  // skin from the crease down, and a LENGTH derived from this path's own aspect
+  // through the flank's anisotropy. Measured from the path, never a copied
+  // constant; a team with no traced bull wears its lockup at the same height,
+  // which is square. The SIDE designs no longer start behind this — behind the
+  // whole animal is behind the rear wheel — they clear the SUN and share the
+  // bull; see sideFrom.
   function wrapMarkSpan(teamId) {
     const b = bullPath(teamId);
     const aspect = b ? (b.y1 - b.y0) / (b.x1 - b.x0) : 1;
@@ -2228,8 +2226,10 @@ const LiveryTex = (function () {
     // side band's own 0→1 along the flank; under the wrap it starts aft of the
     // crown's graphic, everywhere else it is the whole flank.
     // …AFT OF THE SUN, NOT AFT OF THE BULL, and that is the whole of this fix.
-    // The bull ends at u 0.58 and FLANK_SEEN is 0.62, so "start behind the
-    // animal" and "start behind the wheel" were the same instruction. Measured
+    // The bull then ended at u 0.58 against a FLANK_SEEN of 0.62, so "start
+    // behind the animal" and "start behind the wheel" were the same
+    // instruction — and it is only the SUN's reach that binds either way. Even
+    // now that the bull ends at 0.40 this stays derived from the sun. Measured
     // on the SHIPPED Red Bull (crown wrap, side duo) from the garage side
     // camera by tools/car/flank-occlusion.mjs: 92 % of duo's ink behind the
     // car, 95 % of a wordmark's, 100 % of slash's, 50-54 % of every flank mark.
