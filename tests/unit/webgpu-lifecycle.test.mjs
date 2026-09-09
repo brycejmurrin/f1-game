@@ -986,7 +986,7 @@ test("WGSL closes the documented GLX look gaps", () => {
   assert.match(CHUNKS_SOURCE, /texture_2d_array/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterial\(/);
   assert.match(CHUNKS_SOURCE, /fn applyMaterialNormal\(/);
-  assert.match(CHUNKS_SOURCE, /surfaceId <= 31/);
+  assert.match(CHUNKS_SOURCE, /surfaceId <= 32/);
   // Every livery-finish surface must exist in WGSL too — a finish implemented
   // on GLX alone is invisible on WebGPU and nothing else would catch it.
   for (const id of [28, 29, 30, 31])
@@ -1238,6 +1238,23 @@ test("soft-present uses ephemeral staging buffers for visible 2D blit", () => {
     /if \(_softGpu && _softBusy\) return false/,
     "begin() must not drop frames while soft-present readback is in flight",
   );
+  assert.match(WGX_SOURCE, /function _bootFail\(reason\)/,
+    "post-soft boot refusals must tear down the soft GPU canvas + device");
+  assert.match(WGX_SOURCE, /_gpuCanvas\.parentNode\.removeChild\(_gpuCanvas\)/,
+    "failed soft WGX boot must detach the offscreen canvas before GLX fallback");
+  assert.match(WGX_SOURCE, /_webdriverSoft/,
+    "navigator.webdriver must arm soft-present like GLX without classifying content soft");
+  assert.match(WGX_SOURCE, /_softAdapter \|\| _blitForced \|\| _webdriverSoft/,
+    "_softGpu must OR the webdriver presentation latch");
+  // Soft-present: configure the offscreen webgpu canvas BEFORE claiming #game
+  // as 2D — otherwise a configure fail locks #game and same-page GLX dies.
+  const claim = WGX_SOURCE.slice(
+    WGX_SOURCE.indexOf("ctx = canvas.getContext(\"webgpu\")"),
+    WGX_SOURCE.indexOf("const PRESENT_TEST_MS"));
+  assert.match(claim, /_configureCanvas\(\)[\s\S]{0,200}?_displayCanvas\.getContext\("2d"/,
+    "2D on #game must follow a successful offscreen configure");
+  assert.doesNotMatch(claim, /_displayCanvas\.getContext\("2d"[\s\S]{0,200}?_configureCanvas\(\)/,
+    "claiming #game 2D before configure re-locks same-page GLX fallback");
 });
 
 test("Safari UA downgrades rgba16float swapchain to bgra8unorm", async () => {

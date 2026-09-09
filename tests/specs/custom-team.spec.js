@@ -107,7 +107,7 @@ test("custom-team color save frees and rebuilds its decal texture", async ({ pag
 
   await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
-  await page.waitForFunction(() => window.__customAtlases().length > 0);
+  await page.waitForFunction(() => window.__customAtlases().length > 0, null, { polling: 100 });
   const firstTextureId = await page.evaluate(() => window.__customAtlases()[0]);
 
   await page.locator("#cs-done").click();      // garage DONE goes on to RACE SETTINGS...
@@ -181,9 +181,9 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   await page.locator("#rs-go").click();
   await page.waitForFunction(() => window.__apex.info().track != null, null, { polling: 100, timeout: BOOT_MS });
   await page.evaluate(() => window.__apex.park(0.1));
-  await page.waitForFunction(() => window.__customTeamMeshProbe.customMeshes.length >= 1);
+  await page.waitForFunction(() => window.__customTeamMeshProbe.customMeshes.length >= 1, null, { polling: 100 });
   await page.evaluate(() => window.__apex.camera("cockpit"));
-  await page.waitForFunction(() => window.__customTeamMeshProbe.customMeshes.length >= 2);
+  await page.waitForFunction(() => window.__customTeamMeshProbe.customMeshes.length >= 2, null, { polling: 100 });
 
   await page.locator("#pausebtn").click();
   await page.locator("#pm-quit").click();

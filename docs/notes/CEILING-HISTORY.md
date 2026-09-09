@@ -2668,3 +2668,24 @@ second in white ink on lit metal. `trimAft` derives the station from
 `LiveryTex.FLANK_SEEN` rather than a third hand-picked literal, and three of
 the four comment blocks it touches were consolidated (two were layered
 corrections about a band that is now the whole flank) to pay part of the cost.
+## 2026-09-09 — share :sh casters + field helmet maxSplit 0
+
+`js/game.js` lines 10363 -> **10368** (+5) / codeLines 5604 -> **5609** (+5).
+Seat-keyed `:sh` casters were bit-identical between teammates (depth cannot
+see paint); one `:sh` per team(+parts) again. `TEAM_MESH_CACHE_MAX` 48→40
+(still ≥ 12×(2 painted + 1 `:sh`) = 36).
+
+`js/car/car3d.js` lines 4107 -> **4111** (+4). Field AI bodies (`opts.field`,
+already set from `noWheels` factory bodies) pass `Helmets.build({ maxSplit: 0 })`
+— paint-edge splits stay on player/garage/cockpit lids only.
+
+
+## 2026-09-09 — cache / renderer hygiene
+
+`js/game.js` lines 10368 -> **10385** (+17) / codeLines 5609 -> **5618** (+9). `loadCarModel` clears `fieldWheelOrder` with the cache; `cz-save` merges structural `DEFAULT_CUSTOM.livery`; foreign-tab `customTeam` re-runs `syncCustomTeam`.
+
+`js/render/glx/glx.js` lines 2610 -> **2615** (+5). Soft-blit sizes from `drawingBufferWidth/Height` so spatial-upscale presents fill `#game-soft`.
+
+## 2026-09-09 — czPreview / WGX claim order / foreign logo
+
+`js/game.js` lines 10385 -> **10422** (+37) / codeLines 5618 -> **5644** (+26). `czLivFromDialog` shared by save+preview; foreign `customLogo` subscribe; stripe/finish refresh the live draft.

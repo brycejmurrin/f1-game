@@ -153,6 +153,22 @@ test("default body and cockpit stay under the absolute triangle ceilings", () =>
   // WHOLE FIELD, not the default livery. The cockpit ceiling below does NOT
   // move: the helmet is not built in that pass (measured 1428, unchanged).
   assert.ok(body <= 6800, `default body ${body} > 6800`);
+  // ...AND FOR EVERY DRIVER, not just the default livery. The helmet paint is
+  // per-design, so the busiest of the 22 costs more triangles than the
+  // generated default this test builds: #1 at 6398 against a default of 5360.
+  // (The 6572 in the raise note above was measured before the doodle replaced
+  // the cell speckle, which shortened the paint boundary; this assertion is
+  // now the live number and that one is history.) That gap lived only in a
+  // COMMENT, which is the same "documented
+  // but not asserted" hole the parts-physics duplicate above was deleted for —
+  // a design could have grown past 6800 with every test green.
+  let worst = { num: null, tris: 0 };
+  for (const t of Teams.LIST)
+    for (const d of t.drivers) {
+      const n = tris(Car3D.build(C1, C2, { noWheels: true, num: d.num }));
+      if (n > worst.tris) worst = { num: d.num, tris: n };
+    }
+  assert.ok(worst.tris <= 6800, `#${worst.num} body ${worst.tris} over the ceiling — the busiest helmet design, which the default build does not reach`);
   // Cockpit ceiling UNCHANGED at 1500: the six-point harness (+60, measured
   // 1428) fits the existing budget. The straps sit between the eye and the dash
   // coaming, filling the lower frame that the coaming never reaches.
@@ -211,9 +227,16 @@ test("a shadow silhouette keeps the helmet shape without paint-split cost", () =
   const caster = tris(Car3D.build(C1, C2, { silhouette: true }));
   const painted = tris(Car3D.build(C1, C2, {}));
   assert.ok(caster < painted, `shadow caster ${caster} still carries paint-split helmet (${painted})`);
+  // Field AI bodies (opts.field) drop paint-edge splits; torso stays (unlike :sh).
+  // Norris (#1) is a busy lid — flat designs can match at either split depth.
+  const field = tris(Car3D.build(C1, C2, { noWheels: true, field: true, num: 1 }));
+  const splitBody = tris(Car3D.build(C1, C2, { noWheels: true, num: 1 }));
+  assert.ok(field < splitBody, `field ${field} should drop paint-split vs ${splitBody}`);
+  assert.ok(field > sil, `field ${field} still carries the in-tub torso :sh drops (${sil})`);
+  assert.match(SRC, /sil \|\| field/);
   const GAME = readFileSync(join(ROOT, "js/game.js"), "utf8");
-  assert.match(GAME, /silhouette: sil/);
-  assert.match(GAME, /sil \? ":sh"/);
+  assert.match(GAME, /teamMeshKey\(team\) \+ ":sh"/);
+  assert.match(GAME, /silhouette: true/);
 });
 
 test("2026 duct/board/slot knobs are inert at 0 and each deforms the mesh", () => {

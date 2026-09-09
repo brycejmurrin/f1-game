@@ -159,6 +159,37 @@ function raceGuard(btn, armedText, repaint) {
   } catch (_) { /* dataset unavailable: proceed as before */ }
   return true;
 }
+
+const RENDERER_LS_KEYS = [
+  "apex26.gfxBackend", "apex26.gfxBackendProbe",
+  "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
+  "apex26.gfxTlxFail",
+  // The canary's strike counter and the pick it retired: a RESET that left
+  // these behind would hand the next boot a strike it did not earn.
+  "apex26.gfxProbeStrikes", "apex26.gfxBackendWas",
+  "apex26.envProbeOff", "apex26.perChunkOff",
+  "apex26.tlxForceGL", "apex26.tlxViz",
+  "apex26.wgxCapture",
+];
+// wgxHoldPresent is written by WGX itself (holdSoftPresent), so a tab that
+// took the hold and never released it keeps skipping the soft-present
+// copy+map on the next boot with no way back — RESET RENDERER is that way
+// back, and it has to know the key exists. Every latch a backend WRITES
+// belongs in one of these two lists. applyBackend clears the session lane
+// too: switching backends must not inherit the previous path's hold/auto-GL
+// latches across the reload (RESET already wiped them; a pick did not).
+const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent"];
+
+function clearRendererStorage() {
+  const removed = [];
+  // Blocked storage reads as null and removes nothing: the in-memory boot still uses the empty pref.
+  for (const k of RENDERER_LS_KEYS) {
+    if (GameStore.store.raw(k) != null) { GameStore.store.rawDel(k); removed.push(k); }
+  }
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode / blocked storage */ }
+  return removed;
+}
+
 function applyBackend(next, rb) {
   if (!raceGuard(rb, "RENDERER: END THIS RACE & RELOAD?", () => paintRenderer(rb))) return false;
   Log.info("game", "RendererPicker.applyBackend " + next);
@@ -177,46 +208,17 @@ function applyBackend(next, rb) {
     return false;
   }
   GameStore.store.rawSet("apex26.gfxBackend", next); GameStore.store.rawDel("apex26.gfxBackendProbe");
-  try { sessionStorage.removeItem("apex26.gfxBound"); } catch (_) { /* next boot paints the new pick */ }
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
   // Landing on WEBGPU by hand is the retry signal (browser update, new
   // device state): reset the WGX loss ladder so the boot re-attempts from
   // the sniffed baseline instead of a rung a long-dead session earned.
   if (next === "webgpu") {
     for (const k of ["apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail"]) GameStore.store.rawDel(k);
-    try { sessionStorage.removeItem("apex26.gfxClaimFail"); } catch (_) { /* boot consumes it anyway */ }
   }
   markReloading(rb, next);
   try { if (typeof PerfGov !== "undefined" && PerfGov.sentinelArm) PerfGov.sentinelArm(false); } catch (_) {}
   setTimeout(() => { try { location.reload(); } catch (_) {} }, 350);
   return true;
-}
-
-const RENDERER_LS_KEYS = [
-  "apex26.gfxBackend", "apex26.gfxBackendProbe",
-  "apex26.gfxWgxLevel", "apex26.gfxWgxLite", "apex26.gfxWgxOk", "apex26.gfxWgxFail",
-  "apex26.gfxTlxFail",
-  // The canary's strike counter and the pick it retired: a RESET that left
-  // these behind would hand the next boot a strike it did not earn.
-  "apex26.gfxProbeStrikes", "apex26.gfxBackendWas",
-  "apex26.envProbeOff", "apex26.perChunkOff",
-  "apex26.tlxForceGL", "apex26.tlxViz",
-  "apex26.wgxCapture",
-];
-// wgxHoldPresent is written by WGX itself (holdSoftPresent), so a tab that
-// took the hold and never released it keeps skipping the soft-present
-// copy+map on the next boot with no way back — RESET RENDERER is that way
-// back, and it has to know the key exists. Every latch a backend WRITES
-// belongs in one of these two lists.
-const RENDERER_SS_KEYS = ["apex26.gfxClaimFail", "apex26.gfxBound", "apex26.ctxLostReloads", "apex26.wgxCapture", "apex26.tlxAutoGL", "apex26.wgxHoldPresent"];
-
-function clearRendererStorage() {
-  const removed = [];
-  // Blocked storage reads as null and removes nothing: the in-memory boot still uses the empty pref.
-  for (const k of RENDERER_LS_KEYS) {
-    if (GameStore.store.raw(k) != null) { GameStore.store.rawDel(k); removed.push(k); }
-  }
-  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode / blocked storage */ }
-  return removed;
 }
 
 // The row that holds the select. A setting row nests the select one level
@@ -273,7 +275,9 @@ function applyThreePath(next, opts) {
   if (next === "webgl2") GameStore.store.rawSet("apex26.tlxForceGL", "1");
   else if (next === "webgpu") GameStore.store.rawSet("apex26.tlxForceGL", "0");
   else GameStore.store.rawDel("apex26.tlxForceGL");
-  try { sessionStorage.removeItem("apex26.tlxAutoGL"); } catch (_) { /* AUTO stay-GL latch is session-only */ }
+  // Same session-latch wipe as applyBackend — THREE PATH reload must not keep
+  // wgxHoldPresent / gfxClaimFail / gfxBound from the previous path.
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
   paintPresent();
   if (readBackend() === "three" && !(opts && opts.noReload)) {
     const btn = typeof document !== "undefined" ? document.getElementById("pm-three-path") : null;
@@ -316,6 +320,9 @@ function shotReloadLive() {
 function applyShotMode(next, opts) {
   if (shotReloadLive() && !(opts && opts.noReload) &&
       !raceGuard(typeof document !== "undefined" ? document.getElementById("pm-screenshots") : null, "SCREENSHOTS: END THIS RACE & RELOAD?", paintPresent)) return false;
+  // Drop inherited session latches, then write the new shot mode (which may
+  // put apex26.wgxCapture back into sessionStorage for this tab).
+  try { for (const k of RENDERER_SS_KEYS) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
   writeShotMode(next);
   paintPresent();
   if (shotReloadLive() && !(opts && opts.noReload)) {
