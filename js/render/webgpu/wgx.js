@@ -1205,6 +1205,7 @@ const WGX = (function () {
     let ssaoBG = null, godrayBG = null, compositeBG = null, fxaaBG = null, ssrBG = null, sgsrBG = null;
     let ssaoBlurSrcBG = null, ssaoBlurDstBG = null, godrayBlurSrcBG = null, godrayBlurDstBG = null;
     let pBloomDown, pBloomUp, pSSAO, pBlur, pBlurHDR, pGodray, pComposite, pFXAA, pFXAALdr, pSGSR, pointSampler, pSSR;
+    let _sgsrGather = false;
     // Blur dynamic-offset ring (see _buildPost BLUR block). Reset each present().
     let _blurBGL = null, _blurStride = 256, _blurSlots = 16, _blurWriteSlot = 0;
     // Per-pass CPU scratch for uniform writes (largest block is SSAO, 176 B/44 f).
@@ -1729,12 +1730,24 @@ const WGX = (function () {
         ssrUBO       = device.createBuffer({ size: _Post.SSR_UNIFORM_BYTES,       usage: _UCD });
         // SGSR1 best-effort: a failed module must NOT kill the post chain —
         // wantSpatialUpscale() fail-closes so the canvas stays at render size.
+        // Prefer SGSR_GATHER (native textureGather) unless the player pins
+        // apex26.spatialUpscaleGather=0 for a 4-tap A/B; fall back to SGSR.
         try {
-          if (_Post.SGSR) {
-            pSGSR = fsPipe(_Post.SGSR, _presentFormat, null);
-            sgsrUBO = device.createBuffer({ size: _Post.SGSR_UNIFORM_BYTES, usage: _UCD });
+          let forceTap = false;
+          try { forceTap = localStorage.getItem("apex26.spatialUpscaleGather") === "0"; } catch (_) { /* blocked */ }
+          pSGSR = null; _sgsrGather = false;
+          if (!forceTap && _Post.SGSR_GATHER) {
+            try {
+              pSGSR = fsPipe(_Post.SGSR_GATHER, _presentFormat, null);
+              _sgsrGather = true;
+            } catch (_) { pSGSR = null; _sgsrGather = false; }
           }
-        } catch (_) { pSGSR = null; sgsrUBO = null; }
+          if (!pSGSR && _Post.SGSR) {
+            pSGSR = fsPipe(_Post.SGSR, _presentFormat, null);
+            _sgsrGather = false;
+          }
+          if (pSGSR) sgsrUBO = device.createBuffer({ size: _Post.SGSR_UNIFORM_BYTES, usage: _UCD });
+        } catch (_) { pSGSR = null; sgsrUBO = null; _sgsrGather = false; }
       } catch (_) { pComposite = null; }   // disable post; ensureTargets stays inert
     }
 
@@ -2228,6 +2241,7 @@ const WGX = (function () {
       return spatialUpscale;
     }
     function getSpatialUpscale() { return spatialUpscale; }
+    function getSpatialUpscaleGather() { return !!_sgsrGather; }
     function resize() {
       const dpr = Math.min(window.devicePixelRatio || 1, WGX_MINIMAL ? 1 : (WGX_LITE ? 1.5 : 2));
       // Clamp to the device's texture ceiling: a 5K/6K display at DPR 2 walks
@@ -6103,6 +6117,7 @@ const WGX = (function () {
       getRenderScale() { return renderScale; },
       setSpatialUpscale,
       getSpatialUpscale,
+      getSpatialUpscaleGather,
       getPresentSize: () => ({ width: presentW || width, height: presentH || height }),
       get width() { return width; },
       get height() { return height; },

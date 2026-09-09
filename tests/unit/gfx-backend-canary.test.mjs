@@ -3695,12 +3695,22 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   assert.match(tsl, /tlx-post-sgsr/, "TSL SGSR pass must exist");
   const wgsl = read("js/render/webgpu/wgsl-post.js");
   assert.match(wgsl, /const SGSR =/, "WGX WGSL SGSR shader must ship");
-  assert.doesNotMatch(wgsl.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
-    /textureGather\s*\(/, "shared kernel uses 4-tap sampleLevel, not textureGather");
+  assert.match(wgsl, /const SGSR_GATHER = SGSR/, "WGX must ship the textureGather SGSR variant");
+  // Strip comments then isolate the 4-tap SGSR string (ends before SGSR_GATHER).
+  const wgslCode = wgsl.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+  const sgsrTap = wgslCode.match(/const SGSR = `([\s\S]*?)`;\s*const SGSR_GATHER/);
+  assert.ok(sgsrTap, "SGSR 4-tap string must precede SGSR_GATHER");
+  assert.doesNotMatch(sgsrTap[1], /textureGather\s*\(/,
+    "4-tap SGSR must not use textureGather (parity with GLX/TLX)");
+  assert.match(wgslCode, /textureGather\s*\(\s*1i\s*,\s*srcTex\s*,\s*srcSamp\s*,\s*p\s*\)/,
+    "SGSR_GATHER must call textureGather(component, tex, samp, uv) — WGSL arg order");
   // Dawn/Naga reserves `std` — the shared SGSR port must use edgeStd (validate caught this).
   assert.match(wgsl, /fn weightY\([^)]*edgeStd/, "SGSR WGSL weightY must not use reserved std");
   const wgx = read("js/render/webgpu/wgx.js");
   assert.match(wgx, /setSpatialUpscale/, "WGX must export setSpatialUpscale");
   assert.match(wgx, /wantSpatialUpscale/, "WGX must gate size split");
   assert.match(wgx, /!!pSGSR/, "WGX wantSpatialUpscale must require linked SGSR pipeline");
+  assert.match(wgx, /SGSR_GATHER/, "WGX must try the gather pipeline first");
+  assert.match(wgx, /spatialUpscaleGather/, "gather escape pin apex26.spatialUpscaleGather=0");
+  assert.match(wgx, /getSpatialUpscaleGather/, "WGX must export gather active state");
 });
