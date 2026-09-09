@@ -2013,14 +2013,32 @@ const LiveryTex = (function () {
         // have had, on the same band. Hung at 0.72 of the flank it read as a
         // badge floating on an empty side while Red Bull's filled the cover.
         const span = wrapMarkSpan(teamId);
+        // …and this badge is NOT the bull, so it does not get the bull's field.
+        // `sunLockup` pairs the sun with the cover because a traced bull is a
+        // metre-long silhouette that genuinely straddles the disc. This one is
+        // a badge centred at v 0.50 while the sun's flank ellipse bottoms out
+        // at v = SUN.r / FLANK.sLen − sTop/sLen = 0.28 on the flank's own
+        // centreline and less either side of it — so at the badge's own u it
+        // clears the sun by a third of the flank and lands on BARE COVER.
+        // Scoring it against both anyway asks one ink to clear a light sun AND
+        // a dark cover, which is unsatisfiable, and markPalette answers an
+        // unsatisfiable floor with a mid-tone compromise that reads on neither:
+        // Cadillac's crest came out at 1.25 against its own black cover and
+        // Mercedes' star at 1.59 against its silver, both under the 2.0 this
+        // very branch declares as MARK_ON_BODY (measured on the atlas with
+        // tools/car/spine-station.mjs, 2026-09-09 — nine teams were fine and
+        // those two were the pair whose sun and cover sit at opposite ends of
+        // the luminance range, which is exactly when the constraint splits).
+        const badgeLockup = markPalette(teamId, colors, [coverPaint], false, { noPlate: true });
         eachFlank((F) => {
           ctx.save();
           ctx.translate(F.fx(span.u0 + span.uLen / 2), F.R.y + F.R.h * 0.50); ctx.scale(flankSquash(spineHeight, F.R), 1);
           const s = BULL.h * F.R.h;   // square through the squash, so square in metres
           const Rw = { x: -s / 2, y: -s / 2, w: s, h: s };
           if (LOGOS[teamId]) {
-            drawLogoImage(ctx, LOGOS[teamId], Rw, logo, markHalo(LOGOS[teamId], sunC, inkOn([sunC])), emblemRim);
-          } else drawCrest(ctx, teamId, Rw, { liv: colors, field: sunC, bare: true, palette: sunLockup });
+            drawLogoImage(ctx, LOGOS[teamId], Rw, logo,
+                          markHalo(LOGOS[teamId], coverPaint, inkOn([coverPaint])), emblemRim);
+          } else drawCrest(ctx, teamId, Rw, { liv: colors, field: [coverPaint], bare: true, palette: badgeLockup });
           ctx.restore();
         });
       }
