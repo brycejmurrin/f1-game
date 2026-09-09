@@ -1496,3 +1496,53 @@ costs nothing at runtime (Playwright dedupes the path: 150 tests either way),
 which is why nothing caught it. The existing disjoint-partition guard says
 `owner.get(f) !== g`, so it asks only whether two DIFFERENT groups claim a spec.
 A within-group guard now sits beside it.
+
+## 2026-09-09 — `hud-layout` is 16 red, and only 5 of them are recent
+
+Measured on a quiet box, serialized, both directions:
+
+| tree | failures of 32 |
+|---|---|
+| as shipped (coarse `--hud-scale: 1.24`) | 16 |
+| same tree, coarse scales forced to 1 | 11 |
+
+So the settings-defaults bake accounts for FIVE — small-landscape tilt/touch
+(4) and minimal+cockpit — and ELEVEN fail without it: every notched-landscape
+cell, small-landscape buttons, broadcast+cockpit, broadcast+heli, and the
+minimal profile. Those eleven are not new work; they have been red for as long
+as the `ui` group has been unable to complete a run.
+
+**What actually collides**, which took three browser probes because the
+assertion asserts an empty array and the reporter truncates the contents:
+
+```
+.hud-top x .hud-gaps = 1937 px²      (gaps 200→309, top 221→631: 88 px wide)
+```
+
+Nothing else. No control overlaps another, nothing leaves the safe area.
+
+**Why the fit pass did not stop it** — the interesting half. At 852×393 with
+59 px insets, compact density:
+
+```
+top 331.4  gaps 87.9  map 96  right 47.1  half 426  sal/sar 59
+leftFor(gaps) 209.9   capLong 0.977   scale 1.24
+gapShort false   gapDrop false   --hud-z-top unset   limitsLeft TRUE
+```
+
+`capLong` (0.977) is well under the scale, so the long gaps strip does not fit
+and `_gapTight` should be true — yet neither `gapShort` nor `gapDrop` is set
+and the band is not capped either. `limitsLeft` IS set, and the same function
+writes it, so fitHud ran and simply did not take the tighten branch. That is
+the defect: the mechanism that exists to keep these two apart does not fire in
+this shape.
+
+**Deliberately not fixed here.** The fix lives in fitHud's cap arithmetic, and
+that code carries a documented oscillation history ("a strip that alternates
+between beside the band and below it… every 10 Hz tick"). Each verification is
+a ~10-minute browser run, which is not a loop in which to guess at a feedback
+system. Named, measured, and left for someone with the room to iterate.
+
+**Fixed instead**: the three empty-list assertions now carry the offending
+pairs and the fit state in their message, so the next failure says
+`.hud-top x .hud-gaps` instead of `Received + 4`.
