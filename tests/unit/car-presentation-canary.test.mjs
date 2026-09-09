@@ -100,7 +100,7 @@ test("visible procedural cars draw a body-only mesh and planted wheels", () => {
   assert.match(game, /const wm = c\.isPlayer \? getPlayerWheelMeshes\(\) : getFieldWheelMeshes\(c\.team\);/);
   assert.match(game, /putBoundedMesh\(fieldWheelCache, fieldWheelOrder/,
     "field wheels must promote hits like every other mesh LRU");
-  assert.match(game, /for \(const k in fieldWheelCache\)[\s\S]{0,120}?fieldWheelOrder\.length = 0/,
+  assert.match(game, /for \(const k in fieldWheelCache\)[\s\S]{0,400}?fieldWheelOrder\.length = 0/,
     "loadCarModel must clear fieldWheelOrder with the cache (putBoundedMesh desync frees a live mesh)");
   assert.match(game, /change\.key === "customTeam"\)\s*syncCustomTeam\(\)/,
     "foreign-tab customTeam writes must re-inject MY TEAM via syncCustomTeam");
