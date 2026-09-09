@@ -319,7 +319,14 @@ const TLX = (function () {
         renderer.setPixelRatio(1);            // we manage DPR/renderScale ourselves
         renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
         renderer.toneMapping = THREE.NoToneMapping;   // tone map lives in the post chain (M8)
-        await renderer.init();
+        try {
+          await renderer.init();
+        } catch (e) {
+          // AUTO WebGPU→WebGL2 retry (and the outer create catch) must not keep
+          // a half-booted three renderer / GPUDevice alive across the fallback.
+          try { if (typeof renderer.dispose === "function") renderer.dispose(); } catch (_) { /* best-effort */ }
+          throw e;
+        }
         // three r185.1 WebGPUAttributeUtils creates every GPUBuffer with
         // mappedAtCreation:true, then getMappedRange()+unmap(). Dawn's
         // client-visible mapping pool is tiny on SwiftShader — a 35 MB scenery
