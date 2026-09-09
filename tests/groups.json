@@ -425,7 +425,8 @@
     "test:data-unit": {
       "kind": "node",
       "files": [
-        "tests/unit/data-results.test.mjs"
+        "tests/unit/data-results.test.mjs",
+        "tests/unit/meeting-picker-labels.test.mjs"
       ]
     },
     "test:modes": {
