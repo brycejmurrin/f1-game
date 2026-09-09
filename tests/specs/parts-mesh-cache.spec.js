@@ -149,9 +149,27 @@ async function applyPartsAndPark(page) {
 }
 
 async function quitRace(page) {
+  // STOP THE RENDER LOOP ACROSS THE CLICKS, then hand it back.
+  //
+  // Playwright will not click until the element is visible, enabled and STABLE
+  // — not moving between two animation frames. A page running the game loop
+  // under SwiftShader starves rAF so badly that "stable" never arrives, so
+  // #pm-quit sat in `attempting click action / waiting for element to be
+  // visible, enabled and stable` until the 360 s test budget expired. Measured
+  // on an IDLE box (loadavg 1.2), so this is not the machine: it is the same
+  // starvation wait-polling.test.mjs documents for timeouts, reaching
+  // actionability instead.
+  //
+  // This is the one place in this file where the loop can be stopped safely.
+  // The mesh counting depends on it — getPlayerWheelMeshes() and
+  // getFieldWheelMeshes() are reached from the DRAW path, so nothing is built
+  // while it is off — and quitting is pure menu work with no mesh in it. Hence
+  // off for the two clicks, on again before the caller races anything.
+  await page.evaluate(() => window.__apex.headless(true));
   await page.locator("#pausebtn").click();
   await page.locator("#pm-quit").click();
   await page.locator("#overlay").waitFor({ state: "visible", timeout: 15_000 });
+  await page.evaluate(() => window.__apex.headless(false));
 }
 
 test.describe("Parts mesh caches — eviction bounds", () => {
