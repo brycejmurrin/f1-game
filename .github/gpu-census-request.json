@@ -1,6 +1,6 @@
 {
   "images": "macos-latest,windows-latest",
   "track": "montreal",
-  "ls": "apex26.resMode=\"med\"",
-  "leg": "baseline-med-json"
+  "ls": "apex26.resMode=\"med\" apex26.spatialUpscale=1",
+  "leg": "med-upscale-json"
 }
