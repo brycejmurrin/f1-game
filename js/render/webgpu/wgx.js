@@ -1224,7 +1224,7 @@ const WGX = (function () {
     let ssaoBG = null, godrayBG = null, compositeBG = null, fxaaBG = null, ssrBG = null, sgsrBG = null;
     let ssaoBlurSrcBG = null, ssaoBlurDstBG = null, godrayBlurSrcBG = null, godrayBlurDstBG = null;
     let pBloomDown, pBloomUp, pSSAO, pBlur, pBlurHDR, pGodray, pComposite, pFXAA, pFXAALdr, pSGSR, pointSampler, pSSR;
-    let _sgsrGather = false;
+    let _sgsrGather = false, _sgsrTried = false;
     // Blur dynamic-offset ring (see _buildPost BLUR block). Reset each present().
     let _blurBGL = null, _blurStride = 256, _blurSlots = 16, _blurWriteSlot = 0;
     // Per-pass CPU scratch for uniform writes (largest block is SSAO, 176 B/44 f).
@@ -1626,20 +1626,20 @@ const WGX = (function () {
       color: { srcFactor: "one", dstFactor: "one", operation: "add" },
       alpha: { srcFactor: "one", dstFactor: "one", operation: "add" },
     };
+    const fsPipe = (code, fmt, blend) => {
+      const mod = device.createShaderModule({ code });
+      const target = blend ? { format: fmt, blend } : { format: fmt };
+      return device.createRenderPipeline({
+        layout: "auto",
+        vertex: { module: mod, entryPoint: "vs_main" },
+        fragment: { module: mod, entryPoint: "fs_main", targets: [target] },
+        primitive: { topology: "triangle-list" },
+      });
+    };
     function _buildPost() {
       if (!_Post) return;
       try {
         pointSampler = device.createSampler({ addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge" });
-        const fsPipe = (code, fmt, blend) => {
-          const mod = device.createShaderModule({ code });
-          const target = blend ? { format: fmt, blend } : { format: fmt };
-          return device.createRenderPipeline({
-            layout: "auto",
-            vertex: { module: mod, entryPoint: "vs_main" },
-            fragment: { module: mod, entryPoint: "fs_main", targets: [target] },
-            primitive: { topology: "triangle-list" },
-          });
-        };
         // Bloom mips are POST_HDR_FORMAT textures (ensureTargets) — the
         // pipelines MUST match. These were SCENE_FORMAT for months and no run
         // ever caught it, because the mismatch only exists when the device
@@ -1747,27 +1747,31 @@ const WGX = (function () {
         compositeUBO = device.createBuffer({ size: _Post.COMPOSITE_UNIFORM_BYTES, usage: _UCD });
         fxaaUBO      = device.createBuffer({ size: _Post.FXAA_UNIFORM_BYTES,      usage: _UCD });
         ssrUBO       = device.createBuffer({ size: _Post.SSR_UNIFORM_BYTES,       usage: _UCD });
-        // SGSR1 best-effort: a failed module must NOT kill the post chain —
-        // wantSpatialUpscale() fail-closes so the canvas stays at render size.
-        // Prefer SGSR_GATHER (native textureGather) unless the player pins
-        // apex26.spatialUpscaleGather=0 for a 4-tap A/B; fall back to SGSR.
-        try {
-          let forceTap = false;
-          try { forceTap = localStorage.getItem("apex26.spatialUpscaleGather") === "0"; } catch (_) { /* blocked */ }
-          pSGSR = null; _sgsrGather = false;
-          if (!forceTap && _Post.SGSR_GATHER) {
-            try {
-              pSGSR = fsPipe(_Post.SGSR_GATHER, _presentFormat, null);
-              _sgsrGather = true;
-            } catch (_) { pSGSR = null; _sgsrGather = false; }
-          }
-          if (!pSGSR && _Post.SGSR) {
-            pSGSR = fsPipe(_Post.SGSR, _presentFormat, null);
-            _sgsrGather = false;
-          }
-          if (pSGSR) sgsrUBO = device.createBuffer({ size: _Post.SGSR_UNIFORM_BYTES, usage: _UCD });
-        } catch (_) { pSGSR = null; sgsrUBO = null; _sgsrGather = false; }
       } catch (_) { pComposite = null; }   // disable post; ensureTargets stays inert
+    }
+
+    function _ensureSpatial() {
+      if (_sgsrTried || WGX_MINIMAL || !_Post) return !!(pSGSR && sgsrUBO);
+      _sgsrTried = true;
+      // SGSR1 best-effort: a failed module must NOT kill the post chain.
+      // Prefer native textureGather unless a player pins the 4-tap A/B.
+      try {
+        let forceTap = false;
+        try { forceTap = localStorage.getItem("apex26.spatialUpscaleGather") === "0"; } catch (_) { /* blocked */ }
+        pSGSR = null; _sgsrGather = false;
+        if (!forceTap && _Post.SGSR_GATHER) {
+          try {
+            pSGSR = fsPipe(_Post.SGSR_GATHER, _presentFormat, null);
+            _sgsrGather = true;
+          } catch (_) { pSGSR = null; _sgsrGather = false; }
+        }
+        if (!pSGSR && _Post.SGSR) {
+          pSGSR = fsPipe(_Post.SGSR, _presentFormat, null);
+          _sgsrGather = false;
+        }
+        if (pSGSR) sgsrUBO = device.createBuffer({ size: _Post.SGSR_UNIFORM_BYTES, usage: _UCD });
+      } catch (_) { pSGSR = null; sgsrUBO = null; _sgsrGather = false; }
+      return !!(pSGSR && sgsrUBO);
     }
 
     //    failure leaves _fxReady false and the FX methods no-op. ──
@@ -1965,7 +1969,10 @@ const WGX = (function () {
     // aux targets) and present() takes the tonemap blit — that is the
     // bulk of the discretionary target bytes the device that just died was
     // carrying. FX stay: they record into the lit pass and own no targets.
-    if (!WGX_MINIMAL) _buildPost();
+    if (!WGX_MINIMAL) {
+      _buildPost();
+      if (spatialUpscale) _ensureSpatial();
+    }
     _buildFx();
 
     function _litPipeline(opts) {
@@ -2255,6 +2262,7 @@ const WGX = (function () {
     function setSpatialUpscale(on) {
       spatialUpscale = !!on;
       try { localStorage.setItem("apex26.spatialUpscale", spatialUpscale ? "1" : "0"); } catch (_) { /* blocked */ }
+      if (spatialUpscale) _ensureSpatial();
       resize();
       _syncSpatialAa();
       return spatialUpscale;

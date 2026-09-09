@@ -23,6 +23,21 @@ const LIGHT_SBO_BYTES =
   Number(/LIGHT_STRIDE_BYTES:\s*(\d+)/.exec(CHUNKS_SOURCE)[1]) *
   Number(/MAX_LIGHTS:\s*(\d+)/.exec(CHUNKS_SOURCE)[1]);
 
+test("WGX constructs SGSR resources only when spatial upscaling is requested", () => {
+  assert.match(WGX_SOURCE, /function _ensureSpatial\(\)/);
+  const post = WGX_SOURCE.slice(WGX_SOURCE.indexOf("function _buildPost()"),
+    WGX_SOURCE.indexOf("function _ensureSpatial()"));
+  assert.doesNotMatch(post, /pSGSR\s*=\s*fsPipe|sgsrUBO\s*=\s*device\.createBuffer/,
+    "the disabled-by-default boot must not construct SGSR pipelines or buffers");
+  const ensure = WGX_SOURCE.slice(WGX_SOURCE.indexOf("function _ensureSpatial()"),
+    WGX_SOURCE.indexOf("function _buildFx()"));
+  assert.match(ensure, /pSGSR\s*=\s*fsPipe/);
+  assert.match(ensure, /sgsrUBO\s*=\s*device\.createBuffer/);
+  const setter = WGX_SOURCE.slice(WGX_SOURCE.indexOf("function setSpatialUpscale"),
+    WGX_SOURCE.indexOf("function getSpatialUpscale"));
+  assert.match(setter, /if\s*\(\s*spatialUpscale\s*\)\s*_ensureSpatial\(\)/);
+});
+
 // opts lets a test pick a REAL WebGPU failure shape. Defaults keep the healthy
 // device every existing test was written against, so these are new switches and
 // never a changed baseline:
