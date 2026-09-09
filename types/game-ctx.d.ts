@@ -419,6 +419,9 @@ interface GameCtx {
   readonly stepSetupAero: (dt: number) => void;
   readonly setupFlapArgs: () => FlapArgs;
   readonly setSetupAero: (on: boolean) => void;
+  readonly setSetupView: (name: string) => void;
+  readonly setupPan: (strafe: number, dolly: number) => void;
+  readonly nudgeSetupZoom: (mul: number) => void;
   readonly setupPreviewXOn: boolean;
 
   // ── Player settings persisted through store ───────────────────────────────

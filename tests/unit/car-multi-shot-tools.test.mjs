@@ -46,9 +46,21 @@ test("garage-angles defaults to spine group and soft-captures via probe helpers"
   assert.match(src, /buildTeamRollup/, "multi-team rollup contact sheet");
   assert.match(src, /rollupOnly/, "multi-team combo defaults to rollup-only survey");
   assert.match(src, /skipAwait:\s*true/, "skips duplicate present wait after settle");
+  assert.match(src, /garageFrame|__apex\.garageFrame/, "uses __apex.garageFrame for preset+zoom+pan");
+  assert.match(src, /garageTeam|__apex\.garageTeam/, "store-fast team switch via __apex.garageTeam");
+  assert.match(src, /resumeTeamSet|--resume/, "supports --resume for interrupted all-team runs");
   assert.match(src, /Excludes DEFAULT_CUSTOM|block\[1\]\.matchAll/,
     "rosterIds parses LIST only, not DEFAULT_CUSTOM");
   assert.doesNotMatch(src, /page\.reload\(/, "no second boot — openGarage pins the team live");
+});
+
+test("__apex exposes garageTeam and garageFrame for multi-shot surveys", () => {
+  const apex = read("js/agent/apex.js");
+  assert.match(apex, /garageTeam\(id\)/, "direct store team switch without teampicker");
+  assert.match(apex, /garageFrame\(view/, "one-shot preset + zoom/pan clicks");
+  const game = read("js/game.js");
+  assert.match(game, /setSetupView:\s*\(\.\.\.a\)\s*=>\s*setSetupView/, "G facade for garageFrame");
+  assert.match(game, /setupPan:\s*\(\.\.\.a\)\s*=>\s*setupPan/, "G facade for pan nudges");
 });
 
 test("teams.js LIST is 11 grid teams — custom is not a roster entry", () => {

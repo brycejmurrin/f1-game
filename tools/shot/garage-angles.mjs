@@ -21,10 +21,12 @@
 // for multi-team combo runs).
 //
 // `--live` loads github.io; labeled rollup + optional per-team sheets.
+// `--resume` skips teams already in meta/PNG; `--oracle` adds offline occl % on rollup.
+// Multi-team fast runs use __apex.garageTeam + garageFrame (not the picker UI).
 //
 // Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
 // under SwiftShader (document.fonts.ready after freeze).
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -33,6 +35,10 @@ import {
   chromiumArgsForBackend, installProbeInit, gotoGame, openGarage, settleGarage,
   screenshotGameCanvas,
 } from "../capture/probe-page.mjs";
+import { loadParts } from "../car/parts-sweep.mjs";
+import { loadAtlas } from "../car/livery-contrast.mjs";
+import { occlusionMap, hiddenIn } from "../car/flank-occlusion.mjs";
+import { sweep as spineSweep } from "../car/spine-station.mjs";
 
 const LIVE_BASE = "https://brycejmurrin.github.io/f1-game/";
 const argv = process.argv.slice(2);
@@ -130,11 +136,12 @@ const [strafe = 0, dolly = 0] = (hasFlag("--pan") ? flag("--pan", "0,0") : panDe
 const withLabels = isLive ? !argv.includes("--no-labels") : argv.includes("--labels");
 const labelEachShot = withLabels && (!multiTeam || argv.includes("--label-shots") || argv.includes("--full-views"));
 const teamSheets = withLabels && (!multiTeam || argv.includes("--team-sheets") || argv.includes("--full-views"));
+const withOracle = argv.includes("--oracle") && spineLogos.length && rollupOnly;
+const useStoreTeam = !argv.includes("--picker-team") && (isFastMode || multiTeam);
 const presentMs = isFastMode ? 4000 : 12000;
 const settleShot = isFastMode ? 2 : 6;
 const settleApply = isFastMode ? 4 : 12;
-const settleSwitch = isFastMode ? 4 : 12;
-const gateTries = isFastMode ? 1 : 3;
+const settleSwitch = isFastMode ? 3 : 12;
 
 function teamIndex(id) {
   const ids = rosterIds();
@@ -157,6 +164,8 @@ if (bad.length) {
   console.error(`Unknown view(s): ${bad.join(", ")}\nAvailable: ${ALL.join(", ")} + groups ${Object.keys(GROUPS).join(", ")}`);
   process.exit(1);
 }
+const skipBayGate = isFastMode && rollupOnly && views.length === 1;
+const gateTries = skipBayGate ? 0 : (isFastMode ? 1 : 3);
 
 function escSvg(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -240,26 +249,72 @@ async function buildTeamRollup(entries, { comboName, liveBuild, view }) {
   const W = cols * tileW;
   const H = rows * tileH;
   const buildNote = liveBuild != null ? `build ${liveBuild}` : "local";
-  const composites = [];
-  for (let i = 0; i < entries.length; i++) {
-    const e = entries[i];
+  const tiles = await Promise.all(entries.map(async (e, i) => {
     const gx = (i % cols) * tileW;
     const gy = Math.floor(i / cols) * tileH;
     const img = await sharp(e.png).resize(cellW, cellH, { fit: "cover" }).png().toBuffer();
-    composites.push({ input: img, left: gx + pad, top: gy + pad });
-    composites.push({
-      input: labelSvg(e.teamLabel || e.teamId.toUpperCase(), `${view} · ${e.design} · ${buildNote}`, cellW, labH),
-      left: gx + pad,
-      top: gy + pad + cellH,
-    });
-  }
+    const oracleNote = e.oracleHidden != null ? ` · occl ${Math.round(e.oracleHidden * 100)}%` : "";
+    const sub = `${view} · ${e.design}${oracleNote} · ${buildNote}`;
+    return [
+      { input: img, left: gx + pad, top: gy + pad },
+      {
+        input: labelSvg(e.teamLabel || e.teamId.toUpperCase(), sub, cellW, labH),
+        left: gx + pad,
+        top: gy + pad + cellH,
+      },
+    ];
+  }));
   const tag = comboName || "survey";
   const sheet = join(outDir, `all-teams-${tag}-${view}-rollup.png`);
   await sharp({ create: { width: W, height: H, channels: 3, background: { r: 16, g: 17, b: 20 } } })
-    .composite(composites)
+    .composite(tiles.flat())
     .png()
     .toFile(sheet);
   return sheet;
+}
+
+/** Offline flank occlusion for rollup labels (--oracle). Cached per team. */
+let _oracleParts = null;
+let _oracleAtlas = null;
+const _oracleCache = new Map();
+function oracleHiddenPct(teamId, spineLogo, cam) {
+  if (!_oracleParts) _oracleParts = loadParts();
+  if (!_oracleAtlas) _oracleAtlas = loadAtlas();
+  const key = teamId + "|" + spineLogo + "|" + cam.az.toFixed(3) + "|" + cam.el.toFixed(3) + "|" + cam.dist.toFixed(2);
+  if (_oracleCache.has(key)) return _oracleCache.get(key);
+  const om = occlusionMap(_oracleParts, {
+    team: teamId,
+    cam: { az: cam.az, el: cam.el, dist: cam.dist, ctr: [0, 0.45, 0.245], fov: 36 },
+    grid: 32,
+  });
+  const sw = spineSweep(_oracleAtlas, { team: teamId, logo: spineLogo, sides: ["none"] });
+  const crown = sw.crown;
+  let hidden = hiddenIn(om, 0, 1);
+  if (crown && crown.u0 != null) hidden = hiddenIn(om, crown.u0, crown.u1, crown.v0, crown.v1);
+  _oracleCache.set(key, hidden);
+  return hidden;
+}
+
+/** Teams already captured — from meta JSON or existing PNGs (--resume). */
+function resumeTeamSet() {
+  if (!argv.includes("--resume")) return new Set();
+  const done = new Set();
+  const metaPath = join(outDir, multiTeam ? "all-teams-angles.json" : `${teams[0]}-angles.json`);
+  if (existsSync(metaPath)) {
+    try {
+      const meta = JSON.parse(readFileSync(metaPath, "utf8"));
+      for (const e of meta.rollupEntries || []) done.add(e.teamId);
+      for (const s of meta.shots || []) done.add(s.teamId);
+    } catch (_) { /* stale meta — fall through to PNG scan */ }
+  }
+  for (const tid of teams) {
+    const tag = spineLogos.length
+      ? (spineLogos[0] || "def") + "-" + (spineSides[0] || "none")
+      : liveries[0];
+    const png = join(outDir, `${tid}-${tag}-${rollupOnly ? rollupView : views[0]}.png`);
+    if (existsSync(png)) done.add(tid);
+  }
+  return done;
 }
 
 async function bayRendered(png, vpW) {
@@ -271,45 +326,27 @@ async function bayRendered(png, vpW) {
   return { ok: spread > 8, spread: +spread.toFixed(2) };
 }
 
-async function nudge(page, id, n) {
-  if (!n) return;
-  const ok = await page.evaluate(({ ctl, times }) => {
-    const b = document.getElementById(ctl);
-    if (!b) return false;
-    for (let i = 0; i < times; i++) b.click();
-    return true;
-  }, { ctl: id, times: Math.abs(n) });
-  if (!ok) throw new Error(`no camera control #${id}`);
-}
-
 async function frame(page, teamId, tag, view) {
-  const clicked = await page.evaluate((v) => {
-    const b = document.querySelector('#cs-stack [data-cs-view="' + v + '"]');
-    if (!b) return false;
-    b.click();
-    return true;
-  }, view);
-  if (!clicked) throw new Error(`no camera preset "${view}" in #cs-stack`);
-  await nudge(page, zoom > 0 ? "cs-view-in" : "cs-view-out", zoom);
-  await nudge(page, strafe > 0 ? "cs-pan-right" : "cs-pan-left", strafe);
-  await nudge(page, dolly > 0 ? "cs-pan-fwd" : "cs-pan-back", dolly);
+  const framed = await page.evaluate(({ v, zoom: z, strafe: st, dolly: dl }) => {
+    const a = window.__apex;
+    if (!a.garageFrame) return { ok: false, error: "no garageFrame hook" };
+    return a.garageFrame(v, { zoom: z, strafe: st, dolly: dl });
+  }, { v: view, zoom, strafe, dolly });
+  if (!framed.ok) throw new Error(`${teamId}/${tag}/${view}: ${framed.error || "frame failed"}`);
   await settleGarage(page, { frames: settleShot, presentMs });
   const png = join(outDir, `${teamId}-${tag}-${view}.png`);
-  let gate = null;
-  for (let attempt = 0; attempt < gateTries; attempt++) {
-    if (attempt) await settleGarage(page, { frames: settleShot, presentMs });
-    const shot = await screenshotGameCanvas(page, png, { skipAwait: true });
-    gate = await bayRendered(png, vp[0]);
-    if (gate.ok) {
-      const cam = await page.evaluate(() => window.__apex.garageCam());
-      return {
-        view, tag, teamId, png, spread: gate.spread, via: shot.via || "page-clip",
-        az: +cam.az.toFixed(3), el: +cam.el.toFixed(3), dist: +cam.effDist.toFixed(3),
-        pan: cam.pan ? cam.pan.map((n) => +n.toFixed(3)) : null,
-      };
-    }
+  const shot = await screenshotGameCanvas(page, png, { skipAwait: true });
+  let spread = null;
+  if (gateTries > 0) {
+    const gate = await bayRendered(png, vp[0]);
+    spread = gate.spread;
+    if (!gate.ok) throw new Error(`${teamId}/${tag}/${view}: bay never rendered (spread ${gate.spread})`);
   }
-  throw new Error(`${teamId}/${tag}/${view}: the bay never rendered (canvas pixel spread ${gate.spread})`);
+  return {
+    view, tag, teamId, png, spread, via: shot.via || "page-clip",
+    az: +framed.az.toFixed(3), el: +framed.el.toFixed(3), dist: +framed.dist.toFixed(3),
+    pan: framed.pan ? framed.pan.map((n) => +n.toFixed(3)) : null,
+  };
 }
 
 async function applyLivery(page, teamId, livId) {
@@ -366,6 +403,13 @@ async function applyDesign(page, teamId, { spineSide, spineLogo }) {
 }
 
 async function switchTeam(page, teamId) {
+  if (useStoreTeam) {
+    const got = await page.evaluate((id) => window.__apex.garageTeam(id), teamId);
+    if (!got.ok) throw new Error(`garageTeam(${teamId}): ${got.error || "failed"}`);
+    if (got.switched) await settleGarage(page, { frames: settleSwitch, presentMs });
+    if (!got.label) throw new Error(`garage opened but label empty after switch to ${teamId}`);
+    return got.label;
+  }
   const switched = await page.evaluate((id) => {
     const t = Teams.LIST.find((x) => x.id === id);
     if (!t) throw new Error("unknown team " + id);
@@ -421,9 +465,13 @@ async function captureDesigns(page, teamId, teamLabel, { liveBuild, rollupEntrie
       if (rollupEntries && views.includes(rollupView)) {
         const pick = tagShots.find((s) => s.view === rollupView);
         if (pick) {
-          rollupEntries.push({
+          const entry = {
             teamId, teamLabel, design: name, png: pick.png, view: rollupView,
-          });
+          };
+          if (withOracle && d.spineLogo) {
+            entry.oracleHidden = oracleHiddenPct(teamId, d.spineLogo, pick);
+          }
+          rollupEntries.push(entry);
         }
       }
       if (teamSheets) {
@@ -475,10 +523,36 @@ async function main() {
     gameUrl = srv.url;
   }
   if (combo) console.log(`combo ${comboKey}: logo=${combo.spineLogo} side=${combo.spineSide} views=${views.join(",")} zoom=${zoom} pan=${strafe},${dolly}`);
+  const resumeSet = resumeTeamSet();
+  const workTeams = resumeSet.size
+    ? teams.filter((t) => !resumeSet.has(t))
+    : teams;
   if (multiTeam) {
     console.log(`teams (${teams.length}): ${teams.join(", ")}`);
+    if (resumeSet.size) console.log(`resume: skip ${resumeSet.size} done, shoot ${workTeams.length}`);
     if (rollupOnly) console.log(`rollup-only (${rollupView}) — --full-views for every preset per team`);
-    if (isFastMode) console.log(`fast: settle ${settleShot}/${settleApply}f present ${presentMs}ms`);
+    if (isFastMode) {
+      console.log(`fast: settle ${settleShot}/${settleApply}f present ${presentMs}ms`
+        + (useStoreTeam ? " store-team" : "") + (skipBayGate ? " no-gate" : ""));
+    }
+    if (withOracle) console.log("oracle: flank-occlusion % on rollup labels");
+  }
+  if (!workTeams.length) {
+    console.log("nothing to shoot — all teams done (--resume)");
+    const metaPath = join(outDir, multiTeam ? "all-teams-angles.json" : `${teams[0]}-angles.json`);
+    if (existsSync(metaPath)) {
+      try {
+        const prior = JSON.parse(readFileSync(metaPath, "utf8"));
+        if (prior.rollupEntries?.length) {
+          const sheet = await buildTeamRollup(prior.rollupEntries, {
+            comboName: comboKey || "survey", liveBuild, view: rollupView,
+          });
+          console.log(`rollup (${prior.rollupEntries.length} teams, ${rollupView}) -> ${sheet}`);
+        }
+      } catch (_) { /* no rollup */ }
+    }
+    shutdown();
+    return;
   }
 
   const t0 = Date.now();
@@ -497,7 +571,7 @@ async function main() {
     }, { t: bootTeam, liv: liveries[0] });
     await openGarage(page, { team: bootTeam });
 
-    for (const tid of teams) {
+    for (const tid of workTeams) {
       const teamLabel = await switchTeam(page, tid);
       console.log(`team sheet: ${teamLabel}`);
       const { shots, sheets } = await captureDesigns(page, tid, teamLabel, { liveBuild, rollupEntries });
@@ -505,22 +579,35 @@ async function main() {
       allSheets.push(...sheets);
     }
 
+    let priorRollup = [];
+    const metaPath = join(outDir, multiTeam ? "all-teams-angles.json" : `${teams[0]}-angles.json`);
+    if (resumeSet.size && existsSync(metaPath)) {
+      try {
+        priorRollup = JSON.parse(readFileSync(metaPath, "utf8")).rollupEntries || [];
+      } catch (_) { /* fresh rollup */ }
+    }
+    const mergedRollup = rollupEntries
+      ? [...priorRollup.filter((e) => !rollupEntries.some((n) => n.teamId === e.teamId)), ...rollupEntries]
+      : null;
+
     let teamRollup = null;
-    if (rollupEntries && rollupEntries.length) {
-      teamRollup = await buildTeamRollup(rollupEntries, {
+    if (mergedRollup && mergedRollup.length) {
+      teamRollup = await buildTeamRollup(mergedRollup, {
         comboName: comboKey || "survey",
         liveBuild,
         view: rollupView,
       });
-      console.log(`rollup (${rollupEntries.length} teams, ${rollupView}) -> ${teamRollup}`);
+      console.log(`rollup (${mergedRollup.length} teams, ${rollupView}) -> ${teamRollup}`);
     }
 
-    const meta = join(outDir, multiTeam ? "all-teams-angles.json" : `${teams[0]}-angles.json`);
+    const meta = metaPath;
     writeFileSync(meta, JSON.stringify({
       teams, combo: comboKey || null, liveries, spineSides, spineLogos,
-      live: isLive, liveBuild, rollupOnly, fast: isFastMode,
+      live: isLive, liveBuild, rollupOnly, fast: isFastMode, oracle: withOracle,
+      storeTeam: useStoreTeam, resumed: resumeSet.size ? [...resumeSet] : null,
       zoom, pan: [strafe, dolly], viewport: vp, views,
-      rollupView, shots: allShots, sheets: allSheets, teamRollup,
+      rollupView, shots: allShots, sheets: allSheets,
+      rollupEntries: mergedRollup, teamRollup,
       seconds: +((Date.now() - t0) / 1000).toFixed(1),
     }, null, 2));
     console.log(`wrote ${allShots.length} angle(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s + ${meta}`);

@@ -3584,6 +3584,10 @@ const G = {
     return { aLvl: aSt.val, style: aSt.aero || null };
   },
   setSetupAero: (on) => setSetupAero(on),
+  // Garage camera stack — deferred like buildSetup (declared below this literal).
+  setSetupView: (...a) => setSetupView(...a),
+  setupPan: (...a) => setupPan(...a),
+  nudgeSetupZoom: (mul) => nudgeSetupCam(0, 0, mul),
   get setupPreviewXOn() { return setupPreviewXOn; },
   get soundOn() { return soundOn; }, set soundOn(v) { soundOn = v; },
   get musicEnabled() { return musicEnabled; }, set musicEnabled(v) { musicEnabled = v; },
