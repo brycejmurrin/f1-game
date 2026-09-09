@@ -234,7 +234,7 @@ const TLX = (function () {
       })();
       let _softBlit = !forceWebGL && _capPref !== "0" && !!(_softAdapter || _headless || _capPref === "1");
       let _displayCanvas = null, _displayCtx = null, _gpuCanvas = null;
-      let _blitRT = null, _softImg = null, _softBlitGen = 0;
+      let _blitRT = null, _softImg = null, _softBlitGen = 0, _softLastMaxPx = 0;
       let _softReadPending = false, _softReadQueued = null, _softReadEpoch = 0;
       const _softPresentWaiters = [];
       // Layout/CSS size follows the VISIBLE canvas. Soft-present is a sibling
@@ -2094,6 +2094,7 @@ const TLX = (function () {
               const s = src[i] + src[i + 1] + src[i + 2];
               if (s > maxPx) maxPx = s;
             }
+            _softLastMaxPx = maxPx;
             if (maxPx >= 8) {
               _displayCtx.putImageData(img, 0, 0);
               _softBlitNotify();
@@ -2617,6 +2618,17 @@ const TLX = (function () {
           return _readLdr(rt).then(function (pack) {
             return { width: pack.w, height: pack.h, data: pack.data };
           });
+        },
+        // Same name as GLX/WGX. Descriptor-copy onto GLX would otherwise keep
+        // GLX.softPresentState (a HeadlessChrome blit the three path never ran).
+        softPresentState() {
+          return {
+            on: !!_softBlit,
+            gen: _softBlitGen,
+            maxPx: _softLastMaxPx,
+            display: _displayCanvas ? [_displayCanvas.width, _displayCanvas.height] : null,
+            pending: !!_softReadPending,
+          };
         },
         awaitSoftPresent(timeoutMs) {
           if (!_softBlit || !_displayCtx) return Promise.resolve(_softBlitGen);

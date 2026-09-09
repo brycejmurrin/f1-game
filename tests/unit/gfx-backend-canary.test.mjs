@@ -1443,6 +1443,8 @@ test("TLX publishes capturePixels / awaitSoftPresent as the three.js screenshot 
   assert.match(tlx, /\bcapturePixels\s*\(\s*\)\s*\{/);
   assert.match(tlx, /\breadRenderTargetPixelsAsync\b/, "the blit goes through three's readback (copyTextureToBuffer + mapAsync), not the swapchain");
   assert.match(fnBody(tlx, "softPresent"), /return\s+!!\s*_softBlit\b/);
+  assert.match(fnBody(tlx, "softPresentState"), /\bon:\s*!!\s*_softBlit\b/,
+    "softPresentState must be OWN so descriptor-copy does not keep GLX's");
   assert.match(tlx, /_softBlit\s*=\s*!forceWebGL\s*&&\s*_capPref\s*!==\s*"0"/);
   assert.doesNotMatch(tlx, /[.]\s*getCurrentTexture\s*\(/, "never getCurrentTexture on software — the swapchain never composites and it breaks mapAsync");
   assert.match(tlx, /await\s+renderer\.init\(\s*\)/);

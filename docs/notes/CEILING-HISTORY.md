@@ -2550,3 +2550,15 @@ headroom.
   A GPU-mesh leak guard is worth a line here: the field cache was the one
   cache in the tree with no cap, no LRU and no free path until recently, and
   this owner has had iOS memory kills.
+
+## 2026-09-09 — GLX HeadlessChrome soft-present
+
+`js/render/glx/glx.js` lines 2357 -> **2482** (+125). HeadlessChrome / SwiftShader
+leaves the WebGL canvas uncomposited for CDP screenshots even with
+`preserveDrawingBuffer`: `readPixels` has the car, `chrome_take_screenshot`
+is a black gap. GLX now 2D-blits onto `#game-soft` under the same UA sniff
+WGX already used (`softPresent` / `softPresentState` / `awaitSoftPresent`).
+The overlay and the blit live in the presenter — there is no second file
+that owns "what the garage capture sees". TLX already had the blit; this
+raise is GLX catching up so garage shots on the default renderer are not
+black.
