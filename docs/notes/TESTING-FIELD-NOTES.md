@@ -1546,3 +1546,43 @@ system. Named, measured, and left for someone with the room to iterate.
 **Fixed instead**: the three empty-list assertions now carry the offending
 pairs and the fit state in their message, so the next failure says
 `.hud-top x .hud-gaps` instead of `Received + 4`.
+
+### 2026-09-09 (later) — three hypotheses eliminated, overlap still there
+
+Continuing the entry above. The fit pass's own numbers, read by a temporary
+`window.__fitDbg` at the end of fitHud:
+
+```
+gaps 16.6   gapChars 0   wLong 16.6   capLong 1.308   capNo 1.434
+capTop 1.308   scale 1.24   tight false   memo [0,0]   n 2
+```
+
+`n: 2` is the finding. **fitHud COMPLETES twice in a session.** It is called
+every ~10 Hz tick from updateHud, but returns early on an unchanged key, and
+the key stops changing. Both completions happen before anyone is close enough
+to show a gap (`gapChars 0`), so the strip is measured at 16.6 px — its own
+padding — and that becomes `wLong`, the width of the LONGEST spelling. It
+renders at 87.9. The left cluster is therefore budgeted ~71 px narrower than it
+draws, `capLong` comes out 1.308 where the true widths give 0.972, and the cap
+never fires.
+
+**Three fixes tried, all reverted, none moved the overlap:**
+
+1. `scale` is read from `root.style` — the INLINE style — so a `--hud-scale`
+   arriving from a stylesheet is invisible to the fit pass. The coarse block in
+   css/tokens.css sets 1.24, so the HUD renders at 1.24 while the pass budgets
+   1.0. Reading the computed value instead is CORRECT and changes nothing here,
+   because capLong (1.308) clears 1.24 as easily as it clears 1.
+2. The width memo records whenever the width is non-zero, and an empty strip is
+   not zero. Gating it on the strip having text is CORRECT and changes nothing
+   here, because `wLong` then falls back to the same live measurement.
+3. Rajdhani is an async `@font-face`, and the key is deliberately layout-free
+   (it keys on text LENGTH), so a font swap widens every cluster invisibly.
+   Re-fitting on `document.fonts.ready` changed nothing — in a headless run the
+   local faces are ready before the first fit.
+
+All three reverted rather than landed: three unverifiable edits to a 10 Hz
+layout function with a documented oscillation history is how that history got
+written. What is left for whoever picks this up is the question none of the
+three answered: **why does the key stop changing once the strip fills?** The
+answer is upstream of every cap in this file.
