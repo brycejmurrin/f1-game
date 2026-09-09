@@ -12,7 +12,19 @@ import { toMenu, forgetStored, pinFreePlay, freeBuildOff } from "../helpers/shar
 
 const LANDSCAPE = { width: 844, height: 390 };
 
-async function openSetup(page) {
+// `draw` opts BACK IN to the render loop. The garage draws a live turntable and
+// getSetupPreviewMesh() re-keys on partsVisualKey, so every option click rebuilds
+// the car mesh and repaints the livery atlas at SwiftShader speed — which is
+// most of what this file costs, and none of what it asserts. Stopped by default
+// (render() returns early on headlessMode, js/game.js).
+//
+// The PREVIEW CAMERA block is the exception and has to say so: those tests drive
+// the turntable itself, and one of them — "zoom is clamped and drag orbits
+// without touching distance" — fails outright without a loop to advance the
+// camera. Measured: 15 tests in 3.2 min with the loop stopped everywhere and
+// that one red, against 314 s with it running everywhere. Opting the camera
+// block back in keeps both.
+async function openSetup(page, opts) {
   await toMenu(page);
   await forgetStored(page, ["unlimitedBudget"]);
   // The default car, its parts forgotten; #mb-race re-reads the store.
@@ -22,6 +34,8 @@ async function openSetup(page) {
   await page.locator("#sel-car").click();
   await page.locator("#carsetup").waitFor({ state: "visible" });
   await freeBuildOff(page);
+  const draw = !!(opts && opts.draw);
+  await page.evaluate((on) => window.__apex.headless(!on), draw);
 }
 
 test.describe("Car setup — stable DOM identifiers", () => {
@@ -238,7 +252,7 @@ test.describe("Car setup — preview camera", () => {
   };
 
   test("the camera bar exposes a stable data-cs-view per preset", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, { draw: true });
     await openCam(page);
     const ids = await page.locator("#cs-view [data-cs-view]").evaluateAll(
       (els) => els.map((e) => e.dataset.csView));
@@ -246,7 +260,7 @@ test.describe("Car setup — preview camera", () => {
   });
 
   test("the panel starts shut, opens from CAMERA, and a preset shuts it again", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, { draw: true });
     const panel = page.locator("#cs-cam-panel");
     await expect(panel).toBeHidden();
     await expect(page.locator("#cs-cam")).toHaveAttribute("aria-expanded", "false");
@@ -271,7 +285,7 @@ test.describe("Car setup — preview camera", () => {
   });
 
   test("the turntable runs on open and a preset both stops it and re-aims", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, { draw: true });
     const opened = await cam(page);
     expect(opened.on).toBe(true);
     expect(opened.spin).toBe(true);
@@ -298,7 +312,7 @@ test.describe("Car setup — preview camera", () => {
   });
 
   test("PAN walks the rig along the car, and a preset re-centres it", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, { draw: true });
     await openCam(page);
     // Stop the turntable before sampling: it advances the azimuth every frame,
     // so a baseline taken while it runs makes every later az comparison a race.
@@ -343,7 +357,7 @@ test.describe("Car setup — preview camera", () => {
   });
 
   test("zoom is clamped and drag orbits without touching distance", async ({ page }) => {
-    await openSetup(page);
+    await openSetup(page, { draw: true });
     await openCam(page);
     await page.locator('[data-cs-view="front"]').click();
     const start = await cam(page);

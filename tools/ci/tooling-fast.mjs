@@ -39,6 +39,10 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/daily-challenge.test.mjs",
   "tests/unit/setup-tune.test.mjs",
   "tests/unit/team-livery.test.mjs",
+  // 10 s of pure geometry: builds all 297 catalog options and hashes each
+  // mesh, so a part that stops changing the car is caught where the catalog
+  // is edited rather than in a 2-hour render sweep nobody runs.
+  "tests/unit/parts-distinct-mesh.test.mjs",
   "tests/unit/onboard.test.mjs",
   "tests/unit/test-coverage-audit.test.mjs",
   "tests/unit/test-groups-generated.test.mjs",
@@ -124,6 +128,7 @@ export const TOOLING_FAST_FILES = Object.freeze([
   "tests/unit/select-specs.test.mjs",
   "tests/unit/twinned-specs.test.mjs",
   "tests/unit/wait-polling.test.mjs",
+  "tests/unit/gallery-capture-draws.test.mjs",
   "tests/unit/track-graph.test.mjs",
   "tests/unit/lighting-campaign.test.mjs",
   "tests/unit/assets-pack.test.mjs",

@@ -85,17 +85,37 @@ const Helmets = (function () {
       const f = (t - z.t0) / Math.max(1e-3, z.t1 - z.t0);
       return dAz(az, z.az + z.sweep * f) <= z.w0 + (z.w1 - z.w0) * f;
     },
-    // Deterministic speckle: a doodle, a star field, a spatter. Hashed on the
-    // cell, so a driver's helmet is mottled the same way in every session and
-    // on every machine — a Math.random() here would shimmer between builds.
-    // GIVE IT THE MESH'S OWN GRID (n = RINGS, m = SLICES). One cell per vertex
-    // is the crispest a per-vertex speckle can be; any other cell size beats
-    // against the tessellation and comes out as mush.
-    fleck: (z, t, az) => {
+    // A DOODLE, NOT A SPECKLE. This was a hash per (ring, slice) cell — which
+    // matched the DENSITY of a mottled helmet and none of its STRUCTURE, so it
+    // came out as a scatter of axis-aligned rectangles. The macos-latest GPU
+    // render of 2026-09-09 (car-shot.yml run 34293766619) showed the result
+    // reading as static rather than as a design, and raising the mesh
+    // resolution made it WORSE, not better: the speckle was the subject.
+    //
+    // Norris's real lid (scratch/refs/NOR-0.jpg) is a black squiggle over
+    // fluoro — connected, curved strokes of roughly even width. That is a LEVEL
+    // SET: take a smooth field and paint the band where it crosses zero, and
+    // the strokes come out connected and evenly wide by construction. Four
+    // sinusoids at INTEGER azimuthal frequencies keep it seamless round the
+    // shell (a noise lattice would show the join), and it is a closed-form
+    // function of (t, az), so it stays resolution-free — the same doodle at any
+    // tessellation, and deterministic across machines the way the hash was.
+    // The t coefficients are DELIBERATELY low. At their natural size the field
+    // turned over about every two rings, and ring-to-ring agreement measured
+    // 66% against 60% at chance — barely a stroke at all, and the render still
+    // read as speckle. Scaled to 0.6 it measures 78%, and against
+    // scratch/refs/NOR-0.jpg that is where the loops match the real doodle;
+    // slower again (0.3, 87%) smears them into vertical streaks.
+    //   sc  wavelengths round the shell (feature size)
+    //   w   half-width of the stroke, in field units (ink coverage)
+    mottle: (z, t, az) => {
       if (t < z.t0 || t > z.t1) return false;
-      const r = Math.floor(t * z.n), c = Math.floor((((az % 360) + 360) % 360) / (360 / z.m));
-      const h = Math.sin(r * 127.1 + c * 311.7 + z.seed * 74.7) * 43758.5453;
-      return h - Math.floor(h) < z.d;
+      const th = (((az % 360) + 360) % 360) * Math.PI / 180, u = t * Math.PI, k = z.seed;
+      const f = Math.sin(z.sc * th + 3.06 * u + k)
+              + Math.sin((z.sc + 2) * th - 1.98 * u + 1.7 * k + 1.1)
+              + 0.8 * Math.sin((z.sc - 1) * th + 5.40 * u + 0.7 * k + 4.2)
+              + 0.7 * Math.sin((z.sc + 4) * th + 1.26 * u + 1.3 * k + 2.4);
+      return Math.abs(f) < z.w;
     },
   };
 
@@ -173,7 +193,7 @@ const Helmets = (function () {
     spot: (az, t, r, c) => ({ k: "spot", az, t, r, c }),
     patch: (az, w, t0, t1, c) => ({ k: "patch", az, w, t0, t1, c }),
     flash: (az, w0, w1, t0, t1, sweep, c) => ({ k: "flash", az, w0, w1, t0, t1, sweep, c }),
-    fleck: (t0, t1, n, m, d, seed, c) => ({ k: "fleck", t0, t1, n, m, d, seed, c }),
+    mottle: (t0, t1, sc, w, seed, c) => ({ k: "mottle", t0, t1, sc, w, seed, c }),
     // A KEYLINE: the thin line of a second colour that runs alongside every
     // real graphic and is most of why one reads as a design rather than as a
     // dipped shell. Two flat blocks meeting is a toy; a keyline between them is
@@ -210,10 +230,10 @@ const Helmets = (function () {
     44: { name: "HAM", base: C.yellow, alt: C.violet, visor: C.black, zones: [
       ...centre(10, C.white), ...z.sides((a) => z.flash(a, 5, 14, 0.08, 0.42, 24, C.black)),
       z.band(0.68, 0.74, C.black), z.key(0.74, C.white), z.band(0.90, 0.955, C.red)] },
-    // McLaren: fluoro lime under a black doodle. The doodle is a fleck — the
-    // pattern is too fine to draw and too coarse to leave out.
+    // McLaren: fluoro lime under a black doodle. sc 5 / w 0.48 is swept
+    // against scratch/refs/NOR-0.jpg — 5 sets the loop size, 0.48 the ink.
      1: { name: "NOR", base: C.lime, alt: C.cyan, visor: C.black, zones: [
-      z.fleck(0.06, 0.95, 20, 28, 0.30, 3, C.black), z.cap(0.09, C.black),
+      z.mottle(0.06, 0.95, 5, 0.48, 3, C.black), z.cap(0.09, C.black),
       ...z.sides((a) => z.patch(a, 13, 0.20, 0.60, C.black)),
       z.key(0.74, C.papaya), z.band(0.86, 0.92, C.black), z.key(0.92, C.papaya)] },
     // McLaren: black shell, papaya crown and face flash, a lime skirt.
@@ -234,7 +254,7 @@ const Helmets = (function () {
       z.band(0.66, 0.86, C.carbon), z.key(0.605, C.lime), z.band(0.88, 0.955, C.navy)] },
     // Alpine: pale blue mottle over a navy lower half, pink at the rim.
     10: { name: "GAS", base: C.sky, alt: C.white, visor: C.silver, zones: [
-      z.fleck(0.04, 0.58, 20, 28, 0.24, 7, C.white), z.band(0.60, 0.90, C.navy), z.key(0.545, C.white),
+      z.mottle(0.04, 0.58, 6, 0.40, 7, C.white), z.band(0.60, 0.90, C.navy), z.key(0.545, C.white),
       ...z.sides((a) => z.flash(a, 7, 18, 0.14, 0.57, 24, C.white)), ...centre(8, C.white),
       z.band(0.90, 0.955, C.pink)] },
     // Alpine: Argentine white and sky blue, pink down the centre.
@@ -275,7 +295,7 @@ const Helmets = (function () {
     27: { name: "HUL", base: C.graphite, alt: C.white, visor: C.black, zones: [
       z.cap(0.10, C.black), z.flash(0, 10, 34, 0.12, 0.44, 0, C.green),
       ...z.sides((a) => z.flash(a, 7, 18, 0.16, 0.60, 24, C.green)),
-      z.fleck(0.10, 0.62, 20, 28, 0.07, 11, C.white), z.band(0.84, 0.955, C.green), z.key(0.785, C.white)] },
+      z.mottle(0.10, 0.62, 11, 0.12, 11, C.white), z.band(0.84, 0.955, C.green), z.key(0.785, C.white)] },
     // Audi: white with a Brazilian green crown and yellow keyline, navy jaw.
      5: { name: "BOR", base: C.white, alt: C.crimson, visor: C.black, zones: [
       z.cap(0.17, C.green), z.key(0.17, C.yellow),
@@ -539,13 +559,50 @@ const Helmets = (function () {
      which is memory on a mesh the cache already holds at most 24 of, and buys
      back nothing in draw cost — the triangle budget in
      tests/unit/car-wing-foil.test.mjs is unmoved. */
+  /* WHERE THE PAINT CHANGES, SPLIT THE QUAD. Flat paint made every edge a mesh
+     edge, which is only as good as the mesh: a 20x28 grid gives 12.9 degrees of
+     azimuth per cell, so a boundary running diagonally across it came out as a
+     visible staircase. On the macos-latest GPU render of 2026-09-09
+     (car-shot.yml run 34293766619) the busy designs did not read as designs at
+     all — they read as static, and that is aliasing, not detail.
+
+     Raising RINGS/SLICES uniformly is the wrong lever: 57% of Norris's base
+     quads straddle a boundary, so a uniform depth-2 split costs 10,720
+     triangles against a WHOLE-CAR body of 4,232. Instead each base quad
+     recurses only while its own four corners and centre disagree, so triangles
+     land on the boundary LINES and nowhere else. Measured over seven designs
+     that is 2.3x per level, not 4x.
+
+     MAX_SPLIT 1 is measured at the size the helmet is actually SEEN, not at
+     the size a contact sheet shows it: rendered at 110 px — the cockpit view,
+     the largest it gets outside the garage — depth 1 is a clear gain on depth
+     0 and depth 2 is barely separable from depth 1
+     (scratch/renders/sz-sweep.png). Depth 1 costs 3,292 triangles on the
+     busiest design against 1,120; depth 2 costs 9,292, which is more than
+     twice the whole rest of the car for something ~100 px across, so it buys
+     pixels no player is looking at. Past depth 1 the honest fix is not more
+     geometry at all — it is per-fragment paint. The lit shader carries
+     vObjPos already (glsl-lit.js uses it for the orange-peel flake), so the
+     shell's (t, az) IS recoverable in the fragment shader without a new
+     vertex attribute; what is missing is the DESIGN there, which means either
+     a sampled texture or 22 designs in GLSL, across GLX, TLX and WGX. That is
+     a renderer change and not this one.
+
+     The base grid still sets the NORMALS' finite-difference step, so
+     subdivision changes the paint and never the lighting — the shell reads
+     exactly as curved as it did. */
+  const MAX_SPLIT = 1;
+
   function build(out, cx, cy, cz, design, S) {
     const skin = shell(design);
     const clamp1 = (c) => [Math.min(c[0], 1), Math.min(c[1], 1), Math.min(c[2], 1)];
-    const corner = (r, sl) => {
-      const t = ringT(r), a = (sl / SLICES) * Math.PI * 2;
+    // (t, azimuth in degrees) -> position, smooth normal, and the pair itself.
+    // du/da stay tied to the BASE grid so a split quad's normals match its
+    // neighbours' exactly and no subdivision seam can show in the light.
+    const du = 0.5 / RINGS, da = Math.PI / SLICES;
+    const corner = (t, az) => {
+      const a = (az * Math.PI) / 180;
       const p = pointAt(t, a);
-      const du = 0.5 / RINGS, da = Math.PI / SLICES;
       const pu = pointAt(Math.min(1, t + du), a), pd = pointAt(Math.max(0, t - du), a);
       const pr = pointAt(t, a + da), pl = pointAt(t, a - da);
       const tu = [pu[0] - pd[0], pu[1] - pd[1], pu[2] - pd[2]];
@@ -553,16 +610,16 @@ const Helmets = (function () {
       let n = [ta[1] * tu[2] - ta[2] * tu[1], ta[2] * tu[0] - ta[0] * tu[2], ta[0] * tu[1] - ta[1] * tu[0]];
       const m = Math.hypot(n[0], n[1], n[2]) || 1;
       n = [n[0] / m, n[1] / m, n[2] / m];
-      if (r === 0) n = [0, 1, 0];                        // the pole, where both tangents vanish
-      return { p, n, t, sl };
+      if (t <= 0) n = [0, 1, 0];                         // the pole, where both tangents vanish
+      return { p, n, t, az };
     };
-    // one sample per TRIANGLE, at its centroid, wrapped the short way round
+    const sample = (t, az) => skin(Math.min(1, t), ((az % 360) + 360) % 360);
+    // what the paint IS at a point, as a value two samples can be compared on
+    const key = (t, az) => { const v = sample(t, az);
+      return (v.glass ? "g" : "") + v.c.map((x) => Math.round(x * 255)).join(","); };
+    // one sample per TRIANGLE, at its centroid: flat paint, mesh-crisp edges
     const paintTri = (v0, v1, v2) => {
-      const t = (v0.t + v1.t + v2.t) / 3;
-      const base = v0.sl;
-      const off = [v0, v1, v2].reduce((a, v) => a + ((v.sl - base + SLICES + SLICES / 2) % SLICES - SLICES / 2), 0) / 3;
-      const az = (((base + off) / SLICES) * 360 + 360) % 360;
-      const v = skin(Math.min(1, t), az);
+      const v = sample((v0.t + v1.t + v2.t) / 3, (v0.az + v1.az + v2.az) / 3);
       return { c: clamp1(v.c), mat: v.glass ? S.glass : S.paint };
     };
     const emit = (a, b, c) => {
@@ -576,22 +633,26 @@ const Helmets = (function () {
       }
       out.idx.push(i, i + 1, i + 2);
     };
-    const grid = [];
-    for (let r = 0; r <= RINGS; r++) {
-      const row = [];
-      for (let sl = 0; sl < SLICES; sl++) row.push(corner(r, sl));
-      grid.push(row);
-    }
-    for (let r = 0; r < RINGS; r++) {
-      for (let sl = 0; sl < SLICES; sl++) {
-        const s2 = (sl + 1) % SLICES;
-        const a = grid[r][sl], b = grid[r][s2], c = grid[r + 1][s2], d = grid[r + 1][sl];
-        emit(a, b, c); emit(a, c, d);
+    // a quad in (t, az), split while its corners disagree about the paint
+    const patch = (t0, t1, a0, a1, depth) => {
+      const tm = (t0 + t1) / 2, am = (a0 + a1) / 2;
+      if (depth < MAX_SPLIT) {
+        const k = key(t0, a0);
+        if (key(t0, a1) !== k || key(t1, a1) !== k || key(t1, a0) !== k || key(tm, am) !== k) {
+          patch(t0, tm, a0, am, depth + 1); patch(t0, tm, am, a1, depth + 1);
+          patch(tm, t1, am, a1, depth + 1); patch(tm, t1, a0, am, depth + 1);
+          return;
+        }
       }
-    }
+      const a = corner(t0, a0), b = corner(t0, a1), c = corner(t1, a1), d = corner(t1, a0);
+      emit(a, b, c); emit(a, c, d);
+    };
+    for (let r = 0; r < RINGS; r++)
+      for (let sl = 0; sl < SLICES; sl++)
+        patch(ringT(r), ringT(r + 1), (sl / SLICES) * 360, ((sl + 1) / SLICES) * 360, 0);
     return out;
   }
 
   return { DESIGNS, COLORS: C, designFor, painter, shell, isVisor, generated, ZONES, SHAPE, pointAt, build,
-           RINGS, SLICES, ringT };   // the tessellation, so a preview can show what the MESH carries
+           RINGS, SLICES, ringT, MAX_SPLIT };   // the tessellation, so a preview can show what the MESH carries
 })();

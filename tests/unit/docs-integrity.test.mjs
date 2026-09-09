@@ -344,9 +344,23 @@ test("the test-suite counts in the agent docs and README.md match the files on d
     for (const n of claimed)
       assert.equal(n, specs, `${doc} claims ${n} Playwright specs; tests/ holds ${specs}`);
 
-    const unitClaims = [...text.matchAll(/(\d+)\s+`?node --test`? unit suites/gi)].map((m) => Number(m[1]));
-    for (const n of unitClaims)
-      assert.equal(n, units, `${doc} claims ${n} unit suites; tests/ holds ${units}`);
+    // A FLOOR ("200+ unit suites") is allowed, and is what the prose should
+    // use. An exact count is one integer that every agent adding a test has to
+    // bump, in two files — and seven sessions push to one branch here, so it
+    // conflicts every time: README.md measured +64/-64 over seven days, pure
+    // rewrite, almost all of it this number. A floor keeps the drift guard that
+    // this test exists for (the count cannot silently fall, and cannot fall
+    // FAR behind) while costing an edit once per SLACK additions instead of
+    // every one. An exact figure anywhere is still pinned exactly.
+    const SLACK = 50;
+    const unitClaims = [...text.matchAll(/(\d+)(\+?)\s+`?node --test`? unit suites/gi)]
+      .map((m) => ({ n: Number(m[1]), floor: m[2] === "+" }));
+    for (const { n, floor } of unitClaims) {
+      if (!floor) { assert.equal(n, units, `${doc} claims ${n} unit suites; tests/ holds ${units}`); continue; }
+      assert.ok(n <= units, `${doc} claims ${n}+ unit suites; tests/ holds only ${units}`);
+      assert.ok(units - n < SLACK,
+        `${doc} claims ${n}+ unit suites and tests/ holds ${units} — ${units - n} behind, raise the floor`);
+    }
   }
   assert.ok(sawSpecCount, "neither CLAUDE.md nor README.md states a Playwright spec count any more");
 });
