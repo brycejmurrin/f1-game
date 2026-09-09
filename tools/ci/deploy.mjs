@@ -255,20 +255,16 @@ function mergeDeployTip(tip) {
   return `merged (${did.join("; ")})`;
 }
 
-// The cross-file guards — the ones a MERGE breaks. Everything here asserts a
-// relationship BETWEEN files (a registry against the tree, a generated file
-// against its source, a ceiling against what it measures), which is exactly
-// what goes wrong when two verified trees are joined. A physics suite cannot
-// newly fail because someone else's docs commit landed.
-const MERGE_GUARDS = Object.freeze([
-  "tests/unit/test-groups-generated.test.mjs", "tests/unit/load-order.test.mjs",
-  "tests/unit/global-registry.test.mjs", "tests/unit/shell-ids.test.mjs",
-  "tests/unit/game-ctx-surface.test.mjs", "tests/unit/deploy-staging.test.mjs",
-  "tests/unit/tools-runnable.test.mjs", "tests/unit/agent-surface.test.mjs",
-  "tests/unit/docs-integrity.test.mjs", "tests/unit/generated-docs.test.mjs",
-  "tests/unit/test-groups.test.mjs", "tests/unit/ci-coverage.test.mjs",
-  "tests/unit/twinned-specs.test.mjs", "tests/unit/ratchets.test.mjs",
-]);
+// The cross-file guards — the ones a MERGE breaks. Everything in this group
+// asserts a relationship BETWEEN files (a registry against the tree, a
+// generated file against its source, a ceiling against what it measures),
+// which is exactly what goes wrong when two independently verified trees are
+// joined. A physics suite cannot newly fail because someone else's docs commit
+// landed. Read from tests/groups.json rather than listed here: a second copy of
+// a registry is the class of problem this whole change is about, and
+// `npm run test:guards` is the same 14 files for a human before a commit.
+const MERGE_GUARDS = Object.freeze(
+  JSON.parse(fs.readFileSync(path.join(ROOT, "tests/groups.json"), "utf8")).groups["test:guards"].files);
 
 /* HOW WIDE THE GATE RUNS ITSELF.
    The node suites are independent processes and the runner buffers each file's
