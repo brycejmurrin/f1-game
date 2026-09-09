@@ -1017,6 +1017,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
   #cs-cam-panel {
     max-height: min(36vh, 220px);
     overflow-y: auto;
+    overscroll-behavior-y: contain;
   }
 }
 /* Label column + controls. The labels are a fixed column so the three rows of
