@@ -1411,7 +1411,7 @@ const LiveryTex = (function () {
       ctx.restore();
     });
   }
-  function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont) {
+  function drawSpineTop(ctx, id, R, c1, acc, ink, name, num, numFont, acc2) {
     const X = R.x, Y = R.y, W = R.w, H = R.h;
     ctx.save();
     ctx.beginPath(); ctx.rect(X, Y, W, H); ctx.clip();
@@ -1489,9 +1489,17 @@ const LiveryTex = (function () {
       // works team paints there (Ferrari's tricolore, Alpine's bleu-blanc-rouge).
       // Body paint is the middle band, so only the outer two are drawn: a
       // three-colour livery cannot be assumed, and c1 in the middle always reads.
+      // The two drawn bands are picked against the COVER — one as the band
+      // colour, one as the crest ink — and never against EACH OTHER, so a
+      // livery whose two picks land together wears one colour repeated.
+      // Measured: Mercedes 1.01:1 between its own bands, Aston Martin 1.03,
+      // Williams 1.07, Red Bull 1.31 — four of eleven teams in a two-colour
+      // "tricolour", which is the one thing the design is named for. acc2 is
+      // the second band re-picked against the cover AND the first band; where
+      // the two already separate it IS the ink and nothing changes.
       const bandH = H * 0.085, top = Y + H * 0.62;
       ctx.fillStyle = cssA(acc, 0.97); ctx.fillRect(X, top, W, bandH);
-      ctx.fillStyle = cssA(ink, 0.97); ctx.fillRect(X, top + bandH * 2, W, bandH);
+      ctx.fillStyle = cssA(acc2 || ink, 0.97); ctx.fillRect(X, top + bandH * 2, W, bandH);
     } else if (id === "wordmark") {
       // The title sponsor along the spine, rotated to run nose → tail so it
       // reads from the SIDE of the car, the way a real engine cover carries it.
@@ -1892,7 +1900,11 @@ const LiveryTex = (function () {
       } else drawCrest(ctx, teamId, Rb, { liv: colors, field: [coverPaint], bare: true, palette: Object.assign({}, lockup, { plate: null }) });
       ctx.restore();
     } else if (spineLogo !== "none") {
-      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont);
+      // The tricolour's SECOND band: a colour clearing the cover it sits on AND
+      // the first band beside it. The ink is tried first, so a livery whose
+      // bands already separate keeps exactly what it wears today.
+      const bandC2 = pickOn([inkCrest].concat(BAND_ORDER), [coverPaint, bandC], BAND_ON_COVER);
+      drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont, bandC2);
       if (spineLogo === "saddle") saddleFlanks(ctx, bandC);
     }
     if (REGIONS.tail) {
