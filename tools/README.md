@@ -183,6 +183,7 @@ The car and the garage: option sweeps, livery and crest rendering, career econom
 | **car/carshot.mjs** | Cropped studio-orbit car JPEG, self-booting: `carshot.mjs [az] [tod] [teamIdx] [out]` → `artifacts/tmp/carshot.jpg`. | playwright-probe |
 | **car/cockpit-pale-sweep.mjs** | Does anything in the COCKPIT read as a blank pale slab? Ray-casts the real Car3D cockpit from the driver's eye. | playwright-probe |
 | **car/crest-sweep.mjs** | Measures every team crest offline by replaying `LiveryTex.drawCrest` into a recording 2D context + scanline raster. | playwright-probe |
+| **car/flank-occlusion.mjs** | Ray-tests cover-flank stations against the real car mesh + wheels from a garage camera; reports what is hidden. | garage-parts-livery |
 | **car/helmet-sheet.mjs** | Rasterises each js/car/helmets.js design onto the real shell and writes a labelled contact sheet PNG (`--only`,… | playwright-probe |
 | **car/helmet-trace.mjs** | Projects the js/car/helmets.js shell into a side-on reference photo and samples the real colour at every (t, az) of… | playwright-probe |
 | **car/livery-contrast.mjs** | Sweeps every team x spine design offline and reports any large area that fails to separate from what it covers. | garage-parts-livery |

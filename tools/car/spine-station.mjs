@@ -102,9 +102,9 @@ function sampleRegion(ops, R, grid, bg) {
  * the same livery wearing spineSide "none".
  * `frontLeft` is flankFrame's: on the RIGHT flank canvas-left is the REAR.
  */
-export function station(base, design, frontLeft, grid = GRID) {
+export function station(base, design, frontLeft, hiddenAt) {
   const { w, h } = base;
-  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity, n = 0;
+  let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity, n = 0, dark = 0;
   for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
     const k = (j * w + i) * 3;
     const d = Math.abs(base.rgb[k] - design.rgb[k]) + Math.abs(base.rgb[k + 1] - design.rgb[k + 1])
@@ -115,12 +115,17 @@ export function station(base, design, frontLeft, grid = GRID) {
     const u = frontLeft ? cx : 1 - cx;
     if (u < u0) u0 = u; if (u > u1) u1 = u;
     if (v < v0) v0 = v; if (v > v1) v1 = v;
+    // Over the design's OWN INK, not its bounding box: a wordmark's box spans
+    // the flank while its letters are a strip, and the tyre covers a station,
+    // not a rectangle.
+    if (hiddenAt && hiddenAt(u, v)) dark++;
   }
   if (!n) return null;
   return {
     px: n, share: +(n / (w * h)).toFixed(3),
     u0: +u0.toFixed(3), u1: +u1.toFixed(3),
     v0: +v0.toFixed(3), v1: +v1.toFixed(3), vMid: +((v0 + v1) / 2).toFixed(3),
+    ...(hiddenAt ? { hidden: +(dark / n).toFixed(3) } : {}),
   };
 }
 
@@ -133,7 +138,7 @@ async function writePng(s, file, scale) {
     .png().toFile(file);
 }
 
-export function sweep(A, { team, logo, sides, grid = GRID }) {
+export function sweep(A, { team, logo, sides, grid = GRID, hiddenAt = null }) {
   const t = A.Teams.LIST.find((x) => x.id === team);
   if (!t) throw new Error(`no team "${team}" (have ${A.Teams.LIST.map((x) => x.id).join(",")})`);
   const liv = A.Liveries.forTeam(t)[0];
@@ -151,7 +156,7 @@ export function sweep(A, { team, logo, sides, grid = GRID }) {
     base,
     rows: sides.map((spineSide) => {
       const s = of(spineSide);
-      return { spineSide, sample: s, ...(station(base, s, false, grid) || { px: 0 }) };
+      return { spineSide, sample: s, ...(station(base, s, false, hiddenAt) || { px: 0 }) };
     }),
   };
 }
@@ -161,7 +166,17 @@ async function main() {
   const A = loadAtlas();
   const team = arg("team", "mclaren");
   const sides = (arg("side", "") || A.LT.SPINE_SIDE_IDS.filter((s) => s !== "none").join(",")).split(",");
-  const out = sweep(A, { team, logo: arg("logo", null), sides, grid: +arg("grid", GRID) });
+  // --occlude answers the OTHER half in the same run: flank-occlusion projects
+  // the real body and wheels through the garage SIDE camera, so a design that
+  // lands well and is covered anyway reports as covered instead of clean.
+  let hiddenAt = null, om = null;
+  if (process.argv.includes("--occlude")) {
+    const [{ loadParts }, occl] = await Promise.all([import("./parts-sweep.mjs"), import("./flank-occlusion.mjs")]);
+    om = occl.occlusionMap(loadParts(), { team, grid: 96 });
+    hiddenAt = (u, v) => om.cell[Math.min(om.rows - 1, (v * om.rows) | 0) * om.cols
+                                 + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1;
+  }
+  const out = sweep(A, { team, logo: arg("logo", null), sides, grid: +arg("grid", GRID), hiddenAt });
   const dir = arg("png", null);
   if (dir) {
     const d = path.isAbsolute(dir) ? dir : path.join(ROOT, dir);
@@ -177,14 +192,16 @@ async function main() {
   console.log(`  v 0 = shoulder crease (s ${out.crease} m), 1 = sidepod line (s ${out.sidepod} m)`);
   console.log("  u 0 = front of the flank, 1 = rear. crease/sidepod = the ink crosses that");
   console.log("  boundary — what a full-flank BAND is for, and what a MARK must not do.");
-  console.log("  design      u0    u1     v0    v1   vMid  share  note");
+  console.log(`  design      u0    u1     v0    v1   vMid  share${om ? "  hidden" : ""}  note`);
   for (const r of out.rows) {
     if (!r.px) { console.log(`  ${r.spineSide.padEnd(10)}  (paints nothing on this crown)`); continue; }
     const note = [r.v0 <= 0.02 ? "crease" : "", r.v1 >= 0.98 ? "sidepod" : "",
-      r.vMid > 0.6 ? "low" : ""].filter(Boolean).join("+") || "clear";
+      r.vMid > 0.6 ? "low" : "", r.hidden >= 0.5 ? "MOSTLY HIDDEN" : ""].filter(Boolean).join("+") || "clear";
     console.log(`  ${r.spineSide.padEnd(10)} ${r.u0.toFixed(2)}  ${r.u1.toFixed(2)}   `
-      + `${r.v0.toFixed(2)}  ${r.v1.toFixed(2)}  ${r.vMid.toFixed(2)}  ${r.share.toFixed(2)}   ${note}`);
+      + `${r.v0.toFixed(2)}  ${r.v1.toFixed(2)}  ${r.vMid.toFixed(2)}  ${r.share.toFixed(2)}`
+      + (om ? `  ${(r.hidden * 100).toFixed(0).padStart(5)}%` : "") + `   ${note}`);
   }
+  if (om) console.log(`  hidden = the share of the design's OWN INK behind the car from the garage SIDE camera`);
   if (dir) console.log(`  PNGs -> ${dir}`);
 }
 

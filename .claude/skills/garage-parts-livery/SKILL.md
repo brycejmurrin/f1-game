@@ -143,10 +143,11 @@ lands on — the half that varies per team. Whether it lands anywhere worth
 looking is a different question, and you answer it on the cheapest surface that
 can: `node tools/car/spine-station.mjs --team=redbull` measures where every
 flank design's ink actually falls (`v` 0 = shoulder crease, 1 = sidepod line;
-`u` front → rear) in 0.2 s with no browser, `--png` rasterises the flat art, and
-only occlusion / foreshortening / lighting need `garage-angles.mjs` (pass
-`--zoom`/`--pan` or a flank mark arrives forty pixels wide) or `shot.mjs --team`
-at racing distance. The vertical half is in CI via `fin-design.test.mjs`.
+`u` front → rear) in 0.2 s with no browser, `--occlude` adds what the car's own
+tyres and bodywork cover from a garage camera, `--png` rasterises the flat art,
+and only foreshortening / lighting / racing distance need `garage-angles.mjs`
+(pass `--zoom`/`--pan` or a flank mark arrives forty pixels wide) or
+`shot.mjs --team`. Both halves are in CI via `fin-design.test.mjs`.
 
 Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **career-mode**,
 **tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.
