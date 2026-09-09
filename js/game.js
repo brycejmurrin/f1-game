@@ -471,6 +471,15 @@ function syncCustomTeam() {
   invalidateCustomMeshCache(playerBodies, playerBodyOrder);
   invalidateCustomMeshCache(cockpitBodies, cockpitBodyOrder);
 }
+// Another tab's customTeam write bumps store.rev (store.onForeignWrite) but
+// would leave Teams.LIST + mesh caches on the previous paint until the next
+// local cz-save. Re-inject whenever the foreign key (or a full clear) lands.
+if (store.subscribe) {
+  store.subscribe((change) => {
+    if (!change || !change.foreign) return;
+    if (change.clear || change.key === "customTeam") syncCustomTeam();
+  });
+}
 let teamIdx = store.get("team", 2);          // default McLaren
 let driverIdx = store.get("driver", 0);
 function storedTrackIndex() {
@@ -2762,6 +2771,10 @@ async function loadCarModel(url) {
     for (const k in wheelMeshCache) { freeWheelPair(wheelMeshCache[k]); delete wheelMeshCache[k]; }
     wheelMeshOrder.length = 0;
     for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
+    // Same putBoundedMesh contract as wheelMeshOrder: clearing the cache without
+    // the order array leaves stale keys queued, so the next eviction can free a
+    // live field-wheel mesh while a dead key still occupies a slot.
+    fieldWheelOrder.length = 0;
     return true;
   } catch (e) { return false; }
 }
@@ -9859,11 +9872,15 @@ $("cz-save").onclick = () => {
       num: clamp(parseInt($("cz-num").value, 10) || 99, 0, 99),
     }],
   };
-  // Optional extra paint -> ct.livery (only the fields that aren't NONE).
-  const liv = {};
+  // Keep structural MY TEAM livery (finShape / spine*) from the previous save
+  // (or DEFAULT_CUSTOM) — this dialog only edits colour slots + finish. A bare
+  // colour-only object used to wipe finShape "none" and regrow the shark fin.
+  const liv = Object.assign({}, DEFAULT_CUSTOM.livery || {}, (prev && prev.livery) || {});
+  for (const [, key] of CZ_LIV_FIELDS) delete liv[key];
+  delete liv.finish;
   CZ_LIV_FIELDS.forEach(([domId, key]) => { if (!$(domId).classList.contains("cz-off")) liv[key] = hexToRgb($(domId).value); });
   if (czFinish && czFinish !== "gloss") liv.finish = czFinish;
-  if (Object.keys(liv).length) ct.livery = liv;
+  ct.livery = liv;
   store.set("customTeam", ct);
   syncCustomTeam();
   teamIdx = Teams.LIST.findIndex((t) => t.id === "custom");

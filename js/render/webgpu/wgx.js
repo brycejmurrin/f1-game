@@ -667,7 +667,12 @@ const WGX = (function () {
     // gfx-probe); a saved-only "1" reads as AUTO with a warning.
     const _blitForced = _capPref === "1" && (_softAdapter || _capPrefSrc === "session");
     if (_capPref === "1" && !_blitForced) { try { Log.warn("gfx", "WGX: saved SCREENSHOTS=2D BLIT ignored on a hardware adapter (per-frame CPU present); tap it again in SETTINGS for this tab"); } catch (_) { /* harness */ } }
-    const _softGpu = _capPref === "0" ? false : (_softAdapter || _blitForced);
+    // Presentation need (not a content/softAdapter verdict): Playwright's headed
+    // Desktop Chrome sets navigator.webdriver without HeadlessChrome — GLX arms
+    // soft there for CDP; match it so soft-present still blits without degrading
+    // content gates that key off _softAdapter alone.
+    const _webdriverSoft = typeof navigator !== "undefined" && !!navigator.webdriver;
+    const _softGpu = _capPref === "0" ? false : (_softAdapter || _blitForced || _webdriverSoft);
     if (_softGpu) _outProbeOff = true;
     // Software-present renders into an rgba8unorm texture, not the preferred
     // (usually bgra8unorm) swapchain. Every pipeline targeting currentView must
@@ -721,6 +726,19 @@ const WGX = (function () {
       if (document.body) document.body.appendChild(_gpuCanvas);
       canvas = _gpuCanvas;
       try { Log.info("gfx", "WGX soft-present on"); } catch (_) { /* harness */ }
+    }
+    // Same-page GLX fallback must not inherit a soft GPU canvas or a live
+    // device: tear them down before every post-soft _fail so #game is free
+    // for webgl2 and the orphaned offscreen node is gone.
+    function _bootFail(reason) {
+      try {
+        if (_gpuCanvas && _gpuCanvas.parentNode) _gpuCanvas.parentNode.removeChild(_gpuCanvas);
+      } catch (_) { /* already detached */ }
+      _gpuCanvas = null;
+      try { if (softPresentTex) softPresentTex.destroy(); } catch (_) { /* gone */ }
+      softPresentTex = null; softPresentView = null;
+      try { if (device && typeof device.destroy === "function") device.destroy(); } catch (_) { /* already lost */ }
+      return _fail(reason);
     }
     // CACHED CSS SIZE. resize() runs every frame, but clientWidth/clientHeight
     // are layout reads. Mirror GLX/TLX: invalidate only when the visible canvas
@@ -1592,7 +1610,7 @@ const WGX = (function () {
       // SILENTLY: this catch once hid a real init bug, and by the time create()
       // returns null the canvas may already hold a webgpu context, which makes
       // the GLX fallback's getContext("webgl2") fail too (blank "needs WebGL2").
-      return _fail("init threw: " + ((e && e.message) || e));
+      return _bootFail("init threw: " + ((e && e.message) || e));
     }
 
     //    built per-size in ensureTargets). A failure here only disables the
@@ -6032,8 +6050,7 @@ const WGX = (function () {
       _stReason = "self-test took " + _stMs + " ms (budget " + SELFTEST_BUDGET_MS + " ms)";
     }
     if (_stReason) {
-      try { if (typeof device.destroy === "function") device.destroy(); } catch (_) { /* device already lost; fallback still proceeds */ }
-      return _fail(_stReason);
+      return _bootFail(_stReason);
     }
     try { localStorage.removeItem("apex26.gfxWgxFail"); } catch (_) { /* blocked storage */ }
     _lastFailure = null;
@@ -6046,16 +6063,16 @@ const WGX = (function () {
     // and game.js's reload path remains the backstop for that one case.
     try {
       ctx = canvas.getContext("webgpu");
-      if (!ctx) return _fail("canvas has no webgpu context");
+      if (!ctx) return _bootFail("canvas has no webgpu context");
       if (_softGpu && _displayCanvas) {
         _displayCtx = _displayCanvas.getContext("2d", { alpha: false });
-        if (!_displayCtx) return _fail("software WebGPU needs a 2D display canvas");
+        if (!_displayCtx) return _bootFail("software WebGPU needs a 2D display canvas");
       }
       resize();
       const _bootCfgErr = _configureCanvas();
-      if (_bootCfgErr) return _fail(_bootCfgErr);
+      if (_bootCfgErr) return _bootFail(_bootCfgErr);
     } catch (e) {
-      return _fail("context configure threw: " + ((e && e.message) || e));
+      return _bootFail("context configure threw: " + ((e && e.message) || e));
     }
     const PRESENT_TEST_MS = 4000;
     let _ptTimer = null;
@@ -6075,8 +6092,7 @@ const WGX = (function () {
       try { if (_ptTimer !== null) clearTimeout(_ptTimer); } catch (_) { /* timer already fired */ }
     }
     if (_presentReason) {
-      try { if (typeof device.destroy === "function") device.destroy(); } catch (_) { /* device already lost */ }
-      return _fail(_presentReason);
+      return _bootFail(_presentReason);
     }
 
     const noop = function () {};

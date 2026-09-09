@@ -476,8 +476,10 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.forceMobileTier", "apex26.tlxForceHw", "apex26.tlxForceBatches",
     "apex26.tlxArrayNearest", "apex26.tlxMirrorSweep", "apex26.tlxChunkRelease",
     "apex26.tlxMobile", "apex26.gfxHigh", "apex26.matTexMix",
-    // GLX SGSR1 spike (UPSCALING-2026-09 §6) — opt-in debug pin, not crash state
-    "apex26.spatialUpscale",
+    // UPSCALE is a SETTINGS display preference (scale.js / __apex.spatialUpscale),
+    // not crash state — RESET RENDERER must not wipe the player's SGSR choice.
+    // spatialUpscaleGather is an A/B escape pin (tools/bench only writes "0").
+    "apex26.spatialUpscale", "apex26.spatialUpscaleGather",
   ]);
   // LANE-AWARE: clearRendererStorage removes each list from ITS OWN store, so a
   // key written to localStorage but listed only in RENDERER_SS_KEYS would pass
@@ -528,6 +530,17 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   assert.equal(ss.getItem("apex26.ctxLostReloads"), null);
   assert.equal(ss.getItem("apex26.tlxAutoGL"), null);
   assert.equal(G.readBackend(), "webgl2");
+});
+
+test("applyBackend clears session renderer latches before reload", () => {
+  // Switching WEBGL2 ↔ THREE ↔ WEBGPU must not inherit wgxHoldPresent /
+  // tlxAutoGL from the previous path; RESET already wiped them, a pick did not.
+  const src = read("js/perf/renderer-picker.js");
+  const fn = src.slice(src.indexOf("function applyBackend("), src.indexOf("function rendererSlot("));
+  assert.match(fn, /for \(const k of RENDERER_SS_KEYS\) sessionStorage\.removeItem\(k\)/,
+    "applyBackend must clear every RENDERER_SS_KEYS latch, not only gfxBound");
+  assert.doesNotMatch(fn, /clearRendererStorage\(\)/,
+    "must not wipe LS backend prefs — that would delete the pick just written");
 });
 
 test("blocked sessionStorage skips the opt-in so this tab never claims the canvas", () => {
@@ -1718,6 +1731,8 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "soft-present must arm from the HeadlessChrome sniff");
   assert.match(src, /navigator\.webdriver/,
     "webdriver arms soft when the project UA hides HeadlessChrome");
+  assert.match(src, /drawingBufferWidth/,
+    "softBlit must size from the drawing buffer (present size under spatial upscale)");
   assert.match(src, /game-soft/,
     "soft-present needs a 2D overlay canvas id for CDP/page shots");
   assert.match(src, /putImageData/,
@@ -2052,6 +2067,12 @@ test("TLX software-WebGPU soft-presents like WGX (never getCurrentTexture)", () 
     "the adapter verdict must not treat headless as software — that is a presentation fact");
   assert.match(src, /_softBlit\s*=\s*!forceWebGL\s*&&\s*_capPref\s*!==\s*"0"\s*&&\s*!!\s*\(\s*_softAdapter\s*\|\|\s*_headless\s*\|\|\s*_capPref\s*===\s*"1"\s*\)/,
     "the blit must follow headless: a headless swapchain does not composite even on real silicon");
+  assert.match(src, /_headless\s*=\s*\/HeadlessChrome\/i\.test\(ua\)\s*\|\|\s*\([\s\S]{0,80}?navigator\.webdriver/,
+    "webdriver must arm soft blit like GLX (headed Playwright project UA)");
+  assert.match(src, /_abortDisplay|_abortRenderer/,
+    "TLX create catch must be able to tear down a half-booted soft overlay / renderer");
+  assert.match(src, /_abortDisplay\.parentNode\.removeChild\(_abortDisplay\)/,
+    "failed TLX boot must remove #game-soft before GLX fallback");
   // An empty adapter.info is UNKNOWN, not software. Browsers trim those fields
   // for fingerprinting reasons, so a player with no vendor string must not be
   // handed the degraded path on real hardware.

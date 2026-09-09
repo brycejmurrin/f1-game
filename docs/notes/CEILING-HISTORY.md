@@ -2668,3 +2668,9 @@ see paint); one `:sh` per team(+parts) again. `TEAM_MESH_CACHE_MAX` 48→40
 already set from `noWheels` factory bodies) pass `Helmets.build({ maxSplit: 0 })`
 — paint-edge splits stay on player/garage/cockpit lids only.
 
+
+## 2026-09-09 — cache / renderer hygiene
+
+`js/game.js` lines 10368 -> **10385** (+17) / codeLines 5609 -> **5618** (+9). `loadCarModel` clears `fieldWheelOrder` with the cache; `cz-save` merges structural `DEFAULT_CUSTOM.livery`; foreign-tab `customTeam` re-runs `syncCustomTeam`.
+
+`js/render/glx/glx.js` lines 2610 -> **2615** (+5). Soft-blit sizes from `drawingBufferWidth/Height` so spatial-upscale presents fill `#game-soft`.
