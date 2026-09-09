@@ -504,28 +504,28 @@ one-shot gesture listener registered `once:false`; `fitHud` re-measuring
 tick.
 
 Recorded, not fixed (PLAUSIBLE or a design call):
-- **Menu state renders the full scene every frame** behind opaque sheets
-  (GARAGE, DATA HUB, CAREER…) at the last race's render scale, and
-  `PerfGov.tick()` is race-gated so nothing adapts — the mechanism behind
-  PERF-FINDINGS' 39.7 s vs 0.1 s VS FRIEND control. Fix: reduced flyby
-  cadence / capped scale when `UiLayers.top()` is a full-screen sheet.
+- **~~Menu state renders the full scene every frame~~** — mostly CLOSED by
+  `menuBlank` (title/garage/career hide the canvas). Remaining: race-settings
+  flyby still draws every frame with PerfGov race-gated. **Results freeze
+  (2026-09-09):** `render()` returns on `state === "results"` (last race present
+  kept); `endRace` calls `Particles.rainShow(false)`; env probe is race|count
+  only.
+- **~~GLX `cullInstances(batch, planes, {upload:false})`~~** — FIXED 2026-09-09:
+  GLX now packs to `shadowIbo` like WGX's `shadowInstBuf`; camera ibo/cell-set
+  cache survive a shadow recentre.
 - **`sw.js` activate deletes every other cache generation** while the old
   shell is still running: its lazy fetches (scenery, data, net, deferred
   backends) miss the cache; offline after the swap a circuit builds bare.
   Needs a two-generation repro before changing the sweep.
-- **GLX `cullInstances(batch, planes, {upload:false})`**: GLX takes two
-  args, so the shadow-recentre frame packs + uploads every instance set
-  twice (light frustum, then camera). Give the batch two memo slots.
 - **Storage quota is shared** by ghost (uncapped, ~40 KB/track), six career
   slots and the API cache; only the API cache evicts, and only its own keys.
 - **Ten direct `localStorage.setItem` sites** bypass `store.write`
   (bodyattitude, cockpit-opts, gfx-quality, metrics, perf, apex) — no
   `noteBroken`, no cross-tab invalidation.
 - AI brake-look loop redoes three wrap chains per sample (`Tracks.nodeAt`
-  would resolve the index once); `for…of` iterators in the GLX instance
-  cull; netplay allocates one `{id,car}` per remote per publish; career
-  migration branches on `.durable` instead of `.ok`; `endRace` leaves the
-  rain overlay on where `quitToMenu` clears it.
+  would resolve the index once); netplay allocates one `{id,car}` per remote
+  per publish; career migration branches on `.durable` instead of `.ok`.
+  (`endRace` rain overlay cleared 2026-09-09.)
 
 Player-facing improvements the code is one step from: coloured sector
 splits (`sectorBests`/`sectorLast` are already on the façade); `LEADER` /

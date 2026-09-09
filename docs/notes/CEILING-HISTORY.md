@@ -2550,3 +2550,17 @@ headroom.
   A GPU-mesh leak guard is worth a line here: the field cache was the one
   cache in the tree with no cap, no LRU and no free path until recently, and
   this owner has had iOS memory kills.
+
+- `js/game.js` lines 10319 -> **10336** (+17), codeLines 5581 -> **5585** (+4);
+  `js/render/glx/glx.js` lines 2357 -> **2421** (+64) (2026-09-09): FPS carve —
+  results freeze + rain/`endRace` cleanup + env-probe race|count gate + GLX
+  `upload:false` dual buffer (match WGX). The game.js bump is the results
+  early-return, `Particles.rainShow(false)` in `endRace`, the env-probe state
+  gate, and hoisting `_castRibbonSh` / `_shCtr` so a sun recentre stops
+  allocating a closure and two lookAt literals. The GLX bump is the real cost:
+  `cullInstances` now takes `opts`, packs light-culled instances to
+  `shadowIbo`/`_shadowPacked`, and leaves the camera ibo + cell-set cache
+  alone — the same class WGX fixed on 2026-09-02. `shadow.js` rebinds the VAO
+  to `shadowIbo` for the light-culled draw and restores the camera buffers
+  after. Without the second buffer, `upload:false` cannot save a camera
+  re-upload on GLX (one `ibo` only). Canaries pin both halves.

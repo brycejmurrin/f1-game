@@ -241,6 +241,45 @@ const GLXShadow = (function () {
         // The buffer now holds the FULL set in source order — a stale repack
         // count would draw the wrong N props until the next cullInstances.
         batch.visible = batch.instances;
+        // Ensure the VAO points at the camera ibo (a prior shadow draw may have
+        // rebound it to shadowIbo).
+        if (batch.shadowIbo) {
+          gl.bindVertexArray(batch.vao);
+          gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
+          for (let c = 0; c < 4; c++) {
+            gl.vertexAttribPointer(5 + c, 4, gl.FLOAT, false, 64, c * 16);
+          }
+          if (batch.cbo) {
+            gl.bindBuffer(gl.ARRAY_BUFFER, batch.cbo);
+            gl.vertexAttribPointer(9, 3, gl.FLOAT, false, 12, 0);
+          }
+        }
+      } else if (count !== undefined && batch.shadowIbo && batch._shadowN === n) {
+        // Light-culled pack lives on shadowIbo — bind it for this draw only and
+        // leave the camera ibo / cell-set cache alone (upload:false contract).
+        gl.bindVertexArray(batch.vao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowIbo);
+        for (let c = 0; c < 4; c++) {
+          gl.vertexAttribPointer(5 + c, 4, gl.FLOAT, false, 64, c * 16);
+        }
+        if (batch.shadowCbo) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, batch.shadowCbo);
+          gl.vertexAttribPointer(9, 3, gl.FLOAT, false, 12, 0);
+        }
+        if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 1);
+        gl.drawElementsInstanced(gl.TRIANGLES, batch.count, batch.indexType, 0, n);
+        if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 0);
+        // Restore the camera buffers so the lit pass does not draw from the
+        // light pack.
+        gl.bindBuffer(gl.ARRAY_BUFFER, batch.ibo);
+        for (let c = 0; c < 4; c++) {
+          gl.vertexAttribPointer(5 + c, 4, gl.FLOAT, false, 64, c * 16);
+        }
+        if (batch.cbo) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, batch.cbo);
+          gl.vertexAttribPointer(9, 3, gl.FLOAT, false, 12, 0);
+        }
+        return;
       }
       bindVAO(batch.vao);
       if (S.depthU.uInstanced) gl.uniform1f(S.depthU.uInstanced, 1);

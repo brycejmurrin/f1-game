@@ -978,6 +978,32 @@ test("updateInstances clears the cull snapshots it did not produce", () => {
   assert.equal(typeof h.GLX.updateInstances, "function", "updateInstances is exported");
 });
 
+test("GLX shadow cull upload:false leaves the camera pack and cache alone", () => {
+  // Same class WGX pinned in 2026-09-02: a light-frustum cull that wrote ibo
+  // forced the camera cull to miss every shadow recentre. upload:false packs
+  // into shadowIbo and must not touch _cullPlanes / _cellKeyN / ibo.
+  const h = bootGlx();
+  const tri = { pos: [0, 0, 0, 1, 0, 0, 0, 1, 0], nrm: [0, 1, 0, 0, 1, 0, 0, 1, 0], col: [1, 1, 1, 1, 1, 1, 1, 1, 1], idx: [0, 1, 2] };
+  const mats = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 100, 0, 0, 1]);
+  const batch = h.GLX.createInstancedBatch(tri, mats, null, { cellSize: 50 });
+  const planes = (d) => Array.from({ length: 6 }, () => [0, 0, 0, d]);
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6)), 2);
+  const camPlanes = batch._cullPlanes;
+  const camN = batch._cullN;
+  const camKeyN = batch._cellKeyN;
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6), { upload: false }), 2);
+  assert.ok(batch.shadowIbo, "shadow path allocates its own instance buffer");
+  assert.equal(batch._shadowN, 2);
+  assert.equal(batch._cullPlanes, camPlanes, "camera frustum snapshot untouched");
+  assert.equal(batch._cullN, camN);
+  assert.equal(batch._cellKeyN, camKeyN, "camera cell-set cache untouched");
+  assert.equal(h.count("bufferSubData"), 1, "one upload — to shadowIbo, not a second stomping of ibo");
+  h.reset();
+  assert.equal(h.GLX.cullInstances(batch, planes(1e6)), 2);
+  assert.equal(h.count("bufferSubData"), 0, "camera cull still hits after a shadow cull");
+});
+
 test("the debris pools instance behind a capability read, with the loop as fallback", () => {
   // Four per-body loops reaching 98 draws at desktop caps — and 17 every frame
   // of every lap from cones alone, which have no liveness test (PERF-FINDINGS
@@ -2180,6 +2206,15 @@ test("instanced cull cache only hits the transform pack resident in the GPU buff
     "cullInstances must recognise the shadow cull (upload:false)");
   assert.match(wgxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?writeBuffer\(batch\.shadowInstBuf/,
     "the shadow cull uploads to shadowInstBuf and leaves the camera pack/cache alone");
+  // GLX caught up (2026-09-09): same upload:false contract, WebGL2 buffer names.
+  const glx = read("js/render/glx/glx.js");
+  const glxCull = glx.slice(glx.indexOf("function cullInstances(batch, planes, opts)"), glx.indexOf("function cullInstances(batch, planes, opts)") + 4200);
+  assert.match(glxCull, /const shadow = !!\(opts && opts\.upload === false\);/,
+    "GLX cullInstances must recognise upload:false");
+  assert.match(glxCull, /if \(shadow\) \{[^]*?batch\._shadowN = n;[^]*?batch\.shadowIbo/,
+    "GLX shadow cull uploads to shadowIbo and leaves the camera pack/cache alone");
+  assert.match(glShadow, /batch\.shadowIbo && batch\._shadowN === n/,
+    "GLX castShadowInstanced draws from shadowIbo when the light cull packed it");
 
   // AND THE SEPARATION IS ONLY HALF OF IT. shadowInstBuf is per BATCH, not per
   // LIGHT, and the sun, car and lamp passes all reach it through one caller
@@ -2679,9 +2714,15 @@ test("the flyby shows under race settings only; the picker pre-builds it hidden 
   // return, and a freshly built world still gets its warm-up frames hidden.
   assert.match(game, /const menuBlank = state === "menu" && !setupPreviewOn && \(!track \|\| _rsEl\.hidden\);/);
   assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
-  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1200);
+  assert.match(game, /if \(state === "results"\) return;/,
+    "results keeps the last race present — physics already stopped, re-drawing is unpaid");
+  assert.match(game, /Particles\.rainShow\(false\);[\s\S]*?if \(soundOn\) GameAudio\.finish\(\);/,
+    "endRace clears the 2D rain overlay the way quitToMenu already did");
+  const renderBody = game.slice(game.indexOf("function render(dt) {"), game.indexOf("function render(dt) {") + 1600);
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (setupPreviewOn) { renderSetupPreview(dt); return; }"),
     "the visibility gate precedes the garage-preview return");
+  assert.ok(renderBody.indexOf('if (state === "results") return;') < renderBody.indexOf("if (setupPreviewOn)"),
+    "results freeze precedes the garage-preview return");
   assert.ok(renderBody.indexOf("const menuBlank") < renderBody.indexOf("if (!track) return;"),
     "the visibility gate precedes the no-track return");
   assert.match(game, /builtTrackId !== def\.id \|\| builtTrackNight !== sessionDark/,
