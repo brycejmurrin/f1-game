@@ -1586,3 +1586,34 @@ layout function with a documented oscillation history is how that history got
 written. What is left for whoever picks this up is the question none of the
 three answered: **why does the key stop changing once the strip fills?** The
 answer is upstream of every cap in this file.
+
+## 2026-09-09 — a `cancelled` Pages badge can be sitting on top of a real failure
+
+Two consecutive deploys of the deploy branch did not publish, and only ONE of
+them looked red:
+
+| run | badge | what the JOBS said |
+|---|---|---|
+| 2163 (`ca100dc0`) | failure | `Per-circuit geometry sweeps` failed 04:17 |
+| 2164 (`d36cdf00`) | cancelled | `Per-circuit geometry sweeps` failed **04:27:29** — five minutes before anything was cancelled |
+
+Both were the same assertion, and it was neither flaky nor infrastructural:
+`tests/unit/driving-line-opts.test.mjs:94` still asserted `written.brakeCue`
+after `6ee62f21` renamed that store key to `lineBrakeCue`. The READ side of the
+test kept passing, because the module migrates the legacy key — so only the
+round-trip test went red, and the failure looked far more exotic than it was.
+
+The rule this adds to the one already in AGENTS.md §Verification 8 ("a timed-out
+job reports `cancelled`"): **a run's conclusion is the LEAST informative thing
+about it.** `cancelled` on a Pages run can mean the job hit `timeout-minutes`,
+that a newer push superseded a pending run, OR — as here — that a job had
+already failed outright and the cancel merely landed on top of the stragglers.
+Run 2164 shows all three shapes at once: a genuinely failed `sweeps` job, a
+`Smoke (2)` job whose every step reports `success` and whose conclusion is
+`cancelled`, and three downstream jobs cancelled at creation. Read
+`list_workflow_jobs` and look for the first job whose CONCLUSION is `failure`
+before forming any theory about the run.
+
+Cost of not doing that here: two deploys silently not published, and a session
+spent hypothesising about concurrency groups and billing for a one-line stale
+key in a unit test.

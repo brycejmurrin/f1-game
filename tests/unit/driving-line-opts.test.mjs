@@ -91,11 +91,26 @@ test("each row round-trips through the store under its own key", () => {
   assert.equal(rows.get("pm-brakecue").read(), "off");
   rows.get("pm-brakecue").write("on");
   assert.equal(M.brakeCue(), true);
-  assert.equal(written.brakeCue, "on", "stored as the string the loader reads back");
+  // Under lineBrakeCue, NOT the shared brakeCue this switch used to write —
+  // that key is the steering panel's 1-10 slider (6ee62f21).
+  assert.equal(written.lineBrakeCue, "on", "stored as the string the loader reads back");
+  assert.equal(written.brakeCue, undefined, "the steering slider's key is not written here");
   assert.equal(rows.get("pm-brakecue").read(), "on");
   rows.get("pm-brakecue").write("off");
   assert.equal(M.brakeCue(), false);
-  assert.equal(written.brakeCue, "off");
+  assert.equal(written.lineBrakeCue, "off");
+});
+
+/* The rename's whole point: a player who set this switch before 6ee62f21 has
+   it under the shared key, and a player who only ever touched the STEERING
+   slider has a NUMBER there that never said anything about this switch. */
+test("the legacy shared key migrates only when it is still a string", () => {
+  assert.equal(load({ stored: { brakeCue: "on" } }).M.brakeCue(), true, "a pre-rename ON carries over");
+  assert.equal(load({ stored: { brakeCue: "off" } }).M.brakeCue(), false);
+  assert.equal(load({ stored: { brakeCue: 8 } }).M.brakeCue(), false,
+    "the steering slider's notch is not a cue setting");
+  assert.equal(load({ stored: { lineBrakeCue: "off", brakeCue: "on" } }).M.brakeCue(), false,
+    "an own-key value wins over the legacy one");
 });
 
 test("it wires on DOMContentLoaded when the document is still loading", () => {
