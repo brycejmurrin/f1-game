@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Where does a spine design LAND, and does anything cover it?
-// @doc Measures + rasterises where every spine design lands on the cover flank, offline — no browser, no game boot.
+// @doc Measures + rasterises where every spine design lands on the cover flank, and the crown's own mark — offline, no browser.
 // @skill garage-parts-livery
 //
 // The placement question ("the flank logo sits a little low") used to cost a
@@ -145,12 +145,15 @@ async function writePng(s, file, scale) {
     .png().toFile(file);
 }
 
-// The crown's flank graphic, isolated as the region's EVENODD fills. That is
-// not a heuristic about which op is the bull: tracePath + fill("evenodd") is
-// how a traced mark is painted and nothing else on this band uses the rule, so
-// the filter is the bull under `wrap`, the yielded badge under a bull-less
-// crest, and NOTHING under a crown that leaves the flank to its bands.
-const markOps = (ops) => ops.filter((o) => o.rule === "evenodd");
+// The crown's flank graphic, sampled with NO side design, so everything in the
+// region belongs to the crown — and then the SUN dropped, as the one thing the
+// crown paints there that is a field rather than a mark. Translucency is what
+// separates them and it is the painter's own distinction, not a guess: the wrap
+// lays its disc at alpha 0.97 (cssA) and every mark, traced bull or yielded
+// badge, is opaque css(). Filtering on the fill RULE instead looked tidier and
+// silently measured nothing for the two teams whose crest paints nonzero.
+const alphaOf = (s) => { const m = /rgba\([^)]*,\s*([\d.]+)\)/.exec(s || ""); return m ? +m[1] : 1; };
+const markOps = (ops) => ops.filter((o) => alphaOf(o.style) >= 1);
 
 export function sweep(A, { team, logo, sides, grid = GRID, hiddenAt = null }) {
   const t = A.Teams.LIST.find((x) => x.id === team);

@@ -629,7 +629,7 @@ test("nothing that has to be READ is put where the car covers it", async () => {
 // where the body eats the band's bottom corner: 19 % of the bull's ink and 36 %
 // of its HEAD, the low forward part of a charging silhouette, so the head went
 // and the rump stayed. Every team, because the same station carries the badge a
-// bull-less crest yields — Mercedes' was the worst at 32 %.
+// bull-less crest yields — Mercedes' was the worst at 23 %, Haas 21 %.
 test("the crown's own mark on the flank is on camera, on every team", async () => {
   const { loadAtlas } = await import("../../tools/car/livery-contrast.mjs");
   const { sweep } = await import("../../tools/car/spine-station.mjs");
@@ -643,9 +643,11 @@ test("the crown's own mark on the flank is on camera, on every team", async () =
       hiddenAt: (u, v) => om.cell[Math.min(om.rows - 1, (v * om.rows) | 0) * om.cols
                                   + Math.min(om.cols - 1, (u * om.cols) | 0)] === 1,
     });
-    // A crest that is a LOADED IMAGE paints through drawImage, which records no
-    // geometry — Haas and Audi measure nothing here and that is the recording
-    // context's limit, not a clean flank.
+    // A crest the shipped game draws as a LOADED IMAGE paints through drawImage,
+    // which records no geometry; offline it falls back to the traced crest, so
+    // what is measured is the badge's BOX with different art inside it. That is
+    // the right answer for a station question and the wrong one for anything
+    // about the art. A crown that paints no mark at all is not this test's.
     if (!out.crown) continue;
     assert.ok(out.crown.hidden <= 0.10,
       `${t.id}: ${(out.crown.hidden * 100).toFixed(0)}% of the wrap's flank mark is behind the car `

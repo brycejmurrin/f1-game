@@ -42,12 +42,22 @@ sidepod line); `u` runs front to rear, which is how you saw a CROWN squeezing a
 mark aft without booting anything: `wrap` used to hand the marks u 0.52–0.95,
 which is the station the rear tyre eats from a side camera.
 
-One thing the diff CANNOT see, because it is the diff's own premise: a crown
-whose flank content depends on `spineSide`. Under `wrap` a team with no traced
-bull yields its filler badge to the side design, so the base ("none") carries a
-badge the design's frame does not, and the diff reports the badge's REMOVAL as
-part of the design's ink — measured 0.11 of v low on McLaren. Sweep a team with
-a traced bull (`redbull`, `racingbulls`) whenever the crown is `wrap`.
+Two things the diff CANNOT see, both because of its own premise. The first is a
+crown whose flank content depends on `spineSide`: under `wrap` a team with no
+traced bull yields its filler badge to the side design, so the base ("none")
+carries a badge the design's frame does not, and the diff reports the badge's
+REMOVAL as part of the design's ink — measured 0.11 of v low on McLaren. Sweep a
+team with a traced bull (`redbull`, `racingbulls`) whenever the crown is `wrap`.
+
+The second is the CROWN's own graphic, which is in both samples and therefore in
+no row — the biggest thing on the flank, invisible to the instrument built to
+watch the flank. That is the `(crown)` row now: sampled with no side design, so
+everything in the region is the crown's, minus the SUN, which is the one thing
+the crown paints there that is a field rather than a mark. Translucency is what
+tells them apart, and it is the painter's own distinction — the disc goes down
+at alpha 0.97 and every mark is opaque. (Filtering on the fill RULE reads
+tidier, and silently measured nothing for the two teams whose crest paints
+nonzero.) `--team=all` runs one crown across the grid, which is the survey.
 
 Two caveats it prints but you should know before reading a PNG. Lettering
 renders as its METRIC BOX, not as glyphs, because that is what the recording
@@ -95,11 +105,27 @@ bands and `sc` clamped to `FLANK_SEEN` for content; the band clears the SUN
 (a hard disc, `sunReach`) and SHARES the bull (a silhouette, and every mark
 carries a keyline, halo or plate); `SIDE_FILL` puts flat fills UNDER the crown's
 flank graphic and lettering over it, so a solid `split` cannot erase the bull's
-legs and the bull cannot erase a sponsor; and `BULL.top` stands the animal on
-the sidepod line, spending the sixth of the flank that was dead under its hooves
-on the crease strip the lettering rides. Everything that has to be read now
+legs and the bull cannot erase a sponsor; and `BULL.top` drops the animal clear
+of the crease strip the lettering rides. Everything that has to be read now
 measures 0 % from the side, and `fin-design.test.mjs` holds content — marks AND
 lettering — under 0.40 on every crown.
+
+### …and then the bull paid for it
+
+Dropping it was the next defect, because **the flank's bottom corner is not on
+camera either**. Below v ~0.81 forward of u 0.2 the sidepod eats the band, so an
+animal standing on the sidepod line (top 0.26, h 0.74, reaching v 0.99) lost
+19 % of its ink and **36 % of its HEAD** — the head is the low forward part of a
+charging silhouette, so what went was the half that makes it a bull. Nothing
+caught it: the side rows were all 0 %, and the animal was not in them.
+
+`BULL` is now `{ h: 0.52, u0: 0.05, top: 0.30 }` — half the area, its centre
+0.09 of the flank further forward, its lowest hoof at v 0.81, 2 % hidden. Both
+ends of the constant answer to a different edge (`top` to the lettering strip
+above, `h` to the sidepod below) and neither is free. The same station carries
+the badge a bull-less crest yields to, so the survey moved with it: Mercedes
+23 % hidden → 2 %, Haas 21 → 1, Ferrari 18 → 1, Racing Bulls 16 → 0, and the
+five already-clear teams unchanged at 0-2 %.
 
 The oracle was validated against a controlled render pair before any of that,
 same plate, same camera, crown the only variable: forward it is whole, aft it is
