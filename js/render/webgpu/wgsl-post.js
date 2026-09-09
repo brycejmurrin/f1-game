@@ -1,4 +1,4 @@
-/* Apex 26 — WGSL post-processing shaders (WGSLPost). WGSL port of js/render/glx/shaders/glsl-post.js: SSAO, godray, bloom, SSR, composite, FXAA. Composes WGSLChunks leaves (fullscreenTri, tonemap). wgx.js owns pipelines/targets. */
+/* Apex 26 — WGSL post-processing shaders (WGSLPost). WGSL port of js/render/glx/shaders/glsl-post.js: SSAO, godray, bloom, SSR, composite, FXAA, SGSR1 spatial upscale. Composes WGSLChunks leaves (fullscreenTri, tonemap). wgx.js owns pipelines/targets. */
 "use strict";
 
 const WGSLPost = (function () {
@@ -916,8 +916,9 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(c, 1.0);
 }`;
 
-  // 6. FXAA — Timothy Lottes compact edge AA. Port of GLX FXAA_FS (js/render/glx/shaders/glsl-post.js COMPOSITE_FS).
-  //    Runs LAST on the tonemapped LDR image, straight to the swapchain.
+  // 6. FXAA — Timothy Lottes compact edge AA. Port of GLX FXAA_FS (js/render/glx/shaders/glsl-post.js).
+  //    On the tonemapped LDR image: → swapchain (or soft present) normally, or →
+  //    aaTex at render size when SGSR1 spatial upscale follows (UPSCALING-2026-09 §6).
   //
   //    BIND GROUP 0:
   //      @binding(0) srcTex  : texture_2d<f32>   LDR composite result
@@ -964,6 +965,107 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   let lB = fxLuma(rB);
   if (lB < lMin || lB > lMax) { return vec4<f32>(rA, 1.0); }
   return vec4<f32>(rB, 1.0);
+}`;
+
+  // 6b. SGSR1 spatial upscale — Qualcomm Snapdragon Game Super Resolution mobile
+  //    kernel (BSD-3-Clause), ported from GLX SGSR_FS. FOUR textureSampleLevel
+  //    taps emulate textureGather(comp) — same as WebGL2; do NOT use WGSL
+  //    textureGather first (parity / A-B with GLX). Runs AFTER FXAA when
+  //    apex26.spatialUpscale=1 and renderScale < ~1; uViewport is SOURCE
+  //    (render) size. See docs/research/UPSCALING-2026-09.md §6–7.
+  //
+  //    BIND GROUP 0:
+  //      @binding(0) srcTex  : texture_2d<f32>   FXAA LDR at render size
+  //      @binding(1) srcSamp : sampler           linear clamp
+  //      @binding(2) U       : uniform  SgsrU
+  //    UNIFORM SgsrU (16 B):
+  //      viewport : vec4<f32>  off 0   (1/srcW, 1/srcH, srcW, srcH)
+  const SGSR = `
+// Copyright (c) 2025, Qualcomm Innovation Center, Inc. All rights reserved.
+// SPDX-License-Identifier: BSD-3-Clause
+// Adapted for Apex 26 WGSL (gatherComp = 4× textureSampleLevel, like GLX).
+struct SgsrU {
+  viewport : vec4<f32>,
+};
+@group(0) @binding(0) var srcTex  : texture_2d<f32>;
+@group(0) @binding(1) var srcSamp : sampler;
+@group(0) @binding(2) var<uniform> U : SgsrU;
+${fullscreenTri}
+${POST_VS}
+
+const EdgeThreshold : f32 = 8.0 / 255.0;
+const EdgeSharpness : f32 = 2.0;
+
+fn fastLanczos2(x : f32) -> f32 {
+  var wA = x - 4.0;
+  var wB = x * wA - wA;
+  wA = wA * wA;
+  return wB * wA;
+}
+fn weightY(dx : f32, dy : f32, c : f32, std : f32) -> vec2<f32> {
+  let x = ((dx * dx) + (dy * dy)) * 0.55 + clamp(abs(c) * std, 0.0, 1.0);
+  let w = fastLanczos2(x);
+  return vec2<f32>(w, w * c);
+}
+// ES 3.1 textureGather(comp) order: (x0,y1), (x1,y1), (x1,y0), (x0,y0).
+// Green channel only (OperationMode RGBA / edge vote on green).
+fn gatherGreen(p : vec2<f32>) -> vec4<f32> {
+  let t = U.viewport.xy;
+  let a = textureSampleLevel(srcTex, srcSamp, p + vec2<f32>(0.0, t.y), 0.0).g;
+  let b = textureSampleLevel(srcTex, srcSamp, p + vec2<f32>(t.x, t.y), 0.0).g;
+  let c = textureSampleLevel(srcTex, srcSamp, p + vec2<f32>(t.x, 0.0), 0.0).g;
+  let d = textureSampleLevel(srcTex, srcSamp, p, 0.0).g;
+  return vec4<f32>(a, b, c, d);
+}
+
+@fragment
+fn fs_main(in : VOut) -> @location(0) vec4<f32> {
+  let rgb = textureSampleLevel(srcTex, srcSamp, in.uv, 0.0).xyz;
+  var color = vec4<f32>(rgb, rgb.g);
+  let imgCoord = (in.uv * U.viewport.zw) + vec2<f32>(-0.5, 0.5);
+  let imgCoordPixel = floor(imgCoord);
+  var coord = imgCoordPixel * U.viewport.xy;
+  let pl = imgCoord - imgCoordPixel;
+  var left = gatherGreen(coord);
+  let edgeVote = abs(left.z - left.y) + abs(color.w - left.y) + abs(color.w - left.z);
+  if (edgeVote > EdgeThreshold) {
+    coord.x = coord.x + U.viewport.x;
+    var right = gatherGreen(coord + vec2<f32>(U.viewport.x, 0.0));
+    var upDown : vec4<f32>;
+    let udLo = gatherGreen(coord + vec2<f32>(0.0, -U.viewport.y));
+    let udHi = gatherGreen(coord + vec2<f32>(0.0, U.viewport.y));
+    upDown = vec4<f32>(udLo.w, udLo.z, udHi.y, udHi.x);
+    let mean = (left.y + left.z + right.x + right.w) * 0.25;
+    left = left - vec4<f32>(mean);
+    right = right - vec4<f32>(mean);
+    upDown = upDown - vec4<f32>(mean);
+    color.w = color.g - mean;
+    let sum = abs(left.x) + abs(left.y) + abs(left.z) + abs(left.w)
+            + abs(right.x) + abs(right.y) + abs(right.z) + abs(right.w)
+            + abs(upDown.x) + abs(upDown.y) + abs(upDown.z) + abs(upDown.w);
+    let std = 2.181818 / max(sum, 1e-4);
+    var aWY = weightY(pl.x, pl.y + 1.0, upDown.x, std);
+    aWY = aWY + weightY(pl.x - 1.0, pl.y + 1.0, upDown.y, std);
+    aWY = aWY + weightY(pl.x - 1.0, pl.y - 2.0, upDown.z, std);
+    aWY = aWY + weightY(pl.x, pl.y - 2.0, upDown.w, std);
+    aWY = aWY + weightY(pl.x + 1.0, pl.y - 1.0, left.x, std);
+    aWY = aWY + weightY(pl.x, pl.y - 1.0, left.y, std);
+    aWY = aWY + weightY(pl.x, pl.y, left.z, std);
+    aWY = aWY + weightY(pl.x + 1.0, pl.y, left.w, std);
+    aWY = aWY + weightY(pl.x - 1.0, pl.y - 1.0, right.x, std);
+    aWY = aWY + weightY(pl.x - 2.0, pl.y - 1.0, right.y, std);
+    aWY = aWY + weightY(pl.x - 2.0, pl.y, right.z, std);
+    aWY = aWY + weightY(pl.x - 1.0, pl.y, right.w, std);
+    var finalY = aWY.y / max(aWY.x, 1e-4);
+    let maxY = max(max(left.y, left.z), max(right.x, right.w));
+    let minY = min(min(left.y, left.z), min(right.x, right.w));
+    finalY = clamp(EdgeSharpness * finalY, minY, maxY);
+    let deltaY = clamp(finalY - color.w, -23.0 / 255.0, 23.0 / 255.0);
+    color.x = clamp(color.x + deltaY, 0.0, 1.0);
+    color.y = clamp(color.y + deltaY, 0.0, 1.0);
+    color.z = clamp(color.z + deltaY, 0.0, 1.0);
+  }
+  return vec4<f32>(color.xyz, 1.0);
 }`;
 
   // 7. SSR — wet-road + car-paint screen-space reflection (its own HALF-RES
@@ -1259,7 +1361,8 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     "BLOOM_UP",    // mip chain upsample, additive blend -> bloom mip0
     "SSR",         // HALF-res  <- sceneHDR + sceneDepth (full-res)  -> ssrTex (rgba, .a=mix)
     "COMPOSITE",   // full-res LDR <- sceneHDR, bloom, ssao, godray (+ image FX; ssrTex optional)
-    "FXAA",        // full-res -> swapchain <- LDR composite
+    "FXAA",        // full-res -> swapchain (or aaTex when SGSR follows) <- LDR composite
+    "SGSR",        // present-size <- FXAA/LDR at render size (opt-in spatial upscale)
   ];
 
   return {
@@ -1271,6 +1374,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     GODRAY,
     COMPOSITE,
     FXAA,
+    SGSR,
     SSR,
     // shared vertex stage (exported for reference/reuse)
     POST_VS,
@@ -1282,6 +1386,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     GODRAY_UNIFORM_BYTES: 288,      // GodrayU (world-space march + lamp vol)
     COMPOSITE_UNIFORM_BYTES: 256,   // CompositeU (16×vec4) — +HDR grading + ACES tone curve + LENS DIRT
     FXAA_UNIFORM_BYTES: 16,         // FxaaU
+    SGSR_UNIFORM_BYTES: 16,         // SgsrU (viewport vec4)
     SSR_UNIFORM_BYTES: 208,         // SsrU  (2×mat4 128 + 5×vec4 80)
     // chain description
     PASS_ORDER,
