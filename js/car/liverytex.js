@@ -1262,6 +1262,13 @@ const LiveryTex = (function () {
   // gold), else the stripe, accent or c2. ONE function so the atlas (crown and
   // flanks) and Car3D (the airbox and roll hoop) paint the same sun.
   function sunColour(teamId, liv) {
+    // AN EXPLICIT PICK WINS, and skips everything below. spineTint is documented
+    // as "the SPINE TOP band on the cover crown, and the saddle's flank half" —
+    // and the wrap's sun IS what SPINE TOP paints on the crown, so a player who
+    // picked a tint and chose `wrap` was watching their colour get thrown away
+    // and re-derived. Choosing a colour is a decision about the car, not a
+    // suggestion; the guard below owns the DEFAULT, never a pick.
+    if (liv.spineTint) return liv.spineTint.slice();
     // The field is the COVER, not the body: this sun is painted on the crown,
     // the cover flanks and (Car3D) the airbox. Scoring it against c1 gave a
     // sun that reads on the chassis and disappears on a contrasting cover.
@@ -1952,7 +1959,14 @@ const LiveryTex = (function () {
     // carries a keyline that would survive it. Identity check, not a colour
     // compare: where the flank IS the cover this is bandC and the atlas is
     // byte-identical to before.
-    const flankBandC = flankBg === coverPaint ? bandC : pickOn(BAND_ORDER, flankBgs, BAND_ON_COVER);
+    // SIDE TINT (liv.sideTint) — what the SPINE SIDE band designs (split, bars,
+    // slash) paint, picked as picked. One field cannot serve two zones: spineTint
+    // paints the flank UNDER these when the crown design is a saddle, so a band
+    // taking the same value would be a no-op. This is the second zone's own
+    // colour, and like spineTint it skips the re-pick entirely — the derived
+    // default keeps the guard, which is where the invisible bands came from.
+    const flankBandC = colors.sideTint ||
+      (flankBg === coverPaint ? bandC : pickOn(BAND_ORDER, flankBgs, BAND_ON_COVER));
     // The flank canvas is the WHOLE cover side. The marks sit AT THE FRONT of
     // it — the SF-26's 16 and the W17's 12 just behind the airbox — through
     // flankSquash() so they come out in proportion. They used to sit at 0.24 of
