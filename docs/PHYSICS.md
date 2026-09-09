@@ -322,21 +322,21 @@ for the geometry). The AI's corner SPEED comes from the path's curvature when
 the car is ON the line and the road's when it is not (`TrackLine.pathK`, an
 AI-only read — see the curvature table above).
 
-`brakeTarget` sizes that corner with the SAME aerodynamic downforce the player
-corners on: `aeroGrip` is `1 + DOWNFORCE·aeroDfMult·(v/vTop)²`, so lateral grip
-is 65 % higher at the top speed than at rest. Until 2026-09-09 the AI used a
-flat `latMax` — its standing-start grip — at every speed, and so was timid in
-exactly the corners where the wings do the most work (measured: −2.3 % of a lap
-at Spa, −0.1 % at Monza, where the corners are slow). Because the grip that sets
-the corner speed depends on the corner speed, `vC` is a fixed point rather than
-a plain square root: with `A = latMax·bankMu·grip·skill²/k`,
-
-    vC² = A / (1 − A·df/vTop²)
-
-and a non-positive denominator means aero grip outruns the corner's demand at
-every speed — the corner is not the limit, `vTop` is. `df: 0` reproduces the old
-flat model exactly. Numbers per circuit and per difficulty:
-`docs/notes/AI-FIELD-RESEARCH.md`.
+`brakeTarget` sizes that corner off a flat `latMax`, and that is a DELIBERATE
+choice as of 2026-09-09, not an oversight. Giving it the player's aerodynamic
+term (`aeroGrip` = `1 + DOWNFORCE·aeroDfMult·(v/vTop)²`, 65 % more grip at the
+top speed) was tried and reverted the same day, because the AI does not
+simulate lateral grip the way the player does. The player integrates a slip
+model whose `muBase` carries `aeroGrip`; the AI takes a kinematic lateral step
+whose grip term is `gripScale = 1 - clamp((vStd(speed) - 20)/(VMAX - 20), 0, 1)
+* 0.28` — it FALLS with speed — and a yaw cap with no aero term either. Adding
+aero to the planner alone put planned grip (rising 65 %) and available grip
+(falling 28 %) on opposite slopes: the AI planned entry speeds it could not
+turn at and washed 0.60 m out of a short corner's apex at Monza while the long
+ones were unmoved. **The planner and the actuator disagreeing about how grip
+varies with speed is a real open defect**; until one of the two directions in
+`docs/notes/AI-FIELD-RESEARCH.md` is taken, flat `latMax` is the consistent
+choice because it does not contradict the actuator.
 
 ### Racecraft: who passes, who yields
 

@@ -142,16 +142,12 @@ window.PhysicsConsts = {
   // calibrated to — one circuit fixed, two broken. The spread is also well
   // inside the separation between levels (1.8-3.5 % per step), so each level
   // still means what it meant. Evidence: docs/notes/RACING-LINE-RESEARCH.md §8.
-  // 2026-09-09: the AI's corner model gained the DOWNFORCE term the player has
-  // always cornered on (ai-drive.js brakeTarget solves vC as a fixed point now).
-  // Field-median lap time moved -0.1 % at monza, +0.2 % at monaco and -2.3 % at
-  // spa on `normal` — the gain tracks how FAST the circuit's corners are, which
-  // is the whole prediction. NOT re-scaled, by the same argument as above: the
-  // drift is circuit-dependent and one multiplier cannot express it. What it
-  // bought is consistency BETWEEN circuits — monza and spa now agree to 0.2
-  // points on the easy step (+4.09 / +3.92 %) where they were 3.8 apart
-  // (+4.32 / +8.12 %). Evidence: docs/notes/AI-FIELD-RESEARCH.md.
-  // game.js's BAND_CEIL also caps a rubber-banded AI at this table's top scale:
+  // 2026-09-09: adding the player's DOWNFORCE term to the AI's corner model was
+  // tried and REVERTED — the AI's lateral actuator has no aero and its grip
+  // FALLS with speed (game.js gripScale), so an aero planner outran it and cost
+  // 0.60 m of apex depth at a short monza corner. Details and the lap-time
+  // table it produced: docs/notes/AI-FIELD-RESEARCH.md. DIFF is unchanged.
+  // game.js's BAND_CEIL caps a rubber-banded AI at this table's top scale:
   // easy's 0.851 x 1.18 = 1.004 used to beat hard's own 0.980.
   DIFF: {
     easy:   { ai: 0.851, band: 0.18 },

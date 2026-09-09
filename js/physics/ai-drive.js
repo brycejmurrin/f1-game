@@ -302,30 +302,12 @@ const AiDrive = (function () {
     const brake = ctx.brake || 22;
     const grip = ctx.grip || 1;
     const skill = t.skill;
-    // AERODYNAMIC DOWNFORCE, the term the PLAYER has always cornered on and the
-    // AI never did (game.js aeroGrip: 1 + DOWNFORCE*aeroDfMult*(v/vTop)^2, so a
-    // player's lateral grip is 65 % higher at vTop than at rest). Without it the
-    // AI sized every corner off its standing-start grip and was correspondingly
-    // timid in the fast ones — the asymmetry that made difficulty feel arbitrary
-    // circuit to circuit. `df` is DOWNFORCE already scaled by the car's active
-    // aero (game.js supplies it); 0 restores the old flat model exactly.
-    //
-    // The corner speed is now a FIXED POINT rather than a plain sqrt, because
-    // the grip that sets vC depends on vC. With A = latMax*bankMu*grip*skill^2/k:
-    //   vC^2 = A * (1 + df*vC^2/vTop^2)   =>   vC^2 = A / (1 - A*df/vTop^2)
-    // A non-positive denominator means aero grip outruns the corner's demand at
-    // every speed — the corner is not the limit, vTop is.
-    const df = ctx.df > 0 ? ctx.df : 0;
-    const vTop = ctx.vTop > 0 ? ctx.vTop : 0;
-    const aero = df && vTop ? df / (vTop * vTop) : 0;
     let vLim = Infinity;
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
       const k = Math.max(Math.abs(s.k || 0), 1e-5);
       const bankMu = 1 + Math.sin(s.bank || 0) * 0.8;
-      const A = latMax * bankMu * grip * skill * skill / k;
-      const den = 1 - A * aero;
-      const vC = aero ? (den > 0 ? Math.min(Math.sqrt(A / den), vTop) : vTop) : Math.sqrt(A);
+      const vC = Math.sqrt(latMax * bankMu * grip / k) * skill;
       // Distance budget: can scrub ~0.85·BRAKE over d metres (arcade, not perfect).
       const d = Math.max(s.d || 0, 1);
       const vEntry = Math.sqrt(vC * vC + 2 * brake * 0.85 * d);

@@ -113,21 +113,64 @@ project does not have.
   easy, at gaps past ~640 m, and it is a monotonicity fix rather than a
   measurable pace change.
 
-## Downforce in the AI's corner model, and pass hysteresis (2026-09-09)
+## The AI's planner and its actuator disagree about grip (2026-09-09)
 
-Two changes, measured together because the second exists to pay for the first.
+**A downforce term was added to the AI's corner model and then REVERTED the
+same day, because measuring it found a bigger defect underneath.** Read this
+section as the record of that, not as a description of shipped behaviour.
 
-**1. `brakeTarget` gained the aero term the player has always cornered on.**
-`js/game.js`'s `aeroGrip` is `1 + DOWNFORCE·aeroDfMult·(v/vTop)²`; the AI sized
-every corner off a flat `latMax`, i.e. its STANDING-START grip, and was
-correspondingly timid wherever the corner is fast. The corner speed is now a
-fixed point rather than a plain sqrt, because the grip that sets `vC` depends on
-`vC`: with `A = latMax·bankMu·grip·skill²/k`, `vC² = A/(1 − A·df/vTop²)`, and a
-non-positive denominator means the corner is not the limit — `vTop` is. `df: 0`
-restores the old model exactly, which is why `tests/unit/ai-drive.test.mjs`
-(which builds its ctx by hand) still passes unchanged.
+### What was tried, and why it was wrong
 
-Field-median lap time, `tools/check/ai-pace.mjs`, HEAD vs the change:
+`js/game.js`'s `aeroGrip` is `1 + DOWNFORCE·aeroDfMult·(v/vTop)²`, so a
+PLAYER's lateral grip is 65 % higher at the top speed than at rest, while
+`brakeTarget` sized every corner off a flat `latMax`. That looked like a plain
+player/AI asymmetry, and the fix looked like giving the AI the same term.
+
+It is not, and the reason is that **the AI does not simulate lateral grip the
+way the player does at all.** The player integrates a slip model whose `muBase`
+carries `aeroGrip`. The AI takes a kinematic lateral step (`js/game.js`, the
+`c.x +=` line in `updateCar`):
+
+    c.x += steer * STEER_VMAX * aiLat * gripScale * kerbGrip * gripMult(c) * ...
+
+with `gripScale = 1 - clamp((vStd(speed) - 20)/(VMAX - 20), 0, 1) * 0.28`, and
+its yaw-rate cap is `AI_YAW_LAT * LAT_MAX * gripMult(c) / vAbs`. **Neither has
+an aero term, and `gripScale` FALLS by up to 28 % with speed.**
+
+So the change put the AI's planner and its actuator in OPPOSITE directions:
+planned grip rising 65 % with speed, available grip falling 28 %. The AI planned
+entry speeds it could not physically turn at, arrived too fast and washed out of
+the apex. `tests/unit/ai-racecraft-vm.test.mjs` caught it, and an instrumented
+A/B against the pre-change tree says it was not a threshold graze:
+
+| monza corner | before | with the aero term |
+|---|---|---|
+| s0=2068, len 128 m | apex 5.969 m inside | 5.978 m (unchanged) |
+| **s0=2451, len 52 m** | **apex 4.068 m** | **3.467 m** |
+
+0.60 m of apex depth at the SHORT corner, nothing at the long one — the shape a
+planner/actuator mismatch makes, since the long corners were bounded by other
+limits anyway.
+
+### The real defect, now measured rather than asserted
+
+**The AI's corner planner and its lateral actuator model grip differently, and
+with opposite slopes in speed.** That is worth fixing properly, and there are
+two honest directions, neither of them a one-liner:
+
+- make the PLANNER match the ACTUATOR — give `brakeTarget` the same `gripScale`
+  taper, so the AI plans for grip that falls with speed. More conservative in
+  fast corners, and it needs its own measurement pass;
+- or give the ACTUATOR aero so both rise — a much larger physics change that
+  moves every AI car's cornering everywhere and needs full re-measurement.
+
+Until one of those is done, `brakeTarget` staying on flat `latMax` is the
+CONSISTENT choice, because it at least does not contradict the actuator.
+
+### The lap-time table the reverted change produced
+
+Kept because it is real measurement and the next attempt should not have to
+re-take it. `tools/check/ai-pace.mjs`, field median, HEAD vs the aero term:
 
 | circuit | easy | normal | hard |
 |---|---|---|---|
@@ -136,52 +179,60 @@ Field-median lap time, `tools/check/ai-pace.mjs`, HEAD vs the change:
 | spa    | 163.42 → 153.43 (−6.11 %) | 151.15 → 147.65 (−2.32 %) | 146.98 → 142.48 (−3.06 %) |
 
 \* the monaco/easy run timed only 19 of 21 cars, so its median is over a
-different sample than the base's 21 — do not read that cell as a pace change.
+different sample than the base's 21 — not a pace change.
 
-The size of the gain tracks how fast the circuit's corners are, which is the
-prediction: Spa (Pouhon, Blanchimont, Eau Rouge) moves several per cent, Monza
-(three chicanes and straights) barely moves at all. **The difficulty ladder got
-more consistent circuit to circuit**, which was the point:
+Note what this table does NOT prove. Spa getting 2.3 % faster is the AI
+planning more speed, not the AI carrying more speed *well*; the apex
+measurement above is what happens to the line while that lap time falls. A
+faster lap from a planner that outruns its actuator is not an improvement, and
+this is the trap the pace instrument alone walks into — `ai-pace.mjs` and
+`ai-field.mjs` measure time, stringing and passes, and NOTHING about line
+geometry. That gap is why this reached a deploy gate instead of being caught at
+my desk.
 
-| easy vs normal | HEAD | now |   | hard vs normal | HEAD | now |
-|---|---|---|---|---|---|---|
-| monza | +4.32 % | +4.09 % | | monza | −3.18 % | −3.19 % |
-| spa   | +8.12 % | +3.92 % | | spa   | −2.76 % | −3.50 % |
+## A completed pass locks out the counter-attack (2026-09-09, SHIPPED)
 
-Monza and Spa now agree to within 0.2 points on the easy step and 0.3 on the
-hard step, against 3.8 and 0.4 before. Monaco stays the outlier at ≈0 %
-separation between easy and normal — a corner-limited circuit barely reads a
-GROUND-SPEED scale, which is a property of `DIFF` being a speed multiplier and
-not something this change caused.
+Independent of the reverted change above, and kept. Nothing in the pass
+machinery distinguished a completed pass from a re-pass — every cooldown was on
+the ATTACKER after a FAILURE — so the car that had just been passed attacked
+straight back. It now takes the same `2 × passCooldown` "threshold endured"
+lockout the lunge-abandon branch already uses, scaled by its OWN experience, and
+never written onto a human.
 
-`DIFF` was NOT re-scaled, for the reason the 2026-09-08 note in
-`js/physics/consts.js` already gives: the drift is circuit-dependent (−0.09 %
-monza, +0.22 % monaco, −2.32 % spa at normal) and a global multiplier cannot
-express it — holding Spa would put Monza 2.3 % off the pace it is calibrated to.
+`tools/check/ai-field.mjs`, normal, 240 s, re-measured with the aero term
+REVERTED so the column describes what actually ships:
 
-**2. A completed pass now locks out the counter-attack.** Change 1 alone made
-the racing WORSE by the measure that matters, because more cars ran nose to
-tail: `tools/check/ai-field.mjs` at monza went 109 order flips / 27 settled /
-59 % oscillation to 151 / 22 / 74 %. Nothing in the pass machinery distinguished
-a completed pass from a re-pass — the cooldowns were all on the ATTACKER after a
-FAILURE — so the passed car simply attacked straight back. It now takes the same
-`2 × passCooldown` "threshold endured" lockout the lunge-abandon branch already
-uses, scaled by its OWN experience, and never written onto a human.
+| | HEAD | hysteresis only (shipped) |
+|---|---|---|
+| monza flips / settled / oscillation | 109 / 27 / 59 % | 154 / 19 / 63 % |
+| monza strings out to | 1548 m | 1524 m |
+| monza nose-to-tail | 20.3 % | 23.5 % |
+| monaco flips / settled / oscillation | 28 / 15 / 18 % | 39 / 22 / 18 % |
+| monaco strings out to | 4461 m | **7807 m** |
+| monaco nose-to-tail | 13.3 % | 12.3 % |
 
-| `ai-field.mjs`, normal, 240 s | HEAD | aero only | aero + hysteresis |
-|---|---|---|---|
-| monza flips / settled / oscillation | 109 / 27 / 59 % | 151 / 22 / 74 % | 144 / 27 / 63 % |
-| monza strings out to | 1548 m | 1375 m | 1376 m |
-| monza nose-to-tail | 20.3 % | 24.6 % | 22.5 % |
-| monaco flips / settled / oscillation | 28 / 15 / 18 % | 34 / 18 / 29 % | 73 / 40 / 26 % |
-| monaco strings out to | 4461 m | 3865 m | 3785 m |
+**Monaco is a clear win and Monza is ambiguous, and I am not going to pretend
+otherwise.** Monaco gains half again as many settled passes (15 → 22) at an
+unchanged 18 % oscillation share, strings the field out to 7.8 km against
+4.5 km, and cuts close-following car-time — that is the field bunching LESS,
+which was the ask. Monza goes the other way on the metric that matters most:
+settled passes fall 27 → 19 while total flips rise, i.e. more churn resolving
+into fewer clean passes, which is the opposite of what the mechanism predicts.
 
-Read honestly: settled passes are up (monza level, monaco 15 → 40) and the
-oscillation SHARE is back near baseline, but the absolute oscillation count is
-still above HEAD at both circuits, because there is simply more close running
-than there was. The 8.6 % pace spread — five times the real 2025 field's
-1.7 % — remains the untouched root cause of both the stringing and the flip
-count, and needs a design decision rather than a defect fix.
+The honest caveat on all of it: **every number in this file is a single run.**
+The sim is deterministic, so a repeat reproduces exactly — but that is
+REPRODUCIBILITY, not low variance across conditions, and a 240 s race is
+chaotic enough that one behavioural change reshuffles the whole field. Nothing
+here establishes that a 27 → 19 swing at one circuit is the change rather than
+the reshuffle. An n-run spread per condition is the missing instrument, and
+until it exists these tables should be read as direction, not magnitude.
+
+It ships anyway because the MECHANISM is principled and independently
+motivated — a completed pass being instantly undone is not racing, and the
+lockout matches the published overtake-FSM hysteresis in the prior-art section
+above — and because the alternative on the table was shipping nothing while a
+measured Monaco improvement sat unclaimed. If the Monza figure holds up under a
+proper n-run measurement, the constant is the thing to revisit first.
 
 Monza's numbers were byte-identical at `1 ×` and `2 ×` the cooldown: after a
 pass on that layout the pair separates for longer than either timer anyway, so
