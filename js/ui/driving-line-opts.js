@@ -74,7 +74,10 @@ const DrivingLineOpts = (function () {
     // docs/research/DRIVING-CONTROLS-RESEARCH.md, the only one that takes
     // nothing over. Its own preference and not a mode of DRIVING LINE, because
     // the players who need it most are the ones running the line OFF.
-    SettingRow.wire("pm-brakecue", {
+    // Id is pm-linebrakecue — NOT pm-brakecue. The steering panel's 1-10 range
+    // already owns that id; a shared id made getElementById return the set-row
+    // div, so the slider's .value / oninput never reached the input.
+    SettingRow.wire("pm-linebrakecue", {
       values: SettingRow.labels(["off", "on"]),
       read: () => (cueOn ? "on" : "off"),
       write: (v) => setBrakeCue(v === "on"),

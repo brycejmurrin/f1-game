@@ -79,6 +79,11 @@ const SPEC = [
   { k: "manual", lane: "json", group: "driving", def: false, src: "js/game.js" },
   { k: "aeroMode", lane: "json", group: "driving", def: "manual", src: "js/game.js" },
   { k: "drivingLine", lane: "json", group: "driving", def: "full", src: "js/game.js" },
+  // DRIVING LINE prefs (js/ui/driving-line-opts.js) — separate from the mode
+  // above and from steering's numeric brakeCue slider.
+  { k: "drivingLinePalette", lane: "json", group: "driving", def: "f1", src: "js/ui/driving-line-opts.js" },
+  { k: "drivingLineOpacity", lane: "json", group: "driving", def: "normal", src: "js/ui/driving-line-opts.js" },
+  { k: "lineBrakeCue", lane: "json", group: "driving", def: "off", src: "js/ui/driving-line-opts.js" },
   { k: "difficulty", lane: "json", group: "driving", def: "normal", src: "js/game.js" },
   { k: "raceGrid", lane: "json", group: "driving", def: "tier", src: "js/game.js" },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },

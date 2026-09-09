@@ -52,11 +52,16 @@ function load({ stored = {}, readyState = "complete" } = {}) {
 
 test("every row it claims is a real set-row in the shell, and it claims all three", () => {
   const { rows } = load();
-  assert.deepEqual([...rows.keys()].sort(), ["pm-brakecue", "pm-linecolor", "pm-lineopacity"]);
+  assert.deepEqual([...rows.keys()].sort(), ["pm-linebrakecue", "pm-linecolor", "pm-lineopacity"]);
   for (const id of rows.keys()) {
     assert.ok(SHELL.includes(`id="${id}"`), `${id} must exist in index.html`);
     assert.ok(SHELL.includes(`id="${id}-sel"`), `${id}-sel must exist — SettingRow needs the select`);
   }
+  // The steering slider keeps id="pm-brakecue" (a range input). Sharing that
+  // name with this set-row made getElementById return the wrong node.
+  assert.ok(SHELL.includes('id="pm-brakecue"'), "steer BRAKE CUE range keeps pm-brakecue");
+  assert.ok(!SHELL.includes('id="pm-brakecue" class="set-row"'),
+    "the set-row must not reuse the slider id");
 });
 
 test("the stored values reach DrivingLine AT EVAL, before any DOM event", () => {
@@ -98,13 +103,13 @@ test("each row round-trips through the store under its own key", () => {
   assert.equal(line._opacity, "subtle");
   assert.equal(written.drivingLineOpacity, "subtle");
 
-  assert.equal(rows.get("pm-brakecue").read(), "off");
-  rows.get("pm-brakecue").write("on");
+  assert.equal(rows.get("pm-linebrakecue").read(), "off");
+  rows.get("pm-linebrakecue").write("on");
   assert.equal(M.brakeCue(), true);
   assert.equal(written.lineBrakeCue, "on", "stored under lineBrakeCue, not the slider's brakeCue");
   assert.equal(written.brakeCue, undefined, "must not re-collide with steer-tuning's key");
-  assert.equal(rows.get("pm-brakecue").read(), "on");
-  rows.get("pm-brakecue").write("off");
+  assert.equal(rows.get("pm-linebrakecue").read(), "on");
+  rows.get("pm-linebrakecue").write("off");
   assert.equal(M.brakeCue(), false);
   assert.equal(written.lineBrakeCue, "off");
 });
