@@ -3679,6 +3679,8 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   assert.match(wgsl, /const SGSR =/, "WGX WGSL SGSR shader must ship");
   assert.doesNotMatch(wgsl.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
     /textureGather\s*\(/, "shared kernel uses 4-tap sampleLevel, not textureGather");
+  // Dawn/Naga reserves `std` — the shared SGSR port must use edgeStd (validate caught this).
+  assert.match(wgsl, /fn weightY\([^)]*edgeStd/, "SGSR WGSL weightY must not use reserved std");
   const wgx = read("js/render/webgpu/wgx.js");
   assert.match(wgx, /setSpatialUpscale/, "WGX must export setSpatialUpscale");
   assert.match(wgx, /wantSpatialUpscale/, "WGX must gate size split");
