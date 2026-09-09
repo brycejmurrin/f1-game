@@ -1268,6 +1268,15 @@ const LiveryTex = (function () {
     // picked a tint and chose `wrap` was watching their colour get thrown away
     // and re-derived. Choosing a colour is a decision about the car, not a
     // suggestion; the guard below owns the DEFAULT, never a pick.
+    // SUN TINT (liv.sunTint) owns this surface. SPINE TINT used to, which made
+    // one field mean two different things depending on SPINE TOP: a band on
+    // most designs, the sun disc on `wrap`. Choosing `wrap` then repurposed a
+    // colour picked for a band. They are separate rows now.
+    if (liv.sunTint) return liv.sunTint.slice();
+    // …and SPINE TINT still answers here when SUN TINT is unset, so a livery
+    // saved before SUN existed keeps painting the colour its author picked
+    // rather than silently falling back to the derivation. No shipped team hits
+    // this: Aston is the only spineTint livery and it wears `stripe`, not wrap.
     if (liv.spineTint) return liv.spineTint.slice();
     // The field is the COVER, not the body: this sun is painted on the crown,
     // the cover flanks and (Car3D) the airbox. Scoring it against c1 gave a
@@ -1802,7 +1811,12 @@ const LiveryTex = (function () {
     // which is what the fin badge already uses; every shipped car now sets
     // finShape "none", so a fin that is not there was choosing the ink for a
     // mark that is.
-    const inkCrest = inkOn([coverPaint]);
+    // CREST INK (liv.crestInk) — what the crown's LETTERING wears: the wordmark,
+    // the number, `carbon`'s keylines, the trim on `panel` and `stripe`, and the
+    // flank marks that take this same ink. Authored wins outright, like every
+    // tint row: an explicit pick is a decision about one surface, and the
+    // contrast derivation below owns only the DEFAULT.
+    const inkCrest = colors.crestInk || inkOn([coverPaint]);
     const inkFin = inkOn([finPaint]);
     const inkPod = inkOn(podBg);              // sidepod wordmarks (titleA only)
     const inkNose = inkOn([c1, c2]);          // titleB — the monocoque top
@@ -1986,7 +2000,11 @@ const LiveryTex = (function () {
       // The tricolour's SECOND band: a colour clearing the cover it sits on AND
       // the first band beside it. The ink is tried first, so a livery whose
       // bands already separate keeps exactly what it wears today.
-      const bandC2 = pickOn([inkCrest].concat(BAND_ORDER), [coverPaint, bandC], BAND_ON_COVER);
+      // BAND TINT 2 (liv.bandTint2) — the tricolour's SECOND band. Without it the
+      // design is two colours you cannot both choose: SPINE TINT owns one band
+      // and the other was derived, which is how four teams ended up wearing a
+      // "tricolour" of one colour repeated (1.01:1 on Mercedes).
+      const bandC2 = colors.bandTint2 || pickOn([inkCrest].concat(BAND_ORDER), [coverPaint, bandC], BAND_ON_COVER);
       drawSpineTop(ctx, spineLogo, REGIONS.crest, coverPaint, bandC, inkCrest, names[0] || "", raceNum, colors.numFont, bandC2);
       if (spineLogo === "saddle") saddleFlanks(ctx, bandC);
     }
@@ -2088,13 +2106,17 @@ const LiveryTex = (function () {
       // The plate has to separate from the FLANK, and the saddle paints that
       // flank in stripe||accent — the plate's own first choice. Ferrari shipped
       // a number board the exact colour of the panel it sits on.
-      let plateC = stripe || accent;
-      if (contrast(plateC, flankBg) < 1.6) {
+      // PLATE PANEL (liv.plateTint) and PLATE NUMBER (liv.plateInk) are picked
+      // rows now. An authored panel skips the re-pick below entirely — it is a
+      // choice about one surface, and re-deriving it is exactly the "my colour
+      // was thrown away" the tint rows exist to stop.
+      let plateC = colors.plateTint || stripe || accent;
+      if (!colors.plateTint && contrast(plateC, flankBg) < 1.6) {
         for (const cand of [c2, c1, stripe, INK_DARK, INK_LIGHT].filter(Boolean)) {
           if (contrast(cand, flankBg) > contrast(plateC, flankBg)) plateC = cand;
         }
       }
-      const plateInk = contrast(c1, plateC) >= 3 ? c1 : inkOn([plateC]);
+      const plateInk = colors.plateInk || (contrast(c1, plateC) >= 3 ? c1 : inkOn([plateC]));
       flankMark((Rm) => drawNumber(ctx, raceNum, Rm, plateInk, inkCrest, plateC, colors.numFont, 0));
     } else if (spineSide === "wordmark") {
       // The title sponsor the length of the flank's upper half — the RB22's
