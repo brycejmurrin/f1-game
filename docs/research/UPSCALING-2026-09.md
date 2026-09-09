@@ -193,7 +193,7 @@ FXAA→`aaTex` (LDR) then SGSR→present. WGX hardware `bgra8unorm` uses a separ
 | Size model | **Split** when flag on: canvas = present (`css×dpr`), FBOs = `×renderScale` | same split | same split |
 | Last fullscreen pass | FXAA → (optional SGSR) → default FB | FXAA → aaTex then SGSR → swapchain / soft present | FXAA → aaRT then SGSR → `#game` / soft blit |
 | Soft present | optional HeadlessChrome blit | required on software; readback = present size when upscaling | `#game-soft` at present size when upscaling |
-| `textureGather` | **no** (WebGL2) — 4× `textureLod` | WGSL has gather; **unused** (4× `textureSampleLevel`) | TSL / WebGL2 polyfill; **unused** (shared taps) |
+| `textureGather` | **no** (WebGL2) — 4× `textureLod` | **yes** — `SGSR_GATHER` preferred; 4-tap `SGSR` fallback / `apex26.spatialUpscaleGather=0` | TSL / WebGL2 polyfill; **unused** (shared taps) |
 | Spatial API | `setSpatialUpscale` / `wantSpatialUpscale` / `getPresentSize` | same | same |
 
 Historical touch points (landed):
@@ -237,8 +237,8 @@ Recommended UI: **one `SettingRow` labelled `UPSCALE`**, values ON/OFF, default 
 
 1. **Settings first (small, shippable alone):** ON/OFF `SettingRow` next to RESOLUTION, same `apex26.spatialUpscale` key, default OFF. Works for GLX immediately; WGX/TLX keep `available` until ported.
 2. **Backend port: strategy A (shared SGSR1)** for WGX then TLX — one kernel, fail closed without letterboxing, soft-present at present size only when the flag is active. Do **not** introduce FSR1's second pass.
-3. **Optional follow-up:** WGX-only `textureGather` fast path behind the same flag after A is green on a real GPU.
-4. **Still required before default ON:** device A/B at RESOLUTION MED/LOW — SwiftShader cannot judge (§6).
+3. **Optional follow-up (landed 2026-09-09):** WGX-only `textureGather` fast path (`SGSR_GATHER`) preferred when the module links; `apex26.spatialUpscaleGather=0` forces 4-tap. Soft-present cost bench: `node tools/gfx/soft-present-bench.mjs`. Real-GPU A/B via `gpu-census.yml` with `apex26.resMode=med` ± `apex26.spatialUpscale=1` — still required before default ON.
+4. **Still required before default ON:** device A/B at RESOLUTION MED/LOW — SwiftShader cannot judge (§6). Default remains **OFF**.
 
 ### 7.5 Out of scope (unchanged)
 

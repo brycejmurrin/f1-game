@@ -968,10 +968,11 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
 }`;
 
   // 6b. SGSR1 spatial upscale — Qualcomm Snapdragon Game Super Resolution mobile
-  //    kernel (BSD-3-Clause), ported from GLX SGSR_FS. FOUR textureSampleLevel
-  //    taps emulate textureGather(comp) — same as WebGL2; do NOT use WGSL
-  //    textureGather first (parity / A-B with GLX). Runs AFTER FXAA when
-  //    apex26.spatialUpscale=1 and renderScale < ~1; uViewport is SOURCE
+  //    kernel (BSD-3-Clause), ported from GLX SGSR_FS. Default SGSR uses FOUR
+  //    textureSampleLevel taps (parity with GLX/TLX). SGSR_GATHER is the WGX
+  //    fast path (native textureGather green) — wgx prefers it when the module
+  //    links; apex26.spatialUpscaleGather=0 forces the 4-tap. Runs AFTER FXAA
+  //    when apex26.spatialUpscale=1 and renderScale < ~1; uViewport is SOURCE
   //    (render) size. See docs/research/UPSCALING-2026-09.md §6–7.
   //
   //    BIND GROUP 0:
@@ -1068,6 +1069,29 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   }
   return vec4<f32>(color.xyz, 1.0);
 }`;
+
+  // Native gather path — same kernel, gatherGreen via textureGather(..., 1).
+  // Component index must be a const expression (WGSL). Same (a,b,c,d) order as
+  // the 4-tap emulator / ES 3.1 gatherComp.
+  const SGSR_GATHER = SGSR
+    .replace(
+      "Adapted for Apex 26 WGSL (gatherComp = 4× textureSampleLevel, like GLX).",
+      "Adapted for Apex 26 WGSL — native textureGather green (WGX fast path)."
+    )
+    .replace(
+      `fn gatherGreen(p : vec2<f32>) -> vec4<f32> {
+  let t = U.viewport.xy;
+  let a = textureSampleLevel(srcTex, srcSamp, p + vec2<f32>(0.0, t.y), 0.0).g;
+  let b = textureSampleLevel(srcTex, srcSamp, p + vec2<f32>(t.x, t.y), 0.0).g;
+  let c = textureSampleLevel(srcTex, srcSamp, p + vec2<f32>(t.x, 0.0), 0.0).g;
+  let d = textureSampleLevel(srcTex, srcSamp, p, 0.0).g;
+  return vec4<f32>(a, b, c, d);
+}`,
+      `fn gatherGreen(p : vec2<f32>) -> vec4<f32> {
+  // WGSL: component is the FIRST arg (not GLSL's last).
+  return textureGather(1i, srcTex, srcSamp, p);
+}`
+    );
 
   // 7. SSR — wet-road + car-paint screen-space reflection (its own HALF-RES
   //    pass; COMPOSITE bilinear-upsamples it through linearSampler, the same
@@ -1376,6 +1400,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     COMPOSITE,
     FXAA,
     SGSR,
+    SGSR_GATHER,
     SSR,
     // shared vertex stage (exported for reference/reuse)
     POST_VS,

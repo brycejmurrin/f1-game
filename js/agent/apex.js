@@ -1519,7 +1519,9 @@ const api = {
     if (v !== undefined) gfx.setSpatialUpscale(!!(+v || v === true || v === "1"));
     const on = !!gfx.getSpatialUpscale();
     const scale = gfx.getRenderScale();
-    return { on, active: !!(on && scale < 0.98), scale, available: true };
+    const out = { on, active: !!(on && scale < 0.98), scale, available: true };
+    if (typeof gfx.getSpatialUpscaleGather === "function") out.gather = !!gfx.getSpatialUpscaleGather();
+    return out;
   },
 
   // perf() — thin governor snapshot (alias of renderScale report + tier parts).
