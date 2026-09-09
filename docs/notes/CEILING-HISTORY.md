@@ -2495,6 +2495,39 @@ files are not ratcheted.
   `tests/unit/livery-decal-surfaces.test.mjs`, which measures vertex-to-
   SURFACE distance (`tests/helpers/mesh-distance.mjs`) rather than
   vertex-to-box — the substitution that let all of this hide.
+
+## 2026-09-09 — `js/game.js` 10292 -> **10322** lines, 5572 -> **5581** code
+
+A deliberate raise for two AI defects that had no cheaper home (a third was
+tried, measured and reverted — see below), and it is +9 CODE lines; the other 21
+are the comments saying what each was wrong about. (The line count is measured
+on the tree merged with the deploy branch, which is where the ratchet is read.)
+
+- **The rubber band capped at the top of the ladder** (2 code lines in
+  `updateCar`). `DIFF.easy.ai * (1 + DIFF.easy.band)` is `0.851 * 1.18 = 1.004`,
+  which beats `DIFF.hard.ai` outright: a lapped car on the easiest setting had a
+  higher pace scale than the fastest car on the hardest one. The ceiling itself
+  is derived from the table and lives in `js/physics/consts.js` as `BAND_CEIL`
+  — with `DIFF`, because it is a property of `DIFF` — precisely so game.js pays
+  for the cap and not for the arithmetic.
+- ~~**Downforce reaches the AI's corner model**~~ — REVERTED the same day, so
+  it costs nothing here. `ai-racecraft-vm` caught it: the AI's lateral actuator
+  has no aero term and its grip falls with speed, so an aero-aware planner
+  outran it and washed 0.60 m out of a short monza corner's apex. The raise
+  below is therefore for TWO fixes, not three. See docs/notes/AI-FIELD-RESEARCH.md.
+- **A completed pass locks out the counter-attack** (6 code lines). The "PAST:
+  done" branch was a bare `c.passOf = null` — every cooldown in the pass
+  machinery was on the ATTACKER after a FAILURE, and nothing at all distinguished
+  a completed pass from a re-pass. It is now the branch that has to say something,
+  so it is the branch that got longer.
+
+Measured, not asserted: `tools/check/ai-field.mjs` and `tools/check/ai-pace.mjs`
+against HEAD, tabulated in `docs/notes/AI-FIELD-RESEARCH.md`.
+
+game.js is 10.3k lines and the next AI change of this size should buy an
+extraction (the pass/defend state machine is the obvious candidate — it is ~120
+lines of `updateCar` that talks to `AiDrive` and nothing else) rather than more
+headroom.
 - `js/game.js` lines 10292 -> **10297** (+5), codeLines 5572 -> **5573** (+1)
   (2026-09-09): one line of MARKER, and it is worth saying why it is in
   product code rather than in the test that wants it.
