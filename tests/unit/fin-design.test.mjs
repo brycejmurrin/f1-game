@@ -290,6 +290,18 @@ test("every SPINE TOP design paints the crown; wordmark and number carry text", 
   }
 });
 
+test("carbon tail keylines match the crown width", () => {
+  // Crown carbon uses W*0.035; the tail continuation used to keep 0.014 and
+  // vanished at chase distance. Both arms of drawSpineTop/drawTailTop must agree.
+  const src = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
+  const carbons = [...src.matchAll(/id === "carbon"[\s\S]*?(?=else if \(id ===|ctx\.restore\(\))/g)];
+  assert.ok(carbons.length >= 2, "crest and tail both paint carbon");
+  for (const m of carbons) {
+    assert.match(m[0], /0\.035/, "each carbon arm uses the 3.5 % keyline");
+    assert.doesNotMatch(m[0], /0\.014/, "carbon must not keep the pre-fix 1.4 % width");
+  }
+});
+
 test("finBadge number puts the race number on the fin; none leaves the plate bare", () => {
   const num = A.paint("ferrari", { ...BASE, finBadge: "number" });
   const texts = opsIn(num, R.finBadge).filter((op) => op.kind === "text").map((op) => op.text);

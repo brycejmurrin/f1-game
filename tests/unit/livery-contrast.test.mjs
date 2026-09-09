@@ -19,8 +19,13 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadAtlas, sweepAtlas, AREA_FLOOR } from "../../tools/car/livery-contrast.mjs";
 import { paintAt } from "../../tools/car/crest-sweep.mjs";
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 // The atlas records CSS strings, so the comparison is done on them rather than
 // on the colour arrays LiveryTex.contrast takes.
@@ -134,6 +139,15 @@ test("a colour you PICK is the colour that gets painted, contrast or not", () =>
   for (const [what, liv, region] of cases)
     assert.ok(dominant(liv, region).startsWith(css),
       `${what}: picked ${css}..) and got ${dominant(liv, region)}`);
+});
+
+test("pickOn guards Array.isArray(bg) before reading bg[0]", () => {
+  // Array.isArray(bg[0]) alone threw when bg was null/undefined.
+  const src = fs.readFileSync(path.join(ROOT, "js/car/liverytex.js"), "utf8");
+  assert.match(src, /Array\.isArray\(bg\)\s*&&\s*bg\.length\s*&&\s*Array\.isArray\(bg\[0\]\)/,
+    "pickOn must null-guard bg before treating it as a list of paints");
+  assert.doesNotMatch(src, /const bgs = Array\.isArray\(bg\[0\]\)/,
+    "the old bg[0]-only guard must not return");
 });
 
 test("SPINE TOP wrap survives a partial livery (no c1/c2)", () => {

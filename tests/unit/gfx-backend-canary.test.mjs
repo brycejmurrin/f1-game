@@ -1694,6 +1694,16 @@ test("GLX soft-presents under HeadlessChrome so CDP sees the car", () => {
     "soft-present must throttle full-frame readPixels (car-group SwiftShader tax)");
   assert.match(src, /softPresent:\s*\(\)\s*=>\s*!!_softPresent/,
     "softPresent() capability bit for renderer-picker / probes");
+  assert.match(src, /function invalidateSoftPresent\(/,
+    "snapCam calls gfx.invalidateSoftPresent — GLX must define it (WGX already does)");
+  assert.match(src, /invalidateSoftPresent,/,
+    "invalidateSoftPresent must be on the GLX export surface");
+});
+
+test("menuBlank hides #game-soft with #game", () => {
+  const src = code("js/game.js");
+  assert.match(src, /getElementById\("game-soft"\)/,
+    "soft-present overlay must follow menuBlank visibility with #game");
 });
 
 test("the alpha tag that makes canvas opacity load-bearing still exists", () => {
