@@ -409,7 +409,7 @@ test("spineSide paints the flank band on pick only, and clears the service panel
   assert.ok(texts({ spineSide: "wordmark" }).join("").length >= 3, "wordmark: a sponsor name on the flank");
   assert.ok(texts({ spineSide: "duo" }).join("").length > texts({ spineSide: "wordmark" }).join("").length, "duo: two names on the flank");
   const slash = opsIn(A.paint("ferrari", { ...BASE, spineSide: "slash" }), R.spineSide);
-  assert.ok(slash.length >= 3 && slash.every((op) => op.kind !== "text"), "slash: raked stripes, no text");
+  assert.ok(slash.length >= 1 && slash.every((op) => op.kind !== "text"), "slash: one bold rake, no text");
   assert.ok(opsIn(A.paint("ferrari", { ...BASE, spineSide: "logo" }), R.spineSide).length > 0, "the crest on the flank");
   assert.ok(texts({ spineSide: "ribbon" }).includes("16"), "ribbon: number in the crease band");
   assert.ok(texts({ spineSide: "lockup" }).includes("16"), "lockup: number beside the mark");
