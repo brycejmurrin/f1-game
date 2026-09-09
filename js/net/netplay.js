@@ -67,6 +67,11 @@ const NetPlay = (function () {
         if (exact) return exact;
         const sameTeam = cars.find((c) => free(c) && c.team && c.team.id === profile.team);
         if (sameTeam) { lastSlotFallback = "team"; return sameTeam; }
+        // A named profile that matches nobody must not steal a wrong-team car.
+        // pickRemoteSlot(null) keeps the any-free-car arm — load-bearing for
+        // __apex.netLoopback / a session whose HELLO has not arrived.
+        lastSlotFallback = "profile-miss";
+        return null;
       }
       lastSlotFallback = "any";
       return cars.find(free) || null;

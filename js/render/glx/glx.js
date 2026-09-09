@@ -434,10 +434,12 @@ const GLX = (function () {
 
   function softBlitNotify() {
     _softBlitGen++;
+    const keep = [];
     const ws = _softPresentWaiters.splice(0);
     for (let i = 0; i < ws.length; i++) {
-      try { ws[i](_softBlitGen); } catch (_) { /* harness waiter */ }
+      try { if (!ws[i](_softBlitGen)) keep.push(ws[i]); } catch (_) { /* harness waiter */ }
     }
+    for (let j = 0; j < keep.length; j++) _softPresentWaiters.push(keep[j]);
   }
 
   function softBlit() {
@@ -493,13 +495,16 @@ const GLX = (function () {
   }
 
   function awaitSoftPresent(timeoutMs) {
-    if (!_softPresent || !_displayCtx) return Promise.resolve(_softBlitGen);
+    if (!_softPresent) return Promise.resolve(_softBlitGen);
+    if (!_displayCtx) return Promise.reject(new Error("no display ctx"));
     // Wait for a NEWER blit, not the last one already on the overlay.
     // The wrap/indexOf(waiter) mismatch used to leave timed-out waiters on
     // the list forever, and an early return on gen>0 made SAVE SCREENSHOT
     // after a camera move byte-identical to the previous still (same class
     // as TLX/WGX 2026-09-03). Timeout must splice the same function push()
-    // stored — see renderer-soft-lifecycle.
+    // stored — see renderer-soft-lifecycle. Return true/false so notify's
+    // keep[] can re-queue waiters whose predicate has not fired (a dim
+    // skip never notifies; the next good blit must still wake them).
     const start = _softBlitGen;
     const ms = timeoutMs == null ? 8000 : timeoutMs;
     return new Promise(function (resolve, reject) {
@@ -513,7 +518,9 @@ const GLX = (function () {
         if (gen > start) {
           try { clearTimeout(t); } catch (_) { /* harness */ }
           resolve(gen);
+          return true;
         }
+        return false;
       };
       _softPresentWaiters.push(waiter);
     });

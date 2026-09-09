@@ -101,15 +101,18 @@ const UiScale = (() => {
     // this safe: the :root declaration keeps the two locked together until the
     // player moves this slider, and only then do they part.
     function applyBtnScale() { applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale"); }
-    $("pm-uiscale").oninput = (e) => {
+    const uiEl = $("pm-uiscale");
+    if (uiEl) uiEl.oninput = (e) => {
       store.set("uiScale", scaleSnap(+e.target.value || scaleDefaultFor("uiScale")));
       applyUiScale();
     };
-    $("pm-hudscale").oninput = (e) => {
+    const hudEl = $("pm-hudscale");
+    if (hudEl) hudEl.oninput = (e) => {
       store.set("hudScale", scaleSnap(+e.target.value || scaleDefaultFor("hudScale")));
       applyHudScale();
     };
-    $("pm-btnscale").oninput = (e) => {
+    const btnEl = $("pm-btnscale");
+    if (btnEl) btnEl.oninput = (e) => {
       store.set("hudBtnScale", scaleSnap(+e.target.value || scaleDefaultFor("hudBtnScale")));
       applyBtnScale();
     };
