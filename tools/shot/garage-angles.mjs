@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// @doc Garage camera-preset shots — ONE Chromium; optional --livery / --spine-side walks.
+// @doc Garage camera-preset shots — ONE Chromium; optional --livery / --spine-side walks; --live hits github.io.
 //   node tools/shot/garage-angles.mjs [--team=redbull] [--views=spine] [--livery=default,rb_white]
-//     [--spine-side=logo,duo] [--spine-logo=…] [--zoom=8] [--pan=2,0] [--out=dir]
+//     [--spine-side=logo,duo] [--spine-logo=…] [--zoom=8] [--pan=2,0] [--out=dir] [--live]
 // @skill playwright-probe
 // @skill garage-parts-livery
 //
@@ -19,6 +19,9 @@
 // team default paint. `--zoom` / `--pan` are counted clicks on #cs-view-in /
 // #cs-pan-* so a framing that reads here is one a player can reach.
 //
+// `--live` loads https://brycejmurrin.github.io/f1-game/ (no local static
+// server), defaults `--views=all`, writes labeled PNGs + a contact sheet.
+//
 // Capture prefers #game-soft via screenshotGameCanvas — page.screenshot hangs
 // under SwiftShader (document.fonts.ready after freeze).
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
@@ -31,7 +34,9 @@ import {
   screenshotGameCanvas,
 } from "../capture/probe-page.mjs";
 
+const LIVE_BASE = "https://brycejmurrin.github.io/f1-game/";
 const argv = process.argv.slice(2);
+const isLive = argv.includes("--live");
 /** Accept `--name=value` and `--name value` (render-car style). */
 const flag = (name, dflt) => {
   const eq = argv.find((a) => a.startsWith(name + "="));
@@ -45,9 +50,10 @@ const liveries = flag("--livery", "default").split(",").map((s) => s.trim()).fil
 const spineSides = (flag("--spine-side", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
 const spineLogos = (flag("--spine-logo", "") || "").split(",").map((s) => s.trim()).filter(Boolean);
 const vp = flag("--viewport", "1280x720").split("x").map(Number);
-const outDir = flag("--out", "artifacts/garage-angles");
-const zoom = Number(flag("--zoom", "0")) || 0;
-const [strafe = 0, dolly = 0] = (flag("--pan", "0,0")).split(",").map(Number);
+const outDir = flag("--out", isLive ? "artifacts/garage-angles-live" : "artifacts/garage-angles");
+const zoom = Number(flag("--zoom", isLive ? "6" : "0")) || 0;
+const [strafe = 0, dolly = 0] = (flag("--pan", isLive ? "3,0" : "0,0")).split(",").map(Number);
+const withLabels = !argv.includes("--no-labels");
 
 /** Roster order == store.team index (game.js boot). */
 function teamIndex(id) {
@@ -67,12 +73,83 @@ const GROUPS = {
   spine: ["hero", "top", "rear", "side"],
   all: ALL,
 };
-const rawViews = flag("--views", "spine").split(",").map((s) => s.trim()).filter(Boolean);
+const rawViews = flag("--views", isLive ? "all" : "spine").split(",").map((s) => s.trim()).filter(Boolean);
 const views = [...new Set(rawViews.flatMap((v) => GROUPS[v] || [v]))];
 const bad = views.filter((v) => !ALL.includes(v));
 if (bad.length) {
   console.error(`Unknown view(s): ${bad.join(", ")}\nAvailable: ${ALL.join(", ")} + groups ${Object.keys(GROUPS).join(", ")}`);
   process.exit(1);
+}
+
+function escSvg(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+}
+
+/** Title + subtitle bar (helmet-sheet pattern). */
+function labelSvg(title, sub, w, h) {
+  return Buffer.from(
+    `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">
+       <rect width="${w}" height="${h}" fill="#14161a"/>
+       <text x="${w / 2}" y="${h * 0.46}" font-family="DejaVu Sans, sans-serif" font-size="${Math.round(h * 0.40)}"
+             font-weight="700" fill="#f0f0f2" text-anchor="middle">${escSvg(title)}</text>
+       <text x="${w / 2}" y="${h * 0.86}" font-family="DejaVu Sans, sans-serif" font-size="${Math.round(h * 0.30)}"
+             fill="#9a9ca3" text-anchor="middle">${escSvg(sub)}</text>
+     </svg>`);
+}
+
+/** Burn a caption bar under a capture; returns the labeled path. */
+async function labelShot(pngPath, title, sub) {
+  const meta = await sharp(pngPath).metadata();
+  const labH = Math.max(40, Math.round(meta.height * 0.075));
+  const labeled = pngPath.replace(/\.png$/, "-labeled.png");
+  const bar = labelSvg(title, sub, meta.width, labH);
+  await sharp(pngPath)
+    .extend({ bottom: labH, background: { r: 20, g: 22, b: 26 } })
+    .composite([{ input: bar, top: meta.height, left: 0 }])
+    .png()
+    .toFile(labeled);
+  return labeled;
+}
+
+/** Grid of labeled captures — one PNG per design tag. */
+async function buildContactSheet(shots, { team, tag, liveBuild, teamLabel }) {
+  if (!shots.length) return null;
+  const cols = Math.min(4, shots.length);
+  const rows = Math.ceil(shots.length / cols);
+  const cellW = 640;
+  const cellH = 360;
+  const labH = 44;
+  const pad = 8;
+  const tileW = cellW + pad * 2;
+  const tileH = cellH + labH + pad;
+  const W = cols * tileW;
+  const H = rows * tileH;
+  const buildNote = liveBuild != null ? ` · build ${liveBuild}` : "";
+  const composites = [];
+  for (let i = 0; i < shots.length; i++) {
+    const s = shots[i];
+    const gx = (i % cols) * tileW;
+    const gy = Math.floor(i / cols) * tileH;
+    const img = await sharp(s.png).resize(cellW, cellH, { fit: "cover" }).png().toBuffer();
+    composites.push({ input: img, left: gx + pad, top: gy + pad });
+    const sub = [
+      teamLabel || team,
+      s.liveryName || s.livery || tag,
+      `az ${s.az} el ${s.el}`,
+      buildNote.trim(),
+    ].filter(Boolean).join(" · ");
+    composites.push({
+      input: labelSvg(s.view.toUpperCase(), sub, cellW, labH),
+      left: gx + pad,
+      top: gy + pad + cellH,
+    });
+  }
+  const sheet = join(outDir, `${team}-${tag}-labeled-sheet.png`);
+  await sharp({ create: { width: W, height: H, channels: 3, background: { r: 16, g: 17, b: 20 } } })
+    .composite(composites)
+    .png()
+    .toFile(sheet);
+  return sheet;
 }
 
 /** Gate the CANVAS half only — the setup sheet always has text spread. */
@@ -184,7 +261,19 @@ async function applyDesign(page, { spineSide, spineLogo }) {
 
 async function main() {
   mkdirSync(outDir, { recursive: true });
-  const srv = await startStaticServer(process.cwd());
+  let gameUrl;
+  let liveBuild = null;
+  if (isLive) {
+    liveBuild = await fetch(LIVE_BASE + "version.json")
+      .then((r) => r.json())
+      .then((j) => j.build ?? null)
+      .catch(() => null);
+    gameUrl = LIVE_BASE;
+    console.log(`live github.io — build ${liveBuild ?? "?"}`);
+  } else {
+    const srv = await startStaticServer(process.cwd());
+    gameUrl = srv.url;
+  }
   const t0 = Date.now();
   const browser = await launchChromium({ headless: true, args: chromiumArgsForBackend("webgl2") });
   try {
@@ -192,7 +281,7 @@ async function main() {
     await page.setViewportSize({ width: vp[0], height: vp[1] });
     // Pin the INDEX before first paint — #mb-garage never re-reads the store.
     await installProbeInit(page, { backend: "webgl2", team: teamIdx });
-    await gotoGame(page, srv.url, 120000);
+    await gotoGame(page, gameUrl, 120000);
     // First paint already on the first --livery (or default).
     await page.evaluate(({ t, liv }) => {
       GameStore.store.set("livery." + t, liv);
@@ -227,39 +316,67 @@ async function main() {
     console.log(`team sheet: ${teamLabel}  [switched=${switched}]`);
 
     const shots = [];
+    const sheets = [];
     const designs = spineSides.length
       ? (spineLogos.length ? spineLogos : [""]).flatMap((logo) =>
         spineSides.map((side) => ({ spineLogo: logo, spineSide: side })))
       : null;
+    const buildNote = liveBuild != null ? `build ${liveBuild}` : "local tree";
     if (designs) {
       for (const d of designs) {
         const name = await applyDesign(page, d);
         const tag = (d.spineLogo || "def") + "-" + d.spineSide;
+        const tagShots = [];
         for (const v of views) {
           const s = await frame(page, tag, v);
           s.liveryName = name;
           s.spineLogo = d.spineLogo || null;
           s.spineSide = d.spineSide;
+          if (withLabels) {
+            const sub = [name, buildNote, `dist ${s.dist}`].join(" · ");
+            s.labeled = await labelShot(s.png, v.toUpperCase(), sub);
+          }
+          tagShots.push(s);
           shots.push(s);
-          console.log(`shot ${tag}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}`);
+          console.log(`shot ${tag}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}${s.labeled ? " +" + s.labeled : ""}`);
+        }
+        if (withLabels) {
+          const sheet = await buildContactSheet(tagShots, { team, tag, liveBuild, teamLabel });
+          if (sheet) {
+            sheets.push(sheet);
+            console.log(`sheet ${tag} -> ${sheet}`);
+          }
         }
       }
     } else {
       for (const liv of liveries) {
         const name = await applyLivery(page, liv);
+        const tagShots = [];
         for (const v of views) {
           const s = await frame(page, liv, v);
           s.livery = liv;
           s.liveryName = name;
+          if (withLabels) {
+            const sub = [name, buildNote, `dist ${s.dist}`].join(" · ");
+            s.labeled = await labelShot(s.png, v.toUpperCase(), sub);
+          }
+          tagShots.push(s);
           shots.push(s);
-          console.log(`shot ${liv}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}`);
+          console.log(`shot ${liv}/${s.view} via=${s.via} az ${s.az} el ${s.el} dist ${s.dist} spread ${s.spread} -> ${s.png}${s.labeled ? " +" + s.labeled : ""}`);
+        }
+        if (withLabels) {
+          const sheet = await buildContactSheet(tagShots, { team, tag: liv, liveBuild, teamLabel });
+          if (sheet) {
+            sheets.push(sheet);
+            console.log(`sheet ${liv} -> ${sheet}`);
+          }
         }
       }
     }
     const meta = join(outDir, `${team}-angles.json`);
     writeFileSync(meta, JSON.stringify({
-      team, teamIdx, liveries, spineSides, spineLogos,
-      zoom, pan: [strafe, dolly], sheetHead: shown, viewport: vp, views, shots,
+      team, teamIdx, liveries, spineSides, spineLogos, live: isLive, liveBuild,
+      zoom, pan: [strafe, dolly], sheetHead: shown, viewport: vp, views, shots, sheets,
       seconds: +((Date.now() - t0) / 1000).toFixed(1),
     }, null, 2));
     console.log(`wrote ${shots.length} angle(s) in ${((Date.now() - t0) / 1000).toFixed(1)}s + ${meta}  [sheet: ${shown}]`);
