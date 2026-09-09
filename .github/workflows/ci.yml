@@ -541,7 +541,25 @@ jobs:
     # cancelled job is exactly the silent-failure mode the header warns about.
     # 50 covers a shard whose every spec lands in the starvation tail, with the
     # per-test cap below as the real hang detector.
-    timeout-minutes: 50
+    #
+    # …but 50 was measured for what a PUSH runs here: smoke.spec.js sharded four
+    # ways. The same job also runs the WIDE step — the boot group nightly, or on
+    # dispatch whichever group `group` names — and that is a different size of
+    # job wearing the same cap. Measured 2026-09-08 on the `ui` dispatch (run
+    # 34279958405): the group is 150 tests, --shard splits them 38/38/37/37 by
+    # COUNT, and APEX_WORKERS is 1. Shard 2 drew the cheap specs and finished
+    # its group in 11.5 min; shards 1, 3 and 4 drew the race-building ones and
+    # were still running at exactly 50:00 when the cap killed them. At the ~94 s
+    # race boot this file already records for a starved runner, 37 race-shaped
+    # tests is ~58 min of BOOT before a single assertion — the cap could not be
+    # met, and it is the fourth `ui` dispatch to die this way.
+    #
+    # A TIMED-OUT JOB REPORTS `cancelled`, which is why this kept being read as
+    # someone clicking cancel (docs/notes/TESTING-FIELD-NOTES.md, and the plan
+    # file recorded the wrong cause three times). The dispatch and the nightly
+    # get their own number; the per-test cap below is still the hang detector,
+    # so a genuinely stuck spec goes red at 15 min rather than burning the 120.
+    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && 120 || 50 }}
     steps:
       # fetch-depth: 0 — the filter below diffs against the SHA that is currently
       # live on Pages, which is arbitrarily far back. Same reason the sweeps job
