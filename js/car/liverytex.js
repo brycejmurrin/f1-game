@@ -1842,10 +1842,10 @@ const LiveryTex = (function () {
   // contrasting panel, "duo" the RB22 (title aft, partner forward). The W17's
   // raked bars were `"slash"` — culled 2026-09-09 with bars/split/chevron as
   // SIDE+zoom sticker graphics; Mercedes ships `"sash"` instead.
-  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash"];
+  const SPINE_SIDE_IDS = ["none", "number", "logo", "code", "plate", "wordmark", "duo", "ribbon", "lockup", "title", "emblem", "band", "sash", "rake", "shoulder", "starfield"];
   // FILLS sit under the wrap's bull; lettering/numbers/badges sit over it.
-  // `ribbon` is content (strip + number). `band`/`sash` are colour panels.
-  const SIDE_FILL = { band: 1, sash: 1 };
+  // `ribbon` is content (strip + number). `band`/`sash`/`rake`/`shoulder` are colour panels.
+  const SIDE_FILL = { band: 1, sash: 1, rake: 1, shoulder: 1 };
   // Where a MARK (logo / number / code / plate) sits on the flank canvas.
   // v is the centre, 0 at the shoulder crease and 1 at the sidepod line.
   // Hung at 0.56 the plate sat in the sidepod (owner: "a little low"); hung
@@ -2697,6 +2697,74 @@ const LiveryTex = (function () {
         ctx.beginPath();
         ctx.moveTo(su(F, 0.14), bot); ctx.lineTo(su(F, uEnd), bot);
         ctx.stroke();
+        ctx.restore();
+      });
+    } else if (spineSide === "rake") {
+      // One hard diagonal colour cut — not the parallel-edge sash. Fill reads
+      // sideTint, or saddleFill under saddleWrap. Content stays in FLANK_SEEN.
+      const rakeC = coverBind === "saddleWrap" ? (saddleFlankC || flankBandC) : flankBandC;
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(rakeC, 0.97);
+        const u0 = sideFrom || 0.02;
+        const uEnd = sideFrom ? sideTo : FLANK_SEEN;
+        const vTop = Sf.y + Sf.h * 0.04, vBot = Sf.y + Sf.h * 0.58;
+        ctx.beginPath();
+        ctx.moveTo(su(F, u0), vBot);
+        ctx.lineTo(su(F, uEnd), vTop);
+        ctx.lineTo(su(F, uEnd), vBot);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = cssA(INK_DARK, 0.38); ctx.lineWidth = Math.max(2, Sf.h * 0.016);
+        ctx.beginPath();
+        ctx.moveTo(su(F, u0), vBot); ctx.lineTo(su(F, uEnd), vTop);
+        ctx.stroke();
+        ctx.restore();
+      });
+    } else if (spineSide === "shoulder") {
+      // Upper-third shelf only; lower flank stays cover/body. Reads saddleTint
+      // first, else sideTint. SIDE_FILL under wrap bull.
+      const shoulderC = colors.saddleTint || flankBandC;
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        ctx.fillStyle = cssA(shoulderC, 0.97);
+        const u0 = sideFrom || 0.02;
+        const uEnd = sideFrom ? sideTo : FLANK_SEEN;
+        const y0 = Sf.y + Sf.h * 0.04, y1 = Sf.y + Sf.h * 0.33;
+        ctx.fillRect(Math.min(su(F, u0), su(F, uEnd)), y0, Math.abs(su(F, uEnd) - su(F, u0)), y1 - y0);
+        ctx.strokeStyle = cssA(INK_DARK, 0.35); ctx.lineWidth = Math.max(2, Sf.h * 0.014);
+        ctx.beginPath();
+        ctx.moveTo(su(F, u0), y1); ctx.lineTo(su(F, uEnd), y1);
+        ctx.stroke();
+        ctx.restore();
+      });
+    } else if (spineSide === "starfield") {
+      // Micro dot field on the flank panel — not finStyle "stars". Density
+      // floor keeps cover-legibility's 1.5 % flank area readable.
+      const dotInk = colors.sideTint || colors.crestInk
+        || pickOn([inkCrest].concat(BAND_ORDER), flankBgs, BAND_ON_COVER);
+      const density = 0.28;
+      eachFlank((F) => {
+        const Sf = F.R;
+        ctx.save(); ctx.beginPath(); ctx.rect(Sf.x, Sf.y, Sf.w, Sf.h); ctx.clip();
+        const u0 = sideFrom || 0.02;
+        const uEnd = sideFrom ? sideTo : FLANK_SEEN;
+        const x0 = su(F, u0), x1 = su(F, uEnd);
+        const y0 = Sf.y + Sf.h * 0.06, y1 = Sf.y + Sf.h * 0.58;
+        const w = Math.abs(x1 - x0), h = y1 - y0;
+        const step = Math.max(3, w * 0.045);
+        for (let py = y0; py < y1 - step * 0.5; py += step) {
+          for (let px = Math.min(x0, x1); px < Math.min(x0, x1) + w - step * 0.5; px += step) {
+            const hsh = (((px * 73856093) ^ (py * 19349663)) >>> 0) % 1000;
+            if (hsh / 1000 > density) continue;
+            const r = step * 0.32;
+            ctx.fillStyle = cssA(dotInk, 0.97);
+            ctx.beginPath();
+            ctx.arc(px + step * 0.5, py + step * 0.5, r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
         ctx.restore();
       });
     }
