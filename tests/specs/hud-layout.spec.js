@@ -172,15 +172,25 @@ for (const v of VIEWS) {
           const hud = v.name.includes("landscape") ? [...HUD, ...HUD_LANDSCAPE_ONLY] : HUD;
           const r = await measure(page, CTRL, hud, v.w, v.h, v);
           expect(r.count, "controls are on screen at all").toBeGreaterThan(3);
+          // NAME THE BOXES IN THE MESSAGE. These three assert an EMPTY list, so
+          // a failure prints "Received + 4" and the reporter truncates the
+          // contents — which says a collision happened and nothing about what
+          // hit what. Finding that out cost three separate browser probes
+          // (2026-09-09); the answer was one pair, `.hud-top x .hud-gaps`, and
+          // it was in the array the whole time. The dump also carries the fit
+          // pass's own state, because "which elements" and "why did the cap not
+          // stop it" are the same question.
+          const dump = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash,
+                                              unsafe: r.unsafe, fit: r.fit || null });
           // No control may sit on another — every one of these is a tap target.
-          expect(r.overlaps).toEqual([]);
+          expect(r.overlaps, "controls must not sit on each other" + dump).toEqual([]);
           // And no READOUT may sit on a tap target, which is the failure that
           // shipped: you cannot read what your thumb is covering, and you
           // cannot press what a number is drawn over.
-          expect(r.hudClash).toEqual([]);
+          expect(r.hudClash, "no HUD readout may sit on another" + dump).toEqual([]);
           // Everything inside the safe box, not merely inside the viewport —
           // a notch does not politely render behind a button.
-          expect(r.unsafe).toEqual([]);
+          expect(r.unsafe, "nothing may leave the safe area" + dump).toEqual([]);
         });
       }
     }
@@ -205,12 +215,13 @@ for (const c of [
       const v = { name: "notched-landscape", w: 852, h: 393, sal: 59, sar: 59, sat: 0, sab: 21 };
       await race(page, "buttons", false, v, { profile: c.profile, cam: c.cam });
       const r = await measure(page, CTRL, [...HUD, ...HUD_LANDSCAPE_ONLY], v.w, v.h, v);
-      expect(r.overlaps, "controls must not sit on each other").toEqual([]);
+      const dump2 = " " + JSON.stringify({ overlaps: r.overlaps, hudClash: r.hudClash, unsafe: r.unsafe });
+      expect(r.overlaps, "controls must not sit on each other" + dump2).toEqual([]);
       // The one this pass exists for: a HUD readout painting over another HUD
       // readout. A hidden element has no box, so a profile that legitimately
       // drops the map or the gaps simply contributes nothing here.
-      expect(r.hudClash, "no HUD readout may sit on another HUD readout").toEqual([]);
-      expect(r.unsafe, "nothing may sit under the notch or the home indicator").toEqual([]);
+      expect(r.hudClash, "no HUD readout may sit on another HUD readout" + dump2).toEqual([]);
+      expect(r.unsafe, "nothing may sit under the notch or the home indicator" + dump2).toEqual([]);
     });
   });
 }

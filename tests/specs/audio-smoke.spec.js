@@ -104,7 +104,15 @@ test("persisted SOUND OFF and out-of-range volumes apply on first load", async (
   await page.locator("#soundbtn").click();
   await expect.poll(() => page.evaluate(() => GameAudio.debug().contextState))
     .not.toBe("uninitialised");
-  await expect.poll(() => engineRequests.length).toBe(2);
+  // ONE sample, not two. The granular (PSOLA) engine voice retired f1_rev.mp3
+  // (933e3167): it was fetched, decoded and loop-scanned behind a gain written
+  // to 0 at creation and never changed, and because the fetch sat inside a
+  // Promise.all that `usingSamples` gated on, a 404 in the layer nobody could
+  // hear dropped every player to the oscillator fallback. The asset stays on
+  // disk and nothing loads it, so ONE request is the correct count — this
+  // assertion simply outlived the two-sample voice, unseen because the `ui`
+  // group has not completed a run since.
+  await expect.poll(() => engineRequests.length).toBe(1);
 });
 
 test("re-enabling sound during a race restarts race music", async ({ page, loadTrack }) => {

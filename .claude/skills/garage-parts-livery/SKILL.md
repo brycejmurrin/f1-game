@@ -61,6 +61,29 @@ it — place side details with `coverFlankX(c, y)` and crown details with
 `coverSurfaceY(c, x)`, never at `c.x` / `c.top` literally, or they float. The 2026
 lights are draw-time, not livery: `CarMesh.ersLightCode` (pure) and
 `drawMirrorLights` at `Car3D.mirrorLightAnchors` under 20 km/h.
+**THE PAINT SHEET HAS ONE FIELD LIST, and adding a field means touching it in
+exactly two places.** The editor's 28 keys live in `LIV_DRAFT_COLORS` +
+`LIV_DRAFT_PILLS` (js/garage/setup-sheet.js); `livDraftFrom(liv, name)` builds a
+draft for all three doors (new / edit / "customize a copy") and
+`livDraftTo(d, keepNull)` converts back for BOTH the save and the live preview
+(`keepNull` is the only difference — the preview needs every key present for
+resolveLivery's draft branch, the stored livery stays sparse so a garage file
+does not carry 28 nulls). There were FIVE hand-written copies of this list and
+they had drifted: the copy door silently dropped all eight structural fields, so
+duplicating a team's own paint job returned a shark-finned car. Add a field to
+the two tables and to `Liveries.forTeam`'s copy list — nothing else — and give
+it a `LIV_ROW_HINT` entry naming the SURFACE it paints and what it inherits when
+unset. `tests/unit/team-livery.test.mjs` holds all of that, mutation-tested.
+A new draft inherits the TEAM's livery pills (every 2026 car is
+`finShape: "none"` + `spineHeight: "dorsal"`), so a blank canvas is blank paint
+and not a different car.
+
+**A garage FILE is player input.** `applyGarage` validates SHAPE per key family
+before writing (js/ui/settings-export.js): a custom livery needs an id and two
+rgb triples, and a partly-corrupt array keeps the sound paint jobs. Without it
+one entry lacking `c1` took the LIVERY tab down — `cssCol` reads `c[0]` on
+whatever it is handed.
+
 The mark takes up to THREE livery colours and the editor asks
 `LiveryTex.markSlots(teamId)` how many and what to call them — never assume a
 length. `logo` is the dominant shape; `logo2` is the mark's second SHAPE and
