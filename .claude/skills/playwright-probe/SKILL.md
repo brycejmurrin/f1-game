@@ -44,6 +44,11 @@ node tools/shot/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
 node tools/shot/apex-capture.mjs cameras [track] [outdir]
 node tools/shot/apex-capture.mjs modes   [outdir]
 node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
+
+# ONE Chromium, many angles (soft #game-soft/#view → CDP — never page.screenshot):
+node tools/car/render-car.mjs --team=redbull --preset=spine   # needs :3456
+node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=scratch/renders/garage-spine
+node tools/car/carshot.mjs 40 day 2 artifacts/tmp/carshot.jpg  # tiny cropped JPEG
 ```
 
 ## Single framed screenshot (`shot.mjs`)

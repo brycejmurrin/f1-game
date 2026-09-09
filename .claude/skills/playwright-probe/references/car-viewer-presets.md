@@ -13,8 +13,10 @@ Ad-hoc: `--az=<deg> --el=<deg> --dist=<m>` (overrides `--views`).
 ## Named shot sets (`--preset=<name>`)
 
 3 purpose-built shots per preset (overrides `--views`). `--preset=list` prints
-names.
+names. Repeatable customs: `--shot=label,az,el,dist` (keeps ONE Chromium).
 
+- `spine` — crown / crown-rear / flank-high / tail-high for cover/fin/stripe
+  checks (also `garage-angles.mjs --views=spine` for in-garage).
 - `wing` (alias `aero`) — behind / front / front-3-quarter. Clears the
   rear-wing endplate at every downforce level.
 - `engine` `brakes` `tyres` `ers` `gearbox` — close, part-focused (main +
@@ -26,13 +28,17 @@ names.
 - `livery` — side / front-3-quarter / rear-3-quarter for sponsor placement.
 
 ```sh
+node tools/car/render-car.mjs --team=redbull --preset=spine
+node tools/car/render-car.mjs --team=redbull --shot=crown,0,72,4.2 --shot=flank,90,40,4.4
 node tools/car/render-car.mjs --team=mclaren --preset=brakes --brakes=ceramic
 node tools/car/render-car.mjs --team=mclaren --preset=wing --aero=extreme
 node tools/car/render-car.mjs --team=mclaren --preset=livery --lightset=day,dusk,night
+node tools/shot/garage-angles.mjs --team=redbull --views=spine --out=scratch/renders/garage-spine
 ```
 
 `--lightset=day,dusk,night` renders every shot at each tod as a grid (rows =
-shot, columns = tod).
+shot, columns = tod). Capture is soft `#view` / `#game-soft` → CDP (never
+`page.screenshot` under SwiftShader).
 
 ## Options
 
