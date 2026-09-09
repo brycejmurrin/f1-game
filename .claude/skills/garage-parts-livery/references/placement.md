@@ -93,8 +93,8 @@ side camera the tyre projects straight over the cover. Measured on the marks:
 **Read the camera column before calling a number a defect** — the row above was
 7 % from the hero preset the garage opens on. It was still a defect, and a
 shipped one: Red Bull's default is crown `wrap` + side `duo`, and the same push
-put 92 % of its sponsor names, 95 % of a wordmark and 100 % of `slash` behind
-the wheel. `sideFrom` started the band aft of the BULL, the bull ends at u 0.58
+put 92 % of its sponsor names, 95 % of a wordmark and 100 % of the then-`slash`
+side behind the wheel. `sideFrom` started the band aft of the BULL, the bull ends at u 0.58
 and `FLANK_SEEN` is 0.62, so "behind the animal" and "behind the wheel" were one
 instruction.
 
@@ -104,7 +104,8 @@ sponsor name's is half a word. So `liverytex.js` carries two axes, `su` for
 bands and `sc` clamped to `FLANK_SEEN` for content; the band clears the SUN
 (a hard disc, `sunReach`) and SHARES the bull (a silhouette, and every mark
 carries a keyline, halo or plate); `SIDE_FILL` puts flat fills UNDER the crown's
-flank graphic and lettering over it, so a solid `split` cannot erase the bull's
+flank graphic and lettering over it, so a solid colour fill (`band`/`sash`; the
+culled `split` was the same class) cannot erase the bull's
 legs and the bull cannot erase a sponsor; and `BULL.top` drops the animal clear
 of the crease strip the lettering rides. Everything that has to be read now
 measures 0 % from the side, and `fin-design.test.mjs` holds content — marks AND

@@ -274,29 +274,14 @@ test("a flank mark clears the flank the crown design actually left it", () => {
       }
     }
   }
-  // KNOWN — measured, not waived. One class: a mark that SPANS the saddle's
-  // raked edge. saddleFlanks fills to u 0.58 tapering to 0.40 while the wordmark
-  // and duo boxes run out to u 0.96, so they start on the saddle and finish on
-  // bare cover, and no single ink clears both. Inking against the pair was tried
-  // and is WORSE — Red Bull's number, code and wordmark all fell to 1.31:1 on
-  // its gold saddle, surfaces that had been fine. The answer is the HALO
-  // markPalette already builds for marks, which is a change to the flank
-  // painting path, not a better choice of ink. wrap/logo leftovers are the
-  // brand PLATE, which wins outright by an explicit identity-over-legibility
-  // decision documented in markPalette — a different argument, not this one.
-  //
-  // Fails if the list GROWS and fails if an entry starts PASSING, so the fix
-  // cannot leave a stale allowance behind and a regression cannot hide in one.
-  const KNOWN = new Set([
-    "audi saddle/wordmark", "audi saddle/duo",
-    "astonmartin wrap/code",
-    "cadillac saddle/wordmark", "cadillac saddle/duo",
-    "ferrari saddle/wordmark", "ferrari saddle/duo", "ferrari wrap/logo",
-    "mercedes saddle/wordmark", "mercedes saddle/duo",
-    "racingbulls saddle/wordmark", "racingbulls saddle/duo",
-    "redbull saddle/wordmark", "redbull saddle/duo", "redbull saddle/logo",
-    "williams saddle/wordmark", "williams saddle/duo",
-  ]);
+  // Fixed 2026-09-09: saddle wordmark/duo clamp + forced halo + wrap/saddle
+  // noPlate cleared the rake-span class (~16 entries). One leftover is a
+  // DIFFERENCING artifact, not an on-car invisible mark: under WRAP with no
+  // traced bull, spineSide "none" paints the team's lockup as a flank fallback,
+  // so markOnItsGround compares the CODE against that crest (Aston's lime wings)
+  // instead of the sun. On the car the code replaces the lockup. Fails if the
+  // list grows or an entry starts passing for a real reason — then delete it.
+  const KNOWN = new Set(["astonmartin wrap/code"]);
   assert.deepEqual(bad.filter((k) => !KNOWN.has(k)), [], "a flank mark went invisible");
   assert.deepEqual([...KNOWN].filter((k) => !bad.includes(k)), [],
     "these KNOWN gaps now pass — delete them from KNOWN");
