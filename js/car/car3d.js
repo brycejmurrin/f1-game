@@ -3165,7 +3165,11 @@ const Car3D = (function () {
     // EXTERIOR ONLY. The first-person build draws the driver's own wheel
     // (getCockpitWheel) and must not also carry a torso, which would sit in
     // the camera; noDriver drops the lot for the studio's empty-car shots.
-    if (!ckpt && !(opts && opts.noDriver)) {
+    // `silhouette` is the shadow-caster path: the torso sits inside the tub
+    // so it cannot change a sun/lamp silhouette, and paying for it on a
+    // depth map is wasted fill.
+    const sil = !!(opts && opts.silhouette);
+    if (!ckpt && !(opts && opts.noDriver) && !sil) {
       // The suit takes the TEAM ACCENT, as a real one does. A neutral dark suit
       // was invisible: it sat in a dark liner inside a shadowed well and the
       // whole occupant read as more black smudge, which is the failure this
@@ -3196,7 +3200,10 @@ const Car3D = (function () {
       // defect this module exists to fix. 0.715 clears it by 82 mm, and still
       // passes 43 mm under the halo at 0.890.
       const des = Helmets.designFor(opts && opts.num, c1);
-      Helmets.build(out, 0, 0.715, -0.075, des, { paint: SURFACES.paint, glass: SURFACES.visor });
+      Helmets.build(out, 0, 0.715, -0.075, des, {
+        paint: SURFACES.paint, glass: SURFACES.visor,
+        maxSplit: sil ? 0 : undefined,   // depth pass: keep the lid shape, drop paint-edge splits
+      });
       // No brow box and no rear spoiler box: the traced shell carries its own
       // ridge over the aperture and its own aero lip at the back.
     }

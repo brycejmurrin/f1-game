@@ -656,9 +656,12 @@ const Helmets = (function () {
       out.idx.push(i, i + 1, i + 2);
     };
     // a quad in (t, az), split while its corners disagree about the paint
+    // Shadow casters pass maxSplit: 0 — paint-edge splits are invisible in a
+    // depth map, and they were the bulk of the helmet's triangle budget.
+    const splitCap = (S && typeof S.maxSplit === "number") ? S.maxSplit : MAX_SPLIT;
     const patch = (t0, t1, a0, a1, depth) => {
       const tm = (t0 + t1) / 2, am = (a0 + a1) / 2;
-      if (depth < MAX_SPLIT) {
+      if (depth < splitCap) {
         const k = key(t0, a0);
         if (key(t0, a1) !== k || key(t1, a1) !== k || key(t1, a0) !== k || key(tm, am) !== k) {
           patch(t0, tm, a0, am, depth + 1); patch(t0, tm, am, a1, depth + 1);

@@ -465,6 +465,26 @@ const DataHub = (function () {
       onPick(m);
     });
 
+    // OpenF1 reuses meeting_name for testing + calendar weekends (two
+    // "Pre-Season Testing", two "Bahrain Grand Prix"). Append circuit when it
+    // is not already in the name; when that still collides, append YYYY-MM-DD.
+    function meetingPickerOptions(ms) {
+      const base = ms.map(function (m) {
+        let label = m.name || m.circuit || "Round";
+        if (m.circuit && label.indexOf(m.circuit) < 0) label += " · " + m.circuit;
+        return label;
+      });
+      const counts = Object.create(null);
+      for (let i = 0; i < base.length; i++) counts[base[i]] = (counts[base[i]] || 0) + 1;
+      return ms.map(function (m, i) {
+        let label = base[i];
+        if (counts[label] > 1 && m.dateStart) {
+          label += " · " + String(m.dateStart).slice(0, 10);
+        }
+        return { value: m.meetingKey, label: label };
+      });
+    }
+
     function loadGPs(userChanged) {
       const myGen = ++pickerGen;
       ph(gpSel, "loading…"); ph(sesSel, "—");
@@ -472,9 +492,7 @@ const DataHub = (function () {
         if (myGen !== pickerGen) return;
         if (!ms.length) { ph(gpSel, "no data"); return; }
         if (sel.meetingKey === null) sel.meetingKey = ms[ms.length - 1].meetingKey;
-        setSelectOptions(gpSel, ms.map(function (m) {
-          return { value: m.meetingKey, label: m.name || m.circuit || "Round" };
-        }), sel.meetingKey);
+        setSelectOptions(gpSel, meetingPickerOptions(ms), sel.meetingKey);
         loadSessions(userChanged);
       }, function () {
         if (myGen !== pickerGen) return;

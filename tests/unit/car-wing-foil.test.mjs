@@ -218,6 +218,20 @@ test("single-option recipes stay within 1.6x the default triangle budget", () =>
   assert.deepEqual(over, [], `over 1.6x default ${base}: ${over.join(", ")}`);
 });
 
+test("a shadow silhouette keeps the helmet shape without paint-split cost", () => {
+  const full = tris(Car3D.build(C1, C2, { noWheels: true }));
+  const sil = tris(Car3D.build(C1, C2, { noWheels: true, silhouette: true }));
+  const empty = tris(Car3D.build(C1, C2, { noWheels: true, noDriver: true }));
+  assert.ok(sil < full, `silhouette ${sil} should be under full ${full}`);
+  assert.ok(sil > empty, `silhouette ${sil} dropped the helmet (noDriver is ${empty})`);
+  const caster = tris(Car3D.build(C1, C2, { silhouette: true }));
+  const painted = tris(Car3D.build(C1, C2, {}));
+  assert.ok(caster < painted, `shadow caster ${caster} still carries paint-split helmet (${painted})`);
+  const GAME = readFileSync(join(ROOT, "js/game.js"), "utf8");
+  assert.match(GAME, /silhouette: sil/);
+  assert.match(GAME, /sil \? ":sh"/);
+});
+
 test("2026 duct/board/slot knobs are inert at 0 and each deforms the mesh", () => {
   const bare = Car3D.build(C1, C2, { noWheels: true });
   const probe = (visual) => Car3D.build(C1, C2, {

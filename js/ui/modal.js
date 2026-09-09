@@ -19,6 +19,9 @@ window.TopModal = (function () {
   function wire(el) {
     if (!el || wired.has(el) || typeof el.showModal !== "function") return;
     wired.add(el);
+    // Let the dialog itself take focus when Tab wraps past the last control
+    // (otherwise Chromium lands on <body> for a blank step).
+    if (!el.hasAttribute("tabindex")) el.tabIndex = -1;
 
     new MutationObserver(() => sync(el))
       .observe(el, { attributes: true, attributeFilter: ["hidden"] });
@@ -146,12 +149,20 @@ window.TopModal = (function () {
 
   function onFocusIn(e) {
     // Non-dialog layers never got platform focus containment. Keep Tab inside
-    // the top UiLayers pane (#select, #career, #lighting, …). Dialogs already
-    // trap via showModal(); #carsetup stays pointer-events:none for the
-    // turntable — still contain keyboard focus to its chrome.
+    // the top UiLayers pane (#select, #career, #lighting, …). Dialogs trap via
+    // showModal(), but Chromium still parks on <body> for one step when Tab
+    // wraps the last control — pull that back. #carsetup stays
+    // pointer-events:none for the turntable — still contain keyboard focus to
+    // its chrome.
     const layer = window.UiLayers && window.UiLayers.top();
-    if (!layer || layer.tagName === "DIALOG") return;
+    if (!layer) return;
     const t = e.target;
+    if (layer.tagName === "DIALOG") {
+      if (t && t !== document.body && layer.contains(t)) return;
+      const focusable = firstFocusable(layer, false) || layer;
+      try { focusable.focus({ preventScroll: true }); } catch (_) { /* detached */ }
+      return;
+    }
     if (t && layer.contains(t)) return;
     const focusable = firstFocusable(layer, false);
     if (focusable) {

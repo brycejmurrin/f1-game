@@ -393,7 +393,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-livecard, .dh-card.dh-livecard { display: flex; flex-direction: column; gap: calc(var(--gap) / 3); }
 .dh-live-title { font-size: 17px; font-weight: 800; font-style: italic; color: var(--text); }
 .dh-live-type { font-size: var(--fs-2); color: var(--red); letter-spacing: var(--ls-4); }
-.dh-live-sub { font-size: var(--fs-2); color: var(--dim); margin-top: calc(var(--gap) / 6); }
+.dh-live-sub { font-size: var(--fs-2); color: var(--dim); margin-top: calc(var(--gap) / 6); white-space: normal; overflow-wrap: anywhere; }
 .dh-live-team { color: var(--dim); font-size: var(--fs-2); }
 .dh-live-gapwrap { display: flex; align-items: center; gap: calc(var(--gap) * 0.5); flex: 1; min-width: 100px; justify-content: flex-end; }
 .dh-live-gapbar { height: 4px; border-radius: var(--r-xs); max-width: 80px; }
